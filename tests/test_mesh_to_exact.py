@@ -284,6 +284,50 @@ def test_a_freeform_mesh_is_refused_with_the_way_out(
     assert refused.value.object_id == "obj_1"
 
 
+@pytest.mark.parametrize("stage", ["_build", "_checked_body"])
+def test_an_exception_of_opencascade_becomes_the_refusal_with_its_way_out(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """Die Ausnahmen aus OpenCASCADE erben in OCP 8 nur von ``Exception``.
+
+    ``GeomAPI_Interpolate`` warf an einem Fettpressenwerkzeug aus dem Korpus
+    ``Standard_ConstructionError``, die Flächenreparatur an einem Minigolfteil
+    ``StdFail_NotDone``; der Fang über ``RuntimeError`` ließ beide durch, und
+    der Kunde las „Im Programm ist ein unerwarteter Fehler aufgetreten“.
+    Nachgestellt mit derselben Ausnahmeart an beiden Baustufen.
+    """
+    from OCP.Standard import Standard_ConstructionError
+
+    from app.core.brep import from_mesh
+    from app.core.brep.ops import MeshToExactParams, mesh_to_exact
+    from app.core.errors import GeometryError
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    def native(*_args: object, **_kwargs: object) -> None:
+        raise Standard_ConstructionError("BSpline curve: # Poles and degree mismatch")
+
+    monkeypatch.setattr(from_mesh, stage, native)
+    source = SceneObject(id="obj_1", name="Platte", mesh=_mesh("plate_holes.stl"))
+    context = OpContext(
+        Scene(),
+        [source],
+        MeshToExactParams(),
+        profile,
+        "fine",
+        None,
+        lambda *_: None,
+        lambda *_: pytest.fail("keine Rückfrage erwartet"),
+        NeverCancelled(),
+    )
+
+    with pytest.raises(GeometryError) as refused:
+        mesh_to_exact(context)
+
+    assert refused.value.suggestions
+    assert isinstance(refused.value.__cause__, from_mesh.ConversionRefusedError)
+
+
 def test_an_open_mesh_is_refused_with_repair(profile: Profile) -> None:
     """Ein Netz mit Loch hat keine Hülle — die Absage schlägt die Reparatur vor."""
     from app.core.brep.ops import MeshToExactParams, mesh_to_exact

@@ -265,6 +265,234 @@ def test_steps_and_shoulders_from_a_mesh_are_rebuilt_as_sketches_and_extrusions(
     )
 
 
+def _wall_holder():
+    """Ein Wandhalter nach dem Vorbild des Besenhalters aus Roberts Test (0.5.2).
+
+    Eine Leiste 80 x 4 x 20 mit 3-mm-Fasen an den vier Kanten ihrer Enden,
+    darunter ein offener Klemmring Ø 42/34, durch die Leiste zwei Löcher Ø 4,5
+    mit 90-Grad-Senkung Ø 9. Längs Z ist alles Wand außer den Fasen und den
+    Querbohrungen — genau, was ein Querschnitt nicht trägt.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_Line
+
+    from app.core.brep import edit
+
+    bar = edit.moved(edit.box(80.0, 4.0, 20.0), (0.0, 22.0, 0.0))
+    ends = tuple(
+        edit.edge_key(edge)
+        for edge in edit.edges_of(bar)
+        if BRepAdaptor_Curve(edge.edge).GetType() == GeomAbs_Line
+        and abs(edge.direction[1]) > 0.999
+        and abs(abs(edge.middle[0]) - 40.0) < 1e-6
+    )
+    assert len(ends) == 4
+    bar = edit.chamfer(bar, 3.0, "named", ends)
+    ring = edit.boolean("difference", [edit.cylinder(42.0, 20.0), edit.cylinder(34.0, 20.0)])
+    ring = edit.boolean(
+        "difference", [ring, edit.moved(edit.box(12.0, 10.0, 20.0), (0.0, -20.0, 0.0))]
+    )
+    holder = edit.unified(edit.boolean("union", [bar, ring]))
+    for x in (-30.0, 30.0):
+        holder = edit.bore(holder, position=(x, 24.0, 10.0), axis="y", diameter=4.5)
+        sink = edit.transformed(
+            edit.cone(4.5, 9.0, 2.25),
+            (
+                (1.0, 0.0, 0.0, x),
+                (0.0, 0.0, 1.0, 21.75),
+                (0.0, -1.0, 0.0, 10.0),
+                (0.0, 0.0, 0.0, 1.0),
+            ),
+        )
+        holder = edit.boolean("difference", [holder, sink])
+    return holder
+
+
+def test_a_wall_holder_is_rebuilt_from_its_profile_with_cuts_and_countersunk_holes(
+    profile: Profile,
+):
+    """Profilkörper längs der Plattenachse, Fasen als Abzug, Senkbohrungen gebohrt (RM-022).
+
+    Weder Quader noch gestufte Querschnitte tragen dieses Teil: Die Fasen
+    stehen schräg zur Achse, die Senkungen quer. Sollwert ist der gebaute
+    Körper — Volumen, Formgrenze, Senkung Ø 9; Roberts Datei selbst gehört
+    nicht ins Repository.
+    """
+    from app.core.scene.rebuild import RebuildBudget, propose
+
+    solid = _wall_holder()
+    project = imported_payload("part.stl", _as_stl(solid))
+    proposal = propose(
+        project.document,
+        "obj_1",
+        profile,
+        sources=ProjectSources(project),
+        budget=RebuildBudget(0.1, 0.01),
+    )
+
+    assert proposal.accepted, [
+        (entry.check.reason, entry.check.unexplained) for entry in proposal.candidates
+    ]
+    chosen = proposal.accepted[0]
+    drills = [draft for draft in chosen.drafts if draft.op == "drill_brep_hole"]
+    assert chosen.drafts[0].op == "sketch_extrude"
+    assert any(draft.op == "subtract_objects" for draft in chosen.drafts)
+    assert [draft.params.get("widening_diameter") for draft in drills] == [
+        pytest.approx(9.0, abs=0.05)
+    ] * 2
+    assert all(draft.params["compensate"] is False for draft in drills)
+    assert chosen.result.mesh.volume == pytest.approx(solid.volume, rel=1e-3)
+    assert chosen.check.surface is not None and chosen.check.surface.within_limit
+
+
+def test_a_needle_of_the_triangulation_leaves_a_plane_explained():
+    """Ein unbedeckter Rest zählt erst ab der Ebenengenauigkeit (``_uncovered``).
+
+    Am Besenhalter verwarf eine Nadel von 2,65·10⁻⁶ mm² am Rand eines Bodens
+    den ganzen Vorschlag. Ein 0,05 mm breiter Streifen, der wirklich fehlt,
+    bleibt ein Befund, auch schmaler als die Formgrenze.
+    """
+    import shapely
+
+    from app.core.scene.rebuild import _uncovered
+
+    floor = shapely.box(0.0, 0.0, 10.0, 10.0)
+    needle = shapely.union(floor, shapely.Polygon([(5.0, 10.0), (5.0001, 10.0), (5.0, 10.3)]))
+    strip = shapely.union(floor, shapely.box(5.0, 10.0, 5.05, 10.3))
+
+    assert not _uncovered(needle, floor, 0.1, 0.001)
+    assert _uncovered(strip, floor, 0.1, 0.001)
+    assert not shapely.buffer(floor, 0.1).covers(needle)
+
+
+def test_two_sections_differ_by_a_shallow_engraving_but_not_by_a_sliver():
+    """Gleich heißt: kein Stück mit echter Breite dazwischen (``_same``).
+
+    Die Schrift des Besenhalters nahm einem Querschnitt mit 763 mm Umfang
+    4,08 mm² — weniger als ein Hundertstel mal Umfang, und die Schicht ging
+    in ihrer Nachbarin auf. Ein Streifen von 0,005 mm längs der ganzen Wand
+    ist dagegen Rauschen der Vernetzung.
+    """
+    import shapely
+
+    from app.core.scene.rebuild import RebuildBudget, _same
+
+    budget = RebuildBudget(0.1, 0.01)
+    plate = shapely.box(-110.0, 0.0, 110.0, 4.0)
+    engraved = shapely.difference(plate, shapely.box(-3.0, 3.32, 3.0, 4.0))
+    shaved = shapely.box(-110.0, 0.0, 110.0, 3.995)
+
+    assert float(plate.symmetric_difference(engraved).area) < 0.01 * float(plate.length)
+    assert not _same(plate, engraved, budget)
+    assert _same(plate, shaved, budget)
+
+
+def test_an_engraving_is_a_pocket_and_an_open_notch_is_not():
+    """Luft quer zur Achse, ringsum Material: eine Tasche (``_cross_pockets``).
+
+    Ein Ring Ø 6/4, 0,6 mm tief in der Seite einer Platte, wird eine Tasche
+    mit einem Abzug längs seiner Tiefe; eine gerundete Ecke R 5 durch die
+    ganze Platte ist quer auch ein Prisma, längs der Achse aber keines, und
+    zur Seite offen — sie bleibt den Schichten wie die Plattenecken des
+    Besenhalters. Die Füllung reicht bis an die Wand und deckt die Gravur.
+    """
+    import math
+
+    import manifold3d
+    import numpy as np
+    import shapely
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.rebuild import RebuildBudget, _cross_pockets
+
+    def as_mesh(body: manifold3d.Manifold) -> MeshData:
+        out = body.to_mesh()
+        return MeshData.of(
+            trimesh.Trimesh(
+                vertices=np.asarray(out.vert_properties)[:, :3],
+                faces=np.asarray(out.tri_verts),
+                process=False,
+            )
+        )
+
+    plate = manifold3d.Manifold.cube((40.0, 4.0, 20.0))
+    ring = manifold3d.Manifold.cylinder(1.2, 3.0, 3.0, 96) - manifold3d.Manifold.cylinder(
+        1.2, 2.0, 2.0, 96
+    )
+    ring = ring.rotate((-90.0, 0.0, 0.0)).translate((20.0, 3.4, 10.0))
+    corner = manifold3d.Manifold.cube((5.0, 4.0, 5.0)) - manifold3d.Manifold.cylinder(
+        4.0, 5.0, 5.0, 96
+    ).rotate((-90.0, 0.0, 0.0)).translate((5.0, 0.0, 5.0))
+    body = as_mesh(plate - ring - corner)
+    engraving = math.pi * (3.0 * 3.0 - 2.0 * 2.0) * 0.6
+    frame = (
+        np.zeros(3),
+        np.array([1.0, 0.0, 0.0]),
+        np.array([0.0, 1.0, 0.0]),
+        np.array([0.0, 0.0, 1.0]),
+    )
+
+    pockets, cuts = _cross_pockets(
+        body,
+        shapely.box(0.0, 0.0, 40.0, 4.0),
+        20.0,
+        frame,
+        (),
+        body,
+        (),
+        RebuildBudget(0.1, 0.01),
+        NeverCancelled(),
+    )
+
+    assert len(pockets) == 1
+    assert [draft.op for draft in cuts] == ["sketch_extrude", "subtract_objects"]
+    centre = (pockets[0].bounds.minimum[0] + pockets[0].bounds.maximum[0]) / 2.0
+    assert centre == pytest.approx(20.0, abs=0.05)
+    assert pockets[0].volume >= engraving * 0.98
+
+
+def test_an_engraving_across_the_profile_is_cut_as_one_pocket(profile: Profile):
+    """Eine Gravur quer zur Plattenachse wird ein Abzug, nicht Dutzende Schichtreste.
+
+    Am Besenhalter steht auf der Rückseite eine 0,68 mm tiefe Schrift. Längs
+    der Plattenachse ändert ein runder Buchstabe seinen Querschnitt mit jeder
+    Höhe; die Schichten ließen ihn erst in einer Nachbarschicht verschwinden,
+    dann stießen Säulen und Reste mit deckungsgleichen Böden aneinander. Hier
+    ein Ring Ø 6/4, 0,6 mm tief, zwischen den beiden Senkbohrungen.
+    """
+    from app.core.brep import edit
+    from app.core.scene.rebuild import RebuildBudget, propose
+
+    ring = edit.boolean("difference", [edit.cylinder(6.0, 1.2), edit.cylinder(4.0, 1.2)])
+    ring = edit.transformed(
+        ring,
+        (
+            (1.0, 0.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0, 23.4),
+            (0.0, -1.0, 0.0, 10.0),
+            (0.0, 0.0, 0.0, 1.0),
+        ),
+    )
+    solid = edit.boolean("difference", [_wall_holder(), ring])
+    project = imported_payload("part.stl", _as_stl(solid))
+    proposal = propose(
+        project.document,
+        "obj_1",
+        profile,
+        sources=ProjectSources(project),
+        budget=RebuildBudget(0.1, 0.01),
+    )
+
+    assert proposal.accepted, [
+        (entry.check.reason, entry.check.unexplained) for entry in proposal.candidates
+    ]
+    chosen = proposal.accepted[0]
+    assert chosen.result.mesh.volume == pytest.approx(solid.volume, rel=1e-3)
+    assert chosen.check.surface is not None and chosen.check.surface.within_limit
+
+
 @pytest.mark.parametrize("name", ("openscad_ascii.stl", "plate_countersunk_blind.stl"))
 def test_round_base_and_blind_countersink_preserve_their_complete_shape(
     name: str, profile: Profile
@@ -1005,7 +1233,7 @@ def test_an_imported_texture_is_named_before_replacing_the_model(profile: Profil
     assert any("Oberflächentexturen" in str(loss) for loss in application.losses)
 
 
-@pytest.mark.parametrize("name", ("broken_selfint.stl", "post_with_fillet.stl"))
+@pytest.mark.parametrize("name", ("broken_selfint.stl",))
 def test_crossing_source_surfaces_stop_before_candidate_generation(name: str, profile: Profile):
     from app.core.errors import UserError
     from app.core.scene.rebuild import RebuildBudget, propose
@@ -1024,6 +1252,37 @@ def test_crossing_source_surfaces_stop_before_candidate_generation(name: str, pr
     assert caught.value.suggestions
     assert "überschneidungsfrei" in str(caught.value)
     assert document_to_data(project.document) == before
+
+
+def test_a_small_crossing_at_a_seam_does_not_stop_the_rebuild(profile: Profile):
+    """Vier Dreiecke an der Kehle des Zapfens kreuzen sich (0,07 % der Fläche).
+
+    Das hielt den Nachbau bisher an, wie an 16 Körpern des Korpus. Unter
+    ``CROSSING_SHARE`` entstehen Kandidaten, und die unabhängige Formprüfung
+    entscheidet über sie; die zwei durcheinanderlaufenden Quader halten
+    weiter an (oben).
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.repair import self_intersection_check
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.rebuild import CROSSING_SHARE, RebuildBudget, _crossing_share, propose
+
+    project = imported("post_with_fillet.stl")
+    source = evaluate(project.document, profile, sources=ProjectSources(project)).scene
+    mesh = as_mesh_data(source.objects["obj_1"].mesh)
+    crossed, complete = self_intersection_check(mesh)
+    assert complete and crossed, "die Probe muss sich selbst kreuzen"
+    assert 0.0 < _crossing_share(mesh, crossed) < CROSSING_SHARE
+
+    proposal = propose(
+        project.document,
+        "obj_1",
+        profile,
+        sources=ProjectSources(project),
+        budget=RebuildBudget(0.1, 0.01),
+    )
+
+    assert proposal.candidates
 
 
 @pytest.mark.parametrize("width, offset", ((2.0, 3.0), (0.05, 0.04)))

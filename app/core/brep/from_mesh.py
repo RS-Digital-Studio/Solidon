@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 
 import numpy as np
 
+from app.core.errors import PROGRAMMING_ERRORS, OperationCancelled
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import CancelToken, SurfacePatch, Vec3
@@ -3659,13 +3660,6 @@ def convert(
         try:
             built = _build(mesh, regions, tolerance, cancelled, report, built_faces)
             break
-        except (ValueError, RuntimeError) as problem:
-            # Ein einzelnes Dreieck, das keine Fläche ergibt, oder eine
-            # Ausnahme aus OpenCASCADE: kein Bereich, den ein Herabstufen
-            # retten könnte. Der Grund kommt ins Protokoll, dem Kunden sagt
-            # die Absage, was er tun kann.
-            _log.warning("mesh conversion could not build the body: %r", problem)
-            raise ConversionRefusedError("unbuildable") from problem
         except _RegionFailedError as failure:
             demoted += len(failure.regions)
             regions = _demoted(mesh, regions, failure.regions)
@@ -3673,6 +3667,19 @@ def convert(
                 raise ConversionRefusedError(
                     "freeform", triangles=len(regions.facet_triangles())
                 ) from failure
+        except (OperationCancelled, MemoryError, *PROGRAMMING_ERRORS):
+            raise
+        except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
+            # Ein einzelnes Dreieck, das keine Fläche ergibt, oder eine
+            # Ausnahme aus OpenCASCADE: kein Bereich, den ein Herabstufen
+            # retten könnte. Der Grund kommt ins Protokoll, dem Kunden sagt
+            # die Absage, was er tun kann. **Die Ausnahmen aus OpenCASCADE
+            # erben in OCP 8 nur von ``Exception``** — ``Standard_ConstructionError``
+            # aus ``GeomAPI_Interpolate``, ``StdFail_NotDone`` aus der
+            # Flächenreparatur —; ein Fang über ``RuntimeError`` ließ sie als
+            # „unerwarteten Fehler“ durch, an fünf Teilen des Korpus.
+            _log.warning("mesh conversion could not build the body: %r", problem)
+            raise ConversionRefusedError("unbuildable") from problem
     if built is None:
         raise ConversionRefusedError("unbuildable")
     try:
@@ -3685,8 +3692,10 @@ def convert(
         # fängt mit leerem Merker an.
         own = _own_distances(mesh, regions, built.moved)
         body = replace(body, converted_from=ConversionReference(mesh, own, tolerance))
-    except ValueError as problem:
-        _log.warning("mesh conversion built an invalid body: %s", problem)
+    except (OperationCancelled, MemoryError, *PROGRAMMING_ERRORS):
+        raise
+    except Exception as problem:  # ValueError der Prüfung oder OpenCASCADE beim Vereinen
+        _log.warning("mesh conversion built an invalid body: %r", problem)
         raise ConversionRefusedError("invalid") from problem
     report(0.85, "measure")
     facets = regions.facet_triangles()

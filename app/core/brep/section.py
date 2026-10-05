@@ -28,6 +28,7 @@ from typing import Any, Literal
 
 from app.core.brep.kernel import DEFLECTION, Solid, copy_shape, require
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
+from app.core.sketch.traced import on_bisector
 from app.core.types import CancelToken, Point2, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -67,12 +68,13 @@ def plane_section(
     Leer, wenn die Ebene den Körper nicht trifft.
     """
     require()
+    from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
     from OCP.GeomAbs import GeomAbs_Circle, GeomAbs_Line
     from OCP.gp import gp_Ax3, gp_Dir, gp_Pln, gp_Pnt
     from OCP.TopAbs import TopAbs_EDGE
-    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopExp import TopExp, TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
     if cancelled is not None:
@@ -103,6 +105,7 @@ def plane_section(
         return (_dot(offset, x_axis), _dot(offset, y_axis))
 
     curves: list[SectionCurve] = []
+    reaches: list[tuple[float, float]] = []
     circles: dict[int, list[tuple[float, float, Point2, float]]] = {}
     circle_keys: list[tuple[Point2, float]] = []
     walk = TopExp_Explorer(section.Shape(), TopAbs_EDGE)
@@ -114,10 +117,15 @@ def plane_section(
         curve = BRepAdaptor_Curve(edge)
         first, last = float(curve.FirstParameter()), float(curve.LastParameter())
         start, end = flat(curve.Value(first)), flat(curve.Value(last))
+        near = (
+            BRep_Tool.Tolerance_s(TopExp.FirstVertex_s(edge)),
+            BRep_Tool.Tolerance_s(TopExp.LastVertex_s(edge)),
+        )
         kind = curve.GetType()
         if kind == GeomAbs_Line:
             if math.dist(start, end) > EPS_GEOM:
                 curves.append(SectionCurve("line", (start, end)))
+                reaches.append(near)
             continue
         if kind == GeomAbs_Circle:
             circle = curve.Circle()
@@ -131,13 +139,17 @@ def plane_section(
             key = _circle_key(circle_keys, centre, radius)
             circles.setdefault(key, []).append((first, last, begin, radius))
             curves.append(SectionCurve("arc", (centre, begin, finish)))
+            reaches.append(near if forward else (near[1], near[0]))
             continue
         points = _sampled(curve, first, last, deflection, flat)
         if len(points) == 2:
             curves.append(SectionCurve("line", points))
+            reaches.append(near)
         elif len(points) > 2:
             curves.append(SectionCurve("spline", points))
-    return tuple(_whole_circles(curves, circles, circle_keys))
+            reaches.append(near)
+    whole = _whole_circles(list(zip(curves, reaches, strict=True)), circles, circle_keys)
+    return tuple(_joined([curve for curve, _reach in whole], [reach for _curve, reach in whole]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,33 +238,102 @@ def horizontal_regions(
     return tuple(regions)
 
 
+def _ends(curve: SectionCurve) -> tuple[int, int]:
+    """Welche Punkte einer Schnittkurve ihre Enden sind (Bogen: Mitte zuerst)."""
+    return (1, 2) if curve.kind == "arc" else (0, len(curve.points) - 1)
+
+
+def _joined(curves: list[SectionCurve], reaches: list[tuple[float, float]]) -> list[SectionCurve]:
+    """Enden, die der Kern für einen Punkt hält, werden ein Punkt.
+
+    Am Körper aus einem Netz (P4.0) schließen benachbarte Flächen nur
+    innerhalb der Toleranz ihrer Eckpunkte aneinander. Ihre Schnittkanten
+    trafen sich am Besenhalter aus Roberts Test um 0,0001 bis 0,0002 mm
+    daneben, und die Skizze nahm den Umriss als offen nicht an. Zusammengelegt
+    wird nur, was näher liegt als die Toleranzen beider Eckpunkte zusammen —
+    so, wie der Kern selbst über Gleichheit entscheidet; ein sauberer Körper
+    hat Toleranzen um 1e-7 mm und bleibt, wie er ist. Danach entfällt, was zu
+    einer Strecke ohne Länge schrumpft oder eine andere Kurve doppelt.
+
+    **Ein Bogen bleibt ein Bogen**: Rückt eines seiner Enden, rückt seine
+    Mitte auf die Mittelsenkrechte der neuen Enden. Sonst sind seine Schenkel
+    um die Verschiebung verschieden lang, und der Löser weist die Skizze mit
+    lauter festen Punkten als Widerspruch ab. Vollkreise haben keine Enden.
+    """
+    ends: list[tuple[int, int, Point2, float]] = []
+    for index, (curve, reach) in enumerate(zip(curves, reaches, strict=True)):
+        if curve.kind == "circle":
+            continue
+        first, last = _ends(curve)
+        ends.append((index, first, curve.points[first], reach[0]))
+        ends.append((index, last, curve.points[last], reach[1]))
+    parent = list(range(len(ends)))
+
+    def root(item: int) -> int:
+        while parent[item] != item:
+            parent[item] = parent[parent[item]]
+            item = parent[item]
+        return item
+
+    for one in range(len(ends)):
+        for other in range(one + 1, len(ends)):
+            if math.dist(ends[one][2], ends[other][2]) <= ends[one][3] + ends[other][3] + EPS_GEOM:
+                low, high = sorted((root(one), root(other)))
+                parent[high] = low
+    points = [list(curve.points) for curve in curves]
+    for number, (index, place, _point, _reach) in enumerate(ends):
+        points[index][place] = ends[root(number)][2]
+    joined: list[SectionCurve] = []
+    seen: set[tuple[Any, ...]] = set()
+    for curve, placed in zip(curves, points, strict=True):
+        first, last = _ends(curve)
+        if curve.kind == "line" and math.dist(placed[first], placed[last]) <= EPS_GEOM:
+            continue
+        if curve.kind == "arc" and tuple(placed) != curve.points:
+            placed[0] = on_bisector(placed[0], placed[1], placed[2])
+        ends_key = frozenset((placed[first], placed[last]))
+        key = (curve.kind, ends_key, placed[0] if curve.kind == "arc" else None)
+        if curve.kind != "spline" and key in seen:
+            continue
+        seen.add(key)
+        joined.append(SectionCurve(curve.kind, tuple(placed)))
+    return joined
+
+
 def _whole_circles(
-    curves: list[SectionCurve],
+    curves: list[tuple[SectionCurve, tuple[float, float]]],
     circles: dict[int, list[tuple[float, float, Point2, float]]],
     keys: list[tuple[Point2, float]],
-) -> list[SectionCurve]:
-    """Bögen desselben Kreises, die zusammen eine volle Umdrehung bedecken, werden ein Kreis."""
+) -> list[tuple[SectionCurve, tuple[float, float]]]:
+    """Bögen desselben Kreises, die zusammen eine volle Umdrehung bedecken, werden ein Kreis.
+
+    Gefragt wird vor dem Zusammenlegen der Enden: Die Schlüssel der Kreise
+    stammen aus den unveränderten Kanten des Kerns. Jede Kurve reist mit den
+    Toleranzen ihrer Enden.
+    """
     whole: set[int] = set()
     for key, pieces in circles.items():
         turn = sum(abs(last - first) for first, last, _begin, _radius in pieces)
         if turn >= math.tau - EPS_GEOM:
             whole.add(key)
-    result: list[SectionCurve] = []
+    result: list[tuple[SectionCurve, tuple[float, float]]] = []
     placed: set[int] = set()
-    for curve in curves:
+    for curve, reach in curves:
         if curve.kind != "arc":
-            result.append(curve)
+            result.append((curve, reach))
             continue
         centre = curve.points[0]
         radius = math.dist(centre, curve.points[1])
         key = _circle_key(keys, centre, radius)
         if key not in whole:
-            result.append(curve)
+            result.append((curve, reach))
             continue
         if key in placed:
             continue
         placed.add(key)
-        result.append(SectionCurve("circle", (centre, (centre[0] + radius, centre[1]))))
+        result.append(
+            (SectionCurve("circle", (centre, (centre[0] + radius, centre[1]))), (0.0, 0.0))
+        )
     return result
 
 

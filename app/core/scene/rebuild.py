@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from itertools import pairwise, product
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 
@@ -32,13 +33,23 @@ from app.core.types import (
     Feature,
     Finding,
     Parameter,
+    Point2,
     Profile,
     ProgressFn,
     SceneObject,
+    SketchElement,
     SourceAccess,
     Transaction,
+    Vec3,
 )
-from app.core.units import EPS_GEOM, dot3, exact_cos_degrees, exact_sin, plane_axes
+from app.core.units import (
+    EPS_GEOM,
+    dot3,
+    exact_cos_degrees,
+    exact_sin,
+    exact_sin_degrees,
+    plane_axes,
+)
 from app.i18n import TranslatableText, _
 
 
@@ -180,12 +191,16 @@ def _unexplained_planes(
     candidate: SceneObject,
     cancelled: CancelToken,
     boundary_mm: float = EPS_GEOM,
+    offset_mm: float = EPS_GEOM,
 ) -> set[str]:
     """Eine kleine unbekannte Stufe verschwindet nicht im erlaubten Formbudget.
 
     Jede begrenzte ebene Teilfläche braucht eine überlappende Fläche in
     derselben gerichteten Ebene. Die Formgrenze erlaubt keine fehlenden
-    Taschenböden, auch unterhalb des lokalen Abstandsbudgets.
+    Taschenböden, auch unterhalb des lokalen Abstandsbudgets. Dieselbe Ebene
+    heißt: höchstens ``offset_mm`` daneben. Eine Skizze, die aus dem
+    Querschnitt einer STL entsteht, trägt deren einfache Genauigkeit — am
+    Wandhalter lagen ihre Ebenen 5,4 µm neben den Flächen des Netzes.
     """
     import shapely
 
@@ -214,7 +229,7 @@ def _unexplained_planes(
             plane
             for plane in planes
             if dot3(normal, plane.params["normal"]) >= exact_cos_degrees(EPS_ANGLE)
-            and abs(dot3(np.asarray(plane.params["centre"]) - centre, normal)) <= EPS_GEOM
+            and abs(dot3(np.asarray(plane.params["centre"]) - centre, normal)) <= offset_mm
         ]
         indices = [index for plane in matching for index in plane.face_indices]
         if not indices or not feature.face_indices:
@@ -237,11 +252,28 @@ def _unexplained_planes(
         # sie schmaler als dieses Budget ist.
         pieces = shapely.get_parts(source_area)
         overlap = shapely.area(shapely.intersection(pieces, target_area))
-        if np.any(overlap <= EPS_GEOM * EPS_GEOM) or not target_area.buffer(boundary_mm).covers(
-            source_area
+        if np.any(overlap <= EPS_GEOM * EPS_GEOM) or _uncovered(
+            source_area, target_area, boundary_mm, offset_mm
         ):
             unexplained.add(feature.id)
     return unexplained
+
+
+def _uncovered(source_area: Any, target_area: Any, boundary_mm: float, offset_mm: float) -> bool:
+    """Ob von einer Quellfläche mehr fehlt als eine Nadel der Dreiecksteilung.
+
+    Am Besenhalter blieb von einem Boden mit 45,8 mm² eine Nadel von
+    2,65·10⁻⁶ mm² ungedeckt — 0,02 mm lang, schmaler als die Genauigkeit,
+    mit der zwei Ebenen dieselbe heißen. Ein Rest zählt, sobald er im Mittel
+    mindestens ``offset_mm`` breit ist; ein fehlender schmaler Taschenboden
+    bleibt damit ein Befund.
+    """
+    import shapely
+
+    missing = shapely.difference(source_area, target_area.buffer(boundary_mm))
+    return any(
+        2.0 * float(part.area) / float(part.length) >= offset_mm for part in _areas_of(missing)
+    )
 
 
 def _single(feature: Feature) -> OperationDraft | None:
@@ -317,19 +349,29 @@ def _oriented_basis(source: SceneObject) -> np.ndarray | None:
 
 
 def _sinks_of(feature: Feature, features: tuple[Feature, ...], tolerance: float) -> list[Feature]:
-    """Die vertieften Kegel auf der Achse einer Bohrung — Kandidaten ihrer Senkung."""
+    """Die vertieften Kegel auf der Achse einer Bohrung — Kandidaten ihrer Senkung.
+
+    Gleichgerichtet heißt innerhalb des Winkels, in dem die Erkennung
+    Richtungen gleich nennt (``EPS_ANGLE``): Beide Achsen sind eingepasst, und
+    an einer STL aus dem exakten Kern standen Bohrung und Senkung um mehr als
+    ``EPS_GEOM`` schief zueinander — die Senkung blieb ohne Bohrung.
+    """
+    from app.core.perceive.features import EPS_ANGLE
+
     params = feature.params
     axis = np.array(params["axis"], dtype=float, copy=True)
     axis /= math.sqrt(dot3(axis, axis))
     centre = np.asarray(params["centre"], dtype=float)
+    parallel = exact_cos_degrees(EPS_ANGLE)
     cones = []
     for cone in features:
         if cone.kind != "cone" or not cone.params.get("recess", False):
             continue
-        cone_axis = np.asarray(cone.params["axis"], dtype=float)
+        cone_axis = np.array(cone.params["axis"], dtype=float, copy=True)
+        cone_axis /= math.sqrt(dot3(cone_axis, cone_axis))
         displacement = np.asarray(cone.params["centre"], dtype=float) - centre
         if (
-            math.hypot(*np.cross(cone_axis, axis)) < EPS_GEOM
+            abs(dot3(cone_axis, axis)) >= parallel
             and math.hypot(*np.cross(displacement, axis)) <= tolerance
         ):
             cones.append(cone)
@@ -626,6 +668,1086 @@ def _layered(
                         )
                     )
     return sorted(plans, key=lambda plan: len(plan[0]))
+
+
+#: Wie viele Achsen der Profilkörper versucht, die prismatischste zuerst.
+PROFILE_AXES: Final = 2
+
+#: Welcher Anteil der Oberfläche längs oder quer zu einer Achse stehen muss,
+#: damit sie die Achse eines Profilkörpers sein kann.
+PRISMATIC_SHARE: Final = 0.5
+
+
+#: Wie weit Querschnittsfläche mal Länge vom Volumen eines Stücks abweichen
+#: darf, das als Prisma gilt (Anteil). Größere Abweichungen fängt die
+#: unabhängige Formprüfung ohnehin; diese Schranke spart nur aussichtslose
+#: Auswertungen.
+PRISM_SLACK: Final = 0.02
+
+
+def _prismatic(
+    source: SceneObject, mesh: MeshData, budget: RebuildBudget, cancelled: CancelToken
+) -> list[tuple[list[OperationDraft], set[str], SceneObject]]:
+    """Ein Profilkörper längs einer Achse, dazu die Prismen, die ihm fehlen oder zu viel sind.
+
+    Für Teile, deren Seiten nicht alle längs einer Richtung laufen: Am
+    Besenhalter aus Roberts Test (0.5.2) stehen 82 Rundungen und alle Wände
+    längs der Plattenachse, quer dazu aber Fasen, Rundungen und gesenkte
+    Schraubenlöcher. Geschnitten wird das Netz selbst, nicht der P4.0-Körper:
+    Dessen Flächen schließen nur innerhalb ihrer Toleranzen aneinander, und an
+    20 Teilen des Korpus entsteht er gar nicht.
+
+    Je Achse (:func:`_prism_axes`) und Höhe wird der Querschnitt über die
+    ganze Länge gezogen; die Höhe mit dem kleinsten Unterschied zum Körper
+    gewinnt. Der Unterschied zerfällt in Stücke, die abgezogen oder
+    aufgesetzt werden — jedes ein Prisma längs einer Richtung des Teils
+    (:func:`_prism_piece`) —, und was kein Prisma ist, aber in einer
+    erkannten Bohrung samt Senkung liegt, wird gebohrt, ohne Kompensation
+    (CAD-Konzept §13.5). Bleibt ein Stück ohne Erklärung, gibt es an dieser
+    Höhe keinen Vorschlag. Querschnitte werden Skizzen aus Strecken, Bögen
+    und Kreisen (:func:`app.core.sketch.traced.traced_loop`); ob der Aufbau
+    dieselbe Form ergibt, entscheidet wie immer die unabhängige Formprüfung.
+    """
+    features = tuple(source.features.values())
+    plans: list[tuple[list[OperationDraft], set[str], SceneObject]] = []
+    for axis in _prism_axes(mesh, features)[:PROFILE_AXES]:
+        cancelled.raise_if_cancelled()
+        drafts = _profile_plan(mesh, features, axis, budget, cancelled)
+        if drafts:
+            plans.append(
+                (drafts, {feature.id for feature in features if feature.kind != "face"}, source)
+            )
+    return plans
+
+
+def _prism_axes(mesh: MeshData, features: tuple[Feature, ...]) -> list[np.ndarray]:
+    """Richtungen, längs derer der Körper am ehesten ein Prisma ist — beste zuerst.
+
+    Gezählt wird die Oberfläche, die längs der Richtung (Wände) oder quer zu
+    ihr (Deckel) steht. Kandidaten sind die Weltachsen und die Normalen und
+    Achsen der erkannten Merkmale; gleich gute behalten diese Folge.
+    """
+    from app.core.perceive.features import EPS_ANGLE
+
+    normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
+    areas = np.asarray(mesh.raw.area_faces, dtype=np.float64)
+    total = float(areas.sum())
+    if total <= EPS_GEOM:
+        return []
+    parallel = exact_cos_degrees(EPS_ANGLE)
+    across = exact_sin(math.radians(EPS_ANGLE))
+    candidates = [np.eye(3)[index] for index in range(3)]
+    for feature in features:
+        vector = feature.params.get("normal" if feature.kind == "face" else "axis")
+        if vector is None:
+            continue
+        axis = np.array(vector, dtype=float, copy=True)
+        length = math.sqrt(dot3(axis, axis))
+        if length > EPS_GEOM:
+            candidates.append(axis / length)
+    distinct: list[np.ndarray] = []
+    for axis in candidates:
+        if not any(abs(dot3(axis, known)) >= parallel for known in distinct):
+            distinct.append(axis)
+    scored = []
+    for axis in distinct:
+        facing = np.abs(along(normals, axis))
+        share = float(areas[(facing >= parallel) | (facing <= across)].sum()) / total
+        if share >= PRISMATIC_SHARE:
+            scored.append((share, axis))
+    scored.sort(key=lambda entry: -entry[0])
+    return [axis for _share, axis in scored]
+
+
+def _profile_plan(
+    mesh: MeshData,
+    features: tuple[Feature, ...],
+    axis: np.ndarray,
+    budget: RebuildBudget,
+    cancelled: CancelToken,
+) -> list[OperationDraft]:
+    """Die Schritte eines Profilkörpers längs ``axis`` — oder keine.
+
+    Zwischen zwei Deckelhöhen ist der Querschnitt eines Prismas überall
+    gleich (:func:`_layers`). Ändert er sich innerhalb der Schicht — eine
+    Fase, eine Senkung, eine Querrundung —, trägt die Schicht die Vereinigung
+    ihrer Querschnitte, und nur dort zerfällt der Überschuss in Stücke
+    (:func:`_pieces_as_steps`).
+
+    **Gebaut wird abziehend**: ein Körper aus dem Umriss aller Schichten
+    über die ganze Länge, dann je Schicht die Luft daneben. Gestapelte
+    Schichten zu vereinigen ging am Besenhalter schief: Zwei Schichten mit
+    fast, aber nicht genau gleichen Wänden ließ OpenCASCADE als getrennte
+    Körper stehen, und das Netz war nicht mehr dicht. Die Luft einer Schicht
+    verliert ihre Splitter (:func:`_opened`) und reicht, wo sie an den Rand
+    stößt, über ihn hinaus; so liegt kein Werkzeug auf einer Wand des Umrisses.
+    """
+    origin = np.asarray(mesh.bounds.centre, dtype=np.float64)
+    depth = along(np.asarray(mesh.raw.vertices, dtype=np.float64) - origin, axis)
+    low, high = float(depth.min()), float(depth.max())
+    height = high - low
+    if height <= budget.local_mm:
+        return []
+    foot = origin + axis * low
+    x_axis, y_axis = _frame_axes(axis, foot)
+    local = _in_frame(mesh, foot, x_axis, y_axis, axis)
+    # Querbohrungen und Senkungen stehen in keinem Querschnitt: Eine Schicht
+    # durch sie bekäme eine Kerbe, die später ein Prisma ausschneidet und die
+    # Bohrung dann zum zweiten Mal — beide Flächen lagen fast aufeinander.
+    # Im Querschnitt sind sie deshalb gefüllt und werden am Ende gebohrt.
+    from app.core.perceive.features import EPS_ANGLE
+
+    drilled: list[Feature] = []
+    fills: list[MeshData] = []
+    parallel = exact_cos_degrees(EPS_ANGLE)
+    for feature in features:
+        if feature.kind != "hole":
+            continue
+        across = abs(dot3(np.asarray(feature.params["axis"], dtype=float), axis)) < parallel
+        if not across and len(_sinks_of(feature, features, budget.local_mm)) != 1:
+            continue
+        tool = _drill_tool(feature, features, budget, beyond=False)
+        if tool is None:
+            continue
+        drilled.append(feature)
+        fills.append(_in_frame(tool, foot, x_axis, y_axis, axis))
+    layers = _layers(local, height, budget, cancelled, fills=fills)
+    if not layers:
+        return []
+    import shapely
+
+    outline = shapely.union_all([section for _lower, _upper, section, _varying in layers])
+    # Taschen quer zur Achse ebenso: gefüllt in den Schichten, am Ende in
+    # einem Zug abgezogen (:func:`_cross_pockets`).
+    frame = (foot, x_axis, y_axis, axis)
+    pockets, pocket_cuts = _cross_pockets(
+        local, outline, height, frame, fills, mesh, features, budget, cancelled
+    )
+    if pockets:
+        fills = [*fills, *pockets]
+        layers = _layers(local, height, budget, cancelled, fills=fills)
+        if not layers:
+            return []
+        outline = shapely.union_all([section for _lower, _upper, section, _varying in layers])
+    beyond = budget.local_mm * 10.0
+    around = outline.buffer(beyond, join_style="mitre")
+    # Nur die Luft im Umriss: Wo die Schicht dieselbe Wand hat wie der
+    # Umriss, schneidet nichts.
+    airs = [
+        _opened(shapely.difference(outline, section), budget)
+        for _lower, _upper, section, _varying in layers
+    ]
+    base = _extrusion(foot, x_axis, y_axis, height, _traced(outline, budget), "obj_1")
+    if base is None:
+        return []
+    steps: list[OperationDraft] = [base]
+    for first, last, column in _columns(airs, budget):
+        # Wo die Säule an den Rand reicht, steht das Werkzeug über ihn hinaus,
+        # in keiner ihrer Schichten aber in deren Material.
+        reach = column.buffer(budget.local_mm)
+        for index in range(first, last + 1):
+            reach = shapely.intersection(reach, shapely.difference(around, layers[index][2]))
+        elements = _traced(reach, budget)
+        lower, upper = layers[first][0], layers[last][1]
+        # Am Boden und an der Decke reicht die Luft über den Körper hinaus,
+        # sonst lägen ihre Deckel genau auf seinen.
+        bottom = lower - beyond if first == 0 else lower
+        top = upper + beyond if last == len(layers) - 1 else upper
+        step = _extrusion(foot + axis * bottom, x_axis, y_axis, top - bottom, elements, "obj_2")
+        if step is None:
+            return []
+        steps.extend(
+            (step, OperationDraft("subtract_objects", ("obj_1", "obj_2"), outputs=("obj_1",)))
+        )
+    for lower, upper, section, changing in layers:
+        if changing is None:
+            continue
+        cancelled.raise_if_cancelled()
+        # Zuerst der Überschuss über den ganzen Querschnitt. Hängen seine
+        # Stücke über Splitter ohne Dicke zusammen — am Wandhalter die vier
+        # Fasenkeile über die Wände von Bohrung und Ring —, ist das Ganze kein
+        # Prisma. Dann rückt der Querschnitt an den Wänden, die sich in der
+        # Schicht nicht ändern, um ein Viertel der Formgrenze ein: Dort
+        # entstehen die Splitter, und dort ist nichts abzuziehen.
+        inset = budget.local_mm / 4.0
+        narrowed = shapely.intersection(
+            section,
+            shapely.union(
+                section.buffer(-inset, join_style="mitre"),
+                changing.buffer(inset, join_style="mitre"),
+            ),
+        )
+        for region in (section, narrowed):
+            attempt = list(drilled)
+            excess = _excess(region, lower, upper, local, fills, cancelled)
+            cuts = (
+                None
+                if excess is None
+                else _pieces_as_steps(
+                    *((part, "subtract_objects") for part in excess),
+                    source=mesh,
+                    frame=frame,
+                    features=features,
+                    budget=budget,
+                    cancelled=cancelled,
+                    drilled=attempt,
+                )
+            )
+            if cuts is not None:
+                break
+        if cuts is None:
+            return []
+        drilled[:] = attempt
+        steps.extend(cuts)
+    steps.extend(pocket_cuts)
+    steps.extend(_drilled(feature, features, budget.local_mm)[0] for feature in drilled)
+    return steps
+
+
+def _excess(
+    region: Any,
+    lower: float,
+    upper: float,
+    local: MeshData,
+    fills: Sequence[MeshData],
+    cancelled: CancelToken,
+) -> list[MeshData] | None:
+    """Was das Prisma von ``region`` über ``lower`` bis ``upper`` mehr hat als der Körper.
+
+    Ohne die Füllungen der Bohrungen und Taschen, die später gebohrt und
+    abgezogen werden; ``None``, wenn das Netz nicht rechnet. Das Prisma liegt
+    ganz in seiner Schicht; was es vom Körper außerhalb nicht berührt,
+    ändert die Differenz nicht.
+    """
+    prisms = _extruded(region, lower, upper)
+    if prisms is None:
+        return None
+    excess: list[MeshData] = []
+    for prism in prisms:
+        part: MeshData | None = _apart(prism, local, cancelled)
+        for fill in fills:
+            part = _apart(part, fill, cancelled) if part is not None else None
+        if part is None:
+            return None
+        excess.append(part)
+    return excess
+
+
+def _cross_pockets(
+    local: MeshData,
+    outline: Any,
+    height: float,
+    frame: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    fills: Sequence[MeshData],
+    source: MeshData,
+    features: tuple[Feature, ...],
+    budget: RebuildBudget,
+    cancelled: CancelToken,
+) -> tuple[list[MeshData], list[OperationDraft]]:
+    """Luft im Umriss, die ein Prisma quer zur Achse ist: als Füllung und als Abzug.
+
+    Die Schrift auf der Rückseite des Besenhalters ist 0,68 mm tief und
+    steht längs der Plattenachse in Dutzenden Schichten, mal als Säule, mal
+    als Reststück. Wo zwei Werkzeuge in einer Schicht aneinanderstießen,
+    lagen ihre Böden oder Wände deckungsgleich, und der exakte Kern ließ eine
+    offene Naht stehen. Quer zur Achse ist jeder Buchstabe ein Prisma — ein
+    Werkzeug, das ganz im Material beginnt. Zurück kommen die Taschen in
+    Zeichenkoordinaten (sie füllen die Querschnitte wie eine Querbohrung) und
+    ihre Abzüge. **Auch ein Strich, der längs der Achse ein Prisma ist**: Die
+    Säulen teilten ihn über drei Schichten in zwei Werkzeuge mit
+    deckungsgleichem Boden, und der zweite Abzug blieb ohne Wirkung.
+
+    **Gesucht wird im eingerückten Umriss**: Wo der Umriss auf einer Wand des
+    Körpers liegt, hinterlässt die Differenz Splitter ohne Dicke, und über sie
+    hing jede Tasche an der übrigen Luft. Die Füllung reicht danach längs der
+    Tasche bis an den Umriss.
+    """
+    from app.core.errors import GeometryError
+    from app.core.geom.boolean import boolean
+    from app.core.perceive.features import EPS_ANGLE
+
+    inset = budget.local_mm / 4.0
+    searched = _extruded(outline.buffer(-inset, join_style="mitre"), inset, height - inset)
+    bounds = _extruded(outline, 0.0, height)
+    if searched is None or bounds is None:
+        return [], []
+    foot, x_axis, y_axis, axis = frame
+    parallel = exact_cos_degrees(EPS_ANGLE)
+    sideways = [
+        direction
+        for direction in _directions(frame, features)
+        if abs(dot3(direction, axis)) < parallel
+    ]
+    pockets: list[MeshData] = []
+    cuts: list[OperationDraft] = []
+    for prism in searched:
+        air: MeshData | None = _apart(prism, local, cancelled)
+        for fill in fills:
+            air = _apart(air, fill, cancelled) if air is not None else None
+        if air is None:
+            continue
+        for piece in _pieces(air, cancelled):
+            cancelled.raise_if_cancelled()
+            if not _substantial(piece, budget):
+                continue
+            world = _in_world(piece, frame)
+            for direction in sideways:
+                found = _as_prism(world, direction, budget, cancelled)
+                if found is None or not _walled(found, direction, source, budget, cancelled):
+                    continue
+                step = _prism_step(found, direction, source, budget, cancelled)
+                along_pocket = _extruded(found[4], -budget.local_mm, found[3] + budget.local_mm)
+                if step is None or along_pocket is None:
+                    continue
+                prism_frame = (found[0], found[1], found[2], direction)
+                filled = [
+                    _in_frame(
+                        MeshData.of(_in_world(part.raw, prism_frame)), foot, x_axis, y_axis, axis
+                    )
+                    for part in along_pocket
+                ]
+                try:
+                    clipped = [
+                        boolean(
+                            "intersection", [part, limit], allow_empty=True, cancelled=cancelled
+                        ).mesh
+                        for part in filled
+                        for limit in bounds
+                    ]
+                except GeometryError:
+                    continue
+                pockets.extend(part for part in clipped if len(part.raw.faces))
+                cuts.extend(
+                    (
+                        step,
+                        OperationDraft("subtract_objects", ("obj_1", "obj_2"), outputs=("obj_1",)),
+                    )
+                )
+                break
+    return pockets, cuts
+
+
+def _walled(
+    found: tuple[np.ndarray, np.ndarray, np.ndarray, float, Any],
+    direction: np.ndarray,
+    source: MeshData,
+    budget: RebuildBudget,
+    cancelled: CancelToken,
+) -> bool:
+    """Ob ringsum Material steht: eine Vertiefung, keine Ecke, die nach außen offen ist.
+
+    Eine gerundete Plattenecke ist quer zur Achse auch ein Prisma, aber zur
+    Seite offen; sie bleibt den Schichten, die sie immer schon trugen.
+    """
+    import shapely
+
+    from app.core.slice.analysis import cross_sections
+
+    foot, x_axis, y_axis, span, section = found
+    local = _in_frame(source, foot, x_axis, y_axis, direction)
+    (middle,) = cross_sections(local, [span / 2.0], cancelled=cancelled)
+    if middle is None or middle.is_empty:
+        return False
+    rim = shapely.difference(section.buffer(budget.local_mm), section)
+    return bool(_opened(shapely.difference(rim, middle), budget).is_empty)
+
+
+def _directions(
+    frame: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray], features: tuple[Feature, ...]
+) -> list[np.ndarray]:
+    """Wonach ein Stück ein Prisma sein darf: Achsen des Plans und der Merkmale."""
+    _foot, x_axis, y_axis, axis = frame
+    directions = [axis, x_axis, y_axis]
+    for feature in features:
+        vector = feature.params.get("normal" if feature.kind == "face" else "axis")
+        if vector is not None:
+            direction = np.array(vector, dtype=float, copy=True)
+            length = math.sqrt(dot3(direction, direction))
+            if length > EPS_GEOM:
+                directions.append(direction / length)
+    return directions
+
+
+def _vec3(values: np.ndarray) -> Vec3:
+    """Drei Zahlen eines Felds als Punkt oder Richtung."""
+    return (float(values[0]), float(values[1]), float(values[2]))
+
+
+def _frame_axes(axis: np.ndarray, foot: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Die Zeichenrichtungen einer Skizze quer zu ``axis`` — dieselben wie ihre Ebene."""
+    from app.core.sketch.planes import frame_of
+
+    frame = frame_of(_vec3(axis), _vec3(foot))
+    return np.asarray(frame.x_axis, dtype=np.float64), np.asarray(frame.y_axis, dtype=np.float64)
+
+
+def _in_frame(
+    mesh: MeshData, foot: np.ndarray, x_axis: np.ndarray, y_axis: np.ndarray, axis: np.ndarray
+) -> MeshData:
+    """Das Netz in Zeichenkoordinaten: ``x``/``y`` der Skizze, ``z`` die Länge der Achse."""
+    import trimesh
+
+    shifted = np.asarray(mesh.raw.vertices, dtype=np.float64) - foot
+    local = np.column_stack((along(shifted, x_axis), along(shifted, y_axis), along(shifted, axis)))
+    return MeshData.of(
+        trimesh.Trimesh(vertices=local, faces=np.asarray(mesh.raw.faces), process=False)
+    )
+
+
+def _layers(
+    local: MeshData,
+    height: float,
+    budget: RebuildBudget,
+    cancelled: CancelToken,
+    *,
+    fills: Sequence[MeshData] = (),
+) -> list[tuple[float, float, Any, Any]]:
+    """Die Schichten zwischen den Deckelhöhen: Grenzen, Querschnitt, was sich ändert.
+
+    Das Letzte ist ``None`` für ein Prisma, sonst der Bereich, den nicht
+    jeder Querschnitt der Schicht trägt (ohne Splitter).
+
+    Eine Schicht, deren Querschnitt in der Mitte, den Vierteln und nahe den
+    Rändern derselbe ist, ist ein Prisma. Sonst trägt sie die Vereinigung
+    von siebzehn Querschnitten — so steht der Körper ganz im Profil, und
+    was zu viel ist, wird abgezogen. Gleiche Nachbarschichten werden eine.
+    Leer, wenn eine Schicht keinen Querschnitt hat.
+
+    **Gleich heißt: kein Stück mit echter Breite dazwischen** (:func:`_same`).
+    Eine Grenze über die ganze Fläche des Unterschieds, gemessen am Umfang,
+    ließ am Besenhalter die 0,68 mm tiefe Schrift auf der Rückseite in einer
+    Nachbarschicht verschwinden: Sie war kleiner als ein Hundertstel mal
+    763 mm Umfang.
+    """
+    import shapely
+
+    from app.core.perceive.features import EPS_ANGLE
+    from app.core.slice.analysis import cross_sections
+
+    normals = np.asarray(local.raw.face_normals, dtype=np.float64)
+    levels = np.asarray(local.raw.triangles_center, dtype=np.float64)[:, 2]
+    capped = np.abs(normals[:, 2]) >= exact_cos_degrees(EPS_ANGLE)
+    # Eine Schicht ist mindestens so dick wie die dünnste Extrusion und die
+    # Formgrenze; eine dünnere geht in der Schicht darunter auf, die dann
+    # die Vereinigung beider Querschnitte trägt. Am Besenhalter lagen zwei
+    # Deckel 0,038 mm auseinander, und die Extrusion lehnte die Höhe ab.
+    thinnest = max(budget.local_mm, _thinnest_extrusion())
+    marks = [0.0]
+    for level in np.sort(levels[capped]).tolist():
+        if level - marks[-1] >= thinnest and height - level >= thinnest:
+            marks.append(float(level))
+    marks.append(height)
+    layers: list[tuple[float, float, Any, Any]] = []
+    for lower, upper in pairwise(marks):
+        cancelled.raise_if_cancelled()
+        span = upper - lower
+        samples = [lower + span * share for share in (0.5, 0.25, 0.75, 0.05, 0.95)]
+        sections = [
+            _straightened(section)
+            for section in _filled(
+                cross_sections(local, samples, cancelled=cancelled), fills, samples
+            )
+            if section is not None and not section.is_empty
+        ]
+        if len(sections) != len(samples):
+            return []
+        middle = sections[0]
+        varying = not all(_same(middle, other, budget) for other in sections[1:])
+        section, changing = middle, None
+        if varying:
+            heights = [lower + span * (index + 0.5) / 17 for index in range(17)]
+            dense = [
+                _straightened(entry)
+                for entry in _filled(
+                    cross_sections(local, heights, cancelled=cancelled), fills, heights
+                )
+                if entry is not None and not entry.is_empty
+            ]
+            if len(dense) != len(heights):
+                return []
+            every = [*dense, *sections]
+            section = shapely.union_all(every)
+            # Geöffnet, nicht nur nach mittlerer Breite gesiebt: Am Wandhalter
+            # hing ein Band von Tausendsteln längs der ganzen Leiste an den
+            # Fasen und verband sie zu einem Stück.
+            reach = budget.local_mm / 8.0
+            changing = shapely.MultiPolygon(
+                _areas_of(
+                    shapely.difference(section, shapely.intersection_all(every))
+                    .buffer(-reach, join_style="mitre")
+                    .buffer(reach, join_style="mitre")
+                )
+            )
+        if (
+            layers
+            and changing is None
+            and layers[-1][3] is None
+            and _same(layers[-1][2], section, budget)
+        ):
+            layers[-1] = (layers[-1][0], upper, layers[-1][2], None)
+            continue
+        layers.append((lower, upper, section, changing))
+    return layers
+
+
+def _columns(airs: list[Any], budget: RebuildBudget) -> list[tuple[int, int, Any]]:
+    """Die Luft der Schichten als Säulen: je Säule erste und letzte Schicht und ihre Fläche.
+
+    Eine Wand, die durch mehrere Schichten läuft, entsteht so aus einem
+    Werkzeug. Je Schicht ein eigenes ließ dieselbe Wand mehrmals nachzeichnen,
+    jedes Mal um Tausendstel anders — am Besenhalter Stufen an den Zapfen,
+    die der Kern nicht mehr vernetzte. Von unten nach oben: Eine Säule wächst
+    in die nächste Schicht, solange dort ein gemeinsamer Teil bleibt, und
+    schrumpft dabei auf ihn; was eine Schicht darüber hinaus an Luft hat, wird
+    eine eigene Säule.
+    """
+    import shapely
+
+    remaining = [_opened(air, budget) for air in airs]
+    columns: list[tuple[int, int, Any]] = []
+    for first in range(len(remaining)):
+        while not remaining[first].is_empty:
+            column, last = remaining[first], first
+            for later in range(first + 1, len(remaining)):
+                common = _opened(shapely.intersection(column, remaining[later]), budget)
+                if common.is_empty:
+                    break
+                column, last = common, later
+            columns.append((first, last, column))
+            for index in range(first, last + 1):
+                remaining[index] = _opened(shapely.difference(remaining[index], column), budget)
+    return columns
+
+
+def _filled(sections: list[Any], fills: Sequence[MeshData], heights: list[float]) -> list[Any]:
+    """Die Querschnitte mit den Bohrungen, die später gebohrt werden, als Material."""
+    import shapely
+
+    from app.core.slice.analysis import cross_sections
+
+    if not fills:
+        return sections
+    filled = list(sections)
+    for fill in fills:
+        for index, extra in enumerate(cross_sections(fill, heights)):
+            if extra is not None and not extra.is_empty and filled[index] is not None:
+                filled[index] = shapely.union(filled[index], extra)
+    return filled
+
+
+def _straightened(section: Any) -> Any:
+    """Der Schnitt ohne die Punkte, die auf der Geraden ihrer Nachbarn liegen.
+
+    Eine Ebene quer durch eine senkrechte Wand trifft ihre senkrechten Kanten
+    in jeder Höhe in denselben Punkten, ihre Diagonalen aber je Höhe woanders.
+    Ohne diese Punkte trägt dieselbe Wand in jeder Schicht dieselben Ecken,
+    und Vereinigung und Differenz zweier Schichten treffen sie genau. Mit
+    ihnen standen am Besenhalter zwischen zwei Schichten Stufen von einem
+    Zehntausendstel, die der Kern nicht mehr vernetzte, und die Vereinigung
+    einer wechselnden Schicht trug 270 000 Ecken. Die Schranke ist die
+    Auflösung einer STL in einfacher Genauigkeit an diesem Ort.
+    """
+    import shapely
+
+    reach = max(abs(value) for value in section.bounds)
+    return shapely.simplify(section, 4.0 * float(np.spacing(np.float32(reach))))
+
+
+def _same(first: Any, second: Any, budget: RebuildBudget) -> bool:
+    """Ob zwei Querschnitte dieselbe Form haben: Was sie trennt, sind nur Splitter."""
+    return bool(_opened(first.symmetric_difference(second), budget).is_empty)
+
+
+def _opened(region: Any, budget: RebuildBudget) -> Any:
+    """Die Fläche ohne Splitter: Stücke, deren mittlere Breite unter einem
+    Viertel der Formgrenze liegt, fallen weg.
+
+    Wo eine Schicht fast dieselbe Wand hat wie der Umriss aller Schichten,
+    bleibt zwischen beiden ein Streifen von Hundertsteln. Ein Werkzeug dieser
+    Breite träfe die Wand fast deckungsgleich, und genau daran scheitert der
+    exakte Kern. Gemessen wird je Stück ``2 · Fläche / Umfang``; ein Versatz
+    nach innen und außen hätte dasselbe gesagt, lief an den Schichten des
+    Besenhalters aber minutenlang.
+    """
+    import shapely
+
+    kept = [
+        part
+        for part in _areas_of(region)
+        if 2.0 * float(part.area) / float(part.length) >= budget.local_mm / 4.0
+    ]
+    return shapely.MultiPolygon(kept)
+
+
+def _areas_of(section: Any) -> list[Any]:
+    """Die Flächenstücke einer Geometrie; Linien und Punkte einer Berührung fallen weg."""
+    import shapely
+
+    return [
+        part
+        for part in shapely.get_parts(section)
+        if part.geom_type == "Polygon" and part.area > EPS_GEOM * EPS_GEOM
+    ]
+
+
+def _thinnest_extrusion() -> float:
+    """Die kleinste Höhe, die *Skizze extrudieren* annimmt — aus ihrem Register."""
+    specs = getattr(REGISTRY.get("sketch_extrude").params, "__param_spec__", ())
+    return next(
+        (float(spec.minimum) for spec in specs if spec.name == "height" and spec.minimum),
+        EPS_GEOM,
+    )
+
+
+def _extruded(section: Any, lower: float, upper: float) -> list[MeshData] | None:
+    """Jedes Stück des Querschnitts von ``lower`` bis ``upper`` gezogen, in Zeichenkoordinaten.
+
+    Stück für Stück: Zwei Stücke, die sich in einer Ecke berühren, teilten
+    zusammen eine Kante mit vier Flächen, und das Netz wäre nicht dicht.
+    """
+    import trimesh
+
+    bodies = []
+    for part in _areas_of(section):
+        # Fast doppelte Ecken aus dem Raster zerlegt die Dreiecksteilung nicht dicht.
+        body = trimesh.creation.extrude_polygon(
+            part.simplify(EPS_GEOM, preserve_topology=True), height=upper - lower
+        )
+        if not body.is_watertight:
+            return None
+        body.apply_translation((0.0, 0.0, lower))
+        bodies.append(MeshData.of(body))
+    return bodies or None
+
+
+def _apart(first: MeshData, second: MeshData, cancelled: CancelToken) -> MeshData | None:
+    """Was von ``first`` außerhalb von ``second`` liegt — ``None``, wenn das Netz nicht rechnet."""
+    from app.core.errors import GeometryError
+    from app.core.geom.boolean import boolean
+
+    try:
+        return boolean("difference", [first, second], allow_empty=True, cancelled=cancelled).mesh
+    except GeometryError:
+        return None
+
+
+def _pieces_as_steps(
+    *residuals: tuple[MeshData, str],
+    source: MeshData,
+    frame: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    features: tuple[Feature, ...],
+    budget: RebuildBudget,
+    cancelled: CancelToken,
+    drilled: list[Feature],
+) -> list[OperationDraft] | None:
+    """Jedes Reststück als Prisma oder Bohrung — ``None``, sobald eines keines ist.
+
+    Die Bohrungen kommen in ``drilled`` dazu, jede einmal; gebohrt wird erst,
+    wenn alle Schichten zerlegt sind, denn eine Querbohrung kreuzt mehrere.
+
+    Ein Stück, das kein Prisma ist, darf eine erkannte Bohrung samt Senkung
+    berühren: Ohne deren Werkzeug (:func:`_drill_tool`) muss jedes übrige
+    Teilstück ein Prisma sein, und die Bohrung wird gebohrt. Am Besenhalter
+    lief eine gewölbte Stirnfläche über beide Schraubenlöcher, und erst ohne
+    Löcher zerfiel ihr Rest in Prismen längs der Leiste.
+    """
+    directions = _directions(frame, features)
+    holes = [feature for feature in features if feature.kind in {"hole", "slot"}]
+    steps: list[OperationDraft] = []
+    for residual, joining in residuals:
+        for piece in _pieces(residual, cancelled):
+            cancelled.raise_if_cancelled()
+            if not _substantial(piece, budget):
+                continue
+            world = _in_world(piece, frame)
+            found = _prism_piece(world, directions, source, budget, cancelled)
+            if found is not None:
+                steps.extend(
+                    (found, OperationDraft(joining, ("obj_1", "obj_2"), outputs=("obj_1",)))
+                )
+                continue
+            if joining == "union_objects":
+                return None
+            near = [hole for hole in holes if _touches(world, hole, features, budget)]
+            tools = [tool for hole in near if (tool := _drill_tool(hole, features, budget))]
+            if not near or len(tools) != len(near):
+                return None
+            rest: MeshData | None = MeshData.of(world)
+            for tool in tools:
+                rest = _apart(rest, tool, cancelled) if rest is not None else None
+            if rest is None:
+                return None
+            for part in _pieces(rest, cancelled):
+                if not _substantial(part, budget):
+                    continue
+                cut = _prism_piece(part, directions, source, budget, cancelled)
+                if cut is None:
+                    return None
+                steps.extend((cut, OperationDraft(joining, ("obj_1", "obj_2"), outputs=("obj_1",))))
+            drilled.extend(hole for hole in near if hole not in drilled)
+    return steps
+
+
+def _substantial(piece: Any, budget: RebuildBudget) -> bool:
+    """Ob ein Stück mehr ist als ein Splitter, der in der Formgrenze verschwindet.
+
+    Wo Profilkörper und Netz dieselbe Wand haben, hinterlässt die Differenz
+    Tausende Splitter ohne Dicke, und eine leicht gewölbte Stirnfläche wie am
+    Besenhalter einen Streifen von 0,013 mm. Abgezogen hätte ihn der exakte
+    Kern als fast deckungsgleiche Fläche, und die Boolesche Rechnung scheiterte.
+    Gemessen wird die mittlere Dicke ``2 · Volumen / Oberfläche``; unter einem
+    Viertel der Formgrenze bleibt auch die größte Dicke eines Keils (die
+    doppelte mittlere) innerhalb der Grenze, die die unabhängige Formprüfung
+    danach misst.
+    """
+    area = float(piece.area)
+    return area > EPS_GEOM and 2.0 * float(piece.volume) / area >= budget.local_mm / 4.0
+
+
+def _in_world(piece: Any, frame: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]) -> Any:
+    """Ein Stück aus Zeichenkoordinaten zurück in die Welt."""
+    import trimesh
+
+    foot, x_axis, y_axis, axis = frame
+    vertices = np.asarray(piece.vertices, dtype=np.float64)
+    return trimesh.Trimesh(
+        vertices=foot
+        + vertices[:, :1] * x_axis
+        + vertices[:, 1:2] * y_axis
+        + vertices[:, 2:3] * axis,
+        faces=np.asarray(piece.faces),
+        process=False,
+    )
+
+
+def _touches(
+    world: Any, hole: Feature, features: tuple[Feature, ...], budget: RebuildBudget
+) -> bool:
+    """Ob das Stück in den Zylinder einer Bohrung samt Senkung reicht."""
+    params = hole.params
+    axis = np.array(params["axis"], dtype=float, copy=True)
+    axis /= math.sqrt(dot3(axis, axis))
+    widest = float(params["diameter"])
+    for cone in _sinks_of(hole, features, budget.local_mm):
+        widest = max(widest, float(cone.params["diameter"]))
+    shifted = np.asarray(world.vertices, dtype=np.float64) - np.asarray(
+        params["centre"], dtype=float
+    )
+    axial = along(shifted, axis)
+    radial = shifted - axial[:, None] * axis
+    reach = float(params.get("depth", 0.0)) / 2.0 + widest
+    inside = (np.sqrt((radial * radial).sum(axis=1)) <= widest / 2.0 + budget.local_mm) & (
+        np.abs(axial) <= reach
+    )
+    return bool(inside.any())
+
+
+def _drill_tool(
+    hole: Feature, features: tuple[Feature, ...], budget: RebuildBudget, *, beyond: bool = True
+) -> MeshData | None:
+    """Was die Bohrung samt eindeutiger Senkung wegnimmt, als Netz — etwas weiter als sie.
+
+    Gedreht aus seinem Längsschnitt (Radius gegen Tiefe ab der Mündung), um
+    ein Zehntel der Formgrenze weiter: Die Facetten der gebohrten Wand liegen
+    innerhalb des Kreises, und was das Werkzeug mehr nimmt, ist Luft. Mit
+    ``beyond`` reicht es über beide Enden hinaus; ohne endet es an Mündung
+    und Grund — so füllt es die Bohrung, ohne über den Körper zu stehen.
+    """
+    import trimesh
+
+    params = hole.params
+    axis = np.array(params["axis"], dtype=float, copy=True)
+    axis /= math.sqrt(dot3(axis, axis))
+    centre = np.asarray(params["centre"], dtype=float)
+    radius = float(params["diameter"]) / 2.0 + budget.tessellation_mm
+    half = float(params.get("depth", 0.0)) / 2.0
+    if half <= EPS_GEOM:
+        return None
+    margin = budget.local_mm if beyond else 0.0
+    cones = _sinks_of(hole, features, budget.local_mm)
+    if len(cones) == 1:
+        mouth = np.asarray(cones[0].params["centre"], dtype=float)
+        inward = axis if dot3(centre - mouth, axis) >= 0.0 else -axis
+        far = dot3(centre - mouth, inward) + half
+        wide = float(cones[0].params["diameter"]) / 2.0 + budget.tessellation_mm
+        opening = float(cones[0].params["angle"]) / 2.0
+        if not 0.0 < opening < 90.0 or wide <= radius:
+            return None
+        sink = (wide - radius) * exact_cos_degrees(opening) / exact_sin_degrees(opening)
+        profile = [
+            (0.0, -margin),
+            (wide, -margin),
+            (wide, 0.0),
+            (radius, sink),
+            (radius, far + margin),
+            (0.0, far + margin),
+        ]
+    else:
+        mouth = centre - axis * half
+        inward = axis
+        profile = [
+            (0.0, -margin),
+            (radius, -margin),
+            (radius, 2.0 * half + margin),
+            (0.0, 2.0 * half + margin),
+        ]
+    body = trimesh.creation.revolve(np.asarray(profile, dtype=np.float64), sections=128)
+    if not body.is_watertight:
+        return None
+    x_axis, y_axis = _frame_axes(inward, mouth)
+    local = np.asarray(body.vertices, dtype=np.float64)
+    placed = trimesh.Trimesh(
+        vertices=mouth + local[:, :1] * x_axis + local[:, 1:2] * y_axis + local[:, 2:3] * inward,
+        faces=np.asarray(body.faces),
+        process=False,
+    )
+    if float(placed.volume) < 0.0:
+        placed.invert()
+    return MeshData.of(placed)
+
+
+def _pieces(body: MeshData, cancelled: CancelToken) -> list[Any]:
+    """Die zusammenhängenden Stücke eines Netzes, jedes für sich."""
+    raw = body.raw
+    if not len(raw.faces):
+        return []
+    return [
+        raw.submesh([faces], append=True) for faces in face_components(raw, cancelled=cancelled)
+    ]
+
+
+def _prism_piece(
+    piece: Any,
+    directions: list[np.ndarray],
+    source: MeshData,
+    budget: RebuildBudget,
+    cancelled: CancelToken,
+) -> OperationDraft | None:
+    """Das Stück als Extrusion seines Querschnitts längs einer der Richtungen — oder ``None``.
+
+    Ein Prisma hat überall denselben Querschnitt: in der Mitte, bei einem
+    Fünftel und bei vier Fünfteln gleich groß, und Fläche mal Länge gibt
+    sein Volumen. ``piece`` liegt in Weltkoordinaten. Abgezogen wird es mit
+    einem Werkzeug, das über das Stück hinaus in die Luft reicht
+    (:func:`_cut_reach`).
+    """
+    for direction in directions:
+        found = _as_prism(piece, direction, budget, cancelled)
+        if found is None:
+            continue
+        step = _prism_step(found, direction, source, budget, cancelled)
+        if step is not None:
+            return step
+    return None
+
+
+def _prism_step(
+    found: tuple[np.ndarray, np.ndarray, np.ndarray, float, Any],
+    direction: np.ndarray,
+    source: MeshData,
+    budget: RebuildBudget,
+    cancelled: CancelToken,
+) -> OperationDraft | None:
+    """Das Werkzeug eines Prismas aus :func:`_as_prism`, so weit es reichen darf."""
+    foot, x_axis, y_axis, span, section = found
+    below, above, outline = _cut_reach(
+        section, source, (foot, x_axis, y_axis, direction), span, budget, cancelled
+    )
+    return _extrusion(
+        foot - direction * below,
+        x_axis,
+        y_axis,
+        span + below + above,
+        _traced(outline, budget),
+        "obj_2",
+    )
+
+
+def _as_prism(
+    piece: Any, direction: np.ndarray, budget: RebuildBudget, cancelled: CancelToken
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, Any] | None:
+    """Ob das Stück ein Prisma längs ``direction`` ist — Fuß, Zeichenachsen, Länge, Querschnitt.
+
+    Ein Prisma hat überall denselben Querschnitt: in der Mitte, bei einem
+    Fünftel und bei vier Fünfteln gleich groß, und Fläche mal Länge gibt
+    sein Volumen. ``piece`` liegt in Weltkoordinaten.
+    """
+    import trimesh
+
+    from app.core.slice.analysis import cross_sections
+
+    world = np.asarray(piece.vertices, dtype=np.float64)
+    volume = float(piece.volume)
+    centre = (world.min(axis=0) + world.max(axis=0)) / 2.0
+    reach = along(world - centre, direction)
+    low, high = float(reach.min()), float(reach.max())
+    span = high - low
+    if span <= budget.tessellation_mm:
+        return None
+    foot = centre + direction * low
+    x_axis, y_axis = _frame_axes(direction, foot)
+    shifted = world - foot
+    local = MeshData.of(
+        trimesh.Trimesh(
+            vertices=np.column_stack(
+                (along(shifted, x_axis), along(shifted, y_axis), along(shifted, direction))
+            ),
+            faces=np.asarray(piece.faces),
+            process=False,
+        )
+    )
+    sections = [
+        section
+        for section in cross_sections(
+            local, [span * 0.5, span * 0.2, span * 0.8], cancelled=cancelled
+        )
+        if section is not None and not section.is_empty
+    ]
+    if len(sections) != 3:
+        return None
+    areas = [float(section.area) for section in sections]
+    if abs(areas[0] * span - volume) > PRISM_SLACK * volume or any(
+        abs(area - areas[0]) > PRISM_SLACK * areas[0] for area in areas[1:]
+    ):
+        return None
+    return foot, x_axis, y_axis, span, sections[0]
+
+
+def _cut_reach(
+    section: Any,
+    source: MeshData,
+    frame: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    span: float,
+    budget: RebuildBudget,
+    cancelled: CancelToken,
+) -> tuple[float, float, Any]:
+    """Wie weit ein Abzug über sein Stück hinausreicht: nach unten, nach oben, zur Seite.
+
+    Das Stück grenzt dort an den Körper, wo vorher eine Wand des Profils
+    stand. Ein Werkzeug genau bis dahin läge auf dieser Wand, und an solchen
+    fast deckungsgleichen Flächen scheitert der exakte Kern. Zur Seite reicht
+    es deshalb um die Formgrenze weiter, nur nicht in das Material des Körpers
+    über die Länge des Stücks; an den Enden um das Zehnfache, wo dahinter
+    kein Material steht. **Bleibt ein Ende stehen, reicht die Seite nicht über
+    das Material dahinter**: Dort liegt der Deckel des Werkzeugs auf einer
+    Fläche, die ein anderes Werkzeug schon freigelegt hat — am Besenhalter der
+    Grund der Schrift, und die beiden deckungsgleichen Stücke ließ der Kern
+    als offene Naht stehen.
+    """
+    import shapely
+
+    from app.core.slice.analysis import cross_sections
+
+    foot, x_axis, y_axis, direction = frame
+    local = _in_frame(source, foot, x_axis, y_axis, direction)
+    beyond = budget.local_mm * 10.0
+    inside = [span * (index + 0.5) / 8.0 for index in range(8)]
+    behind = budget.local_mm / 2.0
+    found = cross_sections(
+        local,
+        [*inside, -beyond / 2.0, span + beyond / 2.0, -behind, span + behind],
+        cancelled=cancelled,
+    )
+    material = shapely.union_all(
+        [entry for entry in found[: len(inside)] if entry is not None and not entry.is_empty]
+    )
+    outline = shapely.difference(section.buffer(budget.local_mm), material)
+    if outline.is_empty:
+        outline = section
+
+    def open_at(entry: Any) -> bool:
+        return entry is None or float(shapely.intersection(entry, outline).area) <= EPS_GEOM
+
+    ends = (open_at(found[-4]), open_at(found[-3]))
+    below, above = (beyond if open_end else 0.0 for open_end in ends)
+    closed = [
+        entry
+        for entry, open_end in zip(found[-2:], ends, strict=True)
+        if not open_end and entry is not None and not entry.is_empty
+    ]
+    if closed:
+        outline = shapely.union(section, shapely.difference(outline, shapely.union_all(closed)))
+    return below, above, outline
+
+
+def _apart_at_touches(rings: list[list[Any]], step: float) -> list[list[Point2]]:
+    """Ringe ohne gemeinsamen Punkt: Ein zweites Vorkommen rückt um ``step`` nach innen.
+
+    Ein gültiges Polygon darf ein Loch haben, das seinen Rand in einem Punkt
+    berührt, und zwei Teile dürfen sich in einer Ecke treffen. Die Skizze
+    liest dort eine Verzweigung und nimmt den Umriss nicht an („Der Umriss
+    verzweigt sich“, am Wandhalter quer zur Leiste). Das zweite Vorkommen
+    rückt deshalb um einen Bruchteil der Formgrenze zur Mitte seiner Nachbarn.
+    """
+    seen: set[Point2] = set()
+    result: list[list[Point2]] = []
+    for ring in rings:
+        points: list[Point2] = [(float(point[0]), float(point[1])) for point in ring]
+        moved = list(points)
+        for index, point in enumerate(points):
+            if point not in seen:
+                seen.add(point)
+                continue
+            before, after = points[index - 1], points[(index + 1) % len(points)]
+            middle = ((before[0] + after[0]) / 2.0, (before[1] + after[1]) / 2.0)
+            reach = math.dist(point, middle)
+            if reach > EPS_GEOM:
+                share = min(step / reach, 0.5)
+                moved[index] = (
+                    point[0] + (middle[0] - point[0]) * share,
+                    point[1] + (middle[1] - point[1]) * share,
+                )
+        result.append(moved)
+    return result
+
+
+def _extrusion(
+    foot: np.ndarray,
+    x_axis: np.ndarray,
+    y_axis: np.ndarray,
+    height: float,
+    elements: Sequence[SketchElement],
+    output: str,
+) -> OperationDraft | None:
+    """Fertig nachgezeichnete Elemente als feste Skizze auf der Ebene durch ``foot``,
+    gezogen um ``height``."""
+    from app.core.sketch.planes import through_plane
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import Sketch, SketchConstraint
+
+    if not elements:
+        return None
+    plane = through_plane((_vec3(foot), _vec3(foot + x_axis), _vec3(foot + y_axis)))
+    constraints = tuple(
+        SketchConstraint("fixed", (point,))
+        for point in range(sum(len(element.points) for element in elements))
+    )
+    return OperationDraft(
+        "sketch_extrude",
+        params={
+            "height": height,
+            "sketch": sketch_to_text(Sketch(plane, tuple(elements), constraints)),
+        },
+        outputs=(output,),
+    )
+
+
+def _traced(section: Any, budget: RebuildBudget) -> tuple[SketchElement, ...]:
+    """Ein Querschnitt als Strecken, Bögen und Kreise, Ring für Ring."""
+    from app.core.sketch.traced import traced_loop
+
+    parts = _areas_of(section)
+    rings = [list(ring.coords)[:-1] for part in parts for ring in (part.exterior, *part.interiors)]
+    return tuple(
+        element
+        for ring in _apart_at_touches(rings, budget.tessellation_mm / 10.0)
+        for element in traced_loop(
+            ring,
+            budget.tessellation_mm,
+            sag=budget.local_mm / 2.0,
+            shortest=budget.local_mm / 4.0,
+        )
+    )
 
 
 def _supported_box(source: SceneObject, basis: np.ndarray) -> OperationDraft | None:
@@ -952,6 +2074,23 @@ def _rounded(
     return pending
 
 
+#: Welcher Anteil der Oberfläche sich selbst durchdringen darf, ohne dass der
+#: Nachbau anhält. Aus CAD exportierte Netze kreuzen sich oft an einer Naht in
+#: vier bis achtzig Dreiecken; am Korpus hielt das 16 Körper an, darunter
+#: Minigolfteile und eine Kehle am Zapfen (0,07 % der Fläche). Form und
+#: Volumen ändert so wenig nichts, was die unabhängige Prüfung nicht sähe.
+CROSSING_SHARE: Final = 0.001
+
+
+def _crossing_share(mesh: MeshData, crossed: tuple[int, ...]) -> float:
+    """Welcher Anteil der Oberfläche auf Dreiecken liegt, die andere durchdringen."""
+    if not crossed:
+        return 0.0
+    areas = np.asarray(mesh.raw.area_faces, dtype=np.float64)
+    total = float(areas.sum())
+    return float(areas[list(crossed)].sum()) / total if total > 0.0 else 1.0
+
+
 def propose(
     document: Document,
     object_id: str,
@@ -990,7 +2129,7 @@ def propose(
     from app.core.geom.repair import self_intersection_check
 
     crossed, complete = self_intersection_check(mesh, token)
-    if crossed or not complete:
+    if not complete or _crossing_share(mesh, crossed) > CROSSING_SHARE:
         raise UserError(
             _("Die Ausgangsform ist noch nicht vollständig als überschneidungsfrei geprüft."),
             _("Reparieren Sie das Modell und starten Sie den Nachbau erneut."),
@@ -1000,6 +2139,11 @@ def propose(
         progress(0.1, str(_("Modell nachbauen")))
     # P4.0 liefert die begrenzten analytischen Flächen als Kandidatenquelle.
     # Die unabhängige Abnahme unten vergleicht weiterhin mit dem Originalnetz.
+    # Ohne P4.0-Körper bleiben die Wege am Netz: Grundkörper aus seinen
+    # Merkmalen und der Profilkörper aus seinen Querschnitten. An 20 Teilen
+    # des Korpus entstand kein P4.0-Körper, und der Nachbau sagte dort ab,
+    # bevor er einen Weg versucht hatte.
+    recovered: Solid | None
     if isinstance(source.mesh, Solid):
         recovered = source.mesh
     else:
@@ -1010,23 +2154,21 @@ def propose(
                 tolerance=from_mesh.DEFAULT_TOLERANCE,
                 cancelled=token,
             ).solid
-        except from_mesh.ConversionRefusedError as error:
-            raise UserError(
-                _("Aus den erkannten Flächen ließ sich kein geschlossener Körper bauen."),
-                _("Reparieren Sie das Modell und starten Sie den Nachbau erneut."),
-                suggestions=(CANCEL,),
-            ) from error
-    recovered_source = replace(
-        source, mesh=recovered, features=features_of(recovered, cancelled=token)
+        except from_mesh.ConversionRefusedError:
+            recovered = None
+    recovered_source = (
+        None
+        if recovered is None
+        else replace(source, mesh=recovered, features=features_of(recovered, cancelled=token))
     )
-    forms = [recovered_source]
+    forms = [source] if recovered_source is None else [recovered_source]
     original_kinds = Counter(
         feature.kind for feature in source.features.values() if feature.kind != "face"
     )
     recovered_kinds = Counter(
-        feature.kind for feature in recovered_source.features.values() if feature.kind != "face"
+        feature.kind for feature in forms[0].features.values() if feature.kind != "face"
     )
-    if original_kinds - recovered_kinds:
+    if recovered_source is not None and original_kinds - recovered_kinds:
         # P4.0 kann einen erkannten Träger wegen seiner Randkurve als Facetten
         # behalten. Der ursprüngliche Fit bleibt ein weiterer Kandidat; nur
         # die unabhängige vollständige Formprüfung darf ihn freigeben.
@@ -1067,7 +2209,13 @@ def propose(
             unexplained = tuple(
                 sorted(
                     (relevant - explained)
-                    | _unexplained_planes(form, body, token, boundary_mm=budget.local_mm)
+                    | _unexplained_planes(
+                        form,
+                        body,
+                        token,
+                        boundary_mm=budget.local_mm,
+                        offset_mm=budget.tessellation_mm / 10.0,
+                    )
                 )
             )
             if unexplained:
@@ -1089,10 +2237,20 @@ def propose(
         plans.extend(
             plan for form in forms for plan in _rounded(form, document, profile, budget, token)
         )
-        plans.extend(_layered(recovered_source, budget.local_mm, token))
+        if recovered_source is not None:
+            plans.extend(_layered(recovered_source, budget.local_mm, token))
         for index, (drafts, explained, form) in enumerate(plans):
             if progress is not None:
-                progress(0.6 + 0.4 * index / len(plans), str(REGISTRY.get(drafts[0].op).title))
+                progress(0.6 + 0.3 * index / len(plans), str(REGISTRY.get(drafts[0].op).title))
+            assess(drafts, explained, form)
+            if candidates and candidates[-1].check.accepted:
+                break
+    if not any(candidate.check.accepted for candidate in candidates):
+        # Der Profilkörper zuletzt: Er rechnet Boolesche am Netz, bevor er
+        # einen Plan hat, und trägt, was die Wege davor nicht tragen.
+        if progress is not None:
+            progress(0.9, str(_("Modell nachbauen")))
+        for drafts, explained, form in _prismatic(source, mesh, budget, token):
             assess(drafts, explained, form)
             if candidates and candidates[-1].check.accepted:
                 break

@@ -123,8 +123,44 @@ def test_a_divided_cell_asks_only_its_new_points(monkeypatch: pytest.MonkeyPatch
     assert result.upper_mm >= farthest > 0.01
     first = before.triangle_count + after.triangle_count
     divided = (result.samples // 4 - first) // 4
-    assert divided > 1000
+    # Viele Teilungen, nicht eine bestimmte Zahl: Die Schranke neben einer
+    # Facette nimmt einen Teil der Zellen schon früher an.
+    assert divided > 500
     assert sum(asked) <= 4 * first + 7 * divided
+
+
+def test_a_cell_beside_a_facet_is_bounded_without_dividing() -> None:
+    """RM-022: Ragt eine flache Zelle knapp über den Rand einer Facette, gilt sqrt(h² + r²).
+
+    Zwei Platten 40 x 40 x 4 mit einem Durchbruch 2 x 2, der zweite um
+    0,004 mm versetzt — wie am Besenhalter, wo der Nachbau die Buchstaben
+    auf der Rückseite um Tausendstel anders zog. Die flachen Dreiecke der
+    einen Platte ragen über den Durchbruch der anderen; mit der Schranke
+    neben der Facette (``permitted / 2`` seitlich) wird keine Zelle geteilt,
+    ohne sie 156-mal. Die obere Schranke bleibt eine: Sie liegt über dem
+    Versatz der Lochwände.
+    """
+    import manifold3d
+
+    from app.core.geom.difference import surface_distance_bound
+
+    def plate(shift: float) -> MeshData:
+        body = manifold3d.Manifold.cube((40.0, 40.0, 4.0), True) - manifold3d.Manifold.cube(
+            (2.0, 2.0, 6.0), True
+        ).translate((shift, 0.0, 0.0))
+        out = body.to_mesh()
+        return MeshData.of(
+            trimesh.Trimesh(
+                np.asarray(out.vert_properties)[:, :3], np.asarray(out.tri_verts), process=False
+            )
+        )
+
+    before, after = plate(0.0), plate(0.004)
+    result = surface_distance_bound(before, after, permitted_mm=0.05)
+
+    assert result.within_limit
+    assert result.upper_mm >= 0.004
+    assert result.samples == 4 * (before.triangle_count + after.triangle_count)
 
 
 def test_an_exhausted_surface_check_never_certifies_the_shape() -> None:

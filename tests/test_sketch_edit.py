@@ -711,6 +711,51 @@ def test_an_oblique_section_of_an_exact_cylinder_becomes_a_curve() -> None:
         assert (x / 10.0) ** 2 + (y * math.cos(tilt) / 10.0) ** 2 == pytest.approx(1.0, abs=1e-6)
 
 
+def test_section_ends_within_the_kernels_own_tolerance_become_one_point() -> None:
+    """Am Körper aus einem Netz (P4.0) schließen Nachbarflächen nur innerhalb
+    der Toleranz ihrer Eckpunkte aneinander; am Besenhalter aus Roberts Test
+    lagen die Schnittkanten 0,0001 bis 0,0002 mm auseinander, und die Skizze
+    nahm den Umriss als offen nicht an. Zusammengelegt wird, was näher liegt
+    als beide Eckpunkttoleranzen zusammen — nicht mehr: Bei Toleranzen eines
+    sauberen Körpers bleibt dieselbe Lücke stehen. Doppelte Kanten und
+    Strecken ohne Länge entfallen."""
+    pytest.importorskip("OCP")
+    from app.core.brep.section import SectionCurve, _joined
+
+    loose = 1.5e-4
+    bend = [
+        SectionCurve("line", ((0.0, 0.0), (10.0, 0.0))),
+        SectionCurve("line", ((10.0 + loose, 0.0), (10.0, 10.0))),
+        SectionCurve("arc", ((10.0, 15.0), (10.0, 10.0 + loose), (15.0, 15.0))),
+        SectionCurve("line", ((10.0, 10.0), (10.0 + loose, 0.0))),
+        SectionCurve("line", ((0.0, 0.0), (loose / 2.0, 0.0))),
+    ]
+    sewn = [(1e-4, 1e-4)] * len(bend)
+    clean = [(1e-7, 1e-7)] * len(bend)
+
+    joined = _joined(bend, sewn)
+    corner = {curve.points[-1] for curve in joined[:1]} | {joined[1].points[0]}
+    assert len(corner) == 1, "die Ecke bei x = 10 ist ein Punkt"
+    assert joined[2].points[1] == joined[1].points[1], "der Bogen schließt an die Strecke an"
+    assert len(joined) == 3, "die rückwärts doppelte Kante und die Strecke ohne Länge entfallen"
+
+    kept = _joined(bend, clean)
+    assert kept[0].points[1] != kept[1].points[0], "bei sauberen Toleranzen bleibt die Lücke"
+
+    # Rückt ein Bogenende auf das Ende einer Strecke, bleibt der Bogen ein
+    # Bogen: Seine Schenkel sind gleich lang, sonst nähme der Löser die
+    # Skizze mit festen Punkten als Widerspruch nicht an.
+    quarter = [
+        SectionCurve("line", ((5.0, -5.0), (0.0, 5.0 + loose))),
+        SectionCurve("arc", ((0.0, 0.0), (0.0, 5.0), (-5.0, 0.0))),
+    ]
+    welded = _joined(quarter, [(1e-4, 1e-4)] * 2)
+    centre, start, end = welded[1].points
+    assert start == welded[0].points[1]
+    assert math.dist(centre, start) == pytest.approx(math.dist(centre, end), abs=1e-12)
+    assert math.dist(centre, (0.0, 0.0)) <= loose
+
+
 def test_a_section_beside_an_exact_body_says_so() -> None:
     """Regel 17 gilt auch am exakten Weg: kein Schnitt, eine Aussage."""
     plate = _exact_plate()
