@@ -26,6 +26,7 @@ class Field:
 
     path: str
     title: str | TranslatableText
+    """Die Beschriftung — im ganzen Dialog nur einmal vergeben (RM-514)."""
     group: str
     kind: FieldKind = "float"
     unit: str = ""
@@ -35,6 +36,8 @@ class Field:
     decimals: int = 2
     choices: tuple[str, ...] = ()
     front: bool = False
+    """Vorn im Dialog stehen nur Fülldichte und Stützen (RM-514); was aus
+    Drucker, Filament und Qualität kommt, steht hinter „Weitere Einstellungen"."""
     factor: float = 1.0
     """Anzeige geteilt durch Modellwert. Der Kern rechnet Anteile in 0…1, die
     Werkstatt spricht in Prozent — ein Feld mit ``[%]`` und einer 0,15 darin
@@ -96,7 +99,6 @@ FIELDS: tuple[Field, ...] = (
         maximum=1.2,
         step=0.02,
         decimals=3,
-        front=True,
         note=_(
             "Wie dick jede Schicht ist. Weniger heißt feiner und länger: 0,2 mm ist der Alltag, "
             "0,12 mm für Sichtteile, 0,28 mm für Klötze."
@@ -104,7 +106,7 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "layers.first_layer_height",
-        _("Erste Schicht"),
+        _("Schichthöhe erste Schicht"),
         "layers",
         unit="mm",
         minimum=0.02,
@@ -149,7 +151,6 @@ FIELDS: tuple[Field, ...] = (
         kind="int",
         minimum=1,
         maximum=20,
-        front=True,
         note=_(
             "Wie viele Bahnen die Außenhaut dick ist. Zwei halten die Form, drei oder vier tragen "
             "Last."
@@ -263,7 +264,6 @@ FIELDS: tuple[Field, ...] = (
         "infill",
         kind="enum",
         choices=("grid", "gyroid", "honeycomb", "cubic", "lines", "triangles"),
-        front=True,
         note=_(
             "Wie die Füllung gelegt wird. Gyroid trägt in alle Richtungen gleich, Gitter ist "
             "schneller, Wabe liegt dazwischen."
@@ -287,13 +287,12 @@ FIELDS: tuple[Field, ...] = (
     # --- Temperaturen ---
     Field(
         "temperature.nozzle",
-        _("Düse"),
+        _("Düsentemperatur"),
         "temperature",
         kind="int",
         unit="°C",
         minimum=0,
         maximum=400,
-        front=True,
         note=_(
             "Wie heiß die Düse ist. Zu kalt heißt schwache Schichtbindung, zu heiß bringt Fäden "
             "und weiche Überhänge."
@@ -311,13 +310,12 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "temperature.bed",
-        _("Bett"),
+        _("Betttemperatur"),
         "temperature",
         kind="int",
         unit="°C",
         minimum=0,
         maximum=150,
-        front=True,
         note=_(
             "Wie warm das Bett ist. Die passende Temperatur hilft der Haftung und "
             "kann das Hochziehen der Ecken verringern."

@@ -136,29 +136,38 @@ def _body_text() -> str:
     Und mitten im Arbeitsschritt liest sich ein Paragrafenverweis wie
     Kleingedrucktes: Der Hinweis soll Vertrauen schaffen, dass wir sagen, was
     geschieht — nicht den Eindruck, dass wir uns absichern.
+
+    **Höchstens 45 Wörter mit Haken und Satz darunter** (RM-514): Es waren 94,
+    und mitten in der Arbeit liest niemand einen Absatz. Der Rat blieb, knapper
+    gesagt; was die Mitgabe bewirkt, steht am Haken.
     """
     return tr(
-        "Solidon nutzt das gewählte Herstellerprofil, soweit es unterstützt "
-        "und lesbar ist. Fehlende Grundlagen kommen aus Solidons Tabellen. "
-        "Ihre Änderungen und übernommenen Vorschläge ergänzen diese "
-        "Grundlage.\n\nWenn Sie Druckeinstellungen mitgeben, übernimmt der "
-        "Slicer die unterstützten Werte aus der Übergabe. Ohne diese Mitgabe "
-        "verwendet er seine eigenen Druckeinstellungen.\n\nPrüfen Sie die "
-        "wirksamen Werte vor dem Druck, besonders bei einem neuen Filament "
-        "oder einer noch nicht geprüften Kombination aus Drucker und Material."
+        "Grundlage ist das Herstellerprofil, Lücken füllen Solidons Tabellen.\n\n"
+        "Prüfen Sie die wirksamen Werte vor dem Druck, besonders bei neuem Filament "
+        "oder ungeprüfter Kombination aus Drucker und Material."
     )
 
 
-def _share_label() -> str:
-    return tr("Werte beim Speichern und Übergeben mitgeben")
+def share_label() -> str:
+    """Der Haken heißt hier wie im Druckdialog, denn dort wird er geändert.
+
+    Hier stand „Werte beim Speichern und Übergeben mitgeben", im Dialog
+    „Werte mitgeben": zwei Namen für einen Schalter (RM-514). Beide lesen
+    jetzt diese Funktion.
+    """
+    return tr("Werte mitgeben")
 
 
 def _share_note() -> str:
     return tr(
-        "Ohne Haken bleiben Geometrie und Filamentzuordnung in der 3MF erhalten; "
-        "Ihr Slicer verwendet seine eigenen Druckeinstellungen. Sie können die "
-        "Mitgabe jederzeit in den Druckeinstellungen ändern."
+        "Ohne Haken tragen 3MF und Übergabe nur Geometrie und Filamentzuordnung; "
+        "der Slicer nimmt seine eigenen Werte."
     )
+
+
+def disclosure_words() -> int:
+    """Wie viele Wörter der Hinweis zu lesen gibt: Absätze, Haken, Satz darunter."""
+    return sum(len(text.split()) for text in (_body_text(), share_label(), _share_note()))
 
 
 class PrintDisclosureDialog(QDialog):
@@ -173,17 +182,14 @@ class PrintDisclosureDialog(QDialog):
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(ROOMY)
 
-        heading = QLabel(_title_text(), self)
-        set_level(heading, "title")
-        heading.setWordWrap(True)
-        layout.addWidget(heading)
-
+        # **Keine Überschrift, die den Fenstertitel wiederholt** (RM-514): Sie
+        # stand ein zweites Mal groß über dem Text und sagte nichts Neues.
         body = QLabel(_body_text(), self)
         body.setWordWrap(True)
         body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(body)
 
-        self.share = QCheckBox(_share_label(), self)
+        self.share = QCheckBox(share_label(), self)
         self.share.setChecked(share)
         layout.addWidget(self.share)
 

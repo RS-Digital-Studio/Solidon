@@ -1,8 +1,9 @@
 """Druckeinstellungen und Übergabe an den Slicer (Bauplan §29, §2.4).
 
 Der Dialog, der den Wechsel ins andere Programm ersetzt. Vorn steht, was man
-wirklich ändert — Qualität, Füllung, Stützen, Farbe —, hinter „Weitere
-Einstellungen" liegt der Rest, nach Gebieten sortiert (§2.4, gestufte Tiefe).
+wirklich ändert — Drucker, Filamente, Qualität, Fülldichte, Stützen —, hinter
+„Weitere Einstellungen" liegt der Rest samt Suche, nach Gebieten sortiert
+(§2.4, gestufte Tiefe; RM-514).
 
 Die Felder kommen aus :data:`FIELDS`, einer Tabelle in
 :mod:`app.core.knowledge.print_fields`: eine neue Einstellung im Kernmodell
@@ -28,7 +29,7 @@ from time import monotonic
 from typing import Any, Final, cast
 from uuid import uuid4
 
-from PySide6.QtCore import QCoreApplication, QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QItemSelectionModel, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -156,6 +157,7 @@ from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible, even_fields
 from app.ui.print_contract import handoff_receipt
+from app.ui.print_disclosure import share_label
 from app.ui.session import Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.style import (
@@ -167,6 +169,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    WrappedNote,
     expanded_width,
     fit_dialog_to_screen,
     make_primary,
@@ -203,6 +206,10 @@ _OWN_TIP: Final = "solidonOwnTip"
 #: Rolle, unter der ein Auswahleintrag seinen eigenen Satz aufhebt, solange er
 #: den Grund trägt, aus dem das Programm ihn nicht kennt (:func:`_offer_choices`).
 _OWN_CHOICE_TIP: Final = Qt.ItemDataRole.UserRole + 41
+
+#: Rolle, unter der eine Zeile der Vorschläge ihren ganzen Grund trägt — den
+#: Satz unter der Tabelle (:meth:`PrintSettingsDialog._show_advice_reason`).
+_ADVICE_REASON_ROLE: Final = Qt.ItemDataRole.UserRole + 42
 
 
 def _offer_choices(combo: QComboBox, path: str, program: str) -> None:
@@ -590,9 +597,10 @@ def _show_refusal(editor: BoundedSpin | BoundedLengthSpin, label: QLabel) -> str
 def accessible_name(field: Field) -> str:
     """Wie ein Feld heißt, wenn man es nicht sieht — eindeutig im Dialog.
 
-    „Erste Schicht" steht zweimal (Schichthöhe und Tempo), „Außenwand" auch;
-    ein Bildschirmleser, der zweimal dasselbe Wort vorliest, sagt nicht,
-    welches Feld den Fokus hat. Bei Gleichstand kommt die Gruppe dazu.
+    Ein Bildschirmleser, der zweimal dasselbe Wort vorliest, sagt nicht,
+    welches Feld den Fokus hat. Seit RM-514 trägt jede Beschriftung des
+    Dialogs ein eigenes Wort („Schichthöhe erste Schicht" neben dem Tempo
+    „Erste Schicht"); käme ein Gleichstand zurück, nennt der Name die Gruppe.
     """
     title = str(field.title)
     twins = sum(1 for other in FIELDS if str(other.title) == title)
@@ -2563,6 +2571,7 @@ class PrintSettingsDialog(QDialog):
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        outer.setSpacing(NORMAL)
         self._scroll = DialogScrollArea(self)
         contents = QWidget(self._scroll)
         layout = QVBoxLayout(contents)
@@ -2572,7 +2581,7 @@ class PrintSettingsDialog(QDialog):
         # **Vor** dem Slicer-Abschnitt: Dessen Filamentzeilen fragen die
         # Plattenwahl bereits beim Aufbau (``_plate_slots``). Erzeugt
         # wird sie deshalb hier, eingehängt wird sie weiter unten in
-        # ``_build_state`` — dort, wo der Kunde sie braucht.
+        # ``_build_head`` — dort, wo der Kunde sie braucht.
         self._make_plate_row()
         # **Die Reihenfolge ist die der Abhängigkeiten** (Robert, 29.09.2026:
         # „der Slicer unten und der Drucker oben, obwohl der Drucker vom Slicer
@@ -2590,7 +2599,6 @@ class PrintSettingsDialog(QDialog):
             self.adopt_printer,
             self.nozzle_choice,
             self.nozzle,
-            self.nozzle_count,
             self.plate_choice,
             self.material_link,
             self.quality,
@@ -2601,29 +2609,28 @@ class PrintSettingsDialog(QDialog):
         # **Unter den Profilen steht die Grundlage** (Konzept Herstellerprofil,
         # Entscheidung H): worauf Solidon aufsetzt, in einem Satz. Im Kasten
         # „Profile des Slicers" las ihn nur, wer den Kasten aufklappte (Review
-        # Stufe A+B, H11).
+        # Stufe A+B, H11). Ohne Profil des Herstellers ist es **der eine** Satz
+        # dazu; der Kasten bleibt dann zu (RM-514, :meth:`_foundation_line`).
         self.foundation_note = QLabel("", self)
         self.foundation_note.setWordWrap(True)
         layout.addWidget(self.foundation_note)
-        # **Über beiden Abschnitten, nicht darin.** Wer sucht, weiß gerade
-        # nicht, wo das Gesuchte steht — ein Suchfeld in „Weitere
-        # Einstellungen" fände nur, wer den Bereich schon offen hat. Es steht
-        # deshalb über dem, was es durchsucht, und klappt selbst auf, wenn der
-        # Treffer dahinter liegt; zwischen „Das Wichtigste" und der Klappe las
-        # es sich als Teil des ersten Abschnitts.
-        self.search_row = self._build_search()
-        layout.addLayout(self.search_row)
         self.front_box = self._build_front()
         layout.addWidget(self.front_box)
         self.tabs_box = self._build_tabs()
         layout.addWidget(self.tabs_box)
+        # Düsenzahl und Suche entstehen früher, als sie stehen: in der Klappe
+        # vor den Reitern. Die Tabulatortaste geht trotzdem denselben Weg.
+        if self.tabs_toggle is not None:
+            QWidget.setTabOrder(self.tabs_toggle, self.nozzle_count)
+        QWidget.setTabOrder(self.nozzle_count, self.search)
         self.advice_box = self._build_advice()
         layout.addWidget(self.advice_box)
-        layout.addWidget(self._build_state())
-        self.usage_notice = UsageNotice(ui_settings, self)
-        self.usage_notice.changed.connect(self._refresh_advice)
-        layout.addWidget(self.usage_notice)
         layout.addStretch(1)
+        # **Zustand, Bestand und Mitgabe stehen über den Knöpfen, nicht im
+        # Rollbereich** (RM-514, Muster ``generate_dialog``): Sie sagen, was
+        # die Knöpfe gleich tun oder eben getan haben. Im Rollbereich trennte
+        # sie nach dem Zuklappen bis zu 260 Punkte Leere von ihnen.
+        outer.addWidget(self._build_state())
         self._buttons = self._build_buttons()
         outer.addWidget(self._buttons)
 
@@ -2822,7 +2829,7 @@ class PrintSettingsDialog(QDialog):
         self.nozzle_count.setSingleStep(1)
         self.nozzle_count.setDecimals(0)
         self.nozzle_count.setKeyboardTracking(False)
-        self.nozzle_count.setAccessibleName(tr("Düsen"))
+        self.nozzle_count.setAccessibleName(tr("Düsenzahl"))
         self.nozzle_count.setToolTip(
             tr(
                 "Wie viele Düsen der Drucker zugleich führt. Eine Wechselstation zählt "
@@ -2874,7 +2881,7 @@ class PrintSettingsDialog(QDialog):
         # es einmal; hier steht die Antwort zum Nachsehen und Ändern — sonst
         # wäre die Wahl eine Einbahnstraße, und genau das war der Fehler, den
         # dieser Umschalter behebt.
-        self.share_settings = QCheckBox(tr("Werte mitgeben"), self)
+        self.share_settings = QCheckBox(share_label(), self)
         self.share_settings.setChecked(self.ui_settings.print_settings_in_files)
         self.share_settings.setToolTip(
             tr(
@@ -2893,9 +2900,9 @@ class PrintSettingsDialog(QDialog):
         self.quality_label = quality_label
         printer_label = QLabel(tr("Drucker"), self)
         printer_label.setBuddy(self.printer_choice)
-        # **Weder „Düse" noch „Düsendurchmesser".** Das erste ist in diesem
-        # Dialog vergeben — es beschriftet die *Temperatur* („Düse 210 °C"),
-        # und zwei gleich benannte Zeilen wären eine Verwechslung, die der
+        # **Weder „Düse" noch „Düsendurchmesser".** Das erste hieß bis RM-514
+        # auch die *Temperatur* („Düse 210 °C", heute „Düsentemperatur"), und
+        # zwei gleich benannte Zeilen wären eine Verwechslung, die der
         # Kunde erst nach dem Druck bemerkt. Das zweite ist zu lang: Spalte
         # null trägt die längste Beschriftung, und „Diâmetro do bico" drückte
         # die Druckerauswahl auf 342 px, wo „Allgemeiner FDM-Drucker 220 mm"
@@ -2905,7 +2912,7 @@ class PrintSettingsDialog(QDialog):
         nozzle_label = QLabel(tr("Düse ⌀"), self)
         nozzle_label.setBuddy(self.nozzle_choice)
         self.nozzle_label = nozzle_label
-        nozzle_count_label = QLabel(tr("Düsen"), self)
+        nozzle_count_label = QLabel(tr("Düsenzahl"), self)
         nozzle_count_label.setBuddy(self.nozzle_count)
         self.nozzle_count_label = nozzle_count_label
         filament_label = QLabel(tr("Filamente"), self)
@@ -2949,15 +2956,13 @@ class PrintSettingsDialog(QDialog):
         # Die Düse **unter** dem Drucker und nicht daneben: Die Auswahl
         # daneben blieb sonst 234 px breit, und „Allgemeiner FDM-Drucker
         # 220 mm" braucht 360 (``test_print_settings_ui`` misst ihn nach).
-        # Die Zahl der Düsen rechts daneben, in derselben Zeile: Beides ist
-        # die Düse.
+        # **Die Zahl der Düsen steht hinter „Weitere Einstellungen"** (RM-514):
+        # Sie ändert sich mit dem Gerät, nicht mit dem Teil, und vorn zählte
+        # sie zu 34 Bedienelementen (:meth:`_build_tabs`).
         nozzle_row = QHBoxLayout()
         nozzle_row.setContentsMargins(0, 0, 0, 0)
         nozzle_row.setSpacing(NORMAL)
         nozzle_row.addWidget(self.nozzle_control)
-        nozzle_row.addSpacing(NORMAL)
-        nozzle_row.addWidget(nozzle_count_label)
-        nozzle_row.addWidget(self.nozzle_count_control)
         nozzle_row.addStretch(1)
         head.addRow(nozzle_label, nozzle_row)
         # **Die Platte vor den Filamenten**: Sie bestimmt, welche Slots die
@@ -3548,14 +3553,14 @@ class PrintSettingsDialog(QDialog):
         )
 
     def _build_front(self) -> QWidget:
-        """Die sieben Werte, die man wirklich ändert (§2.4).
+        """Die Werte, die man an jedem Teil ändert: Fülldichte und Stützen (§2.4).
 
-        **Als Aufklapper und nicht als gerahmter Kasten** (Befund B9): Der
-        Dialog mischte zwei Abschnittsformen — eingelassener Titel in einem
-        Rahmen über rahmenlosen Aufklappern —, und zwei Formen heißen zwei
-        Rhythmen. Gewonnen hat die Familie, die mehr kann: Zuklappen verlangt
-        §2.5, und links im Fenster tragen Objektbaum, Parameter und Verlauf
-        dieselbe Form. Ein Griff statt zweier.
+        **Ohne eigene Klappe** (RM-514): Hier standen sieben Werte unter „Das
+        Wichtigste", und mit Kopfzeile, Profilen und Vorschlägen zeigte der
+        Dialog beim Öffnen 34 Bedienelemente. Schichthöhe, Wände, Füllmuster
+        und Temperaturen kommen aus Drucker, Filament und Qualität und stehen
+        hinter „Weitere Einstellungen"; vorn bleiben zwei Zeilen, und zwei
+        Zeilen brauchen keine Überschrift, die man auf- und zuklappt.
         """
         inner = QWidget(self)
         form = QFormLayout(inner)
@@ -3563,9 +3568,8 @@ class PrintSettingsDialog(QDialog):
         for field in FIELDS:
             if field.front:
                 self._add_row(form, field)
-        box = collapsible(tr("Das Wichtigste"), inner)
-        self.front_toggle = _toggle_of(box)
-        return box
+        self.front_toggle: QToolButton | None = None
+        return inner
 
     def _build_search(self) -> QFormLayout:
         """Die Zeile, mit der man eine von sechsundfünfzig Einstellungen findet.
@@ -3573,8 +3577,11 @@ class PrintSettingsDialog(QDialog):
         Der Dialog trägt zehn Gruppen, und bis hierhin half nur Aufklappen und
         Lesen — die Geste, die jeder Slicer mitbringt, fehlte als einzige.
 
-        Ein Formular mit einer Zeile, damit ``align_forms`` das Feld an die
-        Kante der übrigen legt; als lose Zeile begann es 113 Punkte vor ihnen.
+        Ein Formular, damit ``align_forms`` das Feld an die Kante der übrigen
+        legt; als lose Zeile begann es 113 Punkte vor ihnen. Es steht in
+        „Weitere Einstellungen" über den Reitern, denn vorn bleiben zwei Felder,
+        und gesucht wird, was dahinter liegt (RM-514); die Zusammenfassung der
+        zugeklappten Klappe nennt die Suche.
         """
         row = QFormLayout()
         row.setContentsMargins(0, 0, 0, 0)
@@ -3935,7 +3942,7 @@ class PrintSettingsDialog(QDialog):
             self._scroll.ensureWidgetVisible(editor)
 
     def _build_tabs(self) -> QWidget:
-        """Die hinteren sechsundvierzig Felder, hinter einem Dreieck.
+        """Die hinteren Felder samt Düsenzahl und Suche, hinter einem Dreieck.
 
         Vorher war es eine ankreuzbare Gruppe, und darüber hat dieselbe
         Anwendung an zwei anderen Stellen schon entschieden (siehe
@@ -3944,6 +3951,15 @@ class PrintSettingsDialog(QDialog):
         „zugeklappt", es sagt „aus". Der Umschalter aus ``panels.collapsible``
         ist derselbe wie dort, mit Dreieck und ganzer Zeile als Klickfläche.
         """
+        # **Vor den Reitern: Düsenzahl und Suche** (RM-514). Die Zahl der
+        # Düsen gehört zum Drucker wie der Durchmesser, ändert sich aber nur
+        # mit dem Gerät; die Suche findet, was in den Reitern liegt.
+        self.search_row = self._build_search()
+        nozzles = QHBoxLayout()
+        nozzles.setContentsMargins(0, 0, 0, 0)
+        nozzles.addWidget(self.nozzle_count_control)
+        nozzles.addStretch(1)
+        self.search_row.insertRow(0, self.nozzle_count_label, nozzles)
         self.tabs = QTabWidget(self)
         for group in GROUPS:
             page = QWidget(self.tabs)
@@ -3969,11 +3985,16 @@ class PrintSettingsDialog(QDialog):
         bar.setElideMode(Qt.TextElideMode.ElideRight)
         bar.setExpanding(False)
         self.tabs.currentChanged.connect(self._refit_sections)
+        more = QWidget(self)
+        more_layout = QVBoxLayout(more)
+        more_layout.setContentsMargins(0, 0, 0, 0)
+        more_layout.addLayout(self.search_row)
+        more_layout.addWidget(self.tabs)
         box = collapsible(
             tr("Weitere Einstellungen"),
-            self.tabs,
+            more,
             open_now=False,
-            contents=tr("Wände, Füllung, Temperaturen, Stützen, Geschwindigkeit und mehr"),
+            contents=tr("Suche, Schichthöhe, Wände, Temperaturen, Düsenzahl und mehr"),
             remember="print.more",
         )
         self.tabs_toggle = _toggle_of(box)
@@ -4146,7 +4167,7 @@ class PrintSettingsDialog(QDialog):
         self.machine_choice.setToolTip(machine_note)
         self.machine_choice.setStatusTip(machine_note)
         self.machine_choice.setAccessibleDescription(machine_note)
-        self.machine_choice.setAccessibleName(tr("Drucker"))
+        self.machine_choice.setAccessibleName(tr("Druckerprofil"))
         self.process_choice = QComboBox(self.slicer_inner)
         self.process_choice.setEnabled(False)
         # Der Slicen-Knopf fragt die Profilwahl vor dem Klick (Regel 19) —
@@ -4190,15 +4211,26 @@ class PrintSettingsDialog(QDialog):
         self._filament_title = ""
         """Wie dieses Profil heißt. Für die Anzeige und die Meldung danach."""
 
-        form.addRow(tr("Drucker"), self.machine_choice)
+        # **Jede Beschriftung einmal im Dialog** (RM-514): Hier stand
+        # „Drucker" ein zweites Mal unter dem Drucker der Kopfzeile, dazu
+        # „Grundprofil" und „Filament" für das, was der Slicer Prozess- und
+        # Filamentprofil nennt.
+        self.machine_label = QLabel(tr("Druckerprofil"), self.slicer_inner)
+        self.machine_label.setBuddy(self.machine_choice)
+        form.addRow(self.machine_label, self.machine_choice)
         # Der Hinweis spricht über das Druckerprofil — „Für X bringt Y kein
         # eigenes Profil mit" — und steht deshalb direkt darunter, nicht am
-        # Ende des Kastens.
+        # Ende des Kastens. Ohne Text steht die Zeile nicht da
+        # (:meth:`_show_profile_rows`).
         self.profile_note = QLabel(tr("Der Profilbestand wird durchgesehen …"), self.slicer_inner)
         self.profile_note.setWordWrap(True)
         form.addRow(self.profile_note)
-        form.addRow(tr("Grundprofil"), self.process_choice)
-        form.addRow(tr("Filament"), filament_row)
+        self.process_label = QLabel(tr("Prozessprofil"), self.slicer_inner)
+        self.process_label.setBuddy(self.process_choice)
+        form.addRow(self.process_label, self.process_choice)
+        self.filament_profile_label = QLabel(tr("Filamentprofil"), self.slicer_inner)
+        self.filament_profile_label.setBuddy(self.adopt_filament)
+        form.addRow(self.filament_profile_label, filament_row)
         self._filament_row = filament_row
         # **Die Druckplatte ist eine Angabe, keine Vermutung** (Konzept
         # Herstellerprofil, Entscheidung F): Zur Wahl stehen die Platten, für
@@ -4226,12 +4258,15 @@ class PrintSettingsDialog(QDialog):
         """Die Namen der Slot-Zeilen — die Quelle für Meldungen über sie."""
         self.slot_form = form
         self._build_slot_rows(form)
+        # **Ohne Merker** (RM-514): Der Kasten öffnet sich von selbst, wenn
+        # eine Wahl fehlt (:meth:`_open_slicer_section`), und ein gemerkter
+        # Zustand hielt ihn danach bei jedem Öffnen offen — auch dort, wo es
+        # nichts zu wählen gibt. Was gewählt ist, nennt der Satz darunter.
         self.slicer_box = collapsible(
             tr("Profile des Slicers"),
             self.slicer_inner,
             open_now=False,
-            contents=tr("Drucker, Grundprofil, Filament und Druckplatte im Slicer"),
-            remember="print.slicer",
+            contents=tr("Druckerprofil, Prozessprofil, Filamentprofil und Druckplatte"),
         )
         self.slicer_toggle = _toggle_of(self.slicer_box)
         if self.slicer_toggle is not None:
@@ -4509,9 +4544,12 @@ class PrintSettingsDialog(QDialog):
             # (`_cura_base`). Vorher lief die Suche, fand null, und der
             # Türsteher in `_slice` verlangte eine Wahl aus einer leeren
             # Liste — ein Fehler ohne Ausweg (Regel 17, §2.7).
-            self.profile_note.setText(
-                tr("Dieser Slicer braucht kein Profil — Solidon beschreibt die Maschine selbst.")
-            )
+            # **Kein Kasten ohne Wahl** (RM-514): Für Cura gibt es kein Profil
+            # zu wählen; was gilt, sagt der Satz darunter
+            # (:meth:`_foundation_line`). Kann Solidon den aktiven Cura-Drucker
+            # nicht lesen, erscheint der Kasten mit genau diesem Satz.
+            self.profile_note.setText("")
+            self.slicer_box.setVisible(False)
             known = dict(profiles.printer_profiles())
             known[self.session.profile.printer.id] = self.session.profile.printer
             cura_worker = _CuraPrinterWorker(found, known)
@@ -4588,6 +4626,7 @@ class PrintSettingsDialog(QDialog):
                     "Druckereinstellung in Cura oder wählen Sie oben einen passenden Drucker."
                 )
             )
+            self.slicer_box.setVisible(True)
             self._open_slicer_section(intent="passive")
         self._offer_the_slicers_printer(self._cura_printer_id)
         self._show_slicer_state()
@@ -4611,6 +4650,7 @@ class PrintSettingsDialog(QDialog):
                 "Druckereinstellung in Cura oder wählen Sie oben einen passenden Drucker."
             )
         )
+        self.slicer_box.setVisible(True)
         self._open_slicer_section(intent="passive")
         self._offer_the_slicers_printer("")
         self._show_slicer_state()
@@ -4853,29 +4893,35 @@ class PrintSettingsDialog(QDialog):
                 # Drucker seines Bündels gehen Solidons Werte hinaus. Der Satz
                 # sagt deshalb, was dann gilt, statt zu einer Wahl zu drängen,
                 # für die es kein richtiges Profil gibt.
+                #
+                # **Was ohne Profil gilt, sagt ein Satz unter dem Kasten**
+                # (RM-514, :meth:`_foundation_line`). Hier stand derselbe Satz
+                # mit anderem Wort noch einmal, und der Kasten klappte mit vier
+                # leeren Feldern auf, obwohl nichts zu wählen war.
                 flavour = (
                     slicer_keys.flavour_of(self._slicer_path.name) if self._slicer_path else None
                 )
-                note = (
-                    tr(
-                        "Für {printer} bringt {slicer} kein eigenes Profil mit — es gelten "
-                        "Solidons Werte, ohne den Startcode des Herstellers."
-                    )
-                    if flavour is not None and not takes_a_machine_profile(flavour)
-                    else tr(
-                        "Für {printer} bringt {slicer} kein eigenes Profil mit — "
-                        "wählen Sie das Profil Ihres Druckers."
-                    )
-                )
+                needed = flavour is None or takes_a_machine_profile(flavour)
                 self.profile_note.setText(
-                    str(note).replace("{printer}", printer).replace("{slicer}", slicer)
+                    str(
+                        tr(
+                            "Für {printer} bringt {slicer} kein eigenes Profil mit — "
+                            "wählen Sie das Profil Ihres Druckers."
+                        )
+                    )
+                    .replace("{printer}", printer)
+                    .replace("{slicer}", slicer)
+                    if needed
+                    else ""
                 )
             else:
+                needed = True
                 self.profile_note.setText(
                     tr("Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.")
                 )
             self._offer_the_slicers_printer(self._printer_of_the_slicer())
-            self._open_slicer_section(intent="passive")
+            if needed:
+                self._open_slicer_section(intent="passive")
         else:
             # Passt ein Profil, gibt es keinen Drucker mehr zu übernehmen — auch
             # nicht nach dem Klick auf den Knopf, der genau das bewirkt hat.
@@ -5286,10 +5332,13 @@ class PrintSettingsDialog(QDialog):
             self._forget_filament_profile()
             # Eine leere Zeile ist eine Sackgasse; der Text nennt den nächsten
             # Schritt (§2.1, Regel 17 in ihrer freundlichen Gestalt).
+            # Gemeint ist das Druckerprofil des Slicers, nicht der Drucker
+            # oben: Der steht immer da (RM-514).
             self.filament_shown.setText(
-                tr("Erst einen Drucker wählen — dann steht hier das Filament.")
+                tr("Erst ein Druckerprofil wählen — dann steht hier das Filamentprofil.")
             )
             fill_slot_choices(-1)
+            self._show_profile_rows()
             self._rebase()
             return
 
@@ -5343,6 +5392,7 @@ class PrintSettingsDialog(QDialog):
                     )
                 )
                 fill_slot_choices(-1)
+                self._show_profile_rows()
                 self._rebase()
                 return
             chosen = preferred
@@ -5351,6 +5401,7 @@ class PrintSettingsDialog(QDialog):
         # Dieselbe Liste in jede Slot-Zeile. Vorbelegt mit dem, was das Projekt
         # dazu sagt; ohne Angabe mit dem Filament der Platte.
         fill_slot_choices(fitting.index(chosen))
+        self._show_profile_rows()
         self._rebase()
 
     def _remember_filament_profile(self, entry: slicer_profiles.SlicerProfile) -> None:
@@ -5416,40 +5467,42 @@ class PrintSettingsDialog(QDialog):
             box.activated.connect(lambda _i, position=index: self._slot_filament_chosen(position))
             caption = str(slot.name or tr("Slot {number}").replace("{number}", str(index + 1)))
             self._slot_names.append(caption)
-            label = QLabel(f"   {caption}", self.slicer_inner)
+            # **Eine Beschriftungskante** (RM-514): Die Beschriftung steht
+            # bündig mit den übrigen, ohne Einrückung, und die Farbe steht im
+            # Feld vor der Auswahl. Als Farbfeld vor dem eingerückten Namen
+            # verschob sie die Spalte aller Formulare des Dialogs.
+            label = QLabel(caption, self.slicer_inner)
+            # Der Name steht an der Beschriftung **und** an der Auswahl, denn
+            # dort landet der Fokus: Ohne Namen las ein Bildschirmleser nur
+            # „Kombinationsfeld", und ein Farbfeld ohne Namen ist genau die
+            # Bedeutung allein über Farbe, die Regel 18 verbietet.
+            label.setAccessibleName(caption)
+            box.setAccessibleName(caption)
+            label.setBuddy(box)
             # **Die Farbe steht daneben** — hier wird zugeordnet, welche Spule
             # in welchen Extruder kommt, und ohne sie ist „Schrift" ein Wort
             # ohne Bild. Dieselbe Kette wie im Filamentwähler und im Panel
             # (``shown_colour``): eigene Farbe, sonst Grauleiter, für Slot 0
             # die Farbe des Teils.
-            label.setToolTip(tr("Die Farbe, in der dieses Filament in der Ansicht steht."))
             colour = QLabel(self.slicer_inner)
             colour.setPixmap(
                 swatch(slot_colours(int(slot.index), slot)).pixmap(SWATCH_PIXELS, SWATCH_PIXELS)
             )
-            row = QWidget(self.slicer_inner)
-            # Die Zeile ist jetzt zweiteilig (Farbfeld, Text). Ihr Name steht
-            # deshalb am Container: Ein Bildschirmleser findet die Zeile sonst
-            # nur als „Widget", und ein Farbfeld ohne Namen ist genau die
-            # Bedeutung allein über Farbe, die Regel 18 verbietet.
-            row.setAccessibleName(caption)
-            # Und an der Auswahl selbst, denn dort landet der Fokus: Ohne
-            # Namen las ein Bildschirmleser nur „Kombinationsfeld".
-            box.setAccessibleName(caption)
-            label.setBuddy(box)
-            side = QHBoxLayout(row)
+            colour.setToolTip(tr("Die Farbe, in der dieses Filament in der Ansicht steht."))
+            field = QWidget(self.slicer_inner)
+            side = QHBoxLayout(field)
             side.setContentsMargins(0, 0, 0, 0)
             side.setSpacing(TIGHT)
             side.addWidget(colour)
-            side.addWidget(label, 1)
+            side.addWidget(box, 1)
             # Eingesetzt hinter der Filamentzeile und vor der Druckplatte, auch
             # beim Neubau nach einem Plattenwechsel — angehängt landeten sie
             # sonst unter allem, was der Kasten sonst trägt.
             # PySide gibt das Paar als ``object`` an — dieselbe Lesart wie
             # ``panels.ParameterPanel``.
             position: Any = form.getWidgetPosition(self._filament_row)
-            form.insertRow(int(position[0]) + 1 + index, row, box)
-            self.slot_rows.append((row, box))
+            form.insertRow(int(position[0]) + 1 + index, label, field)
+            self.slot_rows.append((label, box))
             if index < len(stored) and stored[index]:
                 box.setProperty("wanted", stored[index])
         # Die Tabulatortaste geht denselben Weg: Neu gebaute Zeilen hingen sich
@@ -5458,6 +5511,7 @@ class PrintSettingsDialog(QDialog):
         chain.append(self.bed_plate_choice)
         for before, after in pairwise(chain):
             QWidget.setTabOrder(before, after)
+        self._show_profile_rows()
 
     def _profile_name(self, path: object) -> str:
         """Der Profilname zu einem Pfad aus einer Auswahlliste, oder leer.
@@ -5822,27 +5876,37 @@ class PrintSettingsDialog(QDialog):
     def _build_advice(self) -> QWidget:
         """Was Material und Geometrie an Einstellungen nahelegen (§29).
 
-        Dieselbe Form wie die übrigen Abschnitte — siehe :meth:`_build_front`.
+        **Zugeklappt eine Zeile: „N Vorschläge" und *Übernehmen*** (RM-514).
+        Aufgeklappt eine Tabelle mit Einstellung und Vorschlag; der Grund der
+        gewählten Zeile steht ganz darunter, vollständig und umbrochen. Als
+        dritte Spalte endete er in jeder Zeile auf „…", obwohl der Code
+        Umbruch versprach — neben zwei Spalten war für einen Satz kein Platz.
         """
         holder = QWidget(self)
         inner = QVBoxLayout(holder)
         inner.setContentsMargins(0, 0, 0, 0)
 
         self.advice_view = QTreeWidget(holder)
-        self.advice_view.setColumnCount(3)
-        self.advice_view.setHeaderLabels([tr("Einstellung"), tr("Vorschlag"), tr("Grund")])
+        self.advice_view.setColumnCount(2)
+        self.advice_view.setHeaderLabels([tr("Einstellung"), tr("Vorschlag")])
         self.advice_view.setRootIsDecorated(False)
         self.advice_view.setMaximumHeight(150)
-        # Die Gründe bekommen, was die beiden ersten Spalten übrig lassen, und
-        # brechen darin um, statt auf „…" zu enden. Bei drei Spalten mit
-        # gleichem Anteil stand in jeder Zeile ein angefangener Satz.
+        # Die Einstellung bekommt, was der Vorschlag übrig lässt, und bricht
+        # darin um („Brim · Turm, Pilz und 3 weitere"), statt auf „…" zu enden.
         header = self.advice_view.header()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.advice_view.setWordWrap(True)
+        self.advice_view.setTextElideMode(Qt.TextElideMode.ElideNone)
         self.advice_view.itemChanged.connect(self._advice_checked)
+        self.advice_view.currentItemChanged.connect(self._show_advice_reason)
         inner.addWidget(self.advice_view)
+        self.advice_reason = WrappedNote(holder)
+        self.advice_reason.setTextFormat(Qt.TextFormat.PlainText)
+        self.advice_reason.setAccessibleName(tr("Grund"))
+        self.advice_reason.grown.connect(self._refit_sections)
+        inner.addWidget(self.advice_reason)
 
         self.advice_state = QLabel(holder)
         self.advice_state.setTextFormat(Qt.TextFormat.PlainText)
@@ -5860,14 +5924,43 @@ class PrintSettingsDialog(QDialog):
         self.advice_control.clicked.connect(self._control_advice)
         inner.addWidget(self.advice_control, 0, Qt.AlignmentFlag.AlignRight)
 
-        self.apply_button = QPushButton(tr("Vorschläge übernehmen"), holder)
-        self.apply_button.clicked.connect(self._apply_advice)
-        inner.addWidget(self.apply_button, 0, Qt.AlignmentFlag.AlignRight)
-        box = collapsible(tr("Was dieses Teil verlangt"), holder)
+        box = collapsible(
+            tr("Was dieses Teil verlangt"),
+            holder,
+            open_now=False,
+            contents=tr("Die Druckempfehlungen werden für die gewählten Platten geprüft …"),
+            remember="print.advice",
+        )
         self.advice_toggle = _toggle_of(box)
+        # *Übernehmen* steht in der Zeile, die zugeklappt die Zahl der
+        # Vorschläge nennt, und bleibt aufgeklappt an derselben Stelle: über
+        # der Tabelle, rechts, wo der Blick nach dem Aufklappen landet.
+        self.apply_button = QPushButton(tr("Übernehmen"), box)
+        self.apply_button.clicked.connect(self._apply_advice)
+        self._advice_summary: QLabel | None = box.findChild(QLabel, "sectionSummary")
+        section = box.layout()
+        if self._advice_summary is not None and isinstance(section, QVBoxLayout):
+            place = section.indexOf(self._advice_summary)
+            section.removeWidget(self._advice_summary)
+            line = QHBoxLayout()
+            line.setContentsMargins(0, 0, 0, 0)
+            line.setSpacing(NORMAL)
+            line.addWidget(self._advice_summary, 1)
+            line.addWidget(self.apply_button, 0, Qt.AlignmentFlag.AlignRight)
+            section.insertLayout(place, line)
+        else:
+            inner.addWidget(self.apply_button, 0, Qt.AlignmentFlag.AlignRight)
         return box
 
     def _build_state(self) -> QWidget:
+        """Was die Knöpfe gleich tun oder getan haben — direkt über ihnen.
+
+        Außerhalb des Rollbereichs (RM-514): Zustand, Bestand, Buchung und
+        *Werte mitgeben* gehören zur Übergabe und stehen bei ihren Knöpfen,
+        gleich wie weit der Inhalt darüber auf- oder zugeklappt ist. Die
+        Sätze messen ihre Höhe selbst (``WrappedNote``), sonst presste ein
+        langer Grund den Rollbereich, ohne dass das Fenster nachwächst.
+        """
         holder = QWidget(self)
         row = QVBoxLayout(holder)
         row.setContentsMargins(0, 0, 0, 0)
@@ -5887,8 +5980,8 @@ class PrintSettingsDialog(QDialog):
         self._oversize_key = None
         self._oversize = None
         self._oversize_shown = False
-        self.state = QLabel("", holder)
-        self.state.setWordWrap(True)
+        self.state = WrappedNote(holder)
+        self.state.grown.connect(self._refit_sections)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
         # Füllung wandert darunter hindurch: bei 45 % lag sie halb auf
         # Bernstein und halb auf der Spur, ab 60 % ganz auf Bernstein — mit
@@ -5907,13 +6000,16 @@ class PrintSettingsDialog(QDialog):
         self.cancel_slice.setVisible(False)
         self.cancel_slice.clicked.connect(self._cancel_slice)
         row.addWidget(self.state)
-        self.stock_notice = QLabel("", holder)
-        self.stock_notice.setWordWrap(True)
+        self.stock_notice = WrappedNote(holder)
+        self.stock_notice.grown.connect(self._refit_sections)
         self.stock_notice.setAccessibleName(tr("Filamentbestand für diesen Druck"))
         self.stock_notice.hide()
         row.addWidget(self.stock_notice)
         row.addWidget(self.progress)
         row.addWidget(self.cancel_slice)
+        self.usage_notice = UsageNotice(self.ui_settings, holder)
+        self.usage_notice.changed.connect(self._refresh_advice)
+        row.addWidget(self.usage_notice)
         # **Bei der Übergabe, nicht bei der Qualität.** Der Haken schaltet,
         # was eine gespeicherte 3MF und *Im Slicer öffnen* mitnehmen — er
         # stand neben „Qualität“, mit der er nichts zu tun hat.
@@ -6126,6 +6222,8 @@ class PrintSettingsDialog(QDialog):
         Statuszeile, Bildschirmleser).
         """
         self._check_print_result()
+        self._show_profile_rows()
+        self._show_foundation_note()
         selection_issue = self._printer_selection_issue()
         field_refusal = self._first_numeric_refusal()
         printer_valid = valid_printer_choice(self.printer_choice)
@@ -6851,15 +6949,58 @@ class PrintSettingsDialog(QDialog):
     def _show_foundation(self) -> None:
         """Unter den Profilen in einem Satz: worauf Solidon aufsetzt."""
         self._show_bed_plates()
-        foundation = self._foundation
-        if foundation is None or not foundation.has_profile:
-            self.foundation_note.setText(
+        self._show_foundation_note()
+
+    def _show_foundation_note(self) -> None:
+        """Den Satz zur Grundlage setzen — und ohne Satz keine leere Zeile."""
+        line = self._foundation_line()
+        self.foundation_note.setText(line)
+        self.foundation_note.setVisible(bool(line))
+        # Was der Satz kürzer sagt als früher, steht dahinter (RM-514).
+        detail = (
+            ""
+            if self._foundation is not None and self._foundation.has_profile
+            else str(
                 tr(
-                    "Ohne Profil des Herstellers gelten Solidons Vorgaben. "
-                    "Sie gehen vollständig zum Slicer."
+                    "Ohne Herstellerprofil gehen alle Werte von Solidon zum Slicer, "
+                    "ohne den Startcode des Herstellers."
                 )
             )
-            return
+        )
+        self.foundation_note.setToolTip(detail)
+        self.foundation_note.setAccessibleDescription(detail)
+
+    def _foundation_line(self) -> str:
+        """Worauf Solidon aufsetzt, in **einem** Satz.
+
+        Ohne Profil des Herstellers standen dazu zwei Sätze mit zwei Wörtern
+        für dieselbe Sache („Solidons Werte" im Kasten, „Solidons Vorgaben"
+        darunter) und vier leere Felder (RM-514, D11). Jetzt sagt es dieser
+        Satz allein, und der Kasten bleibt zu, wenn es darin nichts zu wählen
+        gibt. Verlangt der Slicer ein Profil, das fehlt, schweigt er: Dann
+        steht der Weg im aufgeklappten Kasten und in der Zustandszeile.
+        """
+        foundation = self._foundation
+        if foundation is not None and foundation.has_profile:
+            return self._profile_line(foundation)
+        if self._profile_gap():
+            return ""
+        slicer = _slicer_title(self._slicer_path) if self._slicer_path else ""
+        if slicer and self._current_flavour() == "cura":
+            return str(tr("{slicer} braucht kein Profil, es gelten Solidons Werte.")).replace(
+                "{slicer}", slicer
+            )
+        printer = self.printer_choice.currentText()
+        if self._profiles and not self.machine_choice.currentData() and printer and slicer:
+            return (
+                str(tr("Für {printer} hat {slicer} kein Profil, es gelten Solidons Werte."))
+                .replace("{printer}", printer)
+                .replace("{slicer}", slicer)
+            )
+        return str(tr("Ohne Herstellerprofil gelten Solidons Werte."))
+
+    def _profile_line(self, foundation: manufacturer.Foundation) -> str:
+        """„Grundlage: Prozess · Filament · Platte" für eine gelesene Grundlage."""
         parts = [self._profile_name(foundation.process)]
         if foundation.staged:
             # Die Stufe liegt über dem Standardprozess, bis sie ihren eigenen
@@ -6874,7 +7015,30 @@ class PrintSettingsDialog(QDialog):
             line += " " + str(
                 tr("Der Hersteller gibt diese Platte für dieses Filament nicht frei.")
             )
-        self.foundation_note.setText(line)
+        return line
+
+    def _show_profile_rows(self) -> None:
+        """Im Kasten der Profile steht nur, was eine Wahl oder eine Auskunft ist.
+
+        Eine Auswahl ohne Einträge ist ein leeres Feld (RM-514, C3): Ohne
+        Druckerprofil gibt es kein Prozessprofil, ohne Bestand keine
+        Filamentliste, und ohne Satz keine Hinweiszeile. Solche Zeilen stehen
+        nicht da, bis es etwas zu wählen gibt.
+        """
+        form = self.slot_form
+
+        def show(widget: QWidget, shown: bool) -> None:
+            # PySide gibt das Paar als ``object`` an (wie in ``_build_slot_rows``).
+            position: Any = form.getWidgetPosition(widget)
+            if int(position[0]) >= 0:
+                form.setRowVisible(widget, shown)
+
+        show(self.machine_choice, self.machine_choice.count() > 0)
+        show(self.profile_note, bool(self.profile_note.text()))
+        show(self.process_choice, self.process_choice.count() > 0)
+        show(self._filament_row, bool(self._profiles))
+        for label, box in self.slot_rows:
+            show(label, box.count() > 0)
 
     def _reset_field(self, path: str) -> None:
         """Eine eigene Wahl zurücknehmen: der Wert des Profils gilt wieder."""
@@ -7562,6 +7726,8 @@ class PrintSettingsDialog(QDialog):
             .replace("{count}", str(count))
             .replace("{name}", name)
         )
+        # Auch zugeklappt sieht man, dass gerechnet wird und wie weit.
+        self._show_advice_summary(0)
 
     def _advice_finished(self, worker: _AdviceWorker) -> None:
         """Der eigene Abschluss gibt nur seinen Arbeiter frei."""
@@ -7597,6 +7763,13 @@ class PrintSettingsDialog(QDialog):
         """Die aktuelle Messung anzeigen, ohne dabei eine neue anzufordern."""
         self._show_advice_offers()
         entries = self._current_advice()
+        current = self.advice_view.currentItem()
+        # Nur eine Wahl des Kunden bleibt gewählt, nicht die stille Vorgabe.
+        chosen = (
+            current.data(0, Qt.ItemDataRole.UserRole)
+            if current is not None and current.isSelected()
+            else None
+        )
         blocker = QSignalBlocker(self.advice_view)
         self.advice_view.clear()
         for entry in entries:
@@ -7610,13 +7783,7 @@ class PrintSettingsDialog(QDialog):
             reason = "\n".join(part for part in (str(entry.reason), str(unavailable)) if part)
             # Alle Teile am ganzen Eintrag, auch die, die der Titel zählt.
             said = "\n".join(part for part in (reason, self._advice_parts(entry)) if part)
-            item = QTreeWidgetItem(
-                [
-                    f"{marker}{title}",
-                    f"{was} → {becomes}",
-                    reason,
-                ]
-            )
+            item = QTreeWidgetItem([f"{marker}{title}", f"{was} → {becomes}"])
             # Angehakt heißt „wird übernommen". Vorbelegt ja, denn die
             # Vorschläge sind begründet — aber einzeln abwählbar, weil sonst
             # die Wahl zwischen allen und keinem bestünde und der Nutzer für
@@ -7632,16 +7799,28 @@ class PrintSettingsDialog(QDialog):
                     else Qt.CheckState.Unchecked,
                 )
             item.setData(0, Qt.ItemDataRole.UserRole, key)
-            # Der Grund ist der Satz, der den Vorschlag rechtfertigt, und er
-            # ist länger als jede Spalte, die neben zwei anderen Platz hat.
-            # In der Zeile stand deshalb „Das Projekt hat Passungen. …" — der
-            # Teil, den man liest, wenn man wissen will, ob der Vorschlag zum
-            # eigenen Teil passt, war genau der abgeschnittene. Er steht jetzt
-            # zusätzlich am ganzen Eintrag.
-            for column in range(3):
+            # Der Grund ist der Satz, der den Vorschlag rechtfertigt. Er steht
+            # ganz unter der Tabelle für die gewählte Zeile
+            # (:meth:`_show_advice_reason`) und an jeder Zeile als Kurzhilfe
+            # und für den Bildschirmleser — in einer Spalte neben zwei anderen
+            # endete er auf „…" (RM-514).
+            item.setData(
+                0, _ADVICE_REASON_ROLE, tr("{setting}: {reason}", setting=title, reason=said)
+            )
+            for column in range(2):
                 item.setToolTip(column, said)
+                item.setData(column, Qt.ItemDataRole.AccessibleDescriptionRole, said)
             self.advice_view.addTopLevelItem(item)
+            if key == chosen:
+                self.advice_view.setCurrentItem(item)
+        # Ohne Wahl steht der Grund der ersten Zeile darunter — mit ihrem
+        # Namen davor, denn hervorgehoben wird sie nicht: Eine vorgewählte
+        # Zeile ist eine Akzentfläche im Ruhezustand (RM-512, B12).
+        first = self.advice_view.topLevelItem(0)
+        if self.advice_view.currentItem() is None and first is not None:
+            self.advice_view.setCurrentItem(first, 0, QItemSelectionModel.SelectionFlag.NoUpdate)
         del blocker
+        self._show_advice_reason()
         waiting = self._advice_pending or bool(self._advice_problem)
         # **Ohne Einwand ein Satz, keine leere Tabelle.** Hier stand eine
         # Tabelle mit drei Spaltenköpfen, einer Zeile „Nichts einzuwenden."
@@ -7651,12 +7830,14 @@ class PrintSettingsDialog(QDialog):
         # bleibt, denn eine stille Stelle sähe aus wie ein Fehler.
         quiet = not entries and not waiting
         self.advice_view.setVisible(not quiet)
+        self.advice_reason.setVisible(bool(entries))
         self.apply_button.setVisible(not quiet)
         self.advice_state.setText(
             tr("Die Druckempfehlungen werden für die gewählten Platten geprüft …")
             if self._advice_pending
             else self._advice_problem or (tr("Nichts einzuwenden.") if quiet else "")
         )
+        self._show_advice_summary(len(entries))
         self.advice_state.setVisible(waiting or quiet)
         self.advice_progress.setVisible(self._advice_pending)
         self.advice_control.setText(
@@ -7691,8 +7872,27 @@ class PrintSettingsDialog(QDialog):
         self.apply_button.setToolTip(why)
         self.apply_button.setStatusTip(why)
         self.apply_button.setAccessibleDescription(why)
-        for column in range(2):
-            self.advice_view.resizeColumnToContents(column)
+        self.advice_view.resizeColumnToContents(1)
+
+    def _show_advice_reason(self, *_items: object) -> None:
+        """Der ganze Grund der gewählten Zeile, unter der Tabelle (RM-514)."""
+        item = self.advice_view.currentItem()
+        said = str(item.data(0, _ADVICE_REASON_ROLE) or "") if item is not None else ""
+        self.advice_reason.setText(said)
+
+    def _show_advice_summary(self, count: int) -> None:
+        """Was die zugeklappte Zeile sagt: die Zahl der Vorschläge oder den Stand."""
+        if self._advice_pending or self._advice_problem or not count:
+            said = self.advice_state.text()
+        elif count == 1:
+            said = str(tr("Ein Vorschlag"))
+        else:
+            said = str(tr("{count} Vorschläge")).replace("{count}", localised(str(count)))
+        if self._advice_summary is not None:
+            self._advice_summary.setText(said)
+        if self.advice_toggle is not None:
+            self.advice_toggle.setToolTip(said)
+            self.advice_toggle.setAccessibleDescription(said)
 
     def _advice_title(self, entry: SettingAdvice) -> str:
         """Wie ein Vorschlag heißt — in der Liste und in der Meldung danach.

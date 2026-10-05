@@ -1065,7 +1065,7 @@ class Tutorial:
                     "profile-baseline",
                     (
                         "Die tatsächliche Grundlage",
-                        "Darunter stehen das zugehörige Grundprofil und die Filamentvorgabe.",
+                        "Darunter stehen das zugehörige Prozessprofil und die Filamentvorgabe.",
                         "",
                     ),
                     (
@@ -1206,12 +1206,12 @@ class Tutorial:
                     "apply-advice",
                     (
                         "Vorschläge bewusst übernehmen",
-                        "Mit Vorschläge übernehmen wende ich die gezeigten Änderungen an.",
+                        "Mit Übernehmen wende ich die gezeigten Änderungen an.",
                         "",
                     ),
                     (
                         "Apply the suggestions deliberately",
-                        "I click Apply suggestions to use the displayed changes.",
+                        "I click Apply to use the displayed changes.",
                         "",
                     ),
                     dialog=dialog,

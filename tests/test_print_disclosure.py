@@ -22,8 +22,10 @@ from app.ui.print_disclosure import (
     PrintDisclosureResult,
     clear_disclosure,
     disclosure_is_current,
+    disclosure_words,
     ensure_print_disclosure,
     remember_disclosure,
+    share_label,
 )
 from app.ui.settings import UiSettings, is_utc_timestamp
 
@@ -154,6 +156,39 @@ def test_the_notice_says_what_leaves_the_programme(qt_app: QApplication) -> None
         "kein Paragrafenverweis mitten im Arbeitsschritt — er liest sich als "
         "Kleingedrucktes und leistet rechtlich nichts"
     )
+
+
+def test_the_notice_says_it_in_at_most_45_words() -> None:
+    """94 Wörter mitten in der Arbeit liest niemand (RM-514, C22).
+
+    Gezählt wird, was der Hinweis zu lesen gibt: die Absätze, der Haken und
+    der Satz darunter. Der Rat aus dem dritten Absatz bleibt (Entscheidung
+    Robert, 03.09.2026), und der Haken heißt wie im Druckdialog, wo er
+    geändert wird.
+    """
+    assert disclosure_words() <= 45, disclosure_words()
+    assert share_label() == "Werte mitgeben"
+
+
+def test_the_notice_repeats_no_title_and_names_the_switch_like_the_dialog(
+    qt_app: QApplication,
+) -> None:
+    """Die Überschrift stand ein zweites Mal unter dem Fenstertitel, und der
+    Haken hieß „Werte beim Speichern und Übergeben mitgeben", im Dialog
+    „Werte mitgeben" (RM-514)."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+
+    notice = PrintDisclosureDialog(share=True, parent=None)
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+    try:
+        texts = [label.text() for label in notice.findChildren(QLabel)]
+        assert notice.windowTitle() not in texts, "die Überschrift wiederholt den Fenstertitel"
+        assert notice.share.text() == dialog.share_settings.text()
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        notice.deleteLater()
 
 
 def test_the_choice_from_the_notice_reaches_the_settings(
