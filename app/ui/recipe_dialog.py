@@ -30,7 +30,7 @@ from collections.abc import Callable
 from itertools import pairwise
 from typing import Any
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -38,12 +38,12 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -52,19 +52,32 @@ from app.core.errors import AppError, FileWriteError, InternalError
 from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
-from app.core.types import Document, Feature, Profile
+from app.core.types import Document, Feature, Profile, measure_status
 from app.i18n import tr
 from app.ui.dialogs import problem_text
-from app.ui.labels import PARAMETER_UNITS, NumberSpin, feature_label, localised, wheel_needs_focus
+from app.ui.labels import (
+    PARAMETER_UNITS,
+    NumberSpin,
+    area,
+    feature_measure_tip,
+    feature_name,
+    length,
+    localised,
+    measure_text,
+    wheel_needs_focus,
+)
 from app.ui.leash import Worker, WorkerLeash, weak_slot
+from app.ui.panels import align_forms, collapsible, least_number_width
 from app.ui.style import (
     NORMAL,
     SPACE,
+    TIGHT,
     WIDE,
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
     make_primary,
+    set_level,
 )
 
 _log = get_logger(__name__)
@@ -178,12 +191,13 @@ class _ParamRow:
 
     def __init__(self, parameter: Any, parent: QWidget) -> None:
         self.name = parameter.name
-        # **Der Haken trägt den Namen des Projektparameters.** Ohne ihn stehen
-        # bei drei Parametern dreimal dieselben sieben Zeilen untereinander —
-        # „Beschriftung: Breite", „Beschriftung: Höhe" —, und welcher Parameter
-        # gerade eingerichtet wird, steht nirgends. Sichtbar wurde das erst am
-        # gerenderten Dialog; die Felder waren einzeln alle richtig.
-        self.take = QCheckBox(str(parameter.name), parent)
+        # **Der Haken trägt die Beschriftung des Maßes, nicht seinen
+        # Schlüssel** (RM-517): Dort stand ``breite`` und ``hoehe`` — der
+        # Schlüssel, mit dem der Verlauf rechnet, während die Parameterleiste
+        # „Breite" zeigt (``parameter.title or name``). Ändert der Kunde die
+        # Beschriftung unter „Weitere Einstellungen", zieht der Haken mit.
+        shown = str(parameter.title or parameter.name)
+        self.take = QCheckBox(shown, parent)
         self.derived = str(parameter.expression or "")
         """Der Ausdruck des Projektparameters, oder leer.
 
@@ -205,8 +219,7 @@ class _ParamRow:
         # las der Bildschirmleser zweimal „Diesen Wert freigeben",
         # „Beschriftung", „Einheit" — der sichtbare Name am Haken war
         # überschrieben. Der Name bleibt Name, der Satz wird Beschreibung.
-        name = str(parameter.name)
-        self.take.setAccessibleName(name)
+        self.take.setAccessibleName(shown)
         self.take.setAccessibleDescription(tr("Diesen Wert freigeben"))
 
         self.hint: QLabel | None = None
@@ -226,8 +239,7 @@ class _ParamRow:
             self.take.setStatusTip(note)
             self.take.setAccessibleDescription(note)
 
-        self.title = QLineEdit(str(parameter.title or parameter.name), parent)
-        self.title.setAccessibleName(f"{tr('Beschriftung')} · {name}")
+        self.title = QLineEdit(shown, parent)
         # **Die Einheit entscheidet über die Umrechnung, nicht über die
         # Beschriftung.** ``op_dialog.shown_unit`` zeigt ein Feld genau dann in
         # der eingestellten Anzeigeeinheit, wenn seine Einheit ``mm`` ist
@@ -240,7 +252,6 @@ class _ParamRow:
         # (Regel 21): So sieht der Kunde, was der Fall ist, statt es zu erfahren,
         # wenn das Teil falsch herauskommt.
         self.unit = QComboBox(parent)
-        self.unit.setAccessibleName(f"{tr('Einheit')} · {name}")
         for code, label in UNITS:
             self.unit.addItem(str(label), code)
         chosen = str(parameter.unit or "")
@@ -279,18 +290,45 @@ class _ParamRow:
             float(parameter.maximum) if parameter.maximum is not None else value + span
         )
         self.default.setValue(value)
-        self.minimum.setAccessibleName(f"{tr('Kleinster Wert')} · {name}")
-        self.maximum.setAccessibleName(f"{tr('Größter Wert')} · {name}")
-        self.default.setAccessibleName(f"{tr('Vorgabe')} · {name}")
 
         self.placement = QComboBox(parent)
         self.placement.addItem(tr("Vorn im Dialog"), PLACE_FRONT)
         self.placement.addItem(tr("Unter „Weitere Einstellungen“"), PLACE_ADVANCED)
-        self.placement.setAccessibleName(f"{tr('Wo der Wert steht')} · {name}")
 
         self.doc = QLineEdit(parent)
         self.doc.setPlaceholderText(tr("Ein Satz: was passiert, wenn man ihn ändert"))
-        self.doc.setAccessibleName(f"{tr('Beschreibung')} · {name}")
+
+        # Die Überschrift seines Blocks unter „Weitere Einstellungen“ — dort
+        # stehen Beschriftung, Einheit, Platz und Satz jedes Maßes beisammen.
+        self.heading = QLabel(shown, parent)
+        set_level(self.heading, "section")
+        self._name_fields(shown)
+        self.title.textChanged.connect(self._renamed)
+
+    def _renamed(self, text: str) -> None:
+        """Haken, Überschrift und Feldnamen folgen der Beschriftung."""
+        shown = text.strip() or str(self.name)
+        self.take.setText(shown)
+        self.take.setAccessibleName(shown)
+        self.heading.setText(shown)
+        self._name_fields(shown)
+
+    def _name_fields(self, shown: str) -> None:
+        """**Jedes Feld sagt, zu welchem Maß es gehört** — mit seiner Beschriftung.
+
+        Bei zwei Maßen las der Bildschirmleser zweimal „Vorgabe", „Einheit";
+        und der Schlüssel (``breite``) ist auch für ihn kein Name.
+        """
+        for field, label in (
+            (self.title, tr("Beschriftung", context="Feld")),
+            (self.unit, tr("Einheit")),
+            (self.default, tr("Vorgabe")),
+            (self.minimum, tr("Kleinster Wert")),
+            (self.maximum, tr("Größter Wert")),
+            (self.placement, tr("Platz im Dialog")),
+            (self.doc, tr("Beschreibung")),
+        ):
+            field.setAccessibleName(tr("{field} · {value}", field=label, value=shown))
 
     def restore(self, entry: Any) -> None:
         """Übernimmt die Angaben, die dieses Maß im bearbeiteten Baustein trug (E6).
@@ -370,18 +408,28 @@ class _FeatureRow:
         self.feature_id = str(feature.id)
         # „Bohrung 3 · ⌀4,2" und nicht „hole_1": Die Kennung ist der Schlüssel
         # des Rezepts, nicht die Sprache des Kunden — vor dem Speichern soll er
-        # sehen, welche Stelle er freigibt. Dieselbe Quelle wie Viewport und
-        # Statusleiste (§18.5); zwei Formulierungen für ein Merkmal wären zwei
-        # Gelegenheiten, auseinanderzulaufen.
-        shown = feature_label(feature.id, feature)
+        # sehen, welche Stelle er freigibt. Name wie im Viewport (§18.5), die
+        # Zahl ohne Herkunftswort: „Maßherkunft nicht bestimmt" beantwortete
+        # hier eine Frage, die beim Speichern niemand stellt (RM-517).
+        shown = place_label(feature)
         self.take = QCheckBox(shown, parent)
         self.take.setChecked(True)
         # Wie am Parameter: der Name der Stelle bleibt Name, der Satz wird
         # Beschreibung, und das Namensfeld sagt, zu welcher Stelle es gehört.
         self.take.setAccessibleName(shown)
         self.take.setAccessibleDescription(tr("Dieses Merkmal nach außen geben"))
+        tip = feature_measure_tip(feature)
+        if tip:
+            self.take.setToolTip(tip)
+        # Der Name, unter dem ein Projekt die Stelle später anspricht. Er
+        # steht unter „Weitere Einstellungen“: Die Vorgabe (die Kennung) taugt,
+        # und als Beschriftung vorn war sie ein Rohschlüssel.
+        self.label = QLabel(shown, parent)
         self.name = QLineEdit(self.feature_id, parent)
-        self.name.setAccessibleName(f"{tr('Öffentlicher Name')} · {shown}")
+        self.name.setAccessibleName(
+            tr("{field} · {value}", field=tr("Name der Stelle"), value=shown)
+        )
+        self.label.setBuddy(self.name)
 
     def restore(self, public_name: str | None) -> None:
         """Übernimmt, was der bearbeitete Baustein an dieser Stelle versprach (E6).
@@ -394,6 +442,29 @@ class _FeatureRow:
         self.take.setChecked(public_name is not None)
         if public_name is not None:
             self.name.setText(public_name)
+
+
+def place_label(feature: Feature) -> str:
+    """„Bohrung 1 · Ø4,20 mm“ — der Name einer Stelle und ihr Maß, ohne Herkunftswort.
+
+    Der Name kommt aus derselben Quelle wie im Viewport (``feature_name``).
+    Die Zahl steht nur, wo sie bestimmt ist; das Wort zu ihrer Herkunft
+    („gemessen“, „Maßherkunft nicht bestimmt“) steht in der Kurzhilfe
+    (``feature_measure_tip``) — beim Freigeben einer Stelle ist es keine
+    Auskunft, sondern ein Rätsel.
+    """
+    name = feature_name(feature.id, feature)
+    shown: Callable[[float], str]
+    if feature.kind == "hole":
+        key, prefix, shown = "diameter", "Ø", length
+    elif feature.kind in ("face", "curved_face"):
+        key, prefix, shown = "area", "", area
+    else:
+        return name
+    if not measure_status(feature, key).available:
+        return name
+    value = measure_text(feature, key, prefix=prefix, format_value=shown, with_source=False)
+    return tr("{name} · {value}", name=name, value=value)
 
 
 #: Wie viele Schrittnummern der Umfangssatz aufzählt, bevor er abkürzt. Bei
@@ -530,13 +601,22 @@ class RecipeDialog(QDialog):
         self.author.setAccessibleName(tr("Autor"))
 
         # Ohne Doppelpunkt, wie jedes andere Formular der Anwendung: Die
-        # Spalte selbst sagt, dass links der Name der Zeile steht.
+        # Spalte selbst sagt, dass links der Name der Zeile steht. **Name und
+        # Gruppe in einer Zeile** — beides beantwortet „wie finde ich ihn im
+        # Katalog wieder“; Beschreibung, Lizenz und Autor stehen hinten
+        # (RM-517: 21 Felder für zwei Maße, 978 Punkte hoch).
+        naming = QWidget(self)
+        naming_row = QHBoxLayout(naming)
+        naming_row.setContentsMargins(0, 0, 0, 0)
+        naming_row.setSpacing(NORMAL)
+        naming_row.addWidget(self.title, 1)
+        group_label = QLabel(tr("Gruppe"), naming)
+        group_label.setBuddy(self.group)
+        naming_row.addWidget(group_label)
+        naming_row.addWidget(self.group)
         head = QFormLayout()
-        head.addRow(tr("Name"), self.title)
-        head.addRow(tr("Gruppe"), self.group)
-        head.addRow(tr("Beschreibung"), self.doc)
-        head.addRow(tr("Lizenz"), self.licence)
-        head.addRow(tr("Autor"), self.author)
+        _one_line(head)
+        head.addRow(tr("Name"), naming)
 
         self._params = [_ParamRow(entry, self) for entry in document.parameters.values()]
         self._features = [_FeatureRow(entry, self) for entry in features]
@@ -577,15 +657,27 @@ class RecipeDialog(QDialog):
         layout.addLayout(head)
         layout.addWidget(self._parameter_box())
         layout.addWidget(self._feature_box())
+        # Was einmal stimmt und selten geändert wird, steht hinten — mit
+        # Inhaltsangabe, damit man weiß, dass es dort ist (``fenster.md``).
+        self._more = self._more_box()
+        self.more_section = collapsible(
+            tr("Weitere Einstellungen"),
+            self._more,
+            open_now=False,
+            contents=tr("Beschreibung, Lizenz, Autor; je Maß Einheit und Platz; Namen der Stellen"),
+        )
+        layout.addWidget(self.more_section)
 
         # Was der Bereichstest ergeben hat — leer, bis er gelaufen ist. Er
         # läuft beim Speichern und nicht vorher: Der Kunde soll die Grenzen
         # erst festlegen, sonst prüft er einen Bereich, den er gleich ändert.
         self.range_plan = QLabel("", self)
         self.range_plan.setWordWrap(True)
+        self.range_plan.setVisible(False)
         layout.addWidget(self.range_plan)
         self.report = QLabel("", self)
         self.report.setWordWrap(True)
+        self.report.setVisible(False)
         # **Die Zahl steht neben dem Balken, nicht darauf** (`tests/test_style.py`):
         # Mittig gesetzt wandert der Rand der Füllung darunter durch, und ab
         # sechzig Prozent liegt sie ganz auf Bernstein — 1,69 Kontrast. Eine
@@ -632,6 +724,10 @@ class RecipeDialog(QDialog):
         outer.addWidget(buttons)
         for editor in (*content.findChildren(NumberSpin), *content.findChildren(QComboBox)):
             wheel_needs_focus(editor)
+        # **Eine Beschriftungskante vorn, eine hinten** (RM-518): Die Namen der
+        # Stellen sind lang („Schrägfläche · 2880 mm²“) und zögen sonst die
+        # Spalte vorn auf ihre Breite.
+        align_forms(self, apart=(self._more,))
 
         # **Erst jetzt**, denn die Vorbelegung schreibt in Felder, die es
         # vorher nicht gibt — und sie muss vor ``_update_enabled`` stehen, weil
@@ -643,6 +739,9 @@ class RecipeDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
+        # Noch einmal, sobald das Thema die Schrift gesetzt hat: Haken und
+        # Wort messen erst danach ihre wirkliche Breite.
+        align_forms(self, apart=(self._more,))
         self._fit_soon("initial")
 
     def _fit_soon(self, intent: ContentFitIntent = "passive") -> None:
@@ -685,12 +784,22 @@ class RecipeDialog(QDialog):
             feature_row.restore(public.get(feature_row.feature_id))
 
     def _parameter_box(self) -> QWidget:
-        box = QGroupBox(tr("Welche Maße soll man einstellen können?"), self)
-        form = QFormLayout(box)
+        """Je Maß eine Zeile: „[✓] Breite · Vorgabe [120] von [60] bis [240]“.
+
+        Vorher waren es sieben Zeilen je Maß in einem gerahmten Kasten
+        (RM-517). Was ein Maß sonst noch trägt — Beschriftung, Einheit, Platz
+        im Dialog, Satz —, steht unter „Weitere Einstellungen“; die Vorgaben
+        dafür kommen aus dem Projektparameter und stimmen fast immer.
+        """
+        box = QWidget(self)
+        column = QVBoxLayout(box)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(TIGHT)
+        column.addWidget(_section(tr("Welche Maße soll man einstellen können?"), box))
         if not self._params:
-            # §2.7: Ein leerer Kasten sagt nicht, was fehlt. Dieser hier schon,
-            # denn ohne Projektparameter ist der Baustein starr — er ließe sich
-            # anlegen und danach an keiner Stelle anpassen.
+            # §2.7: Ein leerer Abschnitt sagt nicht, was fehlt. Dieser hier
+            # schon, denn ohne Projektparameter ist der Baustein starr — er
+            # ließe sich anlegen und danach an keiner Stelle anpassen.
             empty = QLabel(
                 tr(
                     "Dieser Ausschnitt hat keine Projektparameter. Der Baustein "
@@ -700,24 +809,34 @@ class RecipeDialog(QDialog):
                 box,
             )
             empty.setWordWrap(True)
-            form.addRow(empty)
+            column.addWidget(empty)
             return box
+        form = QFormLayout()
+        _one_line(form)
+        column.addLayout(form)
         for row in self._params:
             line = QWidget(box)
-            strip = QFormLayout(line)
-            strip.setContentsMargins(0, 0, 0, 0)
-            strip.addRow(tr("Beschriftung"), row.title)
-            strip.addRow(tr("Einheit"), row.unit)
+            fields = QHBoxLayout(line)
+            fields.setContentsMargins(0, 0, 0, 0)
+            fields.setSpacing(NORMAL)
             # **Die Vorgabe vor ihren Grenzen**: Sie werden aus ihr abgeleitet
             # (``_ParamRow``, halbe Spanne darunter, eine darüber), und der
             # Parameterdialog ordnet ebenso — Wert, dann Grenzen.
-            strip.addRow(tr("Vorgabe"), row.default)
-            strip.addRow(tr("Kleinster Wert"), row.minimum)
-            strip.addRow(tr("Größter Wert"), row.maximum)
-            strip.addRow(tr("Steht"), row.placement)
-            strip.addRow(tr("Beschreibung"), row.doc)
-            chain = (row.title, row.unit, row.default, row.minimum, row.maximum, row.placement)
-            for before, after in pairwise((*chain, row.doc)):
+            for word, spin in (
+                (tr("Vorgabe"), row.default),
+                (tr("von", context="Bereich"), row.minimum),
+                (tr("bis", context="Bereich"), row.maximum),
+            ):
+                label = QLabel(word, line)
+                label.setBuddy(spin)
+                # So breit wie die Zahl, nicht wie der Wertebereich: drei
+                # Felder über die ganze Zeile trennten „von“ und „bis“ von
+                # ihren Zahlen.
+                spin.setFixedWidth(least_number_width(spin) + 2 * NORMAL)
+                fields.addWidget(label)
+                fields.addWidget(spin)
+            fields.addStretch(1)
+            for before, after in pairwise((row.take, row.default, row.minimum, row.maximum)):
                 QWidget.setTabOrder(before, after)
             if row.hint is not None:
                 # **Über der Zeile und außerhalb von ``line``.** Der Satz
@@ -726,24 +845,29 @@ class RecipeDialog(QDialog):
                 # wird, und lesbar erst, wenn er erledigt ist.
                 row.hint.setParent(box)
                 form.addRow(row.hint)
+            # Senkrecht dehnbar, sonst gibt das Formular dem Haken nur seine
+            # eigene Höhe, und er steht über der Mitte der Zahlenfelder.
+            row.take.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
             form.addRow(row.take, line)
             row.take.toggled.connect(line.setEnabled)
             row.take.toggled.connect(self._update_enabled)
-            # Der Block folgt dem Haken von Anfang an: Eine abgeleitete Zeile
-            # geht ohne Haken auf, und ein bedienbarer Block darunter verspräche
-            # eine Wirkung, die er nicht hat.
+            # Die Zeile folgt dem Haken von Anfang an: Eine abgeleitete Zeile
+            # geht ohne Haken auf, und bedienbare Felder daneben versprächen
+            # eine Wirkung, die sie nicht haben.
             line.setEnabled(row.take.isChecked())
-            # **Der Knopf muss mitbekommen, was er prüft.** Bis hierher hörte
-            # er nur auf den Haken; die Grenzen prüft er seit heute mit, und
-            # eine Prüfung, die den Wert nicht mitbekommt, spricht über den
-            # Stand von vorhin.
+            # **Der Knopf muss mitbekommen, was er prüft**: Grenzen und
+            # Vorgabe entscheiden mit, ob er kann.
             for field in (row.minimum, row.default, row.maximum):
                 field.valueChanged.connect(self._update_enabled)
         return box
 
     def _feature_box(self) -> QWidget:
-        box = QGroupBox(tr("Welche Stellen soll man später anklicken können?"), self)
-        form = QFormLayout(box)
+        """Je Stelle ein Haken mit ihrem Namen — der Name im Rezept steht hinten."""
+        box = QWidget(self)
+        column = QVBoxLayout(box)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(TIGHT)
+        column.addWidget(_section(tr("Welche Stellen soll man später anklicken können?"), box))
         if not self._features:
             empty = QLabel(
                 tr(
@@ -754,25 +878,51 @@ class RecipeDialog(QDialog):
                 box,
             )
             empty.setWordWrap(True)
-            form.addRow(empty)
+            column.addWidget(empty)
             return box
-        # Eine Kopfzeile über den zwei Spalten. Ohne sie steht neben „Bohrung 1
-        # · Ø5,20 mm" ein Feld mit „hole_1" darin, und niemand weiß, ob er das
-        # ändern darf oder soll — der Kastentitel erklärt den Haken, nicht das
-        # Feld daneben.
-        head_place = QLabel(tr("Stelle"), box)
-        head_name = QLabel(tr("Name im Rezept"), box)
-        for label in (head_place, head_name):
-            font = label.font()
-            font.setBold(True)
-            label.setFont(font)
-        form.addRow(head_place, head_name)
-
         for row in self._features:
-            form.addRow(row.take, row.name)
+            column.addWidget(row.take)
             row.take.toggled.connect(row.name.setEnabled)
+            row.take.toggled.connect(row.label.setEnabled)
             row.take.toggled.connect(self._update_enabled)
             row.name.textChanged.connect(self._update_enabled)
+        return box
+
+    def _more_box(self) -> QWidget:
+        """Was hinter „Weitere Einstellungen“ steht: Angaben zum Baustein, je
+        Maß Beschriftung, Einheit, Platz und Satz, und die Namen der Stellen.
+        """
+        box = QWidget(self)
+        column = QVBoxLayout(box)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(NORMAL)
+        about = QFormLayout()
+        _one_line(about)
+        about.addRow(tr("Beschreibung"), self.doc)
+        about.addRow(tr("Lizenz"), self.licence)
+        about.addRow(tr("Autor"), self.author)
+        column.addLayout(about)
+        for row in self._params:
+            column.addWidget(row.heading)
+            form = QFormLayout()
+            _one_line(form)
+            form.addRow(tr("Beschriftung", context="Feld"), row.title)
+            form.addRow(tr("Einheit"), row.unit)
+            form.addRow(tr("Platz im Dialog"), row.placement)
+            form.addRow(tr("Beschreibung"), row.doc)
+            column.addLayout(form)
+            for field in (row.heading, row.title, row.unit, row.placement, row.doc):
+                row.take.toggled.connect(field.setEnabled)
+                field.setEnabled(row.take.isChecked())
+            for before, after in pairwise((row.title, row.unit, row.placement, row.doc)):
+                QWidget.setTabOrder(before, after)
+        if self._features:
+            column.addWidget(_section(tr("Namen der Stellen"), box))
+            names = QFormLayout()
+            _one_line(names)
+            for feature in self._features:
+                names.addRow(feature.label, feature.name)
+            column.addLayout(names)
         return box
 
     # --- Zustand --------------------------------------------------------------
@@ -806,14 +956,13 @@ class RecipeDialog(QDialog):
             require_range_size(count)
         except AppError as error:
             range_error = str(error.detail)
-        # Die Einzahl eigens: „1 Kombinationen" stand da, sobald ein einziges
-        # Maß mit einem einzigen Wert freigegeben war.
-        planned = (
-            tr("Bereichstest: eine Kombination.")
-            if count == 1
-            else tr("Bereichstest: {count} Kombinationen.").format(count=count)
-        )
-        self.range_plan.setText(range_error or planned)
+        # **Nur, wenn es den Kunden etwas angeht** (RM-517): „Bereichstest:
+        # 4 Kombinationen.“ stand vor jedem Speichern da — eine Zahl über
+        # unsere Prüfung, keine über sein Teil. Was bleibt, ist der Fall, in
+        # dem zu viele Maße freigegeben sind; der Satz dazu kommt aus dem Kern
+        # und nennt den Weg.
+        self.range_plan.setText(range_error)
+        self.range_plan.setVisible(bool(range_error))
         # **Ein vergebener Name ist kein Fehler, sondern der zweite Fall.**
         # „Ändern heißt neu speichern" steht im Handbuch (Kapitel *Eigene
         # Bausteine*), und wer die Breite seines Halters nachträglich ändert,
@@ -982,7 +1131,7 @@ class RecipeDialog(QDialog):
             )
 
         self._show_waiting(True)
-        self.report.setText(tr("Der Baustein wird über seine Grenzen geprüft …"))
+        self._say(tr("Der Baustein wird über seine Grenzen geprüft …"))
         # **Über ``_update_enabled``, nicht mit der Hand.** ``setEnabled(False)``
         # sperrte den Knopf ohne Grund daneben — und ein Tastendruck ließ ihn
         # danach wieder aufgehen, weil ``_update_enabled`` von der laufenden
@@ -1003,6 +1152,11 @@ class RecipeDialog(QDialog):
         worker.finished.connect(lambda done=worker: self._worker_done(done))
         self._worker = worker
         self._leash.start(worker)
+
+    def _say(self, text: str) -> None:
+        """Ein Satz unter den Feldern — sichtbar nur, solange er etwas sagt."""
+        self.report.setText(text)
+        self.report.setVisible(bool(text))
 
     def _reveal_report(self) -> None:
         """Macht den Prüfstatus im Rollbereich sichtbar, ohne das Fenster zu ändern."""
@@ -1039,7 +1193,7 @@ class RecipeDialog(QDialog):
         self.progress.setValue(max(0, min(100, round(share * 100))))
         self.percent.setText(f"{localised(f'{share * 100:.0f}')} %")
         if note:
-            self.report.setText(note)
+            self._say(note)
 
     def _stop_check(self) -> None:
         """Der Bereichstest wird abgebrochen, der Dialog bleibt offen.
@@ -1051,7 +1205,7 @@ class RecipeDialog(QDialog):
         if self._worker is not None:
             self._worker.stop()
         self._show_waiting(False)
-        self.report.setText(tr("Der Bereichstest wurde abgebrochen."))
+        self._say(tr("Der Bereichstest wurde abgebrochen."))
         self._update_enabled()
 
     def _checked(self, checked: Any) -> None:
@@ -1102,7 +1256,7 @@ class RecipeDialog(QDialog):
         """
         self._show_waiting(False)
         self._update_enabled()
-        self.report.setText(
+        self._say(
             problem_text(error)
             if isinstance(error, AppError)
             else str(tr("Der Baustein ließ sich nicht anlegen."))
@@ -1116,6 +1270,28 @@ class RecipeDialog(QDialog):
     def release(self) -> None:
         """Wartet auf den Bereichstest — ein Fenster geht nicht vor seinem Arbeiter."""
         self._leash.wait_all()
+
+
+def _one_line(form: QFormLayout) -> None:
+    """Beschriftung und Feld in einer Zeile, nie darüber (``fenster.md``).
+
+    Senkrecht mittig: Ein Haken ist niedriger als die Zahlenfelder daneben und
+    stand sonst über ihrer Mitte.
+    """
+    form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+    form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    # Fest, denn der Stilabstand hängt an der Art der Beschriftung: Hinter
+    # einem Haken war er kleiner als hinter einem Wort, und die Felder unter
+    # „Name“ begannen zehn Punkte weiter rechts als die unter „Breite“.
+    form.setHorizontalSpacing(NORMAL)
+
+
+def _section(text: str, parent: QWidget) -> QLabel:
+    """Eine flache Abschnittsüberschrift statt eines gerahmten Kastens (RM-518)."""
+    label = QLabel(text, parent)
+    label.setWordWrap(True)
+    set_level(label, "section")
+    return label
 
 
 def taken_name(name: str) -> bool:

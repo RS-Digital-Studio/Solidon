@@ -212,7 +212,7 @@ stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis bleibt scroll
 | Datei | Zweck |
 |---|---|
 | `catalog.py` | der Bausteinkatalog (§24.3, §2.6): Kachel aus Bild und Titel, Eckzeichen (`tile_marks`); `show_for_feature` zeigt nur, was das Register an einer Merkmalsart anbietet; `offer_ways` führt aus der leeren Szene zu einem ersten Körper |
-| `recipe_dialog.py` | Auswahl als Baustein speichern; an einem wieder geöffneten eigenen Baustein heißt der Knopf *Baustein ersetzen* |
+| `recipe_dialog.py` | Auswahl als Baustein speichern: je Maß eine Zeile (Vorgabe, von, bis), je Stelle ein Haken, alles Übrige unter *Weitere Einstellungen*; an einem wieder geöffneten eigenen Baustein heißt der Knopf *Baustein ersetzen* |
 | `counterpart_dialog.py` | Gegenstücke: zwei Stellen, Paar/Maße aus Bausteinschema und `Pair.shared` |
 
 Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;

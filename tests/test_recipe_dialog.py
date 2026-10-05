@@ -95,24 +95,28 @@ def test_the_dialog_names_and_limits_the_range_before_starting(qt_app: QApplicat
         assert "1024" in dialog.range_plan.text()
         assert "512" in dialog.range_plan.text()
         assert "Maße" in dialog._save.accessibleDescription()
+        assert dialog.range_plan.isVisibleTo(dialog), "die Grenze steht da, wo sie greift"
         dialog._params[-1].take.setChecked(False)
         assert dialog._save.isEnabled()
-        assert "512" in dialog.range_plan.text()
-        assert "Kombinationen" in dialog.range_plan.text()
+        # Unter der Grenze ist die Zahl eine Auskunft über die Prüfung, nicht
+        # über das Teil — sie steht nicht da (RM-517).
+        assert dialog.range_plan.text() == ""
+        assert not dialog.range_plan.isVisibleTo(dialog)
     finally:
         dialog.release()
         dialog.deleteLater()
 
 
-def test_a_one_corner_range_uses_the_singular(qt_app: QApplication, monkeypatch) -> None:
-    """Ein Bereich aus genau einer Kombination darf nicht im Plural stehen."""
-    from app.ui import recipe_dialog
+def test_an_allowed_range_says_nothing_about_combinations(qt_app: QApplication) -> None:
+    """„Bereichstest: 4 Kombinationen.“ stand vor jedem Speichern da (RM-517).
 
-    monkeypatch.setattr(recipe_dialog.recipes, "range_size", lambda _exposed: 1)
+    Eine Zahl über unsere Prüfung ist keine Auskunft über das Teil; der Satz
+    bleibt dem Fall vorbehalten, in dem zu viele Maße freigegeben sind.
+    """
     dialog = _dialog(qt_app)
     try:
-        assert dialog.range_plan.text() == "Bereichstest: eine Kombination."
-        assert "Kombinationen" not in dialog.range_plan.text()
+        assert dialog.range_plan.text() == ""
+        assert not dialog.range_plan.isVisibleTo(dialog)
     finally:
         dialog.release()
         dialog.deleteLater()
@@ -1684,9 +1688,12 @@ def test_every_row_says_which_value_it_belongs_to(qt_app: QApplication) -> None:
     dialog = _dialog(qt_app, (_feature("hole_1"),))
     try:
         rows = {row.name: row for row in dialog._params}
-        for name, row in rows.items():
+        for row in rows.values():
+            shown = row.take.text()
+            assert shown == row.title.text(), "der Haken trägt die Beschriftung"
             for widget in row.widgets():
-                assert name in widget.accessibleName(), (name, widget.accessibleName())
+                assert shown in widget.accessibleName(), (shown, widget.accessibleName())
+                assert row.name not in widget.accessibleName(), "kein Schlüssel als Name"
         assert rows["breite"].title.accessibleName() != rows["hoehe"].title.accessibleName()
         assert rows["breite"].take.accessibleDescription(), "was der Haken tut, bleibt gesagt"
 
@@ -1722,3 +1729,65 @@ def test_a_refused_part_names_what_helps(qt_app: QApplication) -> None:
     finally:
         dialog.release()
         dialog.deleteLater()
+
+
+def _visible_lines(dialog: RecipeDialog) -> tuple[int, str]:
+    """Wie viele Zeilen der Rollbereich zeigt, und was darin zu lesen ist.
+
+    Eine Zeile ist eine Höhenlage: Mitten, die weniger als acht Punkte
+    auseinanderliegen, gehören zu derselben (Haken, Wort und Feld einer Zeile).
+    """
+    from PySide6.QtWidgets import QAbstractButton, QLabel
+
+    visible = [
+        widget
+        for widget in (*dialog.findChildren(QLabel), *dialog.findChildren(QAbstractButton))
+        if widget.isVisibleTo(dialog)
+        and widget.text().strip()
+        and dialog._scroll.isAncestorOf(widget)
+    ]
+    centres = sorted(widget.mapTo(dialog, widget.rect().center()).y() for widget in visible)
+    lines = sum(
+        1 for index, centre in enumerate(centres) if index == 0 or centre - centres[index - 1] >= 8
+    )
+    return lines, " ".join(widget.text() for widget in visible)
+
+
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_two_dimensions_fit_in_ten_lines_without_keys(qt_app: QApplication, language: str) -> None:
+    """Abnahme RM-517: zwei Maße, zwei Stellen — höchstens zehn Zeilen, 600 Punkte.
+
+    Vorher 21 Felder in 978 Punkten, und sichtbar standen ``breite``,
+    ``hoehe``, ``hole_1``, ``face_2``, „Maßherkunft nicht bestimmt“ und
+    „Bereichstest: 4 Kombinationen“ — in jeder Sprache.
+    """
+    from PySide6.QtWidgets import QGroupBox, QLineEdit
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    install_language(language)
+    set_language(language)
+    face = Feature(id="face_2", kind="face", provenance="detected", params={"area": 2880.0})
+    profile: Any = None
+    dialog = RecipeDialog(_document(), {}, (0,), (_feature("hole_1"), face), profile)
+    try:
+        dialog.title.setText("Halter für die Werkbank")
+        dialog.show()
+        for _ in range(5):
+            qt_app.processEvents()
+        assert not dialog.findChildren(QGroupBox), "flache Abschnitte statt Rahmen"
+        lines, shown = _visible_lines(dialog)
+        assert lines <= 10, (lines, shown)
+        assert dialog.height() <= 600, dialog.height()
+        fields = " ".join(
+            field.text() for field in dialog.findChildren(QLineEdit) if field.isVisibleTo(dialog)
+        )
+        for key in ("breite", "hoehe", "hole_1", "face_2"):
+            assert key not in shown and key not in fields, key
+        assert "Maßherkunft" not in shown and "Kombination" not in shown
+    finally:
+        dialog.release()
+        dialog.close()
+        dialog.deleteLater()
+        set_language("de")
