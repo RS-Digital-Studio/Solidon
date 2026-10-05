@@ -781,6 +781,11 @@ def _screens_child(language: str) -> int:
         if dialog.slicer_toggle is not None:
             dialog.slicer_toggle.setChecked(False)
             settle(10)
+        # Die Vorschläge offen: Seit RM-514 steht der Abschnitt zugeklappt als
+        # Zeile „N Vorschläge“ da, und die Seite zeigt, was das Teil verlangt.
+        if dialog.advice_toggle is not None:
+            dialog.advice_toggle.setChecked(True)
+            settle(10)
         free = free_rect(window)
         fit_into(window, dialog, free, STEP_RATIO)
         crop = framed(frame_rect(window, dialog), STEP_RATIO, free)

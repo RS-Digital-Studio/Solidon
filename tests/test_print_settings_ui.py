@@ -115,23 +115,26 @@ def test_typing_an_unknown_printer_preserves_the_choice_and_output_state(
     assert dialog.state.text() == before[4]
 
 
-@pytest.mark.parametrize("path", ["layers.layer_height", "retraction.length"])
+@pytest.mark.parametrize("path", ["infill.density", "layers.layer_height", "retraction.length"])
 def test_search_opens_the_matching_section_and_scrolls_to_its_field(
     qt_app: QApplication, session: Session, path: str
 ) -> None:
-    """Auch auf zugeklappter Vorderseite führt ein Treffer zu einem sichtbaren Eingabefeld."""
+    """Auch hinter zugeklappter Tiefe führt ein Treffer zu einem sichtbaren Eingabefeld.
+
+    Vorn stehen seit RM-514 nur Fülldichte und Stützen, ohne eigene Klappe;
+    ein Treffer dort klappt nichts auf.
+    """
     dialog = PrintSettingsDialog(session, UiSettings())
     dialog.show()
     try:
-        dialog.front_toggle.setChecked(False)
+        assert dialog.front_toggle is None, "vorn gibt es keine Klappe mehr"
         dialog.tabs_toggle.setChecked(False)
         dialog.resize(620, 400)
         dialog._lift(path)
         for _ in range(4):
             qt_app.processEvents()
         field = next(entry for entry in FIELDS if entry.path == path)
-        toggle = dialog.front_toggle if field.front else dialog.tabs_toggle
-        assert toggle.isChecked()
+        assert field.front or dialog.tabs_toggle.isChecked()
         editor = dialog._editors[path]
         assert editor.isVisibleTo(dialog)
         visible = dialog._scroll.viewport()
@@ -177,6 +180,9 @@ def test_search_guides_to_the_selector_for_an_inactive_detail_field(
 
     request.addfinalizer(close_dialog)
     dialog.show()
+    # Die Suche steht hinter „Weitere Einstellungen" (RM-514); wer sucht,
+    # hat die Klappe offen.
+    dialog.tabs_toggle.setChecked(True)
     for _ in range(3):
         qt_app.processEvents()
     selector = dialog._editors[selector_path]
@@ -305,13 +311,8 @@ def test_changing_a_selector_does_not_revisit_an_unrelated_search_hit(
     dialog.show()
     for _ in range(3):
         qt_app.processEvents()
-    dialog.search.setText("wall_loops")
-    QTest.keyClick(dialog.search, Qt.Key.Key_Return)
-    for _ in range(3):
-        qt_app.processEvents()
-
-    assert dialog._search_hits[dialog._search_at] == "shell.wall_count"
-    assert dialog._search_requirement_target == ""
+    # Die Suche steht hinter „Weitere Einstellungen" (RM-514): erst aufklappen,
+    # dann einen Treffer vorn suchen, der die Klappe nicht braucht.
     assert dialog.tabs_toggle is not None
     assert not dialog.tabs_toggle.isChecked()
     folded_frame = dialog.frameGeometry()
@@ -320,12 +321,19 @@ def test_changing_a_selector_does_not_revisit_an_unrelated_search_hit(
         qt_app.processEvents()
     assert dialog.tabs_toggle.isChecked()
     assert dialog.frameGeometry().topLeft() == folded_frame.topLeft()
+    dialog.search.setText("fill_density")
+    QTest.keyClick(dialog.search, Qt.Key.Key_Return)
+    for _ in range(3):
+        qt_app.processEvents()
+
+    assert dialog._search_hits[dialog._search_at] == "infill.density"
+    assert dialog._search_requirement_target == ""
     adhesion_group = GROUPS.index("adhesion")
     dialog.tabs.setCurrentIndex(adhesion_group)
     for _ in range(3):
         qt_app.processEvents()
     selector = dialog._editors["adhesion.kind"]
-    target = dialog._editors["shell.wall_count"]
+    target = dialog._editors["infill.density"]
     assert isinstance(selector, QComboBox)
     assert selector.isVisibleTo(dialog)
     window_size_after_open = (dialog.width(), dialog.height())
@@ -444,6 +452,8 @@ def test_changing_search_clears_the_pending_prerequisite_target(
 
     request.addfinalizer(close_dialog)
     dialog.show()
+    # Die Suche steht hinter „Weitere Einstellungen" (RM-514).
+    dialog.tabs_toggle.setChecked(True)
     for _ in range(3):
         qt_app.processEvents()
     target_path = "support.z_gap"
@@ -1496,6 +1506,7 @@ def test_the_save_button_says_what_it_is_waiting_for(dialog: PrintSettingsDialog
     Beschreibung für den Bildschirmleser ist die zweite Kodierung.
     """
     assert not dialog.save_button.isEnabled(), "nothing has been sliced yet"
+    assert dialog.save_button.isHidden(), "RM-514: er erscheint mit der Druckdatei"
     for channel, value in (
         ("tooltip", dialog.save_button.toolTip()),
         ("status tip", dialog.save_button.statusTip()),
@@ -1509,6 +1520,7 @@ def test_the_save_button_says_what_it_is_waiting_for(dialog: PrintSettingsDialog
     # Fehlers: Er sagt, etwas fehle, während es da ist.
     dialog._release_the_save()
     assert dialog.save_button.isEnabled()
+    assert not dialog.save_button.isHidden(), "mit der Datei steht er da"
     assert not dialog.save_button.toolTip()
     assert not dialog.save_button.accessibleDescription()
 
@@ -1694,9 +1706,15 @@ def test_filament_settings_precede_temperature_and_speed_tabs() -> None:
 
 def test_the_front_page_stays_short() -> None:
     """§2.4: vorn die zwei bis drei Werte, die man ändert. Wird das eine
-    zweite vollständige Liste, ist die gestufte Tiefe verloren."""
-    front = [field for field in FIELDS if field.front]
-    assert 3 <= len(front) <= 10
+    zweite vollständige Liste, ist die gestufte Tiefe verloren.
+
+    RM-514 (Entscheidung Robert): vorn Drucker, Filamente, Qualität,
+    Fülldichte und Stützen — die ersten drei in der Kopfzeile, die übrigen
+    zwei aus dieser Tabelle. Schichthöhe, Wände, Füllmuster und Temperaturen
+    stehen hinter „Weitere Einstellungen".
+    """
+    front = [field.path for field in FIELDS if field.front]
+    assert front == ["infill.density", "support.style"]
 
 
 # --- Werte hin und zurück -----------------------------------------------------------
@@ -1716,6 +1734,8 @@ def test_the_printer_header_refuses_out_of_range_numbers(
     from PySide6.QtTest import QTest
 
     dialog.show()
+    # Die Düsenzahl steht hinter „Weitere Einstellungen" (RM-514).
+    dialog.tabs_toggle.setChecked(True)
     qt_app.processEvents()
     try:
         other = dialog.nozzle_choice.count() - 1
@@ -2531,14 +2551,48 @@ def test_the_close_button_speaks_german(dialog: PrintSettingsDialog) -> None:
 
 
 def test_the_advice_list_names_a_reason(qt_app: QApplication) -> None:
+    """Einstellung und Vorschlag in der Tabelle, der ganze Grund darunter (RM-514).
+
+    Als dritte Spalte endete der Grund in jeder Zeile auf „…", obwohl der Code
+    Umbruch versprach. Jetzt steht er für die gewählte Zeile vollständig unter
+    der Tabelle, mit dem Namen der Einstellung davor, und an jeder Zeile als
+    Kurzhilfe. Vorgewählt ist die erste Zeile ohne Hervorhebung — eine
+    eingefärbte Zeile im Ruhezustand wäre eine Akzentfläche mehr (B12).
+    Zugeklappt sagt der Abschnitt nur die Zahl, daneben *Übernehmen*.
+    """
     session = Session()
     session.project.document.material = "tpu-95a"
     dialog = PrintSettingsDialog(session, UiSettings())
+    view = dialog.advice_view
 
-    assert dialog.advice_view.topLevelItemCount() > 0
-    first = dialog.advice_view.topLevelItem(0)
+    assert view.columnCount() == 2
+    count = view.topLevelItemCount()
+    assert count > 1, "TPU bremst mehrere Tempi — sonst prüft der Test die Wahl nicht"
+    assert dialog.advice_toggle is not None and not dialog.advice_toggle.isChecked()
+    assert dialog._advice_summary is not None
+    assert dialog._advice_summary.text() == f"{count} Vorschläge"
+    assert dialog.apply_button.text() == "Übernehmen"
+    assert dialog.apply_button.isVisibleTo(dialog.advice_box)
+
+    entries = dialog._current_advice()
+    first = view.topLevelItem(0)
     assert first is not None
-    assert first.text(2), "die dritte Spalte ist der Grund, und sie darf nicht leer sein"
+    assert view.currentItem() is first and not first.isSelected()
+    said = dialog.advice_reason.text()
+    assert said.startswith(dialog._advice_title(entries[0])), said
+    assert str(entries[0].reason) in said
+    assert all(str(entries[0].reason) in first.toolTip(column) for column in range(2))
+
+    second = view.topLevelItem(1)
+    assert second is not None
+    view.setCurrentItem(second)
+    assert dialog.advice_reason.text().startswith(dialog._advice_title(entries[1]))
+
+    # Eine eigene Wahl überlebt den Neuaufbau der Liste; die stille Vorgabe
+    # wird dabei nicht zur Wahl.
+    dialog._show_advice()
+    assert view.currentItem() is not None and view.currentItem().isSelected()
+    assert dialog.advice_reason.text().startswith(dialog._advice_title(entries[1]))
 
 
 def test_applying_the_advice_moves_the_editors(qt_app: QApplication) -> None:
@@ -6933,13 +6987,25 @@ def test_the_print_dialog_asks_in_the_order_its_answers_depend_on(
         place(head),
         place(dialog.slicer_box),
         place(dialog.foundation_note),
-        place(dialog.search_row),
         place(dialog.front_box),
         place(dialog.tabs_box),
         place(dialog.advice_box),
-        place(dialog.share_settings),
     ]
     assert order == sorted(order) and len(set(order)) == len(order), order
+    # Düsenzahl und Suche stehen hinter „Weitere Einstellungen" (RM-514), die
+    # Mitgabe außerhalb des Rollbereichs bei den Knöpfen der Übergabe.
+    assert dialog.tabs_box.isAncestorOf(dialog.search)
+    assert dialog.tabs_box.isAncestorOf(dialog.nozzle_count)
+    assert not dialog._scroll.isAncestorOf(dialog.share_settings)
+    outer = dialog.layout()
+    assert outer is not None
+    below = [outer.itemAt(index).widget() for index in range(outer.count())]
+    holder = next(
+        widget
+        for widget in below
+        if widget is not None and widget.isAncestorOf(dialog.share_settings)
+    )
+    assert below.index(dialog._scroll) < below.index(holder) < below.index(dialog._buttons)
 
 
 def test_the_header_names_the_material_a_body_really_prints_in(
@@ -7184,16 +7250,28 @@ def test_the_search_walks_through_its_hits_and_counts_them(
 
 
 def test_the_search_field_sits_where_it_can_be_seen(qt_app: QApplication, session: Session) -> None:
-    """Nicht hinter der Klappe, die es aufmachen soll.
+    """Über den Reitern von „Weitere Einstellungen", und die Klappe nennt es.
 
-    Wer sucht, weiß gerade nicht, wo das Gesuchte steht — ein Suchfeld in
-    „Weitere Einstellungen" fände nur, wer den Bereich schon offen hat.
+    Vorn stehen seit RM-514 nur Fülldichte und Stützen; gesucht wird, was
+    dahinter liegt. Damit das Suchfeld nicht nur findet, wer den Bereich
+    schon offen hat, nennt die zugeklappte Zeile es zuerst — und es steht
+    über allen Reitern, nicht in einem davon.
     """
+    from PySide6.QtWidgets import QLabel
+
     dialog = PrintSettingsDialog(session, UiSettings())
 
-    assert dialog.search.isVisibleTo(dialog), "sichtbar, auch solange alles zugeklappt ist"
-    assert not dialog.tabs.isAncestorOf(dialog.search), "und nicht im Klappbereich"
+    assert dialog.tabs_box.isAncestorOf(dialog.search)
+    assert not dialog.tabs.isAncestorOf(dialog.search), "über den Reitern, nicht in einem"
+    summary = next(
+        label
+        for label in dialog.tabs_box.findChildren(QLabel)
+        if label.objectName() == "sectionSummary"
+    )
+    assert summary.text().startswith("Suche"), summary.text()
     assert dialog.search.placeholderText(), "es sagt, wofür es da ist"
+    dialog.tabs_toggle.setChecked(True)
+    assert dialog.search.isVisibleTo(dialog)
 
 
 def test_the_dialog_uses_one_form_of_section(qt_app: QApplication, session: Session) -> None:
@@ -7219,29 +7297,40 @@ def test_the_dialog_uses_one_form_of_section(qt_app: QApplication, session: Sess
     ]
 
     assert not kaesten, f"noch gerahmt: {[box.title() for box in kaesten]}"
-    assert dialog.front_toggle is not None and dialog.front_toggle.isChecked(), (
-        "die Vorderseite steht offen — zuklappen darf man sie, vorfinden nicht"
+    # Vorn stehen zwei Zeilen ohne Klappe (RM-514); was sich klappen lässt,
+    # trägt dieselbe Kopfzeile.
+    assert dialog.front_toggle is None
+    assert (
+        dialog.advice_toggle is not None and dialog.advice_toggle.objectName() == "sectionHeading"
     )
-    assert dialog.advice_toggle is not None and dialog.advice_toggle.isChecked()
 
 
-def test_the_most_important_section_can_be_folded_away(
+def test_the_front_shows_density_and_supports_and_hides_the_rest(
     qt_app: QApplication, session: Session
 ) -> None:
-    """Und die Form bringt ihren Nutzen mit, sonst wäre sie nur Anstrich.
+    """Vorn Fülldichte und Stützen, der Rest hinter „Weitere Einstellungen" (RM-514).
 
-    Wer nur die Vorschläge lesen will, klappt die acht Felder darüber weg —
-    genau das, was §2.5 für die linke Spalte des Fensters verlangt und was die
-    gerahmte Form nicht konnte.
+    Beim Öffnen zeigte der Dialog 34 Bedienelemente. Schichthöhe, Wände,
+    Füllmuster, Düsen- und Betttemperatur und die Düsenzahl kommen aus
+    Drucker, Filament und Qualität; sie stehen zugeklappt dahinter.
     """
     dialog = PrintSettingsDialog(session, UiSettings())
-    editor = dialog._editors["layers.layer_height"]
-    assert editor.isVisibleTo(dialog)
+    assert dialog.tabs_toggle is not None and not dialog.tabs_toggle.isChecked()
 
-    dialog.front_toggle.setChecked(False)
-    qt_app.processEvents()
-
-    assert not editor.isVisibleTo(dialog), "zugeklappt ist zu"
+    for path in ("infill.density", "support.style"):
+        assert dialog._editors[path].isVisibleTo(dialog), path
+    behind = (
+        "layers.layer_height",
+        "shell.wall_count",
+        "infill.pattern",
+        "temperature.nozzle",
+        "temperature.bed",
+    )
+    for path in behind:
+        assert dialog.tabs_box.isAncestorOf(dialog._editors[path]), path
+        assert not dialog._editors[path].isVisibleTo(dialog), path
+    assert not dialog.nozzle_count.isVisibleTo(dialog)
+    assert dialog.nozzle_choice.isVisibleTo(dialog), "der Durchmesser bleibt beim Drucker"
 
 
 def test_every_form_row_of_a_dialog_starts_at_one_line(
@@ -8183,6 +8272,101 @@ def test_a_printer_the_slicer_does_not_know_says_which_one(
     assert "{" not in note, f"ein Platzhalter blieb stehen: {note!r}"
 
 
+def test_without_a_manufacturer_profile_one_sentence_says_it_and_no_field_stands_empty(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Ein Satz statt zweier, und kein leeres Feld (RM-514, C3/D11).
+
+    PrusaSlicer verlangt kein Profil. Fand sich für den Drucker keines, klappte
+    der Kasten auf: vier leere Felder, „Für … bringt PrusaSlicer kein eigenes
+    Profil mit — es gelten Solidons Werte …" darin und „Ohne Profil des
+    Herstellers gelten Solidons Vorgaben …" darunter, zwei Wörter für eine
+    Sache. Dazu „Erst einen Drucker wählen", obwohl oben einer stand — es
+    fehlte das Druckerprofil.
+    """
+    dialog._slicer_path = Path("C:/Programme/Prusa3D/PrusaSlicer/prusa-slicer.exe")
+    fremd = _profile("Fremder Drucker 0.4 nozzle", "machine", printer_model="Fremder", nozzle=0.4)
+    dialog._profiles_found([fremd])
+
+    drucker = dialog.printer_choice.currentText()
+    satz = dialog.foundation_note.text()
+    assert drucker and drucker in satz and "PrusaSlicer" in satz, satz
+    assert not dialog.profile_note.text(), "derselbe Satz nicht noch einmal im Kasten"
+    assert dialog.slicer_toggle is not None and not dialog.slicer_toggle.isChecked(), (
+        "nichts zu wählen — der Kasten bleibt zu"
+    )
+
+    dialog._open_slicer_section()
+    sichtbar = [
+        box
+        for box in (dialog.process_choice, *(box for _label, box in dialog.slot_rows))
+        if box.isVisibleTo(dialog.slicer_box)
+    ]
+    assert all(box.count() for box in sichtbar), "ein sichtbares Auswahlfeld hat etwas zur Wahl"
+    assert not dialog.process_choice.isVisibleTo(dialog.slicer_box)
+    assert not dialog.profile_note.isVisibleTo(dialog.slicer_box)
+    assert "Druckerprofil" in dialog.filament_shown.text(), dialog.filament_shown.text()
+
+    # Für Cura gibt es nichts zu wählen: derselbe eine Satz, kein Kasten.
+    dialog._slicer_path = Path("C:/Programme/Cura/CuraEngine.exe")
+    dialog._show_foundation_note()
+    assert "Solidons Werte" in dialog.foundation_note.text()
+
+
+def test_no_caption_stands_twice_in_the_print_dialog(dialog: PrintSettingsDialog) -> None:
+    """„Drucker" stand zweimal, „Düse" meinte Durchmesser und Temperatur (RM-514, C14).
+
+    Gezählt werden die Beschriftungen aller Formulare des Dialogs, auch der
+    zugeklappten Reiter: Wer „Düse" liest, soll nicht raten, welche gemeint
+    ist. Und die Slotzeilen stehen an derselben Kante wie die übrigen — der
+    Farbpunkt im Feld, nicht eingerückt vor der Beschriftung.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    beschriftungen: list[str] = []
+    for form in dialog.findChildren(QFormLayout):
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            label = item.widget() if item is not None else None
+            if isinstance(label, QLabel) and label.text().strip():
+                beschriftungen.append(label.text().strip())
+    assert len(beschriftungen) > 40, "die Formulare wurden nicht gefunden"
+    doppelt = sorted({text for text in beschriftungen if beschriftungen.count(text) > 1})
+    assert not doppelt, f"zweimal im Dialog: {doppelt}"
+    for text in ("Druckerprofil", "Prozessprofil", "Filamentprofil", "Düsentemperatur"):
+        assert text in beschriftungen, text
+    assert not [text for text in beschriftungen if text.startswith(" ")], "keine Einrückung"
+
+
+def test_the_handover_lines_stand_right_above_the_buttons(
+    dialog: PrintSettingsDialog, qt_app: QApplication
+) -> None:
+    """Zustand, Bestand und *Werte mitgeben* gehören zu den Knöpfen (RM-514, C15).
+
+    Sie standen am Ende des Rollbereichs; nach dem Zuklappen trennten bis zu
+    260 Punkte Leere die Mitgabe von den Knöpfen, die sie betrifft. Jetzt
+    stehen sie außerhalb, und dazwischen liegt höchstens zweimal ``NORMAL``.
+    """
+    from app.ui.style import NORMAL
+
+    dialog.show()
+    for _ in range(8):
+        qt_app.processEvents()
+    dialog.tabs_toggle.setChecked(True)
+    for _ in range(8):
+        qt_app.processEvents()
+    dialog.tabs_toggle.setChecked(False)
+    dialog.resize(dialog.width(), dialog.height() + 260)
+    for _ in range(8):
+        qt_app.processEvents()
+
+    for widget in (dialog.state, dialog.stock_notice, dialog.share_settings):
+        assert not dialog._scroll.isAncestorOf(widget), widget
+    unten = dialog.share_settings.mapTo(dialog, dialog.share_settings.rect().bottomLeft()).y()
+    luecke = dialog._buttons.geometry().top() - unten
+    assert 0 <= luecke <= 2 * NORMAL, luecke
+
+
 def test_without_a_matching_profile_the_nozzle_still_narrows_the_list(
     dialog: PrintSettingsDialog,
 ) -> None:
@@ -8954,7 +9138,7 @@ def test_secondary_filament_advice_is_visible_but_not_applicable_in_prusa(qt_app
     dialog._apply_advice()
     assert handover.override_for(dialog.settings, white) is None
     assert any(
-        "erste Filament" in dialog.advice_view.topLevelItem(row).text(2)
+        "erste Filament" in dialog.advice_view.topLevelItem(row).toolTip(0)
         and not dialog.advice_view.topLevelItem(row).flags() & Qt.ItemFlag.ItemIsUserCheckable
         for row in range(dialog.advice_view.topLevelItemCount())
     )

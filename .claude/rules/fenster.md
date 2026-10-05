@@ -342,29 +342,28 @@ Erreichbarkeit wieder her. Die Anfangsbreite samt zugeklappter Teile und
 Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
-(`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
-zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
-(`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
-(`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
-Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt.
+(`DontWrapRows`). Eine Beschriftungsspalte je Dialog (`panels.align_forms`,
+gerahmte Reiter über `apart`), gleich breite Felder (`panels.even_fields`,
+`op_dialog.even_value_fields`); eine Zeile aus Feld und Knöpfen endet mit
+`addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal im Dialog.
 
 **Klappen:** überall die flache Überschrift (`panels.collapsible`,
 `sectionHeading`); zugeklappt nennt sie ihren Inhalt (`contents=`, Wächter in
-`test_interface_limits`), `remember=` hält den Zustand des Kunden. Werte, die sich ein- und ausschalten lassen, sind eine
-Schalterzeile mit eingerückten Feldern, kein ankreuzbarer Rahmen. Bei
-`ContentHeight`-Dialogen werden Anfangsgröße und ausdrücklich bedientes
-Klappen getrennt gemessen; eigenes Wachsen gilt nicht als gezogene
-Nutzergröße. Andere Dialoge behalten ihren
-eigenen Größenweg. Ein Ausgang ist `RejectRole` — als `AcceptRole` macht ihn
-die Knopfleiste beim Anzeigen zum Hauptknopf.
+`test_interface_limits`), `remember=` hält den Zustand des Kunden — nie an
+einer Klappe, die sich selbst öffnet. Werte, die sich ein- und ausschalten
+lassen, sind eine Schalterzeile mit eingerückten Feldern, kein ankreuzbarer
+Rahmen. Bei `ContentHeight`-Dialogen werden Anfangsgröße und bedientes Klappen
+getrennt gemessen; eigenes Wachsen gilt nicht als Nutzergröße. Ein Ausgang ist
+`RejectRole` — als `AcceptRole` macht ihn die Knopfleiste zum Hauptknopf.
 
-**Was eine Angabe bestimmt, steht vor ihr** (Entscheidung Robert,
-29.09.2026): was eine Liste füllt, eine Vorgabe setzt oder sperrt, davor; ein
-Schalter bei dem, was er schaltet; ein Zustandssatz bei seinem Gegenstand.
+**Was eine Angabe bestimmt, steht vor ihr** (Entscheidung Robert): was eine
+Liste füllt, eine Vorgabe setzt oder sperrt, davor; ein Schalter bei dem, was
+er schaltet; ein Zustandssatz bei seinem Gegenstand.
 Druckeinstellungen: Slicer, Drucker, Düse, Platte, Filamente, Qualität,
 Profile des Slicers, Grundlage, Werte; *Werte mitgeben* bei der Übergabe
 (`test_the_print_dialog_asks_in_the_order_its_answers_depend_on`). Register:
-`tests/test_dependency_order.py`.
+`tests/test_dependency_order.py`. Vorn davon nur Fülldichte und Stützen;
+Zustand und Mitgabe über den Knöpfen, außerhalb des Rollbereichs.
 
 **Slicer vor Drucker:** Einstellungen und Erstlauf verwenden dieselbe
 asynchrone Druckererhebung; in den Einstellungen steht der Slicer unter

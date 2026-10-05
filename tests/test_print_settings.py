@@ -836,7 +836,7 @@ def test_a_part_on_many_small_feet_asks_for_a_brim() -> None:
 
     brim = [entry for entry in entries if entry.path == "adhesion.kind"]
     assert [entry.value for entry in brim] == ["brim"]
-    assert "Füßen" in str(brim[0].reason)
+    assert "Füße" in str(brim[0].reason), "der Grund nennt die Füße"
 
 
 def test_one_foot_that_holds_on_its_own_needs_no_brim() -> None:
