@@ -1639,6 +1639,20 @@ QWidget#selectionOperations QToolButton#operationRow:hover {{
 QWidget#selectionOperations QToolButton#operationRow:focus {{
     border: 2px dashed {focus};
 }}
+/* Das Suchfeld der Werkzeugleiste ist ein Knopf, der aussieht wie ein Feld
+   (RM-506): Fläche und Rahmen eines Eingabefelds, Text in der Nebenfarbe,
+   linksbündig — wer es sieht, weiß, dass man hier sucht. */
+QPushButton#functionSearch {{
+    background: {base};
+    border: 1px solid {line};
+    border-radius: {SPACE}px;
+    color: {muted};
+    min-height: 0px;
+    padding: {TIGHT // 2}px {NORMAL}px;
+    text-align: left;
+}}
+QPushButton#functionSearch:hover {{ border-color: {accent_line}; }}
+QPushButton#functionSearch:focus {{ border: 2px dashed {focus}; }}
 /* Der Pfeil vor einer Handlung im Merkmalfenster klappt sie auf (RM-510).
    Offen sagt er mit seiner Richtung, nicht mit einer Akzentfläche — die
    gehört dem aktiven Werkzeug. */

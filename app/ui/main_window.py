@@ -3588,6 +3588,8 @@ class MainWindow(QMainWindow):
         self.selection_operations = SelectionOperationsPanel(REGISTRY.all(), self)
         self.selection_operations.operationRequested.connect(self.launch_operation)
         self.selection_operations.catalogRequested.connect(self.action_catalog)
+        self.selection_operations.matchingPartsRequested.connect(self.open_matching_parts)
+        self.selection_operations.paletteRequested.connect(self.open_palette)
         from app.ui.filament_assignment import QuickFilamentPicker
 
         self.quick_filament = QuickFilamentPicker(self)
@@ -4978,6 +4980,26 @@ class MainWindow(QMainWindow):
             if symbol == "armature":
                 self._toolbar_armature = action
 
+        # **Suchen, sichtbar** (RM-506): Die Befehlspalette fand jede Funktion,
+        # aber niemand fand die Palette — sie stand nur unter *Bearbeiten*,
+        # und sieben der zwölf Kernfunktionen stehen in keinem Menü. Das Feld
+        # sieht aus wie eines und öffnet sie; daneben steht dasselbe Kürzel wie
+        # im Menü, aus derselben Aktion, damit eine andere Belegung mitgeht.
+        keys = self._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)
+        searching = tr("Funktion suchen …")
+        self.function_search = QPushButton(
+            icon("search", toolbar), f"{searching}   {keys}" if keys else searching, toolbar
+        )
+        self.function_search.setObjectName("functionSearch")
+        self.function_search.setAccessibleName(tr("Funktion suchen"))
+        hint = tr("Öffnet die Befehlspalette: jede Funktion mit Ort und Kürzel.")
+        self.function_search.setToolTip(hint)
+        self.function_search.setStatusTip(hint)
+        self.function_search.setAccessibleDescription(hint)
+        self.function_search.clicked.connect(lambda _checked=False: self.open_palette(""))
+        toolbar.addSeparator()
+        toolbar.addWidget(self.function_search)
+
         # Rechts neben den sieben Knöpfen stand die halbe Leiste leer. Dort
         # steht jetzt, was das Projekt gerade ist und worauf es gedruckt wird —
         # Angaben, die jede Toleranz im Stapel bestimmen (§12) und für die man
@@ -5418,7 +5440,10 @@ class MainWindow(QMainWindow):
         # Formen und Skelett gehen beide von einem gewählten Körper aus. Das
         # fing bisher erst die Sitzung selbst ab — eine Meldung nach dem Klick,
         # wo der Knopf sie vorher sagen kann (§2.6).
-        ready = chosen >= 1 and not locked and not gesturing and halted is None
+        # Ohne Auswahl genügt der einzige Körper der Szene (RM-506): Formen
+        # und Skelett standen bei genau einem grau, obwohl klar ist, welcher.
+        bodies = chosen if chosen >= 1 else int(self._lone_body() is not None)
+        ready = bodies >= 1 and not locked and not gesturing and halted is None
         self._toolbar_sculpt.setEnabled(ready)
         self._toolbar_armature.setEnabled(ready)
         for action in (
@@ -9613,9 +9638,18 @@ class MainWindow(QMainWindow):
         """Den gemeinsamen Katalogaufbau öffnen."""
         self._exec_catalog(self._make_catalog())
 
-    def _make_catalog(self) -> PartCatalog:
+    def open_matching_parts(self, feature_kind: str) -> None:
+        """Der Katalog, gefiltert auf das, was an dieser Merkmalsart ansetzt.
+
+        Robert, 05.10.2026: An einer gewählten Bohrung steht *Passende
+        Bausteine …*. Der Katalog zeigt dort fünf statt neunundvierzig und
+        führt mit einem Klick zu allen (``PartCatalog.show_for_feature``).
+        """
+        self._exec_catalog(self._make_catalog(feature_kind=feature_kind))
+
+    def _make_catalog(self, *, feature_kind: str | None = None) -> PartCatalog:
         """Den Katalog für alle drei lokalen Zugänge gleich verdrahten."""
-        catalog = PartCatalog(self)
+        catalog = PartCatalog(self, feature_kind=feature_kind)
         catalog.set_can_save(*self._recipe_readiness())
         catalog.set_can_insert(*self._insert_readiness())
         result = self.session.last_result
@@ -12853,7 +12887,8 @@ class MainWindow(QMainWindow):
             or self._sketch_panel is not None
         ):
             return
-        target = object_id or self.object_tree.selected()
+        # Der einzige Körper ist gemeint, wenn nichts gewählt ist (RM-506).
+        target = object_id or self.object_tree.selected() or self._lone_body() or ""
         if not target:
             self.announce(str(_NEEDS_SELECTION))
             return
@@ -13793,7 +13828,7 @@ class MainWindow(QMainWindow):
             or self._sketch_panel is not None
         ):
             return
-        target = object_id or self.object_tree.selected()
+        target = object_id or self.object_tree.selected() or self._lone_body() or ""
         if not target:
             self.announce(str(_NEEDS_SELECTION))
             return
@@ -14142,8 +14177,21 @@ class MainWindow(QMainWindow):
 
     def action_command_palette(self) -> None:
         """Eine Taste, alles — und die Kürzel lernen sich nebenbei (§2.6)."""
+        self.open_palette("")
+
+    def open_palette(self, query: str = "") -> None:
+        """Die Befehlspalette, auf Wunsch mit einem Suchtext.
+
+        **Bei genau einem Körper nimmt sie ihn** (RM-506): Ohne Auswahl stand
+        jede Körperhandlung gesperrt da, und „Wählen Sie einen Körper“ ist an
+        einem Projekt mit einem einzigen keine Frage, sondern ein Umweg —
+        derselbe Gedanke wie beim Katalog (:meth:`_lone_body`).
+        """
+        lone = self._lone_body()
+        if lone is not None and not self.object_tree.selected_objects():
+            self.object_tree.select_object(lone)
         commands = self.window_commands()
-        palette = CommandPalette(self.palette_rows(commands), parent=self)
+        palette = CommandPalette(self.palette_rows(commands), parent=self, query=query)
         if palette.exec() != CommandPalette.DialogCode.Accepted:
             return
         name = palette.chosen()
@@ -22767,6 +22815,10 @@ class MainWindow(QMainWindow):
             self.action_sketch_free()
         elif chosen == "parts":
             self.action_catalog()
+        elif chosen == "import":
+            self.import_action.trigger()
+        elif chosen == "generate":
+            self.action_generate()
         elif chosen == "chat":
             # **Der Chat kommt nach vorn, dann bekommt er den Cursor** (RM-448):
             # Stand der Reiter auf dem Prüfbericht oder war die Spalte

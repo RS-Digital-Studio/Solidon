@@ -101,7 +101,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-506 — Funktionen findet man über eine sichtbare Suche und eine Karte, die mit dem Häufigen beginnt](#rm-506) | Bedienung und Darstellung | Suchfeld oben, Gruppenfolge und Sortierung der Karte, Reparieren am Körper, Kanten im Leertext, Weg 3 in die Einladung |
 | [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
 | [RM-508 — Der Prüfbericht zeigt zuerst die Befunde](#rm-508) | Bedienung und Darstellung | Kopf auf eine Zeile, Gerüst und Doppelungen aus der Befundkarte, Export neben der Übergabe |
 | [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
@@ -3865,38 +3864,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
-<a id="rm-506"></a>
-
-- [ ] **RM-506 — Funktionen findet man über eine sichtbare Suche und eine Karte, die mit dem Häufigen beginnt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Sieben der zwölf Kernfunktionen stehen in keinem Menü; ohne Auswahl sind sie
-  unsichtbar, die Befehlspalette ist nur über *Bearbeiten* sichtbar, und die Suche der
-  Auswahlkarte sucht nur in der Auswahl. Die Karte sortiert ihre Gruppen mit
-  `str.casefold` (`selection_operations.py:513`, `:525`) — gegen `grenzen.md` — und
-  stellt auf Deutsch „Ändern“ (32 Einträge am Körper, zugeklappt) ans Ende.
-  Reparieren gilt nur offenen Kanten, der Leertext nennt keine Kanten, *Formen* und
-  *Skelett* bleiben bei genau einem Körper grau, Weg 3 hat nur *Datei → Modell erzeugen*.
-  **Fix:** Suchfeld „Funktion suchen … Strg+Umschalt+P“ in der oberen Leiste, das die
-  Befehlspalette öffnet; Treffer nennen Ort (`menu_path`) und Voraussetzung, bei genau
-  einem Körper nehmen sie ihn (`_lone_body`); die Kartensuche bietet bei null Treffern
-  „In allen Funktionen suchen“. Gruppenfolge der Karte aus `surfaces.menu_rank`,
-  Einträge mit `i18n.sort_key`; „Ändern“ am Körper über `folded_categories` in
-  Untergruppen von höchstens zwölf, offen. `repair` auch am Körper; Leertext „Fläche,
-  Kante oder Bohrung“; *Formen*/*Skelett* nehmen den einzigen Körper; die Einladung der
-  leeren Szene bietet „Modell einfügen …“ und, mit eingerichtetem Generator, „Aus Text
-  oder Bild …“; `menu_path` nennt für `takes_whole_scene` den Ort ohne Auswahl.
-  **Entschieden (Robert, 05.10.2026):** In der Karte ohne Auswahl bleibt von den drei
-  Szenenhandlungen nur „Druckoptimal ausrichten“ — sie ändern alle Körper, also stehen
-  sie nur ohne Auswahl, und eine genügt dort; Anordnen und Überschneidungen bleiben über
-  Palette und Menü erreichbar. An einer gewählten Bohrung steht „Passende Bausteine …“,
-  der den Katalog auf die Bausteine mit `applies_to` `hole` filtert.
-  **Stand 05.10.2026:** Mit RM-510 erledigt — ohne Auswahl steht nur „Druckoptimal
-  ausrichten“ (`selection_operations.SCENE_ACTIONS_IN_THE_CARD`). Offen: alles Übrige
-  dieses Punkts, darunter „Passende Bausteine …“ mit dem Katalogfilter aus RM-517.
-  **Abnahme:** Am geladenen Modell führen „verrunden“, „gewinde“, „reparieren“,
-  „ausrichten“ in höchstens drei Handlungen zum Dialog oder nennen die fehlende
-  Auswahl; die Gruppenfolge der Karte ist in allen sechs Sprachen gleich; Verrunden ist
-  am Körper bei 1600 × 1000 ohne Aufklappen sichtbar; `test_interface_limits` grün.
 
 <a id="rm-507"></a>
 

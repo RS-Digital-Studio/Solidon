@@ -281,6 +281,30 @@ seinem Wunschmaß und nicht aus einer Zahl im Stylesheet, denn die Suite fährt
 ohne. Der ungebrochene Titel bleibt als `operationTitle` am Knopf: `text()`
 ändert sich, und die Suche darunter braucht den ganzen.
 
+**Und Handlungen für alle Körper stehen nur ohne Auswahl.** Am gewählten
+Körper sagte der Knopf, er gelte diesem Körper, und nahm doch alle. Robert,
+05.10.2026: „Eigentlich reicht hier druckoptimal ausrichten, machen ja alle
+ziemlich das gleiche und nur ohne Auswahl.“ Die Karte zeigt deshalb nur
+`SCENE_ACTIONS_IN_THE_CARD`; *Auf dem Bett anordnen* (Strg+Umschalt+O) und
+*Überschneidungen prüfen* stehen in der Palette, und `menu_path` nennt dort
+„Befehlspalette“ statt „bei gewähltem Körper“ (RM-506).
+
+**Und die Gruppen folgen der Menüleiste** (RM-506). Sortiert wurde mit
+`str.casefold` des übersetzten Titels: Auf Deutsch stand „Ändern“ mit 32
+Einträgen am Körper zugeklappt am Ende, und jede Sprache hatte eine eigene
+Folge. Eine Kategorie, die das Menü in ein Untermenü faltet, ist in der Karte
+eine eigene Gruppe, so dass keine mehr als zwölf Einträge zeigt. Was die
+Werkzeugzeile schon trägt (*Bewegen*: verschieben, drehen, skalieren), steht am
+Ende seiner Gruppe — bei 1600 × 1000 lag *Verrunden* sonst hinter sieben
+Transformationen unter dem Ausschnitt.
+
+**Und an einer Bohrung heißt der Knopf *Passende Bausteine …*** (Robert,
+05.10.2026). Der volle Katalog an einer Bohrung bot neunundvierzig Bausteine,
+von denen fünf dort ansetzen; der gefilterte führt mit einem Klick zu allen.
+Findet die Kartensuche nichts, bietet sie *In allen Funktionen suchen*: Sie
+kennt nur, was zur Auswahl passt, und „gewinde“ am Körper blieb leer, obwohl
+es die Funktion gibt.
+
 ## Die Vorderseite eines Dialogs
 
 *Bis zur Verdichtung in `oberflaeche.md`:*

@@ -51,8 +51,8 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
 - **Was einer Auswahl gilt, steht rechts in der Karte der Handlungen — und nur
   dort** (Entscheidung Robert): `PANEL_CATEGORIES` (`registry.py`),
   `in_the_menu_bar`, und `_build_menus` legt dafür kein Menü an. Die Aktionen
-  entstehen trotzdem am Fenster (Kürzel, Palette über `_op_actions`,
-  Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum
+  entstehen trotzdem am Fenster (Kürzel, Palette über `_op_actions` und das
+  Feld *Funktion suchen …* oben, Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum
   und Ansicht** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
   zwei Aktionen auf einer Taste führt Qt beide nicht aus.
 - **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*
@@ -68,7 +68,7 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
   *Erzeugen → Bausteine*
   (`test_a_chosen_part_reaches_the_catalogue_in_one_click`).
 - **Der Katalog führt aus seiner Sperre hinaus:** Bei genau einem Körper gilt
-  ein Baustein ihm, auch ohne Auswahl (`MainWindow._lone_body`); in der leeren
+  ein Baustein ihm, auch ohne Auswahl, wie die Palette (`MainWindow._lone_body`); in der leeren
   Szene stehen unter dem Satz die Wege, die er nennt (`PartCatalog.offer_ways`:
   *Quader anlegen*, *Modell einfügen …*). Ein modaler Katalog, der „wählen Sie
   im Objektbaum“ sagt, ist eine Sackgasse (RM-356).
@@ -76,9 +76,9 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
   (Entscheidung Robert), nur *Diesen Schritt ändern*, *Auf dieser Fläche
   zeichnen* und die Sichtbarkeit; der Viewport zeigt dasselbe Menü.
 - **Der Wegweiser nennt den Ort:** `menu_path` schreibt „Handlungen rechts
-  (bei gewähltem Körper) → Vereinigen“ bzw. „(bei gewähltem Merkmal:
-  Fläche)“, sonst den Menüweg; Werkzeugbeschreibungen beginnen mit „Ort:“,
-  Handbuch und Tour nennen dieselben Orte
+  (bei gewähltem Körper) → Vereinigen“, „(bei gewähltem Merkmal: Fläche)“,
+  „(ohne Auswahl)“ oder „Befehlspalette“, sonst den Menüweg; Werkzeugbeschreibungen
+  und Palettenzeilen nennen ihn mit „Ort:“, Handbuch und Tour dieselben Orte
   (`test_every_menu_path_in_the_texts_exists_in_the_menu_bar`).
 - **`HANDLE_INSTEAD`** (`panels.py`): An der Bohrung ist der Griff die Zeile
   *Zum Langloch ziehen* (der Doppelklick im Baum startet die erste passende
@@ -93,8 +93,8 @@ bekommt:
 |---|---|
 | Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
 | Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen“: erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig“), Menü *Erzeugen*, Karte der Handlungen; Grundkörper tragen vorn *Maße als Parameter anlegen* (§13) |
-| Weg 3 — generieren | Chat und Generierungsdialog |
-| Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — beide brauchen einen gewählten Körper und sagen das vorher) |
+| Weg 3 — generieren | Chat, Generierungsdialog, Einladung der leeren Szene |
+| Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — am gewählten oder einzigen Körper, sonst sagen sie es vorher) |
 | keiner der vier | Untermenü und Befehlspalette, sonst nichts |
 
 ## Die Karte der Handlungen
@@ -129,24 +129,27 @@ Robert).
   der dort eine Liste verlangt, prüft die Gewohnheit); wer eine Handlung aus der
   Karte nimmt, zählt je Merkmalsart nach, was übrig bleibt (*Senken* am Kegel
   hat eine eigene Zeile in `QUICK_FEATURES`).
-- **Die Suchliste ist nach `group_title(spec.category)` gefaltet**
-  (`panels.collapsible`); eine Gruppe über der Menügrenze beginnt zugeklappt
+- **Die Suchliste folgt der Menüleiste, in jeder Sprache** (`_card_group`:
+  `menu_rank`; eine Kategorie, die das Menü faltet, ist eine eigene Gruppe, die
+  der Werkzeugzeile steht am Ende ihrer Gruppe, `TOOL_STRIP_CATEGORIES`),
+  Einträge nach `sort_key`; eine Gruppe über der Menügrenze beginnt zugeklappt
   (`OPEN_UP_TO` = `MAX_SUBMENU_ENTRIES`, `test_interface_limits`), gerechnet an
   der Stufe. Eine selbst bewegte Klappe bleibt über Auswahlwechsel (`clicked`,
   nicht `toggled`); ein Suchtreffer öffnet seine Gruppe.
-- **Der Knopf *Bausteine* ist ein Hauptknopf** an Körper und Fläche, nicht an
-  Bohrung oder Verrundung (Entscheidung Robert). **Ohne Auswahl bleibt dieser
-  Weg** (Entscheidung Robert), von der Operationsliste nur das Folgende.
-- **Handlungen für alle Körper stehen, wenn nichts gewählt ist — und nur dann**
-  (Entscheidung Robert): welche, sagt das Register (`takes_whole_scene`:
-  *Druckoptimal ausrichten*, *Auf dem Bett anordnen*, *Überschneidungen
-  prüfen*). Am gewählten Körper sagte der Knopf, er gelte diesem Körper, und
-  nahm doch alle. Darüber steht „Gilt für alle Körper.", ohne Suchfeld; ein
+- **Der Knopf *Bausteine* ist ein Hauptknopf** an Körper und Fläche, an der
+  Bohrung *Passende Bausteine …* mit gefiltertem Katalog (`MATCHING_PARTS_AT`),
+  an der Verrundung keiner (Entscheidung Robert). **Ohne Auswahl bleibt er**,
+  von der Operationsliste nur das Folgende.
+- **Handlungen für alle Körper (`takes_whole_scene`) stehen nur ohne Auswahl**
+  (Entscheidung Robert), in der Karte davon nur `SCENE_ACTIONS_IN_THE_CARD`
+  (`surfaces.py`), die übrigen in der Palette.
+  Darüber steht „Gilt für alle Körper.", ohne Suchfeld; ein
   Suchtext von der letzten Auswahl filtert dort nichts weg
   (`SelectionOperationsPanel._without_a_selection`).
 - **Eine Karte ohne Liste lädt nicht zum Suchen ein:** Das Suchfeld verschwindet
   mit der Liste, ein Satz nennt, wo die Handlungen stehen; wer sucht und nichts
-  findet, behält es. Beide Leeren setzt eine Stelle
+  findet, behält es, mit *In allen Funktionen suchen* (Palette, dasselbe Wort).
+  Beide Leeren setzt eine Stelle
   (`SelectionOperationsPanel._only_this_sentence`).
 - **Was der Filament-Schnellwähler trägt, steht nicht auch in der Liste**
   (`PICKER_HANDLES`), und in der leeren Karte tritt er beiseite
@@ -188,8 +191,7 @@ Robert).
   übersetzbarem Titel und den Grenzen des Feldes, der Schritt verweist mit
   `=@breite` darauf, beides in **einer** Transaktion (`changes` an
   `Session.apply`); ein Feld mit Ausdruck bleibt, ein Feld, dessen
-  `depends_on` gerade nicht gilt, wird keiner — es steht ja nicht da
-  Der Haken steht beim ersten Start an und übernimmt danach die letzte Wahl
+  `depends_on` gerade nicht gilt, wird keiner. Der Haken steht beim ersten Start an und übernimmt danach die letzte Wahl
   beim Übernehmen (`UiSettings.name_dimensions`).
 - **Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat:**
   `ArmatureField` baut je Knochen drei Winkel (`ValueField`, §13), sobald der
@@ -285,9 +287,8 @@ rechnen“, „Als Dreiecksmodell rechnen“). Zwei Sperren vor dem Klick: in de
 exakten Kern nur, wenn er da ist (sonst fehlt der Eintrag; das Fenster prüft den
 direkten Aufruf ein zweites Mal); ins Netz nur, wenn kein späterer Schritt
 bearbeitbare Flächen braucht (`needs_exact`). Getauscht wird nur zwischen den
-Grundkörpern aus `PRIMITIVE_TWINS` — an Bohren und Aushöhlen liefe ein
-Wechsel ins Leere, dort entscheidet der Körper, und beliebige Operationen
-gegeneinander wären ein Umschreiben der Geschichte.
+Grundkörpern aus `PRIMITIVE_TWINS`; an Bohren und Aushöhlen entscheidet der
+Körper.
 
 **Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort:** Menüleiste und
 Auswahlfenster legen `MENU_TWINS` gleich zusammen; `surfaces.context_menu()`
@@ -358,8 +359,7 @@ Die Skizzenwerkzeuge leben vom ersten Fall, die obere Werkzeugleiste vom zweiten
 (sieben Knöpfe an fester Stelle, wenige an der Zahl, der Tooltip nennt Namen,
 Kürzel und Zweck). Die Werkzeugzeile unter dem Viewport bleibt beschriftet: Ihre
 Umschalter wechseln mit dem Zustand, und für „Schnitt“ und „Explosion“ gibt
-es kein Bild. Regel 18 verlangt eine zweite Kodierung neben der **Farbe**, nicht
-eine Beschriftung neben jedem Zeichen.
+es kein Bild.
 
 - **Wo das Wort vom Knopf verschwindet, steht es an drei Stellen weiter:**
   `QAction`, Tooltip, `statusTip` — den Satz holt `_button_tip` aus dem
@@ -397,7 +397,7 @@ Aktionen aus („Ambiguous shortcut overload“). `tests/test_ui.py`
 Befehlspalette (`palette_entries(for_feature=...)`) — eine Reihenfolge, keine
 Auswahl; eine Palette, die aussortiert, wäre eine Betriebsart. **Sortiert wird
 nach dem Titel, überall mit `i18n.sort_key`** (Menüleiste über `by_category`,
-Palette, Kontextmenü) — nicht nach `Registry.all()`, nicht mit `str` oder
+Palette, Kontextmenü, Karte) — nicht nach `Registry.all()`, nicht mit `str` oder
 `casefold`: „ä“ zählt wie „a“ (DIN 5007-1). Die **Suchfaltung**
 `registry.search.fold` ist etwas anderes („ä“ → „ae“ für „aushoehlen“);
 der Kommentar an jeder Tabelle sagt, welche sie ist.
@@ -423,7 +423,6 @@ am Register und an den Fensterbefehlen).
 Es faltet mit `fold`, wägt mit `strength` und liest die Kundenwörter über
 `customer_phrases` und `says`; nennt eine Suche genau die Wendung einer
 Operation, sucht es zusätzlich deren Titel als Wortfolge. Ein neues Kundenwort
-ändert also auch, wo das Handbuch aufschlägt — `tests/test_manual_search.py`
-verlangt bei 50 Kundensuchen mindestens 80 Prozent richtige Seiten unter den
-ersten drei. Eine eigene Wortliste des Handbuchs wäre ein Zwilling dieser
+ändert also auch, wo das Handbuch aufschlägt (`tests/test_manual_search.py`
+misst die Quote, Konzept Handbuch §11). Eine eigene Wortliste des Handbuchs wäre ein Zwilling dieser
 Tabelle (`zwillinge.md`).
