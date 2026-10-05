@@ -4334,3 +4334,35 @@ def test_creality_print_keeps_its_printers_below_its_application_key(
 
     assert sp.user_roots("orca", executable) == [newest / "user" / "default"]
     assert sp.chosen_machine("orca", executable) == "Creality K1 0.4 nozzle"
+
+
+def test_an_appimage_offers_the_printers_its_slicer_copied_to_system(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein AppImage trägt seinen Bestand im Abbild, das nur während seines
+    Laufs eingehängt ist. Die Orca-Familie kopiert die Bündel der eingerichteten
+    Drucker nach ``system/`` neben ``user/`` — ohne diesen Ort bot Solidon unter
+    Linux nur selbst angelegte Drucker an."""
+    config = tmp_path / "config" / "OrcaSlicer"
+    _write(
+        config / "system" / "Creality" / "machine" / "k1.json",
+        {
+            "type": "machine",
+            "name": "Creality K1 (0.4 nozzle)",
+            "instantiation": "true",
+            "printer_model": "Creality K1",
+        },
+    )
+    _write(
+        config / "user" / "default" / "machine" / "Mein K1.json",
+        {"name": "Mein K1", "from": "User", "inherits": "Creality K1 (0.4 nozzle)"},
+    )
+    appimage = tmp_path / "Applications" / "OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.3.1.AppImage"
+    appimage.parent.mkdir()
+    appimage.write_bytes(b"")
+    monkeypatch.setattr(sp, "config_base", lambda _executable: str(config.parent))
+
+    assert sp.install_root(appimage) is None
+    names = {entry.name for entry in sp.find_profiles(appimage, "orca")}
+
+    assert {"Creality K1 (0.4 nozzle)", "Mein K1"} <= names
