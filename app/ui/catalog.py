@@ -1,9 +1,14 @@
 """Der Bausteinkatalog (Bauplan §24.3, §2.6).
 
 „Eine Bibliothek, die man nicht sehen kann, existiert für den Nutzer nicht."
-Also ist das ein Fenster mit Bildern, einer kurzen Beschreibung und den zwei
-wichtigsten Parametern jedes Bausteins — und die Bilder kommen aus den
-Bausteinen selbst (§24.3), gerendert beim Öffnen des Katalogs.
+Also ist das ein Fenster mit Bildern: je Baustein eine Kachel aus Vorschaubild
+und Titel, rechts daneben, was der gewählte tut und welche Maße er hat. Die
+Bilder kommen aus den Bausteinen selbst (§24.3), gerendert beim Öffnen des
+Katalogs.
+
+Was eine Kachel sonst noch sagt — nimmt Material weg, eigener Baustein,
+Bereichstest offen —, steht als Zeichen in einer Ecke des Bildes, mit Wort in
+Kurzhilfe, zugänglicher Beschreibung und Detailspalte (Regel 18, RM-517).
 
 Eigene Bausteine sind als solche gekennzeichnet (§24.5). Der Unterschied
 zählt: sie existieren nur auf dieser Maschine, und ein Projekt, das einen
@@ -13,10 +18,11 @@ benutzt, lässt sich nicht so weitergeben wie der Rest.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
-from PySide6.QtCore import QByteArray, QEvent, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtCore import QByteArray, QEvent, QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
@@ -41,39 +47,38 @@ from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
 from app.ui.leash import stop_watching_the_dying, weak_slot
+from app.ui.palette import ROLES
 from app.ui.panels import collapsible, open_section
-from app.ui.style import NORMAL, SPACE, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
+from app.ui.style import (
+    NORMAL,
+    SPACE,
+    WIDE,
+    DialogScrollArea,
+    fit_dialog_to_screen,
+    make_primary,
+)
 
-#: Wie viele Parameter ein Katalogeintrag zeigt. §24.3 verlangt die zwei
-#: wichtigsten — und das sind die zwei zuerst deklarierten, denn eine
-#: Deklaration wird in der Reihenfolge geschrieben, in der jemand über den
-#: Baustein nachdenkt.
-SHOWN_PARAMETERS = 2
-
-OWN_MARKER = "*"
-
-#: Was „nimmt Material weg" auf einer Kachel anschreibt. Vorher trug das allein
-#: die Farbe des Vorschaubilds — orange subtraktiv, grau additiv, ohne Legende
-#: (Regel 18). Ein Minuszeichen und ein Wort sagen es auch dem, der die beiden
-#: Farben nicht unterscheidet.
-SUBTRACTIVE_MARKER = "−"
-
-#: Was den gescheiterten oder fehlenden Bereichstest anschreibt (§24.5).
-#: Ein Ausrufezeichen und ein Satz — §24.5 verlangt den Warnhinweis am
-#: Katalogeintrag, kein Verbot: Der Baustein bleibt wählbar, er trägt nur
-#: seine Warnung mit. ``range_passed`` wurde bis zum 26.08.2026 geschrieben,
-#: geprüft und von keiner Oberfläche gelesen — der Satz im Rezeptdialog
-#: („Der Katalog zeigt das an") war unwahr.
+#: Was den gescheiterten oder fehlenden Bereichstest in Worten anführt (§24.5)
+#: — in Detailspalte und Kurzhilfe. Auf der Kachel steht dafür ein Warndreieck.
+#: §24.5 verlangt den Warnhinweis am Katalogeintrag, kein Verbot: Der Baustein
+#: bleibt wählbar, er trägt nur seine Warnung mit.
 RANGE_MARKER = "!"
 
 #: Anzeigegröße des Vorschaubilds in einer Kachel. Gerendert wird weiter in
 #: ``SIZE`` — die Reserve zahlt sich auf HiDPI-Bildschirmen aus.
 TILE_ICON = 96
 
-#: Grundfläche einer Kachel: breit genug für „Schraubenloch mit Senkung" in
-#: zwei Zeilen, hoch genug für Bild, Titel und die zwei Parameter darunter.
+#: Breite einer Kachel: breit genug für „Kabeldurchführung mit Zugentlastung"
+#: in zwei Zeilen. Die Höhe rechnet :func:`tile_size` aus Bild und genau zwei
+#: Titelzeilen — ein längerer Titel endet mit „…" und steht ganz in Kurzhilfe
+#: und Detailspalte.
 TILE_WIDTH = 164
-TILE_HEIGHT = 190
+
+#: Wie viele Zeilen ein Kacheltitel höchstens bekommt (RM-517).
+TITLE_LINES = 2
+
+#: Kantenlänge eines Eckzeichens im Verhältnis zum Vorschaubild.
+MARK_SHARE = 0.27
 
 #: Mindestbreite der Detailspalte. Schmaler wird aus zwei Sätzen eine
 #: Wortkolonne.
@@ -81,16 +86,9 @@ DETAIL_WIDTH = 220
 
 #: Die Größe, mit der der Katalog aufgeht — kleinste und größte.
 #:
-#: Es stand eine Zahl da, 980 mal 640, und die galt auf jedem Bildschirm. Bei
-#: 24 Einträgen zeigte sie **vier Kacheln von neunzehn**: die Rasterfläche war
-#: 718 mal 562, also vier je Zeile und zweieinhalb Zeilen, und der Rollbalken
-#: hatte 1240 Pixel Weg. §2.6 will eine Bibliothek, die man *sieht*; vier von
-#: neunzehn ist eine Liste, durch die man sich arbeitet.
-#:
-#: Die Kachel selbst ist nicht der Grund, obwohl das Verhältnis danach aussieht
-#: (164 mal 190 für ein 96er Bild): Ihre Breite kommt vom Text — „Schraubenloch
-#: mit Senkung" braucht zwei Zeilen —, und ihre Höhe von Bild plus vier
-#: Textzeilen. Wer sie schrumpft, schneidet Titel ab.
+#: Eine feste Zahl (980 mal 640) zeigte vier Kacheln von neunzehn; §2.6 will
+#: eine Bibliothek, die man *sieht*. Die Kachel selbst ist nicht der Grund:
+#: Ihre Breite kommt vom Titel, ihre Höhe von Bild und zwei Titelzeilen.
 CATALOG_MIN = (980, 640)
 #: Die Höhe steht höher als die Breite es verlangt, seit jede Gruppe ihre
 #: eigene Zeile bekommt (:meth:`PartCatalog._stretch_headings`): Sieben
@@ -127,6 +125,183 @@ def catalog_size() -> tuple[int, int]:
         max(CATALOG_MIN[0], min(int(area.width() * CATALOG_SHARE), CATALOG_MAX[0])),
         max(CATALOG_MIN[1], min(int(area.height() * CATALOG_SHARE), CATALOG_MAX[1])),
     )
+
+
+MarkKind = Literal["range", "removes", "origin"]
+
+
+@dataclass(frozen=True, slots=True)
+class TileMark:
+    """Ein Eckzeichen einer Kachel und das, was es in Worten heißt."""
+
+    kind: MarkKind
+    words: str
+
+
+def tile_marks(spec: PartSpec) -> tuple[TileMark, ...]:
+    """Was die Kachel außer Bild und Titel sagt — je Aussage ein Eckzeichen.
+
+    Drei Ecken, drei Aussagen: links oben der offene Bereichstest (§24.5),
+    rechts oben „nimmt Material weg", links unten die Herkunft eines Bausteins,
+    der nicht mitgeliefert ist (§24.5). Vorher standen sie als Textzeilen
+    unter dem Titel, und der Strich vor „nimmt Material weg" las sich als Minus (A22).
+    """
+    marks: list[TileMark] = []
+    warning = _range_warning(spec)
+    if warning:
+        marks.append(TileMark("range", f"{RANGE_MARKER} {warning}"))
+    if spec.subtractive:
+        marks.append(TileMark("removes", tr("nimmt Material weg")))
+    origin = _origin_words(spec)
+    if origin:
+        marks.append(TileMark("origin", origin))
+    return tuple(marks)
+
+
+def _origin_words(spec: PartSpec) -> str:
+    """Woher ein nicht mitgelieferter Baustein kommt — sonst nichts."""
+    if spec.source == "travelled":
+        # „Um eine Herkunft mehr" (Konzept §17.1): Der Baustein kam mit einer
+        # Projektdatei und gehört ihr — nicht dieser Maschine.
+        return tr("mitgereister Baustein")
+    if spec.source == "imported":
+        return tr("aus Datei hinzugefügt")
+    if spec.own:
+        return tr("eigener Baustein")
+    return ""
+
+
+def describe(spec: PartSpec) -> str:
+    """Die Eckzeichen einer Kachel in Worten, eine Zeile — leer ohne Zeichen."""
+    return " · ".join(mark.words for mark in tile_marks(spec))
+
+
+def tile_tip(spec: PartSpec) -> str:
+    """Kurzhilfe und zugängliche Beschreibung einer Kachel.
+
+    Der ganze Titel zuerst — auf der Kachel endet ein langer nach zwei Zeilen
+    mit „…" —, dann die Eckzeichen in Worten, dann der Satz des Bausteins.
+    """
+    return "\n".join(part for part in (str(spec.title), describe(spec), str(spec.doc)) if part)
+
+
+def tile_size(line_spacing: int) -> QSize:
+    """Kachelgröße für Bild und genau :data:`TITLE_LINES` Titelzeilen.
+
+    Die Zugabe unter dem Bild bleibt kleiner als eine Zeile: So passt keine
+    dritte Titelzeile mehr hinein, und Qt kürzt die zweite mit „…".
+    """
+    return QSize(TILE_WIDTH, TILE_ICON + TITLE_LINES * line_spacing + NORMAL + SPACE)
+
+
+def parts_for_feature(kind: str) -> frozenset[str]:
+    """Die Bausteine, die das Register an einer Merkmalsart anbietet.
+
+    Gefragt wird das ``applies_to`` ihrer Operation — dieselbe Auskunft, die
+    die Karte der Handlungen liest (``Registry.for_feature``), nicht eine
+    zweite Liste (``oberflaeche.md``, „Eine Auskunft, eine Quelle").
+    """
+    from app.core.knowledge.parts.ops import op_name
+    from app.core.registry import REGISTRY
+
+    fitting = {operation.name for operation in REGISTRY.for_feature(kind)}
+    return frozenset(spec.name for spec in PARTS.all() if op_name(spec.name) in fitting)
+
+
+def feature_title(kind: str) -> str:
+    """Wie eine Merkmalsart heißt — die Namen des Registers.
+
+    Eine unbekannte Art ist ein Fehler des Aufrufers und kein Fall für eine
+    Beschriftung: Ihr Schlüssel stünde sonst im Fenster.
+    """
+    from app.core.registry.registry import FEATURE_TITLES
+
+    if kind not in FEATURE_TITLES:
+        raise ValueError(f"unknown feature kind {kind!r}")
+    return str(FEATURE_TITLES[kind])
+
+
+def marked(picture: QPixmap, marks: Sequence[TileMark], ink: QColor) -> QPixmap:
+    """Das Vorschaubild mit seinen Eckzeichen — eine Kopie, das Bild bleibt.
+
+    Gezeichnet statt geschrieben: Ein Zeichen aus der Schrift hängt an der
+    Schrift der Plattform, und offscreen misst jede gleich. Die Formen sind
+    so gewählt, dass sie ohne Farbe auseinandergehen (Regel 18): Dreieck mit
+    Ausrufezeichen, Block mit Bohrung, Stern.
+    """
+    if not marks:
+        return picture
+    result = QPixmap(picture)
+    width = float(result.width() / max(result.devicePixelRatio(), 1.0))
+    height = float(result.height() / max(result.devicePixelRatio(), 1.0))
+    side = width * MARK_SHARE
+    painter = QPainter(result)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    for mark in marks:
+        if mark.kind == "range":
+            _warning_mark(painter, QRectF(0.0, 0.0, side, side))
+        elif mark.kind == "removes":
+            _removes_mark(painter, QRectF(width - side, 0.0, side, side))
+        else:
+            _origin_mark(painter, QRectF(0.0, height - side, side, side), ink)
+    painter.end()
+    return result
+
+
+def _warning_mark(painter: QPainter, box: QRectF) -> None:
+    """Ein Warndreieck mit Ausrufezeichen — die Farbe der Warnung."""
+    triangle = QPolygonF(
+        [
+            QPointF(box.center().x(), box.top() + box.height() * 0.06),
+            QPointF(box.right() - box.width() * 0.04, box.bottom() - box.height() * 0.08),
+            QPointF(box.left() + box.width() * 0.04, box.bottom() - box.height() * 0.08),
+        ]
+    )
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(ROLES["warning"]))
+    painter.drawPolygon(triangle)
+    dark = QColor("#1c2026")
+    pen = QPen(dark, box.width() * 0.1)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    painter.setPen(pen)
+    x = box.center().x()
+    painter.drawLine(
+        QPointF(x, box.top() + box.height() * 0.36), QPointF(x, box.top() + box.height() * 0.6)
+    )
+    painter.drawPoint(QPointF(x, box.top() + box.height() * 0.76))
+
+
+def _removes_mark(painter: QPainter, box: QRectF) -> None:
+    """Ein Block mit Bohrung: Hier wird Material weggenommen."""
+    margin = box.width() * 0.06
+    inset = box.adjusted(margin, margin, -margin, -margin)
+    block = QPainterPath()
+    block.addRoundedRect(inset, inset.width() * 0.2, inset.width() * 0.2)
+    hole = QPainterPath()
+    radius = inset.width() * 0.24
+    hole.addEllipse(inset.center(), radius, radius)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(ROLES["removes"]))
+    painter.drawPath(block.subtracted(hole))
+
+
+def _origin_mark(painter: QPainter, box: QRectF, ink: QColor) -> None:
+    """Ein Stern: Dieser Baustein gehört nicht zur Lieferung."""
+    import math
+
+    centre = box.center()
+    outer = box.width() * 0.46
+    inner = outer * 0.45
+    points = []
+    for index in range(10):
+        radius = outer if index % 2 == 0 else inner
+        angle = -math.pi / 2 + index * math.pi / 5
+        points.append(
+            QPointF(centre.x() + radius * math.cos(angle), centre.y() + radius * math.sin(angle))
+        )
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(ink)
+    painter.drawPolygon(QPolygonF(points))
 
 
 class PartCatalog(QDialog):
@@ -166,7 +341,7 @@ class PartCatalog(QDialog):
     showAffectedStepRequested = Signal()
     """Den von der Bausteindatei betroffenen Verlaufsschritt im Fenster zeigen."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, feature_kind: str | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Bausteine"))
         self.resize(*catalog_size())
@@ -175,6 +350,25 @@ class PartCatalog(QDialog):
         self.search.setPlaceholderText(tr("Suchen — zum Beispiel Mutter, Magnet, Kabel"))
         self.search.setAccessibleName(tr("Bausteine durchsuchen"))
         self.search.textChanged.connect(self.show_parts)
+
+        # **Nur, was an die gewählte Stelle passt** (:meth:`show_for_feature`):
+        # An einer Bohrung sind es fünf Bausteine, nicht neunundvierzig. Die
+        # Zeile sagt, dass gefiltert ist, und führt mit einem Klick zu allen —
+        # ein Filter, den man nicht sieht, sieht aus wie eine kleine Bibliothek.
+        self._feature_kind: str | None = None
+        self._fitting: frozenset[str] | None = None
+        self.filter_note = QLabel("", self)
+        self.filter_note.setWordWrap(True)
+        self.show_all = QPushButton(tr("Alle Bausteine zeigen"), self)
+        self.show_all.setAutoDefault(False)
+        self.show_all.clicked.connect(lambda _checked=False: self.show_for_feature(None))
+        self.filter_row = QWidget(self)
+        filter_layout = QHBoxLayout(self.filter_row)
+        filter_layout.setContentsMargins(0, 0, 0, 0)
+        filter_layout.setSpacing(NORMAL)
+        filter_layout.addWidget(self.filter_note, stretch=1)
+        filter_layout.addWidget(self.show_all)
+        self.filter_row.setVisible(False)
 
         # Import und Weitergabe laufen im Hintergrund. Ihr Ergebnis bleibt im
         # Katalog sichtbar, statt nur für wenige Sekunden in der Statuszeile
@@ -214,6 +408,9 @@ class PartCatalog(QDialog):
         self.list.setSpacing(NORMAL)
         self.list.setIconSize(QSize(TILE_ICON, TILE_ICON))
         self.list.setWordWrap(True)
+        # Ein zu langer Titel endet mit „…" in seiner zweiten Zeile, statt die
+        # Kachel aufzublähen; ganz steht er in Kurzhilfe und Detailspalte.
+        self.list.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.list.itemDoubleClicked.connect(self._chosen)
         # Die Überschriften folgen der Breite der Liste, nicht der des
         # Dialogs: dessen resizeEvent feuert, bevor das Layout der Liste ihre
@@ -224,10 +421,10 @@ class PartCatalog(QDialog):
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list.currentItemChanged.connect(self._show_detail)
 
-        # Die Detailspalte erklärt die gewählte Kachel in zwei Sätzen. Eine
-        # Kachel trägt so viel, wie auf eine Kachel passt; alles Weitere stand
-        # vorher in einem Tooltip, den man erst findet, wenn man weiß, dass er
-        # da ist.
+        # Die Detailspalte erklärt die gewählte Kachel: Satz, Herkunft und alle
+        # Maße. Die Kachel trägt Bild und Titel, mehr nicht (RM-517) — die
+        # Maßnamen standen dort als zweite Zeile und machten jede Kachel zu
+        # einem kleinen Absatz.
         self.detail = QLabel(self)
         self.detail.setWordWrap(True)
         self.detail.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -251,6 +448,8 @@ class PartCatalog(QDialog):
         # Startseite einen Baustein, bestätigte — und bekam erst dann
         # „Wählen Sie zuerst ein Objekt": zwei Dialoge für eine Absage, die
         # beim Öffnen schon feststand (Robert, 25.08.2026, über 3d-druck-ce).
+        # Was die Detailspalte schon sagt („Wählen Sie links einen Baustein"),
+        # steht hier nicht ein zweites Mal (D10).
         self.insert_hint = QLabel("", self)
         self.insert_hint.setWordWrap(True)
         self.insert_hint.setVisible(False)
@@ -279,13 +478,15 @@ class PartCatalog(QDialog):
         button_layout.setSpacing(SPACE)
         # „OK" sagt nicht, was es tut — derselbe Befund, der jedem
         # Operationsdialog seinen handelnden Knopf gegeben hat. Dieser hier
-        # setzt den gewählten Baustein in die Szene, also heißt er so.
+        # setzt den gewählten Baustein in die Szene, also heißt er so: „Einsetzen"
+        # wie die Bausteinzeilen des Auswahlfensters, nicht „Einfügen" — das
+        # ist das Modell aus einer Datei (C19).
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
-            ok.setText(tr("Einfügen"))
+            ok.setText(tr("Einsetzen"))
             # **Der Akzent war die ganze Zeit da — bestellt hatte ihn
             # niemand.** Qt macht beim ersten ``show()`` den ersten
-            # autoDefault-Knopf zum Default, und das ist hier „Einfügen". Er
+            # autoDefault-Knopf zum Default, und das ist hier „Einsetzen". Er
             # trug damit die Akzentfarbe, aber nicht die halbfette Schrift,
             # die neben ihr die zweite Kodierung ist (Regel 18).
             # ``make_primary`` macht ihn ausdrücklich zu dem, was er ohnehin
@@ -412,11 +613,12 @@ class PartCatalog(QDialog):
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(NORMAL)
         layout.addWidget(self.search)
+        layout.addWidget(self.filter_row)
         layout.addWidget(file_result_row)
         layout.addWidget(split, stretch=1)
         layout.addWidget(self.management_section)
-        # Der Satz erklärt, warum *Einfügen* gesperrt ist — also steht er über
-        # *Einfügen* und nicht über sechs Verwaltungsknöpfen dazwischen.
+        # Der Satz erklärt, warum *Einsetzen* gesperrt ist — also steht er über
+        # *Einsetzen* und nicht über sechs Verwaltungsknöpfen dazwischen.
         layout.addWidget(self.insert_hint)
         layout.addWidget(buttons)
         previous: QWidget = self.list
@@ -436,7 +638,10 @@ class PartCatalog(QDialog):
         self._previews: dict[str, QPixmap] = {}
         self._blank: QPixmap | None = None
         """Der Platzhalter, einmal gezeichnet — siehe :meth:`_placeholder`."""
-        self.show_parts()
+        if feature_kind is not None:
+            self.show_for_feature(feature_kind)
+        else:
+            self.show_parts()
         self._show_detail()
         self._rendering = True
         QTimer.singleShot(0, self, self._render_pending)
@@ -447,7 +652,7 @@ class PartCatalog(QDialog):
         """Gibt den Knopf frei — oder sagt daneben, was ihm fehlt.
 
         Ein Knopf, der eine Wirkung verspricht und keine hat, ist die stillste
-        Art, jemanden ratlos zu machen; derselbe Befund, der dem „Einfügen"
+        Art, jemanden ratlos zu machen; derselbe Befund, der dem „Einsetzen"
         daneben seine Bedingung gegeben hat. Der Grund kommt vom Fenster, weil
         nur das ihn kennt — kein Ausschnitt gewählt, kein Körper gerechnet.
         Er steht als Zeile über den Knöpfen (das Handbuch verspricht „sagt
@@ -559,10 +764,10 @@ class PartCatalog(QDialog):
             # **Der leere Grund war einer.** Sperren ohne zu sagen, warum, ist
             # genau das, was Regel 18 ausschließt — und diese Lage ist nicht
             # der Randfall, sondern der Anfang: Der Katalog geht auf, links ist
-            # nichts gewählt, und *Einfügen* stand grau und wortlos da. Wer im
+            # nichts gewählt, und *Einsetzen* stand grau und wortlos da. Wer im
             # Suchfeld etwas tippt, das nichts trifft, landet wieder hier.
             # Gefunden vom Wächter über alle Dialoge (3d-druck-7f, 03.09.2026).
-            return False, tr("Wählen Sie links in der Liste einen Baustein.")
+            return False, detail(None)
         if (spec.at_hole or spec.at_face) and not self._feature_chosen:
             return True, tr(
                 "Dieser Baustein wird an eine Fläche oder Bohrung gesetzt. "
@@ -643,10 +848,32 @@ class PartCatalog(QDialog):
         if self._rendering:
             QTimer.singleShot(0, self, self._render_pending)
 
+    def show_for_feature(self, kind: str | None) -> None:
+        """Nur die Bausteine zeigen, die an diese Merkmalsart passen — oder alle.
+
+        ``kind`` ist eine Merkmalsart des Registers (``hole``, ``face``, …);
+        gezeigt wird, wessen Operation sie in ``applies_to`` trägt
+        (:func:`parts_for_feature`). ``None`` hebt den Filter auf. Die Suche
+        bleibt stehen und gilt zusätzlich.
+        """
+        title = feature_title(kind) if kind is not None else ""
+        self._feature_kind = kind
+        self._fitting = parts_for_feature(kind) if kind is not None else None
+        self.filter_note.setText(tr("Passend für: {kind}", kind=title) if kind else "")
+        self.filter_row.setVisible(kind is not None)
+        self.show_parts(self.search.text())
+
+    def feature_kind(self) -> str | None:
+        """Nach welcher Merkmalsart gerade gefiltert wird — sonst ``None``."""
+        return self._feature_kind
+
     def show_parts(self, text: str = "") -> None:
         """Füllt die Liste, gruppiert wie der Katalog gruppiert."""
         self.list.clear()
         wanted = PARTS.search(text) if text.strip() else PARTS.all()
+        fitting = self._fitting
+        if fitting is not None:
+            wanted = tuple(spec for spec in wanted if spec.name in fitting)
         by_group: dict[str, list[PartSpec]] = {}
         for spec in wanted:
             by_group.setdefault(spec.group, []).append(spec)
@@ -669,12 +896,14 @@ class PartCatalog(QDialog):
             self.list.addItem(heading)
             for spec in entries:
                 self.list.addItem(self._item(spec))
-        if not self.list.count() and text.strip():
+        if not self.list.count() and (text.strip() or fitting is not None):
             # Ein leeres Raster sagt nicht, ob nichts passt oder ob die Suche
             # hängt — und die Detailspalte daneben forderte weiter auf, einen
             # Baustein zu wählen, den es hier nicht gibt.
             nothing = QListWidgetItem(
                 tr("Kein Baustein passt zu „{term}“.").format(term=text.strip())
+                if text.strip()
+                else tr("Für diese Stelle gibt es keinen passenden Baustein.")
             )
             nothing.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list.addItem(nothing)
@@ -741,11 +970,23 @@ class PartCatalog(QDialog):
         return handled
 
     def _item(self, spec: PartSpec) -> QListWidgetItem:
-        item = QListWidgetItem(describe(spec))
+        """Eine Kachel: Bild mit Eckzeichen, darunter der Titel in höchstens zwei Zeilen.
+
+        **Oben bündig** (RM-517): Qt setzt den Titel sonst senkrecht mittig in
+        den Raum unter dem Bild, und in einer Reihe aus ein- und zweizeiligen
+        Titeln sprangen die ersten Zeilen um eine halbe Zeile. Name, Eckzeichen
+        und Satz hören Bildschirmleser über die Rollen der Zeile.
+        """
+        title = str(spec.title)
+        item = QListWidgetItem(title)
         item.setData(Qt.ItemDataRole.UserRole, spec.name)
         item.setIcon(self._preview(spec))
-        item.setToolTip(str(spec.doc))
-        item.setSizeHint(QSize(TILE_WIDTH, TILE_HEIGHT))
+        item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        tip = tile_tip(spec)
+        item.setToolTip(tip)
+        item.setData(Qt.ItemDataRole.AccessibleTextRole, title)
+        item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, tip)
+        item.setSizeHint(tile_size(self.list.fontMetrics().lineSpacing()))
         return item
 
     def _preview(self, spec: PartSpec) -> Any:
@@ -774,7 +1015,12 @@ class PartCatalog(QDialog):
         from PySide6.QtGui import QIcon
 
         found = self._previews.get(spec.name)
-        return QIcon(found) if found is not None else QIcon(self._placeholder())
+        picture = found if found is not None else self._placeholder()
+        return QIcon(marked(picture, tile_marks(spec), self._ink()))
+
+    def _ink(self) -> QColor:
+        """Die Schriftfarbe des Katalogs — für Platzhalter und Herkunftsstern."""
+        return QColor(self.palette().color(self.foregroundRole()))
 
     def _placeholder(self) -> Any:
         """Die leise Fläche, die ein Vorschaubild vertritt, bis es da ist.
@@ -787,9 +1033,6 @@ class PartCatalog(QDialog):
         Bild", nicht „hier fehlt etwas": Das Bild kommt ja, und zwar in
         Millisekunden.
         """
-        from PySide6.QtCore import QRectF
-        from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
-
         if self._blank is not None:
             return self._blank
 
@@ -801,7 +1044,7 @@ class PartCatalog(QDialog):
         # **Aus der Palette und nicht aus der Thementabelle.** Der Katalog
         # kennt seinen Themennamen nicht; die Textfarbe des Widgets kennt ihn
         # immer und folgt einem Themenwechsel ohne Zutun.
-        edge = QColor(self.palette().color(self.foregroundRole()))
+        edge = self._ink()
         # Halb durchsichtig: Der Platzhalter ist eine Ahnung und keine Aussage.
         edge.setAlpha(70)
         painter.setPen(QPen(edge, 1.5))
@@ -825,8 +1068,6 @@ class PartCatalog(QDialog):
         den Bildern bedienbar, und wer den Katalog gleich wieder schließt,
         hat nicht auf achtzehn Rechnungen gewartet.
         """
-        from PySide6.QtGui import QPainter
-
         if not self._rendering:
             # Losgelassen, während die Kette lief. Ohne diese Zeile reiht sich
             # der Zeitgeber weiter ein, und jede eingereihte gebundene Methode
@@ -865,15 +1106,13 @@ class PartCatalog(QDialog):
         """Hängt ein fertiges Bild an seine Zeile, ohne die Liste neu zu bauen —
         ein Neuaufbau würde die Auswahl und die Bildlaufposition mitnehmen.
         """
-        pixmap = self._previews.get(name)
-        if pixmap is None:
+        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        if spec is None or name not in self._previews:
             return
-        from PySide6.QtGui import QIcon
-
         for row in range(self.list.count()):
             item = self.list.item(row)
             if item is not None and item.data(Qt.ItemDataRole.UserRole) == name:
-                item.setIcon(QIcon(pixmap))
+                item.setIcon(self._preview(spec))
                 return
 
     def _share_state(self, spec: PartSpec | None) -> tuple[bool, str]:
@@ -908,7 +1147,8 @@ class PartCatalog(QDialog):
         """
         name = self.chosen()
         spec = next((entry for entry in PARTS.all() if entry.name == name), None)
-        self.detail.setText(detail(spec))
+        shown = detail(spec)
+        self.detail.setText(shown)
         allowed, reason = self._insert_state(spec)
         if self._insert is not None:
             self._insert.setEnabled(spec is not None and allowed)
@@ -917,8 +1157,13 @@ class PartCatalog(QDialog):
             # anzusehen — siehe :meth:`set_can_save`.
             self._insert.setStatusTip(reason)
             self._insert.setAccessibleDescription(reason)
-        self.insert_hint.setText(reason)
-        self.insert_hint.setVisible(bool(reason))
+        # **Ein Leertext, nicht zwei** (D10): Ohne Auswahl sagt die
+        # Detailspalte, was zu tun ist; dieselbe Zeile über dem Knopf wäre
+        # derselbe Satz ein zweites Mal. Knopf, Statuszeile und
+        # Bildschirmleser bekommen ihn trotzdem (darüber).
+        below = "" if reason == shown else reason
+        self.insert_hint.setText(below)
+        self.insert_hint.setVisible(bool(below))
         # Die Wege zu einem ersten Körper gehören zur Sperre der leeren Szene:
         # Ein freistehender Baustein braucht keinen, dort stünden sie umsonst.
         blocked = not self._insert_allowed and not (spec is not None and spec.standalone)
@@ -1049,22 +1294,6 @@ def _range_warning(spec: PartSpec) -> str:
     return tr("der Bereichstest ist für diesen Baustein nie gelaufen")
 
 
-def describe(spec: PartSpec) -> str:
-    """Titel, die zwei wichtigsten Parameter, und woher der Baustein kommt."""
-    parameters = ", ".join(str(entry.title) for entry in spec.params.spec()[:SHOWN_PARAMETERS])
-    marker = f" {OWN_MARKER} {tr('eigener Baustein')}" if spec.own else ""
-    if spec.source == "travelled":
-        # „Um eine Herkunft mehr" (Konzept §17.1): Der Baustein kam mit einer
-        # Projektdatei und gehört ihr — nicht dieser Maschine.
-        marker = f" {OWN_MARKER} {tr('mitgereister Baustein')}"
-    if spec.source == "imported":
-        marker = f" {OWN_MARKER} {tr('aus Datei hinzugefügt')}"
-    kind = f"\n{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}" if spec.subtractive else ""
-    warning = _range_warning(spec)
-    checked = f"\n{RANGE_MARKER} {warning}" if warning else ""
-    return f"{spec.title}{marker}\n{parameters}{kind}{checked}"
-
-
 def detail(spec: PartSpec | None) -> str:
     """Was die Detailspalte über den gewählten Baustein sagt.
 
@@ -1073,7 +1302,7 @@ def detail(spec: PartSpec | None) -> str:
     dass er da ist.
     """
     if spec is None:
-        return tr("Wählen Sie einen Baustein — hier steht dann, was er tut.")
+        return tr("Wählen Sie links in der Liste einen Baustein.")
 
     # Maskiert, denn die Spalte ist RichText und Titel wie Beschreibung sind
     # bei Rezepten Kundeneingaben — und mitgereiste kommen aus fremden
@@ -1083,21 +1312,18 @@ def detail(spec: PartSpec | None) -> str:
 
     lines = [f"<b>{escape(str(spec.title))}</b>", "", escape(str(spec.doc)), ""]
     if spec.subtractive:
-        lines.append(f"{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}")
+        lines.append(tr("nimmt Material weg"))
     if spec.own:
-        lines.append(f"{OWN_MARKER} {tr('eigener Baustein')}")
+        lines.append(tr("eigener Baustein"))
     if spec.source == "travelled":
-        lines.append(
-            f"{OWN_MARKER} "
-            + tr("mitgereister Baustein — kam mit einer Projektdatei und bleibt bei ihr")
-        )
-    # Eine lokal importierte Datei trägt eine eng begrenzte Herkunftsquittung:
-    # Prüfsumme der exakten Eingangsbytes und Importzeit, aber keinen lokalen
-    # Pfad und keine erfundene Veröffentlichungsquelle.
+        lines.append(tr("mitgereister Baustein — kam mit einer Projektdatei und bleibt bei ihr"))
     if spec.source == "imported":
+        # Eine lokal importierte Datei trägt eine eng begrenzte
+        # Herkunftsquittung: Prüfsumme der exakten Eingangsbytes und
+        # Importzeit, aber keinen lokalen Pfad und keine erfundene
+        # Veröffentlichungsquelle.
         lines.append(
-            f"{OWN_MARKER} "
-            + tr("aus Datei hinzugefügt — Zeitpunkt und eindeutige Dateikennung sind gespeichert")
+            tr("aus Datei hinzugefügt — Zeitpunkt und eindeutige Dateikennung sind gespeichert")
         )
     warning = _range_warning(spec)
     if warning:

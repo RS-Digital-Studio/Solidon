@@ -35,6 +35,7 @@ Role = Literal[
     "protected",
     "axis_x",
     "axis_y",
+    "removes",
 ]
 
 #: Die Farbe je Bedeutung — die eine Stelle, an der eine Rolle ihren Wert
@@ -74,6 +75,15 @@ ROLES: dict[Role, str] = {
     # Buchstabe (Regel 18).
     "axis_x": "#d05a5a",
     "axis_y": "#5aa564",
+    # Ein Baustein, der Material wegnimmt — Vorschaubild und Kachelzeichen im
+    # Bausteinkatalog. Violett, weil Bernstein die Auswahl ist und der alte
+    # Ton (#e0a85c) daneben wie ein zweiter Akzent aussah; Rot hieße Fehler,
+    # Türkis gesperrt, Blau Merkmal. Die Zeichenfarbe des Kerns
+    # (``drawing.PALETTES``) darf diese Tabelle nicht lesen und trägt deshalb
+    # denselben Wert; ``tests/test_catalog_ui.py`` hält beide gleich und den
+    # Abstand zum Akzent groß. Das Zeichen in der Kachelecke ist die zweite
+    # Kodierung (Regel 18).
+    "removes": "#9b7fd4",
 }
 
 

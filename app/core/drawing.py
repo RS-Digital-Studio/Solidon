@@ -70,6 +70,16 @@ class Palette:
     """Grundfarbe eines Körpers, der Material wegnimmt statt hinzuzufügen."""
 
 
+#: Grundfarbe eines Bausteins, der Material wegnimmt — in beiden Themen gleich.
+#:
+#: Dieselbe Rolle wie ``removes`` in ``app/ui/palette.py``: Der Kern darf die
+#: Oberfläche nicht lesen, also steht der Wert hier noch einmal, und
+#: ``tests/test_catalog_ui.py`` hält beide gleich. Bis RM-517 lag hier ein
+#: Orange (#e0a85c) neben dem Akzent der Oberfläche (#f0a54a) und las sich als
+#: Auswahl.
+REMOVES_TONE: Final = (0x9B / 255.0, 0x7F / 255.0, 0xD4 / 255.0)
+
+
 #: Beide Themen. Kontraste gegen den jeweiligen Fensterhintergrund geprüft.
 #:
 #: **Diese Werte sehen aus wie Dubletten der Rollen in ``app/ui/palette.py``
@@ -95,7 +105,7 @@ PALETTES: Final[dict[Theme, Palette]] = {
         warn="#b4611c",
         fill="#e9ebee",
         solid=(0.72, 0.77, 0.82),
-        subtractive=(0.88, 0.66, 0.36),
+        subtractive=REMOVES_TONE,
     ),
     "dark": Palette(
         paper="#1b1f25",
@@ -105,7 +115,7 @@ PALETTES: Final[dict[Theme, Palette]] = {
         warn="#d99048",
         fill="#262b33",
         solid=(0.62, 0.68, 0.75),
-        subtractive=(0.82, 0.62, 0.34),
+        subtractive=REMOVES_TONE,
     ),
 }
 

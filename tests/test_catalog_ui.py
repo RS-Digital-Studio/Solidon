@@ -1915,3 +1915,216 @@ def test_the_closed_management_names_what_it_holds(qt_app: QApplication) -> None
     again = PartCatalog()
     assert again.management_section.findChild(QToolButton).isChecked(), "offen verlassen, offen"
     again.deleteLater()
+
+
+# --- RM-517: Kachel aus Bild und Titel, Eckzeichen, Filter nach Merkmalsart --------
+
+
+def _lab(colour: str) -> tuple[float, float, float]:
+    """CIELAB einer sRGB-Farbe (D65) — für den Farbabstand ΔE76."""
+    channels = [int(colour.lstrip("#")[index : index + 2], 16) / 255 for index in (0, 2, 4)]
+    red, green, blue = (
+        value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+        for value in channels
+    )
+    x = (0.4124 * red + 0.3576 * green + 0.1805 * blue) / 0.95047
+    y = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    z = (0.0193 * red + 0.1192 * green + 0.9505 * blue) / 1.08883
+
+    def f(value: float) -> float:
+        return value ** (1 / 3) if value > 0.008856 else 7.787 * value + 16 / 116
+
+    return 116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))
+
+
+def _distance(first: str, second: str) -> float:
+    return sum((a - b) ** 2 for a, b in zip(_lab(first), _lab(second), strict=True)) ** 0.5
+
+
+def _hex(tone: tuple[float, float, float]) -> str:
+    return "#" + "".join(f"{round(channel * 255):02x}" for channel in tone)
+
+
+def test_the_colour_of_a_part_that_removes_is_a_role_far_from_the_accent() -> None:
+    """Die Vorschaufarbe abtragender Bausteine lag am Akzent (C13).
+
+    #e0a85c neben #f0a54a: ΔE76 rund zehn — dasselbe Bernstein für „gewählt"
+    und „nimmt weg". Die Farbe ist jetzt eine Rolle in ``palette.py``; der Kern
+    trägt denselben Wert, weil er die Oberfläche nicht lesen darf.
+    """
+    from app.core import drawing
+    from app.ui.palette import ROLES
+    from app.ui.theme import THEMES
+
+    removes = ROLES["removes"]
+    assert _distance("#e0a85c", ROLES["select"]) < 40, "die Messung trennt alt und neu"
+    for theme in ("light", "dark"):
+        assert _hex(drawing.palette(theme).subtractive) == removes, theme
+    for role in ("select", "measure", "warning", "island"):
+        assert _distance(removes, ROLES[role]) >= 40, (role, _distance(removes, ROLES[role]))
+    for colours in THEMES.values():
+        assert _distance(removes, colours["highlight"]) >= 40
+    # Und vom Grau-Blau der anbauenden Bausteine sicher weg — sonst trüge die
+    # Farbe des Bildes die Aussage nicht mehr mit.
+    for theme in ("light", "dark"):
+        solid = _hex(drawing.palette(theme).solid)
+        assert _distance(removes, solid) >= 25, (theme, solid)
+
+
+def test_a_tile_says_its_title_and_the_rest_by_corner_marks() -> None:
+    """Kachel aus Bild und Titel; was sonst gilt, ist ein Eckzeichen (A22).
+
+    Zwei bis vier Textzeilen trug eine Kachel — Titel, zwei Maßnamen und
+    „nimmt Material weg" hinter einem Strich, der sich als Minus las.
+    """
+    from app.i18n import tr
+    from app.ui.catalog import describe, tile_marks, tile_tip
+
+    subtractive = [spec for spec in PARTS.all() if spec.subtractive]
+    additive = [spec for spec in PARTS.all() if not spec.subtractive]
+    assert subtractive and additive, "sonst prüft dieser Test nichts"
+    for spec in subtractive:
+        assert "removes" in [mark.kind for mark in tile_marks(spec)], spec.name
+        assert tr("nimmt Material weg") in describe(spec)
+        assert tr("nimmt Material weg") in tile_tip(spec), "das Zeichen hat ein Wort"
+        assert "−" not in describe(spec) and "–" not in describe(spec)
+    for spec in additive:
+        assert "removes" not in [mark.kind for mark in tile_marks(spec)], spec.name
+    for spec in PARTS.all():
+        assert tile_tip(spec).splitlines()[0] == str(spec.title), "der ganze Titel"
+
+
+def test_an_own_part_and_a_failed_range_carry_their_marks() -> None:
+    """Herkunft und Bereichstest bleiben am Eintrag (§24.5) — als Zeichen und Wort."""
+    import dataclasses
+
+    from app.i18n import tr
+    from app.ui.catalog import tile_marks
+
+    donor = next(spec for spec in PARTS.all() if not spec.subtractive)
+    own = dataclasses.replace(donor, name="eigen_probe", source="recipe", range_passed=True)
+    broken = dataclasses.replace(donor, name="kaputt_probe", source="recipe", range_passed=False)
+    travelled = dataclasses.replace(donor, name="reise_probe", source="travelled")
+
+    assert [mark.kind for mark in tile_marks(own)] == ["origin"]
+    assert tile_marks(own)[0].words == tr("eigener Baustein")
+    assert tile_marks(broken)[0].kind == "range"
+    assert tr("mitgereister Baustein") in [mark.words for mark in tile_marks(travelled)]
+
+
+def test_a_tile_has_room_for_two_title_lines_and_not_three() -> None:
+    """Höchstens zwei Zeilen Titel; ein längerer endet mit „…" (RM-517)."""
+    from app.ui.catalog import TILE_ICON, TITLE_LINES, tile_size
+
+    assert TITLE_LINES == 2
+    for line in (14, 16, 19, 24):
+        below = tile_size(line).height() - TILE_ICON
+        assert below >= TITLE_LINES * line, line
+        assert below < (TITLE_LINES + 1) * line, f"{line}: eine dritte Zeile passte noch"
+
+
+def test_the_catalogue_filters_by_what_the_register_offers_at_a_feature() -> None:
+    """An einer Bohrung passen fünf Bausteine — gefragt beim Register.
+
+    Die Quelle ist ``applies_to`` der Bausteinoperation, dieselbe wie in der
+    Karte der Handlungen; eine zweite Aufzählung im Katalog wüsste beim
+    nächsten Baustein die Hälfte.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.parts.ops import op_name
+    from app.core.registry import REGISTRY
+    from app.i18n import tr
+    from app.ui.catalog import feature_title, parts_for_feature
+
+    load_operations()
+    at_hole = parts_for_feature("hole")
+    titles = {str(spec.title) for spec in PARTS.all() if spec.name in at_hole}
+    assert {
+        "Druckbares Gewinde",
+        "Heat-Set-Einpressbuchse",
+        "Mutternfalle",
+        "Kugellager einsetzen",
+        "Schraube",
+    } <= titles
+    for name in at_hole:
+        assert "hole" in REGISTRY.get(op_name(name)).applies_to
+    assert len(parts_for_feature("face")) > len(at_hole), "an einer Fläche passt mehr"
+    assert feature_title("hole") == tr("Bohrung")
+    with pytest.raises(ValueError):
+        feature_title("hole_1")
+
+
+def test_a_filtered_catalogue_says_so_and_shows_all_in_one_click(qt_app: QApplication) -> None:
+    """Der Filter steht sichtbar da und lässt sich mit einem Klick aufheben."""
+    from app.core.bootstrap import load_operations
+    from app.i18n import tr
+    from app.ui.catalog import parts_for_feature
+
+    load_operations()
+    catalog = PartCatalog(feature_kind="hole")
+    try:
+        assert catalog.feature_kind() == "hole"
+        assert catalog_names(catalog) == set(parts_for_feature("hole"))
+        assert catalog.filter_row.isVisibleTo(catalog)
+        assert tr("Bohrung") in catalog.filter_note.text()
+
+        catalog.search.setText("Mutter")
+        assert catalog_names(catalog) <= set(parts_for_feature("hole")), "Suche und Filter"
+
+        catalog.search.setText("")
+        catalog.show_all.click()
+        assert catalog.feature_kind() is None
+        assert not catalog.filter_row.isVisibleTo(catalog)
+        assert {spec.name for spec in PARTS.all()} <= catalog_names(catalog)
+
+        catalog.show_for_feature("hole")
+        assert catalog_names(catalog) == set(parts_for_feature("hole"))
+    finally:
+        catalog.release()
+        catalog.deleteLater()
+
+
+def test_the_tile_text_is_the_title_and_sits_at_the_top(qt_app: QApplication) -> None:
+    """Kacheltext ist nur der Titel, oben bündig; Name und Satz für Vorleser."""
+    catalog = PartCatalog()
+    try:
+        by_name = {spec.name: spec for spec in PARTS.all()}
+        seen = 0
+        for row in range(catalog.list.count()):
+            item = catalog.list.item(row)
+            name = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+            if not name:
+                continue
+            seen += 1
+            spec = by_name[name]
+            assert item.text() == str(spec.title)
+            assert item.textAlignment() & Qt.AlignmentFlag.AlignTop
+            assert item.data(Qt.ItemDataRole.AccessibleTextRole) == str(spec.title)
+            assert str(spec.doc) in item.data(Qt.ItemDataRole.AccessibleDescriptionRole)
+        assert seen >= 20, "ohne Kacheln prüft dieser Test nichts"
+    finally:
+        catalog.release()
+        catalog.deleteLater()
+
+
+def test_nothing_chosen_is_said_once(qt_app: QApplication) -> None:
+    """Ohne Auswahl ein Leertext, nicht zwei (D10).
+
+    Rechts stand „Wählen Sie einen Baustein — hier steht dann, was er tut",
+    über dem Knopf „Wählen Sie links in der Liste einen Baustein". Der Knopf
+    trägt den Grund weiter, für Tastatur und Bildschirmleser.
+    """
+    from app.i18n import tr
+    from app.ui.catalog import detail
+
+    catalog = PartCatalog()
+    try:
+        assert catalog.chosen() is None
+        assert catalog.detail.text() == detail(None)
+        assert catalog.insert_hint.isHidden()
+        assert catalog._insert is not None
+        assert catalog._insert.text().replace("&", "") == tr("Einsetzen")
+        assert catalog._insert.accessibleDescription() == detail(None)
+    finally:
+        catalog.release()
+        catalog.deleteLater()
