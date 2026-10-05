@@ -60,6 +60,7 @@ Nutzen da und sonst nichts.
 - Die Suche im Handbuch bricht nicht mehr mit einem Fehler ab, wenn ein weiteres Zeichen keinen Treffer mehr findet.
 - Nehmen Sie einen Schritt zurück oder löschen ihn, während *Diesen Schritt ändern* offen ist, schließt sich der Dialog und sagt es.
 - Ein seltenes Einfrieren der Anwendung während der Druckprüfung ist behoben.
+- Am Mac nennen Sätze mit Tastenkürzel die Tasten des Mac, also ⌘, ⇧ und ⌥.
 
 ### Drucken und Übergabe an den Slicer
 
@@ -75,6 +76,13 @@ Nutzen da und sonst nichts.
 - Der Druckdialog zeigt vorn Slicer, Drucker, Düse, Filamente, Qualität, Fülldichte und Stützen, der Rest steht unter *Weitere Einstellungen*.
 - Jeder Grund eines Vorschlags im Druckdialog passt in eine Zeile. *Druckdatei speichern* erscheint, sobald es eine Druckdatei gibt.
 - Teile, die oben breiter sind als am Fuß, bekommen keine Randwarnung mehr, wenn Brim und Skirt auf dem Bett bleiben.
+- Übernommene Stützen kommen auch bei feiner Schicht unter Brücken an. Bisher konnte *Kanäle frei halten* sie dort ganz wegnehmen.
+- Sind Stützen eingeschaltet und kommt im Slicer keine an, sagt Solidon es nach dem Slicen und nennt den Ausweg.
+- OrcaSlicer und ElegooSlicer erzeugen die Druckdatei auch, wenn ein Herstellerprofil Werte enthält, die sie selbst ablehnen. Solidon nennt jeden ersetzten Wert.
+- Nennt ein Profil eine Baumstützenspitze schmaler als die Stützbahn, hebt Solidon sie an, damit der Slicer mit Stützen rechnet.
+- Übernimmt ein Slicer eine Einstellung anders, nennt der Hinweis das Feld und beide Werte und führt in den Druckdialog.
+- Unter Linux bietet Solidon auch PrusaSlicer und OrcaSlicer aus dem Paketverwalter samt ihren Herstellerdruckern an.
+- Auf einem Mac, dessen Dateisystem Groß- und Kleinschreibung unterscheidet, findet Solidon die Herstellerdrucker im Programmpaket des Slicers.
 
 ### Bohrungen, Langlöcher und Teilen
 

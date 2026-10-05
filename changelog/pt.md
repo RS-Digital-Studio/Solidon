@@ -35,6 +35,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A pesquisa no manual já não termina com um erro quando mais um carácter deixa de encontrar resultados.
 - Se anular ou eliminar um passo enquanto *Editar este passo* está aberto, o diálogo fecha-se e indica-o.
 - Foi corrigido um bloqueio raro da aplicação durante a verificação de impressão.
+- No Mac, as frases que indicam um atalho usam as teclas do Mac, ou seja ⌘, ⇧ e ⌥.
 
 ### Imprimir e entregar ao slicer
 
@@ -50,6 +51,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As definições de impressão mostram à frente slicer, impressora, bico, filamentos, qualidade, densidade de preenchimento e suportes; o resto está em *Mais definições*.
 - Cada motivo de uma sugestão nas definições de impressão cabe numa linha. *Guardar o ficheiro de impressão* aparece assim que existe um ficheiro de impressão.
 - As peças mais largas em cima do que na base já não recebem um aviso de margem quando o brim e o skirt ficam na mesa.
+- Os suportes aceites chegam também por baixo das pontes com camadas finas. Até agora *Manter os canais livres* podia retirá-los aí por completo.
+- Se os suportes estiverem ativados e não chegar nenhum ao slicer, o Solidon di-lo depois do fatiamento e indica a saída.
+- O OrcaSlicer e o ElegooSlicer criam o ficheiro de impressão mesmo quando um perfil do fabricante contém valores que eles próprios rejeitam. O Solidon indica cada valor substituído.
+- Quando um perfil indica uma ponta de suporte em árvore mais estreita do que a linha de suporte, o Solidon alarga-a para que o slicer calcule com suportes.
+- Se um slicer aplicar uma definição de outra forma, o aviso indica o campo e os dois valores e leva às definições de impressão.
+- No Linux, o Solidon oferece também o PrusaSlicer e o OrcaSlicer do gestor de pacotes com as respetivas impressoras do fabricante.
+- Num Mac cujo sistema de ficheiros distingue maiúsculas e minúsculas, o Solidon encontra as impressoras do fabricante dentro do pacote do slicer.
 
 ### Furos, furos oblongos e divisão
 

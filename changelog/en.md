@@ -35,6 +35,7 @@ it into `website/version.json`.
 - Searching the manual no longer stops with an error when one more character finds no match.
 - If you undo or delete a step while *Edit this step* is open, the dialog closes and tells you so.
 - A rare freeze of the application during the print check is fixed.
+- On the Mac, sentences that name a shortcut use the Mac keys ⌘, ⇧ and ⌥.
 
 ### Printing and slicer handover
 
@@ -50,6 +51,13 @@ it into `website/version.json`.
 - The print dialog shows slicer, printer, nozzle, filaments, quality, infill density and supports up front; the rest is under *More settings*.
 - Each reason for a suggestion in the print dialog fits on one line. *Save print file* appears as soon as there is a print file.
 - Parts that are wider at the top than at the base no longer get an edge warning when brim and skirt stay on the bed.
+- Accepted supports now reach bridges at fine layer heights too. Until now *Keep channels clear* could remove them there entirely.
+- If supports are switched on but none arrive in the slicer, Solidon says so after slicing and names the way out.
+- OrcaSlicer and ElegooSlicer now produce the print file even when a manufacturer profile contains values they reject themselves. Solidon names every value it replaced.
+- When a profile names a tree support tip narrower than the support line, Solidon widens it so the slicer computes with supports.
+- If a slicer applies a setting differently, the notice names the field and both values and leads to the print dialog.
+- On Linux, Solidon also offers PrusaSlicer and OrcaSlicer from the package manager together with their manufacturer printers.
+- On a Mac whose file system is case-sensitive, Solidon finds the manufacturer printers inside the slicer's app bundle.
 
 ### Holes, slots and splitting
 

@@ -36,6 +36,7 @@ dans `website/version.json`.
 - La recherche dans le manuel ne s'arrête plus sur une erreur quand un caractère de plus ne trouve plus rien.
 - Si vous annulez ou supprimez une étape pendant que *Modifier cette étape* est ouvert, la boîte de dialogue se ferme et le signale.
 - Un blocage rare de l'application pendant le contrôle d'impression est corrigé.
+- Sur Mac, les phrases qui nomment un raccourci utilisent les touches du Mac, soit ⌘, ⇧ et ⌥.
 
 ### Imprimer et transmettre au slicer
 
@@ -51,6 +52,13 @@ dans `website/version.json`.
 - Les réglages d'impression montrent d'abord slicer, imprimante, buse, filaments, qualité, densité de remplissage et supports ; le reste est sous *Autres réglages*.
 - Chaque raison d'une suggestion dans les réglages d'impression tient sur une ligne. *Enregistrer le fichier d'impression* apparaît dès qu'un fichier d'impression existe.
 - Les pièces plus larges en haut qu'à la base ne reçoivent plus d'avertissement de bord quand le brim et le skirt restent sur le plateau.
+- Les supports acceptés arrivent aussi sous les ponts avec des couches fines. Jusqu'ici, *Garder les canaux libres* pouvait les y supprimer entièrement.
+- Si les supports sont activés et qu'aucun n'arrive dans le slicer, Solidon le dit après le tranchage et indique la solution.
+- OrcaSlicer et ElegooSlicer produisent le fichier d'impression même quand un profil du fabricant contient des valeurs qu'ils refusent eux-mêmes. Solidon nomme chaque valeur remplacée.
+- Quand un profil indique une pointe de support arborescent plus étroite que la ligne de support, Solidon l'élargit pour que le slicer calcule avec les supports.
+- Si un slicer applique un réglage autrement, l'avis nomme le champ et les deux valeurs et mène aux réglages d'impression.
+- Sous Linux, Solidon propose aussi PrusaSlicer et OrcaSlicer installés par le gestionnaire de paquets, avec leurs imprimantes du fabricant.
+- Sur un Mac dont le système de fichiers distingue majuscules et minuscules, Solidon trouve les imprimantes du fabricant dans le paquet du slicer.
 
 ### Perçages, trous oblongs et découpe
 

@@ -36,6 +36,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La búsqueda en el manual ya no se interrumpe con un error cuando un carácter más deja de encontrar resultados.
 - Si deshace o borra un paso mientras *Editar este paso* está abierto, el diálogo se cierra y lo indica.
 - Se ha corregido un bloqueo poco frecuente de la aplicación durante la comprobación de impresión.
+- En el Mac, las frases que nombran un atajo usan las teclas del Mac, es decir ⌘, ⇧ y ⌥.
 
 ### Imprimir y entregar al slicer
 
@@ -51,6 +52,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los ajustes de impresión muestran delante slicer, impresora, boquilla, filamentos, calidad, densidad de relleno y soportes; el resto está en *Más ajustes*.
 - Cada motivo de una sugerencia en los ajustes de impresión cabe en una línea. *Guardar archivo de impresión* aparece en cuanto hay un archivo de impresión.
 - Las piezas más anchas arriba que en la base ya no reciben un aviso de borde si el brim y el skirt quedan sobre la placa.
+- Los soportes aceptados llegan también bajo los puentes con capas finas. Hasta ahora *Mantener libres los canales* podía quitarlos allí por completo.
+- Si los soportes están activados y no llega ninguno al slicer, Solidon lo dice después de laminar y nombra la salida.
+- OrcaSlicer y ElegooSlicer generan el archivo de impresión aunque un perfil del fabricante contenga valores que ellos mismos rechazan. Solidon nombra cada valor sustituido.
+- Si un perfil da una punta de soporte en árbol más estrecha que la línea de soporte, Solidon la ensancha para que el slicer calcule con soportes.
+- Si un slicer aplica un ajuste de otra forma, el aviso nombra el campo y ambos valores y lleva a los ajustes de impresión.
+- En Linux, Solidon ofrece también PrusaSlicer y OrcaSlicer del gestor de paquetes junto con sus impresoras del fabricante.
+- En un Mac cuyo sistema de archivos distingue mayúsculas y minúsculas, Solidon encuentra las impresoras del fabricante dentro del paquete del slicer.
 
 ### Taladros, ranuras y división
 

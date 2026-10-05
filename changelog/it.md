@@ -35,6 +35,7 @@ scrive in `website/version.json`.
 - La ricerca nel manuale non si interrompe più con un errore quando un carattere in più non trova risultati.
 - Se annulli o elimini un passo mentre *Modifica questo passaggio* è aperto, la finestra si chiude e te lo dice.
 - Un raro blocco dell'applicazione durante la verifica di stampa è stato risolto.
+- Sul Mac le frasi che nominano una scorciatoia usano i tasti del Mac, cioè ⌘, ⇧ e ⌥.
 
 ### Stampare e passare allo slicer
 
@@ -50,6 +51,13 @@ scrive in `website/version.json`.
 - Le impostazioni di stampa mostrano davanti slicer, stampante, ugello, filamenti, qualità, densità di riempimento e supporti; il resto sta in *Altre impostazioni*.
 - Ogni motivo di un suggerimento nelle impostazioni di stampa sta in una riga. *Salva file di stampa* compare appena c'è un file di stampa.
 - I pezzi più larghi in alto che alla base non ricevono più un avviso sul bordo se brim e skirt restano sul piano.
+- I supporti accettati arrivano anche sotto i ponti con strati sottili. Finora *Tenere liberi i canali* poteva toglierli lì del tutto.
+- Se i supporti sono attivi e nello slicer non ne arriva nessuno, Solidon lo dice dopo lo slicing e indica la via d'uscita.
+- OrcaSlicer ed ElegooSlicer creano il file di stampa anche quando un profilo del produttore contiene valori che loro stessi rifiutano. Solidon nomina ogni valore sostituito.
+- Se un profilo indica una punta del supporto ad albero più stretta della linea di supporto, Solidon la allarga perché lo slicer calcoli con i supporti.
+- Se uno slicer applica un'impostazione in modo diverso, l'avviso nomina il campo e i due valori e porta alle impostazioni di stampa.
+- Su Linux Solidon offre anche PrusaSlicer e OrcaSlicer del gestore di pacchetti insieme alle loro stampanti del produttore.
+- Su un Mac il cui file system distingue maiuscole e minuscole, Solidon trova le stampanti del produttore nel pacchetto dello slicer.
 
 ### Fori, asole e divisione
 
