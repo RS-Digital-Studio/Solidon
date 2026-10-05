@@ -1,7 +1,7 @@
 """Welche Maschinenprofile jedes installierten Slicers Solidon nicht anbietet, und warum.
 
 Sonde für Roberts Auftrag vom 05.10.2026 („bei jedem Slicer alle unterstützten
-Drucker“). Aufruf aus der Wurzel: .venv\Scripts\python.exe .claude/.state/anycubic-2026-10-05/fehlende_drucker.py
+Drucker“). Aufruf aus der Wurzel: .venv/Scripts/python.exe .claude/.state/anycubic-2026-10-05/fehlende_drucker.py
 """
 
 from __future__ import annotations

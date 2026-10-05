@@ -1286,8 +1286,35 @@ def discover_printers(executable: Path, flavour: SlicerFlavour) -> tuple[Printer
     return tuple(sorted(found.values(), key=lambda printer: (printer.title.casefold(), printer.id)))
 
 
+#: Was ein Slicer einsetzt, wenn ein Maschinenprofil samt Erbkette einen
+#: Schlüssel gar nicht nennt — seine eingebaute Vorgabe (Entscheidung Robert,
+#: 05.10.2026). Orca-Familie: ``set_default_value`` in ``PrintConfig.cpp``,
+#: gleich in OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print und
+#: Anycubic Slicer Next; Prusa-Familie: ``--save`` von PrusaSlicer 2.9.6 und
+#: SuperSlicer 2.5.59.13. Ein vorhandener, aber unbrauchbarer Wert bleibt eine
+#: Absage. Betroffen waren CR-20 und i3 Mega bei PrusaSlicer, M3D Enabler bei
+#: Orca.
+MACHINE_DEFAULTS: Final[Mapping[str, Mapping[str, object]]] = {
+    "orca": {
+        "printable_area": ["0x0", "200x0", "200x200", "0x200"],
+        "printable_height": "100",
+        "nozzle_diameter": ["0.4"],
+    },
+    "prusa": {
+        "bed_shape": "0x0,200x0,200x200,0x200",
+        "max_print_height": "200",
+        "nozzle_diameter": "0.4",
+    },
+}
+
+
+def _machine_value(values: Mapping[str, Any], key: str, flavour: SlicerFlavour) -> Any:
+    """Der Wert aus der Kette oder, wenn sie ihn gar nicht nennt, die Vorgabe des Slicers."""
+    return values[key] if key in values else MACHINE_DEFAULTS.get(flavour, {}).get(key)
+
+
 def _profile_numbers(value: Any) -> tuple[float, ...]:
-    """Native Zahlenlisten, ohne eine fehlende Düse durch eine Vorgabe zu ersetzen."""
+    """Native Zahlenlisten; ein leerer oder ungültiger Wert ist eine Absage."""
     raw = value if isinstance(value, (list, tuple)) else str(value).split(",")
     if any(isinstance(item, bool) for item in raw):
         raise ValueError("boolean dimension")
@@ -1607,7 +1634,7 @@ def _discovered_printer(
         origin: tuple[float, float] | None = (0.0, 0.0) if centred else None
     else:
         contour = _profile_points(
-            values.get("bed_shape" if flavour == "prusa" else "printable_area")
+            _machine_value(values, "bed_shape" if flavour == "prusa" else "printable_area", flavour)
         )
         if len(contour) < 3:
             raise _incomplete_profile(entry.path)
@@ -1617,9 +1644,11 @@ def _discovered_printer(
         if width <= 0.0 or depth <= 0.0:
             raise _incomplete_profile(entry.path)
         height = _profile_numbers(
-            values.get("max_print_height" if flavour == "prusa" else "printable_height")
+            _machine_value(
+                values, "max_print_height" if flavour == "prusa" else "printable_height", flavour
+            )
         )[0]
-        nozzles = _profile_numbers(values.get("nozzle_diameter"))
+        nozzles = _profile_numbers(_machine_value(values, "nozzle_diameter", flavour))
         count = float(len(nozzles))
         cx, cy = (left + right) / 2.0, (front + back) / 2.0
         contour = tuple((x - cx, y - cy) for x, y in contour)
