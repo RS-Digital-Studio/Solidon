@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import re
 import weakref
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
@@ -52,6 +53,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractSpinBox,
     QApplication,
+    QBoxLayout,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -64,6 +66,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QMenu,
@@ -85,7 +88,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.core import expressions
-from app.core.action_effects import side_effect
+from app.core.action_effects import effect_worth_showing, side_effect
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
     ARRANGE_ON_BED,
@@ -201,11 +204,11 @@ from app.ui.style import (
     TARGET_SIZE,
     TIGHT,
     make_danger,
-    make_large_target,
     make_primary,
     rule,
     set_level,
 )
+from app.ui.tab_signal import count_phrases
 from app.ui.theme import UNDONE_COLOUR
 
 _log = get_logger(__name__)
@@ -369,6 +372,27 @@ _BUNDLE_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 #: Zeile lieferte ``'#3479ba'`` statt ihrer Körper. Eine Rolle ohne Namen
 #: ist für den Nächsten unsichtbar; deshalb steht sie hier bei den anderen.
 _TONE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
+
+#: Die Zeile eines Befunds kurz und ganz: erster Satz und vollständige Meldung
+#: (:func:`headline`). Die gewählte Zeile steht ganz da (RM-508).
+_LINE_ROLE = int(Qt.ItemDataRole.UserRole) + 7
+
+#: Wo ein Satz endet: ein Schlusszeichen vor Leerraum und einem Großbuchstaben
+#: oder einer Ziffer, nicht hinter einem einzelnen Buchstaben — „0,16 mm.“
+#: endet, „z. B.“ nicht, und eine Übersetzung mit „e.g. the“ auch nicht.
+_SENTENCE_END = re.compile(r"(?<=[.!?])(?<!\s\w\.)(?<!^\w\.)\s+(?=[\d¿¡A-ZÀ-ÞÄÖÜ])")
+
+
+def headline(message: str) -> str:
+    """Der erste Satz einer Meldung — die Zeile, die man beim Überfliegen liest.
+
+    **Erst die Befunde, dann ihre Erklärung** (RM-508): Im Hauptfenster
+    standen 88 Wörter Befundtext, die Hälfte davon Rat in Prosa („Die
+    Materialbahnen im Slicer prüfen; fehlen sie dort, …“), und lange Zeilen
+    verdrängten die nächsten. Die Liste zeigt je Befund seinen ersten Satz;
+    die gewählte Zeile steht ganz da, ihre Handlungen darunter.
+    """
+    return _SENTENCE_END.split(message, maxsplit=1)[0]
 
 
 def _bundled(
@@ -1101,6 +1125,52 @@ def origin_label(source: str) -> str:
     return tr("intern geschätzt") if source == "internal" else tr("aus G-Code")
 
 
+def finding_meta(finding: Finding, place: str) -> str:
+    """Folge, Ort und Grundlage eines Befunds als eine Zeile (RM-508, Produktkompass 4.3).
+
+    „Hinweis · Dose · intern geschätzt“ — das Wort für die Schwere ist die
+    Folge für das Druckziel (:func:`print_contract.handoff_state` leitet den
+    Status aus genau ihr ab), der Ort ist der Körper, die Grundlage die
+    Herkunft der Aussage (§22.5). Drei Sätze darunter („Folge: Ein Hinweis;
+    die Übergabe hängt nicht davon ab.“) sagten dasselbe in 18 Wörtern
+    (Entscheidung Robert, 05.10.2026). Ohne Ort fällt er weg.
+    """
+    parts = (_severity_label(finding.severity), place, origin_label(finding.source))
+    line = " · ".join(part for part in parts if part)
+    # Die Kataloge schreiben die Schwere klein („note“), weil sie im Satz
+    # steht; am Zeilenanfang steht sie groß, in jeder Sprache.
+    return line[:1].upper() + line[1:]
+
+
+def finding_place(
+    finding: Finding,
+    bodies: Sequence[str],
+    live: Mapping[ObjectId, SceneObject],
+    names: Mapping[str, str],
+) -> tuple[str, str]:
+    """Wo ein Befund liegt, und wie der Knopf heißt, der es zeigt — oder ``""``.
+
+    ``bodies`` sind die noch vorhandenen Körper einer Sammelzeile. Ein Ort, den
+    der Befund nicht trägt, wird nicht erfunden: Ohne Stelle zeigt der Knopf
+    den Körper, ohne vorhandenen Körper gibt es keinen Knopf.
+    """
+    if len(bodies) > 1:
+        return ", ".join(names.get(key, key) for key in bodies), tr("Körper zeigen")
+    body = live.get(finding.object_id) if finding.object_id else None
+    if body is None:
+        return (tr("Körper nicht mehr vorhanden") if finding.object_id else ""), ""
+    located = finding.location is not None or bool(finding.feature_ids) or bool(finding.outline)
+    return str(body.name), tr("Stelle zeigen") if located else tr("Körper zeigen")
+
+
+def _last_widget(row: QBoxLayout) -> QToolButton:
+    """Die Überschrift, die :func:`collapsible` eben in ``row`` gelegt hat."""
+    item = row.itemAt(row.count() - 1)
+    widget = item.widget() if item is not None else None
+    assert isinstance(widget, QToolButton)
+    return widget
+
+
 #: Werte, die in der Zeile eines Befunds stehen — die, nach denen man beim
 #: Lesen zuerst fragt: welcher Körper, und wie viel.
 #:
@@ -1144,6 +1214,11 @@ _LINE_VALUES: tuple[str, ...] = (
     "span_mm",
     "width_mm",
 )
+
+
+#: Werte der Zeile, die selbst Namen sind — die beiden Körper einer
+#: Überschneidung. Jeder andere Wert trägt seine Beschriftung (:func:`_line_for`).
+_NAMES_IN_THE_LINE: Final = frozenset({"a", "b"})
 
 
 def _op_title(name: str) -> str:
@@ -1326,6 +1401,11 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
                 # nicht umschalten kann. ``value_text`` beantwortet beides und
                 # lässt Pfade, Kennungen und Versionsnummern unangetastet.
                 else value_text(key, finding.values[key])
+                if key in _NAMES_IN_THE_LINE
+                # **Je Wert ein Name** (RM-508): „— Deckel · 0 mm³ · 100 %“ ließ
+                # raten, welche Zahl was ist; jetzt „Stützen: 0 mm³ · Gespart:
+                # 100 %“, mit der Beschriftung der Einzelheiten.
+                else value_line(key, finding.values[key])
             )
             for key in _LINE_VALUES
             if key in finding.values
@@ -5421,12 +5501,19 @@ class HistoryPanel(QWidget):
         menu.deleteLater()
 
 
-#: Ab wie vielen Befunden der Bericht seine Filterzeile zeigt.
+#: Ab wie vielen Zeilen der Bericht seine Filterzeile zeigt.
 #:
-#: Zwei, denn bei einem einzigen Befund kann ein Filter nur ihn treffen oder die
-#: Zeile „Kein Befund passt zu …" erzeugen — und bei null zeigte der Bericht ein
-#: Suchfeld, eine Filterauswahl und einen leeren Kasten für nichts.
-FILTER_FROM = 2
+#: Acht (RM-508): Bis dahin überblickt man die Liste, und ein Suchfeld mit
+#: Stufenwahl stand ab zwei Befunden über ihr — zwei Bedienelemente und drei
+#: Wörter Gerüst, wo der Kunde die Befunde lesen wollte.
+FILTER_FROM = 8
+
+#: Wie viele Befundzeilen die Liste im knappen Fenster mindestens zeigt (RM-508).
+LEAST_REPORT_ROWS: Final = 3
+
+#: Handlungen eines Befunds, die seine Stelle zeigen — bietet er eine an,
+#: entfällt der Zeige-Knopf der Befundzeile (RM-508, Durchsicht B10).
+_SHOWING_ACTIONS: Final = frozenset({SHOW_LOCATION.id, SHOW_LOCATIONS.id})
 
 
 class BodyChoiceDialog(QDialog):
@@ -5546,6 +5633,44 @@ class _ReportList(QListWidget):
 
     leftPressed = Signal(QListWidgetItem)
 
+    _least = 0
+    """Die Mindesthöhe beim letzten Legen der Zeilen — siehe :meth:`updateGeometries`."""
+
+    def _least_rows(self) -> int:
+        """Die ersten drei sichtbaren Zeilen samt Rahmen, oder 0 ohne Zeile."""
+        rows = [
+            max(self.visualRect(self.indexFromItem(item)).height(), self.sizeHintForRow(row))
+            for row in range(self.count())
+            if not (item := self.item(row)).isHidden()
+        ][:LEAST_REPORT_ROWS]
+        return sum(rows) + 2 * self.frameWidth() if rows else 0
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Schnittstelle
+        """So hoch wie die ersten drei sichtbaren Zeilen, mit Rahmen (RM-508).
+
+        Darunter gibt die Liste im knappen Fenster nicht nach; den Rest rollt
+        der Bericht über ihr (``overlay.FittedScroller``). Bei 1280 x 800 stand
+        sonst von einer einzigen Warnung keine ganze Zeile da. Gemessen wird an
+        den echten, umbrochenen Zeilen wie in ``overlay.rows_height``.
+        """
+        hint = super().minimumSizeHint()
+        least = self._least_rows()
+        return QSize(hint.width(), least) if least else hint
+
+    def updateGeometries(self) -> None:  # noqa: N802 — Qt-Schnittstelle
+        """Nach dem Legen der Zeilen: Hat sich die Mindesthöhe geändert, erfährt es das Layout.
+
+        Die Zeilenhöhen hängen am Umbruch und damit an der Breite; ein Layout,
+        das sich die Mindesthöhe aus dem ersten, schmalen Legen gemerkt hat,
+        hielt die Liste auf 352 statt 104 Punkten, und der Bericht rollte
+        seine Handlungen aus dem Bild.
+        """
+        super().updateGeometries()
+        least = self._least_rows()
+        if least != self._least:
+            self._least = least
+            self.updateGeometry()
+
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Schnittstelle
         item = self.itemAt(event.position().toPoint())
         super().mousePressEvent(event)
@@ -5581,7 +5706,10 @@ class ReportPanel(QWidget):
     ausdrücklich vorsieht.
     """
 
-    rebuildRequested = Signal(str)
+    exportRequested = Signal()
+    """Der Kunde will die Körper als Datei schreiben — derselbe Weg wie *Datei →
+    Exportieren …* (RM-508)."""
+
     slicerRequested = Signal()
     """Der Kunde will das geprüfte Teil zum Slicer bringen.
 
@@ -5623,7 +5751,49 @@ class ReportPanel(QWidget):
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self._alert_counts = (0, 0)
         """Dieselben getrennt, Fehler zuerst — siehe :meth:`alert_counts`."""
-        self.list = _ReportList(self)
+        self._list_follows: bool | None = None
+        """Für welchen Zustand die Befundliste zuletzt von selbst auf- oder
+        zugeklappt wurde: offen mit Fehlern oder Warnungen, zu mit Hinweisen
+        allein (RM-508). Ein Klick des Kunden gilt, bis der Zustand wechselt —
+        sonst klappte jede Auswertung nach einer Zahländerung zurück."""
+
+        # **Der Bericht zeigt zuerst die Befunde** (RM-508). Im Ruhezustand
+        # trug er rund 175 der 290 Wörter des Hauptfensters, davon 88
+        # Befundtext; im Handbuchbild belegte der Kopf 62 % der Karte, und von
+        # vier Befunden war einer zu sehen. Über der Liste steht jetzt eine
+        # Zeile, die Kennzahlen stehen im Prüfumfang, der Nachbau in der Karte
+        # der Handlungen, die Übergabe und der Export unten.
+        body = QWidget(self)
+        layout = QVBoxLayout(body)
+        self._rows = layout
+        """Die Zeilen des Berichts, im Rollbereich — die letzte ist der Stretch."""
+        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, TIGHT)
+        layout.setSpacing(TIGHT)
+
+        # Der Kopf: Zustand, Zähler (zugleich die Klappe der Liste) und
+        # Prüfumfang in einer Zeile.
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(TIGHT)
+        layout.addLayout(head)
+        self.review_symbol = QLabel(body)
+        self.review_symbol.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.summary = QLabel(tr("Keine Befunde."), body)
+        self.summary.setWordWrap(True)
+        head.addWidget(self.review_symbol)
+        # Der Zustand nimmt den Platz der Zeile und bricht erst um, wenn die
+        # Klappen rechts ihn brauchen.
+        head.addWidget(self.summary, 1)
+        self._head = head
+        # Passt die Zeile nicht — französisch bei 440 Punkten Karte —, rückt der
+        # Prüfumfang hierher (:meth:`_fit_head`), statt die Zähler zu kürzen.
+        self._head_spill = QHBoxLayout()
+        self._head_spill.setContentsMargins(0, 0, 0, 0)
+        self._head_spill.addStretch(1)
+        layout.addLayout(self._head_spill)
+
+        findings_box = QWidget(body)
+        self.list = _ReportList(findings_box)
         self.list.setObjectName("reportFindings")
         self.list.setAccessibleName(tr("Befunde"))
         # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
@@ -5633,7 +5803,10 @@ class ReportPanel(QWidget):
         self.list.setWordWrap(True)
         self.list.setTextElideMode(Qt.TextElideMode.ElideNone)
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.list.setMinimumHeight(TARGET_SIZE)
+        # Umgebrochene Zeilen messen sich an der Breite, die die Liste gerade
+        # hat — ohne ``Adjust`` blieb die Höhe aus dem ersten Legen stehen, und
+        # eine dreizeilige Meldung endete in der breiteren Karte auf „…“.
+        self.list.setResizeMode(QListView.ResizeMode.Adjust)
         # §18.4 sagt „Klick auf eine Warnung fährt die Kamera hin" —
         # ``itemActivated`` allein hieß aber Doppelklick oder Eingabetaste,
         # und wer einmal klickte, bekam nichts. Beide Wege führen zum Ort;
@@ -5648,118 +5821,90 @@ class ReportPanel(QWidget):
         # Und was dagegen hilft, steht im Kontextmenü — siehe :meth:`_on_menu`.
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_menu)
-        self.summary = QLabel(tr("Keine Befunde."), self)
-        self.summary.setWordWrap(True)
-        self.review_symbol = QLabel(self)
-        self.review_symbol.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.review_toggle = QToolButton(self)
-        self.review_toggle.setText(tr("Prüfumfang"))
-        self.review_toggle.setCheckable(True)
-        self.review_toggle.setArrowType(Qt.ArrowType.RightArrow)
-        self.review_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.review_toggle.toggled.connect(self._toggle_review_scope)
-        self.review_scope = QLabel("", self)
-        self.review_scope.setWordWrap(True)
-        self.review_scope.setTextFormat(Qt.TextFormat.PlainText)
-        self.review_scope.setAccessibleName(tr("Grundlage des Übergabestatus"))
-        self.review_scroll = QScrollArea(self)
-        self.review_scroll.setWidgetResizable(True)
-        self.review_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.review_scroll.setWidget(self.review_scope)
-        self.review_scroll.setMaximumHeight(4 * TARGET_SIZE)
-        self.review_scroll.setMinimumHeight(2 * TARGET_SIZE)
-        self.review_scroll.setAccessibleName(tr("Prüfumfang"))
-        self.review_scroll.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.review_scroll.hide()
-        # Der letzte Meter: Ist nichts zu beanstanden und liegt ein Körper da,
-        # steht der nächste Klick genau hier — nicht drei Menüs weiter.
-        self.to_slicer = make_large_target(QPushButton(tr("An den Slicer übergeben …"), self))
-        self.to_slicer.setMinimumHeight(TARGET_SIZE)
-        self.to_slicer.setToolTip(
-            tr("Druckeinstellungen prüfen und das Teil an den eingerichteten Slicer geben.")
-        )
-        self.to_slicer.setStatusTip(self.to_slicer.toolTip())
-        # Bei einem Körper ist dies die nächste Handlung, solange kein
-        # gewählter Befund eine passendere Hauptaktion anbietet.
-        self.to_slicer.setVisible(False)
-        self.to_slicer.clicked.connect(self.slicerRequested)
-        self._rebuild_selection: tuple[str, ...] = ()
-        self.rebuild = make_large_target(QPushButton(tr("Modell nachbauen"), self))
-        self.rebuild.clicked.connect(self._request_rebuild)
-        self.rebuild.hide()
-        self.rebuild_note = QLabel("", self)
-        self.rebuild_note.setWordWrap(True)
-        self.rebuild_note.setTextFormat(Qt.TextFormat.PlainText)
-        self.rebuild_note.hide()
-        # Die Kennzahlen darunter: was der Bericht in Sätzen sagt, hier als
-        # Zahlen zum Vergleichen und Weitergeben.
-        self.facts = QLabel("", self)
-        self.facts.setWordWrap(True)
-        self.facts.setProperty("level", "caption")
-        self.facts.setVisible(False)
 
         # Ein Bericht mit hundert Hinweisen und zwei Fehlern versteckt die zwei.
         # Gefiltert wird über den Text und über den Schweregrad; beides
         # zusammen, weil „Wandstärke" und „nur die Fehler" verschiedene Fragen
-        # sind (§17.3).
-        self.search = QLineEdit(self)
+        # sind (§17.3). Erst ab :data:`FILTER_FROM` Zeilen (``_show_controls``).
+        findings = QVBoxLayout(findings_box)
+        findings.setContentsMargins(0, 0, 0, 0)
+        findings.setSpacing(TIGHT)
+        self.search = QLineEdit(findings_box)
         self.search.setMinimumHeight(TARGET_SIZE)
         self.search.setPlaceholderText(tr("Befunde durchsuchen …"))
         self.search.setAccessibleName(tr("Befunde durchsuchen"))
         self.search.textChanged.connect(self._refilter)
-        self.severity = QComboBox(self)
+        self.severity = QComboBox(findings_box)
         self.severity.setMinimumHeight(TARGET_SIZE)
         self.severity.setAccessibleName(tr("Nach Schweregrad filtern"))
         self.severity.addItem(tr("Alle"), "")
         for name in ("error", "warning", "info"):
             self.severity.addItem(f"{SEVERITY_MARKER[name]} {_severity_label(name)}", name)
         self.severity.currentIndexChanged.connect(self._refilter)
-
         filter_row = QHBoxLayout()
         filter_row.setContentsMargins(0, 0, 0, 0)
         filter_row.addWidget(self.search, stretch=1)
         filter_row.addWidget(self.severity)
-        # Der leere Bericht ist der häufigste — und er zeigte ein Suchfeld, eine
-        # Filterauswahl und einen leeren Kasten darunter. Drei Bedienelemente
-        # für nichts, und der Satz „Keine Befunde." dazwischen. Was es nicht zu
-        # filtern gibt, bekommt keinen Filter (siehe ``_show_controls``).
-
-        # **Der Inhalt rollt, statt sich zu stauchen** (``overlay.FittedScroller``):
-        # Im knappen Fenster lagen sonst Knöpfe und Filter übereinander.
-        body = QWidget(self)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(FittedScroller(body, self))
-        layout = QVBoxLayout(body)
-        self._rows = layout
-        """Die Zeilen des Berichts, im Rollbereich — die letzte ist der Stretch."""
-        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
-        summary_row = QHBoxLayout()
-        summary_row.addWidget(self.review_symbol)
-        summary_row.addWidget(self.summary, 1)
-        layout.addLayout(summary_row)
-        layout.addWidget(self.review_toggle)
-        layout.addWidget(self.review_scroll)
-        layout.addWidget(self.to_slicer)
-        layout.addWidget(self.rebuild)
-        layout.addWidget(self.rebuild_note)
+        findings.addLayout(filter_row)
         # Wenn der Filter alles wegnimmt, steht sonst ein leerer Rahmen da und
         # sagt nicht, ob nichts passt oder ob der Bericht leer ist. Ein Label
         # und kein Listeneintrag: gefiltert wird über ``setHidden``, die Liste
         # bleibt gefüllt, und ein Eintrag darin wäre beim nächsten Filtern im
         # Weg.
-        self._nothing = QLabel("", self)
+        self._nothing = QLabel("", findings_box)
         self._nothing.setWordWrap(True)
         self._nothing.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         self._nothing.setVisible(False)
+        findings.addWidget(self._nothing)
+        findings.addWidget(self.list, 1)
+
+        # **Unter dem gewählten Befund eine Zeile, nicht drei** (Entscheidung
+        # Robert, 05.10.2026): Folge, Ort und Grundlage als „Hinweis · Dose ·
+        # intern geschätzt“ (:func:`finding_meta`), daneben die Einzelheiten
+        # und ein Knopf, der die Stelle zeigt. Einen eigenen Folgesatz gibt es
+        # nur, wo die Folge mehr ist als das Wort für die Schwere.
+        meta = QHBoxLayout()
+        meta.setContentsMargins(0, 0, 0, 0)
+        meta.setSpacing(TIGHT)
+        findings.addLayout(meta)
+        self.finding_context = QLabel("", findings_box)
+        self.finding_context.setWordWrap(True)
+        self.finding_context.setTextFormat(Qt.TextFormat.PlainText)
+        set_level(self.finding_context, "caption")
+        self.finding_context.hide()
+        meta.addWidget(self.finding_context, 1)
+        self.finding_details = QTextBrowser(findings_box)
+        self.finding_details.setAccessibleName(tr("Einzelheiten zum Befund"))
+        self.finding_details.setMaximumHeight(4 * TARGET_SIZE)
+        self.finding_details.setOpenExternalLinks(False)
+        details = collapsible(
+            tr("Einzelheiten"),
+            self.finding_details,
+            open_now=False,
+            contents=tr("Werte, Herkunft und Schritt des Befunds"),
+            heading_row=meta,
+        )
+        details.setParent(findings_box)
+        self.finding_details_toggle = _last_widget(meta)
+        self.finding_details_toggle.toggled.connect(self._toggle_finding_details)
+        self.finding_details_toggle.hide()
+        self.finding_place = QPushButton(tr("Stelle zeigen"), findings_box)
+        self.finding_place.clicked.connect(self._show_selected_place)
+        self.finding_place.hide()
+        meta.addWidget(self.finding_place)
+        findings.addWidget(details)
+        # Ein Folgesatz, wo es eine Folge gibt (:func:`finding_consequence`).
+        self.finding_consequence = QLabel("", findings_box)
+        self.finding_consequence.setWordWrap(True)
+        self.finding_consequence.setTextFormat(Qt.TextFormat.PlainText)
+        self.finding_consequence.hide()
+        findings.addWidget(self.finding_consequence)
 
         # **Was gegen den gewählten Befund hilft, steht darunter.** Gebaut waren
         # die Handlungen längst, nur hingen sie an einem Rechtsklick auf eine
         # Listenzeile — und §2.7 verspricht „anklickbare Handlungen", nicht
-        # welche zum Suchen. Der Fehlerdialog hat dafür seit je Knöpfe; der
-        # Bericht, in dem die häufigeren Fälle landen, hatte keine. Leer bleibt
-        # die Zeile unsichtbar, wie die Filterzeile über der leeren Liste.
-        self._offers = QWidget(self)
+        # welche zum Suchen. Leer bleibt die Zeile unsichtbar.
+        self._offers = QWidget(findings_box)
         self._offers.setVisible(False)
         # Untereinander und über die ganze Breite: Zwei längere Handlungen
         # passten im schmalen Prüfbericht nicht nebeneinander. Der primäre
@@ -5768,112 +5913,196 @@ class ReportPanel(QWidget):
         self._offer_row = QVBoxLayout(self._offers)
         self._offer_row.setContentsMargins(0, TIGHT, 0, 0)
         self._offer_row.setSpacing(TIGHT)
-        self.list.itemSelectionChanged.connect(self._show_offers)
-
-        layout.addWidget(self.facts)
-        layout.addLayout(filter_row)
-        layout.addWidget(self._nothing)
-        layout.addWidget(self.list, 1)
-        self.finding_context = QLabel("", self)
-        self.finding_context.setWordWrap(True)
-        self.finding_context.setTextFormat(Qt.TextFormat.PlainText)
-        self.finding_context.hide()
-        self.finding_place = QPushButton(tr("Betroffene Stelle zeigen"), self)
-        self.finding_place.clicked.connect(self._show_selected_place)
-        self.finding_place.hide()
-        self.finding_details_toggle = QToolButton(self)
-        self.finding_details_toggle.setText(tr("Einzelheiten"))
-        self.finding_details_toggle.setCheckable(True)
-        self.finding_details_toggle.setArrowType(Qt.ArrowType.RightArrow)
-        self.finding_details_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.finding_details_toggle.setAccessibleName(tr("Einzelheiten zum Befund"))
-        self.finding_details_toggle.toggled.connect(self._toggle_finding_details)
-        self.finding_details_toggle.hide()
-        self.finding_details = QTextBrowser(self)
-        self.finding_details.setAccessibleName(tr("Einzelheiten zum Befund"))
-        self.finding_details.setMaximumHeight(4 * TARGET_SIZE)
-        self.finding_details.setOpenExternalLinks(False)
-        self.finding_details.hide()
-        layout.addWidget(self.finding_context)
-        layout.addWidget(self.finding_place)
-        layout.addWidget(self.finding_details_toggle)
-        layout.addWidget(self.finding_details)
-        layout.addWidget(self._offers)
         # Was die vorgeschlagene Handlung außer ihrem Zweck verändert — der
-        # Satz kommt aus dem Kern (``core.action_effects``), sichtbar unter dem
-        # Hauptknopf, für die übrigen in Kurzhilfe und Beschreibung (Produktkompass 4.3).
-        self.offer_effect = QLabel("", self)
+        # Satz kommt aus dem Kern (``core.action_effects``) und steht unter dem
+        # Hauptknopf, aber nur, wo sie etwas verändert (``effect_worth_showing``):
+        # „Ändert nichts am Modell.“ stand unter 67 von 109 Handlungen.
+        self.offer_effect = QLabel("", self._offers)
         self.offer_effect.setWordWrap(True)
         self.offer_effect.setTextFormat(Qt.TextFormat.PlainText)
+        set_level(self.offer_effect, "caption")
         self.offer_effect.hide()
-        layout.addWidget(self.offer_effect)
-        layout.addStretch(1)
-        # Leere Berichte bleiben oben kompakt. Bei Befunden gehört der freie
-        # Platz der rollbaren Liste, nicht den Abständen zwischen Textzeilen.
+        self.list.itemSelectionChanged.connect(self._show_offers)
+        findings.addWidget(self._offers)
+
+        # Der Grund, wenn die Bewertung unvollständig ist — eine Zeile unter dem
+        # Kopf; alle Gründe stehen im Prüfumfang.
+        self.review_reason = QLabel("", body)
+        self.review_reason.setWordWrap(True)
+        self.review_reason.setTextFormat(Qt.TextFormat.PlainText)
+        set_level(self.review_reason, "caption")
+        self.review_reason.hide()
+        layout.addWidget(self.review_reason)
+
+        # Die Zähler sind die Klappe der Liste (:meth:`_settle_list`).
+        self._findings_section = collapsible("", findings_box, heading_row=head)
+        self._findings_section.setParent(body)
+        self.list_toggle = _last_widget(head)
+        self.list_toggle.toggled.connect(self._list_toggled)
+        self.list_toggle.hide()
+
+        # Der Prüfumfang, mit den Kennzahlen darin: was der Bericht in Sätzen
+        # sagt, dort als Zahlen zum Vergleichen und Weitergeben.
+        scope_box = QWidget()
+        scope_rows = QVBoxLayout(scope_box)
+        scope_rows.setContentsMargins(0, 0, 0, 0)
+        scope_rows.setSpacing(TIGHT)
+        self.facts = QLabel("", scope_box)
+        self.facts.setWordWrap(True)
+        self.facts.setVisible(False)
+        self.review_scope = QLabel("", scope_box)
+        self.review_scope.setWordWrap(True)
+        self.review_scope.setTextFormat(Qt.TextFormat.PlainText)
+        self.review_scope.setAccessibleName(tr("Grundlage des Übergabestatus"))
+        scope_rows.addWidget(self.facts)
+        scope_rows.addWidget(self.review_scope)
+        self.review_scroll = QScrollArea(body)
+        self.review_scroll.setWidgetResizable(True)
+        self.review_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.review_scroll.setWidget(scope_box)
+        self.review_scroll.setMaximumHeight(4 * TARGET_SIZE)
+        self.review_scroll.setMinimumHeight(2 * TARGET_SIZE)
+        self.review_scroll.setAccessibleName(tr("Prüfumfang"))
+        self.review_scroll.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        scope = collapsible(
+            tr("Prüfumfang"),
+            self.review_scroll,
+            open_now=False,
+            contents=tr("Druckziel, Kennzahlen und Stand jeder Prüfung"),
+            heading_row=head,
+        )
+        scope.setParent(body)
+        self.review_toggle = _last_widget(head)
+        self.review_toggle.toggled.connect(self._toggle_review_scope)
+        self.review_toggle.hide()
+        layout.addWidget(scope)
+        layout.addWidget(self._findings_section, 1)
+        layout.addStretch(0)
+
+        # **Übergabe und Export stehen unten, außerhalb des Rollbereichs**
+        # (RM-508): Mit dem Export enden alle vier Hauptwege (§2.2), und er
+        # hatte keinen sichtbaren Knopf, nur *Datei → Exportieren* und Strg+E.
+        # Außerhalb des Rollbereichs, damit kein langer Bericht den letzten
+        # Schritt hinausschiebt — dieselbe Regel wie die Knopfzeile der Auswahl.
+        self._footer = QWidget(self)
+        footer = QHBoxLayout(self._footer)
+        footer.setContentsMargins(NORMAL, TIGHT, NORMAL, NORMAL)
+        footer.setSpacing(TIGHT)
+        self.to_slicer = QPushButton(tr("An den Slicer übergeben …"), self._footer)
+        self.to_slicer.setToolTip(
+            tr("Druckeinstellungen prüfen und das Teil an den eingerichteten Slicer geben.")
+        )
+        self.to_slicer.setStatusTip(self.to_slicer.toolTip())
+        self.to_slicer.clicked.connect(self.slicerRequested)
+        self.export_button = QPushButton(tr("Exportieren …"), self._footer)
+        self.export_button.setToolTip(
+            tr(
+                "Die Körper als STL, 3MF, OBJ, PLY, GLB oder STEP schreiben — "
+                "mit der Prüfung aus dem Bericht davor."
+            )
+        )
+        self.export_button.setStatusTip(self.export_button.toolTip())
+        self.export_button.clicked.connect(self.exportRequested)
+        for button in (self.to_slicer, self.export_button):
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            footer.addWidget(button)
+        self._footer.setVisible(False)
+
+        # **Der Inhalt rollt, statt sich zu stauchen** (``overlay.FittedScroller``):
+        # Erst gibt die Liste bis auf drei Zeilen nach (``_ReportList``), dann
+        # rollt der Kopf mit dem Rest.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self._scroller = FittedScroller(body, self)
+        outer.addWidget(self._scroller, 1)
+        outer.addWidget(self._footer)
+
+        # Die Tabulatortaste geht den Weg des Auges: Kopf, Prüfumfang, Filter,
+        # Liste, Befundzeile, Handlungen, unten Übergabe und Export.
+        chain = (
+            self.list_toggle,
+            self.review_toggle,
+            self.review_scroll,
+            self.search,
+            self.severity,
+            self.list,
+            self.finding_details_toggle,
+            self.finding_place,
+            self.to_slicer,
+            self.export_button,
+        )
+        for before, after in pairwise(chain):
+            QWidget.setTabOrder(before, after)
+
+    @override
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fit_head()
+
+    def _fit_head(self) -> None:
+        """Der Kopf ist eine Zeile, solange sie passt; sonst steht der Prüfumfang darunter.
+
+        Gemessen am Zustand in einer Zeile und an der Breite des Berichts, nicht
+        an gelegten Größen — sonst wechselte die Zeile bei jedem Legen hin und
+        her. Die Zähler werden nie gekürzt: „1 avertisse…“ stand im französischen
+        Fenster bei 1280 Punkten Breite.
+        """
+        head, spill, scope = self._head, self._head_spill, self.review_toggle
+        shown = [
+            widget.sizeHint().width()
+            for widget in (self.review_symbol, self.list_toggle, scope)
+            if not widget.isHidden()
+        ]
+        status = self.summary.fontMetrics().horizontalAdvance(self.summary.text())
+        wanted = sum(shown) + status + len(shown) * head.spacing()
+        bar = self._scroller.verticalScrollBar().sizeHint().width()
+        room = self.width() - 2 * NORMAL - bar
+        below = wanted > room
+        if below == (spill.indexOf(scope) >= 0):
+            return
+        (head if below else spill).removeWidget(scope)
+        (spill if below else head).addWidget(scope)
 
     def _toggle_finding_details(self, opened: bool) -> None:
-        self.finding_details_toggle.setArrowType(
-            Qt.ArrowType.DownArrow if opened else Qt.ArrowType.RightArrow
-        )
         self.finding_details.setVisible(opened and bool(self.list.selectedItems()))
+        self.contentGrew.emit()
 
     def _show_selected_place(self) -> None:
         items = self.list.selectedItems()
         if len(items) == 1:
             self._on_activated(items[0])
 
-    def _show_finding_context(self, item: QListWidgetItem | None) -> None:
-        """Grundlage und Ort bleiben sichtbar; dieselben technischen Werte sind aufklappbar."""
+    def _show_finding_context(self, item: QListWidgetItem | None, *, shows: bool = False) -> None:
+        """Die Befundzeile: Folge, Ort und Grundlage in einer Zeile (RM-508).
+
+        ``shows`` sagt, dass eine angebotene Handlung die Stelle schon zeigt —
+        dann gibt es keinen zweiten Knopf für denselben Weg (Durchsicht B10).
+        """
         with QSignalBlocker(self.finding_details_toggle):
             self.finding_details_toggle.setChecked(False)
-        self._toggle_finding_details(False)
+        self.finding_details_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self.finding_details.hide()
         self.finding_context.setVisible(item is not None)
         self.finding_details_toggle.setVisible(item is not None)
         self.finding_place.hide()
+        self.finding_consequence.hide()
         self.finding_details.clear()
         if item is None:
             self.finding_context.clear()
             return
         finding: Finding = item.data(Qt.ItemDataRole.UserRole)
         bodies = tuple(key for key in (item.data(_BODIES_ROLE) or ()) if key in self._live_objects)
-        body = self._live_objects.get(finding.object_id) if finding.object_id else None
-        located = body is not None and (
-            finding.location is not None or bool(finding.feature_ids) or bool(finding.outline)
-        )
-        if len(bodies) > 1:
-            place = tr("Betroffene Körper: {names}").format(
-                names=", ".join(self._names.get(key, key) for key in bodies)
-            )
-            self.finding_place.setText(tr("Betroffene Körper zeigen"))
+        place, way = finding_place(finding, bodies, self._live_objects, self._names)
+        if way and not shows:
+            self.finding_place.setText(way)
             self.finding_place.show()
-        elif located and body is not None:
-            place = tr("Am Körper „{name}“.").format(name=str(body.name))
-            self.finding_place.show()
-        elif body is not None:
-            place = tr("Körper „{name}“; keine genaue Stelle angegeben.").format(
-                name=str(body.name)
-            )
-            self.finding_place.setText(tr("Betroffenen Körper zeigen"))
-            self.finding_place.show()
-        elif finding.object_id is not None:
-            place = tr("Der betroffene Körper ist in diesem Stand nicht mehr vorhanden.")
-        else:
-            place = tr("Keine räumliche Stelle angegeben.")
-        if located and len(bodies) <= 1:
-            self.finding_place.setText(tr("Betroffene Stelle zeigen"))
+        self.finding_context.setText(finding_meta(finding, place))
         from app.ui.print_contract import finding_consequence
 
-        # Die Reihenfolge der Befundkarte (Produktkompass 4.3): was — steht in der Zeile —,
-        # welche Folge, wo, worauf die Aussage beruht; die Handlung folgt.
-        self.finding_context.setText(
-            "\n".join(
-                (
-                    finding_consequence(finding),
-                    place,
-                    tr("Grundlage: {source}").format(source=origin_label(finding.source)),
-                )
-            )
-        )
+        consequence = finding_consequence(finding)
+        self.finding_consequence.setText(consequence)
+        self.finding_consequence.setVisible(bool(consequence))
         self.finding_details.setPlainText(item.toolTip().replace(" · ", "\n"))
 
     def _show_offers(self) -> None:
@@ -5888,10 +6117,14 @@ class ReportPanel(QWidget):
         seine Beschriftung, seinen Handler und seine Sichtbarkeit einzeln
         nachziehen — drei Gelegenheiten für einen Knopf, der das Falsche tut.
         """
+        self._unfold_the_chosen()
         row = self._offer_row
         while row.count():
             item = row.takeAt(0)
             widget = item.widget() if item is not None else None
+            if widget is self.offer_effect:
+                # Der Satz zur Nebenfolge bleibt; er wandert nur mit dem Hauptknopf.
+                continue
             if widget is not None:
                 # **Verstecken, nicht elternlos machen** (RM-101).
                 # ``setParent(None)`` macht aus einem Kind-Widget ein
@@ -5915,7 +6148,6 @@ class ReportPanel(QWidget):
         finding: Finding | None = (
             items[0].data(Qt.ItemDataRole.UserRole) if len(items) == 1 else None
         )
-        self._show_finding_context(items[0] if finding is not None else None)
         handlers = handlers_of(self)
         offered = (
             handled_actions(
@@ -5932,8 +6164,15 @@ class ReportPanel(QWidget):
         primary = next(
             (action for action in offered if action.primary), offered[0] if offered else None
         )
+        # **Ein Zeige-Knopf** (Durchsicht B10): Bietet der Befund selbst das
+        # Zeigen an, entfällt der eigene Knopf der Befundzeile.
+        self._show_finding_context(
+            items[0] if finding is not None else None,
+            shows=any(action.id in _SHOWING_ACTIONS for action in offered),
+        )
         self.offer_effect.clear()
         self.offer_effect.hide()
+        previous: QWidget = self.finding_place
         for action in offered:
             button = QPushButton(str(action.label), self._offers)
             button.setToolTip(str(finding.message) if finding is not None else "")
@@ -5948,12 +6187,8 @@ class ReportPanel(QWidget):
                 effect_line = tr("Nebenfolge: {effect}").format(effect=str(effect))
                 button.setToolTip("\n".join((button.toolTip(), effect_line)).strip())
                 button.setAccessibleDescription(effect_line)
-                if action is primary:
-                    self.offer_effect.setText(
-                        tr("„{action}“: {effect}").format(
-                            action=str(action.label), effect=str(effect)
-                        )
-                    )
+                if action is primary and effect_worth_showing(action.id):
+                    self.offer_effect.setText(str(effect))
                     self.offer_effect.show()
             if action is primary:
                 make_primary(button)
@@ -5979,6 +6214,14 @@ class ReportPanel(QWidget):
             else:
                 button.clicked.connect(weak_slot(self, ReportPanel._run_action, action.id))
             row.addWidget(button)
+            if action is primary:
+                row.addWidget(self.offer_effect)
+            QWidget.setTabOrder(previous, button)
+            previous = button
+        if previous is not self.finding_place:
+            QWidget.setTabOrder(previous, self.to_slicer)
+        if not offered:
+            row.addWidget(self.offer_effect)
         self._offers.setVisible(bool(offered))
         self._emphasise_slicer(bool(self._live_objects) and not offered)
 
@@ -5995,6 +6238,28 @@ class ReportPanel(QWidget):
         font = self.to_slicer.font()
         font.setBold(ready)
         self.to_slicer.setFont(font)
+
+    def _unfold_the_chosen(self) -> None:
+        """Die gewählte Zeile ganz, jede andere mit ihrem ersten Satz (:func:`headline`)."""
+        changed = False
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            lines = item.data(_LINE_ROLE)
+            if not lines:
+                continue
+            wanted = lines[1] if item.isSelected() else lines[0]
+            if item.text() != wanted:
+                item.setText(wanted)
+                changed = True
+        if changed:
+            self._grew()
+
+    def follow_export(self, allowed: bool, tip: str) -> None:
+        """*Exportieren …* folgt dem Menüeintrag: dieselbe Sperre, derselbe Grund."""
+        self.export_button.setEnabled(allowed)
+        self.export_button.setToolTip(tip)
+        self.export_button.setStatusTip(tip)
+        self.export_button.setAccessibleDescription(tip)
 
     def _run_bound_bed_action(self, error: AppError, document: Document | None) -> None:
         """Der angezeigte Importumfang bleibt gebunden, der Handler prüft seine Gültigkeit."""
@@ -6113,18 +6378,12 @@ class ReportPanel(QWidget):
         """Filterzeile und Liste nur, wenn es etwas zu filtern gibt.
 
         Ein Bericht ohne Befunde ist der Normalfall — und er zeigte ein
-        Suchfeld, eine Filterauswahl und einen leeren Listenkasten. Drei
-        Elemente, von denen keines etwas tun kann, und der einzige Satz mit
-        Inhalt („Keine Befunde.") stand darüber wie eine Überschrift.
-
-        Die Schwelle ist **zwei**, nicht eins: Bei einem einzigen Befund kann
-        ein Filter nur ihn selbst treffen oder die Zeile „Kein Befund passt zu
-        …" erzeugen. Beides ist keine Auskunft, die jemand gesucht hat.
+        Suchfeld, eine Filterauswahl und einen leeren Listenkasten. Gefiltert
+        wird erst ab :data:`FILTER_FROM` Zeilen; darunter überblickt man die
+        Liste ohne Werkzeug.
         """
         count = self.list.count()
         self.list.setVisible(bool(count))
-        layout = self._rows
-        layout.setStretch(layout.count() - 1, 0 if count else 1)
         for widget in (self.search, self.severity):
             widget.setVisible(count >= FILTER_FROM)
         if count < FILTER_FROM and (self.search.text() or self.severity.currentIndex()):
@@ -6133,6 +6392,34 @@ class ReportPanel(QWidget):
             # zurücknehmen kann.
             self.search.clear()
             self.severity.setCurrentIndex(0)
+        self._settle_list()
+
+    def _settle_list(self) -> None:
+        """Die Liste klappt mit ihrem Zähler: offen bei Fehlern und Warnungen.
+
+        **Hinweise allein beginnen zugeklappt** (RM-508): Sie verlangen keine
+        Entscheidung, und offen nahmen sie bei 1280 x 800 rund 250 Punkte
+        Karte für Sätze wie „Ausgehöhlt.“. Der Zähler im Kopf nennt sie und
+        öffnet sie. Wer selbst klappt, behält das, bis eine Warnung kommt oder
+        geht. Ohne Befund gibt es keine Klappe.
+        """
+        count = self.list.count()
+        self.list_toggle.setVisible(bool(count))
+        section = self._findings_section
+        if not count:
+            self._list_follows = None
+            section.hide()
+        else:
+            urgent = any(
+                self.list.item(row).data(Qt.ItemDataRole.UserRole).severity != "info"
+                for row in range(count)
+            )
+            if self._list_follows != urgent:
+                self._list_follows = urgent
+                self.list_toggle.setChecked(urgent)
+            section.show()
+        self._settle_stretch()
+        self._fit_head()
 
     def _refilter(self) -> None:
         """Blendet aus, was nicht passt — gelöscht wird nichts.
@@ -6166,34 +6453,6 @@ class ReportPanel(QWidget):
         self._nothing.setText(str(sentence).format(term=term, severity=level))
         self._nothing.setVisible(True)
 
-    def set_rebuild_selection(self, objects: Sequence[str]) -> None:
-        """Der Bericht bietet den Nachbau für genau den gewählten Körper an."""
-        self._rebuild_selection = tuple(objects)
-        self._update_rebuild_action()
-
-    def _update_rebuild_action(self) -> None:
-        chosen = self._rebuild_selection
-        body = self._live_objects.get(chosen[0]) if len(chosen) == 1 else None
-        note = (
-            tr("Nachbau prüfen für {name}. Die Maße werden anschließend änderbar.").format(
-                name=str(body.name)
-            )
-            if body is not None
-            else tr("Wählen Sie genau ein Modell im Objektbaum oder in der Ansicht.")
-        )
-        if self._stopped_at is not None:
-            note = tr("Der Nachbau braucht ein vollständig berechnetes Modell.")
-        self.rebuild.setVisible(bool(self._live_objects))
-        self.rebuild_note.setVisible(bool(self._live_objects))
-        self.rebuild.setEnabled(body is not None and self._stopped_at is None)
-        self.rebuild.setToolTip(note)
-        self.rebuild.setAccessibleDescription(note)
-        self.rebuild_note.setText(note)
-
-    def _request_rebuild(self) -> None:
-        if self.rebuild.isEnabled() and len(self._rebuild_selection) == 1:
-            self.rebuildRequested.emit(self._rebuild_selection[0])
-
     def show_result(
         self, result: EvaluationResult | None, document: Document | None = None
     ) -> None:
@@ -6207,7 +6466,6 @@ class ReportPanel(QWidget):
         self._document = document
         self._stopped_at = result.stopped_at if result is not None else None
         self._live_objects = dict(result.scene.objects) if result is not None else {}
-        self._update_rebuild_action()
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
         # Sie stehen im Ergebnis, das ohnehin hereinkommt — die Kennung „obj_2"
         # wäre die zweitbeste Antwort auf „welcher denn".
@@ -6447,6 +6705,7 @@ class ReportPanel(QWidget):
             # Körper: Jedes Mitglied fasst die seines Körpers schon zusammen.
             amount = sum(_lost_count(one) for one in members)
             message = f"({amount}) {sentence}"
+            short = f"({amount}) {headline(sentence)}"
             # Gleicher Satz genügt nicht: Zwei Schritte wären in der Liste
             # optisch dieselbe Handlung, obwohl ihre Klicks an verschiedene
             # Ziele führen. „Schritt" ist die Sprache des sichtbaren Verlaufs
@@ -6487,7 +6746,9 @@ class ReportPanel(QWidget):
                 context.append(step)
             if context:
                 message = f"{message} — {' · '.join(context)}"
-            item = QListWidgetItem(message)
+                short = f"{short} — {' · '.join(context)}"
+            item = QListWidgetItem(short)
+            item.setData(_LINE_ROLE, (short, message))
             item.setData(_BUNDLE_ROLE, len(members))
             if len(bodies) > 1:
                 item.setData(_BODIES_ROLE, bodies)
@@ -6576,7 +6837,11 @@ class ReportPanel(QWidget):
                 )
             elif lost > 1:
                 finding = dataclasses.replace(finding, message=f"({lost}) {finding.message}")
-            item = QListWidgetItem(_line_for(finding, self._names))
+            short = _line_for(
+                dataclasses.replace(finding, message=headline(str(finding.message))), self._names
+            )
+            item = QListWidgetItem(short)
+            item.setData(_LINE_ROLE, (short, _line_for(finding, self._names)))
         # Die Farbe folgt der Fläche, auf der sie landet. Die Rollenfarben sind
         # für den dunklen Untergrund gewählt; auf der weißen Liste des hellen
         # Themas brachte Bernstein 2,22 und das Hinweisblau 2,67 — jede Zeile
@@ -6653,13 +6918,23 @@ class ReportPanel(QWidget):
             self._alerts = alerts
             self._alert_counts = (counts["error"], counts["warning"])
             self.alertsChanged.emit(alerts)
-        # Der Knopf zum Slicer steht, sobald kein Fehler mehr im Weg ist und
-        # ein Körper da ist — auch neben Warnungen und Hinweisen, die den
-        # Druck nicht verhindern. Ohne Körper gibt es nichts zu übergeben.
-        self.to_slicer.setVisible(bool(self._live_objects))
-        self._emphasise_slicer(bool(self._live_objects) and self._offers.isHidden())
-        if not self._live_objects and not any(counts.values()):
+        # Übergabe und Export stehen, sobald ein Körper da ist — auch neben
+        # Warnungen und Hinweisen, die den Druck nicht verhindern. Ohne Körper
+        # gibt es nichts zu übergeben.
+        live = bool(self._live_objects)
+        self._footer.setVisible(live)
+        self._emphasise_slicer(live and self._offers.isHidden())
+        # **Zähler ohne Nullen** (RM-508): „0 x Fehler“ stand über jedem
+        # sauberen Modell. Was es nicht gibt, wird nicht gezählt; die Zahl
+        # trägt ihr Wort, das Wort seinen Plural.
+        self.list_toggle.setText(
+            " · ".join(count_phrases(counts["error"], counts["warning"], counts["info"]))
+        )
+        self.review_toggle.setVisible(live or any(counts.values()))
+        if not live and not any(counts.values()):
+            self.review_symbol.clear()
             self.summary.setText(tr("Keine Befunde."))
+            self.review_reason.hide()
             return
         from app.ui.print_contract import handoff_state
 
@@ -6672,11 +6947,14 @@ class ReportPanel(QWidget):
         symbol = f"severity-{severity}" if severity != "info" else "done"
         self.review_symbol.setPixmap(icon(symbol, self).pixmap(TARGET_SIZE // 2))
         self.review_symbol.setAccessibleName(status)
-        self.summary.setText(
-            f"{status}\n{counts['error']} × {tr('Fehler')} · "
-            f"{counts['warning']} × {tr('Warnung')} · "
-            f"{counts['info']} × {tr('Hinweis')}"
-        )
+        self.summary.setText(status)
+        self._fit_head()
+        # **Unvollständig sagt, warum** (Durchsicht B17): der erste Grund unter
+        # dem Kopf, alle im Prüfumfang. Steht ein Fehler da, sagt der Status
+        # schon mehr als die fehlende Prüfung.
+        reason = self._review_missing[0] if self._review_missing and not counts["error"] else ""
+        self.review_reason.setText(reason)
+        self.review_reason.setVisible(bool(reason))
 
     def set_review_context(self, basis: str, missing: Sequence[str]) -> None:
         """Der Status beschreibt dieselbe Grundlage wie der Druckerknopf."""
@@ -6685,12 +6963,21 @@ class ReportPanel(QWidget):
         self.review_scope.setText("\n".join(dict.fromkeys((*basis.splitlines(), *missing))))
         self._count_up()
 
-    def _toggle_review_scope(self, shown: bool) -> None:
-        self.review_scroll.setVisible(shown)
-        self.review_toggle.setArrowType(
-            Qt.ArrowType.DownArrow if shown else Qt.ArrowType.RightArrow
-        )
+    def _toggle_review_scope(self, _shown: bool) -> None:
+        """Auf- und Zuklappen besorgt :func:`collapsible`; die Karte misst neu."""
         self.contentGrew.emit()
+
+    def _list_toggled(self, _opened: bool) -> None:
+        """Die Liste klappt — der freie Platz wandert, die Karte misst neu."""
+        self._settle_stretch()
+        self.contentGrew.emit()
+
+    def _settle_stretch(self) -> None:
+        """Der freie Platz gehört der offenen Liste, sonst dem Stretch darunter."""
+        opened = bool(self.list.count()) and self.list_toggle.isChecked()
+        rows = self._rows
+        rows.setStretchFactor(self._findings_section, 1 if opened else 0)
+        rows.setStretch(rows.count() - 1, 0 if opened else 1)
 
     def alerts(self) -> int:
         """Wie viele Befunde nach Aufmerksamkeit verlangen — Fehler und
@@ -6755,8 +7042,10 @@ class ReportPanel(QWidget):
         # aus dem Kern (:func:`units.format_volume`). Ohne Argument, weil diese
         # Karte keine eigene Einheit führt — die Anzeigeeinheit ist ein
         # Zustand, kein Feld.
+        # Je Wert ein Name (RM-508): „66,6 cm³ · 2 Teile“ stand ohne Wort für
+        # die erste Zahl über der Liste; im Prüfumfang heißt sie, was sie ist.
         self.facts.setText(
-            f"{closed} · {volume(content)} · {parts} {tr('Teil') if parts == 1 else tr('Teile')}"
+            " · ".join((closed, value_line("volume_mm3", content), value_line("parts", parts)))
         )
         self.facts.setVisible(True)
 
@@ -10803,6 +11092,7 @@ def collapsible(
     open_now: bool = True,
     contents: str = "",
     remember: str = "",
+    heading_row: QBoxLayout | None = None,
 ) -> QWidget:
     """Ein Abschnitt, der sich zuklappen lässt — §2.5 verlangt genau das.
 
@@ -10824,6 +11114,14 @@ def collapsible(
     **Mit ``remember`` merkt er sich, wie der Kunde ihn verließ** — über
     Dialoge und Neustarts hinweg (:func:`keep_sections_in`). Ohne Merker
     gilt ``open_now``.
+
+    **Mit ``heading_row`` steht die Überschrift in einer Zeile mit anderem**
+    (RM-508: der Kopf des Prüfberichts ist eine Zeile, „Status · Zähler ·
+    Prüfumfang“). Sie ist dann so breit wie ihr Titel, ohne Linie darunter,
+    in Grundschrift; der Wrapper trägt nur den Inhalt. Was zugeklappt darin
+    steht, nennen Kurzhilfe und Beschreibung, denn eine Zeile darunter wäre
+    die zweite, die der Kopf nicht haben soll. Die Überschrift ist das letzte
+    Element, das die Funktion in ``heading_row`` legt.
     """
     if remember:
         open_now = _OPEN_SECTIONS.get(remember, open_now)
@@ -10843,12 +11141,20 @@ def collapsible(
     heading.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
     heading.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
     content.setVisible(open_now)
-    set_level(heading, "section")
-    heading.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    inline = heading_row is not None
+    set_level(heading, "body" if inline else "section")
+    heading.setSizePolicy(
+        # Fest: Qt kürzte eine Überschrift in der Zeile sonst mitten im Wort.
+        QSizePolicy.Policy.Fixed if inline else QSizePolicy.Policy.Expanding,
+        QSizePolicy.Policy.Fixed,
+    )
+    if inline:
+        heading.setProperty("inline", True)
     summary: _SectionSummary | None = None
     if contents:
         heading.setToolTip(contents)
         heading.setAccessibleDescription(contents)
+    if contents and not inline:
         summary = _SectionSummary(contents, heading, wrapper)
         summary.setObjectName("sectionSummary")
         # Eingerückt bis unter den Titel, nicht unter den Pfeil.
@@ -10868,7 +11174,10 @@ def collapsible(
     layout = QVBoxLayout(wrapper)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
-    layout.addWidget(heading)
+    if heading_row is not None:
+        heading_row.addWidget(heading)
+    else:
+        layout.addWidget(heading)
     if summary is not None:
         layout.addWidget(summary)
     layout.addWidget(content)

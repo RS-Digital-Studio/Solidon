@@ -11,7 +11,13 @@ import ast
 from pathlib import Path
 
 import app.core
-from app.core.action_effects import NOTHING, SIDE_EFFECTS, side_effect
+from app.core.action_effects import (
+    NOTHING,
+    SIDE_EFFECTS,
+    WHEN_APPLIED,
+    effect_worth_showing,
+    side_effect,
+)
 
 
 def _core_action_ids() -> set[str]:
@@ -54,3 +60,19 @@ def test_the_actions_that_move_or_cut_say_so() -> None:
         assert "nichts" not in str(SIDE_EFFECTS[identifier])
     assert "alle Körper" in str(SIDE_EFFECTS["arrange_on_bed"])
     assert SIDE_EFFECTS["show_locations"] is NOTHING
+
+
+def test_only_an_effect_that_changes_something_stands_under_the_main_button() -> None:
+    """Die Floskeln bleiben in Kurzhilfe und Beschreibung, nicht unter dem Knopf (RM-508).
+
+    „Ändert nichts am Modell.“ stand unter der Mehrzahl aller Handlungen und
+    verdrängte im Prüfbericht die nächste Zeile.
+    """
+    floskeln = {key for key, effect in SIDE_EFFECTS.items() if effect in (NOTHING, WHEN_APPLIED)}
+    assert len(floskeln) > len(SIDE_EFFECTS) / 2, "sonst prüft die Gegenprobe nichts"
+    assert not any(effect_worth_showing(key) for key in floskeln)
+    assert all(effect_worth_showing(key) for key in set(SIDE_EFFECTS) - floskeln)
+    assert effect_worth_showing("arrange_on_bed")
+    assert not effect_worth_showing("show_location")
+    assert not effect_worth_showing("correct_input")
+    assert not effect_worth_showing("unbekannt")

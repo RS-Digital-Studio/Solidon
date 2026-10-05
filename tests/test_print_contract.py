@@ -6,7 +6,7 @@ from app.core.knowledge import profiles
 from app.core.scene import EvaluationResult
 from app.core.scene.project import new_project
 from app.core.types import Finding, MaterialSlot, Scene
-from app.ui.print_contract import handoff_state, print_target
+from app.ui.print_contract import finding_consequence, handoff_state, print_target
 from tests.helpers import make_object
 
 
@@ -249,3 +249,112 @@ def test_a_project_without_its_own_printer_opens_with_the_customers_defaults(tmp
     session.open_project(path, "centauri-carbon-2", "petg")
     document = session.project.document
     assert (document.printer, document.material) == ("bambu-a1", "abs")
+
+
+# --- Die Befundkarte (RM-508) ---------------------------------------------------
+
+
+def test_the_finding_line_says_consequence_place_and_basis_in_one_line():
+    """„Hinweis · Dose · intern geschätzt“ statt dreier Sätze (Entscheidung Robert, 05.10.2026)."""
+    from app.ui.panels import finding_meta
+
+    hint = Finding("hollow.done", "info", "Ausgehöhlt.", object_id="obj_1")
+    assert finding_meta(hint, "Dose") == "Hinweis · Dose · intern geschätzt"
+    measured = Finding("gcode.time", "warning", "Länger als geschätzt.", source="gcode")
+    assert finding_meta(measured, "") == "Warnung · aus G-Code"
+
+
+def test_the_finding_line_starts_with_a_capital_in_every_language():
+    """Die Kataloge schreiben die Schwere klein, weil sie sonst im Satz steht."""
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.panels import finding_meta
+
+    install_language("en")
+    set_language("en")
+    try:
+        line = finding_meta(Finding("hollow.done", "info", "Hollowed."), "Box")
+    finally:
+        set_language("de")
+    assert line[0].isupper(), line
+    assert "Box" in line
+
+
+def test_a_consequence_sentence_only_where_the_finding_tips_the_target():
+    """Ein eigener Folgesatz nur bei echter Folge: Ein Fehler lässt die Übergabe nicht empfehlen."""
+    assert finding_consequence(Finding("a", "error", "Kaputt.")).startswith("Folge:")
+    assert finding_consequence(Finding("a", "warning", "Riskant.")) == ""
+    assert finding_consequence(Finding("a", "info", "Gut.")) == ""
+
+
+def test_the_place_is_named_and_shown_only_where_the_finding_has_one():
+    """Kein erfundener Ort: Ohne Stelle zeigt der Knopf den Körper, ohne Körper fehlt er."""
+    from app.ui.panels import finding_place
+
+    body = make_object("obj_1")
+    live = {"obj_1": body}
+    names = {"obj_1": str(body.name), "obj_2": "Deckel"}
+    located = Finding("a", "warning", "Hier.", object_id="obj_1", location=(1.0, 2.0, 3.0))
+    assert finding_place(located, (), live, names) == (str(body.name), "Stelle zeigen")
+    loose = Finding("a", "info", "Irgendwo.", object_id="obj_1")
+    assert finding_place(loose, (), live, names) == (str(body.name), "Körper zeigen")
+    gone = Finding("a", "info", "Weg.", object_id="obj_9")
+    assert finding_place(gone, (), live, names) == ("Körper nicht mehr vorhanden", "")
+    assert finding_place(Finding("a", "info", "Ortlos."), (), live, names) == ("", "")
+    bundle = finding_place(loose, ("obj_1", "obj_2"), live, names)
+    assert bundle == (f"{body.name}, Deckel", "Körper zeigen")
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        (
+            "Die dünnste Stelle ist schmaler als die Mindestbahnbreite. Eine kleinere Düse wählen.",
+            "Die dünnste Stelle ist schmaler als die Mindestbahnbreite.",
+        ),
+        ("Ausgehöhlt. Die Wandstärke stimmt.", "Ausgehöhlt."),
+        ("Dünner als 0,16 mm. 3 Stellen.", "Dünner als 0,16 mm."),
+        ("Zum Beispiel z. B. eine Bohrung.", "Zum Beispiel z. B. eine Bohrung."),
+        ("Use a finer nozzle, e.g. the 0.2 mm one.", "Use a finer nozzle, e.g. the 0.2 mm one."),
+        ("Deckel erzeugt — das Spiel kommt aus dem Materialprofil.", None),
+    ],
+)
+def test_a_report_row_reads_as_its_first_sentence(message, expected):
+    """Die Liste zeigt je Befund seinen ersten Satz; die gewählte Zeile steht ganz da (RM-508)."""
+    from app.ui.panels import headline
+
+    assert headline(message) == (message if expected is None else expected)
+
+
+def test_every_value_in_a_report_row_carries_its_name():
+    """„— Deckel · 0 mm³ · 100 %“ ließ raten, welche Zahl was ist (Durchsicht B18)."""
+    from app.ui.labels import value_line
+    from app.ui.panels import _line_for
+
+    finding = Finding(
+        "orient.saves_support",
+        "info",
+        "Anders gedreht braucht das Teil weniger Stützen.",
+        object_id="obj_1",
+        values={"support_cm3": 0.0, "saved_percent": 100.0},
+    )
+    line = _line_for(finding, {"obj_1": "Deckel"})
+    for key, value in finding.values.items():
+        assert value_line(key, value) in line, line
+    collision = Finding(
+        "arrange.collision",
+        "warning",
+        "Zwei Objekte überschneiden sich.",
+        values={"a": "A", "b": "B"},
+    )
+    assert "— A · B" in _line_for(collision), "die beiden Körper sind selbst Namen"
+
+
+def test_counts_leave_out_what_is_not_there():
+    """„0 x Fehler“ stand über jedem sauberen Modell (Durchsicht B17)."""
+    from app.ui.tab_signal import count_phrases, counted
+
+    assert count_phrases(0, 2, 4) == ["2 Warnungen", "4 Hinweise"]
+    assert count_phrases(1, 1, 1) == ["1 Fehler", "1 Warnung", "1 Hinweis"]
+    assert count_phrases(0, 0, 0) == []
+    assert counted(2, 0) == "2 Fehler"

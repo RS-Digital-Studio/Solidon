@@ -259,6 +259,32 @@ and_names_the_way_on`.
   schlechter als eine halb verdeckte; die Beschriftung trägt `always_visible`
   und steht in jedem Fall.
 
+### Der Bericht zeigt zuerst die Befunde (RM-508)
+
+Die Durchsicht der Oberfläche 0.5.2 zählte im Hauptfenster rund 290 Wörter,
+175 davon im Prüfbericht und nur 88 davon Befundtext; im Handbuchbild belegte
+der Kopf 62 % der Karte, und von vier Befunden war einer zu sehen. Gerüst war:
+ein gesperrter *Modell nachbauen* mit einem Satz ohne Auswahl, „0 × Fehler“,
+die Kennzahlen, ein Filter ab zwei Befunden, unter jedem Befund drei Sätze für
+Folge, Ort und Grundlage, zwei Knöpfe für denselben Kameraflug und „Ändert
+nichts am Modell.“ unter dem Hauptknopf (67 von 109 Nebenfolgen sind eine der
+beiden Floskeln). Robert entschied am 05.10.2026, Folge, Ort und Grundlage als
+eine Zeile zu führen („Hinweis · Dose · intern geschätzt“) und einen Folgesatz
+nur bei echter Folge; das schreibt den Vertrag aus RM-090 (Produktkompass
+§4.3) fort. Echt ist die Folge beim Fehler: Er allein lässt die Übergabe nicht
+empfehlen.
+
+Hinweise allein klappen zu, weil sie keine Entscheidung verlangen und offen bei
+1280 × 800 rund 250 Punkte Karte nahmen; die Zahl im Kopf öffnet sie (RM-511
+übernahm die Abnahme „höchstens 120 px“). Die Liste zeigt je Befund seinen
+ersten Satz, weil der zweite meist Rat in Prosa ist (RM-509 kürzt ihn); die
+gewählte Zeile steht ganz da, mit ihren Handlungen darunter. Übergabe und
+Export stehen außerhalb des Rollbereichs, denn mit dem Export enden alle vier
+Hauptwege, und vorher gab es dafür keinen sichtbaren Knopf.
+
+Gewählt wird beim Drücken, weil die Karte ihre Höhe beim Wählen ändert: Beim
+Loslassen läge die Zeile woanders, und Qt meldete keinen Klick.
+
 ## Das Merkmalfenster
 
 **Und darüber schweigt das Merkmalfenster.** Sein leerer Zustand ist ein
@@ -764,6 +790,11 @@ Befehlspalette findet jede Zeile der Einstellungen unter ihrem Namen
 es freigibt.
 
 ## Rückmeldung und Fehlerbericht
+
+Die Sitzung für den Anhang ist eine Kopie von Dokument und Bericht mit eigener
+Quellzuordnung; unveränderliche Datei-Bytes werden geteilt, nicht kopiert.
+`report.log_tail()` liest rückwärts höchstens 1 MiB für die letzten 400 Zeilen —
+ein großes Protokoll von vorn zu lesen hielt den Dialog an.
 
 *Bis zur Verdichtung in `oberflaeche.md`:*
 

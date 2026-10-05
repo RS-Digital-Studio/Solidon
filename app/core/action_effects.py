@@ -194,3 +194,15 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
 def side_effect(action_id: str) -> TranslatableText | None:
     """Der Satz zur Nebenfolge einer Handlung, ``None`` für eine unbekannte Kennung."""
     return SIDE_EFFECTS.get(action_id)
+
+
+def effect_worth_showing(action_id: str) -> bool:
+    """Ob die Nebenfolge mehr sagt als „ändert nichts“ oder „erst beim Übernehmen“.
+
+    Nur dann steht sie sichtbar unter dem Hauptknopf (RM-508): Die beiden
+    Floskeln :data:`NOTHING` und :data:`WHEN_APPLIED` standen unter der Mehrzahl
+    aller Handlungen und verdrängten im Bericht die nächste Zeile. Sie bleiben
+    in Kurzhilfe und Beschreibung des Knopfes.
+    """
+    effect = SIDE_EFFECTS.get(action_id)
+    return effect is not None and effect not in (NOTHING, WHEN_APPLIED)

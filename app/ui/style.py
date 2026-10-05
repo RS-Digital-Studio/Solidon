@@ -1569,6 +1569,12 @@ QToolButton#sectionHeading {{
 QToolButton#sectionHeading:hover {{ background: {hover}; }}
 QToolButton#sectionHeading:checked {{ background: transparent; color: {text}; }}
 QToolButton#sectionHeading:checked:hover {{ background: {hover}; }}
+/* Eine Klappe in einer Zeile mit anderem (``collapsible(heading_row=)``, der
+   Kopf des Prüfberichts): ohne Linie, so knapp wie ein Wort in der Zeile. */
+QToolButton#sectionHeading[inline="true"] {{
+    border-bottom: none;
+    padding: {TIGHT}px {TIGHT}px;
+}}
 
 /* Eine Beispielkachel ist semantisch und funktional ein großer Knopf mit zwei
    Zeilen darin. Ihre eigene Innenkante kommt aus dem Layout; die gewöhnliche

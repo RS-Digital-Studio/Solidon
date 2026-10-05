@@ -360,7 +360,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   Auswertungsarbeiter. `PrintTarget` hält übersetzbare Texte für Sprachwechsel
   ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
   und wiederholt offene Prüfungen nicht.
-- **Befundkarte**: Folge, Ort, Grundlage; Nebenfolge aus `core.action_effects`.
+- **Befundkarte**: `finding_meta` als eine Zeile; Nebenfolge `effect_worth_showing`.
 - **Änderung und Übergabe**: `ExplainedDifference` erklärt die Szenen der
   Kerndifferenz, `review_difference` nur Neues und Weggefallenes. Belege aus
   dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe

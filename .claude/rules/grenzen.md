@@ -108,6 +108,9 @@ Robert).
   `QUICK_FEATURE`) — eine Empfehlung, keine Aufzählung; Unvollständigkeit ist
   hier kein Fehler. Aus dem Register herleiten lässt sie sich nicht:
   Kategorie-Rang und Kürzel sind kein Häufigkeitssignal.
+- **Am einen gewählten Körper steht *Modell nachbauen* bei den Hauptaktionen**
+  (`selection_operations.REBUILD`, RM-508): ein Dialog, keine Operation; er
+  steht nur, wenn er geht (`MainWindow._rebuild_allowed`), nie im Bericht.
 - **Das Merkmal hat Vorrang vor der Menge** — wer eine Bohrung anklickt,
   meint sie, nicht den Körper darunter; bei mehreren markierten Zeilen gibt der
   Baum kein gewähltes Merkmal zurück. Mehrere markierte Merkmalszeilen eines
