@@ -69,7 +69,6 @@ FROZEN_COUNTS: dict[str, int] = {
     "op_doc": 42,
     "param_doc": 56,
     "tooltip": 3,
-    "tour": 58,
 }
 
 

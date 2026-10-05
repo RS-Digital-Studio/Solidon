@@ -225,41 +225,36 @@ TOURS: Final[tuple[Tour, ...]] = (
     Tour(
         example_id="weg1-halterung-anpassen",
         intro=_(
-            "Der häufigste Fall: eine heruntergeladene Halterung, die fast passt. "
-            "Dieses Projekt hat den Weg schon einmal durchgespielt — jetzt sind Sie dran."
+            "Der häufigste Fall: eine heruntergeladene Halterung, die fast passt. Jetzt passen "
+            "Sie sie selbst an."
         ),
         steps=(
             TourStep(
                 shows="history",
                 text=_(
-                    "Sehen Sie links in den Verlauf: vier Schritte — laden, reparieren, "
-                    "auf das Bett, bohren. Das Modell ist hier nicht das Netz, sondern "
-                    "diese Liste, und jeder Schritt bleibt änderbar."
+                    "Links im Verlauf stehen vier Schritte: laden, reparieren, auf das Bett, "
+                    "bohren. Jeder bleibt änderbar."
                 ),
             ),
             TourStep(
                 shows="history",
                 text=_(
-                    "Öffnen Sie den letzten Schritt „Bohrung setzen“ mit einem "
-                    "Doppelklick im Verlauf und ändern Sie den Durchmesser — etwa auf "
-                    "6 mm. Das Loch wird nicht neu gebohrt: es ist derselbe Schritt "
-                    "mit einer anderen Zahl."
+                    "Öffnen Sie „Bohrung setzen“ im Verlauf mit einem Doppelklick und ändern Sie "
+                    "den Durchmesser, etwa auf 6 mm."
                 ),
                 done=_op_number_changed("drill_hole", "diameter", 4.2),
             ),
             TourStep(
                 text=_(
-                    "Drücken Sie Strg+Z. Zurückgenommen wird immer der letzte Schritt, und das "
-                    "war die Zahl: Der Durchmesser steht wieder auf 4,2 mm, die Bohrung bleibt. "
-                    "Erst ein zweites Strg+Z nähme den Bohrschritt selbst zurück."
+                    "Drücken Sie Strg+Z. Der Durchmesser steht wieder auf 4,2 mm, die Bohrung "
+                    "bleibt."
                 ),
                 done=_undo_put_back("drill_hole", "diameter", 4.2),
             ),
             TourStep(
                 text=_(
-                    "Holen Sie ihn mit Strg+Y zurück. Nichts geht hier verloren: "
-                    "Rückgängig und Wiederholen gelten für jeden Schritt, auch nächste "
-                    "Woche noch."
+                    "Holen Sie die Änderung mit Strg+Y zurück. Rückgängig und Wiederholen gelten "
+                    "für jeden Schritt."
                 ),
                 done=_op_restored("drill_hole"),
             ),
@@ -282,17 +277,14 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # (``evaluate.check_form_deviation``), und an dieser Halterung
                 # liegen sie nicht.
                 text=_(
-                    "Rechts steht der Prüfbericht — hier zwei Hinweise und keine Warnung: "
-                    '„nichts zu reparieren" für '
-                    "dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen "
-                    "ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung."
+                    "Rechts im Prüfbericht stehen zwei Hinweise: nichts zu reparieren, und die "
+                    "Bohrung wurde für den Druck vergrößert."
                 ),
             ),
         ),
         closing=_(
-            "Das war Weg 1: einlesen, reparieren, ändern. Am Ende steht "
-            "Datei → Exportieren — die Datei geht in den Slicer, und der macht den "
-            "G-Code."
+            "Das war Weg 1. Datei → Exportieren gibt das Teil an den Slicer weiter, der den "
+            "G-Code macht."
         ),
     ),
     Tour(
@@ -305,31 +297,28 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="parameters",
                 text=_(
-                    "Links unter Parameter stehen Breite, Tiefe und Stärke. Ändern "
-                    "Sie hier eine Zahl; alle passenden Schritte im Verlauf verwenden "
-                    "sie automatisch."
+                    "Links unter Parameter stehen Breite, Tiefe und Stärke. Alle Schritte, die "
+                    "sie verwenden, folgen jeder Änderung."
                 ),
             ),
             TourStep(
                 text=_(
-                    "Ändern Sie den Wert von Breite — etwa auf 90. Das ganze Teil "
-                    "folgt sofort, und die Schraubenlöcher bleiben, wo sie hingehören."
+                    "Stellen Sie Breite etwa auf 90. Das Teil folgt, und die Schraubenlöcher "
+                    "bleiben an ihrem Platz."
                 ),
                 done=_parameter_changed("breite", 60.0),
             ),
             TourStep(
                 text=_(
-                    "Die Schraubenlöcher und die Versteifung sind Bausteine: die Maße "
-                    "für M4 kommen aus der Normteiltabelle, das Spiel aus dem "
-                    "Materialprofil. Der ganze Katalog liegt unter Strg+K."
+                    "Schraubenlöcher und Versteifung sind Bausteine, ihre Maße kommen aus der "
+                    "Normteiltabelle und dem Materialprofil. Der Katalog liegt unter Strg+K."
                 )
             ),
             TourStep(
                 shows="tree",
                 text=_(
-                    "Setzen Sie selbst einen Baustein: den Halter im Objektbaum "
-                    "anklicken, dann rechts unter *Auswahl* auf *Bausteine* — der "
-                    "Katalog zeigt jeden mit Bild."
+                    "Setzen Sie einen Baustein: den Halter im Objektbaum anklicken, dann rechts "
+                    "unter Auswahl auf „Bausteine“."
                 ),
                 done=_parts_inserted(4),
             ),
@@ -343,33 +332,26 @@ TOURS: Final[tuple[Tour, ...]] = (
     Tour(
         example_id="weg3-generiert-aufbereiten",
         intro=_(
-            "Dieser Körper kommt aus einem Generator. So ein Netz ist eine "
-            "Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der "
-            "Reparaturkette."
+            "Dieser Körper kommt aus einem Generator. Weg 3 beginnt deshalb mit der Reparaturkette."
         ),
         steps=(
             TourStep(
                 shows="history",
                 text=_(
-                    "Die ersten Schritte im Verlauf sind Erzeugen und Reparieren: "
-                    "generierte Netze kommen mit Löchern und doppelten Flächen, und "
-                    "die Kette schließt sie, bevor irgendetwas anderes passiert."
+                    "Die ersten Schritte im Verlauf sind Erzeugen und Reparieren. Die Reparatur "
+                    "schließt Löcher und entfernt doppelte Flächen."
                 ),
             ),
             TourStep(
                 shows="report",
                 text=_(
-                    "Rechts im Prüfbericht steht, was die Kette gefunden und "
-                    "geschlossen hat — mit Herkunft: eine Schätzung wird nie als "
-                    "Messung ausgegeben."
+                    "Rechts im Prüfbericht steht, was die Reparatur gefunden und geschlossen hat."
                 ),
             ),
             TourStep(
                 shows="viewport",
                 text=_(
-                    "Maße entstehen danach als eigene Schritte, nicht durch Vermessen "
-                    "des Netzes: klicken Sie eine Fläche an, dann rechts unter "
-                    "*Auswahl* auf *Bohrung setzen*."
+                    "Klicken Sie eine Fläche an, dann rechts unter Auswahl auf „Bohrung setzen“."
                 ),
                 done=_op_present("drill_hole"),
             ),
@@ -382,18 +364,15 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
         ),
         closing=_(
-            "Das war Weg 3. Ein extern erzeugtes GLB- oder STL-Modell ziehen Sie "
-            "in Solidon, prüfen es und bearbeiten es danach wie jeden anderen Körper. "
-            "Aus Text oder Bild erzeugt der Dialog *Modell erzeugen* ein Modell über "
-            "ein lokales ComfyUI, sobald es eingerichtet ist."
+            "Ein extern erzeugtes GLB oder STL bearbeiten Sie wie jeden Körper. „Modell "
+            "erzeugen“ erzeugt Modelle über ein lokales ComfyUI."
         ),
     ),
     Tour(
         example_id="weg4-figur-formen",
         intro=_(
-            "Manche Formen lassen sich nicht bemaßen. Weg 4 baut die grobe Gestalt "
-            "aus Grundkörpern und formt sie dann von Hand — dieses Beispiel hört "
-            "genau dort auf, wo Sie den Pinsel nehmen."
+            "Manche Formen lassen sich nicht bemaßen. Weg 4 baut die Gestalt aus Grundkörpern "
+            "und formt sie mit dem Pinsel."
         ),
         steps=(
             TourStep(
@@ -412,54 +391,45 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # ``tests/test_tour.py``: Er zählt gegen den **echten**
                 # Verlauf und nicht gegen eine zweite gepflegte Zahl.
                 text=_(
-                    "Im Verlauf stehen sechs Schritte: zwei Grundkörper, einer davon "
-                    "versetzt, beide weich verschmolzen, dann „Dreiecke angleichen“ und "
-                    "zum Schluss auf das Bett gesetzt. Das Angleichen wird gern "
-                    "ausgelassen und danach vermisst: Ohne es hat der Pinsel zu wenige "
-                    "Eckpunkte."
+                    "Im Verlauf stehen sechs Schritte. „Dreiecke angleichen“ gibt dem Pinsel "
+                    "genug Eckpunkte zum Formen."
                 ),
             ),
             TourStep(
                 shows="history",
                 text=_(
-                    "Doppelklick auf *Weich verschmelzen* und den Übergang auf 8 stellen: Der "
-                    "Hals wird dicker. Der geänderte Schritt und seine Folgeschritte werden neu "
-                    "berechnet."
+                    "Öffnen Sie „Weich verschmelzen“ im Verlauf mit einem Doppelklick und "
+                    "stellen Sie den Übergang auf 8. Der Hals wird dicker."
                 ),
                 done=_op_number_changed("blend_union", "radius", 4.0),
             ),
             TourStep(
                 shows="toolbar",
                 text=_(
-                    "Jetzt der Pinsel: die Figur anklicken, dann oben in der "
-                    "Werkzeugleiste auf „Formen“ mit dem Pinselsymbol zeigen und "
-                    "klicken. Ziehen Sie ein paar Striche über den Körper, sehen Sie "
-                    "in der Leiste unten auf die Wandstärke — und beenden Sie mit "
-                    "Fertig."
+                    "Figur anklicken, oben in der Werkzeugleiste „Formen“ wählen, ein paar "
+                    "Striche ziehen und mit „Fertig“ beenden."
                 ),
                 done=_op_present("sculpt_strokes"),
             ),
             TourStep(
                 shows="history",
                 text=_(
-                    "Strg+Z nimmt die ganze Sitzung zurück, nicht den letzten Zug: Im "
-                    "Verlauf steht ein Schritt, so viele Züge er auch enthält."
+                    "Drücken Sie Strg+Z. Die ganze Sitzung ist ein Schritt im Verlauf und "
+                    "verschwindet auf einmal."
                 ),
                 done=_undo_happened,
             ),
             TourStep(
                 shows="toolbar",
                 text=_(
-                    "„Skelett“ steht in derselben Werkzeugleiste und gehört zum "
-                    "selben Weg: zwei Klicks setzen einen Knochen, Fertig fragt "
-                    "danach nach den Winkeln. So bekommt eine Figur ihre Haltung, "
-                    "ohne dass sie neu gebaut wird."
+                    "Daneben in der Werkzeugleiste steht „Skelett“: Zwei Klicks setzen einen "
+                    "Knochen, und „Fertig“ fragt nach den Winkeln."
                 ),
             ),
         ),
         closing=_(
-            "Das war Weg 4. Was ihn von den anderen dreien unterscheidet: Hier zählt "
-            "eine Geste und keine Zahl — und trotzdem bleibt jeder Schritt änderbar."
+            "Das war Weg 4. Hier zählt eine Geste statt einer Zahl, und trotzdem bleibt jeder "
+            "Schritt änderbar."
         ),
     ),
     Tour(
@@ -480,9 +450,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="viewport",
                 text=_(
-                    "Das kleine Teil daneben ist ein Prüfstück: ein Ausschnitt um die "
-                    "Mutternfalle. Drucken Sie ihn zuerst, um die Passung zu prüfen, bevor Sie "
-                    "das ganze Gehäuse drucken."
+                    "Das kleine Teil daneben ist ein Prüfstück um die Mutternfalle. Drucken Sie "
+                    "es vor dem ganzen Gehäuse."
                 ),
             ),
             TourStep(
@@ -496,17 +465,15 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="history",
                 text=_(
-                    "Öffnen Sie die Mutternfalle mit einem Doppelklick im Verlauf und "
-                    "stellen Sie die Größe auf M4 um — alle Maße kommen aus der "
-                    "Normteiltabelle, keines aus dem Gefühl."
+                    "Öffnen Sie die Mutternfalle im Verlauf mit einem Doppelklick und stellen "
+                    "Sie die Größe auf M4."
                 ),
                 done=_op_text_changed("insert_nut_trap", "size", "M3"),
             ),
         ),
         closing=_(
-            "Passungen wie die Mutternfalle stehen und fallen mit dem Spiel Ihres "
-            "Druckers. Messen lässt es sich mit dem Beispiel „Kalibrieren“, "
-            "eintragen unter Bearbeiten → Material kalibrieren."
+            "Das Spiel Ihres Druckers messen Sie mit dem Beispiel „Kalibrieren“ und tragen es "
+            "unter Bearbeiten → Material kalibrieren ein."
         ),
     ),
     Tour(
@@ -519,9 +486,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="history",
                 text=_(
-                    "Öffnen Sie „Beschriftung“ mit einem Doppelklick im Verlauf und "
-                    "schreiben Sie Ihren eigenen Text. Die Schrift bleibt dem zweiten "
-                    "Filament zugeordnet."
+                    "Öffnen Sie „Beschriftung“ im Verlauf mit einem Doppelklick und schreiben "
+                    "Sie Ihren eigenen Text."
                 ),
                 done=_op_text_changed("label_text", "text", "Solidon3D"),
             ),
@@ -533,9 +499,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # Übersetzungen dazu. Der Satz zeigt jetzt auf die Sache und
                 # nicht auf den Wortlaut.
                 text=_(
-                    "Die Lettern daneben sind der zweite Weg: ein eigener "
-                    "Körper. Für Drucker mit einem Werkzeug — gedruckt und "
-                    "aufgeklebt, oder mit Filamentwechsel von Hand."
+                    "Die Lettern daneben sind ein eigener Körper. Drucker mit einem Werkzeug "
+                    "drucken sie extra und kleben sie auf."
                 ),
             ),
             TourStep(
@@ -549,9 +514,7 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
             TourStep(
                 text=_(
-                    "Beim Export trägt 3MF die Slots als Farbgruppen mit — der "
-                    "Slicer macht daraus den Farbwechsel. STL kennt keine Farbe und "
-                    "verliert sie."
+                    "3MF trägt die Filamente als Farbgruppen in den Slicer. STL kennt keine Farbe."
                 )
             ),
         ),
@@ -563,42 +526,35 @@ TOURS: Final[tuple[Tour, ...]] = (
     Tour(
         example_id="skizze-mit-massen",
         intro=_(
-            "Eine runde Platte, gezeichnet statt eingetippt. Der Unterschied "
-            "steckt nicht im Ergebnis, sondern darin, was passiert, wenn Sie ein "
-            "Maß ändern."
+            "Eine runde Platte, gezeichnet statt eingetippt. Der Unterschied zeigt sich, wenn "
+            "Sie ein Maß ändern."
         ),
         steps=(
             TourStep(
                 shows="viewport",
                 text=_(
-                    "Der Umriss dieser Platte ist ein Kreis mit einer Bedingung: "
-                    "„Der Rand hat vom Mittelpunkt immer denselben Abstand.“ Solidon "
-                    "rechnet mit dem Kreis selbst und nicht mit einer Kette aus Punkten."
+                    "Der Umriss ist ein Kreis mit einer Bedingung: Der Rand hat überall "
+                    "denselben Abstand zum Mittelpunkt."
                 ),
             ),
             TourStep(
                 shows="parameters",
                 text=_(
-                    "Ändern Sie „Durchmesser“ auf 80: Der Umriss folgt, die Tasche "
-                    "bleibt in ihrem Verhältnis, und beides bleibt rund. Genau "
-                    "dafür ist eine Bedingung da — sie überlebt die Änderung, ein "
-                    "Punkt nicht."
+                    "Stellen Sie „Durchmesser“ auf 80. Umriss und Tasche folgen und bleiben "
+                    "rund, weil die Bedingung die Änderung überlebt."
                 ),
                 done=_parameter_changed("durchmesser", 60.0),
             ),
             TourStep(
                 shows="history",
                 text=_(
-                    "Die Tasche ist derselbe Weg, nur abwärts: ein zweiter Umriss, "
-                    "in den Körper geschnitten. Mit einem Doppelklick auf "
-                    "„Tasche schneiden“ ändern Sie ihre Tiefe."
+                    "Die Tasche ist ein zweiter Umriss im Körper. Ihre Tiefe ändern Sie mit "
+                    "einem Doppelklick auf „Tasche schneiden“."
                 ),
             ),
         ),
         closing=_(
-            "Skizzen liegen im Menü Erzeugen. Sie lohnen sich überall dort, wo ein "
-            "Maß später noch stimmen muss — bei allem anderen sind die Grundformen "
-            "schneller."
+            "Skizzen liegen im Menü Erzeugen. Sie lohnen sich, wo ein Maß später noch stimmen muss."
         ),
     ),
     Tour(
@@ -612,10 +568,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="viewport",
                 text=_(
-                    "Die Toleranzleiter zeigt, welches Spiel eine Passung braucht; "
-                    "die Wandleiter, ab welcher Stärke wirklich Material liegt; der "
-                    "Fächer, ab welchem Winkel Stützen nötig sind — gemessen statt "
-                    "Faustregel 45 Grad."
+                    "Die Toleranzleiter misst das Spiel, die Wandleiter die dünnste Wand, der "
+                    "Fächer den steilsten Überhang ohne Stützen."
                 ),
             ),
             TourStep(
@@ -626,9 +580,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # mit „Doppelklick im Verlauf" trägt ihn.
                 shows="history",
                 text=_(
-                    "Die Platte ordnet ein eigener Schritt an: öffnen Sie "
-                    "„Anordnen“ mit einem Doppelklick und ändern Sie den Abstand — "
-                    "die drei Körper rücken sofort um."
+                    "Öffnen Sie „Anordnen“ mit einem Doppelklick und ändern Sie den Abstand. Die "
+                    "drei Körper rücken sofort um."
                 ),
                 done=_op_number_changed("arrange_bed", "spacing", 8.0),
             ),
@@ -641,9 +594,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
             TourStep(
                 text=_(
-                    "Die Werte gehören ins Materialprofil, nicht ins Modell: "
-                    "Bearbeiten → Material kalibrieren. Sie gelten danach für jede "
-                    "Passung — auch in Projekten, die Sie früher gebaut haben."
+                    "Tragen Sie die Werte unter Bearbeiten → Material kalibrieren ein. Sie "
+                    "gelten dann für jede Passung, auch in alten Projekten."
                 )
             ),
         ),
@@ -655,16 +607,15 @@ TOURS: Final[tuple[Tour, ...]] = (
     Tour(
         example_id="aushoehlen-und-teilen",
         intro=_(
-            "Ein Klotz, der so nicht gedruckt werden müsste: zu viel Material, das "
-            "keiner sieht. Dieses Projekt teilt ihn und höhlt beide Hälften aus."
+            "Ein massiver Klotz verbraucht Material, das keiner sieht. Dieses Projekt teilt ihn "
+            "und höhlt beide Hälften aus."
         ),
         steps=(
             TourStep(
                 shows="history",
                 text=_(
-                    "Erst teilen, dann aushöhlen — nicht umgekehrt: eine ausgehöhlte "
-                    "Wand wäre an der Schnittfläche zu dünn für Passstifte. Deshalb "
-                    "steht „Teilen und verstiften“ im Verlauf vor dem „Aushöhlen“."
+                    "Im Verlauf steht „Teilen und verstiften“ vor „Aushöhlen“, denn eine hohle "
+                    "Wand wäre zu dünn für Passstifte."
                 ),
             ),
             TourStep(
@@ -676,9 +627,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="history",
                 text=_(
-                    "Öffnen Sie eines der beiden „Aushöhlen“ im Verlauf und stellen "
-                    "Sie die Wandstärke um — etwa auf 5 mm. Die Entlüftungsbohrungen "
-                    "wandern mit."
+                    "Öffnen Sie ein „Aushöhlen“ im Verlauf mit einem Doppelklick und stellen Sie "
+                    "die Wandstärke auf 5 mm."
                 ),
                 done=_op_number_changed("hollow_object", "wall", 3.0),
             ),
@@ -702,43 +652,35 @@ TOURS: Final[tuple[Tour, ...]] = (
             # sparen — wer ihrem Schlusssatz folgte, griff zu einer Funktion,
             # die seinen Fall gar nicht meint, und die beiden Wege, auf denen
             # er die Naht selbst legt, standen nirgends.
-            "Passt ein Teil nicht auf das Bett, sucht Bearbeiten → Automatisch "
-            "teilen die Trennebene selbst. Soll die Naht woanders liegen, legen "
-            "Sie sie mit *Teilen* aus den Handlungen rechts an eine Ebene — oder "
-            "ziehen sie mit *An gezeichneter Linie trennen* dorthin, wo Sie sie "
-            "haben wollen."
+            "Zu große Teile teilt Bearbeiten → Automatisch teilen. Eigene Nähte legen „Teilen“ "
+            "und „An gezeichneter Linie trennen“."
         ),
     ),
     Tour(
         example_id="zu-gross-automatisch-teilen",
         intro=_(
-            "Eine Wandleiste von 60 cm — zu lang für jedes übliche Druckbett. "
-            "Automatisch teilen hat sie in drei Stücke zerlegt, mit Passstiften "
-            "in jeder Naht."
+            "Eine Wandleiste von 60 cm ist zu lang für jedes übliche Bett. Automatisch teilen "
+            "hat sie in drei Stücke zerlegt."
         ),
         steps=(
             TourStep(
                 shows="history",
                 text=_(
-                    "Im Verlauf stehen zwei gewöhnliche Schritte „Teilen“: So hat "
-                    "Automatisch teilen die Leiste zerlegt. Drei Stücke — weniger "
-                    "gehen auf einem 220er Bett nicht."
+                    "Im Verlauf stehen zwei gewöhnliche Schritte „Teilen“. Weniger als drei "
+                    "Stücke gehen auf ein 220er Bett nicht."
                 ),
             ),
             TourStep(
                 shows="viewport",
                 text=_(
-                    "In jeder Naht stecken zwei Stifte, in der Gegenseite die "
-                    "passenden Löcher. Das Spiel kommt aus dem Materialprofil, und "
-                    "zu jedem Stift gibt es eine Passung."
+                    "In jeder Naht stecken zwei Stifte, ihr Spiel kommt aus dem Materialprofil."
                 ),
             ),
             TourStep(
                 shows="history",
                 text=_(
-                    "Öffnen Sie den ersten „Teilen“-Schritt mit einem Doppelklick und "
-                    "verschieben Sie die Position — die Naht wandert, Stifte und "
-                    "Passungen gehen mit."
+                    "Öffnen Sie den ersten „Teilen“-Schritt mit einem Doppelklick und ändern Sie "
+                    "die Position. Stifte und Passungen wandern mit."
                 ),
                 done=_first_op_number_changed("split_pinned", "position", -100.0),
             ),
@@ -751,58 +693,47 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
         ),
         closing=_(
-            "Mit Ihrem eigenen Modell: Bearbeiten → Automatisch teilen. Ist ein "
-            "Teil spiegelgleich, liegt die Naht in der Mitte, und beide Seiten "
-            "drucken sich mit denselben Einstellungen."
+            "Für Ihr eigenes Modell: Bearbeiten → Automatisch teilen. Ein spiegelgleiches Teil "
+            "wird in der Mitte geteilt."
         ),
     ),
     Tour(
         example_id="dose-mit-deckel",
-        intro=_(
-            "Eine Dose mit Deckel — und darin steckt alles, was die anderen "
-            "Beispiele einzeln zeigen: benannte Maße, ein ausgehöhlter Körper, "
-            "Bausteine in der Wand, ein Deckel und eine Beschriftung."
-        ),
+        intro=_("Eine Dose mit Deckel vereint, was die anderen Beispiele einzeln zeigen."),
         steps=(
             TourStep(
                 shows="parameters",
                 text=_(
-                    "Links stehen vier Maße mit Namen. Stellen Sie die Höhe auf "
-                    "60 mm — die Dose wächst, der Deckel bleibt, wo er hingehört, "
-                    "und die Kabeldurchführung wandert mit der Wand."
+                    "Stellen Sie links die Höhe auf 60 mm. Der Deckel bleibt oben, und die "
+                    "Kabeldurchführung wandert mit."
                 ),
                 done=_parameter_changed("hoehe", 40.0),
             ),
             TourStep(
                 shows="history",
                 text=_(
-                    "Im Verlauf steht „Aushöhlen“ mit dem Schalter *Oben öffnen*. "
-                    "Er ist der Grund, warum es überhaupt einen Deckel geben kann: "
-                    "ein geschlossener Hohlraum ist ein Hohlraum, kein Fach."
+                    "Im Verlauf steht „Aushöhlen“ mit „Oben öffnen“. Erst die offene Seite macht "
+                    "aus dem Hohlraum ein Fach."
                 ),
             ),
             TourStep(
                 shows="viewport",
                 text=_(
-                    "Der Deckel ist nicht nachgezeichnet, sondern aus der Öffnung "
-                    "geschnitten. Sein Kragen ist der Hohlraum, geschrumpft um das "
-                    "Spiel aus dem Materialprofil — dieselbe Zahl, die über jede "
-                    "andere Passung entscheidet."
+                    "Der Deckel ist aus der Öffnung geschnitten, sein Kragen um das Spiel aus "
+                    "dem Materialprofil kleiner."
                 ),
             ),
             TourStep(
                 shows="report",
                 text=_(
-                    "Zur Passung steht nichts im Prüfbericht: Das Spiel stimmt mit dem "
-                    "Materialprofil überein, und eine verletzte Passung stünde hier als "
-                    "Warnung. Dose und Deckel liegen getrennt zum Drucken; die Körper in "
-                    "Einbaulage werden erst geprüft, wenn sie ineinanderstehen."
+                    "Zur Passung steht nichts im Prüfbericht, denn das Spiel stimmt mit dem "
+                    "Materialprofil überein."
                 ),
             ),
         ),
         closing=_(
-            "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der "
-            "Öffnung anklicken, dann *Erzeugen → Bausteine → Deckel erzeugen*."
+            "Für eine eigene Schachtel die Fläche an der Öffnung anklicken, dann Erzeugen → "
+            "Bausteine → Deckel erzeugen."
         ),
     ),
     # **Die einzige Tour, die mit einer Warnung anfängt.** Die anderen zeigen,
@@ -811,28 +742,22 @@ TOURS: Final[tuple[Tour, ...]] = (
     Tour(
         example_id="passung-nach-materialwechsel",
         intro=_(
-            "Dieses Beispiel zeigt eine Warnung zum Materialspiel: Der Deckel soll "
-            "aus weichem TPU kommen, doch das vorgesehene Spiel reicht dafür nicht "
-            "aus. Die nächsten Schritte zeigen, wie Sie die Warnung in einem Zug "
-            "beheben."
+            "Der Deckel soll aus weichem TPU sein, doch sein Spiel reicht dafür nicht. So "
+            "beheben Sie die Warnung."
         ),
         steps=(
             TourStep(
                 shows="report",
                 text=_(
-                    "Die Meldung zur Passung vergleicht das vorhandene Spiel mit "
-                    "dem Materialprofil: bei einer Dose aus PLA 0,20 mm, für den "
-                    "TPU-Deckel 0,35 mm. Bei anderen Materialien gelten die Zahlen "
-                    "im Prüfbericht."
+                    "Die Meldung im Prüfbericht nennt das vorhandene Spiel von 0,20 mm und die "
+                    "0,35 mm, die TPU braucht."
                 ),
             ),
             TourStep(
                 shows="report",
                 text=_(
-                    "Klicken Sie auf die Meldung. Die Ansicht fliegt an die "
-                    "Öffnung, um die es geht, und eine Marke steht kurz dort. Eine "
-                    "Warnung, die nicht zeigt, wo sie sitzt, ist eine halbe "
-                    "Auskunft."
+                    "Klicken Sie auf die Meldung. Die Ansicht fliegt an die Öffnung, und eine "
+                    "Marke zeigt die Stelle."
                 ),
             ),
             TourStep(
@@ -840,27 +765,22 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # (``tests/test_tour.py`` hält Ort und Text zusammen).
                 shows="report",
                 text=_(
-                    "Das TPU-Profil sieht mehr Spiel vor als das bisherige Material. "
-                    "Soll der Deckel aus TPU bleiben, vergrößern Sie das Spiel um "
-                    "die im Prüfbericht angezeigte Differenz. Die Körperprobe in "
-                    "Einbaulage und der Montageweg bleiben gesondert zu prüfen."
+                    "Soll der Deckel aus TPU bleiben, vergrößern Sie das Spiel um die Differenz "
+                    "aus dem Prüfbericht."
                 ),
             ),
             TourStep(
                 shows="history",
                 text=_(
-                    "Der letzte Schritt im Verlauf heißt „Deckel aus TPU“. Nehmen Sie ihn mit "
-                    "Strg+Z zurück: Die Warnung zum Materialspiel verschwindet, und "
-                    "zur Passung steht nichts mehr im Prüfbericht. Alternativ können "
-                    "Sie das Spiel anpassen und das weiche Material behalten."
+                    "Nehmen Sie den letzten Schritt „Deckel aus TPU“ im Verlauf mit Strg+Z "
+                    "zurück. Die Warnung verschwindet."
                 ),
                 done=_op_gone("set_material"),
             ),
         ),
         closing=_(
-            "Der Punkt ist nicht der Deckel, sondern dass niemand nachrechnen "
-            "musste. Wer ein Material wechselt, ändert damit jede Passung daran — "
-            "und erfährt es beim Öffnen und nicht nach dem Drucken."
+            "Niemand musste nachrechnen. Wer das Material wechselt, erfährt beim Öffnen, welche "
+            "Passungen es betrifft."
         ),
     ),
 )
