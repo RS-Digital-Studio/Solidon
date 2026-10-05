@@ -347,10 +347,20 @@ Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
 (`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
 (`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
-Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt.
+Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt. **Hat der
+Dialog eine Rückseite, setzt die Vorderseite die Spalte**
+(`dialogs.align_to_the_front`): Eine längere Beschriftung hinten bricht um,
+statt die Felder vorn wegzuschieben (RM-518). Wer zwei Formulare hat, richtet
+aus (`test_ui_dialogs`).
+
+**Ein Dialog, eine Form** (RM-518): Abschnitte sind flache Überschriften
+(`sectionHeading`, `panels.collapsible`), kein gerahmter `QGroupBox` — die
+Ausnahmen stehen mit Grund im Wächter in `tests/test_ui_dialogs.py`; der
+Außenrand eines Dialogs ist `WIDE`.
 
 **Klappen:** überall die flache Überschrift (`panels.collapsible`,
-`sectionHeading`); zugeklappt nennt sie ihren Inhalt (`contents=`, Wächter in
+`sectionHeading`; eine von Hand benannte Überschrift fängt
+`test_every_section_heading_is_built_by_collapsible`); zugeklappt nennt sie ihren Inhalt (`contents=`, Wächter in
 `test_interface_limits`), `remember=` hält den Zustand des Kunden. Werte, die sich ein- und ausschalten lassen, sind eine
 Schalterzeile mit eingerückten Feldern, kein ankreuzbarer Rahmen. Bei
 `ContentHeight`-Dialogen werden Anfangsgröße und ausdrücklich bedientes
