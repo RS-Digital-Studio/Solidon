@@ -751,8 +751,13 @@ def test_the_unlock_dialog_does_not_close_on_an_empty_field(
 def test_the_activation_dialog_reads_as_two_small_steps(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Ohne Lizenzwissen sieht man Reihenfolge, Abkürzung und Offline-Ausweg."""
-    from PySide6.QtWidgets import QGroupBox, QLabel
+    """Ohne Lizenzwissen sieht man Reihenfolge, Abkürzung und Offline-Ausweg.
+
+    Die zwei Schritte sind seit RM-518 flache Abschnitte wie in jedem Dialog,
+    keine gerahmten ``QGroupBox`` mehr; beide stehen beim Öffnen offen, denn
+    ein zugeklappter Schritt wäre eine Reihenfolge, die man nicht sieht.
+    """
+    from PySide6.QtWidgets import QGroupBox, QLabel, QToolButton
 
     from app.core import activation
     from app.core.activation import store
@@ -762,10 +767,19 @@ def test_the_activation_dialog_reads_as_two_small_steps(
     activation.forget_cache()
     try:
         dialog = ActivationDialog()
-        groups = [group.title() for group in dialog.findChildren(QGroupBox)]
+        steps = [
+            heading
+            for heading in dialog.findChildren(QToolButton)
+            if heading.objectName() == "sectionHeading"
+        ]
         labels = " ".join(label.text() for label in dialog.findChildren(QLabel))
 
-        assert groups == ["1 · Lizenzschlüssel einfügen", "2 · Diesen Rechner aktivieren"]
+        assert [step.text() for step in steps] == [
+            "1 · Lizenzschlüssel einfügen",
+            "2 · Diesen Rechner aktivieren",
+        ]
+        assert all(step.isChecked() for step in steps), "beide Schritte stehen offen da"
+        assert not dialog.findChildren(QGroupBox), "eine Form wie jeder Dialog (RM-518)"
         assert "Kein Konto" in labels and "ohne Internet" in labels
         assert not dialog.online_button.isEnabled()
         assert "Zuerst" in dialog.online_button.toolTip()

@@ -145,8 +145,16 @@ def _sideways(dialog: QDialog, scroll: QScrollArea, natural: int) -> None:
     Rest rollt (``fenster.md``, Dialoggröße nach Auslöser). Auf einem
     Bildschirm mit Platz ist der Unterschied null. Mehr als dieser Rest hieße:
     Die zugeklappten Zeilen waren beim Öffnen nicht mitgerechnet (RM-342 D-N5).
+
+    ``expanded_width`` rechnet den senkrechten Rollbalken mit, den das
+    Aufklappen bringt. Ist ein Reiter so kurz, dass er keinen braucht (auf
+    Englisch *Supports*), hat der Inhalt dessen Breite übrig und rollt um
+    genau sie weniger quer — gemessen wird dann gegen diesen Rest, nicht
+    gegen eine Zahl, die ein Balken mitbringt, der nicht dasteht.
     """
-    assert scroll.horizontalScrollBar().maximum() == max(0, natural - dialog.width())
+    bar = scroll.verticalScrollBar()
+    spare = 0 if bar.isVisible() else bar.sizeHint().width()
+    assert scroll.horizontalScrollBar().maximum() == max(0, natural - spare - dialog.width())
 
 
 @pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
