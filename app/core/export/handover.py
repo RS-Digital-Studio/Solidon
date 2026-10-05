@@ -285,7 +285,9 @@ class SlicerSetup:
 
     @property
     def name(self) -> str:
-        return self.executable.stem
+        """Wie Meldungen den Slicer nennen: der Dateistamm, ein Flatpak nach
+        seinem Programm (:func:`discover.flatpak_title`) statt „com.prusa3d“."""
+        return discover.flatpak_title(self.executable) or self.executable.stem
 
 
 def _profile_roots(setup: SlicerSetup) -> tuple[Path, ...]:
@@ -5377,7 +5379,13 @@ def off_the_bed(
             area = translate(area, xoff=across, yoff=along)
     # Jede Sperrfläche ist ein Rechteck mit Fläche (``gcode.exclusion_areas``),
     # so wie der Slicer sie liest; ohne Fläche hätte er sie schon übergangen.
-    for (left, front), _right_front, (right, back), _left_back in analysis.excluded_areas:
+    # Nennt die Datei Sperrflächen, die sich nicht lesen lassen (``None``),
+    # wird ohne sie geprüft, und der Prüfbericht sagt es — „keine“ wäre eine
+    # Entwarnung für eine Bahn, die mitten durch eine fährt.
+    if analysis.excluded_areas is None:
+        unread = _("Die Sperrflächen der Druckdatei sind unlesbar, geprüft wurde ohne sie.")
+        note = unread if note is None else _("{bed} {exclusions}", bed=note, exclusions=unread)
+    for (left, front), _right_front, (right, back), _left_back in analysis.excluded_areas or ():
         area = area.difference(box(left, front, right, back))
     warning = None
     if note is not None:
@@ -6719,6 +6727,11 @@ def window_program(executable: Path) -> Path | None:
     ein Programm mit Fenster, und das liegt bei zwei Familien neben dem
     Konsolenprogramm im selben Ordner. Gesucht wird nur dort — ein Fenster aus
     einer anderen Installation wäre ein anderer Slicer mit anderen Profilen.
+
+    **Zurück kommt die Datei, wie sie heißt.** Auf einem Dateisystem ohne
+    Unterscheidung der Schreibweise (APFS, NTFS) trifft ``is_file`` auch
+    ``Ultimaker-Cura``, wo ``UltiMaker-Cura`` liegt; der zusammengesetzte Name
+    war dann ein Pfad, den es so nicht gibt. Gelesen wird deshalb der Ordner.
     """
     names = _WINDOW_SIBLINGS.get(executable.stem.casefold())
     if names is None:
@@ -6730,10 +6743,19 @@ def window_program(executable: Path) -> Path | None:
     if bundle is not None:
         folders.append(bundle / "Contents" / "MacOS")
     for folder in folders:
+        try:
+            entries = sorted(folder.iterdir())
+        except OSError:
+            continue
         for name in names:
-            candidate = folder / (name + executable.suffix)
-            if candidate.is_file():
-                return candidate
+            wanted = name + executable.suffix
+            spelled = [entry for entry in entries if entry.name.casefold() == wanted.casefold()]
+            # Die genaue Schreibweise zuerst: Auf einem Dateisystem mit
+            # Unterscheidung können beide nebeneinander liegen.
+            spelled.sort(key=lambda entry: entry.name != wanted)
+            found = next((entry for entry in spelled if entry.is_file()), None)
+            if found is not None:
+                return found
     return None
 
 

@@ -328,6 +328,78 @@ def test_an_exception_of_opencascade_becomes_the_refusal_with_its_way_out(
     assert isinstance(refused.value.__cause__, from_mesh.ConversionRefusedError)
 
 
+def _conversion_context(profile: Profile, mesh: MeshData) -> Any:
+    """Der Aufruf von *In exakten Körper umwandeln* an einem Körper, ohne Rückfrage."""
+    from app.core.brep.ops import MeshToExactParams
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    return OpContext(
+        Scene(),
+        [SceneObject(id="obj_1", name="Teil", mesh=mesh)],
+        MeshToExactParams(),
+        profile,
+        "fine",
+        None,
+        lambda *_: None,
+        lambda *_: pytest.fail("keine Rückfrage erwartet"),
+        NeverCancelled(),
+    )
+
+
+@pytest.mark.parametrize("stage", ["_build", "_checked_body"])
+def test_a_lost_helper_process_stays_itself_and_does_not_become_a_refusal(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """Der breite Fang für OpenCASCADE lässt den verlorenen Hilfsprozess durch (``kern.md``).
+
+    ``_build`` fragt über ``mesh.face_components`` ab ``OFFLOAD_ABOVE``
+    Dreiecken den Hilfsprozess. Stirbt der — unter Linux etwa am OOM-Killer —,
+    kommt ``KernelHelperLostError``, ein Programmfehler mit Fehlerbericht. Der
+    Fang über ``Exception`` machte daraus „Aus den erkannten Flächen ließ sich
+    kein geschlossener Körper bauen“, also einen Bedienfehler, und der Nachbau
+    rechnete danach still ohne den exakten Körper weiter.
+    """
+    from app.core.brep import from_mesh
+    from app.core.brep.ops import mesh_to_exact
+    from app.core.geom.kernel_process import KernelHelperLostError
+
+    def lost(*_args: object, **_kwargs: object) -> None:
+        raise KernelHelperLostError()
+
+    monkeypatch.setattr(from_mesh, stage, lost)
+
+    with pytest.raises(KernelHelperLostError):
+        mesh_to_exact(_conversion_context(profile, _mesh("plate_holes.stl")))
+
+
+def test_a_mesh_with_a_turned_triangle_is_sent_to_the_repair(profile: Profile) -> None:
+    """Ein dichtes Netz mit einem verkehrt herum liegenden Dreieck ist nicht einheitlich orientiert.
+
+    ``convert`` sagt das mit ``OpenSurfaceError`` (sein Docstring), und die
+    Absage schlägt die Reparatur vor. Der Fang über ``Exception`` um den Bau
+    fing den Satz der Randprüfung mit ein und meldete „kein geschlossener
+    Körper“ samt größerer Abweichung — die nichts ändert.
+    """
+    from app.core.brep import from_mesh
+    from app.core.brep.ops import mesh_to_exact
+    from app.core.errors import REPAIR_AND_RETRY, NotManifoldError
+    from app.core.perceive.features import detect
+
+    box = trimesh.creation.box(extents=(20.0, 16.0, 10.0))
+    faces = np.asarray(box.faces).copy()
+    faces[0] = faces[0][::-1]
+    turned = MeshData.of(trimesh.Trimesh(np.asarray(box.vertices), faces, process=False))
+    assert turned.is_watertight and not turned.raw.is_winding_consistent, "der Fall entsteht"
+
+    with pytest.raises(from_mesh.OpenSurfaceError):
+        from_mesh.convert(turned, detect(turned), tolerance=from_mesh.DEFAULT_TOLERANCE)
+    with pytest.raises(NotManifoldError) as refused:
+        mesh_to_exact(_conversion_context(profile, turned))
+
+    assert refused.value.suggestions[0] == REPAIR_AND_RETRY
+
+
 def test_an_open_mesh_is_refused_with_repair(profile: Profile) -> None:
     """Ein Netz mit Loch hat keine Hülle — die Absage schlägt die Reparatur vor."""
     from app.core.brep.ops import MeshToExactParams, mesh_to_exact

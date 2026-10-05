@@ -571,3 +571,78 @@ def test_every_network_call_puts_its_headers_under_a_deadline() -> None:
         + "\n`timeout` gilt je Leseoperation; die Gesamtfrist setzt "
         "app.core.http.apply_header_deadline."
     )
+
+
+# --- Regel 6: kein Gleichheitsvergleich mit Unendlich --------------------------------
+
+#: Wie ``float`` Unendlich als Text annimmt (Groß- und Kleinschreibung egal).
+_INFINITE_TEXTS = frozenset({"inf", "+inf", "-inf", "infinity", "+infinity", "-infinity"})
+
+
+def _is_infinity(node: ast.expr) -> bool:
+    """Ob ``node`` Unendlich schreibt: ``float("inf")``, ``math.inf``, ``np.inf``, ``-inf``."""
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        return _is_infinity(node.operand)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "float":
+        return (
+            len(node.args) == 1
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+            and node.args[0].value.strip().lower() in _INFINITE_TEXTS
+        )
+    if isinstance(node, ast.Attribute):
+        return node.attr == "inf"
+    return isinstance(node, ast.Name) and node.id == "inf"
+
+
+def compared_with_infinity(tree: ast.AST) -> list[int]:
+    """Die Zeilen, an denen ``==`` oder ``!=`` eine Zahl mit Unendlich vergleicht."""
+    found: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Compare):
+            continue
+        sides = [node.left, *node.comparators]
+        for index, operator in enumerate(node.ops):
+            if isinstance(operator, (ast.Eq, ast.NotEq)) and (
+                _is_infinity(sides[index]) or _is_infinity(sides[index + 1])
+            ):
+                found.append(node.lineno)
+    return sorted(set(found))
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("best == float('-inf')", [1]),
+        ("left[0] == math.inf or right != -np.inf", [1]),
+        ("x == inf", [1]),
+        ("math.isinf(best)", []),
+        ("best < float('inf')", []),
+    ],
+)
+def test_the_infinity_guard_finds_what_it_is_given(source: str, expected: list[int]) -> None:
+    """Die Gegenprobe des Wächters darunter: Er findet die Schreibweisen von Unendlich."""
+    assert compared_with_infinity(ast.parse(source)) == expected
+
+
+def test_no_number_is_compared_with_infinity_by_equality() -> None:
+    """Regel 6 gilt wörtlich: kein ``==`` und kein ``!=`` auf Fließkomma.
+
+    ``best == float("-inf")`` in ``build_area.rim_room`` und
+    ``left[0] == math.inf`` in ``repair`` gaben dasselbe Ergebnis wie
+    ``math.isinf`` — und sind trotzdem die Schreibweise, an der niemand mehr
+    erkennt, wo ein Vergleich mit Toleranz fehlt (Durchsicht 0.5.3, Fund 10).
+    Der einzige Wächter für Regel 6 stand bis dahin in ``test_advise.py`` und
+    sah nur den Druckrat.
+    """
+    offenders: list[str] = []
+    compared = 0
+    for path in source_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        compared += sum(1 for node in ast.walk(tree) if isinstance(node, ast.Compare))
+        offenders.extend(f"{path.name}:{line}" for line in compared_with_infinity(tree))
+
+    assert compared > 1000, f"nur {compared} Vergleiche gefunden — die Suche greift nicht"
+    assert not offenders, (
+        "Gleichheit mit Unendlich (Regel 6), statt dessen math.isinf:\n  " + "\n  ".join(offenders)
+    )

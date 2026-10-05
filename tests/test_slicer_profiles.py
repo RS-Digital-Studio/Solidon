@@ -331,6 +331,19 @@ def test_prusaslicer_knows_no_exclusion_area_and_reads_points_like_its_stream(
         assert printer.bed_exclusions == ()
 
 
+@pytest.mark.parametrize("corner", ["1e999x0", "0x1e999", "-1e999x200"])
+def test_a_coordinate_beyond_every_number_is_refused_as_text_too(corner: str) -> None:
+    """``float("1e999")`` ist unendlich. Als Listenpunkt wurde eine solche
+    Koordinate abgelehnt, als Text (``0x0,1e999x0,…``) ging sie seit dem Lesen
+    wie ein ``istringstream`` an der Prüfung vorbei: Bett und Sperrfläche trugen
+    eine unendliche Ecke, bis eine spätere Prüfung die Kontur mit falschem Grund
+    verwarf (Regression gegen 0.5.2, Durchsicht 0.5.3, Fund 7)."""
+    shape = f"0x0,{corner},200x200,0x200"
+    for written in (shape, [shape]):
+        with pytest.raises(ValueError, match="nonfinite"):
+            sp._profile_points(written)
+
+
 def test_discovered_identity_survives_installation_move_and_separates_nozzles(
     unknown_printers: Path,
     tmp_path: Path,
@@ -4532,6 +4545,56 @@ def test_a_distribution_package_keeps_its_profiles_under_share(
 
 
 @pytest.mark.parametrize(
+    ("program", "below_share"),
+    [
+        ("prusa-slicer", ("PrusaSlicer", "profiles")),
+        ("orca-slicer", ("OrcaSlicer", "profiles")),
+    ],
+)
+def test_a_distribution_package_beside_cura_keeps_its_own_profiles(
+    tmp_path: Path, program: str, below_share: tuple[str, ...]
+) -> None:
+    """Cura aus dem Paketverwalter legt seinen Bestand nach ``/usr/share/cura``.
+
+    Der Ordner gehört Cura. Angeboten wurde er jedem Programm und vor
+    ``share/<Programm>``: PrusaSlicer und Orca daneben bekamen Curas Ordner als
+    Herstellerbestand und darin keinen ihrer Drucker (Durchsicht 0.5.3, Fund 1).
+    """
+    prefix = tmp_path / "usr"
+    executable = prefix / "bin" / program
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"")
+    cura = prefix / "bin" / "cura"
+    cura.write_bytes(b"")
+    (prefix / "share" / "cura" / "resources" / "definitions").mkdir(parents=True)
+    profiles = prefix.joinpath("share", *below_share)
+    profiles.mkdir(parents=True)
+
+    assert sp.install_root(executable) == profiles
+    assert sp.install_root(cura) == prefix / "share" / "cura", "Cura behält seinen Ordner"
+
+
+def test_a_mac_bundle_hands_out_its_resources_in_its_own_spelling(tmp_path: Path) -> None:
+    """Ein Mac-Bündel trägt seinen Bestand unter ``Contents/Resources/profiles``.
+
+    Gesucht wurde ``resources/profiles``. Auf dem üblichen APFS ohne
+    Unterscheidung der Schreibweise traf das, auf einem case-sensitiv
+    formatierten Volume nicht — dort fehlte der Herstellerbestand von Orca,
+    Bambu, Elegoo, Creality und Anycubic. Verglichen wird der Text: Auf einem
+    Dateisystem ohne Unterscheidung nennt ``is_dir`` auch die falsche
+    Schreibweise vorhanden, und ``WindowsPath`` vergleicht sie gleich.
+    """
+    contents = tmp_path / "OrcaSlicer.app" / "Contents"
+    executable = contents / "MacOS" / "OrcaSlicer"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"")
+    profiles = contents / "Resources" / "profiles"
+    profiles.mkdir(parents=True)
+
+    assert str(sp.install_root(executable)) == str(profiles)
+
+
+@pytest.mark.parametrize(
     ("app_id", "flavour", "inside", "command"),
     [
         ("com.prusa3d.PrusaSlicer", "prusa", "bin/prusa-slicer", "/app/bin/prusa-slicer"),
@@ -4603,7 +4666,14 @@ def test_cura_as_a_flatpak_reads_its_own_data_folder(
 def test_cura_on_a_mac_finds_its_definitions_and_its_window(tmp_path: Path) -> None:
     """Cura 5 legt auf dem Mac seinen Bestand nach ``Contents/Resources/share/cura``
     und die Rechenmaschine daneben (``CuraApplication.py``,
-    ``CuraEngineBackend.py``); das Fenster liegt in ``Contents/MacOS``."""
+    ``CuraEngineBackend.py``); das Fenster liegt in ``Contents/MacOS``.
+
+    **Das Fenster heißt, wie die Datei heißt.** ``window_program`` setzte den
+    Namen aus seiner Liste zusammen und fragte ``is_file``: Auf APFS ohne
+    Unterscheidung der Schreibweise traf schon ``Ultimaker-Cura``, und zurück
+    kam ein Pfad, den es so nicht gibt (Generalprobe 0.5.3, macOS-Runner).
+    Verglichen wird der Text, denn ``WindowsPath`` vergleicht ohne Schreibweise.
+    """
     from app.core.export import handover
 
     contents = tmp_path / "UltiMaker Cura.app" / "Contents"
@@ -4616,7 +4686,7 @@ def test_cura_on_a_mac_finds_its_definitions_and_its_window(tmp_path: Path) -> N
         program.write_bytes(b"")
 
     assert sp.install_root(engine) == shared
-    assert handover.window_program(engine) == window
+    assert str(handover.window_program(engine)) == str(window)
 
 
 def test_creality_print_keeps_its_printers_below_its_application_key(

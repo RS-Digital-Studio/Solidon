@@ -453,13 +453,18 @@ def test_undoing_a_changed_step_says_the_change_not_the_step() -> None:
         (r"C:\Program Files\UltiMaker Cura 5.13.0\CuraEngine.exe", "UltiMaker Cura 5.13.0"),
         ("/Applications/PrusaSlicer.app/Contents/MacOS/PrusaSlicer", "PrusaSlicer"),
         ("/usr/bin/prusa-slicer", "prusa-slicer"),
+        ("/var/lib/flatpak/exports/bin/com.prusa3d.PrusaSlicer", "PrusaSlicer"),
+        ("/var/lib/flatpak/exports/bin/com.ultimaker.cura", "Cura"),
+        ("/run/user/1000/doc/d0880632/com.orcaslicer.OrcaSlicer", "OrcaSlicer"),
     ],
 )
 def test_a_slicer_is_named_as_on_its_box(path: str, name: str) -> None:
     """Druckdialog und Erstinbetriebnahme nennen einen Slicer gleich (KUNDE-02).
 
     Der Erststart zeigte `elegoo-slicer`, `CuraEngine` — Dateinamen, während der
-    Druckdialog „ElegooSlicer“ und „UltiMaker Cura 5.13.0“ schrieb.
+    Druckdialog „ElegooSlicer“ und „UltiMaker Cura 5.13.0“ schrieb. Ein Flatpak
+    hieß „com.prusa3d“, seine Portalkopie wie ihr Ordner im Portal; beide
+    nennen das Programm wie die Übergabe (``discover.flatpak_title``).
     """
     from pathlib import PurePosixPath, PureWindowsPath
 

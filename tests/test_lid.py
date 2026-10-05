@@ -193,6 +193,31 @@ def test_a_softer_lid_gets_more_room(profile: Profile) -> None:
     assert soft == pytest.approx(profiles.material("tpu-95a").clearance)
 
 
+@pytest.mark.parametrize("op", ["create_lid", "screw_lid"])
+def test_an_opening_below_the_bed_keeps_its_stated_height(profile: Profile, op: str) -> None:
+    """Die Höhe der Öffnung ist eine Welthöhe, und ein Körper darf unter dem Bett liegen.
+
+    Für den Namen der Null („Oberkante“) bekam das Feld ``minimum=0``; ein
+    Projekt aus 0.5.2 mit eingetippter negativer Höhe hielt danach am Schritt
+    an — „Der Wert liegt unter dem zulässigen Mindestwert“ (Durchsicht 0.5.3,
+    Fund 9). Die Null nennt der Satz des Feldes; die Grenze trägt alte
+    Projekte.
+    """
+    from app.core.registry.params import validate
+
+    assert validate(REGISTRY.get(op).params, {"z": -10.0}).z == pytest.approx(-10.0)
+    if op != "create_lid":
+        return
+    below = housing()
+    moved = below.mesh.raw.copy()
+    moved.apply_translation((0.0, 0.0, -40.0))
+    entry = dataclasses.replace(below, mesh=MeshData.of(moved))
+
+    body = make_lid(entry, profile, thickness=2.4, collar=4.0, z=-10.0).outputs[1].mesh
+
+    assert body.bounds.maximum[2] == pytest.approx(OUTER[2] - 40.0 + 2.4), "auf dem Rand"
+
+
 def test_a_lid_without_a_collar_is_a_plate(profile: Profile) -> None:
     result = make_lid(housing(), profile, thickness=2.4, collar=0.0)
     body = result.outputs[1].mesh

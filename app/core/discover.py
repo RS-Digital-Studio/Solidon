@@ -331,8 +331,13 @@ _cache: dict[str, Path | None] = {}
 
 
 def forget_cache() -> None:
-    """Beim nächsten Mal neu suchen. Nach einer Installation und nach einer Angabe."""
+    """Beim nächsten Mal neu suchen. Nach einer Installation und nach einer Angabe.
+
+    Dazu gehört, was der Rechner über unsichtbare Flatpak-Ordner gesagt hat
+    (:func:`_hidden_on_host`).
+    """
     _cache.clear()
+    _hidden.clear()
 
 
 def refresh_path() -> bool:
@@ -706,6 +711,11 @@ def _host_test(flag: str, path: Path) -> bool:
     return answer.returncode == 0
 
 
+def _launcher_folders() -> set[PurePosixPath]:
+    """Die Exportordner (:data:`_FLATPAK_EXPORTS`), wie :func:`flatpak_app` Pfade vergleicht."""
+    return {PurePosixPath(Path(folder).expanduser().as_posix()) for folder in _FLATPAK_EXPORTS}
+
+
 def flatpak_app(program: Path | str) -> str:
     """Die Flatpak-Kennung, wenn ``program`` ein Flatpak startet — sonst leer.
 
@@ -722,8 +732,7 @@ def flatpak_app(program: Path | str) -> str:
     und keines seiner Profile angeboten.
     """
     path = PurePosixPath(Path(program).as_posix())
-    exports = {PurePosixPath(Path(folder).expanduser().as_posix()) for folder in _FLATPAK_EXPORTS}
-    if path.parent in exports or _from_portal(path):
+    if path.parent in _launcher_folders() or _from_portal(path):
         return path.name if _APP_ID.fullmatch(path.name) else ""
     for root in _FLATPAK_INSTALLATIONS:
         apps = PurePosixPath(Path(root).expanduser().as_posix()) / "app"
@@ -733,23 +742,65 @@ def flatpak_app(program: Path | str) -> str:
     return ""
 
 
+def flatpak_title(program: Path | str) -> str:
+    """Wie ein Mensch das Programm nennt, das ``program`` als Flatpak startet — sonst leer.
+
+    Der Dateistamm einer Kennung ist ihr Anfang (``com.prusa3d.PrusaSlicer`` →
+    ``com.prusa3d``), und so hießen Slicer-Flatpaks in Listen und Meldungen. Das
+    letzte Glied ist der Programmname; klein geschrieben (``com.ultimaker.cura``)
+    bekommt es seinen großen Anfangsbuchstaben. Eine Stelle für die Übergabe
+    (``SlicerSetup.name``) und die Oberfläche (``labels.slicer_title``).
+    """
+    app = flatpak_app(program)
+    if not app:
+        return ""
+    name = app.rsplit(".", 1)[-1]
+    return name if name != name.lower() else name.capitalize()
+
+
+#: Was der Rechner auf „liegt das dort, nur für diesen Sandkasten unsichtbar?“
+#: geantwortet hat, je Art und Kennung (:func:`_hidden_on_host`).
+_hidden: dict[tuple[str, str], Path | None] = {}
+
+
+def _hidden_on_host(kind: str, app_id: str, candidates: Sequence[Path]) -> Path | None:
+    """Welcher der Ordner auf dem Rechner liegt, obwohl ihn der Sandkasten nicht sieht.
+
+    Die Antwort dient nur der Protokollzeile, und jede Frage ist ein
+    Prozessstart (``flatpak-spawn --host``, bis fünf Sekunden). Der Druckdialog
+    fragt den Bestand je Filament im Hauptfaden; gefragt wird deshalb je Art und
+    Kennung einmal, bis :func:`forget_cache` den Merker leert.
+    """
+    key = (kind, app_id)
+    if key not in _hidden:
+        found = next((folder for folder in candidates if _host_test("-d", folder)), None)
+        _hidden[key] = found
+        if found is not None:
+            _log.info(
+                "the %s of %s exist, but are hidden from this sandbox: %s", kind, app_id, found
+            )
+    return _hidden[key]
+
+
 def flatpak_files(app_id: str) -> Path | None:
     """Der Ordner, den das Flatpak ``app_id`` als ``/app`` sieht, oder ``None``.
 
     Aus Solidons eigenem Flatpak heraus ist er nur mit der Leseberechtigung des
     Manifests sichtbar (``tools/make_linux_packages.py``). Fehlt sie — etwa weil
     eine Überschreibung sie entzogen hat —, sagt das Protokoll es, statt die
-    Profile still für nicht vorhanden zu halten.
+    Profile still für nicht vorhanden zu halten. **Gefragt wird der Rechner erst,
+    wenn keine Installation sichtbar ist**: Ein systemweit installierter Slicer
+    kostete sonst je Aufruf einen Prozessstart für die Nutzerinstallation davor.
     """
-    hidden: Path | None = None
-    for root in _FLATPAK_INSTALLATIONS:
-        files = Path(root).expanduser() / "app" / app_id / "current" / "active" / "files"
+    candidates = [
+        Path(root).expanduser() / "app" / app_id / "current" / "active" / "files"
+        for root in _FLATPAK_INSTALLATIONS
+    ]
+    for files in candidates:
         if files.is_dir():
             return files
-        if in_flatpak() and hidden is None and _host_test("-d", files):
-            hidden = files
-    if hidden is not None:
-        _log.info("the files of %s are installed, but hidden from this sandbox: %s", app_id, hidden)
+    if in_flatpak():
+        _hidden_on_host("files", app_id, candidates)
     return None
 
 
@@ -765,8 +816,8 @@ def flatpak_data(app_id: str) -> Path | None:
     folder = Path.home() / ".var" / "app" / app_id
     if folder.is_dir():
         return folder
-    if in_flatpak() and _host_test("-d", folder):
-        _log.info("the data of %s exists, but is hidden from this sandbox: %s", app_id, folder)
+    if in_flatpak():
+        _hidden_on_host("data", app_id, (folder,))
     return None
 
 
@@ -798,17 +849,21 @@ def host_program(program: Path) -> Path:
       Slicen für verschwunden. Hält das Bündel einen Slicer, gilt sein Programm
       — bei Cura die Rechenmaschine (:func:`_bundle_program`). Ein anderes
       Bündel bleibt, wie es ist: Ollama und ComfyUI startet ``open``.
+
+    Und gewählt werden kann die Programmdatei einer Flatpak-Installation
+    (``/var/lib/flatpak/app/<Kennung>/…/files/bin/orca-slicer``). Gestartet
+    läuft sie ohne ihre Laufzeit und mit unserem ``/tmp``, das ihr Paket nicht
+    sieht; wie die Portalkopie steht sie für den Starter ihrer Kennung.
     """
     if program.suffix.lower() == ".app":
         return _bundle_program(program)
-    path = PurePosixPath(program.as_posix())
-    if not _from_portal(path):
-        return program
     app = flatpak_app(program)
-    for folder in _FLATPAK_EXPORTS if app else ():
+    if not app or PurePosixPath(program.as_posix()).parent in _launcher_folders():
+        return program
+    for folder in _FLATPAK_EXPORTS:
         launcher = Path(folder).expanduser() / app
         if launcher.is_file() or (in_flatpak() and _host_test("-f", launcher)):
-            _log.info("the portal copy %s stands for %s", program, launcher)
+            _log.info("%s stands for the launcher %s", program, launcher)
             return launcher
     return program
 
@@ -966,9 +1021,12 @@ def _all_from_host(names: tuple[str, ...]) -> Iterator[Path]:
 def sandboxed(program: Path | str | None) -> bool:
     """Läuft dieses Programm in einer Sandbox, die unser ``/tmp`` nicht sieht?
 
-    Wahr für die Startprogramme, die Flatpak exportiert. Der Wrapper selbst ist
-    eine gewöhnliche Datei; was dahinter startet, sieht ein eigenes ``/tmp``
-    und vom Rechner nur, was das Paket sich freigeben ließ.
+    Wahr für jedes Programm, das ein Flatpak startet — gefragt bei
+    :func:`flatpak_app`, derselben Stelle, die über Bestand und Aufruf
+    entscheidet: der Starter aus den Exporten, eine Datei der Installation, die
+    Portalkopie. Der Starter selbst ist eine gewöhnliche Datei; was dahinter
+    startet, sieht ein eigenes ``/tmp`` und vom Rechner nur, was das Paket sich
+    freigeben ließ.
 
     **Und wahr, sobald Solidon selbst in einem Flatpak läuft** — dann ist es
     unser ``/tmp``, das der andere nicht sieht, und die Richtung des Satzes
@@ -979,8 +1037,7 @@ def sandboxed(program: Path | str | None) -> bool:
         return True
     if program is None:
         return False
-    text = Path(program).as_posix()
-    return any(Path(folder).expanduser().as_posix() in text for folder in _FLATPAK_EXPORTS)
+    return bool(flatpak_app(program))
 
 
 def exchange_dir() -> Path:

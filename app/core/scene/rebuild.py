@@ -18,6 +18,7 @@ from typing import Any, Final
 import numpy as np
 
 from app.core.errors import CANCEL, UserError, ValidationError
+from app.core.geom import lathe
 from app.core.geom.difference import SurfaceDistanceBound, surface_distance_bound
 from app.core.geom.mesh import MeshData, as_mesh_data, face_components, signed_volume, unique_edges
 from app.core.geom.transform import along, turned
@@ -1491,7 +1492,11 @@ def _drill_tool(
             (radius, 2.0 * half + margin),
             (0.0, 2.0 * half + margin),
         ]
-    body = trimesh.creation.revolve(np.asarray(profile, dtype=np.float64), sections=128)
+    # Über ``lathe`` und nicht ``trimesh.creation.revolve``: Dessen Ecken kommen
+    # aus ``np.cos``/``np.sin`` und runden je CPU anders (RM-187). Das Werkzeug
+    # füllt die Querschnitte des Profilplans und entscheidet in ``_apart``, ob
+    # ein Reststück ein Prisma ist.
+    body = lathe.revolve(np.asarray(profile, dtype=np.float64), sections=128)
     if not body.is_watertight:
         return None
     x_axis, y_axis = _frame_axes(inward, mouth)

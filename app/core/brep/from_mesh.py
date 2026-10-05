@@ -45,7 +45,8 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 
 import numpy as np
 
-from app.core.errors import PROGRAMMING_ERRORS, OperationCancelled
+from app.core.errors import PROGRAMMING_ERRORS, AppError
+from app.core.geom.kernel_process import NOT_A_KERNEL_FAILURE
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import CancelToken, SurfacePatch, Vec3
@@ -3614,6 +3615,23 @@ def source_deviation(
     )
 
 
+#: Was beim Bau des Körpers kein Bauproblem ist und deshalb nicht zur Absage
+#: „unbuildable“ oder „invalid“ wird: Abbruch und verlorener Hilfsprozess
+#: (``kern.md``: wer breit fängt, lässt ``NOT_A_KERNEL_FAILURE`` durch), jede
+#: eigene Ausnahme mit ihrem eigenen Satz (``AppError``), die Randprüfung eines
+#: widersprüchlich orientierten Netzes (``OpenSurfaceError``, der Docstring von
+#: :func:`convert` sagt sie zu), Speichermangel und Programmfehler. Der breite
+#: Fang daneben gilt den Ausnahmen aus OpenCASCADE, die in OCP 8 nur von
+#: ``Exception`` erben.
+_NOT_A_BUILD_FAILURE: Final = (
+    *NOT_A_KERNEL_FAILURE,
+    AppError,
+    OpenSurfaceError,
+    MemoryError,
+    *PROGRAMMING_ERRORS,
+)
+
+
 def convert(
     mesh: MeshData,
     features: Mapping[FeatureId, Feature],
@@ -3667,7 +3685,7 @@ def convert(
                 raise ConversionRefusedError(
                     "freeform", triangles=len(regions.facet_triangles())
                 ) from failure
-        except (OperationCancelled, MemoryError, *PROGRAMMING_ERRORS):
+        except _NOT_A_BUILD_FAILURE:
             raise
         except Exception as problem:  # OpenCASCADE wirft eigene Ausnahmearten
             # Ein einzelnes Dreieck, das keine Fläche ergibt, oder eine
@@ -3692,7 +3710,7 @@ def convert(
         # fängt mit leerem Merker an.
         own = _own_distances(mesh, regions, built.moved)
         body = replace(body, converted_from=ConversionReference(mesh, own, tolerance))
-    except (OperationCancelled, MemoryError, *PROGRAMMING_ERRORS):
+    except _NOT_A_BUILD_FAILURE:
         raise
     except Exception as problem:  # ValueError der Prüfung oder OpenCASCADE beim Vereinen
         _log.warning("mesh conversion built an invalid body: %r", problem)

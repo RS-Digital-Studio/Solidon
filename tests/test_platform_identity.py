@@ -1176,6 +1176,53 @@ def _rebuilt_box() -> str:
     return fingerprint([drafts[0].params[key] for key in sorted(drafts[0].params)])
 
 
+def _rebuild_drill_tool() -> str:
+    """Das Bohrwerkzeug des Nachbaus, mit und ohne Senkung (Durchsicht 0.5.3, Fund 4).
+
+    Es füllt die Querbohrungen in den Querschnitten des Profilplans und
+    entscheidet in ``_apart``, ob ein Reststück ein Prisma ist. Gedreht wurde es
+    über ``trimesh.creation.revolve``, dessen Ecken aus ``np.cos``/``np.sin``
+    kommen. Die Merkmale stehen fest, wie eine Erkennung sie liefern könnte —
+    deren eingepasste Maße dürfen in der letzten Stelle rauschen, gefragt ist
+    das Werkzeug daraus.
+    """
+    from app.core.scene.rebuild import RebuildBudget, _drill_tool
+    from app.core.types import Feature
+
+    tilted = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"axis": (0.2, 0.3, 0.9), "centre": (1.5, -2.0, 4.0), "diameter": 5.3, "depth": 8.0},
+    )
+    sunk = Feature(
+        id="hole_2",
+        kind="hole",
+        provenance="detected",
+        params={"axis": (1.0, 0.0, 0.0), "centre": (0.0, 3.0, 4.0), "diameter": 4.5, "depth": 20.0},
+    )
+    sink = Feature(
+        id="cone_1",
+        kind="cone",
+        provenance="detected",
+        params={
+            "axis": (1.0, 0.0, 0.0),
+            "centre": (-10.0, 3.0, 4.0),
+            "diameter": 9.0,
+            "angle": 90.0,
+            "recess": True,
+        },
+    )
+    features = (tilted, sunk, sink)
+    prints = []
+    for hole in (tilted, sunk):
+        for beyond in (True, False):
+            tool = _drill_tool(hole, features, RebuildBudget(0.1, 0.01), beyond=beyond)
+            assert tool is not None, "die Probe muss ein Werkzeug bauen"
+            prints.append(_mesh_print(tool))
+    return "|".join(prints)
+
+
 def _tangential_rounds() -> str:
     """Die tangentiale Trennung am rundum verrundeten T (RM-226): wer welche Rundung trägt.
 
@@ -1235,6 +1282,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "resize_chamber": _changed_chamber,
     "resize_closure": _changed_closure,
     "rebuild_box": _rebuilt_box,
+    "rebuild_drill_tool": _rebuild_drill_tool,
     "repair_selfint": _resolved_crossings,
     "resize_hole": _changed_bore,
     "rotate_object": _turned_plate,
