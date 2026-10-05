@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from app.core import examples
 from app.ui.start_screen import (
@@ -169,7 +169,11 @@ def test_the_drop_area_is_a_field_and_says_when_it_is_hit(screen: StartScreen) -
 
 
 def test_the_drop_area_names_every_format_it_accepts(screen: StartScreen) -> None:
-    """Eine beworbene Teilmenge lässt gültige Dateien wie Ausnahmen wirken."""
+    """Eine beworbene Teilmenge lässt gültige Dateien wie Ausnahmen wirken.
+
+    Die Liste steht in Kurzhilfe, Statuszeile und Beschreibung, nicht mehr
+    auf der Fläche (RM-515, D15): neunzehn Endungen machten sie zum Absatz.
+    """
     from PySide6.QtWidgets import QLabel
 
     from app.branding import PART_FILE_SUFFIX, PROJECT_SUFFIX
@@ -177,9 +181,12 @@ def test_the_drop_area_names_every_format_it_accepts(screen: StartScreen) -> Non
 
     area = screen.findChild(DropArea)
     assert area is not None
-    shown = "\n".join(label.text().lower() for label in area.findChildren(QLabel))
-    for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
-        assert suffix.lstrip(".").lower() in shown, suffix
+    shown = " ".join(label.text() for label in area.findChildren(QLabel))
+    for told in (area.toolTip(), area.statusTip(), area.accessibleDescription()):
+        for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
+            assert suffix.lstrip(".").upper() in told.upper(), suffix
+    assert "STL" not in shown and "3MF" not in shown, "keine Formatliste auf der Fläche"
+    assert "Browser" in area.toolTip()
 
 
 def test_the_drop_area_accepts_only_the_named_part_file_suffix(tmp_path: Path) -> None:
@@ -284,17 +291,18 @@ def test_the_tab_chain_follows_the_visible_page_and_scrolls_each_target_into_vie
     heading = screen.more_section.findChild(QToolButton, "sectionHeading")
     assert scroll is not None and heading is not None
     guided = [tile for tile in screen.tiles if tile.entry.way]
-    screen.new_button.setFocus(Qt.FocusReason.OtherFocusReason)
+    screen.recent_list.setFocus(Qt.FocusReason.OtherFocusReason)
     for expected in (
+        *guided,
+        screen.new_button,
         screen.import_button,
         screen.open_button,
         screen.manual_button,
         screen.inventory_button,
-        screen.recent_list,
-        *guided,
+        screen.drop_area,
+        heading,
         screen.feedback_button,
         screen.support_button,
-        heading,
     ):
         QTest.keyClick(screen, Qt.Key.Key_Tab)
         QApplication.processEvents()
@@ -397,16 +405,17 @@ def test_a_tile_answers_pointer_and_keyboard_focus_without_motion(screen: StartS
     assert effect.blurRadius() == rest
 
 
-def test_an_empty_recent_list_is_a_line_not_a_box(screen: StartScreen) -> None:
-    """Ein leerer Zustand darf klein sein; er muss nur seinen Platz wieder
-    hergeben, wenn er gefüllt wird."""
+def test_an_empty_recent_list_is_not_there_at_all(screen: StartScreen) -> None:
+    """Beim ersten Start gibt es nichts fortzusetzen (RM-515).
+
+    Erst war es eine leere Box über 400 Pixel, dann eine Zeile „Noch nichts
+    geöffnet.“ über nichts. Mit dem ersten Projekt steht der Abschnitt da.
+    """
     screen.show_recent([])
-    assert not screen.recent_empty.isHidden()
-    assert screen.recent_list.isHidden()
+    assert screen.recent_section.isHidden()
 
     screen.show_recent([Path("a.p3d"), Path("b.p3d")])
-    assert screen.recent_empty.isHidden()
-    assert not screen.recent_list.isHidden()
+    assert not screen.recent_section.isHidden()
     assert screen.recent_list.count() == 2
 
 
@@ -767,10 +776,14 @@ def test_primary_start_actions_are_large_and_examples_are_readable(
         apply_theme(qt_app, before)
 
 
-def test_the_start_screen_offers_feedback_and_voluntary_support_as_two_action_cards(
-    qt_app: QApplication,
-) -> None:
-    """Die zwei Nebenwege bleiben zugänglich, ohne einen fünften Hauptweg vorzutäuschen."""
+def test_feedback_and_support_are_a_quiet_footer_not_tiles(qt_app: QApplication) -> None:
+    """Feedback und Spende waren so groß wie die vier Einstiege (A17).
+
+    Jetzt zwei flache Knöpfe unter allem anderen; was sie öffnen, sagen
+    Kurzhilfe, Statuszeile und Beschreibung. „Freiwillig“ und die Anbieter
+    stehen dort (Wofür, nicht womit — Robert, 23.09.2026).
+    """
+    from app.ui.start_screen import FooterLink
     from app.ui.style import TARGET_SIZE, stylesheet
 
     before = qt_app.styleSheet()
@@ -780,59 +793,40 @@ def test_the_start_screen_offers_feedback_and_voluntary_support_as_two_action_ca
     support: list[bool] = []
     screen.feedbackRequested.connect(lambda: feedback.append(True))
     screen.supportRequested.connect(lambda: support.append(True))
-    screen.resize(800, 600)
+    screen.resize(1600, 900)
     screen.show()
     qt_app.processEvents()
 
     assert screen.secondary_actions == [screen.feedback_button, screen.support_button]
-    assert screen.feedback_button.accessibleName() == "Feedback geben"
-    assert screen.support_button.accessibleName() == "Solidon unterstützen"
-    assert "PayPal" not in screen.support_button.accessibleName()
-    assert "Eine Person" in screen.feedback_button.detail_label.text()
-    assert screen.feedback_button.hint_label.text() == "Vorschau vor dem Senden"
-    # Wofür, nicht womit (Robert, 23.09.2026) — und die Grenze zum Kauf steht
-    # sichtbar im Zusatz und in der Beschreibung für den Bildschirmleser.
-    assert screen.support_button.detail_label.text() == (
-        "Trägt die Werkzeuge und laufenden Kosten der Entwicklung."
-    )
-    assert screen.support_button.hint_label.text() == "Freiwillig · PayPal oder GoFundMe"
-    assert "Freiwillig" in screen.support_button.accessibleDescription()
+    assert screen.feedback_button.text() == "Feedback geben"
+    assert screen.support_button.text() == "Solidon unterstützen"
+    assert "Eine Person" in screen.feedback_button.toolTip()
+    assert "Vorschau vor dem Senden" in screen.feedback_button.accessibleDescription()
+    assert "Freiwillig" in screen.support_button.toolTip()
+    assert "PayPal" in screen.support_button.accessibleDescription()
+    starts = [tile for tile in screen.tiles if tile.entry.way]
     for button in screen.secondary_actions:
-        assert isinstance(button, QPushButton)
-        assert button.objectName() == "startActionCard"
-        assert min(button.sizeHint().height(), button.height()) >= TARGET_SIZE
-        assert button.minimumWidth() >= TARGET_SIZE
+        assert isinstance(button, FooterLink) and button.isFlat()
+        assert button.height() >= TARGET_SIZE
+        assert button.height() < min(tile.height() for tile in starts) / 2, "keine Kachel"
         assert button.focusPolicy() == Qt.FocusPolicy.StrongFocus
-        assert button.accessibleDescription()
-        assert button.detail_label.text() in button.accessibleDescription()
-        assert button.hint_label.text() in button.accessibleDescription()
-        assert button.icon_label.pixmap() is not None
-        assert not button.icon_label.pixmap().isNull()
-        assert not button.findChildren(QPushButton), "die ganze Karte ist genau ein Schaltziel"
+    assert screen.footer.geometry().top() > screen.more_section.geometry().bottom(), (
+        "die Fußzeile steht unter allem anderen"
+    )
 
     screen.feedback_button.click()
     screen.support_button.click()
-
     assert feedback == [True]
     assert support == [True]
-
-    from PySide6.QtGui import QAccessible
-
-    for button in screen.secondary_actions:
-        interface = QAccessible.queryAccessibleInterface(button)
-        assert interface is not None and interface.role() == QAccessible.Role.Button
     screen.deleteLater()
     qt_app.setStyleSheet(before)
 
 
-@pytest.mark.parametrize(
-    ("width", "height", "columns"),
-    ((1920, 1080, 2), (1040, 760, 2), (800, 600, 1), (640, 720, 1)),
-)
-def test_the_two_quiet_start_actions_never_add_a_horizontal_scroll_axis(
-    qt_app: QApplication, width: int, height: int, columns: int
+@pytest.mark.parametrize(("width", "height"), ((1920, 1080), (1040, 760), (800, 600), (640, 720)))
+def test_the_footer_never_adds_a_horizontal_scroll_axis(
+    qt_app: QApplication, width: int, height: int
 ) -> None:
-    """Breit stehen die Karten als Paar, schmal gestapelt und niemals seitlich."""
+    """Die Fußzeile bleibt in der Spalte, auch schmal."""
     from PySide6.QtWidgets import QScrollArea
 
     from app.ui.style import stylesheet
@@ -847,28 +841,8 @@ def test_the_two_quiet_start_actions_never_add_a_horizontal_scroll_axis(
     scroll = screen.findChild(QScrollArea)
     assert scroll is not None
     assert scroll.horizontalScrollBar().maximum() == 0
-    assert screen._secondary_columns == columns
-    positions = [
-        screen.secondary_grid.getItemPosition(index)[:2]
-        for index in range(screen.secondary_grid.count())
-    ]
-    assert max(column for _row, column in positions) + 1 == columns
     for button in screen.secondary_actions:
-        assert button.width() <= screen.column.width()
-        assert button.height() >= 44
-        assert button.detail_label.heightForWidth(button.detail_label.width()) <= (
-            button.detail_label.height()
-        )
-        assert button.hint_label.heightForWidth(button.hint_label.width()) <= (
-            button.hint_label.height()
-        )
-    if columns == 2:
-        assert abs(screen.feedback_button.width() - screen.support_button.width()) <= 1
-    else:
-        assert all(
-            abs(button.width() - screen.secondary_area.width()) <= 1
-            for button in screen.secondary_actions
-        )
+        assert button.geometry().right() <= screen.footer.width()
     screen.deleteLater()
     qt_app.setStyleSheet(before)
 
@@ -934,10 +908,8 @@ def test_the_support_card_opens_only_the_local_notice_dialog(
 
 
 @pytest.mark.parametrize("key", (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space))
-def test_a_start_action_card_activates_once_on_key_release(
-    qt_app: QApplication, key: Qt.Key
-) -> None:
-    """Tastatur und Maus lösen denselben einen Dialogzug aus — beim Loslassen."""
+def test_a_footer_link_answers_the_keyboard_once(qt_app: QApplication, key: Qt.Key) -> None:
+    """Eingabe- und Leertaste lösen denselben einen Dialogzug aus (§19.2)."""
     from PySide6.QtTest import QTest
 
     screen = StartScreen()
@@ -945,12 +917,10 @@ def test_a_start_action_card_activates_once_on_key_release(
     qt_app.processEvents()
     requests: list[bool] = []
     screen.feedbackRequested.connect(lambda: requests.append(True))
-    card = screen.feedback_button
-    card.setFocus(Qt.FocusReason.TabFocusReason)
+    link = screen.feedback_button
+    link.setFocus(Qt.FocusReason.TabFocusReason)
 
-    QTest.keyPress(card, key)
-    assert not requests
-    QTest.keyRelease(card, key)
+    QTest.keyClick(link, key)
 
     assert requests == [True]
 
@@ -968,32 +938,6 @@ def test_a_double_click_requests_at_most_one_start_action(qt_app: QApplication) 
     QTest.mouseDClick(screen.support_button, Qt.MouseButton.LeftButton)
 
     assert requests == [True]
-
-
-def test_the_start_action_cards_need_no_animation_for_their_feedback(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Reduzierte Bewegung behält Fokus, Tiefe und Handlung ohne Zeitablauf."""
-    from PySide6.QtCore import QEvent, QPropertyAnimation
-
-    from app.ui.motion import animations_enabled
-
-    monkeypatch.setenv("SOLIDON3D_MOTION", "aus")
-    assert not animations_enabled()
-    screen = StartScreen()
-    screen.resize(1040, 760)
-    screen.show()
-    qt_app.processEvents()
-    card = screen.feedback_button
-    quiet_blur = card._shadow.blurRadius()
-
-    QApplication.sendEvent(card, QEvent(QEvent.Type.Enter))
-    qt_app.processEvents()
-
-    assert card._shadow.blurRadius() > quiet_blur
-    assert not card.findChildren(QPropertyAnimation)
-    card.setFocus(Qt.FocusReason.TabFocusReason)
-    assert card.hasFocus()
 
 
 def test_the_wide_layout_starts_only_when_a_third_column_has_room(screen: StartScreen) -> None:
@@ -1139,7 +1083,7 @@ def test_the_tour_note_stands_once_above_the_tiles(qt_app: QApplication) -> None
     qt_app.processEvents()
 
     # Gesucht wird der Wortstamm, nicht der ganze Satz: Über der Gruppe heißt
-    # es „Vier geführte Touren", in der Kachelbeschreibung „Geführte Tour" —
+    # es „Geführte Touren", in der Kachelbeschreibung „Geführte Tour" —
     # dieselbe Auskunft, zwei Beugungen.
     sichtbar = [
         label.text()
@@ -1216,7 +1160,9 @@ def test_a_model_file_has_its_own_button_on_the_start_screen(screen: StartScreen
     screen.importRequested.connect(lambda: seen.append("import"))
     screen.browseRequested.connect(lambda: seen.append("browse"))
 
-    assert screen.import_button.text() == "Modell öffnen …"
+    # Wie in Werkzeugleiste und Menü (A17): „Modell einfügen …“, „Öffnen …“.
+    assert screen.import_button.text() == "Modell einfügen …"
+    assert screen.open_button.text() == "Öffnen …"
     screen.import_button.click()
     assert seen == ["import"]
 
@@ -1269,3 +1215,56 @@ def test_replaced_example_tiles_hide_before_deferred_deletion(
     assert all(not tile.isHidden() for tile in old)
     screen.show_examples()
     assert all(tile.isHidden() for tile in old)
+
+
+# --- RM-515: wählen statt lesen ---------------------------------------------------
+
+
+def test_every_card_text_has_at_most_ten_words_in_every_language() -> None:
+    """Kartentexte höchstens zehn Wörter (RM-515, D15) — in jeder Sprache.
+
+    Die Karten trugen 16 bis 19 Wörter und eine Pointe („Der häufigste
+    Einstieg.“). Ein Wort ist, was Buchstaben oder Ziffern trägt; ein
+    Gedankenstrich ist keines.
+    """
+    import re
+
+    from app.i18n import set_language
+    from app.i18n.catalog import available_languages, install_language
+
+    try:
+        for language in available_languages():
+            install_language(language)
+            set_language(language)
+            for entry in examples.EXAMPLES:
+                text = str(entry.doc)
+                words = [word for word in text.split() if re.search(r"\w", word)]
+                assert len(words) <= examples.MAX_CARD_WORDS, (language, entry.id, text)
+                assert "häufigste" not in text
+    finally:
+        set_language("de")
+
+
+def test_only_the_four_starts_are_large(screen: StartScreen) -> None:
+    """Nur die vier Einstiege stehen in Kachelgröße, mit größerem Bild und Titel."""
+    from app.ui.start_screen import START_PREVIEW_HEIGHT
+
+    starts = [tile for tile in screen.tiles if tile.entry.way]
+    others = [tile for tile in screen.tiles if not tile.entry.way]
+    assert len(starts) == 4 and others
+    for tile in starts:
+        assert tile.starts
+        assert tile.title_label.objectName() == "startTourTitle"
+        assert tile.preview.pixmap().deviceIndependentSize().height() == START_PREVIEW_HEIGHT
+    for tile in others:
+        assert not tile.starts
+        assert tile.preview.pixmap().deviceIndependentSize().height() == PREVIEW_HEIGHT
+
+
+def test_the_tour_heading_counts_nothing(screen: StartScreen) -> None:
+    """„Vier geführte Touren“ stand über sechs Karten (RM-515)."""
+    import re
+
+    heading = screen.tours_heading.text()
+    assert "Tour" in heading
+    assert not re.search(r"\d|Vier|vier", heading), heading

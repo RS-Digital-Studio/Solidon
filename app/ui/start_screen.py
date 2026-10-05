@@ -119,7 +119,9 @@ WIDE_COLUMN_WIDTH = 1360
 WIDE_LAYOUT_MIN_WIDTH = 1600
 
 #: Die Ablagefläche ist eine große Trefferfläche, aber kein eigener Bildschirm.
-DROP_AREA_MIN_HEIGHT = 112
+#: Seit Formatliste und Verweis in der Kurzhilfe stehen (RM-515), trägt sie
+#: Zeichen und zwei kurze Sätze.
+DROP_AREA_MIN_HEIGHT = 88
 
 
 class DropArea(QPushButton):
@@ -170,27 +172,21 @@ class DropArea(QPushButton):
         click_hint.setWordWrap(True)
         set_level(click_hint, "caption")
 
-        names = [
+        # **Formatliste und Verweis stehen in der Kurzhilfe** (RM-515, D15):
+        # neunzehn Endungen und ein Satz machten die Fläche zu einem Absatz.
+        # Wer wissen will, ob seine Datei geht, zeigt auf die Fläche; wer sie
+        # einfach ablegt, liest nichts. Das Feld nimmt auch einen Verweis
+        # (:attr:`urlDropped`) — der kürzeste Weg von einer Modellseite hierher.
+        self.formats = " · ".join(
             suffix.lstrip(".").upper()
             for suffix in (*IMPORT_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX)
-        ]
-        middle = (len(names) + 1) // 2
-        kinds = QLabel(
-            "\n".join((" · ".join(names[:middle]), " · ".join(names[middle:]))),
-            self,
         )
-        kinds.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        kinds.setWordWrap(True)
-        set_level(kinds, "caption")
-
-        # Das Feld nimmt auch einen Verweis (:attr:`urlDropped`), und das ist
-        # der kürzeste Weg von einer Modellseite hierher: kein Herunterladen,
-        # kein Suchen im Download-Ordner. Es stand nirgends — ein Weg, den
-        # niemand kennt, ist keiner.
-        link = QLabel(tr("Auch ein Verweis aus dem Browser"), self)
-        link.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        link.setWordWrap(True)
-        set_level(link, "caption")
+        self._tip = tr(
+            "Liest {formats}. Auch ein Verweis aus dem Browser geht.", formats=self.formats
+        )
+        self.setToolTip(self._tip)
+        self.setStatusTip(self._tip)
+        self.setAccessibleDescription(self._tip)
 
         # Die Antwort auf eine Datei, die Solidon nicht liest (RM-358 W1-6):
         # Die Quittung des Fensters liegt über der Ansicht und damit hinter
@@ -207,8 +203,6 @@ class DropArea(QPushButton):
         layout.addWidget(self.symbol)
         layout.addWidget(hint)
         layout.addWidget(click_hint)
-        layout.addWidget(kinds)
-        layout.addWidget(link)
         layout.addWidget(self.note)
         layout.addStretch(1)
         self._painted: tuple[str, bool] | None = None
@@ -218,7 +212,7 @@ class DropArea(QPushButton):
         """Einen Satz zur zuletzt abgelegten Datei zeigen — leer räumt ihn weg."""
         self.note.setText(text)
         self.note.setVisible(bool(text))
-        self.setAccessibleDescription(text)
+        self.setAccessibleDescription(text or self._tip)
         self.updateGeometry()
 
     def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
@@ -229,7 +223,7 @@ class DropArea(QPushButton):
         if layout is None:
             return hint
         content = layout.sizeHint()
-        wrapped_reserve = 2 * self.fontMetrics().height()
+        wrapped_reserve = self.fontMetrics().height()
         return QSize(
             max(hint.width(), content.width()),
             max(hint.height(), content.height() + wrapped_reserve),
@@ -243,9 +237,9 @@ class DropArea(QPushButton):
             return super().minimumSizeHint()
         content = layout.minimumSize()
         # QBoxLayout zählt bei umbrechenden Labels nur deren einzeilige
-        # Mindesthöhe. Zwei Zeilen Reserve halten auch die lange Formatliste
-        # bei großer Systemschrift vollständig sichtbar.
-        wrapped_reserve = 2 * self.fontMetrics().height()
+        # Mindesthöhe. Eine Zeile Reserve hält auch bei großer Systemschrift
+        # beide Sätze vollständig sichtbar.
+        wrapped_reserve = self.fontMetrics().height()
         return QSize(
             content.width(),
             max(DROP_AREA_MIN_HEIGHT, content.height() + wrapped_reserve),
@@ -343,11 +337,23 @@ def current_theme() -> str:
 
 
 #: Wie hoch ein Vorschaubild in der Kachel steht. Groß genug, um die Form zu
-#: erkennen, klein genug, dass Titel und Satz ihre Zeilen behalten.
+#: erkennen, klein genug, dass Titel und Satz ihre Zeilen behalten — die
+#: Beispiele unter „Was kann das noch?“.
 PREVIEW_HEIGHT = 88
 
+#: Das Vorschaubild der vier Einstiege. Sie sind der Anfang des Programms und
+#: stehen deshalb größer als alles andere auf der Seite (RM-515); die Kachel
+#: wird damit rund anderthalbmal so hoch, und der Titel bekommt die Größe
+#: dazu (:data:`START_TITLE_SCALE`).
+START_PREVIEW_HEIGHT = 132
 
-def _preview_pixmap(entry: Example) -> QPixmap | None:
+#: Schriftgröße eines Einstiegstitels relativ zur Grundschrift — zwischen
+#: Abschnitt (1,15) und Fenstertitel (1,75): Die vier sollen auffallen, ohne
+#: lauter zu sein als der Name der Anwendung darüber.
+START_TITLE_SCALE = 1.4
+
+
+def _preview_pixmap(entry: Example, height: int = PREVIEW_HEIGHT) -> QPixmap | None:
     """Das Vorschaubild eines Beispiels als Pixmap, oder nichts.
 
     Gerastert wird beim Aufbau der Kachel: das SVG ist ein Bild und kein
@@ -360,9 +366,7 @@ def _preview_pixmap(entry: Example) -> QPixmap | None:
     renderer = QSvgRenderer(QByteArray(source.encode("utf-8")))
     if not renderer.isValid():
         return None
-    image = QImage(
-        QSize(PREVIEW_HEIGHT, PREVIEW_HEIGHT) * 2, QImage.Format.Format_ARGB32_Premultiplied
-    )
+    image = QImage(QSize(height, height) * 2, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(Qt.GlobalColor.transparent)
     painter = QPainter(image)
     renderer.render(painter)
@@ -410,13 +414,27 @@ class ExampleTile(QPushButton):
         self.setGraphicsEffect(self._shadow)
         self._paint_depth()
 
+        # **Die vier Einstiege groß, die übrigen Beispiele ruhig** (RM-515):
+        # Vorher waren alle Kacheln gleich und Feedback und Spende genauso
+        # groß — der Blick fand keinen Anfang. Ob eine Kachel ein Einstieg
+        # ist, sagt das Beispiel selbst (``way``).
+        self.starts = bool(entry.way)
         title = QLabel(str(entry.title), self)
         title.setWordWrap(True)
-        set_level(title, "section")
+        if self.starts:
+            title.setObjectName("startTourTitle")
+            base = max(QApplication.font().pointSize(), 1)
+            title.setStyleSheet(
+                f"QLabel#startTourTitle {{ font-size: {round(base * START_TITLE_SCALE)}pt;"
+                " font-weight: 600; }"
+            )
+        else:
+            set_level(title, "section")
+        self.title_label = title
 
         doc = QLabel(str(entry.doc), self)
         doc.setWordWrap(True)
-        set_level(doc, "caption")
+        set_level(doc, "body" if self.starts else "caption")
 
         # Das Bild kommt aus dem Beispiel selbst, gerendert von
         # `tools/make_examples.py` beim Bauen. Fehlt es, steht die Kachel wie
@@ -425,7 +443,7 @@ class ExampleTile(QPushButton):
         # keine.
         self.preview = QLabel(self)
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        picture = _preview_pixmap(entry)
+        picture = _preview_pixmap(entry, START_PREVIEW_HEIGHT if self.starts else PREVIEW_HEIGHT)
         self.preview.setVisible(picture is not None)
         if picture is not None:
             self.preview.setPixmap(picture)
@@ -445,6 +463,10 @@ class ExampleTile(QPushButton):
         text = QVBoxLayout(words)
         text.setContentsMargins(0, 0, 0, 0)
         text.setSpacing(TIGHT)
+        # Ein Einstieg stellt Titel und Satz mittig neben sein großes Bild;
+        # oben angeschlagen stand unter zwei Zeilen eine leere Kachelhälfte.
+        if self.starts:
+            text.addStretch(1)
         text.addWidget(title)
         text.addWidget(doc)
         # Der Überschuss sammelt sich unten, nicht zwischen Titel und Satz:
@@ -567,174 +589,55 @@ def accepted_paths(event: QDragEnterEvent | QDropEvent) -> list[Path]:
     ]
 
 
-class StartActionCard(QPushButton):
-    """Eine ruhige Nebenhandlung mit Symbol, Titel und sachlichem Grund."""
+class FooterLink(QPushButton):
+    """Ein schlichter Nebenweg in der Fußzeile: Symbol und Name, der Rest in der Kurzhilfe.
 
-    def __init__(
-        self,
-        title: str,
-        detail: str,
-        hint: str,
-        symbol: str,
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setObjectName("startActionCard")
+    Feedback und Unterstützung standen als Karten so groß wie die vier
+    Einstiege da (A17) — zwei Nebenwege sahen aus wie zwei weitere Anfänge.
+    Hier sind sie flache Knöpfe unter allem anderen; was sie öffnen und warum,
+    sagen Kurzhilfe, Statuszeile und Bildschirmleser.
+    """
+
+    def __init__(self, title: str, detail: str, symbol: str, parent: QWidget | None = None) -> None:
+        super().__init__(title, parent)
+        self.setObjectName("startFooterLink")
+        self.setFlat(True)
         self.setAutoDefault(False)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setToolTip(detail)
+        self.setStatusTip(detail)
         self.setAccessibleName(title)
         self.setAccessibleDescription(detail)
-        self.setMinimumWidth(44)
-        self.setMinimumHeight(76)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self._symbol = symbol
-        self._keyboard_key: int | None = None
-        self._mouse_armed = False
-        self._last_mouse_activation = 0.0
-
-        self.icon_label = QLabel(self)
-        self.icon_label.setFixedSize(28, 28)
-        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.icon_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-
-        self.title_label = QLabel(title, self)
-        self.title_label.setWordWrap(True)
-        self.title_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        set_level(self.title_label, "section")
-
-        self.detail_label = QLabel(detail, self)
-        self.detail_label.setWordWrap(True)
-        self.detail_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        set_level(self.detail_label, "caption")
-
-        self.hint_label = QLabel(hint, self)
-        self.hint_label.setWordWrap(True)
-        self.hint_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.hint_label.setProperty("cardHint", True)
-        set_level(self.hint_label, "caption")
-        self.setAccessibleDescription(f"{detail} {hint}")
-
-        words = QVBoxLayout()
-        words.setContentsMargins(0, 0, 0, 0)
-        words.setSpacing(TIGHT)
-        words.addWidget(self.title_label)
-        words.addWidget(self.detail_label)
-        words.addWidget(self.hint_label)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
-        layout.setSpacing(NORMAL)
-        layout.addWidget(self.icon_label, alignment=Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(words, stretch=1)
+        self._refresh_icon()
         make_large_target(self)
 
-        # Dieselbe unmittelbare Tiefenrückmeldung wie die Beispielkacheln.
-        # Sie bewegt nichts und braucht deshalb auch bei reduzierter Bewegung
-        # keinen Ersatz: Fläche, Rahmen und Schatten antworten sofort.
-        self._hovered = False
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self.setGraphicsEffect(self._shadow)
-        self._paint_depth()
-        self._refresh_icon()
-
     def _refresh_icon(self) -> None:
-        size = QSize(24, 24)
-        self.icon_label.setPixmap(icon(self._symbol, self).pixmap(size))
-
-    def _paint_depth(self) -> None:
-        active = self._hovered or self.hasFocus()
-        self._shadow.setBlurRadius(16.0 if active else 7.0)
-        self._shadow.setOffset(0.0, 2.0 if active else 1.0)
-        self._shadow.setColor(QColor(0, 0, 0, 72 if active else 34))
-
-    def enterEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        self._hovered = True
-        self._paint_depth()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        self._hovered = False
-        self._paint_depth()
-        super().leaveEvent(event)
-
-    def focusInEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        super().focusInEvent(event)
-        self._paint_depth()
-
-    def focusOutEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        self._keyboard_key = None
-        self.setDown(False)
-        super().focusOutEvent(event)
-        self._paint_depth()
+        self.setIcon(icon(self._symbol, self))
 
     def keyPressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        """Eingabe und Leertaste lösen erst beim Loslassen genau einmal aus."""
-        keys = (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space)
-        if event.key() in keys:
-            if not event.isAutoRepeat() and self._keyboard_key is None:
-                self._keyboard_key = int(event.key())
-                self.setDown(True)
+        """Die Eingabetaste löst aus wie die Leertaste (§19.2) — einmal, ohne Wiederholung.
+
+        Ein Knopf außerhalb eines Dialogs nimmt sonst nur die Leertaste.
+        """
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if not event.isAutoRepeat():
+                self.click()
             event.accept()
             return
         super().keyPressEvent(event)
 
-    def keyReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        if self._keyboard_key == int(event.key()):
-            armed = not event.isAutoRepeat()
-            self._keyboard_key = None
-            self.setDown(False)
-            if armed:
-                self.click()
-            event.accept()
-            return
-        super().keyReleaseEvent(event)
-
-    def mousePressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        """Gedrückt gibt die Tiefe sofort nach; die Karte selbst bewegt sich nie."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._mouse_armed = True
-            self.setDown(True)
-            self._shadow.setBlurRadius(5.0)
-            self._shadow.setOffset(0.0, 0.0)
-            event.accept()
-            return
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        if event.button() == Qt.MouseButton.LeftButton:
-            armed = self._mouse_armed and self.rect().contains(event.position().toPoint())
-            self._mouse_armed = False
-            self.setDown(False)
-            if armed:
-                self._last_mouse_activation = time.monotonic()
-                self.click()
-            event.accept()
-            self._paint_depth()
-            return
-        super().mouseReleaseEvent(event)
-        self._paint_depth()
-
     def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        """Ein hastiger Doppelklick bleibt genau eine Dialoganforderung."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            interval = QApplication.doubleClickInterval() / 1000.0
-            # Auf echten Plattformen kam unmittelbar davor schon der erste
-            # Klick; QTest und einzelne Hilfsmittel senden dagegen nur das
-            # Doppelklick-Ereignis. In beiden Fällen folgt höchstens ein Zug.
-            fresh = time.monotonic() - self._last_mouse_activation > interval
-            self._mouse_armed = False
-            self.setDown(False)
-            if fresh:
-                self._last_mouse_activation = time.monotonic()
-                self.click()
-            event.accept()
-            return
-        super().mouseDoubleClickEvent(event)
+        """Ein hastiger Doppelklick öffnet keine zwei modalen Fenster übereinander.
+
+        Der erste Klick hat schon ausgelöst; der zweite Druck bleibt liegen.
+        """
+        event.accept()
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802 — Qt-Name
         super().changeEvent(event)
-        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.FontChange):
+        if event.type() == QEvent.Type.PaletteChange:
             self._refresh_icon()
 
 
@@ -872,9 +775,6 @@ class StartScreen(QWidget):
         # ``sizeHintForRow`` gibt dort einen Vorgabewert zurück, der um mehr
         # als das Doppelte danebenliegt (77 statt 30).
 
-        self.recent_empty = QLabel(tr("Noch nichts geöffnet."), self)
-        set_level(self.recent_empty, "caption")
-
         # §37.2: die Beispielprojekte sind Inhalt des Startbildschirms und kein
         # Ordner, den jemand suchen muss.
         #
@@ -905,12 +805,18 @@ class StartScreen(QWidget):
         make_primary(self.new_button)
         make_large_target(self.new_button)
         self.new_button.clicked.connect(self.newRequested)
-        self.import_button = QPushButton(tr("Modell öffnen …"), self)
+        # **Die Knöpfe heißen wie in der Werkzeugleiste und im Menü** (A17):
+        # „Modell öffnen …“ und „Projekt öffnen …“ hier, „Modell einfügen“ und
+        # „Öffnen“ dort — der Kunde sucht beim zweiten Mal das Wort, das er
+        # zuerst gelesen hat.
+        self.import_button = QPushButton(tr("Modell einfügen …"), self)
         self.import_button.setToolTip(tr("Eine STL-, 3MF- oder andere Modelldatei einfügen."))
         self.import_button.setStatusTip(self.import_button.toolTip())
         make_large_target(self.import_button)
         self.import_button.clicked.connect(self.importRequested)
-        self.open_button = QPushButton(tr("Projekt öffnen …"), self)
+        self.open_button = QPushButton(tr("Öffnen …"), self)
+        self.open_button.setToolTip(tr("Ein gespeichertes Projekt öffnen (.p3d)."))
+        self.open_button.setStatusTip(self.open_button.toolTip())
         make_large_target(self.open_button)
         self.open_button.clicked.connect(self.browseRequested)
 
@@ -925,10 +831,7 @@ class StartScreen(QWidget):
         # über das Hilfemenü des Hauptfensters, das beim ersten Start noch
         # niemand gesehen hat. Der Verweis gehört hierher, und zwar neben die
         # Knöpfe: am anderen Fensterrand gehörte er sichtbar zu nichts.
-        # **Der Knopf nennt seine Handlung, der Zusatz steht daneben** (B27):
-        # Mit dem ganzen Satz maß er 249 Punkte gegen 99 und 113 seiner zwei
-        # Nachbarn — mehr als doppelt so breit, und eine Knopfzeile, in der
-        # einer heraussticht, sieht nach Rangordnung aus, wo keine ist.
+        # **Der Knopf nennt seine Handlung, der Zusatz steht daneben** (B27).
         self.manual_button = QPushButton(tr("Handbuch"), self)
         self.manual_button.setToolTip(
             tr("Wo fange ich an? Anleitungen in Bildern, vom ersten Klick bis zum Druck.")
@@ -939,35 +842,40 @@ class StartScreen(QWidget):
         self.manual_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.manual_button.clicked.connect(self.manualRequested)
 
-        # Zwei zusammengehörige Nebenwege unter den vier Einstiegen. Sie
-        # erklären knapp, warum es sie gibt, und öffnen nur vorhandene lokale
-        # Dialoge: Rückmeldung versendet erst nach der Vorschau,
-        # Unterstützung führt erst nach der Anbieterwahl zu PayPal oder GoFundMe.
-        feedback_detail = tr(
-            "Eine Person entwickelt Solidon unabhängig. Was soll für Sie besser werden?"
-        )
-        self.feedback_button = StartActionCard(
+        # **Zwei Nebenwege als Fußzeile, nicht als Karten** (A17). Sie öffnen
+        # nur vorhandene lokale Dialoge: Rückmeldung versendet erst nach der
+        # Vorschau, Unterstützung führt erst nach der Anbieterwahl zu PayPal
+        # oder GoFundMe. Wofür, nicht womit (Entscheidung Robert, 23.09.2026):
+        # Der Satz nennt, was das Geld trägt; die Anbieter und „freiwillig“
+        # stehen dahinter.
+        self.feedback_button = FooterLink(
             tr("Feedback geben"),
-            feedback_detail,
-            tr("Vorschau vor dem Senden"),
+            tr(
+                "Eine Person entwickelt Solidon unabhängig. Was soll für Sie besser "
+                "werden? Vorschau vor dem Senden."
+            ),
             "feedback",
             self,
         )
         self.feedback_button.clicked.connect(self.feedbackRequested)
-
-        # **Wofür, nicht womit** (Entscheidung Robert, 23.09.2026): Der Satz
-        # nennt, was das Geld trägt; die Anbieter stehen im Zusatz, zusammen
-        # mit dem Wort, das die Grenze zum Kauf zieht.
-        support_detail = tr("Trägt die Werkzeuge und laufenden Kosten der Entwicklung.")
-        self.support_button = StartActionCard(
+        self.support_button = FooterLink(
             tr("Solidon unterstützen"),
-            support_detail,
-            tr("Freiwillig · PayPal oder GoFundMe"),
+            tr(
+                "Trägt die Werkzeuge und laufenden Kosten der Entwicklung. "
+                "Freiwillig, über PayPal oder GoFundMe."
+            ),
             "support",
             self,
         )
         self.support_button.clicked.connect(self.supportRequested)
         self.secondary_actions = [self.feedback_button, self.support_button]
+        self.footer = QWidget(self)
+        footer = QHBoxLayout(self.footer)
+        footer.setContentsMargins(0, 0, 0, 0)
+        footer.setSpacing(NORMAL)
+        for link in self.secondary_actions:
+            footer.addWidget(link)
+        footer.addStretch(1)
 
         buttons = QHBoxLayout()
         buttons.setSpacing(NORMAL)
@@ -985,12 +893,15 @@ class StartScreen(QWidget):
         self._primary_actions.addWidget(self.inventory_button, 0, 1)
         self._inventory_below = False
 
-        self.secondary_area = QWidget(self)
-        self.secondary_grid = QGridLayout(self.secondary_area)
-        self.secondary_grid.setContentsMargins(0, 0, 0, 0)
-        self.secondary_grid.setSpacing(TILE_GRID_SPACING)
-        self._secondary_columns = 2
-        self._layout_secondary_actions(2)
+        # „Zuletzt geöffnet“ nur, wenn es etwas gibt (:meth:`show_recent`):
+        # Beim ersten Start war „Noch nichts geöffnet.“ eine Zeile über
+        # nichts, und dann steht Weiterarbeiten vor Entdecken.
+        self.recent_section = QWidget(self)
+        recent = QVBoxLayout(self.recent_section)
+        recent.setContentsMargins(0, 0, 0, 0)
+        recent.setSpacing(TIGHT)
+        recent.addWidget(_caption(tr("Zuletzt geöffnet"), self.recent_section))
+        recent.addWidget(self.recent_list)
 
         column = QWidget(self)
         self.column = column
@@ -1000,37 +911,25 @@ class StartScreen(QWidget):
         inner.setContentsMargins(0, 0, 0, 0)
         inner.setSpacing(NORMAL)
         inner.addWidget(title)
-        inner.addWidget(drop)
-        inner.addLayout(self._primary_actions)
-        # Wer schon gearbeitet hat, sucht zuerst den Rückweg in sein Projekt.
-        # Deshalb steht „Zuletzt geöffnet" vor den Touren; Neu, Öffnen und
-        # Weiterarbeiten bilden gemeinsam den Einstieg, Vertiefung folgt.
-        inner.addWidget(_caption(tr("Zuletzt geöffnet"), self))
-        inner.addWidget(self.recent_empty)
-        inner.addWidget(self.recent_list)
-        # **Einmal über der Gruppe, nicht viermal darin** (Befund B27).
-        # Unter jedem der vier Kacheltitel stand „Geführte Tour · Schritt für
-        # Schritt" — dieselbe Aussage über dieselbe Sache, viermal im selben
-        # Blickfeld. Was für alle gilt, gehört über die Gruppe; in der
-        # Beschreibung jeder Kachel bleibt der Satz, denn ein Vorleser sieht
-        # nicht, was darüber steht.
-        inner.addWidget(
-            _caption(tr("Wo fange ich an? Vier geführte Touren, Schritt für Schritt."), self)
-        )
-        inner.addWidget(self.examples_area)
-        inner.addWidget(self.secondary_area)
-        # **Die fünf weiteren Beispiele klappen zu, die vier Wege nicht.**
-        # Auf 1600x900 — der häufigsten Laptop-Auflösung — brauchte der
-        # Startbildschirm 1040 Bildpunkte und rollte damit um 140; die
-        # Kachelbereiche reichten bis 917. ``more_area`` ist mit 264 der größte
-        # Einzelposten, und die Naht liegt dort, wo die Sache selbst eine hat:
-        # Die vier Kacheln darüber sind die vier Wege aus §2.2, also die
-        # Struktur des Programms. Die fünf hier sind Vertiefung — wer den
-        # Startbildschirm zum ersten Mal sieht, soll die vier sehen.
+        inner.addWidget(self.recent_section)
+        # **Die vier Einstiege oben und groß** (RM-515): Sie sind die Struktur
+        # des Programms, die vier Wege aus §2.2. Die Überschrift nennt keine
+        # Zahl — „Vier geführte Touren“ stand über sechs Karten.
         #
-        # Die Überschrift **wird** der Umschalter, statt einen zweiten daneben
-        # zu stellen: Der Text bleibt derselbe, und die ganze Zeile ist die
-        # Fläche, die man trifft (Regel 18 über den gedrückten Zustand).
+        # **Einmal über der Gruppe, nicht viermal darin** (B27): Dass hinter
+        # jeder Kachel eine Führung beginnt, steht hier; in der Beschreibung
+        # jeder Kachel bleibt der Satz, denn ein Vorleser sieht nicht, was
+        # darüber steht.
+        self.tours_heading = _caption(
+            tr("Wo fange ich an? Geführte Touren, Schritt für Schritt."), self
+        )
+        inner.addWidget(self.tours_heading)
+        inner.addWidget(self.examples_area)
+        inner.addLayout(self._primary_actions)
+        inner.addWidget(drop)
+        # **Die weiteren Beispiele klappen zu, die vier Wege nicht.** Wer den
+        # Startbildschirm zum ersten Mal sieht, soll die vier sehen; die
+        # übrigen sind Vertiefung. Die Überschrift **wird** der Umschalter.
         self.more_section = collapsible(
             tr("Was kann das noch?"),
             self.more_area,
@@ -1038,17 +937,10 @@ class StartScreen(QWidget):
             contents=tr("Weitere Beispielprojekte"),
         )
         inner.addWidget(self.more_section)
-        # **Ausbalanciert, nicht oben angedockt** (Befund B27). Der ganze
-        # Überschuss sammelte sich unten: Auf einem hohen Fenster endete der
-        # Inhalt bei genau der halben Höhe, und darunter war nichts — das las
-        # sich nicht als Ruhe, sondern als Abbruch. Zwei Dehnfelder teilen ihn
-        # jetzt, oben weniger als unten: Die Spalte steht dann etwas über der
-        # Mitte, wo der Blick sie sucht, und die Fläche darunter wirkt gewollt.
-        #
-        # Gefüllt wird sie ausdrücklich nicht. „Zuletzt geöffnet" wächst von
-        # selbst, sobald jemand arbeitet; der leere Neuzustand ist die
-        # Ausnahme, und neue Inhalte dafür zu erfinden wäre eine Pflegefläche
-        # ohne Auftrag.
+        inner.addWidget(self.footer)
+        # **Ausbalanciert, nicht oben angedockt** (Befund B27): Zwei
+        # Dehnfelder teilen den Überschuss, oben weniger als unten. Die Spalte
+        # steht dann etwas über der Mitte, wo der Blick sie sucht.
         inner.insertStretch(0, 1)
         inner.addStretch(3)
 
@@ -1059,22 +951,13 @@ class StartScreen(QWidget):
         middle = QHBoxLayout(centred)
         self._middle = middle
         # Zwei statt drei Weiten Rand: Die drei waren Luft, die oben und unten
-        # zusammen zweiunddreißig Pixel kostete — bei einem Inhalt, der auf
-        # 1920 mal 1080 um 198 Pixel über das Sichtfeld hinausragte.
+        # zusammen zweiunddreißig Pixel kostete.
         middle.setContentsMargins(WIDE * 2, WIDE * 2, WIDE * 2, WIDE * 2)
         middle.addStretch()
         # **Mit Dehnung, sonst bleibt die Spalte bei ihrer Wunschbreite.**
-        # ``setMaximumWidth`` erlaubt nur; es zieht nicht. Zwischen zwei
-        # Stretch-Feldern ohne eigenen Faktor bekam die Spalte ihre
-        # ``sizeHint`` — gemessen 714 Pixel, und zwar bei **jeder**
-        # Fenstergröße von 1280 bis 3413. Die Rechnung in
-        # :meth:`_fit_the_columns` stellte derweil korrekt auf 1360 und drei
-        # Kachelspalten um; sie kam nur nie an. Nur die Spalte erhält deshalb
-        # einen Dehnungsfaktor: Bis zu ihrem Maximum nimmt sie jeden
-        # verfügbaren Punkt. Erst danach teilt Qt den Rest auf die beiden
-        # leeren Federn und hält sie damit in der Mitte. Ein Faktor auch an
-        # den Federn nahm ihr vorher schon unterhalb des Maximums ein Sechstel
-        # der Breite.
+        # ``setMaximumWidth`` erlaubt nur; es zieht nicht. Nur die Spalte
+        # erhält einen Dehnungsfaktor: Bis zu ihrem Maximum nimmt sie jeden
+        # verfügbaren Punkt, erst danach teilt Qt den Rest auf die Federn.
         middle.addWidget(column, 1)
         middle.addStretch()
 
@@ -1142,25 +1025,10 @@ class StartScreen(QWidget):
             )
             self._inventory_below = narrow
         columns = 3 if wide_enough else NARROW_COLUMNS if narrow else TILE_COLUMNS
-        self._layout_secondary_actions(1 if narrow else 2)
         if columns == self._columns:
             return
         self._columns = columns
         self.show_examples()
-
-    def _layout_secondary_actions(self, columns: int) -> None:
-        """Die zwei Karten liegen breit als Paar und schmal als klare Folge."""
-        if columns == self._secondary_columns and self.secondary_grid.count():
-            return
-        for column in range(max(self._secondary_columns, columns)):
-            self.secondary_grid.setColumnStretch(column, 0)
-        while self.secondary_grid.count():
-            self.secondary_grid.takeAt(0)
-        for index, card in enumerate(self.secondary_actions):
-            self.secondary_grid.addWidget(card, index // columns, index % columns)
-        for column in range(columns):
-            self.secondary_grid.setColumnStretch(column, 1)
-        self._secondary_columns = columns
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Beim Breiterwerden das Kachelraster neu teilen."""
@@ -1185,17 +1053,21 @@ class StartScreen(QWidget):
         deeper = [tile for tile in self.tiles if not tile.entry.way]
         heading = self.more_section.findChild(QToolButton, "sectionHeading")
         assert heading is not None
+        # Von oben nach unten, wie das Auge geht: zuletzt Geöffnetes, die vier
+        # Einstiege, die Knöpfe, die Ablagefläche, die weiteren Beispiele und
+        # zuletzt die Fußzeile.
         chain = [
+            self.recent_list,
+            *guided,
             self.new_button,
             self.import_button,
             self.open_button,
             self.manual_button,
             self.inventory_button,
-            self.recent_list,
-            *guided,
-            *self.secondary_actions,
+            self.drop_area,
             heading,
             *deeper,
+            *self.secondary_actions,
         ]
         self._focus_targets = set(chain)
         for target in chain:
@@ -1225,15 +1097,14 @@ class StartScreen(QWidget):
         return super().eventFilter(watched, event)
 
     def show_recent(self, paths: list[Path]) -> None:
-        """Die zuletzt geöffneten Projekte — oder eine Zeile, wenn es keine gibt.
+        """Die zuletzt geöffneten Projekte — oder nichts, wenn es keine gibt.
 
-        Eine leere Liste war eine leere Box über 400 Pixel Höhe mit einem Satz
-        darin. Ein leerer Zustand darf klein sein; er muss nur seinen Platz
-        wieder hergeben, wenn er gefüllt wird.
+        Eine leere Liste war erst eine leere Box über 400 Pixel Höhe, dann eine
+        Zeile „Noch nichts geöffnet.“ über nichts. Beim ersten Start gibt es
+        nichts fortzusetzen, und der Abschnitt steht nicht da (RM-515).
         """
         self.recent_list.clear()
-        self.recent_empty.setVisible(not paths)
-        self.recent_list.setVisible(bool(paths))
+        self.recent_section.setVisible(bool(paths))
         for path in paths:
             item = QListWidgetItem(path.name)
             item.setData(Qt.ItemDataRole.UserRole, str(path))

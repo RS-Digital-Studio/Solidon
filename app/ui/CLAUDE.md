@@ -113,7 +113,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
-| `start_screen.py` | die ersten fünf Minuten (§2.3) |
+| `start_screen.py` | die ersten fünf Minuten (§2.3): die vier Einstiege groß oben (`ExampleTile.starts`), Knöpfe wie in der Werkzeugleiste, Feedback und Unterstützen als Fußzeile (`FooterLink`) |
 | `header.py` | Kopfzeile: Projektname, Druckerwechsel, die tatsächlich belegten Filamente (`mesh.slot_indices`) |
 
 ### Brücke zum Kern
