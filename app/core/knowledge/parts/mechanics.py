@@ -553,9 +553,8 @@ def _hinge_feasible(raw: BaseParams) -> TranslatableText | None:
         "zur Biegung, sonst bricht das Scharnier beim ersten Öffnen."
     ),
     caveat=_(
-        "Nicht für ein Teil, das aufrecht gedruckt wird: Die dünne Stelle hält nur, "
-        "solange die Schichten quer zur Biegung laufen. Steht das Scharnier "
-        "senkrecht auf der Platte, bricht es beim ersten Öffnen."
+        "Aufrecht gedruckt, denn die dünne Stelle hält nur mit Schichten quer zur Biegung. Sonst "
+        "bricht sie beim ersten Öffnen."
     ),
     changes=[
         FIRST_RELEASE,
@@ -843,9 +842,8 @@ class SnapConnectorParams(BaseParams):
         "ihn nicht, darunter wäre der Arm dünner, als eine Düse ihn tragfähig legt."
     ),
     caveat=_(
-        "Nicht für kurze Nähte: Der Arm ist ein Zehntel seiner Länge dick, und unter "
-        "acht Millimetern legt eine Düse ihn nicht mehr tragfähig. Für kleine "
-        "Teile hält eine Rastnase besser."
+        "Für Nähte unter acht Millimetern, denn dort wird der Arm zu dünn. Kleine Teile hält "
+        "eine Rastnase besser."
     ),
     changes=[
         PartChange(
@@ -1078,8 +1076,8 @@ class HingeEyeParams(BaseParams):
         "hält — anders als das Filmscharnier, das nur biegt."
     ),
     caveat=_(
-        "Ein halbes Scharnier: Das zweite Auge gehört an das Gegenstück, der "
-        "Bolzen kommt aus der Bibliothek (Passstift) oder aus dem Handel."
+        "Als ganzes Scharnier. Das zweite Auge gehört ans Gegenstück, und der Bolzen kommt als "
+        "Passstift oder aus dem Handel."
     ),
     changes=[HINGE_EYE_ADDED, HINGE_EYE_FACET_WALL_FIXED, MATERIAL_OF_TARGET],
 )
@@ -1225,9 +1223,8 @@ class BarrelHingeParams(BaseParams):
         "zusammenzusetzen, nichts einzustecken."
     ),
     caveat=_(
-        "Der Spalt entscheidet: Zu eng verschweißt beim Drucken, zu weit "
-        "schlackert. Er kommt aus dem kalibrierten Material — wer das Material "
-        "wechselt, druckt ein Prüfstück, bevor er zwanzig Scharniere druckt."
+        "Nach einem Materialwechsel ohne Prüfstück. Der Spalt kommt aus dem Material, und zu eng "
+        "verschweißt das Scharnier."
     ),
     changes=[BARREL_HINGE_ADDED, BARREL_HINGE_CLEARANCE_FIXED, MATERIAL_OF_TARGET],
 )

@@ -400,9 +400,8 @@ NO_CAVITY: Final = _(
         "das Teil schneidet."
     ),
     caveat=_(
-        "Nicht für Teile, die dicht sein müssen: Ein Gitter hat Hohlräume, und Wasser "
-        "findet sie. Für tragende Teile erst die Wandstärke erhöhen — eine Füllung "
-        "ersetzt keine Wand."
+        "Für Teile, die dicht sein müssen, denn Wasser findet die Hohlräume. Tragende Teile "
+        "brauchen zuerst mehr Wandstärke."
     ),
 )
 def lattice_fill(ctx: OpContext) -> OpResult:

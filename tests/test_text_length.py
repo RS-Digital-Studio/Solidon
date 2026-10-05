@@ -64,7 +64,6 @@ LIMITS: dict[str, Limit] = {
 #: mit jeder Kürzung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag.
 FROZEN_COUNTS: dict[str, int] = {
     "announcement": 1,
-    "caveat": 42,
     "error_detail": 36,
     "finding": 118,
     "op_doc": 42,

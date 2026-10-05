@@ -604,8 +604,8 @@ def _lug_reason(params: LugParams) -> TranslatableText | None:
         "Unterlegscheibe der gewählten Schraube."
     ),
     caveat=_(
-        "Nicht für Lasten, die die Lasche biegen: Gedruckt bricht sie dort, wo sie an der "
-        "Fläche ansetzt. Dann eine Versteifungsrippe oder einen Eckwinkel dazusetzen."
+        "Für Lasten, die die Lasche biegen, denn sie bricht am Ansatz. Dann eine "
+        "Versteifungsrippe oder einen Eckwinkel dazusetzen."
     ),
     changes=[LUG_ADDED],
     feasible=lambda raw: _lug_reason(cast(LugParams, raw)),
@@ -800,9 +800,8 @@ def _clamp_reason(params: PipeClampParams) -> TranslatableText | None:
         "Materialprofil."
     ),
     caveat=_(
-        "Liegend gedruckt laufen die Schichten quer durch den Ring, und er hält weniger "
-        "Klemmkraft. Für eine Schelle, die fest klemmen soll, so drucken, dass die "
-        "Rohrachse senkrecht steht."
+        "Liegend gedruckt, wenn sie fest klemmen soll, denn die Schichten laufen dann quer durch "
+        "den Ring. Die Rohrachse gehört senkrecht."
     ),
     changes=[PIPE_CLAMP_ADDED],
     feasible=lambda raw: _clamp_reason(cast(PipeClampParams, raw)),
@@ -1419,12 +1418,8 @@ class PegboardHookParams(BaseParams):
         "an ihnen aufreißt."
     ),
     caveat=_(
-        "Zum Abnehmen muss die Rastzunge durch den Schlitz niedergedrückt werden "
-        "— ohne Werkzeug geht das nur, wenn man vor der Wand steht. Wer ein Teil "
-        "oft abnimmt, schaltet sie ab; dann löst sich der Einhänger auf "
-        "demselben Weg, auf dem er eingehängt wird. Schlitzmaße und Raster stammen "
-        "aus einer bemaßten Zeichnung, die Plattendicke von 5 mm ist nachgemessen; "
-        "daraus folgt, wie tief Nase und Zunge greifen."
+        "Wenn ein Teil oft abgenommen wird, denn die Rastzunge muss dazu durch den Schlitz "
+        "gedrückt werden. Dann „Rastzunge“ abschalten."
     ),
     changes=[
         PEGBOARD_HOOK_ADDED,
@@ -1772,9 +1767,8 @@ class FootParams(BaseParams):
         "Unterseite vom Tisch weg."
     ),
     caveat=_(
-        "Nicht für Teile, die auf der Fläche aufliegen sollen — ein Fuß hebt sie ab. "
-        "Und nicht zum Verschrauben gedacht: Er hat keine Bohrung, und eine "
-        "Schraube darin stünde auf dem Tisch."
+        "Für Teile, die flach aufliegen sollen, und zum Verschrauben. Ein Fuß hebt das Teil an "
+        "und hat keine Bohrung."
     ),
     changes=[FOOT_ADDED, POCKET_REACHES_PAST_THE_FACE, FOOT_PROFILE_FIXED, MATERIAL_OF_TARGET],
 )

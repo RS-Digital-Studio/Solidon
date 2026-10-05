@@ -509,10 +509,8 @@ def size_for_printed_screw(diameter: float) -> dict[str, Any]:
         "ist bewusst knapp: das Material soll beim Einpressen verdrängt werden."
     ),
     caveat=_(
-        "Nicht ohne Lötkolben: Die Buchse wird warm eingepresst, und der Durchmesser "
-        "ist dafür knapp gehalten. Kalt hineingedrückt sprengt sie die Wand — ohne "
-        "Lötkolben trägt eine Mutternfalle ähnlich viel, und ein Schraubenloch reicht, "
-        "wo die Schraube durch das Teil gehen darf."
+        "Ohne Lötkolben, denn die Buchse wird warm eingepresst und sprengt kalt die Wand. Dann "
+        "trägt eine Mutternfalle ähnlich viel."
     ),
     changes=[
         FIRST_RELEASE,
@@ -623,13 +621,8 @@ class NutTrapParams(BaseParams):
         "eingelegt, auf Wunsch mit durchgehendem Schraubenloch."
     ),
     caveat=_(
-        "Nur mit passender Sechskantmutter: Die Tasche ist auf die Schlüsselweite aus "
-        "der Normteiltabelle gebaut, eine beliebige Mutter wackelt darin oder geht "
-        "nicht hinein. Und sie muss erreichbar bleiben — seitlich eingeschoben "
-        "braucht sie eine freie Flanke, von unten eingelegt eine Öffnung, die kein "
-        "späterer Schritt zubaut. Wo keine Mutter zur Hand ist, hält ein gedrucktes "
-        "Gewinde leichte Lasten; für tragende Verschraubungen ist eine Einpressbuchse "
-        "richtig."
+        "Ohne passende Sechskantmutter, denn die Tasche folgt der Normteiltabelle. Die Mutter "
+        "muss erreichbar bleiben, auch nach späteren Schritten."
     ),
     changes=[
         FIRST_RELEASE,
@@ -826,10 +819,8 @@ class ThreadParams(BaseParams):
         "gemeinsame Weg."
     ),
     caveat=_(
-        "Nicht, wo eine Metallschraube greifen soll: Der Kamm ist abgeflacht, damit "
-        "ein Drucker ihn überhaupt auflöst — ein genormtes Gegenstück fasst darin "
-        "nicht sauber. Für tragende Verschraubungen ist eine Einpressbuchse richtig, "
-        "und wo kein Lötkolben zur Hand ist, eine Mutternfalle."
+        "Wo eine Metallschraube greifen soll, denn der Kamm ist für den Drucker abgeflacht. Für "
+        "tragende Verschraubungen eine Einpressbuchse oder Mutternfalle."
     ),
     changes=[
         FIRST_RELEASE,
@@ -1004,10 +995,8 @@ class PrintedScrewParams(BaseParams):
         "automatisch bündig gesenktem Senkkopf und passendem Außengewinde."
     ),
     caveat=_(
-        "Nur aus dem Material des Teils, an dem sie sitzt: Gewinde und Kopf haben dessen "
-        "Spiel, dann bleibt die Schraube auch mitgedruckt lösbar. Für hohe "
-        "Lasten oder häufiges Lösen sind Metallschrauben mit Mutternfalle oder "
-        "Heat-Set-Buchse zuverlässiger."
+        "Für hohe Lasten oder häufiges Lösen. Dafür halten Metallschrauben mit Mutternfalle oder "
+        "Heat-Set-Buchse besser."
     ),
     changes=[
         PRINTED_FASTENERS,
@@ -1120,10 +1109,8 @@ class PrintedNutParams(BaseParams):
     ),
     doc=_("Druckbare Sechskantmutter mit passendem Innengewinde."),
     caveat=_(
-        "Nur aus dem Material der Schraube und des Teils, auf dem sie sitzt: Gewinde und "
-        "Auflage haben dessen Spiel, dann bleibt die Mutter auch mitgedruckt lösbar. "
-        "Für hohe Lasten oder häufiges Lösen sind Metallschrauben mit "
-        "Mutternfalle oder Heat-Set-Buchse zuverlässiger."
+        "Für hohe Lasten oder häufiges Lösen. Dafür halten Metallschrauben mit Mutternfalle oder "
+        "Heat-Set-Buchse besser."
     ),
     changes=[
         PRINTED_FASTENERS,

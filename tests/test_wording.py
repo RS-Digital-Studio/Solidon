@@ -520,7 +520,6 @@ DARF_KONSTRUKTEURSWORT: dict[str, str] = {
     ),
 }
 DARF_DESIGNER_WORD: dict[str, str] = {
-    "Nicht für Teile, die dicht sein müssen": "„watertight“ meint dort wörtlich Wasser.",
     "Einen Parameterwert setzen": "Kommandozeile: „Boolean“ ist dort der Datentyp.",
     "Für Wahrheitswerte verwenden Sie": "Kommandozeile: „Boolean“ ist dort der Datentyp.",
     "Wie breit eine Bahn gelegt wird.": "„is normal“ heißt dort „ist üblich“.",

@@ -952,9 +952,8 @@ class SculptParams(BaseParams):
         "im Verlauf und bleibt änderbar, so viele Züge er auch enthält."
     ),
     caveat=_(
-        "Nicht an einem Teil, das noch bemaßt wird: Ein Strich sitzt an einer Stelle im "
-        "Raum, und wer die Form darunter ändert, verschiebt die Fläche unter ihm weg. "
-        "Erst konstruieren, dann formen."
+        "An einem Teil, das noch bemaßt wird. Ein Strich bleibt im Raum stehen, also erst "
+        "konstruieren, dann formen."
     ),
 )
 def sculpt_strokes(ctx: OpContext) -> OpResult:

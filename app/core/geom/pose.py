@@ -639,9 +639,8 @@ class PoseParams(BaseParams):
         "wird ein Zustand."
     ),
     caveat=_(
-        "Nicht für starke Beugungen: Die Haut wird an gebeugten Gelenken eingeschnürt, "
-        "und ein ausgestreckter Arm ist ein Überhang. Was der Druck davon hält, sagt "
-        "die Überhangkarte."
+        "Für starke Beugungen, denn an gebeugten Gelenken schnürt sich die Haut ein. Was der "
+        "Druck hält, zeigt die Überhangkarte."
     ),
 )
 def pose_armature(ctx: OpContext) -> OpResult:

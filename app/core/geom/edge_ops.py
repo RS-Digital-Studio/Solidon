@@ -254,9 +254,8 @@ class FilletParams(BaseParams):
     # schnitt. Seit beide Kerne dieselbe Frage stellen
     # (``edges.contact_band_limit``), lehnen beide ab, mit demselben Satz.
     caveat=_(
-        "An einem Netz besteht die Rundung aus geraden Stücken statt aus einer "
-        "Kurve. Sie weichen um weniger ab, als eine Düse auflöst; wer eine echte "
-        "Kurve braucht, arbeitet an einem exakten Körper weiter."
+        "Wenn die Rundung eine echte Kurve sein muss. Am Netz besteht sie aus geraden Stücken, "
+        "feiner als jede Düse."
     ),
 )
 def fillet_edges(ctx: OpContext) -> OpResult:
@@ -430,9 +429,8 @@ class ChamferParams(BaseParams):
     # Netz 23 656,0 mm³ (ebene Ecke durch die drei Berührpunkte), exakter
     # Körper 23 655,0 (gewölbte Ecke) — bei Abstand und Winkel beide gleich.
     caveat=_(
-        "Wo drei Fasen mit verschiedenen Abständen an einer Ecke zusammentreffen, "
-        "schließt der exakte Körper die Ecke gewölbt und das Netz eben. Die Kanten "
-        "selbst sind an beiden gleich."
+        "Wenn an einer Ecke drei ungleiche Fasen zusammentreffen und ihre Form zählt. Am Netz "
+        "schließt sie eben, sonst gewölbt."
     ),
 )
 def chamfer_edges(ctx: OpContext) -> OpResult:
@@ -607,10 +605,8 @@ class BeadParams(BaseParams):
         "*Verrunden* an derselben Kante."
     ),
     caveat=_(
-        "Ein Wulst steht über den Körper hinaus und ändert damit sein Außenmaß. "
-        "Wo es auf das Maß ankommt, gehört er nach innen oder gar nicht hin. "
-        "Ein exakter Körper wird dabei zum Netz; seine Flächen und Kanten werden "
-        "zu festen Dreiecken. Rückgängig stellt den exakten Körper wieder her."
+        "Wo es auf das Außenmaß ankommt, denn ein Wulst steht über den Körper hinaus. Flächen "
+        "und Kanten werden zu Dreiecken."
     ),
 )
 def bead_edges_op(ctx: OpContext) -> OpResult:

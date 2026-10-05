@@ -1569,9 +1569,8 @@ class DecimateParams(BaseParams):
         "wird gemessen und gemeldet."
     ),
     caveat=_(
-        "Nicht auf einem Teil, das noch bemaßt wird: Das Verringern verschiebt Flächen, "
-        "und eine Bohrung, die danach gesetzt wird, sitzt auf einer anderen Oberfläche "
-        "als geplant. Zuerst konstruieren, zuletzt verringern."
+        "An einem Teil, das noch bemaßt wird, denn das Verringern verschiebt Flächen. Zuerst "
+        "konstruieren, zuletzt verringern."
     ),
     # „2" mit dem Parameter ``method``: Der gemessene Weg rechnet wie zuvor,
     # der Schlüssel alter Einträge passt aber nicht mehr zum neuen Schema.
@@ -2036,8 +2035,8 @@ class UniformParams(BaseParams):
         "die überflüssig feinen zusammengefasst. Die Vorstufe zum Formen von Hand."
     ),
     caveat=_(
-        "Nicht zum Verfeinern allein: Wer nur mehr Dreiecke will, ohne dass irgendwo "
-        "welche verschwinden, nimmt „Kanten verfeinern“ — das teilt und fasst nie zusammen."
+        "Zum bloßen Verfeinern, denn hier verschwinden auch Dreiecke. Dafür gibt es „Kanten "
+        "verfeinern“."
     ),
     retriangulates=True,
     expected_triangles=expected_evened,
@@ -2123,9 +2122,8 @@ class SubdivideParams(BaseParams):
         "bleiben scharf."
     ),
     caveat=_(
-        "Nicht als Ersatz für eine gröbere Vorlage: Was hier entsteht, ist aus den "
-        "vorhandenen Dreiecken gerechnet, keine wiedergewonnene Konstruktion. "
-        "Wo es auf ein Maß ankommt, gehört die Rundung in die Skizze."
+        "Wo es auf ein Maß ankommt, denn die Rundung wird aus vorhandenen Dreiecken gerechnet. "
+        "Dafür gehört sie in die Skizze."
     ),
     # Zählt vorab wie das Angleichen, verändert aber die Form mit Absicht: Die
     # Vorschau zeigt die Rundung als Differenz, nicht bloß das neue Netz.

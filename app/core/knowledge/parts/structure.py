@@ -668,8 +668,8 @@ def _clip_closed(params: CableClipParams) -> TranslatableText | None:
         "enger als das Kabel: Man drückt es hinein, und es bleibt."
     ),
     caveat=_(
-        "Nicht für Kabel, die unter Zug stehen — dafür ist die Kabeldurchführung "
-        "mit Zugentlastung da. Ein Clip führt, er hält nicht fest."
+        "Für Kabel unter Zug, denn ein Clip führt nur. Dafür ist die Kabeldurchführung mit "
+        "Zugentlastung da."
     ),
     changes=[CABLE_CLIP_ADDED, CABLE_CLIP_FACET_WALL_FIXED, CABLE_CLIP_OPENING_CORRECTED],
     feasible=lambda raw: _clip_closed(cast(CableClipParams, raw)),
@@ -794,8 +794,8 @@ class GussetParams(BaseParams):
         "sonst aufklappen. Der Klassiker gegen eine Ecke, die beim Anfassen federt."
     ),
     caveat=_(
-        "Nicht in eine Ecke, durch die etwas hindurchmuss — er füllt sie diagonal. "
-        "Für eine Wand, die für sich zu weich ist, ist die Versteifungsrippe da."
+        "In einer Ecke, durch die etwas hindurchmuss, denn er füllt sie diagonal. Eine zu weiche "
+        "Wand braucht die Versteifungsrippe."
     ),
     changes=[
         GUSSET_ADDED,

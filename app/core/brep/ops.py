@@ -1083,8 +1083,8 @@ _STAGES: dict[str, TranslatableText] = {
     # Wann sie die falsche Wahl ist (Vertrag von ``caveat``), nicht ihre Grenze —
     # die steht im doc-Satz davor.
     caveat=_(
-        "Nicht für organische Formen wie Figuren oder Scans: Ihre freie Form bleibt "
-        "Dreiecke. Zum Drucken und für STL oder 3MF ist die Umwandlung nicht nötig."
+        "Für Figuren und Scans, deren freie Form Dreiecke bleibt. Zum Drucken ist die Umwandlung "
+        "nicht nötig."
     ),
 )
 def mesh_to_exact(ctx: OpContext) -> OpResult:

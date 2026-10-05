@@ -17815,10 +17815,8 @@ class HollowParams(BaseParams):
         "Flächen oder die Oberseite offen bleiben."
     ),
     caveat=_(
-        "Nicht ohne Entlüftung, wenn im Slicer Stützen entstehen: Der Hohlraum füllt "
-        "sich sonst mit Material, das niemand mehr herausbekommt. Und nicht bei "
-        "Teilen, die Kräfte aufnehmen — eine dünne Hülle bricht anders als ein "
-        "gefüllter Körper."
+        "Ohne Entlüftung, wenn der Slicer innen Stützen setzt. Und bei tragenden Teilen, denn "
+        "eine dünne Hülle bricht anders."
     ),
     shortcut="Ctrl+H",
 )
@@ -18840,9 +18838,8 @@ ONE_PIECE: Final = _("Der Körper besteht aus einem Stück; es gibt nichts zu ze
         "ein Teil — eine STL weiß das nicht, die Geometrie schon."
     ),
     caveat=_(
-        "Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer "
-        "Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft "
-        "Teilen an einer Ebene."
+        "Bei Teilen, die sich an einer Fläche berühren, denn sie gelten als eines. Dort an einer "
+        "Ebene teilen."
     ),
 )
 def split_bodies(ctx: OpContext) -> OpResult:
@@ -18992,9 +18989,8 @@ def split_bodies(ctx: OpContext) -> OpResult:
         "nur schneiden."
     ),
     caveat=_(
-        "Nicht bei Teilen, deren Schnittfläche sichtbar bleibt: Die Naht liegt an "
-        "einer Ebene und ist es danach auch. Wo sie stören würde, lieber die Lage "
-        "ändern oder eine Stelle wählen, an der ohnehin eine Kante läuft."
+        "Wo die Schnittfläche sichtbar bleibt, denn die Naht liegt an einer Ebene. Besser dort "
+        "teilen, wo ohnehin eine Kante läuft."
     ),
 )
 def split_pinned(ctx: OpContext) -> OpResult:
@@ -19758,8 +19754,8 @@ def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> Secti
         "Fläche versetzen."
     ),
     caveat=_(
-        "Was auf der anderen Seite lag, ist danach fort — auch Bohrungen und "
-        "Bausteine dort. Wer beide Teile braucht, nimmt Teilen."
+        "Wenn beide Seiten gebraucht werden, denn die andere Seite ist danach fort, samt "
+        "Bohrungen und Bausteinen. Dafür gibt es „Teilen“."
     ),
 )
 def cut_away(ctx: OpContext) -> OpResult:
@@ -20104,9 +20100,8 @@ class SplitLineParams(BaseParams):
         "Wunsch Passstifte in die Schnittfläche."
     ),
     caveat=_(
-        "Der Schnitt ist eine Ebene, keine Kurve: Die Linie legt fest, wo und wie "
-        "schräg getrennt wird, und die Ebene läuft von dort gerade durch das Teil. "
-        "Wer um eine Rundung herum trennen will, teilt zweimal."
+        "Für einen Schnitt um eine Rundung herum, denn getrennt wird an einer geraden Ebene. "
+        "Dann zweimal trennen."
     ),
 )
 def split_line(ctx: OpContext) -> OpResult:
@@ -20909,10 +20904,7 @@ class JoinPathParams(BaseParams):
         "zusammenpassen. Das erste gewählte Teil wird in das zweite geschoben, "
         "gedreht oder erst geschoben und dann gedreht."
     ),
-    caveat=_(
-        "Beide Teile stehen dabei in ihrer Endlage; geprüft wird der Weg davor. "
-        "Ein offener Körper hat kein Innen und lässt sich so nicht messen."
-    ),
+    caveat=_("An offenen Körpern, denn sie haben kein Innen und lassen sich so nicht messen."),
 )
 def check_join_path_op(ctx: OpContext) -> OpResult:
     """Der Weg in die Endlage, nicht die Endlage selbst.

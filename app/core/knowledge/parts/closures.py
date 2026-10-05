@@ -305,8 +305,8 @@ def _bayonet_reason(params: BayonetParams) -> TranslatableText | None:
         "Ende des Schlitzes steht die Nocke an. Beide Hälften aus denselben Maßen setzen."
     ),
     caveat=_(
-        "Hält gegen Zug und Verdrehen nur durch die Nocken; ohne Dichtung ist er nicht "
-        "dicht, und ohne Rastung kann er sich durch Rütteln zurückdrehen."
+        "Wenn der Verschluss dicht sein oder Rütteln aushalten muss. Dafür braucht er eine "
+        "Dichtung und eine Rastung."
     ),
     changes=[BAYONET_ADDED],
 )
@@ -590,8 +590,8 @@ def _detent_reason(params: DetentDiscParams) -> TranslatableText | None:
         "oben aufgeklipst und ist wieder lösbar."
     ),
     caveat=_(
-        "Die Scheibe liegt nur auf; dicht wie ein Schraubdeckel ist sie nicht. Beide Teile "
-        "liegend drucken, die Scheibe mit ihrer glatten Unterseite auf dem Bett."
+        "Wenn der Deckel dicht schließen muss, denn die Scheibe liegt nur auf. Beide Teile "
+        "liegend drucken."
     ),
     changes=[DETENT_DISC_ADDED],
 )
