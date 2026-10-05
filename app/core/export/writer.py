@@ -677,8 +677,8 @@ def check_adhesion_on_bed(
                 code="arrange.support_foot_unknown",
                 severity="info",
                 message=_(
-                    "Wie weit dieser Slicer die erste Stützschicht verbreitert, steht nicht in "
-                    "seinem Profil; der Rand zum Bett ist ohne sie geprüft."
+                    "Dieses Slicerprofil sagt nicht, wie weit die erste Stützschicht wächst. Der "
+                    "Rand zum Bett ist ohne sie geprüft."
                 ),
             )
         )
@@ -944,9 +944,8 @@ def check_before_export(
                         code="export.needs_solid",
                         severity="error",
                         message=_(
-                            "STEP speichert einzeln bearbeitbare Flächen und Kanten, der Körper "
-                            "besteht aus festen Dreiecken. „In Flächen und Kanten umwandeln“ "
-                            "macht sie daraus; STL und 3MF nehmen ihn, wie er ist."
+                            "STEP speichert bearbeitbare Flächen und Kanten, dieser Körper "
+                            "besteht aus festen Dreiecken. STL und 3MF nehmen ihn, wie er ist."
                         ),
                         object_id=entry.id,
                         values={"format": export_format},
@@ -1755,9 +1754,8 @@ def _part_setting_findings(
                 _("Nur für dieses Teil: {reason}", reason=entry.reason)
                 if applied
                 else _(
-                    "Dieser Slicer übernimmt den genannten Vorschlag nicht für dieses Teil. "
-                    "Prüfen Sie die Einstellung für die ganze Platte oder wählen Sie einen "
-                    "Slicer, der diesen Wert je Teil übernimmt."
+                    "Dieser Slicer übernimmt den Vorschlag nicht für einzelne Teile. Für die "
+                    "ganze Platte prüfen oder einen anderen Slicer wählen."
                 )
             ),
             # Beim übernommenen Wert steht der Grund im Satz; wo der Slicer ihn
@@ -1786,8 +1784,8 @@ def _lowered_foot_findings(parts: Sequence[tuple[ObjectId, Mapping[str, str]]]) 
             code="export.brim_foot_lowered",
             severity="info",
             message=_(
-                "Damit der Brim an diesem Teil anliegt, ist seine Fußkorrektur im Slicer "
-                "auf {value} gesenkt. Die erste Schicht wird dort so breit wie das Modell.",
+                "Damit der Brim anliegt, steht die Fußkorrektur dieses Teils auf {value}. Die "
+                "erste Schicht wird so breit wie das Modell.",
                 value=format_length(float(keys["elefant_foot_compensation"])),
             ),
             values={"value": keys["elefant_foot_compensation"]},
@@ -1933,9 +1931,8 @@ def _support_blocker(
         code="export.support_blocker",
         severity="info",
         message=_(
-            "In „{name}“ liegen Decken in schmalen Kanälen. Die gewählte Kanalsperre hält dort "
-            "Stützen fern, die sich nach dem Druck schlecht entfernen ließen. Prüfen Sie im "
-            "Slicer, ob die Decken ohne Stützen gedruckt werden können.",
+            "In „{name}“ hält die Kanalsperre Stützen aus schmalen Kanälen fern. Im Slicer "
+            "prüfen, ob die Decken dort ohne halten.",
             name=source_text(entry.name),
         ),
         values={

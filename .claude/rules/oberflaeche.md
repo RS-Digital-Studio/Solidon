@@ -141,7 +141,9 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   Pointe; Bewertungsvokabeln („hochspannend“, „extrem wertvoll“);
   Gedankenstriche im Übermaß; der zusammenfassende Schlusssatz. Dagegen:
   kürzer, ruhig ein unfertiger Gedanke oder umgangssprachlicher Einwurf, ein
-  Absatz ungerundet. Gilt auch im Gespräch mit Robert.
+  Absatz ungerundet. Gilt auch im Gespräch mit Robert. Semikolon, die Formel
+  „Nur …:“ und Fachwörter der Datenhaltung hält `test_wording` mit
+  eingefrorenem Bestand (`tests/data/text_patterns.json`, RM-509).
 - **Nach außen heißt es „Version“, nicht „Fassung“** (Entscheidung Robert) —
   ein zweites Wort lässt den Kunden einen Unterschied suchen. Intern (Commits,
   Roadmap, Konzepte, Regeln) darf „Fassung“ bleiben; sinngemäß für jedes zweite

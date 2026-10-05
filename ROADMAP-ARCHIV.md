@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-509: Kundentexte haben Längengrenzen, und ein Wächter hält sie (05.10.2026)](#rm-509-kundentexte-haben-längengrenzen-und-ein-wächter-hält-sie-05102026) |
 | 2026-10-05 | [RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)](#rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026) |
 | 2026-10-05 | [RM-523: Die Druckerlisten nennen Drucker, die Düse wählt der Druckdialog (05.10.2026)](#rm-523-die-druckerlisten-nennen-drucker-die-düse-wählt-der-druckdialog-05102026) |
 | 2026-10-05 | [RM-508: Der Prüfbericht zeigt zuerst die Befunde (05.10.2026)](#rm-508-der-prüfbericht-zeigt-zuerst-die-befunde-05102026) |
@@ -42336,3 +42337,41 @@ Prusa-Beständen dieses Rechners jede Maschine eine Düse, der Rolohaun-Drucker 
 
 **Nachweis:** `test_a_machine_reads_its_nozzle_from_the_profile_it_inherits`,
 `test_a_bundle_machine_without_a_nozzle_takes_the_slicers_default` (ohne Fix rot mit 0,0).
+
+## RM-509: Kundentexte haben Längengrenzen, und ein Wächter hält sie (05.10.2026)
+
+<a id="rm-509-kundentexte-haben-längengrenzen-und-ein-wächter-hält-sie-05102026"></a>
+<a id="rm-509"></a>
+
+**RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Für 8 553 sichtbare Texte gab es eine Längengrenze nur bei den Bildanleitungen.
+  128 von 502 Befundsätzen hatten mehr als 20 Wörter; geänderte Bausteine erschienen
+  als Absätze bis 99 Wörter; Menü, Statuszeile und Dialogkopf zeigten die ganze `doc`;
+  Vorbehalte folgten der Formel „Nur …: …“; die Tour hatte 56 von 83 Schritten über
+  20 Wörtern und Markdown-Sternchen; KI-Offenlegung und Modellbeschreibungen 55–84
+  Wörter; Fachwörter und Semikolons ohne Wächter.
+  **Entschieden (Robert, 05.10.2026):** Statustipps nur an Menüaktionen; an Feldern
+  bleiben Tooltip und zugängliche Beschreibung.
+
+**Umsetzung:** `tests/test_text_length.py` ordnet jeden Kundentext nach Aufrufort
+einer Art zu und prüft deren Grenze; der Bestand darüber steht je Art in
+`tests/data/text_lengths/` und darf nur schrumpfen. Menü, Statuszeile, Palette und
+Dialogkopf zeigen den ersten Satz (`registry.surfaces.first_sentence`), die Tour
+hält `MAX_STEP_WORDS`. Befunde, Bausteinänderungen, Vorbehalte und Tourschritte sind
+gekürzt, dazu Fehlertexte der Ops, Hinweise der Slicer-Übergabe, die
+Modellbeschreibungen der lokalen KI und die KI-Offenlegung (Version 1.5, Erzeugung
+1.1) in allen sechs Sprachen. Die Offenlegung steht in zwei Sätzen je Ziel ohne
+Klappe: Der vollständige Text bleibt vor dem Senden offen, und keine Datenkategorie
+fällt weg. `test_wording` friert Fachwörter der Datenhaltung, das Semikolon und die
+Formel „Nur …:“/„Nicht …:“ in `tests/data/text_patterns.json` ein.
+
+**Nachweis:** Eingefrorener Bestand Befunde 118 → 0, Bausteinänderungen 54 → 0,
+Vorbehalte 42 → 0, Tour 58 → 0 (die Listen entfallen); übrig Fehlerdetail 36,
+Parameter-`doc` 56, Kurzsatz einer `doc` 42, Tooltip 3, Ansage 1. Muster eingefroren:
+Fachwort 28, „Nur …:“ 9, Semikolon 121. Gegenproben im Test: ein neuer Text über der
+Grenze, eine wachsende Liste, ein neues Semikolon und ein gestrichenes, noch
+gelistetes Vorkommen machen die Wächter rot; ein Statustipp an einem Knopf ebenso.
+Entwicklungstor über den Stand mit main zusammengeführt: 24 177 bestanden, der eine
+rote Fall (privater Querimport zwischen zwei Testdateien) behoben; ruff, Format und
+mypy für Windows, Linux und macOS grün. Commits `2b210f698` bis `fdde41e49`.
+Changelog: zum nächsten Release (kürzere Befunde, Tour und Hinweise).

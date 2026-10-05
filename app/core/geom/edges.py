@@ -3412,9 +3412,8 @@ def skipped_finding(skipped: int, worked: int) -> Finding:
         code="edges.skipped",
         severity="warning",
         message=_(
-            "Einige Kanten dieser Auswahl wurden ausgelassen: Dort stoßen keine zwei "
-            "Flächen unter einem Winkel zusammen, etwa wo zwei Teile Wand an Wand "
-            "stehen. Die übrigen Kanten sind bearbeitet."
+            "Einige Kanten wurden ausgelassen, weil dort keine zwei Flächen im Winkel "
+            "zusammenstoßen, etwa Wand an Wand."
         ),
         values={"skipped": skipped, "worked": worked},
         # Regel 17: Die Kantenwahl steht im Schritt.

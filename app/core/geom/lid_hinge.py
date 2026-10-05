@@ -563,8 +563,8 @@ def pin_for_bore(ctx: OpContext) -> OpResult:
                 code="pin_for_bore.made",
                 severity="info",
                 message=_(
-                    "Der Stift ist {diameter} dick und {length} lang. Er steht in der Bohrung; "
-                    "zum Drucken legen Sie ihn mit *Auf dem Bett anordnen* ab.",
+                    "Der Stift ist {diameter} dick, {length} lang und steht noch in der Bohrung. "
+                    "„Auf dem Bett anordnen“ legt ihn ab.",
                     diameter=_format(diameter),
                     length=_format(length),
                 ),

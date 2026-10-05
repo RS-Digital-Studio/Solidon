@@ -64,14 +64,10 @@ LIMITS: dict[str, Limit] = {
 #: mit jeder Kürzung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag.
 FROZEN_COUNTS: dict[str, int] = {
     "announcement": 1,
-    "caveat": 42,
     "error_detail": 36,
-    "finding": 118,
     "op_doc": 42,
     "param_doc": 56,
-    "part_change": 54,
     "tooltip": 3,
-    "tour": 58,
 }
 
 
@@ -180,7 +176,8 @@ def customer_texts(sources: Iterable[tuple[str, str]]) -> Iterator[CustomerText]
                 yield CustomerText(kind, text, f"{path}:{getattr(node, 'lineno', 0)}")
 
 
-def _application_sources() -> Iterator[tuple[str, str]]:
+def application_sources() -> Iterator[tuple[str, str]]:
+    """Jede Quelldatei unter ``app/`` als (Pfad, Text) — auch für ``test_wording``."""
     for path in sorted((ROOT / "app").rglob("*.py")):
         yield path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8")
 
@@ -230,7 +227,7 @@ def problems(
 def test_every_customer_text_stays_within_the_limit_of_its_place() -> None:
     """Kein neuer Text über der Grenze, und der Bestand schrumpft nur."""
     lists = {kind: frozen(kind) for kind in LIMITS}
-    found = problems(customer_texts(_application_sources()), lists, FROZEN_COUNTS)
+    found = problems(customer_texts(application_sources()), lists, FROZEN_COUNTS)
     assert not found, "\n".join(found[:40]) + (
         f"\n… und {len(found) - 40} weitere" if len(found) > 40 else ""
     )

@@ -410,9 +410,9 @@ def _findings(settings: Mapping[str, Any], hard: Profile, soft: Profile) -> list
             code="profile_clamp.hardware",
             severity="info",
             message=_(
-                "Montage: zwei {size}-Schrauben, mindestens {length} mm unter dem Kopf, "
-                "und passende Muttern. Einlagen von der Bundseite einschieben; "
-                "waagrechte Schraubenlöcher beim Druck auf Stützen prüfen.",
+                "Montage: zwei {size}-Schrauben, mindestens {length} mm unter dem Kopf, mit "
+                "Muttern. Einlagen von der Bundseite einschieben, Schraubenlöcher auf Stützen "
+                "prüfen.",
                 size=settings["screw_size"],
                 length=format_length(length, with_unit=False),
             ),

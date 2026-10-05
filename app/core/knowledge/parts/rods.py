@@ -177,9 +177,8 @@ def _turn_of(direction: Vec3) -> float:
         "und Rahmen. Stabmaß, Einstecktiefe und Klemmschraube gelten für jede Aufnahme."
     ),
     caveat=_(
-        "Nicht für unrunde oder stark schwankende Stäbe ohne Klemmschraube: Die Aufnahme ist "
-        "rund und um das Spiel weiter als das gemessene Maß. Bambus an der dicksten Stelle "
-        "messen und die Klemmschraube wählen."
+        "Für unrunde oder schwankende Stäbe ohne Klemmschraube, denn die Aufnahme ist rund. "
+        "Bambus an der dicksten Stelle messen."
     ),
     changes=[ROD_CONNECTOR_ADDED],
 )

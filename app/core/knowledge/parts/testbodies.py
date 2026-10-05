@@ -58,8 +58,8 @@ OVERHANG_FROM_VERTICAL = PartChange(
     reason="Die angegebene Senkrechte war durch vertauschte Sinus- und Kosinusanteile zur "
     "Waagerechten geworden.",
     effect=_(
-        "Jede Rampe hat ihren eingetragenen Winkel zur Senkrechten. Kombinationen mit einem "
-        "letzten Winkel ab 90 Grad werden vor dem Bauen erklärt."
+        "Jede Rampe hat jetzt ihren Winkel zur Senkrechten, und ein letzter Winkel ab 90 Grad "
+        "wird vorher erklärt."
     ),
 )
 
@@ -69,8 +69,8 @@ OVERHANG_FAN_BOUNDED = PartChange(
     reason="Breite und Auskraglänge hatten keine Obergrenze; der Bereichstest prüfte sie "
     "deshalb nur an ihrer Untergrenze.",
     effect=_(
-        "Breite je Stufe höchstens 50 mm, Auskraglänge höchstens 100 mm. Ein Fächer "
-        "darüber wird mit Hinweis auf die Grenze abgewiesen; darunter ändert sich nichts."
+        "Die Breite je Stufe ist jetzt auf 50 mm begrenzt, die Auskraglänge auf 100 mm, darunter "
+        "ändert sich nichts."
     ),
 )
 
@@ -110,8 +110,8 @@ FIT_LADDER_CAN_BE_ASSEMBLED = PartChange(
     date="2026-09-08",
     reason="Zapfen und Bohrungen waren auf derselben starren Platte und nicht ineinander steckbar.",
     effect=_(
-        "Zwei getrennte, nummerierte Leisten lassen sich zum Messen zusammenstecken. "
-        "Zapfendurchmesser und Spielstufen bleiben erhalten; die Grundplatte wird geteilt."
+        "Zwei getrennte Leisten ersetzen die gemeinsame Grundplatte, Zapfen und Spielstufen "
+        "bleiben gleich."
     ),
 )
 
@@ -120,8 +120,8 @@ FIT_LADDER_FACE_AT_RAIL_CENTRE = PartChange(
     date="2026-09-12",
     reason="Der Flächenbezug lag um die Gravurtiefe vom Leistenrand versetzt statt in der Mitte.",
     effect=_(
-        "Die benannte Fläche liegt mittig auf der Zapfenleiste. Daran ausgerichtete "
-        "Folgeschritte verschieben sich; Leisten, Zapfen, Bohrungen und Spielmaße bleiben gleich."
+        "Die benannte Fläche liegt jetzt mittig auf der Zapfenleiste, daran ausgerichtete "
+        "Schritte verschieben sich."
     ),
 )
 

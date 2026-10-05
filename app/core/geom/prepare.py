@@ -855,10 +855,7 @@ def split_findings(before: HasComponents, after: HasComponents) -> list[Finding]
         Finding(
             code="bore.splits_the_body",
             severity="warning",
-            message=_(
-                "Die Bohrung schneidet den Körper ganz durch — er zerfällt in mehrere "
-                "Teile. Verkürzen Sie die Länge oder versetzen Sie die Bohrung."
-            ),
+            message=_("Die Bohrung schneidet den Körper ganz durch, er zerfällt in mehrere Teile."),
             values={"count": now},
             # Regel 17: Länge oder Stelle, die der Satz nennt, stehen im Schritt.
             suggestions=(CORRECT_INPUT,),
@@ -2250,9 +2247,8 @@ def sink_placement(
                 code="bore.sink_buried",
                 severity="warning",
                 message=_(
-                    "An dieser Stelle liegt Material und keine Bohrungsmündung — die "
-                    "Senkung würde ein Hohlraum im Teil. Position auf eine Fläche oder "
-                    "in eine Bohrung legen."
+                    "An dieser Stelle liegt Material statt einer Bohrungsmündung, die Senkung "
+                    "würde ein Hohlraum im Teil."
                 ),
                 values={"diameter": format_length(diameter)},
                 # Regel 17: Die Stelle, die der Satz nennt, steht im Schritt.
@@ -2606,8 +2602,8 @@ def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshD
                 code="split.uncapped",
                 severity="warning",
                 message=_(
-                    "Die Schnittflächen bleiben offen: Das Modell ist schon vor dem "
-                    "Schnitt nicht geschlossen. Reparieren Sie es und teilen Sie danach erneut."
+                    "Die Schnittflächen bleiben offen, weil das Modell schon vor dem Schnitt "
+                    "nicht geschlossen war."
                 ),
             )
         )

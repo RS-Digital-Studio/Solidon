@@ -407,9 +407,8 @@ class BlendParams(BaseParams):
         "Für Griffe, Verstrebungen und alles, was gedruckt nicht an der Innenecke reißen soll."
     ),
     caveat=_(
-        "Nicht an einem Teil, dessen Maße zählen: Das Ergebnis entsteht auf einem Raster, "
-        "und scharfe Kanten der Ausgangskörper werden dabei weicher. Wo eine Passung sitzt, "
-        "gehört die gewöhnliche Vereinigung hin."
+        "An Teilen, deren Maße zählen, denn scharfe Kanten werden auf dem Raster weicher. Für "
+        "eine Passung normal vereinigen."
     ),
 )
 def blend_union(ctx: OpContext) -> OpResult:
@@ -463,8 +462,8 @@ def blend_union(ctx: OpContext) -> OpResult:
                 code="blend.still_apart",
                 severity="warning",
                 message=_(
-                    "Die Körper berühren sich nicht und liegen weiter auseinander als der "
-                    "Übergang breit ist — sie sind nebeneinander geblieben, nicht verbunden."
+                    "Die Körper liegen weiter auseinander, als der Übergang breit ist, und "
+                    "bleiben unverbunden."
                 ),
                 object_id=ctx.inputs[0].id,
                 values={"components": merged.component_count},

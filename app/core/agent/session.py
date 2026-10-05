@@ -179,10 +179,8 @@ def _truncation_finding(had_calls: bool) -> Finding:
         code="agent.answer_truncated",
         severity="warning",
         message=_(
-            "Die Antwort des Modells brach mitten ab — sie war länger als das, "
-            "was das Modell je Schritt ausgeben darf. Der Vorschlag zeigt den "
-            "Stand bis hierhin; eine kürzere Anweisung oder ein kleinerer "
-            "Schritt kommt durch."
+            "Die Antwort des Modells war zu lang und brach ab. Eine kürzere Anweisung oder ein "
+            "kleinerer Schritt kommt durch."
         ),
         values={"dropped_call": "yes" if had_calls else "no"},
     )
@@ -228,9 +226,8 @@ def _halted_finding() -> Finding:
         code="agent.halted_by_document_change",
         severity="warning",
         message=_(
-            "Die letzten Parameter, Passungen oder Druckwerte dieses Zuges hielten die "
-            "Auswertung an und wurden zurückgenommen. Der Vorschlag zeigt den Stand "
-            "davor; der Grund steht im Befund darüber."
+            "Einige Werte dieses Zuges hielten die Auswertung an und wurden zurückgenommen. Der "
+            "Grund steht im Befund darüber."
         ),
     )
 
@@ -247,9 +244,8 @@ def _refusal_finding() -> Finding:
         code="agent.answer_refused",
         severity="warning",
         message=_(
-            "Das Modell hat diese Anfrage abgelehnt und nicht geantwortet. Eine "
-            "andere Formulierung oder ein anderes Modell führt weiter — an der "
-            "Anwendung liegt es nicht."
+            "Das Sprachmodell hat die Anfrage abgelehnt. Eine andere Formulierung oder ein "
+            "anderes Modell führt weiter."
         ),
     )
 
@@ -302,10 +298,8 @@ def _written_call_finding(name: str) -> Finding:
         code="agent.call_written_out",
         severity="warning",
         message=_(
-            "Das Modell hat seinen Werkzeugaufruf hingeschrieben, statt ihn "
-            "auszuführen — im Gespräch steht die Zeile, getan wurde nichts. Das "
-            "liegt am Modell und nicht an der Anwendung; ein anderes hilft. Ob "
-            "eines taugt, sagt „Werkzeuge prüfen“ unter „Chat einrichten …“."
+            "Das Modell schrieb den Werkzeugaufruf nur hin. Ob ein Modell taugt, sagt „Werkzeuge "
+            "prüfen“ unter „Chat einrichten …“."
         ),
         values={"op": name},
     )

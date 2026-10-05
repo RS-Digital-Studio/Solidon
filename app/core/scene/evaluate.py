@@ -672,9 +672,8 @@ def _evaluate(
                 code="parameter.out_of_range",
                 severity="warning",
                 message=_(
-                    "Ein Parameter liegt außerhalb seiner Grenzen — gerechnet wird "
-                    "trotzdem mit ihm. Prüfen Sie den Ausdruck, oder passen Sie "
-                    "die Grenzen an."
+                    "Ein Parameter liegt außerhalb seiner Grenzen, gerechnet wird trotzdem mit "
+                    "ihm. Ausdruck oder Grenzen prüfen."
                 ),
                 values=bounds,
                 source="internal",
@@ -776,10 +775,9 @@ def _evaluate(
                     code="evaluate.unknown_operation",
                     severity="error",
                     message=_(
-                        "Diesen Schritt kann Solidon nicht rechnen — ab hier bleibt das "
-                        "Projekt stehen. Seine Werte gehen nicht verloren: Der Verlauf "
-                        "zeigt sie an. Um weiterzuarbeiten, im Verlauf hinter den "
-                        "Schritt zurückgehen; die nächste Änderung verwirft ihn."
+                        "Diesen Schritt kann Solidon nicht rechnen, das Projekt bleibt hier "
+                        "stehen. Im Verlauf davor weiterarbeiten, die nächste Änderung verwirft "
+                        "ihn."
                     ),
                     op_id=operation.id,
                     values={"operation": operation.op},
@@ -797,9 +795,8 @@ def _evaluate(
                     code="evaluate.legacy_point_paint",
                     severity="error",
                     message=_(
-                        "Dieser ältere Farbschritt färbt um einen Punkt statt eine Fläche. "
-                        "Seine Werte bleiben erhalten. Entfernen Sie den Schritt im Verlauf "
-                        "und weisen Sie das Filament der gewünschten Fläche erneut zu."
+                        "Dieser ältere Farbschritt färbt um einen Punkt statt eine Fläche. Im "
+                        "Verlauf entfernen und das Filament der Fläche neu zuweisen."
                     ),
                     op_id=operation.id,
                     values={"operation": operation.op},
@@ -1932,10 +1929,9 @@ def conversion_finding(
         code="evaluate.exact_became_mesh",
         severity="info",
         message=_(
-            "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt. "
-            "Flächen und Kanten bleiben bearbeitbar; Rundungen bestehen jetzt "
-            "aus geraden Teilstücken. Rückgängig stellt den vorherigen Körper "
-            "wieder her.",
+            "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt, Rundungen sind "
+            "gerade Teilstücke, Flächen und Kanten bleiben bearbeitbar. Rückgängig holt ihn "
+            "zurück.",
             operation=title,
             object=source.name,
         ),
@@ -4529,10 +4525,8 @@ def _with_features(
                 # weglassen könnte — und geführt werden Rundformen auf ihr
                 # trotzdem nicht.
                 message=_(
-                    "Die Oberfläche dieses Modells ist überwiegend gekrümmt. Auf einer "
-                    "solchen Fläche sind Kugeln, Ringe, Kegel und Verrundungen keine "
-                    "Merkmale und werden nicht geführt; Bohrungen, Zapfen und ebene "
-                    "Flächen bleiben."
+                    "Die Oberfläche dieses Modells ist überwiegend gekrümmt. Als Merkmale "
+                    "geführt werden nur Bohrungen, Zapfen und ebene Flächen."
                 ),
                 object_id=entry.id,
                 op_id=operation.id,
@@ -4641,9 +4635,8 @@ def _with_features(
                 code="perceive.too_many",
                 severity="info",
                 message=_(
-                    "Das Modell hat mehr Merkmale, als Solidon über die Schritte verfolgt; "
-                    "behalten sind die größten. Wurde es ohne „Doppelte Punkte zusammenführen“ "
-                    "geladen, laden Sie es mit diesem Haken neu."
+                    "Solidon verfolgt nur die größten Merkmale dieses Modells. Fehlte beim Laden "
+                    "„Doppelte Punkte zusammenführen“, neu laden mit diesem Haken."
                 ),
                 object_id=entry.id,
                 op_id=operation.id,
@@ -6054,9 +6047,8 @@ def check_thin_walls(scene: Scene) -> list[Finding]:
                 code="perceive.thin_wall",
                 severity="warning",
                 message=_(
-                    "Zwischen einer Bohrung und dem Material um sie herum bleibt weniger "
-                    "Wand stehen, als der Drucker legen kann. Vergrößern Sie das Außenmaß "
-                    "oder verkleinern Sie die Bohrung."
+                    "Um eine Bohrung bleibt weniger Wand, als der Drucker legen kann. Abhilfe: "
+                    "Außenmaß vergrößern oder Bohrung verkleinern."
                 ),
                 object_id=object_id,
                 feature_ids=(thinnest.bore, thinnest.wall),
@@ -6082,9 +6074,8 @@ def _disk_full_finding(operation: Operation) -> Finding:
         code="kernel.disk_full",
         severity="warning",
         message=_(
-            "Für den Austausch mit dem Rechenprozess war kein Speicherplatz mehr frei. Diese "
-            "Rechnung lief deshalb im Programm selbst, und das Fenster konnte dabei stehen. "
-            "Geben Sie Speicherplatz frei; danach rechnet Solidon wieder im Hintergrund."
+            "Es war kein Speicherplatz frei, deshalb lief die Rechnung im Programm und das "
+            "Fenster stand. Freier Platz behebt das."
         ),
         op_id=operation.id,
     )

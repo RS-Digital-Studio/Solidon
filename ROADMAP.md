@@ -102,7 +102,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
-| [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
@@ -3366,6 +3365,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Aus RM-508 (05.10.2026): `report.png`, `main-window.png` und die
   Bildanleitungen neu; `make_figures` gibt dem Berichtsbild jetzt die
   Grundlage des Fensters mit, belegt erst mit diesem Lauf.
+  Aus RM-509 (05.10.2026): Tour, Befundkarten, Bausteinänderungen und
+  KI-Hinweis tragen kürzere Texte; Bilder, die sie zeigen, neu.
 
   **Aus der dritten Runde der Durchsicht v0.5.1 (27.09.2026)** kommen Fenstertests, die
   das Release-Tor tragen muss; die Abschlüsse von RM-231 und RM-269 stützen sich auf sie
@@ -3914,32 +3915,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
   Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
   zwei Menüs mit verschiedener Wirkung.
-
-<a id="rm-509"></a>
-
-- [ ] **RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Für 8 553 sichtbare Texte gibt es eine Längengrenze nur bei den Bildanleitungen.
-  128 von 502 Befundsätzen haben mehr als 20 Wörter, die Handlung steht als Prosa im
-  Satz; 108 Fehlertexte erklären die Technik dahinter; geänderte Bausteine erscheinen
-  als Absätze bis 99 Wörter; Menü, Statuszeile und Dialogkopf zeigen die ganze `doc`
-  (Menü-Tooltip bis 116 Wörter); Vorbehalte folgen der Formel „Nur …: …“; die Tour hat
-  56 von 83 Schritten über 20 Wörtern und Markdown-Sternchen; KI-Offenlegung und
-  Modellbeschreibungen 55–84 Wörter; Fachwörter und Formeln (Gedankenstriche,
-  Semikolons, „nicht … sondern“) außerhalb der Wortliste.
-  **Fix:** `tests/test_text_length.py` ordnet jeden Text nach Aufrufort einer Art zu und
-  prüft Obergrenzen (Befund 20 Wörter/2 Sätze, Fehlerdetail 25/2, Bausteinänderung
-  20/1, Vorbehalt 20/2, Kurzsatz einer `doc` 15, Parameter-`doc` 25/2, Hinweis 25/2,
-  Tooltip 25/2, Ansage 20, Leertext 20, Tour 20; Druckrat-Grund 60 Zeichen); der
-  heutige Bestand über der Grenze steht eingefroren in einer Liste, die nur schrumpfen
-  darf. Danach die Texte kürzen, beginnend bei Befunden und Bausteinänderungen; Menü,
-  Statuszeile und Dialogkopf zeigen nur den ersten Satz (`first_sentence`); Tour mit
-  `MAX_STEP_WORDS`; Offenlegungen als ein Satz mit Klappe; Wortliste und Musterwächter
-  in `test_wording` erweitert.
-  **Entschieden (Robert, 05.10.2026):** Statustipps nur an Menüaktionen; an Feldern
-  bleiben Tooltip und zugängliche Beschreibung, `oberflaeche.md` zieht nach.
-  **Abnahme:** Der Wächter ist grün, ein neuer Text über der Grenze und eine wachsende
-  Bestandsliste machen ihn rot (Gegenprobe); die eingefrorene Liste ist am Ende leer
-  für Befunde, Bausteinänderungen, Vorbehalte und Tour. Überschneidung RM-084.
 
 <a id="rm-512"></a>
 

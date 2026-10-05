@@ -1102,39 +1102,39 @@ def test_every_catalog_translates_all_three_target_paths_and_actions() -> None:
     required = (
         "Interaktion mit einem KI-System",
         (
-            "Sie interagieren mit einem KI-System. Antworten können falsch oder "
-            "unvollständig sein. Solidon führt daraus keine Geometrie ungeprüft aus: "
-            "Ein Vorschlag bleibt sichtbar, prüfbar und mit einem Schritt rücknehmbar."
+            "Sie interagieren mit einem KI-System. Antworten können falsch oder unvollständig "
+            "sein, und jeder Vorschlag lässt sich prüfen und mit einem Schritt zurücknehmen."
         ),
         (
-            "Wenn Sie Anthropic wählen, werden Ihre Chatnachricht und die zuvor angezeigte "
-            "Projektauswahl nicht allein übertragen. Direkt an Anthropic gehen die aktuelle "
-            "Nachricht, bis zu zwölf frühere Chatbeiträge, ein textlicher Steckbrief der "
-            "gesamten aktuellen Szene mit Objekt- und Quellnamen, Maßen, Merkmalen, "
-            "Parametern, Einstellungen und Auswahl, der Prüfbericht sowie die für den "
-            "Agenten nötigen Anweisungen, Regeln und Werkzeugschemata. Unterstützt das "
-            "gewählte Modell Bilder, kann Solidon außerdem automatisch gerenderte Ansichten "
-            "der Szene mitsenden. Die Projektdatei und die Netzgeometrie selbst werden nicht "
-            "übertragen. Sie verwenden Ihren eigenen API-Schlüssel."
+            "Sie erzeugen mit einem KI-System ein 3D-Modell. Es kann Fehler enthalten, prüfen Sie "
+            "Körper und Druckbarkeit vor der Verwendung."
         ),
         (
-            "Das lokale Ollama-Ziel {target} verarbeitet auf diesem Rechner dieselben "
-            "Arbeitsdaten wie der Chat: aktuelle Nachricht, bis zu zwölf frühere "
-            "Chatbeiträge, textlichen Steckbrief der gesamten Szene, Prüfbericht, "
-            "Anweisungen, Regeln und Werkzeugschemata sowie bei einem Bildmodell "
-            "automatisch gerenderte Ansichten. Projektdatei und Netzgeometrie selbst "
-            "werden nicht übertragen. Die Werkzeugprobe sendet nur einen festen "
-            "technischen Prüfauftrag ohne Projekt- oder Chatinhalt. Installation, Download "
-            "oder Update des Modells können gesondert eine Netzverbindung verwenden."
+            "An Anthropic gehen Ihre Nachricht, bis zu zwölf frühere Chatbeiträge, ein textlicher "
+            "Steckbrief der Szene mit Namen, Maßen, Merkmalen, Parametern, Einstellungen und "
+            "Auswahl, der Prüfbericht und die Anweisungen für den Agenten, bei Bildmodellen auch "
+            "gerenderte Ansichten. Projektdatei und Netz werden nicht übertragen, und Sie nutzen "
+            "Ihren eigenen API-Schlüssel."
         ),
         (
-            "Das Ollama-Ziel {target} liegt auf einem anderen Rechner. An diese Adresse "
-            "werden aktuelle Nachricht, bis zu zwölf frühere Chatbeiträge, der textliche "
-            "Steckbrief der gesamten Szene, Prüfbericht, Anweisungen, Regeln und "
-            "Werkzeugschemata sowie bei einem Bildmodell automatisch gerenderte Ansichten "
-            "übertragen. Projektdatei und Netzgeometrie selbst werden nicht übertragen. Die "
-            "Werkzeugprobe sendet einen festen technischen Prüfauftrag. Verwenden Sie nur "
-            "ein Ziel, dessen Betreiber und Übertragungsweg Sie vertrauen."
+            "Das lokale Ollama-Ziel {target} erhält auf diesem Rechner Ihre Nachricht, bis zu "
+            "zwölf frühere Chatbeiträge, den textlichen Steckbrief der Szene, den Prüfbericht und "
+            "die Anweisungen für den Agenten, bei Bildmodellen auch gerenderte Ansichten. "
+            "Projektdatei und Netz werden nicht übertragen, Installation und Modelldownload "
+            "können eine Netzverbindung nutzen."
+        ),
+        (
+            "Das Ollama-Ziel {target} liegt auf einem anderen Rechner und erhält Ihre Nachricht, "
+            "bis zu zwölf frühere Chatbeiträge, den textlichen Steckbrief der Szene, den "
+            "Prüfbericht, die Anweisungen für den Agenten, bei Bildmodellen gerenderte Ansichten "
+            "und für die Werkzeugprobe einen festen Auftrag ohne Projektinhalt. Projektdatei und "
+            "Netz werden nicht übertragen, und Sie sollten Betreiber und Übertragungsweg "
+            "vertrauen."
+        ),
+        (
+            "Gesendet werden Beschreibung oder Bild, Startwert, Ablauf und Modellwahl, nicht aber "
+            "Projektdatei, Szene oder Chat. Installation und Modelldownloads können weitere "
+            "Netzverbindungen nutzen."
         ),
         "Mit Pfeil- und Bildtasten durch den KI-Hinweis blättern.",
         "KI-Anfrage fortsetzen",

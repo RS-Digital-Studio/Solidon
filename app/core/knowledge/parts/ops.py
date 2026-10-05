@@ -734,10 +734,8 @@ def _cuts_no_layer(
         code="parts.cuts_no_layer",
         severity="warning",
         message=_(
-            "Dieser Baustein nimmt hier nicht einmal eine Schicht Material weg — von "
-            "dieser Stelle aus liegt er außerhalb des Objekts. Klicken Sie die Fläche an, "
-            "in die er soll: Sie gibt ihm Ort und Richtung. Oder prüfen Sie im Schritt "
-            "Position und Richtung."
+            "Dieser Baustein nimmt keine Schicht weg, er liegt außerhalb des Objekts. Eine "
+            "angeklickte Fläche gibt ihm Ort und Richtung."
         ),
         values={"part": spec.name, "removed_mm3": round(max(removed, 0.0), 3)},
         # Regel 17: Position und Richtung stehen im Schritt.
@@ -865,11 +863,8 @@ def _standing_on_edge(spec: PartSpec, params: Any, direction: Vec3 | None) -> Fi
         severity="warning",
         # Der Vorschlag steht im Satz, wie bei den Nachbarn.
         message=_(
-            "Dieser Baustein hält nur flach gedruckt: Seine dünne Stelle trägt, "
-            "solange die Schichten quer zur Biegung laufen. Hochkant laufen sie "
-            "längs, und er bricht beim ersten Öffnen. Setzen Sie ihn auf eine "
-            "waagerechte Fläche — oder lassen Sie die Achse auf Z, wenn Sie die "
-            "Stelle eintippen."
+            "Dieser Baustein bricht hochkant gedruckt beim ersten Öffnen. Er gehört auf eine "
+            "waagerechte Fläche oder auf die Achse Z."
         ),
         values={"part": spec.name},
         # Regel 17: Die Richtung des Bausteins steht im Schritt.
@@ -914,11 +909,8 @@ def _lying_flat(spec: PartSpec, params: Any, direction: Vec3 | None) -> Finding 
         severity="warning",
         # Der Vorschlag steht im Satz, wie nebenan: erst was ist, dann was hilft.
         message=_(
-            "Dieser Baustein hat ein Oben — eingehängt trägt er nur, wenn sein "
-            "Zapfen nach oben zeigt. Waagerecht ausgerichtet zeigt er zur Seite, "
-            "und seine Nase greift hinter nichts. Klicken Sie die Fläche an, an "
-            "die er kommt: Sie gibt ihm die Richtung, und er richtet sich selbst "
-            "auf. Soll er ohne Fläche stehen, setzen Sie die Achse auf Y."
+            "Dieser Baustein trägt nur mit dem Zapfen nach oben. Eine angeklickte Fläche oder "
+            "die Achse Y richtet ihn auf."
         ),
         values={"part": spec.name},
         # Regel 17: Die Richtung des Bausteins steht im Schritt.
@@ -1428,9 +1420,8 @@ def _over_the_rim(
         code="part.over_the_edge",
         severity="warning",
         message=_(
-            "Der Baustein reicht über den Rand der Fläche hinaus und schneidet die "
-            "Nachbarfläche an. Setzen Sie ihn weiter in die Fläche oder wählen Sie "
-            "kleinere Maße."
+            "Der Baustein reicht über den Rand der Fläche hinaus und schneidet die Nachbarfläche "
+            "an."
         ),
         location=(float(farthest[0]), float(farthest[1]), float(farthest[2])),
         values={"suggestion": suggestion} if suggestion is not None else {},
@@ -1521,9 +1512,8 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
         code="part.spring_overloaded",
         severity="warning",
         message=_(
-            "Der Federarm hat bei Belastung quer zu den Druckschichten zu wenig Reserve. "
-            "Verlängern Sie den Arm oder verringern Sie den Federweg. "
-            "Prüfen Sie auch die Druckausrichtung."
+            "Der Federarm hat bei Belastung quer zu den Druckschichten zu wenig Reserve. Ein "
+            "längerer Arm oder weniger Federweg hilft."
         ),
         values={
             "stress": round(load.stress, 1),
@@ -2049,9 +2039,8 @@ def _lip_on_a_slant(
         code="parts.lip_on_a_slant",
         severity="warning",
         message=_(
-            "{lip} hält nur auf einer Seite, weil der Baustein schräg zur Fläche steht. "
-            "Setzen Sie ihn senkrecht zur Fläche: Klicken Sie die Fläche an oder prüfen "
-            "Sie im Schritt die Richtung.",
+            "{lip} hält nur auf einer Seite, weil der Baustein schräg zur Fläche steht. Er "
+            "gehört senkrecht auf die Fläche.",
             lip=lip.name,
         ),
         values={

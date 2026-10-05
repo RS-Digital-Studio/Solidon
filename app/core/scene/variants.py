@@ -329,9 +329,8 @@ def _place(
                 code="variants.no_mark",
                 severity="info",
                 message=_(
-                    "Auf diesem Teil ist kein Platz für die eingravierte Zahl — es "
-                    "bleibt unbeschriftet. Nach dem Druck sagt die Reihenfolge auf der "
-                    "Platte, welches welches ist: der kleinste Wert links."
+                    "Auf diesem Teil ist kein Platz für die eingravierte Zahl. Auf der Platte "
+                    "liegt der kleinste Wert links."
                 ),
                 values={
                     "parts": ", ".join(unmarked),

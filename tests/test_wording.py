@@ -520,7 +520,6 @@ DARF_KONSTRUKTEURSWORT: dict[str, str] = {
     ),
 }
 DARF_DESIGNER_WORD: dict[str, str] = {
-    "Nicht für Teile, die dicht sein müssen": "„watertight“ meint dort wörtlich Wasser.",
     "Einen Parameterwert setzen": "Kommandozeile: „Boolean“ ist dort der Datentyp.",
     "Für Wahrheitswerte verwenden Sie": "Kommandozeile: „Boolean“ ist dort der Datentyp.",
     "Wie breit eine Bahn gelegt wird.": "„is normal“ heißt dort „ist üblich“.",
@@ -687,3 +686,84 @@ def test_the_sketch_figure_says_the_word_of_the_status_line(language: str) -> No
     status = catalog["{state} · Bestimmt — jedes Maß steht fest, nichts wackelt mehr. {advice}"]
     word = status.removeprefix("{state} · ").split(" — ")[0]
     assert figure.split(" — ")[0] == word, f"Bild {figure!r}, Statuszeile {word!r}"
+
+
+# --- Fachwörter und Satzmuster (RM-509) --------------------------------------
+
+#: Wörter aus der Datenhaltung, die ein Kunde nicht sucht (Durchsicht 0.5.2,
+#: D13). Einige sind heute Feldnamen („Startwert“, „Materialtoleranz
+#: berücksichtigen“) — der Bestand ist eingefroren, ein neues Vorkommen nicht.
+FACHWORT = re.compile(
+    r"Mindestbahnbreite|im Rahmen des Rasters|Maßherkunft|Bereichstest|Startwert\w*"
+    r"|Materialtoleranz|exakte[nr]? Körper|Rezept\w*"
+)
+
+#: Satzmuster, die nach Sprachmodell klingen (D14): das Semikolon und die
+#: Formel „Nur …:“ / „Nicht …:“ am Anfang.
+SATZMUSTER: dict[str, re.Pattern[str]] = {
+    "Fachwort": FACHWORT,
+    "Semikolon": re.compile(r";"),
+    "Nur-Formel": re.compile(r"^(Nur|Nicht)\b[^:.]{0,80}:"),
+}
+
+#: Wie viele Kundentexte je Muster heute noch treffen. Die Zahl sinkt mit jeder
+#: Überarbeitung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag.
+MUSTER_BESTAND: dict[str, int] = {"Fachwort": 28, "Nur-Formel": 9, "Semikolon": 121}
+
+MUSTER_DATEI = Path(__file__).resolve().parent / "data" / "text_patterns.json"
+
+
+def muster_funde(texte: set[str]) -> dict[str, list[str]]:
+    """Je Muster die Kundentexte, die es treffen, sortiert."""
+    return {
+        name: sorted(text for text in texte if muster.search(text))
+        for name, muster in SATZMUSTER.items()
+    }
+
+
+def muster_probleme(
+    funde: dict[str, list[str]], bestand: dict[str, list[str]], zahlen: dict[str, int]
+) -> list[str]:
+    """Was den Musterwächter rot macht — leer, wenn alles stimmt."""
+    probleme: list[str] = []
+    for name in SATZMUSTER:
+        erlaubt = set(bestand.get(name, []))
+        probleme += [f"{name} neu: {text}" for text in funde[name] if text not in erlaubt]
+        probleme += [
+            f"{name}: aus dem Bestand streichen: {text}"
+            for text in bestand.get(name, [])
+            if text not in funde[name]
+        ]
+        if len(bestand.get(name, [])) != zahlen.get(name, 0):
+            probleme.append(
+                f"{name}: {len(bestand.get(name, []))} eingefroren, MUSTER_BESTAND sagt "
+                f"{zahlen.get(name, 0)} — der Bestand darf nur schrumpfen"
+            )
+    return probleme
+
+
+def test_no_new_customer_text_uses_jargon_or_a_machine_pattern() -> None:
+    """Kein neuer Kundentext mit Fachwort, Semikolon oder „Nur …:“ (RM-509, D13/D14).
+
+    Geprüft werden die Kundentexte, die ``test_text_length`` nach Aufrufort
+    einordnet. Was heute trifft, steht in ``tests/data/text_patterns.json``.
+    """
+    from tests.test_text_length import application_sources, customer_texts
+
+    texte = {entry.text for entry in customer_texts(application_sources())}
+    bestand = json.loads(MUSTER_DATEI.read_text(encoding="utf-8"))
+    probleme = muster_probleme(muster_funde(texte), bestand, MUSTER_BESTAND)
+    assert not probleme, "\n".join(probleme[:30])
+
+
+def test_the_pattern_guard_sees_a_new_semicolon() -> None:
+    """Gegenprobe: ein neues Semikolon ist rot, ein gestrichenes Vorkommen auch."""
+    funde = muster_funde({"Kurz und klar.", "Erst dies; dann das.", "Nur hier: so."})
+    assert funde["Semikolon"] == ["Erst dies; dann das."]
+    assert funde["Nur-Formel"] == ["Nur hier: so."]
+    probleme = muster_probleme(funde, {"Nur-Formel": ["Nur hier: so."]}, {"Nur-Formel": 1})
+    assert probleme == ["Semikolon neu: Erst dies; dann das."]
+    veraltet = muster_probleme(
+        muster_funde({"Kurz."}), {"Semikolon": ["Erst dies; dann das."]}, {"Semikolon": 1}
+    )
+    assert veraltet == ["Semikolon: aus dem Bestand streichen: Erst dies; dann das."]

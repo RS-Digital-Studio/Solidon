@@ -211,8 +211,7 @@ def cut_counter_form(ctx: OpContext) -> OpResult:
                     code="counter_form.through_floor",
                     severity="warning",
                     message=_(
-                        "Die Tasche für „{object}“ reicht durch den Boden des Einsatzes. "
-                        "Heben Sie das Teil an oder nehmen Sie einen höheren Einsatz.",
+                        "Die Tasche für „{object}“ reicht durch den Boden des Einsatzes.",
                         object=tool.name,
                     ),
                     object_id=insert.id,

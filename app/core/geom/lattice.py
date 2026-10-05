@@ -400,9 +400,8 @@ NO_CAVITY: Final = _(
         "das Teil schneidet."
     ),
     caveat=_(
-        "Nicht für Teile, die dicht sein müssen: Ein Gitter hat Hohlräume, und Wasser "
-        "findet sie. Für tragende Teile erst die Wandstärke erhöhen — eine Füllung "
-        "ersetzt keine Wand."
+        "Für Teile, die dicht sein müssen, denn Wasser findet die Hohlräume. Tragende Teile "
+        "brauchen zuerst mehr Wandstärke."
     ),
 )
 def lattice_fill(ctx: OpContext) -> OpResult:
@@ -501,9 +500,8 @@ def _cavity_from_vents(bores: tuple[str, ...]) -> Finding:
         code="lattice.cavity_from_vents",
         severity="info",
         message=_(
-            "Der Innenraum ist über die Entlüftung bestimmt: {count} durchgehende "
-            "Bohrungen wurden dafür probeweise geschlossen. Das Gitter sitzt in dem "
-            "Raum, der danach eingeschlossen war.",
+            "Für den Innenraum wurden {count} durchgehende Bohrungen probeweise geschlossen. Das "
+            "Gitter füllt den Raum, der dann eingeschlossen war.",
             count=len(bores),
         ),
         feature_ids=bores,

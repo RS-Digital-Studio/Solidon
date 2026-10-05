@@ -805,9 +805,8 @@ def _wrap_beyond_body(body: Any, wrap_diameter: float) -> Finding | None:
         code="texture.wrap_beyond_body",
         severity="warning",
         message=_(
-            "Das Muster läuft um einen Zylinder, der breiter ist als der Körper — "
-            "es steht über dessen Rand hinaus. Klicken Sie die Zylinderfläche neu "
-            "an, damit der Durchmesser wieder zum Körper passt."
+            "Das Muster läuft um einen Zylinder, der breiter ist als der Körper, und steht über "
+            "dessen Rand hinaus."
         ),
         values={
             "wrap_diameter_mm": round(wrap_diameter, 3),

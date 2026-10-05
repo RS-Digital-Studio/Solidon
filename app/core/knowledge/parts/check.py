@@ -168,9 +168,8 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
                 code="parts.missing",
                 severity="error",
                 message=_(
-                    "Dieses Projekt benutzt Bausteine, die es hier nicht gibt. Ein "
-                    "eigener von einem anderen Rechner gehört in Ihren Bausteinordner, "
-                    "einen neuen aus der Bibliothek bringt eine neuere Version mit."
+                    "Dieses Projekt benutzt Bausteine, die hier fehlen. Eigene gehören in den "
+                    "Bausteinordner, neue bringt eine neuere Version."
                 ),
                 values={"parts": ", ".join(missing)},
                 # Regel 17: Der zweite Weg des Satzes ist ein Knopf; den
@@ -190,9 +189,8 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
                 code="parts.travelled",
                 severity="info",
                 message=_(
-                    "Bausteine sind mit dieser Datei mitgereist und stehen im "
-                    "Katalog. Sie bleiben bei der Datei und werden nicht auf "
-                    "diesem Rechner abgelegt."
+                    "Die Bausteine aus dieser Datei stehen im Katalog. Sie bleiben bei der Datei "
+                    "und werden hier nicht abgelegt."
                 ),
                 values={"parts": _titles(travelled, source)},
             )
@@ -299,9 +297,8 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
                 code="parts.changed",
                 severity="info",
                 message=_(
-                    "Seit dem Speichern haben sich benutzte Bausteine geändert. Ihr "
-                    "früherer Stand ist nicht mehr enthalten; das Projekt rechnet mit "
-                    "dem aktuellen. Prüfen Sie Lage und Maße dieser Bausteine."
+                    "Seit dem Speichern haben sich benutzte Bausteine geändert, ihr früherer "
+                    "Stand ist nicht mehr enthalten. Lage und Maße prüfen."
                 ),
                 values={
                     "parts": _titles(changed, source),
@@ -459,9 +456,8 @@ def check_outgoing(document: Document, registry: PartRegistry | None = None) -> 
             code="parts.travelling",
             severity="warning",
             message=_(
-                "Dieses Projekt benutzt eigene Bausteine. Sie reisen nicht mit — "
-                "bei einem anderen Empfänger hält die Auswertung an. Legen Sie die "
-                "Dateien aus Ihrem Bausteinordner bei, wenn er damit rechnen soll."
+                "Dieses Projekt benutzt eigene Bausteine, die nicht mitreisen. Ein Empfänger "
+                "braucht die Dateien aus Ihrem Bausteinordner."
             ),
             values={"parts": ", ".join(travelling)},
         )

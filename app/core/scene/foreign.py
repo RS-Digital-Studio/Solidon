@@ -159,9 +159,8 @@ def findings_for(document: Document) -> list[Finding]:
                 code="project.carried_chat",
                 severity="warning",
                 message=_(
-                    "Dieses Projekt bringt ein gespeichertes Gespräch mit. Es wird dem "
-                    "Assistenten als Vorgeschichte gezeigt und kann Anweisungen enthalten, "
-                    "die nicht von Ihnen stammen."
+                    "Dieses Projekt bringt ein Gespräch mit, das der Assistent als Vorgeschichte "
+                    "liest. Es kann fremde Anweisungen enthalten."
                 ),
                 values={"entries": len(document.chat)},
             )

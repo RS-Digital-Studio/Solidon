@@ -397,8 +397,8 @@ def _wall_reason(params: RoomWallParams) -> TranslatableText | None:
         "Fenster mit Falz oder einer Tür. Die Scheibe dazu ist der Baustein Fensterscheibe."
     ),
     caveat=_(
-        "Flach drucken, die Innenseite mit Nuten und Falz nach oben. Die rechte Seitenwand "
-        "ist die gespiegelte linke; das Fenster hat seinen Falz dann außen."
+        "Stehend gedruckt. Die Wand gehört flach aufs Bett, Nuten und Falz nach oben, die rechte "
+        "ist die gespiegelte linke."
     ),
     changes=[ROOM_PANELS_ADDED],
 )

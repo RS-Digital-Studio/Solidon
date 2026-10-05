@@ -176,7 +176,12 @@ def test_an_input_that_was_already_open_keeps_its_own_diagnosis(
     result = run_operation(name, mesh, profile, "draft", **values)
     expected = "split.uncapped" if name == "split_pinned" else "cut_away.uncapped"
     finding = next(entry for entry in result.findings if entry.code == expected)
-    assert "vor" in str(finding.message) and "Reparieren" in str(finding.message)
+    assert "vor" in str(finding.message)
+    # Der Rückweg steht als Knopf an der Zeile, nicht als Satz (RM-509).
+    from app.core.errors import REPAIR_AND_RETRY
+    from app.ui.panels import actions_for
+
+    assert REPAIR_AND_RETRY in actions_for(finding)
 
 
 def test_auto_split_discards_contact_before_judging_connectors(

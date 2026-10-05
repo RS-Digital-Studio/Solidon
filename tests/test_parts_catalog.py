@@ -401,12 +401,12 @@ def test_a_library_12_project_is_told_about_all_three_geometry_fixes() -> None:
             said.setdefault(names, []).append(str(finding.message.values["change"]))
     # Je Baustein seine eigene Korrektur aus Stand 13 …
     assert said["Bolzenscharnier"][0].startswith("Der Außendurchmesser wächst")
-    assert said["Passstift und Passbohrung"][0].startswith("Der Schwalbenschwanz folgt")
+    assert said["Passstift und Passbohrung"][0].startswith("Der Schwalbenschwanz hat jetzt")
     assert said["Standfuß"][0].startswith("Fuß und Tasche entstehen")
     # … und die gemeinsame aus Stand 15 einmal, mit allen drei Namen.
     shared = "Bolzenscharnier, Passstift und Passbohrung, Standfuß"
     assert said[shared] == [
-        text for text in said[shared] if text.startswith("An ausdrücklich anders zugeordneten")
+        text for text in said[shared] if text.startswith("Hat ein Körper ein eigenes Material")
     ]
     effects = {
         str(change.effect)

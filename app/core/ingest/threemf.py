@@ -877,9 +877,8 @@ def _read_objects(
                     code="ingest.foreign_volume",
                     severity="warning",
                     message=_(
-                        "„{name}“ trägt einen Bereich, den der Slicer als „{kind}“ führt — er "
-                        "ist als Material des Körpers geladen, und die Farben wurden nicht "
-                        "übernommen.",
+                        "„{name}“ trägt einen Bereich, den der Slicer als „{kind}“ führt. Er "
+                        "gehört jetzt zum Körper, die Farben fehlen.",
                         name=leaf.name,
                         kind=problem.kind,
                     ),
@@ -986,9 +985,8 @@ def _colours_dropped(name: str, reason: TranslatableText | str) -> Finding:
         code="ingest.colours_dropped",
         severity="warning",
         message=_(
-            "Die Farben von „{name}“ wurden nicht übernommen: {reason}. Der Körper ist "
-            "einfarbig geladen — im Slicer nach Filamenten in einzelne Körper aufgeteilt und "
-            "neu exportiert kommen die Farben mit.",
+            "Die Farben von „{name}“ wurden nicht übernommen: {reason}. Neu exportiert, im "
+            "Slicer nach Filamenten getrennt, kommen sie mit.",
             name=name,
             reason=reason,
         ),
@@ -1781,9 +1779,9 @@ def _leaves(
                         # Der Rat im Satz, aus demselben Grund wie bei
                         # ``_colours_dropped``.
                         message=_(
-                            "Die Filamentpalette dieser 3MF ließ sich nicht lesen: {reason}. "
-                            "Die Körper sind einfarbig geladen — im Slicer nach Filamenten in "
-                            "einzelne Körper aufgeteilt und neu exportiert kommen die Farben mit.",
+                            "Die Filamentpalette dieser 3MF ist unlesbar: {reason}. Neu "
+                            "exportiert, im Slicer nach Filamenten getrennt, kommen die Farben "
+                            "mit.",
                             reason=problem.reason,
                         ),
                         values={"reason": problem.reason},

@@ -203,8 +203,8 @@ def _solved_drawing(ctx: OpContext, sketch_text: str, findings: list[Finding]) -
                 code="sketch.underconstrained",
                 severity="info",
                 message=_(
-                    "Nicht jedes Maß der Zeichnung ist festgelegt. Gedruckt wird sie, "
-                    "wie sie gezeichnet ist; feste Maße legen Sie im Skizzeneditor an."
+                    "Nicht jedes Maß der Zeichnung ist festgelegt, gedruckt wird sie wie "
+                    "gezeichnet. Feste Maße setzt der Skizzeneditor."
                 ),
                 values={"free_dof": solved.free_dof},
             )
@@ -1343,9 +1343,8 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
                     code="sketch.revolve_upright",
                     severity="info",
                     message=_(
-                        "Der Querschnitt liegt nicht auf der Vorder- oder Seitenansicht. "
-                        "Gedreht wird er trotzdem aufrecht um die senkrechte Achse: "
-                        "waagerecht ist der Abstand zur Achse, senkrecht die Höhe."
+                        "Der Querschnitt liegt auf keiner Vorder- oder Seitenansicht und wird "
+                        "trotzdem aufrecht um die senkrechte Achse gedreht."
                     ),
                     values={"plane": drawn_on},
                 )
@@ -2762,9 +2761,8 @@ def _cut_with_tool(
                     code="sketch.exact_cut_unsound",
                     severity="warning",
                     message=_(
-                        "Der exakte Kern hat diesen Schnitt an diesem Körper nicht gültig "
-                        "geschlossen. Gerechnet wurde deshalb am Netz; Rückgängig stellt den "
-                        "exakten Körper wieder her."
+                        "Mit Flächen und Kanten ließ sich dieser Schnitt nicht schließen, "
+                        "gerechnet wurde am Netz. Strg+Z stellt den Körper wieder her."
                     ),
                     object_id=source.id,
                     suggestions=(CORRECT_INPUT,),

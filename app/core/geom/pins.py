@@ -847,8 +847,8 @@ def _too_shallow_for_snap(depth: float) -> Finding:
         code="split.snap_too_small",
         severity="info",
         message=_(
-            "Hinter der Naht steht zu wenig Material für einen Federarm — er wäre zu kurz "
-            "zum Federn. Es sind runde Stifte geworden; zum Zusammenstecken hilft Kleber."
+            "Hinter der Naht ist zu wenig Material für einen Federarm, deshalb sind es runde "
+            "Stifte. Zum Zusammenstecken hilft Kleber."
         ),
         values={"depth_mm": round(depth, 2), "needed_mm": round(SNAP_MIN_REACH, 2)},
     )
@@ -878,8 +878,8 @@ def connector_glue_finding(choice: ConnectorChoice | None = None) -> Finding:
         code="split.connector_glue",
         severity="info",
         message=_(
-            "Hinter der Naht steht zu wenig Material für einen Federarm — er wäre zu kurz "
-            "zum Federn. Es sind runde Stifte geworden; zum Zusammenstecken hilft Kleber."
+            "Hinter der Naht ist zu wenig Material für einen Federarm, deshalb sind es runde "
+            "Stifte. Zum Zusammenstecken hilft Kleber."
         ),
         values=values,
     )
@@ -897,9 +897,8 @@ def _seam_too_thin(diameter: float, found: float, needed: float) -> Finding:
         code="split.seam_too_thin",
         severity="warning",
         message=_(
-            "Hinter der Trennfläche steht zu wenig Material für einen Stift — er "
-            "stünde im Hohlraum, und seine Bohrung ginge durch die Wand. Getrennt "
-            "wurde trotzdem; geklebt hält die Naht."
+            "Hinter der Trennfläche ist zu wenig Material für einen Stift, getrennt wurde ohne. "
+            "Geklebt hält die Naht."
         ),
         values={
             "diameter_mm": round(diameter, 2),

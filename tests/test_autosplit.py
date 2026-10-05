@@ -2490,7 +2490,11 @@ def test_the_open_cut_says_why_and_what_to_do(profile: Profile) -> None:
     assert offen, "der Befund fehlt ganz"
     satz = source_text(offen[0].message)
     assert "vor dem" in satz and "nicht geschlossen" in satz, f"die Ursache fehlt: {satz}"
-    assert "Reparieren" in satz, f"der Rückweg fehlt: {satz}"
+    # Der Rückweg steht als Knopf an der Zeile, nicht als Satz (RM-509).
+    from app.core.errors import REPAIR_AND_RETRY
+    from app.ui.panels import actions_for
+
+    assert REPAIR_AND_RETRY in actions_for(offen[0]), f"der Rückweg fehlt: {satz}"
 
 
 def test_new_fit_pairs_never_take_a_name_that_is_already_in_use(loaded, profile: Profile) -> None:

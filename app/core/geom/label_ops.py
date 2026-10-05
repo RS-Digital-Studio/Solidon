@@ -712,10 +712,8 @@ def _buried(letters: Any, before: Any, after: Any, mode: str) -> Finding | None:
         # des Reviews, 13.09.2026). Gezählt wird hier nichts: ``letters.volume``
         # ist das Volumen der gesetzten Schrift, und das steht jetzt auch da.
         message=_(
-            "Die Schrift steckt im Körper: Von {expected} gesetzter Schrift stehen nur "
-            "{shown} über der Fläche, der Rest liegt im Material und ist unsichtbar. "
-            "Meist zeigt die Richtung in den Körper hinein oder der Punkt liegt in ihm — "
-            "klicken Sie die Fläche an, dann trägt sie Ort und Richtung selbst ein.",
+            "Von {expected} Schrift stehen nur {shown} über der Fläche, der Rest steckt im "
+            "Körper. Meist zeigt die Richtung hinein.",
             expected=format_volume(expected),
             shown=format_volume(shown),
         ),
@@ -888,8 +886,8 @@ def _no_back_side() -> Finding:
         code="label.no_back_side",
         severity="warning",
         message=_(
-            "Auf der Rückseite steht kein Text: Die Richtung tritt dort nicht aus dem "
-            "Körper aus. Klicken Sie eine Fläche an, hinter der Material liegt."
+            "Auf der Rückseite steht kein Text, weil die Richtung dort nicht aus dem Körper "
+            "austritt."
         ),
         suggestions=(CORRECT_INPUT,),
     )
