@@ -236,7 +236,6 @@ class _ParamRow:
             # Regel 18: nicht nur die fehlende Marke im Kästchen — der Satz
             # steht sichtbar da, hängt am Haken und wird vorgelesen.
             self.take.setToolTip(note)
-            self.take.setStatusTip(note)
             self.take.setAccessibleDescription(note)
 
         self.title = QLineEdit(shown, parent)
@@ -992,14 +991,12 @@ class RecipeDialog(QDialog):
             if taken
             else ""
         )
-        # **An alle drei Kanäle, nicht nur an den Tooltip** (Regel 18). Der Satz
-        # stand hier immer schon — ``_why_locked`` formuliert ihn —, er erreichte
-        # aber nur die Maus. Wer den Knopf mit der Tastatur anfährt, liest die
-        # Statuszeile; ein Bildschirmleser die zugängliche Beschreibung. Das
-        # Handbuch verspricht den Satz an dieser Stelle ausdrücklich; eingelöst
-        # war er für zwei von drei Wegen.
+        # **An Tooltip und Beschreibung, nicht nur an den Tooltip** (Regel 18).
+        # Der Satz stand hier immer schon — ``_why_locked`` formuliert ihn —, er
+        # erreichte aber nur die Maus; ein Bildschirmleser liest die zugängliche
+        # Beschreibung. Das Handbuch verspricht den Satz an dieser Stelle
+        # ausdrücklich.
         self._save.setToolTip(hint)
-        self._save.setStatusTip(hint)
         self._save.setAccessibleDescription(hint)
 
     # --- Anlegen --------------------------------------------------------------

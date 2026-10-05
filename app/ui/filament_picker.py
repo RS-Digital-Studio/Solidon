@@ -554,7 +554,6 @@ class SlicerFilamentDialog(QDialog):
             why = str(tr("Kein Profil gewählt.")) if self.list.count() else self.count.text()
         self._ok_button.setEnabled(not why)
         self._ok_button.setToolTip(why)
-        self._ok_button.setStatusTip(why)
         self._ok_button.setAccessibleDescription(why)
 
     def chosen_profile(self) -> str:
@@ -938,14 +937,12 @@ class NewFilamentDialog(QDialog):
             (self.note, tr("Eigene Hinweise zu dieser Spule, etwa Trocknung oder Besonderheiten.")),
         ):
             editor.setToolTip(help_text)
-            editor.setStatusTip(help_text)
             editor.setAccessibleDescription(help_text)
             label = (
                 layout if editor in (self.remaining, self.spool_weight, self.location) else details
             ).labelForField(stock if editor is self.remaining else editor)
             if label is not None:
                 label.setToolTip(help_text)
-                label.setStatusTip(help_text)
                 label.setAccessibleDescription(help_text)
         self.name.setFocus()
         align_forms(self)
@@ -1006,7 +1003,6 @@ class NewFilamentDialog(QDialog):
         self.full_spool_button.setToolTip(
             tr("Übernimmt die Nennfüllung als Restmenge. Tragen Sie zuerst die Nennfüllung ein.")
         )
-        self.full_spool_button.setStatusTip(self.full_spool_button.toolTip())
         self.full_spool_button.setAccessibleDescription(self.full_spool_button.toolTip())
         with QSignalBlocker(self.stock_slider):
             self.stock_slider.setValue(
@@ -1126,7 +1122,6 @@ class NewFilamentDialog(QDialog):
         why = str(tr("Der Bestand des Slicers wird gerade gelesen.")) if searching else ""
         self.choose_profile.setEnabled(not searching)
         self.choose_profile.setToolTip(why)
-        self.choose_profile.setStatusTip(why)
         self.choose_profile.setAccessibleDescription(why)
 
     def _stop_profile_search(self) -> None:
@@ -1189,13 +1184,12 @@ class NewFilamentDialog(QDialog):
         """Der Entfernen-Knopf sagt, warum er nichts zu tun hat.
 
         Ohne eingetragenes Profil ist er gesperrt, und das ist richtig — er
-        stand nur wortlos da. Alle drei Kanäle (Regel 18); der Grund nennt den
+        stand nur wortlos da. Kurzhilfe und Beschreibung (Regel 18); der Grund nennt den
         Zustand und nicht die Handlung, denn was fehlt, ist das Profil.
         """
         why = "" if has_profile else str(tr("Es ist kein Profil eingetragen."))
         self.clear_profile.setEnabled(has_profile)
         self.clear_profile.setToolTip(why)
-        self.clear_profile.setStatusTip(why)
         self.clear_profile.setAccessibleDescription(why)
 
     def _clear_slicer_profile(self) -> None:
@@ -1863,10 +1857,9 @@ class _WithinTheWidth(QStyledItemDelegate):
 
 
 def _explain(button: QPushButton, free: bool, said: str) -> None:
-    """Freigabe und Satz eines Knopfes in einem Zug — an allen drei Kanälen."""
+    """Freigabe und Satz eines Knopfes in einem Zug — in Kurzhilfe und Beschreibung."""
     button.setEnabled(free)
     button.setToolTip(said)
-    button.setStatusTip(said)
     button.setAccessibleDescription(said)
 
 
@@ -2314,9 +2307,9 @@ class FilamentPanel(QWidget):
     def _selection_changed(self, item: QListWidgetItem | None, *_args: object) -> None:
         """Nur Projektfilamente haben eigene Druckwerte.
 
-        **Ein ruhender Knopf sagt, worauf er wartet** — an allen drei Kanälen
-        (Regel 18). Beide standen grau mit einem Satz über ihre Handlung und
-        leerer Statuszeile; frei tragen sie wieder diesen Satz.
+        **Ein ruhender Knopf sagt, worauf er wartet** — in Kurzhilfe und
+        Beschreibung (Regel 18). Beide standen grau mit einem Satz über ihre
+        Handlung; frei tragen sie wieder diesen Satz.
         """
         project = bool(item is not None and item.data(_SLOT_ROLE) is not None)
         shelf = bool(item is not None and item.data(_ID_ROLE))

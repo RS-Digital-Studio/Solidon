@@ -762,7 +762,7 @@ class SupportDialog(QDialog):
     def _show_ways(self) -> None:
         """Ablegen und Mail ruhen, solange der Anhang entsteht oder gesendet wird.
 
-        Mit Grund an allen drei Kanälen (Regel 18) — und ohne, sobald sie
+        Mit Grund in Kurzhilfe und Beschreibung (Regel 18) — und ohne, sobald sie
         wieder frei sind: Nach einem gescheiterten Versand standen sie sonst
         frei da und sagten „Wird gesendet …".
         """
@@ -780,7 +780,6 @@ class SupportDialog(QDialog):
         for button in (self.save_folder, self.by_mail):
             button.setEnabled(not busy)
             button.setToolTip(resting)
-            button.setStatusTip(resting)
             button.setAccessibleDescription(resting)
 
     def _update_send(self) -> None:
@@ -798,7 +797,7 @@ class SupportDialog(QDialog):
         # dieselbe Sendung, die ``_start`` anschließend prüft und verschickt.
         has_content = bool(self._message_text().strip() or self.detail.strip())
         self.send.setEnabled(has_content and not running)
-        # **Der ruhende Knopf sagt, worauf er wartet** — an allen drei Kanälen
+        # **Der ruhende Knopf sagt, worauf er wartet** — in Kurzhilfe und Beschreibung
         # (Regel 18). Frisch geöffnet stand er wortlos grau da.
         why = (
             ""
@@ -810,7 +809,6 @@ class SupportDialog(QDialog):
             else str(tr("Schreiben Sie zuerst, worum es geht."))
         )
         self.send.setToolTip(why)
-        self.send.setStatusTip(why)
         self.send.setAccessibleDescription(why)
 
     # --- Senden -----------------------------------------------------------------

@@ -62,7 +62,6 @@ def test_pending_assignment_keeps_choice_and_cancel_available(picker: QuickFilam
     assert picker.picker.isEnabled() and picker.cancel_button.isEnabled()
     assert not picker.apply_button.isHidden() and not picker.can_accept()
     assert picker.apply_button.toolTip() == reason
-    assert picker.apply_button.statusTip() == reason
     assert picker.apply_button.accessibleDescription() == reason
     picker.apply_button.click()
     picker.accept()

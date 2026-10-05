@@ -547,7 +547,6 @@ class SelectionOperationsPanel(QWidget):
         rebuild.setObjectName("quickOperation")
         tip = tr("Baut den Körper aus erkannten Formen nach; seine Maße werden danach änderbar.")
         rebuild.setToolTip(tip)
-        rebuild.setStatusTip(tip)
         rebuild.setAccessibleDescription(tip)
         rebuild.clicked.connect(lambda _checked=False: self.rebuildRequested.emit())
         rebuild.hide()
@@ -663,7 +662,6 @@ class SelectionOperationsPanel(QWidget):
         self.catalog_button.setToolTip(
             tr("Öffnet den vollständigen Bausteinkatalog mit Bildern und Suche.")
         )
-        self.catalog_button.setStatusTip(self.catalog_button.toolTip())
         self.catalog_button.setAccessibleDescription(self.catalog_button.toolTip())
         self.catalog_button.clicked.connect(self._catalog_clicked)
         self._catalog_kind = ""
@@ -767,7 +765,6 @@ class SelectionOperationsPanel(QWidget):
         warning = caveat_line(spec)
         tip = f"{spec.doc}\n\n{warning}" if warning else str(spec.doc)
         button.setToolTip(tip)
-        button.setStatusTip(str(spec.doc))
         button.setAccessibleDescription(tip)
         button.clicked.connect(weak_slot(self, SelectionOperationsPanel._request_operation, spec))
         button.setProperty("operationName", spec.name)
@@ -1149,7 +1146,6 @@ class SelectionOperationsPanel(QWidget):
                 button.setProperty("operationTip", spec_tip)
             tip = str(spec_tip) if enabled or not reason else reason
             button.setToolTip(tip)
-            button.setStatusTip(tip)
             button.setAccessibleDescription(tip)
 
     def _without_a_selection(self, availability: Callable[[str], tuple[bool, str]]) -> None:

@@ -296,7 +296,7 @@ class _Row(QWidget):
     def set_busy(self, running: bool) -> None:
         """Während irgendetwas installiert wird, drückt hier niemand etwas.
 
-        **Und jeder ruhende Knopf sagt, warum** — an allen drei Kanälen
+        **Und jeder ruhende Knopf sagt, warum** — in Kurzhilfe und Beschreibung
         (Regel 18). Sein eigener Satz wird dafür gemerkt und danach
         zurückgegeben, dieselbe Bauart wie ``_OWN_TIP`` im Druckdialog.
         """
@@ -472,22 +472,22 @@ _OWN_TIP = "solidon_own_tip"
 
 
 def _explain_while_busy(button: QPushButton, busy: str) -> None:
-    """Den Wartegrund an alle drei Kanäle — oder den eigenen Satz zurück."""
+    """Den Wartegrund in Kurzhilfe und Beschreibung — oder den eigenen Satz zurück.
+
+    Eine Statuszeile trägt ein Knopf nicht mehr: Statustipps stehen nur an
+    Menüaktionen (Robert, 05.10.2026, RM-509).
+    """
     own = button.property(_OWN_TIP)
     if busy:
         if own is None:
-            button.setProperty(
-                _OWN_TIP, (button.toolTip(), button.statusTip(), button.accessibleDescription())
-            )
+            button.setProperty(_OWN_TIP, (button.toolTip(), button.accessibleDescription()))
         button.setToolTip(busy)
-        button.setStatusTip(busy)
         button.setAccessibleDescription(busy)
         return
     if own is None:
         return
-    tip, status, described = own
+    tip, described = own
     button.setToolTip(str(tip))
-    button.setStatusTip(str(status))
     button.setAccessibleDescription(str(described))
     button.setProperty(_OWN_TIP, None)
 

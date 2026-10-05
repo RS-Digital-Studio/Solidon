@@ -73,7 +73,6 @@ class MeasureBar(QWidget):
         # Rücktaste tut dasselbe, solange die Ansicht den Fokus hat.
         self.undo = QPushButton(tr("Letztes Maß zurück"), self)
         self.undo.setToolTip(tr("Nimmt das zuletzt gesetzte Maß zurück (Rücktaste)."))
-        self.undo.setStatusTip(self.undo.toolTip())
         self.undo.clicked.connect(self.undoRequested)
         clear = QPushButton(tr("Bemaßungen löschen"), self)
         clear.clicked.connect(self.clearRequested)

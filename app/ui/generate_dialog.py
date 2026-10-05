@@ -934,7 +934,7 @@ class GenerateDialog(QDialog):
     def _show_image(self, picture: bytes | None, name: str) -> None:
         """Bild und Beschreibung in denselben Stand bringen.
 
-        Mit Bild ruht die Beschreibung, mit Grund an allen drei Kanälen
+        Mit Bild ruht die Beschreibung, mit Grund in Kurzhilfe und Beschreibung
         (Regel 18): Der Bildweg liest sie nicht, und ein bedienbares Feld
         versprach das Gegenteil.
         """
@@ -954,7 +954,6 @@ class GenerateDialog(QDialog):
         )
         self.prompt.setEnabled(picture is None)
         self.prompt.setToolTip(resting)
-        self.prompt.setStatusTip(resting)
         self.prompt.setAccessibleDescription(resting)
         # **Der Weg hat gewechselt, also gilt die alte Antwort nicht mehr.** Mit
         # Bild braucht es kein SDXL-Modell; ohne schon. Wer eines wählt, soll
@@ -1007,7 +1006,6 @@ class GenerateDialog(QDialog):
         cancel = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel.setEnabled(why is None)
         cancel.setToolTip(why or "")
-        cancel.setStatusTip(why or "")
         cancel.setAccessibleDescription(why or "")
 
     def _lock_make(self, free: bool) -> None:
@@ -1038,7 +1036,6 @@ class GenerateDialog(QDialog):
         make = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
         make.setEnabled(free)
         make.setToolTip(why)
-        make.setStatusTip(why)
         make.setAccessibleDescription(why)
 
     def _start(self) -> None:

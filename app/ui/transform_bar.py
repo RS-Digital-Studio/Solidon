@@ -111,7 +111,7 @@ class TransformBar(QWidget):
             # beides und lernt das Bild nebenbei (Regel 18, §2.6).
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             button.setToolTip(_role_hint(key))
-            button.setStatusTip(_role_hint(key))
+            button.setAccessibleDescription(_role_hint(key))
             self.roles.addButton(button, index)
             self.role_buttons[key] = button
             role_row.addWidget(button)
@@ -176,9 +176,9 @@ class TransformBar(QWidget):
         Modus und nichts zu bestätigen — wer das Menü wieder schließt, hat
         eingestellt, was er eingestellt hat (Regel 19).
 
-        **Und ein wortloser Knopf trägt seinen Namen an drei Stellen**
-        (``grenzen.md``): im Barrierefreiheitsbaum, im Tooltip und in der
-        Statuszeile. Das Zeichen ist ein Punkt im Raster — das Einrasten
+        **Und ein wortloser Knopf trägt seinen Namen an zwei Stellen**
+        (``grenzen.md``): im Barrierefreiheitsbaum und im Tooltip. Das Zeichen
+        ist ein Punkt im Raster — das Einrasten
         selbst, nicht ein Zahnrad: Ein Zahnrad hieße „Einstellungen" und stünde
         damit für alles.
         """
@@ -187,7 +187,7 @@ class TransformBar(QWidget):
         button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         button.setAccessibleName(tr("Fang"))
         button.setToolTip(tr("Fang — auf welchen Schritt ein Zug einrastet."))
-        button.setStatusTip(button.toolTip())
+        button.setAccessibleDescription(button.toolTip())
         button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
         # Der Rasterfang ist eine Länge, also folgt er der Anzeigeeinheit
@@ -214,7 +214,10 @@ class TransformBar(QWidget):
         self.angle.setAccessibleName(tr("Winkelfang"))
         rows.addRow(tr("Rasterfang"), self.grid)
         rows.addRow(tr("Winkelfang"), self.angle)
-        holder.setStatusTip(tr("Null heißt: kein Einrasten."))
+        # Stand nur als Statustipp da; die stehen seit RM-509 nur an Menüaktionen.
+        zero = tr("Null heißt: kein Einrasten.")
+        holder.setToolTip(zero)
+        holder.setAccessibleDescription(zero)
 
         action = QWidgetAction(menu)
         action.setDefaultWidget(holder)
@@ -258,7 +261,7 @@ class TransformBar(QWidget):
         bekam 149 Punkte für 184 gewünschte und stand als „Versch…" da. Ein
         halbes Wort ist schlechter als kein Wort — das Symbol allein ist
         geeignet, weil es in jedem Slicer dasselbe bedeutet, und der Name steht
-        weiter im Tooltip, in der Statuszeile und im Barrierefreiheitsbaum.
+        weiter im Tooltip und im Barrierefreiheitsbaum.
 
         **Gemessen wird gegen einen gemerkten Wert, nicht gegen den aktuellen.**
         Wer die Wunschbreite im Symbolzustand liest, bekommt die kleine Zahl und
@@ -549,7 +552,6 @@ class TransformBar(QWidget):
         self.by_size.setToolTip(
             tr("Statt eines Faktors die größte Kante eintragen — der Faktor ergibt sich.")
         )
-        self.by_size.setStatusTip(self.by_size.toolTip())
         self.by_size.toggled.connect(self._scale_mode_changed)
 
         row.addWidget(self.factor)
@@ -671,7 +673,7 @@ class TransformBar(QWidget):
         Klick, also genau die Sackgasse, die Regel 19 verbietet.
 
         ``None`` heißt frei, ein Satz heißt gesperrt mit diesem Grund. Der
-        Grund steht als **Text** im Tooltip und in der Statuszeile, nicht nur
+        Grund steht als **Text** im Tooltip und in der Beschreibung, nicht nur
         als graue Farbe: Regel 18 verlangt eine zweite Kodierung, und „warum
         geht das nicht" ist die Frage, die eine ausgegraute Schaltfläche sonst
         offen lässt.
@@ -688,7 +690,7 @@ class TransformBar(QWidget):
             reason = reasons.get(key)
             button.setEnabled(reason is None)
             button.setToolTip(reason or _role_hint(key))
-            button.setStatusTip(reason or _role_hint(key))
+            button.setAccessibleDescription(reason or _role_hint(key))
         current = next((k for k, b in self.role_buttons.items() if b.isChecked()), None)
         if current is not None and reasons.get(current) is not None:
             free = next((k for k, b in self.role_buttons.items() if b.isEnabled()), None)
@@ -717,7 +719,7 @@ def _role_name(key: str) -> str:
 
 
 def _role_hint(key: str) -> str:
-    """Was die Rolle tut, in einem Satz — Tooltip und Statuszeile lesen ihn."""
+    """Was die Rolle tut, in einem Satz — Tooltip und Beschreibung lesen ihn."""
     return {
         "move": tr("Das Teil versetzen — am Griff im Bild oder über X, Y, Z."),
         "rotate": tr("Um eine Hauptachse drehen — Achse wählen, Winkel eintragen."),

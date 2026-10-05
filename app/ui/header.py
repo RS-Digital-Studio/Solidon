@@ -344,7 +344,6 @@ class HeaderBar(QWidget):
         self.printer_button.setAutoRaise(True)
         printer_hint = tr("Öffnet die Druckeinstellungen; der Drucker steht dort ganz oben.")
         self.printer_button.setToolTip(printer_hint)
-        self.printer_button.setStatusTip(printer_hint)
         self.printer_button.setAccessibleDescription(printer_hint)
         self.printer_button.clicked.connect(self.printerRequested)
         self.printer_control = _PrinterControl(self)

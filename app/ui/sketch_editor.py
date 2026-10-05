@@ -6221,7 +6221,6 @@ class SketchPanel(QWidget):
                 shortcut = f"  ({key})" if key else ""
                 note = f"{label}{shortcut} — {tool_instruction(name)}"
                 button.setToolTip(note)
-                button.setStatusTip(note)
                 # **Ein Name für den Bildschirmleser**, nicht nur eine
                 # Beschreibung: Qt liest den Tooltip als Beschreibung, und ein
                 # Knopf ohne Text hat sonst keinen Namen — gesagt wurde
@@ -6247,7 +6246,6 @@ class SketchPanel(QWidget):
         self.polygon_corners_field.setValue(DEFAULT_POLYGON_CORNERS)
         corners_note = tr("Wie viele Ecken das Vieleck bekommt — drei bis zwölf.")
         self.polygon_corners_field.setToolTip(corners_note)
-        self.polygon_corners_field.setStatusTip(corners_note)
         self.polygon_corners_field.setAccessibleName(tr("Ecken"))
         self.polygon_corners_field.setAccessibleDescription(corners_note)
         self.polygon_corners_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
@@ -6262,7 +6260,6 @@ class SketchPanel(QWidget):
         self.slot_width_field.set_value_mm(DEFAULT_SLOT_WIDTH_MM)
         slot_note = tr("Wie breit das Langloch wird — die zwei Klicks setzen seine Länge.")
         self.slot_width_field.setToolTip(slot_note)
-        self.slot_width_field.setStatusTip(slot_note)
         self.slot_width_field.setAccessibleName(tr("Breite"))
         self.slot_width_field.setAccessibleDescription(slot_note)
         self.slot_width_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
@@ -6279,7 +6276,6 @@ class SketchPanel(QWidget):
         self.grid_columns_field.setRange(1, MOST_HOLE_GRID_LINES)
         self.grid_columns_field.setValue(DEFAULT_GRID_COLUMNS)
         self.grid_columns_field.setToolTip(columns_note)
-        self.grid_columns_field.setStatusTip(columns_note)
         self.grid_columns_field.setAccessibleName(tr("Spalten"))
         self.grid_columns_field.setAccessibleDescription(columns_note)
         self.grid_columns_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
@@ -6293,7 +6289,6 @@ class SketchPanel(QWidget):
         self.grid_rows_field.setRange(1, MOST_HOLE_GRID_LINES)
         self.grid_rows_field.setValue(DEFAULT_GRID_ROWS)
         self.grid_rows_field.setToolTip(rows_note)
-        self.grid_rows_field.setStatusTip(rows_note)
         self.grid_rows_field.setAccessibleName(tr("Zeilen"))
         self.grid_rows_field.setAccessibleDescription(rows_note)
         self.grid_rows_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
@@ -6307,7 +6302,6 @@ class SketchPanel(QWidget):
         self.bolt_count_field.setRange(edit.LEAST_PATTERN_HOLES, edit.MOST_BOLT_CIRCLE_HOLES)
         self.bolt_count_field.setValue(DEFAULT_BOLT_COUNT)
         self.bolt_count_field.setToolTip(count_note)
-        self.bolt_count_field.setStatusTip(count_note)
         self.bolt_count_field.setAccessibleName(tr("Löcher"))
         self.bolt_count_field.setAccessibleDescription(count_note)
         self.bolt_count_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
@@ -6321,7 +6315,6 @@ class SketchPanel(QWidget):
         self.hole_diameter_field.set_range_mm(LEAST_SNAP_MM, 1000.0)
         self.hole_diameter_field.set_value_mm(DEFAULT_HOLE_DIAMETER_MM)
         self.hole_diameter_field.setToolTip(diameter_note)
-        self.hole_diameter_field.setStatusTip(diameter_note)
         self.hole_diameter_field.setAccessibleName(tr("Lochdurchmesser"))
         self.hole_diameter_field.setAccessibleDescription(diameter_note)
         self.hole_diameter_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
@@ -6457,11 +6450,10 @@ class SketchPanel(QWidget):
             'Ganz herunter gedreht steht „Automatisch", und sie folgt wieder.'
         )
         self.snap_step.setToolTip(snap_note)
-        # Statuszeile und Vorleser sagen dasselbe wie der Tooltip (Regel 18) —
+        # Der Vorleser sagt dasselbe wie der Tooltip (Regel 18) —
         # das Feld des Versetzen-Knopfs in der Zeile darüber zeigt dieselben
         # Millimeter, und ohne Auskunft ohne Wartezeit blieb nur Raten,
         # welches was ist (der Zwilling dieser Zeilen steht dort).
-        self.snap_step.setStatusTip(snap_note)
         self.snap_step.setAccessibleDescription(snap_note)
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.snap_step_label = QLabel(tr("Rasterweite"), self)
@@ -6515,14 +6507,13 @@ class SketchPanel(QWidget):
         self.offset_distance.set_value_mm(2.0)
         offset_note = tr("Um wie viel versetzt wird. Negativ ist nach innen.")
         self.offset_distance.setToolTip(offset_note)
-        # In der Statuszeile und beim Vorleser derselbe Satz wie im Tooltip
+        # Beim Vorleser derselbe Satz wie im Tooltip
         # (Regel 18): Dieses Feld und die Rasterweite darunter sind die zwei
         # einzigen nackten mm-Felder des Bereichs, und wofür welches ist, war
         # ohne Hover nicht zu erkennen (Robert, 26.08.2026). Ein sichtbares
         # Wort scheitert an der 900er-Breitengrenze — gemessen: als Wort am
         # Knopf 1017, als Label davor 971 —, also antwortet die Statuszeile
         # ohne Wartezeit, sobald der Zeiger das Feld nur berührt.
-        self.offset_distance.setStatusTip(offset_note)
         self.offset_distance.setAccessibleDescription(offset_note)
         self.offset_distance.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         # Ohne Namen liest ein Vorleser hier „Drehfeld, 2,00 mm" vor. Der

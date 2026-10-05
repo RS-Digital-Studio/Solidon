@@ -328,10 +328,7 @@ def _silent_buttons(dialog: QDialog) -> list[str]:
         if button.isVisibleTo(dialog)
         and button.text()
         and not button.isEnabled()
-        and not all(
-            text.strip()
-            for text in (button.toolTip(), button.statusTip(), button.accessibleDescription())
-        )
+        and not all(text.strip() for text in (button.toolTip(), button.accessibleDescription()))
     ]
 
 

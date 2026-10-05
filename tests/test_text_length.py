@@ -291,3 +291,61 @@ def test_a_growing_list_turns_the_guard_red() -> None:
 )
 def test_sentences_are_counted_as_a_reader_counts_them(text: str, count: int) -> None:
     assert len(sentences(text)) == count
+
+
+# --- Statustipps nur an Menüaktionen ----------------------------------------------
+
+#: Was einen Statustipp tragen darf: eine Menüaktion. Robert, 05.10.2026
+#: (RM-509): An Feldern und Knöpfen wiederholten 134 von 176 Statustipps den
+#: Tooltip desselben Widgets; dort bleiben Tooltip und zugängliche Beschreibung.
+ACTION_MAKERS = frozenset({"QAction", "addAction", "_add_action", "menuAction", "toggleViewAction"})
+
+
+def status_tips_off_actions(sources: Iterable[tuple[str, str]]) -> list[str]:
+    """Jeder ``setStatusTip`` an etwas, das keine Menüaktion ist."""
+    found: list[str] = []
+    for path, source in sources:
+        tree = ast.parse(source)
+        made: dict[str, set[str]] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign | ast.AnnAssign) and isinstance(node.value, ast.Call):
+                maker = _callee(node.value)
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    made.setdefault(ast.unparse(target), set()).add(maker)
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "setStatusTip"
+            ):
+                continue
+            receiver = ast.unparse(node.func.value)
+            if "action" in receiver.lower() or made.get(receiver, set()) & ACTION_MAKERS:
+                continue
+            found.append(f"{path}:{node.lineno} {receiver}")
+    return found
+
+
+def _interface_sources() -> Iterator[tuple[str, str]]:
+    for path in sorted((ROOT / "app" / "ui").rglob("*.py")):
+        yield path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8")
+
+
+def test_status_tips_stand_only_at_menu_actions() -> None:
+    """Felder und Knöpfe sagen es in Tooltip und Beschreibung, nicht in der Statuszeile."""
+    found = status_tips_off_actions(_interface_sources())
+    assert not found, "Statustipp an einem Widget:\n" + "\n".join(found)
+
+
+def test_a_status_tip_on_a_button_turns_the_guard_red() -> None:
+    """Gegenprobe: am Knopf rot, an der Aktion nicht."""
+    source = (
+        "def build(menu, button):\n"
+        "    action = menu.addAction('Öffnen')\n"
+        "    action.setStatusTip('Öffnet eine Datei.')\n"
+        "    entry = menu.addAction('Speichern')\n"
+        "    entry.setStatusTip('Speichert.')\n"
+        "    button.setStatusTip('Öffnet eine Datei.')\n"
+    )
+    assert status_tips_off_actions([("app/ui/sample.py", source)]) == ["app/ui/sample.py:6 button"]

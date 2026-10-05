@@ -4998,7 +4998,6 @@ class MainWindow(QMainWindow):
         self.function_search.setAccessibleName(tr("Funktion suchen"))
         hint = tr("Öffnet die Befehlspalette: jede Funktion mit Ort und Kürzel.")
         self.function_search.setToolTip(hint)
-        self.function_search.setStatusTip(hint)
         self.function_search.setAccessibleDescription(hint)
         self.function_search.clicked.connect(lambda _checked=False: self.open_palette(""))
         toolbar.addSeparator()
@@ -6460,7 +6459,6 @@ class MainWindow(QMainWindow):
         # brauchen (Regel 18).
         if message:
             self.trial_line.setToolTip(tr("Öffnet die Freischaltung."))
-            self.trial_line.setStatusTip(tr("Öffnet die Freischaltung."))
             self.trial_line.setAccessibleName(tr("Solidon freischalten"))
             self.trial_line.setAccessibleDescription(message)
         # Die Linie trennt zwei Auskünfte — steht links keine, trennt sie
@@ -9504,7 +9502,6 @@ class MainWindow(QMainWindow):
         self.announce(said)
         self._export_folder = written[0].parent
         self.reveal_export.setToolTip(str(self._export_folder))
-        self.reveal_export.setStatusTip(str(self._export_folder))
         self.reveal_export.setVisible(True)
         # Hier und nicht im Arbeiter: Nur was wirklich geschrieben wurde,
         # zählt — ein abgebrochener oder gescheiterter Export kommt an dieser
@@ -16876,7 +16873,6 @@ class MainWindow(QMainWindow):
             self.session.cancel_preview()
         self.chat.accept_button.setEnabled(True)
         self.chat.accept_button.setToolTip("")
-        self.chat.accept_button.setStatusTip("")
         self.chat.accept_button.setAccessibleDescription("")
         self.chat.show_proposal(None)
         self._show_difference(None)
@@ -17228,8 +17224,8 @@ class MainWindow(QMainWindow):
             # nichts zu begründen als „nicht am Merkmal").
             #
             # ``str()`` und nicht ``TranslatableText``: Die Leiste schreibt den
-            # Satz in einen Tooltip und in die Statuszeile, und beide wollen
-            # eine Zeichenkette. Beim Sprachwechsel wird die Leiste ohnehin neu
+            # Satz in Tooltip und Beschreibung, und beide wollen eine
+            # Zeichenkette. Beim Sprachwechsel wird die Leiste ohnehin neu
             # gefüttert, weil sich mit der Sprache auch die Auswahl neu
             # anzeigt — ein mitreisender ``TranslatableText`` brächte hier
             # nichts, was nicht schon da wäre.
@@ -20974,7 +20970,6 @@ class MainWindow(QMainWindow):
             elif isinstance(previous.owner, QPushButton):
                 previous.owner.setEnabled(True)
                 previous.owner.setToolTip("")
-                previous.owner.setStatusTip("")
                 previous.owner.setAccessibleDescription("")
             previous.owner.preview_required = False
         # Abgelöst, nicht abgebrochen: Die Vorbereitung der groben Stufe
@@ -21039,7 +21034,6 @@ class MainWindow(QMainWindow):
         elif isinstance(owner, QPushButton):
             owner.setEnabled(reason is None)
             owner.setToolTip(reason or "")
-            owner.setStatusTip(reason or "")
             owner.setAccessibleDescription(reason or "")
         if owner is not None and owner is self._quiet_host:
             self.feature_panel.block_apply(reason)
@@ -21468,7 +21462,6 @@ class MainWindow(QMainWindow):
             elif isinstance(approval.owner, QPushButton):
                 approval.owner.setEnabled(True)
                 approval.owner.setToolTip("")
-                approval.owner.setStatusTip("")
                 approval.owner.setAccessibleDescription("")
             if approval.owner is self._quiet_host:
                 self.feature_panel.block_apply(None)
@@ -21874,7 +21867,7 @@ class MainWindow(QMainWindow):
         anklickbar: drei Klicks und ein angehaltener Verlaufsschritt später
         stand derselbe Satz im Prüfbericht. Welche Handlungen das sind, steht
         in :attr:`_APPLY_BLOCKING_ADVICE`; die Sperre trägt den Satz in
-        Kurzhilfe, Statuszeile und zugänglicher Beschreibung
+        Kurzhilfe und zugänglicher Beschreibung
         (``OperationDialog.block_apply``, Regel 18) und fällt mit dem nächsten
         Bild.
         """
@@ -25950,7 +25943,6 @@ class MainWindow(QMainWindow):
             )
         )
         self.alert_button.setToolTip(hint)
-        self.alert_button.setStatusTip(hint)
 
     def _show_alerts(self) -> None:
         """Die rechte Spalte zurückholen und den Bericht nach vorn."""

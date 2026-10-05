@@ -511,10 +511,7 @@ def test_resting_buttons_say_why_while_something_runs(qt_app: QApplication) -> N
             for button in dialog.findChildren(QPushButton)
             if not button.isHidden()
             and not button.isEnabled()
-            and not all(
-                text.strip()
-                for text in (button.toolTip(), button.statusTip(), button.accessibleDescription())
-            )
+            and not all(text.strip() for text in (button.toolTip(), button.accessibleDescription()))
         ]
         assert not silent, f"ruhen ohne Grund: {silent}"
         dialog._busy(False)

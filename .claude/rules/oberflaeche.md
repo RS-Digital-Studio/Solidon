@@ -67,9 +67,10 @@ Operationen über ihren `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
 `_explain` über `QFormLayout.labelForField`). Ist eine Zeile gesperrt, tragen
-beide Hälften den *Grund* statt des Satzes. Dazu `statusTip` und
-`accessibleDescription` (Regel 18); ein eigener Tooltip bleibt, der Satz kommt
-dahinter.
+beide Hälften den *Grund* statt des Satzes. Dazu `accessibleDescription`
+(Regel 18); ein eigener Tooltip bleibt, der Satz kommt dahinter. **Einen
+`statusTip` tragen nur Menüaktionen** (Entscheidung Robert, RM-509): An Feldern
+und Knöpfen wiederholte er den Tooltip; `test_status_tips_stand_only_at_menu_actions`.
 
 **Auswahlwerte tragen je einen Satz** aus `_CHOICE_NOTES` — was der Wert
 bewirkt und kostet. `explain_choices(box)` hängt ihn als ToolTipRole **und**

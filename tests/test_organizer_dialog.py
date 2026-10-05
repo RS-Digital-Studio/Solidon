@@ -286,7 +286,6 @@ def test_the_resting_accept_button_says_why(qt_app):
         assert not dialog.accept_button.isEnabled()
         said = (
             dialog.accept_button.toolTip(),
-            dialog.accept_button.statusTip(),
             dialog.accept_button.accessibleDescription(),
         )
         assert all(text.strip() for text in said), said

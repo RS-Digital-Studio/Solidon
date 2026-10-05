@@ -559,7 +559,6 @@ def _make_setting_editor(
     if note:
         if not editor.toolTip():
             editor.setToolTip(note)
-        editor.setStatusTip(note)
         editor.setAccessibleDescription(note)
     if isinstance(editor, BoundedSpin):
         editor.setProperty(_REFUSAL_BASE_DESCRIPTION, editor.accessibleDescription())
@@ -583,7 +582,6 @@ def _show_refusal(editor: BoundedSpin | BoundedLengthSpin, label: QLabel) -> str
     if label.text() != reason:
         label.setText(reason)
     label.setToolTip(reason)
-    label.setStatusTip(reason)
     label.setAccessibleDescription(reason)
     label.setVisible(bool(reason))
 
@@ -761,7 +759,6 @@ class FilamentOverrideDialog(QDialog):
             box.setChecked(own_section is not None)
             explanation = tr("Eingeschaltet gelten diese Werte nur für die gewählte Spule.")
             box.setToolTip(explanation)
-            box.setStatusTip(explanation)
             box.setAccessibleDescription(explanation)
             section_layout.addWidget(box)
             body = QWidget(section)
@@ -798,7 +795,6 @@ class FilamentOverrideDialog(QDialog):
                 note = str(field.note)
                 if note:
                     label.setToolTip(note)
-                    label.setStatusTip(note)
                 form.addRow(label, editor_holder)
                 if isinstance(editor, RowCheckBox):
                     caption_toggles(label, editor)
@@ -868,7 +864,6 @@ class FilamentOverrideDialog(QDialog):
         reason = self._first_refusal()
         self._ok_button.setEnabled(not reason)
         self._ok_button.setToolTip(reason)
-        self._ok_button.setStatusTip(reason)
         self._ok_button.setAccessibleDescription(reason)
 
     def _refresh_field_refusal(self, path: str, *_args: object) -> None:
@@ -2721,7 +2716,6 @@ class PrintSettingsDialog(QDialog):
             "auch beim nächsten Mal; die Profile darunter richten sich nach ihr."
         )
         self.slicer_choice.setToolTip(slicer_note)
-        self.slicer_choice.setStatusTip(slicer_note)
         self.slicer_choice.setAccessibleDescription(slicer_note)
         self.slicer_choice.setAccessibleName(tr("Slicer"))
         self.slicer_single = QLabel("", self)
@@ -2731,7 +2725,6 @@ class PrintSettingsDialog(QDialog):
         # versteht, zeigt auf das Wort davor und nicht auf den Kasten daneben.
         self.slicer_label = QLabel(tr("Slicer"), self)
         self.slicer_label.setToolTip(slicer_note)
-        self.slicer_label.setStatusTip(slicer_note)
         self.slicer_label.setAccessibleDescription(slicer_note)
         self.slicer_label.setBuddy(self.slicer_choice)
         self.slicer_choice.setVisible(False)
@@ -2872,7 +2865,6 @@ class PrintSettingsDialog(QDialog):
         self.material_link.setToolTip(
             tr("Öffnet links den Abschnitt „Filamente“ — dort wird die Spule gewählt.")
         )
-        self.material_link.setStatusTip(self.material_link.toolTip())
         self.material_link.setAccessibleDescription(self.material_link.toolTip())
         self.material_link.clicked.connect(self.filamentsRequested)
         self.refresh_materials()
@@ -2891,7 +2883,6 @@ class PrintSettingsDialog(QDialog):
                 "gelten diese Werte immer, unabhängig vom Haken."
             )
         )
-        self.share_settings.setStatusTip(self.share_settings.toolTip())
         self.share_settings.setAccessibleDescription(self.share_settings.toolTip())
         self.share_settings.toggled.connect(self._share_toggled)
 
@@ -3099,7 +3090,6 @@ class PrintSettingsDialog(QDialog):
             self.material_state.setToolTip(
                 tr("Noch keine Spule gewählt — solange gilt die Vorgabe des Projekts.")
             )
-        self.material_state.setStatusTip(self.material_state.toolTip())
         self.material_state.setAccessibleDescription(self.material_state.toolTip())
 
     def refresh_materials(self) -> None:
@@ -3591,7 +3581,6 @@ class PrintSettingsDialog(QDialog):
         self.search.setToolTip(
             tr("Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.")
         )
-        self.search.setStatusTip(self.search.toolTip())
         self.search.setAccessibleDescription(self.search.toolTip())
         self.search.returnPressed.connect(self._search_forward)
         self.search.textChanged.connect(self._search_typed)
@@ -3930,7 +3919,6 @@ class PrintSettingsDialog(QDialog):
             self._search_requirement_control = ""
         self.search_requirement.setText(text)
         self.search_requirement.setVisible(bool(text))
-        self.search_requirement.setStatusTip(text)
         self.search_requirement.setAccessibleDescription(text)
         if previous != (text, self.search_requirement.isHidden()):
             self._refit_sections()
@@ -4165,7 +4153,6 @@ class PrintSettingsDialog(QDialog):
             "auch mitten im Namen."
         )
         self.machine_choice.setToolTip(machine_note)
-        self.machine_choice.setStatusTip(machine_note)
         self.machine_choice.setAccessibleDescription(machine_note)
         self.machine_choice.setAccessibleName(tr("Druckerprofil"))
         self.process_choice = QComboBox(self.slicer_inner)
@@ -4994,7 +4981,6 @@ class PrintSettingsDialog(QDialog):
         why = why.replace("{slicer}", _slicer_title(self._slicer_path) if self._slicer_path else "")
         why = why.replace("{printer}", title)
         self.adopt_printer.setToolTip(why)
-        self.adopt_printer.setStatusTip(why)
         self.adopt_printer.setAccessibleDescription(why)
         self._show_adopt_printer(True)
 
@@ -5421,14 +5407,13 @@ class PrintSettingsDialog(QDialog):
         # während er kann.
         what = str(tr("Die Werte dieses Profils in die Einstellungen holen."))
         self.adopt_filament.setToolTip(what)
-        self.adopt_filament.setStatusTip(what)
         self.adopt_filament.setAccessibleDescription(what)
 
     def _forget_filament_profile(self) -> None:
         """Kein Profil zugeordnet — dann ist die Handlung daneben auch keine.
 
-        Der Knopf wird gesperrt und nicht bloß wirkungslos: Alle drei Kanäle
-        (Regel 18), und der Grund steht am Zustand statt an der Handlung.
+        Der Knopf wird gesperrt und nicht bloß wirkungslos: Kurzhilfe und
+        Beschreibung (Regel 18), und der Grund steht am Zustand statt an der Handlung.
         """
         if self._filament_source is not None:
             self._release_adopted_values(self._filament_source)
@@ -5439,7 +5424,6 @@ class PrintSettingsDialog(QDialog):
         why = str(tr("Erst ein Filament, dann seine Werte."))
         self.adopt_filament.setEnabled(False)
         self.adopt_filament.setToolTip(why)
-        self.adopt_filament.setStatusTip(why)
         self.adopt_filament.setAccessibleDescription(why)
 
     def _build_slot_rows(self, form: QFormLayout) -> None:
@@ -6115,8 +6099,8 @@ class PrintSettingsDialog(QDialog):
         erste Anlauf hat damit ``test_the_explanation_arrives_at_the_field_
         and_at_its_label`` gerissen.
 
-        Der Grund hängt an **beiden** Hälften der Zeile (Regel 18: Tooltip,
-        Statuszeile, Bildschirmleser). In ein ausgegrautes Feld zeigt niemand;
+        Der Grund hängt an **beiden** Hälften der Zeile (Regel 18: Tooltip und
+        Bildschirmleser). In ein ausgegrautes Feld zeigt niemand;
         man zeigt auf das Wort davor.
         """
         flavour = self._current_flavour()
@@ -6156,17 +6140,16 @@ class PrintSettingsDialog(QDialog):
                 if own is None:
                     if not reason:
                         continue
-                    # Beim ersten Mal sind die drei Kanäle die eigenen — und
+                    # Beim ersten Mal sind die zwei Kanäle die eigenen — und
                     # sie sind **nicht** derselbe Text: Der Farbknopf nennt im
                     # Tooltip zuerst den Hexwert und hängt den Satz an, während
-                    # Statuszeile und Bildschirmleser nur den Satz führen. Wer
-                    # sie gleichsetzt, verliert entweder den Wert oder schiebt
-                    # ihn in eine Zeile, in die er nicht gehört.
-                    own = (widget.toolTip(), widget.statusTip(), widget.accessibleDescription())
+                    # der Bildschirmleser nur den Satz führt. Wer sie
+                    # gleichsetzt, verliert entweder den Wert oder schiebt ihn
+                    # in eine Zeile, in die er nicht gehört.
+                    own = (widget.toolTip(), widget.accessibleDescription())
                     widget.setProperty(_OWN_TIP, own)
-                tip, status, described = own
+                tip, described = own
                 widget.setToolTip(reason or str(tip))
-                widget.setStatusTip(reason or str(status))
                 widget.setAccessibleDescription(reason or str(described))
                 if not reason:
                     widget.setProperty(_OWN_TIP, None)
@@ -6218,8 +6201,8 @@ class PrintSettingsDialog(QDialog):
         kam (Regel 19). Von den vier Grenzen war SLICER die einzige ohne
         dieses Ausgrauen. Der Kern bleibt die zweite Hürde; das hier ist die
         Freundlichkeit davor — dieselbe Bauart wie bei den Operationen im
-        Menü, mit dem Grund an beiden Kodierungen (Regel 18: Tooltip,
-        Statuszeile, Bildschirmleser).
+        Menü, mit dem Grund an beiden Kodierungen (Regel 18: Tooltip und
+        Bildschirmleser).
         """
         self._check_print_result()
         self._show_profile_rows()
@@ -6291,7 +6274,6 @@ class PrintSettingsDialog(QDialog):
         running = self._worker is not None
         self.slice_button.setEnabled(found is not None and not reason and not running)
         self.slice_button.setToolTip(reason)
-        self.slice_button.setStatusTip(reason)
         self.slice_button.setAccessibleDescription(reason)
         # Der Öffnen-Weg hat andere Bedingungen als der Rechen-Weg: Profile
         # braucht er nie (das Fenster bringt seine mit), dafür ein Programm
@@ -6315,7 +6297,6 @@ class PrintSettingsDialog(QDialog):
             open_reason = str(tr("Zu diesem Slicer ist kein Fenster installiert — er rechnet nur."))
         self.open_button.setEnabled(found is not None and not open_reason and not running)
         self.open_button.setToolTip(open_reason)
-        self.open_button.setStatusTip(open_reason)
         self.open_button.setAccessibleDescription(open_reason)
         # **Der Weg zu einem Slicer erst, wenn keiner gefunden wurde.** „Jetzt
         # einen einrichten" neben „Die Slicer werden gesucht …" wäre ein
@@ -6685,7 +6666,6 @@ class PrintSettingsDialog(QDialog):
         note = str(field.note)
         if note:
             label.setToolTip(note)
-            label.setStatusTip(note)
         # Abgelegt wie der Editor daneben: Die Suche hebt beide Hälften der
         # Zeile hervor, und wer eine Zeile sucht, sucht ihr Wort — das steht
         # links (:meth:`_lift`).
@@ -6713,9 +6693,8 @@ class PrintSettingsDialog(QDialog):
         self._editors[field.path] = editor
         # **Der Satz gehört an beide Hälften der Zeile.** Ein Tooltip nur am
         # Eingabefeld findet, wer schon dort steht; wer die Zeile liest, zeigt
-        # auf ihre Beschriftung. Der ``statusTip`` kommt dazu, weil ein
-        # Bildschirmleser ihn vorliest und die Statuszeile ihn zeigt, ohne dass
-        # jemand warten muss (Regel 18: nicht nur eine Kodierung).
+        # auf ihre Beschriftung. Die Beschreibung kommt dazu, weil ein
+        # Bildschirmleser sie vorliest (Regel 18: nicht nur eine Kodierung).
         self._fields[field.path] = field
         return editor
 
@@ -6843,7 +6822,6 @@ class PrintSettingsDialog(QDialog):
                     .replace("{source}", source)
                 )
             reset.setToolTip(what)
-            reset.setStatusTip(what)
             reset.setAccessibleDescription(what)
         self._mark_parts(base, source)
         self._mark_foreign()
@@ -7870,7 +7848,6 @@ class PrintSettingsDialog(QDialog):
             )
         )
         self.apply_button.setToolTip(why)
-        self.apply_button.setStatusTip(why)
         self.apply_button.setAccessibleDescription(why)
         self.advice_view.resizeColumnToContents(1)
 
@@ -8530,14 +8507,13 @@ class PrintSettingsDialog(QDialog):
         nichts, und der Grund ist der einfachste von allen: Es gibt noch keine
         Datei.
 
-        Dieselben drei Kanäle wie dort — Tooltip, Statuszeile und die
-        Beschreibung für den Bildschirmleser (Regel 18: eine Bedeutung nie
+        Dieselben zwei Kanäle wie dort — Tooltip und die Beschreibung für
+        den Bildschirmleser (Regel 18: eine Bedeutung nie
         allein über das Aussehen).
         """
         reason = str(tr("Noch keine Druckdatei — sie entsteht beim Slicen."))
         self.save_button.setEnabled(False)
         self.save_button.setToolTip(reason)
-        self.save_button.setStatusTip(reason)
         self.save_button.setAccessibleDescription(reason)
         # **Und er steht erst da, wenn es die Datei gibt** (RM-514): Er ist der
         # zweite Schritt nach *Slicen*, und mit mehreren Slicern standen vorn
@@ -8557,7 +8533,6 @@ class PrintSettingsDialog(QDialog):
         self.save_button.setVisible(not self.session.profile.printer.is_resin)
         self.save_button.setEnabled(not reason)
         self.save_button.setToolTip(reason)
-        self.save_button.setStatusTip(reason)
         self.save_button.setAccessibleDescription(reason)
 
     def _save_gcode(self) -> None:

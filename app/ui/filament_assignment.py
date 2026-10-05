@@ -121,7 +121,6 @@ class QuickFilamentPicker(QWidget):
         self.apply_button.setEnabled(self._apply_pending is not None and reason is None)
         explanation = reason if reason is not None else str(tr("Filament zuweisen"))
         self.apply_button.setToolTip(explanation)
-        self.apply_button.setStatusTip(explanation)
         self.apply_button.setAccessibleDescription(explanation)
 
     def can_accept(self) -> bool:
@@ -261,7 +260,6 @@ class QuickFilamentPicker(QWidget):
             else tr("Wählen Sie einen Körper oder eine Fläche mit zugewiesenem Filament.")
         )
         self.clear_button.setToolTip(explanation)
-        self.clear_button.setStatusTip(explanation)
         self.clear_button.setAccessibleDescription(explanation)
 
     def _has_assigned_selection(self, occupied: dict[str, set[int]]) -> bool:

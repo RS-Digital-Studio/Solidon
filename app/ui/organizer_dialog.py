@@ -863,14 +863,13 @@ class OrganizerDialog(QDialog):
             )
 
     def _lock_accept(self, why: str) -> None:
-        """Der Hauptknopf ruht mit Grund an allen drei Kanälen — oder ist frei.
+        """Der Hauptknopf ruht mit Grund in Kurzhilfe und Beschreibung — oder ist frei.
 
         Er ruhte während jeder Vorschau und nach jedem Fehler wortlos; der
         Satz stand nur in der Zeile darunter (Regel 18).
         """
         self.accept_button.setEnabled(not why)
         self.accept_button.setToolTip(why)
-        self.accept_button.setStatusTip(why)
         self.accept_button.setAccessibleDescription(why)
 
     def _crashed(self, detail: str) -> None:

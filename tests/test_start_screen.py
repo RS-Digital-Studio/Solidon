@@ -182,7 +182,7 @@ def test_the_drop_area_names_every_format_it_accepts(screen: StartScreen) -> Non
     area = screen.findChild(DropArea)
     assert area is not None
     shown = " ".join(label.text() for label in area.findChildren(QLabel))
-    for told in (area.toolTip(), area.statusTip(), area.accessibleDescription()):
+    for told in (area.toolTip(), area.accessibleDescription()):
         for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
             assert suffix.lstrip(".").upper() in told.upper(), suffix
     assert "STL" not in shown and "3MF" not in shown, "keine Formatliste auf der Fläche"

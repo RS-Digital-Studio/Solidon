@@ -1496,7 +1496,6 @@ class KeyDialog(QDialog):
             forget_reason = str(tr("Es ist kein Schlüssel hinterlegt."))
         self.forget_button.setEnabled(self._key_source == "keychain")
         self.forget_button.setToolTip(forget_reason)
-        self.forget_button.setStatusTip(forget_reason)
         self.forget_button.setAccessibleDescription(forget_reason)
         form.addRow(forget_actions)
         # **Eine Abschnittsform in allen Dialogen** (RM-518): die flache
@@ -1607,13 +1606,12 @@ class KeyDialog(QDialog):
         wortlos da — der Grund stand in der Zustandszeile darüber. Wer auf einen
         grauen Knopf zeigt, fragt ihn und nicht die Zeile daneben; deshalb
         derselbe Satz an beiden Orten statt zwei Formulierungen über dieselbe
-        Lage. Ein leerer Grund gibt frei, und alle drei Kanäle, weil ein Grund,
+        Lage. Ein leerer Grund gibt frei, Kurzhilfe und Beschreibung, weil ein Grund,
         den nur die Maus findet, für einen Bildschirmleser keiner ist (Regel 18).
         """
         for button in (self.pull_button, self.probe_button):
             button.setEnabled(not why)
             button.setToolTip(why)
-            button.setStatusTip(why)
             button.setAccessibleDescription(why)
 
     def _show_service(self, state: tools.ToolState | None) -> None:
@@ -1778,7 +1776,6 @@ class KeyDialog(QDialog):
         holt = str(tr("Erst wenn das Modell geholt ist."))
         self.probe_button.setEnabled(False)
         self.probe_button.setToolTip(holt)
-        self.probe_button.setStatusTip(holt)
         self.probe_button.setAccessibleDescription(holt)
         set_role(self.probe_result, "info", tr("Wird geholt: {model}", model=model))
 
@@ -2663,7 +2660,6 @@ class ActivationDialog(QDialog):
         )
         self.buy_button.setToolTip(locked)
         for button in (self.check_button, self.buy_button):
-            button.setStatusTip(button.toolTip())
             button.setAccessibleDescription(button.toolTip())
         activation_hint = ""
         if pending_deactivation:
@@ -2674,7 +2670,6 @@ class ActivationDialog(QDialog):
             activation_hint = tr("Geben Sie einen Namen für diesen Rechner ein.")
         for button in (self.online_button, self.offline_button):
             button.setToolTip(activation_hint)
-            button.setStatusTip(activation_hint)
             button.setAccessibleDescription(activation_hint)
         # **Der fünfte Knopf, den die vier Schleifen darüber übersehen haben.**
         # Er ist gesperrt, solange es nichts zu entfernen gibt, und stand dabei
@@ -2684,7 +2679,6 @@ class ActivationDialog(QDialog):
             "" if self.forget_button.isEnabled() else str(tr("Es ist kein Schlüssel eingetragen."))
         )
         self.forget_button.setToolTip(forget_hint)
-        self.forget_button.setStatusTip(forget_hint)
         self.forget_button.setAccessibleDescription(forget_hint)
 
     def _remember(self) -> None:
@@ -3650,7 +3644,6 @@ class DonationDialog(QDialog):
             button.setAutoDefault(False)
             make_large_target(button)
             button.setToolTip(payment_hint)
-            button.setStatusTip(payment_hint)
             button.setAccessibleDescription(payment_hint)
             # Gleich breit, gleich hoch: Keiner der beiden Wege ist der
             # empfohlene, und das Auge liest Größe als Rang.
@@ -3670,14 +3663,12 @@ class DonationDialog(QDialog):
         without.setWordWrap(True)
         self.share_button = QPushButton(tr("Link zur Website kopieren"), self)
         self.share_button.setToolTip(WEBSITE_URL)
-        self.share_button.setStatusTip(WEBSITE_URL)
         self.share_button.setAccessibleDescription(WEBSITE_URL)
         self.share_button.clicked.connect(self._copy_website)
         self.feedback_button = QPushButton(tr("Rückmeldung senden …"), self)
         self.feedback_button.setToolTip(
             tr("Öffnet die Rückmeldung. Gesendet wird erst nach Ihrer Vorschau.")
         )
-        self.feedback_button.setStatusTip(self.feedback_button.toolTip())
         self.feedback_button.setAccessibleDescription(self.feedback_button.toolTip())
         self.feedback_button.clicked.connect(self._want_feedback)
         helping = QHBoxLayout()
@@ -3899,7 +3890,6 @@ class AboutDialog(QDialog):
         self.support_button.setToolTip(
             tr("Wofür das Geld ist und wie Sie freiwillig helfen können.")
         )
-        self.support_button.setStatusTip(self.support_button.toolTip())
         self.support_button.setAccessibleDescription(self.support_button.toolTip())
         self.support_button.clicked.connect(self._want_support)
         self.support_button.setAutoDefault(False)

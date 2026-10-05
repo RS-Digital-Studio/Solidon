@@ -292,7 +292,6 @@ class SettingsDialog(QDialog):
         )
         self.ai_disclosure_reset.setAccessibleDescription(note)
         self.ai_disclosure_reset.setToolTip(note)
-        self.ai_disclosure_reset.setStatusTip(note)
         self.ai_disclosure_reset.setEnabled(has_disclosure)
         self.ai_disclosure_reset.clicked.connect(self._reset_disclosure)
 
@@ -775,7 +774,6 @@ class SettingsDialog(QDialog):
         reason = self.printer_state.text() if pending else choice_reason
         self.save.setEnabled(not pending and valid)
         self.save.setToolTip(reason)
-        self.save.setStatusTip(reason)
         self.save.setAccessibleDescription(reason)
         self.search_progress.setVisible(pending)
         self.search_progress.setAccessibleName(reason or self.printer_state.text())

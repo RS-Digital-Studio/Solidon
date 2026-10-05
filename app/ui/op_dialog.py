@@ -391,7 +391,6 @@ class ValueField(QWidget):
         # Auswerter (Regel: eine Wahrheit, nicht zwei Listen).
         self.text.setToolTip(self._grammar_help())
         self.text.installEventFilter(self)
-        self.text.setStatusTip(str(tr("Ein Ausdruck rechnet mit Projektparametern.")))
         self.text.setAccessibleDescription(self._grammar_help())
 
         #: Vervollständigt ``@name`` beim Tippen. Ohne sie muss der Kunde die
@@ -411,7 +410,6 @@ class ValueField(QWidget):
         self.parameter_button.setToolTip(
             tr("Ein benanntes Maß des Projekts einsetzen — änderbar an einer Stelle.")
         )
-        self.parameter_button.setStatusTip(self.parameter_button.toolTip())
         self.parameter_button.setAccessibleDescription(self.parameter_button.toolTip())
         self.parameter_button.setAccessibleName(tr("Parameter"))
         parameter_menu = QMenu(self.parameter_button)
@@ -436,7 +434,6 @@ class ValueField(QWidget):
         self.toggle.setToolTip(
             tr("Statt einer festen Zahl rechnen lassen — zum Beispiel die halbe Breite.")
         )
-        self.toggle.setStatusTip(self.toggle.toolTip())
         self.toggle.setAccessibleDescription(self.toggle.toolTip())
         # Ein Umschalter, der nur anders aussieht, wäre Bedeutung allein über
         # Farbe (Regel 18). Der gedrückte Zustand *und* das sichtbar andere
@@ -467,7 +464,6 @@ class ValueField(QWidget):
                     "umgerechnet, das Teil bleibt gleich."
                 )
             )
-            self.circle_toggle.setStatusTip(self.circle_toggle.toolTip())
             self.circle_toggle.setAccessibleDescription(self.circle_toggle.toolTip())
             self.circle_toggle.setAccessibleName(tr("Durchmesser oder Radius"))
             self._name_circle_toggle()
@@ -1273,10 +1269,9 @@ def sketch_extent(text: str, values: Mapping[str, float]) -> tuple[float, float]
 def _explain(editor: QWidget, caption: QWidget | None, sentence: str) -> None:
     """Ein Satz an das Feld, an seine Beschriftung und an den Bildschirmleser.
 
-    Drei Wege für eine Auskunft: Der Tooltip erscheint, wo die Maus steht, der
-    ``statusTip`` in der Statuszeile ohne Wartezeit, und
+    Zwei Wege für eine Auskunft: Der Tooltip erscheint, wo die Maus steht, und
     ``accessibleDescription`` liest ein Vorleser vor (Regel 18 — nicht nur eine
-    Kodierung).
+    Kodierung). Statustipps stehen nur an Menüaktionen (RM-509).
 
     ``caption`` darf ``None`` sein, weil ``QFormLayout.labelForField`` das
     zurückgibt, sobald eine Zeile über beide Spalten geht (``addRow`` mit einem
@@ -1285,11 +1280,9 @@ def _explain(editor: QWidget, caption: QWidget | None, sentence: str) -> None:
     keine hat, und nicht für eine, die es schon gibt.
     """
     editor.setToolTip(sentence)
-    editor.setStatusTip(sentence)
     editor.setAccessibleDescription(sentence)
     if caption is not None:
         caption.setToolTip(sentence)
-        caption.setStatusTip(sentence)
 
 
 def _why_inactive(field: str, wanted: str | bool) -> str:
@@ -2218,7 +2211,6 @@ class OperationDialog(QDialog):
         self.to_the_bed = QPushButton(tr("Auf das Bett"), self)
         bed_note = tr("Nimmt die gewählte Fläche zurück — der Körper entsteht auf dem Bett.")
         self.to_the_bed.setToolTip(bed_note)
-        self.to_the_bed.setStatusTip(bed_note)
         self.to_the_bed.setAccessibleDescription(bed_note)
         self.to_the_bed.setAutoDefault(False)
         self.to_the_bed.setVisible(False)
@@ -2243,7 +2235,6 @@ class OperationDialog(QDialog):
         self.aim_again = QPushButton(tr("Stelle im Bild wählen"), self)
         aim_note = tr("Zurück ins Bild und die Stelle am Modell neu wählen. Die Werte bleiben.")
         self.aim_again.setToolTip(aim_note)
-        self.aim_again.setStatusTip(aim_note)
         self.aim_again.setAccessibleDescription(aim_note)
         self.aim_again.setVisible(False)
         self.aim_again.clicked.connect(self.surfaceRequested)
@@ -2271,10 +2262,8 @@ class OperationDialog(QDialog):
             "Wo die Operation ansetzt. Die Zahlen stehen unter „Weitere Einstellungen“."
         )
         self._place_label.setToolTip(place_note)
-        self._place_label.setStatusTip(place_note)
         if place_caption is not None:
             place_caption.setToolTip(place_note)
-            place_caption.setStatusTip(place_note)
         self._filament_notice = ErrorNotice(self)
         self._filament_notice.hide()
         layout.addWidget(self._filament_notice)
@@ -2526,11 +2515,9 @@ class OperationDialog(QDialog):
                 name=controller.title
             )
             self._hidden_expression_open.setToolTip(access)
-            self._hidden_expression_open.setStatusTip(access)
             self._hidden_expression_open.setAccessibleDescription(access)
         else:
             self._hidden_expression_open.setToolTip("")
-            self._hidden_expression_open.setStatusTip("")
             self._hidden_expression_open.setAccessibleDescription("")
         missing_sketch = self._missing_sketch()
         missing_material = self._missing_material()
@@ -2581,7 +2568,6 @@ class OperationDialog(QDialog):
         )
         button.setEnabled(not pending and not incomplete)
         button.setToolTip(reason)
-        button.setStatusTip(reason)
         button.setAccessibleDescription(reason)
 
     def _field_refusal(self) -> str:
@@ -2837,12 +2823,11 @@ class OperationDialog(QDialog):
         return ""
 
     def _describe_fully(self, spec: OperationSpec) -> None:
-        """Die ganze Beschreibung an die eine Zeile: Kurzhilfe, Statuszeile, Vorleser."""
+        """Die ganze Beschreibung an die eine Zeile: Kurzhilfe und Vorleser."""
         if self._description is None:
             return
         whole = str(spec.doc or "")
         self._description.setToolTip(whole if whole.strip() != lead_sentence(spec) else "")
-        self._description.setStatusTip(lead_sentence(spec))
         self._description.setAccessibleDescription(whole)
 
     def _show_caveat(self, spec: OperationSpec) -> None:
@@ -2982,7 +2967,7 @@ class OperationDialog(QDialog):
         Für das Band über dem Bild: Trägt der Grund einer ausgebliebenen
         Vorschau eine Handlung („Der Körper ist nicht geschlossen — erst
         reparieren, dann aushöhlen"), bleibt der Knopf grau mit diesem Satz
-        in Kurzhilfe, Statuszeile und zugänglicher Beschreibung (Regel 18),
+        in Kurzhilfe und zugänglicher Beschreibung (Regel 18),
         bis das nächste Bild ``None`` bringt. Bis zum 14.09.2026 blieb er
         anklickbar; wer klickte, bekam einen angehaltenen Schritt im Verlauf
         und den Knopf drei Klicks später im Prüfbericht (Bedienweg-

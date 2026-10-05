@@ -583,9 +583,9 @@ def test_part_file_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
     weshalb er gerade nicht kann. Ein grauer Knopf ohne Grund ist derselbe
     Fehler wie eine gesperrte Operation ohne Grund.
 
-    **Der Grund steht an drei Stellen**, weil je nach Bedienung eine davon
-    ausfällt: Tooltip für die Maus, ``statusTip`` für die Statuszeile ohne
-    Wartezeit, ``accessibleDescription`` für den Bildschirmleser. Regel 18
+    **Der Grund steht an zwei Stellen**, weil je nach Bedienung eine davon
+    ausfällt: Tooltip für die Maus, ``accessibleDescription`` für den
+    Bildschirmleser. Statustipps stehen nur an Menüaktionen (RM-509). Regel 18
     verlangt mehr als eine Kodierung, und ein grau gewordener Knopf ist genau
     eine.
 
@@ -604,7 +604,7 @@ def test_part_file_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
         assert leer, "der gesperrte Knopf sagt nicht, was fehlt"
         assert catalog.share_hint.isVisibleTo(catalog)
         assert catalog.share_hint.text() == leer
-        assert catalog.share_part.statusTip() == leer, "die Statuszeile schweigt"
+        assert not catalog.share_part.statusTip(), "Statustipps nur an Menüaktionen (RM-509)"
         assert catalog.share_part.accessibleDescription() == leer, (
             "der Bildschirmleser bekommt den Grund nicht"
         )

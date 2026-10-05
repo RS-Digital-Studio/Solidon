@@ -206,7 +206,6 @@ class MapLegend(QWidget):
             self._layout.addWidget(self.note, stretch=1)
             self.note.setText("")
             self.note.setToolTip("")
-            self.note.setStatusTip("")
             self.note.setAccessibleDescription("")
             return
 
@@ -309,7 +308,6 @@ class MapLegend(QWidget):
                 "Sie ist keine Fertigungstoleranz."
             )
         self.note.setToolTip(explanation)
-        self.note.setStatusTip(explanation)
         self.note.setAccessibleDescription(explanation)
         self._layout.addWidget(self.note, stretch=1)
 
@@ -515,7 +513,6 @@ class AnalysisBar(QWidget):
         self.legend.show_map(None)
         self.legend.note.setText(message)
         self.legend.note.setToolTip(message)
-        self.legend.note.setStatusTip(message)
         self.legend.note.setAccessibleDescription(message)
         if action and on_action is not None:
             self.legend.offer(action, on_action)

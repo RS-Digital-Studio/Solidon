@@ -552,11 +552,10 @@ class PartCatalog(QDialog):
         self.edit_part = QPushButton(tr("Zum Bearbeiten öffnen …"), self)
         self.edit_part.setAccessibleName(tr("Baustein zum Bearbeiten öffnen"))
         # Was der Klick bewirkt, steht am Knopf — er tauscht das offene
-        # Projekt, und das ist mehr, als „bearbeiten" vermuten lässt. An allen
-        # drei Kanälen, weil je nach Bedienung einer ausfällt (Regel 18).
+        # Projekt, und das ist mehr, als „bearbeiten" vermuten lässt. In Kurzhilfe
+        # und Beschreibung, weil je nach Bedienung eine ausfällt (Regel 18).
         opens = tr("Legt die Schritte dieses Bausteins als neues Projekt in das Fenster.")
         self.edit_part.setToolTip(opens)
-        self.edit_part.setStatusTip(opens)
         self.edit_part.setAccessibleDescription(opens)
         self.edit_part.setVisible(False)
         self.edit_part.clicked.connect(self._request_draft)
@@ -668,7 +667,6 @@ class PartCatalog(QDialog):
         hint = "" if can else reason
         self.save_part.setEnabled(can)
         self.save_part.setToolTip(hint)
-        self.save_part.setStatusTip(hint)
         self.save_part.setAccessibleDescription(hint)
         self.save_hint.setText(hint)
         self.save_hint.setVisible(bool(reason) and not can)
@@ -676,15 +674,14 @@ class PartCatalog(QDialog):
     def set_can_share(self, can: bool, reason: str = "") -> None:
         """Ob der gewählte Baustein als Datei exportiert werden kann.
 
-        **Der Grund steht sichtbar und am Knopf**, weil Tooltip, Statuszeile
-        und Bildschirmleser je nach Bedienung ausfallen können. Ein grau
+        **Der Grund steht sichtbar und am Knopf**, weil Tooltip und
+        Bildschirmleser je nach Bedienung ausfallen können. Ein grau
         gewordener Knopf ohne sichtbaren Grund ist derselbe Fehler wie eine
         gesperrte Operation ohne Grund.
         """
         self.share_part.setEnabled(can)
         hint = "" if can else reason
         self.share_part.setToolTip(hint)
-        self.share_part.setStatusTip(hint)
         self.share_part.setAccessibleDescription(hint)
         self.share_hint.setText(hint)
         self.share_hint.setVisible(bool(hint))
@@ -1155,12 +1152,11 @@ class PartCatalog(QDialog):
             self._insert.setToolTip(reason)
             # Dieselbe Auskunft für den, der den Knopf anfährt statt ihn
             # anzusehen — siehe :meth:`set_can_save`.
-            self._insert.setStatusTip(reason)
             self._insert.setAccessibleDescription(reason)
         # **Ein Leertext, nicht zwei** (D10): Ohne Auswahl sagt die
         # Detailspalte, was zu tun ist; dieselbe Zeile über dem Knopf wäre
-        # derselbe Satz ein zweites Mal. Knopf, Statuszeile und
-        # Bildschirmleser bekommen ihn trotzdem (darüber).
+        # derselbe Satz ein zweites Mal. Knopf und Bildschirmleser
+        # bekommen ihn trotzdem (darüber).
         below = "" if reason == shown else reason
         self.insert_hint.setText(below)
         self.insert_hint.setVisible(bool(below))
@@ -1250,7 +1246,6 @@ class PartCatalog(QDialog):
         hint = "" if can else reason
         self.export_scad.setEnabled(can)
         self.export_scad.setToolTip(hint)
-        self.export_scad.setStatusTip(hint)
         self.export_scad.setAccessibleDescription(hint)
 
 

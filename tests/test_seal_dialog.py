@@ -247,7 +247,7 @@ def test_the_resting_seal_button_says_why(qt_app):
         wait_until(qt_app, lambda: dialog.contours.count() == 2)
         button = dialog.accept_button
         assert not button.isEnabled()
-        said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
+        said = (button.toolTip(), button.accessibleDescription())
         assert all(text.strip() for text in said), said
     finally:
         dialog.release()

@@ -530,7 +530,6 @@ class ChatPanel(QWidget):
             # leeren Zeile hängen bleibt, gehört zum Vorschlag davor und
             # behauptet, er sei noch da.
             self.cost_line.setToolTip("")
-            self.cost_line.setStatusTip("")
             self.cost_line.setAccessibleDescription("")
             self.questions_toggle.setVisible(False)
             self.questions_view.setVisible(False)
@@ -538,12 +537,11 @@ class ChatPanel(QWidget):
         proposal = preview.proposal
         self.summary.setText(describe(preview))
         self.cost_line.setText(costs(proposal))
-        # Die Abrechnungszahlen eine Stufe tiefer (§2.4) — und an allen drei
-        # Stellen, damit sie nicht nur die Maus findet: Die Statuszeile zeigt
-        # sie ohne Wartezeit, der Bildschirmleser liest sie vor (Regel 18).
+        # Die Abrechnungszahlen eine Stufe tiefer (§2.4) — im Tooltip und in
+        # der Beschreibung, damit sie nicht nur die Maus findet: Der
+        # Bildschirmleser liest sie vor (Regel 18).
         detail = token_detail(proposal)
         self.cost_line.setToolTip(detail)
-        self.cost_line.setStatusTip(detail)
         self.cost_line.setAccessibleDescription(detail)
         questions = list(proposal.questions)
         self.questions_toggle.setChecked(False)

@@ -400,7 +400,6 @@ class SlicerSpoolDialog(QDialog):
         why = "" if chosen else str(tr("Keine Spule markiert."))
         self._ok_button.setEnabled(chosen)
         self._ok_button.setToolTip(why)
-        self._ok_button.setStatusTip(why)
         self._ok_button.setAccessibleDescription(why)
 
     def chosen_spools(self) -> list[filaments.CatalogueFilament]:
@@ -1056,7 +1055,6 @@ class InventoryView(QWidget):
                 else tr("Noch keine Buchungen für diese Spule.")
             )
         self.reverse_button.setToolTip(hint)
-        self.reverse_button.setStatusTip(hint)
         self.reverse_button.setAccessibleDescription(hint)
         self.reverse_hint.setText(hint)
 

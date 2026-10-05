@@ -401,7 +401,6 @@ class SealPathDialog(QDialog):
         ):
             said = str(why) if resting else ""
             widget.setToolTip(said)
-            widget.setStatusTip(said)
             widget.setAccessibleDescription(said)
         self.contours.setEnabled(False)
         self.contour_view.setEnabled(False)
@@ -501,14 +500,13 @@ class SealPathDialog(QDialog):
         self._lock_accept("" if valid else self.status.text())
 
     def _lock_accept(self, why: str) -> None:
-        """Der Hauptknopf ruht mit Grund an allen drei Kanälen — oder ist frei.
+        """Der Hauptknopf ruht mit Grund in Kurzhilfe und Beschreibung — oder ist frei.
 
         Der Grund ist der Satz der Zustandszeile; der Knopf stand ohne ihn
         grau da (Regel 18).
         """
         self.accept_button.setEnabled(not why)
         self.accept_button.setToolTip(why)
-        self.accept_button.setStatusTip(why)
         self.accept_button.setAccessibleDescription(why)
 
     def _failed(self, revision: int, problem: AppError) -> None:

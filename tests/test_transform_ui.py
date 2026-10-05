@@ -128,7 +128,7 @@ def test_every_role_button_says_what_it_does(bar: TransformBar) -> None:
         assert button.text(), f"{key}: kein Wort am Knopf"
         assert not button.icon().isNull(), f"{key}: kein Symbol"
         assert button.toolTip(), f"{key}: kein Satz im Tooltip"
-        assert button.statusTip() == button.toolTip(), f"{key}: zwei Formulierungen"
+        assert button.accessibleDescription() == button.toolTip(), f"{key}: zwei Formulierungen"
 
 
 def test_the_axis_box_has_a_name_a_screen_reader_can_read(bar: TransformBar) -> None:
@@ -175,7 +175,7 @@ def test_the_snap_button_says_what_it_is_without_a_word_on_it(bar: TransformBar)
     assert not bar.snap.text(), "der Knopf trägt ein Wort — dann gilt diese Regel nicht"
     assert bar.snap.accessibleName(), "kein Name im Barrierefreiheitsbaum"
     assert bar.snap.toolTip(), "kein Tooltip"
-    assert bar.snap.statusTip() == bar.snap.toolTip(), "zwei Formulierungen für dasselbe"
+    assert bar.snap.accessibleDescription() == bar.snap.toolTip(), "zwei Formulierungen"
     assert not bar.snap.icon().isNull(), "kein Symbol"
     assert bar.snap.menu() is not None, "der Knopf öffnet nichts"
 
@@ -993,7 +993,7 @@ def test_a_face_offers_only_moving(qt_app: QApplication) -> None:
     assert bar.role_buttons["move"].isEnabled()
     assert not bar.role_buttons["rotate"].isEnabled()
     assert bar.role_buttons["rotate"].toolTip() == "Das braucht einen exakten Körper."
-    assert bar.role_buttons["rotate"].statusTip() == "Das braucht einen exakten Körper."
+    assert bar.role_buttons["rotate"].accessibleDescription() == "Das braucht einen exakten Körper."
 
     # Und zurück: Ohne Sperre gilt wieder der eigene Satz der Rolle.
     bar.limit_roles({"move": None, "rotate": None, "scale": None})

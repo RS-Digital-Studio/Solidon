@@ -262,7 +262,7 @@ def test_deviation_legend_distinguishes_unknown_coverage_and_numerical_bounds(
             assert "Keine Abweichungswerte" in legend.note.text()
             assert " mm" not in legend.note.text()
         assert legend.note.accessibleDescription() == legend.note.toolTip()
-        assert legend.note.statusTip() == legend.note.toolTip()
+        assert not legend.note.statusTip(), "Statustipps nur an Menüaktionen (RM-509)"
     finally:
         legend.deleteLater()
 
