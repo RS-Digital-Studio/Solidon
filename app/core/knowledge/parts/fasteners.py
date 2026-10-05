@@ -39,6 +39,7 @@ from app.core.knowledge.parts.registry import (
     register_part,
 )
 from app.core.registry import op_params, param, play_param
+from app.core.registry.params import ZERO_NONE
 from app.core.types import BaseParams, Feature, PartResult
 from app.i18n import TranslatableText, _
 
@@ -200,6 +201,7 @@ class ScrewHoleParams(BaseParams):
         default=False,
         depends_on=("countersink", (False,)),
         doc=_("Schneidet eine passende Auflage für die Unterlegscheibe."),
+        placement="advanced",
     )
     play: float = play_param(maximum=2.0, depends_on=("washer", (True,)))
     head_room: float = param(
@@ -612,12 +614,14 @@ class NutTrapParams(BaseParams):
         minimum=0.0,
         maximum=100.0,
         doc=_("Wie weit der Schlitz nach außen reicht. Null heißt: nur die Tasche."),
+        zero_text=ZERO_NONE,
     )
     play: float = play_param()
     screw_hole: bool = param(
         title=_("Schraubenloch mitschneiden"),
         default=True,
         doc=_("Schneidet zusätzlich das Durchgangsloch für die Schraube durch das Teil."),
+        placement="advanced",
     )
 
 

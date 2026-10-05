@@ -148,6 +148,65 @@ PARAMETER_MARKER = expressions.REFERENCE_PREFIX
 
 _log = get_logger(__name__)
 
+#: Was Qt als „keine Obergrenze“ für eine Breite kennt (``QWIDGETSIZE_MAX``).
+_UNBOUNDED = 16_777_215
+
+
+def _form_labels(forms: Sequence[QFormLayout]) -> list[QWidget]:
+    """Die Beschriftungen aller Zeilen, in der Reihenfolge der Formulare."""
+    found: list[QWidget] = []
+    for form in forms:
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                found.append(widget)
+    return found
+
+
+def align_to_the_front(
+    front: QFormLayout | Sequence[QFormLayout],
+    back: QFormLayout | Sequence[QFormLayout] = (),
+) -> None:
+    """Eine Beschriftungskante für Vorder- und Rückseite, bemessen an der Vorderseite.
+
+    ``panels.align_forms`` nahm die breiteste Beschriftung des ganzen Dialogs,
+    auch die einer zugeklappten Rückseite; im Operationsdialog klafften dadurch
+    vorn 120 bis 170 Punkte zwischen Beschriftung und Feld (RM-518, C21). Hier
+    setzt die Vorderseite die Spalte, und eine längere Beschriftung hinten
+    bricht in ihr um. Ohne Beschriftung vorn richtet sich die Rückseite nach
+    sich selbst.
+
+    **Umgebrochen wird zwischen Wörtern, nie in einem.** Ein einzelnes Wort,
+    das länger ist als die Spalte („Entlüftungsdurchmesser“), wird nicht
+    abgeschnitten: Seine Beschriftung behält die Breite des Worts
+    (``minimumSizeHint`` eines umbrechenden Labels), und nur die Rückseite
+    rückt ihre Felder dafür ein Stück weiter — die Vorderseite behält ihre Kante.
+
+    Gezählt werden auch Zeilen vorn, die gerade verborgen sind: Erscheint ein
+    bedingtes Feld, springt die Kante nicht.
+
+    Wiederholbar: Ein Variantenwechsel ruft es erneut, und gemessen wird
+    jedes Mal an der eigenen Wunschbreite der Beschriftungen.
+    """
+    leading = _form_labels([front] if isinstance(front, QFormLayout) else list(front))
+    trailing = _form_labels([back] if isinstance(back, QFormLayout) else list(back))
+    if not leading:
+        leading, trailing = trailing, []
+    if not leading:
+        return
+    for widget in (*leading, *trailing):
+        widget.setMinimumWidth(0)
+        widget.setMaximumWidth(_UNBOUNDED)
+    widest = max(widget.sizeHint().width() for widget in leading)
+    for widget in leading:
+        widget.setMinimumWidth(widest)
+    for widget in trailing:
+        if isinstance(widget, QLabel):
+            widget.setWordWrap(True)
+        widget.setMinimumWidth(widest)
+        widget.setMaximumWidth(max(widest, widget.minimumSizeHint().width()))
+
 
 class AskDialog(QDialog):
     """Mehrdeutigkeit hält an und fragt — über ``ctx.ask``, nie aus dem Kern

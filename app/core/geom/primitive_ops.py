@@ -440,6 +440,7 @@ class ConeParams(PositionedPrimitiveParams):
         minimum=0.0,
         maximum=1000.0,
         doc=_("Durchmesser der Unterseite. Null macht diese Seite zur Spitze."),
+        zero_text=_("Spitze", context="Nullwert"),
     )
     top_diameter: float = param(
         title=_("Oberer Durchmesser"),
@@ -448,6 +449,7 @@ class ConeParams(PositionedPrimitiveParams):
         minimum=0.0,
         maximum=1000.0,
         doc=_("Durchmesser an der Oberseite. Null macht diese Seite zur Spitze."),
+        zero_text=_("Spitze", context="Nullwert"),
     )
     height: float = param(
         title=_("Höhe"),

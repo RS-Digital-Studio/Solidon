@@ -474,6 +474,7 @@ class RaisedOutlineParams(BaseParams):
         default="rectangle",
         choices=shapes.SHAPE_AND_PATTERN_CHOICES,
         doc=_SHAPE_AND_PATTERN_DOC,
+        placement="advanced",
     )
     length: float = param(
         title=_("Länge"),
@@ -482,6 +483,7 @@ class RaisedOutlineParams(BaseParams):
         minimum=0.1,
         maximum=1000.0,
         doc=_PATTERN_LENGTH_DOC,
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite"),
@@ -491,6 +493,7 @@ class RaisedOutlineParams(BaseParams):
         maximum=1000.0,
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
+        placement="advanced",
     )
     height: float = param(
         title=_("Höhe"),
@@ -507,6 +510,7 @@ class RaisedOutlineParams(BaseParams):
         maximum=200,
         doc=_COUNT_DOC,
         depends_on=("shape", ("bolt_circle",)),
+        placement="advanced",
     )
     columns: int = param(
         title=_("Spalten"),
@@ -515,6 +519,7 @@ class RaisedOutlineParams(BaseParams):
         maximum=100,
         doc=_COLUMNS_DOC,
         depends_on=("shape", ("hole_grid",)),
+        placement="advanced",
     )
     rows: int = param(
         title=_("Zeilen"),
@@ -523,6 +528,7 @@ class RaisedOutlineParams(BaseParams):
         maximum=100,
         doc=_ROWS_DOC,
         depends_on=("shape", ("hole_grid",)),
+        placement="advanced",
     )
     hole_diameter: float = param(
         title=_("Loch-Ø"),
@@ -532,6 +538,7 @@ class RaisedOutlineParams(BaseParams):
         maximum=1000.0,
         doc=_HOLE_DIAMETER_DOC,
         depends_on=("shape", ("bolt_circle", "hole_grid")),
+        placement="advanced",
     )
     corners: int = param(
         title=_("Ecken"),
@@ -552,6 +559,7 @@ class RaisedOutlineParams(BaseParams):
             "Bei einer Skizze mit mehreren getrennten Umrissen: welcher davon. "
             "Null heißt alle — sie werden zu einem Körper vereinigt."
         ),
+        zero_text=_("alle", context="Nullwert"),
     )
     up_to: str = param(
         title=_("Bis zur Fläche"),
@@ -771,6 +779,7 @@ class SketchPocketParams(BaseParams):
         default="rectangle",
         choices=shapes.SHAPE_AND_PATTERN_CHOICES,
         doc=_SHAPE_AND_PATTERN_DOC,
+        placement="advanced",
     )
     length: float = param(
         title=_("Länge"),
@@ -779,6 +788,7 @@ class SketchPocketParams(BaseParams):
         minimum=0.1,
         maximum=1000.0,
         doc=_PATTERN_LENGTH_DOC,
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite"),
@@ -788,6 +798,7 @@ class SketchPocketParams(BaseParams):
         maximum=1000.0,
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
+        placement="advanced",
     )
     # Vor der Tiefe und vorn: Der Haken schaltet sie aus (``depends_on``).
     through: bool = param(
@@ -811,6 +822,7 @@ class SketchPocketParams(BaseParams):
         maximum=200,
         doc=_COUNT_DOC,
         depends_on=("shape", ("bolt_circle",)),
+        placement="advanced",
     )
     columns: int = param(
         title=_("Spalten"),
@@ -819,6 +831,7 @@ class SketchPocketParams(BaseParams):
         maximum=100,
         doc=_COLUMNS_DOC,
         depends_on=("shape", ("hole_grid",)),
+        placement="advanced",
     )
     rows: int = param(
         title=_("Zeilen"),
@@ -827,6 +840,7 @@ class SketchPocketParams(BaseParams):
         maximum=100,
         doc=_ROWS_DOC,
         depends_on=("shape", ("hole_grid",)),
+        placement="advanced",
     )
     hole_diameter: float = param(
         title=_("Loch-Ø"),
@@ -836,6 +850,7 @@ class SketchPocketParams(BaseParams):
         maximum=1000.0,
         doc=_HOLE_DIAMETER_DOC,
         depends_on=("shape", ("bolt_circle", "hole_grid")),
+        placement="advanced",
     )
     # **Die drei Zahlen gelten in der Zeichenebene, nicht in der Welt.**
     # ``x`` und ``y`` verschieben den Umriss über ``shifted`` in den
@@ -898,6 +913,7 @@ class SketchPocketParams(BaseParams):
             "Bei einer Skizze mit mehreren getrennten Umrissen: welcher davon. "
             "Null heißt alle — sie werden zu einem Körper vereinigt."
         ),
+        zero_text=_("alle", context="Nullwert"),
     )
     sketch: str = param(
         title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
@@ -1201,7 +1217,11 @@ _UPRIGHT_PLANES: frozenset[str] = frozenset({"plane:xz", "plane:yz"})
 @op_params
 class SketchRevolveParams(BaseParams):
     shape: str = param(
-        title=_("Grundform"), default="rectangle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+        title=_("Grundform"),
+        default="rectangle",
+        choices=shapes.SHAPE_CHOICES,
+        doc=_SHAPE_DOC,
+        placement="advanced",
     )
     length: float = param(
         title=_("Länge"),
@@ -1213,6 +1233,7 @@ class SketchRevolveParams(BaseParams):
             "Ausdehnung des Querschnitts von der Achse weg. Beim Kreis und "
             "Vieleck ist das der Durchmesser."
         ),
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite"),
@@ -1243,6 +1264,7 @@ class SketchRevolveParams(BaseParams):
         # in fünf Sprachen, und beim Vieleck steht ohnehin der Grund der
         # Sperre an der Zeile statt seiner (``_explain`` in ``op_dialog.py``).
         depends_on=("shape", ("rectangle", "slot")),
+        placement="advanced",
     )
     offset: float = param(
         title=_("Abstand zur Achse"),
@@ -1384,10 +1406,20 @@ def _revolve_section(
 @op_params
 class SketchSweepParams(BaseParams):
     shape: str = param(
-        title=_("Grundform"), default="circle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+        title=_("Grundform"),
+        default="circle",
+        choices=shapes.SHAPE_CHOICES,
+        doc=_SHAPE_DOC,
+        placement="advanced",
     )
     length: float = param(
-        title=_("Länge"), default=10.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
+        title=_("Länge"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_LENGTH_DOC,
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite"),
@@ -1397,6 +1429,7 @@ class SketchSweepParams(BaseParams):
         maximum=1000.0,
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
+        placement="advanced",
     )
     along: str = param(
         title=_("Bahn"),
@@ -1428,6 +1461,7 @@ class SketchSweepParams(BaseParams):
         maximum=180.0,
         doc=_("Wie weit der Bogen führt — 90 Grad ist ein rechtwinkliger Rohrbogen."),
         depends_on=("along", ("arc",)),
+        placement="advanced",
     )
     # **Vorn, sobald die Bahn gezeichnet wird** (RM-183): Sie ist dann die
     # Eingabe, auf die es ankommt, und ``depends_on`` nimmt sie beim Bogen aus
@@ -1697,10 +1731,20 @@ def _bezier_derivatives(
 @op_params
 class SketchLoftParams(BaseParams):
     shape: str = param(
-        title=_("Grundform"), default="rectangle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+        title=_("Grundform"),
+        default="rectangle",
+        choices=shapes.SHAPE_CHOICES,
+        doc=_SHAPE_DOC,
+        placement="advanced",
     )
     length: float = param(
-        title=_("Länge"), default=40.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
+        title=_("Länge"),
+        default=40.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_LENGTH_DOC,
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite"),
@@ -1710,6 +1754,7 @@ class SketchLoftParams(BaseParams):
         maximum=1000.0,
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
+        placement="advanced",
     )
     height: float = param(
         title=_("Höhe"),
@@ -1728,6 +1773,7 @@ class SketchLoftParams(BaseParams):
             "eigene Zeichnung. Ein Kegelstumpf braucht nur eine Zahl; ein "
             "Übergang von rund auf eckig braucht zwei Umrisse."
         ),
+        placement="advanced",
     )
     top_scale: float = param(
         title=_("Verjüngung"),
@@ -1739,6 +1785,7 @@ class SketchLoftParams(BaseParams):
             "ihn — ein Pyramiden- oder Kegelstumpf; über 1 wird es oben weiter."
         ),
         depends_on=("top", ("scaled",)),
+        placement="advanced",
     )
     # Vorn aus demselben Grund wie die Bahn des Sweeps (RM-183).
     top_sketch: str = param(
@@ -1750,6 +1797,7 @@ class SketchLoftParams(BaseParams):
             "untere, und um die Höhe darüber aufgespannt."
         ),
         depends_on=("top", ("drawn",)),
+        placement="advanced",
     )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
     corners: int = param(
@@ -1948,7 +1996,11 @@ def _drawn_pairs(
 @op_params
 class SketchRevolveCutParams(BaseParams):
     shape: str = param(
-        title=_("Grundform"), default="rectangle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+        title=_("Grundform"),
+        default="rectangle",
+        choices=shapes.SHAPE_CHOICES,
+        doc=_SHAPE_DOC,
+        placement="advanced",
     )
     length: float = param(
         title=_("Länge"),
@@ -1960,6 +2012,7 @@ class SketchRevolveCutParams(BaseParams):
             "Ausdehnung des Querschnitts von der Achse weg — bei einer Ringnut ihre "
             "Tiefe. Beim Kreis und beim Vieleck ist das der Durchmesser."
         ),
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite"),
@@ -1972,6 +2025,7 @@ class SketchRevolveCutParams(BaseParams):
             "Beim Kreis und beim Vieleck ohne Wirkung."
         ),
         depends_on=("shape", ("rectangle", "slot")),
+        placement="advanced",
     )
     offset: float = param(
         title=_("Abstand zur Achse"),
@@ -2085,8 +2139,8 @@ class SketchRevolveCutParams(BaseParams):
     caveat=_MESH_CUT_CAVEAT,
     doc=_(
         "Dreht einen Querschnitt um eine Achse und nimmt, was er dabei überstreicht, aus "
-        "dem gewählten Körper heraus — eine Ringnut in einer Welle oder in einer Bohrung, "
-        "ganz herum oder als Teilstück."
+        "dem gewählten Körper heraus. So entsteht eine Ringnut in einer Welle oder in "
+        "einer Bohrung, ganz herum oder als Teilstück."
     ),
 )
 def sketch_revolve_cut(ctx: OpContext) -> OpResult:
@@ -2165,10 +2219,20 @@ def _revolve_axis(
 @op_params
 class SketchSweepCutParams(BaseParams):
     shape: str = param(
-        title=_("Grundform"), default="circle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+        title=_("Grundform"),
+        default="circle",
+        choices=shapes.SHAPE_CHOICES,
+        doc=_SHAPE_DOC,
+        placement="advanced",
     )
     length: float = param(
-        title=_("Länge"), default=4.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
+        title=_("Länge"),
+        default=4.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_LENGTH_DOC,
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite"),
@@ -2178,6 +2242,7 @@ class SketchSweepCutParams(BaseParams):
         maximum=1000.0,
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
+        placement="advanced",
     )
     along: str = param(
         title=_("Bahn"),
@@ -2209,6 +2274,7 @@ class SketchSweepCutParams(BaseParams):
         maximum=180.0,
         doc=_("Wie weit der Bogen führt — 90 Grad lenkt den Kanal von senkrecht auf waagerecht."),
         depends_on=("along", ("arc",)),
+        placement="advanced",
     )
     # **Die Skizze steht vor der Bahn**, anders als beim Erzeuger: Wer frei
     # zeichnet und „Fertig" wählt, hat einen geschlossenen Umriss gezeichnet,
@@ -2304,7 +2370,7 @@ class SketchSweepCutParams(BaseParams):
     caveat=_MESH_CUT_CAVEAT,
     doc=_(
         "Führt einen Querschnitt entlang eines Bogens oder einer gezeichneten Bahn und "
-        "nimmt ihn aus dem gewählten Körper heraus — ein geführter Kanal, der oben "
+        "nimmt ihn aus dem gewählten Körper heraus. Das ergibt einen geführten Kanal, der oben "
         "beginnt und seitlich austreten kann."
     ),
 )
@@ -2340,10 +2406,20 @@ def sketch_sweep_cut(ctx: OpContext) -> OpResult:
 @op_params
 class SketchLoftCutParams(BaseParams):
     shape: str = param(
-        title=_("Grundform"), default="rectangle", choices=shapes.SHAPE_CHOICES, doc=_SHAPE_DOC
+        title=_("Grundform"),
+        default="rectangle",
+        choices=shapes.SHAPE_CHOICES,
+        doc=_SHAPE_DOC,
+        placement="advanced",
     )
     length: float = param(
-        title=_("Länge"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
+        title=_("Länge"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_LENGTH_DOC,
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite"),
@@ -2353,6 +2429,7 @@ class SketchLoftCutParams(BaseParams):
         maximum=1000.0,
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
+        placement="advanced",
     )
     # Vor der Tiefe und vorn: Der Haken schaltet sie aus (``depends_on``).
     through: bool = param(
@@ -2381,6 +2458,7 @@ class SketchLoftCutParams(BaseParams):
             "als eigene Zeichnung. Ein Trichter braucht nur eine Zahl; ein Übergang von "
             "eckig auf rund braucht zwei Umrisse."
         ),
+        placement="advanced",
     )
     top_scale: float = param(
         title=_("Verjüngung"),
@@ -2392,6 +2470,7 @@ class SketchLoftCutParams(BaseParams):
             "Trichter; über 1 wird der Übergang nach unten weiter."
         ),
         depends_on=("top", ("scaled",)),
+        placement="advanced",
     )
     top_sketch: str = param(
         title=_("Untere Zeichnung"),
@@ -2402,6 +2481,7 @@ class SketchLoftCutParams(BaseParams):
             "obere und um die Tiefe darunter aufgespannt."
         ),
         depends_on=("top", ("drawn",)),
+        placement="advanced",
     )
     x: float = param(
         title=_("X"),
@@ -2468,8 +2548,8 @@ class SketchLoftCutParams(BaseParams):
     deterministic=False,
     caveat=_MESH_CUT_CAVEAT,
     doc=_(
-        "Nimmt einen Übergang zwischen zwei Umrissen aus dem gewählten Körper heraus — oben "
-        "die Grundform oder Zeichnung, in der Tiefe ihre verkleinerte Kopie oder eine "
+        "Nimmt einen Übergang zwischen zwei Umrissen aus dem gewählten Körper heraus. Oben "
+        "liegt die Grundform oder Zeichnung, in der Tiefe ihre verkleinerte Kopie oder eine "
         "zweite Zeichnung: ein Trichter, ein Kanal von eckig auf rund."
     ),
 )

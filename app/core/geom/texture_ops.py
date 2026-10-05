@@ -618,6 +618,7 @@ class TextureParams(BaseParams):
             "unter der Düse, wird das Muster nicht gedruckt und die Operation "
             "sagt es, statt es zu versuchen."
         ),
+        placement="advanced",
     )
     depth: float = param(
         title=_("Tiefe"),
@@ -628,6 +629,7 @@ class TextureParams(BaseParams):
             "Wie hoch das Muster steht oder wie tief es einschneidet. Flacher als "
             "eine Schicht verschwindet es beim Drucken."
         ),
+        placement="advanced",
     )
     mode: str = param(
         title=_("Art"),
@@ -643,6 +645,7 @@ class TextureParams(BaseParams):
             "Ein vertieftes Rändel greift sich anders als ein erhabenes — welches "
             "besser ist, entscheidet die Hand."
         ),
+        placement="advanced",
     )
     wrap: str = param(
         title=_("Auflegen"),

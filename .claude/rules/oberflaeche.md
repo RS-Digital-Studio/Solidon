@@ -15,7 +15,7 @@ Zwillinge, Kürzel), `ansicht.md`, `griffe.md`, `kamera.md`, `wartezeit.md`,
 `konzepte/begruendungen/regel-oberflaeche.md`.
 
 **Die Grenzen gelten für jeden**, auch wo `grenzen.md` nicht lädt: neun Menüs,
-zwölf Zeilen je Menü, acht Umschalter, acht Felder vorn, ein Menüeintrag je
+zwölf Zeilen je Menü, acht Umschalter, vier Felder vorn, ein Menüeintrag je
 Operation. Wer eine Zahl erhöht, begründet es im Commit
 (`tests/test_interface_limits.py`).
 

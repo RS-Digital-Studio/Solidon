@@ -102,6 +102,7 @@ class LoadParams(BaseParams):
         title=_("Name"),
         default="",
         doc=_("Leer übernimmt den Dateinamen."),
+        placement="advanced",
     )
     #: Der Einlesplan setzt den Schalter für jedes Modell nach dem ersten
     #: (§17.1, Schritt 6); Vorgabe aus, damit ein älterer Ladeschritt liegen
@@ -113,6 +114,7 @@ class LoadParams(BaseParams):
         default=False,
         depends_on=("free_spot", (False,)),
         doc=_("Setzt das Modell mit seiner Unterseite auf das Druckbett."),
+        placement="advanced",
     )
     centre: bool = param(
         title=_("Mittig auf das Bett legen"),
@@ -122,6 +124,7 @@ class LoadParams(BaseParams):
             "Schiebt das Modell in die Mitte der Druckplatte. Ein Modell aus einem "
             "CAD-Programm hat seinen Nullpunkt oft in einer Ecke und liegt sonst weit daneben."
         ),
+        placement="advanced",
     )
     spot_x: float | None = spot_param("x")
     spot_y: float | None = spot_param("y")
@@ -480,6 +483,8 @@ class LoadOutlineParams(BaseParams):
         minimum=0.0,
         maximum=1000.0,
         doc=_("Auf diese Breite skalieren. Null nimmt die Zahlen der Datei als Millimeter."),
+        placement="advanced",
+        zero_text=_("wie in der Datei", context="Nullwert"),
     )
     contours: str = param(
         title=_("Konturauswahl"),

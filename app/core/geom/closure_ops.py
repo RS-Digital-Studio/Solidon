@@ -131,8 +131,8 @@ class ResizeClosureParams(BaseParams):
     result_kind="mesh",
     doc=_(
         "Ändert Spiel und Drehweg eines erkannten Bajonetts oder einer Rastung an allen "
-        "Stellungen zugleich: Nocken schmaler, Mulden und Wege breiter, der Anschlag weiter — "
-        "oder umgekehrt."
+        "Stellungen zugleich. Nocken werden schmaler, Mulden und Wege breiter, "
+        "der Anschlag rückt weiter — oder umgekehrt."
     ),
     caveat=_(
         "Nur an einem erkannten Verschluss mit ebenen Seiten, den Drehweg nur am Teil mit den "

@@ -35,6 +35,7 @@ from app.core.knowledge.parts.shapes import RIDGE_SHARE, mesh_only, moved, threa
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
+from app.core.registry.params import ZERO_AUTOMATIC, ZERO_FROM_PROFILE, ZERO_NONE
 from app.core.scene.placement import dominant_axis, faces_up
 from app.core.slice.analysis import cross_section
 from app.core.types import (
@@ -905,6 +906,8 @@ class LidParams(BaseParams):
         minimum=0.0,
         maximum=100.0,
         doc=_("Wie weit der Kragen in die Öffnung reicht. Null heißt: flacher Deckel ohne Kragen."),
+        placement="advanced",
+        zero_text=ZERO_NONE,
     )
     at_feature: str = param(
         title=_("An Fläche"),
@@ -928,6 +931,9 @@ class LidParams(BaseParams):
         default=0.0,
         unit="mm",
         doc=_("Null nimmt die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
+        placement="advanced",
+        zero_text=_("Oberkante", context="Nullwert"),
+        minimum=0.0,
     )
     clearance: float = param(
         title=_("Spiel"),
@@ -937,6 +943,7 @@ class LidParams(BaseParams):
         maximum=2.0,
         placement="advanced",
         doc=_("Null heißt: der Wert aus dem Materialprofil."),
+        zero_text=ZERO_FROM_PROFILE,
     )
     hinge: str = param(
         title=_("Scharnier"),
@@ -1616,6 +1623,7 @@ class ScrewLidParams(BaseParams):
         minimum=0.8,
         maximum=50.0,
         doc=_("Dicke der Deckelplatte über dem Gewinde."),
+        placement="advanced",
     )
     wall: float = param(
         title=_("Wandstärke des Deckels"),
@@ -1627,6 +1635,7 @@ class ScrewLidParams(BaseParams):
             "Dicke des Rands, der das Gewinde trägt. Zu dünn reißt beim Aufschrauben "
             "entlang der Schichten auf."
         ),
+        placement="advanced",
     )
     neck: float = param(
         title=_("Halsdurchmesser"),
@@ -1636,6 +1645,7 @@ class ScrewLidParams(BaseParams):
         maximum=400.0,
         placement="advanced",
         doc=_("Null nimmt die schmalere Seite der Öffnung."),
+        zero_text=ZERO_AUTOMATIC,
     )
     at_feature: str = param(
         title=_("An Fläche"),
@@ -1659,6 +1669,9 @@ class ScrewLidParams(BaseParams):
         default=0.0,
         unit="mm",
         doc=_("Null nimmt die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
+        placement="advanced",
+        zero_text=_("Oberkante", context="Nullwert"),
+        minimum=0.0,
     )
     clearance: float = param(
         title=_("Spiel"),
@@ -1668,6 +1681,7 @@ class ScrewLidParams(BaseParams):
         maximum=2.0,
         placement="advanced",
         doc=_("Null heißt: der Wert aus dem Materialprofil."),
+        zero_text=ZERO_FROM_PROFILE,
     )
 
 

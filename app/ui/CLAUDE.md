@@ -163,8 +163,8 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 
 | Datei | Zweck |
 |---|---|
-| `op_dialog.py` | ausschließlich aus Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13), `aim_again` zurück zur Platzierung; `show_seat`: *Auf das Bett* bei Erzeugern auf gewählter Fläche |
-| `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link` |
+| `op_dialog.py` | ausschließlich aus Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); vorn `lead_sentence` und die Lesezeile *Stelle* (`place_fields`, `place_text`) mit `aim_again` zurück zur Platzierung, hinten die Klappe mit `advanced_summary`; `show_seat`: *Auf das Bett* bei Erzeugern auf gewählter Fläche |
+| `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
 | `organizer_dialog.py` | Fachaufteilung eines Organizers, die Geometrie im Arbeiter (§19) |

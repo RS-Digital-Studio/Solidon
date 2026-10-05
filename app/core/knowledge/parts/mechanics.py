@@ -236,6 +236,7 @@ class SnapFitParams(BaseParams):
         minimum=0.2,
         maximum=6.0,
         doc=_("Wie weit der Haken vorsteht — also wie viel Weg beim Einrasten zurückgelegt wird."),
+        placement="advanced",
     )
     lead_angle: float = param(
         title=_("Anlaufwinkel"),
@@ -363,6 +364,7 @@ class LatchParams(BaseParams):
         minimum=1.0,
         maximum=30.0,
         doc=_("Höhe der Nase. Die Anlaufschräge sitzt oben, die gerade Haltefläche unten."),
+        placement="advanced",
     )
     negative: bool = param(
         title=_("Als Aussparung"),
@@ -515,6 +517,7 @@ class HingeParams(BaseParams):
         minimum=0.2,
         maximum=1.2,
         doc=_("Dünnste Stelle. Unter 0,3 mm reißt PLA, PETG hält mehr aus."),
+        placement="advanced",
     )
     gap: float = param(
         title=_("Scharnierbreite"),
@@ -526,6 +529,7 @@ class HingeParams(BaseParams):
             "Breite der dünnen Stelle. Zu schmal knickt an einer Linie und bricht, "
             "zu breit lässt den Deckel schlackern."
         ),
+        placement="advanced",
     )
 
 
@@ -1072,6 +1076,7 @@ class HingeEyeParams(BaseParams):
         minimum=0.8,
         maximum=15.0,
         doc=_("Material rings um die Bohrung. Zu dünn reißt beim ersten Zug auf."),
+        placement="advanced",
     )
     play: float = play_param(maximum=2.0)
 
@@ -1213,6 +1218,7 @@ class BarrelHingeParams(BaseParams):
         minimum=1.0,
         maximum=15.0,
         doc=_("Material rings um den Bolzen. Zu dünn reißt beim ersten Zug auf."),
+        placement="advanced",
     )
     play: float = play_param(maximum=2.0)
 

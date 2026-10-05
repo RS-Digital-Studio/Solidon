@@ -63,6 +63,7 @@ class CreateSealParams(BaseParams):
         maximum=100.0,
         unit="mm",
         doc=_("Gesamte Breite der Nut quer zum Dichtweg."),
+        placement="advanced",
     )
     groove_depth: float = param(
         title=_("Nuttiefe"),
@@ -71,12 +72,14 @@ class CreateSealParams(BaseParams):
         maximum=100.0,
         unit="mm",
         doc=_("Tiefe unter der Trägerfläche; Boden und Seitenwände werden am Körper geprüft."),
+        placement="advanced",
     )
     section: str = param(
         title=_("Dichtquerschnitt"),
         default="rectangle",
         choices=("rectangle", "round"),
         doc=_("Rechteckige Dichtung oder runde Schnur entlang desselben geschlossenen Wegs."),
+        placement="advanced",
     )
     protrusion: float = param(
         title=_("Überstand"),
@@ -88,6 +91,7 @@ class CreateSealParams(BaseParams):
             "Unverformte Höhe über der Nutmündung; zusammen mit der Nuttiefe "
             "ergibt sie die Dichtungshöhe."
         ),
+        placement="advanced",
     )
     gasket_width: float = param(
         title=_("Dichtungsbreite"),
@@ -97,6 +101,7 @@ class CreateSealParams(BaseParams):
         unit="mm",
         depends_on=("section", ("rectangle",)),
         doc=_("Breite des rechteckigen Querschnitts quer zum Dichtweg."),
+        placement="advanced",
     )
     body_material: str = param(
         title=_("Material des Trägers"),

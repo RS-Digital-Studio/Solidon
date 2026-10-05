@@ -204,6 +204,9 @@ _PLACEMENT: tuple[tuple[str, Any, Any], ...] = (
             title=_("An Merkmal"),
             kind="feature",
             default="",
+            # Hinten wie die Lage selbst: Vorn nennt der Dialog die gewählte
+            # Stelle in einer Lesezeile (RM-513), ein Klick ins Bild setzt sie.
+            placement="advanced",
             doc=_(
                 "Name eines erkannten Merkmals, zum Beispiel hole_1. Dann zählt "
                 "dessen Ort, und die Position darüber wird als Versatz gerechnet."

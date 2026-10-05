@@ -28,7 +28,8 @@ Die Zahlen hält `tests/test_interface_limits.py`, die Breitengrenze
 | Menüs in der Leiste | ≤ 9 |
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
 | Umschalter in der Werkzeugzeile | ≤ 8 — heute sieben: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen — auf `Alt+1` bis `Alt+7` |
-| Felder auf der Vorderseite eines Operationsdialogs, gezählt, was zugleich dasteht (Felder anderer Varianten stehen nicht da) | ≤ 8 |
+| Felder auf der Vorderseite eines Operationsdialogs, gezählt, was zugleich dasteht (Felder anderer Varianten stehen nicht da) | ≤ 4, bei mindestens 90 % der Operationen ≤ 3 (Bauplan §2.4, Entscheidung Robert) |
+| Wörter über dem ersten Feld (Platzierungssatz, erster Satz der Beschreibung, Überschrift „Wann nicht?“) | ≤ 25, übersetzt ≤ 35 |
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
 | Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Palette und Verlauf |
 
@@ -161,10 +162,30 @@ Robert).
 
 ## Die Vorderseite eines Dialogs
 
-- **Ein vorbelegter Wert kommt nach vorn, außer er ist eine Richtung:**
-  `decided` (`op_dialog.py`) holt angeklickte Fläche und vorgewählte Position
-  (§18.5) vor die Klappe; `direction_fields` (Normale aus `normal_fields_of`,
-  `axis`) bleiben hinten und gelten trotzdem.
+- **Vorn stehen zwei bis drei Werte und ein Satz** (RM-513): Was man ändert,
+  steht vorn; Toleranzen, Auflösungen, Rückfallverhalten, Ausrichtungsfeinheiten
+  und der Ersatz für eine Zeichnung (Grundform samt Maßen) hinten. Über dem
+  ersten Feld stehen die Platzierungsanweisung als erste Zeile in normaler
+  Schrift, der erste Satz der `doc` (`op_dialog.lead_sentence`, dieselbe
+  Kürzung wie die Palette, `command_palette.first_sentence`; die ganze `doc`
+  im Tooltip) und die Grenze zugeklappt unter „Wann nicht?“ (`remember=`).
+- **Ein vorbelegter Wert kommt nach vorn, außer er ist eine Richtung oder die
+  Stelle — und nur, solange vorn Platz ist:** `_promoted_fields` holt
+  angeklickte Fläche, gemessenes Maß und übergebene Zeichnung (§18.5) vor die
+  Klappe, bis `MAX_FRONT_FIELDS` erreicht ist; `direction_fields` (Normale aus
+  `normal_fields_of`, `axis`) bleiben hinten und gelten trotzdem.
+- **Die Stelle ist eine Lesezeile** (Entscheidung Robert, RM-513): Wer am
+  Körper ansetzt und seine Koordinaten hinten führt (`place_fields`: Bohrung,
+  Beschriftung, Bausteine), zeigt vorn „Stelle: Oberseite · x / y / z mm“ mit
+  *Stelle im Bild wählen*; Koordinaten und das Merkmal, an dem sie hängen,
+  bleiben hinten bearbeitbar. Wo die Koordinaten selbst die Eingabe sind
+  (*Merkmal verschieben*), stehen sie als Felder vorn.
+- **Eine Null mit Bedeutung trägt ihren Namen** (`param(zero_text=…)`, nur bei
+  Mindestwert 0, angezeigt über `setSpecialValueText`): „automatisch“, „ohne“,
+  „aus dem Material“ — die Wörter stehen als `ZERO_*` in `registry/params.py`,
+  `test_registry_consistency` sucht jedes `doc`, das die Null erklärt.
+- **„fx“ steht nur, wenn das Projekt Parameter hat oder das Feld einen Ausdruck
+  trägt**; „=“ und „@“ im Zahlenfeld führen weiter in den Ausdruck.
 - **Die Vorgabe trifft den Körper, nicht den Ursprung:** *Teilen* in seiner
   Mitte (`_plane_through`), *Dreiecke verringern* bei der Hälfte seiner
   Dreiecke, *Dreiecke angleichen* bei einem Fünfzigstel seiner längsten Kante
@@ -218,7 +239,10 @@ Fokus bekommt, und `adjustSize` läuft nur, wenn sich eine Zeile bewegt hat
 (`test_a_rectangle_shows_only_the_rows_a_rectangle_has`). Im Merkmalfenster
 folgt `FeaturePanel._follow_conditions` demselben `ActionField.depends_on`: Das
 Feld verschwindet samt Beschriftung, kommt mit seinem Wert zurück und wird
-nicht gesperrt — die Sperre gehört dem Kettenhalt (`_settle_lock`).
+nicht gesperrt — die Sperre gehört dem Kettenhalt (`_settle_lock`). Ein
+Zahlenfeld mit benannter Null geht beim Verschwinden auf seine Null und kommt
+mit seinem Wert zurück: Was nicht dasteht, zählt nicht (*Aushöhlen* mit „Oben
+öffnen“ verliert seine Entlüftung und bleibt am exakten Körper exakt).
 
 - **Agent und Mensch bekommen verschiedene Anreden, nicht verschiedene
   Inhalte:** „Gilt bei Art = circular“ im Handbuch, `kind` für den Agenten
@@ -336,9 +360,11 @@ Filter darin still mit.
 Dreiundsiebzig von hundertachtundsiebzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
-Fortsetzung des `doc`-Satzes: im Dialog ein eigenes halbfettes Label (Regel 18),
-im Tooltip unter dem Satz, beim Agenten in der Werkzeugbeschreibung — **nie in
-der Statuszeile**, denn eine abgeschnittene Warnung ist schlimmer als keine.
+Fortsetzung des `doc`-Satzes: im Tooltip unter dem Satz, beim Agenten in der
+Werkzeugbeschreibung — **nie in der Statuszeile**, denn eine abgeschnittene
+Warnung ist schlimmer als keine. Im Dialog steht sie zugeklappt unter „Wann
+nicht?“ (die Überschrift ist die zweite Kodierung, Regel 18; ihr Tooltip trägt
+den Satz), damit über dem ersten Feld nur ein Satz steht (RM-513).
 
 ## Ein erzeugtes Merkmal bietet den Schritt an, der es erzeugt hat
 
