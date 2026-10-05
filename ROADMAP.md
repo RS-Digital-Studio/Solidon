@@ -106,7 +106,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-508 — Der Prüfbericht zeigt zuerst die Befunde](#rm-508) | Bedienung und Darstellung | Kopf auf eine Zeile, Gerüst und Doppelungen aus der Befundkarte, Export neben der Übergabe |
 | [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
 | [RM-510 — Das Auswahlfenster stellt die Handlungen nach vorn und zeigt eine Handlung zur Zeit](#rm-510) | Bedienung und Darstellung | Schnellhandlungen als Knöpfe, flache Liste, Akkordeon am Merkmal, Filament hinter die Handlungen, keine doppelten Knöpfe |
-| [RM-511 — Rechts steht eine Spalte, und leere Karten geben ihren Platz frei](#rm-511) | Bedienung und Darstellung | Reiterkorrektur der Kartenhöhe, Bericht ruht als Kopf bei nur Hinweisen, Auswahl unter dem Bericht |
+| [RM-511 — Rechts steht eine Spalte, und leere Karten geben ihren Platz frei](#rm-511) | Bedienung und Darstellung | Rechts eine Karte mit den Reitern Auswahl, Prüfbericht und Chat; Reiterkorrektur der Kartenhöhe |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-513 — Ein Operationsdialog zeigt vorn zwei bis drei Werte und einen Satz](#rm-513) | Bedienung und Darstellung | Vorderseitengrenze 4, Einleitung ein Satz, „Wann nicht?“ als Klappe, Nullwerte mit Namen, fx nur mit Parametern |
 | [RM-514 — Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar](#rm-514) | Bedienung und Darstellung | Fünf Werte vorn, ein Profilsatz ohne leere Felder, Grund unter der Tabelle, eindeutige Beschriftungen, Lücke über den Knöpfen |
@@ -3860,8 +3860,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Kante oder Bohrung“; *Formen*/*Skelett* nehmen den einzigen Körper; die Einladung der
   leeren Szene bietet „Modell einfügen …“ und, mit eingerichtetem Generator, „Aus Text
   oder Bild …“; `menu_path` nennt für `takes_whole_scene` den Ort ohne Auswahl.
-  **Entscheidung Robert:** Ausrichten und Anordnen auch bei gewähltem Körper zeigen
-  (A5); Bausteine-Knopf an einer Bohrung (A7).
+  **Entschieden (Robert, 05.10.2026):** In der Karte ohne Auswahl bleibt von den drei
+  Szenenhandlungen nur „Druckoptimal ausrichten“ — sie ändern alle Körper, also stehen
+  sie nur ohne Auswahl, und eine genügt dort; Anordnen und Überschneidungen bleiben über
+  Palette und Menü erreichbar. An einer gewählten Bohrung steht „Passende Bausteine …“,
+  der den Katalog auf die Bausteine mit `applies_to` `hole` filtert.
   **Abnahme:** Am geladenen Modell führen „verrunden“, „gewinde“, „reparieren“,
   „ausrichten“ in höchstens drei Handlungen zum Dialog oder nennen die fehlende
   Auswahl; die Gruppenfolge der Karte ist in allen sechs Sprachen gleich; Verrunden ist
@@ -3905,8 +3908,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Unter einem Befund eine Metazeile; ein Zeige-Knopf; die Nebenfolge nur bei
   `changes`; je Wert ein Name; Klappen über `collapsible`. „Exportieren …“ neben
   „An den Slicer übergeben …“.
-  **Entscheidung Robert:** Folge und Grundlage als Metazeile statt zweier Sätze (berührt
-  den Vertrag aus RM-090).
+  **Entschieden (Robert, 05.10.2026):** Folge, Ort und Grundlage stehen als eine
+  Metazeile („Hinweis · Dose · intern geschätzt“), ein eigener Folgesatz nur bei echter
+  Folge; der Vertrag aus RM-090 (Produktkompass §4.3) wird so fortgeschrieben.
   **Abnahme:** In der Lage von main-window.png höchstens 100 Wörter im Bericht und über
   der Liste höchstens 12; in der Lage von report.png mindestens drei Befundzeilen; kein
   Befund mit zwei Knöpfen derselben Handlung; Export mit einem sichtbaren Klick.
@@ -3931,8 +3935,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Statuszeile und Dialogkopf zeigen nur den ersten Satz (`first_sentence`); Tour mit
   `MAX_STEP_WORDS`; Offenlegungen als ein Satz mit Klappe; Wortliste und Musterwächter
   in `test_wording` erweitert.
-  **Entscheidung Robert:** Statustipp nur an Menüaktionen (D18), weil 134 von 176
-  Statustipps den Tooltip wiederholen.
+  **Entschieden (Robert, 05.10.2026):** Statustipps nur an Menüaktionen; an Feldern
+  bleiben Tooltip und zugängliche Beschreibung, `oberflaeche.md` zieht nach.
   **Abnahme:** Der Wächter ist grün, ein neuer Text über der Grenze und eine wachsende
   Bestandsliste machen ihn rot (Gegenprobe); die eingefrorene Liste ist am Ende leer
   für Befunde, Bausteinänderungen, Vorbehalte und Tour. Überschneidung RM-084.
@@ -3967,12 +3971,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   beschreibt eine Spalte. Bei „Bereit zur Übergabe“ sind 46–51 % der Berichtskarte leer;
   vermutete Ursache: `natural_height` zieht den höchsten Reiter nur bei einer Zone ab,
   die selbst ein `QTabWidget` ist (`overlay.py:677`).
-  **Fix:** Reiterkorrektur für jedes `QTabWidget` in einer Zone; mit nur Hinweisen ruht
-  der Bericht als Kopf (Status, Zähler, Übergabe) und klappt bei Warnung oder Fehler auf;
-  die Auswahl steht als zweite Karte unter dem Bericht in `overlay.CardColumn`,
-  Andocken bleibt möglich.
-  **Entscheidung Robert:** eine Spalte als Vorgabe (das Auswahlfenster steht seit dem
-  18.09. auch ohne Auswahl offen).
+  **Fix:** Reiterkorrektur für jedes `QTabWidget` in einer Zone; rechts eine Karte mit
+  den Reitern Auswahl, Prüfbericht und Chat statt Karte plus Dock; eine Auswahl holt den
+  Reiter Auswahl nach vorn, eine neue Warnung den Prüfbericht.
+  **Entschieden (Robert, 05.10.2026):** „rechts das Auswahlpanel, der Prüfbericht und
+  Chat da als Tab“. Das freie Andocken des Auswahlfensters entfällt; Bauplan §2.5 und
+  `fenster.md` ziehen nach.
   **Abnahme:** In allen Reitern höchstens 24 px Leerraum unter dem letzten Element; bei
   1280 × 800 und nur Hinweisen ist die Berichtskarte höchstens 120 px hoch; zwischen
   1280 und 2560 px Breite eine rechte Spalte, freie Mitte mindestens 70 %.
@@ -4011,9 +4015,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   normaler Schrift; `vents` hängt an `open_top`; `param(zero_text=…)` über
   `setSpecialValueText`; „fx“ nur mit Projektparametern oder Ausdruck; Klappe mit
   `contents=`; Auswahlzeilen ohne Maßquelle und Doppelungen.
-  **Entscheidung Robert:** `AGENTS.md` nennt „acht Felder vorn“ (Grenze 4 nach §2.4);
-  *Bohrung setzen* mit einer Lesezeile „Stelle: …“ statt drei Koordinaten vorn
-  (`grenzen.md` verlangt die vorgewählte Position vorn).
+  **Entschieden (Robert, 05.10.2026):** Grenze vier Felder vorn, `AGENTS.md` und
+  `test_interface_limits.py` ziehen nach; *Bohrung setzen* zeigt die Stelle als
+  Lesezeile, die Koordinaten stehen hinten, `grenzen.md` zieht nach.
   **Abnahme:** Grenztest mit 4 grün, mindestens 90 % der Operationen mit höchstens drei
   Feldern gleichzeitig; über dem ersten Feld in DE höchstens 25 Wörter, in FR und PT
   höchstens 35; Registertest für `zero_text`; *Aushöhlen* mit „Oben öffnen“ ohne
