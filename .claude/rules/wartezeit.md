@@ -342,6 +342,12 @@ der rekursiv gelöschten Kinder bis zur nativen Löschung und Ereignisrunde;
 dann im Hauptthread freigeben. Ohne Ereignisrunde hält das `finished`-Lambda
 über `leash._alive` weiterhin Leine/Dialog und täuscht ein Leck vor.
 
+### Die Speicherbereinigung gehört dem Hauptfaden (RM-021)
+
+Im Fensterprozess ruht die Automatik; `leash.collect_in_main_thread` räumt im
+Hauptfaden ab, gerufen in `main` vor dem ersten Arbeiter, in
+`build_application` und `qt_app`.
+
 ### `undisturbed()` teilt den GC-Zustand im Prozess
 
 `gc.disable` gilt prozessweit. Verschachtelte/überlappende Kontexte zählen
@@ -375,10 +381,9 @@ Methode (`ToolStrip._on_button`).
   nachweisen, nicht per Lambdasuche. Eine `cell` zeigt auf eine Closure;
   `__qualname__`/`__code__` benennen die Zeile. Genau eines von zehn erhaltenen
   Widgets spricht für eine Referenz, nicht Streuung.
-- Fällt die letzte Referenz beim GC im Nebenthread, kann Shiboken das Widget
-  dort zerstören und zwischen GIL/Qt-Mutex stehen bleiben. Vor erneuten
-  Versuchen Stapelabzüge und Grenzen von `gc.collect`, `leash.undisturbed`
-  und `deleteLater` in `tests/conftest.py` lesen.
+- Ohne Ring zerstört der Referenzzähler sofort, auch im Nebenthread. Vor
+  erneuten Versuchen Stapelabzüge und Grenzen von `gc.collect`,
+  `leash.undisturbed` und `deleteLater` in `tests/conftest.py` lesen.
 
 ### Ein Filter auf einem sterblichen Widget bestellt beim `Destroy` ab
 
@@ -440,12 +445,10 @@ jeder Geste neu anläuft, bekommt einen Abbruchschalter
 Python-Filter, jede Python-Überschreibung, jeder Slot ist ein Griff, und neben
 einem rechnenden Arbeiter wartet jeder. Daraus folgt:
 
-* **Umschalten nach 1 ms** (`leash.GIL_SWITCH_S`, gesetzt in `main` über
-  `configure_gil_switching`); kürzer nicht, darunter dreht sich unter Windows
-  jeder Wartende im Kreis.
+* **Umschalten nach 1 ms, nicht kürzer** (`leash.GIL_SWITCH_S`, gesetzt in
+  `main` über `configure_gil_switching`; Grund im Docstring).
 * **`Worker.run` verlangt unter Windows 1 ms Zeitgeberauflösung**, solange
-  `work` läuft (`_prompt_handover`) — sonst endet jede Wartefrist erst am
-  nächsten Takt, 15,6 ms je Griff. Ein Arbeiter erbt das nur über
+  `work` läuft (`_prompt_handover`). Ein Arbeiter erbt das nur über
   `leash.Worker`.
 * **Kein C-Aufruf im Arbeiter hält den GIL länger als wenige Millisekunden**:
   große Listen in Blöcken, großes XML in Stücken (`threemf.XML_CHUNK`,

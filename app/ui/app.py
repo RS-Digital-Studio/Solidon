@@ -57,7 +57,7 @@ from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
 from app.ui import app_events, cursors, start_check, window_chrome
 from app.ui.icons import application_icon
-from app.ui.leash import Worker, WorkerLeash, configure_gil_switching
+from app.ui.leash import Worker, WorkerLeash, collect_in_main_thread, configure_gil_switching
 from app.ui.qt_platform import prefer_x11_for_the_viewport
 from app.ui.settings import UiSettings, load_settings
 from app.ui.splash import SplashScreen
@@ -319,6 +319,9 @@ def build_application(
         prefer_x11_for_the_viewport()
         enable_hidpi()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
+    # Vor dem ersten Arbeiter: Kein Faden außer diesem räumt Ringe mit
+    # Qt-Objekten ab (``leash.collect_in_main_thread``, RM-021).
+    collect_in_main_thread(application)
     application.setApplicationName(APP_NAME)
     application.setApplicationVersion(APP_VERSION)
     application.setOrganizationDomain(APP_ID)
@@ -487,6 +490,9 @@ def main(argv: list[str] | None = None) -> int:
     configure_gil_switching()
     existing = QApplication.instance()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
+    # Vor dem ersten Arbeiter (die Adapterprobe unten): Ringe mit Qt-Objekten
+    # räumt nur der Hauptfaden ab (``leash.collect_in_main_thread``, RM-021).
+    collect_in_main_thread(application)
     application.setWindowIcon(application_icon())
 
     # Vor allem anderen: eine abgelaufene Demo startet nicht mehr

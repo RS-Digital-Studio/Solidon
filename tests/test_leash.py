@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import gc
 import weakref
+from collections.abc import Callable
 from threading import Event, Thread
 
 import pytest
@@ -42,6 +43,8 @@ def test_undisturbed_keeps_gc_disabled_until_the_last_overlapping_user_leaves(
     monkeypatch.setattr(leash_module.gc, "isenabled", lambda: state[0])
     monkeypatch.setattr(leash_module.gc, "disable", disable)
     monkeypatch.setattr(leash_module.gc, "enable", enable)
+    # Geprüft wird das Zählen der Überlappung, ohne Sammler im Hauptfaden.
+    monkeypatch.setattr(leash_module, "_main_thread_collects", False)
 
     first_inside = Event()
     second_inside = Event()
@@ -84,6 +87,115 @@ def test_undisturbed_keeps_gc_disabled_until_the_last_overlapping_user_leaves(
     assert not errors, errors
     assert state[0] is initially_enabled, "der ursprüngliche GC-Zustand muss wieder gelten"
     assert changes == (["disable", "enable"] if initially_enabled else [])
+
+
+class _QtRing:
+    """Ein Ring, an dem ein Qt-Objekt hängt — der Fall aus RM-021."""
+
+    def __init__(self) -> None:
+        self.me = self
+        self.carrier = QObject()
+
+
+def _collections_by_thread() -> tuple[list[int], Callable[[str, dict[str, int]], None]]:
+    """Merkt sich je begonnener Bereinigung den Faden, in dem sie läuft."""
+    import threading
+
+    threads: list[int] = []
+
+    def note(phase: str, _info: dict[str, int]) -> None:
+        if phase == "start":
+            threads.append(threading.get_ident())
+
+    return threads, note
+
+
+def test_a_worker_never_starts_the_collection_and_the_main_thread_does(
+    qt_app: QApplication,
+) -> None:
+    """Ringe mit Qt-Objekten räumt nur der Hauptfaden ab (RM-021).
+
+    Die Anwendung stand still, als der Speicherbereiniger im Arbeiter der
+    Druckbefunde einen solchen Ring abräumte: Der Destruktor hielt Qts
+    Verbindungssperre, der Hauptfaden wollte in sie hinein. Ein Arbeiter, der
+    weit über die Schwelle allokiert, darf deshalb keine Bereinigung
+    auslösen; der Sammler im Hauptfaden holt sie nach. Gegenprobe: Mit der
+    Automatik (``gc.enable()``) startet dieselbe Arbeit im Arbeiterfaden.
+    """
+    import threading
+
+    from app.ui.leash import COLLECTOR_NAME, _MainThreadCollector
+
+    collector = qt_app.findChild(_MainThreadCollector, COLLECTOR_NAME)
+    assert collector is not None, "qt_app baut die Anwendung wie build_application"
+    assert not gc.isenabled(), "im Fensterprozess ruht die Automatik"
+
+    threads, note = _collections_by_thread()
+    gc.callbacks.append(note)
+    try:
+        # Gebaut im Hauptfaden, losgelassen im Arbeiter — wie im Befund.
+        handed_over = [_QtRing()]
+        dropped = weakref.ref(handed_over[0])
+        # Lebend gehalten, sonst sinkt der Zähler mit jedem Freigeben wieder.
+        kept: list[list[list[int]]] = []
+
+        def work() -> None:
+            handed_over.clear()
+            kept.append([[index] for index in range(5 * gc.get_threshold()[0])])
+
+        worker = Thread(target=work)
+        worker.start()
+        worker.join(10)
+        assert not worker.is_alive()
+        assert threads == [], "ein Arbeiter hat eine Bereinigung begonnen"
+        assert dropped() is not None, "der Ring wartet auf den Hauptfaden"
+
+        collector.collect_if_due()
+        assert threads, "über der Schwelle räumt der Hauptfaden ab"
+        assert set(threads) == {threading.get_ident()}
+        assert dropped() is None, "der Ring ist im Hauptfaden abgeräumt"
+        kept.clear()
+    finally:
+        gc.callbacks.remove(note)
+
+
+def test_the_main_thread_waits_while_events_are_delivered(qt_app: QApplication) -> None:
+    """Innerhalb von ``undisturbed`` räumt auch der Hauptfaden nicht ab."""
+    from app.ui.leash import COLLECTOR_NAME, _MainThreadCollector, undisturbed
+
+    collector = qt_app.findChild(_MainThreadCollector, COLLECTOR_NAME)
+    assert collector is not None
+    threads, note = _collections_by_thread()
+    gc.callbacks.append(note)
+    try:
+        churn = [[index] for index in range(5 * gc.get_threshold()[0])]
+        with undisturbed():
+            collector.collect_if_due()
+            assert threads == [], "während der Zustellung wird nichts zerstört"
+        assert not gc.isenabled(), "das Ende des Schutzes schaltet die Automatik nicht ein"
+        collector.collect_if_due()
+        assert threads, "danach holt der Hauptfaden nach"
+        del churn
+    finally:
+        gc.callbacks.remove(note)
+
+
+def test_the_application_hands_the_collection_to_its_main_thread() -> None:
+    """``main`` und ``build_application`` schalten den Sammler ein, vor jedem Arbeiter.
+
+    Die Funktion allein beweist nichts — die Anwendung muss sie rufen, und
+    zwar bevor ``main`` die Adapterprobe als ersten Arbeiter startet;
+    ``build_application`` ruft sie für jeden Weg ohne ``main``.
+    """
+    import inspect
+
+    import app.ui.app as app_module
+
+    start = inspect.getsource(app_module.main)
+    assert "collect_in_main_thread(application)" in start
+    assert start.index("collect_in_main_thread(") < start.index("leash.start(")
+    build = inspect.getsource(app_module.build_application)
+    assert "collect_in_main_thread(application)" in build
 
 
 class _Schlaefer(QThread):

@@ -1001,9 +1001,14 @@ def qt_app() -> object:
     from PySide6.QtWidgets import QApplication
 
     from app.i18n import SOURCE_LANGUAGE
+    from app.ui.leash import collect_in_main_thread
 
     QLocale.setDefault(QLocale(SOURCE_LANGUAGE))
-    return QApplication.instance() or QApplication([])
+    application = QApplication.instance() or QApplication([])
+    # Wie ``build_application``: Ringe mit Qt-Objekten räumt nur der
+    # Hauptfaden ab (RM-021), sonst verklemmt sich ein Arbeiter mit ihm.
+    collect_in_main_thread(application)
+    return application
 
 
 @pytest.fixture

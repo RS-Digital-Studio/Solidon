@@ -638,6 +638,73 @@ def stop_watching_the_dying(watcher: QObject, watched: QObject, event: QEvent) -
     return True
 
 
+#: Wie oft der Hauptfaden nachsieht, ob die Speicherbereinigung fällig ist.
+#: Ein Ring, den ein Arbeiter liegen lässt, wartet höchstens so lange.
+COLLECT_EVERY_MS: Final = 500
+
+#: Der Objektname des Sammlers an der Anwendung — so findet ein zweiter
+#: Aufruf den ersten.
+COLLECTOR_NAME: Final = "mainThreadCollector"
+
+
+class _MainThreadCollector(QObject):
+    """Räumt Ringe im Hauptfaden ab, sobald die Schwellen der Automatik erreicht sind."""
+
+    def __init__(self, parent: QObject) -> None:
+        super().__init__(parent)
+        self.setObjectName(COLLECTOR_NAME)
+        self._threshold = gc.get_threshold()
+        self._timer = QTimer(self)
+        self._timer.setInterval(COLLECT_EVERY_MS)
+        self._timer.timeout.connect(self.collect_if_due)
+        self._timer.start()
+
+    def collect_if_due(self) -> None:
+        """Dieselben Stufen wie die Automatik, nur an einem Ort, den Qt kennt.
+
+        Nie innerhalb von :func:`undisturbed` — dort darf nichts zerstört
+        werden, solange Qt Ereignisse zustellt.
+        """
+        if _undisturbed_count:
+            return
+        young, middle, old = gc.get_count()
+        first, second, third = self._threshold
+        if young <= first:
+            return
+        gc.collect(0)
+        if middle > second:
+            gc.collect(1)
+            if old > third:
+                gc.collect(2)
+
+
+def collect_in_main_thread(application: QObject) -> None:
+    """Die Speicherbereinigung gehört dem Hauptfaden (RM-021).
+
+    **Gemessen, nicht vermutet** (04.10.2026, ``py-spy dump --native``): Die
+    Anwendung stand still, als der Speicherbereiniger im Arbeiter der
+    Druckbefunde einen Ring mit einem Qt-Objekt abräumte. Dessen Destruktor
+    hielt Qts Verbindungssperre und wartete auf den GIL; der Hauptfaden hielt
+    den GIL und wollte in derselben Sperre ein Signal verbinden
+    (``QObject::connectImpl`` auf ``QBasicMutex``). Ausgelöst wird die
+    Automatik von irgendeiner Allokation in irgendeinem Faden — welcher es
+    trifft, entscheidet der Zufall. :func:`undisturbed` schützt nur die
+    Stellen, die es kennen.
+
+    Deshalb ruht die Automatik im Fensterprozess ganz, und ein Zeitgeber im
+    Hauptfaden räumt nach ihren Schwellen ab. Der Preis: Ein Ring wartet bis
+    zu :data:`COLLECT_EVERY_MS`, solange der Hauptfaden die Ereignisschleife
+    dreht. Einmal je Anwendung; ein zweiter Aufruf findet den ersten.
+    """
+    global _main_thread_collects
+    if application.findChild(_MainThreadCollector, COLLECTOR_NAME) is not None:
+        return
+    _MainThreadCollector(application)
+    with _undisturbed_lock:
+        _main_thread_collects = True
+        gc.disable()
+
+
 @contextmanager
 def undisturbed() -> Iterator[None]:
     """Ereignisse zustellen, ohne dass der Speicherbereiniger dazwischenfährt.
@@ -682,7 +749,8 @@ def undisturbed() -> Iterator[None]:
         with _undisturbed_lock:
             _undisturbed_count -= 1
             if _undisturbed_count == 0:
-                if _undisturbed_was_enabled:
+                # Kam der Sammler im Hauptfaden dazwischen, bleibt die Automatik aus.
+                if _undisturbed_was_enabled and not _main_thread_collects:
                     gc.enable()
                 _undisturbed_was_enabled = None
 
@@ -690,3 +758,4 @@ def undisturbed() -> Iterator[None]:
 _undisturbed_lock = Lock()
 _undisturbed_count = 0
 _undisturbed_was_enabled: bool | None = None
+_main_thread_collects = False
