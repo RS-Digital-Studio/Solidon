@@ -172,6 +172,7 @@ class FilletParams(BaseParams):
             "Ein Radius über die ganze Kante, oder ein Radius, der sich vom Anfang zum "
             "Ende und über Zwischenstellen ändert — etwa für einen Griff."
         ),
+        placement="advanced",
     )
     end_radius: float = param(
         title=_("Radius am Ende"),
@@ -184,6 +185,7 @@ class FilletParams(BaseParams):
             "mit Zwischenstellen als weicher Bogen durch alle Werte."
         ),
         depends_on=("mode", ("variable_radius",)),
+        placement="advanced",
     )
     stations: str = param(
         title=_("Zwischenstellen"),
@@ -243,8 +245,8 @@ class FilletParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Rundet die gewählten Kanten ab — mit einem Radius oder mit einem Verlauf vom "
-        "Anfang zum Ende, an einem exakten Körper wie an einem Netz."
+        "Rundet die gewählten Kanten ab, mit einem Radius oder mit einem Verlauf vom "
+        "Anfang zum Ende. Das geht an einem exakten Körper wie an einem Netz."
     ),
     # **Der zweite Teil des Vorbehalts ist gefallen** (22.09.2026). Er sagte,
     # das Netz nehme am 3-mm-Kasten noch 2 mm an, wo der exakte Körper
@@ -347,6 +349,7 @@ class ChamferParams(BaseParams):
             "Gleiche Breite auf beiden Flächen, zwei verschiedene Abstände oder ein "
             "Abstand mit dem Winkel der Fase zur Bezugsfläche."
         ),
+        placement="advanced",
     )
     second_distance: float = param(
         title=_("Zweiter Abstand"),
@@ -356,6 +359,7 @@ class ChamferParams(BaseParams):
         maximum=100.0,
         doc=_("Wie weit die Fase auf der zweiten Fläche zurücknimmt."),
         depends_on=("mode", ("two_distances",)),
+        placement="advanced",
     )
     angle: float = param(
         title=_("Winkel"),
@@ -368,6 +372,7 @@ class ChamferParams(BaseParams):
             "rechtwinkligen Kante ist die gleiche Breite auf beiden Seiten."
         ),
         depends_on=("mode", ("distance_angle",)),
+        placement="advanced",
     )
     flip_sides: bool = param(
         title=_("Seiten tauschen"),

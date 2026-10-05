@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox
 from app.core.registry import REGISTRY
 from app.core.scene.project import load, save
 from app.ui.main_window import MainWindow
+from app.ui.op_dialog import MAX_FRONT_FIELDS
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
 
@@ -60,7 +61,7 @@ def test_reopening_container_keeps_named_advanced_dimensions_in_the_fold(
     dialog._accept_button.click()
     assert window.session.wait_for_idle(60_000)
     step = window.session.project.document.ops[0]
-    assert window.session.change_params(step.id, {"floor": "=@container_wall"})
+    assert window.session.change_params(step.id, {"floor": "=@container_height/10"})
     assert window.session.wait_for_idle(60_000)
     before = deepcopy(window.session.project.document)
     entry = before.ops[0]
@@ -73,13 +74,15 @@ def test_reopening_container_keeps_named_advanced_dimensions_in_the_fold(
         for name, row in dialog._rows.items()
         if row is dialog._front and not dialog._editors[name].isHidden()
     ]
-    assert len(active_front) <= 8, active_front
-    assert {"shape", "lid", "height", "wall"} <= set(active_front)
+    assert len(active_front) <= MAX_FRONT_FIELDS, active_front
+    assert {"shape", "height"} <= set(active_front)
+    assert dialog._rows["lid"] is dialog._advanced_form, "die Deckelart steht hinten (RM-513)"
+    assert dialog._rows["wall"] is dialog._advanced_form
     assert dialog._rows["floor"] is dialog._advanced_form
     assert not dialog._editors["floor"].isVisibleTo(dialog)
     values = dialog.values()
     assert values["floor"] == entry.params["floor"]
-    assert values["floor"] == "=@container_wall"
+    assert values["floor"] == "=@container_height/10"
     dialog.advanced.setChecked(True)
     assert dialog._editors["floor"].isVisibleTo(dialog)
     assert dialog.values() == values
@@ -222,7 +225,8 @@ def test_container_invalid_geometry_recovers_and_rapid_changes_use_last_values(
     dialog._accept_button.click()
     assert window.session.wait_for_idle(60_000)
     document = window.session.project.document
-    assert document.parameters["container_wall"].value == pytest.approx(2.5)
+    assert "container_wall" not in document.parameters, "die Wand steht hinten (RM-513)"
+    assert document.ops[-1].params["wall"] == pytest.approx(2.5)
     assert document.parameters["container_width"].value == pytest.approx(48)
     assert document.ops[-1].params == expected.drafts[0].params
     assert window.session.last_result.complete
@@ -375,7 +379,7 @@ def test_historical_container_shape_change_names_only_new_main_dimensions(
     dialog._accept_button.click()
     assert window.session.wait_for_idle(60_000)
     before = deepcopy(window.session.project.document)
-    assert set(before.parameters) == {"container_diameter", "container_height", "container_wall"}
+    assert set(before.parameters) == {"container_diameter", "container_height"}
     step = next(op for op in before.ops if op.op == "create_container")
     window.edit_operation(step.id, given={"shape": "rectangular", "width": 48, "depth": 36})
     dialog = window._op_dialog

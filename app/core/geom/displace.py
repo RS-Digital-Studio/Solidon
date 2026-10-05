@@ -373,6 +373,7 @@ class DisplaceParams(BaseParams):
             "die anderen Arten brauchen keine."
         ),
         depends_on=("projection", ("face",)),
+        placement="advanced",
     )
     middle: float = param(
         title=_("Nulllage"),

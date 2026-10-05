@@ -15,7 +15,7 @@ Zwillinge, Kürzel), `ansicht.md`, `griffe.md`, `kamera.md`, `wartezeit.md`,
 `konzepte/begruendungen/regel-oberflaeche.md`.
 
 **Die Grenzen gelten für jeden**, auch wo `grenzen.md` nicht lädt: neun Menüs,
-zwölf Zeilen je Menü, acht Umschalter, acht Felder vorn, ein Menüeintrag je
+zwölf Zeilen je Menü, acht Umschalter, vier Felder vorn, ein Menüeintrag je
 Operation. Wer eine Zahl erhöht, begründet es im Commit
 (`tests/test_interface_limits.py`).
 
@@ -227,8 +227,7 @@ Einstellmöglichkeit.**
 da** (Entscheidung Robert): Es verschwindet samt Beschriftung, solange seine
 Bedingung nicht gilt, und kommt mit ihr wieder — im Operationsdialog, im
 Merkmalfenster und überall, wo Felder einer Wahl folgen. Was vorn steht und wie
-`depends_on` deklariert, gezeigt und geprüft wird: `grenzen.md` („Die
-Vorderseite eines Dialogs“, „Bedingte Felder“).
+`depends_on` deklariert, gezeigt und geprüft wird: `vorderseite.md`.
 
 Ein abgelehnter fx-Ausdruck in einem verborgenen bedingten Feld hält den
 Operationsdialog an, weil `values()` ihn weiterhin an den Kern reicht. Eine

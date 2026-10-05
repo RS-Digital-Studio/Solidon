@@ -34,6 +34,7 @@ from app.core.knowledge.parts.build import face, result, subtract, union
 from app.core.knowledge.parts.registry import FeatureRequirement, PartChange, register_part
 from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param, play_param
+from app.core.registry.params import ZERO_NONE
 from app.core.types import BaseParams, Feature, FeatureId, PartResult
 from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, _
@@ -107,6 +108,7 @@ class RoomFloorParams(BaseParams):
         minimum=2.0,
         maximum=12.0,
         doc=_("Dicke der Bodenplatte."),
+        placement="advanced",
     )
     wall: float = param(
         title=_("Wandstärke"),
@@ -115,6 +117,7 @@ class RoomFloorParams(BaseParams):
         minimum=2.0,
         maximum=10.0,
         doc=_("Dicke der Wände, die auf diesem Boden stehen. Danach richten sich die Nuten."),
+        placement="advanced",
     )
     ceiling: bool = param(
         title=_("Zwischendecke"),
@@ -128,6 +131,7 @@ class RoomFloorParams(BaseParams):
         title=_("Treppenöffnung"),
         default=False,
         doc=_("Eine Öffnung an der linken Wand, die hinten an der Rückwand endet."),
+        placement="advanced",
     )
     stair_width: float = param(
         title=_("Öffnungsbreite"),
@@ -181,7 +185,7 @@ def _floor_reason(params: RoomFloorParams) -> TranslatableText | None:
     ),
     feasible=lambda raw: _floor_reason(cast(RoomFloorParams, raw)),
     doc=_(
-        "Die Bodenplatte eines Raums mit offener Front: Nuten für Rückwand und beide "
+        "Die Bodenplatte eines Raums mit offener Front. Sie trägt Nuten für Rückwand und beide "
         "Seitenwände, wahlweise auch unten als Zwischendecke und mit Treppenöffnung. "
         "Zusammen mit der Raumwand eine Raumvorlage aus flach gedruckten Platten."
     ),
@@ -306,6 +310,7 @@ class RoomWallParams(BaseParams):
         minimum=2.0,
         maximum=10.0,
         doc=_("Dicke der Platte; Federn und Nuten richten sich danach."),
+        placement="advanced",
     )
     opening: str = param(
         title=_("Öffnung"),
@@ -315,6 +320,7 @@ class RoomWallParams(BaseParams):
             "Ein Fenster mittig in der Wand mit Falz für die Scheibe oder eine Tür, die am "
             "Boden beginnt."
         ),
+        placement="advanced",
     )
     opening_width: float = param(
         title=_("Öffnungsbreite"),
@@ -323,6 +329,8 @@ class RoomWallParams(BaseParams):
         minimum=0.0,
         maximum=200.0,
         doc=_("Breite von Fenster oder Tür. Null heißt: keine Öffnung."),
+        placement="advanced",
+        zero_text=ZERO_NONE,
     )
     opening_height: float = param(
         title=_("Öffnungshöhe"),
@@ -331,6 +339,7 @@ class RoomWallParams(BaseParams):
         minimum=10.0,
         maximum=300.0,
         doc=_("Höhe von Fenster oder Tür."),
+        placement="advanced",
     )
     play: float = play_param()
 
@@ -383,7 +392,7 @@ def _wall_reason(params: RoomWallParams) -> TranslatableText | None:
     ),
     feasible=lambda raw: _wall_reason(cast(RoomWallParams, raw)),
     doc=_(
-        "Eine Wandplatte für den Raumboden: Rückwand mit Nuten für die Seitenwände oder "
+        "Eine Wandplatte für den Raumboden. Rückwand mit Nuten für die Seitenwände oder "
         "Seitenwand mit Feder zur Rückwand, beide mit Feder zum Boden und wahlweise einem "
         "Fenster mit Falz oder einer Tür. Die Scheibe dazu ist der Baustein Fensterscheibe."
     ),
@@ -534,9 +543,9 @@ class RoomPaneParams(BaseParams):
     at_face=False,
     features=("pane",),
     doc=_(
-        "Die Scheibe zum Fenster einer Raumwand: so groß wie der Falz weniger das Spiel, "
-        "halb so dick wie die Wand. Zum Beispiel aus durchscheinendem Filament drucken und "
-        "von innen einkleben."
+        "Die Scheibe zum Fenster einer Raumwand. Sie ist so groß wie der Falz weniger das "
+        "Spiel und halb so dick wie die Wand. Zum Beispiel aus durchscheinendem Filament "
+        "drucken und von innen einkleben."
     ),
     caveat=_(
         "Für ein Spielhaus fest einkleben, nicht lose einlegen: Eine lose Scheibe ist ein "

@@ -53,6 +53,7 @@ from app.core.geom.transform import (
     translation,
 )
 from app.core.registry import VARIABLE, op_params, param, register_op
+from app.core.registry.params import ZERO_UNCHANGED
 from app.core.types import (
     BaseParams,
     FeatureRef,
@@ -314,6 +315,7 @@ class TranslateParams(BaseParams):
             "Auf welche Druckplatte der Körper wandert, gezählt wie im Plattenwähler; "
             "die Verschiebung gilt dann dort. Null lässt ihn auf seiner."
         ),
+        zero_text=ZERO_UNCHANGED,
     )
 
 
@@ -622,6 +624,7 @@ class ScaleParams(BaseParams):
         minimum=0.0,
         placement="advanced",
         doc=_("Nur diese Achse. Null heißt: der gleichmäßige Faktor oben gilt."),
+        zero_text=_("gleichmäßig", context="Nullwert"),
     )
     fy: float = param(
         title=_("Faktor Y"),
@@ -629,6 +632,7 @@ class ScaleParams(BaseParams):
         minimum=0.0,
         placement="advanced",
         doc=_("Null heißt: der gleichmäßige Faktor oben gilt."),
+        zero_text=_("gleichmäßig", context="Nullwert"),
     )
     fz: float = param(
         title=_("Faktor Z"),
@@ -639,6 +643,7 @@ class ScaleParams(BaseParams):
             "Null heißt: der gleichmäßige Faktor oben gilt. Achsweise Skalierung "
             "verzerrt Bohrungen — sie werden oval."
         ),
+        zero_text=_("gleichmäßig", context="Nullwert"),
     )
     about: str = param(
         title=_("Bezugspunkt"),

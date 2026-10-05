@@ -2715,7 +2715,7 @@ aus der Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Zuordnung | ID-Stabilität, Mehrdeutigkeitserkennung |
 | Fehler | jede Ausnahme trägt mindestens einen Handlungsvorschlag |
 | Barrierefreiheit | keine Bedeutung allein über Farbe |
-| Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, acht Felder auf der Vorderseite; eine sichtbare Handlung genau einmal, technisch gleichwertige Zwillinge und Varianten teilen ihren Einstieg |
+| Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, vier Felder auf der Vorderseite; eine sichtbare Handlung genau einmal, technisch gleichwertige Zwillinge und Varianten teilen ihren Einstieg |
 | Leistung | Zielwerte §31, Regressionsschwelle 25 % |
 | Lizenzen | installierte Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus §2.2 laufen als Ende-zu-Ende-Test |
@@ -3315,7 +3315,7 @@ Oberfläche, deckt genau diesen Fund zu.
 
 Konstruktionswerkzeuge, Bediensprache und Darstellung halten die
 Oberflächengrenzen: höchstens neun Menüs, zwölf Zeilen je Menü, acht
-Umschalter und acht Felder auf der Vorderseite eines Dialogs. Eine sichtbare
+Umschalter und vier Felder auf der Vorderseite eines Dialogs. Eine sichtbare
 Handlung steht genau einmal; technisch gleichwertige Zwillinge und Varianten
 teilen ihren Einstieg. Begründet abgelehnter Umfang wird im Konzept erhalten.
 

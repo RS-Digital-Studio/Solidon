@@ -55,6 +55,7 @@ from app.core.knowledge.parts.registry import (
 )
 from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param, play_param
+from app.core.registry.params import ZERO_NONE
 from app.core.types import BaseParams, Feature, FeatureId, PartResult, Vec3
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from app.i18n import TranslatableText, _
@@ -150,7 +151,13 @@ class _Fastened(Protocol):
 
 
 def _mount_param(default: str) -> Any:
-    return param(title=_("Befestigung"), default=default, choices=MOUNTS, doc=_MOUNT_DOC)
+    return param(
+        title=_("Befestigung"),
+        default=default,
+        choices=MOUNTS,
+        placement="advanced",
+        doc=_MOUNT_DOC,
+    )
 
 
 def _board_param() -> Any:
@@ -165,6 +172,7 @@ def _board_param() -> Any:
             "Wie dick die Platte ist, über die die Klemme greift — Regalboden, "
             "Tischplatte, Tür. Der Spalt hat genau dieses Maß."
         ),
+        placement="advanced",
     )
 
 
@@ -515,6 +523,7 @@ class HolderUParams(BaseParams):
         doc=_(
             "Schließt den Halter unten: Aus der U-Form wird ein Köcher, aus dem Ring ein Becher."
         ),
+        placement="advanced",
     )
     wall: float = _wall_param()
     play: float = play_param(maximum=HOOKS_PLAY)
@@ -613,6 +622,7 @@ class HolderRingParams(BaseParams):
         doc=_(
             "Schließt den Halter unten: Aus der U-Form wird ein Köcher, aus dem Ring ein Becher."
         ),
+        placement="advanced",
     )
     wall: float = _wall_param()
     play: float = play_param(maximum=HOOKS_PLAY)
@@ -749,7 +759,7 @@ def _fork_too_shallow(raw: BaseParams) -> TranslatableText | None:
     wall=_WALL,
     feasible=_fork_too_shallow,
     doc=_(
-        "Zwei Zinken mit rundem Grund, vorn offen: Der Stiel wird von vorn eingeschoben, "
+        "Zwei Zinken mit rundem Grund, vorn offen. Der Stiel wird von vorn eingeschoben, "
         "der Kopf liegt oben auf — Besen, Schlauch, Werkzeug. Befestigt mit Schlüsselloch, "
         "Schraublöchern, Lochwand-Haken oder Klemme."
     ),
@@ -833,6 +843,8 @@ class HolderShelfParams(BaseParams):
             "Wie hoch der Rand vorn über die Ablage steht. Null ist die L-Form; mit Rand "
             "wird es die Z-Form, von der nichts herunterrutscht."
         ),
+        placement="advanced",
+        zero_text=ZERO_NONE,
     )
     mount: str = _mount_param("screws")
     board: float = _board_param()

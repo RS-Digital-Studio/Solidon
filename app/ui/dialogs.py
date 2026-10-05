@@ -39,7 +39,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -148,6 +147,65 @@ PARAMETER_MARKER = expressions.REFERENCE_PREFIX
 
 _log = get_logger(__name__)
 
+#: Was Qt als „keine Obergrenze“ für eine Breite kennt (``QWIDGETSIZE_MAX``).
+_UNBOUNDED = 16_777_215
+
+
+def _form_labels(forms: Sequence[QFormLayout]) -> list[QWidget]:
+    """Die Beschriftungen aller Zeilen, in der Reihenfolge der Formulare."""
+    found: list[QWidget] = []
+    for form in forms:
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                found.append(widget)
+    return found
+
+
+def align_to_the_front(
+    front: QFormLayout | Sequence[QFormLayout],
+    back: QFormLayout | Sequence[QFormLayout] = (),
+) -> None:
+    """Eine Beschriftungskante für Vorder- und Rückseite, bemessen an der Vorderseite.
+
+    ``panels.align_forms`` nahm die breiteste Beschriftung des ganzen Dialogs,
+    auch die einer zugeklappten Rückseite; im Operationsdialog klafften dadurch
+    vorn 120 bis 170 Punkte zwischen Beschriftung und Feld (RM-518, C21). Hier
+    setzt die Vorderseite die Spalte, und eine längere Beschriftung hinten
+    bricht in ihr um. Ohne Beschriftung vorn richtet sich die Rückseite nach
+    sich selbst.
+
+    **Umgebrochen wird zwischen Wörtern, nie in einem.** Ein einzelnes Wort,
+    das länger ist als die Spalte („Entlüftungsdurchmesser“), wird nicht
+    abgeschnitten: Seine Beschriftung behält die Breite des Worts
+    (``minimumSizeHint`` eines umbrechenden Labels), und nur die Rückseite
+    rückt ihre Felder dafür ein Stück weiter — die Vorderseite behält ihre Kante.
+
+    Gezählt werden auch Zeilen vorn, die gerade verborgen sind: Erscheint ein
+    bedingtes Feld, springt die Kante nicht.
+
+    Wiederholbar: Ein Variantenwechsel ruft es erneut, und gemessen wird
+    jedes Mal an der eigenen Wunschbreite der Beschriftungen.
+    """
+    leading = _form_labels([front] if isinstance(front, QFormLayout) else list(front))
+    trailing = _form_labels([back] if isinstance(back, QFormLayout) else list(back))
+    if not leading:
+        leading, trailing = trailing, []
+    if not leading:
+        return
+    for widget in (*leading, *trailing):
+        widget.setMinimumWidth(0)
+        widget.setMaximumWidth(_UNBOUNDED)
+    widest = max(widget.sizeHint().width() for widget in leading)
+    for widget in leading:
+        widget.setMinimumWidth(widest)
+    for widget in trailing:
+        if isinstance(widget, QLabel):
+            widget.setWordWrap(True)
+        widget.setMinimumWidth(widest)
+        widget.setMaximumWidth(max(widest, widget.minimumSizeHint().width()))
+
 
 class AskDialog(QDialog):
     """Mehrdeutigkeit hält an und fragt — über ``ctx.ask``, nie aus dem Kern
@@ -239,7 +297,7 @@ class AskDialog(QDialog):
             self._name_the_choice()
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(NORMAL)
         layout.addWidget(prompt)
         layout.addWidget(self._preparing)
@@ -479,7 +537,7 @@ class CalibrationDialog(QDialog):
         scroll = DialogScrollArea(self)
         scroll.setWidget(content)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
         outer.addWidget(scroll, 1)
         outer.addWidget(buttons)
@@ -666,6 +724,7 @@ class ParameterDialog(QDialog):
         form = QFormLayout()
         form.setHorizontalSpacing(NORMAL)
         form.setVerticalSpacing(NORMAL)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         form.addRow(tr("Name"), self.name_field)
         form.addRow(tr("Wert"), value_row)
         form.addRow(tr("Ausdruck"), self.expression_row)
@@ -681,8 +740,11 @@ class ParameterDialog(QDialog):
         limits_form.setContentsMargins(0, 0, 0, 0)
         limits_form.setHorizontalSpacing(NORMAL)
         limits_form.setVerticalSpacing(NORMAL)
+        limits_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         limits_form.addRow(tr("Untergrenze"), self.minimum_field)
         limits_form.addRow(tr("Obergrenze"), self.maximum_field)
+        # Eine Beschriftungskante für Wert und Grenzen (RM-518).
+        align_to_the_front(form, limits_form)
         bounded = existing is not None and (
             existing.minimum is not None or existing.maximum is not None
         )
@@ -770,7 +832,7 @@ class ParameterDialog(QDialog):
         wheel_needs_focus(self.unit_field)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(NORMAL)
         layout.addWidget(self._scroll, 1)
         layout.addWidget(buttons)
@@ -1184,7 +1246,7 @@ class KeyDialog(QDialog):
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_key_content_soon)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
         outer.addWidget(self._scroll, 1)
         outer.addWidget(buttons)
@@ -1377,7 +1439,7 @@ class KeyDialog(QDialog):
         Wessen Schlüssel gehört dort hinein, und was verlässt damit den
         Rechner? Beides steht jetzt am Feld, bevor jemand einen Dienst wählt.
         """
-        section = QGroupBox(tr("Cloud-Modell"), self)
+        section = QWidget(self)
         provider = QLabel(tr("Anthropic"), section)
         note = QLabel(
             tr(
@@ -1394,7 +1456,8 @@ class KeyDialog(QDialog):
         note.setMaximumWidth(600)
 
         form = QFormLayout(section)
-        form.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         form.setHorizontalSpacing(NORMAL)
         form.setVerticalSpacing(NORMAL)
@@ -1423,7 +1486,12 @@ class KeyDialog(QDialog):
         self.forget_button.setStatusTip(forget_reason)
         self.forget_button.setAccessibleDescription(forget_reason)
         form.addRow(forget_actions)
-        return section
+        # **Eine Abschnittsform in allen Dialogen** (RM-518): die flache
+        # Überschrift wie in Druckeinstellungen und Einstellungen, kein Rahmen.
+        # Im Rumpf geholt: ``panels`` liest selbst aus diesem Modul.
+        from app.ui.panels import collapsible
+
+        return collapsible(tr("Cloud-Modell"), section)
 
     def _local_model_section(self) -> QWidget:
         """Der zweite Weg: ein Modell auf diesem Rechner, statt eines Schlüssels.
@@ -1436,7 +1504,7 @@ class KeyDialog(QDialog):
         einem Fenster sitzt. Jetzt steht an jedem der drei Schritte der Knopf,
         der ihn tut.
         """
-        section = QGroupBox(tr("Lokales Modell"), self)
+        section = QWidget(self)
         note = QLabel(
             tr(
                 "Statt eines Schlüssels geht auch ein Modell über Ollama. Ob es "
@@ -1493,7 +1561,7 @@ class KeyDialog(QDialog):
         row.addWidget(self.probe_button)
 
         inner = QVBoxLayout(section)
-        inner.setContentsMargins(0, ROOMY, 0, 0)
+        inner.setContentsMargins(0, 0, 0, 0)
         inner.setSpacing(NORMAL)
         inner.setAlignment(Qt.AlignmentFlag.AlignTop)
         inner.addWidget(note)
@@ -1510,7 +1578,9 @@ class KeyDialog(QDialog):
         self.service_state.setText(looking)
         self.service_button.setVisible(False)
         self._lock_model_buttons(looking)
-        return section
+        from app.ui.panels import collapsible
+
+        return collapsible(tr("Lokales Modell"), section)
 
     # --- der Dienst -------------------------------------------------------------
 
@@ -2081,7 +2151,7 @@ class OfflineActivationDialog(QDialog):
         scroll = DialogScrollArea(self)
         scroll.setWidget(content)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
         outer.addWidget(scroll, 1)
         outer.addWidget(buttons)
@@ -2274,9 +2344,9 @@ class ActivationDialog(QDialog):
         self.buy_button = QPushButton(tr("Solidon kaufen"), self)
         self.buy_button.clicked.connect(open_website)
 
-        key_group = QGroupBox(tr("1 · Lizenzschlüssel einfügen"), self)
+        key_group = QWidget(self)
         key_layout = QVBoxLayout(key_group)
-        key_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        key_layout.setContentsMargins(0, 0, 0, 0)
         key_layout.setSpacing(NORMAL)
         key_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         key_explanation = QLabel(
@@ -2293,9 +2363,9 @@ class ActivationDialog(QDialog):
         key_actions.addStretch(1)
         key_layout.addLayout(key_actions)
 
-        device_group = QGroupBox(tr("2 · Diesen Rechner aktivieren"), self)
+        device_group = QWidget(self)
         device_layout = QVBoxLayout(device_group)
-        device_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        device_layout.setContentsMargins(0, 0, 0, 0)
         device_layout.setSpacing(NORMAL)
         device_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         device_explanation = QLabel(
@@ -2336,15 +2406,18 @@ class ActivationDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.state_label)
         layout.addWidget(introduction)
-        layout.addWidget(key_group)
-        layout.addWidget(device_group)
+        # Zwei Schritte als flache Abschnitte wie in jedem Dialog (RM-518).
+        from app.ui.panels import collapsible
+
+        layout.addWidget(collapsible(tr("1 · Lizenzschlüssel einfügen"), key_group))
+        layout.addWidget(collapsible(tr("2 · Diesen Rechner aktivieren"), device_group))
         layout.setSpacing(NORMAL)
         layout.addStretch(1)
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_activation_soon)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
         outer.addWidget(self._scroll, 1)
         outer.addWidget(buttons)
@@ -3849,7 +3922,7 @@ class AboutDialog(QDialog):
         scroll = DialogScrollArea(self)
         scroll.setWidget(content)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
         outer.addWidget(scroll, 1)
         outer.addWidget(buttons)

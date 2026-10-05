@@ -131,6 +131,7 @@ from app.core.geom.transform import (
 )
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
+from app.core.registry.params import ZERO_AUTOMATIC, ZERO_NONE, ZERO_THROUGH, ZERO_UNCHANGED
 from app.core.scene.placement import SIDE_KEYS, side_of
 from app.core.slice.orientation import (
     DEFAULT_CANDIDATES,
@@ -240,6 +241,7 @@ def _first_pin_param() -> Any:
             "Automatisch teilen trägt sie ein, damit jede Passung ihren Stift findet. "
             "Null zählt nach den Stiften, die das Teil schon trägt."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
 
 
@@ -254,6 +256,7 @@ def _piece_count_param() -> Any:
             "Automatisch teilen trägt ein, in wie viele Stücke es teilt. Ab drei "
             "heißen sie „1 von 3“, „2 von 3“ …; null heißt: A und B."
         ),
+        zero_text=_("A und B", context="Nullwert"),
     )
 
 
@@ -265,6 +268,7 @@ def _number_a_param() -> Any:
         minimum=0,
         placement="advanced",
         doc=_("Seine Nummer in dieser Zählung. Null heißt: Es wird gleich weiter geteilt."),
+        zero_text=ZERO_NONE,
     )
 
 
@@ -276,6 +280,7 @@ def _number_b_param() -> Any:
         minimum=0,
         placement="advanced",
         doc=_("Dasselbe für Stück B."),
+        zero_text=ZERO_NONE,
     )
 
 
@@ -478,6 +483,7 @@ class DrillParams(BaseParams):
         minimum=0.0,
         placement="advanced",
         doc=_("Null bohrt durch das ganze Teil."),
+        zero_text=ZERO_THROUGH,
     )
     slotted: bool = param(
         title=_("Langloch"),
@@ -510,7 +516,7 @@ class DrillParams(BaseParams):
         minimum=-180.0,
         maximum=180.0,
         unit=DEGREE_UNIT,
-        placement="front",
+        placement="advanced",
         depends_on=("slotted", (True,)),
         doc=_("Dreht die Längsrichtung um die Bohrachse. Die Vorschau zeigt die Richtung."),
     )
@@ -550,6 +556,7 @@ class DrillParams(BaseParams):
             "Null lässt die Bohrung gerade. Ein größerer Durchmesser "
             "schafft Platz über ihrer Mündung."
         ),
+        zero_text=ZERO_NONE,
     )
     widening_depth: float = param(
         title=_("Tiefe der Aufweitung"),
@@ -5166,6 +5173,7 @@ class PatternFeatureParams(BaseParams):
             "Plätze, die frei bleiben, als Nummern mit Komma. Die Quelle ist Platz 1 "
             "und bleibt immer."
         ),
+        placement="advanced",
     )
     dx: float = param(
         title=_("Richtung X"),
@@ -7523,6 +7531,7 @@ class ResizeFeatureParams(BaseParams):
             "Nur an einem Ring: die Dicke des Wulstes oder die Breite der Kehle. "
             "Null lässt sie unverändert."
         ),
+        zero_text=ZERO_UNCHANGED,
     )
     pitch: float = param(
         title=_("Steigung"),
@@ -7534,6 +7543,7 @@ class ResizeFeatureParams(BaseParams):
             "An einem Gewinde die neue Steigung, an einem Muster die neue Teilung — der "
             "Abstand von Zelle zu Zelle. Null lässt sie unverändert."
         ),
+        zero_text=ZERO_UNCHANGED,
     )
     cell_width: float = param(
         title=_("Zellbreite"),
@@ -7545,6 +7555,7 @@ class ResizeFeatureParams(BaseParams):
             "Nur an einem Muster: die neue Breite einer Zelle — Schlüsselweite der Wabe, "
             "Breite der Rippe, Durchmesser der Noppe. Null lässt sie unverändert."
         ),
+        zero_text=ZERO_UNCHANGED,
     )
     cell_depth: float = param(
         title=_("Zelltiefe"),
@@ -7556,6 +7567,7 @@ class ResizeFeatureParams(BaseParams):
             "Nur an einem Muster: wie tief die Zellen werden, vertieft wie erhaben. "
             "Null lässt sie unverändert."
         ),
+        zero_text=ZERO_UNCHANGED,
     )
     style: str = param(
         title=_("Musterstil"),
@@ -7621,9 +7633,9 @@ class ResizeFeatureParams(BaseParams):
     deterministic=False,
     doc=_(
         "Ändert den Durchmesser eines erkannten Merkmals: Zapfen, Senkung, "
-        "Verjüngung, Kuppel, Pfanne, Wulst oder Kehle — den Durchmesser und die "
-        "Steigung eines Gewindes, den Radius einer Rundung, Teilung, Zellbreite und "
-        "Tiefe eines Musters."
+        "Verjüngung, Kuppel, Pfanne, Wulst oder Kehle. An einem Gewinde ändert es "
+        "Durchmesser und Steigung, an einer Rundung den Radius, an einem Muster "
+        "Teilung, Zellbreite und Tiefe."
     ),
 )
 def resize_feature(ctx: OpContext) -> OpResult:
@@ -7994,7 +8006,7 @@ class ResizeHoleParams(BaseParams):
         title=_("Änderungsumfang"),
         default="keep",
         choices=("keep", "follow"),
-        placement="front",
+        placement="advanced",
         doc=_(
             "Nur den Bohrungsdurchmesser ändern oder den eindeutigen Einlauf mitnehmen. "
             "Beim Mitnehmen bleiben Einführbreite, Senkungswinkel und Stufentiefen erhalten."
@@ -8007,7 +8019,7 @@ class ResizeHoleParams(BaseParams):
         unit="mm",
         minimum=-FEATURE_REACH,
         maximum=FEATURE_REACH,
-        placement="front",
+        placement="advanced",
         doc=_(
             "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
             "leer heißt, sie bleibt, wo sie ist."
@@ -8020,7 +8032,7 @@ class ResizeHoleParams(BaseParams):
         unit="mm",
         minimum=-FEATURE_REACH,
         maximum=FEATURE_REACH,
-        placement="front",
+        placement="advanced",
         doc=_(
             "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
             "leer heißt, sie bleibt, wo sie ist."
@@ -8033,7 +8045,7 @@ class ResizeHoleParams(BaseParams):
         unit="mm",
         minimum=-FEATURE_REACH,
         maximum=FEATURE_REACH,
-        placement="front",
+        placement="advanced",
         doc=_(
             "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
             "leer heißt, sie bleibt, wo sie ist."
@@ -8051,7 +8063,7 @@ class ResizeHoleParams(BaseParams):
         unit="mm",
         minimum=0.0,
         maximum=1000.0,
-        placement="front",
+        placement="advanced",
         doc=_(
             "Wie tief die Bohrung von ihrer Mündung aus ins Material reicht. Null bohrt "
             "ganz durch; leer lässt die Tiefe, wie sie ist."
@@ -9061,7 +9073,7 @@ class SlotHoleParams(BaseParams):
         unit="mm",
         minimum=-FEATURE_REACH,
         maximum=FEATURE_REACH,
-        placement="front",
+        placement="advanced",
         doc=_(
             "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "
             "der Bohrung; leer heißt, sie bleibt, wo sie ist."
@@ -9074,7 +9086,7 @@ class SlotHoleParams(BaseParams):
         unit="mm",
         minimum=-FEATURE_REACH,
         maximum=FEATURE_REACH,
-        placement="front",
+        placement="advanced",
         doc=_(
             "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "
             "der Bohrung; leer heißt, sie bleibt, wo sie ist."
@@ -9087,7 +9099,7 @@ class SlotHoleParams(BaseParams):
         unit="mm",
         minimum=-FEATURE_REACH,
         maximum=FEATURE_REACH,
-        placement="front",
+        placement="advanced",
         doc=_(
             "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "
             "der Bohrung; leer heißt, sie bleibt, wo sie ist."
@@ -9099,7 +9111,7 @@ class SlotHoleParams(BaseParams):
         optional=True,
         unit="mm",
         minimum=0.2,
-        placement="front",
+        placement="advanced",
         doc=_(
             "Die Breite des Langlochs. Leer heißt: so breit wie die Bohrung gemessen "
             "ist. Mit einer Zahl wird das Langloch in einem Schritt gezogen und auf "
@@ -17444,6 +17456,7 @@ class PlugParams(BaseParams):
         maximum=1000.0,
         placement="advanced",
         doc=_("Null füllt durch das ganze Teil."),
+        zero_text=ZERO_THROUGH,
     )
     anchor: str = param(
         title=_("Bezugspunkt"),
@@ -17721,6 +17734,7 @@ class HollowParams(BaseParams):
             "Die übrigen Flächen bleiben geschlossen. Leer heißt: geschlossen "
             "oder oben offen."
         ),
+        placement="advanced",
     )
     wall_side: str = param(
         title=_("Richtung"),
@@ -17730,6 +17744,7 @@ class HollowParams(BaseParams):
             "Innen behält das Teil seine Außenmaße, und die Wand wächst nach innen. "
             "Außen wird das Teil selbst zum Hohlraum, und die Wand legt sich darum."
         ),
+        placement="advanced",
     )
     open_at: str = param(
         title=_("Öffnen an Fläche"),
@@ -17756,6 +17771,8 @@ class HollowParams(BaseParams):
             "Null lässt den Hohlraum geschlossen. Eine offene Dose braucht keine zusätzlichen "
             "Entlüftungen."
         ),
+        zero_text=ZERO_NONE,
+        depends_on=("open_top", (False,)),
     )
     vent_diameter: float = param(
         title=_("Entlüftungsdurchmesser"),
@@ -18630,6 +18647,7 @@ class SplitPinnedParams(BaseParams):
         minimum=0,
         maximum=6,
         doc=_("Null heißt: nur schneiden. Zwei halten die Hälften gegen Verdrehen."),
+        zero_text=ZERO_NONE,
     )
     shape: str = param(
         title=_("Stiftform"),
@@ -18655,6 +18673,7 @@ class SplitPinnedParams(BaseParams):
         maximum=PIN_MAX,
         placement="advanced",
         doc=_("Null heißt: aus der Schnittfläche ableiten."),
+        zero_text=ZERO_AUTOMATIC,
     )
     play: float = play_param()
     pins_on_b: bool = param(
@@ -19335,6 +19354,7 @@ class CutAwayParams(BaseParams):
             "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen "
             "ganzer Seiten. Null schneidet gerade."
         ),
+        placement="advanced",
     )
     tilt_axis: str = param(
         title=_("Neigen um"),
@@ -20001,6 +20021,7 @@ class SplitLineParams(BaseParams):
             "Stifte auf der einen Hälfte, Bohrungen auf der anderen — sie halten die "
             "Teile beim Kleben in Deckung. Null heißt: nur trennen."
         ),
+        zero_text=ZERO_NONE,
     )
     normal_x: float = param(
         title=_("Trennrichtung X"),
@@ -20039,6 +20060,7 @@ class SplitLineParams(BaseParams):
         maximum=PIN_MAX,
         placement="advanced",
         doc=_("Null heißt: aus der Schnittfläche ableiten."),
+        zero_text=ZERO_AUTOMATIC,
     )
     play: float = play_param()
     pins_on_b: bool = param(
@@ -20831,6 +20853,7 @@ class JoinPathParams(BaseParams):
         default=False,
         depends_on=("motion", ("slide", "slide_turn")),
         doc=_("Schiebt entgegen der Achsrichtung, also von der anderen Seite her."),
+        placement="advanced",
     )
     distance: float = param(
         title=_("Fügeweg"),
@@ -20843,6 +20866,7 @@ class JoinPathParams(BaseParams):
             "Wie weit vor der Endlage geprüft wird. So lang wie die Stelle, an der "
             "die Teile ineinandergreifen, plus etwas Anlauf."
         ),
+        placement="advanced",
     )
     angle: float = param(
         title=_("Drehweg"),
