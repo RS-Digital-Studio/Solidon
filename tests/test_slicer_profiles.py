@@ -4292,3 +4292,45 @@ def test_cura_as_a_flatpak_reads_its_own_data_folder(
 
     assert sp.install_root(launcher) == resources
     assert data in sp.user_roots("cura", launcher)
+
+
+def test_cura_on_a_mac_finds_its_definitions_and_its_window(tmp_path: Path) -> None:
+    """Cura 5 legt auf dem Mac seinen Bestand nach ``Contents/Resources/share/cura``
+    und die Rechenmaschine daneben (``CuraApplication.py``,
+    ``CuraEngineBackend.py``); das Fenster liegt in ``Contents/MacOS``."""
+    from app.core.export import handover
+
+    contents = tmp_path / "UltiMaker Cura.app" / "Contents"
+    engine = contents / "Resources" / "CuraEngine"
+    window = contents / "MacOS" / "UltiMaker-Cura"
+    shared = contents / "Resources" / "share" / "cura"
+    (shared / "resources" / "definitions").mkdir(parents=True)
+    window.parent.mkdir(parents=True)
+    for program in (engine, window):
+        program.write_bytes(b"")
+
+    assert sp.install_root(engine) == shared
+    assert handover.window_program(engine) == window
+
+
+def test_creality_print_keeps_its_printers_below_its_application_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Creality Print 7 legt unter ``Creality/Creality Print/<Version>`` ab, mit
+    ``Creality.conf`` (``SLIC3R_APP_KEY "Creality"``) — gemessen an 7.3 unter
+    Windows. Unter der Programmmarke gesucht, fehlten die eigenen Drucker und
+    der zuletzt gewählte auf jeder Plattform."""
+    base = tmp_path / "config"
+    newest = base / "Creality" / "Creality Print" / "7.3"
+    older = base / "Creality" / "Creality Print" / "7.0"
+    for version, machine in ((older, "Alt"), (newest, "Creality K1 0.4 nozzle")):
+        (version / "user" / "default" / "machine").mkdir(parents=True)
+        (version / "Creality.conf").write_text(
+            json.dumps({"presets": {"machine": machine}}) + "\n# MD5 checksum 0\n", encoding="utf-8"
+        )
+    (newest / "Creality.conf.bak").write_text("{}", encoding="utf-8")
+    executable = tmp_path / "Creality Print 7.2" / "CrealityPrint.exe"
+    monkeypatch.setattr(sp, "config_base", lambda _executable: str(base))
+
+    assert sp.user_roots("orca", executable) == [newest / "user" / "default"]
+    assert sp.chosen_machine("orca", executable) == "Creality K1 0.4 nozzle"

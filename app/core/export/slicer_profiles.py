@@ -300,31 +300,51 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     if flavour == "cura":
         return _cura_user_roots(executable, Path(base))
     if flavour == "prusa":
-        stem = discover.program_mark(executable.name)
-        return (
-            [
-                folder
-                for folder in Path(base).iterdir()
-                if folder.is_dir() and discover.plain_name(folder.name) == stem
-            ]
-            if Path(base).is_dir()
-            else []
-        )
+        return _program_folders(Path(base), discover.program_mark(executable.name))
     if not has_user_profile_tree(flavour):
         return []
 
-    # Die Programmmarke, nicht der ganze Dateistamm: ``OrcaSlicer_Linux_V2.1.1``
-    # legt seine Profile unter ``OrcaSlicer`` ab, und der Stamm traf diesen
-    # Ordner nie — eigene Profile, gewählter Drucker und Filamente fehlten
-    # nach jedem Update des AppImages (Gesamtreview 05.09.2026, CORE-16).
-    stem = discover.program_mark(executable.name)
     found: list[Path] = []
-    for folder in Path(base).iterdir() if Path(base).is_dir() else []:
-        if not folder.is_dir() or discover.plain_name(folder.name) != stem:
-            continue
+    for folder in _program_folders(Path(base), discover.program_mark(executable.name)):
         user = folder / "user"
         if user.is_dir():
             found.extend(entry for entry in user.iterdir() if entry.is_dir())
+    return found
+
+
+def _program_folders(base: Path, mark: str) -> list[Path]:
+    """Die Datenordner des Programms ``mark`` unter ``base``.
+
+    Gewöhnlich ``<base>/<Programm>``, verglichen über die Programmmarke, nicht
+    den ganzen Dateistamm: ``OrcaSlicer_Linux_V2.1.1`` legt seine Profile unter
+    ``OrcaSlicer`` ab (Gesamtreview 05.09.2026, CORE-16).
+
+    **Creality Print 7 legt unter seinem Anwendungsschlüssel ab**
+    (``SLIC3R_APP_KEY "Creality"`` in seiner ``version.inc``) und darunter je
+    Version: ``Creality/Creality Print/7.3`` mit ``Creality.conf``. Unter der
+    Programmmarke gesucht, fand Solidon dort auf keiner Plattform die eigenen
+    Drucker und den zuletzt gewählten. Es gilt die neueste Version.
+    """
+    try:
+        entries = sorted(base.iterdir())
+    except OSError:
+        return []
+    found = [
+        entry for entry in entries if entry.is_dir() and discover.plain_name(entry.name) == mark
+    ]
+    if mark == "crealityprint":
+        try:
+            versions = [
+                entry
+                for entry in (base / "Creality" / "Creality Print").iterdir()
+                if entry.is_dir() and re.fullmatch(r"\d+(?:\.\d+)*", entry.name)
+            ]
+        except OSError:
+            versions = []
+        if versions:
+            found.append(
+                max(versions, key=lambda entry: tuple(int(part) for part in entry.name.split(".")))
+            )
     return found
 
 
@@ -362,9 +382,19 @@ def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
     if not has_user_profile_tree(flavour):
         return ""
     for root in user_roots(flavour, executable):
-        # ``user/<Konto>`` — die Konfiguration liegt eine Ebene darüber.
-        config = root.parent.parent / f"{root.parent.parent.name}.conf"
-        if not config.is_file():
+        # ``user/<Konto>`` — die Konfiguration liegt eine Ebene darüber und
+        # heißt wie ihr Ordner, bei Creality Print wie der Anwendungsschlüssel
+        # (``7.3/Creality.conf``, :func:`_program_folders`).
+        folder = root.parent.parent
+        config = next(
+            (
+                candidate
+                for candidate in (folder / f"{folder.name}.conf", *sorted(folder.glob("*.conf")))
+                if candidate.is_file()
+            ),
+            None,
+        )
+        if config is None:
             continue
         try:
             text = config.read_text(encoding="utf-8", errors="replace")
@@ -405,10 +435,7 @@ def prusa_config(executable: Path) -> Path | None:
     base = config_base(executable)
     if not base:
         return None
-    stem = discover.program_mark(executable.name)
-    for folder in Path(base).iterdir() if Path(base).is_dir() else []:
-        if not folder.is_dir() or discover.plain_name(folder.name) != stem:
-            continue
+    for folder in _program_folders(Path(base), discover.program_mark(executable.name)):
         config = folder / _PRUSA_CONFIG
         if config.is_file():
             return config

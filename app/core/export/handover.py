@@ -6692,10 +6692,17 @@ def window_program(executable: Path) -> Path | None:
     names = _WINDOW_SIBLINGS.get(executable.stem.casefold())
     if names is None:
         return executable
-    for name in names:
-        candidate = executable.with_name(name + executable.suffix)
-        if candidate.is_file():
-            return candidate
+    # Im Mac-Bündel liegt Curas Fenster in ``Contents/MacOS``, die
+    # Rechenmaschine in ``Contents/Resources`` (``discover.parts_for``).
+    bundle = next((parent for parent in executable.parents if parent.suffix == ".app"), None)
+    folders = [executable.parent]
+    if bundle is not None:
+        folders.append(bundle / "Contents" / "MacOS")
+    for folder in folders:
+        for name in names:
+            candidate = folder / (name + executable.suffix)
+            if candidate.is_file():
+                return candidate
     return None
 
 

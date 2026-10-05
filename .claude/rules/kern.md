@@ -378,7 +378,13 @@ gerade installiert hat (`app/core/discover.py`):
   (`com.orcaslicer.OrcaSlicer`), ohne PATH — verglichen wird über
   `plain_name` (klein, ohne Trenner).
 - Homebrew-Casks legen das Binary in `<Name>.app/Contents/MacOS/<Name>`; was
-  in `parts_for()` fehlt, wird nicht gefunden.
+  in `parts_for()` fehlt, wird nicht gefunden. CuraEngine liegt in
+  `Contents/Resources`, ein Bündel ist eine Installation, und ein gewähltes
+  Bündel steht für seinen Slicer (`host_program`).
+- Die eigene Konfiguration eines Slicers liegt unter
+  `<Konfiguration>/<Programm>`, bei Creality Print 7 unter seinem
+  Anwendungsschlüssel `Creality/Creality Print/<Version>` mit `Creality.conf`
+  (`slicer_profiles._program_folders`).
 - Ein Flatpak hat sein eigenes `/tmp`: `workspace_for` legt den Arbeitsordner
   eingesperrter Programme unter `$HOME` (`--filesystem=home`, nachgelesen im
   Flathub-Manifest). Für ein weiteres Programm dort nachlesen, was es lesen

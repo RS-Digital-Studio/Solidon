@@ -1425,7 +1425,10 @@ def choose_slicer_file(parent: QWidget, box: QComboBox) -> None:
     filename, _ = QFileDialog.getOpenFileName(parent, tr("Slicer-Programm auswählen"))
     if not filename:
         return
-    filename = discover.program_path(filename)
+    # Das Programm hinter der Wahl: der Starter hinter einer Portalkopie im
+    # Flatpak, der Slicer im Mac-Bündel — sonst sucht die Druckerliste
+    # darunter vergeblich.
+    filename = discover.program_path(str(discover.host_program(Path(filename))))
     if not select_program(box, filename):
         box.addItem(slicer_title(Path(filename)), filename)
         box.setItemData(box.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)
