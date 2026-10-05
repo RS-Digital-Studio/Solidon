@@ -1,0 +1,40 @@
+# Wegwerfzweig: misst den Start des veröffentlichten Mac-Pakets 0.5.2 wie ein
+# Doppelklick (Kundenmeldung „ohne codesign --sign - startet es nicht“).
+# Baut nichts und prüft nichts. Zum Fahren auf einen Wegwerfzweig
+# diag/mac-start-052 nach .github/workflows/ kopieren und pushen; den Zweig
+# nach der Auswertung löschen.
+name: Mac-Start diagnostizieren
+
+on:
+  push:
+    branches: [diag/mac-start-052]
+
+permissions:
+  contents: read
+
+jobs:
+  start:
+    name: Start (${{ matrix.arch }}, vorher prüfen ${{ matrix.assess }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-26-intel, arch: x86_64, assess: nein }
+          - { os: macos-26-intel, arch: x86_64, assess: ja }
+          - { os: macos-latest, arch: arm64, assess: nein }
+          - { os: macos-latest, arch: arm64, assess: ja }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Messen
+        run: python3 .claude/.state/mac-start-2026-10-05/mac_start.py ${{ matrix.arch }} ${{ matrix.assess }}
+      - name: Sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mac-start-${{ matrix.arch }}-${{ matrix.assess }}
+          path: diag-out/
+          retention-days: 7
