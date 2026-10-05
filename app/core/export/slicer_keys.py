@@ -23,6 +23,7 @@ Ruhe (§29).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -1258,6 +1259,100 @@ def with_nozzle_kinds(
         for variant in nozzle_kind_keys(key, program)
         if key in own or variant not in values
     }
+
+
+class ConsoleLimit(NamedTuple):
+    """Was die Konsole eines Programms an einem Schlüssel annimmt."""
+
+    lowest: float
+    highest: float
+    default: str
+    """Die Vorgabe des Programms — was es nähme, wenn kein Profil den Schlüssel nennt."""
+    nil: bool = False
+    """Ob ``nil`` hier gilt (eine Gleitkommaoption, die das Programm leer erlaubt)."""
+
+
+_ORCA_LIMITS: Final[dict[str, ConsoleLimit]] = {
+    "retraction_distances_when_cut": ConsoleLimit(10.0, 18.0, "18"),
+    "filament_flush_temp": ConsoleLimit(0.0, 1500.0, "0"),
+    "extruder_printable_height": ConsoleLimit(0.0, 1000.0, "0"),
+    "fan_max_speed": ConsoleLimit(0.0, 100.0, "100"),
+    "tree_support_wall_count": ConsoleLimit(0.0, 2.0, "0"),
+}
+
+#: Grenzen, an denen die **Konsole** eines Programms die geladenen Werte prüft
+#: (``DynamicPrintConfig::validate`` beim Start, „Param values in 3mf/config
+#: error … not in range“), bei Bambu Studio mit Rückgabe -18. Das Fenster lädt
+#: seine Systemprofile ungeprüft und eine 3MF mit der Warnung „Invalid values
+#: found in the 3MF“ (OrcaSlicer 2.4.2, ``Plater::load_files``). Eine
+#: Ganzzahlliste mit ``nil`` reißt jede Obergrenze; ``nil`` in einer
+#: Gleitkommaoption nur, wo sie nicht leer sein darf.
+#:
+#: Aufgenommen ist, was Herstellerprofile der installierten Bestände wirklich
+#: verletzen — Anycubic Kobra S1 Max (``retraction_distances_when_cut = 0``,
+#: ``filament_flush_temp = nil``), Creality K2 und SPARKX i7 in Orca (28 und
+#: 30), SeeMeCNC BOSSdelta (``extruder_printable_height = 2100``), E3NG-TPU
+#: (``fan_max_speed = 1000``), Bambus ``tree_support_wall_count = -1`` in
+#: Creality Print —, Grenzen und Vorgaben aus dem Quelltext des Programms, je
+#: Wert an der Konsole gemessen (05.10.2026: OrcaSlicer 2.4.2, ElegooSlicer
+#: 1.5.3, Bambu Studio 2.3, Creality Print 7.3). Anycubic Slicer Next 2.0.0.3
+#: prüft nicht; es nahm jeden dieser Werte an.
+CONSOLE_LIMITS: Final[dict[str, dict[str, ConsoleLimit]]] = {
+    "orcaslicer": _ORCA_LIMITS,
+    "elegooslicer": _ORCA_LIMITS,
+    "bambustudio": {
+        "retraction_distances_when_cut": ConsoleLimit(10.0, 18.0, "18", nil=True),
+        "filament_flush_temp": ConsoleLimit(0.0, 1500.0, "0"),
+        "extruder_printable_height": ConsoleLimit(0.0, 1000.0, "0", nil=True),
+        "fan_max_speed": ConsoleLimit(0.0, 100.0, "100"),
+        "tree_support_wall_count": ConsoleLimit(-1.0, 2.0, "-1"),
+    },
+    "crealityprint": {
+        "retraction_distances_when_cut": ConsoleLimit(10.0, 30.0, "18"),
+        "fan_max_speed": ConsoleLimit(0.0, 100.0, "100"),
+        "tree_support_wall_count": ConsoleLimit(0.0, 2.0, "0"),
+    },
+}
+
+#: Wie genau die Programme an der Grenze vergleichen (``is_value_valid``, vier Stellen).
+_LIMIT_PRECISION: Final = 1e-4
+
+
+def _console_takes(text: str, limit: ConsoleLimit) -> bool:
+    """Ob die Konsole diesen einen Eintrag annimmt."""
+    if text == "nil":
+        return limit.nil
+    try:
+        number = float(text.rstrip("%"))
+    except ValueError:
+        return True
+    if math.isnan(number):  # „nan“ liest das Programm als nil
+        return limit.nil
+    return limit.lowest - _LIMIT_PRECISION <= number <= limit.highest + _LIMIT_PRECISION
+
+
+def console_replacements(
+    values: Mapping[str, object], program: str
+) -> dict[str, tuple[object, object]]:
+    """Herstellerwerte, die die Konsole ablehnt, mit dem, was an ihrer Stelle hinausgeht.
+
+    Ein abgelehnter Eintrag wird die Vorgabe des Programms — das, was es ohne
+    die Angabe nähme; die übrigen Einträge einer Liste bleiben, die Länge
+    auch. Schlüssel → (Herstellerwert, Ersatz).
+    """
+    replaced: dict[str, tuple[object, object]] = {}
+    for key, limit in CONSOLE_LIMITS.get(program, {}).items():
+        value = values.get(key)
+        if value is None:
+            continue
+        entries = value if isinstance(value, list) else [value]
+        fixed = [
+            entry if _console_takes(str(entry).strip().strip('"'), limit) else limit.default
+            for entry in entries
+        ]
+        if fixed != entries:
+            replaced[key] = (value, fixed if isinstance(value, list) else fixed[0])
+    return replaced
 
 
 def omitted_from_gcode(key: str, value: str, program: str) -> bool:

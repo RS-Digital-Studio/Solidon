@@ -330,7 +330,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Maschinendüse, ein eigener Wert in jeder (`slicer_keys.NOZZLE_KIND_KEYS`);
   wo gestützt wird, keine Baumspitze unter der Stützbahn
   (`handover.organic_tree_fitted`); passt der genannte Standardprozess nicht,
-  der seiner Schichthöhe, ohne Prozess `slicer.process_missing`.
+  der seiner Schichthöhe, ohne Prozess `slicer.process_missing`; was die
+  Konsole ablehnt, als Programmvorgabe (`slicer_keys.CONSOLE_LIMITS`).
 - **Was sich nicht übersetzen lässt, wird nicht umgedeutet**
   (`Foundation.foreign`): `crosshatch` bleibt, wird nicht geschrieben, und der
   Dialog zeigt „Hersteller: crosshatch".

@@ -1531,6 +1531,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "count": _("Anzahl"),
     "counted": _("Verarbeitet"),
     "cut": _("Schnitt"),
+    # ``slicer.profile_value_replaced``: was statt eines abgelehnten Herstellerwerts hinausgeht.
+    "default": _("Vorgabe"),
     # ``ingest.threemf``: der Negativkörper aus dem Slicer, der keinen Körper trifft.
     "cutter": _("Aussparung"),
     "cycle": _("Zyklus"),

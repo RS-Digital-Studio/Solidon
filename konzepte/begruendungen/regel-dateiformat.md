@@ -462,6 +462,14 @@ Bäumen eine Spitze mindestens so breit wie die Stützbahn; Anycubic und
 OrcaSlicer liefern Prozesse an 0,8er-Düsen mit 0,8 gegen 0,82 mm aus, jeder
 Schnitt mit Stützen wurde abgesagt. Der genannte Standardprozess: Kobra 4 0,8
 nennt den des Kobra X, und gedruckt wurde still mit Solidons Tabelle.
+Die Konsolengrenzen: OrcaSlicer, ElegooSlicer, Bambu Studio und Creality
+Print prüfen beim Start jeden geladenen Wert gegen ihre Grenzen und schneiden
+sonst nichts; das Fenster lädt Systemprofile ungeprüft und warnt bei einer
+3MF nur. Orcas Kobra-S1-Max-Profil (`filament_flush_temp = nil`,
+`retraction_distances_when_cut = 0`) kam so über Solidon nie zu einer
+Druckdatei. Ersetzt wird durch die Vorgabe des Programms, den Wert, den es
+ohne die Angabe nähme; die verletzten Werte wirken dort nicht (Schalter
+`long_retractions_when_cut` aus, Spülen nur mit mehreren Spulen).
 
 ## CuraEngine rechnet keine Formeln
 

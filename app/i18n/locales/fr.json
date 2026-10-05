@@ -1029,6 +1029,7 @@
   "Das Graustufenbild, dessen Helligkeit zur Höhe wird. Hell steht hoch.": "L'image en niveaux de gris dont la luminosité devient la hauteur. Le clair est en haut.",
   "Das Hauptfenster mit einem geladenen Modell im Viewport, dem Objektbaum links und dem Prüfbericht rechts.": "La fenêtre principale avec un modèle chargé dans le viewport, l'arbre des objets à gauche et le rapport de contrôle à droite.",
   "Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht": "La fenêtre principale de Solidon3D avec le modèle, l'historique et le rapport de contrôle",
+  "Das Herstellerprofil nennt {key} = {value}, das lehnt der Slicer ab. Solidon übergibt seine Vorgabe {default}.": "Le profil du fabricant indique {key} = {value}, ce que le slicer refuse. Solidon transmet sa valeur par défaut {default}.",
   "Das Herstellerprofil stützt keine Brücken, und welche Decke der Slicer als Brücke liest, rechnet nur er.": "Le profil du fabricant ne met pas de supports sous les ponts, et seul le slicer sait quel plafond il traite comme un pont.",
   "Das Installationsprogramm ließ sich nicht starten.": "Le programme d'installation n'a pas pu démarrer.",
   "Das Kennzeichen für eine Hilfslinie ist wahr oder falsch.": "L'indicateur de ligne auxiliaire est vrai ou faux.",

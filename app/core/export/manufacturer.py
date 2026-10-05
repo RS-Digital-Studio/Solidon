@@ -145,6 +145,9 @@ class Foundation:
     nozzle_type: str = ""
     """Die Düsenart der Maschine (``nozzle_type``), leer ohne Angabe. Sie wählt
     die Düsenart-Fassung der Filamentwerte (``slicer_keys.printed_key``)."""
+    console_replaced: Mapping[str, tuple[str, str]] = field(default_factory=dict)
+    """Herstellerwerte, die die Konsole des Programms ablehnt, mit dem Ersatz,
+    den die Übergabe schreibt (``slicer_keys.CONSOLE_LIMITS``)."""
     process_missing: str = ""
     """Die Maschine des Slicers, zu der kein Prozessprofil gewählt oder
     gefunden ist — die Grundlage ist dann Solidons Tabelle, und der Kunde
@@ -2361,7 +2364,27 @@ def base_settings(
         variant_name=variant.name,
         variant_id=variant.extruder_id,
         nozzle_type=_text(machine_values.get("nozzle_type")) or "",
+        console_replaced=_console_replaced(
+            (machine_values, process_values, filament_values), program(setup)
+        ),
     )
+
+
+def _console_replaced(
+    chains: Sequence[Mapping[str, Any]], program_name: str
+) -> dict[str, tuple[str, str]]:
+    """Je abgelehntem Schlüssel der erste abgelehnte Eintrag und sein Ersatz."""
+    found: dict[str, tuple[str, str]] = {}
+    for values in chains:
+        for key, (old, new) in slicer_keys.console_replacements(values, program_name).items():
+            olds = old if isinstance(old, list) else [old]
+            news = new if isinstance(new, list) else [new]
+            found[key] = next(
+                (str(before), str(after))
+                for before, after in zip(olds, news, strict=True)
+                if before != after
+            )
+    return found
 
 
 def _prusa_foundation(
@@ -2517,6 +2540,21 @@ def findings(foundation: Foundation) -> list[Finding]:
                 ),
                 values={"profile": foundation.process_missing},
                 suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        )
+    for key, (value, default) in sorted(foundation.console_replaced.items()):
+        found.append(
+            Finding(
+                code="slicer.profile_value_replaced",
+                severity="info",
+                message=_(
+                    "Das Herstellerprofil nennt {key} = {value}, das lehnt der Slicer ab. "
+                    "Solidon übergibt seine Vorgabe {default}.",
+                    key=key,
+                    value=value,
+                    default=default,
+                ),
+                values={"setting": key, "value": value, "default": default},
             )
         )
     if foundation.material_from_table:
