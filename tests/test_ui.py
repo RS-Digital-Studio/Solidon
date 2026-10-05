@@ -11390,24 +11390,24 @@ def test_the_catalog_button_says_what_it_does(qt_app: QApplication) -> None:
     assert box is not None
     ok = box.button(QDialogButtonBox.StandardButton.Ok)
     assert ok is not None
-    assert ok.text().replace("&", "") == "Einfügen"
+    assert ok.text().replace("&", "") == "Einsetzen"
 
 
 def test_the_catalog_says_in_words_what_takes_material_away(qt_app: QApplication) -> None:
     """Regel 18: was subtraktiv ist, trug allein die Farbe des Vorschaubilds.
 
-    Orange nimmt weg, grau setzt hinzu — ohne Legende, und für jeden, der die
-    beiden Farben nicht unterscheidet, gar nicht.
+    Heute trägt die Kachel ein Eckzeichen, und das Zeichen hat ein Wort — in
+    Kurzhilfe, zugänglicher Beschreibung und Detailspalte (RM-517).
     """
     from app.core.knowledge.parts import PARTS
-    from app.ui.catalog import SUBTRACTIVE_MARKER, describe
+    from app.ui.catalog import describe, tile_marks
 
     subtractive = [spec for spec in PARTS.all() if spec.subtractive]
     additive = [spec for spec in PARTS.all() if not spec.subtractive]
     assert subtractive and additive, "sonst prüft dieser Test nichts"
 
     for spec in subtractive:
-        assert SUBTRACTIVE_MARKER in describe(spec)
+        assert "removes" in [mark.kind for mark in tile_marks(spec)]
         assert tr("nimmt Material weg") in describe(spec)
     for spec in additive:
         assert tr("nimmt Material weg") not in describe(spec)

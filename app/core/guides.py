@@ -64,7 +64,7 @@ TARGETS: Final[frozenset[str]] = frozenset(
         "print.slice",
         "print.save",
         # Startbildschirm: die Ablagefläche und die Knöpfe „Neues Projekt",
-        # „Modell öffnen …", „Projekt öffnen …" und „Handbuch"
+        # „Modell einfügen …", „Öffnen …" und „Handbuch"
         "start.drop",
         "start.new",
         "start.model",
@@ -256,7 +256,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
         summary=_("Von der heruntergeladenen Datei bis zur Druckdatei."),
         steps=(
             step(
-                _("Ziehen Sie die Datei auf das Fenster oder klicken Sie auf *Modell öffnen …*."),
+                _("Ziehen Sie die Datei auf das Fenster oder klicken Sie auf *Modell einfügen …*."),
                 "start.drop",
                 "start.model",
             ),

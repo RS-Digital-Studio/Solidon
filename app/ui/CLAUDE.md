@@ -210,7 +210,7 @@ stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis bleibt scroll
 
 | Datei | Zweck |
 |---|---|
-| `catalog.py` | der Bausteinkatalog (§24.3, §2.6); `offer_ways` führt aus der leeren Szene zu einem ersten Körper |
+| `catalog.py` | Bausteinkatalog (§24.3, §2.6); `show_for_feature` filtert je Merkmalsart, `offer_ways` zum ersten Körper |
 | `recipe_dialog.py` | Auswahl als Baustein speichern; an einem wieder geöffneten eigenen Baustein heißt der Knopf *Baustein ersetzen* |
 | `counterpart_dialog.py` | Gegenstücke: zwei Stellen, Paar/Maße aus Bausteinschema und `Pair.shared` |
 

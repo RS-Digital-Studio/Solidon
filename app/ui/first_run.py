@@ -52,8 +52,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -83,7 +81,6 @@ from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the
 from app.ui.settings import UiSettings
 from app.ui.style import (
     NORMAL,
-    ROOMY,
     SPACE,
     TIGHT,
     WIDE,
@@ -262,6 +259,26 @@ class ToolRow(QWidget):
         row.addWidget(what, stretch=1)
 
 
+class _StateLine(QLabel):
+    """Eine Zustandszeile unter der Druckerwahl — da nur, solange sie etwas sagt.
+
+    Leer stand sie als Lücke zwischen „Drucker“ und „Filamente“.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__("", parent)
+        self.setWordWrap(True)
+        set_level(self, "caption")
+        self.setVisible(False)
+
+    def setText(self, text: str) -> None:  # noqa: N802 — Qt-Name
+        super().setText(text)
+        self.setVisible(bool(text))
+
+    def clear(self) -> None:
+        self.setText("")
+
+
 #: Der Dialog hat sich für einen Sprachwechsel geschlossen und will neu
 #: aufgebaut werden.
 #:
@@ -270,6 +287,11 @@ class ToolRow(QWidget):
 #: ``exec()`` genau eine Zahl zurückgibt und der Aufrufer sonst zwei Dinge
 #: fragen müsste, von denen er eines vergessen kann.
 LANGUAGE_CHANGED = 2
+
+#: Die Kennung des Slicers unter den Zusatzprogrammen (``tools.TOOLS``). Er
+#: wird in den Grundlagen gefragt und steht deshalb nicht noch einmal unter
+#: „Zusatzprogramme und Chat“.
+SLICER_TOOL = "slicer"
 
 
 class FirstRunDialog(QDialog):
@@ -314,32 +336,26 @@ class FirstRunDialog(QDialog):
 
             terms = damaged_line()
         elif state.in_demo:
+            # Kurz, wie die anderen beiden Fälle (RM-515): Der Erstlauf zeigt
+            # beim Öffnen höchstens 45 Wörter, diese Zeile trug allein 24.
             terms = tr(
-                "Diese Demo läuft vollständig und ohne Schlüssel bis zum {date}; "
-                "danach lässt sie sich nicht mehr starten. Ihre Projekte bleiben "
-                "erhalten."
+                "Die Demo läuft bis zum {date}. Ihre Projekte bleiben danach erhalten."
             ).format(date=deadline_date(state))
         elif state.sale_without_trial:
             terms = tr(
-                "Diese Verkaufsversion startet ohne Testphase. Öffnen, Ansehen und "
-                "Messen bleiben ohne Schlüssel möglich; zum Ändern und Ausgeben "
-                "brauchen Sie einen Lizenzschlüssel und die einmalige Geräteaktivierung."
+                "Diese Version läuft ohne Testphase; Ändern und Ausgeben brauchen "
+                "Lizenzschlüssel und Geräteaktivierung."
             )
         else:
             terms = tr(
-                "Die ersten {days} Tage ist alles frei; danach bleiben Öffnen, "
-                "Ansehen und Messen es."
+                "Die ersten {days} Tage ist alles frei, danach noch Öffnen, Ansehen und Messen."
             ).format(days=TRIAL_DAYS)
         title = QLabel(tr("Willkommen bei {app}").format(app=APP_NAME), self)
         set_level(title, "title")
-        self.greeting = QLabel(
-            tr(
-                "Wählen Sie zuerst Ihren Slicer und danach Ihren Drucker. "
-                "Ihre Filamente können Sie anschließend im Filamentlager einrichten."
-            ),
-            self,
-        )
-        self.greeting.setWordWrap(True)
+        # **Kein Einleitungssatz** (RM-515, C4): „Wählen Sie zuerst Ihren
+        # Slicer und danach Ihren Drucker …“ sagte, was die Reihenfolge der
+        # Felder darunter ohnehin zeigt, und nannte Slicer und Filamentlager
+        # ein zweites Mal. Beim Öffnen stehen höchstens 45 Wörter da.
         self.terms = QLabel(terms, self)
         self.terms.setWordWrap(True)
         set_level(self.terms, "caption")
@@ -371,16 +387,18 @@ class FirstRunDialog(QDialog):
             self.slicer.setCurrentIndex(1)
         self.slicer.setAccessibleName(tr("Slicer"))
         self.slicer.currentIndexChanged.connect(self._slicer_changed)
-        self.slicer_file = QPushButton(tr("Benutzerdefiniert …"), self)
+        # „Programm wählen …“ und nicht „Benutzerdefiniert …“ — so heißt der
+        # Eintrag für einen eigenen Drucker eine Zeile tiefer, und zwei Dinge
+        # mit einem Namen ließen den Kunden das falsche anklicken (C4).
+        self.slicer_file = QPushButton(tr("Programm wählen …"), self)
         self.slicer_file.setIcon(icon("open", self.slicer_file))
         self.slicer_file.setToolTip(tr("Slicer-Programm auswählen"))
+        self.slicer_file.setAccessibleDescription(self.slicer_file.toolTip())
         self.slicer_file.clicked.connect(self._choose_slicer_file)
         slicer_row = QHBoxLayout()
         slicer_row.addWidget(self.slicer, 1)
         slicer_row.addWidget(self.slicer_file)
-        self.printer_state = QLabel("", self)
-        self.printer_state.setWordWrap(True)
-        set_level(self.printer_state, "caption")
+        self.printer_state = _StateLine(self)
         self._printer_survey: _PrinterSurvey | None = None
         self._surveyed_slicer = ""
         """Für welchen Slicer die Drucker zuletzt gesucht wurden."""
@@ -409,16 +427,16 @@ class FirstRunDialog(QDialog):
         self.custom_printer = QWidget(self)
         custom_form = QFormLayout(self.custom_printer)
         custom_form.setContentsMargins(0, 0, 0, 0)
-        custom_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        # **Beschriftung neben dem Feld, nie darüber** (``fenster.md``): Mit
+        # ``WrapLongRows`` brach der Bauraum unter seine Beschriftung, und das
+        # Formular hatte keine gemeinsame Kante (C4).
+        custom_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         self.printer_name = QLineEdit(self.custom_printer)
         self.printer_name.setPlaceholderText(tr("Name Ihres Druckers"))
+        named = tr("So finden Sie den Drucker später in der Liste wieder.")
+        self.printer_name.setToolTip(named)
+        self.printer_name.setAccessibleDescription(named)
         custom_form.addRow(tr("Name"), self.printer_name)
-        self.printer_name_hint = QLabel(
-            tr("So finden Sie den Drucker später in der Liste wieder."), self.custom_printer
-        )
-        self.printer_name_hint.setWordWrap(True)
-        set_level(self.printer_name_hint, "caption")
-        custom_form.addRow(self.printer_name_hint)
         # Das Verfahren entscheidet, welche Maße darunter gefragt werden:
         # Düse und Düsenzahl bei FDM, Pixelgröße und Mindestwand bei Resin
         # (Resin-Konzept §4). Ein Feld, das für das gewählte Verfahren
@@ -429,27 +447,30 @@ class FirstRunDialog(QDialog):
         self.printer_technology.currentIndexChanged.connect(self._technology_changed)
         custom_form.addRow(tr("Verfahren"), self.printer_technology)
         self.printer_dimensions: list[NumberSpin] = []
-        dimensions = QGridLayout()
+        # **Breite, Tiefe und Höhe in einer Zeile** (RM-515): drei Felder mit
+        # je einer Überschrift darüber machten aus einem Maß drei Zeilen. Die
+        # Reihenfolge steht in der Beschriftung, der Name jedes Feldes in
+        # Kurzhilfe und zugänglichem Namen.
+        volume = QWidget(self.custom_printer)
+        dimensions = QHBoxLayout(volume)
         dimensions.setContentsMargins(0, 0, 0, 0)
-        dimensions.setHorizontalSpacing(NORMAL)
-        dimensions.setVerticalSpacing(TIGHT)
+        dimensions.setSpacing(NORMAL)
         template = profiles.printer(profiles.DEFAULT_PRINTER)
         resin_template = profiles.printer(profiles.DEFAULT_RESIN_PRINTER)
-        for column, (label, value) in enumerate(
-            zip((tr("Breite"), tr("Tiefe"), tr("Höhe")), template.build_volume, strict=True)
+        for label, value in zip(
+            (tr("Breite"), tr("Tiefe"), tr("Höhe")), template.build_volume, strict=True
         ):
-            field = NumberSpin(self.custom_printer)
+            field = NumberSpin(volume)
             field.setRange(1, 100_000)
             field.setDecimals(2)
             field.setSuffix(" " + tr("mm"))
             field.setValue(value)
             field.setAccessibleName(label)
-            heading = QLabel(label, self.custom_printer)
-            heading.setBuddy(field)
-            dimensions.addWidget(heading, 0, column)
-            dimensions.addWidget(field, 1, column)
+            field.setToolTip(label)
+            dimensions.addWidget(field)
             self.printer_dimensions.append(field)
-        custom_form.addRow(tr("Bauraum"), dimensions)
+        dimensions.addStretch(1)
+        custom_form.addRow(tr("Bauraum B × T × H"), volume)
         self.printer_nozzle = NumberSpin(self.custom_printer)
         self.printer_nozzle.setRange(0.05, 10)
         self.printer_nozzle.setDecimals(2)
@@ -518,16 +539,14 @@ class FirstRunDialog(QDialog):
         self._technology_changed()
         self.custom_printer.hide()
 
-        basics = QGroupBox(tr("Grundlagen"), self)
+        # **Grundlagen als flacher Abschnitt, nicht als Rahmen** (RM-518):
+        # Sprache, Slicer, Drucker — in dieser Reihenfolge, denn der Slicer
+        # bestimmt, welche Drucker in der Liste stehen (``fenster.md``).
+        basics = QWidget(self)
+        self.basics = basics
         form = QFormLayout(basics)
-        form.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
-        basics_hint = QLabel(
-            tr("Diese Vorgaben gelten für neue Projekte und lassen sich jederzeit ändern."),
-            basics,
-        )
-        basics_hint.setWordWrap(True)
-        set_level(basics_hint, "caption")
-        form.addRow(basics_hint)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         form.addRow(tr("Sprache"), self.language)
         form.addRow(tr("Slicer"), slicer_row)
         form.addRow(tr("Drucker"), self.printer)
@@ -541,37 +560,40 @@ class FirstRunDialog(QDialog):
         #
         # „Maße" und nicht „Bauraum und Düse": Ein eigener Resin-Drucker fragt
         # Pixelgröße und Mindestwand, eine Düse hat er nicht (RM-071).
-        self.printer_hint = QLabel(
-            tr(
-                "Ihr Drucker ist nicht dabei? Wählen Sie „Benutzerdefiniert“ "
-                "und tragen Sie seinen Namen und seine Maße ein."
-            ),
-            basics,
+        # Der Satz steht jetzt an der Liste selbst (Kurzhilfe, Beschreibung)
+        # und nicht als Zeile darunter: Der Eintrag „Benutzerdefiniert …“ am
+        # Ende der Liste ist der Weg, und wer ihn sucht, sieht ihn dort.
+        custom_way = tr(
+            "Ihr Drucker ist nicht dabei? Wählen Sie „Benutzerdefiniert …“ "
+            "und tragen Sie seinen Namen und seine Maße ein."
         )
-        self.printer_hint.setWordWrap(True)
-        set_level(self.printer_hint, "caption")
-        self.printer_hint.setVisible(self.printer.currentData() != "__custom__")
-        form.addRow(self.printer_hint)
-        # **Das eigene Formular nach Zustand und Hinweis**: Beide sprechen über
-        # die Druckerwahl und standen hinter acht Zeilen eigener Maße.
+        self.printer.setToolTip(custom_way)
+        self.printer.setAccessibleDescription(custom_way)
+        # **Das eigene Formular direkt unter der Druckerwahl**, eingereiht in
+        # dieselbe Beschriftungsspalte (``align_forms`` unten).
         form.addRow(self.custom_printer)
+        # Das Filamentlager wird hier genannt und nur hier (C4).
         self.inventory_button = QPushButton(tr("Filamentlager öffnen …"), basics)
         self.inventory_button.setIcon(icon("open", self.inventory_button))
         self.inventory_button.clicked.connect(self._open_inventory)
-        form.addRow(tr("Filamente"), self.inventory_button)
+        # So breit wie sein Name: über die ganze Zeile sah der Knopf aus wie
+        # ein Feld, in das man etwas eintragen soll.
+        filaments = QHBoxLayout()
+        filaments.setContentsMargins(0, 0, 0, 0)
+        filaments.addWidget(self.inventory_button)
+        filaments.addStretch(1)
+        form.addRow(tr("Filamente"), filaments)
 
-        optional = QGroupBox(tr("Optionale Erweiterungen"), self)
+        # **Zusatzprogramme und Chat zugeklappt, mit Inhaltsangabe** (RM-515):
+        # Zum Konstruieren braucht es nichts davon, und offen standen sie mit
+        # drei Programmzeilen, Chatsatz und zwei Knöpfen vor dem ersten Blick.
+        # Der Slicer steht nicht noch einmal darin — er ist oben gefragt.
+        optional = QWidget(self)
+        self.extras = optional
         optional_layout = QVBoxLayout(optional)
-        optional_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        optional_layout.setContentsMargins(0, 0, 0, 0)
         optional_layout.setSpacing(NORMAL)
-        optional_hint = QLabel(
-            tr(
-                "Slicer, Bildgenerierung und Chat erweitern Solidon. Zum Konstruieren "
-                "und Bearbeiten brauchen Sie nichts davon. Filamentprofile aus Ihrem "
-                "Slicer können Sie später im Filamentlager als eigene Spulen übernehmen."
-            ),
-            optional,
-        )
+        optional_hint = QLabel(tr("Zum Konstruieren brauchen Sie nichts davon."), optional)
         optional_hint.setWordWrap(True)
         set_level(optional_hint, "caption")
         optional_layout.addWidget(optional_hint)
@@ -631,7 +653,8 @@ class FirstRunDialog(QDialog):
         optional_actions.addStretch(1)
         optional_layout.addLayout(optional_actions)
 
-        self.open_button = QPushButton(tr("Eigenes Modell öffnen …"), self)
+        # Wie in Werkzeugleiste und Startbildschirm (A17).
+        self.open_button = QPushButton(tr("Modell einfügen …"), self)
         self.open_button.clicked.connect(self._open)
 
         # Nach der Handlung benannt, wie der Dialog *Ungesicherte Änderungen*
@@ -656,7 +679,16 @@ class FirstRunDialog(QDialog):
         content_layout = QVBoxLayout(self._contents)
         content_layout.setContentsMargins(0, 0, NORMAL, 0)
         content_layout.setSpacing(WIDE)
-        for section in (title, self.greeting, self.terms, basics, optional):
+        from app.ui.panels import align_forms, collapsible
+
+        programs = [str(tool.title) for tool in tools.TOOLS if tool.id != SLICER_TOOL]
+        self.extras_section = collapsible(
+            tr("Zusatzprogramme und Chat"),
+            optional,
+            open_now=False,
+            contents=tr("{programs} und Chat", programs=", ".join(programs)),
+        )
+        for section in (title, self.terms, basics, self.extras_section):
             content_layout.addWidget(section)
         content_layout.addStretch(1)
         self._scroll = DialogScrollArea(self)
@@ -670,6 +702,11 @@ class FirstRunDialog(QDialog):
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(WIDE)
         layout.addWidget(self._scroll, 1)
+        # **Eine Beschriftungskante** für Grundlagen und eigenen Drucker
+        # (RM-518): Ohne sie begann der Bauraum eine andere Spalte als
+        # „Sprache“. Geladen erst hier: ``panels`` braucht beim Import über
+        # eine halbe Sekunde, und dieser Dialog ist das Erste beim Start.
+        align_forms(self)
         layout.addWidget(buttons)
         self._buttons = buttons
         if printer_query is not None:
@@ -786,6 +823,10 @@ class FirstRunDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
+        # Noch einmal, sobald das Thema die Schrift gesetzt hat.
+        from app.ui.panels import align_forms
+
+        align_forms(self)
         self._grow_initial_soon()
 
     def _grow_soon(self) -> None:
@@ -1021,8 +1062,11 @@ class FirstRunDialog(QDialog):
             if widget is not None:
                 widget.hide()
                 widget.deleteLater()
+        # Der Slicer steht oben in den Grundlagen; eine zweite Zeile hier
+        # fragte ihn ein zweites Mal (C4).
         for state in states:
-            self._tool_rows.addWidget(ToolRow(state, self.tools))
+            if state.tool.id != SLICER_TOOL:
+                self._tool_rows.addWidget(ToolRow(state, self.tools))
 
     def _install(self) -> None:
         """§36: was fehlt, lässt sich von hier holen, statt aus einem README."""
@@ -1113,7 +1157,6 @@ class FirstRunDialog(QDialog):
         """Eigene Druckerdaten stehen direkt unter der entsprechenden Auswahl."""
         custom = self.printer.currentData() == "__custom__"
         self.custom_printer.setVisible(custom)
-        self.printer_hint.setVisible(not custom)
         valid = valid_printer_choice(self.printer)
         reason = "" if valid else str(tr("Wählen Sie einen Drucker aus der Liste."))
         for button in (self.start, self.open_button, self.inventory_button):

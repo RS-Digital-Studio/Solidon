@@ -641,6 +641,8 @@ def test_first_run_grows_with_the_late_survey_and_shows_its_buttons(
     „Chat einrichten …“ lagen unter dem Rand, ein Rollbalken erschien. Eine
     vom Kunden gezogene Größe bleibt dagegen, wie sie ist.
     """
+    from PySide6.QtWidgets import QToolButton
+
     from app.ui import first_run
     from app.ui.settings import UiSettings
     from app.ui.theme import apply_theme
@@ -656,6 +658,15 @@ def test_first_run_grows_with_the_late_survey_and_shows_its_buttons(
             before = _draw_shorter(dialog, qt_app)
         else:
             assert not _out_of_view(dialog._scroll)
+
+        # Die Programmzeilen stehen unter „Zusatzprogramme und Chat“, und der
+        # Abschnitt ist zugeklappt (RM-515); gewachsen wird, wenn er offen ist.
+        heading = dialog.extras_section.findChild(QToolButton, "sectionHeading")
+        assert heading is not None
+        heading.click()
+        _settle(qt_app)
+        if not drawn:
+            before = QSize(dialog.size())
 
         survey = first_run._Survey()
         survey.done.connect(dialog._show)

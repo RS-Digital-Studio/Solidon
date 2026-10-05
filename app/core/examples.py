@@ -48,6 +48,11 @@ PREVIEW_SIZE: Final = 220
 #: und beide brauchen ihre Rundung.
 PREVIEW_TRIANGLES: Final = 1500
 
+#: Wie viele Wörter der Satz unter einem Kacheltitel höchstens hat — in jeder
+#: Sprache (RM-515). Die Karten trugen 16 bis 19 Wörter und Pointen („Der
+#: häufigste Einstieg.“); was die Tour zeigt, erzählt die Tour.
+MAX_CARD_WORDS: Final = 10
+
 
 @dataclass(frozen=True, slots=True)
 class Example:
@@ -74,37 +79,25 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         id="weg1-halterung-anpassen",
         title=_("Vorhandenes Modell anpassen"),
         way="1",
-        doc=_(
-            "Eine heruntergeladene Halterung öffnen, automatisch prüfen, aufs Druckbett "
-            "stellen und eine Bohrung ergänzen. Der häufigste Einstieg."
-        ),
+        doc=_("Eine heruntergeladene Halterung prüfen, aufs Druckbett stellen und bohren."),
     ),
     Example(
         id="weg2-halter-konstruieren",
         title=_("Eigenes Teil bauen"),
         way="2",
-        doc=_(
-            "Einen Halter aus Grundformen und fertigen Bausteinen zusammensetzen. "
-            "Breite, Tiefe und Stärke lassen sich direkt ändern."
-        ),
+        doc=_("Ein Halter aus Bausteinen mit änderbarer Breite, Tiefe und Stärke."),
     ),
     Example(
         id="weg3-generiert-aufbereiten",
         title=_("Modell aus Text oder Bild vorbereiten"),
         way="3",
-        doc=_(
-            "Ein automatisch erzeugtes Modell prüfen, reparieren, auf das Druckbett "
-            "stellen und weiterbearbeiten. Ein fertiges Beispiel ist bereits enthalten."
-        ),
+        doc=_("Ein schon erzeugtes Modell prüfen, reparieren, auf das Druckbett stellen."),
     ),
     Example(
         id="weg4-figur-formen",
         title=_("Figur frei formen"),
         way="4",
-        doc=_(
-            "Einfache Körper weich verbinden und anschließend wie Ton von Hand formen. "
-            "Für Figuren und freie Formen ohne genaue Maße."
-        ),
+        doc=_("Körper weich verbinden und wie Ton von Hand formen."),
     ),
     # Die fünf darunter sind keine weiteren Wege — sie zeigen, was auf den vier
     # Wegen an Werkzeug bereitliegt. Die vier oben beantworten „wie fange ich
@@ -114,56 +107,38 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         title=_("Bausteine — Muttern, Buchsen, Kabel"),
         way="",
         doc=_(
-            "Ein Gehäuseboden mit Mutternfalle, Heat-Set-Buchse, Schraubenloch und "
-            "Kabeldurchführung. Die Maße der Bausteine bleiben änderbar."
+            "Gehäuseboden mit Mutternfalle, Einpressbuchse, Schraubenloch und Kabeldurchführung."
         ),
     ),
     Example(
         id="schild-zweifarbig",
         title=_("Beschriftung — zweifarbig und aufhängbar"),
         way="",
-        doc=_(
-            "Ein Schild mit Schrift in einem eigenen Filament: der 3MF-Export "
-            "macht daraus den Farbwechsel. Dazu eine Schlüsselloch-Aufhängung."
-        ),
+        doc=_("Ein Schild mit Schrift im zweiten Filament und Aufhängung."),
     ),
     Example(
         id="skizze-mit-massen",
         title=_("Skizzieren — ein Umriss, der sich bemaßen lässt"),
         way="",
-        doc=_(
-            "Eine runde Platte aus einer Skizze: Der Durchmesser ist eine Bedingung, "
-            "kein Punkt — ändert man den Projektparameter, folgt der Umriss. Dazu "
-            "eine Tasche, ebenfalls skizziert."
-        ),
+        doc=_("Eine runde Platte, deren Durchmesser einem Parameter folgt."),
     ),
     Example(
         id="drucker-kalibrieren",
         title=_("Kalibrieren — Passungen und Druckgrenzen prüfen"),
         way="",
-        doc=_(
-            "Toleranzleiter, Wandstärkenleiter und Überhangfächer auf einer Platte. "
-            "Die gemessenen Werte gehören danach ins Materialprofil."
-        ),
+        doc=_("Toleranz, Wandstärke und Überhang auf einer Platte testen."),
     ),
     Example(
         id="aushoehlen-und-teilen",
         title=_("Druckvorbereitung — aushöhlen, teilen, anordnen"),
         way="",
-        doc=_(
-            "Material sparen, das Teil an einer Ebene mit Passstiften trennen und "
-            "beide Hälften auf das Bett legen."
-        ),
+        doc=_("Material sparen, mit Passstiften trennen und beide Hälften anordnen."),
     ),
     Example(
         id="zu-gross-automatisch-teilen",
         title=_("Zu groß fürs Bett — automatisch teilen"),
         way="",
-        doc=_(
-            "Eine 60 cm lange Wandleiste passt auf kein übliches Druckbett. Automatisch "
-            "teilen findet die Nähte, setzt Passstifte hinein und legt die Stücke zum "
-            "Drucken nebeneinander."
-        ),
+        doc=_("Eine Wandleiste, länger als jedes Bett, in Stücke teilen."),
     ),
     # Das letzte ist keine achte Sorte, sondern die Summe: es legt hintereinander,
     # was die anderen einzeln zeigen. Es steht auch auf dem Startbildschirm und
@@ -173,11 +148,7 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         id="dose-mit-deckel",
         title=_("Alles zusammen — Dose mit Deckel"),
         way="",
-        doc=_(
-            "Benannte Maße, ausgehöhlt und oben offen, Kabeldurchführung und "
-            "Einpressbuchse in der Wand, ein Deckel aus der Öffnung geschnitten "
-            "statt nachgezeichnet, beschriftet und neben die Dose gelegt."
-        ),
+        doc=_("Ausgehöhlte Dose mit Durchführung, Buchse, Deckel und Beschriftung."),
     ),
     # **Dieses Beispiel öffnet gezielt mit einer Materialwarnung.** Die anderen
     # zeigen, wie etwas geht; dieses zeigt, was passiert, wenn etwas nicht mehr
@@ -188,11 +159,7 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         id="passung-nach-materialwechsel",
         title=_("Wenn eine Passung nicht mehr passt"),
         way="",
-        doc=_(
-            "Der Deckel soll aus weichem TPU kommen. Der Prüfbericht meldet, dass er zu stramm "
-            "sitzt: Das gewählte TPU-Profil sieht hier mehr Spiel vor. Ein Klick auf die "
-            "Meldung zeigt die Stelle."
-        ),
+        doc=_("Nach dem Wechsel auf TPU sitzt der Deckel zu stramm."),
     ),
 )
 

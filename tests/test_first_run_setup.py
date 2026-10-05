@@ -192,22 +192,44 @@ def setup_dialog(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> First
     return FirstRunDialog(UiSettings())
 
 
-def test_custom_printer_name_hint_stays_with_its_field(setup_dialog: FirstRunDialog) -> None:
-    """Der Namenshinweis steht direkt unter dem Feld, das er erklärt."""
+def test_the_custom_printer_reads_in_one_column(setup_dialog: FirstRunDialog) -> None:
+    """Eigener Drucker: Beschriftung neben dem Feld, Bauraum in einer Zeile (RM-515).
+
+    Mit ``WrapLongRows`` brach der Bauraum unter seine Beschriftung, drei
+    Überschriften standen über drei Feldern, und der Namenshinweis war eine
+    eigene Zeile. Der Weg zum eigenen Drucker steht an der Druckerliste.
+    """
     from PySide6.QtWidgets import QFormLayout
 
     form = setup_dialog.custom_printer.layout()
     assert isinstance(form, QFormLayout)
-    name_row, name_role = form.getWidgetPosition(setup_dialog.printer_name)
-    hint_row, hint_role = form.getWidgetPosition(setup_dialog.printer_name_hint)
+    assert form.rowWrapPolicy() == QFormLayout.RowWrapPolicy.DontWrapRows
+    _row, name_role = form.getWidgetPosition(setup_dialog.printer_name)
     assert name_role == QFormLayout.ItemRole.FieldRole
-    assert hint_role == QFormLayout.ItemRole.SpanningRole
-    assert hint_row == name_row + 1
+    assert setup_dialog.printer_name.toolTip(), "der Hinweis steht am Feld"
+    rows = {form.getWidgetPosition(field)[0] for field in setup_dialog.printer_dimensions}
+    rows |= {
+        form.getWidgetPosition(field.parentWidget())[0]
+        for field in setup_dialog.printer_dimensions
+        if field.parentWidget() is not setup_dialog.custom_printer
+    }
+    assert len({row for row in rows if row >= 0}) == 1, "Breite, Tiefe und Höhe in einer Zeile"
+    assert "Benutzerdefiniert" in setup_dialog.printer.toolTip()
+    assert "Benutzerdefiniert" in setup_dialog.printer.accessibleDescription()
 
     setup_dialog.printer.setCurrentIndex(setup_dialog.printer.findData("__custom__"))
     assert not setup_dialog.custom_printer.isHidden()
-    assert setup_dialog.printer_hint.isHidden()
-    assert setup_dialog.printer_name_hint.text()
+    labels = [
+        form.itemAt(row, QFormLayout.ItemRole.LabelRole).widget()
+        for row in range(form.rowCount())
+        if form.itemAt(row, QFormLayout.ItemRole.LabelRole) is not None
+    ]
+    basics = setup_dialog.basics.layout()
+    assert isinstance(basics, QFormLayout)
+    language = basics.labelForField(setup_dialog.language)
+    assert language is not None
+    widths = {label.minimumWidth() for label in labels} | {language.minimumWidth()}
+    assert len(widths) == 1, f"eine Beschriftungskante, nicht {sorted(widths)}"
 
 
 def test_selected_slicer_filters_printers_and_keeps_custom_choice(
