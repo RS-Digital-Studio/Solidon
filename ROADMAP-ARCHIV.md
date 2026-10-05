@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-514: Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar (05.10.2026)](#rm-514-der-druckdialog-zeigt-vorn-das-wichtigste-und-jeder-grund-ist-lesbar-05102026) |
+| 2026-10-05 | [RM-515: Startbildschirm und Erste Schritte erzählen nicht mehr (05.10.2026)](#rm-515-startbildschirm-und-erste-schritte-erzählen-nicht-mehr-05102026) |
+| 2026-10-05 | [RM-517: Der Bausteinkatalog zeigt Bild und Titel und filtert nach Merkmalsart (05.10.2026)](#rm-517-der-bausteinkatalog-zeigt-bild-und-titel-und-filtert-nach-merkmalsart-05102026) |
 | 2026-10-05 | [RM-510: Die Auswahl stellt die Handlungen nach vorn und zeigt eine Handlung zur Zeit (05.10.2026)](#rm-510-die-auswahl-stellt-die-handlungen-nach-vorn-und-zeigt-eine-handlung-zur-zeit-05102026) |
 | 2026-10-05 | [RM-511: Rechts steht eine Karte mit den Reitern Auswahl, Prüfbericht und Chat (05.10.2026)](#rm-511-rechts-steht-eine-karte-mit-den-reitern-auswahl-prüfbericht-und-chat-05102026) |
 | 2026-10-04 | [RM-017: Nutfedermaße an realen Aluminiumprofilen prüfen — am echten Fenster abgenommen (04.10.2026)](#rm-017-nutfedermaße-an-realen-aluminiumprofilen-prüfen--am-echten-fenster-abgenommen-04102026) |
@@ -41852,3 +41855,114 @@ ausrichten“.
 18 Einträge im Sichtbereich; längster Platzhalter (fr, 30 Zeichen) rund 200 von gut 400
 Punkten; an Körper, Bohrung und Fläche keine zwei Knöpfe mit demselben Ziel. Fenstertests
 beim Release. Changelog: zum nächsten Release.
+
+## RM-514: Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar (05.10.2026)
+
+<a id="rm-514-der-druckdialog-zeigt-vorn-das-wichtigste-und-jeder-grund-ist-lesbar-05102026"></a>
+<a id="rm-514"></a>
+
+**RM-514 — Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Beim Öffnen zeigt der Druckdialog 34 Bedienelemente und 62 Wörter (1248 px hoch).
+  Ohne Herstellerprofil stehen vier leere Profilfelder und zwei Sätze mit zwei Wörtern
+  für dieselbe Sache, dazu „Erst einen Drucker wählen“. Die Spalte „Grund“ des Druckrats
+  ist in jeder Zeile abgeschnitten (40 von 45 Gründen sind länger als 60 Zeichen, mit
+  Pointen). „Drucker“ steht zweimal, „Düse“ meint Durchmesser und Temperatur. Über den
+  Knöpfen bleibt eine Lücke bis 260 px. Der Hinweis vor der ersten Nutzung hat 94 Wörter
+  und nennt den Schalter anders als der Dialog.
+  **Fix:** Vorn Drucker, Filamente, Qualität, Fülldichte, Stützen; Schichthöhe, Wände,
+  Füllmuster, Temperaturen und Düsenzahl unter „Weitere Einstellungen“; ohne
+  Herstellerprofil ein Satz ohne leere Felder; „Was dieses Teil verlangt“ als Zeile
+  „N Vorschläge · Übernehmen“; die Tabelle mit Einstellung und Vorschlag, der Grund der
+  gewählten Zeile ganz darunter (`style.WrappedNote`); Gründe höchstens 60 Zeichen ohne
+  Pointe; „Druckerprofil“, „Prozessprofil“, „Filamentprofil“, „Düsentemperatur“,
+  „Betttemperatur“; Zustand und „Werte mitgeben“ außerhalb des Rollbereichs über den
+  Knöpfen; Hinweis höchstens 45 Wörter, Schalter „Werte mitgeben“.
+  **Abnahme:** Bei 1920 × 1080 höchstens 15 Bedienelemente ohne Rollbalken in DE, FR und
+  PT; bei 620 px Breite kein „…“ in der Tabelle, in sechs Sprachen; kein
+  Beschriftungstext zweimal; höchstens 2 × NORMAL zwischen „Werte mitgeben“ und den
+  Knöpfen. Überschneidung RM-312, RM-502.
+
+**Umsetzung (`6239f7af8`, `ea71f59f5`, `aeb7cf591`):** Vorn Fülldichte und Stützen,
+alles Übrige hinter „Weitere Einstellungen“; ohne Herstellerprofil ein Satz statt leerer
+Felder. Die Vorschlagstabelle hat zwei Spalten, der Grund der gewählten Zeile steht darunter;
+alle 36 Gründe in `advise.py` haben höchstens 60 Zeichen (Test, Kataloge höchstens 70).
+Eindeutige Beschriftungen (Druckerprofil, Prozessprofil, Filamentprofil, Düsentemperatur,
+Betttemperatur, Düsenzahl, „Schichthöhe erste Schicht“). Zustand, Bestand, Buchung und
+„Werte mitgeben“ direkt über den Knöpfen (9 px Abstand). Der Hinweis vor der ersten Nutzung
+hat 45 statt 94 Wörter. „Druckdatei speichern …“ erscheint erst mit der Druckdatei — mit
+mehreren Slicern standen sonst 16 statt 15 Bedienelemente vorn; die Düse nach hinten zu
+legen hätte die Reihenfolge vom 29.09.2026 gebrochen.
+
+**Nachweis:** Proben mit verborgenem Fenster auf der echten Plattform, dunkles Thema, DE und
+FR (FR auch bei 620 px), PT bei 620 px, kein „…“ in der Tabelle. Offen für den Release:
+Fenstertests, EN/ES/IT, HiDPI und helles Thema; neu zu erzeugen `print-settings.png`,
+`guide-print-a-model-*`, Webbild „schritt-druck“, Workshop-Videos.
+Changelog: zum nächsten Release.
+
+## RM-515: Startbildschirm und Erste Schritte erzählen nicht mehr (05.10.2026)
+
+<a id="rm-515-startbildschirm-und-erste-schritte-erzählen-nicht-mehr-05102026"></a>
+<a id="rm-515"></a>
+
+**RM-515 — Startbildschirm und „Erste Schritte“ lassen wählen statt lesen.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Der Startbildschirm hat rund 135 Wörter und 19 Formatnamen, nutzt 53 % × 47 % der
+  Fläche in kleiner Schrift; Feedback und Spende sind so groß wie die vier Einstiege;
+  „Vier geführte Touren“ steht über sechs Karten. „Erste Schritte“ (Codebefund) zeigt
+  beim Öffnen 118 Wörter, fragt den Slicer zweimal, nennt das Filamentlager zweimal,
+  „Benutzerdefiniert …“ heißt Programmknopf und Druckereintrag, das Formular für einen
+  eigenen Drucker bricht um und hat keine gemeinsame Kante.
+  **Fix:** Die vier Einstiege größer und oben, Kartentexte höchstens zehn Wörter;
+  Feedback und Unterstützen als Fußzeile; Formatliste und Browserhinweis im Tooltip der
+  Ablagefläche; Überschrift ohne Zahl. Erstlauf: Sprache, Slicer, Drucker und die Zeile
+  zur Testphase vorn, „Zusatzprogramme und Chat“ zugeklappt mit Inhaltsangabe,
+  „Programm wählen …“, eigener Drucker mit `DontWrapRows`, Bauraum B × T × H in einer
+  Zeile, `align_forms`.
+  **Abnahme:** Kartentexte höchstens zehn Wörter (Test); nur die vier Einstiege in
+  Kachelgröße; der Erstlauf zeigt beim Öffnen höchstens 45 Wörter, „Slicer“ einmal.
+
+**Umsetzung (`8d6258a82`, `fd1fd2beb`, `3eb7d7001`):** Die vier Einstiege stehen groß
+oben (Bild 132 statt 88 px), Rückmeldung und Unterstützen sind eine flache Fußzeile, die
+Knöpfe heißen wie in der Werkzeugleiste („Modell einfügen …“, „Öffnen …“). Kartentexte
+höchstens zehn Wörter in sechs Sprachen (`examples.MAX_CARD_WORDS`, Test). Erste Schritte
+zeigt beim Öffnen höchstens 45 Wörter, „Slicer“ einmal, der Rest zugeklappt; der eigene
+Drucker steht in einer Spalte, Bauraum als B × T × H. Die verwaiste Stilregel der alten
+Startkarten ist entfernt.
+
+**Nachweis:** Proben mit verborgenem Fenster, Startbildschirm 1280 bis 2560 px, Erstlauf DE
+und PT. Offen für den Release: Fenstertests, HiDPI, helles Thema, Bildschirmleser;
+`start-screen.png` und die Anleitungsbilder neu. Changelog: zum nächsten Release.
+
+## RM-517: Der Bausteinkatalog zeigt Bild und Titel und filtert nach Merkmalsart (05.10.2026)
+
+<a id="rm-517-der-bausteinkatalog-zeigt-bild-und-titel-und-filtert-nach-merkmalsart-05102026"></a>
+<a id="rm-517"></a>
+
+**RM-517 — Bausteinkatalog und „Eigener Baustein“ zeigen Bild, Name und das Nötige.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Katalogkacheln tragen zwei bis vier Textzeilen, Titel einer Reihe springen um rund
+  8 px, „– nimmt Material weg“ liest sich als Minus, die Vorschaufarbe abtragender
+  Bausteine (#E0A85C) liegt am Akzent (#F0A54A), zwei Leertexte sagen dasselbe.
+  *Eigener Baustein* ist für zwei Maße ein Formular mit 21 Feldern (978 px) und zeigt die
+  Rohschlüssel `breite`, `hoehe`, `hole_1`, `face_2`, „Maßherkunft nicht bestimmt“ und
+  „Bereichstest: 4 Kombinationen“.
+  **Fix:** Kachel mit Bild und Titel (höchstens zwei Zeilen, oben bündig), Parameter nur
+  in der Detailspalte, „nimmt Material weg“ als Zeichen in der Ecke, Rollenfarbe aus
+  `palette.py`, ein Leertext. Eigener Baustein: je Maß eine Zeile „[✓] Breite · Vorgabe
+  [120] von [60] bis [240]“, der Rest unter „Weitere Einstellungen“, Beschriftungen statt
+  Schlüssel.
+  **Abnahme:** Kein Kacheltext über zwei Zeilen (DE), gleiche Titelhöhe je Reihe,
+  Farbabstand zum Akzent per Test; eigener Baustein mit zwei Maßen höchstens zehn
+  sichtbare Zeilen und 600 px, kein ASCII-Schlüssel sichtbar in sechs Sprachen.
+
+**Umsetzung (`3c50b4bea`, `c491a595f`, `860e1766d`):** Eine Kachel trägt Bild und Titel;
+was sonst gilt, steht als gezeichnetes Eckzeichen und in Worten in Kurzhilfe, Beschreibung
+und Detailspalte (nimmt Material weg, eigener Baustein, Bereichstest offen). Abtragende
+Bausteine tragen die Rolle `removes` (violett, ΔE76 rund 98 zum Akzent, Test). Der Katalog
+filtert nach Merkmalsart (`PartCatalog(feature_kind=…)`, `parts_for_feature`), an `hole`
+Gewinde, Heat-Set, Mutternfalle, Kugellager und Schraube. „Eigener Baustein“ zeigt je Maß
+eine Zeile ohne Rohschlüssel (zwei Maße, zwei Stellen: zehn Zeilen in 334 px). Der
+Hauptknopf heißt „Einsetzen“.
+
+**Nachweis:** Proben mit verborgenem Fenster, Katalog DE und FR, Eigener Baustein DE und PT.
+Offen für den Release: Fenstertests, Kürzung dreizeiliger Kacheltitel in FR/PT;
+`catalog.png` und `own-part.png` neu. Der Filter wird an der Bohrung mit RM-506 angebunden.
+Changelog: zum nächsten Release.
