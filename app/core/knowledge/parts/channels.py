@@ -220,9 +220,8 @@ def hose_barb_body(raw: BaseParams) -> PartResult:
         "ohne Kleben."
     ),
     caveat=_(
-        "Dicht wird die Verbindung erst mit einer Schlauchschelle am Bund; die Widerhaken "
-        "allein halten gegen Zug, nicht gegen Druck. Für Druckleitungen eine gekaufte "
-        "Verschraubung verwenden."
+        "Für Leitungen unter Druck, dort hilft eine gekaufte Verschraubung. Dicht wird die Tülle "
+        "erst mit einer Schlauchschelle am Bund."
     ),
     changes=[HOSE_BARB_ADDED],
 )
@@ -403,8 +402,8 @@ RAMP_EDGE_SHARE: Final = 1.0 / 3.0
         "als Einlage mit Rampe für Rinnen ohne Platz an der Seite."
     ),
     caveat=_(
-        "Die Naht hält die Segmente in Flucht, nicht gegen Zug. Zum Einrasten an jedem "
-        "Segment eine Rastnase setzen und in der Hülse die Aussparung dazu."
+        "Wenn die Segmente einrasten sollen, denn die Naht hält sie nur in Flucht. Dafür eine "
+        "Rastnase je Segment setzen."
     ),
     changes=[CHANNEL_JOINT_ADDED],
 )

@@ -1253,8 +1253,7 @@ def test_unresolved_bound_bambu_variant_uses_one_checked_fallback(
     assert findings[0].suggestions
     assert str(findings[0].message) == (
         "Die gebundene Spule „PLA-Schrift“ hat keine eindeutige Variante für "
-        "Direct Drive High Flow. Wählen Sie das passende Spulenprofil im Druckdialog; "
-        "bis dahin gelten die Projektwerte."
+        "Direct Drive High Flow. Bis Sie das Spulenprofil wählen, gelten die Projektwerte."
     )
     assert [
         finding.code

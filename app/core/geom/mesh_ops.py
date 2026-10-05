@@ -1569,9 +1569,8 @@ class DecimateParams(BaseParams):
         "wird gemessen und gemeldet."
     ),
     caveat=_(
-        "Nicht auf einem Teil, das noch bemaßt wird: Das Verringern verschiebt Flächen, "
-        "und eine Bohrung, die danach gesetzt wird, sitzt auf einer anderen Oberfläche "
-        "als geplant. Zuerst konstruieren, zuletzt verringern."
+        "An einem Teil, das noch bemaßt wird, denn das Verringern verschiebt Flächen. Zuerst "
+        "konstruieren, zuletzt verringern."
     ),
     # „2" mit dem Parameter ``method``: Der gemessene Weg rechnet wie zuvor,
     # der Schlüssel alter Einträge passt aber nicht mehr zum neuen Schema.
@@ -1875,8 +1874,8 @@ def _smoothing_cost(
             code="mesh.smooth_shrank",
             severity="warning",
             message=_(
-                "Das Glätten hat den Körper deutlich verkleinert — an einem groben Netz "
-                "zieht es die Ecken zusammen. Erst die Kanten verfeinern, dann glätten."
+                "Das Glätten hat den Körper deutlich verkleinert, weil es an einem groben Netz "
+                "die Ecken zusammenzieht."
             ),
             object_id=object_id,
             values=values,
@@ -1939,9 +1938,8 @@ def remesh_mesh(ctx: OpContext) -> OpResult:
                 code="mesh.remesh_dense",
                 severity="info",
                 message=_(
-                    "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles "
-                    "danach rechnet entsprechend länger. Eine größere Kantenlänge hält "
-                    "es kleiner."
+                    "Das Netz hat jetzt über hundertmal so viele Dreiecke, und alles danach "
+                    "rechnet entsprechend länger."
                 ),
                 object_id=source.id,
                 # Der Satz nennt den Weg, und der Knopf öffnet den Schritt mit dem
@@ -2036,8 +2034,8 @@ class UniformParams(BaseParams):
         "die überflüssig feinen zusammengefasst. Die Vorstufe zum Formen von Hand."
     ),
     caveat=_(
-        "Nicht zum Verfeinern allein: Wer nur mehr Dreiecke will, ohne dass irgendwo "
-        "welche verschwinden, nimmt „Kanten verfeinern“ — das teilt und fasst nie zusammen."
+        "Zum bloßen Verfeinern, denn hier verschwinden auch Dreiecke. Dafür gibt es „Kanten "
+        "verfeinern“."
     ),
     retriangulates=True,
     expected_triangles=expected_evened,
@@ -2123,9 +2121,8 @@ class SubdivideParams(BaseParams):
         "bleiben scharf."
     ),
     caveat=_(
-        "Nicht als Ersatz für eine gröbere Vorlage: Was hier entsteht, ist aus den "
-        "vorhandenen Dreiecken gerechnet, keine wiedergewonnene Konstruktion. "
-        "Wo es auf ein Maß ankommt, gehört die Rundung in die Skizze."
+        "Wo es auf ein Maß ankommt, denn die Rundung wird aus vorhandenen Dreiecken gerechnet. "
+        "Dafür gehört sie in die Skizze."
     ),
     # Zählt vorab wie das Angleichen, verändert aber die Form mit Absicht: Die
     # Vorschau zeigt die Rundung als Differenz, nicht bloß das neue Netz.
@@ -2225,9 +2222,8 @@ def _simplification_findings(
                 code="mesh.already_below_target",
                 severity="info",
                 message=_(
-                    "Der Körper hat schon weniger Dreiecke als das Ziel — es gibt nichts zu "
-                    "verringern. Ein Ziel unterhalb der vorhandenen Zahl gibt dem Schritt "
-                    "etwas zu tun; sonst kann er wegbleiben."
+                    "Der Körper hat schon weniger Dreiecke als das Ziel, es gibt nichts zu "
+                    "verringern."
                 ),
                 object_id=object_id,
                 values={
@@ -2332,9 +2328,8 @@ def _deviation_findings(
                 code="mesh.components_split",
                 severity="warning",
                 message=_(
-                    "Der Körper ist dabei in {count} Teile zerfallen. „Reparieren“ setzt "
-                    "zusammen, was noch zusammenpasst; bleibt zu viel übrig, war das Ziel "
-                    "zu niedrig.",
+                    "Der Körper ist dabei in {count} Teile zerfallen. Bleibt nach dem Reparieren "
+                    "zu viel übrig, war das Ziel zu niedrig.",
                     count=after.component_count,
                 ),
                 object_id=object_id,

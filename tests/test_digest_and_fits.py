@@ -1275,7 +1275,10 @@ def test_a_fit_pointing_at_nothing_is_an_error(profile: Profile) -> None:
     # (``panels.FINDING_ACTIONS``).
     message = str(findings[0].message)
     assert "nicht mehr erkennbar" in message, message
-    assert "Verlauf" in message, "der Satz muss den Weg nennen"
+    from app.core.errors import SHOW_HISTORY
+    from app.ui.panels import actions_for
+
+    assert SHOW_HISTORY in actions_for(findings[0]), "der Weg steht als Knopf an der Zeile"
     assert "benannte" not in message, "keine Ursache, die der Befund nicht kennt"
 
 

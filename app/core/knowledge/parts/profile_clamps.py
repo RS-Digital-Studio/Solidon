@@ -51,9 +51,7 @@ _SHELL_SEATED = PartChange(
     reason="Die Schale allein begann bei der Bundhöhe der Einlage und schwebte als "
     "aufgesetzter Baustein um genau dieses Maß über ihrer Fläche.",
     effect=_(
-        "Die Schale beginnt bei null; den Bundfreiraum setzt das Klemmenpaar, das "
-        "beide Hälften in einem Rahmen ablegt. Das Feld „Bundhöhe“ gibt es an der "
-        "Schale nicht mehr."
+        "Die Schale beginnt jetzt bei null, und das Feld „Bundhöhe“ gibt es an ihr nicht mehr."
     ),
 )
 

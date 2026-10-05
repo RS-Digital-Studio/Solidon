@@ -292,8 +292,7 @@ def attach_fit(
                 severity="warning",
                 message=_(
                     "Der Verlauf hat sich seit dem Einsetzen geändert, deshalb fehlt die "
-                    "Passung. Prüfen Sie die beiden Hälften und tragen Sie die Passung bei "
-                    "Bedarf rechts unter Auswahl ein."
+                    "Passung. Rechts unter Auswahl lässt sie sich nachtragen."
                 ),
                 values={"pair": pair.key},
             )
@@ -312,9 +311,8 @@ def attach_fit(
                 code="parts.counterpart_unpaired",
                 severity="info",
                 message=_(
-                    "Die beiden Hälften stehen, eine Passung dazwischen gibt es "
-                    "nicht: Eines der Merkmale ist unter seinem Namen nicht zu "
-                    "finden. Sie lässt sich rechts unter Auswahl nachtragen."
+                    "Ein Merkmal ist unter seinem Namen nicht zu finden, deshalb fehlt die "
+                    "Passung. Rechts unter Auswahl lässt sie sich nachtragen."
                 ),
                 values={"pair": pair.key},
             )
@@ -555,8 +553,7 @@ def attach_thread_fit(
                 severity="warning",
                 message=_(
                     "Der Verlauf hat sich seit dem Einsetzen geändert, deshalb fehlt die "
-                    "Passung. Prüfen Sie die beiden Hälften und tragen Sie die Passung bei "
-                    "Bedarf rechts unter Auswahl ein."
+                    "Passung. Rechts unter Auswahl lässt sie sich nachtragen."
                 ),
                 values={"pair": "thread"},
             )
@@ -571,9 +568,8 @@ def attach_thread_fit(
                 code="parts.counterpart_unpaired",
                 severity="info",
                 message=_(
-                    "Die beiden Hälften stehen, eine Passung dazwischen gibt es "
-                    "nicht: Eines der Merkmale ist unter seinem Namen nicht zu "
-                    "finden. Sie lässt sich rechts unter Auswahl nachtragen."
+                    "Ein Merkmal ist unter seinem Namen nicht zu finden, deshalb fehlt die "
+                    "Passung. Rechts unter Auswahl lässt sie sich nachtragen."
                 ),
                 values={"pair": "thread"},
             )

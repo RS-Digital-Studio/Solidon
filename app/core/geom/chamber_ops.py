@@ -107,10 +107,7 @@ class ResizeChamberParams(BaseParams):
         "Ändert Innenmaß und Tiefe einer erkannten Kammer, einer Nut oder eines Kanals als Ganzes: "
         "Boden, Wände und Rundungen wandern gemeinsam, die Außenmaße bleiben."
     ),
-    caveat=_(
-        "Nur an einer erkannten Kammer mit ebenem Rand, einer Nut oder einem Kanal "
-        "mit zwei ebenen Wänden. Eine einzelne Wand verschiebt „Fläche versetzen“."
-    ),
+    caveat=_("An einer Kammer ohne ebenen Rand. Eine einzelne Wand verschiebt „Fläche versetzen“."),
 )
 def resize_chamber(ctx: OpContext) -> OpResult:
     from app.core.perceive.groups import chamber_region, reason_against_group

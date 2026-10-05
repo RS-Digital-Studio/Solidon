@@ -135,8 +135,8 @@ class ResizeClosureParams(BaseParams):
         "der Anschlag rückt weiter — oder umgekehrt."
     ),
     caveat=_(
-        "Nur an einem erkannten Verschluss mit ebenen Seiten, den Drehweg nur am Teil mit den "
-        "Wegen. Runde Rastmulden ändern Sie über ihren Radius mit „Merkmal ändern“."
+        "An gewölbten Seiten und runden Rastmulden. Die Mulden ändert „Merkmal ändern“ über "
+        "ihren Radius."
     ),
 )
 def resize_closure(ctx: OpContext) -> OpResult:

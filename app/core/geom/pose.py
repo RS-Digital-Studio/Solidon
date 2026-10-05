@@ -639,9 +639,8 @@ class PoseParams(BaseParams):
         "wird ein Zustand."
     ),
     caveat=_(
-        "Nicht für starke Beugungen: Die Haut wird an gebeugten Gelenken eingeschnürt, "
-        "und ein ausgestreckter Arm ist ein Überhang. Was der Druck davon hält, sagt "
-        "die Überhangkarte."
+        "Für starke Beugungen, denn an gebeugten Gelenken schnürt sich die Haut ein. Was der "
+        "Druck hält, zeigt die Überhangkarte."
     ),
 )
 def pose_armature(ctx: OpContext) -> OpResult:
@@ -693,9 +692,8 @@ def _pose_findings(
                 code="pose.no_armature",
                 severity="warning",
                 message=_(
-                    "Für eine Stellung fehlt noch das Skelett — dieser Schritt bewegt nichts. "
-                    "Die Knochen entstehen im Skeletteditor: zwei Klicks je Knochen, dann "
-                    "Fertig."
+                    "Für eine Stellung fehlt das Skelett, der Schritt bewegt nichts. Im "
+                    "Skeletteditor setzen zwei Klicks einen Knochen."
                 ),
                 object_id=object_id,
             )

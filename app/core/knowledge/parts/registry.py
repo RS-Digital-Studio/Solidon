@@ -147,8 +147,8 @@ MATERIAL_OF_TARGET = PartChange(
     reason="Automatische Passungswerte wurden aus dem Projektmaterial statt aus dem Material "
     "des Zielkörpers gelesen.",
     effect=_(
-        "An ausdrücklich anders zugeordneten Körpern folgen Spiel und Übermaß jetzt deren "
-        "Material. Bestehende Passungen an solchen Körpern prüfen."
+        "Hat ein Körper ein eigenes Material, folgen Spiel und Übermaß jetzt diesem statt dem "
+        "Projektmaterial."
     ),
 )
 
@@ -802,9 +802,7 @@ MOUTH_AT_ORIGIN: Final = PartChange(
     date="2026-08-05",
     reason="Der Ursprung ist die Mündung, das Werkzeug geht nach unten ins Material (§24.1).",
     effect=_(
-        "Der Baustein liegt um seine eigene Tiefe tiefer. Alte Projekte "
-        "bekommen ihn an der Stelle, an der er vorher wirkungslos in der Luft "
-        "stand — die Position ist zu prüfen."
+        "Der Baustein liegt jetzt um seine Tiefe tiefer im Material statt wirkungslos darüber."
     ),
 )
 
@@ -820,9 +818,8 @@ FACE_ON_THE_BODY: Final = PartChange(
     reason="Die Mitte der benannten Fläche lag im Material oder in der Luft neben dem "
     "Körper, nicht auf der Fläche, die sie benennt.",
     effect=_(
-        "Die Mitte liegt jetzt auf der Fläche. Wer einen weiteren Baustein daran "
-        "ausgerichtet hat, findet ihn um diesen Versatz verschoben; der Körper selbst "
-        "bleibt gleich."
+        "Die Mitte benannter Flächen liegt jetzt auf der Fläche, daran ausgerichtete Bausteine "
+        "können sich verschieben."
     ),
 )
 
@@ -836,10 +833,8 @@ FACE_GIVES_DIRECTION: Final = PartChange(
     reason="Eine Fläche schaut entlang ihrer Normalen, und darauf steht der "
     "Baustein — vorher stand er entlang der Vorgabe Z (§25, §18.5).",
     effect=_(
-        "An einer Deckfläche ändert sich nichts. An einer Seitenwand oder einer "
-        "geneigten Fläche steht der Baustein jetzt senkrecht auf ihr statt senkrecht "
-        "nach oben; wer das alte Verhalten nachbaut, hat unter „Achse“ eine Richtung "
-        "gewählt, die nun aus der Fläche kommt."
+        "An einer Seitenwand oder Schräge steht der Baustein jetzt senkrecht auf der Fläche "
+        "statt senkrecht nach oben."
     ),
 )
 

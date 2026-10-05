@@ -250,9 +250,8 @@ def _metadata_lost() -> Finding:
         code="step.metadata_lost",
         severity="warning",
         message=_(
-            "Namen, Farben und Einzelkörper dieser STEP-Datei ließen sich nicht lesen; sie "
-            "kam als ein Körper. Im CAD-Programm neu als STEP gespeichert kommt die "
-            "Baugruppe meist mit."
+            "Diese STEP-Datei kam ohne Namen, Farben und Einzelkörper als ein Körper. Im "
+            "CAD-Programm neu gespeichert kommt die Baugruppe meist mit."
         ),
     )
 
@@ -589,8 +588,8 @@ def _colours_merged(name: str, dropped: int) -> Finding:
         code="step.colours_merged",
         severity="warning",
         message=_(
-            "„{name}“ hat mehr Farben, als ein Körper Filamente trägt. {count} seltene Farben "
-            "kamen ohne Filament; „Filament auf eine Fläche“ weist sie zu.",
+            "„{name}“ hat mehr Farben, als ein Körper Filamente trägt, {count} kamen ohne. "
+            "„Filament auf eine Fläche“ weist sie zu.",
             name=name,
             count=dropped,
         ),

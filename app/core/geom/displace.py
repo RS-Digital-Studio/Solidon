@@ -415,9 +415,8 @@ class DisplaceParams(BaseParams):
         "Maserung, Prägung und Wappen — alles, wofür keine Skizze taugt."
     ),
     caveat=_(
-        "Nicht auf ein grobes Netz: Ein Relief zeigt sich nur, wo Eckpunkte sind, und "
-        "unter einem Eckpunkt je zwei Bildpunkten bleibt vom Bild nichts übrig. Erst die "
-        "Dreiecke angleichen."
+        "Auf einem groben Netz, denn ein Relief zeigt sich nur an Eckpunkten. Vorher „Dreiecke "
+        "angleichen“."
     ),
 )
 def displace_image(ctx: OpContext) -> OpResult:
