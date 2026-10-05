@@ -3231,6 +3231,96 @@ _ANSWERS: list[
 _ANSWERS_LOCK = threading.Lock()
 
 
+class _Ceilings:
+    """Welche Überhangstücke zu einer Decke gehören (:func:`_model_support`).
+
+    Eine schräge Decke zerfällt im Schnitt in Streifen, je Schicht einen: Jeder
+    beginnt dort, wo die Schicht darunter mit ihrer Überhangzugabe endet.
+    Zwei Stücke benachbarter Schichten gehören deshalb zusammen, wenn das
+    untere dem oberen so nahe liegt wie das Material seiner Schicht überhaupt
+    — bis auf :data:`OVERHANG_MARGIN`, das Vernetzungsrauschen. So braucht die
+    Frage weder Winkel noch Schichthöhe, und die Abstände in benachbarten
+    Streifen (an der Waschschüssel 0,1384 gegen 0,1386 mm) stimmen trotz der
+    Kreisbögen der Zugabe überein. Inseln gehören zu keiner Decke: Sie hängen
+    in der Luft, und ihr nächstes Material sagt nichts über ihren Anschluss.
+    """
+
+    def __init__(
+        self, layers: tuple[LayerInfo, ...], material: Callable[[int], ShapelyPolygon]
+    ) -> None:
+        self._layers = layers
+        self._material = material
+        self._shapes: dict[tuple[int, int], ShapelyPolygon] = {}
+        self._floating: dict[int, ShapelyPolygon] = {}
+        self._gaps: dict[tuple[int, int], float] = {}
+        self._known: dict[tuple[int, int], frozenset[tuple[int, int]]] = {}
+
+    def shape(self, name: tuple[int, int]) -> ShapelyPolygon:
+        """Das Stück ``name`` (Schicht, Nummer) als Fläche."""
+        if name not in self._shapes:
+            contour = self._layers[name[0]].overhangs[name[1]]
+            self._shapes[name] = ShapelyPolygon(contour.outline, contour.holes)
+        return self._shapes[name]
+
+    def floats(self, name: tuple[int, int]) -> bool:
+        """Liegt das Stück auf einer Insel seiner Schicht?"""
+        layer = self._layers[name[0]]
+        if not layer.islands:
+            return False
+        if name[0] not in self._floating:
+            self._floating[name[0]] = unary_union(
+                [ShapelyPolygon(item.outline, item.holes) for item in layer.islands]
+            )
+        return bool(self.shape(name).intersection(self._floating[name[0]]).area > EPS_GEOM)
+
+    def _gap(self, name: tuple[int, int]) -> float:
+        """Wie weit das Stück vom Material der Schicht darunter entfernt ist."""
+        if name not in self._gaps:
+            below = self._material(name[0] - 1)
+            self._gaps[name] = (
+                math.inf if below.is_empty else float(shapely.distance(self.shape(name), below))
+            )
+        return self._gaps[name]
+
+    def _neighbours(self, name: tuple[int, int], index: int) -> list[tuple[int, int]]:
+        """Die Stücke der Schicht ``index`` (darüber oder darunter), an die ``name`` anschließt."""
+        others = [
+            (index, number)
+            for number in range(len(self._layers[index].overhangs))
+            if not self.floats((index, number))
+        ]
+        if not others:
+            return []
+        # Ein Aufruf je Nachbarschicht statt je Paar.
+        distances = shapely.distance(self.shape(name), [self.shape(other) for other in others])
+        return [
+            other
+            for other, distance in zip(others, distances, strict=True)
+            if float(distance) <= self._gap(name if index < name[0] else other) + OVERHANG_MARGIN
+        ]
+
+    def of(self, start: tuple[int, int]) -> frozenset[tuple[int, int]]:
+        """Die Decke, zu der ``start`` gehört, samt ``start``."""
+        if start in self._known:
+            return self._known[start]
+        if start[0] < 1 or self.floats(start):
+            return frozenset({start})
+        found = {start}
+        waiting = [start]
+        while waiting:
+            name = waiting.pop()
+            for index in (name[0] - 1, name[0] + 1):
+                if not 1 <= index < len(self._layers):
+                    continue
+                for other in self._neighbours(name, index):
+                    if other not in found:
+                        found.add(other)
+                        waiting.append(other)
+        ceiling = frozenset(found)
+        self._known.update(dict.fromkeys(ceiling, ceiling))
+        return ceiling
+
+
 def _model_support(
     result: SliceResult,
     channel_width: float,
@@ -3238,18 +3328,39 @@ def _model_support(
 ) -> ModelSupport:
     """Die Kanalfrage selbst, ungemerkt (:func:`model_support`)."""
     layers = result.layers
+    # Material einmal je Schicht für alle Säulen und die unveränderte Kanalfrage.
+    materials: dict[int, tuple[ShapelyPolygon, manifold3d.CrossSection]] = {}
+    building = threading.Lock()
+
+    def material_at(index: int) -> tuple[ShapelyPolygon, manifold3d.CrossSection]:
+        with building:
+            if index not in materials:
+                shape = _material(layers[index])
+                materials[index] = shape, _material_cross(shape)
+            return materials[index]
+
+    ceilings = _Ceilings(layers, lambda index: material_at(index)[0])
+    # Einzelne Stücke bekommen dieselbe Antwort wie im ganzen Durchgang — und
+    # die hängt seit der Decke als Ganzes an den Stücken ihrer Decke: Gefragt
+    # wird deshalb jede Decke, zu der ein gewähltes Stück gehört.
+    wanted: set[tuple[int, int]] | None = None
+    if only is not None:
+        wanted = set()
+        for name in sorted(only):
+            if name not in wanted:
+                wanted |= ceilings.of(name)
     areas: list[float] = []
     names: list[tuple[int, int]] = []
     pieces: list[ShapelyPolygon] = []
     starts: dict[int, list[int]] = {}
     for index in range(len(layers) - 1, 0, -1):
         for number, contour in enumerate(layers[index].overhangs):
-            if only is not None and (index, number) not in only:
+            if wanted is not None and (index, number) not in wanted:
                 continue
             starts.setdefault(index, []).append(len(areas))
             names.append((index, number))
             areas.append(piece_area(contour))
-            pieces.append(ShapelyPolygon(contour.outline, contour.holes))
+            pieces.append(ceilings.shape((index, number)))
     if not starts:
         return ModelSupport()
     top = max(starts)
@@ -3261,16 +3372,6 @@ def _model_support(
     starting = sorted(starts, reverse=True)
     groups = min(_workers(SUPPORT_WORKERS), len(starting)) if len(layers) >= PARALLEL_FROM else 1
     member = {index: number % groups for number, index in enumerate(starting)}
-    # Material einmal je Schicht für alle Säulen und die unveränderte Kanalfrage.
-    materials: dict[int, tuple[ShapelyPolygon, manifold3d.CrossSection]] = {}
-    building = threading.Lock()
-
-    def material_at(index: int) -> tuple[ShapelyPolygon, manifold3d.CrossSection]:
-        with building:
-            if index not in materials:
-                shape = _material(layers[index])
-                materials[index] = shape, _material_cross(shape)
-            return materials[index]
 
     def descend(group: int) -> dict[int, tuple[int, float]]:
         pending: list[tuple[int, manifold3d.CrossSection]] = []
@@ -3310,23 +3411,16 @@ def _model_support(
 
     if not landed:
         return ModelSupport()
-    floating: dict[int, ShapelyPolygon] = {}
     islands: set[int] = set()
     channels: set[int] = set()
     places: dict[int, Any] = {}
     asked: dict[int, list[int]] = {}
     for owner, (low, _area) in landed.items():
-        index = names[owner][0]
-        if layers[index].islands:
-            if index not in floating:
-                floating[index] = unary_union(
-                    [ShapelyPolygon(item.outline, item.holes) for item in layers[index].islands]
-                )
-            if pieces[owner].intersection(floating[index]).area > EPS_GEOM:
-                # Eine Insel ist nie eine Decke, die sich selbst schließt: Sie
-                # hat nichts unter sich, an dem eine Brücke ansetzen könnte.
-                islands.add(owner)
-                continue
+        if ceilings.floats(names[owner]):
+            # Eine Insel ist nie eine Decke, die sich selbst schließt: Sie
+            # hat nichts unter sich, an dem eine Brücke ansetzen könnte.
+            islands.add(owner)
+            continue
         # **Gemessen wird unmittelbar unter der Decke**, nicht auf halber
         # Höhe der Säule. Die Frage ist, ob sich die Decke selbst schließt,
         # und das entscheidet die Weite, die sie überspannen muss: Der
@@ -3355,6 +3449,37 @@ def _model_support(
             answers = list(pool.map(answer, asked))
     for under, closed in zip(asked, answers, strict=True):
         channels.update(owner for owner, shut in zip(asked[under], closed, strict=True) if shut)
+
+    # **Eine Decke ist als Ganzes Kanal oder Brücke** (Wedge-Lock, 05.10.2026).
+    # Die Frage oben gilt dem Ort eines Stücks, und das erste Stück einer
+    # schrägen Decke liegt oft an der Wand: An der 0,25er Düse (0,08 mm) waren
+    # es zwei Ausrundungen von zusammen 0,0 mm² an den Beinen einer Brücke von
+    # 25 mm, und an der Wand fasst der Raum keinen Kreis von ``channel_width``.
+    # Die vier Schichten Brücke darüber hingen frei, verlangten Stützen, und
+    # die Sperre um die zwei Ausrundungen nahm sie ihnen alle — bei 0,2 mm gab
+    # es keine solche Schicht. Zusammen gehört, was in benachbarten Schichten
+    # aneinander anschließt (:class:`_Ceilings`); liegt die Decke zum größeren
+    # Teil außerhalb eines Kanals, ist keines ihrer Stücke einer. Andersherum nicht: Ein
+    # offenes Stück an der Mündung eines Kanals (die Waschschüssel) bleibt
+    # offen und behält seine Stütze.
+    owner_of = {name: owner for owner, name in enumerate(names)}
+    settled: set[int] = set()
+    for owner in sorted(channels):
+        if owner in settled:
+            continue
+        ceiling = sorted(owner_of[name] for name in ceilings.of(names[owner]))
+        settled.update(ceiling)
+        inside = math.fsum(areas[member] for member in ceiling if member in channels)
+        hanging = math.fsum(areas[member] for member in ceiling if member not in channels)
+        if hanging > inside:
+            channels.difference_update(ceiling)
+
+    # Gemeldet wird, wonach gefragt war; die übrigen Stücke ihrer Decken
+    # haben nur mitentschieden.
+    reported = set(landed) if only is None else {owner for owner in landed if names[owner] in only}
+    channels &= reported
+    landed = {owner: entry for owner, entry in landed.items() if owner in reported}
+    islands &= reported
     outside = [area for owner, (_low, area) in landed.items() if owner not in channels]
     open_patch = max(outside, default=0.0)
     open_area = math.fsum(outside)

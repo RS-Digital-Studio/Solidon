@@ -5717,6 +5717,8 @@
   "Platte {number} · {count} Körper": "Piatto {number} · {count} corpi",
   "Platte {plate}, {quantity}: Die Gegenprobe ist unvollständig. {reason}": "Piatto {plate}, {quantity}: la verifica incrociata è incompleta. {reason}",
   "Platte {plate}, {quantity}: intern geschätzt {estimated} {unit}, im G-Code {measured} {unit}. {result}": "Piatto {plate}, {quantity}: stima interna {estimated} {unit}, nel G-Code {measured} {unit}. {result}",
+  "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. Die Stützeinstellungen prüfen und neu slicen.": "Piatto {plate}: i supporti sono attivi, ma il G-Code non ne contiene nessuno. Verifica le impostazioni dei supporti ed esegui di nuovo lo slicing.",
+  "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. „Kanäle frei halten“ ausschalten und neu slicen.": "Piatto {plate}: i supporti sono attivi, ma il G-Code non ne contiene nessuno. Disattiva «Tenere liberi i canali» ed esegui di nuovo lo slicing.",
   "Platten": "Piatti",
   "Platten der Datei übernehmen": "Mantieni i piatti del file",
   "Platten: {count}": "Piatti: {count}",

@@ -5717,6 +5717,8 @@
   "Platte {number} · {count} Körper": "Plaque {number} · {count} corps",
   "Platte {plate}, {quantity}: Die Gegenprobe ist unvollständig. {reason}": "Plateau {plate}, {quantity} : La contre-vérification est incomplète. {reason}",
   "Platte {plate}, {quantity}: intern geschätzt {estimated} {unit}, im G-Code {measured} {unit}. {result}": "Plateau {plate}, {quantity} : estimation interne {estimated} {unit}, dans le G-Code {measured} {unit}. {result}",
+  "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. Die Stützeinstellungen prüfen und neu slicen.": "Plateau {plate} : Les supports sont activés, mais le G-Code n'en contient aucun. Vérifiez les réglages de support et relancez le tranchage.",
+  "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. „Kanäle frei halten“ ausschalten und neu slicen.": "Plateau {plate} : Les supports sont activés, mais le G-Code n'en contient aucun. Désactivez « Garder les canaux libres » et relancez le tranchage.",
   "Platten": "Plateaux",
   "Platten der Datei übernehmen": "Conserver les plaques du fichier",
   "Platten: {count}": "Plateaux : {count}",

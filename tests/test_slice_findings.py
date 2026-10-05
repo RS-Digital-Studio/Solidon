@@ -27,6 +27,7 @@ from app.core.slice.analysis import (
     minimum_width,
     model_support,
     narrowest,
+    piece_area,
     slice_body,
     spanning_width,
     support_on_model,
@@ -992,3 +993,133 @@ def test_the_channel_space_leaves_a_column_on_the_model_free() -> None:
     assert slabs, "der Kanal bleibt gesperrt"
     for _low, _high, region in slabs:
         assert region.intersection(footprint).area == pytest.approx(0.0, abs=1e-6)
+
+
+# --- Eine Decke ist als Ganzes Kanal oder Brücke --------------------------------
+
+#: Die Unterseite des Stegs steigt auf seiner Tiefe um so viel an; die Zwickel
+#: an den Beinen fallen auf 3 mm Breite um 1 mm ab — beide flacher als jede
+#: Überhanggrenze, also zerfallen beide in Streifen, je Schicht einen.
+DECK_RISE = 0.25
+GUSSET_WIDTH = 3.0
+GUSSET_DROP = 1.0
+
+
+def hull(points: list[tuple[float, float, float]]) -> trimesh.Trimesh:
+    return trimesh.convex.convex_hull(points)
+
+
+def bridge_on_gussets(
+    gap: float, legs: tuple[float, float], depth: float = 5.0, rise: float = DECK_RISE
+) -> MeshData:
+    """Ein Steg von ``gap`` mm Spannweite und ``depth`` mm Tiefe auf zwei Beinen,
+    die in y von ``legs[0]`` bis ``legs[1]`` reichen, alles auf einer
+    Grundplatte; die Unterseite des Stegs steigt von 10 mm (hinten, y =
+    ``depth``) auf 10 + ``rise`` mm (vorn, y = 0). Hinten unter dem Steg sitzt
+    an jedem Bein ein flacher Zwickel, 1 mm tief.
+
+    Der Bau des Wedge-Lock (``F:\\3D Dateien``, 05.10.2026): Dort waren es zwei
+    Ausrundungen zwischen Bein und Steg, deren erste Schicht als Kanaldecke
+    galt, weil ihr Ort an der Beinwand liegt — und die Sperre um sie sperrte
+    den Raum unter dem ganzen Steg.
+    """
+    left, right = 5.0, 5.0 + gap
+    low, high = 10.0, 12.0
+    deck = [
+        (x, y, z)
+        for x in (left, right)
+        for y, z in ((0.0, low + rise), (depth, low), (0.0, high), (depth, high))
+    ]
+    parts = [
+        brick(gap + 20.0, legs[1] - legs[0] + 20.0, 2.0, (left + gap / 2.0, sum(legs) / 2.0, 1.0)),
+        brick(5.0, legs[1] - legs[0], high - 2.0, (left - 2.5, sum(legs) / 2.0, high / 2.0 + 1.0)),
+        brick(5.0, legs[1] - legs[0], high - 2.0, (right + 2.5, sum(legs) / 2.0, high / 2.0 + 1.0)),
+        hull(deck),
+    ]
+    for face, toward in ((left, 1.0), (right, -1.0)):
+        tip = face + toward * GUSSET_WIDTH
+        parts.append(
+            hull(
+                [
+                    (x, y, z)
+                    for y in (depth - 1.0, depth)
+                    for x, z in (
+                        (face, low - GUSSET_DROP),
+                        (face, high - 1.0),
+                        (tip, high - 1.0),
+                        (tip, low),
+                    )
+                ]
+            )
+        )
+    return on_bed(*parts)
+
+
+@pytest.mark.parametrize("layer_height", [0.08, 0.2])
+def test_a_bridge_is_no_channel_because_its_foot_touches_a_wall(layer_height: float) -> None:
+    """Die Kanalsperre nahm einem übernommenen Stützvorschlag jede Stütze.
+
+    Am Wedge-Lock an der 0,25er Düse (Kobra S1, 0,08 mm) galt die erste
+    Schicht einer 25-mm-Brücke als Kanaldecke, die vier darüber als Brücke
+    außerhalb eines Kanals. Die Brücken verlangten Stützen, das Kanalstück die
+    Sperre, und die Sperre deckte die ganze Decke: 0 statt 6,6 m Stütze im
+    G-Code. Bei 0,2 mm gab es kein Kanalstück. Gefragt wird deshalb die Decke
+    als Ganzes — Stücke benachbarter Schichten, die aneinander anschließen —,
+    und eine Decke, die zum größeren Teil frei hängt, ist kein Kanal.
+    """
+    gap = 25.0
+    result = slice_body(bridge_on_gussets(gap, (-3.0, 8.0)), layer_height)
+    gussets = [
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        if layer.z < 10.0
+        for number, piece in enumerate(layer.overhangs)
+        if piece_area(piece) < 1.0
+    ]
+    assert gussets, "die Zwickel hängen in Streifen an den Beinwänden"
+
+    need = advise.support_need(result)
+    model = need.model
+    spans = [layer.bridge_width for layer in result.layers if layer.bridge_width > 0.0]
+    assert max(spans) == pytest.approx(gap, abs=0.2), "die Brücke spannt von Bein zu Bein"
+    assert need.needed, "eine Brücke von 25 mm braucht Stützen"
+    assert not model.channels, "kein Stück dieser Decke ist eine Kanaldecke"
+    assert not model.channel_layers
+    assert channel_space(result, model) == [], "also keine Sperre unter der Brücke"
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    assert "support.block_channels" not in {entry.path for entry in entries}
+    for name in gussets:
+        assert not model_support(result, only=frozenset({name})).channels, (
+            "einzeln gefragt dieselbe Antwort wie im ganzen Durchgang"
+        )
+
+
+@pytest.mark.parametrize("layer_height", [0.08, 0.2])
+def test_a_channel_ceiling_stays_a_channel_with_an_open_end(layer_height: float) -> None:
+    """Die Gegenprobe, die Waschschüssel: Ihr Wasserkanal ist eine Decke, an
+    deren Mündung ein Stück außerhalb des Kanals frei hängt. Die Decke hängt
+    zum größeren Teil im Kanal und bleibt Kanaldecke; das offene Stück bleibt
+    offen und behält seine Stütze.
+
+    Hier ein Steg von 15 mm Tiefe in einem 20 mm weiten Tunnel, der vorn 1 mm
+    hinter dem Steg endet. Bei 0,08 mm hängt der vorderste Streifen außerhalb,
+    bei 0,2 mm reicht kein Streifen hinaus.
+    """
+    result = slice_body(bridge_on_gussets(20.0, (-1.0, 40.0), depth=15.0, rise=0.5), layer_height)
+    model = model_support(result)
+    front = max(
+        (
+            (index, number)
+            for index, layer in enumerate(result.layers)
+            for number, _piece in enumerate(layer.overhangs)
+        ),
+        key=lambda name: result.layers[name[0]].z,
+    )
+
+    assert model.channels, "die Decke im Tunnel ist Kanaldecke"
+    assert channel_space(result, model), "und bekommt ihre Sperre"
+    if layer_height < 0.1:
+        assert front in model.open_pieces, "der vorderste Streifen hängt außerhalb"
+        assert model.open_area < model.channel_area
+    else:
+        assert not model.open_pieces

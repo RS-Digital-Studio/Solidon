@@ -442,6 +442,106 @@ def test_plate_findings_distinguish_known_zero_and_missing_measurement(expected,
     assert findings[1].suggestions == ()
 
 
+@pytest.mark.parametrize("nozzle", [0.25, 0.4, 0.8])
+def test_no_support_is_measured_as_a_strand_through_the_nozzle(nozzle):
+    """„Keine Stütze“ heißt: weniger als ein Strang im Düsenquerschnitt, so lang
+    wie die kürzeste Brücke, die Solidon stützen lässt — eine Grenze in Metern
+    schlüge an einer 0,8er Düse an, die dieselbe Stütze mit wenigen Metern legt."""
+    import math
+
+    from app.core.slice.advise import SPAN_INTERESTING
+    from app.core.slice.estimate import support_floor
+
+    profile = profiles.make_profile()
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, nozzle_diameter=nozzle)
+    )
+    assert support_floor(profile) == pytest.approx(SPAN_INTERESTING * math.pi * nozzle**2 / 4.0)
+
+
+@pytest.mark.parametrize("blocked", [True, False])
+def test_supports_switched_on_but_none_in_the_gcode_is_a_warning(blocked):
+    """Die Kanalsperre nahm am Wedge-Lock dem übernommenen Stützvorschlag jede
+    Stütze (0 statt 6,6 m an der 0,25er Düse), und weil die Stützmenge mit Sperre
+    unbekannt ist, sagte die Gegenprobe nur „unvollständig“. Jetzt sagt sie, dass
+    nichts gestützt ist, und wohin der Weg führt."""
+    from app.core.errors import OPEN_PRINT_SETTINGS
+    from app.core.slice.estimate import PlateComparison, plate_findings
+    from app.core.slice.gcode import GcodeMetrics
+
+    floor = 0.74
+    expected = PlateComparison(
+        0, None, 4, "unbekannt", support_floor_mm3=floor, channels_blocked=blocked
+    )
+    findings = plate_findings(expected, GcodeMetrics(support_mm3=0.0, model_layer_count=4))
+
+    missing = [finding for finding in findings if finding.code == "gcode.support_missing"]
+    assert len(missing) == 1
+    assert missing[0].severity == "warning"
+    assert missing[0].suggestions == (OPEN_PRINT_SETTINGS,)
+    assert missing[0].source == "gcode"
+    assert missing[0].values["plate"] == 1
+    assert missing[0].values["measured"] == 0.0
+    assert ("„Kanäle frei halten“" in str(missing[0].message)) is blocked
+    assert [finding.code for finding in findings] == [
+        "gcode.support_missing",
+        "gcode.plate_comparison",
+    ], "die Stützzeile der allgemeinen Gegenprobe sagte dasselbe ein zweites Mal"
+
+    for printed, why in ((floor * 1.01, "ein Strang ist eine Stütze"), (None, "unbekannt")):
+        quiet = plate_findings(expected, GcodeMetrics(support_mm3=printed, model_layer_count=4))
+        assert "gcode.support_missing" not in {finding.code for finding in quiet}, why
+    unasked = PlateComparison(0, 0.0, 4)
+    zero = plate_findings(unasked, GcodeMetrics(support_mm3=0.0, model_layer_count=4))
+    assert "gcode.support_missing" not in {finding.code for finding in zero}, (
+        "ohne Stützbedarf ist keine Stütze die richtige Antwort"
+    )
+
+
+def test_the_plate_comparison_knows_when_support_is_wanted_and_blocked():
+    """Die Untergrenze gilt nur, wo Stützen eingeschaltet sind und die
+    Schichtanalyse sie selbst verlangt; die Sperre geht nur hinaus, wo ein
+    Kanal ist. Ein Block mit einem Tunnel von 20 mm, daneben oben eine
+    Kragplatte: Die Kragplatte braucht Stützen, die Tunneldecke ist Kanal. Ohne
+    Kragplatte trägt sich die Tunneldecke selbst, und keine Stütze im G-Code ist
+    dort die richtige Antwort."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.slice.estimate import plate_comparison
+    from app.core.types import SceneObject
+
+    block = trimesh.creation.box(extents=(60.0, 40.0, 40.0))
+    block.apply_translation((0.0, 0.0, 20.0))
+    tunnel = trimesh.creation.box(extents=(20.0, 50.0, 20.0))
+    tunnel.apply_translation((0.0, 0.0, 18.0))
+    arm = trimesh.creation.box(extents=(40.0, 40.0, 5.0))
+    arm.apply_translation((50.0, 0.0, 37.5))
+    bare = MeshData.of(trimesh.boolean.difference([block, tunnel]))
+    body = MeshData.of(trimesh.boolean.union([bare.raw, arm]))
+    profile = profiles.make_profile()
+    plain = print_settings.resolve(profile)
+    supported = dataclasses.replace(
+        plain, support=dataclasses.replace(plain.support, style="normal")
+    )
+    blocking = dataclasses.replace(
+        supported, support=dataclasses.replace(supported.support, block_channels=True)
+    )
+
+    def compared(settings, mesh=body):
+        part = (SceneObject(id="tunnel", name="Tunnel", mesh=mesh), mesh, settings)
+        return plate_comparison(0, [part], profile, keep_arrangement=True, separate_objects=False)
+
+    assert compared(plain).support_floor_mm3 is None, "ohne Stützen keine Untergrenze"
+    on = compared(supported)
+    assert on.support_floor_mm3 is not None and on.support_floor_mm3 > 0.0
+    assert not on.channels_blocked
+    assert compared(blocking).channels_blocked
+    alone = compared(blocking, bare)
+    assert alone.channels_blocked
+    assert alone.support_floor_mm3 is None, "die Tunneldecke allein verlangt keine Stütze"
+
+
 def test_plate_findings_preserve_selected_plate_order_and_reject_partial_mapping():
     """Platte 4 vor Platte 2, ohne Summieren oder stilles Abschneiden."""
     from app.core.slice.estimate import PlateComparison, plates_findings

@@ -100,7 +100,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
 - **Eine Decke im Kanal verlangt keine Stütze auf dem Modell**
   (`analysis.model_support`): Fasst der freie Raum unmittelbar **unter** ihr
   keinen Kreis von `CHANNEL_WIDTH` um das Stück, schließt sie sich als Brücke
-  oder Gewölbe und fällt aus dem Stützbedarf. Außen auf dem Modell zählt nur
+  oder Gewölbe und fällt aus dem Stützbedarf. Gefragt wird die Decke als
+  Ganzes (`_Ceilings`): Liegt sie meist außerhalb eines Kanals, ist keines
+  ihrer Stücke Kanal. Außen auf dem Modell zählt nur
   ein Stück über `OVERHANG_LAYER_WORTH_SUPPORT` oder die Summe über
   `OVERHANG_WORTH_SUPPORT`; wer die Grenze anfasst, fährt die Waschschüssel
   im Slicer.
@@ -150,12 +152,6 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `MOST_WALLS_WORTH_SUGGESTING` keine, der Obergrenze des Dialogfelds, die der
   Kern selbst führt (Regel 1; `tests/test_print_settings_ui.py` hält beide
   gleich). Der Materialanteil belegt keine Festigkeit.
-
-> **Ein Vorschlag ist ein Knopf, kein Hinweis.** Was er trägt, landet auf
-> Klick in der Datei für den Slicer; ein Wert, den das Feld nicht darstellen
-> kann, ist ein stiller Unterschied zwischen dem, was der Kunde sieht, und dem,
-> was er druckt. Und was die Geometrie als Material führt, ist erst Material,
-> wenn eine Bahn darin liegt.
 
 ## Das Maschinenprofil des Slicers
 
@@ -227,7 +223,9 @@ ohne Mindesttempo keine Zeit), verglichen ab der ersten Schicht
 (`GcodeMetrics.printing_seconds`). Beide tragen `source="internal"`.
 **Stützen zählen außerhalb der Mindestschichtzeit**; stützt der Slicer ganz
 anders oder das Profil keine Brücken, bleibt die Zeit offen
-(`estimate.time_comparison_blocked`).
+(`estimate.time_comparison_blocked`). Stützen ein, im G-Code unter
+`estimate.support_floor`: `gcode.support_missing`, wo `advise.support_need`
+Stützen verlangt.
 
 ## Was die Analyse liefert
 
