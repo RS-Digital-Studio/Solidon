@@ -147,7 +147,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen](#rm-038) | Kundenrückmeldungen | mailto-Weg gebaut, Rückfall ohne Mailprogramm sagt, was jetzt geht, lange Berichte werden gekürzt (`29dcefa4`, `736d4a46`); offen der Portalweg im ausgelieferten Flatpak |
 | [RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen](#rm-040) | Kundenrückmeldungen | Aktuellen Kundenbericht mit Traceback und betroffener Datei reproduzieren |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Start, Fokus und IME am aktuellen Flatpak bestätigen |
-| [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Code und Manifest fertig (`ce4e66ffb`, `91b42fc13`); Sonde für Linux und beide Macs auf `diagnose/slicer-erkennung`, wartet auf Actions-Minuten |
+| [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Am Runner im Sandkasten mit den Manifestrechten belegt; offen nur der Lauf mit dem ausgelieferten Solidon-Flatpak und das Öffnen im Fenster |
+| [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Entscheidung Robert: CuraEngine über Curas eigenen Lader starten oder Cura unter Linux nur öffnen |
+| [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Nach dem Release mit der Versionsnummer antworten; Entwurf liegt lokal bereit |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -4841,19 +4843,49 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-064"></a>
 
 - [~] **RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen.** Erkennung, Hostpfade und
-  Austauschordner sind repariert. Seit `ce4e66ffb` liest Solidon auch Herstellerprofile und eigene
+  Austauschordner sind repariert. Seit `ce4e66ffb` liest Solidon Herstellerprofile und eigene
   Drucker eines Slicer-Flatpaks (`/app/share/<Programm>/profiles`, `~/.var/app/<Kennung>/config`),
   das Manifest gibt beides lesend frei, und eine Portalkopie aus dem Dateidialog wird zum Starter
   (Kundenmeldung 05.10.2026: Ubuntu 24.04, Orca 2.5 als Flatpak, keine Drucker, nur ein alter aus
-  `~/.config`). `91b42fc13` ergänzt Cura im Mac-Bündel, von Hand gewählte `.app`-Bündel und die
-  Ablage von Creality Print 7. Abnahme: auf Linux Solidon-Flatpak gegen Orca-, Prusa-, Bambu- und
-  Cura-Flatpak (Drucker, eigener Drucker, Slicen, Öffnen) und auf beiden Mac-Runnern gegen die
-  Homebrew-Casks aller Slicer. Die Sonde dafür liegt auf dem Zweig `diagnose/slicer-erkennung`
-  (`probe_slicers.py`, Workflow `slicer-probe.yml`, vorher/nachher je Stufe); sie lief am
-  05.10.2026 nicht an, weil das private Repository keine Actions-Minuten hat. Vor dem Lauf
-  `main` in den Zweig mergen, nach dem Lauf den Zweig löschen.
+  `~/.config`). Dazu `91b42fc13` (Cura im Mac-Bündel, `.app`-Wahl, Creality Print 7),
+  `b1d2b69ff` (eingerichtete Drucker eines AppImage aus `system/`) und `b79f8a07e` (PrusaSlicer
+  als Flatpak rechnet über `--command`, sein Startskript ruft im Hintergrund auf).
+
+  Am 05.10.2026 am Runner belegt (Zweig `diagnose/slicer-erkennung`, Läufe 37336128130,
+  37337780033, 37339765628, je vorher/nachher): Unter Linux fand der Stand von 0.5.2 im Sandkasten
+  mit seinen Rechten **kein** Slicer-Flatpak und außerhalb bei Orca nur den Drucker aus
+  `~/.config`. Danach bieten Orca-, Bambu- und Prusa-Flatpak sowie Orca-, Elegoo- und
+  Creality-AppImage ihre Herstellerdrucker und den eigenen an und slicen einen Würfel —
+  außerhalb und im Sandkasten mit den Manifestrechten. Auf beiden Macs (macOS 26.6, ARM und
+  Intel) slicen PrusaSlicer, Creality Print, Cura, ElegooSlicer, Bambu Studio und OrcaSlicer aus
+  Homebrew; vorher fand Solidon dort von Cura nur das Fenster. Cura unter Linux: RM-521.
+
+  Offen: derselbe Weg mit dem ausgelieferten Solidon-Flatpak der nächsten Version und das Öffnen
+  im Fenster des Slicers. Danach den Zweig löschen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
+
+<a id="rm-521"></a>
+
+- [ ] **RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak).** Solidon findet Cura als
+  Flatpak samt 642 Druckern, rechnen kann es damit nicht, als AppImage findet es weder Drucker
+  noch Rechenmaschine. Gemessen am Runner (Diagnoselauf 37340935632): Cura 5.13 ist mit
+  appimage-builder gepackt, `CuraEngine` nennt seinen Lader relativ (`lib64/ld-linux-x86-64.so.2`),
+  der Lader liegt unter `runtime/compat` samt eigener glibc 2.35, und die Bibliothekspfade stehen
+  in `AppRun.env`. Ein Aufruf über `--command` oder mit `--cwd` scheitert mit „required file not
+  found“; beim AppImage steckt alles im Abbild, das nur zur Laufzeit eingehängt ist.
+  **Entscheidung Robert:** CuraEngine über Curas Lader aus `runtime/compat` mit dem Pfad aus
+  `AppRun.env` starten (beim AppImage nach `--appimage-mount`), oder Cura unter Linux nur im
+  Fenster öffnen und das im Druckdialog sagen. Bis dahin endet ein Slicen mit „keine Druckdatei“.
+
+<a id="rm-522"></a>
+
+- [ ] **RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden.** Kundenmeldung
+  vom 05.10.2026 zu 0.5.2 (Ubuntu 24.04, Orca 2.5 als Flatpak, keine Drucker und Profile, RM-064).
+  Die erste Antwort sagt nur zu, dass nachgestellt wird. Zugesagt ist eine zweite Nachricht, sobald
+  feststeht, ob die nächste Version es behebt: Ursache in zwei Sätzen, die Versionsnummer und dass
+  die Flatseal-Freigabe für den Session-Bus nicht nötig ist. Entwurf in Roberts lokaler Ablage.
+  Abnahme: nach dem Release versandt, Versandstatus dokumentiert.
 
 <a id="rm-072"></a>
 

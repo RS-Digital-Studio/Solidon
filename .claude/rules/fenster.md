@@ -391,15 +391,15 @@ Zustand und Mitgabe über den Knöpfen, außerhalb des Rollbereichs.
 **Slicer vor Drucker:** Einstellungen und Erstlauf verwenden dieselbe
 asynchrone Druckererhebung; in den Einstellungen steht der Slicer unter
 „Anwendung“ (er gilt jedem Projekt), direkt vor den Druckervorgaben. Beide
-bieten vollständige Profile aus dem gewählten Slicer an; neue Druckerprofile bleiben bis zum Speichern im Entwurf, auch beim
-Sprachwechsel. Die Einstellungen übernehmen dabei auch den Programmpfad erst
-beim Speichern. Der Erstlauf bewahrt seine bisherige Sprachwechsel-Semantik:
-Sprache, Slicerpfad und bereits gespeicherte Drucker gelten sofort; eine neue
-Profil-ID reist getrennt im Entwurf. Verspätete Antworten einer früheren
-Auswahl ändern weder den aktuellen Dialog noch gespeicherte Einstellungen.
-Die Druckerliste hat eine feste Suchzeile oberhalb der Treffer. Sie filtert
-live; erst eine ausdrückliche Auswahl übernimmt einen Drucker, Escape schließt
-nur die Liste.
+bieten nur vollständige Profile des gewählten Slicers; neue bleiben bis zum
+Speichern im Entwurf, auch beim Sprachwechsel, in den Einstellungen ebenso
+der Programmpfad. Im Erstlauf gelten Sprache, Slicerpfad und gespeicherte
+Drucker sofort; eine neue Profil-ID reist im Entwurf. Verspätete Antworten
+einer früheren Auswahl ändern weder Dialog noch Einstellungen. Je Modell eine
+Zeile ohne Düse (Entscheidung Robert, `add_printer_choices`); die Düse wählt
+der Druckdialog, Speichern behält sie (`with_saved_nozzle`). Die
+Druckerliste hat eine feste Suchzeile über den Treffern; sie filtert live,
+erst eine ausdrückliche Auswahl übernimmt, Escape schließt nur die Liste.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 

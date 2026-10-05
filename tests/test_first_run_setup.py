@@ -309,6 +309,32 @@ def test_failed_slicer_worker_keeps_saved_custom_printers_and_current_choice(
     assert "kennt Solidon nicht" in setup_dialog.printer_state.text()
 
 
+def test_choosing_a_slicer_printer_again_keeps_the_nozzle_from_the_print_dialog(
+    setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Liste nennt den Drucker ohne Düse, und Speichern setzt eine im
+    Druckdialog gewählte Düse nicht still auf die Variante des Slicers zurück."""
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    template = profiles.printer(profiles.DEFAULT_PRINTER)
+    found = replace(
+        template,
+        id="slicer-orca-a1",
+        title="Bambu Lab A1 0.4 nozzle",
+        vendor="BBL",
+        nozzle_diameter=0.4,
+        extrusion_width=0.42,
+    )
+    # So legt der Druckdialog eine andere Düse ab (``_nozzle_changed``).
+    profiles.save_printer(replace(found, nozzle_diameter=0.6, extrusion_width=0.63))
+    setup_dialog._discovered_printers = {found.id: found}
+    setup_dialog._fill_printers((found.id,), found.id)
+
+    assert setup_dialog.printer.currentData() == found.id
+    assert setup_dialog.printer.currentText() == "Bambu Lab A1"
+    assert setup_dialog._save_custom_printer()
+    assert profiles.printer_profiles()[found.id].nozzle_diameter == pytest.approx(0.6)
+
+
 def test_slicer_profile_search_stays_outside_the_gui_thread(
     setup_dialog: FirstRunDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

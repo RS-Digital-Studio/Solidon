@@ -60,6 +60,7 @@ from app.ui.first_run import (
     preferred_printer,
     select_program,
     valid_printer_choice,
+    with_saved_nozzle,
 )
 from app.ui.icons import icon
 from app.ui.labels import TrackSlider, by_title, slicer_title, wheel_needs_focus
@@ -413,8 +414,9 @@ class SettingsDialog(QDialog):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.printer.setMinimumContentsLength(20)
-        add_printer_choices(self.printer, self._known_printers())
-        select_data(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
+        chosen_printer = settings.printer or profiles.DEFAULT_PRINTER
+        add_printer_choices(self.printer, self._known_printers(), keep={chosen_printer})
+        select_data(self.printer, chosen_printer)
         self.printer.setToolTip(self.printer.currentText())
         self.printer.currentTextChanged.connect(self.printer.setToolTip)
         # Die Materialliste folgt dem Verfahren des Druckers: Ein Harzdrucker
@@ -689,14 +691,20 @@ class SettingsDialog(QDialog):
         return self.printer.search_field.text() or None
 
     def _known_printers(self) -> dict[str, PrinterProfile]:
-        return dict(profiles.printer_profiles()) | self._discovered_printers
+        saved = profiles.printer_profiles()
+        return dict(saved) | {
+            identifier: with_saved_nozzle(found, saved.get(identifier))
+            for identifier, found in self._discovered_printers.items()
+        }
 
     def save_external_choices(self) -> None:
         """Nur Speichern übernimmt das gewählte fremde Profil und den Programmpfad."""
         chosen = str(self.printer.currentData() or "")
-        profile = self._discovered_printers.get(chosen)
+        found = self._discovered_printers.get(chosen)
         try:
-            if profile is not None and profiles.printer_profiles().get(chosen) != profile:
+            saved = profiles.printer_profiles().get(chosen)
+            profile = with_saved_nozzle(found, saved) if found is not None else None
+            if profile is not None and saved != profile:
                 profiles.save_printer(profile)
             if not discover.same_program(discover.remembered_path("slicer"), self.slicer_path):
                 discover.remember_path("slicer", self.slicer_path)
@@ -798,7 +806,9 @@ class SettingsDialog(QDialog):
         with QSignalBlocker(self.printer):
             self.printer.clear()
             add_printer_choices(
-                self.printer, {name: entry for name, entry in known.items() if name in allowed}
+                self.printer,
+                {name: entry for name, entry in known.items() if name in allowed},
+                keep={preferred},
             )
             select_data(self.printer, preferred)
         self.printer.setEnabled(True)

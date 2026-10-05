@@ -99,6 +99,7 @@ from app.ui.labels import (
     demo_days,
     fill_parameter_units,
     localised_value,
+    printer_title,
     trial_days,
     unit_of,
     value_line,
@@ -516,7 +517,7 @@ class CalibrationDialog(QDialog):
             process_note.setText(
                 tr("Wand und Überhang gelten nur für diese Druckbedingungen:")
                 + "\n"
-                + f"{printer.title} · {current.title}\n"
+                + f"{printer_title(printer)} · {current.title}\n"
                 + conditions
             )
         else:

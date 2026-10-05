@@ -246,8 +246,9 @@ def _where_to_start_page() -> Page:
         str(
             _(
                 "**Beim ersten Start** fragt Solidon nach Sprache, Slicer und Drucker. Die "
-                "Drucker kommen aus dem gewählten Slicer, und das Suchfeld über der Liste "
-                "findet Ihren schnell. Fehlt Ihr Drucker, legen Sie einen eigenen mit seinen "
+                "Drucker kommen aus dem gewählten Slicer, jeder einmal, und das Suchfeld über der "
+                "Liste findet Ihren schnell; die Düse wählen Sie später in den "
+                "Druckeinstellungen. Fehlt Ihr Drucker, legen Sie einen eigenen mit seinen "
                 "tatsächlichen Bauraummaßen an. *Später einstellen* geht auch. Alles ändern Sie "
                 "jederzeit in den Einstellungen. Filamente aus Ihrem Slicer übernehmen Sie im "
                 "Filamentlager als eigene Spulen. Auf dem Startbildschirm führen vier Touren "

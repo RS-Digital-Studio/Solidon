@@ -4413,7 +4413,6 @@ def _definition_keys(path: Path) -> set[str]:
 #: je Familie in der Reihenfolge der Suche, relativ zu seinem ``/app``.
 _FLATPAK_CLI: Final[dict[SlicerFlavour, tuple[str, ...]]] = {
     "prusa": ("bin/prusa-slicer",),
-    "cura": ("cura/CuraEngine", "bin/CuraEngine"),
 }
 
 
@@ -4424,11 +4423,16 @@ def _cli_program(setup: SlicerSetup) -> list[str]:
     **Ein Slicer als Flatpak rechnet nicht immer über seinen Starter.** Das
     Startskript von PrusaSlicer auf Flathub ruft das Programm im Hintergrund auf
     und kehrt sofort zurück (``exec /app/bin/prusa-slicer "$@" &``) — Solidon
-    wartete auf nichts, und es entstand keine Druckdatei; der Starter von Cura
-    öffnet nur das Fenster. Für beide geht der Aufruf mit ``--command`` an das
-    Programm im Paket. Orca und Bambu Studio rufen im Vordergrund auf und
-    behalten ihren Starter samt dessen Umgebung (``LC_NUMERIC=C``). Gemessen
-    am Runner mit den Flathub-Paketen (RM-064).
+    wartete auf nichts, und es entstand keine Druckdatei. Der Aufruf geht deshalb
+    mit ``--command`` an das Programm im Paket. Orca und Bambu Studio rufen im
+    Vordergrund auf und behalten ihren Starter samt dessen Umgebung
+    (``LC_NUMERIC=C``). Gemessen am Runner mit den Flathub-Paketen (RM-064).
+
+    **Cura bleibt beim Starter**, der nur das Fenster öffnet: Sein Paket ist ein
+    AppImage aus appimage-builder, und CuraEngine nennt seinen Lader relativ
+    (``lib64/ld-linux-x86-64.so.2``); er liegt unter ``runtime/compat`` und
+    startet nur mit Curas eigenem Bibliothekspfad. Ein Aufruf mit
+    ``--command`` scheiterte am Runner mit „required file not found“.
     """
     app = discover.flatpak_app(setup.executable)
     inner = _FLATPAK_CLI.get(setup.flavour, ())

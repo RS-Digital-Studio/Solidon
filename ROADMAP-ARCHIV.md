@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)](#rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026) |
+| 2026-10-05 | [RM-523: Die Druckerlisten nennen Drucker, die Düse wählt der Druckdialog (05.10.2026)](#rm-523-die-druckerlisten-nennen-drucker-die-düse-wählt-der-druckdialog-05102026) |
 | 2026-10-05 | [RM-508: Der Prüfbericht zeigt zuerst die Befunde (05.10.2026)](#rm-508-der-prüfbericht-zeigt-zuerst-die-befunde-05102026) |
 | 2026-10-05 | [RM-516: Maße im Bild und Vorschauband nennen jede Zahl einmal (05.10.2026)](#rm-516-maße-im-bild-und-vorschauband-nennen-jede-zahl-einmal-05102026) |
 | 2026-10-05 | [RM-513: Ein Operationsdialog zeigt vorn höchstens vier Felder und einen Satz (05.10.2026)](#rm-513-ein-operationsdialog-zeigt-vorn-höchstens-vier-felder-und-einen-satz-05102026) |
@@ -42277,3 +42279,60 @@ Agent im Worktree 23 987 bestanden; nach dem Zusammenführen Tor grün. Commit
 mit Akzentknopf.
 Changelog: zum nächsten Release (Prüfbericht zeigt zuerst die Befunde, Export
 neben der Übergabe, Nachbau am Körper).
+
+## RM-523: Die Druckerlisten nennen Drucker, die Düse wählt der Druckdialog (05.10.2026)
+
+<a id="rm-523-die-druckerlisten-nennen-drucker-die-düse-wählt-der-druckdialog-05102026"></a>
+<a id="rm-523"></a>
+
+**RM-523 — Erste Schritte zeigten jede Düsenvariante als eigenen Drucker.** Robert: nur die
+  Drucker anzeigen, die Düse erst im Druckdialog wählen. Bambu Studio führt 202 Profile für
+  92 Geräte, OrcaSlicer 996 für 400, PrusaSlicer 1050 für 381.
+
+**Vorher geprüft:** ob der Druckdialog jede Düse eines Modells auf die richtige Maschine
+stellt — Sonde über acht installierte Slicer, 4907 Druckerprofile. PrusaSlicer und SuperSlicer
+verloren bei 729 von 1390 und 264 von 966 Wechseln das Maschinenprofil: `match` hielt sich an
+die im Bündel genannte Variante (`prusaslicer_printer`). Bei gleicher Düse sprang „MK4S HF0.4“
+auf die gewöhnliche 0,6, und die Übergabe (`machine_with_nozzle`) wählte alphabetisch — am
+SV06 die High-Speed-Variante, wo der Dialog die Grundausführung nahm. Bambu Studio führt
+„Creality K1 0.8 nozzle“ mit dem Modellfeld des K1 Max; am K1 fehlte die 0,8.
+
+**Fix:** `slicer_profiles.model_name` (Name ohne Düse, „HF“ bleibt), `sister_variant` und
+`variant_order` als eine Stelle für Dialog und Übergabe; `match` folgt einer festgelegten
+Variante zur Schwester und bleibt ohne Schwester leer (RM-329); `same_printer_model` kennt
+auch den Namen ohne Düse. Danach jeder Wechsel richtig (PrusaSlicer 1121, SuperSlicer 791,
+OrcaSlicer 605, Bambu Studio 110). `add_printer_choices` zeigt je Modell eine Zeile
+(`labels.printer_title`); dafür steht die gewählte oder vorgeschlagene Variante (`keep`),
+sonst die 0,4er, und der Hinweis am Eintrag nennt die Düse. Erststart und Einstellungen
+speichern einen Drucker aus dem Slicer mit der Düse, die der Druckdialog gesetzt hat
+(`with_saved_nozzle`); vorher setzte jedes Speichern sie still auf die Variante zurück.
+Kopfzeile, Druckziel (neue Zeile *Düse*) und Prozesshinweis nennen denselben Namen.
+Handbuch *Beim ersten Start*, fünf Kataloge. Die Funktionen im Kern kamen mit `b79f8a07e`
+in den Baum. Drei Profile mit geerbter Düse lesen 0 mm: RM-524.
+
+**Nachweis:** `test_slicer_profiles.py` (`model_name`, festgelegte Variante, Ausführung,
+Grundausführung in Dialog und Übergabe, falsches Modellfeld; am Stand `b1d2b69ff` rot),
+`test_printer_choices.py`; Fenstertests (Release): `test_variants_of_one_printer_become_one_choice`,
+`test_choosing_a_slicer_printer_again_keeps_the_nozzle_from_the_print_dialog`,
+`test_saving_the_settings_keeps_the_nozzle_chosen_in_the_print_dialog`.
+
+## RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)
+
+<a id="rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026"></a>
+<a id="rm-524"></a>
+
+**RM-524 — Drei Herstellerprofile verloren beim Lesen ihre Düse.** Gefunden bei RM-523:
+  `slicer_profiles._read` nimmt `nozzle_diameter` nur aus der Profildatei. OrcaSlicers und
+  ElegooSlicers „Rolohaun Delta Flyer Refit 0.4 nozzle“ erbt sie vom Rook MK1 LDO,
+  PrusaSlicers und SuperSlicers „Anycubic i3 Mega“ und „… i3 Mega S“ nennen sie in der ganzen
+  Kette nicht. Die Maschine trug 0 mm, `match` fand zum Drucker keine, und der Druckdialog
+  ließ das Maschinenprofil leer.
+
+**Fix:** `find_profiles` liest die Düse einer Maschine ohne eigene Angabe aus der Erbkette,
+die es für Maschinen ohnehin abgeht (`_stated_nozzle`); nennt die Kette keine, gilt die
+Vorgabe des Slicers aus `MACHINE_DEFAULTS` — dieselbe, mit der die Druckererhebung rechnet.
+`_prusa_listing` nimmt sie über `_machine_value`. Danach trägt in allen sieben Orca- und
+Prusa-Beständen dieses Rechners jede Maschine eine Düse, der Rolohaun-Drucker findet seine.
+
+**Nachweis:** `test_a_machine_reads_its_nozzle_from_the_profile_it_inherits`,
+`test_a_bundle_machine_without_a_nozzle_takes_the_slicers_default` (ohne Fix rot mit 0,0).

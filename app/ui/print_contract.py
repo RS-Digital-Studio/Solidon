@@ -15,8 +15,9 @@ from app.core.geom.difference import SceneDifference
 from app.core.knowledge import profiles
 from app.core.scene import EvaluationResult
 from app.core.types import CheckState, Document, Finding, Profile, Scene, SceneObject
+from app.core.units import format_length
 from app.i18n import TranslatableText, _, tr
-from app.ui.labels import length
+from app.ui.labels import length, printer_title
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,7 +130,9 @@ def print_target(document: Document, result: EvaluationResult | None) -> PrintTa
         else _("Verfahren unbekannt")
     )
     printer_name = (
-        printer.title if printer is not None else (document.printer or _("Druckziel fehlt"))
+        printer_title(printer)
+        if printer is not None
+        else (document.printer or _("Druckziel fehlt"))
     )
     title = _("{printer} · {process}", printer=printer_name, process=process)
     if missing:
@@ -148,6 +151,10 @@ def print_target(document: Document, result: EvaluationResult | None) -> PrintTa
                 z=f"{printer.build_volume[2]:g}",
             ),
         )
+        if not printer.is_resin:
+            # Der Name nennt die Düse nicht mehr (``printer_title``); gewählt
+            # wird sie im Druckdialog, und hier steht, mit welcher gerechnet wird.
+            details.insert(2, _("Düse: {nozzle}", nozzle=format_length(printer.nozzle_diameter)))
     details.extend(dict.fromkeys(missing))
     return PrintTarget(title, tuple(details), tuple(dict.fromkeys(missing)), tuple(names))
 
@@ -428,7 +435,7 @@ def handoff_receipt(
         ).details
     else:
         basis = tr("Druckziel: {printer} · {material}").format(
-            printer=str(profile.printer.title), material=str(profile.material.title)
+            printer=printer_title(profile.printer), material=str(profile.material.title)
         )
     details = [
         status,

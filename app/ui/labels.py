@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from app import i18n
 from app.core.activation import Activation
+from app.core.export.slicer_profiles import model_name
 from app.core.geom.mesh import MeshData, face_components
 from app.core.perceive.actions import measure_explanation, measure_qualifier
 from app.core.perceive.groups import FunctionalGroup, GroupMeasure
@@ -45,6 +46,7 @@ from app.core.types import (
     Feature,
     FeatureId,
     Finding,
+    PrinterProfile,
     SceneObject,
     measure_status,
     thread_is_tapered,
@@ -3058,6 +3060,19 @@ def slicer_title(path: Path) -> str:
     if folder.lower() in _GENERIC_FOLDERS:
         return path.stem
     return folder
+
+
+def printer_title(printer: PrinterProfile) -> str:
+    """Der Drucker, wie ihn Listen, Kopfzeile und Druckziel nennen: ohne die
+    Düse seiner Slicervariante (Entscheidung Robert).
+
+    Die Slicer führen jede Düse als eigenes Profil („Bambu Lab A1 0.4
+    nozzle“); gewählt wird der Drucker, die Düse im Druckdialog. Nach dem
+    Wechsel dort stünde im Namen noch die alte. Gekürzt wird nur ein Profil mit
+    Hersteller — ein selbst benannter Drucker heißt, wie der Kunde ihn nannte.
+    """
+    title = str(printer.title)
+    return model_name(title) if printer.vendor.strip() else title
 
 
 def deadline_date(state: Activation) -> str:
