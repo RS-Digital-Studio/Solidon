@@ -480,15 +480,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   **Rückmeldung 05.10.2026, 0.5.2 auf einem zweiten Mac desselben Kunden:** Das Beenden nach
   dem Start ist weg. Gestartet hat die App aber erst nach `sudo codesign --force --deep --sign -`,
-  danach stand sie zunächst nur im Dock und kam dann. Prozessor, macOS-Version und das Bild ohne
-  Neusignierung sind beim Kunden erfragt. Verdacht, ungemessen: macOS prüft eine notarisierte App
-  beim ersten Start vollständig, auch ohne Quarantäne; die Ad-hoc-Signatur nimmt die Notarisierung
-  und damit diese Prüfung weg. Im Tag-Lauf 37266459831 brauchte `spctl --assess` auf dem
-  Intel-Runner 55 s, auf ARM 3 s. Der Messweg liegt in `.claude/.state/mac-start-2026-10-05/`:
-  veröffentlichtes Paket mit Quarantäne installieren, über `open` starten, Zeit bis Prozess, Python
-  und Fenster — erster, zweiter und neu signierter Start, je mit und ohne vorheriges `spctl`. Am
-  05.10. lief er nicht: GitHub startet seit dem Vormittag keinen Job (Zahlung oder Ausgabenlimit
-  des Kontos), auch keinen auf `main`.
+  danach stand sie zunächst nur im Dock und kam dann. Beide Macs des Kunden sind **Intel-Macs mit
+  macOS 26**; im Büro stand die App eine halbe Stunde, ohne zu starten. Damit ist der erste Verdacht
+  (Gatekeepers lange Erstprüfung der notarisierten App) widerlegt: Auf echten Intel-Macs startet das
+  mit Developer ID signierte Paket nicht, ad hoc signiert schon. Nie geprüft ist genau dieser Fall:
+  Der Intel-Starttest der Releaseakte läuft ohne Bildschirm (`--offscreen`, also ohne
+  Cocoa-Plattform und ohne 3D-Ansicht, `"renderer": {"present": false}` im Tag-Lauf
+  37266459831). Signiert wird mit Hardened Runtime und ohne Entitlements
+  (`build.yml`, Schritt „Signieren“); was die Ad-hoc-Signatur davon aufhebt (ausführbarer
+  Schreibspeicher für libffi-Rückrufe von wgpu und ctypes auf x86_64, Bibliotheksprüfung), ist
+  ungemessen. Erfragt sind die Terminalausgabe des direkten Starts, `codesign --verify --deep
+  --strict` am installierten Paket, Absturzberichte und die genaue macOS-Version. Der Messweg in
+  `.claude/.state/mac-start-2026-10-05/` misst Zeiten und sichert Protokolle; am 05.10. lief er
+  nicht, weil GitHub seit dem Vormittag keinen Job startet (Zahlung oder Ausgabenlimit des Kontos),
+  auch keinen auf `main`.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).
 

@@ -181,9 +181,24 @@ def install_root(executable: Path) -> Path | None:
     Ablage unterscheidet sich zwischen Windows, einem AppImage und einem
     Linux-Paket, und alle drei legen ``resources`` irgendwo über der ausführbaren
     Datei ab.
+
+    **Ein Flatpak trägt seinen Bestand nicht über dem Starter**, sondern in
+    seinem eigenen ``/app`` (:func:`discover.flatpak_files`): nach FHS gebaut —
+    Orca, PrusaSlicer und Bambu Studio auf Flathub — unter
+    ``share/<Programm>/profiles``, Cura als ausgepacktes AppImage unter
+    ``cura/share/cura``. Ein Slicer aus dem Paketverwalter der Distribution legt
+    genauso nach FHS ab (``/usr/share/PrusaSlicer/profiles``).
     """
+    mark = discover.program_mark(executable.name)
+    app = discover.flatpak_app(executable)
+    files = discover.flatpak_files(app) if app else None
+    if files is not None:
+        for folder in (files, *sorted(entry for entry in files.iterdir() if entry.is_dir())):
+            for candidate in _bundled(folder, mark):
+                if candidate.is_dir():
+                    return candidate
     for folder in (executable.parent, *executable.parents):
-        for candidate in (folder / "resources" / "profiles", folder / "share" / "cura"):
+        for candidate in _bundled(folder, mark):
             # Gefragt wird über ``discover``: Läuft Solidon in einem Flatpak,
             # ist ``executable`` ein Host-Pfad, und ``is_dir()`` darauf sagt
             # zuverlässig nein. Für Cura hängt daran ``-j <definition>``, und
@@ -191,6 +206,26 @@ def install_root(executable: Path) -> Path | None:
             if discover.is_dir_on_host(candidate):
                 return candidate
     return None
+
+
+def _bundled(folder: Path, mark: str) -> Iterator[Path]:
+    """Wo unter ``folder`` ein mitgelieferter Bestand liegen kann.
+
+    ``share/<Programm>`` wird gelesen statt erraten, denn der Ordner trägt die
+    Schreibweise des Herstellers (``OrcaSlicer``, ``BambuStudio``), das Programm
+    die des Startnamens (``orca-slicer``). Das Debian-Paket von Anycubic Slicer
+    Next legt eine Ebene tiefer ab: ``share/AnycubicSlicerNext/resources/profiles``.
+    """
+    yield folder / "resources" / "profiles"
+    yield folder / "share" / "cura"
+    try:
+        shared = sorted((folder / "share").iterdir())
+    except OSError:
+        return
+    for entry in shared:
+        if discover.plain_name(entry.name) == mark:
+            yield entry / "profiles"
+            yield entry / "resources" / "profiles"
 
 
 def config_home(platform: str) -> str:
@@ -235,6 +270,23 @@ def config_home(platform: str) -> str:
     return str(home) if home.is_dir() else ""
 
 
+def config_base(executable: Path) -> str:
+    """Wo **dieser** Slicer seine Konfiguration ablegt.
+
+    Ein Slicer als Flatpak schreibt nicht nach ``~/.config``: Flatpak setzt
+    sein ``XDG_CONFIG_HOME`` auf ``~/.var/app/<Kennung>/config``. Ein
+    ``~/.config/OrcaSlicer`` daneben stammt dann von einer anderen Installation
+    und wird nicht gelesen — sonst hieße der Drucker, den Solidon als zuletzt
+    eingestellt meldet, wie einer, den der Kunde dort längst nicht mehr hat.
+    """
+    app = discover.flatpak_app(executable)
+    if not app:
+        return config_home(sys.platform)
+    data = discover.flatpak_data(app)
+    config = data / "config" if data is not None else None
+    return str(config) if config is not None and config.is_dir() else ""
+
+
 def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     """Wo die selbst angelegten Profile liegen.
 
@@ -242,7 +294,7 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     ab. Der Programmname ist der der ausführbaren Datei, ohne Bindestriche —
     ``elegoo-slicer.exe`` schreibt nach ``ElegooSlicer``.
     """
-    base = config_home(sys.platform)
+    base = config_base(executable)
     if not base:
         return []
     if flavour == "cura":
@@ -350,7 +402,7 @@ def prusa_config(executable: Path) -> Path | None:
     eingelegt und eingestellt war — dieselbe Auskunft, die bei Orca in
     ``presets.machine`` steht, nur in einem anderen Format.
     """
-    base = config_home(sys.platform)
+    base = config_base(executable)
     if not base:
         return None
     stem = discover.program_mark(executable.name)
@@ -625,7 +677,7 @@ def cura_active_machine(executable: Path) -> CuraActiveMachine | None:
     Auf diese Maschine setzt Cura ein importiertes Profil um, und nur ihre
     Qualitätsstufen nimmt es an (:func:`cura_quality_types`).
     """
-    base = config_home(sys.platform)
+    base = config_base(executable)
     installed = install_root(executable)
     if not base or installed is None:
         return None
@@ -769,7 +821,7 @@ def _cura_configured(
     mitgelieferten Bestand. Ein Fach ohne Material oder ohne Farbe bleibt weg;
     ein Vorschlag ohne Farbe wäre keiner.
     """
-    base = config_home(sys.platform)
+    base = config_base(executable)
     if not base:
         return ()
     for root in _cura_user_roots(executable, Path(base)):
@@ -1918,14 +1970,26 @@ def _cura_profiles(executable: Path, wanted: frozenset[ProfileKind]) -> list[Sli
 
 
 def _cura_user_roots(executable: Path, config: Path, *, platform: str | None = None) -> list[Path]:
-    """Cura speichert je Programmversion, nicht je Nutzerkonto."""
+    """Cura speichert je Programmversion, nicht je Nutzerkonto.
+
+    Ein Cura als Flatpak legt Daten wie Konfiguration in seinem eigenen
+    ``~/.var/app/<Kennung>`` ab (:func:`config_base`).
+    """
     candidates = [config / "cura"]
     if (platform or sys.platform).startswith("linux"):
-        named = os.environ.get("XDG_DATA_HOME", "")
-        data = (
-            Path(named) if named and not discover.in_flatpak() else Path.home() / ".local" / "share"
-        )
-        candidates.insert(0, data / "cura")
+        app = discover.flatpak_app(executable)
+        if app:
+            own = discover.flatpak_data(app)
+            data = own / "data" if own is not None else None
+        else:
+            named = os.environ.get("XDG_DATA_HOME", "")
+            data = (
+                Path(named)
+                if named and not discover.in_flatpak()
+                else Path.home() / ".local" / "share"
+            )
+        if data is not None:
+            candidates.insert(0, data / "cura")
     version = next(
         (
             match.group(1)

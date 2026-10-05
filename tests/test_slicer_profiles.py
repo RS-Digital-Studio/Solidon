@@ -3928,3 +3928,187 @@ def test_an_own_copy_is_no_stage() -> None:
     chosen = sp.stage_process(fitting, fitting[2], "fine", 0.12)
 
     assert chosen is not None and chosen.name == "0.12mm Fine @CC2"
+
+
+# --- ein Slicer als Flatpak -------------------------------------------------------
+#
+# Ein Kunde mit Orca als Flatpak bekam keinen seiner Drucker angeboten: Solidon
+# suchte den Herstellerbestand über dem Starter in den Exporten und die eigenen
+# Drucker in ``~/.config``. Orca als Flatpak hat beides woanders — nachgelesen in
+# Orcas Quelltext (``SLIC3R_FHS`` mit ``-DFLATPAK=ON``, ``XDG_CONFIG_HOME`` in
+# ``GUI_App.cpp``) und im Flathub-Manifest, nicht angenommen.
+
+_ORCA = "com.orcaslicer.OrcaSlicer"
+
+
+@pytest.fixture
+def orca_flatpak(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
+    """Eine Systeminstallation von Orca als Flatpak, wie ``flatpak install`` sie
+    hinterlässt, samt einem veralteten ``~/.config/OrcaSlicer`` daneben."""
+    from app.core import discover
+
+    system = tmp_path / "var" / "lib" / "flatpak"
+    home = tmp_path / "home"
+    launcher = system / "exports" / "bin" / _ORCA
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("#!/bin/sh\nexec /usr/bin/flatpak run com.orcaslicer.OrcaSlicer\n")
+    files = system / "app" / _ORCA / "current" / "active" / "files"
+    vendor = files / "share" / "OrcaSlicer" / "profiles"
+    (files / "bin").mkdir(parents=True)
+    (files / "bin" / "orca-slicer").write_bytes(b"")
+    _write(
+        vendor / "Creality" / "machine" / "k1.json",
+        {
+            "type": "machine",
+            "name": "Creality K1 (0.4 nozzle)",
+            "instantiation": "true",
+            "printer_model": "Creality K1",
+            "nozzle_diameter": ["0.4"],
+        },
+    )
+    _write(
+        vendor / "Creality" / "process" / "standard.json",
+        {
+            "type": "process",
+            "name": "0.20mm Standard @Creality K1 (0.4 nozzle)",
+            "instantiation": "true",
+            "compatible_printers": ["Creality K1 (0.4 nozzle)"],
+        },
+    )
+    config = home / ".var" / "app" / _ORCA / "config" / "OrcaSlicer"
+    _write(
+        config / "user" / "default" / "machine" / "Mein K1.json",
+        {"name": "Mein K1", "from": "User", "inherits": "Creality K1 (0.4 nozzle)"},
+    )
+    (config / "OrcaSlicer.conf").write_text(
+        json.dumps({"presets": {"machine": "Mein K1"}}), encoding="utf-8"
+    )
+    stale = home / ".config" / "OrcaSlicer"
+    _write(
+        stale / "user" / "default" / "machine" / "Alt.json",
+        {"name": "Creality K1 - Custom", "from": "User"},
+    )
+    (stale / "OrcaSlicer.conf").write_text(
+        json.dumps({"presets": {"machine": "Creality K1 - Custom"}}), encoding="utf-8"
+    )
+
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(discover, "_FLATPAK_EXPORTS", (str(launcher.parent),))
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(system),))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    monkeypatch.setattr(sp.sys, "platform", "linux")
+    return {"launcher": launcher, "files": files, "vendor": vendor, "config": config}
+
+
+def test_a_flatpak_slicer_brings_its_vendor_profiles(orca_flatpak: dict[str, Path]) -> None:
+    """Der Bestand liegt im ``/app`` des Flatpak unter ``share/OrcaSlicer``,
+    nicht über dem Starter in ``exports/bin``."""
+    assert sp.install_root(orca_flatpak["launcher"]) == orca_flatpak["vendor"]
+
+
+def test_a_flatpak_slicer_keeps_its_own_printers_in_its_own_folder(
+    orca_flatpak: dict[str, Path],
+) -> None:
+    """``~/.var/app/<Kennung>/config`` statt ``~/.config`` — und ein altes
+    ``~/.config/OrcaSlicer`` einer früheren Installation bleibt ungelesen."""
+    launcher = orca_flatpak["launcher"]
+
+    assert sp.user_roots("orca", launcher) == [orca_flatpak["config"] / "user" / "default"]
+    assert sp.chosen_machine("orca", launcher) == "Mein K1"
+
+
+def test_a_flatpak_slicer_offers_vendor_and_own_printers(orca_flatpak: dict[str, Path]) -> None:
+    """Was der Kunde im Druckdialog sieht: die Drucker des Herstellers und
+    seinen eigenen, nicht den einer alten Installation."""
+    names = {entry.name for entry in sp.find_profiles(orca_flatpak["launcher"], "orca")}
+
+    assert {
+        "Creality K1 (0.4 nozzle)",
+        "0.20mm Standard @Creality K1 (0.4 nozzle)",
+        "Mein K1",
+    } <= names
+    assert "Creality K1 - Custom" not in names
+
+
+def test_the_portal_copy_of_the_launcher_reads_the_same_profiles(
+    orca_flatpak: dict[str, Path],
+) -> None:
+    """So kam der Pfad beim Kunden an: Solidons Dateidialog gab im eigenen
+    Flatpak die Portalkopie des Starters zurück."""
+    from app.core import discover
+
+    portal = Path("/run/user/2009/doc/d0880632") / _ORCA
+
+    assert discover.host_program(portal) == orca_flatpak["launcher"]
+    assert sp.install_root(portal) == orca_flatpak["vendor"]
+
+
+def test_a_user_installation_and_a_hidden_one_are_told_apart(
+    orca_flatpak: dict[str, Path], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Fehlt Solidons eigenem Flatpak die Leseberechtigung, sagt das Protokoll
+    es — statt den Bestand still für nicht vorhanden zu halten."""
+    from app.core import discover
+
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(orca_flatpak["files"].parent),))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(discover, "_host_test", lambda _flag, _path: True)
+
+    with caplog.at_level("INFO", logger=discover._log.name):
+        assert discover.flatpak_files(_ORCA) is None
+
+    assert "hidden from this sandbox" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("program", "below_share"),
+    [
+        ("prusa-slicer", ("PrusaSlicer", "profiles")),
+        ("AnycubicSlicerNext", ("AnycubicSlicerNext", "resources", "profiles")),
+    ],
+)
+def test_a_distribution_package_keeps_its_profiles_under_share(
+    tmp_path: Path, program: str, below_share: tuple[str, ...]
+) -> None:
+    """``apt install prusa-slicer`` legt nach FHS ab: ``/usr/bin/prusa-slicer``
+    und ``/usr/share/PrusaSlicer/profiles``. Dieselbe Ablage nutzt das Flatpak.
+    Anycubic Slicer Next legt laut ``md5sums`` seines Pakets 2.0.0.5 eine Ebene
+    tiefer ab."""
+    prefix = tmp_path / "usr"
+    executable = prefix / "bin" / program
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"")
+    (prefix / "share" / "applications").mkdir(parents=True)
+    profiles = prefix.joinpath("share", *below_share)
+    profiles.mkdir(parents=True)
+
+    assert sp.install_root(executable) == profiles
+
+
+def test_cura_as_a_flatpak_reads_its_own_data_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cura auf Flathub ist ein ausgepacktes AppImage unter ``/app/cura``, und
+    seine Druckerstapel liegen in ``~/.var/app/com.ultimaker.cura/data``."""
+    from app.core import discover
+
+    cura = "com.ultimaker.cura"
+    system = tmp_path / "flatpak"
+    home = tmp_path / "home"
+    launcher = system / "exports" / "bin" / cura
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("")
+    resources = system / "app" / cura / "current" / "active" / "files" / "cura" / "share" / "cura"
+    (resources / "resources" / "definitions").mkdir(parents=True)
+    data = home / ".var" / "app" / cura / "data" / "cura" / "5.11"
+    data.mkdir(parents=True)
+    (home / ".var" / "app" / cura / "config" / "cura").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(discover, "_FLATPAK_EXPORTS", (str(launcher.parent),))
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(system),))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    monkeypatch.setattr(sp.sys, "platform", "linux")
+
+    assert sp.install_root(launcher) == resources
+    assert data in sp.user_roots("cura", launcher)

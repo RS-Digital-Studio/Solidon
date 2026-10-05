@@ -6251,7 +6251,7 @@ def slice_model(
             # ist derselbe Weg noch einmal — er schreibt sie neu.
             suggestions=(RETRY, CANCEL),
         )
-    if not setup.executable.is_file():
+    if not discover.is_file_on_host(setup.executable):
         raise ExternalToolError(
             tool=setup.name,
             detail=_("Der eingestellte Slicer liegt nicht mehr an seinem Pfad."),
@@ -6751,7 +6751,7 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
             detail=_("Zu diesem Slicer ist kein Fenster installiert — er rechnet nur."),
             suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
         )
-    if not program.is_file():
+    if not discover.is_file_on_host(program):
         raise ExternalToolError(
             tool=setup.name,
             detail=_("Der eingestellte Slicer liegt nicht mehr an seinem Pfad."),

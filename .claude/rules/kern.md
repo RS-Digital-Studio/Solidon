@@ -392,9 +392,24 @@ Cura-Definition aus `install_root` startet CuraEngine nicht), und
 `XDG_CONFIG_HOME`/`XDG_CACHE_HOME` zeigen in den Sandkasten —
 `--filesystem=home` nimmt `~/.var` aus, der Austauschordner wäre für den
 Slicer unsichtbar. Deshalb: **Jeder neue Startpfad bekommt `discover.on_host`
-davor** (`flatpak-spawn --host`), **und mit XDG ist im Flatpak der Rechner
-gemeint** (`config_home`, `exchange_dir`). Ein Modul, das eine Falle richtig
-benennt, ist gegen sie nicht immun.
+davor** (`flatpak-spawn --host`), **jede Existenzprüfung eines Programms geht
+über `is_file_on_host`/`is_dir_on_host`, und mit XDG ist im Flatpak der
+Rechner gemeint** (`config_home`, `exchange_dir`). Ein Modul, das eine Falle
+richtig benennt, ist gegen sie nicht immun.
+
+### Ein Slicer als Flatpak hat sein Wissen in seinem Sandkasten
+
+Den Herstellerbestand trägt er in seinem `/app` (nach FHS unter
+`share/<Programm>/profiles`), die eigenen Drucker unter
+`~/.var/app/<Kennung>/config` — nie über dem Starter und nie in `~/.config`.
+Erkannt wird er an Ort und Kennung (`discover.flatpak_app`: Starter in den
+Exporten, Datei der Installation, Portalkopie), gelesen über
+`flatpak_files`/`flatpak_data` und `slicer_profiles.config_base`. Eine
+Portalkopie aus Solidons Dateidialog (`/run/user/<uid>/doc/…`) wird beim
+Merken und Lesen zum Starter (`host_program`). Solidons Flatpak darf das nur
+lesen, weil das Manifest die Installationsordner, die Exporte und
+`~/.var/app/<Kennung>:ro` je Eintrag in `tools.SLICER_FLATPAKS` freigibt —
+ein Slicer, der neu auf Flathub erscheint, kommt dort dazu.
 
 ### Was auf einer Plattform gilt, ist keine Zusage
 

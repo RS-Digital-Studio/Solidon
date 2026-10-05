@@ -12,6 +12,15 @@ finish-args:
   - --share=network
   - --device=dri
   - --filesystem=home
+  - --filesystem=/var/lib/flatpak/app:ro
+  - --filesystem=/var/lib/flatpak/exports/bin:ro
+  - --filesystem=xdg-data/flatpak/app:ro
+  - --filesystem=xdg-data/flatpak/exports/bin:ro
+  - --filesystem=~/.var/app/com.orcaslicer.OrcaSlicer:ro
+  - --filesystem=~/.var/app/io.github.softfever.OrcaSlicer:ro
+  - --filesystem=~/.var/app/com.prusa3d.PrusaSlicer:ro
+  - --filesystem=~/.var/app/com.bambulab.BambuStudio:ro
+  - --filesystem=~/.var/app/com.ultimaker.cura:ro
   - --talk-name=org.freedesktop.secrets
   - --talk-name=org.freedesktop.Flatpak
   - --talk-name=org.fcitx.Fcitx5
