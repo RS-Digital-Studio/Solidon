@@ -2981,6 +2981,52 @@ def test_a_measure_group_with_room_shows_its_choices_whole(quiet_measure_flow: A
     assert combo.width() >= needed.width(), (combo.width(), needed.width())
 
 
+def test_the_measure_card_is_as_narrow_as_its_content_and_round(quiet_measure_flow: Any) -> None:
+    """Die Karte nimmt nur die Breite, die ihr Inhalt braucht, und rundet die Ecken (RM-516).
+
+    Robert: „das bohrung ändern fenster in der mitte auch schmaler machen und
+    ecken abrunden, so viel platz brauchen wir nicht“. Die längste Auswahl zog
+    die Beschriftungsspalte neben sich auf die volle Breite — 408 Bildpunkte
+    bei 1600 × 1000. Jetzt steht ihre Beschriftung darüber, und die Karte ist so
+    breit wie die Auswahl.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QComboBox, QFormLayout
+
+    from app.ui.panels import column_choice
+    from app.ui.placement_flow import _choice_widths
+    from app.ui.style import NORMAL
+
+    controller, _session, viewport, _host, _group, _fields, _during = quiet_measure_flow
+    group = QWidget()
+    layout = QFormLayout(group)
+    layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+    field = LengthSpin(group)
+    layout.addRow("Durchmesser", field)
+    combo = column_choice(QComboBox(group))
+    for text in ("Nur Bohrungsdurchmesser", "Senkung, Stufen und Verengung mitnehmen"):
+        combo.addItem(text)
+    layout.addRow("Änderungsumfang", combo)
+    controller.set_measure_fields(
+        group, editors=[field], interpret=lambda: True, refresh=lambda _values: None
+    )
+    viewport.resize(1600, 1000)
+    for _round in range(5):
+        QApplication.processEvents()
+        controller.redraw()
+    box = controller._measure_box
+    needed = max(width for _combo, width in _choice_widths(group))
+    assert combo.width() >= needed, "die Auswahl steht ganz"
+    assert box.width() <= max(
+        needed + 4 * NORMAL,
+        controller._measure_accept.sizeHint().width()
+        + controller._measure_cancel.sizeHint().width()
+        + 3 * NORMAL,
+    ), box.width()
+    assert not box.mask().isEmpty(), "die Ecken sind freigestellt"
+    assert not box.mask().contains(QPoint(0, 0)), "der Zwickel oben links gehört dem Bild"
+
+
 def test_quiet_host_keeps_permission_for_identical_known_values(qt_app: QApplication) -> None:
     """Nur echte Wertänderungen verwerfen die Freigabe; gesperrt endet nichts."""
     from app.ui.placement_flow import QuietHost

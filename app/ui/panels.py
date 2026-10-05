@@ -10375,6 +10375,11 @@ class FeaturePanel(QWidget):
             )
             more.setParent(box)
             more.setObjectName("feature-measure-more")
+            # In der kleinen Karte keine Abschnittsüberschrift, die lauter ist
+            # als der Titel der Handlung darüber.
+            heading = more.findChild(QToolButton, "sectionHeading")
+            if heading is not None:
+                set_level(heading, "body")
             form.addRow(more)
             align_forms(box)
         group = _MeasureGroup(

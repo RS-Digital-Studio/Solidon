@@ -294,7 +294,10 @@ und stellt die gemessenen Werte wieder her (`_drag_kind` bleibt `"slot"`).
   „Aktuell: Ø…“ nur das warnende Herkunftswort (`labels.feature_source`) und
   X, Y, Z unter „Weitere Werte“ (`panels._coordinate_fields`). Am sitzenden
   Merkmal sagen zwei Kantenmaße die Lage; eine Mitte nur über *Bezug ändern*
-  („Ohne Mitte“ nimmt sie zurück).
+  („Ohne Mitte“ nimmt sie zurück). Die Karte der Maßgruppe ist so schmal wie
+  ihr Inhalt — die längste Auswahl steht als eigene Zeile unter ihrer
+  Beschriftung (`_choice_widths`, `WrapLongRows`) — und rund wie die Karten
+  am Rand (`_MeasureCard`, `overlay.MEASURE_CARD`).
 * **Bezüge heißen nach der Seite, zu der ihre Maßlinie läuft**
   (`placement_flow.reference_names`, Weltachsen wie die Flächennamen im Baum),
   Mittenmaße nach ihrer Achse (`_axis_letters`); nicht nach der Seite im Bild,

@@ -14,7 +14,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from itertools import pairwise, product
-from typing import Any, Final, Protocol, cast, runtime_checkable
+from typing import Any, Final, Protocol, cast, override, runtime_checkable
 
 import numpy as np
 from PySide6.QtCore import (
@@ -31,12 +31,13 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent, QPolygonF
+from PySide6.QtGui import QColor, QFocusEvent, QKeyEvent, QPolygonF, QResizeEvent
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QApplication,
     QComboBox,
     QDialog,
+    QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -68,6 +69,7 @@ from app.i18n import TranslatableText, tr
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
+from app.ui.overlay import MEASURE_CARD, _round_corners
 from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, Renderer, SurfaceStyle
 from app.ui.style import NORMAL, ROOMY, SPACE
@@ -455,18 +457,16 @@ def _forget_parked(key: int) -> None:
     _PARKED_WATCHED.discard(key)
 
 
-def _choice_shortfall(group: QWidget) -> int:
-    """Wie viel breiter die Gruppe sein müsste, damit jede Auswahl ganz steht.
+def _choice_widths(group: QWidget) -> list[tuple[QComboBox, int]]:
+    """Wie breit jede Auswahl der Gruppe sein muss, damit ihr längster Eintrag ganz steht.
 
     ``panels.column_choice`` hält eine Auswahl in der Spalte rechts schmal
     (RM-488); ihr ``sizeHint`` nennt dann nur zwölf Zeichen. In der Karte im
-    Bild ist Platz, und dort stand am echten Fenster „Nur Bohrungsdurchm…“
-    (Fensterabnahme 04.10.2026). Gerechnet wird gegen den **längsten** Eintrag:
-    Eine Karte, die mit jeder Wahl ihre Breite wechselt, springt unter der Maus.
-    Wo das Bild die Breite nicht hat, kürzt :meth:`_size_measure_fields` wie
-    bisher auf den freien Raum.
+    Bild stand so am echten Fenster „Nur Bohrungsdurchm…“ (Fensterabnahme
+    04.10.2026). Gerechnet wird gegen den **längsten** Eintrag: Eine Karte, die
+    mit jeder Wahl ihre Breite wechselt, springt unter der Maus.
     """
-    shortfall = 0
+    widths: list[tuple[QComboBox, int]] = []
     for combo in group.findChildren(QComboBox):
         if combo.isHidden() or not combo.count():
             continue
@@ -477,8 +477,22 @@ def _choice_shortfall(group: QWidget) -> int:
         needed = combo.style().sizeFromContents(
             QStyle.ContentsType.CT_ComboBox, option, QSize(longest, metrics.height()), combo
         )
-        shortfall = max(shortfall, needed.width() - combo.sizeHint().width())
-    return shortfall
+        widths.append((combo, needed.width()))
+    return widths
+
+
+class _MeasureCard(QFrame):
+    """Die Karte der Maßgruppe über der Ansicht — mit runden Ecken wie die Karten am Rand.
+
+    Das Stilblatt rundet den Rahmen (``overlay.card_stylesheet``); die Maske
+    stellt die Zwickel daneben frei, sonst stünden dort schwarze Ecken über
+    dem Bild (:func:`overlay._round_corners`).
+    """
+
+    @override
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        _round_corners(self)
 
 
 def _release_measure_group(group: QWidget, release: Callable[[QWidget], bool] | None) -> None:
@@ -1952,10 +1966,32 @@ class PlacementFlow(QObject):
             self._measure_box.hide()
             return
         group.ensurePolished()
+        # **So schmal, wie der Inhalt es verlangt** (RM-516, Robert: „so viel
+        # platz brauchen wir nicht“). Die längste Auswahl bekommt ihre ganze
+        # Breite als eigene Zeile — die Beschriftung steht dann darüber
+        # (``WrapLongRows``) —, statt die Beschriftungsspalte neben sich auf
+        # die volle Kartenbreite zu ziehen: 408 statt rund 300 Bildpunkte an
+        # *Bohrung ändern*. Gemessen wird die Gruppe ohne die Mindestbreiten,
+        # die dieser Aufruf selbst setzt.
+        choices = _choice_widths(group)
+        for combo, _needed in choices:
+            combo.setMinimumWidth(0)
+        beside = group.sizeHint().width()
+        for combo, needed in choices:
+            combo.setMinimumWidth(needed)
+        form = group.layout()
+        # Nur ein Formular, das Zeilen umbrechen darf, stellt die Auswahl unter
+        # ihre Beschriftung; sonst steht beides nebeneinander, in voller Breite.
+        content = (
+            max([beside, *(needed for _combo, needed in choices)])
+            if isinstance(form, QFormLayout)
+            and form.rowWrapPolicy() != QFormLayout.RowWrapPolicy.DontWrapRows
+            else group.sizeHint().width()
+        )
         width = min(
             max(room.width(), 1),
             max(
-                group.sizeHint().width() + _choice_shortfall(group) + 4 * NORMAL,
+                content + 4 * NORMAL,
                 self._measure_accept.sizeHint().width()
                 + self._measure_cancel.sizeHint().width()
                 + 3 * NORMAL,
@@ -2572,8 +2608,8 @@ class PlacementFlow(QObject):
         self._accept = QPushButton(self._bar)
         layout.addWidget(self._accept)
         self._bar.hide()
-        self._measure_box = QFrame(self.viewport)
-        self._measure_box.setObjectName("placement_measure_fields")
+        self._measure_box = _MeasureCard(self.viewport)
+        self._measure_box.setObjectName(MEASURE_CARD)
         self._measure_box.setAutoFillBackground(True)
         measure_layout = QVBoxLayout(self._measure_box)
         measure_layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)

@@ -492,6 +492,15 @@ Wer den Zug beim Beginn meldet, schließt genau die Maße weg, um die es geht.
   5,20 mm (eingepasst). Passt vermutlich zu M5") sagte dasselbe Maß ein
   zweites Mal. Nicht geändert: Die Felder stehen weiter neben dem Körper und
   nicht auf ihm (Entscheidung Robert, 21. und 22.09.2026).
+  **Die Karte der Maßgruppe ist so schmal wie ihr Inhalt und rund** (Robert,
+  05.10.2026: „das bohrung ändern fenster in der mitte auch schmaler machen
+  und ecken abrunden, so viel platz brauchen wir nicht“). Die längste Auswahl
+  („Senkung, Stufen und Verengung mitnehmen“) zog die Beschriftungsspalte
+  neben sich auf die volle Breite; jetzt steht sie als eigene Zeile unter
+  ihrer Beschriftung, ganz lesbar wie seit der Fensterabnahme vom 04.10.2026
+  verlangt. Am echten Fenster 304 statt 408 Bildpunkte breit. Rahmen und
+  Rundung kommen aus demselben Stilblatt wie die Karten am Rand, die Maske
+  stellt die Zwickel frei.
 
 ### Wo etwas schon sitzt, zielt der Zeiger nicht
 
