@@ -440,9 +440,13 @@ class ManualWindow(QMainWindow):
         Überschrift zwischen Rang eins und zwei risse zusammen, was die Suche
         geordnet hat.
         """
+        # **Erst die alten Zeilen weg, dann die neue Liste.** ``clear()`` meldet
+        # unterwegs noch eine alte Zeile; ihre Nummer zeigte in die schon neue,
+        # kürzere Liste, und eine Suche ohne Treffer warf ``IndexError``
+        # (Kundenmeldung zu 0.5.2).
+        self.contents.clear()
         self._visible = list(pages)
         self._spots = spots or []
-        self.contents.clear()
         part = None
         for index, page in enumerate(self._visible):
             if grouped and page.part != part:

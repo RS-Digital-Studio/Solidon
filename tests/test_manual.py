@@ -20,6 +20,7 @@ einem modalen Meldungsfenster.
 from __future__ import annotations
 
 import re
+import sys
 from collections.abc import Callable
 from html import escape, unescape
 from pathlib import Path
@@ -1331,6 +1332,38 @@ def test_a_search_without_a_hit_names_the_way_back(qt_app: QApplication) -> None
     window = ManualWindow()
     try:
         window.search.setText("gibtesnicht-xyz")
+        assert "Suchfeld" in window.text.toPlainText(), window.text.toPlainText()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+@pytest.mark.parametrize("chosen", ["first", "last"])
+def test_a_search_that_runs_out_of_hits_reads_no_page_of_the_old_list(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, chosen: str
+) -> None:
+    """Eine Suche ohne Treffer nach einer mit Treffern wirft nichts.
+
+    Kundenmeldung zu 0.5.2: Viermal ``IndexError`` in ``_show_current``,
+    während im Handbuch gesucht wurde. ``_fill`` setzte die neue Seitenliste,
+    bevor die alten Zeilen weg waren, und ``clear()`` meldete dazwischen noch
+    eine alte Zeile — mit einer Nummer in die neue, leere Liste. Eine
+    Ausnahme in einem Slot sieht nur ``sys.excepthook``; ohne ihn bliebe der
+    Test grün.
+    """
+    errors: list[BaseException] = []
+    monkeypatch.setattr(sys, "excepthook", lambda _kind, value, _trace: errors.append(value))
+    window = ManualWindow()
+    try:
+        window.search.setText("Gewinde")
+        assert window.contents.count() > 1, "die Suche muss vorher etwas finden"
+        if chosen == "last":
+            window.contents.setCurrentRow(window.contents.count() - 1)
+
+        window.search.setText("gibtesnicht-xyz")
+
+        assert not errors, errors
+        assert window.contents.count() == 0
         assert "Suchfeld" in window.text.toPlainText(), window.text.toPlainText()
     finally:
         window.close()
