@@ -5712,6 +5712,8 @@
   "Platte {number} · {count} Körper": "Placa {number} · {count} cuerpos",
   "Platte {plate}, {quantity}: Die Gegenprobe ist unvollständig. {reason}": "Placa {plate}, {quantity}: La comprobación cruzada está incompleta. {reason}",
   "Platte {plate}, {quantity}: intern geschätzt {estimated} {unit}, im G-Code {measured} {unit}. {result}": "Placa {plate}, {quantity}: estimación interna {estimated} {unit}, en el G-Code {measured} {unit}. {result}",
+  "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. Die Stützeinstellungen prüfen und neu slicen.": "Placa {plate}: Los soportes están activados, pero el G-Code no contiene ninguno. Compruebe los ajustes de soporte y vuelva a laminar.",
+  "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. „Kanäle frei halten“ ausschalten und neu slicen.": "Placa {plate}: Los soportes están activados, pero el G-Code no contiene ninguno. Desactive «Mantener libres los canales» y vuelva a laminar.",
   "Platten": "Placas",
   "Platten der Datei übernehmen": "Conservar las placas del archivo",
   "Platten: {count}": "Placas: {count}",

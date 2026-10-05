@@ -534,6 +534,16 @@ Stütze, wie die Schichtanalyse in schmalen Bändern liest (Waschschüssel,
 Arbeitsplattenreiniger) — eine Zeitwarnung wiederholte dort nur die Stützwarnung.
 `SUPPORT_TIME_AGREEMENT` (Faktor 2) trennt beides an den gemessenen Mengen.
 
+**Stützen ein, im G-Code keine (05.10.2026).** Mit Kanalsperre ist die
+Stützmenge der Schätzung unbekannt, und die Gegenprobe sagte am Wedge-Lock nur
+„unvollständig“, während der Slicer keine Bahn Stütze schrieb.
+`estimate.support_floor` ist ein Strang im Düsenquerschnitt, so lang wie die
+kürzeste Brücke, die Solidon stützen lässt: weniger trägt keine solche Decke.
+In Metern hätte eine 0,8er Düse angeschlagen, die dieselbe Stütze mit einem
+Bruchteil der Bahn legt. Gefragt wird nur, wo `advise.support_need` Stützen
+verlangt — ein Tunnel ohne weiteren Überhang bekommt mit Stützen und Sperre zu
+Recht keine. Ein Profil ohne Brückenstützen bleibt ungeprüft wie die Zeit.
+
 ## Was die Analyse liefert
 
 Überhangfläche je Schicht, Stützvolumen, Querschnittsverlauf, **Inseln**

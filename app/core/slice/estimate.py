@@ -55,6 +55,7 @@ eine Näherung mit ausgewiesener Herkunft, keine Rechnung.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -276,6 +277,28 @@ class PlateComparison:
     Mindestdrucktempo oder ohne gemeinsames Raster."""
     seconds_reason: TranslatableText | str = ""
     """Warum ``seconds`` fehlt, wenn es nicht am Mindesttempo liegt."""
+    support_floor_mm3: float | None = None
+    """Unter wie viel Stützmaterial die Druckdatei „keine Stütze“ heißt
+    (:func:`support_floor`) — gesetzt nur, wenn Stützen eingeschaltet sind und
+    die Schichtanalyse sie selbst für nötig hält."""
+    channels_blocked: bool = False
+    """Ob auf dieser Platte eine Kanalsperre hinausging."""
+
+
+def support_floor(profile: Profile) -> float:
+    """Wie viel Stützmaterial in mm³ „keine Stütze“ heißt (§28.1).
+
+    Ein Strang im Querschnitt der Düse, so lang wie die kürzeste Brücke, für
+    die Solidon Stützen verlangt (``advise.SPAN_INTERESTING``): Weniger trägt
+    keine Decke, die Solidon gestützt haben will. Gemessen am Querschnitt und
+    nicht als Bahnlänge, damit dieselbe Grenze an einer 0,25er und an einer
+    0,8er Düse dasselbe heißt — die größere legt für dieselbe Stütze nur einen
+    Bruchteil der Meter.
+    """
+    from app.core.slice.advise import SPAN_INTERESTING
+
+    radius = profile.printer.nozzle_diameter / 2.0
+    return SPAN_INTERESTING * math.pi * radius * radius
 
 
 def plate_comparison(
@@ -419,14 +442,6 @@ def plate_comparison(
             seconds=None,
             seconds_reason=seconds_reason,
         )
-    if arranged_apart:
-        return PlateComparison(
-            plate,
-            None,
-            model_layers,
-            _("Der Slicer bestimmt die gemeinsame Anordnung der Teile erst beim Slicen."),
-            seconds=seconds,
-        )
 
     # Gleicher Vertrag heißt gleiches Raster und gleiche Stützparameter, nicht
     # bloß dieselbe Dichte. Filamentdichte beeinflusst mm³ dagegen nicht.
@@ -443,10 +458,45 @@ def plate_comparison(
             )
         )
 
-    if same_grid and all(same_support(settings) for _entry, _mesh, settings in known):
-        assert shared is not None
+    uniform = same_grid and all(same_support(settings) for _entry, _mesh, settings in known)
+    if uniform and shared is not None:
         groups = [(shared, first)]
     else:
+        groups = [
+            (measure((index,), settings), settings)
+            for index, (_entry, _mesh, settings) in enumerate(known)
+        ]
+    # **Und ob der Slicer überhaupt stützt** (Wedge-Lock, 05.10.2026): Mit
+    # übernommener Kanalsperre stand im G-Code keine Stütze, und weil die
+    # Stützmenge mit Sperre unbekannt ist, sagte die Gegenprobe darunter nur
+    # „unvollständig“. Die Untergrenze gilt unabhängig von den Begrenzungen,
+    # aber nur, wo Solidon selbst Stützen für nötig hält
+    # (:func:`advise.support_need`, ohne Kanaldecken): Wer an einem Tunnel
+    # ohne weiteren Überhang Stützen samt Sperre einschaltet, bekommt zu Recht
+    # keine (:func:`plate_findings`).
+    from app.core.slice.advise import support_need
+
+    supported_groups = [entry for entry in groups if entry[1].support.style != "none"]
+    floor_mm3 = (
+        support_floor(profile)
+        if any(support_need(result).needed for result, _settings in supported_groups)
+        else None
+    )
+    blocked = any(
+        settings.support.block_channels and bool(model_support(result).channels)
+        for result, settings in supported_groups
+    )
+    if arranged_apart:
+        return PlateComparison(
+            plate,
+            None,
+            model_layers,
+            _("Der Slicer bestimmt die gemeinsame Anordnung der Teile erst beim Slicen."),
+            seconds=seconds,
+            support_floor_mm3=floor_mm3,
+            channels_blocked=blocked,
+        )
+    if not uniform:
         for index, mesh in enumerate(meshes):
             for other in meshes[index + 1 :]:
                 if all(
@@ -460,11 +510,9 @@ def plate_comparison(
                         model_layers,
                         _("Überlappende Teile haben unterschiedliche Stützeinstellungen."),
                         seconds=seconds,
+                        support_floor_mm3=floor_mm3,
+                        channels_blocked=blocked,
                     )
-        groups = [
-            (measure((index,), settings), settings)
-            for index, (_entry, _mesh, settings) in enumerate(known)
-        ]
     support = 0.0
     for result, settings in groups:
         if settings.support.style == "none":
@@ -485,10 +533,18 @@ def plate_comparison(
                     model_layers,
                     _("Die gemeinsame Stützmenge mit diesen Stützbegrenzungen ist unbekannt."),
                     seconds=seconds,
+                    support_floor_mm3=floor_mm3,
+                    channels_blocked=blocked,
                 )
         support += support_material(result.support_volume, settings)
     return PlateComparison(
-        plate, support, model_layers, arrangement_dependent=len(known) > 1, seconds=seconds
+        plate,
+        support,
+        model_layers,
+        arrangement_dependent=len(known) > 1,
+        seconds=seconds,
+        support_floor_mm3=floor_mm3,
+        channels_blocked=blocked,
     )
 
 
@@ -511,7 +567,15 @@ def plate_findings(
         measured_support = None
         reason = _("Die Druckdatei weist die vollständige Stützmenge nicht eindeutig aus.")
     found: list[Finding] = []
-    for quantity, estimate_value, measured_value, unit, missing_reason in (
+    rows: list[
+        tuple[
+            TranslatableText,
+            float | None,
+            float | None,
+            TranslatableText | str,
+            TranslatableText | str,
+        ]
+    ] = [
         (_("Stützmaterial"), support, measured_support, "mm³", reason),
         (
             _("Modellschichten"),
@@ -520,7 +584,14 @@ def plate_findings(
             _("Schichten"),
             expected.layers_reason,
         ),
-    ):
+    ]
+    floor = expected.support_floor_mm3
+    if floor is not None and measured_support is not None and measured_support < floor:
+        # Die allgemeine Abweichung darunter sagte dasselbe ein zweites Mal,
+        # und mit Kanalsperre sagte sie nur „unvollständig“.
+        found.append(_support_missing(expected, measured_support, support))
+        rows = rows[1:]
+    for quantity, estimate_value, measured_value, unit, missing_reason in rows:
         values: dict[str, float | str | TranslatableText] = {
             "plate": expected.plate + 1,
             "what": quantity,
@@ -579,6 +650,42 @@ def plate_findings(
             )
         )
     return found
+
+
+def _support_missing(expected: PlateComparison, printed: float, estimated: float | None) -> Finding:
+    """Stützen eingeschaltet, im G-Code aber keine (:attr:`PlateComparison.support_floor_mm3`).
+
+    Mit Kanalsperre ist sie der erste Verdacht: Am Wedge-Lock nahm sie dem
+    übernommenen Vorschlag jede Stütze. Der Weg führt in die
+    Druckeinstellungen, wo „Kanäle frei halten“ steht.
+    """
+    values: dict[str, float | str | TranslatableText] = {
+        "plate": expected.plate + 1,
+        "measured": printed,
+        "measured_source": "gcode",
+        "floor_mm3": round(expected.support_floor_mm3 or 0.0, 3),
+    }
+    if estimated is not None:
+        values["estimated"] = estimated
+        values["estimated_source"] = "internal"
+    return Finding(
+        code="gcode.support_missing",
+        severity="warning",
+        message=_(
+            "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. "
+            "„Kanäle frei halten“ ausschalten und neu slicen.",
+            plate=expected.plate + 1,
+        )
+        if expected.channels_blocked
+        else _(
+            "Platte {plate}: Stützen sind eingeschaltet, aber im G-Code steht keine. "
+            "Die Stützeinstellungen prüfen und neu slicen.",
+            plate=expected.plate + 1,
+        ),
+        values=values,
+        suggestions=(OPEN_PRINT_SETTINGS,),
+        source="gcode",
+    )
 
 
 #: Um welchen Faktor Stützmenge der Schätzung und der Druckdatei höchstens
