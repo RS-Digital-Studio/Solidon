@@ -738,7 +738,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (Wedge-Lock +261 %). Das ist die eigentliche Arbeit von P4.1.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#neun-heruntergeladene-modelle-durch-die-ganze-kette-21082026).
-  Registerabgleich 02.10.: Bericht p40, `s35_candidates.py`, zeichnenbau und p66 liegen nur im gitignorierten `Releases/0.5.0/Nachweise/` auf einer Maschine — ins Repository holen oder als Aussage in den Punkt.
+  Belege versioniert (05.10.2026): [Bericht p40](konzepte/nachweise-release-0.5.0/reports/p40.md) mit [`s35_candidates.py`](konzepte/nachweise-release-0.5.0/sonden/p40/s35_candidates.py), [zeichnenbau](konzepte/nachweise-release-0.5.0/reports/zeichnenbau.md), [p66](konzepte/nachweise-release-0.5.0/reports/p66.md).
 
   **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** `scene/rebuild.py` schlägt Folgen
   aus Grundvolumen, Aufträgen und Abzügen vor; `difference.surface_distance_bound` prüft beidseitig
@@ -1333,7 +1333,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     Schritt: eine Skizze auf einer Versatzebene über einer Fläche, die ein
     späterer Schritt teilt, als Test an beiden Kernen.
   * **P4.0** — offen: Nachbau-Tests für die zwei Nähbefunde aus dem Bau
-    (Bericht p40 in `Releases/0.5.0/Nachweise/`) und die Paketprobe, dass die
+    ([Bericht p40](konzepte/nachweise-release-0.5.0/reports/p40.md)) und die Paketprobe, dass die
     Umwandlung im gebauten Paket läuft — `brep/from_mesh.py` und
     `brep/canonical.py` laden `OCP.GeomAPI` und `OCP.GeomAdaptor`, die
     ausdrückliche OCP-Liste in `packaging/solidon3d.spec` nennt beide nicht.
@@ -1390,8 +1390,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     beim Zug unsichtbar, lange Bedingungszeile bei zwei Kurven. Reihenfolge und
     Abnahme je Etappe:
     [Bedienabnahme Zeichnen](konzepte/nachweise-release-0.5.0/reports/zeichnen-bedienung.md)
-    §8, dazu die Berichte zeichnenbau („Vorschlag Etappe 2“) und p66 („Für den
-    Zeichnen-Umbau“) in `Releases/0.5.0/Nachweise/`. Nächster Schritt: Z2.
+    §8, dazu die Berichte [zeichnenbau](konzepte/nachweise-release-0.5.0/reports/zeichnenbau.md)
+    („Vorschlag Etappe 2“) und [p66](konzepte/nachweise-release-0.5.0/reports/p66.md) („Für den
+    Zeichnen-Umbau“). Nächster Schritt: Z2.
   * **P5.1–P5.3** — P5.1 stellt die Maßoperationen familienweise auf den
     Maßeditor im Bild um (Bohrung und Platzierung, dann Bewegen, Drehen und
     Skalieren, dann die übrigen Merkmals-, Form- und Bausteinmaße) und nimmt
@@ -1417,7 +1418,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Anforderung aus P0.8 mit Nachweis und die Erstnutzerprüfung. Keine stille
   Formänderung bei der Erkennung; die Nicht-Ziele aus Konzept §15 bleiben
   ausgenommen.
-  Registerabgleich 02.10.: Die tragenden Belege liegen nur im gitignorierten `Releases/0.5.0/Nachweise/` auf einer Maschine — ins Repository holen oder als Aussage in den Punkt (wie RM-347).
+  Die tragenden Belege aus der Durchsicht 0.5.0 sind versioniert (05.10.2026): [p40](konzepte/nachweise-release-0.5.0/reports/p40.md), [zeichnenbau](konzepte/nachweise-release-0.5.0/reports/zeichnenbau.md), [p66](konzepte/nachweise-release-0.5.0/reports/p66.md), [p7step](konzepte/nachweise-release-0.5.0/reports/p7step.md).
 
   **Teilstand 04.10.2026 (Zwillingsbrüche aus RM-226, nach 0.5.2):** Drei Stellen, an denen Netz und
   exakter Körper verschieden erkennen, sind gemessen und noch nicht gebaut. (1) Kegelstücke
@@ -3059,7 +3060,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Wächter gegen Konstrukteurswörter und falsch zitierte Knöpfe eingecheckt (`e8f9f574d`); offen
   ist der erschöpfende Durchgang durch den Bestand vor 0.5.0 in Anwendung und Website, dazu
   Presse A16/A23 und die C12-Namen
-  Registerabgleich 02.10.: offen, *Extrusionsbreite* neben *Bahnbreite* am Code bestätigt; die `sollliste*.md` liegen nur unter `Releases/0.5.0/…` und sind nicht versioniert; Statuszeichen wäre `[~]`.
+  Registerabgleich 02.10.: offen, *Extrusionsbreite* neben *Bahnbreite* am Code bestätigt; die [Sollliste 0.5.0](konzepte/nachweise-release-0.5.0/reports/sollliste.md) mit ihren Teilen A bis C ist versioniert (05.10.2026); Statuszeichen wäre `[~]`.
 
   **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Inventar über 237 Quellmodule,
   fünf Kataloge und 43 Website-Seiten; 154 Quellenstände mit SHA256 gelesen
