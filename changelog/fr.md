@@ -16,6 +16,60 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.5.3
+
+### Utilisation et système
+
+- À droite, une carte porte les onglets *Sélection*, *Rapport de contrôle* et *Chat*. Un nouvel avertissement ne fait plus passer le rapport devant ; son onglet l'indique par un symbole et un nombre.
+- En haut de la fenêtre, *Rechercher une fonction* (Ctrl+Maj+P) trouve chaque fonction. La carte des fonctions suit l'ordre de la barre de menus.
+- Dans la sélection, une seule action est ouverte à la fois sur une caractéristique. Les autres restent repliées et affichent leurs valeurs.
+- Les dialogues d'opération montrent au plus quatre champs et une phrase à l'avant. Les valeurs rarement changées sont sous *Autres réglages*, les limites sous *Quand l'éviter ?*.
+- Un zéro qui a un sens dit dans le champ ce qu'il fait, par exemple « automatique », « sans » ou « selon le matériau ».
+- Toutes les boîtes de dialogue ont la même forme, avec des sections plates et un bord commun pour les libellés, y compris les réglages, le dialogue IA et le déverrouillage.
+- Le rapport de contrôle montre d'abord les constats, avec au-dessus une ligne d'état et des compteurs. *Exporter …* se trouve à côté de *Transmettre au slicer …*.
+- Constats, étapes de la visite et indications sont plus courts. Quand un bouton propose l'action, la phrase ne la répète plus.
+- L'action *Reconstruire le modèle* se trouve sur le corps sélectionné.
+- L'écran d'accueil montre en grand, en haut, les quatre façons de commencer. *Premiers pas* demande langue, slicer et imprimante et replie le reste.
+- Le catalogue de blocs montre une image et un titre par vignette. Sur un perçage, *Blocs adaptés …* ne montre que ce qui va dans un perçage.
+- La boîte de dialogue *Enregistrer la sélection comme bloc* affiche une ligne par cote, avec sa valeur par défaut et ses limites.
+- Sous Windows, le pointeur de souris propre à Solidon clique de nouveau exactement à sa pointe. Jusqu'ici, le clic tombait quelques pixels à côté.
+- La recherche dans le manuel ne s'arrête plus sur une erreur quand un caractère de plus ne trouve plus rien.
+- Si vous annulez ou supprimez une étape pendant que *Modifier cette étape* est ouvert, la boîte de dialogue se ferme et le signale.
+- Un blocage rare de l'application pendant le contrôle d'impression est corrigé.
+
+### Imprimer et transmettre au slicer
+
+- Nouveau : Anycubic Slicer Next, avec les 39 imprimantes Anycubic, sous Windows, macOS et Linux.
+- Sous Linux, Solidon trouve OrcaSlicer, Bambu Studio et PrusaSlicer installés en Flatpak, avec vos imprimantes et profils, y compris depuis le Flatpak de Solidon.
+- Sous Linux, les slicers en AppImage proposent aussi les imprimantes de fabricant que vous y avez configurées.
+- Sur Mac, Solidon crée désormais aussi le fichier d'impression avec Cura. Jusqu'ici, il ne trouvait que la fenêtre de Cura.
+- Creality Print 7 apporte ses propres imprimantes et la dernière que vous avez choisie.
+- Les listes d'imprimantes nomment chaque imprimante une seule fois, sans variantes de buse. La buse se choisit dans les réglages d'impression.
+- Une buse choisie dans les réglages d'impression est conservée si vous enregistrez ensuite les réglages de l'application.
+- Si vous changez de buse pour PrusaSlicer ou SuperSlicer, le slicer reçoit aussi le profil d'imprimante correspondant.
+- Solidon propose plus d'imprimantes, y compris celles dont le profil n'indique ni plateau ni buse, comme la Creality CR-20 et l'Anycubic i3 Mega dans PrusaSlicer.
+- Les réglages d'impression montrent d'abord slicer, imprimante, buse, filaments, qualité, densité de remplissage et supports ; le reste est sous *Autres réglages*.
+- Chaque raison d'une suggestion dans les réglages d'impression tient sur une ligne. *Enregistrer le fichier d'impression* apparaît dès qu'un fichier d'impression existe.
+- Les pièces plus larges en haut qu'à la base ne reçoivent plus d'avertissement de bord quand le brim et le skirt restent sur le plateau.
+
+### Perçages, trous oblongs et découpe
+
+- Un filetage ou un insert à chaud dans un perçage sélectionné ne s'arrête plus sur « hors de la surface ». Si le perçage est trop large, Solidon indique des tailles adaptées.
+- Sur un perçage sélectionné, la vue n'affiche que diamètre, profondeur et deux cotes d'arête. Les références portent le nom de leur côté, par exemple « Arête extérieure à gauche ».
+- En pouces, la phrase au-dessus d'un perçage donne sa taille en pouces.
+- Le bandeau d'aperçu dit en une ligne ce qui change, avec les longueurs dans votre unité d'affichage.
+
+### Sculpter, texte et esquisse
+
+- Pour les supports et plaques avec perçages, fraisures et texte, *Reconstruire le modèle* crée désormais un contour dont les logements sont retirés. S'il ne trouve aucune structure, il le dit.
+- Si vous reprenez dans une esquisse la coupe d'un corps converti, ses cercles et ses arcs arrivent comme cercles et arcs.
+- Si une pièce ne peut pas être convertie en faces et arêtes, Solidon donne la raison et une issue au lieu de finir sur une erreur inattendue.
+
+### Générer avec l'IA
+
+- L'information sur l'IA dit en deux phrases, pour chaque destination, ce qui est envoyé. Le texte ayant changé, vous la confirmez une nouvelle fois.
+- Les descriptions des modèles locaux recommandés sont plus courtes.
+
 ## 0.5.2
 
 ### Nouvelles formes et nouveaux blocs

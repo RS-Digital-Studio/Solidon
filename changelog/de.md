@@ -40,6 +40,60 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.5.3
+
+### Bedienung und System
+
+- Rechts steht eine Karte mit den Reitern *Auswahl*, *Prüfbericht* und *Chat*. Neue Warnungen holen den Prüfbericht nicht mehr nach vorn, sein Reiter zeigt sie mit Zeichen und Zahl.
+- Oben im Fenster finden Sie jede Funktion über *Funktion suchen* (Strg+Umschalt+P). Die Karte der Funktionen ist geordnet wie die Menüleiste.
+- In der Auswahl ist an einem Merkmal eine Handlung zur Zeit offen. Die übrigen nennen zugeklappt ihre Werte.
+- Operationsdialoge zeigen vorn höchstens vier Felder und einen Satz. Selten geänderte Werte stehen unter *Weitere Einstellungen*, Grenzen unter *Wann nicht?*.
+- Eine Null mit Bedeutung heißt im Feld, was sie bewirkt, etwa „automatisch“, „ohne“ oder „aus dem Material“.
+- Alle Dialoge haben dieselbe Form mit flachen Abschnitten und einer gemeinsamen Kante für die Beschriftungen, auch Einstellungen, KI-Dialog und Freischaltung.
+- Der Prüfbericht zeigt zuerst die Befunde, darüber eine Zeile mit Status und Zählern. *Exportieren …* steht neben *An den Slicer übergeben …*.
+- Befunde, Tourschritte und Hinweise sind kürzer. Wo ein Knopf die Handlung anbietet, wiederholt der Satz sie nicht.
+- Die Handlung *Modell nachbauen* steht am gewählten Körper.
+- Der Startbildschirm zeigt die vier Einstiege groß oben. *Erste Schritte* fragt Sprache, Slicer und Drucker und klappt den Rest zu.
+- Der Bausteinkatalog zeigt je Kachel Bild und Titel. An einer Bohrung zeigt *Passende Bausteine …* nur, was in eine Bohrung gehört.
+- Im Dialog *Auswahl als Baustein speichern* steht je Maß eine Zeile mit Vorgabe und Grenzen.
+- Unter Windows klickt Solidons eigener Mauszeiger wieder genau an seiner Spitze. Bisher lag der Klick einige Pixel daneben.
+- Die Suche im Handbuch bricht nicht mehr mit einem Fehler ab, wenn ein weiteres Zeichen keinen Treffer mehr findet.
+- Nehmen Sie einen Schritt zurück oder löschen ihn, während *Diesen Schritt ändern* offen ist, schließt sich der Dialog und sagt es.
+- Ein seltenes Einfrieren der Anwendung während der Druckprüfung ist behoben.
+
+### Drucken und Übergabe an den Slicer
+
+- Neu ist Anycubic Slicer Next mit allen 39 Anycubic-Druckern, unter Windows, macOS und Linux.
+- Unter Linux findet Solidon OrcaSlicer, Bambu Studio und PrusaSlicer als Flatpak samt Ihren Druckern und Profilen, auch aus Solidons eigenem Flatpak.
+- Slicer als AppImage bieten unter Linux auch ihre eingerichteten Herstellerdrucker an.
+- Auf dem Mac erzeugt Solidon die Druckdatei jetzt auch mit Cura. Bisher fand es nur Curas Fenster.
+- Creality Print 7 bringt seine eigenen Drucker und den zuletzt gewählten mit.
+- Die Druckerlisten nennen jeden Drucker einmal, ohne Düsenvarianten. Die Düse wählen Sie im Druckdialog.
+- Eine im Druckdialog gewählte Düse bleibt erhalten, wenn Sie danach die Einstellungen speichern.
+- Wechseln Sie für PrusaSlicer oder SuperSlicer die Düse, bekommt der Slicer das passende Druckerprofil dazu.
+- Solidon bietet mehr Drucker an, auch solche, deren Profil Bett oder Düse nicht nennt, etwa Creality CR-20 und Anycubic i3 Mega in PrusaSlicer.
+- Der Druckdialog zeigt vorn Slicer, Drucker, Düse, Filamente, Qualität, Fülldichte und Stützen, der Rest steht unter *Weitere Einstellungen*.
+- Jeder Grund eines Vorschlags im Druckdialog passt in eine Zeile. *Druckdatei speichern* erscheint, sobald es eine Druckdatei gibt.
+- Teile, die oben breiter sind als am Fuß, bekommen keine Randwarnung mehr, wenn Brim und Skirt auf dem Bett bleiben.
+
+### Bohrungen, Langlöcher und Teilen
+
+- Ein Gewinde oder eine Einpressbuchse in einer gewählten Bohrung hält nicht mehr mit „außerhalb der Fläche“ an. Ist die Bohrung zu weit, nennt Solidon passende Größen.
+- An einer gewählten Bohrung stehen im Bild nur Durchmesser, Tiefe und zwei Kantenmaße. Bezüge heißen nach ihrer Seite, etwa „Außenkante links“.
+- In Zoll nennt der Satz über einer Bohrung ihr Maß in Zoll.
+- Das Vorschauband nennt in einer Zeile, was sich ändert, Längen in Ihrer Anzeigeeinheit.
+
+### Formen, Schrift und Zeichnen
+
+- Halter und Platten mit Bohrungen, Senkungen und Schrift baut *Modell nachbauen* jetzt als Umriss mit abgezogenen Taschen nach. Findet es keinen Aufbau, sagt es das.
+- Übernehmen Sie beim Zeichnen den Schnitt eines umgewandelten Körpers, kommen seine Kreise und Bögen als Kreise und Bögen an.
+- Lässt sich ein Teil nicht in Flächen und Kanten umwandeln, nennt Solidon Grund und Ausweg, statt mit einem unerwarteten Fehler zu enden.
+
+### Erzeugen mit KI
+
+- Der KI-Hinweis sagt je Ziel in zwei Sätzen, was gesendet wird. Weil sich der Text geändert hat, bestätigen Sie ihn einmal neu.
+- Die Beschreibungen der empfohlenen lokalen Modelle sind kürzer.
+
 ## 0.5.2
 
 ### Neue Formen und Bausteine

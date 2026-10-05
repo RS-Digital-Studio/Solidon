@@ -15,6 +15,60 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.5.3
+
+### Operation and system
+
+- On the right, a card holds the tabs *Selection*, *Report* and *Chat*. New warnings no longer bring the report to the front; its tab shows them with a symbol and a count.
+- At the top of the window, *Search functions* (Ctrl+Shift+P) finds any function. The map of functions follows the order of the menu bar.
+- In the selection, a feature has one action open at a time. The others stay collapsed and show their values.
+- Operation dialogs show at most four fields and one sentence up front. Rarely changed values are under *More settings*, limits under *When to avoid it?*.
+- A zero with a meaning says in the field what it does, such as “automatic”, “none” or “from material”.
+- All dialogs share one layout with flat sections and a common edge for the labels, including the settings, the AI dialog and activation.
+- The report shows the findings first, with a line of status and counters above them. *Export …* sits next to *Hand over to the slicer …*.
+- Findings, tour steps and hints are shorter. Where a button offers the action, the sentence no longer repeats it.
+- The *Rebuild model* action sits on the selected body.
+- The start screen shows the four ways to begin in large at the top. *First steps* asks for language, slicer and printer and collapses the rest.
+- The part catalogue shows a picture and a title on each tile. On a hole, *Matching parts …* shows only what belongs in a hole.
+- The dialog *Save selection as a part* shows one row per dimension with its default and limits.
+- On Windows, Solidon's own mouse pointer clicks exactly at its tip again. Until now the click landed a few pixels off.
+- Searching the manual no longer stops with an error when one more character finds no match.
+- If you undo or delete a step while *Edit this step* is open, the dialog closes and tells you so.
+- A rare freeze of the application during the print check is fixed.
+
+### Printing and slicer handover
+
+- New is Anycubic Slicer Next with all 39 Anycubic printers, on Windows, macOS and Linux.
+- On Linux, Solidon finds OrcaSlicer, Bambu Studio and PrusaSlicer installed as Flatpak, with your printers and profiles, also from Solidon's own Flatpak.
+- Slicers installed as AppImage on Linux also offer the vendor printers you have set up in them.
+- On the Mac, Solidon now also creates the print file with Cura. Until now it only found Cura's window.
+- Creality Print 7 brings its own printers and the one you selected last.
+- The printer lists name each printer once, without nozzle variants. You choose the nozzle in the print dialog.
+- A nozzle chosen in the print dialog is kept when you save the settings afterwards.
+- If you change the nozzle for PrusaSlicer or SuperSlicer, the slicer gets the matching printer profile with it.
+- Solidon offers more printers, including ones whose profile names neither bed nor nozzle, such as the Creality CR-20 and Anycubic i3 Mega in PrusaSlicer.
+- The print dialog shows slicer, printer, nozzle, filaments, quality, infill density and supports up front; the rest is under *More settings*.
+- Each reason for a suggestion in the print dialog fits on one line. *Save print file* appears as soon as there is a print file.
+- Parts that are wider at the top than at the base no longer get an edge warning when brim and skirt stay on the bed.
+
+### Holes, slots and splitting
+
+- A thread or heat-set insert in a selected hole no longer stops with “outside the surface”. If the hole is too wide, Solidon names suitable sizes.
+- On a selected hole, the view shows only diameter, depth and two edge distances. References are named after their side, such as “Outer edge left”.
+- In inches, the sentence above a hole gives its size in inches.
+- The preview strip says in one line what changes, with lengths in your display unit.
+
+### Sculpting, text and sketching
+
+- For holders and plates with holes, countersinks and lettering, *Rebuild model* now builds an outline with pockets cut away. If it finds no structure, it says so.
+- If you take the section of a converted body into a sketch, its circles and arcs arrive as circles and arcs.
+- If a part cannot be converted to faces and edges, Solidon names the reason and a way out instead of ending with an unexpected error.
+
+### Generating with AI
+
+- The AI notice says in two sentences per destination what is sent. Because the text has changed, you confirm it once more.
+- The descriptions of the recommended local models are shorter.
+
 ## 0.5.2
 
 ### New shapes and parts

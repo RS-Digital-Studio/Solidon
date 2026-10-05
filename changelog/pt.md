@@ -15,6 +15,60 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.5.3
+
+### Utilização e sistema
+
+- À direita há um cartão com os separadores *Seleção*, *Relatório de verificação* e *Chat*. Os avisos novos já não trazem o relatório para a frente; o separador mostra-os com um símbolo e um número.
+- No topo da janela encontra qualquer função em *Pesquisar função* (Ctrl+Shift+P). O mapa de funções segue a ordem da barra de menus.
+- Na seleção, cada característica tem uma só ação aberta de cada vez. As outras ficam recolhidas e mostram os seus valores.
+- Os diálogos de operação mostram à frente no máximo quatro campos e uma frase. Os valores raramente alterados estão em *Mais definições*, os limites em *Quando evitar?*.
+- Um zero com significado diz no campo o que faz, por exemplo «automático», «sem» ou «do material».
+- Todos os diálogos têm a mesma forma, com secções planas e uma margem comum para as etiquetas, também as definições, o diálogo de IA e a ativação.
+- O relatório de verificação mostra primeiro as constatações e, por cima, uma linha com estado e contadores. *Exportar …* fica ao lado de *Entregar ao slicer …*.
+- Constatações, passos da visita guiada e indicações são mais curtos. Onde um botão oferece a ação, a frase já não a repete.
+- A ação *Reconstruir modelo* está no corpo selecionado.
+- O ecrã inicial mostra em grande, no topo, as quatro formas de começar. *Primeiros passos* pergunta idioma, slicer e impressora e recolhe o resto.
+- O catálogo de blocos mostra imagem e título em cada mosaico. Num furo, *Blocos adequados …* mostra só o que cabe num furo.
+- O diálogo *Guardar a seleção como bloco* mostra uma linha por medida, com valor predefinido e limites.
+- No Windows, o ponteiro do rato próprio do Solidon volta a clicar exatamente na ponta. Até agora o clique caía alguns píxeis ao lado.
+- A pesquisa no manual já não termina com um erro quando mais um carácter deixa de encontrar resultados.
+- Se anular ou eliminar um passo enquanto *Editar este passo* está aberto, o diálogo fecha-se e indica-o.
+- Foi corrigido um bloqueio raro da aplicação durante a verificação de impressão.
+
+### Imprimir e entregar ao slicer
+
+- Novidade: Anycubic Slicer Next com as 39 impressoras Anycubic, no Windows, macOS e Linux.
+- No Linux, o Solidon encontra OrcaSlicer, Bambu Studio e PrusaSlicer instalados como Flatpak, com as suas impressoras e perfis, também a partir do Flatpak do próprio Solidon.
+- No Linux, os slicers em AppImage também oferecem as impressoras de fabricante que neles configurou.
+- No Mac, o Solidon passa a criar o ficheiro de impressão também com o Cura. Até agora só encontrava a janela do Cura.
+- O Creality Print 7 traz as suas próprias impressoras e a última que escolheu.
+- As listas de impressoras indicam cada impressora uma só vez, sem variantes de bico. O bico escolhe-se nas definições de impressão.
+- Um bico escolhido nas definições de impressão mantém-se quando depois guarda as definições do programa.
+- Se mudar o bico para o PrusaSlicer ou o SuperSlicer, o slicer recebe também o perfil de impressora correspondente.
+- O Solidon oferece mais impressoras, também aquelas cujo perfil não indica mesa nem bico, como a Creality CR-20 e a Anycubic i3 Mega no PrusaSlicer.
+- As definições de impressão mostram à frente slicer, impressora, bico, filamentos, qualidade, densidade de preenchimento e suportes; o resto está em *Mais definições*.
+- Cada motivo de uma sugestão nas definições de impressão cabe numa linha. *Guardar o ficheiro de impressão* aparece assim que existe um ficheiro de impressão.
+- As peças mais largas em cima do que na base já não recebem um aviso de margem quando o brim e o skirt ficam na mesa.
+
+### Furos, furos oblongos e divisão
+
+- Uma rosca ou uma bucha de inserção a quente num furo selecionado já não para com «fora da superfície». Se o furo for demasiado largo, o Solidon indica tamanhos adequados.
+- Num furo selecionado, a vista mostra só diâmetro, profundidade e duas cotas às arestas. As referências têm o nome do seu lado, por exemplo «Aresta exterior à esquerda».
+- Em polegadas, a frase sobre um furo indica a sua medida em polegadas.
+- A faixa de pré-visualização diz numa linha o que muda, com os comprimentos na sua unidade de apresentação.
+
+### Modelar, texto e esboço
+
+- Em suportes e placas com furos, escareamentos e texto, *Reconstruir modelo* cria agora um contorno com alojamentos subtraídos. Se não encontrar uma estrutura, di-lo.
+- Se num esboço aproveitar o corte de um corpo convertido, os seus círculos e arcos chegam como círculos e arcos.
+- Se uma peça não puder ser convertida em faces e arestas, o Solidon indica o motivo e uma saída em vez de terminar com um erro inesperado.
+
+### Gerar com IA
+
+- O aviso de IA diz em duas frases, por destino, o que é enviado. Como o texto mudou, confirma-o mais uma vez.
+- As descrições dos modelos locais recomendados são mais curtas.
+
 ## 0.5.2
 
 ### Novas formas e blocos

@@ -15,6 +15,60 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.5.3
+
+### Uso e sistema
+
+- A destra c'è una scheda con le linguette *Selezione*, *Rapporto di verifica* e *Chat*. I nuovi avvisi non portano più il rapporto in primo piano; la sua linguetta li mostra con un simbolo e un numero.
+- In alto nella finestra trovi ogni funzione con *Cerca funzione* (Ctrl+Maiusc+P). La mappa delle funzioni segue l'ordine della barra dei menu.
+- Nella selezione, su una caratteristica è aperta una sola azione alla volta. Le altre restano chiuse e mostrano i loro valori.
+- Le finestre delle operazioni mostrano davanti al massimo quattro campi e una frase. I valori cambiati di rado stanno in *Altre impostazioni*, i limiti in *Quando evitarla?*.
+- Uno zero con un significato dice nel campo cosa fa, per esempio «automatico», «senza» o «dal materiale».
+- Tutte le finestre di dialogo hanno la stessa forma, con sezioni piatte e un bordo comune per le etichette, anche impostazioni, finestra dell'IA e sblocco.
+- Il rapporto di verifica mostra prima i rilievi, con sopra una riga di stato e contatori. *Esporta …* sta accanto a *Passa allo slicer …*.
+- Rilievi, passi del tour e suggerimenti sono più brevi. Dove un pulsante offre l'azione, la frase non la ripete più.
+- L'azione *Ricostruisci modello* si trova sul corpo selezionato.
+- La schermata iniziale mostra in grande, in alto, i quattro modi per cominciare. *Primi passi* chiede lingua, slicer e stampante e chiude il resto.
+- Il catalogo dei blocchi mostra immagine e titolo in ogni riquadro. Su un foro, *Blocchi adatti …* mostra solo ciò che va in un foro.
+- La finestra *Salva la selezione come blocco* mostra una riga per misura, con valore predefinito e limiti.
+- Su Windows il puntatore del mouse di Solidon torna a cliccare esattamente sulla punta. Prima il clic cadeva qualche pixel più in là.
+- La ricerca nel manuale non si interrompe più con un errore quando un carattere in più non trova risultati.
+- Se annulli o elimini un passo mentre *Modifica questo passaggio* è aperto, la finestra si chiude e te lo dice.
+- Un raro blocco dell'applicazione durante la verifica di stampa è stato risolto.
+
+### Stampare e passare allo slicer
+
+- Novità: Anycubic Slicer Next con tutte le 39 stampanti Anycubic, su Windows, macOS e Linux.
+- Su Linux Solidon trova OrcaSlicer, Bambu Studio e PrusaSlicer installati come Flatpak, con le tue stampanti e i tuoi profili, anche dal Flatpak di Solidon.
+- Su Linux anche gli slicer in AppImage offrono le stampanti dei produttori che vi hai configurato.
+- Su Mac Solidon ora crea il file di stampa anche con Cura. Prima trovava solo la finestra di Cura.
+- Creality Print 7 porta con sé le sue stampanti e l'ultima che hai scelto.
+- Gli elenchi delle stampanti nominano ogni stampante una sola volta, senza varianti di ugello. L'ugello lo scegli nelle impostazioni di stampa.
+- Un ugello scelto nelle impostazioni di stampa resta anche se poi salvi le impostazioni del programma.
+- Se cambi ugello per PrusaSlicer o SuperSlicer, lo slicer riceve anche il profilo di stampante adatto.
+- Solidon offre più stampanti, anche quelle il cui profilo non indica piano o ugello, come la Creality CR-20 e la Anycubic i3 Mega in PrusaSlicer.
+- Le impostazioni di stampa mostrano davanti slicer, stampante, ugello, filamenti, qualità, densità di riempimento e supporti; il resto sta in *Altre impostazioni*.
+- Ogni motivo di un suggerimento nelle impostazioni di stampa sta in una riga. *Salva file di stampa* compare appena c'è un file di stampa.
+- I pezzi più larghi in alto che alla base non ricevono più un avviso sul bordo se brim e skirt restano sul piano.
+
+### Fori, asole e divisione
+
+- Una filettatura o un inserto a caldo in un foro selezionato non si ferma più con «fuori dalla superficie». Se il foro è troppo largo, Solidon indica le misure adatte.
+- Su un foro selezionato la vista mostra solo diametro, profondità e due quote dai bordi. I riferimenti prendono il nome dal loro lato, per esempio «Bordo esterno a sinistra».
+- In pollici, la frase sopra un foro ne indica la misura in pollici.
+- La fascia dell'anteprima dice in una riga cosa cambia, con le lunghezze nella tua unità di visualizzazione.
+
+### Modellare, testo e schizzo
+
+- Per supporti e piastre con fori, svasature e scritte, *Ricostruisci modello* ora crea un contorno con le sedi sottratte. Se non trova una struttura, lo dice.
+- Se in uno schizzo riprendi la sezione di un corpo convertito, i suoi cerchi e archi arrivano come cerchi e archi.
+- Se un pezzo non si può convertire in facce e spigoli, Solidon indica il motivo e una via d'uscita invece di finire con un errore imprevisto.
+
+### Generare con l'IA
+
+- L'avviso sull'IA dice in due frasi, per ogni destinazione, cosa viene inviato. Dato che il testo è cambiato, lo confermi ancora una volta.
+- Le descrizioni dei modelli locali consigliati sono più brevi.
+
 ## 0.5.2
 
 ### Nuove forme e nuovi blocchi

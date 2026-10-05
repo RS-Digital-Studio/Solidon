@@ -16,6 +16,60 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.5.3
+
+### Manejo y sistema
+
+- A la derecha hay una tarjeta con las pestañas *Selección*, *Informe de comprobación* y *Chat*. Los avisos nuevos ya no traen el informe al frente; su pestaña los indica con un símbolo y un número.
+- Arriba en la ventana, *Buscar función* (Ctrl+Mayús+P) encuentra cualquier función. El mapa de funciones sigue el orden de la barra de menús.
+- En la selección, cada característica tiene una sola acción abierta a la vez. Las demás quedan plegadas y muestran sus valores.
+- Los diálogos de operación muestran delante como mucho cuatro campos y una frase. Lo que rara vez se cambia está en *Más ajustes*, los límites en *¿Cuándo evitarla?*.
+- Un cero con significado dice en el campo lo que hace, por ejemplo «automático», «sin» o «del material».
+- Todos los diálogos tienen la misma forma, con secciones planas y un borde común para las etiquetas, también los ajustes, el diálogo de IA y la activación.
+- El informe de comprobación muestra primero los hallazgos, con una línea de estado y contadores encima. *Exportar …* está junto a *Entregar al slicer …*.
+- Hallazgos, pasos del recorrido y avisos son más cortos. Donde un botón ofrece la acción, la frase ya no la repite.
+- La acción *Reconstruir modelo* está en el cuerpo seleccionado.
+- La pantalla de inicio muestra arriba, en grande, las cuatro formas de empezar. *Primeros pasos* pregunta idioma, slicer e impresora y pliega el resto.
+- El catálogo de bloques muestra imagen y título en cada ficha. En un taladro, *Bloques adecuados …* muestra solo lo que va en un taladro.
+- El diálogo *Guardar la selección como bloque* muestra una fila por medida con su valor por defecto y sus límites.
+- En Windows, el puntero propio de Solidon vuelve a hacer clic justo en su punta. Hasta ahora el clic caía unos píxeles al lado.
+- La búsqueda en el manual ya no se interrumpe con un error cuando un carácter más deja de encontrar resultados.
+- Si deshace o borra un paso mientras *Editar este paso* está abierto, el diálogo se cierra y lo indica.
+- Se ha corregido un bloqueo poco frecuente de la aplicación durante la comprobación de impresión.
+
+### Imprimir y entregar al slicer
+
+- Se añade Anycubic Slicer Next, con las 39 impresoras de Anycubic, en Windows, macOS y Linux.
+- En Linux, Solidon encuentra OrcaSlicer, Bambu Studio y PrusaSlicer instalados como Flatpak, con sus impresoras y perfiles, también desde el propio Flatpak de Solidon.
+- En Linux, los slicers en AppImage también ofrecen las impresoras de fabricante que tenga configuradas en ellos.
+- En el Mac, Solidon ahora también genera el archivo de impresión con Cura. Hasta ahora solo encontraba la ventana de Cura.
+- Creality Print 7 aporta sus propias impresoras y la última que eligió.
+- Las listas de impresoras nombran cada impresora una sola vez, sin variantes de boquilla. La boquilla se elige en los ajustes de impresión.
+- La boquilla elegida en los ajustes de impresión se mantiene aunque después guarde los ajustes del programa.
+- Si cambia la boquilla para PrusaSlicer o SuperSlicer, el slicer recibe también el perfil de impresora que corresponde.
+- Solidon ofrece más impresoras, también aquellas cuyo perfil no indica placa ni boquilla, como la Creality CR-20 y la Anycubic i3 Mega en PrusaSlicer.
+- Los ajustes de impresión muestran delante slicer, impresora, boquilla, filamentos, calidad, densidad de relleno y soportes; el resto está en *Más ajustes*.
+- Cada motivo de una sugerencia en los ajustes de impresión cabe en una línea. *Guardar archivo de impresión* aparece en cuanto hay un archivo de impresión.
+- Las piezas más anchas arriba que en la base ya no reciben un aviso de borde si el brim y el skirt quedan sobre la placa.
+
+### Taladros, ranuras y división
+
+- Una rosca o un inserto termofijado en un taladro seleccionado ya no se detiene con «fuera de la superficie». Si el taladro es demasiado ancho, Solidon indica tamaños adecuados.
+- En un taladro seleccionado, la vista muestra solo diámetro, profundidad y dos cotas a aristas. Las referencias se nombran por su lado, por ejemplo «Arista exterior izquierda».
+- En pulgadas, la frase sobre un taladro da su medida en pulgadas.
+- La franja de vista previa dice en una línea qué cambia, con las longitudes en su unidad de visualización.
+
+### Modelar, texto y dibujo
+
+- En soportes y placas con taladros, avellanados y texto, *Reconstruir modelo* crea ahora un contorno con alojamientos restados. Si no encuentra una estructura, lo dice.
+- Si al dibujar toma la sección de un cuerpo convertido, sus círculos y arcos llegan como círculos y arcos.
+- Si una pieza no se puede convertir en caras y aristas, Solidon indica el motivo y una salida en lugar de terminar con un error inesperado.
+
+### Generar con IA
+
+- El aviso de IA explica en dos frases por destino qué se envía. Como el texto ha cambiado, tendrá que confirmarlo una vez más.
+- Las descripciones de los modelos locales recomendados son más cortas.
+
 ## 0.5.2
 
 ### Formas y bloques nuevos
