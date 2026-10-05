@@ -483,6 +483,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Intel-Mac deshalb ohne Bildschirm (`auslieferung.md`); Fenster und Metal-Ansicht auf Intel
   belegt nur ein echtes Gerät — offen bleibt die Rückmeldung des Kunden nach 0.5.2 (RM-505).
 
+  **Rückmeldung 05.10.2026, 0.5.2 auf einem zweiten Mac desselben Kunden:** Das Beenden nach
+  dem Start ist weg. Gestartet hat die App aber erst nach `sudo codesign --force --deep --sign -`,
+  danach stand sie zunächst nur im Dock und kam dann. Prozessor, macOS-Version und das Bild ohne
+  Neusignierung sind beim Kunden erfragt. Verdacht, ungemessen: macOS prüft eine notarisierte App
+  beim ersten Start vollständig, auch ohne Quarantäne; die Ad-hoc-Signatur nimmt die Notarisierung
+  und damit diese Prüfung weg. Im Tag-Lauf 37266459831 brauchte `spctl --assess` auf dem
+  Intel-Runner 55 s, auf ARM 3 s. Der Messweg liegt in `.claude/.state/mac-start-2026-10-05/`:
+  veröffentlichtes Paket mit Quarantäne installieren, über `open` starten, Zeit bis Prozess, Python
+  und Fenster — erster, zweiter und neu signierter Start, je mit und ohne vorheriges `spctl`. Am
+  05.10. lief er nicht: GitHub startet seit dem Vormittag keinen Job (Zahlung oder Ausgabenlimit
+  des Kontos), auch keinen auf `main`.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).
 
 <a id="rm-107"></a>
