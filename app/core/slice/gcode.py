@@ -1210,7 +1210,10 @@ def analyze_lines(
                 support_amounts[active_tool] = support_amounts.get(active_tool, 0.0) + amount
             state.all_extent.add(*points)
             state.all_paths_inside = state.all_paths_inside and inside
-            if after_first_layer:
+            # Code des Profils (``;TYPE:Custom``) ist kein Druck, auch nach der
+            # Schichtmarke: Anycubics Kobra S1 zieht dort seine Spüllinie hinter
+            # der Druckfläche.
+            if after_first_layer and not custom_role:
                 state.model_extent.add(*points)
                 state.model_paths_inside = state.model_paths_inside and inside
         # Nur was beide Dialekte als Druckbahn lesen — ein Rückzug in dem

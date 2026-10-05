@@ -541,6 +541,46 @@ def test_a_mac_bundle_is_found_inside_its_contents(
     assert found == binary
 
 
+@pytest.mark.parametrize(
+    ("place", "parts"),
+    [
+        # Windows: Setup 2.0.0.3 nach ``C:\Program Files\AnycubicSlicerNext``.
+        (("AnycubicSlicerNext", "AnycubicSlicerNext.exe"), (".", "bin")),
+        # macOS: DMG 2.0.0.3, ``CFBundleExecutable`` ist AnycubicSlicerNext.
+        (
+            ("AnycubicSlicerNext.app", "Contents", "MacOS", "AnycubicSlicerNext"),
+            (".", "bin", "Contents/MacOS"),
+        ),
+        # Linux: das apt-Paket legt ``usr/bin/AnycubicSlicerNext`` ab.
+        (("bin", "AnycubicSlicerNext"), (".", "bin")),
+    ],
+)
+def test_anycubic_slicer_next_is_found_where_its_installers_put_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    place: tuple[str, ...],
+    parts: tuple[str, ...],
+) -> None:
+    """Anycubic Slicer Next steht im Slicerkatalog und ist ein Orca-Abkömmling."""
+    from app.core.export.slicer_keys import flavour_of
+    from app.core.tools import SLICERS
+
+    root = tmp_path / "root"
+    binary = root.joinpath(*place)
+    binary.parent.mkdir(parents=True)
+    binary.write_text("")
+    monkeypatch.setattr(discover, "_install_roots", lambda: (root,))
+    monkeypatch.setattr(discover, "_PARTS", parts)
+    monkeypatch.setattr(discover, "_SUFFIXES", (".exe", "") if binary.suffix else ("",))
+    discover.forget_cache()
+
+    found = discover._from_folders(SLICERS)
+
+    assert found == binary
+    assert flavour_of(binary.name) == "orca"
+    assert discover.program_mark(binary.name) == "anycubicslicernext"
+
+
 def test_the_bundle_path_belongs_to_macos_and_nowhere_else() -> None:
     """Die Zuordnung selbst, von jeder Maschine aus prüfbar.
 

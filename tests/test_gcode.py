@@ -1135,6 +1135,29 @@ def test_a_moving_purge_before_the_first_layer_is_not_a_model_print() -> None:
     assert gcode.analyze(purge_only).extent is None
 
 
+def test_a_purge_line_in_the_profiles_own_code_is_not_the_model() -> None:
+    """Anycubics Kobra S1 zieht die Spüllinie in ``before_layer_change_gcode``
+    der ersten Schicht, also **nach** der Schichtmarke, bei Y = 255 mm — hinter
+    der Druckfläche von 250 mm, auf der Platte. Die Bahnart steht dabei noch auf
+    ``Custom`` (Code des Profils), erst danach beginnt das Modell. Gezählt, meldete
+    die Gegenprobe jeden Druck als neben dem Bett (Druckdatei von Anycubic Slicer
+    Next 2.0.0.3, 05.10.2026)."""
+    text = (
+        "; printable_area = 0x0,250x0,250x250,0x250\n"
+        ";TYPE:Custom\nG9111 bedTemp=55 extruderTemp=220\nG90\nM83\n"
+        ";LAYER_CHANGE\n;Z:0.2\n;HEIGHT:0.2\n ; PURGE LINE\n"
+        "G1 X89.365 Y255 F18000\nG1 Z.25 F900\nG1 E0.8 F2400\n"
+        "G1 X158.835 Y255 E3.72454\nG1 X158.835 Y255.45 E.0252\n"
+        ";TYPE:Outer wall\nG1 X100 Y100 F3000\nG1 X120 Y100 E1\nG1 X120 Y120 E1\n"
+    )
+
+    box = gcode.analyze(text).extent
+
+    assert box is not None
+    assert box.minimum[:2] == pytest.approx((100, 100))
+    assert box.maximum[:2] == pytest.approx((120, 120))
+
+
 def test_the_first_printed_segment_includes_its_start() -> None:
     text = "G90\nM83\n;LAYER:0\nG0 X-5 Y0 Z0.2\nG1 X5 Y0 E1\n"
 

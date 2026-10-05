@@ -197,6 +197,21 @@ def test_an_odd_exclusion_in_the_file_neither_aborts_nor_warns(line: str) -> Non
     assert finding is not None and finding.code == "gcode.off_the_bed"
 
 
+def test_a_manufacturer_purge_behind_the_printable_area_is_not_off_the_bed() -> None:
+    """Die Spüllinie des Kobra S1 (Y = 255 mm bei 250 mm Druckfläche) gehört zum
+    Code des Profils, nicht zum Druck; neben dem Bett liegt nur das Modell."""
+    purge = (
+        "; printable_area = 0x0,250x0,250x250,0x250\n"
+        ";TYPE:Custom\nG90\nM83\n;LAYER_CHANGE\n;Z:0.2\n"
+        "G1 X89.365 Y255 F18000\nG1 X158.835 Y255 E3.7\n"
+    )
+    inside = purge + ";TYPE:Outer wall\nG1 X100 Y100\nG1 X120 Y100 E1\n"
+    assert handover.off_the_bed(inside, profiles.make_profile(), "orca") is None
+    outside = purge + ";TYPE:Outer wall\nG1 X100 Y240\nG1 X100 Y260 E1\n"
+    finding = handover.off_the_bed(outside, profiles.make_profile(), "orca")
+    assert finding is not None and finding.code == "gcode.off_the_bed"
+
+
 @pytest.mark.parametrize("ignored_exclusion", [False, True])
 def test_a_bed_outline_without_area_falls_back_to_the_profile(ignored_exclusion: bool) -> None:
     profile = profiles.make_profile()

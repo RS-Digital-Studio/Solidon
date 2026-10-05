@@ -454,9 +454,11 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
 #: Konsolenlauf je Programm mit vollständiger Maschine und Filament des
 #: Herstellers und leerem Prozess, abgelesen im Konfigurationsblock des
 #: G-Codes (27.09.2026; ElegooSlicer 1.5.3.4, OrcaSlicer 2.4.2, Bambu Studio
-#: 02.08.02.61, Creality Print 7.2). In den Ketten der zwölf zugeordneten
-#: Drucker fehlen vier Vorgaben; OrcaSlicer braucht zusätzlich die am
-#: Kobra-2-Prozess gemessenen Rückfälle für nicht unterstützte Prozentwerte.
+#: 02.08.02.61, Creality Print 7.2; Anycubic Slicer Next 2.0.0.3 am
+#: 05.10.2026). In den Ketten der zwölf zugeordneten Drucker fehlen vier
+#: Vorgaben; OrcaSlicer braucht zusätzlich die am Kobra-2-Prozess gemessenen
+#: Rückfälle für nicht unterstützte Prozentwerte. Anycubics eigene Ketten
+#: nennen alle Schlüssel; die Vorgaben gelten Prozessen ohne Herstellerbasis.
 PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     "elegooslicer": {
         "brim_type": "auto_brim",
@@ -484,21 +486,31 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
     },
+    "anycubicslicernext": {
+        "brim_type": "auto_brim",
+        "initial_layer_speed": "30",
+        "precise_outer_wall": "1",
+        "support_object_xy_distance": "0.35",
+        "wall_generator": "arachne",
+        "wall_sequence": "inner wall/outer wall",
+    },
 }
 
 #: ``raft_first_layer_expansion`` der Programme, wenn die Kette ihn nicht
 #: nennt: Er verbreitert die erste Raft- **und** Stützschicht. Gemessen wie
 #: :data:`PROGRAM_DEFAULTS` im Konfigurationsblock der Druckdatei
 #: (04.10.2026; ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2, Creality Print
-#: 7.3.0.6149: je 2) und für PrusaSlicer 2.9.6 und SuperSlicer 2.5.59.13 über
-#: ``--save`` (je 3). An garden-hose-holder.3mf lag SuperSlicers Stütze in
-#: Schicht 1 2,9 mm vor dem Teil (Slicer-Matrix RM-312). Bambu Studio
-#: 02.08.02.61 schreibt ``-1`` — eine Automatik ohne belegte Breite, also
-#: unbekannt; Cura führt den Schlüssel nicht.
+#: 7.3.0.6149, am 05.10.2026 Anycubic Slicer Next 2.0.0.3: je 2) und für
+#: PrusaSlicer 2.9.6 und SuperSlicer 2.5.59.13 über ``--save`` (je 3). An
+#: garden-hose-holder.3mf lag SuperSlicers Stütze in Schicht 1 2,9 mm vor dem
+#: Teil (Slicer-Matrix RM-312). Bambu Studio 02.08.02.61 schreibt ``-1`` —
+#: eine Automatik ohne belegte Breite, also unbekannt; Cura führt den
+#: Schlüssel nicht.
 SUPPORT_FOOT_DEFAULTS: Final[Mapping[str, float]] = {
     "elegooslicer": 2.0,
     "orcaslicer": 2.0,
     "crealityprint": 2.0,
+    "anycubicslicernext": 2.0,
     "prusaslicer": 3.0,
     "superslicer": 3.0,
 }
@@ -723,7 +735,11 @@ def native_brim_gap(value: float, foot: float | None, program_name: str) -> str:
 #: ``firstLayerObjGroups``), ``brim_object_gap`` hat die Grenzen 0 bis 2
 #: (``PrintConfig.cpp``), und ``brim_use_efc_outline`` gibt es dort nicht.
 #: Die Fußkorrektur ist dagegen ein Objektwert (``PrintObjectConfig``).
-_FOOT_PER_PART: Final = frozenset({"crealityprint"})
+#: Anycubic Slicer Next teilt Crealitys ``Brim.cpp``; gemessen am 05.10.2026
+#: (2.0.0.3, Würfel am Kobra S1): Mit 0,3 mm Fußkorrektur rückt die Außenwand
+#: der ersten Schicht 0,3 mm nach innen, die innerste Brim-Bahn bleibt, und
+#: ein Abstand von -0,2 mm kommt als 0 zurück.
+_FOOT_PER_PART: Final = frozenset({"crealityprint", "anycubicslicernext"})
 
 
 def part_brim_gap(value: float, foot: float | None, program: str) -> dict[str, str]:

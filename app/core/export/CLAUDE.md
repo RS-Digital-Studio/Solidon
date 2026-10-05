@@ -168,17 +168,17 @@ dieselben Rollen in der Konsole und im importierbaren Fensterprofil.
 ## Warum `slicer_keys.py` existiert
 
 Drei Familien übersetzen (Warum im Moduldocstring): `prusa` (PrusaSlicer,
-SuperSlicer), `orca` (OrcaSlicer, Bambu Studio, ElegooSlicer, **Creality
-Print** ab Version 6), `cura` (CuraEngine). `flavour_of` ist die einzige
+SuperSlicer), `orca` (OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print
+ab 6, Anycubic Slicer Next), `cura` (CuraEngine). `flavour_of` ist die einzige
 Stelle, an der ein Programm eine Familie wird (`FLAVOUR_BY_NAME`); alles andere
 ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädikat
 „nein“, `slice_model` und `write_config` sagen mit Vorschlag ab
 (`_refuse_untranslated`, `only_opens`). Gleiche Familie heißt nicht gleicher
 Stand: Was ein Programm nicht kennt, steht je Programmmarke in
 `NOT_TAKEN_BY_PROGRAM` und `PROGRAM_ALIASES` (`takes(…, program)`,
-`for_program`; SuperSlicer stürzt an fremden 3MF-Schlüsseln ab). Rat
+`for_program`), was es nicht ausgibt, in `OMITTED_FROM_GCODE`. Rat
 (`writer.part_advice`, `split_for_parts`), Beilage (`prusa_values`) und Dialog
-fragen es; gemessener Bestand in `tests/data/superslicer_3mf_keys.json`.
+fragen es; Bestand in `tests/data/superslicer_3mf_keys.json`.
 Aufzählungen übersetzt `PROGRAM_VALUES` je Programm; nicht verfügbare Wahlen
 stehen mit Ersatz und Grund in `NOT_OFFERED_BY_PROGRAM`. Dialog, Rat, Platte
 und Objektwerte fragen denselben Bestand. `tests/data/slicer_values.json`

@@ -228,6 +228,35 @@ def test_discovery_reads_orca_exclusions_as_rectangles_of_four_points(
         )
 
 
+def test_profile_management_fields_are_not_values(tmp_path: Path) -> None:
+    """``is_custom_defined`` und ``url`` beschreiben ein Profil der Orca-Familie.
+
+    ``ConfigBase::load_from_json`` legt sie wie ``name`` und ``inherits`` als
+    Zeichenkette ab und bricht bei einer Liste ab (``type must be string, but
+    is array``). Anycubics Filamentprofile tragen ``is_custom_defined``; als
+    Wert weitergereicht kam er in Solidons Filamentdatei als Liste, und Anycubic
+    Slicer Next rechnete keinen Auftrag (05.10.2026).
+    """
+    parent = tmp_path / "filament" / "base.json"
+    _write(
+        parent,
+        {
+            "name": "Basis",
+            "is_custom_defined": "0",
+            "url": "https://x",
+            "nozzle_temperature": ["210"],
+        },
+    )
+    child = tmp_path / "filament" / "pla.json"
+    _write(child, {"name": "PLA", "inherits": "Basis", "is_custom_defined": "0", "url": ""})
+
+    values = sp.resolve_values(child, roots=(tmp_path,))
+
+    assert values["nozzle_temperature"] == ["210"]
+    assert "is_custom_defined" not in values
+    assert "url" not in values
+
+
 def test_prusaslicer_knows_no_exclusion_area_and_reads_points_like_its_stream(
     prusa_mini: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -4264,6 +4293,46 @@ def test_a_distribution_package_keeps_its_profiles_under_share(
     profiles.mkdir(parents=True)
 
     assert sp.install_root(executable) == profiles
+
+
+@pytest.mark.parametrize(
+    ("app_id", "flavour", "inside", "command"),
+    [
+        ("com.prusa3d.PrusaSlicer", "prusa", "bin/prusa-slicer", "/app/bin/prusa-slicer"),
+        ("com.ultimaker.cura", "cura", "cura/CuraEngine", "/app/cura/CuraEngine"),
+        ("com.orcaslicer.OrcaSlicer", "orca", "bin/orca-slicer", ""),
+    ],
+)
+def test_a_flatpak_slicer_computes_with_the_program_inside(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_id: str,
+    flavour: str,
+    inside: str,
+    command: str,
+) -> None:
+    """Gemessen am Runner mit den Flathub-Paketen: PrusaSlicers Startskript
+    ruft das Programm im Hintergrund auf und kehrt sofort zurück, Curas Starter
+    öffnet nur das Fenster — beide schrieben keine Druckdatei. Orca ruft im
+    Vordergrund auf und behält seinen Starter."""
+    from app.core import discover
+    from app.core.export import handover
+
+    system = tmp_path / "flatpak"
+    launcher = system / "exports" / "bin" / app_id
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("")
+    program = system / "app" / app_id / "current" / "active" / "files" / inside
+    program.parent.mkdir(parents=True)
+    program.write_bytes(b"")
+    monkeypatch.setattr(discover, "_FLATPAK_EXPORTS", (str(launcher.parent),))
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(system),))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+
+    found = handover._cli_program(handover.SlicerSetup(launcher, flavour))  # type: ignore[arg-type]
+
+    expected = ["flatpak", "run", f"--command={command}", app_id] if command else [str(launcher)]
+    assert found == expected
 
 
 def test_cura_as_a_flatpak_reads_its_own_data_folder(

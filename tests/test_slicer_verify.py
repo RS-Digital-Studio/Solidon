@@ -96,13 +96,30 @@ def test_nil_does_not_exempt_arbitrary_unknown_settings() -> None:
     assert handover.verify_settings({}, {"discarded_setting": "nil"}, flavour="orca")
 
 
-@pytest.mark.parametrize("program", ["orcaslicer", "elegooslicer", "crealityprint"])
+@pytest.mark.parametrize(
+    "program", ["orcaslicer", "elegooslicer", "crealityprint", "anycubicslicernext"]
+)
 def test_bambu_scarf_switch_is_consumed_only_in_bambu(program: str) -> None:
-    """Die drei verwandten Programme haben diesen belegten Bambu-Schalter nicht."""
+    """Die verwandten Programme haben diesen belegten Bambu-Schalter nicht."""
     written = {"override_filament_scarf_seam_setting": "1"}
     assert handover.verify_settings({}, written, flavour="orca", program=program) == []
     assert handover.verify_settings({}, written, flavour="orca", program="bambustudio")
     assert handover.verify_settings({}, written, flavour="orca")
+
+
+def test_anycubic_takes_no_ironing_without_writing_it() -> None:
+    """Anycubic Slicer Next nimmt „no ironing“ an und lässt die Zeile im
+    Konfigurationsblock weg (gemessen an 2.0.0.3); gebügelt steht sie da.
+    Ein anderer Wert, der fehlt, bleibt ein Befund."""
+    program = "anycubicslicernext"
+    off = {"ironing_type": "no ironing"}
+    assert handover.verify_settings({}, off, flavour="orca", program=program) == []
+    assert handover.verify_settings({}, off, flavour="orca", program="orcaslicer")
+    on = {"ironing_type": "top"}
+    assert handover.verify_settings({}, on, flavour="orca", program=program)
+    assert (
+        handover.verify_settings({"ironing_type": "top"}, on, flavour="orca", program=program) == []
+    )
 
 
 def test_slice_model_passes_the_family_and_exact_program(

@@ -420,6 +420,13 @@ Bambus `-100` bleiben reguläre Absagen, auch wenn ihre Zahl größer ausfällt.
 
 ## Warum `slicer_keys.py` existiert
 
+Aus der Karte verschoben (05.10.2026): `NOT_TAKEN_BY_PROGRAM` gibt es, weil
+SuperSlicer an fremden 3MF-Schlüsseln abstürzt. `OMITTED_FROM_GCODE` gibt
+es, weil die Gegenprobe einen Wert, den das Programm annimmt, aber nicht in
+den Konfigurationsblock schreibt, sonst als „nicht übernommen“ meldet —
+Bambus Nahtschalter bei den Verwandten, Anycubics `ironing_type` bei „no
+ironing“.
+
 Weil dieselbe Einstellung in Cura, PrusaSlicer, OrcaSlicer und ElegooSlicer
 vier verschiedene Namen hat. Eine Übersetzungstabelle an einer Stelle ist der
 Preis dafür, dass §29 überhaupt einlösbar ist — verstreute Sonderfälle wären

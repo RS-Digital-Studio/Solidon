@@ -167,6 +167,7 @@ SLICERS: Final = (
     "BambuStudio",
     "CrealityPrint",
     "creality-print",
+    "AnycubicSlicerNext",
     "SuperSlicer",
     "superslicer",
     # Cura vor seiner Oberfläche: neben ``UltiMaker-Cura.exe`` liegt

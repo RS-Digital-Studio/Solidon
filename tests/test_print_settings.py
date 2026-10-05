@@ -349,6 +349,7 @@ def test_a_replaced_support_suggestion_explains_the_support_actually_offered() -
         ("elegooslicer", "orca"),
         ("bambustudio", "orca"),
         ("crealityprint", "orca"),
+        ("anycubicslicernext", "orca"),
         ("cura", "cura"),
     ],
 )
@@ -2052,6 +2053,10 @@ def test_the_prusa_family_writes_no_word_booleans(flavour: str) -> None:
         # derselbe Profilbaum, 4234 lesbare Profile, dieselbe Übergabedatei.
         ("CrealityPrint.exe", "orca"),
         ("creality-print", "orca"),
+        # Anycubic Slicer Next baut auf OrcaSlicer auf und heißt unter Windows,
+        # macOS und Linux gleich (gemessen an 2.0.0.3 und dem Paket 2.0.0.5).
+        ("AnycubicSlicerNext.exe", "orca"),
+        ("AnycubicSlicerNext", "orca"),
         ("CuraEngine.exe", "cura"),
         ("notepad.exe", None),
     ],
@@ -3778,7 +3783,14 @@ def _creality_tower_config(tmp_path: Path) -> handover.SlicerConfig:
 
 
 @pytest.mark.parametrize(
-    "program", ["orca-slicer.exe", "elegoo-slicer.exe", "bambu-studio.exe", "CrealityPrint.exe"]
+    "program",
+    [
+        "orca-slicer.exe",
+        "elegoo-slicer.exe",
+        "bambu-studio.exe",
+        "CrealityPrint.exe",
+        "AnycubicSlicerNext.exe",
+    ],
 )
 @pytest.mark.parametrize("bed", [180, 220])
 @pytest.mark.parametrize("rotation", [0, 90])

@@ -1983,6 +1983,7 @@ def test_the_profiles_skirt_beside_a_brim_counts_until_solidon_writes_the_kind()
     [
         ({"raft_first_layer_expansion": "1.5"}, "orcaslicer", 1.5),
         ({}, "elegooslicer", 2.0),
+        ({}, "anycubicslicernext", 2.0),
         ({}, "superslicer", 3.0),
         ({"raft_first_layer_expansion": "-1"}, "bambustudio", None),
         ({}, "bambustudio", None),

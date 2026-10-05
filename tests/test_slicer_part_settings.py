@@ -38,6 +38,8 @@ def _advice(path, value, settings):
         ("orca-slicer.exe", "orca", set()),
         ("elegoo-slicer.exe", "orca", set()),
         ("CrealityPrint.exe", "orca", set()),
+        # Wie Orca je Objekt (``PrintObjectConfig``), nicht nur je Platte wie Bambu.
+        ("AnycubicSlicerNext.exe", "orca", set()),
         ("CuraEngine.exe", "cura", set()),
     ],
 )
@@ -636,6 +638,7 @@ MEASURED_PART_PATHS = frozenset(
         ("orcaslicer", "orca", set()),
         ("elegooslicer", "orca", set()),
         ("crealityprint", "orca", set()),
+        ("anycubicslicernext", "orca", set()),
         ("bambustudio", "orca", {"speed.acceleration", "speed.outer_wall_acceleration"}),
         (
             "prusaslicer",

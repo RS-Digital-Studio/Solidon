@@ -173,7 +173,7 @@ COPY_BLOCK_BYTES: Final = 1024 * 1024
 CREALITY_TOWER_SIDE_OFFSET: Final = 15.0
 CREALITY_TOWER_TOP_OFFSET: Final = 35.0
 
-#: Vorgabe aller vier Orca-Programme, PrintConfig.cpp/prime_tower_brim_width.
+#: Vorgabe aller fünf Orca-Programme, PrintConfig.cpp/prime_tower_brim_width.
 #: Auch im G-Code ihrer nativen Kobra-Profile ohne diesen Schlüssel: 3 mm.
 ORCA_TOWER_DEFAULT_BRIM: Final = 3.0
 
@@ -4409,6 +4409,41 @@ def _definition_keys(path: Path) -> set[str]:
     return found
 
 
+#: Das Programm, mit dem ein Slicer als Flatpak auf der Kommandozeile rechnet,
+#: je Familie in der Reihenfolge der Suche, relativ zu seinem ``/app``.
+_FLATPAK_CLI: Final[dict[SlicerFlavour, tuple[str, ...]]] = {
+    "prusa": ("bin/prusa-slicer",),
+    "cura": ("cura/CuraEngine", "bin/CuraEngine"),
+}
+
+
+def _cli_program(setup: SlicerSetup) -> list[str]:
+    """Womit der Slicer auf der Kommandozeile rechnet: gewöhnlich die
+    Programmdatei selbst.
+
+    **Ein Slicer als Flatpak rechnet nicht immer über seinen Starter.** Das
+    Startskript von PrusaSlicer auf Flathub ruft das Programm im Hintergrund auf
+    und kehrt sofort zurück (``exec /app/bin/prusa-slicer "$@" &``) — Solidon
+    wartete auf nichts, und es entstand keine Druckdatei; der Starter von Cura
+    öffnet nur das Fenster. Für beide geht der Aufruf mit ``--command`` an das
+    Programm im Paket. Orca und Bambu Studio rufen im Vordergrund auf und
+    behalten ihren Starter samt dessen Umgebung (``LC_NUMERIC=C``). Gemessen
+    am Runner mit den Flathub-Paketen (RM-064).
+    """
+    app = discover.flatpak_app(setup.executable)
+    inner = _FLATPAK_CLI.get(setup.flavour, ())
+    if not app or not inner:
+        return [str(setup.executable)]
+    files = discover.flatpak_files(app)
+    found = next(
+        (entry for entry in inner if files is None or (files / entry).is_file()),
+        None,
+    )
+    if found is None:
+        return [str(setup.executable)]
+    return ["flatpak", "run", f"--command=/app/{found}", app]
+
+
 def _command(
     setup: SlicerSetup,
     models: Sequence[Path],
@@ -4426,7 +4461,7 @@ def _command(
     ergäbe ebenso viele Druckdateien, von denen jede so tut, als sei sie der
     ganze Auftrag.
     """
-    binary = str(setup.executable)
+    binary, *inside = _cli_program(setup)
     files = [str(entry) for entry in models]
 
     if setup.flavour == "prusa":
@@ -4437,6 +4472,7 @@ def _command(
         # Anordnung (:func:`app.core.export.writer.arrangement_holds`).
         return [
             binary,
+            *inside,
             "--export-gcode",
             *(["--dont-arrange"] if keep_arrangement else []),
             "--load",
@@ -4466,7 +4502,12 @@ def _command(
         settings_arg = f"{machine};{config.process}" if machine else str(config.process)
         # Creality Print ab 7.3 rechnet nur mit ``--cli`` auf der Konsole
         # (:func:`_creality_cli`).
-        arguments = [binary, *(["--cli"] if _creality_cli(setup) else []), "--load-settings"]
+        arguments = [
+            binary,
+            *inside,
+            *(["--cli"] if _creality_cli(setup) else []),
+            "--load-settings",
+        ]
         arguments.append(settings_arg)
         # Das Filament kommt über einen eigenen Schalter. Es mit in
         # ``--load-settings`` zu geben hilft nicht: der Slicer sortiert die
@@ -4500,7 +4541,7 @@ def _command(
     # waren das 12,3 MB, über der Sammelgrenze :data:`SLICER_OUTPUT_LIMIT`,
     # und der Lauf endete ohne Druckdatei (RM-252). Ohne den Schalter bleiben
     # Warnungen und Fehler, 50 kB — mehr liest die Übergabe nicht daraus.
-    arguments = [binary, "slice"]
+    arguments = [binary, *inside, "slice"]
     engine = config.cura_machine or CuraMachine()
     if engine.search_path:
         # Vor ``-j``: CuraEngine sucht die Erbkette und die Extruderzüge beim
@@ -5801,7 +5842,7 @@ def _for_the_creality_window(model: Path) -> Path:
 def _orca_cli_tower_position(
     config: SlicerConfig, setup: SlicerSetup, models: Sequence[Path]
 ) -> SlicerConfig:
-    """Initialisiert fehlende Turmkoordinaten der vier Orca-Konsolen (RM-476).
+    """Initialisiert fehlende Turmkoordinaten der Orca-Konsolen (RM-476).
 
     Crealitys bekannter Platzierungsmodus bleibt maßgeblich. Ohne Modus
     beginnt der Turm unten mit Abstand zum Rand, statt bei der festen
@@ -5814,7 +5855,7 @@ def _orca_cli_tower_position(
     if (
         setup.flavour != "orca"
         or discover.program_mark(setup.executable.name)
-        not in {"crealityprint", "orcaslicer", "elegooslicer", "bambustudio"}
+        not in {"crealityprint", "orcaslicer", "elegooslicer", "bambustudio", "anycubicslicernext"}
         or config.machine is None
     ):
         return config
@@ -7086,13 +7127,7 @@ def verify_settings(
         if actual is None:
             if flavour not in {"prusa", "orca"}:
                 continue
-            # Nur Bambu kennt diesen Schalter; die drei gemessenen Verwandten
-            # schreiben ihre Nahtwerte unmittelbar und führen ihn nicht.
-            if key == "override_filament_scarf_seam_setting" and program in {
-                "orcaslicer",
-                "elegooslicer",
-                "crealityprint",
-            }:
+            if slicer_keys.omitted_from_gcode(key, wanted, program):
                 continue
             ignored.append(f"{key}: {wanted} → —")
             continue
