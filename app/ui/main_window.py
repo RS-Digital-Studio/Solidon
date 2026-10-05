@@ -3594,7 +3594,10 @@ class MainWindow(QMainWindow):
         self.quick_filament.spoolChosen.connect(self._assign_inventory_spool)
         self.quick_filament.clearRequested.connect(self._clear_selected_filament)
         self.quick_filament.inventoryRequested.connect(self.action_inventory)
-        cast(QVBoxLayout, self.selection_operations.layout()).insertWidget(1, self.quick_filament)
+        # Zugeklappt unter der Liste, die Kopfzeile nennt die Zuweisung (RM-510).
+        self.quick_filament.described.connect(self.selection_operations.describe_print)
+        self.selection_operations.add_print_widget(self.quick_filament)
+        self.feature_panel.set_print_host(self.selection_operations.print_rows())
 
         # Eine Karte, nicht zwei: Die Spalte trägt jetzt allein Bericht, Chat
         # und Tour und teilt ihre Höhe mit nichts mehr. Der Formatverlust,
@@ -14401,6 +14404,8 @@ class MainWindow(QMainWindow):
         # oder zurückzunehmen — samt dem Band und seinem anwendungsweiten
         # Ereignisfilter (gemessen am 03.09.2026: alle sechs Zustände blieben).
         self.feature_dock.closed.connect(self._feature_dock_closed)
+        if self.settings.feature_hint_seen:
+            self.feature_panel.retire_hint()
 
     def _on_feature_moved(self, feature_id: str, centre: Any) -> None:
         """Ein Zug am Griff hat ein Merkmal versetzt (§18.11, Regel 2).
@@ -17469,6 +17474,12 @@ class MainWindow(QMainWindow):
             if feature_id != self._feature_shown:
                 self.feature_dock.forget_dismissal()
             self._feature_shown = feature_id
+            # Wer ein Merkmal angeklickt hat, braucht die Anleitung dazu nicht
+            # mehr — auch nicht in der nächsten Sitzung (RM-510).
+            if not self.settings.feature_hint_seen:
+                self.settings.feature_hint_seen = True
+                self._store_settings()
+                self.feature_panel.retire_hint()
         # **Was die Zeile bündelt, zeigt die Ansicht gleich ganz** (RM-232).
         # Eine Bohrung mit ihrer Senkung meldet der Baum als ein Merkmal und in
         # derselben Runde als zwei (``featuresSelected``); die Ansicht baute

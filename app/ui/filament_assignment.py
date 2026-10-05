@@ -33,6 +33,8 @@ class QuickFilamentPicker(QWidget):
     spoolChosen = Signal(object)
     inventoryRequested = Signal()
     clearRequested = Signal()
+    described = Signal(str)
+    """Die aktuelle Zuweisung in einem Satz — für die zugeklappte Kopfzeile (RM-510)."""
     preview_required = False
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -223,6 +225,7 @@ class QuickFilamentPicker(QWidget):
                 )
             )
         self.scope.setText(scope)
+        self.described.emit(current)
         try:
             entries = filaments.catalogue()
         except AppError as problem:

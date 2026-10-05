@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Final, override
 
-from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from app.core.registry import (
     REGISTRY,
@@ -44,7 +45,8 @@ from app.core.registry import (
 )
 from app.i18n import tr
 from app.ui.icons import icon, icon_name_for
-from app.ui.leash import weak_slot
+from app.ui.leash import stop_watching_the_dying, weak_slot
+from app.ui.overlay import ContentScroller
 from app.ui.panels import collapsible
 from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_large_target, make_primary, set_level
 
@@ -132,7 +134,25 @@ OPEN_UP_TO: Final = 12
 #: mit entgegengesetzter Aussage. Was oben stehen kann, steht nicht auch
 #: darunter — dieselbe Regel wie bei den Hauptaktionen und bei
 #: :func:`_shown_as_fields`.
-PICKER_HANDLES: Final = frozenset({"clear_filament"})
+#:
+#: *Filament zuweisen* und *Filament auf eine Fläche* gehören dazu (RM-510):
+#: Am Körper und an der Fläche gab es Färben zweimal, als Wähler und als Knopf.
+PICKER_HANDLES: Final = frozenset({"assign_slot", "clear_filament", "paint_slot"})
+
+#: Was ohne Auswahl von den Handlungen für alle Körper in der Karte steht.
+#:
+#: Robert, 05.10.2026: „Eigentlich reicht hier druckoptimal ausrichten, machen
+#: ja alle ziemlich das gleiche und nur ohne Auswahl.“ Anordnen und
+#: Überschneidungen prüfen bleiben über Menü und Befehlspalette erreichbar.
+SCENE_ACTIONS_IN_THE_CARD: Final = frozenset({"orient_for_print"})
+
+#: Wie hoch eine Zeile der Operationsliste ist (RM-510).
+#:
+#: Die Liste war eine Wand gleicher 44-Punkte-Kacheln mit Rahmen, gleich laut
+#: wie die Hauptaktionen darüber. Flache Zeilen mit Hover setzen die Liste
+#: hinter die Hauptaktionen zurück und zeigen bei gleicher Höhe ein Drittel
+#: mehr; die Hauptaktionen behalten die volle Zielgröße.
+LIST_ROW_HEIGHT: Final = 32
 
 
 def _shown_as_fields() -> frozenset[str]:
@@ -317,36 +337,28 @@ def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, .
     )
 
 
-#: Wie viele Schriftzeilen die Operationsliste höchstens verlangt — dieselbe
-#: Grenze, die ``QScrollArea.sizeHint`` selbst zieht. Darüber rollt die Liste
-#: in sich, statt das Auswahlfenster zu strecken.
-LIST_LINES_AT_MOST: Final = 24
+#: Die Ereignisse, nach denen die Klappe „Filament und Druck“ neu bewertet wird.
+_SHOWN_OR_HIDDEN: Final = (QEvent.Type.ShowToParent, QEvent.Type.HideToParent)
+_CAME_OR_WENT: Final = (QEvent.Type.ChildAdded, QEvent.Type.ChildRemoved)
 
 
-class _ListScroller(QScrollArea):
+class _ListScroller(ContentScroller):
     """Der Rollbereich der Operationsliste — so hoch, wie die sichtbaren Knöpfe es verlangen.
 
     **Qt fragt seinen Inhalt nur einmal** (RM-232, 25.09.2026):
     ``QScrollArea.sizeHint`` merkt sich die Wunschhöhe des Inhalts beim
     ersten Fragen, und das war beim Aufbau, als alle Handlungen sichtbar
     waren. An einer Bohrung stehen darin drei Knöpfe, 81 Punkte hoch; die
-    Liste verlangte weiter 384. Zusammen mit dem Merkmalfenster lag der
-    Inhalt des Auswahlfensters damit an der Kante seines Sichtfelds (1231
-    gegen 1225 Punkte an der dichten Platte): Kamen die Maße im Bild, sprang
-    der Rollbalken an, das Fenster wurde schmaler, alle Texte brachen neu um
-    — und blieben so. Hier wird der Inhalt bei jeder Frage gefragt, und
-    jeder Umbau seines Layouts meldet die neue Höhe nach oben weiter.
-    """
+    Liste verlangte weiter 384. Hier wird der Inhalt bei jeder Frage gefragt
+    (:class:`~app.ui.overlay.ContentScroller`), und jeder Umbau seines Layouts
+    meldet die neue Höhe nach oben weiter.
 
-    @override
-    def sizeHint(self) -> QSize:
-        hint = super().sizeHint()
-        content = self.widget()
-        if content is None:
-            return hint
-        tallest = LIST_LINES_AT_MOST * self.fontMetrics().height()
-        wanted = content.sizeHint().height() + 2 * self.frameWidth()
-        return QSize(hint.width(), min(wanted, tallest))
+    **Ohne eigene Grenze** (RM-510): Bis dahin hielt die Liste bei 24
+    Schriftzeilen an und rollte, während die Karte darüber noch Platz hatte —
+    bei 1600 x 1000 standen am Körper 15 Einträge sichtbar. Jetzt deckelt die
+    Karte am Fenster (``overlay.natural_height``), und wo das nicht reicht,
+    rollt die Liste in sich; Hauptaktionen und Suche bleiben dabei stehen.
+    """
 
     @override
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
@@ -421,13 +433,17 @@ class SelectionOperationsPanel(QWidget):
         Umschalter das, was sie beim Treffer öffnet — ein Treffer in einer
         zugeklappten Gruppe wäre sonst einer, den niemand sieht."""
         self._states: dict[str, tuple[bool, str]] = {}
+        self._grids: dict[str, QGridLayout] = {}
+        """Je Gruppe das Raster ihrer Zeilen."""
+        self._arranged: dict[str, tuple[int, tuple[int, ...]]] = {}
+        """Je Gruppe die Spaltenzahl und die Zeilen, für die zuletzt gelegt wurde."""
         self._quick_buttons: dict[str, QToolButton] = {}
         self._quick_shown: list[str] = []
         self._quick_columns = 1
         self._query = ""
         """Der zuletzt eingegebene Suchtext — ein Stufenwechsel darf ihn nicht
         vergessen."""
-        self._wrapped_for: tuple[int, int, tuple[str, ...]] | None = None
+        self._wrapped_for: tuple[int, int, tuple[str, ...], tuple[int, ...]] | None = None
         """Für welche Breiten und Hauptaktionen die Beschriftungen zuletzt
         umbrochen wurden (:meth:`_wrap_labels`)."""
         self._folded_by_hand: set[str] = set()
@@ -518,13 +534,20 @@ class SelectionOperationsPanel(QWidget):
             # Wand (Robert, 11.09.2026: „sieht alles ziemlich monoton und
             # dadurch unübersichtlich aus").
             box = QWidget(content)
-            box_layout = QVBoxLayout(box)
+            # Ein Raster statt einer Spalte: Wo die Karte breit genug ist,
+            # stehen die Zeilen einer Gruppe zu zweit (:meth:`_arrange_groups`).
+            box_layout = QGridLayout(box)
             box_layout.setContentsMargins(0, TIGHT, 0, 0)
-            box_layout.setSpacing(TIGHT)
+            box_layout.setHorizontalSpacing(TIGHT)
+            box_layout.setVerticalSpacing(0)
+            self._grids[title] = box_layout
             buttons: list[QToolButton] = []
             for spec in sorted(grouped[title], key=lambda entry: str(entry.title).casefold()):
                 button = self._operation_button(spec, box)
-                box_layout.addWidget(button)
+                button.setObjectName("operationRow")
+                button.setAutoRaise(True)
+                button.setMinimumHeight(LIST_ROW_HEIGHT)
+                box_layout.addWidget(button, len(buttons), 0)
                 buttons.append(button)
             section = collapsible(title, box)
             section.setParent(content)
@@ -576,6 +599,30 @@ class SelectionOperationsPanel(QWidget):
         separate.setSpacing(TIGHT)
         separate.addWidget(self.catalog_button)
 
+        # **Filament zugeklappt unter der Liste** (RM-510): Vor *Bohrung
+        # setzen* standen zehn Bedienelemente und 44 Wörter zu Filament und
+        # Nahtschutz. Die Reihenfolge ist jetzt Kopf, Hauptaktionen, Liste,
+        # Bausteine und dann das Filament; zugeklappt nennt die Zeile die
+        # Zuweisung (:meth:`describe_print`). Den Wähler hängt das Fenster ein
+        # (:meth:`add_print_widget`).
+        self._print_widget: QWidget | None = None
+        self._print_box = QWidget(self)
+        self._print_rows = QVBoxLayout(self._print_box)
+        self._print_rows.setContentsMargins(0, 0, 0, 0)
+        self._print_rows.setSpacing(TIGHT)
+        # Kommt oder geht ein Inhalt — der Nahtschutz des Merkmalfensters
+        # entsteht je Merkmal neu —, wird die Klappe neu bewertet.
+        self._print_box.installEventFilter(self)
+        self.print_section = collapsible(
+            tr("Filament und Druck"),
+            self._print_box,
+            open_now=False,
+            contents=tr("Noch kein Filament zugewiesen"),
+            remember="selection.filament",
+        )
+        self.print_section.setParent(self)
+        self.print_section.setVisible(False)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, NORMAL)
         layout.setSpacing(TIGHT)
@@ -585,7 +632,53 @@ class SelectionOperationsPanel(QWidget):
         layout.addWidget(self._nothing)
         layout.addWidget(self.scroller, 1)
         layout.addLayout(separate)
+        layout.addWidget(self.print_section)
         self.hide()
+
+    def add_print_widget(self, widget: QWidget) -> None:
+        """Hängt den Filamentwähler in den zugeklappten Abschnitt unter der Liste.
+
+        Der Abschnitt steht, solange der Wähler steht: Das Fenster blendet ihn
+        je nach Auswahl ein und aus, und eine leere Klappe wäre ein Angebot
+        ohne Inhalt.
+        """
+        self._print_rows.insertWidget(0, widget)
+        self._print_widget = widget
+        widget.installEventFilter(self)
+        self._settle_print_section()
+
+    def print_rows(self) -> QVBoxLayout:
+        """Wohin weitere Druckangaben gehören — der Nahtschutz des Merkmalfensters."""
+        return self._print_rows
+
+    def _settle_print_section(self) -> None:
+        """Die Klappe steht, solange etwas in ihr steht."""
+        shown = any(
+            not child.isHidden()
+            for child in self._print_box.children()
+            if isinstance(child, QWidget) and isValid(child)
+        )
+        self.print_section.setVisible(shown)
+
+    def describe_print(self, text: str) -> None:
+        """Was zugeklappt unter „Filament“ steht — die aktuelle Zuweisung."""
+        summary = self.print_section.findChild(QLabel, "sectionSummary")
+        heading = self.print_section.findChild(QToolButton, "sectionHeading")
+        if summary is not None:
+            summary.setText(text)
+        if heading is not None:
+            heading.setToolTip(text)
+            heading.setAccessibleDescription(text)
+
+    @override
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if (watched is self._print_widget and event.type() in _SHOWN_OR_HIDDEN) or (
+            watched is self._print_box and event.type() in _CAME_OR_WENT
+        ):
+            self._settle_print_section()
+        return super().eventFilter(watched, event)
 
     def _operation_button(self, spec: OperationSpec, parent: QWidget | None = None) -> QToolButton:
         """Einen Registereintrag als direkte, tastaturfähige Handlung bauen."""
@@ -725,6 +818,7 @@ class SelectionOperationsPanel(QWidget):
             (inner - self._quick.horizontalSpacing()) // 2 if self._quick_columns == 2 else inner
         )
         room = self.scroller.viewport().width()
+        columns = tuple(self.columns_of(title) for title in self._groups)
         # **Nur, wenn sich eine Breite oder die Hauptaktionen geändert haben.**
         # Jeder Merkmalklick änderte die Höhe der Karte darüber, und jede
         # Höhenänderung lief hierher: gut hundert Knöpfe, jeder zweimal neu
@@ -732,21 +826,72 @@ class SelectionOperationsPanel(QWidget):
         # Halter mit Wabenmuster 37 ms je Klick (22.09.2026). Eine Höhe bricht
         # keine Zeile um; der Rollbalken, der mit ihr kommt, ändert ``room``
         # und steht damit im Schlüssel.
-        key = (share, room, tuple(self._quick_shown))
+        key = (share, room, tuple(self._quick_shown), columns)
         if key == self._wrapped_for:
             return
         self._wrapped_for = key
         for name in self._quick_shown:
             self._wrap_label(self._quick_buttons[name], share)
-        for _section, _toggle, buttons in self._groups.values():
+        for title, (_section, _toggle, buttons) in self._groups.items():
+            grid = self._grids.get(title)
+            spacing = grid.horizontalSpacing() if grid is not None else 0
+            cell = (room - spacing) // 2 if self.columns_of(title) == 2 else room
             for button in buttons:
-                self._wrap_label(button, room)
+                self._wrap_label(button, cell)
+
+    def _natural_width(self, button: QToolButton) -> int:
+        """Wie breit der Knopf mit seinem ungebrochenen Titel sein will."""
+        title = str(button.property("operationTitle") or button.text())
+        shown = button.text()
+        if shown == title:
+            return button.sizeHint().width()
+        button.setText(title)
+        width = button.sizeHint().width()
+        button.setText(shown)
+        return width
+
+    def _arrange_groups(self) -> None:
+        """Die Zeilen jeder Gruppe zu zweit, wo jeder Titel in die halbe Breite passt.
+
+        Robert, 05.10.2026: die rechte Karte breiter machen „und es dann auch
+        sinnvoll nutzen“. In einer Spalte stand ein Titel von 170 Punkten in
+        einer Zeile von 500; zu zweit zeigt dieselbe Höhe doppelt so viele
+        Handlungen. Entschieden wird je Gruppe und an der echten Breite: Passt
+        ein Titel nicht ungebrochen in seine Hälfte, bleibt die Gruppe einspaltig
+        — ein Umbruch in einer flachen Zeile wäre abgeschnitten. Gelegt wird
+        zeilenweise, in der Reihenfolge der Liste.
+        """
+        room = self.scroller.viewport().width()
+        for title, (_section, _toggle, buttons) in self._groups.items():
+            grid = self._grids.get(title)
+            if grid is None:
+                continue
+            shown = [button for button in buttons if not button.isHidden()]
+            half = (room - grid.horizontalSpacing()) // 2
+            two = len(shown) > 1 and all(self._natural_width(button) <= half for button in shown)
+            columns = 2 if two else 1
+            key = (columns, tuple(id(button) for button in shown))
+            if self._arranged.get(title) == key:
+                continue
+            self._arranged[title] = key
+            for button in buttons:
+                grid.removeWidget(button)
+            for index, button in enumerate(shown):
+                grid.addWidget(button, index // columns, index % columns)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 1 if columns == 2 else 0)
+
+    def columns_of(self, title: str) -> int:
+        """Wie viele Spalten die Gruppe ``title`` gerade hat — für Prüfungen."""
+        arranged = self._arranged.get(title)
+        return arranged[0] if arranged is not None else 1
 
     @override
     def resizeEvent(self, event: QResizeEvent) -> None:
-        """Die Hauptaktionen passen sich der tatsächlichen Spaltenbreite an."""
+        """Hauptaktionen und Liste passen sich der tatsächlichen Spaltenbreite an."""
         super().resizeEvent(event)
         self._lay_out_quick(self._quick_shown)
+        self._arrange_groups()
         self._wrap_labels()
 
     def set_context(
@@ -831,6 +976,10 @@ class SelectionOperationsPanel(QWidget):
             if selected != 1
             else tr("1 Objekt gewählt")
         )
+        # **Ein Name der Auswahl** (RM-510): An einem Merkmal nennt es das
+        # Merkmalfenster darüber schon, mit Maß; hier stand derselbe Name ein
+        # zweites Mal, nur mit dem Körper davor.
+        self.summary.setVisible(not feature_kind)
         self._take_availability(availability)
         self._lay_out_quick(
             tuple(
@@ -883,6 +1032,7 @@ class SelectionOperationsPanel(QWidget):
         self._say_there_is_nothing(found, bool(wanted))
         # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
+        self._arrange_groups()
         self._wrap_labels()
 
     def _take_availability(self, availability: Callable[[str], tuple[bool, str]]) -> None:
@@ -922,6 +1072,7 @@ class SelectionOperationsPanel(QWidget):
         # Stellen, die dieselbe Sichtbarkeit setzen, machen sie abwechselnd.
         self._lay_out_quick(())
         self.summary.setText(tr("Nichts gewählt"))
+        self.summary.setVisible(True)
         self.catalog_button.setVisible(True)
         self._take_availability(availability)
         self._filter()
@@ -1008,7 +1159,7 @@ class SelectionOperationsPanel(QWidget):
         # keiner anderen (:attr:`_for_all_bodies`); ohne Auswahl steht nichts
         # sonst da.
         if name in self._for_all_bodies:
-            return self._nothing_chosen
+            return self._nothing_chosen and name in SCENE_ACTIONS_IN_THE_CARD
         if self._nothing_chosen:
             return False
         if self._feature_kind:

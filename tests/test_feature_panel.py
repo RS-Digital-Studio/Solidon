@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QToolButton,
     QWidget,
 )
 
@@ -77,6 +78,39 @@ def test_measuring_keeps_footer_actions_hidden_through_a_feature_switch(qt_app) 
     finally:
         panel.close()
         panel.deleteLater()
+
+
+def test_one_action_is_open_and_it_is_the_one_apply_takes(qt_app: QApplication) -> None:
+    """RM-510: Am Merkmal ein Akkordeon — genau eine Handlung offen, die scharfe.
+
+    An einer Bohrung standen sechs Handlungen mit allen Feldern zugleich offen,
+    1579 Punkte Inhalt in 877 sichtbaren. Offen ist jetzt die, die *Übernehmen*
+    meint; die anderen nennen zugeklappt ihre Werte. Ein Klick auf einen Kopf
+    öffnet seine Handlung und macht sie scharf, ein zweiter Klick auf den
+    offenen schließt sie nicht — offen ist immer genau eine.
+    """
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    rows = [row for row in panel._shown_rows.values() if row.toggle is not None]
+    assert len(rows) > 2, "ohne mehrere Handlungen prüft der Test nichts"
+
+    def open_keys() -> list[str]:
+        return [row.key for row in rows if row.body is not None and not row.body.isHidden()]
+
+    assert open_keys() == [panel._armed], "offen ist genau die scharfe"
+    other = next(row for row in rows if row.key != panel._armed)
+    assert other.summary is not None and other.summary.text(), "zugeklappt nennt sie ihre Werte"
+    assert not other.summary.isHidden()
+
+    assert other.toggle is not None
+    other.toggle.click()
+    assert panel._armed == other.key, "der Kopf macht seine Handlung scharf"
+    assert open_keys() == [other.key]
+    assert other.summary.isHidden(), "offen stehen die Felder, nicht ihre Zusammenfassung"
+
+    other.toggle.click()
+    assert open_keys() == [other.key], "ein Klick auf die offene schließt sie nicht"
 
 
 def test_a_place_stands_on_one_line_where_the_card_has_room(qt_app: QApplication) -> None:
@@ -653,13 +687,25 @@ def spoken(row: QWidget) -> str:
 
 
 def row_of(panel: FeaturePanel, title: str) -> QWidget:
-    """Die Zeile, deren Überschrift diese Handlung nennt.
+    """Die Zeile, deren Überschrift diese Handlung nennt — aufgeklappt.
 
     Bis zum 10.09.2026 fand man sie an ihrem Knopf; den gibt es nicht mehr,
-    und die Überschrift trug den Titel schon immer daneben.
+    und die Überschrift trug den Titel schon immer daneben. Seit RM-510 ist
+    die Überschrift der Kopf eines Akkordeons, und offen ist nur die scharfe
+    Handlung; geöffnet wird die gesuchte wie vom Kunden, mit einem Klick.
     """
     for row in panel._built:
         if any(label.text() == title for label in row.findChildren(QLabel)):
+            toggle = next(
+                (
+                    head
+                    for head in row.findChildren(QToolButton)
+                    if head.objectName() == "actionHeading"
+                ),
+                None,
+            )
+            if toggle is not None and not toggle.isChecked():
+                toggle.click()
             return row
     raise AssertionError(f"keine Zeile für {title!r} — angeboten sind {buttons(panel)}")
 
@@ -2400,9 +2446,9 @@ def test_the_waiting_panel_names_the_feature_and_offers_nothing(qt_app: QApplica
         panel.show_pending(hole_id, found[hole_id])
 
         texts = [label.text() for label in panel.findChildren(QLabel) if label.isVisibleTo(panel)]
-        heading = (
-            f"{cavity_name(hole_id, found[hole_id], ())}  ·  {feature_measure(found[hole_id])}"
-        )
+        # Die Herkunft nur, wenn sie warnt (RM-510): knappe Maßzeile.
+        measure = feature_measure(found[hole_id], compact=True)
+        heading = f"{cavity_name(hole_id, found[hole_id], ())}  ·  {measure}"
         assert heading in texts
         assert tr("Die Handlungen werden ermittelt …") in texts
         assert not panel._runs, "keine Zeile, die etwas anbietet"

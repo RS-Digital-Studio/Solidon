@@ -8478,8 +8478,8 @@ def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
     assert panel.chosen_level() == "hole", "die Merkmalsart kommt durch"
-    assert panel.summary.text().startswith(f"{entry.name} · "), (
-        f"an der Bohrung steht Körper und Merkmal: {panel.summary.text()!r}"
+    assert panel.summary.isHidden(), (
+        "an der Bohrung nennt das Merkmalfenster darüber die Auswahl, einmal (RM-510)"
     )
     assert panel._buttons["arrange_bed"].isHidden(), (
         "und *Auf dem Bett anordnen* verschwindet, statt bedienbar dazustehen"
@@ -8488,7 +8488,8 @@ def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -
     window.object_tree.select_object(None)
     QApplication.processEvents()
     assert panel.chosen_level() == "scene", "ohne Auswahl die Stufe der ganzen Szene"
-    assert not panel._buttons["arrange_bed"].isHidden(), "und dort steht die Handlung für alle"
+    assert not panel._buttons["orient_for_print"].isHidden(), "und dort steht die Handlung für alle"
+    assert panel._buttons["arrange_bed"].isHidden(), "von den dreien nur eine (Robert, 05.10.2026)"
 
 
 def test_the_selection_panel_uses_the_shared_launch_path() -> None:

@@ -1411,6 +1411,11 @@ def stylesheet(
     active = active_fill(theme)
     active_hover = _mixed(highlight, window, _ACTIVE_MIX + 0.15)
 
+    # Eine Fläche, die über dem Fenster steht statt in ihm: die Hauptaktionen
+    # der Auswahl (RM-510). Sie trugen die Füllung eines Eingabefelds (``base``)
+    # und sahen aus wie ein Feld, in das man tippt.
+    raised = _mixed(colours["text"], window, 0.07)
+
     return f"""
 /* --- Typografie: vier Stufen, Größe und Gewicht und Farbe --------------- */
 *[level="title"] {{ font-size: {sizes["title"][0]}pt; font-weight: {sizes["title"][1]}; }}
@@ -1624,17 +1629,48 @@ QWidget#selectionOperations QToolButton {{
     text-align: left;
 }}
 QWidget#selectionOperations QToolButton#quickOperation {{
-    background: {base};
+    background: {raised};
     border: 1px solid {line};
     border-radius: {SPACE}px;
     padding: {TIGHT}px {NORMAL}px;
 }}
 QWidget#selectionOperations QToolButton#quickOperation:hover {{
     background: {hover};
+    border-color: {accent_line};
 }}
 QWidget#selectionOperations QToolButton#quickOperation:focus {{
     border: 2px dashed {focus};
 }}
+/* Die Liste darunter besteht aus flachen Zeilen (RM-510): ohne Fläche und
+   Rahmen, bis der Zeiger darüber steht — so stehen die Hauptaktionen vorn und
+   die Liste dahinter, und der Fokus bleibt gestrichelt sichtbar. */
+QWidget#selectionOperations QToolButton#operationRow {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {SPACE}px;
+    padding: {TIGHT // 2}px {TIGHT}px;
+}}
+QWidget#selectionOperations QToolButton#operationRow:hover {{
+    background: {hover};
+    border-color: {line};
+}}
+QWidget#selectionOperations QToolButton#operationRow:focus {{
+    border: 2px dashed {focus};
+}}
+/* Der Pfeil vor einer Handlung im Merkmalfenster klappt sie auf (RM-510).
+   Offen sagt er mit seiner Richtung, nicht mit einer Akzentfläche — die
+   gehört dem aktiven Werkzeug. */
+QToolButton#actionHeading {{
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 0px;
+}}
+QToolButton#actionHeading:hover, QToolButton#actionHeading:checked:hover {{
+    background: {hover};
+    border-color: {line};
+}}
+QToolButton#actionHeading:checked {{ background: transparent; border-color: transparent; }}
+QToolButton#actionHeading:focus {{ border: 2px dashed {focus}; }}
 
 /* Die Tour ist eine Folge kleiner Karten statt einer grauen Textwand. Der
    aktuelle Auftrag trägt eine Akzentkante und einen Hintergrund; Pfeil,

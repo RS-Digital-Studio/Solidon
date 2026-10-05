@@ -142,6 +142,9 @@ class UiSettings:
     steht hier und nicht im Schlüsselbund, weil eine E-Mail-Adresse kein
     Zugangsdatum ist."""
     first_run_done: bool = False
+    feature_hint_seen: bool = False
+    """Ob schon einmal ein Merkmal angeklickt wurde — dann entfällt die
+    Anleitung „Kein Merkmal gewählt …“ über den Körperhandlungen (RM-510)."""
     shortcut_scheme: str = "default"
     """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des
     Registers; „fusion" legt einzelne Buchstaben darüber."""

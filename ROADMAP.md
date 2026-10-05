@@ -105,7 +105,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
 | [RM-508 — Der Prüfbericht zeigt zuerst die Befunde](#rm-508) | Bedienung und Darstellung | Kopf auf eine Zeile, Gerüst und Doppelungen aus der Befundkarte, Export neben der Übergabe |
 | [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
-| [RM-510 — Das Auswahlfenster stellt die Handlungen nach vorn und zeigt eine Handlung zur Zeit](#rm-510) | Bedienung und Darstellung | Schnellhandlungen als Knöpfe, flache Liste, Akkordeon am Merkmal, Filament hinter die Handlungen, keine doppelten Knöpfe |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-513 — Ein Operationsdialog zeigt vorn zwei bis drei Werte und einen Satz](#rm-513) | Bedienung und Darstellung | Vorderseitengrenze 4, Einleitung ein Satz, „Wann nicht?“ als Klappe, Nullwerte mit Namen, fx nur mit Parametern |
 | [RM-514 — Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar](#rm-514) | Bedienung und Darstellung | Fünf Werte vorn, ein Profilsatz ohne leere Felder, Grund unter der Tabelle, eindeutige Beschriftungen, Lücke über den Knöpfen |
@@ -3877,6 +3876,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   sie nur ohne Auswahl, und eine genügt dort; Anordnen und Überschneidungen bleiben über
   Palette und Menü erreichbar. An einer gewählten Bohrung steht „Passende Bausteine …“,
   der den Katalog auf die Bausteine mit `applies_to` `hole` filtert.
+  **Stand 05.10.2026:** Mit RM-510 erledigt — ohne Auswahl steht nur „Druckoptimal
+  ausrichten“ (`selection_operations.SCENE_ACTIONS_IN_THE_CARD`). Offen: alles Übrige
+  dieses Punkts, darunter „Passende Bausteine …“ mit dem Katalogfilter aus RM-517.
   **Abnahme:** Am geladenen Modell führen „verrunden“, „gewinde“, „reparieren“,
   „ausrichten“ in höchstens drei Handlungen zum Dialog oder nennen die fehlende
   Auswahl; die Gruppenfolge der Karte ist in allen sechs Sprachen gleich; Verrunden ist
@@ -3954,28 +3956,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Der Wächter ist grün, ein neuer Text über der Grenze und eine wachsende
   Bestandsliste machen ihn rot (Gegenprobe); die eingefrorene Liste ist am Ende leer
   für Befunde, Bausteinänderungen, Vorbehalte und Tour. Überschneidung RM-084.
-
-<a id="rm-510"></a>
-
-- [ ] **RM-510 — Das Auswahlfenster stellt die Handlungen nach vorn und zeigt eine Handlung zur Zeit.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Die empfohlenen Handlungen haben die Füllung eines Eingabefelds, die Liste darunter
-  ist eine Wand gleicher 44-px-Kacheln. An einer Bohrung stehen sechs Handlungen mit
-  allen Feldern gleichzeitig offen (Inhalt 1579 px, sichtbar 877 px bei 1600 × 1000).
-  Vor „Bohrung setzen“ stehen zehn Bedienelemente und 44 Wörter zu Filament und
-  Nahtschutz; der Platzhalter ist abgeschnitten. An einer Fläche führen je zwei Knöpfe
-  zum selben Ziel, das Dock nennt die Auswahl zweimal mit „gemessen“, am Körper steht
-  oben eine Anleitung mit 18 Wörtern, Färben gibt es als Schnellwähler und als Knopf.
-  **Fix:** Schnellhandlungen als erhabene Knöpfe, die Liste als flache 32-px-Zeilen mit
-  Hover, Gruppenköpfe wie `sectionHeading`; am Merkmal ein Akkordeon aus `collapsible`,
-  Kopfzeile mit Wert, genau eine Handlung offen und scharf; Reihenfolge Kopf →
-  Schnellhandlungen → Liste → zugeklappt „Filament und Druck“; ein Knopf je Ziel; ein
-  Name der Auswahl, Herkunft nur bei Warnung; Anleitung als Bildunterschrift, die nach
-  dem ersten Merkmalklick entfällt; `paint_slot` in `PICKER_HANDLES`; Umbruch an der
-  vollen Breite.
-  **Abnahme:** An einer Bohrung von plate_holes passt das Dock bei 1600 × 1000 ohne
-  Rollen, höchstens vier Zahlenfelder sichtbar; bei 1000 px Höhe mindestens 18 Einträge
-  sichtbar; kein abgeschnittener Platzhalter in sechs Sprachen; je Merkmalsart keine
-  zwei Knöpfe mit demselben Ziel. Überschneidung RM-204, RM-232.
 
 <a id="rm-512"></a>
 

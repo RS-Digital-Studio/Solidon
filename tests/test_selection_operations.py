@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 from app.core.bootstrap import load_operations
 from app.core.perceive.actions import ACTION_ORDER
@@ -353,12 +353,18 @@ def test_actions_for_all_bodies_stand_without_a_selection_and_not_at_one(
 
     Am gewählten Körper sagte *Druckoptimal ausrichten*, es gelte diesem
     Körper — und richtete jeden aus.
+
+    **Und von den dreien steht nur eine** (Robert, 05.10.2026: „Eigentlich
+    reicht hier druckoptimal ausrichten“): Anordnen und Überschneidungen
+    prüfen bleiben über Menü und Befehlspalette erreichbar.
     """
     from app.i18n import tr
+    from app.ui.selection_operations import SCENE_ACTIONS_IN_THE_CARD
 
     load_operations()
-    for_all = {spec.name for spec in body_operations(REGISTRY.all()) if spec.takes_whole_scene}
-    assert for_all, "ohne solche Handlungen prüfte der Test nichts"
+    every = {spec.name for spec in body_operations(REGISTRY.all()) if spec.takes_whole_scene}
+    assert every > SCENE_ACTIONS_IN_THE_CARD, "die Karte zeigt eine Auswahl der Szenenhandlungen"
+    for_all = set(SCENE_ACTIONS_IN_THE_CARD)
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.resize(320, 520)
     panel.show()
@@ -371,12 +377,12 @@ def test_actions_for_all_bodies_stand_without_a_selection_and_not_at_one(
     assert shown() == for_all
     assert panel.chosen_level() == "scene"
     assert panel._nothing.isVisible() and panel._nothing.text() == tr("Gilt für alle Körper.")
-    assert not panel.search.isVisible(), "drei Handlungen sucht niemand"
+    assert not panel.search.isVisible(), "eine Handlung sucht niemand"
 
     panel.set_context(1, _availability(1))
-    assert not shown() & for_all, "am gewählten Körper steht keine Handlung für alle"
+    assert not shown() & every, "am gewählten Körper steht keine Handlung für alle"
     panel.set_context(1, _availability(1), feature_kind="face")
-    assert not shown() & for_all, "an einer Fläche auch nicht"
+    assert not shown() & every, "an einer Fläche auch nicht"
 
     # Ein Suchtext von der letzten Auswahl filtert ohne Auswahl nichts weg:
     # Das Feld ist dann verborgen, und niemand sähe, warum etwas fehlt.
@@ -451,10 +457,13 @@ def test_the_summary_says_what_is_chosen_not_how_many(qt_app: QApplication) -> N
     panel.set_context(1, _availability(1), label="Halter")
     assert panel.summary.text() == "Halter"
 
+    # Am Merkmal nennt es das Merkmalfenster darüber, mit Maß — die Zeile
+    # hier tritt zurück, damit der Name einmal dasteht (RM-510).
     panel.set_context(1, _availability(1), feature_kind="face", label="Halter · Oberseite")
-    assert panel.summary.text() == "Halter · Oberseite"
+    assert panel.summary.isHidden(), "ein Name der Auswahl, nicht zwei"
 
     panel.set_context(2, _availability(2), label="Halter")
+    assert not panel.summary.isHidden()
     assert panel.summary.text() == "2 Objekte gewählt", "bei zweien gibt es keinen einen Namen"
 
     # Ohne Namen bleibt es bei der Menge — das Panel erfindet keinen.
@@ -638,8 +647,11 @@ def test_the_picker_above_the_list_shows_its_handling_no_second_time(
     try:
         texts = {button.text() for button in picker.findChildren(QPushButton)}
         assert PICKER_HANDLES, "ohne Eintrag prüft der Test nichts"
-        for name in PICKER_HANDLES:
-            assert str(REGISTRY.get(name).title) in texts, f"{name} trägt der Wähler nicht"
+        # Entfernen trägt der Wähler als Knopf, Zuweisen und Färben über seine
+        # Auswahlliste (RM-510: Färben stand am Körper und an der Fläche
+        # zweimal da).
+        assert str(REGISTRY.get("clear_filament").title) in texts, "Entfernen fehlt am Wähler"
+        assert picker.picker.accessibleName(), "die Auswahlliste des Wählers weist zu"
     finally:
         picker.close()
 
@@ -849,6 +861,65 @@ def test_the_draft_stands_on_the_body_and_at_a_face_but_not_at_a_hole(qt_app: QA
     assert not panel._fits_the_level("draft_faces")
 
 
+def test_the_list_stands_in_two_columns_where_every_title_fits(qt_app: QApplication) -> None:
+    """RM-510: Flache Zeilen, und wo die Karte breit genug ist, zu zweit.
+
+    Robert, 05.10.2026: die rechte Karte breiter machen „und es dann auch
+    sinnvoll nutzen“. Zweispaltig wird nur eine Gruppe, deren Titel alle
+    ungebrochen in die halbe Breite passen; in einer schmalen Karte bleibt
+    jede einspaltig.
+    """
+    from app.ui.selection_operations import LIST_ROW_HEIGHT
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.resize(900, 900)
+    panel.show()
+    panel.set_context(1, _availability(1))
+    QApplication.processEvents()
+    shown = [title for title, (section, _t, _b) in panel._groups.items() if not section.isHidden()]
+    assert shown, "ohne Gruppen prüft der Test nichts"
+    assert any(panel.columns_of(title) == 2 for title in shown), "breit: zu zweit"
+    rows = [
+        button
+        for _s, _t, buttons in panel._groups.values()
+        for button in buttons
+        if not button.isHidden()
+    ]
+    assert all(button.objectName() == "operationRow" for button in rows), "flache Zeilen"
+    assert all(button.minimumHeight() == LIST_ROW_HEIGHT for button in rows)
+
+    panel.resize(240, 900)
+    QApplication.processEvents()
+    assert all(panel.columns_of(title) == 1 for title in shown), "schmal: untereinander"
+
+
+def test_filament_waits_folded_below_the_list(qt_app: QApplication) -> None:
+    """RM-510: Filament und Druck stehen zugeklappt unter der Liste, nicht vor ihr.
+
+    Vor *Bohrung setzen* standen zehn Bedienelemente und 44 Wörter zu Filament
+    und Nahtschutz. Der Abschnitt steht nur, solange etwas in ihm steht, und
+    zugeklappt nennt er die Zuweisung.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.show()
+    assert panel.print_section.isHidden(), "leer steht keine Klappe"
+    picker = QWidget()
+    panel.add_print_widget(picker)
+    QApplication.processEvents()
+    assert not panel.print_section.isHidden()
+    layout = panel.layout()
+    assert layout is not None
+    assert layout.indexOf(panel.print_section) > layout.indexOf(panel.scroller), "unter der Liste"
+    panel.describe_print("Im Projekt: PLA Rot")
+    summary = panel.print_section.findChild(QLabel, "sectionSummary")
+    assert summary is not None and summary.text() == "Im Projekt: PLA Rot"
+    picker.hide()
+    QApplication.processEvents()
+    assert panel.print_section.isHidden(), "ohne Inhalt geht die Klappe mit"
+
+
 def test_the_operation_list_asks_for_the_height_of_its_visible_buttons(
     qt_app: QApplication,
 ) -> None:
@@ -859,23 +930,23 @@ def test_the_operation_list_asks_for_the_height_of_its_visible_buttons(
     drei Knöpfe, und die Liste verlangte weiter 24 Zeilen: Zusammen mit dem
     Merkmalfenster stand der Inhalt des Auswahlfensters an der Kante seines
     Sichtfelds, und der Rollbalken sprang an und brach alle Texte neu um.
-    Eine lange Liste bleibt bei der Grenze und rollt in sich.
-    """
-    from app.ui.selection_operations import LIST_LINES_AT_MOST
 
+    Seit RM-510 ohne eigene Grenze: Die Karte deckelt am Fenster, und eine
+    lange Liste rollt erst dann in sich.
+    """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.resize(244, 900)
     panel.show()
-    tallest = LIST_LINES_AT_MOST * panel.scroller.fontMetrics().height()
     panel.set_context(1, _availability(1))
     QApplication.processEvents()
-    assert panel.scroller.sizeHint().height() <= tallest
+    body = panel.scroller.sizeHint().height()
+    content = panel.scroller.widget()
+    assert content is not None
+    assert body >= content.sizeHint().height(), "am Körper wünscht die Liste alle Knöpfe"
 
     panel.set_context(1, _availability(1), feature_kind="hole", label="Platte · Bohrung 1")
     QApplication.processEvents()
-    content = panel.scroller.widget()
-    assert content is not None
-    wanted = content.sizeHint().height() + 2 * panel.scroller.frameWidth()
-    assert wanted < tallest, "an einer Bohrung stehen nur wenige Knöpfe"
-    assert panel.scroller.sizeHint().height() == wanted
+    wanted = panel.scroller.sizeHint().height()
+    assert wanted >= content.sizeHint().height(), "die Wunschhöhe folgt den sichtbaren Knöpfen"
+    assert wanted < body, "an einer Bohrung stehen weniger Knöpfe als am Körper"

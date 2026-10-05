@@ -7531,6 +7531,12 @@ class _ActionRow:
     box: QWidget
     signature: tuple[Any, ...] | None
     title: QLabel | None = None
+    toggle: QToolButton | None = None
+    """Der Umschalter des Akkordeons vor dem Titel (RM-510)."""
+    summary: QLabel | None = None
+    """Was die zugeklappte Handlung gerade einstellt — die Kopfzeile mit Wert."""
+    body: QWidget | None = None
+    """Die Felder; sichtbar nur, solange die Handlung offen ist."""
     dot: QToolButton | None = None
     button: QPushButton | None = None
     widgets: dict[str, QWidget] = dataclasses.field(default_factory=dict)
@@ -7970,10 +7976,17 @@ class FeaturePanel(QWidget):
             self,
         )
         self._empty.setWordWrap(True)
+        # Eine Bildunterschrift, keine Überschrift (RM-510): Sie erklärt den
+        # Weg und tritt hinter die Handlungen darunter zurück.
+        set_level(self._empty, "caption")
         fit_wrapped(self._empty)
         self._rows.addWidget(self._empty)
         self._say_nothing_is_chosen = True
         """Ob der leere Satz stehen darf — das Fenster entscheidet es."""
+        self._hint_retired = False
+        """Ob die Anleitung ausgedient hat (:meth:`retire_hint`)."""
+        self._print_host: QVBoxLayout | None = None
+        """Der Abschnitt außerhalb, in dem der Nahtschutz steht — oder keiner."""
         # **Der Restplatz gehört nach unten, nicht zwischen die Handlungen.**
         # Das Panel steckt in einem Rollbereich mit ``setWidgetResizable``, wird
         # also auf dessen Höhe gezogen. Ohne diese Dehnung verteilt Qt den
@@ -8222,7 +8235,20 @@ class FeaturePanel(QWidget):
         # nächste Aufbau bringt sie zurück (:meth:`_settle_lock`).
         _set_shown(self._lock_note, False)
         _set_shown(self._every, False)
-        _set_shown(self._empty, self._say_nothing_is_chosen)
+        _set_shown(self._empty, self._say_nothing_is_chosen and not self._hint_retired)
+
+    def retire_hint(self) -> None:
+        """Die Anleitung „Kein Merkmal gewählt …“ hat ihren Dienst getan (RM-510).
+
+        Sie steht als Bildunterschrift über den Körperhandlungen, bis der
+        Kunde zum ersten Mal ein Merkmal angeklickt hat; danach weiß er, wie
+        man an die Maße kommt, und 18 Wörter über jeder Körperauswahl wären
+        Tapete. Ob das schon war, merkt sich das Fenster
+        (``UiSettings.feature_hint_seen``).
+        """
+        self._hint_retired = True
+        if self._feature_id is None and not self._built:
+            self._empty.setVisible(False)
 
     def say_nothing_is_chosen(self, on: bool) -> None:
         """Ob der leere Zustand seinen Satz trägt — oder die Karte ihn trägt.
@@ -8242,7 +8268,7 @@ class FeaturePanel(QWidget):
         # ein Paar (``show_pair``) sind kein Merkmal, und neben ihnen stand
         # „Kein Merkmal gewählt …“, sobald die Karte danach neu aufgebaut wurde.
         if self._feature_id is None and self._part_operation is None and not self._built:
-            self._empty.setVisible(on)
+            self._empty.setVisible(on and not self._hint_retired)
 
     def show_feature(
         self,
@@ -8362,7 +8388,9 @@ class FeaturePanel(QWidget):
         self.clear()
         self._feature_id = feature_id
         _set_shown(self._empty, False)
-        heading = QLabel(f"{cavity_name(feature_id, feature, ())}  ·  {feature_measure(feature)}")
+        heading = QLabel(
+            f"{cavity_name(feature_id, feature, ())}  ·  {feature_measure(feature, compact=True)}"
+        )
         heading.setWordWrap(True)
         fit_wrapped(heading)
         set_level(heading, "section")
@@ -8427,9 +8455,11 @@ class FeaturePanel(QWidget):
         self._feature_id = feature_id
         _set_shown(self._empty, False)
 
-        heading = QLabel(
-            f"{cavity_name(feature_id, feature, cavity)}  ·  {feature_measure(feature)}"
-        )
+        # **Die Herkunft nur, wenn sie warnt** (RM-510): „gemessen“ hinter jedem
+        # Maß ist keine Auskunft, „eingepasst“ schon (``measure_qualifier`` mit
+        # ``compact``). Woher die Zahl kommt, sagt der Tooltip jedes Mal.
+        measure = feature_measure(feature, compact=True)
+        heading = QLabel(f"{cavity_name(feature_id, feature, cavity)}  ·  {measure}")
         hint = feature_measure_tip(feature)
         heading.setToolTip(hint)
         heading.setStatusTip(hint)
@@ -8536,7 +8566,10 @@ class FeaturePanel(QWidget):
         # fünfundzwanzig Bausteine an, und der Katalog lag hinter Rechtsklick
         # und Untermenü. Ein Panel aus vier grauen Zeilen ist eine Sackgasse
         # mit Begründung; eine Sackgasse bleibt es trotzdem.
-        if not any(action.op for action in actions):
+        # **Nicht an einer Fläche**: Dort steht unter diesem Fenster der Knopf
+        # *Bausteine* zum selben Katalog, und zwei Knöpfe mit einem Ziel sind
+        # eine Frage ohne Antwort (RM-510).
+        if not any(action.op for action in actions) and feature.kind != "face":
             catalog = QPushButton(tr("Baustein einsetzen …"), self)
             catalog.setStatusTip(
                 tr("Öffnet den Katalog — Bohrung, Mutternfalle, Magnettasche und die übrigen.")
@@ -8593,7 +8626,8 @@ class FeaturePanel(QWidget):
         protection = protection_of(feature)
         if not protection.possible:
             return
-        self._separate()
+        if self._print_host is None:
+            self._separate()
         toggle = QCheckBox(str(protection.title), self)
         toggle.setObjectName("protection-toggle")
         toggle.setAccessibleName(str(protection.title))
@@ -8603,8 +8637,18 @@ class FeaturePanel(QWidget):
         toggle.setToolTip(str(protection.explanation))
         toggle.setAccessibleDescription(str(protection.explanation))
         toggle.toggled.connect(lambda on: self.protectionToggled.emit(feature_id, bool(on)))
-        self._rows.insertWidget(self._rows.count() - 1, toggle)
+        # **Zugeklappt unter den Handlungen** (RM-510), wo das Fenster einen
+        # Abschnitt „Filament und Druck“ anbietet (:meth:`set_print_host`);
+        # geräumt wird er mit dem Merkmal wie jede andere Zeile.
+        if self._print_host is not None:
+            self._print_host.addWidget(toggle)
+        else:
+            self._rows.insertWidget(self._rows.count() - 1, toggle)
         self._built.append(toggle)
+
+    def set_print_host(self, rows: QVBoxLayout) -> None:
+        """Wohin der Nahtschutz kommt — der Abschnitt „Filament und Druck“ darunter."""
+        self._print_host = rows
 
     def protection_toggle(self) -> QCheckBox | None:
         """Der Umschalter des gezeigten Merkmals, oder ``None`` ohne Merkmal."""
@@ -9390,7 +9434,27 @@ class FeaturePanel(QWidget):
             # Die Überschrift wiederholt den Knopftext, und das ist Absicht: Sie
             # beantwortet „wozu sind diese Felder", er „und jetzt ausführen".
             # Zwei verschiedene Wörter dafür wären zwei Namen für eine Handlung.
-            group_title = QLabel(str(action.title), box)
+            #
+            # **Und sie ist der Umschalter eines Akkordeons** (RM-510): An einer
+            # Bohrung standen sechs Handlungen mit allen Feldern zugleich offen,
+            # 1579 Punkte Inhalt in 877 sichtbaren. Offen ist genau eine, und
+            # zwar die, die der Knopf unten übernimmt (:meth:`_arm`) — zwei
+            # Regeln wären zwei Wahrheiten über dieselbe Frage. Zugeklappt nennt
+            # die Zeile darunter ihre Werte (:meth:`_summarise`).
+            #
+            # Der Umschalter ist ein Pfeil **vor** dem Titel, nicht der Titel
+            # selbst: Ein Knopf bricht nicht um, und ein langer Titel machte die
+            # Spalte sonst breiter als die Karte (RM-488). Titel und Wertezeile
+            # öffnen per Klick ebenso.
+            toggle = QToolButton(box)
+            toggle.setObjectName("actionHeading")
+            toggle.setCheckable(True)
+            toggle.setAutoRaise(True)
+            toggle.setArrowType(Qt.ArrowType.RightArrow)
+            toggle.setAccessibleName(str(action.title))
+            toggle.toggled.connect(partial(self._row_toggled, row))
+            row.toggle = toggle
+            group_title = _RowTitle(str(action.title), toggle, box)
             group_title.setWordWrap(True)
             set_level(group_title, "caption")
             fit_wrapped(group_title)
@@ -9406,12 +9470,20 @@ class FeaturePanel(QWidget):
             head = QHBoxLayout()
             head.setContentsMargins(0, 0, 0, 0)
             head.setSpacing(TIGHT)
+            head.addWidget(toggle)
             head.addWidget(group_title, 1)
             row.title = group_title
             row.dot = self._explain(box, head)
             layout.addLayout(head)
+            summary = _RowSummary(toggle, box)
+            summary.setVisible(False)
+            row.summary = summary
+            layout.addWidget(summary)
 
-            form = QFormLayout()
+            body = QWidget(box)
+            body.setVisible(False)
+            row.body = body
+            form = QFormLayout(body)
             form.setContentsMargins(0, 0, 0, 0)
             form.setSpacing(TIGHT)
             # Bricht um, statt abzuschneiden: Bei schmaler Spalte rutscht das
@@ -9480,7 +9552,7 @@ class FeaturePanel(QWidget):
                     for refusal in waiting:
                         form.addRow(refusal)
                     pending, waiting = [], []
-            layout.addLayout(form)
+            layout.addWidget(body)
         else:
             button = QPushButton(str(action.title), box)
             button.clicked.connect(partial(self._run_row, row))
@@ -9662,6 +9734,8 @@ class FeaturePanel(QWidget):
         )
         if row is None:
             return False
+        if row.body is not None and row.body.isHidden():
+            self._arm(row.key)
         editor = row.widgets[name]
         if not editor.isVisibleTo(self) or not editor.isEnabled():
             return False
@@ -9750,7 +9824,9 @@ class FeaturePanel(QWidget):
         alle Halte der gezeigten Zeilen; die Knopfzeile hängt
         :meth:`_settle_tab_order` danach an.
         """
-        stops = [stop for row in self._built for stop in _focus_stops(row)]
+        stops = [
+            stop for row in self._built if self.isAncestorOf(row) for stop in _focus_stops(row)
+        ]
         for first, second in pairwise(stops):
             QWidget.setTabOrder(first, second)
 
@@ -9859,6 +9935,11 @@ class FeaturePanel(QWidget):
             self._rows.removeWidget(self._footer)
             self._rows.insertWidget(self._rows.count() - 1, self._footer)
         self._settle_tab_order()
+        # Wiederverwendete Zeilen bringen ihren alten Zustand mit; offen ist
+        # danach genau die scharfe (RM-510), und jede nennt ihre Werte.
+        self._open_only(self._armed)
+        for row in self._shown_rows.values():
+            self._summarise(row)
         if self._armed not in self._runs:
             # Ohne Handlung trägt der Knopf nichts — nach einem Neuaufbau, der
             # die Knopfzeile stehen ließ (``clear(rebuilding=True)``), geht sie
@@ -9909,6 +9990,10 @@ class FeaturePanel(QWidget):
         dessen Innenleben und kein eigener Halt.
         """
         for row in reversed(self._built):
+            # Was in einem Abschnitt außerhalb steht (der Nahtschutz unter
+            # „Filament und Druck“), ist kein Halt vor dem Knopf darunter.
+            if not self.isAncestorOf(row):
+                continue
             stops = _focus_stops(row)
             if stops:
                 return stops[-1]
@@ -9931,6 +10016,61 @@ class FeaturePanel(QWidget):
         self._built.append(line)
         return line
 
+    def _row_toggled(self, row: _ActionRow, checked: bool) -> None:
+        """Ein Klick auf den Kopf öffnet seine Handlung — und macht sie scharf.
+
+        Ein Klick auf den Kopf der offenen schließt sie nicht: Offen ist immer
+        genau eine, die, die der Knopf unten übernimmt.
+        """
+        if checked:
+            self._arm(row.key)
+        self._open_row(row, row.key == self._armed)
+
+    def _open_row(self, row: _ActionRow, open_now: bool) -> None:
+        """Klappt eine Handlung auf oder zu, ohne sie scharf zu machen."""
+        if row.toggle is None or row.body is None:
+            return
+        with QSignalBlocker(row.toggle):
+            row.toggle.setChecked(open_now)
+        row.toggle.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
+        if row.title is not None:
+            # Die offene Handlung steht in voller Schrift, die zugeklappten in
+            # der Nebenstufe — zusammen mit dem Pfeil zwei Kodierungen (Regel 18).
+            level = "body" if open_now else "caption"
+            if row.title.property("level") != level:
+                set_level(row.title, level)
+        _set_shown(row.body, open_now)
+        if row.summary is not None:
+            _set_shown(row.summary, not open_now and bool(row.summary.text()))
+
+    def _open_only(self, key: str | None) -> None:
+        """Genau eine Handlung offen: die scharfe (RM-510)."""
+        for row in self._shown_rows.values():
+            self._open_row(row, row.key == key)
+
+    def _summarise(self, row: _ActionRow) -> None:
+        """Was die Handlung gerade einstellt, in einer Zeile unter ihrem Kopf.
+
+        Höchstens drei Werte, ein kurzer Feldname (X, Y, Z) steht davor; was
+        ausgeblendet ist, zählt nicht mit. Zu sehen ist die Zeile nur,
+        solange die Handlung zugeklappt ist.
+        """
+        if row.summary is None:
+            return
+        parts: list[str] = []
+        for name, editor in row.widgets.items():
+            shown = _field_text(editor) if not editor.isHidden() else ""
+            if not shown:
+                continue
+            label = row.labels.get(name)
+            caption = label.text() if label is not None else ""
+            parts.append(f"{caption} {shown}" if caption and len(caption) <= 2 else shown)
+            if len(parts) == 3:
+                break
+        row.summary.setText(" · ".join(parts))
+        if row.body is not None:
+            _set_shown(row.summary, row.body.isHidden() and bool(parts))
+
     def _arm(self, key: str) -> None:
         """Sagt dem Knopf unten, welche Zeile er meint.
 
@@ -9944,6 +10084,7 @@ class FeaturePanel(QWidget):
             return
         changed = self._armed is not None and self._armed != key
         self._armed = key
+        self._open_only(key)
         self._armed_title.setText(entry.title)
         _set_shown(self._armed_title, True)
         # **Der Titel steht am Knopf, nur nicht auf ihm.** Ein Bildschirmleser
@@ -10438,6 +10579,7 @@ class FeaturePanel(QWidget):
             # Eine andere Art der Fase zeigt andere Felder — vor der Meldung,
             # damit die Vorschau schon zur sichtbaren Zeile gehört.
             self._follow_conditions(row)
+            self._summarise(row)
             self._settle_apply_block()
             if not self._active_field_refusal():
                 self.valuesChanged.emit(row.op, self._row_values(row))
@@ -10601,6 +10743,55 @@ class _SectionSummary(QLabel):
             self._heading.setChecked(True)
             return
         super().mouseReleaseEvent(event)
+
+
+class _RowTitle(QLabel):
+    """Der Titel einer Handlung — ein Klick öffnet sie wie ihr Pfeil (RM-510)."""
+
+    def __init__(self, text: str, heading: QToolButton, parent: QWidget) -> None:
+        super().__init__(text, parent)
+        self._heading = heading
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
+            event.position().toPoint()
+        ):
+            self._heading.setChecked(True)
+            return
+        super().mouseReleaseEvent(event)
+
+
+class _RowSummary(QLabel):
+    """Die Werte einer zugeklappten Handlung — ein Klick öffnet sie (RM-510)."""
+
+    def __init__(self, heading: QToolButton, parent: QWidget) -> None:
+        super().__init__("", parent)
+        self._heading = heading
+        self.setWordWrap(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        set_level(self, "caption")
+        self.setIndent(heading.sizeHint().width() + TIGHT)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
+            event.position().toPoint()
+        ):
+            self._heading.setChecked(True)
+            return
+        super().mouseReleaseEvent(event)
+
+
+def _field_text(editor: QWidget) -> str:
+    """Wie ein Feld seinen Wert gerade zeigt — für die Kopfzeile einer Handlung."""
+    target = getattr(editor, "spin", editor)
+    if isinstance(target, QAbstractSpinBox):
+        return target.text().strip()
+    if isinstance(target, QComboBox):
+        return target.currentText()
+    if isinstance(target, QLineEdit):
+        return target.text().strip()
+    return ""
 
 
 def collapsible(

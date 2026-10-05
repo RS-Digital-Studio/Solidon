@@ -204,9 +204,9 @@ Stellen halten das, beide sind nötig:
 
 ## Das Merkmalfenster
 
-- **Ohne jede Auswahl schweigt es** (`FeaturePanel.say_nothing_is_chosen`) —
-  dann nennt die Karte den Weg zu den Bausteinen; mit gewähltem Körper kommt der
-  Satz zurück.
+- **Offen ist genau eine Handlung, die scharfe** (RM-510): `_arm` klappt auf
+  (`_open_only`), ein Kopf macht scharf, Zugeklapptes nennt seine Werte. Ohne
+  Auswahl schweigt es; die Anleitung entfällt nach dem ersten Merkmalklick.
 - **Für alle heißt dasselbe Maß, nicht dieselbe Stelle:** „Auf alle N
   gleichartigen anwenden“ gibt jedem Mitglied seine eigene gemessene Mitte
   (`relations.params_for_members`); eine Verschiebung am gewählten Merkmal geht

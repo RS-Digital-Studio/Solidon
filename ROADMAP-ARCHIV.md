@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-510: Die Auswahl stellt die Handlungen nach vorn und zeigt eine Handlung zur Zeit (05.10.2026)](#rm-510-die-auswahl-stellt-die-handlungen-nach-vorn-und-zeigt-eine-handlung-zur-zeit-05102026) |
 | 2026-10-05 | [RM-511: Rechts steht eine Karte mit den Reitern Auswahl, Prüfbericht und Chat (05.10.2026)](#rm-511-rechts-steht-eine-karte-mit-den-reitern-auswahl-prüfbericht-und-chat-05102026) |
 | 2026-10-04 | [RM-017: Nutfedermaße an realen Aluminiumprofilen prüfen — am echten Fenster abgenommen (04.10.2026)](#rm-017-nutfedermaße-an-realen-aluminiumprofilen-prüfen--am-echten-fenster-abgenommen-04102026) |
 | 2026-10-04 | [RM-197: Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell — am echten Fenster abgenommen (04.10.2026)](#rm-197-maßeditor-im-bild-kein-bezugswechsel-am-etikett-beschriftungen-mit-abstand-zum-modell--am-echten-fenster-abgenommen-04102026) |
@@ -41803,3 +41804,51 @@ Hinweisen (der Kopf selbst ist RM-508). Entfallen durch Roberts Breitenentscheid
 Mitte mindestens 70 %“ (bei 1920 jetzt 55 %). Fenstertests beim Release.
 Changelog: zum nächsten Release (eine Karte mit drei Reitern, Marken und Blinken am
 Prüfbericht, breitere Karte mit Koordinaten in einer Zeile).
+
+## RM-510: Die Auswahl stellt die Handlungen nach vorn und zeigt eine Handlung zur Zeit (05.10.2026)
+
+<a id="rm-510-die-auswahl-stellt-die-handlungen-nach-vorn-und-zeigt-eine-handlung-zur-zeit-05102026"></a>
+<a id="rm-510"></a>
+
+**RM-510 — Das Auswahlfenster stellt die Handlungen nach vorn und zeigt eine Handlung zur Zeit.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Die empfohlenen Handlungen haben die Füllung eines Eingabefelds, die Liste darunter
+  ist eine Wand gleicher 44-px-Kacheln. An einer Bohrung stehen sechs Handlungen mit
+  allen Feldern gleichzeitig offen (Inhalt 1579 px, sichtbar 877 px bei 1600 × 1000).
+  Vor „Bohrung setzen“ stehen zehn Bedienelemente und 44 Wörter zu Filament und
+  Nahtschutz; der Platzhalter ist abgeschnitten. An einer Fläche führen je zwei Knöpfe
+  zum selben Ziel, das Dock nennt die Auswahl zweimal mit „gemessen“, am Körper steht
+  oben eine Anleitung mit 18 Wörtern, Färben gibt es als Schnellwähler und als Knopf.
+  **Fix:** Schnellhandlungen als erhabene Knöpfe, die Liste als flache 32-px-Zeilen mit
+  Hover, Gruppenköpfe wie `sectionHeading`; am Merkmal ein Akkordeon aus `collapsible`,
+  Kopfzeile mit Wert, genau eine Handlung offen und scharf; Reihenfolge Kopf →
+  Schnellhandlungen → Liste → zugeklappt „Filament und Druck“; ein Knopf je Ziel; ein
+  Name der Auswahl, Herkunft nur bei Warnung; Anleitung als Bildunterschrift, die nach
+  dem ersten Merkmalklick entfällt; `paint_slot` in `PICKER_HANDLES`; Umbruch an der
+  vollen Breite.
+  **Abnahme:** An einer Bohrung von plate_holes passt das Dock bei 1600 × 1000 ohne
+  Rollen, höchstens vier Zahlenfelder sichtbar; bei 1000 px Höhe mindestens 18 Einträge
+  sichtbar; kein abgeschnittener Platzhalter in sechs Sprachen; je Merkmalsart keine
+  zwei Knöpfe mit demselben Ziel. Überschneidung RM-204, RM-232.
+
+**Umsetzung:** Am Merkmal ein Akkordeon: je Handlung ein Pfeil vor dem Titel, offen ist
+genau die scharfe (`FeaturePanel._arm` → `_open_only`), zugeklappt nennt eine Zeile die
+Werte (`_summarise`); Titel und Wertezeile öffnen per Klick, die offene steht in voller
+Schrift. Die Liste der Auswahlkarte besteht aus flachen 32-px-Zeilen
+(`LIST_ROW_HEIGHT`), je Gruppe zweispaltig, wo jeder Titel ungebrochen in die halbe
+Breite passt (`_arrange_groups`); die Hauptaktionen sind erhaben (`raised` in
+`style.py`); die Liste wünscht ihren ganzen Inhalt (`_ListScroller` als
+`ContentScroller`), die Karte deckelt am Fenster. Filament und Nahtschutz stehen
+zugeklappt in „Filament und Druck“ unter Liste und Bausteinen, die Kopfzeile nennt die
+Zuweisung (`QuickFilamentPicker.described`, `FeaturePanel.set_print_host`). Ein Name der
+Auswahl (die Namenszeile der Karte tritt am Merkmal zurück), Herkunft nur bei Warnung
+(`feature_measure(compact=True)`), an der Fläche kein zweiter Katalogknopf,
+`assign_slot` und `paint_slot` in `PICKER_HANDLES`. Die Anleitung „Kein Merkmal gewählt …“
+ist Bildunterschrift und entfällt nach dem ersten Merkmalklick
+(`UiSettings.feature_hint_seen`). Mit RM-506 entschieden: ohne Auswahl nur „Druckoptimal
+ausrichten“.
+
+**Nachweis (echtes Fenster mit Stilblatt, 1600 × 1000, plate_holes):** Bohrung ohne Rollen
+(Inhalt 685 = Sichtfläche), drei Zahlenfelder offen; am Körper mit aufgeklappten Gruppen
+18 Einträge im Sichtbereich; längster Platzhalter (fr, 30 Zeichen) rund 200 von gut 400
+Punkten; an Körper, Bohrung und Fläche keine zwei Knöpfe mit demselben Ziel. Fenstertests
+beim Release. Changelog: zum nächsten Release.
