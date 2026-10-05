@@ -1,9 +1,10 @@
 # Nachweise der Durchsicht 0.5.0 (23. und 24.09.2026)
 
 Was offene Registerpunkte, Kommentare und Begründungen aus der Durchsicht 0.5.0
-noch belegen. Die Durchsicht liegt vollständig nur auf der Entwicklungsmaschine
-(`Releases/0.5.0/Nachweise/`, nicht versioniert); geholt mit
-[RM-294](../../ROADMAP-ARCHIV.md#rm-294). **Unverändert abgelegt**, von ruff
+noch belegen. Die vollständige Durchsicht lag nur auf der Entwicklungsmaschine
+(`Releases/0.5.0/Nachweise/`, nicht versioniert) und ist nach 0.5.2 gelöscht
+(Robert); geholt mit [RM-294](../../ROADMAP-ARCHIV.md#rm-294) und am 05.10.2026
+für RM-022, RM-084 und RM-188. **Unverändert abgelegt**, von ruff
 ausgenommen wie `nachweise-release-0.5.1/`. Nicht hier liegen die Netze der
 Vorschausonde (`kugel_*.stl`, `plate_holes_x*.stl`) — `probe_preview.py` und
 `probe_sphere_table.py` nennen, wie sie entstanden.
