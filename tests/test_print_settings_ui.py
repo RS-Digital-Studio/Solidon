@@ -9322,12 +9322,15 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
     assert page is not None
 
     def rows_height() -> int:
-        # Ohne den Statussatz unter der Düse: Er wechselt mit jeder Wahl, und
-        # sein Größenwunsch bricht je Text und Schrift in andere Zeilen um —
-        # auf dem macOS-Runner war die Seite nach dem Zuklappen vier Punkte
-        # höher als aufgeklappt (641 gegen 637, Tag-Lauf 0.5.2). Gemessen wird
-        # die Zeile mit dem Feld.
-        return page.sizeHint().height() - dialog.nozzle_state.sizeHint().height()
+        # In der Breite, die die Seite hat, wie der Dialog selbst misst
+        # (``DialogScrollArea.sizeHint``), und ohne den Statussatz unter der
+        # Düse, der mit jeder Wahl wechselt. Der Größenwunsch der Seite rechnet
+        # in einer eigenen Wunschbreite, und die hängt an diesem Satz: Auf dem
+        # macOS-Runner sank sie beim Zuklappen von 442 auf 408 Punkte, andere
+        # Sätze brachen in mehr Zeilen um, und die Seite war zugeklappt höher
+        # als aufgeklappt (641 gegen 637, Tag-Lauf 0.5.2).
+        state = dialog.nozzle_state
+        return dialog._scroll.sizeHint().height() - state.heightForWidth(state.width())
 
     closed_size = dialog.size()
     closed_content_height = rows_height()
