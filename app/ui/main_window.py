@@ -479,7 +479,11 @@ def _target_feature_names(
     if result is None:
         return {}
     return {
-        f"{object_id}:{feature_id}": f"{entry.name} · {feature_label(feature_id, feature)}"
+        # Auswahlzeilen nennen Name und Maß, nicht die Maßquelle (RM-513, C16):
+        # „· aus der Konstruktion“ ist ein Wort aus der Datenhaltung.
+        f"{object_id}:{feature_id}": (
+            f"{entry.name} · {feature_label(feature_id, feature, compact=True)}"
+        )
         for object_id, entry in result.scene.objects.items()
         if object_id != except_for
         for feature_id, feature in entry.features.items()
@@ -22207,7 +22211,7 @@ class MainWindow(QMainWindow):
                 for kind in entry.feature_kinds
             )
         return {
-            feature_id: feature_label(feature_id, feature)
+            feature_id: feature_label(feature_id, feature, compact=True)
             for feature_id, feature in entry.features.items()
             if not wanted or feature.kind in wanted
         }

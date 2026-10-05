@@ -319,6 +319,30 @@ def spool_label(entry: filaments.CatalogueFilament, *, identified: bool = True) 
     )
 
 
+def _row_label(entry: filaments.CatalogueFilament, *, identified: bool) -> str:
+    """Die sichtbare Zeile einer Liste — ohne Wörter aus der Datenhaltung.
+
+    „PLA rot · PLA · Bestand unbekannt“ nannte das Material zweimal und einen
+    Bestand, den niemand kennt (RM-513, C16). Die Zeile nennt das Material
+    nur, wenn der Name es nicht schon sagt, und den Bestand nur, wenn er
+    bekannt ist; die ganze Angabe steht in Kurzhilfe und Beschreibung
+    (:func:`spool_label`).
+    """
+    material = entry.material_type or ""
+    named = bool(material) and material.casefold() in entry.name.casefold()
+    return " · ".join(
+        value
+        for value in (
+            entry.name,
+            "" if named else material,
+            stock_label(entry) if entry.remaining_grams is not None else "",
+            entry.location,
+            entry.identifier[:8] if identified else "",
+        )
+        if value
+    )
+
+
 def spool_labels(entries: Sequence[filaments.CatalogueFilament]) -> list[str]:
     """Die sichtbaren Etiketten einer Liste, in Reihenfolge der Einträge.
 
@@ -327,10 +351,10 @@ def spool_labels(entries: Sequence[filaments.CatalogueFilament]) -> list[str]:
     Vorschlagssatz. Eine Kennung unterscheidet; wo nichts zu unterscheiden
     ist, ist sie Rauschen. Die Karte im Regal hielt es schon so.
     """
-    plain = [spool_label(entry, identified=False) for entry in entries]
+    plain = [_row_label(entry, identified=False) for entry in entries]
     counts = Counter(plain)
     return [
-        spool_label(entry) if counts[label] > 1 else label
+        _row_label(entry, identified=True) if counts[label] > 1 else label
         for entry, label in zip(entries, plain, strict=True)
     ]
 
@@ -2164,7 +2188,9 @@ class FilamentPanel(QWidget):
                 else tr("Ohne Slicer-Profil")
             )
             said = tr("Doppelklick ändert Name, Typ und Farbe.")
-            item.setToolTip(f"{label}\n{said} {profile_hint}")
+            # Die Kurzhilfe trägt die ganze Angabe, auch „Bestand unbekannt“.
+            item.setToolTip(f"{spool_label(entry)}\n{said} {profile_hint}")
+            item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, spool_label(entry))
             self.list.addItem(item)
 
         if entries:

@@ -643,8 +643,30 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     zeilen = [panel.list.item(index).text() for index in range(panel.list.count())]
     assert "PLA Schwarz — 2 Körper" in zeilen, f"zwei Körper tragen es: {zeilen}"
     assert "PETG Rot — 1 Körper" in zeilen, f"einer trägt es: {zeilen}"
-    assert sum(line.startswith("PETG Rot ·") for line in zeilen) == 1
-    assert any("Bestand unbekannt" in line for line in zeilen), "Altbestand wird nicht geraten"
+    assert sum(line.startswith("PETG Rot") for line in zeilen) == 1
+    regal = [panel.list.item(index) for index in range(panel.list.count())]
+    assert not any(" g übrig" in item.text() for item in regal), "Altbestand wird nicht geraten"
+    assert any("Bestand unbekannt" in (item.toolTip() or "") for item in regal), (
+        "die Kurzhilfe sagt, dass der Bestand unbekannt ist"
+    )
+
+
+def test_a_choice_row_names_material_and_stock_only_when_they_tell_something() -> None:
+    """RM-513, C16: „PLA rot · PLA · Bestand unbekannt“ sprach in Datenbankwörtern.
+
+    Das Material steht nur, wenn der Name es nicht schon sagt, der Bestand
+    nur, wenn er bekannt ist; die ganze Angabe bleibt in der Kurzhilfe.
+    """
+    from app.core.knowledge import filaments
+    from app.ui.filament_picker import spool_label, spool_labels
+
+    rot = filaments.CatalogueFilament("PLA rot", "#c0392b", "PLA")
+    blau = filaments.CatalogueFilament("Blau", "#2040c0", "PETG", remaining_grams=230.0)
+    assert spool_labels([rot, blau]) == [
+        "PLA rot",
+        f"Blau · PETG · {spool_label(blau).split(' · ')[2]}",
+    ]
+    assert "Bestand unbekannt" in spool_label(rot), "die Kurzhilfe sagt es weiter"
 
 
 def test_refreshing_the_rack_keeps_the_project_summary(

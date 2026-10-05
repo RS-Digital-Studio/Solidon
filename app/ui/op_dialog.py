@@ -3119,7 +3119,8 @@ class OperationDialog(QDialog):
                     points["feature"].append(
                         (
                             f"{body.id}:{key}",
-                            f"{body.name} · {feature_label(key, feature)}",
+                            # Auswahlzeile: ohne Maßquelle (RM-513, C16).
+                            f"{body.name} · {feature_label(key, feature, compact=True)}",
                             reference_point([body], "feature", key),
                         )
                     )
