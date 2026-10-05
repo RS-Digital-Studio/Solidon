@@ -827,8 +827,20 @@ def cross_sections(
     Die Koordinaten bleiben auf jeder Höhe X und Y der Welt. Das ist kein
     Detail: eine Schicht mit der darunter zu vergleichen bedeutet nur etwas,
     wenn beide auf dieselbe Karte gezeichnet sind.
+
+    **Die Höhen dürfen in jeder Folge kommen.** Das Einsortieren sucht sie
+    über ``searchsorted`` und verlangt sie aufsteigend; ungeordnet kamen
+    Schnitte leer zurück, ohne Fehler (am Nachbau des Besenhalters, 0.5.2).
+    Geschnitten wird deshalb hier aufsteigend, zurück kommt jeder Schnitt an
+    der Stelle seiner Höhe.
     """
-    return _cross_sections(mesh, heights, capture_contours=False, cancelled=cancelled)[0]
+    wanted = np.asarray(heights, dtype=float)
+    order = np.argsort(wanted, kind="stable")
+    sections = _cross_sections(mesh, wanted[order], capture_contours=False, cancelled=cancelled)[0]
+    result: list[ShapelyPolygon | None] = [None] * len(order)
+    for target, section in zip(order, sections, strict=True):
+        result[int(target)] = section
+    return result
 
 
 def _cross_sections(

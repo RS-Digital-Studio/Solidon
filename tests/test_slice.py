@@ -2175,6 +2175,38 @@ def test_an_open_contact_band_never_enters_the_volume_kernel(
     assert section.area == pytest.approx(float(extent[0] * extent[1]), abs=1e-9)
 
 
+@pytest.mark.parametrize("count", [5, 40])
+def test_sections_come_back_at_their_heights_in_any_order(count: int) -> None:
+    """Ungeordnete Höhen geben dieselben Schnitte wie geordnete, je an ihrer Stelle.
+
+    Das Einsortieren sucht die Höhen über ``searchsorted``; ungeordnet kamen
+    am Nachbau des Besenhalters Schnitte leer zurück. Die Treppe aus drei
+    Quadern hat je Stufe einen anderen Querschnitt, und jedes Dreieck reicht
+    nur über seine Stufe — an einem Kegel, dessen Dreiecke über die ganze
+    Höhe reichen, fiel der Fehler nicht auf. 40 Höhen nehmen den Weg über den
+    Volumenkern (``DIRECT_SECTIONS_ABOVE``), 5 den über die Segmente.
+    """
+    mesh = on_bed(
+        trimesh.util.concatenate(
+            [
+                _placed_box((30.0, 30.0, 3.0), (0.0, 0.0, 1.5)),
+                _placed_box((20.0, 20.0, 3.0), (0.0, 0.0, 4.5)),
+                _placed_box((10.0, 10.0, 3.0), (0.0, 0.0, 7.5)),
+            ]
+        )
+    )
+    heights = np.linspace(0.1, 8.8, count)
+    shuffled = np.random.default_rng(7).permutation(heights)
+
+    ordered = analysis.cross_sections(mesh, heights)
+    mixed = analysis.cross_sections(mesh, shuffled)
+
+    assert all(section is not None for section in mixed)
+    by_height = dict(zip(heights.tolist(), ordered, strict=True))
+    for height, section in zip(shuffled.tolist(), mixed, strict=True):
+        assert section.equals(by_height[height]), f"z={height:.2f}"
+
+
 @pytest.mark.parametrize("count", [1, 10])
 def test_few_sections_avoid_a_volume_build(count: int, monkeypatch: pytest.MonkeyPatch) -> None:
     """Wenige Schnitte sparen den Körperaufbau und behalten das Rahmenfenster."""

@@ -2340,16 +2340,9 @@ def sections_across(mesh: MeshData, normal: Vec3, heights: np.ndarray) -> list[A
         transform.moved(turned, turn)
         body = MeshData.of(turned)
 
-    # Die Schichtanalyse sortiert jedes Dreieck in die Schichten, die es
-    # erreicht, und erwartet die Höhen darum geordnet. Die Suche fragt sie in
-    # der Reihenfolge an, in der sie ihr einfielen — also wird hier sortiert
-    # und danach zurückgestellt.
-    order = np.argsort(np.asarray(heights, dtype=float))
-    sections = cross_sections(body, np.asarray(heights, dtype=float)[order])
-    result: list[Any] = [None] * len(order)
-    for target, section in zip(order, sections, strict=True):
-        result[int(target)] = section
-    return result
+    # Die Suche fragt die Höhen in der Reihenfolge an, in der sie ihr
+    # einfielen; ``cross_sections`` ordnet sie selbst.
+    return cross_sections(body, np.asarray(heights, dtype=float))
 
 
 def _cut_in_two(
