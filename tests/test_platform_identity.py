@@ -697,6 +697,37 @@ def _slanted_cut() -> str:
     return _mesh_print(cut(_plate(), plane).mesh)
 
 
+def _traced_outline() -> str:
+    """Der Querschnitt eines Netzes als Skizze nachgezeichnet, wie der Nachbau es tut.
+
+    Die Einpassung entscheidet zwischen Strecke und Bogen und rückt Bögen auf
+    ihre Mittelsenkrechte; beides darf an keiner letzten Stelle hängen. Der
+    Körper ist ein Rechteck mit gerundeten Ecken und einer Bohrung, aus
+    Facetten wie eine STL.
+    """
+    import shapely
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.sketch.traced import traced_loop
+    from app.core.slice.analysis import cross_sections
+
+    outline = shapely.box(-20.0, -10.0, 20.0, 10.0).buffer(-3.0).buffer(3.0, quad_segs=8)
+    outline = outline.difference(shapely.Point(5.0, 2.0).buffer(2.6, quad_segs=12))
+    body = MeshData.of(trimesh.creation.extrude_polygon(outline, height=8.0))
+    section = cross_sections(body, [4.0])[0]
+    assert section is not None
+    elements = [
+        element
+        for ring in (section.exterior, *section.interiors)
+        for element in traced_loop(list(ring.coords)[:-1], 0.01, sag=0.05)
+    ]
+    assert {element.kind for element in elements} == {"line", "arc", "circle"}
+    return fingerprint(
+        [value for element in elements for point in element.points for value in point]
+    )
+
+
 def _aligned_plate() -> str:
     """Eine Bohrungsachse auf eine schräge zweite gelegt."""
     from app.core.geom.align import align_matrix
@@ -1210,6 +1241,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "section_cut": _slanted_cut,
     "step_assembly": _step_assembly,
     "tangential_rounds": _tangential_rounds,
+    "traced_outline": _traced_outline,
     "thicken": _thickened_skin,
     "support_columns": _support_columns,
 }

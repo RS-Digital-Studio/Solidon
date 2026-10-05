@@ -39,6 +39,7 @@ schweigt, wenn sie sich nicht auflösen lässt, `frame_for_sketch` sagt warum;
 | `edit.py` | Trimmen (so entsteht der Ellipsenbogen), Verlängern, Versetzen, Spiegeln; Ecken (`corner_at`, `fillet`, `chamfer`); Formen aus zwei Klicks (`polygon_at`, `slot_between`, `hole_grid_between`, `bolt_circle_at`); `project` (exakt über `brep.section`), `face_outline`, `ellipse_from_clicks`, Splinepunkte, `removed`; Strecken auf ein Maß (`scaled`, `stretched`); die Pläne der Kurvenbedingungen (`tangent_plan`, `curvature_plan`, `on_curve_plan`, `equal_axes_plan`, `taken_back`) |
 | `ops.py` | Die Operationen der Kategorie „Skizze"; `cut_regions`/`_cut_span` für Tasche und Übergangsschnitt; `_cut_with_tool` für die Schnitte mit Werkzeug; `sketch_join` teilt mit `sketch_extrude` `RaisedOutlineParams` |
 | `serialize.py` | **Die ganze Skizze als ein Parameterwert** einer Operation |
+| `traced.py` | Ein Sehnenzug aus einem Netzschnitt wird Strecken, Bögen und Kreise (`traced_loop`, für den Nachbau); ein Bogen braucht drei Sehnen bis `MAX_ARC_STEP` und eine Sehnenhöhe bis `sag`; eine gerade Kante kippt nicht zum ersten Punkt einer Rundung (`_exact_part`), eine kurze Strecke fällt ohne Kippen weg (`_without_short`), ein fast tangentialer Bogen wird tangential (`_tangent`, `NEAR_TANGENT`); `on_bisector` hält gerückte Bögen gleichschenklig |
 
 ## Warum `serialize.py` der Schlüssel ist
 
