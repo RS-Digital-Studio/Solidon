@@ -382,7 +382,13 @@ def test_a_held_tile_changes_its_surface_without_jumping(qt_app: QApplication, t
 
 
 def test_a_tile_answers_pointer_and_keyboard_focus_without_motion(screen: StartScreen) -> None:
-    """Tiefe bestätigt die ganze Zielfläche unmittelbar, ohne Animation."""
+    """Tiefe bestätigt die ganze Zielfläche unmittelbar, ohne Animation.
+
+    Seit RM-515 stehen die vier Einstiege oben und vorn in der Fokuskette, wie
+    das Auge geht; der erste trägt deshalb beim Zeigen den Fokus und steht schon
+    angehoben da — die Tastatur beginnt dort. Die Ruhe misst der Test darum
+    erst, wenn der Fokus woanders liegt.
+    """
     from PySide6.QtCore import QEvent, Qt
     from PySide6.QtWidgets import QGraphicsDropShadowEffect
 
@@ -392,9 +398,14 @@ def test_a_tile_answers_pointer_and_keyboard_focus_without_motion(screen: StartS
     tile = screen.tiles[0]
     effect = tile.graphicsEffect()
     assert isinstance(effect, QGraphicsDropShadowEffect)
+    assert tile.entry.way, "die erste Kachel ist ein Einstieg"
+    assert tile.hasFocus(), "die Tastatur beginnt beim ersten Einstieg (RM-515)"
+    focused = effect.blurRadius()
 
+    screen.new_button.setFocus(Qt.FocusReason.OtherFocusReason)
     QApplication.sendEvent(tile, QEvent(QEvent.Type.Leave))
     rest = effect.blurRadius()
+    assert focused > rest, "der Fokus beim Öffnen ist so sichtbar wie jeder andere"
     QApplication.sendEvent(tile, QEvent(QEvent.Type.Enter))
     assert effect.blurRadius() > rest
 
@@ -937,7 +948,16 @@ def test_a_double_click_requests_at_most_one_start_action(qt_app: QApplication) 
 
     QTest.mouseDClick(screen.support_button, Qt.MouseButton.LeftButton)
 
-    assert requests == [True]
+    assert requests == [True], "das Doppelklick-Ereignis allein öffnet genau einmal"
+
+    # Die Folge einer echten Plattform: Drücken und Loslassen lösen aus, das
+    # Doppelklick-Ereignis kommt danach und darf kein zweites Fenster öffnen.
+    feedback: list[bool] = []
+    screen.feedbackRequested.connect(lambda: feedback.append(True))
+    QTest.mouseClick(screen.feedback_button, Qt.MouseButton.LeftButton)
+    QTest.mouseDClick(screen.feedback_button, Qt.MouseButton.LeftButton)
+
+    assert feedback == [True], "Klick und Doppelklick sind zusammen ein Zug"
 
 
 def test_the_wide_layout_starts_only_when_a_third_column_has_room(screen: StartScreen) -> None:

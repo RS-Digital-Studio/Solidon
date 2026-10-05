@@ -41,6 +41,12 @@ Wie ein Text für den Kunden klingt (kurz, nicht nach einem Sprachmodell,
   bleiben. Französisch schreibt „Échap“, weil französische Tastaturen die
   Taste so beschriften. Die Eingabetaste heißt, wie der Bestand sie nennt:
   en/pt Enter, es Intro, fr Entrée, it Invio.
+- **Ein Kürzel im Satz steht in der Schreibweise von Windows** („Strg+Z“,
+  „Ctrl+Z“, Umschalt/Shift, Alt, dahinter genau eine Taste): Auf dem Mac
+  schreibt `tr` es als ⌘Z, ⇧⌘P, ⌥7 und *Wiederholen* als ⇧⌘Z
+  (`app/i18n/keys.py`, eingestellt beim Start über `sys.platform`). Eine
+  andere Form („Strg-Z“, „Strg + Z“) erkennt es nicht; Handbuch, Website und
+  Changelog-Seiten bleiben in dieser Schreibweise (`test_native_keys.py`).
 
 ## Ein Schlüssel, eine Bedeutung, eine Schreibweise
 

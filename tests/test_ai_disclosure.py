@@ -1113,23 +1113,23 @@ def test_every_catalog_translates_all_three_target_paths_and_actions() -> None:
             "An Anthropic gehen Ihre Nachricht, bis zu zwölf frühere Chatbeiträge, ein textlicher "
             "Steckbrief der Szene mit Namen, Maßen, Merkmalen, Parametern, Einstellungen und "
             "Auswahl, der Prüfbericht und die Anweisungen für den Agenten, bei Bildmodellen auch "
-            "gerenderte Ansichten. Projektdatei und Netz werden nicht übertragen, und Sie nutzen "
-            "Ihren eigenen API-Schlüssel."
+            "gerenderte Ansichten. Projektdatei und die Geometrie des Modells werden nicht "
+            "übertragen, und Sie nutzen Ihren eigenen API-Schlüssel."
         ),
         (
             "Das lokale Ollama-Ziel {target} erhält auf diesem Rechner Ihre Nachricht, bis zu "
             "zwölf frühere Chatbeiträge, den textlichen Steckbrief der Szene, den Prüfbericht und "
             "die Anweisungen für den Agenten, bei Bildmodellen auch gerenderte Ansichten. "
-            "Projektdatei und Netz werden nicht übertragen, Installation und Modelldownload "
-            "können eine Netzverbindung nutzen."
+            "Projektdatei und die Geometrie des Modells werden nicht übertragen, Installation "
+            "und Modelldownload können eine Netzverbindung nutzen."
         ),
         (
             "Das Ollama-Ziel {target} liegt auf einem anderen Rechner und erhält Ihre Nachricht, "
             "bis zu zwölf frühere Chatbeiträge, den textlichen Steckbrief der Szene, den "
             "Prüfbericht, die Anweisungen für den Agenten, bei Bildmodellen gerenderte Ansichten "
             "und für die Werkzeugprobe einen festen Auftrag ohne Projektinhalt. Projektdatei und "
-            "Netz werden nicht übertragen, und Sie sollten Betreiber und Übertragungsweg "
-            "vertrauen."
+            "die Geometrie des Modells werden nicht übertragen, und Sie sollten Betreiber und "
+            "Übertragungsweg vertrauen."
         ),
         (
             "Gesendet werden Beschreibung oder Bild, Startwert, Ablauf und Modellwahl, nicht aber "
@@ -1159,6 +1159,32 @@ def test_every_catalog_translates_all_three_target_paths_and_actions() -> None:
         for source in required:
             assert source in catalog, f"{language} fehlt: {source}"
             assert catalog[source] != source, f"{language} fällt auf Deutsch zurück: {source}"
+
+
+def test_the_notice_never_says_net_for_the_geometry_beside_a_network_connection() -> None:
+    """„Netz“ für das Modell stand neben „Netzverbindung“ — das las sich als Internet.
+
+    Wer prüft, was hinausgeht, liest „Projektdatei und Netz werden nicht
+    übertragen“ als „nichts geht ins Netz“. Gemeint war das Dreiecksnetz des
+    Modells; der Satz heißt es jetzt wie der Fehlerbericht: die Geometrie des
+    Modells. Geprüft an jedem Ziel, das einen eigenen Satz hat.
+    """
+    import re
+
+    from app.ui import ai_disclosure
+
+    targets = (
+        _target("anthropic"),
+        target_for_ollama("http://localhost:11434"),
+        target_for_ollama("https://ollama.example"),
+        ai_disclosure.target_for_comfy("http://127.0.0.1:8188"),
+    )
+    texts = [ai_disclosure._provider_text(target) for target in targets]
+    assert len(set(texts)) == len(targets), "jedes Ziel hat seinen eigenen Satz"
+    for text in texts:
+        assert not re.search(r"\bNetz\b", text), f"„Netz“ allein ist zweideutig: {text}"
+    said = [text for text in texts if "Geometrie des Modells" in text]
+    assert len(said) == 3, "Anthropic und beide Ollama-Ziele nennen, was nicht hinausgeht"
 
 
 def test_all_languages_targets_sizes_and_text_scales_fit_and_unlock_at_the_top(

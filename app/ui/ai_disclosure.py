@@ -203,24 +203,25 @@ def _provider_text(target: AiDisclosureTarget) -> str:
             "An Anthropic gehen Ihre Nachricht, bis zu zwölf frühere Chatbeiträge, ein "
             "textlicher Steckbrief der Szene mit Namen, Maßen, Merkmalen, Parametern, "
             "Einstellungen und Auswahl, der Prüfbericht und die Anweisungen für den Agenten, bei "
-            "Bildmodellen auch gerenderte Ansichten. Projektdatei und Netz werden nicht "
-            "übertragen, und Sie nutzen Ihren eigenen API-Schlüssel."
+            "Bildmodellen auch gerenderte Ansichten. Projektdatei und die Geometrie des Modells "
+            "werden nicht übertragen, und Sie nutzen Ihren eigenen API-Schlüssel."
         )
     if target.target_class == "local":
         return tr(
             "Das lokale Ollama-Ziel {target} erhält auf diesem Rechner Ihre Nachricht, bis zu "
             "zwölf frühere Chatbeiträge, den textlichen Steckbrief der Szene, den Prüfbericht "
             "und die Anweisungen für den Agenten, bei Bildmodellen auch gerenderte Ansichten. "
-            "Projektdatei und Netz werden nicht übertragen, Installation und Modelldownload "
-            "können eine Netzverbindung nutzen.",
+            "Projektdatei und die Geometrie des Modells werden nicht übertragen, Installation "
+            "und Modelldownload können eine Netzverbindung nutzen.",
             target=target.address,
         )
     return tr(
         "Das Ollama-Ziel {target} liegt auf einem anderen Rechner und erhält Ihre Nachricht, bis "
         "zu zwölf frühere Chatbeiträge, den textlichen Steckbrief der Szene, den Prüfbericht, "
         "die Anweisungen für den Agenten, bei Bildmodellen gerenderte Ansichten und für die "
-        "Werkzeugprobe einen festen Auftrag ohne Projektinhalt. Projektdatei und Netz werden "
-        "nicht übertragen, und Sie sollten Betreiber und Übertragungsweg vertrauen.",
+        "Werkzeugprobe einen festen Auftrag ohne Projektinhalt. Projektdatei und die Geometrie "
+        "des Modells werden nicht übertragen, und Sie sollten Betreiber und Übertragungsweg "
+        "vertrauen.",
         target=target.address,
     )
 

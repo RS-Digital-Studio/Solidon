@@ -452,17 +452,37 @@ def test_the_first_screen_answers_before_it_is_asked(qt_app: QApplication) -> No
 
     Geprüft wird am **gebauten** Dialog und vor der Erhebung — genau der
     Augenblick, den ein Kunde als Erstes sieht.
+
+    **Seit RM-515 zeigt der Erstlauf beim Öffnen höchstens 45 Wörter.** Der
+    Ausweg für den fehlenden Drucker ist der Eintrag „Benutzerdefiniert …“
+    am Ende der Liste, und der Satz dazu steht an der Liste selbst (Kurzhilfe
+    und Beschreibung), nicht als Zeile darunter. Zusatzprogramme und Chat
+    stehen zugeklappt mit Inhaltsangabe; Platzhalter, gesperrter Knopf und
+    Grund gelten, sobald der Kunde den Abschnitt öffnet.
     """
-    from PySide6.QtWidgets import QLabel
+    from PySide6.QtWidgets import QLabel, QToolButton
 
     dialog = FirstRunDialog(UiSettings())
     try:
+        custom = dialog.printer.findData("__custom__")
+        assert custom == dialog.printer.count() - 1, "the way out ends the list of printers"
+        entry = dialog.printer.itemText(custom)
+        for said in (dialog.printer.toolTip(), dialog.printer.accessibleDescription()):
+            assert "nicht dabei" in said and f"„{entry}“" in said, (
+                f"no way out for a printer that is not listed: {said!r}"
+            )
+
+        assert not dialog.extras.isVisibleTo(dialog), "programs and chat start folded (RM-515)"
+        heading = next(
+            button
+            for button in dialog.extras_section.findChildren(QToolButton)
+            if button.objectName() == "sectionHeading"
+        )
+        assert "Chat" in heading.toolTip(), "folded, the section names what it holds"
+        heading.click()
+        assert dialog.extras.isVisibleTo(dialog)
         texts = [label.text() for label in dialog.findChildren(QLabel) if label.isVisibleTo(dialog)]
         joined = " ".join(texts)
-
-        assert any("nicht dabei" in text for text in texts), (
-            f"no way out for a printer that is not listed: {texts}"
-        )
 
         waiting = [text for text in texts if "nachgesehen" in text]
         assert waiting, "the placeholders should still say that something is being looked up"
