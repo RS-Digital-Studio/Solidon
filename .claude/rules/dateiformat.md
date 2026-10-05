@@ -202,27 +202,31 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   Umlaute nach ISO 10303-21; die Rundreise ergibt dieselben Körper, Namen und
   Farben.
 
+## Ein Druckerprofil wird gelesen, wie der Slicer es liest
+
+Orca: je vier Punkte von `bed_exclude_area` ein Hüllrechteck
+(`build_area.exclusion_boxes`, für Profil, Gegenprobe und Turm). PrusaSlicer
+übergeht den Schlüssel; Punkte lesen beide wie ein `istringstream`
+(`_stream_point`). Cura: konvexe Hülle, Form `elliptic` oder Rechteck, nur
+Konstanten in Formelgestalt (`_cura_literal`).
+
 ## Was welcher Slicer bekommt
 
-- **Die Schrägnaht braucht Art und Länge** (`shell.scarf_seam`): Elegoos
-  Basisprozess führt `seam_slope_min_length = 0`, und mit der Art allein setzt
-  ElegooSlicer keine Rampe. Geschrieben werden nur Außenwand und glatte
-  Schleifen mit `slicer_keys.SCARF_LENGTH`; Bambu Studio bekommt dazu
-  `override_filament_scarf_seam_setting`, sonst sticht die Schrägnaht seines
-  Filaments (Elegoo, Orca und Creality kennen den Schlüssel nicht und
-  übergehen ihn). Cura: `scarf_joint_seam_length` je Netz. Die Grundlage liest
-  „an“ nur mit einer Länge über null.
+- **Die Schrägnaht braucht Art und Länge** (`shell.scarf_seam`). Geschrieben
+  werden nur Außenwand und glatte Schleifen mit `slicer_keys.SCARF_LENGTH`;
+  Bambu Studio bekommt dazu `override_filament_scarf_seam_setting`, sonst
+  sticht die Schrägnaht seines Filaments. Cura: `scarf_joint_seam_length` je
+  Netz. Die Grundlage liest „an“ nur mit einer Länge über null.
 - **Stützdichte bei Prusa und Orca:** Lücke `s/d−s`, zurück `s/(Lücke+s)`;
   `s` aus der wirksamen Stützbahn. Ohne positive Dichte aktive Übergabe anhalten.
 - **Eine Stützsperre gehört zu ihrem Objekt, und jede Familie schreibt sie
   anders** (`slicer_keys.helpers_as_parts`): Orca-Familie als eigenes Teil
   (`model_settings.config` nennt die zweite Komponente `support_blocker`),
   PrusaSlicer als Bereich (Dreiecke hinter denen des Körpers, `SupportBlocker`
-  in der Beilage, Modell mit `slic3rpe:Version3mf`, sonst übergeht PrusaSlicer
-  die Beilage), CuraEngine als eigenes Netz mit `anti_overhang_mesh=true`
-  (`slicer_keys.takes_mesh_settings`), Curas Fenster als Komponente neben
-  ihrem Körper mit `cura:anti_overhang_mesh` (ein freistehendes Objekt setzt
-  Cura aufs Bett). Jede Familie druckt die fremde Schreibweise als
+  in der Beilage, Modell mit `slic3rpe:Version3mf`), CuraEngine als eigenes
+  Netz mit `anti_overhang_mesh=true` (`slicer_keys.takes_mesh_settings`),
+  Curas Fenster als Komponente neben ihrem Körper mit
+  `cura:anti_overhang_mesh`. Jede Familie druckt die fremde Schreibweise als
   Kunststoff — geprüft wird an der **Modellbahn** mit und ohne Sperre, nicht
   an der Stütze. Geschrieben nur in die direkte Übergabe, nie in eine
   gespeicherte 3MF.
@@ -234,8 +238,7 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   Fenster (`for_window`) bekommt dieselben Netze mit denselben Werten als 3MF
   in Curas Schreibweise (`cura:<schlüssel>` am Objekt, Wahrheitswerte `True`,
   `handover.for_the_cura_window`), mittig auf dem Bett der Maschine, die in Cura
-  aktiv ist (`CuraActiveMachine.bed`, ohne sie das des Druckers): Curas Leser
-  zieht deren halbe Bettgröße ab und ordnet eine 3MF beim Laden nicht an.
+  aktiv ist (`CuraActiveMachine.bed`, ohne sie das des Druckers).
 - **Mehrere Platten in eine Datei, wo der Slicer Platten kennt**
   (`knows_plates`): Orca-Familie mit je einem `plate`-Block, Teile
   plattenweise im Raster — `ceil(sqrt(n))` Spalten, Zeilen nach unten, ein

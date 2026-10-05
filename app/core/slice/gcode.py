@@ -1407,12 +1407,6 @@ def analyze_lines(
     extent = state.model_extent.box() if has_first_layer else state.all_extent.box()
     does_extrude = extent is not None
     _log.info("read g-code of %s", metrics.slicer or "unknown slicer")
-    excluded_areas = []
-    for value in settings.get("bed_exclude_area", "").split(";"):
-        if value.strip():
-            excluded, invalid = _bed_corners(value)
-            if excluded and not invalid:
-                excluded_areas.append(tuple(excluded))
     return GcodeAnalysis(
         metrics,
         does_extrude,
@@ -1420,7 +1414,7 @@ def analyze_lines(
         bed,
         settings,
         tuple(corners or ()) if not bed_invalid else (),
-        tuple(excluded_areas),
+        exclusion_areas(settings.get("bed_exclude_area", "")) or (),
         (state.model_paths_inside if has_first_layer else state.all_paths_inside)
         if path_check is not None
         else None,
@@ -1582,6 +1576,35 @@ def _bed_corners(value: str) -> tuple[list[tuple[float, float]] | None, bool]:
     if len(corners) < 3:
         return None, True
     return corners, False
+
+
+def exclusion_areas(value: str) -> tuple[tuple[tuple[float, float], ...], ...] | None:
+    """Die Sperrflächen einer ``bed_exclude_area``-Angabe, ``None``, wenn sie unlesbar ist.
+
+    Nur die Orca-Familie schreibt den Schlüssel, und sie liest je vier Punkte
+    als ein Rechteck (:func:`app.core.build_area.exclusion_boxes`). Orcas
+    Vorgabe ``0x0`` sperrt also nichts — und ist lesbar.
+    """
+    from app.core.build_area import exclusion_boxes
+
+    areas: list[tuple[tuple[float, float], ...]] = []
+    for part in value.split(";"):
+        if not part.strip():
+            continue
+        points: list[tuple[float, float]] = []
+        for corner in part.split(","):
+            pieces = corner.strip().split("x")
+            if len(pieces) != 2:
+                return None
+            try:
+                point = (float(pieces[0]), float(pieces[1]))
+            except ValueError:
+                return None
+            if not all(math.isfinite(coordinate) for coordinate in point):
+                return None
+            points.append(point)
+        areas.extend(exclusion_boxes(points))
+    return tuple(areas)
 
 
 def _bed_box(corners: list[tuple[float, float]] | None, height: float | None) -> BoundingBox | None:

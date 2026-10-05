@@ -135,7 +135,11 @@ def test_discovery_keeps_where_the_machine_has_its_origin(
         {"nozzle_diameter": [True]},
         {"printable_area": ["0x0", "10x10", "0x10", "10x0"]},
         {"printable_area": ["0x0", "infx0", "0x10"]},
-        {"bed_exclude_area": ["0x0", "10x10"]},
+        # Eine Zahl statt einer Zeichenkette lädt auch die Orca-Familie nicht
+        # (``parse_str_arr``: „should not happen“).
+        {"bed_exclude_area": [True]},
+        # Das erste Rechteck sperrt das ganze Bett, wie OrcaSlicers Kobra 3.
+        {"bed_exclude_area": ["0x0", "300x0", "300x300", "0x300", "0x0", "2x2", "2x298"]},
         {"inherits": "fehlende Basis"},
         {"inherits": "Acme Unbekannt 0.6 nozzle"},
         {"printer_technology": "SLA"},
@@ -150,6 +154,106 @@ def test_discovery_never_substitutes_missing_or_invalid_machine_dimensions(
     content.update(change)
     _write(path, content)
     assert sp.discover_printers(unknown_printers / "slicer.exe", "orca") == ()
+
+
+@pytest.mark.parametrize(
+    ("area", "boxes"),
+    [
+        # Anycubic Kobra 3 in Anycubic Slicer Next: ein Rand von 2,5 mm an jeder Seite.
+        (
+            [
+                *("10x20", "12.5x20", "12.5x220", "10x220"),
+                *("10x220", "210x220", "210x217.5", "10x217.5"),
+                *("210x220", "207.5x220", "207.5x20", "210x20"),
+                *("10x20", "10x22.5", "210x22.5", "210x20"),
+            ],
+            [
+                (10, 20, 12.5, 220),
+                (10, 217.5, 210, 220),
+                (207.5, 20, 210, 220),
+                (10, 20, 210, 22.5),
+            ],
+        ),
+        # Qidi Q1 Pro: zwei Rechtecke und ein überzähliger Punkt, den der Slicer übergeht.
+        (
+            [
+                *("25x210", "25x205", "115x205", "115x210"),
+                *("180x210", "180x205", "200x205", "200x210", "180x210"),
+            ],
+            [(25, 205, 115, 210), (180, 205, 200, 210)],
+        ),
+        # Qidi Q2: alle Punkte in einem Listeneintrag. Orca hängt die Einträge
+        # einer Punktliste mit Komma aneinander (``ConfigBase::load_from_json``).
+        (["10x20,21x20,21x36,10x36"], [(10, 20, 21, 36)]),
+        # Anycubic Kobra 3 Max: Rechtecke ohne Fläche füllen die Liste und sperren nichts.
+        (
+            ["10x20", "13x20", "13x220", "10x220", "10x20", "210x20", "210x20", "10x20"],
+            [(10, 20, 13, 220)],
+        ),
+        # Orcas Vorgabe für „keine Sperrzone“.
+        (["0x0"], []),
+    ],
+)
+def test_discovery_reads_orca_exclusions_as_rectangles_of_four_points(
+    unknown_printers: Path, area: list[str], boxes: list[tuple[float, float, float, float]]
+) -> None:
+    """Je vier Punkte von ``bed_exclude_area`` sind ein Hüllrechteck, ein Rest zählt nicht.
+
+    So liest die Orca-Familie die Liste (``PartPlate::calc_bounding_boxes``) und
+    prüft gegen sie (``PartPlate::check_outside``); als ein Vieleck gelesen
+    schnitt sie sich selbst, und Solidon bot Kobra 3, Kobra 3 Max, Qidi Q1 Pro,
+    Q2 und X-Plus 4 gar nicht an (05.10.2026).
+    """
+    base = unknown_printers / "Acme" / "machine" / "base.json"
+    document = json.loads(base.read_text(encoding="utf-8"))
+    document["bed_exclude_area"] = area
+    _write(base, document)
+
+    printer = sp.discover_printers(unknown_printers / "slicer.exe", "orca")[0]
+
+    # Die Kontur der Vorlage reicht von 10/20 bis 210/220, ihre Mitte ist 110/120.
+    expected = tuple(
+        (
+            (left - 110, front - 120),
+            (right - 110, front - 120),
+            (right - 110, back - 120),
+            (left - 110, back - 120),
+        )
+        for left, front, right, back in boxes
+    )
+    assert len(printer.bed_exclusions) == len(expected)
+    for found, wanted in zip(printer.bed_exclusions, expected, strict=True):
+        assert [number for point in found for number in point] == pytest.approx(
+            [number for point in wanted for number in point]
+        )
+
+
+def test_prusaslicer_knows_no_exclusion_area_and_reads_points_like_its_stream(
+    prusa_mini: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PrusaSlicer kennt ``bed_exclude_area`` nicht und übergeht den Schlüssel.
+
+    QIDIs Bündel für PrusaSlicer trägt ihn trotzdem; als Sperrzone gelesen ließ
+    er X-Plus 4 und Q1 Pro aus der Auswahl fallen. Und ein Punkt wie ``235-0``
+    (AnkerMake M5) ist für PrusaSlicer 235 mal 0: Der Wert wird wie aus einem
+    ``istringstream`` gelesen, bis zum ersten Zeichen, das keine Zahl mehr ist
+    (``ConfigOptionPoints::deserialize``).
+    """
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    bundle = prusa_mini.parent / "resources" / "profiles" / "PrusaResearch.ini"
+    content = bundle.read_text(encoding="utf-8").replace(
+        "[printer:*common*]",
+        "[printer:*common*]\nbed_shape = 0x0,235-0,235x235,0x235\nmax_print_height = 250\n"
+        "bed_exclude_area = 0x0,0x0,25x230,25x235,115x235,115x230,25x230,0x0",
+    )
+    bundle.write_text(content, encoding="utf-8")
+
+    found = sp.discover_printers(prusa_mini, "prusa")
+
+    assert len(found) == 2
+    for printer in found:
+        assert printer.build_volume == pytest.approx((235, 235, 250))
+        assert printer.bed_exclusions == ()
 
 
 def test_discovered_identity_survives_installation_move_and_separates_nozzles(
@@ -298,6 +402,82 @@ def test_discovery_rejects_cura_formula_even_with_generic_default(
     content["overrides"].setdefault(key, {})["value"] = "some_unknown_setting"
     _write(path, content)
     assert sp.discover_printers(cura, "cura") == ()
+
+
+def test_cura_reads_disallowed_areas_and_shape_like_its_build_volume(
+    cura: Path, cura_bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Curas ``BuildVolume`` nimmt von jeder Sperrfläche die konvexe Hülle
+    (``Polygon.getMinkowskiHull``) und behandelt jede Form außer ``elliptic``
+    als Rechteck. Vertex K8400 Dual führt sein Sperrviereck über Kreuz,
+    Leapfrog Creatr HS schreibt ``Rectangular`` — beide bot Solidon nicht an
+    (05.10.2026)."""
+    from app.core import build_area
+
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    path = cura_bestand / "definitions" / "abax_pri3.def.json"
+    content = json.loads(path.read_text(encoding="utf-8"))
+    content["overrides"].update(
+        {
+            "machine_width": {"default_value": 200},
+            "machine_depth": {"default_value": 200},
+            "machine_height": {"default_value": 200},
+            "machine_shape": {"default_value": "Rectangular"},
+            "machine_disallowed_areas": {
+                "default_value": [[[-100, 100], [100, 100], [-100, 80], [100, 80]]]
+            },
+        }
+    )
+    _write(path, content)
+
+    printer = sp.discover_printers(cura, "cura")[0]
+
+    assert printer.printable_area == ()
+    assert sorted(printer.bed_exclusions[0]) == [(-100, 80), (-100, 100), (100, 80), (100, 100)]
+    assert build_area.printable_area(printer).area == pytest.approx(200 * 200 - 200 * 20)
+
+
+@pytest.mark.parametrize(
+    ("key", "formula", "blocked"),
+    [
+        # AnkerMake M5C: für Curas Auswerter ein unbekannter Name, der mit 0
+        # endet (``SettingFunction.__call__``) — und 0 ist kein „elliptic“.
+        ("machine_shape", "rectangular", 0.0),
+        # UltiMaker Method: die Sperrflächen als Listenliteral.
+        ("machine_disallowed_areas", "[ [ [-10, -10], [10, -10], [10, 10], [-10, 10] ] ]", 400.0),
+    ],
+)
+def test_cura_reads_a_constant_written_as_formula_without_computing(
+    cura: Path,
+    cura_bestand: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+    formula: str,
+    blocked: float,
+) -> None:
+    """Zwei Hersteller schreiben Konstanten als Formel. Gelesen werden sie, ohne
+    dass etwas ausgeführt wird (Regel 10); jede andere Formel an einem
+    Maschinenschlüssel bleibt unbekannt (der Test darüber)."""
+    from app.core import build_area
+
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    path = cura_bestand / "definitions" / "abax_pri3.def.json"
+    content = json.loads(path.read_text(encoding="utf-8"))
+    content["overrides"].update(
+        {
+            "machine_width": {"default_value": 200},
+            "machine_depth": {"default_value": 200},
+            "machine_height": {"default_value": 200},
+            "machine_disallowed_areas": {"default_value": []},
+        }
+    )
+    content["overrides"].setdefault(key, {})["value"] = formula
+    _write(path, content)
+
+    printer = sp.discover_printers(cura, "cura")[0]
+
+    assert printer.printable_area == ()
+    assert build_area.printable_area(printer).area == pytest.approx(200 * 200 - blocked)
 
 
 @pytest.mark.parametrize("own", [False, True])
