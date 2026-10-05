@@ -926,14 +926,16 @@ class LidParams(BaseParams):
             "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
         ),
     )
+    # **Ohne Mindestwert, und damit ohne Namen für die Null** (``zero_text``
+    # steht nur am Mindestwert null): Die Höhe ist eine Welthöhe, ein Körper
+    # darf unter dem Bett liegen, und Projekte bis 0.5.2 tragen negative
+    # Höhen. Die Null nennt der Satz des Feldes.
     z: float = param(
         title=_("Höhe der Öffnung"),
         default=0.0,
         unit="mm",
         doc=_("Null nimmt die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
         placement="advanced",
-        zero_text=_("Oberkante", context="Nullwert"),
-        minimum=0.0,
     )
     clearance: float = param(
         title=_("Spiel"),
@@ -1664,14 +1666,13 @@ class ScrewLidParams(BaseParams):
             "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
         ),
     )
+    # Ohne Mindestwert wie ``LidParams.z``: eine Welthöhe, auch unter dem Bett.
     z: float = param(
         title=_("Höhe der Öffnung"),
         default=0.0,
         unit="mm",
         doc=_("Null nimmt die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
         placement="advanced",
-        zero_text=_("Oberkante", context="Nullwert"),
-        minimum=0.0,
     )
     clearance: float = param(
         title=_("Spiel"),

@@ -7220,14 +7220,18 @@ def test_fx_stands_only_where_there_is_something_to_reckon_with(qt_app: QApplica
 
 
 def test_a_named_zero_shows_its_name(qt_app: QApplication) -> None:
-    """„0,00 mm“ hieß „Oberkante“ oder „automatisch“ (C8)."""
+    """„0,00 mm“ hieß „aus dem Material“ oder „automatisch“ (C8).
+
+    Die Höhe der Öffnung trägt keinen Namen mehr: Sie ist eine Welthöhe ohne
+    Mindestwert (Durchsicht 0.5.3, Fund 9), und Qt zeigt den Namen nur dort.
+    """
     lid = OperationDialog(REGISTRY.get("create_lid"), {}, None)
     container = OperationDialog(REGISTRY.get("create_container"), {}, None)
     try:
-        height = lid._editors["z"]
-        assert isinstance(height, ValueField)
-        assert height.spin.text() == tr("Oberkante", context="Nullwert")
-        assert lid.values()["z"] == 0.0, "der Wert bleibt die Null"
+        play = lid._editors["clearance"]
+        assert isinstance(play, ValueField)
+        assert play.spin.text() == tr("aus dem Material", context="Nullwert")
+        assert lid.values()["clearance"] == 0.0, "der Wert bleibt die Null"
         neck = container._editors["neck"]
         assert isinstance(neck, ValueField)
         assert neck.spin.text() == tr("automatisch", context="Nullwert")
