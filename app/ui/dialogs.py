@@ -182,14 +182,27 @@ def align_to_the_front(
     (``minimumSizeHint`` eines umbrechenden Labels), und nur die Rückseite
     rückt ihre Felder dafür ein Stück weiter — die Vorderseite behält ihre Kante.
 
-    Gezählt werden auch Zeilen vorn, die gerade verborgen sind: Erscheint ein
-    bedingtes Feld, springt die Kante nicht.
+    **Bemessen wird an den Zeilen vorn, die dastehen.** Eine bedingte Zeile,
+    die erst mit ihrem Schalter erscheint, bricht in der Spalte um wie die
+    Rückseite — so springt die Kante nicht, und vorn klafft keine Lücke für
+    ein Feld, das gar nicht dasteht. Gezählt wurden sie bis dahin mit: „Länge
+    des Langlochs“ schob die Felder der Bohrung 47 Punkte hinter
+    „Durchmesser“, auf Portugiesisch 99 (RM-518, höchstens 24).
 
     Wiederholbar: Ein Variantenwechsel ruft es erneut, und gemessen wird
     jedes Mal an der eigenen Wunschbreite der Beschriftungen.
     """
     leading = _form_labels([front] if isinstance(front, QFormLayout) else list(front))
     trailing = _form_labels([back] if isinstance(back, QFormLayout) else list(back))
+    shown = [widget for widget in leading if not widget.isHidden()]
+    if shown:
+        leading, trailing = (
+            shown,
+            [
+                *(widget for widget in leading if widget.isHidden()),
+                *trailing,
+            ],
+        )
     if not leading:
         leading, trailing = trailing, []
     if not leading:

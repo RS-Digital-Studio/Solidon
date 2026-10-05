@@ -347,9 +347,11 @@ zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
 (`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
 (`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
 Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal
-im Dialog. **Hat der Dialog eine Rückseite, setzt die Vorderseite die Spalte**
-(`dialogs.align_to_the_front`): Eine längere Beschriftung hinten bricht um
-(RM-518); wer zwei Formulare hat, richtet aus (`test_ui_dialogs`).
+im Dialog. **Hat der Dialog eine Rückseite, setzen die Zeilen vorn, die
+dastehen, die Spalte** (`dialogs.align_to_the_front`): Eine längere
+Beschriftung hinten oder eine bedingte vorn bricht um, die Lesezeile *Stelle*
+richtet beim Erscheinen neu aus (RM-518, höchstens 24 px hinter der längsten);
+wer zwei Formulare hat, richtet aus (`test_ui_dialogs`).
 
 **Ein Dialog, eine Form** (RM-518): Abschnitte sind flache Überschriften, kein
 `QGroupBox` (Ausnahmen mit Grund im Wächter in `test_ui_dialogs`); Außenrand

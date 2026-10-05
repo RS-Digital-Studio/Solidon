@@ -599,3 +599,32 @@ def test_align_to_the_front_lets_the_back_wrap(qt_app: QApplication) -> None:
         ), "der Satz selbst ist breiter als die Spalte"
     finally:
         holder.deleteLater()
+
+
+def test_a_hidden_row_in_front_does_not_widen_the_column(qt_app: QApplication) -> None:
+    """Eine bedingte Zeile vorn bricht um, statt die Spalte aufzuziehen (RM-518).
+
+    „Länge des Langlochs“ steht erst mit dem Haken *Langloch* da und schob die
+    Felder der Bohrung trotzdem 47 Punkte hinter „Durchmesser“, auf
+    Portugiesisch 99. Die Abnahme verlangt höchstens 24.
+    """
+    from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
+
+    from app.ui.dialogs import align_to_the_front
+
+    holder = QWidget()
+    try:
+        front = QFormLayout()
+        QVBoxLayout(holder).addLayout(front)
+        front.addRow("Durchmesser", QLineEdit(holder))
+        front.addRow("Länge des Langlochs mit Zugabe", QLineEdit(holder))
+        hidden = front.itemAt(1, QFormLayout.ItemRole.LabelRole).widget()
+        shown = front.itemAt(0, QFormLayout.ItemRole.LabelRole).widget()
+        assert isinstance(hidden, QLabel) and isinstance(shown, QLabel)
+        hidden.hide()
+        align_to_the_front(front)
+        assert shown.minimumWidth() == shown.sizeHint().width(), "die sichtbare setzt die Spalte"
+        assert hidden.wordWrap(), "die verborgene bricht um, wenn sie erscheint"
+        assert hidden.maximumWidth() == max(shown.minimumWidth(), hidden.minimumSizeHint().width())
+    finally:
+        holder.deleteLater()

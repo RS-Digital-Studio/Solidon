@@ -2255,6 +2255,8 @@ class OperationDialog(QDialog):
         # solche Stelle führt, steht er allein wie bisher.
         self._place = place_fields(spec)
         self._place_known = self._place is not None and any(name in given for name in self._place)
+        self._aligned = False
+        """Ob die Beschriftungskante schon steht — vorher richtet die Stelle nichts neu aus."""
         self._place_row = QWidget(self)
         place_layout = QHBoxLayout(self._place_row)
         place_layout.setContentsMargins(0, 0, 0, 0)
@@ -2459,14 +2461,16 @@ class OperationDialog(QDialog):
         ):
             self.valuesChanged.connect(self._follow_source_pending)
         self._follow_source_pending()
+        # Erst steht fest, ob die Lesezeile *Stelle* dasteht — die Spalte
+        # bemisst sich an den Zeilen, die dastehen (RM-518).
+        self.valuesChanged.connect(self._refresh_place)
+        self._refresh_place()
         # Vorderseite und „Weitere Einstellungen" sind zwei Formulare, und
         # jedes rechnete seine Beschriftungsspalte für sich: Im Bohrdialog
         # begannen die Felder bei 0 und bei 150 Punkten, untereinander im
         # selben Blickfeld (Befund B8).
         self._align_to_the_front()
         self._even_number_fields()
-        self.valuesChanged.connect(self._refresh_place)
-        self._refresh_place()
         self._refresh_advanced_summary()
 
     def _ask_manual(self) -> None:
@@ -2805,6 +2809,11 @@ class OperationDialog(QDialog):
         shown = bool(text) or aiming_back
         if shown != self._front.isRowVisible(self._place_row):
             self._front.setRowVisible(self._place_row, shown)
+            # Die Lesezeile ist keine bedingte Eingabe, die umbrechen soll:
+            # Erscheint sie, gehört ihre Beschriftung zur Spalte („Emplacement“
+            # ist breiter als „Nom“), verschwindet sie, gibt sie die Breite frei.
+            if self._aligned:
+                self._align_to_the_front()
             if self.isVisible():
                 self._queue_refit("passive")
 
@@ -4257,9 +4266,9 @@ class OperationDialog(QDialog):
         self._follow_source_pending()
         self._hide_legacy_feature_field()
         self._hide_internal_fields()
+        self._refresh_place()
         self._align_to_the_front()
         self._even_number_fields()
-        self._refresh_place()
         self._refresh_advanced_summary()
         self._resize_to_content("passive")
         self.schemaChanged.emit()
@@ -4375,6 +4384,7 @@ class OperationDialog(QDialog):
         Beschriftung hinten bricht um (:func:`app.ui.dialogs.align_to_the_front`).
         """
         align_to_the_front(self._front, self._advanced_form)
+        self._aligned = True
 
     def _queue_refit(self, intent: ContentFitIntent) -> None:
         """Fasst gleichzeitige Größenwünsche mit Vorrang der bewussten Aktion zusammen."""

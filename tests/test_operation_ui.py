@@ -7228,8 +7228,11 @@ def test_the_label_column_is_set_by_the_front(qt_app: QApplication) -> None:
 
     dialog = OperationDialog(REGISTRY.get("create_lid"), {}, None)
     try:
-        front = labels(dialog._front)
-        back = labels(dialog._advanced_form)
+        # Die Spalte setzen die Zeilen vorn, die dastehen; eine bedingte, die
+        # erst mit ihrem Schalter erscheint, bricht um wie die Rückseite.
+        front = [label for label in labels(dialog._front) if not label.isHidden()]
+        back = [label for label in labels(dialog._front) if label.isHidden()]
+        back += labels(dialog._advanced_form)
         widest = max(label.sizeHint().width() for label in front)
         assert all(label.minimumWidth() == widest for label in front)
         for label in back:
@@ -7243,6 +7246,53 @@ def test_the_label_column_is_set_by_the_front(qt_app: QApplication) -> None:
         ), "„Höhe der Öffnung“ zieht die Spalte nicht mehr auf"
     finally:
         dialog.deleteLater()
+
+
+def test_the_place_line_joins_the_column_only_while_it_stands(qt_app: QApplication) -> None:
+    """Die Lesezeile *Stelle* zählt zur Spalte, solange sie dasteht (RM-518).
+
+    Versteckt wurde sie erst nach dem Ausrichten; auf Französisch zog
+    „Emplacement“ die Spalte dann für Dialoge auf, die gar keine Stelle
+    zeigten — 49 Dialoge mit mehr als 24 Punkten hinter „Nom“ oder „Rayon“.
+    """
+    from PySide6.QtWidgets import QFormLayout
+
+    from app.ui.op_dialog import place_fields
+
+    def shown_labels(dialog: OperationDialog) -> list[QLabel]:
+        found = []
+        for row in range(dialog._front.rowCount()):
+            item = dialog._front.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            widget = item.widget() if item is not None else None
+            if isinstance(widget, QLabel) and not widget.isHidden():
+                found.append(widget)
+        return found
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    spec = REGISTRY.get("drill_hole")
+    place = place_fields(spec)
+    assert place is not None
+    # Auf Französisch ist „Emplacement“ breiter als „Diamètre“ und „Trou oblong“.
+    install_language("fr")
+    set_language("fr")
+    try:
+        without = OperationDialog(spec, {}, None)
+        placed = OperationDialog(spec, {}, None, values=dict.fromkeys(place, 1.0))
+        try:
+            for dialog, stands in ((without, False), (placed, True)):
+                labels = shown_labels(dialog)
+                assert (dialog._front.isRowVisible(dialog._place_row)) is stands
+                widest = max(label.sizeHint().width() for label in labels)
+                assert all(label.minimumWidth() == widest for label in labels), (
+                    f"Stelle {'da' if stands else 'weg'}: Spalte nach den Zeilen, die dastehen"
+                )
+        finally:
+            without.deleteLater()
+            placed.deleteLater()
+    finally:
+        set_language("de")
 
 
 def test_the_limit_stays_closed_and_remembers_the_customer(qt_app: QApplication) -> None:
