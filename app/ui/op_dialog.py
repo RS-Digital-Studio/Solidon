@@ -46,12 +46,20 @@ from PySide6.QtWidgets import (
 
 from app.core import expressions, manual
 from app.core.errors import AppError
-from app.core.registry import OperationSpec, caveat_line, inactive_dependency
-from app.core.registry.surfaces import chooses_a_centre, normal_fields_of
+from app.core.registry import OperationSpec, inactive_dependency
+from app.core.registry.surfaces import chooses_a_centre, first_sentence, normal_fields_of
 from app.core.types import ParamSpec
-from app.core.units import DEGREE_UNIT, EPS_DISPLAY, LengthUnit, decimals_for, from_mm, to_mm
+from app.core.units import (
+    DEGREE_UNIT,
+    EPS_DISPLAY,
+    EPS_GEOM,
+    LengthUnit,
+    decimals_for,
+    from_mm,
+    to_mm,
+)
 from app.i18n import tr
-from app.ui.dialogs import ErrorNotice
+from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -71,7 +79,7 @@ from app.ui.labels import (
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.organizer_dialog import OrganizerLayoutField
 from app.ui.outline_dialog import ContourField
-from app.ui.panels import align_forms
+from app.ui.panels import collapsible
 from app.ui.seal_dialog import SealPathField
 from app.ui.style import (
     NORMAL,
@@ -94,13 +102,19 @@ if TYPE_CHECKING:
 
 _SEAL_PATH_COMPANIONS = frozenset({"support_feature", "opening_signature", "counterface"})
 
-#: Die kurze Vorderseite bleibt innerhalb der acht Felder aus Bauplan §35.
+#: Höchstens so viele Felder stehen vorn zugleich (Bauplan §2.4: zwei bis drei;
+#: Entscheidung Robert, RM-513: vier als harte Grenze, neun von zehn
+#: Operationen mit höchstens drei).
 #:
 #: Dieselbe Zahl wie ``MAX_FRONT_PARAMS`` in ``tests/test_interface_limits.py``,
-#: und der Test hält beide zusammen (Muster ``OPEN_UP_TO``): Wer hier neun
-#: erlaubt, während die Prüfung acht verlangt, hat zwei Grenzen für dieselbe
+#: und der Test hält beide zusammen (Muster ``OPEN_UP_TO``): Wer hier fünf
+#: erlaubt, während die Prüfung vier verlangt, hat zwei Grenzen für dieselbe
 #: Frage — und die Oberfläche wächst an der Stelle mit, die niemand misst.
-MAX_FRONT_FIELDS: Final = 8
+#: Der Dialog hält sie auch beim Vorholen entschiedener Werte (``_promoted_fields``).
+MAX_FRONT_FIELDS: Final = 4
+
+#: Wie viele Feldnamen die zugeklappten „Weitere Einstellungen“ nennen.
+ADVANCED_NAMES_SHOWN: Final = 3
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
@@ -177,6 +191,67 @@ def expression_hint(value: float, unit: str) -> str:
     tidy = round(float(value), 6) + 0.0
     shown = localised(f"{tidy:g}")
     return f"= {shown} {unit}" if unit else f"= {shown}"
+
+
+def lead_sentence(spec: OperationSpec) -> str:
+    """Der eine Satz über den Feldern: der erste der Beschreibung (RM-513).
+
+    Vor dem ersten Feld standen bis zu 118 Wörter — die ganze Beschreibung und
+    die Grenze dazu. Den Rest trägt der Tooltip derselben Zeile, die Grenze
+    die zugeklappte Klappe „Wann nicht?“. Gekürzt wird wie in der
+    Befehlspalette (:func:`app.core.registry.surfaces.first_sentence`), damit
+    beide Orte denselben Satz zeigen.
+    """
+    return first_sentence(str(spec.doc or "")).strip()
+
+
+def placement_hint() -> str:
+    """Was der Dialog sagt, solange im Bild gezielt wird — seine erste Zeile."""
+    return tr("Stelle im Bild anklicken.")
+
+
+def lead_texts(spec: OperationSpec, *, placing: bool) -> tuple[str, ...]:
+    """Was über dem ersten Feld steht, in der Reihenfolge des Dialogs.
+
+    ``placing``: ob der Dialog gerade zum Zielen auffordert. Gezählt wird die
+    Überschrift der Grenze, nicht ihr Inhalt — der steht zugeklappt. Die
+    Wortgrenze dazu hält ``tests/test_interface_limits.py`` über das Register.
+    """
+    texts: list[str] = []
+    if placing:
+        texts.append(placement_hint())
+    lead = lead_sentence(spec)
+    if lead:
+        texts.append(lead)
+    if spec.caveat:
+        texts.append(tr("Wann nicht?"))
+    return tuple(texts)
+
+
+def advanced_summary(titles: Sequence[str]) -> str:
+    """Was die zugeklappten „Weitere Einstellungen“ enthalten (RM-513).
+
+    Die ersten Feldnamen und ein „…“, wenn es mehr sind — die Klappe nannte
+    ihren Inhalt nicht, und wer *Befestigung* suchte, fand sie nicht.
+    """
+    shown = ", ".join(titles[:ADVANCED_NAMES_SHOWN])
+    return f"{shown} …" if len(titles) > ADVANCED_NAMES_SHOWN else shown
+
+
+def place_text(face: str, point: Sequence[float]) -> str:
+    """Die gewählte Stelle als eine Zeile: „Oberseite · 12,00 / 8,50 / 20,00 mm“.
+
+    Statt dreier Koordinatenfelder vorn (Entscheidung Robert, RM-513); die
+    Zahlen bleiben hinter „Weitere Einstellungen“ bearbeitbar.
+    """
+    numbers = " / ".join(
+        (
+            length(float(point[0]), with_unit=False),
+            length(float(point[1]), with_unit=False),
+            length(float(point[2])),
+        )
+    )
+    return tr("{face} · {point}", face=face, point=numbers) if face else numbers
 
 
 class ValueField(QWidget):
@@ -256,6 +331,11 @@ class ValueField(QWidget):
         if self._optional:
             self.spin.setMinimum(self.spin.minimum() - 10.0 ** -self.spin.decimals())
             self.spin.setSpecialValueText(tr("wie gemessen"))
+        elif self.names_its_zero():
+            # **Die Null sagt, was sie bedeutet** (RM-513): „automatisch“ statt
+            # „0,00 mm“. Qt zeigt den Sondertext am Mindestwert, und der ist
+            # hier null — ``ParamSpec.zero_text`` steht nur an solchen Feldern.
+            self.spin.setSpecialValueText(str(entry.zero_text))
         self.spin.setMaximum(
             self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
         )
@@ -362,6 +442,11 @@ class ValueField(QWidget):
         # Farbe (Regel 18). Der gedrückte Zustand *und* das sichtbar andere
         # Feld sagen dasselbe, und der Hinweis darunter sagt es ein drittes Mal.
         self.toggle.setAccessibleName(tr("Parameterausdruck"))
+        # **„fx“ nur, wo es etwas zu rechnen gibt** (RM-513): ohne
+        # Projektparameter stand es neben jedem Zahlenfeld und lud zu nichts
+        # ein. „=“ und „@“ im Feld führen weiter in den Ausdruck
+        # (:meth:`eventFilter`); dann erscheint der Knopf, der zurückführt.
+        self.toggle.setVisible(self._offers_expressions())
 
         self.hint = QLabel("", self)
         self.hint.setVisible(False)
@@ -440,6 +525,20 @@ class ValueField(QWidget):
         immer der Durchmesser."""
         whole = shown * 2.0 if self._half else shown
         return to_mm(whole, self._shown) if self._shown else whole
+
+    def _offers_expressions(self) -> bool:
+        """Ob „fx“ neben der Zahl steht: nur, wenn das Projekt Parameter hat."""
+        return bool(self._parameter_values)
+
+    def names_its_zero(self) -> bool:
+        """Ob die Null dieses Feldes einen Namen trägt (``ParamSpec.zero_text``)."""
+        entry = self._entry
+        return (
+            bool(entry.zero_text)
+            and not entry.optional
+            and entry.minimum is not None
+            and abs(float(entry.minimum)) <= EPS_GEOM
+        )
 
     def caption(self) -> str:
         """Wie die Zeile heißt — der Titel des Schemas, oder „Radius"."""
@@ -642,6 +741,7 @@ class ValueField(QWidget):
                         self.spin.setValue(shown)
         self.spin.setVisible(not to_expression)
         self.text.setVisible(to_expression)
+        self.toggle.setVisible(to_expression or self._offers_expressions())
         # Der Leerraum hinter den Knöpfen weicht dem Ausdruck.
         self._row.setStretch(self._row.count() - 1, 0 if to_expression else 1)
         self.parameter_button.setVisible(to_expression)
@@ -1664,39 +1764,78 @@ def direction_fields(spec: OperationSpec) -> frozenset[str]:
     return frozenset(normal_fields_of(spec)) | {placement_fields(spec.params)["axis"]}
 
 
+def place_fields(spec: OperationSpec) -> tuple[str, str, str] | None:
+    """Die drei Felder der Stelle, wenn der Dialog sie als Lesezeile zeigt — sonst ``None``.
+
+    Eine Operation, die an einem Körper ansetzt und ihre Stelle hinten führt
+    (Bohrung, Beschriftung, Bausteine), nennt die gewählte Stelle vorn in einer
+    Zeile; die Koordinaten bleiben hinten bearbeitbar (Entscheidung Robert,
+    RM-513). Wo die Koordinaten selbst die Eingabe sind (*Merkmal
+    verschieben*), stehen sie als Felder vorn, und ein Erzeuger sagt seine
+    Fläche im Sitzsatz (:meth:`OperationDialog.show_seat`).
+    """
+    from app.core.knowledge.parts.ops import placement_fields
+
+    if spec.consumes == 0:
+        return None
+    placed = placement_fields(spec.params)
+    axes = tuple(placed.get(axis, axis) for axis in ("x", "y", "z"))
+    entries = {entry.name: entry for entry in spec.params.spec()}
+    if not all(axis in entries and entries[axis].placement == "advanced" for axis in axes):
+        return None
+    return axes[0], axes[1], axes[2]
+
+
 def _promoted_fields(spec: OperationSpec, given: Mapping[str, Any]) -> frozenset[str]:
-    """Entschiedene Werte nach vorn holen, eine Position immer als vollständige Gruppe."""
+    """Entschiedene Werte nach vorn holen — so viele, wie die Vorderseite fasst.
+
+    Die angeklickte Fläche, ein gemessener Durchmesser, eine übergebene
+    Zeichnung (§18.5) gehören vor den Nutzer. Nicht dazu gehören Richtungen
+    (:func:`direction_fields`), Kantenabstände der Flächenbindung und die
+    Stelle selbst, wo die Lesezeile sie nennt (:func:`place_fields`) — samt
+    dem Merkmal, an dem sie hängt. Dazu ein Deckel: Vorn stehen nie mehr als
+    :data:`MAX_FRONT_FIELDS` Felder zugleich; was keinen Platz findet, bleibt
+    hinten, in der Reihenfolge des Schemas.
+    """
     from app.core.knowledge.parts.ops import placement_fields
 
     entries = spec.params.spec()
     direction = direction_fields(spec)
     placed = placement_fields(spec.params)
-    bound_distances = {
-        placed.get(name, name) for name in ("surface_distance_1", "surface_distance_2")
-    }
-    promoted = {
-        entry.name
+    kept_back = {placed.get(name, name) for name in ("surface_distance_1", "surface_distance_2")}
+    place = place_fields(spec)
+    if place is not None:
+        kept_back.update(place)
+        kept_back.add(placed.get("at_feature", "at_feature"))
+    if spec.name in {"pattern", "pattern_feature", "mirror_object"}:
+        # Die Drehmitte wählt die Zeile *Drehmitte* vorn; ihre Zahlen bleiben hinten.
+        kept_back.update({"cx", "cy", "cz"})
+    candidates = [
+        entry
         for entry in entries
         if entry.name in given
         and given[entry.name] != entry.default
         and entry.name not in direction
-        and entry.name not in bound_distances
+        and entry.name not in kept_back
         and not entry.internal
-    }
-    coordinates = {placed.get(axis, axis) for axis in ("x", "y", "z")}
-    if coordinates <= {entry.name for entry in entries} and coordinates & promoted:
-        front = {
-            entry.name
-            for entry in entries
-            if not entry.internal
-            and (entry.placement == "front" or entry.kind == "armature" or entry.name in promoted)
-        }
-        # Die Fachparameter behalten ihren Platz. Reicht die Vorderseite nicht
-        # für die ganze Position, bleiben auch deren entschiedene Werte hinten.
-        if len(front | coordinates) <= MAX_FRONT_FIELDS:
-            promoted.update(coordinates)
-        else:
-            promoted.difference_update(coordinates)
+        and entry.placement != "front"
+    ]
+    values = {entry.name: entry.default for entry in entries} | dict(given)
+    room = MAX_FRONT_FIELDS - sum(
+        1
+        for entry in entries
+        if entry.placement == "front"
+        and not entry.internal
+        and inactive_dependency(entry, entries, values) is None
+    )
+    promoted: set[str] = set()
+    for entry in candidates:
+        if room <= 0:
+            break
+        if inactive_dependency(entry, entries, values) is not None:
+            continue
+        promoted.add(entry.name)
+        room -= 1
     return frozenset(promoted)
 
 
@@ -1959,10 +2098,7 @@ class OperationDialog(QDialog):
             # eines Vektors tippt niemand von Hand, und ihre zwei Geschwister
             # blieben hinten. Richtung und Achse bleiben, wo das Schema sie
             # hinlegt; der Wert gilt trotzdem.
-            decided = entry.name in promoted and not (
-                spec.name in {"pattern", "pattern_feature", "mirror_object"}
-                and entry.name in {"cx", "cy", "cz"}
-            )
+            decided = entry.name in promoted
             target = (
                 front
                 if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
@@ -1995,10 +2131,27 @@ class OperationDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         self._scroll.setWidget(contents)
         outer.addWidget(self._scroll, 1)
-        self._caveat: QLabel | None = None
+        # **Wer im Bild zielen muss, erfährt es im Dialog — als erste Zeile**
+        # (Befund Robert, 18.09.2026: „keine Info dass es über den Viewport
+        # geht"; RM-513: sie war die blasseste Zeile, unter allem anderen).
+        # Die Platzierung startet bei diesen Operationen von selbst und
+        # schreibt ihren Satz in eine Leiste am Viewport; der Dialog bleibt
+        # daneben stehen. In normaler Schrift, denn sie ist die Anweisung.
+        #
+        # **Sichtbar erst, wenn die Platzierung wirklich läuft.** Ob sie das
+        # tut, weiß allein der Fluss (:meth:`show_placement_hint`): Er startet
+        # nicht beim **Ändern** eines Schritts und nicht ohne setzbaren Körper,
+        # und ein Dialog, der zum Klicken auffordert, während nichts zu klicken
+        # ist, ist schlechter als keiner (gemessen 18.09.2026).
+        placed = QLabel(placement_hint(), self)
+        placed.setWordWrap(True)
+        placed.setVisible(False)
+        self._placement_hint = placed
+        layout.addWidget(placed)
+
         self._description: QLabel | None = None
         if spec.doc:
-            description = QLabel(str(spec.doc), self)
+            description = QLabel(lead_sentence(spec), self)
             description.setWordWrap(True)
             # So hoch wie sein Text, nicht so hoch wie der übrige Platz.
             #
@@ -2012,28 +2165,24 @@ class OperationDialog(QDialog):
             description.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             layout.addWidget(description)
             self._description = description
+            self._describe_fully(spec)
 
-        # **Die Grenze stand nur im Handbuch.** Zwölf Operationen tragen einen
-        # ``caveat``, und gelesen hat ihn allein die Handbuchreferenz — nicht
-        # der Dialog, in dem gerade jemand die Operation anwendet. Als eigenes
-        # Label und nicht an den ``doc``-Satz gehängt: Die Deklaration des
-        # Feldes begründet das selbst — in einen Satz gepackt liest sich die
-        # Einschränkung wie ein Nachtrag und wird überlesen.
-        #
-        # Das Wort „Wann nicht" davor ist die zweite Kodierung (Regel 18): Der
-        # Satz steht halbfett, aber die Aussage hängt nicht daran.
+        # **Die Grenze steht zugeklappt unter dem Satz** (RM-513). Offen trug
+        # sie bis zu sechzig Wörter vor das erste Feld; das Handbuch und die
+        # Kurzhilfe der Überschrift nennen sie ganz. Die Überschrift „Wann
+        # nicht?“ ist die Kodierung, die vorher die halbfette Schrift trug
+        # (Regel 18), und ``remember`` hält, ob der Kunde sie offen haben will.
         # Immer gebaut, sichtbar nur mit Inhalt: Ein Variantenwechsel *zu*
         # einer Grenze hin hätte sonst nichts, woran er sie schreiben könnte.
-        warning = caveat_line(spec)
-        caveat = QLabel(warning, self)
+        caveat = QLabel(str(spec.caveat or ""), self)
         caveat.setWordWrap(True)
-        set_level(caveat, "caption")
-        font = caveat.font()
-        font.setBold(True)
-        caveat.setFont(font)
-        caveat.setVisible(bool(warning))
         self._caveat = caveat
-        layout.addWidget(caveat)
+        self._caveat_section = collapsible(
+            tr("Wann nicht?"), caveat, open_now=False, remember="op_dialog.caveat"
+        )
+        self._caveat_section.setParent(self)
+        layout.addWidget(self._caveat_section)
+        self._show_caveat(spec)
 
         # **Woran gearbeitet wird, wenn mehr gewählt ist als gebraucht.** Eine
         # Operation nimmt so viele Körper, wie sie deklariert, und zwar in
@@ -2080,31 +2229,6 @@ class OperationDialog(QDialog):
         bed_row.addStretch(1)
         layout.addLayout(bed_row)
         self._attachment_row = bed_row
-        # **Wer im Bild zielen muss, erfährt es im Dialog** (Befund Robert,
-        # 18.09.2026: „Bohrung setzen sollte doch über den Viewport gehen,
-        # wenn das dialogfenster da ist, keine Info dass es über den Viewport
-        # geht"). Die Platzierung startet bei diesen Operationen von selbst
-        # und schreibt ihren Satz in eine Leiste am **Viewport**; der Dialog
-        # bleibt daneben stehen und sagte dazu nichts. Wer auf ihn sieht,
-        # sucht ein Feld für die Stelle und findet keines — sie steht in
-        # ``x/y/z`` hinter der Klappe, und dorthin gehört sie auch.
-        placed = QLabel(
-            tr("Die Stelle wählen Sie im Bild — klicken Sie sie am Modell an."),
-            self,
-        )
-        placed.setWordWrap(True)
-        set_level(placed, "caption")
-        # **Sichtbar wird er erst, wenn die Platzierung wirklich läuft.** Ob
-        # sie das tut, weiß allein der Fluss: Er startet nicht beim **Ändern**
-        # eines Schritts (dort ist die Stelle längst gewählt, und wer den
-        # Durchmesser nachbessert, will kein Fadenkreuz — `placement_flow`
-        # sagt es in eigenen Worten) und nicht ohne setzbaren Körper. Am
-        # Registereintrag allein gemessen stand der Satz auch dort, und ein
-        # Dialog, der zum Klicken auffordert, während nichts zu klicken ist,
-        # ist schlechter als keiner (gemessen 18.09.2026).
-        placed.setVisible(False)
-        self._placement_hint = placed
-        layout.addWidget(placed)
         # **Und der Weg zurück ins Bild** (RM-205). Escape in der Platzierung
         # bringt den Dialog zurück und behält die Werte — aber von hier
         # führte nichts mehr zurück in die erste Stufe: ``surfaceRequested``
@@ -2123,11 +2247,34 @@ class OperationDialog(QDialog):
         self.aim_again.setAccessibleDescription(aim_note)
         self.aim_again.setVisible(False)
         self.aim_again.clicked.connect(self.surfaceRequested)
-        aim_row = QHBoxLayout()
-        aim_row.setContentsMargins(0, 0, 0, 0)
-        aim_row.addWidget(self.aim_again)
-        aim_row.addStretch(1)
-        layout.addLayout(aim_row)
+        # **Die gewählte Stelle als Lesezeile vorn** (Entscheidung Robert,
+        # RM-513): „Stelle: Oberseite · 12,00 / 8,50 / 20,00 mm“ statt dreier
+        # Koordinatenfelder. Die Zahlen bleiben hinten bearbeitbar; der Knopf
+        # zurück ins Bild steht in derselben Zeile. Wo die Operation keine
+        # solche Stelle führt, steht er allein wie bisher.
+        self._place = place_fields(spec)
+        self._place_known = self._place is not None and any(name in given for name in self._place)
+        self._aligned = False
+        """Ob die Beschriftungskante schon steht — vorher richtet die Stelle nichts neu aus."""
+        self._place_row = QWidget(self)
+        place_layout = QHBoxLayout(self._place_row)
+        place_layout.setContentsMargins(0, 0, 0, 0)
+        place_layout.setSpacing(SPACE)
+        self._place_label = QLabel("", self._place_row)
+        self._place_label.setWordWrap(True)
+        self._place_label.setAccessibleName(tr("Stelle"))
+        place_layout.addWidget(self._place_label, 1)
+        place_layout.addWidget(self.aim_again)
+        front.insertRow(0, tr("Stelle"), self._place_row)
+        place_caption = front.labelForField(self._place_row)
+        place_note = tr(
+            "Wo die Operation ansetzt. Die Zahlen stehen unter „Weitere Einstellungen“."
+        )
+        self._place_label.setToolTip(place_note)
+        self._place_label.setStatusTip(place_note)
+        if place_caption is not None:
+            place_caption.setToolTip(place_note)
+            place_caption.setStatusTip(place_note)
         self._filament_notice = ErrorNotice(self)
         self._filament_notice.hide()
         layout.addWidget(self._filament_notice)
@@ -2202,40 +2349,53 @@ class OperationDialog(QDialog):
         hidden_expression_row.addWidget(self._hidden_expression_notice, 1)
         hidden_expression_row.addWidget(self._hidden_expression_open)
         layout.addLayout(hidden_expression_row)
+        self._advanced_summary: QLabel | None = None
+        self._advanced_section: QWidget | None = None
         if advanced.rowCount() or extra is not None:
-            # Eine ankreuzbare Gruppe graut ihre Felder aus, statt sie
-            # wegzuklappen — die gestufte Tiefe aus §2.4 war damit gedacht und
-            # nicht gebaut: die hinteren Werte standen weiter da, nur grau, und
-            # das Häkchen las sich wie ein Schalter, der etwas bewirkt.
+            # **Dieselbe Klappe wie in jedem anderen Dialog** (``panels.collapsible``,
+            # RM-513): flache Überschrift mit Linie, und zugeklappt nennt sie die
+            # ersten Felder dahinter. Die eigene Bauart davor sagte nicht, was
+            # hinter ihr liegt, und wer *Befestigung* suchte, fand sie nicht.
             inner = QWidget(self)
             inner.setLayout(advanced)
-            inner.setVisible(False)
-            self.advanced = QToolButton(self)
-            self.advanced.setText(tr("Weitere Einstellungen"))
-            self.advanced.setCheckable(True)
-            self.advanced.setAutoRaise(True)
-            self.advanced.setArrowType(Qt.ArrowType.RightArrow)
-            self.advanced.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-            # **Dieselbe Klappe wie in jedem anderen Dialog.** Offen trug sie
-            # die Fläche eines aktiven Werkzeugs — ein bernsteinfarbener Knopf
-            # mitten im Formular —, während Einstellungen, Erzeugen und
-            # Rückmeldung eine flache Überschrift mit Linie zeigen
-            # (``panels.collapsible``).
-            self.advanced.setObjectName("sectionHeading")
-            set_level(self.advanced, "section")
-            self.advanced.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
+            section = collapsible(
+                tr("Weitere Einstellungen"),
+                inner,
+                open_now=False,
+                contents=advanced_summary(self._advanced_titles()),
+            )
+            section.setParent(self)
+            self._advanced_section = section
+            heading = next(
+                child
+                for child in section.findChildren(QToolButton)
+                if child.objectName() == "sectionHeading"
+            )
+            self.advanced = heading
+            self._advanced_summary = next(
+                (
+                    child
+                    for child in section.findChildren(QLabel)
+                    if child.objectName() == "sectionSummary"
+                ),
+                None,
+            )
             # **Keine geschachtelte Funktion, die ``self`` fängt.** Sie ist
             # dasselbe wie ein Lambda: ihre Zelle hält den Dialog, der Sender
             # ist sein eigener Knopf, und der Ring über die C++-Grenze steht.
             # Gemessen am 23.08.2026: zehn losgelassene ``OperationDialog``
             # überlebten alle zehn, und ``gc.get_referrers`` nannte genau diese
             # Zelle.
-            self.advanced.toggled.connect(
-                weak_slot(self, OperationDialog._unfold_advanced, inner, forward=True)
+            #
+            # ``pressed`` kommt vor dem Zuklappen: Steht der Fokus in einem Feld
+            # dahinter, geht er an die Überschrift statt an den nächsten Knopf.
+            heading.pressed.connect(
+                weak_slot(self, OperationDialog._before_folding, inner, forward=False)
             )
-            layout.addWidget(self.advanced)
-            layout.addWidget(inner)
+            heading.toggled.connect(
+                weak_slot(self, OperationDialog._advanced_toggled, forward=True)
+            )
+            layout.addWidget(section)
 
         # Überschuss erst nach allen Feldern, nicht vor der aufklappbaren Tiefe.
         layout.addStretch(1)
@@ -2300,12 +2460,17 @@ class OperationDialog(QDialog):
         ):
             self.valuesChanged.connect(self._follow_source_pending)
         self._follow_source_pending()
+        # Erst steht fest, ob die Lesezeile *Stelle* dasteht — die Spalte
+        # bemisst sich an den Zeilen, die dastehen (RM-518).
+        self.valuesChanged.connect(self._refresh_place)
+        self._refresh_place()
         # Vorderseite und „Weitere Einstellungen" sind zwei Formulare, und
         # jedes rechnete seine Beschriftungsspalte für sich: Im Bohrdialog
         # begannen die Felder bei 0 und bei 150 Punkten, untereinander im
         # selben Blickfeld (Befund B8).
-        align_forms(self)
+        self._align_to_the_front()
         self._even_number_fields()
+        self._refresh_advanced_summary()
 
     def _ask_manual(self) -> None:
         """F1: die Stelle im Handbuch zu dieser Operation melden.
@@ -2597,7 +2762,7 @@ class OperationDialog(QDialog):
         return entered.get("coverage") == "whole_face" and not entered.get("face")
 
     def show_placement_hint(self, on: bool, *, paused: bool = False) -> None:
-        """Den Satz „Die Stelle wählen Sie im Bild" zeigen oder wegnehmen.
+        """Den Satz „Stelle im Bild anklicken.“ zeigen oder wegnehmen.
 
         Gerufen vom :class:`~app.ui.placement_flow.PlacementFlow`, wenn er
         anfängt und wenn er aufhört. Er ist die einzige Stelle, die es weiß:
@@ -2611,6 +2776,91 @@ class OperationDialog(QDialog):
         """
         self._placement_hint.setVisible(bool(on))
         self.aim_again.setVisible(paused)
+        self._refresh_place()
+
+    def _refresh_place(self) -> None:
+        """Die Lesezeile *Stelle* nach den Werten, die gerade gelten.
+
+        Sichtbar, sobald eine Stelle gewählt ist — oder solange der Knopf
+        zurück ins Bild in ihr steht. Leere Koordinaten (``optional``: „bleibt,
+        wo sie ist“) nennen nur das Merkmal.
+        """
+        aiming_back = not self.aim_again.isHidden()
+        text = ""
+        if self._place is not None and self._place_known:
+            values = self.values()
+            point = [
+                float(coordinate)
+                for name in self._place
+                if isinstance(coordinate := values.get(name), int | float)
+            ]
+            face = self._place_face(values)
+            if len(point) < len(self._place):
+                text = face or tr("wie gemessen")
+            else:
+                text = place_text(face, point)
+        elif self._place is not None and aiming_back:
+            text = tr("noch nicht gewählt")
+        if text != self._place_label.text():
+            self._place_label.setText(text)
+            self._place_label.setAccessibleDescription(text)
+        self._place_label.setVisible(bool(text))
+        shown = bool(text) or aiming_back
+        if shown != self._front.isRowVisible(self._place_row):
+            self._front.setRowVisible(self._place_row, shown)
+            # Die Lesezeile ist keine bedingte Eingabe, die umbrechen soll:
+            # Erscheint sie, gehört ihre Beschriftung zur Spalte („Emplacement“
+            # ist breiter als „Nom“), verschwindet sie, gibt sie die Breite frei.
+            if self._aligned:
+                self._align_to_the_front()
+            if self.isVisible():
+                self._queue_refit("passive")
+
+    def _place_face(self, values: Mapping[str, Any]) -> str:
+        """Woran die Stelle liegt: das gewählte Merkmal, sonst die Seite ihrer Richtung."""
+        from app.core.knowledge.parts.ops import placement_fields
+        from app.core.scene.placement import side_of
+
+        placed = placement_fields(self.spec.params)
+        for name in (placed.get("at_feature", "at_feature"), "at_feature"):
+            chosen = values.get(name)
+            if isinstance(chosen, str) and chosen:
+                return self._features.get(chosen, chosen)
+        normal = [
+            float(part)
+            for name in normal_fields_of(self.spec)
+            if isinstance(part := values.get(name), int | float)
+        ]
+        if len(normal) == 3 and any(abs(part) > EPS_GEOM for part in normal):
+            _key, side = side_of((normal[0], normal[1], normal[2]))
+            return str(side)
+        return ""
+
+    def _describe_fully(self, spec: OperationSpec) -> None:
+        """Die ganze Beschreibung an die eine Zeile: Kurzhilfe, Statuszeile, Vorleser."""
+        if self._description is None:
+            return
+        whole = str(spec.doc or "")
+        self._description.setToolTip(whole if whole.strip() != lead_sentence(spec) else "")
+        self._description.setStatusTip(lead_sentence(spec))
+        self._description.setAccessibleDescription(whole)
+
+    def _show_caveat(self, spec: OperationSpec) -> None:
+        """Die Grenze dieser Operation in ihre Klappe — oder die Klappe weg."""
+        said = str(spec.caveat or "")
+        self._caveat.setText(said)
+        self._caveat_section.setVisible(bool(said))
+        heading = next(
+            (
+                child
+                for child in self._caveat_section.findChildren(QToolButton)
+                if child.objectName() == "sectionHeading"
+            ),
+            None,
+        )
+        if heading is not None:
+            heading.setToolTip(said)
+            heading.setAccessibleDescription(said)
 
     def offer_attachment(self, target: str) -> None:
         """Die gewählte Fläche und freie Bettlage sind vorn erreichbar."""
@@ -2877,7 +3127,8 @@ class OperationDialog(QDialog):
                     points["feature"].append(
                         (
                             f"{body.id}:{key}",
-                            f"{body.name} · {feature_label(key, feature)}",
+                            # Auswahlzeile: ohne Maßquelle (RM-513, C16).
+                            f"{body.name} · {feature_label(key, feature, compact=True)}",
                             reference_point([body], "feature", key),
                         )
                     )
@@ -3043,6 +3294,9 @@ class OperationDialog(QDialog):
         docs = {entry.name: str(entry.doc or "") for entry in self.spec.params.spec()}
 
         shown: dict[str, bool] = {}
+        #: Werte, die ein Feld beim Verschwinden gegen seine benannte Null
+        #: getauscht hat — sie kommen mit der Zeile zurück.
+        parked: dict[str, Any] = {}
 
         def follow() -> None:
             entered = self.values()
@@ -3055,6 +3309,26 @@ class OperationDialog(QDialog):
                 label = self._rows[entry.name].labelForField(editor)
                 if label is not None:
                     label.setEnabled(active)
+                if (
+                    isinstance(editor, ValueField)
+                    and editor.names_its_zero()
+                    and shown.get(entry.name) is not None
+                    and shown.get(entry.name) is not active
+                ):
+                    # **Was verschwindet, sagt nichts mehr** (RM-513): Ein Feld,
+                    # dessen Null „ohne“ heißt, geht beim Verschwinden auf
+                    # seine Null und kommt mit seinem Wert zurück. Sonst zählte
+                    # das Unsichtbare weiter — *Aushöhlen* mit „Oben öffnen“
+                    # behielt eine Entlüftung, und die hielt den exakten Weg zu.
+                    if not active and not editor.toggle.isChecked():
+                        parked[entry.name] = editor.value()
+                        with QSignalBlocker(editor.spin):
+                            editor.set_value(0.0)
+                        entered = self.values()
+                    elif active and entry.name in parked:
+                        with QSignalBlocker(editor.spin):
+                            editor.set_value(parked.pop(entry.name))
+                        entered = self.values()
                 if shown.get(entry.name) is not active:
                     # Ein Migrationsmarker bleibt auch aktiv unsichtbar (RM-332).
                     self._rows[entry.name].setRowVisible(editor, active and not entry.internal)
@@ -3088,6 +3362,8 @@ class OperationDialog(QDialog):
             # 800 Punkten Höhe: aufgeklappt 552, *Langloch* an 582, wieder
             # aus 533 — neunzehn Punkte unter dem Inhalt). Und einen
             # Ereignisumlauf später, nicht sofort: siehe ``_resize_to_content``.
+            if changed:
+                self._refresh_advanced_summary()
             if changed and self.isVisible():
                 self._queue_refit("passive")
             self._follow_source_pending()
@@ -3840,10 +4116,12 @@ class OperationDialog(QDialog):
         axes = tuple(placed.get(name, name) for name in ("x", "y", "z"))
         if not set(axes) <= fields:
             return False
+        self._place_known = self._place is not None
         for name, value in zip(axes, point, strict=True):
             editor = self._editors.get(name)
             if isinstance(editor, ValueField):
                 editor.set_value(float(value))
+        self._refresh_place()
         return True
 
     def take_plane_point(self, point: Sequence[float]) -> int | None:
@@ -3860,6 +4138,8 @@ class OperationDialog(QDialog):
 
     def take_placement(self, values: Mapping[str, Any]) -> None:
         """Übernimmt eine vollständige Raumlage ohne gerundete Zwischenwerte."""
+        if self._place is not None and any(name in values for name in self._place):
+            self._place_known = True
         with QSignalBlocker(self):
             for name, value in values.items():
                 editor = self._editors.get(name)
@@ -3931,19 +4211,19 @@ class OperationDialog(QDialog):
                 self._watch(editor)
                 if entry.kind in ("feature", "features") or entry.targets_feature:
                     editor.installEventFilter(self)
-                decided = entry.name in promoted and not (
-                    spec.name in {"pattern", "pattern_feature", "mirror_object"}
-                    and entry.name in {"cx", "cy", "cz"}
-                )
+                decided = entry.name in promoted
                 form = (
                     self._front
                     if entry.placement == "front" or isinstance(editor, ArmatureField) or decided
                     else self._advanced_form
                 )
-                # Der Artwähler bleibt nach den Feldern, nicht zwischen ihnen.
+                # Der Artwähler bleibt nach den Feldern, nicht zwischen ihnen,
+                # und die Lesezeile *Stelle* bleibt ihre erste Zeile.
                 if form is self._front:
                     form.insertRow(
-                        len([f for f in self._rows.values() if f is form]), str(entry.title), editor
+                        1 + len([f for f in self._rows.values() if f is form]),
+                        str(entry.title),
+                        editor,
                     )
                 else:
                     form.addRow(str(entry.title), editor)
@@ -3974,20 +4254,21 @@ class OperationDialog(QDialog):
             str(tr("Einsetzen")) if spec.category == "parts" else str(spec.title)
         )
         if self._description is not None:
-            self._description.setText(str(spec.doc or ""))
+            self._description.setText(lead_sentence(spec))
             self._description.setVisible(bool(spec.doc))
-        if self._caveat is not None:
-            # Ein Zwilling hat seine eigene Grenze — oder keine. Stehen bleibt
-            # sonst die des anderen Rechenkerns, und das ist schlechter als
-            # keine Angabe.
-            warning = caveat_line(spec)
-            self._caveat.setText(warning)
-            self._caveat.setVisible(bool(warning))
+            self._describe_fully(spec)
+        # Ein Zwilling hat seine eigene Grenze — oder keine. Stehen bleibt
+        # sonst die des anderen Rechenkerns, und das ist schlechter als keine
+        # Angabe.
+        self._show_caveat(spec)
+        self._place = place_fields(spec)
         self._follow_source_pending()
         self._hide_legacy_feature_field()
         self._hide_internal_fields()
-        align_forms(self)
+        self._refresh_place()
+        self._align_to_the_front()
         self._even_number_fields()
+        self._refresh_advanced_summary()
         self._resize_to_content("passive")
         self.schemaChanged.emit()
 
@@ -4042,24 +4323,67 @@ class OperationDialog(QDialog):
             editor for editor in self._editors.values() if isinstance(editor, ValueField)
         )
 
-    def _unfold_advanced(self, inner: QWidget, open_now: bool) -> None:
-        """„Weitere Einstellungen" auf- und zuklappen.
+    def _before_folding(self, inner: QWidget) -> None:
+        """Vor dem Zuklappen: Fokus aus der Rückseite an die Überschrift.
 
-        Als Methode und nicht als geschachtelte Funktion: Der Abschluss fing
-        ``self``, hing am eigenen Knopf und hielt den Dialog fest. Der Rahmen
-        kommt gebunden mit, der Zustand vom Signal.
+        Gerufen beim Drücken, also bevor ``panels.collapsible`` den Inhalt
+        verbirgt — danach hätte Qt den Fokus schon an den nächsten Knopf in der
+        Kette gegeben, und Enter träfe ihn statt des Hauptknopfs.
         """
+        if not self.advanced.isChecked():
+            return
         focused = inner.focusWidget()
-        if (
-            not open_now
-            and focused is not None
-            and focused.hasFocus()
-            and inner.isAncestorOf(focused)
-        ):
+        if focused is not None and focused.hasFocus() and inner.isAncestorOf(focused):
             self.advanced.setFocus(Qt.FocusReason.OtherFocusReason)
-        inner.setVisible(open_now)
-        self.advanced.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
+
+    def _advanced_toggled(self, _open_now: bool) -> None:
+        """Ausdrücklich auf- oder zugeklappt: die Höhe folgt (``fenster.md``)."""
         self._queue_refit("explicit")
+
+    def _advanced_titles(self) -> list[str]:
+        """Die Beschriftungen der sichtbaren Zeilen hinter der Klappe, in ihrer Reihenfolge.
+
+        Ohne Stelle und Richtung: Die Stelle nennt vorn die Lesezeile, und
+        „Position X, Position Y, Position Z …“ verriete nicht, was die Klappe
+        sonst noch hält (Tiefe, Aufweitung).
+        """
+        form = self._advanced_form
+        names = {id(editor): name for name, editor in self._editors.items()}
+        where = set(self._place or ()) | set(direction_fields(self.spec))
+        titles: list[str] = []
+        for row in range(form.rowCount()):
+            if not form.isRowVisible(row):
+                continue
+            field = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+            if field is not None and names.get(id(field.widget())) in where:
+                continue
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            label = item.widget() if item is not None else None
+            if isinstance(label, QLabel) and label.text().strip():
+                titles.append(label.text().strip())
+        return titles
+
+    def _refresh_advanced_summary(self) -> None:
+        """Was die Klappe nennt, folgt den Zeilen, die gerade hinter ihr stehen."""
+        if self._advanced_summary is None:
+            return
+        said = advanced_summary(self._advanced_titles())
+        if said == self._advanced_summary.text():
+            return
+        self._advanced_summary.setText(said)
+        self.advanced.setToolTip(said)
+        self.advanced.setAccessibleDescription(said)
+
+    def _align_to_the_front(self) -> None:
+        """Eine Beschriftungskante, bemessen an der Vorderseite (RM-518, C21).
+
+        ``panels.align_forms`` zählte die zugeklappte Rückseite mit, und ihre
+        längste Beschriftung schob die Felder vorn um 120 bis 170 Punkte nach
+        rechts. Jetzt setzt die Vorderseite die Spalte, und eine längere
+        Beschriftung hinten bricht um (:func:`app.ui.dialogs.align_to_the_front`).
+        """
+        align_to_the_front(self._front, self._advanced_form)
+        self._aligned = True
 
     def _queue_refit(self, intent: ContentFitIntent) -> None:
         """Fasst gleichzeitige Größenwünsche mit Vorrang der bewussten Aktion zusammen."""

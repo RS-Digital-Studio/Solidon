@@ -70,7 +70,8 @@ def test_container_names_only_active_front_dimensions(shape, lid):
     load_operations()
     document = new_project("centauri-carbon-2", "petg").document
     plan = plan_container(document, {"shape": shape, "lid": lid, "pitch": 4, "rows": 2})
-    names = {"container_height", "container_wall"}
+    # Die Wandstärke steht seit RM-513 hinten und wird deshalb keine Projektgröße.
+    names = {"container_height"}
     names |= {"container_diameter"} if shape == "round" else {"container_width", "container_depth"}
     assert set(plan.parameters) == names
     assert plan.drafts[0].params["pitch"] == 4
@@ -113,7 +114,7 @@ def test_new_container_keeps_explicit_expressions_for_additional_and_inactive_fi
     ):
         assert plan.drafts[0].params[name] == expression
     assert plan.drafts[-1].params["rows"] == "=@division_count"
-    assert set(plan.parameters) == {"container_diameter", "container_height", "container_wall"}
+    assert set(plan.parameters) == {"container_diameter", "container_height"}
     history = History(document)
     history.apply(plan.title, plan.drafts, changes=plan.document_change)
     profile = profiles.make_profile("centauri-carbon-2", "petg")

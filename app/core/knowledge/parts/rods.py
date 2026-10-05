@@ -108,6 +108,7 @@ class RodConnectorParams(BaseParams):
         minimum=1.2,
         maximum=8.0,
         doc=_("Material um die Stange und zwischen den Anschlägen."),
+        placement="advanced",
     )
     screw: str = param(
         title=_("Klemmschraube"),
@@ -117,6 +118,7 @@ class RodConnectorParams(BaseParams):
             "Ein Kernloch quer durch jede Aufnahme. Die Schraube schneidet ihr Gewinde selbst "
             "und klemmt die Stange; ohne steckt sie nur."
         ),
+        placement="advanced",
     )
     play: float = play_param()
 
@@ -170,7 +172,7 @@ def _turn_of(direction: Vec3) -> float:
     wall=WallRequirement.from_parameter("wall"),
     feasible=lambda raw: _rod_reason(cast(RodConnectorParams, raw)),
     doc=_(
-        "Aufnahmen für runde Stangen mit festem Anschlag: eine Steckhülse allein oder ein "
+        "Aufnahmen für runde Stangen mit festem Anschlag. Eine Steckhülse allein oder ein "
         "Verbinder mit zwei, drei oder vier gleichen Aufnahmen für Rankgerüste, Gestelle "
         "und Rahmen. Stabmaß, Einstecktiefe und Klemmschraube gelten für jede Aufnahme."
     ),

@@ -35,6 +35,7 @@ from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest, without_eff
 from app.core.geom.mesh import MeshData, as_mesh_data, stable_normals
 from app.core.knowledge.profiles import for_object
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
+from app.core.registry.params import ZERO_NONE
 from app.core.types import BaseParams, BRepBody, Finding, OpContext, OpResult, SolverInfo
 from app.core.units import EPS_GEOM, format_length
 from app.i18n import _
@@ -69,6 +70,7 @@ class CounterFormParams(BaseParams):
             "Durchmesser einer runden Mulde an der Seite jeder Tasche, damit man das Teil "
             "greifen kann. Null lässt sie weg."
         ),
+        zero_text=ZERO_NONE,
     )
     clearance: float = play_param(maximum=3.0)
 
@@ -154,8 +156,8 @@ def _matrix(u: np.ndarray, v: np.ndarray, w: np.ndarray, start: float) -> np.nda
     minimum_inputs=2,
     produces=VARIABLE,
     doc=_(
-        "Lässt in den zuerst gewählten Einsatz eine Tasche für jedes weitere Teil ein: "
-        "der Umriss des Teils mit Spiel, vom tiefsten Punkt bis durch die Oberseite, "
+        "Lässt in den zuerst gewählten Einsatz eine Tasche für jedes weitere Teil ein. "
+        "Sie folgt dem Umriss des Teils mit Spiel, vom tiefsten Punkt bis durch die Oberseite, "
         "so dass es gerade herauskommt. Die Teile bleiben, wo sie sind."
     ),
     caveat=_(

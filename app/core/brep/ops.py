@@ -228,6 +228,7 @@ class BrepConeParams(PositionedPrimitiveParams):
         minimum=0.0,
         maximum=1000.0,
         doc=_("Durchmesser der Unterseite. Null macht diese Seite zur Spitze."),
+        zero_text=_("Spitze", context="Nullwert"),
     )
     top_diameter: float = param(
         title=_("Oberer Durchmesser"),
@@ -236,6 +237,7 @@ class BrepConeParams(PositionedPrimitiveParams):
         minimum=0.0,
         maximum=1000.0,
         doc=_("Durchmesser an der Oberseite. Null macht diese Seite zur Spitze."),
+        zero_text=_("Spitze", context="Nullwert"),
     )
     height: float = param(
         title=_("Höhe"),
@@ -510,8 +512,8 @@ class ShellParams(BaseParams):
     produces=1,
     doc=_(
         "Höhlt einen Körper mit bearbeitbaren Flächen auf die gewählte Wandstärke "
-        "aus und lässt die Oberseite offen — ein Kasten aus einem Quader, in einem "
-        "Schritt."
+        "aus und lässt die Oberseite offen. So wird in einem Schritt aus "
+        "einem Quader ein Kasten."
     ),
     # Der Entlüftungshinweis der Netz-Operation gilt hier nicht: Die Oberseite
     # bleibt offen, es entsteht kein eingeschlossener Hohlraum. Der zweite Satz

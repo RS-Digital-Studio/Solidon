@@ -2012,6 +2012,14 @@ class ParamSpec:
     der Editor der Bahn auf der Draufsicht, der Kunde zeichnete dort, und die
     Operation lehnte ab, nachdem alles fertig war (RM-183, gefahren am
     22.09.2026)."""
+    zero_text: TranslatableText | str | None = None
+    """Wie die Null dieses Zahlenfelds heißt, wenn sie mehr ist als eine Zahl.
+
+    „automatisch“, „keine“, „aus dem Material“: Bei rund hundert Parametern
+    sagt die Null etwas anderes als null Millimeter, und im Feld stand
+    „0,00 mm“ (RM-513). Der Dialog zeigt den Namen am Mindestwert
+    (``setSpecialValueText``) — deshalb nur an Feldern mit Mindestwert 0;
+    ``tests/test_registry_consistency.py`` hält beides."""
 
 
 @runtime_checkable

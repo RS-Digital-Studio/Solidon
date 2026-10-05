@@ -15,6 +15,7 @@ darstellt.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Collection, Container
 from dataclasses import dataclass, replace
 from typing import Any, Final
@@ -888,6 +889,52 @@ def cli_commands(registry: Registry | None = None) -> tuple[CliCommand, ...]:
         )
         commands.append(CliCommand(name=spec.name, help=str(spec.doc), arguments=arguments))
     return tuple(commands)
+
+
+#: Abkürzungen, deren Punkt keinen Satz beendet, in den Sprachen der Kataloge.
+ABBREVIATIONS: Final = (
+    "z. B.",
+    "d. h.",
+    "u. a.",
+    "bzw.",
+    "ca.",
+    "Nr.",
+    "vgl.",
+    "inkl.",
+    "e.g.",
+    "i.e.",
+)
+
+_SENTENCE_GAP: Final = re.compile(r"(?<=[.!?])\s+")
+
+
+def sentences(text: str) -> list[str]:
+    """Die Sätze eines Kundentexts, wie ein Leser sie zählt (RM-509).
+
+    Ein Satz endet an Punkt, Ausrufe- oder Fragezeichen, wenn danach etwas
+    beginnt, das kein Kleinbuchstabe ist; eine Abkürzung wie „z. B.“ beendet
+    keinen, eine Zahl wie „1.5“ auch nicht. Menü, Statuszeile, Palette und der
+    Längenwächter schneiden mit dieser einen Regel — zwei Regeln hießen, der
+    Wächter misst etwas anderes, als der Kunde liest.
+    """
+    masked = text.strip()
+    for short in ABBREVIATIONS:
+        masked = masked.replace(short, short.replace(".", "\x00"))
+    found: list[str] = []
+    for piece in _SENTENCE_GAP.split(masked):
+        if not piece:
+            continue
+        if found and piece[:1].islower():
+            found[-1] = f"{found[-1]} {piece}"
+        else:
+            found.append(piece)
+    return [part.replace("\x00", ".") for part in found]
+
+
+def first_sentence(text: str) -> str:
+    """Der erste Satz eines Kundentexts — was Menü, Statuszeile und Palette zeigen."""
+    parts = sentences(text)
+    return parts[0] if parts else ""
 
 
 def caveat_line(spec: OperationSpec, markup: bool = False) -> str:

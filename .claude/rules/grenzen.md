@@ -1,5 +1,5 @@
 ---
-description: "Die Oberfläche wächst nicht mit — die gezählten Grenzen, was wo steht (Menüleiste, Karte der Handlungen, Kontextmenü, Palette), die Vorderseite eines Dialogs, bedingte Felder, Zwillinge und Kernwechsel, Sperrgründe vor dem Dialog, Kürzel, Sortierung und Suche; wer eine Zahl erhöht, begründet es"
+description: "Die Oberfläche wächst nicht mit — die gezählten Grenzen, was wo steht (Menüleiste, Karte der Handlungen, Kontextmenü, Palette), Zwillinge und Kernwechsel, Sperrgründe vor dem Dialog, Kürzel, Sortierung und Suche; wer eine Zahl erhöht, begründet es"
 paths:
   - "app/core/registry/**/*.py"
   - "app/ui/main_window.py"
@@ -28,7 +28,8 @@ Die Zahlen hält `tests/test_interface_limits.py`, die Breitengrenze
 | Menüs in der Leiste | ≤ 9 |
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
 | Umschalter in der Werkzeugzeile | ≤ 8 — heute sieben: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen — auf `Alt+1` bis `Alt+7` |
-| Felder auf der Vorderseite eines Operationsdialogs, gezählt, was zugleich dasteht (Felder anderer Varianten stehen nicht da) | ≤ 8 |
+| Felder auf der Vorderseite eines Operationsdialogs, gezählt, was zugleich dasteht (Felder anderer Varianten stehen nicht da) | ≤ 4, bei mindestens 90 % der Operationen ≤ 3 (Bauplan §2.4, Entscheidung Robert) |
+| Wörter über dem ersten Feld (Platzierungssatz, erster Satz der Beschreibung, Überschrift „Wann nicht?“) | ≤ 25, übersetzt ≤ 35 |
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
 | Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Palette und Verlauf |
 
@@ -164,83 +165,15 @@ Robert).
 
 ## Die Vorderseite eines Dialogs
 
-- **Ein vorbelegter Wert kommt nach vorn, außer er ist eine Richtung:**
-  `decided` (`op_dialog.py`) holt angeklickte Fläche und vorgewählte Position
-  (§18.5) vor die Klappe; `direction_fields` (Normale aus `normal_fields_of`,
-  `axis`) bleiben hinten und gelten trotzdem.
-- **Die Vorgabe trifft den Körper, nicht den Ursprung:** *Teilen* in seiner
-  Mitte (`_plane_through`), *Dreiecke verringern* bei der Hälfte seiner
-  Dreiecke, *Dreiecke angleichen* bei einem Fünfzigstel seiner längsten Kante
-  (`_measured_from_body`, `EDGE_SHARE`) — gefragt nach den Feldern
-  (`axis`/`position`, `triangles`, `edge`), nicht nach der Operation; die Zahl
-  bleibt änderbar. *Druckplatten* bleibt beim Höchstwert, das Feld ist eine
-  Obergrenze.
-- **Ein Erzeuger nimmt seine Lage nur von einer gezeigten Fläche** (RM-390):
-  Ein gewählter Körper, eine Bohrung oder Kante setzen ihn nicht, er entsteht
-  auf dem Bett (`values_for_object` gibt `consumes == 0` nichts). Auf einer
-  gewählten Fläche steht er auf ihr und, wo nötig, in ihrer Ebene über das Bett
-  gehoben (`placement.seats_on`, `seat_on_face`); vorn steht „Wird auf ‹Fläche›
-  von ‹Körper› gesetzt“ mit *Auf das Bett* (`OperationDialog.show_seat`).
-  Nach dem Übernehmen ist sein neuer Körper gewählt (`_queue_created_choice`).
-- **Ein Grundkörper bietet an, seine Maße zu benennen** (§13, Entscheidung
-  Robert): *Maße als Parameter anlegen* steht vorn in jedem Dialog der
-  Kategorie `primitive` und im Erzeuger jedes Bausteins, der sich als Vorlage
-  erklärt (`PartSpec.template`, die Halter; `offers_naming`). Gesetzt, wird
-  jedes wirksame Millimetermaß der Vorderseite ein Projektparameter nach
-  seiner Beschriftung (*Breite* → `breite`, vergeben → `breite_2`) mit
-  übersetzbarem Titel und den Grenzen des Feldes, der Schritt verweist mit
-  `=@breite` darauf, beides in **einer** Transaktion (`changes` an
-  `Session.apply`); ein Feld mit Ausdruck bleibt, ein Feld, dessen
-  `depends_on` gerade nicht gilt, wird keiner. Der Haken steht beim ersten Start an und übernimmt danach die letzte Wahl
-  beim Übernehmen (`UiSettings.name_dimensions`).
-- **Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat:**
-  `ArmatureField` baut je Knochen drei Winkel (`ValueField`, §13), sobald der
-  Dialog ein Skelett hat, sonst bleibt das Textfeld. Im Schema steht er hinten
-  (`tests/test_gesture_ops.py`), im Dialog vorn, wenn er der Grund ist, aus dem
-  der Dialog aufgeht.
-- **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**
-  (`OperationDialog.switch_variant`): Was die Variante nicht kennt,
-  verschwindet, die Beschreibung wechselt.
+Was vorn steht und wie bedingte Felder erscheinen, steht in `vorderseite.md`;
+sie lädt mit Operationsdialog, Merkmalfenster und Parameterschema.
+
 - **Leere Materialrollen beginnen mit dem Projektmaterial**
   (`MainWindow.run_operation`), ausdrückliche Werte haben Vorrang. Beim
   Wiederöffnen bleiben die gespeicherten Rollen stehen.
 - **Auch ein Sammeleintrag beginnt am gemeinsamen Einstieg**
   (`MainWindow.launch_operation`): *Aus Skizze erzeugen* öffnet unmittelbar
   die Zeichnung, wie Palette und Kürzel.
-
-## Bedingte Felder
-
-Die Bedingung steht am Parameter (`ParamSpec.depends_on`), denn Dialog,
-Handbuch (Parametertabelle), Agent (Werkzeugbeschreibung) und Kommandozeile
-(`json_schema`) lesen sie. Der Dialog blendet ein Feld ohne Wirkung aus
-(`oberflaeche.md`, „Gestufte Tiefe“): `OperationDialog._couple_dependent_fields`
-nimmt es samt Beschriftung heraus und bringt es mit der Bedingung wieder;
-dahinter bleibt es gesperrt und begründet, damit kein verborgenes Feld den
-Fokus bekommt, und `adjustSize` läuft nur, wenn sich eine Zeile bewegt hat
-(`test_a_rectangle_shows_only_the_rows_a_rectangle_has`). Im Merkmalfenster
-folgt `FeaturePanel._follow_conditions` demselben `ActionField.depends_on`: Das
-Feld verschwindet samt Beschriftung, kommt mit seinem Wert zurück und wird
-nicht gesperrt — die Sperre gehört dem Kettenhalt (`_settle_lock`).
-
-- **Agent und Mensch bekommen verschiedene Anreden, nicht verschiedene
-  Inhalte:** „Gilt bei Art = circular“ im Handbuch, `kind` für den Agenten
-  (`condition_text(..., keys=True)`), „Wirkt nur, wenn …“ im Dialog mit Werten
-  durch `choice_label`.
-- **`tests/test_operation_ui.py` liest den Quelltext jeder Operation** und
-  meldet jeden Parameter, der nur in **genau einem** Zweig über einen Umschalter
-  derselben Operation gelesen wird — nicht über einen Aufruf, der den ganzen
-  Parametersatz weitergibt.
-- **Ein Haken als Umschalter** braucht einen typtreuen Vergleich (über `str()`
-  hieße der Wert „True“, und `1 == True`) und einen eigenen Satz.
-- **Die Art des Umschalters wird mitgeprüft:** Ein Wahrheitswert an einem
-  Aufklappmenü oder ein Auswahlwert an einem Haken trifft nie zu.
-
-Maßgruppen im Bild übernehmen dieselben `depends_on`-Bedingungen wie die rechte
-Spalte, einschließlich Auswahlwerten und Ketten. Der Adapter `_saved_fields`
-reicht sie aus dem Parameterschema weiter. Titel, Eingabe und Ablehnung
-verschwinden gemeinsam; verborgene Werte bleiben erhalten und sperren die
-Übernahme nicht. Stille Wertaktualisierung und wiederverwendete Gruppen
-berechnen die Sichtbarkeit erneut (`FeaturePanel._follow_measure_conditions`).
 
 ## Zwillinge: eine Handlung, zwei Rechenkerne
 
@@ -337,9 +270,11 @@ Filter darin still mit.
 Dreiundsiebzig von hundertachtundsiebzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
-Fortsetzung des `doc`-Satzes: im Dialog ein eigenes halbfettes Label (Regel 18),
-im Tooltip unter dem Satz, beim Agenten in der Werkzeugbeschreibung — **nie in
-der Statuszeile**, denn eine abgeschnittene Warnung ist schlimmer als keine.
+Fortsetzung des `doc`-Satzes: im Tooltip unter dem Satz, beim Agenten in der
+Werkzeugbeschreibung — **nie in der Statuszeile**, denn eine abgeschnittene
+Warnung ist schlimmer als keine. Im Dialog steht sie zugeklappt unter „Wann
+nicht?“ (die Überschrift ist die zweite Kodierung, Regel 18; ihr Tooltip trägt
+den Satz), damit über dem ersten Feld nur ein Satz steht (RM-513).
 
 ## Ein erzeugtes Merkmal bietet den Schritt an, der es erzeugt hat
 

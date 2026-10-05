@@ -38,6 +38,7 @@ from app.core.knowledge.parts.registry import (
 )
 from app.core.knowledge.parts.shapes import Form
 from app.core.registry import GRIP_TITLE, op_params, param, play_param
+from app.core.registry.params import ZERO_AS_CHOSEN, ZERO_AUTOMATIC, ZERO_NONE
 from app.core.types import BaseParams, PartResult, Vec3
 from app.core.units import is_greater
 from app.i18n import TranslatableText, _
@@ -215,6 +216,7 @@ class MagnetPocketParams(BaseParams):
             "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
             "Null verwendet die ausgewählte Größe."
         ),
+        zero_text=ZERO_AS_CHOSEN,
     )
     height: float = param(
         title=_("Eigene Höhe"),
@@ -227,6 +229,7 @@ class MagnetPocketParams(BaseParams):
             "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
             "Null verwendet die ausgewählte Größe."
         ),
+        zero_text=ZERO_AS_CHOSEN,
     )
     play: float = play_param()
     cover: float = param(
@@ -236,6 +239,7 @@ class MagnetPocketParams(BaseParams):
         minimum=0.0,
         maximum=5.0,
         doc=_("Material über dem Magneten. Null lässt die Tasche offen."),
+        zero_text=ZERO_NONE,
     )
     press_lip: bool = param(
         title=_("Haltelippe"),
@@ -407,15 +411,22 @@ class WallMountParams(BaseParams):
         minimum=1.0,
         maximum=20.0,
         doc=_("Dicke von Rückplatte und Auflage. Unter zwei Millimetern biegt sich der Halter."),
+        placement="advanced",
     )
     size: str = param(
         title=_("Schraube"),
         default="M4",
         choices=_SCREWS,
         doc=_("Wofür die Löcher sind. Es sind Durchgangslöcher aus der Normteiltabelle."),
+        placement="advanced",
     )
     holes: int = param(
-        title=_("Löcher"), default=2, minimum=1, maximum=6, doc=_("Über die Breite verteilt.")
+        title=_("Löcher"),
+        default=2,
+        minimum=1,
+        maximum=6,
+        doc=_("Über die Breite verteilt."),
+        placement="advanced",
     )
     lip: float = param(
         title=_("Auflage"),
@@ -540,6 +551,8 @@ class LugParams(BaseParams):
         doc=_(
             "Quer zur Lasche gemessen. Null heißt: so breit wie die Unterlegscheibe der Schraube."
         ),
+        placement="advanced",
+        zero_text=ZERO_AUTOMATIC,
     )
     length: float = param(
         title=_("Länge"),
@@ -551,6 +564,8 @@ class LugParams(BaseParams):
             "Wie weit die Lasche von der Fläche absteht, bis zum Scheitel des runden Endes. "
             "Null heißt: so lang, dass die Unterlegscheibe neben der Fläche Platz hat."
         ),
+        placement="advanced",
+        zero_text=ZERO_AUTOMATIC,
     )
     thickness: float = param(
         title=_("Dicke"),
@@ -602,8 +617,8 @@ def _lug_reason(params: LugParams) -> TranslatableText | None:
     wall=WallRequirement.from_parameter("thickness"),
     doc=_(
         "Eine flache Lasche mit rundem Ende und einem Durchgangsloch aus der "
-        "Normteiltabelle, die von der Fläche absteht — zum Anschrauben an Wand, Gehäuse "
-        "oder Deckel. Ohne eingetragene Breite und Länge richtet sie sich nach der "
+        "Normteiltabelle, die von der Fläche absteht. Sie dient zum Anschrauben an Wand, "
+        "Gehäuse oder Deckel. Ohne eingetragene Breite und Länge richtet sie sich nach der "
         "Unterlegscheibe der gewählten Schraube."
     ),
     caveat=_(
@@ -736,6 +751,7 @@ class PipeClampParams(BaseParams):
             "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
             "Null verwendet die ausgewählte Größe."
         ),
+        zero_text=ZERO_AS_CHOSEN,
     )
     width: float = param(
         title=_("Breite"),
@@ -752,6 +768,7 @@ class PipeClampParams(BaseParams):
         minimum=1.5,
         maximum=10.0,
         doc=_("Dicke von Ring, Fuß und Klemmohren."),
+        placement="advanced",
     )
     screw_size: str = param(
         title=_("Klemmschraube"),
@@ -795,7 +812,7 @@ def _clamp_reason(params: PipeClampParams) -> TranslatableText | None:
     features=["seat", "bore"],
     wall=WallRequirement.from_parameter("wall"),
     doc=_(
-        "Ein Ring um ein Rohr mit zwei Klemmohren und einer Schraube quer durch beide: "
+        "Ein Ring um ein Rohr mit zwei Klemmohren und einer Schraube quer durch beide. "
         "Angezogen schließt sie den Spalt, und der Ring klemmt. Rohr aus der Rohrreihe der "
         "Normteiltabelle oder mit eigenem Durchmesser; das Spiel kommt aus dem "
         "Materialprofil."
@@ -1330,6 +1347,7 @@ class PegboardHookParams(BaseParams):
         default="skadis",
         choices=_BOARDS,
         doc=_("An welche Platte das Teil kommt. Die Maße stehen in der Tabelle."),
+        placement="advanced",
     )
     count: int = param(
         title=_("Einhänger"),
@@ -1370,6 +1388,7 @@ class PegboardHookParams(BaseParams):
             "Lösen wird sie durch den Schlitz niedergedrückt. Abgeschaltet ist "
             "der Einhänger die einfache Form, die sich anheben und abnehmen lässt."
         ),
+        placement="advanced",
     )
     plate: float = param(
         title=_("Rückplatte"),
@@ -1382,6 +1401,8 @@ class PegboardHookParams(BaseParams):
             "schon — eine Platte dazwischen wäre Material, das niemand braucht. "
             "Wer trotzdem eine will, bekommt sie ins Teil eingelassen, nicht aufgesetzt."
         ),
+        placement="advanced",
+        zero_text=ZERO_NONE,
     )
     play: float = play_param(maximum=1.5)
     lip: float = param(
@@ -1395,6 +1416,7 @@ class PegboardHookParams(BaseParams):
             "Wie weit die Nase hinter die Lochwand greift. Null heißt: zwei Drittel "
             "der Lochwanddicke."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
 
 
@@ -1758,6 +1780,7 @@ class FootParams(BaseParams):
             "damit die erste Schicht nicht als Grat vorsteht. Bei der Tasche ist "
             "es eine Fase zum Einfädeln."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
     play: float = play_param(maximum=2.0)
 

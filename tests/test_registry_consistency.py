@@ -1203,3 +1203,101 @@ def test_every_operation_with_an_edge_parameter_is_offered_at_a_clicked_edge() -
     for name, measure in EDGE_OPERATIONS:
         namen = {entry.name for entry in REGISTRY.get(name).params.spec()}
         assert measure in namen, f"{name}: kein Parameter {measure!r}"
+
+
+#: Zahlenfelder, deren ``doc`` die Null erklärt, ohne dass sie einen Namen
+#: braucht — mit Grund. Dort ist die Null ein gewöhnlicher Wert derselben
+#: Größe, und „0“ sagt genau, was gilt.
+_ZERO_IS_A_NUMBER: Final[dict[tuple[str, str], str]] = {
+    ("check_collisions", "clearance"): "Abstand null heißt: nur echte Überschneidungen",
+    ("remesh_uniform", "deviation"): "keine Abweichung ist ein Maß, keine Betriebsart",
+    ("displace_image", "middle"): "ein Grauwert wie jeder andere",
+    ("sketch_revolve", "offset"): "null Abstand zur Achse ist ein Maß",
+    ("create_container", "opening_angle"): "ein Winkel wie jeder andere",
+    ("create_lid", "opening_angle"): "ein Winkel wie jeder andere",
+    ("sketch_sweep_cut", "turn"): "ein Winkel wie jeder andere",
+    # Das Feld kennt schon „nicht gesagt“ (``optional``), und Qt hat nur einen
+    # Sondertext je Feld: Der gehört dort „wie gemessen“.
+    ("resize_hole", "depth"): "optional — der Sondertext gehört „wie gemessen“",
+}
+
+
+def _explains_its_zero(entry: Any) -> bool:
+    """Ob der deutsche ``doc``-Satz sagt, was die Null dieses Feldes bedeutet."""
+    from app.i18n import source_text
+
+    text = source_text(entry.doc) if entry.doc is not None else ""
+    return re.search(r"\b[Nn]ull\b", text) is not None
+
+
+def test_every_zero_that_means_something_has_a_name() -> None:
+    """„0,00 mm“ hieß an rund hundert Feldern „automatisch“ oder „ohne“ (RM-513, C8).
+
+    Wo der Satz eines Zahlenfelds mit Mindestwert null die Null erklärt, trägt
+    das Feld ``zero_text``, und der Dialog zeigt ihn statt der Zahl. Gefunden
+    wird das am Satz — ein neues Feld mit „Null heißt …“ fällt sonst durch.
+    """
+    load_operations()
+    nameless = sorted(
+        f"{spec.name}.{entry.name}"
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.kind in {"float", "int"}
+        and entry.minimum is not None
+        and entry.minimum == 0
+        and _explains_its_zero(entry)
+        and not entry.zero_text
+        and (spec.name, entry.name) not in _ZERO_IS_A_NUMBER
+    )
+    assert not nameless, f"Die Null ist erklärt, aber ohne Namen: {nameless}"
+
+
+def test_a_named_zero_stands_where_the_dialog_can_show_it() -> None:
+    """Der Name erscheint am Mindestwert (``setSpecialValueText``) — also nur dort, wo der null ist.
+
+    An einem Feld, das darunter reicht oder „nicht gesagt“ kennt, stünde er nie
+    da: eine Angabe ohne Wirkung. Die Ausnahmeliste hält ihre Gründe aktuell.
+    """
+    load_operations()
+    misplaced = sorted(
+        f"{spec.name}.{entry.name}"
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.zero_text
+        and (
+            entry.kind not in {"float", "int"}
+            or entry.optional
+            or entry.minimum is None
+            or entry.minimum != 0
+        )
+    )
+    assert not misplaced, f"zero_text ohne Mindestwert null: {misplaced}"
+    stale = sorted(
+        f"{name}.{field}"
+        for name, field in _ZERO_IS_A_NUMBER
+        if not any(
+            entry.name == field and _explains_its_zero(entry)
+            for entry in REGISTRY.get(name).params.spec()
+        )
+    )
+    assert not stale, f"Ausnahmen ohne Feld oder ohne Satz über die Null: {stale}"
+
+
+def test_an_open_box_has_no_vent_row() -> None:
+    """*Aushöhlen* widersprach sich vorn: „Oben öffnen“ an und „Entlüftungen 1“ (RM-513, C5).
+
+    Die Entlüftungen gelten nur dem geschlossenen Hohlraum; Öffnungen und
+    Richtung stehen hinten, und die Null der Entlüftungen heißt „ohne“.
+    """
+    load_operations()
+    entries = {entry.name: entry for entry in REGISTRY.get("hollow_object").params.spec()}
+    assert entries["vents"].depends_on == ("open_top", (False,))
+    assert entries["vents"].zero_text
+    assert entries["openings"].placement == "advanced"
+    assert entries["wall_side"].placement == "advanced"
+    front_when_open = [
+        name
+        for name, entry in entries.items()
+        if entry.placement == "front" and (entry.depends_on is None or True in entry.depends_on[1])
+    ]
+    assert front_when_open == ["wall", "open_top"], front_when_open

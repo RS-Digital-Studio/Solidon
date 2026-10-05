@@ -47,6 +47,19 @@ NAME_DOC: Final = _("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt
 #: die an einer Stelle steht, sollte auch an einer Stelle erklärt werden.
 AUTO_FROM_PROFILE_DOC: Final = _("Null heißt: Wert aus dem gewählten Materialprofil.")
 
+#: Wie eine Null im Zahlenfeld heißt (``param(zero_text=…)``, RM-513).
+#:
+#: Wenige Wörter für viele Felder, damit dieselbe Bedeutung überall gleich
+#: heißt. Der Kontext trennt sie von gleichlautenden Beschriftungen; „ohne“
+#: statt „keine“, weil der Genus des Feldes in jeder Sprache ein anderer ist.
+ZERO_FROM_PROFILE: Final = _("aus dem Material", context="Nullwert")
+ZERO_AUTOMATIC: Final = _("automatisch", context="Nullwert")
+ZERO_NONE: Final = _("ohne", context="Nullwert")
+ZERO_MEASURED: Final = _("wie gemessen", context="Nullwert")
+ZERO_UNCHANGED: Final = _("unverändert", context="Nullwert")
+ZERO_THROUGH: Final = _("durchgehend", context="Nullwert")
+ZERO_AS_CHOSEN: Final = _("wie gewählt", context="Nullwert")
+
 #: Der Titel des Maßes, das zwei Flächen auf Abstand hält.
 PLAY_TITLE: Final = _("Spiel")
 
@@ -83,6 +96,7 @@ def play_param(
         placement="advanced",
         depends_on=depends_on,
         doc=AUTO_FROM_PROFILE_DOC,
+        zero_text=ZERO_FROM_PROFILE,
     )
 
 
@@ -116,6 +130,7 @@ def param(
     sketch_planes: tuple[str, ...] = (),
     internal: bool = False,
     dropped_on_change: bool = False,
+    zero_text: TranslatableText | str | None = None,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
@@ -146,6 +161,9 @@ def param(
     :attr:`app.core.types.ParamSpec.internal`; ``dropped_on_change`` einen,
     den eine bewusste Änderung des Schritts aufhebt — siehe
     :attr:`app.core.types.ParamSpec.dropped_on_change`.
+
+    ``zero_text`` nennt, was die Null eines Zahlenfelds bedeutet
+    („automatisch“, „ohne“) — siehe :attr:`app.core.types.ParamSpec.zero_text`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -168,6 +186,7 @@ def param(
             "sketch_planes": tuple(sketch_planes),
             "internal": internal,
             "dropped_on_change": dropped_on_change,
+            "zero_text": zero_text,
         }
     }
     if default is MISSING:
@@ -264,6 +283,9 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 sketch_planes=metadata["sketch_planes"],
                 internal=metadata["internal"],
                 dropped_on_change=metadata["dropped_on_change"],
+                # ``get``: Deklarationen außerhalb von :func:`param` — ein
+                # Rezept baut seine Metadaten selbst — kennen den Schlüssel nicht.
+                zero_text=metadata.get("zero_text"),
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]

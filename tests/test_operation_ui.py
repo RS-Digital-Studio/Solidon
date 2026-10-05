@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QMenu, QWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QMenu, QToolButton, QWidget
 
 from app.core import bootstrap
 from app.core.errors import ValidationError
@@ -35,7 +35,7 @@ from app.core.sketch import shapes
 from app.core.sketch.serialize import sketch_to_text
 from app.i18n import tr
 from app.ui.main_window import LID_OPS, MainWindow
-from app.ui.op_dialog import OperationDialog, ValueField
+from app.ui.op_dialog import MAX_FRONT_FIELDS, OperationDialog, ValueField
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests import ui_helpers
@@ -374,6 +374,7 @@ def test_variable_output_count_keeps_a_fixed_integer_editor(qt_app: QApplication
         try:
             editor = dialog._editors["count"]
             assert isinstance(editor, CountField)
+            # Das Projekt hat Parameter — dann steht „fx“ da (RM-513).
             assert editor.toggle.isVisibleTo(dialog), "die Stückzahl hat kein fx"
             editor.start_expression("=")
             editor.text.setText("=@reihen*@spalten")
@@ -1065,9 +1066,9 @@ def test_a_direction_from_the_click_stays_behind_the_flap(
     X*, an der Vorderseite *Achse* und *Normale Y* — je nachdem, welche
     Komponente des Klicks ungleich null war. Ein Neuling kennt das Wort nicht,
     sieht eine von drei Zahlen und kann den Dialog nicht lernen, weil er bei
-    jeder Bohrung anders aussieht. Vorn stehen die Zahlen, die man ändert
-    (§2.4): die Position. Richtung und Achse bleiben hinten — und gelten
-    trotzdem.
+    jeder Bohrung anders aussieht. Richtung und Achse bleiben hinten — und
+    gelten trotzdem. Die Position steht seit RM-513 als Lesezeile vorn
+    (Entscheidung Robert), ihre Zahlen hinten.
     """
     spec = REGISTRY.get(initial)
     faces = {
@@ -1102,8 +1103,9 @@ def test_a_direction_from_the_click_stays_behind_the_flap(
                 dialog.switch_variant(REGISTRY.get(selected))
             front = frozenset(name for name, form in dialog._rows.items() if form is dialog._front)
             assert not front & {"nx", "ny", "nz", "axis"}, f"{face}: {sorted(front)}"
-            assert {"x", "y", "z"} <= front, f"{face}: die Position bleibt vorn"
-            assert len(front) <= 8, f"{face}: die Vorderseite überschreitet §35"
+            assert not front & {"x", "y", "z"}, f"{face}: die Zahlen der Stelle stehen hinten"
+            assert dialog._place_label.text(), f"{face}: vorn nennt eine Zeile die Stelle"
+            assert len(front) <= MAX_FRONT_FIELDS, f"{face}: die Vorderseite ist zu voll"
             values = dialog.values()
             for name in ("x", "y", "z", "nx", "ny", "nz"):
                 assert values[name] == pytest.approx(given[name]), f"{face}: {name} gilt weiter"
@@ -1132,15 +1134,16 @@ def test_a_default_position_stays_together_behind_the_flap(qt_app: QApplication)
 def test_a_full_part_dialog_keeps_the_whole_position_behind_the_flap(
     qt_app: QApplication, point: tuple[float, float, float]
 ) -> None:
-    """Sieben Bausteinmaße lassen keinen Platz für drei zusätzliche Positionsfelder."""
+    """Die Stelle eines Bausteins steht vorn als Zeile, ihre Zahlen hinten (RM-513)."""
     spec = REGISTRY.get("insert_wall_mount")
     given = dict(zip(("x", "y", "z"), point, strict=True))
     given.update(nx=0.0, ny=0.0, nz=1.0)
     dialog = OperationDialog(spec, [], values=given)
     try:
         front = {name for name, form in dialog._rows.items() if form is dialog._front}
-        assert front == {"width", "height", "thickness", "size", "holes", "lip", "at_feature"}
-        assert len(front) <= 8
+        assert front == {"width", "height", "lip"}
+        assert len(front) <= MAX_FRONT_FIELDS
+        assert dialog._place_label.text().endswith("mm"), "die Stelle steht als Zeile vorn"
         for axis, value in zip(("x", "y", "z"), point, strict=True):
             assert dialog._rows[axis] is dialog._advanced_form
             assert dialog.values()[axis] == pytest.approx(value)
@@ -1186,10 +1189,11 @@ def test_a_part_placement_keeps_its_group_when_dimensions_own_the_usual_names(
         for variant in (spec, replace(spec, name="insert_mapped_position_variant")):
             dialog.switch_variant(variant)
             front = {name for name, form in dialog._rows.items() if form is dialog._front}
-            assert {placed[axis] for axis in ("x", "y", "z")} <= front
+            assert not front & {placed[axis] for axis in ("x", "y", "z")}
+            assert dialog._place_label.text(), "die Stelle steht als Zeile vorn"
             assert not front & {placed[axis] for axis in ("nx", "ny", "nz", "axis")}
             assert {"x", "axis", "nx"} <= front
-            assert len(front) <= 8
+            assert len(front) <= MAX_FRONT_FIELDS
             values = dialog.values()
             assert values["x"] == pytest.approx(30.0)
             assert values["axis"] == pytest.approx(12.0)
@@ -2520,12 +2524,15 @@ def test_the_description_is_as_tall_as_its_text(qt_app: QApplication) -> None:
         dialog.resize(520, 460)
         dialog.show()
         QApplication.processEvents()
-        # Seit der Inhalt im Rollbereich steht, ist der Satz dort der erste
-        # Eintrag und nicht mehr der des Dialogs; gemessen wird seine Höhe.
+        # Seit der Inhalt im Rollbereich steht, stehen die Sätze dort und nicht
+        # im Dialog. Erst kommt die Aufforderung zum Zielen (RM-513, ohne
+        # laufende Platzierung verborgen), dann der Satz; gemessen wird seine Höhe.
         holder = dialog._description.parentWidget()
         assert holder is not None and holder.layout() is not None
         first = holder.layout().itemAt(0)
-        assert first is not None and first.widget() is dialog._description
+        assert first is not None and first.widget() is dialog._placement_hint
+        second = holder.layout().itemAt(1)
+        assert second is not None and second.widget() is dialog._description
         # Zwei Zeilen Text in einem Dialog dieser Höhe — großzügig gedeckelt,
         # damit der Test eine andere Schrift überlebt und trotzdem anschlägt,
         # wenn das Label wieder wächst.
@@ -2837,23 +2844,29 @@ def test_a_field_without_effect_says_why(empty_window: MainWindow) -> None:
 def test_a_rectangle_shows_only_the_rows_a_rectangle_has(empty_window: MainWindow) -> None:
     """RM-171: *Grundform hochziehen* trug bei einem Rechteck vier tote Zeilen
     vorn — Löcher, Spalten, Zeilen, Loch-Ø gelten nur für Lochkreis und
-    Lochraster. Jetzt stehen vorn die vier Felder eines Rechtecks, und die
-    übrigen erscheinen mit der Grundform, die sie braucht."""
+    Lochraster. Seit RM-513 steht vorn nur die Höhe — die Grundform ist der
+    Ersatz für eine Zeichnung und steht samt ihren Maßen hinten; dort stehen
+    die Felder eines Rechtecks, und die übrigen erscheinen mit der Grundform,
+    die sie braucht."""
     from PySide6.QtWidgets import QComboBox
+
+    def shown(form: Any) -> list[str]:
+        return [
+            name
+            for name, editor in dialog._editors.items()
+            if dialog._rows[name] is form and not editor.isHidden()
+        ]
 
     dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {}, empty_window)
     dialog.show()
     try:
+        dialog.advanced.setChecked(True)
         # Erst den initialen Inhaltsfit abschließen, bevor die Ausgangsgröße
         # als Vergleich dient.
         for _ in range(3):
             QApplication.processEvents()
-        front = [
-            name
-            for name, editor in dialog._editors.items()
-            if dialog._rows[name] is dialog._front and not editor.isHidden()
-        ]
-        assert front == ["shape", "length", "width", "height"], front
+        assert shown(dialog._front) == ["height"], shown(dialog._front)
+        assert shown(dialog._advanced_form)[:3] == ["shape", "length", "width"]
         # Fort heißt nicht weg: Die Operation bekommt jeden Wert, auch den
         # der versteckten Zeilen — und der Verlauf öffnet den Schritt damit.
         hidden = {"count", "columns", "rows", "hole_diameter", "corners"}
@@ -2866,13 +2879,9 @@ def test_a_rectangle_shows_only_the_rows_a_rectangle_has(empty_window: MainWindo
         shape.setCurrentIndex(shape.findData("hole_grid"))
         for _ in range(3):
             QApplication.processEvents()
-        front = [
-            name
-            for name, editor in dialog._editors.items()
-            if dialog._rows[name] is dialog._front and not editor.isHidden()
-        ]
         # Die Breite geht: Ein Lochraster hat keine — dafür kommen seine drei.
-        assert front == ["shape", "length", "height", "columns", "rows", "hole_diameter"], front
+        back = shown(dialog._advanced_form)
+        assert "width" not in back and {"columns", "rows", "hole_diameter"} <= set(back), back
         # Eine Zeile mehr darf den Rahmen wachsen lassen (RM-487), nie breiter.
         assert dialog.width() == fitted_size.width(), "bedingte Zeilen verbreitern nichts"
         assert dialog.height() >= fitted_size.height()
@@ -3536,11 +3545,21 @@ def test_the_caveat_reaches_every_surface_that_offers_the_operation(
         assert str(spec.caveat) in action.toolTip(), f"{spec.name}: kein Tooltip"
         assert str(spec.doc) in action.toolTip(), f"{spec.name}: der Satz fehlt daneben"
 
-        # Und der Dialog, in dem sie gerade angewendet wird.
+        # Und der Dialog, in dem sie gerade angewendet wird — zugeklappt unter
+        # „Wann nicht?“ (RM-513), ganz im Tooltip der Überschrift.
         dialog = OperationDialog(spec, {}, empty_window)
-        assert dialog._caveat is not None, f"{spec.name}: kein Label"
         assert str(spec.caveat) in dialog._caveat.text(), f"{spec.name}: leer"
-        assert dialog._caveat.isVisibleTo(dialog), f"{spec.name}: unsichtbar"
+        assert dialog._caveat_section.isVisibleTo(dialog), f"{spec.name}: keine Klappe"
+        heading = next(
+            child
+            for child in dialog._caveat_section.findChildren(QToolButton)
+            if child.objectName() == "sectionHeading"
+        )
+        assert heading.text() == "Wann nicht?", spec.name
+        assert str(spec.caveat) in heading.toolTip(), f"{spec.name}: Kurzhilfe ohne Grenze"
+        heading.setChecked(True)
+        assert dialog._caveat.isVisibleTo(dialog), f"{spec.name}: aufgeklappt unsichtbar"
+        heading.setChecked(False)
 
 
 def test_an_operation_without_a_caveat_shows_no_empty_warning(empty_window: MainWindow) -> None:
@@ -3554,7 +3573,7 @@ def test_an_operation_without_a_caveat_shows_no_empty_warning(empty_window: Main
     dialog = OperationDialog(spec, {}, empty_window)
 
     assert dialog._caveat is not None, "das Label wird immer gebaut"
-    assert not dialog._caveat.isVisibleTo(dialog), f"{spec.name}: leeres Warnfeld"
+    assert not dialog._caveat_section.isVisibleTo(dialog), f"{spec.name}: leere Klappe"
     assert not dialog._caveat.text()
 
 
@@ -4976,6 +4995,8 @@ def test_a_typed_length_stretches_a_drawing_only_along_itself(qt_app: QApplicati
     )
     dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     dialog.show()
+    # Grundform und Maße der Zeichnung stehen hinter der Klappe (RM-513).
+    dialog.advanced.setChecked(True)
     qt_app.processEvents()
     try:
         length = dialog._editors["length"]
@@ -6978,8 +6999,10 @@ def test_a_holder_template_names_its_dimensions_but_not_an_idle_field() -> None:
         True,
     )
     assert change is not None and change.after.parameters is not None
-    assert set(change.after.parameters) == {"breite", "tiefe", "hoehe", "plattenstaerke"}
-    assert values["board"] == "=@plattenstaerke"
+    # Befestigung und Plattenstärke stehen seit RM-513 hinten; benannt wird,
+    # was vorn steht — auch mit Klemme bleiben es die drei Maße des Halters.
+    assert set(change.after.parameters) == {"breite", "tiefe", "hoehe"}
+    assert values["board"] == defaults["board"]
 
 
 def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) -> None:
@@ -7116,6 +7139,226 @@ def test_the_hint_to_aim_in_the_view_belongs_to_the_running_placement(
         assert not dialog._placement_hint.isVisibleTo(dialog), "und Escape nimmt ihn zurück"
     finally:
         dialog.deleteLater()
+
+
+# --- Die kurze Vorderseite (RM-513, RM-518) -------------------------------------
+
+
+def test_the_flap_summary_names_the_first_fields_and_stops() -> None:
+    """Zugeklappt nennt die Klappe ihre ersten Felder, dann „…“ (C11)."""
+    from app.ui.op_dialog import ADVANCED_NAMES_SHOWN, advanced_summary
+
+    titles = ["Tiefe", "Aufweitung", "Übergangswinkel", "Ausgleich"]
+    assert advanced_summary(titles[:ADVANCED_NAMES_SHOWN]) == "Tiefe, Aufweitung, Übergangswinkel"
+    assert advanced_summary(titles) == "Tiefe, Aufweitung, Übergangswinkel …"
+    assert advanced_summary([]) == ""
+
+
+def test_the_place_reads_as_one_line_with_its_face() -> None:
+    """„Oberseite · 12,00 / 8,50 / 20,00 mm“ statt dreier Felder vorn (C9)."""
+    from app.ui.labels import length
+    from app.ui.op_dialog import place_text
+
+    line = place_text("Oberseite", (12.0, 8.5, 20.0))
+    assert line.startswith("Oberseite · ")
+    assert line.endswith(length(20.0)), "die Einheit steht einmal, am Ende"
+    assert line.count(" / ") == 2
+    assert place_text("", (1.0, 2.0, 3.0)).count(" / ") == 2, "ohne Fläche nur die Zahlen"
+
+
+def test_the_place_of_a_drill_is_one_line_in_front(qt_app: QApplication) -> None:
+    """Nach dem Flächenklick nennt eine Zeile die Stelle, die Koordinaten stehen hinten.
+
+    Entscheidung Robert (RM-513): *Bohrung setzen* zeigte drei Koordinatenzeilen
+    vorn. Jetzt steht dort „Stelle: Oberseite · … mm“, daneben der Weg zurück
+    ins Bild, und die Zahlen bleiben hinter der Klappe bearbeitbar.
+    """
+    values = {"x": 12.0, "y": 8.5, "z": 20.0, "nx": 0.0, "ny": 0.0, "nz": 1.0}
+    dialog = OperationDialog(REGISTRY.get("drill_hole"), {}, None, values=values)
+    try:
+        assert all(dialog._rows[axis] is dialog._advanced_form for axis in ("x", "y", "z"))
+        assert dialog._front.isRowVisible(dialog._place_row)
+        assert dialog._place_label.text().startswith(tr("Oberseite") + " · ")
+        assert dialog.aim_again.parentWidget() is dialog._place_row, "der Rückweg steht daneben"
+        dialog.take_point((1.0, 2.0, 3.0))
+        assert "1,00 / 2,00 / 3,00" in dialog._place_label.text(), "die Zeile folgt dem Klick"
+        assert dialog.values()["x"] == pytest.approx(1.0)
+    finally:
+        dialog.deleteLater()
+
+
+def test_the_flap_says_what_it_holds_and_keeps_the_place_out(qt_app: QApplication) -> None:
+    """Die Klappe nennt Tiefe und Aufweitung, nicht „Position X, Position Y …“ (C11)."""
+    dialog = OperationDialog(REGISTRY.get("drill_hole"), {}, None)
+    try:
+        summary = dialog._advanced_summary
+        assert summary is not None
+        assert summary.text().startswith(tr("Tiefe")), summary.text()
+        assert "X" not in summary.text()
+        assert dialog.advanced.toolTip() == summary.text()
+    finally:
+        dialog.deleteLater()
+
+
+def test_fx_stands_only_where_there_is_something_to_reckon_with(qt_app: QApplication) -> None:
+    """„fx“ neben jedem Zahlenfeld lud zu nichts ein (C7); „=“ im Feld wirkt weiter."""
+    plain = OperationDialog(REGISTRY.get("create_box"), {}, None)
+    named = OperationDialog(REGISTRY.get("create_box"), {}, None, parameter_values={"breite": 40.0})
+    try:
+        field = next(e for e in plain._editors.values() if isinstance(e, ValueField))
+        assert field.toggle.isHidden(), "ohne Projektparameter kein fx"
+        field.start_expression("=")
+        assert not field.toggle.isHidden(), "ein Ausdruck bringt den Knopf zurück"
+        assert all(
+            not editor.toggle.isHidden()
+            for editor in named._editors.values()
+            if isinstance(editor, ValueField)
+        ), "mit Projektparametern steht fx an jedem Zahlenfeld"
+    finally:
+        plain.deleteLater()
+        named.deleteLater()
+
+
+def test_a_named_zero_shows_its_name(qt_app: QApplication) -> None:
+    """„0,00 mm“ hieß „Oberkante“ oder „automatisch“ (C8)."""
+    lid = OperationDialog(REGISTRY.get("create_lid"), {}, None)
+    container = OperationDialog(REGISTRY.get("create_container"), {}, None)
+    try:
+        height = lid._editors["z"]
+        assert isinstance(height, ValueField)
+        assert height.spin.text() == tr("Oberkante", context="Nullwert")
+        assert lid.values()["z"] == 0.0, "der Wert bleibt die Null"
+        neck = container._editors["neck"]
+        assert isinstance(neck, ValueField)
+        assert neck.spin.text() == tr("automatisch", context="Nullwert")
+    finally:
+        lid.deleteLater()
+        container.deleteLater()
+
+
+def test_an_open_box_hides_its_vents_and_drops_them(qt_app: QApplication) -> None:
+    """„Oben öffnen“ an und „Entlüftungen 1“ widersprach sich (C5).
+
+    Die Zeile geht mit dem Haken, und mit ihr die Entlüftung: Unsichtbar
+    gezählt hätte sie den exakten Weg zugehalten. Ohne Haken kommt sie mit
+    ihrem Wert zurück.
+    """
+    dialog = OperationDialog(REGISTRY.get("hollow_object"), {}, None)
+    try:
+        vents = dialog._editors["vents"]
+        assert not vents.isHidden() and dialog.values()["vents"] == 1
+        dialog._editors["open_top"].setChecked(True)
+        assert vents.isHidden(), "oben offen braucht keine Entlüftungszeile"
+        assert dialog.values()["vents"] == 0
+        dialog._editors["open_top"].setChecked(False)
+        assert not vents.isHidden() and dialog.values()["vents"] == 1
+    finally:
+        dialog.deleteLater()
+
+
+def test_the_label_column_is_set_by_the_front(qt_app: QApplication) -> None:
+    """Die Rückseite zog die Beschriftungsspalte auf 120 bis 170 Punkte (C21).
+
+    Jetzt setzt die längste Beschriftung vorn die Kante; hinten bricht eine
+    längere in ihr um.
+    """
+    from PySide6.QtWidgets import QFormLayout
+
+    def labels(form: QFormLayout) -> list[QLabel]:
+        found = []
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            if item is not None and isinstance(item.widget(), QLabel):
+                found.append(item.widget())
+        return found
+
+    dialog = OperationDialog(REGISTRY.get("create_lid"), {}, None)
+    try:
+        # Die Spalte setzen die Zeilen vorn, die dastehen; eine bedingte, die
+        # erst mit ihrem Schalter erscheint, bricht um wie die Rückseite.
+        front = [label for label in labels(dialog._front) if not label.isHidden()]
+        back = [label for label in labels(dialog._front) if label.isHidden()]
+        back += labels(dialog._advanced_form)
+        widest = max(label.sizeHint().width() for label in front)
+        assert all(label.minimumWidth() == widest for label in front)
+        for label in back:
+            # So schmal wie die Spalte vorn, außer ein einzelnes Wort ist
+            # breiter — in einem Wort bricht nichts um.
+            wanted = max(widest, label.minimumSizeHint().width())
+            assert label.maximumWidth() == wanted, label.text()
+            assert label.wordWrap(), label.text()
+        assert widest < max(
+            label.fontMetrics().horizontalAdvance(label.text()) for label in back
+        ), "„Höhe der Öffnung“ zieht die Spalte nicht mehr auf"
+    finally:
+        dialog.deleteLater()
+
+
+def test_the_place_line_joins_the_column_only_while_it_stands(qt_app: QApplication) -> None:
+    """Die Lesezeile *Stelle* zählt zur Spalte, solange sie dasteht (RM-518).
+
+    Versteckt wurde sie erst nach dem Ausrichten; auf Französisch zog
+    „Emplacement“ die Spalte dann für Dialoge auf, die gar keine Stelle
+    zeigten — 49 Dialoge mit mehr als 24 Punkten hinter „Nom“ oder „Rayon“.
+    """
+    from PySide6.QtWidgets import QFormLayout
+
+    from app.ui.op_dialog import place_fields
+
+    def shown_labels(dialog: OperationDialog) -> list[QLabel]:
+        found = []
+        for row in range(dialog._front.rowCount()):
+            item = dialog._front.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            widget = item.widget() if item is not None else None
+            if isinstance(widget, QLabel) and not widget.isHidden():
+                found.append(widget)
+        return found
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    spec = REGISTRY.get("drill_hole")
+    place = place_fields(spec)
+    assert place is not None
+    # Auf Französisch ist „Emplacement“ breiter als „Diamètre“ und „Trou oblong“.
+    install_language("fr")
+    set_language("fr")
+    try:
+        without = OperationDialog(spec, {}, None)
+        placed = OperationDialog(spec, {}, None, values=dict.fromkeys(place, 1.0))
+        try:
+            for dialog, stands in ((without, False), (placed, True)):
+                labels = shown_labels(dialog)
+                assert (dialog._front.isRowVisible(dialog._place_row)) is stands
+                widest = max(label.sizeHint().width() for label in labels)
+                assert all(label.minimumWidth() == widest for label in labels), (
+                    f"Stelle {'da' if stands else 'weg'}: Spalte nach den Zeilen, die dastehen"
+                )
+        finally:
+            without.deleteLater()
+            placed.deleteLater()
+    finally:
+        set_language("de")
+
+
+def test_the_limit_stays_closed_and_remembers_the_customer(qt_app: QApplication) -> None:
+    """„Wann nicht?“ beginnt zugeklappt und bleibt offen, wenn der Kunde es so will."""
+    first = OperationDialog(REGISTRY.get("hollow_object"), {}, None)
+    try:
+        assert not first._caveat.isVisibleTo(first), "die Grenze steht zugeklappt"
+        heading = next(
+            child
+            for child in first._caveat_section.findChildren(QToolButton)
+            if child.objectName() == "sectionHeading"
+        )
+        heading.setChecked(True)
+    finally:
+        first.deleteLater()
+    second = OperationDialog(REGISTRY.get("hollow_object"), {}, None)
+    try:
+        assert second._caveat.isVisibleTo(second), "die letzte Wahl gilt im nächsten Dialog"
+    finally:
+        second.deleteLater()
 
 
 @pytest.mark.parametrize("name", ["fillet_edges", "chamfer_edges", "bead_edges"])

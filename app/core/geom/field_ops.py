@@ -244,6 +244,7 @@ class FieldCutParams(BaseParams):
         maximum=2000.0,
         unit="mm",
         doc=_("Abstand zwischen den Mittelpunkten benachbarter Öffnungen."),
+        placement="advanced",
     )
     # **Vor der Tiefe und vorn**: Der Haken schaltet sie aus
     # (``depends_on``); hinter der Klappe fand ihn nicht, wer durchschneiden
@@ -252,6 +253,7 @@ class FieldCutParams(BaseParams):
         title=_("Durchgehend"),
         default=False,
         doc=_("Schneidet durch die ganze Höhe des Körpers — die Tiefe zählt dann nicht."),
+        placement="advanced",
     )
     depth: float = param(
         title=_("Tiefe"),
@@ -261,6 +263,7 @@ class FieldCutParams(BaseParams):
         unit="mm",
         depends_on=("through", (False,)),
         doc=_("Schnitttiefe ab der Zeichenfläche, auf einer Grundebene ab der Körperoberkante."),
+        placement="advanced",
     )
     exclusion_sketch: str = param(
         title=_("Ausschlüsse"),
