@@ -308,9 +308,12 @@ Umsetzungsplan:
 
 **29.09.2026, Release-Sitzung:** Der Lauf `alle_plaene.sh` (seit 28.09. 00:05, Plan
 „modelle“ auf PAUSE bei 90/124) ist beendet. Sein Schnappschuss `F:\3D Druck.gesamt` war
-am 28.09. vormittags schon entfernt, weitergelaufen wäre er nicht. Die Ergebnisse liegen
-unverändert unter `output/review/gesamt-2026-09-27/modelle/`; zum Fortsetzen einen neuen
-Schnappschuss auf dem Stand nach 0.5.1 anlegen und den Plan neu starten.
+am 28.09. vormittags schon entfernt, weitergelaufen wäre er nicht. Zum Fortsetzen einen
+neuen Schnappschuss auf dem aktuellen Stand anlegen und alle Pläne neu starten.
+
+**05.10.2026, nach 0.5.2:** `output/review/` ist auf Roberts Freigabe gelöscht, mit allen
+Ausgaben der Gesamtprüfung darunter (`gesamt-2026-09-27/`). Die Pfade unten nennen, wohin
+die Werkzeuge schreiben; frühere Ergebnisse liegen dort nicht mehr.
 
 - Werkzeuge: `.claude/.state/uebergabe-gesamt-2026-09-27/` (`treiber.py`,
   `einheit.py`, `bericht.py`, `alle_plaene.sh`/`.ps1`). Ausgaben:
