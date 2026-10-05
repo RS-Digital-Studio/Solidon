@@ -2672,6 +2672,25 @@ def feature_measure_tip(feature: Feature, *names: str) -> str:
     return "\n".join(descriptions)
 
 
+def feature_source(feature: Feature) -> str:
+    """Woher die Maße eines Merkmals kommen — nur das warnende Wort, ohne Zahl.
+
+    Für die Maßgruppe im Bild (RM-516): Die Zahl steht dort im Feld, und
+    davor noch einmal „Aktuell: Ø5,20 mm“ hieß denselben Durchmesser zweimal
+    lesen. Eine direkte Quelle sagt nichts (``compact``); dann bleibt die
+    Zeile leer.
+    """
+    words = dict.fromkeys(
+        str(word)
+        for name in ("diameter", "radius", "tube_diameter", "length", "pitch", "area", "volume")
+        if name in feature.params
+        and (word := measure_qualifier(measure_status(feature, name), compact=True)) is not None
+    )
+    if not words:
+        return ""
+    return tr("Ausgangswert: {source}").format(source=", ".join(words))
+
+
 def feature_measure(feature: Feature, *, compact: bool = False, marked: bool = False) -> str:
     """Die eine Zahl, die dieses Merkmal ausmacht — ohne seinen Namen.
 

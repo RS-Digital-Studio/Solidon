@@ -1218,6 +1218,27 @@ def test_a_viewport_marker_stays_short_but_a_warning_word_stays(qt_app: object) 
     assert tr("eingepasst") in feature_label("hole_3", fitted, compact=True)
 
 
+def test_the_measure_card_names_where_the_value_comes_from_without_the_number() -> None:
+    """Über dem Durchmesserfeld steht nicht noch einmal der Durchmesser (RM-516).
+
+    „Aktuell: Ø5,20 mm · eingepasst“ über dem Feld mit 5,20 mm war dieselbe
+    Zahl zweimal im Bild. Geblieben ist das Wort, das warnt; eine direkte
+    Quelle sagt nichts, und dann bleibt die Zeile leer.
+    """
+    from app.core.types import Feature
+    from app.ui.labels import feature_source
+
+    fitted = Feature(
+        "hole_3", "hole", "detected", {"diameter": 5.2}, measure_sources={"diameter": "fit"}
+    )
+    measured = Feature(
+        "hole_2", "hole", "detected", {"diameter": 5.2}, measure_sources={"diameter": "facets"}
+    )
+    assert feature_source(fitted) == "Ausgangswert: eingepasst"
+    assert feature_source(measured) == ""
+    assert not any(character.isdigit() for character in feature_source(fitted))
+
+
 @pytest.mark.parametrize(
     "kind,second",
     [("slot", "length"), ("torus", "tube_diameter"), ("cone", "angle"), ("thread", "pitch")],

@@ -815,3 +815,27 @@ def test_part_bore_advice_translates_the_complete_assessment_frame(language: str
             assert not expected.startswith("Einschätzung anhand dieses Maßes:")
     finally:
         set_language(previous)
+
+
+@pytest.mark.parametrize("unit", ["mm", "in"])
+def test_the_bore_sentence_names_its_diameter_in_the_display_unit(unit: str) -> None:
+    """In Zoll steht kein „mm“ im Satz über der Bohrung (RM-516).
+
+    Das „mm“ stand fest in den Sätzen, und das Merkmalfenster schrieb in Zoll
+    „Bohrungsmaß: 5,20 mm“ neben lauter Zollmaßen. Die Zahl trägt jetzt ihre
+    Einheit selbst — gemessen wie vorgegeben.
+    """
+    from app.core.scene.placement import bore_advice
+    from app.i18n import display_unit, set_display_unit
+
+    previous = display_unit()
+    set_display_unit(unit)
+    try:
+        measured, _choices = bore_advice(5.2, ask=False, feature=hole(diameter=5.2))
+        native, _choices = bore_advice(5.5, ask=False)
+        blind, _choices = bore_advice(7.5, ask=True)
+    finally:
+        set_display_unit(previous)
+    for said in (measured, native, blind):
+        assert ("mm" in said.split()) is (unit == "mm"), said
+        assert (" in" in said) is (unit == "in"), said

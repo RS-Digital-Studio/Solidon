@@ -251,6 +251,12 @@ Rückmeldung, die nie stimmt. Das Vorschauband trägt den Grund aus dem Kern
 Was nie etwas tun kann, sagt es schon am Menüeintrag (`grenzen.md`, „Der Satz
 kommt vor den Dialog“).
 
+**Das Band nennt, was sich ändert** (RM-516, Vertrag RM-090): unter dem Titel
+eine Zeile aus `print_contract.explain_difference` — Ziel, Körper und von
+Außenmaß, Körperzahl und Material nur, was nicht bleibt, Längen über
+`labels.length` —, dahinter der Stand der Druckprüfung. Neue und behobene
+Befunde stehen in höchstens drei Zeilen darunter (`review_difference`).
+
 **Eine Absage steht auch bei den Eingaben** (`OperationDialog.show_refusal`),
 selbst wenn der Dialog keinen zusätzlichen Handlungsknopf ausführen kann.
 Die nächste Vorschau räumt den alten Satz ab; das Vorschauband bleibt die
@@ -378,6 +384,9 @@ auch Funktionen ohne Widget; ein übergebenes Argument hat Vorrang.
   lässt und `value_mm()` liest.
 - **Ein Einheitenwechsel meldet nichts:** `refresh_unit` tauscht unter
   `blockSignals`.
+- **Ein Satz trägt keine Einheit im Katalogtext:** Die Zahl kommt mit ihrer
+  Einheit (`labels.length`, im Kern `format_length(…, display_unit())`) —
+  „misst {measure} mm“ las sich in Zoll als „0.2047 mm“ (RM-516).
 - **Gelesen wird über die Leiste, nicht an ihr vorbei** (`SculptBar.values()`,
   typisiert als `StrokeValues`, damit mypy das Auspacken prüft).
 - **Geprüft wird an einer Handlung, nicht nur an Anzeigen:**

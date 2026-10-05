@@ -5611,6 +5611,9 @@ class Viewport(QWidget):
         der Kamera; wer sie schon getroffen hat, zeichnet nicht neu."""
         self._edge_colour = "#4c5258"
         self._feature_overlay = False
+        self._measured_feature: tuple[ObjectId, FeatureId] | None = None
+        """Das Merkmal, dessen Maße gerade im Bild stehen — es trägt keine Marke
+        (:meth:`set_measured_feature`)."""
         self._feature_actors: list[Any] = []
         self._feature_label_data: list[tuple[Vec3, str, int]] = []
         self._feature_label_owners: list[ObjectId] = []
@@ -11160,6 +11163,24 @@ class Viewport(QWidget):
             if self._snap_shown is None:
                 self.setAccessibleDescription(hint)
 
+    def set_measured_feature(self, ref: tuple[ObjectId, FeatureId] | None) -> None:
+        """Das Merkmal, dessen Maße im Bild stehen, verliert seine Marke (RM-516).
+
+        Neben Maßlinien, Kantenmaßen und dem Durchmesserfeld stand am Loch noch
+        „Bohrung 1 · Ø5,20 mm · eingepasst“ — derselbe Durchmesser ein weiteres
+        Mal, mitten zwischen den Feldern. Was das Merkmal ist, sagen die
+        Maßgruppe, das Auswahlfenster und die Statuszeile; die Fläche bleibt
+        in der Auswahlfarbe. Neu beschriftet werden nur die Marken, Flächen
+        und Konturen bleiben stehen.
+        """
+        if ref == self._measured_feature:
+            return
+        self._measured_feature = ref
+        if self.renderer is None:
+            return
+        self._redraw_feature_labels()
+        self._draw()
+
     def _redraw_features(self) -> None:
         if self.renderer is None:
             return
@@ -11168,6 +11189,12 @@ class Viewport(QWidget):
         self._redraw_edge_patch()
         self._redraw_protected_patch()
         self._redraw_hover_patch()
+        self._redraw_feature_labels()
+
+    def _redraw_feature_labels(self) -> None:
+        """Marken und Namen der gezeigten Merkmale — ohne Flächen und Konturen."""
+        if self.renderer is None:
+            return
         for actor in self._feature_actors:
             self.renderer.remove(actor)
         self._feature_actors.clear()
@@ -11200,6 +11227,8 @@ class Viewport(QWidget):
             hovered = self._features_of(self._hovered_object).get(self._hovered_feature)
             if hovered is not None:
                 shown[(self._hovered_object, self._hovered_feature)] = hovered
+        if self._measured_feature is not None:
+            shown.pop(self._measured_feature, None)
         if not shown:
             return
 
@@ -15208,10 +15237,18 @@ class Viewport(QWidget):
         self._gizmo_labels.update_labels(self._gizmo_label_base, self._gizmo_label_texts)
 
     def _slot_length_text(self) -> str:
-        """Die Länge des Langlochgriffs, wie das Merkmalfenster sie schreibt."""
-        if self._slot_handle is None:
+        """Die Länge des Langlochgriffs, wie das Merkmalfenster sie schreibt.
+
+        **An der runden Bohrung leer** (RM-516): Ihre Länge ist ihr Durchmesser,
+        und der steht im Feld der Maßgruppe — daneben im Bild ein zweites
+        „5,20 mm“. Sobald der Zug ein Langloch daraus macht, steht die Länge.
+        """
+        from app.core.geom.prepare import is_round_length
+
+        handle = self._slot_handle
+        if handle is None or is_round_length(float(handle.length), 2.0 * handle.radius):
             return ""
-        return length(float(self._slot_handle.length))
+        return length(float(handle.length))
 
     def _pull_at_the_hole(self, event: PointerEvent) -> bool:
         """Ein Druck auf das gewählte Loch beginnt den Zug zum Langloch.

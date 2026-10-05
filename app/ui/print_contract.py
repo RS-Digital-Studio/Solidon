@@ -16,7 +16,7 @@ from app.core.knowledge import profiles
 from app.core.scene import EvaluationResult
 from app.core.types import CheckState, Document, Finding, Profile, Scene, SceneObject
 from app.i18n import TranslatableText, _, tr
-from app.ui.labels import localised
+from app.ui.labels import length
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,9 +220,22 @@ def check_summary(
 
 @dataclass(slots=True)
 class ExplainedDifference(SceneDifference):
-    """Dieselbe Kerndifferenz mit einer Erklärung aus genau ihrem Vorher/Nachher."""
+    """Dieselbe Kerndifferenz mit einer Erklärung aus genau ihrem Vorher/Nachher.
+
+    ``change`` ist die eine Zeile, die sagt, was sich ändert; ``notes`` sind
+    die Meldungen der Vorschau selbst. ``explanation`` setzt beides mit dem
+    Stand der Druckprüfung zusammen — so, wie es im Vorschauband steht.
+    """
 
     explanation: str = ""
+    change: str = ""
+    notes: tuple[str, ...] = ()
+
+
+def _size(body: SceneObject) -> str:
+    """Das Außenmaß eines Körpers in der Anzeigeeinheit, die Einheit einmal am Ende."""
+    x, y, z = (float(value) for value in body.mesh.bounds.size)
+    return " × ".join((length(x, with_unit=False), length(y, with_unit=False), length(z)))
 
 
 def explain_difference(
@@ -233,7 +246,14 @@ def explain_difference(
     *,
     affected: Iterable[str] = (),
 ) -> ExplainedDifference:
-    """Liest vorhandene Kennzahlen im Vorschauarbeiter, ohne eine Ersatzprüfung."""
+    """Liest vorhandene Kennzahlen im Vorschauarbeiter, ohne eine Ersatzprüfung.
+
+    **Eine Zeile nennt, was sich ändert** (RM-516): das Ziel, die betroffenen
+    Körper und von Außenmaß, Körperzahl und Material nur, was nicht bleibt.
+    Bis dahin standen sieben Zeilen im Band, darunter „Körperzahl: 1 → 1“ und
+    ein Außenmaß mit drei Nachkommastellen und festem „mm“, das sich nicht
+    änderte. Was gleich bleibt, ist mit dem Körpernamen gesagt.
+    """
     old = before.objects if before is not None else {}
     keys = tuple(
         key
@@ -242,40 +262,32 @@ def explain_difference(
         )
         if key in old or key in after.objects
     )
-    names = [str((after.objects.get(key) or old[key]).name) for key in keys]
-    lines = [
-        tr("Ziel: {goal}").format(goal=goal),
-        tr("Betroffene Körper: {names}").format(
-            names=", ".join(names) or tr("keine geometrische Änderung")
-        ),
-    ]
-    lines.append(
-        tr("Körperzahl: {before} → {after}").format(before=len(old), after=len(after.objects))
-    )
+    kept: list[str] = []
+    changes: list[str] = []
     for key in keys:
-        values = []
-        for bodies in (old, after.objects):
-            body = bodies.get(key)
-            if body is None:
-                values.append(tr("nicht vorhanden"))
-            else:
-                bounds = body.mesh.bounds
-                values.append(
-                    " × ".join(localised(f"{float(size):.3f}") for size in bounds.size) + " mm"
-                )
-        lines.append(
-            tr("Außenmaß „{name}“: {before} → {after}").format(
-                name=str((after.objects.get(key) or old[key]).name),
-                before=values[0],
-                after=values[1],
-            )
-        )
         previous, following = old.get(key), after.objects.get(key)
-        if (
-            previous is not None
-            and following is not None
-            and previous.material != following.material
-        ):
+        if previous is None:
+            assert following is not None
+            changes.append(
+                tr("„{name}“ neu: {size}").format(name=following.name, size=_size(following))
+            )
+            continue
+        name = str(previous.name if following is None else following.name)
+        if following is None:
+            changes.append(tr("„{name}“ entfällt").format(name=name))
+            continue
+        # Verglichen wird, was dasteht: zwei Maße, die gleich geschrieben
+        # werden, ändern für den Leser nichts (und kein ``==`` auf Fließkomma).
+        sizes = _size(previous), _size(following)
+        if sizes[0] != sizes[1]:
+            changes.append(
+                tr("„{name}“: {before} → {after}").format(
+                    name=name, before=sizes[0], after=sizes[1]
+                )
+            )
+        else:
+            kept.append(name)
+        if previous.material != following.material:
             materials = profiles.material_profiles()
             material_names = [
                 str(materials[body.material].title)
@@ -283,35 +295,41 @@ def explain_difference(
                 else body.material or tr("Material des Projekts")
                 for body in (previous, following)
             ]
-            lines.append(
+            changes.append(
                 tr("Material „{name}“: {before} → {after}").format(
-                    name=str(following.name),
-                    before=material_names[0],
-                    after=material_names[1],
+                    name=name, before=material_names[0], after=material_names[1]
                 )
             )
-    lines.append(
-        tr(
-            "Grundlage: berechnete Änderungsvorschau. "
-            "Druckfolgen werden nach der Übernahme erneut geprüft."
+    if len(old) != len(after.objects):
+        changes.append(
+            tr("{before} → {after} Körper").format(before=len(old), after=len(after.objects))
         )
-    )
-    lines.append(
-        tr(
-            "Behobene und verbleibende Druckbefunde sind in dieser Vorschau "
-            "noch nicht vollständig geprüft."
+    parts = [
+        goal,
+        ", ".join(kept) if kept or changes else str(tr("keine geometrische Änderung")),
+        *changes,
+    ]
+    change = " · ".join(part for part in parts if part)
+    notes = tuple(
+        dict.fromkeys(
+            str(finding.message) for finding in difference.findings if finding.severity != "info"
         )
-    )
-    lines.extend(
-        str(finding.message) for finding in difference.findings if finding.severity != "info"
     )
     return ExplainedDifference(
         entries=difference.entries,
         created=difference.created,
         deleted=difference.deleted,
         findings=difference.findings,
-        explanation="\n".join(lines),
+        explanation=_explained(change, tr("Druckbefunde noch nicht geprüft"), notes),
+        change=change,
+        notes=notes,
     )
+
+
+def _explained(change: str, state: str, notes: Iterable[str], lines: Iterable[str] = ()) -> str:
+    """Die Zeilen des Bands unter dem Titel: Änderung samt Prüfstand, Meldungen, Befunde."""
+    head = " · ".join(part for part in (change, state) if part)
+    return "\n".join(line for line in (head, *notes, *lines) if line)
 
 
 def review_difference(
@@ -319,74 +337,51 @@ def review_difference(
     reports: list[tuple[Finding, ...]],
     checked: list[tuple[CheckState, ...]],
 ) -> ExplainedDifference:
-    """Erklärt zwei tatsächlich erneut geprüfte Stände mit derselben Druckgrundlage."""
-    pending = (
-        tr(
-            "Grundlage: berechnete Änderungsvorschau. "
-            "Druckfolgen werden nach der Übernahme erneut geprüft."
-        ),
-        tr(
-            "Behobene und verbleibende Druckbefunde sind in dieser Vorschau "
-            "noch nicht vollständig geprüft."
-        ),
-    )
-    lines = [line for line in difference.explanation.splitlines() if line not in pending]
-    lines.append(
-        tr("Grundlage: genaue Auswertung und Schichtanalyse beider Stände mit demselben Druckziel.")
-    )
-    # **Genannt wird, was sich ändert, nicht der ganze Bericht zweimal.** Bis
-    # 04.10.2026 stand jede Warnung beider Stände im Vorschauband — am
-    # Piratenschiff mit 32 Warnungen 64 Zeilen über dem Bild.
+    """Erklärt zwei tatsächlich erneut geprüfte Stände mit derselben Druckgrundlage.
+
+    **Genannt wird, was sich ändert, nicht der ganze Bericht zweimal.** Bis
+    04.10.2026 stand jede Warnung beider Stände im Vorschauband — am
+    Piratenschiff mit 32 Warnungen 64 Zeilen über dem Bild. Seit RM-516 auch
+    keine Zählung „0 vorher, 0 nachher“ und keine Grundlagenzeile mehr: Ohne
+    neuen oder behobenen Befund sagt die Änderungszeile „Druckbefunde
+    unverändert“, sonst stehen höchstens drei Zeilen darunter.
+    """
     before, after = (
         tuple(finding for finding in findings if finding.severity != "info") for findings in reports
     )
     missing = [note for states in checked for note in check_summary(states)[1]]
-    lines.append(
-        tr("Warnungen oder Fehler: {before} vorher, {after} nachher.").format(
-            before=len(before), after=len(after)
-        )
-    )
     known = {_identity(finding) for finding in before}
-    lines.extend(
-        _at_most(
-            [
-                tr("Neu im Nachherstand: {finding}").format(finding=str(finding.message))
-                for finding in after
-                if _identity(finding) not in known
-            ]
-        )
-    )
+    lines = [
+        tr("Neu: {finding}").format(finding=str(finding.message))
+        for finding in after
+        if _identity(finding) not in known
+    ]
     if not missing:
+        # Behoben heißt nur, was eine vollständige Gegenprüfung nicht mehr
+        # findet; eine fehlende Meldung aus einer abgebrochenen ist keine.
         remaining = {finding.code for finding in after}
         lines.extend(
-            _at_most(
-                [
-                    tr("Im geprüften Nachherstand nicht mehr vorhanden: {finding}").format(
-                        finding=message
-                    )
-                    for message in dict.fromkeys(
-                        str(finding.message) for finding in before if finding.code not in remaining
-                    )
-                ]
+            tr("Behoben: {finding}").format(finding=message)
+            for message in dict.fromkeys(
+                str(finding.message) for finding in before if finding.code not in remaining
             )
         )
-    else:
-        lines.append(
-            tr(
-                "Die Gegenprüfung ist unvollständig; fehlende Meldungen "
-                "belegen keine behobenen Befunde."
-            )
-        )
-        lines.extend(_at_most(list(dict.fromkeys(missing)), 2))
-    difference.explanation = "\n".join(lines)
+    state = (
+        tr("Druckbefunde nicht vollständig geprüft")
+        if missing
+        else ""
+        if lines
+        else tr("Druckbefunde unverändert")
+    )
+    difference.explanation = _explained(difference.change, state, difference.notes, _at_most(lines))
     difference.findings += tuple(
         finding for finding in reports[1] if finding not in difference.findings
     )
     return difference
 
 
-#: Wie viele gleichartige Zeilen die Änderungserklärung zeigt, bevor sie zählt.
-_SHOWN_LINES: Final = 4
+#: Wie viele Zeilen neue und behobene Befunde zusammen höchstens belegen (RM-516).
+_SHOWN_LINES: Final = 3
 
 
 def _identity(finding: Finding) -> tuple[str, str | None, str]:
@@ -395,10 +390,11 @@ def _identity(finding: Finding) -> tuple[str, str | None, str]:
 
 
 def _at_most(lines: list[str], shown: int = _SHOWN_LINES) -> list[str]:
-    """Die ersten Zeilen und, was übrig bleibt, als Zahl."""
+    """Höchstens ``shown`` Zeilen — die letzte zählt, was nicht mehr hineinpasst."""
     if len(lines) <= shown:
         return lines
-    return [*lines[:shown], tr("… und {count} weitere.").format(count=len(lines) - shown)]
+    rest = len(lines) - (shown - 1)
+    return [*lines[: shown - 1], tr("… und {count} weitere.").format(count=rest)]
 
 
 def handoff_receipt(

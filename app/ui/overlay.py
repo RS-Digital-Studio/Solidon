@@ -221,6 +221,10 @@ DOCK_PROPERTY = "dock"
 #: Der Objektname, an dem das Stilblatt eine schwebende Karte erkennt.
 CARD = "overlayCard"
 
+#: Die Karte der Maßgruppe über dem Bild (``placement_flow``) — gerahmt und
+#: gerundet wie die Karten am Rand (RM-516).
+MEASURE_CARD = "placement_measure_fields"
+
 #: Das Polster zwischen der Randlinie einer Karte und ihrem Inhalt.
 #:
 #: Genau ein Pixel, denn genau einen ist die Linie breit. Ohne ihn malen die
@@ -360,7 +364,7 @@ def card_stylesheet(theme: Theme) -> str:
     """
     colours = THEMES[theme]
     return f"""
-QWidget#{CARD} {{
+QWidget#{CARD}, QFrame#{MEASURE_CARD} {{
     background: {colours["window"]};
     border: 1px solid {colours["accent_line"]};
     border-radius: {ROOMY}px;

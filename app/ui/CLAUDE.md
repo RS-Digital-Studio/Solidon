@@ -361,8 +361,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
   und wiederholt offene Prüfungen nicht.
 - **Befundkarte**: Folge, Ort, Grundlage; Nebenfolge aus `core.action_effects`.
-- **Änderung und Übergabe**: `ExplainedDifference` erklärt die Szenen der
-  Kerndifferenz, `review_difference` nur Neues und Weggefallenes. Belege aus
+- **Änderung und Übergabe**: `ExplainedDifference` sagt in einer Zeile, was
+  sich ändert, `review_difference` nur Neues und Behobenes. Belege aus
   dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe
   `export.readback` im Arbeiter. Gleiche Importbefunde einer Transaktion werden
   gebündelt; Originalwerte und Körper bleiben zugänglich.
