@@ -56,7 +56,9 @@ def _run_output(
     return outcome, calls
 
 
-@pytest.mark.parametrize("program", ("BambuStudio.exe", "OrcaSlicer.exe", "ElegooSlicer.exe"))
+@pytest.mark.parametrize(
+    "program", ("BambuStudio.exe", "OrcaSlicer.exe", "ElegooSlicer.exe", "AnycubicSlicerNext.exe")
+)
 @pytest.mark.parametrize("with_result", (False, True))
 def test_multiple_native_print_files_never_become_one_complete_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, with_result: bool

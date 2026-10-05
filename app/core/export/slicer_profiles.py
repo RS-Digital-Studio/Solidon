@@ -27,7 +27,7 @@ import os
 import re
 import sys
 import threading
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -1170,6 +1170,31 @@ def _printer_name(value: str) -> str:
     return re.sub(r"^prusa mini(?:\+| is)?(?=\s|$)", "prusa mini", value)
 
 
+#: Die Düse am Ende eines Maschinennamens, in jeder Schreibweise der
+#: installierten Bestände: „0.4 nozzle“, „(0.4 nozzle)“, „(0.2 mm nozzle)“,
+#: „HF0.4 nozzle“, „0.4 HF nozzle“. Nur am Ende und nur nach einem Wortrand —
+#: „(0.4+0.6 nozzle)“ und „0.4 nozzle (Dual)“ nennen eine andere Maschine.
+_NOZZLE_IN_NAME: Final = re.compile(
+    r"(?:\s+\(?|(?<=HF))\d+(?:[.,]\d+)?\s*(?:mm)?\s*(HF\s+)?nozzle\)?$", re.IGNORECASE
+)
+
+
+def model_name(name: str) -> str:
+    """Der Maschinenname ohne die Düse seiner Variante: das Gerät, wie es der
+    Kunde nennt („Bambu Lab A1 0.4 nozzle“ → „Bambu Lab A1“).
+
+    **Eine andere Ausführung bleibt im Namen.** Ein High-Flow-Hotend ist keine
+    Düsengröße: „Original Prusa MK4S HF0.4 nozzle“ wird „Original Prusa MK4S
+    HF“, nicht „Original Prusa MK4S“. Ein Name ohne Düsenangabe bleibt, wie er
+    ist; ein Trenner vor der Düse („AzteQ Industrial - 0.6 nozzle“) fällt mit.
+    """
+    found = _NOZZLE_IN_NAME.search(name)
+    if found is None:
+        return name
+    rest = (name[: found.start()] + (" HF" if found.group(1) else "")).rstrip(" -\u2013\u2014:,")
+    return rest or name
+
+
 def _names_the_printer(machine: str, title: str) -> bool:
     """Meint dieser Maschinenname diesen Drucker?
 
@@ -1883,12 +1908,60 @@ def machine_with_nozzle(
         if identity(entry) == identity(current_machine)
         or same_printer_model(entry, current_machine)
     ]
-    if not same_printer:
+    chosen = sister_variant(same_printer, current_machine, printer.nozzle_diameter)
+    if chosen is None:
         return ""
-    chosen = min(same_printer, key=lambda entry: (not entry.from_user, entry.name))
     # Namen können bei verschiedenen Herstellern gleich sein. Die nächste
     # Stufe schreibt das Profil aus; sie braucht deshalb dessen Kennung.
     return identity(chosen)
+
+
+def sister_variant(
+    machines_here: Sequence[SlicerProfile], reference: SlicerProfile, nozzle: float
+) -> SlicerProfile | None:
+    """Die Variante desselben Geräts mit dieser Düse — oder keine.
+
+    **Eine Stelle für Druckdialog und Übergabe** (:func:`match`,
+    :func:`machine_with_nozzle`): Beide fragen nach einem Düsenwechsel, welche
+    Schwester gemeint ist. Bis dahin nahm der eine den kürzesten, der andere
+    den alphabetisch ersten Namen — am SV06 zwei verschiedene Maschinen.
+
+    Vorrang haben eigene Profile, dann **dieselbe Ausführung**
+    (:func:`model_name`: aus „MK4S HF0.4“ wird bei 0,6 „MK4S HF0.6“, nicht die
+    gewöhnliche Düse, die zuerst im Alphabet steht), dann die schlichteste.
+    """
+    fitting = [
+        entry
+        for entry in machines_here
+        if abs(entry.nozzle - nozzle) < 1e-6
+        and (identity(entry) == identity(reference) or same_printer_model(entry, reference))
+    ]
+    return min(fitting, key=variant_order(reference, nozzle), default=None)
+
+
+def variant_order(
+    reference: SlicerProfile | None, nozzle: float
+) -> Callable[[SlicerProfile], tuple[bool, float, bool, int, str]]:
+    """Die Reihenfolge unter Maschinenvarianten: eigene zuerst, dann die Düse,
+    dann dieselbe Ausführung wie ``reference``, dann der kürzeste Name.
+
+    Der kürzeste Name ist die Grundausführung: OrcaSlicer führt den Sovol SV06
+    als „0.4 nozzle“ und als „0.4 High-Speed nozzle“, und ohne diese Regel
+    entschied die Reihenfolge im Ordner — ein gewöhnlicher SV06 bekam den
+    High-Speed-Prozess (27.09.2026).
+    """
+    kind = model_name(reference.name) if reference is not None else ""
+
+    def order(entry: SlicerProfile) -> tuple[bool, float, bool, int, str]:
+        return (
+            not entry.from_user,
+            abs(entry.nozzle - nozzle),
+            bool(kind) and model_name(entry.name) != kind,
+            len(entry.name),
+            entry.name,
+        )
+
+    return order
 
 
 def _load(path: Path, documents: ProfileDocuments | None = None) -> dict[str, Any] | None:
@@ -2710,6 +2783,10 @@ DESCRIBING_KEYS: Final = frozenset(
         "renamed_from",
         "description",
         "version",
+        # Verwaltungsfelder, die ``ConfigBase::load_from_json`` nur als
+        # Zeichenkette nimmt; Anycubics Profile tragen ``is_custom_defined``.
+        "is_custom_defined",
+        "url",
     }
 )
 
@@ -3993,7 +4070,20 @@ def match(
     candidates = own_model or candidates
 
     exact = [entry for entry in candidates if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
-    if source_family and not exact and not any(_nozzle_is_a_value(entry) for entry in candidates):
+    variable = any(_nozzle_is_a_value(entry) for entry in candidates)
+    # **Eine festgelegte Variante mit anderer Düse meint ihre Schwester.** Ein
+    # Drucker aus PrusaSlicers Bündel nennt seine Variante beim Namen
+    # (``prusaslicer_printer``); stellt der Druckdialog die Düse um, liegt das
+    # gemeinte Profil neben ihr. Bis dahin blieb die Wahl dann leer — am
+    # CR-10 von 0,4 auf 0,6 wie an jedem zweiten Wechsel im Bestand.
+    pinned = (native or named_in_bundle) if cura_instance is None else []
+    reference = pinned[0] if len(pinned) == 1 else source_machine
+    if pinned and reference is not None and not exact and not variable:
+        sister = sister_variant(all_machines, reference, printer.nozzle_diameter)
+        if sister is None:
+            return None, None
+        return sister, standard_process(processes(profiles, sister), sister, printer)
+    if source_family and not exact and not variable:
         # Ein exakt erkanntes importiertes Profil belegt seine Gerätefamilie,
         # aber nicht, welche fremde Düse an diesem Gerät aufgeschraubt ist.
         # Ohne passende Variante bleibt die Auswahl leer statt am Nachbarmaß
@@ -4001,20 +4091,9 @@ def match(
         # Maschinenprofil hat; an einer Cura-Maschine gibt es keine Variante
         # zu verfehlen (RM-329).
         return None, None
-    # Bei gleicher Düse die Grundausführung, wie bei :func:`match_filament`:
-    # OrcaSlicer führt den Sovol SV06 als „0.4 nozzle“ und als „0.4 High-Speed
-    # nozzle“, und ohne diese Regel entschied die Reihenfolge im Ordner — ein
-    # gewöhnlicher SV06 bekam den High-Speed-Prozess mit 100 statt 25 mm/s
-    # Außenwand und 20 statt 40 Grad Stützgrenze vorgewählt (27.09.2026).
-    chosen = min(
-        exact or candidates,
-        key=lambda entry: (
-            not entry.from_user,
-            abs(entry.nozzle - printer.nozzle_diameter),
-            len(entry.name),
-            entry.name,
-        ),
-    )
+    # Bei gleicher Düse dieselbe Ausführung, sonst die Grundausführung
+    # (:func:`variant_order`).
+    chosen = min(exact or candidates, key=variant_order(reference, printer.nozzle_diameter))
 
     return chosen, standard_process(processes(profiles, chosen), chosen, printer)
 

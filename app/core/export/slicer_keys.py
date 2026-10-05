@@ -989,6 +989,10 @@ FLAVOUR_BY_NAME: Final[tuple[tuple[str, SlicerFlavour], ...]] = (
     # Filamente — und die Übergabedatei ist dieselbe wie für OrcaSlicer.
     ("crealityprint", "orca"),
     ("creality-print", "orca"),
+    # Anycubic Slicer Next baut auf OrcaSlicer auf: derselbe Profilbaum, nur
+    # mit dem Hersteller Anycubic; Windows, macOS und das Linux-Paket nennen
+    # die Programmdatei gleich.
+    ("anycubicslicernext", "orca"),
     ("curaengine", "cura"),
     ("cura", "cura"),
 )
@@ -1145,6 +1149,34 @@ PROGRAM_KEYS: Final[dict[str, dict[str, str]]] = {
 def native_key(key: str, program: str) -> str:
     """Der Schlüssel im Zielprogramm, auch für Profilgruppe und Gegenprobe."""
     return PROGRAM_KEYS.get(program, {}).get(key, key)
+
+
+#: Was ein Programm annimmt, aber nicht in den Konfigurationsblock seiner
+#: Druckdatei schreibt — je Programmmarke Schlüssel und die Werte, bei denen er
+#: fehlt (``None``: immer). Die Gegenprobe meldet sonst „nicht übernommen“.
+#: Gemessen im Konfigurationsblock: ``override_filament_scarf_seam_setting``
+#: kennt nur Bambu Studio, die Verwandten schreiben ihre Nahtwerte unmittelbar
+#: (03.10.2026; Anycubic Slicer Next 2.0.0.3 am 05.10.2026). Anycubic Slicer
+#: Next führt ``ironing_type`` nur, wenn gebügelt wird; „no ironing“ nimmt es
+#: an (``s_keys_map_IroningType``) und lässt die Zeile weg.
+OMITTED_FROM_GCODE: Final[dict[str, dict[str, frozenset[str] | None]]] = {
+    "orcaslicer": {"override_filament_scarf_seam_setting": None},
+    "elegooslicer": {"override_filament_scarf_seam_setting": None},
+    "crealityprint": {"override_filament_scarf_seam_setting": None},
+    "anycubicslicernext": {
+        "override_filament_scarf_seam_setting": None,
+        "ironing_type": frozenset({"no ironing"}),
+    },
+}
+
+
+def omitted_from_gcode(key: str, value: str, program: str) -> bool:
+    """Ob das Programm diesen Wert annimmt, ohne ihn in die Druckdatei zu schreiben."""
+    values = OMITTED_FROM_GCODE.get(program, {})
+    if key not in values:
+        return False
+    omitted = values[key]
+    return omitted is None or value.strip().strip('"') in omitted
 
 
 def normalise_chamber(values: Mapping[str, object], program: str) -> dict[str, object]:

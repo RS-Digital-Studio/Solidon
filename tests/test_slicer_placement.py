@@ -130,7 +130,14 @@ def test_rotation_finds_an_actual_pose_and_keeps_source(subject, case):
 
 
 @pytest.mark.parametrize(
-    "program", ["orca-slicer.exe", "bambu-studio.exe", "ElegooSlicer.exe", "CrealityPrint.exe"]
+    "program",
+    [
+        "orca-slicer.exe",
+        "bambu-studio.exe",
+        "ElegooSlicer.exe",
+        "CrealityPrint.exe",
+        "AnycubicSlicerNext.exe",
+    ],
 )
 def test_programs_that_arrange_themselves_get_a_part_that_fits_only_turned_turned(subject, program):
     """Die Orca-Familie verschiebt beim Anordnen, sie dreht nicht.

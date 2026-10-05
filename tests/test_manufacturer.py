@@ -229,7 +229,7 @@ def test_choosing_a_brim_does_not_invent_an_unreadable_gap() -> None:
     assert "brim_object_gap" not in values
 
 
-@pytest.mark.parametrize("program", ["elegoo", "creality"])
+@pytest.mark.parametrize("program", ["elegoo", "creality", "anycubic"])
 @pytest.mark.parametrize("chosen", [False, True])
 def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
     bestand: Path, tmp_path: Path, chosen: bool, program: str
@@ -238,7 +238,8 @@ def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
 
     Creality Print misst den Brim am unkorrigierten Umriss und nimmt keinen
     negativen Abstand (RM-318): Je Teil senkt Solidon dort die Fußkorrektur
-    dieses Teils, für die ganze Platte hält es mit Handlung an."""
+    dieses Teils, für die ganze Platte hält es mit Handlung an. Anycubic Slicer
+    Next teilt Crealitys ``Brim.cpp`` und verhält sich gemessen genauso."""
     from xml.etree import ElementTree as ET
 
     import trimesh
@@ -252,8 +253,10 @@ def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
     data.update(brim_object_gap="0.1", elefant_foot_compensation="0.15")
     _write(native, data)
     setup, profile = _setup(bestand), _cc2()
-    if program == "creality":
-        executable = bestand.with_name("CrealityPrint.exe")
+    if program != "elegoo":
+        executable = bestand.with_name(
+            "CrealityPrint.exe" if program == "creality" else "AnycubicSlicerNext.exe"
+        )
         executable.write_bytes(b"")
         setup = _setup(executable)
     base = manufacturer.base_settings(profile, "standard", setup).settings
@@ -265,7 +268,7 @@ def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
     for index, mesh in enumerate(meshes):
         mesh.apply_translation((index * 50.0, 0, -mesh.bounds[0, 2]))
         objects.append(SceneObject(id=f"obj_{index}", name=f"Part_{index}", mesh=MeshData.of(mesh)))
-    if program == "creality" and chosen:
+    if program != "elegoo" and chosen:
         with pytest.raises(ValidationError) as caught:
             write_assembly(
                 objects,
@@ -295,7 +298,7 @@ def test_the_corrected_brim_gap_reaches_only_the_rods_unless_it_is_a_choice(
         {item.get("key"): item.get("value") for item in obj.findall("metadata")}
         for obj in config.iter("object")
     ]
-    if program == "creality":
+    if program != "elegoo":
         # Nur die Stange: Abstand nativ null, Fußkorrektur dieses Teils null;
         # die Platte und der breite Körper behalten 0,15 mm.
         assert project["brim_object_gap"] == "0.1"
@@ -642,7 +645,10 @@ def test_chamber_control_uses_the_program_key_and_proven_machine(
     assert any(f.code == "slicer.chamber_unavailable" for f in findings) is (supported is not True)
 
 
-@pytest.mark.parametrize("program", ["orcaslicer", "elegooslicer", "bambustudio", "crealityprint"])
+@pytest.mark.parametrize(
+    "program",
+    ["orcaslicer", "elegooslicer", "bambustudio", "crealityprint", "anycubicslicernext"],
+)
 def test_chamber_readback_follows_the_same_name_as_the_slicer(tmp_path: Path, program: str) -> None:
     """Bambus Plural und der alte Orca-Alias kommen auch beim Übernehmen an."""
     from app.core.export import slicer_profiles

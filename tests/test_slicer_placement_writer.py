@@ -133,7 +133,14 @@ def test_only_the_cli_path_changes_an_arrangement(tmp_path, flavour, program, ro
 
 
 @pytest.mark.parametrize(
-    "program", ["orca-slicer.exe", "bambu-studio.exe", "ElegooSlicer.exe", "CrealityPrint.exe"]
+    "program",
+    [
+        "orca-slicer.exe",
+        "bambu-studio.exe",
+        "ElegooSlicer.exe",
+        "CrealityPrint.exe",
+        "AnycubicSlicerNext.exe",
+    ],
 )
 def test_programs_that_arrange_themselves_keep_the_existing_handoff(tmp_path, program):
     objects = [body(1), body(2)]
