@@ -110,7 +110,10 @@ def test_the_held_sentence_goes_with_the_draft(before: str) -> None:
         _quiet_order=None,
         _announcement=held if before == "held" else "Gespeichert.",
         feature_panel=SimpleNamespace(measuring=False),
-        viewport=SimpleNamespace(set_feature_gizmo_blocked=lambda _blocked: None),
+        viewport=SimpleNamespace(
+            set_feature_gizmo_blocked=lambda _blocked: None,
+            set_measured_feature=lambda _ref: None,
+        ),
         _drop_feature_preview=lambda: None,
         _clear_the_status_line=lambda: cleared.append(True),
     )
@@ -427,7 +430,10 @@ def test_first_measure_edit_releases_split_but_passive_measures_do_not(
     view.session = SimpleNamespace(
         last_result=None, project=SimpleNamespace(document=object()), result_current=False
     )
-    view.viewport = SimpleNamespace(set_feature_gizmo_blocked=lambda *args, **kwargs: None)
+    view.viewport = SimpleNamespace(
+        set_feature_gizmo_blocked=lambda *args, **kwargs: None,
+        set_measured_feature=lambda _ref: None,
+    )
     monkeypatch.setattr(
         placement_flow,
         "PlacementFlow",

@@ -17972,8 +17972,10 @@ class MainWindow(QMainWindow):
         if not self._measuring_to_release:
             return
         self._measuring_to_release = False
-        if self._quiet_placement is None and self.feature_panel.measuring:
-            self.feature_panel.set_measuring(False)
+        if self._quiet_placement is None:
+            self.viewport.set_measured_feature(None)
+            if self.feature_panel.measuring:
+                self.feature_panel.set_measuring(False)
 
     def _show_chosen_features(self, chosen: list[Any]) -> None:
         """Abstand im selben Körper, manuelle Prüfbeziehung zwischen zwei Körpern."""
@@ -18454,14 +18456,21 @@ class MainWindow(QMainWindow):
 
     def _focus_measure_field(self, name: str) -> None:
         """Das Feld dieses Parameters in der Maßgruppe bekommt den Fokus."""
-        from app.ui.panels import FIELD_PROPERTY
+        from app.ui.panels import FIELD_PROPERTY, open_section
 
         flow = self._quiet_placement
         group = flow.measure_group if flow is not None else None
         if group is None:
             return
         for widget in group.findChildren(QWidget):
-            if widget.property(FIELD_PROPERTY) == name and widget.isVisibleTo(group):
+            if widget.property(FIELD_PROPERTY) != name or widget.isHidden():
+                continue
+            # X, Y und Z stehen unter „Weitere Werte“ (RM-516): Wer eines davon
+            # meint, bekommt die Klappe aufgeklappt.
+            content = widget.parentWidget()
+            if not widget.isVisibleTo(group) and content is not None:
+                open_section(content)
+            if widget.isVisibleTo(group):
                 spin = getattr(widget, "spin", widget)
                 spin.setFocus(Qt.FocusReason.OtherFocusReason)
                 if isinstance(spin, QAbstractSpinBox):
@@ -19350,6 +19359,8 @@ class MainWindow(QMainWindow):
         if not flow.active:
             self.end_quiet_placement()
             return
+        if target[1]:
+            self.viewport.set_measured_feature((target[0], target[1]))
         if editing:
             host.begin_edit()
         show_values()
@@ -19416,8 +19427,10 @@ class MainWindow(QMainWindow):
                 self._ending_quiet_placement = False
         if measuring_follows:
             self._measuring_to_release = True
-        elif self.feature_panel.measuring:
-            self.feature_panel.set_measuring(False)
+        else:
+            self.viewport.set_measured_feature(None)
+            if self.feature_panel.measuring:
+                self.feature_panel.set_measuring(False)
         self.viewport.set_feature_gizmo_blocked(False)
         self._drop_feature_preview()
         # **Der Satz zur gehaltenen Auswahl geht mit dem Entwurf**
@@ -21665,7 +21678,9 @@ class MainWindow(QMainWindow):
         note = self._conversion_preview_note(note, getattr(difference, "findings", ()))
         explanation = getattr(difference, "explanation", "")
         if explanation:
-            note = "\n".join((note, explanation))
+            # Die Warnungen der Vorschau stehen auch in der Erklärung (dort für
+            # den Chat, der nur sie liest); im Band steht jede Zeile einmal.
+            note = "\n".join(dict.fromkeys((*note.splitlines(), *explanation.splitlines())))
         self.viewport.mark_preview(note, tr("Leertaste halten: vorher") if shown else "")
 
     def _conversion_preview_note(self, title: str, findings: Sequence[Finding]) -> str:

@@ -106,11 +106,76 @@ def test_preview_explanation_reads_the_same_scenes_and_does_not_claim_print_chec
     original = SceneDifference(created=("b",), deleted=("a",))
     explained = explain_difference(original, before, after, "Teilen")
     assert explained.created == original.created and explained.deleted == original.deleted
-    assert "Ziel: Teilen" in explained.explanation
-    assert "Körperzahl: 1 → 1" in explained.explanation
-    assert "Platte" in explained.explanation and "Halter" in explained.explanation
-    assert "Außenmaß" in explained.explanation and "nicht vorhanden" in explained.explanation
-    assert "noch nicht vollständig geprüft" in explained.explanation
+    lines = explained.explanation.splitlines()
+    assert len(lines) == 1, lines
+    assert lines[0].startswith("Teilen · ")
+    assert "„Platte“ entfällt" in lines[0] and "„Halter“ neu: " in lines[0]
+    assert "Körper" not in lines[0], "1 → 1 Körper ist keine Änderung"
+    assert lines[0].endswith("Druckbefunde noch nicht geprüft")
+
+
+def test_the_preview_band_names_only_what_changes():
+    """RM-516: Titel und eine Zeile — kein „A → A“, keine drei Nachkommastellen.
+
+    Bis dahin standen über einer verschobenen Bohrung sieben Zeilen im Band:
+    Ziel, betroffene Körper, „Körperzahl: 1 → 1“, „Außenmaß … 80,000 × 50,000
+    × 8,000 mm → 80,000 × 50,000 × 8,000 mm“, Grundlage und „0 vorher, 0
+    nachher“ (guide-drill-a-hole-8).
+    """
+    from app.core.geom.difference import SceneDifference
+    from app.core.types import CheckState
+    from app.ui.print_contract import explain_difference, review_difference
+
+    plate = make_object("a", "Platte", size=(80.0, 50.0, 8.0))
+    moved = make_object("a", "Platte", size=(80.0, 50.0, 8.0))
+    explained = explain_difference(
+        SceneDifference(),
+        Scene(objects={"a": plate}),
+        Scene(objects={"a": moved}),
+        "Bohrung",
+        affected=("a",),
+    )
+    assert explained.explanation == "Bohrung · Platte · Druckbefunde noch nicht geprüft"
+    checks = (CheckState("slice.print_findings", "a", state="completed"),)
+    reviewed = review_difference(explained, [(), ()], [checks, checks])
+    assert reviewed.explanation == "Bohrung · Platte · Druckbefunde unverändert"
+    assert "→" not in reviewed.explanation and "mm" not in reviewed.explanation
+
+    grown = make_object("a", "Platte", size=(80.0, 50.0, 10.0))
+    changed = explain_difference(
+        SceneDifference(),
+        Scene(objects={"a": plate}),
+        Scene(objects={"a": grown}),
+        "Dicker",
+        affected=("a",),
+    )
+    assert changed.change == "Dicker · „Platte“: 80,00 × 50,00 × 8,00 mm → 80,00 × 50,00 × 10,00 mm"
+
+
+def test_the_preview_band_writes_lengths_in_the_display_unit():
+    """In Zoll steht kein „mm“ im Band (RM-516) — die Maße gehen über ``labels.length``."""
+    from app.core.geom.difference import SceneDifference
+    from app.ui.labels import set_display_unit
+    from app.ui.print_contract import explain_difference
+
+    before = Scene(objects={"a": make_object("a", "Platte", size=(25.4, 50.8, 5.0))})
+    after = Scene(
+        objects={
+            "a": make_object("a", "Platte", size=(25.4, 50.8, 2.54)),
+            "b": make_object("b", "Deckel", size=(25.4, 50.8, 2.54)),
+        }
+    )
+    set_display_unit("in")
+    try:
+        explained = explain_difference(
+            SceneDifference(created=("b",)), before, after, "Teilen", affected=("a",)
+        )
+    finally:
+        set_display_unit("mm")
+    assert "mm" not in explained.change, explained.change
+    assert "„Platte“: 1,0000 × 2,0000 × 0,1969 in → 1,0000 × 2,0000 × 0,1000 in" in explained.change
+    assert "„Deckel“ neu: 1,0000 × 2,0000 × 0,1000 in" in explained.change
+    assert "1 → 2 Körper" in explained.change
 
 
 def test_handoff_receipt_stays_frozen_and_separates_written_from_opened(tmp_path):
@@ -170,11 +235,16 @@ def test_review_only_calls_findings_resolved_after_complete_checks(state):
     old = Finding("slice.island", "warning", "Freistehende Insel")
     new = Finding("slice.bridge", "warning", "Neue lange Brücke")
     checks = (CheckState("slice.print_findings", "a", state=state),)
-    reviewed = review_difference(ExplainedDifference(), [(old,), (new,)], [checks, checks])
-    assert "Warnungen oder Fehler: 1 vorher, 1 nachher." in reviewed.explanation
-    assert "Neu im Nachherstand: Neue lange Brücke" in reviewed.explanation
-    assert ("nicht mehr vorhanden: Freistehende Insel" in reviewed.explanation) == (
-        state == "completed"
+    reviewed = review_difference(
+        ExplainedDifference(change="Teilen · Platte"), [(old,), (new,)], [checks, checks]
+    )
+    lines = reviewed.explanation.splitlines()
+    assert "Neu: Neue lange Brücke" in lines
+    assert ("Behoben: Freistehende Insel" in lines) == (state == "completed")
+    assert lines[0] == (
+        "Teilen · Platte"
+        if state == "completed"
+        else "Teilen · Platte · Druckbefunde nicht vollständig geprüft"
     )
     assert reviewed.findings == (new,)
 
@@ -182,8 +252,10 @@ def test_review_only_calls_findings_resolved_after_complete_checks(state):
 def test_review_names_only_what_changes_and_counts_the_rest():
     """Am Piratenschiff standen 32 Warnungen je Stand im Vorschauband (RM-090).
 
-    Gegenprobe vor dem Umbau: 2 × 32 Zeilen. Genannt wird jetzt, was neu ist
-    oder wegfällt, je höchstens vier, der Rest als Zahl.
+    Gegenprobe vor dem Umbau: 2 × 32 Zeilen. Genannt wird, was neu ist oder
+    wegfällt — seit RM-516 zusammen höchstens drei Zeilen, die letzte zählt
+    den Rest. Unverändertes steht nicht da, auch nicht als „36 vorher, 36
+    nachher“.
     """
     from app.core.types import CheckState
     from app.ui.print_contract import ExplainedDifference, review_difference
@@ -196,17 +268,36 @@ def test_review_names_only_what_changes_and_counts_the_rest():
     new = [Finding(f"bridge.long_{index}", "warning", f"Brücke {index}") for index in range(6)]
     checks = (CheckState("slice.print_findings", "a", state="completed"),)
     reviewed = review_difference(
-        ExplainedDifference(),
+        ExplainedDifference(change="Teilen · Platte"),
         [(*staying, *gone), (*staying, *new)],
         [checks, checks],
     )
     lines = reviewed.explanation.splitlines()
-    assert len(lines) <= 14, lines
-    assert "Warnungen oder Fehler: 36 vorher, 36 nachher." in lines
-    assert sum("Neu im Nachherstand" in line for line in lines) == 4
-    assert sum("nicht mehr vorhanden" in line for line in lines) == 4
-    assert lines.count("… und 2 weitere.") == 2
+    assert lines == [
+        "Teilen · Platte",
+        "Neu: Brücke 0",
+        "Neu: Brücke 1",
+        "… und 10 weitere.",
+    ]
     assert not any("Insel" in line for line in lines), "Unverändertes wird nicht wiederholt"
+
+
+def test_three_changed_findings_stand_without_a_count():
+    from app.core.types import CheckState
+    from app.ui.print_contract import ExplainedDifference, review_difference
+
+    gone = Finding("wall.thin", "warning", "Dünne Wand")
+    new = [Finding(f"bridge.long_{index}", "warning", f"Brücke {index}") for index in range(2)]
+    checks = (CheckState("slice.print_findings", "a", state="completed"),)
+    reviewed = review_difference(
+        ExplainedDifference(change="Teilen"), [(gone,), tuple(new)], [checks, checks]
+    )
+    assert reviewed.explanation.splitlines() == [
+        "Teilen",
+        "Neu: Brücke 0",
+        "Neu: Brücke 1",
+        "Behoben: Dünne Wand",
+    ]
 
 
 def test_a_project_without_its_own_printer_opens_with_the_customers_defaults(tmp_path, monkeypatch):

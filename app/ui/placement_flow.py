@@ -92,6 +92,9 @@ _log = get_logger(__name__)
 #: einer Kante — ein Zeichen für den Code, kein Text für den Nutzer.
 _PICK_IN_MODEL: Final = "pick"
 
+#: Der Eintrag „Ohne Mitte“ an der Mitte: zurück zu den zwei Kantenmaßen.
+_NO_CENTRE: Final = "no-centre"
+
 
 def _mouth_outline_on_surface(
     outline: Sequence[tuple[float, float]],
@@ -829,19 +832,120 @@ def _places_that_still_serve(
     return kept
 
 
-def _screen_side(foot: QPointF, spot: QPointF) -> str | None:
-    """Zu welcher Seite des Bildes eine Maßlinie von der Stelle aus läuft.
+#: Die Seiten je Weltachse, positiv und negativ — dieselben Seiten, nach denen
+#: der Objektbaum die Flächen benennt (``registry.surfaces.SIDE_NAMES``).
+_SIDES: Final[tuple[tuple[str, str], ...]] = (
+    ("right", "left"),
+    ("back", "front"),
+    ("top", "bottom"),
+)
 
-    ``links``, ``rechts``, ``oben`` oder ``unten`` nach der längeren Richtung im
-    Bild; ``None`` für eine Linie, die im Bild kaum eine Richtung hat (von vorn
-    auf die Kante gesehen) — dann bleibt die Nummer.
+
+def _sides_of(direction: Sequence[float]) -> list[tuple[str, float, int]]:
+    """Seite, Anteil und Achse je Weltachse, nach dem Anteil der Richtung geordnet."""
+    return sorted(
+        (
+            (
+                _SIDES[axis][0 if float(direction[axis]) > 0.0 else 1],
+                abs(float(direction[axis])),
+                axis,
+            )
+            for axis in range(3)
+        ),
+        key=lambda entry: -entry[1],
+    )
+
+
+def reference_names(references: Sequence[tuple[str, str, Vec3, Vec3]]) -> dict[str, str]:
+    """Die Namen der Bezüge einer Fläche — nach der Seite, zu der sie liegen (RM-516).
+
+    Je Bezug Kennung, Art (``outer``, ``inner``, ``axis``), die Richtung von der
+    Stelle zum Bezug und seine Mitte, alles in Weltkoordinaten. Benannt wird
+    nach der Weltachse, in die die Maßlinie läuft: „Außenkante links“,
+    „Außenkante vorn“ — dieselben Seiten wie „Linke Seite“ und „Vorderseite“ im
+    Objektbaum, und anders als die Seite im Bild bleibt der Name beim Drehen
+    der Kamera stehen. Bis dahin stand an der Platte „Außenkante 1“ und
+    „Außenkante 4“, und die Nummer musste man im Kopf einer Kante zuordnen.
+
+    Liegen zwei Bezüge derselben Art zur selben Seite, unterscheidet sie die
+    Lage ihrer Mitten entlang der nächsten Achse („Außenkante rechts, vorn“);
+    erst wo auch das nicht trägt, bleibt die Nummer.
     """
-    across, down = foot.x() - spot.x(), foot.y() - spot.y()
-    if max(abs(across), abs(down)) < 2 * SPACE:
-        return None
-    if abs(across) >= abs(down):
-        return "left" if across < 0 else "right"
-    return "up" if down < 0 else "down"
+    bare = {
+        "outer": tr("Außenkante"),
+        "inner": tr("Innenkante"),
+        "axis": tr("Achse"),
+    }
+    sided = {
+        "left": tr("{reference} links"),
+        "right": tr("{reference} rechts"),
+        "front": tr("{reference} vorn"),
+        "back": tr("{reference} hinten"),
+        "top": tr("{reference} oben"),
+        "bottom": tr("{reference} unten"),
+    }
+    words = {
+        "left": tr("links"),
+        "right": tr("rechts"),
+        "front": tr("vorn"),
+        "back": tr("hinten"),
+        "top": tr("oben"),
+        "bottom": tr("unten"),
+    }
+    numbered = {
+        "outer": tr("Außenkante {number}"),
+        "inner": tr("Innenkante {number}"),
+        "axis": tr("Achse {number}"),
+    }
+    groups: dict[tuple[str, str], list[int]] = {}
+    primary: list[tuple[str, int]] = []
+    for index, (_identifier, kind, direction, _middle) in enumerate(references):
+        side, _share, axis = _sides_of(direction)[0]
+        primary.append((side, axis))
+        groups.setdefault((kind, side), []).append(index)
+    names: dict[str, str] = {}
+    for (kind, side), members in groups.items():
+        name = sided[side].format(reference=bare.get(kind, bare["outer"]))
+        if len(members) == 1:
+            names[references[members[0]][0]] = name
+            continue
+        if len(members) == 2:
+            first, second = (
+                np.asarray(references[index][3], dtype=np.float64) for index in members
+            )
+            spread = second - first
+            spread[primary[members[0]][1]] = 0.0
+            axis = int(np.argmax(np.abs(spread)))
+            if abs(float(spread[axis])) > EPS_GEOM:
+                positive, negative = _SIDES[axis]
+                lower, upper = (negative, positive) if spread[axis] > 0.0 else (positive, negative)
+                for index, word in zip(members, (lower, upper), strict=True):
+                    names[references[index][0]] = tr("{reference}, {side}").format(
+                        reference=name, side=words[word]
+                    )
+                continue
+        for index in members:
+            kind_name = numbered.get(references[index][1], numbered["outer"])
+            names[references[index][0]] = kind_name.format(number=index + 1)
+    return names
+
+
+def _axis_letters(axes: Sequence[Sequence[float]]) -> list[str]:
+    """Die Weltachse je Richtung als Buchstabe — zwei Richtungen nie mit demselben.
+
+    Eine schräge Fläche kann zwei Achsen haben, die beide am meisten nach X
+    zeigen; dann nimmt die zweite ihre nächststärkere Achse.
+    """
+    letters: list[str] = []
+    for direction in axes:
+        letters.append(
+            next(
+                letter
+                for _side, _share, axis in _sides_of(direction)
+                if (letter := "XYZ"[axis]) not in letters
+            )
+        )
+    return letters
 
 
 def _clear_of_lines(rect: QRect, lines: Sequence[tuple[QPointF, QPointF]]) -> bool:
@@ -2534,12 +2638,11 @@ class PlacementFlow(QObject):
         self._centre.setAutoFillBackground(True)
         self._centre.hide()
         self._centre_measures = [LengthSpin(self.viewport), LengthSpin(self.viewport)]
-        for index, field in enumerate(self._centre_measures):
+        for index, (field, axis) in enumerate(zip(self._centre_measures, "XY", strict=True)):
             field.setObjectName(f"placement_centre_distance_{index + 1}")
-            field.setAccessibleName(
-                tr("Abstand zum Mittelpunkt – Richtung {number}").format(number=index + 1)
-            )
-            field.setPrefix(tr("Mitte {number}: ").format(number=index + 1))
+            # Die Achse ist hier die der Fläche; ``redraw`` setzt die der Welt.
+            field.setAccessibleName(tr("Abstand zum Mittelpunkt in {axis}").format(axis=axis))
+            field.setPrefix(tr("Mitte {axis}: ").format(axis=axis))
             field.setToolTip(tr("Der Maßpfeil zeigt die Richtung auf dieser Fläche."))
             field.hide()
         # **Der Bezugswechsel steht nicht im Bild** (Robert, 21.09.2026,
@@ -3102,13 +3205,10 @@ class PlacementFlow(QObject):
             self._prepared_mesh = entry.mesh
             self._patch_faces = frozenset(self._surface.face_indices)
             self._object_id = entry.id
-            self._centre_id = (
-                centre_id
-                if references is not None
-                else self._surface.centres[0].feature_id
-                if self._surface.centres
-                else ""
-            )
+            # **Am sitzenden Merkmal sagen zwei Kantenmaße die Lage** (RM-516);
+            # eine Mitte steht nur, wenn sie gewählt war (``_held_centre``) oder
+            # jemand sie über *Bezug ändern* dazunimmt.
+            self._centre_id = centre_id if references is not None else ""
             self._seated_at_feature = True
             self._distance_valid = True
             self._settle()
@@ -3198,9 +3298,11 @@ class PlacementFlow(QObject):
                     self._no_seat_at_feature()
                     return
                 self._prepared, self._surface, self._own_mouth = value
-                self._centre_id = (
-                    self._surface.centres[0].feature_id if self._surface.centres else ""
-                )
+                # **Die Lage steht über zwei Kantenmaße** (RM-516): Mitte 1,
+                # Mitte 2 und „Bohrung 2 · Abstand“ sagten dieselbe Stelle ein
+                # zweites und drittes Mal. Die Mitte eines Nachbarn bleibt über
+                # *Bezug ändern* am Kantenmaß erreichbar.
+                self._centre_id = ""
                 self._prepared_mesh = entry.mesh
                 self._patch_faces = frozenset(self._surface.face_indices)
                 self._object_id = object_id
@@ -3903,19 +4005,63 @@ class PlacementFlow(QObject):
             return
         self.session.placement_async(compute, done, lambda _detail: done(None), refused)
 
-    def _reference_entries(self, index: int) -> list[tuple[str, tuple[str, str]]]:
-        """Menü und Modellwahl verwenden dieselben belegten Referenzen."""
+    def _reference_entries(self, index: int) -> list[tuple[str, object]]:
+        """Menü und Modellwahl verwenden dieselben belegten Referenzen.
+
+        Am Kantenmaß stehen die Kanten und, solange keine Mitte im Bild steht,
+        die Mitten der Nachbarn — wer eine wählt, nimmt sie als drittes Maß
+        dazu. An der Mitte stehen die Mitten und der Weg zurück zu den zwei
+        Kantenmaßen (RM-516).
+        """
         if self._surface is None or self._prepared is None:
             return []
-        entries = (
-            [(identifier, "centre") for identifier, _ in self._prepared.centres]
-            if index == 2
-            else [(edge.id, edge.kind) for edge in self._prepared.edges]
-        )
-        return [
-            (self._reference_name(kind, number), (identifier, kind))
-            for number, (identifier, kind) in enumerate(entries, 1)
+        centres: list[tuple[str, object]] = [
+            (self._centre_title(identifier), (identifier, "centre"))
+            for identifier, _ in self._prepared.centres
         ]
+        if index == 2:
+            return [*centres, (tr("Ohne Mitte"), _NO_CENTRE)]
+        titles = self._reference_titles()
+        edges: list[tuple[str, object]] = [
+            (titles.get(edge.id, edge.id), (edge.id, edge.kind)) for edge in self._prepared.edges
+        ]
+        return [*edges, *([] if self._centre_id else centres)]
+
+    def _reference_titles(self, at: Vec3 | None = None) -> dict[str, str]:
+        """Die Namen aller Bezüge der Fläche, von der Stelle aus (:func:`reference_names`)."""
+        if self._surface is None or self._prepared is None:
+            return {}
+        point = np.asarray(at if at is not None else self._surface.point, dtype=np.float64)
+        entries: list[tuple[str, str, Vec3, Vec3]] = []
+        for edge in self._prepared.edges:
+            inward = np.asarray(edge.inward, dtype=np.float64)
+            span = float(np.linalg.norm(inward))
+            if span > EPS_GEOM:
+                inward = inward / span
+            start, end = np.asarray(edge.start), np.asarray(edge.end)
+            distance = float(np.dot(point - start, inward))
+            direction = -inward * distance if abs(distance) > EPS_GEOM else -inward
+            middle = (start + end) / 2.0
+            entries.append(
+                (
+                    edge.id,
+                    edge.kind,
+                    (float(direction[0]), float(direction[1]), float(direction[2])),
+                    (float(middle[0]), float(middle[1]), float(middle[2])),
+                )
+            )
+        return reference_names(entries)
+
+    def _centre_title(self, identifier: str) -> str:
+        """Die Mitte eines Nachbarn, benannt wie im Objektbaum."""
+        source = (
+            self._result.scene.objects.get(self._object_id)
+            if self._result is not None and self._object_id
+            else None
+        )
+        feature = source.features.get(identifier) if source is not None else None
+        name = feature_name(identifier, feature) if feature is not None else tr("Mitte")
+        return tr("Mitte von {feature}").format(feature=name)
 
     def _reference_field(self, index: int) -> QWidget:
         """Das Maß, an dem der Bezug mit dem Index hängt: zwei Kanten, eine Mitte."""
@@ -3951,35 +4097,6 @@ class PlacementFlow(QObject):
         menu.popup(field.mapToGlobal(at if at is not None else QPoint(0, field.height())))
         return menu
 
-    @staticmethod
-    def _reference_name(kind: str, number: int, side: str | None = None) -> str:
-        """Der Name eines Bezugs — mit seiner Seite im Bild, sonst mit Nummer.
-
-        Die Nummer bleibt im Kontextmenü (dort stehen alle Bezüge der Fläche);
-        am Maß selbst sagt die Seite mehr (:func:`_screen_side`).
-        """
-        if side is not None:
-            bare = {
-                "outer": tr("Außenkante"),
-                "inner": tr("Innenkante"),
-                "axis": tr("Achse"),
-                "centre": tr("Mitte"),
-            }
-            sided = {
-                "left": tr("{reference} links"),
-                "right": tr("{reference} rechts"),
-                "up": tr("{reference} oben"),
-                "down": tr("{reference} unten"),
-            }
-            return sided[side].format(reference=bare[kind])
-        names = {
-            "outer": tr("Außenkante {number}"),
-            "inner": tr("Innenkante {number}"),
-            "axis": tr("Achse {number}"),
-            "centre": tr("Mitte {number}"),
-        }
-        return names[kind].format(number=number)
-
     def _reference_selected(self, index: int, data: object) -> None:
         """Eine bewusste Wahl ändert nur den Bezug, niemals die Geometrie."""
         if data is None or self._surface is None or self._prepared is None:
@@ -3997,6 +4114,9 @@ class PlacementFlow(QObject):
             self._show_input_for_edit()
             self.redraw()
             return
+        if data == _NO_CENTRE:
+            self._choose_reference(index, "", "centre")
+            return
         if isinstance(data, tuple) and len(data) == 2:
             self._choose_reference(index, str(data[0]), str(data[1]))
 
@@ -4005,7 +4125,10 @@ class PlacementFlow(QObject):
             return
         try:
             if kind == "centre":
-                if not any(centre.feature_id == identifier for centre in self._surface.centres):
+                # Eine leere Kennung nimmt die Mitte wieder weg (``_NO_CENTRE``).
+                if identifier and not any(
+                    centre.feature_id == identifier for centre in self._surface.centres
+                ):
                     return
                 self._centre_id = identifier
             else:
@@ -5333,20 +5456,12 @@ class PlacementFlow(QObject):
         else:
             self._rest.hide()
 
-        # **Die Maße sagen, wohin sie gehen** (Durchsicht 0.5.1, Weg c):
-        # „Außenkante 4“ verlangte, die Nummer im Kopf auf eine Kante im Bild
-        # zu legen. Genannt wird die Seite, zu der die Maßlinie im Bild läuft
-        # — dieselbe, die das Auge sieht, auch nach dem Drehen. Zeigen beide
-        # Maße zur selben Seite, bleibt die Nummer, sonst wären sie gleich.
-        sides = [
-            _screen_side(
-                screen(tuple(point - np.asarray(edge.inward, dtype=np.float64) * edge.distance)),
-                screen(surface.point),
-            )
-            for edge in surface.edges[:2]
-        ]
-        if len(set(sides)) < len(sides):
-            sides = [None] * len(sides)
+        # **Die Maße sagen, wohin sie gehen** (RM-516): nach der Seite der
+        # Fläche, zu der die Maßlinie läuft — „Außenkante links“, „Außenkante
+        # vorn“, wie „Linke Seite“ und „Vorderseite“ im Objektbaum. Die Seite
+        # im Bild wechselte beim Drehen der Kamera, und wo beide Maße im Bild
+        # zur selben Seite liefen, blieb „Außenkante 1“ und „Außenkante 4“.
+        titles = self._reference_titles(surface.point)
         for index, edge in enumerate(surface.edges[:2]):
             reference = (screen(edge.start), screen(edge.end))
             self._canvas.references.append(reference)
@@ -5359,12 +5474,7 @@ class PlacementFlow(QObject):
             field = self._measures[index]
             if _holds_focus(field, focused):
                 self._canvas.focus.extend((reference, (start, end)))
-            number = next(
-                number
-                for number, reference in enumerate(self._prepared.edges, 1)
-                if reference.id == edge.id
-            )
-            reference_name = self._reference_name(edge.kind, number, sides[index])
+            reference_name = titles.get(edge.id) or str(tr("Außenkante"))
             # Den Zahlenwert ergänzt das Feld; der Katalog setzt das gesamte Präfix.
             field.setPrefix(tr("{name}: {value}", name=reference_name, value=""))
             # **Der Name für den Bildschirmleser zieht mit.** Er stand einmalig
@@ -5390,7 +5500,14 @@ class PlacementFlow(QObject):
         if centre is not None:
             corner = np.asarray(centre.point) + np.asarray(surface.frame.x_axis) * centre.offset[0]
             vertices = (centre.point, tuple(corner), surface.point)
+            axes = _axis_letters((surface.frame.x_axis, surface.frame.y_axis))
             for index, field in enumerate(self._centre_measures):
+                # Nach der Achse benannt, in der das Maß läuft — „Mitte X“
+                # statt „Mitte 1“ (RM-516).
+                field.setPrefix(tr("Mitte {axis}: ").format(axis=axes[index]))
+                field.setAccessibleName(
+                    tr("Abstand zum Mittelpunkt in {axis}").format(axis=axes[index])
+                )
                 start, end = screen(vertices[index]), screen(vertices[index + 1])
                 self._canvas.lines.append((start, end))
                 if _holds_focus(field, focused):

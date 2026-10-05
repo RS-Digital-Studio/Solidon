@@ -470,8 +470,9 @@ def test_material_preview_explains_its_target_without_a_geometry_change(qt_app, 
         assert difference is not None and not difference.changed
         assert "Platte" in difference.explanation
         assert "Material „Platte“:" in difference.explanation and "PETG" in difference.explanation
-        assert "Außenmaß „Platte“:" in difference.explanation
-        assert "noch nicht vollständig geprüft" in difference.explanation
+        # Das Außenmaß bleibt — und was bleibt, steht nicht da (RM-516).
+        assert "Außenmaß" not in difference.explanation and " × " not in difference.explanation
+        assert "Druckbefunde noch nicht geprüft" in difference.explanation
         assert len(session.history.transactions) == before
         session.apply("Material festlegen", [draft])
         assert session.wait_for_idle()
@@ -506,9 +507,9 @@ def test_full_preview_checks_both_actual_states_and_keeps_material_change(qt_app
         assert [kind for kind, _ in events] == ["picture", "checked"]
         final = events[-1][1]
         assert final is not None
-        assert "genaue Auswertung und Schichtanalyse" in final.explanation
         assert "Material „Platte“:" in final.explanation
-        assert "Warnungen oder Fehler: 0 vorher, 0 nachher." in final.explanation
+        assert final.explanation.endswith("Druckbefunde unverändert"), final.explanation
+        assert len(final.explanation.splitlines()) == 1, final.explanation
         assert session.last_result.scene.objects[key].material != "petg"
     finally:
         session.release()
@@ -592,10 +593,10 @@ def test_candidate_review_names_a_print_finding_the_change_resolves(qt_app):
         assert session.wait_for_idle(60_000)
         assert [kind for kind, _ in events] == ["picture", "checked"]
         text = events[-1][1].explanation
-        assert "genaue Auswertung und Schichtanalyse" in text
-        assert "Im geprüften Nachherstand nicht mehr vorhanden" in text, text
-        assert "noch nicht vollständig geprüft" not in text
-        assert len(text.splitlines()) <= 16, text
+        assert any(line.startswith("Behoben: ") for line in text.splitlines()), text
+        assert "noch nicht geprüft" not in text and "nicht vollständig geprüft" not in text
+        # Eine Änderungszeile, höchstens drei Befundzeilen (RM-516).
+        assert len(text.splitlines()) <= 4, text
         assert session.last_result.scene.objects[key].mesh.bounds.size[0] > bed, (
             "die Vorschau ändert das Dokument nicht"
         )

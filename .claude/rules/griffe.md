@@ -288,6 +288,18 @@ und stellt die gemessenen Werte wieder her (`_drag_kind` bleibt `"slot"`).
   gemeint ist. **Der Zwilling zeigt nur, was er allein hat**
   (`FeaturePanel._in_the_view`): Breite, Durchmesser, X, Y, Z und Toleranz
   stehen schon im Bild.
+* **Im Bild steht jede Zahl einmal** (RM-516): Solange die Maße stehen, trägt
+  das Merkmal keine Marke (`Viewport.set_measured_feature`), die runde Bohrung
+  keine Länge neben den Knöpfen (`_slot_length_text`), die Maßgruppe statt
+  „Aktuell: Ø…“ nur das warnende Herkunftswort (`labels.feature_source`) und
+  X, Y, Z unter „Weitere Werte“ (`panels._coordinate_fields`). Am sitzenden
+  Merkmal sagen zwei Kantenmaße die Lage; eine Mitte nur über *Bezug ändern*
+  („Ohne Mitte“ nimmt sie zurück).
+* **Bezüge heißen nach der Seite, zu der ihre Maßlinie läuft**
+  (`placement_flow.reference_names`, Weltachsen wie die Flächennamen im Baum),
+  Mittenmaße nach ihrer Achse (`_axis_letters`); nicht nach der Seite im Bild,
+  die beim Drehen wechselt. Eine Nummer nur, wo drei Bezüge einer Art zur
+  selben Seite liegen.
 
 ### Wo etwas schon sitzt, zielt der Zeiger nicht
 

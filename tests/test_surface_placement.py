@@ -3755,6 +3755,7 @@ def _preview_matrix(
             _show_bar=lambda: None,
             _refresh_measure_actions=lambda: None,
             _size_measure_fields=lambda _room: None,
+            _reference_titles=lambda _at=None: {},
             _seat_is_coming=lambda: False,
             _object_id="object",
             _frozen=False,
@@ -3791,6 +3792,7 @@ def _preview_matrix(
         flow._show_bar = lambda: None
         flow._refresh_measure_actions = lambda: None
         flow._size_measure_fields = lambda _room: None
+        flow._reference_titles = lambda _at=None: {}
         flow._seat_is_coming = lambda: False
         flow._object_id = "object"
         flow._frozen = False

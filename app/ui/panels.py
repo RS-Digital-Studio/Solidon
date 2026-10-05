@@ -156,6 +156,7 @@ from app.core.types import (
     Parameter,
     SceneObject,
     Transaction,
+    measure_status,
 )
 from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
@@ -176,6 +177,7 @@ from app.ui.labels import (
     feature_measure,
     feature_measure_tip,
     feature_name,
+    feature_source,
     fill_parameter_units,
     group_measure_text,
     group_summary,
@@ -7664,6 +7666,27 @@ class _MeasureGroup:
     fields: tuple[Any, ...] = ()
     fixed: tuple[tuple[str, Any], ...] = ()
     released: list[Callable[[], None]] = dataclasses.field(default_factory=list)
+    more: QWidget | None = None
+    """Die Klappe „Weitere Werte“ mit X, Y und Z der Stelle — ``None`` ohne Koordinaten."""
+
+
+def _coordinate_fields(action: Any) -> frozenset[str]:
+    """Die Felder einer Handlung, die die Stelle als X, Y und Z tragen (RM-516).
+
+    Im Bild steht die Stelle über die Kantenmaße; diese drei Felder sagen
+    dasselbe noch einmal und stehen deshalb hinter „Weitere Werte“. Die Namen
+    kommen aus dem Schema der Operation (``placement_fields``), nicht aus einer
+    zweiten Liste hier.
+    """
+    from app.core.knowledge.parts.ops import placement_fields
+
+    op = getattr(action, "op", None)
+    if not isinstance(op, str) or not REGISTRY.has(op):
+        return frozenset()
+    placed = placement_fields(REGISTRY.get(op).params)
+    names = frozenset(placed.get(axis, axis) for axis in ("x", "y", "z"))
+    given = {str(field.name) for field in action.fields}
+    return names if names <= given else frozenset()
 
 
 def _set_shown(widget: QWidget, visible: bool) -> None:
@@ -7699,6 +7722,7 @@ def _measure_group_alive(group: _MeasureGroup) -> bool:
         group.title,
         group.current,
         group.note,
+        group.more,
         *group.widgets.values(),
         *group.labels.values(),
         *group.refusals.values(),
@@ -8461,7 +8485,16 @@ class FeaturePanel(QWidget):
         # Maß ist keine Auskunft, „eingepasst“ schon (``measure_qualifier`` mit
         # ``compact``). Woher die Zahl kommt, sagt der Tooltip jedes Mal.
         measure = feature_measure(feature, compact=True)
-        heading = QLabel(f"{cavity_name(feature_id, feature, cavity)}  ·  {measure}")
+        name = cavity_name(feature_id, feature, cavity)
+        # **An einer Bohrung nennt der Satz darunter das Maß** (RM-516):
+        # „Bohrungsmaß: 5,20 mm (eingepasst). Passt vermutlich zu M5“ — im
+        # Kopf davor stand derselbe Durchmesser samt Herkunft schon einmal.
+        said_below = (
+            feature.kind == "hole"
+            and feature.params.get("diameter") is not None
+            and measure_status(feature, "diameter").available
+        )
+        heading = QLabel(name if said_below else f"{name}  ·  {measure}")
         hint = feature_measure_tip(feature)
         heading.setToolTip(hint)
         heading.setStatusTip(hint)
@@ -10257,7 +10290,7 @@ class FeaturePanel(QWidget):
         signature: tuple[Any, ...] | None,
     ) -> _MeasureGroup:
         """Baut die Widgets einer Maßgruppe — Texte schreibt :meth:`_fill_measure_group`."""
-        from app.ui.op_dialog import ValueField
+        from app.ui.op_dialog import ValueField, advanced_summary
 
         box = _MeasureBox(parent)
         form = QFormLayout(box)
@@ -10283,7 +10316,21 @@ class FeaturePanel(QWidget):
         widgets: dict[str, QWidget] = {}
         labels: dict[str, QLabel] = {}
         refusals: dict[str, QLabel] = {}
+        # **Die Stelle steht über die Kantenmaße im Bild** (RM-516): X, Y und Z
+        # derselben Stelle stehen dahinter, unter „Weitere Werte“ — erreichbar,
+        # aber nicht als zweite Zahlenreihe für dieselbe Lage.
+        coordinates = _coordinate_fields(action)
+        more_form: QFormLayout | None = None
+        more_content: QWidget | None = None
+        if coordinates:
+            more_content = QWidget(box)
+            more_form = QFormLayout(more_content)
+            more_form.setContentsMargins(0, 0, 0, 0)
+            more_form.setSpacing(TIGHT)
+            more_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+            more_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         for field in action.fields:
+            target = more_form if more_form is not None and str(field.name) in coordinates else form
             editor = self._build_field(field, box)
             label = QLabel(str(field.label), box)
             label.setWordWrap(True)
@@ -10293,14 +10340,14 @@ class FeaturePanel(QWidget):
                 wheel_needs_focus(editor.spin)
             elif isinstance(editor, QAbstractSpinBox | QComboBox):
                 wheel_needs_focus(editor)
-            form.addRow(label, editor)
+            target.addRow(label, editor)
             if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
                 refusal = QLabel(box)
                 refusal.setObjectName(f"feature-measure-refusal-{field.name}")
                 refusal.setWordWrap(True)
                 refusal.setVisible(False)
                 refusals[str(field.name)] = refusal
-                form.addRow(refusal)
+                target.addRow(refusal)
                 editor.valueRefused.connect(partial(self._refresh_measure_refusal, editor, refusal))
                 editor.lineEdit().textEdited.connect(
                     partial(self._refresh_measure_refusal, editor, refusal)
@@ -10317,7 +10364,22 @@ class FeaturePanel(QWidget):
                 editor.currentIndexChanged.connect(box.conditionsChanged)
             elif isinstance(editor, QSpinBox | QDoubleSpinBox):
                 editor.valueChanged.connect(box.conditionsChanged)
-        group = _MeasureGroup(box, signature, title, current, note, widgets, labels, refusals)
+        more: QWidget | None = None
+        if more_content is not None:
+            names = [str(field.label) for field in action.fields if str(field.name) in coordinates]
+            more = collapsible(
+                tr("Weitere Werte"),
+                more_content,
+                open_now=False,
+                contents=advanced_summary(names),
+            )
+            more.setParent(box)
+            more.setObjectName("feature-measure-more")
+            form.addRow(more)
+            align_forms(box)
+        group = _MeasureGroup(
+            box, signature, title, current, note, widgets, labels, refusals, more=more
+        )
         box.conditionsChanged.connect(
             weak_slot(self, FeaturePanel._follow_measure_conditions, group)
         )
@@ -10335,17 +10397,25 @@ class FeaturePanel(QWidget):
         group.fixed = tuple(getattr(action, "fixed", ()))
         group.title.setText(str(action.title))
         if group.current is not None and feature is not None:
-            caption = (
-                tr("Am fertigen Teil: {measure}")
-                if getattr(action, "step", None) is not None
-                else tr("Aktuell: {measure}")
-            ).format(measure=feature_measure(feature))
+            # **Die Zahl steht im Feld, hier nur, woher sie kommt** (RM-516).
+            # „Aktuell: Ø5,20 mm · eingepasst“ über dem Feld mit 5,20 mm war
+            # derselbe Durchmesser ein zweites Mal im Bild. Geblieben ist das
+            # Wort, das warnt; eine direkte Quelle sagt nichts, und am
+            # fertigen Teil eines Schritts steht im Feld dessen eigener Wert.
+            caption = feature_source(feature) if getattr(action, "step", None) is None else ""
             group.current.setText(caption)
             hint = feature_measure_tip(feature)
             group.current.setToolTip(hint)
             group.current.setStatusTip(hint)
             group.current.setAccessibleDescription(hint)
-            fit_wrapped(group.current)
+            _set_shown(group.current, bool(caption))
+            if caption:
+                fit_wrapped(group.current)
+        if group.more is not None:
+            # Jede Maßgruppe beginnt zugeklappt, auch eine wiederverwendete.
+            heading = group.more.findChild(QToolButton, "sectionHeading")
+            if heading is not None and heading.isChecked():
+                heading.setChecked(False)
         if group.note is not None:
             group.note.setText(str(action.note))
             fit_wrapped(group.note)
@@ -10412,7 +10482,9 @@ class FeaturePanel(QWidget):
         # Umfangsbereich des Flusses um; endet der Fluss vorher, stünde er
         # beim nächsten Merkmal verwaist oben links in der Gruppe.
         own = {
-            id(part) for part in (group.title, group.current, group.note) if part is not None
+            id(part)
+            for part in (group.title, group.current, group.note, group.more)
+            if part is not None
         } | {
             id(part)
             for part in (*group.widgets.values(), *group.labels.values(), *group.refusals.values())

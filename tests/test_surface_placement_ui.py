@@ -2108,6 +2108,62 @@ def test_the_feature_panel_keeps_measuring_from_hole_to_hole(qt_app: QApplicatio
         window.release()
 
 
+def test_a_selected_hole_names_each_number_once_in_the_view(qt_app: QApplication) -> None:
+    """Der Zustand von guide-thread-a-hole-1: jede Zahl einmal, kein Bezug mit Nummer (RM-516).
+
+    Vorher zeigte die gewählte Bohrung ihren Durchmesser in Marke, Maßzahl,
+    Karte und Feld und ihre Lage über sieben Zahlen — zwei Kantenmaße, zwei
+    Mittenmaße, ein Abstand zur Nachbarbohrung und X, Y, Z —, die Bezüge hießen
+    „Außenkante 4“ und „Mitte 2“. Gegenprobe: Mit dem Ende der Maße kommt die
+    Marke zurück.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.labels import feature_label
+    from app.ui.panels import FIELD_PROPERTY
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        viewport = window.viewport
+        feature = window.session.last_result.scene.objects[object_id].features[hole]
+        assert viewport._measured_feature == (object_id, hole)
+        marks = [text for _point, text, _priority in viewport._feature_label_data]
+        assert feature_label(hole, feature, compact=True) not in marks, "keine Marke am Loch"
+        assert not flow._centre_id, "die Lage steht über zwei Kantenmaße"
+        assert all(field.isHidden() for field in flow._centre_measures)
+        assert flow._centre.isHidden()
+        names = [field.prefix() for field in flow._measures]
+        assert all(names) and not any(character.isdigit() for name in names for character in name)
+        group = flow._measure_group
+        caption = group.findChild(QLabel, "feature-measure-source")
+        assert caption is None or not any(character.isdigit() for character in caption.text())
+        coordinates = [
+            widget
+            for widget in group.findChildren(QWidget)
+            if widget.property(FIELD_PROPERTY) in {"x", "y", "z"}
+        ]
+        assert coordinates and not any(widget.isVisibleTo(group) for widget in coordinates), (
+            "X, Y und Z stehen hinter „Weitere Werte“"
+        )
+        window._focus_measure_field("x")
+        assert any(widget.isVisibleTo(group) for widget in coordinates), (
+            "wer X meint, bekommt die Klappe aufgeklappt"
+        )
+        assert viewport._slot_length_text() == ""
+        window.object_tree.select_object(object_id)
+        window.session.wait_for_idle()
+        for _ in range(20):
+            QApplication.processEvents()
+        assert viewport._measured_feature is None, "ohne Maße im Bild kommt die Marke zurück"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_passive_measures_can_be_replaced_but_a_begun_draft_cannot(
     qt_app: QApplication,
 ) -> None:
@@ -4553,8 +4609,10 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
         flow = _measures_in_the_view(window)
         assert flow is not None and flow._change_op == drill.id
         assert flow.dialog.values() == original
+        # Am fertigen Teil eines Schritts steht im Feld dessen eigener Wert;
+        # eine zweite Zahl darüber gibt es nicht mehr (RM-516).
         caption = flow._measure_group.findChild(QLabel, "feature-measure-source")
-        assert caption is not None and "Am fertigen Teil:" in caption.text()
+        assert caption is not None and caption.isHidden() and not caption.text()
         assert not flow.dialog.begun and not window.feature_dock.is_current()
         assert set(flow._result.scene.objects) == {owner}
         assert not any(

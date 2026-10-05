@@ -1492,6 +1492,33 @@ def test_slot_grip_snap_labels_and_clearance_follow_the_preview(qt_app: object) 
         viewport.deleteLater()
 
 
+def test_a_round_hole_shows_no_second_diameter_beside_its_knobs(qt_app: object) -> None:
+    """Die Länge neben den Knöpfen steht erst, wenn ein Langloch daraus wird (RM-516).
+
+    An der runden Bohrung ist sie ihr Durchmesser, und der steht im Feld der
+    Maßgruppe — daneben stand im Bild ein zweites „5,20 mm“.
+    """
+    from app.ui.labels import length
+    from app.ui.viewport import Viewport
+
+    load_operations()
+    viewport = Viewport()
+    try:
+        viewport.renderer = RecordingRenderer(size=(800, 600))
+        a_slot_in_the_view(viewport)
+        handle = viewport._slot_handle
+        assert handle is not None
+        handle.set_values(2.0 * handle.radius, 0.0)
+        viewport._update_slot_labels()
+        assert viewport._gizmo_label_texts[-1] == "", "rund: keine Zahl neben den Knöpfen"
+        handle.set_values(20.0, 0.0)
+        viewport._update_slot_labels()
+        assert viewport._gizmo_label_texts[-1] == length(20.0), "ein Langloch nennt seine Länge"
+    finally:
+        viewport.renderer = None
+        viewport.deleteLater()
+
+
 def test_a_drag_waits_in_its_bar_instead_of_writing_a_step(qt_app: object) -> None:
     """Der Zug endet in der Leiste — die Operation entsteht erst beim Übernehmen.
 

@@ -245,6 +245,12 @@ Rückmeldung, die nie stimmt. Das Vorschauband trägt den Grund aus dem Kern
 Was nie etwas tun kann, sagt es schon am Menüeintrag (`grenzen.md`, „Der Satz
 kommt vor den Dialog“).
 
+**Das Band nennt, was sich ändert** (RM-516, Vertrag RM-090): unter dem Titel
+eine Zeile aus `print_contract.explain_difference` — Ziel, Körper und von
+Außenmaß, Körperzahl und Material nur, was nicht bleibt, Längen über
+`labels.length` —, dahinter der Stand der Druckprüfung. Neue und behobene
+Befunde stehen in höchstens drei Zeilen darunter (`review_difference`).
+
 **Eine Absage steht auch bei den Eingaben** (`OperationDialog.show_refusal`),
 selbst wenn der Dialog keinen zusätzlichen Handlungsknopf ausführen kann.
 Die nächste Vorschau räumt den alten Satz ab; das Vorschauband bleibt die

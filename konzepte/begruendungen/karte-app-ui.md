@@ -2147,8 +2147,10 @@ Kernauskunft. `labels.feature_measure` gruppiert gleiche Zusätze; verschiedene
 Quellen bleiben je Zahl benannt. Baum, Viewport und Merkmalpanel benutzen
 dieselben Texte. Tooltip, Statushinweis und Vorlesetext erklären die Quelle
 ohne erfundene Genauigkeit. Die gemeinsame Feldfabrik kennzeichnet den
-unveränderten Ausgangswert; aktuelle Zielwerte bleiben editierbar. Historische
-Maßgruppen zeigen Schrittvorgaben und die Auskunft „Am fertigen Teil“ getrennt.
+unveränderten Ausgangswert; aktuelle Zielwerte bleiben editierbar. Über dem
+Feld einer Maßgruppe steht nur das warnende Herkunftswort, keine zweite Zahl
+(`labels.feature_source`, RM-516); historische Maßgruppen zeigen im Feld die
+Schrittvorgabe.
 Die Viewport-Auskunft folgt dem tatsächlich dargestellten Vorschaukörper und
 weicht vorübergehend der vorhandenen Fangpunktansage.
 

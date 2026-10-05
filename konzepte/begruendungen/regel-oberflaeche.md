@@ -280,6 +280,22 @@ Vorschau: Diese Ebene teilt das Objekt nicht."), sagt bei leerer Differenz
 gerechnet …" (§2.8). Ein leeres Bild ohne Satz sieht aus wie „nichts ändert
 sich" — und das ist die eine Rückmeldung, die nie stimmt.
 
+**Das Band nennt, was sich ändert, und sonst nichts** (RM-516, Durchsicht der
+Oberfläche 0.5.2, Befund B9). Über einer verschobenen Bohrung
+(guide-drill-a-hole-8) standen sieben Zeilen: Ziel, betroffene Körper,
+„Körperzahl: 1 → 1", „Außenmaß … 80,000 × 50,000 × 8,000 mm → 80,000 ×
+50,000 × 8,000 mm", zwei Grundlagensätze und „Warnungen oder Fehler: 0
+vorher, 0 nachher". Das Außenmaß schrieb drei Nachkommastellen und ein festes
+„mm" — in Zoll falsch. Seither steht unter dem Titel eine Zeile („Bohrung
+setzen · plate_holes · Druckbefunde unverändert"), am echten Fenster gemessen
+zwei Zeilen statt acht. Der Vertrag aus RM-090 bleibt: Was sich an Außenmaß,
+Körperzahl und Material ändert, steht mit Vorher und Nachher da; was bleibt,
+ist mit dem Körpernamen gesagt. Dass Druckbefunde noch nicht geprüft oder
+nicht vollständig geprüft sind, sagt dieselbe Zeile, und „behoben" heißt
+weiterhin nur, was eine vollständige Gegenprüfung nicht mehr findet. Neue
+und behobene Befunde teilen sich höchstens drei Zeilen, die letzte zählt den
+Rest — vorher je vier und je eine Zählzeile.
+
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 
 Die Regel „jedes Feld sagt, was es tut" nannte zwei Orte — die
