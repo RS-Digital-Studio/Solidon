@@ -814,7 +814,7 @@ def test_the_oversized_example_shows_auto_split_with_its_pins(evaluated) -> None
 def test_the_screw_holes_of_way_two_follow_width_and_thickness(
     width: float, thickness: float
 ) -> None:
-    """Die Tour verspricht, dass die Schraubenlöcher bleiben, wo sie hingehören.
+    """Die Tour verspricht, dass die Schraubenlöcher an ihrem Platz bleiben.
 
     Sie standen fest bei x = ±20 und 6 mm tief: Breite 40 schnitt eine Bohrung
     halb in die Kante, Breite 30 ließ sie neben dem Körper ins Leere gehen,
