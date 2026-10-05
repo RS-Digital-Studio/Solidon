@@ -6719,6 +6719,11 @@ def window_program(executable: Path) -> Path | None:
     ein Programm mit Fenster, und das liegt bei zwei Familien neben dem
     Konsolenprogramm im selben Ordner. Gesucht wird nur dort — ein Fenster aus
     einer anderen Installation wäre ein anderer Slicer mit anderen Profilen.
+
+    **Zurück kommt die Datei, wie sie heißt.** Auf einem Dateisystem ohne
+    Unterscheidung der Schreibweise (APFS, NTFS) trifft ``is_file`` auch
+    ``Ultimaker-Cura``, wo ``UltiMaker-Cura`` liegt; der zusammengesetzte Name
+    war dann ein Pfad, den es so nicht gibt. Gelesen wird deshalb der Ordner.
     """
     names = _WINDOW_SIBLINGS.get(executable.stem.casefold())
     if names is None:
@@ -6730,10 +6735,19 @@ def window_program(executable: Path) -> Path | None:
     if bundle is not None:
         folders.append(bundle / "Contents" / "MacOS")
     for folder in folders:
+        try:
+            entries = sorted(folder.iterdir())
+        except OSError:
+            continue
         for name in names:
-            candidate = folder / (name + executable.suffix)
-            if candidate.is_file():
-                return candidate
+            wanted = name + executable.suffix
+            spelled = [entry for entry in entries if entry.name.casefold() == wanted.casefold()]
+            # Die genaue Schreibweise zuerst: Auf einem Dateisystem mit
+            # Unterscheidung können beide nebeneinander liegen.
+            spelled.sort(key=lambda entry: entry.name != wanted)
+            found = next((entry for entry in spelled if entry.is_file()), None)
+            if found is not None:
+                return found
     return None
 
 

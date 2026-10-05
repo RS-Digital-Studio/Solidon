@@ -4653,7 +4653,14 @@ def test_cura_as_a_flatpak_reads_its_own_data_folder(
 def test_cura_on_a_mac_finds_its_definitions_and_its_window(tmp_path: Path) -> None:
     """Cura 5 legt auf dem Mac seinen Bestand nach ``Contents/Resources/share/cura``
     und die Rechenmaschine daneben (``CuraApplication.py``,
-    ``CuraEngineBackend.py``); das Fenster liegt in ``Contents/MacOS``."""
+    ``CuraEngineBackend.py``); das Fenster liegt in ``Contents/MacOS``.
+
+    **Das Fenster heißt, wie die Datei heißt.** ``window_program`` setzte den
+    Namen aus seiner Liste zusammen und fragte ``is_file``: Auf APFS ohne
+    Unterscheidung der Schreibweise traf schon ``Ultimaker-Cura``, und zurück
+    kam ein Pfad, den es so nicht gibt (Generalprobe 0.5.3, macOS-Runner).
+    Verglichen wird der Text, denn ``WindowsPath`` vergleicht ohne Schreibweise.
+    """
     from app.core.export import handover
 
     contents = tmp_path / "UltiMaker Cura.app" / "Contents"
@@ -4666,7 +4673,7 @@ def test_cura_on_a_mac_finds_its_definitions_and_its_window(tmp_path: Path) -> N
         program.write_bytes(b"")
 
     assert sp.install_root(engine) == shared
-    assert handover.window_program(engine) == window
+    assert str(handover.window_program(engine)) == str(window)
 
 
 def test_creality_print_keeps_its_printers_below_its_application_key(
