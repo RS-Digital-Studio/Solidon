@@ -543,7 +543,7 @@ def rim_room(
                 for axis, length in ((0, width), (1, depth))
             ]
             best = max(best, min(rooms))
-    if best == float("-inf"):
+    if math.isinf(best):
         return free_margin(whole, printer) - around_whole
     return best
 

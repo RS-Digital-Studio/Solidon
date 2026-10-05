@@ -21,6 +21,47 @@ def test_complete_configuration_reports_a_discarded_key(flavour: str) -> None:
     assert findings[0].values == {"count": 1, "settings": "chamber_temperature: 35 → —"}
 
 
+def test_a_discarded_value_is_named_with_both_values_and_a_way() -> None:
+    """„Der Slicer hat Einstellungen anders übernommen“ nannte weder Wert noch
+    Ausweg (Anycubic-Matrix, B6). Der Satz nennt jetzt das Feld des
+    Druckdialogs, das Geschriebene und das Gedruckte; die Knöpfe führen in den
+    Druckdialog und zum Slicerprofil (Regel 17)."""
+    from app.core.errors import CHECK_SLICER_PROFILE, OPEN_PRINT_SETTINGS
+    from app.core.knowledge import print_fields
+    from app.i18n import source_text
+
+    one = handover.verify_settings(
+        {"nozzle_temperature": "210"}, {"nozzle_temperature": "235"}, flavour="orca"
+    )
+    many = handover.verify_settings(
+        {"nozzle_temperature": "210", "slow_down_layer_time": "8", "top_shell_layers": "5"},
+        {"nozzle_temperature": "235", "slow_down_layer_time": "20", "top_shell_layers": "5"},
+        flavour="orca",
+    )
+
+    title = source_text(print_fields.field_of("temperature.nozzle").title)
+    assert source_text(one[0].message) == f"Der Slicer druckt „{title}“ mit 210 statt 235."
+    assert one[0].suggestions == (OPEN_PRINT_SETTINGS, CHECK_SLICER_PROFILE)
+    assert many[0].values["count"] == 2
+    assert "2 Einstellungen" in source_text(many[0].message)
+    assert f"„{title}“ mit 210 statt 235" in source_text(many[0].message)
+    unknown = handover.verify_settings({"odd_key": "1"}, {"odd_key": "2"}, flavour="orca")
+    assert "„odd_key“ mit 1 statt 2" in source_text(unknown[0].message), "sonst der Schlüssel"
+    start = "G28\\nG29\\n" + "M117 Solidon\\n" * 20
+    coded = handover.verify_settings(
+        {"layer_height": "0.3", "machine_start_gcode": "G28"},
+        {"layer_height": "0.2", "machine_start_gcode": start},
+        flavour="orca",
+    )
+    text = source_text(coded[0].message)
+    assert "0.3 statt 0.2" in text, "ein Wert geht einem Startcode vor"
+    assert start in coded[0].values["settings"], "der ganze Startcode bleibt in den Werten"
+    lone = handover.verify_settings(
+        {"machine_start_gcode": "G28"}, {"machine_start_gcode": start}, flavour="orca"
+    )
+    assert start not in source_text(lone[0].message) and "…" in source_text(lone[0].message)
+
+
 @pytest.mark.parametrize("flavour", [None, "cura"])
 def test_partial_configuration_has_no_missing_key_claim(flavour: str | None) -> None:
     """Cura und einzelne Vergleichswerte versprechen keinen vollständigen Block."""

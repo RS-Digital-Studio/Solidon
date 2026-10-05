@@ -3294,7 +3294,7 @@ def _smoothest_fill(
                 continue
             for middle in range(first + 1, last):
                 left, right = best[first][middle], best[middle][last]
-                if left[0] == math.inf or right[0] == math.inf:
+                if math.isinf(left[0]) or math.isinf(right[0]):
                     continue
                 normal = normal_of(first, middle, last)
                 neighbour_left = (

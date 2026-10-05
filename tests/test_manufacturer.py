@@ -2103,6 +2103,56 @@ def test_a_stage_lies_over_the_standard_process(
     assert process["outer_wall_speed"] == "160", "das Tempo bleibt beim Hersteller"
 
 
+@pytest.mark.parametrize("fits", [False, True])
+def test_a_named_standard_of_another_printer_still_lets_the_stage_lie_over_it(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, fits: bool
+) -> None:
+    """Anycubics Kobra 4 0,8 nennt den Standard des Kobra X (B3). Der eigene
+    Standard derselben Schichthöhe vertritt ihn — auch für die Stufe, die über
+    dem Standard liegt; passt der genannte doch, bleibt der eigene eine Wahl."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo"
+    machine = vendor / "machine" / "ECC2" / "cc2.json"
+    document = json.loads(machine.read_text(encoding="utf-8"))
+    document["default_print_profile"] = "0.20mm Standard @Fremd"
+    _write(machine, document)
+    _write(
+        vendor / "process" / "ECC2" / "0.20mm Standard @Fremd.json",
+        {
+            "type": "process",
+            "name": "0.20mm Standard @Fremd",
+            "inherits": "fdm_process_common",
+            "instantiation": "true",
+            "compatible_printers": [
+                "Elegoo Centauri Carbon 2 0.4 nozzle" if fits else "Elegoo Fremd 0.4 nozzle"
+            ],
+        },
+    )
+
+    base = manufacturer.base_settings(_cc2(), "fine", _setup(bestand))
+
+    assert ("layers.layer_height" in base.staged) is not fits
+
+
+def test_a_slicer_machine_without_a_process_is_said(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fehlt der Prozess, druckte Solidon still mit seiner Tabelle — am Kobra 4
+    0,8 langsamer und mit einer Wand mehr (B3). Jetzt sagt es ein Befund mit
+    dem Weg in den Druckdialog."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    setup = replace(_setup(bestand), base_process="")
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    found = manufacturer.findings(foundation)
+
+    assert not foundation.has_profile
+    assert [entry.code for entry in found] == ["slicer.process_missing"]
+    assert found[0].suggestions
+    assert "Elegoo Centauri Carbon 2 0.4 nozzle" in str(found[0].message)
+    assert manufacturer.findings(manufacturer.base_settings(_cc2(), "standard", None)) == []
+
+
 def test_a_chosen_process_is_the_stage(bestand: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Wer selbst einen anderen Prozess wählt, hat die Stufe damit gewählt:
     Über ihm liegt keine Stufe."""
@@ -2284,6 +2334,48 @@ def test_a_printer_with_a_plate_choice_gets_no_guessed_plate(
     assert [entry.code for entry in manufacturer.findings(foundation)] == ["slicer.plate_unknown"]
 
 
+@pytest.mark.parametrize("executable_name", ["AnycubicSlicerNext.exe", "orca-slicer.exe"])
+def test_anycubic_names_the_plate_its_program_takes(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, executable_name: str
+) -> None:
+    """Anycubics Maschinen haben Plattenwahl ohne Standardplatte. Solidon schrieb
+    deshalb die Temperatur der glatten Platte auf jede Platte und warnte bei
+    jedem Schnitt; Anycubic Slicer Next rechnet ohne Angabe auf der
+    texturierten PEI-Platte (Anycubic-Matrix, B5: Kobra S1 0,6 PLA 55 statt
+    65 °C). Für dieses Programm gilt jetzt dessen Platte samt ihrer Temperatur
+    aus dem Filament; OrcaSlicer behält Warnung und Gleichsetzung."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    common = bestand.parent / "resources" / "profiles" / "Elegoo" / "machine"
+    document = json.loads((common / "fdm_machine_common.json").read_text(encoding="utf-8"))
+    document.pop("default_bed_type")
+    document["support_multi_bed_types"] = "1"
+    _write(common / "fdm_machine_common.json", document)
+    executable = bestand.with_name(executable_name)
+    executable.write_bytes(b"")
+    setup = _setup(executable)
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    process, filament = _written(tmp_path, foundation.settings, setup)
+
+    if executable_name == "AnycubicSlicerNext.exe":
+        assert foundation.plate == "Textured PEI Plate"
+        assert foundation.settings.temperature.bed == 60, "die texturierte Platte des Filaments"
+        assert manufacturer.findings(foundation) == []
+        assert process["curr_bed_type"] == "Textured PEI Plate"
+        assert filament["textured_plate_temp"] == ["60"]
+        assert filament["hot_plate_temp"] == ["55"], "die übrigen Platten bleiben beim Hersteller"
+        assert filament["eng_plate_temp"] == ["0"]
+        project = handover.project_settings(foundation.settings, _cc2(), setup)
+        assert project["curr_bed_type"] == "Textured PEI Plate", "auch das Fenster bekommt sie"
+    else:
+        assert foundation.plate == ""
+        assert [entry.code for entry in manufacturer.findings(foundation)] == [
+            "slicer.plate_unknown"
+        ]
+        assert "curr_bed_type" not in process
+        assert filament["textured_plate_temp"] == filament["hot_plate_temp"]
+
+
 def test_a_user_template_finds_the_model_of_its_printer(tmp_path: Path) -> None:
     """Review Stufe A+B, R4: Eine eigene Vorlage liegt unter ``user/``, das
     Modell ihres Druckers beim Hersteller. Gesucht nur neben der Vorlage, fand
@@ -2374,6 +2466,415 @@ def test_switched_off_supports_do_not_name_a_type() -> None:
     automatic = print_settings.with_path(settings, "adhesion.kind", "auto")
     assert handover.as_mapping(automatic, "orca")["brim_type"] == "auto_brim"
     assert slicer_keys.TABLES["orca"], "die Tabelle ist nicht leer"
+
+
+# --- Organische Bäume: Spitze und Stützbahn -----------------------------------------
+
+
+@pytest.mark.parametrize("executable_name", ["AnycubicSlicerNext.exe", "orca-slicer.exe"])
+def test_supports_switched_on_get_a_tree_tip_the_slicer_accepts(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, executable_name: str
+) -> None:
+    """Anycubics und OrcaSlicers „0.40mm Standard @Anycubic Kobra S1 Max 0.8
+    nozzle“ nennt eine Baumspitze von 0,8 mm bei 0,82 mm Stützbahn. Mit Stützen
+    sagte der Slicer ab: „Organic support tree tip diameter must not be smaller
+    than support material extrusion width“ (Anycubic-Matrix, B4). Hier dieselbe
+    Lage an 0,4 mm Düse: Spitze 0,4 mm, Bahn 0,42 mm (``line_width``)."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    common = bestand.parent / "resources" / "profiles" / "Elegoo" / "process"
+    document = json.loads((common / "fdm_process_common.json").read_text(encoding="utf-8"))
+    document["tree_support_tip_diameter"] = "0.4"
+    _write(common / "fdm_process_common.json", document)
+    executable = bestand.with_name(executable_name)
+    executable.write_bytes(b"")
+    setup = _setup(executable)
+    base = manufacturer.base_settings(_cc2(), "standard", setup).settings
+
+    (tmp_path / "ohne").mkdir()
+    without, _filament = _written(tmp_path / "ohne", base, setup)
+    supported = print_settings.with_choice(base, "support.style", "auto")
+    process, _filament = _written(tmp_path, supported, setup)
+    project = handover.project_settings(supported, _cc2(), setup)
+
+    assert without["tree_support_tip_diameter"] == "0.4", "ohne Stützen bleibt das Profil"
+    assert process["tree_support_tip_diameter"] == "0.42"
+    assert project["tree_support_tip_diameter"] == "0.42"
+    assert "tree_support_branch_diameter_organic" not in process, "Orcas 2 mm Ast reichen"
+    found = handover.plate_tree_findings(supported, _cc2(), setup)
+    assert [entry.code for entry in found] == ["slicer.tree_tip_widened"]
+    assert handover.plate_tree_findings(base, _cc2(), setup) == []
+    out = tmp_path / "check"
+    out.mkdir()
+    config = handover.write_config(supported, _cc2(), setup, out)
+    assert config.written["tree_support_tip_diameter"] == "0.42", "die Gegenprobe hält sie"
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        # Kobra S1 Max 0,8, wie Anycubic und OrcaSlicer ihn ausliefern.
+        (
+            {
+                "support_type": "tree(auto)",
+                "support_line_width": "0.82",
+                "tree_support_tip_diameter": "0.8",
+            },
+            {"tree_support_tip_diameter": "0.82"},
+        ),
+        # Prozent beziehen sich auf die Düse; der Ast muss zwei Bahnen tragen.
+        (
+            {
+                "support_type": "tree(manual)",
+                "support_line_width": "130%",
+                "tree_support_branch_diameter_organic": "2",
+            },
+            {"tree_support_tip_diameter": "1.04", "tree_support_branch_diameter_organic": "2.08"},
+        ),
+        # Ohne Bahnbreite die allgemeine, ohne beide die Düse — Orcas Vorgaben.
+        ({"support_type": "tree(auto)", "line_width": "0.9"}, {"tree_support_tip_diameter": "0.9"}),
+        ({"support_type": "tree(auto)"}, {}),
+        # Gitter, Baum mit anderem Stil und ausgeschaltete Stützen prüft der Slicer nicht.
+        ({"support_type": "normal(auto)", "support_line_width": "0.82"}, {}),
+        (
+            {
+                "support_type": "tree(auto)",
+                "support_style": "tree_slim",
+                "support_line_width": "0.82",
+            },
+            {},
+        ),
+        ({"enable_support": "0", "support_type": "tree(auto)", "support_line_width": "0.82"}, {}),
+        # Ein Raft stützt auch.
+        (
+            {
+                "enable_support": "0",
+                "raft_layers": "2",
+                "support_type": "tree(auto)",
+                "support_line_width": "0.82",
+            },
+            {"tree_support_tip_diameter": "0.82"},
+        ),
+    ],
+)
+def test_the_tree_tip_follows_the_slicers_own_check(
+    values: dict[str, str], expected: dict[str, str]
+) -> None:
+    """Dieselbe Prüfung wie ``Print::validate`` der Orca-Familie, an einer 0,8er Düse."""
+    assert handover.organic_tree_fitted({"enable_support": "1", **values}, 0.8) == expected
+
+
+def test_a_part_that_switches_supports_on_carries_the_tree_tip(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der übernommene Stützvorschlag geht als Objektwert an das Teil — und der
+    Slicer prüft dessen Bäume mit der Spitze der Platte. Am Kobra S1 Max 0,8
+    sagte er deshalb auch den Vorschlagslauf ab (B4)."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    common = bestand.parent / "resources" / "profiles" / "Elegoo" / "process"
+    document = json.loads((common / "fdm_process_common.json").read_text(encoding="utf-8"))
+    document["tree_support_tip_diameter"] = "0.4"
+    _write(common / "fdm_process_common.json", document)
+    setup = _setup(bestand)
+    base = manufacturer.base_settings(_cc2(), "standard", setup).settings
+    accepted = print_settings.with_accepted(base, "support.style", "auto")
+
+    split = handover.split_for_parts(accepted, _cc2(), setup, "orca")
+    keys = handover.object_keys(
+        split.plate,
+        [SettingAdvice("support.style", "auto", "none", "Überhänge")],
+        "orca",
+        program="elegooslicer",
+        profile=_cc2(),
+        native=split.native,
+    )
+
+    assert "support.style" in split.per_part, "sonst prüft der Fall nichts"
+    assert keys["enable_support"] == "1"
+    assert keys["tree_support_tip_diameter"] == "0.42"
+    assert [entry.code for entry in handover.widened_tree_findings(keys, "obj_0")] == [
+        "slicer.tree_tip_widened"
+    ]
+
+
+# --- Was die Konsole ablehnt ------------------------------------------------------
+
+
+def _rejected_by_the_console(bestand: Path, executable_name: str) -> handover.SlicerSetup:
+    """Der Bestand mit den Werten aus Orcas Profil des Anycubic Kobra S1 Max 0,8
+    (``retraction_distances_when_cut = 0``, ``filament_flush_temp = nil``) und
+    Bambus ``tree_support_wall_count = -1``, wie Creality Print es mitliefert."""
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo"
+    machine = vendor / "machine" / "fdm_machine_common.json"
+    document = json.loads(machine.read_text(encoding="utf-8"))
+    document.update(retraction_distances_when_cut=["0"], long_retractions_when_cut=["0"])
+    _write(machine, document)
+    filament = vendor / "filament" / "ECC2" / "pla.json"
+    document = json.loads(filament.read_text(encoding="utf-8"))
+    document["filament_flush_temp"] = ["nil"]
+    _write(filament, document)
+    process = vendor / "process" / "fdm_process_common.json"
+    document = json.loads(process.read_text(encoding="utf-8"))
+    document["tree_support_wall_count"] = "-1"
+    _write(process, document)
+    executable = bestand.with_name(executable_name)
+    executable.write_bytes(b"")
+    return _setup(executable)
+
+
+@pytest.mark.parametrize(
+    ("executable_name", "expected"),
+    [
+        # OrcaSlicer 2.4.2 und ElegooSlicer: alle drei abgelehnt, gemessen an der Konsole.
+        ("orca-slicer.exe", {"retraction": "18", "flush": "0", "walls": "0"}),
+        ("elegoo-slicer.exe", {"retraction": "18", "flush": "0", "walls": "0"}),
+        # Bambu Studio kennt -1 Wände (automatisch) und lehnt die zwei anderen ab.
+        ("bambu-studio.exe", {"retraction": "18", "flush": "0", "walls": "-1"}),
+        # Creality Print kennt filament_flush_temp nicht und lehnt nur die zwei anderen ab.
+        ("CrealityPrint.exe", {"retraction": "18", "flush": "nil", "walls": "0"}),
+        # Anycubic Slicer Next prüft nicht: Alles bleibt, wie der Hersteller es schreibt.
+        ("AnycubicSlicerNext.exe", {"retraction": "0", "flush": "nil", "walls": "-1"}),
+    ],
+)
+def test_a_value_the_console_rejects_goes_out_as_the_programs_default(
+    bestand: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    executable_name: str,
+    expected: dict[str, str],
+) -> None:
+    """OrcaSlicer schnitt am Kobra S1 Max nichts: „Param values in 3mf/config
+    error: filament_flush_temp: nil not in range [0,1500];
+    retraction_distances_when_cut: 0 not in range [10,18]“ — Werte aus Orcas
+    eigenem Anycubic-Profil, die das Fenster ungeprüft lädt. Abgelehnt wird je
+    Programm verschieden; was es ablehnt, geht als seine Vorgabe hinaus, in
+    Konsole und Projektdatei, und die Grundlage sagt es."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    setup = _rejected_by_the_console(bestand, executable_name)
+    settings = print_settings.resolve(_cc2())
+    out = tmp_path / "out"
+    out.mkdir()
+
+    config = handover.write_config(settings, _cc2(), setup, out)
+    machine = json.loads(config.machine.read_text(encoding="utf-8"))
+    process = json.loads(config.process.read_text(encoding="utf-8"))
+    filament = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    project = handover.project_settings(settings, _cc2(), setup)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+
+    for written in (machine, project):
+        assert written["retraction_distances_when_cut"] == [expected["retraction"]]
+        assert written["long_retractions_when_cut"] == ["0"], "der Schalter bleibt beim Hersteller"
+    for written in (filament, project):
+        assert written["filament_flush_temp"] == [expected["flush"]]
+    for written in (process, project):
+        assert str(written["tree_support_wall_count"]) == expected["walls"]
+    replaced = {
+        entry.values["setting"]: (entry.values["value"], entry.values["default"])
+        for entry in manufacturer.findings(foundation)
+        if entry.code == "slicer.profile_value_replaced"
+    }
+    assert replaced == {
+        key: (old, new)
+        for key, old, new in (
+            ("retraction_distances_when_cut", "0", expected["retraction"]),
+            ("filament_flush_temp", "nil", expected["flush"]),
+            ("tree_support_wall_count", "-1", expected["walls"]),
+        )
+        if old != new
+    }
+
+
+def test_the_console_limits_keep_every_other_entry() -> None:
+    """Je Spule und Extruder ein Eintrag: ersetzt wird nur, was abgelehnt wird,
+    die Liste behält ihre Länge; ``nil`` gilt, wo das Programm es erlaubt."""
+    values = {
+        "retraction_distances_when_cut": ["0", "15", "18"],
+        "filament_flush_temp": ["220", "nil"],
+        "fan_max_speed": "1000",
+        "line_width": "0.42",
+    }
+
+    replaced = slicer_keys.console_replacements(values, "orcaslicer")
+
+    assert replaced == {
+        "retraction_distances_when_cut": (["0", "15", "18"], ["18", "15", "18"]),
+        "filament_flush_temp": (["220", "nil"], ["220", "0"]),
+        "fan_max_speed": ("1000", "100"),
+    }
+    bambu = slicer_keys.console_replacements(
+        {"retraction_distances_when_cut": ["nil"]}, "bambustudio"
+    )
+    assert bambu == {}, "Bambu Studio führt den Abstand leer"
+    assert slicer_keys.console_replacements(values, "anycubicslicernext") == {}
+
+
+# --- Düsenart-Fassungen (Anycubic Slicer Next) --------------------------------------
+
+
+def _nozzle_kinds(bestand: Path, executable_name: str, nozzle_type: str | None) -> Path:
+    """Der Bestand mit Anycubics Düsenart-Fassungen, gemessen an „Anycubic PLA
+    @Anycubic Kobra S1 0.4 nozzle“: Grund 205/215 °C, Messing 210/220 °C,
+    gehärteter Stahl 220/220 °C; die Mindestschichtzeit nur mit Stahlfassung."""
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo"
+    machine = vendor / "machine" / "fdm_machine_common.json"
+    document = json.loads(machine.read_text(encoding="utf-8"))
+    if nozzle_type is not None:
+        document["nozzle_type"] = nozzle_type
+    _write(machine, document)
+    filament = vendor / "filament" / "ECC2" / "pla.json"
+    document = json.loads(filament.read_text(encoding="utf-8"))
+    document.update(
+        nozzle_temperature=["205"],
+        nozzle_temperature_initial_layer=["215"],
+        nozzle_temperature_BRASS=["210"],
+        nozzle_temperature_initial_layer_BRASS=["220"],
+        nozzle_temperature_HS=["220"],
+        nozzle_temperature_initial_layer_HS=["220"],
+        fan_min_speed=["80"],
+        fan_min_speed_HS=["100"],
+        slow_down_layer_time=["8"],
+        slow_down_layer_time_HS=["12"],
+    )
+    _write(filament, document)
+    executable = bestand.with_name(executable_name)
+    executable.write_bytes(b"")
+    return executable
+
+
+#: Was Anycubic Slicer Next 2.0.0.3 an Messing druckt: die Fassung ``_BRASS``,
+#: sonst den Grundwert (gemessen im Konfigurationsblock am Kobra S1 0,4).
+_ANYCUBIC_PRINTS_AT_BRASS = {
+    "nozzle_temperature": "210",
+    "nozzle_temperature_initial_layer": "220",
+    "fan_min_speed": "80",
+    "slow_down_layer_time": "8",
+    "layer_height": "0.2",
+    "wall_loops": "2",
+    "support_threshold_angle": "30",
+}
+
+
+@pytest.mark.parametrize(
+    ("nozzle_type", "nozzle", "first", "fan_low"),
+    [("brass", 210, 220, 0.8), ("hardened_steel", 220, 220, 1.0), (None, 210, 220, 0.8)],
+)
+def test_anycubic_shows_the_nozzle_kind_it_prints(
+    bestand: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    nozzle_type: str | None,
+    nozzle: int,
+    first: int,
+    fan_low: float,
+) -> None:
+    """Anycubic Slicer Next ersetzt beim Schneiden sechs Filamentwerte durch die
+    Fassung der Maschinendüse (Anycubic-Matrix, B1). Der Druckdialog zeigte die
+    Grundwerte — am Kobra S1 0,4 205/215 °C, gedruckt wurden 210/220 °C. Ohne
+    Angabe druckt das Programm wie an Messing (``undefine``)."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    setup = _setup(_nozzle_kinds(bestand, "AnycubicSlicerNext.exe", nozzle_type))
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+
+    temperature = foundation.settings.temperature
+    assert (temperature.nozzle, temperature.nozzle_first_layer) == (nozzle, first)
+    assert foundation.settings.cooling.minimum_fan_speed == pytest.approx(fan_low)
+    assert foundation.settings.cooling.minimum_layer_time == pytest.approx(
+        12.0 if nozzle_type == "hardened_steel" else 8.0
+    )
+
+
+def test_anycubic_prints_an_own_temperature_at_every_nozzle_kind(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Am Kobra S1 0,4 schrieb Solidon 235/240 °C, Anycubic druckte die 210/220 °C
+    der geerbten Messingfassung (``M104 S210``), und nur die Gegenprobe merkte
+    es. Die eigene Wahl steht jetzt in jeder Fassung, in Konsole und Beilage."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    setup = _setup(_nozzle_kinds(bestand, "AnycubicSlicerNext.exe", "brass"))
+    base = manufacturer.base_settings(_cc2(), "standard", setup).settings
+    settings = print_settings.with_choice(base, "temperature.nozzle", 235)
+    settings = print_settings.with_choice(settings, "temperature.nozzle_first_layer", 240)
+
+    process, filament = _written(tmp_path, settings, setup)
+    project = handover.project_settings(settings, _cc2(), setup)
+
+    for written in (filament, project):
+        for key, value in (
+            ("nozzle_temperature", "235"),
+            ("nozzle_temperature_initial_layer", "240"),
+        ):
+            assert [written[f"{key}{suffix}"] for suffix in ("", "_BRASS", "_HS")] == [[value]] * 3
+        # Was niemand gewählt hat, behält die Fassungen des Herstellers.
+        assert written["slow_down_layer_time_HS"] == ["12"]
+    assert process["wall_loops"] == "2"
+
+
+def test_anycubic_needs_no_alarm_for_the_nozzle_kind_it_was_given(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Im Standardweg meldete die Gegenprobe an 18 von 39 Anycubic-Druckern
+    „anders übernommen“ — sie hielt Anycubics Grundwert gegen die gedruckte
+    Fassung. Geschrieben und geprüft wird jetzt der Wert, der gedruckt wird;
+    eine eigene Wahl, die der Slicer verwirft, bleibt ein Befund."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    setup = _setup(_nozzle_kinds(bestand, "AnycubicSlicerNext.exe", "brass"))
+    settings = manufacturer.effective(None, manufacturer.base_settings(_cc2(), "standard", setup))
+    out = tmp_path / "out"
+    out.mkdir()
+
+    config = handover.write_config(settings, _cc2(), setup, out)
+    filament = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+
+    assert filament["nozzle_temperature"] == ["210"], "der Grundwert ist die Messingfassung"
+    assert filament["nozzle_temperature_HS"] == ["220"], "die Stahlfassung bleibt Anycubics"
+    assert config.written["nozzle_temperature"] == "210"
+    assert handover.verify_settings(_ANYCUBIC_PRINTS_AT_BRASS, config.written) == []
+    chosen = print_settings.with_choice(settings, "temperature.nozzle", 235)
+    (tmp_path / "chosen").mkdir()
+    config = handover.write_config(chosen, _cc2(), setup, tmp_path / "chosen")
+    assert (
+        handover.verify_settings(
+            {**_ANYCUBIC_PRINTS_AT_BRASS, "nozzle_temperature": "235"}, config.written
+        )
+        == []
+    )
+    assert handover.verify_settings(_ANYCUBIC_PRINTS_AT_BRASS, config.written), (
+        "eine verworfene Wahl bleibt ein Befund"
+    )
+
+
+def test_orcaslicer_keeps_its_base_values_beside_anycubics_nozzle_kinds(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OrcaSlicer kennt die Fassungen nicht und druckt den Grundwert — dort
+    bleibt alles, wie es war: Grundlage 205 °C, keine Fassung geschrieben."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    setup = _setup(_nozzle_kinds(bestand, "orca-slicer.exe", "brass"))
+    base = manufacturer.base_settings(_cc2(), "standard", setup).settings
+    assert base.temperature.nozzle == 205
+    settings = print_settings.with_choice(base, "temperature.nozzle", 235)
+
+    _process, filament = _written(tmp_path, settings, setup)
+
+    assert filament["nozzle_temperature"] == ["235"]
+    assert filament["nozzle_temperature_BRASS"] == ["210"], "geerbt, nicht angefasst"
+    assert "slow_down_layer_time_BRASS" not in filament
+
+
+def test_an_anycubic_spool_reads_the_nozzle_kind_it_prints(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Spule mit eigenem Herstellerprofil liest dieselbe Fassung wie die
+    Grundlage — sonst zeigte der Druckdialog je Spule den Platzhalter."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    setup = _setup(_nozzle_kinds(bestand, "AnycubicSlicerNext.exe", "hardened_steel"))
+    settings = print_settings.resolve(_cc2())
+    slot = MaterialSlot(index=0, name="A", material_type="PLA", material="Elegoo PLA @ECC2")
+
+    resolved = handover.settings_for_slot(settings, _cc2(), slot, setup)
+
+    assert resolved.temperature.nozzle == 220
+    assert resolved.cooling.minimum_layer_time == pytest.approx(12.0)
 
 
 # --- PrusaSlicer auf dem Bündel (Stufe C) ------------------------------------------

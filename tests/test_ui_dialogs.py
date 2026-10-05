@@ -463,13 +463,18 @@ def test_undoing_a_changed_step_says_the_change_not_the_step() -> None:
         (r"C:\Program Files\UltiMaker Cura 5.13.0\CuraEngine.exe", "UltiMaker Cura 5.13.0"),
         ("/Applications/PrusaSlicer.app/Contents/MacOS/PrusaSlicer", "PrusaSlicer"),
         ("/usr/bin/prusa-slicer", "prusa-slicer"),
+        ("/var/lib/flatpak/exports/bin/com.prusa3d.PrusaSlicer", "PrusaSlicer"),
+        ("/var/lib/flatpak/exports/bin/com.ultimaker.cura", "Cura"),
+        ("/run/user/1000/doc/d0880632/com.orcaslicer.OrcaSlicer", "OrcaSlicer"),
     ],
 )
 def test_a_slicer_is_named_as_on_its_box(path: str, name: str) -> None:
     """Druckdialog und Erstinbetriebnahme nennen einen Slicer gleich (KUNDE-02).
 
     Der Erststart zeigte `elegoo-slicer`, `CuraEngine` — Dateinamen, während der
-    Druckdialog „ElegooSlicer“ und „UltiMaker Cura 5.13.0“ schrieb.
+    Druckdialog „ElegooSlicer“ und „UltiMaker Cura 5.13.0“ schrieb. Ein Flatpak
+    hieß „com.prusa3d“, seine Portalkopie wie ihr Ordner im Portal; beide
+    nennen das Programm wie die Übergabe (``discover.flatpak_title``).
     """
     from pathlib import PurePosixPath, PureWindowsPath
 
@@ -607,6 +612,47 @@ def test_align_to_the_front_lets_the_back_wrap(qt_app: QApplication) -> None:
         assert long_label.fontMetrics().horizontalAdvance(long_label.text()) > (
             long_label.maximumWidth()
         ), "der Satz selbst ist breiter als die Spalte"
+    finally:
+        holder.deleteLater()
+
+
+def test_a_long_word_behind_the_flap_keeps_its_width_in_a_narrow_window(
+    qt_app: QApplication,
+) -> None:
+    """Ein Wort, breiter als die Spalte, wird auch im engen Fenster nicht abgeschnitten (RM-518).
+
+    Die Untergrenze stand auf der Spalte der Vorderseite: Die Einstellungen
+    gaben „Differenzansicht“ auf einem schmalen Bildschirm nur deren 168
+    Punkte, und ``expanded_width`` rechnete mit dem ganzen Wort — der Dialog
+    rollte 24 Punkte weniger quer, als er versprach.
+    """
+    from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
+
+    from app.ui.dialogs import align_to_the_front
+
+    holder = QWidget()
+    try:
+        front, back = QFormLayout(), QFormLayout()
+        outer = QVBoxLayout(holder)
+        outer.addLayout(front)
+        outer.addLayout(back)
+        front.addRow("Breite", QLineEdit(holder))
+        back.addRow("Entlüftungsdurchmesserzugabe", QLineEdit(holder))
+        align_to_the_front(front, back)
+        item = back.itemAt(0, QFormLayout.ItemRole.LabelRole)
+        assert item is not None
+        word = item.widget()
+        assert isinstance(word, QLabel)
+        column = front.itemAt(0, QFormLayout.ItemRole.LabelRole).widget().minimumWidth()
+        needed = word.minimumSizeHint().width()
+        assert needed > column, "das Wort ist breiter als die Spalte vorn"
+
+        holder.show()
+        holder.resize(holder.minimumSizeHint())
+        for _ in range(3):
+            qt_app.processEvents()
+
+        assert word.width() >= needed, f"{word.width()} Punkte für ein Wort von {needed}"
     finally:
         holder.deleteLater()
 

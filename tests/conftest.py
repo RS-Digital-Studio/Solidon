@@ -638,7 +638,7 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
     Tests können noch laufen.
     """
     try:
-        from app.i18n import SOURCE_LANGUAGE, set_language
+        from app.i18n import SOURCE_LANGUAGE, set_key_platform, set_language
     except ImportError:  # pragma: no cover - ohne die Kataloge gibt es nichts zu räumen
         yield
         return
@@ -651,6 +651,9 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
             QLocale.setDefault(QLocale(SOURCE_LANGUAGE))
     yield
     set_language(SOURCE_LANGUAGE)
+    # Die Tastatur der Kürzel gehört zur Sprache: Auch Werkzeuge schreiben wie
+    # die Quelle, nur der Start der Anwendung stellt die Plattform ein.
+    set_key_platform("")
 
 
 #: **Was hier absichtlich NICHT zurückgesetzt wird: das Stylesheet.**

@@ -34,7 +34,8 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, APP_VERSION, website_page_url
 from app.core import changes
 from app.core.markup import inline
-from app.i18n import get_language, tr
+from app.i18n import get_language, key_platform, tr
+from app.i18n.keys import native_keys
 from app.ui.style import NORMAL, WIDE, no_primary, set_level
 
 #: Womit der Dialog aufgeht. Eine **Anfangsgröße**, kein Deckel: Der Deckel
@@ -89,14 +90,19 @@ def groups_html(groups: tuple[changes.Group, ...]) -> str:
     Rückfall, wenn eine Versionsdatei gar keine Gruppen mitbringt.
     """
     blocks: list[str] = []
+    # Die Punkte kommen aus einer Datei, nicht durch ``tr``: Ihre Kürzel
+    # schreibt erst diese Stelle so, wie die Tastatur sie beschriftet (⌘Z).
+    platform = key_platform()
     for group in groups:
         if group.title:
-            heading = html.escape(group.title)
+            heading = html.escape(native_keys(group.title, platform))
             blocks.append(f'<p style="margin-top:10px;margin-bottom:0"><b><u>{heading}</u></b></p>')
         # ``inline`` und nicht nur maskieren: Die Punkte heben Handlungen wie
         # *Druckoptimal ausrichten* hervor, und maskiert standen die Sternchen
         # im Text. Maskiert wird darin trotzdem alles andere.
-        points = "".join(f"<li>{inline(point)}</li>" for point in group.points)
+        points = "".join(
+            f"<li>{inline(native_keys(point, platform))}</li>" for point in group.points
+        )
         blocks.append(f'<ul style="margin-top:4px">{points}</ul>')
     return "".join(blocks)
 

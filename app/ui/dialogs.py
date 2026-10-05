@@ -217,8 +217,12 @@ def align_to_the_front(
     for widget in trailing:
         if isinstance(widget, QLabel):
             widget.setWordWrap(True)
-        widget.setMinimumWidth(widest)
-        widget.setMaximumWidth(max(widest, widget.minimumSizeHint().width()))
+        # Auch die Untergrenze trägt das längste Wort: Mit der Spalte als
+        # Mindestbreite gab Qt einem engen Fenster „Differenzansicht“ nur die
+        # 168 Punkte der Spalte, und das Wort lief ins Feld daneben.
+        word = max(widest, widget.minimumSizeHint().width())
+        widget.setMinimumWidth(word)
+        widget.setMaximumWidth(word)
 
 
 class AskDialog(QDialog):

@@ -197,6 +197,56 @@ def test_an_odd_exclusion_in_the_file_neither_aborts_nor_warns(line: str) -> Non
     assert finding is not None and finding.code == "gcode.off_the_bed"
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        "; bed_exclude_area = 40x40,60x40,60x60,40x60;oops\n",
+        "; bed_exclude_area = 40x40,60x40,60,40x60\n",
+    ],
+)
+def test_an_unreadable_exclusion_is_named_not_dropped(line: str) -> None:
+    """Eine unlesbare ``bed_exclude_area`` wurde still zu „keine Sperrfläche“.
+
+    ``exclusion_areas`` trennt Unlesbares (``None``) von Leerem; ``analyze``
+    machte daraus mit ``or ()`` wieder „keine“, und die Gegenprobe prüfte ohne
+    ein Wort gegen das ganze Bett — eine Bahn durch die Sperrfläche fiel nicht
+    auf (Durchsicht 0.5.3, Fund 8). Geprüft wird weiter gegen das Bett; der
+    Prüfbericht sagt, dass die Sperrflächen fehlen, auch neben einem Übertritt.
+    """
+    assert gcode.analyze(line).excluded_areas is None
+    inside = handover.off_the_bed(
+        BED + line + START + "G0 X50 Y50\nG1 X60 E1\n", profiles.make_profile(), "prusa"
+    )
+    assert inside is not None and inside.code == "gcode.invalid_build_area"
+    assert inside.severity == "warning" and inside.source == "gcode"
+    assert isinstance(inside.message, TranslatableText)
+    assert "Sperrflächen" in inside.message.translate("de")
+    outside = handover.off_the_bed(
+        BED + line + START + "G0 X150 Y50\nG1 X160 E1\n", profiles.make_profile(), "prusa"
+    )
+    assert outside is not None and outside.code == "gcode.off_the_bed"
+    assert isinstance(outside.values["detail"], TranslatableText)
+    assert "Sperrflächen" in outside.values["detail"].translate("de")
+
+
+def test_an_unusable_bed_and_unreadable_exclusions_are_both_named() -> None:
+    """Fehlen Bettkontur und Sperrflächen der Datei, nennt die Warnung beide."""
+    profile = profiles.make_profile()
+    printer = replace(
+        profile.printer,
+        build_volume=(100, 100, 100),
+        printable_area=((0, -50), (50, 0), (0, 50), (-50, 0)),
+    )
+    flat = "; printable_area = 0x0,100x0,50x0\n; bed_exclude_area = 1x1,oops\n"
+    finding = handover.off_the_bed(
+        flat + START + "G0 X5 Y50\nG1 X50 Y5 E1\n", replace(profile, printer=printer), "prusa"
+    )
+    assert finding is not None and finding.code == "gcode.invalid_build_area"
+    assert isinstance(finding.message, TranslatableText)
+    shown = finding.message.translate("de")
+    assert "Bettkontur" in shown and "Sperrflächen" in shown
+
+
 def test_a_manufacturer_purge_behind_the_printable_area_is_not_off_the_bed() -> None:
     """Die Spüllinie des Kobra S1 (Y = 255 mm bei 250 mm Druckfläche) gehört zum
     Code des Profils, nicht zum Druck; neben dem Bett liegt nur das Modell."""

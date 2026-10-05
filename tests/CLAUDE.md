@@ -16,6 +16,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — jede Kante eingefroren; eine neue ist eine Entscheidung |
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein? | `test_lazy_exports.py` |
 | Deutsche Stämme in Bezeichnern? Alle Kataloge vollständig? | `test_language_rules.py` (ein AST je Datei für alle Sprachregeln) · `test_translations.py` (einmal extrahiert für alle Kataloge) |
+| Nennt ein Satz mit Kürzel auf dem Mac die Mac-Taste, und bleibt jeder Text unter Windows und Linux gleich? | `test_native_keys.py` — Plattform als Argument, der Abgleich mit Qt nur auf dem Mac |
 | Hält jeder Kundentext die Längengrenze seines Ortes? | `test_text_length.py` — Art nach Aufrufort, Bestand in `data/text_lengths/` nur schrumpfend; Statustipps nur an Menüaktionen; Fachwörter und Satzmuster: `test_wording.py` |
 | Ist jede Op vollständig registriert? | `test_registry_consistency.py` |
 | Werden Normteilmaße vor dem Sortieren geprüft und bleiben gültige Größen stabil geordnet? | `test_standards.py` |

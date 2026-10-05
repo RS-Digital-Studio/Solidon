@@ -409,10 +409,14 @@ Den Herstellerbestand trägt er in seinem `/app` (nach FHS unter
 `share/<Programm>/profiles`), die eigenen Drucker unter
 `~/.var/app/<Kennung>/config` — nie über dem Starter und nie in `~/.config`.
 Erkannt wird er an Ort und Kennung (`discover.flatpak_app`: Starter in den
-Exporten, Datei der Installation, Portalkopie), gelesen über
-`flatpak_files`/`flatpak_data` und `slicer_profiles.config_base`. Eine
-Portalkopie aus Solidons Dateidialog (`/run/user/<uid>/doc/…`) wird beim
-Merken und Lesen zum Starter (`host_program`). Solidons Flatpak darf das nur
+Exporten, Datei der Installation, Portalkopie) — auch `sandboxed` fragt dort —,
+gelesen über `flatpak_files`/`flatpak_data` und `slicer_profiles.config_base`,
+genannt nach seinem Programm (`discover.flatpak_title`), nie nach dem
+Dateistamm der Kennung. Eine Portalkopie aus Solidons Dateidialog
+(`/run/user/<uid>/doc/…`) und eine Datei der Installation werden beim Merken
+und Lesen zum Starter (`host_program`). Den Rechner nach einem unsichtbaren
+Ordner fragt nur, wer lokal keinen sieht, und je Kennung einmal
+(`_hidden_on_host`) — jede Frage ist ein Prozessstart. Solidons Flatpak darf das nur
 lesen, weil das Manifest die Installationsordner, die Exporte und
 `~/.var/app/<Kennung>:ro` je Eintrag in `tools.SLICER_FLATPAKS` freigibt —
 ein Slicer, der neu auf Flathub erscheint, kommt dort dazu.

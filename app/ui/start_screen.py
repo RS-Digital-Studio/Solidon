@@ -610,6 +610,13 @@ class FooterLink(QPushButton):
         self._symbol = symbol
         self._refresh_icon()
         make_large_target(self)
+        # Wann zuletzt ausgelöst wurde (``time.monotonic``) — der Doppelklick
+        # unten fragt danach.
+        self._last_click = -float("inf")
+        self.clicked.connect(self._note_click)
+
+    def _note_click(self) -> None:
+        self._last_click = time.monotonic()
 
     def _refresh_icon(self) -> None:
         self.setIcon(icon(self._symbol, self))
@@ -627,10 +634,17 @@ class FooterLink(QPushButton):
         super().keyPressEvent(event)
 
     def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        """Ein hastiger Doppelklick öffnet keine zwei modalen Fenster übereinander.
+        """Ein hastiger Doppelklick öffnet genau ein modales Fenster, nicht zwei und nicht keins.
 
-        Der erste Klick hat schon ausgelöst; der zweite Druck bleibt liegen.
+        Auf echten Plattformen hat der erste Klick schon ausgelöst, und der
+        zweite Druck bleibt liegen. QTest und manche Hilfsmittel senden aber
+        nur das Doppelklick-Ereignis; seit RM-515 schluckte der Fußzeilenknopf
+        es ganz, und so ein Doppelklick öffnete nichts. Ohne frischen Klick
+        davor löst er deshalb selbst einmal aus.
         """
+        recent = time.monotonic() - self._last_click <= QApplication.doubleClickInterval() / 1000.0
+        if event.button() == Qt.MouseButton.LeftButton and not recent:
+            self.click()
         event.accept()
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802 — Qt-Name

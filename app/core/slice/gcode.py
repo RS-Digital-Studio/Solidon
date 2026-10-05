@@ -318,7 +318,9 @@ class GcodeAnalysis:
     bed: BoundingBox | None
     settings: dict[str, str]
     bed_outline: tuple[tuple[float, float], ...] = ()
-    excluded_areas: tuple[tuple[tuple[float, float], ...], ...] = ()
+    excluded_areas: tuple[tuple[tuple[float, float], ...], ...] | None = ()
+    """Die Sperrflächen der Datei — ``None``, wenn sie welche nennt, die sich
+    nicht lesen lassen (:func:`exclusion_areas`). Leer heißt: keine."""
     paths_inside: bool | None = None
     firmware: str = ""
     #: Die erste Schicht (ab 1 gezählt), in der mit laufendem Bauteillüfter
@@ -1410,6 +1412,11 @@ def analyze_lines(
     extent = state.model_extent.box() if has_first_layer else state.all_extent.box()
     does_extrude = extent is not None
     _log.info("read g-code of %s", metrics.slicer or "unknown slicer")
+    # Unlesbar ist nicht leer: ``None`` reist weiter, und die Gegenprobe sagt,
+    # dass sie ohne die Sperrflächen der Datei geprüft hat.
+    excluded = exclusion_areas(settings.get("bed_exclude_area", ""))
+    if excluded is None:
+        _log.warning("the exclusion areas of the print file cannot be read")
     return GcodeAnalysis(
         metrics,
         does_extrude,
@@ -1417,7 +1424,7 @@ def analyze_lines(
         bed,
         settings,
         tuple(corners or ()) if not bed_invalid else (),
-        exclusion_areas(settings.get("bed_exclude_area", "")) or (),
+        excluded,
         (state.model_paths_inside if has_first_layer else state.all_paths_inside)
         if path_check is not None
         else None,

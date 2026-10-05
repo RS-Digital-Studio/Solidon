@@ -258,7 +258,15 @@ class DialogScrollArea(QScrollArea):
                 max(content.minimumSizeHint().height(), layout.totalHeightForWidth(width))
             )
         frame = self.frameWidth() * 2
-        return wanted + QSize(frame, frame)
+        hint = wanted + QSize(frame, frame)
+        # **Rollt der Inhalt quer, gehört die Querleiste zum Wunsch.** Ist der
+        # Bildschirm schmaler als das Formular, deckelt ``fit_dialog_to_screen``
+        # die Breite, und die Leiste unten nimmt dem Inhalt eine Zeile Höhe.
+        # Ohne sie gab das Zuklappen der Einstellungen zu viel Höhe zurück, und
+        # das passive Nachwachsen holte die 12 Punkte gleich wieder (RM-518).
+        if self.isVisible() and content.minimumSizeHint().width() > self.width() - frame:
+            hint.setHeight(hint.height() + self.horizontalScrollBar().sizeHint().height())
+        return hint
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt gibt den Namen
         return QSize(TARGET_SIZE * 2, TARGET_SIZE * 2)

@@ -447,6 +447,30 @@ deshalb kein Formatsprung. Beispiel einer Standardplatte ohne Namen: Elegoos
 `default_bed_type = 4` ist die texturierte PEI. Der Messstand zur Abnahme des
 Konfigurationsblocks steht in `ROADMAP.md`.
 
+**Was der Slicer liest (Anycubic-Matrix, 05.10.2026).** Anycubic Slicer Next
+2.0.0.3 ersetzt beim Schneiden sechs Filamentwerte durch `<schlüssel>_BRASS`
+oder `_HS` nach `nozzle_type` der Maschine (`brass`, `undefine` und ohne
+Angabe `_BRASS`; `hardened_steel` und `stainless_steel` `_HS`). Solidon
+schrieb nur den Grundwert: Eine eigene Wahl verlor gegen die geerbte Fassung
+(Kobra S1 0,4: 235 °C gewählt, 210 °C gedruckt), der Dialog zeigte Anycubics
+Platzhalter (205 statt 210 °C), und die Gegenprobe meldete im Standardweg an
+18 von 39 Druckern Fehlalarm. Die Platte des Programms: ohne `curr_bed_type`
+rechnet Anycubic Slicer Next auf texturiertem PEI (221 von 221 Läufen), und
+Solidon schrieb `hot_plate_temp` auf alle Platten (Kobra S1 0,6: 55 statt
+65 °C). Die Baumspitze: Orcas `Print::validate` verlangt bei organischen
+Bäumen eine Spitze mindestens so breit wie die Stützbahn; Anycubic und
+OrcaSlicer liefern Prozesse an 0,8er-Düsen mit 0,8 gegen 0,82 mm aus, jeder
+Schnitt mit Stützen wurde abgesagt. Der genannte Standardprozess: Kobra 4 0,8
+nennt den des Kobra X, und gedruckt wurde still mit Solidons Tabelle.
+Die Konsolengrenzen: OrcaSlicer, ElegooSlicer, Bambu Studio und Creality
+Print prüfen beim Start jeden geladenen Wert gegen ihre Grenzen und schneiden
+sonst nichts; das Fenster lädt Systemprofile ungeprüft und warnt bei einer
+3MF nur. Orcas Kobra-S1-Max-Profil (`filament_flush_temp = nil`,
+`retraction_distances_when_cut = 0`) kam so über Solidon nie zu einer
+Druckdatei. Ersetzt wird durch die Vorgabe des Programms, den Wert, den es
+ohne die Angabe nähme; die verletzten Werte wirken dort nicht (Schalter
+`long_retractions_when_cut` aus, Spülen nur mit mehreren Spulen).
+
 ## CuraEngine rechnet keine Formeln
 
 Was ein geschriebener Wert nicht erreicht, und die Messung:
@@ -459,6 +483,10 @@ Was ein geschriebener Wert nicht erreicht, und die Messung:
 
 > Gemessen an einem 20-mm-Würfel: **1100 mm Filament statt 818, 753 Sekunden
 > statt 660.**
+
+Die Konstanten der Werksprofile in `handover`: Stütze 150, Schnittstelle
+80 mm/s, Schnittstelle in Linien zu einem Drittel, Füllung nach den Wänden,
+Kämmgrenze.
 
 Zu den Werksprofilen (Stufe D, 27.09.2026): „Ihre Formeln erreichen die
 Konsole so wenig wie die von `fdmprinter`; ohne Solidons Zeile gälte also
@@ -487,6 +515,10 @@ Endcode halten deren X-/Y-Grenze ein. CuraEngine liest in Definitionen nur
 Formeln bleiben unbekannt. Der Standardwert `machine_acceleration` braucht
 denselben Deckel: Cura schreibt ihn vor dem Endcode nochmals mit `M204`.
 
+Warum Unfüllbares anhält: Wörtlich bräche ein Klipper-Makro am Drucker ab.
+Warum die zwei Schalter auf `false` stehen: Sonst stünde Curas `M190`/`M109`
+vor dem Startcode, der die Temperatur selbst setzt.
+
 Die Entscheidung Roberts vom 26.08.2026 lautete: „Der Anfahrcode bleibt der
 des Herstellers". Warum Solidon füllt: „gemessen:
 `START_PRINT EXTRUDER_TEMP={…}` stand wörtlich im G-Code". Die Rechnung
@@ -501,8 +533,10 @@ des Herstellers". Warum Solidon füllt: „gemessen:
 > Centauri Carbon, unsichtbar an K1 Max, Ender-3 V3 SE und KE und SV06; mit
 > der Stufe der aktiven Maschine überall sichtbar.
 
-Passt kein eingerichteter Drucker, entsteht keine Datei: Ein still
-verschwindendes Profil ist schlimmer als keines.
+Curas Importer lehnt fremde Qualitätsstufen ab und importiert solche ohne
+passende Düse und Spule des ersten Fachs unsichtbar; deshalb die Stufe der
+aktiven Maschine. Passt kein eingerichteter Drucker, entsteht keine Datei: Ein
+still verschwindendes Profil ist schlimmer als keines.
 
 ## Winkel zählen nicht überall gleich
 
@@ -524,6 +558,9 @@ verschwindendes Profil ist schlimmer als keines.
 
 > — und ein Fehlalarm, den der Kunde dreimal gesehen hat, nimmt dem echten
 > Befund die Wirkung.
+
+Warum Flächen gezählt werden: Ein Körper darf einen Materialslot tragen, den
+keines seiner Dreiecke benutzt.
 
 ## Ein Absturz ist keine Absage
 

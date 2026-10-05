@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from app import i18n
+from app.core import discover
 from app.core.activation import Activation
 from app.core.export.slicer_profiles import model_name
 from app.core.geom.mesh import MeshData, face_components
@@ -1544,6 +1545,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "count": _("Anzahl"),
     "counted": _("Verarbeitet"),
     "cut": _("Schnitt"),
+    # ``slicer.profile_value_replaced``: was statt eines abgelehnten Herstellerwerts hinausgeht.
+    "default": _("Vorgabe"),
     # ``ingest.threemf``: der Negativkörper aus dem Slicer, der keinen Körper trifft.
     "cutter": _("Aussparung"),
     "cycle": _("Zyklus"),
@@ -3066,7 +3069,13 @@ def slicer_title(path: Path) -> str:
 
     **Eine Stelle für den Druckdialog und die Erstinbetriebnahme** — die
     nannte dieselben Programme mit Dateinamen (Durchsicht 0.5.1, KUNDE-02).
+    Ein Flatpak heißt nach seinem Programm, wie in den Meldungen der Übergabe
+    (``discover.flatpak_title``); sein Starter liegt in ``bin``, seine
+    Portalkopie in einem Ordner mit Nummer.
     """
+    flatpak = discover.flatpak_title(path)
+    if flatpak:
+        return flatpak
     for parent in path.parents:
         if parent.suffix.lower() == ".app":
             return parent.stem
