@@ -19748,7 +19748,7 @@ class MainWindow(QMainWindow):
                 said, choices = bore_advice(
                     float(diameter),
                     ask=False,
-                    measured=localised(f"{float(diameter):.2f}"),
+                    measured=length(float(diameter)),
                     feature=feature,
                     features=entry.features if entry else None,
                     mesh=as_mesh_data(entry.mesh) if entry else None,

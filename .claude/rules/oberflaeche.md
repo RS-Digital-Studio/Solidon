@@ -378,6 +378,9 @@ auch Funktionen ohne Widget; ein übergebenes Argument hat Vorrang.
   lässt und `value_mm()` liest.
 - **Ein Einheitenwechsel meldet nichts:** `refresh_unit` tauscht unter
   `blockSignals`.
+- **Ein Satz trägt keine Einheit im Katalogtext:** Die Zahl kommt mit ihrer
+  Einheit (`labels.length`, im Kern `format_length(…, display_unit())`) —
+  „misst {measure} mm“ las sich in Zoll als „0.2047 mm“ (RM-516).
 - **Gelesen wird über die Leiste, nicht an ihr vorbei** (`SculptBar.values()`,
   typisiert als `StrokeValues`, damit mypy das Auspacken prüft).
 - **Geprüft wird an einer Handlung, nicht nur an Anzeigen:**

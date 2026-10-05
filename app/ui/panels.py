@@ -8554,7 +8554,7 @@ class FeaturePanel(QWidget):
             said, _choices = bore_advice(
                 float(diameter),
                 ask=False,
-                measured=localised(f"{float(diameter):.2f}"),
+                measured=length(float(diameter)),
                 feature=feature,
                 features=features,
                 mesh=mesh,
