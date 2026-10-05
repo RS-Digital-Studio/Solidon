@@ -591,11 +591,20 @@ GUIDES: Final[tuple[Guide, ...]] = (
             ),
             step(_("Doppelklicken Sie auf *Druckbares Gewinde*."), "part:printed_thread"),
             step(
-                _("Wählen Sie die *Größe* und klicken Sie auf *Einsetzen*."),
+                _(
+                    "Über den Feldern steht, welches Gewinde in diese Bohrung passt. "
+                    "Wählen Sie die *Größe* und klicken Sie auf *Einsetzen*."
+                ),
                 "field:size",
                 "dialog.accept",
             ),
-            step(_("Das Gewinde sitzt in der Bohrung."), "viewport"),
+            step(
+                _(
+                    "Das Gewinde sitzt in der Bohrung. Ist sie zu weit, etwa ein Schraubenloch "
+                    "derselben Größe, sagt es der Prüfbericht."
+                ),
+                "viewport",
+            ),
         ),
         teaches=("insert_printed_thread",),
         topics=("parts",),
