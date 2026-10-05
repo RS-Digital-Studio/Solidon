@@ -145,7 +145,7 @@ def test_discovery_keeps_where_the_machine_has_its_origin(
         {"printer_technology": "SLA"},
     ],
 )
-def test_discovery_never_substitutes_missing_or_invalid_machine_dimensions(
+def test_discovery_never_substitutes_invalid_machine_dimensions(
     unknown_printers: Path,
     change: dict[str, object],
 ) -> None:
@@ -154,6 +154,52 @@ def test_discovery_never_substitutes_missing_or_invalid_machine_dimensions(
     content.update(change)
     _write(path, content)
     assert sp.discover_printers(unknown_printers / "slicer.exe", "orca") == ()
+
+
+@pytest.mark.parametrize(
+    ("missing", "volume", "nozzle"),
+    [
+        # Orcas M3D Enabler D8500 nennt keine Druckhöhe.
+        ("printable_height", (200, 200, 100), 0.6),
+        ("nozzle_diameter", (200, 200, 240), 0.4),
+        ("printable_area", (200, 200, 240), 0.6),
+    ],
+)
+def test_orca_discovery_takes_the_slicers_own_default_for_a_missing_key(
+    unknown_printers: Path, missing: str, volume: tuple[float, ...], nozzle: float
+) -> None:
+    """Nennt die Kette einen Maschinenschlüssel gar nicht, rechnet der Slicer mit
+    seiner eingebauten Vorgabe (``set_default_value`` in ``PrintConfig.cpp``,
+    in allen fünf Orca-Programmen gleich), und Solidon auch (Entscheidung
+    Robert, 05.10.2026). Ein vorhandener, unbrauchbarer Wert bleibt eine Absage
+    (der Test darüber)."""
+    base = unknown_printers / "Acme" / "machine" / "base.json"
+    document = json.loads(base.read_text(encoding="utf-8"))
+    document.pop(missing)
+    if missing == "printable_area":
+        document.pop("bed_exclude_area")
+    _write(base, document)
+
+    printer = sp.discover_printers(unknown_printers / "slicer.exe", "orca")[0]
+
+    assert printer.build_volume == pytest.approx(volume)
+    assert printer.nozzle_diameter == pytest.approx(nozzle)
+
+
+def test_prusa_discovery_takes_the_slicers_own_default_for_a_missing_key(
+    prusa_mini: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PrusaSlicers Creality CR-20 nennt kein Bett, Anycubics i3 Mega keine Düse;
+    PrusaSlicer rechnet dann mit 200 × 200 × 200 mm und 0,4 mm (``--save``,
+    ebenso SuperSlicer). Die Vorlage hier nennt weder Bett noch Höhe."""
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+
+    found = sp.discover_printers(prusa_mini, "prusa")
+
+    assert len(found) == 2
+    for printer in found:
+        assert printer.build_volume == pytest.approx((200, 200, 200))
+        assert printer.nozzle_diameter == pytest.approx(0.4)
 
 
 @pytest.mark.parametrize(

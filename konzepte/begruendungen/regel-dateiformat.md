@@ -251,9 +251,14 @@ Ursachen lagen alle im Lesen, nicht in den Profilen:
   seine Sperrflächen aus den benutzten Düsen und bleibt deshalb außen vor.
 
 Danach fehlten nur noch Profile, denen ein Maschinenschlüssel ganz fehlt
-(PrusaSlicer: CR-20, i3 Mega; Orca: M3D Enabler) — dort setzt der Slicer seine
-eingebaute Vorgabe, Solidon bisher nicht —, OrcaSlicers Kobra 3, dessen erstes
-Rechteck das ganze Bett sperrt, und die drei Method.
+(PrusaSlicer: CR-20, i3 Mega; Orca: M3D Enabler). Dort setzt der Slicer seine
+eingebaute Vorgabe, und seit dem 05.10.2026 Solidon auch (Entscheidung
+Robert, `slicer_profiles.MACHINE_DEFAULTS`). Außen vor bleiben OrcaSlicers
+Kobra 3, dessen erstes Rechteck das ganze Bett sperrt, und die drei Method.
+Für den Kobra 3 gemessen: Die Konsole prüft die Sperrzonen nicht und rechnete
+einen Würfel durch (OrcaSlicer 2.4.2), das Fenster markiert jedes Teil als
+außerhalb und gibt die Platte nicht zum Schneiden frei
+(`instance_outside_set`, `m_ready_for_slice`).
 
 ## Was welcher Slicer bekommt
 
