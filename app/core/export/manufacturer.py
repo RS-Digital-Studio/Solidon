@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -40,7 +40,7 @@ from app.core.knowledge import print_settings as settings_table
 from app.core.knowledge import profiles
 from app.core.log import get_logger
 from app.core.types import Finding, PrintSettings, Profile, QualityPreset
-from app.core.units import exact_atan_degrees, is_zero
+from app.core.units import exact_atan_degrees, is_close, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -142,6 +142,13 @@ class Foundation:
     """Wie weit die erste Stützschicht über die Stütze hinausreicht, in mm
     (``raft_first_layer_expansion``, :func:`support_foot`). ``None`` heißt
     unbekannt: Cura, Bambu Studios ``-1`` und Solidons Tabelle ohne Slicer."""
+    nozzle_type: str = ""
+    """Die Düsenart der Maschine (``nozzle_type``), leer ohne Angabe. Sie wählt
+    die Düsenart-Fassung der Filamentwerte (``slicer_keys.printed_key``)."""
+    process_missing: str = ""
+    """Die Maschine des Slicers, zu der kein Prozessprofil gewählt oder
+    gefunden ist — die Grundlage ist dann Solidons Tabelle, und der Kunde
+    erfährt es (:func:`findings`; Anycubic-Matrix, B3)."""
 
     @property
     def has_profile(self) -> bool:
@@ -555,6 +562,16 @@ _PLATE_NUMBERS: Final[Mapping[str, str]] = {"4": "Textured PEI Plate"}
 #: :data:`PROGRAM_DEFAULTS`. Das Fenster nimmt die Standardplatte der Maschine,
 #: die Konsole nicht; darum schreibt die Übergabe sie immer.
 CONSOLE_PLATE: Final = "Cool Plate"
+
+#: Die Platte, die ein **Programm** ohne Angabe nimmt, wo sein Hersteller sie
+#: eigens gesetzt hat — für Maschinen mit Plattenwahl, die keine Standardplatte
+#: nennen. Anycubic Slicer Next 2.0.0.3 rechnet ohne ``curr_bed_type`` auf der
+#: texturierten PEI-Platte, nicht auf Orcas „Cool Plate" (221 von 221
+#: Konsolenläufen der Anycubic-Matrix, 05.10.2026). Die Übergabe schreibt sie
+#: ausdrücklich, und das Fenster übernimmt ``curr_bed_type`` aus der Datei
+#: (``Plater::load_files`` → ``on_bed_type_change``). Programme ohne Eintrag
+#: bekommen keine geratene Platte, sondern ``slicer.plate_unknown``.
+PROGRAM_PLATE: Final[Mapping[str, str]] = {"anycubicslicernext": "Textured PEI Plate"}
 
 #: Die Platte eines Druckers, der keine Standardplatte nennt — weder im Profil
 #: noch im Modell. Das sind die Geräte ohne Plattenwahl
@@ -1223,6 +1240,10 @@ def _read_filament(
     """Die Filamentwerte in Solidons Pfaden — samt Rückzug der Maschine, wo das
     Filament ``nil`` sagt, und der Betttemperatur der gewählten Platte."""
     filament = slicer_keys.normalise_chamber(filament, program)
+    # Gelesen wird, was an dieser Düse gedruckt wird (Anycubic Slicer Next).
+    filament = slicer_keys.for_the_nozzle(
+        filament, program, _text(machine.get("nozzle_type")) or ""
+    )
     read: dict[str, object] = {}
     for solidon, native, kind in slicer_profiles.FILAMENT_READBACK:
         native = slicer_keys.native_key(native, program)
@@ -2027,20 +2048,42 @@ def _declared_name(path: Path) -> str:
     return name.strip() if isinstance(name, str) and name.strip() else path.stem
 
 
-def _runs_the_standard_process(process_file: Path, machine: Mapping[str, Any]) -> bool:
+def _runs_the_standard_process(
+    process_file: Path,
+    machine: Mapping[str, Any],
+    machine_name: str,
+    roots: Sequence[Path] = (),
+) -> bool:
     """Liegt der Standardprozess der Maschine darunter?
 
     Nur dann legt eine Stufe ihre Werte darüber. Wer selbst einen Prozess
     gewählt hat — „0.12mm Fine" etwa —, hat damit die Stufe gewählt, und der
     Prozess bestimmt sie. Nennt die Maschine keinen Standardprozess, gilt der
     als Standard, der es im Namen trägt (wie bei der Vorwahl in
-    ``slicer_profiles.match``).
+    ``slicer_profiles.match``); nennt sie einen, der nicht zu ihr passt, der
+    „Standard“ seiner Schichthöhe.
     """
     chosen = _declared_name(process_file)
     standard = _text(machine.get("default_print_profile"))
-    if standard:
-        return chosen == standard
-    return "standard" in chosen.casefold()
+    if not standard:
+        return "standard" in chosen.casefold()
+    if chosen == standard:
+        return True
+    # Ein genannter Standard, der nicht zu dieser Maschine passt, vertritt der
+    # „Standard“ seiner Schichthöhe (``slicer_profiles.standard_process``).
+    named = process_file.parent / f"{standard}.json"
+    if named.is_file():
+        listed = slicer_profiles.binding(named, roots).get("compatible_printers")
+        if not isinstance(listed, list) or machine_name in listed:
+            return False
+    stated = slicer_profiles.layer_in_name(standard)
+    layer = slicer_profiles.layer_in_name(chosen)
+    return (
+        stated is not None
+        and layer is not None
+        and is_close(stated, layer)
+        and "standard" in chosen.casefold()
+    )
 
 
 def for_stage(
@@ -2089,9 +2132,9 @@ def _stage_process(setup: SlicerSetup, profile: Profile, quality: QualityPreset)
     if process_file is None or machine_file is None:
         return ""
     machine = slicer_profiles.resolve_values(machine_file, roots=roots)
-    if not _runs_the_standard_process(process_file, machine):
-        return ""
     machine_name = _declared_name(machine_file)
+    if not _runs_the_standard_process(process_file, machine, machine_name, roots):
+        return ""
     standard = slicer_profiles.SlicerProfile(process_file, _declared_name(process_file), "process")
     # **Die Geschwister mit demselben Zusatz** („@Elegoo CC2 0.4 nozzle"): So
     # legen die Hersteller ihre Stufen ab, je Drucker und Düse ein Ordner. Die
@@ -2142,6 +2185,15 @@ def _prusa_stage_process(
     return slicer_profiles.identity(chosen) if chosen is not None else ""
 
 
+def _without_process(setup: SlicerSetup | None) -> str:
+    """Der Name der Maschine eines Orca-Programms, zu der kein Prozess gewählt ist."""
+    if setup is None or setup.flavour != "orca" or setup.base_process or not setup.machine_profile:
+        return ""
+    from app.core.export import handover
+
+    return handover._profile_name(setup.machine_profile)
+
+
 def base_settings(
     profile: Profile, quality: QualityPreset, setup: SlicerSetup | None
 ) -> Foundation:
@@ -2160,6 +2212,9 @@ def base_settings(
             material_from_table=(
                 setup is not None and setup.flavour in ("orca", "prusa") and not setup.base_filament
             ),
+            # Eine Maschine des Slicers ohne Prozess druckt nicht still mit
+            # Solidons Tabelle (Kobra 4 0,8: der genannte Standard fehlt).
+            process_missing=_without_process(setup),
             motion=cura_motion(setup, profile)
             if setup is not None and setup.flavour == "cura"
             else None,
@@ -2201,7 +2256,9 @@ def base_settings(
     plate = (
         plate_name(setup.plate)
         or default_plate(machine, model)
-        or ("" if offers_plates(machine, model) else SINGLE_PLATE)
+        or (
+            PROGRAM_PLATE.get(program(setup), "") if offers_plates(machine, model) else SINGLE_PLATE
+        )
     )
     variant = _variant_selection(process, machine)
     if variant is None:
@@ -2255,7 +2312,11 @@ def base_settings(
         )
         read.update(filament_read)
     staged = (
-        _stage_values(profile, quality) if _runs_the_standard_process(process_file, machine) else {}
+        _stage_values(profile, quality)
+        if _runs_the_standard_process(
+            process_file, machine, _declared_name(machine_file) if machine_file else "", roots
+        )
+        else {}
     )
 
     base = fallback
@@ -2299,6 +2360,7 @@ def base_settings(
         variant_count=variant.count,
         variant_name=variant.name,
         variant_id=variant.extruder_id,
+        nozzle_type=_text(machine_values.get("nozzle_type")) or "",
     )
 
 
@@ -2443,6 +2505,20 @@ def findings(foundation: Foundation) -> list[Finding]:
             )
         ]
     found: list[Finding] = []
+    if foundation.process_missing:
+        found.append(
+            Finding(
+                code="slicer.process_missing",
+                severity="warning",
+                message=_(
+                    "Für „{machine}“ fehlt ein Prozessprofil des Herstellers. Bis Sie eines "
+                    "im Druckdialog wählen, gelten Solidons Werte.",
+                    machine=foundation.process_missing,
+                ),
+                values={"profile": foundation.process_missing},
+                suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        )
     if foundation.material_from_table:
         found.append(
             Finding(

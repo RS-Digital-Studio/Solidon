@@ -1480,7 +1480,61 @@ def test_a_standard_process_that_is_not_there_is_not_replaced_by_the_first(
 
     assert process is not None and process.name == "0.20mm Standard @Creality Ender-3 V3"
     finer = replace(ender, layer_height=0.16)
-    assert sp.match(found, finer)[1] is None, "nichts passt — dann fragt der Dialog"
+    finer_process = sp.match(found, finer)[1]
+    assert finer_process is not None and finer_process.name == process.name, (
+        "die Schichthöhe im genannten Namen ist die Angabe des Herstellers"
+    )
+
+
+def test_a_named_standard_of_another_printer_means_the_standard_of_its_layer(
+    slicer: Path, bestand: Path
+) -> None:
+    """Anycubics Kobra 4 0,8 nennt „0.40mm Standard @Anycubic Kobra X 0.8
+    nozzle“. Den gibt es, aber er passt nur zum Kobra X; die Schichthöhe des
+    Druckers (0,2 mm) traf keinen der eigenen Prozesse (0,24 bis 0,56 mm), und
+    gedruckt wurde still mit Solidons Tabelle (Anycubic-Matrix, B3)."""
+    machine = "Anycubic Kobra 4 0.8 nozzle"
+    document: dict[str, object] = {
+        "type": "machine",
+        "name": machine,
+        "instantiation": "true",
+        "printer_model": "Anycubic Kobra 4",
+        "nozzle_diameter": ["0.8"],
+        "default_print_profile": "0.40mm Standard @Anycubic Kobra X 0.8 nozzle",
+    }
+    _write(bestand / "Anycubic" / "machine" / f"{machine}.json", document)
+    for name, printer in (
+        ("0.24mm Standard @Anycubic Kobra 4 0.8 nozzle", machine),
+        ("0.40mm Standard @Anycubic Kobra 4 0.8 nozzle", machine),
+        ("0.56mm Standard @Anycubic Kobra 4 0.8 nozzle", machine),
+        ("0.40mm Standard @Anycubic Kobra X 0.8 nozzle", "Anycubic Kobra X 0.8 nozzle"),
+    ):
+        _write(
+            bestand / "Anycubic" / "process" / f"{name}.json",
+            {
+                "type": "process",
+                "name": name,
+                "instantiation": "true",
+                "compatible_printers": [printer],
+            },
+        )
+    kobra = PrinterProfile(
+        id="k4",
+        title="Anycubic Kobra 4",
+        build_volume=(260.0, 260.0, 260.0),
+        nozzle_diameter=0.8,
+        layer_height=0.2,
+    )
+    found = sp.find_profiles(slicer, "orca")
+
+    chosen, process = sp.match(found, kobra)
+
+    assert chosen is not None and chosen.name == machine
+    assert process is not None and process.name == "0.40mm Standard @Anycubic Kobra 4 0.8 nozzle"
+    nameless = replace(chosen, default_process="")
+    assert sp.standard_process(sp.processes(found, chosen), nameless, kobra) is None, (
+        "ohne genannte Höhe und ohne Prozess der Druckerhöhe bleibt es leer"
+    )
 
 
 def test_an_unknown_printer_gets_no_guess(slicer: Path) -> None:

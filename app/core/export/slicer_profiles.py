@@ -40,6 +40,7 @@ from app.core.export import prusa_conditions
 from app.core.export.slicer_keys import (
     CURA_JERK_LINKS,
     SlicerFlavour,
+    for_the_nozzle,
     has_readable_profiles,
     has_user_profile_tree,
     native_key,
@@ -4180,11 +4181,20 @@ def standard_process(
     """Der Standardprozess einer Maschine unter den passenden: der, den sie
     nennt (``default_print_profile``), sonst der, den ihr Hersteller Standard
     nennt (:func:`_standard_process`). Die Stufe „Standard" meint ihn, und die
-    übrigen Stufen suchen von ihm aus (:func:`stage_process`)."""
+    übrigen Stufen suchen von ihm aus (:func:`stage_process`).
+
+    **Fehlt der genannte, gilt seine Schichthöhe.** Anycubics Kobra 4 0,8 nennt
+    „0.40mm Standard @Anycubic Kobra X 0.8 nozzle“ — einen Prozess, der nicht
+    zu ihm passt. Die Schichthöhe des Druckers (0,2 mm) traf keinen seiner
+    Prozesse, und gedruckt wurde still mit Solidons Tabelle (Anycubic-Matrix,
+    B3). Die Höhe im genannten Namen ist die Angabe des Herstellers; erst ohne
+    sie gilt die des Druckers."""
     named = [entry for entry in fitting if entry.name == machine.default_process]
     if named:
         return named[0]
-    return _standard_process(fitting, printer)
+    stated = layer_in_name(machine.default_process)
+    found = _standard_process(fitting, stated) if stated is not None else None
+    return found or _standard_process(fitting, printer.layer_height)
 
 
 #: Die Schichthöhe am Anfang eines Prozessnamens, wie alle Hersteller ihn
@@ -4274,7 +4284,7 @@ def stage_process(
 
 
 def _standard_process(
-    fitting: Sequence[SlicerProfile], printer: PrinterProfile
+    fitting: Sequence[SlicerProfile], layer_height: float
 ) -> SlicerProfile | None:
     """Der Standardprozess, wenn die Maschine keinen nennt, den es gibt.
 
@@ -4285,16 +4295,15 @@ def _standard_process(
     das Herstellerprofil die Grundlage ist, der ganze Druck.
 
     Gesucht wird deshalb, was ein Hersteller Standard nennt: die Schichthöhe
-    des Druckers und „Standard" im Namen, sonst die Schichthöhe allein. Findet
-    sich nichts, bleibt es leer — der Druckdialog fragt, statt zu raten
+    ``layer_height`` und „Standard" im Namen, sonst die Schichthöhe allein.
+    Findet sich nichts, bleibt es leer — der Druckdialog fragt, statt zu raten
     (Regel 21).
     """
 
     same = [
         entry
         for entry in fitting
-        if (height := layer_in_name(entry.name)) is not None
-        and abs(height - printer.layer_height) < 1e-6
+        if (height := layer_in_name(entry.name)) is not None and abs(height - layer_height) < 1e-6
     ]
     standard = [entry for entry in same if "standard" in entry.name.casefold()]
     pool = standard or same
@@ -4552,6 +4561,7 @@ def filament_readback(
     variant_name: str = "",
     extruder_id: str = "",
     program: str = "",
+    nozzle_type: str = "",
 ) -> FilamentReadback:
     """Was dieses Filamentprofil über sein Material sagt (§29).
 
@@ -4590,7 +4600,8 @@ def filament_readback(
     elif source.name.endswith((".xml.fdm_material", ".inst.cfg")):
         readback = _CURA_FILAMENT_READBACK
     else:
-        resolved = normalise_chamber(resolved, program)
+        # ``nozzle_type`` der Maschine wählt die Düsenart-Fassung, die gedruckt wird.
+        resolved = for_the_nozzle(normalise_chamber(resolved, program), program, nozzle_type)
         readback = tuple((path, native_key(key, program), kind) for path, key, kind in readback)
     values: dict[str, float | int] = {}
     for solidon, native, kind in readback:

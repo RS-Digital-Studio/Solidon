@@ -325,6 +325,11 @@ zählt die rückgelesene Werkzeugnutzung, nicht die Zahl deklarierter Spulen ode
 eine möglicherweise unbekannte Eingangsbelegung. Ausdrückliche Sollwerte werden
 immer verglichen; die Bauraumprüfung bleibt unverändert.
 
+Creality Print bekommt die Kopie ohne den einzelnen `plate`-Block, weil es mit
+mehreren Filamenten daran abstürzt. Ab 7.3 ordnet seine Konsole selbst an; auch
+eine Platte, deren Anordnung nicht hält, geht deshalb ohne Vorgabe hinaus
+(gemessen, `_creality_cli`).
+
 ## Die Lüfterkurve
 
 Alle drei Familien regeln den Bauteillüfter über der Schichtzeit: bis zur
@@ -553,6 +558,9 @@ ausdrückliche Ablehnung der CLI-Option wird für weitere Aufträge gemerkt.
 Unbrauchbare Bett- und Sperrkonturen der Druckdatei bleiben als Warnung im
 Prüfbericht. Ein gleichzeitig nachgewiesener Bauraumübertritt hat Vorrang und
 trägt den Profilrückfall oder die ausgelassene Sperre als Einzelheit mit.
+
+Curas Fenster bekommt immer das halbe Bett der aktiven Maschine, weil sein
+3MF-Leser es abzieht, gleich wo der Nullpunkt liegt.
 
 ## Grenzen
 

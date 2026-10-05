@@ -72,7 +72,7 @@ from app.core.export.slicer_keys import (
 from app.core.geom.attributes import used_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.threemf import SETTINGS_PATH
-from app.core.knowledge import print_settings, profiles
+from app.core.knowledge import print_fields, print_settings, profiles
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.process import (
@@ -88,6 +88,7 @@ from app.core.types import (
     Finding,
     MaterialSlot,
     Mesh,
+    ObjectId,
     PrinterProfile,
     PrintSettings,
     Profile,
@@ -96,7 +97,7 @@ from app.core.types import (
     SlotOverride,
     SlotProfileBinding,
 )
-from app.core.units import EPS_GEOM, is_close, is_zero
+from app.core.units import EPS_GEOM, format_length, is_close, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -1180,6 +1181,12 @@ def object_keys(
     if native is not None:
         written.update(_speed_roles(native, written, flavour, program=program))
         written.update(_acceleration_roles(native, written, flavour, applied))
+        if flavour == "orca" and profile is not None and "enable_support" in written:
+            # Schaltet erst das Teil Stützen ein, prüft der Slicer seine Bäume
+            # mit den Werten der Platte (:func:`organic_tree_fitted`).
+            written.update(
+                organic_tree_fitted({**native, **written}, profile.printer.nozzle_diameter)
+            )
     if flavour == "orca" and "brim_object_gap" in written:
         requested = any(entry.path == "adhesion.brim_gap" for entry in advice)
         if "brim" not in print_settings.adhesion_kinds(applied.adhesion.kind) or (
@@ -1493,7 +1500,8 @@ def split_for_parts(
         )
     native = (
         _part_native_values(trimmed, profile, setup, origin, flavour)
-        if per_part & {"speed.acceleration", "speed.outer_wall", "speed.inner_wall"}
+        if per_part
+        & {"speed.acceleration", "speed.outer_wall", "speed.inner_wall", "support.style"}
         else {}
     )
     return PartSplit(
@@ -2319,6 +2327,7 @@ def _resolve_slot(
                 variant_name=foundation.variant_name if foundation is not None else "",
                 extruder_id=foundation.variant_id if foundation is not None else "",
                 program=manufacturer.program(setup),
+                nozzle_type=foundation.nozzle_type if foundation is not None else "",
             )
             for path, value in readback.values.items():
                 settings = with_path(settings, path, value)
@@ -2981,6 +2990,7 @@ def write_config(
             plate=plate,
             suggested=_suggested_speed_keys(settings, setup.flavour),
             foundation=foundation,
+            nozzle=profile.printer.nozzle_diameter,
         )
         target.write_text(
             json.dumps(process_document, indent=2, ensure_ascii=False),
@@ -3035,6 +3045,7 @@ def write_config(
                     ),
                     plate=plate or None,
                     chamber_control=foundation.chamber_control,
+                    nozzle_type=foundation.nozzle_type,
                 )
             )
         # **Erst angleichen, dann schreiben.** Die Orca-Familie indiziert jeden
@@ -3074,6 +3085,11 @@ def write_config(
                 expected[key] = printed_value
         if plate:
             expected["curr_bed_type"] = plate
+        if "enable_support" in own_process or "raft_layers" in own_process:
+            # Mit den Stützen geprüft: die Baumspitze, die Solidon gehoben hat.
+            for key in (ORGANIC_TIP, ORGANIC_BRANCH):
+                if key in process_document:
+                    expected[key] = _printed(process_document[key])
         firmware = machine_document.get("gcode_flavor")
         if isinstance(firmware, str):
             expected["gcode_flavor"] = firmware
@@ -3289,6 +3305,7 @@ def project_settings(
             plate=plate,
             suggested=_suggested_speed_keys(settings, setup.flavour),
             foundation=foundation,
+            nozzle=profile.printer.nozzle_diameter,
         )
     )
     document.update(_machine_keys(profile, setup.flavour))
@@ -3349,6 +3366,7 @@ def project_settings(
                 ),
                 plate=plate or None,
                 chamber_control=foundation.chamber_control,
+                nozzle_type=foundation.nozzle_type,
             )
         )
 
@@ -3767,6 +3785,104 @@ def _suggested_speed_keys(settings: PrintSettings, flavour: SlicerFlavour) -> fr
     )
 
 
+#: Die Schlüssel der organischen Bäume, die :func:`organic_tree_fitted` hebt.
+ORGANIC_TIP: Final = "tree_support_tip_diameter"
+ORGANIC_BRANCH: Final = "tree_support_branch_diameter_organic"
+
+
+def organic_tree_fitted(values: Mapping[str, object], nozzle: float) -> dict[str, str]:
+    """Baumspitze und Ast, so weit gehoben, dass die Orca-Familie stützt.
+
+    Wo gestützt wird (``enable_support`` oder ein Raft) und die Stütze ein
+    organischer Baum ist (``tree(…)`` mit Stil ``default`` oder ``organic``),
+    verweigert jedes Orca-Programm den Schnitt, sobald die Spitze schmaler ist
+    als die Stützbahn oder der Ast schmaler als zwei Bahnen oder die Spitze
+    (``Print.cpp``, ``Print::validate``). Anycubic und OrcaSlicer liefern das
+    für dreizehn bzw. sechs Prozesse an 0,8er-Düsen so aus — Kobra S1 Max 0,8:
+    Spitze 0,8 mm, Stützbahn 0,82 mm (Anycubic-Matrix, B4). Die Bahn ist
+    ``support_line_width``, ohne sie ``line_width``, ohne beide die Düse
+    (``Flow.cpp``); Prozente beziehen sich auf die Düse. Ohne Schlüssel gelten
+    Orcas Vorgaben (Spitze 0,8 mm, Ast 2 mm, Stütze ``normal(auto)``).
+    """
+
+    def text(key: str, default: str) -> str:
+        value = values.get(key)
+        return (_printed(value) if value is not None else default).strip().strip('"')
+
+    supported = text("enable_support", "0") == "1" or (_as_float(text("raft_layers", "0")) or 0) > 0
+    style = text("support_style", "default") or "default"
+    if not supported or not text("support_type", "normal(auto)").startswith("tree"):
+        return {}
+    if style not in ("default", "organic") or nozzle <= 0.0:
+        return {}
+    width = nozzle
+    for key in ("support_line_width", "line_width"):
+        raw = text(key, "0")
+        number = _as_float(raw.removesuffix("%"))
+        if number is not None and number > 0.0:
+            width = number * nozzle / 100.0 if raw.endswith("%") else number
+            break
+    tip = _as_float(text(ORGANIC_TIP, "0.8"))
+    branch = _as_float(text(ORGANIC_BRANCH, "2"))
+    if tip is None or branch is None:
+        return {}
+    fitted: dict[str, str] = {}
+    if tip < width - EPS_GEOM:
+        tip = width
+        fitted[ORGANIC_TIP] = f"{width:g}"
+    if branch < max(2.0 * width, tip) - EPS_GEOM:
+        fitted[ORGANIC_BRANCH] = f"{max(2.0 * width, tip):g}"
+    return fitted
+
+
+def widened_tree_findings(
+    keys: Mapping[str, object], object_id: ObjectId | None = None
+) -> list[Finding]:
+    """Sagt, wo Solidon die Baumspitze gehoben hat (:func:`organic_tree_fitted`).
+
+    Eine Abweichung vom Herstellerprofil braucht einen Grund, und der Kunde
+    erfährt ihn — an der Platte oder am Teil, das die Stütze einschaltet.
+    """
+    value = keys.get(ORGANIC_TIP)
+    width = _as_float(_printed(value)) if value is not None else None
+    if width is None:
+        return []
+    return [
+        Finding(
+            code="slicer.tree_tip_widened",
+            severity="info",
+            message=_(
+                "Die Baumspitze im Profil ist schmaler als die Stützbahn, das lehnt der Slicer "
+                "ab. Solidon setzt sie auf {value}.",
+                value=format_length(width),
+            ),
+            values={"setting": ORGANIC_TIP, "value": _printed(value)},
+            object_id=object_id,
+        )
+    ]
+
+
+def plate_tree_findings(
+    settings: PrintSettings, profile: Profile, setup: SlicerSetup | None
+) -> list[Finding]:
+    """Ob die Platte ihre Baumspitze gehoben bekommt — dieselbe Frage wie im
+    Prozessprofil (:func:`_orca_process`), am Herstellerprozess samt Abweichung."""
+    if setup is None or setup.flavour != "orca":
+        return []
+    if settings.support.style == "none" and "raft" not in print_settings.adhesion_kinds(
+        settings.adhesion.kind
+    ):
+        # Ohne Stütze und Raft prüft der Slicer keine Bäume — und die Grundlage
+        # kostet je Export eine Zehntelsekunde.
+        return []
+    foundation = manufacturer.base_settings(profile, settings.quality, setup)
+    program = slicer_keys.program_of(setup.executable)
+    values = _part_native_values(settings, profile, setup, foundation, "orca") or as_mapping(
+        settings, "orca", program=program
+    )
+    return widened_tree_findings(organic_tree_fitted(values, profile.printer.nozzle_diameter))
+
+
 def _orca_process(
     values: dict[str, str],
     settings: PrintSettings,
@@ -3776,6 +3892,7 @@ def _orca_process(
     plate: str = "",
     suggested: frozenset[str] = frozenset(),
     foundation: manufacturer.Foundation | None = None,
+    nozzle: float = 0.0,
 ) -> dict[str, object]:
     """Das Prozessprofil für die Orca-Familie.
 
@@ -3837,6 +3954,9 @@ def _orca_process(
     if base is not None:
         document.update(_speed_roles(document, own, "orca"))
         document.update(_acceleration_roles(document, own, "orca", settings, foundation))
+    # Stützt die Platte mit organischen Bäumen, deren Spitze das Profil schmaler
+    # nennt als die Stützbahn, sagte der Slicer ab — gehoben wird auf die Bahn.
+    document.update(organic_tree_fitted(document, nozzle))
     # **Die Druckplatte, ausdrücklich** (Entscheidung F). Ohne sie nimmt die
     # Konsole „Cool Plate" — gemessen am ElegooSlicer mit 35 °C Bett für PLA,
     # während das Fenster am Centauri Carbon 2 die texturierte PEI-Platte wählt.
@@ -3893,6 +4013,7 @@ def _orca_filament(
     deviating: Mapping[str, str] | None = None,
     plate: str | None = None,
     chamber_control: bool | None = None,
+    nozzle_type: str = "",
 ) -> dict[str, object]:
     """Das Filamentprofil für die Orca-Familie.
 
@@ -3959,6 +4080,9 @@ def _orca_filament(
         inherited = slicer_keys.normalise_chamber(
             slicer_profiles.resolve_values(base, roots=_profile_roots(setup)), program
         )
+        # Der Grundwert ist, was an dieser Düse gedruckt wird: Anycubic Slicer
+        # Next ersetzt ihn beim Schneiden durch die Düsenart-Fassung.
+        inherited = slicer_keys.for_the_nozzle(inherited, program, nozzle_type)
         document.update({key: _as_slots(value) for key, value in inherited.items()})
 
     # Solidons Werte kommen darüber — außer sie gehören einem anderen Material.
@@ -4027,6 +4151,9 @@ def _orca_filament(
             document["filament_colour_type"] = ["1"]
     if slot is not None and slot.name:
         document["name"] = f"Solidon {slot.name}"
+    # Ein eigener Wert geht in jede Düsenart-Fassung — sonst druckt der
+    # Slicer die Fassung des Herstellers statt der Wahl.
+    document.update(slicer_keys.with_nozzle_kinds(document, program, own_values))
     if plate is not None:
         # Die Platte ist bekannt: Die Temperaturen der übrigen Platten bleiben,
         # wie der Hersteller sie setzt — auch seine Nullen, mit denen er eine
@@ -7123,6 +7250,7 @@ def verify_settings(
     """
 
     ignored: list[str] = list(differences)
+    pairs: list[tuple[str, str, str]] = []
     for key, wanted in _verification_values(written, program).items():
         if key in _RECOMPUTED:
             continue
@@ -7142,6 +7270,7 @@ def verify_settings(
             if slicer_keys.omitted_from_gcode(key, wanted, program):
                 continue
             ignored.append(f"{key}: {wanted} → —")
+            pairs.append((key, wanted, "—"))
             continue
         if _same(
             actual,
@@ -7150,6 +7279,7 @@ def verify_settings(
         ):
             continue
         ignored.append(f"{key}: {wanted} → {actual}")
+        pairs.append((key, wanted, actual))
 
     if not ignored:
         return []
@@ -7158,13 +7288,66 @@ def verify_settings(
         Finding(
             code="slicer.setting_ignored",
             severity="warning",
-            message=_(
-                "Der Slicer hat Einstellungen anders übernommen, als Solidon sie geschrieben hat."
+            message=_ignored_message(
+                len(ignored),
+                # Ein Wert vor einem Startcode: der passt in einen Satz.
+                min(pairs, key=lambda pair: (pair[0].endswith("_gcode"), pair)) if pairs else None,
+                flavour,
             ),
             values={"count": len(ignored), "settings": "; ".join(sorted(ignored)[:10])},
             source="gcode",
+            # Der eigene Wert steht im Druckdialog, der des Herstellers im Profil.
+            suggestions=(OPEN_PRINT_SETTINGS, CHECK_SLICER_PROFILE),
         )
     ]
+
+
+#: Wie viele Zeichen eines Werts im Satz der Gegenprobe stehen.
+_SHOWN_VALUE: Final = 40
+
+
+def _ignored_message(
+    count: int, first: tuple[str, str, str] | None, flavour: SlicerFlavour | None
+) -> TranslatableText:
+    """Der Satz der Gegenprobe: was der Slicer statt des Geschriebenen druckt.
+
+    Genannt wird das Feld des Druckdialogs, sonst der Schlüssel des Slicers,
+    mit beiden Werten — „anders übernommen“ allein ließ offen, was und wie
+    (Anycubic-Matrix, B6).
+    """
+    if first is None:
+        return _("Der Slicer hat Einstellungen anders übernommen, als Solidon sie geschrieben hat.")
+    key, wanted, actual = first
+    path = next(
+        (
+            entry.path
+            for entry in slicer_keys.TABLES.get(flavour or "other", ())
+            if entry.key == key
+        ),
+        None,
+    )
+    field = print_fields.field_of(path) if path is not None else None
+    setting: TranslatableText | str = field.title if field is not None else key
+    # Ein Startcode bleibt in den Werten des Befunds, im Satz steht sein Anfang.
+    wanted, actual = (
+        text if len(text) <= _SHOWN_VALUE else text[: _SHOWN_VALUE - 1] + "…"
+        for text in (wanted, actual)
+    )
+    if count == 1:
+        return _(
+            "Der Slicer druckt „{setting}“ mit {actual} statt {wanted}.",
+            setting=setting,
+            actual=actual,
+            wanted=wanted,
+        )
+    return _(
+        "Der Slicer druckt {count} Einstellungen anders als geschrieben, darunter "
+        "„{setting}“ mit {actual} statt {wanted}.",
+        count=count,
+        setting=setting,
+        actual=actual,
+        wanted=wanted,
+    )
 
 
 def _same(

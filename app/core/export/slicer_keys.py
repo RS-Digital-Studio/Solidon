@@ -23,7 +23,7 @@ Ruhe (§29).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, NamedTuple
@@ -1168,6 +1168,96 @@ OMITTED_FROM_GCODE: Final[dict[str, dict[str, frozenset[str] | None]]] = {
         "ironing_type": frozenset({"no ironing"}),
     },
 }
+
+
+#: Filamentschlüssel, die ein **Programm** zusätzlich je Düsenart führt. Beim
+#: Schneiden ersetzt es den Grundwert durch die Fassung der Maschinendüse
+#: (``nozzle_type``); fehlt sie oder ist sie leer, bleibt der Grundwert.
+#: Anycubic Slicer Next 2.0.0.3 trägt genau diese zwölf Zeichenketten in
+#: ``AnycubicSlicer.dll``, der öffentliche Quelltext und OrcaSlicer nicht.
+#: Gemessen am 05.10.2026 im Konfigurationsblock: ``brass``, ``undefine`` und
+#: eine Maschine ohne Angabe drucken ``_BRASS``, ``hardened_steel`` und
+#: ``stainless_steel`` drucken ``_HS``; ein ``nil`` in der Fassung bricht den Lauf ab.
+NOZZLE_KIND_KEYS: Final[dict[str, tuple[str, ...]]] = {
+    "anycubicslicernext": (
+        "nozzle_temperature",
+        "nozzle_temperature_initial_layer",
+        "fan_max_speed",
+        "fan_min_speed",
+        "fan_cooling_layer_time",
+        "slow_down_layer_time",
+    ),
+}
+
+#: Die Fassungen je Programm und welche Düsenart sie druckt; ``None`` gilt für
+#: jede Düse, die keine Fassung eigens nennt.
+NOZZLE_KIND_SUFFIXES: Final[dict[str, dict[str, tuple[str | None, ...]]]] = {
+    "anycubicslicernext": {
+        "_BRASS": (None, "brass", "undefine"),
+        "_HS": ("hardened_steel", "stainless_steel"),
+    },
+}
+
+
+def nozzle_kind_keys(key: str, program: str) -> tuple[str, ...]:
+    """Die Düsenart-Fassungen eines Filamentschlüssels — leer, wo das Programm keine führt."""
+    if key not in NOZZLE_KIND_KEYS.get(program, ()):
+        return ()
+    return tuple(f"{key}{suffix}" for suffix in NOZZLE_KIND_SUFFIXES[program])
+
+
+def printed_key(key: str, program: str, nozzle_type: str) -> str | None:
+    """Die Fassung, die das Programm an dieser Maschinendüse statt ``key`` druckt."""
+    if key not in NOZZLE_KIND_KEYS.get(program, ()):
+        return None
+    suffixes = NOZZLE_KIND_SUFFIXES[program]
+    kind = nozzle_type.strip().casefold()
+    chosen = next((suffix for suffix, kinds in suffixes.items() if kind in kinds), None)
+    if chosen is None:
+        chosen = next(suffix for suffix, kinds in suffixes.items() if None in kinds)
+    return f"{key}{chosen}"
+
+
+def for_the_nozzle(
+    values: Mapping[str, object], program: str, nozzle_type: str
+) -> dict[str, object]:
+    """Die Filamentwerte, wie das Programm sie an dieser Düse druckt.
+
+    Steht die Fassung der Maschinendüse da und ist nicht leer, gilt sie statt
+    des Grundwerts — so liest die Grundlage den Wert, der gedruckt wird, und
+    nicht Anycubics Platzhalter (Kobra S1 PLA: Grund 205 °C, Messing 210 °C).
+    """
+    result = dict(values)
+    for key in NOZZLE_KIND_KEYS.get(program, ()):
+        variant = printed_key(key, program, nozzle_type)
+        value = values.get(variant) if variant is not None else None
+        first = value[0] if isinstance(value, list) and value else value
+        if first is None or isinstance(first, list) or str(first).strip() in ("", "nil"):
+            continue
+        result[key] = value
+    return result
+
+
+def with_nozzle_kinds(
+    values: Mapping[str, object], program: str, own: Collection[str]
+) -> dict[str, object]:
+    """Die Düsenart-Fassungen, die den geschriebenen Grundwert tragen müssen.
+
+    Ein eigener Wert (``own``) geht in jede Fassung. Sonst überstimmt die
+    geerbte Fassung des Herstellers jede eigene oder übernommene Temperatur,
+    Lüfter- und Schichtzeitwahl: Am Kobra S1 0,4 schrieb Solidon 235 °C, und
+    der Slicer druckte die 210 °C der Messingdüse. Eine fehlende Fassung
+    bekommt den Grundwert, den der Slicer ohnehin nähme; sonst füllte der
+    Abgleich mehrerer Spulen sie mit dem Wert einer anderen Spule. Geerbte
+    Fassungen bleiben, wie der Hersteller sie setzt.
+    """
+    return {
+        variant: values[key]
+        for key in NOZZLE_KIND_KEYS.get(program, ())
+        if key in values
+        for variant in nozzle_kind_keys(key, program)
+        if key in own or variant not in values
+    }
 
 
 def omitted_from_gcode(key: str, value: str, program: str) -> bool:
