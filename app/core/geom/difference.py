@@ -111,6 +111,7 @@ class _FacetProjection:
     origin: np.ndarray
     frame: np.ndarray
     polygon: BaseGeometry
+    wide: BaseGeometry | None
     low: float
     high: float
 
@@ -121,9 +122,18 @@ class _FacetCover:
     Facetten sind nur Suchgruppen. Die Schranke nutzt die gemessenen Höhen
     aller beteiligten Ecken und die vollständige Vereinigung ihrer Projektionen.
     Damit bleiben Löcher erhalten, auch wenn alle Prüfpunkte am Rand liegen.
+
+    **Neben der Facette gilt die Schranke weiter, nur größer**: Liegt die
+    Projektion einer Zelle höchstens ``reach`` neben der Facette, hat jeder
+    ihrer Punkte einen Facettenpunkt im Abstand ``sqrt(Höhe² + reach²)``. Am
+    Besenhalter ragten 38 mm lange, 0,06 mm schmale Dreiecke der flachen
+    Rückseite um Tausendstel über den Rand eines Buchstabens; ohne diese
+    Schranke teilte sich jedes in tausend Zellen, und die Prüfung brauchte
+    mehr als ihr Budget.
     """
 
-    def __init__(self, body: trimesh.Trimesh) -> None:
+    def __init__(self, body: trimesh.Trimesh, reach: float = 0.0) -> None:
+        self.reach = reach
         self.triangles = np.asarray(body.triangles)
         self.groups = tuple(np.asarray(faces) for faces in body.facets)
         self.group_of = np.full(len(self.triangles), -1, dtype=np.int64)
@@ -153,10 +163,18 @@ class _FacetCover:
                 return None
             # Rundes Puffern erweitert höchstens um EPS_GEOM. Derselbe Betrag
             # steht ausdrücklich in der Abstandsschranke; keine Formtoleranz.
+            wide = polygon.buffer(self.reach) if self.reach > EPS_GEOM else None
             polygon = polygon.buffer(EPS_GEOM)
             shapely.prepare(polygon)
+            if wide is not None:
+                shapely.prepare(wide)
             self.projected[identifier] = _FacetProjection(
-                origin, frame, polygon, float(points[:, :, 2].min()), float(points[:, :, 2].max())
+                origin,
+                frame,
+                polygon,
+                wide,
+                float(points[:, :, 2].min()),
+                float(points[:, :, 2].max()),
             )
         return self.projected[identifier]
 
@@ -176,14 +194,21 @@ class _FacetCover:
                 continue
             indices = np.flatnonzero(np.any(groups == identifier, axis=1))
             points = turned(triangles[indices] - projection.origin, projection.frame)
-            covered = shapely.covers(projection.polygon, shapely.polygons(points[:, :, :2]))
+            outlines = shapely.polygons(points[:, :, :2])
+            vertical = np.maximum(
+                np.abs(points[:, :, 2].max(axis=1) - projection.low),
+                np.abs(points[:, :, 2].min(axis=1) - projection.high),
+            )
+            covered = shapely.covers(projection.polygon, outlines)
             if np.any(covered):
-                vertical = np.maximum(
-                    np.abs(points[covered, :, 2].max(axis=1) - projection.low),
-                    np.abs(points[covered, :, 2].min(axis=1) - projection.high),
-                )
                 selected = indices[covered]
-                result[selected] = np.minimum(result[selected], vertical + EPS_GEOM)
+                result[selected] = np.minimum(result[selected], vertical[covered] + EPS_GEOM)
+            beside = ~covered
+            if projection.wide is not None and np.any(beside):
+                near = np.flatnonzero(beside)[shapely.covers(projection.wide, outlines[beside])]
+                if len(near):
+                    reach = np.sqrt(vertical[near] * vertical[near] + self.reach * self.reach)
+                    result[indices[near]] = np.minimum(result[indices[near]], reach + EPS_GEOM)
         return result
 
 
@@ -238,7 +263,7 @@ def surface_distance_bound(
         )
         target_triangles = np.asarray(target_local.triangles)
         index = surface_index(target_local)
-        cover = _FacetCover(target_local)
+        cover = _FacetCover(target_local, reach=permitted_mm / 2.0)
         # Mit jeder Zelle reisen Abstand und nächstes Dreieck ihrer Ecken.
         # Eine geteilte Zelle kennt drei Ecken von ihrer Mutter, die drei
         # Kantenmitten fragt die Mutter einmal für alle vier Töchter: je

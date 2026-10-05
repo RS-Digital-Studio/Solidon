@@ -48,7 +48,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | CI baut mit 3.14.8, Lizenzbeilage nachgezogen, Kernsuite auf drei Systemen wie main; offen der Paketbau auf vier Plattformen (wartet auf grüne Fensterjobs) und die drei Arbeitsplätze |
 | [RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau](#rm-469) | Plattformen, Pakete und Grafik | Pin gehoben, Kernsuite auf macOS wie main; offen beide Mac-Paketjobs und die Ansicht im gebauten Paket |
-| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Am echten Fenster abgenommen (04.10.); offen allein die Wiederholung der berichtigten Zahlenanzeige am Fenster |
+| [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände) — ob Solidon dort Vorgaben setzt, entscheidet Robert |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
@@ -808,6 +808,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zu *Modell nachbauen* ergänzt.
 
   **Teilstand 04.10.2026:** Fensterabnahme 04.10.2026: Lochplatte mit *Abbrechen* während der Prüfung (Verlauf unverändert) und Vorschlag Quader plus vier Bohrungen; Winkel mit Bohrungen in beiden Schenkeln deckt sich mit dem Original, Übernahme und Strg+Z stellen das Netz her; Stufenplatte mit Senkung Ø 8 ohne Kompensation. Der Wert eines Ausdrucks steht seit `61baf9d2c` ohne Exponent da. Belege `F:\solidon-review-reports\claude-2026-10-04\fensterabnahme\rm022-*\`. Die Zahlenanzeige unter einem Ausdrucksfeld ist behoben, aber am Fenster noch nicht wiederholt (Bildnachweise unter `F:\solidon-review-reports\claude-2026-10-04\fensterabnahme\`).
+
+  **Teilstand 05.10.2026 (Claude): Profilkörper am Netz.** Roberts Besenhalter aus dem Test von
+  0.5.2 (Leiste mit Fasen, zwei Klemmringe, Senkbohrungen, 0,68 mm tiefe Schrift auf der
+  Rückseite) bekam keinen Vorschlag. `scene/rebuild._prismatic` zieht jetzt den Umriss aller
+  Schichten längs der besten Achse und nimmt je Schicht die Luft als Säule weg; was eine Schicht
+  mehr hat, wird ein Prisma oder eine Senkbohrung (`_pieces_as_steps`). Querbohrungen und
+  umschlossene Quertaschen stehen gefüllt in den Querschnitten und werden am Ende gebohrt oder in
+  einem Zug abgezogen (`_cross_pockets`); Schichten gelten nur ohne dickes Stück dazwischen als
+  gleich (`_same`). Querschnitte werden über `sketch/traced.py` Strecken, Bögen und Kreise, ohne
+  gerade Wände zu kippen. Die Formprüfung schließt Zellen neben einer ebenen Facette über
+  √(h² + r²) ein (`geom/difference._FacetCover`); eine Nadel der Dreiecksteilung lässt eine Ebene
+  nicht mehr unerklärt (`_uncovered`). Am Besenhalter: Vorschlag aus 21 Schritten (zehn
+  Extrusionen, neun Abzüge, zwei Senkbohrungen) in 247 s angenommen, gültig, dicht, Topologie aller
+  drei Schalen wie die Quelle, Volumen 0,32 %, Flächenabstand höchstens 0,090 mm. Korpus
+  (`F:\3D Dateien` und `tests/data`, 267 Körper) vor den letzten Schritten: 57 von 227
+  Nicht-Freiform-Körpern angenommen (vorher 39), Freiform keiner. **Offen:** der Korpuslauf über
+  diesen Stand, fünf Teile über 600 s (darunter `pista+biglie.3mf`), die Fensterabnahme beim
+  Release. Tests: `test_rebuild.py` (Wandhalter, Gravur, Schichtvergleich, Tasche),
+  `test_sketch_traced.py`, `test_difference.py::test_a_cell_beside_a_facet_is_bounded_without_dividing`.
 
 <a id="rm-209"></a>
 

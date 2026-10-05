@@ -155,6 +155,11 @@ LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
         ("registry", "knowledge"),
         ("scene", "brep"),
         ("scene", "organizer"),
+        # Der Nachbau (§42) zerlegt ein Netz in Schichten und Prismen über die
+        # Querschnitte der Schichtanalyse (``slice.analysis.cross_sections``).
+        # Beide Pakete stehen schon im eifrigen Kreis; träge, damit er nicht
+        # um eine Kante dichter wird.
+        ("scene", "slice"),
         # Die Flächenkontur einer Netzfläche (RM-188 P3.4): Die Randringe und
         # die Rundmerkmale, die einen Ring als Kreis belegen, stehen in
         # ``perceive``; die Skizze liest sie beim Übernehmen, nicht beim Import.
