@@ -1355,7 +1355,6 @@ def stylesheet(
     muted = colours["muted"]
     disabled = colours["disabled"]
     line = colours["line"]
-    start_card_line = colours["start_card_line"]
     highlight = colours["highlight"]
     on_highlight = colours["highlight_text"]
     highlight_pressed = colours["highlight_pressed"]
@@ -1585,23 +1584,6 @@ QPushButton#exampleTile {{
 QPushButton#exampleTile:hover {{ background: {hover}; }}
 QPushButton#exampleTile:focus {{ border: 2px solid {focus}; padding: 0; }}
 QPushButton#exampleTile:pressed {{ background: {line}; }}
-
-/* Die zwei Nebenwege auf der Startfläche sind eine zusammengehörige
-   Kartengruppe. Text und Symbol tragen die Aussage gemeinsam; Fokus ändert
-   zusätzlich den Rahmen und bleibt damit auch ohne Farbwahrnehmung klar. */
-QPushButton#startActionCard {{
-    background: {base};
-    border: 1px solid {start_card_line};
-    border-radius: {NORMAL}px;
-    min-height: {TARGET_SIZE - 2}px;
-    padding: 0;
-    text-align: left;
-}}
-QPushButton#startActionCard QLabel {{ background: transparent; }}
-QPushButton#startActionCard QLabel[cardHint="true"] {{ font-weight: 600; }}
-QPushButton#startActionCard:hover {{ background: {hover}; }}
-QPushButton#startActionCard:focus {{ border: 2px solid {focus}; padding: 0; }}
-QPushButton#startActionCard:pressed {{ background: {line}; }}
 
 /* Die technische Modellzeile liegt in der dunklen rechten Seitenfläche auch
    im hellen Thema. Eine eigene, palettengesteuerte Infofläche hält Schrift
