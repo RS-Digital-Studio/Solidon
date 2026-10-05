@@ -464,24 +464,29 @@ def _build(role: str, size: int) -> QCursor:
     image.setDevicePixelRatio(float(ratio))
 
     _, hotspot = SHAPES[role]
-    # **Der Griffpunkt steht in denselben Pixeln wie die Zeichnung.**
-    #
-    # Hier stand die Umrechnung auf die *angeforderte* Größe, mit dem Kommentar
-    # „QCursor rechnet das Verhältnis selbst heraus". Gemessen am 27.08.2026
-    # tut es das nicht: Bei einer Zeichnung von 64 mal 64 Pixeln und einer
-    # angeforderten Größe von 32 Punkten kam der Punkt der Pfeilspitze bei
-    # 7,8 % der Breite an, wo er bei 15,6 % liegen muss — **um den
-    # Überabtastungsfaktor zu weit oben links.** Gemeldet hat es ein Kunde:
-    # „klickt nicht an der Spitze sondern in der Mitte des Symbols."
-    #
-    # Gerechnet wird deshalb gegen die Kantenlänge des Bildes, das entsteht.
-    # Ob Qt danach durch die Gerätepixelrate teilt oder nicht, ist damit keine
-    # Frage mehr, die dieser Code beantworten muss — beide Zahlen stehen in
-    # derselben Einheit.
-    drawn = image.width()
-    scale = drawn / 32.0
+    # In der Einheit, in der die Plattform ihn liest (:func:`hotspot_unit`).
+    unit = hotspot_unit(QGuiApplication.platformName(), size, image.width())
+    scale = unit / 32.0
     point = QPoint(round(hotspot[0] * scale), round(hotspot[1] * scale))
     return QCursor(QPixmap.fromImage(image), point.x(), point.y())
+
+
+def hotspot_unit(platform: str, size: int, drawn: int) -> int:
+    """Gegen welche Kantenlänge der Griffpunkt eines Bildzeigers gerechnet wird.
+
+    **Die Plattformen lesen ihn verschieden, und beides ist gemessen.** Unter
+    X11 (``xcb``) steht er in Pixeln des Bildes: Mit Punkten gerechnet kam die
+    Pfeilspitze bei 7,8 % der Breite an statt bei 15,6 % (27.08.2026, ein
+    Kunde: „klickt nicht an der Spitze sondern in der Mitte des Symbols").
+    Windows liest ihn in Bildschirmpunkten und rechnet ihn mit der Skalierung
+    hoch (05.10.2026, ``GetIconInfo`` am fertigen Zeiger: Griffpunkt (10, 7)
+    in einem Bild von 32 Pixeln bei 100 %, (20, 14) bei 200 %); in Pixeln
+    gerechnet lag der Klick 5 Pixel neben der Spitze, und das Bild sprang bei
+    jedem Wechsel zwischen Systempfeil und eigenem Zeiger — Roberts
+    „die Maus springt ab und zu“. macOS und Wayland legen ihn wie Windows in
+    Punkten an.
+    """
+    return drawn if platform == "xcb" else size
 
 
 def _ratio() -> int:

@@ -67,34 +67,54 @@ def test_the_hotspot_sits_where_the_shape_points(qt_app: QApplication) -> None:
     wo sie bei 15,6 % liegt.
 
     **Ein Test, der dieselbe Annahme benutzt wie sein Prüfling, findet keinen
-    gemeinsamen Irrtum.** Gemessen wird deshalb gegen die **Pixmap in Pixeln**
-    und gegen den Anteil aus :data:`cursors.SHAPES` — beides Zahlen, die der
-    Code nicht selbst gewählt hat.
+    gemeinsamen Irrtum.** Und die Annahme war eine Plattform: Die Korrektur vom
+    27.08. galt X11 und versetzte den Klick unter Windows um 5 Pixel
+    (05.10.2026). In welcher Einheit welche Plattform liest, prüft der
+    Test darunter gegen die gemessenen Zahlen; hier steht der Anteil aus
+    :data:`cursors.SHAPES` gegen die Kante, in der die laufende Plattform liest.
     """
+    from PySide6.QtGui import QGuiApplication
+
     widget = QWidget()
+    platform = QGuiApplication.platformName()
 
     for role in ("select", "feature", "measure", "sculpt"):
         drawn = cursors.cursor(role, widget)
         pixmap = drawn.pixmap()
         spot = drawn.hotSpot()
         wanted_x, wanted_y = cursors.SHAPES[role][1]
+        edge = cursors.hotspot_unit(
+            platform, round(pixmap.deviceIndependentSize().width()), pixmap.width()
+        )
 
         # Ein Pixel Toleranz je Achse: der Punkt wird gerundet.
-        tolerance = 1.0 / pixmap.width()
-        assert abs(spot.x() / pixmap.width() - wanted_x / 32.0) <= tolerance, (
-            f"{role}: Griffpunkt liegt bei {spot.x() / pixmap.width():.3f} der Breite, "
+        tolerance = 1.0 / edge
+        assert abs(spot.x() / edge - wanted_x / 32.0) <= tolerance, (
+            f"{role}: Griffpunkt liegt bei {spot.x() / edge:.3f} der Breite, "
             f"gezeichnet ist er bei {wanted_x / 32.0:.3f}"
         )
-        assert abs(spot.y() / pixmap.height() - wanted_y / 32.0) <= tolerance, (
-            f"{role}: Griffpunkt liegt bei {spot.y() / pixmap.height():.3f} der Höhe, "
+        assert abs(spot.y() / edge - wanted_y / 32.0) <= tolerance, (
+            f"{role}: Griffpunkt liegt bei {spot.y() / edge:.3f} der Höhe, "
             f"gezeichnet ist er bei {wanted_y / 32.0:.3f}"
         )
 
-    # Und die Aussage, um die es geht: Fadenkreuz mittig, Pfeil an der Spitze.
-    middle = cursors.cursor("measure", widget)
-    assert abs(middle.hotSpot().x() / middle.pixmap().width() - 0.5) <= 0.02
-    tip = cursors.cursor("select", widget)
-    assert tip.hotSpot().x() / tip.pixmap().width() < 0.25, "die Spitze sitzt links oben"
+
+@pytest.mark.parametrize(
+    ("platform", "edge"), [("xcb", 64), ("windows", 32), ("cocoa", 32), ("wayland", 32)]
+)
+def test_each_platform_reads_the_hotspot_in_its_own_unit(platform: str, edge: int) -> None:
+    """Gemessen, nicht nachgelesen — an einem Zeiger von 32 Punkten, gezeichnet
+    in 64 Pixeln.
+
+    X11 liest den Griffpunkt in Pixeln des Bildes (27.08.2026: mit Punkten
+    gerechnet landete der Klick bei 7,8 % statt 15,6 % der Breite). Windows
+    liest ihn in Bildschirmpunkten: ``GetIconInfo`` am fertigen Zeiger ergab
+    bei 100 % den Griffpunkt (10, 7) in einem Bild von 32 Pixeln, wo die
+    Spitze bei (5, 3,5) gezeichnet ist, und bei 200 % (20, 14) in 64 Pixeln —
+    der Klick lag 5 Pixel neben der Spitze, und das Bild sprang bei jedem
+    Wechsel zum Systempfeil (05.10.2026). macOS und Wayland nehmen Punkte.
+    """
+    assert cursors.hotspot_unit(platform, 32, 64) == edge
 
 
 def test_the_same_role_is_built_once(qt_app: QApplication) -> None:
