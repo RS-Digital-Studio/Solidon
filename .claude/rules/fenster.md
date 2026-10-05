@@ -38,6 +38,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
   mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
+  Linke und rechte Karte liegen bündig an Fensterrand und Leiste
+  (`overlay.EDGE`, Entscheidung Robert), rund ist nur die freie Ecke; die
+  rechte ist 400 breit, 25 % des Fensters, höchstens 540.
 - Warnungen holen den Bericht nie nach vorn, sie nähmen der Auswahl die Felder:
   `SignalTabBar` zählt und blinkt bis zum Ansehen; `_focus_report` nur auf Bitte.
 - Eine neue Auswahl holt den Reiter Auswahl; Verlassen gilt bis zum Wechsel.

@@ -22,6 +22,7 @@ from app.ui import overlay
 from app.ui.main_window import MainWindow
 from app.ui.overlay import (
     CARD_PADDING,
+    EDGE,
     LEFT_MAX,
     LEFT_WIDTH,
     MARGIN,
@@ -175,8 +176,8 @@ def test_the_axis_marker_does_not_hide_behind_a_card(window: MainWindow) -> None
         # nicht gegen den, den sie gerade einnimmt: Auf der leeren Szene ist
         # die linke Spalte kurz, und genau dort fällt der Fehler nicht auf. Im
         # Fenster mit geladenem Projekt reicht sie bis an diese Kante.
-        room = max(view.height() - 2 * MARGIN - host._bottom_room(), 0)
-        lowest_card_edge = MARGIN + room
+        room = max(view.height() - EDGE - MARGIN - host._bottom_room(), 0)
+        lowest_card_edge = EDGE + room
 
         assert marker.top() >= lowest_card_edge, (
             f"{size}: Die Achsenanzeige beginnt bei {marker.top()} und damit "
@@ -266,12 +267,13 @@ def test_the_zones_sit_on_top_and_take_nothing_away(window: MainWindow) -> None:
     bottom = window.overlay.bottom
     assert left is not None and right is not None and bottom is not None
 
-    assert left.geometry().left() == MARGIN
-    assert left.geometry().top() == MARGIN
+    # Bündig an Seite und Leiste (Robert, 05.10.2026).
+    assert left.geometry().left() == EDGE == 0
+    assert left.geometry().top() == EDGE
     assert left.geometry().width() == LEFT_WIDTH
 
-    assert right.geometry().right() == width - MARGIN - 1
-    assert right.geometry().top() == MARGIN
+    assert right.geometry().right() == width - EDGE - 1
+    assert right.geometry().top() == EDGE
     # Der Anschluss nutzt dieselbe responsive Breite wie die Kartenplatzierung;
     # die unabhängigen Maßgrenzen prüft die anschließende Breitenmatrix.
     assert right.geometry().width() == card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
@@ -296,12 +298,12 @@ def test_the_work_cards_use_full_hd_and_grow_with_large_screens() -> None:
     right = [card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE) for width in widths]
 
     assert 295 <= left[3] <= 310, f"Full HD links: {left[3]} statt etwa 300"
-    assert 510 <= right[3] <= 525, f"Full HD rechts: {right[3]} statt etwa 518"
+    assert 470 <= right[3] <= 490, f"Full HD rechts: {right[3]} statt etwa 480"
     assert left == sorted(left) and right == sorted(right), "breiter darf keine Karte schrumpfen"
     assert left[-1] <= LEFT_MAX and right[-1] <= RIGHT_MAX
 
     for width, left_width, right_width in zip(widths, left, right, strict=True):
-        assert left_width + right_width + 3 * MARGIN <= width, (
+        assert left_width + right_width + 2 * EDGE + MARGIN <= width, (
             f"{width}: linke und rechte Karte überlappen oder nehmen den letzten Sichtspalt"
         )
 
@@ -319,8 +321,8 @@ def test_the_overlay_matrix_keeps_every_zone_inside_and_the_viewport_whole(
     qt_app.processEvents()
 
     assert host.view.geometry() == host.rect()
-    assert left.geometry().left() == MARGIN
-    assert right.geometry().right() == width - MARGIN - 1
+    assert left.geometry().left() == EDGE
+    assert right.geometry().right() == width - EDGE - 1
     assert left.geometry().right() + MARGIN < right.geometry().left(), (
         f"{width}: zwischen den Arbeitskarten bleibt kein sichtbarer Viewport"
     )
@@ -504,7 +506,7 @@ def test_dragging_the_window_lets_nothing_lag_behind(
     host.resize(1000, 700)
 
     assert not host._moves, "ein Resize bewegt nichts, es setzt"
-    assert right.geometry().right() == 1000 - MARGIN - 1, "und sitzt sofort richtig"
+    assert right.geometry().right() == 1000 - EDGE - 1, "und sitzt sofort richtig"
 
 
 @pytest.mark.parametrize("interrupted", [False, True])
@@ -751,7 +753,7 @@ def test_sharing_the_room_settles_on_one_answer(window: MainWindow) -> None:
     Höhe hängen, die gerade gesetzt wurde.
     """
     host = window.overlay
-    room = host.height() - 2 * MARGIN - host._bottom_room()
+    room = host.height() - EDGE - MARGIN - host._bottom_room()
 
     host._share_room(host.left, room)
     QApplication.processEvents()
@@ -893,14 +895,20 @@ def test_the_drawn_card_really_shows_its_border(window: MainWindow) -> None:
     # Ein Bild, das kleiner ist als der abgeschnittene Rand, ergibt eine leere
     # Zeilenmenge — und damit einen Test, der jede Farbe durchgehen ließe.
     assert len(rows) > 10, f"nur {len(rows)} Bildzeilen bei Höhe {picture.height()}"
-    for label, x in (("links", 0), ("rechts", picture.width() - 1)):
-        wrong = [
+
+    def lined(x: int) -> list[int]:
+        return [
             y
             for y in rows
-            if abs(QColor(picture.pixel(x, y)).red() - accent.red()) > 30
-            or abs(QColor(picture.pixel(x, y)).green() - accent.green()) > 30
+            if abs(QColor(picture.pixel(x, y)).red() - accent.red()) <= 30
+            and abs(QColor(picture.pixel(x, y)).green() - accent.green()) <= 30
         ]
-        assert not wrong, f"{label}: {len(wrong)} von {len(rows)} Zeilen ohne Randlinie"
+
+    # Die Karte liegt links bündig am Fensterrand (Robert, 05.10.2026): Ihre
+    # Linie steht innen, zur Ansicht hin, und am Fensterrand keine.
+    inner = lined(picture.width() - 1)
+    assert len(inner) == len(rows), f"innen: {len(rows) - len(inner)} Zeilen ohne Randlinie"
+    assert not lined(0), "am Fensterrand steht keine Linie"
 
 
 def test_the_tab_card_keeps_its_border_too(window: MainWindow) -> None:

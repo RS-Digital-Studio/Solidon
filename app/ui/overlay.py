@@ -177,7 +177,7 @@ LEFT_WIDTH = 300
 #: breiter machen, wo wir mehr Platz haben“. Die Grundbreite trägt eine
 #: Koordinatenzeile X, Y, Z nebeneinander; darüber wächst die Karte mit ihrem
 #: eigenen Anteil (:data:`RIGHT_SHARE`).
-RIGHT_WIDTH = 440
+RIGHT_WIDTH = 400
 
 #: Ab welcher Fensterbreite die Karten mitwachsen, und wie weit.
 #:
@@ -192,11 +192,11 @@ GROWTH_SHARE = 0.13
 LEFT_MAX = 420
 
 #: Der Anteil der rechten Karte. Größer als links, weil sie seit RM-511 auch
-#: die Felder der Auswahl trägt: Auf Full HD sind das 518 Punkte — genug, dass
-#: X, Y und Z einer Stelle nebeneinander stehen (``panels._CoordinateRow``
-#: braucht 452 für die Zeile) —, ab 2222 Punkten Fensterbreite der Deckel.
-RIGHT_SHARE = 0.27
-RIGHT_MAX = 600
+#: die Felder der Auswahl trägt: Auf Full HD sind das 480 Punkte, ab 2160
+#: Punkten Fensterbreite der Deckel. Robert, 05.10.2026: „ein bisschen
+#: schmaler“ als die 518 von RM-511 — die Ansicht bekommt den Platz zurück.
+RIGHT_SHARE = 0.25
+RIGHT_MAX = 540
 
 #: In einem schmalen Fenster dürfen die beiden Karten einander nicht
 #: überdecken. Jede bekommt höchstens diesen Anteil; der Rest bleibt als
@@ -204,8 +204,19 @@ RIGHT_MAX = 600
 #: je Karte statt einer Überlappung. Auf Full HD greift die Grenze nicht.
 NARROW_CARD_SHARE = 0.42
 
-#: Abstand der Karten zum Fensterrand und zueinander.
+#: Abstand der Karten zueinander und zur Werkzeugzeile unten.
 MARGIN = ROOMY
+
+#: Abstand der Karten links und rechts zum Fensterrand: keiner. Robert,
+#: 05.10.2026: „Die ganzen Panels rechts und links sollen keinen Abstand mehr
+#: zum Rand haben.“ Sie liegen bündig an der Seite und unter der Leiste; frei
+#: und rund bleibt nur ihre innere untere Ecke (:func:`_round_corners`, die
+#: Regeln ``[dock=…]`` in :func:`card_stylesheet`).
+EDGE = 0
+
+#: Die Seite, an der eine Zone anliegt — als Eigenschaft ``dock`` an der Zone
+#: und ihren Karten, damit Stilblatt und Maske dieselbe Antwort lesen.
+DOCK_PROPERTY = "dock"
 
 #: Der Objektname, an dem das Stilblatt eine schwebende Karte erkennt.
 CARD = "overlayCard"
@@ -360,6 +371,22 @@ QTabWidget#{CARD}::pane {{
     background: transparent;
     margin: 0px {CARD_PADDING}px {CARD_PADDING}px {CARD_PADDING}px;
 }}
+
+QWidget#{CARD}[{DOCK_PROPERTY}="left"] {{
+    border-top: none;
+    border-left: none;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 0px;
+}}
+
+QWidget#{CARD}[{DOCK_PROPERTY}="right"] {{
+    border-top: none;
+    border-right: none;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+}}
 """
 
 
@@ -378,15 +405,30 @@ def _round_corners(zone: QWidget) -> None:
     Der Preis ist eine harte Kante an der Rundung: eine Maske kennt nur ganz
     oder gar nicht. Bei zwölf Pixeln Radius fällt das weniger auf als vier
     schwarze Ecken auf hellem Modell.
+
+    **Eine anliegende Karte ist nur an ihrer freien Ecke rund** — der inneren
+    unteren (:data:`EDGE`). An Fensterrand und Leiste wäre eine Rundung ein
+    Zwickel, durch den das Modell zwischen Karte und Rand blitzt.
     """
     if zone.width() <= 0 or zone.height() <= 0:
         return
     rects = zone.card_rects() if isinstance(zone, CardColumn) else [zone.rect()]
+    dock = zone.property(DOCK_PROPERTY)
     mask = QRegion()
     for rect in rects:
         shape = QPainterPath()
         shape.addRoundedRect(QRectF(rect), float(ROOMY), float(ROOMY))
         mask = mask.united(QRegion(shape.toFillPolygon().toPolygon()))
+        if dock in ("left", "right"):
+            # Oben über die ganze Breite und die anliegende Seite über die
+            # ganze Höhe eckig — es bleibt die Rundung unten innen.
+            mask = mask.united(
+                QRegion(QRect(rect.left(), rect.top(), rect.width(), rect.height() - ROOMY))
+            )
+            side = rect.left() if dock == "left" else rect.left() + ROOMY
+            mask = mask.united(
+                QRegion(QRect(side, rect.top(), rect.width() - ROOMY, rect.height()))
+            )
     zone.setMask(mask)
 
 
@@ -452,6 +494,17 @@ class CardColumn(QWidget):
     def resizeEvent(self, event: object) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)  # type: ignore[arg-type]
         _round_corners(self)
+
+
+def _dock(zone: QWidget, side: str) -> None:
+    """Zone und ihre Karten wissen, an welcher Seite sie anliegen (:data:`EDGE`)."""
+    for widget in (zone, *living(zone, QWidget)):
+        if widget is zone or widget.objectName() == CARD:
+            widget.setProperty(DOCK_PROPERTY, side)
+            # Eine Eigenschaft im Selektor wirkt erst nach neuem Polieren.
+            style = widget.style()
+            style.unpolish(widget)
+            style.polish(widget)
 
 
 def rows_height(view: QAbstractItemView) -> int:
@@ -931,6 +984,8 @@ class OverlayHost(QWidget):
             # Widget auch das Löschen seiner Fläche, und dann steht jede
             # Beschriftung doppelt übereinander.
         self.left, self.right, self.bottom = left, right, bottom
+        for zone, side in ((left, "left"), (right, "right")):
+            _dock(zone, side)
         # Eine zugeklappte Zone soll ihre Fläche zurückgeben. Qt meldet die
         # neue Wunschhöhe erst, wenn jemand danach fragt — also fragen wir bei
         # jeder Änderung an einem Kind nach.
@@ -1153,13 +1208,13 @@ class OverlayHost(QWidget):
         # Links und rechts hängen oben und wachsen nur so weit nach unten, wie
         # ihr Inhalt reicht — höchstens bis kurz vors untere Ende, damit die
         # Werkzeugzeile frei bleibt.
-        room = max(height - 2 * MARGIN - self._bottom_room(), 0)
+        room = max(height - EDGE - MARGIN - self._bottom_room(), 0)
 
         if self.left.isVisibleTo(self):
             self._share_room(self.left, room)
             wanted = min(natural_height(self.left), room)
             card = card_width(LEFT_WIDTH, LEFT_MAX, width)
-            self._move(self.left, QRect(MARGIN, MARGIN, card, wanted), moving)
+            self._move(self.left, QRect(EDGE, EDGE, card, wanted), moving)
 
         if self.right.isVisibleTo(self):
             self._share_room(self.right, room)
@@ -1167,7 +1222,7 @@ class OverlayHost(QWidget):
             wanted = min(natural_height(self.right, width=card), room)
             self._move(
                 self.right,
-                QRect(width - card - MARGIN, MARGIN, card, wanted),
+                QRect(width - card - EDGE, EDGE, card, wanted),
                 moving,
             )
 
@@ -1227,8 +1282,8 @@ class OverlayHost(QWidget):
         width = self.width()
         right = card_width(RIGHT_WIDTH, RIGHT_MAX, width, RIGHT_SHARE)
         setter(
-            card_width(LEFT_WIDTH, LEFT_MAX, width) + 2 * MARGIN if showing_left else 0,
-            right + 2 * MARGIN if showing_right else 0,
+            card_width(LEFT_WIDTH, LEFT_MAX, width) + EDGE + MARGIN if showing_left else 0,
+            right + EDGE + MARGIN if showing_right else 0,
             self._bottom_room(),
         )
 

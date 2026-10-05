@@ -7559,15 +7559,44 @@ class _ActionRow:
 COORDINATE_FIELDS: Final = ("x", "y", "z")
 
 
-class _CoordinateRow(QWidget):
-    """X, Y und Z einer Stelle nebeneinander — untereinander, wo es zu eng wird.
+#: Der längste Wert, für den ein Koordinatenfeld Platz hält: ein Meter, mehr
+#: als ein Druckbett (Robert, 05.10.2026: „es würde auch 999,99 mm reichen“).
+#: Qt bemisst ein Drehfeld am Rand seines Bereichs (±100 000 mm,
+#: „-100000,00 mm“) und verlangte damit 118 Punkte je Feld; ein größerer Wert
+#: rollt im Feld, statt die Zeile zu sprengen.
+COORDINATE_ROOM: Final = 999.99
 
-    Seit RM-511 trägt die rechte Karte die Felder der Auswahl und ist breit
-    genug für drei Zahlen in einer Zeile (Robert, 05.10.2026: „breiter machen
-    … und es dann auch sinnvoll nutzen“). An einer Bohrung spart das bei
-    *Verschieben* und *Verdoppeln* je zwei Zeilen. In einer schmalen Karte —
-    ein kleines Fenster — stehen sie wieder untereinander, statt eine Zahl
-    abzuschneiden; entschieden wird an der Breite, die die Zeile bekommt.
+
+def _compact_width(editor: QAbstractSpinBox) -> int:
+    """Die Mindestbreite eines Drehfelds für Werte bis :data:`COORDINATE_ROOM`, mit Pfeilen."""
+    hint = editor.minimumSizeHint().width()
+    if not isinstance(editor, QDoubleSpinBox):
+        return hint
+    metrics = editor.fontMetrics()
+
+    def shown(value: float) -> int:
+        text = editor.prefix() + editor.textFromValue(value) + editor.suffix()
+        return metrics.horizontalAdvance(text)
+
+    widest = max(shown(editor.minimum()), shown(editor.maximum()))
+    room = shown(max(editor.minimum(), -COORDINATE_ROOM))
+    return min(hint, hint - widest + room)
+
+
+class _CoordinateRow(QWidget):
+    """X, Y und Z einer Stelle nebeneinander — untereinander nur, wo es nicht geht.
+
+    Seit RM-511 trägt die rechte Karte die Felder der Auswahl, und drei Zahlen
+    stehen in einer Zeile (Robert, 05.10.2026). An einer Bohrung spart das bei
+    *Verschieben* und *Verdoppeln* je zwei Zeilen. Als die Karte schmaler
+    wurde, sollte die Zeile bleiben, die Felder kleiner werden und ihre
+    Pfeiltasten behalten (Robert, 05.10.2026: „x/y/z sollten trotzdem in einer
+    Zeile sein“, „mach sie bisschen kleiner“, „Maß behalten und ergänzen“).
+    Jedes Feld hält deshalb Platz für Werte bis ±999,99 mm
+    (:func:`_compact_width`) statt für den Rand seines Bereichs, und die Zeile
+    passt mit Pfeilen in die Karte von 400 Punkten. Untereinander stehen die
+    drei nur in einem sehr schmalen Fenster, statt eine Zahl abzuschneiden;
+    entschieden wird an der Breite, die die Zeile bekommt.
     """
 
     def __init__(self, pairs: list[tuple[QLabel, QWidget]], parent: QWidget) -> None:
@@ -7584,10 +7613,18 @@ class _CoordinateRow(QWidget):
         """Ob die drei Felder gerade nebeneinander stehen."""
         return bool(self._across)
 
+    def _fit_fields(self) -> None:
+        """Jedem Drehfeld seine knappe Mindestbreite — gemessen am geltenden Stil."""
+        for _label, editor in self._pairs:
+            if isinstance(editor, QAbstractSpinBox):
+                compact = _compact_width(editor)
+                if editor.minimumWidth() != compact:
+                    editor.setMinimumWidth(compact)
+
     def _needed(self) -> int:
         """Wie breit die Zeile sein muss, damit kein Feld unter sein Mindestmaß fällt."""
         widths = sum(
-            label.sizeHint().width() + editor.minimumSizeHint().width()
+            label.sizeHint().width() + (editor.minimumWidth() or editor.minimumSizeHint().width())
             for label, editor in self._pairs
         )
         return widths + self._grid.horizontalSpacing() * (2 * len(self._pairs) - 1)
@@ -7626,6 +7663,7 @@ class _CoordinateRow(QWidget):
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt-Name
         super().resizeEvent(event)
+        self._fit_fields()
         self._arrange(across=event.size().width() >= self._needed())
 
 
@@ -9217,7 +9255,14 @@ class FeaturePanel(QWidget):
         else:
             self._settle_apply_block()
         if self._measuring:
-            for widget in (self._in_view, self._apply, self._cancel, self._every):
+            # Der Titel gehört zum Knopf darunter: ohne ihn stünde er allein.
+            for widget in (
+                self._in_view,
+                self._apply,
+                self._cancel,
+                self._every,
+                self._armed_title,
+            ):
                 _set_shown(widget, False)
 
     def _build_action(self, action: Any) -> QWidget:
@@ -9915,7 +9960,14 @@ class FeaturePanel(QWidget):
         nimmt sie sich hier und hängt sie **unter** ihn; dann steht sie bei
         jeder Fensterhöhe da (:meth:`MainWindow._build_feature_dock`). Wer sie
         nicht nimmt, findet sie unten im Panel, wo sie immer stand.
+
+        Wer sie nimmt, bekommt sie mit den Seitenrändern des Panels: Unter dem
+        Rollbereich steht sie außerhalb von dessen Polster, und ohne eigenen
+        Rand klebte ihr Titel an der Kartenkante.
         """
+        layout = self._footer.layout()
+        if layout is not None:
+            layout.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
         return self._footer
 
     def _settle_apply(self) -> None:
@@ -10088,7 +10140,8 @@ class FeaturePanel(QWidget):
         self._armed = key
         self._open_only(key)
         self._armed_title.setText(entry.title)
-        _set_shown(self._armed_title, True)
+        # Beim Messen trägt die Maßgruppe im Bild Titel und Übernehmen.
+        _set_shown(self._armed_title, not self._measuring)
         # **Der Titel steht am Knopf, nur nicht auf ihm.** Ein Bildschirmleser
         # liest den zugänglichen Namen, und „Übernehmen" allein sagte dort
         # nicht, was übernommen wird (§19.1).
