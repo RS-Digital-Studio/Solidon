@@ -222,13 +222,14 @@ def arc_radius_param() -> Any:
         unit="mm",
         minimum=-1000.0,
         maximum=1000.0,
+        placement="advanced",
         doc=_ARC,
     )
 
 
 def wrap_param() -> Any:
     """Die Lage zur Rundung des Trägers — flach, um sie herum oder an ihr entlang."""
-    return param(title=_("Rundung"), default="flat", choices=WRAPS, doc=_WRAP)
+    return param(title=_("Rundung"), default="flat", choices=WRAPS, placement="advanced", doc=_WRAP)
 
 
 def wrap_radius_param() -> Any:
@@ -576,6 +577,7 @@ class LabelParams(BaseParams):
             "Setzt denselben Text auch auf die Gegenseite, dort, wo die Richtung durch "
             "den Körper wieder austritt — für Fahnen, Schilder und Anhänger."
         ),
+        placement="advanced",
     )
     # **Bahn und Rundung** (RM-184, Audit §9): Vorgaben gerade und flach — ein
     # Schritt von vor diesen Feldern bleibt, was er war.
@@ -1328,6 +1330,7 @@ class InlayParams(BaseParams):
         # **Vorn, anders als beim Aufbringen**: Bei einer Einlage ist die Tiefe
         # die Menge der zweiten Farbe — drei Schichten decken, eine scheint durch.
         doc=_("Wie tief die Einlage reicht. Drei Schichten decken die Farbe darunter ab."),
+        placement="advanced",
     )
     slot: int = param(
         title=_("Filament"),
@@ -1425,7 +1428,7 @@ def _inlay_too_thin(depth: float, profile: Profile | None) -> Finding | None:
     keeps_inputs=1,
     applies_to=["face"],
     doc=_(
-        "Legt Text bündig in eine Fläche ein: Die Buchstaben werden aus dem Körper "
+        "Legt Text bündig in eine Fläche ein. Die Buchstaben werden aus dem Körper "
         "geschnitten und als eigenes Teil in einer zweiten Farbe zurückgesetzt — ohne "
         "Spalt, ohne Überlappung, die Oberfläche bleibt eben."
     ),

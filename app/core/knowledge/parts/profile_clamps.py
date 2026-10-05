@@ -17,6 +17,7 @@ from app.core.knowledge.parts.registry import PartChange, WallRequirement, regis
 from app.core.knowledge.parts.section import CONTOUR_SAG, Section, invalid
 from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param
+from app.core.registry.params import ZERO_FROM_PROFILE
 from app.core.types import BaseParams, CancelToken, Feature, PartResult, Quality, SolverInfo
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import TranslatableText, _
@@ -226,6 +227,7 @@ class ProfileClampShellParams(BaseParams):
         maximum=8.0,
         unit="mm",
         doc=_("Abstand vom Sitz zur Außenkontur, senkrecht gemessen."),
+        placement="advanced",
     )
     half: str = param(
         title=_("Hälfte"),
@@ -271,6 +273,7 @@ class ProfileClampShellParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_("Gesamtzugabe an Kopf und Mutter; null verwendet das Materialprofil."),
+        zero_text=ZERO_FROM_PROFILE,
     )
 
 
@@ -445,6 +448,7 @@ class ProfileClampLinerParams(BaseParams):
             "Wandstärke einer neuen Einlage, senkrecht gemessen; beim Ersatz die "
             "erforderliche Mindestwand."
         ),
+        placement="advanced",
     )
     half: str = param(
         title=_("Hälfte"),
@@ -501,6 +505,7 @@ class ProfileClampLinerParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_("Gesamtspalt zwischen beiden Einlagen; null verwendet das Materialprofil."),
+        zero_text=ZERO_FROM_PROFILE,
     )
     grip: float = param(
         title=_("Übermaß am Gegenprofil"),
@@ -513,6 +518,7 @@ class ProfileClampLinerParams(BaseParams):
             "Um wie viel die Einlage insgesamt enger ist als das Profil, damit sie "
             "es federnd klemmt; null nimmt den Wert aus dem Materialprofil."
         ),
+        zero_text=ZERO_FROM_PROFILE,
     )
 
 

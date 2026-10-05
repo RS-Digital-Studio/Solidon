@@ -3303,7 +3303,8 @@ def test_bore_action_edits_original_values_and_preserves_hidden_params(profile, 
     assert fields["depth"].value == pytest.approx(depth)
     assert fields["depth"].minimum == pytest.approx(0.0)
     assert fields["slotted"].kind == "bool"
-    assert fields["slot_angle"].kind == "angle"
+    # Die Richtung des Langlochs steht seit RM-513 hinten — im Dialog wie hier.
+    assert "slot_angle" not in fields
     assert not {"x", "y", "z", "nx", "anchor", "compensate"} & fields.keys()
     proposed = {**dict(action.fixed), **{name: field.value for name, field in fields.items()}}
     assert all(proposed[name] == value for name, value in saved.items())

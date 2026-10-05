@@ -86,6 +86,7 @@ class HoseBarbParams(BaseParams):
             "Wie weit jeder Widerhaken je Seite über den Schlauch hinaussteht. Mehr hält "
             "fester und lässt sich schwerer aufschieben."
         ),
+        placement="advanced",
     )
     count: int = param(
         title=_("Widerhaken"),
@@ -93,6 +94,7 @@ class HoseBarbParams(BaseParams):
         minimum=1,
         maximum=6,
         doc=_("Wie viele Widerhaken hintereinander auf dem Schaft sitzen."),
+        placement="advanced",
     )
     length: float = param(
         title=_("Schaftlänge"),
@@ -109,6 +111,7 @@ class HoseBarbParams(BaseParams):
         minimum=0.8,
         maximum=6.0,
         doc=_("Wand zwischen Durchgang und Schaft. Der Durchgang ist um zwei Wände enger."),
+        placement="advanced",
     )
     collar: float = param(
         title=_("Bundhöhe"),
@@ -120,6 +123,7 @@ class HoseBarbParams(BaseParams):
             "Der Bund am Fuß, an dem der Schlauch ansteht und eine Schelle Platz findet. Er "
             "ist eine Wand breiter als die Widerhaken."
         ),
+        placement="advanced",
     )
     through: float = param(
         title=_("Trägerwand"),
@@ -211,7 +215,7 @@ def hose_barb_body(raw: BaseParams) -> PartResult:
     ),
     feasible=lambda raw: _barb_reason(cast(HoseBarbParams, raw)),
     doc=_(
-        "Eine Tülle zum Aufschieben eines Schlauchs: Bund, Schaft und Widerhaken um einen "
+        "Eine Tülle zum Aufschieben eines Schlauchs. Bund, Schaft und Widerhaken sitzen um einen "
         "freien Durchgang, der durch die Wand des Teils weitergeht. Alles in einem Schritt, "
         "ohne Kleben."
     ),
@@ -308,6 +312,7 @@ class ChannelJointParams(BaseParams):
         minimum=0.8,
         maximum=6.0,
         doc=_("Wand- und Bodenstärke der Segmente — so tief ist der Anschlag in der Mitte."),
+        placement="advanced",
     )
     overlap: float = param(
         title=_("Überlappung"),
@@ -316,6 +321,7 @@ class ChannelJointParams(BaseParams):
         minimum=5.0,
         maximum=60.0,
         doc=_("Wie weit jedes Segment in die Naht greift."),
+        placement="advanced",
     )
     thickness: float = param(
         title=_("Nahtwand"),
@@ -324,6 +330,7 @@ class ChannelJointParams(BaseParams):
         minimum=0.8,
         maximum=6.0,
         doc=_("Wandstärke der Hülse oder der Einlage."),
+        placement="advanced",
     )
     ramp: float = param(
         title=_("Rampenlänge"),
@@ -336,6 +343,7 @@ class ChannelJointParams(BaseParams):
             "Über diese Länge läuft die Einlage am oberen Ende flach aus, damit nichts an "
             "ihrer Kante hängen bleibt."
         ),
+        placement="advanced",
     )
     play: float = play_param()
 

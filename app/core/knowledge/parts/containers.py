@@ -361,6 +361,7 @@ class FootParams(BaseParams):
         maximum=20.0,
         unit="mm",
         doc=_("Länge des Zapfens oberhalb des Anschlags."),
+        placement="advanced",
     )
 
 

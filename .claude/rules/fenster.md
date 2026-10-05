@@ -342,19 +342,30 @@ Erreichbarkeit wieder her. Die Anfangsbreite samt zugeklappter Teile und
 Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
-(`DontWrapRows`). Eine Beschriftungsspalte je Dialog (`panels.align_forms`,
-gerahmte Reiter über `apart`), gleich breite Felder (`panels.even_fields`,
-`op_dialog.even_value_fields`); eine Zeile aus Feld und Knöpfen endet mit
-`addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal im Dialog.
+(`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
+zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
+(`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
+(`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
+Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal
+im Dialog. **Hat der Dialog eine Rückseite, setzen die Zeilen vorn, die
+dastehen, die Spalte** (`dialogs.align_to_the_front`): Eine längere
+Beschriftung hinten oder eine bedingte vorn bricht um, die Lesezeile *Stelle*
+richtet beim Erscheinen neu aus (RM-518, höchstens 24 px hinter der längsten);
+wer zwei Formulare hat, richtet aus (`test_ui_dialogs`).
 
-**Klappen:** überall die flache Überschrift (`panels.collapsible`,
-`sectionHeading`); zugeklappt nennt sie ihren Inhalt (`contents=`, Wächter in
-`test_interface_limits`), `remember=` hält den Zustand des Kunden — nie an
-einer Klappe, die sich selbst öffnet. Werte, die sich ein- und ausschalten
-lassen, sind eine Schalterzeile mit eingerückten Feldern, kein ankreuzbarer
-Rahmen. Bei `ContentHeight`-Dialogen werden Anfangsgröße und bedientes Klappen
-getrennt gemessen; eigenes Wachsen gilt nicht als Nutzergröße. Ein Ausgang ist
-`RejectRole` — als `AcceptRole` macht ihn die Knopfleiste zum Hauptknopf.
+**Ein Dialog, eine Form** (RM-518): Abschnitte sind flache Überschriften, kein
+`QGroupBox` (Ausnahmen mit Grund im Wächter in `test_ui_dialogs`); Außenrand
+`WIDE`.
+
+**Klappen:** überall `panels.collapsible` (`sectionHeading`; eine von Hand
+gebaute fängt `test_every_section_heading_is_built_by_collapsible`); zugeklappt
+nennt sie ihren Inhalt (`contents=`, Wächter in `test_interface_limits`),
+`remember=` hält den Zustand des Kunden — nie an einer Klappe, die sich selbst
+öffnet. Werte, die sich ein- und ausschalten lassen, sind eine Schalterzeile
+mit eingerückten Feldern, kein ankreuzbarer Rahmen. Bei `ContentHeight`-Dialogen
+werden Anfangsgröße und bedientes Klappen getrennt gemessen; eigenes Wachsen
+gilt nicht als Nutzergröße. Ein Ausgang ist `RejectRole` — als `AcceptRole`
+macht ihn die Knopfleiste zum Hauptknopf.
 
 **Was eine Angabe bestimmt, steht vor ihr** (Entscheidung Robert): was eine
 Liste füllt, eine Vorgabe setzt oder sperrt, davor; ein Schalter bei dem, was

@@ -35,6 +35,7 @@ from app.core.geom.boolean import boolean, without_effect
 from app.core.geom.mesh import MeshData, as_mesh_data, signed_volume, stable_normals
 from app.core.geom.prepare import FEATURE_OVERLAP
 from app.core.registry import op_params, param, register_op
+from app.core.registry.params import ZERO_MEASURED
 from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SolverInfo
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -53,6 +54,7 @@ class ResizeChamberParams(BaseParams):
         default="",
         kind="feature",
         doc=_("Boden oder Wand der Kammer. Geändert wird immer die ganze Kammer."),
+        placement="advanced",
     )
     width: float = param(
         title=_("Breite innen"),
@@ -63,6 +65,7 @@ class ResizeChamberParams(BaseParams):
             "Das neue Innenmaß quer. Die Wände rücken um die Hälfte der Änderung je "
             "Seite, die Außenmaße bleiben. Null behält das gemessene Maß."
         ),
+        zero_text=ZERO_MEASURED,
     )
     length: float = param(
         title=_("Länge innen"),
@@ -73,6 +76,7 @@ class ResizeChamberParams(BaseParams):
             "Das neue Innenmaß längs, wie die Breite. Bei einer Nut gibt es nur die "
             "Breite. Null behält das gemessene Maß."
         ),
+        zero_text=ZERO_MEASURED,
     )
     depth: float = param(
         title=_("Tiefe"),
@@ -83,6 +87,7 @@ class ResizeChamberParams(BaseParams):
             "Die neue Tiefe vom Rand bis zum Boden. Der Boden wandert, der Rand bleibt. "
             "Null behält das gemessene Maß."
         ),
+        zero_text=ZERO_MEASURED,
     )
 
 

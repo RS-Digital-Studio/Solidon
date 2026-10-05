@@ -45,6 +45,7 @@ from app.core.errors import (
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
+from app.core.registry.params import ZERO_NONE
 from app.core.types import (
     BaseParams,
     CancelToken,
@@ -371,6 +372,7 @@ class BlendParams(BaseParams):
             "gewöhnliche Vereinigung. Einen Spalt überbrückt er ab etwa dem Dreifachen "
             "seiner Breite."
         ),
+        zero_text=ZERO_NONE,
     )
     grid: float = param(
         title=_("Rasterweite"),

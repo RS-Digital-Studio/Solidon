@@ -56,15 +56,15 @@ from app.core.generate import working_volume
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
-from app.ui.dialogs import show_error, spoken_values
+from app.ui.dialogs import align_to_the_front, show_error, spoken_values
 from app.ui.labels import UNEXPECTED_CRASH, volume, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
-    ROOMY,
     SPACE,
+    WIDE,
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
@@ -440,6 +440,7 @@ class GenerateDialog(QDialog):
 
         form = QFormLayout()
         form.setVerticalSpacing(NORMAL)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         form.addRow(tr("Beschreibung"), self.prompt)
         form.addRow(tr("Bild"), self.picture)
         form.addRow("", picture_row)
@@ -452,6 +453,7 @@ class GenerateDialog(QDialog):
         advanced_form = QFormLayout(advanced)
         advanced_form.setVerticalSpacing(NORMAL)
         advanced_form.setContentsMargins(0, 0, 0, 0)
+        advanced_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         advanced_form.addRow(tr("Startwert"), self.seed)
 
         # **Welches Modell die Arbeit macht** — wie beim Sprachmodell, wo die
@@ -465,6 +467,7 @@ class GenerateDialog(QDialog):
         self._models = QWidget(self)
         self._models_form = QFormLayout(self._models)
         self._models_form.setContentsMargins(0, 0, 0, 0)
+        self._models_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         self._models.setVisible(False)
         self._model_fields: dict[str, QComboBox] = {}
         advanced_form.addRow(self._models)
@@ -562,7 +565,7 @@ class GenerateDialog(QDialog):
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._grow_soon)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
         outer.addWidget(self._scroll, 1)
         outer.addWidget(self.taken)
@@ -572,11 +575,20 @@ class GenerateDialog(QDialog):
         if heading is not None:
             heading.toggled.connect(self._grow_explicit_soon)
         wheel_needs_focus(self.seed)
+        # **Eine Beschriftungskante** (RM-518): Beschreibung und Bild setzen
+        # sie, Startwert und Modelle hinter der Klappe folgen ihr.
+        self._front_form = form
+        self._advanced_forms = (advanced_form, self._models_form)
+        self._align_forms()
 
         self.prompt.textChanged.connect(self._update_state)
         self.prompt.textChanged.connect(self._show_what_is_taken)
         self._update_state()
         self.recheck()
+
+    def _align_forms(self) -> None:
+        """Vorn setzt die Spalte, hinten bricht eine längere Beschriftung um."""
+        align_to_the_front(self._front_form, self._advanced_forms)
 
     # --- state ------------------------------------------------------------------
 
@@ -748,6 +760,9 @@ class GenerateDialog(QDialog):
         # Die Überschrift verschwindet mit den Feldern: ein leerer Abschnitt in
         # „Weitere Einstellungen“ wäre ein Versprechen ohne Inhalt.
         self._models.setVisible(bool(self._model_fields))
+        # Die neuen Beschriftungen folgen derselben Kante wie die übrigen.
+        if hasattr(self, "_front_form"):
+            self._align_forms()
         self._grow_soon()
 
     def _remember_models(self) -> None:

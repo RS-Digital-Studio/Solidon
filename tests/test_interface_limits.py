@@ -47,8 +47,20 @@ MAX_TOOLS = 8
 #: Felder auf der **Vorderseite** eines Operationsdialogs. Was darüber
 #: hinausgeht, gehört hinter „Weitere Einstellungen" (§2.5, `placement`).
 #: Dieselbe Zahl wie ``MAX_FRONT_FIELDS`` im Dialog — geprüft in
-#: ``test_the_dialog_and_the_test_agree_on_the_front``.
-MAX_FRONT_PARAMS = 8
+#: ``test_the_dialog_and_the_test_agree_on_the_front``. Bauplan §2.4 sagt
+#: „zwei bis drei“; vier ist die harte Grenze (Entscheidung Robert, RM-513),
+#: drei die Regel für neun von zehn Operationen (:data:`USUAL_FRONT_SHARE`).
+MAX_FRONT_PARAMS = 4
+
+#: Welcher Anteil der Operationen vorn höchstens drei Felder zugleich zeigt.
+USUAL_FRONT_SHARE = 0.9
+
+#: Wie viele Wörter über dem ersten Feld eines Operationsdialogs stehen dürfen
+#: (RM-513): Platzierungssatz, Einleitungssatz und die Überschrift der Grenze.
+#: Deutsch ist die Quelle; die übrigen Sprachen laufen bis rund ein Viertel
+#: länger, gemessen an Französisch und Portugiesisch.
+MAX_LEAD_WORDS = 25
+MAX_LEAD_WORDS_TRANSLATED = 35
 
 #: Einträge in einem Untermenü. Darüber liest niemand mehr, er sucht — und
 #: dafür gibt es die Befehlspalette.
@@ -260,6 +272,74 @@ def test_no_operation_floods_the_front_of_its_dialog() -> None:
         f"Diese Operationen zeigen mehr als {MAX_FRONT_PARAMS} Felder zugleich auf der "
         f"Vorderseite: {over}. Setze die selteneren auf placement='advanced'."
     )
+
+
+def test_nine_of_ten_operations_show_at_most_three_fields_in_front() -> None:
+    """Drei Felder vorn sind die Regel, vier die Ausnahme (Bauplan §2.4, RM-513).
+
+    Die Grenze allein ließe zu, dass jede Operation vier zeigt — gemessen an
+    0.5.2 trug die Hälfte vier und mehr. Was vorn steht, ändert man; Toleranzen,
+    Auflösungen und Ausrichtungsfeinheiten stehen hinter der Klappe.
+    """
+    counted = {spec.name: _most_front_fields_shown_at_once(spec) for spec in REGISTRY.all()}
+    assert len(counted) > 100, "das Register ist leer — erst load_operations()"
+    usual = sum(1 for count in counted.values() if count <= MAX_FRONT_PARAMS - 1)
+    four = sorted(name for name, count in counted.items() if count >= MAX_FRONT_PARAMS)
+    assert usual >= USUAL_FRONT_SHARE * len(counted), (
+        f"nur {usual} von {len(counted)} Operationen zeigen höchstens drei Felder vorn; "
+        f"vier zeigen: {four}"
+    )
+
+
+def _words(text: str) -> int:
+    """Wörter wie ein Leser sie zählt: alles mit einem Buchstaben oder einer Ziffer."""
+    return sum(1 for word in text.split() if any(char.isalnum() for char in word))
+
+
+def test_the_lead_above_the_first_field_stays_short_in_every_language() -> None:
+    """Vor dem ersten Feld stehen höchstens 25 Wörter, übersetzt höchstens 35 (RM-513).
+
+    In 0.5.2 waren es bis zu 118: die ganze Beschreibung, die Grenze und der
+    Platzierungssatz. Gezählt wird, was der Dialog zeigt (``lead_texts``):
+    der Platzierungssatz, solange gezielt wird, der erste Satz der
+    Beschreibung und die zugeklappte Überschrift „Wann nicht?“.
+    """
+    from app.core.scene.placement import supports_surface_placement
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import available_languages, install_language
+    from app.ui.op_dialog import lead_texts
+    from app.ui.placement_flow import starts_by_itself
+
+    before = get_language()
+    over: list[str] = []
+    try:
+        for language in available_languages():
+            install_language(language)
+            set_language(language)
+            limit = MAX_LEAD_WORDS if language == "de" else MAX_LEAD_WORDS_TRANSLATED
+            for spec in REGISTRY.all():
+                placing = supports_surface_placement(spec) and starts_by_itself(spec)
+                counted = sum(_words(text) for text in lead_texts(spec, placing=placing))
+                if counted > limit:
+                    over.append(f"{language} {spec.name}: {counted}")
+    finally:
+        set_language(before)
+    assert not over, f"zu viele Wörter über dem ersten Feld: {over}"
+
+
+def test_the_lead_is_the_first_sentence_and_names_the_limit_briefly() -> None:
+    """Der Dialog zeigt den ersten Satz, die Grenze nur als Überschrift (RM-513, C2)."""
+    from app.ui.command_palette import first_sentence
+    from app.ui.op_dialog import lead_sentence, lead_texts, placement_hint
+
+    spec = REGISTRY.get("hollow_object")
+    assert spec.caveat, "Aushöhlen trägt eine Grenze — sonst prüft das hier nichts"
+    assert lead_sentence(spec) == first_sentence(str(spec.doc)).strip()
+    shown = lead_texts(spec, placing=True)
+    assert shown[0] == placement_hint(), "die Platzierungsanweisung ist die erste Zeile"
+    assert shown[1] == lead_sentence(spec)
+    assert str(spec.caveat) not in " ".join(shown), "die Grenze selbst steht zugeklappt"
+    assert lead_texts(spec, placing=False)[0] == lead_sentence(spec)
 
 
 def test_the_front_count_sees_the_variants_and_not_their_sum() -> None:
@@ -2086,7 +2166,10 @@ def test_the_palette_names_the_key_the_menu_really_uses(window: MainWindow) -> N
 #: Zugeklappte Abschnitte, deren Titel schon ihr Inhalt ist, mit Grund.
 #: Die Filamente der linken Spalte: Eine Zusatzzeile kostete die Spalte Höhe,
 #: um die Objektbaum und Filamentliste ohnehin ringen (RM-489).
-_TITLE_IS_THE_CONTENT = {("main_window.py", "Filamente")}
+#: „Wann nicht?“ im Operationsdialog: Die Überschrift ist die Frage, die der
+#: Inhalt beantwortet; eine Zusammenfassung wäre die Grenze selbst, und die
+#: Klappe hielte nichts zurück (RM-513).
+_TITLE_IS_THE_CONTENT = {("main_window.py", "Filamente"), ("op_dialog.py", "Wann nicht?")}
 
 
 def test_every_closed_section_names_what_it_holds() -> None:
@@ -2128,3 +2211,22 @@ def test_every_closed_section_names_what_it_holds() -> None:
             if (path.name, text) not in _TITLE_IS_THE_CONTENT:
                 silent.append(f"{path.relative_to(root)}:{node.lineno} {text}")
     assert not silent, f"zugeklappt, ohne zu sagen, was darin steht: {silent}"
+
+
+def test_every_section_heading_is_built_by_collapsible() -> None:
+    """Eine Klappe entsteht über ``panels.collapsible`` — und nennt damit ihren Inhalt.
+
+    Der Operationsdialog baute seine „Weitere Einstellungen“ selbst, als
+    ``QToolButton`` mit dem Namen der Überschrift, und der Wächter darüber sah
+    ihn nicht: Er liest nur Aufrufe von ``collapsible`` (RM-513, C11). Wer eine
+    Überschrift von Hand benennt, umgeht ihn wieder.
+    """
+    root = Path(__file__).resolve().parents[1] / "app" / "ui"
+    hand_made = [
+        f"{path.relative_to(root)}:{number}"
+        for path in sorted(root.rglob("*.py"))
+        if path.name != "panels.py"
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if 'setObjectName("sectionHeading")' in line
+    ]
+    assert not hand_made, f"Klappen ohne panels.collapsible: {hand_made}"

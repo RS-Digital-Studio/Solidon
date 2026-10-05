@@ -50,7 +50,8 @@ from app.i18n import tr
 from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.labels import length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
-from app.ui.style import NORMAL, ROOMY, SPACE, make_primary, no_primary, set_level
+from app.ui.panels import align_forms
+from app.ui.style import NORMAL, SPACE, WIDE, make_primary, no_primary, set_level
 from app.ui.theme import Theme, current_theme
 
 if TYPE_CHECKING:
@@ -254,7 +255,7 @@ class OrganizerDialog(QDialog):
         self._timer.timeout.connect(self._preview)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(NORMAL)
         header = QLabel(
             tr(
@@ -413,6 +414,9 @@ class OrganizerDialog(QDialog):
         layout.addWidget(buttons)
         no_primary(self)
         make_primary(self.accept_button)
+        # Name und Maße beginnen an einer Kante (RM-518); die Fachwerte links
+        # stehen in ihrem eigenen Rollbereich und behalten ihre Spalte.
+        align_forms(self, apart=(self.editor,))
         self._rebuild_tree()
         self._changed()
 

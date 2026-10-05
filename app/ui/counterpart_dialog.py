@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 from app.core.counterpart import PAIRS, Pair
 from app.i18n import tr
 from app.ui.labels import LengthSpin, NumberSpin, choice_label
+from app.ui.panels import align_forms
 from app.ui.style import NORMAL, SPACE, WIDE, make_primary, set_level
 
 
@@ -167,6 +168,9 @@ class CounterpartDialog(QDialog):
             else:
                 field.valueChanged.connect(self.valuesChanged)
         QWidget.setTabOrder(previous, self._accept)
+        # Paar und Maße beginnen an einer Kante (RM-518) — nach jedem
+        # Paarwechsel neu, denn die Zeilen sind dann andere.
+        align_forms(self)
         self.valuesChanged.emit()
 
     def _field_for(self, entry: Any) -> NumberSpin | QComboBox:

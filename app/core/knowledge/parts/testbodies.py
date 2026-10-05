@@ -183,6 +183,7 @@ class FitLadderParams(BaseParams):
         minimum=2,
         maximum=8,
         doc=_("Wie viele Paare gedruckt werden. Vier reichen meistens, um den Wert einzugrenzen."),
+        placement="advanced",
     )
     first: float = param(
         title=_("Kleinstes Spiel"),
@@ -207,6 +208,7 @@ class FitLadderParams(BaseParams):
         minimum=2.0,
         maximum=40.0,
         doc=_("Höhe der Zapfen. Höher heißt länger drucken, aber ehrlicher fügen."),
+        placement="advanced",
     )
 
 
@@ -331,6 +333,7 @@ class WallLadderParams(BaseParams):
         minimum=5.0,
         maximum=120.0,
         doc=_("Länge jeder Wand."),
+        placement="advanced",
     )
 
 
@@ -415,6 +418,7 @@ class OverhangFanParams(BaseParams):
         minimum=2.0,
         maximum=50.0,
         doc=_("Breite einer einzelnen Fläche. Schmaler spart Zeit, breiter zeigt mehr."),
+        placement="advanced",
     )
     length: float = param(
         title=_("Auskraglänge"),
@@ -423,6 +427,7 @@ class OverhangFanParams(BaseParams):
         minimum=3.0,
         maximum=100.0,
         doc=_("Wie weit jede Fläche frei hinaussteht. Zu kurz verzeiht der Drucker alles."),
+        placement="advanced",
     )
 
 

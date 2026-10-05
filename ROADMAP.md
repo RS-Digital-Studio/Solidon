@@ -105,9 +105,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-508 — Der Prüfbericht zeigt zuerst die Befunde](#rm-508) | Bedienung und Darstellung | Kopf auf eine Zeile, Gerüst und Doppelungen aus der Befundkarte, Export neben der Übergabe |
 | [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
-| [RM-513 — Ein Operationsdialog zeigt vorn zwei bis drei Werte und einen Satz](#rm-513) | Bedienung und Darstellung | Vorderseitengrenze 4, Einleitung ein Satz, „Wann nicht?“ als Klappe, Nullwerte mit Namen, fx nur mit Parametern |
 | [RM-516 — Maße im Bild und Vorschauband nennen jede Zahl einmal](#rm-516) | Bedienung und Darstellung | Bohrung: Durchmesser nur im Feld, Lage über zwei Kantenmaße, Bezüge mit Seitennamen; Vorschauband zwei Zeilen |
-| [RM-518 — Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante](#rm-518) | Bedienung und Darstellung | `QGroupBox` ersetzen, Rand `WIDE`, `align_forms` überall, Spaltenbreite aus der Vorderseite |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -3336,6 +3334,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   parallele Aufnahmen zerstörten Bilder anderer Sitzungen). Abnahme: ein
   Protokoll je Weg mit Klicks, Zeiten und Bildern nach dem Bildstandard vom
   23.09.2026, jeder Befund behoben oder als Punkt geführt.
+  Aus RM-513 und RM-518 (05.10.2026): der Operationsdialog mit Maus und
+  Bildschirmleser — umgebrochene Beschriftungen hinten, die Lesezeile *Stelle*
+  mit *Stelle im Bild wählen*, benannte Null („Oberkante“, „automatisch“) im
+  Zahlenfeld, „Wann nicht?“, die verschachtelte Klappe unter „Anwendung“ in den
+  Einstellungen; mit den neuen Bildern ihre Alttexte (der Bohrdialog in
+  `funktionen.html` und den Übersetzungen nennt noch Position X, Y, Z mit fx).
 
   **Aus der dritten Runde der Durchsicht v0.5.1 (27.09.2026)** kommen Fenstertests, die
   das Release-Tor tragen muss; die Abschlüsse von RM-231 und RM-269 stützen sich auf sie
@@ -3956,30 +3960,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
   mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
 
-<a id="rm-513"></a>
-
-- [ ] **RM-513 — Ein Operationsdialog zeigt vorn zwei bis drei Werte und einen Satz.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  104 von 177 Operationen zeigen mehr als drei Felder gleichzeitig vorn, 42 sechs oder
-  mehr; `MAX_FRONT_FIELDS = 8` steht gegen Bauplan §2.4 („zwei bis drei“). Vor dem ersten
-  Feld stehen bis zu 118 Wörter, die Platzierungsanweisung ist die blasseste Zeile.
-  *Aushöhlen* widerspricht sich vorn („Oben öffnen“, „Öffnungen: Keine“, „Entlüftungen
-  1“); 104 Zahlenfelder zeigen „0,00 mm“, wo „automatisch“ gemeint ist; „fx“ steht
-  neben jedem Zahlenfeld; *Bohrung setzen* zeigt drei Koordinatenzeilen; die Klappe nennt
-  ihren Inhalt nicht; Auswahlzeilen sagen „· aus der Konstruktion“, „Bestand unbekannt“.
-  **Fix:** Grenze 4 in `op_dialog.py` und `test_interface_limits.py`, selten geänderte
-  Felder je Operation auf `placement="advanced"`; vorn der erste Satz der `doc`, „Wann
-  nicht?“ als zugeklappte `collapsible`, die Platzierungsanweisung als erste Zeile in
-  normaler Schrift; `vents` hängt an `open_top`; `param(zero_text=…)` über
-  `setSpecialValueText`; „fx“ nur mit Projektparametern oder Ausdruck; Klappe mit
-  `contents=`; Auswahlzeilen ohne Maßquelle und Doppelungen.
-  **Entschieden (Robert, 05.10.2026):** Grenze vier Felder vorn, `AGENTS.md` und
-  `test_interface_limits.py` ziehen nach; *Bohrung setzen* zeigt die Stelle als
-  Lesezeile, die Koordinaten stehen hinten, `grenzen.md` zieht nach.
-  **Abnahme:** Grenztest mit 4 grün, mindestens 90 % der Operationen mit höchstens drei
-  Feldern gleichzeitig; über dem ersten Feld in DE höchstens 25 Wörter, in FR und PT
-  höchstens 35; Registertest für `zero_text`; *Aushöhlen* mit „Oben öffnen“ ohne
-  Entlüftungszeile.
-
 <a id="rm-516"></a>
 
 - [ ] **RM-516 — Maße im Bild und Vorschauband nennen jede Zahl einmal.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
@@ -3996,21 +3976,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Im Zustand von guide-thread-a-hole-1 höchstens fünf Zahlen im Bild, kein
   Bezugsname mit Ziffer; das Vorschauband in der Lage von guide-drill-a-hole-8 höchstens
   zwei Zeilen; in Zoll kein „mm“. Überschneidung RM-090.
-
-<a id="rm-518"></a>
-
-- [ ] **RM-518 — Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Einstellungen, Erstlauf und *Eigener Baustein* benutzen gerahmte `QGroupBox`, die
-  übrigen flache Klappen; Ränder sind 12 px (`ROOMY`) oder 16 px (`WIDE`); Erzeugen,
-  Eigener Baustein und Erstlauf richten ihre Formulare nicht aus. Im Operationsdialog
-  klaffen 120 bis 170 px zwischen Beschriftung und Feld, weil `align_forms` die
-  zugeklappte Rückseite mitzählt.
-  **Fix:** Abschnitte über `sectionHeading` bzw. `collapsible`; Rand `WIDE`; jeder Dialog
-  mit Formularen ruft `align_forms`; die Spaltenbreite kommt aus der längsten
-  Beschriftung vorn, längere hinten brechen um.
-  **Abnahme:** Wächter ohne `QGroupBox` in Dialogen; Dialoge mit mindestens zwei
-  `QFormLayout` richten aus; in DE, FR und PT höchstens 24 px hinter der längsten
-  Beschriftung vorn. Überschneidung RM-502.
 
 <a id="rm-519"></a>
 
@@ -4123,6 +4088,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   einem vergleichbaren Referenzlauf bewerten. Abnahme: Fallresultate, Modellkennung, Regelversion
   und Quote sind belegt; mehrschrittige Werkzeugaufrufe berücksichtigen den Umgang mit
   Thinking-Blöcken. Die Behandlung von Modellablehnungen ist bereits gebaut.
+  **Neu zu messen nach RM-513 (05.10.2026):** Rund hundert Felder stehen jetzt
+  hinten; für Rückseitenfelder liest der Agent die Bedingung, nicht den Satz.
+  Lokal mit qwen3:14b gegen den Stand `1ce7eac68` (24 gut mit Angebot);
+  verschlechtert sich die Quote, bekommen die betroffenen Felder ihren Satz
+  zurück.
 
   **Lokal abgeschlossen am 26.09.2026** — Prompt-Version 8, Regelsammlung
   unverändert, RTX 4080 mit freier Karte (Belegung je Fall im Rohdatensatz),

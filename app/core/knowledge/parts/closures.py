@@ -192,6 +192,7 @@ class BayonetParams(BaseParams):
         minimum=1.2,
         maximum=6.0,
         doc=_("Wand von Aufnahme und Kragen, und mindestens so breit bleibt jeder Steg."),
+        placement="advanced",
     )
     lugs: int = param(
         title=_("Nocken"),
@@ -207,6 +208,7 @@ class BayonetParams(BaseParams):
         minimum=2.0,
         maximum=20.0,
         doc=_("Breite jeder Nocke entlang des Umfangs."),
+        placement="advanced",
     )
     lug_height: float = param(
         title=_("Nockenhöhe"),
@@ -227,6 +229,7 @@ class BayonetParams(BaseParams):
             "Wie tief der Kragen axial einfährt, bevor er gedreht wird; so viel Wand steht "
             "über dem Drehschlitz."
         ),
+        placement="advanced",
     )
     turn: float = param(
         title=_("Drehweg"),
@@ -235,6 +238,7 @@ class BayonetParams(BaseParams):
         minimum=5.0,
         maximum=60.0,
         doc=_("Wie weit gedreht wird, bis die Nocke am Ende des Schlitzes ansteht."),
+        placement="advanced",
     )
     play: float = play_param()
 
@@ -448,6 +452,7 @@ class DetentDiscParams(BaseParams):
         minimum=1.6,
         maximum=6.0,
         doc=_("Dicke der Scheibe; so dick sind auch Boden und Kragen der Führung."),
+        placement="advanced",
     )
     positions: int = param(
         title=_("Stellungen"),
@@ -466,6 +471,7 @@ class DetentDiscParams(BaseParams):
         minimum=10.0,
         maximum=120.0,
         doc=_("Wie weit das Fenster der Scheibe und jede Öffnung der Führung reicht."),
+        placement="advanced",
     )
     post: float = param(
         title=_("Zapfen"),
@@ -474,6 +480,7 @@ class DetentDiscParams(BaseParams):
         minimum=3.0,
         maximum=12.0,
         doc=_("Durchmesser des mittigen Zapfens, über dessen Kopf die Federnabe schnappt."),
+        placement="advanced",
     )
     arm: float = param(
         title=_("Federarmstärke"),
@@ -485,6 +492,7 @@ class DetentDiscParams(BaseParams):
             "Stärke der Federarme an der Nabe und der Rastzunge am Rand. Der Kopf und die "
             "Rastnase stehen eine halbe Armstärke über."
         ),
+        placement="advanced",
     )
     play: float = play_param()
 
@@ -576,7 +584,7 @@ def _detent_reason(params: DetentDiscParams) -> TranslatableText | None:
     wall=WallRequirement.from_parameter("arm"),
     feasible=lambda raw: _detent_reason(cast(DetentDiscParams, raw)),
     doc=_(
-        "Ein Drehverschluss mit Raststellungen, etwa für einen Streudeckel: Die Führung "
+        "Ein Drehverschluss mit Raststellungen, etwa für einen Streudeckel. Die Führung "
         "trägt Zapfen, Kragen mit Rastmulden, tastbare Marken und je Stellung eine Öffnung, "
         "die Scheibe ein Fenster, eine federnde Nabe und eine Rastzunge. Die Scheibe wird von "
         "oben aufgeklipst und ist wieder lösbar."

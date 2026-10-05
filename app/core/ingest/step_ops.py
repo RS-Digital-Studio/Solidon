@@ -75,6 +75,7 @@ class LoadStepParams(BaseParams):
         title=_("Name"),
         default="",
         doc=_("Gilt für einen einzelnen Körper. Leer übernimmt den Namen aus der Datei."),
+        placement="advanced",
     )
     #: Derselbe Schalter wie an ``load``; Vorgabe aus, damit ein älterer
     #: Ladeschritt liegen bleibt, wo er gespeichert wurde.
@@ -84,6 +85,7 @@ class LoadStepParams(BaseParams):
         default=False,
         depends_on=("free_spot", (False,)),
         doc=_("Setzt das Modell mit seiner Unterseite auf das Druckbett."),
+        placement="advanced",
     )
     centre: bool = param(
         title=_("Mittig auf das Bett legen"),
@@ -93,6 +95,7 @@ class LoadStepParams(BaseParams):
             "Schiebt das Modell in die Mitte der Druckplatte. Ein Modell aus einem "
             "CAD-Programm hat seinen Nullpunkt oft in einer Ecke und liegt sonst weit daneben."
         ),
+        placement="advanced",
     )
     spot_x: float | None = spot_param("x")
     spot_y: float | None = spot_param("y")
