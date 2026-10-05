@@ -112,8 +112,8 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
-| `first_run.py` | Erstlauf (§38): Sprache, Slicer, Drucker und Testphase vorn, *Zusatzprogramme und Chat* zugeklappt (ohne zweite Slicerzeile); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
-| `start_screen.py` | die ersten fünf Minuten (§2.3): die vier Einstiege groß oben (`ExampleTile.starts`), Knöpfe wie in der Werkzeugleiste, Feedback und Unterstützen als Fußzeile (`FooterLink`) |
+| `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
+| `start_screen.py` | die ersten fünf Minuten (§2.3) |
 | `header.py` | Kopfzeile: Projektname, Druckerwechsel, die tatsächlich belegten Filamente (`mesh.slot_indices`) |
 
 ### Brücke zum Kern
@@ -211,8 +211,8 @@ stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis bleibt scroll
 
 | Datei | Zweck |
 |---|---|
-| `catalog.py` | der Bausteinkatalog (§24.3, §2.6): Kachel aus Bild und Titel, Eckzeichen (`tile_marks`); `show_for_feature` zeigt nur, was das Register an einer Merkmalsart anbietet; `offer_ways` führt aus der leeren Szene zu einem ersten Körper |
-| `recipe_dialog.py` | Auswahl als Baustein speichern: je Maß eine Zeile (Vorgabe, von, bis), je Stelle ein Haken, alles Übrige unter *Weitere Einstellungen*; an einem wieder geöffneten eigenen Baustein heißt der Knopf *Baustein ersetzen* |
+| `catalog.py` | Bausteinkatalog (§24.3, §2.6); `show_for_feature` filtert je Merkmalsart, `offer_ways` zum ersten Körper |
+| `recipe_dialog.py` | Auswahl als Baustein speichern; an einem wieder geöffneten eigenen Baustein heißt der Knopf *Baustein ersetzen* |
 | `counterpart_dialog.py` | Gegenstücke: zwei Stellen, Paar/Maße aus Bausteinschema und `Pair.shared` |
 
 Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;

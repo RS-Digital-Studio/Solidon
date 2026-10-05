@@ -78,7 +78,7 @@ TILE_WIDTH = 164
 TITLE_LINES = 2
 
 #: Kantenlänge eines Eckzeichens im Verhältnis zum Vorschaubild.
-MARK_SHARE = 0.27
+TILE_MARK_SHARE = 0.27
 
 #: Mindestbreite der Detailspalte. Schmaler wird aus zwei Sätzen eine
 #: Wortkolonne.
@@ -234,7 +234,7 @@ def marked(picture: QPixmap, marks: Sequence[TileMark], ink: QColor) -> QPixmap:
     result = QPixmap(picture)
     width = float(result.width() / max(result.devicePixelRatio(), 1.0))
     height = float(result.height() / max(result.devicePixelRatio(), 1.0))
-    side = width * MARK_SHARE
+    side = width * TILE_MARK_SHARE
     painter = QPainter(result)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     for mark in marks:
