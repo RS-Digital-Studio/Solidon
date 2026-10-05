@@ -489,8 +489,7 @@ def test_print_dialog_depth_keeps_the_frame_anchor_and_returns_collapsed_height(
     dialog.show()
     try:
         # Erst wenn die Slicersuche zurück ist, steht die zugeklappte Höhe:
-        # Ihr Ergebnis lässt den Rahmen passiv wachsen (RM-487), auf dem
-        # Linux-Runner mitten in der ersten Runde (611 statt 715 Punkte).
+        # Ihr Ergebnis darf den Rahmen passiv wachsen lassen (RM-487).
         assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
         for _ in range(8):
             qt_app.processEvents()
@@ -9253,22 +9252,44 @@ def test_a_printer_that_cannot_be_saved_says_so_and_shows_what_holds(
 def test_switching_print_tabs_keeps_the_outer_size_and_scrolls_the_current_page(
     dialog: PrintSettingsDialog, qt_app: QApplication
 ) -> None:
-    """Ein Reiterwechsel lässt den Außenrahmen stehen und aktualisiert die Rollfläche."""
+    """Ein Reiterwechsel springt nicht und aktualisiert die Rollfläche.
+
+    Der Wechsel ist eine passive Änderung (RM-487): Eine höhere Seite darf den
+    Rahmen bis zum Bildschirmrand unter dem Anker wachsen lassen, keine lässt
+    ihn schrumpfen, Breite und Anker bleiben. Nach einem Durchgang steht der
+    Rahmen. Geklappt wird erst nach der Anfangsmessung, wie beim Kunden: Vorher
+    ging die Klappe in der Anfangsmessung auf, der Dialog war ohne Anker und
+    rückte beim ersten höheren Reiter hinauf.
+    """
     dialog.show()
+    for _ in range(16):
+        qt_app.processEvents()
+    assert dialog._content_height.initial_fit_done
     assert dialog.tabs_toggle is not None
     dialog.tabs_toggle.setChecked(True)
     for _ in range(16):
         qt_app.processEvents()
-    opened_size = (dialog.width(), dialog.height())
+    width = dialog.width()
     anchor = dialog.frameGeometry().topLeft()
+    bottom = dialog.screen().availableGeometry().bottom()
+    height = dialog.height()
     for index in range(dialog.tabs.count()):
         dialog.tabs.setCurrentIndex(index)
         for _ in range(16):
             qt_app.processEvents()
-        assert (dialog.width(), dialog.height()) == opened_size
+        assert dialog.width() == width
+        assert dialog.height() >= height, "ein Reiterwechsel nimmt keine Höhe zurück"
         assert dialog.frameGeometry().topLeft() == anchor
+        assert dialog.frameGeometry().bottom() <= bottom
+        height = dialog.height()
         page = dialog.tabs.currentWidget()
         assert page is not None and page.isVisibleTo(dialog)
+    settled = dialog.size()
+    for index in range(dialog.tabs.count()):
+        dialog.tabs.setCurrentIndex(index)
+        for _ in range(16):
+            qt_app.processEvents()
+        assert dialog.size() == settled, dialog.tabs.tabText(index)
     assert dialog.width() >= dialog._room_for_tabs()
     chosen_width = max(dialog.minimumWidth(), 620)
     dialog.resize(chosen_width, dialog.height())
@@ -9299,8 +9320,17 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
     assert button_layout.spacing() == SPACE
     page = dialog._scroll.widget()
     assert page is not None
+
+    def rows_height() -> int:
+        # Ohne den Statussatz unter der Düse: Er wechselt mit jeder Wahl, und
+        # sein Größenwunsch bricht je Text und Schrift in andere Zeilen um —
+        # auf dem macOS-Runner war die Seite nach dem Zuklappen vier Punkte
+        # höher als aufgeklappt (641 gegen 637, Tag-Lauf 0.5.2). Gemessen wird
+        # die Zeile mit dem Feld.
+        return page.sizeHint().height() - dialog.nozzle_state.sizeHint().height()
+
     closed_size = dialog.size()
-    closed_content_height = page.sizeHint().height()
+    closed_content_height = rows_height()
     assert dialog.nozzle.isHidden()
 
     other = dialog.nozzle_choice.count() - 1
@@ -9310,12 +9340,12 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
         qt_app.processEvents()
 
     assert not dialog.nozzle.isHidden()
-    assert page.sizeHint().height() > closed_content_height
+    assert rows_height() > closed_content_height
     # Die Zeile darf den Rahmen wachsen lassen, nie breiter (RM-487).
     assert dialog.width() == closed_size.width()
     assert dialog.height() >= closed_size.height()
     expanded_size = dialog.size()
-    expanded_content_height = page.sizeHint().height()
+    expanded_content_height = rows_height()
 
     standard = dialog.nozzle_choice.findData(0.4)
     assert standard >= 0
@@ -9325,7 +9355,7 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
         qt_app.processEvents()
 
     assert dialog.nozzle.isHidden()
-    assert page.sizeHint().height() < expanded_content_height
+    assert rows_height() < expanded_content_height
     assert dialog.size() == expanded_size, "Zuklappen lässt den Außenrahmen ruhig stehen"
 
 

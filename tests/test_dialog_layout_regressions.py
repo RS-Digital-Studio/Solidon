@@ -310,6 +310,47 @@ def test_the_hidden_width_is_the_width_after_opening(qt_app: QApplication) -> No
         dialog.deleteLater()
 
 
+def test_the_initial_height_belongs_to_the_width_the_dialog_opens_with(
+    qt_app: QApplication,
+) -> None:
+    """Die Anfangshöhe wird in der Breite gemessen, auf die der Dialog dabei wächst.
+
+    Umbrochener Text braucht schmal mehr Zeilen als breit. Gemessen in der
+    Ausgangsbreite und erst danach verbreitert, öffnete der Druckdialog unter
+    Linux 104 Punkte höher als sein Inhalt (Tag-Lauf 0.5.2). Gegenprobe: In
+    der schmalen Breite gemessen stünde der Dialog genau auf ``narrow``.
+    """
+    from PySide6.QtWidgets import QLabel, QVBoxLayout
+
+    from app.ui.style import ContentHeight, DialogScrollArea, _hidden_height
+
+    dialog = QDialog()
+    try:
+        outer = QVBoxLayout(dialog)
+        scroll = DialogScrollArea(dialog)
+        contents = QWidget(scroll)
+        column = QVBoxLayout(contents)
+        for _ in range(4):
+            sentence = QLabel("Ein Satz, der in schmaler Breite umbricht. " * 3, contents)
+            sentence.setWordWrap(True)
+            column.addWidget(sentence)
+        scroll.setWidget(contents)
+        outer.addWidget(scroll)
+        dialog.resize(260, 200)
+        dialog.show()
+        _settle(qt_app)
+        narrow = dialog.sizeHint().height()
+
+        ContentHeight().fit(dialog, scroll, intent="initial", natural_width=560)
+        _settle(qt_app)
+
+        assert dialog.width() == 560
+        assert dialog.height() < narrow, "die Höhe gilt der schmalen Ausgangsbreite"
+        assert _hidden_height(scroll) == 0, "und nichts vom Inhalt liegt unter dem Rand"
+    finally:
+        dialog.deleteLater()
+
+
 def test_parameter_dialog_keeps_validation_and_actions_reachable_when_short(
     qt_app: QApplication,
 ) -> None:

@@ -639,6 +639,32 @@ class ContentHeight:
         elif intent == "explicit":
             self._anchored = True
 
+    def _widen_before_measuring(
+        self, dialog: QWidget, *, grow_width: bool, natural_width: int
+    ) -> None:
+        """Stellt die Anfangsbreite ein, bevor die Höhe gemessen wird.
+
+        Umbrochener Text braucht schmal mehr Zeilen als breit. Gemessen in der
+        Ausgangsbreite und erst danach verbreitert, öffnete der Druckdialog
+        unter Linux (DejaVu Sans) 104 Punkte höher als sein Inhalt, und das
+        erste Zuklappen nahm sie wieder weg. Die Breite ist dieselbe, die
+        ``_content_size_for_intent`` und ``fit_dialog_to_screen`` danach
+        ergeben; diese eigene Zwischengröße gilt nicht als Zug des Kunden.
+        """
+        width = dialog.width()
+        if grow_width:
+            width = max(width, dialog.sizeHint().width())
+        width = max(width, natural_width)
+        screen = dialog.screen()
+        if screen is not None:
+            room = screen.availableGeometry().adjusted(NORMAL, NORMAL, -NORMAL, -NORMAL)
+            border = dialog.frameGeometry().width() - dialog.width()
+            width = min(width, max(1, room.width() - border))
+        if width == dialog.width():
+            return
+        dialog.resize(width, dialog.height())
+        self._remember_size(dialog)
+
     def _keeps_anchor(self, intent: ContentFitIntent) -> bool:
         """Ob der Dialog oben stehen bleibt, statt hinaufzurücken.
 
@@ -682,6 +708,8 @@ class ContentHeight:
         floor = self.floor(dialog)
         if intent == "passive" and (self.user is not None or not self._initialized):
             return
+        if intent == "initial" and natural_size is None and self.user is None:
+            self._widen_before_measuring(dialog, grow_width=grow_width, natural_width=natural_width)
         scroll.updateGeometry()
         layout.invalidate()
         layout.activate()

@@ -327,7 +327,8 @@ Statusmeldungen ohne die gepinnte Höhe, denn `QLabel.heightForWidth` meldet
 nie weniger als die Mindesthöhe.
 
 **Dialoggröße nach Auslöser:** `ContentHeight` misst die natürliche Geometrie
-des aktuellen Inhalts einmal nach dem Anzeigen. Eine manuell gezogene Breite
+des aktuellen Inhalts einmal nach dem Anzeigen, die Höhe erst in der neuen
+Breite (Umbruch). Eine manuell gezogene Breite
 oder Höhe bleibt für die Dialoglebensdauer maßgeblich; Mehrinhalt rollt im
 äußeren Scrollbereich, Aktionsknöpfe bleiben außerhalb. Nur ausdrücklich
 betätigtes Auf- und Zuklappen darf bei automatischer Größe die Höhe anpassen;
