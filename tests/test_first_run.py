@@ -589,20 +589,75 @@ def test_the_first_run_asks_only_for_the_two_basics(qt_app: QApplication) -> Non
     shown = " ".join(label.text() for label in dialog.tools.findChildren(QLabel))
     assert external_tools.TOOLS, "ohne Werkzeugliste prüft die Schleife nichts"
     for tool in external_tools.TOOLS:
+        if tool.id == "slicer":
+            # Den Slicer fragen die Grundlagen; eine zweite Zeile hier fragte
+            # ihn ein zweites Mal (RM-515, C4).
+            assert str(tool.title) not in shown
+            continue
         assert str(tool.title) in shown, f"{tool.id} fehlt in der Erstinbetriebnahme"
-    assert "Modell öffnen" in dialog.open_button.text()
+    assert "Modell einfügen" in dialog.open_button.text()
 
 
-def test_the_first_run_groups_basics_and_optional_extras(qt_app: QApplication) -> None:
-    """Der erste Blick trennt notwendige Vorgaben von freiwilligen Erweiterungen."""
-    from PySide6.QtWidgets import QGroupBox
+def test_the_first_run_groups_basics_and_folds_the_extras(qt_app: QApplication) -> None:
+    """Grundlagen vorn, Zusatzprogramme und Chat zugeklappt mit Inhaltsangabe (RM-515).
+
+    Flache Abschnitte statt gerahmter Kästen (RM-518); der Programmknopf heißt
+    nicht mehr wie der Eintrag für einen eigenen Drucker.
+    """
+    from PySide6.QtWidgets import QGroupBox, QLabel, QToolButton
 
     dialog = FirstRunDialog(UiSettings())
-    groups = {group.title() for group in dialog.findChildren(QGroupBox)}
+    try:
+        assert not dialog.findChildren(QGroupBox), "flache Abschnitte statt Rahmen"
+        heading = dialog.extras_section.findChild(QToolButton, "sectionHeading")
+        summary = dialog.extras_section.findChild(QLabel, "sectionSummary")
+        assert heading is not None and not heading.isChecked(), "zugeklappt"
+        assert summary is not None and "Ollama" in summary.text() and "Chat" in summary.text()
+        assert not dialog.install_button.isVisibleTo(dialog)
+        assert dialog.install_button.text() == "Zusatzprogramme verwalten …"
+        assert dialog.open_button.text() == "Modell einfügen …"
+        assert dialog.slicer_file.text() == "Programm wählen …"
+        assert dialog.slicer_file.text() != dialog.printer.itemText(
+            dialog.printer.findData("__custom__")
+        )
+    finally:
+        dialog.release()
+        dialog.deleteLater()
 
-    assert {"Grundlagen", "Optionale Erweiterungen"} <= groups
-    assert dialog.install_button.text() == "Zusatzprogramme verwalten …"
-    assert dialog.open_button.text() == "Eigenes Modell öffnen …"
+
+def test_the_first_run_opens_with_at_most_45_words_and_one_slicer(qt_app: QApplication) -> None:
+    """Abnahme RM-515: beim Öffnen höchstens 45 Wörter, „Slicer“ einmal, das
+    Filamentlager einmal.
+
+    Vorher 118 Wörter: ein Einleitungssatz, eine Zeile über die Vorgaben, ein
+    Hinweis zum eigenen Drucker, ein Absatz über Erweiterungen, und der Slicer
+    stand oben und noch einmal unter den Programmen.
+    """
+    import re
+
+    from PySide6.QtWidgets import QAbstractButton, QComboBox, QLabel
+
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        texts = []
+        for widget in (
+            *dialog.findChildren(QLabel),
+            *dialog.findChildren(QAbstractButton),
+            *dialog.findChildren(QComboBox),
+        ):
+            if widget.isVisibleTo(dialog):
+                text = widget.currentText() if isinstance(widget, QComboBox) else widget.text()
+                texts.append(text)
+        words = [word for text in texts for word in text.split() if re.search(r"\w", word)]
+        assert len(words) <= 45, (len(words), texts)
+        assert sum(len(re.findall(r"\bSlicer\b", text)) for text in texts) == 1, texts
+        assert sum(text.count("Filamentlager") for text in texts) == 1, texts
+    finally:
+        dialog.reject()
+        dialog.release()
+        dialog.deleteLater()
 
 
 def test_an_installed_service_is_not_called_missing(qt_app: QApplication) -> None:
@@ -2011,7 +2066,7 @@ def test_an_unexpected_error_does_not_leave_the_first_run_waiting(
     assert dialog.install_button.isEnabled(), "der Weg zur Liste bleibt offen"
     assert "nachgesehen" not in dialog.chat_state.text(), "keine Zeile bleibt auf „wird“ stehen"
     assert "schiefgegangen" in dialog.chat_state.text()
-    assert "Modell öffnen" in dialog.open_button.text(), "und der Weg hinaus steht da"
+    assert "Modell einfügen" in dialog.open_button.text(), "und der Weg hinaus steht da"
 
 
 def test_the_session_attachment_names_the_parts_that_stay_behind(

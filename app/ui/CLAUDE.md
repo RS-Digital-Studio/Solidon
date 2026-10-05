@@ -112,7 +112,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
-| `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
+| `first_run.py` | Erstlauf (§38): Sprache, Slicer, Drucker und Testphase vorn, *Zusatzprogramme und Chat* zugeklappt (ohne zweite Slicerzeile); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3): die vier Einstiege groß oben (`ExampleTile.starts`), Knöpfe wie in der Werkzeugleiste, Feedback und Unterstützen als Fußzeile (`FooterLink`) |
 | `header.py` | Kopfzeile: Projektname, Druckerwechsel, die tatsächlich belegten Filamente (`mesh.slot_indices`) |
 
