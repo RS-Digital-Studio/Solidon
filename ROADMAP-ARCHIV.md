@@ -32,6 +32,7 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-05 | [RM-520: Ein Gewinde in einer vorhandenen Bohrung — Kundenmeldung zu 0.5.2 (05.10.2026)](#rm-520-ein-gewinde-in-einer-vorhandenen-bohrung--kundenmeldung-zu-052-05102026) |
+| 2026-10-05 | [RM-506: Funktionen findet man über eine sichtbare Suche und eine Karte, die der Menüleiste folgt (05.10.2026)](#rm-506-funktionen-findet-man-über-eine-sichtbare-suche-und-eine-karte-die-der-menüleiste-folgt-05102026) |
 | 2026-10-05 | [RM-514: Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar (05.10.2026)](#rm-514-der-druckdialog-zeigt-vorn-das-wichtigste-und-jeder-grund-ist-lesbar-05102026) |
 | 2026-10-05 | [RM-515: Startbildschirm und Erste Schritte erzählen nicht mehr (05.10.2026)](#rm-515-startbildschirm-und-erste-schritte-erzählen-nicht-mehr-05102026) |
 | 2026-10-05 | [RM-517: Der Bausteinkatalog zeigt Bild und Titel und filtert nach Merkmalsart (05.10.2026)](#rm-517-der-bausteinkatalog-zeigt-bild-und-titel-und-filtert-nach-merkmalsart-05102026) |
@@ -42012,3 +42013,73 @@ Zusicherung eine Gegenprobe. Umweg für 0.5.2 ohne Fix gemessen: Ein Innengewind
 freien Stelle der Fläche schneidet sein Loch selbst (261 mm³ an Netz und exaktem Körper).
 Changelog: zum nächsten Release (Gewinde und Einpressbuchse in einer Bohrung, Satz bei zu
 weiter Bohrung, Handbuchsuche, Schrittdialog).
+
+## RM-506: Funktionen findet man über eine sichtbare Suche und eine Karte, die der Menüleiste folgt (05.10.2026)
+
+<a id="rm-506-funktionen-findet-man-über-eine-sichtbare-suche-und-eine-karte-die-der-menüleiste-folgt-05102026"></a>
+<a id="rm-506"></a>
+
+**RM-506 — Funktionen findet man über eine sichtbare Suche und eine Karte, die mit dem Häufigen beginnt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Sieben der zwölf Kernfunktionen stehen in keinem Menü; ohne Auswahl sind sie
+  unsichtbar, die Befehlspalette ist nur über *Bearbeiten* sichtbar, und die Suche der
+  Auswahlkarte sucht nur in der Auswahl. Die Karte sortiert ihre Gruppen mit
+  `str.casefold` (`selection_operations.py:513`, `:525`) — gegen `grenzen.md` — und
+  stellt auf Deutsch „Ändern“ (32 Einträge am Körper, zugeklappt) ans Ende.
+  Reparieren gilt nur offenen Kanten, der Leertext nennt keine Kanten, *Formen* und
+  *Skelett* bleiben bei genau einem Körper grau, Weg 3 hat nur *Datei → Modell erzeugen*.
+  **Fix:** Suchfeld „Funktion suchen … Strg+Umschalt+P“ in der oberen Leiste, das die
+  Befehlspalette öffnet; Treffer nennen Ort (`menu_path`) und Voraussetzung, bei genau
+  einem Körper nehmen sie ihn (`_lone_body`); die Kartensuche bietet bei null Treffern
+  „In allen Funktionen suchen“. Gruppenfolge der Karte aus `surfaces.menu_rank`,
+  Einträge mit `i18n.sort_key`; „Ändern“ am Körper über `folded_categories` in
+  Untergruppen von höchstens zwölf, offen. `repair` auch am Körper; Leertext „Fläche,
+  Kante oder Bohrung“; *Formen*/*Skelett* nehmen den einzigen Körper; die Einladung der
+  leeren Szene bietet „Modell einfügen …“ und, mit eingerichtetem Generator, „Aus Text
+  oder Bild …“; `menu_path` nennt für `takes_whole_scene` den Ort ohne Auswahl.
+  **Entschieden (Robert, 05.10.2026):** In der Karte ohne Auswahl bleibt von den drei
+  Szenenhandlungen nur „Druckoptimal ausrichten“ — sie ändern alle Körper, also stehen
+  sie nur ohne Auswahl, und eine genügt dort; Anordnen und Überschneidungen bleiben über
+  Palette und Menü erreichbar. An einer gewählten Bohrung steht „Passende Bausteine …“,
+  der den Katalog auf die Bausteine mit `applies_to` `hole` filtert.
+  **Abnahme:** Am geladenen Modell führen „verrunden“, „gewinde“, „reparieren“,
+  „ausrichten“ in höchstens drei Handlungen zum Dialog oder nennen die fehlende
+  Auswahl; die Gruppenfolge der Karte ist in allen sechs Sprachen gleich; Verrunden ist
+  am Körper bei 1600 × 1000 ohne Aufklappen sichtbar; `test_interface_limits` grün.
+
+**Umsetzung:** Oben in der Leiste steht *Funktion suchen … Strg+Umschalt+P*
+(`MainWindow.function_search`) und öffnet die Befehlspalette; jede Zeile nennt in
+Kurzhilfe und Beschreibung ihren Ort (`PaletteEntry.where` aus `menu_path`), und bei
+genau einem Körper nimmt die Palette ihn (`_lone_body`), ebenso *Formen* und *Skelett*.
+Findet die Kartensuche nichts, bietet sie *In allen Funktionen suchen* mit demselben
+Wort. Die Karte ordnet ihre Gruppen nach `menu_rank` (`selection_operations._card_group`),
+die Einträge mit `sort_key`; eine Kategorie, die das Menü faltet, ist eine eigene Gruppe,
+und *Transformation* steht am Ende ihrer Gruppe, weil *Bewegen* sie trägt
+(`TOOL_STRIP_CATEGORIES`). `repair` steht auch am Körper, der Leertext nennt „Fläche,
+Kante oder Bohrung“. Die Einladung der leeren Szene hat eine zweite Zeile: *Modell
+einfügen …*, *Aus Text oder Bild …*, *Im Chat beschreiben*. Abweichend vom Fix steht
+*Aus Text oder Bild …* immer: Der Dialog sagt selbst, was dem Generator fehlt, und ihn
+nur mit eingerichtetem Generator zu zeigen hieße, beim Leeren der Szene das Netz zu
+fragen. `menu_path` nennt für `takes_whole_scene` „Handlungen rechts (ohne Auswahl)“
+oder „Befehlspalette“; `SCENE_ACTIONS_IN_THE_CARD` liegt in `surfaces.py` und gilt für
+Karte und Wegweiser. Den Entscheidungstext richtig gelesen: *Auf dem Bett anordnen*
+(Strg+Umschalt+O) und *Überschneidungen prüfen* stehen in der Palette, in keinem Menü.
+An einer gewählten Bohrung heißt der Katalogknopf *Passende Bausteine …*
+(`MATCHING_PARTS_AT`, `MainWindow.open_matching_parts`, Filter aus RM-517). Mitbehoben:
+Das Suchfeld drückte die Druckerangabe der Kopfzeile bei 1600 px auf „Allge…0 mm ·
+FDM“, während die leere Maßangabe 211 px hielt; ihre Spalte dehnt sich nur noch mit
+Inhalt (`HeaderBar._stretch_the_bounds_column`). `grenzen.md` und ihre Begründungen
+nachgezogen.
+
+**Nachweis (echtes Fenster, Windows, 1600 × 1000, Sonde):** Am geladenen
+`plate_holes.stl` wählt die Palette für „verrunden“, „gewinde“, „reparieren“ und
+„ausrichten“ je eine freie Zeile vor (*Verrunden*, *Druckbares Gewinde*, *Reparieren*,
+*Druckoptimal ausrichten*): Strg+Umschalt+P, Wort, Eingabe — drei Handlungen.
+*Verrunden* steht am Körper ohne Aufklappen im Ausschnitt (Mitte bei 665 px, Unterkante
+780; vorher 838). An der Bohrung steht *Passende Bausteine …*. Leere Szene: Suchfeld und
+alle sieben Einladungsknöpfe sichtbar; Kopfzeile mit vollem Druckernamen (234 px), leere
+Maßspalte 0 px. Gruppenfolge in allen sechs Sprachen gleich
+(`test_the_groups_follow_the_menu_bar_in_every_language`), `test_interface_limits` grün im
+Tor. Fenstertests beim Release.
+Changelog: zum nächsten Release (Suchfeld oben, Karte in der Folge der Menüleiste,
+Reparieren am Körper, passende Bausteine an der Bohrung, Einladung mit Import und
+Generator).

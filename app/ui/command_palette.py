@@ -362,7 +362,13 @@ class _Rows(QStyledItemDelegate):
 class CommandPalette(QDialog):
     """Tippen, wählen, ausführen."""
 
-    def __init__(self, entries: list[PaletteEntry] | None = None, parent: QWidget | None = None):
+    def __init__(
+        self,
+        entries: list[PaletteEntry] | None = None,
+        parent: QWidget | None = None,
+        *,
+        query: str = "",
+    ):
         super().__init__(parent)
         self.setWindowTitle(tr("Befehle"))
         # Breite **und** Höhe. Nur die Breite stand hier, und ohne Höhe nimmt
@@ -404,7 +410,10 @@ class CommandPalette(QDialog):
         layout.setSpacing(NORMAL)
         layout.addWidget(self.search)
         layout.addWidget(self.list)
-        self._refilter("")
+        # Ein Suchtext von außen — „In allen Funktionen suchen“ unter der Karte
+        # der Auswahl (RM-506): dasselbe Wort, jetzt über alles.
+        self.search.setText(query)
+        self._refilter(query)
 
     def _refilter(self, query: str) -> None:
         self.list.clear()
@@ -501,15 +510,19 @@ class CommandPalette(QDialog):
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, entry.name)
             tooltip_lines: list[str] = []
+            where = str(entry.where).strip()
             for text in (
                 str(entry.title),
                 str(entry.reason) if not entry.available else "",
                 str(entry.doc),
+                # Der Ort, wie das Kürzel: nebenbei gelernt (RM-506).
+                tr("Ort: {place}", place=where) if where else "",
             ):
                 text = text.strip()
                 if text and text not in tooltip_lines:
                     tooltip_lines.append(text)
             item.setToolTip("\n".join(tooltip_lines))
+            item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, "\n".join(tooltip_lines[1:]))
             if not entry.available:
                 # Sichtbar, aber nicht wählbar — dieselbe Antwort wie im
                 # Menü. Die Palette bleibt eine Reihenfolge, keine Auswahl:

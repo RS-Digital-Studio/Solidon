@@ -599,3 +599,42 @@ def test_menu_folding_keeps_rank_ties_and_protected_groups(
     assert (
         folded_groups(sizes, limit, fixed, keep, rank=lambda name: ranking.get(name, 0)) == expected
     )
+
+
+def test_actions_for_every_body_name_where_they_stand_without_a_selection() -> None:
+    """RM-506: Der Ort einer Handlung für alle Körper nennt „ohne Auswahl“.
+
+    Der Weg nannte „bei gewähltem Körper“ — genau dort stehen sie seit dem
+    27.09.2026 nicht. Was die Karte ohne Auswahl nicht zeigt (Robert,
+    05.10.2026: „Eigentlich reicht hier druckoptimal ausrichten“), steht in der
+    Befehlspalette, und so heißt sein Ort.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY, menu_path
+    from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD
+
+    load_operations()
+    for spec in REGISTRY.all():
+        if not spec.takes_whole_scene:
+            continue
+        where = menu_path(spec)
+        assert "bei gewähltem Körper" not in where, f"{spec.name}: {where}"
+        if spec.name in SCENE_ACTIONS_IN_THE_CARD:
+            assert "ohne Auswahl" in where, f"{spec.name}: {where}"
+        else:
+            assert "Befehlspalette" in where, f"{spec.name}: {where}"
+
+
+def test_repair_stands_at_the_body_too() -> None:
+    """RM-506: *Reparieren* gilt dem Körper, nicht nur der offenen Kante.
+
+    Wer ein offenes Modell eingelesen hat, sucht es am Modell und nicht an
+    einer Stelle, die er erst finden muss.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    repair = REGISTRY.get("repair")
+    assert repair.also_on_body
+    assert "edge_loop" in repair.applies_to, "an der offenen Kante bleibt es"

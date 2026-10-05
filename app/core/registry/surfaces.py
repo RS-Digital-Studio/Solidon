@@ -665,8 +665,27 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     return " → ".join(steps)
 
 
+#: Welche Handlungen für alle Körper rechts stehen, wenn nichts gewählt ist.
+#:
+#: Robert, 05.10.2026: „Eigentlich reicht hier druckoptimal ausrichten, machen
+#: ja alle ziemlich das gleiche und nur ohne Auswahl.“ *Druckoptimal
+#: ausrichten* ordnet das Bett danach neu; *Auf dem Bett anordnen* (Kürzel)
+#: und *Überschneidungen prüfen* bleiben über die Befehlspalette erreichbar.
+#: Die Karte rechts und :func:`menu_path` lesen dieselbe Menge.
+SCENE_ACTIONS_IN_THE_CARD: Final = frozenset({"orient_for_print"})
+
+
 def _panel_place(spec: OperationSpec) -> str:
-    """Der Ort einer Handlung rechts im Fenster, mit der Auswahl, die sie braucht."""
+    """Der Ort einer Handlung rechts im Fenster, mit der Auswahl, die sie braucht.
+
+    **Eine Handlung für alle Körper steht ohne Auswahl** (RM-506): Der Weg
+    nannte „bei gewähltem Körper“, und genau dort steht sie seit dem
+    27.09.2026 nicht mehr.
+    """
+    if spec.takes_whole_scene:
+        if spec.name in SCENE_ACTIONS_IN_THE_CARD:
+            return f"{_('Handlungen rechts')} ({_('ohne Auswahl')})"
+        return str(_("Befehlspalette"))
     if spec.applies_to:
         kinds = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to if kind)
         selection = _("bei gewähltem Merkmal: {kinds}", kinds=kinds)
@@ -766,6 +785,9 @@ class PaletteEntry:
     """Warum nicht, wenn nicht — dieselbe Auskunft, die das Menü im
     Hinweistext trägt (Regel 18: der Grund ist die zweite Kodierung neben
     dem Ausgrauen)."""
+    where: TranslatableText | str = ""
+    """Wo die Operation sonst steht (:func:`menu_path`) — so lernt man den Ort
+    nebenbei wie das Kürzel (RM-506)."""
 
 
 def palette_entries(
@@ -782,7 +804,8 @@ def palette_entries(
     Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen, und die
     stehen auf der Nicht-bauen-Liste.
     """
-    specs = list((registry or REGISTRY).all())
+    source = registry or REGISTRY
+    specs = list(source.all())
     # **Nach dem Titel, nicht nach dem Namen.** ``Registry.all()`` sortiert nach
     # dem internen englischen Bezeichner, und die Palette gab das ungefiltert
     # weiter: „An Merkmal ausrichten", „Textur aufbringen", „Auf dem Bett
@@ -811,6 +834,7 @@ def palette_entries(
             category=spec.category,
             doc=spec.doc,
             shortcut=spec.shortcut,
+            where=menu_path(spec, source),
         )
         for spec in specs
     )

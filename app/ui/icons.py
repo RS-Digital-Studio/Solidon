@@ -387,6 +387,8 @@ PATHS: Final[dict[str, str]] = {
     # Einpassen: vier Ecken, die sich um das Gezeichnete zusammenziehen. Die
     # Pfeile zeigen nach innen — ein Rahmen allein sähe aus wie ein Auswahl-
     # rechteck, und genau das tut dieser Knopf nicht.
+    # Eine Lupe: das Suchfeld der Werkzeugleiste, das die Befehlspalette öffnet.
+    "search": '<circle cx="10.5" cy="10.5" r="6" /><path d="M15 15l5.5 5.5" />',
     "fit": (
         '<path d="M4 8.5V4.5h4" /><path d="M20 8.5V4.5h-4" />'
         '<path d="M4 15.5v4h4" /><path d="M20 15.5v4h-4" />'

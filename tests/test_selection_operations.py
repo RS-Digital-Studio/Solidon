@@ -861,6 +861,109 @@ def test_the_draft_stands_on_the_body_and_at_a_face_but_not_at_a_hole(qt_app: QA
     assert not panel._fits_the_level("draft_faces")
 
 
+def test_the_groups_follow_the_menu_bar_in_every_language(qt_app: QApplication) -> None:
+    """RM-506: Die Karte ordnet ihre Gruppen wie die Menüleiste, nicht nach dem Titel.
+
+    Sortiert wurde nach ``str.casefold`` des übersetzten Titels: Auf Deutsch
+    stand „Ändern“ mit 32 Einträgen am Ende, und jede Sprache hatte ihre eigene
+    Folge. Jetzt gilt ``MENU_GROUPS`` — dieselbe Folge in allen sechs Sprachen —,
+    und eine Kategorie, die das Menü faltet, ist eine eigene Gruppe, so dass
+    keine Gruppe am Körper mehr als zwölf Einträge zeigt.
+    """
+    from app.core.registry import MENU_GROUPS, folded_categories
+    from app.i18n import set_language
+    from app.i18n.catalog import available_languages, install_language
+
+    load_operations()
+
+    def menu_order(panel: SelectionOperationsPanel) -> list[tuple[int, int]]:
+        order = []
+        for _section, _toggle, buttons in panel._groups.values():
+            name = str(buttons[0].property("operationName"))
+            category = REGISTRY.get(name).category
+            group = next(
+                index for index, (_t, members) in enumerate(MENU_GROUPS) if category in members
+            )
+            folded = int(category in folded_categories(category))
+            order.append((group, folded))
+        return order
+
+    orders = {}
+    try:
+        for language in available_languages():
+            install_language(language)
+            set_language(language)
+            panel = SelectionOperationsPanel(REGISTRY.all())
+            orders[language] = menu_order(panel)
+            assert orders[language] == sorted(orders[language]), (
+                f"{language}: Gruppen nicht in der Folge der Menüleiste"
+            )
+    finally:
+        set_language("de")
+    assert len({tuple(order) for order in orders.values()}) == 1, "jede Sprache gleich"
+
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.show()
+    panel.set_context(1, _availability(1))
+    QApplication.processEvents()
+    for title, (section, _toggle, buttons) in panel._groups.items():
+        shown = sum(1 for button in buttons if not button.isHidden())
+        if not section.isHidden():
+            assert shown <= OPEN_UP_TO, f"{title}: {shown} Einträge am Körper"
+
+
+def test_a_hole_offers_the_matching_parts(qt_app: QApplication) -> None:
+    """RM-506 (Robert, 05.10.2026): An einer Bohrung *Passende Bausteine …*.
+
+    Derselbe Knopf wie *Bausteine*, aber er öffnet den Katalog gefiltert auf
+    das, was dort ansetzt; an einer Kante steht er weiter nicht.
+    """
+    from app.i18n import tr
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.show()
+    asked: list[str] = []
+    opened: list[bool] = []
+    panel.matchingPartsRequested.connect(asked.append)
+    panel.catalogRequested.connect(lambda: opened.append(True))
+
+    panel.set_context(1, _availability(1), feature_kind="hole")
+    QApplication.processEvents()
+    assert panel.catalog_button.isVisible()
+    assert panel.catalog_button.text() == tr("Passende Bausteine …")
+    panel.catalog_button.click()
+    assert asked == ["hole"] and not opened
+
+    panel.set_context(1, _availability(1), feature_kind="face")
+    QApplication.processEvents()
+    assert panel.catalog_button.text() == tr("Bausteine")
+    panel.catalog_button.click()
+    assert opened == [True] and asked == ["hole"], "an der Fläche der ganze Katalog"
+
+
+def test_no_hit_offers_to_search_every_function(qt_app: QApplication) -> None:
+    """RM-506: Ohne Treffer führt ein Knopf in die Befehlspalette, mit demselben Wort.
+
+    Die Suche der Karte kennt nur, was zur Auswahl passt; wer „gewinde“ an
+    einem Körper sucht, fand nichts, obwohl es das gibt.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.show()
+    wanted: list[str] = []
+    panel.paletteRequested.connect(wanted.append)
+    panel.set_context(1, _availability(1))
+    panel.search.setText("wortdasnichtvorkommt")
+    QApplication.processEvents()
+    assert panel._everywhere.isVisible(), "kein Treffer: der Weg in alle Funktionen"
+    panel._everywhere.click()
+    assert wanted == ["wortdasnichtvorkommt"]
+    panel.search.setText("")
+    QApplication.processEvents()
+    assert not panel._everywhere.isVisible(), "mit Treffern steht er nicht"
+
+
 def test_the_list_stands_in_two_columns_where_every_title_fits(qt_app: QApplication) -> None:
     """RM-510: Flache Zeilen, und wo die Karte breit genug ist, zu zweit.
 
