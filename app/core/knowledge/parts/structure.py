@@ -47,8 +47,8 @@ CABLE_CLIP_OPENING_CORRECTED = PartChange(
     reason="Die automatische Verengung war als Materialübermaß gefüllt und auf den "
     "aufgeweiteten Sitz bezogen.",
     effect=_(
-        "Die Öffnung ist um die gewählte Verengung je Seite enger als das Kabel; das Spiel "
-        "folgt dem Zielmaterial. Eine vollständig geschlossene Öffnung wird abgewiesen."
+        "Die Öffnung ist um die gewählte Verengung je Seite enger als das Kabel, das Spiel folgt "
+        "dem Material."
     ),
 )
 
@@ -67,11 +67,8 @@ THIN_WALL_KEEPS_THE_RIB_PRINTABLE = PartChange(
         "die Rippe jetzt so dick wie die Wand selbst."
     ),
     effect=_(
-        "Nur bei einer Wandstärke unter 1,2 mm und nur, wenn die Dicke nicht von "
-        "Hand gesetzt ist: Statt zwei Dritteln der Wand steht dort jetzt die volle "
-        "Wandstärke. Aus 0,264 mm werden 0,4 mm, aus 0,528 mm werden 0,8 mm. Ab "
-        "1,2 mm Wand ändert sich kein Maß — dort war die Zwei-Drittel-Regel schon "
-        "immer die größere der beiden Zahlen."
+        "An Wänden unter 1,2 mm ist die Dicke jetzt die Wandstärke, bei 0,4 mm also 0,4 statt "
+        "0,264 mm."
     ),
 )
 
@@ -86,11 +83,8 @@ THIN_WALL_KEEPS_THE_GUSSET_PRINTABLE = PartChange(
         "die Rippe jetzt so dick wie die Wand selbst."
     ),
     effect=_(
-        "Nur bei einer Wandstärke unter 1,2 mm und nur, wenn die Dicke nicht von "
-        "Hand gesetzt ist: Statt zwei Dritteln der Wand steht dort jetzt die volle "
-        "Wandstärke. Aus 0,264 mm werden 0,4 mm, aus 0,528 mm werden 0,8 mm. Ab "
-        "1,2 mm Wand ändert sich kein Maß — dort war die Zwei-Drittel-Regel schon "
-        "immer die größere der beiden Zahlen."
+        "An Wänden unter 1,2 mm ist die Dicke jetzt die Wandstärke, bei 0,4 mm also 0,4 statt "
+        "0,264 mm."
     ),
 )
 
@@ -104,12 +98,7 @@ RIB_MEETS_THE_MINIMUM_WALL = PartChange(
         "bekam damit eine 0,80-mm-Rippe — unter dem Maß, das Version 5 selbst als "
         "Kriterium nennt."
     ),
-    effect=_(
-        "Nur zwischen 0,8 und 1,27 mm Wandstärke und nur, wenn die Dicke nicht von "
-        "Hand gesetzt ist: Aus 0,80 mm werden 0,84 mm. Darüber war die "
-        "Zwei-Drittel-Regel schon immer die größere der beiden Zahlen, darunter "
-        "ist die Rippe so dick wie die Wand."
-    ),
+    effect=_("Zwischen 0,8 und 1,27 mm Wand wird die Rippe jetzt 0,84 statt 0,80 mm dick."),
 )
 
 #: Zwei Anlässe, ein Eintrag: Ein Änderungsverlauf trägt je Stand **eine**
@@ -127,11 +116,8 @@ GUSSET_MEASURES_AND_NAMES_ITS_FACE = PartChange(
         "**Kante**: Die Unterseite läuft von y = 0 bis y = Schenkel (§24.1)."
     ),
     effect=_(
-        "Die Dicke ändert sich nur zwischen 0,8 und 1,27 mm Wandstärke und nur, wenn "
-        "sie nicht von Hand gesetzt ist: Aus 0,80 mm werden 0,84 mm. Wer einen "
-        "weiteren Baustein oder eine Operation an der Auflagefläche ausrichtet, "
-        "trifft jetzt ihre Mitte statt ihrer Vorderkante — das ist ein halber "
-        "Schenkel, bei der Vorgabe also 6 mm."
+        "Ausrichtungen an der Auflagefläche rücken um einen halben Schenkel, an dünner Wand wird "
+        "die Dicke 0,84 mm."
     ),
 )
 
@@ -149,9 +135,8 @@ PROFILE_TONGUE_MANUFACTURERS = PartChange(
     date="2026-10-03",
     reason="Zwei benannte Profilquerschnitte sind gegen Herstellerzeichnung und STEP geprüft.",
     effect=_(
-        "Die neuen Motedis-Profile berücksichtigen Stegdicke und schräge Kammerwände. "
-        "Ältere Profilangaben behalten ihre Maße; wählen Sie für eine neue Passung "
-        "das genaue Profil."
+        "Neue Motedis-Profile berücksichtigen Stegdicke und schräge Kammerwände, ältere "
+        "Profilangaben behalten ihre Maße."
     ),
 )
 
@@ -341,8 +326,8 @@ CABLE_RELIEF_HAS_SUPPORT = PartChange(
     date="2026-09-08",
     reason="Der Klemmkanal lag hinter der Wand in Luft und konnte keine Zugentlastung bilden.",
     effect=_(
-        "Bei aktiver Zugentlastung wächst hinter der Wand ein tragender Klemmblock; "
-        "der Klemmspalt bleibt enger als das Kabel. Ohne Zugentlastung bleibt die Bohrung gleich."
+        "Mit Zugentlastung wächst hinter der Wand ein tragender Klemmblock, ohne sie bleibt die "
+        "Bohrung gleich."
     ),
 )
 
@@ -593,9 +578,8 @@ CABLE_CLIP_FACET_WALL_FIXED = PartChange(
     date="2026-09-01",
     reason="Die polygonale Kreisannäherung unterschritt die zugesagte Bügelwand.",
     effect=_(
-        "Der Außendurchmesser wächst um den Zuschlag für das Vieleck, als das ein Kreis "
-        "gedruckt wird. Kabelsitz, Spiel und Öffnung bleiben unverändert; die kleinste "
-        "Wand hält ihr Nennmaß."
+        "Der Außendurchmesser wächst um den Zuschlag für das gedruckte Vieleck, damit die "
+        "dünnste Wand ihr Nennmaß hält."
     ),
 )
 

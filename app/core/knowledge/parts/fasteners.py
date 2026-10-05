@@ -53,8 +53,8 @@ THREAD_PROFILES_MATCH = PartChange(
     reason="Die innere Wendel hatte entgegengesetzte Flanken; die zugehörigen Druckgewinde "
     "überschnitten sich.",
     effect=_(
-        "Innen- und Außengang haben denselben Verlauf mit radialem Profilspiel. Auch die "
-        "automatische Toleranz folgt dem Zielmaterial."
+        "Innen- und Außengang laufen jetzt gleich, und das automatische Spiel folgt dem Material "
+        "des Teils."
     ),
 )
 
@@ -71,11 +71,7 @@ PLAY_FROM_PROFILE = PartChange(
     date="2026-08-16",
     reason="Das Spiel kommt aus dem kalibrierten Materialprofil, nie als Zahl "
     "im Baustein (Regel 7, §28.3).",
-    effect=_(
-        "Die Vorgabe ist null und heißt: Profilwert. Mutternfalle und "
-        "Gewinde fallen damit je nach Material enger oder weiter aus als mit den "
-        "alten Festwerten 0,2 und 0,15 mm; wer genau die will, trägt sie ein."
-    ),
+    effect=_("Das Spiel kommt jetzt aus dem Materialprofil statt aus festen 0,2 und 0,15 mm."),
 )
 
 
@@ -90,13 +86,7 @@ NUT_HEIGHT_FROM_ISO = PartChange(
         "ISO 4032 — und zwar genau in den drei Größen, in denen sich beide "
         "unterscheiden."
     ),
-    effect=_(
-        "Die Tasche wird bei M5, M6 und M8 tiefer: 4,70 statt 4,00 mm, 5,20 statt "
-        "5,00 und 6,80 statt 6,50. Wer eine M5-Mutternfalle gedruckt hat, hatte "
-        "eine Tasche 0,6 mm zu flach für die Mutter, die hineingehört — bei der "
-        "verbreitetsten Größe. M2 bis M4 ändern sich nicht, dort sind beide Normen "
-        "gleich."
-    ),
+    effect=_("Die Tasche wird bei M5, M6 und M8 tiefer, etwa bei M5 4,70 statt 4,00 mm."),
 )
 
 INSERT_LEAD_IS_ITS_OWN_SIZE = PartChange(
@@ -108,11 +98,8 @@ INSERT_LEAD_IS_ITS_OWN_SIZE = PartChange(
         "statt der halben Wandverdrängung."
     ),
     effect=_(
-        "Die Fase misst jetzt 0,5 mm bei jeder Größe, die Mündung also Bohrung "
-        "plus 1,0 mm. Vorher waren es 0,6 mm Mündungszuschlag, unabhängig von der "
-        "Größe — der Unterschied ist ein knapper halber Millimeter am Loch. Dazu "
-        "wächst die M2.5-Buchse von 5,0 auf 5,7 mm Länge: Der Hersteller nennt "
-        "sie RX-M2.5x5.7."
+        "Die Mündungsfase misst jetzt bei jeder Größe 0,5 mm, und die M2.5-Buchse wird 5,7 statt "
+        "5,0 mm lang."
     ),
 )
 
@@ -122,8 +109,8 @@ M25_INSTALLATION_HOLE = PartChange(
     date="2026-09-12",
     reason="Das Ruthex-Produktdatenblatt nennt für RX-M2,5x5,7 ein Einbauloch von 4,0 mm.",
     effect=_(
-        "Der M2.5-Sitz wächst von 3,6 auf 4,0 mm Durchmesser; seine Einführöffnung "
-        "wächst ebenfalls um 0,4 mm. Alte Projekte mit dieser Größe auf die Wandstärke prüfen."
+        "Der M2.5-Sitz wächst von 3,6 auf 4,0 mm, alte Projekte mit dieser Größe auf die "
+        "Wandstärke prüfen."
     ),
 )
 
@@ -138,11 +125,8 @@ HEAD_ROOM_CUTS_DOWNWARD = PartChange(
         "Zylinder nichts ab, und der versenkte Kopf stand vor."
     ),
     effect=_(
-        "Bei einer Kopftiefe über null wird jetzt Material abgetragen: eine "
-        "zylindrische Aussparung in Kopfbreite von der Mündung abwärts, und die "
-        "Senkung rückt um denselben Betrag tiefer. Wer die Kopftiefe bisher gesetzt "
-        "hat, bekam sie wirkungslos — der Kopf saß auf der Fläche statt darunter. Bei "
-        "einer Kopftiefe von null (der Vorgabe) ändert sich nichts."
+        "Eine Kopftiefe über null trägt jetzt eine zylindrische Aussparung ab, und die Senkung "
+        "rückt um denselben Betrag tiefer."
     ),
 )
 
@@ -155,9 +139,8 @@ SCREW_HEADS_USE_THEIR_OWN_RECESSES = PartChange(
         "der Unterlegscheiben standen zugleich ungenutzt in der Normteiltabelle."
     ),
     effect=_(
-        "Eine Kopftiefe ohne Senkkopf schneidet jetzt den Zylinderkopfdurchmesser. "
-        "Bei M4 sind das 7,0 statt 8,0 mm; Senkköpfe bleiben unverändert. Neu "
-        "ist die abschaltbare Tasche für eine ISO-7089-Unterlegscheibe."
+        "Ohne Senkkopf schneidet die Kopftiefe jetzt den Zylinderkopfdurchmesser, bei M4 also "
+        "7,0 statt 8,0 mm."
     ),
 )
 
@@ -167,10 +150,8 @@ SCREW_HOLE_ZONES = PartChange(
     reason="Die Senkung war als zylindrische Bohrung benannt, die Kopfaussparung gar nicht. "
     "Außerdem folgte das automatische Spiel nicht dem Zielmaterial.",
     effect=_(
-        "Das Merkmal der Senkung bezeichnet jetzt den echten 90-Grad-Kegel, das der "
-        "Kopftiefe die eingestellte zylindrische Aussparung. Beide treffen sich ohne "
-        "den bisherigen 0,01-mm-Ringsims. Das automatische Spiel der Scheibentasche "
-        "folgt dem Zielmaterial."
+        "Senkung und Kopfaussparung treffen sich ohne den bisherigen 0,01-mm-Ring, und das Spiel "
+        "der Scheibentasche folgt dem Material des Teils."
     ),
 )
 
@@ -584,11 +565,8 @@ NUT_TRAP_SINKS_ON_A_FACE = PartChange(
         "richtig behandelt, an einer Fläche nicht."
     ),
     effect=_(
-        "Über eine Fläche gesetzt wird die Tasche jetzt von der Fläche aus "
-        "ins Material gebaut, mit der Öffnung an der Fläche. Wer eine "
-        "Mutternfalle an eine Deckfläche gesetzt hat, bekam vorher eine "
-        "unveränderte Platte samt Hinweis „nichts abgetragen“; an einer Bohrung "
-        "ändert sich nichts, dort saß sie schon in der Mitte."
+        "An einer Fläche wird die Tasche jetzt ins Material gebaut statt darüber, an einer "
+        "Bohrung ändert sich nichts."
     ),
 )
 
@@ -715,13 +693,8 @@ THREAD_CUTS_INWARD = PartChange(
         "eigenen Parametertext, der es seit je richtig sagt."
     ),
     effect=_(
-        "Auf „Innengewinde“ wird das Werkzeug jetzt abgezogen. Wer es bisher in ein "
-        "Kernloch gesetzt hat, bekam einen Gewindebolzen hineingewachsen statt eines "
-        "Gewindes darin: an M6 über 10 mm Länge +190 mm³ statt -48 mm³. Und es liegt "
-        "jetzt unter seiner Mündung statt über ihr — nach oben gebaut hätte es auch "
-        "als Werkzeug nichts geschnitten, weil es neben dem Bauteil stand. Das "
-        "Außengewinde bleibt unverändert, es wird weiter angesetzt und wächst nach "
-        "oben."
+        "Auf „Innengewinde“ wird jetzt ein Gewinde unter der Mündung geschnitten statt ein "
+        "Bolzen aufgesetzt, das Außengewinde bleibt gleich."
     ),
 )
 
@@ -746,9 +719,8 @@ PRINTED_SCREW_PREPARES_COUNTERSINK = PartChange(
         "zylindrisch, deshalb stand der Kopf trotz aktivierter Wahl auf der Fläche."
     ),
     effect=_(
-        "Bei aktiviertem Senkkopf schneidet derselbe Schritt jetzt eine passende "
-        "90-Grad-Senkung in die gewählte Bohrung und setzt den Schraubenkopf bündig "
-        "hinein. Strg+Z nimmt beides gemeinsam zurück."
+        "Mit Senkkopf schneidet derselbe Schritt jetzt eine 90-Grad-Senkung in die Bohrung und "
+        "setzt den Kopf bündig hinein."
     ),
 )
 
@@ -761,10 +733,8 @@ PRINTED_SCREW_GEOMETRY_FIXED = PartChange(
         "Zusätzlich berührten Gewindegang und Kern sich nur auf derselben Zylinderfläche."
     ),
     effect=_(
-        "Die angegebene Gewindelänge beginnt jetzt unter der Senkkopfspitze. Eine "
-        "Senkkopfschraube wird dadurch um ihre Kopfhöhe länger; die zylindrische "
-        "Ausführung bleibt unverändert. Der Gang greift ein kleines Stück in den "
-        "Kern, damit beide sicher verbunden sind."
+        "Bei Senkkopf beginnt die Gewindelänge jetzt unter der Kopfspitze, die Schraube wird "
+        "also um die Kopfhöhe länger."
     ),
 )
 
@@ -776,8 +746,8 @@ PRINTED_THREAD_ROOT_OVERLAPS_CORE = PartChange(
         "die Vereinigung ließ dort koplanar überdeckte Dreiecke zurück."
     ),
     effect=_(
-        "Der Gang greift jetzt ein kleines Stück in den Kern, damit beide sicher "
-        "verbunden sind. Außenmaß, Steigung, Spiel und Gewindelänge bleiben gleich."
+        "Der Gang greift jetzt ein kleines Stück in den Kern, alle Maße des Gewindes bleiben "
+        "gleich."
     ),
 )
 
@@ -791,9 +761,7 @@ THREAD_OPENS_AT_BOTH_ENDS = PartChange(
         "beide um 2,3 mm³."
     ),
     effect=_(
-        "Der Gang läuft an beiden Stirnflächen voll aus, wie am exakten Körper. Mutter "
-        "und Gewindeloch sind unten offen; ein Gewindebolzen trägt den Gang bis an sein "
-        "unteres Ende. Durchmesser, Steigung, Spiel und Länge bleiben gleich."
+        "Der Gang läuft jetzt an beiden Enden voll aus, Mutter und Gewindeloch sind unten offen."
     ),
 )
 
@@ -981,9 +949,8 @@ SEPARATE_PARTS_KEEP_THEIR_PLAY = PartChange(
         "Ort und Stelle in einem Stück gedruckt verschweißten sie mit dem Träger (RM-276)."
     ),
     effect=_(
-        "Schraubenkopf und Mutter haben jetzt auch zum Sitz das Spiel aus dem "
-        "Materialprofil: Sechskantkopf und Mutter stehen um das Spiel über der Fläche, die "
-        "Senkung wird um das Spiel weiter. Gewinde, Länge und Kopf bleiben gleich."
+        "Kopf und Mutter stehen jetzt um das Spiel über ihrem Sitz, die Senkung wird um das "
+        "Spiel weiter."
     ),
 )
 

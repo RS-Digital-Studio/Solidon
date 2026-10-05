@@ -48,9 +48,8 @@ KEYHOLE_RETAINS_HEAD = PartChange(
     date="2026-09-06",
     reason="Der Kopfkanal war zur Mündung offen und konnte den Schraubenkopf nicht zurückhalten.",
     effect=_(
-        "Nur der Einstieg ist kopfbreit offen, über dem Haltekanal bleibt eine Lippe. Tiefe "
-        "und Einhängeweg werden auf eine mögliche Rückhaltung geprüft; das Spiel folgt dem "
-        "Zielmaterial."
+        "Über dem Haltekanal bleibt jetzt eine Lippe, die den Kopf hält, offen ist nur der "
+        "Einstieg."
     ),
 )
 
@@ -66,11 +65,8 @@ WALL_MOUNT_KEEPS_HOLE_WALLS = PartChange(
         "nicht als zusammenhängenden druckbaren Körper halten."
     ),
     effect=_(
-        "Die eingetragene Breite und Höhe bleiben Mindestmaße; die Rückplatte "
-        "wächst nur dann, wenn Schraubengröße oder Lochzahl mehr Rand und Steg brauchen. "
-        "Die Schraubenlöcher schneiden jetzt durch die Platte; zuvor lagen ihre "
-        "Werkzeuge vollständig daneben und trugen nichts ab. Die Lochmitten liegen "
-        "auf halber Plattenhöhe statt auf drei Vierteln."
+        "Die Schraubenlöcher gehen jetzt durch die Platte und liegen auf halber Höhe, die Platte "
+        "wächst bei Bedarf mit."
     ),
 )
 
@@ -86,12 +82,7 @@ SLOT_RUNS_DOWNWARD = PartChange(
         "immer in X; der Code verschob danach in Y und meinte, er habe gedreht."
     ),
     effect=_(
-        "Der Schlitz läuft jetzt in -Y statt in X — also dorthin, wohin die "
-        "Beschreibung seit jeher zeigt. Wer die Aufhängung bisher an einer Wand "
-        "benutzt hat, bekam einen waagerechten Schlitz: Die Schraube wanderte "
-        "seitlich, statt sich beim Absinken zu verklemmen. Die Maße ändern sich "
-        "nicht, nur ihre Richtung. Alte Projekte rechnen den Schlitz neu, und das ist "
-        "beabsichtigt."
+        "Der Schlitz läuft jetzt in -Y statt in X, an der Wand also nach unten statt waagerecht."
     ),
 )
 
@@ -104,11 +95,8 @@ LIP_GRIPS_THE_MAGNET = PartChange(
         "ein Volumen, das man vereinigt, kann nur weiten, nicht verengen."
     ),
     effect=_(
-        "Die Mündung ist jetzt ein Zehntel enger als der Magnet, statt genauso weit "
-        "wie die Tasche. An einem 6-mm-Magneten gemessen: 5,91 mm statt bisher 6,00, "
-        "bei kalibriertem Material sogar 6,35. Wer die Lippe bisher eingeschaltet "
-        "hatte, bekam keine — der Magnet fiel bei jedem Material heraus, sobald das "
-        "Teil kopfüber lag."
+        "Die Haltelippe macht die Mündung jetzt enger als den Magneten, bei 6 mm sind es 5,91 "
+        "statt 6,00 mm."
     ),
 )
 
@@ -123,10 +111,8 @@ LIP_GRIP_FROM_PROFILE = PartChange(
         "und ihr Übermaß nicht."
     ),
     effect=_(
-        "Neues Feld „Übermaß“ unter „Weitere Einstellungen“. Null heißt wie beim "
-        "Spiel: der Wert aus dem Materialprofil — ohne Profil bleibt es bei den "
-        "bisherigen 0,1 mm. Wer eine Zahl einträgt, bekommt genau sie; die Mündung "
-        "wird um diesen Betrag enger als der Magnet."
+        "Neu ist das Feld „Übermaß“, bei null kommt es aus dem Materialprofil, ohne Profil "
+        "bleibt es 0,1 mm."
     ),
 )
 
@@ -152,10 +138,7 @@ HEAD_PLAY_ADDS_INSTEAD_OF_REPLACING = PartChange(
         "ein, nicht erst bei einem kalibrierten."
     ),
     effect=_(
-        "Das runde Ende wird wieder weit genug, dass der Kopf hindurchfällt. Gemessen "
-        "an M4 mit PETG: 7,25 mm Öffnung bei 7,00 mm Kopf — gedruckt geht der Kopf da "
-        "nicht mehr durch. Jetzt sind es 7,25 mm über dem Durchgangsmaß, also 7,85. "
-        "Das gilt mit und ohne Kalibrierung."
+        "Das runde Ende wird wieder weit genug für den Kopf, bei M4 mit PETG 7,85 statt 7,25 mm."
     ),
 )
 
@@ -167,9 +150,8 @@ POCKET_REACHES_PAST_THE_FACE = PartChange(
         "angeklickten Fläche statt einen Überlappungswert darüber hinaus (§39)."
     ),
     effect=_(
-        "Kein Maß am fertigen Teil ändert sich — die Tasche ist gleich tief und "
-        "gleich weit. Der Schnitt trifft nur nicht mehr Fläche auf Fläche; genau "
-        "daran scheiterte vorher das Abziehen."
+        "Kein Maß ändert sich, die Tasche reicht nur ein Stück über die Fläche hinaus, damit das "
+        "Abziehen gelingt."
     ),
 )
 
@@ -1155,15 +1137,8 @@ HOOK_HOLDS_WHEN_LIFTED = PartChange(
         "Robert, 25.08.2026)."
     ),
     effect=_(
-        "Der Zapfen trägt jetzt oben eine federnde Zunge, die beim Einführen "
-        "einfedert und hinter der Platte ausrastet. Zwei Maße ändern sich damit: "
-        "Der Einhänger misst über alles eine Zungenstärke, einen Federweg und "
-        "eine Rastschulter mehr in der Höhe (bei SKÅDIS 15,47 statt 11,25 mm) "
-        "und reicht weiter hinter die Platte (9,94 statt 8,33 mm), weil der "
-        "Federarm zehnmal so lang sein muss wie dick. Eine bestellte Rückplatte "
-        "wächst entsprechend mit. Wer die alte Form braucht — etwa für ein Teil, "
-        "das oft abgenommen wird —, schaltet den Parameter „Rastzunge“ ab; dann "
-        "ist die Geometrie dieselbe wie vorher."
+        "Mit „Rastzunge“ wird der Einhänger bei SKÅDIS 15,47 statt 11,25 mm hoch, ausgeschaltet "
+        "bleibt er wie vorher."
     ),
 )
 
@@ -1175,11 +1150,8 @@ HOOK_FEATURE_ON_A_REAL_FACE = PartChange(
         "die den Querschnitt dort ausfüllt (gemessen zu 99 % innen)."
     ),
     effect=_(
-        "Es liegt jetzt auf der Rückseite der Nase — einer Fläche, die es "
-        "wirklich gibt — und meldet deren Langlochfläche statt eines Rechtecks. "
-        "Wer über dieses Merkmal eine Passung oder eine Operation angesetzt hat, "
-        "findet es an anderer Stelle wieder; die Zapfenmitte in X und Y ist "
-        "dieselbe geblieben."
+        "Das Merkmal liegt jetzt auf der Rückseite der Nase, daran angesetzte Passungen oder "
+        "Schritte finden es dort."
     ),
 )
 
@@ -1736,10 +1708,7 @@ FOOT_PROFILE_FIXED = PartChange(
         "Überlappende Körper hinterließen am Fasenansatz des Fußes eine "
         "Ringschulter und durchschnitten sich bei tiefen Taschen."
     ),
-    effect=_(
-        "Fuß und Tasche entstehen jetzt jeweils aus einem einzigen Drehprofil. "
-        "Höhe, Sitzmaß, Standfläche und Fase bleiben gleich; innere Flächen entfallen."
-    ),
+    effect=_("Fuß und Tasche entstehen jetzt aus je einem Drehprofil, alle Maße bleiben gleich."),
 )
 
 
