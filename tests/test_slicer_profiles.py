@@ -4345,7 +4345,7 @@ def test_a_distribution_package_keeps_its_profiles_under_share(
     ("app_id", "flavour", "inside", "command"),
     [
         ("com.prusa3d.PrusaSlicer", "prusa", "bin/prusa-slicer", "/app/bin/prusa-slicer"),
-        ("com.ultimaker.cura", "cura", "cura/CuraEngine", "/app/cura/CuraEngine"),
+        ("com.ultimaker.cura", "cura", "cura/CuraEngine", ""),
         ("com.orcaslicer.OrcaSlicer", "orca", "bin/orca-slicer", ""),
     ],
 )
@@ -4360,7 +4360,8 @@ def test_a_flatpak_slicer_computes_with_the_program_inside(
     """Gemessen am Runner mit den Flathub-Paketen: PrusaSlicers Startskript
     ruft das Programm im Hintergrund auf und kehrt sofort zurück, Curas Starter
     öffnet nur das Fenster — beide schrieben keine Druckdatei. Orca ruft im
-    Vordergrund auf und behält seinen Starter."""
+    Vordergrund auf und behält seinen Starter, Cura ebenso: Seine CuraEngine
+    startet nur mit Curas eigenem Lader aus ``runtime/compat``."""
     from app.core import discover
     from app.core.export import handover
 
