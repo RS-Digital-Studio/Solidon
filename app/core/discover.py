@@ -100,12 +100,18 @@ def parts_for(platform: str) -> tuple[str, ...]:
     „nicht gefunden" führte — die schlechteste aller Antworten, weil sie den
     Nutzer an seiner eigenen Handlung zweifeln lässt.
 
+    ``Contents/Resources`` ist die Rechenmaschine von Cura: Cura 5 sucht
+    CuraEngine auf dem Mac zuerst dort (``CuraEngineBackend.py``, Suchpfad
+    ``<MacOS>/../Resources``), in ``Contents/MacOS`` liegt nur das Fenster.
+    Ohne diesen Ort fand Solidon auf dem Mac ein Cura, mit dem es nicht slicen
+    konnte.
+
     Eine Funktion und keine Zeile mit ``if sys.platform``, damit die Zuordnung
     von **jeder** Maschine aus prüfbar ist: Ein Test, der die Mac-Pfade nur auf
     einem Mac sehen kann, prüft sie nirgends.
     """
     if platform == "darwin":
-        return (".", "bin", "Contents/MacOS")
+        return (".", "bin", "Contents/MacOS", "Contents/Resources")
     return (".", "bin")
 
 
@@ -507,8 +513,14 @@ def _one_per_installation(found: list[Path], names: tuple[str, ...]) -> tuple[Pa
     # Fenster und Kommandozeile — fallen weiter zusammen.
     def installation(entry: Path) -> tuple[Path, str]:
         # Eine AppImage-Datei ist selbst die Installation; zwei Versionen
-        # dürfen auch im selben Downloadordner getrennt angeboten werden.
-        location = entry if entry.suffix.lower() == ".appimage" else entry.parent
+        # dürfen auch im selben Downloadordner getrennt angeboten werden. Auf
+        # dem Mac ist es das Bündel: Cura legt das Fenster nach
+        # ``Contents/MacOS`` und CuraEngine nach ``Contents/Resources``.
+        bundle = next((parent for parent in entry.parents if parent.suffix == ".app"), None)
+        if bundle is not None:
+            location = bundle
+        else:
+            location = entry if entry.suffix.lower() == ".appimage" else entry.parent
         return location, program_mark(entry.name, names)
 
     best: dict[tuple[Path, str], Path] = {}
@@ -771,15 +783,24 @@ def _from_portal(path: PurePosixPath) -> bool:
 
 
 def host_program(program: Path) -> Path:
-    """Der Starter, für den eine Portalkopie steht; jeder andere Pfad bleibt.
+    """Das Programm, für das ein gewählter Pfad steht; jeder andere Pfad bleibt.
 
-    Wählt man in Solidons Flatpak im Dateidialog
-    ``/var/lib/flatpak/exports/bin/com.orcaslicer.OrcaSlicer``, kommt
-    ``/run/user/<uid>/doc/<nr>/com.orcaslicer.OrcaSlicer`` zurück: eine
-    Freigabe dieser einen Datei, kein Ort, an dem sich eine Installation
-    ablesen ließe. Der Name ist die Kennung, und unter ihr liegt der echte
-    Starter in den Exporten.
+    Zwei Dateidialoge geben etwas anderes zurück als das Programm:
+
+    * Wählt man in Solidons Flatpak
+      ``/var/lib/flatpak/exports/bin/com.orcaslicer.OrcaSlicer``, kommt
+      ``/run/user/<uid>/doc/<nr>/com.orcaslicer.OrcaSlicer`` zurück: eine
+      Freigabe dieser einen Datei, kein Ort, an dem sich eine Installation
+      ablesen ließe. Der Name ist die Kennung, und unter ihr liegt der echte
+      Starter in den Exporten.
+    * Auf dem Mac gibt der Dialog das Bündel ``OrcaSlicer.app`` zurück, einen
+      Ordner. Damit fand Solidon keinen Bestand und hielt den Slicer beim
+      Slicen für verschwunden. Hält das Bündel einen Slicer, gilt sein Programm
+      — bei Cura die Rechenmaschine (:func:`_bundle_program`). Ein anderes
+      Bündel bleibt, wie es ist: Ollama und ComfyUI startet ``open``.
     """
+    if program.suffix.lower() == ".app":
+        return _bundle_program(program)
     path = PurePosixPath(program.as_posix())
     if not _from_portal(path):
         return program
@@ -790,6 +811,24 @@ def host_program(program: Path) -> Path:
             _log.info("the portal copy %s stands for %s", program, launcher)
             return launcher
     return program
+
+
+def _bundle_program(bundle: Path) -> Path:
+    """Der Slicer in einem Mac-Bündel, in der Rangfolge von ``tools.SLICERS``."""
+    from app.core.tools import SLICERS
+
+    inside = [part for part in parts_for("darwin") if part.startswith("Contents/")]
+    found = [
+        candidate
+        for part in inside
+        for name in SLICERS
+        if (candidate := bundle / part / name).is_file()
+    ]
+    if not found:
+        return bundle
+    chosen = _one_per_installation(found, SLICERS)[0]
+    _log.info("the bundle %s stands for %s", bundle, chosen)
+    return chosen
 
 
 #: Wo ein AppImage üblicherweise liegt. Es gibt keinen vorgeschriebenen Ort —

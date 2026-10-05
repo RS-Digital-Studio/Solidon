@@ -1926,6 +1926,16 @@ waren es fünf, vier davon in `tests/test_agent_suite.py`.
   bleibt die gemessene: `surface_values` rechnet von der gefundenen Mündung
   zurück und nimmt die halbe Tiefe nur, wo sie zwischen Mündung und Fläche
   passt. Korpus: `plate_chamfered_mouths.stl`.
+- **Beim Binden wird die Öffnung gefüllt wie beim Setzen** (RM-520,
+  Kundenmeldung zu 0.5.2). Ein Baustein für Bohrungen sitzt über `seat_of` in
+  der Mündung, und gespeichert wird ihre Mitte. `bind_surface` bereitete die
+  Fläche beim Rechnen frisch vor, **mit** der Öffnung, und lehnte die Mitte als
+  „außerhalb der gewählten Fläche“ ab — jedes Gewinde, jede Einpressbuchse und
+  Mutternfalle, die so gesetzt wurde, hielt an. `_at_its_mouth` füllt die
+  Öffnung nur, wenn die Achse einer Bohrung durch den Punkt läuft
+  (`bore_through`, quer höchstens `MAX_FACET_SAG`); ein Punkt neben ihr bleibt
+  eine Absage, denn dorthin setzt kein Klick, und wer dort landet, weil sich die
+  Geometrie unter dem Bezug geändert hat, soll es erfahren.
 - **Die Fasenkorrektur gilt nur der eigenen Mündungsfläche** (G5,
   25.09.2026). `surface_values(..., mouth=...)` bekommt den Durchstoßpunkt
   der Achse durch die eigene Fläche — aus `seat_of`, wo am Merkmal begonnen

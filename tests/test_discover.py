@@ -1303,3 +1303,46 @@ def test_a_host_file_counts_from_inside_the_sandbox(
     monkeypatch.setattr(discover, "in_flatpak", lambda: True)
     assert discover.is_file_on_host(host_only)
     assert asked == [("-f", host_only)]
+
+
+# --- ein Slicer im Mac-Bündel -------------------------------------------------------
+
+
+def _bundle(applications: Path, name: str, *programs: str) -> Path:
+    """Ein Mac-Bündel mit Programmen unter ``Contents/<Ort>/<Name>``."""
+    bundle = applications / name
+    for program in programs:
+        path = bundle / "Contents" / program
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"")
+    return bundle
+
+
+def test_cura_on_a_mac_brings_its_engine_from_the_resources(tmp_path: Path) -> None:
+    """Cura 5 sucht CuraEngine auf dem Mac zuerst in ``Contents/Resources``
+    (``CuraEngineBackend.py``); in ``Contents/MacOS`` liegt nur das Fenster.
+    Gefunden wurde nur das Fenster, und mit dem lässt sich nicht slicen."""
+    from app.core.tools import SLICERS
+
+    assert "Contents/Resources" in discover.parts_for("darwin")
+    cura = _bundle(tmp_path, "UltiMaker Cura.app", "MacOS/UltiMaker-Cura", "Resources/CuraEngine")
+    window = cura / "Contents" / "MacOS" / "UltiMaker-Cura"
+    engine = cura / "Contents" / "Resources" / "CuraEngine"
+
+    kept = discover._one_per_installation([window, engine], SLICERS)
+
+    assert kept == (engine,), (
+        "ein Bündel ist eine Installation, und die Rechenmaschine vertritt sie"
+    )
+
+
+def test_a_chosen_mac_bundle_stands_for_its_slicer(tmp_path: Path) -> None:
+    """Der Dateidialog des Mac gibt ``OrcaSlicer.app`` zurück, einen Ordner.
+    Ein Bündel ohne Slicer bleibt — Ollama und ComfyUI startet ``open``."""
+    orca = _bundle(tmp_path, "OrcaSlicer.app", "MacOS/OrcaSlicer")
+    cura = _bundle(tmp_path, "UltiMaker Cura.app", "MacOS/UltiMaker-Cura", "Resources/CuraEngine")
+    ollama = _bundle(tmp_path, "Ollama.app", "MacOS/Ollama")
+
+    assert discover.host_program(orca) == orca / "Contents" / "MacOS" / "OrcaSlicer"
+    assert discover.host_program(cura) == cura / "Contents" / "Resources" / "CuraEngine"
+    assert discover.host_program(ollama) == ollama

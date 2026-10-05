@@ -149,7 +149,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen](#rm-038) | Kundenrückmeldungen | mailto-Weg gebaut, Rückfall ohne Mailprogramm sagt, was jetzt geht, lange Berichte werden gekürzt (`29dcefa4`, `736d4a46`); offen der Portalweg im ausgelieferten Flatpak |
 | [RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen](#rm-040) | Kundenrückmeldungen | Aktuellen Kundenbericht mit Traceback und betroffener Datei reproduzieren |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Start, Fokus und IME am aktuellen Flatpak bestätigen |
-| [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Modell zwischen installiertem Solidon- und Slicer-Flatpak übergeben |
+| [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Code und Manifest fertig (`ce4e66ffb`, `91b42fc13`); Sonde für Linux und beide Macs auf `diagnose/slicer-erkennung`, wartet auf Actions-Minuten |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -4879,13 +4879,20 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-064"></a>
 
-- [ ] **RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen.** Erkennung, Hostpfade und
-  Austauschordner sind repariert. Abnahme auf Linux: Modell aus dem ausgelieferten Solidon-Flatpak
-  an ein installiertes Slicer-Flatpak übergeben, dort öffnen und den erreichbaren Austauschpfad
-  dokumentieren.
+- [~] **RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen.** Erkennung, Hostpfade und
+  Austauschordner sind repariert. Seit `ce4e66ffb` liest Solidon auch Herstellerprofile und eigene
+  Drucker eines Slicer-Flatpaks (`/app/share/<Programm>/profiles`, `~/.var/app/<Kennung>/config`),
+  das Manifest gibt beides lesend frei, und eine Portalkopie aus dem Dateidialog wird zum Starter
+  (Kundenmeldung 05.10.2026: Ubuntu 24.04, Orca 2.5 als Flatpak, keine Drucker, nur ein alter aus
+  `~/.config`). `91b42fc13` ergänzt Cura im Mac-Bündel, von Hand gewählte `.app`-Bündel und die
+  Ablage von Creality Print 7. Abnahme: auf Linux Solidon-Flatpak gegen Orca-, Prusa-, Bambu- und
+  Cura-Flatpak (Drucker, eigener Drucker, Slicen, Öffnen) und auf beiden Mac-Runnern gegen die
+  Homebrew-Casks aller Slicer. Die Sonde dafür liegt auf dem Zweig `diagnose/slicer-erkennung`
+  (`probe_slicers.py`, Workflow `slicer-probe.yml`, vorher/nachher je Stufe); sie lief am
+  05.10.2026 nicht an, weil das private Repository keine Actions-Minuten hat. Vor dem Lauf
+  `main` in den Zweig mergen, nach dem Lauf den Zweig löschen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
-  Registerabgleich 02.10.: Statuszeichen wäre nach der Legende `[~]`.
 
 <a id="rm-072"></a>
 

@@ -251,6 +251,52 @@ def test_reopening_a_drawing_changes_one_step_and_keeps_undo_and_saved_state(
     empty_window.finish_sketch(keep=False)
 
 
+@pytest.mark.parametrize("gone", ["undo", "delete"])
+def test_a_step_dialog_closes_when_its_step_leaves_the_history(
+    empty_window: MainWindow, monkeypatch: pytest.MonkeyPatch, gone: str
+) -> None:
+    """*Diesen Schritt ändern* offen, der Schritt verschwindet: Der Dialog geht zu und sagt es.
+
+    Kundenmeldung zu 0.5.2: Dreimal „Diese Operation gibt es im Verlauf
+    nicht“ als Absturz aus der Vorschau des Dialogs. Strg+Z oder *Schritt
+    löschen* nahmen den Schritt weg, der Dialog blieb stehen, und jede
+    Szenenänderung schlug ihn im Verlauf nach. Eine Ausnahme in einem Slot
+    sieht nur ``sys.excepthook``.
+    """
+    import sys
+
+    from shiboken6 import isValid
+
+    errors: list[BaseException] = []
+    monkeypatch.setattr(sys, "excepthook", lambda _kind, value, _trace: errors.append(value))
+    session = empty_window.session
+    session.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 30.0, "depth": 30.0, "height": 10.0})],
+    )
+    assert session.wait_for_idle()
+    session.apply("Zylinder", [OperationDraft(op="create_cylinder")])
+    assert session.wait_for_idle()
+    step = session.history.operations[-1].id
+    empty_window.edit_operation(step)
+    dialog = empty_window._op_dialog
+    assert dialog is not None and dialog.isVisible()
+
+    if gone == "undo":
+        empty_window.action_undo()
+    else:
+        session.remove_operations([step])
+    assert session.wait_for_idle()
+    for _ in range(5):
+        QApplication.processEvents()
+
+    assert not errors, errors
+    assert not isValid(dialog) or not dialog.isVisible(), (
+        "ein Dialog ohne Schritt bleibt nicht stehen"
+    )
+    assert "nicht mehr im Verlauf" in empty_window._announcement
+
+
 def test_a_discarded_drawing_cannot_enter_another_project(empty_window: MainWindow) -> None:
     """Gleiche Schrittanzahl macht ein anderes Projekt nicht zum alten."""
     session = empty_window.session

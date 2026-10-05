@@ -184,6 +184,9 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   Träger zählt seine eigene Fläche; eine Wand hinter dem Rand deckt ihn nicht.
   Ein Lagevorschlag kommt nur nach Prüfung des vollständigen Werkzeugumrisses
   gegen das Flächenpolygon samt Aussparungen (`_rim_placement_suggestion`).
+  Die Bohrung, in der ein Baustein sitzt, ermittelt `_seated_bore` einmal je
+  Kern; Randprüfung (`bore=`, `_inside_the_bore`) und `_in_a_wider_bore` lesen
+  sie (Regel in `bausteine.md`).
 - **Namensräume**: Trägt ein eigener Baustein `nx`, `ny` oder `nz` als Maß,
   verschiebt `build_params` alle drei nach `surface_` (`normal_fields`);
   Ortsfelder kollidierender Rezeptmaße bekommen `placement_`

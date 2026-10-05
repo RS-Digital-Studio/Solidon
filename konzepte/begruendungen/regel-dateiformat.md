@@ -225,7 +225,48 @@ Warum die Blöcke beim Parsen so klein sind: So lange, wie ein Stück den GIL
 hält, wartet jeder Griff des Hauptthreads. `findall(".//…")` über das Modell
 lief in C durch alle Ecken und Dreiecke.
 
+## Ein Druckerprofil wird gelesen, wie der Slicer es liest
+
+Am 05.10.2026 bot Solidon 66 Maschinenprofile der installierten Slicer nicht
+an, darunter Anycubic Kobra 3 und Kobra 3 Max, Qidi Q1 Pro, Q2, X-Plus 4 und
+X-Max 4, AnkerMake M5, Vertex K8400 Dual, Leapfrog Creatr HS und AnkerMake
+M5C (Sonde `.claude/.state/anycubic-2026-10-05/fehlende_drucker.py`). Die
+Ursachen lagen alle im Lesen, nicht in den Profilen:
+
+- Die Orca-Familie bildet aus `bed_exclude_area` je vier Punkte ein
+  Hüllrechteck (`PartPlate::calc_bounding_boxes`) und prüft Teile dagegen
+  (`check_outside`) — in OrcaSlicer, Bambu Studio und Anycubic Slicer Next
+  gleich. Als ein Vieleck gelesen schnitt sich etwa Anycubics Rand aus vier
+  Streifen selbst. Orcas Vorgabe `["0x0"]` hielt zudem die Turmlage an.
+  Einträge wie `["0x0,11x0,11x16,0x16"]` sind vier Punkte, weil
+  `ConfigBase::load_from_json` die Einträge mit Komma aneinanderhängt.
+- PrusaSlicer hat die Option nicht; QIDIs und Snapmakers Bündel tragen sie
+  trotzdem. `ConfigOptionPoints::deserialize` liest jede Koordinate aus einem
+  `istringstream`, daher ist der Tippfehler `235-0` im AnkerMake-Profil für
+  PrusaSlicer 235 mal 0.
+- Cura nimmt von jeder Sperrfläche `getMinkowskiHull`, also die konvexe
+  Hülle (Vertex führt sein Viereck über Kreuz), und fragt nur `elliptic`
+  (Leapfrog schreibt `Rectangular`). AnkerMakes Formel `rectangular` endet in
+  `SettingFunction.__call__` als `NameError` mit 0; UltiMaker Method rechnet
+  seine Sperrflächen aus den benutzten Düsen und bleibt deshalb außen vor.
+
+Danach fehlten nur noch Profile, denen ein Maschinenschlüssel ganz fehlt
+(PrusaSlicer: CR-20, i3 Mega; Orca: M3D Enabler) — dort setzt der Slicer seine
+eingebaute Vorgabe, Solidon bisher nicht —, OrcaSlicers Kobra 3, dessen erstes
+Rechteck das ganze Bett sperrt, und die drei Method.
+
 ## Was welcher Slicer bekommt
+
+Aus der Regel verschoben (05.10.2026): Die Schrägnaht braucht ihre Länge,
+weil Elegoos Basisprozess `seam_slope_min_length = 0` führt und ElegooSlicer
+mit der Art allein keine Rampe setzt. Elegoo, Orca, Creality und Anycubic
+kennen `override_filament_scarf_seam_setting` nicht und übergehen ihn.
+PrusaSlicer übergeht die Beilage ohne `slic3rpe:Version3mf` am Modell. Eine
+freistehende Stützsperre setzt Cura aufs Bett, deshalb ist sie dort eine
+Komponente neben ihrem Körper. Curas 3MF-Leser zieht die halbe Bettgröße der
+aktiven Maschine ab und ordnet beim Laden nicht an, deshalb liegt die Datei
+mittig auf deren Bett. Die Lesart der Druckerprofile ist belegt am Quelltext
+der Slicer, nicht an der Form der Datei.
 
 Zur Stützdichte (RM-475): PrusaSlicer und die Orca-Familie rechnen
 `support_density = Linienabstand / (Lücke + Linienabstand)`

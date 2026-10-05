@@ -237,6 +237,32 @@ def test_native_bed_polygons_keep_their_actual_vertices() -> None:
     assert result.excluded_areas == (((10, 10), (20, 10), (20, 20), (10, 20)),)
 
 
+@pytest.mark.parametrize(
+    ("value", "boxes"),
+    [
+        # Bambus Grundprofil der X1: zwei Rechtecke vorn links und am linken Rand.
+        ("0x0,28x0,28x28,0x28,0x28,8x28,8x256,0x256", [(0, 0, 28, 28), (0, 28, 8, 256)]),
+        # Qidi Q1 Pro: der neunte Punkt bleibt ohne Rechteck.
+        ("25x245,25x240,115x240,115x245,208x245", [(25, 240, 115, 245)]),
+        # Anycubic Kobra 3 Max: ein Rechteck ohne Fläche sperrt nichts.
+        ("0x0,3x0,3x420,0x420,0x0,423x0,423x0,423x0", [(0, 0, 3, 420)]),
+        # Orcas Vorgabe für „keine Sperrzone“.
+        ("0x0", []),
+    ],
+)
+def test_orca_exclusions_in_the_print_file_are_rectangles_of_four_points(
+    value: str, boxes: list[tuple[float, float, float, float]]
+) -> None:
+    """Die Orca-Familie schreibt ``bed_exclude_area`` als Punktliste, in der je
+    vier Punkte ein Hüllrechteck sind (``PartPlate::calc_bounding_boxes``); ein
+    Rest unter vier Punkten zählt nicht. Die Gegenprobe liest sie genauso."""
+    result = gcode.analyze(f"; bed_exclude_area = {value}\n")
+    assert result.excluded_areas == tuple(
+        ((left, front), (right, front), (right, back), (left, back))
+        for left, front, right, back in boxes
+    )
+
+
 def test_stationary_extrusion_with_repeated_coordinates_is_not_a_print() -> None:
     result = gcode.analyze("M83\nG0 X10 Y10 Z0.2\nG1 X10 Y10 E5\n")
     assert not result.extrudes

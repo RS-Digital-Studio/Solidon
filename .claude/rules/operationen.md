@@ -453,10 +453,11 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
   nur Punkt und Normale; Mittelpunkt-Offsets von der Bohrungsmitte entlang U/V.
 - **Ohne Tiefe und Achse keine Mitte** — die Mündung wandert nie als Mitte
   weiter (Regel 21); das Vorzeichen kommt aus der gezielten Fläche.
-- **Wo etwas sitzt, wird nicht neu gezielt:** `seat_of()` sucht die Ebene der
-  Mündung, ohne eigene Mitte und Aussparungskanten als Bezug, eine gefaste
-  Mündung bis `mouth_reach` dahinter; die Fasenkorrektur gilt nur der eigenen
-  Mündungsfläche (`mouth_on`), gemessen an der Mündung, nicht am Ziel.
+- **Wo etwas sitzt, wird nicht neu gezielt:** `seat_of()` sucht die
+  Mündungsebene ohne eigene Mitte und Aussparung als Bezug, gefast bis
+  `mouth_reach` dahinter, füllt die Öffnung, beim Binden auch
+  (`_at_its_mouth`); Fasenkorrektur nur an der eigenen Mündungsfläche
+  (`mouth_on`), an der Mündung gemessen.
 - **Sichtstrahlen prüft das Originalnetz** (`original_surface_hit()`); Kappen
   und die positive Seite einer Schnittebene sind kein Ziel. **Vorschau und
   Operation teilen das Werkzeug** (`prepare_tool()`, `PlacementTool`: Winkel,

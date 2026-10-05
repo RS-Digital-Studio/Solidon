@@ -8,7 +8,7 @@ Bettmitte, Z ab Bett. Nomineller Bauraum, fester Druckbereich und der separat
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -78,6 +78,33 @@ def printable_area(printer: PrinterProfile, *, margin: float = 0.0) -> BaseGeome
     for contour in printer.bed_exclusions:
         area = area.difference(_contour(contour))
     return area.buffer(-max(0.0, margin), join_style="mitre") if margin > 0.0 else area
+
+
+def exclusion_boxes(
+    points: Sequence[tuple[float, float]],
+) -> tuple[tuple[tuple[float, float], ...], ...]:
+    """Die Sperrflächen, die eine Punktliste ``bed_exclude_area`` der Orca-Familie meint.
+
+    Je vier Punkte sind ein Rechteck, und zwar ihr Hüllrechteck; ein Rest unter
+    vier Punkten zählt nicht, ein Rechteck ohne Fläche sperrt nichts. So liest
+    der Slicer die Liste (``PartPlate::calc_bounding_boxes``) und prüft gegen
+    sie (``PartPlate::check_outside``) — in OrcaSlicer, Bambu Studio und ihren
+    Abkömmlingen gleich. Als ein Vieleck gelesen schnitt sich etwa der Rand des
+    Anycubic Kobra 3 (vier Streifen, 16 Punkte) selbst, und Solidon bot den
+    Drucker nicht an.
+
+    Die Ecken kommen gegen den Uhrzeigersinn ab vorn links, in den Koordinaten
+    der Liste.
+    """
+    boxes: list[tuple[tuple[float, float], ...]] = []
+    for start in range(0, len(points) - 3, 4):
+        group = points[start : start + 4]
+        left, right = min(x for x, _y in group), max(x for x, _y in group)
+        front, back = min(y for _x, y in group), max(y for _x, y in group)
+        if right - left <= EPS_GEOM or back - front <= EPS_GEOM:
+            continue
+        boxes.append(((left, front), (right, front), (right, back), (left, back)))
+    return tuple(boxes)
 
 
 def machine_shift(printer: PrinterProfile) -> tuple[float, float]:

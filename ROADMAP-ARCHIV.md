@@ -33,6 +33,7 @@ entfernt hat.
 |---|---|
 | 2026-10-05 | [RM-513: Ein Operationsdialog zeigt vorn höchstens vier Felder und einen Satz (05.10.2026)](#rm-513-ein-operationsdialog-zeigt-vorn-höchstens-vier-felder-und-einen-satz-05102026) |
 | 2026-10-05 | [RM-518: Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante (05.10.2026)](#rm-518-alle-dialoge-haben-eine-form-flache-abschnitte-ein-rand-eine-beschriftungskante-05102026) |
+| 2026-10-05 | [RM-520: Ein Gewinde in einer vorhandenen Bohrung — Kundenmeldung zu 0.5.2 (05.10.2026)](#rm-520-ein-gewinde-in-einer-vorhandenen-bohrung--kundenmeldung-zu-052-05102026) |
 | 2026-10-05 | [RM-506: Funktionen findet man über eine sichtbare Suche und eine Karte, die der Menüleiste folgt (05.10.2026)](#rm-506-funktionen-findet-man-über-eine-sichtbare-suche-und-eine-karte-die-der-menüleiste-folgt-05102026) |
 | 2026-10-05 | [RM-514: Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar (05.10.2026)](#rm-514-der-druckdialog-zeigt-vorn-das-wichtigste-und-jeder-grund-ist-lesbar-05102026) |
 | 2026-10-05 | [RM-515: Startbildschirm und Erste Schritte erzählen nicht mehr (05.10.2026)](#rm-515-startbildschirm-und-erste-schritte-erzählen-nicht-mehr-05102026) |
@@ -41969,6 +41970,51 @@ Hauptknopf heißt „Einsetzen“.
 Offen für den Release: Fenstertests, Kürzung dreizeiliger Kacheltitel in FR/PT;
 `catalog.png` und `own-part.png` neu. Der Filter wird an der Bohrung mit RM-506 angebunden.
 Changelog: zum nächsten Release.
+
+## RM-520: Ein Gewinde in einer vorhandenen Bohrung — Kundenmeldung zu 0.5.2 (05.10.2026)
+
+<a id="rm-520-ein-gewinde-in-einer-vorhandenen-bohrung--kundenmeldung-zu-052-05102026"></a>
+<a id="rm-520"></a>
+
+**RM-520 — Ein Baustein, den die Platzierung in die gewählte Bohrung setzt, hält beim Rechnen an.**
+  Kundenmeldung zu 0.5.2 (macOS): Bohrung angeklickt, *Druckbares Gewinde* aus dem Katalog,
+  und jeder Versuch endete mit „Dieser Punkt liegt außerhalb der gewählten Fläche“ — an einer
+  STEP-Bohrung, an einem *Schraubenloch mit Senkung*, an einem Netz; 20 solche Halte im
+  Protokoll. Dazu viermal `IndexError` im Handbuchfenster und dreimal „Diese Operation gibt
+  es im Verlauf nicht“ aus einem offenen Schrittdialog.
+
+**Ursache:** Seit 0.5.2 speichert die Platzierung einen Flächenbezug mit Kantenabständen
+(`27c7a29e9`, im Tag v0.5.2). Ein Baustein für Bohrungen sitzt über `placement.seat_of` in
+der Mündung, deren Fläche die eigene Öffnung füllt; gespeichert wird die Bohrungsmitte.
+`bind_surface` bereitete die Fläche beim Rechnen mit Öffnung vor, `at_point` lehnte die
+Mitte ab. Offscreen startet die Platzierung nicht (kein Renderer); der Fenstertest des Sitzes
+prüfte nur den Hinweistext. Das Handbuchfenster setzte die neue Seitenliste vor dem Leeren
+der alten Zeilen; der Schrittdialog schlug einen Schritt nach, den Strg+Z oder *Schritt
+löschen* schon genommen hatten.
+
+**Fix:** `placement.bore_through`, `_at_its_mouth`: Liegt der gespeicherte Punkt auf der
+Achse einer Bohrung, wird ihre Öffnung gefüllt wie beim Setzen; neben der Achse bleibt die
+Absage. Am Netz meldete jeder Baustein in einer Durchgangsbohrung zusätzlich „reicht über den
+Rand der Fläche“ — die Randprüfung lässt die Öffnung der Bohrung aus (`ops._seated_bore`,
+`_inside_the_bore`). Erreicht ein Baustein die Wand nicht (Gewinde M6 im Schraubenloch M6,
+Ø 6,6), meldet er `parts.bore_too_wide` mit dem Satz über passende Gewinde und *Größe
+ändern*; vorher kam im Sackloch nichts (52 mm³ unter dem Lochboden abgetragen), im Durchgang
+„liegt neben dem Körper“. `ManualWindow._fill` leert zuerst; ein Schrittdialog ohne Schritt
+schließt sich mit Ansage. Handbuch: Anleitung *Ein Gewinde in eine Bohrung* nennt den Satz
+über passende Gewinde und die zu weite Bohrung, *Die Bausteine* die Bohrung als
+Ansatzstelle, das Druckbare Gewinde mit Kernloch-Regel und das Gegengewinde, *Merkmale*
+*Merkmal ändern* und *entfernen* am Gewinde und den Knopf *Bausteine*, *Normteile* den Zweck
+des Kernlochs; fünf Kataloge nachgezogen.
+
+**Nachweis:** `test_a_part_seated_in_the_chosen_bore_is_built_there` (vier Träger, fünf
+Bausteine; ohne Fix rot mit dem Kundensatz), `test_a_saved_point_in_a_bore_but_off_its_axis_stays_refused`,
+`test_a_thread_in_a_wider_bore_names_the_bore_not_the_body`,
+`test_a_search_that_runs_out_of_hits_reads_no_page_of_the_old_list`,
+`test_a_step_dialog_closes_when_its_step_leaves_the_history` (Fenster, beim Release); je
+Zusicherung eine Gegenprobe. Umweg für 0.5.2 ohne Fix gemessen: Ein Innengewinde auf einer
+freien Stelle der Fläche schneidet sein Loch selbst (261 mm³ an Netz und exaktem Körper).
+Changelog: zum nächsten Release (Gewinde und Einpressbuchse in einer Bohrung, Satz bei zu
+weiter Bohrung, Handbuchsuche, Schrittdialog).
 
 ## RM-506: Funktionen findet man über eine sichtbare Suche und eine Karte, die der Menüleiste folgt (05.10.2026)
 

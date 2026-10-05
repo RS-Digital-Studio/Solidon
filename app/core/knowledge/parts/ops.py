@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, Final, cast, overload
 
 from app.core.errors import (
     CANCEL,
+    CHANGE_SIZE,
     CORRECT_INPUT,
     SHOW_LOCATION,
     Action,
@@ -69,7 +70,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM, MAX_FACET_SAG, dot3
+from app.core.units import DEGREE_UNIT, EPS_GEOM, MAX_FACET_SAG, dot3, format_length
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -484,8 +485,10 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         # lösbares Teil urteilt selbst, ob sein Träger zerfallen ist
         # (``_host_split``), und ein schräg gesetzter abtragender Baustein
         # öffnet bis über seine Fläche (``_opened_to_the_face``): Ein Ergebnis
-        # von davor trüge weder den Satz noch die freie Öffnung.
-        cache_version=f"{_result_version(spec)}:targets:6",
+        # von davor trüge weder den Satz noch die freie Öffnung. targets:7 —
+        # in einer Bohrung, die schon weiter ist, sagt er das statt „neben
+        # dem Körper“ (``parts.bore_too_wide``).
+        cache_version=f"{_result_version(spec)}:targets:7",
         params=params,
         consumes=1,
         produces=1,
@@ -739,6 +742,84 @@ def _cuts_no_layer(
         values={"part": spec.name, "removed_mm3": round(max(removed, 0.0), 3)},
         # Regel 17: Position und Richtung stehen im Schritt.
         suggestions=(CORRECT_INPUT,),
+    )
+
+
+def _seated_bore(source: SceneObject, spec: PartSpec, mouth: Vec3, outward: Vec3) -> Feature | None:
+    """Die Bohrung des Trägers, in der ein Baustein für Bohrungen sitzt — sonst ``None``.
+
+    Sitzen heißt: Ihre Achse läuft durch die Mündung des Bausteins, den Ort
+    nach der gespeicherten Platzierung (:func:`_mouth_frame`), nicht den
+    Merkmalsanker, der bei freier Lage der Ursprung ist
+    (:func:`app.core.scene.placement.bore_through`). Gefragt wird nur bei
+    Bausteinen, die in Bohrungen gehören; die übrigen schneiden ihre Öffnung
+    selbst. Die Randprüfung lässt die Öffnung dieser Bohrung aus, und
+    :func:`_in_a_wider_bore` misst an ihr.
+    """
+    from app.core.scene.placement import bore_through
+
+    if not spec.at_hole:
+        return None
+    bore = bore_through(mouth, outward, source.features)
+    if bore is None or not isinstance(bore.params.get("diameter"), int | float):
+        return None
+    return bore
+
+
+def _inside_the_bore(points: Any, bore: Feature) -> Any:
+    """Welche Punkte innerhalb des Radius einer Bohrung um ihre Achse liegen.
+
+    Auf :data:`~app.core.units.MAX_FACET_SAG` großzügig: Die Wand einer
+    Netzbohrung ist ein Vieleck, ihr gemessener Durchmesser eingepasst.
+    """
+    import numpy as np
+
+    axis = np.asarray(bore.params["axis"], dtype=np.float64)
+    axis = axis / float(np.sqrt(np.sum(axis * axis)))
+    offset = np.asarray(points, dtype=np.float64) - np.asarray(bore.params["centre"])
+    along = np.sum(offset * axis, axis=1)
+    across = offset - along[:, None] * axis
+    radius = float(bore.params["diameter"]) / 2.0 + MAX_FACET_SAG
+    return np.sum(across * across, axis=1) <= radius * radius
+
+
+def _in_a_wider_bore(spec: PartSpec, bore: Feature, built: Mesh) -> Finding | None:
+    """Ein Baustein für Bohrungen sitzt in einer, deren Wand er nicht erreicht.
+
+    **Der Fall der Kundenmeldung zu 0.5.2**: *Schraubenloch mit Senkung* M6
+    bohrt Ø 6,6, ein *Druckbares Gewinde* M6 darin reicht nur bis Ø 6 plus
+    Spiel. Gemessen am exakten Quader 34,13 x 40,74 x 14,15: Das Loch ist ein
+    Sackloch von 10 mm, das Gewinde 12 mm lang, und abgetragen wurden 52 mm³
+    — die zwei Millimeter unter dem Lochboden, an der Wand nichts. Kein
+    Befund kam; in einer durchgehenden Bohrung kam „das Werkzeug liegt neben
+    dem Körper“, und auch das stimmte nicht. Gefragt wird deshalb nicht, ob
+    etwas abgetragen wurde, sondern ob der Baustein die Wand erreicht: sein
+    größter Abstand von der eigenen Achse gegen den Radius der Bohrung, in
+    der er sitzt (:func:`_seated_bore`). Ein Baustein entsteht um seine Achse
+    Z im Ursprung, also ist das der größte Abstand seiner Ecken von ihr, vor
+    dem Setzen gemessen. Der Satz nennt die Bohrung und darunter, was in sie
+    passt (``PartSpec.at_hole_advice``, derselbe Satz wie über dem Dialog).
+    """
+    import numpy as np
+
+    diameter = float(bore.params["diameter"])
+    corners = np.asarray(as_mesh_data(built).raw.vertices, dtype=np.float64)
+    reach = float(np.max(corners[:, 0] * corners[:, 0] + corners[:, 1] * corners[:, 1]))
+    radius = diameter / 2.0
+    if reach > radius * radius:
+        return None
+    advice = spec.at_hole_advice(diameter) if spec.at_hole_advice is not None else None
+    wider = _(
+        "Die Bohrung ist mit {diameter} weiter als dieser Baustein, an ihrer Wand trägt er "
+        "nichts ab.",
+        diameter=format_length(diameter),
+    )
+    return Finding(
+        code="parts.bore_too_wide",
+        severity="warning",
+        message=wider if advice is None else _("{wider} {advice}", wider=wider, advice=advice),
+        values={"part": spec.name, "field": "size"},
+        suggestions=(CHANGE_SIZE,),
     )
 
 
@@ -1037,14 +1118,17 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     original_body = body
     lip = None
     rim = None
+    bore: Feature | None = None
     if subtractive:
         mouth, outward = _mouth_frame(ctx.params, anchor, direction, spec.keeps_up)
+        bore = _seated_bore(source, spec, mouth, outward)
         rim = _over_the_rim(
             body,
             placed,
             mouth,
             outward,
             surface=_surface_at_anchor(source, mouth),
+            bore=bore,
             cancelled=ctx.cancelled,
         )
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
@@ -1124,6 +1208,8 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
         nothing = without_effect(body, mesh, kind, ctx.profile)
         if nothing is None and subtractive:
             nothing = _cuts_no_layer(body, mesh, built, spec, ctx.profile)
+        if bore is not None:
+            nothing = _in_a_wider_bore(spec, bore, built) or nothing
 
     features = _merged_features(
         source,
@@ -1234,6 +1320,7 @@ def _over_the_rim(
     direction: Vec3 | None,
     *,
     surface: Feature | None = None,
+    bore: Feature | None = None,
     cancelled: CancelToken,
 ) -> Finding | None:
     """Reicht ein abtragender Baustein seitlich über den Rand seiner Fläche?
@@ -1254,6 +1341,14 @@ def _over_the_rim(
     hinten aus und nicht seitlich, sein Umriss liegt ganz über der Fläche.
     Bei einer gewählten ebenen Fläche zählt nur ihr eigener Umriss: Eine
     Seitenwand hinter ihrem Rand ist keine Fortsetzung des Rinnenbodens.
+
+    **Die Öffnung der Bohrung, in der er sitzt, ist kein Rand** (``bore``,
+    :func:`_seated_bore`). Ein Gewinde oder eine Einpressbuchse in einer
+    Durchgangsbohrung liegt mit dem halben Umriss über der Luft der Bohrung;
+    der Strahl dort trifft nichts, und an der Lochplatte aus dem Korpus kam
+    „schneidet die Nachbarfläche an“ für jeden Baustein in jeder Bohrung, fünf
+    Millimeter vom Plattenrand. Was innerhalb ihres Radius liegt, zählt nicht —
+    wie beim Setzen, wo ``placement.seat_of`` dieselbe Öffnung füllt.
     """
     if direction is None:
         return None
@@ -1284,6 +1379,10 @@ def _over_the_rim(
         fractions = depth[cuts[:, 0]] / (depth[cuts[:, 0]] - depth[cuts[:, 1]])
         mouth = points[cuts[:, 0]] + fractions[:, None] * (points[cuts[:, 1]] - points[cuts[:, 0]])
         footprint = np.concatenate((footprint, mouth))
+    if bore is not None:
+        footprint = footprint[~_inside_the_bore(footprint, bore)]
+        if not len(footprint):
+            return None
     host = as_mesh_data(body)
     low, high = host.bounds.minimum, host.bounds.maximum
     reach = float(np.sqrt(np.sum((np.asarray(high) - np.asarray(low)) ** 2))) + float(
@@ -1641,14 +1740,17 @@ def _insert_at_exact(
     original_body = body
     lip = None
     rim = None
+    bore: Feature | None = None
     if subtractive:
         mouth, outward = _mouth_frame(ctx.params, anchor, direction, spec.keeps_up)
+        bore = _seated_bore(source, spec, mouth, outward)
         rim = _over_the_rim(
             body,
             placed,
             mouth,
             outward,
             surface=_surface_at_anchor(source, mouth),
+            bore=bore,
             cancelled=ctx.cancelled,
         )
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
@@ -1711,6 +1813,8 @@ def _insert_at_exact(
         nothing = without_effect(body, mesh, kind, ctx.profile)
         if nothing is None and subtractive:
             nothing = _cuts_no_layer(body, mesh, built, spec, ctx.profile)
+        if bore is not None:
+            nothing = _in_a_wider_bore(spec, bore, built) or nothing
     _exact_result_checked(mesh)
     features = _merged_features(
         source,

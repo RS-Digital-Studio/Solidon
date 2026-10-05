@@ -21456,6 +21456,12 @@ class MainWindow(QMainWindow):
         if isinstance(seal_field, SealPathField):
             dialog.seal_flow = SealFlow(self, dialog, change_op=change_op)
 
+        def step_gone() -> bool:
+            """Ob der Schritt, den dieser Dialog ändert, nicht mehr im Verlauf steht."""
+            return change_op is not None and all(
+                entry.id != change_op for entry in self.session.history.document.ops
+            )
+
         def prepared() -> _PreviewOrder:
             """Die endgültige Filterung und der Platzierungsbezug gelten an beiden Enden."""
             if order_of is not None:
@@ -21500,6 +21506,18 @@ class MainWindow(QMainWindow):
 
         def changed(*_ignored: Any) -> None:
             """Der alte Knopf wird vor den dreihundert Millisekunden ungültig."""
+            if step_gone():
+                # **Ein Dialog ohne Schritt schließt sich** (Kundenmeldung zu
+                # 0.5.2): Strg+Z oder *Schritt löschen* bei offenem *Diesen
+                # Schritt ändern* ließen den Dialog stehen, und jede weitere
+                # Szenenänderung warf „Diese Operation gibt es im Verlauf
+                # nicht“ als Absturz. Ändern lässt sich nichts mehr.
+                timer.stop()
+                dialog.reject()
+                self.announce(
+                    tr("Der Schritt steht nicht mehr im Verlauf, deshalb ist sein Fenster zu.")
+                )
+                return
             previous = self._preview_approval
             approval = self._set_preview_order(dialog, prepared())
             if approval is not previous:
@@ -21525,6 +21543,8 @@ class MainWindow(QMainWindow):
             return REGISTRY.get(drafts[0].op) if drafts else dialog.spec
 
         def placement_inputs() -> tuple[str, ...]:
+            if step_gone():
+                return ()
             if change_op is not None:
                 operation = self.session.history.operation(change_op)
                 return tuple(operation.inputs)

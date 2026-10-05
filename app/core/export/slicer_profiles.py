@@ -300,31 +300,51 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     if flavour == "cura":
         return _cura_user_roots(executable, Path(base))
     if flavour == "prusa":
-        stem = discover.program_mark(executable.name)
-        return (
-            [
-                folder
-                for folder in Path(base).iterdir()
-                if folder.is_dir() and discover.plain_name(folder.name) == stem
-            ]
-            if Path(base).is_dir()
-            else []
-        )
+        return _program_folders(Path(base), discover.program_mark(executable.name))
     if not has_user_profile_tree(flavour):
         return []
 
-    # Die Programmmarke, nicht der ganze Dateistamm: ``OrcaSlicer_Linux_V2.1.1``
-    # legt seine Profile unter ``OrcaSlicer`` ab, und der Stamm traf diesen
-    # Ordner nie — eigene Profile, gewählter Drucker und Filamente fehlten
-    # nach jedem Update des AppImages (Gesamtreview 05.09.2026, CORE-16).
-    stem = discover.program_mark(executable.name)
     found: list[Path] = []
-    for folder in Path(base).iterdir() if Path(base).is_dir() else []:
-        if not folder.is_dir() or discover.plain_name(folder.name) != stem:
-            continue
+    for folder in _program_folders(Path(base), discover.program_mark(executable.name)):
         user = folder / "user"
         if user.is_dir():
             found.extend(entry for entry in user.iterdir() if entry.is_dir())
+    return found
+
+
+def _program_folders(base: Path, mark: str) -> list[Path]:
+    """Die Datenordner des Programms ``mark`` unter ``base``.
+
+    Gewöhnlich ``<base>/<Programm>``, verglichen über die Programmmarke, nicht
+    den ganzen Dateistamm: ``OrcaSlicer_Linux_V2.1.1`` legt seine Profile unter
+    ``OrcaSlicer`` ab (Gesamtreview 05.09.2026, CORE-16).
+
+    **Creality Print 7 legt unter seinem Anwendungsschlüssel ab**
+    (``SLIC3R_APP_KEY "Creality"`` in seiner ``version.inc``) und darunter je
+    Version: ``Creality/Creality Print/7.3`` mit ``Creality.conf``. Unter der
+    Programmmarke gesucht, fand Solidon dort auf keiner Plattform die eigenen
+    Drucker und den zuletzt gewählten. Es gilt die neueste Version.
+    """
+    try:
+        entries = sorted(base.iterdir())
+    except OSError:
+        return []
+    found = [
+        entry for entry in entries if entry.is_dir() and discover.plain_name(entry.name) == mark
+    ]
+    if mark == "crealityprint":
+        try:
+            versions = [
+                entry
+                for entry in (base / "Creality" / "Creality Print").iterdir()
+                if entry.is_dir() and re.fullmatch(r"\d+(?:\.\d+)*", entry.name)
+            ]
+        except OSError:
+            versions = []
+        if versions:
+            found.append(
+                max(versions, key=lambda entry: tuple(int(part) for part in entry.name.split(".")))
+            )
     return found
 
 
@@ -362,9 +382,19 @@ def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
     if not has_user_profile_tree(flavour):
         return ""
     for root in user_roots(flavour, executable):
-        # ``user/<Konto>`` — die Konfiguration liegt eine Ebene darüber.
-        config = root.parent.parent / f"{root.parent.parent.name}.conf"
-        if not config.is_file():
+        # ``user/<Konto>`` — die Konfiguration liegt eine Ebene darüber und
+        # heißt wie ihr Ordner, bei Creality Print wie der Anwendungsschlüssel
+        # (``7.3/Creality.conf``, :func:`_program_folders`).
+        folder = root.parent.parent
+        config = next(
+            (
+                candidate
+                for candidate in (folder / f"{folder.name}.conf", *sorted(folder.glob("*.conf")))
+                if candidate.is_file()
+            ),
+            None,
+        )
+        if config is None:
             continue
         try:
             text = config.read_text(encoding="utf-8", errors="replace")
@@ -405,10 +435,7 @@ def prusa_config(executable: Path) -> Path | None:
     base = config_base(executable)
     if not base:
         return None
-    stem = discover.program_mark(executable.name)
-    for folder in Path(base).iterdir() if Path(base).is_dir() else []:
-        if not folder.is_dir() or discover.plain_name(folder.name) != stem:
-            continue
+    for folder in _program_folders(Path(base), discover.program_mark(executable.name)):
         config = folder / _PRUSA_CONFIG
         if config.is_file():
             return config
@@ -1432,24 +1459,75 @@ def _cura_machine_instances(
                 _log.debug("skipping incomplete Cura stack %s: %s", machine, problem)
 
 
+#: Was ``std::istringstream >> double`` von einer Koordinate liest: die Zahl am
+#: Anfang, bis zum ersten Zeichen, das keine mehr fortsetzt, sonst null.
+_STREAM_NUMBER: Final = re.compile(
+    r"\s*([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)"
+)
+
+
+def _stream_point(text: str) -> tuple[float, float]:
+    """Ein Punkt ``AxB``, wie Orca und PrusaSlicer ihn lesen.
+
+    ``ConfigOptionPoints::deserialize`` trennt am ``x`` und liest jede Hälfte
+    aus einem ``istringstream``; was dort nicht als Zahl beginnt, bleibt null.
+    PrusaSlicers Bündel führt den AnkerMake M5 mit ``235-0`` — der Slicer liest
+    235 mal 0, und so liest es Solidon auch.
+    """
+    first, separator, rest = text.partition("x")
+    found = [_STREAM_NUMBER.match(part) for part in (first, rest.split("x", 1)[0])]
+    numbers = [float(match.group(1)) if match else 0.0 for match in found]
+    return numbers[0], numbers[1] if separator else 0.0
+
+
 def _profile_points(value: Any) -> tuple[tuple[float, float], ...]:
-    """Orca-/Prusa-Koordinaten und Curas JSON-Konturen als reine Daten."""
+    """Orca-/Prusa-Koordinaten und Curas JSON-Konturen als reine Daten.
+
+    Orca hängt die Einträge einer Punktliste mit Komma aneinander, bevor es sie
+    liest (``ConfigBase::load_from_json``): ``["0x0,11x0,11x16,0x16"]`` sind
+    vier Punkte, wie Qidis Profile für Q2 und X-Max 4 sie schreiben.
+    """
     if isinstance(value, str):
-        value = json.loads(value) if value.lstrip().startswith("[") else value.split(",")
+        value = json.loads(value) if value.lstrip().startswith("[") else [value]
     if not isinstance(value, (list, tuple)):
         raise ValueError("invalid contour")
-    points = []
+    points: list[tuple[float, float]] = []
     for item in value:
-        pair = item.split("x") if isinstance(item, str) else item
-        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+        if isinstance(item, str):
+            points.extend(_stream_point(token) for token in (item.split(",") if item else ()))
+            continue
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
             raise ValueError("invalid contour point")
-        if any(isinstance(number, bool) for number in pair):
+        if any(isinstance(number, bool) for number in item):
             raise ValueError("boolean coordinate")
-        point = (float(pair[0]), float(pair[1]))
+        point = (float(item[0]), float(item[1]))
         if not all(math.isfinite(number) for number in point):
             raise ValueError("nonfinite coordinate")
         points.append(point)
     return tuple(points)
+
+
+def _convex_hull(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
+    """Die konvexe Hülle gegen den Uhrzeigersinn ab dem kleinsten Punkt, leer ohne Fläche.
+
+    Monotone Kette über eine Handvoll Punkte, in fester Folge gerechnet — auf
+    jeder Maschine dieselbe Ecke zuerst.
+    """
+    unique = sorted(set(points))
+
+    def turn(origin: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> float:
+        return (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0])
+
+    chains: list[list[tuple[float, float]]] = []
+    for ordered in (unique, unique[::-1]):
+        chain: list[tuple[float, float]] = []
+        for point in ordered:
+            while len(chain) >= 2 and turn(chain[-2], chain[-1], point) <= 0.0:
+                chain.pop()
+            chain.append(point)
+        chains.append(chain[:-1])
+    hull = (*chains[0], *chains[1])
+    return hull if len(hull) >= 3 else ()
 
 
 def _discovered_printer(
@@ -1471,8 +1549,9 @@ def _discovered_printer(
         count = _profile_numbers(values.get("machine_extruder_count", 1))[0]
         if not count.is_integer():
             raise _incomplete_profile(entry.path)
-        shape = str(values.get("machine_shape", "rectangular"))
-        if shape == "elliptic":
+        # Curas ``BuildVolume`` fragt nur ``elliptic``; jede andere Angabe ist
+        # ein Rechteck — auch Leapfrogs ``Rectangular``.
+        if str(values.get("machine_shape", "rectangular")) == "elliptic":
             sections = 4
             while max(width, depth) / 2.0 * (1.0 - inscribed_ratio(sections)) > MAX_FACET_SAG:
                 sections *= 2
@@ -1480,18 +1559,19 @@ def _discovered_printer(
                 (x * width / 2.0, y * depth / 2.0)
                 for x, y in (circle_point(sections, index) for index in range(sections))
             )
-        elif shape == "rectangular":
-            contour = ()
         else:
-            raise _incomplete_profile(entry.path)
+            contour = ()
         # Cura definiert Sperrzonen relativ zur Bettmitte, unabhängig vom
-        # G-Code-Ursprung (machine_center_is_zero).
+        # G-Code-Ursprung (machine_center_is_zero), und sperrt von jeder die
+        # konvexe Hülle (``Polygon.getMinkowskiHull``).
         blocked = values.get("machine_disallowed_areas", [])
         if isinstance(blocked, str):
             blocked = json.loads(blocked)
         if not isinstance(blocked, (list, tuple)):
             raise _incomplete_profile(entry.path)
-        exclusions = tuple(_profile_points(points) for points in blocked)
+        exclusions = tuple(
+            hull for hull in (_convex_hull(_profile_points(points)) for points in blocked) if hull
+        )
         # Curas Ursprung liegt an der Ecke oder in der Mitte — dieselbe
         # Lesart wie ``handover._cura_machine`` (RM-330, RM-424).
         centred = str(values.get("machine_center_is_zero", "")).strip().lower() == "true"
@@ -1524,12 +1604,14 @@ def _discovered_printer(
             if is_zero(left) and is_zero(front)
             else (0.0 if is_zero(cx) else -cx, 0.0 if is_zero(cy) else -cy)
         )
-        blocked = values.get("bed_exclude_area", [])
+        # Sperrzonen kennt nur die Orca-Familie; PrusaSlicer übergeht den
+        # Schlüssel, den QIDIs und Snapmakers Bündel trotzdem tragen.
+        blocked = values.get("bed_exclude_area", []) if flavour == "orca" else []
         if blocked:
-            points = _profile_points(blocked)
-            # Orca benutzt eine Nullkontur ausdrücklich für „keine Sperrzone“.
-            if any(abs(number) > EPS_GEOM for point in points for number in point):
-                exclusions = (tuple((x - cx, y - cy) for x, y in points),)
+            exclusions = tuple(
+                tuple((x - cx, y - cy) for x, y in corners)
+                for corners in build_area.exclusion_boxes(_profile_points(blocked))
+            )
     vendor = entry.vendor or ("" if entry.from_user else _vendor_of(entry.path, "machine"))
     # Bahnbreite und Schichthöhe sind Arbeitsvorgaben, keine Herstellermaße;
     # sie folgen der belegten Düse, wie beim eigenen Druckerprofil.
@@ -2169,6 +2251,43 @@ def cura_definition_id(path: Path) -> str:
     return path.stem.removesuffix(".def")
 
 
+def _cura_literal(key: str, formula: str) -> Any:
+    """Was Cura aus einer Formel ohne Rechnung liest, oder ``None``.
+
+    Zwei Hersteller schreiben Konstanten als Formel: UltiMaker Method die
+    Sperrflächen als Listenliteral, AnkerMake M5C die Form als
+    ``rectangular`` — für Curas Auswerter ein unbekannter Name, der mit 0
+    endet (``SettingFunction.__call__``), und 0 ist für ``BuildVolume`` ein
+    Rechteck. Beides gilt, ohne dass etwas ausgeführt wird (Regel 10); jede
+    andere Formel bleibt unbekannt.
+    """
+    text = formula.strip()
+    if key == "machine_shape" and text == "rectangular":
+        return text
+    if key != "machine_disallowed_areas":
+        return None
+    try:
+        areas = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(areas, list):
+        return None
+    for area in areas:
+        if not isinstance(area, list):
+            return None
+        for point in area:
+            if not (
+                isinstance(point, list)
+                and len(point) == 2
+                and all(
+                    isinstance(number, (int, float)) and not isinstance(number, bool)
+                    for number in point
+                )
+            ):
+                return None
+    return areas
+
+
 def _cura_definition_values(
     path: Path,
     roots: Sequence[Path],
@@ -2244,6 +2363,8 @@ def _cura_definition_values(
                 # Nur ein endliches Zahlenliteral gilt; gerechnet wird hier nicht.
                 number = float(value)
                 value = number if math.isfinite(number) else None
+            elif isinstance(value, str) and (literal := _cura_literal(key, value)) is not None:
+                value = literal
             elif isinstance(value, str):
                 if strict and key in {
                     "machine_width",

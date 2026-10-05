@@ -3896,6 +3896,61 @@ def test_an_automatic_tower_keeps_out_of_the_beds_exclusion_area(
         assert y == pytest.approx(margin)
 
 
+@pytest.mark.parametrize(
+    ("excluded", "x"),
+    [
+        # Orcas Vorgabe für „keine Sperrzone“: Der Turm beginnt am Bettrand.
+        (["0x0"], 0.0),
+        # Qidi Q1 Pro sperrt hinten zwei Streifen; je vier Punkte sind ein
+        # Rechteck, der neunte bleibt ohne. Der Turm rückt hinter den ersten.
+        (
+            [
+                "25x245",
+                "25x240",
+                "115x240",
+                "115x245",
+                "208x245",
+                "208x240",
+                "245x240",
+                "245x245",
+                "208x245",
+            ],
+            115.0,
+        ),
+    ],
+)
+def test_an_automatic_tower_reads_the_exclusions_like_the_orca_family(
+    tmp_path: Path, excluded: list[str], x: float
+) -> None:
+    """Je vier Punkte von ``bed_exclude_area`` sind ein Hüllrechteck (``PartPlate``).
+
+    Vorher hielt eine Sperrzone die Turmlage an, sobald sie nicht als ein
+    einziges Vieleck lesbar war — auch Orcas eigene Vorgabe ``["0x0"]`` für
+    „keine“, die rund 190 Maschinen der Orca-Familie tragen.
+    """
+    config = _creality_tower_config(tmp_path)
+    assert config.machine is not None
+    config.machine.write_text(
+        json.dumps(
+            {"printable_area": ["0x0", "256x0", "256x256", "0x256"], "bed_exclude_area": excluded}
+        ),
+        encoding="utf-8",
+    )
+    config.process.write_text(
+        json.dumps(
+            {"enable_prime_tower": "1", "prime_tower_width": "35", "prime_tower_brim_width": "3"}
+        ),
+        encoding="utf-8",
+    )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    positioned = handover._orca_cli_tower_position(config, setup, ())
+
+    margin = 15 + 3
+    assert float(positioned.written["wipe_tower_x"]) == pytest.approx(x + margin)
+    assert float(positioned.written["wipe_tower_y"]) == pytest.approx(margin)
+
+
 def test_an_exclusion_that_leaves_no_room_keeps_the_slicers_own_tower(tmp_path: Path) -> None:
     """Passt der Turm neben keiner Sperrfläche, wird keine Lage erfunden."""
     config = _creality_tower_config(tmp_path)

@@ -5307,7 +5307,7 @@ def off_the_bed(
     eine bereits gelesene Analyse allein keinen Durchtritt durch eine innere
     Sperrfläche belegen.
 
-    Unbrauchbare Konturen bleiben als Warnung sichtbar. Liegt zusätzlich
+    Eine unbrauchbare Bettkontur bleibt als Warnung sichtbar. Liegt zusätzlich
     eine Bahn außerhalb, trägt der Fehler die Einschränkung als Einzelheit.
     """
     from io import StringIO
@@ -5326,16 +5326,14 @@ def off_the_bed(
     # Ausnahme abbrechen — nach dem gelungenen Slicen, mit der Druckdatei in
     # einem Ordner, der gleich gelöscht wird. Was keine Fläche ergibt, fällt
     # auf das Profil zurück oder wird übergangen; der Prüfbericht sagt es.
-    notes: list[TranslatableText] = []
+    note: TranslatableText | None = None
     area = _usable_area(analysis.bed_outline) if analysis.bed_outline else None
     if area is None:
         if analysis.bed_outline:
             _log.warning("the bed outline of the print file has no area; using the profile")
-            notes.append(
-                _(
-                    "Die Bettkontur der Druckdatei hat keine nutzbare Fläche; "
-                    "geprüft wurde gegen das Druckerprofil."
-                )
+            note = _(
+                "Die Bettkontur der Druckdatei hat keine nutzbare Fläche; "
+                "geprüft wurde gegen das Druckerprofil."
             )
         area = build_area.printable_area(profile.printer)
         if wants_bed_coordinates(flavour) and not origin_at_centre:
@@ -5345,30 +5343,16 @@ def off_the_bed(
                 shift if shift is not None else build_area.machine_shift(profile.printer)
             )
             area = translate(area, xoff=across, yoff=along)
-    excluded_invalid = False
-    for contour in analysis.excluded_areas:
-        blocked = _usable_area(contour)
-        if blocked is None:
-            _log.warning("an exclusion area of the print file has no area and is ignored")
-            excluded_invalid = True
-            continue
-        area = area.difference(blocked)
-    if excluded_invalid:
-        notes.append(
-            _(
-                "Mindestens eine Sperrkontur der Druckdatei hat keine nutzbare Fläche "
-                "und wurde bei der Prüfung ausgelassen."
-            )
-        )
+    # Jede Sperrfläche ist ein Rechteck mit Fläche (``gcode.exclusion_areas``),
+    # so wie der Slicer sie liest; ohne Fläche hätte er sie schon übergangen.
+    for (left, front), _right_front, (right, back), _left_back in analysis.excluded_areas:
+        area = area.difference(box(left, front, right, back))
     warning = None
-    if notes:
-        detail = (
-            notes[0] if len(notes) == 1 else _("{first} {second}", first=notes[0], second=notes[1])
-        )
+    if note is not None:
         warning = Finding(
             code="gcode.invalid_build_area",
             severity="warning",
-            message=_("{detail} Prüfen Sie die Druckfläche im Slicer.", detail=detail),
+            message=_("{detail} Prüfen Sie die Druckfläche im Slicer.", detail=note),
             source="gcode",
             suggestions=(CHECK_SLICER_PROFILE,),
         )
@@ -5961,9 +5945,10 @@ def _beside_the_exclusions(
         return start
     if not isinstance(raw, str):
         return None
-    contours = [part for part in raw.split(";") if part.strip()]
-    areas = gcode.analyze(f"; bed_exclude_area = {raw}\n").excluded_areas
-    if len(areas) != len(contours):
+    # Je vier Punkte ein Rechteck, wie der Slicer liest; Orcas Vorgabe „0x0“
+    # sperrt nichts und hielt den Turm bis zum 05.10.2026 trotzdem an.
+    areas = gcode.exclusion_areas(raw)
+    if areas is None:
         return None
     spans: list[tuple[float, float]] = []
     for contour in areas:
@@ -6707,10 +6692,17 @@ def window_program(executable: Path) -> Path | None:
     names = _WINDOW_SIBLINGS.get(executable.stem.casefold())
     if names is None:
         return executable
-    for name in names:
-        candidate = executable.with_name(name + executable.suffix)
-        if candidate.is_file():
-            return candidate
+    # Im Mac-Bündel liegt Curas Fenster in ``Contents/MacOS``, die
+    # Rechenmaschine in ``Contents/Resources`` (``discover.parts_for``).
+    bundle = next((parent for parent in executable.parents if parent.suffix == ".app"), None)
+    folders = [executable.parent]
+    if bundle is not None:
+        folders.append(bundle / "Contents" / "MacOS")
+    for folder in folders:
+        for name in names:
+            candidate = folder / (name + executable.suffix)
+            if candidate.is_file():
+                return candidate
     return None
 
 
