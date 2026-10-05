@@ -209,7 +209,11 @@ def test_search_guides_to_the_selector_for_an_inactive_detail_field(
     assert selector.isVisibleTo(dialog)
     assert dialog._search_at == 0
     assert dialog.search_state.text()
-    assert (dialog.width(), dialog.height()) == search_window_size_before
+    # Die Suche ist ein passiver Anlass: Der Rahmen bleibt so breit und darf
+    # wachsen, um den Hinweis zu zeigen, nie schrumpfen (RM-487). Mit echten
+    # Schriften (Linux-Runner) wuchs er dafür um 32 bis 105 Punkte.
+    assert dialog.width() == search_window_size_before[0]
+    assert dialog.height() >= search_window_size_before[1]
     requirement = dialog.search_requirement.text()
     assert requirement
     assert str(dialog._fields[selector_path].title) in requirement
@@ -242,8 +246,13 @@ def test_search_guides_to_the_selector_for_an_inactive_detail_field(
     assert unrelated.hasFocus()
     assert dialog.search_requirement.isVisibleTo(dialog)
     assert dialog._search_requirement_target == target_path
-    assert (dialog.width(), dialog.height()) == window_size_before_changes
-    assert dialog.frameGeometry().topLeft() == frame_anchor_before_changes
+    # Eingeblendete Felder einer anderen Gruppe sind ein passiver Anlass: so
+    # breit wie vorher, höher oder gleich, und wenn unten der Platz fehlt, nur
+    # so weit hinauf wie nötig (RM-487) — nie seitwärts, nie tiefer.
+    assert dialog.width() == window_size_before_changes[0]
+    assert dialog.height() >= window_size_before_changes[1]
+    assert dialog.frameGeometry().left() == frame_anchor_before_changes.x()
+    assert dialog.frameGeometry().top() <= frame_anchor_before_changes.y()
 
     dialog.tabs.setCurrentIndex(GROUPS.index(selector_path.partition(".")[0]))
     for _ in range(3):
@@ -259,8 +268,10 @@ def test_search_guides_to_the_selector_for_an_inactive_detail_field(
     assert not dialog.search_requirement.isVisibleTo(dialog)
     assert dialog.search_requirement.text() == ""
     assert dialog._search_requirement_target == ""
-    assert (dialog.width(), dialog.height()) == window_size_before_changes
-    assert dialog.frameGeometry().topLeft() == frame_anchor_before_changes
+    assert dialog.width() == window_size_before_changes[0]
+    assert dialog.height() >= window_size_before_changes[1]
+    assert dialog.frameGeometry().left() == frame_anchor_before_changes.x()
+    assert dialog.frameGeometry().top() <= frame_anchor_before_changes.y()
     assert selector.accessibleDescription() == selector_description
     assert print_settings.read_path(dialog.settings, target_path) == target_before
 
@@ -477,7 +488,11 @@ def test_print_dialog_depth_keeps_the_frame_anchor_and_returns_collapsed_height(
     dialog.resize(660, 450)
     dialog.show()
     try:
-        for _ in range(3):
+        # Erst wenn die Slicersuche zurück ist, steht die zugeklappte Höhe:
+        # Ihr Ergebnis lässt den Rahmen passiv wachsen (RM-487), auf dem
+        # Linux-Runner mitten in der ersten Runde (611 statt 715 Punkte).
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+        for _ in range(8):
             qt_app.processEvents()
         width = dialog.width()
         collapsed_height = dialog.height()
@@ -6603,6 +6618,14 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     for _ in range(8):
         qt_app.processEvents()
     assert dialog._content_height.initial_fit_done
+    # **Oben am Schirm**, sonst misst „soweit der Bildschirm reicht“ die Lage:
+    # Ausdrückliches Klappen hält den Anker (RM-487) und wächst nur bis zum
+    # unteren Rand unter ihm. Mit echten Schriften stand der Dialog tiefer, als
+    # die Rechnung unten annimmt, und blieb sechs Punkte darunter.
+    area = dialog.screen().availableGeometry()
+    dialog.move(area.topLeft())
+    for _ in range(4):
+        qt_app.processEvents()
     before = dialog.height()
     field = dialog._editors["layers.layer_height"]
     tall_enough = field.sizeHint().height()
@@ -9262,6 +9285,9 @@ def test_custom_nozzle_entry_expands_inside_the_window_and_closes_again(
     from app.ui.style import SPACE, WIDE
 
     dialog.show()
+    # Die Slicersuche reicht Zeilen nach; käme sie zwischen den zwei
+    # Messungen an, wüchse die Seite unabhängig von der Düse (macOS-Runner).
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     for _ in range(16):
         qt_app.processEvents()
     layout = dialog.layout()

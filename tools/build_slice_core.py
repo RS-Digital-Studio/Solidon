@@ -83,9 +83,18 @@ def build() -> int:
 
     # In-place bauen heißt: neben die Quelle, damit der Import sie findet.
     # ``setup`` will dafür im Paketverzeichnis stehen.
+    modules = cythonize(str(SOURCE), quiet=True, language_level="3")
+    if sys.platform != "win32":
+        # **Keine zusammengezogene Multiplikation und Addition.** clang auf
+        # arm64 macht aus ``a * b + c`` sonst ein FMA, und die Schnittlagen
+        # wichen um ein Bit vom numpy-Weg ab, den der Kern ersetzt
+        # (``test_native_material_spans_equal_numpy_exactly``, Tag-Lauf 0.5.2
+        # auf macOS). MSVC zieht unter ``/fp:precise`` nichts zusammen.
+        for module in modules:
+            module.extra_compile_args = [*module.extra_compile_args, "-ffp-contract=off"]
     setup(
         name="solidon3d-slice-core",
-        ext_modules=cythonize(str(SOURCE), quiet=True, language_level="3"),
+        ext_modules=modules,
         script_args=[
             "build_ext",
             "--inplace",
