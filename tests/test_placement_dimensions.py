@@ -1902,26 +1902,90 @@ def test_only_a_prepared_face_carries_typed_coordinates(surface, prepared, witho
 
 
 @pytest.mark.parametrize(
-    ("foot", "expected"),
+    ("direction", "expected"),
     [
-        ((-40.0, 5.0), "left"),
-        ((40.0, -5.0), "right"),
-        ((3.0, -40.0), "up"),
-        ((-3.0, 40.0), "down"),
-        ((1.0, 1.0), None),
+        ((-15.0, 0.0, 0.0), "Außenkante links"),
+        ((15.0, 1.0, 0.0), "Außenkante rechts"),
+        ((0.0, -10.0, 0.0), "Außenkante vorn"),
+        ((2.0, 10.0, 0.0), "Außenkante hinten"),
+        ((0.0, 0.0, 4.0), "Außenkante oben"),
+        ((0.0, 1.0, -4.0), "Außenkante unten"),
     ],
 )
-def test_a_dimension_is_named_by_the_side_it_runs_to_in_the_picture(foot, expected):
-    """„Außenkante links“ statt „Außenkante 4“ — die Seite, zu der die Maßlinie läuft.
+def test_a_dimension_is_named_by_the_side_of_the_face_it_runs_to(direction, expected):
+    """„Außenkante links“ statt „Außenkante 4“ — nach der Weltachse, nicht nach dem Bild.
 
-    Durchsicht 0.5.1, Weg c: Eine Nummer verlangte, sie im Kopf einer Kante im
-    Bild zuzuordnen. Eine Linie ohne Richtung im Bild (von vorn auf die Kante
-    gesehen) behält die Nummer.
+    RM-516: An der Lochplatte standen „Außenkante 1“ und „Außenkante 4“, weil
+    beide Maßlinien im Bild zur selben Seite liefen. Die Seiten heißen wie im
+    Objektbaum („Linke Seite“, „Vorderseite“) und bleiben beim Drehen stehen.
     """
-    from app.ui.placement_flow import _screen_side
+    from app.ui.placement_flow import reference_names
 
-    spot = QPointF(100.0, 100.0)
-    assert _screen_side(QPointF(spot.x() + foot[0], spot.y() + foot[1]), spot) == expected
+    assert reference_names([("edge_0", "outer", direction, (0.0, 0.0, 0.0))]) == {
+        "edge_0": expected
+    }
+
+
+def test_the_plate_references_carry_no_number():
+    """Der Zustand von guide-thread-a-hole-1: vier Außenkanten, kein Name mit Ziffer."""
+    from app.ui.placement_flow import reference_names
+
+    names = reference_names(
+        [
+            ("edge_0", "outer", (-15.0, 0.0, 0.0), (-40.0, 0.0, 8.0)),
+            ("edge_1", "outer", (0.0, -10.0, 0.0), (0.0, -25.0, 8.0)),
+            ("edge_2", "outer", (65.0, 0.0, 0.0), (40.0, 0.0, 8.0)),
+            ("edge_3", "outer", (0.0, 40.0, 0.0), (0.0, 25.0, 8.0)),
+            ("edge_4", "inner", (5.0, 0.0, 0.0), (-20.0, 0.0, 8.0)),
+        ]
+    )
+    assert names == {
+        "edge_0": "Außenkante links",
+        "edge_1": "Außenkante vorn",
+        "edge_2": "Außenkante rechts",
+        "edge_3": "Außenkante hinten",
+        "edge_4": "Innenkante rechts",
+    }
+    assert not any(character.isdigit() for name in names.values() for character in name)
+
+
+def test_two_edges_to_the_same_side_are_told_apart_by_where_they_sit():
+    """Ein L-förmiger Boden hat zwei Kanten nach rechts: vorn und hinten, ohne Nummer."""
+    from app.ui.placement_flow import reference_names
+
+    names = reference_names(
+        [
+            ("edge_0", "outer", (30.0, 0.0, 0.0), (40.0, -12.0, 8.0)),
+            ("edge_1", "outer", (5.0, 0.0, 0.0), (-10.0, 12.0, 8.0)),
+        ]
+    )
+    assert names == {
+        "edge_0": "Außenkante rechts, vorn",
+        "edge_1": "Außenkante rechts, hinten",
+    }
+    # Drei zur selben Seite unterscheidet keine Lage mehr: dann die Nummer.
+    crowded = reference_names(
+        [
+            ("edge_0", "outer", (30.0, 0.0, 0.0), (40.0, -12.0, 8.0)),
+            ("edge_1", "outer", (5.0, 0.0, 0.0), (-10.0, 12.0, 8.0)),
+            ("edge_2", "outer", (6.0, 0.0, 0.0), (-10.0, 20.0, 8.0)),
+        ]
+    )
+    assert crowded == {
+        "edge_0": "Außenkante 1",
+        "edge_1": "Außenkante 2",
+        "edge_2": "Außenkante 3",
+    }
+
+
+def test_the_centre_measures_are_named_by_their_axis():
+    """„Mitte X“ und „Mitte Y“ statt „Mitte 1“ und „Mitte 2“; nie zweimal derselbe Buchstabe."""
+    from app.ui.placement_flow import _axis_letters
+
+    assert _axis_letters([(1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]) == ["X", "Y"]
+    assert _axis_letters([(1.0, 0.0, 0.0), (0.0, 0.0, -1.0)]) == ["X", "Z"]
+    # Eine schräge Fläche: beide Richtungen zeigen am meisten nach X.
+    assert _axis_letters([(0.6, 0.57, 0.56), (0.75, -0.6, -0.2)]) == ["X", "Y"]
 
 
 @pytest.mark.parametrize("preview_required", [False, True])

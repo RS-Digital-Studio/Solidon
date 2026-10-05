@@ -929,6 +929,196 @@ def test_same_printer_model_keeps_manufacturers_separate() -> None:
     assert not sp.same_printer_model(unknown_first, unknown_second)
 
 
+@pytest.mark.parametrize(
+    ("name", "model"),
+    [
+        ("Bambu Lab A1 0.4 nozzle", "Bambu Lab A1"),
+        ("Creality K1 Max (0.4 nozzle)", "Creality K1 Max"),
+        ("Geeetech A10Pro (0.2 mm nozzle)", "Geeetech A10Pro"),
+        ("Original Prusa MK4S HF0.4 nozzle", "Original Prusa MK4S HF"),
+        ("Prusa CORE One HF 0.4 nozzle", "Prusa CORE One HF"),
+        ("Flashforge Guider4 0.4 HF nozzle", "Flashforge Guider4 HF"),
+        ("AzteQ Industrial - 0.6 nozzle", "AzteQ Industrial"),
+        ("Snapmaker U1 (0.4+0.6 nozzle)", "Snapmaker U1 (0.4+0.6 nozzle)"),
+        ("Raise3D Pro3 0.4 nozzle (Dual)", "Raise3D Pro3 0.4 nozzle (Dual)"),
+        ("Sovol SV06 0.4 High-Speed nozzle", "Sovol SV06 0.4 High-Speed nozzle"),
+        ("Elegoo Centauri Carbon 2", "Elegoo Centauri Carbon 2"),
+    ],
+)
+def test_the_model_name_drops_the_nozzle_and_keeps_the_hotend(name: str, model: str) -> None:
+    """Die Schreibweisen der installierten Bestände; was eine andere Maschine
+    meint (Dual, zwei Düsen, High-Speed), bleibt unangetastet."""
+    assert sp.model_name(name) == model
+
+
+def _variants(
+    vendor: str, model: str, *names_and_nozzles: tuple[str, float], prefix: str = "machine"
+) -> list[sp.SlicerProfile]:
+    return [
+        sp.SlicerProfile(
+            path=Path(f"{prefix}/{name}.json"),
+            name=name,
+            kind="machine",
+            printer_model=model,
+            nozzle=nozzle,
+            vendor=vendor,
+        )
+        for name, nozzle in names_and_nozzles
+    ]
+
+
+def test_a_pinned_bundle_variant_follows_a_new_nozzle_to_its_sister() -> None:
+    """Ein Drucker aus PrusaSlicers Bündel nennt seine Variante beim Namen; nach
+    einem Düsenwechsel im Druckdialog meint er die Schwester, nicht nichts."""
+    found = _variants(
+        "Creality",
+        "CR10",
+        ("Creality CR-10 (0.4 mm nozzle)", 0.4),
+        ("Creality CR-10 (0.6 mm nozzle)", 0.6),
+    )
+    printer = PrinterProfile(
+        id="slicer-prusa-cr10",
+        title="Creality CR-10 (0.4 mm nozzle)",
+        build_volume=(300.0, 300.0, 400.0),
+        nozzle_diameter=0.6,
+        vendor="Creality",
+        prusaslicer_printer="Creality CR-10 (0.4 mm nozzle)",
+    )
+
+    machine, _process = sp.match(found, printer)
+
+    assert machine is not None and machine.name == "Creality CR-10 (0.6 mm nozzle)"
+    # Ohne Schwester mit dieser Düse bleibt es leer, wie an einem erkannten
+    # Profil (RM-329) — die 0,4er wäre ein Nachbarmaß.
+    assert sp.match(found, replace(printer, nozzle_diameter=0.8)) == (None, None)
+
+
+def test_a_nozzle_change_keeps_the_hotend_of_the_chosen_variant() -> None:
+    """Aus „MK4S HF0.4“ wird bei 0,6 „MK4S HF0.6“ — im Druckdialog wie in der
+    Übergabe, auch wenn die gewöhnliche Düse im Alphabet vorn steht."""
+    found = _variants(
+        "PrusaResearch",
+        "Original Prusa MK4S",
+        ("Original Prusa MK4S 0.4 nozzle", 0.4),
+        ("Original Prusa MK4S 0.6 nozzle", 0.6),
+        ("Original Prusa MK4S HF0.4 nozzle", 0.4),
+        ("Original Prusa MK4S HF0.6 nozzle", 0.6),
+    )
+    pinned = PrinterProfile(
+        id="slicer-prusa-mk4s-hf",
+        title="Original Prusa MK4S HF0.4 nozzle",
+        build_volume=(250.0, 210.0, 220.0),
+        nozzle_diameter=0.6,
+        vendor="PrusaResearch",
+        prusaslicer_printer="Original Prusa MK4S HF0.4 nozzle",
+    )
+    named = replace(pinned, id="slicer-orca-mk4s-hf", prusaslicer_printer="")
+    hf_04 = sp.machine_for_name(found, "Original Prusa MK4S HF0.4 nozzle")
+    assert hf_04 is not None
+
+    for printer in (pinned, named):
+        machine, _process = sp.match(found, printer)
+        assert machine is not None and machine.name == "Original Prusa MK4S HF0.6 nozzle"
+    handed = sp.machine_with_nozzle(
+        sp.identity(hf_04), "orca", Path("orca"), named, available=found
+    )
+    assert handed == sp.identity(found[3])
+
+
+def test_dialog_and_handover_take_the_same_plain_sister() -> None:
+    """Dieselbe Schwester an beiden Stellen: die Grundausführung, nicht die
+    High-Speed-Variante, die im Alphabet vorn steht."""
+    found = _variants(
+        "Sovol",
+        "Sovol SV06",
+        ("Sovol SV06 0.4 nozzle", 0.4),
+        ("Sovol SV06 0.6 nozzle", 0.6),
+        ("Sovol SV06 0.6 High-Speed nozzle", 0.6),
+    )
+    printer = PrinterProfile(
+        id="slicer-orca-sv06",
+        title="Sovol SV06 0.4 nozzle",
+        build_volume=(220.0, 220.0, 250.0),
+        nozzle_diameter=0.6,
+        vendor="Sovol",
+    )
+
+    machine, _process = sp.match(found, printer)
+    handed = sp.machine_with_nozzle(
+        sp.identity(found[0]), "orca", Path("orca"), printer, available=found
+    )
+
+    assert machine is not None and machine.name == "Sovol SV06 0.6 nozzle"
+    assert handed == sp.identity(machine)
+
+
+def test_a_variant_with_a_wrong_model_field_still_belongs_to_its_name() -> None:
+    """Bambu Studio führt „Creality K1 0.8 nozzle“ mit dem Modellfeld des
+    K1 Max; am K1 gehört die 0,8 trotzdem zur Wahl, am K1 Max bleibt seine."""
+    k1 = _variants(
+        "Creality",
+        "Creality K1",
+        ("Creality K1 0.4 nozzle", 0.4),
+        ("Creality K1 0.6 nozzle", 0.6),
+    )
+    misfiled = _variants("Creality", "Creality K1 Max", ("Creality K1 0.8 nozzle", 0.8))
+    k1_max = _variants(
+        "Creality",
+        "Creality K1 Max",
+        ("Creality K1 Max 0.4 nozzle", 0.4),
+        ("Creality K1 Max 0.8 nozzle", 0.8),
+    )
+    found = [*k1, *misfiled, *k1_max]
+
+    assert sp.nozzle_sizes_for_machine(found, k1[0]) == pytest.approx((0.4, 0.6, 0.8))
+    assert sp.sister_variant(found, k1[0], 0.8) == misfiled[0]
+    assert sp.sister_variant(found, k1_max[0], 0.8) == k1_max[1]
+    # Nach dem Namen zählt nur, wer eine Düse im Namen trägt.
+    plain = _variants("Creality", "", ("Creality K1", 0.4), ("Creality K1", 0.6), prefix="user")
+    assert not sp.same_printer_model(plain[0], plain[1])
+
+
+def test_a_machine_reads_its_nozzle_from_the_profile_it_inherits(unknown_printers: Path) -> None:
+    """Steht die Düse allein in der Erbbasis, gehört sie trotzdem zur Maschine
+    (RM-524): OrcaSlicers „Rolohaun Delta Flyer Refit 0.4 nozzle“ erbt sie vom
+    Rook MK1 LDO. Gelesen als 0, fand der Druckdialog zu ihrem Drucker keine
+    Maschine. Nennt die ganze Kette keine, gilt die Vorgabe des Slicers."""
+    executable = unknown_printers / "slicer.exe"
+    machines = sp.find_profiles(executable, "orca", kinds=("machine",))
+    (machine,) = [entry for entry in machines if entry.name == "Acme Unbekannt 0.6 nozzle"]
+    (printer,) = sp.discover_printers(executable, "orca")
+
+    assert machine.nozzle == pytest.approx(0.6)
+    chosen, _process = sp.match(machines, printer)
+    assert chosen is not None and chosen.name == machine.name
+
+    base = unknown_printers / "Acme" / "machine" / "base.json"
+    document = json.loads(base.read_text(encoding="utf-8"))
+    del document["nozzle_diameter"]
+    _write(base, document)
+    (machine,) = [
+        entry
+        for entry in sp.find_profiles(executable, "orca", kinds=("machine",))
+        if entry.name == "Acme Unbekannt 0.6 nozzle"
+    ]
+    assert machine.nozzle == pytest.approx(0.4)
+
+
+def test_a_bundle_machine_without_a_nozzle_takes_the_slicers_default(prusa_mini: Path) -> None:
+    """Anycubics i3 Mega nennt in PrusaSlicers Bündel keine Düse; PrusaSlicer
+    rechnet dann mit 0,4 mm, und die Maschine trägt dieselbe Zahl wie der
+    Drucker, den die Erhebung daraus macht (RM-524)."""
+    bundle = prusa_mini.parent / "resources" / "profiles" / "PrusaResearch.ini"
+    content = bundle.read_text(encoding="utf-8")
+    assert "nozzle_diameter = 0.4\n" in content
+    bundle.write_text(content.replace("nozzle_diameter = 0.4\n", ""), encoding="utf-8")
+
+    machines = sp.find_profiles(prusa_mini, "prusa", kinds=("machine",))
+
+    assert machines
+    assert all(entry.nozzle == pytest.approx(0.4) for entry in machines)
+
+
 def test_cura_native_instance_wins_over_a_same_family_title_match() -> None:
     """Die gespeicherte Cura-Identität geht vor der nur ähnlich benannten Familie."""
     title_match = sp.SlicerProfile(

@@ -64,6 +64,7 @@ class CounterProfileParams(BaseParams):
         unit="mm",
         depends_on=("profile_shape", ("ellipse",)),
         doc=_("Gesamte Breite der ausdrücklich gewählten Ellipse."),
+        placement="advanced",
     )
     height: float = param(
         title=_("Profilhöhe"),
@@ -73,6 +74,7 @@ class CounterProfileParams(BaseParams):
         unit="mm",
         depends_on=("profile_shape", ("ellipse",)),
         doc=_("Gesamte Höhe der ausdrücklich gewählten Ellipse."),
+        placement="advanced",
     )
     counter_sketch: str = param(
         title=_("Gegenkontur"),
@@ -109,6 +111,7 @@ class ProfileClampSetParams(CounterProfileParams):
         maximum=80.0,
         unit="mm",
         doc=_("Länge der Schalen entlang des Profils."),
+        placement="advanced",
     )
     liner_thickness: float = param(
         title=_("Einlagenstärke"),

@@ -31,6 +31,12 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)](#rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026) |
+| 2026-10-05 | [RM-523: Die Druckerlisten nennen Drucker, die Düse wählt der Druckdialog (05.10.2026)](#rm-523-die-druckerlisten-nennen-drucker-die-düse-wählt-der-druckdialog-05102026) |
+| 2026-10-05 | [RM-508: Der Prüfbericht zeigt zuerst die Befunde (05.10.2026)](#rm-508-der-prüfbericht-zeigt-zuerst-die-befunde-05102026) |
+| 2026-10-05 | [RM-516: Maße im Bild und Vorschauband nennen jede Zahl einmal (05.10.2026)](#rm-516-maße-im-bild-und-vorschauband-nennen-jede-zahl-einmal-05102026) |
+| 2026-10-05 | [RM-513: Ein Operationsdialog zeigt vorn höchstens vier Felder und einen Satz (05.10.2026)](#rm-513-ein-operationsdialog-zeigt-vorn-höchstens-vier-felder-und-einen-satz-05102026) |
+| 2026-10-05 | [RM-518: Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante (05.10.2026)](#rm-518-alle-dialoge-haben-eine-form-flache-abschnitte-ein-rand-eine-beschriftungskante-05102026) |
 | 2026-10-05 | [RM-520: Ein Gewinde in einer vorhandenen Bohrung — Kundenmeldung zu 0.5.2 (05.10.2026)](#rm-520-ein-gewinde-in-einer-vorhandenen-bohrung--kundenmeldung-zu-052-05102026) |
 | 2026-10-05 | [RM-506: Funktionen findet man über eine sichtbare Suche und eine Karte, die der Menüleiste folgt (05.10.2026)](#rm-506-funktionen-findet-man-über-eine-sichtbare-suche-und-eine-karte-die-der-menüleiste-folgt-05102026) |
 | 2026-10-05 | [RM-514: Der Druckdialog zeigt vorn das Wichtigste, und jeder Grund ist lesbar (05.10.2026)](#rm-514-der-druckdialog-zeigt-vorn-das-wichtigste-und-jeder-grund-ist-lesbar-05102026) |
@@ -42083,3 +42089,250 @@ Tor. Fenstertests beim Release.
 Changelog: zum nächsten Release (Suchfeld oben, Karte in der Folge der Menüleiste,
 Reparieren am Körper, passende Bausteine an der Bohrung, Einladung mit Import und
 Generator).
+
+## RM-513: Ein Operationsdialog zeigt vorn höchstens vier Felder und einen Satz (05.10.2026)
+
+<a id="rm-513-ein-operationsdialog-zeigt-vorn-höchstens-vier-felder-und-einen-satz-05102026"></a>
+<a id="rm-513"></a>
+
+**RM-513 — Ein Operationsdialog zeigt vorn zwei bis drei Werte und einen Satz.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  104 von 177 Operationen zeigen mehr als drei Felder gleichzeitig vorn, 42 sechs oder
+  mehr; `MAX_FRONT_FIELDS = 8` steht gegen Bauplan §2.4 („zwei bis drei“). Vor dem ersten
+  Feld stehen bis zu 118 Wörter, die Platzierungsanweisung ist die blasseste Zeile.
+  *Aushöhlen* widerspricht sich vorn („Oben öffnen“, „Öffnungen: Keine“, „Entlüftungen
+  1“); 104 Zahlenfelder zeigen „0,00 mm“, wo „automatisch“ gemeint ist; „fx“ steht
+  neben jedem Zahlenfeld; *Bohrung setzen* zeigt drei Koordinatenzeilen; die Klappe nennt
+  ihren Inhalt nicht; Auswahlzeilen sagen „· aus der Konstruktion“, „Bestand unbekannt“.
+  **Fix:** Grenze 4 in `op_dialog.py` und `test_interface_limits.py`, selten geänderte
+  Felder je Operation auf `placement="advanced"`; vorn der erste Satz der `doc`, „Wann
+  nicht?“ als zugeklappte `collapsible`, die Platzierungsanweisung als erste Zeile in
+  normaler Schrift; `vents` hängt an `open_top`; `param(zero_text=…)` über
+  `setSpecialValueText`; „fx“ nur mit Projektparametern oder Ausdruck; Klappe mit
+  `contents=`; Auswahlzeilen ohne Maßquelle und Doppelungen.
+  **Entschieden (Robert, 05.10.2026):** Grenze vier Felder vorn, `AGENTS.md` und
+  `test_interface_limits.py` ziehen nach; *Bohrung setzen* zeigt die Stelle als
+  Lesezeile, die Koordinaten stehen hinten, `grenzen.md` zieht nach.
+  **Abnahme:** Grenztest mit 4 grün, mindestens 90 % der Operationen mit höchstens drei
+  Feldern gleichzeitig; über dem ersten Feld in DE höchstens 25 Wörter, in FR und PT
+  höchstens 35; Registertest für `zero_text`; *Aushöhlen* mit „Oben öffnen“ ohne
+  Entlüftungszeile.
+
+**Umsetzung:** Grenze vier in `op_dialog.MAX_FRONT_FIELDS`, `test_interface_limits.py`,
+`AGENTS.md`, `grenzen.md` und Bauplan (P15, Testtabelle); 162 von 178 Operationen zeigen
+höchstens drei Felder (vorher 73), keine mehr als vier (vorher 68 mit fünf bis acht).
+Vorn steht der erste Satz der `doc` (`lead_sentence`), die Grenze zugeklappt unter „Wann
+nicht?“ mit gemerktem Zustand, die Platzierungsanweisung als erste Zeile; 19 lange
+Einleitungen sind in allen Sprachen geteilt. *Aushöhlen*: Entlüftungen hängen an „Oben
+öffnen“. `param(zero_text=…)` nennt bei 127 Parametern die Null („automatisch“, „ohne“, „aus
+dem Material“). „fx“ steht nur mit Projektparametern oder Ausdruck. *Bohrung setzen* und
+alle Operationen mit Stelle hinten zeigen vorn die Lesezeile *Stelle* mit *Stelle im Bild
+wählen* (Entscheidung Robert). Die Klappe nennt zugeklappt ihre ersten drei Felder. C16:
+Auswahlzeilen nennen Name und Maß ohne „· aus der Konstruktion“, Spulenzeilen das Material
+nur, wenn der Name es nicht sagt, den Bestand nur, wenn er bekannt ist. Die Abschnitte zur
+Vorderseite und zu bedingten Feldern stehen in der Regel `vorderseite.md`. Bewusst hinten
+und damit nicht mehr im Merkmalfenster und nicht mehr als Projektparameter benannt:
+Deckelart und Wandstärke des Behälters (der Behälter-Assistent fragt den Deckel selbst),
+Befestigung der Halter, Richtung des Langlochs (der Griff setzt sie).
+
+**Nachweis:** Dialogarbeit im Worktree, Tests ohne Fenster grün (Grenztest, Register-
+test für `zero_text`, 90-Prozent-Test, Wörter über dem ersten Feld DE ≤ 25, übersetzt ≤ 35);
+Tor über den zusammengeführten Stand 24 035 bestanden, Exit 0; mypy, ruff, Format sauber.
+Commits `e52d82fac`, Merge `d4fc5fb9f`, C16 `7a047b0c4`. Offen in RM-213: die
+Fensterabnahme des Dialogs und die Bilder samt Alttexten; in RM-016: die Agenten-Suite,
+weil der Agent für Rückseitenfelder nur die Bedingung liest.
+Changelog: zum nächsten Release (Dialoge zeigen vorn das Wichtigste, Null mit Namen, Stelle
+als eine Zeile).
+
+## RM-518: Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante (05.10.2026)
+
+<a id="rm-518-alle-dialoge-haben-eine-form-flache-abschnitte-ein-rand-eine-beschriftungskante-05102026"></a>
+<a id="rm-518"></a>
+
+**RM-518 — Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Einstellungen, Erstlauf und *Eigener Baustein* benutzen gerahmte `QGroupBox`, die
+  übrigen flache Klappen; Ränder sind 12 px (`ROOMY`) oder 16 px (`WIDE`); Erzeugen,
+  Eigener Baustein und Erstlauf richten ihre Formulare nicht aus. Im Operationsdialog
+  klaffen 120 bis 170 px zwischen Beschriftung und Feld, weil `align_forms` die
+  zugeklappte Rückseite mitzählt.
+  **Fix:** Abschnitte über `sectionHeading` bzw. `collapsible`; Rand `WIDE`; jeder Dialog
+  mit Formularen ruft `align_forms`; die Spaltenbreite kommt aus der längsten
+  Beschriftung vorn, längere hinten brechen um.
+  **Abnahme:** Wächter ohne `QGroupBox` in Dialogen; Dialoge mit mindestens zwei
+  `QFormLayout` richten aus; in DE, FR und PT höchstens 24 px hinter der längsten
+  Beschriftung vorn. Überschneidung RM-502.
+
+**Umsetzung:** Kein `QGroupBox` mehr in Dialogen (Ausnahme mit Grund: die
+Filamentkarten in `filament_usage.py`, eine Karte je Zeile), Wächter
+`test_no_dialog_frames_its_sections`; Rand `WIDE` überall, auch im Organizer. Jeder Dialog
+mit mehreren Formularen richtet aus (`test_a_dialog_with_several_forms_aligns_them`), auch
+Gegenstück- und Organizer-Dialog; die Übergangslisten des Wächters sind leer und melden,
+wenn ein Eintrag erledigt ist. `dialogs.align_to_the_front`: Die Zeilen vorn, die dastehen,
+setzen die Spalte; eine Beschriftung hinten oder eine bedingte vorn bricht um, die
+Lesezeile *Stelle* richtet beim Erscheinen neu aus. Zuerst zählte die Spalte verborgene
+Bedingungszeilen mit, und die Stelle versteckte sich erst nach dem Ausrichten — auf
+Französisch zog „Emplacement“ die Spalte für Dialoge ohne Stelle auf.
+
+**Nachweis (echtes Fenster, Windows, Sonde über alle Operationsdialoge):** Abstand
+hinter der längsten Beschriftung vorn, je 171 Dialoge: vorher DE 47, FR 75, PT 99 px (5,
+52, 6 Dialoge über 24), danach DE 7, FR 6, PT 6 px, keiner über 24. Tests
+`test_a_hidden_row_in_front_does_not_widen_the_column`,
+`test_the_place_line_joins_the_column_only_while_it_stands` (auf Französisch; mit der alten
+Spaltenrechnung rot). Commits `40fc800e4`, Merge `d4fc5fb9f` und der Nachzug der Spalte.
+Changelog: zum nächsten Release (eine Form für alle Dialoge, Felder beginnen an einer
+Kante).
+
+## RM-516: Maße im Bild und Vorschauband nennen jede Zahl einmal (05.10.2026)
+
+<a id="rm-516-maße-im-bild-und-vorschauband-nennen-jede-zahl-einmal-05102026"></a>
+<a id="rm-516"></a>
+
+**RM-516 — Maße im Bild und Vorschauband nennen jede Zahl einmal.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Eine gewählte Bohrung zeigt ihren Durchmesser fünfmal (Marke, Maßzahl, Karte, Feld,
+  Dock) und ihre Lage über sieben Zahlen; Bezugsnamen tragen Nummern („Außenkante 4“,
+  „Mitte 2“), die Felder stehen rund 200 px über dem Teil. Das Vorschauband hat sieben
+  Zeilen mit „Körperzahl: 1 → 1“ und Maßen mit drei Nachkommastellen und festem „mm“
+  (`print_contract.py:264`).
+  **Fix:** Solange die Maße im Bild stehen, fällt die Merkmalsmarke weg, der Durchmesser
+  steht nur im Feld, die Lage über zwei Kantenmaße, X/Y/Z hinter „Weitere Werte“, Bezüge
+  nach der Flächenachse benannt. Vorschauband: Titelzeile und eine Zeile mit dem, was
+  sich ändert; Neues und Behobenes höchstens drei Zeilen; keine Zeile „A → A“; Maße über
+  `labels.length`.
+  **Abnahme:** Im Zustand von guide-thread-a-hole-1 höchstens fünf Zahlen im Bild, kein
+  Bezugsname mit Ziffer; das Vorschauband in der Lage von guide-drill-a-hole-8 höchstens
+  zwei Zeilen; in Zoll kein „mm“. Überschneidung RM-090.
+
+**Umsetzung:** Solange Maße im Bild stehen, fällt die Marke des gemessenen
+Merkmals weg; der Durchmesser steht nur im Feld (über ihm allein das Warnwort
+„Ausgangswert: eingepasst“, die Überschrift im Reiter Auswahl nur der Name). Die
+Lage geben zwei Kantenmaße; die Nachbarmitte kommt über „Bezug ändern“ dazu, beim
+Setzen einer neuen Bohrung bleibt sie als Zielhilfe. X, Y, Z stehen zugeklappt
+unter „Weitere Werte“. Bezüge heißen nach der Weltseite wie im Objektbaum
+(„Außenkante links“, „Außenkante vorn“), eine Nummer erst ab drei Kanten einer
+Seite. Das Vorschauband ist Titel plus eine Zeile; Außenmaß, Körperzahl und
+Material stehen nur bei Änderung, über `labels.length`; Neues und Behobenes
+höchstens drei Zeilen, „Behoben“ weiter nur nach vollständiger Neuprüfung
+(RM-090). Dazu Roberts Wunsch vom selben Tag: Die Maßkarte ist so breit wie ihre
+längste Zeile und rund (Stilblatt und Maske). Mitbehoben: `bore_advice` schrieb ein
+festes „mm“, in Zoll stand „Bohrungsmaß: 5,20 mm“.
+
+**Nachweis (echtes Fenster, plate_holes, 1600 × 1000):** Zahlen im Bild im Zustand
+guide-thread-a-hole-1 20 → 5, kein Bezugsname mit Ziffer; Vorschauband im Zustand
+guide-drill-a-hole-8 8 → 2 Zeilen; in Zoll kein „mm“ (Dock „0,2047 in“); Maßkarte
+408 px eckig → 304 px rund. Tor im Worktree 23 984 bestanden, nach dem Zusammenführen
+mit Kartenlage und Längenwächter erneut grün; Fenstertests geschrieben, beim Release.
+Commits `af3c8488d`, `442b8be9d`, `e0a69c61c`. Die zwei Kantenfelder stehen weiter
+rund 200 px über dem Teil — Roberts Regel vom 21./22.09.2026, Felder vom Körper
+fern. Offen in RM-213: Bilder und die übrigen Fensterzustände.
+Changelog: zum nächsten Release (jede Zahl einmal im Bild, Bezüge nach Seiten
+benannt, kürzeres Vorschauband, Bohrungsmaß in Zoll richtig).
+
+## RM-508: Der Prüfbericht zeigt zuerst die Befunde (05.10.2026)
+
+<a id="rm-508-der-prüfbericht-zeigt-zuerst-die-befunde-05102026"></a>
+<a id="rm-508"></a>
+
+**RM-508 — Der Prüfbericht zeigt zuerst die Befunde.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Im Ruhezustand trägt der Bericht rund 175 der 290 Wörter des Hauptfensters, davon
+  nur rund 88 Befundtext. In report.png belegt der Kopf 62 % der Karte, sichtbar ist
+  einer von vier Befunden. Dauerhaft da: gesperrtes „Modell nachbauen“ mit Satz,
+  „0 × Fehler“, Kennzahlen, Suche ab zwei Befunden. Unter jedem Befund Folge, Ort und
+  Grundlage (meist ohne eigene Aussage), zwei Knöpfe für denselben Kameraflug, eine
+  Nebenfolge-Floskel unter dem Hauptknopf (67 von 109 Sätzen), unbenannte Werte
+  („— Deckel · 0 mm³ · 100 %“), Klappen als gerahmte Knöpfe. Für den Export, mit dem
+  alle Hauptwege enden, gibt es keinen sichtbaren Knopf.
+  **Fix:** Kopf als eine Zeile „Status · 2 Warnungen · 4 Hinweise · Prüfumfang ▸“ mit
+  Grund bei unvollständiger Bewertung; Zähler ohne Nullen; Kennzahlen in den
+  Prüfumfang; Filter ab acht Befunden; „Modell nachbauen“ als Handlung am gewählten
+  Körper. Befundliste mit Mindesthöhe drei Zeilen; bei Platzmangel rollt der Kopf.
+  Unter einem Befund eine Metazeile; ein Zeige-Knopf; die Nebenfolge nur bei
+  `changes`; je Wert ein Name; Klappen über `collapsible`. „Exportieren …“ neben
+  „An den Slicer übergeben …“.
+  **Entschieden (Robert, 05.10.2026):** Folge, Ort und Grundlage stehen als eine
+  Metazeile („Hinweis · Dose · intern geschätzt“), ein eigener Folgesatz nur bei echter
+  Folge; der Vertrag aus RM-090 (Produktkompass §4.3) wird so fortgeschrieben.
+  **Abnahme:** In der Lage von main-window.png höchstens 100 Wörter im Bericht und über
+  der Liste höchstens 12; in der Lage von report.png mindestens drei Befundzeilen; kein
+  Befund mit zwei Knöpfen derselben Handlung; Export mit einem sichtbaren Klick; bei
+  1280 × 800 und nur Hinweisen ist die Berichtskarte höchstens 120 px hoch (aus RM-511
+  übernommen; seit RM-511 folgt die Karte dem Inhalt, gemessen 252 px ohne Befund).
+
+**Umsetzung:** Der Kopf ist eine Zeile: Status, Zähler ohne Nullen (zugleich
+die Klappe der Liste), *Prüfumfang* mit den benannten Kennzahlen; ein Grund steht
+nur bei unvollständiger Bewertung. Nur Hinweise beginnen zugeklappt, Fehler oder
+Warnung öffnen die Liste. Eine Zeile zeigt ihren ersten Satz, die gewählte den
+ganzen; die Liste gibt bis drei Zeilen nach, dann rollt der Kopf. Unter einem
+Befund die Metazeile „Hinweis · Dose · intern geschätzt“, ein Zeige-Knopf, ein
+Folgesatz nur beim Fehler, die Nebenfolge nur bei echter Änderung
+(`effect_worth_showing`), je Wert ein Name. Klappen über `collapsible`
+(`heading_row=`), Filter ab acht Zeilen, *Exportieren …* neben *An den Slicer
+übergeben …* unten. *Modell nachbauen* ist eine Hauptaktion am gewählten Körper.
+Der Vertrag aus Produktkompass §4.3 ist fortgeschrieben.
+
+**Nachweis (echtes Fenster, Windows):** Lage main-window (dose-mit-deckel,
+2560 × 1369): Wörter im Bericht 162 → 87, über der Liste 34 → 7, Befundzeilen 6 von
+6; Lage report.png (620 × 430): 4 von 4 Befundzeilen; 1280 × 800 mit nur Hinweisen
+(weg1-halterung-anpassen): Karte 398 → 120 px. Nach dem Zusammenführen mit der
+schmaleren, bündigen Karte (400 px) wiederholt: 87 / 7 / 6 von 6, 4 von 4,
+120 px. Kein Befund mit zwei Knöpfen derselben Handlung, Export mit einem Klick.
+Agent im Worktree 23 987 bestanden; nach dem Zusammenführen Tor grün. Commit
+`94653b4fe`. Offen in RM-213: Bilder; RM-512 behandelt den vorgewählten Hinweis
+mit Akzentknopf.
+Changelog: zum nächsten Release (Prüfbericht zeigt zuerst die Befunde, Export
+neben der Übergabe, Nachbau am Körper).
+
+## RM-523: Die Druckerlisten nennen Drucker, die Düse wählt der Druckdialog (05.10.2026)
+
+<a id="rm-523-die-druckerlisten-nennen-drucker-die-düse-wählt-der-druckdialog-05102026"></a>
+<a id="rm-523"></a>
+
+**RM-523 — Erste Schritte zeigten jede Düsenvariante als eigenen Drucker.** Robert: nur die
+  Drucker anzeigen, die Düse erst im Druckdialog wählen. Bambu Studio führt 202 Profile für
+  92 Geräte, OrcaSlicer 996 für 400, PrusaSlicer 1050 für 381.
+
+**Vorher geprüft:** ob der Druckdialog jede Düse eines Modells auf die richtige Maschine
+stellt — Sonde über acht installierte Slicer, 4907 Druckerprofile. PrusaSlicer und SuperSlicer
+verloren bei 729 von 1390 und 264 von 966 Wechseln das Maschinenprofil: `match` hielt sich an
+die im Bündel genannte Variante (`prusaslicer_printer`). Bei gleicher Düse sprang „MK4S HF0.4“
+auf die gewöhnliche 0,6, und die Übergabe (`machine_with_nozzle`) wählte alphabetisch — am
+SV06 die High-Speed-Variante, wo der Dialog die Grundausführung nahm. Bambu Studio führt
+„Creality K1 0.8 nozzle“ mit dem Modellfeld des K1 Max; am K1 fehlte die 0,8.
+
+**Fix:** `slicer_profiles.model_name` (Name ohne Düse, „HF“ bleibt), `sister_variant` und
+`variant_order` als eine Stelle für Dialog und Übergabe; `match` folgt einer festgelegten
+Variante zur Schwester und bleibt ohne Schwester leer (RM-329); `same_printer_model` kennt
+auch den Namen ohne Düse. Danach jeder Wechsel richtig (PrusaSlicer 1121, SuperSlicer 791,
+OrcaSlicer 605, Bambu Studio 110). `add_printer_choices` zeigt je Modell eine Zeile
+(`labels.printer_title`); dafür steht die gewählte oder vorgeschlagene Variante (`keep`),
+sonst die 0,4er, und der Hinweis am Eintrag nennt die Düse. Erststart und Einstellungen
+speichern einen Drucker aus dem Slicer mit der Düse, die der Druckdialog gesetzt hat
+(`with_saved_nozzle`); vorher setzte jedes Speichern sie still auf die Variante zurück.
+Kopfzeile, Druckziel (neue Zeile *Düse*) und Prozesshinweis nennen denselben Namen.
+Handbuch *Beim ersten Start*, fünf Kataloge. Die Funktionen im Kern kamen mit `b79f8a07e`
+in den Baum. Drei Profile mit geerbter Düse lesen 0 mm: RM-524.
+
+**Nachweis:** `test_slicer_profiles.py` (`model_name`, festgelegte Variante, Ausführung,
+Grundausführung in Dialog und Übergabe, falsches Modellfeld; am Stand `b1d2b69ff` rot),
+`test_printer_choices.py`; Fenstertests (Release): `test_variants_of_one_printer_become_one_choice`,
+`test_choosing_a_slicer_printer_again_keeps_the_nozzle_from_the_print_dialog`,
+`test_saving_the_settings_keeps_the_nozzle_chosen_in_the_print_dialog`.
+
+## RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)
+
+<a id="rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026"></a>
+<a id="rm-524"></a>
+
+**RM-524 — Drei Herstellerprofile verloren beim Lesen ihre Düse.** Gefunden bei RM-523:
+  `slicer_profiles._read` nimmt `nozzle_diameter` nur aus der Profildatei. OrcaSlicers und
+  ElegooSlicers „Rolohaun Delta Flyer Refit 0.4 nozzle“ erbt sie vom Rook MK1 LDO,
+  PrusaSlicers und SuperSlicers „Anycubic i3 Mega“ und „… i3 Mega S“ nennen sie in der ganzen
+  Kette nicht. Die Maschine trug 0 mm, `match` fand zum Drucker keine, und der Druckdialog
+  ließ das Maschinenprofil leer.
+
+**Fix:** `find_profiles` liest die Düse einer Maschine ohne eigene Angabe aus der Erbkette,
+die es für Maschinen ohnehin abgeht (`_stated_nozzle`); nennt die Kette keine, gilt die
+Vorgabe des Slicers aus `MACHINE_DEFAULTS` — dieselbe, mit der die Druckererhebung rechnet.
+`_prusa_listing` nimmt sie über `_machine_value`. Danach trägt in allen sieben Orca- und
+Prusa-Beständen dieses Rechners jede Maschine eine Düse, der Rolohaun-Drucker findet seine.
+
+**Nachweis:** `test_a_machine_reads_its_nozzle_from_the_profile_it_inherits`,
+`test_a_bundle_machine_without_a_nozzle_takes_the_slicers_default` (ohne Fix rot mit 0,0).

@@ -2752,7 +2752,11 @@ class PrintSettingsDialog(QDialog):
         self.printer_choice = PrinterComboBox(self)
         # Nach Verfahren gruppiert wie im Erststart (RM-071): Ein Resin-Drucker
         # stand hier flach zwischen den FDM-Geräten.
-        add_printer_choices(self.printer_choice, profiles.printer_profiles())
+        add_printer_choices(
+            self.printer_choice,
+            profiles.printer_profiles(),
+            keep={self.session.profile.printer.id},
+        )
         # Der Drucker, **mit dem gerechnet wird** — nicht die Kennung im
         # Dokument. Kennt dieser Rechner sie nicht (ein eigener Drucker eines
         # anderen Rechners), rechnet die Szene mit dem allgemeinen Drucker
@@ -5016,7 +5020,9 @@ class PrintSettingsDialog(QDialog):
             search = self.printer_choice.search_field.text()
             with QSignalBlocker(self.printer_choice):
                 self.printer_choice.clear()
-                add_printer_choices(self.printer_choice, known)
+                add_printer_choices(
+                    self.printer_choice, known, keep={current_id, self._slicers_printer}
+                )
                 _select_data(self.printer_choice, current_id)
                 self.printer_choice.search_field.setText(search)
             self._cura_printer_candidate = None

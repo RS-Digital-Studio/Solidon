@@ -110,6 +110,13 @@ QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature", "pattern_fe
 """Für jede Merkmalsart ohne eigene Zeile in :data:`QUICK_FEATURES`."""
 
 QUICK_SEVERAL_FEATURES = ("group_pattern",)
+
+#: Der Schlüssel der Hauptaktion *Modell nachbauen* — keine Operation, sondern
+#: ein Dialog (``rebuild_dialog``), der eine Transaktion vorschlägt. Sie gilt
+#: genau einem gewählten Körper und steht deshalb hier, nicht im Prüfbericht
+#: (RM-508, Durchsicht B19: gesperrt und mit einem Satz von elf Wörtern stand
+#: sie dort auch ohne Auswahl).
+REBUILD: Final = "rebuild_model"
 """Bei mehreren markierten Merkmalszeilen eines Körpers (RM-504).
 
 Wer mehrere Einzelmerkmale markiert, hat sie meist als Gruppe gemeint — das
@@ -409,6 +416,8 @@ class SelectionOperationsPanel(QWidget):
     """Der Katalog, gefiltert auf diese Merkmalsart (:data:`MATCHING_PARTS_AT`)."""
     paletteRequested = Signal(str)
     """Die Befehlspalette mit diesem Suchtext — „In allen Funktionen suchen“."""
+    rebuildRequested = Signal()
+    """*Modell nachbauen* am gewählten Körper (:data:`REBUILD`)."""
 
     def __init__(self, specs: Iterable[OperationSpec], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -527,6 +536,23 @@ class SelectionOperationsPanel(QWidget):
             button.setObjectName("quickOperation")
             button.hide()
             self._quick_buttons[name] = button
+        rebuild = QToolButton(self)
+        title = tr("Modell nachbauen")
+        rebuild.setText(title)
+        rebuild.setProperty("operationTitle", title)
+        rebuild.setIcon(icon("category.primitive", rebuild))
+        rebuild.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        rebuild.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        rebuild.setMinimumHeight(TARGET_SIZE)
+        rebuild.setObjectName("quickOperation")
+        tip = tr("Baut den Körper aus erkannten Formen nach; seine Maße werden danach änderbar.")
+        rebuild.setToolTip(tip)
+        rebuild.setStatusTip(tip)
+        rebuild.setAccessibleDescription(tip)
+        rebuild.clicked.connect(lambda _checked=False: self.rebuildRequested.emit())
+        rebuild.hide()
+        self._quick_buttons[REBUILD] = rebuild
+        self.rebuild_button = rebuild
 
         self.search = QLineEdit(self)
         self.search.setClearButtonEnabled(True)
@@ -797,15 +823,27 @@ class SelectionOperationsPanel(QWidget):
         self._quick_shown = wanted
         self._quick_columns = columns
         self._quick.setColumnStretch(1, 1 if columns == 2 else 0)
-        for index, name in enumerate(wanted):
-            button = self._quick_buttons[name]
-            if columns == 1:
-                self._quick.addWidget(button, index, 0)
-            elif index < 2:
-                self._quick.addWidget(button, 0, index)
+        # Nach der ersten Zeile stehen zwei weitere nebeneinander, wenn beide in
+        # ihre Hälfte passen (am Körper *Teilen* und *Modell nachbauen*), sonst
+        # nimmt einer die ganze Breite.
+        half = (available - self._quick.horizontalSpacing()) // 2
+        row = 0
+        index = 0
+        while index < len(wanted):
+            pair = wanted[index : index + 2] if columns == 2 else wanted[index : index + 1]
+            if len(pair) == 2 and (
+                index == 0
+                or max(self._quick_buttons[name].sizeHint().width() for name in pair) <= half
+            ):
+                for column, name in enumerate(pair):
+                    self._quick.addWidget(self._quick_buttons[name], row, column)
             else:
-                self._quick.addWidget(button, max(index - 1, 0), 0, 1, 2)
-            button.show()
+                pair = pair[:1]
+                self._quick.addWidget(self._quick_buttons[pair[0]], row, 0, 1, columns)
+            for name in pair:
+                self._quick_buttons[name].show()
+            index += len(pair)
+            row += 1
 
     def _wrap_label(self, button: QToolButton, room: int) -> None:
         """Die Beschriftung auf die verfügbare Breite umbrechen, nicht abschneiden.
@@ -954,8 +992,13 @@ class SelectionOperationsPanel(QWidget):
         part_selected: bool = False,
         left_out: frozenset[str] = frozenset(),
         features: int = 0,
+        rebuild: bool = False,
     ) -> None:
         """Auswahl, Lage und Freigaben nachführen, ohne die Liste neu zu bauen.
+
+        ``rebuild`` sagt, ob *Modell nachbauen* am gewählten Körper geht
+        (``MainWindow._rebuild_allowed``); die Hauptaktion steht an genau einem
+        Körper ohne gewähltes Merkmal.
 
         ``features`` ist die Zahl markierter Merkmale am gewählten Körper, wenn
         kein einzelnes gewählt ist (:func:`quick_names`).
@@ -1037,15 +1080,15 @@ class SelectionOperationsPanel(QWidget):
         # zweites Mal, nur mit dem Körper davor.
         self.summary.setVisible(not feature_kind)
         self._take_availability(availability)
-        self._lay_out_quick(
-            tuple(
-                name
-                for name in quick_names(
-                    selected, feature_kind, left_out=left_out, features=features
-                )
-                if self._buttons[name].isEnabled()
-            )
-        )
+        quick = [
+            name
+            for name in quick_names(selected, feature_kind, left_out=left_out, features=features)
+            if self._buttons[name].isEnabled()
+        ]
+        if selected == 1 and not feature_kind and rebuild:
+            # Wie die Registerknöpfe der Zeile: Steht er da, geht er auch.
+            quick.append(REBUILD)
+        self._lay_out_quick(tuple(quick))
         self._filter()
 
     def _filter(self, query: str | None = None) -> None:

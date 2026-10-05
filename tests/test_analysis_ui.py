@@ -4602,7 +4602,7 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
     """
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
-    from app.ui.panels import ReportPanel
+    from app.ui.panels import _LINE_ROLE, ReportPanel
 
     orphan_text = (
         "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
@@ -4643,7 +4643,7 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
             )
         )
 
-        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        texts = [panel.list.item(row).data(_LINE_ROLE)[1] for row in range(panel.list.count())]
         # Seit dem 11.09.2026 bündelt der Bericht jede gleiche Meldung ab zwei:
         # die drei geschlossenen Lücken sind eine Zeile „(3) …".
         assert len(texts) == 4, f"eine Sammelzeile statt 118, der Rest bleibt: {texts!r}"
@@ -4666,9 +4666,9 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
 
         # Die Kopfzeile zählt die Befunde, nicht die Zeilen — und der
         # ``count``-Wert des Kernbefunds bläht sie nicht auf.
-        summary = panel.summary.text()
-        assert f"2 × {tr('Warnung')}" in summary, summary
-        assert f"121 × {tr('Hinweis')}" in summary, summary
+        summary = panel.list_toggle.text()
+        assert "2 Warnungen" in summary, summary
+        assert "121 Hinweise" in summary, summary
     finally:
         panel.deleteLater()
 
@@ -4687,7 +4687,7 @@ def test_a_bundle_survives_findings_that_arrive_later(qt_app: QApplication) -> N
     """
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
-    from app.ui.panels import ReportPanel
+    from app.ui.panels import _LINE_ROLE, ReportPanel
 
     orphan_text = (
         "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
@@ -4718,10 +4718,10 @@ def test_a_bundle_survives_findings_that_arrive_later(qt_app: QApplication) -> N
                 )
             ]
         )
-        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        texts = [panel.list.item(row).data(_LINE_ROLE)[1] for row in range(panel.list.count())]
         assert len(texts) == 2, f"die Sammelzeile übersteht den Nachschub: {texts!r}"
         assert any(text.startswith("(118) Formdetails") for text in texts)
-        assert f"119 × {tr('Hinweis')}" in panel.summary.text(), panel.summary.text()
+        assert "119 Hinweise" in panel.list_toggle.text(), panel.list_toggle.text()
 
         # Der Nachschub-Weg dedupliziert identische Kernbefunde. Vier
         # wortgleiche Warnungen ohne weitere Unterscheidungsmerkmale sind
@@ -4736,10 +4736,10 @@ def test_a_bundle_survives_findings_that_arrive_later(qt_app: QApplication) -> N
                 for _ in range(4)
             ]
         )
-        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        texts = [panel.list.item(row).data(_LINE_ROLE)[1] for row in range(panel.list.count())]
         assert texts.count("Zwei Objekte berühren sich") == 1, texts
         assert len(texts) == 3, texts
-        assert f"1 × {tr('Warnung')}" in panel.summary.text(), panel.summary.text()
+        assert "1 Warnung" in panel.list_toggle.text(), panel.list_toggle.text()
     finally:
         panel.deleteLater()
 
@@ -4762,7 +4762,7 @@ def test_a_bundle_never_crosses_the_body_or_step_its_click_will_show(
 
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
-    from app.ui.panels import ReportPanel
+    from app.ui.panels import _LINE_ROLE, ReportPanel
 
     findings = tuple(
         Finding(
@@ -4797,7 +4797,7 @@ def test_a_bundle_never_crosses_the_body_or_step_its_click_will_show(
         qt_app.processEvents()
 
         assert panel.list.count() == 2, "je Körper und Schritt steht eine ehrliche Sammelzeile"
-        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        texts = [panel.list.item(row).data(_LINE_ROLE)[1] for row in range(panel.list.count())]
         assert texts[0] != texts[1], "gleich große Bündel müssen sichtbar unterscheidbar bleiben"
         assert "Griff" in texts[0] and f"{tr('Schritt')} 7" in texts[0]
         assert "Deckel" in texts[1] and f"{tr('Schritt')} 11" in texts[1]
@@ -5042,11 +5042,11 @@ def test_identical_findings_bundle_from_two_and_never_across_severity(
     """
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
-    from app.ui.panels import ReportPanel
+    from app.ui.panels import _LINE_ROLE, ReportPanel
 
     def shown(findings: tuple[Finding, ...]) -> list[str]:
         panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
-        return [panel.list.item(row).text() for row in range(panel.list.count())]
+        return [panel.list.item(row).data(_LINE_ROLE)[1] for row in range(panel.list.count())]
 
     def echo(count: int, severity: str = "info") -> tuple[Finding, ...]:
         return tuple(
@@ -5391,8 +5391,8 @@ def test_an_empty_report_offers_nothing_to_filter(qt_app: QApplication) -> None:
     mit Inhalt — „Keine Befunde." — stand darüber wie eine Überschrift. Das ist
     der häufigste Zustand des Berichts, nicht ein Randfall.
 
-    Die Schwelle ist zwei: Bei einem einzigen Befund kann ein Filter nur ihn
-    treffen oder die Zeile „Kein Befund passt zu …" erzeugen.
+    Die Schwelle ist acht (RM-508): Bis dahin überblickt man die Liste, und
+    die Filterzeile stand ab zwei Befunden als Gerüst über ihr.
     """
     from app.ui.panels import FILTER_FROM, ReportPanel
 
@@ -5424,7 +5424,15 @@ def test_an_empty_report_offers_nothing_to_filter(qt_app: QApplication) -> None:
             values={"a": "Halter", "b": "Deckel"},
         )
         panel.add_findings([second])
-        assert not panel.search.isHidden(), "ab zwei Zeilen gibt es etwas zu filtern"
+        assert panel.search.isHidden(), "zwei Zeilen überblickt man ohne Filter (RM-508)"
+        panel.add_findings(
+            [
+                Finding(code=f"test.row_{index}", severity="info", message=f"Zeile {index}.")
+                for index in range(FILTER_FROM - 2)
+            ]
+        )
+        assert panel.list.count() == FILTER_FROM
+        assert not panel.search.isHidden(), f"ab {FILTER_FROM} Zeilen gibt es etwas zu filtern"
         assert not panel.severity.isHidden()
 
         # Und ein Filter, der wieder verschwindet, nimmt seine Wirkung mit:
@@ -7712,7 +7720,7 @@ def test_a_bundle_of_summarised_losses_announces_the_same_count_everywhere(
         assert value_line("count", 49) in item.data(Qt.ItemDataRole.AccessibleDescriptionRole)
         stored: Finding = item.data(Qt.ItemDataRole.UserRole)
         assert stored.values["count"] == 49
-        assert f"2 × {tr('Hinweis')}" in panel.summary.text()
+        assert "2 Hinweise" in panel.list_toggle.text()
     finally:
         panel.deleteLater()
 
@@ -7999,7 +8007,7 @@ def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -
         assert panel.summary.text().startswith(tr("Bewertung unvollständig"))
         panel.set_review_context("Prüfumfang vollständig nachgewiesen", ())
         assert panel.summary.text().startswith(tr("Bereit zur Übergabe"))
-        assert f"1 × {tr('Hinweis')}" in panel.summary.text()
+        assert "1 Hinweis" in panel.list_toggle.text()
         assert not panel.list.selectedItems(), "ein Hinweis zur Einrichtung ist nicht vorgewählt"
 
         warning = Finding(
@@ -8014,7 +8022,7 @@ def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -
             )
         )
         assert panel.summary.text().startswith(tr("Entscheidung erforderlich"))
-        assert f"1 × {tr('Warnung')}" in panel.summary.text()
+        assert "1 Warnung" in panel.list_toggle.text()
 
         # Gegenprobe: Ein Hinweis **am Körper** mit Handlung wird vorgewählt.
         below = Finding(

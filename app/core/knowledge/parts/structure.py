@@ -36,6 +36,7 @@ from app.core.knowledge.parts.registry import (
 )
 from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param, play_param
+from app.core.registry.params import ZERO_AS_CHOSEN, ZERO_AUTOMATIC
 from app.core.types import BaseParams, PartResult
 from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, _
@@ -230,6 +231,7 @@ class RibParams(BaseParams):
         maximum=20.0,
         placement="advanced",
         doc=_("Null heißt: zwei Drittel der Wandstärke, sonst zeichnet sie sich ab."),
+        zero_text=ZERO_AUTOMATIC,
     )
     fillet: float = param(
         title=_("Anlauf"),
@@ -238,6 +240,7 @@ class RibParams(BaseParams):
         minimum=0.0,
         maximum=20.0,
         doc=_("Schräger Auslauf am Fuß statt einer scharfen Kante."),
+        placement="advanced",
     )
 
 
@@ -305,6 +308,7 @@ class CableGlandParams(BaseParams):
             "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
             "Null verwendet die ausgewählte Größe."
         ),
+        zero_text=ZERO_AS_CHOSEN,
     )
     wall: float = param(
         title=_("Wandstärke"),
@@ -328,6 +332,7 @@ class CableGlandParams(BaseParams):
         maximum=20.0,
         placement="advanced",
         doc=_("Null heißt: vier Fünftel des Kabeldurchmessers."),
+        zero_text=ZERO_AUTOMATIC,
     )
 
 
@@ -470,6 +475,7 @@ class ProfileTongueParams(BaseParams):
             "Null nutzt die Kammertiefe mit Spiel zum Nutgrund. Ein kleinerer Wert "
             "kürzt den Kopf; seine Verjüngung bleibt passend zur Kammer."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
 
 
@@ -613,6 +619,7 @@ class CableClipParams(BaseParams):
             "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
             "Null verwendet die ausgewählte Größe."
         ),
+        zero_text=ZERO_AS_CHOSEN,
     )
     width: float = param(
         title=_("Breite"),
@@ -640,6 +647,8 @@ class CableClipParams(BaseParams):
             "Wie weit die Öffnung je Seite enger ist als das Kabel — das ist es, "
             "was den Clip halten lässt. Null heißt: ein Fünftel des Durchmessers."
         ),
+        placement="advanced",
+        zero_text=ZERO_AUTOMATIC,
     )
     play: float = play_param(maximum=2.0)
 
@@ -776,6 +785,7 @@ class GussetParams(BaseParams):
             "Wie dick der Winkel ist, längs der Kante gemessen. Null heißt: so "
             "dick wie die Rippe es täte — zwei Drittel der Wand."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
     wall: float = param(
         title=_("Wandstärke"),

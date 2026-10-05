@@ -111,7 +111,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
-| `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
+| `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
 | `header.py` | Kopfzeile: Projektname, Druckerwechsel, die tatsächlich belegten Filamente (`mesh.slot_indices`) |
 
@@ -119,7 +119,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 
 | Datei | Zweck |
 |---|---|
-| `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`), `one_step` (mehrere `apply` als eine Transaktion); `evaluation_profile` ist das Profil der Auswertung samt wirksamer Stützschwelle des Fensters (Entscheidung L), `evaluation_follows` sagt, ob eine spät gelesene Grundlage neu auswerten lässt |
+| `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`), `one_step` (mehrere `apply` als eine Transaktion); `evaluation_profile` (Profil der Auswertung samt Stützschwelle, `schichtanalyse.md`), `evaluation_follows` (spät gelesene Grundlage wertet neu aus) |
 | `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `collect_in_main_thread`, GC-Zähler mit Zustandswahrung; `stop_watching_the_dying` für Ereignisfilter, die ihr Objekt überleben; `configure_gil_switching` (Umschaltintervall), `Worker.run` mit 1-ms-Takt unter Windows |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung; Zuhörer melden dort ihre Ereignisarten an (`listen`), wer es tut, sagt der Modul-Docstring |
 | `loading.py` | Ladeanzeige über der Ansicht (§2.8); `ProgressTiming` führt je Auswertung eine Uhr und einen Zeittext für Statuszeile und Schleier |
@@ -138,7 +138,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 
 | Datei | Zweck |
 |---|---|
-| `placement_flow.py` | Flächenplatzierung (§18.5): `_settle` setzt, `_begin_depth` steuert Tiefe, Escape ruft `step_back`. `PlacementHost` verbindet Dialog/`QuietHost`, `Session.placement_async` Fläche/Werkzeug, `_Dimensions` die Maße. Mündung zuerst, `0`=Durchgang. Langloch: Flächennormale beim Setzen, positive Merkmalachse beim Ziehen/Ändern, Gegenmündung rechtshändig. Alt-`measured_frame`: Achse im Arbeiter lösen, Ausdrücke beim Verschieben erhalten. |
+| `placement_flow.py` | Flächenplatzierung (§18.5): `_settle` setzt, `_begin_depth` steuert Tiefe, Escape ruft `step_back`. `PlacementHost` verbindet Dialog/`QuietHost`, `Session.placement_async` Fläche/Werkzeug, `_Dimensions` die Maße. Mündung zuerst, `0`=Durchgang. Langloch: Flächennormale beim Setzen, positive Merkmalachse beim Ziehen/Ändern, Gegenmündung rechtshändig. Alt-`measured_frame`: `operationen.md`. |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |
@@ -162,8 +162,8 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 
 | Datei | Zweck |
 |---|---|
-| `op_dialog.py` | ausschließlich aus Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13), `aim_again` zurück zur Platzierung; `show_seat`: *Auf das Bett* bei Erzeugern auf gewählter Fläche |
-| `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link` |
+| `op_dialog.py` | ausschließlich aus Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); vorn `lead_sentence` und die Lesezeile *Stelle* (`place_fields`, `place_text`) mit `aim_again` zurück zur Platzierung, hinten die Klappe mit `advanced_summary`; `show_seat`: *Auf das Bett* bei Erzeugern auf gewählter Fläche |
+| `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
 | `organizer_dialog.py` | Fachaufteilung eines Organizers, die Geometrie im Arbeiter (§19) |
@@ -188,7 +188,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | Datei | Zweck |
 |---|---|
 | `print_findings_flow.py` | die Befunde der Schichtanalyse nach jeder Auswertung im Arbeiter (§2.8, §22); ein neuer Stand löst den laufenden ab |
-| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Grenzablehnung direkt am Zahlenfeld; Düsenvariante nach Profilidentität, Modell und Hersteller; Cura-Übernahme nur für eine aktive Maschine und erst nach Klick; Fehlerhandlungen öffnen hier die bestehende Druckerwahl; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
+| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Düsenvariante nach Profilidentität, Modell und Hersteller; Cura-Übernahme nur für eine aktive Maschine und erst nach Klick; Fehlerhandlungen öffnen die Druckerwahl; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
 **Druckfelder und Kennung:** `manufacturer.base_settings`, Feldherkunft und
@@ -360,9 +360,9 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   Auswertungsarbeiter. `PrintTarget` hält übersetzbare Texte für Sprachwechsel
   ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
   und wiederholt offene Prüfungen nicht.
-- **Befundkarte**: Folge, Ort, Grundlage; Nebenfolge aus `core.action_effects`.
-- **Änderung und Übergabe**: `ExplainedDifference` erklärt die Szenen der
-  Kerndifferenz, `review_difference` nur Neues und Weggefallenes. Belege aus
+- **Befundkarte**: `finding_meta` als eine Zeile; Nebenfolge `effect_worth_showing`.
+- **Änderung und Übergabe**: `ExplainedDifference` sagt in einer Zeile, was
+  sich ändert, `review_difference` nur Neues und Behobenes. Belege aus
   dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe
   `export.readback` im Arbeiter. Gleiche Importbefunde einer Transaktion werden
   gebündelt; Originalwerte und Körper bleiben zugänglich.

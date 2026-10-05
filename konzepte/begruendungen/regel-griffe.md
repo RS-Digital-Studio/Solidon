@@ -472,6 +472,36 @@ Wer den Zug beim Beginn meldet, schließt genau die Maße weg, um die es geht.
   einem Langloch stand darunter *Bohrung ändern* mit demselben Wert als
   Durchmesser, zwei Felder für eine Zahl, von denen nur eines das Bild führt.
 
+* **Im Bild steht jede Zahl einmal** (RM-516, Durchsicht der Oberfläche
+  0.5.2, Befund B8). Eine gewählte Bohrung zeigte ihren Durchmesser in Marke
+  („Bohrung 1 · Ø5,20 mm · eingepasst"), Maßzahl neben den Langlochknöpfen,
+  Karte („Aktuell: Ø5,20 mm"), Feld und Merkmalfenster, ihre Lage über sieben
+  Zahlen (zwei Kantenmaße, „Mitte 1", „Mitte 2", „Bohrung 2 · Abstand", X, Y,
+  Z), und die Bezüge hießen „Außenkante 4" — beide Maßlinien liefen im Bild
+  zur selben Seite, und dann blieb die Nummer. Am echten Fenster
+  (Lochplatte, 1600 × 1000) standen 20 Zahlen im Bild — 13 Maße, 6 Nummern
+  in Namen und die Zahl gleichartiger Bohrungen —, danach 5: Durchmesser,
+  Tiefe, zwei Kantenmaße und diese Zahl. Entschieden:
+  Die Bezüge heißen nach der Weltachse, wie die Flächen im Objektbaum
+  („Linke Seite", „Vorderseite"), und bleiben beim Drehen stehen. Die Mitte
+  eines Nachbarn fällt nur am **sitzenden** Merkmal weg; beim Setzen einer
+  neuen Bohrung ist sie die Zielhilfe für den Abstand zum Nachbarloch und
+  steht weiter von selbst. Das Herkunftswort („eingepasst") bleibt über dem
+  Feld, weil es warnt; die Zahl steht nur im Feld. Im Merkmalfenster nennt
+  der Kopf einer Bohrung nur ihren Namen — der Satz darunter („Bohrungsmaß:
+  5,20 mm (eingepasst). Passt vermutlich zu M5") sagte dasselbe Maß ein
+  zweites Mal. Nicht geändert: Die Felder stehen weiter neben dem Körper und
+  nicht auf ihm (Entscheidung Robert, 21. und 22.09.2026).
+  **Die Karte der Maßgruppe ist so schmal wie ihr Inhalt und rund** (Robert,
+  05.10.2026: „das bohrung ändern fenster in der mitte auch schmaler machen
+  und ecken abrunden, so viel platz brauchen wir nicht“). Die längste Auswahl
+  („Senkung, Stufen und Verengung mitnehmen“) zog die Beschriftungsspalte
+  neben sich auf die volle Breite; jetzt steht sie als eigene Zeile unter
+  ihrer Beschriftung, ganz lesbar wie seit der Fensterabnahme vom 04.10.2026
+  verlangt. Am echten Fenster 304 statt 408 Bildpunkte breit. Rahmen und
+  Rundung kommen aus demselben Stilblatt wie die Karten am Rand, die Maske
+  stellt die Zwickel frei.
+
 ### Wo etwas schon sitzt, zielt der Zeiger nicht
 
 * **Am Merkmal zielt die Platzierung nie.** Bis zum Abend des 11.09.2026 war

@@ -96,7 +96,6 @@ def test_review_scope_keeps_a_long_list_scrollable_and_deduplicates_states(qt_ap
         assert panel.review_scope.text().splitlines() == rows
         assert panel.review_scroll.height() <= 4 * TARGET_SIZE
         assert panel.review_scroll.verticalScrollBar().maximum() > 0
-        assert panel.list.height() >= TARGET_SIZE
     finally:
         panel.close()
         panel.deleteLater()
@@ -130,6 +129,9 @@ def test_empty_report_stays_compact_beside_a_taller_hidden_tab(qt_app):
         qt_app.processEvents()
         assert natural_height(tabs) <= collapsed + 4 * TARGET_SIZE + 20
         panel.add_findings([Finding(f"note.{i}", "info", f"Befund {i}") for i in range(30)])
+        qt_app.processEvents()
+        assert not panel.list.isVisibleTo(panel), "Hinweise allein beginnen zugeklappt (RM-508)"
+        panel.list_toggle.click()
         qt_app.processEvents()
         assert panel.list.height() > panel.review_scroll.height()
     finally:
@@ -470,8 +472,9 @@ def test_material_preview_explains_its_target_without_a_geometry_change(qt_app, 
         assert difference is not None and not difference.changed
         assert "Platte" in difference.explanation
         assert "Material „Platte“:" in difference.explanation and "PETG" in difference.explanation
-        assert "Außenmaß „Platte“:" in difference.explanation
-        assert "noch nicht vollständig geprüft" in difference.explanation
+        # Das Außenmaß bleibt — und was bleibt, steht nicht da (RM-516).
+        assert "Außenmaß" not in difference.explanation and " × " not in difference.explanation
+        assert "Druckbefunde noch nicht geprüft" in difference.explanation
         assert len(session.history.transactions) == before
         session.apply("Material festlegen", [draft])
         assert session.wait_for_idle()
@@ -506,9 +509,9 @@ def test_full_preview_checks_both_actual_states_and_keeps_material_change(qt_app
         assert [kind for kind, _ in events] == ["picture", "checked"]
         final = events[-1][1]
         assert final is not None
-        assert "genaue Auswertung und Schichtanalyse" in final.explanation
         assert "Material „Platte“:" in final.explanation
-        assert "Warnungen oder Fehler: 0 vorher, 0 nachher." in final.explanation
+        assert final.explanation.endswith("Druckbefunde unverändert"), final.explanation
+        assert len(final.explanation.splitlines()) == 1, final.explanation
         assert session.last_result.scene.objects[key].material != "petg"
     finally:
         session.release()
@@ -592,10 +595,10 @@ def test_candidate_review_names_a_print_finding_the_change_resolves(qt_app):
         assert session.wait_for_idle(60_000)
         assert [kind for kind, _ in events] == ["picture", "checked"]
         text = events[-1][1].explanation
-        assert "genaue Auswertung und Schichtanalyse" in text
-        assert "Im geprüften Nachherstand nicht mehr vorhanden" in text, text
-        assert "noch nicht vollständig geprüft" not in text
-        assert len(text.splitlines()) <= 16, text
+        assert any(line.startswith("Behoben: ") for line in text.splitlines()), text
+        assert "noch nicht geprüft" not in text and "nicht vollständig geprüft" not in text
+        # Eine Änderungszeile, höchstens drei Befundzeilen (RM-516).
+        assert len(text.splitlines()) <= 4, text
         assert session.last_result.scene.objects[key].mesh.bounds.size[0] > bed, (
             "die Vorschau ändert das Dokument nicht"
         )
@@ -842,9 +845,12 @@ def test_finding_card_names_consequence_and_side_effect_and_tab_reaches_them(qt_
 
     Die Nebenfolge kommt aus ``core.action_effects``; ohne sie stand *Auf dem
     Bett anordnen* am Befund, ohne zu sagen, dass es alle Körper bewegt.
-    Tastatur: Von der Liste aus erreicht Tab Stelle, Einzelheiten und Knopf.
+    Seit RM-508 stehen Folge, Ort und Grundlage in einer Zeile („Warnung ·
+    Rumpf · intern geschätzt“), und die Nebenfolge steht unter dem Hauptknopf,
+    weil sie etwas verändert. Tastatur: Von der Liste aus erreicht Tab
+    Einzelheiten, Stelle und Knopf.
     """
-    from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
+    from PySide6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget
 
     from app.core.action_effects import SIDE_EFFECTS
 
@@ -875,16 +881,17 @@ def test_finding_card_names_consequence_and_side_effect_and_tab_reaches_them(qt_
         host.show()
         panel.list.setCurrentRow(0)
         qt_app.processEvents()
-        context = panel.finding_context.text().splitlines()
-        assert context[0].startswith("Folge: Ein Risiko")
-        assert "Rumpf" in context[1] and context[2].startswith("Grundlage:")
+        assert panel.finding_context.text() == "Warnung · Rumpf · intern geschätzt"
+        assert panel.finding_consequence.isHidden(), "eine Warnung braucht keinen Folgesatz"
         assert not panel.offer_effect.isHidden()
-        assert str(SIDE_EFFECTS["arrange_on_bed"]) in panel.offer_effect.text()
-        assert "Auf dem Bett anordnen" in panel.offer_effect.text()
+        assert panel.offer_effect.text() == str(SIDE_EFFECTS["arrange_on_bed"])
         buttons = [
-            panel._offer_row.itemAt(index).widget() for index in range(panel._offer_row.count())
+            widget
+            for index in range(panel._offer_row.count())
+            if isinstance(widget := panel._offer_row.itemAt(index).widget(), QPushButton)
         ]
         assert buttons and "Nebenfolge:" in buttons[0].accessibleDescription()
+        assert panel._offer_row.indexOf(panel.offer_effect) == 1, "direkt unter dem Hauptknopf"
         panel.list.setFocus()
         reached = []
         for _round in range(12):
@@ -929,3 +936,195 @@ def test_a_deviating_readback_turns_the_receipt_into_a_warning(tmp_path):
     assert receipt.severity == "warning"
     assert "weicht ab" in str(receipt.message)
     assert "„Deckel“ steht in „deckel.stl“" in receipt.values["detail"]
+
+
+# --- RM-508: Der Prüfbericht zeigt zuerst die Befunde ---------------------------
+
+
+def _report_with(findings, *, width=440, height=500):
+    """Ein Bericht mit einem lebenden Körper „Dose“ und diesen Befunden, gezeigt."""
+    panel = ReportPanel()
+    panel.show_result(
+        EvaluationResult(
+            Scene(objects={"a": make_object("a", "Dose")}, report=Report(tuple(findings)))
+        )
+    )
+    panel.set_review_context("Geometrieprüfung: ganze Szene", ())
+    panel.resize(width, height)
+    panel.show()
+    return panel
+
+
+def test_the_head_is_one_line_and_counts_leave_out_zeros(qt_app):
+    """Status, Zähler und Prüfumfang in einer Zeile; „0 x Fehler“ steht nicht da."""
+    panel = _report_with(
+        [
+            Finding("a.warn", "warning", "Eine Warnung.", object_id="a"),
+            Finding("a.note", "info", "Ein Hinweis.", object_id="a"),
+            Finding("b.note", "info", "Noch ein Hinweis.", object_id="a"),
+        ]
+    )
+    try:
+        qt_app.processEvents()
+        assert panel.summary.text() == "Entscheidung erforderlich"
+        assert panel.list_toggle.text() == "1 Warnung · 2 Hinweise"
+        assert "0" not in panel.list_toggle.text()
+        assert panel.review_reason.isHidden(), "eine vollständige Bewertung braucht keinen Grund"
+        tops = {
+            widget.mapTo(panel, widget.rect().center()).y() // 8
+            for widget in (panel.summary, panel.list_toggle, panel.review_toggle)
+        }
+        assert len(tops) == 1, "eine Zeile"
+        assert not panel.facts.isVisibleTo(panel), "die Kennzahlen stehen im Prüfumfang"
+        panel.review_toggle.click()
+        qt_app.processEvents()
+        assert panel.facts.isVisibleTo(panel)
+        panel.set_review_context("Geometrieprüfung: ganze Szene", ("Schichtanalyse: läuft",))
+        assert panel.summary.text() == "Bewertung unvollständig"
+        assert panel.review_reason.text() == "Schichtanalyse: läuft", "unvollständig sagt warum"
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_hints_alone_start_folded_and_a_warning_unfolds_the_list(qt_app):
+    """Hinweise verlangen keine Entscheidung; die Karte bleibt bei ihnen klein."""
+    panel = _report_with([Finding("a.note", "info", "Ausgehöhlt.", object_id="a")])
+    try:
+        qt_app.processEvents()
+        assert not panel.list_toggle.isHidden()
+        assert panel.list_toggle.text() == "1 Hinweis"
+        assert not panel.list.isVisibleTo(panel), "Hinweise allein stehen zugeklappt"
+        panel.list_toggle.click()
+        qt_app.processEvents()
+        assert panel.list.isVisibleTo(panel)
+        panel.add_findings([Finding("b.note", "info", "Noch einer.", object_id="a")])
+        assert panel.list.isVisibleTo(panel), "wer selbst aufklappt, behält es"
+        panel.list_toggle.click()
+        panel.add_findings([Finding("a.warn", "warning", "Eine Warnung.", object_id="a")])
+        assert panel.list.isVisibleTo(panel), "eine Warnung öffnet die Liste"
+        panel.show_result(None)
+        assert panel.list_toggle.isHidden(), "ohne Befund keine Klappe"
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_a_finding_offers_one_way_to_show_its_place(qt_app):
+    """Durchsicht B10: „Betroffene Stelle zeigen“ und „Stelle zeigen“ flogen gleich."""
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from app.core.errors import SHOW_LOCATION
+
+    class Host(QWidget):
+        def error_handlers(self):
+            return {SHOW_LOCATION.id: lambda _error: None}
+
+    host = Host()
+    layout = QVBoxLayout(host)
+    panel = ReportPanel(host)
+    layout.addWidget(panel)
+    try:
+        for suggestions, own in (((SHOW_LOCATION,), False), ((), True)):
+            finding = Finding(
+                "a.open",
+                "warning",
+                "Hier.",
+                object_id="a",
+                location=(0.0, 0.0, 1.0),
+                suggestions=suggestions,
+            )
+            panel.show_result(
+                EvaluationResult(
+                    Scene(objects={"a": make_object("a", "Dose")}, report=Report((finding,)))
+                )
+            )
+            panel.list.setCurrentRow(0)
+            labels = [
+                button.text()
+                for button in panel._offers.findChildren(QPushButton)
+                if not button.isHidden()
+            ]
+            showing = labels.count("Stelle zeigen") + (not panel.finding_place.isHidden())
+            assert showing == 1, (labels, panel.finding_place.isHidden())
+            assert panel.finding_place.isHidden() is not own
+    finally:
+        host.close()
+        host.deleteLater()
+
+
+def test_export_stands_beside_the_handover_outside_the_scroller(qt_app):
+    """Mit dem Export enden alle Hauptwege; er war nur über das Menü erreichbar (A3)."""
+    from app.ui.overlay import FittedScroller
+
+    panel = _report_with([])
+    requested = []
+    panel.exportRequested.connect(lambda: requested.append(True))
+    try:
+        qt_app.processEvents()
+        scroller = panel.findChild(FittedScroller)
+        assert scroller is not None
+        for button in (panel.to_slicer, panel.export_button):
+            assert button.isVisibleTo(panel)
+            assert not scroller.isAncestorOf(button), "der letzte Schritt rollt nicht hinaus"
+        assert panel.export_button.text() == "Exportieren …"
+        assert abs(panel.export_button.y() - panel.to_slicer.y()) <= 1, "nebeneinander"
+        panel.export_button.click()
+        assert requested == [True]
+        panel.follow_export(False, "Es wird gerade exportiert.")
+        assert not panel.export_button.isEnabled()
+        assert panel.export_button.toolTip() == "Es wird gerade exportiert."
+        panel.show_result(None)
+        assert not panel.export_button.isVisibleTo(panel), "ohne Körper nichts zu exportieren"
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_the_chosen_row_stands_whole_and_the_others_by_their_first_sentence(qt_app):
+    """Die Liste zeigt je Befund seinen ersten Satz; die gewählte Zeile ganz."""
+    long_one = Finding(
+        "a.thin",
+        "warning",
+        "Die dünnste Stelle ist schmal. Eine kleinere Düse wählen.",
+        object_id="a",
+    )
+    other = Finding("b.thin", "warning", "Noch eine Stelle. Mit Rat dahinter.", object_id="a")
+    panel = _report_with([long_one, other])
+    try:
+        panel.list.clearSelection()
+        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        assert all("Düse" not in text and "Rat" not in text for text in texts), texts
+        panel.list.setCurrentRow(0)
+        assert "Eine kleinere Düse wählen." in panel.list.item(0).text()
+        assert "Rat" not in panel.list.item(1).text()
+        panel.list.setCurrentRow(1)
+        assert "Düse" not in panel.list.item(0).text()
+        assert "Mit Rat dahinter." in panel.list.item(1).text()
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_the_list_keeps_three_rows_when_the_room_is_short(qt_app):
+    """Bei Platzmangel rollt der Kopf; die Liste gibt nur bis drei Zeilen nach."""
+    from app.ui.panels import LEAST_REPORT_ROWS
+
+    findings = [
+        Finding(f"a.warn_{index}", "warning", f"Warnung {index}.", object_id="a")
+        for index in range(8)
+    ]
+    panel = _report_with(findings, width=360, height=160)
+    try:
+        for _round in range(4):
+            qt_app.processEvents()
+        viewport = panel.list.viewport().rect()
+        whole = sum(
+            1
+            for row in range(panel.list.count())
+            if viewport.contains(panel.list.visualItemRect(panel.list.item(row)))
+        )
+        assert whole >= LEAST_REPORT_ROWS, whole
+    finally:
+        panel.close()
+        panel.deleteLater()

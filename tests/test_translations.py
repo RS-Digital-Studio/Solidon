@@ -769,19 +769,22 @@ def test_french_history_labels_translate_colons_without_changing_names_or_values
 
 
 @pytest.mark.parametrize(
-    "side,expected",
-    [(None, "Arête extérieure 3 : "), ("left", "Arête extérieure à gauche : ")],
+    "direction,expected",
+    [
+        ((-1.0, 0.0, 0.0), "Arête extérieure à gauche : "),
+        ((0.0, -1.0, 0.0), "Arête extérieure avant : "),
+    ],
 )
 def test_french_placement_prefix_uses_its_actual_resolved_reference_frame(
-    side: str | None, expected: str
+    direction: tuple[float, float, float], expected: str
 ) -> None:
-    """Der echte Präfixaufruf trägt Nummer und Seitenbezug durch den Katalog.
+    """Der echte Präfixaufruf trägt den Seitenbezug durch den Katalog (RM-516).
 
     Die Quelle bindet den Rahmen an den wirklichen setPrefix-Aufruf; die reine
     Textprüfung löst dessen Referenznamen auf, ohne eine Maßansicht aufzubauen.
     """
     from app.i18n import get_language, tr
-    from app.ui.placement_flow import PlacementFlow
+    from app.ui.placement_flow import reference_names
 
     tree = ast.parse((UI_DIR / "placement_flow.py").read_text(encoding="utf-8"))
     frames = [
@@ -813,7 +816,7 @@ def test_french_placement_prefix_uses_its_actual_resolved_reference_frame(
     install_language("fr")
     set_language("fr")
     try:
-        name = PlacementFlow._reference_name("outer", 3, side)
+        name = reference_names([("edge_3", "outer", direction, (0.0, 0.0, 0.0))])["edge_3"]
         assert tr(frame.args[0].value, name=name, value=values["value"].value) == expected
     finally:
         set_language(previous)

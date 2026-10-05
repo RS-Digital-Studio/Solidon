@@ -2465,6 +2465,36 @@ def test_the_waiting_panel_names_the_feature_and_offers_nothing(qt_app: QApplica
         QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
+def test_a_hole_heading_leaves_its_measure_to_the_sentence_below(qt_app: QApplication) -> None:
+    """Der Kopf nennt die Bohrung, der Satz darunter ihr Maß — einmal (RM-516).
+
+    „Bohrung 1 · Ø5,20 mm · eingepasst“ stand über „Bohrungsmaß: 5,20 mm
+    (eingepasst). Passt vermutlich zu M5“: derselbe Durchmesser samt Herkunft
+    zweimal untereinander.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.labels import length
+    from app.ui.panels import cavity_name
+
+    load_operations()
+    mesh = plate()
+    found = features.detect(mesh)
+    hole_id = next(key for key, value in found.items() if value.kind == "hole")
+    hole = found[hole_id]
+    panel = FeaturePanel()
+    try:
+        panel.show_feature(hole_id, hole, features=found, mesh=mesh)
+        built = [widget.text() for widget in panel._built if isinstance(widget, QLabel)]
+        assert built[0] == cavity_name(hole_id, hole, ()), "der Kopf nennt nur die Bohrung"
+        diameter = length(float(hole.params["diameter"]), with_unit=False)
+        assert any(diameter in text for text in built[1:]), "das Maß steht im Satz darunter"
+    finally:
+        panel.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 def test_a_partly_reused_panel_matches_a_fresh_one_and_tabs_like_the_eye(
     qt_app: QApplication,
 ) -> None:

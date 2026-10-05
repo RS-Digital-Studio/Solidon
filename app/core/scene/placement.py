@@ -61,14 +61,16 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import (
+    DISPLAY_UNITS,
     EPS_GEOM,
     MAX_FACET_SAG,
+    LengthUnit,
     dot3,
     exact_cos_degrees,
     format_length,
     round_display,
 )
-from app.i18n import TranslatableText, tr
+from app.i18n import TranslatableText, display_unit, tr
 
 if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
@@ -378,6 +380,12 @@ def _matches_said(matches: Sequence[BoreMatch]) -> str:
     )
 
 
+def _shown_unit() -> LengthUnit:
+    """Die Anzeigeeinheit für Sätze, die der Kern fertig ausliefert (RM-358 W1-1)."""
+    unit = display_unit()
+    return unit if unit in DISPLAY_UNITS else "mm"
+
+
 def bore_advice(
     diameter: float,
     *,
@@ -424,9 +432,12 @@ def bore_advice(
     )
     if not status.available:
         return str(measure_explanation(status)), [tr("Selbst eintragen")] if ask else []
-    measured = measured if measured is not None else format_length(diameter, with_unit=False)
+    # **Die Zahl trägt ihre Einheit selbst** (RM-516): Das „mm“ stand fest im
+    # Satz, und in Zoll las der Kunde „Bohrungsmaß: 0.2047 mm“ — oder, über
+    # die Oberfläche gerechnet, „5,20 mm“ neben lauter Zollmaßen.
+    measured = measured if measured is not None else format_length(diameter, _shown_unit())
     qualifier = measure_qualifier(status)
-    named_measure = f"{measured} mm" + (f" ({qualifier})" if qualifier is not None else "")
+    named_measure = f"{measured}" + (f" ({qualifier})" if qualifier is not None else "")
     if feature is not None and features is not None:
         from app.core.perceive import relations
 
@@ -475,10 +486,10 @@ def bore_advice(
         # Ganze Sätze mit Platzhaltern statt zusammengesetzter Halbsätze: Wer
         # nur „das Durchgangsloch für" zu übersetzen bekommt, weiß nicht, was
         # danach steht — und in mancher Sprache steht es davor.
-        said = tr("Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.")
+        said = tr("Diese Bohrung misst {measure} — das Durchgangsloch für {screw}.")
         if feature is not None and feature.params.get("through") is False:
             said = tr(
-                "Diese Sackbohrung misst {measure} mm. Ihr Durchmesser bietet Platz für {screw}."
+                "Diese Sackbohrung misst {measure}. Ihr Durchmesser bietet Platz für {screw}."
             )
         return said.replace("{measure}", measured).replace("{screw}", size), []
     if not ask:
@@ -492,10 +503,10 @@ def bore_advice(
                     "Eine passende Größe ist nicht sicher zugeordnet."
                 ).replace("{screw}", near), []
         return tr(
-            "Diese Bohrung misst {measure} mm. Keine Normgröße ist eindeutig zugeordnet."
+            "Diese Bohrung misst {measure}. Keine Normgröße ist eindeutig zugeordnet."
         ).replace("{measure}", measured), []
     asked = tr(
-        "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. "
+        "Diese Bohrung misst {measure} und passt zu keiner Normgröße. "
         "Zu welcher Schraube gehört sie?"
     )
     return (

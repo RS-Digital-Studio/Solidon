@@ -985,11 +985,11 @@ def test_the_key_dialog_separates_cloud_and_local_paths(
 ) -> None:
     """Ohne KI-Vorwissen sind ein Passwortfeld und ein Modellname keine Wahl.
 
-    Die beiden Wege stehen als benannte Gruppen da; der Cloud-Weg nennt
-    Anbieter, Datengrenze und das Feld selbst, der lokale Weg bleibt davon
-    sichtbar getrennt.
+    Die beiden Wege stehen als benannte Abschnitte da — flache Überschriften
+    wie in jedem Dialog (RM-518); der Cloud-Weg nennt Anbieter, Datengrenze und
+    das Feld selbst, der lokale Weg bleibt davon sichtbar getrennt.
     """
-    from PySide6.QtWidgets import QGroupBox, QLabel
+    from PySide6.QtWidgets import QLabel, QToolButton
 
     from app.core.backends import keys
     from app.ui.dialogs import KeyDialog
@@ -997,10 +997,16 @@ def test_the_key_dialog_separates_cloud_and_local_paths(
     monkeypatch.setattr(keys, "_keyring", lambda: None)
     dialog = KeyDialog()
 
-    groups = {box.title() for box in dialog.findChildren(QGroupBox)}
-    assert {"Cloud-Modell", "Lokales Modell"} <= groups
+    headings = {
+        button.text(): button
+        for button in dialog.findChildren(QToolButton)
+        if button.objectName() == "sectionHeading"
+    }
+    assert {"Cloud-Modell", "Lokales Modell"} <= set(headings)
     assert dialog.field.accessibleName() == "API-Schlüssel"
-    cloud = next(box for box in dialog.findChildren(QGroupBox) if box.title() == "Cloud-Modell")
+    cloud = dialog.cloud_model_section
+    assert cloud.isAncestorOf(headings["Cloud-Modell"])
+    assert not cloud.isAncestorOf(headings["Lokales Modell"]), "die Wege sind getrennt"
     text = " ".join(label.text() for label in cloud.findChildren(QLabel))
     assert "Anthropic" in text, "der Schlüssel nennt seinen Anbieter"
     for disclosed in (

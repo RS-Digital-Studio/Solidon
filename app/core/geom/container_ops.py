@@ -29,7 +29,7 @@ from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, pin
 from app.core.knowledge.parts.containers import rounded_prism
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.registry.params import validate
+from app.core.registry.params import ZERO_AUTOMATIC, validate
 from app.core.types import (
     BaseParams,
     CancelToken,
@@ -57,6 +57,7 @@ class ContainerParams(BaseParams):
         default="screw",
         choices=("screw", "push", "hinged"),
         doc=_("Schraubdeckel, Steckdeckel oder ein mitgedrucktes Klappscharnier."),
+        placement="advanced",
     )
     diameter: float = param(
         title=_("Durchmesser"),
@@ -100,6 +101,7 @@ class ContainerParams(BaseParams):
         minimum=0.4,
         maximum=100.0,
         doc=_("Dicke der Außenwand und der Trennwände."),
+        placement="advanced",
     )
     floor: float = param(
         title=_("Bodenstärke"),
@@ -178,6 +180,7 @@ class ContainerParams(BaseParams):
         placement="advanced",
         depends_on=("lid", ("screw",)),
         doc=_("Null nimmt die schmalere Seite der Öffnung."),
+        zero_text=ZERO_AUTOMATIC,
     )
     rows: int = param(
         title=_("Reihen"),
@@ -203,6 +206,7 @@ class ContainerParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_("Höhe über dem Innenboden. Null lässt Platz für den Deckel."),
+        zero_text=ZERO_AUTOMATIC,
     )
     holes: bool = param(
         title=_("Streulöcher"),
@@ -238,6 +242,7 @@ class ContainerParams(BaseParams):
         placement="advanced",
         depends_on=("holes", (True,)),
         doc=_("Abstand der Löcher zur Deckelmitte. Null verwendet ein Viertel der Innenweite."),
+        zero_text=ZERO_AUTOMATIC,
     )
     hinge_width: float = param(
         title=_("Scharnierbreite"),
@@ -804,6 +809,7 @@ class ContainerInsertParams(BaseParams):
         unit="mm",
         placement="advanced",
         doc=_("Höhe über dem Einsatzboden. Null reicht bis zum Einsatzrand."),
+        zero_text=_("bis zum Rand", context="Nullwert"),
     )
 
 

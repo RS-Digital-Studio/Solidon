@@ -478,3 +478,153 @@ def test_the_first_run_names_slicers_like_the_print_dialog() -> None:
     source = inspect.getsource(first_run)
     assert ".stem, " not in source, "ein Slicer wird wieder mit seinem Dateinamen eingetragen"
     assert source.count("slicer_title(") >= 3
+
+
+# --- Eine Form für alle Dialoge (RM-518) ------------------------------------------
+
+_UI = Path(__file__).resolve().parents[1] / "app" / "ui"
+
+#: Wo ein Rahmen bleibt, mit Grund — er gliedert dort keinen Dialog in Abschnitte.
+_FRAMES_WITH_A_REASON: dict[str, str] = {
+    "filament_usage.py": "eine Karte je Filamentzeile, kein Abschnitt eines Formulars",
+}
+
+#: Noch nicht umgestellt — jede Datei hier wäre ein offener Teil von RM-518 und
+#: verließe die Liste mit ihrer Umstellung. Erstlauf (RM-515) und eigener
+#: Baustein (RM-517) sind umgestellt; die Liste ist leer und bleibt es.
+_FRAMES_STILL_TO_GO: dict[str, str] = {}
+
+#: Dialoge mit mehreren Formularen, die noch nicht ausrichten — wie oben ein
+#: offener Teil von RM-518, keine Ausnahme mit Bestand.
+_FORMS_STILL_TO_ALIGN: dict[tuple[str, str], str] = {}
+
+
+def _calls(tree: object, name: str) -> int:
+    """Wie oft ``name(...)`` im Baum gerufen wird, als Name oder Attribut."""
+    import ast
+
+    return sum(
+        1
+        for node in ast.walk(tree)  # type: ignore[arg-type]
+        if isinstance(node, ast.Call)
+        and (
+            (isinstance(node.func, ast.Name) and node.func.id == name)
+            or (isinstance(node.func, ast.Attribute) and node.func.attr == name)
+        )
+    )
+
+
+def test_no_dialog_frames_its_sections() -> None:
+    """Abschnitte sind flache Überschriften, kein gerahmter ``QGroupBox`` (RM-518, C18).
+
+    Einstellungen, Erstlauf und *Eigener Baustein* rahmten ihre Abschnitte, die
+    übrigen Dialoge klappten flach — zwei Formen, zwei Rhythmen. Gelesen wird
+    der Quelltext; die Listen nennen jede Ausnahme mit Grund und werden kürzer,
+    nie länger.
+    """
+    import ast
+
+    framed = sorted(
+        path.name
+        for path in _UI.rglob("*.py")
+        if _calls(ast.parse(path.read_text(encoding="utf-8")), "QGroupBox")
+    )
+    allowed = set(_FRAMES_WITH_A_REASON) | set(_FRAMES_STILL_TO_GO)
+    assert set(framed) <= allowed, f"gerahmte Abschnitte: {sorted(set(framed) - allowed)}"
+    done = sorted(set(_FRAMES_STILL_TO_GO) - set(framed))
+    assert not done, f"umgestellt — aus der Übergangsliste nehmen: {done}"
+
+
+def test_a_dialog_with_several_forms_aligns_them() -> None:
+    """Wer zwei Formulare hat, gibt ihnen eine Beschriftungskante (RM-518).
+
+    Erzeugen und der Parameterdialog richteten ihre Formulare nicht aus, und
+    die Felder begannen in jedem an einer anderen Stelle. Ausgerichtet wird
+    über ``panels.align_forms`` oder, mit Rückseite, über
+    ``dialogs.align_to_the_front``.
+    """
+    import ast
+
+    loose: list[str] = []
+    for path in sorted(_UI.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            bases = {base.id for base in node.bases if isinstance(base, ast.Name)}
+            if "QDialog" not in bases or _calls(node, "QFormLayout") < 2:
+                continue
+            aligned = any(
+                _calls(node, name)
+                for name in ("align_forms", "align_to_the_front", "_align_to_the_front")
+            )
+            if not aligned and (path.name, node.name) not in _FORMS_STILL_TO_ALIGN:
+                loose.append(f"{path.name}:{node.name}")
+            if aligned and (path.name, node.name) in _FORMS_STILL_TO_ALIGN:
+                loose.append(f"{path.name}:{node.name} richtet aus — aus der Übergangsliste nehmen")
+    assert not loose, f"Formulare ohne gemeinsame Kante: {loose}"
+
+
+def test_align_to_the_front_lets_the_back_wrap(qt_app: QApplication) -> None:
+    """Die Vorderseite setzt die Spalte; hinten bricht eine längere Beschriftung um (C21)."""
+    from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
+
+    from app.ui.dialogs import align_to_the_front
+
+    holder = QWidget()
+    try:
+        front, back = QFormLayout(), QFormLayout()
+        outer = QVBoxLayout(holder)
+        outer.addLayout(front)
+        outer.addLayout(back)
+        front.addRow("Breite", QLineEdit(holder))
+        front.addRow("Höhe", QLineEdit(holder))
+        back.addRow("Eine sehr lange Beschriftung hinter der Klappe", QLineEdit(holder))
+        align_to_the_front(front, back)
+
+        def label(form: QFormLayout, row: int) -> QLabel:
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            assert item is not None and isinstance(item.widget(), QLabel)
+            return item.widget()
+
+        long_label = label(back, 0)
+        assert long_label.wordWrap(), "hinten bricht die lange Beschriftung um"
+        widest = max(label(front, row).sizeHint().width() for row in range(2))
+        assert all(label(front, row).minimumWidth() == widest for row in range(2))
+        # Umgebrochen wird zwischen Wörtern: so schmal wie die Spalte, außer
+        # ein einzelnes Wort ist breiter — abgeschnitten wird nichts.
+        assert long_label.maximumWidth() == max(widest, long_label.minimumSizeHint().width())
+        assert long_label.fontMetrics().horizontalAdvance(long_label.text()) > (
+            long_label.maximumWidth()
+        ), "der Satz selbst ist breiter als die Spalte"
+    finally:
+        holder.deleteLater()
+
+
+def test_a_hidden_row_in_front_does_not_widen_the_column(qt_app: QApplication) -> None:
+    """Eine bedingte Zeile vorn bricht um, statt die Spalte aufzuziehen (RM-518).
+
+    „Länge des Langlochs“ steht erst mit dem Haken *Langloch* da und schob die
+    Felder der Bohrung trotzdem 47 Punkte hinter „Durchmesser“, auf
+    Portugiesisch 99. Die Abnahme verlangt höchstens 24.
+    """
+    from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
+
+    from app.ui.dialogs import align_to_the_front
+
+    holder = QWidget()
+    try:
+        front = QFormLayout()
+        QVBoxLayout(holder).addLayout(front)
+        front.addRow("Durchmesser", QLineEdit(holder))
+        front.addRow("Länge des Langlochs mit Zugabe", QLineEdit(holder))
+        hidden = front.itemAt(1, QFormLayout.ItemRole.LabelRole).widget()
+        shown = front.itemAt(0, QFormLayout.ItemRole.LabelRole).widget()
+        assert isinstance(hidden, QLabel) and isinstance(shown, QLabel)
+        hidden.hide()
+        align_to_the_front(front)
+        assert shown.minimumWidth() == shown.sizeHint().width(), "die sichtbare setzt die Spalte"
+        assert hidden.wordWrap(), "die verborgene bricht um, wenn sie erscheint"
+        assert hidden.maximumWidth() == max(shown.minimumWidth(), hidden.minimumSizeHint().width())
+    finally:
+        holder.deleteLater()

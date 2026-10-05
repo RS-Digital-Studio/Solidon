@@ -2108,6 +2108,62 @@ def test_the_feature_panel_keeps_measuring_from_hole_to_hole(qt_app: QApplicatio
         window.release()
 
 
+def test_a_selected_hole_names_each_number_once_in_the_view(qt_app: QApplication) -> None:
+    """Der Zustand von guide-thread-a-hole-1: jede Zahl einmal, kein Bezug mit Nummer (RM-516).
+
+    Vorher zeigte die gewählte Bohrung ihren Durchmesser in Marke, Maßzahl,
+    Karte und Feld und ihre Lage über sieben Zahlen — zwei Kantenmaße, zwei
+    Mittenmaße, ein Abstand zur Nachbarbohrung und X, Y, Z —, die Bezüge hießen
+    „Außenkante 4“ und „Mitte 2“. Gegenprobe: Mit dem Ende der Maße kommt die
+    Marke zurück.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.labels import feature_label
+    from app.ui.panels import FIELD_PROPERTY
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active
+        viewport = window.viewport
+        feature = window.session.last_result.scene.objects[object_id].features[hole]
+        assert viewport._measured_feature == (object_id, hole)
+        marks = [text for _point, text, _priority in viewport._feature_label_data]
+        assert feature_label(hole, feature, compact=True) not in marks, "keine Marke am Loch"
+        assert not flow._centre_id, "die Lage steht über zwei Kantenmaße"
+        assert all(field.isHidden() for field in flow._centre_measures)
+        assert flow._centre.isHidden()
+        names = [field.prefix() for field in flow._measures]
+        assert all(names) and not any(character.isdigit() for name in names for character in name)
+        group = flow._measure_group
+        caption = group.findChild(QLabel, "feature-measure-source")
+        assert caption is None or not any(character.isdigit() for character in caption.text())
+        coordinates = [
+            widget
+            for widget in group.findChildren(QWidget)
+            if widget.property(FIELD_PROPERTY) in {"x", "y", "z"}
+        ]
+        assert coordinates and not any(widget.isVisibleTo(group) for widget in coordinates), (
+            "X, Y und Z stehen hinter „Weitere Werte“"
+        )
+        window._focus_measure_field("x")
+        assert any(widget.isVisibleTo(group) for widget in coordinates), (
+            "wer X meint, bekommt die Klappe aufgeklappt"
+        )
+        assert viewport._slot_length_text() == ""
+        window.object_tree.select_object(object_id)
+        window.session.wait_for_idle()
+        for _ in range(20):
+            QApplication.processEvents()
+        assert viewport._measured_feature is None, "ohne Maße im Bild kommt die Marke zurück"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_passive_measures_can_be_replaced_but_a_begun_draft_cannot(
     qt_app: QApplication,
 ) -> None:
@@ -2923,6 +2979,52 @@ def test_a_measure_group_with_room_shows_its_choices_whole(quiet_measure_flow: A
         QStyle.ContentsType.CT_ComboBox, option, QSize(longest, metrics.height()), combo
     )
     assert combo.width() >= needed.width(), (combo.width(), needed.width())
+
+
+def test_the_measure_card_is_as_narrow_as_its_content_and_round(quiet_measure_flow: Any) -> None:
+    """Die Karte nimmt nur die Breite, die ihr Inhalt braucht, und rundet die Ecken (RM-516).
+
+    Robert: „das bohrung ändern fenster in der mitte auch schmaler machen und
+    ecken abrunden, so viel platz brauchen wir nicht“. Die längste Auswahl zog
+    die Beschriftungsspalte neben sich auf die volle Breite — 408 Bildpunkte
+    bei 1600 × 1000. Jetzt steht ihre Beschriftung darüber, und die Karte ist so
+    breit wie die Auswahl.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QComboBox, QFormLayout
+
+    from app.ui.panels import column_choice
+    from app.ui.placement_flow import _choice_widths
+    from app.ui.style import NORMAL
+
+    controller, _session, viewport, _host, _group, _fields, _during = quiet_measure_flow
+    group = QWidget()
+    layout = QFormLayout(group)
+    layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+    field = LengthSpin(group)
+    layout.addRow("Durchmesser", field)
+    combo = column_choice(QComboBox(group))
+    for text in ("Nur Bohrungsdurchmesser", "Senkung, Stufen und Verengung mitnehmen"):
+        combo.addItem(text)
+    layout.addRow("Änderungsumfang", combo)
+    controller.set_measure_fields(
+        group, editors=[field], interpret=lambda: True, refresh=lambda _values: None
+    )
+    viewport.resize(1600, 1000)
+    for _round in range(5):
+        QApplication.processEvents()
+        controller.redraw()
+    box = controller._measure_box
+    needed = max(width for _combo, width in _choice_widths(group))
+    assert combo.width() >= needed, "die Auswahl steht ganz"
+    assert box.width() <= max(
+        needed + 4 * NORMAL,
+        controller._measure_accept.sizeHint().width()
+        + controller._measure_cancel.sizeHint().width()
+        + 3 * NORMAL,
+    ), box.width()
+    assert not box.mask().isEmpty(), "die Ecken sind freigestellt"
+    assert not box.mask().contains(QPoint(0, 0)), "der Zwickel oben links gehört dem Bild"
 
 
 def test_quiet_host_keeps_permission_for_identical_known_values(qt_app: QApplication) -> None:
@@ -4553,8 +4655,10 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
         flow = _measures_in_the_view(window)
         assert flow is not None and flow._change_op == drill.id
         assert flow.dialog.values() == original
+        # Am fertigen Teil eines Schritts steht im Feld dessen eigener Wert;
+        # eine zweite Zahl darüber gibt es nicht mehr (RM-516).
         caption = flow._measure_group.findChild(QLabel, "feature-measure-source")
-        assert caption is not None and "Am fertigen Teil:" in caption.text()
+        assert caption is not None and caption.isHidden() and not caption.text()
         assert not flow.dialog.begun and not window.feature_dock.is_current()
         assert set(flow._result.scene.objects) == {owner}
         assert not any(

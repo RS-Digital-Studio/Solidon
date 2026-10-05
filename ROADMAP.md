@@ -102,12 +102,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
-| [RM-508 — Der Prüfbericht zeigt zuerst die Befunde](#rm-508) | Bedienung und Darstellung | Kopf auf eine Zeile, Gerüst und Doppelungen aus der Befundkarte, Export neben der Übergabe |
 | [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
-| [RM-513 — Ein Operationsdialog zeigt vorn zwei bis drei Werte und einen Satz](#rm-513) | Bedienung und Darstellung | Vorderseitengrenze 4, Einleitung ein Satz, „Wann nicht?“ als Klappe, Nullwerte mit Namen, fx nur mit Parametern |
-| [RM-516 — Maße im Bild und Vorschauband nennen jede Zahl einmal](#rm-516) | Bedienung und Darstellung | Bohrung: Durchmesser nur im Feld, Lage über zwei Kantenmaße, Bezüge mit Seitennamen; Vorschauband zwei Zeilen |
-| [RM-518 — Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante](#rm-518) | Bedienung und Darstellung | `QGroupBox` ersetzen, Rand `WIDE`, `align_forms` überall, Spaltenbreite aus der Vorderseite |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -3338,6 +3334,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   parallele Aufnahmen zerstörten Bilder anderer Sitzungen). Abnahme: ein
   Protokoll je Weg mit Klicks, Zeiten und Bildern nach dem Bildstandard vom
   23.09.2026, jeder Befund behoben oder als Punkt geführt.
+  Aus RM-513 und RM-518 (05.10.2026): der Operationsdialog mit Maus und
+  Bildschirmleser — umgebrochene Beschriftungen hinten, die Lesezeile *Stelle*
+  mit *Stelle im Bild wählen*, benannte Null („Oberkante“, „automatisch“) im
+  Zahlenfeld, „Wann nicht?“, die verschachtelte Klappe unter „Anwendung“ in den
+  Einstellungen; mit den neuen Bildern ihre Alttexte (der Bohrdialog in
+  `funktionen.html` und den Übersetzungen nennt noch Position X, Y, Z mit fx).
+  Aus RM-516 (05.10.2026): Handbuchbilder guide-thread-a-hole-1 und
+  guide-drill-a-hole-8 neu; am Fenster die geöffneten „Weitere Werte“ der
+  Maßkarte, HiDPI, helles Thema und das Vorschauband in Zoll mit echter
+  Größenänderung.
+  Aus RM-508 (05.10.2026): `report.png`, `main-window.png` und die
+  Bildanleitungen neu; `make_figures` gibt dem Berichtsbild jetzt die
+  Grundlage des Fensters mit, belegt erst mit diesem Lauf.
 
   **Aus der dritten Runde der Durchsicht v0.5.1 (27.09.2026)** kommen Fenstertests, die
   das Release-Tor tragen muss; die Abschlüsse von RM-231 und RM-269 stützen sich auf sie
@@ -3887,33 +3896,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
   zwei Menüs mit verschiedener Wirkung.
 
-<a id="rm-508"></a>
-
-- [ ] **RM-508 — Der Prüfbericht zeigt zuerst die Befunde.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Im Ruhezustand trägt der Bericht rund 175 der 290 Wörter des Hauptfensters, davon
-  nur rund 88 Befundtext. In report.png belegt der Kopf 62 % der Karte, sichtbar ist
-  einer von vier Befunden. Dauerhaft da: gesperrtes „Modell nachbauen“ mit Satz,
-  „0 × Fehler“, Kennzahlen, Suche ab zwei Befunden. Unter jedem Befund Folge, Ort und
-  Grundlage (meist ohne eigene Aussage), zwei Knöpfe für denselben Kameraflug, eine
-  Nebenfolge-Floskel unter dem Hauptknopf (67 von 109 Sätzen), unbenannte Werte
-  („— Deckel · 0 mm³ · 100 %“), Klappen als gerahmte Knöpfe. Für den Export, mit dem
-  alle Hauptwege enden, gibt es keinen sichtbaren Knopf.
-  **Fix:** Kopf als eine Zeile „Status · 2 Warnungen · 4 Hinweise · Prüfumfang ▸“ mit
-  Grund bei unvollständiger Bewertung; Zähler ohne Nullen; Kennzahlen in den
-  Prüfumfang; Filter ab acht Befunden; „Modell nachbauen“ als Handlung am gewählten
-  Körper. Befundliste mit Mindesthöhe drei Zeilen; bei Platzmangel rollt der Kopf.
-  Unter einem Befund eine Metazeile; ein Zeige-Knopf; die Nebenfolge nur bei
-  `changes`; je Wert ein Name; Klappen über `collapsible`. „Exportieren …“ neben
-  „An den Slicer übergeben …“.
-  **Entschieden (Robert, 05.10.2026):** Folge, Ort und Grundlage stehen als eine
-  Metazeile („Hinweis · Dose · intern geschätzt“), ein eigener Folgesatz nur bei echter
-  Folge; der Vertrag aus RM-090 (Produktkompass §4.3) wird so fortgeschrieben.
-  **Abnahme:** In der Lage von main-window.png höchstens 100 Wörter im Bericht und über
-  der Liste höchstens 12; in der Lage von report.png mindestens drei Befundzeilen; kein
-  Befund mit zwei Knöpfen derselben Handlung; Export mit einem sichtbaren Klick; bei
-  1280 × 800 und nur Hinweisen ist die Berichtskarte höchstens 120 px hoch (aus RM-511
-  übernommen; seit RM-511 folgt die Karte dem Inhalt, gemessen 252 px ohne Befund).
-
 <a id="rm-509"></a>
 
 - [ ] **RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
@@ -3957,62 +3939,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
   Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
   mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
-
-<a id="rm-513"></a>
-
-- [ ] **RM-513 — Ein Operationsdialog zeigt vorn zwei bis drei Werte und einen Satz.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  104 von 177 Operationen zeigen mehr als drei Felder gleichzeitig vorn, 42 sechs oder
-  mehr; `MAX_FRONT_FIELDS = 8` steht gegen Bauplan §2.4 („zwei bis drei“). Vor dem ersten
-  Feld stehen bis zu 118 Wörter, die Platzierungsanweisung ist die blasseste Zeile.
-  *Aushöhlen* widerspricht sich vorn („Oben öffnen“, „Öffnungen: Keine“, „Entlüftungen
-  1“); 104 Zahlenfelder zeigen „0,00 mm“, wo „automatisch“ gemeint ist; „fx“ steht
-  neben jedem Zahlenfeld; *Bohrung setzen* zeigt drei Koordinatenzeilen; die Klappe nennt
-  ihren Inhalt nicht; Auswahlzeilen sagen „· aus der Konstruktion“, „Bestand unbekannt“.
-  **Fix:** Grenze 4 in `op_dialog.py` und `test_interface_limits.py`, selten geänderte
-  Felder je Operation auf `placement="advanced"`; vorn der erste Satz der `doc`, „Wann
-  nicht?“ als zugeklappte `collapsible`, die Platzierungsanweisung als erste Zeile in
-  normaler Schrift; `vents` hängt an `open_top`; `param(zero_text=…)` über
-  `setSpecialValueText`; „fx“ nur mit Projektparametern oder Ausdruck; Klappe mit
-  `contents=`; Auswahlzeilen ohne Maßquelle und Doppelungen.
-  **Entschieden (Robert, 05.10.2026):** Grenze vier Felder vorn, `AGENTS.md` und
-  `test_interface_limits.py` ziehen nach; *Bohrung setzen* zeigt die Stelle als
-  Lesezeile, die Koordinaten stehen hinten, `grenzen.md` zieht nach.
-  **Abnahme:** Grenztest mit 4 grün, mindestens 90 % der Operationen mit höchstens drei
-  Feldern gleichzeitig; über dem ersten Feld in DE höchstens 25 Wörter, in FR und PT
-  höchstens 35; Registertest für `zero_text`; *Aushöhlen* mit „Oben öffnen“ ohne
-  Entlüftungszeile.
-
-<a id="rm-516"></a>
-
-- [ ] **RM-516 — Maße im Bild und Vorschauband nennen jede Zahl einmal.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Eine gewählte Bohrung zeigt ihren Durchmesser fünfmal (Marke, Maßzahl, Karte, Feld,
-  Dock) und ihre Lage über sieben Zahlen; Bezugsnamen tragen Nummern („Außenkante 4“,
-  „Mitte 2“), die Felder stehen rund 200 px über dem Teil. Das Vorschauband hat sieben
-  Zeilen mit „Körperzahl: 1 → 1“ und Maßen mit drei Nachkommastellen und festem „mm“
-  (`print_contract.py:264`).
-  **Fix:** Solange die Maße im Bild stehen, fällt die Merkmalsmarke weg, der Durchmesser
-  steht nur im Feld, die Lage über zwei Kantenmaße, X/Y/Z hinter „Weitere Werte“, Bezüge
-  nach der Flächenachse benannt. Vorschauband: Titelzeile und eine Zeile mit dem, was
-  sich ändert; Neues und Behobenes höchstens drei Zeilen; keine Zeile „A → A“; Maße über
-  `labels.length`.
-  **Abnahme:** Im Zustand von guide-thread-a-hole-1 höchstens fünf Zahlen im Bild, kein
-  Bezugsname mit Ziffer; das Vorschauband in der Lage von guide-drill-a-hole-8 höchstens
-  zwei Zeilen; in Zoll kein „mm“. Überschneidung RM-090.
-
-<a id="rm-518"></a>
-
-- [ ] **RM-518 — Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Einstellungen, Erstlauf und *Eigener Baustein* benutzen gerahmte `QGroupBox`, die
-  übrigen flache Klappen; Ränder sind 12 px (`ROOMY`) oder 16 px (`WIDE`); Erzeugen,
-  Eigener Baustein und Erstlauf richten ihre Formulare nicht aus. Im Operationsdialog
-  klaffen 120 bis 170 px zwischen Beschriftung und Feld, weil `align_forms` die
-  zugeklappte Rückseite mitzählt.
-  **Fix:** Abschnitte über `sectionHeading` bzw. `collapsible`; Rand `WIDE`; jeder Dialog
-  mit Formularen ruft `align_forms`; die Spaltenbreite kommt aus der längsten
-  Beschriftung vorn, längere hinten brechen um.
-  **Abnahme:** Wächter ohne `QGroupBox` in Dialogen; Dialoge mit mindestens zwei
-  `QFormLayout` richten aus; in DE, FR und PT höchstens 24 px hinter der längsten
-  Beschriftung vorn. Überschneidung RM-502.
 
 <a id="rm-519"></a>
 
@@ -4125,6 +4051,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   einem vergleichbaren Referenzlauf bewerten. Abnahme: Fallresultate, Modellkennung, Regelversion
   und Quote sind belegt; mehrschrittige Werkzeugaufrufe berücksichtigen den Umgang mit
   Thinking-Blöcken. Die Behandlung von Modellablehnungen ist bereits gebaut.
+  **Neu zu messen nach RM-513 (05.10.2026):** Rund hundert Felder stehen jetzt
+  hinten; für Rückseitenfelder liest der Agent die Bedingung, nicht den Satz.
+  Lokal mit qwen3:14b gegen den Stand `1ce7eac68` (24 gut mit Angebot);
+  verschlechtert sich die Quote, bekommen die betroffenen Felder ihren Satz
+  zurück.
 
   **Lokal abgeschlossen am 26.09.2026** — Prompt-Version 8, Regelsammlung
   unverändert, RTX 4080 mit freier Karte (Belegung je Fall im Rohdatensatz),

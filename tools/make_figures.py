@@ -700,6 +700,9 @@ def take_all(app: QApplication, language: str) -> None:
         raise SystemExit("die Auswertung fehlt — kein Bild vom Prüfbericht")
     report = ReportPanel(window)
     report.show_result(result, session.project.document)
+    # Dieselbe Grundlage wie der Bericht im Fenster: Ohne sie stand im Bild
+    # „Bewertung unvollständig“, wo das Fenster „Entscheidung erforderlich“ sagt.
+    report.set_review_context(window.report._review_basis, window.report._review_missing)
     prepared(report, REPORT)
     settle(app)
     shoot(report, "report", language)

@@ -38,6 +38,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
   mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).
+  Linke und rechte Karte liegen bündig an Fensterrand und Leiste
+  (`overlay.EDGE`, Entscheidung Robert), rund ist nur die freie Ecke; die
+  rechte ist 400 breit, 25 % des Fensters, höchstens 540.
 - Warnungen holen den Bericht nie nach vorn, sie nähmen der Auswahl die Felder:
   `SignalTabBar` zählt und blinkt bis zum Ansehen; `_focus_report` nur auf Bitte.
 - Eine neue Auswahl holt den Reiter Auswahl; Verlassen gilt bis zum Wechsel.
@@ -174,9 +177,17 @@ Stellen halten das, beide sind nötig:
   nicht *Modell teilen*.
 - Gleiche Meldungen bündeln ab zwei nach Satz, Kennung, Schwere, Schritt und
   Handlungen; Anzahl davor in Klammern. Klick wählt alle Körper, Handlung fragt
-  die Teilmenge. Gewählt wird beim Drücken (`_ReportList.leftPressed`): Die
-  Karte ändert ihre Höhe, und beim Loslassen läge die Zeile woanders. Nur gemeinsame Merkmale, aber alle Umrissorte eines Körpers
-  werden mitgeführt.
+  die Teilmenge. Gewählt wird beim Drücken (`_ReportList.leftPressed`). Nur
+  gemeinsame Merkmale, aber alle Umrissorte eines Körpers werden mitgeführt.
+- **Erst die Befunde** (RM-508): Kopf eine Zeile — Status, Zähler ohne Nullen
+  (zugleich Klappe der Liste), *Prüfumfang* mit den Kennzahlen; ein Grund nur
+  bei unvollständiger Bewertung. Hinweise allein klappen zu, Fehler oder
+  Warnung öffnen. Zeilen zeigen `headline`, die gewählte ganz; die Liste gibt
+  bis drei Zeilen nach (`LEAST_REPORT_ROWS`), dann rollt der Kopf. Darunter `finding_meta`
+  („Hinweis · Dose · intern geschätzt“), ein Zeige-Knopf (`_SHOWING_ACTIONS`),
+  ein Folgesatz nur beim Fehler, die Nebenfolge nur bei `effect_worth_showing`.
+  Filter ab `FILTER_FROM` Zeilen; Übergabe und Export unter dem Rollbereich;
+  der Nachbau steht in der Karte der Handlungen.
 - `actions_for(finding)` speist sichtbare Knopfzeile und Kontextmenü (§2.7).
   Jeder Befund bekommt `suggestions` oder begründetes `OHNE_KNOPF`
   (`test_finding_ways.py`); `actions_for_document` entfernt Handlungen ohne
@@ -342,19 +353,31 @@ Erreichbarkeit wieder her. Die Anfangsbreite samt zugeklappter Teile und
 Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
-(`DontWrapRows`). Eine Beschriftungsspalte je Dialog (`panels.align_forms`,
-gerahmte Reiter über `apart`), gleich breite Felder (`panels.even_fields`,
-`op_dialog.even_value_fields`); eine Zeile aus Feld und Knöpfen endet mit
-`addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal im Dialog.
+(`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
+zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
+(`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
+(`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
+Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt, keine zweimal
+im Dialog. **Hat der Dialog eine Rückseite, setzen die Zeilen vorn, die
+dastehen, die Spalte** (`dialogs.align_to_the_front`): Eine längere
+Beschriftung hinten oder eine bedingte vorn bricht um, die Lesezeile *Stelle*
+richtet beim Erscheinen neu aus (RM-518, höchstens 24 px hinter der längsten);
+wer zwei Formulare hat, richtet aus (`test_ui_dialogs`).
 
-**Klappen:** überall die flache Überschrift (`panels.collapsible`,
-`sectionHeading`); zugeklappt nennt sie ihren Inhalt (`contents=`, Wächter in
-`test_interface_limits`), `remember=` hält den Zustand des Kunden — nie an
-einer Klappe, die sich selbst öffnet. Werte, die sich ein- und ausschalten
-lassen, sind eine Schalterzeile mit eingerückten Feldern, kein ankreuzbarer
-Rahmen. Bei `ContentHeight`-Dialogen werden Anfangsgröße und bedientes Klappen
-getrennt gemessen; eigenes Wachsen gilt nicht als Nutzergröße. Ein Ausgang ist
-`RejectRole` — als `AcceptRole` macht ihn die Knopfleiste zum Hauptknopf.
+**Ein Dialog, eine Form** (RM-518): Abschnitte sind flache Überschriften, kein
+`QGroupBox` (Ausnahmen mit Grund im Wächter in `test_ui_dialogs`); Außenrand
+`WIDE`.
+
+**Klappen:** überall `panels.collapsible` (`sectionHeading`; eine von Hand
+gebaute fängt `test_every_section_heading_is_built_by_collapsible`); zugeklappt
+nennt sie ihren Inhalt (`contents=`, Wächter in `test_interface_limits`;
+mit `heading_row=` steht die Überschrift in einer Zeile, der Inhalt im Tooltip),
+`remember=` hält den Zustand des Kunden — nie an einer Klappe, die sich selbst
+öffnet. Werte, die sich ein- und ausschalten lassen, sind eine Schalterzeile
+mit eingerückten Feldern, kein ankreuzbarer Rahmen. Bei `ContentHeight`-Dialogen
+werden Anfangsgröße und bedientes Klappen getrennt gemessen; eigenes Wachsen
+gilt nicht als Nutzergröße. Ein Ausgang ist `RejectRole` — als `AcceptRole`
+macht ihn die Knopfleiste zum Hauptknopf.
 
 **Was eine Angabe bestimmt, steht vor ihr** (Entscheidung Robert): was eine
 Liste füllt, eine Vorgabe setzt oder sperrt, davor; ein Schalter bei dem, was
@@ -368,15 +391,15 @@ Zustand und Mitgabe über den Knöpfen, außerhalb des Rollbereichs.
 **Slicer vor Drucker:** Einstellungen und Erstlauf verwenden dieselbe
 asynchrone Druckererhebung; in den Einstellungen steht der Slicer unter
 „Anwendung“ (er gilt jedem Projekt), direkt vor den Druckervorgaben. Beide
-bieten vollständige Profile aus dem gewählten Slicer an; neue Druckerprofile bleiben bis zum Speichern im Entwurf, auch beim
-Sprachwechsel. Die Einstellungen übernehmen dabei auch den Programmpfad erst
-beim Speichern. Der Erstlauf bewahrt seine bisherige Sprachwechsel-Semantik:
-Sprache, Slicerpfad und bereits gespeicherte Drucker gelten sofort; eine neue
-Profil-ID reist getrennt im Entwurf. Verspätete Antworten einer früheren
-Auswahl ändern weder den aktuellen Dialog noch gespeicherte Einstellungen.
-Die Druckerliste hat eine feste Suchzeile oberhalb der Treffer. Sie filtert
-live; erst eine ausdrückliche Auswahl übernimmt einen Drucker, Escape schließt
-nur die Liste.
+bieten nur vollständige Profile des gewählten Slicers; neue bleiben bis zum
+Speichern im Entwurf, auch beim Sprachwechsel, in den Einstellungen ebenso
+der Programmpfad. Im Erstlauf gelten Sprache, Slicerpfad und gespeicherte
+Drucker sofort; eine neue Profil-ID reist im Entwurf. Verspätete Antworten
+einer früheren Auswahl ändern weder Dialog noch Einstellungen. Je Modell eine
+Zeile ohne Düse (Entscheidung Robert, `add_printer_choices`); die Düse wählt
+der Druckdialog, Speichern behält sie (`with_saved_nozzle`). Die
+Druckerliste hat eine feste Suchzeile über den Treffern; sie filtert live,
+erst eine ausdrückliche Auswahl übernimmt, Escape schließt nur die Liste.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
@@ -405,13 +428,12 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 
 `OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`:
 
-- **Gerechnet wird nie mit den Höhen, die gerade gesetzt wurden** — sonst läuft
-  die Karte auf und ab; `natural_height` taugt darin nicht, `extra_height`
+- **Gerechnet wird nie mit den Höhen, die gerade gesetzt wurden**;
+  `natural_height` taugt darin nicht, `extra_height`
   rechnet strukturell (je Posten: Wunsch des Ganzen minus die Wünsche der
   Karten darin).
 - **Was nicht den Karten gehört, wird abgezogen** (Abschnittsköpfe,
-  Parameterleiste, Layoutabstände) — sonst schneidet das Elternwidget Zeilen
-  weg, ohne dass ein Rollbalken es meldet.
+  Parameterleiste, Layoutabstände).
 - **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`; aus `fit_to_rows`
   mit drei Mindestzeilen und aus dem leeren Zustand über `fit_wrapped`), nie
   höher als ihr Wunsch; verteilt wird nur, was darüber liegt.
@@ -425,8 +447,7 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 once“, „no card is pushed outside its section“). `fit_to_rows` rechnet mit
 **einer** Zeilenhöhe — ungleiche Zeilen (Objektbaum) misst `overlay.rows_height`, und
 `wanted_height` fragt dieselbe Quelle wie das Setzen. **Was unter der Liste
-steht, gehört in beide Rechnungen**, sonst schiebt die Liste den einzigen Weg
-der Karte hinaus.
+steht, gehört in beide Rechnungen.**
 
 **Gesetzt wird einmal je Ereignisdurchlauf, nicht je Ereignis:** `_place_later`
 setzt über einen Nullzeitgeber — kein nachgereichtes Ereignis, denn die Listen
@@ -454,12 +475,10 @@ ein Programmfehler, nicht Ihre Schuld“ (§33.1).
   dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden* erscheint
   erst, wenn ein Versand scheiterte.
 - **Einmal erzeugt, identisch verwendet:** Die Sitzung wird einmal im Arbeiter
-  gespeichert (Kopie von Dokument und Bericht, eigene Quellzuordnung;
-  unveränderliche Datei-Bytes geteilt), ebenso die Protokollbytes — Vorschau,
-  Versand und Ablage nehmen dieselben. Bis der Anhang fertig ist, zeigt der
-  Dialog die Vorbereitung und sperrt den Versand; Abwahl und Schließen gehen,
-  ein geschlossener Dialog verwirft späte Antworten. `report.log_tail()` liest
-  rückwärts höchstens 1 MiB für die letzten 400 Zeilen.
+  gespeichert, ebenso die Protokollbytes — Vorschau, Versand und Ablage nehmen
+  dieselben. Bis der Anhang fertig ist, zeigt der Dialog die Vorbereitung und
+  sperrt den Versand; Abwahl und Schließen gehen, ein geschlossener Dialog
+  verwirft späte Antworten.
 
 
 ### Formsitzung: Mauszüge und Analyse

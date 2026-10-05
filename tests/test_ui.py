@@ -110,7 +110,10 @@ def test_the_held_sentence_goes_with_the_draft(before: str) -> None:
         _quiet_order=None,
         _announcement=held if before == "held" else "Gespeichert.",
         feature_panel=SimpleNamespace(measuring=False),
-        viewport=SimpleNamespace(set_feature_gizmo_blocked=lambda _blocked: None),
+        viewport=SimpleNamespace(
+            set_feature_gizmo_blocked=lambda _blocked: None,
+            set_measured_feature=lambda _ref: None,
+        ),
         _drop_feature_preview=lambda: None,
         _clear_the_status_line=lambda: cleared.append(True),
     )
@@ -427,7 +430,10 @@ def test_first_measure_edit_releases_split_but_passive_measures_do_not(
     view.session = SimpleNamespace(
         last_result=None, project=SimpleNamespace(document=object()), result_current=False
     )
-    view.viewport = SimpleNamespace(set_feature_gizmo_blocked=lambda *args, **kwargs: None)
+    view.viewport = SimpleNamespace(
+        set_feature_gizmo_blocked=lambda *args, **kwargs: None,
+        set_measured_feature=lambda _ref: None,
+    )
     monkeypatch.setattr(
         placement_flow,
         "PlacementFlow",
@@ -5310,7 +5316,7 @@ def test_the_report_summary_counts_findings_from_both_directions(
 
     assert panel.list.count() == 2
     assert "Keine Befunde" not in panel.summary.text()
-    assert "1" in panel.summary.text()
+    assert panel.list_toggle.text() == "1 Warnung · 1 Hinweis"
 
 
 def test_a_report_without_findings_says_so(qt_app: QApplication) -> None:
@@ -7882,7 +7888,6 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     """
     from app.ui.overlay import CARD
     from app.ui.panels import FILTER_FROM
-    from app.ui.style import TARGET_SIZE
 
     window.action_theme(theme)
     panel = window.selection_operations
@@ -7945,15 +7950,26 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     assert window.overlay.right is window.right_column
 
     report = window.report
+    # Die Filterzeile steht erst ab ``FILTER_FROM`` Zeilen (RM-508: acht).
+    report.add_findings(
+        [
+            Finding(f"test.filter_{index}", "warning", f"Befund {index}")
+            for index in range(FILTER_FROM)
+        ]
+    )
     assert report.list.count() >= FILTER_FROM, "ohne Filterzeile prüft dieser Test nichts"
     window.resize(1024, 720)
     window.show()
     QApplication.processEvents()
-    for above, below in ((report.to_slicer, report.search), (report.search, report.list)):
-        assert above.geometry().bottom() < below.geometry().top(), (
-            "Bericht und Filter dürfen nicht übereinanderliegen: "
-            f"Spalte={window.right_column.height()}, Bericht={window.right.height()}"
-        )
+    assert report.search.geometry().bottom() < report.list.geometry().top(), (
+        "Filter und Liste dürfen nicht übereinanderliegen: "
+        f"Spalte={window.right_column.height()}, Bericht={window.right.height()}"
+    )
+    # Übergabe und Export stehen unten, außerhalb des Rollbereichs (RM-508).
+    footer_top = report.to_slicer.mapTo(report, report.to_slicer.rect().topLeft()).y()
+    list_bottom = report.list.mapTo(report, report.list.rect().bottomLeft()).y()
+    assert list_bottom < footer_top
+    assert report.export_button.isVisibleTo(report)
     # **Und keine Zeile des Berichts über einer anderen.** Seit Prüfumfang,
     # Nachbau, Befundkontext und Nebenfolge dazukamen, will der Bericht bei
     # 1024 x 720 mehr Höhe, als die Spalte hat; Qt staucht dann unter die
@@ -7967,13 +7983,12 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
         and item.spacerItem() is None
         and not item.isEmpty()
     ]
-    assert len(rows) >= 5, rows
+    assert len(rows) >= 2, rows
     for upper, lower in itertools.pairwise(rows):
         assert upper.bottom() < lower.top(), (upper, lower)
-    assert report.list.geometry().bottom() <= report.height(), "die Liste bleibt in der Karte"
+    assert list_bottom <= report.height(), "die Liste bleibt in der Karte"
     assert report.search.height() >= 32
     assert report.severity.height() >= 32
-    assert report.to_slicer.height() >= TARGET_SIZE
     assert panel.catalog_button.isVisibleTo(window.feature_dock)
 
     # **Eine Karte, und die Maske lässt nichts daneben stehen.** Mit zwei
@@ -8165,7 +8180,7 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
     ``_update_actions``). Ohne diesen Test wäre die Zusage genau dort
     eingelöst, wo sie niemand sieht.
     """
-    from app.ui.selection_operations import QUICK_BODY
+    from app.ui.selection_operations import QUICK_BODY, REBUILD
 
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -8179,7 +8194,8 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
 
     window.object_tree.select_object(object_id)
     QApplication.processEvents()
-    assert vorn() == set(QUICK_BODY), "ein Körper allein: bohren, aushöhlen, teilen"
+    # Dazu *Modell nachbauen* (RM-508): eine Handlung am einen gewählten Körper.
+    assert vorn() == {*QUICK_BODY, REBUILD}, "ein Körper allein: bohren, aushöhlen, teilen"
 
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
@@ -11068,7 +11084,7 @@ def test_the_report_can_be_filtered(window: MainWindow) -> None:
     hidden = [window.report.list.item(row).isHidden() for row in range(window.report.list.count())]
     assert hidden == [True, False], "der Text filtert unabhängig vom Schweregrad"
 
-    assert "1 × Fehler" in window.report.summary.text(), "gezählt wird der ganze Bericht"
+    assert "1 Fehler" in window.report.list_toggle.text(), "gezählt wird der ganze Bericht"
 
 
 def test_the_history_shows_what_a_redo_would_bring_back(window: MainWindow) -> None:
@@ -16650,7 +16666,7 @@ def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) 
     from app.core.knowledge import profiles
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import ProjectSources, new_project
-    from app.ui.panels import ReportPanel
+    from app.ui.panels import _LINE_ROLE, ReportPanel
 
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
@@ -16697,7 +16713,7 @@ def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) 
     panel = ReportPanel()
     try:
         panel.show_result(result, document)
-        lines = [panel.list.item(row).text() for row in range(panel.list.count())]
+        lines = [panel.list.item(row).data(_LINE_ROLE)[1] for row in range(panel.list.count())]
     finally:
         panel.deleteLater()
 

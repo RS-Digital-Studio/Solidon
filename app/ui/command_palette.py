@@ -38,6 +38,7 @@ from app.core.registry.search import (
 # Ausdrücklich weitergereicht: Die Faltung lebt seit dem 25.09.2026 in
 # ``registry.search``, und das Hauptfenster liest sie noch von hier.
 from app.core.registry.search import fold as fold
+from app.core.registry.surfaces import first_sentence as first_sentence
 from app.i18n import tr
 from app.ui.style import NORMAL, TIGHT, WIDE
 
@@ -248,12 +249,6 @@ def word_hits(entry: PaletteEntry, query: str) -> int:
 
 #: Wie weit die Tastenspalte vom rechten Rand einrückt.
 SHORTCUT_MARGIN: Final = 12
-
-
-def first_sentence(text: str) -> str:
-    """Der erste Satz eines ``doc``-Texts für die Erklärungszeile."""
-    head, dot, _rest = text.partition(". ")
-    return f"{head}." if dot else text
 
 
 class _Rows(QStyledItemDelegate):

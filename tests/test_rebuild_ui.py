@@ -283,9 +283,9 @@ def test_visible_report_flow_cleans_up_and_ignores_late_results(qt_app, monkeypa
         qt_app.processEvents()
         source = next(iter(session.last_result.scene.objects))
         window.object_tree.select_object(source)
-        window._update_rebuild_selection()
+        window._update_actions()
         before = document_to_data(session.project.document)
-        window.report.rebuild.click()
+        window.selection_operations.rebuild_button.click()
         dialog = window._rebuild_dialog
         assert dialog is not None and not dialog.isModal()
         monkeypatch.setattr(dialog._leash, "start", workers.append)
@@ -363,31 +363,44 @@ def test_a_stale_failure_does_not_replace_a_new_worker(qt_app, rebuilt, monkeypa
     assert first.cancel.is_cancelled
 
 
-def test_report_entry_requires_one_live_selected_body(qt_app):
-    from app.ui.panels import ReportPanel
+def test_the_rebuild_stands_at_one_chosen_body_in_the_card_of_actions(qt_app):
+    """RM-508: *Modell nachbauen* ist eine Handlung am gewählten Körper.
 
-    panel = ReportPanel()
-    panel._live_objects = {
-        "obj_1": SimpleNamespace(name="Halter"),
-        "obj_2": SimpleNamespace(name="Deckel"),
-    }
+    Bis dahin stand der Knopf im Prüfbericht, auch ohne Auswahl, gesperrt und
+    mit einem Satz von elf Wörtern (Durchsicht B19). Jetzt steht er unter den
+    Hauptaktionen der Karte, an genau einem Körper ohne gewähltes Merkmal, und
+    nur, wenn er geht.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.ui.panels import ReportPanel
+    from app.ui.selection_operations import REBUILD, SelectionOperationsPanel
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    report = ReportPanel()
     seen = []
-    panel.rebuildRequested.connect(seen.append)
+    panel.rebuildRequested.connect(lambda: seen.append(True))
+
+    def allowed(_name: str) -> tuple[bool, str]:
+        return True, ""
+
     try:
-        for selection in ((), ("obj_1", "obj_2"), ("missing",)):
-            panel.set_rebuild_selection(selection)
-            assert not panel.rebuild.isEnabled()
-        panel.set_rebuild_selection(("obj_1",))
-        assert panel.rebuild.isEnabled()
-        assert "Halter" in panel.rebuild_note.text()
-        panel.rebuild.click()
-        assert seen == ["obj_1"]
-        panel.show_result(None)
-        assert not panel.rebuild.isEnabled()
-        assert panel.rebuild.isHidden()
+        assert not hasattr(report, "rebuild"), "der Bericht trägt den Nachbau nicht mehr"
+        for selected, kind, rebuild_allowed in ((0, "", True), (2, "", True), (1, "face", True)):
+            panel.set_context(selected, allowed, feature_kind=kind, rebuild=rebuild_allowed)
+            assert REBUILD not in panel._quick_shown, (selected, kind)
+        panel.set_context(1, allowed, rebuild=False)
+        assert REBUILD not in panel._quick_shown, "gesperrt steht er nicht da"
+        panel.set_context(1, allowed, rebuild=True)
+        assert REBUILD in panel._quick_shown
+        assert not panel.rebuild_button.isHidden()
+        assert panel.rebuild_button.toolTip()
+        panel.rebuild_button.click()
+        assert seen == [True]
     finally:
-        panel.close()
         panel.deleteLater()
+        report.deleteLater()
 
 
 @pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
@@ -449,14 +462,14 @@ def test_visible_report_path_uses_the_same_checked_body_and_one_undo(
         qt_app.processEvents()
         source = next(iter(session.last_result.scene.objects))
         window.object_tree.select_object(source)
-        window._update_rebuild_selection()
-        assert window.report.rebuild.isEnabled()
+        window._update_actions()
+        assert not window.selection_operations.rebuild_button.isHidden()
         session.project.document.protected[source] = ("face_1",)
         before = document_to_data(session.project.document)
         original = session.last_result
         application = None
 
-        window.report.rebuild.click()
+        window.selection_operations.rebuild_button.click()
         dialog = window._rebuild_dialog
         assert dialog is not None and not dialog.isModal()
         dialog._start()

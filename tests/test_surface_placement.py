@@ -3303,7 +3303,8 @@ def test_bore_action_edits_original_values_and_preserves_hidden_params(profile, 
     assert fields["depth"].value == pytest.approx(depth)
     assert fields["depth"].minimum == pytest.approx(0.0)
     assert fields["slotted"].kind == "bool"
-    assert fields["slot_angle"].kind == "angle"
+    # Die Richtung des Langlochs steht seit RM-513 hinten — im Dialog wie hier.
+    assert "slot_angle" not in fields
     assert not {"x", "y", "z", "nx", "anchor", "compensate"} & fields.keys()
     proposed = {**dict(action.fixed), **{name: field.value for name, field in fields.items()}}
     assert all(proposed[name] == value for name, value in saved.items())
@@ -3754,6 +3755,7 @@ def _preview_matrix(
             _show_bar=lambda: None,
             _refresh_measure_actions=lambda: None,
             _size_measure_fields=lambda _room: None,
+            _reference_titles=lambda _at=None: {},
             _seat_is_coming=lambda: False,
             _object_id="object",
             _frozen=False,
@@ -3790,6 +3792,7 @@ def _preview_matrix(
         flow._show_bar = lambda: None
         flow._refresh_measure_actions = lambda: None
         flow._size_measure_fields = lambda _room: None
+        flow._reference_titles = lambda _at=None: {}
         flow._seat_is_coming = lambda: False
         flow._object_id = "object"
         flow._frozen = False

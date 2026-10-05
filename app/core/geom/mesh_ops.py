@@ -2118,7 +2118,7 @@ class SubdivideParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Macht aus einer kantigen Fläche eine gekrümmte: Die neuen Punkte werden nicht "
+        "Macht aus einer kantigen Fläche eine gekrümmte. Die neuen Punkte werden nicht "
         "in das ebene Dreieck gesetzt, sondern auf die Rundung, die sie meint. Scharfe Kanten "
         "bleiben scharf."
     ),

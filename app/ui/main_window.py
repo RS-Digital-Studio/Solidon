@@ -187,7 +187,7 @@ from app.core.registry import (
     variant_members,
 )
 from app.core.registry.params import body_keys, inactive_dependency
-from app.core.registry.surfaces import chooses_a_centre
+from app.core.registry.surfaces import chooses_a_centre, first_sentence
 from app.core.report import crash_detail
 from app.core.scene import (
     EdgeTarget,
@@ -479,7 +479,11 @@ def _target_feature_names(
     if result is None:
         return {}
     return {
-        f"{object_id}:{feature_id}": f"{entry.name} · {feature_label(feature_id, feature)}"
+        # Auswahlzeilen nennen Name und Maß, nicht die Maßquelle (RM-513, C16):
+        # „· aus der Konstruktion“ ist ein Wort aus der Datenhaltung.
+        f"{object_id}:{feature_id}": (
+            f"{entry.name} · {feature_label(feature_id, feature, compact=True)}"
+        )
         for object_id, entry in result.scene.objects.items()
         if object_id != except_for
         for feature_id, feature in entry.features.items()
@@ -3511,8 +3515,7 @@ class MainWindow(QMainWindow):
         self.report.bundleActivated.connect(self._on_bundle_activated)
         self.report.actionOnBodies.connect(self._run_on_chosen_bodies)
         self.report.slicerRequested.connect(self.action_print_settings)
-        self.report.rebuildRequested.connect(self.action_rebuild)
-        self.object_tree.selectionChanged.connect(self._update_rebuild_selection)
+        self.report.exportRequested.connect(self.action_export)
         self.chat = ChatPanel(self)
         self.chat.requestSent.connect(self._on_request_sent)
         self.chat.accepted.connect(self._on_proposal_accepted)
@@ -3590,6 +3593,7 @@ class MainWindow(QMainWindow):
         self.selection_operations.catalogRequested.connect(self.action_catalog)
         self.selection_operations.matchingPartsRequested.connect(self.open_matching_parts)
         self.selection_operations.paletteRequested.connect(self.open_palette)
+        self.selection_operations.rebuildRequested.connect(self._rebuild_chosen_body)
         from app.ui.filament_assignment import QuickFilamentPicker
 
         self.quick_filament = QuickFilamentPicker(self)
@@ -5078,10 +5082,13 @@ class MainWindow(QMainWindow):
         # Grenze. Zwölf Operationen tragen einen ``caveat``, und gelesen hat
         # ihn allein das Handbuch — also niemand in dem Augenblick, in dem er
         # zählt. In die Statuszeile passt er nicht: die ist eine Zeile, und
-        # abgeschnitten wäre eine Warnung schlimmer als keine.
-        action.setStatusTip(str(spec.doc))
+        # abgeschnitten wäre eine Warnung schlimmer als keine. **Nur der erste
+        # Satz** (RM-509): Ein Menü-Tooltip trug bis zu 116 Wörter; der Rest
+        # steht im Dialog und im Handbuch.
+        sentence = first_sentence(str(spec.doc))
+        action.setStatusTip(sentence)
         warning = caveat_line(spec)
-        action.setToolTip(f"{spec.doc}\n\n{warning}" if warning else str(spec.doc))
+        action.setToolTip(f"{sentence}\n\n{warning}" if warning else sentence)
         action.triggered.connect(
             weak_slot(self, lambda view, entry: view.launch_operation(entry), spec)
         )
@@ -5460,6 +5467,9 @@ class MainWindow(QMainWindow):
             self._lock_hint(action, locked)
         for action in (self._toolbar_sculpt, self._toolbar_armature):
             self._pick_hint(action, ready, locked, missing=halted or "")
+        # Der Knopf im Prüfbericht folgt dem Menüeintrag: dieselbe Sperre,
+        # derselbe Grund (RM-508).
+        self.report.follow_export(self.export_action.isEnabled(), self.export_action.toolTip())
         # Derselbe Registervertrag wie Menü und Palette, ohne eine dritte
         # Freigabelogik. Das Panel hält seine Knöpfe über Auswahlwechsel hinweg
         # und ändert hier nur Zustand und Hinweise.
@@ -5482,6 +5492,7 @@ class MainWindow(QMainWindow):
             # Mehrere markierte Merkmalszeilen eines Körpers bieten vorn das
             # Zusammenfassen als Muster an (RM-504).
             features=self._several_features_chosen(),
+            rebuild=self._rebuild_allowed(chosen, locked, gesturing),
         )
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result
@@ -7672,8 +7683,29 @@ class MainWindow(QMainWindow):
         )
         show_error(error, parent, {**self.error_handlers(), STOP_INSERTING.id: stop_inserting_then})
 
-    def _update_rebuild_selection(self, *_args: Any) -> None:
-        self.report.set_rebuild_selection(self.object_tree.selected_objects())
+    def _rebuild_chosen_body(self) -> None:
+        """*Modell nachbauen* aus der Karte der Handlungen: genau der gewählte Körper."""
+        chosen = self.object_tree.selected_objects()
+        if len(chosen) == 1:
+            self.action_rebuild(chosen[0])
+
+    def _rebuild_allowed(self, chosen: int, locked: bool, gesturing: bool) -> bool:
+        """Ob *Modell nachbauen* am gewählten Körper geht (RM-508).
+
+        Bis dahin ein Knopf im Prüfbericht, auch ohne Auswahl, gesperrt und mit
+        einem Satz darunter; jetzt eine Hauptaktion am einen gewählten Körper.
+        Die Bedingungen sind die, unter denen :meth:`action_rebuild` nicht
+        absagt — der Knopf bietet nicht an, was der Klick dann verweigert.
+        """
+        result = self.session.last_result
+        return (
+            chosen == 1
+            and not locked
+            and not gesturing
+            and result is not None
+            and result.complete
+            and result.stopped_at is None
+        )
 
     def action_rebuild(self, object_id: str) -> None:
         """Bericht → geprüfter Kandidat → sichtbarer Vergleich → eine Transaktion."""
@@ -12386,8 +12418,8 @@ class MainWindow(QMainWindow):
         )
         for spec in specs:
             action = self._finish_menu.addAction(str(spec.title))
-            action.setToolTip(str(spec.doc))
-            action.setStatusTip(str(spec.doc))
+            action.setToolTip(first_sentence(str(spec.doc)))
+            action.setStatusTip(first_sentence(str(spec.doc)))
             action.triggered.connect(weak_slot(self, MainWindow._finish_sketch_as, spec.name))
             self._finish_actions[spec.name] = action
 
@@ -17968,8 +18000,10 @@ class MainWindow(QMainWindow):
         if not self._measuring_to_release:
             return
         self._measuring_to_release = False
-        if self._quiet_placement is None and self.feature_panel.measuring:
-            self.feature_panel.set_measuring(False)
+        if self._quiet_placement is None:
+            self.viewport.set_measured_feature(None)
+            if self.feature_panel.measuring:
+                self.feature_panel.set_measuring(False)
 
     def _show_chosen_features(self, chosen: list[Any]) -> None:
         """Abstand im selben Körper, manuelle Prüfbeziehung zwischen zwei Körpern."""
@@ -18450,14 +18484,21 @@ class MainWindow(QMainWindow):
 
     def _focus_measure_field(self, name: str) -> None:
         """Das Feld dieses Parameters in der Maßgruppe bekommt den Fokus."""
-        from app.ui.panels import FIELD_PROPERTY
+        from app.ui.panels import FIELD_PROPERTY, open_section
 
         flow = self._quiet_placement
         group = flow.measure_group if flow is not None else None
         if group is None:
             return
         for widget in group.findChildren(QWidget):
-            if widget.property(FIELD_PROPERTY) == name and widget.isVisibleTo(group):
+            if widget.property(FIELD_PROPERTY) != name or widget.isHidden():
+                continue
+            # X, Y und Z stehen unter „Weitere Werte“ (RM-516): Wer eines davon
+            # meint, bekommt die Klappe aufgeklappt.
+            content = widget.parentWidget()
+            if not widget.isVisibleTo(group) and content is not None:
+                open_section(content)
+            if widget.isVisibleTo(group):
                 spin = getattr(widget, "spin", widget)
                 spin.setFocus(Qt.FocusReason.OtherFocusReason)
                 if isinstance(spin, QAbstractSpinBox):
@@ -19346,6 +19387,8 @@ class MainWindow(QMainWindow):
         if not flow.active:
             self.end_quiet_placement()
             return
+        if target[1]:
+            self.viewport.set_measured_feature((target[0], target[1]))
         if editing:
             host.begin_edit()
         show_values()
@@ -19412,8 +19455,10 @@ class MainWindow(QMainWindow):
                 self._ending_quiet_placement = False
         if measuring_follows:
             self._measuring_to_release = True
-        elif self.feature_panel.measuring:
-            self.feature_panel.set_measuring(False)
+        else:
+            self.viewport.set_measured_feature(None)
+            if self.feature_panel.measuring:
+                self.feature_panel.set_measuring(False)
         self.viewport.set_feature_gizmo_blocked(False)
         self._drop_feature_preview()
         # **Der Satz zur gehaltenen Auswahl geht mit dem Entwurf**
@@ -19731,7 +19776,7 @@ class MainWindow(QMainWindow):
                 said, choices = bore_advice(
                     float(diameter),
                     ask=False,
-                    measured=localised(f"{float(diameter):.2f}"),
+                    measured=length(float(diameter)),
                     feature=feature,
                     features=entry.features if entry else None,
                     mesh=as_mesh_data(entry.mesh) if entry else None,
@@ -21661,7 +21706,9 @@ class MainWindow(QMainWindow):
         note = self._conversion_preview_note(note, getattr(difference, "findings", ()))
         explanation = getattr(difference, "explanation", "")
         if explanation:
-            note = "\n".join((note, explanation))
+            # Die Warnungen der Vorschau stehen auch in der Erklärung (dort für
+            # den Chat, der nur sie liest); im Band steht jede Zeile einmal.
+            note = "\n".join(dict.fromkeys((*note.splitlines(), *explanation.splitlines())))
         self.viewport.mark_preview(note, tr("Leertaste halten: vorher") if shown else "")
 
     def _conversion_preview_note(self, title: str, findings: Sequence[Finding]) -> str:
@@ -22227,7 +22274,7 @@ class MainWindow(QMainWindow):
                 for kind in entry.feature_kinds
             )
         return {
-            feature_id: feature_label(feature_id, feature)
+            feature_id: feature_label(feature_id, feature, compact=True)
             for feature_id, feature in entry.features.items()
             if not wanted or feature.kind in wanted
         }

@@ -28,7 +28,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QProgressBar,
@@ -49,6 +48,7 @@ from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.ai_disclosure import clear_disclosure
+from app.ui.dialogs import align_to_the_front
 from app.ui.first_run import (
     LANGUAGE_CHANGED,
     PrinterChoices,
@@ -60,18 +60,18 @@ from app.ui.first_run import (
     preferred_printer,
     select_program,
     valid_printer_choice,
+    with_saved_nozzle,
 )
 from app.ui.icons import icon
 from app.ui.labels import TrackSlider, by_title, slicer_title, wheel_needs_focus
 from app.ui.leash import WAIT_TIMEOUT_MS, WorkerLeash
 from app.ui.palette import DIFF_PALETTES
-from app.ui.panels import align_forms, collapsible, open_section
+from app.ui.panels import collapsible, open_section
 from app.ui.print_settings_dialog import _SlicerWorker
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
 from app.ui.style import (
     NORMAL,
-    ROOMY,
     SPACE,
     WIDE,
     ContentHeight,
@@ -415,8 +415,9 @@ class SettingsDialog(QDialog):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.printer.setMinimumContentsLength(20)
-        add_printer_choices(self.printer, self._known_printers())
-        select_data(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
+        chosen_printer = settings.printer or profiles.DEFAULT_PRINTER
+        add_printer_choices(self.printer, self._known_printers(), keep={chosen_printer})
+        select_data(self.printer, chosen_printer)
         self.printer.setToolTip(self.printer.currentText())
         self.printer.currentTextChanged.connect(self.printer.setToolTip)
         # Die Materialliste folgt dem Verfahren des Druckers: Ein Harzdrucker
@@ -455,16 +456,18 @@ class SettingsDialog(QDialog):
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_soon)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(NORMAL)
         layout.addWidget(self._scroll, 1)
         layout.addWidget(buttons)
         for choice in self.findChildren(QComboBox) + self.findChildren(QSpinBox):
             wheel_needs_focus(choice)
-        # Zwei Gruppen, zwei Formulare — und jedes rechnete seine
+        # Zwei Abschnitte, drei Formulare — und jedes rechnete seine
         # Beschriftungsspalte für sich: Die Felder begannen oben bei 148 und
-        # unten bei 70 Punkten, gemessen am gebauten Dialog (Befund B11).
-        align_forms(self)
+        # unten bei 70 Punkten, gemessen am gebauten Dialog (Befund B11). Die
+        # Spalte setzen die Zeilen, die offen dastehen; hinter „Weitere
+        # Einstellungen“ bricht eine längere Beschriftung um (RM-518).
+        align_to_the_front((self._application_form, self._project_form), self._advanced_form)
         self._natural_advanced_width = self._reserve_advanced_width()
         heading = self.advanced.findChild(QToolButton)
         assert heading is not None
@@ -577,8 +580,11 @@ class SettingsDialog(QDialog):
         )
 
     def _application_group(self, titles: Mapping[str, str]) -> QWidget:
-        box = QGroupBox(tr("Anwendung"), self)
+        # **Eine Abschnittsform in allen Dialogen** (RM-518): die flache
+        # Überschrift der Druckeinstellungen statt eines gerahmten Kastens.
+        box = QWidget(self)
         form = QFormLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
         form.setVerticalSpacing(NORMAL)
         form.setHorizontalSpacing(NORMAL)
         # **Eine Zeilenform für alle Zeilen.** Mit ``WrapLongRows`` stand die
@@ -641,12 +647,14 @@ class SettingsDialog(QDialog):
             remember="settings.more",
         )
         self._advanced_form = details
+        self._application_form = form
         form.addRow(self.advanced)
-        return box
+        return collapsible(tr("Anwendung"), box)
 
     def _project_group(self, titles: Mapping[str, str]) -> QWidget:
-        box = QGroupBox(tr("Vorgaben für neue Projekte"), self)
+        box = QWidget(self)
         form = QFormLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
         form.setVerticalSpacing(NORMAL)
         form.setHorizontalSpacing(NORMAL)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
@@ -665,7 +673,8 @@ class SettingsDialog(QDialog):
         form.addRow(self.search_progress)
         form.addRow(self.search_again)
         form.addRow(titles["material"], self.material)
-        return box
+        self._project_form = form
+        return collapsible(tr("Vorgaben für neue Projekte"), box)
 
     @property
     def slicer_path(self) -> str:
@@ -683,14 +692,20 @@ class SettingsDialog(QDialog):
         return self.printer.search_field.text() or None
 
     def _known_printers(self) -> dict[str, PrinterProfile]:
-        return dict(profiles.printer_profiles()) | self._discovered_printers
+        saved = profiles.printer_profiles()
+        return dict(saved) | {
+            identifier: with_saved_nozzle(found, saved.get(identifier))
+            for identifier, found in self._discovered_printers.items()
+        }
 
     def save_external_choices(self) -> None:
         """Nur Speichern übernimmt das gewählte fremde Profil und den Programmpfad."""
         chosen = str(self.printer.currentData() or "")
-        profile = self._discovered_printers.get(chosen)
+        found = self._discovered_printers.get(chosen)
         try:
-            if profile is not None and profiles.printer_profiles().get(chosen) != profile:
+            saved = profiles.printer_profiles().get(chosen)
+            profile = with_saved_nozzle(found, saved) if found is not None else None
+            if profile is not None and saved != profile:
                 profiles.save_printer(profile)
             if not discover.same_program(discover.remembered_path("slicer"), self.slicer_path):
                 discover.remember_path("slicer", self.slicer_path)
@@ -793,7 +808,9 @@ class SettingsDialog(QDialog):
         with QSignalBlocker(self.printer):
             self.printer.clear()
             add_printer_choices(
-                self.printer, {name: entry for name, entry in known.items() if name in allowed}
+                self.printer,
+                {name: entry for name, entry in known.items() if name in allowed},
+                keep={preferred},
             )
             select_data(self.printer, preferred)
         self.printer.setEnabled(True)

@@ -49,7 +49,7 @@ from app.core.knowledge.parts.mechanics import (
 )
 from app.core.knowledge.profiles import for_object
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.registry.params import validate
+from app.core.registry.params import ZERO_AUTOMATIC, ZERO_FROM_PROFILE, validate
 from app.core.types import (
     BaseParams,
     CancelToken,
@@ -425,6 +425,7 @@ class PinForBoreParams(BaseParams):
         minimum=0.0,
         maximum=500.0,
         doc=_("Null nimmt die Länge der Bohrung, am Scharnier die Breite über alle Augen."),
+        zero_text=ZERO_AUTOMATIC,
     )
     clearance: float = param(
         title=_("Spiel"),
@@ -437,6 +438,7 @@ class PinForBoreParams(BaseParams):
             "Um so viel ist der Stift dünner als die Bohrung. "
             "Null heißt: der Wert aus dem Materialprofil."
         ),
+        zero_text=ZERO_FROM_PROFILE,
     )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
 

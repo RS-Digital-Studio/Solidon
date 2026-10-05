@@ -40,14 +40,25 @@ TINT_MAX: Final = 0.45
 TINT_REST: Final = 0.3
 
 
-def counted(errors: int, warnings: int) -> str:
-    """„2 Fehler, 1 Warnung“ — für Tooltip und Bildschirmleser."""
+def count_phrases(errors: int, warnings: int, infos: int = 0) -> list[str]:
+    """„2 Warnungen“, „1 Hinweis“ — je Schwere ein Wort mit Zahl, keine für null.
+
+    Eine Quelle für Reiter und Kopf des Prüfberichts (RM-508): „0 x Fehler“
+    stand dort über jedem sauberen Modell.
+    """
     parts = []
     if errors:
         parts.append(tr("1 Fehler") if errors == 1 else tr("{count} Fehler", count=errors))
     if warnings:
         parts.append(tr("1 Warnung") if warnings == 1 else tr("{count} Warnungen", count=warnings))
-    return ", ".join(parts)
+    if infos:
+        parts.append(tr("1 Hinweis") if infos == 1 else tr("{count} Hinweise", count=infos))
+    return parts
+
+
+def counted(errors: int, warnings: int) -> str:
+    """„2 Fehler, 1 Warnung“ — für Tooltip und Bildschirmleser."""
+    return ", ".join(count_phrases(errors, warnings))
 
 
 class AlertBadge(QWidget):
