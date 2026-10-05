@@ -3935,6 +3935,7 @@
   "Für diese Ausgabe liegt kein Filamentbedarf vor.": "No filament demand is available for this output.",
   "Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus.": "No edge is named for this selection yet — pick one.",
   "Für diese Dateiversion fehlt der Umstellungsschritt.": "The migration step for this file version is missing.",
+  "Für diese Form fand der Nachbau keinen Aufbau, der dieselbe Form ergibt. Größere Grenzen helfen hier nicht; behalten Sie das ursprüngliche Modell.": "For this shape the rebuild found no construction that gives the same shape. Wider limits will not help here; keep the original model.",
   "Für diese Handlung ist keine Fläche gewählt — klicken Sie eine im Bild an.": "No face is chosen for this action — click one in the view.",
   "Für diese Kantenlänge reicht der Arbeitsspeicher nicht. Eine doppelt so lange Kante braucht ein Viertel davon.": "There is not enough memory for this edge length. An edge twice as long needs a quarter of it.",
   "Für diese Objekte gibt es keine gespeicherte Wahl zur Merkmalserkennung.": "There is no stored feature recognition choice for these objects.",

@@ -3935,6 +3935,7 @@
   "Für diese Ausgabe liegt kein Filamentbedarf vor.": "Não foi determinado o filamento necessário para este ficheiro.",
   "Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus.": "Para esta seleção ainda não há nenhuma aresta indicada — escolha uma.",
   "Für diese Dateiversion fehlt der Umstellungsschritt.": "Para esta versão de ficheiro falta o passo de conversão.",
+  "Für diese Form fand der Nachbau keinen Aufbau, der dieselbe Form ergibt. Größere Grenzen helfen hier nicht; behalten Sie das ursprüngliche Modell.": "Para esta forma, a reconstrução não encontrou nenhuma construção que dê a mesma forma. Limites mais largos não ajudam aqui; mantenha o modelo original.",
   "Für diese Handlung ist keine Fläche gewählt — klicken Sie eine im Bild an.": "Para esta ação não há nenhuma face escolhida — clique numa na vista.",
   "Für diese Kantenlänge reicht der Arbeitsspeicher nicht. Eine doppelt so lange Kante braucht ein Viertel davon.": "A memória não é suficiente para este comprimento de aresta. Uma aresta com o dobro do comprimento precisa de um quarto.",
   "Für diese Objekte gibt es keine gespeicherte Wahl zur Merkmalserkennung.": "Não existe nenhuma escolha guardada sobre o reconhecimento de características para estes objetos.",

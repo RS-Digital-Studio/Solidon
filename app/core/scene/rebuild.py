@@ -1033,10 +1033,13 @@ def propose(
         forms.append(source)
     plans: list[tuple[list[OperationDraft], set[str], SceneObject]] = []
     for form in forms:
-        for feature in form.features.values():
-            step = _single(feature)
-            if step is not None:
-                plans.append(([step], {feature.id}, form))
+        # Ein Rundteil allein ist nur ein Vorschlag, wenn es das ganze Teil
+        # ist. Neben weiteren Merkmalen fällt es an der Formprüfung immer
+        # durch und kostet eine Auswertung: Am Besenhalter aus Roberts Test
+        # (0.5.2) standen zwölf einzelne Zylinder für sechs Zapfen in der Liste.
+        rounds = [feature for feature in form.features.values() if feature.kind != "face"]
+        if len(rounds) == 1 and (step := _single(rounds[0])) is not None:
+            plans.append(([step], {rounds[0].id}, form))
         drafts, explained = _boxed(form, budget.local_mm)
         plans.append((drafts, explained, form))
         basis = _oriented_basis(form)

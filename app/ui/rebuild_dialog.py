@@ -97,6 +97,10 @@ class _RebuildWorker(Worker):
         self.completed.emit(result)
 
 
+#: Prüfgründe, die an den Grenzen des Kunden hängen; die übrigen hängen an der Form.
+LIMIT_REASONS = frozenset({"volume", "surface", "incomplete"})
+
+
 def check_text(candidate: RebuildCandidate) -> str:
     """Der Grund aus der unabhängigen Kernprüfung, ohne neue Annahmeregeln."""
     reasons = {
@@ -316,25 +320,33 @@ class RebuildDialog(QDialog):
                         )
                     )
             self.candidates.setVisible(bool(result.candidates))
-            self.status.setText(
-                tr("Wählen Sie einen Vorschlag und vergleichen Sie die Formen.")
-                if result.accepted
-                else tr(
+            if result.accepted:
+                verdict = tr("Wählen Sie einen Vorschlag und vergleichen Sie die Formen.")
+            elif any(item.check.reason in LIMIT_REASONS for item in result.candidates):
+                verdict = tr(
                     "Kein Vorschlag besteht Ihre Grenzen. Behalten Sie das ursprüngliche Modell "
                     "oder ändern Sie die Grenzen bewusst."
                 )
-            )
+            else:
+                # An der Form gescheitert, nicht an den Grenzen: Größere
+                # Grenzen helfen nicht (Besenhalter aus Roberts Test, 0.5.2).
+                verdict = tr(
+                    "Für diese Form fand der Nachbau keinen Aufbau, der dieselbe Form ergibt. "
+                    "Größere Grenzen helfen hier nicht; behalten Sie das ursprüngliche Modell."
+                )
+            self.status.setText(verdict)
             if result.failures:
                 self.status.setText(
                     self.status.text()
                     + "\n"
                     + "\n".join(str(finding.message) for finding in result.failures)
                 )
-            if result.candidates:
-                selected = next(
-                    (i for i, item in enumerate(result.candidates) if item.check.accepted), 0
-                )
-                self.candidates.setCurrentRow(selected)
+            # Nur ein bestandener Vorschlag wird vorgewählt; sonst überschriebe
+            # seine Zeile das Urteil über alle („Dieser Vorschlag wird nicht
+            # übernommen“), und das war alles, was am Besenhalter stehen blieb.
+            accepted = [i for i, item in enumerate(result.candidates) if item.check.accepted]
+            if accepted:
+                self.candidates.setCurrentRow(accepted[0])
         else:
             self.application = result
             self.losses.setText("\n".join(str(loss) for loss in result.losses))

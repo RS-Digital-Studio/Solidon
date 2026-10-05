@@ -116,6 +116,40 @@ def test_a_checked_candidate_needs_its_visible_preview_and_specific_loss_accepta
     assert len(calls) == 2, "Ein ungeeigneter Kandidat wird nie zur Übernahme vorbereitet"
 
 
+@pytest.mark.parametrize(
+    ("reasons", "verdict"),
+    [
+        (("topology", "unexplained"), "Größere Grenzen helfen hier nicht"),
+        (("topology", "surface"), "ändern Sie die Grenzen bewusst"),
+    ],
+)
+def test_without_a_passing_candidate_the_verdict_stays_and_nothing_is_preselected(
+    qt_app, rebuilt, monkeypatch, reasons, verdict
+):
+    """Roberts Test von 0.5.2 am Besenhalter: Alle Vorschläge fielen durch,
+    vorgewählt wurde trotzdem der erste, und seine Zeile („Dieser Vorschlag
+    wird nicht übernommen“) überschrieb das Urteil über alle. Scheitert jeder
+    an der Form, sagt der Dialog, dass größere Grenzen nicht helfen; scheitert
+    einer an einer Grenze, nennt er die Grenzen."""
+    dialog, _session, proposal, _application, calls = rebuilt
+    failing = tuple(
+        RebuildCandidate((), proposal.source, RebuildCheck(False, reason, float("inf")))
+        for reason in reasons
+    )
+    none_pass = RebuildProposal(proposal.source, proposal.budget, failing, {})
+    monkeypatch.setattr(rebuild, "propose", lambda *args, **kwargs: none_pass)
+
+    dialog._start()
+    wait_for(qt_app, lambda: dialog.proposal is none_pass)
+
+    assert dialog.candidates.count() == len(reasons)
+    assert dialog.candidates.currentRow() == -1, "kein Vorschlag vorgewählt"
+    assert verdict in dialog.status.text()
+    assert "Dieser Vorschlag wird nicht übernommen" not in dialog.status.text()
+    assert not dialog.take.isEnabled()
+    assert calls == [], "kein ungeeigneter Kandidat wird zur Übernahme vorbereitet"
+
+
 def test_changing_a_limit_clears_old_preview_and_loss_acceptance(qt_app, rebuilt):
     dialog, _session, _proposal, application, _calls = rebuilt
     dialog._start()
@@ -150,6 +184,9 @@ def test_incomplete_bounds_explain_unknown_distance_and_reserved_tessellation(
     )
     dialog.start.click()
     wait_for(qt_app, lambda: dialog.proposal is not None)
+    # Ein durchgefallener Vorschlag wird nicht vorgewählt; seine Einzelheiten
+    # zeigt er, sobald man ihn anwählt.
+    dialog.candidates.setCurrentRow(0)
     lines = dialog.details.text().splitlines()
     # Die obere Schranke ist unbekannt — gesagt, nicht als Zahl erfunden.
     assert any(str(tr("unbekannt")) in line for line in lines), lines

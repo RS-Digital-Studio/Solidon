@@ -3935,6 +3935,7 @@
   "Für diese Ausgabe liegt kein Filamentbedarf vor.": "No se ha determinado el filamento necesario para este archivo.",
   "Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus.": "Para esta selección aún no hay ninguna arista indicada — elija una.",
   "Für diese Dateiversion fehlt der Umstellungsschritt.": "Falta el paso de migración para esta versión de archivo.",
+  "Für diese Form fand der Nachbau keinen Aufbau, der dieselbe Form ergibt. Größere Grenzen helfen hier nicht; behalten Sie das ursprüngliche Modell.": "Para esta forma, la reconstrucción no encontró ninguna construcción que dé la misma forma. Unos límites más amplios no ayudan aquí; conserve el modelo original.",
   "Für diese Handlung ist keine Fläche gewählt — klicken Sie eine im Bild an.": "Para esta acción no hay ninguna cara elegida: haga clic en una en la vista.",
   "Für diese Kantenlänge reicht der Arbeitsspeicher nicht. Eine doppelt so lange Kante braucht ein Viertel davon.": "No hay memoria suficiente para esta longitud de arista. Una arista el doble de larga necesita una cuarta parte.",
   "Für diese Objekte gibt es keine gespeicherte Wahl zur Merkmalserkennung.": "No hay ninguna elección guardada sobre el reconocimiento de características para estos objetos.",

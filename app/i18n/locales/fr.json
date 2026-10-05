@@ -3935,6 +3935,7 @@
   "Für diese Ausgabe liegt kein Filamentbedarf vor.": "Aucun besoin en filament n'est disponible pour cette sortie.",
   "Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus.": "Aucune arête n'est encore désignée pour cette sélection — choisissez-en une.",
   "Für diese Dateiversion fehlt der Umstellungsschritt.": "L'étape de migration manque pour cette version de fichier.",
+  "Für diese Form fand der Nachbau keinen Aufbau, der dieselbe Form ergibt. Größere Grenzen helfen hier nicht; behalten Sie das ursprüngliche Modell.": "Pour cette forme, la reconstruction n'a trouvé aucune construction qui donne la même forme. Des limites plus larges n'y changeront rien ; conservez le modèle d'origine.",
   "Für diese Handlung ist keine Fläche gewählt — klicken Sie eine im Bild an.": "Aucune face n'est choisie pour cette action — cliquez sur l'une d'elles dans la vue.",
   "Für diese Kantenlänge reicht der Arbeitsspeicher nicht. Eine doppelt so lange Kante braucht ein Viertel davon.": "La mémoire ne suffit pas pour cette longueur d'arête. Une arête deux fois plus longue en demande le quart.",
   "Für diese Objekte gibt es keine gespeicherte Wahl zur Merkmalserkennung.": "Il n'existe aucun choix enregistré concernant la reconnaissance des caractéristiques pour ces objets.",
