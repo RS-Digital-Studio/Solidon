@@ -599,6 +599,18 @@ def flatpak_manifest() -> str:
       ``flatpak-spawn --host which`` und ``handover`` startet über denselben
       Weg. Der Arbeitsordner liegt schon im Nutzer-Cache, weil
       ``discover.sandboxed`` den eigenen Fall jetzt mitzählt.
+    * ``--filesystem=/var/lib/flatpak/app:ro``, ``xdg-data/flatpak/app:ro``,
+      die beiden ``exports/bin`` und ``~/.var/app/<Slicer>:ro`` — **lesend,
+      was ein Slicer als Flatpak über sich weiß.** Seine Herstellerprofile
+      liegen in seinem ``/app`` unter ``share/<Programm>/profiles``, seine
+      eigenen Drucker unter ``~/.var/app/<Kennung>/config``, und keiner der
+      Orte ist für einen anderen Sandkasten sichtbar — ``--filesystem=home``
+      nimmt ``~/.var/app`` ausdrücklich aus. Ein Kunde mit Orca als Flatpak
+      bekam deshalb keinen seiner Drucker angeboten. Mit den Exporten findet
+      Solidon den Slicer auch von selbst, und der Dateidialog gibt den echten
+      Pfad statt einer Portalkopie zurück. Freigegeben wird nur, was
+      :data:`app.core.tools.SLICER_FLATPAKS` nennt, nicht ``~/.var/app`` im
+      Ganzen; dieselben Installationsordner liest Flatseal.
     * ``--talk-name=org.fcitx.Fcitx5`` und ``--talk-name=org.freedesktop.portal.Fcitx``
       — die Eingabemethode. Derselbe Kunde meldete: „So muss ich diesen Text in
       einer anderen Anwendung schreiben und nach Solidon3D copypasten." Eine
@@ -635,6 +647,8 @@ def flatpak_manifest() -> str:
     Entscheidung Robert, 27.08.2026: „jede plattform sollte das gleiche haben
     und alles funktionieren."
     """
+    from app.core.tools import SLICER_FLATPAKS
+
     permissions = "\n".join(
         f"  - {entry}"
         for entry in (
@@ -644,6 +658,11 @@ def flatpak_manifest() -> str:
             "--share=network",
             "--device=dri",
             "--filesystem=home",
+            "--filesystem=/var/lib/flatpak/app:ro",
+            "--filesystem=/var/lib/flatpak/exports/bin:ro",
+            "--filesystem=xdg-data/flatpak/app:ro",
+            "--filesystem=xdg-data/flatpak/exports/bin:ro",
+            *(f"--filesystem=~/.var/app/{app}:ro" for app in SLICER_FLATPAKS),
             "--talk-name=org.freedesktop.secrets",
             "--talk-name=org.freedesktop.Flatpak",
             "--talk-name=org.fcitx.Fcitx5",

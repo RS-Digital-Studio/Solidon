@@ -1237,3 +1237,69 @@ def test_different_slicers_in_one_bin_folder_stay_apart(tmp_path: Path) -> None:
     assert discover.program_mark("UltiMaker-Cura.exe") == discover.program_mark("CuraEngine.exe")
     assert discover.program_mark("OrcaSlicer_Linux_V2.1.1.AppImage") == "orcaslicer"
     assert discover.program_mark("elegoo-slicer.exe") == "elegooslicer"
+
+
+# --- ein Slicer als Flatpak, gesehen aus Solidons Flatpak --------------------------
+
+
+def test_a_flatpak_is_recognised_in_all_three_shapes(
+    flatpak_exports: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Starter, Datei in der Installation und Portalkopie meinen dieselbe
+    Anwendung; ein Programm, das nur so heißt, ist keins."""
+    installation = tmp_path / "flatpak"
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(installation),))
+    orca = "com.orcaslicer.OrcaSlicer"
+    inside = installation / "app" / orca / "current" / "active" / "files" / "bin" / "orca-slicer"
+
+    assert discover.flatpak_app(flatpak_exports / orca) == orca
+    assert discover.flatpak_app(inside) == orca
+    assert discover.flatpak_app(f"/run/user/2009/doc/d0880632/{orca}") == orca
+    assert discover.flatpak_app(f"/run/flatpak/doc/d0880632/{orca}") == orca
+    assert discover.flatpak_app(tmp_path / "bin" / orca) == "", "nur der Name, nicht der Ort"
+    assert discover.flatpak_app("/usr/bin/orca-slicer") == ""
+    assert discover.flatpak_app("/run/user/2009/doc/d0880632/OrcaSlicer.AppImage") == ""
+
+
+def test_the_portal_copy_of_a_launcher_is_remembered_as_the_launcher(
+    flatpak_exports: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beim Kunden stand ``/run/user/2009/doc/d0880632/com.orcaslicer.OrcaSlicer``
+    in den Einstellungen — die Freigabe einer Datei, keine Installation. Auch
+    der von 0.5.2 so gespeicherte Wert kommt als Starter zurück."""
+    orca = "com.orcaslicer.OrcaSlicer"
+    portal = f"/run/user/2009/doc/d0880632/{orca}"
+    stored: dict[str, str] = {"slicer:path": portal}
+    monkeypatch.setattr(discover, "_load", lambda: dict(stored))
+    monkeypatch.setattr(discover, "_store", lambda entries: stored.update(entries))
+
+    assert Path(discover.remembered_path("slicer")) == flatpak_exports / orca
+
+    discover.remember_path("slicer", portal)
+    assert Path(stored["slicer:path"]) == flatpak_exports / orca
+
+    unknown = "/run/user/2009/doc/d0880633/com.example.Fehlt"
+    assert Path(discover.host_program(Path(unknown))) == Path(unknown), "unbekannt bleibt"
+
+
+def test_a_host_file_counts_from_inside_the_sandbox(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Aus Solidons Flatpak ist ``/usr/bin/prusa-slicer`` die Datei der
+    Laufzeit; ``slice_model`` hielt einen gefundenen Slicer für verschwunden."""
+    asked: list[tuple[str, Path]] = []
+
+    def host(flag: str, path: Path) -> bool:
+        asked.append((flag, path))
+        return True
+
+    monkeypatch.setattr(discover, "_host_test", host)
+    host_only = tmp_path / "usr" / "bin" / "prusa-slicer"
+
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    assert not discover.is_file_on_host(host_only), "draußen zählt nur die eigene Sicht"
+    assert asked == []
+
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    assert discover.is_file_on_host(host_only)
+    assert asked == [("-f", host_only)]

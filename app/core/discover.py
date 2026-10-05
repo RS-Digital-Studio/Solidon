@@ -53,6 +53,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -61,7 +62,7 @@ import tempfile
 import urllib.request
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -123,6 +124,19 @@ _FLATPAK_EXPORTS: Final = (
     "~/.local/share/flatpak/exports/bin",
     "/var/lib/flatpak/exports/bin",
 )
+
+#: Wo Flatpak die Anwendungen selbst ablegt, in derselben Reihenfolge wie
+#: :data:`_FLATPAK_EXPORTS`. Unter ``app/<Kennung>/current/active/files`` liegt,
+#: was die Anwendung als ``/app`` sieht — bei einem Slicer samt seinen
+#: Herstellerprofilen, die neben dem Starter nirgends stehen.
+_FLATPAK_INSTALLATIONS: Final = (
+    "~/.local/share/flatpak",
+    "/var/lib/flatpak",
+)
+
+#: Die Form einer Flatpak-Kennung: mindestens drei Glieder mit Punkt dazwischen,
+#: keines beginnt mit einer Ziffer (``com.orcaslicer.OrcaSlicer``).
+_APP_ID: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*){2,}")
 
 
 def _install_roots() -> tuple[Path, ...]:
@@ -207,13 +221,23 @@ def same_program(first: str, second: str) -> bool:
 
 
 def remembered_path(tool_id: str) -> str:
-    """Der gewählte Programmpfad, mit Rückfall auf das alte gemeinsame Feld."""
+    """Der gewählte Programmpfad, mit Rückfall auf das alte gemeinsame Feld.
+
+    Eine Portalkopie kommt als der Starter zurück, für den sie steht
+    (:func:`host_program`) — auch eine, die eine frühere Version so gespeichert
+    hat.
+    """
     entries = _load()
     chosen = entries.get(_typed_key(tool_id, "path"), "")
     if chosen:
-        return program_path(chosen)
+        return _hosted_path(chosen)
     legacy = entries.get(tool_id, "")
-    return program_path(legacy) if "://" not in legacy else ""
+    return _hosted_path(legacy) if "://" not in legacy else ""
+
+
+def _hosted_path(text: str) -> str:
+    """:func:`program_path` nach :func:`host_program`; leer bleibt leer."""
+    return program_path(str(host_program(Path(text)))) if text else ""
 
 
 def _remote_address(entries: dict[str, str], tool_id: str) -> str:
@@ -257,8 +281,8 @@ def _remember_typed(tool_id: str, kind: str, value: str) -> None:
 
 
 def remember_path(tool_id: str, value: str) -> None:
-    """Den lokalen Startpfad eines Dienstes merken."""
-    _remember_typed(tool_id, "path", value)
+    """Den lokalen Startpfad eines Dienstes merken — eine Portalkopie als ihren Starter."""
+    _remember_typed(tool_id, "path", _hosted_path(value))
 
 
 def remember_address(tool_id: str, value: str) -> None:
@@ -639,17 +663,133 @@ def is_dir_on_host(folder: Path) -> bool:
     """
     if not in_flatpak():
         return folder.is_dir()
+    return _host_test("-d", folder)
+
+
+def is_file_on_host(path: Path) -> bool:
+    """Gibt es diese Datei — auf dem Rechner, nicht im Sandkasten?
+
+    Dieselbe Frage wie :func:`is_dir_on_host`, für den Slicer selbst: Aus
+    Solidons Flatpak heraus ist ``/usr/bin/prusa-slicer`` die Datei der Laufzeit,
+    nicht die des Rechners, und ``slice_model`` meldete einen gerade gefundenen
+    Slicer als verschwunden.
+    """
+    if path.is_file():
+        return True
+    return in_flatpak() and _host_test("-f", path)
+
+
+def _host_test(flag: str, path: Path) -> bool:
+    """``test <flag> <path>`` auf dem Rechner, gefragt aus dem Sandkasten."""
     try:
         answer = run_limited(
-            ["flatpak-spawn", "--host", "test", "-d", str(folder)],
+            ["flatpak-spawn", "--host", "test", flag, str(path)],
             cwd=trusted_cwd(),
             timeout=5.0,
             output_limit=64 * 1024,
         )
     except (OSError, subprocess.SubprocessError) as problem:
-        _log.info("cannot ask the host about %s: %s", folder, problem)
+        _log.info("cannot ask the host about %s: %s", path, problem)
         return False
     return answer.returncode == 0
+
+
+def flatpak_app(program: Path | str) -> str:
+    """Die Flatpak-Kennung, wenn ``program`` ein Flatpak startet — sonst leer.
+
+    Ein Slicer als Flatpak hat drei Gestalten, und jede meint dieselbe
+    Anwendung: den Starter aus den Exporten, der wie die Kennung heißt; eine
+    Datei unter ``<Installation>/app/<Kennung>/``; und die Portalkopie des
+    Starters (:func:`host_program`). Erkannt wird am Ort, nicht am Namen allein —
+    ein Programm darf auch so heißen, ohne ein Flatpak zu sein.
+
+    **Daran hängt, wo seine Profile liegen.** Ein Flatpak-Slicer legt die
+    eigenen Drucker unter ``~/.var/app/<Kennung>/config`` ab und die des
+    Herstellers unter ``/app/share``. Gesucht wurde in ``~/.config`` und über der
+    Programmdatei; ein Kunde mit Orca als Flatpak bekam keinen seiner Drucker
+    und keines seiner Profile angeboten.
+    """
+    path = PurePosixPath(Path(program).as_posix())
+    exports = {PurePosixPath(Path(folder).expanduser().as_posix()) for folder in _FLATPAK_EXPORTS}
+    if path.parent in exports or _from_portal(path):
+        return path.name if _APP_ID.fullmatch(path.name) else ""
+    for root in _FLATPAK_INSTALLATIONS:
+        apps = PurePosixPath(Path(root).expanduser().as_posix()) / "app"
+        if path.is_relative_to(apps) and len(path.parts) > len(apps.parts):
+            name = path.parts[len(apps.parts)]
+            return name if _APP_ID.fullmatch(name) else ""
+    return ""
+
+
+def flatpak_files(app_id: str) -> Path | None:
+    """Der Ordner, den das Flatpak ``app_id`` als ``/app`` sieht, oder ``None``.
+
+    Aus Solidons eigenem Flatpak heraus ist er nur mit der Leseberechtigung des
+    Manifests sichtbar (``tools/make_linux_packages.py``). Fehlt sie — etwa weil
+    eine Überschreibung sie entzogen hat —, sagt das Protokoll es, statt die
+    Profile still für nicht vorhanden zu halten.
+    """
+    hidden: Path | None = None
+    for root in _FLATPAK_INSTALLATIONS:
+        files = Path(root).expanduser() / "app" / app_id / "current" / "active" / "files"
+        if files.is_dir():
+            return files
+        if in_flatpak() and hidden is None and _host_test("-d", files):
+            hidden = files
+    if hidden is not None:
+        _log.info("the files of %s are installed, but hidden from this sandbox: %s", app_id, hidden)
+    return None
+
+
+def flatpak_data(app_id: str) -> Path | None:
+    """Wo das Flatpak ``app_id`` seine Konfiguration und Daten ablegt, oder ``None``.
+
+    Flatpak setzt ``XDG_CONFIG_HOME`` und ``XDG_DATA_HOME`` jeder Anwendung auf
+    ``~/.var/app/<Kennung>/config`` und ``…/data``; ein Slicer findet seine
+    eigenen Drucker dort und nirgends sonst. ``--filesystem=home`` nimmt
+    ``~/.var/app`` aus — aus Solidons Flatpak heraus braucht jeder Slicer seine
+    eigene Leseberechtigung im Manifest.
+    """
+    folder = Path.home() / ".var" / "app" / app_id
+    if folder.is_dir():
+        return folder
+    if in_flatpak() and _host_test("-d", folder):
+        _log.info("the data of %s exists, but is hidden from this sandbox: %s", app_id, folder)
+    return None
+
+
+def _from_portal(path: PurePosixPath) -> bool:
+    """Liegt ``path`` im Dokumentenportal (``/run/user/<uid>/doc/<nr>/<name>``)?
+
+    Dorthin legt das Portal, was ein Sandkasten im Dateidialog außerhalb seiner
+    Freigaben wählt. Im Sandkasten heißt derselbe Ort auch ``/run/flatpak/doc``.
+    """
+    parts = path.parts
+    return (len(parts) == 7 and parts[:3] == ("/", "run", "user") and parts[4] == "doc") or (
+        len(parts) == 6 and parts[:4] == ("/", "run", "flatpak", "doc")
+    )
+
+
+def host_program(program: Path) -> Path:
+    """Der Starter, für den eine Portalkopie steht; jeder andere Pfad bleibt.
+
+    Wählt man in Solidons Flatpak im Dateidialog
+    ``/var/lib/flatpak/exports/bin/com.orcaslicer.OrcaSlicer``, kommt
+    ``/run/user/<uid>/doc/<nr>/com.orcaslicer.OrcaSlicer`` zurück: eine
+    Freigabe dieser einen Datei, kein Ort, an dem sich eine Installation
+    ablesen ließe. Der Name ist die Kennung, und unter ihr liegt der echte
+    Starter in den Exporten.
+    """
+    path = PurePosixPath(program.as_posix())
+    if not _from_portal(path):
+        return program
+    app = flatpak_app(program)
+    for folder in _FLATPAK_EXPORTS if app else ():
+        launcher = Path(folder).expanduser() / app
+        if launcher.is_file() or (in_flatpak() and _host_test("-f", launcher)):
+            _log.info("the portal copy %s stands for %s", program, launcher)
+            return launcher
+    return program
 
 
 #: Wo ein AppImage üblicherweise liegt. Es gibt keinen vorgeschriebenen Ort —
