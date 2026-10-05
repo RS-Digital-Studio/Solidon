@@ -331,6 +331,19 @@ def test_prusaslicer_knows_no_exclusion_area_and_reads_points_like_its_stream(
         assert printer.bed_exclusions == ()
 
 
+@pytest.mark.parametrize("corner", ["1e999x0", "0x1e999", "-1e999x200"])
+def test_a_coordinate_beyond_every_number_is_refused_as_text_too(corner: str) -> None:
+    """``float("1e999")`` ist unendlich. Als Listenpunkt wurde eine solche
+    Koordinate abgelehnt, als Text (``0x0,1e999x0,…``) ging sie seit dem Lesen
+    wie ein ``istringstream`` an der Prüfung vorbei: Bett und Sperrfläche trugen
+    eine unendliche Ecke, bis eine spätere Prüfung die Kontur mit falschem Grund
+    verwarf (Regression gegen 0.5.2, Durchsicht 0.5.3, Fund 7)."""
+    shape = f"0x0,{corner},200x200,0x200"
+    for written in (shape, [shape]):
+        with pytest.raises(ValueError, match="nonfinite"):
+            sp._profile_points(written)
+
+
 def test_discovered_identity_survives_installation_move_and_separates_nozzles(
     unknown_printers: Path,
     tmp_path: Path,

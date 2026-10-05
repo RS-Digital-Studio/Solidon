@@ -1562,16 +1562,17 @@ def _profile_points(value: Any) -> tuple[tuple[float, float], ...]:
     points: list[tuple[float, float]] = []
     for item in value:
         if isinstance(item, str):
-            points.extend(_stream_point(token) for token in (item.split(",") if item else ()))
-            continue
-        if not isinstance(item, (list, tuple)) or len(item) != 2:
-            raise ValueError("invalid contour point")
-        if any(isinstance(number, bool) for number in item):
-            raise ValueError("boolean coordinate")
-        point = (float(item[0]), float(item[1]))
-        if not all(math.isfinite(number) for number in point):
+            read = [_stream_point(token) for token in (item.split(",") if item else ())]
+        else:
+            if not isinstance(item, (list, tuple)) or len(item) != 2:
+                raise ValueError("invalid contour point")
+            if any(isinstance(number, bool) for number in item):
+                raise ValueError("boolean coordinate")
+            read = [(float(item[0]), float(item[1]))]
+        # Für beide Schreibweisen: ``1e999`` liest auch der Strom als unendlich.
+        if not all(math.isfinite(number) for point in read for number in point):
             raise ValueError("nonfinite coordinate")
-        points.append(point)
+        points.extend(read)
     return tuple(points)
 
 
