@@ -102,7 +102,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
-| [RM-508 — Der Prüfbericht zeigt zuerst die Befunde](#rm-508) | Bedienung und Darstellung | Kopf auf eine Zeile, Gerüst und Doppelungen aus der Befundkarte, Export neben der Übergabe |
 | [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
@@ -3343,6 +3342,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   guide-drill-a-hole-8 neu; am Fenster die geöffneten „Weitere Werte“ der
   Maßkarte, HiDPI, helles Thema und das Vorschauband in Zoll mit echter
   Größenänderung.
+  Aus RM-508 (05.10.2026): `report.png`, `main-window.png` und die
+  Bildanleitungen neu; `make_figures` gibt dem Berichtsbild jetzt die
+  Grundlage des Fensters mit, belegt erst mit diesem Lauf.
 
   **Aus der dritten Runde der Durchsicht v0.5.1 (27.09.2026)** kommen Fenstertests, die
   das Release-Tor tragen muss; die Abschlüsse von RM-231 und RM-269 stützen sich auf sie
@@ -3891,33 +3893,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
   Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
   zwei Menüs mit verschiedener Wirkung.
-
-<a id="rm-508"></a>
-
-- [ ] **RM-508 — Der Prüfbericht zeigt zuerst die Befunde.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Im Ruhezustand trägt der Bericht rund 175 der 290 Wörter des Hauptfensters, davon
-  nur rund 88 Befundtext. In report.png belegt der Kopf 62 % der Karte, sichtbar ist
-  einer von vier Befunden. Dauerhaft da: gesperrtes „Modell nachbauen“ mit Satz,
-  „0 × Fehler“, Kennzahlen, Suche ab zwei Befunden. Unter jedem Befund Folge, Ort und
-  Grundlage (meist ohne eigene Aussage), zwei Knöpfe für denselben Kameraflug, eine
-  Nebenfolge-Floskel unter dem Hauptknopf (67 von 109 Sätzen), unbenannte Werte
-  („— Deckel · 0 mm³ · 100 %“), Klappen als gerahmte Knöpfe. Für den Export, mit dem
-  alle Hauptwege enden, gibt es keinen sichtbaren Knopf.
-  **Fix:** Kopf als eine Zeile „Status · 2 Warnungen · 4 Hinweise · Prüfumfang ▸“ mit
-  Grund bei unvollständiger Bewertung; Zähler ohne Nullen; Kennzahlen in den
-  Prüfumfang; Filter ab acht Befunden; „Modell nachbauen“ als Handlung am gewählten
-  Körper. Befundliste mit Mindesthöhe drei Zeilen; bei Platzmangel rollt der Kopf.
-  Unter einem Befund eine Metazeile; ein Zeige-Knopf; die Nebenfolge nur bei
-  `changes`; je Wert ein Name; Klappen über `collapsible`. „Exportieren …“ neben
-  „An den Slicer übergeben …“.
-  **Entschieden (Robert, 05.10.2026):** Folge, Ort und Grundlage stehen als eine
-  Metazeile („Hinweis · Dose · intern geschätzt“), ein eigener Folgesatz nur bei echter
-  Folge; der Vertrag aus RM-090 (Produktkompass §4.3) wird so fortgeschrieben.
-  **Abnahme:** In der Lage von main-window.png höchstens 100 Wörter im Bericht und über
-  der Liste höchstens 12; in der Lage von report.png mindestens drei Befundzeilen; kein
-  Befund mit zwei Knöpfen derselben Handlung; Export mit einem sichtbaren Klick; bei
-  1280 × 800 und nur Hinweisen ist die Berichtskarte höchstens 120 px hoch (aus RM-511
-  übernommen; seit RM-511 folgt die Karte dem Inhalt, gemessen 252 px ohne Befund).
 
 <a id="rm-509"></a>
 

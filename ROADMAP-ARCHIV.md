@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-508: Der Prüfbericht zeigt zuerst die Befunde (05.10.2026)](#rm-508-der-prüfbericht-zeigt-zuerst-die-befunde-05102026) |
 | 2026-10-05 | [RM-516: Maße im Bild und Vorschauband nennen jede Zahl einmal (05.10.2026)](#rm-516-maße-im-bild-und-vorschauband-nennen-jede-zahl-einmal-05102026) |
 | 2026-10-05 | [RM-513: Ein Operationsdialog zeigt vorn höchstens vier Felder und einen Satz (05.10.2026)](#rm-513-ein-operationsdialog-zeigt-vorn-höchstens-vier-felder-und-einen-satz-05102026) |
 | 2026-10-05 | [RM-518: Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante (05.10.2026)](#rm-518-alle-dialoge-haben-eine-form-flache-abschnitte-ein-rand-eine-beschriftungskante-05102026) |
@@ -42222,3 +42223,57 @@ rund 200 px über dem Teil — Roberts Regel vom 21./22.09.2026, Felder vom Kör
 fern. Offen in RM-213: Bilder und die übrigen Fensterzustände.
 Changelog: zum nächsten Release (jede Zahl einmal im Bild, Bezüge nach Seiten
 benannt, kürzeres Vorschauband, Bohrungsmaß in Zoll richtig).
+
+## RM-508: Der Prüfbericht zeigt zuerst die Befunde (05.10.2026)
+
+<a id="rm-508-der-prüfbericht-zeigt-zuerst-die-befunde-05102026"></a>
+<a id="rm-508"></a>
+
+**RM-508 — Der Prüfbericht zeigt zuerst die Befunde.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Im Ruhezustand trägt der Bericht rund 175 der 290 Wörter des Hauptfensters, davon
+  nur rund 88 Befundtext. In report.png belegt der Kopf 62 % der Karte, sichtbar ist
+  einer von vier Befunden. Dauerhaft da: gesperrtes „Modell nachbauen“ mit Satz,
+  „0 × Fehler“, Kennzahlen, Suche ab zwei Befunden. Unter jedem Befund Folge, Ort und
+  Grundlage (meist ohne eigene Aussage), zwei Knöpfe für denselben Kameraflug, eine
+  Nebenfolge-Floskel unter dem Hauptknopf (67 von 109 Sätzen), unbenannte Werte
+  („— Deckel · 0 mm³ · 100 %“), Klappen als gerahmte Knöpfe. Für den Export, mit dem
+  alle Hauptwege enden, gibt es keinen sichtbaren Knopf.
+  **Fix:** Kopf als eine Zeile „Status · 2 Warnungen · 4 Hinweise · Prüfumfang ▸“ mit
+  Grund bei unvollständiger Bewertung; Zähler ohne Nullen; Kennzahlen in den
+  Prüfumfang; Filter ab acht Befunden; „Modell nachbauen“ als Handlung am gewählten
+  Körper. Befundliste mit Mindesthöhe drei Zeilen; bei Platzmangel rollt der Kopf.
+  Unter einem Befund eine Metazeile; ein Zeige-Knopf; die Nebenfolge nur bei
+  `changes`; je Wert ein Name; Klappen über `collapsible`. „Exportieren …“ neben
+  „An den Slicer übergeben …“.
+  **Entschieden (Robert, 05.10.2026):** Folge, Ort und Grundlage stehen als eine
+  Metazeile („Hinweis · Dose · intern geschätzt“), ein eigener Folgesatz nur bei echter
+  Folge; der Vertrag aus RM-090 (Produktkompass §4.3) wird so fortgeschrieben.
+  **Abnahme:** In der Lage von main-window.png höchstens 100 Wörter im Bericht und über
+  der Liste höchstens 12; in der Lage von report.png mindestens drei Befundzeilen; kein
+  Befund mit zwei Knöpfen derselben Handlung; Export mit einem sichtbaren Klick; bei
+  1280 × 800 und nur Hinweisen ist die Berichtskarte höchstens 120 px hoch (aus RM-511
+  übernommen; seit RM-511 folgt die Karte dem Inhalt, gemessen 252 px ohne Befund).
+
+**Umsetzung:** Der Kopf ist eine Zeile: Status, Zähler ohne Nullen (zugleich
+die Klappe der Liste), *Prüfumfang* mit den benannten Kennzahlen; ein Grund steht
+nur bei unvollständiger Bewertung. Nur Hinweise beginnen zugeklappt, Fehler oder
+Warnung öffnen die Liste. Eine Zeile zeigt ihren ersten Satz, die gewählte den
+ganzen; die Liste gibt bis drei Zeilen nach, dann rollt der Kopf. Unter einem
+Befund die Metazeile „Hinweis · Dose · intern geschätzt“, ein Zeige-Knopf, ein
+Folgesatz nur beim Fehler, die Nebenfolge nur bei echter Änderung
+(`effect_worth_showing`), je Wert ein Name. Klappen über `collapsible`
+(`heading_row=`), Filter ab acht Zeilen, *Exportieren …* neben *An den Slicer
+übergeben …* unten. *Modell nachbauen* ist eine Hauptaktion am gewählten Körper.
+Der Vertrag aus Produktkompass §4.3 ist fortgeschrieben.
+
+**Nachweis (echtes Fenster, Windows):** Lage main-window (dose-mit-deckel,
+2560 × 1369): Wörter im Bericht 162 → 87, über der Liste 34 → 7, Befundzeilen 6 von
+6; Lage report.png (620 × 430): 4 von 4 Befundzeilen; 1280 × 800 mit nur Hinweisen
+(weg1-halterung-anpassen): Karte 398 → 120 px. Nach dem Zusammenführen mit der
+schmaleren, bündigen Karte (400 px) wiederholt: 87 / 7 / 6 von 6, 4 von 4,
+120 px. Kein Befund mit zwei Knöpfen derselben Handlung, Export mit einem Klick.
+Agent im Worktree 23 987 bestanden; nach dem Zusammenführen Tor grün. Commit
+`94653b4fe`. Offen in RM-213: Bilder; RM-512 behandelt den vorgewählten Hinweis
+mit Akzentknopf.
+Changelog: zum nächsten Release (Prüfbericht zeigt zuerst die Befunde, Export
+neben der Übergabe, Nachbau am Körper).
