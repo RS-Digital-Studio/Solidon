@@ -317,7 +317,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   wenn nur einer gewählt ist.
 - **Die Druckplatte ist eine Angabe, keine Vermutung**: die im Druckdialog
   gewählte (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
-  Modells. Nur ohne
+  Modells, sonst die des Programms (`manufacturer.PROGRAM_PLATE`). Nur ohne
   Plattenwahl (`support_multi_bed_types` fehlt) gilt die eine Temperatur
   `hot_plate_temp` (`manufacturer.SINGLE_PLATE`); mit Wahl und ohne
   Standardplatte keine geratene, sondern `slicer.plate_unknown`. Die
@@ -326,6 +326,11 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   liest dort nichts, `slicer.plate_refuses_filament` führt in die
   Druckeinstellungen. Eine eigene Betttemperatur geht trotzdem in den
   Schlüssel dieser Platte — die Wahl des Kunden.
+- **Gedruckt wird, was der Slicer liest**: die Düsenart-Fassung der
+  Maschinendüse, ein eigener Wert in jeder (`slicer_keys.NOZZLE_KIND_KEYS`);
+  wo gestützt wird, keine Baumspitze unter der Stützbahn
+  (`handover.organic_tree_fitted`); passt der genannte Standardprozess nicht,
+  der seiner Schichthöhe, ohne Prozess `slicer.process_missing`.
 - **Was sich nicht übersetzen lässt, wird nicht umgedeutet**
   (`Foundation.foreign`): `crosshatch` bleibt, wird nicht geschrieben, und der
   Dialog zeigt „Hersteller: crosshatch".
@@ -409,9 +414,8 @@ Eine neue Cura-Zuordnung prüft, was am Schlüssel hängt: Kopien in
 (**die Formel aus der Definition**, keine eigene Meinung), bewusst Ausgelassenes
 mit Begründung in `CURA_UNTOUCHED`; `tests/test_print_settings.py` lässt
 nichts dazwischen zu. **Wo Curas Werksprofile anders setzen als `fdmprinter`,
-gilt das Werksprofil** — als Konstante mit Herkunft in `handover` (Stütze 150,
-Schnittstelle 80 mm/s, Schnittstelle in Linien zu einem Drittel, Füllung nach
-den Wänden, Kämmgrenze), nie als Meinung ohne Beleg.
+gilt das Werksprofil** — als Konstante mit Herkunft in `handover`, nie als
+Meinung ohne Beleg.
 
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 
@@ -426,22 +430,19 @@ Platzhalter, deshalb `handover._filled`:
   (kein `eval`, Regel 10), nur über Zahlen, die Solidon kennt.
 - **Unfüllbares hält die Übergabe an** (`_unfillable`, Regel 21): unbekannter
   Name, `{if …}`, Werte, die erst das Fenster nach dem Schneiden kennt
-  (`{print_time}`) — wörtlich bräche ein Klipper-Makro am Drucker ab.
+  (`{print_time}`).
 
 Setzt der Startcode selbst eine Temperatur (Platzhalter auf
 `material_bed_temperature…` oder eine Düsentemperatur, Kommentare
 ausgenommen), stehen `material_bed_temp_prepend`/`material_print_temp_prepend`
-auf `false`, wie Curas `StartSliceJob` im Fenster — sonst stünde Curas
-`M190`/`M109` davor. Ohne Definition: `fdmprinter` und der Befund
+auf `false`, wie Curas `StartSliceJob` im Fenster. Ohne Definition: `fdmprinter` und der Befund
 `slicer.cura_printer_unknown`, kein stiller Rückfall.
 
 ## Das Cura-Profil gehört dem Drucker, der in Cura aktiv ist
 
 Curas Fenster nimmt Einstellungen nur als `.curaprofile`
-(`handover.cura_profile_beside`); sein Importer setzt sie auf die **aktive
-Maschine** um, lehnt fremde Qualitätsstufen ab und importiert solche ohne
-passende Düse und Spule des ersten Fachs unsichtbar. Die Stufe kommt deshalb
-aus `slicer_profiles.cura_active_machine` und
+(`handover.cura_profile_beside`) und setzt sie auf die **aktive Maschine** um.
+Die Stufe kommt aus `slicer_profiles.cura_active_machine` und
 `cura_quality_types(…, variant=…, material_type=…)`, nie aus `fdmprinter` für
 eine Maschine mit eigenen Stufen. Passt kein eingerichteter Drucker, entsteht
 **keine Datei**, sondern `handover.cura_profile_unbound`.
@@ -457,9 +458,7 @@ die **Horizontale** — für sie rechnet `_angle_from_horizontal` `90 − Wert`.
 Exit 0 und eine Datei sagen nicht, dass der Auftrag darin steht: **Nach** dem
 Lauf wird geprüft, was hineingehörte (`spools_left_out`). Jede neue Zusage an
 den Slicer braucht ein Merkmal, an dem man ihr Einlösen in der fertigen Datei
-erkennt. Gezählt werden **Flächen, nicht die Deklaration** — ein Körper darf
-einen Materialslot tragen, den keines seiner Dreiecke benutzt, und ein
-Fehlalarm entwertet den echten Befund.
+erkennt. Gezählt werden **Flächen, nicht die Deklaration**.
 
 ## Ein Absturz ist keine Absage
 

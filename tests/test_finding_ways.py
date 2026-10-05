@@ -53,7 +53,6 @@ OHNE_KNOPF: dict[str, str] = {
     "export.part_setting": "Auskunft: Die Geometrie verlangt die Einstellung, sie ist gesetzt.",
     "export.part_setting_unavailable": "Auskunft über den Slicer; eine andere gibt es dort nicht.",
     "slicer.unknown_key": "Auskunft über die Slicer-Version; die Namen stehen in den Werten.",
-    "slicer.setting_ignored": "Auskunft aus der Gegenprobe; die Werte nennen jede Einstellung.",
     "slicer.arranged_itself": "Auskunft: Der Slicer hat selbst angeordnet, die Datei ist druckbar.",
     "split.no_cut_face": "Auskunft beim Teilen: Getrennt ist, nur ohne Stifte.",
     "split.seam_too_thin": "Auskunft beim Teilen: Getrennt ist, geklebt hält die Naht.",

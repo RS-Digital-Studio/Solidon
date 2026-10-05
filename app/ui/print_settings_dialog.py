@@ -5058,10 +5058,10 @@ class PrintSettingsDialog(QDialog):
         index = self.process_choice.findData(wanted) if wanted else -1
         if index < 0 and preferred is not None:
             index = self.process_choice.findData(slicer_profiles.identity(preferred))
-        if index < 0 and machine is not None:
-            named = [entry for entry in fitting if entry.name == machine.default_process]
-            if named:
-                index = self.process_choice.findData(slicer_profiles.identity(named[0]))
+        if index < 0 and standard is not None:
+            # Derselbe Standard wie in Vorwahl und Export, auch wo die Maschine
+            # einen nennt, der nicht zu ihr passt (``standard_process``).
+            index = self.process_choice.findData(slicer_profiles.identity(standard))
         self.process_choice.setCurrentIndex(max(index, 0))
         # **Die Stufe wählt den Prozess** (Entscheidung I): Steht der
         # Standardprozess der Maschine da oder schon der Prozess der Stufe, folgt
