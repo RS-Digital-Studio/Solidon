@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)](#rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026) |
 | 2026-10-05 | [RM-523: Die Druckerlisten nennen Drucker, die Düse wählt der Druckdialog (05.10.2026)](#rm-523-die-druckerlisten-nennen-drucker-die-düse-wählt-der-druckdialog-05102026) |
 | 2026-10-05 | [RM-508: Der Prüfbericht zeigt zuerst die Befunde (05.10.2026)](#rm-508-der-prüfbericht-zeigt-zuerst-die-befunde-05102026) |
 | 2026-10-05 | [RM-516: Maße im Bild und Vorschauband nennen jede Zahl einmal (05.10.2026)](#rm-516-maße-im-bild-und-vorschauband-nennen-jede-zahl-einmal-05102026) |
@@ -42314,3 +42315,24 @@ Grundausführung in Dialog und Übergabe, falsches Modellfeld; am Stand `b1d2b69
 `test_printer_choices.py`; Fenstertests (Release): `test_variants_of_one_printer_become_one_choice`,
 `test_choosing_a_slicer_printer_again_keeps_the_nozzle_from_the_print_dialog`,
 `test_saving_the_settings_keeps_the_nozzle_chosen_in_the_print_dialog`.
+
+## RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)
+
+<a id="rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026"></a>
+<a id="rm-524"></a>
+
+**RM-524 — Drei Herstellerprofile verloren beim Lesen ihre Düse.** Gefunden bei RM-523:
+  `slicer_profiles._read` nimmt `nozzle_diameter` nur aus der Profildatei. OrcaSlicers und
+  ElegooSlicers „Rolohaun Delta Flyer Refit 0.4 nozzle“ erbt sie vom Rook MK1 LDO,
+  PrusaSlicers und SuperSlicers „Anycubic i3 Mega“ und „… i3 Mega S“ nennen sie in der ganzen
+  Kette nicht. Die Maschine trug 0 mm, `match` fand zum Drucker keine, und der Druckdialog
+  ließ das Maschinenprofil leer.
+
+**Fix:** `find_profiles` liest die Düse einer Maschine ohne eigene Angabe aus der Erbkette,
+die es für Maschinen ohnehin abgeht (`_stated_nozzle`); nennt die Kette keine, gilt die
+Vorgabe des Slicers aus `MACHINE_DEFAULTS` — dieselbe, mit der die Druckererhebung rechnet.
+`_prusa_listing` nimmt sie über `_machine_value`. Danach trägt in allen sieben Orca- und
+Prusa-Beständen dieses Rechners jede Maschine eine Düse, der Rolohaun-Drucker findet seine.
+
+**Nachweis:** `test_a_machine_reads_its_nozzle_from_the_profile_it_inherits`,
+`test_a_bundle_machine_without_a_nozzle_takes_the_slicers_default` (ohne Fix rot mit 0,0).

@@ -1078,6 +1078,47 @@ def test_a_variant_with_a_wrong_model_field_still_belongs_to_its_name() -> None:
     assert not sp.same_printer_model(plain[0], plain[1])
 
 
+def test_a_machine_reads_its_nozzle_from_the_profile_it_inherits(unknown_printers: Path) -> None:
+    """Steht die Düse allein in der Erbbasis, gehört sie trotzdem zur Maschine
+    (RM-524): OrcaSlicers „Rolohaun Delta Flyer Refit 0.4 nozzle“ erbt sie vom
+    Rook MK1 LDO. Gelesen als 0, fand der Druckdialog zu ihrem Drucker keine
+    Maschine. Nennt die ganze Kette keine, gilt die Vorgabe des Slicers."""
+    executable = unknown_printers / "slicer.exe"
+    machines = sp.find_profiles(executable, "orca", kinds=("machine",))
+    (machine,) = [entry for entry in machines if entry.name == "Acme Unbekannt 0.6 nozzle"]
+    (printer,) = sp.discover_printers(executable, "orca")
+
+    assert machine.nozzle == pytest.approx(0.6)
+    chosen, _process = sp.match(machines, printer)
+    assert chosen is not None and chosen.name == machine.name
+
+    base = unknown_printers / "Acme" / "machine" / "base.json"
+    document = json.loads(base.read_text(encoding="utf-8"))
+    del document["nozzle_diameter"]
+    _write(base, document)
+    (machine,) = [
+        entry
+        for entry in sp.find_profiles(executable, "orca", kinds=("machine",))
+        if entry.name == "Acme Unbekannt 0.6 nozzle"
+    ]
+    assert machine.nozzle == pytest.approx(0.4)
+
+
+def test_a_bundle_machine_without_a_nozzle_takes_the_slicers_default(prusa_mini: Path) -> None:
+    """Anycubics i3 Mega nennt in PrusaSlicers Bündel keine Düse; PrusaSlicer
+    rechnet dann mit 0,4 mm, und die Maschine trägt dieselbe Zahl wie der
+    Drucker, den die Erhebung daraus macht (RM-524)."""
+    bundle = prusa_mini.parent / "resources" / "profiles" / "PrusaResearch.ini"
+    content = bundle.read_text(encoding="utf-8")
+    assert "nozzle_diameter = 0.4\n" in content
+    bundle.write_text(content.replace("nozzle_diameter = 0.4\n", ""), encoding="utf-8")
+
+    machines = sp.find_profiles(prusa_mini, "prusa", kinds=("machine",))
+
+    assert machines
+    assert all(entry.nozzle == pytest.approx(0.4) for entry in machines)
+
+
 def test_cura_native_instance_wins_over_a_same_family_title_match() -> None:
     """Die gespeicherte Cura-Identität geht vor der nur ähnlich benannten Familie."""
     title_match = sp.SlicerProfile(

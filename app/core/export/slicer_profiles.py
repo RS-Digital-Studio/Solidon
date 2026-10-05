@@ -2679,6 +2679,13 @@ def _kind_of(path: Path, root: Path) -> ProfileKind | None:
 DEFAULT_KINDS: Final[tuple[ProfileKind, ...]] = ("machine", "process")
 
 
+def _stated_nozzle(chain: Sequence[Mapping[str, Any]], flavour: SlicerFlavour) -> float:
+    """Die Düse, die die Erbkette zuerst nennt — sonst die, mit der der Slicer
+    dann rechnet (:data:`MACHINE_DEFAULTS`), wie bei der Druckererhebung."""
+    stated = next((loaded for loaded in chain if "nozzle_diameter" in loaded), {})
+    return _first_number(_machine_value(stated, "nozzle_diameter", flavour))
+
+
 def find_profiles(
     executable: Path,
     flavour: SlicerFlavour,
@@ -2766,13 +2773,25 @@ def find_profiles(
     all_roots = profile_roots(flavour, executable)
     incomplete: set[int] = set()
     for index, profile in enumerate(found):
-        if profile.compatible_printers or not profile.inherits:
+        # Die Düse kann allein in einer Erbbasis stehen: OrcaSlicers „Rolohaun
+        # Delta Flyer Refit 0.4 nozzle“ erbt sie vom Rook MK1 LDO. Gelesen als
+        # 0 fand der Druckdialog keine Maschine zu ihrem Drucker (RM-524).
+        unknown_nozzle = profile.kind == "machine" and not profile.nozzle > 0.0
+        if not profile.inherits:
+            if unknown_nozzle:
+                found[index] = replace(profile, nozzle=_stated_nozzle((), flavour))
+            continue
+        if profile.compatible_printers and not unknown_nozzle:
             continue
         try:
             chain = _chain(profile.path, all_roots, indexes=indexes, documents=documents)
         except ExternalToolError as problem:
             _log.warning("skipping incomplete profile %s: %s", profile.name, problem)
             incomplete.add(index)
+            continue
+        if unknown_nozzle:
+            profile = found[index] = replace(profile, nozzle=_stated_nozzle(chain, flavour))
+        if profile.compatible_printers:
             continue
         for loaded in chain:
             compatibility = tuple(_strings(loaded.get("compatible_printers")))
@@ -3202,7 +3221,9 @@ def _prusa_listing(store: _PrusaStore, cancelled: CancelToken | None) -> list[Sl
         profile = replace(
             entry,
             printer_model=model,
-            nozzle=_first_number(str(values.get("nozzle_diameter", "")).split(",")[0]),
+            nozzle=_first_number(
+                str(_machine_value(values, "nozzle_diameter", "prusa")).split(",")[0]
+            ),
             default_process=str(values.get("default_print_profile", "")),
             default_filament=next(
                 iter(_prusa_list(str(values.get("default_filament_profile", "")))), ""
