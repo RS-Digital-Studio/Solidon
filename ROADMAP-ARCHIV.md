@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-05 | [RM-516: Maße im Bild und Vorschauband nennen jede Zahl einmal (05.10.2026)](#rm-516-maße-im-bild-und-vorschauband-nennen-jede-zahl-einmal-05102026) |
 | 2026-10-05 | [RM-513: Ein Operationsdialog zeigt vorn höchstens vier Felder und einen Satz (05.10.2026)](#rm-513-ein-operationsdialog-zeigt-vorn-höchstens-vier-felder-und-einen-satz-05102026) |
 | 2026-10-05 | [RM-518: Alle Dialoge haben eine Form: flache Abschnitte, ein Rand, eine Beschriftungskante (05.10.2026)](#rm-518-alle-dialoge-haben-eine-form-flache-abschnitte-ein-rand-eine-beschriftungskante-05102026) |
 | 2026-10-05 | [RM-520: Ein Gewinde in einer vorhandenen Bohrung — Kundenmeldung zu 0.5.2 (05.10.2026)](#rm-520-ein-gewinde-in-einer-vorhandenen-bohrung--kundenmeldung-zu-052-05102026) |
@@ -42176,3 +42177,48 @@ hinter der längsten Beschriftung vorn, je 171 Dialoge: vorher DE 47, FR 75, PT 
 Spaltenrechnung rot). Commits `40fc800e4`, Merge `d4fc5fb9f` und der Nachzug der Spalte.
 Changelog: zum nächsten Release (eine Form für alle Dialoge, Felder beginnen an einer
 Kante).
+
+## RM-516: Maße im Bild und Vorschauband nennen jede Zahl einmal (05.10.2026)
+
+<a id="rm-516-maße-im-bild-und-vorschauband-nennen-jede-zahl-einmal-05102026"></a>
+<a id="rm-516"></a>
+
+**RM-516 — Maße im Bild und Vorschauband nennen jede Zahl einmal.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Eine gewählte Bohrung zeigt ihren Durchmesser fünfmal (Marke, Maßzahl, Karte, Feld,
+  Dock) und ihre Lage über sieben Zahlen; Bezugsnamen tragen Nummern („Außenkante 4“,
+  „Mitte 2“), die Felder stehen rund 200 px über dem Teil. Das Vorschauband hat sieben
+  Zeilen mit „Körperzahl: 1 → 1“ und Maßen mit drei Nachkommastellen und festem „mm“
+  (`print_contract.py:264`).
+  **Fix:** Solange die Maße im Bild stehen, fällt die Merkmalsmarke weg, der Durchmesser
+  steht nur im Feld, die Lage über zwei Kantenmaße, X/Y/Z hinter „Weitere Werte“, Bezüge
+  nach der Flächenachse benannt. Vorschauband: Titelzeile und eine Zeile mit dem, was
+  sich ändert; Neues und Behobenes höchstens drei Zeilen; keine Zeile „A → A“; Maße über
+  `labels.length`.
+  **Abnahme:** Im Zustand von guide-thread-a-hole-1 höchstens fünf Zahlen im Bild, kein
+  Bezugsname mit Ziffer; das Vorschauband in der Lage von guide-drill-a-hole-8 höchstens
+  zwei Zeilen; in Zoll kein „mm“. Überschneidung RM-090.
+
+**Umsetzung:** Solange Maße im Bild stehen, fällt die Marke des gemessenen
+Merkmals weg; der Durchmesser steht nur im Feld (über ihm allein das Warnwort
+„Ausgangswert: eingepasst“, die Überschrift im Reiter Auswahl nur der Name). Die
+Lage geben zwei Kantenmaße; die Nachbarmitte kommt über „Bezug ändern“ dazu, beim
+Setzen einer neuen Bohrung bleibt sie als Zielhilfe. X, Y, Z stehen zugeklappt
+unter „Weitere Werte“. Bezüge heißen nach der Weltseite wie im Objektbaum
+(„Außenkante links“, „Außenkante vorn“), eine Nummer erst ab drei Kanten einer
+Seite. Das Vorschauband ist Titel plus eine Zeile; Außenmaß, Körperzahl und
+Material stehen nur bei Änderung, über `labels.length`; Neues und Behobenes
+höchstens drei Zeilen, „Behoben“ weiter nur nach vollständiger Neuprüfung
+(RM-090). Dazu Roberts Wunsch vom selben Tag: Die Maßkarte ist so breit wie ihre
+längste Zeile und rund (Stilblatt und Maske). Mitbehoben: `bore_advice` schrieb ein
+festes „mm“, in Zoll stand „Bohrungsmaß: 5,20 mm“.
+
+**Nachweis (echtes Fenster, plate_holes, 1600 × 1000):** Zahlen im Bild im Zustand
+guide-thread-a-hole-1 20 → 5, kein Bezugsname mit Ziffer; Vorschauband im Zustand
+guide-drill-a-hole-8 8 → 2 Zeilen; in Zoll kein „mm“ (Dock „0,2047 in“); Maßkarte
+408 px eckig → 304 px rund. Tor im Worktree 23 984 bestanden, nach dem Zusammenführen
+mit Kartenlage und Längenwächter erneut grün; Fenstertests geschrieben, beim Release.
+Commits `af3c8488d`, `442b8be9d`, `e0a69c61c`. Die zwei Kantenfelder stehen weiter
+rund 200 px über dem Teil — Roberts Regel vom 21./22.09.2026, Felder vom Körper
+fern. Offen in RM-213: Bilder und die übrigen Fensterzustände.
+Changelog: zum nächsten Release (jede Zahl einmal im Bild, Bezüge nach Seiten
+benannt, kürzeres Vorschauband, Bohrungsmaß in Zoll richtig).

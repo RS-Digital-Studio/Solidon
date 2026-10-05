@@ -105,7 +105,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-508 — Der Prüfbericht zeigt zuerst die Befunde](#rm-508) | Bedienung und Darstellung | Kopf auf eine Zeile, Gerüst und Doppelungen aus der Befundkarte, Export neben der Übergabe |
 | [RM-509 — Kundentexte haben Längengrenzen, und ein Wächter hält sie](#rm-509) | Bedienung und Darstellung | Wächter `test_text_length.py` mit eingefrorenem Bestand; Befund-, Fehler-, Baustein-, Tour- und Offenlegungstexte kürzen |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
-| [RM-516 — Maße im Bild und Vorschauband nennen jede Zahl einmal](#rm-516) | Bedienung und Darstellung | Bohrung: Durchmesser nur im Feld, Lage über zwei Kantenmaße, Bezüge mit Seitennamen; Vorschauband zwei Zeilen |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -3340,6 +3339,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Zahlenfeld, „Wann nicht?“, die verschachtelte Klappe unter „Anwendung“ in den
   Einstellungen; mit den neuen Bildern ihre Alttexte (der Bohrdialog in
   `funktionen.html` und den Übersetzungen nennt noch Position X, Y, Z mit fx).
+  Aus RM-516 (05.10.2026): Handbuchbilder guide-thread-a-hole-1 und
+  guide-drill-a-hole-8 neu; am Fenster die geöffneten „Weitere Werte“ der
+  Maßkarte, HiDPI, helles Thema und das Vorschauband in Zoll mit echter
+  Größenänderung.
 
   **Aus der dritten Runde der Durchsicht v0.5.1 (27.09.2026)** kommen Fenstertests, die
   das Release-Tor tragen muss; die Abschlüsse von RM-231 und RM-269 stützen sich auf sie
@@ -3959,23 +3962,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
   Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
   mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
-
-<a id="rm-516"></a>
-
-- [ ] **RM-516 — Maße im Bild und Vorschauband nennen jede Zahl einmal.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Eine gewählte Bohrung zeigt ihren Durchmesser fünfmal (Marke, Maßzahl, Karte, Feld,
-  Dock) und ihre Lage über sieben Zahlen; Bezugsnamen tragen Nummern („Außenkante 4“,
-  „Mitte 2“), die Felder stehen rund 200 px über dem Teil. Das Vorschauband hat sieben
-  Zeilen mit „Körperzahl: 1 → 1“ und Maßen mit drei Nachkommastellen und festem „mm“
-  (`print_contract.py:264`).
-  **Fix:** Solange die Maße im Bild stehen, fällt die Merkmalsmarke weg, der Durchmesser
-  steht nur im Feld, die Lage über zwei Kantenmaße, X/Y/Z hinter „Weitere Werte“, Bezüge
-  nach der Flächenachse benannt. Vorschauband: Titelzeile und eine Zeile mit dem, was
-  sich ändert; Neues und Behobenes höchstens drei Zeilen; keine Zeile „A → A“; Maße über
-  `labels.length`.
-  **Abnahme:** Im Zustand von guide-thread-a-hole-1 höchstens fünf Zahlen im Bild, kein
-  Bezugsname mit Ziffer; das Vorschauband in der Lage von guide-drill-a-hole-8 höchstens
-  zwei Zeilen; in Zoll kein „mm“. Überschneidung RM-090.
 
 <a id="rm-519"></a>
 
