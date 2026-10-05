@@ -502,11 +502,24 @@ def _from_flow(settings: PrintSettings) -> list[SettingAdvice]:
 
 #: Der Grund jedes Tempodeckels aus :func:`_from_flow` — und woran er zu
 #: erkennen ist (:func:`limits_flow`).
-FLOW_LIMIT_REASON: Final = _(
-    "Dieses Tempo hält den eingestellten maximalen Volumenstrom ein. "
-    "Mehr Durchsatz braucht einen gemessenen Wert für dieses Filament "
-    "und Hotend; eine höhere Temperatur allein belegt ihn nicht."
-)
+#:
+#: **Ein Grund hat höchstens 60 Zeichen** (RM-514): Der Druckdialog zeigt ihn
+#: unter der Tabelle, und bei 620 px Breite endete jeder längere auf „…“.
+#: Ein Satz, ohne Pointe; wo zwei Regeln dasselbe sagen, teilen sie sich
+#: eine Konstante (``tests/test_advise.py`` hält beides).
+FLOW_LIMIT_REASON: Final = _("Mehr Tempo überschreitet den Volumenstrom des Filaments.")
+
+#: Ein hohes, schmales Teil — für den Brim wie für die ruhigen Wände.
+SLENDER_REASON: Final = _("Die Düse kann das hohe, schmale Teil umstoßen.")
+
+#: Zu wenig Standfläche — im Rat für die Platte wie im Rat je Teil.
+SMALL_FOOTPRINT_REASON: Final = _("Die Standfläche ist zu klein, um ohne Brim zu halten.")
+
+#: Die Schichthöhe über der Düsengrenze, für jede Schicht wie für die erste.
+LAYER_TOO_HIGH_REASON: Final = _("Schichten über drei Viertel der Düse haften schlecht.")
+
+#: Das Bett am Höchstwert des Druckers, für jede Schicht wie für die erste.
+BED_AT_MAXIMUM_REASON: Final = _("Wärmer wird das Bett dieses Druckers nicht.")
 
 
 def limits_flow(entry: SettingAdvice) -> bool:
@@ -540,10 +553,7 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
                 settings,
                 path="speed.travel",
                 value=printer.travel_speed,
-                reason=_(
-                    "Dieser Drucker fährt leer schneller. Je länger die Leerfahrt dauert, "
-                    "desto mehr läuft die Düse aus und zieht Fäden."
-                ),
+                reason=_("Der Drucker fährt leer schneller; das gibt weniger Fäden."),
             )
         )
 
@@ -559,15 +569,9 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
                 settings,
                 path="support.threshold_angle",
                 value=limit,
-                reason=_(
-                    "Bis zu diesem Winkel druckt dieser Drucker Überhänge ohne Stütze. "
-                    "Ein kleinerer Winkel stützt auch Schrägen, die sich selbst tragen."
-                )
+                reason=_("Bis zu diesem Winkel druckt der Drucker ohne Stütze.")
                 if settings.support.threshold_angle < limit
-                else _(
-                    "Ab diesem Winkel braucht dieser Drucker Stützen. Ein größerer Winkel "
-                    "lässt Überhänge frei hängen, die absacken."
-                ),
+                else _("Ab diesem Winkel sacken Überhänge ohne Stütze ab."),
             )
         )
 
@@ -578,10 +582,7 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
                 settings,
                 path="layers.layer_height",
                 value=round(wanted, 3),
-                reason=_(
-                    "Eine Schicht über drei Vierteln des Düsendurchmessers haftet nicht "
-                    "sicher auf der darunterliegenden."
-                ),
+                reason=LAYER_TOO_HIGH_REASON,
                 severity="warning",
             )
         )
@@ -598,11 +599,7 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
                 settings,
                 path="layers.first_layer_height",
                 value=round(wanted, 3),
-                reason=_(
-                    "Auch die erste Schicht bleibt unter drei Vierteln des "
-                    "Düsendurchmessers — höher legt die Düse keine Bahn, die auf dem "
-                    "Bett trägt."
-                ),
+                reason=LAYER_TOO_HIGH_REASON,
                 severity="warning",
             )
         )
@@ -622,19 +619,19 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
             "temperature.nozzle_first_layer",
             settings.temperature.nozzle_first_layer,
             printer.nozzle_temperature_max,
-            _("Auch die erste Schicht bleibt in dem, was dieser Drucker heizen kann."),
+            _("Heißer heizt die Düse dieses Druckers nicht."),
         ),
         (
             "temperature.bed",
             settings.temperature.bed,
             printer.bed_temperature_max,
-            _("Wärmer wird dieses Bett nicht — gedruckt würde mit seinem Höchstwert."),
+            BED_AT_MAXIMUM_REASON,
         ),
         (
             "temperature.bed_first_layer",
             settings.temperature.bed_first_layer,
             printer.bed_temperature_max,
-            _("Auch für die erste Schicht ist beim Höchstwert dieses Bettes Schluss."),
+            BED_AT_MAXIMUM_REASON,
         ),
     ):
         if current > ceiling:
@@ -656,11 +653,7 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
                     settings,
                     path=path,
                     value=round(narrowest, 3),
-                    reason=_(
-                        "Schmaler legt diese Düse keine Bahn — enger gequetscht reißt die "
-                        "Spur ab, statt dünner zu werden. Für feinere Bahnen gehört eine "
-                        "kleinere Düse ins Druckerprofil."
-                    ),
+                    reason=_("Schmaler legt diese Düse keine Bahn, sie reißt ab."),
                     severity="warning",
                 )
             )
@@ -671,10 +664,7 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
                 settings,
                 path="temperature.nozzle",
                 value=printer.nozzle_temperature_max,
-                reason=_(
-                    "Das Material will an die Grenze dessen, was dieser Drucker heizen "
-                    "kann — für einen Dauerlauf ist das knapp."
-                ),
+                reason=_("Das Material verlangt die Höchsttemperatur dieses Druckers."),
                 severity="warning",
             )
         )
@@ -738,10 +728,7 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
                     settings,
                     path="adhesion.kind",
                     value="brim",
-                    reason=_(
-                        "Dieses Material zieht sich beim Abkühlen zusammen, und der "
-                        "Bauraum ist offen. Ein Brim hält die Ecken unten."
-                    ),
+                    reason=_("Im offenen Bauraum hebt dieses Material die Ecken an."),
                     severity="warning",
                 )
             )
@@ -751,7 +738,7 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
                     settings,
                     path="cooling.fan_speed",
                     value=0.2,
-                    reason=_("Zugluft auf diesem Material trennt die Schichten voneinander."),
+                    reason=_("Zugluft trennt bei diesem Material die Schichten."),
                     severity="warning",
                 )
             )
@@ -769,10 +756,7 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
                 settings,
                 path="temperature.chamber",
                 value=CHAMBER_FOR_WARPING,
-                reason=_(
-                    "Dieser Drucker hat einen geschlossenen Bauraum, und dieses Material "
-                    "ist der Grund, warum das hilft."
-                ),
+                reason=_("Dieses Material druckt im geheizten Bauraum sicherer."),
             )
         )
 
@@ -791,10 +775,7 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
                         path=path,
                         value=FLEXIBLE_MAX_SPEED,
                         was=current,
-                        reason=_(
-                            "Weiches Filament staucht im Antrieb, statt zu fördern. "
-                            "Langsam ist hier keine Vorsicht, sondern Voraussetzung."
-                        ),
+                        reason=_("Weiches Filament staucht sich bei mehr Tempo im Antrieb."),
                     )
                 )
     return advice
@@ -909,10 +890,7 @@ def _from_geometry(
                 settings,
                 path="support.style",
                 value="none",
-                reason=_(
-                    "Nichts an diesem Teil schwebt. Stützen kosten hier nur Material "
-                    "und hinterlassen Spuren."
-                ),
+                reason=_("Nichts an diesem Teil braucht eine Stütze."),
             )
         )
 
@@ -963,10 +941,7 @@ def _from_geometry(
                 settings,
                 path="support.placement",
                 value="everywhere",
-                reason=_(
-                    "Unter diesen Überhängen liegt bereits Modellmaterial. Stützen "
-                    "müssen auch auf dem Modell beginnen dürfen, um sie zu erreichen."
-                ),
+                reason=_("Stützen erreichen diese Überhänge nur vom Modell aus."),
                 severity="warning",
             )
         )
@@ -976,16 +951,9 @@ def _from_geometry(
                 settings,
                 path="support.placement",
                 value="build_plate",
-                reason=_(
-                    "Die übrigen Decken liegen in schmalen Kanälen. Stützen darin wären schwer "
-                    "zu entfernen. Prüfen Sie im Slicer, ob diese Decken ohne Stützen gedruckt "
-                    "werden können."
-                )
+                reason=_("Stützen in den schmalen Kanälen ließen sich kaum entfernen.")
                 if model.channels
-                else _(
-                    "Stützen erreichen diese Überhänge vom Druckbett aus. So vermeiden Sie "
-                    "zusätzliche Ansatzstellen auf dem Modell."
-                ),
+                else _("Stützen erreichen alle Überhänge vom Druckbett aus."),
             )
         )
 
@@ -1000,11 +968,7 @@ def _from_geometry(
                 settings,
                 path="support.block_channels",
                 value=True,
-                reason=_(
-                    "Dieses Teil hat schmale Kanäle. Eine Sperre hält dort schwer entfernbare "
-                    "Stützen fern. Prüfen Sie im Slicer, ob die Decken ohne Stützen gedruckt "
-                    "werden können."
-                ),
+                reason=_("Die Sperre hält Stützen aus den schmalen Kanälen."),
             )
         )
 
@@ -1020,7 +984,7 @@ def _from_geometry(
             settings,
             profile,
             result,
-            _("Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt."),
+            SMALL_FOOTPRINT_REASON,
             flavour=flavour,
         )
 
@@ -1037,10 +1001,7 @@ def _from_geometry(
             settings,
             profile,
             result,
-            _(
-                "Das Teil steht auf kleinen Füßen, und keiner hält allein. "
-                "Ein Brim gibt jedem Fuß Halt."
-            ),
+            _("Ein Brim gibt jedem der kleinen Füße Halt."),
             flavour=flavour,
         )
 
@@ -1049,7 +1010,7 @@ def _from_geometry(
             settings,
             profile,
             result,
-            _("Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen."),
+            SLENDER_REASON,
             flavour=flavour,
         )
 
@@ -1069,10 +1030,7 @@ def _from_geometry(
                     settings,
                     path="adhesion.brim_gap",
                     value=0.0,
-                    reason=_(
-                        "Das hohe, schmale Teil steht auf wenig Fläche. Ein Brim ohne Abstand "
-                        "hält seinen Fuß besser fest."
-                    ),
+                    reason=_("Ohne Abstand hält der Brim den schmalen Fuß fester."),
                     severity="warning",
                 )
             )
@@ -1103,10 +1061,7 @@ def _from_geometry(
                 settings,
                 path="speed.first_layer",
                 value=NARROW_WEB_SPEED,
-                reason=_(
-                    "Die erste Schicht hat schmale Stege. Langsamer gelegt, haften ihre "
-                    "kurzen Bahnen besser."
-                ),
+                reason=_("Langsamer haften die kurzen Bahnen auf schmalen Stegen."),
                 severity="warning",
             )
         )
@@ -1132,11 +1087,7 @@ def _from_geometry(
                 settings,
                 path="shell.wall_generator",
                 value="arachne",
-                reason=_(
-                    "Die schmalste Stelle geht auf keine ganze Zahl von Bahnen auf. "
-                    "Mit fester Bahnbreite bleibt dort eine Lücke, die nur "
-                    "Lückenfüllung schließt — und die trägt nicht."
-                ),
+                reason=_("Die dünnste Stelle passt in keine ganze Zahl von Bahnen."),
                 severity="warning",
             )
         )
@@ -1147,10 +1098,7 @@ def _from_geometry(
                 settings,
                 path="speed.bridge",
                 value=settings.speed.outer_wall,
-                reason=_(
-                    "Über einer Lücke trägt nichts von unten. Schneller als die "
-                    "Außenwand gefahren hängt die erste Bahn durch."
-                ),
+                reason=_("Schneller als die Außenwand hängen Brücken durch."),
             )
         )
 
@@ -1171,11 +1119,7 @@ def _from_geometry(
                 settings,
                 path="layers.line_width",
                 value=round(max(thin / 2.0, least), 3),
-                reason=_(
-                    "Mit dieser Bahnbreite passen zwei Bahnen in die dünnste "
-                    "Stelle. Bei breiteren Linien kann der Slicer dort nur eine "
-                    "variable Bahn oder Lückenfüllung erzeugen."
-                ),
+                reason=_("So passen zwei Bahnen in die dünnste Stelle."),
                 severity="warning",
             )
         )
@@ -1204,12 +1148,7 @@ def _from_geometry(
                 settings,
                 path="shell.outer_wall_first",
                 value=True,
-                reason=_(
-                    "Die Wandstärke läuft an der Außenkontur stetig über mehrere "
-                    "Bahnen. Mit variabler Bahnbreite wechselt dort die Wandzahl, "
-                    "und zuerst gelegte Innenwände zeichnen das durch die Außenwand "
-                    "ab. Zuerst gelegt liegt die Außenwand auf glattem Grund."
-                ),
+                reason=_("Die wechselnde Wandstärke zeichnet sich sonst außen ab."),
                 severity="warning",
             )
         )
@@ -1231,11 +1170,7 @@ def _from_geometry(
                 settings,
                 path="shell.scarf_seam",
                 value=True,
-                reason=_(
-                    "Die Außenwand ist rund, und die Naht findet keine Ecke: Sie bleibt als "
-                    "Linie sichtbar. Eine Schrägnaht setzt Anfang und Ende flach "
-                    "übereinander und kostet etwas Druckzeit."
-                ),
+                reason=_("Auf der runden Wand findet die Naht keine Ecke."),
             )
         )
 
@@ -1252,11 +1187,7 @@ def _from_geometry(
                 settings,
                 path="cooling.minimum_layer_time",
                 value=THIN_LAYER_SECONDS,
-                reason=_(
-                    "Weiter oben liegen Schichten mit so wenig Fläche, dass sie in "
-                    "Sekunden fertig sind. Ohne Mindestzeit je Schicht legt die Düse "
-                    "auf noch weiches Material."
-                ),
+                reason=_("Kleine Schichten oben kühlen sonst nicht ab."),
             )
         )
     return advice
@@ -1278,10 +1209,7 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
                 settings,
                 path="shell.ironing",
                 value=True,
-                reason=_(
-                    "Eine bündige Passung legt zwei Flächen aufeinander. Gebügelt "
-                    "gleitet die obere, statt auf den Bahnkanten zu sitzen."
-                ),
+                reason=_("Gebügelt gleiten die Flächen der bündigen Passung."),
             )
         )
     if not settings.shell.precise_outer_wall:
@@ -1290,10 +1218,7 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
                 settings,
                 path="shell.precise_outer_wall",
                 value=True,
-                reason=_(
-                    "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu "
-                    "rechnen statt auf die Bahnmitte ist genau dafür da."
-                ),
+                reason=_("Für Passungen zählt die Außenwand auf Sollmaß."),
             )
         )
     if settings.speed.outer_wall_acceleration > CAREFUL_ACCELERATION:
@@ -1302,10 +1227,7 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
                 settings,
                 path="speed.outer_wall_acceleration",
                 value=CAREFUL_ACCELERATION,
-                reason=_(
-                    "Hohe Beschleunigung schwingt die Kontur aus. Das kostet die "
-                    "Zehntelmillimeter, auf die eine Passung gerechnet ist."
-                ),
+                reason=_("Weniger Beschleunigung hält die Kontur der Passungen genau."),
             )
         )
     if settings.speed.outer_wall > careful:
@@ -1314,10 +1236,7 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
                 settings,
                 path="speed.outer_wall",
                 value=careful,
-                reason=_(
-                    "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält "
-                    "das Maß, auf das sie gerechnet sind."
-                ),
+                reason=_("Langsam gefahren hält die Außenwand das Maß der Passungen."),
             )
         )
     if not settings.shell.outer_wall_first:
@@ -1326,10 +1245,7 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
                 settings,
                 path="shell.outer_wall_first",
                 value=True,
-                reason=_(
-                    "Die Außenwand zuerst zu legen gibt die genauere Kontur — was bei "
-                    "einer Passung der Punkt ist."
-                ),
+                reason=_("Zuerst gelegt trifft die Außenwand das Maß der Passungen."),
             )
         )
     return advice
@@ -1381,15 +1297,7 @@ def _fill_the_core(settings: PrintSettings, diameter: float, core: float) -> lis
             settings,
             path="infill.density",
             value=math.ceil(needed * 100.0) / 100.0,
-            reason=_(
-                "Der Verbinder ist zu dick, um ihn mit Wänden zu schließen — er "
-                "trägt dann über das Füllmuster in seiner Mitte. So viel Füllung "
-                "ergibt rechnerisch denselben Materialanteil wie ein Ring aus Wänden; "
-                "sie gilt für das ganze Teil und kostet dort Material und Zeit. "
-                "Wie gut das Muster die Mitte trifft, hängt an seiner Art: ein "
-                "Gyroid liegt in alle Richtungen gleich, ein Gitter lässt dort "
-                "eher Luft."
-            ),
+            reason=_("Der Verbinder ist zu dick für Wände; die Füllung trägt ihn."),
         )
     ]
 
@@ -1457,12 +1365,7 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
             settings,
             path="shell.wall_count",
             value=needed,
-            reason=_(
-                "Der Verbinder besteht bei den eingestellten Wänden im Kern aus "
-                "Füllmuster. So viele Wände machen den Materialring mindestens "
-                "so breit wie den verbleibenden Kern — sie gelten für das ganze "
-                "Teil und nicht nur für den Zapfen."
-            ),
+            reason=_("So trägt der Verbinder mehr Wand als Füllung."),
         )
     ]
 
@@ -1603,9 +1506,9 @@ def for_part(
         ]
     if _unanchored(settings, flavour):
         if 0.0 < footprint < SMALL_FOOTPRINT:
-            reason = _("Dieses Teil steht auf zu wenig Fläche, um ohne Brim zu halten.")
+            reason = SMALL_FOOTPRINT_REASON
         elif _slender(bounds):
-            reason = _("Dieses Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.")
+            reason = SLENDER_REASON
         else:
             reason = None
         if reason is not None:
@@ -1653,7 +1556,7 @@ def _calm_walls(settings: PrintSettings) -> list[SettingAdvice]:
     Grundbeschleunigung — am Centauri Carbon 2 mit 10 000 mm/s², doppelt so
     hart wie die Außenwand.
     """
-    reason = _("Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.")
+    reason = SLENDER_REASON
     wanted = (
         ("speed.outer_wall", settings.speed.outer_wall, SLENDER_WALL_SPEED),
         ("speed.inner_wall", settings.speed.inner_wall, SLENDER_WALL_SPEED),

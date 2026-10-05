@@ -1252,3 +1252,67 @@ def test_a_brim_is_suggested_only_as_wide_as_the_bed_allows(top, width) -> None:
         assert kinds == ["brim"] and widths == [pytest.approx(math.floor(measured * 10.0) / 10.0)]
         assert 3.5 < widths[0] <= measured
         assert "settings.brim_no_room" not in findings
+
+
+def _reason_texts() -> list[tuple[int, str]]:
+    """Jeder Grund des Druckrats als Quelltext — Zeile und deutscher Satz.
+
+    Gelesen am Quelltext und nicht an Läufen: Ein Grund, den kein Testkörper
+    auslöst, steht trotzdem im Dialog. Ein Grund ist jedes ``_()`` in
+    ``advise.py`` außerhalb eines ``Finding`` und einer ``ValidationError`` —
+    deren Sätze gehen in den Prüfbericht, nicht in die Tabelle des Dialogs.
+    """
+    import ast
+
+    tree = ast.parse(Path(advise.__file__).read_text(encoding="utf-8"))
+    elsewhere: set[int] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in {"Finding", "ValidationError"}
+        ):
+            elsewhere.update(id(inner) for inner in ast.walk(node))
+    return [
+        (node.lineno, node.args[0].value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+        and id(node) not in elsewhere
+    ]
+
+
+def test_every_reason_fits_under_the_table_of_the_print_dialog() -> None:
+    """Ein Grund ist ein Satz von höchstens 60 Zeichen, in jeder Sprache lesbar.
+
+    Der Druckdialog zeigt den Grund der gewählten Zeile unter der Tabelle; in
+    der Spalte daneben endeten 40 von 45 Gründen auf „…“ (RM-514). Deutsch
+    höchstens 60 Zeichen, jeder Katalog höchstens 70 — Übersetzungen sind in
+    Zeichen bis zu einem Zehntel länger. Und jeder Grund steht einmal: Wo zwei
+    Regeln dasselbe sagen, teilen sie sich eine Konstante, sonst laufen die
+    Sätze auseinander.
+    """
+    from collections import Counter
+
+    from app.i18n.catalog import available_languages, read_catalog
+
+    reasons = _reason_texts()
+    assert len(reasons) >= 30, f"nur {len(reasons)} Gründe gefunden — liest der Test noch?"
+    long = [f"{line}: {len(text)} {text}" for line, text in reasons if len(text) > 60]
+    assert not long, f"länger als 60 Zeichen: {long}"
+    twice = [text for text, count in Counter(text for _, text in reasons).items() if count > 1]
+    assert not twice, f"derselbe Grund an zwei Stellen, gehört in eine Konstante: {twice}"
+    for language in available_languages():
+        if language == "de":
+            continue
+        catalog = read_catalog(language)
+        wide = [
+            f"{catalog[text]!r} ({len(catalog[text])})"
+            for _, text in reasons
+            if len(catalog.get(text, "")) > 70
+        ]
+        assert not wide, f"{language}: länger als 70 Zeichen: {wide}"
