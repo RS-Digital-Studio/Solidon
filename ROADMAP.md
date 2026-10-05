@@ -50,6 +50,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau](#rm-469) | Plattformen, Pakete und Grafik | Pin gehoben, Kernsuite auf macOS wie main; offen beide Mac-Paketjobs und die Ansicht im gebauten Paket |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Am echten Fenster abgenommen (04.10.); offen allein die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
+| [RM-524 — Drei Herstellerprofile verlieren beim Lesen ihre Düse](#rm-524) | Geometrie, Erkennung und Druckvorbereitung | `slicer_profiles._read` liest `nozzle_diameter` nur aus der Datei selbst; die Düse über die Erbkette lesen, Test mit Elternprofil |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände) — ob Solidon dort Vorgaben setzt, entscheidet Robert |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut (3–10 % Löserzeit), an der Freiform ohne Wirkung aufs Ziel (7,2 s unter Last bei null Merkmalen); offen: anderer Hebel oder neu gefasstes Ziel |
@@ -677,6 +678,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** beide Mac-Pakete gebaut, die Ansicht des Mac-Pakets zeichnet.
 
 ## Geometrie, Erkennung und Druckvorbereitung
+
+<a id="rm-524"></a>
+
+- [ ] **RM-524 — Drei Herstellerprofile verlieren beim Lesen ihre Düse.** Gefunden bei RM-523:
+  `slicer_profiles._read` nimmt `nozzle_diameter` nur aus der Profildatei. Steht die Düse allein
+  im Elternprofil, bleibt `SlicerProfile.nozzle` 0 — OrcaSlicer und ElegooSlicer „Rolohaun Delta
+  Flyer Refit 0.4 nozzle“, PrusaSlicer und SuperSlicer „Anycubic i3 Mega“ und „… i3 Mega S“.
+  `discover_printers` löst die Erbkette auf und gibt dem Drucker 0,4 mm, `match` findet dazu
+  keine Maschine, und der Druckdialog lässt das Maschinenprofil leer.
+  **Abnahme:** ein Test mit Elternprofil (ohne Fix rot), alle drei Profile ordnen sich ihrer
+  Maschine zu, die Profilsuche im Druckdialog bleibt so schnell wie vorher.
 
 <a id="rm-504"></a>
 

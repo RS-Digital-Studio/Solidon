@@ -387,6 +387,51 @@ def test_settings_keep_imported_printers_local_until_the_selected_one_is_saved(
         rebuilt.deleteLater()
 
 
+def test_saving_the_settings_keeps_the_nozzle_chosen_in_the_print_dialog(
+    qt_app, monkeypatch, tmp_path
+) -> None:
+    """Ein frisch aus dem Slicer gelesener Drucker behält beim Speichern die
+    Düse, die der Druckdialog unter seiner Kennung abgelegt hat."""
+    from dataclasses import replace
+
+    from app.core.knowledge import profiles
+    from app.ui import settings_dialog as module
+    from app.ui.first_run import PrinterChoices
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    found = replace(
+        profiles.printer(profiles.DEFAULT_PRINTER),
+        id="slicer-orca-a1",
+        title="Bambu Lab A1 0.4 nozzle",
+        vendor="BBL",
+        nozzle_diameter=0.4,
+        extrusion_width=0.42,
+    )
+    profiles.save_printer(replace(found, nozzle_diameter=0.6, extrusion_width=0.63))
+    path = Path("my-slicer.exe")
+    monkeypatch.setattr(module.discover, "remembered_path", lambda _key: str(path))
+    monkeypatch.setattr(module.discover, "remember_path", lambda _key, _value: None)
+    monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit((path,)))
+    monkeypatch.setattr(
+        module._PrinterSurvey,
+        "work",
+        lambda worker: worker.done.emit(
+            PrinterChoices(path, (found.id,), found.id, profiles=(found,))
+        ),
+    )
+    dialog = module.SettingsDialog(UiSettings(printer=found.id), slicer_path=str(path))
+    try:
+        assert dialog.wait_for_survey(5000)
+        assert dialog.printer.currentData() == found.id
+        assert dialog.printer.currentText() == "Bambu Lab A1"
+        dialog.save_external_choices()
+        assert profiles.printer_profiles()[found.id].nozzle_diameter == pytest.approx(0.6)
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -> None:
     """Auf- und Zuklappen lässt die Speichertasten stehen und erhält eine gezogene Höhe."""
     from PySide6.QtWidgets import QToolButton

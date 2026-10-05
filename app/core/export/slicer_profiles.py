@@ -3608,16 +3608,29 @@ def machine_for_name(profiles: list[SlicerProfile], name: str) -> SlicerProfile 
 
 
 def same_printer_model(first: SlicerProfile, second: SlicerProfile) -> bool:
-    """Ob zwei Maschinenvarianten dasselbe Modell und denselben Hersteller führen."""
+    """Ob zwei Maschinenvarianten dasselbe Modell und denselben Hersteller führen.
+
+    Das Modell steht im Modellfeld oder im Namen ohne Düse (:func:`model_name`):
+    Bambu Studio führt „Creality K1 0.8 nozzle“ mit dem Modellfeld des K1 Max,
+    und am K1 fehlte dann die 0,8. Nach dem Namen zählt nur, wer eine Düse im
+    Namen trägt — sonst wären zwei gleich benannte Profile schon Geschwister.
+    """
     first_vendor = machine_vendor(first)
     second_vendor = machine_vendor(second)
-    return bool(
+    if not (first_vendor and second_vendor and first_vendor.casefold() == second_vendor.casefold()):
+        return False
+    if (
         first.printer_model
         and second.printer_model
-        and first_vendor
-        and second_vendor
         and _printer_name(first.printer_model) == _printer_name(second.printer_model)
-        and first_vendor.casefold() == second_vendor.casefold()
+    ):
+        return True
+    first_model = model_name(first.name)
+    second_model = model_name(second.name)
+    return (
+        first_model != first.name
+        and second_model != second.name
+        and _printer_name(first_model) == _printer_name(second_model)
     )
 
 

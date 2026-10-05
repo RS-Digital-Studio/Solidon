@@ -38,7 +38,7 @@ from app.core.types import Profile, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.icons import icon
-from app.ui.labels import length
+from app.ui.labels import length, printer_title
 from app.ui.style import TARGET_SIZE, TIGHT, divider, set_level
 from app.ui.tool_strip import BarComboBox
 
@@ -632,7 +632,7 @@ class HeaderBar(QWidget):
         Zeile weniger steht.
         """
         del result
-        self.printer.setText(str(profile.printer.title))
+        self.printer.setText(printer_title(profile.printer))
         self._reflow()
 
     def state(self) -> tuple[str, str, str]:

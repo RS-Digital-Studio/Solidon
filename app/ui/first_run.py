@@ -70,13 +70,20 @@ from app.core.backends import llm
 from app.core.errors import AppError
 from app.core.export import slicer_profiles
 from app.core.export.handover import detect
-from app.core.knowledge import profiles
+from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
 from app.core.types import PrinterProfile, PrintTechnology
 from app.i18n import format_decimal, language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.icons import icon
-from app.ui.labels import NumberSpin, deadline_date, slicer_title, wheel_needs_focus
+from app.ui.labels import (
+    NumberSpin,
+    deadline_date,
+    length,
+    printer_title,
+    slicer_title,
+    wheel_needs_focus,
+)
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying
 from app.ui.settings import UiSettings
 from app.ui.style import (
@@ -411,12 +418,12 @@ class FirstRunDialog(QDialog):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.printer.setMinimumContentsLength(20)
-        add_printer_choices(self.printer, self._known_printers())
-        self.printer.addItem(tr("Benutzerdefiniert …"), userData="__custom__")
         # Erst die Slicerwahl startet das Lesen seiner Druckerprofile. Bis
         # dahin bleibt die gespeicherte Vorgabe stehen; fremde Installationen
         # liefern weder einen Drucker noch ein Material für diese Auswahl.
         self._suggested_printer = printer_selection or settings.printer or profiles.DEFAULT_PRINTER
+        add_printer_choices(self.printer, self._known_printers(), keep={self._suggested_printer})
+        self.printer.addItem(tr("Benutzerdefiniert …"), userData="__custom__")
         select_data(self.printer, self._suggested_printer)
         if discovered_printers is not None:
             # Beim Sprachwechsel ist die mitgebrachte Auswahl bereits eine
@@ -1045,7 +1052,11 @@ class FirstRunDialog(QDialog):
         return self.printer.search_field.text() or None
 
     def _known_printers(self) -> dict[str, PrinterProfile]:
-        return dict(profiles.printer_profiles()) | self._discovered_printers
+        saved = profiles.printer_profiles()
+        return dict(saved) | {
+            identifier: with_saved_nozzle(found, saved.get(identifier))
+            for identifier, found in self._discovered_printers.items()
+        }
 
     def _fill_tools(self, states: tuple[tools.ToolState, ...]) -> None:
         """Eine Zeile je Programm, neu gebaut statt neu beschriftet.
@@ -1178,12 +1189,11 @@ class FirstRunDialog(QDialog):
             return False
         if self.printer.currentData() != "__custom__":
             identifier = str(self.printer.currentData() or "")
-            discovered = self._discovered_printers.get(identifier)
-            return (
-                discovered is None
-                or profiles.printer_profiles().get(identifier) == discovered
-                or self._persist_printer(discovered)
-            )
+            if identifier not in self._discovered_printers:
+                return True
+            saved = profiles.printer_profiles().get(identifier)
+            chosen = with_saved_nozzle(self._discovered_printers[identifier], saved)
+            return saved == chosen or self._persist_printer(chosen)
         name = self.printer_name.text().strip()
         if not name:
             self.printer_state.setText(tr("Geben Sie Ihrem Drucker einen Namen."))
@@ -1367,6 +1377,7 @@ class FirstRunDialog(QDialog):
             add_printer_choices(
                 self.printer,
                 {identifier: entry for identifier, entry in known.items() if identifier in allowed},
+                keep={preferred},
             )
             self.printer.addItem(tr("Benutzerdefiniert …"), userData="__custom__")
             select_data(self.printer, preferred)
@@ -1504,23 +1515,95 @@ def group_printer_choices(box: QComboBox) -> None:
                 item.setFont(heading)
 
 
-def add_printer_choices(box: QComboBox, entries: Mapping[str, PrinterProfile]) -> None:
+def add_printer_choices(
+    box: QComboBox, entries: Mapping[str, PrinterProfile], *, keep: Collection[str] = ()
+) -> None:
     """Die Drucker nach Verfahren und darin nach sichtbarem Titel, mit Köpfen.
 
     Dieselbe Ordnung wie im Erststart: FDM zuerst, dann Resin, jede Gruppe
     nach dem Titel, den der Kunde liest (:func:`app.ui.labels.by_title`).
+
+    **Ein Eintrag je Drucker, nicht je Düse** (Entscheidung Robert): Die Slicer
+    führen jede Düse als eigenes Profil, und die Liste eines Bambu Studio war
+    eine Wand aus „0.2 nozzle“, „0.4 nozzle“, „0.6 nozzle“. Varianten mit
+    demselben Namen ohne Düse (:func:`app.ui.labels.printer_title`) werden
+    eine Zeile; die Düse wählt der Druckdialog, der dazu die Schwestervariante
+    sucht (``slicer_profiles.sister_variant``). Für das Modell steht die
+    Variante aus ``keep`` — die gewählte oder vorgeschlagene, damit eine Wahl
+    ihre Düse behält —, sonst die übliche (``REFERENCE_NOZZLE``), sonst die
+    nächstliegende.
     """
+    models: dict[tuple[str, ...], list[tuple[str, PrinterProfile]]] = {}
+    for identifier, printer in entries.items():
+        models.setdefault(_model_key(identifier, printer), []).append((identifier, printer))
+    listed = [_listed_variant(variants, keep) for variants in models.values()]
 
     def rank(pair: tuple[str, PrinterProfile]) -> tuple[int, str]:
         technology = pair[1].technology
         order = _TECHNOLOGY_ORDER.index(technology) if technology in _TECHNOLOGY_ORDER else 99
-        return order, str(pair[1].title).casefold()
+        return order, printer_title(pair[1]).casefold()
 
     with QSignalBlocker(box):
-        for identifier, printer in sorted(entries.items(), key=rank):
-            box.addItem(str(printer.title), identifier)
-            box.setItemData(box.count() - 1, str(printer.title), Qt.ItemDataRole.ToolTipRole)
+        for identifier, printer in sorted(listed, key=rank):
+            title = printer_title(printer)
+            box.addItem(title, identifier)
+            box.setItemData(box.count() - 1, _choice_tip(printer), Qt.ItemDataRole.ToolTipRole)
     group_printer_choices(box)
+
+
+def _model_key(identifier: str, printer: PrinterProfile) -> tuple[str, ...]:
+    """Woran die Liste Varianten eines Druckers erkennt: Verfahren und Name
+    ohne Düse. Ein Drucker ohne Hersteller (selbst angelegt) steht für sich."""
+    if not printer.vendor.strip():
+        return ("", identifier)
+    return (printer.technology, printer_title(printer).casefold())
+
+
+def _listed_variant(
+    variants: list[tuple[str, PrinterProfile]], keep: Collection[str]
+) -> tuple[str, PrinterProfile]:
+    """Die Variante, die für ihr Modell in der Liste steht (:func:`add_printer_choices`)."""
+    kept = [pair for pair in variants if pair[0] in keep]
+    if kept:
+        return kept[0]
+    # Gleich weit weg (0,2 und 0,6) gewinnt die größere: Sie verzeiht mehr.
+    return min(
+        variants,
+        key=lambda pair: (
+            round(abs(pair[1].nozzle_diameter - print_settings.REFERENCE_NOZZLE), 6),
+            -pair[1].nozzle_diameter,
+        ),
+    )
+
+
+def _choice_tip(printer: PrinterProfile) -> str:
+    """Der Hinweis am Eintrag: an einem Filamentdrucker die Düse und wo man sie
+    ändert — der Name nennt sie nicht mehr."""
+    title = printer_title(printer)
+    if printer.is_resin:
+        return title
+    return tr(
+        "{printer}, Düse {nozzle}. Eine andere Düse wählen Sie in den Druckeinstellungen."
+    ).format(printer=title, nozzle=length(printer.nozzle_diameter))
+
+
+def with_saved_nozzle(found: PrinterProfile, saved: PrinterProfile | None) -> PrinterProfile:
+    """Ein neu gelesenes Slicerprofil mit der Düse, die der Druckdialog am
+    gespeicherten Drucker gesetzt hat — Erststart wie Einstellungen.
+
+    Der Druckdialog legt eine andere Düse unter derselben Kennung ab
+    (``_nozzle_changed``). Las ein späteres Speichern den Drucker frisch aus
+    dem Slicer, stand die Düse still wieder auf der Variante; seit die Liste
+    nur noch Drucker zeigt, wäre das jedes Mal so.
+    """
+    if saved is None:
+        return found
+    return replace(
+        found,
+        nozzle_diameter=saved.nozzle_diameter,
+        extrusion_width=saved.extrusion_width,
+        nozzles=saved.nozzles,
+    )
 
 
 def allowed_printers(identifiers: Iterable[str], known: Mapping[str, PrinterProfile]) -> set[str]:
