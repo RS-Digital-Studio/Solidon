@@ -329,6 +329,28 @@ Dieselbe Vorsicht gilt jeder künftigen Regel über ein gedrucktes Maß: Was die
 Geometrie als Material führt, ist erst dann Material, wenn eine Bahn darin
 liegt.
 
+**Eine Decke ist als Ganzes Kanal oder Brücke (05.10.2026).** Am Wedge-Lock
+an der 0,25er Düse (Kobra S1 und S1 Max, 0,08 mm) galten zwei Ausrundungen
+von zusammen 0,0 mm² am Fuß einer 25-mm-Brücke als Kanaldecke: Ihr Ort liegt
+an der Beinwand, und dort fasst der Raum keinen Kreis von `CHANNEL_WIDTH`. Die
+vier Schichten Brücke darüber hingen außerhalb eines Kanals und verlangten
+Stützen, die Kanalstücke die Sperre, und die Sperre deckte die ganze Decke:
+0 statt 6,6 m Stütze in Anycubic Slicer Next, obwohl `channel_space` die
+Grundrisse der offenen Säulen schon aussparte. Bei 0,2 mm gab es kein solches
+Stück. Die Ursache ist die Frage an einem einzelnen Ort, deshalb fragt
+`_Ceilings` die Decke: Stücke benachbarter Schichten gehören zusammen, wenn das
+untere dem oberen so nahe liegt wie das Material seiner Schicht (0,13856 gegen
+0,13827 mm am Wedge-Lock, bis auf `OVERHANG_MARGIN`). Entschieden wird nach
+Fläche und nur in eine Richtung: Die Waschschüssel hat im CC2-Raster eine
+Decke mit 186 mm² im Kanal und 44 mm² offen, deren offenes Stück selbst
+16,3 mm spannt; „eine lange Brücke macht die Decke offen“ hätte ihren Kanal
+freigegeben, „ein offenes Stück macht alles offen“ ebenso. Im Korpus
+`F:\3D Dateien` nimmt die Regel nur Kanalstücke, deren Ort höchstens 0,63 mm
+neben der Wand der Schicht darunter liegt — Wandstreifen von Gewölben über
+Räumen weiter als `CHANNEL_WIDTH` (Pool-Wasserfall, Kumiko-Organizer, die
+Waschschüssel in ihrer Dateilage bis 2,6 mm); nach *Druckoptimal ausrichten*
+behält die Waschschüssel jedes Kanalstück.
+
 ## Das Maschinenprofil des Slicers
 
 `export/slicer_profiles.py` liest den Bestand des installierten Slicers. Vier
