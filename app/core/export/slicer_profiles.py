@@ -193,7 +193,11 @@ def install_root(executable: Path) -> Path | None:
     app = discover.flatpak_app(executable)
     files = discover.flatpak_files(app) if app else None
     if files is not None:
-        for folder in (files, *sorted(entry for entry in files.iterdir() if entry.is_dir())):
+        try:
+            inner = sorted(entry for entry in files.iterdir() if entry.is_dir())
+        except OSError:
+            inner = []
+        for folder in (files, *inner):
             for candidate in _bundled(folder, mark):
                 if candidate.is_dir():
                     return candidate
@@ -2599,7 +2603,17 @@ def find_profiles(
     installed = install_root(executable)
     if installed is not None:
         roots.append((installed, False))
-    roots.extend((folder, True) for folder in user_roots(flavour, executable))
+    users = user_roots(flavour, executable)
+    roots.extend((folder, True) for folder in users)
+    if installed is None:
+        # Ein AppImage trägt seinen Bestand im Abbild, das nur während seines
+        # Laufs eingehängt ist — unter Linux der Normalfall für Orca, Bambu,
+        # Elegoo und Creality. Die Orca-Familie kopiert die Bündel der
+        # eingerichteten Drucker nach ``system/`` neben ``user/``, und dort
+        # stehen genau die Drucker des Kunden.
+        for system in dict.fromkeys(folder.parent.parent / "system" for folder in users):
+            if system.is_dir():
+                roots.append((system, False))
 
     count = 0
     documents: ProfileDocuments = {}
