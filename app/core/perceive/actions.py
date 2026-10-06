@@ -221,13 +221,21 @@ TORUS_IS_THE_WHOLE_BODY: Final = _(
 )
 
 
-def torus_is_the_body(feature: Feature, mesh: MeshData | None) -> TranslatableText | None:
-    """Der Satz, wenn die Ringfläche jedes Dreieck des Körpers beansprucht — sonst ``None``."""
+def torus_blocked(feature: Feature, mesh: MeshData | None) -> TranslatableText | None:
+    """Warum an diesem Ring keine Handlung geht — sonst ``None``.
+
+    Erst die billige Frage, ob die Ringfläche jedes Dreieck des Körpers
+    beansprucht; dann dieselbe, an der die Operation absagt
+    (``prepare_ops.torus_refusal``, RM-535), damit keine Zeile Felder zeigt,
+    die beim Übernehmen nichts tun.
+    """
     if feature.kind != "torus" or mesh is None or not feature.face_indices:
         return None
     if len(set(feature.face_indices)) >= mesh.triangle_count:
         return TORUS_IS_THE_WHOLE_BODY
-    return None
+    from app.core.geom.prepare_ops import torus_refusal
+
+    return torus_refusal(mesh, feature)
 
 
 #: Was statt der Handlung hilft, je Merkmalsart, für die keine gilt.
@@ -280,7 +288,7 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
     # einzeln etwas ändern ließe". Seit P2.6 tragen Wulst und Kehle alle fünf
     # Handlungen in beiden Kernen (``prepare_ops._move_torus`` und
     # Geschwister); was bleibt, ist der Ring, der der ganze Körper ist
-    # (:func:`torus_is_the_body`), und das Langloch (``NOT_APPLICABLE_HERE``).
+    # (:func:`torus_blocked`), und das Langloch (``NOT_APPLICABLE_HERE``).
     # **Das Langloch stand hier bis zum 11.09.2026** — „die Handlungen hier
     # rechnen mit einem Durchmesser und träfen seine Flanken nicht". Sie tun es
     # nicht mehr: Sein Werkzeugkörper wird aufgezogen wie beim Schneiden, und
@@ -718,7 +726,7 @@ def actions_for(
         cancelled.raise_if_cancelled()
     actions: list[FeatureAction] = []
     edge_blocked = fillet_blocked(feature, features, mesh)
-    piece_blocked = cone_piece_blocked(feature) or torus_is_the_body(feature, mesh)
+    piece_blocked = cone_piece_blocked(feature) or torus_blocked(feature, mesh)
     # **Die Kette einmal gefragt, für alle Zeilen.** Was der Aufrufer mitbringt,
     # gilt; sonst fragt das Netz — und dieselbe Antwort speist die Sperre am
     # geteilten Hohlraum (*Zum Langloch ziehen*) und die am Merkmal ohne

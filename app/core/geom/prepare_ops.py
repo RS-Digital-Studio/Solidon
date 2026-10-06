@@ -14768,6 +14768,23 @@ def _torus_rims(
     return patch, rim, ring_edges, loops
 
 
+def torus_refusal(mesh: MeshData, feature: Feature) -> TranslatableText | None:
+    """Der Satz, mit dem die Ringhandlungen an diesem Netz absagen — sonst ``None``.
+
+    **Dieselbe Frage wie beim Rechnen** (:func:`_torus_rims`, RM-535): Die
+    Karte fragte nur, ob der Ring der ganze Körper ist, und bot an Wulst und
+    Kehle X/Y/Z an; *Übernehmen* endete dann an allen vier geprüften Ringen
+    mit „lässt sich nicht vom Körper trennen“.
+    """
+    if feature.kind != "torus":
+        return None
+    try:
+        _torus_rims(mesh, feature)
+    except ValidationError as refusal:
+        return cast(TranslatableText, refusal.detail)
+    return None
+
+
 def _torus_ring_mesh(
     centre: Vec3, axis: Vec3, ring_diameter: float, tube_diameter: float
 ) -> MeshData:
