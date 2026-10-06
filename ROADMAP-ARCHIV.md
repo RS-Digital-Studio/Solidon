@@ -31,6 +31,22 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
+| 2026-10-06 | [RM-313: Der Versionswächter liefert seit v0.5.2 echte Ergebnisse (06.10.2026)](#rm-313-der-versionswächter-liefert-seit-v052-echte-ergebnisse-06102026) |
+| 2026-10-06 | [RM-234: Die Fensterverträge melden sich auch bei rotem Kern (06.10.2026)](#rm-234-die-fensterverträge-melden-sich-auch-bei-rotem-kern-06102026) |
+| 2026-10-06 | [RM-137: Die Abnahme des Sitzungsendes entfällt, den Hook gibt es nicht mehr (06.10.2026)](#rm-137-die-abnahme-des-sitzungsendes-entfällt-den-hook-gibt-es-nicht-mehr-06102026) |
+| 2026-10-06 | [RM-136: Fensterschema, Alttexte und Handbücher sind mit 0.5.2 und 0.5.3 erzeugt (06.10.2026)](#rm-136-fensterschema-alttexte-und-handbücher-sind-mit-052-und-053-erzeugt-06102026) |
+| 2026-10-06 | [RM-454: Die Etappenentscheidung fragt jeden Spiegelort (06.10.2026)](#rm-454-die-etappenentscheidung-fragt-jeden-spiegelort-06102026) |
+| 2026-10-06 | [RM-428: Gespiegelte Züge teilen sich einen glatten Anteil (06.10.2026)](#rm-428-gespiegelte-züge-teilen-sich-einen-glatten-anteil-06102026) |
+| 2026-10-06 | [RM-419: Die Durchstichprüfung sucht je Zugbereich und bietet Zug zurücknehmen (06.10.2026)](#rm-419-die-durchstichprüfung-sucht-je-zugbereich-und-bietet-zug-zurücknehmen-06102026) |
+| 2026-10-06 | [RM-383: Viele getrennte Teile halten keine Boolesche mehr an (06.10.2026)](#rm-383-viele-getrennte-teile-halten-keine-boolesche-mehr-an-06102026) |
+| 2026-10-06 | [RM-382: Ein Mehrschaler hält nur noch am Treffer der selbstkreuzenden Schale (06.10.2026)](#rm-382-ein-mehrschaler-hält-nur-noch-am-treffer-der-selbstkreuzenden-schale-06102026) |
+| 2026-10-06 | [RM-381: Boolesche an Mehrschalern rechnen wieder schnell und lassen sich abbrechen (06.10.2026)](#rm-381-boolesche-an-mehrschalern-rechnen-wieder-schnell-und-lassen-sich-abbrechen-06102026) |
+| 2026-10-06 | [RM-365: Stand festschreiben legt die feine Rechnung ab (06.10.2026)](#rm-365-stand-festschreiben-legt-die-feine-rechnung-ab-06102026) |
+| 2026-10-06 | [RM-434: Weiches Verschmelzen prüft die Eingänge vor dem Entwurfsbudget (06.10.2026)](#rm-434-weiches-verschmelzen-prüft-die-eingänge-vor-dem-entwurfsbudget-06102026) |
+| 2026-10-06 | [RM-327: Der Zerfallssatz folgt der Teilezahl des Endstands (06.10.2026)](#rm-327-der-zerfallssatz-folgt-der-teilezahl-des-endstands-06102026) |
+| 2026-10-06 | [RM-322: Rundungen binden nur an vollständig belegte native Kanten (06.10.2026)](#rm-322-rundungen-binden-nur-an-vollständig-belegte-native-kanten-06102026) |
+| 2026-10-06 | [RM-469: Beide Mac-Pakete bauen mit rubicon-objc 0.5.7, und die Ansicht zeichnet (06.10.2026)](#rm-469-beide-mac-pakete-bauen-mit-rubicon-objc-057-und-die-ansicht-zeichnet-06102026) |
 | 2026-10-06 | [RM-433: Die Rückfrage vor Werkzeugen entfällt mit dem Hook (06.10.2026)](#rm-433-die-rückfrage-vor-werkzeugen-entfällt-mit-dem-hook-06102026) |
 | 2026-10-06 | [RM-350: Ein roter Versionswächter am Tag sperrt die Signierung nicht mehr (06.10.2026)](#rm-350-ein-roter-versionswächter-am-tag-sperrt-die-signierung-nicht-mehr-06102026) |
 | 2026-10-05 | [RM-509: Kundentexte haben Längengrenzen, und ein Wächter hält sie (05.10.2026)](#rm-509-kundentexte-haben-längengrenzen-und-ein-wächter-hält-sie-05102026) |
@@ -920,7 +936,7 @@ Belege: `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-ci-359528
 und `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\tore\codex-ci-35952849083-ubuntu.txt`.
 Der getrennte Windows-/Ubuntu-Erkennungsvertrag ist damit belegt. Die Grenzen
 der CI-Fensterabnahme und des neuen roten macOS-Laufs bleiben unter
-[RM-234](ROADMAP.md#rm-234); sie werden durch diesen Abschluss nicht grün.
+[RM-234](#rm-234); sie werden durch diesen Abschluss nicht grün.
 
 ## Gegen echte Modelle geprüft
 
@@ -9136,8 +9152,8 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-133 — `rotate_feature` ändert das Volumen, und niemand sagt es | weiter offen → [RM-133](#rm-133) | prepare_ops.py:1912ff meldet inzwischen verlorenen Durchgang über _throughness_lost. Die allgemeine Volumenänderung ist weiter eine Bedienentscheidung, kein bestätigter Geometriefehler. |
 | RM-134 — Testhilfen stehen zweimal | weiter offen → [RM-134](ROADMAP.md#rm-134) | tests/test_cone_fit_quality.py:15 und test_torus_fit_quality.py:15 führen _freeform_patch doppelt; test_analysis_ui.py:161 und test_selection.py:361 on_the_bore_wall mit unterschiedlicher Signatur. Die historische Zahl 21 Gruppen wird nicht ungeprüft fortgeschrieben. |
 | RM-135 — Die Filamentkarte fordert mehr, als sie zeigt | weiter offen → [RM-135](ROADMAP.md#rm-135) | app/ui/filament_picker.py:831ff _around_the_list bleibt die gemeinsame Berechnung. tests/test_filament_picker.py:534ff hat weiterhin die Mac-Unterhöhen-Ausnahme. 144/126 ist ein historischer Windows-Befund; beide Richtungen gemeinsam neu vermessen. |
-| RM-136 — Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | weiter offen → [RM-136](ROADMAP.md#rm-136) | app/core/figures.py:92 beschreibt weiter vier Bereiche, :1118 trägt der Bildtext den alten Aufbau. 4a88f97a/cdb5cab1 aktualisieren echte Screenshots und Medien; 84a746e7 veröffentlicht 0.3.5. Der alte Auftrag 'vor Paketbau 0.3.5' und pauschal alte Screenshots sind erledigt; Schema bleibt offen. |
-| RM-137 — Live-Abnahme des Sitzungsendes | weiter offen → [RM-137](ROADMAP.md#rm-137) | Aktuelle ROADMAP.md wurde während der Durchsicht berechtigt weitergeführt: Desktop und Standalone-CLI sind getrennt geprüft. loggedIn=false stammt aus der separaten CLI und beweist keine fehlende Desktop-Anmeldung; Pyright ist bereits als Kind einer Desktop-Sitzung belegt. Nur Live-Abnahme des echten Sitzungsendes fehlt. |
+| RM-136 — Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | weiter offen → [RM-136](#rm-136) | app/core/figures.py:92 beschreibt weiter vier Bereiche, :1118 trägt der Bildtext den alten Aufbau. 4a88f97a/cdb5cab1 aktualisieren echte Screenshots und Medien; 84a746e7 veröffentlicht 0.3.5. Der alte Auftrag 'vor Paketbau 0.3.5' und pauschal alte Screenshots sind erledigt; Schema bleibt offen. |
+| RM-137 — Live-Abnahme des Sitzungsendes | weiter offen → [RM-137](#rm-137) | Aktuelle ROADMAP.md wurde während der Durchsicht berechtigt weitergeführt: Desktop und Standalone-CLI sind getrennt geprüft. loggedIn=false stammt aus der separaten CLI und beweist keine fehlende Desktop-Anmeldung; Pyright ist bereits als Kind einer Desktop-Sitzung belegt. Nur Live-Abnahme des echten Sitzungsendes fehlt. |
 
 ## Registerstand vor dem Roadmap-Abgleich (08.09.2026)
 
@@ -26164,7 +26180,7 @@ Vier Prüfer über die einundzwanzig Commits des Tages. Fünfundzwanzig Befunde,
 alle behoben ausser einem — und der steht hier, weil er nur zusammen mit einem
 Erzeugerlauf zu haben ist.
 
-- **Historischer Befund RM-136 (weiter offen; aktuelle Aufgabe [RM-136](ROADMAP.md#rm-136)):** **Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern.**
+- **Historischer Befund RM-136 (weiter offen; aktuelle Aufgabe [RM-136](#rm-136)):** **Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern.**
       `d2040474` hat Handbuch, PDFs und Website mit dem neuen Absatz zur
       rechten Spalte geschrieben; die Bildschirmfotos unter
       `app/images/manual/*/` sind vom Erzeugerlauf um 06:13, und die rechte
@@ -26282,7 +26298,7 @@ projektlokal abgeschaltet ist, damit Roberts .NET-Projekte es behalten.
       `max` und `--setting-sources=user,project,local`. Die separate CLI im
       PATH ist 2.1.247; ihre Meldung `loggedIn=false` beweist keine fehlende
       Desktop-Anmeldung. Die frühere Schlussfolgerung ist korrigiert.
-- **Historischer Befund RM-137 (weiter offen; aktuelle Aufgabe [RM-137](ROADMAP.md#rm-137)):** **Live-Abnahme des Sitzungsendes.** Tatsächliche SessionEnd-
+- **Historischer Befund RM-137 (weiter offen; aktuelle Aufgabe [RM-137](#rm-137)):** **Live-Abnahme des Sitzungsendes.** Tatsächliche SessionEnd-
       Ereignisse müssen beim Ende einer echten Editor-Sitzung beobachtet werden.
       Eine konfigurierte Terminal-Statuszeile ist kein Nachweis für ihre
       Darstellung in Claude Desktop. Der ergänzte Benutzer-PATH gilt für
@@ -32843,7 +32859,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   40 exakte Körper 0 anders. Das Ziel „unter 10 s“ ist für die Erkennung je Schritt
   erreicht, an der dieser Punkt die 30 s gemessen hatte. Das ganze Übernehmen bleibt bei
   16 bis 17,5 s, weil die Operation nach dem Klick in voller Güte 9 bis 10 s neu rechnet;
-  dieser Teil der Abnahme steht als [RM-273](ROADMAP.md#rm-273). Tests
+  dieser Teil der Abnahme steht als [RM-273](#rm-273). Tests
   `tests/test_boolean.py::test_a_boolean_keeps_the_layout_of_every_triangle_it_did_not_cut`,
   `tests/test_fit_stability.py::test_moving_a_bore_keeps_the_layout_of_the_rest_of_the_body`,
   `::test_untouched_round_forms_read_the_same_numbers_after_a_bore_elsewhere`,
@@ -34710,6 +34726,7 @@ Fenster- und Leistungsläufe bleiben Release-Abnahmen.
 ## RM-273: Das Übernehmen nutzt die Vorschau für die verschobene Bohrung (01.10.2026)
 
 <a id="rm-273-das-übernehmen-nutzt-die-vorschau-für-die-verschobene-bohrung-01102026"></a>
+<a id="rm-273"></a>
 
 Die Durchsicht 0.5.1 hatte am Gartenschlauchhalter 16 bis 17,5 s je Übernahme
 unter Last gemessen; der Auftrag wurde nach der Dialogvorschau erneut gerechnet.
@@ -34733,6 +34750,11 @@ Testauswahl bestand mit 342 Tests, 186 releasegebundene oder release-only Tests
 blieben ausgelassen. Ruff, Format und `git diff --check` für den neuen Test und
 die Roadmap-Dateien waren grün. Das unabhängige Review fand keine Befunde. Das
 vollständige Entwicklungstor steht vor dem Commit noch aus.
+
+**Nachprüfung (Review 02.10.2026):** Auf Kernebene bestätigt — das Übernehmen am
+Gartenschlauchhalter dauerte 0,06 s, ohne Fehl-Treffer. Der Nachweis am echten Fenster
+gehört zur Fensterabnahme beim Release ([RM-213](ROADMAP.md#rm-213)). Bis zum 06.10.2026
+stand der Punkt zusätzlich als `[x]` in `ROADMAP.md`; dort ist er entfernt.
 
 ## RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)
 
@@ -42442,3 +42464,515 @@ PreToolUse-Eintrag in `.codex/hooks.json` sind entfernt;
 `tests/test_agent_mirror.py` hält Hooks, Plugins und Umgebung beider Editoren gleich.
 Die Regeln aus `AGENTS.md` (kein Revert, Geld und Veröffentlichung nur auf Auftrag)
 gelten ohne Rückfrage am Werkzeug.
+
+## RM-469: Beide Mac-Pakete bauen mit rubicon-objc 0.5.7, und die Ansicht zeichnet (06.10.2026)
+
+<a id="rm-469-beide-mac-pakete-bauen-mit-rubicon-objc-057-und-die-ansicht-zeichnet-06102026"></a>
+<a id="rm-469"></a>
+
+**RM-469 — rubicon-objc 0.5.7 wartet auf den Mac-Paketbau.** Aus RM-467, erster Lauf
+  02.10.2026. rubicon-objc kommt nur auf macOS über wgpu in den Baum, für die Metal-Oberfläche der
+  Ansicht. 0.5.7 (30.09.2026) wirft für unbekannte C-Typen `ValueError` statt `AttributeError` und
+  verlangt ein funktionierendes `platform.processor()`. Der Pin steht seit `3c21802b9` auf 0.5.7;
+  die Kernsuite auf macos-latest lief damit wie main, die Fensterverträge auf macOS zeigen dieselben
+  Fehler wie auf Windows und Linux (Handstart 37060439101).
+  **Offen:** beide Mac-Paketjobs (Apple Silicon und `macos-26-intel`, das nur paketiert wird) und
+  ein Blick auf die Ansicht im gebauten Paket; sie laufen, sobald die Fensterjobs grün sind.
+  **Abnahme:** beide Mac-Pakete gebaut, die Ansicht des Mac-Pakets zeichnet.
+
+**Nachweis (06.10.2026):** Im Taglauf 37266459831 (v0.5.2) sind *Paket (macos-latest)* (Job
+111630453072) und *Paket (macos-26-intel)* (Job 111630453007) grün; der ARM-Job installiert
+`rubicon_objc-0.5.7`, und der Startbericht des gebauten Pakets meldet
+`"renderer": {"present": true, "kind": "GfxRenderer"}`. Im Taglauf 37409338027 (v0.5.3) sind
+beide Mac-Paketjobs wieder grün (Jobs 112108681188, 112108681243). Das Intel-Paket startet am
+Runner nur ohne Bildschirm; Fenster und Ansicht auf echten Intel-Macs führt
+[RM-104](ROADMAP.md#rm-104).
+
+## RM-322: Rundungen binden nur an vollständig belegte native Kanten (06.10.2026)
+
+<a id="rm-322-rundungen-binden-nur-an-vollständig-belegte-native-kanten-06102026"></a>
+<a id="rm-322"></a>
+
+**RM-322 — Tragende Netzkanten am exakten Körper wiederfinden.** Rest aus RM-284.
+  **Präzisierte Diagnose am 02.10.2026:** Am unveränderten `pegboard-gs-100-v2.step`
+  haben vier der zehn gewählten Netzzüge einen nativen Partner; dort muss das Maß unter
+  0,8535533905932737 mm bleiben. Die übrigen sechs liegen innerhalb nativer Flächen und
+  haben keine eigene Topologiekante. Die frühere Aussage über sechs passende exakte
+  Rundungen war zu weitgehend; der historische Netzversuch in
+  `konzepte/nachweise-release-0.5.1/laeufe/kanten-gruppe-brep2.txt` bleibt unverändert.
+  **Umgesetzt:** Herkunft, vollständiger Kurvenverlauf und eindeutiger Partner belegen
+  die Zuordnung. Teilwahl, fehlende Herkunft oder leere Gruppen erweitern die Auswahl
+  nicht auf alle nativen Kanten. Nach Bandfilterung wird die Restabdeckung erneut geprüft;
+  Abbruch, vollständige Ortskonturen und Berichtanschluss bleiben erhalten. Beide
+  Operationscaches stehen auf 14. Zwei unabhängige P1-Befunde und ein Toleranz-P2 sind mit
+  echten roten/grünen Gegenfällen korrigiert und im Nachreview freigegeben.
+  **Fachnachweise:** 57 direkte Fälle einschließlich vier analytischer Verlaufs-/Cache-/
+  Folgefälle, sechs Kundenfälle in beiden Güten sowie Fehlerort- und Übersetzungsprüfungen
+  grün. R0,3 bearbeitet vier Kanten und nennt sechs ausgelassene Stellen. R1/R2 sagen begründet ab,
+  erhalten den Körper und nennen alle zehn Stellen. Quelle und Dateihash bleiben gleich.
+  Beleg: [Zuordnung, Gegenproben und Kundenmodell](konzepte/nachweise-release-0.5.1/reports/rm322-native-edge-binding-2026-10-02.md).
+  Die gezielte Statikprüfung und alle 32 Dokumentwächter sind ebenfalls grün.
+  **Zentrale Übernahme:** Zweitreview freigegeben; Entwicklungstor mit 19.464
+  bestandenen und 62 übersprungenen Tests, Ruff/Format/mypy je Exit 0, ohne
+  Quellenabweichung. Commit `0041000a0` enthält alle 17 Pfade; 38 unabhängige
+  Inhaltsvergleiche passen. Der Push nach `origin/main` ist noch nachzuweisen.
+  Fenster-, Renderer- und Leistungsabnahme gehören weiterhin zum Release.
+
+**Nachweis (06.10.2026):** `0041000a0` liegt auf `origin/main` und in v0.5.2 und v0.5.3
+(`git branch -r --contains`, `git tag --contains`); damit ist der offene Pushbeleg erbracht.
+Fenster-, Renderer- und Leistungsabnahme laufen mit der Fensterabnahme beim Release
+([RM-213](ROADMAP.md#rm-213)).
+
+## RM-327: Der Zerfallssatz folgt der Teilezahl des Endstands (06.10.2026)
+
+<a id="rm-327-der-zerfallssatz-folgt-der-teilezahl-des-endstands-06102026"></a>
+<a id="rm-327"></a>
+
+**RM-327 — Der Zerfallssatz einer Bohrung verschwindet, sobald sich die Teilezahl ändert.**
+  Review seit 0.5.1, Befund A-M2, Commit `55515ca03` (Claude); schwächt die Zusage von
+  `23a0eb8fa` („bleibt zerfallen → Satz bleibt“).
+  `app/core/scene/evaluate.py:1548` (`"bore.splits_the_body": "count"` in `COUNTED_PARTS`) mit
+  `:1850–1852` in `_without_outdated`: Jede abweichende Zahl streicht den ganzen Befund.
+  **Fehlerfall (beide Kerne):** Würfel 20 mm, Langloch A quer (2 Teile), Langloch B quer dazu
+  (4 Teile), dann ein Quader vereinigt, der zwei Viertel überbrückt → Endstand 3 lose Teile, im
+  Prüfbericht kein Zerfallssatz. Der Kunde druckt drei lose Teile ohne Hinweis.
+  **Fix:** Zahl am Endstand nachführen wie bei `ingest.small_components` (`dataclasses.replace`
+  im Zweig von `_without_outdated`); gestrichen wird nur, wenn der Körper ein Stück ist.
+  Zugleich die Gegenrichtung aus `23a0eb8fa` vervollständigen: In `ONE_PIECE_CODES`
+  (`evaluate.py:1528–1537`) fehlen `label.fell_apart` (`geom/label_ops.py:675`),
+  `texture.fell_apart` (`geom/texture_ops.py:758`), `parts.hanging_loose`
+  (`knowledge/parts/ops.py:569`), `blend.still_apart` (`geom/blend.py:403`) und
+  `sketch.join_apart` (`sketch/ops.py:665`) — Fehlerfall: Schrift neben einem Quader („liegt in
+  2 losen Stücken“), danach Grundplatte unter beidem vereinigt → ein Stück, der Satz bleibt.
+  **Abnahme:** Test der Brückenfolge an beiden Kernen (Satz mit Zahl 3) und je Code ein Test,
+  dass der Satz am einteiligen Endstand fällt. Bauplan §17.3, §15.
+  Beleg: `bericht-A.md` (M2, N2), Sonden `a_zerfall_teilezahl.py`, `a_schrift_lose_dann_vereint.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch, beide Teile. Nach der Brückenfolge an beiden Kernen 3 Teile ohne Zerfallssatz; `label.fell_apart` bleibt nach der Vereinigung zu einem Teil stehen. Die fünf Codes fehlen weiter in `ONE_PIECE_CODES` (`evaluate.py:1528–1537`).
+  **Umsetzung und Fachnachweise 02.10.:** Die sechs beauftragten Codes verwenden eine
+  nachgewiesene Materialzahl; die übrige Schalen-/Komponentenzählung bleibt getrennt.
+  Der Bohrungshinweis erhält am dreiteiligen Endstand die Zahl 3. Ein belegter
+  einteiliger Körper entfernt den Hinweis; ein unbewiesener Zustand erhält ihn.
+  Die tatsächliche Brückenfolge an beiden Kernen und in beiden Qualitätsstufen,
+  alle fünf registrierten Ausgeber, warme Cachetreffer, Undo/Redo sowie Abbruch
+  sind geprüft. 56 direkte Fälle und der überlappende Nachgang mit 155 gezielten
+  Fachfällen sind grün; ebenso 14 Karten- und 610 Sprach-/Werteprüfungen.
+  [Portabler Beleg](konzepte/nachweise-release-0.5.1/reports/rm327-final-report-parts-2026-10-02.md)
+  mit Rotnachweisen und genauer Abnahmegrenze. Code und Dokumentation sind unabhängig
+  freigegeben; 32 Dokumentprüfungen sind grün. Zwei spätere Wächter des gemeinsamen
+  Baums melden fremde Stellen, die ihre Bearbeiter korrigiert haben; deren Gegenläufe,
+  das vollständige Entwicklungstor und der Commit-/Pushbeleg bleiben offen.
+
+**Nachweis (06.10.2026):** `d5f8306ea` (02.10., in v0.5.2 und v0.5.3; Commitvermerk: der
+gemeinsame Abschlussstand besteht das vollständige Entwicklungstor) mit Tests in
+`tests/test_evaluation.py`, `test_prepare.py`, `test_repair.py`, `test_slot_features.py` und
+`test_brep.py`. `MATERIAL_PART_CODES` in `app/core/scene/evaluate.py` führt alle sechs Codes
+(`bore.splits_the_body`, `label.fell_apart`, `texture.fell_apart`, `parts.hanging_loose`,
+`blend.still_apart`, `sketch.join_apart`), `ONE_PIECE_CODES` schließt sie ein. Die Zeilenangaben
+oben (`evaluate.py:1548`, `:1528–1537`, `:1850–1852`) gelten für den Stand vor dem Fix.
+
+## RM-434: Weiches Verschmelzen prüft die Eingänge vor dem Entwurfsbudget (06.10.2026)
+
+<a id="rm-434-weiches-verschmelzen-prüft-die-eingänge-vor-dem-entwurfsbudget-06102026"></a>
+<a id="rm-434"></a>
+
+**RM-434 — Das Entwurfsbudget von Weich verschmelzen übergeht die Eingangsprüfung.**
+  Nachgang zu RM-379, Befund B02 des Reviews am festen Stand `48106c57a`.
+  Zunächst lokal als RM424 vorbereitet; nach dem zentralen Nummernabgleich
+  RM434, weil RM424 auf `origin/main` bereits den Orca-/Prusa-Bettursprung führt.
+  **Fehler:** Der registrierte `blend_union`-Aufruf liest im Entwurf über
+  `draft_grid`/`_grid` die Bounds, bevor die bisherige Volumen-/Dichtheitsprüfung
+  in `blend_bodies` greift. Ein leeres Eingangsnetz führt zu `TypeError` ohne
+  Handlung; derselbe Eingang in `fine` zu `NotManifoldError` mit Reparaturweg.
+  Ein häufiger nativer Kundenweg mit einem leeren Szenenobjekt ist damit nicht belegt.
+  **Fix:** Die bestehende Eingangsprüfung gemeinsam vor Bounds und Budgetentscheidung
+  ausführen; keine zweite Validierungsregel. Gültige Rasterentscheidungen erhalten.
+  **Abnahme:** Tatsächliche registrierte Op, leeres erstes/zweites/beide Netze,
+  offene und volumenlose Eingänge in beiden Güten: fachliche Absage mit Handlung,
+  kein Abstandsfeld. Gesunde Gegenfälle unter und über dem Entwurfsbudget unverändert.
+  Bauplan §31, Regel 17.
+  **Umgesetzt und fachlich freigegeben 02.10.:** Drei tatsächliche leere
+  Entwurfseingänge rot, nach dem Fix alle 18 neuen Fälle und der überlappende
+  Nachgang mit sechs Bestandsfällen grün. Dieselbe bestehende Prüfung steht
+  jetzt vor `_grid`-Bounds und Budget; Cacheversion `blend_union` 4.
+  Ruff/Format/Diffprüfung grün. Der gezielte Mypy-Nachlauf ist nach der Korrektur
+  der fremden Handover-Stelle grün. Vollständiges Tor und Hauptzweigübernahme offen.
+  [Aktueller Fachnachweis](konzepte/nachweise-release-0.5.1/reports/rm434-blend-inputs-2026-10-02.md).
+  [Historischer Review mit Eingaben und Abnahmegrenzen](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie.md),
+  [Messdaten B02](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie-proben.json).
+
+**Nachweis (06.10.2026):** `4af4fb4c9` (02.10., in v0.5.2 und v0.5.3; Commitvermerk:
+vollständiges Entwicklungstor bestanden), Tests in `tests/test_missing_ops.py`. `_grid` in
+`app/core/geom/blend.py` prüft Dichtheit und Volumen vor Bounds und Punktzahl, `draft_grid` ruft
+`_grid`; die Cacheversion von `blend_union` steht inzwischen auf 5.
+
+## RM-365: Stand festschreiben legt die feine Rechnung ab (06.10.2026)
+
+<a id="rm-365-stand-festschreiben-legt-die-feine-rechnung-ab-06102026"></a>
+<a id="rm-365"></a>
+
+**RM-365 — *Festschreiben* einer Formsitzung friert das Entwurfsnetz ein.**
+  Review 02.10.2026, Gebietsprüfung Weg 4 (W4-5), am HEAD `6ce767031`.
+  `app/ui/session.py:2737–2743` schreibt das im Fenster gerechnete Netz fest — das ist die
+  Entwurfsstufe.
+  **Fehlerfall:** Fein vor dem Festschreiben 9 974 Dreiecke, 14 433,6 mm³; nach dem
+  Festschreiben 6 964 Dreiecke, 14 056,4 mm³ (−2,6 %), Form bis 0,94 mm verschoben (Median
+  0,03 mm). Der Export wird schlechter als ohne Festschreiben.
+  **Fix:** beim Festschreiben mit `quality="fine"` rechnen.
+  **Abnahme:** Test: Festschreiben ändert Dreieckszahl und Volumen der feinen Auswertung nicht.
+  Bauplan §31, §2.2.
+  Belege: `gebiet-weg4.md`, Sonde `w4_einbacken_entwurf.py`.
+
+**Nachweis (06.10.2026):** `337dcf670` (03.10., in v0.5.2 und v0.5.3): *Stand festschreiben*
+rechnet fein wie Export und Druck, im `_BakeWorker` mit Fortschritt und *Abbrechen*; übernommen
+wird nur, wenn der Schritt noch derselbe ist. An der Figur aus Weg 4 sind die Ecken danach
+bitgleich mit der feinen Auswertung. Tests
+`tests/test_sculpt_session.py::test_baking_keeps_the_fine_result` und
+`::test_baking_in_the_window_runs_beside_it_and_keeps_the_fine_result`; beide sind Fenstertests
+und liefen im Release-Tor von 0.5.3 mit (Taglauf 37409338027, alle Fensterdateien grün).
+
+## RM-381: Boolesche an Mehrschalern rechnen wieder schnell und lassen sich abbrechen (06.10.2026)
+
+<a id="rm-381-boolesche-an-mehrschalern-rechnen-wieder-schnell-und-lassen-sich-abbrechen-06102026"></a>
+<a id="rm-381"></a>
+
+**RM-381 — Boolesche Ops an mehrschaligen Modellen sind seit `eab5f4f47` 8- bis 15-mal langsamer und nicht abbrechbar.**
+  Review 02.10.2026 der Commits bis `3fd3b1ace`, Fund 1. Die Berührungsvorfrage läuft jetzt ohne
+  Paarbudget (`app/core/geom/boolean.py:490–496`); damit entfällt der Frühabbruch in
+  `repair.py:1459–1462`, und die Schleife `:1466–1485` zählt jeden Kandidaten ab (Zeit fast ganz
+  in der Kandidatenaufzählung: 4,59 s gesamt, davon 0,04 s in `crossing_pairs`). In `drill`,
+  `slot_bore` und `resize_bore` kommt kein `cancelled` an (`prepare.py:892`, `:1086`, `:1858`,
+  `:1934`).
+  **Fehlerfall:** `drill_hole` am Besenhalter (`broomholdervcd_d35mm.stl`): vorher 0,29–0,35 s,
+  jetzt 4,33–4,95 s; Mini Golf v17: 0,46–0,56 s → 3,94–4,32 s; Ergebnisse gleich (zwei Runden im
+  Wechsel gegen den Stand `3739d46af`). Im Korpus 2 von 65 mehrschaligen Körpern betroffen. Die
+  4 s lassen sich nicht abbrechen (§2.8).
+  **Fix:** Kandidaten über ein räumliches Raster bzw. einen Hüllquaderindex statt über die
+  Achsenüberdeckung erzeugen; bis dahin ein Deckel, der „unbekannt“ weiterrechnet und es als
+  Befund sagt; `cancelled` bis in die Vorfrage durchreichen.
+  **Abnahme:** Messung `drill_hole` am Besenhalter wieder ≤ 0,5 s (Budget §31, Regressionsschwelle
+  25 %), Abbrechen während der Vorfrage wirkt; Ergebnisse unverändert.
+  Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_besenhalter_zeit.txt`,
+  `r_besenhalter_paare.txt`, `r_korpus_vorfrage.txt`.
+  Review 02.10. (`e3dff1907`): Der neue Trennbeleg (`prepare_ops.py:3716–3724`) ruft die ungebremste Berührungssuche bei jedem Merkmalklick (`app/core/perceive/actions.py:740–748`) und vor `slot_hole` ein zweites Mal — Besenhalter, Bohrung `hole_5`: Merkmalklick 4,75–5,50 s statt 0,01–0,07 s, `slot_hole` 15,2–16,6 s statt 10,8–12,5 s; so lange zeigt das Merkmalfenster keine Handlung. Bis zum Fix den Beleg erst bei *Zum Langloch ziehen* rechnen und das Kontaktergebnis je Netz merken (`sonden\r3_besenhalter_*.txt`).
+  Ergänzung Bibliotheksprüfung 02.10.2026: Ein übersetzter Hüllquader-Sweep braucht am Besenhalter 0,5–0,8 s statt 8,6–19,2 s, an Mini Golf v17 0,3–0,4 statt 8–13 s, bei gleichem Ergebnis; manifold3d (Schnittvolumen je Paar) 0,06–0,47 s, aber nur für gültige Teile und ohne bloße Flächenberührung — als Vorweg, der Sweep als allgemeiner Weg. Beleg `bibliotheken\befunde.md`.
+
+**Nachweis (06.10.2026):** `6d395169c` (02.10.: Vorfrage über zwei Hüllquaderbäume, am
+Besenhalter 14 058 echte Paare statt 55,7 Millionen Grobkandidaten; Abbruch und Kennung bis in
+die Vorfrage; die Antwort merkt sich das Netz, auch für den Trennbeleg im Merkmalfenster) und
+`713e56d9d` (03.10.: jede Bohroperation endet beim Abbruch in ihrem Schnitt), beide in v0.5.2.
+Am HEAD `fc4fc701c` mit der Sonde `r_besenhalter_zeit.py` gemessen (unter Fremdlast, nicht auf
+ruhiger Maschine): `drill_hole` am Besenhalter 0,27–0,28 s in Entwurf und Fein, Mini Golf v17
+0,43–0,48 s; Volumen und Befunde gleich dem Stand vor `eab5f4f47`. Abbruch:
+`tests/test_prepare.py::test_a_cancel_at_the_cut_stops_every_bore_operation` und
+`tests/test_boolean.py::test_cancelling_during_the_parts_preflight_stops_the_bore` grün.
+
+## RM-382: Ein Mehrschaler hält nur noch am Treffer der selbstkreuzenden Schale (06.10.2026)
+
+<a id="rm-382-ein-mehrschaler-hält-nur-noch-am-treffer-der-selbstkreuzenden-schale-06102026"></a>
+<a id="rm-382"></a>
+
+**RM-382 — Ein Mehrschaler mit einer selbstkreuzenden Schale lässt sich seit `eab5f4f47` gar nicht mehr bearbeiten.**
+  Review 02.10.2026 der Commits bis `3fd3b1ace`, Fund 2. `app/core/geom/boolean.py:214–225` hält
+  vor Stufe 1, gleich wo das Werkzeug ansetzt; der Satz „Dieser Schritt ließ sich mit diesen
+  Körpern nicht zuverlässig berechnen.“ nennt keinen Grund und keinen Ausweg. Nur 14 von 114
+  Aufrufen der Netz-`boolean()` übergeben `object_ids`. Das kehrt die im Register dokumentierte
+  RM-253-Entscheidung um (Registerzeile RM-253 und Eintrag; ein dort genannter Test wurde
+  entfernt).
+  **Fehlerfall:** Echter Laptop-Ständer (21 Teile, 173 592 Dreiecke): `drill_hole` hält an jeder
+  Stelle mit `object_id=None` und `correct_input`/`cancel`, auch wo die Bohrung nichts trifft;
+  vor `eab5f4f47` rechnete derselbe Schritt mit `boolean.parts_not_united` (Warnung).
+  **Offen für Robert:** Halten nur, wenn das Werkzeug die kaputten Schalen berührt, oder immer?
+  **Fix (unabhängig davon):** Kennung an allen Aufrufen durchreichen und als Pflicht in die Regel
+  (`.claude/rules/operationen.md`); Satz mit Grund und Ausweg (*Stellen zeigen*, *Zerlegen*);
+  §17.2 bzw. die Regel nennen den Halt.
+  **Abnahme:** Test am Laptop-Ständer bzw. einem kleinen Zwilling: Bohrung abseits der kaputten
+  Schale rechnet (oder hält nach Roberts Entscheidung) — in jedem Fall mit `object_id` und einem
+  Satz mit Grund und Handlung. Bauplan §2.7, Regel 17.
+  Belege: `review-3fd3b1ace.md`, Sonde `r_laptopstaender.txt`.
+  **Entscheidung Robert 02.10.2026:** „Das Beste für Kunden, damit sie bearbeiten können.“ Umgesetzt heißt das: Gehalten wird nur, wenn das Werkzeug eine selbstkreuzende Schale tatsächlich berührt (Hüllquader- und dann Schnittprüfung gegen die kaputten Schalen). Trifft es nur intakte Schalen, rechnet der Schritt wie vor `eab5f4f47` und meldet die kaputte Schale als Warnung mit *Stellen zeigen* und *Reparieren*. Hält er doch, nennt der Satz die Schale und bietet *Reparieren*, *Stellen zeigen*, *Abbrechen* an, mit `object_id`. Abnahme damit: Bohrung abseits der kaputten Schale am Laptop-Ständer rechnet mit Warnung; Bohrung durch die kaputte Schale hält mit Kennung, Grund und Handlungen.
+
+**Nachweis (06.10.2026):** `6d395169c` (02.10., in v0.5.2) setzt Roberts Entscheidung um:
+Gehalten wird nur, wo ein Werkzeug eine selbstkreuzende Schale trifft
+(`CROSSING_SHELL_IN_THE_WAY` mit Grund, Ort, Kennung und *Stellen zeigen*, *Eingabe
+korrigieren*, *Abbrechen*; der Satz rät, den Schritt anders zu setzen oder das Teil im
+Netzprogramm zu reparieren; Regel in `.claude/rules/operationen.md`). Abseits rechnet der
+Schritt mit der Warnung `boolean.parts_not_united`. Tests in `tests/test_boolean.py` grün:
+`test_a_tool_at_the_crossing_shell_stops_with_its_body_and_place`,
+`test_a_step_away_from_the_crossing_shell_computes_and_says_so`,
+`test_drill_hole_on_the_laptop_twin_keeps_its_body_either_way`,
+`test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`. Am echten Laptop-Ständer am
+06.10.: `hole_1` bis `hole_4` rechnen mit `boolean.parts_not_united`, `hole_11` hält mit dem
+Satz zur sich selbst kreuzenden Oberfläche. Dass §17.2 den Halt nennt, steht mit Ansage bei
+[RM-385](ROADMAP.md#rm-385); die übrigen Fehlbilder am Original bei [RM-253](ROADMAP.md#rm-253).
+
+## RM-383: Viele getrennte Teile halten keine Boolesche mehr an (06.10.2026)
+
+<a id="rm-383-viele-getrennte-teile-halten-keine-boolesche-mehr-an-06102026"></a>
+<a id="rm-383"></a>
+
+**RM-383 — Über 256 Schalen hält jede Boolesche, auch an getrennten Teilen.**
+  Review 02.10.2026 der Commits bis `3fd3b1ace`, Fund 4. `app/core/geom/repair.py:1364` wirft bei
+  mehr als `CROSSING_PARTS_MAX` (256) Teilen sofort `GeometryError` mit dem Rat „vereinigen Sie sie
+  in Ihrem CAD- oder Netzprogramm“, ohne `object_id`.
+  **Fehlerfall:** 300 getrennte Würfel: `drill_hole`, `subtract_objects` und `union_objects`
+  halten; vor `eab5f4f47` richtig gerechnet; 200 Würfel rechnen weiter.
+  **Fix:** Die Teilezahl allein ist kein Grund zu halten — die Vorfrage über den räumlichen Index
+  (RM-381) auch für viele Teile; wo sie wirklich nicht reicht, Halt mit Kennung und einem Rat, der
+  zum Fall passt.
+  **Abnahme:** Test 300 getrennte Würfel: Bohren durch einen Würfel rechnet, Volumen stimmt.
+  Bauplan §2.7, Regel 17. Beleg: Sonde `r_vielteile_bohren.txt`.
+
+**Nachweis (06.10.2026):** `6d395169c` (in v0.5.2): `CROSSING_PARTS_MAX` gilt nur noch für die
+Nachfrage beim Einlesen; wer die vollständige Antwort braucht (`require_complete`), sucht ohne
+diese Grenze über die Hüllquaderbäume (`app/core/geom/repair.py`). Tests
+`tests/test_boolean.py::test_three_hundred_separate_parts_do_not_stop_a_boolean` (300 Würfel,
+Stab durch den ersten: 2 398 bzw. 2 408 mm³, 300 Teile) und
+`tests/test_repair.py::test_a_complete_crossing_search_is_not_limited_by_the_part_count` grün.
+
+## RM-419: Die Durchstichprüfung sucht je Zugbereich und bietet Zug zurücknehmen (06.10.2026)
+
+<a id="rm-419-die-durchstichprüfung-sucht-je-zugbereich-und-bietet-zug-zurücknehmen-06102026"></a>
+<a id="rm-419"></a>
+
+**RM-419 — Die neue Durchstichprüfung macht den Formschritt bis 130-mal langsamer.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-364 (archiviert). Die Befunde
+  `pierced` und `thin_wall` kommen jetzt richtig (auch an Zwillingen).
+  **Fehlerfall:** `crossing_face_pairs` läuft über den Hüllquader aller bewegten Punkte
+  (`app/core/geom/sculpt.py:768`, `:836`) ohne Fortschritt. Kugel 328 k Dreiecke, sechs Züge R 5:
+  0,22 → 28,7–31,8 s; ein Zug R 25: 0,3 → 9–10 s; Korpusfigur 268 k Dreiecke: 0,23 → 2,66 s. Jede
+  Auswertung des Formschritts zahlt es (§31).
+  **Weitere Reste:** Als Handlung gibt es nur *Stelle zeigen* (*Zug zurücknehmen* fehlt); die
+  Exportprüfung meldet den Durchstich weiterhin nicht.
+  **Fix:** Paare nur zwischen bewegten Dreiecken und ihrer Umgebung prüfen (je Zug, nicht über den
+  Gesamthüllquader), Ergebnis merken, `ctx.progress`; Handlung *Zug zurücknehmen*; Durchstich auch
+  in der Exportprüfung.
+  **Abnahme:** Messung an Kugel (sechs Züge R 5) und der Korpusfigur: höchstens 25 % über dem Stand
+  vor `cd4875450`; Befunde unverändert. Bauplan §31, §17.3, §2.7.
+  Belege: `F:\solidon-review-reports\verif-4cf460e87-geometrie.md`, Sonden `v4g_rm364_*`.
+
+**Nachweis (06.10.2026):** `f77576d19` (02.10., in v0.5.2): `crossings_at` sucht je Zugbereich
+nur Paare mit einem bewegten Dreieck (`app/core/geom/intersections.py`); laut Commit im selben
+Prozess gegen den Stand vor `cd4875450` gemessen: Kugel mit sechs Zügen 0,95–1,08, Figur
+0,88–0,89 — unter der Grenze von +25 %. Der Befund nennt den Zug und bietet *Zug zurücknehmen*,
+die Prüfung vor dem Export trägt `sculpt.pierced` weiter (`CARRIED_TO_EXPORT` in
+`app/core/export/writer.py`), der Schritt meldet seinen Fortschritt. Tests
+`tests/test_sculpt.py::test_a_piercing_stroke_can_be_taken_back` und
+`::test_the_sculpt_step_reports_its_progress` grün; die Leistungsmarke in
+`tests/test_performance.py` läuft beim Release.
+
+## RM-428: Gespiegelte Züge teilen sich einen glatten Anteil (06.10.2026)
+
+<a id="rm-428-gespiegelte-züge-teilen-sich-einen-glatten-anteil-06102026"></a>
+<a id="rm-428"></a>
+
+**RM-428 — Spiegelzug nahe der Ebene: Kerbe, verlorene Spiegelgleichheit, doppelte Laufzeit.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-378 (archiviert). Ein Zug genau auf der
+  Ebene wirkt jetzt wie der Einzelzug (5 Körper × 3 Achsen × 6 Pinsel).
+  - **Kerbe:** Ein Einzelzug 1 mm neben der Ebene hinterlässt eine 0,148 mm tiefe Kerbe mit Knick
+    (Steigung ±0,263), ein gezogener Strich mit bis zu 2 mm Versatz 0,093 mm. Ursache:
+    `_strongest_copy` nimmt das Maximum der Kopien (`app/core/geom/sculpt.py:265–290`); verlangt war
+    eine zur Ebene hin ausgeblendete, glatte Gewichtung.
+  - **Spiegelgleichheit verloren:** Ecken genau auf der Ebene wandern zur Seite des Originalzugs
+    (Kneifen 0,426 mm, Auftragen 0,043 mm, vorher 0) — bei gleichem Gewicht gewinnt immer Kopie 0
+    (`sculpt.py:279`).
+  - **Laufzeit im Qt-Hauptthread:** Der Formeditor rechnet je Klick alle Züge neu (`_on_sculpt` →
+    `apply_strokes`, `app/ui/main_window.py:11544`); am §31-Netz mit 1000 Zügen Symmetrie X 0,277 →
+    0,509 s, xyz 0,836 → 2,176 s (verbindet sich mit RM-366).
+  - **Tests:** Der neue Test fährt nur Auftragen; „weit weg doppelt“ fehlt darin.
+  **Abnahme:** Zug 1 mm und 2 mm neben der Ebene ohne Kerbe (Profil stetig); Ecken auf der Ebene
+  bleiben auf der Ebene; Laufzeit nicht über dem Stand vor `a3213c72c` + 25 %; Tests für alle Pinsel.
+  Belege: `verif-70e9b3145-geometrie.md`, Sonden `v5g_rm378_*`.
+
+**Nachweis (06.10.2026):** `f77576d19` ersetzt „stärkste Kopie je Ecke“ (`_strongest_copy`)
+durch einen geteilten glatten Anteil: keine Kerbe neben der Ebene, spiegelgleiches Ergebnis,
+weit weg bitgleich wie vor RM-378. 1000 Züge mit Symmetrie X und XYZ liegen laut Commit 1,2- bis
+1,25-fach über dem Stand vor `a3213c72c` (vorher 1,8 und 2,6), also genau an der Grenze von
++25 %. `8440db6f7` nimmt die Neuberechnung je Klick aus dem Hauptfaden (RM-366). Tests in
+`tests/test_sculpt.py` grün: `test_a_stroke_beside_the_mirror_plane_stays_mirror_equal`,
+`test_a_stroke_beside_the_mirror_plane_leaves_no_notch`,
+`test_every_brush_acts_once_on_the_mirror_plane`,
+`test_every_brush_far_from_the_mirror_plane_acts_on_both_sides` (alle sechs Pinsel). Der
+Fehlerfall S01 aus RM-425 ist damit ebenfalls behoben; seine bleibenden Tests führt
+[RM-425](ROADMAP.md#rm-425).
+
+## RM-454: Die Etappenentscheidung fragt jeden Spiegelort (06.10.2026)
+
+<a id="rm-454-die-etappenentscheidung-fragt-jeden-spiegelort-06102026"></a>
+<a id="rm-454"></a>
+
+**RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben.**
+  Quellenreview der parallelen Claude-Lieferung `105b2ba0d` am Stand
+  `18c76d96b`: Die neue zweite Trefferprüfung in `sculpt._surface_for`
+  berücksichtigt nur den Originalpunkt, die Auswertung dagegen auch
+  Spiegelpunkte. Erreicht ausschließlich eine Spiegelkopie einen bereits
+  verschobenen Eckpunkt, kann die erforderliche neue Etappe entfallen.
+  Der genaue asymmetrische Prismengegenfall und die Korrekturrichtung stehen
+  in `konzepte/nachweise-release-0.5.1/reports/remote-18c76-sculpt.md`.
+  **Offen:** Gegenfall ausführen, Etappenentscheidung und Auswertung an
+  dieselben Spiegelorte binden und den tatsächlichen Zug nachprüfen.
+  Dies ist ein quellenbelegter, noch nicht ausgeführter Gegenfall; die
+  Archivierung von RM-442 belegt seine Freigabe nicht. Keine neue Umsetzung
+  im begrenzten Codex-Abschluss; als Folgeprüfung für Claude dokumentiert.
+  Review 02.10.: bestätigt über die Oberfläche — mit X-Symmetrie wirkt ein Zug nicht, wenn nur seine Spiegelkopie die eben verformte Fläche greift, der Bericht nennt ihn verfehlt (gleich wie in v0.5.1). Beleg Fall C in `F:\solidon-review-reports\sonden\v8k_rm442_ui.py`.
+
+**Nachweis (06.10.2026):** Kern `f77576d19`: Ob ein Zug eine eigene Etappe braucht, fragt jeden
+Spiegelort um dieselbe Mitte wie die Auswertung. Fenster `8440db6f7`: Die Leiste *Symmetrie*
+reicht ihre Spiegelung an `stroke_at`. Der Gegenfall steht als Test:
+`tests/test_sculpt.py::test_a_mirrored_stroke_that_reaches_only_the_sculpted_face_gets_its_stage`
+(grün) und der Fenstertest
+`tests/test_sculpt_session.py::test_the_session_mirror_reaches_the_stage_decision_in_the_window`
+(Release-Tor 0.5.3).
+
+## RM-136: Fensterschema, Alttexte und Handbücher sind mit 0.5.2 und 0.5.3 erzeugt (06.10.2026)
+
+<a id="rm-136-fensterschema-alttexte-und-handbücher-sind-mit-052-und-053-erzeugt-06102026"></a>
+<a id="rm-136"></a>
+
+**RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren.** Das gezeichnete
+  Fensterschema an Projektkopfzeile, Operationsbereich und aktuelle Auswahlspalte anpassen; Bild,
+  Bildunterschrift und Alternativtext müssen dasselbe erklären. Abnahme: alle sechs Sprachen, danach
+  beim nächsten betroffenen Release nur erforderliche Abbildungen/Handbücher/PDFs neu erzeugen.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-durchsicht-des-07092026).
+  Registerabgleich 02.10.: teilweise erledigt — Quelle nachgezogen, Erzeugung lief (`window.svg` gleicht in allen sechs Sprachen dem Code, `401d35299`); Statuszeichen wäre `[~]`, „Erzeugung beim Release“ in der Registerzeile ist veraltet.
+
+  **Teilstand 03.10.2026 (Codex-Linien, übernommen von Claude):** Die 12 Fenster-SVGs (sechs
+  Sprachen, hell und dunkel) gleichen dem Generator in `core/figures.py`, alle sechs HTML-Alttexte
+  dem vollständigen `Figure.alt`; der Kontaktbogen ist angesehen. Gefunden: Lange Berichtstitel
+  liefen in Spanisch und Portugiesisch aus der Spalte, `_window` bricht sie jetzt um. Nur die 12
+  Fenster-SVGs sind neu erzeugt, `stamp_page` hat je Seite zwei Bildverweise erneuert. Bestand 18/18
+  Bedingungsarten, 12/12 SVG, 6/6 Alttexte. Belege unter
+  `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `construction-ui.md` (RM-136),
+  `construction-docs.json`, `window-six-languages.png`.
+
+**Nachweis (06.10.2026):** Quelle mit `401d35299` und dem Teilstand 03.10. (12 Fenster-SVGs,
+sechs Alttexte, Umbruch langer Berichtstitel). Erzeugt mit 0.5.2 (`9b0e93975`: sechs
+Handbuch-PDFs, Fensterbilder) und 0.5.3 (`e31d6cd5d`: sechs PDFs, `website/handbuch.html`,
+`window.svg` und `window-dark.svg` je Sprache). Das Fensterschema zeichnet seit `fdc4d8801` die
+rechte Karte mit den Reitern Auswahl, Prüfbericht und Chat, der Alttext in
+`website/handbuch.html` sagt dasselbe.
+`pytest -m rendered tests/test_manual.py::test_the_drawn_figures_are_the_ones_the_code_draws` am
+06.10.2026: sechs Sprachen grün.
+
+## RM-137: Die Abnahme des Sitzungsendes entfällt, den Hook gibt es nicht mehr (06.10.2026)
+
+<a id="rm-137-die-abnahme-des-sitzungsendes-entfällt-den-hook-gibt-es-nicht-mehr-06102026"></a>
+<a id="rm-137"></a>
+
+**RM-137 — Sitzungsende im tatsächlichen Editorbetrieb abnehmen.** Das tatsächliche SessionEnd
+  beim Ende einer echten Editor-Sitzung beobachten und die Freigabe des Sitzungsgebiets belegen.
+  Abnahme: sichtbarer echter Sitzungsablauf samt wirksamem Benutzer-PATH nach Neustart; eine
+  konfigurierte Terminal-Statuszeile nicht als Desktop-Darstellungsnachweis behandeln.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#zwei-werkzeuge-zwei-wahrheiten-08092026).
+  Registerabgleich 02.10. (Stand `4449e3370`): gegenstandslos — den SessionEnd-Hook gibt es nicht mehr; `22a2d6e29` (09.09., Robert: „alles raus, was mit mehreren Sitzungen zu tun hat“) hat ihn samt Sitzungsbrett entfernt. Als entfallen ins Archiv. Beleg `F:\solidon-review-reports\register-rest.md`.
+
+**Nachweis (06.10.2026):** Entfallen. `22a2d6e29` (09.09., Robert: „alles raus, was mit mehreren
+Sitzungen zu tun hat“) hat den SessionEnd-Hook samt Sitzungsbrett entfernt.
+`.claude/settings.json` trägt am Stand `fc4fc701c` nur `SessionStart`, `PostToolUse` und `Stop`,
+`.codex/hooks.json` dasselbe; auch `0e3538898` (06.10.) hat keinen zurückgebracht.
+
+## RM-234: Die Fensterverträge melden sich auch bei rotem Kern (06.10.2026)
+
+<a id="rm-234-die-fensterverträge-melden-sich-auch-bei-rotem-kern-06102026"></a>
+<a id="rm-234"></a>
+
+**RM-234 — Linux-Fensterabnahme und macOS-Gegenprobe nachweisen.**
+  **Historischer Befund bei RM-186** (Durchsicht 0.5.0, erkennung): Die Fensterdateien
+  laufen seit dem 08.09.2026 nur auf Windows und nur beim Release; der einzige
+  Ubuntu-Job, der sie fährt („Neueste Versionen", nur `schedule` und
+  `workflow_dispatch`), brach am 14.09. vor den Tests ab und blieb am 22.09. an
+  den Kerntests hängen („8 failed"). Wegen `set -euo pipefail` kommt er bei
+  einem roten Kernschritt nie an die Fensterdateien. Ein Befund aus einer
+  Fensterdatei kann damit auf Linux nie gemessen sein — daran hing RM-186. Dazu
+  die offene Gegenprobe auf macOS: Lauf 35775952291 schlug in
+  `test_prepare.py::test_a_widened_countersink_over_the_edge_says_so` fehl,
+  vermutlich der mit `9307a844` behobene Fall. Weg: Kern- und Fensterschritt im
+  Job getrennt laufen lassen und beide Ergebnisse melden; Zusagen, die auf allen
+  Plattformen gelten sollen, als Kerntest (wie der neue RM-186-Test).
+
+  **Nachweis vom 24.09.2026:** Im Lauf `35952849083` besteht der gepinnte
+  Ubuntu-Releasejob `107485122706` die Kernsammlung, 210 Fensterverträge
+  (16 abgewählt) und den Renderer-Schritt. „Neueste Versionen" ist heute ausdrücklich
+  auf die Kernsammlung begrenzt und enthält keinen Fensterschritt; dessen früher
+  geforderte Erreichbarkeit dort passt nicht mehr zum Workflow. Der neue macOS-Kernjob
+  `107485122874` bricht beim Poolhalter durch einen nativen Workerabbruch ab,
+  nicht mit einer Assertion des genannten Senkungstests. **Offen bleiben** die
+  unabhängige Ergebnismeldung der Fensterverträge auch bei rotem Kernschritt und
+  ein vollständig grüner macOS-Lauf mit dem Senkungstest. **Nachtrag 24.09.:** Der tatsächliche
+  Taglauf `35982366247` besteht auch auf macOS mit 16.947 Kerntests, 210 Fensterverträgen
+  und drei Renderertests. Der vorherige native GEOS-Absturz ist behoben (`fb53de3c`).
+  Die unabhängige Ergebnismeldung bei rotem Kern bleibt als eigener Rest offen. Kein Gesamtabschluss
+  aus dem grünen Ubuntu-Kern allein. Belege und Grenzen:
+  `konzepte/nachweise-release-0.5.0/reports/codex-ci-35952849083-unix-packages.md`.
+
+  **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Der Rest ist im Workflow gebaut:
+  `window-contracts` ist seit `0a0e4eef0` ein eigener Job ohne `needs`, ein roter
+  Kernteil hält ihn nicht an, und `78e151e85` schreibt Sammel- und Fensterfehler ins
+  Protokoll. Offen ist allein der Nachweis an einem echten Lauf, in dem der Kern rot und
+  die Fensterverträge trotzdem gemeldet sind.
+
+**Nachweis (06.10.2026):** Lauf 37362250510 (05.10.2026, Handstart auf `diag/release-probe`,
+Stand `17236c6dc`): *Suite (macos-latest, Teil 1)* rot mit „1 failed, 7360 passed, 36 skipped“
+(Job 111939408586), daneben haben alle drei Fensterverträge gemeldet, etwa *Fensterverträge
+(ubuntu-24.04)* mit „4 failed, 287 passed, 105 deselected“ samt `reports/contracts/summary.md`
+(Job 111939408024). `window-contracts` hat weiter kein `needs` (`.github/workflows/build.yml`,
+gebaut mit `0a0e4eef0` und `78e151e85`). Im Taglauf 37409338027 (v0.5.3) sind Kern und
+Fensterverträge auf allen drei Plattformen grün.
+
+## RM-313: Der Versionswächter liefert seit v0.5.2 echte Ergebnisse (06.10.2026)
+
+<a id="rm-313-der-versionswächter-liefert-seit-v052-echte-ergebnisse-06102026"></a>
+<a id="rm-313"></a>
+
+**RM-313 — Der Wächter „Neueste Versionen“ liefert im privaten Repository nichts.** Aus
+  dem Aufräumen vom 29.09.2026 (Bericht Werkzeuge 6.1). Der Montagsjob `latest` lief seit
+  dem 07.09.2026 ohne Ergebnis: zweimal mit null Schritten (Abrechnungsablehnung im privaten
+  Repository), einmal abgebrochen. Der Wochenplan ist entfernt; `latest` läuft jetzt an
+  `v*`-Release-Tags oder bei ausdrücklich gesetztem `check_latest`-Handstart und bleibt ohne
+  Abhängigkeit von den Pflichtjobs. Die Vertragssicherung in
+  `test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build` prüft, dass
+  kein Zeitplan mehr existiert und beide Auslöser erhalten bleiben. Ein echter Ergebnisbericht
+  folgt beim nächsten öffentlichen Release; dafür wurde kein Release gestartet.
+
+**Nachweis (06.10.2026):** Am Tag `v0.5.2` lief „Neueste Versionen“ zum ersten Mal mit Ergebnis
+(Taglauf 37266459831, Job 111624232901, grün: 23 977 bestanden, 48 übersprungen, 1 xpassed). Am
+Tag `v0.5.3` (Taglauf 37409338027, Job 112101793411) meldete er „11 failed, 24281 passed, 48
+skipped, 1 xpassed“, Bericht als Artefakt `tests-latest-ubuntu` gesichert; alle elf Fehler in
+`tests/test_licence_notices.py`: `cadquery-ocp-novtk 8.0.1.1.0` passte nicht zur
+festgeschriebenen Lizenztextfassung für 8.0.1.0.0, behoben mit `036021393`. Der rote Job sperrt
+die Signierung nicht mehr ([RM-350](#rm-350)); die neue Fassung gehört in den nächsten
+Bibliothekslauf ([RM-467](ROADMAP.md#rm-467)).
+`tests/test_packaging.py::test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build`
+besteht am 06.10.2026.
+
+## RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)
+
+<a id="rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026"></a>
+<a id="rm-387"></a>
+
+**RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet.**
+  Review 02.10.2026, Registerabgleich „Bedienung und Darstellung“, am HEAD `4449e3370`.
+  - **Bezeichner:** `app/ui/main_window.py:19865–19887` (`_on_import_finished`,
+    `_on_import_confirmed`) benutzt die Variablen `eingelesen` und `geladen` — Verstoß gegen die
+    Sprachregel (`AGENTS.md`, Bezeichner englisch). `tests/test_language_rules.py` findet sie
+    nicht, weil die kuratierte Liste nur `gelesen` als ganzes Wort kennt. Fix: umbenennen (etwa
+    `imported`, `downloaded`) und die Stämme `eingelesen`/`geladen` (bzw. `lesen`, `laden`, wo
+    das ohne Fehltreffer geht) in `GERMAN_STEMS` eintragen; der Wächter muss mit der alten
+    Schreibweise rot werden.
+  - **Abbildung:** `website/handbuch/en/fit.svg` und `fit-dark.svg` (Stand 05.09.) zeigen noch
+    „Play 0.25 mm“; der Katalog übersetzt seit 0.5.1 „Clearance“.
+    `tests/test_manual.py::test_the_drawn_figures_are_the_ones_the_code_draws[en]` (Marker
+    `rendered`, nur beim Release) wird dadurch rot. Fix: beim nächsten Release die geänderten
+    Abbildungen mit `tools/make_manual.py` neu erzeugen (Weg in `/erzeugen`).
+  **Abnahme:** Sprachwächter rot gegen die alte Schreibweise, grün nach dem Umbenennen; der
+  Abbildungstest `[en]` grün beim Release. Beleg:
+  `F:\solidon-review-reports\register-bedienung.md`.
+  Teil Bezeichner erledigt mit `bd7f11180` (02.10.2026): `eingelesen`/`geladen` in `app/ui/main_window.py` heißen `imported`/`downloaded`, die Stämme stehen in `GERMAN_STEMS`; Gegenprobe rot an genau den drei alten Stellen. Offen bleibt der Teil `fit.svg` (Erzeugung beim nächsten Release).
+
+**Nachweis (06.10.2026):** Bezeichner mit `bd7f11180` (02.10.): `imported`/`downloaded` statt
+`eingelesen`/`geladen`, beide Stämme in `GERMAN_STEMS` (`tests/test_language_rules.py`),
+Gegenprobe rot an den drei alten Stellen. Abbildung mit 0.5.2 neu erzeugt (`9b0e93975`):
+`website/handbuch/en/fit.svg` und `fit-dark.svg` zeigen „Clearance 0.25 mm“.
+`pytest -m rendered tests/test_manual.py::test_the_drawn_figures_are_the_ones_the_code_draws` am
+06.10.2026: sechs Sprachen grün, `[en]` eingeschlossen.
