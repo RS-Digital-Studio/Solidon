@@ -37,7 +37,10 @@ Dialogs“ und „Bedingte Felder“.
 - **Eine Null mit Bedeutung trägt ihren Namen** (`param(zero_text=…)`, nur bei
   Mindestwert 0, angezeigt über `setSpecialValueText`): „automatisch“, „ohne“,
   „aus dem Material“ — die Wörter stehen als `ZERO_*` in `registry/params.py`,
-  `test_registry_consistency` sucht jedes `doc`, das die Null erklärt.
+  `test_registry_consistency` sucht jedes `doc`, das die Null erklärt. An einem
+  `optional`-Feld nennt `zero_text` den leeren Zustand („Oberkante“, sonst „wie
+  gemessen“); dort ist die Null eine Zahl. Ein geleertes Feld mit Sondertext
+  nimmt den Sonderwert an (`labels._BoundedBehavior`).
 - **„fx“ steht nur, wenn das Projekt Parameter hat oder das Feld einen Ausdruck
   trägt**; „=“ und „@“ im Zahlenfeld führen weiter in den Ausdruck.
 - **Die Vorgabe trifft den Körper, nicht den Ursprung:** *Teilen* in seiner

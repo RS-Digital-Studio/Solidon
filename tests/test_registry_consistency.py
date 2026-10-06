@@ -1248,8 +1248,11 @@ def test_every_zero_that_means_something_has_a_name() -> None:
 def test_a_named_zero_stands_where_the_dialog_can_show_it() -> None:
     """Der Name erscheint am Mindestwert (``setSpecialValueText``) — also nur dort, wo der null ist.
 
-    An einem Feld, das darunter reicht oder „nicht gesagt“ kennt, stünde er nie
-    da: eine Angabe ohne Wirkung. Die Ausnahmeliste hält ihre Gründe aktuell.
+    An einem Feld, das darunter reicht, stünde er nie da: eine Angabe ohne
+    Wirkung. Ein Feld, das „nicht gesagt“ kennt, trägt seinen Sonderwert eine
+    Stufe unter dem Mindestwert; dort nennt der Name den leeren Zustand
+    (RM-526), gleich wo der Mindestwert liegt. Die Ausnahmeliste hält ihre
+    Gründe aktuell.
     """
     load_operations()
     misplaced = sorted(
@@ -1259,9 +1262,7 @@ def test_a_named_zero_stands_where_the_dialog_can_show_it() -> None:
         if entry.zero_text
         and (
             entry.kind not in {"float", "int"}
-            or entry.optional
-            or entry.minimum is None
-            or entry.minimum != 0
+            or (not entry.optional and (entry.minimum is None or entry.minimum != 0))
         )
     )
     assert not misplaced, f"zero_text ohne Mindestwert null: {misplaced}"

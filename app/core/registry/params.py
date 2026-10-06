@@ -47,7 +47,8 @@ NAME_DOC: Final = _("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt
 #: die an einer Stelle steht, sollte auch an einer Stelle erklärt werden.
 AUTO_FROM_PROFILE_DOC: Final = _("Null heißt: Wert aus dem gewählten Materialprofil.")
 
-#: Wie eine Null im Zahlenfeld heißt (``param(zero_text=…)``, RM-513).
+#: Wie eine Null im Zahlenfeld heißt (``param(zero_text=…)``, RM-513) — oder,
+#: an einem ``optional``-Feld, sein leerer Zustand (RM-526).
 #:
 #: Wenige Wörter für viele Felder, damit dieselbe Bedeutung überall gleich
 #: heißt. Der Kontext trennt sie von gleichlautenden Beschriftungen; „ohne“
@@ -59,6 +60,8 @@ ZERO_MEASURED: Final = _("wie gemessen", context="Nullwert")
 ZERO_UNCHANGED: Final = _("unverändert", context="Nullwert")
 ZERO_THROUGH: Final = _("durchgehend", context="Nullwert")
 ZERO_AS_CHOSEN: Final = _("wie gewählt", context="Nullwert")
+ZERO_TOP_EDGE: Final = _("Oberkante", context="Nullwert")
+ZERO_BODY_CENTRE: Final = _("Körpermitte", context="Nullwert")
 
 #: Der Titel des Maßes, das zwei Flächen auf Abstand hält.
 PLAY_TITLE: Final = _("Spiel")
@@ -163,7 +166,8 @@ def param(
     :attr:`app.core.types.ParamSpec.dropped_on_change`.
 
     ``zero_text`` nennt, was die Null eines Zahlenfelds bedeutet
-    („automatisch“, „ohne“) — siehe :attr:`app.core.types.ParamSpec.zero_text`.
+    („automatisch“, „ohne“), an einem ``optional``-Feld, was leer bedeutet
+    („Oberkante“) — siehe :attr:`app.core.types.ParamSpec.zero_text`.
     """
     metadata = {
         _METADATA_KEY: {

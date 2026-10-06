@@ -1985,7 +1985,8 @@ class ParamSpec:
 
     Der Wert reist als ``null`` in der Projektdatei, fehlt im Werkzeugschema
     des Agenten als Pflichtfeld und steht im Dialog als leeres Feld mit einem
-    Sondertext am Mindestwert."""
+    Sondertext am Mindestwert — „wie gemessen“, oder was :attr:`zero_text`
+    nennt."""
     internal: bool = False
     """Ein Marker, den eine Migration setzt, und kein Feld für den Kunden.
 
@@ -2020,7 +2021,13 @@ class ParamSpec:
     sagt die Null etwas anderes als null Millimeter, und im Feld stand
     „0,00 mm“ (RM-513). Der Dialog zeigt den Namen am Mindestwert
     (``setSpecialValueText``) — deshalb nur an Feldern mit Mindestwert 0;
-    ``tests/test_registry_consistency.py`` hält beides."""
+    ``tests/test_registry_consistency.py`` hält beides.
+
+    **An einem ``optional``-Feld heißt so der leere Zustand** (RM-526): Dort
+    steht der Sonderwert eine Stufe unter dem Mindestwert, und ohne eigenen
+    Namen hieße er „wie gemessen“. Die Höhe der Öffnung eines Deckels ist eine
+    Welthöhe, in der die Null eine Zahl ist wie jede andere; leer heißt dort
+    „Oberkante“."""
 
 
 @runtime_checkable

@@ -200,8 +200,8 @@ def test_an_opening_below_the_bed_keeps_its_stated_height(profile: Profile, op: 
     Für den Namen der Null („Oberkante“) bekam das Feld ``minimum=0``; ein
     Projekt aus 0.5.2 mit eingetippter negativer Höhe hielt danach am Schritt
     an — „Der Wert liegt unter dem zulässigen Mindestwert“ (Durchsicht 0.5.3,
-    Fund 9). Die Null nennt der Satz des Feldes; die Grenze trägt alte
-    Projekte.
+    Fund 9). Seit RM-526 heißt der leere Zustand „Oberkante“; die Grenze trägt
+    alte Projekte.
     """
     from app.core.registry.params import validate
 
@@ -216,6 +216,35 @@ def test_an_opening_below_the_bed_keeps_its_stated_height(profile: Profile, op: 
     body = make_lid(entry, profile, thickness=2.4, collar=4.0, z=-10.0).outputs[1].mesh
 
     assert body.bounds.maximum[2] == pytest.approx(OUTER[2] - 40.0 + 2.4), "auf dem Rand"
+
+
+@pytest.mark.parametrize("op", ["create_lid", "screw_lid"])
+def test_an_empty_height_is_the_top_edge_and_zero_is_the_bed(profile: Profile, op: str) -> None:
+    """Leer heißt Oberkante, und die Null ist eine Höhe wie jede andere (RM-526).
+
+    Bis Format 46 hieß ``z = 0`` „Oberkante“; eine Öffnung auf Höhe des Betts ließ
+    sich deshalb nicht sagen. Ein Gehäuse 20 mm unter dem Bett schneidet die
+    Ebene null mitten im Hohlraum: Leer bekommt es den Deckel auf seinem Rand bei
+    10 mm, mit null auf Höhe des Betts.
+    """
+    from app.core.registry.params import validate
+
+    spec = REGISTRY.get(op).params
+    assert validate(spec, {}).z is None, "die Vorgabe ist leer"
+    assert validate(spec, {"z": None}).z is None
+    assert validate(spec, {"z": 0.0}).z == 0.0, "die Null bleibt eine Zahl"
+    if op != "create_lid":
+        return
+    below = housing()
+    moved = below.mesh.raw.copy()
+    moved.apply_translation((0.0, 0.0, -20.0))
+    entry = dataclasses.replace(below, mesh=MeshData.of(moved))
+
+    top = make_lid(entry, profile, thickness=2.4, collar=4.0).outputs[1].mesh
+    bed = make_lid(entry, profile, thickness=2.4, collar=4.0, z=0.0).outputs[1].mesh
+
+    assert top.bounds.maximum[2] == pytest.approx(OUTER[2] - 20.0 + 2.4), "auf dem Rand"
+    assert bed.bounds.maximum[2] == pytest.approx(2.4), "auf Höhe des Betts"
 
 
 def test_a_lid_without_a_collar_is_a_plate(profile: Profile) -> None:

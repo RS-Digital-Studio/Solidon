@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)](#rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
 | 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
@@ -43027,3 +43028,43 @@ Skizzenmodus am echten Gerät — geht in RM-070 auf, das ihn in seiner Register
 **Entfallen (06.10.2026, Entscheidung Robert):** Gebraucht werden nur noch die Dateien der
 Druckprojekte, und die liegen in `F:\3D Dateien`; das Repository „3D Drucker“ braucht keine
 eigene Sicherung.
+
+## RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)
+
+<a id="rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026"></a>
+<a id="rm-526"></a>
+
+**RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich.** Seit RM-513
+  hieß die Null in `create_lid.z` und `screw_lid.z` „Oberkante“, getragen von `minimum=0`;
+  damit hielten alte Projekte mit negativer Öffnungshöhe am Schritt an. Für 0.5.3 ist die
+  Grenze zurückgenommen (Durchsicht Kern, Fund 9), und hinter der Klappe steht die Null wieder
+  als Zahl. **Fix:** `z` als optionale Koordinate, leer heißt Oberkante, Migration 0 → leer
+  (Checkliste „Dateiformat ändern“). **Abnahme:** alte Projekte mit 0 und mit negativer Höhe
+  öffnen und rechnen gleich, das Feld zeigt „Oberkante“, wenn es leer ist.
+
+**Umsetzung:** `create_lid.z` und `screw_lid.z` sind `optional` (Vorgabe leer) und
+tragen `zero_text` „Oberkante“ (`registry.params.ZERO_TOP_EDGE`); an einem
+`optional`-Feld nennt `zero_text` seitdem den leeren Zustand, sonst „wie gemessen“
+(`ParamSpec.zero_text`, `test_registry_consistency`). `lid.plane_of` nimmt ohne Zahl die
+Oberkante, jede Zahl ist eine Welthöhe, die Null das Bett. Format 47: Die Migration
+`_empty_the_top_edge` leert eine gespeicherte Null, auch in den Fassungen einer
+Änderung; ein Ausdruck bekommt `legacy_zero_top` und liest eine Null bei jeder
+Auswertung wie damals als Oberkante (`lid.stated_height`), bis jemand den Schritt
+ändert. Cache-Versionen `create_lid` 6, `screw_lid` 7. Ein geleertes Zahlenfeld mit
+Sondertext nimmt den Sonderwert an, über Eingabetaste und Fokuswechsel
+(`labels._BoundedBehavior._empty_is_special`); vorher stellte Qt still die vorige Zahl
+zurück, und zurück zur „Oberkante“ ging es nur mit dem Pfeil eine Million Millimeter
+tief. Mitbehoben: Drehpunkte zeigen leer „Körpermitte“, die freie Stelle und die
+Kanalhöhe „automatisch“ statt „wie gemessen“.
+
+**Nachweis:** `tests/data/projects/lid_top_edge_v46.p3d` vom Stand davor
+(`65e3ec97b`) geschrieben: Deckel und Drehdeckel bei null, ein Deckel bei -10 an einem
+Gehäuse unter dem Bett, eine Änderung der Stärke. Nach der Migration rechnen alle
+sechs Körper wie gespeichert, ohne Migration hielte der Deckel an
+(`test_project.py::test_v46_lids_at_zero_keep_the_top_edge`); der Ausdruck trägt den
+Marker (`test_v46_a_height_expression_keeps_reading_zero_as_the_top_edge`); leer und
+null an einem Gehäuse 20 mm unter dem Bett (`test_lid.py::test_an_empty_height_is_the_top_edge_and_zero_is_the_bed`);
+Fenstertests `test_a_named_zero_shows_its_name` und
+`test_an_emptied_field_takes_its_named_value` (Release, offscreen per Sonde grün).
+Changelog: ja — Höhe der Öffnung leer heißt Oberkante, ein geleertes Feld springt auf
+seinen Namen zurück.

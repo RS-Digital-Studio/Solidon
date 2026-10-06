@@ -31,6 +31,7 @@ from app.core.errors import (
 )
 from app.core.geom.boolean import fell_apart, without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
+from app.core.registry.params import ZERO_AUTOMATIC
 from app.core.sketch import planes, shapes
 from app.core.sketch.planes import (
     feature_plane_parts,
@@ -2335,6 +2336,7 @@ class SketchSweepCutParams(BaseParams):
             "Auf welcher Höhe der Kanal beginnt. Leer heißt: an der Oberseite des Körpers, "
             "wenn er nach unten läuft, an der Unterseite, wenn er nach oben läuft."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
     turn: float = param(
         title=_("Drehung"),

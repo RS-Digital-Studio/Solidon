@@ -330,7 +330,11 @@ class ValueField(QWidget):
         )
         if self._optional:
             self.spin.setMinimum(self.spin.minimum() - 10.0 ** -self.spin.decimals())
-            self.spin.setSpecialValueText(tr("wie gemessen"))
+            # Was leer heißt, sagt das Schema, wo es mehr ist als „wie gemessen“:
+            # an der Höhe der Öffnung eines Deckels „Oberkante“ (RM-526).
+            self.spin.setSpecialValueText(
+                str(entry.zero_text) if entry.zero_text else tr("wie gemessen")
+            )
         elif self.names_its_zero():
             # **Die Null sagt, was sie bedeutet** (RM-513): „automatisch“ statt
             # „0,00 mm“. Qt zeigt den Sondertext am Mindestwert, und der ist

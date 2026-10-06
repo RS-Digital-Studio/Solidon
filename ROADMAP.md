@@ -97,7 +97,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
-| [RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich](#rm-526) | Bedienung und Darstellung | `z` als optionale Koordinate (leer heißt Oberkante), Migration 0 → leer |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -3727,16 +3726,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Im Zustand von main-window.png vier Parameterzeilen ohne Untertext; in
   sechs Sprachen nichts abgeschnitten im Objektbaum; jede Schrittnummer sichtbar;
   Neues Projekt → Zeichnen ohne Einladung und Dock, höchstens drei Bedingungszeilen.
-
-<a id="rm-526"></a>
-
-- [ ] **RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich.** Seit RM-513
-  hieß die Null in `create_lid.z` und `screw_lid.z` „Oberkante“, getragen von `minimum=0`;
-  damit hielten alte Projekte mit negativer Öffnungshöhe am Schritt an. Für 0.5.3 ist die
-  Grenze zurückgenommen (Durchsicht Kern, Fund 9), und hinter der Klappe steht die Null wieder
-  als Zahl. **Fix:** `z` als optionale Koordinate, leer heißt Oberkante, Migration 0 → leer
-  (Checkliste „Dateiformat ändern“). **Abnahme:** alte Projekte mit 0 und mit negativer Höhe
-  öffnen und rechnen gleich, das Feld zeigt „Oberkante“, wenn es leer ist.
 
 ## KI und Generatoren
 

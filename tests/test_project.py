@@ -4494,6 +4494,132 @@ def test_revision_v44_migrates_without_inventing_lineage(tmp_path: Path) -> None
     )
 
 
+#: Was der Stand vor RM-526 (``65e3ec97b``, Format 46) aus ``lid_top_edge_v46.p3d``
+#: rechnete, gemessen beim Schreiben der Datei: je Körper Unter- und Oberkante in mm
+#: und das Volumen in mm³. Kasten 60 x 40 x 30 mit Deckel bei ``z = 0`` (damals
+#: „Oberkante“, danach auf 3 mm Stärke geändert), Dose Ø 40 mit Drehdeckel bei
+#: ``z = 0`` und ein Kasten 40 mm unter dem Bett mit Deckel bei ``z = -10``.
+SAVED_LID_RESULT: Final = {
+    "obj_1": (0.0, 30.0, 16621.457),
+    "obj_2": (26.0, 33.0, 14929.487),
+    "obj_3": (0.0, 48.0, 18221.348),
+    "obj_4": (0.0, 11.0, 7681.499),
+    "obj_5": (-40.0, -10.0, 12474.79),
+    "obj_6": (-14.0, -7.6, 8122.82),
+}
+
+
+def test_v46_lids_at_zero_keep_the_top_edge(tmp_path: Path) -> None:
+    """46 → 47: Ein Deckel mit ``z = 0`` bleibt auf der Oberkante (RM-526).
+
+    Bis Format 46 hieß die Null der Höhe „Oberkante“; seit Format 47 ist sie das
+    Bett, und leer heißt Oberkante. ``lid_top_edge_v46.p3d`` hat der Stand davor
+    geschrieben. Nach der Migration sind beide Nullen leer — auch in den Fassungen
+    der Änderung, die Rückgängig zurücklegt —, die negative Höhe bleibt, und alle
+    sechs Körper rechnen wie gespeichert. Ohne Migration hielte der Deckel am
+    Kasten an: Auf Höhe des Betts hat der Körper keine Öffnung.
+    """
+    from app.core.scene.evaluate import evaluate
+
+    path = Path(__file__).parent / "data" / "projects" / "lid_top_edge_v46.p3d"
+    original = project_data(path)
+    assert original["format_version"] == 46
+    lids = {"create_lid", "screw_lid"}
+    assert [entry["params"]["z"] for entry in original["ops"] if entry["op"] in lids] == [
+        0.0,
+        0.0,
+        -10.0,
+    ]
+
+    project = load(path)
+    assert project.document.format_version == FORMAT_VERSION
+    assert [entry.params["z"] for entry in project.document.ops if entry.op in lids] == [
+        None,
+        None,
+        -10.0,
+    ]
+    (changed,) = [
+        transaction
+        for transaction in project.document.transactions
+        if transaction.changes is not None and transaction.changes.before.edited_ops
+    ]
+    assert changed.changes is not None
+    for state in (changed.changes.before, changed.changes.after):
+        assert state.edited_ops is not None
+        assert [version.params["z"] for version in state.edited_ops.values() if version] == [None]
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = evaluate(project.document, profile, detect_features=False)
+    assert result.complete, result.scene.report.findings
+    measured = {
+        name: (
+            float(entry.mesh.bounds.minimum[2]),
+            float(entry.mesh.bounds.maximum[2]),
+            float(entry.mesh.volume),
+        )
+        for name, entry in result.scene.objects.items()
+    }
+    assert measured.keys() == SAVED_LID_RESULT.keys()
+    for name, (low, high, volume) in SAVED_LID_RESULT.items():
+        assert measured[name] == (
+            pytest.approx(low, abs=1e-4),
+            pytest.approx(high, abs=1e-4),
+            pytest.approx(volume, abs=0.01),
+        ), name
+    restored = load(save(project, tmp_path / "migrated.p3d"))
+    assert [entry.params["z"] for entry in restored.document.ops if entry.op in lids] == [
+        None,
+        None,
+        -10.0,
+    ], "leer reist als leer"
+
+    unmigrated = deepcopy(project.document)
+    unmigrated.ops = [
+        dataclasses.replace(entry, params={**entry.params, "z": 0.0})
+        if entry.op == "create_lid" and entry.params["z"] is None
+        else entry
+        for entry in unmigrated.ops
+    ]
+    assert not evaluate(unmigrated, profile, detect_features=False).complete, (
+        "mit der Null als Bett hätte der Deckel am Kasten angehalten"
+    )
+
+
+def test_v46_a_height_expression_keeps_reading_zero_as_the_top_edge() -> None:
+    """46 → 47: Ein Ausdruck in der Höhe bekommt ``legacy_zero_top`` (RM-526).
+
+    Ob er null ergibt, zeigt erst die Auswertung; mit dem Marker liest der Schritt
+    eine Null wie bis Format 46 als Oberkante, jede andere Zahl als Welthöhe. Ohne
+    Marker ist die Null das Bett.
+    """
+    from app.core.geom.lid import stated_height
+    from app.core.registry import REGISTRY
+    from app.core.registry.params import validate
+
+    migrated = migrate(
+        {
+            "format_version": 46,
+            "ops": [
+                {"id": 1, "op": "create_lid", "params": {"z": "=@h"}},
+                {"id": 2, "op": "screw_lid", "params": {"z": 0}},
+                {"id": 3, "op": "create_lid", "params": {"thickness": 2.0}},
+                {"id": 4, "op": "translate_object", "params": {"z": 0.0}},
+            ],
+        }
+    )
+    assert [entry["params"] for entry in migrated["ops"]] == [
+        {"z": "=@h", "legacy_zero_top": True},
+        {"z": None},
+        {"thickness": 2.0},
+        {"z": 0.0},
+    ]
+    spec = REGISTRY.get("create_lid").params
+    assert stated_height(validate(spec, {"z": 0.0, "legacy_zero_top": True})) is None
+    assert stated_height(validate(spec, {"z": 5.0, "legacy_zero_top": True})) == 5.0
+    assert stated_height(validate(spec, {"z": 0.0})) == 0.0
+    assert stated_height(validate(spec, {})) is None
+
+
 #: Was der Stand vor RM-325 (``38006b338``, Format 40) aus ``slot_tool_v40.p3d``
 #: rechnete, gemessen beim Schreiben der Datei: je Körper das Volumen in mm³ und die
 #: Langlöcher als (Richtung, Länge). Elf Klötze 60 x 100 x 60 mm, je ein Langloch

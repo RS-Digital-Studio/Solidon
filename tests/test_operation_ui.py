@@ -7227,8 +7227,8 @@ def test_fx_stands_only_where_there_is_something_to_reckon_with(qt_app: QApplica
 def test_a_named_zero_shows_its_name(qt_app: QApplication) -> None:
     """„0,00 mm“ hieß „aus dem Material“ oder „automatisch“ (C8).
 
-    Die Höhe der Öffnung trägt keinen Namen mehr: Sie ist eine Welthöhe ohne
-    Mindestwert (Durchsicht 0.5.3, Fund 9), und Qt zeigt den Namen nur dort.
+    Die Höhe der Öffnung ist eine Welthöhe ohne Mindestwert (Durchsicht 0.5.3,
+    Fund 9); ihr Name „Oberkante“ steht am leeren Zustand (RM-526).
     """
     lid = OperationDialog(REGISTRY.get("create_lid"), {}, None)
     container = OperationDialog(REGISTRY.get("create_container"), {}, None)
@@ -7237,12 +7237,57 @@ def test_a_named_zero_shows_its_name(qt_app: QApplication) -> None:
         assert isinstance(play, ValueField)
         assert play.spin.text() == tr("aus dem Material", context="Nullwert")
         assert lid.values()["clearance"] == 0.0, "der Wert bleibt die Null"
+        height = lid._editors["z"]
+        assert isinstance(height, ValueField)
+        assert height.spin.text() == tr("Oberkante", context="Nullwert")
+        assert lid.values()["z"] is None, "leer bleibt leer"
         neck = container._editors["neck"]
         assert isinstance(neck, ValueField)
         assert neck.spin.text() == tr("automatisch", context="Nullwert")
     finally:
         lid.deleteLater()
         container.deleteLater()
+
+
+@pytest.mark.parametrize("key", [Qt.Key.Key_Return, None])
+def test_an_emptied_field_takes_its_named_value(qt_app: QApplication, key: Any) -> None:
+    """Wer die Zahl löscht, meint, was der Sondertext sagt (RM-526).
+
+    Qt nannte das leere Feld einen Zwischenstand; Eingabetaste und Fokuswechsel
+    stellten still die vorige Zahl zurück. Zurück zu „Oberkante“ führten nur
+    Pfeil und Rad bis unter die kleinste Zahl, an einer Welthöhe ohne
+    Untergrenze eine Million Millimeter tief. Dasselbe gilt für eine benannte
+    Null: Geleert heißt das Spiel wieder „aus dem Material“.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QFocusEvent
+    from PySide6.QtTest import QTest
+
+    dialog = OperationDialog(REGISTRY.get("create_lid"), {}, None)
+    dialog.show()
+    try:
+        for name, named, empty in (
+            ("z", tr("Oberkante", context="Nullwert"), None),
+            ("clearance", tr("aus dem Material", context="Nullwert"), 0.0),
+        ):
+            field = dialog._editors[name]
+            assert isinstance(field, ValueField)
+            field.set_value(1.5)
+            assert dialog.values()[name] == pytest.approx(1.5)
+            field.spin.setFocus()
+            field.spin.lineEdit().selectAll()
+            QTest.keyClick(field.spin.lineEdit(), Qt.Key.Key_Delete)
+            if key is None:
+                QApplication.sendEvent(
+                    field.spin, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.TabFocusReason)
+                )
+            else:
+                QTest.keyClick(field.spin.lineEdit(), key)
+            assert dialog.values()[name] == empty, name
+            assert field.spin.text() == named, name
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
 
 
 def test_an_open_box_hides_its_vents_and_drops_them(qt_app: QApplication) -> None:
