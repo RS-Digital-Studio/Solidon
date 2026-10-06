@@ -18,14 +18,17 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from app.core import discover
 from app.core.errors import ExternalToolError, ValidationError
-from app.core.export import handover
+from app.core.export import cura_linux, handover, slicer_profiles
 from app.core.knowledge import print_settings, profiles
 
 #: Der Startcode des K1 Max in Cura 5.13 (``creality_k1max.def.json``), wörtlich.
@@ -2030,3 +2033,331 @@ def test_unknown_jerk_keeps_printer_selection_and_active_bed_readable(
         handover.cura_profile_beside(tmp_path / "part.stl", settings, profile, setup)
     assert window_error.value.suggestions
     assert not (tmp_path / "part.curaprofile").exists()
+
+
+# Cura unter Linux: Flatpak und AppImage rechnen über Curas eigenen Lader (RM-521).
+
+#: ``AppRun.env`` der Cura 5.13 aus Flathub und AppImage, gemessen am Runner
+#: (Lauf 37504088443); gekürzt auf die Zeilen, die der Lader braucht, und eine
+#: daneben.
+APPRUN_ENV = (
+    "APPDIR=$ORIGIN\n"
+    "APPDIR_EXEC_PATH=$APPDIR/UltiMaker-Cura\n"
+    "APPDIR_LIBRARY_PATH=$APPDIR:$APPDIR/runtime/compat/:$APPDIR/usr/lib/x86_64-linux-gnu:"
+    "$APPDIR/lib/x86_64-linux-gnu:$APPDIR/usr/lib\n"
+    "XDG_DATA_DIRS=$APPDIR/usr/local/share:$APPDIR/usr/share:$XDG_DATA_DIRS\n"
+    "APPDIR_LIBC_LIBRARY_PATH=$APPDIR/runtime/compat:$APPDIR/runtime/compat/lib/x86_64-linux-gnu:"
+    "$APPDIR/runtime/compat/lib64:$APPDIR/runtime/compat/usr/lib/x86_64-linux-gnu\n"
+    "APPDIR_LIBC_VERSION=2.35\n"
+    "APPDIR_LIBC_LINKER_PATH={'lib64/ld-linux-x86-64.so.2'}\n"
+)
+
+#: Der Bibliothekspfad daraus für ``/app/cura``: erst Curas glibc, dann der Rest,
+#: ``runtime/compat`` nur einmal.
+FLATPAK_LIBRARIES = (
+    "/app/cura/runtime/compat:/app/cura/runtime/compat/lib/x86_64-linux-gnu:"
+    "/app/cura/runtime/compat/lib64:/app/cura/runtime/compat/usr/lib/x86_64-linux-gnu:"
+    "/app/cura:/app/cura/usr/lib/x86_64-linux-gnu:/app/cura/lib/x86_64-linux-gnu:"
+    "/app/cura/usr/lib"
+)
+
+#: Ein Einhängen wie ``--appimage-mount``: den Punkt nennen, dann warten.
+MOUNT_SCRIPT = (
+    "import sys, time\nif len(sys.argv) > 1:\n    print(sys.argv[1], flush=True)\ntime.sleep(120)\n"
+)
+
+
+def _appdir(folder: Path, tmp_path: Path, *, environment: bool = True, loader: bool = True) -> Path:
+    """Curas AppDir, wie Flathub es unter ``/app/cura`` und das AppImage im Abbild trägt."""
+    template = _cura(tmp_path / "vorlage" / folder.name)
+    shutil.copytree(template.parent / "share", folder / "share")
+    (folder / "CuraEngine").write_bytes(b"")
+    if environment:
+        (folder / "AppRun.env").write_text(APPRUN_ENV, encoding="utf-8")
+    if loader:
+        found = folder / "runtime" / "compat" / "lib64" / "ld-linux-x86-64.so.2"
+        found.parent.mkdir(parents=True)
+        found.write_bytes(b"")
+    return folder
+
+
+def _flatpak_cura(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **appdir: bool) -> Path:
+    """Cura aus Flathub: Starter in den Exporten, das AppDir unter ``files/cura``."""
+    system = tmp_path / "flatpak"
+    launcher = system / "exports" / "bin" / "com.ultimaker.cura"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("")
+    files = system / "app" / "com.ultimaker.cura" / "current" / "active" / "files"
+    _appdir(files / "cura", tmp_path, **appdir)
+    monkeypatch.setattr(discover, "_FLATPAK_EXPORTS", (str(launcher.parent),))
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(system),))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    return launcher
+
+
+def _appimage_cura(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mounts: list[Path], **appdir: bool
+) -> tuple[Path, Path]:
+    """Ein Cura-AppImage, dessen Einhängen ein Skript nachstellt; ``mounts`` zählt mit."""
+    appimage = tmp_path / "Applications" / "UltiMaker-Cura-5.13.0-linux-X64.AppImage"
+    appimage.parent.mkdir(parents=True)
+    appimage.write_bytes(b"AppImage")
+    point = _appdir(tmp_path / "tmp" / ".mount_UltiMaXyZ", tmp_path, **appdir)
+    script = tmp_path / "einhaengen.py"
+    script.write_text(MOUNT_SCRIPT, encoding="utf-8")
+
+    def command(image: Path) -> list[str]:
+        mounts.append(image)
+        return [sys.executable, str(script), str(point)]
+
+    monkeypatch.setattr(cura_linux, "mount_command", command)
+    return appimage, point
+
+
+def _ended(monkeypatch: pytest.MonkeyPatch) -> list[subprocess.Popen[bytes]]:
+    """Jeder Einhängeprozess, den ``cura_linux`` beendet hat."""
+    ended: list[subprocess.Popen[bytes]] = []
+    original = cura_linux.terminate_process_tree
+
+    def terminate(process: subprocess.Popen[bytes], **kwargs: float) -> None:
+        original(process, **kwargs)
+        ended.append(process)
+
+    monkeypatch.setattr(cura_linux, "terminate_process_tree", terminate)
+    return ended
+
+
+def _sliced(
+    executable: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[list[str], Path]:
+    """Ein Würfel für den K1 Max über die echte Übergabe; zurück kommen Befehl und Arbeitsordner."""
+    model = tmp_path / "wuerfel.stl"
+    model.write_bytes((Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes())
+    captured: list[tuple[list[str], Path]] = []
+
+    def run(command: list[str], workspace: Path, *_args: object, **_kwargs: object):
+        _staged_from_the_workspace(command, workspace)
+        captured.append((list(command), workspace))
+        Path(command[command.index("-o") + 1]).write_text(_printed("G28"), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        handover.SlicerSetup(executable, "cura"),
+        output_dir=tmp_path / "aus",
+    )
+    assert len(captured) == 1
+    return captured[0]
+
+
+def _staged_from_the_workspace(command: list[str], workspace: Path) -> None:
+    """Hinter ``slice`` zeigt jeder Pfad in den Arbeitsordner, und die Maschine ist der
+    K1 Max — gefragt während des Laufs, danach ist der Ordner geräumt."""
+    after = command[command.index("slice") + 1 :]
+    paths = [
+        Path(after[index + 1])
+        for index, flag in enumerate(after[:-1])
+        if flag in {"-d", "-j", "-l", "-o"}
+    ]
+    assert paths and all(path.is_relative_to(workspace) for path in paths)
+    machine = Path(after[after.index("-j") + 1])
+    assert json.loads(machine.read_text(encoding="utf-8"))["name"] == "Creality K1 Max"
+
+
+def test_the_library_path_comes_from_apprun_env_in_its_order() -> None:
+    """Gekürzt fand CuraEngine am Runner die ``libstdc++`` des Rechners und
+    scheiterte an ``GLIBC_2.38``: Curas glibc zuerst, dann seine übrigen
+    Bibliotheken, jede einmal; eine fremde Variable bleibt draußen."""
+    variables = cura_linux.read_environment(APPRUN_ENV + "APPDIR_LIBRARY_PATH_X=$HOME/lib\n")
+
+    assert cura_linux.library_path(variables, "/app/cura") == FLATPAK_LIBRARIES
+    assert cura_linux.library_path({"APPDIR_LIBRARY_PATH": "$APPDIR:$OTHER/lib"}, "/m") == "/m"
+    assert cura_linux.linker(variables) == "lib64/ld-linux-x86-64.so.2"
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("{'lib/ld-linux-aarch64.so.1'}", "lib/ld-linux-aarch64.so.1"),
+        ("{'/lib64/ld-linux-x86-64.so.2'}", cura_linux.DEFAULT_LINKER),
+        ("{'../../ld.so'}", cura_linux.DEFAULT_LINKER),
+        ("", cura_linux.DEFAULT_LINKER),
+    ],
+)
+def test_the_loader_stays_inside_the_appdir(written: str, expected: str) -> None:
+    assert cura_linux.linker({"APPDIR_LIBC_LINKER_PATH": written}) == expected
+
+
+def test_cura_as_a_flatpak_computes_through_its_own_loader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Starter öffnet nur das Fenster, ``--command`` auf CuraEngine fand den
+    Lader nicht (RM-521). Gerechnet wird über den Lader aus ``runtime/compat``
+    mit dem Pfad aus ``AppRun.env``, der Arbeitsordner ist freigegeben, und die
+    Druckerdefinition kommt aus dem ``/app`` des Pakets — vorher fehlte ``-j``."""
+    launcher = _flatpak_cura(tmp_path, monkeypatch)
+
+    command, workspace = _sliced(launcher, monkeypatch, tmp_path)
+
+    assert command[: command.index("slice")] == [
+        "flatpak",
+        "run",
+        f"--filesystem={workspace}",
+        "--command=/app/cura/runtime/compat/lib64/ld-linux-x86-64.so.2",
+        "com.ultimaker.cura",
+        "--library-path",
+        FLATPAK_LIBRARIES,
+        "/app/cura/CuraEngine",
+    ]
+    assert handover.console_refusal(launcher) is None
+
+
+@pytest.mark.parametrize("missing", ["environment", "loader"])
+def test_a_flatpak_cura_without_its_loader_only_opens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str
+) -> None:
+    """Findet Solidon Lader oder ``AppRun.env`` nicht, rechnet es nicht, sondern
+    sagt im Druckdialog, dass nur Curas Fenster bleibt — und die Übergabe hält
+    vor jedem Prozessstart mit demselben Satz an."""
+    launcher = _flatpak_cura(tmp_path, monkeypatch, **{missing: False})
+
+    refusal = handover.console_refusal(launcher)
+    assert refusal is not None
+    assert str(refusal) == str(cura_linux.WINDOW_ONLY)
+    with pytest.raises(ExternalToolError) as caught:
+        _sliced(launcher, monkeypatch, tmp_path)
+    assert str(caught.value.detail) == str(cura_linux.WINDOW_ONLY)
+    assert caught.value.suggestions
+    assert handover.window_program(launcher) == launcher, "das Fenster bleibt"
+
+
+def test_cura_as_an_appimage_computes_while_it_is_mounted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Abbild wird für den Lauf eingehängt, CuraEngine startet über Lader und
+    Pfad des Einhängepunkts, und nach dem Lauf ist der Einhängeprozess beendet.
+    Die Drucker kommen aus einer Kopie, die nur einmal je Fassung entsteht."""
+    mounts: list[Path] = []
+    appimage, point = _appimage_cura(tmp_path, monkeypatch, mounts)
+    ended = _ended(monkeypatch)
+
+    command, _workspace = _sliced(appimage, monkeypatch, tmp_path)
+
+    assert command[: command.index("slice")] == [
+        str(point / "runtime" / "compat" / "lib64" / "ld-linux-x86-64.so.2"),
+        "--library-path",
+        cura_linux.library_path(cura_linux.read_environment(APPRUN_ENV), str(point)),
+        str(point / "CuraEngine"),
+    ]
+    assert ended and all(process.poll() is not None for process in ended)
+    copy = slicer_profiles.install_root(appimage)
+    assert copy is not None and not copy.is_relative_to(point)
+    assert (
+        slicer_profiles.cura_resources(copy) / "definitions" / "creality_k1max.def.json"
+    ).is_file()
+    found = slicer_profiles.find_profiles(appimage, "cura", ("machine",))
+    assert "Creality K1 Max" in {entry.name for entry in found}
+    assert mounts.count(appimage) == 2, "einmal für die Kopie, einmal für den Lauf"
+    assert handover.console_refusal(appimage) is None
+
+
+def test_the_printers_of_an_appimage_are_copied_once_per_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mounts: list[Path] = []
+    appimage, _point = _appimage_cura(tmp_path, monkeypatch, mounts)
+
+    first = cura_linux.appimage_resources(appimage)
+    again = cura_linux.appimage_resources(appimage)
+    assert first is not None and first == again
+    assert len(mounts) == 1
+    stamp = json.loads((first.parent.parent / cura_linux.STAMP).read_text(encoding="utf-8"))
+    assert stamp["engine"] is True
+
+    newer = appimage.stat().st_mtime_ns + 10**9
+    os.utime(appimage, ns=(newer, newer))
+    assert cura_linux.appimage_resources(appimage) == first
+    assert len(mounts) == 2, "eine neue Fassung wird neu gelesen"
+
+
+def test_an_appimage_without_its_loader_only_opens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was das Einlesen der Drucker über die Rechenmaschine erfahren hat, sagt der
+    Druckdialog, ohne selbst einzuhängen; vorher ist es unbekannt und sperrt nicht."""
+    mounts: list[Path] = []
+    appimage, _point = _appimage_cura(tmp_path, monkeypatch, mounts, loader=False)
+
+    assert handover.console_refusal(appimage) is None
+    assert not mounts, "der Dialog hängt nichts ein"
+    assert cura_linux.appimage_resources(appimage) is not None
+    refusal = handover.console_refusal(appimage)
+    assert refusal is not None and str(refusal) == str(cura_linux.WINDOW_ONLY)
+    with pytest.raises(ExternalToolError) as caught:
+        _sliced(appimage, monkeypatch, tmp_path)
+    assert str(caught.value.detail) == str(cura_linux.WINDOW_ONLY)
+
+
+def test_the_mount_ends_with_the_block_also_after_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = tmp_path / "einhaengen.py"
+    script.write_text(MOUNT_SCRIPT, encoding="utf-8")
+    ended = _ended(monkeypatch)
+
+    with (
+        pytest.raises(RuntimeError),
+        cura_linux._mounted([sys.executable, str(script), str(tmp_path)], None) as point,
+    ):
+        assert point == tmp_path
+        raise RuntimeError("Lauf gescheitert")
+
+    assert len(ended) == 1 and ended[0].poll() is not None
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_a_mount_that_never_answers_gives_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cancelled: bool
+) -> None:
+    """Ohne Einhängepunkt kein Warten bis zum Zeitlimit des Slicers: Abbruch und
+    eigene Zeitgrenze beenden den Prozess, und es gibt keinen Punkt."""
+    from app.core.scene.cancel import CancelSignal
+
+    script = tmp_path / "stumm.py"
+    script.write_text(MOUNT_SCRIPT, encoding="utf-8")
+    token = CancelSignal()
+    if cancelled:
+        token.cancel()
+    ended = _ended(monkeypatch)
+
+    with cura_linux._mounted([sys.executable, str(script)], token, seconds=1.0) as point:
+        assert point is None
+
+    assert len(ended) == 1 and ended[0].poll() is not None
+
+
+def test_from_solidons_flatpak_the_appimage_mounts_where_both_see_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Aus dem Sandkasten ist das ``/tmp`` des Rechners unsichtbar; die Laufzeit
+    beachtet ``TMPDIR``, und ``--watch-bus`` hängt auch dann aus, wenn
+    ``flatpak-spawn`` ohne Signal stirbt (gemessen am Runner)."""
+    appimage = tmp_path / "UltiMaker-Cura-5.13.0-linux-X64.AppImage"
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(discover, "exchange_dir", lambda: tmp_path / "austausch")
+
+    assert cura_linux.mount_command(appimage) == [
+        "flatpak-spawn",
+        "--host",
+        "--watch-bus",
+        f"--env=TMPDIR={tmp_path / 'austausch'}",
+        str(appimage),
+        "--appimage-mount",
+    ]
+    assert (tmp_path / "austausch").is_dir()
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    assert cura_linux.mount_command(appimage) == [str(appimage), "--appimage-mount"]

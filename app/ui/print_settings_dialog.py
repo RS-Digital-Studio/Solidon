@@ -6397,6 +6397,10 @@ class PrintSettingsDialog(QDialog):
                     "die Datei in seinem Fenster."
                 )
             )
+        elif (window_only := handover.console_refusal(found)) is not None:
+            # Eine Cura ohne ihren Lader (RM-521): rechnen kann Solidon mit ihr
+            # nicht, ihr Fenster bleibt der Weg.
+            reason = str(window_only)
         elif oversize is not None:
             # Ein Teil, das in keiner Lage passt, lehnt jeder Slicer ab — der
             # ElegooSlicer mit -50 nach Minuten Vorbereitung (KUNDE-09). Im
