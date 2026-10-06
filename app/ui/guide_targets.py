@@ -339,6 +339,8 @@ def area_for(window: MainWindow, name: str) -> QRect:
         action = _action_for(window, kind, rest)
         if kind == "operation":
             button = window.selection_operations._buttons.get(rest)
+            if button is not None and not button.isVisible():
+                _reveal(window, button)
             if button is not None and button.isVisible():
                 return _global(_in_view(button))
         shown = _shown_in_toolbar(window, action)
@@ -384,6 +386,28 @@ def _in_view(widget: QWidget) -> QWidget:
 
 def _global(widget: QWidget) -> QRect:
     return QRect(widget.mapToGlobal(QPoint(0, 0)), widget.size())
+
+
+def _reveal(window: MainWindow, widget: QWidget) -> None:
+    """Holt ein verdecktes Ziel der rechten Karte hervor, wie der Kunde es täte.
+
+    Er klickt auf den Reiter, auf dessen Seite es steht, und klappt die Gruppe
+    auf, in der es liegt: Die Karte der Handlungen klappt Gruppen zu, sobald
+    mehr als ``OPEN_UP_TO`` Knöpfe offen stünden, und seit RM-511 steht vorn
+    nicht immer die Auswahl.
+    """
+    from app.ui.panels import open_section
+
+    tabs = window.right
+    for index in range(tabs.count()):
+        page = tabs.widget(index)
+        if page is not None and page.isAncestorOf(widget) and index != tabs.currentIndex():
+            tabs.setCurrentIndex(index)
+    parent = widget.parentWidget()
+    while parent is not None and parent is not tabs:
+        open_section(parent)
+        parent = parent.parentWidget()
+    QApplication.processEvents()
 
 
 def _tab_of_a_page_behind(window: MainWindow, widget: QWidget) -> QRect | None:
