@@ -38,14 +38,10 @@ achte Platz der Werkzeugzeile ist keine Einladung: Eine Funktion, die eine
 Leiste will, verdrängt eine andere oder ist keine wert (`MAX_TOOLS`).
 
 **Gefaltet wird je Kategorie und nur so weit, bis der Rest passt:**
-`folded_categories` (`app/core/registry/surfaces.py`) nimmt die hinteren
-Kategorien aus `MENU_GROUPS` (dort von häufig nach selten); die Rechnung liegt
-im Kern, damit `menu_path` dieselbe Antwort gibt wie die Leiste. Eine direkt
-stehende Kategorie behält ihren Namen als Überschrift (`addSection`; zählt nicht
-in der Zeilengrenze, `isSeparator()` bleibt wahr), außer sie ist die einzige
-(„Bausteine → Bausteine“). Die direkten stehen vor den gefalteten, getrennt
-durch einen nackten Trennstrich, denn eine Überschrift benennt alles bis zum
-nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein.
+`folded_categories` (`registry/surfaces.py`, auch für `menu_path`) nimmt die
+hinteren Kategorien aus `MENU_GROUPS`. Eine direkte Kategorie trägt ihren Namen
+als Überschrift, außer sie ist die einzige; die direkten stehen vor den
+gefalteten, getrennt durch einen nackten Trennstrich.
 
 ## Wo eine Operation steht
 
@@ -57,15 +53,12 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
   und Ansicht** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
   zwei Aktionen auf einer Taste führt Qt beide nicht aus.
 - **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*,
-  *Erzeugen* samt Abschnitt *Bausteine* (Katalog, Gegenstücke, Deckel ohne
-  Kachel; `parts` steht in der Gruppe *Erzeugen*), *Ansicht*, *Hilfe*.
-  *Automatisch teilen* braucht einen Körper und steht in der Karte unter
-  *Vorbereiten* (`SelectionOperationsPanel.add_window_action`, RM-507).
-- **Ein Text, eine Wirkung** (RM-507): Steht derselbe Eintrag in zwei Menüs, ist
-  es dieselbe `QAction` (Katalog, *Modell einfügen …*); ein Operationsdialog
-  bestätigt mit seinem Titel, ein Baustein ohne Verb im Titel mit „Einsetzen“
-  wie der Katalog (`op_dialog.accept_text`); sichtbarer und zugänglicher Name
-  eines Knopfs kommen aus einem Schlüssel (`header.printer_button_text`).
+  *Erzeugen* samt *Bausteine* (Katalog, Gegenstücke, Deckel ohne Kachel),
+  *Ansicht*, *Hilfe*; *Automatisch teilen* steht in der Karte
+  (`add_window_action`).
+- **Ein Text, eine Wirkung** (RM-507): gleicher Menütext ist dieselbe
+  `QAction`; Dialoge bestätigen mit `op_dialog.accept_text`; sichtbarer und
+  zugänglicher Name kommen aus einem Schlüssel.
 - **Den Menüort einer Operation mit Auswahl entscheidet ihre Kachel, nicht ihre
   Kategorie:** `catalogue_operations()` (`surfaces.py`) ist die Quelle für
   Leiste, Karte, `menu_path` und Wächter; `create_lid` und `screw_lid` stehen

@@ -113,7 +113,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
-| `header.py` | Kopfzeile: Projektname, Knopf *Druckeinstellungen …* (`printer_button_text`), die tatsächlich belegten Filamente (`mesh.slot_indices`) |
+| `header.py` | Kopfzeile: Projektname, `printer_button_text`, die belegten Filamente (`mesh.slot_indices`) |
 
 ### Brücke zum Kern
 
@@ -148,7 +148,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
-| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES`; Fensterhandlungen ohne Registereintrag über `add_window_action` (*Automatisch teilen*) |
+| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES`; `add_window_action` |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |
@@ -211,7 +211,7 @@ stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis bleibt scroll
 | Datei | Zweck |
 |---|---|
 | `catalog.py` | Bausteinkatalog (§24.3, §2.6); `show_for_feature` filtert je Merkmalsart, `offer_ways` zum ersten Körper |
-| `recipe_dialog.py` | Auswahl als Baustein speichern; an einem wieder geöffneten eigenen Baustein heißt der Knopf *Baustein ersetzen* |
+| `recipe_dialog.py` | Auswahl als Baustein speichern; wieder geöffnet: *Baustein ersetzen* |
 | `counterpart_dialog.py` | Gegenstücke: zwei Stellen, Paar/Maße aus Bausteinschema und `Pair.shared` |
 
 Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
