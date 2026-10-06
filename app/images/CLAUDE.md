@@ -12,8 +12,8 @@ hinzugefügt. Das Warum: `konzepte/begruendungen/karte-app-images.md`.
 
 Die beiden SVG sind Quelle, nicht Ergebnis. `tools/make_icon.py` rastert
 daraus `packaging/solidon3d.ico`, `packaging/solidon3d.icns` und
-`website/icon.svg`. Wer das Symbol ändert, ändert hier — und lässt danach das
-Werkzeug laufen.
+`website/icon.svg`, damit exe, Fenster und Website dasselbe zeigen. Wer das
+Symbol ändert, ändert hier — und lässt danach das Werkzeug laufen.
 
 ## Die Bildschirmfotos: nur vor einem Release, ein Prozess je Sprache
 

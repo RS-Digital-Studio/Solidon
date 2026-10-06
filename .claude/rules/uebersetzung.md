@@ -61,7 +61,7 @@ Kalibrierstand eines Materials) oder steht es einmal als Beschriftung und
 einmal als Wort im Satz („Dreiecke“: Feld *Triangles*, Anzahl *440842
 triangles*), trennt ein `context` die Schlüssel (`tr("Startwert",
 context="Kalibrierstand")`, `context="Anzahl"`). Eine Übersetzung für beide
-passt an keiner Stelle: „starting point“ stand klein als Feldbeschriftung.
+passt an keiner Stelle — „starting point“ steht dann klein als Feldbeschriftung.
 
 ## Glossare je Sprache — verbindlich
 
@@ -128,7 +128,7 @@ Ton: Anrede „vous", Infinitiv bei Bedienaktionen, gewöhnliche Leerzeichen
 (keine geschützten). Vor : ; ? ! steht eines, auch wo der Code einen Satz
 zusammensetzt: Das Satzzeichen zwischen zwei übersetzten Teilen gehört in den
 Katalogeintrag mit Platzhaltern (`_("Gilt für: {kinds}", kinds=…)`), nicht fest
-in den Code — sonst stand an jeder Operation der Referenz „Objets: 0 → 1“
+in den Code — sonst steht an jeder Operation der Referenz „Objets: 0 → 1“
 (`test_french_sets_a_space_before_colon_semicolon_and_question_mark`).
 
 **Italienisch:** Operation→operazione · Transaktion→transazione ·
@@ -214,8 +214,8 @@ sucht das Wort im Fenster. `tests/test_guides.py` prüft es in jeder Sprache.
 Die neuen Texte in jede Katalogdatei eintragen — `test_translations.py` sagt,
 welche fehlen; ein eigenes Verfahren braucht es nicht. Wer eine ganze Sprache
 am Stück übersetzt, arbeitet gegen eine eingefrorene Basis: Der lebende Katalog
-wächst mitten im Lauf und verschiebt jede Indexangabe. Werkzeuge und Ablauf dafür
-stehen in der Historie unter `.claude/i18n-wip/` (bis Commit `93f0989`).
+wächst mitten im Lauf und verschiebt jede Indexangabe. Wo Werkzeuge und Ablauf
+dafür liegen: `konzepte/begruendungen/regel-uebersetzung.md`.
 
 Handbuchbilder und -seiten je Sprache erzeugen `tools/make_figures.py` und
 `tools/make_manual.py` — **nicht** offscreen, ein eigener Schritt (`/erzeugen`).

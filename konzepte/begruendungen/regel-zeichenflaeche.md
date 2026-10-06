@@ -224,6 +224,12 @@ intern hatte). Wer an der Kamera zoomt, geht durch `apply_wheel_zoom`, und
 das unterscheidet die beiden Projektionen; `tests/test_viewport_decisions.py`
 prüft beide.
 
+Mit dem Wechsel auf den Renderer-Vertrag (`ccccd5f78`) ist `apply_wheel_zoom`
+entfallen: Die Fallunterscheidung trägt seither `Renderer.dolly` selbst
+(orthografisch über die Bildhöhe, perspektivisch über den Abstand), geprüft im
+Vertragstest `test_render_contract.py::test_camera_pose_projection_and_dolly`;
+der Satz „ein Dolly ändert orthografisch nichts“ gilt nicht mehr.
+
 **Und die Kamera braucht dafür eine Untergrenze.** In einer leeren Szene hat
 `reset_camera` nie stattgefunden; die Startkamera stand 1,62 Einheiten vor dem
 Ursprung (gemessen unter PyVista), und `_plane_distance` übernahm sie treu — 918

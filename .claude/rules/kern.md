@@ -465,8 +465,8 @@ selbst kann.
 ## Eine Zahl, die je nach Wahl anderes misst, bekommt je Bedeutung ein Feld
 
 *Abschneiden* misst die `position` auf der Achse und den `offset` von Fläche,
-Kante oder Punkten (RM-400): Ein gemeinsames Feld behielt beim Umschalten einen
-Wert, der dort etwas anderes hieß. Eine Ebene aus Punkten richtet ihre Normale
+Kante oder Punkten (RM-400): Ein gemeinsames Feld behielte beim Umschalten
+einen Wert, der dort etwas anderes heißt. Eine Ebene aus Punkten richtet ihre Normale
 aus (`prepare_ops._upward`), damit „Kleinere Seite“ nicht an der Klickfolge hängt.
 
 ## Ein erzeugtes Merkmal nennt, was gebaut ist

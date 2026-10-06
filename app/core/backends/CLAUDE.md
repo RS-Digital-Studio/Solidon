@@ -33,29 +33,23 @@ Messung ist die Agenten-Suite.
 - **Ohne `num_ctx` schneidet Ollama den Prompt still ab** — ein Modell, das die
   Werkzeuge nicht aufruft, hat sie dann nie gesehen. `tools/check_local_model.py`
   prüft das, bevor eine Modellmessung etwas aussagt.
-- **Ob gekürzt wurde, entscheidet die Länge der Anfrage**, nicht die
-  Werkzeugzahl (`prompt_was_cut`): `request_length` misst den gesendeten Text,
-  `least_tokens`/`most_tokens` spannen mit `LEAST_CHARS_PER_TOKEN` und
-  `MOST_CHARS_PER_TOKEN` den Bereich auf, den ein Tokenizer daraus zählen
-  kann — die obere Schranke absichtlich weit. `tools/measure_local_model.py`
-  fragt dieselbe Funktion.
-- **Jede lokale Antwort hat eine Obergrenze** (`OLLAMA_ANSWER_TOKENS` als
-  `num_predict`); Ollama meldet den Abbruch als `length`, die Sitzung sagt es
-  mit Befund (`TRUNCATED_STOPS`).
+- **Kürzung erkennen** (`prompt_was_cut`, Regel in `agentenschicht.md`):
+  `request_length` misst den gesendeten Text, `least_tokens`/`most_tokens`
+  spannen mit `LEAST_CHARS_PER_TOKEN` und `MOST_CHARS_PER_TOKEN` den Bereich
+  auf, den ein Tokenizer daraus zählen kann — die obere Schranke absichtlich
+  weit.
+- **Antwortgrenze** in `llm.py`: `OLLAMA_ANSWER_TOKENS` als `num_predict`;
+  Ollama meldet den Abbruch als `length` (`TRUNCATED_STOPS`). Regel in
+  `agentenschicht.md`.
 - **Der abbrechbare HTTP-Transport** hält den verbundenen Socket bis zum Ende
   des Request-Threads; ein Abbruch erreicht so auch bei HTTP/1.0 und
   `Connection: close` den Antwortkörper, Antwort und Verbindung schließt der
   Request-Thread, bevor der Aufrufer zurückkehrt. Entsteht die Verbindung erst
   während eines Abbruchs, verhindert die erneute Tokenprüfung das POST.
-- **`PROMPT_TOKENS` und `PROMPT_TOOL_COUNT` gehören zu derselben gezählten
-  Anfrage.** Nach einer Änderung am Werkzeugsatz zählt
-  `tools/measure_local_model.py --count-tokens` die Grundlast eines lokalen
-  Zugs (kompakter Prompt, Angebot zu „Hallo.“, `base_tools` wie die Sitzung)
-  genau einmal, mit einem Antworttoken und ohne Geschwindigkeit. Die
-  JSON-Auskunft hält Modell, Kontext, Werkzeugzahl, Token und den SHA-256 der
-  Anfrage fest; fehlende Zähler, eine unvollständige Antwort oder erkannte
-  Kürzung ergeben keinen Referenzwert — erst die belegte Zählung zieht beide
-  Konstanten nach.
+- **`PROMPT_TOKENS` und `PROMPT_TOOL_COUNT`** stehen in `llm.py` und gehören
+  zu derselben gezählten Anfrage; gezählt wird mit
+  `tools/measure_local_model.py --count-tokens` (ein Antworttoken, JSON mit
+  SHA-256 der Anfrage). Wann und wie neu gezählt wird: `agentenschicht.md`.
 
 ## Lokale KI teilt eine Grafikkarte
 

@@ -149,7 +149,8 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   `source_mesh`, sonst `origin_mesh`; `REMOVAL_CODES` zählen nicht) **und heißt
   am größten Stück weiter** (`_divided_partners`, nach *Teilen* in jeder
   Hälfte; gleich große sind `MatchResult.ambiguous`); alte Dreiecke nur, wenn
-  sie diese Fläche sind (`_old_face`); nach einer Bewegung wird nicht gesucht;
+  sie diese Fläche sind (`matching.planar_source`, `pieces_in_place`); nach
+  einer Bewegung wird nicht gesucht;
   eine beschnittene erzeugte Fläche ohne Stück fällt heraus
   (`perceive.generated_lost`).
 - **Die Zuordnungsfrage** (`_answer_matches`) fragt Verwiesenes zuerst, auch

@@ -20,7 +20,7 @@ ist das ein Befund, kein zweiter Wahrheitsbegriff. Regeln:
 | `thread.py` | Gewinde an importierter Geometrie (§21.1) |
 | `properties.py` | Volumen, Fläche, Schwerpunkt (§11); `estimated_volume` nur zur Plausibilität, nie veröffentlicht |
 | `section.py` | Exakter Ebenenschnitt der Skizzenprojektion; `horizontal_regions` für `geom.lid` |
-| `lettering.py` | Schrift als exakte Flächen, nonzero gefüllt (`label_text`) |
+| `lettering.py` | Schrift als exakte Flächen, nonzero gefüllt (`glyph_contours`, `letter_faces`, `letters`; gerufen von der Operation `label_text`) |
 | `step.py` | STEP hinein und hinaus |
 | `from_mesh.py` | Vom Dreiecksnetz zum exakten Körper ohne Verlauf |
 
@@ -141,9 +141,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   dient nur der Materialseitenprobe. Kugelige Eckrundungen tragen die
   Trägerkugelmitte ohne erfundene Achse; Ecke ist eine Kugel ab
   `perceive.features.CORNER_NEIGHBOURS` verrundeten Nachbarn ihres Radius
-  (`rounds_the_corner`), dieselbe Frage wie am Netz. Ein Zylinder, der quer zu seiner
-  Achse nicht in den Körper passt, ist wie am Netz keine Rundform
-  (`_oversized_rounds_dropped` fragt `perceive.features.cylinder_fits_in_the_body`).
+  (`rounds_the_corner`), dieselbe Frage wie am Netz. Zu große Zylinder nimmt
+  `_oversized_rounds_dropped` heraus (Regel: `operationen.md`, Frage
+  `perceive.features.cylinder_fits_in_the_body`).
   Werkzeuge: Material über trägen `profiles.for_object`, Profil aus
   `geom.prepare.drill_outline`, analytisch rotiert;
   `revolved_bore_tool`/`clipped_bore_tool` schneiden an den echten Randebenen

@@ -425,7 +425,7 @@ bildet. Im Zweifel bleibt der Kegel.
 
 `detect_voids` gibt eingeschlossene Negativschalen, die `detect_holes` sonst
 als Bohrungen ohne Öffnung läse, als Merkmalsart `void` aus;
-`_voids_instead_of_phantom_bores` nimmt die Phantombohrungen darauf weg.
+`voids_instead_of_phantom_bores` nimmt die Phantombohrungen darauf weg.
 
 - **Vier Tore**: dicht, einheitlicher Umlaufsinn, mehr als eine Komponente,
   Schale im Material der **festen** Komponenten — nicht gegen „alles andere“,

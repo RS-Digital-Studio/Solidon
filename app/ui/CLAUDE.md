@@ -19,7 +19,7 @@ Projektwechsel sperren verspätete Antworten.
 Ein Grundkörper an einer ausgewählten Fläche bietet vorn Ansatzpunkt und
 Verbinden. Flächenvorbereitung läuft über `Session.placement_async`; bis zur
 Antwort bleibt Übernehmen unabhängig von einer älteren Vorschau gesperrt.
-Erzeugen und Vereinigung stehen in derselben `PreviewOrder` und Transaktion.
+Erzeugen und Vereinigung stehen in derselben `_PreviewOrder` und Transaktion.
 `ContainerWizardParams`/`plan_container`: benannte Maße, optionale Einlage und
 Passung als Vorschauauftrag. `plan_container_edit` liefert historisch
 `ContainerEdit.values` und `document_change` gemeinsam für Vorschau/Übernahme.

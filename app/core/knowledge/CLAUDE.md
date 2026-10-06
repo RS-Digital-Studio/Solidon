@@ -1,9 +1,8 @@
 # `app/core/knowledge/` — was die Anwendung weiß
 
 Profile, Normteile, Regelsammlung, Kalibrierung, Filamentlager — und in
-`parts/` die Bausteinbibliothek (§24, §38, §39). **Der Agent setzt geprüfte
-Bausteine zusammen, statt Geometrie zu erfinden** (§24): Was hier liegt, ist
-Teil des Rechenwegs, nicht Beiwerk. Einzuhalten sind
+`parts/` die Bausteinbibliothek (§24, §38, §39). Was hier liegt, ist Teil des
+Rechenwegs, nicht Beiwerk (Grundsatz in `bausteine.md`). Einzuhalten sind
 `.claude/rules/bausteine.md` und `kern.md`; die Messreihen stehen in
 `konzepte/begruendungen/karte-app-core-knowledge.md`.
 

@@ -324,6 +324,11 @@ eines bleibt.
   sonst HID. Die Plattform ist dort ein Parameter, damit der Mac-Zweig auf
   jeder Maschine prüfbar bleibt. **Am Gerät gemessen ist nur Windows**; der
   Mac-Weg wartet auf die Rückmeldung des Kunden.
+* **Ein Faden je Suche ließ 0.5.1 abstürzen** (RM-505, aus der Regel
+  verschoben): Jede Suche lief in einem eigenen, danach beendeten Faden, und ab
+  der zweiten zeigte der HID-Manager auf einen freigegebenen Run Loop — auf
+  jedem Mac, mit oder ohne 3D-Maus. Seither sucht `_SearchThread` in einem
+  Faden, der nie endet.
 
 ## Was die Suite prüft und was nur das echte Fenster
 
@@ -345,3 +350,6 @@ README daneben nennt die
 drei Fallen, die dabei zuschnappen — Millimeter sagen nichts (jede Bewegung
 skaliert mit der Entfernung), Bildpunkte hier gar nichts (das Renderfenster
 bleibt 160×160), und `session.apply` blockiert den Hauptthread.
+
+Aus der Regel verschoben: Die zwei alten Prüfstände (Drehpunkt, Steuerung)
+schickten VTK-Ereignisse an `viewport.plotter` und sind entfernt.

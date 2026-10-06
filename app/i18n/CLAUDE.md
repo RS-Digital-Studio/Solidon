@@ -28,34 +28,13 @@ Der Übersetzungskontext ist sowohl als zweites Argument als auch über
 auch als Platzhalterwert verwendbar bleibt. Der Einsammler und der Laufzeitweg
 verwenden denselben Kontextschlüssel; `context` ist kein Formatierungswert.
 
-**Deutsch hat keine Datei.** Es ist die Quellsprache — der deutsche Text steht
-im Code, die Kataloge übersetzen ihn weg.
+**Deutsch hat keine Datei** — es ist die Quellsprache, der deutsche Text steht
+im Code. Was für die Kataloge gilt (der Schlüssel ist der deutsche Satz, eine
+neue Sprache ist eine Datei, nachgezogen über `extract`), steht in
+`locales/CLAUDE.md`.
 
-## Eine weitere Sprache ist eine Datei und sonst nichts
+## Eine Falle, gemessen
 
-Sprachauswahl, Einsammler, Handbuch, Abbildungen und Prüfung lesen alle
-`available_languages()`, also das Verzeichnis. Wer `locales/nl.json`
-einscheckt, hat Niederländisch hinzugefügt — an keiner zweiten Stelle steht
-eine Liste, die nachgezogen werden müsste.
-
-**Unvollständig eingecheckt wird keine.** `tests/test_translations.py` prüft
-jede gefundene Datei, nicht nur die englische.
-
-## Zwei Fallen, beide gemessen
-
-- **Sprachwechsel braucht zwei Schritte.** `install_language()` lädt,
-  `set_language()` aktiviert. Wer eines vergisst, misst seinen eigenen Aufbau
-  und hält ihn für einen Fehler.
-- **Katalogschlüssel sind Wörter, keine IDs.** Der Schlüssel *ist* der
-  deutsche Quelltext. Ein neu formuliertes Label kapert deshalb still den
-  Eintrag eines anderen, wenn beide denselben Satz ergeben — das Minus im
-  Katalog-Diff ist der Alarm, der Test sieht es nicht.
-
-## Werkzeug
-
-Nach neuen Texten die Kataloge nachziehen — der Lauf meldet je Sprache,
-wie viele Texte offen sind:
-
-```bash
-.venv/Scripts/python.exe -m app.i18n.extract
-```
+**Sprachwechsel braucht zwei Schritte.** `install_language()` lädt,
+`set_language()` aktiviert. Wer eines vergisst, misst seinen eigenen Aufbau
+und hält ihn für einen Fehler.

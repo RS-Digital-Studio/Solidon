@@ -213,15 +213,15 @@ Rückkehrziel (`action_projection`).
   (`_bed_outline_for`, Kante aus `_bed_extent`; ohne gezeigten Bauraum wird
   nicht geschnitten).
 * **Gerechnet je Körper, nicht je Auffangfläche**: der Umriss je Stück einmal auf
-  seiner Unterkante (`_shadow_base_of`, ebene Hülle über GEOS
-  `geom.mesh.planar_outline`), dann nur verschoben — `ground` fällt in
+  seiner Unterkante (ebene Hülle über GEOS, als `base` an
+  `shadow_outline_of`), dann nur verschoben — `ground` fällt in
   `shadow_points` als Summand heraus, die Klammer `maximum(…, 0)` greift dort
   nie. Die konvexe Hülle je Körper einmal (`_shadow_hull_of`), über
   `SHADOW_HULL_POINTS` als Stichprobe plus Extrempunkte in vierzehn Richtungen.
 * **Ein Aktor je Körper**, fester Kapazität, nur neue Punkte
-  (`_show_shadow_soups`); `_shadow_owners` schiebt ihn beim Zug mit
-  (`_shift_shadow`), **jeder Zug zieht den Schatten mit** (`_drag_shadow`,
-  `continue_body_drag_at`). Geworfen in einem Aufruf (`planar_outlines`,
+  (`_show_shadow_soups`), gemerkt in `_shadow_owners`; **jeder Zug zieht den
+  Schatten mit** — am Griff `_drag_shadow`, frei `continue_body_drag_at`, beide
+  über `set_position` am Aktor. Geworfen in einem Aufruf (`planar_outlines`,
   `shadow_soups` rein), über `SHADOW_PROJECTION_ABOVE` im `_ShadowWorker` — bis
   dahin bleibt der alte. Hüllen in Körperkoordinaten, Versatz beim Wurf.
 
@@ -329,7 +329,8 @@ der Fehler nicht auf.
 * **Ein Maß in Millimetern gehört nicht an den Zeiger**, sondern als Ring in die
   Szene.
 * **Gesetzt wird nur in `Viewport._update_cursor`**; die Auslöser melden Zustand
-  (`set_painting`, `set_measure_mode`, `set_drag_cursor`, `eventFilter`). Die
+  (`set_measure_mode`, `set_sculpting`, `set_splitting`, `set_boning`,
+  `set_sketching`, `set_drag_cursor`, `eventFilter`). Die
   Rangfolge in `_resting_role` ist die von `_on_picked` — laufen sie
   auseinander, verspricht der Zeiger etwas anderes, als der Klick tut.
 * **`setMouseTracking(True)`** am Widget des Renderers.
@@ -358,8 +359,8 @@ der Fehler nicht auf.
 * **Ein `QScrollArea` fragt seinen Inhalt nur einmal** — wechselnder Inhalt
   braucht einen Rollbereich, der neu fragt und Umbauten meldet
   (`selection_operations._ListScroller`).
-* **Gemessen an `Paint`-Ereignissen, nicht an Bildschirmfotos**
-  (`.claude/.state/rm-232-erster-klick-2026-09-25/scenario_malen.py`).
+* **Gemessen an `Paint`-Ereignissen, nicht an Bildschirmfotos** — eine Aufnahme
+  verschiebt die Folge, die sie aufnehmen soll.
 
 ### Nur was über der Grafikfläche liegt, hat ein eigenes Fenster
 
@@ -373,10 +374,9 @@ der Fehler nicht auf.
 * **Schwebendes überlebt den Fluss**: `_park_floating` legt es verborgen und
   ungebunden ab, `_take_parked_floating`/`_wire_floating` übernehmen; ein Satz je
   Ansicht unter ihrer Kennung, nicht im schwachen Wörterbuch, geräumt über
-  `destroyed`. Verdeckung prüft `scenario_verdeckt.py`.
-* **Nicht der Bildtakt**: `max_fps=30` lässt eine Bestellung im Median 2,5 ms
-  warten (`scenario_bestellung.py`, `scenario_zug.py`) — wer dort ansetzt,
-  misst vorher.
+  `destroyed`.
+* **Der Bildtakt bremst nicht** (`max_fps=30`) — wer dort ansetzt, misst
+  vorher.
 
 ### Ein Zug zeichnet leichter, sein letztes Bild voll
 
@@ -489,7 +489,7 @@ geprüft.
   ohne ihn erzeugt ein Zug nach innen keine Operation.
 
 `sketch_grid`, `show_sketch_cursor`, `_sketch_hit`, `set_sketch_pull`,
-`MEASURE_GAP`, `apply_wheel_zoom`, `view_on_plane` und `place_sketch_cards`
+`MEASURE_GAP`, `view_on_plane` und `place_sketch_cards`
 regelt `zeichenflaeche.md`.
 
 ## Renderstart: Plattform und Wayland

@@ -1038,9 +1038,10 @@ als das fremde Programm, gehört das dazu.** „Der Download brach ab" ist eine
 Fremdmeldung; „auf `C:` sind 0 Byte frei, das Paket braucht 7,5 GB" ist eine
 Ursache.
 
-## Ein Prüfwerkzeug ist auch nur Code, und es war viermal der Fehler
+## Ein Prüfwerkzeug ist auch nur Code
 
-An **einem** Tag, und alle vier waren **grün**:
+Die Überschrift der Regel hieß bis zum 06.10.2026 „…, und es war viermal der
+Fehler“. An **einem** Tag, und alle vier waren **grün**:
 
 | Werkzeug | Fehler |
 |---|---|

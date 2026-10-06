@@ -170,7 +170,8 @@ Rechenschritt aus dem Kundenstart heraus.
 ## Zwei Muster, die überall wiederkehren
 
 **1. Lazy-Import in den Paket-`__init__.py`.** `scene`, `registry`, `agent`,
-`brep` exportieren über `_EXPORTS` und `app.core.lazy.install()` — gegen einen
+`brep`, `sketch`, `activation` und `knowledge/parts` exportieren über
+`_EXPORTS` und `app.core.lazy.install()` — gegen einen
 Deadlock: Zwei Threads, die gleichzeitig importieren, verklemmen sich sonst
 über die Modul-Locks. Ein neuer Name steht an **drei** Stellen
 (`TYPE_CHECKING`-Block, `_EXPORTS`, `__all__`); `tests/test_lazy_exports.py`
@@ -195,6 +196,7 @@ Entscheidung, ein Paket, das neu in den Kreis gerät, macht den Lauf rot.
 | `ctx.ask` | Fragen statt raten (Regel 21) |
 | `ctx.cancelled` | Kooperativer Abbruch |
 | `ctx.sources` | Zugriff auf die Quelldateien, wenn eine Op sie braucht |
+| `ctx.bound_edges` | Die vor dem Cache einmal gebundenen Kanten je Kantenfeld (`scene.edge_binding`) |
 
 Was eine Operation zurückgibt, ist ein `OpResult`, nie eine veränderte
 Eingabe. Die Grenzen des Kerns (kein Qt, kein `print`, keine

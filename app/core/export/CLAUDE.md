@@ -208,10 +208,10 @@ sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
   die Werte je Netz kommen aus `writer._part_values` (Rücknahme je Netz, `handover.PartSplit`).
   Curas Fenster bekommt dasselbe als 3MF (`writer._cura_window`,
   `threemf.write_assembly(cura=True)`), angefordert vom Fenster-Arbeiter
-  des Druckdialogs (`_PlateJob.for_window`), mittig auf dem Bett der
-  Maschine, die in Cura aktiv ist (`CuraActiveMachine.bed`). Ist dort ein
-  anderer Drucker aktiv, nennt `cura_active_printer_mismatch` beide; dieselbe
-  Definition mit demselben Bett gilt als derselbe Drucker (`_same_cura_machine`).
+  des Druckdialogs (`_PlateJob.for_window`); wohin es aufs Bett kommt, regelt
+  `dateiformat.md`. Ist in Cura ein anderer Drucker aktiv, nennt
+  `cura_active_printer_mismatch` beide; dieselbe Definition mit demselben Bett
+  gilt als derselbe Drucker (`_same_cura_machine`).
 - **CuraEngine bekommt seine Maschine aus der Druckerdefinition**
   (`_cura_machine`): mit `PrinterProfile.cura_definition` und installierter
   Datei `-j`, sonst `fdmprinter`; Start- und Endcode aus der Kette, gefüllt von

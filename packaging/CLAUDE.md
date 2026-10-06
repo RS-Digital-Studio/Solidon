@@ -31,10 +31,8 @@ Setuptools-Dateiauswahl mit den versionierten Ressourcen; lokale
 
 **Nur `.spec` und `.iss` sind Quelle**; alles andere ist Ergebnis, trägt seine
 Werte aus `app/branding.py` und wird nicht von Hand bearbeitet — der nächste
-Lauf überschreibt es. **Die Symbolquelle** ist
-`app/images/icon/solidon3d.svg` (und `-small.svg`): `make_icon.py` rastert
-`.ico` und `.icns` hierher und legt `website/icon.svg` ab — exe und Fenster
-zeigen dasselbe. `DATENSCHUTZ.md` aus der Wurzel reist über die `.spec` mit:
+Lauf überschreibt es. **Symbole:** Quelle und Werkzeug in
+`app/images/CLAUDE.md`. `DATENSCHUTZ.md` aus der Wurzel reist über die `.spec` mit:
 die lokale Fassung für den KI-Hinweis, ohne Webabruf gelesen.
 
 ## Wie jede Plattform installiert

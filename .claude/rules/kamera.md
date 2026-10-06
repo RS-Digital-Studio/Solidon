@@ -50,10 +50,11 @@ rechts dreht um den Mittelpunkt der Ansicht, das gedrückte Rad kippt, Scrollen
 zoomt; Umschalt ändert nichts. `slicer`, `orbit`, `cad` und `blender` bilden
 Fremdprogramme nach.
 
-* **Links schiebt und wählt trotzdem**: `_left_up` trennt Klick und Zug über
-  `is_click`, unabhängig davon, was `_begin` gestartet hat — `select` und `pan`
-  dürfen auf derselben Taste liegen, nur `pan` und ein *gezogenes* Werkzeug
-  nicht. Auf dem **gewählten** Körper führt links das Teil (Entscheidung Robert).
+* **Links schiebt und wählt trotzdem**: `Navigator._release` trennt Klick und
+  Zug über `is_click`, unabhängig davon, was `_begin` gestartet hat — `select`
+  und `pan` dürfen auf derselben Taste liegen, nur `pan` und ein *gezogenes*
+  Werkzeug nicht. Auf dem **gewählten** Körper führt links das Teil
+  (Entscheidung Robert).
 * **Dieser Zug rechnet auf einer Ebene, er pickt nicht**: gepickt wird beim
   Drücken (liegt dort der gewählte Körper?) und beim Zugbeginn (wo gegriffen?),
   danach schneidet `_plane_point` den Sichtstrahl mit der waagerechten Ebene
@@ -112,9 +113,8 @@ Ein Trackball führt das Oben der Kamera mit und summiert Schräglage.
 `turntable_camera` dreht waagerecht um die Welt-Hochachse und senkrecht um die
 Bildwaagerechte; das Oben folgt daraus. Die Hebung wird an `POLE_LIMIT_DEGREES`
 **begrenzt, nicht abgeschnitten** — fast senkrecht darüber dreht man weiter
-waagerecht und kommt jederzeit zurück, auch aus einer Draufsicht des Menüs. Die
-Empfindlichkeit blieb die des alten VTK-Trackballs (`TURN_MOTION_FACTOR`), damit
-sich die gewohnte Geschwindigkeit nicht verstellt. Es gilt für alle fünf
+waagerecht und kommt jederzeit zurück, auch aus einer Draufsicht des Menüs.
+`TURN_MOTION_FACTOR` hält die gewohnte Drehgeschwindigkeit. Es gilt für alle fünf
 Schemata — ein Nachbau, der neigt, wo sein Vorbild es nicht tut, ist keiner.
 
 ## Kameravorgaben und Einpassen
@@ -210,7 +210,7 @@ Operation.
   blockierend im Hauptthread, ein Takt für Lesen und Fahren; gesucht
   (`hid.enumerate`) im **einen, nie endenden** Faden `_SearchThread` (hidapi
   bindet seinen Manager auf dem Mac an den Run Loop des importierenden Fadens;
-  ein Faden je Suche ließ 0.5.1 abstürzen), geöffnet im Hauptthread — im
+  ein Faden je Suche stürzt ab), geöffnet im Hauptthread — im
   Hauptthread hielt die Suche neben einem Arbeiter das Fenster an; die
   Vorzeichen stammen aus einer aufgezeichneten Lesung (`tests/data/spacemouse/`).
 * **Auf dem Mac durch den Treiber**: 3DxWare hält das Gerät exklusiv.
@@ -229,9 +229,8 @@ Offscreen ist `Viewport.renderer` `None`: Die Suite prüft die Regeln gegen
 Attrappen (`RecordingRenderer`, Renderer-Doppel), nie die Kette Qt-Ereignis →
 Widget des Renderers → `PointerEvent` → Renderer. **Einheitstests über eine
 reine Funktion sagen nichts darüber, ob jemand sie ruft.** Die Kette zeigt nur
-das echte Fenster, und einen lauffähigen Prüfstand dafür gibt es nicht: Die zwei
-alten (Drehpunkt, Steuerung) schickten VTK-Ereignisse an `viewport.plotter` und
-sind entfernt. Nach einer Änderung an `_NAVIGATION`, am Navigator oder an
+das echte Fenster, und einen lauffähigen Prüfstand dafür gibt es nicht. Nach
+einer Änderung an `_NAVIGATION`, am Navigator oder an
 `camera_step` gehört die Navigation deshalb in die Fensterabnahme (RM-213). Wer
 einen Prüfstand baut, schickt `QMouseEvent` an `renderer.widget` und kennt die
 Fallen: Millimeter sagen nichts (jede Bewegung skaliert mit der Entfernung),

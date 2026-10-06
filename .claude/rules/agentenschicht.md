@@ -103,7 +103,10 @@ samt Messreihe.
   lokalen Zugs (kompakter Prompt, Angebot zu „Hallo.", keine Operation
   ausführlich) und weist Modell, Kontext, Werkzeugzahl und Anfragehash aus;
   Geschwindigkeit misst er nicht — Kalt-/Warmläufe und Leistungsprüfungen nur
-  beim Release. `test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scene`
+  beim Release. Fehlende Zähler, eine unvollständige Antwort oder erkannte
+  Kürzung ergeben keinen Referenzwert; erst eine belegte Zählung zieht
+  `PROMPT_TOKENS` und `PROMPT_TOOL_COUNT` gemeinsam nach.
+  `test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scene`
   verlangt eine Grundlast unter einem Drittel des Fensters und 16 000 Token
   Luft für ausführliche Werkzeuge, Steckbrief und Verlauf.
 - **Die Kurzfassung der Werkzeuge** (`prompt._COMPACT_FIELDS_HINT`):

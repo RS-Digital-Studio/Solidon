@@ -19,9 +19,9 @@ Ausgabeformat, Normteilmaße aus der Tabelle, Vorschaubild gerendert von
 
 - **Gebaut wird als Formbeschreibung** über `shapes` und `build`, gerechnet je
   Kern: am Netzträger gegen `manifold3d` im eigenen Prozess, am exakten Träger
-  über die Zwillinge in `exact.py`. So hängt `insert_part` an keiner
-  Installation und bleibt testbar; einen Rechenweg über OpenSCAD gibt es
-  nicht.
+  über die Zwillinge in `exact.py`. So hängen die Baustein-Operationen
+  (`insert_*`/`create_*`, `ops.creation_name`) an keiner Installation und
+  bleiben testbar; einen Rechenweg über OpenSCAD gibt es nicht.
 - **Ein Baustein fasst kein Netz an, ohne es zu sagen**: `.raw`, eine
   Dreiecksmessung, eine Netzoperation stehen hinter `shapes.mesh_only`, und
   ein solcher Baustein steht nicht in `ops.EXACT_PARTS`. Eine Gruppe gilt als

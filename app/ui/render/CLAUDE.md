@@ -129,5 +129,5 @@ bis zum ruhigen Bild, Zug je Kamerastellung, Bild im Stand, Speicher). Drei
 Fallen gelten dabei weiter: rendercanvas zeigt ein Qt-Widget von sich aus über
 eine Bitmap (deshalb `present_method="screen"`); gezählt werden Bilder, nicht
 Bestellungen (`render_now`); und das erste Bild eines Netzes übersetzt die
-Shader — am 3,15-Millionen-Baum vier Sekunden, jedes weitere Bild 4 ms. Der
+Shader und dauert Sekunden, jedes weitere nur Millisekunden. Der
 Bildtakt von rendercanvas (`max_fps=30`) bremst nichts (`ansicht.md`).

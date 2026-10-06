@@ -322,7 +322,7 @@ Ansichtsseite steht in `griffe.md`.
   `WA_DontShowOnScreen` aktiviert kein Fenster.
 - Stylesheets ohne Selektor am Vorfahren ersetzen für gesetzte Eigenschaften
   die Anwendungsfarben aller Nachkommen: besonders `background`, nicht ein
-  reines `border` wie `_flash`. Deshalb `objectName`-Selektoren; bei notwendiger
+  reines `border` wie `_flash_area`. Deshalb `objectName`-Selektoren; bei notwendiger
   breiter Regel Hauptknopffarben ausdrücklich setzen (`#surveyNotice #surveyGive`)
   und weiterhin `make_primary` verwenden. Klicktests belegen keine Knopffarbe.
 - Umschalter nennen das Werkzeug, Knöpfe die Handlung (*Trennen*, *Jetzt

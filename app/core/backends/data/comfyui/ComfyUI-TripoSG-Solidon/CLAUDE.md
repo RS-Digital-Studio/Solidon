@@ -4,6 +4,11 @@ Die ComfyUI-Knoten für TripoSG (MIT). Sie sind **nicht Teil der Anwendung**,
 sie werden in eine fremde ComfyUI-Installation kopiert
 (`app/core/backends/comfy_setup.py`).
 
+| Datei | Rolle |
+|---|---|
+| `nodes.py` | Die Knoten (`TripoSGLoader`, `TripoSGImageToMesh`, `TripoSGPostprocess`, `TripoSGExportMesh`) |
+| `__init__.py` | Meldet sie ComfyUI an (`NODE_CLASS_MAPPINGS`, `NODE_DISPLAY_NAME_MAPPINGS`) |
+
 ## Warum das hier liegt und nicht in `tools/`
 
 Weil `tools/` im gebauten Paket nicht mitreist. Der Nutzer soll ComfyUI aus

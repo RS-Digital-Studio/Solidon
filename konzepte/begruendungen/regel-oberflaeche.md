@@ -69,7 +69,8 @@ Beschriftung; im Operationsdialog holt `QFormLayout.labelForField` die
 Beschriftung, die `addRow` aus der Zeichenkette gebaut hat (`_explain` in
 `op_dialog.py`). Ist eine Zeile gesperrt, tragen beide
 Hälften den *Grund* statt des Satzes — in ein ausgegrautes Feld zeigt niemand,
-man zeigt auf das Wort davor.
+man zeigt auf das Wort davor. Die Regel nannte zuletzt 2296 Parameter der 178
+Operationen (06.10.2026); sie nennt keine Zahl mehr, weil kein Test sie hält.
 
 Der `note`-Satz ist nicht der Titel noch einmal, sondern sagt, was passiert,
 wenn man den Wert bewegt („Rechnet die Außenwand

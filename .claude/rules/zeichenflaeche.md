@@ -79,9 +79,9 @@ im Einzelnen stehen unter denselben Überschriften in
 * **Die Marke hat eigene Aktoren** (`_cursor_actors`) und verschwindet in
   `set_sketching` (nicht in `finish_sketch`) bei **jedem** Aufruf, auch beim
   Ebenenwechsel.
-* **Ein Zeigerschritt, der nichts ändert, zeichnet nicht:** `render()` kostet
-  6,9 ms, bei sechzig Ereignissen je Sekunde 41 % eines Kerns. Verglichen
-  werden gefangener Ort **und** Maßstab.
+* **Ein Zeigerschritt, der nichts ändert, zeichnet nicht** — ein Bild ist teuer,
+  und Zeigerereignisse kommen dicht. Verglichen werden gefangener Ort **und**
+  Maßstab.
 * Fangmarke, `pending_elements()` und der feste Klick lesen dasselbe Ziel aus
   `_placement_target`; ein Mausereignis rendert höchstens einmal.
 
@@ -91,9 +91,12 @@ im Einzelnen stehen unter denselben Überschriften in
   wären gleich lange Strecken verschieden lang. Beim Verlassen kommt der Wert
   des Nutzers zurück; `view_on_plane` rechnet `parallel_scale` aus der
   Kameradistanz (`_fit_parallel_scale`).
-* **Wer an der Kamera zoomt, geht durch `apply_wheel_zoom`**, das beide
-  Projektionen unterscheidet (ein Dolly ändert orthografisch nichts); das Rad
-  zoomt auf den Zeiger. `tests/test_viewport_decisions.py` prüft beide.
+* **Wer an der Kamera zoomt, geht durch `Renderer.dolly`**, das beide
+  Projektionen bedient (orthografisch über den Maßstab, perspektivisch über den
+  Abstand); das Rad zoomt auf den Zeiger (`Navigator._zoom_at`), die Tastatur
+  über `Viewport.zoom`. Geprüft in
+  `test_render_contract.py::test_camera_pose_projection_and_dolly` und
+  `test_navigator.py::test_a_wheel_step_keeps_the_point_under_the_pointer`.
 * **Die Kamera meldet jede Bewegung zurück** (`Viewport.cameraMoved`, verbunden
   in `start_sketch`, gelöst in `finish_sketch`), am **Ende** einer Bewegung:
   Zugende des Navigators (`on_end` in `_weak_callbacks`); Radzoom,

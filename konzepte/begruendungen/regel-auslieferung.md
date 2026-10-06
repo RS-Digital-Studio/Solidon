@@ -13,6 +13,19 @@ Regeln lagen in Karten, Erinnerungen und Commit-Meldungen verstreut
 Zur Grenze von 100 Artefakten je Release-Lauf: „Am 25.09.2026 waren es rund
 45".
 
+Warum der Job „Neueste Versionen“ nur meldet (RM-350): Am Tag v0.5.3 wurde er
+rot (`cadquery-ocp-novtk 8.0.1.1.0` ohne festgeschriebenen Lizenztext), der
+Taglauf endete auf „failure“, und `sign_release.verify_ci_run` verlangte
+`success` — das Windows-Setup ließ sich für diesen Tag nicht signieren, obwohl
+Kern, Fenster und Pakete grün waren. Seither `continue-on-error` am Job
+(`81303aaab`) und `ADVISORY_JOBS` in der Signierung (`6e16a2cef`).
+
+## Jedes Kundenpaket startet bei jedem Release einmal
+
+Der Anlass, aus der Regel verschoben (RM-505): 0.5.1 bestand Suite, Bau,
+Signatur und Notarisierung und beendete sich auf jedem Mac nach 20 bis 40
+Sekunden — kein Schritt hatte das ausgelieferte Programm je gestartet.
+
 ## Die Version wird vor dem Bau erhöht, und nur über das Werkzeug
 
 Warum ein nie veröffentlichter Fehler nicht in den Changelog gehört: „— der

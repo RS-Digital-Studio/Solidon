@@ -26,7 +26,8 @@ Von Hand: `index.html`, `funktionen.html`, `ki-modelle.html`,
 `security.html` (je Sprache), `offline-aktivierung.html` und
 `activation.js` (ausgeliefert von `tools/deploy_activation_server.py`),
 `style.css`, `site.js`, `.htaccess`, `api/`, `fonts/`, `release-dates.json`, die Datei zur
-Bestätigung bei der Suchmaschine, die Rechtstext-**Quellen** im
+Bestätigung bei der Suchmaschine (`google2f8f028be26a9b5e.html`, Search
+Console — nicht löschen), die Rechtstext-**Quellen** im
 Wurzelverzeichnis (`EULA.md`, `AGB.md`, `WIDERRUF.md`, `DATENSCHUTZ.md`), die
 Schaustücke in `bilder/`, die gezeichnete `bilder/fernsteuerung-mcp.svg`
 (textfrei, eine Datei für alle sechs Sprachen) — und **`impressum.html`**: Es
@@ -110,10 +111,9 @@ MCP-Werkzeuglisten gehören nicht ins Bedienhandbuch.
   schließt `website/teile/` ganz aus, gleich welcher Name oder welche Endung.
   Eine öffentliche Tauschstelle gibt es nicht; Bausteindateien bleiben im
   lokalen Dateiweg der Anwendung.
-- **Der Download-Kasten zeigt die fünf Plätze aus `DELIVERED`**
-  (`tools/make_download.py`): Setup, AppImage, Flatpak, beide macOS-Pakete —
-  obwohl der Baulauf acht Dateien liefert. Archive werden nicht hochgeladen.
-  Die Regel dazu steht in `.claude/rules/auslieferung.md`.
+- **Der Download-Kasten** (`tools/make_download.py`): Welche Plätze er zeigt,
+  regelt `.claude/rules/auslieferung.md`; Archive des Baulaufs werden nicht
+  hochgeladen.
 
 ## Die sechs Sprachfassungen
 

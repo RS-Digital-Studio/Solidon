@@ -88,7 +88,7 @@ weder im Repository noch beim Kunden. Getrennte Paare:
 `tools/make_licence_keys.py` erzeugt Kaufcodes,
 `tools/setup_activation_server.py` richtet den Aktivierungsdienst ein.
 
-Ein ab dem 01.11.2026 ausgestellter Verkaufscode allein schaltet nichts frei:
+Ein ab `DEVICE_ACTIVATION_FROM` ausgestellter Verkaufscode allein schaltet nichts frei:
 Erst ein vom Dienst signiertes, an den privaten Geräteteil gebundenes
 Zertifikat öffnet die vier Grenzen. Bestandsschlüssel vor diesem Stichtag
 bleiben ohne nachträgliche Gerätebindung gültig. Das Zertifikat läuft nicht

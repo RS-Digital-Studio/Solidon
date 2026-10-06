@@ -62,8 +62,8 @@ er:** `skirt`, `brim`, `raft` mit „Skirt-Runden“, „Brim-Breite“,
 anders heißt als sein Feld, ist eine Fährte ins Nichts.
 
 **Jedes Feld sagt, was es tut — und zwar alle**, sonst lernt niemand, dass es
-hier Sätze gibt: die Druckeinstellungen über `note`, die 2296 Parameter der 178
-Operationen über ihren `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
+hier Sätze gibt: die Druckeinstellungen über `note`, jeder Parameter jeder
+Operation über seinen `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
 `_explain` über `QFormLayout.labelForField`). Ist eine Zeile gesperrt, tragen
@@ -389,7 +389,7 @@ auch Funktionen ohne Widget; ein übergebenes Argument hat Vorrang.
   `blockSignals`.
 - **Ein Satz trägt keine Einheit im Katalogtext:** Die Zahl kommt mit ihrer
   Einheit (`labels.length`, im Kern `format_length(…, display_unit())`) —
-  „misst {measure} mm“ las sich in Zoll als „0.2047 mm“ (RM-516).
+  sonst liest sich „misst {measure} mm“ in Zoll als „0.2047 mm“ (RM-516).
 - **Gelesen wird über die Leiste, nicht an ihr vorbei** (`SculptBar.values()`,
   typisiert als `StrokeValues`, damit mypy das Auspacken prüft).
 - **Geprüft wird an einer Handlung, nicht nur an Anzeigen:**

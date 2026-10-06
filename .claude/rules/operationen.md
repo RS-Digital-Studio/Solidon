@@ -75,7 +75,7 @@ Ausdrücken wird dort eingetragen; `strokes` fehlt mit Absicht.
 ### Eine Operation, die an ihren eigenen Eingängen vorbei liest, bringt das Gelesene in den Schlüssel
 
 `_with_nested_context` mischt die Hashes aller Träger ein, die ein Parameter
-benennt (`align_to_feature`-Ziel, `up_to`-Fläche `TARGET_FIELD`,
+benennt (`align_to_feature`-Ziel, `up_to`-Fläche `ParamSpec.targets_feature`,
 `feature:<id>`-Skizzenebene über `feature_ref_of_sketch`, auch durch
 `standing_on_feature`), und bei `OperationSpec.reads_other_bodies` am Register
 alle Objekte unter `#scene` (`orient_for_print`, `keep_on_bed`). Eine neue

@@ -33,6 +33,10 @@ Paketfreigabe. Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
   vollständige Windows-Fenstergruppe protokolliert die Testnamen, bei einem
   stehenden Test liefert `faulthandler` nach zwei Minuten den Stapel. Ein
   Fristablauf ist ein roter Lauf und sperrt die Paketierung.
+- **Der Job „Neueste Versionen“ meldet und hält nichts an**
+  (`continue-on-error`; `sign_release.ADVISORY_JOBS` nimmt einen Hauptbau an,
+  der nur dort rot ist). Sein Ergebnis wird gelesen und ein Rot als
+  Registerpunkt übernommen — Ablauf in `/erzeugen`, Schritt „CI-Bau“.
 
 ## Der Einstieg des Pakets startet auch den Hilfsprozess des Kerns
 
@@ -63,8 +67,8 @@ einen unveränderten Paketbaum; die Anwendung steht dafür
 Gestartet wird der gebaute Baum im Paketjob aller vier Runner, AppImage und
 Flatpak, das installierte Windows-Setup in `build.yml` und in
 `windows-signed-installer.yml` und das finale Mac-Paket nach Quarantäne,
-Installer und Gatekeeper. Grund: 0.5.1 bestand Suite, Bau, Signatur und
-Notarisierung und beendete sich auf jedem Mac nach 20 bis 40 Sekunden.
+Installer und Gatekeeper. Grund: Suite, Bau, Signatur und Notarisierung können
+grün sein, während das Paket beim Kunden nach Sekunden endet.
 
 - **Ohne Bildschirm (`--offscreen`) nur der Intel-Mac-Runner**: Sein
   Symboldienst (`iconservicesagent`) stürzt in Metal ab, jedes Fenster wartet

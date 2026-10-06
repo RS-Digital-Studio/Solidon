@@ -32,7 +32,7 @@ Nut, Kanal) und `geom/closure_ops.py` (Spiel und Drehweg eines Verschlusses).
   Stück aus Flächen zählt nur, wenn der Kosinus zweier Normalen höchstens
   `STATION_FACES_APART` ist — zwei Facetten derselben Wand sind keine
   Nocke —, und runde Mulden übereinander am selben Winkel sind eine Stellung
-  (`_notch_reach`). Beides kam als falscher Verschluss aus dem Korpus.
+  (`_notch_reach`). Sonst meldet der Korpus falsche Verschlüsse.
 - **Gemerkt wird je Netz und Merkmalsliste** (`features.remembered`, geteilt):
   Baum, Merkmalfenster und Operation fragen dieselbe Antwort; gerechnet wird
   im Auswertungsarbeiter (`session._warm_metrics`).
