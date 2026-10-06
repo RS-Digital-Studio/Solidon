@@ -1394,7 +1394,9 @@ def _empty_the_top_edge(data: dict[str, Any]) -> dict[str, Any]:
         height = params.get("z")
         if isinstance(height, str):
             params.setdefault("legacy_zero_top", True)
-        elif isinstance(height, int | float) and not isinstance(height, bool) and height == 0:
+        elif isinstance(height, int | float) and not isinstance(height, bool) and not height:
+            # Genau die Lesart von damals (``stated or`` Oberkante): Was als
+            # Zahl falsch war, hieß Oberkante — kein Vergleich mit Toleranz.
             params["z"] = None
     return data
 
