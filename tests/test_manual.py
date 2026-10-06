@@ -2642,7 +2642,9 @@ def test_a_contents_entry_that_is_cut_says_so(qt_app: QApplication) -> None:
     assert liste.textElideMode() == QtCore_Qt.TextElideMode.ElideRight
     lang = max(range(liste.count()), key=lambda i: len(liste.item(i).text()))
     eintrag = liste.item(lang)
-    assert eintrag.toolTip() == eintrag.text(), "der volle Name steht im Hinweis"
+    # Seit RM-509 steht hinter dem Namen die Art der Seite („— Funktionen“),
+    # die vorher der Statustipp trug; der volle Name bleibt vorn.
+    assert eintrag.toolTip().startswith(f"{eintrag.text()} — "), "der volle Name steht im Hinweis"
     fenster.close()
 
 
