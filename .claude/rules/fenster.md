@@ -129,6 +129,9 @@ wird nur, wenn Zurückgenommenes verworfen würde (§15.4,
 - **Eine unmögliche Stelle sagt ihren Grund, bevor gerechnet wird**
   (`Session.move_targets`): kein Einfügestrich und ein Satz beim Ziehen, ein
   grauer Eintrag mit Kurzhilfe im Kontextmenü.
+- **Jede Schrittnummer ist zu sehen:** Eine zugeklappte Gruppe trägt die
+  Nummern ihrer Schritte („3–4“, `panels.step_span`), sonst sprang die Zählung
+  an ihr von 2 auf 5 (RM-519).
 - **Der Zustand steht als Wort an der Zeile** („(aus)“, „(ruht)“), kursiv
   und gedämpft nur zusätzlich (Regel 18); die Kurzhilfe nennt, was ein Schritt braucht und
   wer ihn braucht. Was ein *Objekt entfernen* mitnimmt, steht zugeklappt darunter

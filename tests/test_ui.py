@@ -6754,6 +6754,69 @@ def test_the_history_keeps_the_title_of_a_deleted_child(qt_app: QApplication) ->
     assert len(deleted) - len(deleted.lstrip()) == indent, (deleted, kept)
 
 
+def test_a_step_span_names_the_numbers_of_a_group() -> None:
+    """Ohne Fenster: Eine Gruppenzeile trägt die Nummern ihrer Schritte (RM-519)."""
+    from app.ui.panels import step_span
+
+    assert step_span([3, 4]) == "3–4"
+    assert step_span([4, 3, 5]) == "3–5"
+    assert step_span([2, 3, 6]) == "2–3, 6", "nach einem Verschieben eine Lücke"
+    assert step_span([7]) == "7"
+    assert step_span([]) == ""
+
+
+def test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last(
+    qt_app: QApplication,
+) -> None:
+    """Jede Schrittnummer ist zu sehen, und der Kernwechsel steht hinten (RM-519).
+
+    Die zugeklappte Gruppe trug keine Nummer, und die Zählung sprang von 2 auf
+    5. *Als Dreiecksmodell rechnen* stand im Kontextmenü an zweiter Stelle,
+    gleich nach *Parameter ändern …* — für die seltenste Handlung im Menü.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.types import Document, Operation, Transaction
+    from app.ui.panels import HistoryPanel
+
+    load_operations()
+    document = Document(
+        format_version=17,
+        app_version="0.1.3",
+        ops=[
+            Operation(id=1, op="create_brep_box"),
+            Operation(id=2, op="drill_hole"),
+            Operation(id=3, op="drill_hole"),
+            Operation(id=4, op="rename_object"),
+        ],
+        transactions=[
+            Transaction(id="t1", title="Quader", ops=(1,)),
+            Transaction(id="t2", title="Kabel und Befestigung", ops=(2, 3)),
+            Transaction(id="t3", title="Name", ops=(4,)),
+        ],
+    )
+    panel = HistoryPanel()
+    panel.show_document(document)
+    shown = [
+        item.text()
+        for row in range(panel.list.count())
+        if not (item := panel.list.item(row)).isHidden()
+    ]
+    assert shown[0].startswith("1  Quader"), shown
+    assert shown[1] == "▸  2–3  Kabel und Befestigung", shown
+    assert shown[2].startswith("4  Name"), shown
+
+    menu = panel.context_menu(panel.list.item(0))
+    assert menu is not None
+    actions = menu.actions()
+    assert actions[0].objectName() == "history.edit"
+    switch = next(action for action in actions if action.objectName() == "history.kernel")
+    assert switch.text() == "Als Dreiecksmodell rechnen"
+    assert actions[-1] is switch, [action.text() for action in actions]
+    assert actions[-2].isSeparator(), "hinter einem Trennstrich"
+    menu.deleteLater()
+    panel.deleteLater()
+
+
 def test_history_context_delete_uses_the_visible_multiple_selection(
     qt_app: QApplication,
 ) -> None:

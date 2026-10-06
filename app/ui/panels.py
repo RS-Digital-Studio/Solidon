@@ -4489,6 +4489,26 @@ def removal_groups(document: Document, gone: Discarded) -> dict[str, tuple[int, 
     }
 
 
+def step_span(numbers: Iterable[int]) -> str:
+    """Die Schrittnummern einer Gruppenzeile im Verlauf, als Spanne „3 bis 4“ (RM-519).
+
+    Ohne sie sprang die Zählung an der Gruppe — 1, 2, ▸ Kabel und
+    Befestigung, 5 —, und wer „Operation 4“ aus einer Fehlermeldung suchte,
+    fand sie nicht. Zusammenhängende Nummern stehen als Spanne, Lücken nach
+    einem Verschieben als Liste.
+    """
+    ordered = sorted(set(numbers))
+    runs: list[list[int]] = []
+    for number in ordered:
+        if runs and number == runs[-1][-1] + 1:
+            runs[-1].append(number)
+        else:
+            runs.append([number])
+    return ", ".join(
+        str(run[0]) if len(run) == 1 else f"{run[0]}–{run[-1]}" for run in runs
+    )
+
+
 def _with_removed(count: int) -> str:
     """Wie viele Schritte unter einer Löschung stehen, für ihre Zeile."""
     if count == 1:
@@ -5042,16 +5062,21 @@ class HistoryPanel(QWidget):
             # Schritts lautet „Bohrung setzen — Operation 4". Wer von dort
             # zurück in den Verlauf sieht, sucht diese Zahl.
             #
-            # Eine Transaktion aus mehreren Schritten bekommt keine: Sie
-            # *vertritt* keinen einzelnen, und ihre Kinder tragen ihre eigenen.
+            # Eine Transaktion aus mehreren Schritten trägt die Spanne ihrer
+            # Kinder (von 3 bis 4, RM-519): Ohne sie sprang die Zählung an der
+            # zugeklappten Gruppe von 2 auf 5.
             single = transaction.ops[0] if len(transaction.ops) == 1 else None
             # Ein gelöschter Schritt hat keine Stelle mehr — seine Kennung
             # stünde sonst als Nummer neben den Stellen der übrigen (RM-368).
-            number = (
-                f"{self._positions[single]}  "
-                if single is not None and single in self._positions
-                else ""
-            )
+            if single is not None:
+                span = str(self._positions[single]) if single in self._positions else ""
+            else:
+                span = step_span(
+                    self._positions[op_id]
+                    for op_id in transaction.ops
+                    if op_id in self._positions and op_id not in replanned
+                )
+            number = f"{span}  " if span else ""
             item = QListWidgetItem(f"{number}{transaction.title}{by}")
             halted = stopped_at is not None and stopped_at in transaction.ops
             if halted:
@@ -5673,18 +5698,27 @@ class HistoryPanel(QWidget):
         return tuple(int(op_id) for op_id in clicked)
 
     def _on_context_menu(self, position: QPoint) -> None:
-        """Was man mit einem Schritt tun kann, dort, wo er steht.
+        """Rechtsklick im Verlauf: das Menü der Zeile darunter."""
+        menu = self.context_menu(self.list.itemAt(position))
+        if menu is None:
+            return
+        menu.exec(self.list.viewport().mapToGlobal(position))
+        # Wie im Objektbaum: Das Menü gehört diesem Klick.
+        menu.deleteLater()
+
+    def context_menu(self, item: QListWidgetItem | None) -> QMenu | None:
+        """Was man mit einem Schritt tun kann, dort, wo er steht — gebaut, nicht gezeigt.
 
         Bisher gab es nur den Doppelklick, und den findet, wer ihn probiert.
         Angeboten wird, was der Stapel wirklich kann: einen Schritt öffnen,
         seine Zahlen ändern oder ihn samt abhängigen Schritten löschen
         (§15.4). Das Löschen bleibt eine Transaktion und damit rücknehmbar.
+        Getrennt vom Zeigen, weil ``QMenu.exec`` wie ein modaler Dialog wartet.
         """
-        item = self.list.itemAt(position)
         op_id = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         op_ids = self._operations_for_context(item)
         if not op_ids:
-            return
+            return None
 
         menu = QMenu(self)
         # Die Objektnamen ``history.*`` sind die Adresse, unter der eine
@@ -5696,11 +5730,6 @@ class HistoryPanel(QWidget):
             action.setObjectName("history.edit")
             action.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.operationActivated.emit(chosen)
-            )
-        if single_op is not None and single_op in self._switchable:
-            switch = menu.addAction(self._switchable[single_op])
-            switch.triggered.connect(
-                lambda _checked=False, chosen=single_op: self.kernelSwitchRequested.emit(chosen)
             )
         if single_op is not None and single_op in self._drawn:
             # **Eine Zeichnung für mehrere Schritte** (Befund E6): Außenkontur
@@ -5736,9 +5765,17 @@ class HistoryPanel(QWidget):
             frozen.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.bakeRequested.emit(chosen)
             )
-        menu.exec(self.list.viewport().mapToGlobal(position))
-        # Wie im Objektbaum: Das Menü gehört diesem Klick.
-        menu.deleteLater()
+        if single_op is not None and single_op in self._switchable:
+            # **Der Kernwechsel steht hinten, hinter einem Strich** (RM-519):
+            # An zweiter Stelle, gleich nach *Parameter ändern …*, las er sich
+            # wie eine alltägliche Handlung — er ist die seltenste im Menü.
+            menu.addSeparator()
+            switch = menu.addAction(self._switchable[single_op])
+            switch.setObjectName("history.kernel")
+            switch.triggered.connect(
+                lambda _checked=False, chosen=single_op: self.kernelSwitchRequested.emit(chosen)
+            )
+        return menu
 
 
 #: Ab wie vielen Zeilen der Bericht seine Filterzeile zeigt.
