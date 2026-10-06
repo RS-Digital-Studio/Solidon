@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-350: Ein roter Versionswächter am Tag sperrt die Signierung nicht mehr (06.10.2026)](#rm-350-ein-roter-versionswächter-am-tag-sperrt-die-signierung-nicht-mehr-06102026) |
 | 2026-10-05 | [RM-509: Kundentexte haben Längengrenzen, und ein Wächter hält sie (05.10.2026)](#rm-509-kundentexte-haben-längengrenzen-und-ein-wächter-hält-sie-05102026) |
 | 2026-10-05 | [RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)](#rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026) |
 | 2026-10-05 | [RM-523: Die Druckerlisten nennen Drucker, die Düse wählt der Druckdialog (05.10.2026)](#rm-523-die-druckerlisten-nennen-drucker-die-düse-wählt-der-druckdialog-05102026) |
@@ -42375,3 +42376,39 @@ Entwicklungstor über den Stand mit main zusammengeführt: 24 177 bestanden, der
 rote Fall (privater Querimport zwischen zwei Testdateien) behoben; ruff, Format und
 mypy für Windows, Linux und macOS grün. Commits `2b210f698` bis `fdde41e49`.
 Changelog: zum nächsten Release (kürzere Befunde, Tour und Hinweise).
+
+## RM-350: Ein roter Versionswächter am Tag sperrt die Signierung nicht mehr (06.10.2026)
+
+<a id="rm-350-ein-roter-versionswächter-am-tag-sperrt-die-signierung-nicht-mehr-06102026"></a>
+<a id="rm-350"></a>
+
+**RM-350 — Ein roter Versionswächter am Release-Tag sperrt die Windows-Signierung.**
+  Review seit 0.5.1, Befund E-H1, Commit `36f13c9ee` (Codex).
+  Der Job `latest` (freie Auflösung ohne `constraints.txt`) läuft seitdem an jedem Release-Tag im
+  selben Lauf wie Kernmatrix und Paketbau (`.github/workflows/build.yml:1444–1453`) und hat kein
+  `continue-on-error`. Wird er rot, endet der Lauf mit `conclusion: failure`.
+  `tools/sign_release.verify_ci_run` verlangt `success` (`tools/sign_release.py:805–806`) und wird
+  in beiden Signierphasen (`:1023`, `:1084`) und in `tools/windows_signed_installer.py:96`
+  gerufen. Der Jobkommentar `build.yml:1451` sagt „blockiert nichts — er meldet“.
+  **Fehlerfall:** Zum nächsten Tag bringt eine neue Fremdversion eine `DeprecationWarning`
+  (unter `filterwarnings = ["error"]` rot) oder eine neue ruff-/mypy-Regel → Lauf „failure“,
+  obwohl Kern, Fenster und Pakete grün sind → `sign_release.py --phase application --run <lauf>`
+  bricht mit „CI-Lauf … ist kein erfolgreich abgeschlossener Lauf“ ab; das Windows-Setup lässt
+  sich für diesen Tag nicht signieren.
+  **Fix:** `continue-on-error: true` am Job `latest` (der Job zeigt rot, der Lauf bleibt
+  `success`) oder den Wächter in einen eigenen Workflow legen.
+  **Abnahme:** Wächter in `tests/test_packaging.py`, dass `latest` den Laufausgang nicht bestimmen
+  kann; vor dem nächsten Release-Tag. Bauplan §37.2. Beleg: `bericht-E.md` (H1),
+  `sonden\e_sign_conclusion.txt`.
+  Nachprüfung am Stand `6ce767031`: besteht noch. Im Arbeitsbaum nur entschärft, solange das Repository privat ist; `continue-on-error` fehlt weiter.
+
+**Umsetzung (06.10.2026):** Am Tag v0.5.3 trat der Fehlerfall ein: „Neueste Versionen“
+wurde rot (`cadquery-ocp-novtk 8.0.1.1.0` ohne festgeschriebenen Lizenztext), der
+Taglauf 37409338027 endete auf „failure“. `sign_release.verify_ci_run` nimmt einen
+Hauptbau mit „failure“ seitdem an, wenn die vollständig gelesene Jobliste außer
+`ADVISORY_JOBS` nur Grün oder Übersprungen zeigt (`6e16a2cef`, vor dem Installerlauf als
+Orchestrierungsdatei erlaubt); elf Sperrfälle und der Abgleich mit `build.yml` stehen in
+`tests/test_sign_release.py`. Danach bekam der Job `continue-on-error`
+(`81303aaab`, `test_a_red_latest_job_leaves_the_release_run_green`), und `/erzeugen`
+verlangt, sein Ergebnis zu lesen. Die Ursache selbst: `036021393` (Lizenztext
+bytegleich, Fassung ergänzt). Anwendung und Setup von 0.5.3 sind damit signiert.

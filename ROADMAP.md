@@ -1,11 +1,12 @@
 # ROADMAP — Arbeitsliste
 
 Der ursprüngliche Bauplan-Abgleich vom 08.09.2026 und seine Fortschreibungen stehen im
-[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.5.1**, veröffentlicht
-am **28.09.2026** (`website/version.json`, `1f5dc9f43`). Der Tag `v0.5.1` zeigt auf
-`585869a2c`; der [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
-ist erfolgreich abgeschlossen. Die Website bietet Windows-Setup, Linux-AppImage,
-Linux-Flatpak und die beiden Mac-Pakete an. Die offenen Aufgaben darunter führen ihre verbleibende
+[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.5.3**, veröffentlicht
+am **06.10.2026** (`website/version.json`, `d5a485a7a`). Der Tag `v0.5.3` zeigt auf
+`34e1b3364`; der [Taglauf 37409338027](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37409338027)
+ist im zweiten Versuch abgeschlossen, rot nur im meldenden Versionswächter (RM-350); das
+Windows-Setup kommt aus dem Installerlauf 37418052743 und ist lokal signiert. Die Website
+bietet Windows-Setup, Linux-AppImage, Linux-Flatpak und die beiden Mac-Pakete an. Die offenen Aufgaben darunter führen ihre verbleibende
 Arbeit oder Abnahme; ein veröffentlichter Build ersetzt keinen Feldnachweis.
 
 Legende: `[ ]` offen · `[~]` teilweise umgesetzt, Abnahme oder Restarbeit offen ·
@@ -112,7 +113,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) entschieden und gebaut: lokal 12 Schritte (`MAX_STEPS_LOCAL`, `steps_for`), gehostet 8; offen (b) der Satz im Prompt für gebündelte Aufrufe — braucht einen Suitelauf mit qwen3:14b vorher und nachher auf freier Karte |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
-| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) erledigt: `hollow.done` trägt *Diesen Schritt ändern*; offen (b) `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
+| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | (a) und (b) erledigt; offen die sechs Befunde aus dem Review 02.10., die einen Schritt meinen und *Diesen Schritt ändern* noch nicht tragen |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -126,7 +127,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | Die gesperrten Zwillinge nachziehen, die dünnen Hüllen auf ihren Produktionsweg umstellen, die Nur-Test-Kernfunktionen einzeln entscheiden |
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `rendering`-Fälle in der Release-CI auf Linux und macOS und in `latest` fahren — oder Roberts Entscheidung festhalten und Wächter nachziehen |
 | [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, Regel mit Datum, veraltete Regeln und Registerzellen |
-| [RM-350 — Ein roter Versionswächter am Release-Tag sperrt die Windows-Signierung](#rm-350) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `continue-on-error: true` am Job `latest` oder eigener Workflow; Wächter in `test_packaging.py` |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
 | [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10. im Archiv, nächster am 05.10.; Paketbeleg der neuen Bauplattform unter RM-468 und RM-469 |
@@ -4147,6 +4147,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Release-Lauf. Bauplan §2.7, §15.5.
   Review 02.10. (`73d83b55b`, RM-374 archiviert mit `9983e9923`): Die Vorgabe „jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf“ ist nicht erfüllt — ohne Knopf bleiben `mesh.already_below_target` (`app/core/geom/mesh_ops.py:2219`, im Fenster geprüft), `rotate_feature.unchanged`, `resize_feature.unchanged`, `move_feature.unchanged`, `{operation}.unchanged` (`prepare_ops.py`) und `bore.resize_unchanged` (`prepare.py`, `prepare_ops.py`); dieser Punkt nennt bisher nur `hollow.done`. Beleg `F:\solidon-review-reports\verif-73d83b55b-claude.md`.
   **Stand 02.10.2026 abends:** (a) erledigt (Claude, Thread „Bedienung und KI“): Beide `hollow.done` tragen *Diesen Schritt ändern* mit `field: wall`, `MEINT_DEN_SCHRITT` nennt sie. Offen (b).
+  **Stand 06.10.2026:** (b) erledigt im Release-Lauf 0.5.3: `make_examples.py` hat alle
+  Beispielprojekte neu erzeugt (`ac0d11486`), `weg3-generiert-aufbereiten.p3d` trägt die
+  Transaktionen des heutigen Codes. Offen bleibt der Review-Fund: Die sechs Befunde oben
+  (`mesh.already_below_target`, `rotate_feature.unchanged`, `resize_feature.unchanged`,
+  `move_feature.unchanged`, `{operation}.unchanged`, `bore.resize_unchanged`) tragen den Knopf
+  noch nicht und stehen nicht in `MEINT_DEN_SCHRITT`; je Befund mit `cache_version` der Op.
 
 ## Tests und Entwicklungswerkzeuge
 
@@ -4488,28 +4494,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Abnahme: je Spiegelstrich Test oder korrigierte Stelle mit Commit. Beleg: Berichte unter
   `F:\solidon-review-reports`.
   Nachprüfung am Stand `6ce767031`: alle sieben Reste offen (E-N2, F-N5, F-N3, F-N4, D-N4, Registerstände, Beifund memory); nur `oberflaeche.md:202–203` ist im Arbeitsbaum ungesichert korrigiert.
-
-<a id="rm-350"></a>
-
-- [ ] **RM-350 — Ein roter Versionswächter am Release-Tag sperrt die Windows-Signierung.**
-  Review seit 0.5.1, Befund E-H1, Commit `36f13c9ee` (Codex).
-  Der Job `latest` (freie Auflösung ohne `constraints.txt`) läuft seitdem an jedem Release-Tag im
-  selben Lauf wie Kernmatrix und Paketbau (`.github/workflows/build.yml:1444–1453`) und hat kein
-  `continue-on-error`. Wird er rot, endet der Lauf mit `conclusion: failure`.
-  `tools/sign_release.verify_ci_run` verlangt `success` (`tools/sign_release.py:805–806`) und wird
-  in beiden Signierphasen (`:1023`, `:1084`) und in `tools/windows_signed_installer.py:96`
-  gerufen. Der Jobkommentar `build.yml:1451` sagt „blockiert nichts — er meldet“.
-  **Fehlerfall:** Zum nächsten Tag bringt eine neue Fremdversion eine `DeprecationWarning`
-  (unter `filterwarnings = ["error"]` rot) oder eine neue ruff-/mypy-Regel → Lauf „failure“,
-  obwohl Kern, Fenster und Pakete grün sind → `sign_release.py --phase application --run <lauf>`
-  bricht mit „CI-Lauf … ist kein erfolgreich abgeschlossener Lauf“ ab; das Windows-Setup lässt
-  sich für diesen Tag nicht signieren.
-  **Fix:** `continue-on-error: true` am Job `latest` (der Job zeigt rot, der Lauf bleibt
-  `success`) oder den Wächter in einen eigenen Workflow legen.
-  **Abnahme:** Wächter in `tests/test_packaging.py`, dass `latest` den Laufausgang nicht bestimmen
-  kann; vor dem nächsten Release-Tag. Bauplan §37.2. Beleg: `bericht-E.md` (H1),
-  `sonden\e_sign_conclusion.txt`.
-  Nachprüfung am Stand `6ce767031`: besteht noch. Im Arbeitsbaum nur entschärft, solange das Repository privat ist; `continue-on-error` fehlt weiter.
 
 <a id="rm-387"></a>
 
