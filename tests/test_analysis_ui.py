@@ -6487,8 +6487,10 @@ def test_the_history_shows_what_kind_of_step_each_line_is(qt_app: QApplication) 
     Die Nummer ist keine Zierde — der Fehlerdialog nennt „Operation: 4", und
     ein geöffneter Schritt heißt „Bohrung setzen — Operation 4". Sie steht
     deshalb an jeder Zeile, die genau einen Schritt vertritt; eine
-    Transaktion aus mehreren bekommt keine, ihre Kinder tragen ihre eigenen.
+    zugeklappte Transaktion aus mehreren trägt die Spanne ihrer Kinder
+    („3–4“, RM-519), sonst sprang die sichtbare Zählung an ihr von 2 auf 5.
     """
+    import re
     from pathlib import Path
 
     from app.ui.panels import HistoryPanel
@@ -6515,6 +6517,13 @@ def test_the_history_shows_what_kind_of_step_each_line_is(qt_app: QApplication) 
             assert str(single) in row.text(), (
                 f"Schritt {single} nennt seine Nummer nicht: {row.text()!r}"
             )
+        # Und zugeklappt, wie der Verlauf aufgeht, ist jede Nummer zu sehen.
+        shown = " ".join(row.text() for row in rows if not row.isHidden())
+        numbers = {int(number) for number in re.findall(r"\d+", shown)}
+        for low, high in re.findall(r"(\d+)–(\d+)", shown):
+            numbers.update(range(int(low), int(high) + 1))
+        steps = len(session.project.document.ops)
+        assert set(range(1, steps + 1)) <= numbers, f"es fehlen Nummern: {shown!r}"
     finally:
         panel.deleteLater()
 

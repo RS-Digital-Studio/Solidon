@@ -74,6 +74,34 @@ def test_the_parameter_card_names_fitting_numbers_and_offers_to_bind(
     panel.close()
 
 
+def test_the_box_with_lid_shows_its_four_measures_without_a_line_below(
+    qt_app: QApplication,
+) -> None:
+    """Abnahme RM-519 am Bild des Hauptfensters: vier Maße, keine Zeile darunter.
+
+    Im Beispiel *Dose mit Deckel* stand unter Tiefe, Höhe und Wandstärke
+    „Eine feste Zahl passt“ / „2 feste Zahlen passen“, und es las sich wie die
+    Überschrift der jeweils nächsten Zeile. Alle vier Maße wirken.
+    """
+    from pathlib import Path
+
+    from app.ui.panels import ParameterPanel
+    from app.ui.session import Session
+
+    session = Session()
+    session.open_project(Path(__file__).parent.parent / "app" / "examples" / "dose-mit-deckel.p3d")
+    assert session.wait_for_idle(60000)
+    document = session.project.document
+    assert len(document.parameters) == 4
+    panel = ParameterPanel()
+    try:
+        panel.show_document(document, session.last_result)
+        shown = [name for name, hint in panel._hints.items() if panel._form.isRowVisible(hint)]
+        assert shown == [], f"Untertext unter {shown}"
+    finally:
+        panel.deleteLater()
+
+
 def test_the_bind_button_names_how_many_numbers_it_binds() -> None:
     """Ohne Fenster: Die Zahl der Stellen steht am Knopf, in Einzahl und Mehrzahl (RM-519)."""
     from app.ui.panels import binding_button_text
