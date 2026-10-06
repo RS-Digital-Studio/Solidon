@@ -215,7 +215,7 @@ from app.ui.style import (
     SPACE,
     TARGET_SIZE,
     TIGHT,
-    make_danger,
+    leading_action,
     make_primary,
     rule,
     set_level,
@@ -6378,9 +6378,7 @@ class ReportPanel(QWidget):
             if finding is not None
             else []
         )
-        primary = next(
-            (action for action in offered if action.primary), offered[0] if offered else None
-        )
+        primary = leading_action(offered)
         # **Ein Zeige-Knopf** (Durchsicht B10): Bietet der Befund selbst das
         # Zeigen an, entfällt der eigene Knopf der Befundzeile.
         self._show_finding_context(
@@ -6832,14 +6830,14 @@ class ReportPanel(QWidget):
         Knöpfe freischaltet, muss man wissen, und §2.7 verspricht anklickbare
         Handlungen und nicht auffindbare.
 
-        Gemessen am häufigsten Fall überhaupt, dem ersten Öffnen eines
-        Modells: ``block_with_rounded_edge.stl`` liegt von Z -10 bis +10, der
-        Bericht meldet ``arrange.below_bed``, und *Auf das Bett setzen* löst es
-        mit einem Klick. Vor der Vorauswahl standen dort null Knöpfe, nach
-        einem Klick auf die Zeile einer — der Weg zur Lösung war einen Klick
-        länger als nötig, und dieser Klick stand nirgends geschrieben.
+        Gemessen an einer Warnung mit Ausweg: Steht ein Körper über den
+        Bauraum hinaus, meldet der Bericht ``arrange.out_of_build_volume``, und
+        darunter stehen *Modell teilen* und *Auf den Bauraum verkleinern* —
+        ohne Vorauswahl erst nach einem Klick auf die Zeile. Der Weg zur Lösung
+        war einen Klick länger als nötig, und dieser Klick stand nirgends
+        geschrieben.
 
-        Drei Bedingungen, und jede hat ihren Grund:
+        Vier Bedingungen, und jede hat ihren Grund:
 
         * **Nur ohne bestehende Wahl.** Eine Auswahl des Kunden zu
           überschreiben wäre schlimmer als keine Vorauswahl (§2.4).
@@ -6850,6 +6848,12 @@ class ReportPanel(QWidget):
           schwerste, aber nicht immer der, der etwas anzubieten hat —
           ``ingest.welded`` steht regelmäßig darüber und hat keine. Ihn
           vorzuwählen ließe die Zeile wieder leer.
+        * **Nur Fehler und Warnungen** (RM-512). Eine vorgewählte Zeile trägt
+          die Akzentkante und ihre Handlung den Hauptknopf; ein Hinweis, der
+          das tut, liest sich wie eine Warnung (KUNDE-06: „Material
+          kalibrieren“ über jedem sauberen Modell) und nimmt dem Ruhezustand
+          sein eines Licht. Seine Handlung steht einen Klick auf die Zeile
+          entfernt.
         """
         if self.list.selectedItems():
             return
@@ -6859,12 +6863,7 @@ class ReportPanel(QWidget):
             if item.isHidden():
                 continue
             finding = item.data(Qt.ItemDataRole.UserRole)
-            if finding.severity == "info" and finding.object_id is None:
-                # **Ein Hinweis zur Einrichtung ist nicht der erste Schritt am
-                # Teil** (KUNDE-06). „Material kalibrieren“ stand vorgewählt,
-                # in der Auswahlfarbe, mit orangem Hauptknopf, über jedem
-                # sauberen Modell — und las sich wie eine Warnung. Ein Hinweis
-                # am Körper (*Auf das Bett setzen*) bleibt vorwählbar.
+            if finding.severity not in ("error", "warning"):
                 continue
             if handled_actions(
                 finding,
@@ -8636,7 +8635,11 @@ class FeaturePanel(QWidget):
         self._apply.clicked.connect(self._run_armed)
         self._apply.setVisible(False)
         below.addWidget(self._apply)
-        self._cancel = make_danger(QPushButton(tr("Abbrechen"), self._footer))
+        # Ein normaler Knopf: Abbrechen verwirft nur eine Vorschau, die das
+        # Dokument nie gesehen hat. Rot trägt das unwiederbringliche Verwerfen
+        # (Entscheidung Robert, 06.10.2026: RM-512 löst das rote Abbrechen vom
+        # 11.09. ab).
+        self._cancel = QPushButton(tr("Abbrechen"), self._footer)
         self._cancel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._cancel.setToolTip(tr("Verwirft, was im Bild wartet — gerechnet wird nichts."))
         self._cancel.clicked.connect(self.cancelRequested)

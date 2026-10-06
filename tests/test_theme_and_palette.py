@@ -357,9 +357,9 @@ def test_the_surfaces_stand_apart(theme: str) -> None:
 
 @pytest.mark.parametrize("theme", list(THEMES))
 def test_the_accent_line_carries_on_its_own_window(theme: str) -> None:
-    """Die Kante des aktiven Reiters ist der einzige Ort, an dem der Akzent
-    einen *bleibenden* Zustand zeigt. Sie muss auf beiden Untergründen tragen —
-    der Bernstein selbst bringt gegen das helle Fenster nur 1,37.
+    """Die Akzentkante — Fokusring, aktives Werkzeug, laufender Tourschritt —
+    muss auf beiden Untergründen tragen; der Bernstein selbst bringt gegen das
+    helle Fenster nur 1,37.
     """
     colours = THEMES[theme]  # type: ignore[index]
     assert contrast_ratio(colours["accent_line"], colours["window"]) >= 3.0
