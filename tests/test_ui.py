@@ -16540,23 +16540,6 @@ def test_a_recovered_project_saves_into_the_users_file(
     assert window.session.modified, "der Stand weicht von der Datei ab — genau darum ging es"
 
 
-def test_no_question_box_asks_yes_or_no(window: MainWindow) -> None:
-    """Bauart-Prüfung: „Ja"/„Nein" ist in dieser Oberfläche keine Frage.
-
-    Der letzte Ja/Nein-Dialog war der namenlose Wiederherstellungsfall. Diese
-    Zeile hält es dabei — sonst ist der nächste in einem halben Jahr wieder da,
-    und er liest sich beim Schreiben jedes Mal harmlos.
-    """
-    import app.ui
-
-    quellen = sorted(Path(app.ui.__file__).parent.glob("*.py"))
-    assert quellen, "keine Oberflächenquellen gefunden"
-    for path in quellen:
-        text = path.read_text(encoding="utf-8")
-        assert "QMessageBox.question" not in text, f"{path.name}: Ja/Nein-Frage"
-        assert "StandardButton.Yes" not in text, f"{path.name}: Ja-Knopf"
-
-
 def test_the_theme_stands_before_anything_is_shown(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

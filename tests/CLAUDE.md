@@ -31,7 +31,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Trägt jede Ausnahme einen Vorschlag? | `test_errors.py` |
 | Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
-| Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Felder? | `test_theme_and_palette.py` · `test_interface_limits.py` |
+| Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Umschalter, vier Felder vorn? | `test_theme_and_palette.py` · `test_interface_limits.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Verhindert eine abweisende Nachprüfung das Schreiben einer Vergleichsmarke und bleibt sie außerhalb der API-Zeit? | `test_performance_marks.py` — nachgestellte Prüfablehnungen, gestellte Uhr, eigene temporäre Marken; keine Leistungsmessung |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
@@ -94,7 +94,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Arbeitsliste und Archiv: Register, Sprungmarken und fortsetzbare Belege | `test_roadmap.py` — offene Punkte einschließlich Fortsetzungszeilen dürfen keine ausschließlich lokalen Nachweispfade führen; geschlossene Historie bleibt datiert |
 | Hooks, Claude und Codex gleich (Agenten, Skills, Hooks, Plugins, Umgebung), Karten | `test_solidon3d_hooks.py` (echte Auslösung im Editor zusätzlich prüfen) · `test_agent_mirror.py` · `test_directory_docs.py` |
 | Überleben zwei gleichzeitig schreibende Sitzungen in `MEMORY.md`? | `test_memory_index.py` — zwei echte Prozesse |
-| Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` |
+| Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? Halten harte Regeln am Quelltext — kein `eval`, keine Ja/Nein-Frage, kein `==` mit Unendlich? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |
 | Rechnet der Hilfsprozess des Netzkerns bitgleich und zurückgestellt ohne Nachladen, endet er beim Abbrechen und — untätig — mit einem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte Hilfsprozesse, dazu nachgestellte stumme, sterbende und abweisende; verspätetes Ende, Ressourcenfreigabe, bleibende Absage, ursprüngliche Startursache, Startkontingent und Generationswechsel auch am öffentlichen Aufruf; ENOSPC gegenüber echtem Speichermangel über pack/copied und den öffentlichen Call-/Serve-Transfer; Schwelle null, Aufruf aus einem Nebenfaden. Das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob; `test_packaging.py` prüft dessen eigenes Endebudget und harte Stopfehler mit Attrappen |
 | Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` — Windows-Jobobjekt, gehaltene Griffe, echte OS-Abfrage; negative Kontrollen treffen dasselbe Assert; ohne Fenster oder Leistungsmarken |

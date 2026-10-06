@@ -1,12 +1,12 @@
 # AGENTS.md — Repository-Regeln
 
-Immer lesen. Der Bauplan (`3d-agent-bauplan.md`) sagt **was**, diese Datei
-sagt **wie**, `ROADMAP.md` sagt **was als Nächstes**. Bei Widerspruch gilt der
-Bauplan.
+Immer lesen. Diese Datei sagt, **wie** gearbeitet wird; welche Unterlage
+welche andere Frage beantwortet, steht in `CLAUDE.md`. Bei Widerspruch gilt
+der Bauplan (`3d-agent-bauplan.md`).
 
 ---
 
-## Projekt in fünf Zeilen
+## Projekt in Kürze
 
 Desktop-Anwendung zum Konstruieren, Generieren und Bearbeiten druckbarer
 3D-Modelle. Kern ist ein non-destruktiver Operationsstack über einer Szene mit
@@ -21,7 +21,11 @@ aktiviert. Ohne KI bleibt nur der Chat aus.
 
 ## Harte Regeln
 
-Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
+Wo die Suite eine Regel hält, ist ein Verstoß ein roter Lauf, keine
+Geschmacksfrage. Über den ganzen Baum wachen Tests bei 1, 3, 4, 9–13, 15–20
+und 22; bei 2, 6, 7, 14 und 21 prüfen sie die Stellen, an denen die Regel
+greift. 5 und 8 sind Urteilsfragen ohne mechanische Prüfung — sie hält die
+Durchsicht (`/regelcheck`, Agent `solidon3d-review`).
 
 **Aufbau**
 1. **Kein Qt unterhalb von `ui/`.** `core` ohne installiertes Qt importierbar.
@@ -67,9 +71,11 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
     nur extern aufrufen, nie mitliefern. Die bereits freigegebene GCC-Laufzeit
     in Ziel-Wheels ist ausschließlich mit dem vollständigen SPDX-Paar
     `GPL-3.0-or-later WITH GCC-exception-3.1` aus `licences.toml/allowed_with`
-    zulässig (§36). Das ist keine allgemeine Freigabe für GPL-Code oder andere
-    Linking-Ausnahmen; die konkrete Laufzeit muss die Ausnahme tragen und
-    deren Bedingungen erfüllen.
+    zulässig (§36). Ebenso eng zugelassen ist der unveränderte
+    PyInstaller-Bootloader unter `GPL-2.0-or-later WITH PyInstaller Bootloader
+    Exception` (Entscheidung Robert, §36). Das ist keine allgemeine Freigabe
+    für GPL-Code oder andere Linking-Ausnahmen; die konkrete Laufzeit muss die
+    Ausnahme tragen und deren Bedingungen erfüllen.
 
 **Bedienung**
 16. **Jeder Agentenvorschlag ist genau eine Transaktion.** Ein Undo nimmt ihn
@@ -105,7 +111,9 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 
 **Deutsch heißt echte Umlaute** — ä ö ü ß, nie `ae`/`oe`/`ue`/`ss` als Ersatz,
 in jedem deutschen Text: Docstrings, Kommentare, Commits, Doku und die
-deutsche Quelle der Oberflächentexte.
+deutsche Quelle der Oberflächentexte. Geprüft werden Commit-Meldungen
+(`.githooks/commit-msg`) und die Oberflächentexte
+(`tests/test_translations.py`); Docstrings und Kommentare prüft kein Wächter.
 
 Eine **weitere Sprache** ist eine Datei in `app/i18n/locales/` und sonst
 nichts: Sprachauswahl, Einsammler, Handbuch, Abbildungen und Prüfung lesen das
@@ -124,17 +132,15 @@ Englisch überlappen bei technischen Wörtern zu stark für eine automatische.
 **Wer ein deutsches Wort in einem Bezeichner findet, trägt seinen Stamm dort
 ein.**
 
-Begriffszuordnung (verbindlich): Op → `Operation`, Transaktion →
-`Transaction`, Baustein → `Part`, Steckbrief → `digest`, Prüfbericht →
-`report`, Passung → `Fit`, Provenienz → `provenance`, Profil → `Profile`,
-Regelsammlung → `rules`. Neue Begriffe zuerst in Bauplan §4.2, dann in den
-Code.
+Begriffe und ihre Bezeichner stehen verbindlich in Bauplan §4.2; ein neuer
+Begriff kommt zuerst dorthin, dann in den Code.
 
 ---
 
 ## Paketstruktur
 
-Was wo liegt und warum, steht in der Karte in `CLAUDE.md`.
+Was wo liegt, steht in den Karten (`CLAUDE.md` an der Wurzel und je
+Verzeichnis), das Warum in `konzepte/begruendungen/`.
 
 Agenten ohne Claude Codes automatische Bereichsladung lesen vor einer Änderung
 die `CLAUDE.md`-Karten vom Root bis zum betroffenen Verzeichnis und jede Datei
@@ -190,9 +196,11 @@ Dialoge.
 
 1. `@register_op(...)` mit `name`, `title`, `category`, `params`,
    `reversible`, `consumes`/`produces`, `applies_to`, `deterministic`, `doc`,
-   optional `shortcut`
+   optional `shortcut` und `icon` (sonst trägt die Kategorie das Symbol;
+   Einzelheiten und die volle Signatur: `/neue-op`)
 2. Parameterschema mit Grenzen, Einheiten, Vorgaben und Zuordnung zu Vorder-
-   oder Rückseite des Dialogs
+   oder Rückseite des Dialogs — vorn höchstens vier Felder zugleich, bei neun
+   von zehn Operationen höchstens drei (`tests/test_interface_limits.py`)
 3. Umsetzung als `OpFn` gegen `manifold3d` / `trimesh`; Boolesche Ops über die
    Rückfallkette, verwendete Stufe in `solver`
 4. Bei Zufall: Startwert aus `ctx.seed`, `deterministic=False`
@@ -212,10 +220,11 @@ Dialoge.
    nichts aus
 5. Bereichsnachweis, wenn der Baustein oder seine Grenzen sich ändern —
    wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an den Ecken des
-   Parameterbereichs: `python tools/check_part_ranges.py <name>` schreibt ihn
-   nach `knowledge/data/part_ranges.toml`. Die Suite fährt den Bereich nicht,
-   sie vergleicht nur, ob der Nachweis zum Stand passt (Entscheidung Robert);
-   die Prüflogik selbst steht in `test_parts.py`
+   Parameterbereichs: `.venv\Scripts\python.exe tools/check_part_ranges.py
+   <name>` schreibt ihn nach `app/core/knowledge/data/part_ranges.toml`. Die
+   Suite fährt den Bereich nicht, sie vergleicht nur, ob der Nachweis zum
+   Stand passt (Entscheidung Robert); die Prüflogik selbst steht in
+   `test_parts.py`
 6. Normteilmaße aus der Tabelle, nie im Baustein hart eintragen
 7. Vorschaubild wird gerendert (`parts/preview.py`), nicht von Hand gepflegt
 8. Bei Maßänderung an einem bestehenden Baustein: `LIBRARY_VERSION` erhöhen,
@@ -242,7 +251,7 @@ Dialoge.
 
 ## Checkliste: Regelsammlung ändern
 
-1. Eintrag in `core/knowledge/data/rules.toml` mit Datum und Anlass
+1. Eintrag in `app/core/knowledge/data/rules.toml` mit Datum und Anlass
 2. Version erhöhen
 3. Agenten-Suite vorher und nachher, beide Ergebnisse festhalten
 4. Verschlechtert sich die Quote, wird die Regel zurückgenommen — nicht
@@ -251,6 +260,8 @@ Dialoge.
 ---
 
 ## Testarten
+
+Welche Datei welche Art trägt, steht in `tests/CLAUDE.md`.
 
 | Art | Prüft |
 |---|---|
@@ -270,7 +281,7 @@ Dialoge.
 | Zuordnung | ID-Stabilität, Mehrdeutigkeit |
 | Fehler | jede Ausnahme mit Handlungsvorschlag |
 | Barrierefreiheit | keine Bedeutung allein über Farbe |
-| Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Werkzeuge, vier Felder vorn |
+| Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, vier Felder vorn |
 | Leistung | Zielwerte Bauplan §31, Regressionsschwelle 25 % |
 | Lizenzen | Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus Bauplan §2.2 Ende zu Ende |
@@ -287,10 +298,8 @@ Plugin-System, Telemetrie, Verzweigungen im Op-Stack, Bearbeitung im
 gehosteten Backend, Betriebsarten-Umschaltung in der Oberfläche, **eigener
 G-Code-Slicer** (Schichtanalyse ja, G-Code nein — §22).
 
-Verrundung und Fase nehmen beide Körperarten an (`geom/edge_ops.py`, Robert:
-„alles soll immer bearbeitbar sein"). Am Netz ist der Bogen ein Sehnenzug,
-dessen Abweichung `units.MAX_FACET_SAG` einhält — dieselbe Grenze, mit der der
-exakte Kern tesselliert; der Unterschied wird benannt, nicht versteckt.
+Verrunden und Fase an Netzkanten sind kein Nicht-Ziel: Beide Körperarten
+nehmen sie an (Bauplan §25, Regeln in `.claude/rules/kanten.md`).
 
 Wenn eine Aufgabe eines dieser Dinge zu verlangen scheint, ist die Aufgabe
 falsch verstanden — nachfragen statt bauen.

@@ -1,9 +1,11 @@
 @AGENTS.md
 
-# Solidon — Anweisungen für Claude Code
+# Solidon — Unterlagen, Befehle, Karte
 
-`AGENTS.md` oben ist die Hausordnung und gilt vollständig. Diese Datei ergänzt,
-was nur Claude Code betrifft: Unterlagen, Befehle, Werkzeuge, Arbeitsweise.
+`AGENTS.md` oben ist die Hausordnung und gilt vollständig. Diese Datei ergänzt
+sie um Unterlagen, Befehle, Karte, Werkzeuge und Arbeitsweise. Sie gilt für
+Claude Code und Codex gleich: Claude Code lädt `AGENTS.md` über die erste
+Zeile, Codex liest diese Datei nach `AGENTS.md`, „Paketstruktur“.
 
 ## Was dieses Projekt ist
 
@@ -14,7 +16,7 @@ verwenden CPython 3.14.8, die Arbeitsplätze noch 3.14.7 (RM-468).
 | Datei | Beantwortet |
 |---|---|
 | `3d-agent-bauplan.md` | **Was** gebaut wird — die Spezifikation, §-Nummern sind verbindlich |
-| `AGENTS.md` | **Wie** gearbeitet wird — 22 harte Regeln, jede mit Test |
+| `AGENTS.md` | **Wie** gearbeitet wird — 22 harte Regeln und wer sie prüft |
 | `ROADMAP.md` | **Was als Nächstes** — oben das Register der offenen Punkte |
 | `ROADMAP-ARCHIV.md` | **Was schon versucht wurde** — Befunde und Nachweise |
 | `konzepte/README.md` | **Warum** — Index der Konzepte und Durchsichten mit ihrem Stand |
@@ -22,7 +24,7 @@ verwenden CPython 3.14.8, die Arbeitsplätze noch 3.14.7 (RM-468).
 | `<verzeichnis>/CLAUDE.md` | **Was wo liegt** — lädt, sobald eine Datei darin angefasst wird |
 | `.claude/rules/*.md` | **Was einzuhalten ist** — lädt über `paths:` |
 
-Bei Widerspruch gilt der Bauplan; eine Aussage ohne §-Beleg ist eine Vermutung.
+Eine Aussage ohne §-Beleg ist eine Vermutung.
 **Offene Arbeit steht im Register von `ROADMAP.md` und nirgends sonst.** Die
 Statustabellen der Konzepte altern — ein „offen" dort wird am Code geprüft und,
 wenn es stimmt, ins Register übernommen.
@@ -39,10 +41,11 @@ setzen `PYTHONUTF8=1` für ihre Unterprozesse.
 
 ```
 .venv\Scripts\python.exe tools/affected_tests.py app/core/units.py --run   # Dateien nennen
-.venv\Scripts\python.exe tools/affected_tests.py --run                     # alle ungestageten Änderungen
+.venv\Scripts\python.exe tools/affected_tests.py --run                     # alle Änderungen gegen HEAD
 ```
 
-Ohne Dateiliste nimmt es alle ungestageten Änderungen im Baum, auch fremde.
+Ohne Dateiliste nimmt es alle Änderungen gegenüber HEAD — gestaged,
+ungestaged und neu, auch fremde.
 Meldet es „das ist die Suite" (`i18n`, `types.py`, `errors.py`, `log.py`),
 gleich das Tor fahren.
 
@@ -56,8 +59,8 @@ bash .claude/scripts/suite-getrennt.sh
 ```
 
 **Fenster-, Renderer- und Leistungsprüfungen nur beim Release** (`AGENTS.md`,
-„Arbeitsweise“). `pytest -q` am Stück kommt nicht durch
-(nativer Abriss nach rund 700 Fenstern); das Tor trennt Fenster und Renderer ab:
+„Arbeitsweise“). `pytest -q` am Stück kommt nicht durch (nativer Abriss im
+Fensterteil); das Tor trennt Fenster und Renderer ab:
 
 ```
 bash .claude/scripts/suite-getrennt.sh --release
@@ -88,42 +91,31 @@ Temp-Ordner (§38) — außerhalb der Suite fehlt beides.
 ## Karte
 
 ```
-app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
-  registry/   Register der Ops, Parameterschema, Flächenzuordnung
-  organizer/  reproduzierbare Fachaufteilungen (Teilungsbaum, Bau, Op)
-  scene/      Szene, Stapel, Auswertung, Projektdatei, Parameter, Passungen
-  geom/       Ops gegen manifold3d/trimesh, Boolesche Rückfallkette, Reparatur
-  sketch/     Skizzen mit Zwangsbedingungen (§30.1): Löser, Profile, Ebenen
-  brep/       zweiter Kern (OpenCASCADE) — optional, meldet sich ab, wenn er fehlt
-  slice/      Schichtanalyse und G-Code lesen, nie G-Code schreiben;
-              advise.py schließt aus der Geometrie auf Druckeinstellungen
-  ingest/     Einlesen, Einheitenerkennung, 3MF als Baugruppe
-  perceive/   Feature-Erkennung, stabile IDs, Analysekarten, Steckbrief
-  knowledge/  Profile, Normteile, Regelsammlung, Kalibrierung, parts/ Bausteine;
-              print_settings.py löst Stufe + Material + Drucker auf
-  agent/      LLM-Schicht: Sitzung, Vorschlag als eine Transaktion, Prüfungen
-  backends/   LLM und Mesh-Erzeuger — extern und abschaltbar; comfy_setup.py
-              und data/comfyui/ (TripoSG, MIT) liegen im Kern, weil tools/
-              nicht im Paket mitreist
-  export/     STL/3MF/OBJ/PLY/GLB/STEP, Plattenbelegung, Slicer-Übergabe
-  activation/ Freischaltung: Kaufcode, Geräteidentität, Zertifikat, Fristen
-  updates.py  Update fragen, holen, prüfen — gestartet nur auf Klick
-  report.py   Fehlerbericht als Ordner — schreibt, sendet nie
-  support.py  der einzige Weg hinaus: Rückmeldung an den Support, an einem Knopf
-  manual.py · figures.py · drawing.py · markup.py   Handbuch, Abbildungen, SVG, Markdown
+app/core/     kopfloser Kern: kein Qt, keine Dialoge, Kommunikation nur über
+              OpContext — Unterpakete und Module in app/core/CLAUDE.md
 app/ui/       PySide6 — darf core benutzen, nie umgekehrt
-app/images/   Bildschirmfotos fürs Handbuch, je Sprache ein Ordner
 app/cli/      Kommandozeile auf core
+app/i18n/     tr() ohne Qt und die Sprachkataloge (locales/)
+app/examples/ die zwölf Beispielprojekte, erzeugt von tools/make_examples.py
+app/images/   Bildschirmfotos fürs Handbuch, je Sprache ein Ordner
 tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung
+packaging/    Vorlagen für Spec, Installer und Linux-/Mac-Pakete
 website/      öffentliche Seiten; erzeugt wird, was die tools/make_*.py nennen,
               api/ gehört nach httpdocs/api/
 changelog/    was im Update-Fenster steht, je Sprache eine Datei. Hier liegt
               bewusst keine CLAUDE.md: Test und make_download.py lesen jeden
               Dateinamen des Ordners als Sprache
-3D Drucker/   physische Druckprojekte — eigenes Repository, hier in .gitignore
-output/, tmp/ örtliche Prüfstände und Sicherungen, nicht versioniert
+konzepte/     das Warum: Konzepte, Durchsichten, Nachweise, begruendungen/
+Signierung/   Übergabe der Windows-Signatur (README.md)
+.github/      CI-Workflows; .githooks/ pre-commit, commit-msg, post-commit
+.claude/      Regeln, Agenten, Skills, Hooks — was davon mitreist: .claude/README.md
 Releases/     lokale Pakete; nur die veröffentlichten Handbuch-PDFs versioniert
+output/, tmp/ örtliche Prüfstände und Sicherungen, nicht versioniert
+marketing/    Pressetexte und Kampagnen, nur örtlich, nicht versioniert
+3D Drucker/   physische Druckprojekte, eigenes Repository, nicht versioniert;
+              fehlt auf manchem Rechner hier, auf einem liegt es unter
+              F:\3D Dateien\3D Drucker
 ```
 
 Jedes Verzeichnis mit Code trägt seine eigene Karte; `tests/test_directory_docs.py`
@@ -185,8 +177,10 @@ raten — das steht in `AGENTS.md`. Dazu:
   Commits halten ihn an. Die Zuordnung vergleicht vollständige Repositorypfade;
   nur eindeutig fremde Testbefunde dürfen passieren. Ein ausgefallener oder
   nicht auswertbarer Prüflauf hält den Commit an.
-  `SOLIDON_KEIN_TOR=1` schaltet ihn für einen Lauf ab.
-  Beide Hooks laufen nur mit `core.hooksPath = .githooks` (`check_env`
+- **`.githooks/commit-msg`** prüft die Meldung auf Ersatzschreibung statt
+  Umlaut (`tools/check_message.py`). `SOLIDON_KEIN_TOR=1` schaltet ihn und
+  `pre-commit` für einen Lauf ab.
+- Alle drei Hooks laufen nur mit `core.hooksPath = .githooks` (`check_env`
   meldet es) und suchen ihren Interpreter am Hauptklon, auch aus einem Worktree.
 - **Nach einer Muster- oder Entscheidungsänderung** die Regel in
   `.claude/rules/` nachziehen und `ROADMAP.md` fortschreiben; den Bauplan nur
@@ -194,10 +188,9 @@ raten — das steht in `AGENTS.md`. Dazu:
 
 ## Erinnerungen
 
-Sie liegen in `.claude/memory/` — **nur auf dieser Maschine** (`.gitignore`),
-weil das Repository zu jedem Release öffentlich wird. Der Ort im Nutzerprofil
-ist eine Verknüpfung darauf (`tools/link_memory.py`); fehlen sie nach einem
-Pull, holt der Sitzungsstart den letzten versionierten Stand zurück.
+Wo sie liegen, sagt `AGENTS.md` („Paketstruktur“), warum nicht im
+Repository, `.claude/README.md`. Fehlen sie nach einem Pull, holt der
+Sitzungsstart den letzten versionierten Stand zurück.
 
 - **Eine Datei je Thema.** Eine neue Erkenntnis kommt als Abschnitt in das
   passende Thema aus `MEMORY.md`; eine neue Datei nur für ein neues Thema. Der

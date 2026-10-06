@@ -646,3 +646,147 @@ def test_no_number_is_compared_with_infinity_by_equality() -> None:
     assert not offenders, (
         "Gleichheit mit Unendlich (Regel 6), statt dessen math.isinf:\n  " + "\n  ".join(offenders)
     )
+
+
+# --- Regel 10: kein eval, kein exec ----------------------------------------------
+
+#: Die Eingebauten, die Text als Python ausführen: ``eval`` und ``exec`` werten
+#: aus, ``compile`` übersetzt für beide.
+_CODE_RUNNERS = frozenset({"eval", "exec", "compile"})
+
+
+def runs_text_as_code(tree: ast.AST) -> list[int]:
+    """Die Zeilen, an denen ein eingebauter Codeausführer genannt wird.
+
+    Gesucht wird der **Name**, nicht nur der Aufruf: ``map(eval, texte)`` ruft
+    ``eval`` nicht an dieser Stelle auf und führt trotzdem aus. Eine Methode
+    gleichen Namens (``dialog.exec()``, ``re.compile``) führt keinen Text aus
+    und bleibt unbeachtet; ``builtins.eval`` ist dagegen der eingebaute über
+    einen Umweg.
+    """
+    found: list[int] = []
+    for node in ast.walk(tree):
+        named = isinstance(node, ast.Name) and node.id in _CODE_RUNNERS
+        detour = (
+            isinstance(node, ast.Attribute)
+            and node.attr in _CODE_RUNNERS
+            and isinstance(node.value, ast.Name)
+            and node.value.id in {"builtins", "__builtins__"}
+        )
+        if named or detour:
+            found.append(node.lineno)
+    return sorted(set(found))
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ('wert = eval("1 + 1")', [1]),
+        ("exec(quelle)", [1]),
+        ('code = compile(text, "<eingabe>", "eval")', [1]),
+        ("werte = list(map(eval, texte))", [1]),
+        ("builtins.exec(quelle)", [1]),
+        ("dialog.exec()", []),
+        ('muster = re.compile("[a-z]+")', []),
+        ("wert = ast.literal_eval(text)", []),
+        ('getattr(builtins, "eval")(text)', []),
+    ],
+    ids=[
+        "eval",
+        "exec",
+        "compile",
+        "als_wert_weitergereicht",
+        "ueber_builtins",
+        "qt_methode",
+        "regulaerer_ausdruck",
+        "literal_eval",
+        "zur_laufzeit_unsichtbar",
+    ],
+)
+def test_the_code_runner_guard_finds_what_it_is_given(source: str, expected: list[int]) -> None:
+    """Die Gegenprobe des Wächters darunter: Er findet jede Schreibweise, die er zusagt.
+
+    ``ast.literal_eval`` liest nur Literale und bleibt erlaubt. Der letzte Fall
+    ist die zugegebene Grenze: Ein Name, der erst zur Laufzeit als Text
+    entsteht, sieht eine Quelltextprüfung nicht.
+    """
+    assert runs_text_as_code(ast.parse(source)) == expected
+
+
+def test_no_source_runs_text_as_code() -> None:
+    """Regel 10 und §32: Parameterausdrücke gehen über den eigenen Auswerter.
+
+    ``app/core/expressions.py`` rechnet Ausdrücke ohne ``eval``, und
+    ``tests/test_expressions.py`` prüft, dass er ``=eval('1')`` ablehnt. Ob ein
+    neuer Weg am Auswerter vorbei ``eval``, ``exec`` oder ``compile`` aufruft,
+    sah bis hierhin kein Test; ruff wählt die passenden Regeln (``S307``,
+    ``S102``) nicht. Gelesen wird alles, was ausgeliefert wird oder das Paket
+    baut.
+    """
+    offenders: list[str] = []
+    calls = 0
+    for path in source_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        calls += sum(1 for node in ast.walk(tree) if isinstance(node, ast.Call))
+        offenders.extend(f"{path.name}:{line}" for line in runs_text_as_code(tree))
+
+    assert calls > 10000, f"nur {calls} Aufrufe gefunden — die Suche greift nicht"
+    assert not offenders, (
+        "Text wird als Python ausgeführt (Regel 10), statt dessen den eigenen Auswerter "
+        "(app.core.expressions) oder ast.literal_eval:\n  " + "\n  ".join(offenders)
+    )
+
+
+# --- Regel 19: keine Ja/Nein-Frage vor einer rücknehmbaren Handlung ---------------
+
+#: Woran eine Ja/Nein-Frage im Oberflächenquelltext zu erkennen ist.
+_YES_NO_MARKS = ("QMessageBox.question", "StandardButton.Yes")
+
+
+def yes_no_questions(text: str) -> list[str]:
+    """Welche Kennzeichen einer Ja/Nein-Frage in diesem Quelltext stehen."""
+    return [mark for mark in _YES_NO_MARKS if mark in text]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ('QMessageBox.question(self, titel, "Wirklich?")', ["QMessageBox.question"]),
+        ("box.setStandardButtons(QMessageBox.StandardButton.Yes)", ["StandardButton.Yes"]),
+        ("QMessageBox.information(self, titel, text)", []),
+        ("box.setStandardButtons(QMessageBox.StandardButton.Ok)", []),
+    ],
+    ids=["frage", "ja_knopf", "hinweis", "ok_knopf"],
+)
+def test_the_question_guard_finds_what_it_is_given(source: str, expected: list[str]) -> None:
+    """Die Gegenprobe des Wächters darunter: Frage und Ja-Knopf fallen auf, ein Hinweis nicht."""
+    assert yes_no_questions(source) == expected
+
+
+def test_no_question_box_asks_yes_or_no() -> None:
+    """Bauart-Prüfung: „Ja"/„Nein" ist in dieser Oberfläche keine Frage.
+
+    Der letzte Ja/Nein-Dialog war der namenlose Wiederherstellungsfall. Diese
+    Zeile hält es dabei — sonst ist der nächste in einem halben Jahr wieder da,
+    und er liest sich beim Schreiben jedes Mal harmlos.
+
+    Der Test liest nur Quelltext. In ``tests/test_ui.py`` nahm er die Fixture
+    ``window`` und lief damit nur beim Release; hier läuft er im
+    Entwicklungstor, und er liest ``app/ui/`` samt Unterordnern statt nur der
+    obersten Ebene.
+    """
+    sources = sorted(
+        path for path in (PACKAGE_DIR / "ui").rglob("*.py") if "__pycache__" not in path.parts
+    )
+    assert len(sources) > 50, f"nur {len(sources)} Oberflächenquellen — die Suche greift nicht"
+
+    offenders = [
+        f"{path.relative_to(PACKAGE_DIR).as_posix()}: {mark}"
+        for path in sources
+        for mark in yes_no_questions(path.read_text(encoding="utf-8"))
+    ]
+
+    assert not offenders, (
+        "Ja/Nein-Frage vor einer Handlung (Regel 19) — rücknehmbar machen statt fragen:\n  "
+        + "\n  ".join(offenders)
+    )

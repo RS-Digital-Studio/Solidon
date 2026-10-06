@@ -7,8 +7,9 @@ paths:
 
 # Regeln für die Suite
 
-Jede harte Regel aus `AGENTS.md` hat ihren Test — die Suite ist die eigentliche
-Fassung des Regelwerks. Welche Datei was prüft, steht in `AGENTS.md`
+Die harten Regeln aus `AGENTS.md` halten Tests, wo eine mechanische Prüfung
+möglich ist — welche den ganzen Baum prüfen und welche nur Stellen, sagt
+`AGENTS.md` dort. Welche Datei was prüft, steht in `AGENTS.md`
 („Testarten“) und `tests/CLAUDE.md` („Was wo geprüft wird“); wie ein Lauf
 gefahren und gelesen wird, in `/pruefen`. Anlässe und Messwerte stehen unter
 denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
@@ -163,7 +164,7 @@ Wie ein Lauf gelesen wird, sagt `/pruefen`; hier die Fallen, die schon
 zugeschnappt sind:
 
 - **Eine Pipe liefert den Code ihres letzten Glieds, und pytest puffert
-  dahinter** — ein stehender Lauf schwieg anderthalb Stunden. In eine Datei
+  dahinter** — ein stehender Lauf schweigt dann, statt zu melden. In eine Datei
   schreiben, Fortschritt mit `python -u`. Das gilt auch für
   `.claude/scripts/suite-getrennt.sh` und jeden anderen Befehl
   (`gh api … | tail` meldet 0 über einer 404).
@@ -420,7 +421,8 @@ billiger zu messen und immer mehr wert.
 ## Nach einer Änderung an `app/` oder `tools/`: zwei Läufe von je drei Sekunden
 
 Die Prüfungen, die *jede* Datei lesen, liegen außerhalb des Gebiets einer
-Änderung — so kamen viermal an einem Tag deutsche Bezeichner ins Tor:
+Änderung — wer nur die Tests seines Gebiets fährt, bringt deutsche Bezeichner
+ins Tor:
 
 ```text
 .venv\Scripts\python.exe -m pytest tests/test_language_rules.py -q
@@ -445,7 +447,7 @@ Zur Ursache führt die Wiederholung, nicht der Text. Eigene Meldungen sagen,
 was wir mehr wissen (Regel 17): „auf `C:` sind 0 Byte frei, das Paket braucht
 7,5 GB“ statt „der Download brach ab“.
 
-## Ein Prüfwerkzeug ist auch nur Code, und es war viermal der Fehler
+## Ein Prüfwerkzeug ist auch nur Code
 
 **Ein Werkzeug, das nichts meldet, sieht aus wie eines, das nichts findet.**
 Den Zweig prüfen, den es noch nie gab (gefälschtes Protokoll je Urteil, mit

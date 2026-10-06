@@ -13,12 +13,13 @@ wiederholt — wo etwas anderswo steht, steht hier der Verweis.
 | `rules/` | Die Regeln je Gebiet. Laden über `paths:` im Frontmatter, sobald eine passende Datei angefasst wird; `description:` sagt, worum es geht, ohne die Datei zu öffnen | Quelle |
 | `agents/` | Die Fachagenten als Markdown mit Frontmatter | **Quelle.** `.codex/agents/*.toml` entsteht daraus über `tools/sync_agents.py`; `tests/test_agent_mirror.py` fährt `--check` |
 | `skills/` | Die Befehle (`/pruefen`, `/liefern`, …) | **Quelle.** `.agents/skills/` entsteht aus derselben Datei, ebenfalls über `tools/sync_agents.py` |
-| `memory/` | Die Erfahrungen dieses Projekts, eine Datei je Fakt, dazu `MEMORY.md` als Index | Quelle, **nur auf der Maschine** (`.gitignore`). Den Index schreibt `tools/memory_index.py`, die Verknüpfung aus dem Nutzerprofil `tools/link_memory.py` |
+| `memory/` | Die Erfahrungen dieses Projekts, eine Datei je Thema, dazu `MEMORY.md` als Index | Quelle, **nur auf der Maschine** (`.gitignore`). Den Index schreibt `tools/memory_index.py`, die Verknüpfung aus dem Nutzerprofil `tools/link_memory.py` |
 | `hooks/` | `solidon3d_hooks.py` — ein Skript für beide Editoren | Quelle. Die Einstiege stehen in `settings.json` und `.codex/hooks.json` |
 | `scripts/` | `suite-getrennt.sh` — das Entwicklungstor: Kernsammlung im Standardlauf, Fensterdateien nur beim Release mit `--release`; der gesamte Prüfweg steht in `/pruefen` | Quelle |
-| `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, meist ein `README.md`. Nennt ihn nur noch `ROADMAP-ARCHIV.md`, wird er entfernt — der Stand bleibt in der Git-Historie; ein Skript, das eine Regel oder ein Werkzeug dauerhaft braucht, gehört nach `tools/`. Eine Sonde, die ein Workflow auf Zeit für einen offenen Punkt fährt, bleibt bei ihrer Durchsicht, bis der Punkt schließt (`mac-netz.yml`, RM-187) | Quelle |
+| `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, ohne festes Format. Nennt ihn nur noch `ROADMAP-ARCHIV.md`, wird er entfernt — der Stand bleibt in der Git-Historie. Ein Skript, das eine Regel, ein Werkzeug oder ein Test dauerhaft braucht, gehört nach `tools/`; bis es umgezogen ist, bleibt sein Ordner (`git grep -l .claude/.state -- tests .github` nennt die Leser). Eine Sonde, die ein Workflow auf Zeit für einen offenen Punkt fährt, bleibt bei ihrer Durchsicht, bis der Punkt schließt (`mac-netz.yml`, RM-187) | Quelle |
 | `settings.json` | Rechte, Hooks, Umgebung, Plugins. Kein Eintrag fragt oder sperrt vor einem Befehl (Entscheidung Robert). Hooks, Plugins und Umgebung stehen in `.codex/hooks.json` und `.codex/config.toml` gleich; `tests/test_agent_mirror.py` hält beide Seiten gleich | Quelle |
 | `launch.json` | Startprofil für das Vorschaufenster | Quelle |
+| `worktrees/` | Arbeitsbäume von Prüfläufen und Agenten, ohne eigene `.venv` — die Git-Hooks suchen sie am Hauptklon | örtlich, siehe unten |
 | `bedienkonzept-ueberblick.md`, `bedienkonzept-funktionen.md` | Wie die Sitzung selbst bedienbar sein soll. **Entwurf** — umgesetzt ist davon nichts; den Stand nennt je eine eigene Tabelle, nicht die letzte der Datei | Quelle |
 
 **Wo eine Datei zweimal existiert, wird nur die Quelle bearbeitet.** Die
@@ -38,10 +39,11 @@ Ausgenommen ist, was wirklich **dieser** Maschine gehört:
 
 | Pfad | Warum nicht |
 |---|---|
-| `.state/sitzungsstart-*`, `.state/letzter-testlauf-*`, `.state/letzte-erinnerung-*` | Marken, die der Hook bei jedem Lauf neu schreibt — getrackt wären sie auf jeder Maschine eine andere Änderung im Baum |
+| `.state/sitzungsstart-*`, `.state/letzter-testlauf*`, `.state/letzte-erinnerung*` | Marken, die die Hooks bei jedem Lauf neu schreiben — getrackt wären sie auf jeder Maschine eine andere Änderung im Baum |
 | `settings.local.json` | Rechte, die jemand für seine Maschine erteilt hat |
 | `memory/` | Das Repository wird zu jedem Release öffentlich, und die Erinnerungen nennen Zugangswege, Schlüsselablagen, Kundennamen und Verkaufszahlen. `tests/test_directory_docs.py` hält fest, dass keine Datei darunter versioniert ist |
-| `.state/release-*/` | Protokolle eines Release-Laufs. Die Sondenordner daneben bleiben eingecheckt: Sie tragen ein README und ein Skript, das jemand wieder fahren kann — ein Protokoll von sechs Megabyte trägt das nicht |
+| `.state/release-*/` | Protokolle eines Release-Laufs. Die Sondenordner daneben bleiben eingecheckt: Ihre Skripte kann jemand wieder fahren — ein Protokoll von sechs Megabyte trägt das nicht |
+| `worktrees/` | Arbeitsbäume von Prüfläufen und Agenten. Ausgeschlossen nur über die örtliche `.git/info/exclude`, nicht über `.gitignore` |
 
 **Im Zweifel `git ls-files .claude` fahren statt raten.**
 

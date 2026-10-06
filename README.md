@@ -41,25 +41,25 @@ gewerbliche 249 €. Was die beiden unterscheidet (Personen, Rechner, Support,
 Weitergabe im Betrieb), regeln `AGB.md` §2 und `EULA.md`; die Startseite zeigt
 es in ihrem Abschnitt „Preis und Lizenz".
 
-Die veröffentlichte Fassung steht auf der [Downloadseite](https://solidon3d.de/).
-Dieses Repository enthält zusätzlich den Entwicklungsstand für die kommende
-Version **0.5.0**, nach der Veröffentlichung von **0.4.4**. Der vollständige
-Umfang steht in `changelog/de.md`, Abschnitt „0.5.0"; noch nicht Teil des
-Downloads sind unter anderem:
+## Herunterladen
 
-* **Resin-Drucker:** eigene Geräteprofile mit Pixelgröße und Mindestwand,
-  ohne die Ratschläge, die nur für FDM-Drucker gelten.
-* **Maße im Bild:** eine angeklickte Bohrung zeigt Abstände, Mitte und
-  Durchmesser sofort am Modell, mit Zahlenfeldern zum Tippen.
-* **Echte Muster statt Hunderter Flächen:** Wabenmuster, Rändel, Rippen,
-  Wellen und Noppen stehen im Baum als ein Muster mit Teilung, Zellbreite
-  und Tiefe.
-* **Schnellere Erkennung und Bearbeitung:** deutlich kürzere Wartezeit beim
-  Einlesen, Klicken und Bearbeiten großer Modelle.
-* **Öffnungsfelder zeichnen:** Runde Löcher, Langlöcher oder Waben innerhalb
-  eines gezeichneten Bereichs verteilen, mit festem Rand und ausgesparten Zonen.
-* **Merkmale örtlich suchen:** An großen Netzen die Erkennung auf den
-  ausgewählten Bereich begrenzen.
+Die Pakete stehen auf der [Downloadseite](https://solidon3d.de/#download):
+für Windows eine Setup-Datei, für Linux ein AppImage und ein Flatpak, für den
+Mac je ein Paket für Apple Silicon und für Intel. Welche Version gerade
+veröffentlicht ist, steht dort; was jede Version gebracht hat, in
+[changelog/de.md](changelog/de.md). Dieses Repository trägt dazu den
+Entwicklungsstand danach.
+
+Solidon läuft unter Windows 10 ab Version 1809 und Windows 11 auf x64, unter
+macOS ab Version 13 und unter Linux auf x64 mit X11 oder Xwayland. Die
+3D-Ansicht braucht eine Grafik mit Direct3D 12, Vulkan oder Metal. Findet
+Solidon keine passende, startet es ohne 3D-Ansicht; `SOLIDON3D_NO_VIEWPORT=1`
+lässt sie ausdrücklich weg. Arbeitsspeicher, Speicherplatz und
+Bildschirmgröße nennt die Website unter
+[Systemvoraussetzungen](https://solidon3d.de/#voraussetzungen).
+
+Das Flatpak fragt wie die anderen Pakete nach Updates, sendet Rückmeldungen
+und erreicht eingerichtete Onlinedienste.
 
 ## Was Solidon nicht ist
 
@@ -137,109 +137,15 @@ liegt nicht dazwischen.
 
 Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 
----
+## Zusätzliche Programme
 
-## Unterlagen
+Slicer, Ollama und ComfyUI liegen nicht bei, sie werden eingerichtet (§36,
+§38). Pflicht ist keines; beim ersten Start zeigt Solidon, welche es gefunden
+hat.
 
-| Datei | Inhalt |
-|---|---|
-| [3d-agent-bauplan.md](3d-agent-bauplan.md) | die Spezifikation — sagt **was** |
-| [AGENTS.md](AGENTS.md) | Repository-Regeln — sagen **wie** |
-| [ROADMAP.md](ROADMAP.md) | Arbeitsliste je Phase — sagt **was als Nächstes** |
-| [ROADMAP-ARCHIV.md](ROADMAP-ARCHIV.md) | die abgeschlossenen Abschnitte, datiert — sagt **was schon versucht wurde** |
-| [konzepte/](konzepte/README.md) | Konzepte und Durchsichten — sagen **warum**, mit den Messwerten daneben |
-
-## Entwickeln
-
-Entwickelt wird mit CPython 3.14, die Pakete baut die CI mit 3.14.8. Die
-3D-Ansicht zeichnet mit pygfx über wgpu.
-
-```
-python -m venv .venv
-.venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
-git config core.hooksPath .githooks
-```
-
-Die dritte Zeile ist einmal je Arbeitsplatz nötig und schaltet die Git-Hooks des
-Projekts ein: `pre-commit` prüft Bezeichner und neue Übersetzungstexte,
-`commit-msg` die Umlautschreibung der Commit-Meldung, `post-commit` pusht jeden
-Commit sofort. Ohne die Zeile fehlen diese Prüfungen und der automatische Push.
-`core.hooksPath` ist eine lokale Einstellung; Git holt sie sich nicht aus dem
-Repository, deshalb steht sie hier und nicht in einer Datei.
-
-Je Änderung laufen die betroffenen Tests, vor einem Commit das Entwicklungstor
-aus Suite, Ruff, Formatprüfung und mypy. Fenster- und Leistungsprüfungen laufen
-ausschließlich beim Release.
-
-| Befehl | Zweck |
-|---|---|
-| `.venv/Scripts/python.exe tools/affected_tests.py <datei> --run` | Betroffene Tests ohne Fenster und Leistung |
-| `bash .claude/scripts/suite-getrennt.sh` | Entwicklungssuite ohne Fenster und Leistung |
-| `bash .claude/scripts/suite-getrennt.sh --release` | Release-Suite einschließlich getrennter Fensterläufe |
-| `.venv/Scripts/python.exe -m pytest -q -m performance` | Leistungsbudgets aus §31, nur beim Release |
-| `.venv/Scripts/python.exe -m ruff check .` | Stil und Fehlerbilder |
-| `.venv/Scripts/python.exe -m ruff format --check .` | Formatierung prüfen |
-| `.venv/Scripts/python.exe -m mypy` | Typprüfung (strict) |
-| `.venv/Scripts/python.exe -m app.ui.app` | Anwendung starten |
-| `.venv/Scripts/python.exe -m app.cli.main ops` | Operationen auflisten |
-| `.venv/Scripts/python.exe -m app.i18n.extract` | Übersetzungskataloge abgleichen |
-| `.venv/Scripts/python.exe tests/data/make_corpus.py` | Referenzkorpus erzeugen |
-| `.venv/Scripts/python.exe tools/make_examples.py` | Beispielprojekte erzeugen |
-| `.venv/Scripts/python.exe tools/run_agent_suite.py` | Agenten-Suite gegen ein echtes Modell |
-
-Zum Starten per Doppelklick liegt unter `tools/start-solidon3d.cmd` eine
-Verknüpfung.
-
-## Paketieren
-
-Die Reihenfolge und Voraussetzungen für einen beauftragten Release stehen in
-[Erzeugen](.claude/skills/erzeugen/SKILL.md). Ein lokaler Probe- oder Ersatzbau
-verwendet einen eigenen Arbeitsbaum mit passender Entwicklungsumgebung und
-C-Compiler. Vor PyInstaller werden der Schichtkern und das Prüfmodul mit seinem
-signierten Manifest aus demselben Stand gebaut:
-
-```
-.venv/Scripts/python.exe -m pip install -c constraints.txt pyinstaller cython setuptools
-.venv/Scripts/python.exe tools/build_slice_core.py
-.venv/Scripts/python.exe tools/build_licence_module.py
-.venv/Scripts/pyinstaller.exe packaging/solidon3d.spec --noconfirm
-```
-
-Ergebnis ist ein Ordner unter `dist/Solidon3D`. Die Bauläufe für Windows,
-Linux und beide Mac-Architekturen stehen in `.github/workflows/build.yml`; sie
-laufen erst, wenn die Suite auf den vorgesehenen Plattformen grün ist. Das
-Windows-Paket wird dort gebaut und in zwei Schritten lokal signiert:
-`tools/sign_release.py` holt zunächst die prüfsummengebundene Anwendung aus
-dem Baulauf und signiert sie mit dem Certum-Zertifikat. Der Workflow
-`.github/workflows/windows-signed-installer.yml` baut daraus den Installer
-in CI. Anschließend signiert und prüft das lokale Werkzeug auch die
-Setup-Datei. Ab Version 0.5.0 werden für Windows nur die signierte Anwendung
-und Setup-Datei veröffentlicht; die genaue Übergabe steht in
-`Signierung/README.md`.
-
-Aus demselben Ordner entstehen unter Linux drei Formate. Das **tar.gz** ist der
-Bau selbst; das **AppImage** ist eine Datei, die ohne Installation läuft, und
-das **Flatpak** der Weg in die Software-Verwaltung mit Aktualisierung und
-Sandbox. Gebaut werden sie von `tools/make_linux_packages.py`, das die Werte aus
-`app/branding.py` liest und daraus Menüeintrag, Flatpak-Manifest und
-AppStream-Beschreibung schreibt. Ausgeliefert werden AppImage und Flatpak;
-das Archiv bleibt ein Bauartefakt.
-
-```
-python tools/make_linux_packages.py --files    # nur die Beschreibungen
-python tools/make_linux_packages.py            # beide Pakete, braucht Linux
-```
-
-`appimagetool` und `flatpak-builder` sind externe Programme und werden nicht
-mitgeliefert (§36). Das Flatpak hat dieselbe Netzfähigkeit wie Windows und
-macOS: Aktualisierungsprüfung, Rückmeldung und ausdrücklich konfigurierte
-Onlinedienste funktionieren. Daraus entstehen weder Konto noch Telemetrie;
-ohne Netz bleibt alles außer Chat und bewusst gewählten Onlinediensten
-benutzbar.
-
-Slicer, Ollama und ComfyUI werden **nicht** mitgeliefert, sondern konfiguriert
-(§36, §38). Beim ersten Start zeigt die Anwendung, welche davon gefunden
-wurden; Pflicht ist keines.
+Als Slicer kennt Solidon PrusaSlicer, SuperSlicer, OrcaSlicer, ElegooSlicer,
+Bambu Studio, Creality Print, Anycubic Slicer Next und Cura. Unter Linux
+findet es OrcaSlicer, Bambu Studio und PrusaSlicer auch als Flatpak.
 
 Unter **Hilfe → Zusätzliche Programme** steht dieselbe Liste mit einem Knopf
 daneben. Python-Pakete (B-Rep-Kern, V-HACD, Schlüsselbund) holt Solidon über
@@ -256,11 +162,6 @@ trennt deshalb zwischen einer lokalen App und der Web-/Netzadresse eines schon
 laufenden Dienstes. Beide Angaben bleiben getrennt erhalten. *Lokal starten*
 wechselt bewusst auf Port 8188; die zuvor eingetragene Netzadresse bleibt für
 einen späteren Wechsel gespeichert.
-
-Die 3D-Ansicht zeichnet mit pygfx über wgpu und braucht Direct3D 12, Vulkan
-oder Metal, unter Linux X11 beziehungsweise Xwayland. Findet Solidon keine
-passende Grafik, startet es ohne 3D-Ansicht statt abzubrechen;
-`SOLIDON3D_NO_VIEWPORT=1` lässt sie ausdrücklich weg.
 
 ## Sprachmodell für den Chat
 
@@ -298,28 +199,14 @@ raten (`OLLAMA_SUGGESTIONS` in `app/core/backends/llm.py`):
 | `qwen3:14b` | 13,6 GB | 22/39 | Vorgabe; denkt vor jeder Antwort, Karte mit 16 GB |
 | `qwen3:30b-a3b` | mehr als 16 GB | — | auf 16 GB rechnet ein Drittel der Prozessor |
 
-Die Suite am 26.09.2026 auf freier Karte (RTX 4080). Derselbe Stand mit dem
-ganzen Werkzeugsatz statt des Angebots traf mit `qwen3:14b` im selben
-Fenster 14 von 39, neunmal riss dabei das Fenster; mit einem Fenster von
-40 960 Token 24 von 39, aber in 149 statt 47 Minuten und zu einem Zehntel
-auf dem Prozessor.
+Die Spalte „Suite“ zählt, wie viele der 39 Referenzanfragen das Modell löst,
+gemessen auf einer RTX 4080.
 
-Gemessen und nicht empfohlen (`OLLAMA_UNSUITABLE`): `gemma4:12b`,
-`granite4.1:8b`, `llama3.1:8b`, `mistral-nemo`, `qwen2.5-coder:14b`, `llama3`.
-Passt ein Modell nicht ganz in den Grafikspeicher, rechnet der Prozessor mit,
-und jede Antwort dauert ein Vielfaches.
-
-Ob ein Modell die Werkzeuge wirklich aufruft, misst
-
-```
-.venv/Scripts/python.exe tools/check_local_model.py qwen3:14b
-```
-
-Wie gut es dann mit den Referenzanfragen zurechtkommt, misst
-
-```
-.venv/Scripts/python.exe tools/run_agent_suite.py --backend ollama
-```
+Gemessen und nicht empfohlen (`OLLAMA_UNSUITABLE`): `qwen3.5:9b-q8_0` (die
+kleinere Fassung trifft öfter), `gemma4:12b`, `granite4.1:8b`, `llama3.1:8b`,
+`mistral-nemo`, `qwen2.5-coder:14b`, `llama3`. Passt ein Modell nicht ganz in
+den Grafikspeicher, rechnet der Prozessor mit, und jede Antwort dauert ein
+Vielfaches.
 
 ## Modelle erzeugen (Weg 3)
 
@@ -352,17 +239,6 @@ neu starten**: Es liest seine Knoten beim Start.
 Für den Weg über **Text** kommt ein SDXL-Modell unter `models/checkpoints`
 dazu; für den Weg über ein **Bild** wird keines gebraucht.
 
-Dasselbe von der Kommandozeile, für den Entwicklungsbaum:
-
-```
-python tools/setup_comfyui.py
-```
-
-Die Arbeit steckt in `app/core/backends/comfy_setup.py`, die Knoten in
-`app/core/backends/data/comfyui/` — beides reist im Paket mit. Vorher lag es
-unter `tools/`, und die Anwendung nannte einen Befehl, den ein Kunde nicht
-ausführen kann.
-
 Fehlt die Knotensammlung, sagt Solidon das beim Erzeugen und führt zu diesem
 Dialog — es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
 
@@ -375,14 +251,7 @@ Wahl: Das verbreitetere Hunyuan3D nimmt in seiner Lizenz die Europäische
 Union ausdrücklich aus.
 
 Gemessen auf einer RTX 4080 braucht ein Körper rund 13 Sekunden und kommt mit
-300 000 bis 600 000 Dreiecken geschlossen und aus einem Stück heraus. Die
-Vorgaben im Ablauf sind nicht geraten: `octree_depth` steht auf 8, weil 9 bei
-vierfacher Dreieckszahl keinen sichtbaren Unterschied brachte, und `steps` auf
-50, weil dünne Flächen bei 25 sichtbar ausfransen.
-
-Welche Knoten benutzt werden, steht in `app/core/backends/data/text_to_mesh.json`
-und `image_to_mesh.json`. Die Dateien nennen Rollen und keine Dateinamen: mit
-einem anderen Generator wird die Datei ersetzt, nicht der Quelltext.
+300 000 bis 600 000 Dreiecken geschlossen und aus einem Stück heraus.
 
 ## Was ohne zweites Programm geht
 
@@ -394,7 +263,7 @@ Programme bleiben für das, wo sie wirklich besser sind.
 | Text auf einer Fläche | **Fläche wählen → rechts Text aufbringen** | OpenSCAD, Blender |
 | Logo oder Umriss als Körper | **Datei → Modell einfügen** (SVG, DXF) | Inkscape + Blender |
 | Fasen und Verrundungen | **Kante wählen → rechts Verrunden / Fase anbringen** — am Netz oder exakten Körper | CAD-Programm |
-| Erzeugtes Netz brauchbar machen | **Teil wählen → rechts Dezimieren, Glätten, Neu vernetzen** | MeshLab |
+| Erzeugtes Netz brauchbar machen | **Teil wählen → rechts Dreiecke verringern, Glätten, Dreiecke angleichen** | MeshLab |
 | Material sparen | **Teil wählen → rechts Aushöhlen** mit Entlüftung | Slicer-Infill oder Handarbeit |
 | Linkes und rechtes Teil | **Teil wählen → rechts Spiegeln** | zweite Konstruktion |
 | Erste Schicht maßhaltig | **Elefantenfuß ausgleichen** aus dem Materialprofil | Slicer-Einstellung, projektfern |
@@ -407,7 +276,7 @@ Programme bleiben für das, wo sie wirklich besser sind.
 | 3MF-Baugruppe aus dem Slicer öffnen | **Datei → Modell einfügen** — die Teile kommen einzeln an | pro Teil eine STL exportieren |
 | Etwas an eine angeklickte Fläche setzen | **Fläche wählen, Operation aufrufen** — Ort und Achse sind eingetragen | Koordinaten ablesen und eintippen |
 | Eine vorhandene Bohrung in STL oder STEP ändern | **Bohrung anklicken → Bohrung ändern** — nur den neuen Durchmesser eintragen | Stopfen bauen, neu bohren oder CAD-Historie rekonstruieren |
-| Eine erkannte Bohrung zwei Millimeter versetzen | **Bohrung wählen → rechts Position ändern**; spätere Änderungen auch im Verlauf | zurücknehmen und neu bohren |
+| Eine erkannte Bohrung zwei Millimeter versetzen | **Bohrung wählen → rechts Merkmal verschieben**; spätere Änderungen auch im Verlauf | zurücknehmen und neu bohren |
 | Dichtung aus TPU im PETG-Gehäuse | **Körper wählen → rechts Material festlegen** | zwei Projekte |
 
 Der Text kommt als Schriftumriss, nicht als Bild — die Kanten bleiben in jeder
@@ -442,29 +311,24 @@ Draußen bleibt, was draußen besser ist: der **Slicer** schreibt die Druckdatei
 ## Exakte Körper (B-Rep) und STEP
 
 Neben dem Netz-Kern steht ein zweiter mit mathematisch beschriebenen Flächen
-und Kanten (§30). Er kommt ins Spiel, wenn eine STEP-Datei geladen oder ein
-exakter Körper angelegt wird. **Verrunden** und **Fase anbringen** arbeiten
-seit 0.4.1 auch an geeigneten Kanten eingelesener Netze. Auf einem Netz
-besteht eine Rundung aus kurzen geraden Abschnitten; ein exakter Körper
-behält den mathematischen Bogen. Die Auswahl erfolgt in beiden Fällen im
-Bild, Radius oder Breite werden rechts eingegeben.
+und Kanten (§30). Er kommt ins Spiel, wenn eine STEP-Datei geladen, ein
+exakter Körper angelegt oder ein Netz umgewandelt wird. **Verrunden** und
+**Fase anbringen** arbeiten seit 0.4.1 auch an geeigneten Kanten eingelesener
+Netze. Auf einem Netz besteht eine Rundung aus kurzen geraden Abschnitten; ein
+exakter Körper behält den mathematischen Bogen. Die Auswahl erfolgt in beiden
+Fällen im Bild, Radius oder Breite werden rechts eingegeben.
 
-Der Objektbaum kennzeichnet exakte Körper. **In ein Netz umwandeln** geht
-jederzeit, der Rückweg nicht — ein Netz hat seine Kanten verloren. Der Schritt
-steht aber im Verlauf, ein Undo holt den exakten Körper also zurück.
+Der Objektbaum kennzeichnet exakte Körper. *Flächenbearbeitung beenden* macht
+aus einem exakten Körper jederzeit ein Netz; der Schritt steht im Verlauf, ein
+Undo holt den exakten Körper zurück. In die andere Richtung baut *In Flächen
+und Kanten umwandeln* aus einem Netz einen Körper aus Ebenen, Zylindern,
+Kegeln, Kugeln und Ringen. Einen Konstruktionsverlauf bekommt er dabei nicht;
+den stellt *Modell nachbauen* als Folge von Operationen auf, wo es einen
+Aufbau findet, und sagt es, wenn es keinen findet.
 
 Exportiert wird ein solcher Körper als `STEP` mit Flächen und Kanten; STL und
-3MF bleiben für alles, was auf den Drucker soll.
-
-Jedes Installationspaket bringt den Kern mit. Optional ist er nur beim Start
-aus den Quellen:
-
-```bash
-.venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[brep]"
-```
-
-Ohne ihn sagen die betroffenen Operationen das in einem Satz, und alles andere
-in Solidon funktioniert unverändert.
+3MF bleiben für alles, was auf den Drucker soll. Jedes Installationspaket
+bringt den Kern mit.
 
 ## Mehr Teile als auf eine Platte passen
 
@@ -530,3 +394,93 @@ Nutzer landet:
 Fremdbibliotheken behalten ihre eigenen Lizenzen; die Übersicht führt
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Geprüft wird das automatisch
 gegen die Freigabeliste in `app/core/knowledge/data/licences.toml`.
+
+---
+
+## Für Entwickler
+
+Welche Unterlage welche Frage beantwortet — Bauplan, Hausordnung, Roadmap,
+Konzepte, Karten —, steht in [CLAUDE.md](CLAUDE.md), die Regeln in
+[AGENTS.md](AGENTS.md). Dort stehen auch die Befehle für betroffene Tests,
+Entwicklungstor, Release-Suite und Start.
+
+### Einrichten
+
+Entwickelt wird mit CPython 3.14, die Pakete baut die CI mit 3.14.8. Die
+3D-Ansicht zeichnet mit pygfx über wgpu.
+
+```
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
+git config core.hooksPath .githooks
+```
+
+Die dritte Zeile ist einmal je Arbeitsplatz nötig und schaltet die Git-Hooks des
+Projekts ein: `pre-commit` prüft Bezeichner und neue Übersetzungstexte,
+`commit-msg` die Umlautschreibung der Commit-Meldung, `post-commit` pusht jeden
+Commit sofort. Ohne die Zeile fehlen diese Prüfungen und der automatische Push.
+`core.hooksPath` ist eine lokale Einstellung; Git holt sie sich nicht aus dem
+Repository, deshalb steht sie hier und nicht in einer Datei.
+
+Ohne das Extra `brep` fehlt der exakte Kern; die betroffenen Operationen sagen
+das in einem Satz, alles andere funktioniert unverändert. Zum Starten per
+Doppelklick liegt unter `tools/start-solidon3d.cmd` eine Verknüpfung.
+
+Je Änderung laufen die betroffenen Tests, vor einem Commit das Entwicklungstor
+aus Suite, Ruff, Formatprüfung und mypy. Fenster-, Renderer- und
+Leistungsprüfungen laufen ausschließlich beim Release.
+
+### Lokale Sprachmodelle messen
+
+Ob ein Modell die Werkzeuge wirklich aufruft, misst
+`.venv/Scripts/python.exe tools/check_local_model.py qwen3:14b`; wie gut es mit
+den Referenzanfragen zurechtkommt,
+`.venv/Scripts/python.exe tools/run_agent_suite.py --backend ollama`.
+
+Die Suite-Spalte der Modelltabelle stammt vom 26.09.2026, auf freier Karte
+(RTX 4080). Derselbe Stand mit dem ganzen Werkzeugsatz statt des Angebots traf
+mit `qwen3:14b` im selben Fenster 14 von 39, neunmal riss dabei das Fenster;
+mit einem Fenster von 40 960 Token 24 von 39, aber in 149 statt 47 Minuten und
+zu einem Zehntel auf dem Prozessor.
+
+### ComfyUI aus dem Entwicklungsbaum
+
+`.venv/Scripts/python.exe tools/setup_comfyui.py` richtet ein, was der Dialog
+*Knoten und Modell einrichten …* einrichtet. Die Arbeit steckt in
+`app/core/backends/comfy_setup.py`, die Knoten in
+`app/core/backends/data/comfyui/`; beides reist im Paket mit. Welche Knoten ein
+Ablauf benutzt, steht in `app/core/backends/data/text_to_mesh.json` und
+`image_to_mesh.json`. Die Dateien nennen Rollen und keine Dateinamen: Für einen
+anderen Generator wird die Datei ersetzt, nicht der Quelltext.
+
+### Paketieren
+
+Reihenfolge und Voraussetzungen für einen beauftragten Release stehen in
+[Erzeugen](.claude/skills/erzeugen/SKILL.md), die Übergabe der
+Windows-Signatur in [Signierung/README.md](Signierung/README.md). Die Bauläufe
+für Windows, Linux und beide Mac-Architekturen stehen in
+`.github/workflows/build.yml`; sie laufen erst, wenn die Suite auf den
+vorgesehenen Plattformen grün ist. Für Windows wird nur die signierte
+Setup-Datei mit der signierten Anwendung veröffentlicht: `tools/sign_release.py`
+holt die prüfsummengebundene Anwendung aus dem Baulauf und signiert sie mit dem
+Certum-Zertifikat, `.github/workflows/windows-signed-installer.yml` baut daraus
+den Installer, und das Werkzeug signiert und prüft danach die Setup-Datei.
+
+Ein lokaler Probe- oder Ersatzbau verwendet einen eigenen Arbeitsbaum mit
+passender Entwicklungsumgebung und C-Compiler. Vor PyInstaller werden der
+Schichtkern und das Prüfmodul mit seinem signierten Manifest aus demselben
+Stand gebaut:
+
+```
+.venv/Scripts/python.exe -m pip install -c constraints.txt pyinstaller cython setuptools
+.venv/Scripts/python.exe tools/build_slice_core.py
+.venv/Scripts/python.exe tools/build_licence_module.py
+.venv/Scripts/pyinstaller.exe packaging/solidon3d.spec --noconfirm
+```
+
+Ergebnis ist ein Ordner unter `dist/Solidon3D`. `tools/make_linux_packages.py`
+macht daraus unter Linux AppImage und Flatpak; Menüeintrag, Flatpak-Manifest
+und AppStream-Beschreibung schreibt es aus den Werten in `app/branding.py`,
+mit `--files` nur diese und ohne Linux. Das tar.gz des Baus bleibt ein
+Bauartefakt. `appimagetool` und `flatpak-builder` sind externe Programme und
+werden nicht mitgeliefert (§36).
