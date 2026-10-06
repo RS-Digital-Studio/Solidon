@@ -2127,11 +2127,10 @@ def test_the_error_dialog_accents_the_action_and_never_the_way_out(qt_app: objec
 
 
 def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None:
-    """Ein Knopf, der verwirft, trägt das Fehlerrot der Palette als Fläche.
-
-    *Abbrechen* steht unter *Übernehmen*, gleich breit — ohne eigene Farbe
-    sähe er aus wie dessen Zwilling (Robert, 11.09.2026: „das abbrechen mit
-    rotem hintergrund"). Gemessen am gezeichneten Knopf, nicht am Stylesheet:
+    """Ein Knopf, der unwiederbringlich verwirft, trägt das Fehlerrot der
+    Palette als Fläche — *Verwerfen* vor dem Schließen eines geänderten
+    Projekts, nicht *Abbrechen* (Entscheidung Robert, 06.10.2026: RM-512 löst
+    das rote Abbrechen vom 11.09. ab). Gemessen am gezeichneten Knopf, nicht am Stylesheet:
     Ein Selektor, den Qt nicht liest, färbt nichts. Die Schrift darauf muss
     lesbar bleiben (§19.3), und das Wort ist die zweite Kodierung (Regel 18).
     """
@@ -2150,7 +2149,7 @@ def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None
             apply_theme(qt_app, theme)
             qt_app.setStyleSheet(stylesheet(theme, 10))
             holder = QWidget()
-            button = make_danger(QPushButton("Abbrechen", holder))
+            button = make_danger(QPushButton("Verwerfen", holder))
             button.resize(160, 40)
             holder.resize(200, 60)
             holder.show()
@@ -2260,20 +2259,14 @@ def test_no_button_is_red_and_primary_at_once() -> None:
     assert not offenders, offenders
 
 
-#: Wo *Abbrechen* das Fehlerrot trägt, obwohl es nichts Unwiederbringliches
-#: verwirft. **Offene Entscheidung:** Robert wollte es am 11.09.2026 so („das
-#: abbrechen mit rotem hintergrund“, ``86c4975aa``), RM-512 verlangt Rot genau
-#: am unwiederbringlichen Verwerfen. Bis das entschieden ist, bleiben die zwei
-#: bestehenden Stellen, und keine kommt dazu.
-RED_EXITS_PENDING_DECISION = {("filament_assignment.py", "Abbrechen"), ("panels.py", "Abbrechen")}
-
-
 def test_no_exit_is_drawn_red() -> None:
     """*Abbrechen* und *Schließen* verwerfen nichts, also tragen sie kein Rot.
 
     Ein roter Ausgang neben einem roten *Verwerfen* macht beide gleich laut:
-    Wer den sicheren Weg sucht, findet zwei Warnfarben. Bekannt sind die
-    Stellen aus :data:`RED_EXITS_PENDING_DECISION`.
+    Wer den sicheren Weg sucht, findet zwei Warnfarben. Auch *Abbrechen* unter
+    *Übernehmen* im Merkmalfenster und in der Filamentwahl ist ein normaler
+    Knopf (Entscheidung Robert, 06.10.2026: RM-512 löst das rote Abbrechen vom
+    11.09. ab).
     """
     exits = {"Abbrechen", "Schließen"}
     found = set()
@@ -2288,7 +2281,7 @@ def test_no_exit_is_drawn_red() -> None:
                 continue
             labels = _labels(call.args[0]) | assigned.get(ast.unparse(call.args[0]), set())
             found |= {(file, label) for label in labels & exits}
-    assert found <= RED_EXITS_PENDING_DECISION, sorted(found - RED_EXITS_PENDING_DECISION)
+    assert not found, sorted(found)
 
 
 #: Wo eine Handlung mit ``primary`` den Hauptknopf bekommen darf: im

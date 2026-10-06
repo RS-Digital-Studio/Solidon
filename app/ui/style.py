@@ -961,9 +961,13 @@ def _keep_the_primary() -> None:
 def make_danger(button: QPushButton) -> QPushButton:
     """Macht einen Knopf zum Verwerfen kenntlich — das Fehlerrot als Fläche.
 
-    *Abbrechen* unter *Übernehmen* (Robert, 11.09.2026: „das abbrechen mit
-    rotem hintergrund"): Beide stehen übereinander, beide gleich breit, und
-    der eine wirft weg, was der andere ausführt. Die Farbe kommt aus der
+    **Genau am unwiederbringlichen Verwerfen** und nie zusammen mit
+    :func:`make_primary`: *Verwerfen* vor dem Schließen eines geänderten
+    Projekts, *Abgeschnittene Schritte verwerfen*, *Trotzdem schließen* bei
+    einer laufenden Erzeugung — jeder Knopf mit ``DestructiveRole``. Ein
+    *Abbrechen* oder *Schließen* ist ein Ausgang und bleibt ein normaler
+    Knopf (Entscheidung Robert, 06.10.2026: RM-512 löst das rote Abbrechen
+    vom 11.09. ab). Wächter: ``test_style.py``. Die Farbe kommt aus der
     Rolle ``error`` der Palette, je Thema in der Fassung, die auf der
     Fensterfläche lesbar ist — das Wort auf dem Knopf ist die zweite
     Kodierung (Regel 18), die Schrift darauf rechnet :func:`readable_on`.
@@ -1495,9 +1499,8 @@ QPushButton:default:pressed {{
     background: {highlight_pressed};
     border-color: {highlight_pressed};
 }}
-/* Ein Knopf, der verwirft (``make_danger``): das Fehlerrot der Palette als
-   Fläche, damit *Abbrechen* neben dem bernsteinfarbenen *Übernehmen* nicht
-   wie dessen Zwilling aussieht. Der Rahmen wechselt beim Überfahren wie am
+/* Ein Knopf, der unwiederbringlich verwirft (``make_danger``): das Fehlerrot
+   der Palette als Fläche. Der Rahmen wechselt beim Überfahren wie am
    Hauptknopf; gedrückt wird die Fläche dunkler über den Rahmen der Fläche. */
 QPushButton[danger="true"] {{
     background: {danger};

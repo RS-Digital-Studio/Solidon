@@ -309,8 +309,10 @@ Ansichtsseite steht in `griffe.md`.
 
 - Hauptaktionen entstehen über `style.make_primary`, nie direkt über
   `setDefault(True)`: Akzent und halbfette Schrift bilden zwei Kodierungen.
-  Verwerfen verwendet `make_danger` (Fehlerrot, Schrift aus `readable_on`,
-  Handlungswort; etwa *Abbrechen* unter *Übernehmen*). `test_style.py` prüft
+  Unwiederbringliches Verwerfen verwendet `make_danger` (Fehlerrot, Schrift aus
+  `readable_on`, Handlungswort); *Abbrechen* und *Schließen* nie, auch nicht
+  unter *Übernehmen* (Entscheidung Robert, 06.10.2026: RM-512 löst das rote
+  Abbrechen vom 11.09. ab). `test_style.py` prüft
   gezeichnete Fläche/Schrift und verbietet den direkten Default-Aufruf.
 - **Höchstens ein Akzentknopf je Fenster** (RM-512). Jeder Knopf mit
   `DestructiveRole` trägt `make_danger`, nie zugleich `make_primary`; eine

@@ -215,7 +215,6 @@ from app.ui.style import (
     SPACE,
     TARGET_SIZE,
     TIGHT,
-    make_danger,
     make_primary,
     rule,
     set_level,
@@ -8637,7 +8636,11 @@ class FeaturePanel(QWidget):
         self._apply.clicked.connect(self._run_armed)
         self._apply.setVisible(False)
         below.addWidget(self._apply)
-        self._cancel = make_danger(QPushButton(tr("Abbrechen"), self._footer))
+        # Ein normaler Knopf: Abbrechen verwirft nur eine Vorschau, die das
+        # Dokument nie gesehen hat. Rot trägt das unwiederbringliche Verwerfen
+        # (Entscheidung Robert, 06.10.2026: RM-512 löst das rote Abbrechen vom
+        # 11.09. ab).
+        self._cancel = QPushButton(tr("Abbrechen"), self._footer)
         self._cancel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._cancel.setToolTip(tr("Verwirft, was im Bild wartet — gerechnet wird nichts."))
         self._cancel.clicked.connect(self.cancelRequested)
