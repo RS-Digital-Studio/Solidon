@@ -11,7 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import os  # noqa: E402
 
 os.environ["GESAMT_AUSRICHTEN"] = "0"
-import einheit  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # RM-530: Matrix in tools/
+from tools import matrix_unit as einheit  # noqa: E402
 
 objects, findings = einheit.load(Path(sys.argv[2]))
 for entry in objects:

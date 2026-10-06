@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
 | 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
@@ -43119,3 +43120,33 @@ entfernt, `importorskip("OCP")` in `test_sketch_edit.py` durch `exact_kernel()` 
 Umsetzung: ruff, Format und mypy grün, Suite 24 075 bestanden, 1 rot —
 `test_kernel_process_lifecycle.py::test_active_helper_ends_with_a_killed_parent`, am reinen
 main-Stand in einem von vier Einzelläufen ebenso rot und nicht berührt.
+
+## RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)
+
+<a id="rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026"></a>
+<a id="rm-530"></a>
+
+**RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft.** `tests/test_delivery_tools.py` und
+  `tests/test_delivery_matrix_review.py` fahren Skripte aus
+  `.claude/.state/uebergabe-gesamt-2026-09-27/` (`einheit.py`, `bericht.py`, `treiber.py`) und
+  `uebergabe-matrix-2026-09-27/`; `.github/workflows/mac-netz.yml` und `tests/helpers.py`
+  greifen auf `.claude/.state/plattformgleichheit-2026-09-17/` zu. Ruff und mypy prüfen den
+  Zustandsordner nicht, und `uebergabe-gesamt-2026-09-27` soll nach dem Gesamtlauf weg — dann
+  bräche die Suite. Fund der Unterlagen-Durchsicht 06.10.2026. **Fix:** Was ein Test oder
+  Workflow dauerhaft braucht, zieht nach `tools/` (Regel in `.claude/README.md`), die Tests
+  zeigen dorthin. **Abnahme:** `git grep -n ".claude/.state" -- tests .github` findet nur
+  noch Sonden eines offenen Punkts, Ruff prüft die umgezogenen Skripte, die Liefertests bleiben grün.
+
+**Nachweis (06.10.2026):** `treiber.py`, `einheit.py`, `bericht.py`, `matrix_config.py` und
+`gcode_lesen.py` liegen per `git mv` als `tools/matrix_driver.py`, `matrix_unit.py`,
+`matrix_report.py`, `matrix_config.py` und `matrix_gcode.py`. Sie importieren ihre Nachbarn über
+das Paket `tools` aus ihrem eigenen Baum und legen erst danach die Code-Wurzel davor, die weiter
+ein anderer Stand sein darf;
+`tests/test_affected_tests.py::test_tests_and_tools_import_their_neighbours_with_the_package_prefix`
+hält das. Ruff prüft die Dateien (26 Befunde behoben). `tests/test_delivery_tools.py` und
+`tests/test_delivery_matrix_review.py` laden sie von dort ohne zusätzlichen Suchpfad, 535 Fälle
+mit der Sprachprüfung grün. Laufskripte, `UEBERGABE.md`, die Anycubic-Hülle und die alten Sonden
+im Zustandsordner zeigen auf die neuen Dateien. `git grep -n .claude/.state -- tests .github`
+findet nur noch `mac-netz.yml` und den Kommentar in `tests/helpers.py` (Sonde des offenen
+RM-187) sowie erfundene Pfade in `test_affected_tests.py` und `test_roadmap.py`, die keine Datei
+lesen.

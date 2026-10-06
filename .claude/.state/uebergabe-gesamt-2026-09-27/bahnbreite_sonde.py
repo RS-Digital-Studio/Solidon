@@ -26,7 +26,8 @@ sys.argv = [sys.argv[0], TREE, MODEL, str(TARGET.parent), "heim"]
 sys.path.insert(0, str(HERE))
 os.environ["GESAMT_AUSRICHTEN"] = "0"
 
-import einheit  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # RM-530: Matrix in tools/
+from tools import matrix_unit as einheit  # noqa: E402
 
 from app.core.export import handover, manufacturer  # noqa: E402
 from app.core.knowledge import profiles  # noqa: E402

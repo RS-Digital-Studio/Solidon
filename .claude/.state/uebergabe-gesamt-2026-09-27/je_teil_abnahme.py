@@ -37,7 +37,8 @@ sys.argv = [sys.argv[0], TREE, MODEL, str(TARGET), "heim"]
 sys.path.insert(0, str(HERE))
 os.environ["GESAMT_AUSRICHTEN"] = "0"
 
-import einheit  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # RM-530: Matrix in tools/
+from tools import matrix_unit as einheit  # noqa: E402
 import trimesh  # noqa: E402
 
 from app.core.export import manufacturer  # noqa: E402
@@ -47,8 +48,7 @@ from app.core.slice import advise  # noqa: E402
 from app.core.types import SceneObject  # noqa: E402
 from app.ui.print_settings_dialog import _AdviceWorker, _TargetedAdvice  # noqa: E402
 
-sys.path.insert(0, str(einheit.MATRIX))
-from gcode_lesen import TYPE_MARK, kind_of  # noqa: E402
+from tools.matrix_gcode import TYPE_MARK, kind_of  # noqa: E402
 
 WORD = re.compile(r"([XYZEF])(-?[\d.]+)")
 #: So weit neben dem Hüllquader zählt eine Bahn noch zum Körper (Rand, Stütze).

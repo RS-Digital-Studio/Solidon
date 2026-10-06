@@ -1,10 +1,10 @@
-"""``einheit.py`` der Slicer-Matrix für die Drucker, die Solidon aus Anycubic Slicer Next liest.
+"""``tools/matrix_unit.py`` der Slicer-Matrix für die Drucker, die Solidon aus Anycubic Slicer Next liest.
 
 Der Kunde wählt seinen Anycubic-Drucker aus dem Slicer (``discover_printers``),
 nicht aus Solidons eigener Tabelle, die nur den Kobra 2 kennt. Dieser
 Vorschalter hängt die gelesenen Drucker in den Bestand des Prozesses, trägt
 den Slicer als ``anycubic`` in ``matrix_config`` ein und führt dann
-``einheit.py`` unverändert aus.
+``tools/matrix_unit.py`` unverändert aus.
 
 Aufruf: python einheit_anycubic.py <code-wurzel> <modell> <ausgabeordner> <kombis>
 ``<kombis>``: ``alle`` (jeder gelesene Drucker), ``heim`` (Kobra S1 und S1 Max,
@@ -18,13 +18,13 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-TOOL = HERE.parent / "uebergabe-gesamt-2026-09-27" / "einheit.py"
+TOOL = HERE.parents[2] / "tools" / "matrix_unit.py"
 EXE = Path(r"C:\Program Files\AnycubicSlicerNext\AnycubicSlicerNext.exe")
 ROOT = Path(sys.argv[1]).resolve()
-sys.path.insert(0, str(ROOT))
-sys.path.insert(1, str(TOOL.parent))
+sys.path.insert(0, str(TOOL.parents[1]))
+from tools import matrix_config  # noqa: E402
 
-import matrix_config  # noqa: E402
+sys.path.insert(0, str(ROOT))
 
 from app.core.export import slicer_profiles  # noqa: E402
 from app.core.knowledge import profiles  # noqa: E402
