@@ -27,7 +27,7 @@ Die Zahlen hält `tests/test_interface_limits.py`, die Breitengrenze
 |---|---|
 | Menüs in der Leiste | ≤ 9 |
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
-| Umschalter in der Werkzeugzeile | ≤ 8 — heute sieben: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen — auf `Alt+1` bis `Alt+7` |
+| Umschalter in der Werkzeugzeile | ≤ 8 — heute sieben: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Teilen — auf `Alt+1` bis `Alt+7` |
 | Felder auf der Vorderseite eines Operationsdialogs, gezählt, was zugleich dasteht (Felder anderer Varianten stehen nicht da) | ≤ 4, bei mindestens 90 % der Operationen ≤ 3 (Bauplan §2.4, Entscheidung Robert) |
 | Wörter über dem ersten Feld (Platzierungssatz, erster Satz der Beschreibung, Überschrift „Wann nicht?“) | ≤ 25, übersetzt ≤ 35 |
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
@@ -56,10 +56,16 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
   Feld *Funktion suchen …* oben, Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum
   und Ansicht** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
   zwei Aktionen auf einer Taste führt Qt beide nicht aus.
-- **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*
-  (mit *Automatisch teilen*), *Erzeugen* samt Abschnitt *Bausteine* (Katalog,
-  Gegenstücke, Deckel ohne Kachel; `parts` steht in der Gruppe *Erzeugen*),
-  *Ansicht*, *Hilfe*.
+- **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*,
+  *Erzeugen* samt Abschnitt *Bausteine* (Katalog, Gegenstücke, Deckel ohne
+  Kachel; `parts` steht in der Gruppe *Erzeugen*), *Ansicht*, *Hilfe*.
+  *Automatisch teilen* braucht einen Körper und steht in der Karte unter
+  *Vorbereiten* (`SelectionOperationsPanel.add_window_action`, RM-507).
+- **Ein Text, eine Wirkung** (RM-507): Steht derselbe Eintrag in zwei Menüs, ist
+  es dieselbe `QAction` (Katalog, *Modell einfügen …*); ein Operationsdialog
+  bestätigt mit seinem Titel, ein Baustein ohne Verb im Titel mit „Einsetzen“
+  wie der Katalog (`op_dialog.accept_text`); sichtbarer und zugänglicher Name
+  eines Knopfs kommen aus einem Schlüssel (`header.printer_button_text`).
 - **Den Menüort einer Operation mit Auswahl entscheidet ihre Kachel, nicht ihre
   Kategorie:** `catalogue_operations()` (`surfaces.py`) ist die Quelle für
   Leiste, Karte, `menu_path` und Wächter; `create_lid` und `screw_lid` stehen
@@ -92,7 +98,7 @@ bekommt:
 
 | Weg | Ort an der Oberfläche |
 |---|---|
-| Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
+| Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Teilen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
 | Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen“: erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig“), Menü *Erzeugen*, Karte der Handlungen; Grundkörper tragen vorn *Maße als Parameter anlegen* (§13) |
 | Weg 3 — generieren | Chat, Generierungsdialog, Einladung der leeren Szene |
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — am gewählten oder einzigen Körper, sonst sagen sie es vorher) |
@@ -175,7 +181,7 @@ sie lädt mit Operationsdialog, Merkmalfenster und Parameterschema.
   (`MainWindow.run_operation`), ausdrückliche Werte haben Vorrang. Beim
   Wiederöffnen bleiben die gespeicherten Rollen stehen.
 - **Auch ein Sammeleintrag beginnt am gemeinsamen Einstieg**
-  (`MainWindow.launch_operation`): *Aus Skizze erzeugen* öffnet unmittelbar
+  (`MainWindow.launch_operation`): *Zeichnen …* öffnet unmittelbar
   die Zeichnung, wie Palette und Kürzel.
 
 ## Zwillinge: eine Handlung, zwei Rechenkerne
@@ -254,7 +260,7 @@ Filter darin still mit.
 - **Was am gewählten Körper nie etwas tun kann, sagt es am Menüeintrag**
   (`requires_body` und `lid.reason_against`, deklariert nach `operationen.md`,
   „Was die Operation verlangt, steht im Register“) — *Offene Fläche schließen*,
-  *In Einzelteile zerlegen*, *Gitter füllen*, die Deckel an der gewählten
+  *In Einzelteile aufteilen*, *Gitter füllen*, die Deckel an der gewählten
   Fläche, einmal je Merkmal und Auswertung gerechnet; *An Merkmal ausrichten*
   verlangt sein Ziel (`_NEEDS_TARGET`), und der Dialog sperrt mit demselben
   Satz, wenn die Liste leer ist. Was an einer Zahl im Dialog hängt, sagt das

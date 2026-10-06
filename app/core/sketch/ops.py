@@ -1989,7 +1989,7 @@ def _drawn_pairs(
 #
 # **Und trotzdem kein zweiter Menüeintrag** (Konzept §10: „Revolve-Cut wird
 # kein zweiter Eintrag, sondern ein Feld im Dialog"): Die drei stehen in der
-# Variantengruppe *Aus Skizze erzeugen …* direkt hinter ihrem Erzeuger — das
+# Variantengruppe *Zeichnen …* direkt hinter ihrem Erzeuger — das
 # Feld ist die Art. Werkzeug und Querschnitt kommen aus denselben Helfern wie
 # beim Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`); was dazukommt,
 # ist die Lage am Zielkörper und die Differenz in beiden Kernen.

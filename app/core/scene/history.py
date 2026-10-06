@@ -951,7 +951,7 @@ class History:
         """Zerlegt einen Körper vor einem angehaltenen Schritt und plant neu.
 
         Dasselbe Muster wie :meth:`repair_and_retry`, mit *In Einzelteile
-        zerlegen* statt der Reparatur: Der vollständige Suffix ab
+        aufteilen* statt der Reparatur: Der vollständige Suffix ab
         ``stopped_at`` wird ersetzt, davor kommt ``split_bodies`` auf
         ``target`` mit der Stückzahl ``count``, und alte wie neue Fassung
         reisen in **einer** Transaktion (§15.5, Regel 16). Der Anlass ist das

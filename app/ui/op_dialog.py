@@ -16,6 +16,7 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final
 
@@ -58,7 +59,7 @@ from app.core.units import (
     from_mm,
     to_mm,
 )
-from app.i18n import tr
+from app.i18n import source_text, tr
 from app.ui.dialogs import ErrorNotice, align_to_the_front
 from app.ui.labels import (
     BoundedSpin,
@@ -203,6 +204,27 @@ def lead_sentence(spec: OperationSpec) -> str:
     beide Orte denselben Satz zeigen.
     """
     return first_sentence(str(spec.doc or "")).strip()
+
+
+#: Ein Verb am Ende eines deutschen Titels: „Deckel erzeugen“, „Kugellager
+#: einsetzen“. „Halter rund“ endet klein, aber auf kein Verb.
+_ENDS_IN_A_VERB: Final = re.compile(r"\s[a-zäöüß]+(?:en|ern|eln)$")
+
+
+def accept_text(spec: OperationSpec) -> str:
+    """Was der Hauptknopf eines Operationsdialogs sagt (RM-507).
+
+    Der Knopf benennt die Handlung: „Bohrung setzen“ statt „OK“ — was gleich
+    passiert, steht dort, wo entschieden wird. Die meisten Bausteine heißen
+    nach dem, was sie sind, und ein Knopf „Lochwand-Einhänger“ sagt nicht,
+    was der Klick tut; dort heißt er „Einsetzen“ wie im Bausteinkatalog
+    (Robert, 25.08.2026). Trägt ein Bausteintitel selbst ein Verb, ist er der
+    Knopf: *Deckel erzeugen* setzte bis RM-507 „ein“. Entschieden wird an der
+    deutschen Quelle, damit jede Sprache denselben Knopf zeigt.
+    """
+    if spec.category == "parts" and not _ENDS_IN_A_VERB.search(source_text(spec.title)):
+        return str(tr("Einsetzen"))
+    return str(spec.title)
 
 
 def placement_hint() -> str:
@@ -2398,17 +2420,12 @@ class OperationDialog(QDialog):
         button_layout = buttons.layout()
         assert button_layout is not None
         button_layout.setSpacing(SPACE)
-        # Der Knopf benennt die Handlung: „Bohrung setzen" statt „OK". Was
-        # gleich passiert, steht damit dort, wo entschieden wird — der
-        # Fenstertitel ist beim Klicken nicht mehr im Blick. Für die
-        # Bausteine gilt das nicht wörtlich: Ihre Titel sind Substantive,
-        # und ein Knopf namens „Lochwand-Einhänger" sagt nicht, was der
-        # Klick tut. Dort heißt die Handlung „Einsetzen" — den Baustein
-        # nennt der Fenstertitel (Robert, 25.08.2026, über 3d-druck-ce).
+        # Der Knopf benennt die Handlung (:func:`accept_text`); der
+        # Fenstertitel ist beim Klicken nicht mehr im Blick.
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self._accept_button = ok
         if ok is not None:
-            ok.setText(str(tr("Einsetzen")) if spec.category == "parts" else str(spec.title))
+            ok.setText(accept_text(spec))
             make_primary(ok)
         self._source_fields = tuple(
             editor for editor in self._editors.values() if isinstance(editor, ImageSourceField)
@@ -4239,9 +4256,7 @@ class OperationDialog(QDialog):
         for widget in retired:
             widget.deleteLater()
         self.setWindowTitle(str(spec.title))
-        self._accept_button.setText(
-            str(tr("Einsetzen")) if spec.category == "parts" else str(spec.title)
-        )
+        self._accept_button.setText(accept_text(spec))
         if self._description is not None:
             self._description.setText(lead_sentence(spec))
             self._description.setVisible(bool(spec.doc))

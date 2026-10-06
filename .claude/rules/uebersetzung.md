@@ -178,12 +178,13 @@ bleibt nur, wo *Spiel* die Lose meint (Langloch für Schrauben, die sich
 verschieben lassen) — im 3D-Druck meint „play“ Wackeln, und ein Feld „Play“
 neben einem Satz über „clearance“ sind für den Kunden zwei Dinge.
 
-**Das Werkzeug *Trennen* und die Operation *Teilen* heißen in jeder Sprache
-verschieden** — en Cut/Split, es Separar/Dividir, fr Séparer/Diviser, it
-Taglia/Dividi, pt Separar/Dividir. Das Werkzeug folgt *An gezeichneter Linie
-trennen*, die es anlegt, die Operation *Automatisch teilen*, dessen Schritte sie
-sind; ein gemeinsamer Name schickte den Kunden an den falschen Ort
-(`test_no_tool_or_operation_shares_its_name_with_another`).
+**Jeder Weg, ein Teil zu teilen, sagt „teilen“, und keine zwei heißen gleich**
+(RM-507): das Werkzeug *Teilen* (en Split, es Dividir, fr Diviser, it Dividi,
+pt Dividir), die Operationen *An Ebene teilen*, *An gezeichneter Linie teilen*
+und *In Einzelteile aufteilen*, der Ablauf *Automatisch teilen*. Drei Verben für
+eine Sache ließen den Kunden suchen, ein gemeinsamer Name schickte ihn an den
+falschen Ort (`test_every_way_to_split_says_teilen`,
+`test_no_tool_or_operation_shares_its_name_with_another`).
 
 ## Übersetzen heißt neu schreiben, nicht flicken
 

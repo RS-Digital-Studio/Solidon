@@ -8685,7 +8685,7 @@ def test_an_auto_split_finding_opens_the_drawn_split_tool(
         button.text().replace("&", ""): button
         for button in window.report._offers.findChildren(QPushButton)
     }
-    label = tr("An gezeichneter Linie trennen")
+    label = tr("An gezeichneter Linie teilen")
     assert label in buttons, f"angeboten wurden nur: {sorted(buttons)}"
     buttons[label].click()
 

@@ -1085,3 +1085,42 @@ def test_the_operation_list_asks_for_the_height_of_its_visible_buttons(
     wanted = panel.scroller.sizeHint().height()
     assert wanted >= content.sizeHint().height(), "die Wunschhöhe folgt den sichtbaren Knöpfen"
     assert wanted < body, "an einer Bohrung stehen weniger Knöpfe als am Körper"
+
+
+def test_auto_split_stands_with_the_other_ways_to_split(qt_app: QApplication) -> None:
+    """*Automatisch teilen* steht am Körper unter *Vorbereiten*, nicht unter *Bearbeiten* (RM-507).
+
+    Der Ablauf ist kein Registereintrag; die Karte trägt ihn über die Aktion
+    des Fensters: dieselbe Freigabe, derselbe Grund, derselbe Klick. An einem
+    Merkmal und ohne Auswahl steht er nicht da.
+    """
+    from PySide6.QtGui import QAction
+
+    from app.ui.selection_operations import _category_group
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    action = QAction("Automatisch teilen …", panel)
+    action.setToolTip("Ein zu großes Teil zerschneiden.")
+    fired: list[bool] = []
+    action.triggered.connect(lambda: fired.append(True))
+    panel.add_window_action("auto_split", "prepare", action)
+    _rank, group = _category_group("prepare")
+    row = panel._buttons["auto_split"]
+    assert row in panel._groups[group][2], "die Zeile steht in der Gruppe der Teilen-Wege"
+
+    panel.set_context(1, _availability(1))
+    assert row.isVisibleTo(panel) and row.isEnabled()
+    row.click()
+    assert fired == [True], "der Klick löst dieselbe Aktion aus wie Palette und Kürzel"
+
+    action.setEnabled(False)
+    action.setToolTip("Dafür muss ein Körper ausgewählt sein.")
+    panel.set_context(1, _availability(1))
+    assert not row.isEnabled() and row.toolTip() == action.toolTip(), "Sperre und Grund"
+
+    action.setEnabled(True)
+    panel.set_context(1, _availability(1), feature_kind="face")
+    assert not row.isVisibleTo(panel), "an einer Fläche gilt er nicht"
+    panel.set_context(0, _availability(0))
+    assert not row.isVisibleTo(panel), "ohne Auswahl auch nicht"

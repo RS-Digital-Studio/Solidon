@@ -790,7 +790,7 @@ def make_primary(button: QPushButton) -> QPushButton:
     erst im Bild sieht: Das Stylesheet setzt für ``QPushButton:default`` ein
     ``font-weight: 600``, gezeichnet wird also halbfett. Qt rechnet die
     bevorzugte Breite aber aus der **normalen** Schrift des Widgets — bei
-    „Jetzt trennen" sind das 77 gegen 89 Bildpunkte. Wo ein Layout dem Knopf
+    „Jetzt teilen" sind das 77 gegen 89 Bildpunkte. Wo ein Layout dem Knopf
     genau seine bevorzugte Breite gibt, und in einer engen Leiste tut es das,
     stand auf dem Hauptknopf „etzt trenne".
 

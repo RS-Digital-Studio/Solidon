@@ -170,7 +170,7 @@ def _window(theme: Theme) -> str:
     canvas.wrapped(
         271,
         262,
-        str(_("Schnitt · Messen · Bewegen · Analyse · Schichten · Explosion · Trennen")),
+        str(_("Schnitt · Messen · Bewegen · Analyse · Schichten · Explosion · Teilen")),
         width=36,
         size=7,
         line_height=9,

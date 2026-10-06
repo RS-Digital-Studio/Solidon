@@ -94,7 +94,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
@@ -3669,26 +3668,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
-<a id="rm-507"></a>
-
-- [ ] **RM-507 — Jede Funktion hat einen Namen, überall derselbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Teilen hat sieben Einträge mit drei Verben an vier Orten, „Automatisch teilen“ fällt
-  ins Menü *Bearbeiten*. Ein Druckdialog heißt „An den Slicer übergeben …“,
-  „Drucken vorbereiten …“ und „Drucker …“ (zugänglicher Name „Drucker wechseln“).
-  *Deckel erzeugen* bestätigt mit „Einsetzen“, der Katalog mit „Einfügen“; im Menü
-  *Erzeugen* stehen „Aus Skizze erzeugen …“ (Knopf „Zeichnen“) und „Modell einfügen“
-  doppelt; der Startbildschirm sagt „Modell öffnen“ und „Projekt öffnen“, die Leiste
-  „Modell einfügen“ und „Öffnen“.
-  **Fix:** Durchgehend „Teilen“ (Umschalter, „Jetzt teilen“, „An gezeichneter Linie
-  teilen“), „Automatisch teilen …“ in die Karte unter *Vorbereiten*; Kopfknopf und
-  zugänglicher Name „Druckeinstellungen …“, der Dateieintrag heißt wie der Knopf im
-  Bericht; ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“, auch im Katalog;
-  „Zeichnen …“ im Menü, dieselbe `QAction` für Modell einfügen; Startknöpfe wie die
-  Leiste. `grenzen.md` und alle Kataloge ziehen nach.
-  **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
-  Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
-  zwei Menüs mit verschiedener Wirkung.
 
 <a id="rm-512"></a>
 

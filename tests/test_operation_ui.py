@@ -7249,6 +7249,35 @@ def test_a_named_zero_shows_its_name(qt_app: QApplication) -> None:
         container.deleteLater()
 
 
+def test_every_accept_button_names_what_the_click_does() -> None:
+    """Ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“ (RM-507, C19).
+
+    *Deckel erzeugen* bestätigte mit „Einsetzen“, der Katalog mit „Einfügen“.
+    Jede Operation außerhalb der Bausteine trägt ihren Titel; ein Baustein
+    heißt nach dem, was er ist, und setzt „ein“ — außer sein Titel sagt
+    selbst, was der Klick tut. Die Menge dieser Ausnahmen steht hier, damit
+    ein neuer Baustein mit Verb im Titel bewusst dazukommt.
+    """
+    from app.ui.op_dialog import accept_text
+
+    bootstrap.load_operations()
+    insert = str(tr("Einsetzen"))
+    own = {
+        spec.name
+        for spec in REGISTRY.all()
+        if spec.category == "parts" and accept_text(spec) == str(spec.title)
+    }
+    assert own == {"add_container_insert", "create_lid", "insert_bearing_seat", "screw_lid"}
+    for spec in REGISTRY.all():
+        expected = insert if spec.category == "parts" and spec.name not in own else str(spec.title)
+        assert accept_text(spec) == expected, spec.name
+    catalog_source = (Path(__file__).parent.parent / "app" / "ui" / "catalog.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'ok.setText(tr("Einsetzen"))' in catalog_source, "der Katalog setzt ebenso ein"
+    assert 'tr("Einfügen")' not in catalog_source
+
+
 @pytest.mark.parametrize("key", [Qt.Key.Key_Return, None])
 def test_an_emptied_field_takes_its_named_value(qt_app: QApplication, key: Any) -> None:
     """Wer die Zahl löscht, meint, was der Sondertext sagt (RM-526).

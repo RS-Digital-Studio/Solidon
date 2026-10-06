@@ -43,7 +43,7 @@ Dialogs“ und „Bedingte Felder“.
   nimmt den Sonderwert an (`labels._BoundedBehavior`).
 - **„fx“ steht nur, wenn das Projekt Parameter hat oder das Feld einen Ausdruck
   trägt**; „=“ und „@“ im Zahlenfeld führen weiter in den Ausdruck.
-- **Die Vorgabe trifft den Körper, nicht den Ursprung:** *Teilen* in seiner
+- **Die Vorgabe trifft den Körper, nicht den Ursprung:** *An Ebene teilen* in seiner
   Mitte (`_plane_through`), *Dreiecke verringern* bei der Hälfte seiner
   Dreiecke, *Dreiecke angleichen* bei einem Fünfzigstel seiner längsten Kante
   (`_measured_from_body`, `EDGE_SHARE`) — gefragt nach den Feldern

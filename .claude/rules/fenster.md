@@ -326,8 +326,8 @@ Ansichtsseite steht in `griffe.md`.
   reines `border` wie `_flash_area`. Deshalb `objectName`-Selektoren; bei notwendiger
   breiter Regel Hauptknopffarben ausdrücklich setzen (`#surveyNotice #surveyGive`)
   und weiterhin `make_primary` verwenden. Klicktests belegen keine Knopffarbe.
-- Umschalter nennen das Werkzeug, Knöpfe die Handlung (*Trennen*, *Jetzt
-  trennen*); `test_interface_limits.py`.
+- Umschalter nennen das Werkzeug, Knöpfe die Handlung (*Teilen*, *Jetzt
+  teilen*); `test_interface_limits.py`.
 
 ## Ein Dialog, der höher ist als sein Inhalt
 

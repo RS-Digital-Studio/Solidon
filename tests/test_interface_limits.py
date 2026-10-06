@@ -1697,6 +1697,36 @@ def _menu_titles_and_entries(menu: QMenu) -> list[str]:
     return found
 
 
+def test_no_menu_text_stands_for_two_actions(window: MainWindow) -> None:
+    """Kein Text steht in zwei Menüs mit verschiedener Wirkung (RM-507, A18).
+
+    Unter *Erzeugen* stand die Operation „Modell einfügen“ neben „Modell
+    einfügen …“ in *Datei*, zwei Wege unter einem Namen. Gleicher Text ist
+    erlaubt, wenn es dieselbe ``QAction`` ist (der Katalog, das Einfügen);
+    verglichen wird ohne ``&`` und Auslassungspunkte. *Automatisch teilen*
+    steht in keinem Menü mehr, sondern bei den Teilen-Wegen der Auswahlkarte.
+    """
+    owners: dict[str, set[int]] = {}
+
+    def walk(menu: QMenu) -> None:
+        for action in menu.actions():
+            below = action.menu()
+            if isinstance(below, QMenu):
+                walk(below)
+            elif not action.isSeparator() and action.text():
+                text = action.text().replace("&", "").replace("…", "").strip()
+                owners.setdefault(text, set()).add(id(action))
+
+    for entry in window.menuBar().actions():
+        if isinstance(menu := entry.menu(), QMenu):
+            walk(menu)
+    assert len(owners) > 40, "die Menüleiste ist kaum gefüllt — dann prüft das nichts"
+    doubled = sorted(text for text, actions in owners.items() if len(actions) > 1)
+    assert not doubled, f"ein Text, mehrere Aktionen: {doubled}"
+    assert "Automatisch teilen" not in owners
+    assert window.auto_split_action in window.selection_operations._window_actions.values()
+
+
 def test_every_menu_path_in_the_texts_leads_somewhere(window: MainWindow) -> None:
     """Was Handbuch, Tour und Website als Weg nennen, muss es geben.
 

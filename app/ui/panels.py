@@ -327,7 +327,7 @@ _PER_BODY_ACTIONS: Final[frozenset[str]] = frozenset(
 #: ``error.object_id``) oder wirken auf die Auswahl, die an einem verbrauchten
 #: Körper eine andere wäre. Nach *Modell teilen* stand am Laptopständer
 #: „Das Modell besteht aus 21 Teilen …“ am verbrauchten Körper mit
-#: *Überschneidungen auflösen* und *In Einzelteile zerlegen*, und ein Klick
+#: *Überschneidungen auflösen* und *In Einzelteile aufteilen*, und ein Klick
 #: legte eine Reparatur an einem Körper an, den es nicht mehr gibt. Was einen
 #: Schritt ändert (``NEEDS_OP``) oder die ganze Szene meint, gilt ohne ihn.
 #: Vollständig hält die Menge ``test_finding_actions`` am Handlerverzeichnis.
@@ -646,7 +646,7 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     "ingest.small_components": (REMOVE_SMALL_PARTS,),
     # **Ein Befund, dessen Handlung nebenan stand.** „Das Modell besteht aus
     # mehreren Teilen." trug nichts, während im selben Bericht „sehr kleine
-    # Einzelteile" den Knopf hatte — und *In Einzelteile zerlegen* stand in
+    # Einzelteile" den Knopf hatte — und *In Einzelteile aufteilen* stand in
     # der Karte unter 24 Handlungen (Bedienweg-Durchsicht 14.09.2026).
     "ingest.multiple_components": (SPLIT_BODIES,),
     # **Der Ausweg stand im Text des einen Befunds und das Ziel im anderen.**
@@ -5936,7 +5936,7 @@ class ReportPanel(QWidget):
     und genau dort stand der Kunde, der wissen wollte, ob er jetzt drucken
     kann, vor „Keine Befunde." und sonst nichts. Der Weg zum Slicer lag allein
     hinter *Datei → Druckeinstellungen …*, einem Namen, unter dem ein Laie nichts
-    sucht. Der Eintrag heißt *Drucken vorbereiten*. Das Fenster verdrahtet dieses
+    sucht. Der Eintrag heißt *An den Slicer übergeben*. Das Fenster verdrahtet dieses
     Signal mit demselben Dialog.
     """
 

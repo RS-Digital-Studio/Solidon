@@ -2316,7 +2316,7 @@ def body_requirement(spec: Any, facts: BodyFacts | None) -> str | None:
     Die dritte Schwester neben :func:`kind_requirement` und
     :func:`feature_requirement`: Nicht die Bauart, nicht das Merkmal, sondern
     der Zustand. Gemessen am 13.09.2026 über alle Dialoge: *Offene Fläche
-    schließen* am geschlossenen Quader, *In Einzelteile zerlegen* an einem
+    schließen* am geschlossenen Quader, *In Einzelteile aufteilen* an einem
     Stück und *Gitter füllen* am massiven Körper öffneten einen Dialog, dessen
     Vorschau nur „Keine Vorschau: …" sagen konnte — die Sackgasse aus Regel
     19, ein Fenster später. Hier steht der Satz, den die Operation beim

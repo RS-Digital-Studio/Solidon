@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-507: Jede Funktion hat einen Namen, überall derselbe (06.10.2026)](#rm-507-jede-funktion-hat-einen-namen-überall-derselbe-06102026) |
 | 2026-10-06 | [RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)](#rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
@@ -43068,3 +43069,56 @@ Fenstertests `test_a_named_zero_shows_its_name` und
 `test_an_emptied_field_takes_its_named_value` (Release, offscreen per Sonde grün).
 Changelog: ja — Höhe der Öffnung leer heißt Oberkante, ein geleertes Feld springt auf
 seinen Namen zurück.
+
+## RM-507: Jede Funktion hat einen Namen, überall derselbe (06.10.2026)
+
+<a id="rm-507-jede-funktion-hat-einen-namen-überall-derselbe-06102026"></a>
+<a id="rm-507"></a>
+
+**RM-507 — Jede Funktion hat einen Namen, überall derselbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Teilen hat sieben Einträge mit drei Verben an vier Orten, „Automatisch teilen“ fällt
+  ins Menü *Bearbeiten*. Ein Druckdialog heißt „An den Slicer übergeben …“,
+  „Drucken vorbereiten …“ und „Drucker …“ (zugänglicher Name „Drucker wechseln“).
+  *Deckel erzeugen* bestätigt mit „Einsetzen“, der Katalog mit „Einfügen“; im Menü
+  *Erzeugen* stehen „Aus Skizze erzeugen …“ (Knopf „Zeichnen“) und „Modell einfügen“
+  doppelt; der Startbildschirm sagt „Modell öffnen“ und „Projekt öffnen“, die Leiste
+  „Modell einfügen“ und „Öffnen“.
+  **Fix:** Durchgehend „Teilen“ (Umschalter, „Jetzt teilen“, „An gezeichneter Linie
+  teilen“), „Automatisch teilen …“ in die Karte unter *Vorbereiten*; Kopfknopf und
+  zugänglicher Name „Druckeinstellungen …“, der Dateieintrag heißt wie der Knopf im
+  Bericht; ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“, auch im Katalog;
+  „Zeichnen …“ im Menü, dieselbe `QAction` für Modell einfügen; Startknöpfe wie die
+  Leiste. `grenzen.md` und alle Kataloge ziehen nach.
+  **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
+  Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
+  zwei Menüs mit verschiedener Wirkung.
+
+**Umsetzung:** Alle Teilen-Wege sagen „teilen“: das Werkzeug *Teilen* mit *Jetzt
+teilen*, die Operationen *An Ebene teilen* (`split_pinned`, vorher „Teilen“ — der Name
+des Werkzeugs, und zwei Dinge unter einem Namen verbietet
+`test_no_tool_or_operation_shares_its_name_with_another`), *An gezeichneter Linie
+teilen* und *In Einzelteile aufteilen*, dazu die Handlungen der Befunde, Tour, Handbuch,
+Figur und Beispieltext in sechs Sprachen. *Automatisch teilen …* steht nicht mehr unter
+*Bearbeiten*, sondern am gewählten Körper in der Karte unter *Vorbereiten*
+(`SelectionOperationsPanel.add_window_action`, Freigabe und Grund von der Aktion). Der
+Kopfknopf heißt sichtbar und vorgelesen *Druckeinstellungen …*
+(`header.printer_button_text`), der Dateieintrag *An den Slicer übergeben …* wie der
+Knopf im Prüfbericht. Ein Operationsdialog bestätigt mit seinem Titel; ein Baustein,
+dessen Titel kein Verb trägt, mit „Einsetzen“ wie der Katalog (`op_dialog.accept_text`)
+— *Deckel erzeugen*, *Drehdeckel erzeugen*, *Behältereinsatz erzeugen* und *Kugellager
+einsetzen* tragen ihren Titel. Im Menü *Erzeugen* heißt der Skizzeneintrag *Zeichnen …*
+wie der Knopf, und *Modell einfügen …* ist dieselbe `QAction` wie in *Datei*. Startknöpfe
+und Leiste hießen seit RM-515 schon gleich. Regeln: `grenzen.md` („Ein Text, eine
+Wirkung“), `uebersetzung.md`, Bauplan nur im Titel *In Einzelteile aufteilen*.
+
+**Nachweis:** `test_registry_consistency.py::test_every_way_to_split_says_teilen` (am
+Stand davor rot: „trennen“, „zerlegen“), `test_operation_ui.py::test_every_accept_button_names_what_the_click_does`
+(Registertest über alle Knopftexte), `test_translations.py` (kein Werkzeug teilt seinen
+Namen mit einer Operation, in sechs Sprachen). Fenstertests, offscreen per Sonde grün,
+beim Release im Fensterlauf: `test_interface_limits.py::test_no_menu_text_stands_for_two_actions`
+(am Stand davor rot: „Modell einfügen“ zweimal, „Automatisch teilen“ im Menü),
+`test_header.py::test_the_printer_button_has_one_name_seen_and_read`,
+`test_selection_operations.py::test_auto_split_stands_with_the_other_ways_to_split`.
+Die Handbuchseiten und Bilder ziehen mit `/erzeugen` beim Release nach
+(`test_every_manual_paragraph_reaches_the_generated_page`). Changelog: ja — einheitliche
+Namen, *Automatisch teilen* rechts in der Auswahl, *Druckeinstellungen …* in der Kopfzeile.

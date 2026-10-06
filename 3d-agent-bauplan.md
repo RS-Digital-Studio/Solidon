@@ -2429,7 +2429,7 @@ Regel bei der Auswertung (§17.1), damit ein Rezept dieselbe Operation ohne
 diese Rückholung benutzen kann.
 
 **Und die Nummern der Teile hängen an der Geometrie, nicht am Rauschen.**
-*In Einzelteile zerlegen* ordnet nach Volumen; zwei gleich große Teile
+*In Einzelteile aufteilen* ordnet nach Volumen; zwei gleich große Teile
 entscheiden über ihre Lage. Gerechnete Volumina schwanken in den letzten
 Stellen mit der Tessellierung, und ein Tausch der Nummern nähme jedem späteren
 Schritt sein Ziel — die Kennung eines Objekts ist der Anker für alles, was

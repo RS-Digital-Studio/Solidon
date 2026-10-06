@@ -3241,7 +3241,7 @@ class MainWindow(QMainWindow):
                 "exportiert wird, bleibt, wo es ist."
             ),
         )
-        # Trennen ist das eine Werkzeug der Zeile, das das Modell ändert und
+        # Teilen ist das eine Werkzeug der Zeile, das das Modell ändert und
         # nicht nur die Ansicht: Es ist der Handgriff, den ein Anfänger als
         # Erstes braucht, sobald ein Teil nicht auf die Platte passt, und ein
         # Menüweg dahin wäre einer zu viel. Was das Schließen zurücknimmt, ist
@@ -3251,7 +3251,7 @@ class MainWindow(QMainWindow):
         # über das Auswahlfenster am Merkmal, als Operation wie jede andere.)
         self.tools.add(
             "split",
-            tr("Trennen"),
+            tr("Teilen"),
             self.split_bar,
             # Auch eine gebundene Methode hält hier stark: Der Umschalter legt
             # sie in ein ``Tool`` und das in ein Wörterbuch — ein gewöhnlicher
@@ -3260,7 +3260,7 @@ class MainWindow(QMainWindow):
             weak_slot(self, lambda view: view._end_split()),
             symbol="split",
             hint=tr(
-                "Zwei Punkte auf dem Teil anklicken — dazwischen wird getrennt, "
+                "Zwei Punkte auf dem Teil anklicken — dazwischen wird geteilt, "
                 "gerade in den Bildschirm hinein. Die Hälften bekommen Stifte zum "
                 "Zusammenstecken, wenn der Haken steht."
             ),
@@ -4302,9 +4302,12 @@ class MainWindow(QMainWindow):
             ),
             symbol="export",
         )
+        # **Heißt wie der Knopf im Prüfbericht** (RM-507): „Drucken
+        # vorbereiten …“ öffnete denselben Dialog wie *An den Slicer übergeben …*
+        # und der Kopfknopf *Druckeinstellungen …* — drei Namen für einen Weg.
         self._add_action(
             file_menu,
-            tr("Drucken vorbereiten …"),
+            tr("An den Slicer übergeben …"),
             "Ctrl+P",
             self.action_print_settings,
             tr("Schichten, Temperaturen, Farbe und Stützen einstellen — und slicen lassen."),
@@ -4585,29 +4588,29 @@ class MainWindow(QMainWindow):
                         # deshalb kann er nicht hier entstehen.
                         continue
                     place = self._subgroup_for(spec, target, subgroups)
+                    if spec.name == "load":
+                        # **Derselbe Eintrag wie in *Datei*** (RM-507): Unter
+                        # *Erzeugen* stand die Operation „Modell einfügen“
+                        # neben „Modell einfügen …“ in *Datei* — zwei Zeilen,
+                        # ein Name, zwei Wege. Wie beim Katalog hängt hier
+                        # dieselbe ``QAction``; die Operation behält ihre
+                        # Aktion am Fenster für Palette und Freigabe.
+                        place.addAction(self.import_action)
+                        self._op_actions[spec.name] = self._operation_action(None, spec)
+                        continue
                     self._op_actions[spec.name] = self._operation_action(place, spec)
                 self._add_variant_entries(section.category, target, subgroups)
 
         # *Automatisch teilen* ist kein Registereintrag, sondern ein Ablauf über
         # mehreren Operationen — und stand deshalb unter *Bearbeiten*, zwei
-        # Menüs entfernt von den anderen Wegen, ein Teil zu trennen. Wer ein zu
+        # Menüs entfernt von den anderen Wegen, ein Teil zu teilen. Wer ein zu
         # großes Teil vor sich hat, sucht nicht nach der Bauart einer Funktion,
-        # sondern nach dem Wort „teilen"; sie stehen jetzt beieinander.
-        #
-        # Gesucht wird über die **Kategorie** und nicht über den Menütitel:
-        # Der Titel ist übersetzt und umbenennbar, und ein Vergleich darauf
-        # ließe den Eintrag nach der nächsten Umbenennung still unter
-        # *Bearbeiten* zurück. Gibt es die Gruppe nicht, weil keine
-        # Vorbereiten-Operation registriert ist, bleibt *Bearbeiten* der Platz
-        # — ein Eintrag darf umziehen, nicht verschwinden.
-        prepare_group = next(
-            (str(title) for title, categories in MENU_GROUPS if "prepare" in categories), ""
-        )
-        prepare_menu = groups.get(prepare_group, edit_menu)
-        if prepare_menu is not edit_menu:
-            prepare_menu.addSeparator()
+        # sondern nach dem Wort „teilen“. Die übrigen Wege stehen rechts in der
+        # Auswahlkarte unter *Vorbereiten*, und dort steht seit RM-507 auch
+        # dieser (``SelectionOperationsPanel.add_window_action``); Palette und
+        # Freigabe gehen über dieselbe Aktion am Fenster.
         self.auto_split_action = self._add_action(
-            prepare_menu,
+            None,
             tr("Automatisch teilen …"),
             None,
             self.action_auto_split,
@@ -4617,6 +4620,7 @@ class MainWindow(QMainWindow):
             ),
             symbol="split",
         )
+        self.selection_operations.add_window_action("auto_split", "prepare", self.auto_split_action)
 
         # Was das Register kennt und diese Tabelle nicht, bekommt sein eigenes
         # Menü: eine neue Kategorie soll auftauchen, nicht verschwinden.
@@ -5272,7 +5276,7 @@ class MainWindow(QMainWindow):
         ``symbol`` ist für die Einträge, die **keine** Registeroperation sind
         und deshalb nicht über :func:`icon_name_for` an ihr Zeichen kommen.
         Drei gab es davon, alle drei in Menüs, deren übrige Zeilen eines
-        tragen: *Aus Skizze erzeugen*, *Automatisch teilen* und
+        tragen: *Zeichnen …*, *Automatisch teilen* und
         *Bausteinkatalog* standen als Lücke in einer Symbolspalte.
         """
         action = QAction(label, self)
@@ -5301,7 +5305,9 @@ class MainWindow(QMainWindow):
         if inspect.ismethod(slot):
             slot = weak_slot(cast(QObject, slot.__self__), slot.__func__)
         action.triggered.connect(slot)
-        menu.addAction(action)
+        # Ohne Menü hängt sie am Fenster: Ein Kürzel greift, und eine Karte
+        # oder ein Knopf kann sie tragen (*Automatisch teilen*, RM-507).
+        (menu if menu is not None else self).addAction(action)
         return action
 
     def _update_actions(self) -> None:
@@ -8053,7 +8059,7 @@ class MainWindow(QMainWindow):
         self.announce(
             tr("Geschützt — „Automatisch teilen“ legt hier keine Naht.")
             if on
-            else tr("Freigegeben — hier darf wieder getrennt werden.")
+            else tr("Freigegeben — hier darf wieder geteilt werden.")
         )
 
     def _release_protection_after_error(self, error: AppError) -> None:
@@ -11072,7 +11078,7 @@ class MainWindow(QMainWindow):
             "file.import": (tr("Modell einfügen …"), "Ctrl+I", self.action_import),
             "file.export": (tr("Exportieren …"), "Ctrl+E", self.action_export),
             "file.print_settings": (
-                tr("Drucken vorbereiten …"),
+                tr("An den Slicer übergeben …"),
                 "Ctrl+P",
                 self.action_print_settings,
             ),
@@ -17000,7 +17006,7 @@ class MainWindow(QMainWindow):
                 # dann täte, wäre nichts: der Körper unter ihr ist keiner mehr,
                 # den dieser Klick meint.
                 self._clear_split_line()
-                self.announce(tr("Bitte auf das Teil klicken, das getrennt werden soll."))
+                self.announce(tr("Bitte auf das Teil klicken, das geteilt werden soll."))
                 return
             self._split_target = target
         elif self.viewport.object_at(picked) != self._split_target:
@@ -22465,7 +22471,7 @@ class MainWindow(QMainWindow):
 
         Gefragt wird nach den Feldern, nicht nach dem Namen — und nach beiden
         Schreibweisen einer Ebene: *Teilen* führt ``axis`` und ``position``,
-        *An gezeichneter Linie trennen* ``normal_x/y/z`` und ``position``.
+        *An gezeichneter Linie teilen* ``normal_x/y/z`` und ``position``.
         Die zweite blieb bis zum 14.09.2026 außen vor, und sie hatte denselben
         Fehler: Gemessen über alle 110 Dialoge stand über *An gezeichneter
         Linie trennen* „Keine Vorschau: Diese Ebene teilt das Objekt nicht" —
@@ -24815,7 +24821,7 @@ class MainWindow(QMainWindow):
     def _split_into_bodies_after_error(self, error: AppError) -> None:
         """Ein Modell aus mehreren Teilen zerlegen — der Knopf am Befund, der es sagt.
 
-        Dieselbe Operation wie *In Einzelteile zerlegen* in der Karte, nur dort,
+        Dieselbe Operation wie *In Einzelteile aufteilen* in der Karte, nur dort,
         wo der Kunde gerade liest, dass es mehrere Teile sind (Bedienweg-
         Durchsicht 14.09.2026). Kein Bestätigungsdialog (Regel 19): Die
         Handlung ist ein Schritt im Verlauf, und Strg+Z nimmt sie zurück.
@@ -24866,7 +24872,7 @@ class MainWindow(QMainWindow):
 
         Der Vorschlag kommt vom Ausrichten (``prepare_ops._the_way_out_of``)
         und nennt den Körper und die Zahl seiner losen Teile; der Verlauf
-        setzt *In Einzelteile zerlegen* vor den angehaltenen Schritt und plant
+        setzt *In Einzelteile aufteilen* vor den angehaltenen Schritt und plant
         den Rest neu — derselbe Zug wie bei :meth:`_repair_after_error`
         (§17.1). Hält die Kette nicht mehr dort, bleibt die Zerlegung allein
         als nächster Schritt: Sie ist, was der Kunde angeklickt hat.
@@ -24890,7 +24896,7 @@ class MainWindow(QMainWindow):
     def _recount_after_error(self, error: AppError) -> None:
         """Die Stückzahl einer Zerlegung auf die gemessene Zahl setzen — ein Klick.
 
-        Der Vorschlag kommt von *In Einzelteile zerlegen* (``split_bodies``),
+        Der Vorschlag kommt von *In Einzelteile aufteilen* (``split_bodies``),
         wenn Stückzahl und Teile auseinanderliegen — als Warnung, wenn
         überzählige Teile ihrem Nachbarn zugeschlagen wurden, als Halt, wenn
         Teile fehlen. ``values["found"]`` ist die Zahl, die passt; der Verlauf
