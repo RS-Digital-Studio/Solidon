@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-519: Linke Karten und Zeichenmodus zeigen nur, was gerade gilt (06.10.2026)](#rm-519-linke-karten-und-zeichenmodus-zeigen-nur-was-gerade-gilt-06102026) |
 | 2026-10-06 | [RM-512: Im Ruhezustand leuchtet nur Bausteine, und Rot trägt nur das Verwerfen (06.10.2026)](#rm-512-im-ruhezustand-leuchtet-nur-bausteine-und-rot-trägt-nur-das-verwerfen-06102026) |
 | 2026-10-06 | [RM-507: Jede Funktion hat einen Namen, überall derselbe (06.10.2026)](#rm-507-jede-funktion-hat-einen-namen-überall-derselbe-06102026) |
 | 2026-10-06 | [RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)](#rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026) |
@@ -43297,3 +43298,72 @@ Fenstertests offscreen per Sonde grün, im Release-Tor offen; am echten Fenster 
 ansehen: Kontrast der grauen Kartenränder über dem Modell (dunkel 2,30, hell bis 1,73 gegen
 den Verlauf), Reiterkante, HiDPI (RM-213). Changelog: ja — ruhigere Oberfläche, ein
 Hauptknopf je Dialog, Rot nur beim Verwerfen.
+
+## RM-519: Linke Karten und Zeichenmodus zeigen nur, was gerade gilt (06.10.2026)
+
+<a id="rm-519-linke-karten-und-zeichenmodus-zeigen-nur-was-gerade-gilt-06102026"></a>
+<a id="rm-519"></a>
+
+**RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Unter den Parameterfeldern steht „Eine feste Zahl passt“ / „2 feste Zahlen passen“
+  und liest sich wie die Überschrift der nächsten Zeile; die Filamentspalte des
+  Objektbaums ist abgeschnitten („Fila“) und ihre Felder wirken wie Haken; im Verlauf
+  springt die Nummer an einer Gruppenzeile, „Als Dreiecksmodell rechnen“ steht im
+  Kontextmenü an zweiter Stelle. Im Zeichenmodus zeigt das Auswahlfenster nichts
+  Brauchbares, die Bedingungsliste spricht Fachsprache, und die Einladung der leeren
+  Szene liegt über der Skizze.
+  **Fix:** Die Hinweiszeile entfällt bei verwendeten Maßen, die Zahl steht am Bindeknopf
+  („6 Zahlen an Maße binden …“), nur „Nicht verwendet“ bleibt; Spulensymbol als
+  Spaltenkopf, runder Farbpunkt; Gruppenzeile trägt „3–4“, Kernwechsel hinter einem
+  Trennstrich; im Zeichenmodus Dock und Einladung verborgen, Bedingungen nur des
+  gewählten Elements mit Zählzeile.
+  **Abnahme:** Im Zustand von main-window.png vier Parameterzeilen ohne Untertext; in
+  sechs Sprachen nichts abgeschnitten im Objektbaum; jede Schrittnummer sichtbar;
+  Neues Projekt → Zeichnen ohne Einladung und Dock, höchstens drei Bedingungszeilen.
+
+**Umsetzung:** Parameterkarte: Unter einer Zeile steht nur noch „Nicht verwendet“; die Zahl
+passender fester Zahlen steht am Bindeknopf (`panels.binding_button_text`: „Eine Zahl an ein
+Maß binden …“ / „6 Zahlen an Maße binden …“), wo sie stehen, sagt die Kurzhilfe der Zeile samt
+Knopf; Palette und Dialog heißen wie der Knopf. Objektbaum: Der Kopf der Filamentspalte trägt
+das Symbol `spool`, das Wort nur Kurzhilfe und Lesername; `filament_chip` malt einen runden
+Punkt, ohne eigenes Filament mit gestricheltem Rand statt eines leeren Kästchens (Regel 18). Die
+Maßspalte bekommt mindestens ihre Überschrift, und der Baum teilt die Spalten neu, sobald er
+selbst seine Breite hat (`_ObjectTreeView.resized`; beim ersten Zeigen stand die Maßspalte sonst
+auf 25 Punkten). Verlauf: Eine Gruppenzeile trägt die Spanne ihrer Schritte (`panels.step_span`,
+„2–3“, nach Verschieben „2–3, 6“), die zugeklappte Löschgruppe die Nummern, die sie verbirgt
+(„mit 2 Schritten: 4–5“); das Kontextmenü entsteht in `HistoryPanel.context_menu`, der
+Kernwechsel steht zuletzt hinter einem Trennstrich. Zeichenmodus: Der Reiter *Auswahl* ist für
+die Dauer der Skizze verborgen und kommt danach zurück; `_SelectionPage.reveal` holt keinen
+verborgenen Reiter. Die Einladung der leeren Szene steht nicht über Skizze, offenem
+Operationsdialog oder Vorschau (`_show_invitation`). Die Bedingungsliste zeigt nur, was an
+gewählten Punkten hängt, dazu jeden Widerspruch; die Zählzeile darüber nennt die Gesamtzahl in
+zwei Sätzen (`sketch_editor.constraint_count_text`), ihre Breite hängt nicht am Text, sonst
+zoomte der Skizzendialog bei jedem Klick. „Deckung“ heißt *Verbunden*, in Knopf, Liste,
+Handbuchkapitel *Zeichnen* (sechs Sprachen) und Abbildung; Portugiesisch *Coincidente* wie in
+den Sketcher-Katalogen von FreeCAD (pt-PT und pt-BR), „Ligado“ hieße auf dem Umschaltknopf
+„eingeschaltet“. Mitbehoben: Der Doppelklick auf eine Maßkarte meldete einen Bedingungsindex,
+den das Panel als Listenzeile las; `change_constraint_value` nimmt jetzt den Index. Regeln in
+`vorderseite.md` („Die linken Karten zeigen nur, was gilt“), `zeichenflaeche.md` und
+`fenster.md` (Einladung), Begründungen in `konzepte/begruendungen/`. Commits `73c0993e2`,
+`18798029f`, `0e8de8334`, `6cd449a1d`, `9bd08446e`, `ca27aa9a7`.
+
+**Nachweis:** Ohne Fenster `test_the_bind_button_names_how_many_numbers_it_binds`,
+`test_a_step_span_names_the_numbers_of_a_group`,
+`test_the_count_line_says_how_many_constraints_there_are`. Fenstertests (Release, offscreen per
+Sonde grün): `test_the_box_with_lid_shows_its_four_measures_without_a_line_below` (Abnahme am
+Projekt von main-window.png), `test_the_object_tree_cuts_no_heading_in_any_language` (sechs
+Sprachen), `test_the_filament_dot_is_round_and_says_without_colour_whether_it_was_chosen`,
+`test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last`,
+`test_the_history_folds_removed_steps_under_their_removal`,
+`test_drawing_in_a_new_project_hides_the_invitation_and_the_selection_tab` (ohne Auswahl keine
+Bedingungszeile, mit gewählter Seite genau ihre Bedingungen; die Abnahme „höchstens drei“ gilt
+damit im Bildzustand ohne Auswahl), `test_choosing_a_line_does_not_zoom_the_sketch_dialog`,
+`test_the_constraint_list_shows_only_what_hangs_on_the_selection`,
+`test_leaving_the_sketch_brings_back_the_selection_tab_it_hid`,
+`test_a_double_click_on_a_measure_card_opens_its_value`. Review (solidon3d-review) in zwei
+Durchgängen, Urteil „kann rein“. Am echten Fenster beim Release ansehen: Spule, Farbpunkt und
+Zählzeile in beiden Themen und auf HiDPI (RM-213); Handbuchseite, Abbildung `sketch-editor`,
+`main-window.png`, `sketch-mode.png` und `guide-draw-and-pull-4/-6` entstehen dann neu.
+Changelog: ja — Parameterkarte ohne Untertext, Zahl am Bindeknopf; Filamentspalte mit Spule und
+rundem Farbpunkt; durchgehende Schrittnummern im Verlauf; im Zeichnen weder Einladung noch
+Reiter Auswahl, die Bedingungen der Auswahl mit ihrer Zahl, „Verbunden“ statt „Deckung“.
