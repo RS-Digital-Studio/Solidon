@@ -864,6 +864,10 @@ class _SelectionPage(QWidget):
         """
         if not self._workspace_visible or self.dismissed or self._held:
             return
+        if not self._tabs.isTabVisible(self._tabs.indexOf(self)):
+            # Verborgen im Zeichenmodus (RM-519): Eine Auswahl dort holt
+            # keinen Reiter nach vorn, den es gerade nicht gibt.
+            return
         tour = self._tour
         if (
             tour is not None
@@ -11775,6 +11779,11 @@ class MainWindow(QMainWindow):
             self._tab_before_sketch = before
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), True)
         self.right.setCurrentWidget(self._constraints_room)
+        # **Der Reiter Auswahl geht für die Dauer der Skizze** (RM-519): Er
+        # zeigte dort nichts Brauchbares — gewählt wird auf dem Blatt, und was
+        # zur Auswahl gehört, steht in den Bedingungen und in der Karte unten.
+        self.right.setTabVisible(self.right.indexOf(self.feature_dock), False)
+        self._show_invitation()
         self._bottom_layout.insertWidget(0, panel)
         self._chain_sketch_card(panel)
         panel.sketchChanged.connect(self._redraw_sketch)
@@ -12915,6 +12924,10 @@ class MainWindow(QMainWindow):
         # der Fensterdatei, kein sichtbarer Rest.
         showing = self.right.currentWidget() is self._constraints_room
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), False)
+        # Der Reiter Auswahl kommt vor der Wahl zurück — er kann der von
+        # vorher sein —, aber nach dem Ausblenden: Sonst nähme Qt ihn als
+        # Nachbarn kurz nach vorn, und sein Verlassen räumte eine Vorschau ab.
+        self.right.setTabVisible(self.right.indexOf(self.feature_dock), True)
         if showing:
             # Wer während der Skizze selbst einen anderen Reiter gewählt hat,
             # behält ihn; sonst kommt der von vorher, ohne ihn der Prüfbericht.
@@ -12942,6 +12955,7 @@ class MainWindow(QMainWindow):
         self._restore_the_view_before_sketch()
         self.statusBar().clearMessage()
         self._update_actions()
+        self._show_invitation()
         if keep and target and not text:
             self.announce(tr("Die Zeichnung ist leer. Es wurde nichts übernommen."))
         if keep and text:
@@ -20799,6 +20813,7 @@ class MainWindow(QMainWindow):
             # Vor dem Abräumen gefragt: die Freigabe hängt an der Vorschau.
             applies = accepted and (prepared is None or self._preview_can_apply(dialog, prepared()))
             self._op_dialog = None
+            self._show_invitation()
             self.viewport.set_feature_gizmo_blocked(False)
             # Zurück zur gestuften Auswahl: Ohne Dialog ist ein Klick wieder
             # eine Navigation und keine Antwort (§18.5).
@@ -20816,6 +20831,7 @@ class MainWindow(QMainWindow):
         dialog.manualRequested.connect(self.action_manual)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self._op_dialog = dialog
+        self._show_invitation()
         if dialog.spec.name == "apply_texture":
 
             def follow_texture_area() -> None:
@@ -22081,8 +22097,11 @@ class MainWindow(QMainWindow):
         """Eine Differenz ins Bild — oder die stehende heraus; keine Arbeit ohne Differenz."""
         if difference is None and not self._difference_standing:
             return
+        standing = self._difference_standing
         self._difference_standing = difference is not None
         self.viewport.show_difference(difference)
+        if standing != self._difference_standing:
+            self._show_invitation()
 
     def _clear_preview(self) -> None:
         """Die Vorschau geht — Rechnung und Bild —, ein wartender
@@ -22898,6 +22917,14 @@ class MainWindow(QMainWindow):
             self.session.backend_known and self.session.agent_backend is not None
         )
         halted = self._halted_before_a_body(result) if not self.session.busy else None
+        # **Nicht über einer Zeichnung, einem offenen Dialog oder einer
+        # Vorschau** (RM-519): Dort hat der Kunde längst angefangen, und die
+        # Karte lag mitten über der Skizze und dem gezogenen Körper.
+        covered = (
+            self._sketch_panel is not None
+            or self._op_dialog is not None
+            or self._difference_standing
+        )
         if halted is not None and not self._on_start_screen:
             # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
             number, step = halted
@@ -22911,10 +22938,15 @@ class MainWindow(QMainWindow):
                 if retained
                 else tr("Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht.")
             )
-            invitation.show_halted(
-                tr("Das Projekt hält an Schritt {number}: {step}").format(number=number, step=step),
-                reason,
-            )
+            if covered:
+                invitation.hide()
+            else:
+                invitation.show_halted(
+                    tr("Das Projekt hält an Schritt {number}: {step}").format(
+                        number=number, step=step
+                    ),
+                    reason,
+                )
             self.object_tree.say_why_empty(
                 reason
                 if retained
@@ -22925,7 +22957,7 @@ class MainWindow(QMainWindow):
             )
             return
         self.object_tree.say_why_empty("")
-        invitation.show_for(empty and not self._on_start_screen)
+        invitation.show_for(empty and not self._on_start_screen and not covered)
 
     def _halted_before_a_body(self, result: EvaluationResult | None) -> tuple[int, str] | None:
         """Position und Titel eines Halts ohne aktuell berechneten Körper.

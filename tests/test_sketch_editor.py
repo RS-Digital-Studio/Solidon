@@ -1699,11 +1699,20 @@ def test_the_measure_field_only_works_while_drawing(qt_app: QApplication) -> Non
     assert field.value_mm() == pytest.approx(10.0)
 
 
+def _choose_every_point(panel: SketchPanel) -> None:
+    """Alle Punkte wählen: Die Liste zeigt nur, was an der Auswahl hängt (RM-519)."""
+    canvas = panel.canvas
+    count = sum(len(element.points) for element in canvas.sketch.elements)
+    canvas.selection = [("point", (index,)) for index in range(count)]
+    canvas.selectionChanged.emit()
+
+
 def test_hovering_a_constraint_lights_up_its_geometry(qt_app: QApplication) -> None:
     """„Deckung (1, 2)" ist ohne das nicht lesbar: welche zwei Punkte das sind,
     weiß nur, wer die flache Nummerierung im Kopf hat."""
     panel = SketchPanel()
     panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    _choose_every_point(panel)
 
     item = panel.constraint_list.item(0)
     assert item is not None
@@ -1735,6 +1744,105 @@ def test_the_sketch_mode_hides_the_view_tools(qt_app: QApplication) -> None:
         assert not window.tools.isHidden(), "und danach sind sie wieder da"
     finally:
         window.deleteLater()
+
+
+def test_drawing_in_a_new_project_hides_the_invitation_and_the_selection_tab(
+    qt_app: QApplication,
+) -> None:
+    """Neues Projekt, *Zeichnen*: keine Einladung, kein Reiter Auswahl (RM-519).
+
+    Die Karte „Womit fangen Sie an?“ lag mitten über der Skizze, und der
+    Reiter Auswahl zeigte dort nichts Brauchbares. Die Bedingungsliste nennt
+    höchstens die der Auswahl — ohne Auswahl keine Zeile, nur ihre Zahl. Auch
+    ein offener Dialog, etwa *Grundform hochziehen* danach, liegt nicht unter
+    der Einladung.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window._show_start_screen(False)
+        window.session.evaluate_now()
+        window._show_invitation()
+        invitation = window.viewport.invitation
+        assert not invitation.isHidden(), "ohne Einladung vorher prüft der Test nichts"
+        tabs = window.right
+        assert tabs.isTabVisible(tabs.indexOf(window.feature_dock))
+
+        window.action_sketch_free()
+        panel = window._sketch_panel
+        assert panel is not None
+        assert invitation.isHidden(), "die Einladung liegt nicht über der Skizze"
+        assert not tabs.isTabVisible(tabs.indexOf(window.feature_dock)), "kein Reiter Auswahl"
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        assert len(panel.canvas.sketch.constraints) > 3
+        assert panel.constraint_list.count() <= 3, "höchstens drei Bedingungszeilen"
+        assert not panel.constraint_count.text().startswith("0"), panel.constraint_count.text()
+        window.feature_dock.reveal()
+        assert tabs.currentWidget() is not window.feature_dock, "kein verborgener Reiter vorn"
+
+        window.finish_sketch(keep=False)
+        assert tabs.isTabVisible(tabs.indexOf(window.feature_dock)), "danach ist er wieder da"
+        assert not invitation.isHidden(), "und die Einladung auch"
+
+        window.run_operation(REGISTRY.get("create_box"))
+        assert window._op_dialog is not None
+        assert invitation.isHidden(), "nicht über einem offenen Dialog"
+        window._op_dialog.reject()
+        assert not invitation.isHidden()
+    finally:
+        window.deleteLater()
+
+
+def test_the_constraint_list_shows_only_what_hangs_on_the_selection(
+    qt_app: QApplication,
+) -> None:
+    """Dreizehn Zeilen Fachsprache wurden die der Auswahl, darüber ihre Zahl (RM-519).
+
+    Ein Rechteck brachte „Deckung — Linie 1 Ende, Linie 2 Anfang“ viermal
+    und alles andere dazu; die Zeile, um die es ging, stand irgendwo darin.
+    Zwei gedeckte Punkte heißen jetzt *Verbunden*.
+    """
+    panel = SketchPanel(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+    try:
+        constraints = panel.canvas.sketch.constraints
+        total = len(constraints)
+        assert panel.constraint_list.count() == 0
+        assert panel.constraint_list.isHidden(), "kein leerer Kasten unter der Zählzeile"
+
+        panel.canvas._select(("line", (0, 1)), False)
+        touching = [entry for entry in constraints if {0, 1} & set(entry.targets)]
+        assert 0 < len(touching) < total
+        assert panel.constraint_list.count() == len(touching)
+        assert not panel.constraint_list.isHidden()
+        assert panel.constraint_count.text() == (
+            f"{len(touching)} von {total} Bedingungen an der Auswahl"
+        )
+        rows = [panel.constraint_list.item(row).text() for row in range(len(touching))]
+        assert not any("Deckung" in row for row in rows), rows
+        if any(entry.kind == "coincident" for entry in touching):
+            assert any(row.startswith("Verbunden") for row in rows), rows
+    finally:
+        panel.deleteLater()
+
+
+def test_the_count_line_says_how_many_constraints_there_are() -> None:
+    """Ohne Fenster: die Zählzeile über der Bedingungsliste (RM-519)."""
+    from app.ui.sketch_editor import constraint_count_text
+
+    assert constraint_count_text(0, 0, selected=False, clashing=False) == (
+        "Noch keine Bedingungen."
+    )
+    assert constraint_count_text(13, 0, selected=False, clashing=False).startswith(
+        "13 Bedingungen. Wählen Sie"
+    )
+    assert constraint_count_text(1, 0, selected=False, clashing=False).startswith("Eine Bedingung.")
+    assert constraint_count_text(13, 4, selected=True, clashing=False) == (
+        "4 von 13 Bedingungen an der Auswahl"
+    )
+    assert "widersprechen" in constraint_count_text(13, 0, selected=False, clashing=True)
 
 
 def test_finishing_a_sketch_looks_like_the_main_action(qt_app: QApplication) -> None:
@@ -1810,8 +1918,16 @@ def test_an_opened_sketch_shows_its_constraints(qt_app: QApplication) -> None:
     """
     panel = SketchPanel(sketch_to_text(shapes.rectangle(40.0, 20.0)))
 
-    assert panel.canvas.sketch.constraints, "die Vorlage bringt welche mit"
-    assert panel.constraint_list.count() == len(panel.canvas.sketch.constraints)
+    total = len(panel.canvas.sketch.constraints)
+    assert total, "die Vorlage bringt welche mit"
+    # Ohne Auswahl sagt die Zählzeile, wie viele es sind (RM-519) …
+    assert panel.constraint_count.text().startswith(f"{total} Bedingungen."), (
+        panel.constraint_count.text()
+    )
+    assert panel.constraint_list.count() == 0
+    # … und mit allem gewählt steht jede da.
+    _choose_every_point(panel)
+    assert panel.constraint_list.count() == total
 
 
 def test_the_measure_starts_at_what_is_already_there(qt_app: QApplication) -> None:
@@ -2243,8 +2359,11 @@ def test_a_conflict_says_which_two_constraints(qt_app: QApplication) -> None:
         erste, zweite = canvas.conflict_pair
         assert erste != zweite
 
+        # Ein Widerspruch steht auch ohne Auswahl da (RM-519) — und nur er.
+        assert not canvas.selection
+        assert panel.constraint_list.count() == 2
         markiert = [
-            row
+            panel.constraint_indices(row)[0]
             for row in range(panel.constraint_list.count())
             if panel.constraint_list.item(row).text().startswith(CONFLICT_MARKER)
         ]
@@ -2377,6 +2496,7 @@ def test_the_constraint_list_says_what_a_constraint_holds(qt_app: QApplication) 
                 constraints=(SketchConstraint(kind="coincident", targets=(1, 2)),),
             )
         )
+        panel.canvas.selection = [("point", (1,)), ("point", (2,))]
         panel._refresh_constraints()
         item = panel.constraint_list.item(0)
         assert item is not None
@@ -3411,6 +3531,9 @@ def test_the_sketch_menus_do_not_stay_behind(qt_app: QApplication) -> None:
     canvas = dialog.canvas
     canvas.resize(400, 300)
     canvas.selection = [("line", (0, 1))]
+    # Gemeldet, damit die Liste ihre Zeilen der Auswahl hat (RM-519) — sonst
+    # öffnete der Rechtsklick dort gar kein Menü.
+    canvas.selectionChanged.emit()
 
     def close_popup() -> None:
         popup = QApplication.activePopupWidget()
@@ -4443,7 +4566,7 @@ def test_the_constraint_list_explains_each_entry(qt_app: QApplication) -> None:
     panel = SketchPanel("", {})
     panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
     panel.canvas.add_constraint("horizontal", (0, 1))
-    panel._refresh_constraints()
+    panel.canvas._select(("line", (0, 1)), False)
 
     assert panel.constraint_list.count() == 1
     hint = panel.constraint_list.item(0).toolTip()
@@ -5523,6 +5646,7 @@ def test_the_constraint_list_offers_removal_on_a_right_click(qt_app: QApplicatio
     try:
         panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
         panel.canvas.add_constraint("fixed", (0,))
+        panel.canvas._select(("line", (0, 1)), False)
 
         menu = panel.constraint_menu_at(0)
         assert not menu.isEmpty(), "die Zeile bietet etwas an"
@@ -5836,6 +5960,8 @@ def test_only_a_measure_offers_to_be_changed(qt_app: QApplication) -> None:
         canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
         canvas.add_constraint("distance", (0, 1), "30")
         canvas.add_constraint("horizontal", (0, 1))
+        # Die Liste zeigt, was an der Auswahl hängt (RM-519).
+        canvas._select(("line", (0, 1)), False)
 
         with_value = [action.text() for action in panel.constraint_menu_at(0).actions()]
         without = [action.text() for action in panel.constraint_menu_at(1).actions()]
@@ -8859,7 +8985,7 @@ def test_the_fixed_points_of_an_outline_stand_as_one_row(qt_app: QApplication) -
         constraints=(*outline.constraints, SketchConstraint("horizontal", (16, 17))),
     )
     panel.canvas.set_sketch(mine)
-    panel._refresh_constraints()
+    _choose_every_point(panel)
 
     assert panel.constraint_list.count() == 2, "die Kontur und die eigene Bedingung"
     held = panel.constraint_list.item(0)
@@ -9360,6 +9486,33 @@ def test_leaving_the_sketch_brings_back_the_tab_from_before(
         window.finish_sketch(keep=keep)
         qt_app.processEvents()
         assert window.right.currentWidget() is window.report
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_leaving_the_sketch_brings_back_the_selection_tab_it_hid(qt_app: QApplication) -> None:
+    """Stand vorher der Reiter Auswahl vorn, kommt er nach der Skizze wieder (RM-519).
+
+    Im Zeichenmodus ist er verborgen; ein verborgener Reiter wäre beim
+    Verlassen kein Ziel, und der Prüfbericht stünde an seiner Stelle.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        window._show_start_screen(False)
+        window.right.setCurrentWidget(window.feature_dock)
+        window.start_sketch("sketch_extrude")
+        qt_app.processEvents()
+        assert not window.right.isTabVisible(window.right.indexOf(window.feature_dock))
+        window.finish_sketch(keep=False)
+        qt_app.processEvents()
+        assert window.right.isTabVisible(window.right.indexOf(window.feature_dock))
+        assert window.right.currentWidget() is window.feature_dock
     finally:
         window.close()
         window.deleteLater()

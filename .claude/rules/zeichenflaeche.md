@@ -151,6 +151,16 @@ im Einzelnen stehen unter denselben Überschriften in
   Bedingung **tut**, sagt `_does_phrase` — am Knopf, im Kontextmenü, in der
   Meldung und an jedem Listeneintrag. Dass **Strg** dazunimmt, steht in der
   Zeile (`selection_hint`).
+* **Die Bedingungsliste zeigt nur, was an der Auswahl hängt, dazu jeden
+  Widerspruch** (RM-519): Ein Rechteck brachte dreizehn Zeilen, und die
+  gesuchte stand irgendwo darin. Darüber nennt die Zählzeile die Gesamtzahl
+  (`constraint_count_text`); ohne Zeile verschwindet die Liste. Sie folgt
+  `selectionChanged` wie `sketchChanged`. Zwei gedeckte Punkte heißen
+  *Verbunden*, nicht *Deckung*.
+* **Im Zeichenmodus ist der Reiter Auswahl verborgen** (`start_sketch`,
+  `finish_sketch`); `_SelectionPage.reveal` holt keinen verborgenen Reiter
+  nach vorn. Die Einladung der leeren Szene steht nicht über der Skizze
+  (`fenster.md`).
 * **Die Bedingungsliste trägt die Punktnummern auch im Konflikt**; nach ihnen
   sucht, wer eine Meldung des Lösers wiederfinden will.
 * **Die festen Punkte der Hilfsgeometrie sind eine Zeile der Liste**
