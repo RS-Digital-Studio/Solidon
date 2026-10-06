@@ -36,6 +36,8 @@ scrive in `website/version.json`.
 - Se annulli o elimini un passo mentre *Modifica questo passaggio* è aperto, la finestra si chiude e te lo dice.
 - Un raro blocco dell'applicazione durante la verifica di stampa è stato risolto.
 - Sul Mac le frasi che nominano una scorciatoia usano i tasti del Mac, cioè ⌘, ⇧ e ⌥.
+- Sul Mac il tasto di cancellazione elimina corpi, caratteristiche, passi della cronologia e linee di un disegno.
+- Su Linux anche la scorciatoia per ripetere indicata da tour e suggerimenti ripristina un passo.
 
 ### Stampare e passare allo slicer
 

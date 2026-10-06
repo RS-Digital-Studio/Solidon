@@ -37,6 +37,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si deshace o borra un paso mientras *Editar este paso* está abierto, el diálogo se cierra y lo indica.
 - Se ha corregido un bloqueo poco frecuente de la aplicación durante la comprobación de impresión.
 - En el Mac, las frases que nombran un atajo usan las teclas del Mac, es decir ⌘, ⇧ y ⌥.
+- En el Mac, la tecla de borrar elimina cuerpos, características, pasos del historial y líneas de un dibujo.
+- En Linux, el atajo de rehacer que nombran el recorrido y las indicaciones también recupera un paso.
 
 ### Imprimir y entregar al slicer
 

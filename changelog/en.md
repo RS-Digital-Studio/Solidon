@@ -36,6 +36,8 @@ it into `website/version.json`.
 - If you undo or delete a step while *Edit this step* is open, the dialog closes and tells you so.
 - A rare freeze of the application during the print check is fixed.
 - On the Mac, sentences that name a shortcut use the Mac keys ⌘, ⇧ and ⌥.
+- On the Mac, the delete key removes bodies, features, history steps and lines in a drawing.
+- On Linux, the redo shortcut that the tour and hints name now also brings a step back.
 
 ### Printing and slicer handover
 

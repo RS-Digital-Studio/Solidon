@@ -36,6 +36,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se anular ou eliminar um passo enquanto *Editar este passo* está aberto, o diálogo fecha-se e indica-o.
 - Foi corrigido um bloqueio raro da aplicação durante a verificação de impressão.
 - No Mac, as frases que indicam um atalho usam as teclas do Mac, ou seja ⌘, ⇧ e ⌥.
+- No Mac, a tecla de apagar elimina corpos, características, passos do histórico e linhas de um desenho.
+- No Linux, o atalho de refazer indicado na visita guiada e nas dicas também repõe um passo.
 
 ### Imprimir e entregar ao slicer
 

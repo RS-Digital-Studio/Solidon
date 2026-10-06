@@ -61,6 +61,8 @@ Nutzen da und sonst nichts.
 - Nehmen Sie einen Schritt zurück oder löschen ihn, während *Diesen Schritt ändern* offen ist, schließt sich der Dialog und sagt es.
 - Ein seltenes Einfrieren der Anwendung während der Druckprüfung ist behoben.
 - Am Mac nennen Sätze mit Tastenkürzel die Tasten des Mac, also ⌘, ⇧ und ⌥.
+- Am Mac löscht die Rücktaste Körper, Merkmale, Verlaufsschritte und Linien in einer Zeichnung.
+- Unter Linux nimmt auch das Kürzel, das Tour und Hinweise zum Wiederholen nennen, einen Schritt wieder vor.
 
 ### Drucken und Übergabe an den Slicer
 

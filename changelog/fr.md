@@ -37,6 +37,8 @@ dans `website/version.json`.
 - Si vous annulez ou supprimez une étape pendant que *Modifier cette étape* est ouvert, la boîte de dialogue se ferme et le signale.
 - Un blocage rare de l'application pendant le contrôle d'impression est corrigé.
 - Sur Mac, les phrases qui nomment un raccourci utilisent les touches du Mac, soit ⌘, ⇧ et ⌥.
+- Sur Mac, la touche d'effacement supprime corps, caractéristiques, étapes de l'historique et lignes d'un dessin.
+- Sous Linux, le raccourci de rétablissement que citent la visite guidée et les conseils rétablit aussi une étape.
 
 ### Imprimer et transmettre au slicer
 
