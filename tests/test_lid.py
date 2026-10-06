@@ -393,6 +393,7 @@ def exact_box_housing(
 
 def _shared_exact_volume(first, second) -> float:
     """Das gemeinsame Volumen zweier exakter Körper — unabhängig vom Prüfling gerechnet."""
+    exact_kernel()
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
@@ -403,6 +404,7 @@ def _shared_exact_volume(first, second) -> float:
 
 
 def _cylinder_faces(solid) -> int:
+    exact_kernel()
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_Cylinder
 

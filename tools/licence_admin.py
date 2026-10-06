@@ -128,6 +128,13 @@ def _ownership_problem(descriptor: int) -> str:
     der Administratoren als Besitzer an, ein gewöhnlicher mit sich selbst —
     beides ist der aktuelle Nutzer, und die Leserechte prüft die Liste
     danach ohnehin gegen genau diese Konten, SYSTEM und die Administratoren.
+
+    Dazu „Eigentümerrechte" (S-1-3-4): Der Eintrag gibt Rechte an den
+    jeweiligen Besitzer und an niemanden sonst, und der ist an dieser Stelle
+    schon als aktueller Nutzer belegt. Python legt ein Verzeichnis mit
+    ``mkdir(mode=0o700)`` genau so an (SYSTEM, Administratoren,
+    Eigentümerrechte), und auf dem Windows-Runner der CI trug die Tokendatei
+    den Eintrag auch nach ``icacls /inheritance:r`` noch (Taglauf 0.5.3).
     """
     if os.name != "nt":
         getuid = cast(Callable[[], int], vars(os)["getuid"])
@@ -297,11 +304,13 @@ def _ownership_problem(descriptor: int) -> str:
 
         system_data = well_known_sid(22)  # WinLocalSystemSid
         administrators_data = well_known_sid(26)  # WinBuiltinAdministratorsSid
-        if system_data is None or administrators_data is None:
+        owner_rights_data = well_known_sid(71)  # WinCreatorOwnerRightsSid
+        if system_data is None or administrators_data is None or owner_rights_data is None:
             return "CreateWellKnownSid"
         _system_buffer, system_sid = system_data
         _administrators_buffer, administrators_sid = administrators_data
-        trusted_sids = (token_user, token_owner, system_sid, administrators_sid)
+        _owner_rights_buffer, owner_rights_sid = owner_rights_data
+        trusted_sids = (token_user, token_owner, system_sid, administrators_sid, owner_rights_sid)
 
         acl = AclSizeInformation()
         if not advapi32.GetAclInformation(

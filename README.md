@@ -244,11 +244,11 @@ Dialog — es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
 
 ### Welches Modell, und warum dieses
 
-Der mitgelieferte Ablauf benutzt **TripoSG**: Quelltext und Modellkarte weisen
-die MIT-Lizenz aus, die vollständige Lizenz- und Herkunftskette der Gewichte
-und der eingebundenen Modelle wird derzeit geprüft. Das ist der Grund für die
-Wahl: Das verbreitetere Hunyuan3D nimmt in seiner Lizenz die Europäische
-Union ausdrücklich aus.
+Der mitgelieferte Ablauf benutzt **TripoSG**: Quelltext und Modellkarte nennen
+die MIT-Lizenz. Gewählt wurde es, weil das verbreitetere Hunyuan3D in seiner
+Lizenz die Europäische Union ausdrücklich ausnimmt. Ein Teil des
+TripoSG-Quelltexts steht allerdings selbst unter Lizenzen von Tencent mit
+derselben Ausnahme; das wird gerade geklärt.
 
 Gemessen auf einer RTX 4080 braucht ein Körper rund 13 Sekunden und kommt mit
 300 000 bis 600 000 Dreiecken geschlossen und aus einem Stück heraus.
