@@ -4,8 +4,10 @@ Desktop-Anwendung zum **Konstruieren, Generieren und Bearbeiten** druckbarer
 3D-Modelle. Non-destruktiver Operationsstack über einer Szene mit mehreren
 Objekten, vollwertiger Viewport, Bausteinbibliothek, Rückkopplung aus Slicer
 und Drucker. Veröffentlichung als Download; nach Gerätefreischaltung lokal
-ohne Netz nutzbar. Aktivierung, Aktualisierung, Support und optionale
-KI-Backends haben ausdrücklich begrenzte Netzwege (§5, §27, §37).
+ohne Netz nutzbar. Aktivierung, Aktualisierung, Support, das Holen eines
+Modells von einer eingegebenen Dateiadresse, die auf Klick angestoßene
+Einrichtung fehlender Zusatzprogramme und optionale KI-Backends haben
+ausdrücklich begrenzte Netzwege (§5, §25, §27, §37, §38).
 
 Spezifikation zur Abarbeitung durch einen Programmier-Agenten.
 Begleitdateien: `AGENTS.md` (Repository-Regeln, immer lesen) und `ROADMAP.md`
@@ -549,6 +551,7 @@ class SceneObject:
     created_by: OpId = 0
     visible: bool = True
     reserved_feature_ids: tuple[FeatureId, ...] = ()
+    frame: Transform | None = None
 
 
 @dataclass(slots=True)
@@ -572,6 +575,7 @@ class OpContext:
     ask: AskFn
     cancelled: CancelToken
     sources: SourceAccess | None = None
+    bound_edges: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -581,6 +585,7 @@ class OpResult:
     findings: list[Finding] = field(default_factory=list)
     answered: dict[str, Any] = field(default_factory=dict)
     transform: Transform | None = None
+    feature_continuations: tuple[tuple[FeatureContinuation, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -593,6 +598,7 @@ class LayerInfo:
     min_width: float
     overhangs: tuple[Polygon, ...] = ()
     bridge_width: float = 0.0
+    taper_length: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -627,7 +633,13 @@ class Sketch:
 OpFn = Callable[[OpContext], OpResult]
 
 
-def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> SolvedSketch:
+def solve_sketch(
+    sketch: Sketch,
+    params: Mapping[str, float] | None = None,
+    *,
+    dragged: Mapping[int, Point2] | None = None,
+    start: Sequence[Point2] | None = None,
+) -> SolvedSketch:
     """Löst deterministisch; Freiheitsgrade und kollidierende Bedingungen
     werden als Befund beziehungsweise handlungsfähiger Fehler gemeldet."""
 ```
@@ -635,7 +647,10 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
 Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
 
 - `FeatureKind`: `hole`, `face`, `edge_loop`, `pin`, `cone`, `sphere`,
-  `torus`, `thread`, `fillet`, `void`, `slot`. `provenance` unterscheidet
+  `torus`, `thread`, `fillet`, `void`, `slot`, `curved_face`, `pattern`.
+  `curved_face` ist eine gerundete Seite, auf die keine andere Form passt;
+  `pattern` ist ein Feld gleicher Zellen auf einer Trägerfläche (§21.1).
+  `provenance` unterscheidet
   `detected` und `generated`; `recognised=False` erhält eine Kennung auch dann,
   wenn ihr Merkmal derzeit nicht sicher erkannt wird (§21.3).
 - `ObjectKind`: `mesh` oder `brep`; `Quality`: `draft` oder `fine`.
@@ -667,12 +682,24 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
   ist kein Objekt im Baum.
 - `progress(fraction, text)` meldet den Fortschritt;
   `ask(question, choices)` liefert die gewählte Antwort. `sources` vermittelt
-  den Zugriff auf Projektquellen ohne globale Ablage.
+  den Zugriff auf Projektquellen ohne globale Ablage. `bound_edges` trägt je
+  Kantenfeld die einmal gebundene Kantenauswahl als Indizes in den Kantenraum
+  des jeweiligen Kerns; leer, wenn kein Feld aktiv ist oder die Op direkt
+  aufgerufen wird.
 - `OpResult.answered` führt beantwortete Parameter zurück zum Aufrufer
   (§15.7); `transform` beschreibt eine angewandte Transformation für die
   anschließende Merkmalszuordnung. `solver` hält die Rückfallstufe fest.
+  `feature_continuations` belegt je Ausgabe, über ihre Position, die
+  Übergänge alter Merkmale; leer heißt „kein zusätzlicher Beleg", nicht
+  „nichts überlebt" (§21.2).
+- `solve_sketch` beginnt ohne `dragged` und `start` bei den gespeicherten
+  Punkten. `dragged` nennt Punkte, die der Zeiger gerade zieht, `start` den
+  zuletzt gelösten Stand, von dem aus gerechnet wird.
 - `SceneObject.material` und `plate` ordnen Material und Druckplatte zu;
   `reserved_feature_ids` verhindert die Wiedervergabe früherer Merkmalsnamen.
+  `frame` ist der dauerhafte Ausgangsrahmen in Weltkoordinaten (vollständige
+  affine Abbildung); `None` heißt noch nicht zugeordnet. Die Auswertung
+  rekonstruiert ihn aus dem Stapel, nie aus Hauptachsen.
   Namen dürfen übersetzbare Texte tragen. `Scene.profile=None` beschreibt
   eine noch nicht zugeordnete Szene; eine rechnende Op erhält ein aufgelöstes
   `OpContext.profile`.
@@ -696,10 +723,11 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
 4. **`quality` reicht durch.** Jede Op muss beide Stufen beherrschen, notfalls
    indem sie sie gleich behandelt.
 
-Weitere feste Verträge: `PartFn` für Bausteine (§24.1), `MeshBackend`
-(`app/core/backends/mesh.py`) und `LLMBackend` (`app/core/backends/llm.py`) für
-Backends (§27), der Migrationsschritt `Step` (`app/core/scene/migrations.py`) für
-Formatwechsel (§16.2). Sie stehen bei ihrem Gebiet, nicht in `types.py`.
+Weitere feste Verträge: `PartFn` und `PartResult` für Bausteine (§24.1, in
+`app/core/types.py`); `MeshBackend` (`app/core/backends/mesh.py`) und
+`LLMBackend` (`app/core/backends/llm.py`) für Backends (§27) sowie der
+Migrationsschritt `Step` (`app/core/scene/migrations.py`) für Formatwechsel
+(§16.2). Diese drei stehen bei ihrem Gebiet, nicht in `types.py`.
 
 ---
 
@@ -776,7 +804,11 @@ erreicht den Kern nie. Umrechnungen passieren genau zweimal: beim Import
 | `match_tolerance(diagonal_mm)` | max. aus 0,01 mm und 0,5 % der Modelldiagonale | allgemeine größenabhängige Vergleiche |
 
 Die Konstanten stehen in `app/core/units.py`: `EPS_MATCH_RELATIVE` und
-`EPS_MATCH_MINIMUM` bestimmen `match_tolerance()`. Die Merkmalszuordnung aus
+`EPS_MATCH_MINIMUM` bestimmen `match_tolerance()`. Daneben vergleicht
+`EPS_SETTING` (1e-6, ohne Einheit) Werte der Druckeinstellungen — dieselbe
+Zahl wie `EPS_GEOM`, aber keine Länge. `MAX_FACET_SAG` (0,05 mm) ist keine
+Toleranz in diesem Sinn, sondern die Auflösung, mit der beide Kerne Rundungen
+in Facetten zerlegen (§25, §30). Die Merkmalszuordnung aus
 §21.3 nutzt eigene, geprüfte Kosten und Annahmeschwellen in
 `app/core/perceive/matching.py`; diese Funktion steuert sie nicht.
 
@@ -786,21 +818,23 @@ die Messunsicherheit der Passungsprüfung aus §14. Gerundet wird nur in der
 Anzeige. Fließkommazahlen werden nie mit `==` verglichen.
 
 ### 11.3 Determinismus
-Randomisierte Verfahren umfassen die Jitter-Rückfallstufe (§17.2),
-Farbquantisierung (§20) und konvexe Zerlegung beim Auto Split. Jede betroffene
-Operation bekommt
+Randomisierte Verfahren umfassen die Jitter-Rückfallstufe (§17.2), die
+Farbquantisierung (§20) und die gestreuten Texturstile (Voronoi, Rauschen,
+§25). Jede betroffene Operation bekommt
 einen **Startwert, der in der Op gespeichert wird**, ist im Register als
 `deterministic=False` gekennzeichnet und liefert bei gleichem Startwert
 dasselbe Ergebnis. Ohne diese Regel ist Leitprinzip 4 nicht haltbar und ein
 Fehlerbericht reproduziert nichts.
 
-Die Orientierungssuche soll ihre Kandidaten gemäß §28.2 aus der
-konvexen Hülle gewinnen. Solange ein Rechenweg zusätzlich Zufallsrichtungen
-abtastet, gilt auch dort der gespeicherte Startwert; die Anforderung aus
-§28.2 ist dadurch nicht erledigt.
+Die Orientierungssuche gewinnt ihre Kandidaten deterministisch aus Achsen,
+großen Körperflächen und den nach Fläche geordneten Normalen der konvexen
+Hülle (§28.2) und braucht keinen Startwert. Auto Split legt jede gefundene
+Trennebene als Zahl in `split_pinned` ab; die konvexe Zerlegung, die ihm
+Schnittstellen vorschlägt, liefert für denselben Körper dieselben Stücke und
+braucht ebenfalls keinen.
 
 **Nebenläufigkeit muss reproduzierbar bleiben.** Die Schichtanalyse kann
-unabhängige Schichten mit den vorgesehenen Workern berechnen (§31). Das
+unabhängige Schichten in Threads berechnen (`app/core/slice/analysis.py`). Das
 bleibt reproduzierbar, solange jeder Thread eine Schicht für sich rechnet und
 die Summen in feststehender Reihenfolge gebildet werden. Eine Reduktion, die in
 der Reihenfolge der Fertigstellung addiert, ist es nicht — Fließkommaaddition
@@ -900,6 +934,12 @@ Zusätzlich zum gezeigten Grundfall gehören zum Format:
   die übrigen Werte der Gruppen sind der Stand der Grundlage beim Speichern
   und werden bei jeder Verwendung neu aus dem Herstellerprofil bestimmt
   (§29). Ältere Dateien ordnet die Migration nach Format 36 ein.
+- `export` merkt Format und Namensschema des letzten Exports; der Ordner
+  steht in den Geräteeinstellungen (§29, Regel 12).
+- `protected` hält je Körper gesperrte Sichtflächen als Merkmalkennungen
+  (§22.3).
+- `carried_profiles` trägt eigene Drucker- und Materialprofile, die das
+  Projekt braucht; sie werden beim Öffnen wie eine eigene Profildatei geprüft.
 - Umfangreiche gesammelte Parameterwerte werden im Container unter
   `sources/gathered/` abgelegt und im gespeicherten Parameter über `source:`
   referenziert (§16.1). Im Arbeitsdokument steht der aufgelöste Wert.
@@ -1078,9 +1118,9 @@ gespeicherte Entscheidung verlieren noch eine neue Mehrdeutigkeit verdecken.
 speichern und in einer neuen Sitzung jeweils mit und ohne warmen Cache
 öffnen. Beide Wege müssen dieselbe Zuordnung ohne wiederholte Frage liefern.
 Danach die Geometrie so ändern, dass der Abdruck nicht mehr eindeutig passt:
-Die Rückfrage muss wieder erscheinen. Vorhandene Rückschreib- und
-Formatmechanismen ersetzen diese Endabnahme nicht; ihr Rest steht bei
-RM-024 in `ROADMAP.md`.
+Die Rückfrage muss wieder erscheinen. Diese Endabnahme ist bestanden
+([RM-024](ROADMAP-ARCHIV.md#rm-024)); bei einer Änderung dieses Wegs ersetzen
+vorhandene Rückschreib- und Formatmechanismen sie nicht.
 
 ---
 
@@ -1213,9 +1253,9 @@ dass er auf einem voxelgeglätteten Ergebnis arbeitet.
 ## 18. Der Viewport
 
 Der Viewport ist Anzeige- und Prüfwerkzeug. Er zeichnet über den gemeinsamen
-Renderervertrag mit **pygfx/wgpu**. Es gibt keine Rendererwahl; die verbliebene
-VTK-Nutzung im Kern ist ausschließlich Geometrie der Baustein-Bereichsprüfung
-und kein alternativer Zeichenweg.
+Renderervertrag mit **pygfx/wgpu**. Es gibt keine Rendererwahl; VTK ist
+vollständig ausgebaut, die Bereichsprüfung der Bausteine misst über den
+eigenen Strahltest (`geom.mesh.ray_hits_batch`).
 
 ### 18.1 Darstellung
 Massiv, Drahtgitter, Massiv+Kanten, transparent. Flache und weiche
@@ -1247,7 +1287,7 @@ Bemaßungen bleiben stehen, bis sie gelöscht werden; Anzeige gerundet auf
 | Netzfehler | offene Kanten, Non-Manifold, Durchdringung | Reparaturbedarf |
 | Krümmung | Krümmungsradius in Millimetern, scharfe Kanten gesondert markiert; gemessene Merkmalswerte und Schätzung unterschieden | Feature-Erkennung und Rundungsmaße prüfen |
 | Formabweichung | größter Abstand der ausgefüllten Originalfacette zu ihrem vorhandenen analytischen Träger; obere Schranken, numerische Breite und unbekannte Bereiche ausgewiesen | grobe Rundungen und Näherungen prüfen, ohne die Fläche neu einzupassen |
-| Feature-Zuordnung | jedes Feature eigen eingefärbt | verstehen, was die KI sieht |
+| Merkmale | jedes erkannte Merkmal eigen eingefärbt | verstehen, was die KI sieht |
 | Passungen | verbundene Paare, Verletzungen markiert | Mehrteiliges prüfen (§14) |
 | Stützbedarf | geometrische Schätzung aus der Schichtanalyse (§22); G-Code-Kennwerte werden getrennt gegenübergestellt (§28) | Orientierung beurteilen |
 
@@ -1727,6 +1767,7 @@ korpusbezogenen Ziele aus §31.
 | Erste Schichtfläche | Haftung und Kippstabilität |
 | Brückenweiten | freitragende Strecken je Schicht |
 | Kleinste Strukturbreite | gegen Düsendurchmesser prüfbar |
+| Keilstellen | Länge der Außenkontur je Schicht, an der die Wandstärke stetig über mehrere Bahnen läuft — dort wechselt ein Slicer mit variabler Bahnbreite die Wandzahl |
 
 ### 22.3 Was sich dadurch ändert
 Der eigentliche Gewinn ist nicht die Ersparnis, sondern der Maßstab:
@@ -1970,7 +2011,9 @@ Loft, exaktes Gewinde (§30.1)
 Verstiftung setzen, Elefantenfuß kompensieren
 
 **Import** — STL, 3MF (einzeln und als ganze Bauplatte), OBJ, PLY, OFF,
-GLB/glTF, STEP/STP (§30); SVG und DXF mit Extrusion
+GLB/glTF, STEP/STP (§30); SVG und DXF mit Extrusion; ZIP-Archive mit
+Modelldateien; eine direkte Dateiadresse aus dem Netz — Modellseiten werden
+nicht ausgelesen
 
 **Farbe** — ein Filament dem ganzen Teil zuweisen, aus einer Textur ableiten,
 eine erkannte Fläche vollständig färben oder die Zuweisung am Körper oder an
@@ -2178,7 +2221,7 @@ Die Suche läuft intern über §22. Der externe Slicer prüft die gewählte Lage
 mit dem tatsächlichen Druckprofil und liefert Druckdatei und Kostenbasis.
 Die Herkunft aller Kennzahlen bleibt erhalten.
 
-**Die Kandidaten folgen der Geometrie.** Vorgesehen sind die Flächennormalen
+**Die Kandidaten folgen der Geometrie.** Es sind die Flächennormalen
 der konvexen Hülle, nach Fläche geordnet, dazu die sechs Achsrichtungen und die
 Normalen der großen ebenen Flächen des Körpers. Die Erzeugung und Reihenfolge
 der Kandidaten müssen deterministisch sein; Zufallsrichtungen sind kein Ersatz
@@ -2621,14 +2664,27 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
 AppError                     # Basis, trägt Titel, Ursache, Handlungsvorschläge
 ├── UserError                # Eingabe war unzulässig — korrigierbar
 │   ├── ValidationError      # Schema verletzt
-│   └── AmbiguityError       # mehrdeutig, braucht eine Entscheidung
+│   ├── AmbiguityError       # mehrdeutig, braucht eine Entscheidung
+│   ├── NeedsSolidError      # braucht einen exakten Körper, bekam ein Netz
+│   ├── SketchConflictError  # zwei Skizzenbedingungen vertragen sich nicht
+│   └── NativeReferenceLost  # Bezug auf eine exakte Fläche nicht mehr belegt
 ├── GeometryError            # Geometrie ließ es nicht zu — mit Vorschlag
 │   ├── NotManifoldError
 │   ├── BooleanFailedError   # trägt die versuchten Rückfallstufen
 │   └── OutOfBuildVolume
 ├── ExternalToolError        # Slicer, ComfyUI, LLM
+├── FileWriteError           # Datei ließ sich nicht schreiben
+├── LicenceRequired                   # Freischaltung: Schlüssel oder Freigabe fehlt
+├── DeviceActivationRequired          # Freischaltung: Zertifikat fehlt
+├── DeviceDeactivationPending         # Freischaltung: Abmeldung unbestätigt
+├── ActiveLicenceCannotBeReplaced     # Freischaltung: erst Gerät abmelden
+├── InstallationDamaged      # Programmdatei weicht von der Auslieferung ab
 └── InternalError            # Programmfehler — Fehlerbericht anbieten
 ```
+
+Fachklassen eines Gebiets erben von `AppError` oder einem dieser Zweige und
+stehen bei ihrem Modul. `OperationCancelled` ist kein Fehler und erbt nicht
+von `AppError`.
 
 **Die Regel:** Ein Programmfehler darf nie wie ein Bedienfehler aussehen — und
 umgekehrt. `UserError` und `GeometryError` erscheinen als Vorschlag nach §2.7,
@@ -2705,7 +2761,7 @@ aus der Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Auswertung | zweimal ausgewertet = identisch; Objektzahländerung hält an |
 | Geometrie | Kennzahlen je Operation gegen den Korpus |
 | Rückfallkette | jede Stufe einmal erzwungen |
-| Determinismus | gleicher Startwert → gleiches Ergebnis, alle vier Stellen |
+| Determinismus | gleicher Startwert → gleiches Ergebnis an jeder Operation mit `deterministic=False` |
 | Bausteine | Vorschaubild und Merkmale sowie die Prüflogik für Parametergrenzen, Wandstärke und Selbstdurchdringung; vollständiger Bereichslauf bei Änderung des Bausteins oder seiner Grenzen von Hand, nicht in jedem Torlauf |
 | Bausteinversion | geänderter Baustein wird beim Öffnen gemeldet |
 | Schichtanalyse | Fläche und Volumen gegen analytisch bekannte Körper; `island_tower` erkannt |
@@ -2720,6 +2776,7 @@ aus der Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Lizenzen | installierte Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus §2.2 laufen als Ende-zu-Ende-Test |
 | Anschluss | jede Zusage, die nur an **einer** Stelle eingelöst wird, wird an dieser Stelle geprüft — nicht „der Cache kann es", sondern „die Anwendung tut es" |
+| Doku-Karte | jedes Verzeichnis mit Code trägt eine `CLAUDE.md`, jeder §-Verweis darin trifft |
 | Agenten-Suite | 39 Referenzanfragen — 21 zu Säule C (sechs seit der Agent-Vertiefung: nachsehen statt raten, Druckziel, Menüort), 18 zu Säule A |
 
 Die Agenten-Suite misst zusätzlich: Wird ein vorhandener Baustein statt eigener
@@ -2779,15 +2836,18 @@ Die historischen Fälle und Messreihen stehen im [Roadmap-Archiv](ROADMAP-ARCHIV
 | svg.path | MIT | Pfaddaten des Zeichnungsimports; die SVG-Elemente liest `ingest/svg_drawing.py` über `xml.etree`, DXF liest trimesh selbst |
 | uharfbuzz (HarfBuzz) | Apache-2.0, HarfBuzz MIT-artig | Satz und Glyphenumrisse der Schriftzüge aus den beiliegenden Schriften (DejaVu unter Bitstream Vera, Liberation, Comfortaa und Dancing Script unter OFL-1.1) und der Beschriftungen der Ansicht |
 | pygfx, wgpu, rendercanvas | BSD-2-Clause; wgpu-native Apache-2.0 oder MIT | einziger Renderer der 3D-Ansicht; native Grafikbibliotheken werden mitgeliefert |
-| VTK | BSD-3-Clause | ausschließlich kopflose Geometrie der Baustein-Bereichsprüfung, kein Renderer |
+| freetype-py (FreeType) | BSD-3-Clause, FreeType unter FTL | Schrift für Beschriftungen in pygfx |
+| hidapi | dreifach lizenziert, gewählt BSD-3-Clause | 3D-Maus über HID (§2.9) |
+| xxhash, imageio | BSD-2-Clause | Hash für trimeshs Cache; Höhenbild der Reliefoperation |
+| certifi | MPL-2.0 | CA-Satz für HTTPS im gebauten Paket; unverändert mitgeliefert |
 | PySide6 | LGPL | geschlossene Weitergabe möglich, wenn dynamisch gebunden. **PyQt wäre GPL — nicht verwenden.** |
 | keyring | MIT | der Schlüssel des Nutzers im System-Schlüsselbund (§27) |
-| cadquery-ocp-novtk (OpenCascade) | Anbindung Apache-2.0, Kern LGPL-2.1 mit Linking-Ausnahme | dynamisch gebundener B-Rep-Kern; keine zweite VTK-Kopie |
+| cadquery-ocp-novtk (OpenCascade) | Anbindung Apache-2.0, Kern LGPL-2.1 mit Linking-Ausnahme | dynamisch gebundener B-Rep-Kern; Variante ohne mitgebrachtes VTK |
 | build123d / CadQuery | Apache-2.0 | nicht eingesetzt; die Anwendung verwendet die OCP-Anbindung direkt |
 | **pymeshlab** | **GPL** | **nicht verwenden** |
 | open3d | MIT | **nicht verwendet** — Reparatur und Remeshing laufen über trimesh und manifold3d |
 | CoACD | MIT | **geprüft und verworfen**, siehe unten |
-| Slicer (Orca/Prusa/Cura) | GPL/AGPL | nur extern installiert aufrufen, nicht mitliefern |
+| Slicer (PrusaSlicer, SuperSlicer, OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print, Anycubic Slicer Next, CuraEngine) | GPL/AGPL | nur extern installiert aufrufen, nicht mitliefern |
 | ComfyUI | GPL | extern, eigener Prozess — Weg 3 |
 | Ollama | MIT | extern, eigener Prozess — der lokale Chat |
 | Generative Modelle | uneinheitlich, teils regional eingeschränkt | einzeln prüfen |
@@ -2852,10 +2912,11 @@ die zentrale Konstante ersetzt diese externen Schritte nicht.
   festgelegte Windows-Weg übergibt den gebundenen App-Baum an
   `tools/sign_release.py`; lokal signiert das Certum-Cloud-Zertifikat
   Anwendung und Setup-Datei. Apple benötigt Developer-ID-Signaturen und
-  Notarisierung. Vorhandene CI-Schritte belegen weder den verfügbaren Zugang
-  noch die erfolgreiche Signierung und Installation des Kundenpakets; diese
-  Abnahmen bleiben [RM-001](ROADMAP-ARCHIV.md#rm-001-abschluss-050) und
-  [RM-011](ROADMAP.md#rm-011).
+  Notarisierung. Signatur, Zeitstempel und Notarisierung der Kundenpakete
+  sind für Windows und beide Mac-Architekturen belegt
+  ([RM-001](ROADMAP-ARCHIV.md#rm-001-abschluss-050)); ein CI-Schritt allein
+  belegt sie für einen neuen Stand nicht. Die Erstinstallation auf einem
+  fremden Rechner bleibt [RM-011](ROADMAP.md#rm-011).
 
   Die frühere pauschale Sperre für Microsofts Signierdienst ist überholt:
   Public-Trust-Zertifikate sind auch für Organisationen in der EU verfügbar;
@@ -2936,8 +2997,9 @@ die zentrale Konstante ersetzt diese externen Schritte nicht.
   Senden) und nichts ohne Inhalt — ein geschriebener Satz oder, nach einem
   Absturz, der Stapelabzug, der sich selbst trägt. Der Weg
   ohne Netz bleibt derselbe Dialog — er legt den Bericht als Ordner ab.
-- **Doku und Beispielprojekte**: genau die vier Hauptwege aus §2.2. Sie sind
-  gleichzeitig Doku, Abnahmeprüfung und Startbildschirm-Inhalt.
+- **Doku und Beispielprojekte**: je ein Beispiel für die vier Hauptwege aus
+  §2.2 — zugleich Doku, Abnahmeprüfung und Einstieg auf dem Startbildschirm.
+  Weitere Beispiele stehen getrennt davon (§2.3).
 - **Erwartungsmanagement.** Klar hinschreiben, was die Anwendung nicht ist —
   kein CAD-Ersatz, keine Passungen aus generierten Meshes.
 - **Ein einziger Supportkanal.**
@@ -2981,8 +3043,9 @@ Für die weitere CRA-Vorbereitung gelten diese Liefergegenstände:
    `packaging/solidon3d.spec` legt `Solidon3D.cdx.json` ins Paket. Erfasste
    Python- und native Bestandteile, Paketbezug und Belege werden je
    Zielartefakt geprüft. `constraints.txt` allein ist keine Stückliste des
-   Kundenpakets; die durchgesetzte Releaseakte bleibt
-   [RM-115](ROADMAP-ARCHIV.md#rm-115-abschluss-050).
+   Kundenpakets; die Releaseakte ist als verpflichtender Abbruch vor der
+   Veröffentlichung durchgesetzt
+   ([RM-115](ROADMAP-ARCHIV.md#rm-115-abschluss-050)).
 2. **Schwachstellenverfahren.** `SECURITY.md` benennt den Meldekanal und die
    zugesagte Antwortzeit, `SECURITY-INCIDENT.md` die Bearbeitung und
    gesetzlichen Meldepfade. Die öffentliche Sicherheitsseite muss damit
@@ -3145,8 +3208,9 @@ ihren Geltungsbereich mit der zweiten Stufe — Saugglocken, Abflussöffnungen
 und das Kriterium, das für Harz an die Stelle des Überhangwinkels tritt —,
 und jede solche Änderung wird nach dem Verfahren oben gemessen. Noch
 fehlende Verhaltensmessungen stehen in
-[RM-014](ROADMAP.md#rm-014), [RM-016](ROADMAP.md#rm-016) und
-[RM-069](ROADMAP-ARCHIV.md#rm-069).
+[RM-014](ROADMAP.md#rm-014) und [RM-016](ROADMAP.md#rm-016); die Messung der
+kompakten Werkzeugschemata ist mit [RM-069](ROADMAP-ARCHIV.md#rm-069)
+abgeschlossen.
 
 ---
 
