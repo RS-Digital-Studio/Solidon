@@ -1857,8 +1857,8 @@ Szene: 2 Objekte, Drucker centauri-carbon-2, Material petg (Startwert)
 Parameter: breite=70 mm · tiefe=50 mm · wand=8 mm
 Auswahl: obj_1 · heatset_m4_bore_1
   Hohlraum: heatset_m4_bore_1 → cone_1 — eine Kette; Versetzen, Drehen und Verdoppeln nehmen alle Abschnitte mit
-obj_1  "Gehäuseboden"  70.6 × 54.6 × 13.2 mm, 30.4 cm³, geschlossen, 59% massiv, last_op=op6
-  liegt: x -35.6 … 35.0 · y -25.0 … 29.6 · z -5.2 … 8.0 mm
+obj_1  "Gehäuseboden"  70.0 × 50.0 × 13.2 mm, 30.4 cm³, geschlossen, 66% massiv, auf Bett, last_op=op6
+  liegt: x -35.0 … 35.0 · y -25.0 … 25.0 · z 0.0 … 13.2 mm
   hole_1  Ø 3.40 mm (eingepasst), Achse +Z (eingepasst), Durchgang, bei (-25, -15, 2) (eingepasst), created_by=op2
   cone_1  Senkung 90°, Ø 5.00 mm, Achse +Z, bei (25, -15, 8), created_by=op3 — Maße eingepasst
   …

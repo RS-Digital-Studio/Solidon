@@ -80,6 +80,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.); offen: Waschschüssel an 29 Druckern, die Minigolf-Platte als 3MF, der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max, vorher das Matrixwerkzeug (Blockleser, Stützmarke nach Volumen) |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
+| [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
@@ -2742,6 +2743,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Kanal und der entschiedenen Mündung, der Korpus ohne neue Kanalstücke.
   **Entschieden (Robert, 06.10.2026):** Die Mündung bleibt frei, wie Solidon es seit 0.5.3
   hält; offen ist nur die Abnahme.
+
+<a id="rm-539"></a>
+
+- [ ] **RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne
+  Befund.** Die Kabeldurchführung legt ihre Mündung an die angeklickte Fläche, die als
+  Außenseite gilt, und baut den Klemmblock dahinter (`parts/structure.py`,
+  `cable_relief_support` als `host_add`). Im Gehäuse-Beispiel stand sie auf der Oberseite des
+  Bodens: Der Block hing 5,25 mm unter dem Bett und über zwei Ränder (im Beispiel behoben,
+  `tools/make_examples.py`). Setzt ein Kunde sie so, sagt es nur `arrange.below_bed` als
+  Hinweis, dessen Handlung *Auf das Bett setzen* das Gehäuse auf den Block stellt; an einer
+  Seitenwand von innen kommt nichts. `parts/ops.py` vereinigt `host_add`, ohne zu prüfen, wo er
+  landet. **Offen:** ein Befund beim Einsetzen, wenn der Trägeraufbau außerhalb des Trägers oder
+  unter z = 0 liegt, mit einer Handlung, die die Richtung umkehrt, in allen Katalogen.
+  **Abnahme:** Kabeldurchführung von innen auf einen Boden und an eine Seitenwand gesetzt, je
+  ein Befund mit Handlung; danach sitzt der Block innen und der Boden auf dem Bett.
 
 ## Bedienung und Darstellung
 
