@@ -9,7 +9,7 @@ alle Modelle verifizieren, mit allen unterstützten Druckern. Zwei Pläne:
              nach Prüfsumme gestrichen) an Kobra S1 und Kobra S1 Max
 
 Wieder aufnehmbar: Ein Modell, dessen Ergebnis ``done`` trägt, läuft nicht noch
-einmal. Kerne wie in ``treiber.py`` (8 bis 11 bleiben aus, RM-272).
+einmal. Kerne wie in ``tools/matrix_driver.py`` (8 bis 11 bleiben aus, RM-272).
 Aufruf aus der Wurzel: .venv/Scripts/python.exe .claude/.state/anycubic-2026-10-05/treiber_anycubic.py <ausgabeordner> <plan> [--arbeiter N]
 """
 

@@ -14,6 +14,7 @@ from app.core.geom.mesh import MeshData
 from app.core.scene import CancelSignal
 from app.core.scene.fits import check, overlap
 from app.core.types import Feature, FeatureRef, Fit, Profile, Scene, SceneObject
+from tests.helpers import exact_kernel
 
 
 def flush_pair(
@@ -353,6 +354,7 @@ def native_pair(profile: Profile, *, floor: bool = False) -> Scene:
 
 def native_bytes(scene: Scene) -> dict[str, bytes]:
     """Auch Topologie- und Prüfkennzeichen zählen zum unveränderten nativen Eingang."""
+    exact_kernel()
     from io import BytesIO
 
     from OCP.BRepTools import BRepTools

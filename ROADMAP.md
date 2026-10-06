@@ -107,16 +107,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat](#rm-529) | KI und Generatoren | `created_by` in Merkmals- und Objektzeile des Steckbriefs nachrüsten (Entscheidung Robert, 06.10.) |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): umräumen — erledigte und abgelöste Konzepte in einen Unterordner, alle Verweise nachziehen |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
-| [RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen](#rm-113) | Tests und Entwicklungswerkzeuge | Diagnose gebaut (`736d4a46e`); nächster Schritt: den Skip-Grund aus dem JUnit-Bericht `tests-core-windows-latest-*` des Taglaufs 37409338027 lesen und SID/ACL festhalten |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Genehmigt (Robert: „alles gründlich“); neun Helfer in `helpers.py`/`ui_helpers.py` (`95fd36d35`); offen `on_the_bore_wall`, `project`, `FakeCodec`, `a_foreign_slot`; entschieden (Robert, 06.10.): auch die großen Fenster-Fixtures zusammenführen |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Stimme mit Prüfsummen in `licences.toml` dokumentiert; offen: `/legal-review` zur Werbenutzung, Eintrag in `ASSET-RIGHTS.toml` und ein Test, der die Stimme prüft |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (d) und Teile von (b)/(c) mit `b03c0ddfe` erledigt; offen die Kopie `_select_data` samt Karte, die übrigen dünnen Hüllen aus (b), `section.section_volume` und `repair.fill_holes` (Liste am Punkt) |
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): `rendering`-Fälle in der Release-CI auch unter Linux und macOS, dazu der Wächter in `test_packaging.py` |
-| [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, `importorskip`, falscher `adjustSize`-Satz in `vorderseite.md`, „gebaut an drei Orten“ in `oberflaeche.md`, „Datei je Fakt“ |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Erster Lauf 02.10. im Archiv; der zweite war am 05.10. fällig und steht aus (bekannt: cadquery-ocp-novtk 8.0.1.1.0); Paketbeleg der Bauplattform unter RM-468 |
-| [RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft](#rm-530) | Tests und Entwicklungswerkzeuge | Skripte, die Tests und Workflows dauerhaft brauchen, aus `.claude/.state/` nach `tools/` ziehen |
 | [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Auftrag Robert (06.10.): Fenstergruppe in der Release-CI auf allen drei Plattformen, dazu ein Slicer-Job, der je Plattform die Slicer installiert und Erkennung, Druckerlisten und Slicen prüft |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -3976,20 +3973,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#architektur-durchsicht-02092026).
 
-<a id="rm-113"></a>
-
-- [~] **RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen.** Den Besitzer einer
-  frisch angelegten privaten Tokendatei auf dem Windows-Runner ermitteln und die Prüfung mit einer
-  tatsächlich nutzereigenen Datei fahren. Abnahme: SID und ACL dokumentiert, Test ohne bedingten
-  Skip grün; eine breitere Besitzfreigabe nur nach Sicherheitsprüfung.
-
-  **Diagnose gebaut (`736d4a46e`):** Der Skip in `tests/test_licence_admin.py` nennt Besitzer,
-  Nutzer und Standardbesitzer als SID. Der Skip-Grund mit der Runner-SID ist noch nicht belegt:
-  Die Windows-Kernprotokolle nennen nur die Zahl übersprungener Fälle; der Grund steht im
-  JUnit-Bericht `tests-core-windows-latest-*` des Taglaufs 37409338027 (Repository öffentlich).
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
-
 <a id="rm-134"></a>
 
 - [~] **RM-134 — Doppelte Testhilfen zusammenführen.** Robert hat die Zusammenführung
@@ -4166,40 +4149,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Entschieden (Robert, 06.10.2026):** Die Release-CI fährt die `rendering`-Fälle auch
   unter Linux und macOS.
 
-<a id="rm-349"></a>
-
-- [ ] **RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1.**
-  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-D.md`, `bericht-E.md`, `bericht-F.md`),
-  je einzeln abnehmbar. Registerzellen anderer Punkte werden hier nur gemeldet, geändert werden
-  sie von dem, der den Punkt bearbeitet:
-  - **E-N2, `c96f60a18` (Codex):** `tools/check_new_texts.py:171–195` (`missing()`) scheitert
-    nicht, wenn im Index kein Katalog liegt — `main() = 0` bei neuem unübersetztem Text
-    (Sonde `sonden\textwaechter\sonde_leere_kataloge.py`). Fix: leere Katalogliste als Fehler
-    mit Handlungsvorschlag, Test (`tests.md`: zuerst zählen).
-  - **F-N5, `337697db9`, `8cb4eae96` (Codex), Lücken älter:** `tests/CLAUDE.md:123` und der
-    RM-315-Abschluss behaupten `exact_kernel()` vor jedem OCP-Import;
-    `tests/test_feature_moves_keep_shape.py:1394` und
-    `tests/test_geometry_review_regressions.py:923` importieren OCP ohne Wächter (ohne OCP ein
-    `ImportError` statt Skip). Fix: `exact_kernel()` als erste Zeile, AST-Wächter in
-    `test_toolchain.py`.
-  - **F-N3, `72281a33e` (Claude):** `.claude/rules/fenster.md:398–399` trug als einzige Regel ein
-    Datum („Entscheidung Robert, 29.09.2026“). Erledigt mit `ea71f59f5` (05.10.).
-  - **F-N4, `bcaac7b53` (Claude):** `tests/test_manual.py:37` behält `importorskip("PySide6")`,
-    das die Commitmeldung zu entfernen verspricht. Fix: entfernen, sobald die Datei frei ist.
-  - **D-N4:** `.claude/rules/oberflaeche.md:198` („gebaut an drei Orten“) ist seit `d8e37581a`
-    falsch; der Satz „Noch nicht umgestellt …: die Druckeinstellungen“ ist verschwunden, die
-    Druckeinstellungen haben dort einen eigenen Absatz. Der falsche Satz aus
-    `.claude/rules/grenzen.md:194` („`adjustSize` läuft nur, wenn sich eine Zeile bewegt hat“)
-    steht heute in `.claude/rules/vorderseite.md:84–85` und ist seit `b837a73f8` falsch
-    (`app/ui/op_dialog.py`: „Und nicht über ``adjustSize``“).
-  - **Registerstände (F-N2, D-N4):** erledigt am 06.10.2026 mit der Fortschreibung der
-    Registerzeile von RM-134; RM-286 ist archiviert.
-  - **Beifund:** `.claude/README.md:16` sagt über `memory/` „eine Datei je Fakt“,
-    `CLAUDE.md:200` „Eine Datei je Thema“.
-  Abnahme: je Spiegelstrich Test oder korrigierte Stelle mit Commit. Beleg: Berichte unter
-  `F:\solidon-review-reports`.
-  Nachprüfung am Stand `6ce767031`: alle sieben Reste offen (E-N2, F-N5, F-N3, F-N4, D-N4, Registerstände, Beifund memory); nur `oberflaeche.md:202–203` ist im Arbeitsbaum ungesichert korrigiert.
-
 <a id="rm-467"></a>
 
 - [~] **RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren.**
@@ -4219,19 +4168,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Der zweite Lauf war am 05.10. fällig und steht aus; bekannt ist seither `cadquery-ocp-novtk`
   8.0.1.1.0 (in `constraints.txt` auf 8.0.1.0.0 festgelegt, der Wächter „Neueste Versionen“
   zog am Tag v0.5.3 die neue Fassung, die Lizenzbeilage kennt sie seit `036021393`).
-
-<a id="rm-530"></a>
-
-- [ ] **RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft.** `tests/test_delivery_tools.py` und
-  `tests/test_delivery_matrix_review.py` fahren Skripte aus
-  `.claude/.state/uebergabe-gesamt-2026-09-27/` (`einheit.py`, `bericht.py`, `treiber.py`) und
-  `uebergabe-matrix-2026-09-27/`; `.github/workflows/mac-netz.yml` und `tests/helpers.py`
-  greifen auf `.claude/.state/plattformgleichheit-2026-09-17/` zu. Ruff und mypy prüfen den
-  Zustandsordner nicht, und `uebergabe-gesamt-2026-09-27` soll nach dem Gesamtlauf weg — dann
-  bräche die Suite. Fund der Unterlagen-Durchsicht 06.10.2026. **Fix:** Was ein Test oder
-  Workflow dauerhaft braucht, zieht nach `tools/` (Regel in `.claude/README.md`), die Tests
-  zeigen dorthin. **Abnahme:** `git grep -n ".claude/.state" -- tests .github` findet nur
-  noch Sonden eines offenen Punkts, Ruff prüft die umgezogenen Skripte, die Liefertests bleiben grün.
 
 <a id="rm-531"></a>
 

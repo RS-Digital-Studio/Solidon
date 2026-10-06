@@ -1023,6 +1023,7 @@ CASE_BY_NAME = {case.name: case for case in CASES}
 
 def _native_box(width=20.0, depth=16.0, height=10.0, shift=(0.0, 0.0, 0.0)):
     """Analytischer Eingang, unabhängig von der registrierten Erzeugeroperation."""
+    exact_kernel()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
     from OCP.gp import gp_Pnt
 
@@ -1037,6 +1038,7 @@ def _native_box(width=20.0, depth=16.0, height=10.0, shift=(0.0, 0.0, 0.0)):
 
 def _native_cylinder(radius, height, shift=(0.0, 0.0, 0.0)):
     """Ein analytischer Zylinder mit seinem Boden an der angegebenen Stelle."""
+    exact_kernel()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
     from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
 
@@ -1049,6 +1051,7 @@ def _native_cylinder(radius, height, shift=(0.0, 0.0, 0.0)):
 
 def _native_difference(outer, cutter):
     """Der Testkörper entsteht aus angegebenen Volumen, nicht aus der geprüften Op."""
+    exact_kernel()
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
 
     from app.core.brep.kernel import Solid
@@ -1204,6 +1207,7 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
     if source == "bayonet_disc":
         # Eine Scheibe r = 40 mit vier Nocken 6 x 4 x 2 auf der Oberseite, an den
         # Achsen ausgerichtet — mit den Namen der Erkennung wie beim Kasten.
+        exact_kernel()
         from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse
 
         from app.core.brep.features import features_of
@@ -1230,6 +1234,7 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
         )
         return [_object(body, kind)]
     if source == "pin":
+        exact_kernel()
         from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse
 
         from app.core.brep.kernel import Solid
@@ -1247,6 +1252,7 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
         )
         return [_object(body, kind)]
     if source == "sphere":
+        exact_kernel()
         from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
 
         from app.core.brep.kernel import Solid
@@ -1261,6 +1267,7 @@ def _inputs(case: Case, kind: str, project: Project, profile: Profile) -> list[S
             )
         ]
     if source == "disconnected":
+        exact_kernel()
         from OCP.BRep import BRep_Builder
         from OCP.TopoDS import TopoDS_Compound
 
@@ -1912,6 +1919,7 @@ def _arched_block(arc: float) -> Any:
     und Zylinder, unabhängig von Skizze und Extrusion; der Radius folgt aus
     der Sehne, 20 / sin(arc/2) — R 382,15 / 191,34 / 77,27 bei 6 / 12 / 30 Grad.
     """
+    exact_kernel()
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Common
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
     from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
@@ -2173,6 +2181,7 @@ def test_a_dome_between_rounded_edges_stays_a_sphere_on_both_kernels() -> None:
 
 def _pin_with_a_cove(cove: float) -> Any:
     """Platte 60 x 60 x 6 mit Zapfen Ø 12 x 30, sein Fuß mit ``cove`` ausgekehlt (RM-022)."""
+    exact_kernel()
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.GeomAbs import GeomAbs_Circle
 
@@ -2967,6 +2976,7 @@ def _grooved_block() -> Any:
     Rings bei ±X, getrennt durch die Schlitzwände. Eine Bohrung Ø 6 durch bei
     (20, −20) ist die Vorlage zum Verdoppeln.
     """
+    exact_kernel()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeTorus
     from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
 

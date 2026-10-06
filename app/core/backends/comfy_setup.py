@@ -88,8 +88,10 @@ BACKGROUND_SHA256: Final = "9ab37426bf4de0567af6b5d21b16151357149139362e6e899202
 #: Genannt wird das Basismodell und kein Feintuning: Es ist das, was die
 #: Rollenauflösung in :data:`app.core.backends.mesh.MODEL_ROLES` über ``sd_xl``
 #: sicher trifft, es ist die Referenz, und seine Lizenz
-#: (CreativeML Open RAIL++-M) wirft für den lokalen Gebrauch keine Frage auf —
-#: anders als bei Hunyuan, dessen Lizenz die EU ausnimmt. Wer ein anderes
+#: (CreativeML Open RAIL++-M) kennt kein ausgenommenes Gebiet — anders als
+#: Hunyuan, dessen Lizenz die EU ausnimmt. Ihre Nutzungsverbote (Anhang A) und
+#: die Modellkarte, die nur Forschung nennt, gehören zur offenen Kanzleifrage
+#: (RM-003), ebenso der Hunyuan-Anteil im TripoSG-Quelltext. Wer ein anderes
 #: bevorzugt, legt es daneben: ``juggernaut`` und ``dreamshaper`` stehen in der
 #: Rangfolge davor und gewinnen dann.
 IMAGE_MODEL_REPO: Final = "stabilityai/stable-diffusion-xl-base-1.0"
