@@ -1688,7 +1688,7 @@ def story_two_colours(run: GuideRun) -> None:
     run.window.right.setCurrentWidget(run.window.report)
     run.window.viewport.reset_camera(follow_selection=False)
     run.settle(30)
-    run.capture(5)
+    run.capture(4)
 
 
 def story_repair_a_model(run: GuideRun) -> None:
