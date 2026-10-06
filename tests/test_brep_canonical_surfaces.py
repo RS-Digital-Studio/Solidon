@@ -691,7 +691,7 @@ def test_a_pre_cancelled_native_consumer_does_not_start_recognition(operation: s
         if operation == "shell":
             profiles.shell_open_top(source, 1.0, cancelled=cancelled)
         elif operation == "draft":
-            profiles.draft_vertical(source, 3.0, cancelled=cancelled)
+            profiles.draft_faces(source, 3.0, cancelled=cancelled)
         elif operation == "push":
             profiles.push_faces(source, (0.0, 0.0, 1.0), 1.0, cancelled=cancelled)
         elif operation == "unround":

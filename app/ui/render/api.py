@@ -272,9 +272,6 @@ class Item(ABC):
         return float(np.linalg.norm([high_x - low_x, high_y - low_y, high_z - low_z]))
 
     @abstractmethod
-    def set_pickable(self, pickable: bool) -> None: ...
-
-    @abstractmethod
     def update_points(self, points: np.ndarray) -> None:
         """Dieselbe Topologie, andere Ecken — die Vorschau beim Formen (§18.11).
 
@@ -593,9 +590,6 @@ class Renderer(ABC):
 
     @abstractmethod
     def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> int: ...
-
-    @abstractmethod
-    def remove_pointer_listener(self, token: int) -> None: ...
 
     @abstractmethod
     def deliver_pointer(self, kind: str, event: Any) -> None:

@@ -4585,7 +4585,7 @@ def planar_mask(mesh: MeshData) -> np.ndarray:
     Dieselbe Menge wie ``face_mask(mesh, detect_faces(mesh))``: Die Flächen
     tragen als ``face_indices`` genau die Facetten, die
     :func:`_planar_face_entries` findet; Träger und Innenlage, die
-    :func:`detect_faces` danach je Fläche rechnet, liest die Maske nicht. Am
+    :func:`_finished_faces` danach je Fläche rechnet, liest die Maske nicht. Am
     Halter mit Wabenmuster waren das 320 ms je Rundungsklick im Hauptfaden
     (``actions.fillet_blocked``), für eine Antwort, die sich mit dem Körper
     nicht ändert (Regel 3). Gemerkt wird sie deshalb am Körper
@@ -7522,7 +7522,7 @@ class _BodyMemory:
 _MEMORIES: dict[int, _BodyMemory] = {}
 
 #: **Ein Schloss um alle drei Merker.** Das Merkmalfenster fragt
-#: ``fillet_blocked`` → ``detect_faces`` im Hauptfaden, während der Arbeiter
+#: ``fillet_blocked`` → ``planar_mask`` im Hauptfaden, während der Arbeiter
 #: dasselbe Modul für die nächste Auswertung fragt; ``get`` und
 #: ``move_to_end`` an einem ``OrderedDict`` sind zwei Schritte, und wer
 #: dazwischen verdrängt wird, bekam einen ``KeyError``. Wiedereintrittsfähig,
@@ -13016,31 +13016,19 @@ def detect_faces(
     planar: set[int] | None = None,
     check_cancelled: Callable[[], None] | None = None,
 ) -> list[Feature]:
-    """Koplanare Flecken: Normale, Fläche, Mittelpunkt (§21.1)."""
+    """Alle ebenen Flächen mit Normale, Fläche, Mittelpunkt, Träger und Innenlage —
+    der Prüfweg ohne Musterfalten (§21.1).
+
+    Kein Produktionsaufrufer, mit Absicht: :func:`detect` baut die Flächen in
+    denselben Schritten (:func:`_planar_face_entries`, :func:`_largest_first`,
+    :func:`_face_candidates`, :func:`_finished_faces`), faltet dazwischen aber
+    Muster und lässt verschluckte Flächen weg. Hier kommen alle — Tests holen
+    sich so die Flächen vor dem Musterfalten (etwa die Zellen einer Wabe) und
+    die Menge, die :func:`planar_mask` trägt. Die Nummerierung erklärt
+    :func:`_largest_first`.
+    """
     body = mesh.raw
     entries = _planar_face_entries(mesh, planar=planar, check_cancelled=check_cancelled)
-    # **Bei gleicher Fläche entscheiden die Eckennummern der Fläche.**
-    # Die sechs Flächen eines Würfels sind exakt gleich groß; sortiert allein
-    # nach Fläche hing es an der Reihenfolge der Dreiecke im Netz, welche davon
-    # ``face_1`` wird — dieselbe Geometrie mit anders nummerierten Dreiecken
-    # gab eine andere Zuordnung. Die Zuordnung (§21.2) fängt das im
-    # Regelbetrieb wieder ein, weil sie über die Lage vergleicht; die
-    # **Ersterkennung** hat nichts, womit sie vergleichen könnte.
-    #
-    # **Und ausdrücklich nicht der Ort**, obwohl er sich anbietet. Eine
-    # Nummerierung nach Koordinaten überlebt keine Drehung: Bei einer Platte
-    # sind Deck- und Bodenfläche gleich groß, und um zwanzig Grad gekippt
-    # tauschen sie ihre Reihenfolge. Genau darauf steht ein Teil des
-    # Bestands — ``align`` legt ``face_1`` eines gedrehten Teils auf
-    # ``face_1`` des festen, und beide müssen dieselbe Fläche des Teils
-    # meinen. Die kleinste Eckennummer ändert sich weder beim Drehen noch beim
-    # Umsortieren der Dreiecke. Genommen werden alle Ecken der Fläche und
-    # nicht bloß die kleinste: An einem Würfel treffen sich drei Flächen in
-    # derselben Ecke, und drei gleiche Schlüssel sind so gut wie keiner.
-    #
-    # Gerundet wird auch die Fläche, aus demselben Grund: Zwei gleich große
-    # Flächen unterscheiden sich im Netz gern in der zwölften Stelle, und dann
-    # entschiede wieder diese Stelle.
     entries = _largest_first(body, entries)
     return _finished_faces(mesh, _face_candidates(body, entries), entries, check_cancelled)
 
@@ -13057,8 +13045,7 @@ def _face_candidates(body: trimesh.Trimesh, entries: FaceEntries) -> list[Featur
     je Fläche, und ein dichtes Rändel hat 32 000 Flächen, von denen nach dem
     Musterfalten sieben bleiben (22.09.2026: 3,7 und 2,9 s von 17). Deshalb
     entstehen die Flächen in zwei Schritten: erst alle, billig, dann die, die
-    bleiben, fertig (:func:`_finished_faces`). Wer :func:`detect_faces` ruft,
-    bekommt beides in einem.
+    bleiben, fertig (:func:`_finished_faces`); :func:`detect` ruft beide.
     """
     features: list[Feature] = []
     for number, (facet, area, centre) in enumerate(entries, start=1):
@@ -13520,7 +13507,7 @@ def detect_curved_faces(
             continue
         entries.append((patch, area))
     # Größte zuerst, bei gleicher Fläche die Eckennummern — dieselbe
-    # Stabilität wie bei den ebenen Flächen (:func:`detect_faces`).
+    # Stabilität wie bei den ebenen Flächen (:func:`_largest_first`).
     entries = _largest_first(body, entries)
 
     features: list[Feature] = []
@@ -13694,6 +13681,22 @@ def _largest_first(body: trimesh.Trimesh, entries: list[Any]) -> list[Any]:
     Fläche schon immer, weil zwei gleich große sich im Netz in der zwölften
     Stelle unterscheiden; die Rundung allein ließ aber zwei gleiche Flächen
     auf einer Rundungsgrenze wieder nach dem Rauschen ordnen.
+
+    **Bei gleicher Fläche entscheiden die Eckennummern der Fläche.** Die sechs
+    Flächen eines Würfels sind exakt gleich groß; sortiert allein nach Fläche
+    hing es an der Reihenfolge der Dreiecke im Netz, welche davon ``face_1``
+    wird. Die Zuordnung (§21.2) fängt das im Regelbetrieb über die Lage wieder
+    ein; die **Ersterkennung** hat nichts, womit sie vergleichen könnte.
+
+    **Und ausdrücklich nicht der Ort**, obwohl er sich anbietet. Eine
+    Nummerierung nach Koordinaten überlebt keine Drehung: Bei einer Platte
+    sind Deck- und Bodenfläche gleich groß, und um zwanzig Grad gekippt
+    tauschen sie ihre Reihenfolge. ``align`` legt ``face_1`` eines gedrehten
+    Teils auf ``face_1`` des festen, und beide müssen dieselbe Fläche des
+    Teils meinen. Die kleinste Eckennummer ändert sich weder beim Drehen noch
+    beim Umsortieren der Dreiecke. Genommen werden alle Ecken der Fläche und
+    nicht bloß die kleinste: An einem Würfel treffen sich drei Flächen in
+    derselben Ecke, und drei gleiche Schlüssel sind so gut wie keiner.
     """
     order = numbering_order(
         len(entries),
@@ -13813,7 +13816,7 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
     # ``same[k]`` ist dabei die **kleinste** Original-Eckennummer an diesem Ort,
     # und darauf ruht die Nummernstabilität weiter unten: Die Gruppen selbst
     # sind nach Koordinaten geordnet, und eine Ordnung nach Koordinaten
-    # überlebt keine Drehung (siehe ``detect_faces``). Die Original-Nummern tun
+    # überlebt keine Drehung (siehe ``_largest_first``). Die Original-Nummern tun
     # es — sie ändern sich weder beim Drehen noch beim Umsortieren.
     digits = weld_digits(weld_tolerance(mesh.bounds.diagonal))
     same, place = trimesh.grouping.unique_rows(
@@ -13879,8 +13882,8 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
 
     # **Bei gleich vielen offenen Kanten entscheiden die Eckennummern, nicht
     # der Ort.** Hier stand der gerundete Mittelpunkt, und damit galt genau
-    # das, wovor ``detect_faces`` neunzig Zeilen weiter oben ausdrücklich
-    # warnt: Eine Nummerierung nach Koordinaten überlebt keine Drehung. Zwei
+    # das, wovor ``_largest_first`` ausdrücklich warnt: Eine Nummerierung
+    # nach Koordinaten überlebt keine Drehung. Zwei
     # gleich große Ausschnitte in einer Platte tauschen gekippt ihre Plätze,
     # ``edge_loop_1`` meint danach die andere Schleife — und daran hängen
     # Ops und Passungen (§21.2). Die Eckennummern ändern sich weder beim

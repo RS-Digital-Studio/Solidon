@@ -8318,14 +8318,14 @@ def test_the_machine_list_follows_the_printer_of_the_project(qt_app: QApplicatio
         printer_model="Elegoo Centauri Carbon 2",
         nozzle=0.4,
     )
-    from app.ui.print_settings_dialog import _select_data
+    from app.ui.style import select_data
 
     dialog = PrintSettingsDialog(session, settings)
     dialog._profiles_found([weit, meiner])
 
     assert dialog.machine_choice.count() == 2, "der allgemeine Drucker sieht alles"
 
-    _select_data(dialog.printer_choice, "centauri-carbon-2")
+    select_data(dialog.printer_choice, "centauri-carbon-2")
     dialog._scene_profile_changed()
 
     assert session.profile.printer.id == "centauri-carbon-2", "die Vorbedingung des Tests"

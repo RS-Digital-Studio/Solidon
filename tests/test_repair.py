@@ -20,7 +20,6 @@ from app.core.geom.repair import (
     _first_crossing_between,
     branching_edge_count,
     fill_boundary_loops,
-    fill_holes,
     merge_vertices,
     open_edge_count,
     parts_that_cross,
@@ -595,9 +594,10 @@ def test_filling_closes_a_single_missing_triangle() -> None:
     with_hole = body.replacing(body.raw.submesh([range(1, 12)], append=True))
     assert not with_hole.is_watertight
 
-    closed, worked = fill_holes(with_hole)
+    result = repair(with_hole, weld=False, degenerate=False, normals=False)
+    closed = result.mesh
 
-    assert worked
+    assert result.changed
     assert closed.is_watertight
     assert closed.volume == pytest.approx(8000.0, rel=1e-6)
 
@@ -608,9 +608,10 @@ def test_filling_a_hole_keeps_existing_face_slots() -> None:
     opened = body.raw.submesh([range(1, body.triangle_count)], append=True)
     with_hole = MeshData.of(opened, slots=(7,) * len(opened.faces))
 
-    closed, worked = fill_holes(with_hole)
+    result = repair(with_hole, weld=False, degenerate=False, normals=False)
+    closed = result.mesh
 
-    assert worked
+    assert result.changed
     assert len(closed.slots) == closed.triangle_count
     assert closed.slots[: with_hole.triangle_count] == with_hole.slots
 
@@ -633,9 +634,10 @@ def test_every_filled_triangle_inherits_material_and_colour_from_its_hole(
     source = MeshData.of(body, slots=slots)
     old_colours = body.visual.face_colors.copy()
 
-    closed, changed = fill_holes(source)
+    result = repair(source, weld=False, degenerate=False, normals=False)
+    closed = result.mesh
 
-    assert changed and closed.is_watertight
+    assert result.changed and closed.is_watertight
     assert closed.slots[: source.triangle_count] == source.slots
     assert set(closed.slots[source.triangle_count :]) == {6}
     np.testing.assert_array_equal(
@@ -958,10 +960,10 @@ def test_a_closed_opening_carries_its_rim_for_the_view(name: str) -> None:
 
 def test_filling_a_closed_body_changes_nothing() -> None:
     body, _welded = merge_vertices(raw("cube_clean.stl"))
-    same, worked = fill_holes(body)
+    result = repair(body, weld=False, degenerate=False, normals=False)
 
-    assert not worked
-    assert same is body
+    assert not result.changed
+    assert result.mesh is body
 
 
 def test_unifying_normals_reports_only_a_real_change() -> None:
@@ -1733,8 +1735,7 @@ def test_watertight_alone_is_not_enough_for_the_boolean_kernel(
     0,1 bis 0,2 ms — dieselbe Kantentabelle, die die Kette ohnehin aufbaut.
     """
     body, _ = merge_vertices(raw("broken_open.stl"))
-    genaeht, _ = stitch_t_junctions(body)
-    gefuellt, _ = fill_holes(genaeht, stitch=False)
+    gefuellt = repair(body, weld=False, degenerate=False, normals=False).mesh
 
     faces = gefuellt.raw.faces.copy()
     faces[1] = faces[1, ::-1]

@@ -436,24 +436,6 @@ def _border_edges(corners: np.ndarray) -> list[tuple[int, int]]:
     return [order[key] for key, times in seen.items() if times == 1]
 
 
-def draft_vertical(
-    mesh: MeshData,
-    angle_deg: float,
-    *,
-    quality: Quality = "fine",
-    cancelled: CancelToken | None = None,
-) -> BooleanOutcome:
-    """Stellt alle senkrechten Flächen um den Winkel an — der Weg aller alten Schritte.
-
-    Neutral bleibt die Unterkante des Körpers: Dort behält der Körper sein
-    Maß, nach oben wird er schmaler. Wörtlich dieselbe Zusage wie im exakten
-    Kern (``brep.profiles.draft_vertical``), damit dieselbe Menüzeile an
-    beiden Körperarten dasselbe bedeutet. Gerechnet wird wie an gewählten
-    Flächen (:func:`draft_walls`).
-    """
-    return draft_walls(mesh, angle_deg, quality=quality, cancelled=cancelled)
-
-
 def draft_walls(
     mesh: MeshData,
     angle_deg: float,
@@ -1040,11 +1022,6 @@ def _draft_tools(
             if tool.triangle_count and tool.volume > EPS_GEOM:
                 found.append((kind, number, tool))
     return found
-
-
-def _upright_faces(mesh: MeshData) -> list[tuple[list[int], np.ndarray]]:
-    """Die senkrechten Flächen des Netzes — :func:`_walls_along` nach oben."""
-    return _walls_along(mesh, np.array([0.0, 0.0, 1.0]))
 
 
 def _walls_along(mesh: MeshData, pull: np.ndarray) -> list[tuple[list[int], np.ndarray]]:

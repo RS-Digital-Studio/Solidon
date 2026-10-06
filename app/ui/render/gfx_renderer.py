@@ -497,13 +497,6 @@ class GfxItem(Item):
             float(high[2]),
         )
 
-    def set_pickable(self, pickable: bool) -> None:
-        self.restyled = self.restyled or bool(pickable) != self._pickable
-        self._pickable = bool(pickable)
-        for obj in self.objects:
-            obj.material.pick_write = self._pickable and getattr(obj, "_solidon_pickable", True)
-        self._changed()
-
     def pickable(self) -> bool:
         return self._pickable
 
@@ -841,7 +834,6 @@ class GfxLabels(GfxItem, LabelsItem):
                 ),
             )
             field._solidon_coloured = False
-            field._solidon_pickable = False
         label = gfx.Text(
             text=text,
             font_size=float(style.font_size),
@@ -1404,7 +1396,6 @@ class GfxRenderer(Renderer):
             )
             edges._solidon_coloured = False
             edges._solidon_mesh = True
-            edges._solidon_pickable = False
             edges._solidon_force_opaque = style.force_opaque
             root.add(edges)
             objects.append(edges)
@@ -2489,9 +2480,6 @@ class GfxRenderer(Renderer):
         self._next_token += 1
         self._listeners[token] = listener
         return token
-
-    def remove_pointer_listener(self, token: int) -> None:
-        self._listeners.pop(token, None)
 
     def close(self) -> None:
         self._listeners.clear()

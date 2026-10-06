@@ -225,7 +225,7 @@ print("bild geprüft", flush=True)
 # Die echten Qt-Radereignisse müssen bis zur Kamera reichen, auch unterhalb
 # einer Raste. Beide Projektionen behalten dabei den Weltpunkt am Zeiger.
 navigator = Navigator(view, "solidon", NavigationLog().callbacks())
-token = view.add_pointer_listener(navigator.handle)
+view.add_pointer_listener(navigator.handle)
 pointer = QPointF(75, 45)
 ratio = view.widget.devicePixelRatioF()
 x, y = round(pointer.x() * ratio), round(pointer.y() * ratio)
@@ -254,7 +254,7 @@ for parallel in (False, True):
             assert math.dist(anchor, current) < 1e-8
         view.set_camera_pose(pose)
         view.set_parallel_scale(scale)
-view.remove_pointer_listener(token)
+# Der Zuhörer bleibt angemeldet wie in der Ansicht; ``close`` meldet ihn ab.
 del navigator
 print("feine und normale Radbewegungen geprüft", flush=True)
 text_field.setFocus()

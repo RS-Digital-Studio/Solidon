@@ -580,9 +580,9 @@ def fill_only_small_holes(monkeypatch: pytest.MonkeyPatch) -> None:
     zeigen*, kein Reparaturring) geprüft bleibt.
 
     Ersetzt wird ``_filled_rounds``, die Runden des Ringfüllers: Seit
-    ``2b83f72a5`` ruft die Reparatur sie direkt und nicht mehr über
-    ``_filled_with_count``; der alte Schalter griff danach ins Leere, und die
-    Reparatur schloss alles. ``fill_holes`` geht weiter über denselben Weg.
+    ``2b83f72a5`` ruft die Reparatur sie direkt und nicht mehr über eine
+    Zwischenfunktion; der alte Schalter griff danach ins Leere, und die
+    Reparatur schloss alles.
     """
     import trimesh
 

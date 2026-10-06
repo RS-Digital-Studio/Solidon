@@ -104,9 +104,6 @@ class RecordingItem(Item):
             float(high[2]),
         )
 
-    def set_pickable(self, pickable: bool) -> None:
-        self.pickable = bool(pickable)
-
     def update_points(self, points: np.ndarray) -> None:
         fresh = np.asarray(points, dtype=float).reshape(-1, 3)
         if self.capacity is not None:
@@ -474,9 +471,6 @@ class RecordingRenderer(Renderer):
         token = len(self.listeners) + 1
         self.listeners[token] = listener
         return token
-
-    def remove_pointer_listener(self, token: int) -> None:
-        self.listeners.pop(token, None)
 
     def deliver_pointer(self, kind: str, event: Any) -> None:
         """Ein Qt-Ereignis wie der echte Renderer in eine Zeigergeste übersetzen."""

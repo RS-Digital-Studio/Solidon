@@ -179,6 +179,7 @@ from app.ui.style import (
     expanded_width,
     fit_dialog_to_screen,
     make_primary,
+    select_data,
     set_level,
 )
 from app.ui.theme import THEMES, current_theme
@@ -321,13 +322,6 @@ def _toggle_of(section: QWidget) -> QToolButton | None:
     darin ansteht.
     """
     return section.findChild(QToolButton)
-
-
-def _select_data(box: QComboBox, identifier: str) -> None:
-    """Wählt den Eintrag mit dieser Kennung, wenn es ihn gibt."""
-    index = box.findData(identifier)
-    if index >= 0:
-        box.setCurrentIndex(index)
 
 
 def settings_for_export(
@@ -3449,7 +3443,7 @@ class PrintSettingsDialog(QDialog):
         with QSignalBlocker(self.printer_choice):
             self.printer_choice.clear()
             add_printer_choices(self.printer_choice, listed, keep=keep)
-            _select_data(self.printer_choice, current)
+            select_data(self.printer_choice, current)
             self.printer_choice.search_field.setText(search)
 
     def _start_printer_survey(self) -> None:
@@ -3556,7 +3550,7 @@ class PrintSettingsDialog(QDialog):
         printer_id = str(self.printer_choice.currentData())
         if not self._keep_slicer_printer(printer_id):
             with QSignalBlocker(self.printer_choice):
-                _select_data(self.printer_choice, self.session.profile.printer.id)
+                select_data(self.printer_choice, self.session.profile.printer.id)
             self._show_slicer_state()
             return
         if printer_id != self._nozzle_printer_id:

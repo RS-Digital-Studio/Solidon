@@ -2560,12 +2560,23 @@ def shadow_catchers(
 ) -> list[tuple[float, Any]]:
     """Die Flächen, die den Schatten eines Körpers auffangen (§18.6).
 
-    Immer die Platte (``bed`` ist ihr Umriss, ``None`` heißt unbeschnitten),
-    und dazu jeder Körper, dessen Oberkante nicht höher liegt als die
-    Unterkante dieses hier — ``grounds`` trägt je Körper Unter-, Oberkante
-    und Umriss von oben. Die Begründung steht an
-    :meth:`Viewport._shadow_catchers`; hier steht die Rechnung, damit ein
-    Arbeiter sie stellen kann.
+    Immer die Platte, und dazu jeder Körper, dessen Oberkante nicht höher
+    liegt als die Unterkante dieses hier. Ohne das fiel jeder Schatten auf
+    die Platte, auch der eines Turms auf einer zwölf Millimeter hohen
+    Grundplatte: er tauchte erst neben ihr auf, als Fleck ohne Verbindung
+    zu dem, was ihn wirft.
+
+    Beides zusammen ist kein Widerspruch. Licht, das an der Grundplatte
+    vorbeigeht, trifft die Druckplatte — und weil das Stück auf der
+    Druckplatte am Umriss der Grundplatte geschnitten wird, verdeckt diese
+    genau den Teil, der sonst doppelt läge.
+
+    ``grounds`` trägt je Körper Unter-, Oberkante und Umriss von oben,
+    ``bed`` den Umriss der Platte (:meth:`Viewport._shadow_bed`). Zurück kommt
+    je Fläche ihre Höhe und ihr Umriss von oben; ``None`` als Umriss heißt
+    „unbeschnitten" und tritt nur auf, wenn kein Bauraum gezeigt wurde — dann
+    gibt es keine Kante, an der zu schneiden wäre. Eine freie Funktion, damit
+    ein Arbeiter sie stellen kann.
     """
     catchers: list[tuple[float, Any]] = [(0.0, bed)]
     mine = grounds.get(object_id)
@@ -2587,8 +2598,33 @@ def shadow_outline_of(
     window: Any = None,
     base: tuple[Any, float] | None = None,
 ) -> Any:
-    """Der Umriss eines Schattens auf der Fläche ``ground`` — die Rechnung hinter
-    :meth:`Viewport._shadow_outline_of`, frei von der Ansicht."""
+    """Der Umriss eines Schattens auf der Fläche ``ground`` — als Ecken
+    eines konvexen Vielecks, ``(n, 3)``, oder nichts; frei von der Ansicht,
+    damit ein Arbeiter ihn rechnet.
+
+    Die Hülle wird schräg projiziert (:func:`shadow_points`), ihr Umriss
+    von oben genommen (:func:`outline_of`) und am Umriss der Fläche
+    geschnitten, auf die er fällt (:func:`clip_polygon`) — außerhalb lag
+    er auf blankem Hintergrund und behauptete Boden, wo keiner ist. Ein
+    einziges Vieleck statt einer Triangulierung: Die Punkte liegen bereits
+    in der Reihenfolge des Randes, ``shapes.polygon`` fächert sie auf.
+
+    ``base`` ist derselbe Umriss auf der **eigenen** Unterkante des
+    Stücks, samt ihrer Höhe — gerechnet in :func:`shadow_soups` für alle
+    Stücke in einem Gang. Liegt die Auffangfläche darunter — und das tut
+    sie bei jeder außer bei der Platte unter einem versenkten Körper —,
+    verschiebt sich der Umriss nur, statt neu gerechnet zu werden:
+    ``shadow_points`` versetzt jeden Punkt um ``(z - ground)`` mal der
+    waagerechten Lichtrichtung, und liegt kein Punkt unter der Fläche,
+    fällt das ``ground`` als gemeinsamer Summand heraus. Für zehn
+    Auffangflächen wird die Hülle damit einmal gerechnet statt zehnmal —
+    gemessen an ``1-24+scale+polebarn.3mf``: 3541 Hüllen je Kamerageste,
+    eine je Körper und Stück wären 118. Die Klammer in ``shadow_points``
+    (``maximum(..., 0)``) ist der Grund für „tiefer": Ein Punkt unter der
+    Fläche wirft nach dieser Regel keinen Schatten nach vorn, und dann ist
+    die Projektion nicht mehr linear. Auf der eigenen Unterkante greift
+    sie nie.
+    """
     import numpy as np
 
     if hull_points is None or len(hull_points) < 3:
@@ -7096,69 +7132,11 @@ class Viewport(QWidget):
         """Die Schattenhüllen eines Körpers (:func:`shadow_hulls_of`)."""
         return shadow_hulls_of(points, getattr(mesh, "raw", None))
 
-    def _shadow_hull_of(self, points: Any) -> Any:
-        """Die Schattenhülle eines Stücks (:func:`shadow_hull_of`)."""
-        return shadow_hull_of(points)
-
-    def _shadow_catchers(self, object_id: ObjectId) -> list[tuple[float, Any]]:
-        """Die Flächen, die den Schatten dieses Körpers auffangen (§18.6).
-
-        Immer die Platte, und dazu jeder Körper, dessen Oberkante nicht höher
-        liegt als die Unterkante dieses hier. Ohne das fiel jeder Schatten auf
-        die Platte, auch der eines Turms auf einer zwölf Millimeter hohen
-        Grundplatte: er tauchte erst neben ihr auf, als Fleck ohne Verbindung
-        zu dem, was ihn wirft.
-
-        Beides zusammen ist kein Widerspruch. Licht, das an der Grundplatte
-        vorbeigeht, trifft die Druckplatte — und weil das Stück auf der
-        Druckplatte am Umriss der Grundplatte geschnitten wird, verdeckt diese
-        genau den Teil, der sonst doppelt läge.
-
-        Zurück kommt je Fläche ihre Höhe und ihr Umriss von oben; ``None`` als
-        Umriss heißt „unbeschnitten" und tritt nur auf, wenn kein Bauraum
-        gezeigt wurde — dann gibt es keine Kante, an der zu schneiden wäre.
-        """
-        return shadow_catchers(
-            object_id,
-            self._shadow_ground,
-            self._bed_outline_for(object_id) if self._bed_extent is not None else None,
-        )
-
-    def _shadow_outline_of(
-        self,
-        hull_points: Any,
-        direction: tuple[float, float],
-        ground: float = 0.0,
-        window: Any = None,
-        base: tuple[Any, float] | None = None,
-    ) -> Any:
-        """Der Umriss eines Schattens auf der Fläche ``ground`` — als Ecken
-        eines konvexen Vielecks, ``(n, 3)``, oder nichts.
-
-        Die Hülle wird schräg projiziert (:func:`shadow_points`), ihr Umriss
-        von oben genommen (:func:`outline_of`) und am Umriss der Fläche
-        geschnitten, auf die er fällt (:func:`clip_polygon`) — außerhalb lag
-        er auf blankem Hintergrund und behauptete Boden, wo keiner ist. Ein
-        einziges Vieleck statt einer Triangulierung: Die Punkte liegen bereits
-        in der Reihenfolge des Randes, ``shapes.polygon`` fächert sie auf.
-
-        ``base`` ist derselbe Umriss auf der **eigenen** Unterkante des
-        Stücks, samt ihrer Höhe — gerechnet in :meth:`_place_shadows` für alle
-        Stücke in einem Gang. Liegt die Auffangfläche darunter — und das tut
-        sie bei jeder außer bei der Platte unter einem versenkten Körper —,
-        verschiebt sich der Umriss nur, statt neu gerechnet zu werden:
-        ``shadow_points`` versetzt jeden Punkt um ``(z - ground)`` mal der
-        waagerechten Lichtrichtung, und liegt kein Punkt unter der Fläche,
-        fällt das ``ground`` als gemeinsamer Summand heraus. Für zehn
-        Auffangflächen wird die Hülle damit einmal gerechnet statt zehnmal —
-        gemessen an ``1-24+scale+polebarn.3mf``: 3541 Hüllen je Kamerageste,
-        eine je Körper und Stück wären 118. Die Klammer in ``shadow_points``
-        (``maximum(..., 0)``) ist der Grund für „tiefer": Ein Punkt unter der
-        Fläche wirft nach dieser Regel keinen Schatten nach vorn, und dann ist
-        die Projektion nicht mehr linear. Auf der eigenen Unterkante greift
-        sie nie.
-        """
-        return shadow_outline_of(hull_points, direction, ground, window, base)
+    def _shadow_bed(self, object_id: ObjectId) -> Any:
+        """Der Umriss der Platte, an dem der Schatten dieses Körpers endet —
+        ``None`` ohne gezeigten Bauraum: Dann gibt es keine Kante, an der zu
+        schneiden wäre (:func:`shadow_catchers`)."""
+        return self._bed_outline_for(object_id) if self._bed_extent is not None else None
 
     # --- scene ------------------------------------------------------------------
 
@@ -8354,10 +8332,7 @@ class Viewport(QWidget):
             object_id: [hull for hull in found if hull is not None]
             for object_id, found in self._shadow_hulls.items()
         }
-        beds = {
-            object_id: self._bed_outline_for(object_id) if self._bed_extent is not None else None
-            for object_id in hulls
-        }
+        beds = {object_id: self._shadow_bed(object_id) for object_id in hulls}
         size = sum(len(hull) for found in hulls.values() for hull in found)
         if size <= SHADOW_PROJECTION_ABOVE:
             self._show_shadow_soups(
