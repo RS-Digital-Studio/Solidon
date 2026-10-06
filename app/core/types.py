@@ -71,9 +71,10 @@ die Schwünge eines S. Kein Zylinder, keine Kugel, keine Verrundung, sondern
 das, was nach all diesen Einpassungen an gerundeter Oberfläche übrig bleibt
 (Robert, 11.09.2026: „bei den Seiten fehlen die gerundeten flächen"). Eine
 eigene Art und nicht ``face`` mit Vermerk, weil zwölf Operationen an ``face``
-eine Ebene voraussetzen — Bohren, Zeichnen, Versetzen — und eine gerundete
-Seite keine hat; was an ihr geht, ist das Filament (``paint_slot``,
-``clear_filament``).
+eine Ebene voraussetzen und eine gerundete Seite keine hat. An ihr gehen
+Filament (``paint_slot``, ``clear_filament``), Bohren und das Platzieren von
+Grundkörpern und Bausteinen; Zeichnen braucht eine Ebene
+(``perceive.actions.NOT_APPLICABLE``).
 
 ``slot`` ist das Langloch, und es steht hier, weil die Einpassung es nicht
 sieht: Sie findet darin zwei Zylinderausschnitte und nennt sie Verrundungen.

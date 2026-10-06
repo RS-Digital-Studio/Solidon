@@ -25848,9 +25848,9 @@ class MainWindow(QMainWindow):
     def action_check_updates(self) -> None:
         """Von Hand nach einer neuen Version sehen (Demo-Konzept §2 G).
 
-        Die Abfrage beim Start bleibt eine Einstellung und ist aus; ohne diesen
-        Weg gäbe es für alle anderen gar keinen. Für eine Demo mit Enddatum ist
-        das der Unterschied zwischen „endet am 30.10." und „ist einfach weg".
+        Die Abfrage beim Start ist Vorgabe und abschaltbar (``app.core.updates``);
+        wer sie abgeschaltet hat, hat nur diesen Weg. Für eine Demo mit Enddatum
+        ist das der Unterschied zwischen „endet am 30.10." und „ist einfach weg".
         """
         self._asked_for_update = True
         self.announce(tr("Es wird nach einer neuen Version gesehen …"))
