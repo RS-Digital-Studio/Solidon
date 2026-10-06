@@ -23,10 +23,12 @@ from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import ProjectSources, load, new_project, save
 from app.core.types import Profile, SceneObject, Source
 from app.core.units import EPS_GEOM
+from tests.helpers import exact_kernel
 
 
 def _step_plate() -> bytes:
     """Analytischer Sollkörper mit vollständig rationalen Trägerflächen in STEP."""
+    exact_kernel()
     from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
 
     plate = edit.cut_bore(
@@ -179,6 +181,7 @@ def _box_shell(drop: int | None = None) -> Solid:
 
     Mit ``drop`` fehlt diese Fläche — dann ist die Schale offen.
     """
+    exact_kernel()
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
     from OCP.TopAbs import TopAbs_FACE
     from OCP.TopExp import TopExp_Explorer

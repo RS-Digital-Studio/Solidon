@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
@@ -43062,3 +43063,59 @@ bedingte Skip ist entfernt; im Sondenlauf 37490570168 bestehen
 `test_a_token_in_a_private_python_directory_is_read` (31 bestanden, 2 nur unter POSIX
 übersprungen). Der neue Test ist gegen den alten Code rot. Commit „Die Tokendatei gilt auch mit
 „Eigentümerrechte“ als privat“.
+
+## RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)
+
+<a id="rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026"></a>
+<a id="rm-349"></a>
+
+**RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1.**
+  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-D.md`, `bericht-E.md`, `bericht-F.md`),
+  je einzeln abnehmbar. Registerzellen anderer Punkte werden hier nur gemeldet, geändert werden
+  sie von dem, der den Punkt bearbeitet:
+  - **E-N2, `c96f60a18` (Codex):** `tools/check_new_texts.py:171–195` (`missing()`) scheitert
+    nicht, wenn im Index kein Katalog liegt — `main() = 0` bei neuem unübersetztem Text
+    (Sonde `sonden\textwaechter\sonde_leere_kataloge.py`). Fix: leere Katalogliste als Fehler
+    mit Handlungsvorschlag, Test (`tests.md`: zuerst zählen).
+  - **F-N5, `337697db9`, `8cb4eae96` (Codex), Lücken älter:** `tests/CLAUDE.md:123` und der
+    RM-315-Abschluss behaupten `exact_kernel()` vor jedem OCP-Import;
+    `tests/test_feature_moves_keep_shape.py:1394` und
+    `tests/test_geometry_review_regressions.py:923` importieren OCP ohne Wächter (ohne OCP ein
+    `ImportError` statt Skip). Fix: `exact_kernel()` als erste Zeile, AST-Wächter in
+    `test_toolchain.py`.
+  - **F-N3, `72281a33e` (Claude):** `.claude/rules/fenster.md:398–399` trug als einzige Regel ein
+    Datum („Entscheidung Robert, 29.09.2026“). Erledigt mit `ea71f59f5` (05.10.).
+  - **F-N4, `bcaac7b53` (Claude):** `tests/test_manual.py:37` behält `importorskip("PySide6")`,
+    das die Commitmeldung zu entfernen verspricht. Fix: entfernen, sobald die Datei frei ist.
+  - **D-N4:** `.claude/rules/oberflaeche.md:198` („gebaut an drei Orten“) ist seit `d8e37581a`
+    falsch; der Satz „Noch nicht umgestellt …: die Druckeinstellungen“ ist verschwunden, die
+    Druckeinstellungen haben dort einen eigenen Absatz. Der falsche Satz aus
+    `.claude/rules/grenzen.md:194` („`adjustSize` läuft nur, wenn sich eine Zeile bewegt hat“)
+    steht heute in `.claude/rules/vorderseite.md:84–85` und ist seit `b837a73f8` falsch
+    (`app/ui/op_dialog.py`: „Und nicht über ``adjustSize``“).
+  - **Registerstände (F-N2, D-N4):** erledigt am 06.10.2026 mit der Fortschreibung der
+    Registerzeile von RM-134; RM-286 ist archiviert.
+  - **Beifund:** `.claude/README.md:16` sagt über `memory/` „eine Datei je Fakt“,
+    `CLAUDE.md:200` „Eine Datei je Thema“.
+  Abnahme: je Spiegelstrich Test oder korrigierte Stelle mit Commit. Beleg: Berichte unter
+  `F:\solidon-review-reports`.
+  Nachprüfung am Stand `6ce767031`: alle sieben Reste offen (E-N2, F-N5, F-N3, F-N4, D-N4, Registerstände, Beifund memory); nur `oberflaeche.md:202–203` ist im Arbeitsbaum ungesichert korrigiert.
+
+**Nachweis (06.10.2026):** **E-N2:** `tools/check_new_texts.py` meldet einen Index ohne
+Sprachkatalog als Fehler (`NoCatalogError`, Rückgabe 1 mit Handlungsvorschlag);
+`tests/test_delivery_tools.py::test_the_commit_guard_fails_without_any_catalog_in_the_index`.
+**F-N5:** Gezählt standen 62 `OCP`-Importe in 16 Dateien ohne vorangehendes `exact_kernel()`,
+die meisten in Helfern; alle gesichert.
+`tests/test_toolchain.py::test_the_exact_kernel_guard_stands_before_every_ocp_import` prüft das
+lexikalisch (am alten Stand 62 Treffer, jetzt keiner),
+`test_the_ocp_guard_check_reads_order_and_scope` an sechs Fällen mit bekanntem Ausgang;
+`tests/CLAUDE.md` nennt den Wächter. **F-N3** mit `ea71f59f5`. **F-N4:**
+`importorskip("PySide6")` ist aus `test_manual.py` und dem Zwilling in `test_registry.py`
+entfernt, `importorskip("OCP")` in `test_sketch_edit.py` durch `exact_kernel()` ersetzt;
+`test_no_test_skips_over_a_fixed_dependency` liest die Aufrufe über den AST, nicht den Text.
+**D-N4:** `oberflaeche.md` nennt keine Ortszahl mehr, `vorderseite.md` die Höhenanpassung über
+`_queue_refit` statt `adjustSize`. **Registerstände** am 06.10.2026. **Beifund:**
+`.claude/README.md` sagt seit `cd58a0b27` „eine Datei je Thema“. Entwicklungstor am Stand der
+Umsetzung: ruff, Format und mypy grün, Suite 24 075 bestanden, 1 rot —
+`test_kernel_process_lifecycle.py::test_active_helper_ends_with_a_killed_parent`, am reinen
+main-Stand in einem von vier Einzelläufen ebenso rot und nicht berührt.

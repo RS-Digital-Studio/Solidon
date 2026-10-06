@@ -943,6 +943,153 @@ def test_the_shared_exact_kernel_guard_keeps_its_import_errors_visible(
         exact_kernel()
 
 
+def _ocp_imports_without_guard(source: str) -> list[int]:
+    """Zeilen der ``OCP``-Importe, vor denen kein ``exact_kernel()`` steht.
+
+    Lexikalisch: ein Aufruf des Wächters (auch unter seinem Importnamen) auf
+    Modulebene oder in einer umschließenden Funktion, vor der Importzeile.
+    Ein Helfer, den nur geschützte Tests rufen, zählt nicht als geschützt —
+    der nächste Aufrufer weiß davon nichts.
+    """
+    tree = ast.parse(source)
+    names = {"exact_kernel"}
+    parents: dict[ast.AST, ast.AST] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "tests.helpers":
+            names |= {
+                alias.asname or alias.name for alias in node.names if alias.name == "exact_kernel"
+            }
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+
+    def guards_in(scope: ast.AST) -> list[int]:
+        return [
+            node.lineno
+            for node in ast.walk(scope)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in names
+        ]
+
+    module_guards = [
+        line
+        for statement in tree.body
+        if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        for line in guards_in(statement)
+    ]
+    unguarded: list[int] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            modules = [node.module or ""]
+        elif isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        else:
+            continue
+        if not any(module.split(".")[0] == "OCP" for module in modules):
+            continue
+        if any(line < node.lineno for line in module_guards):
+            continue
+        scope = parents.get(node)
+        while scope is not None and not isinstance(scope, ast.Module):
+            if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+                line < node.lineno for line in guards_in(scope)
+            ):
+                break
+            scope = parents.get(scope)
+        else:
+            unguarded.append(node.lineno)
+    return sorted(unguarded)
+
+
+def test_the_exact_kernel_guard_stands_before_every_ocp_import() -> None:
+    """RM-349 (F-N5): Ohne das Extra ``brep`` wird ein OCP-Test ein Skip, kein ``ImportError``.
+
+    ``tests/CLAUDE.md`` verlangt ``exact_kernel()`` vor jedem ``OCP``-Import;
+    zwei Tests hielten sich nicht daran, und eine Zählung fand 62 solche
+    Importe in 16 Dateien, die meisten in Helfern.
+    """
+    files = sorted(
+        [*(_ROOT / "tests").glob("test_*.py"), _ROOT / "tests" / "helpers.py"],
+        key=lambda path: path.name,
+    )
+    reached = [path for path in files if "OCP" in path.read_text(encoding="utf-8")]
+    assert len(reached) > 20, f"zu wenige Dateien mit OCP gefunden: {len(reached)}"
+
+    found = [
+        f"tests/{path.name}:{line}"
+        for path in reached
+        for line in _ocp_imports_without_guard(path.read_text(encoding="utf-8"))
+    ]
+
+    assert not found, "OCP-Import ohne vorangehendes exact_kernel():\n" + "\n".join(found)
+
+
+def test_no_test_skips_over_a_fixed_dependency() -> None:
+    """RM-349 (F-N4): PySide6 ist fest, OCP läuft über ``exact_kernel()``.
+
+    ``importorskip("PySide6")`` machte aus einer kaputten Installation einen
+    übersprungenen Lauf; ``importorskip("OCP")`` übersprang auch einen
+    Importfehler im eigenen Kern, den ``exact_kernel()`` sichtbar hält.
+    """
+    files = sorted((_ROOT / "tests").glob("*.py"))
+    assert len(files) > 200, f"zu wenige Testdateien gefunden: {len(files)}"
+
+    found = [
+        f"tests/{path.name}:{line}: {module}"
+        for path in files
+        for line, module in _skipped_imports(path.read_text(encoding="utf-8"))
+        if module in {"PySide6", "OCP"}
+    ]
+
+    assert not found, "\n".join(found)
+
+
+def _skipped_imports(source: str) -> list[tuple[int, str]]:
+    """Aufrufe ``importorskip("…")`` mit Zeile und Modul — Aufrufe, nicht Text."""
+    return [
+        (node.lineno, node.args[0].value)
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, (ast.Attribute, ast.Name))
+        and (node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id)
+        == "importorskip"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    ]
+
+
+def test_the_skip_check_reads_calls_and_not_prose() -> None:
+    """Ein Docstring, der ``importorskip("OCP")`` erwähnt, ist kein Aufruf."""
+    source = (
+        'def f():\n    """Früher stand hier importorskip("OCP")."""\n'
+        '    pytest.importorskip("PySide6")\n    importorskip("hid")\n'
+    )
+
+    assert _skipped_imports(source) == [(3, "PySide6"), (4, "hid")]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("def f():\n    from OCP.gp import gp_Pnt\n", [2]),
+        ("def f():\n    exact_kernel()\n    from OCP.gp import gp_Pnt\n", []),
+        ("def f():\n    from OCP.gp import gp_Pnt\n    exact_kernel()\n", [2]),
+        ("exact_kernel()\nimport OCP\n", []),
+        (
+            "from tests.helpers import exact_kernel as k\n"
+            "def f(kind):\n    if kind:\n        k()\n        import OCP.gp\n",
+            [],
+        ),
+        ("def g():\n    exact_kernel()\ndef f():\n    import OCP\n", [4]),
+    ],
+    ids=["ohne", "davor", "danach", "modul", "alias-im-zweig", "fremde-funktion"],
+)
+def test_the_ocp_guard_check_reads_order_and_scope(source: str, expected: list[int]) -> None:
+    """Der Wächter oben, an Fällen mit bekanntem Ausgang."""
+    assert _ocp_imports_without_guard(source) == expected
+
+
 def _pyproject() -> dict[str, Any]:
     with (_ROOT / "pyproject.toml").open("rb") as handle:
         data: dict[str, Any] = tomllib.load(handle)

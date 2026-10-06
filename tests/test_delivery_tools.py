@@ -472,6 +472,24 @@ def test_the_commit_guard_takes_its_language_list_from_the_index(
     }
 
 
+def test_the_commit_guard_fails_without_any_catalog_in_the_index(
+    text_guard_repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RM-349 (E-N2): Ohne Katalog fehlt nichts — das ist kein bestandener Fall."""
+    from tools import check_new_texts
+
+    root = text_guard_repo
+    _text_guard_git(root, "rm", "-q", "--cached", "app/i18n/locales/en.json")
+    source = root / "app" / "message.py"
+    source.write_text(source.read_text(encoding="utf-8") + 'tr("Neuer Text")\n', encoding="utf-8")
+    _text_guard_git(root, "add", "app/message.py")
+
+    with pytest.raises(check_new_texts.NoCatalogError):
+        check_new_texts.missing(["Neuer Text"])
+    assert check_new_texts.main() == 1
+    assert "kein Katalog" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("new_text", [False, True])
 def test_the_commit_guard_compares_both_names_of_a_renamed_source(
     text_guard_repo: Path, new_text: bool
