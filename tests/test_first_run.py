@@ -852,7 +852,12 @@ def test_a_report_describes_the_window_session_where_there_is_one(
     # Auch der Merker der eigenen Plattformwahl: Stünde er aus einem früheren
     # Aufruf von ``prefer_x11_for_the_viewport`` noch da, läse sich das „xcb“
     # unten als Wahl der Anwendung.
-    for key in (*reports.SESSION_KEYS, "WAYLAND_DISPLAY", reports.QT_PLATFORM_BEFORE_VARIABLE):
+    for key in (
+        *reports.SESSION_KEYS,
+        "WAYLAND_DISPLAY",
+        reports.QT_PLATFORM_BEFORE_VARIABLE,
+        reports.QT_IM_BEFORE_VARIABLE,
+    ):
         monkeypatch.delenv(key, raising=False)
     assert not any(key.lower() in reports.environment() for key in reports.SESSION_KEYS), (
         "wo nichts gesetzt ist, steht auch nichts"

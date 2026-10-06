@@ -26,13 +26,15 @@ die Weiche ohne Fenster.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
+from pathlib import Path
 from typing import Final
 
 from app.core.log import get_logger
-from app.core.report import QT_PLATFORM_BEFORE_VARIABLE, QT_PLATFORM_UNSET
+from app.core.report import QT_IM_BEFORE_VARIABLE, QT_PLATFORM_BEFORE_VARIABLE, QT_PLATFORM_UNSET
 
 _log = get_logger(__name__)
 
@@ -40,6 +42,12 @@ _log = get_logger(__name__)
 X11: Final = "xcb"
 #: Dasselbe in einer Wayland-Sitzung: X11 zuerst, Wayland als Netz darunter.
 X11_THEN_WAYLAND: Final = "xcb;wayland"
+
+#: Was ein Fcitx-Nutzer in ``QT_IM_MODULE`` stehen hat.
+_FCITX: Final = frozenset({"fcitx", "fcitx5"})
+#: Das Eingabemodul, das Qt selbst mitbringt und Fcitx5 ab Werk bedient
+#: (``ibusfrontend``, dazu ``org.freedesktop.portal.IBus`` für Flatpaks).
+IBUS: Final = "ibus"
 
 
 def qpa_platform(platform: str, environ: Mapping[str, str]) -> str | None:
@@ -77,6 +85,68 @@ def qpa_platform(platform: str, environ: Mapping[str, str]) -> str | None:
         or wanted.casefold().startswith("wayland")
     )
     return X11_THEN_WAYLAND if wayland_session else X11
+
+
+def im_module(platform: str, environ: Mapping[str, str], modules: Collection[str]) -> str | None:
+    """Was ``QT_IM_MODULE`` vor dem Anwendungsaufbau bekommen soll — oder ``None``.
+
+    **Ein Fcitx-Nutzer tippte ins Leere** (RM-062, gemessen am ausgelieferten
+    Flatpak 0.5.3): Das Qt aus PySide6 bringt nur die Eingabemodule
+    ``compose``, ``ibus`` und ``qtvirtualkeyboard`` mit. Mit
+    ``QT_IM_MODULE=fcitx`` fand Qt kein Modul, fiel auf ``compose`` zurück,
+    und Fcitx bekam keine Eingabesitzung — kein Kandidatenfenster, keine
+    Umschaltung. Mit ``ibus`` legt Fcitx5 über seine IBus-Schnittstelle eine
+    an, auch aus dem Sandkasten heraus.
+
+    Gesetzt wird nur, wo es hilft: unter Linux, bei ``fcitx`` oder ``fcitx5``,
+    wenn kein Fcitx-Modul beiliegt und ein IBus-Modul schon. Eine Liste in
+    ``QT_IM_MODULES`` lässt Qt selbst der Reihe nach probieren; dort gibt es
+    nichts zu tun. ``modules`` sind die Dateinamen in
+    ``platforminputcontexts`` (:func:`input_modules`).
+    """
+    if not platform.startswith("linux"):
+        return None
+    wanted = environ.get("QT_IM_MODULE", "").strip().casefold()
+    if wanted not in _FCITX or environ.get("QT_IM_MODULES", "").strip():
+        return None
+    names = [name.casefold() for name in modules]
+    if any("fcitx" in name for name in names) or not any(IBUS in name for name in names):
+        return None
+    return IBUS
+
+
+def input_modules() -> tuple[str, ...]:
+    """Die Dateinamen der Eingabemodule, die das mitgelieferte Qt laden kann — ohne Qt zu laden."""
+    spec = importlib.util.find_spec("PySide6")
+    locations = list(spec.submodule_search_locations or ()) if spec is not None else []
+    found: list[str] = []
+    for location in locations:
+        folder = Path(location) / "Qt" / "plugins" / "platforminputcontexts"
+        try:
+            found.extend(entry.name for entry in folder.iterdir())
+        except OSError:
+            continue
+    return tuple(found)
+
+
+def prefer_an_input_method_qt_has() -> str | None:
+    """Setzt das Eingabemodul in der eigenen Umgebung und hält fest, was dort stand.
+
+    Vor ``QApplication``, dieselbe Bauart wie :func:`prefer_x11_for_the_viewport`:
+    Steht ``ibus`` erst einmal dort, gibt :func:`im_module` beim zweiten
+    Aufruf ``None`` zurück, und der gemerkte Vorwert bleibt für den
+    Fehlerbericht.
+    """
+    if not sys.platform.startswith("linux"):
+        return None
+    chosen = im_module(sys.platform, os.environ, input_modules())
+    if chosen is None:
+        return None
+    before = os.environ.get("QT_IM_MODULE", "").strip()
+    os.environ["QT_IM_MODULE"] = chosen
+    os.environ[QT_IM_BEFORE_VARIABLE] = before or QT_PLATFORM_UNSET
+    _log.info("qt input method set to %s, no %s module ships with qt", chosen, before)
+    return chosen
 
 
 def prefer_x11_for_the_viewport() -> str | None:

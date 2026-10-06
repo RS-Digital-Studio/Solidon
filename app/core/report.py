@@ -197,6 +197,11 @@ QT_PLATFORM_BEFORE_VARIABLE: Final = f"{ENVIRONMENT_PREFIX}_QT_PLATFORM_BEFORE"
 #: aus wie keine.
 QT_PLATFORM_UNSET: Final = "-"
 
+#: Dasselbe für das Eingabemodul (RM-062): Steht ``fcitx`` in
+#: ``QT_IM_MODULE``, und das mitgelieferte Qt kennt nur IBus, setzt die
+#: Anwendung ``ibus`` (``app.ui.qt_platform``). Der Vorwert reist mit.
+QT_IM_BEFORE_VARIABLE: Final = f"{ENVIRONMENT_PREFIX}_QT_IM_BEFORE"
+
 
 def _session() -> dict[str, str]:
     """Wie die Fenstersitzung eingerichtet ist — nur, was wirklich dasteht."""
@@ -206,12 +211,14 @@ def _session() -> dict[str, str]:
     if os.environ.get("WAYLAND_DISPLAY"):
         found.setdefault("xdg_session_type", "")
         found["xdg_session_type"] = found["xdg_session_type"] or "wayland (erkannt)"
-    before = os.environ.get(QT_PLATFORM_BEFORE_VARIABLE, "").strip()
-    if before and found.get("qt_qpa_platform"):
-        was = "nicht gesetzt" if before == QT_PLATFORM_UNSET else before
-        found["qt_qpa_platform"] = (
-            f"{found['qt_qpa_platform']} (von {APP_NAME} gesetzt, vorher {was})"
-        )
+    for key, variable in (
+        ("qt_qpa_platform", QT_PLATFORM_BEFORE_VARIABLE),
+        ("qt_im_module", QT_IM_BEFORE_VARIABLE),
+    ):
+        before = os.environ.get(variable, "").strip()
+        if before and found.get(key):
+            was = "nicht gesetzt" if before == QT_PLATFORM_UNSET else before
+            found[key] = f"{found[key]} (von {APP_NAME} gesetzt, vorher {was})"
     return {key: value for key, value in found.items() if value}
 
 

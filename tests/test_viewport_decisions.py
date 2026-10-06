@@ -385,6 +385,69 @@ def test_the_choice_lands_in_the_environment_and_remembers_what_stood_there(
     assert QT_PLATFORM_BEFORE_VARIABLE not in os.environ
 
 
+def test_a_fcitx_user_gets_the_ibus_module_the_shipped_qt_brings() -> None:
+    """RM-062: Mit ``QT_IM_MODULE=fcitx`` tippte ein Fcitx-Nutzer ins Leere.
+
+    Gemessen am ausgelieferten Flatpak 0.5.3 (Lauf 37507999423): Das Qt aus
+    PySide6 bringt ``compose``, ``ibus`` und ``qtvirtualkeyboard`` mit, kein
+    Fcitx-Modul. Mit ``fcitx`` fiel Qt auf ``compose`` zurück, und Fcitx5 sah
+    keine Eingabesitzung; mit ``ibus`` legte es eine mit Fokus an.
+    """
+    from app.ui.qt_platform import im_module
+
+    shipped = (
+        "libcomposeplatforminputcontextplugin.so",
+        "libibusplatforminputcontextplugin.so",
+        "libqtvirtualkeyboardplugin.so",
+    )
+    assert im_module("linux", {"QT_IM_MODULE": "fcitx"}, shipped) == "ibus"
+    assert im_module("linux", {"QT_IM_MODULE": " Fcitx5 "}, shipped) == "ibus"
+    with_fcitx = (*shipped, "libfcitx5platforminputcontextplugin.so")
+    assert im_module("linux", {"QT_IM_MODULE": "fcitx"}, with_fcitx) is None, (
+        "liegt ein Fcitx-Modul bei, bleibt die Wahl des Nutzers"
+    )
+    assert im_module("linux", {"QT_IM_MODULE": "fcitx"}, shipped[:1]) is None, (
+        "ohne IBus-Modul wäre ibus nur ein zweites Nichts"
+    )
+    both = {"QT_IM_MODULE": "fcitx", "QT_IM_MODULES": "fcitx;ibus"}
+    assert im_module("linux", both, shipped) is None, "eine Liste probiert Qt selbst durch"
+    for other in ("ibus", "xim", "compose", ""):
+        assert im_module("linux", {"QT_IM_MODULE": other}, shipped) is None
+    assert im_module("win32", {"QT_IM_MODULE": "fcitx"}, shipped) is None
+    assert im_module("darwin", {"QT_IM_MODULE": "fcitx"}, shipped) is None
+
+
+def test_the_input_method_lands_in_the_environment_and_the_report_names_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gesetzt wird einmal, der Vorwert steht im Fehlerbericht — wie bei der Plattform."""
+    import os
+
+    from app.core import report
+    from app.ui import qt_platform
+
+    monkeypatch.setattr(qt_platform.sys, "platform", "linux")
+    monkeypatch.setattr(
+        qt_platform, "input_modules", lambda: ("libibusplatforminputcontextplugin.so",)
+    )
+    monkeypatch.setenv("QT_IM_MODULE", "fcitx")
+    monkeypatch.setenv("QT_IM_MODULES", "")
+    monkeypatch.delenv("QT_IM_MODULES")
+    monkeypatch.setenv(report.QT_IM_BEFORE_VARIABLE, "")
+    monkeypatch.delenv(report.QT_IM_BEFORE_VARIABLE)
+
+    assert qt_platform.prefer_an_input_method_qt_has() == "ibus"
+    assert os.environ["QT_IM_MODULE"] == "ibus"
+    assert os.environ[report.QT_IM_BEFORE_VARIABLE] == "fcitx"
+    assert qt_platform.prefer_an_input_method_qt_has() is None, "die eigene Wahl bleibt"
+    assert report.environment()["qt_im_module"] == "ibus (von Solidon3D gesetzt, vorher fcitx)"
+
+    monkeypatch.setattr(qt_platform.sys, "platform", "win32")
+    monkeypatch.setenv("QT_IM_MODULE", "fcitx")
+    assert qt_platform.prefer_an_input_method_qt_has() is None
+    assert os.environ["QT_IM_MODULE"] == "fcitx"
+
+
 def test_a_wayland_session_keeps_the_view_out_and_says_what_to_do(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
+| 2026-10-06 | [RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)](#rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026) |
+| 2026-10-06 | [RM-064: Das ausgelieferte Flatpak findet Orca als Flatpak, slict und öffnet es (06.10.2026)](#rm-064-das-ausgelieferte-flatpak-findet-orca-als-flatpak-slict-und-öffnet-es-06102026) |
 | 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
 | 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
@@ -9059,9 +9062,9 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-035 — Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | weiter offen → [RM-035](ROADMAP.md#rm-035) | Verkaufsweg noch nicht gebaut/vertraglich festgelegt; kein Nachweis eines freigegebenen Bestellablaufs. Pauschale historische Aussage über die Wirkung eines EULA-Häkchens nicht als Rechtsrat fortschreiben. |
 | RM-036 — Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | weiter offen → [RM-036](ROADMAP.md#rm-036) | MoR-Anbieter und Vertrag laut Verkaufsplanung noch offen; kein konkreter Vertrag als geprüft belegt. Pauschale Aussagen über jeden Merchant of Record ersetzen. |
 | RM-037 — Die Eingabefelder unter Wayland nehmen keine Tastatur an | zusammengeführt → [RM-062](ROADMAP.md#rm-062) | Gleicher Kundenpfad wie RM-062 und RM-063; Register fordert weiter Feldnachweis, keine bestätigte Ursachenbehebung gefunden. |
-| RM-038 — Der Mailweg liefert prozentkodierten Text | weiter offen → [RM-038](ROADMAP.md#rm-038) | app/ui/support_dialog.py:807-844 direkter D-Bus-Portalaufruf, Klartext statt QUrl; Kundenfeldlauf nicht belegt. |
+| RM-038 — Der Mailweg liefert prozentkodierten Text | erledigt 06.10.2026 → [RM-038](ROADMAP-ARCHIV.md#rm-038) | app/ui/support_dialog.py:807-844 direkter D-Bus-Portalaufruf, Klartext statt QUrl; Kundenfeldlauf nicht belegt. |
 | RM-039 — Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht | weiter offen → [RM-039](#rm-039) | app/core/geom/prepare.py:944-957: split.uncapped ohne suggestions und ohne Ursache; app/core/geom/autosplit.py:1028 referenziert denselben Vertrag. |
-| RM-040 — Der erste Kundenbericht aus 0.3.4 nennt keine Ursache | weiter offen → [RM-040](ROADMAP.md#rm-040) | 96da8fd0, app/core/scene/evaluate.py; vorhandener Bericht aus 0.3.4 nennt die Ursache noch nicht. Kein neuer Ursachenbeleg gefunden. |
+| RM-040 — Der erste Kundenbericht aus 0.3.4 nennt keine Ursache | erledigt 06.10.2026 → [RM-040](ROADMAP-ARCHIV.md#rm-040) | 96da8fd0, app/core/scene/evaluate.py; vorhandener Bericht aus 0.3.4 nennt die Ursache noch nicht. Kein neuer Ursachenbeleg gefunden. |
 | RM-041 — Die Gitterfüllung kennt bei einem eingelesenen, entlüfteten Hohlkörper keinen Innenraum mehr | weiter offen → [RM-041](#rm-041) | app/core/geom/lattice.py:338-347,408: _cavity_mesh und no_cavity; Abnahmebericht G5 hält die Absage bewusst fest. |
 | RM-042 — Die Merkmalserkennung läuft bis eine Million Dreiecke | weiter offen → [RM-042](#rm-042) | app/core/scene/evaluate.py:94,1079; output/review/abnahme-2026-09-06/befunde-agenten.md K5. Neuere Teilmessung vom 07.09.2026: mechanisch203.776 Dreiecke0,791s; Freiform200k1,483s; keine1M-Messung. Die §31-Grenze ist weiterhin200k. |
 | RM-043 — Die Kopfzeilenfrist der HTTP-Antworten gilt nur für `open_public_url` | erledigt | app/core/http.py:327-370; tests/test_http_security.py:817 prüft initiale Zeilen über open_public_url; Abnahmebericht K15 bleibt offen. |
@@ -9085,7 +9088,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-061 — Am 15.10.2026 die Verkaufsbereitschaft prüfen | weiter offen → [RM-061](ROADMAP.md#rm-061) | Beschluss 28.08.2026, app/branding.py Zeitgrenzen und Verkaufsplanung; kein heutiger Releaseauftrag. Die Planung bleibt offen. |
 | RM-062 — Ob die Eingabemethode im Flatpak jetzt erreichbar ist | weiter offen → [RM-062](ROADMAP.md#rm-062) | RM-037/063 doppeln diesen Feldnachweis; packaging Berechtigungen, app/ui/qt_platform.py; native Wayland-Grenze RM-052. |
 | RM-063 — Ob der Start auf Wayland jetzt ohne Umwege geht | zusammengeführt → [RM-062](ROADMAP.md#rm-062) | Gleicher Linux-Kundenbericht und gleiche Umgebungsdiagnostik wie RM-037/RM-062. |
-| RM-064 — Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | weiter offen → [RM-064](ROADMAP.md#rm-064) | ca18e5a8,8c38d193; app/core/discover.py und Austauschordnerweg; bisher Einzelprüfungen, kein gesamter Feldweg belegt. |
+| RM-064 — Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | erledigt 06.10.2026 → [RM-064](ROADMAP-ARCHIV.md#rm-064) | ca18e5a8,8c38d193; app/core/discover.py und Austauschordnerweg; bisher Einzelprüfungen, kein gesamter Feldweg belegt. |
 | RM-065 — CA-Zertifikate auf macOS — Rückfall gebaut, Paketbestätigung offen | weiter offen → [RM-065](#rm-065) | app/core/network.py, packaging/solidon3d.spec und Tests; historischer 0.3.4-Paketbefund ist keine aktuelle Mac-Laufabnahme. |
 | RM-066 — Ab der nächsten Version kommen AppImage und Flatpak auf die Download-Seite | erledigt | git log 84a746e7; website/version.json und tools/make_download.py DELIVERED. |
 | RM-067 — `rtree` liegt auf Entwicklungsmaschinen als Überrest und macht vier Tests rot | überholt oder begründet entfallen | Lokal importlib.util.find_spec(rtree)=None; pyproject.toml ohne rtree; app/core/knowledge/licences.py:318-343 runtime_packages läuft deklarierte Abhängigkeiten ab; tests/test_licences.py:41 prüft diese Menge statt aller installierten Pakete. Fremde Maschinen wurden nicht als bereinigt behauptet. |
@@ -20015,7 +20018,7 @@ Grund noch den Weg. Der Kunde nannte seine Projektdatei selbst
   reproduziert und nicht am Code nachgewiesen; die Fassung des Kunden ist zwei
   Versionen alt. Wer ihn schließt, braucht eine Rückmeldung aus 0.3.4 oder
   einen eigenen Manjaro-Lauf.
-- **Historischer Befund RM-038 (weiter offen; aktuelle Aufgabe [RM-038](ROADMAP.md#rm-038)):** **Der Mailweg liefert prozentkodierten Text.** Der `mailto`-Link trägt
+- **Historischer Befund RM-038 (erledigt 06.10.2026, [RM-038](ROADMAP-ARCHIV.md#rm-038)):** **Der Mailweg liefert prozentkodierten Text.** Der `mailto`-Link trägt
   den ganzen Bericht; ein kurzer Text, der auf den abgelegten Ordner verweist,
   wäre der robustere Weg.
 - **Historischer Befund RM-039 (weiter offen; aktuelle Aufgabe [RM-039](#rm-039)):** **Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht.**
@@ -20043,7 +20046,7 @@ heutigen als `ValidationError` oder sauber durch (`output/review/
 landung-01a07020-2026-09-06/probe_load_op.py`). Der Fehler ist also
 dateispezifisch und mit dem, was der Bericht trägt, nicht zu finden.
 
-- **Historischer Befund RM-040 (weiter offen; aktuelle Aufgabe [RM-040](ROADMAP.md#rm-040)):** **Der erste Kundenbericht aus 0.3.4 nennt keine Ursache.** Seit
+- **Historischer Befund RM-040 (erledigt 06.10.2026, [RM-040](ROADMAP-ARCHIV.md#rm-040)):** **Der erste Kundenbericht aus 0.3.4 nennt keine Ursache.** Seit
   Commit 96da8fd0 schreibt die Auswertung eine fremde Ausnahme
   mit Traceback als Fehlerzeile ins Protokoll, die Abbruchzeile nennt den
   Grund, und der Fehlerbericht aus dem Prüfbericht trägt ihn — der nächste
@@ -21411,7 +21414,7 @@ zusammen — er stand in der Behebung selbst.
       kein Unterschied; `environment` ist optional. **Die Trennlinie ist die
       Antwort, nicht der Erfolg:** Ein 400 hieße Protokollbruch, ein 502 heißt
       angekommen.
-- **Historischer Befund RM-064 (weiter offen; aktuelle Aufgabe [RM-064](ROADMAP.md#rm-064)):** **Ob die Übergabe an den Slicer im Flatpak jetzt ankommt.** Vier
+- **Historischer Befund RM-064 (erledigt 06.10.2026, [RM-064](ROADMAP-ARCHIV.md#rm-064)):** **Ob die Übergabe an den Slicer im Flatpak jetzt ankommt.** Vier
   Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind
   repariert (`ca18e5a8`, `8c38d193`), und jeder Schritt ist einzeln geprüft.
   **Die Kette als Ganzes nicht** — dazu braucht es zwei echte Flatpaks, und
@@ -43150,3 +43153,101 @@ im Zustandsordner zeigen auf die neuen Dateien. `git grep -n .claude/.state -- t
 findet nur noch `mac-netz.yml` und den Kommentar in `tests/helpers.py` (Sonde des offenen
 RM-187) sowie erfundene Pfade in `test_affected_tests.py` und `test_roadmap.py`, die keine Datei
 lesen.
+
+## RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)
+
+<a id="rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026"></a>
+<a id="rm-038"></a>
+
+**RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen.** `SupportDialog` übergibt
+  Betreff und Nachricht inzwischen direkt als Klartext an `ComposeEmail`; die alte Forderung nach
+  gekürztem mailto-Text ist überholt. Abnahme im ausgelieferten Paket: Umlaute, Satzzeichen und
+  Zeilenumbrüche kommen unverändert im Mailentwurf an; fehlendes Portal liefert eine Rückmeldung und
+  den gespeicherten Ordner als Rückweg.
+
+  Gebaut: `ComposeEmail` mit Klartext (`app/ui/support_dialog.py`), Code und Tests grün. Offen
+  nur der Portalweg im ausgelieferten Flatpak, abzunehmen am Gerät.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-linux-kunde-und-was-sein-protokoll-trug-06092026).
+
+**Erledigt (06.10.2026), am Runner statt am Gerät (Entscheidung Robert:
+„Runner genügt“).** Lauf
+[37506242154](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37506242154)
+auf ubuntu-24.04: das ausgelieferte Flatpak 0.5.3 von solidon3d.de (Prüfsumme
+geprüft) installiert, darin über `flatpak run --command=<python>` der Quelltext
+von `v0.5.3` mit den Rechten des installierten Pakets, `xdg-desktop-portal-gtk`
+als Backend und eine Mailprogramm-Attrappe für `mailto`. `SupportDialog._open_mail`
+mit Umlauten, `„Zitat“`, `;&?=#%+/`, Zeilenumbrüchen und Leerzeile: Betreff
+gleich, Text gleich bis auf die Zeitzeile (die Sonde baute das Ticket zum
+Vergleich ein zweites Mal). Ohne Mailprogramm antwortet das Portal mit 2, ohne
+Backend mit `UnknownMethod`; beide Male nennt der Dialog „bericht.txt“ und die
+abgelegten Anhänge als Rückweg. Workflow und Sonde:
+`.claude/.state/flatpak-abnahme-2026-10-06/`.
+
+
+## RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)
+
+<a id="rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026"></a>
+<a id="rm-040"></a>
+
+**RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen.**
+  Traceback-Protokollierung und Übergabe in den Fehlerbericht sind gebaut. Abnahme: neuer Bericht
+  aus einer aktuellen Fassung nennt die konkrete Ausnahme und betroffene Datei; Ursache nachgestellt
+  und erforderlicher Fix geprüft.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-034-06092026).
+
+**Abgenommen (Robert, 06.10.2026).** Der Fragebogen S-20261006-5be329 aus
+0.5.3 trug ein Absturzprotokoll mit „Windows fatal exception: code 0x8001010d“
+samt Stapel. Ursache nachgestellt (eine von COM selbst geworfene und gefangene
+Ausnahme, die der Prozess überlebt) und behoben in `c3e68671e`: Der Bericht
+hängt nur noch an, was der Prozess nicht überlebt hat. Der Ladefehler aus 0.3.4
+(`op.load.InternalError` ohne Datei, S-20260906-9ca141) ist seither nicht
+wieder gemeldet worden; ohne Datei und Rückadresse bleibt er nicht
+nachstellbar.
+
+
+## RM-064: Das ausgelieferte Flatpak findet Orca als Flatpak, slict und öffnet es (06.10.2026)
+
+<a id="rm-064-das-ausgelieferte-flatpak-findet-orca-als-flatpak-slict-und-öffnet-es-06102026"></a>
+<a id="rm-064"></a>
+
+**RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen.** Erkennung, Hostpfade und
+  Austauschordner sind repariert. Seit `ce4e66ffb` liest Solidon Herstellerprofile und eigene
+  Drucker eines Slicer-Flatpaks (`/app/share/<Programm>/profiles`, `~/.var/app/<Kennung>/config`),
+  das Manifest gibt beides lesend frei, und eine Portalkopie aus dem Dateidialog wird zum Starter
+  (Kundenmeldung 05.10.2026: Ubuntu 24.04, Orca 2.5 als Flatpak, keine Drucker, nur ein alter aus
+  `~/.config`). Dazu `91b42fc13` (Cura im Mac-Bündel, `.app`-Wahl, Creality Print 7),
+  `b1d2b69ff` (eingerichtete Drucker eines AppImage aus `system/`) und `b79f8a07e` (PrusaSlicer
+  als Flatpak rechnet über `--command`, sein Startskript ruft im Hintergrund auf).
+
+  Am 05.10.2026 am Runner belegt (Zweig `diagnose/slicer-erkennung`, Läufe 37336128130,
+  37337780033, 37339765628, je vorher/nachher): Unter Linux fand der Stand von 0.5.2 im Sandkasten
+  mit seinen Rechten **kein** Slicer-Flatpak und außerhalb bei Orca nur den Drucker aus
+  `~/.config`. Danach bieten Orca-, Bambu- und Prusa-Flatpak sowie Orca-, Elegoo- und
+  Creality-AppImage ihre Herstellerdrucker und den eigenen an und slicen einen Würfel —
+  außerhalb und im Sandkasten mit den Manifestrechten. Auf beiden Macs (macOS 26.6, ARM und
+  Intel) slicen PrusaSlicer, Creality Print, Cura, ElegooSlicer, Bambu Studio und OrcaSlicer aus
+  Homebrew; vorher fand Solidon dort von Cura nur das Fenster. Cura unter Linux: RM-521.
+
+  Offen: derselbe Weg mit dem ausgelieferten Solidon-Flatpak 0.5.3 (es enthält `ce4e66ffb`,
+  `91b42fc13`, `b1d2b69ff` und `b79f8a07e`) und das Öffnen im Fenster des Slicers. Sonde und
+  Workflows liegen unter `.claude/.state/slicer-sonde-2026-10-05/`; für einen neuen Lauf auf
+  einem Wegwerfzweig `probe_slicers.py` ins Wurzelverzeichnis und die beiden `.yml` nach
+  `.github/workflows/` legen. Der Zweig `diagnose/slicer-erkennung` ist gelöscht.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
+
+**Erledigt (06.10.2026).** Mit dem ausgelieferten Flatpak 0.5.3 (Quelltext
+`v0.5.3`, Rechte des installierten Pakets) und Orca 2.x von Flathub auf
+ubuntu-24.04: Lauf
+[37503288561](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37503288561)
+findet Orca mit 1002 Herstellerdruckern und 2883 Prozessprofilen, den eigenen
+Drucker „Mein Drucker Flatpak“ als zuletzt gewählten mit seiner Druckhöhe 123 mm,
+und slict damit einen Würfel. Lauf
+[37506837179](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37506837179)
+öffnet Orcas Fenster über `open_in_slicer` (`flatpak-spawn --host` auf den
+Starter); Orca läuft danach. Im Lauf davor endete Orca nach drei Sekunden — der
+Testaufbau startete den Sitzungsbus vor Xvfb, und der Flatpak-Hilfsdienst
+kannte kein `DISPLAY`; auf einem Desktop hat er es. Workflow:
+`.claude/.state/flatpak-abnahme-2026-10-06/abnahme-flatpak.yml`.
