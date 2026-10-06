@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
@@ -927,6 +928,109 @@ atexit.register(crash_at_shutdown)
     raw = Path(done.stdout.splitlines()[0]).read_text(encoding="utf-8", errors="replace")
     assert "crash_at_shutdown" in raw
     assert "Fatal Python error" in raw or "Windows fatal exception" in raw
+    attached = report_module.crash_tail(Path(done.stdout.splitlines()[0]).parent)
+    assert b"crash_at_shutdown" in attached, "ein tödlicher Absturz reist weiter mit"
+
+
+#: Ein Eintrag, wie faulthandler ihn für eine Windows-Ausnahme schreibt.
+_SURVIVED = (
+    "Windows fatal exception: code 0x8001010d\n\n"
+    "Current thread 0x000056fc (most recent call first):\n"
+    '  File "app.py", line 685 in main\n'
+)
+#: Ein unbehandelter Python-Fehler, wie ``_record_unhandled`` ihn schreibt.
+_UNHANDLED = (
+    "\n2026-10-06T11:47:00.000000+00:00 Thread\n"
+    "Traceback (most recent call last):\nRuntimeError: im Slot\n"
+)
+_FATAL = (
+    "Windows fatal exception: access violation\n\n"
+    "Current thread 0x000056fc (most recent call first):\n"
+    '  File "viewport.py", line 7 in paint\n'
+)
+_ENDED = "\n2026-10-06T12:00:00.000000+00:00 normal end\n"
+
+
+@pytest.mark.parametrize(
+    ("text", "alive", "kept", "dropped"),
+    [
+        (_SURVIVED + _UNHANDLED, True, ["im Slot"], ["0x8001010d"]),
+        (_SURVIVED + _UNHANDLED + _ENDED, False, ["im Slot"], ["0x8001010d", "normal end"]),
+        (_SURVIVED + _ENDED, False, [], ["0x8001010d"]),
+        (_SURVIVED + _ENDED + _FATAL, False, ["access violation"], ["0x8001010d"]),
+        (_SURVIVED + _FATAL, False, ["0x8001010d", "access violation"], []),
+        ('  File "angeschnitten.py", line 1\n' + _SURVIVED, True, ["angeschnitten"], ["0x80"]),
+    ],
+    ids=["laufend", "beendet", "nur-überlebt", "tödlich-danach", "ohne-ende", "angeschnitten"],
+)
+@pytest.mark.parametrize("line_end", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_a_survived_exception_is_no_crash(
+    text: str, alive: bool, kept: list[str], dropped: list[str], line_end: str
+) -> None:
+    """faulthandler schreibt auch Windows-Ausnahmen, die das System selbst abfängt.
+
+    COM wirft ``0x8001010d`` und fängt sie wieder; Solidon lief weiter, und
+    der Fragebogen S-20261006-5be329 trug den Eintrag als Absturzprotokoll.
+    Was der laufende Prozess schrieb oder was vor dem Vermerk eines geordneten
+    Endes steht, hat er überlebt; ein Python-Fehler aus einem Slot bleibt.
+    Ohne Vermerk ist nicht zu sagen, welcher Eintrag tödlich war — dann bleibt
+    alles. Unter Windows schreibt der rohe Deskriptor ``\\r\\n``.
+    """
+    from app.core.log import fatal_records
+
+    result = fatal_records(text.replace("\n", line_end), alive=alive)
+
+    for word in kept:
+        assert word in result, result
+    for word in dropped:
+        assert word not in result, result
+    if not kept:
+        assert result == "", "nichts Tödliches: die Datei zählt wie ein sauberer Lauf"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-Ausnahmen gibt es nur unter Windows")
+def test_a_com_exception_the_process_survives_never_reaches_the_report(tmp_path: Path) -> None:
+    """Der echte Weg: faulthandler schreibt, ein Behandler fängt, der Prozess lebt weiter.
+
+    Solange er läuft, hängt der Fehlerbericht den Eintrag nicht an; endet er
+    geordnet, ist die Datei leer und wird beim nächsten Start aufgeräumt. Ein
+    Python-Fehler im selben Lauf hält die Datei — mit dem Vermerk, der den
+    überlebten Eintrag davor ausweist.
+    """
+    body = """
+import ctypes
+from app.core import report
+
+handler_type = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)
+handler = handler_type(lambda pointers: -1)  # EXCEPTION_CONTINUE_EXECUTION
+kernel32 = ctypes.windll.kernel32
+kernel32.AddVectoredExceptionHandler.restype = ctypes.c_void_p
+kernel32.AddVectoredExceptionHandler.argtypes = [ctypes.c_ulong, handler_type]
+cookie = kernel32.AddVectoredExceptionHandler(0, handler)
+kernel32.RaiseException(0x8001010D, 0, 0, None)
+kernel32.RemoveVectoredExceptionHandler(ctypes.c_void_p(cookie))
+assert b"0x8001010d" in capture.read_bytes(), "faulthandler hat mitgeschrieben"
+assert b"0x8001010d" not in report.crash_tail(capture.parent), "der Prozess lebt"
+if "--python" in sys.argv:
+    try:
+        raise RuntimeError("im Slot")
+    except RuntimeError as problem:
+        sys.excepthook(type(problem), problem, problem.__traceback__)
+"""
+    survived = _crash_child(tmp_path / "allein", body)
+    assert survived.returncode == 0, survived.stderr
+    alone = Path(survived.stdout.splitlines()[0])
+    assert alone.read_bytes() == b"", "nichts Tödliches: geleert wie ein sauberer Lauf"
+
+    with_error = _crash_child(
+        tmp_path / "mit-fehler", body.replace('"--python" in sys.argv', "True")
+    )
+    assert with_error.returncode == 0, with_error.stderr
+    kept = Path(with_error.stdout.splitlines()[0])
+    raw = kept.read_text(encoding="utf-8")
+    assert "0x8001010d" in raw and "im Slot" in raw and "normal end" in raw
+    attached = report_module.crash_tail(kept.parent).decode("utf-8")
+    assert "im Slot" in attached and "0x8001010d" not in attached
 
 
 def test_repeated_installation_uses_one_file_and_leaves_clean_runs_empty(tmp_path: Path) -> None:

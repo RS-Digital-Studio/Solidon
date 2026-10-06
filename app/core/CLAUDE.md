@@ -71,7 +71,11 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
   Prozessende. Haupt- und Nebenfadenfehler nehmen mit der CLI denselben
   redigierten Bericht (`report.exception_report()`, ohne Quellzeilen und
   lokale Variablen), das Fenster `report.crash_detail()`; die Versionsauskunft
-  lädt im Fehlerpfad keine native Bibliothek nach. Fünf beendete Läufe
+  lädt im Fehlerpfad keine native Bibliothek nach. Ein Eintrag von
+  faulthandler, den der Prozess überlebt hat — in der Datei des laufenden
+  Prozesses oder vor dem Vermerk `normal end` beim geordneten Ende —, ist
+  kein Absturz (`log.fatal_records`); bleibt nichts Tödliches, leert das Ende
+  die Datei. Fünf beendete Läufe
   bleiben, lebende Prozesse unangetastet, leere Dateien sind kein Beleg;
   automatische Berichte je Lauf höchstens fünf, bewusst abgelegte bleiben.
   `report.diagnostic_attachments()` ist ein begrenzter Schnappschuss —

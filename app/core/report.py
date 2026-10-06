@@ -29,8 +29,10 @@ from app.branding import APP_NAME, APP_VERSION, ENVIRONMENT_PREFIX
 from app.core.log import (
     crash_paths,
     exception_text,
+    fatal_records,
     get_logger,
     log_path,
+    own_crash_path,
     redact,
     redact_user_paths,
 )
@@ -342,9 +344,15 @@ def _copy_log(target: Path) -> None:
 
 
 def crash_tail(directory: Path | None = None) -> bytes:
-    """Begrenzt vorhandene Absturzstapel; ein leerer sauberer Lauf reist nicht mit."""
+    """Begrenzt vorhandene Absturzstapel; ein leerer sauberer Lauf reist nicht mit.
+
+    Auch keine Ausnahme, die der Prozess überlebt hat (:func:`fatal_records`):
+    Die Datei des laufenden Prozesses trägt keinen Absturz, und eine Datei mit
+    dem Vermerk eines geordneten Endes nur, was danach kam.
+    """
     remaining = LOG_TAIL_MAX_BYTES
     sections: list[str] = []
+    own = own_crash_path()
     for path in crash_paths(directory):
         if remaining <= 0:
             break
@@ -361,9 +369,10 @@ def crash_tail(directory: Path | None = None) -> bytes:
             # Ein angeschnittener Wert könnte sein Kennwort-Präfix verloren
             # haben und wäre dann nicht mehr zuverlässig redigierbar.
             raw = raw.partition(b"\n")[2]
-        text = "\n".join(
-            redact(line) for line in raw.decode("utf-8", errors="replace").splitlines()
-        )
+        fatal = fatal_records(raw.decode("utf-8", errors="replace"), alive=path == own)
+        if not fatal:
+            continue
+        text = "\n".join(redact(line) for line in fatal.splitlines())
         heading = f"--- {path.name} ---\n"
         if size > remaining:
             heading += str(_("Das Absturzprotokoll wurde auf die letzten Einträge gekürzt.")) + "\n"

@@ -14,6 +14,7 @@ Keine Geometrie im Protokoll — nur Kennzahlen.
 
 from __future__ import annotations
 
+import atexit
 import faulthandler
 import logging
 import os
@@ -235,6 +236,85 @@ def exception_text(error: BaseException, traceback: TracebackType | None = None)
     return "\n".join(lines)
 
 
+#: Womit ein Eintrag in der Absturzdatei beginnt: faulthandler schreibt
+#: „Windows fatal exception: …“ oder „Fatal Python error: …“, ``_record_unhandled``
+#: und :func:`_note_normal_end` eine Zeile aus Zeitstempel und Anlass. Der
+#: rohe Deskriptor schreibt unter Windows im Textmodus, die Zeilen enden dort
+#: auf ``\r\n`` — der Anlass endet deshalb vor dem ersten Zeilenendezeichen.
+_RECORD_START = re.compile(
+    r"^(?:(?P<native>Windows fatal exception: |Fatal Python error: )"
+    r"|(?P<stamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\S* (?P<context>[^\r\n]+)))",
+    re.MULTILINE,
+)
+#: Der Anlass der Zeile, die das geordnete Ende eines Laufs vermerkt.
+_NORMAL_END: Final = "normal end"
+
+
+def fatal_records(text: str, *, alive: bool = False) -> str:
+    """Aus einer Absturzdatei, was kein überlebter Eintrag ist.
+
+    faulthandler schreibt **jede** Windows-Ausnahme mit Fehlercode, bevor
+    Windows einen Behandler sucht — auch die, die das System selbst abfängt.
+    COM wirft ``0x8001010d`` (``RPC_E_CANTCALLOUT_ININPUTSYNCCALL``) und fängt
+    sie wieder; Solidon lief weiter, und der Fehlerbericht hängte den Eintrag
+    trotzdem als Absturzprotokoll an (Fragebogen S-20261006-5be329).
+
+    Ein Eintrag von faulthandler zählt deshalb nur, wenn der Prozess ihn nicht
+    überlebt hat: Er gehört nicht dem laufenden Prozess (``alive``), und hinter
+    ihm steht kein Vermerk über ein geordnetes Ende. Unbehandelte
+    Python-Fehler aus Slots und Fäden bleiben immer — sie sind Fehler, auch
+    wenn das Programm weiterlief. Ein angeschnittener Anfang bleibt ebenfalls,
+    denn von ihm ist nicht zu sagen, wozu er gehört.
+    """
+    starts = list(_RECORD_START.finditer(text))
+    if not starts:
+        return text
+    ends = [match.start() for match in starts if match.group("context") == _NORMAL_END]
+    last_end = ends[-1] if ends else -1
+    kept = [text[: starts[0].start()]]
+    for match, following in zip(starts, [*starts[1:], None], strict=True):
+        record = text[match.start() : following.start() if following is not None else len(text)]
+        if match.group("context") == _NORMAL_END:
+            continue
+        if match.group("native") and (alive or match.start() < last_end):
+            continue
+        kept.append(record)
+    return "".join(kept) if any(part.strip() for part in kept) else ""
+
+
+def own_crash_path() -> Path | None:
+    """Die Absturzdatei dieses Prozesses — solange er läuft, belegt nichts darin einen Absturz."""
+    return _capture.path if _capture is not None else None
+
+
+def _note_normal_end() -> None:
+    """Vermerkt beim geordneten Ende, dass der Prozess alles bis hierher überlebt hat.
+
+    Läuft über ``atexit``, also nach ``aboutToQuit`` und vor dem Abbau der
+    Module — eine Ausnahme, die erst danach tödlich wird, steht hinter dem
+    Vermerk und zählt. Bleibt nach :func:`fatal_records` nichts, wird die
+    Datei geleert, und der nächste Start räumt sie weg wie einen sauberen
+    Lauf (:func:`_prune_crashes`).
+    """
+    with _capture_guard:
+        current = _capture
+        if current is None:
+            return
+        try:
+            if not os.fstat(current.descriptor).st_size:
+                return
+            text = current.path.read_bytes().decode("utf-8", errors="replace")
+            if not fatal_records(text, alive=True):
+                os.ftruncate(current.descriptor, 0)
+                return
+            os.write(
+                current.descriptor,
+                f"\n{datetime.now(UTC).isoformat()} {_NORMAL_END}\n".encode(),
+            )
+        except OSError as problem:
+            _diagnostic_stderr(f"Absturzprotokoll: {exception_text(problem)}")
+
+
 def crash_paths(directory: Path | None = None) -> tuple[Path, ...]:
     """Nur eigene Absturzdateien; leere Dateien allein belegen keinen Absturz."""
     folder = directory or user_log_dir()
@@ -423,6 +503,7 @@ def install_crash_logging(directory: Path | None = None) -> Path | None:
             handler_attempted = True
             faulthandler.enable(file=descriptor, all_threads=True, c_stack=False)
             _capture = capture
+            atexit.register(_note_normal_end)
         except Exception as problem:
             # Auch eine teilweise Einrichtung darf keinen aktiven Handler
             # mit einem anschließend neu vergebenen Deskriptor zurücklassen.
