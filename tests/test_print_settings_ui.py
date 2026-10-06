@@ -5496,6 +5496,74 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
         dialog.deleteLater()
 
 
+def test_the_print_dialog_offers_the_printers_of_its_slicer(
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Erst der Slicer, dann seine Drucker — auch hier (Entscheidung Robert,
+    06.10.2026), dieselbe Liste wie im Erststart und in den Einstellungen.
+
+    Ein Kunde mit Anycubic Slicer Next fand hier nur den Kobra S1 Max aus dem
+    Erststart und den Kobra 2 aus Solidons Tabelle, nicht seinen Kobra S1. Die
+    Erhebung speichert nichts; erst die Wahl legt den Drucker ab, und das
+    Projekt rechnet mit ihm.
+    """
+    from app.core import discover
+    from app.core.export import slicer_profiles
+    from app.core.types import PrinterProfile
+
+    original_profiles_dir = profiles.user_profiles_dir
+
+    def restore_profile_cache() -> None:
+        profiles.user_profiles_dir = original_profiles_dir
+        profiles.reload()
+
+    request.addfinalizer(restore_profile_cache)
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path / "profiles")
+    profiles.reload()
+    kobra = PrinterProfile(
+        id="slicer-kobra-s1",
+        title="Anycubic Kobra S1 0.4 nozzle",
+        build_volume=(250.0, 250.0, 250.0),
+        vendor="Anycubic",
+    )
+    monkeypatch.setattr(slicer_profiles, "discover_printers", lambda *_args: (kobra,))
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    executable = tmp_path / "AnycubicSlicerNext" / "AnycubicSlicerNext.exe"
+    executable.parent.mkdir()
+    executable.write_text("", encoding="utf-8")
+    discover.remember_path("slicer", str(executable))
+    session = Session()
+    settings = UiSettings()
+    dialog = PrintSettingsDialog(session, settings)
+    try:
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+        assert dialog.wait_for_printer_survey(), "die Drucker des Slicers kamen nicht"
+        index = dialog.printer_choice.findData(kobra.id)
+        assert index >= 0, "der Drucker des Slicers steht zur Wahl"
+        assert dialog.printer_choice.itemText(index) == "Anycubic Kobra S1"
+        assert dialog.printer_choice.findData("centauri-carbon-2") < 0, (
+            "ein Tabellendrucker, den der Slicer nicht nennt, steht nicht da"
+        )
+        assert dialog.printer_choice.currentData() == session.profile.printer.id
+        assert kobra.id not in profiles.printer_profiles(), "die Erhebung speichert nichts"
+
+        dialog.printer_choice.setCurrentIndex(index)
+        dialog.printer_choice.activated.emit(index)
+
+        assert kobra.id in profiles.user_printer_profiles(), "erst die Wahl speichert ihn"
+        assert session.profile.printer.id == kobra.id
+        assert settings.printer == kobra.id
+        assert dialog.printer_choice.currentData() == kobra.id
+    finally:
+        session.wait_for_idle()
+        dialog.release()
+        dialog.deleteLater()
+        discover.remember_path("slicer", "")
+
+
 def test_only_a_picked_printer_becomes_the_next_projects_printer(
     qt_app: QApplication,
 ) -> None:

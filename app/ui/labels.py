@@ -3055,6 +3055,14 @@ class DateField(QWidget):
 #: Ordnernamen, die nichts über das Programm sagen — dort gilt der Dateiname.
 _GENERIC_FOLDERS: Final = frozenset({"", "bin", "sbin", "usr", "local", "macos", "contents"})
 
+#: Programme, deren Paket oder Ordner den Namen ohne Leerzeichen trägt — auf
+#: der Packung steht er mit. Der Mac-Kunde las „AnycubicSlicerNext“.
+_BOX_NAMES: Final = {
+    "anycubicslicernext": "Anycubic Slicer Next",
+    "bambustudio": "Bambu Studio",
+    "crealityprint": "Creality Print",
+}
+
 
 def slicer_title(path: Path) -> str:
     """Ein Name, den ein Mensch wiedererkennt — nicht der Dateiname.
@@ -3076,13 +3084,11 @@ def slicer_title(path: Path) -> str:
     flatpak = discover.flatpak_title(path)
     if flatpak:
         return flatpak
-    for parent in path.parents:
-        if parent.suffix.lower() == ".app":
-            return parent.stem
-    folder = path.parent.name
-    if folder.lower() in _GENERIC_FOLDERS:
-        return path.stem
-    return folder
+    name = next(
+        (parent.stem for parent in path.parents if parent.suffix.lower() == ".app"),
+        path.stem if path.parent.name.lower() in _GENERIC_FOLDERS else path.parent.name,
+    )
+    return _BOX_NAMES.get(name.casefold(), name)
 
 
 def printer_title(printer: PrinterProfile) -> str:

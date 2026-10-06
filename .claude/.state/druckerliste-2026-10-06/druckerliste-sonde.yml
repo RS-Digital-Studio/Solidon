@@ -1,0 +1,193 @@
+# Wegwerfzweig: erst der Slicer, dann seine Drucker — Linux und beide Macs mit
+# dem echten Anycubic Slicer Next, dazu die Fensterdateien der drei
+# Druckerwahlen vorher und nachher. Wird nach der Auswertung mit dem Zweig
+# gelöscht; er baut nichts und liefert nichts aus.
+name: Druckerliste-Sonde
+
+on:
+  push:
+    branches: [diagnose/druckerliste]
+
+permissions:
+  contents: read
+
+env:
+  BASE_SHA: 3a5d607f3df78405b4ed391b0c608d0333ec58c9
+
+jobs:
+  sonde:
+    name: Sonde (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, macos-26-intel]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PROBE_OUT: ${{ github.workspace }}/probe-out
+      OPENBLAS_NUM_THREADS: "1"
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+          cache: pip
+          cache-dependency-path: |
+            constraints.txt
+            pyproject.toml
+
+      - name: Qt-Systembibliotheken (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libdbus-1-3 xvfb xauth \
+            libgl1-mesa-dri fonts-dejavu-core fontconfig \
+            libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 \
+            libxcb-xinerama0 libxcb-xkb1 libxcb-sync1 libxcb-glx0
+
+      - name: Anycubic Slicer Next (Linux, apt-Quelle des Herstellers)
+        # Dasselbe wie das Installationsskript aus dem Anycubic-Wiki, ohne
+        # dessen Rückfrage nach der Region: Quelle „Global“, Ubuntu 24.04.
+        if: runner.os == 'Linux'
+        run: |
+          echo "deb [trusted=yes] https://cdn-universe-slicer.anycubic.com/prod $(lsb_release -sc) main" \
+            | sudo tee /etc/apt/sources.list.d/acnext.list
+          sudo apt-get update
+          sudo apt-get install -y anycubicslicernext
+          dpkg -s anycubicslicernext | grep -i '^version'
+          dpkg -L anycubicslicernext | grep -E '/bin/|AnycubicSlicerNext$|/profiles$' | head -20
+          command -v AnycubicSlicerNext || ls -la /usr/bin | grep -i anycubic || true
+
+      - name: Anycubic Slicer Next (macOS, DMG des Herstellers)
+        if: runner.os == 'macOS'
+        run: |
+          uname -m; sw_vers
+          if [ "$(uname -m)" = "arm64" ]; then
+            url=https://cdn.anycubic-cloud.anycubic.com/file/2026/09/04/dmg/178852197829378100/develop_859_2.0.0.3_arm64_20260904033804_AnycubicSlicerNext.dmg
+          else
+            url=https://cdn.anycubic-cloud.anycubic.com/file/2026/09/04/dmg/178852197400444100/develop_859_2.0.0.3_x86_64_20260904033804_AnycubicSlicerNext.dmg
+          fi
+          curl -fL --retry 3 -o "$RUNNER_TEMP/acs.dmg" "$url"
+          yes | hdiutil attach "$RUNNER_TEMP/acs.dmg" -nobrowse -noverify -mountpoint /Volumes/acs > /dev/null
+          app=$(find /Volumes/acs -maxdepth 1 -name '*.app' | head -1)
+          echo "Paket: $app"
+          sudo cp -R "$app" /Applications/
+          hdiutil detach /Volumes/acs
+          sudo xattr -dr com.apple.quarantine /Applications/*.app 2>/dev/null || true
+          ls /Applications
+          ls "/Applications/$(basename "$app")/Contents/MacOS"
+
+      - name: Abhängigkeiten
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
+
+      - name: Sonde mit dem echten Slicer
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" python probe_druckerliste.py "${{ matrix.os }}"
+          else
+            python probe_druckerliste.py "${{ matrix.os }}"
+          fi
+
+      - name: Die neuen Tests
+        if: always()
+        shell: bash
+        run: |
+          tests=(
+            tests/test_printer_choices.py
+            tests/test_ui_dialogs.py::test_a_slicer_is_named_as_on_its_box
+            tests/test_print_settings_ui.py::test_the_print_dialog_offers_the_printers_of_its_slicer
+            tests/test_print_settings_ui.py::test_curas_active_printer_can_be_adopted_without_losing_print_choices
+          )
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q -p no:cacheprovider -rfE "${tests[@]}"
+          else
+            python -m pytest -q -p no:cacheprovider -rfE "${tests[@]}"
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: sonde-${{ matrix.os }}
+          path: probe-out/
+          if-no-files-found: warn
+
+  fenster:
+    # Die Fensterdateien der drei Druckerwahlen, einmal am Stand davor und
+    # einmal mit der Änderung — ein Rot, das schon vorher da war, gehört nicht
+    # zu ihr. Je Datei ein Prozess wie im Release-Tor.
+    name: Fenster ${{ matrix.stand }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+        stand: [vorher, nachher]
+    env:
+      QT_QPA_PLATFORM: offscreen
+      OPENBLAS_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ matrix.stand == 'vorher' && env.BASE_SHA || github.sha }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+          cache: pip
+          cache-dependency-path: |
+            constraints.txt
+            pyproject.toml
+
+      - name: Qt-Systembibliotheken (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libdbus-1-3 xvfb xauth \
+            libgl1-mesa-dri fonts-dejavu-core fontconfig \
+            libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 \
+            libxcb-xinerama0 libxcb-xkb1 libxcb-sync1 libxcb-glx0
+
+      - name: Abhängigkeiten
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
+
+      - name: Fensterdateien
+        shell: bash
+        run: |
+          set +e
+          mkdir -p fenster-out
+          for file in tests/test_printer_choices.py tests/test_first_run_setup.py \
+                      tests/test_ui_settings.py tests/test_print_settings_ui.py; do
+            name=$(basename "$file" .py)
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q -p no:cacheprovider \
+                -m "not performance and not rendered and not rendering" -rfE \
+                --junitxml="fenster-out/$name.xml" "$file" > "fenster-out/$name.txt" 2>&1
+            else
+              python -m pytest -q -p no:cacheprovider \
+                -m "not performance and not rendered and not rendering" -rfE \
+                --junitxml="fenster-out/$name.xml" "$file" > "fenster-out/$name.txt" 2>&1
+            fi
+            code=$?
+            echo "$file Exit=$code" | tee -a fenster-out/exits.txt
+            tail -3 "fenster-out/$name.txt"
+          done
+          exit 0
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: fenster-${{ matrix.stand }}-${{ matrix.os }}
+          path: fenster-out/
+          if-no-files-found: warn

@@ -130,6 +130,11 @@ hängen an keinem FDM-Slicer und bleiben stehen, wenn ein Slicer die Liste
 filtert, und ein Programm ohne Familie bekommt den Satz, dass Solidon seine
 Drucker nicht kennt. Das Vorgabematerial folgt dem Drucker
 (`profiles.material_for`).
+Seit dem 06.10.2026 fragt auch der Druckdialog dieselbe Erhebung: Er bot nur
+Solidons Tabelle und die gespeicherten Drucker an, und ein Kunde mit Anycubic
+Slicer Next fand dort nur den Kobra S1 Max aus dem Erststart, nicht seinen
+Kobra S1. Robert entschied daraufhin: an jeder Druckerwahl erst der Slicer,
+dann seine Drucker (`printers_on_offer`).
 `custom_printer_draft` und `restore_custom_printer_draft` erhalten ungespeicherte
 Eingaben beim Sprachwechsel. `inventoryRequested` öffnet nach Übernahme der
 Einrichtung das Filamentlager über das Hauptfenster.

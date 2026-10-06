@@ -390,18 +390,18 @@ Profile des Slicers, Grundlage, Werte; *Werte mitgeben* bei der Übergabe
 `tests/test_dependency_order.py`. Vorn davon nur Fülldichte und Stützen;
 Zustand und Mitgabe über den Knöpfen, außerhalb des Rollbereichs.
 
-**Slicer vor Drucker:** Einstellungen und Erstlauf verwenden dieselbe
-asynchrone Druckererhebung; in den Einstellungen steht der Slicer unter
-„Anwendung“ (er gilt jedem Projekt), direkt vor den Druckervorgaben. Beide
-bieten nur vollständige Profile des gewählten Slicers; neue bleiben bis zum
-Speichern im Entwurf, auch beim Sprachwechsel, in den Einstellungen ebenso
-der Programmpfad. Im Erstlauf gelten Sprache, Slicerpfad und gespeicherte
-Drucker sofort; eine neue Profil-ID reist im Entwurf. Verspätete Antworten
-einer früheren Auswahl ändern weder Dialog noch Einstellungen. Je Modell eine
-Zeile ohne Düse (Entscheidung Robert, `add_printer_choices`); die Düse wählt
-der Druckdialog, Speichern behält sie (`with_saved_nozzle`). Die
-Druckerliste hat eine feste Suchzeile über den Treffern; sie filtert live,
-erst eine ausdrückliche Auswahl übernimmt, Escape schließt nur die Liste.
+**Slicer vor Drucker, überall** (Entscheidung Robert): Erststart, Einstellungen
+und Druckdialog lesen die Drucker über dieselbe Erhebung, bieten dieselbe Liste
+(`printers_on_offer`), beides jederzeit wechselbar. Der Slicer steht unter
+„Anwendung“ vor den Druckervorgaben. Ein neues Profil bleibt im Entwurf, bis
+gespeichert oder im Druckdialog gewählt (`_keep_slicer_printer`), auch beim
+Sprachwechsel, ebenso der Programmpfad. Ohne eigene Drucker des Slicers bietet
+der Druckdialog alle bekannten. Im Erstlauf gelten Sprache, Slicerpfad und
+gespeicherte Drucker sofort. Verspätete Antworten früherer Auswahl ändern
+nichts. Je Modell eine Zeile ohne Düse (Entscheidung Robert,
+`add_printer_choices`); die Düse wählt der Druckdialog, Speichern behält sie
+(`with_saved_nozzle`). Die Suchzeile filtert live, erst eine ausdrückliche
+Auswahl übernimmt, Escape schließt nur die Liste.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 

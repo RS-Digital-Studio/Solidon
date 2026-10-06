@@ -55,9 +55,10 @@ from app.ui.first_run import (
     PrinterComboBox,
     _PrinterSurvey,
     add_printer_choices,
-    allowed_printers,
     choose_slicer_file,
+    known_printers,
     preferred_printer,
+    printers_on_offer,
     select_program,
     valid_printer_choice,
     with_saved_nozzle,
@@ -691,11 +692,7 @@ class SettingsDialog(QDialog):
         return self.printer.search_field.text() or None
 
     def _known_printers(self) -> dict[str, PrinterProfile]:
-        saved = profiles.printer_profiles()
-        return dict(saved) | {
-            identifier: with_saved_nozzle(found, saved.get(identifier))
-            for identifier, found in self._discovered_printers.items()
-        }
+        return known_printers(self._discovered_printers)
 
     def save_external_choices(self) -> None:
         """Nur Speichern übernimmt das gewählte fremde Profil und den Programmpfad."""
@@ -798,18 +795,13 @@ class SettingsDialog(QDialog):
         self._fit_soon()
 
     def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
-        known = self._known_printers()
-        allowed = allowed_printers(identifiers, known)
+        offered = printers_on_offer(identifiers, self._discovered_printers)
         preferred, self._suggested_printer = preferred_printer(
-            str(self.printer.currentData() or ""), suggested, self._suggested_printer, allowed
+            str(self.printer.currentData() or ""), suggested, self._suggested_printer, offered
         )
         with QSignalBlocker(self.printer):
             self.printer.clear()
-            add_printer_choices(
-                self.printer,
-                {name: entry for name, entry in known.items() if name in allowed},
-                keep={preferred},
-            )
+            add_printer_choices(self.printer, offered, keep={preferred})
             select_data(self.printer, preferred)
         self.printer.setEnabled(True)
         self.printer.setToolTip(self.printer.currentText())

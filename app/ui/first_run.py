@@ -1051,11 +1051,7 @@ class FirstRunDialog(QDialog):
         return self.printer.search_field.text() or None
 
     def _known_printers(self) -> dict[str, PrinterProfile]:
-        saved = profiles.printer_profiles()
-        return dict(saved) | {
-            identifier: with_saved_nozzle(found, saved.get(identifier))
-            for identifier, found in self._discovered_printers.items()
-        }
+        return known_printers(self._discovered_printers)
 
     def _fill_tools(self, states: tuple[tools.ToolState, ...]) -> None:
         """Eine Zeile je Programm, neu gebaut statt neu beschriftet.
@@ -1361,22 +1357,17 @@ class FirstRunDialog(QDialog):
 
     def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
         """Nur passende Drucker anbieten und eine weiterhin passende Wahl erhalten."""
-        known = self._known_printers()
-        allowed = allowed_printers(identifiers, known)
+        offered = printers_on_offer(identifiers, self._discovered_printers)
         preferred, self._suggested_printer = preferred_printer(
             str(self.printer.currentData() or ""),
             suggested,
             self._suggested_printer,
-            allowed,
+            offered,
             keep={"__custom__"},
         )
         with QSignalBlocker(self.printer):
             self.printer.clear()
-            add_printer_choices(
-                self.printer,
-                {identifier: entry for identifier, entry in known.items() if identifier in allowed},
-                keep={preferred},
-            )
+            add_printer_choices(self.printer, offered, keep={preferred})
             self.printer.addItem(tr("Benutzerdefiniert …"), userData="__custom__")
             select_data(self.printer, preferred)
         self.printer.setEnabled(True)
@@ -1604,9 +1595,39 @@ def with_saved_nozzle(found: PrinterProfile, saved: PrinterProfile | None) -> Pr
     )
 
 
+def known_printers(discovered: Mapping[str, PrinterProfile]) -> dict[str, PrinterProfile]:
+    """Die gespeicherten Drucker und die gelesenen des Slicers — eine Quelle für
+    Erststart, Einstellungen und Druckdialog.
+
+    Ein gelesener Drucker ersetzt den gespeicherten derselben Kennung und
+    behält dessen Düse (:func:`with_saved_nozzle`).
+    """
+    saved = profiles.printer_profiles()
+    return dict(saved) | {
+        identifier: with_saved_nozzle(found, saved.get(identifier))
+        for identifier, found in discovered.items()
+    }
+
+
+def printers_on_offer(
+    identifiers: Iterable[str], discovered: Mapping[str, PrinterProfile]
+) -> dict[str, PrinterProfile]:
+    """Die Drucker, die nach einer Slicer-Suche in der Liste stehen — überall
+    dieselben (:func:`known_printers`, gefiltert über :func:`allowed_printers`).
+
+    Der Druckdialog bot bis hierhin nur Solidons Tabelle und die gespeicherten
+    an: Wer im Erststart den Kobra S1 Max gewählt hatte, fand dort keinen
+    anderen Drucker aus Anycubic Slicer Next, obwohl die Einstellungen alle
+    kannten (Kundenmeldung, 06.10.2026).
+    """
+    known = known_printers(discovered)
+    allowed = allowed_printers(identifiers, known)
+    return {identifier: entry for identifier, entry in known.items() if identifier in allowed}
+
+
 def allowed_printers(identifiers: Iterable[str], known: Mapping[str, PrinterProfile]) -> set[str]:
-    """Welche Drucker nach einer Slicer-Suche zur Wahl stehen — Erststart wie
-    Einstellungen.
+    """Welche Drucker nach einer Slicer-Suche zur Wahl stehen — Erststart,
+    Einstellungen und Druckdialog.
 
     Was der Slicer nennt, dazu der Standarddrucker und jeder Resin-Drucker: Die
     Resin-Drucker hängen an keinem FDM-Slicer. Ein Slicer, der seine Drucker

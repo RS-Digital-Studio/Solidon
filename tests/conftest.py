@@ -549,7 +549,11 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     """
 
     def only_what_was_set(tool_id: str, names: object) -> object:
-        chosen = discover.remembered(tool_id)
+        # ``remembered_path`` wie die echte Suche (``_remembered_program``):
+        # ``remember_path`` legt unter ``slicer:path`` ab, und ``remembered``
+        # las nur den alten Schlüssel — ein so gemerkter Slicer kam aus der
+        # Suche nicht zurück, und der Dialog vergaß ihn wieder.
+        chosen = discover.remembered_path(tool_id)
         from pathlib import Path
 
         path = Path(chosen) if chosen else None

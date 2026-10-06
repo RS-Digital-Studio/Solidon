@@ -117,6 +117,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, `importorskip`, falscher `adjustSize`-Satz in `vorderseite.md`, „gebaut an drei Orten“ in `oberflaeche.md`, „Datei je Fakt“ |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Erster Lauf 02.10. im Archiv; der zweite war am 05.10. fällig und steht aus (bekannt: cadquery-ocp-novtk 8.0.1.1.0); Paketbeleg der Bauplattform unter RM-468 |
 | [RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft](#rm-530) | Tests und Entwicklungswerkzeuge | Skripte, die Tests und Workflows dauerhaft brauchen, aus `.claude/.state/` nach `tools/` ziehen |
+| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Auftrag Robert (06.10.): Fenstergruppe in der Release-CI auf allen drei Plattformen, dazu ein Slicer-Job, der je Plattform die Slicer installiert und Erkennung, Druckerlisten und Slicen prüft |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -4226,6 +4227,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Workflow dauerhaft braucht, zieht nach `tools/` (Regel in `.claude/README.md`), die Tests
   zeigen dorthin. **Abnahme:** `git grep -n ".claude/.state" -- tests .github` findet nur
   noch Sonden eines offenen Punkts, Ruff prüft die umgezogenen Skripte, die Liefertests bleiben grün.
+
+<a id="rm-531"></a>
+
+- [ ] **RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI.** Die
+  Fenstergruppe läuft in der Release-CI nur unter Windows (Job `windows` in `build.yml`), Linux
+  und macOS fahren nur die Fensterverträge (`--ci-group contracts`). Echte Slicer prüft keine CI:
+  Erkennung, Herstellerbestand und Slicen unter Linux und macOS belegten bisher nur
+  Wegwerfzweige (`.claude/.state/slicer-sonde-2026-10-05/`,
+  `.claude/.state/druckerliste-2026-10-06/`). Am 06.10.2026 liefen dort die Fensterdateien der
+  drei Druckerwahlen unter Ubuntu 24.04 und macOS ARM vor und nach der Änderung grün
+  (`test_print_settings_ui.py` mit 396 Tests in rund zweieinhalb Minuten), und Anycubic Slicer
+  Next ließ sich unter Linux (apt-Quelle des Herstellers) und macOS ARM und Intel (DMG)
+  installieren, lesen und zum Slicen bringen. Derselbe Lauf fand eine Testattrappe, die vom
+  echten Code abgewichen war (`conftest._machine_stays_out_of_it`). Auftrag Robert
+  (06.10.2026): solche Tests über die CI für Linux und Mac breit fahren. **Fix:** die
+  Fenstergruppe der Release-CI auf allen drei Plattformen; ein Slicer-Job je Plattform, der die
+  unterstützten Slicer installiert (Flatpak, AppImage und apt unter Linux, Casks und DMG unter
+  macOS) und Erkennung, Druckerlisten aus Erststart, Einstellungen und Druckdialog sowie das
+  Slicen eines Würfels prüft — die beiden Sonden als Grundlage, nach `tools/` gezogen (RM-530).
+  Ausgelöst am Tag und per Handstart, im Vertrag der CI-Aufteilung
+  (`konzepte/konzept-ci-testlaufzeiten-2026-09.md`); die Renderertests stehen in RM-344.
+  **Abnahme:** Ein Tag-Lauf zeigt die Fenstergruppe auf drei Plattformen grün und je Plattform
+  jeden installierbaren Slicer mit Druckerliste und Druckdatei; `test_packaging.py` hält die
+  neuen Jobs im Vertrag.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

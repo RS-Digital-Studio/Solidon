@@ -466,6 +466,16 @@ def test_undoing_a_changed_step_says_the_change_not_the_step() -> None:
         ("/var/lib/flatpak/exports/bin/com.prusa3d.PrusaSlicer", "PrusaSlicer"),
         ("/var/lib/flatpak/exports/bin/com.ultimaker.cura", "Cura"),
         ("/run/user/1000/doc/d0880632/com.orcaslicer.OrcaSlicer", "OrcaSlicer"),
+        (
+            r"C:\Program Files\AnycubicSlicerNext\AnycubicSlicerNext.exe",
+            "Anycubic Slicer Next",
+        ),
+        (
+            "/Applications/AnycubicSlicerNext.app/Contents/MacOS/AnycubicSlicerNext",
+            "Anycubic Slicer Next",
+        ),
+        ("/usr/bin/AnycubicSlicerNext", "Anycubic Slicer Next"),
+        ("/Applications/BambuStudio.app/Contents/MacOS/BambuStudio", "Bambu Studio"),
     ],
 )
 def test_a_slicer_is_named_as_on_its_box(path: str, name: str) -> None:

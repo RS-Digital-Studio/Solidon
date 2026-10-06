@@ -9,6 +9,9 @@ Düse wählt der Druckdialog (Entscheidung Robert). Eine dort gewählte Düse
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
+
+import pytest
 
 from app.core.knowledge import profiles
 from app.core.types import PrinterProfile
@@ -67,6 +70,51 @@ def test_a_saved_nozzle_survives_a_fresh_read_from_the_slicer() -> None:
     assert (kept.nozzle_diameter, kept.extrusion_width, kept.nozzles) == (0.6, 0.63, 2)
     assert kept.printable_area == found.printable_area
     assert first_run.with_saved_nozzle(found, None) is found
+
+
+def test_every_printer_list_offers_the_printers_of_the_chosen_slicer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Erst der Slicer, dann seine Drucker — in Erststart, Einstellungen und
+    Druckdialog dieselbe Liste (Entscheidung Robert, 06.10.2026).
+
+    Der Druckdialog bot nur Solidons Tabelle und die gespeicherten Drucker an:
+    Wer im Erststart den Kobra S1 Max gewählt hatte, fand dort den Kobra S1
+    nicht, obwohl Anycubic Slicer Next ihn führt. Angeboten wird, was der
+    Slicer nennt, dazu die eigenen, der allgemeine und die Resin-Drucker; ein
+    Tabellendrucker, den der Slicer nicht nennt, steht nicht da. Eine am
+    gespeicherten Drucker gesetzte Düse bleibt.
+    """
+    original_profiles_dir = profiles.user_profiles_dir
+
+    def restore_profile_cache() -> None:
+        profiles.user_profiles_dir = original_profiles_dir
+        profiles.reload()
+
+    request.addfinalizer(restore_profile_cache)
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    profiles.reload()
+    s1, s1_max = (
+        _variant(0.4, title=f"Anycubic {model} 0.4 nozzle", vendor="Anycubic", identifier=key)
+        for model, key in (("Kobra S1", "slicer-kobra-s1"), ("Kobra S1 Max", "slicer-s1-max"))
+    )
+    discovered = {s1.id: s1, s1_max.id: s1_max}
+    profiles.save_printer(replace(s1_max, nozzle_diameter=0.6, extrusion_width=0.63))
+    workshop = profiles.save_printer(
+        replace(profiles.printer(profiles.DEFAULT_PRINTER), id="user-werkstatt", title="Werkstatt")
+    )
+    resin = {name for name, entry in profiles.printer_profiles().items() if entry.is_resin}
+    assert resin, "die Tabelle führt Resin-Drucker"
+
+    offered = first_run.printers_on_offer(
+        (*discovered, *profiles.user_printer_profiles()), discovered
+    )
+
+    assert {s1.id, s1_max.id, workshop.id, profiles.DEFAULT_PRINTER} | resin == set(offered)
+    assert "centauri-carbon-2" in profiles.printer_profiles(), "Gegenprobe: in der Tabelle"
+    assert offered[s1.id] == s1
+    assert offered[s1_max.id].nozzle_diameter == pytest.approx(0.6), "die gesetzte Düse bleibt"
+    assert first_run.known_printers(discovered)[s1_max.id] == offered[s1_max.id]
 
 
 def test_variants_of_one_printer_become_one_choice(qt_app) -> None:

@@ -606,6 +606,18 @@ Fall, ist keines.
 andere** — ein grüner Klicktest sagt nichts über sein Bild.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
+## Ein Dialog, der höher ist als sein Inhalt
+
+### Slicer vor Drucker, überall
+
+Der Slicer steht in den Einstellungen unter „Anwendung“, weil er jedem Projekt
+gilt, nicht nur dem offenen. Seit dem 06.10.2026 gilt die Reihenfolge an jeder
+Druckerwahl: Ein Kunde mit Anycubic Slicer Next fand im Druckdialog nur Solidons
+Tabelle und die gespeicherten Drucker, nicht seinen Kobra S1 (`karte-app-ui.md`).
+Liest die Erhebung keinen eigenen Drucker des Slicers, filtert der Druckdialog
+nicht, sonst bliebe dem Projekt nur der allgemeine Drucker; Erststart und
+Einstellungen filtern dort weiter und sagen es in ihrer Zustandszeile.
+
 ## `setParent(None)` macht ein Kind zum Fenster
 
 Qt kennt keinen „elternlosen Zustand" — ein Widget ohne Elternteil **ist** ein
