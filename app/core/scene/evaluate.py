@@ -42,8 +42,10 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
     SUPPRESS_STEP,
+    USE_VOXEL_STAGE,
     AmbiguityError,
     AppError,
+    BooleanFailedError,
     InternalError,
     NativeReferenceLost,
     OperationCancelled,
@@ -148,6 +150,7 @@ from app.core.types import (
     OpContext,
     Operation,
     OpId,
+    OpResult,
     Parameter,
     ParameterName,
     Profile,
@@ -461,6 +464,7 @@ def evaluate(
     on_recognition_answer: RecognitionAnswered | None = None,
     check_status: Callable[[CheckState], None] | None = None,
     missing_basis: tuple[str, ...] = (),
+    full_chain_when_stuck: bool = False,
 ) -> EvaluationResult:
     """Rechnet die Szene, die das Dokument beschreibt.
 
@@ -478,6 +482,12 @@ def evaluate(
     auch bei Abbruch ohne Ergebnis. ``missing_basis`` nennt vom Aufrufer
     nicht bestätigte Grundlagen; etwa ein ersetztes Druckerprofil bestätigt
     keine Druckerwahl. Davon abhängige Prüfungen bleiben ``not_started``.
+
+    ``full_chain_when_stuck`` gilt dem Lauf im Fenster: Hält ein Schritt im
+    Entwurf nur an, weil die kurze Kette ausging (:func:`_only_the_short_chain`),
+    rechnet derselbe Lauf diesen einen Schritt mit der vollen Kette weiter
+    (RM-534). Vorschauen lassen es aus — dort ist der Entwurfssatz mit
+    *Voxelstufe erzwingen* die schnellere Antwort.
     """
     checks = _EvaluationChecks(check_status, missing_basis, cancelled or NeverCancelled())
     checks.start()
@@ -496,6 +506,7 @@ def evaluate(
             detect_features=detect_features,
             on_recognition_answer=on_recognition_answer,
             checks=checks,
+            full_chain_when_stuck=full_chain_when_stuck,
         )
     except OperationCancelled:
         checks.finish("cancelled")
@@ -615,6 +626,7 @@ def _evaluate(
     detect_features: bool = True,
     on_recognition_answer: RecognitionAnswered | None = None,
     checks: _EvaluationChecks | None = None,
+    full_chain_when_stuck: bool = False,
 ) -> EvaluationResult:
     """Geometrie und Befunde auswerten; auch ein Halt erhält anschließend Verwendungsdaten."""
     if checks is None:
@@ -964,6 +976,14 @@ def _evaluate(
             stopped_at = operation.id
             break
         cached = cache.get(key) if cache is not None else None
+        refused = cache.refusal(key) if cache is not None and cached is None else None
+        if refused is not None:
+            # Die volle Kette hat über diesen Schritt schon geurteilt (RM-534):
+            # derselbe Satz, ohne ihn noch einmal mit allen Stufen zu rechnen.
+            findings.append(refused)
+            stopped_at = operation.id
+            reads_quality = True
+            break
 
         if cached is not None:
             # Unverändert weiterreichen: der Umbau hier warf ohne Not den
@@ -1025,10 +1045,23 @@ def _evaluate(
                 bound_edges=binding.selections,
             )
             kernel_process.take_notice()
+            full_chain = _FullChain(
+                allowed=full_chain_when_stuck and quality == "draft",
+                announce=partial(_announce_full_chain, progress, position / total, spec.title),
+            )
             try:
-                produced = spec.fn(context)
+                produced = full_chain.run(spec.fn, context)
             except AppError as error:
-                findings.append(_finding_from(error, operation))
+                halt = _finding_from(error, operation)
+                # **Ein Halt, der nach der Güte gefragt hat, ist kein feines
+                # Urteil** (RM-534): Ohne diese Zeile hielt die Sitzung einen
+                # Entwurfshalt für fein, und Druckdialog wie Export rechneten
+                # die volle Kette nie — obwohl der Satz im Bericht genau sie
+                # ankündigte.
+                reads_quality = reads_quality or asked_quality.read or full_chain.ran
+                if full_chain.ran and cache is not None:
+                    cache.refuse(key, halt)
+                findings.append(halt)
                 stopped_at = operation.id
                 break
             except OperationCancelled:
@@ -1118,9 +1151,9 @@ def _evaluate(
                 transform=produced.transform,
                 continuations=tuple(tuple(entries) for entries in produced.feature_continuations),
                 answered=dict(produced.answered),
-                reads_quality=asked_quality.read,
+                reads_quality=asked_quality.read or full_chain.ran,
             )
-            reads_quality = reads_quality or asked_quality.read
+            reads_quality = reads_quality or asked_quality.read or full_chain.ran
 
         if len(result.objects) != len(operation.outputs):
             findings.append(_object_count_finding(operation, len(result.objects)))
@@ -1658,6 +1691,61 @@ def _evaluate(
         recognition_left_out=frozenset(recognition_left_out & scene.objects.keys()),
         reads_quality=reads_quality,
     )
+
+
+def _only_the_short_chain(error: BooleanFailedError) -> bool:
+    """Ob der Halt nur sagt, dass die kurze Kette ausging (§17.2).
+
+    Die Ausnahme entscheidet das selbst: Ohne gelaufene Voxelstufe bietet sie
+    *Voxelstufe erzwingen* an (``errors.BooleanFailedError``) — eine zweite
+    Entscheidung derselben Frage liefe auseinander.
+    """
+    return any(action.id == USE_VOXEL_STAGE.id for action in error.suggestions)
+
+
+def _announce_full_chain(
+    progress: ProgressFn, fraction: float, step: TranslatableText | str
+) -> None:
+    """Sagt in der Fortschrittszeile, warum dieser Schritt jetzt länger dauert."""
+    progress(
+        fraction,
+        str(
+            _(
+                "{step}: Die schnelle Rechnung kam nicht weiter, die vollständige läuft …",
+                step=step,
+            )
+        ),
+    )
+
+
+@dataclass
+class _FullChain:
+    """Ein Schritt, an dem im Entwurf nur die kurze Kette ausging, rechnet weiter (RM-534).
+
+    Im Fenster endet die Kette nach zwei Stufen (§17.2, §31). Blieb dort
+    nichts übrig, sagte der Bericht „… sagt erst die vollständige“, die
+    Kette hielt an, und der Kunde nahm *Reparieren und erneut versuchen* —
+    zweimal, am Kundenteil, wo die volle Kette den Fehler dann mit einem
+    hilfreicheren Satz bestätigte. Jetzt rechnet derselbe Lauf genau diesen
+    Schritt mit allen Stufen; die Schritte davor und danach bleiben im
+    Entwurf. Das ist deterministisch: Ob die kurze Kette ausgeht, hängt nur an
+    den Eingängen des Schritts, also auch, ob er fein rechnet.
+    """
+
+    allowed: bool
+    announce: Callable[[], None]
+    ran: bool = False
+    """Ob die volle Kette gerechnet hat — ihr Ergebnis und ihr Halt fragen nach der Güte."""
+
+    def run(self, fn: Callable[[OpContext], OpResult], context: OpContext) -> OpResult:
+        try:
+            return fn(context)
+        except BooleanFailedError as error:
+            if not self.allowed or not _only_the_short_chain(error):
+                raise
+        self.ran = True
+        self.announce()
+        return fn(dataclasses.replace(context, quality=cast(Quality, _WatchedQuality("fine"))))
 
 
 class _WatchedQuality(str):

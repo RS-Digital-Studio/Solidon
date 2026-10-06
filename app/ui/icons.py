@@ -238,6 +238,10 @@ PATHS: Final[dict[str, str]] = {
     # Ein Haken: ein erledigter Schritt der Tour. Der Text der Zeile bleibt
     # stehen (Regel 18) — das Zeichen sagt nur den Zustand.
     "done": ('<path d="M4.5 12.5l4.5 4.5L19.5 7" />'),
+    # Eine Uhr: Der Bericht rechnet gerade, was darunter steht, ist der
+    # vorige Stand (RM-534). Kein Schweregrad — sonst läse sich ein Lauf wie
+    # ein Fehler.
+    "running": ('<circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" />'),
     # Ein Pfeil auf den aktuellen Schritt der Tour.
     "step": ('<path d="M4 12h12.5" /><path d="M11.5 6.5 17 12l-5.5 5.5" />'),
     # Ein Vorhängeschloss neben einem Maßfeld: dieses Maß steht schon fest.

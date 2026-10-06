@@ -17682,6 +17682,93 @@ def test_the_halt_message_goes_when_the_chain_runs_again(window: MainWindow) -> 
     )
 
 
+def test_a_new_run_takes_the_halt_message_and_the_report_follows_it(window: MainWindow) -> None:
+    """RM-534: Rechnet es, gilt der Halt von vorhin nicht als Stand.
+
+    „Die Kette hält an“ stand in der Statuszeile, bis das nächste Ergebnis
+    kam, und der Bericht zeigte den alten Fehler mit voller Schwere — 3,7 s
+    am Kundenteil, während die Rechnung lief, die ihn widerrief. Jetzt weicht
+    die Ansage dem Lauf, der Bericht geht in den Laufzustand (nach 0,2 s,
+    ``ReportPanel.set_running``), und hält die Kette wieder an, sagt das
+    Ergebnis es neu.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+    window.session.apply(
+        "Bohrung setzen",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={"diameter": 5000.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    drill = window.session.project.document.ops[-1].id
+    assert "hält an" in window._announcement, "Voraussetzung: die Kette hält an"
+
+    assert window.session.change_params(drill, {"diameter": 6000.0})
+
+    assert window.session.busy, "Voraussetzung: es rechnet"
+    assert window._announcement == "", "die Haltansage weicht dem Lauf"
+    assert window.report._running_delay.isActive() or window.report.running(), (
+        "der Bericht weiß, dass seine Zeilen zum vorigen Stand gehören"
+    )
+    window.session.wait_for_idle()
+    assert window.session.last_result.stopped_at == drill
+    assert "hält an" in window._announcement, "das neue Ergebnis sagt den Halt neu"
+    assert not window.report.running(), "ein Ergebnis ist kein voriger Stand"
+
+
+def test_the_window_goes_the_full_chain_where_the_short_one_ends(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534, Anschluss: Die Auswertung im Fenster rechnet den Schritt mit allen Stufen.
+
+    Der Kern kann es (``evaluate(full_chain_when_stuck=True)``); hier wird
+    belegt, dass die Anwendung es tut. Am Kundenteil hielt die kurze Kette mit
+    „… sagt erst die vollständige“, und keiner fragte die vollständige. Die
+    übrigen Schritte bleiben im Entwurf — der Lauf ist deshalb nicht fein, und
+    Export wie Slicer rechnen weiter nach.
+    """
+    import trimesh
+
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+    real = boolean_module._run_stage
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    window.session.apply(
+        "Bohrung setzen",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={"diameter": 3.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    drill = window.session.project.document.ops[-1].id
+    result = window.session.last_result
+
+    assert result.stopped_at is None, [str(entry.message) for entry in result.scene.report.findings]
+    assert result.solvers[drill].strategy == "jittered", result.solvers[drill]
+    assert window.session.last_quality == "draft"
+    assert not window.session.fine_current, "ein Schritt fein macht den Lauf nicht fein"
+
+
 def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) -> None:
     """Die Bausteine haben keinen Menüort mehr — dafür einen am gewählten Teil.
 

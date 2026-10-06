@@ -6584,6 +6584,155 @@ def test_a_hole_change_that_the_first_stage_holds_does_not_ask_for_the_quality()
     assert changed.complete and not changed.reads_quality
 
 
+def _short_chain_finds_nothing(monkeypatch: pytest.MonkeyPatch, *, nor_the_full: bool) -> list[str]:
+    """Die verlustfreien Stufen liefern nichts, wie am Kundenteil (RM-534).
+
+    Mit ``nor_the_full`` auch die übrigen — die volle Kette bestätigt den
+    Halt. Zurück kommt die Liste der gerufenen Stufen.
+    """
+    import trimesh
+
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+
+    real = boolean_module._run_stage
+    called: list[str] = []
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        called.append(name)
+        if nor_the_full or name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    return called
+
+
+def _drilled_box(profile: Profile) -> Any:
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={})])
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 10.0, "depth": 0.0},
+            )
+        ],
+    )
+    return project.document
+
+
+def test_a_halt_of_the_short_chain_is_no_fine_verdict(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Ein Entwurfshalt, der nach der Güte gefragt hat, ist nie fein.
+
+    Die Auswertung brach beim Halt ab, bevor sie die Frage nach der Güte
+    festhielt; die Sitzung hielt den Halt deshalb für fein, und Druckdialog
+    wie Export bestellten die volle Kette nie — obwohl der Satz im Bericht
+    „… sagt erst die vollständige“ genau sie ankündigte.
+    """
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+
+    halted = evaluate(document, profile, quality="draft")
+
+    assert halted.stopped_at == document.ops[-1].id, "Voraussetzung: der Entwurf hält an"
+    assert any(
+        action.id == "use_voxel_stage"
+        for finding in halted.scene.report.findings
+        for action in finding.suggestions
+    ), "Voraussetzung: der Halt sagt nur, dass die kurze Kette ausging"
+    assert halted.reads_quality, "der Halt gilt als fein, und keiner rechnet die volle Kette"
+
+
+def test_the_window_run_goes_the_full_chain_where_the_short_one_ends(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Im Fenster rechnet derselbe Lauf den einen Schritt mit allen Stufen.
+
+    Der Kunde sah „… sagt erst die vollständige“ als Fehler und nahm
+    *Reparieren und erneut versuchen*, das nicht helfen konnte. Jetzt kommt
+    das Ergebnis der vollen Kette, und es ist genau das der feinen Rechnung.
+    Der nächste Entwurfslauf trifft es im Cache — kein Hin und Her zwischen
+    Fehler und Ergebnis.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+    drill = document.ops[-1].id
+
+    rescued = evaluate(document, profile, quality="draft", cache=cache, full_chain_when_stuck=True)
+    fine = evaluate(document, profile, quality="fine")
+    called.clear()
+    again = evaluate(document, profile, quality="draft", cache=cache, full_chain_when_stuck=True)
+
+    assert rescued.complete, [str(finding.message) for finding in rescued.scene.report.findings]
+    assert rescued.solvers[drill].strategy == "jittered", rescued.solvers[drill]
+    assert rescued.reads_quality, "ein fein gerechneter Schritt fragt nach der Güte"
+    shown = rescued.scene.objects["obj_1"].mesh
+    expected = fine.scene.objects["obj_1"].mesh
+    assert shown.triangle_count == expected.triangle_count
+    assert math.isclose(shown.volume, expected.volume, rel_tol=1e-12)
+    assert again.complete and not called, f"der zweite Lauf rechnete neu: {called}"
+
+
+def test_the_full_chain_says_its_verdict_once(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Bestätigt die volle Kette den Halt, gilt ihr Satz, und zwar ohne Nachrechnen.
+
+    Am Kundenteil sagte sie „Das Werkzeug deckt ihn vollständig ab“, der
+    hilfreichere Satz. Jede Änderung dahinter rechnete den Schritt sonst
+    wieder mit allen Stufen — 17 s für dieselbe Auskunft.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+    drill = document.ops[-1].id
+
+    first = evaluate(document, profile, quality="draft", cache=cache, full_chain_when_stuck=True)
+    tried = list(called)
+    called.clear()
+    second = evaluate(document, profile, quality="draft", cache=cache, full_chain_when_stuck=True)
+
+    assert first.stopped_at == drill and second.stopped_at == drill
+    assert "voxel" in tried, f"die volle Kette lief nicht: {tried}"
+    halt = next(finding for finding in first.scene.report.findings if finding.op_id == drill)
+    assert all(action.id != "use_voxel_stage" for action in halt.suggestions), (
+        "der Satz verweist weiter auf eine Kette, die schon gelaufen ist"
+    )
+    assert first.reads_quality and second.reads_quality
+    assert not called, f"der zweite Lauf rechnete den Schritt noch einmal: {called}"
+    assert [str(finding.message) for finding in second.scene.report.findings] == [
+        str(finding.message) for finding in first.scene.report.findings
+    ]
+
+
+def test_a_preview_keeps_the_answer_of_the_short_chain(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Ohne ``full_chain_when_stuck`` bleibt der Entwurf beim Entwurf.
+
+    Eine Vorschau läuft bei jedem Tastendruck im Dialog; dort ist der
+    Entwurfssatz mit *Voxelstufe erzwingen* die schnellere Antwort.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+
+    halted = evaluate(document, profile, quality="draft", cache=ResultCache())
+
+    assert halted.stopped_at == document.ops[-1].id
+    assert "jittered" not in called and "voxel" not in called, called
+
+
 @pytest.mark.parametrize("following", [False, True])
 def test_preview_recognises_only_features_read_after_the_current_step(
     profile: Profile, monkeypatch: pytest.MonkeyPatch, following: bool

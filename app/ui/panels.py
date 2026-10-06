@@ -45,6 +45,7 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPainter,
     QPainterPath,
+    QPalette,
     QPen,
     QPixmap,
     QResizeEvent,
@@ -200,6 +201,7 @@ from app.ui.labels import (
     wheel_needs_focus,
 )
 from app.ui.leash import Worker, WorkerLeash, weak_slot
+from app.ui.loading import DELAY_MS
 from app.ui.overlay import (
     LEFT_WIDTH,
     ContentScroller,
@@ -5970,6 +5972,18 @@ class ReportPanel(QWidget):
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self._alert_counts = (0, 0)
         """Dieselben getrennt, Fehler zuerst — siehe :meth:`alert_counts`."""
+        self._running = False
+        """Ob die Zeilen gerade als voriger Stand dastehen, weil neu gerechnet wird.
+
+        Der Bericht kannte keinen Zustand „rechnet“ (RM-534): Beim Radius
+        2,0 → 1,0 stand „Der Radius ist für diese Kanten zu groß“ 3,7 s mit
+        voller Schwere da, darüber „Übergabe nicht empfohlen“, während die
+        Rechnung, die ihn widerrief, lief. Gesetzt wird er erst nach
+        :data:`DELAY_MS` (§2.8) — ein Lauf aus dem Cache bleibt ruhig."""
+        self._running_delay = QTimer(self)
+        self._running_delay.setSingleShot(True)
+        self._running_delay.setInterval(DELAY_MS)
+        self._running_delay.timeout.connect(self._running_for_a_while)
         self._list_follows: bool | None = None
         """Für welchen Zustand die Befundliste zuletzt von selbst auf- oder
         zugeklappt wurde: offen mit Fehlern oder Warnungen, zu mit Hinweisen
@@ -6409,6 +6423,13 @@ class ReportPanel(QWidget):
                     self.offer_effect.show()
             if action is primary:
                 make_primary(button)
+            if self._running:
+                # Der Befund gehört zum vorigen Stand (RM-534); eine Handlung
+                # daran träfe ein Teil, das es gleich nicht mehr gibt.
+                button.setEnabled(False)
+                button.setToolTip(
+                    tr("Erst nach der Berechnung — der Befund gehört zum vorigen Stand.")
+                )
             # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene
             # Methoden des Fensters, und ein Lambda, das es fängt, schließt
             # den Ring Panel → Knopf → Handler → Fenster — gemessen hielten
@@ -6500,6 +6521,10 @@ class ReportPanel(QWidget):
 
     def _run_action_for(self, item: QListWidgetItem, action_id: str) -> None:
         """Knopf und Kontextmenü benutzen dieselbe Ziel- und Abbruchentscheidung."""
+        if self._running:
+            # Knopf und Menüeintrag sind gesperrt; das hier fängt, was zwischen
+            # Bau und Klick doch noch durchkam (RM-534).
+            return
         finding: Finding | None = item.data(Qt.ItemDataRole.UserRole)
         # **Eine Sammelzeile fragt, für welche Körper sie gelten soll.** Sie
         # vertritt sechs oder zwölf, und ihr Befund trägt nur den ersten davon;
@@ -6680,6 +6705,10 @@ class ReportPanel(QWidget):
         # ist geschlossen und damit fort." Beides stimmt, das eine kommt vom
         # Einlesen, das andere von der Reparatur — und das stand nirgends.
         self._document = document
+        # Ein Ergebnis ist kein voriger Stand mehr; rechnet es weiter, sagt
+        # das Fenster es neu (:meth:`set_running`).
+        self._running_delay.stop()
+        self._running = False
         self._stopped_at = result.stopped_at if result is not None else None
         self._live_objects = dict(result.scene.objects) if result is not None else {}
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
@@ -7075,6 +7104,17 @@ class ReportPanel(QWidget):
                 self.list.palette().base().color().name(),
             )
         )
+        if self._running:
+            # **Der vorige Stand sagt es in Worten** (RM-534): gedämpft allein
+            # wäre eine Bedeutung über die Farbe (Regel 18), und ein Fehler,
+            # den die laufende Rechnung vielleicht widerruft, liest sich sonst
+            # als gültig.
+            short, whole = item.data(_LINE_ROLE)
+            short = tr("Voriger Stand: {line}", line=short)
+            item.setData(_LINE_ROLE, (short, tr("Voriger Stand: {line}", line=whole)))
+            item.setText(short)
+            tone = self.list.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text)
+            item.setForeground(tone)
         # Die Form trägt den Schweregrad, die Farbe verstärkt ihn nur: ein
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
         item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
@@ -7159,21 +7199,26 @@ class ReportPanel(QWidget):
             return
         from app.ui.print_contract import handoff_state
 
-        status = handoff_state(self._findings, self._review_missing)
+        status = handoff_state(self._findings, self._review_missing, running=self._running)
         severity = (
             "error"
             if counts["error"]
             else ("warning" if self._review_missing or counts["warning"] else "info")
         )
         symbol = f"severity-{severity}" if severity != "info" else "done"
+        if self._running:
+            symbol = "running"
         self.review_symbol.setPixmap(icon(symbol, self).pixmap(TARGET_SIZE // 2))
         self.review_symbol.setAccessibleName(status)
         self.summary.setText(status)
         self._fit_head()
         # **Unvollständig sagt, warum** (Durchsicht B17): der erste Grund unter
         # dem Kopf, alle im Prüfumfang. Steht ein Fehler da, sagt der Status
-        # schon mehr als die fehlende Prüfung.
+        # schon mehr als die fehlende Prüfung — außer er gehört zum vorigen
+        # Stand: Dann sagt die Zeile, dass gerechnet wird (RM-534).
         reason = self._review_missing[0] if self._review_missing and not counts["error"] else ""
+        if self._running:
+            reason = tr("Die Bewertung läuft; der vorige Stand bleibt sichtbar.")
         self.review_reason.setText(reason)
         self.review_reason.setVisible(bool(reason))
 
@@ -7183,6 +7228,52 @@ class ReportPanel(QWidget):
         self._review_missing = tuple(missing)
         self.review_scope.setText("\n".join(dict.fromkeys((*basis.splitlines(), *missing))))
         self._count_up()
+
+    def set_running(self, running: bool) -> None:
+        """Ob gerade neu gerechnet wird und die Zeilen zum vorigen Stand gehören (RM-534).
+
+        Rechnet es länger als :data:`DELAY_MS`, sagt der Kopf „Wird neu
+        berechnet …“ mit Uhr statt Fehlersymbol; die Zeilen bleiben sichtbar
+        (§15.3), mit dem Vorsatz „Voriger Stand:“ als zweiter Kodierung neben
+        der gedämpften Farbe (Regel 18), ihre Handlungen gesperrt. Die Zahlen
+        bleiben, wie sie waren — die Reitermarke zählt keinen alten Fehler
+        als neuen. Das Fenster ruft es bei jedem Wechsel; ein neues Ergebnis
+        (:meth:`show_result`) beendet den Zustand ohnehin.
+        """
+        if running:
+            if not self._running and not self._running_delay.isActive():
+                self._running_delay.start()
+            return
+        self._running_delay.stop()
+        self._show_running(False)
+
+    def running(self) -> bool:
+        """Ob die Zeilen gerade als voriger Stand dastehen — siehe :meth:`set_running`."""
+        return self._running
+
+    def _running_for_a_while(self) -> None:
+        self._show_running(True)
+
+    def _show_running(self, running: bool) -> None:
+        if running == self._running:
+            return
+        self._running = running
+        selected = self.list.selectedItems()
+        chosen = (
+            _identity(selected[0].data(Qt.ItemDataRole.UserRole)) if len(selected) == 1 else None
+        )
+        self._rebuild()
+        self._count_up()
+        self._refilter()
+        if chosen is not None:
+            for row in range(self.list.count()):
+                item = self.list.item(row)
+                if _identity(item.data(Qt.ItemDataRole.UserRole)) == chosen:
+                    self.list.setCurrentRow(row)
+                    break
+        # Die Knöpfe hängen an der Wahl; ohne Wechsel baut sie niemand neu.
+        self._show_offers()
+        self._grew()
 
     def _toggle_review_scope(self, _shown: bool) -> None:
         """Auf- und Zuklappen besorgt :func:`collapsible`; die Karte misst neu."""
@@ -7350,7 +7441,10 @@ class ReportPanel(QWidget):
         menu = QMenu(self)
         chosen: dict[Any, Any] = {}
         for action in offered:
-            chosen[menu.addAction(str(action.label))] = action
+            entry = menu.addAction(str(action.label))
+            # Dieselbe Sperre wie an den Knöpfen darunter (RM-534).
+            entry.setEnabled(not self._running)
+            chosen[entry] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
         # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
         picked = cast(QAction | None, menu.exec(self.list.viewport().mapToGlobal(position)))

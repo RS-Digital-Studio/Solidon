@@ -1206,3 +1206,93 @@ def test_the_least_height_reads_only_the_rows_it_keeps(qt_app, monkeypatch):
     finally:
         panel.close()
         panel.deleteLater()
+
+
+def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_app):
+    """RM-534: Während der Rechnung steht kein alter Fehler als gültig da.
+
+    Kunde (0.5.3): „manchmal wird im Prüfbericht auch Fehler angezeigt und kurz
+    darauf ist die Berechnung erst fertig“. Gemessen: Beim Radius 2,0 → 1,0
+    stand „Der Radius ist für diese Kanten zu groß“ 3,7 s mit voller Schwere
+    da, darüber „Übergabe nicht empfohlen“. Jetzt sagt der Kopf nach 0,2 s,
+    dass gerechnet wird; die Zeile bleibt als voriger Stand lesbar, in Worten
+    und nicht nur gedämpft (Regel 18), ihre Handlung gesperrt, und die Zahl am
+    Reiter ändert sich nicht — ein alter Fehler blinkt nicht als neuer.
+    """
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from app.ui.loading import DELAY_MS
+
+    ran = []
+
+    class Host(QWidget):
+        def error_handlers(self):
+            return {"arrange_on_bed": lambda error: ran.append(error)}
+
+    host = Host()
+    layout = QVBoxLayout(host)
+    panel = ReportPanel(host)
+    layout.addWidget(panel)
+    stale = Finding(
+        "arrange.collision",
+        "error",
+        "Zwei Körper überschneiden sich.",
+        object_id="a",
+        location=(0.0, 0.0, 1.0),
+    )
+    alerts: list[int] = []
+    try:
+        panel.show_result(
+            EvaluationResult(
+                Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((stale,)))
+            )
+        )
+        panel.set_review_context("Geometrieprüfung: ganze Szene", ())
+        host.resize(420, 700)
+        host.show()
+        panel.list.setCurrentRow(0)
+        qt_app.processEvents()
+        panel.alertsChanged.connect(alerts.append)
+        assert panel.summary.text() == "Übergabe nicht empfohlen", "Voraussetzung"
+
+        panel.set_running(True)
+        qt_app.processEvents()
+        assert panel.summary.text() == "Übergabe nicht empfohlen", "unter 0,2 s bleibt es ruhig"
+        QTest.qWait(DELAY_MS + 150)
+
+        assert panel.running()
+        assert panel.summary.text() == "Wird neu berechnet …"
+        assert panel.review_reason.text() == (
+            "Die Bewertung läuft; der vorige Stand bleibt sichtbar."
+        ), "der Grund weicht dem Fehler nicht mehr"
+        assert panel.list.count() == 1, "die Zeile bleibt sichtbar (§15.3)"
+        assert panel.list.item(0).text().startswith("Voriger Stand: "), panel.list.item(0).text()
+        assert panel.list.currentRow() == 0, "die Wahl des Kunden bleibt"
+        buttons = [
+            widget
+            for index in range(panel._offer_row.count())
+            if isinstance(widget := panel._offer_row.itemAt(index).widget(), QPushButton)
+        ]
+        assert buttons, "die Handlung steht weiter da"
+        assert not any(button.isEnabled() for button in buttons), "aber gesperrt"
+        assert "vorigen Stand" in buttons[0].toolTip()
+        assert alerts == [], "die Reitermarke zählt den alten Fehler nicht neu"
+
+        fresh = Finding("a.note", "info", "Ausgehöhlt.", object_id="a")
+        panel.show_result(
+            EvaluationResult(
+                Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((fresh,)))
+            )
+        )
+        qt_app.processEvents()
+        assert not panel.running(), "ein Ergebnis ist kein voriger Stand"
+        assert not panel.list.item(0).text().startswith("Voriger Stand"), panel.list.item(0).text()
+        assert panel.summary.text() != "Wird neu berechnet …"
+
+        panel.set_running(True)
+        panel.set_running(False)
+        QTest.qWait(DELAY_MS + 150)
+        assert not panel.running(), "ein kurzer Lauf hinterlässt nichts"
+    finally:
+        host.close()
+        host.deleteLater()

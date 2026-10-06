@@ -293,6 +293,15 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 eine geänderte Objektzahl hält die Auswertung an, statt still
 weiterzurechnen.
 
+**Wo die kurze Kette nur ausgeht, rechnet der Fensterlauf weiter** (RM-534,
+§17.2): Mit `full_chain_when_stuck` rechnet `evaluate` einen Schritt, dessen
+`BooleanFailedError` *Voxelstufe erzwingen* anbietet, gleich mit der vollen
+Kette (`_FullChain`); sein Ergebnis liegt unter dem Entwurfsschlüssel, ein Halt
+der vollen Kette nur in der Speicherebene (`ResultCache.refuse`, §15.6). Nur
+`Session.run_evaluation` setzt es — eine Vorschau bleibt beim Entwurfssatz.
+Ein Halt nimmt mit, ob der Schritt nach der Güte fragte (`reads_quality`);
+sonst gilt ein Entwurfshalt als fein, und Export wie Slicer rechnen nie nach.
+
 ## Am Dokument wird nie vorbei geschrieben
 
 Jede Änderung am Dokument ist eine Transaktion, auch ohne Operation:

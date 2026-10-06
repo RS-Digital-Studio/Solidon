@@ -5338,6 +5338,9 @@ class Session(QObject):
             on_recognition_answer=self._recognition_answered_in_worker,
             missing_basis=missing_profile_basis(document),
             check_status=worker.checkWith.emit if isinstance(worker, _EvaluationWorker) else None,
+            # Die Antwort der kurzen Kette ist im Fenster keine: Der Bericht
+            # sagte „… sagt erst die vollständige“, und keiner fragte sie (RM-534).
+            full_chain_when_stuck=True,
         )
         # Bei jedem Lauf und nicht nur beim Öffnen: Solange mit einem
         # mitgebrachten oder einem Ersatzdrucker gerechnet wird, sagt es der

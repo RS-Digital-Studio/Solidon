@@ -63,6 +63,10 @@ DEFAULT_TRIANGLE_BUDGET: Final = 20_000_000
 #: Obergrenze des Platten-Caches; die ältesten Einträge gehen zuerst.
 DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 
+#: Wie viele Halte der vollen Kette die Speicherebene behält (``refuse``). Ein
+#: Satz je Schritt, kein Netz — die Grenze hält nur eine lange Sitzung klein.
+_REFUSALS_KEPT: Final = 256
+
 #: Der Stand der Geometrie- und Merkmalsauskunft, den ein Eintrag tragen muss.
 #: Derselbe Stand geht in den Operationshash ein und entwertet die
 #: Speicherebene; alte Einträge sind Fehltreffer. Was ihn bisher hob, in der
@@ -285,6 +289,14 @@ class ResultCache:
         self._cost = 0
         self._budget = triangle_budget
         self._disk = disk
+        self._refusals: OrderedDict[str, Finding] = OrderedDict()
+        """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
+
+        Ein Ergebnis gibt es dort nicht, also auch keinen Eintrag oben. Ohne
+        dieses Gedächtnis rechnete jede Änderung hinter einem solchen Schritt
+        ihn noch einmal mit allen Stufen — am Kundenteil 17 s, um denselben
+        Satz zu sagen. Nur im Speicher: Ein Halt ist kein vollständiger
+        Durchlauf (§15.6), und die Platte trägt nur, was einer hinterlassen hat."""
         self.statistics = CacheStatistics()
         self._lock = threading.RLock()
         """Ein Schloss, weil mehr als ein Faden hier hineinschreibt.
@@ -368,6 +380,19 @@ class ResultCache:
         if self._disk is not None and to_disk:
             self._disk.put(key, result)
 
+    def refuse(self, key: str, finding: Finding) -> None:
+        """Merkt, dass der Schritt unter ``key`` auch mit der vollen Kette anhält."""
+        with self._lock:
+            self._refusals.pop(key, None)
+            self._refusals[key] = finding
+            while len(self._refusals) > _REFUSALS_KEPT:
+                self._refusals.popitem(last=False)
+
+    def refusal(self, key: str) -> Finding | None:
+        """Der gemerkte Halt der vollen Kette unter ``key``, sonst ``None``."""
+        with self._lock:
+            return self._refusals.get(key)
+
     def _store(self, key: str, result: CachedResult) -> None:
         """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`."""
         if key in self._entries:
@@ -402,6 +427,7 @@ class ResultCache:
         """
         with self._lock:
             self._entries.clear()
+            self._refusals.clear()
             self._cost = 0
 
     @property

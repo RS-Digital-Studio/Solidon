@@ -23099,6 +23099,7 @@ class MainWindow(QMainWindow):
         # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
         self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result, self.session.project.document)
+        self._follow_the_run_in_the_report()
         if self._pose_report_target is not None:
             if self._pose_report_target in result.scene.objects:
                 self._gesture_analysis_changed()
@@ -23806,6 +23807,13 @@ class MainWindow(QMainWindow):
 
     def _on_busy(self, busy: bool) -> None:
         self._update_review_status()
+        self._follow_the_run_in_the_report()
+        if busy and self._halted:
+            # **Die Haltansage weicht dem Fortschritt** (RM-534): Sie galt dem
+            # Stand, der gerade neu gerechnet wird. Hält die Kette wieder an,
+            # sagt das Ergebnis es neu.
+            self._halted = False
+            self.announce("")
         if busy:
             self._run_timing.begin()
         else:
@@ -23837,6 +23845,19 @@ class MainWindow(QMainWindow):
             self._resume_preview_after_idle()
             self._resume_map_after_idle()
             self._export_when_current()
+
+    def _follow_the_run_in_the_report(self) -> None:
+        """Der Bericht sagt, wenn seine Zeilen zum vorigen Stand gehören (RM-534).
+
+        Das ist so, solange gerechnet wird und das Gezeigte nicht zum
+        Dokument gehört. Ein Bild vor der Erkennung gehört schon dazu
+        (KUNDE-14): Seine Zeilen sind die des neuen Stands, nur noch nicht
+        vollständig — das sagt der Prüfumfang.
+        """
+        session = self.session
+        self.report.set_running(
+            session.busy and not session.result_current and session.picture is None
+        )
 
     def _resume_map_after_idle(self) -> None:
         """Die gewählte Analysekarte kommt nach der Rechnung wieder.

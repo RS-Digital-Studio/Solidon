@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-534: Der Prüfbericht sagt, wenn er neu rechnet, und die volle Kette entscheidet selbst (06.10.2026)](#rm-534-der-prüfbericht-sagt-wenn-er-neu-rechnet-und-die-volle-kette-entscheidet-selbst-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
 | 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
@@ -43027,3 +43028,77 @@ Skizzenmodus am echten Gerät — geht in RM-070 auf, das ihn in seiner Register
 **Entfallen (06.10.2026, Entscheidung Robert):** Gebraucht werden nur noch die Dateien der
 Druckprojekte, und die liegen in `F:\3D Dateien`; das Repository „3D Drucker“ braucht keine
 eigene Sicherung.
+
+## RM-534: Der Prüfbericht sagt, wenn er neu rechnet, und die volle Kette entscheidet selbst (06.10.2026)
+
+<a id="rm-534-der-prüfbericht-sagt-wenn-er-neu-rechnet-und-die-volle-kette-entscheidet-selbst-06102026"></a>
+<a id="rm-534"></a>
+
+**RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig
+  (Fragebogen S-20261006-5be329).** Kunde: „manchmal wird im Prüfbericht auch Fehler angezeigt und
+  kurz darauf ist die Berechnung erst fertig“. Gemessen am HEAD `3a5d607f3` mit der Kundendatei
+  (Bericht `pruefbericht-bericht.md` im Zustandsordner von RM-533): Beim Wechsel des Radius
+  2,0 → 1,0 (Schritt 18) bleibt die Zeile „Der Radius ist für diese Kanten zu groß“ mit voller
+  Schwere stehen, der Kopf sagt „Übergabe nicht empfohlen“, die Statuszeile „Die Kette hält an“ —
+  3,7 s lang, bis das Ergebnis kommt. Der Hinweis „Die Bewertung läuft“ wird gerade dann
+  unterdrückt (`ReportPanel`: `self._review_missing and not counts["error"]`). Widerlegt sind
+  Zwischenstände aus dem Bild zuerst, `check_states` und die Vorschau eines offenen Dialogs.
+  Dazu ein eigener Fehler: Ein Halt im Entwurf gilt als fein. `evaluate.py` bricht beim Halt ab,
+  bevor `reads_quality` gesetzt wird, `fine_current` ist wahr, und Druckdialog und Export rechnen
+  die volle Kette nie, obwohl der Satz „… sagt erst die vollständige“ sie ankündigt. Am
+  Kundenschritt 6 (*Merkmal entfernen* am Stift) bestätigt die volle Kette den Fehler mit dem
+  besseren Satz („das Werkzeug deckt ihn vollständig ab“); der Kunde nahm zweimal *Reparieren und
+  erneut versuchen*, das dort nicht helfen konnte.
+
+  **Fix in vier Teilen (Entscheidung aus Kundensicht):** (1) Läuft eine Auswertung länger als
+  200 ms, sagt der Kopf „Wird neu berechnet …“; alte Zeilen bleiben als voriger Stand sichtbar,
+  mit Text als zweiter Kodierung (Regel 18), ihre Knöpfe gesperrt, die Reitermarke zählt sie nicht
+  neu, die Haltansage weicht dem Fortschritt; `print_contract.handoff_state` bekommt den
+  Laufzustand als eigenen Eingang. (2) Hält der Entwurf mit `BooleanFailedError` ohne Voxelstufe
+  an, rechnet die Sitzung die volle Kette einmal selbst; bis dahin steht der Laufzustand, kein
+  Fehler; *Voxelstufe erzwingen* bleibt. (3) Ein Halt im Entwurf ist nie `fine_current`. (4) Das
+  feine Urteil gilt für folgende Entwurfsläufe, solange Schritt und Eingang gleich sind — kein
+  Hin und Her. Tests, die heute Verhalten zusichern und bleiben: `test_print_contract.py`
+  (Übergabezustand ohne Lauf), `test_boolean.py` (Entwurfssatz), `test_ui.py` (`use_voxel_stage`);
+  der Halt gehört neben RM-494 in `test_evaluation.py`. **Abnahme:** Während eines Laufs steht
+  kein alter Fehler als gültig da; ein Export nach einem Entwurfshalt rechnet fein.
+
+**Erledigt (06.10.2026).** Alle vier Teile sind gebaut, Teil 2 und 4 anders als
+vorgeschlagen und dafür einfacher:
+
+- **Teil 1, Laufzustand:** `ReportPanel.set_running` aus
+  `MainWindow._follow_the_run_in_the_report` (bei jedem Wechsel von `busy` und
+  nach jedem gezeigten Ergebnis). Nach 200 ms sagt der Kopf „Wird neu berechnet
+  …“ mit Uhr (`icons.PATHS["running"]`), jede Zeile beginnt mit „Voriger
+  Stand:“ und ist gedämpft, Knöpfe und Kontextmenü sind gesperrt, die
+  Reiterzahl bleibt. `handoff_state` hat den Eingang `running`. Die Haltansage
+  weicht in `_on_busy` dem Lauf. Ein Bild vor der Erkennung gilt nicht als
+  voriger Stand.
+- **Teil 2 und 4, volle Kette:** Statt eines zweiten, ganz feinen Laufs der
+  Sitzung rechnet die Auswertung im Fenster genau den Schritt, an dem die kurze
+  Kette ausging, mit allen Stufen weiter (`evaluate(full_chain_when_stuck=True)`,
+  `_FullChain`; nur `Session.run_evaluation` setzt es, Vorschauen nicht). Grund
+  aus Kundensicht: Die Schritte davor und danach bleiben im Entwurf, der Kunde
+  wartet auf einen Schritt statt auf die ganze Kette (am Kundenteil 17 s), und
+  ein Entwurfsurteil steht nie als Fehler da. Das Ergebnis liegt unter dem
+  Entwurfsschlüssel im Cache, also gibt es kein Hin und Her mehr; bestätigt die
+  volle Kette den Halt, merkt die Speicherebene ihren Satz
+  (`ResultCache.refuse`), und der nächste Lauf sagt ihn ohne Nachrechnen. Der
+  Bauplan §17.2 nennt das seither (mit Ansage an Robert).
+- **Teil 3:** Ein Halt nimmt mit, ob der Schritt nach der Güte fragte
+  (`reads_quality`); `fine_current` ist nach einem Entwurfshalt falsch, Export
+  und Druckdialog bestellen die feine Rechnung.
+
+Nachweis: `tests/test_evaluation.py`
+(`test_a_halt_of_the_short_chain_is_no_fine_verdict`,
+`test_the_window_run_goes_the_full_chain_where_the_short_one_ends`,
+`test_the_full_chain_says_its_verdict_once`,
+`test_a_preview_keeps_the_answer_of_the_short_chain`; die ersten drei am Stand
+davor rot), `tests/test_print_contract.py`
+(`test_a_running_evaluation_goes_before_every_finding`),
+`tests/test_print_contract_ui.py`
+(`test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors`),
+`tests/test_ui.py` (`test_a_new_run_takes_the_halt_message_and_the_report_follows_it`,
+`test_the_window_goes_the_full_chain_where_the_short_one_ends`, ohne die
+Eskalation in der Sitzung rot). Regeln: `kern.md` („Auswertung“),
+`wartezeit.md` („Wartezeit“).
