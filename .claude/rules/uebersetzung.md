@@ -47,6 +47,12 @@ Wie ein Text für den Kunden klingt (kurz, nicht nach einem Sprachmodell,
   (`app/i18n/keys.py`, eingestellt beim Start über `sys.platform`). Eine
   andere Form („Strg-Z“, „Strg + Z“) erkennt es nicht; Handbuch, Website und
   Changelog-Seiten bleiben in dieser Schreibweise (`test_native_keys.py`).
+- **Entf und Pos1 haben je Sprache einen Namen**, im Katalog unter dem Kontext
+  „Taste“ (en Del/Home, es Supr/Inicio, fr Suppr/Origine, it Canc/Home, pt
+  Del/Home), und jeder Satz nennt die Taste genau so: Auf dem Mac schreibt
+  `tr` daraus ⌫ und ↖ (`key_names`; `test_native_keys.py` zählt je Satz
+  nach). Pos1 gilt nur in `…`, in Klammern oder vor „(*Handlung*)“, denn
+  „Home“ ist auch die Startseite. Einfg hat dort kein Gegenstück und bleibt.
 
 ## Ein Schlüssel, eine Bedeutung, eine Schreibweise
 

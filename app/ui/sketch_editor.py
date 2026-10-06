@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import html
 import math
+import sys
 import weakref
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -109,6 +110,7 @@ from app.ui.labels import (
 )
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES, text_colour
+from app.ui.shortcut_schemes import delete_keys, deletes, redo_keys
 from app.ui.viewport import MEASURE_GAP
 
 #: Was eine widersprüchliche Bedingung in der Liste anschreibt.
@@ -4399,7 +4401,7 @@ class SketchCanvas(QWidget):
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self.tool == "spline":
             self.finish_spline()
             return
-        if event.key() == Qt.Key.Key_Delete:
+        if deletes(event.key(), sys.platform):
             self.remove_selected()
             return
         # **Die erste Ziffer beginnt die Eingabe, ohne Klick und ohne Tabulator.**
@@ -7110,10 +7112,11 @@ class SketchPanel(QWidget):
         self._shortcuts.append(undo)
 
         # Und der Weg zurück nach vorn, aus demselben Grund am selben Ort
-        # (Z3). ``StandardKey.Redo`` ist auf Windows und Linux Strg+Y und auf
-        # macOS Umschalt+Cmd+Z — dieselbe Taste, die das Fenster für seinen
-        # eigenen Eintrag führt, nur hier für das Blatt.
-        redo = QShortcut(QKeySequence(QKeySequence.StandardKey.Redo), self)
+        # (Z3), mit denselben Tasten, die das Fenster für seinen eigenen
+        # Eintrag führt (``redo_keys``): Strg+Y unter Windows und Linux, dort
+        # neben Strg+Umschalt+Z, und ⇧⌘Z auf dem Mac — nur hier für das Blatt.
+        redo = QShortcut(self)
+        redo.setKeys(redo_keys(sys.platform, QKeySequence(QKeySequence.StandardKey.Redo)))
         redo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         redo.activated.connect(self.canvas.redo)
         self._shortcuts.append(redo)
@@ -7128,7 +7131,9 @@ class SketchPanel(QWidget):
         helper.activated.connect(self.canvas.toggle_construction)
         self._shortcuts.append(helper)
 
-        remove = QShortcut(QKeySequence(QKeySequence.StandardKey.Delete), self)
+        # Am Mac auch ⌫, wie Körper und Verlauf (``delete_keys``).
+        remove = QShortcut(self)
+        remove.setKeys(delete_keys(sys.platform))
         remove.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         remove.activated.connect(self.canvas.remove_selected)
         self._shortcuts.append(remove)
@@ -8042,7 +8047,7 @@ class SketchPanel(QWidget):
         if (
             watched is self.constraint_list
             and event.type() == QEvent.Type.ShortcutOverride
-            and event.key() == Qt.Key.Key_Delete
+            and deletes(event.key(), sys.platform)
         ):
             # **Entf gehört der Liste, solange sie den Fokus hat.** Das Kürzel
             # des Panels gewinnt sonst vor jedem KeyPress und löschte die ganze
@@ -8053,7 +8058,7 @@ class SketchPanel(QWidget):
         if (
             watched is self.constraint_list
             and event.type() == QEvent.Type.KeyPress
-            and event.key() == Qt.Key.Key_Delete
+            and deletes(event.key(), sys.platform)
         ):
             chosen = self.constraint_indices(self.constraint_list.currentRow())
             if chosen:

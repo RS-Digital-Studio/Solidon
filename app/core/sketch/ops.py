@@ -1786,7 +1786,9 @@ class SketchLoftParams(BaseParams):
         depends_on=("top", ("scaled",)),
         placement="advanced",
     )
-    # Vorn aus demselben Grund wie die Bahn des Sweeps (RM-183).
+    # Hinten wie die Wahl „Oberer Umriss“, und gleich unter ihr (RM-513): Wer
+    # „gezeichnet“ wählt, findet den Zeichenknopf dort, wo er gewählt hat —
+    # die Lehre der Sweep-Bahn (RM-183).
     top_sketch: str = param(
         title=_("Obere Zeichnung"),
         default="",

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import sys
 import weakref
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
@@ -197,8 +198,15 @@ from app.ui.labels import (
     wheel_needs_focus,
 )
 from app.ui.leash import Worker, WorkerLeash, weak_slot
-from app.ui.overlay import LEFT_WIDTH, ContentScroller, FittedScroller, rows_height
+from app.ui.overlay import (
+    LEFT_WIDTH,
+    ContentScroller,
+    FittedScroller,
+    rows_height,
+    tell_the_zone,
+)
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
+from app.ui.shortcut_schemes import delete_keys
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -4618,7 +4626,8 @@ class HistoryPanel(QWidget):
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_context_menu)
         self.remove_action = QAction(tr("Schritt löschen …"), self.list)
-        self.remove_action.setShortcut(QKeySequence("Del"))
+        # Am Mac auch ⌫: Die Taste „delete“ dort sendet Backspace (``delete_keys``).
+        self.remove_action.setShortcuts(delete_keys(sys.platform))
         self.remove_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.remove_action.triggered.connect(self._request_selected_removal)
         self.list.addAction(self.remove_action)
@@ -6069,7 +6078,7 @@ class ReportPanel(QWidget):
 
     def _toggle_finding_details(self, opened: bool) -> None:
         self.finding_details.setVisible(opened and bool(self.list.selectedItems()))
-        self.contentGrew.emit()
+        self._grew()
 
     def _show_selected_place(self) -> None:
         items = self.list.selectedItems()
@@ -6583,9 +6592,14 @@ class ReportPanel(QWidget):
 
         Aufgefallen ist es am Handbuchbild: acht Befunde im Kopf gezählt, zwei
         zu sehen.
+
+        **Bis zur Zone, nicht nur bis zum Bericht** (:func:`overlay.tell_the_zone`):
+        Zwischen Bericht und Zone liegen Reiter, Stapel und Karte, und Qt reicht
+        den neuen Wunsch je Ereignisrunde eine Ebene weiter. Beim Aufklappen
+        der Hinweise rollte die Liste so erst neben freiem Platz, und die Karte
+        wuchs in zwei Zügen. Auch die Klappen melden sich deshalb hier.
         """
-        self.list.updateGeometry()
-        self.updateGeometry()
+        tell_the_zone(self.list)
         self.contentGrew.emit()
 
     def _rebuild(self) -> None:
@@ -6967,12 +6981,12 @@ class ReportPanel(QWidget):
 
     def _toggle_review_scope(self, _shown: bool) -> None:
         """Auf- und Zuklappen besorgt :func:`collapsible`; die Karte misst neu."""
-        self.contentGrew.emit()
+        self._grew()
 
     def _list_toggled(self, _opened: bool) -> None:
         """Die Liste klappt — der freie Platz wandert, die Karte misst neu."""
         self._settle_stretch()
-        self.contentGrew.emit()
+        self._grew()
 
     def _settle_stretch(self) -> None:
         """Der freie Platz gehört der offenen Liste, sonst dem Stretch darunter."""

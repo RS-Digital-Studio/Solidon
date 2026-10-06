@@ -441,11 +441,9 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 - **Eine Karte aus vielen festen Zeilen rollt, statt sich zu stauchen**
   (`overlay.FittedScroller`, der Prüfbericht): Erst gibt die Liste bis zu ihrer
   Mindesthöhe nach, dann rollt der Inhalt; die rechte Zone rechnet ihren
-  Wunsch an der Kartenbreite (`natural_height(zone, width=)`). Warum:
-  `konzepte/begruendungen/regel-fenster.md`.
+  Wunsch an der Kartenbreite (`natural_height(zone, width=)`).
 
-`tests/test_overlay.py` hält alle drei („settles on one answer“, „moves a card
-once“, „no card is pushed outside its section“). `fit_to_rows` rechnet mit
+`tests/test_overlay.py` hält alle drei. `fit_to_rows` rechnet mit
 **einer** Zeilenhöhe — ungleiche Zeilen (Objektbaum) misst `overlay.rows_height`, und
 `wanted_height` fragt dieselbe Quelle wie das Setzen. **Was unter der Liste
 steht, gehört in beide Rechnungen.**
@@ -455,7 +453,9 @@ setzt über einen Nullzeitgeber — kein nachgereichtes Ereignis, denn die Liste
 legen ihre Zeilen selbst über einen Nullzeitgeber, und `rows_height` misst an
 `visualRect`; `resizeEvent` und `reflow` setzen sofort. Tests brauchen mehrere
 Runden `processEvents` — eine Zusicherung nach einer Runde misst einen
-Zwischenstand. `is_room_taker` antwortet je Widget-Typ einmal.
+Zwischenstand. `is_room_taker` antwortet je Widget-Typ einmal. **Wer Inhalt
+wachsen lässt, sagt es bis zur Zone** (`overlay.tell_the_zone`, dann
+`reflow`), sonst wächst die Karte in zwei Zügen.
 
 ## Rückmeldung und Fehlerbericht
 

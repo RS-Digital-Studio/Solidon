@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
 
-from app.i18n.keys import native_keys
+from app.i18n.keys import SOURCE_KEY_NAMES, KeyNames, native_keys
 
 #: Deutsch ist die Quellsprache: ihre Texte sind die Message-IDs, sie braucht
 #: keinen Katalog. Welche Sprachen es sonst gibt, sagt nicht diese Datei,
@@ -169,8 +169,15 @@ class TranslatableText:
         fragt und beide Sprachen dieselbe sind; wer eine Sprache ausdrücklich
         nennt, meint sie aber für den ganzen Satz.
         """
-        catalog = _catalogs.get(language or _language, {})
-        text = native_keys(catalog.get(self._key(), self.msgid), _key_platform)
+        chosen = language or _language
+        catalog = _catalogs.get(chosen, {})
+        key = self._key()
+        text = catalog.get(key, self.msgid)
+        if _key_platform == "darwin":
+            # Die Tasten nennt der Satz in seiner Sprache: Ein unübersetzter
+            # kommt aus der Quelle und sagt „Entf“, nicht „Del“.
+            written = chosen if key in catalog else SOURCE_LANGUAGE
+            text = native_keys(text, _key_platform, key_names(written))
         if not self.values:
             return text
         mark = "," if "," in catalog.get("0,1", "0,1") else "."
@@ -225,6 +232,33 @@ def set_key_platform(platform: str) -> None:
 def key_platform() -> str:
     """Die eingestellte Tastatur der Kürzel; leer heißt wie die Quelle."""
     return _key_platform
+
+
+#: Die Einzeltasten, die der Mac anders nennt (:class:`app.i18n.keys.KeyNames`),
+#: als Katalogeinträge: Jede Sprache schreibt dort, wie ihre Texte sie nennen,
+#: und bleibt damit eine Datei. Ein Text nennt die Taste mit genau diesem Namen
+#: (``test_native_keys.py`` zählt nach).
+_KEY_NAMES: Final = (_("Entf", context="Taste"), _("Pos1", context="Taste"))
+
+
+def key_names(language: str) -> KeyNames:
+    """Wie die Texte in ``language`` Entf und Pos1 nennen, aus ihrem Katalog."""
+    if language == SOURCE_LANGUAGE:
+        return SOURCE_KEY_NAMES
+    catalog = _catalogs.get(language, {})
+    delete, home = (catalog.get(name._key(), name.msgid) for name in _KEY_NAMES)
+    return KeyNames(delete=delete, home=home)
+
+
+def native_text(text: str, language: str) -> str:
+    """Ein Text, der nicht durch ``tr`` kommt, mit den Tasten der eingestellten Tastatur.
+
+    ``language`` ist die Sprache, in der ``text`` geschrieben ist — der
+    Verlauf der Neuerungen etwa kommt aus einer Datei je Sprache.
+    """
+    if _key_platform != "darwin":
+        return text
+    return native_keys(text, _key_platform, key_names(language))
 
 
 def install_catalog(language: str, catalog: dict[str, str]) -> None:

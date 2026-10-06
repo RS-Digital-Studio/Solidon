@@ -332,6 +332,13 @@ Aktionen aus („Ambiguous shortcut overload“). `tests/test_ui.py`
 (`test_no_two_shortcuts_in_the_window_collide`) hält das,
 `tests/test_registry_consistency.py` sieht nur das Register.
 
+**Löschen und Wiederholen binden ihre Tasten je Plattform aus einer Quelle**
+(`shortcut_schemes`): `delete_keys`/`deletes` geben am Mac zu Entf die Taste
+⌫ (seine Taste „delete“ sendet Backspace), `redo_keys` gibt unter Linux zu
+Qts Strg+Umschalt+Z die Taste Strg+Y, die Tour und Texte nennen. Wer eine
+dieser Handlungen bindet oder eine Taste dafür abfängt, fragt dort; beim
+Messen nimmt die Ansicht die Rücktaste vor dem Kürzel an (letztes Maß).
+
 ## Sortiert wird nach dem Titel, gesucht in der Sprache des Kunden
 
 **Was zur Auswahl passt, steht vorn:** `applies_to` ordnet Kontextmenü und

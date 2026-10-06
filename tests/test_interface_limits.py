@@ -2183,6 +2183,91 @@ def test_the_palette_names_the_key_the_menu_really_uses(window: MainWindow) -> N
     assert key == "Ctrl+Shift+Z"
 
 
+#: Qts ``StandardKey.Redo`` je Plattform, die erste Belegung — aus der Tabelle
+#: der Qt-Dokumentation zu ``QKeySequence::StandardKey``: Windows Strg+Y, macOS
+#: ⇧⌘Z (``Ctrl`` ist dort die Befehlstaste), KDE und GNOME Strg+Umschalt+Z.
+_QT_REDO = {"win32": "Ctrl+Y", "linux": "Ctrl+Shift+Z", "darwin": "Ctrl+Shift+Z"}
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [
+        ("win32", ["Ctrl+Y"]),
+        ("linux", ["Ctrl+Shift+Z", "Ctrl+Y"]),
+        ("darwin", ["Ctrl+Shift+Z"]),
+    ],
+)
+def test_redo_answers_ctrl_y_wherever_the_texts_name_it(platform: str, expected: list[str]) -> None:
+    """Tour und Kundentexte nennen Strg+Y; unter Linux tat die Taste nichts.
+
+    Dort kommt sie dazu, hinter Qts eigener, die das Menü weiter zeigt. Unter
+    Windows ist Strg+Y schon Qts Taste und steht nicht zweimal da; auf dem Mac
+    schreiben die Texte ⇧⌘Z (``test_native_keys.py``), und ⌘Y bleibt frei.
+    """
+    from app.ui.shortcut_schemes import redo_keys
+
+    keys = redo_keys(platform, QKeySequence(_QT_REDO[platform]))
+
+    assert [key.toString() for key in keys] == expected
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [("win32", ["Del"]), ("linux", ["Del"]), ("darwin", ["Del", "Backspace"])],
+)
+def test_the_mac_deletes_with_its_delete_key_where_entf_deletes(
+    platform: str, expected: list[str]
+) -> None:
+    """Die Taste „delete“ der Mac-Tastatur sendet Backspace; Entf (⌦) gibt es dort nur mit fn.
+
+    Ohne ⌫ löschte am Mac weder Körper noch Merkmal noch Verlaufsschritt,
+    während die Texte die Taste nannten. Unter Windows und Linux bleibt die
+    Rücktaste frei: Sie gehört dort dem Messen und den Textfeldern.
+    """
+    from app.ui.shortcut_schemes import delete_keys, deletes
+
+    assert [key.toString() for key in delete_keys(platform)] == expected
+    assert deletes(Qt.Key.Key_Delete, platform)
+    assert deletes(Qt.Key.Key_Backspace, platform) == (platform == "darwin")
+    assert not deletes(Qt.Key.Key_Escape, platform)
+
+
+def test_menu_history_and_sketch_take_their_keys_from_the_platform(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Wiederholen*, *Löschen* am Körper und Merkmal, *Schritt löschen* und die Skizze.
+
+    Jede dieser Stellen bindet, was ``redo_keys`` und ``delete_keys`` für die
+    Plattform sagen. Nachgestellt wird die fremde Plattform an diesen beiden
+    Fragen, nicht an ``sys.platform``: Linux mit Qts Strg+Umschalt+Z für
+    Wiederholen, der Mac für Entf.
+    """
+    from PySide6.QtGui import QShortcut
+
+    from app.ui import main_window, panels, shortcut_schemes, sketch_editor
+
+    linux_redo = shortcut_schemes.redo_keys("linux", QKeySequence("Ctrl+Shift+Z"))
+    mac_delete = shortcut_schemes.delete_keys("darwin")
+    for module in (main_window, sketch_editor):
+        monkeypatch.setattr(module, "redo_keys", lambda _platform, _standard: linux_redo)
+    for module in (main_window, panels, sketch_editor):
+        monkeypatch.setattr(module, "delete_keys", lambda _platform: mac_delete)
+    window = MainWindow(Session(), UiSettings())
+    sketch = sketch_editor.SketchPanel()
+    try:
+        assert window.redo_action.shortcuts() == linux_redo
+        assert window._op_actions["delete_object"].shortcuts() == mac_delete, (
+            "Entf an Körper und Merkmal"
+        )
+        assert window.history_panel.remove_action.shortcuts() == mac_delete
+        bound = [shortcut.keys() for shortcut in sketch.findChildren(QShortcut)]
+        assert linux_redo in bound, "Wiederholen auf dem Blatt"
+        assert mac_delete in bound, "Löschen auf dem Blatt"
+    finally:
+        sketch.deleteLater()
+        window.deleteLater()
+
+
 #: Zugeklappte Abschnitte, deren Titel schon ihr Inhalt ist, mit Grund.
 #: Die Filamente der linken Spalte: Eine Zusatzzeile kostete die Spalte Höhe,
 #: um die Objektbaum und Filamentliste ohnehin ringen (RM-489).

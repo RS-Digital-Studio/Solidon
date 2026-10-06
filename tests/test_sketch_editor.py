@@ -7052,6 +7052,59 @@ def test_delete_in_the_constraint_list_removes_the_constraint_not_the_line(
         panel.deleteLater()
 
 
+def test_the_mac_delete_key_takes_the_constraint_in_the_list_and_the_line_on_the_sheet(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Am Mac löscht ⌫, wo Entf löscht — in der Liste nur die Bedingung (UI-33).
+
+    Die Taste „delete“ der Mac-Tastatur sendet Backspace
+    (``shortcut_schemes.delete_keys``). Am Kürzel des Panels allein läge sie
+    wieder über der Liste und nähme die Linie samt Bedingungen. Nachgestellt
+    wird der Mac an den beiden Fragen des Editors, nicht an ``sys.platform``.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.ui import shortcut_schemes, sketch_editor
+
+    monkeypatch.setattr(
+        sketch_editor, "delete_keys", lambda _platform: shortcut_schemes.delete_keys("darwin")
+    )
+    monkeypatch.setattr(
+        sketch_editor,
+        "deletes",
+        lambda key, _platform: shortcut_schemes.deletes(key, "darwin"),
+    )
+    panel = sketch_editor.SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.set_sketch(_sketch(("line", ((0.0, 0.0), (10.0, 0.0)))))
+        canvas.add_constraint("horizontal", (0, 1))
+        canvas._select(("line", (0, 1)), False)
+        panel.show()
+        panel.activateWindow()
+        QApplication.processEvents()
+        panel.constraint_list.setCurrentRow(0)
+        panel.constraint_list.setFocus()
+        QApplication.processEvents()
+
+        QTest.keyClick(panel.constraint_list, Qt.Key.Key_Backspace)
+        QApplication.processEvents()
+
+        assert len(canvas.sketch.elements) == 1, "die Linie bleibt"
+        assert len(canvas.sketch.constraints) == 0, "nur die Bedingung ist weg"
+
+        canvas._select(("line", (0, 1)), False)
+        canvas.setFocus()
+        QApplication.processEvents()
+        QTest.keyClick(canvas, Qt.Key.Key_Backspace)
+        QApplication.processEvents()
+
+        assert canvas.sketch.elements == (), "auf dem Blatt nimmt dieselbe Taste die Linie"
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
 # --- Ziehen, Grundformen, Ecken und Maße (13.09.2026) ------------------------------
 
 

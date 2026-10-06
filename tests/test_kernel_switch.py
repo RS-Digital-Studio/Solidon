@@ -156,6 +156,56 @@ def test_hollowing_follows_the_table(
     assert ("evaluate.exact_became_mesh" in codes) == (expected == "mesh")
 
 
+def test_a_saved_conversion_after_an_open_hollowing_lets_the_history_compute_on(
+    profile: Profile,
+) -> None:
+    """Ein Verlauf aus 0.5.2: exakt aushöhlen, oben offen, dann umwandeln — und weiter.
+
+    In 0.5.2 zählte die verborgene Vorgabe *Entlüftungen* 1 auch bei *Oben
+    öffnen* und machte den exakten Körper zum Netz; wer seine Flächen
+    zurückwollte, ließ *In Flächen und Kanten umwandeln* folgen. Seit das
+    Aushöhlen exakt bleibt (Durchsicht 0.5.3, Fund 2), kommt dort ein exakter
+    Körper an, und die Absage „hat bereits echte Flächen und Kanten“ hielt den
+    ganzen Verlauf an. Jetzt geht er unverändert weiter, mit einem Hinweis, und
+    der Schritt danach rechnet an ihm.
+
+    Sollwerte aus der Konstruktion: Quader 40 × 30 × 20, Wand 2, oben offen —
+    Hohlraum 36 × 26 × 18; die Bohrung Ø 6 von der Oberkante durch die ganze
+    Höhe trifft nur den Boden der Dicke 2.
+    """
+    _kernel()
+    result = _evaluated(
+        profile,
+        OperationDraft(op="create_brep_box", params={"width": 40.0, "depth": 30.0, "height": 20.0}),
+        OperationDraft(
+            op="hollow_object",
+            inputs=("obj_1",),
+            params={"wall": 2.0, "open_top": True, "vents": 1},
+        ),
+        OperationDraft(op="mesh_to_exact", inputs=("obj_1",), params={}),
+        OperationDraft(
+            op="drill_hole",
+            inputs=("obj_1",),
+            params={
+                "x": 0.0,
+                "y": 0.0,
+                "z": 20.0,
+                "diameter": 6.0,
+                "depth": 20.0,
+                "compensate": False,
+            },
+        ),
+    )
+    body = result.scene.objects["obj_1"]
+    assert body.kind == "brep"
+    hollowed = 24000.0 - 36.0 * 26.0 * 18.0
+    assert float(body.mesh.volume) == pytest.approx(hollowed - math.pi * 9.0 * 2.0, rel=1e-6)
+    notes = [
+        finding for finding in result.scene.report.findings if finding.code == "brep.already_exact"
+    ]
+    assert [note.severity for note in notes] == ["info"], "der Schritt sagt, dass er nichts tat"
+
+
 def test_the_exact_primitives_stand_where_their_mesh_twins_stand(profile: Profile) -> None:
     """Gleicher Ort, gleiche Hülle, gleiches Volumen bis auf die Facettierung."""
     _kernel()

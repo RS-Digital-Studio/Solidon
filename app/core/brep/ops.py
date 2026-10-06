@@ -30,7 +30,6 @@ from app.core.errors import (
     GeometryError,
     NeedsSolidError,
     NotManifoldError,
-    UserError,
     ValidationError,
 )
 from app.core.geom.boolean import (
@@ -1107,13 +1106,15 @@ def mesh_to_exact(ctx: OpContext) -> OpResult:
     require()
     source = ctx.inputs[0]
     if isinstance(source.mesh, Solid):
-        raise UserError(
-            _("Der Körper hat bereits echte Flächen und Kanten."),
-            _("Seine Flächen und Kanten lassen sich direkt bearbeiten."),
-            suggestions=(CANCEL,),
-            values={"name": source.name},
-            object_id=source.id,
-        )
+        # **Ein exakter Eingang geht unverändert weiter**, mit einem Hinweis
+        # statt einer Absage. In 0.5.2 machte *Aushöhlen* mit *Oben öffnen*
+        # jeden exakten Körper zum Netz, weil die verborgene Entlüftung
+        # zählte, und dieser Schritt holte die Flächen zurück. Seit der Schritt
+        # davor exakt bleibt (Durchsicht 0.5.3, Fund 2), hielte eine Absage
+        # hier jeden solchen Verlauf an; der Körper ist schon, was dieser
+        # Schritt verspricht. Das Menü bietet ihn an einem exakten Körper
+        # weiter nicht an (``requires_kind``).
+        return OpResult(outputs=[source], findings=[_already_exact(source)])
     mesh = as_mesh_data(source.mesh)
     ctx.progress(0.0, str(_STAGES["regions"]))
     # Dieselbe Erkennung wie die Auswertung — ihr Merker liefert sie, wenn der
@@ -1143,6 +1144,18 @@ def mesh_to_exact(ctx: OpContext) -> OpResult:
         raise _refusal(refusal, source) from refusal
     output = _replaced(source, conversion.solid, cancelled=ctx.cancelled)
     return OpResult(outputs=[output], findings=conversion_findings(source, conversion, params))
+
+
+def _already_exact(source: SceneObject) -> Finding:
+    """Die Umwandlung an einem Körper, der schon Flächen und Kanten hat, tut nichts."""
+    return Finding(
+        code="brep.already_exact",
+        severity="info",
+        message=_(
+            "Der Körper hat bereits echte Flächen und Kanten. Die Umwandlung lässt ihn, wie er ist."
+        ),
+        object_id=source.id,
+    )
 
 
 def _refusal(refusal: from_mesh.ConversionRefusedError, source: SceneObject) -> GeometryError:

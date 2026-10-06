@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Final
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QKeyEvent, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QAbstractSlider,
@@ -65,6 +65,46 @@ def shortcut_for(name: str, declared: str | None, scheme: str) -> str | None:
     """
     table = SCHEMES.get(scheme, SCHEMES["default"])[1]
     return table.get(name, declared)
+
+
+def redo_keys(platform: str, standard: QKeySequence) -> list[QKeySequence]:
+    """Die Tasten für *Wiederholen* auf ``platform`` (``sys.platform``); die erste steht im Menü.
+
+    ``standard`` ist Qts ``StandardKey.Redo`` der laufenden Plattform: unter
+    Windows Strg+Y, auf dem Mac ⇧⌘Z, unter GNOME und KDE Strg+Umschalt+Z.
+    Tour und Kundentexte nennen Strg+Y, und unter Linux tat die Taste nichts —
+    dort kommt sie dazu, hinter Qts eigener, die das Menü weiter zeigt. Auf dem
+    Mac schreiben die Texte ⇧⌘Z (``app.i18n.keys``), ⌘Y bleibt frei.
+    """
+    keys = [standard]
+    ctrl_y = QKeySequence("Ctrl+Y")
+    if platform.startswith("linux") and ctrl_y not in keys:
+        keys.append(ctrl_y)
+    return keys
+
+
+def _delete_codes(platform: str) -> tuple[Qt.Key, ...]:
+    """Die Tasten, die löschen, wo Entf löscht — Quelle für Bindung und Tastendruck.
+
+    Die Taste „delete“ der Mac-Tastatur sendet Backspace, Entf (⌦) gibt es
+    dort nur mit fn. Ohne ⌫ löschte am Mac weder ein Körper noch ein Merkmal
+    noch ein Schritt im Verlauf, während die Texte „Entf“ nannten
+    (``app.i18n.keys`` schreibt dort ⌫). Unter Windows und Linux bleibt Entf
+    allein: Die Rücktaste gehört dort dem Messen und den Textfeldern.
+    """
+    if platform == "darwin":
+        return (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
+    return (Qt.Key.Key_Delete,)
+
+
+def delete_keys(platform: str) -> list[QKeySequence]:
+    """Die Tasten, die löschen, wo Entf löscht (:func:`_delete_codes`); die erste steht im Menü."""
+    return [QKeySequence(code) for code in _delete_codes(platform)]
+
+
+def deletes(key: int, platform: str) -> bool:
+    """Ob ein Tastendruck ohne Zusatztaste dort löscht, wo Entf löscht (:func:`delete_keys`)."""
+    return int(key) in {int(code) for code in _delete_codes(platform)}
 
 
 #: Tasten, die dem Bedienelement mit dem Fokus gehören, nicht dem Fenster.

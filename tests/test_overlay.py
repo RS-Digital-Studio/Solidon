@@ -572,7 +572,8 @@ def test_a_wrapped_finding_is_measured_at_its_real_height(window: MainWindow) ->
     assert measured > naive, "der Umbruch muss in der Höhe ankommen"
 
 
-def test_findings_that_arrive_later_make_the_card_grow(window: MainWindow) -> None:
+@pytest.mark.parametrize("severity", ["info", "warning"])
+def test_findings_that_arrive_later_make_the_card_grow(window: MainWindow, severity: str) -> None:
     """Ein ``QListWidget`` meldet sein Wachstum nicht — es muss es sagen.
 
     Nach der Auswertung kommen Befunde nach: die G-Code-Gegenprobe (§28.2),
@@ -584,6 +585,16 @@ def test_findings_that_arrive_later_make_the_card_grow(window: MainWindow) -> No
 
     Aufgefallen ist es am Handbuchbild: acht Befunde im Kopf gezählt, zwei
     davon zu sehen, darunter vierhundert Pixel frei.
+
+    **Hinweise allein klappen zu** (RM-508): Der Zähler nennt sie, und wer ihn
+    klickt, sieht alle acht. Eine Warnung öffnet die Liste von selbst.
+
+    **Und die Karte wächst in einem Zug.** Zwischen Liste und Zone liegen seit
+    RM-511 Reiter, Rollbereich und Karte, und Qt reicht den neuen Wunsch je
+    Ereignisrunde eine Ebene weiter. Die Zone las beim Aufklappen deshalb
+    zuerst den alten Wunsch: Fünf Runden lang rollte die Liste neben freiem
+    Platz, dann glitt die Karte ein zweites Mal (``overlay.tell_the_zone``,
+    Durchsicht 0.5.3).
     """
     from app.core.types import Finding
 
@@ -599,22 +610,31 @@ def test_findings_that_arrive_later_make_the_card_grow(window: MainWindow) -> No
         [
             Finding(
                 code=f"probe.{number}",
-                severity="info",
+                severity=severity,
                 message=f"Ein nachgereichter Befund Nummer {number}, mit einem Satz, "
                 f"der über mehrere Zeilen läuft.",
             )
             for number in range(8)
         ]
     )
-    # Mehrere Durchläufe: Der Träger setzt je Ereignisdurchlauf einmal
-    # (``_place_later``), und die Liste legt ihre Zeilen erst, nachdem die
-    # Karte gewachsen ist — gemessen drei Runden bis zur Ruhe.
-    for _ in range(4):
+    if severity == "info":
+        for _ in range(4):
+            QApplication.processEvents()
+        assert not report.list.isVisibleTo(report), "Hinweise allein stehen zugeklappt"
+        assert "8" in report.list_toggle.text(), "der Zähler nennt sie"
+        report.list_toggle.click()
+    # Der Träger setzt je Ereignisdurchlauf einmal (``_place_later``); gezählt
+    # wird über mehr Runden, als der alte Weg bis zur Ruhe brauchte (fünf).
+    heights = []
+    for _ in range(8):
         QApplication.processEvents()
+        heights.append(report.height())
+    assert report.list.isVisibleTo(report)
 
     assert report.height() > before, (
         "die Karte muss wachsen, wenn Befunde nach der Auswertung dazukommen"
     )
+    assert len(set(heights)) == 1, f"die Karte wächst in einem Zug, nicht in Stufen: {heights}"
     assert report.list.verticalScrollBar().maximum() == 0, (
         "acht Befunde passen in die Spalte — ein Rollbalken hier heißt, "
         f"die Karte hat ihren Platz nicht genommen: Karte {report.height()}, "

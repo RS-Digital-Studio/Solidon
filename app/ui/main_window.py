@@ -384,7 +384,12 @@ from app.ui.selection_operations import SelectionOperationsPanel
 from app.ui.session import AskRequest, Session, TriangleCounts
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
-from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
+from app.ui.shortcut_schemes import (
+    delete_keys,
+    install_navigation_keys,
+    redo_keys,
+    shortcut_for,
+)
 from app.ui.sketch_editor import (
     SketchField,
     SketchPanel,
@@ -4349,6 +4354,10 @@ class MainWindow(QMainWindow):
             tr("Einen zurückgenommenen Schritt wieder anwenden."),
             symbol="redo",
         )
+        # Unter Linux dazu Strg+Y, die Taste aus Tour und Texten (``redo_keys``).
+        self.redo_action.setShortcuts(
+            redo_keys(sys.platform, QKeySequence(QKeySequence.StandardKey.Redo))
+        )
         edit_menu.addSeparator()
         # Gemerkt, weil die Kürzelübersicht darauf verweist. Dort stand die
         # Taste als Text, und der war falsch.
@@ -5196,9 +5205,14 @@ class MainWindow(QMainWindow):
 
         Kürzel mit Zusatztaste bleiben, wo sie waren: Strg+B ist eindeutig
         gemeint, egal worauf der Fokus steht.
+
+        **Am Mac löscht auch ⌫** (:func:`shortcut_schemes.delete_keys`): Die
+        Taste „delete“ dort sendet Backspace, und Körper wie Merkmal blieben
+        sonst stehen, während die Texte die Taste nannten.
         """
         if key not in self._BARE_KEYS:
             return
+        action.setShortcuts(delete_keys(sys.platform))
         action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         for widget in (self.object_tree, self.viewport):
             widget.addAction(action)

@@ -4587,6 +4587,35 @@ def test_the_last_measurement_can_go_without_taking_the_others(qt_app: QApplicat
     assert viewport.measurements.entries == [], "und die leere Liste hält es aus"
 
 
+def test_while_measuring_the_backspace_key_belongs_to_the_last_measurement(
+    qt_app: QApplication,
+) -> None:
+    """Am Mac löscht ⌫ den gewählten Körper — beim Messen nimmt sie das letzte Maß.
+
+    Die Taste „delete“ der Mac-Tastatur sendet Backspace und liegt dort auf
+    *Löschen* (``shortcut_schemes.delete_keys``). Qt fragt vor einem Kürzel
+    die Fokuskette (``ShortcutOverride``); nimmt die Ansicht die Taste nicht
+    an, löscht das Kürzel den Körper, und das Maß bleibt stehen. Entf bleibt
+    beim Kürzel, wie unter Windows.
+    """
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+
+    def claimed(key: Qt.Key) -> bool:
+        event = QKeyEvent(QEvent.Type.ShortcutOverride, key, Qt.KeyboardModifier.NoModifier)
+        event.ignore()
+        return bool(viewport.eventFilter(viewport, event)) and event.isAccepted()
+
+    assert not claimed(Qt.Key.Key_Backspace), "ohne Messen bleibt die Taste beim Kürzel"
+    viewport.set_measure_mode("distance")
+    assert claimed(Qt.Key.Key_Backspace), "beim Messen gehört sie dem letzten Maß"
+    assert not claimed(Qt.Key.Key_Delete), "Entf löscht weiter, was gewählt ist"
+
+
 #: Ein Fangergebnis, das mehrere Tests hier gemeinsam benutzen.
 _SNAP = SnapResult(point=(7.0, 8.0, 9.0), kind="vertex", distance=0.5)
 

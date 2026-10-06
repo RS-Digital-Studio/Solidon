@@ -10,7 +10,7 @@ Die Regeln stehen in `.claude/rules/uebersetzung.md`.
 | Datei | Rolle |
 |---|---|
 | `__init__.py` | `tr()`, `TranslatableText`, Sprachumschaltung, `format_decimal()`, `Figure` (Zahl mit Punkt, die als Platzhalterwert das Dezimalzeichen der Sprache nimmt), Anzeigeeinheit (`display_unit()`), `sort_key()` |
-| `keys.py` | `native_keys(text, platform)`: Kürzel im Satz auf dem Mac als ⌘/⇧/⌥; `translate` wendet es mit `key_platform()` an, das erst `app.ui.app` auf `sys.platform` stellt |
+| `keys.py` | `native_keys(text, platform, names)`: Kürzel im Satz auf dem Mac als ⌘/⇧/⌥, Entf als ⌫, Pos1 als ↖; `translate` wendet es mit `key_platform()` an, das erst `app.ui.app` auf `sys.platform` stellt, und mit den Tastennamen der Sprache, in der der Satz steht (`key_names`, Katalogkontext „Taste“; Dateitexte über `native_text`) |
 | `catalog.py` | Kataloge laden: `available_languages()`, `read_catalog()`, `install_language()` |
 | `extract.py` | Übersetzbare Texte aus den Quellen einsammeln (§37.2) |
 | `locales/` | Ein JSON je Sprache: `en` `es` `fr` `it` `pt` |

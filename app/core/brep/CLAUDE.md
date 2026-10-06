@@ -34,7 +34,9 @@ B-Rep  <·······  Mesh      Umwandlung (mesh_to_exact): erkannt, nicht zur
 
 **Ein Rückweg existiert nicht** — die „exakte" Verrundung wäre ein Vieleck.
 **Die Umwandlung** baut aus den erkannten Flächen einen neuen Körper, ohne
-Verlauf, mit gemessener Abweichung; der Rest bleibt Dreieck.
+Verlauf, mit gemessener Abweichung; der Rest bleibt Dreieck. Einen exakten
+Eingang reicht sie unverändert durch, mit Hinweis (`brep.already_exact`):
+Gespeicherte Verläufe, deren Schritt davor heute exakt bleibt, rechnen weiter.
 `ops.converted_finding` meldet jede absichtliche Vernetzung.
 
 `from_mesh.convert`: Stufen von `surface_regions` bis `source_deviation` im

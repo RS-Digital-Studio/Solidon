@@ -2556,7 +2556,9 @@ def test_the_advice_list_names_a_reason(qt_app: QApplication) -> None:
     der Tabelle, mit dem Namen der Einstellung davor, und an jeder Zeile als
     Kurzhilfe. Vorgewählt ist die erste Zeile ohne Hervorhebung — eine
     eingefärbte Zeile im Ruhezustand wäre eine Akzentfläche mehr (B12).
-    Zugeklappt sagt der Abschnitt nur die Zahl, daneben *Übernehmen*.
+    Zugeklappt sagt der Abschnitt nur die Zahl, daneben *Übernehmen* — und
+    dem Bildschirmleser, der die Zeile daneben nicht mithört, was übernommen
+    wird (§19.1).
     """
     session = Session()
     session.project.document.material = "tpu-95a"
@@ -2570,6 +2572,7 @@ def test_the_advice_list_names_a_reason(qt_app: QApplication) -> None:
     assert dialog._advice_summary is not None
     assert dialog._advice_summary.text() == f"{count} Vorschläge"
     assert dialog.apply_button.text() == "Übernehmen"
+    assert dialog.apply_button.accessibleName() == "Vorschläge übernehmen"
     assert dialog.apply_button.isVisibleTo(dialog.advice_box)
 
     entries = dialog._current_advice()

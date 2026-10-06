@@ -9746,6 +9746,14 @@ def test_failed_operation_is_repaired_before_retry_without_a_loop(
         )
 
     failed_code = "op.remesh_uniform.NotManifoldError"
+    # **Gemessen wird der Bericht, den der Kunde sieht.** Nach dem Halt liegt er
+    # hinter *Auswahl* (ein Halt holt ihn nie nach vorn), und ein verborgener
+    # Reiter hat keine Lage, nur die Vorgabe 100 x 30: Ob zwei Knöpfe hineinpassten,
+    # hing an der Knopfhöhe — mit dem Stylesheet der Anwendung, wie im seriellen
+    # Lauf der Datei hinter einem Test, der es setzt, war es rot (Durchsicht 0.5.3).
+    window.right.setCurrentIndex(window.right.indexOf(window.report))
+    for _ in range(4):
+        QApplication.processEvents()
     choose(failed_code)
     first_repair = button(errors.REPAIR_AND_RETRY.label)
     assert first_repair is not None and not first_repair.isHidden()

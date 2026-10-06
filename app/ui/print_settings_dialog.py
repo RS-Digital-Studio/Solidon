@@ -5938,6 +5938,9 @@ class PrintSettingsDialog(QDialog):
         # Vorschläge nennt, und bleibt aufgeklappt an derselben Stelle: über
         # der Tabelle, rechts, wo der Blick nach dem Aufklappen landet.
         self.apply_button = QPushButton(tr("Übernehmen"), box)
+        # Ein Bildschirmleser hört den Knopf ohne die Zeile daneben, und
+        # „Übernehmen“ allein sagt dort nicht, was übernommen wird (§19.1).
+        self.apply_button.setAccessibleName(tr("Vorschläge übernehmen"))
         self.apply_button.clicked.connect(self._apply_advice)
         self._advice_summary: QLabel | None = box.findChild(QLabel, "sectionSummary")
         section = box.layout()
@@ -7853,8 +7856,8 @@ class PrintSettingsDialog(QDialog):
         # einzige Stelle im Dialog, an der sie fehlte (gemessen am 03.09.2026
         # über alle sichtbaren Knöpfe). Die Tabelle darüber sagt zwar „Nichts
         # einzuwenden.", aber das ist ein Satz an einer anderen Stelle; wer auf
-        # den grauen Knopf zeigt, fragt ihn und nicht sie. An allen drei
-        # Kanälen, weil ein Grund, den nur die Maus findet, für den
+        # den grauen Knopf zeigt, fragt ihn und nicht sie. Als Kurzhilfe und
+        # als Beschreibung, weil ein Grund, den nur die Maus findet, für den
         # Bildschirmleser keiner ist (Regel 18).
         why = (
             self.advice_state.text()

@@ -731,9 +731,23 @@ einen Nullzeitgeber legen und `rows_height` an `visualRect` misst; ein
 Ereignis käme vor den Zeilen dran und läse die alte Höhe. `resizeEvent` und
 `reflow` setzen weiter sofort. **Für Tests heißt das: mehrere Runden
 `processEvents`**, bis Karte und Liste zur Ruhe gekommen sind (gemessen drei
-für eine gewachsene Berichtkarte) — eine Zusicherung nach einer Runde misst
-einen Zwischenstand. `is_room_taker` beantwortet die Frage je Widget-Typ
-einmal; sie ist strukturell, und der Typ ändert sich nicht.
+für eine gewachsene Berichtkarte, seit `tell_the_zone` eine) — eine
+Zusicherung nach einer Runde misst einen Zwischenstand. `is_room_taker`
+beantwortet die Frage je Widget-Typ einmal; sie ist strukturell, und der Typ
+ändert sich nicht.
+
+**Wachstum reicht bis zur Zone, in einem Zug** (Durchsicht 0.5.3). Seit
+RM-511 liegen zwischen Bericht und Zone Reiter, Stapel, Rollbereich und
+Karte. Qt reicht ein neues Wunschmaß je Ereignisrunde eine Ebene weiter, und
+das Layout der Zone merkt sich den Wunsch seiner Karte, bis sie selbst
+`updateGeometry` ruft. Wer acht Hinweise aufklappte (RM-508 legt sie
+zugeklappt ab), sah fünf Runden lang eine rollende Liste — 356 Punkte für
+402 Punkte Zeilen —, dann glitt die Karte ein zweites Mal, von 525 auf 600
+(offscreen, Fenster 900 hoch). Die Klappen meldeten nur `contentGrew`, und
+`ReportPanel._grew` sagte es zwei Ebenen. `overlay.tell_the_zone` fragt jede
+Ebene bis zur Zone sofort; `_grew` nimmt es, und alle drei Klappen gehen
+durch `_grew`. Der Test misst über acht Runden und verlangt eine Höhe
+(`test_findings_that_arrive_later_make_the_card_grow`).
 
 **Ungleiche Zeilen, ungleiche Rechnung (RM-489).** Der Objektbaum rechnete
 mit der Höhe seiner ersten Zeile mal der Zeilenzahl, und die erste ist die

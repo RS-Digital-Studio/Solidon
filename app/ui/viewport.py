@@ -16333,6 +16333,17 @@ class Viewport(QWidget):
                     return True
 
         if (
+            kind == QEvent.Type.ShortcutOverride
+            and self._measure_mode != "off"
+            and event.key() == Qt.Key.Key_Backspace
+        ):
+            # **Die Rücktaste gehört beim Messen dem letzten Maß**, auch am Mac,
+            # wo sie sonst den gewählten Körper löscht
+            # (``shortcut_schemes.delete_keys``). Ohne das Annehmen fände Qt das
+            # Kürzel vor dem Tastendruck darunter.
+            event.accept()
+            return True
+        if (
             kind == QEvent.Type.KeyPress
             and self._measure_mode != "off"
             and event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete)

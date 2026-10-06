@@ -511,6 +511,28 @@ def _dock(zone: QWidget, side: str) -> None:
             style.polish(widget)
 
 
+def tell_the_zone(widget: QWidget) -> None:
+    """Ein Inhalt ist gewachsen: Jede Ebene bis zur Zone fragt ihren Wunsch neu.
+
+    Qt reicht ein geändertes Wunschmaß je Ereignisrunde nur eine Ebene
+    weiter, über Reiter und Rollbereich als nachgereichtes ``LayoutRequest``,
+    und das Layout der Zone merkt sich den Wunsch ihrer Karte, bis die Karte
+    selbst ``updateGeometry`` ruft. Die Zone rechnete deshalb zuerst mit dem
+    alten Wunsch: Nach dem Aufklappen der Befundliste stand die rechte Karte
+    fünf Runden lang eine Zeile zu kurz, die Liste rollte neben freiem Platz,
+    dann glitt die Karte ein zweites Mal (Durchsicht 0.5.3). Hier fragt jede
+    Ebene von ``widget`` bis zur Zone sofort neu; wer danach misst
+    (``OverlayHost.reflow``), liest den neuen Wunsch.
+    """
+    current: QWidget | None = widget
+    while current is not None:
+        current.updateGeometry()
+        parent = current.parentWidget()
+        if parent is None or isinstance(parent, OverlayHost):
+            return
+        current = parent
+
+
 def rows_height(view: QAbstractItemView) -> int:
     """Wie hoch die Zeilen dieser Liste zusammen sind, mit Kopf und Rahmen.
 
