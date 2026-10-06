@@ -11,7 +11,7 @@ Das hier ist also kein Test. Es ist das, was einem sagt, welchen Test man
 schreiben muss: jedes Modell durch die Eingangsstufe, die Merkmalserkennung und
 die Schichtanalyse, mit dem, was brach, und dem, was es kostete.
 
-    python tools/run_model_suite.py "F:/3D Druck/3D Drucker"
+    python tools/run_model_suite.py "../3D Dateien/3D Drucker"
     python tools/run_model_suite.py --limit 10 --skip-slice
 """
 
@@ -103,7 +103,7 @@ def models(folder: Path, limit: int) -> list[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("folder", type=Path, nargs="?", default=Path("3D Drucker"))
+    parser.add_argument("folder", type=Path, nargs="?", default=Path("../3D Dateien/3D Drucker"))
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--layer-height", type=float, default=0.2)
     parser.add_argument("--skip-slice", action="store_true")

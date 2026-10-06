@@ -55,8 +55,8 @@ from PySide6.QtWidgets import QApplication, QDialog
 BUDGET = 120.0
 
 #: Wo gesucht wird. Ordner, die es nicht gibt, werden übersprungen.
-PROJECT_DIRS = ("app/examples", "3D Drucker")
-MODEL_DIRS = ("3D Drucker", "tests/data/meshes")
+PROJECT_DIRS = ("app/examples", "../3D Dateien/3D Drucker")
+MODEL_DIRS = ("../3D Dateien/3D Drucker", "tests/data/meshes")
 
 #: Modellendungen, die die Anwendung einlesen können soll.
 MODEL_SUFFIXES = (".stl", ".3mf", ".step", ".stp", ".obj")

@@ -10,7 +10,7 @@ wenn es ihn nicht gibt. Das ist Absicht — eine Suite, die auf einer Maschine
 ohne jemandes privaten Modellordner scheitert, wäre eine Suite, die Leute
 aufhören zu benutzen.
 
-    python tools/run_model_suite.py "F:/3D Druck/3D Drucker"
+    python tools/run_model_suite.py "../3D Dateien/3D Drucker"
 
 ist derselbe Durchlauf mit einem Bericht statt Zusicherungen; diese Datei hält
 die Handvoll Funde fest, die dabei herauskamen.
@@ -27,7 +27,8 @@ from app.core.ingest.loader import normalise, read_model
 from app.core.perceive.features import detect
 from app.core.slice.analysis import slice_body
 
-MODELS = Path("F:/3D Druck/3D Drucker")
+#: Die gedruckten Projekte liegen neben dem Repository (``3D Dateien``), nicht darin.
+MODELS = Path(__file__).resolve().parents[2] / "3D Dateien" / "3D Drucker"
 
 pytestmark = pytest.mark.skipif(not MODELS.is_dir(), reason="the model folder is not here")
 
