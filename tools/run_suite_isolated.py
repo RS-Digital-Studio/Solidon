@@ -72,6 +72,11 @@ from tools.ci_shards import WINDOW_DURATIONS, balanced, read_durations  # noqa: 
 #: Wie lange eine einzelne Datei einschließlich ihres Abbaus laufen darf.
 BUDGET_SECONDS = 900
 
+#: Spielraum über der gemessenen Dauer einer Datei in der CI. Ein Runner
+#: streut; eine Datei, deren Messung schon nahe an der festen Grenze liegt,
+#: risse sie sonst je nach Maschine (:func:`file_budget`).
+BUDGET_HEADROOM = 1.5
+
 CONTRACT_FILES = frozenset({"tests/test_print_settings_ui.py", "tests/test_render_factory.py"})
 CI_MARKER = "(windowed or rendering) and not performance and not rendered"
 
@@ -88,6 +93,12 @@ class PlannedFile:
     path: str
     expected_tests: int
     estimated_seconds: float
+
+
+def file_budget(file: PlannedFile, floor: float) -> float:
+    """Die Zeitgrenze einer Datei in der CI: mindestens ``floor``, bei einer
+    lang gemessenen Datei das :data:`BUDGET_HEADROOM`-fache ihrer Messung."""
+    return max(floor, BUDGET_HEADROOM * file.estimated_seconds)
 
 
 def plan_shards(
@@ -433,7 +444,9 @@ def run_ci(arguments: argparse.Namespace) -> int:
                 print(f"::group::{heading}" if github else f"Prüfe {heading}", flush=True)
                 try:
                     with verbatim_output(github=github):
-                        result = run_ci_file(file, report_dir, timeout=arguments.timeout)
+                        result = run_ci_file(
+                            file, report_dir, timeout=file_budget(file, arguments.timeout)
+                        )
                 finally:
                     if github:
                         print("::endgroup::", flush=True)
@@ -542,7 +555,8 @@ def main(argv: list[str] | None = None) -> int:
         "--timeout",
         type=float,
         default=BUDGET_SECONDS,
-        help="Sekunden je Datei einschließlich Abbau, lokal wie in der CI",
+        help="Sekunden je Datei einschließlich Abbau; in der CI die Untergrenze, "
+        "eine lang gemessene Datei bekommt BUDGET_HEADROOM mal ihre Messung",
     )
     arguments = parser.parse_args(argv)
     if not math.isfinite(arguments.timeout) or arguments.timeout <= 0:

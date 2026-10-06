@@ -748,6 +748,31 @@ def test_a_failed_file_remains_failed_after_a_successful_file(
     assert all(result["counts"]["tests"] == 1 for result in summary["results"])
 
 
+def test_a_long_measured_file_gets_room_above_its_measurement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Datei, die schon gemessen nahe an der festen Grenze liegt, riss sie
+    je nach Runner (``test_ui.py`` unter Windows); sie bekommt Spielraum über
+    ihrer Messung, eine kurze behält die Untergrenze."""
+    _mock_collection(monkeypatch)
+    monkeypatch.setattr(runner, "read_durations", lambda _path: ({"tests/test_a.py": 800.0}, 5.0))
+    budgets: dict[str, float] = {}
+
+    def run(file: runner.PlannedFile, directory: Path, *, timeout: float) -> dict[str, Any]:
+        budgets[file.path] = timeout
+        junit = directory / (file.path.replace("/", "__").removesuffix(".py") + ".xml")
+        prepared = directory / f"prepared-{len(budgets)}.xml"
+        _junit(prepared)
+        body = f"import shutil; shutil.copyfile({str(prepared)!r}, {str(junit)!r})"
+        return original(file, directory, timeout=timeout, command=[sys.executable, "-c", body])
+
+    original = runner.run_ci_file
+    monkeypatch.setattr(runner, "run_ci_file", run)
+    assert runner.main(["--release", "--ci-group", "windowed", "--report-dir", str(tmp_path)]) == 0
+    assert budgets["tests/test_a.py"] == pytest.approx(runner.BUDGET_HEADROOM * 800.0)
+    assert budgets["tests/test_b.py"] == runner.BUDGET_SECONDS
+
+
 def test_collection_failure_leaves_a_failed_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

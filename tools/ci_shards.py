@@ -216,7 +216,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Tabelle nicht geschrieben: {error}", file=sys.stderr)
         return 1
     target = TABLES[arguments.table]
-    target.write_text(json.dumps(table, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    target.write_text(
+        json.dumps(table, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
     print(f"{target.relative_to(ROOT).as_posix()}: {len(table['durations_seconds'])} Dateien")
     return 0
 
