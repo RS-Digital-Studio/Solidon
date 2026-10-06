@@ -74,9 +74,12 @@ Was zu Geometrie wird oder zwischen Lagen, Flächen oder Kandidaten
 entscheidet, rechnet ohne Wege, deren letzte Stelle an der Plattform hängt:
 
 - kein BLAS (`np.dot`, `@`, `inner`, `vdot`, `tensordot`, `np.linalg.norm`
-  ohne Achse), kein `np.einsum` (FMA auf ARM), kein LAPACK (`svd`, `eigh`,
-  `eig`, `lstsq`, `solve`, `inv`, `det`) — auch nicht für das Vorzeichen
-  eines Eigen- oder Singulärvektors;
+  ohne Achse, `trimesh`s `apply_translation` und `apply_transform`), kein
+  `np.einsum` (FMA auf ARM), kein LAPACK (`svd`, `eigh`, `eig`, `lstsq`,
+  `solve`, `inv`, `det`) — auch nicht für das Vorzeichen eines Eigen- oder
+  Singulärvektors; ein Kreis aus `Point.buffer` oder eine Drehung aus
+  `shapely.affinity.rotate` nimmt die Winkelfunktionen der Plattform, und das
+  Rauschen sieht beides nicht;
 - keine Winkel- und Exponentialfunktion aus NumPy oder `math` (Winkel über
   `units.exact_cos`/`exact_sin`), kein `x ** 2` (Plattform-`pow`) — `x * x`;
 - Zufall nur aus Rohbits (`Generator.random`, `integers`), nie `normal` oder

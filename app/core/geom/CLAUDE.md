@@ -14,15 +14,15 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 
 | Frage | Helfer |
 |---|---|
-| Skalarprodukt zweier Raumvektoren | `units.dot3` |
+| Skalarprodukt, je Zeile zweier Felder | `units.dot3`, `mesh.row_dots` |
 | Lage vieler Punkte entlang einer Richtung | `transform.along` |
-| Punkte bewegen, Richtungen drehen | `transform.moved_points`, `transform.turned` |
+| Punkte, Richtungen, Netze bewegen | `transform.moved_points`, `turned`, `mesh.shifted` |
 | 4x4-Matrizen zusammensetzen (`a @ b`) | `transform.composed` |
 | affine Matrix ohne LAPACK invertieren | `transform.inverse_affine` |
 | kürzeste Drehung zwischen zwei Richtungen | `transform.rotation_between` |
-| Winkelfunktionen | `units.exact_cos`/`exact_sin`, `exact_cos_degrees`, `circle_point` |
-| Arkuskosinus (Knickwinkel, Bogenspanne) | `mesh.stable_arccos` |
-| Sinus und Kosinus vieler Winkel | `mesh.stable_sin_cos` |
+| Winkelfunktionen | `units.exact_cos`/`exact_sin`, `exact_*_degrees`, `circle_point` |
+| Arkusfunktionen | `units.exact_atan2`, `exact_acos_degrees`, `mesh.stable_arccos`, `stable_arctan2` |
+| Sinus und Kosinus vieler Winkel | `mesh.stable_sin_cos`, `periodic_sin_cos` |
 | Ausgleichsebene, symmetrische 3x3-Eigenwerte | `units.plane_fit`, `units.symmetric_eigen3` |
 | Mitte einer Punktwolke | `units.exact_centre` |
 | Normalen und Flächen je Dreieck, Eckennormalen | `mesh.stable_normals`, `mesh.stable_areas` (einzelne Dreiecke), `mesh.stable_vertex_normals` |

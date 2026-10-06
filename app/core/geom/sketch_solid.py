@@ -29,7 +29,14 @@ from typing import TYPE_CHECKING, Any
 from app.core.errors import ValidationError
 from app.core.geom import transform
 from app.core.types import PlaneFrame
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_cos_sin
+from app.core.units import (
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    circle_cos_sin,
+    exact_atan2,
+    exact_cos,
+    exact_sin,
+)
 from app.i18n import _
 
 if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
@@ -88,7 +95,12 @@ def _adaptive_outline(
             raise resolution_error()
         # Diese Form bleibt auch bei sehr kleinem sag/radius auflösbar;
         # acos(1-sag/radius) würde dort schon auf null runden.
-        angle = min(math.pi / 2.0, 4.0 * math.asin(math.sqrt(min(1.0, sag / (2.0 * radius)))))
+        share = math.sqrt(min(1.0, sag / (2.0 * radius)))
+        # ``asin`` als ``atan2(x, √((1 - x)(1 + x)))`` über ``exact_atan2``, die
+        # Ecken über ``exact_cos``/``exact_sin``: ``math.asin``, ``math.cos``
+        # und ``math.sin`` runden je Maschine anders (RM-187).
+        arc = exact_atan2(share, math.sqrt((1.0 - share) * (1.0 + share)))
+        angle = min(math.pi / 2.0, 4.0 * arc)
         if angle <= 0.0 or not math.isfinite(sweep):
             raise resolution_error()
         count = max(1, math.ceil(abs(sweep) / angle))
@@ -96,7 +108,7 @@ def _adaptive_outline(
             raise resolution_error()
         for index in range(1, count + 1):
             theta = begin + sweep * index / count
-            append((centre[0] + radius * math.cos(theta), centre[1] + radius * math.sin(theta)))
+            append((centre[0] + radius * exact_cos(theta), centre[1] + radius * exact_sin(theta)))
 
     def distance_to_chord(
         point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]
@@ -155,13 +167,14 @@ def _adaptive_outline(
                     append(segment.end)
                 else:
                     centre, radius, sweep = arc
-                    begin = math.atan2(segment.start[1] - centre[1], segment.start[0] - centre[0])
+                    begin = exact_atan2(segment.start[1] - centre[1], segment.start[0] - centre[0])
                     circular(centre, radius, begin, sweep)
             else:
                 append(segment.end)
     while len(points) > 1 and math.dist(points[0], points[-1]) < EPS_GEOM:
         points.pop()
     return points
+
 
 
 def _arc_points(
@@ -188,11 +201,11 @@ def _arc_points(
         radius = math.dist(start, via) / 2.0
         if radius < EPS_GEOM:
             return [end]
-        first = math.atan2(ay - centre[1], ax - centre[0])
+        first = exact_atan2(ay - centre[1], ax - centre[0])
         return [
             (
-                centre[0] + radius * math.cos(first + 2.0 * math.pi * index / ARC_STEPS),
-                centre[1] + radius * math.sin(first + 2.0 * math.pi * index / ARC_STEPS),
+                centre[0] + radius * exact_cos(first + 2.0 * math.pi * index / ARC_STEPS),
+                centre[1] + radius * exact_sin(first + 2.0 * math.pi * index / ARC_STEPS),
             )
             for index in range(1, ARC_STEPS + 1)
         ]
@@ -215,9 +228,10 @@ def _arc_points(
     if radius < EPS_GEOM:
         return [end]
 
-    first = math.atan2(ay - uy, ax - ux)
-    middle = math.atan2(by - uy, bx - ux)
-    last = math.atan2(cy - uy, cx - ux)
+    # Winkel und Ecken über die exakten Funktionen (RM-187), wie beim Kreis.
+    first = exact_atan2(ay - uy, ax - ux)
+    middle = exact_atan2(by - uy, bx - ux)
+    last = exact_atan2(cy - uy, cx - ux)
 
     # **Die Richtung entscheidet der Zwischenpunkt.** Von Anfang zu Ende führen
     # zwei Wege um den Kreis; gemeint ist der, auf dem ``via`` liegt. Ohne diese
@@ -237,7 +251,7 @@ def _arc_points(
     points = []
     for index in range(1, steps + 1):
         angle = first + span * index / steps
-        points.append((ux + radius * math.cos(angle), uy + radius * math.sin(angle)))
+        points.append((ux + radius * exact_cos(angle), uy + radius * exact_sin(angle)))
     return points
 
 

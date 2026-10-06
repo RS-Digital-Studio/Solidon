@@ -75,7 +75,12 @@ from typing import Any, Final, Literal, NamedTuple
 import numpy as np
 
 from app.core import units
-from app.core.geom.mesh import MeshData, unique_edges
+from app.core.geom.mesh import (
+    MeshData,
+    periodic_sin_cos,
+    stable_arctan2,
+    unique_edges,
+)
 from app.core.types import Feature, FeatureId, MeasureSource, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -1953,7 +1958,7 @@ class Frame:
     @classmethod
     def plane(cls, normal: np.ndarray) -> Frame:
         unit = np.asarray(normal, dtype=float)
-        unit = unit / max(float(np.linalg.norm(unit)), EPS_GEOM)
+        unit = unit / max(math.hypot(*unit), EPS_GEOM)
         x_axis, y_axis = _plane_axes(unit)
         return cls(kind="plane", normal=unit, x_axis=x_axis, y_axis=y_axis, origin=np.zeros(3))
 
@@ -2007,17 +2012,24 @@ class Frame:
         ``±π·R`` — im Blatt des Trägers an derselben Stelle. Wer viele Zellen
         auf einmal fragt, fragt sie deshalb einzeln.
         """
+        from app.core.geom.transform import along as lying_along
+
         points = np.atleast_2d(np.asarray(points, dtype=float))
         if self.kind == "plane":
-            flat = np.column_stack((points @ self.x_axis, points @ self.y_axis))
-            return flat, points @ self.normal
+            flat = np.column_stack(
+                (lying_along(points, self.x_axis), lying_along(points, self.y_axis))
+            )
+            return flat, lying_along(points, self.normal)
+        # Lagen, Winkel und Mitte ohne BLAS und ohne die Winkelfunktionen der
+        # Plattform (RM-187): Die Abwicklung wird zu Geometrie, wenn ein Muster
+        # neu gezeichnet oder ein Stopfen auf den Mantel gelegt wird.
         offset = points - self.origin
-        along = offset @ self.normal
+        along = lying_along(offset, self.normal)
         radial = offset - np.outer(along, self.normal)
         reach = np.linalg.norm(radial, axis=1)
-        cosines, sines = radial @ self.x_axis, radial @ self.y_axis
-        theta = np.arctan2(sines, cosines)
-        middle = math.atan2(float(sines.sum()), float(cosines.sum()))
+        cosines, sines = lying_along(radial, self.x_axis), lying_along(radial, self.y_axis)
+        theta = stable_arctan2(sines, cosines)
+        middle = float(stable_arctan2(float(sines.sum()), float(cosines.sum())))
         theta = middle + (theta - middle + math.pi) % (2.0 * math.pi) - math.pi
         return np.column_stack((theta * self.radius, along)), reach - self.radius
 
@@ -2040,7 +2052,8 @@ class Frame:
                 + np.outer(heights, self.normal)
             )
         theta = flat[:, 0] / self.radius
-        radial = np.outer(np.cos(theta), self.x_axis) + np.outer(np.sin(theta), self.y_axis)
+        sines, cosines = periodic_sin_cos(theta)
+        radial = np.outer(cosines, self.x_axis) + np.outer(sines, self.y_axis)
         base = self._facet_radius(theta) if faceted else self.radius
         points = (
             self.origin + np.outer(flat[:, 1], self.normal) + radial * (base + heights)[:, None]
@@ -2106,7 +2119,7 @@ class Frame:
         chosen = np.where(past >= corners[before], after, before)
         gap = np.abs((angles[chosen] - wrapped + math.pi) % (2.0 * math.pi) - math.pi)
         step = float(np.median(np.diff(angles))) if len(angles) > 1 else math.pi
-        away = np.cos(wrapped - angles[chosen])
+        away = periodic_sin_cos(wrapped - angles[chosen])[1]
         base = offsets[chosen] / np.maximum(away, EPS_GEOM)
         return np.where(gap <= step, base, self.radius)
 
@@ -2115,14 +2128,14 @@ class Frame:
         if self.kind == "plane":
             return self.normal
         theta = float(flat[0]) / self.radius
-        return self.x_axis * math.cos(theta) + self.y_axis * math.sin(theta)
+        return self.x_axis * units.exact_cos(theta) + self.y_axis * units.exact_sin(theta)
 
     def tangent(self, flat: np.ndarray, direction: np.ndarray) -> np.ndarray:
         """Eine Richtung der Abwicklung als Richtung in der Welt, an dieser Stelle."""
         if self.kind == "plane":
             return self.x_axis * float(direction[0]) + self.y_axis * float(direction[1])
         theta = float(flat[0]) / self.radius
-        around = -self.x_axis * math.sin(theta) + self.y_axis * math.cos(theta)
+        around = -self.x_axis * units.exact_sin(theta) + self.y_axis * units.exact_cos(theta)
         return around * float(direction[0]) + self.normal * float(direction[1])
 
     def placed(self, body: Any, *, faceted: bool = False) -> Any:

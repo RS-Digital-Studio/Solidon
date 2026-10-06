@@ -590,9 +590,10 @@ def test_a_target_missed_by_less_than_double_reaches_the_fallback(profile: Profi
 def _hollow_sphere(profile: Profile) -> MeshData:
     """Eine dünnwandige Hohlkugel — der Fall, in dem Vereinfachen wehtut.
 
-    Zwei Schalen im Abstand von 1,2 mm, dazu die Entlüftung: 197 000 Dreiecke,
-    von denen die inneren dicht neben den äußeren liegen. Genau so kam die
-    ausgehöhlte Ente aus dem Kundendurchgang heraus.
+    Zwei Schalen im Abstand von 1,2 mm, dazu die Entlüftung: 46 992 Dreiecke
+    (gemessen am 06.10.2026 auf Windows, Linux und macOS ARM), von denen die
+    inneren dicht neben den äußeren liegen. Genau so kam die ausgehöhlte Ente
+    aus dem Kundendurchgang heraus.
     """
     kugel = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=30.0))
     return run("hollow_object", object_of(kugel), profile, wall=1.2, vents=1).outputs[0].mesh
@@ -628,12 +629,18 @@ def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -
     # Fenster ist also schmal, und 40 000 liegt darin — wer die Zahl das
     # nächste Mal anfassen muss, misst die Reihe neu, statt zu raten.
     #
-    # **Und auf Apple Silicon liegt das Fenster woanders.** Der Tag-Lauf
+    # **Auf Apple Silicon lag das Fenster einmal woanders.** Der Tag-Lauf
     # 0.3.0 (02.09.2026) meldete auf macos-latest „so grob geht die Wand
-    # auf" — bei 40 000 blieb die Kugel dort dicht. Die Fließkommaordnung des
-    # Vereinfachers ist je Architektur eine andere, und die Zusicherung hier
-    # ist nicht die Zahl, sondern: **wenn** die Wand aufgeht, sagt es der
+    # auf" — bei 40 000 blieb die Kugel dort dicht. Die Zusicherung hier ist
+    # deshalb nicht die Zahl, sondern: **wenn** die Wand aufgeht, sagt es der
     # Befund — und wenn sie hält, schweigt er.
+    #
+    # **Die Reihe vom 06.10.2026 ist auf allen drei Runnern dieselbe** (RM-114,
+    # Lauf 37491131058, Ziele 2 000 bis 100 000): offen von 20 000 bis 35 000,
+    # dicht bis 17 500 und ab 40 000; ab 50 000 bleibt es bei den 46 992
+    # Dreiecken der Kugel. Die Reihe unten trifft also beide Seiten, und
+    # mindestens ein Ziel muss aufgehen — sonst prüfte die Schleife nur das
+    # Schweigen.
     #
     # **Bis zum 23.09.2026 übersprang sich der Test**, wenn kein Ziel der
     # Reihe öffnete (RM-114): auf einer Plattform, auf der es so war, galt
@@ -641,13 +648,16 @@ def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -
     # Richtungen für jedes Ziel der Reihe, gleich wo sie aufgeht, und der
     # Befund wird daneben an einem Ausgang geprüft, der sicher offen ist
     # (``test_the_simplifier_reports_an_open_result_on_every_machine``).
+    opened = []
     for triangles in (40_000, 20_000, 30_000, 60_000, 15_000):
         result = run("decimate_mesh", object_of(hohl), profile, triangles=triangles)
         open_after = not result.outputs[0].mesh.is_watertight
+        opened.append(open_after)
         codes = [entry.code for entry in result.findings]
         assert ("mesh.not_watertight" in codes) is open_after, (
             f"{triangles} Dreiecke: offen={open_after}, Befunde {codes}"
         )
+    assert any(opened), "kein Ziel der Reihe öffnet die Wand — die Reihe neu messen (RM-114)"
 
 
 def test_the_simplifier_reports_an_open_result_on_every_machine(

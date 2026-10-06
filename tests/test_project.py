@@ -4505,16 +4505,21 @@ SAVED_SLOT_TOOL_RESULT: Final = {
     # auf 14 mm gekürzt: blieb 20 mm lang (slot_hole.feature_lost).
     "obj_2": (353265.6924, (((0.0, 0.866, 0.5), 20.0),)),
     "obj_3": (350267.6936, (((0.0, 0.866, 0.5), 22.0),)),
-    # Merkmal drehen um X, 45°: -15° statt +75°.
-    "obj_4": (353265.5776, (((0.0, 0.9659, -0.2588), 20.0),)),
+    # Merkmal drehen um X, 45°: -15° statt +75°. Seit RM-187 (06.10.2026) kommen
+    # Langlochwinkel und Bogenspannen aus ``units.exact_atan2``: An den Halbkreisen
+    # dieses Körpers und von obj_10 entschied das letzte Bit von ``math.atan2``
+    # unter Windows, ob die Spanne knapp unter π lag (36 Sehnen) oder auf π (37),
+    # und jetzt entscheidet es auf jeder Maschine gleich. Lage, Richtung und
+    # Länge bleiben; das Volumen war 353 265,5776 (obj_4) und 353 265,6924 mm³ (obj_10).
+    "obj_4": (353265.635, (((0.0, 0.9659, -0.2588), 20.0),)),
     "obj_5": (353265.6924, (((0.0, 0.866, 0.5), 20.0),)),
     "obj_6": (346531.3847, (((0.0, 0.866, 0.5), 20.0), ((0.0, 0.866, 0.5), 20.0))),
     "obj_7": (360000.0, ()),
     # Bohrung ändern auf Ø 4: kein Langloch mehr (resize_hole.feature_lost).
     "obj_8": (353988.0924, ()),
     "obj_9": (346531.3847, (((0.0, 0.866, 0.5), 20.0), ((0.0, 0.866, 0.5), 20.0))),
-    # -X, Merkmal drehen um X, 45°.
-    "obj_10": (353265.6924, (((0.0, 0.2588, -0.9659), 20.0),)),
+    # -X, Merkmal drehen um X, 45° (Volumen seit RM-187, siehe obj_4).
+    "obj_10": (353265.5776, (((0.0, 0.2588, -0.9659), 20.0),)),
     "obj_11": (348775.9627, (((0.2588, 0.0, -0.9659), 20.0),)),
 }
 

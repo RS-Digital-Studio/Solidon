@@ -21,7 +21,15 @@ from typing import Any, Final, Literal
 from app.core.errors import CORRECT_INPUT, Action, GeometryError
 from app.core.sketch.planes import to_world
 from app.core.types import PlaneFrame, Point2, SketchElement, SolvedSketch, Vec3
-from app.core.units import EPS_GEOM, is_zero, ring_area
+from app.core.units import (
+    EPS_GEOM,
+    circle_point,
+    exact_atan2,
+    exact_cos,
+    exact_sin,
+    is_zero,
+    ring_area,
+)
 from app.i18n import TranslatableText, _
 
 #: Wie nah zwei Endpunkte beieinander liegen müssen, um als verbunden zu
@@ -305,8 +313,8 @@ def _outline(profile: Profile) -> list[Point2]:
         steps = 12
         return [
             (
-                centre[0] + radius * math.cos(2.0 * math.pi * index / steps),
-                centre[1] + radius * math.sin(2.0 * math.pi * index / steps),
+                centre[0] + radius * circle_point(steps, index)[0],
+                centre[1] + radius * circle_point(steps, index)[1],
             )
             for index in range(steps)
         ]
@@ -499,7 +507,7 @@ def _share_a_stretch(first: ProfileSegment, second: ProfileSegment) -> bool:
     def interval(segment: ProfileSegment, turn: tuple[Point2, float, float]) -> tuple[float, float]:
         centre, _radius, sweep = turn
         begin = segment.start if sweep > 0.0 else segment.end
-        return math.atan2(begin[1] - centre[1], begin[0] - centre[0]), abs(sweep)
+        return exact_atan2(begin[1] - centre[1], begin[0] - centre[0]), abs(sweep)
 
     low, span = interval(first, one)
     other_low, other_span = interval(second, other)
@@ -591,7 +599,7 @@ def signed_area(profile: Profile) -> float:
     wurde vom Bohren größer statt kleiner (1213,4 statt 1142,8 mm³).
     """
     if profile.circle is not None:
-        return math.pi * profile.circle[1] ** 2
+        return math.pi * profile.circle[1] * profile.circle[1]
     total = 0.0
     for segment in profile.segments:
         if segment.kind == "spline":
@@ -606,14 +614,14 @@ def signed_area(profile: Profile) -> float:
             # genau diesen Faktor. Die volle Ellipse hat keine Sehne und
             # ergibt so π·a·b.
             frame, sweep = ellipse_turn(segment)
-            total += frame.first * frame.second * (sweep - math.sin(sweep)) / 2.0
+            total += frame.first * frame.second * (sweep - exact_sin(sweep)) / 2.0
             continue
         if segment.kind != "arc" or segment.via is None:
             continue
         arc = arc_through(segment.start, segment.via, segment.end)
         if arc is not None:
             _, radius, sweep = arc
-            total += radius * radius * (sweep - math.sin(sweep)) / 2.0
+            total += radius * radius * (sweep - exact_sin(sweep)) / 2.0
     return total
 
 
@@ -860,9 +868,11 @@ def arc_through(start: Point2, via: Point2, end: Point2) -> tuple[Point2, float,
     radius = math.dist((ux, uy), start)
     if radius <= EPS_GEOM:
         return None
-    begin = math.atan2(ay - uy, ax - ux)
-    middle = math.atan2(by - uy, bx - ux)
-    finish = math.atan2(cy - uy, cx - ux)
+    # Die Winkel über ``exact_atan2`` (RM-187): Die Weite wird zu den Ecken
+    # jedes abgetasteten Bogens, ``math.atan2`` rundet je Maschine anders.
+    begin = exact_atan2(ay - uy, ax - ux)
+    middle = exact_atan2(by - uy, bx - ux)
+    finish = exact_atan2(cy - uy, cx - ux)
     sweep = (finish - begin) % (2.0 * math.pi)
     # Liegt der Stützpunkt jenseits des Endes, führt der Bogen andersherum.
     if (middle - begin) % (2.0 * math.pi) > sweep:
@@ -884,8 +894,8 @@ def arc_sweep(centre: Point2, start: Point2, end: Point2) -> float:
     zusammengeführt hatte, war im Profil ein Kreis und auf dem Blatt
     unsichtbar und nicht anklickbar.
     """
-    begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
-    finish = math.atan2(end[1] - centre[1], end[0] - centre[0])
+    begin = exact_atan2(start[1] - centre[1], start[0] - centre[0])
+    finish = exact_atan2(end[1] - centre[1], end[0] - centre[0])
     sweep = (finish - begin) % (2.0 * math.pi)
     return 2.0 * math.pi if sweep <= _FULL_CIRCLE_EPS else sweep
 
@@ -893,10 +903,10 @@ def arc_sweep(centre: Point2, start: Point2, end: Point2) -> float:
 def _arc_midpoint(centre: Point2, start: Point2, end: Point2) -> Point2:
     """Der Punkt auf halbem Weg des Bogens, gegen den Uhrzeigersinn gerechnet."""
     radius = math.dist(centre, start)
-    begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
+    begin = exact_atan2(start[1] - centre[1], start[0] - centre[0])
     sweep = arc_sweep(centre, start, end)
     middle = begin + sweep / 2.0
-    return (centre[0] + radius * math.cos(middle), centre[1] + radius * math.sin(middle))
+    return (centre[0] + radius * exact_cos(middle), centre[1] + radius * exact_sin(middle))
 
 
 def _flipped(segment: ProfileSegment) -> ProfileSegment:
@@ -1045,7 +1055,7 @@ def parameter_sweep(start: Point2, end: Point2) -> float:
     :class:`EllipseFrame`)."""
     cross = start[0] * end[1] - start[1] * end[0]
     dot = start[0] * end[0] + start[1] * end[1]
-    sweep = math.atan2(cross, dot) % (2.0 * math.pi)
+    sweep = exact_atan2(cross, dot) % (2.0 * math.pi)
     return 2.0 * math.pi if sweep <= _FULL_CIRCLE_EPS else sweep
 
 
@@ -1208,7 +1218,7 @@ def arc_segment_extremes(segment: ProfileSegment) -> list[Point2]:
     turn = 2.0 * math.pi
 
     def angle(point: Point2) -> float:
-        return math.atan2(point[1] - uy, point[0] - ux)
+        return exact_atan2(point[1] - uy, point[0] - ux)
 
     begin = angle(segment.start)
     reach = (angle(segment.end) - begin) % turn
@@ -1248,7 +1258,7 @@ def _ellipses_share_a_stretch(first: ProfileSegment, second: ProfileSegment) -> 
     def interval(segment: ProfileSegment, sweep: float) -> tuple[float, float]:
         begin = segment.start if sweep > 0.0 else segment.end
         cos, sin = one.parameter(begin)
-        return math.atan2(sin, cos), abs(sweep)
+        return exact_atan2(sin, cos), abs(sweep)
 
     low, span = interval(first, one_sweep)
     other_low, other_span = interval(second, other_sweep)
@@ -1314,7 +1324,11 @@ def _steps_for(radius: float, sweep: float) -> int:
     """
     if radius <= CHORD_ERROR:
         return _LEAST_STEPS
-    step = 2.0 * math.acos(max(-1.0, 1.0 - CHORD_ERROR / radius))
+    # ``acos`` als ``atan2(√((1 - y)(1 + y)), y)`` über ``exact_atan2``: Die
+    # Schrittzahl entscheidet über die Ecken, ``math.acos`` rundet je Maschine
+    # anders (RM-187).
+    cosine = max(-1.0, 1.0 - CHORD_ERROR / radius)
+    step = 2.0 * exact_atan2(math.sqrt((1.0 - cosine) * (1.0 + cosine)), cosine)
     if step <= EPS_GEOM:
         return _MOST_STEPS
     return max(_LEAST_STEPS, min(_MOST_STEPS, math.ceil(abs(sweep) / step)))
@@ -1322,12 +1336,12 @@ def _steps_for(radius: float, sweep: float) -> int:
 
 def _along_arc(centre: Point2, start: Point2, sweep: float, radius: float) -> tuple[Point2, ...]:
     """Die Punkte eines Bogens, von ``start`` aus um ``sweep`` gedreht."""
-    begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
+    begin = exact_atan2(start[1] - centre[1], start[0] - centre[0])
     steps = _steps_for(radius, sweep)
     return tuple(
         (
-            centre[0] + radius * math.cos(begin + sweep * index / steps),
-            centre[1] + radius * math.sin(begin + sweep * index / steps),
+            centre[0] + radius * exact_cos(begin + sweep * index / steps),
+            centre[1] + radius * exact_sin(begin + sweep * index / steps),
         )
         for index in range(steps + 1)
     )
@@ -1400,12 +1414,12 @@ def _along_spline(points: tuple[Point2, ...]) -> tuple[Point2, ...]:
             curve.append(
                 (
                     rest**3 * first[0]
-                    + 3.0 * rest**2 * share * one[0]
-                    + 3.0 * rest * share**2 * two[0]
+                    + 3.0 * rest * rest * share * one[0]
+                    + 3.0 * rest * share * share * two[0]
                     + share**3 * second[0],
                     rest**3 * first[1]
-                    + 3.0 * rest**2 * share * one[1]
-                    + 3.0 * rest * share**2 * two[1]
+                    + 3.0 * rest * rest * share * one[1]
+                    + 3.0 * rest * share * share * two[1]
                     + share**3 * second[1],
                 )
             )

@@ -56,7 +56,16 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.hollow import VENT_DIAMETER, HollowResult, below_printable_wall, hollow
-from app.core.geom.mesh import MeshData, as_mesh_data, face_components, lifted_caps, signed_volume
+from app.core.geom.mesh import (
+    MeshData,
+    as_mesh_data,
+    face_components,
+    lifted_caps,
+    row_dots,
+    shifted,
+    signed_volume,
+    stable_arctan2,
+)
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import (
     NoFittingOrientationError,
@@ -980,12 +989,12 @@ def _feature_solid(
 
     if feature.kind == "sphere":
         body = trimesh.creation.icosphere(radius=diameter / 2.0)
-        body.apply_translation(np.asarray(centre, dtype=float))
+        shifted(body, np.asarray(centre, dtype=float))
         return MeshData.of(body)
 
     wanted = axis if axis is not None else feature.params.get("axis", (0.0, 0.0, 1.0))
     given = np.asarray(wanted, dtype=float)
-    length = float(np.linalg.norm(given))
+    length = float(math.hypot(*given))
     direction = given / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
     # **Ganz durch und nicht nur so tief wie gemessen.** Eine Bohrung, die als
     # 12 mm tief erkannt wurde, muss beim Ausfüllen auch die 12 mm treffen —
@@ -1002,7 +1011,7 @@ def _feature_solid(
         )
         # ``cone`` steht mit der Spitze oben auf z=0; für einen Hohlraum zeigt
         # sie ins Material, also entlang der Achse.
-        body.apply_translation((0.0, 0.0, -height / 2.0))
+        shifted(body, (0.0, 0.0, -height / 2.0))
     elif feature.kind == "slot":
         # **Ein Langloch ist eine Bohrung mit zwei Bogenmittelpunkten.** Der
         # Umriss kommt aus derselben Funktion, die auch schneidet
@@ -1069,7 +1078,7 @@ def _feature_solid(
 
     turn = transform.rotation_between([0.0, 0.0, 1.0], direction)
     transform.moved(body, turn)
-    body.apply_translation(np.asarray(centre, dtype=float))
+    shifted(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -1269,12 +1278,11 @@ def _body_from_faces(
             # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an
             # einer Seitenwand hat ihren Ring in der YZ-Ebene.
             spread = ring - hub
-            flatness = (
-                units.plane_fit(ring.tolist())[2]
-                if triangulated_rims
-                else float(np.linalg.svd(spread, compute_uv=False)[-1])
-            )
-            flat = flatness <= FLAT_RIM * len(ring) ** 0.5
+            # Die Restspanne der Ausgleichsebene aus ``units.plane_fit``, nicht
+            # aus ``np.linalg.svd`` (RM-187) — sie entscheidet, ob der Deckel
+            # ein Fächer wird.
+            flatness = units.plane_fit(ring.tolist())[2]
+            flat = flatness <= FLAT_RIM * math.sqrt(len(ring))
             # Der Deckel läuft gegen die Randkanten des Ausschnitts: Jede
             # Kante wird von der anderen Seite geschlossen, und der Körper ist
             # von Anfang an gleichsinnig gewickelt (siehe unten).
@@ -1521,7 +1529,7 @@ def _outward_axis(chain: Sequence[Feature], feature: Feature) -> NDArray[np.floa
     outward = np.asarray(feature.params["centre"], dtype=np.float64) - np.asarray(
         inner[-1].params["centre"], dtype=np.float64
     )
-    return -axis if float(outward @ axis) < 0.0 else axis
+    return -axis if float(transform.along(outward, axis)) < 0.0 else axis
 
 
 def _measured_section(
@@ -1571,7 +1579,7 @@ def _measured_section(
     narrow = float(inner[-1].params.get("diameter", 0.0)) if inner else 0.0
     if wide <= narrow + EPS_GEOM or angle <= EPS_GEOM or angle >= 180.0:
         return None
-    height = (wide - narrow) / 2.0 / math.tan(math.radians(angle / 2.0))
+    height = (wide - narrow) / 2.0 / units.exact_tan_degrees(angle / 2.0)
     if height <= EPS_GEOM:
         return None
 
@@ -1583,7 +1591,7 @@ def _measured_section(
     outline = [
         [0.0, -height - FEATURE_OVERLAP],
         [narrow / 2.0, -height - FEATURE_OVERLAP],
-        [wide / 2.0 + beyond * math.tan(math.radians(angle / 2.0)), beyond + FEATURE_OVERLAP],
+        [wide / 2.0 + beyond * units.exact_tan_degrees(angle / 2.0), beyond + FEATURE_OVERLAP],
         [0.0, beyond + FEATURE_OVERLAP],
     ]
     body = lathe.revolve(outline, sections=FEATURE_SECTIONS)
@@ -1591,7 +1599,7 @@ def _measured_section(
         body,
         transform.rotation_between([0.0, 0.0, 1.0], _outward_axis(chain, feature)),
     )
-    body.apply_translation(np.asarray(centre, dtype=float))
+    shifted(body, np.asarray(centre, dtype=float))
     return MeshData.of(body) if body.is_watertight and body.volume > EPS_GEOM else None
 
 
@@ -1651,7 +1659,7 @@ def _chain_plug(
     outer = chain[-1]
     axis = np.asarray(_feature_direction(outer), dtype=float)
     centre = np.asarray([float(value) for value in outer.params["centre"]], dtype=float)
-    along = (points - centre) @ axis
+    along = transform.along(points - centre, axis)
     reach = float(along.max() - along.min())
     across = points - centre - np.outer(along, axis)
     radius = (
@@ -1667,7 +1675,7 @@ def _chain_plug(
         plug,
         transform.rotation_between(np.array([0.0, 0.0, 1.0]), axis),
     )
-    plug.apply_translation(centre + axis * float(along.min() + along.max()) / 2.0)
+    shifted(plug, centre + axis * float(along.min() + along.max()) / 2.0)
     return boolean(
         "intersection",
         [MeshData.of(plug), shell(mesh)],
@@ -1855,7 +1863,7 @@ def _section_closed(
         for step in range(steps + 1):
             moved = tool.raw.copy()
             if step:
-                moved.apply_translation(axis * (reach * step / steps))
+                shifted(moved, axis * (reach * step / steps))
             cut = boolean(
                 "difference",
                 [body, MeshData.of(moved)],
@@ -1933,7 +1941,7 @@ def _no_longer_through(
             diameter = min(diameter, 2.0 * inscribed - FEATURE_OVERLAP)
     if diameter <= EPS_GEOM:
         return False
-    reach = float(np.linalg.norm(mesh.bounds.size)) * 2.0
+    reach = float(math.hypot(*mesh.bounds.size)) * 2.0
     column = lathe.cylinder(radius=diameter / 2.0, height=reach, sections=FEATURE_SECTIONS)
     transform.moved(
         column,
@@ -1941,7 +1949,7 @@ def _no_longer_through(
             np.array([0.0, 0.0, 1.0]), np.asarray(_feature_direction(feature), dtype=float)
         ),
     )
-    column.apply_translation(np.asarray(centre, dtype=float))
+    shifted(column, np.asarray(centre, dtype=float))
     left = boolean(
         "intersection",
         [MeshData.of(column), mesh],
@@ -2016,13 +2024,13 @@ def _behind_the_cut(remaining: Any, tool: MeshData, centre: Vec3, direction: Vec
     """
     axis = np.asarray(direction, dtype=np.float64)
     origin = np.asarray(centre, dtype=np.float64)
-    cut = (np.asarray(tool.raw.vertices, dtype=np.float64) - origin) @ axis
+    cut = transform.along(np.asarray(tool.raw.vertices, dtype=np.float64) - origin, axis)
     forward = float(cut.max()) + FEATURE_OVERLAP + EPS_GEOM
     backward = float(cut.min()) - FEATURE_OVERLAP - EPS_GEOM
     for piece in remaining.split(only_watertight=False):
         if not bool(abs(float(piece.volume)) > EPS_GEOM):
             continue
-        along = (np.asarray(piece.vertices, dtype=np.float64) - origin) @ axis
+        along = transform.along(np.asarray(piece.vertices, dtype=np.float64) - origin, axis)
         if float(along.min()) > forward or float(along.max()) < backward:
             continue
         return False
@@ -2105,8 +2113,8 @@ def _edge_findings(
                 feature.params.get("direction", (1.0, 0.0, 0.0)), dtype=np.float64
             )
             stretch = max(0.0, float(feature.params.get("length", 0.0)) - diameter) / 2.0
-            if float(np.linalg.norm(direction)) > EPS_GEOM and stretch > EPS_GEOM:
-                direction /= float(np.linalg.norm(direction))
+            if float(math.hypot(*direction)) > EPS_GEOM and stretch > EPS_GEOM:
+                direction /= float(math.hypot(*direction))
                 positions = [centre - direction * stretch, centre + direction * stretch]
         # **Mit ihrer Länge** (RM-249): Bleibt die Scheibe im Hüllquader, fragt
         # die Prüfung am Netz über die eigene Tiefe des Merkmals nach — eine
@@ -2217,7 +2225,7 @@ def _axis_exits(
     Austritt.
     """
     axis = np.asarray(direction, dtype=np.float64)
-    length = float(np.linalg.norm(axis))
+    length = float(math.hypot(*axis))
     if length <= EPS_GEOM:
         return []
     axis /= length
@@ -2311,7 +2319,7 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
     points = np.asarray(raw.vertices, dtype=float)[np.unique(np.asarray(raw.faces)[chosen])]
     direction = np.asarray(_feature_direction(feature), dtype=float)
     measured = np.asarray([float(value) for value in feature.params["centre"]], dtype=float)
-    along = (points - measured) @ direction
+    along = transform.along(points - measured, direction)
     reach = float(along.max() - along.min())
     if reach <= EPS_GEOM:
         return None
@@ -2330,7 +2338,7 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
         transform.rotation_between(np.array([0.0, 0.0, 1.0]), direction),
     )
     middle = float(along.min() + along.max()) / 2.0
-    cut.apply_translation(np.asarray(centre, dtype=float) + direction * middle)
+    shifted(cut, np.asarray(centre, dtype=float) + direction * middle)
     return MeshData.of(cut)
 
 
@@ -2467,11 +2475,15 @@ def _closed_at(
         if feature.face_indices:
             points = np.asarray(mesh.raw.triangles)[list(feature.face_indices)].reshape(-1, 3)
             axis = np.asarray(_bore_vector(feature, "axis"))
-            axis /= np.linalg.norm(axis)
+            axis /= math.hypot(*axis)
             relative = points - centre
             radius = max(
                 radius,
-                float(np.linalg.norm(relative - np.outer(relative @ axis, axis), axis=1).max()),
+                float(
+                    np.linalg.norm(
+                        relative - np.outer(transform.along(relative, axis), axis), axis=1
+                    ).max()
+                ),
             )
         diameter = 2.0 * radius / units.inscribed_ratio(FEATURE_SECTIONS)
         tool = _feature_solid(
@@ -2508,12 +2520,12 @@ def _closed_at(
         outward = np.asarray(_bore_vector(feature, "opening_normal"))
         reach = mesh.bounds.diagonal * 2.0
         envelope = trimesh.creation.box(extents=(reach * 2.0, reach * 2.0, reach))
-        envelope.apply_translation((0.0, 0.0, -reach / 2.0))
+        shifted(envelope, (0.0, 0.0, -reach / 2.0))
         transform.moved(
             envelope,
             transform.rotation_between([0.0, 0.0, 1.0], outward),
         )
-        envelope.apply_translation(mouth)
+        shifted(envelope, mouth)
         tool = boolean(
             "intersection",
             [tool, MeshData.of(envelope)],
@@ -2777,11 +2789,11 @@ def _tool_for(
             dtype=np.float64,
         )
     body = built.raw.copy()
-    body.apply_translation(-np.asarray(measured, dtype=float))
+    shifted(body, -np.asarray(measured, dtype=float))
     if not is_close(scale, 1.0):
         body.apply_scale(scale)  # type: ignore[no-untyped-call]
     transform.moved(body, matrix)
-    body.apply_translation(np.asarray(centre, dtype=float))
+    shifted(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -2836,7 +2848,7 @@ def _air_of_the_bore(
     wide = (radius + 2.0 * FEATURE_OVERLAP) / units.inscribed_ratio(FEATURE_SECTIONS)
     envelope = lathe.cylinder(radius=wide, height=height, sections=FEATURE_SECTIONS)
     transform.moved(envelope, transform.rotation_between([0.0, 0.0, 1.0], up))
-    envelope.apply_translation(mouth - up * (height / 2.0))
+    shifted(envelope, mouth - up * (height / 2.0))
     try:
         air = boolean(
             "difference",
@@ -2920,7 +2932,7 @@ def _toward_the_air(mesh: MeshData, feature: Feature) -> NDArray[np.float64] | N
         return None
     ends = centre + np.array([-1.0, 1.0])[:, None] * axis * (depth / 2.0 + 2.0 * FEATURE_OVERLAP)
     closest, _distance, faces = on_surface(mesh.raw, ends, index=surface_index_of(mesh))
-    signed = np.einsum("ij,ij->i", ends - closest, np.asarray(mesh.raw.face_normals)[faces])
+    signed = row_dots(ends - closest, np.asarray(mesh.raw.face_normals)[faces])
     inside = signed < -EPS_GEOM
     if bool(inside[0]) == bool(inside[1]):
         return None
@@ -2949,9 +2961,9 @@ def _pin_solid(
         return None
     measured = np.asarray(_feature_direction(feature), dtype=np.float64)
     turned = measured if axis is None else np.asarray(_feature_direction(feature, axis))
-    sign = 1.0 if float(outward @ measured) > 0.0 else -1.0
+    sign = 1.0 if float(transform.along(outward, measured)) > 0.0 else -1.0
     tip = turned * sign
-    tilt = math.degrees(math.acos(min(1.0, abs(float(measured @ turned)))))
+    tilt = units.exact_acos_degrees(abs(float(transform.along(measured, turned))))
     radius = _bore_number(feature, "diameter") * scale / 2.0
     depth = _bore_number(feature, "depth")
     below = (
@@ -2959,9 +2971,9 @@ def _pin_solid(
         + FEATURE_OVERLAP
     )
     body = lathe.cylinder(radius=radius, height=below + depth / 2.0, sections=FEATURE_SECTIONS)
-    body.apply_translation((0.0, 0.0, (depth / 2.0 - below) / 2.0))
+    shifted(body, (0.0, 0.0, (depth / 2.0 - below) / 2.0))
     transform.moved(body, transform.rotation_between([0.0, 0.0, 1.0], tip))
-    body.apply_translation(np.asarray(centre, dtype=float))
+    shifted(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -3050,7 +3062,10 @@ def _rooted(
         if len(ordered) < 3:
             continue
         points = vertices[ordered]
-        if float(np.max(np.abs((points - origin) @ normal))) > FLAT_RIM * len(points) ** 0.5:
+        if (
+            float(np.max(np.abs(transform.along(points - origin, normal))))
+            > FLAT_RIM * len(points) ** 0.5
+        ):
             continue
         shifted = points - normal * FEATURE_OVERLAP
         count = len(points)
@@ -3121,7 +3136,7 @@ def _without_cavities(
         if not isinstance(centre, list | tuple) or not isinstance(direction, list | tuple):
             continue
         axis = np.asarray(direction, dtype=float)
-        length = float(np.linalg.norm(axis))
+        length = float(math.hypot(*axis))
         if length <= EPS_GEOM:
             continue
         axis /= length
@@ -3133,7 +3148,7 @@ def _without_cavities(
         # einen Strahlenschnitt, der eine weitere Abhängigkeit bräuchte.
         index = index if index is not None else surface_index(tool.raw)
         closest, _distances, faces = on_surface(tool.raw, samples, index=index)
-        signed = np.einsum("ij,ij->i", samples - closest, np.asarray(tool.raw.face_normals)[faces])
+        signed = row_dots(samples - closest, np.asarray(tool.raw.face_normals)[faces])
         if not bool(np.any(signed < -EPS_GEOM)):
             continue
         # **Durch das Werkzeug, nicht um es herum.** Ein Zapfen, der in einer
@@ -3142,7 +3157,7 @@ def _without_cavities(
         # nicht durch ihn, sie umschließt ihn, und der Schneider nähme das
         # ganze Werkzeug mit: „Von dem Körper bleibt nichts übrig."
         relative = np.asarray(tool.raw.vertices, dtype=float) - middle
-        along = relative @ axis
+        along = transform.along(relative, axis)
         radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
         if float(other.params.get("diameter", 0.0)) / 2.0 >= float(radial.max()):
             continue
@@ -3232,27 +3247,33 @@ def _feature_mount(
                 previous, current = current, following
             points = np.asarray(mesh.raw.vertices, dtype=np.float64)[ordered]
             origin = np.array(units.exact_centre(points.tolist()), dtype=np.float64)
-            _, _, directions = np.linalg.svd(points - origin, full_matrices=False)
-            normal = directions[-1]
-            if np.max(np.abs((points - origin) @ normal)) > EPS_GEOM:
+            # Die Ebene über ``units.plane_fit`` statt ``np.linalg.svd`` (RM-187).
+            normal = np.asarray(units.plane_fit(points.tolist())[1], dtype=np.float64)
+            if np.max(np.abs(transform.along(points - origin, normal))) > EPS_GEOM:
                 continue
             trial = frame_of(
                 cast(Vec3, tuple(float(value) for value in normal)),
                 cast(Vec3, tuple(float(value) for value in origin)),
             )
             xy = np.column_stack(
-                ((points - origin) @ trial.x_axis, (points - origin) @ trial.y_axis)
+                (
+                    transform.along(points - origin, trial.x_axis),
+                    transform.along(points - origin, trial.y_axis),
+                )
             )
             polygon = Polygon(xy)
             if not polygon.is_valid or polygon.area <= EPS_GEOM:
                 continue
             for index in sorted(adjacent):
                 other_normal = np.asarray(mesh.raw.face_normals[index], dtype=np.float64)
-                if abs(float(other_normal @ normal)) < 1.0 - EPS_GEOM:
+                if abs(float(transform.along(other_normal, normal))) < 1.0 - EPS_GEOM:
                     continue
                 centre = np.asarray(mesh.raw.triangles_center[index]) - origin
                 if polygon.covers(
-                    Point(float(centre @ trial.x_axis), float(centre @ trial.y_axis))
+                    Point(
+                        float(transform.along(centre, trial.x_axis)),
+                        float(transform.along(centre, trial.y_axis)),
+                    )
                 ):
                     continue
                 # Randpunkte sind nicht gleichmäßig verteilt: zusätzliche
@@ -3265,18 +3286,22 @@ def _feature_mount(
                     + centroid.x * np.asarray(trial.x_axis)
                     + centroid.y * np.asarray(trial.y_axis)
                 )
-                alignment = float(outward @ other_normal)
+                alignment = float(transform.along(outward, other_normal))
                 if feature.kind in PARAMETRIC_KINDS and abs(alignment) > EPS_GEOM:
                     axis_centre = np.asarray(feature.params["centre"], dtype=np.float64)
                     mount = (
                         axis_centre
-                        + outward * float((origin - axis_centre) @ other_normal) / alignment
+                        + outward
+                        * float(transform.along(origin - axis_centre, other_normal))
+                        / alignment
                     )
                 frame = frame_of(
                     cast(Vec3, tuple(float(value) for value in other_normal)),
                     cast(Vec3, tuple(float(value) for value in mount)),
                 )
-                candidates.append((float(polygon.area), float(other_normal @ outward), frame))
+                candidates.append(
+                    (float(polygon.area), float(transform.along(other_normal, outward)), frame)
+                )
                 break
     if candidates:
         largest = max(area for area, _, _ in candidates)
@@ -3300,13 +3325,13 @@ def _feature_mount(
     centre = np.asarray(feature.params["centre"], dtype=np.float64)
     depth = float(feature.params.get("depth", 0.0))
     if depth <= EPS_GEOM:
-        projected = (np.asarray(tool.raw.vertices) - centre) @ outward
+        projected = transform.along(np.asarray(tool.raw.vertices) - centre, outward)
         depth = float(np.ptp(projected))
     from app.core.geom.mesh import on_surface
 
     ends = centre + np.array([-1.0, 1.0])[:, None] * outward * (depth / 2.0 + EPS_GEOM * 16.0)
     closest, _, faces = on_surface(mesh.raw, ends, index=surface_index_of(mesh))
-    signed = np.einsum("ij,ij->i", ends - closest, np.asarray(mesh.raw.face_normals)[faces])
+    signed = row_dots(ends - closest, np.asarray(mesh.raw.face_normals)[faces])
     inside = signed < -EPS_GEOM
     if inside.all():
         raise ValidationError(field="at_feature", detail=NO_OWN_BODY, constraint="not_movable")
@@ -3355,10 +3380,10 @@ def feature_placement_geometry(
     rotation = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
     to_local = np.eye(4)
     to_local[:3, :3] = rotation.T
-    to_local[:3, 3] = -rotation.T @ np.asarray(frame.origin)
+    to_local[:3, 3] = -transform.turned(np.asarray(frame.origin, dtype=float), rotation.T)
     local = built.raw.copy()
     transform.moved(local, to_local)
-    offset = rotation.T @ (np.asarray(centre) - frame.origin)
+    offset = transform.turned(np.asarray(centre, dtype=float) - frame.origin, rotation.T)
     return FeaturePlacementGeometry(
         MeshData.of(local),
         frame,
@@ -3384,11 +3409,15 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
     old_rotation = np.column_stack(
         (geometry.frame.x_axis, geometry.frame.y_axis, geometry.frame.normal)
     )
-    delta_rotation = new_rotation @ old_rotation.T
+    delta_rotation = np.column_stack(
+        [transform.turned(old_rotation.T[:, column], new_rotation) for column in range(3)]
+    )
     old_centre = np.asarray(feature.params["centre"], dtype=np.float64)
     to_world = np.eye(4)
     to_world[:3, :3] = new_rotation
-    to_world[:3, 3] = target - new_rotation @ np.asarray(geometry.selected_offset)
+    to_world[:3, 3] = target - transform.turned(
+        np.asarray(geometry.selected_offset, dtype=float), new_rotation
+    )
     if np.allclose(delta_rotation, np.eye(3), atol=EPS_GEOM, rtol=0.0) and np.allclose(
         target, old_centre, atol=EPS_GEOM, rtol=0.0
     ):
@@ -3491,13 +3520,15 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
     reserved = {*source.reserved_feature_ids, *source.features}
     set_features: list[Feature] = []
     for related in geometry.related:
-        centre = target + delta_rotation @ (
-            np.asarray(related.params["centre"], dtype=np.float64) - old_centre
+        centre = target + transform.turned(
+            np.asarray(related.params["centre"], dtype=np.float64) - old_centre, delta_rotation
         )
         values = {**related.params, "centre": tuple(float(value) for value in centre)}
         for name in ("axis", "normal"):
             if name in related.params:
-                vector = delta_rotation @ np.asarray(related.params[name], dtype=np.float64)
+                vector = transform.turned(
+                    np.asarray(related.params[name], dtype=np.float64), delta_rotation
+                )
                 values[name] = tuple(float(value) for value in vector)
         identifier = related.id
         if duplicate:
@@ -3572,7 +3603,9 @@ def _exact_place_oriented_cavity(
     turned: dict[str, Any] = dict(feature.params)
     for name in ("axis", "normal", "direction"):
         if name in feature.params:
-            vector = delta_rotation @ np.asarray(feature.params[name], dtype=np.float64)
+            vector = transform.turned(
+                np.asarray(feature.params[name], dtype=np.float64), delta_rotation
+            )
             turned[name] = tuple(float(value) for value in vector)
     centre: Vec3 = (float(target[0]), float(target[1]), float(target[2]))
     expected = dataclasses.replace(
@@ -4123,16 +4156,18 @@ def _slot_in_separate_carrier(
         start, end = np.asarray(first), np.asarray(second)
         travel = end - start
         offset = np.asarray(_bore_vector(feature, "centre")) - start
-        squared = float(travel @ travel)
+        squared = float(transform.along(travel, travel))
         fraction = (
-            float(np.clip(offset @ travel / squared, 0.0, 1.0)) if squared > EPS_GEOM**2 else 0.0
+            float(np.clip(transform.along(offset, travel) / squared, 0.0, 1.0))
+            if squared > EPS_GEOM * EPS_GEOM
+            else 0.0
         )
         radial = offset - fraction * travel
         unit = np.asarray(axis, dtype=float)
-        unit /= np.linalg.norm(unit)
-        radial -= (radial @ unit) * unit
+        unit /= math.hypot(*unit)
+        radial -= (transform.along(radial, unit)) * unit
         if (
-            float(np.linalg.norm(radial)) + _bore_number(feature, "diameter") / 2.0
+            float(math.hypot(*radial)) + _bore_number(feature, "diameter") / 2.0
             > diameter / 2.0 + EPS_GEOM
         ):
             raise ValidationError(
@@ -4306,18 +4341,19 @@ def _inside_the_bore(
     und nicht zu ihr gehört — leer, wo sie leer ist (:func:`hole_is_clear`)."""
     centre = np.asarray(feature.params["centre"], dtype=np.float64)
     axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=np.float64)
-    axis /= max(float(np.linalg.norm(axis)), EPS_GEOM)
+    axis /= max(float(math.hypot(*axis)), EPS_GEOM)
     raw = mesh.raw
     middles = np.asarray(raw.triangles_center, dtype=np.float64) - centre
-    along = middles @ axis
+    along = transform.along(middles, axis)
     low, high = -depth / 2.0, depth / 2.0
     if feature.face_indices:
         chosen = np.asarray(feature.face_indices, dtype=np.int64)
         if chosen.size and int(chosen.max()) < len(raw.faces):
-            rim = (
+            rim = transform.along(
                 np.asarray(raw.vertices, dtype=np.float64)[np.unique(np.asarray(raw.faces)[chosen])]
-                - centre
-            ) @ axis
+                - centre,
+                axis,
+            )
             low, high = float(rim.min()), float(rim.max())
     radial = np.linalg.norm(middles - np.outer(along, axis), axis=1)
     slack = FEATURE_OVERLAP
@@ -4331,7 +4367,8 @@ def _inside_the_bore(
         inside = radial < radius * (1.0 - _CLEARANCE_MARGIN)
         for plane in planes:
             inside &= (
-                np.asarray(raw.triangles_center) @ np.asarray(plane.normal) < plane.position - slack
+                transform.along(np.asarray(raw.triangles_center), np.asarray(plane.normal))
+                < plane.position - slack
             )
     if feature.face_indices:
         own = np.asarray(feature.face_indices, dtype=np.int64)
@@ -4473,7 +4510,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     von Hand ausmacht.
     """
     params = cast(MoveFeatureParams, ctx.params)
-    if np.linalg.norm((params.nx, params.ny, params.nz)) > EPS_GEOM:
+    if math.hypot(*(params.nx, params.ny, params.nz)) > EPS_GEOM:
         return _place_oriented_feature(ctx, duplicate=False)
     source = ctx.inputs[0]
     feature = _movable_feature(source, params.at_feature, "move_feature")
@@ -4570,7 +4607,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         # der Senkungsübergänge rot). Verlängert wird deshalb der exakte
         # Körper selbst — nur an den Mündungen, nie am Boden.
         shifted_cavity = _chain_copy_tool(ctx, body, feature, chain).raw.copy()
-        shifted_cavity.apply_translation(travel)
+        shifted(shifted_cavity, travel)
         cutting = MeshData.of(shifted_cavity)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed = boolean(
@@ -4847,7 +4884,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     dürfen davon nichts merken.
     """
     params = cast(DuplicateFeatureParams, ctx.params)
-    if np.linalg.norm((params.nx, params.ny, params.nz)) > EPS_GEOM:
+    if math.hypot(*(params.nx, params.ny, params.nz)) > EPS_GEOM:
         return _place_oriented_feature(ctx, duplicate=True)
     source = ctx.inputs[0]
     feature = _movable_feature(source, params.at_feature, "duplicate_feature")
@@ -5025,7 +5062,7 @@ def _duplicate_cavity_chain(
     travel = np.asarray(target, dtype=float) - measured
     tool = _chain_copy_tool(ctx, body, feature, chain)
     shifted = tool.raw.copy()
-    shifted.apply_translation(travel)
+    shifted(shifted, travel)
     cutting = MeshData.of(shifted)
     ctx.progress(0.2, str(_("Der ganze Hohlraum wird an der neuen Stelle angelegt …")))
     placed = boolean(
@@ -6513,8 +6550,8 @@ def _rotate_cavity_chain(
         dtype=np.float64,
     )
     old_axis = np.asarray(_feature_direction(chain[0]), dtype=float)
-    new_axis = matrix[:3, :3] @ old_axis
-    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    new_axis = transform.turned(old_axis, matrix)
+    tilt = units.exact_acos_degrees(abs(units.dot3(old_axis, new_axis)))
     _sinks_must_close(chain, tilt, angle)
 
     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
@@ -6557,7 +6594,10 @@ def _rotate_cavity_chain(
     features = _without_old_triangles(source.features)
     for member in chain:
         spun = _with_turned_direction(member, axis, angle)
-        centre = matrix[:3, :3] @ (np.asarray(member.params["centre"], dtype=float) - pivot) + pivot
+        centre = (
+            transform.turned(np.asarray(member.params["centre"], dtype=float) - pivot, matrix)
+            + pivot
+        )
         features[member.id] = dataclasses.replace(
             spun,
             params={
@@ -6718,7 +6758,7 @@ def _boxed_in(
         foot = middle - normal * (units.dot3(normal, middle) - plane.position)
         box = trimesh.creation.box(extents=(size, size, size))
         transform.moved(box, transform.rotation_between([0.0, 0.0, 1.0], normal))
-        box.apply_translation(foot - normal * (size / 2.0))
+        shifted(box, foot - normal * (size / 2.0))
         boxes.append(MeshData.of(box))
     try:
         outcome = boolean(
@@ -6762,8 +6802,8 @@ def _turned_open_cone(
         return None
     outward = np.asarray(_feature_direction(feature), dtype=np.float64)
     outward /= math.hypot(*(float(value) for value in outward))
-    turned = matrix[:3, :3] @ outward
-    tilt = math.degrees(math.acos(min(1.0, abs(float(units.dot3(outward, turned))))))
+    turned = transform.turned(outward, matrix)
+    tilt = units.exact_acos_degrees(abs(units.dot3(outward, turned)))
     _sink_must_close(feature, tilt, angle)
     centre = np.asarray(feature.params["centre"], dtype=np.float64)
     raw = body.raw
@@ -6776,7 +6816,7 @@ def _turned_open_cone(
     depth = -float(along.min())
     if depth <= EPS_GEOM:
         return None
-    slope = math.tan(math.radians(half))
+    slope = units.exact_tan_degrees(half)
     narrow = max(0.0, wide - depth * slope)
     beyond = _cone_past_a_tilted_face(0.0, wide, half, tilt, at_most=float(body.bounds.diagonal))
     # Das obere Ende samt Zugabe liegt auf derselben Flanke: Mit dem Radius der
@@ -6791,7 +6831,7 @@ def _turned_open_cone(
     ]
     solid = lathe.revolve(outline, sections=FEATURE_SECTIONS)
     transform.moved(solid, transform.rotation_between([0.0, 0.0, 1.0], outward))
-    solid.apply_translation(centre)
+    shifted(solid, centre)
     transform.moved(solid, matrix)
     return MeshData.of(solid) if solid.is_watertight and solid.volume > EPS_GEOM else None
 
@@ -6825,7 +6865,7 @@ def _turned_through_bore(
         return None
     old_axis = np.asarray(_feature_direction(feature), dtype=np.float64)
     new_axis = np.asarray(turned_axis, dtype=np.float64)
-    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    tilt = units.exact_acos_degrees(abs(float(transform.along(old_axis, new_axis))))
     if tilt <= EPS_DISPLAY:
         return None
     diameter = float(feature.params.get("diameter", 0.0))
@@ -6904,7 +6944,7 @@ def _turned_blind_bore(
     if reach is None:
         return None
     outward, to_mouth, to_floor = reach
-    turned = matrix[:3, :3] @ outward
+    turned = transform.turned(outward, matrix)
     length = to_floor + to_mouth
     middle = _moved_point(
         np.asarray(feature.params["centre"], dtype=np.float64)
@@ -6938,8 +6978,8 @@ def _blind_reach(
     if mouth is None:
         return None
     outward, to_mouth, to_floor = mouth
-    turned = matrix[:3, :3] @ outward
-    tilt = math.degrees(math.acos(min(1.0, abs(units.dot3(outward, turned)))))
+    turned = transform.turned(outward, matrix)
+    tilt = units.exact_acos_degrees(abs(units.dot3(outward, turned)))
     if tilt <= EPS_DISPLAY:
         # Um die eigene Achse gedreht, bleibt die Mündung, wo sie war — wie bei
         # der Durchgangsbohrung (:func:`_turned_through_bore`) der Weg über die
@@ -7016,7 +7056,7 @@ def _reach_past_a_tilted_face(
     """
     if tilt >= 90.0 - EPS_DISPLAY:
         return at_most
-    needed = distance / units.exact_cos_degrees(tilt) + radius * math.tan(math.radians(tilt))
+    needed = distance / units.exact_cos_degrees(tilt) + radius * units.exact_tan_degrees(tilt)
     return max(distance, min(needed, at_most))
 
 
@@ -7037,7 +7077,7 @@ def _cone_past_a_tilted_face(
     """
     cos_tilt = units.exact_cos_degrees(tilt)
     sin_tilt = units.exact_sin_degrees(tilt)
-    climb = cos_tilt - math.tan(math.radians(half_angle)) * sin_tilt
+    climb = cos_tilt - units.exact_tan_degrees(half_angle) * sin_tilt
     if climb <= EPS_GEOM:
         return at_most
     needed = (distance * (1.0 - cos_tilt) + radius * sin_tilt) / climb
@@ -7103,7 +7143,7 @@ def _shares_in_material(
     every = np.vstack(probes)
     closest, _, at = on_surface(mesh.raw, every, index=surface_index_of(mesh))
     body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
-    signed = np.einsum("ij,ij->i", every - closest, body_normals[at])
+    signed = row_dots(every - closest, body_normals[at])
     shares: list[float] = []
     start = 0
     for part in probes:
@@ -7344,11 +7384,11 @@ def _chain_tool(
     bodies: list[MeshData] = []
     if len(sides) == 1:
         towards = np.asarray(chain[1].params["centre"], dtype=np.float64) - bore_centre
-        away = -bore_axis if float(towards @ bore_axis) > 0.0 else bore_axis
+        away = -bore_axis if units.dot3(towards, bore_axis) > 0.0 else bore_axis
         diameter = float(bore.params.get("diameter", 0.0))
         depth = float(bore.params.get("depth", 0.0))
         half = (depth if depth > EPS_GEOM else diameter) / 2.0
-        mouth = float((bore_centre + away * half - pivot) @ away)
+        mouth = units.dot3(bore_centre + away * half - pivot, away)
         extension = _reach_past_a_tilted_face(mouth, diameter / 2.0, tilt, at_most=at_most) - mouth
         # **Ein Sackloch hat am fernen Ende keine Mündung, sondern seinen Boden**
         # (23.09.2026): Dort gibt es keine gekippte Fläche zu durchstoßen, und jede
@@ -7376,14 +7416,14 @@ def _chain_tool(
         if outer.kind == "cone":
             wide = float(outer.params.get("diameter", 0.0))
             half_angle = float(outer.params.get("angle", 0.0)) / 2.0
-            rise = float((outer_centre - pivot) @ outward)
+            rise = units.dot3(outer_centre - pivot, outward)
             beyond = _cone_past_a_tilted_face(rise, wide / 2.0, half_angle, tilt, at_most=at_most)
             part = _measured_section(side, outer, outward=beyond)
         else:
             diameter = float(outer.params.get("diameter", 0.0))
             depth = float(outer.params.get("depth", 0.0))
             half = (depth if depth > EPS_GEOM else diameter) / 2.0
-            mouth = float((outer_centre + outward * half - pivot) @ outward)
+            mouth = units.dot3(outer_centre + outward * half - pivot, outward)
             beyond = _reach_past_a_tilted_face(mouth, diameter / 2.0, tilt, at_most=at_most) - mouth
             part = _stretched_section(outer, outward, beyond)
         if part is None:
@@ -7420,12 +7460,12 @@ def _stretched_section(
     body = lathe.cylinder(
         radius=diameter / 2.0, height=height + extension, sections=FEATURE_SECTIONS
     )
-    body.apply_translation((0.0, 0.0, extension / 2.0))
+    shifted(body, (0.0, 0.0, extension / 2.0))
     transform.moved(
         body,
         transform.rotation_between([0.0, 0.0, 1.0], outward),
     )
-    body.apply_translation(np.asarray(feature.params["centre"], dtype=float))
+    shifted(body, np.asarray(feature.params["centre"], dtype=float))
     return MeshData.of(body)
 
 
@@ -7441,8 +7481,8 @@ def _turned_vector(vector: Any, axis: Axis, angle: float) -> Vec3:
     # rechter Winkel dreht exakt, sonst trug die Achse einer um 90° gekippten
     # Bohrung ``math.cos(π/2)`` = 6·10⁻¹⁷ als Rest.
     matrix = transform.rotation(axis, angle)
-    spun = np.asarray(matrix, dtype=float)[:3, :3] @ direction
-    length = float(np.linalg.norm(spun)) or 1.0
+    spun = transform.turned(direction, matrix)
+    length = math.hypot(float(spun[0]), float(spun[1]), float(spun[2])) or 1.0
     spun = spun / length
     return (float(spun[0]), float(spun[1]), float(spun[2]))
 
@@ -7839,8 +7879,8 @@ def _resize_chain_countersink(
     section = sections[-1]
     axis = np.asarray(way, dtype=float)
     normal = np.asarray(section.upper.normal, dtype=float)
-    along = float(normal @ axis)
-    tilt = float(np.linalg.norm(np.cross(normal, axis)))
+    along = float(transform.along(normal, axis))
+    tilt = float(math.hypot(*np.cross(normal, axis)))
     slope = (section.outer_radius - section.inner_radius) / (section.end - section.start)
     if along <= EPS_GEOM or along - tilt * slope <= EPS_GEOM:
         raise _chain_not_readable(chain)
@@ -8250,7 +8290,7 @@ def _exits_below(
     for u, v in _DEPTH_RAYS:
         start = mouth - inward * back + (across[0] * u + across[1] * v) * radius
         distances, hit = ray_hits_along(triangles, start, inward)
-        leaving = normals[hit] @ inward > 0.0
+        leaving = transform.along(normals[hit], inward) > 0.0
         exits = np.sort(distances[leaving]) - back
         exits = exits[exits > EPS_GEOM]
         if len(exits):
@@ -8367,7 +8407,7 @@ def _bore_tool_mesh(centre: Vec3, axis: Vec3, diameter: float, depth: float) -> 
     """Der Zylinder einer Bohrung als Netz — für die Nachbarprüfung am exakten Körper."""
     body = lathe.cylinder(radius=diameter / 2.0, height=depth, sections=BORE_SECTIONS)
     transform.moved(body, transform.rotation_between([0.0, 0.0, 1.0], list(axis)))
-    body.apply_translation(np.asarray(centre, dtype=float))
+    shifted(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -9793,7 +9833,7 @@ def _neighbour_bore_findings(
         separation = np.maximum(
             np.maximum(bounds[0] - tool_bounds[1], tool_bounds[0] - bounds[1]), 0.0
         )
-        if float(np.linalg.norm(separation)) >= threshold:
+        if float(math.hypot(*separation)) >= threshold:
             continue
         other = _paired_cavity_body(mesh, *neighbours)
         if other is None:
@@ -10102,15 +10142,13 @@ def slot_angle_of(feature: Feature, axis: tuple[float, float, float]) -> float:
         return 0.0
     frame = slot_frame(axis, (0.0, 0.0, 0.0))
     direction = np.asarray(along, dtype=float)
-    length = float(np.linalg.norm(direction))
+    length = float(math.hypot(*direction))
     if length <= EPS_GEOM:
         return 0.0
     direction = direction / length
-    return math.degrees(
-        math.atan2(
-            float(direction @ np.asarray(frame.y_axis, dtype=float)),
-            float(direction @ np.asarray(frame.x_axis, dtype=float)),
-        )
+    return units.exact_atan2_degrees(
+        float(transform.along(direction, np.asarray(frame.y_axis, dtype=float))),
+        float(transform.along(direction, np.asarray(frame.x_axis, dtype=float))),
     )
 
 
@@ -10328,9 +10366,9 @@ def bore_entrance(
     welded = _welded(mesh)
     origin = _bore_vector(feature, "centre")
     direction = np.asarray(_bore_vector(feature, "axis"), dtype=float)
-    direction /= np.linalg.norm(direction)
+    direction /= math.hypot(*direction)
     sides = cavity_sides(chain)
-    if float((np.asarray(sides[0][-1].params["centre"]) - origin) @ direction) < 0.0:
+    if float(transform.along(np.asarray(sides[0][-1].params["centre"]) - origin, direction)) < 0.0:
         direction = -direction
     axis: Vec3 = (float(direction[0]), float(direction[1]), float(direction[2]))
     exact_axes = all("residual" not in entry.params for entry in chain)
@@ -10368,10 +10406,12 @@ def _entrance_side(
         if exact_axes or entry.kind == "hole":
             entry_axis = np.asarray(_feature_direction(entry), dtype=float)
             centre_offset = np.asarray(entry.params["centre"], dtype=float) - origin
-            lateral = np.linalg.norm(centre_offset - float(centre_offset @ direction) * direction)
+            lateral = math.hypot(
+                *centre_offset - float(transform.along(centre_offset, direction)) * direction
+            )
             tolerance = EPS_GEOM if exact_axes else MAX_FACET_SAG
             if float(lateral) > tolerance or (
-                exact_axes and float(np.linalg.norm(np.cross(direction, entry_axis))) > EPS_GEOM
+                exact_axes and float(math.hypot(*np.cross(direction, entry_axis))) > EPS_GEOM
             ):
                 raise _entrance_error()
         planes = _bore_end_planes(mesh, entry, features, grows=False)
@@ -10385,12 +10425,12 @@ def _entrance_side(
             curved = len(planes) == 2
         if len(planes) != 2 or entry.params.get("partial", False):
             raise _entrance_error()
-        if any(abs(float(np.dot(plane.normal, direction))) <= EPS_GEOM for plane in planes):
+        if any(abs(float(units.dot3(plane.normal, direction))) <= EPS_GEOM for plane in planes):
             raise _entrance_error()
         ends = sorted(
             (
-                (plane.position - float(np.dot(plane.normal, origin)))
-                / float(np.dot(plane.normal, direction)),
+                (plane.position - float(units.dot3(plane.normal, origin)))
+                / float(units.dot3(plane.normal, direction)),
                 plane,
             )
             for plane in planes
@@ -10398,9 +10438,9 @@ def _entrance_side(
         (start, lower), (end, upper) = ends
         if end <= start + EPS_GEOM:
             raise _entrance_error()
-        if float(np.dot(lower.normal, direction)) > 0.0:
+        if float(units.dot3(lower.normal, direction)) > 0.0:
             lower = lower.flipped()
-        if float(np.dot(upper.normal, direction)) < 0.0:
+        if float(units.dot3(upper.normal, direction)) < 0.0:
             upper = upper.flipped()
         if sections and abs(start - sections[-1].end) > FLAT_RIM:
             raise _entrance_error()
@@ -10413,7 +10453,7 @@ def _entrance_side(
             if not EPS_GEOM < angle < 180.0 - EPS_GEOM:
                 raise _entrance_error()
             inner = sections[-1].outer_radius
-            slope = math.tan(math.radians(angle / 2.0))
+            slope = units.exact_tan_degrees(angle / 2.0)
             previous_indices = welded.faces[sections[-1].feature.face_indices, :]
             indices = welded.faces[entry.face_indices, :]
             shoulder = not bool(np.intersect1d(previous_indices, indices).size)
@@ -10436,7 +10476,7 @@ def _entrance_side(
                 # Eine vollständige Ringschulter ist eine echte radiale Stufe.
                 # Ihre Kegelkante liegt nicht auf dem Radius des inneren Schafts.
                 points = np.asarray(welded.vertices[np.unique(indices)]) - origin
-                along = points @ direction
+                along = transform.along(points, direction)
                 radii = np.linalg.norm(points - np.outer(along, direction), axis=1)
                 inner = float(np.max(radii - (along - start) * slope))
                 if inner < sections[-1].outer_radius - MAX_FACET_SAG:
@@ -10516,12 +10556,13 @@ def _entrance_is_open(
     from app.core.sketch.planes import frame_of
 
     frame = frame_of((float(direction[0]), float(direction[1]), float(direction[2])), origin)
-    angles = np.linspace(0.0, 2.0 * math.pi, BORE_SECTIONS, endpoint=False)
-    radial = np.outer(np.cos(angles), np.asarray(frame.x_axis, dtype=float)) + np.outer(
-        np.sin(angles), np.asarray(frame.y_axis, dtype=float)
+    # Die Umfangsrichtungen aus der Kreistafel, nicht aus ``np.cos`` (RM-187).
+    table = np.asarray(units.circle_cos_sin(BORE_SECTIONS), dtype=float)
+    radial = np.outer(table[:, 0], np.asarray(frame.x_axis, dtype=float)) + np.outer(
+        table[:, 1], np.asarray(frame.y_axis, dtype=float)
     )
     normal = np.asarray(last.upper.normal, dtype=float)
-    normal /= np.linalg.norm(normal)
+    normal /= math.hypot(*normal)
     anchor = np.asarray(origin, dtype=float)
     # Radius entlang der Achse: r(t) = a + b·t — beim Zylinder fest, beim
     # Kegel mit seiner Steigung.
@@ -10529,12 +10570,14 @@ def _entrance_is_open(
     if last.feature.kind == "cone" and last.end > last.start + EPS_GEOM:
         slope = (last.outer_radius - last.inner_radius) / (last.end - last.start)
     offset = last.outer_radius - slope * last.end
-    along_normal = float(normal @ direction)
-    radial_normal = radial @ normal
+    along_normal = float(transform.along(normal, direction))
+    radial_normal = transform.along(radial, normal)
     denominator = along_normal + slope * radial_normal
     if np.any(np.abs(denominator) <= EPS_GEOM):
         return True
-    t = (last.upper.position - float(normal @ anchor) - offset * radial_normal) / denominator
+    t = (
+        last.upper.position - float(transform.along(normal, anchor)) - offset * radial_normal
+    ) / denominator
     rim = anchor + np.outer(t, direction) + radial * (offset + slope * t)[:, None]
     return _mouth_is_open(mesh, rim, normal)
 
@@ -10790,7 +10833,9 @@ def _entrance_mesh_tool(
     for outline, planes in _entrance_tools(entrance, diameter, reach, keep=keep, mouths=mouths):
         ctx.cancelled.raise_if_cancelled()
         raw = lathe.revolve(outline, sections=BORE_SECTIONS)
-        raw.vertices = np.asarray(raw.vertices) @ rotation.T + entrance.origin
+        raw.vertices = transform.turned(
+            np.asarray(raw.vertices, dtype=float), rotation
+        ) + np.asarray(entrance.origin, dtype=float)
         tool = MeshData.of(raw)
         for plane in planes:
             tool = cut(tool, plane).mesh
@@ -10908,7 +10953,7 @@ def _moved_after_resizing(
     )
     if cavity is not None:
         shifted = cavity.raw.copy()
-        shifted.apply_translation(travel)
+        shifted(shifted, travel)
         findings.extend(
             _neighbour_bore_findings(source, feature, MeshData.of(shifted), ctx, moved=True)
         )
@@ -11034,9 +11079,9 @@ def _resize_bore_entrance(
                 # Beide Stellen liegen auf derselben analytischen Kegelfläche.
                 normal = np.asarray(section.upper.normal)
                 axis = np.asarray(way)
-                tilt = float(np.linalg.norm(np.cross(normal, axis)))
-                slope = math.tan(math.radians(float(old.params["angle"]) / 2.0))
-                denominator = float(normal @ axis) - tilt * slope
+                tilt = float(math.hypot(*np.cross(normal, axis)))
+                slope = units.exact_tan_degrees(float(old.params["angle"]) / 2.0)
+                denominator = float(transform.along(normal, axis)) - tilt * slope
                 if denominator <= EPS_GEOM:
                     raise _entrance_error()
                 shift = tilt * outer_radius / denominator
@@ -11238,7 +11283,7 @@ def _narrowing_target(
     foot = section.start + rise
     angle = float(section.feature.params.get("angle", 0.0))
     if keep:
-        angle = 2.0 * math.degrees(math.atan((wide - opening) / (section.end - foot)))
+        angle = 2.0 * units.exact_atan_degrees((wide - opening) / (section.end - foot))
     centre = np.asarray(entrance.origin) + foot * np.asarray(way)
     return dataclasses.replace(
         section.feature,
@@ -11477,11 +11522,10 @@ def _floor_carried(
     if floor is None:
         return None
     params = dict(floor.params)
-    turn, shift = motion[:3, :3], motion[:3, 3]
-    centre = turn @ np.asarray(params["centre"], dtype=np.float64) + shift
+    centre = transform.moved_points(np.asarray([params["centre"]], dtype=np.float64), motion)[0]
     params["centre"] = (float(centre[0]), float(centre[1]), float(centre[2]))
     if isinstance(params.get("normal"), tuple | list):
-        normal = turn @ np.asarray(params["normal"], dtype=np.float64)
+        normal = transform.turned(np.asarray(params["normal"], dtype=np.float64), motion)
         params["normal"] = (float(normal[0]), float(normal[1]), float(normal[2]))
     return dataclasses.replace(
         floor, params=params, provenance="generated", face_indices=(), surface_patches=()
@@ -11526,10 +11570,10 @@ def _resized_bore_floor(
     origin = old_points[0]
     moved_origin = origin + np.asarray(shift, dtype=np.float64)
     if (
-        float(np.linalg.norm(normal)) <= EPS_GEOM
-        or not np.all(np.abs((old_points - origin) @ normal) <= tolerance)
-        or not np.all(np.abs((new_points - moved_origin) @ normal) <= tolerance)
-        or not np.all(new_normals @ normal > 0.0)
+        float(math.hypot(*normal)) <= EPS_GEOM
+        or not np.all(np.abs(transform.along(old_points - origin, normal)) <= tolerance)
+        or not np.all(np.abs(transform.along(new_points - moved_origin, normal)) <= tolerance)
+        or not np.all(transform.along(new_normals, normal) > 0.0)
     ):
         return {}
     return {
@@ -12000,10 +12044,10 @@ def _expected_bore(feature: Feature, diameter: float) -> Feature:
 def _through_bore_depth(body: Mesh, centre: Vec3, axis: Vec3) -> float:
     """Ein symmetrischer Schneidkörper, der die gesamte Zielhülle durchdringt."""
     unit = np.asarray(axis, dtype=float)
-    unit /= np.linalg.norm(unit)
+    unit /= math.hypot(*unit)
     bounds = body.bounds
-    offset = abs(float((np.asarray(bounds.centre) - centre) @ unit))
-    half_span = float(np.asarray(bounds.size) @ np.abs(unit)) / 2.0
+    offset = abs(float(transform.along(np.asarray(bounds.centre) - centre, unit)))
+    half_span = float(transform.along(np.asarray(bounds.size), np.abs(unit))) / 2.0
     return 2.0 * (offset + half_span + BOOLEAN_OVERLAP)
 
 
@@ -12042,9 +12086,9 @@ def _bore_match_id(
         # Nachbarlöcher und voneinander getrennte Sacklöcher bleiben unterscheidbar.
         if _free_along_the_axis(candidate, expected, mouth=mouth):
             axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
-            axis /= np.linalg.norm(axis)
+            axis /= math.hypot(*axis)
             centre = np.asarray(_bore_vector(candidate, "centre"), dtype=float)
-            offset = float((centre - _bore_vector(expected, "centre")) @ axis)
+            offset = float(transform.along(centre - _bore_vector(expected, "centre"), axis))
             candidate = dataclasses.replace(
                 candidate,
                 params={
@@ -12338,11 +12382,15 @@ def _recognised_resized_feature(
         # bewegen. Der alte Mittelpunkt muss weiterhin in der tatsächlichen
         # Längenausdehnung liegen; ein getrenntes koaxiales Sackloch scheidet aus.
         axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
-        axis /= np.linalg.norm(axis)
+        axis /= math.hypot(*axis)
         centre = np.asarray(_bore_vector(expected, "centre"), dtype=float)
         direction: Vec3 = (float(axis[0]), float(axis[1]), float(axis[2]))
         old_span = _mesh_bore_span(original, feature, direction)
-        middle = (old_span[0] + old_span[1]) / 2.0 if old_span is not None else float(centre @ axis)
+        middle = (
+            (old_span[0] + old_span[1]) / 2.0
+            if old_span is not None
+            else float(transform.along(centre, axis))
+        )
         comparison = {}
         for identifier, candidate in detected.items():
             if candidate.kind != expected.kind:
@@ -12355,7 +12403,8 @@ def _recognised_resized_feature(
                 if name in params:
                     point = np.asarray(params[name], dtype=float)
                     params[name] = tuple(
-                        float(v) for v in point - float((point - centre) @ axis) * axis
+                        float(v)
+                        for v in point - float(transform.along(point - centre, axis)) * axis
                     )
             comparison[identifier] = dataclasses.replace(candidate, params=params)
     found_id = _bore_match_id(
@@ -12404,15 +12453,15 @@ def _with_nominal_bore(
     if found.kind not in ("hole", "cone") or not found.face_indices:
         return found
     axis = np.asarray(_feature_direction(expected), dtype=float)
-    axis /= np.linalg.norm(axis)
+    axis /= math.hypot(*axis)
     origin = np.asarray(expected.params["centre"], dtype=float)
     points = np.asarray(mesh.raw.vertices[np.unique(mesh.raw.faces[found.face_indices, :])])
     relative = points - origin
-    along = relative @ axis
+    along = transform.along(relative, axis)
     radii = np.linalg.norm(relative - np.outer(along, axis), axis=1)
     wanted = np.full(len(points), diameter / 2.0)
     if found.kind == "cone":
-        wanted += along * math.tan(math.radians(float(expected.params["angle"]) / 2.0))
+        wanted += along * units.exact_tan_degrees(float(expected.params["angle"]) / 2.0)
     tolerance = weld_tolerance(mesh.bounds.diagonal)
     if np.any(radii > wanted + tolerance) or np.any(
         radii < wanted * units.inscribed_ratio(sections) - tolerance
@@ -12612,7 +12661,7 @@ def _exact_turned_blind_tool(
     if reach is None:
         return None
     outward, to_mouth, to_floor = reach
-    turned = matrix[:3, :3] @ outward
+    turned = transform.turned(outward, matrix)
     middle = _moved_point(
         np.asarray(feature.params["centre"], dtype=np.float64)
         + outward * ((to_mouth - to_floor) / 2.0),
@@ -12688,7 +12737,7 @@ def _same_cone(
             return None
         axis = np.asarray(_feature_direction(feature), dtype=np.float64)
         centre = np.asarray(feature.params["centre"], dtype=np.float64)
-        reach = diameter / 2.0 / math.tan(math.radians(angle / 2.0))
+        reach = diameter / 2.0 / units.exact_tan_degrees(angle / 2.0)
         return [centre + axis * reach, centre - axis * reach]
 
     wanted_apexes = apexes(wanted)
@@ -12706,9 +12755,9 @@ def _same_cone(
         if abs(float(candidate.params["angle"]) - float(wanted.params["angle"])) > angle_tolerance:
             continue
         other = np.asarray(_feature_direction(candidate), dtype=np.float64)
-        if abs(float(axis @ other)) < units.exact_cos_degrees(0.5):
+        if abs(float(transform.along(axis, other))) < units.exact_cos_degrees(0.5):
             continue
-        if any(np.linalg.norm(a - b) <= tolerance for a in wanted_apexes for b in own):
+        if any(math.hypot(*a - b) <= tolerance for a in wanted_apexes for b in own):
             found.append(name)
     return found[0] if len(found) == 1 else None
 
@@ -13286,9 +13335,9 @@ def _plane_turned(
     ihrer gedrehten Normalen nach außen geschoben."""
     normal = np.asarray(plane.normal, dtype=float)
     point = normal * plane.position
-    turned_normal = matrix[:3, :3] @ normal
-    turned_point = matrix[:3, :3] @ (point - pivot) + pivot
-    position = float(turned_normal @ turned_point) + shift
+    turned_normal = transform.turned(normal, matrix)
+    turned_point = transform.turned(point - pivot, matrix) + pivot
+    position = units.dot3(turned_normal, turned_point) + shift
     return SectionPlane(
         normal=(float(turned_normal[0]), float(turned_normal[1]), float(turned_normal[2])),
         position=position,
@@ -13568,9 +13617,9 @@ def _exact_chain_tool_turned(
 
     at_most = float(solid.bounds.diagonal)
     axis = np.asarray(entrance.axis, dtype=float)
-    turned_axis = matrix[:3, :3] @ axis
+    turned_axis = transform.turned(axis, matrix)
     origin = np.asarray(entrance.origin, dtype=float)
-    turned_origin = matrix[:3, :3] @ (origin - pivot) + pivot
+    turned_origin = transform.turned(origin - pivot, matrix) + pivot
     first, last = entrance.sections[0], entrance.sections[-1]
     through = bool(first.feature.params.get("through")) and not entrance.back
     # Die Werkzeuge kommen als Schaft, die Erweiterungen der ersten Seite und
@@ -13582,7 +13631,7 @@ def _exact_chain_tool_turned(
     def outward(
         section: _EntranceSection, at: float, *, cone: bool, way: NDArray[np.float64]
     ) -> float:
-        distance = abs(at - float((pivot - origin) @ way))
+        distance = abs(at - units.dot3(pivot - origin, way))
         if cone:
             half_angle = float(section.feature.params.get("angle", 0.0)) / 2.0
             return _cone_past_a_tilted_face(
@@ -13747,8 +13796,8 @@ def _exact_rotate_chain(
         dtype=np.float64,
     )
     old_axis = np.asarray(entrance.axis, dtype=float)
-    new_axis = matrix[:3, :3] @ old_axis
-    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    new_axis = transform.turned(old_axis, matrix)
+    tilt = units.exact_acos_degrees(abs(units.dot3(old_axis, new_axis)))
     _sinks_must_close(chain, tilt, angle)
     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
     filled = _exact_chain_filled(source, entrance, source.mesh)
@@ -13763,7 +13812,7 @@ def _exact_rotate_chain(
     expected = []
     for related in chain:
         centre = np.asarray(related.params["centre"], dtype=float)
-        turned_centre = matrix[:3, :3] @ (centre - pivot) + pivot
+        turned_centre = transform.turned(centre - pivot, matrix) + pivot
         params = {
             **related.params,
             "centre": tuple(float(v) for v in turned_centre),
@@ -14431,7 +14480,7 @@ def _exact_pin_tool(feature: Feature, centre: Vec3, axis: Vec3, *, reach_below: 
     diameter = _bore_number(feature, "diameter")
     depth = _bore_number(feature, "depth")
     unit = np.asarray(axis, dtype=float)
-    unit /= float(np.linalg.norm(unit))
+    unit /= float(math.hypot(*unit))
     start = np.asarray(centre, dtype=float) - unit * reach_below
     return _oriented_cylinder(
         (float(start[0]), float(start[1]), float(start[2])),
@@ -14675,7 +14724,7 @@ def _torus_axis(feature: Feature, axis: Vec3 | None = None) -> np.ndarray:
     gemessen hat, wird nicht geraten (Regel 21).
     """
     direction = np.asarray(axis if axis is not None else _bore_vector(feature, "axis"), dtype=float)
-    length = float(np.linalg.norm(direction))
+    length = float(math.hypot(*direction))
     if not math.isfinite(length) or length <= EPS_GEOM:
         raise ValidationError(
             field="at_feature",
@@ -14750,7 +14799,7 @@ def _torus_rims(
         if len(own) < 3:
             raise _torus_refusal(feature, whole=False)
         relative = points[members] - centre
-        along = relative @ axis
+        along = transform.along(relative, axis)
         radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
         if (
             float(along.max() - along.min()) > FLAT_RIM
@@ -14782,7 +14831,7 @@ def _torus_ring_mesh(
     )
     direction = np.asarray(axis, dtype=float)
     transform.moved(body, np.asarray(transform.rotation_between((0.0, 0.0, 1.0), direction)))
-    body.apply_translation(np.asarray(centre, dtype=float))
+    shifted(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -14822,8 +14871,8 @@ def _torus_shaft_core(
     into_frame = np.asarray(transform.rotation_between(axis, (0.0, 0.0, 1.0)))[:3, :3]
     ordered: list[list[int]] = []
     for loop, middle in zip(loops, hubs, strict=True):
-        local = (into_frame @ (points[loop] - middle).T).T
-        angles = np.arctan2(local[:, 1], local[:, 0])
+        local = transform.turned(points[loop] - middle, into_frame)
+        angles = stable_arctan2(local[:, 1], local[:, 0])
         order = np.argsort(angles)
         ordered.append([loop[int(i)] for i in order])
     first, second = ordered
@@ -14832,8 +14881,8 @@ def _torus_shaft_core(
     n1, n2 = len(first), len(second)
     angle_of = {}
     for loop, middle in zip(loops, hubs, strict=True):
-        local = (into_frame @ (points[loop] - middle).T).T
-        for index, angle in zip(loop, np.arctan2(local[:, 1], local[:, 0]), strict=True):
+        local = transform.turned(points[loop] - middle, into_frame)
+        for index, angle in zip(loop, stable_arctan2(local[:, 1], local[:, 0]), strict=True):
             angle_of[int(index)] = float(angle)
     while i < n1 or j < n2:
         a, b = first[i % n1], second[j % n2]
@@ -15054,7 +15103,7 @@ def _rotate_torus(
 
     old_axis = _torus_axis(feature)
     new_axis = _torus_axis(feature, turned_axis)
-    if abs(float(old_axis @ new_axis)) >= 1.0 - EPS_GEOM:
+    if abs(float(transform.along(old_axis, new_axis))) >= 1.0 - EPS_GEOM:
         return OpResult(
             outputs=[source],
             findings=[
@@ -15273,7 +15322,7 @@ def _thread_corners(feature: Feature, source: SceneObject) -> tuple[np.ndarray, 
         _bore_vector(feature, "centre"), dtype=float
     )
     axis = _torus_axis(feature)
-    along = relative @ axis
+    along = transform.along(relative, axis)
     return along, np.linalg.norm(relative - np.outer(along, axis), axis=1)
 
 
@@ -15505,7 +15554,7 @@ def _material_at(source: SceneObject, point: np.ndarray) -> bool:
     raw = mesh.raw
     flat = np.asarray(point, dtype=float).reshape(1, 3)
     closest, _distance, triangle = on_surface(raw, flat, index=surface_index_of(mesh))
-    outward = float(np.dot(flat[0] - closest[0], np.asarray(raw.face_normals)[triangle[0]]))
+    outward = float(units.dot3(flat[0] - closest[0], np.asarray(raw.face_normals)[triangle[0]]))
     return outward <= EPS_GEOM
 
 
@@ -15553,7 +15602,9 @@ def _along_axis(centre: np.ndarray, axis: np.ndarray, body: Any, start: float) -
 
     turn = np.asarray(transform.rotation_between((0.0, 0.0, 1.0), axis), dtype=float)
     origin = centre + axis * start
-    matrix = translation((float(origin[0]), float(origin[1]), float(origin[2]))) @ turn
+    matrix = transform.composed(
+        translation((float(origin[0]), float(origin[1]), float(origin[2]))), turn
+    )
     if isinstance(body, MeshData):
         raw = body.raw.copy()
         transform.moved(raw, matrix)
@@ -16737,7 +16788,7 @@ def _exact_rotate_pin(
     body = _exact_body_from_faces(source, feature)
     old_axis = np.asarray(_bore_vector(feature, "axis"), dtype=float)
     new_axis = np.asarray(turned_axis, dtype=float)
-    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    tilt = units.exact_acos_degrees(abs(float(transform.along(old_axis, new_axis))))
     depth = _bore_number(feature, "depth")
     reach = _reach_past_a_tilted_face(
         depth / 2.0, _bore_number(feature, "diameter") / 2.0, tilt, at_most=solid.bounds.diagonal
@@ -16751,7 +16802,7 @@ def _exact_rotate_pin(
     # von der Spitze (``depth/2`` über der Mitte) bis zum tiefsten Punkt der
     # schrägen Schnittellipse (``reach`` darunter). Die native Erkennung nennt
     # die Mitte dieser Spanne — und genau dort wird das Merkmal wiedergesucht.
-    unit = new_axis / float(np.linalg.norm(new_axis))
+    unit = new_axis / float(math.hypot(*new_axis))
     middle = np.asarray(centre, dtype=float) + unit * (depth / 2.0 - reach) / 2.0
     expected = dataclasses.replace(
         feature,
@@ -16805,16 +16856,16 @@ def _exact_rotate_cone(
         )
     old_axis = np.asarray(_bore_vector(feature, "axis"), dtype=float)
     new_axis = np.asarray(turned_axis, dtype=float)
-    tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
+    tilt = units.exact_acos_degrees(abs(float(transform.along(old_axis, new_axis))))
     if cavity:
         _sink_must_close(feature, tilt, cast(RotateFeatureParams, ctx.params).angle)
     reach = _cone_past_a_tilted_face(
         0.0, extent.wide_radius, extent.half_angle, tilt, at_most=solid.bounds.diagonal
     )
     matrix = np.asarray(transform.rotation_between(old_axis, new_axis), dtype=float)[:3, :3]
-    turned = matrix @ np.asarray(extent.direction, dtype=float)
+    turned = transform.turned(np.asarray(extent.direction, dtype=float), matrix)
     base = np.asarray(centre, dtype=float) - turned * reach
-    base_radius = extent.wide_radius + reach * math.tan(math.radians(extent.half_angle))
+    base_radius = extent.wide_radius + reach * units.exact_tan_degrees(extent.half_angle)
     ctx.progress(
         0.1,
         str(_("Das Merkmal wird an seiner alten Stelle geschlossen …"))
@@ -16892,7 +16943,7 @@ def _sits_at(
     tolerance = match_tolerance(diagonal)
     if candidate.params.get("open"):
         axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
-        axis /= np.linalg.norm(axis)
+        axis /= math.hypot(*axis)
         arc = np.asarray(_bore_vector(candidate, "arc_centre"))
         middle = np.asarray(_bore_vector(expected, "centre"))
         travel = (
@@ -16904,15 +16955,15 @@ def _sits_at(
         for sign in (-1.0, 1.0):
             offset = arc - (middle + sign * travel / 2.0 * direction)
             if _free_along_the_axis(candidate, expected, mouth=mouth):
-                offset -= float(offset @ axis) * axis
-            if np.linalg.norm(offset) <= tolerance:
+                offset -= float(transform.along(offset, axis)) * axis
+            if math.hypot(*offset) <= tolerance:
                 return True
         return False
     offset = np.asarray(_bore_vector(candidate, "centre")) - _bore_vector(expected, "centre")
     if _free_along_the_axis(candidate, expected, mouth=mouth):
         axis = np.asarray(_bore_vector(expected, "axis"), dtype=float)
-        axis /= np.linalg.norm(axis)
-        offset -= float(offset @ axis) * axis
+        axis /= math.hypot(*axis)
+        offset -= float(transform.along(offset, axis)) * axis
     return bool(np.all(np.abs(offset) <= tolerance))
 
 
@@ -17585,13 +17636,13 @@ def _exact_countersink(ctx: OpContext, source: SceneObject, params: CountersinkP
     )
     half_angle = params.angle / 2.0
     radius = params.diameter / 2.0
-    depth = radius / math.tan(math.radians(half_angle))
+    depth = radius / units.exact_tan_degrees(half_angle)
     outward = np.asarray(AXIS_NORMALS[axis], dtype=float) * placement.outward
     base = np.asarray(placement.position, dtype=float) + outward * FEATURE_OVERLAP
     tool = _oriented_cone(
         (float(base[0]), float(base[1]), float(base[2])),
         (float(-outward[0]), float(-outward[1]), float(-outward[2])),
-        radius + FEATURE_OVERLAP * math.tan(math.radians(half_angle)),
+        radius + FEATURE_OVERLAP * units.exact_tan_degrees(half_angle),
         0.0,
         depth + FEATURE_OVERLAP,
     )
@@ -18719,7 +18770,7 @@ def _gap_between(one: Any, other: Any) -> float:
     """
     low = np.maximum(np.asarray(one.bounds[0]), np.asarray(other.bounds[0]))
     high = np.minimum(np.asarray(one.bounds[1]), np.asarray(other.bounds[1]))
-    return float(np.linalg.norm(np.maximum(low - high, 0.0)))
+    return float(math.hypot(*np.maximum(low - high, 0.0)))
 
 
 #: Ein loses Teil eines Körpers: sein Netz, sein Volumen und die Slots seiner
@@ -19500,9 +19551,9 @@ def _points_plane(params: CutAwayParams) -> SectionPlane:
         one[2] * two[0] - one[0] * two[2],
         one[0] * two[1] - one[1] * two[0],
     )
-    length = math.sqrt(cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2)
-    spread = math.sqrt(one[0] ** 2 + one[1] ** 2 + one[2] ** 2) * math.sqrt(
-        two[0] ** 2 + two[1] ** 2 + two[2] ** 2
+    length = math.sqrt(cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2])
+    spread = math.sqrt(one[0] * one[0] + one[1] * one[1] + one[2] * one[2]) * math.sqrt(
+        two[0] * two[0] + two[1] * two[1] + two[2] * two[2]
     )
     if length <= EPS_GEOM * max(spread, 1.0):
         raise ValidationError(
@@ -19555,7 +19606,7 @@ def _edge_plane(
     points = points_in_kernel(kernel, source.mesh, chosen)
     start, end = points[0], points[-1]
     along = (end[0] - start[0], end[1] - start[1], end[2] - start[2])
-    length = math.sqrt(along[0] ** 2 + along[1] ** 2 + along[2] ** 2)
+    length = math.sqrt(along[0] * along[0] + along[1] * along[1] + along[2] * along[2])
     straight = length > EPS_GEOM and all(
         _off_the_line(point, start, along, length) <= MAX_FACET_SAG for point in points
     )
@@ -19580,7 +19631,7 @@ def _edge_plane(
         axis[1] - across * direction[1],
         axis[2] - across * direction[2],
     )
-    size = math.sqrt(base[0] ** 2 + base[1] ** 2 + base[2] ** 2)
+    size = math.sqrt(base[0] * base[0] + base[1] * base[1] + base[2] * base[2])
     if size <= EPS_DISPLAY:
         raise ValidationError(
             field="axis",
@@ -19632,7 +19683,7 @@ def _off_the_line(point: Vec3, start: Vec3, along: Vec3, length: float) -> float
         offset[2] * along[0] - offset[0] * along[2],
         offset[0] * along[1] - offset[1] * along[0],
     )
-    return math.sqrt(cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2) / length
+    return math.sqrt(cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]) / length
 
 
 def edge_cut_through_middle(source: SceneObject, key: str) -> tuple[str, float] | None:
@@ -19656,7 +19707,7 @@ def edge_cut_through_middle(source: SceneObject, key: str) -> tuple[str, float] 
     points = points_in_kernel(kernel, source.mesh, chosen)
     start, end = points[0], points[-1]
     along = (end[0] - start[0], end[1] - start[1], end[2] - start[2])
-    length = math.sqrt(along[0] ** 2 + along[1] ** 2 + along[2] ** 2)
+    length = math.sqrt(along[0] * along[0] + along[1] * along[1] + along[2] * along[2])
     if length <= EPS_GEOM or any(
         _off_the_line(point, start, along, length) > MAX_FACET_SAG for point in points
     ):
@@ -19674,7 +19725,7 @@ def edge_cut_through_middle(source: SceneObject, key: str) -> tuple[str, float] 
         axis[1] - across * direction[1],
         axis[2] - across * direction[2],
     )
-    size = math.sqrt(base[0] ** 2 + base[1] ** 2 + base[2] ** 2)
+    size = math.sqrt(base[0] * base[0] + base[1] * base[1] + base[2] * base[2])
     base = (base[0] / size, base[1] / size, base[2] / size)
     side = (
         direction[1] * base[2] - direction[2] * base[1],
@@ -19685,7 +19736,7 @@ def edge_cut_through_middle(source: SceneObject, key: str) -> tuple[str, float] 
     middle = tuple(float(low[index] + high[index]) / 2.0 - start[index] for index in range(3))
     # n(t)·v = a·cos t + b·sin t verschwindet bei t = atan2(-a, b); in (-90°, 90°]
     # zeigt die Normale zur Achse hin, wie an jeder anderen Ebene des Schnitts.
-    tilt = math.degrees(math.atan2(-units.dot3(base, middle), units.dot3(side, middle)))
+    tilt = units.exact_atan2_degrees(-units.dot3(base, middle), units.dot3(side, middle))
     if tilt > 90.0:
         tilt -= 180.0
     elif tilt <= -90.0:
@@ -19881,7 +19932,8 @@ def _cut_faces_continued(
 
     result = dict(features)
     pairs = list(continued)
-    same = match_tolerance(source.bounds.diagonal) ** 2
+    near = match_tolerance(source.bounds.diagonal)
+    same = near * near
     for name, old in kept.items():
         if old.kind != "face" or name in result:
             continue
@@ -21196,9 +21248,9 @@ def _refound_fillet(
         if abs(found_radius - radius) > 0.05 * radius:
             continue
         axis = np.asarray(_feature_direction(candidate), dtype=np.float64)
-        if abs(float(axis @ old_axis)) < 1.0 - 1e-3:
+        if abs(float(transform.along(axis, old_axis))) < 1.0 - 1e-3:
             continue
-        distance = float(np.linalg.norm(np.asarray(candidate.params["centre"]) - old_centre))
+        distance = float(math.hypot(*np.asarray(candidate.params["centre"]) - old_centre))
         if distance <= limit and (best is None or distance < best[0]):
             best = (distance, candidate)
     if best is None:

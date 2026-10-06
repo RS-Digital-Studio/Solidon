@@ -630,6 +630,65 @@ def stable_sin_cos(angles: np.ndarray | float) -> tuple[np.ndarray, np.ndarray]:
     return t * sine, cosine
 
 
+def row_dots(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+    """Das Skalarprodukt je Zeile zweier ``(n, 3)``-Felder — ``einsum("ij,ij->i")`` ohne FMA.
+
+    Drei Produkte und zwei Summen je Zeile, jede als eigene NumPy-Operation:
+    ``np.einsum`` zieht auf ARM Produkt und Summe zu einer FMA zusammen, auf
+    x86 nicht (RM-187).
+    """
+    a = np.asarray(first, dtype=np.float64)
+    b = np.asarray(second, dtype=np.float64)
+    return np.asarray(a[..., 0] * b[..., 0] + a[..., 1] * b[..., 1] + a[..., 2] * b[..., 2])
+
+
+def shifted(body: object, offset: Sequence[float] | np.ndarray) -> None:
+    """Ein Netz an Ort und Stelle verschieben — der Ersatz für ``apply_translation``.
+
+    ``trimesh`` verschiebt über ein Matrixprodukt mit einer Einheitsdrehung.
+    Das ist rechnerisch exakt, geht aber durch BLAS, und der Rauschtest kann es
+    von einem echten Produkt nicht unterscheiden (RM-187); elementweise bleibt
+    der Weg prüfbar. Was das Netz über sich weiß, rechnet es danach neu.
+    """
+    raw = cast("trimesh.Trimesh", body)
+    raw.vertices = np.asarray(raw.vertices, dtype=np.float64) + np.asarray(offset, dtype=np.float64)
+
+
+def periodic_sin_cos(angles: np.ndarray | float) -> tuple[np.ndarray, np.ndarray]:
+    """:func:`stable_sin_cos` für Winkel jeder Größe — erst um ganze Umläufe gefaltet.
+
+    Der Winkel abzüglich der nächsten ganzen Zahl von Umläufen landet in
+    ``[-π, π]``; das Abziehen ist eine Grundrechenart und damit auf jeder
+    Maschine gleich gerundet. Für Lagen, die über die Naht eines Zylinders
+    reichen, ohne dort eine Absage zu verdienen (RM-187).
+    """
+    t = np.asarray(angles, dtype=np.float64)
+    turns = np.round(t / (2.0 * math.pi))
+    return stable_sin_cos(t - turns * (2.0 * math.pi))
+
+
+def stable_arctan2(y: np.ndarray | float, x: np.ndarray | float) -> np.ndarray:
+    """``arctan2`` aus :func:`_stable_arctan` — auf jeder Maschine dieselben Bits (RM-187).
+
+    Der Winkel in ``(-π, π]`` über den Arkustangens des Verhältnisses der
+    kleineren zur größeren Koordinate, die Quadranten über Vorzeichen und
+    ``π/2``-Ergänzung. Der Ursprung bekommt null wie bei ``np.arctan2``
+    (dort mit Vorzeichen der Null; hier ohne, denn keine Lage hängt daran).
+    """
+    yy = np.asarray(y, dtype=np.float64)
+    xx = np.asarray(x, dtype=np.float64)
+    ay, ax = np.abs(yy), np.abs(xx)
+    steep = ay > ax
+    big = np.where(steep, ay, ax)
+    small = np.where(steep, ax, ay)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(big > 0.0, small / np.where(big > 0.0, big, 1.0), 0.0)
+    angle = _stable_arctan(ratio)
+    angle = np.where(steep, _PI_2 - angle, angle)
+    angle = np.where(xx < 0.0, math.pi - angle, angle)
+    return np.asarray(np.where(yy < 0.0, -angle, angle))
+
+
 def stable_arccos(values: np.ndarray | float) -> np.ndarray:
     """``arccos`` aus Grundrechenarten und :func:`_stable_arctan` — auf jeder
     Maschine dieselben Bits (RM-166).
