@@ -1777,9 +1777,15 @@ def test_drawing_in_a_new_project_hides_the_invitation_and_the_selection_tab(
         assert invitation.isHidden(), "die Einladung liegt nicht über der Skizze"
         assert not tabs.isTabVisible(tabs.indexOf(window.feature_dock)), "kein Reiter Auswahl"
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
-        assert len(panel.canvas.sketch.constraints) > 3
-        assert panel.constraint_list.count() <= 3, "höchstens drei Bedingungszeilen"
-        assert not panel.constraint_count.text().startswith("0"), panel.constraint_count.text()
+        constraints = panel.canvas.sketch.constraints
+        assert len(constraints) > 3
+        # Im Zustand des Bildes ist nichts gewählt: keine Zeile, nur die Zahl.
+        assert panel.constraint_list.count() == 0
+        assert panel.constraint_count.text().startswith(f"{len(constraints)} Bedingungen.")
+        # Eine gewählte Seite zeigt genau die Bedingungen, die an ihr hängen.
+        panel.canvas._select(("line", (0, 1)), False)
+        touching = [entry for entry in constraints if {0, 1} & set(entry.targets)]
+        assert 0 < panel.constraint_list.count() == len(touching) < len(constraints)
         window.feature_dock.reveal()
         assert tabs.currentWidget() is not window.feature_dock, "kein verborgener Reiter vorn"
 
@@ -1810,13 +1816,11 @@ def test_the_constraint_list_shows_only_what_hangs_on_the_selection(
         constraints = panel.canvas.sketch.constraints
         total = len(constraints)
         assert panel.constraint_list.count() == 0
-        assert panel.constraint_list.isHidden(), "kein leerer Kasten unter der Zählzeile"
 
         panel.canvas._select(("line", (0, 1)), False)
         touching = [entry for entry in constraints if {0, 1} & set(entry.targets)]
         assert 0 < len(touching) < total
         assert panel.constraint_list.count() == len(touching)
-        assert not panel.constraint_list.isHidden()
         assert panel.constraint_count.text() == (
             f"{len(touching)} von {total} Bedingungen an der Auswahl"
         )
@@ -1826,6 +1830,36 @@ def test_the_constraint_list_shows_only_what_hangs_on_the_selection(
             assert any(row.startswith("Verbunden") for row in rows), rows
     finally:
         panel.deleteLater()
+
+
+def test_choosing_a_line_does_not_zoom_the_sketch_dialog(qt_app: QApplication) -> None:
+    """Die Zeichenfläche des Skizzendialogs bleibt beim Wählen, wie sie ist (RM-519).
+
+    Die Bedingungsliste steht dort neben der Fläche. Hing ihre Breite am Text
+    der Zählzeile oder verschwand die leere Liste, passte die Fläche bei jedem
+    Auswahlklick neu ein — gemessen 420 und 564 Punkte breit, der Maßstab
+    sprang um 45 Prozent, und der nächste Klick traf woanders.
+    """
+    dialog = SketchEditorDialog(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+    try:
+        dialog.show()
+        for _ in range(5):
+            qt_app.processEvents()
+        canvas = dialog.canvas
+        before = (canvas.width(), canvas._scale)
+        canvas._select(("line", (0, 1)), False)
+        for _ in range(5):
+            qt_app.processEvents()
+        assert dialog.panel.constraint_list.count() > 0, "ohne Zeilen prüft der Test nichts"
+        assert (canvas.width(), canvas._scale) == before
+        canvas.selection.clear()
+        canvas.selectionChanged.emit()
+        for _ in range(5):
+            qt_app.processEvents()
+        assert (canvas.width(), canvas._scale) == before
+    finally:
+        dialog.close()
+        dialog.deleteLater()
 
 
 def test_the_count_line_says_how_many_constraints_there_are() -> None:
@@ -1842,7 +1876,12 @@ def test_the_count_line_says_how_many_constraints_there_are() -> None:
     assert constraint_count_text(13, 4, selected=True, clashing=False) == (
         "4 von 13 Bedingungen an der Auswahl"
     )
-    assert "widersprechen" in constraint_count_text(13, 0, selected=False, clashing=True)
+    assert constraint_count_text(13, 0, selected=False, clashing=True) == (
+        "13 Bedingungen. Die markierten widersprechen sich."
+    )
+    assert constraint_count_text(13, 2, selected=True, clashing=True).endswith(
+        "an der Auswahl. Die markierten widersprechen sich."
+    )
 
 
 def test_finishing_a_sketch_looks_like_the_main_action(qt_app: QApplication) -> None:

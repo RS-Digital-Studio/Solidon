@@ -357,6 +357,19 @@ den die Nummern da sind.
 fragt `constraint_indices(row)` — Zeile und Index sind nicht mehr dasselbe.
 Entf und Kontextmenü lösen die Gruppe in einem Schritt (`remove_constraints`).
 
+**Die Liste zeigt nur die Auswahl** (RM-519). Ein Rechteck mit Kreis brachte
+dreizehn Zeilen „Deckung — Linie 1 Ende, Linie 2 Anfang“, und die eine, um die es
+ging, stand irgendwo darin. Ein Widerspruch steht trotzdem immer da: Er hält die
+ganze Skizze an, und wer ihn lösen will, sucht ihn nicht erst über die Auswahl.
+Die Maßkarte im Bild meldet einen Bedingungsindex, keine Zeile — seit die Liste
+filtert, sind beide nie dasselbe (`change_constraint_value` nimmt den Index). Im
+Skizzendialog steht die Liste neben der Zeichenfläche: Hinge ihre Breite am Text
+der Zählzeile oder verschwände die leere Liste, passte die Fläche bei jedem
+Auswahlklick neu ein, und der nächste Klick träfe woanders. „Deckung“ kennt nur,
+wer CAD gelernt hat; *Verbunden* sagt, was der Kunde sieht. Der Reiter *Auswahl*
+zeigte im Zeichenmodus nichts Brauchbares, und die Einladung der leeren Szene lag
+mitten über der Skizze und unter *Grundform hochziehen*.
+
 ## Das Maß am Zeiger
 
 **Das Maß beim Zeichnen steht am Zeiger, nicht in der Werkzeugzeile.** Wer

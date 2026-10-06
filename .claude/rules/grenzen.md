@@ -219,10 +219,8 @@ Scheitern; gespeicherte Schritte behalten ihren Kern.
 dem Kontextmenü des Verlaufs (`HistoryPanel.kernelSwitchRequested`,
 `MainWindow.switch_kernel`), mit einem Satz, der den Nutzen nennt, nie den
 Rechenkern (`registry.kernel_switch_label`: „Mit echten Flächen und Kanten
-rechnen“, „Als Dreiecksmodell rechnen“). Er steht zuletzt, hinter einem
-Trennstrich (`HistoryPanel.context_menu`, RM-519): gleich nach *Parameter
-ändern …* las sich die seltenste Handlung wie die alltägliche. Zwei Sperren
-vor dem Klick: in den exakten Kern nur, wenn er da ist (sonst fehlt der Eintrag; das Fenster prüft den
+rechnen“, „Als Dreiecksmodell rechnen“). Zwei Sperren vor dem Klick: in den
+exakten Kern nur, wenn er da ist (sonst fehlt der Eintrag; das Fenster prüft den
 direkten Aufruf ein zweites Mal); ins Netz nur, wenn kein späterer Schritt
 bearbeitbare Flächen braucht (`needs_exact`). Getauscht wird nur zwischen den
 Grundkörpern aus `PRIMITIVE_TWINS`; an Bohren und Aushöhlen entscheidet der

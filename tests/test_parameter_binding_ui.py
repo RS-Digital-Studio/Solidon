@@ -54,6 +54,12 @@ def test_the_parameter_card_names_fitting_numbers_and_offers_to_bind(
     assert not panel._form.isRowVisible(panel._hints["boden"])
     shown = [name for name, hint in panel._hints.items() if panel._form.isRowVisible(hint)]
     assert all(panel._hints[name].text() == "Nicht verwendet" for name in shown)
+    # Das Fenstermaß liest noch niemand, aber die Tasche ist 30 breit: Gerade
+    # hier macht erst das Binden es wirksam, und die Kurzhilfe sagt wo und wie.
+    assert panel._hints["fenster"].text() == "Nicht verwendet"
+    note = panel._titles["fenster"].toolTip()
+    assert "passt zu @fenster" in note, note
+    assert "Der Knopf unter den Maßen bindet" in note, note
     # Ungenutzt bleibt ungenutzt, auch ohne passende Zahl — und der Hinweis
     # steht unter der Zeile, nicht in ihrer Beschriftung: In der schmalen
     # Beschriftungsspalte brach er in vier Zeilen um.
@@ -79,9 +85,10 @@ def test_the_box_with_lid_shows_its_four_measures_without_a_line_below(
 ) -> None:
     """Abnahme RM-519 am Bild des Hauptfensters: vier Maße, keine Zeile darunter.
 
-    Im Beispiel *Dose mit Deckel* stand unter Tiefe, Höhe und Wandstärke
-    „Eine feste Zahl passt“ / „2 feste Zahlen passen“, und es las sich wie die
-    Überschrift der jeweils nächsten Zeile. Alle vier Maße wirken.
+    Im Beispiel *Dose mit Deckel* stand unter Breite, Tiefe und Höhe „Eine
+    feste Zahl passt“, „2 feste Zahlen passen“ und „3 feste Zahlen passen“, und
+    es las sich wie die Überschrift der jeweils nächsten Zeile. Alle vier Maße
+    wirken.
     """
     from pathlib import Path
 

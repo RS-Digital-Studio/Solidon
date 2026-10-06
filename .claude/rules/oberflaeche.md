@@ -358,12 +358,6 @@ des Themas; was die leistet, ist eine Frage an das Thema.
   (`test_no_fallback_colour_can_be_mistaken_for_the_selection`); echte Farben
   kommen vom Kunden (Farbwähler, Filamentkatalog). Die Pinselleiste zeigt
   Farbfeld **und** Name, „neu“ für einen fehlenden Slot.
-- **Die Filamentspalte des Objektbaums trägt die Spule, kein Wort** (RM-519):
-  Das Wort passte in keiner Sprache und stand als „Fila“ da; es bleibt in
-  Kurzhilfe und Lesername. Ihr Farbpunkt ist rund — ein Kästchen las sich als
-  Haken —, ohne eigenes Filament mit gestricheltem Rand (`filament_chip`). Die
-  Überschrift der Maßspalte steht immer ganz (`ObjectTree._size_columns`);
-  `test_the_object_tree_cuts_no_heading_in_any_language` misst jede Sprache.
 - **Ein Hauptknopf entsteht über `style.make_primary()`** (Akzentfarbe **und**
   halbfett), nie über `setDefault(True)`; ein verwerfender über
   `style.make_danger()`, ein Fenster ohne Handlung nimmt `style.no_primary()`,

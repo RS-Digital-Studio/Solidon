@@ -152,15 +152,14 @@ im Einzelnen stehen unter denselben Überschriften in
   Meldung und an jedem Listeneintrag. Dass **Strg** dazunimmt, steht in der
   Zeile (`selection_hint`).
 * **Die Bedingungsliste zeigt nur, was an der Auswahl hängt, dazu jeden
-  Widerspruch** (RM-519): Ein Rechteck brachte dreizehn Zeilen, und die
-  gesuchte stand irgendwo darin. Darüber nennt die Zählzeile die Gesamtzahl
-  (`constraint_count_text`); ohne Zeile verschwindet die Liste. Sie folgt
-  `selectionChanged` wie `sketchChanged`. Zwei gedeckte Punkte heißen
-  *Verbunden*, nicht *Deckung*.
+  Widerspruch** (RM-519); die Zählzeile darüber (`constraint_count_text`) nennt
+  die Gesamtzahl. Sie folgt `selectionChanged` wie `sketchChanged`, und ihre
+  Breite hängt nicht am Text, sonst zoomt der Dialog bei jedem Klick.
+  Gedeckte Punkte heißen *Verbunden*.
 * **Im Zeichenmodus ist der Reiter Auswahl verborgen** (`start_sketch`,
-  `finish_sketch`); `_SelectionPage.reveal` holt keinen verborgenen Reiter
-  nach vorn. Die Einladung der leeren Szene steht nicht über der Skizze
-  (`fenster.md`).
+  `finish_sketch`; `_SelectionPage.reveal` holt ihn nicht). Die Einladung der
+  leeren Szene steht nicht über Skizze, offenem Operationsdialog oder Vorschau:
+  Wer einen dieser Zustände schaltet, ruft `MainWindow._show_invitation`.
 * **Die Bedingungsliste trägt die Punktnummern auch im Konflikt**; nach ihnen
   sucht, wer eine Meldung des Lösers wiederfinden will.
 * **Die festen Punkte der Hilfsgeometrie sind eine Zeile der Liste**

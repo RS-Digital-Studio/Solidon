@@ -119,6 +119,11 @@ Erleichterung:
   „Zuletzt geöffnet" — vorher stand dort nur, was als Projekt geöffnet wurde,
   und ohne die Frage beim Schließen wäre die Datei eine Suche im Dateidialog.
 
+## Der Verlauf lässt sich umbauen
+
+* **Export und Druckeinstellungen beenden das Einfügen zuerst:** Hinaus geht
+  das fertige Teil, nicht der Zwischenstand vor der Einfügemarke.
+
 ## Hinter einen Halt kommt kein Schritt
 
 **Hinter einen Halt kommt kein Schritt** (§15.3). Hält die Kette an einem

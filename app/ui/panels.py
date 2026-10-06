@@ -3984,6 +3984,16 @@ class ParameterPanel(QWidget):
         if uses is None:
             return tr("Die Verwendung wird mit dem Modell geprüft.")
         if not uses:
+            # Ungenutzt, aber eine feste Zahl passt: Hier macht erst das Binden
+            # das Maß wirksam (RM-519) — die Stellen und der Weg dorthin.
+            if spots := self._spot_lines(name):
+                return "\n".join(
+                    [
+                        tr("Dieses Maß wird von keiner Operation verwendet. Es passt hier:"),
+                        *spots,
+                        tr("Der Knopf unter den Maßen bindet diese Zahlen an das Maß."),
+                    ]
+                )
             return tr(
                 "Dieses Maß wird von keiner Operation verwendet. Öffnen Sie einen Schritt "
                 "im Verlauf und tragen Sie =@{name} in das passende Maßfeld ein."
@@ -4490,7 +4500,7 @@ def removal_groups(document: Document, gone: Discarded) -> dict[str, tuple[int, 
 
 
 def step_span(numbers: Iterable[int]) -> str:
-    """Die Schrittnummern einer Gruppenzeile im Verlauf, als Spanne „3 bis 4“ (RM-519).
+    """Die Schrittnummern einer zugeklappten Zeile im Verlauf, als Spanne (RM-519).
 
     Ohne sie sprang die Zählung an der Gruppe — 1, 2, ▸ Kabel und
     Befestigung, 5 —, und wer „Operation 4“ aus einer Fehlermeldung suchte,
@@ -4504,13 +4514,19 @@ def step_span(numbers: Iterable[int]) -> str:
             runs[-1].append(number)
         else:
             runs.append([number])
-    return ", ".join(
-        str(run[0]) if len(run) == 1 else f"{run[0]}–{run[-1]}" for run in runs
-    )
+    return ", ".join(str(run[0]) if len(run) == 1 else f"{run[0]}–{run[-1]}" for run in runs)
 
 
-def _with_removed(count: int) -> str:
-    """Wie viele Schritte unter einer Löschung stehen, für ihre Zeile."""
+def _with_removed(count: int, numbers: str = "") -> str:
+    """Wie viele Schritte unter einer Löschung stehen, für ihre Zeile — und welche.
+
+    Mit ``numbers`` (:func:`step_span`) nennt die zugeklappte Zeile die Nummern,
+    die sie verbirgt, wie eine zugeklappte Gruppe (RM-519).
+    """
+    if numbers:
+        if count == 1:
+            return tr("mit Schritt {number}", number=numbers)
+        return tr("mit {count} Schritten: {numbers}", count=count, numbers=numbers)
     if count == 1:
         return tr("mit einem Schritt")
     return tr("mit {count} Schritten").format(count=count)
@@ -5163,7 +5179,10 @@ class HistoryPanel(QWidget):
                 # mehreren Schritten, die Zahl als Wort an der Zeile (Regel 18).
                 if halted or stopped_at in removed:
                     self._open_groups.add(transaction.id)
-                item.setText(f"{item.text()}  ({_with_removed(len(removed))})")
+                numbers = step_span(
+                    self._positions[op_id] for op_id in removed if op_id in self._positions
+                )
+                item.setText(f"{item.text()}  ({_with_removed(len(removed), numbers)})")
                 if len(transaction.ops) == 1:
                     expanded = transaction.id in self._open_groups
                     item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")

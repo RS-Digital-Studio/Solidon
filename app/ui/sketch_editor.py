@@ -484,10 +484,16 @@ def constraint_count_text(total: int, mine: int, *, selected: bool, clashing: bo
     """
     if total == 0:
         return tr("Noch keine Bedingungen.")
+    if selected and clashing:
+        return tr(
+            "{mine} von {total} Bedingungen an der Auswahl. Die markierten widersprechen sich.",
+            mine=mine,
+            total=total,
+        )
     if selected:
         return tr("{mine} von {total} Bedingungen an der Auswahl", mine=mine, total=total)
     if clashing:
-        return tr("{total} Bedingungen, die markierten widersprechen sich.", total=total)
+        return tr("{total} Bedingungen. Die markierten widersprechen sich.", total=total)
     if total == 1:
         return tr("Eine Bedingung. Wählen Sie eine Linie oder einen Punkt, um sie zu sehen.")
     return tr(
@@ -6879,6 +6885,12 @@ class SketchPanel(QWidget):
         # ging, stand irgendwo darin (:meth:`_refresh_constraints`).
         self.constraint_count = QLabel(self._side_box)
         self.constraint_count.setWordWrap(True)
+        # Die Breite hängt nicht am Text: Im Skizzendialog steht die Spalte
+        # neben der Zeichenfläche, und eine Zeile, die mit der Auswahl breiter
+        # wird, ließe die Fläche bei jedem Klick neu einpassen.
+        self.constraint_count.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         style.set_level(self.constraint_count, "caption")
         side.addWidget(self.constraint_count)
         side.addWidget(self.constraint_list, stretch=1)
@@ -7902,8 +7914,6 @@ class SketchPanel(QWidget):
         self.constraint_count.setText(
             constraint_count_text(total, mine, selected=bool(chosen), clashing=bool(conflict))
         )
-        # Eine leere Liste ist ein leerer Kasten unter der Zählzeile.
-        self.constraint_list.setVisible(bool(self._rows))
 
     def _add_held_row(self, held: tuple[int, ...], conflict: Sequence[int]) -> None:
         """Eine Zeile für alle festen Punkte der Hilfsgeometrie (RM-188 P3.4).
