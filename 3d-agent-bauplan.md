@@ -272,6 +272,13 @@ Die Tastatursteuerung gilt nur in der eigenen Vorgabe. In einer Nachbildung
 wäre sie eine Bewegung, die das Vorbild nicht kennt — und in Blender sind die
 Tasten belegt.
 
+Eine **3D-Maus** (SpaceMouse) steuert dieselbe Kamera als zweite Hand, ohne
+Einrichtung und unabhängig vom gewählten Schema. Solidon liest sie direkt über
+HID ohne Herstellertreiber; auf dem Mac, wo ein installierter Treiber das
+Gerät exklusiv hält, über dessen Framework. Sie fährt nur die Kamera, eine
+Gerätetaste löst *Einpassen* aus, und ohne Gerät erscheint keine Einstellung
+dafür.
+
 ---
 
 ## 3. Ausführungsmodell
@@ -349,6 +356,7 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Trägerteilfläche | `SurfacePatch` | vorhandener analytischer Träger mit seinen ursprünglichen Dreiecken und seiner Maßquelle |
 | Langloch | `slot` | zwei Halbzylinder mit ebenen Flanken, ein Merkmal (§21.1) |
 | Lufteinschluss | `void` | geschlossener Hohlraum ohne Weg nach außen (§21.1) |
+| Gerundete Seite | `curved_face` | glatter, nicht ebener Teil der Oberfläche, den kein anderes Merkmal beansprucht (§21.1) |
 | Provenienz | `provenance` | Herkunft eines Features oder einer Op |
 | Steckbrief | `digest` | Textbeschreibung der Szene für den Agenten |
 | Prüfbericht | `report` | Befunde aus Eingangsstufe, Ops und Prüfungen |
@@ -356,8 +364,8 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
 | Verfahren | `technology` | wie ein Drucker Material zu einem Körper macht: `fdm` legt Bahnen aus einer Düse, `resin` belichtet Schichten in einem Harzbad (§38) |
-| Saugglocke | `cupping` | ein nach unten offener Hohlraum, der beim Abziehen von der Folie Unterdruck zieht — Resin-Befund der zweiten Stufe (§22.2) |
-| Abflussöffnung | `drain` | die Bohrung, durch die ungehärtetes Harz aus einem ausgehöhlten Körper abläuft (§25) |
+| Saugglocke | `cupping` | ein nach unten offener Hohlraum, der beim Abziehen von der Folie Unterdruck zieht — Resin-Befund der zweiten Stufe (§22.2); geplant, [RM-188](ROADMAP.md#rm-188) P9 |
+| Abflussöffnung | `drain` | die Bohrung, durch die ungehärtetes Harz aus einem ausgehöhlten Körper abläuft (§25); geplant, [RM-188](ROADMAP.md#rm-188) P9 |
 | Regelsammlung | `rules` | Druckregeln für Agent und Prüfungen |
 | Bausteindatei | `part_file` | lokaler, offline geprüfter Import und Export eines Bausteinrezepts |
 | Lizenz | `licence` | Nutzungsrechte an einer Bausteindatei; das Dataclass-Feld und der Dateischlüssel heißen `license`, der Parametername bleibt wegen der Builtin-Schattung `licence` |
@@ -487,6 +495,22 @@ nur entsteht, wenn ein Fenster offen ist, entsteht in keinem Testlauf.
 
 **Die Regel:** `core` importiert niemals aus `ui`. Ein Test importiert `core`
 ohne installiertes Qt; bricht er, ist die Trennung verletzt.
+
+**Was die Freischaltung dem Kunden zusagt** (`app/core/activation/`;
+Einzelheiten in `konzepte/konzept-demo-zu-1.0-2026-09.md` und
+`konzepte/konzept-aktivierungsserver-2026-08.md`). Die 0.x-Fassungen sind
+öffentliche Demos mit einem festen Stichtag, der für alle gleich ist; die
+Verkaufsversion trägt keinen. Ein Kaufschlüssel ist mit dem Lizenzschlüssel
+des Betreibers signiert und gilt für eine Hauptversion — ein Schlüssel für
+1.x öffnet keine Demo. Freigeschaltet wird ein Gerät einmal, direkt oder per
+Anfrage- und Antwortdatei über ein zweites Gerät (Leitprinzip 8). Der Kunde
+kann sein Gerät selbst abmelden, um den Platz für einen anderen Rechner
+freizugeben: Die lokale Sperre gilt sofort, frei wird der Platz, sobald der
+Server die vom Gerät signierte Abmeldung bestätigt. Das Paket prüft die vier
+Dateien, an denen die Freischaltung hängt, beim ersten Zustandsabruf gegen
+ein beim Bau signiertes Manifest; eine veränderte Datei sperrt die
+Freischaltung und wird als beschädigte Installation gemeldet, nicht als
+abgelaufene Frist.
 
 **Betreiberwerkzeuge reisen nicht mit dem Produkt.** Die private
 Support-Verwaltung liegt unter `tools/` und spricht mit einem eng begrenzten
@@ -649,7 +673,7 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
 - `FeatureKind`: `hole`, `face`, `edge_loop`, `pin`, `cone`, `sphere`,
   `torus`, `thread`, `fillet`, `void`, `slot`, `curved_face`, `pattern`.
   `curved_face` ist eine gerundete Seite, auf die keine andere Form passt;
-  `pattern` ist ein Feld gleicher Zellen auf einer Trägerfläche (§21.1).
+  `pattern` ist ein Feld gleicher Zellen auf einer Trägerfläche (beide §21.1).
   `provenance` unterscheidet
   `detected` und `generated`; `recognised=False` erhält eine Kennung auch dann,
   wenn ihr Merkmal derzeit nicht sicher erkannt wird (§21.3).
@@ -1414,7 +1438,10 @@ eine nackte Nummer. Der projektübergreifende Filamentkatalog darf beliebig
 viele Spulen führen, je Objekt gelten höchstens acht gleichzeitig benutzte
 Slots. Die aktuell im Slicer eingelegten Filamente werden samt Typ, Farbe und
 Herstellerprofil als Vorschlag zur bewussten Übernahme angeboten; ein von Hand angelegtes Filament
-lässt seinen Typ ausdrücklich wählen.
+lässt seinen Typ ausdrücklich wählen. Ein Filament trägt bis zu vier Farben
+(`MAX_FILAMENT_COLOURS`). Die erste bekommen Ansicht, STL und Slicer mit einer
+Farbe je Filament (PrusaSlicer, Cura); die Orca-Familie bekommt über die 3MF
+alle. Die weiteren Farben gehören nicht zur Identität des Filaments.
 
 **Physische Spulen** tragen eine stabile, lokal erzeugte Kennung. Gleiche Namen
 dürfen mehrfach vorkommen. Die Kennung ist weder Extruderplatz noch Profilname:
@@ -1565,6 +1592,17 @@ Außenwand trägt das Merkmal zusätzlich Bogenmitte, Mündungsmitte und
 Öffnungsnormale. Beim Versetzen wird nur innerhalb des bisherigen Körpers
 gefüllt. Solange der Ausschnitt eindeutig wiedererkannt wird, bleibt seine
 Kennung erhalten; eine gekreuzte Aussparung muss dagegen kein Langloch sein.
+
+**Gerundete Seiten** (`curved_face`) sind glatte, nicht ebene Teile der
+Oberfläche, die nach allen Einpassungen übrig bleiben und die kein anderes
+Merkmal beansprucht — der Bogen eines D, der Mantel eines o. Sie hängen über
+glatte Nähte zusammen, damit zwei Bögen an einer scharfen Kante zwei Seiten
+bleiben, und gelten erst ab einem Mindestanteil der Oberfläche und einer
+Mindestgröße als Merkmal. Eine eigene Art und nicht `face`, weil Zeichnen und
+*Fläche versetzen* eine Ebene voraussetzen. An einer gerundeten Seite lässt
+sich ein eigenes Filament zuweisen und beim Aushöhlen eine Öffnung wählen;
+Bohren und das Platzieren von Grundkörpern und Bausteinen setzen dort am
+Körper an.
 
 **Muster** (`pattern`) sind viele gleiche Zellen auf einer ebenen Fläche —
 die acht Stile, die *Textur aufbringen* (§25) zeichnet, unter ihrem eigenen
@@ -1973,7 +2011,8 @@ Bausteine gelten nur auf dem Rechner, auf dem sie liegen.
 ## 25. Operationskatalog
 
 **Szene** — laden (§17.1), duplizieren, löschen, umbenennen, auf Bett anordnen,
-Kollision prüfen, vereinigen, in Komponenten zerlegen
+Kollision prüfen, Fügeweg prüfen (gelangt ein Teil durch Schieben oder Drehen
+in seine Lage), vereinigen, in Komponenten zerlegen
 
 **Parameter** — anlegen, ändern, löschen, an eine Op binden
 
@@ -1984,7 +2023,9 @@ vereinheitlichen, Selbstdurchdringungen auflösen, Kleinstkomponenten löschen,
 Vertices verschmelzen
 
 **Transformation** — verschieben, drehen, spiegeln, gleichmäßig und achsweise
-skalieren, auf Bett ausrichten, gemeinsam auf das Bett setzen, druckoptimal orientieren.
+skalieren, auf Maß bringen, an einem Merkmal ausrichten, Kopien in Reihe oder
+im Kreis anlegen, auf Bett ausrichten, gemeinsam auf das Bett setzen,
+druckoptimal orientieren.
 `place_on_bed` setzt weiterhin einen einzelnen Körper auf. `place_group_on_bed`
 verschiebt seine gespeicherte Auswahl mit einem gemeinsamen Z-Versatz: Der
 tiefste Punkt liegt danach auf dem Bett, die relative Lage aller Teile bleibt
@@ -1995,20 +2036,38 @@ am Befund nimmt die unveränderten, noch vorhandenen Teile desselben Imports
 gemeinsam auf; es ist ein eigener rücknehmbarer Schritt.
 
 **Boolesch** — Vereinigung, Differenz, Schnitt (mit Rückfallkette §17.2);
-Primitive einfügen (Quader, Zylinder, Kegel oder Kegelstumpf, Kugel und Ring);
+eine Gegenform mit Spiel in einen Einsatz einlassen; Primitive einfügen
+(Quader, Zylinder, Kegel oder Kegelstumpf, Kugel, Ring und Rohr);
 **Baustein an ein erkanntes Feature setzen** (§24)
 
 **Skizze** (§30.1, B-Rep) — Grundform anlegen (Rechteck, Langloch, Kreisbild,
-Vieleck), Skizze extrudieren, rotieren, als Tasche schneiden, entlang Pfad
-führen, zwischen Skizzenprofilen überblenden
+Vieleck), Skizze extrudieren, an einen Körper anfügen, rotieren, als Tasche
+schneiden, entlang Pfad führen, zwischen Skizzenprofilen überblenden; durch
+Drehen, entlang einer Bahn oder durch Überblenden schneiden; ein Lochfeld in
+den gezeichneten Umriss schneiden
 
-**Formgebung** (B-Rep) — Fase, Verrundung; Formschräge, exakte Schale, Sweep,
-Loft, exaktes Gewinde (§30.1)
+**Formgebung** (B-Rep) — Fase, Verrundung, Wulst oder Kehlnaht an Kanten;
+Formschräge, exakte Schale, Sweep, Loft, exaktes Gewinde als Schraube (§30.1)
 
-**Bohrungen** — aufbohren, verschließen, senken, um Materialtoleranz korrigieren
+**Bohrungen** — aufbohren, verschließen, senken, um Materialtoleranz
+korrigieren, zum Langloch ziehen, einen passenden losen Stift bauen
 
-**Druckvorbereitung** — aushöhlen mit Entlüftung, an Ebene schneiden,
-Verstiftung setzen, Elefantenfuß kompensieren
+**Merkmal bearbeiten** (§21.1) — ein erkanntes Merkmal verschieben, drehen,
+verdoppeln, vervielfachen, ändern oder entfernen; Einzelmerkmale zu einem
+Muster zusammenfassen; Merkmale in einem gewählten Bereich nachträglich
+erkennen
+
+**Druckvorbereitung** — aushöhlen mit Entlüftung, an Ebene schneiden oder
+abschneiden, an einer gezeichneten Linie trennen, Verstiftung setzen,
+Elefantenfuß kompensieren, einem Körper ein eigenes Material geben, ein
+Prüfstück um eine Stelle herausschneiden, um eine Passung vor dem ganzen Teil
+auszuprobieren
+
+**Funktionsbaugruppen** — Behälter mit Schraub-, Steck- oder Klappdeckel und
+herausnehmbarem Einsatz; Organizer mit gekoppelten Fächern; Profilklemme aus
+zwei Schalen mit austauschbaren Einlagen; Dichtnut mit getrennter Dichtung.
+Eine erkannte Kammer, Nut oder ein Kanal und ein erkannter Verschluss
+(Bajonett, Rastung) lassen sich als Ganzes ändern.
 
 **Import** — STL, 3MF (einzeln und als ganze Bauplatte), OBJ, PLY, OFF,
 GLB/glTF, STEP/STP (§30); SVG und DXF mit Extrusion; ZIP-Archive mit
@@ -2019,7 +2078,9 @@ nicht ausgelesen
 eine erkannte Fläche vollständig färben oder die Zuweisung am Körper oder an
 einer Fläche entfernen (`clear_filament`)
 
-**Beschriftung** — Text oder Logo erhaben/vertieft auf eine gewählte Fläche
+**Beschriftung** — Text oder Logo erhaben/vertieft auf eine gewählte Fläche;
+Schrift bündig als zweifarbiges Teil einlegen; ein Schriftzug als eigener
+Körper
 
 **Oberfläche** — Textur auf eine gewählte Fläche prägen oder einschneiden:
 Rippe, Welle, Rändel gerade und gekreuzt, Wabe, Noppen, Voronoi, Rauschen. Als
@@ -2027,9 +2088,16 @@ Rippe, Welle, Rändel gerade und gekreuzt, Wabe, Noppen, Voronoi, Rauschen. Als
 sonst druckt ein Rändel gerundeten Brei statt scharfer Rauten. Vor dem Bauen
 steht die Frage, ob das Muster auf dieser Maschine überhaupt entsteht: Stege
 schmaler als die Düse und Prägungen flacher als eine Schicht verschwinden beim
-Drucken und werden abgewiesen, nicht gerechnet.
+Drucken und werden abgewiesen, nicht gerechnet. Dazu ein Relief aus der
+Helligkeit eines Bildes und eine Gitterfüllung im Hohlraum eines ausgehöhlten
+Körpers, beide als echte Geometrie.
 
-**Netz** — dezimieren, remeshen, glätten
+**Netz** — dezimieren, remeshen, Dreiecke angleichen, glätten, eine kantige
+Fläche gekrümmt unterteilen, einer offenen Fläche eine Wand geben
+
+**Organisch** (Weg 4, §2.2) — zwei Körper weich verschmelzen, von Hand
+formen, um ein Skelett in eine Stellung beugen. Alle Züge eines Formvorgangs
+sind ein Schritt im Verlauf (Regel 2).
 
 **Varianten** — dieselbe Op-Kette mit durchvariiertem Parameter (§28.3)
 
@@ -2389,6 +2457,14 @@ exportierte Datei öffnen. Ordner, Format und Übergabeart werden je Projekt
 gemerkt. Solidon benutzt den installierten Slicer als externes Programm und
 liefert ihn nicht mit.
 
+**Unterstützt werden acht Programme in drei Profilfamilien:** die
+Prusa-Familie mit PrusaSlicer und SuperSlicer, die Orca-Familie mit
+OrcaSlicer, Bambu Studio, ElegooSlicer, Creality Print und Anycubic Slicer
+Next, und CuraEngine für Cura. Die Familie bestimmt Profilbaum,
+Schlüsselnamen und Übergabedatei und wird am Programmnamen erkannt. Was
+eine Familie oder ein einzelnes Programm darin nicht entgegennimmt, steht im
+Code (`app/core/export/slicer_keys.py`) und wird vor der Übergabe benannt.
+
 **Die Teile liegen auf der Maschine dort, wo das Dokument sie hat.** Die
 Übergabe verschiebt sie von Solidons Bettmitte in die Koordinaten der
 Maschine, um deren Nullpunkt (`PrinterProfile.bed_origin`, §9): meist die
@@ -2482,8 +2558,9 @@ Druckteil von der ersten Linie bis zum Export im selben Programm.
   ohne es festzulegen; sie verändert die Freiheitsgrade nicht und erzeugt
   keinen Lösungskonflikt.
 - **Die Skizze lebt als Parameterwert der Operation, die sie verbraucht**
-  (`sketch_extrude`, `sketch_pocket`, `sketch_revolve`, `sketch_sweep`,
-  `sketch_loft`).
+  (`sketch_extrude`, `sketch_join`, `sketch_pocket`, `sketch_revolve`,
+  `sketch_revolve_cut`, `sketch_sweep`, `sketch_sweep_cut`, `sketch_loft`,
+  `sketch_loft_cut`, `field_cut`).
   Bearbeiten heißt `change_params` auf dem Schritt im Verlauf — dieselbe
   Regel wie für jede andere Zahl (§15). Es entsteht kein zweiter
   Dokumentbegriff neben dem Stack.
@@ -2534,7 +2611,8 @@ Erledigungsaussage im Bauplan.
 | Anzeigeaufbau, 1 Mio. → höchstens 400 000 Dreiecke | unter 4 s |
 | Anzeige-Dezimierung greift ab | 500 000 Dreiecken |
 | Boolesche Op, 200 000 Dreiecke | unter 2 s |
-| Feature-Erkennung, 200 000 Dreiecke | unter 1 s |
+| Feature-Erkennung, 200 000 Dreiecke, mechanischer Körper | unter 1 s |
+| Feature-Erkennung, 200 000 Dreiecke, organischer Körper | unter 2 s |
 | Analysekarte Wandstärke | unter 3 s, im Hintergrund |
 | Projekt öffnen aus Plattencache | unter 1 s |
 | Parameteränderung → sichtbares Ergebnis | unter 2 s, nur betroffene Zweige |
@@ -2553,11 +2631,17 @@ Der Anzeigeweg strebt 200.000 Dreiecke an; beim Zusammenlegen im Raster sind
 bis zu 400.000 zulässig. Der Leistungsnachweis prüft die tatsächlich erzeugte
 Zahl gegen diese Obergrenze und misst den Anzeigeweg einschließlich der
 Dezimierung. Die Geometrie des Dokuments bleibt dabei unverändert.
-Ein Nachweis der Merkmalserkennung umfasst mechanische und organische
-Referenzkörper; ein guter Kugelfall belegt nicht jede Freiform.
+Die Ziele der Merkmalserkennung gelten je Körperart: mechanisch ist ein
+Körper aus Ebenen, Bohrungen und analytischen Rundungen wie eine Lochplatte,
+organisch eine Freiform ohne solche Träger. Ein Nachweis misst beide Arten;
+ein guter Kugelfall belegt nicht jede Freiform. Die Zeiten gelten auf dem
+Referenzrechner — dem Rechner, auf dem Solidon entsteht
+und auf dem die Rechenprobe aus `app/core/perceive/recognition_time.py`
+18 ms braucht. Eine Messung auf einem anderen Rechner wird über dieselbe Probe
+auf ihn umgerechnet (Messzeit mal 18 ms durch die Probe des Laufs).
 
-**Große Importe haben einen eigenen Zeitbereich.** Das Ein-Sekunden-Ziel der
-200-000-Dreiecke-Referenz wird nicht auf die bis zu fünf Millionen Dreiecke
+**Große Importe haben einen eigenen Zeitbereich.** Die Erkennungsziele der
+200-000-Dreiecke-Referenz werden nicht auf die bis zu fünf Millionen Dreiecke
 einer bestätigten Vollerkennung übertragen (§21.1). Dafür nennt die Warnung
 eine größenabhängige Spanne in Minuten mit Reserve für Form und Rechner.
 Diese Spanne ist kein automatischer Zeitabbruch: Der native Import rechnet
@@ -2866,6 +2950,20 @@ geeigneten Übersetzungsvorgang; sie gibt beliebigen GPL-Code nicht frei.
 Die Bedingungen stehen im [GCC-Originaltext](https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html).
 Die Zuordnung und Belege werden am konkreten Zielpaket geprüft.
 
+Zwei weitere Laufzeitbestandteile sind ebenso eng freigegeben. Der
+**PyInstaller-Bootloader** steht unter
+`GPL-2.0-or-later WITH PyInstaller Bootloader Exception`; zugelassen ist er
+nur unverändert aus genau dem verwendeten PyInstaller-Wheel und nur als
+Starter, der die Anwendung einbettet. Die Freigabe gilt weder für anderen
+GPL-Code noch für einen veränderten oder selbst gebauten Bootloader. Die
+**AppImage-Type-2-Laufzeit** steht vor jedem AppImage und trägt libfuse
+statisch gebunden; ihr Ausdruck ist
+`MIT AND LGPL-2.1-only AND BSD-2-Clause AND BSD-3-Clause AND Zlib`.
+Zugelassen ist nur die geprüfte Laufzeitdatei, und nur mit dem Quellenangebot
+samt Austauschweg, das ihr Eintrag mit `source_delivery` verlangt; fehlt es,
+sperrt die Releaseakte das Release. Beide stehen mit Beleg in
+`app/core/knowledge/data/third_party_licenses.toml`.
+
 **Lizenz und Lieferbarkeit werden vor dem Einbau geprüft.** Eine neue native
 Abhängigkeit braucht zulässige Lizenzbedingungen und installierbare Räder für
 Windows, macOS und Linux in der Python-Version des Projekts. Ein eigener
@@ -2935,12 +3033,22 @@ die zentrale Konstante ersetzt diese externen Schritte nicht.
   Versionsauswahl. Gepflegt wird dafür nur `changelog/<sprache>.md`; der
   Auslieferungslauf erzeugt die Webfassungen automatisch daraus. Eine zweite
   Liste von Neuerungen gibt es nicht.
-- **Update in der Anwendung, aber nur auf Knopfdruck.** Die Versionsdatei
-  nennt neben der Version je Plattform Paketname, Adresse, Größe und
-  SHA-256. Ist eine neuere da, sagt es ein sichtbarer Hinweis — keine Zeile,
+- **Update in der Anwendung: fragen beim Start, laden nur auf Knopfdruck.**
+  Die Versionsdatei nennt neben der Version je Plattform Paketname, Adresse,
+  Größe und SHA-256. Solidon fragt sie beim Start einmal ab; das ist Vorgabe
+  und in den Einstellungen abschaltbar, und von Hand geht es jederzeit über
+  das Menü. Ist eine neuere da, sagt es ein sichtbarer Hinweis — keine Zeile,
   die die nächste Meldung überschreibt. Wer will, lädt das Paket aus der
   Anwendung heraus: mit Fortschritt, abbrechbar, und Solidon rechnet die
   Prüfsumme nach, bevor irgendetwas startet.
+
+  **Was der Server von der Abfrage festhält:** Zeitpunkt und Fassung, die er
+  aus dem Absender `Solidon/<Version>` liest — keine IP-Adresse, keinen
+  User-Agent, keine Geräte-, Projekt- oder Nutzungsdaten. Quellenstarts und
+  Paketproben melden sich als `Solidon-Test/<Version>` und werden nicht
+  gezählt (`website/api/count.php`). Das ist keine Telemetrie: Gezählt wird,
+  welche Fassungen nach einer neuen Version fragen, nicht, was jemand mit
+  Solidon tut; die Anwendung sendet dabei nichts über ihren Gebrauch.
 
   Die Grenze liegt wie beim Fehlerbericht **nicht beim Vorgang, sondern beim
   Auslöser**: Es lädt nichts von allein, es ersetzt sich nichts im
@@ -3101,7 +3209,13 @@ weiter: Empfänger einer Eingabe erkennbar machen und externe Übermittlung nur
 - **Nebenläufigkeit.** Längere Berechnungen und Ein-/Ausgabe laufen in der
   Oberfläche außerhalb des Qt-Hauptthreads, mit Fortschritt und Abbruch nach
   §2.8 und §15.6. Der Kern bleibt synchron aufrufbar; die Kommandozeile
-  benötigt dafür keinen zusätzlichen Worker.
+  benötigt dafür keinen zusätzlichen Worker. Große Aufrufe des Netzkerns
+  laufen in einem Hilfsprozess, weil `manifold3d` den Interpreter während
+  eines Aufrufs nicht freigibt und sonst das Fenster stünde
+  (`app/core/geom/kernel_process.py`). Kleine Aufrufe, Aufrufe aus dem
+  Hauptthread und ein Hilfsprozess, der nicht startet, rechnen im eigenen
+  Prozess weiter. Abbrechen beendet den Hilfsprozess; stirbt er während einer
+  Rechnung, hält der Schritt mit einem Fehler samt Handlungsvorschlag an.
 - **Absturzwiederherstellung.** Benannte eigene Projekte erhalten eine
   Autosave-Datei neben dem Projekt. Noch ungespeicherte Projekte und
   mitgelieferte Beispiele werden im Wiederherstellungsordner des Nutzers
