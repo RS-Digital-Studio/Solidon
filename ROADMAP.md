@@ -94,7 +94,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -3671,24 +3670,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
-<a id="rm-512"></a>
-
-- [ ] **RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Im Ruhezustand des Hauptfensters leuchten sechs Akzente: Bernsteinkanten an linker
-  und rechter Karte, Werkzeugzeile und Reiter, dazu *Bausteine*, die vorgewählte
-  Hinweiszeile und ihr Hauptknopf „Diesen Schritt ändern“. Der Wächter
-  `test_resting_state.py` zählt keine Linien. Dialoge zeigen zwei Hauptknöpfe, sobald ein
-  Hinweis mit Handlung erscheint (57 Handlungen tragen `primary`); Rot tragen zwei
-  „Abbrechen“, „Verwerfen“ ist Hauptknopf; im Chat ist „Übernehmen“ kein Hauptknopf; in
-  der Tour ist „Schritt überspringen“ einer.
-  **Fix:** Kartenränder in der Linienfarbe; vorgewählt werden nur Fehler und Warnungen;
-  Hinweishandlungen im Dialog als normale Knöpfe; `make_danger` genau am
-  unwiederbringlichen Verwerfen, nie mit `make_primary`; Chat-Übernehmen
-  `make_primary`, Überspringen flach. Der Wächter zählt Akzentlinien ab 40 px mit.
-  **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
-  Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
-  mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
 
 <a id="rm-519"></a>
 

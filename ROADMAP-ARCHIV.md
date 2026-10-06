@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-512: Im Ruhezustand leuchtet nur Bausteine, und Rot trägt nur das Verwerfen (06.10.2026)](#rm-512-im-ruhezustand-leuchtet-nur-bausteine-und-rot-trägt-nur-das-verwerfen-06102026) |
 | 2026-10-06 | [RM-507: Jede Funktion hat einen Namen, überall derselbe (06.10.2026)](#rm-507-jede-funktion-hat-einen-namen-überall-derselbe-06102026) |
 | 2026-10-06 | [RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)](#rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026) |
 | 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
@@ -43247,3 +43248,52 @@ beim Release im Fensterlauf: `test_interface_limits.py::test_no_menu_text_stands
 Die Handbuchseiten und Bilder ziehen mit `/erzeugen` beim Release nach
 (`test_every_manual_paragraph_reaches_the_generated_page`). Changelog: ja — einheitliche
 Namen, *Automatisch teilen* rechts in der Auswahl, *Druckeinstellungen …* in der Kopfzeile.
+
+## RM-512: Im Ruhezustand leuchtet nur Bausteine, und Rot trägt nur das Verwerfen (06.10.2026)
+
+<a id="rm-512-im-ruhezustand-leuchtet-nur-bausteine-und-rot-trägt-nur-das-verwerfen-06102026"></a>
+<a id="rm-512"></a>
+
+**RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Im Ruhezustand des Hauptfensters leuchten sechs Akzente: Bernsteinkanten an linker
+  und rechter Karte, Werkzeugzeile und Reiter, dazu *Bausteine*, die vorgewählte
+  Hinweiszeile und ihr Hauptknopf „Diesen Schritt ändern“. Der Wächter
+  `test_resting_state.py` zählt keine Linien. Dialoge zeigen zwei Hauptknöpfe, sobald ein
+  Hinweis mit Handlung erscheint (57 Handlungen tragen `primary`); Rot tragen zwei
+  „Abbrechen“, „Verwerfen“ ist Hauptknopf; im Chat ist „Übernehmen“ kein Hauptknopf; in
+  der Tour ist „Schritt überspringen“ einer.
+  **Fix:** Kartenränder in der Linienfarbe; vorgewählt werden nur Fehler und Warnungen;
+  Hinweishandlungen im Dialog als normale Knöpfe; `make_danger` genau am
+  unwiederbringlichen Verwerfen, nie mit `make_primary`; Chat-Übernehmen
+  `make_primary`, Überspringen flach. Der Wächter zählt Akzentlinien ab 40 px mit.
+  **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
+  Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
+  mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
+
+**Umsetzung:** Kartenränder (`overlay.card_stylesheet`) in der Linienfarbe, der aktive Reiter
+mit einer Kante in der Schriftfarbe statt `accent_line`; im Ruhezustand leuchtet nur *Bausteine*
+(Roberts Hauptknopf ohne Auswahl). `ReportPanel._preselect` wählt nur Fehler und Warnungen
+vor. Hinweishandlungen (`ErrorNotice`, Rat und Übermaß im Druckdialog) sind normale Knöpfe,
+die empfohlene vorn; wer führt, sagt `style.leading_action` an allen vier Stellen, und
+`make_primary(button, leading=False)` gibt den Hauptknopf samt Halbfett ab. Jeder
+`DestructiveRole`-Knopf trägt `make_danger`, nie zugleich `make_primary`, gesperrt grau; die
+Rückfragen vor Verwerfen und Schritt löschen haben keinen Hauptknopf, Fokus und Escape auf
+*Abbrechen*. *Abbrechen* ist nirgends rot. **Entschieden (Robert, 06.10.2026):** RM-512 löst
+das rote *Abbrechen* vom 11.09. ab. Im Chat ist *Übernehmen* Hauptknopf, in der Tour *Weiter*
+beim Leseschritt, *Schritt überspringen* ein normaler Knopf. Regel `fenster.md` („Der
+Hauptknopf“), Begründungen in `konzepte/begruendungen/regel-fenster.md`. Commits `14d115582`,
+`eddac1b16`, `6ddad320f`.
+
+**Nachweis:** `test_resting_state.py` zählt neben Flächen jeden Strich in `highlight` oder
+`accent_line` ab 40 px am ganzen Fenster, hell und dunkel, ohne und mit Hinweis, und verlangt
+genau *Bausteine*; am Stand `65e3ec97b` rot mit vier bzw. fünf Elementen, die Gegenprobe sieht
+Fläche und Linie in beiden Themen. `test_style.py` hält fensterlos `DestructiveRole` ↔
+`make_danger`, nie rot und Hauptknopf zugleich (auch über `setDefaultButton`), kein rotes
+Abbrechen oder Schließen, Hauptknopf aus `Action.primary` nur in `show_error` und
+`_show_offers`, gesperrt rot gleich gesperrt normal, `leading_action` und die Abgabe des
+Halbfetts; die Wächter sichern ihre Grundmenge zu. `test_enter_key.py`: Leertaste verwirft
+nichts ohne Wahl. Review (solidon3d-review) in zwei Durchgängen, Urteil „kann rein“.
+Fenstertests offscreen per Sonde grün, im Release-Tor offen; am echten Fenster beim Release
+ansehen: Kontrast der grauen Kartenränder über dem Modell (dunkel 2,30, hell bis 1,73 gegen
+den Verlauf), Reiterkante, HiDPI (RM-213). Changelog: ja — ruhigere Oberfläche, ein
+Hauptknopf je Dialog, Rot nur beim Verwerfen.
