@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-433: Die Rückfrage vor Werkzeugen entfällt mit dem Hook (06.10.2026)](#rm-433-die-rückfrage-vor-werkzeugen-entfällt-mit-dem-hook-06102026) |
 | 2026-10-06 | [RM-350: Ein roter Versionswächter am Tag sperrt die Signierung nicht mehr (06.10.2026)](#rm-350-ein-roter-versionswächter-am-tag-sperrt-die-signierung-nicht-mehr-06102026) |
 | 2026-10-05 | [RM-509: Kundentexte haben Längengrenzen, und ein Wächter hält sie (05.10.2026)](#rm-509-kundentexte-haben-längengrenzen-und-ein-wächter-hält-sie-05102026) |
 | 2026-10-05 | [RM-524: Jede Maschine kennt ihre Düse, auch wenn sie sie erbt (05.10.2026)](#rm-524-jede-maschine-kennt-ihre-düse-auch-wenn-sie-sie-erbt-05102026) |
@@ -42412,3 +42413,32 @@ Orchestrierungsdatei erlaubt); elf Sperrfälle und der Abgleich mit `build.yml` 
 (`81303aaab`, `test_a_red_latest_job_leaves_the_release_run_green`), und `/erzeugen`
 verlangt, sein Ergebnis zu lesen. Die Ursache selbst: `036021393` (Lizenztext
 bytegleich, Fassung ergänzt). Anwendung und Setup von 0.5.3 sind damit signiert.
+
+## RM-433: Die Rückfrage vor Werkzeugen entfällt mit dem Hook (06.10.2026)
+
+<a id="rm-433-die-rückfrage-vor-werkzeugen-entfällt-mit-dem-hook-06102026"></a>
+<a id="rm-433"></a>
+
+**RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-346 (archiviert). Die fünf Abnahmeformen
+  und viele weitere (PowerShell, `&`, `cd tools`, `bash -c`, `pwsh -Command`, `env`, `"$PY"`) fragen
+  jetzt; 143 Tests grün, Mutationen rot.
+  **Ungefragt durch:** Umhüllungen `timeout 1800 "$PY" tools/upload_website.py`, `time`, `nohup`,
+  `exec`; Unterschale und Befehlsersetzung `( … )`, `$( … )`; zusammengesetzte Befehle `then …`,
+  `do …`; `cmd /c`; `Start-Process … -ArgumentList "tools/x.py --dry-run"` sowie mit `@(…)`.
+  Ursache: `_werkzeug_aufruf` (`.claude/hooks/solidon3d_hooks.py:722`). „Jede Schreibweise“ aus Commit
+  und Archiv stimmt damit nicht. (Deutscher Bezeichner `_werkzeug_aufruf` im Hook — die
+  Bezeichnerregel gilt für `app/` und `tools/`; prüfen, ob das gewollt ist.)
+  **Fix:** Werkzeugnamen im ganzen Befehl suchen (Token nach Umhüllungen, in Unterschalen und
+  Argumentlisten), im Zweifel fragen.
+  **Abnahme:** Test je genannter Form → Rückfrage; Lesen/Prüfen bleibt still. Beleg:
+  `verif-70e9b3145-oberflaeche.md`, Sonden `v5u_rm346_*`.
+
+**Entfallen (06.10.2026, Entscheidung Robert):** Kein Hook fragt oder sperrt mehr vor
+einem Befehl, unter Claude wie unter Codex. Der Prüfer `vor_bash` samt
+Werkzeugerkennung, die `ask`-Liste in `.claude/settings.json` und der
+PreToolUse-Eintrag in `.codex/hooks.json` sind entfernt;
+`test_no_hook_asks_or_blocks_before_a_command` hält das fest, und
+`tests/test_agent_mirror.py` hält Hooks, Plugins und Umgebung beider Editoren gleich.
+Die Regeln aus `AGENTS.md` (kein Revert, Geld und Veröffentlichung nur auf Auftrag)
+gelten ohne Rückfrage am Werkzeug.

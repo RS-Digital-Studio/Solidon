@@ -1,5 +1,5 @@
 {
-  "description": "Solidon-Projekthinweise, Prüfungen und Schutz vor verwerfenden Git-Befehlen.",
+  "description": "Solidon-Projekthinweise und Prüfungen, gleich wie unter Claude.",
   "hooks": {
     "SessionStart": [
       {
@@ -9,19 +9,6 @@
             "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || P=python3; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" sitzungsstart --codex'",
             "commandWindows": "for /f \"delims=\" %R in ('git rev-parse --show-toplevel') do @\"%R\\.venv\\Scripts\\python.exe\" -S -X utf8 \"%R\\.claude\\hooks\\solidon3d_hooks.py\" sitzungsstart --codex",
             "timeout": 25
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "^Bash$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" vor-bash --codex'",
-            "commandWindows": "for /f \"delims=\" %R in ('git rev-parse --show-toplevel') do @\"%R\\.venv\\Scripts\\python.exe\" -S -X utf8 \"%R\\.claude\\hooks\\solidon3d_hooks.py\" vor-bash --codex",
-            "timeout": 20
           }
         ]
       }

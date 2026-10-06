@@ -156,11 +156,13 @@ Feldliste steht deshalb als Tabelle, nicht als Codeblock.
   ausführen; `tests/test_agent_mirror.py` prüft den Spiegel. Die erzeugten
   Dateien werden nie von Hand bearbeitet.
 - **Hooks** teilen sich `.claude/hooks/solidon3d_hooks.py`; die Einstiege
-  stehen in `.claude/settings.json` und `.codex/hooks.json`. Codex verlangt je
+  stehen in `.claude/settings.json` und `.codex/hooks.json`, mit denselben
+  Aufgaben und Zeitgrenzen (`AGENTS.md`, „Claude und Codex bleiben gleich“).
+  Sie melden, sie fragen und sperren nicht. Codex verlangt je
   Hook-Definition eine Freigabe über `/hooks`, nach jeder Änderung erneut.
   Testmarken sind Erinnerungen, kein Nachweis eines Tors.
-- **`pyright-lsp`** gibt Sprachhilfe (Einrichtung je Rechner in `/erzeugen`);
-  die verbindliche Typprüfung bleibt mypy.
+- **`pyright-lsp`** gibt Sprachhilfe, bei Claude und Codex als Plugin
+  (Einrichtung je Rechner in `/erzeugen`); die verbindliche Typprüfung bleibt mypy.
 - **`context7`** liefert Bibliotheksdoku, bei Claude als Plugin, bei Codex
   über `.codex/config.toml`. Gefragt wird nach Bibliothek und Fachfrage — nie
   mit Projektcode oder Zugangsdaten.

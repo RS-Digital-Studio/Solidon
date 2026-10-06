@@ -401,3 +401,65 @@ def test_linked_skill_roots_are_rejected_before_the_source_can_be_overwritten(
     assert sync_agents.main([]) == 1
     assert all(path.read_bytes() == content for path, content in before.items())
     assert not sync_agents.TARGET_DIR.exists()
+
+
+# Claude und Codex bleiben gleich (Entscheidung Robert): dieselben Hooks mit
+# denselben Zeitgrenzen, dieselben Plugins und dieselbe Umgebung. Agenten und
+# Skills hält der Generator oben gleich; was von Hand auf zwei Seiten steht,
+# hält dieser Abschnitt.
+
+CLAUDE_SETTINGS = ROOT / ".claude" / "settings.json"
+CODEX_HOOKS = ROOT / ".codex" / "hooks.json"
+CODEX_CONFIG = ROOT / ".codex" / "config.toml"
+
+#: Dieselbe Werkzeuggruppe heißt in beiden Editoren verschieden: Claude führt
+#: neben der Shell eine eigene PowerShell, Codex nur seine Shell.
+_TOOL_GROUPS = {"bash": "shell", "powershell": "shell", "edit": "edit", "write": "write"}
+
+
+def _hooks(path: Path) -> dict[tuple[str, str], tuple[frozenset[str], object]]:
+    """Je Ereignis und Aufgabe von ``solidon3d_hooks.py``: Werkzeuggruppen und Zeitgrenze."""
+    import json
+    import re
+
+    found: dict[tuple[str, str], tuple[frozenset[str], object]] = {}
+    for event, groups in json.loads(path.read_text(encoding="utf-8"))["hooks"].items():
+        for group in groups:
+            for hook in group["hooks"]:
+                task = re.search(r'solidon3d_hooks\.py"?\s+([a-z-]+)', hook["command"])
+                assert task is not None, hook["command"]
+                tools = frozenset(
+                    _TOOL_GROUPS[name.strip("^$").lower()]
+                    for name in (group.get("matcher") or "").split("|")
+                    if name
+                )
+                assert (event, task.group(1)) not in found, (path.name, event, task.group(1))
+                found[(event, task.group(1))] = (tools, hook.get("timeout"))
+    return found
+
+
+def test_claude_and_codex_run_the_same_hooks() -> None:
+    """Jede Aufgabe des Hook-Skripts hängt unter Claude und Codex am selben
+    Ereignis, an derselben Werkzeuggruppe und mit derselben Zeitgrenze."""
+    claude, codex = _hooks(CLAUDE_SETTINGS), _hooks(CODEX_HOOKS)
+    assert len(claude) >= 4, "zu wenige Hook-Einträge gelesen"
+    assert claude == codex
+
+
+def test_claude_and_codex_load_the_same_plugins_and_environment() -> None:
+    """Ein Plugin, das Claude an- oder abschaltet, schaltet Codex genauso;
+    context7 kommt zu Codex als MCP-Server. Die Umgebung ist dieselbe."""
+    import json
+
+    settings = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))
+    config = tomllib.loads(CODEX_CONFIG.read_text(encoding="utf-8"))
+    claude = settings["enabledPlugins"]
+    codex = {name: entry["enabled"] for name, entry in config.get("plugins", {}).items()}
+    assert claude, "keine Plugins gelesen"
+    for name, enabled in claude.items():
+        if name.startswith("context7@"):
+            assert enabled == ("context7" in config.get("mcp_servers", {})), name
+        else:
+            assert codex.get(name) == enabled, name
+    assert set(codex) <= set(claude)
+    assert settings["env"] == config["shell_environment_policy"]["set"]

@@ -27,20 +27,6 @@
       "Bash(git pull:*)",
       "Bash(git rev-parse:*)",
       "Bash(git read-tree:*)"
-    ],
-    "ask": [
-      "Bash(.venv/Scripts/python.exe tools/run_agent_suite.py:*)",
-      "Bash(.venv/Scripts/python.exe tools/upload_website.py:*)",
-      "Bash(.venv/Scripts/python.exe tools/deploy_activation_server.py:*)",
-      "Bash(.venv/Scripts/python.exe tools/check_support.py:*)",
-      "Bash(.venv/Scripts/python.exe tools/sign_release.py:*)",
-      "Bash(.venv/Scripts/python.exe tools/make_licence_keys.py:*)",
-      "PowerShell(.venv\\Scripts\\python.exe tools/run_agent_suite.py:*)",
-      "PowerShell(.venv\\Scripts\\python.exe tools/upload_website.py:*)",
-      "PowerShell(.venv\\Scripts\\python.exe tools/deploy_activation_server.py:*)",
-      "PowerShell(.venv\\Scripts\\python.exe tools/check_support.py:*)",
-      "PowerShell(.venv\\Scripts\\python.exe tools/sign_release.py:*)",
-      "PowerShell(.venv\\Scripts\\python.exe tools/make_licence_keys.py:*)"
     ]
   },
   "hooks": {
@@ -52,19 +38,6 @@
             "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; if [ ! -x \"$P\" ]; then P=\"\"; for K in python3 python py; do C=\"$(command -v \"$K\" 2>/dev/null)\" || continue; case \"$C\" in *WindowsApps*) continue;; esac; P=\"$C\"; break; done; fi; [ -n \"$P\" ] || exit 0; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsstart",
             "shell": "bash",
             "timeout": 25
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "in=$(cat); shopt -s nocasematch; case \"$in\" in *git*|*run_agent_suite*|*upload_website*|*deploy_activation_server*|*check_support*|*sign_release*|*make_licence_keys*) ;; *) exit 0;; esac; case \"$in\" in *checkout*|*switch*|*restore*|*reset*|*clean*|*push*|*stash*|*branch*|*rebase*|*worktree*|*filter-*|*run_agent_suite*|*upload_website*|*deploy_activation_server*|*check_support*|*sign_release*|*make_licence_keys*) ;; *) exit 0;; esac; P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; printf '%s' \"$in\" | \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" vor-bash",
-            "shell": "bash",
-            "timeout": 20
           }
         ]
       }

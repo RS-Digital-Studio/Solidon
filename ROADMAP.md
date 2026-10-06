@@ -128,7 +128,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: `rendering`-Fälle in der Release-CI auf Linux und macOS und in `latest` fahren — oder Roberts Entscheidung festhalten und Wächter nachziehen |
 | [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, Regel mit Datum, veraltete Regeln und Registerzellen |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
-| [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10. im Archiv, nächster am 05.10.; Paketbeleg der neuen Bauplattform unter RM-468 und RM-469 |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -4515,23 +4514,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Abbildungstest `[en]` grün beim Release. Beleg:
   `F:\solidon-review-reports\register-bedienung.md`.
   Teil Bezeichner erledigt mit `bd7f11180` (02.10.2026): `eingelesen`/`geladen` in `app/ui/main_window.py` heißen `imported`/`downloaded`, die Stämme stehen in `GERMAN_STEMS`; Gegenprobe rot an genau den drei alten Stellen. Offen bleibt der Teil `fit.svg` (Erzeugung beim nächsten Release).
-
-<a id="rm-433"></a>
-
-- [ ] **RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch.**
-  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-346 (archiviert). Die fünf Abnahmeformen
-  und viele weitere (PowerShell, `&`, `cd tools`, `bash -c`, `pwsh -Command`, `env`, `"$PY"`) fragen
-  jetzt; 143 Tests grün, Mutationen rot.
-  **Ungefragt durch:** Umhüllungen `timeout 1800 "$PY" tools/upload_website.py`, `time`, `nohup`,
-  `exec`; Unterschale und Befehlsersetzung `( … )`, `$( … )`; zusammengesetzte Befehle `then …`,
-  `do …`; `cmd /c`; `Start-Process … -ArgumentList "tools/x.py --dry-run"` sowie mit `@(…)`.
-  Ursache: `_werkzeug_aufruf` (`.claude/hooks/solidon3d_hooks.py:722`). „Jede Schreibweise“ aus Commit
-  und Archiv stimmt damit nicht. (Deutscher Bezeichner `_werkzeug_aufruf` im Hook — die
-  Bezeichnerregel gilt für `app/` und `tools/`; prüfen, ob das gewollt ist.)
-  **Fix:** Werkzeugnamen im ganzen Befehl suchen (Token nach Umhüllungen, in Unterschalen und
-  Argumentlisten), im Zweifel fragen.
-  **Abnahme:** Test je genannter Form → Rückfrage; Lesen/Prüfen bleibt still. Beleg:
-  `verif-70e9b3145-oberflaeche.md`, Sonden `v5u_rm346_*`.
 
 <a id="rm-467"></a>
 

@@ -92,7 +92,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Wählt `tools/affected_tests.py` richtig? Findet `tools/twin_scan.py` seine Zwillinge? | `test_affected_tests.py` · `test_twin_scan.py` |
 | Zählt die Einzeldateiabnahme wie das Audit, wählt sie dasselbe Merkmal, geht sie über eine abgesagte Zahl hinweg, liest sie die Abdrücke richtig — und gehen ihre Fensterwege an Lochplatte und dünnwandigem Kasten durch? | `test_file_acceptance.py` (die Fensterwege offscreen, also beim Release) |
 | Arbeitsliste und Archiv: Register, Sprungmarken und fortsetzbare Belege | `test_roadmap.py` — offene Punkte einschließlich Fortsetzungszeilen dürfen keine ausschließlich lokalen Nachweispfade führen; geschlossene Historie bleibt datiert |
-| Hooks, Codex-Spiegel, Karten | `test_solidon3d_hooks.py` (echte Auslösung im Editor zusätzlich prüfen) · `test_agent_mirror.py` · `test_directory_docs.py` |
+| Hooks, Claude und Codex gleich (Agenten, Skills, Hooks, Plugins, Umgebung), Karten | `test_solidon3d_hooks.py` (echte Auslösung im Editor zusätzlich prüfen) · `test_agent_mirror.py` · `test_directory_docs.py` |
 | Überleben zwei gleichzeitig schreibende Sitzungen in `MEMORY.md`? | `test_memory_index.py` — zwei echte Prozesse |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |

@@ -175,8 +175,11 @@ Dialoge.
   auftauchen, schlagen zwanzig, die auseinanderdriften.
 - **Kein Revert.** Nie `checkout`/`restore`/`reset --hard`/`clean` über Arbeit
   — vorwärts fixen; an diesem Baum arbeiten oft mehrere Sitzungen zugleich.
-  Rebase, Force-Push und History-Rewrite nur nach Rückfrage. Der Hook fragt
-  (Claude) bzw. sperrt (Codex) vor jedem verwerfenden Git-Befehl.
+  Rebase, Force-Push und History-Rewrite nur nach Rückfrage. Kein Hook fragt
+  oder sperrt vor einem Befehl (Entscheidung Robert); die Regel gilt trotzdem.
+- **Claude und Codex bleiben gleich** (Entscheidung Robert): Agenten, Skills,
+  Hooks, Plugins und Umgebung sind auf beiden Seiten dieselben, und jede
+  Änderung geht auf beide. `tests/test_agent_mirror.py` hält es fest.
 - **Neue Fehlerbilder werden Testdateien**, keine Sonderfälle im Code.
 - **Bestehende Struktur nutzen.** Vor einer neuen Datei prüfen, ob die Sache in
   ein vorhandenes Modul gehört.
