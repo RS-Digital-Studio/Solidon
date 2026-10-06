@@ -1417,6 +1417,9 @@ def test_the_palette_greys_out_what_the_menu_greys_out(window: MainWindow) -> No
     assert any("Rückgängig" in title for title in titles), (
         f"Rückgängig ist ohne Verlauf gesperrt, die Palette sieht es nicht: {sorted(titles)}"
     )
+    # *Automatisch teilen* steht seit RM-507 in keinem Menü mehr, nur noch in
+    # der Auswahlkarte — die Palette sperrt es trotzdem mit Grund.
+    assert "edit.auto_split" in blocked, f"Automatisch teilen ohne Sperre: {sorted(titles)}"
 
     # Und was geht, sagt nichts: ein Grund an einem offenen Eintrag wäre eine
     # Warnung ohne Anlass.

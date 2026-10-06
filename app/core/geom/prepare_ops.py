@@ -20022,7 +20022,7 @@ class SplitLineParams(BaseParams):
         maximum=6,
         doc=_(
             "Stifte auf der einen Hälfte, Bohrungen auf der anderen — sie halten die "
-            "Teile beim Kleben in Deckung. Null heißt: nur trennen."
+            "Teile beim Kleben in Deckung. Null heißt: nur teilen."
         ),
         zero_text=ZERO_NONE,
     )
@@ -20104,8 +20104,8 @@ class SplitLineParams(BaseParams):
     icon="split",
     doc=_("Teilt ein Objekt an einer im Bild gezeichneten Linie, auf Wunsch mit Passstiften."),
     caveat=_(
-        "Für einen Schnitt um eine Rundung herum, denn getrennt wird an einer geraden Ebene. "
-        "Dann zweimal trennen."
+        "Für einen Schnitt um eine Rundung herum, denn geteilt wird an einer geraden Ebene. "
+        "Dann zweimal teilen."
     ),
 )
 def split_line(ctx: OpContext) -> OpResult:

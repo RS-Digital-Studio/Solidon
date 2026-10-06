@@ -11204,6 +11204,10 @@ class MainWindow(QMainWindow):
             # und eine Signatur zu ändern, um eine Frage zu beantworten, ist
             # der teurere Weg zum selben Ergebnis.
             self._palette_actions[key] = action
+        # **Was in keinem Menü steht, gilt genauso** (RM-507): *Automatisch
+        # teilen* hängt am Fenster und steht in der Auswahlkarte; über die
+        # Menüschleife allein stand es in der Palette ohne Sperre und Grund.
+        self._palette_actions.setdefault("edit.auto_split", self.auto_split_action)
         return found
 
     def _extra_availability(self, key: str) -> tuple[bool, str]:

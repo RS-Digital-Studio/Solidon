@@ -701,7 +701,7 @@ def reason_against(source: SceneObject, name: str) -> str | None:
     (``labels.BODY_FACTS_LIMIT``).
     """
     try:
-        z, direction = opening_frame(source, name, 0.0)
+        z, direction = opening_frame(source, name, None)
         mesh = as_mesh_data(source.mesh)
         if direction != _UP:
             mesh = transform.apply(mesh, upright_normal(direction))
