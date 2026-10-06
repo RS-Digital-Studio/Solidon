@@ -123,6 +123,7 @@ from app.core.scene.edge_binding import NO_BINDING, EdgeBinding, EdgeTarget, bin
 from app.core.scene.fits import active_fits
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import FeatureMemo, digest, object_hash, operation_hash
+from app.core.scene.history import Discarded, discarded
 from app.core.scene.orphans import Reference, feature_ref_of_sketch
 from app.core.scene.orphans import references as feature_references
 from app.core.scene.parameter_binding import BindingSpot, binding_spots
@@ -680,6 +681,9 @@ def _evaluate(
             )
         )
     completed: list[OpId] = []
+    # Die Schritte, wie sie gerechnet haben — mit den Eingängen nach
+    # ``_without_stray_inputs`` und ``_without_absent_inputs``.
+    ran: list[Operation] = []
     reads_quality = False
     pending: list[tuple[str, CachedResult, bool]] = []
     #: Körper, deren Erkennung ``detect_features=False`` ausgelassen hat.
@@ -1479,6 +1483,7 @@ def _evaluate(
         if result.solver is not None:
             solvers[operation.id] = result.solver
         completed.append(operation.id)
+        ran.append(operation)
         if cached is None:
             # **In den Cache geht die rohe Ausgabe, nicht die vorbereitete.**
             # Ein Treffer läuft danach wie ein frischer Schritt durch
@@ -1611,10 +1616,18 @@ def _evaluate(
     # Erst heilen, dann entdoppeln: Was ein späterer Schritt aufgehoben hat,
     # soll gar nicht erst in den Vergleich — sonst überlebte von zwei
     # geheilten Befunden der letzte die Streichung nicht und der erste doch.
+    #
+    # Zuerst fällt, was über Entferntes spricht: Sonst bliebe von zwei Sätzen
+    # über die Hälften der eines entfernten Stifts als letzter stehen, und
+    # ``_without_split_echoes`` striche den gültigen davor.
     settled = _without_split_echoes(
         _without_repeats(
             _without_undone_placements(
-                _without_outdated(_without_settled(findings), scene, cancelled=token),
+                _without_outdated(
+                    _without_settled(_without_discarded(findings, discarded(ran, source))),
+                    scene,
+                    cancelled=token,
+                ),
                 scene,
                 placed=checks.states["scene.placement"].state == "completed",
             )
@@ -2004,6 +2017,36 @@ def _why_it_stopped(findings: Sequence[Finding], stopped_at: int) -> str:
     # zweimal dasselbe und sagte beide Male nichts.
     detail = last.values.get("detail")
     return f"{reason} — {detail}" if detail else reason
+
+
+def _without_discarded(findings: Sequence[Finding], gone: Discarded) -> list[Finding]:
+    """Streicht Befunde über das, was ein späterer Schritt wieder entfernt hat.
+
+    Der Anlass (S-20261006-2a0261): Ein Kunde setzte einen Stift in eine
+    Bohrung, vervielfachte, fasste und teilte ihn und entfernte zuletzt beide
+    Hälften. Im Bericht stand danach weiter „Der Stift … steht noch in der
+    Bohrung", „Das Muster steht" und „Die zwei Hälften liegen noch
+    aneinander" — sechs Sätze über einen Körper, den es nicht mehr gab.
+
+    Gestrichen wird der Befund eines Schritts ohne Wirkung am Endstand
+    (``history.discarded``) und der über einen Ausgang, von dem nach diesem
+    Schritt nichts übrig bleibt. Ein Körper, der in einem anderen
+    weiterlebt — vereinigt, abgezogen, geteilt mit einer bleibenden Hälfte —,
+    behält seine Befunde; über ihn weiß der Endstand nichts. Befunde ohne
+    Schritt (die Prüfungen am Endstand) und die des anhaltenden Schritts
+    bleiben, denn er hat nicht gerechnet.
+    """
+    if not gone.steps and not gone.outputs:
+        return list(findings)
+    return [
+        entry
+        for entry in findings
+        if entry.op_id is None
+        or (
+            entry.op_id not in gone.steps
+            and entry.object_id not in gone.outputs.get(entry.op_id, frozenset())
+        )
+    ]
 
 
 def _without_settled(findings: Sequence[Finding]) -> list[Finding]:

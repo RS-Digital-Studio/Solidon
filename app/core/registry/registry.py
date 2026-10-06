@@ -755,6 +755,15 @@ class OperationSpec:
     neue Hälften und lässt die Null stehen. Am Ergebnis erkennbar ist es
     daran, dass der Ausgang Namen und Material des Eingangs trägt — geprüft
     von ``tests/test_registry_consistency.py``."""
+    leaves_inputs_unchanged: bool = False
+    """Die Operation reicht ihre Eingänge unverändert durch und legt nur Neues daneben.
+
+    *Stift für Bohrung* gibt den Träger zurück, wie er kam, *Objekt
+    duplizieren* das Original. Eine fortgesetzte Kennung (:attr:`keeps_inputs`)
+    sagt das nicht: *Vereinigen* setzt seinen ersten Eingang ebenfalls fort und
+    baut ihn dabei um. Gelesen von ``history.discarded``: Wird alles Neue eines
+    solchen Schritts später entfernt, wirkt er nicht mehr, auch wenn der Träger
+    bleibt (S-20261006-2a0261)."""
     touches_features: bool = False
     """Ob diese Operation Merkmale **einführt** — nicht nur weiterreicht.
 
@@ -1048,6 +1057,7 @@ def register_op(
     edges_on_mesh: bool = False,
     produces_from: str | None = None,
     keeps_inputs: int = 0,
+    leaves_inputs_unchanged: bool = False,
     touches_features: bool = False,
     leaves_separate_parts: bool = False,
     retriangulates: bool = False,
@@ -1088,6 +1098,7 @@ def register_op(
                 edges_on_mesh=edges_on_mesh,
                 produces_from=produces_from,
                 keeps_inputs=keeps_inputs,
+                leaves_inputs_unchanged=leaves_inputs_unchanged,
                 touches_features=touches_features,
                 leaves_separate_parts=leaves_separate_parts,
                 retriangulates=retriangulates,

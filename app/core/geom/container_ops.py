@@ -821,6 +821,7 @@ class ContainerInsertParams(BaseParams):
     consumes=2,
     produces=3,
     keeps_inputs=2,
+    leaves_inputs_unchanged=True,
     deterministic=False,
     doc=_("Erzeugt einen herausnehmbaren Einsatz mit Fächern und Materialspiel zum Behälter."),
 )

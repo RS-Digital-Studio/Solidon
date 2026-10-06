@@ -148,6 +148,10 @@ Kürzel, Startwert wo nötig).
   am **Netz**, auch an einem exakten Körper (*Wulst anlegen*); die
   Kantenbindung vor dem Verbrauchercache (`scene.edge_binding`) sieht dieselben
   Kanten. Ohne das Flag entscheidet die Bauart des Körpers.
+- **`leaves_inputs_unchanged`**: Die Operation gibt ihre Eingänge zurück, wie
+  sie kamen, und legt nur Neues daneben (*Stift für Bohrung*, *Objekt
+  duplizieren*); `scene.history.discarded` liest es. `keeps_inputs` sagt das
+  nicht — auch *Vereinigen* setzt seinen ersten Eingang fort.
 - **`replace_state()`** ist ausschließlich der Commit-Schritt für einen in
   einem isolierten Register vollständig geprüften Rezeptzustand — ohne zweite
   Validierung, damit nach einer atomar veröffentlichten Rezeptdatei kein

@@ -619,6 +619,77 @@ def test_a_foreign_exception_stops_the_chain_instead_of_escaping(
     )
 
 
+def test_a_removed_pin_leaves_no_finding_behind(profile: Profile) -> None:
+    """Ein Stift, dessen Hälften beide entfernt sind, steht nicht mehr im Bericht.
+
+    Der Weg aus S-20261006-2a0261, verkürzt auf echte Operationen: Platte,
+    Bohrung, *Stift für Bohrung*, verschieben, teilen, beide Hälften entfernen.
+    Davor sagte der Bericht weiter „Der Stift … steht noch in der Bohrung" und
+    „Die zwei Hälften liegen noch aneinander". Die Bohrung der Platte behält
+    ihren Befund; holt Strg+Z eine Hälfte zurück, kommen die Sätze des Stifts
+    wieder, denn dann gibt es ihn.
+    """
+    from app.core.scene.project import new_project
+
+    document = new_project("centauri-carbon-2", "petg").document
+    history = History(document)
+    history.apply(
+        "Platte",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0})],
+    )
+    history.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "z": 10.0, "depth": 10.0},
+            )
+        ],
+    )
+    plate = evaluate(document, profile).scene.objects["obj_1"]
+    hole = next(name for name, entry in plate.features.items() if entry.kind == "hole")
+    history.apply(
+        "Stift", [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": hole})]
+    )
+    pin = history.operations[-1].outputs[1]
+    history.apply(
+        "Bewegen", [OperationDraft(op="translate_object", inputs=(pin,), params={"dx": 40.0})]
+    )
+    history.apply(
+        "Teilen",
+        [
+            OperationDraft(
+                op="split_line",
+                inputs=(pin,),
+                params={"normal_x": 1.0, "normal_y": 0.0, "normal_z": 0.0, "position": 40.0},
+            )
+        ],
+    )
+    pin_steps = {entry.id for entry in history.operations[2:]}
+    halves = history.operations[-1].outputs
+    before = evaluate(document, profile)
+    assert before.complete
+    said = {entry.code for entry in before.scene.report.findings if entry.op_id in pin_steps}
+    assert {"pin_for_bore.made", "prepare.halves_in_place"} <= said, "die Gegenprobe davor"
+
+    for half in halves:
+        history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=(half,))])
+    after = evaluate(document, profile)
+
+    assert after.complete and set(after.scene.objects) == {"obj_1"}
+    assert not [entry for entry in after.scene.report.findings if entry.op_id in pin_steps]
+    assert any(entry.object_id == "obj_1" for entry in after.scene.report.findings), (
+        "die Platte behält ihren Befund"
+    )
+
+    history.undo()
+    back = evaluate(document, profile)
+    assert {"pin_for_bore.made", "prepare.halves_in_place"} <= {
+        entry.code for entry in back.scene.report.findings
+    }
+
+
 def test_the_report_carries_the_reason_not_only_the_kind(
     history: History, document: Document, profile: Profile, registry: Registry
 ) -> None:

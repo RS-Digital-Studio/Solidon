@@ -131,7 +131,8 @@ wird nur, wenn Zurückgenommenes verworfen würde (§15.4,
   grauer Eintrag mit Kurzhilfe im Kontextmenü.
 - **Der Zustand steht als Wort an der Zeile** („(aus)“, „(ruht)“), kursiv
   und gedämpft nur zusätzlich (Regel 18); die Kurzhilfe nennt, was ein Schritt braucht und
-  wer ihn braucht.
+  wer ihn braucht. Was ein *Objekt entfernen* mitnimmt, steht zugeklappt darunter
+  (`removal_groups`), sonst mit „(Ergebnis entfernt)“.
 - **Die Tastatur kann alles, was die Maus kann:** Einfg, Alt+Pfeil, Leertaste,
   Esc — am Verlauf und nur dort, wie Entf.
 - **Mit Einfügemarke zeigt die ganze Oberfläche den Stand davor**
@@ -463,9 +464,7 @@ Ein Dialog für beides (`app/ui/support_dialog.py`): *Hilfe → Rückmeldung
 senden* und `report_error` — dort mit `kind=crash`, eigenem Titel und „Das war
 ein Programmfehler, nicht Ihre Schuld“ (§33.1).
 
-- **Von allein geht nichts:** `support.send()` hat genau einen Aufrufer, den
-  Knopf; `tests/test_support.py` zählt ihn — diese Zahl hält die Grenze zur
-  verbotenen Telemetrie.
+- **Von allein geht nichts** (`kern.md`, „Fehler“).
 - **Nichts ungesehen:** Die Vorschau zeigt den ganzen Text samt Anhängen und
   Gesamtgröße.
 - **Das Bildschirmfoto entsteht vor dem Dialog** (`window_shot(self)` im

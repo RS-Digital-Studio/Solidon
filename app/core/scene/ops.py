@@ -119,6 +119,7 @@ class DuplicateObjectParams(BaseParams):
     consumes=1,
     produces=VARIABLE,
     produces_from="count",
+    leaves_inputs_unchanged=True,
     shortcut="Ctrl+D",
     doc=_(
         "Legt weitere Ausfertigungen des Objekts an. Jede bleibt ein eigenes "
@@ -267,6 +268,7 @@ class PatternParams(BaseParams):
     consumes=1,
     produces=VARIABLE,
     produces_from="count",
+    leaves_inputs_unchanged=True,
     doc=_(
         "Legt Kopien in einer Reihe oder auf einem Kreis an — ein Lochbild, ein "
         "Kranz Schraubdome, eine Reihe Clips. Ein einziger Schritt im Verlauf, "

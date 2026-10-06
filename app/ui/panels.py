@@ -142,7 +142,9 @@ from app.core.registry.surfaces import first_sentence
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import (
+    Discarded,
     StepNeed,
+    discarded,
     recognition_reopenable,
     repair_is_available,
     step_titles,
@@ -4383,6 +4385,9 @@ def replanned_steps(document: Document) -> frozenset[int]:
 
     Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
     Kennung an seiner neuen Stelle. Der Verlauf blendet sie deshalb aus, statt
+#: Die Zeile steht unter dem *Objekt entfernen*, das ihr Ergebnis wegnimmt, und
+#: damit nicht an ihrer Stelle im Stapel: Eine Ablage dort hätte kein Ziel.
+NESTED_ROLE = int(Qt.ItemDataRole.UserRole) + 4
     sie wie ein gelöschter Schritt durchzustreichen (§15.4 gilt dem Löschen).
     """
     found: set[int] = set()
@@ -4396,12 +4401,100 @@ def replanned_steps(document: Document) -> frozenset[int]:
     return frozenset(found)
 
 
-def step_state(document: Document, op_id: int) -> str:
-    """Ob ein Schritt rechnet — leer, „aus" oder „ruht" (P7.3), als Wort und nicht als Farbe."""
+def step_state(document: Document, op_id: int, gone: Discarded | None = None) -> str:
+    """Ob ein Schritt wirkt — leer, „aus", „ruht" (P7.3) oder „Ergebnis entfernt".
+
+    Als Wort und nicht als Farbe (Regel 18). „Ergebnis entfernt" trägt ein
+    Schritt, dessen Körper ein späterer Schritt wieder aus der Szene genommen
+    hat (``history.discarded``, S-20261006-2a0261): Er rechnet, wirkt aber
+    nicht mehr auf den Endstand.
+    """
     entry = next((operation for operation in document.ops if operation.id == op_id), None)
-    if entry is None or entry.suppressed is None:
+    if entry is None:
         return ""
-    return tr("aus") if entry.suppressed.chosen else tr("ruht")
+    if entry.suppressed is not None:
+        return tr("aus") if entry.suppressed.chosen else tr("ruht")
+    return tr("Ergebnis entfernt") if gone is not None and op_id in gone.steps else ""
+
+
+def removal_groups(document: Document, gone: Discarded) -> dict[str, tuple[int, ...]]:
+    """Welche Schritte im Verlauf unter welcher Transaktion mit *Objekt entfernen* stehen.
+
+    Entscheidung Robert (06.10.2026): Was mit einem Objekt wegfällt, steht
+    zusammengefasst unter seiner Löschung, nicht verstreut an seiner Stelle.
+    Die Gruppen kommen aus ``history.discarded``; hier wird nur entschieden,
+    welche Zeile sie trägt. Ein Umbau (Einfügen, Verschieben) zeigt seine
+    Schritte als Folge und trägt keine Gruppe; eine Transaktion aus mehreren
+    Schritten zieht nur ganz um, sonst bleibt sie an ihrer Stelle und sagt
+    „Ergebnis entfernt" an jeder Zeile.
+    """
+    present = {entry.id: index for index, entry in enumerate(document.ops)}
+    holders: dict[int, Any] = {}
+    for transaction in document.transactions:
+        for op_id in transaction.ops:
+            if op_id in present:
+                holders[op_id] = transaction
+    head_of = {member: head for head, members in gone.groups.items() for member in members}
+
+    def home_of(op_id: int) -> str | None:
+        head = head_of.get(op_id)
+        holder = holders.get(head) if head is not None else None
+        return holder.id if holder is not None else None
+
+    found: dict[str, set[int]] = {}
+    for head, members in gone.groups.items():
+        home = holders.get(head)
+        if home is None or home.revision in ("insert", "move"):
+            continue
+        for member in members:
+            owner = holders.get(member)
+            if owner is None or owner.id == home.id:
+                continue
+            if owner.revision not in ("insert", "move") and any(
+                home_of(op_id) != home.id for op_id in owner.ops if op_id in present
+            ):
+                continue
+            found.setdefault(home.id, set()).add(member)
+    return {
+        home: tuple(sorted(members, key=present.__getitem__)) for home, members in found.items()
+    }
+
+
+def _with_removed(count: int) -> str:
+    """Wie viele Schritte unter einer Löschung stehen, für ihre Zeile."""
+    if count == 1:
+        return tr("mit einem Schritt")
+    return tr("mit {count} Schritten").format(count=count)
+
+
+def _removed_group_tip(count: int) -> str:
+    """Die Kurzhilfe an einer Löschung, unter der mitentfernte Schritte stehen."""
+    if count == 1:
+        return tr("Entfernt, was der Schritt darunter ergibt. Anklicken klappt ihn auf und zu.")
+    return tr(
+        "Entfernt, was die {count} Schritte darunter ergeben. Anklicken klappt sie auf und zu."
+    ).format(count=count)
+
+
+def _removed_tip(document: Document, remover: int) -> str:
+    """Die Kurzhilfe an einem Schritt, dessen Ergebnis ``remover`` wieder entfernt hat."""
+    return tr(
+        "Schritt {number} entfernt das Ergebnis wieder. Dieser Schritt bleibt im "
+        "Verlauf, wirkt aber nicht mehr."
+    ).format(number=step_number(document, remover))
+
+
+def _grey_out(item: QListWidgetItem, state: str) -> None:
+    """Der Zustand als Wort hinter dem Titel, kursiv und gedämpft nur zusätzlich (Regel 18).
+
+    Ohne Wort nur unter einer Löschung: Dort sagt die Gruppe, was gilt.
+    """
+    if state:
+        item.setText(f"{item.text()}  ({state})")
+    font = QFont(item.font())
+    font.setItalic(True)
+    item.setFont(font)
+    item.setForeground(QColor(UNDONE_COLOUR))
 
 
 def needs_tip(op_id: int, needs: Sequence[StepNeed], document: Document | None = None) -> str:
@@ -4446,6 +4539,10 @@ class _HistoryList(QListWidget):
     """Warum die Stelle unter dem Zeiger nicht geht."""
     markerActivated = Signal()
 
+#: Ein Ablageziel, das es nicht gibt — kein Strich, keine Ablage.
+_NOWHERE: Final = -1
+
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setDragEnabled(True)
@@ -4464,7 +4561,8 @@ class _HistoryList(QListWidget):
         found: list[tuple[int, ...]] = []
         for row in range(self.count()):
             item = self.item(row)
-            found.append(tuple(item.data(OPS_ROLE) or ()) if not item.isHidden() else ())
+            shown = not item.isHidden() and not item.data(NESTED_ROLE)
+            found.append(tuple(item.data(OPS_ROLE) or ()) if shown else ())
         return found
 
     def startDrag(self, supportedActions: Qt.DropAction) -> None:  # noqa: N802, N803 - Qt
@@ -4501,6 +4599,11 @@ class _HistoryList(QListWidget):
         if before not in self._targets:
             # Hier bewegte sich nichts: kein Strich, und kein Satz.
             self.setDropIndicatorShown(False)
+        below = self.item(row) if row < self.count() else None
+        if below is not None and below.data(NESTED_ROLE):
+            # Zwischen den Schritten unter einer Löschung liegt keine Stelle im
+            # Stapel — sie stehen dort, wo ihr Ergebnis endet.
+            return False, _NOWHERE
             super().dragMoveEvent(event)
             event.ignore()
             return
@@ -4683,6 +4786,8 @@ class HistoryPanel(QWidget):
         timeline_layout = QVBoxLayout(self.timeline)
         timeline_layout.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
         self.timeline_slider = QSlider(Qt.Orientation.Horizontal, self.timeline)
+        self._discarded = Discarded()
+        """Schritte, deren Ergebnis ein späterer Schritt wieder entfernt hat."""
         self.timeline_slider.setAccessibleName(tr("Stand im Verlauf"))
         self.timeline_slider.setSingleStep(1)
         self.timeline_slider.setPageStep(1)
@@ -4851,6 +4956,9 @@ class HistoryPanel(QWidget):
                 deleted.add(op_id)
                 previous = before.get(op_id)
                 if previous is not None:
+        self._discarded = discarded(sorted(document.ops, key=lambda one: one.id))
+        removed_under = removal_groups(document, self._discarded)
+        nested = {op_id for members in removed_under.values() for op_id in members}
                     titles.setdefault(op_id, _op_title(previous.op))
         deleted_ids = frozenset(deleted - replanned)
         self._bakeable = frozenset(
@@ -4876,7 +4984,18 @@ class HistoryPanel(QWidget):
                 # neuer Kennung beim Umbau, der ihn eingereiht hat.
                 continue
             if transaction.revision in ("insert", "move"):
-                self._add_revision_rows(transaction, document, titles, replanned, needs)
+                self._add_revision_rows(transaction, document, titles, replanned, needs, nested)
+                continue
+            # Neu gefasste Schritte stehen beim Umbau, nicht hier (P7) — eine
+            # Auswahl dieser Zeile nennt sie nicht mit.
+            active_ops = tuple(
+                op_id
+                for op_id in transaction.ops
+                if op_id not in deleted_ids and op_id not in replanned
+            )
+            if active_ops and all(op_id in nested for op_id in active_ops):
+                # Steht unter der Löschung, die sein Ergebnis wegnimmt
+                # (:func:`removal_groups`).
                 continue
             # Nur was abweicht, wird ausgeschrieben (§26.4). „(Nutzer)" stand
             # vorher an jeder Zeile — in einem Projekt ohne Agenten also
@@ -4944,13 +5063,6 @@ class HistoryPanel(QWidget):
             symbol = _op_icon_name(first_op) if first_op else ""
             if symbol:
                 item.setIcon(icon(symbol, self.list))
-            # Neu gefasste Schritte stehen beim Umbau, nicht hier (P7) — eine
-            # Auswahl dieser Zeile nennt sie nicht mit.
-            active_ops = tuple(
-                op_id
-                for op_id in transaction.ops
-                if op_id not in deleted_ids and op_id not in replanned
-            )
             if transaction.ops and not active_ops:
                 item.setText(f"{item.text()}  ({tr('gelöscht')})")
                 font = QFont(item.font())
@@ -4976,6 +5088,16 @@ class HistoryPanel(QWidget):
                 item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")
                 item.setData(GROUP_ROLE, transaction.id)
                 item.setToolTip(
+            elif len(active_ops) > 1 and all(
+                op_id in self._discarded.steps for op_id in active_ops
+            ):
+                # Eine Teilung, deren Stücke alle wieder entfernt sind, sagt
+                # es schon an der zugeklappten Zeile.
+                self._mark_discarded(
+                    item,
+                    document,
+                    max(self._discarded.steps[op_id] for op_id in active_ops),
+                )
                     tr("{count} Schritte — anklicken zum Auf- und Zuklappen.").format(
                         count=len(transaction.ops)
                     )
@@ -4996,6 +5118,19 @@ class HistoryPanel(QWidget):
                         next((entry.op for entry in document.ops if entry.id == op_id), "")
                     )
                     if child_symbol:
+            removed = removed_under.get(transaction.id, ())
+            if removed:
+                # **Die Löschung trägt, was mit ihr wegfällt** (Entscheidung
+                # Robert, 06.10.2026): ein Oberpunkt wie eine Transaktion aus
+                # mehreren Schritten, die Zahl als Wort an der Zeile (Regel 18).
+                if halted or stopped_at in removed:
+                    self._open_groups.add(transaction.id)
+                item.setText(f"{item.text()}  ({_with_removed(len(removed))})")
+                if len(transaction.ops) == 1:
+                    expanded = transaction.id in self._open_groups
+                    item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")
+                    item.setData(GROUP_ROLE, transaction.id)
+                item.setToolTip(f"{item.toolTip()}\n{_removed_group_tip(len(removed))}")
                         child.setIcon(icon(child_symbol, self.list))
                     if op_id not in deleted_ids:
                         child.setData(Qt.ItemDataRole.UserRole, op_id)
@@ -5035,6 +5170,11 @@ class HistoryPanel(QWidget):
 
     # --- Umbau des Verlaufs (P7) -----------------------------------------------------
 
+            for op_id in removed:
+                self._add_removed_row(
+                    transaction.id, op_id, document, titles, needs, op_id == stopped_at
+                )
+
     def _list_action(self, label: str, key: str, slot: Callable[[], object]) -> QAction:
         """Eine Handlung am Verlauf mit Kürzel, das nur hier gilt (wie Entf)."""
         action = QAction(label, self.list)
@@ -5067,9 +5207,10 @@ class HistoryPanel(QWidget):
             tr("{id} · Strg+Z nimmt den ganzen Umbau zurück.").format(id=transaction.id)
         )
         header.setData(OPS_ROLE, ())
+        nested: Collection[int] = (),
         self.list.addItem(header)
         for op_id in transaction.ops:
-            if op_id in replanned:
+            if op_id in replanned or op_id in nested:
                 continue
             position = self._positions.get(op_id)
             if position is None:
@@ -5100,22 +5241,32 @@ class HistoryPanel(QWidget):
             self.list.addItem(row)
 
     def _mark_state(
-        self, item: QListWidgetItem, document: Document, op_id: int, needs: Sequence[StepNeed]
+        self,
+        item: QListWidgetItem,
+        document: Document,
+        op_id: int,
+        needs: Sequence[StepNeed],
+        *,
+        under_removal: bool = False,
     ) -> None:
-        """Aus, ruhend, abhängig: in Worten an der Zeile, nie nur als Farbe (Regel 18)."""
-        state = step_state(document, op_id)
+        """Aus, ruhend, ohne Wirkung, abhängig: in Worten an der Zeile, nie nur als Farbe.
+
+        ``under_removal``: Die Zeile steht unter der Löschung, die ihr Ergebnis
+        wegnimmt; „Ergebnis entfernt" sagt dort schon die Gruppe.
+        """
+        state = step_state(document, op_id, self._discarded)
         tips = [item.toolTip()] if item.toolTip() else []
         if state:
-            item.setText(f"{item.text()}  ({state})")
-            font = QFont(item.font())
-            font.setItalic(True)
-            item.setFont(font)
-            item.setForeground(QColor(UNDONE_COLOUR))
-            tips.append(
-                tr("Ausgeschaltet: Der Schritt bleibt im Verlauf, rechnet aber nicht.")
-                if self._resting.get(op_id)
-                else tr("Ruht, weil er einen ausgeschalteten Schritt braucht.")
-            )
+            said = under_removal and op_id not in self._resting
+            _grey_out(item, "" if said else state)
+            if op_id in self._resting:
+                tips.append(
+                    tr("Ausgeschaltet: Der Schritt bleibt im Verlauf, rechnet aber nicht.")
+                    if self._resting[op_id]
+                    else tr("Ruht, weil er einen ausgeschalteten Schritt braucht.")
+                )
+            else:
+                tips.append(_removed_tip(document, self._discarded.steps[op_id]))
         dependency = needs_tip(op_id, needs, document)
         if dependency:
             tips.append(dependency)
@@ -5123,12 +5274,21 @@ class HistoryPanel(QWidget):
             item.setToolTip("\n".join(tips))
 
     def _add_marker(self, inserting: int) -> None:
-        """Die Einfügemarke vor ihrem Schritt — und alles danach ruhig gestellt (P7.1)."""
-        rows = self.list.row_ops()
-        at = next(
-            (index for index, ops in enumerate(rows) if ops and inserting in ops),
-            self.list.count(),
-        )
+        """Die Einfügemarke vor ihrem Schritt — und alles danach ruhig gestellt (P7.1).
+
+        Gesucht und gedämpft wird nach der Stelle im Stapel, nicht nach der
+        Zeile: Unter einer Löschung stehen Schritte von weiter vorn.
+        """
+        at = self.list.count()
+        for row in range(self.list.count()):
+            entry = self.list.item(row)
+            if inserting in tuple(entry.data(OPS_ROLE) or ()):
+                at = row
+                group = entry.data(GROUP_ROLE)
+                if entry.isHidden() and group:
+                    self._open_groups.add(group)
+                    self._reflow_groups()
+                break
         marker = QListWidgetItem(f"▸  {tr('Neue Schritte kommen hierhin')}")
         font = QFont(marker.font())
         font.setBold(True)
@@ -5138,9 +5298,54 @@ class HistoryPanel(QWidget):
         marker.setToolTip(tr("Doppelklick oder Esc beendet das Einfügen."))
         marker.setFlags(Qt.ItemFlag.ItemIsEnabled)
         self.list.insertItem(at, marker)
-        for row in range(at + 1, self.list.count()):
+    def _add_removed_row(
+        self,
+        group: str,
+        op_id: int,
+        document: Document,
+        titles: Mapping[int, str],
+        needs: Sequence[StepNeed],
+        halted: bool,
+    ) -> None:
+        """Ein Schritt unter der Löschung, die sein Ergebnis wegnimmt.
+
+        Mit seiner Nummer, damit er im Stapel zu finden bleibt; öffnen,
+        wählen und löschen lässt er sich wie an seiner Stelle. Nur ablegen
+        lässt sich nichts zwischen ihm und seinen Geschwistern (``NESTED_ROLE``).
+        """
+        position = self._positions.get(op_id)
+        number = f"{position}  " if position is not None else ""
+        child = QListWidgetItem(f"    {'! ' if halted else ''}{number}{titles.get(op_id, '')}")
+        child.setData(GROUP_ROLE, group)
+        child.setData(NESTED_ROLE, True)
+        symbol = _op_icon_name(next((entry.op for entry in document.ops if entry.id == op_id), ""))
+        if symbol:
+            child.setIcon(icon(symbol, self.list))
+        child.setData(Qt.ItemDataRole.UserRole, op_id)
+        child.setData(OPS_ROLE, (op_id,))
+        if halted:
+            child.setToolTip(tr("Hier hält die Kette an — der Grund steht im Prüfbericht."))
+        self._mark_state(child, document, op_id, needs, under_removal=True)
+        self.list.addItem(child)
+        child.setHidden(group not in self._open_groups)
+
+    def _mark_discarded(self, item: QListWidgetItem, document: Document, remover: int) -> None:
+        """Die Zeile einer Transaktion, deren Ergebnis ``remover`` wieder entfernt hat."""
+        _grey_out(item, tr("Ergebnis entfernt"))
+        tips = [item.toolTip()] if item.toolTip() else []
+        tips.append(_removed_tip(document, remover))
+        item.setToolTip("\n".join(tips))
+
+        start = self._positions.get(inserting)
+        for row in range(self.list.count()):
             entry = self.list.item(row)
-            if entry.data(OPS_ROLE):
+            places = [self._positions.get(op_id) for op_id in entry.data(OPS_ROLE) or ()]
+            later = (
+                row > at
+                if start is None
+                else any(place is not None and place >= start for place in places)
+            )
+            if places and later:
                 entry.setForeground(QColor(UNDONE_COLOUR))
 
     def _steps_for_action(self) -> tuple[int, ...]:

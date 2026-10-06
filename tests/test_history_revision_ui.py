@@ -81,6 +81,113 @@ def test_the_state_of_a_step_is_a_word_off_or_resting() -> None:
     assert step_state(history.document, 999) == "", "einen unbekannten Schritt gibt es nicht"
 
 
+def _removed_copy() -> History:
+    """Die Platte, eine Kopie davon, verschoben und wieder entfernt — Schritte 4 bis 6."""
+    history = _plate()
+    history.apply(
+        "Duplizieren",
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 2})],
+    )
+    copy = history.operations[-1].outputs[1]
+    history.apply(
+        "Bewegen", [OperationDraft(op="translate_object", inputs=(copy,), params={"dx": 90.0})]
+    )
+    history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=(copy,))])
+    return history
+
+
+def test_a_step_whose_result_was_removed_says_so() -> None:
+    """„Ergebnis entfernt" an jedem Schritt, dessen Körper später entfernt wurde.
+
+    Anlass S-20261006-2a0261. Die Kopie entsteht, wird verschoben und entfernt: Duplizieren und
+    Verschieben wirken nicht mehr, das Entfernen selbst schon, und die
+    Bohrungen an der bleibenden Platte rechnen weiter.
+    """
+    from app.core.scene.history import discarded
+
+    history = _removed_copy()
+    ops = history.operations
+    gone = discarded(history.document.ops)
+
+    assert step_state(history.document, ops[3].id, gone) == "Ergebnis entfernt"
+    assert step_state(history.document, ops[4].id, gone) == "Ergebnis entfernt"
+    assert step_state(history.document, ops[5].id, gone) == "", "das Entfernen wirkt"
+    assert step_state(history.document, ops[1].id, gone) == "", "die Platte bleibt"
+    assert step_state(history.document, ops[3].id) == "", "ohne Auskunft keine Behauptung"
+
+
+def test_the_removed_steps_stand_under_their_removal() -> None:
+    """Was mit einem Objekt wegfällt, steht unter seiner Löschung (Entscheidung Robert, 06.10.2026).
+
+    Duplizieren und Verschieben der Kopie gehören unter *Entfernen*. Steht ein
+    Schritt in einer Transaktion mit einem, der weiter wirkt, bleibt die
+    Transaktion an ihrer Stelle — sie zieht nur ganz um.
+    """
+    from app.core.scene.history import discarded
+    from app.ui.panels import removal_groups
+
+    history = _removed_copy()
+    ops = history.operations
+    removal = history.document.transactions[-1]
+    assert removal_groups(history.document, discarded(history.document.ops)) == {
+        removal.id: (ops[3].id, ops[4].id)
+    }
+
+    mixed = _plate()
+    mixed.apply(
+        "Kopie und Platte bewegen",
+        [
+            OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 2}),
+            OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 5.0}),
+        ],
+    )
+    copy = mixed.operations[3].outputs[1]
+    mixed.apply("Entfernen", [OperationDraft(op="delete_object", inputs=(copy,))])
+    gone = discarded(mixed.document.ops)
+    assert removal_groups(mixed.document, gone) == {}
+    assert step_state(mixed.document, mixed.operations[3].id, gone) == "Ergebnis entfernt", (
+        "an ihrer Stelle sagt die Zeile, was gilt"
+    )
+
+
+def test_the_history_folds_removed_steps_under_their_removal(qt_app: Any) -> None:
+    """Die Löschung ist ein Oberpunkt mit der Zahl als Wort, die Schritte zugeklappt darunter.
+
+    Eingerückt, kursiv und mit dem entfernenden Schritt in der Kurzhilfe;
+    aufgeklappt per Klick, und zwischen sie lässt sich nichts ablegen — sie
+    stehen nicht an ihrer Stelle im Stapel.
+    """
+    from app.ui.panels import NESTED_ROLE, HistoryPanel
+
+    history = _removed_copy()
+    ops = history.operations
+    panel = HistoryPanel()
+    try:
+        panel.show_document(history.document)
+        head = _row_of(panel, ops[5].id)
+        assert head.text().startswith("▸") and head.text().endswith("(mit 2 Schritten)")
+        assert "Entfernt, was die 2 Schritte darunter ergeben." in head.toolTip()
+        at = panel.list.row(head)
+        for offset, step in enumerate((ops[3], ops[4]), start=1):
+            row = _row_of(panel, step.id)
+            assert panel.list.row(row) == at + offset, "unter der Löschung, in Stapelfolge"
+            assert row.text().startswith("    ") and "(Ergebnis entfernt)" not in row.text()
+            assert row.font().italic() and row.data(NESTED_ROLE)
+            assert row.isHidden(), "zugeklappt, bis jemand aufklappt"
+            assert (
+                "Schritt 6 entfernt das Ergebnis wieder. Dieser Schritt bleibt im Verlauf, "
+                "wirkt aber nicht mehr." in row.toolTip()
+            )
+        assert not panel.list.row_ops()[at + 1], "kein Ablageziel zwischen den Schritten"
+
+        panel._toggle_group(head)
+        assert head.text().startswith("▾")
+        assert not _row_of(panel, ops[3].id).isHidden()
+        assert "(Ergebnis entfernt)" not in _row_of(panel, ops[1].id).text(), "die Platte bleibt"
+    finally:
+        panel.deleteLater()
+
+
 def test_the_dependency_tip_names_both_directions() -> None:
     """Was ein Schritt braucht und wer ihn braucht — Körper und Merkmal zählen gleich (P7.2)."""
     needs = (

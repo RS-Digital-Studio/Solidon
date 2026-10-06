@@ -117,6 +117,112 @@ def _living_objects(operations: Sequence[Operation]) -> set[ObjectId]:
     return living
 
 
+@dataclass(frozen=True, slots=True)
+class Discarded:
+    """Was ein späterer Schritt wieder aus der Szene genommen hat (S-20261006-2a0261).
+
+    Ein Stift entsteht, wird verschoben, gefast und geteilt, und am Ende
+    entfernt der Kunde beide Hälften. Seine Schritte bleiben im Verlauf — der
+    Stapel ist non-destruktiv, Strg+Z holt den Stift zurück —, aber am
+    Endstand wirken sie nicht mehr. Der Prüfbericht sprach trotzdem weiter
+    über den Stift, und der Verlauf zeigte jeden seiner Schritte als aktiv.
+    """
+
+    steps: Mapping[OpId, OpId] = field(default_factory=dict)
+    """Schritt ohne Wirkung am Endstand → das *Objekt entfernen*, unter dem er steht."""
+    outputs: Mapping[OpId, frozenset[ObjectId]] = field(default_factory=dict)
+    """Je Schritt die Ausgänge, von deren Stand nach ihm am Ende nichts übrig ist."""
+    groups: Mapping[OpId, tuple[OpId, ...]] = field(default_factory=dict)
+    """Je letztem *Objekt entfernen* die Schritte, die mit ihm wegfallen, in Stapelfolge.
+
+    Dazu zählt ein früheres *Objekt entfernen* desselben Körpers: Wer die
+    zweite Hälfte eines Stifts entfernt, entfernt den Stift (Entscheidung
+    Robert, 06.10.2026: die mitgelöschten Schritte unter der Löschung
+    zusammenfassen)."""
+
+
+def discarded(operations: Sequence[Operation], registry: Registry = REGISTRY) -> Discarded:
+    """Welche Schritte am Endstand nichts mehr hinterlassen, und wer sie entfernt.
+
+    Gefragt wird rückwärts: Ein Körper lebt, wenn er am Ende in der Szene
+    steht oder in einen Körper eingeht, der lebt. Ein Schritt wirkt, solange
+    einer der Körper, die er baut oder ändert, nach ihm weiterlebt. Ein
+    Eingang, den er nur unverändert durchreicht
+    (``OperationSpec.leaves_inputs_unchanged``), zählt dafür nicht: *Stift für
+    Bohrung* gibt den Träger zurück, wie er kam, und ohne den Stift wirkt der
+    Schritt nicht mehr.
+
+    **Ob ein Körper weiterlebt, hängt an der Stelle im Stapel.** Ein Träger,
+    aus dessen Bohrung ein Stift entstand, lebt bis dahin im Stift fort, auch
+    wenn er danach entfernt wird; was ihn erst danach noch änderte, wirkt
+    nicht.
+
+    **Was sich einen entfernten Körper teilt, ist eine Familie** — der Stift,
+    seine Bewegungen, die Teilung und beide Hälften. Ihr letzter Schritt ohne
+    Ausgang ist der, unter dem sie steht.
+
+    Ausgeschaltete Schritte rechnen nicht und zählen nicht mit — dieselbe
+    Bestandsrechnung wie :func:`_living_objects`. Die Auswertung fragt mit den
+    Schritten, die wirklich gerechnet haben, der Verlauf mit dem Dokument.
+    """
+    computing = [entry for entry in operations if entry.suppressed is None]
+    order = {entry.id: index for index, entry in enumerate(computing)}
+    alive = _living_objects(computing)
+    outputs: dict[OpId, frozenset[ObjectId]] = {}
+    # Je Schritt ohne Wirkung und je *Objekt entfernen* die Körper, die er
+    # baut, ändert oder wegnimmt — ein durchgereichter Träger nicht.
+    touched: dict[OpId, list[ObjectId]] = {}
+    removers: set[OpId] = set()
+    for entry in reversed(computing):
+        spec = registry.get(entry.op) if registry.has(entry.op) else None
+        handed_on = (
+            set(entry.inputs) if spec is not None and spec.leaves_inputs_unchanged else set()
+        )
+        lost = frozenset(name for name in entry.outputs if name not in alive)
+        if lost:
+            outputs[entry.id] = lost
+        if not entry.outputs:
+            # *Objekt entfernen*: ein Schritt ohne Ausgang nimmt seine Eingänge weg.
+            if entry.inputs:
+                removers.add(entry.id)
+                touched[entry.id] = list(entry.inputs)
+            continue
+        made = [name for name in entry.outputs if name not in handed_on]
+        if any(name in alive for name in made):
+            alive.update(entry.inputs)
+            continue
+        if made:
+            touched[entry.id] = [
+                name for name in (*entry.inputs, *entry.outputs) if name not in handed_on
+            ]
+    parent: dict[ObjectId, ObjectId] = {}
+
+    def root(name: ObjectId) -> ObjectId:
+        while parent.setdefault(name, name) != name:
+            parent[name] = parent[parent[name]]
+            name = parent[name]
+        return name
+
+    for names in touched.values():
+        for name in names[1:]:
+            parent[root(name)] = root(names[0])
+    families: dict[ObjectId, list[OpId]] = {}
+    for op_id, names in touched.items():
+        families.setdefault(root(names[0]), []).append(op_id)
+    steps: dict[OpId, OpId] = {}
+    groups: dict[OpId, tuple[OpId, ...]] = {}
+    for members in families.values():
+        heads = [op_id for op_id in members if op_id in removers]
+        if not heads:
+            continue
+        head = max(heads, key=order.__getitem__)
+        rest = tuple(sorted((op_id for op_id in members if op_id != head), key=order.__getitem__))
+        steps.update((op_id, head) for op_id in rest if op_id not in removers)
+        if rest:
+            groups[head] = rest
+    return Discarded(steps=steps, outputs=outputs, groups=groups)
+
+
 def _structural_objects(operations: Sequence[Operation]) -> set[ObjectId]:
     """Die Körper nach einer Folge **aller** Schritte, ausgeschaltet oder nicht.
 

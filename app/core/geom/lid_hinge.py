@@ -489,6 +489,7 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     consumes=1,
     produces=2,
     keeps_inputs=1,
+    leaves_inputs_unchanged=True,
     applies_to=["hole"],
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt: dünner um das Spiel aus "

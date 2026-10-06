@@ -45,7 +45,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 | `migrations.py` | `FORMAT_VERSION` und die Kette `vN → vN+1`; Parameterausdrücke bleiben erhalten, wertabhängige Altformat-Umrechnungen tragen einen Marker und laufen mit den aufgelösten Werten bei jeder Auswertung; **ältere Migrationen werden nie zusammengefasst** |
 | `gathered.py` | Große Sammelwerte wandern aus dem Stapel in den Container (§12) |
 | `foreign.py` | Was eine fremde Projektdatei außer Geometrie mitbringt (§32) |
-| `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5); `OperationDraft`, `RevisionPlan` |
+| `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5); `OperationDraft`, `RevisionPlan`, `discarded` (Bericht, Verlauf) |
 | `revision.py` | Den Verlauf umbauen: `dependencies`, `step_needs`, `revise`, `verdict`, `commit`; `searched_at_the_end` lässt Eingefügtes seine freie Stelle am Endstand suchen |
 | `rebuild.py` | Nachbau (§42): P4.0/Netzfits, Formvergleich, benannte Maße, atomare Übernahme |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |

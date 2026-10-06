@@ -6,6 +6,7 @@ import dataclasses
 import json
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -2397,3 +2398,235 @@ def test_replanning_copies_a_step_this_version_does_not_know(history: History) -
     history.commit(plan)
     copied = history.operations[-1]
     assert copied.op == "create_from_scad" and copied.outputs == ("obj_9",)
+
+
+# --- Was ein späterer Schritt wieder entfernt (S-20261006-2a0261) ---------------------
+
+
+@pytest.fixture
+def removal_registry() -> Registry:
+    """Erzeugen, Stift neben den Träger, Bewegen, Teilen, Vereinigen, Entfernen.
+
+    *Stift* reicht seinen Träger unverändert durch wie ``pin_for_bore``;
+    *Vereinigen* setzt seinen ersten Eingang fort wie ``union_objects`` und baut
+    ihn dabei um — dieselbe Zahl Ein- und Ausgänge, der Unterschied steht allein
+    in ``leaves_inputs_unchanged``.
+    """
+    own = Registry()
+    for name, consumes, produces, keeps, unchanged in (
+        ("make_object", 0, 1, 0, False),
+        ("pin_beside", 1, 2, 1, True),
+        ("lid_beside", 1, 2, 1, False),
+        ("move_object", 1, 1, 0, False),
+        ("split_object", 1, 2, 0, False),
+        ("delete_object", 1, 0, 0, False),
+    ):
+
+        @register_op(
+            name=name,
+            title=_("Testschritt"),
+            category="scene",
+            params=SeedParams,
+            consumes=consumes,
+            produces=produces,
+            keeps_inputs=keeps,
+            leaves_inputs_unchanged=unchanged,
+            doc=_("Testversion."),
+            registry=own,
+        )
+        def step(ctx: OpContext) -> OpResult:
+            return OpResult(outputs=list(ctx.inputs))
+
+    return own
+
+
+def _pin_chain(creator: str = "pin_beside") -> list[Operation]:
+    """Der Weg des Kunden: Halter, Stift, bewegt, geteilt, beide Hälften entfernt."""
+    return [
+        Operation(id=1, op="make_object", outputs=("obj_1",)),
+        Operation(id=2, op=creator, inputs=("obj_1",), outputs=("obj_1", "obj_2")),
+        Operation(id=3, op="move_object", inputs=("obj_2",), outputs=("obj_2",)),
+        Operation(id=4, op="move_object", inputs=("obj_1",), outputs=("obj_1",)),
+        Operation(id=5, op="split_object", inputs=("obj_2",), outputs=("obj_3", "obj_4")),
+        Operation(id=6, op="delete_object", inputs=("obj_3",)),
+        Operation(id=7, op="delete_object", inputs=("obj_4",)),
+    ]
+
+
+def test_a_removed_pin_leaves_its_steps_without_effect(removal_registry: Registry) -> None:
+    """Stift, Bewegung und Teilung wirken nicht mehr, sobald beide Hälften fort sind.
+
+    Sie stehen unter dem Schritt, der das Letzte entfernt, und mit ihnen das
+    Entfernen der ersten Hälfte (Entscheidung Robert, 06.10.2026); der Halter
+    und der Schritt, der ihn bewegt, wirken weiter.
+    """
+    from app.core.scene.history import discarded
+
+    gone = discarded(_pin_chain(), removal_registry)
+
+    assert gone.steps == {2: 7, 3: 7, 5: 7}
+    assert gone.groups == {7: (2, 3, 5, 6)}
+    assert gone.outputs == {
+        2: frozenset({"obj_2"}),
+        3: frozenset({"obj_2"}),
+        5: frozenset({"obj_3", "obj_4"}),
+    }
+
+
+def test_a_kept_half_keeps_the_pin_in_effect(removal_registry: Registry) -> None:
+    """Steht eine Hälfte noch, wirken alle Schritte davor; nur die andere ist fort."""
+    from app.core.scene.history import discarded
+
+    gone = discarded(_pin_chain()[:-1], removal_registry)
+
+    assert gone.steps == {}
+    assert gone.groups == {}, "ein Entfernen ohne mitentfernte Schritte steht allein"
+    assert gone.outputs == {5: frozenset({"obj_3"})}
+
+
+def test_a_step_that_rebuilds_its_carrier_stays_in_effect(removal_registry: Registry) -> None:
+    """Gegenprobe: Wer seinen ersten Eingang umbaut, wirkt am bleibenden Träger weiter.
+
+    Dieselbe Kette mit einem Schritt, der wie ein Deckel seinen Träger
+    fortsetzt und ändert — ohne ``leaves_inputs_unchanged`` darf er nicht als
+    wirkungslos gelten, nur weil sein zweiter Körper fort ist.
+    """
+    from app.core.scene.history import discarded
+
+    gone = discarded(_pin_chain("lid_beside"), removal_registry)
+
+    assert gone.steps == {3: 7, 5: 7}
+    assert gone.groups == {7: (3, 5, 6)}
+    assert gone.outputs[2] == frozenset({"obj_2"})
+
+
+def test_a_carrier_lives_on_in_the_pin_it_gave(removal_registry: Registry) -> None:
+    """Ein Träger lebt bis zum Stift im Stift fort; was ihn danach noch änderte, nicht.
+
+    Der Halter wird nach dem Stift bewegt und dann entfernt: Die Bewegung danach
+    wirkt nicht, alles bis zum Stift wirkt, denn seine Bohrung gab das Maß.
+    """
+    from app.core.scene.history import discarded
+
+    chain = [
+        *_pin_chain()[:4],
+        Operation(id=5, op="delete_object", inputs=("obj_1",)),
+    ]
+    gone = discarded(chain, removal_registry)
+
+    assert gone.steps == {4: 5}
+    assert gone.groups == {5: (4,)}
+    assert gone.outputs == {2: frozenset({"obj_1"}), 4: frozenset({"obj_1"})}
+
+
+def test_a_switched_off_removal_removes_nothing(removal_registry: Registry) -> None:
+    """Ein ausgeschaltetes *Objekt entfernen* rechnet nicht — die Hälfte steht."""
+    from app.core.scene.history import discarded
+    from app.core.types import Suppression
+
+    chain = _pin_chain()
+    chain[-1] = dataclasses.replace(chain[-1], suppressed=Suppression())
+    gone = discarded(chain, removal_registry)
+
+    assert gone.steps == {}
+    assert gone.groups == {}
+    assert gone.outputs == {5: frozenset({"obj_3"})}
+
+
+def _hand_on_cases(profile: Profile) -> dict[str, tuple[list[Any], dict[str, Any]]]:
+    """Je markierter Operation ein gültiger Auftrag: Eingänge und Werte."""
+    from app.core.knowledge.parts import shapes
+    from app.core.knowledge.parts.build import bore
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Scene, SceneObject
+
+    with shapes.building("mesh"):
+        plate = shapes.box(30.0, 30.0, 10.0)
+    key, hole = bore("hole_1", 6.0, (0.0, 0.0, 5.0), depth=10.0, through=True)
+    carrier = SceneObject(id="obj_1", name="Platte", mesh=plate, kind="mesh", features={key: hole})
+    spec = REGISTRY.get("create_container")
+    made = spec.fn(
+        OpContext(
+            Scene(),
+            [],
+            spec.params(shape="round", lid="push", kernel="mesh"),
+            profile,
+            "fine",
+            None,
+            lambda *_: None,
+            lambda *_: pytest.fail("unerwartete Frage"),
+            NeverCancelled(),
+        )
+    )
+    container = [
+        dataclasses.replace(entry, id=f"obj_{index}") for index, entry in enumerate(made.outputs, 1)
+    ]
+    return {
+        "pin_for_bore": ([carrier], {"at_feature": "hole_1"}),
+        "duplicate_object": ([carrier], {"count": 3}),
+        "pattern": ([carrier], {"count": 3, "spacing": 40.0}),
+        "add_container_insert": (container, {"shape": "round", "diameter": 60.0, "height": 40.0}),
+    }
+
+
+def test_only_operations_that_hand_their_inputs_on_unchanged_say_so(profile: Profile) -> None:
+    """Das Register sagt es genau dort, wo die Operation ihre Eingänge zurückgibt, wie sie kamen.
+
+    ``history.discarded`` hält einen Schritt für wirkungslos, sobald alles Neue
+    daraus entfernt ist. Stimmte die Zusage nicht, gälte ein Schritt als
+    wirkungslos, der seinen Träger umgebaut hat — und seine Befunde fielen aus
+    dem Bericht. Belegt wird an jedem markierten Ergebnis: gleiche Kennung,
+    dasselbe Netz, dieselben Merkmale.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Scene
+
+    load_operations()
+    marked = {entry.name for entry in REGISTRY.all() if entry.leaves_inputs_unchanged}
+    cases = _hand_on_cases(profile)
+    assert marked == set(cases), "eine neu markierte Operation braucht hier ihren Beleg"
+    for name, (inputs, values) in cases.items():
+        spec = REGISTRY.get(name)
+        result = spec.fn(
+            OpContext(
+                Scene(objects={entry.id: entry for entry in inputs}),
+                inputs,
+                spec.params(**values),
+                profile,
+                "fine",
+                0,
+                lambda *_: None,
+                lambda *_: pytest.fail("unerwartete Frage"),
+                NeverCancelled(),
+            )
+        )
+        assert len(result.outputs) > len(inputs), f"{name} legt etwas daneben"
+        for given, handed_on in zip(inputs, result.outputs, strict=False):
+            assert handed_on.mesh is given.mesh, f"{name} reicht {given.id} umgebaut weiter"
+            assert handed_on.features == given.features, name
+
+
+def test_the_last_removal_of_a_family_is_where_its_steps_stand(removal_registry: Registry) -> None:
+    """Eine bewegte Hälfte und ihr Entfernen gehören zur Familie des Stifts.
+
+    Die erste Hälfte wird verschoben und entfernt, Schritte später die zweite:
+    Alles steht unter dem letzten Entfernen, auch das erste. Gezählt wird die
+    Stelle im Stapel, nicht die Kennung — nach einem Verschieben weichen beide
+    voneinander ab (RM-368).
+    """
+    from app.core.scene.history import discarded
+
+    chain = [
+        *_pin_chain()[:5],
+        Operation(id=9, op="move_object", inputs=("obj_3",), outputs=("obj_3",)),
+        Operation(id=6, op="delete_object", inputs=("obj_3",)),
+        Operation(id=7, op="move_object", inputs=("obj_1",), outputs=("obj_1",)),
+        Operation(id=8, op="delete_object", inputs=("obj_4",)),
+    ]
+    gone = discarded(chain, removal_registry)
+
+    assert gone.groups == {8: (2, 3, 5, 9, 6)}
+    assert gone.steps == {2: 8, 3: 8, 5: 8, 9: 8}
