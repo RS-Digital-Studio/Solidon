@@ -48,8 +48,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Installerlauf 37418052743 (0.5.3) installiert und startet den Kundeninstaller mit Inno Setup 7.1.0; jedes Release startet das installierte Flatpak unter Xvfb. Offen: Aktualisieren/Deinstallieren auf fremdem Windows, Flatpak auf echter Linux-Grafik |
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Kunde mit zwei Intel-Macs (macOS 26): das Developer-ID-signierte Paket startet nicht, ad hoc signiert schon; am Runner nicht nachstellbar (Läufe 37361577881, 37362456615); wartet auf Terminalausgabe, `codesign --verify`, Absturzberichte und macOS-Version des Kunden. Daneben Intel-Fenster am Gerät und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
-| [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
-| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins; `shapes.thread_body` ist umgestellt, sein Weg in `_WAYS` fehlt (Liste am Punkt) |
+| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut (Taglauf 37266459831 grün); offen die drei Arbeitsplätze und der Blick in die Releaseakte |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -524,20 +523,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
 
-<a id="rm-114"></a>
-
-- [~] **RM-114 — Vereinfachungsziele auf Apple Silicon vermessen.** Die Vereinfachungs-Zielreihe der
-  dünnwandigen Hohlkugel auf Apple Silicon messen und den Warnungsnachweis dort zuverlässig
-  auslösen. Abnahme: dokumentiertes Ziel mit dichtem Eingang/offenem Ausgang und tatsächlicher
-  Warnung; kein Skip als Erfolg.
-
-  Seit `a559e947` überspringt der Test nicht mehr; ein sicher offener Ausgang löst die Warnung
-  auf jeder Plattform aus (`tests/test_subdivision.py::test_the_simplifier_reports_an_open_result_on_every_machine`,
-  auf macos-latest grün in den Tagläufen 37266459831 und 37409338027). Offen ist nur die
-  dokumentierte Zielreihe der Hohlkugel auf Apple Silicon.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
-
 <a id="rm-187"></a>
 
 - [~] **RM-187 — Dieselbe Geometrie auf jeder Plattform.** Am 17.09.2026 lieferte dasselbe
@@ -645,7 +630,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Stücke einer Schicht, und die Summe entsteht in einer festen Folge
   (`test_slice.py::test_the_support_volume_comes_out_the_same_on_any_number_of_workers`,
   Regel in `.claude/rules/kern.md`). Die Hubhöhe eines schräg gesetzten Bausteins rechnet
-  komponentenweise über `mesh.stable_normals` (`bba2c6ea7`). Neu offen sind drei Wege:
+  komponentenweise über `mesh.stable_normals` (`bba2c6ea7`). Neu offen waren drei Wege, alle
+  drei erledigt mit Paket A (unten):
 
   - **Der Teilungsweg rechnet Naht- und Stiftlagen über BLAS** (rest-teilen,
     REST-TEILEN-06, vor 0.5.0 entstanden): `autosplit` (`_reflected`, `cuts_through`,
@@ -678,6 +664,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (`rebuild._drill_tool`) dreht über `lathe.revolve` mit den Ecken aus `units.circle_point`
   statt über `trimesh.creation.revolve`; der Weg `rebuild_drill_tool` steht in `_WAYS` und war
   unter dem Plattformrauschen ohne den Fix rot.
+
+  **Paket A (06.10.2026):** Die drei Wege oben und der Rest aus dem Review vom 02.10. rechnen
+  plattformgleich: die Platzierung eines Bausteins (`parts/ops._matrix` über
+  `transform.composed`), Teilen (`autosplit`, `symmetry`, `pins`), alle Drehwege von *Merkmal
+  drehen* und überhaupt `prepare_ops` und `prepare` (Matrixprodukte, `np.dot`, `einsum`, Normen,
+  SVD, Neigungswinkel, Flächennormalen über `stable_normals`), Muster am Zylinder und in der Ebene
+  (`perceive.patterns` ganz, `texture_ops`), Skizzenbögen (`sketch_solid`, `sketch.profile`) und
+  Senkungen. Neue Wege in `_WAYS`: `slanted_part`, `thread_ridge`, `wrapped_texture`,
+  `face_textures`, `sketch_arcs`, `split_seam` und `read_lattices`; fünf davon waren am alten
+  Stand rot. Der Wächter leert vor dem stillen und vor dem verrauschten Lauf die Merker der
+  Erkennung: Vorher beantwortete der verrauschte Lauf die Erkennung aus dem stillen, und die Naht
+  eines umwickelten Musters hing unbemerkt an `math.cos`. Der Teilungskorpus (sieben Modelle) ist
+  vorher und nachher bitgleich bis auf ein Teil des Wabenhalters nach dem Stiftschnitt (zwei
+  Dreiecke, `pins.py`). Cache-Format 52.
+
+  **Offen nach Paket A:**
+
+  - **Einpassungen in `perceive`:** Achsen aus `eigh`, Kreis und Kugel aus `lstsq`, Ebenen aus
+    `svd` und der Löser `least_squares` in `refine.solve`. Entschieden ist ein eigener
+    deterministischer Kern (Entscheidung Robert, 06.10.2026): feste Summenfolge,
+    Householder-QR und Jacobi-SVD, kompiliert ohne zusammengezogene Multiplikation und
+    Addition, mit bitgleichem Rückfall in NumPy. Abnahme: Erkennungskorpus und Laufzeit vorher
+    und nachher, `_WAYS` grün auf drei Runnern.
+  - **Formen in `knowledge/parts/shapes.py`:** `_slot_outline` rechnet mit `np.cos` und trifft
+    Schlüsselloch und Lasche. Jede Änderung an `shapes.py` macht alle 49 Bereichsnachweise
+    ungültig (`tools/check_part_ranges.py --all`), deshalb gebündelt mit dem nächsten Posten;
+    danach Wege für Umrisse und gedrehte Bohrungen in `_WAYS`.
+  - **Potenzen `**` auf Gleitkommazahlen:** 166 Stellen im Kern, 115 davon `** 2`. Pythons `**`
+    ruft das `pow` der Plattform, und das rundet nicht immer korrekt: Auf Windows weicht
+    `x ** 2` in 1049 von zwei Millionen Werten von `x * x` ab, `x ** 0.5` ebenso oft von
+    `math.sqrt`; das Rauschen sieht beides nicht. Weg: Produkte, `math.sqrt` und Kehrwerte
+    ganzzahliger Potenzen (`1.0 / 10 ** n`), dazu ein Wächter über den Syntaxbaum, der `**` mit
+    Gleitkommaanteil im Kern ablehnt (die Regel steht in `kern.md`).
+  - **Das Nachführen bewegter Merkmale** aus der Liste der Durchsicht 0.5.0 ist nicht neu
+    geprüft.
 
 <a id="rm-468"></a>
 

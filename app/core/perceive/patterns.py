@@ -81,6 +81,7 @@ from app.core.geom.mesh import (
     shift_body,
     stable_arccos,
     stable_arctan2,
+    stable_normals,
     unique_edges,
 )
 from app.core.types import Feature, FeatureId, MeasureSource, Vec3
@@ -1482,8 +1483,7 @@ class _CellMeasure:
         self.owner = owner
         self.triangles = np.asarray(body.faces, dtype=np.int64)
         self.points = np.asarray(body.vertices, dtype=float)
-        self.triangle_normals = np.asarray(body.face_normals, dtype=float)
-        self.triangle_areas = np.asarray(body.area_faces, dtype=float)
+        self.triangle_normals, self.triangle_areas = stable_normals(body)
         self.normals = {
             name: np.asarray(feature.params.get("normal", (0.0, 0.0, 0.0)), dtype=float)
             for name, feature in owned.items()

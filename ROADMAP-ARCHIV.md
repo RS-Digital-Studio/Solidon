@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
 | 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
@@ -9135,7 +9136,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-111 — Der Sammellauf zwischen zwei Tests gilt nur noch für zwei Dateien | zusammengeführt → [RM-107](ROADMAP.md#rm-107) | tests/conftest.py:185–244 führt _DIALOG_MODULES und den eingeschränkten Sammellauf weiterhin. Derselbe verbliebene Diagnoseauftrag wie RM107. |
 | RM-112 — Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | zusammengeführt → [RM-135](ROADMAP.md#rm-135) | tests/test_filament_picker.py:534–538 markiert die Mac-Unterhöhe weiterhin xfail. RM135 betrifft denselben _around_the_list-Vertrag in der anderen Richtung. |
 | RM-113 — Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | weiter offen → [RM-113](#rm-113) | tests/test_licence_admin.py:45ff überspringt in CI weiterhin bei 'gehört nicht dem aktuellen Nutzer'. Aus der Vermutung Administratorengruppe folgt keine Erlaubnis, sie ungeprüft als Eigentümer anzuerkennen. |
-| RM-114 — Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen | weiter offen → [RM-114](ROADMAP.md#rm-114) | tests/test_subdivision.py:480–485 probiert 40000/20000/30000/60000/15000 und überspringt, wenn keine Variante öffnet. Ein aktuelles dortiges Messfenster fehlt. |
+| RM-114 — Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen | weiter offen → [RM-114](#rm-114) | tests/test_subdivision.py:480–485 probiert 40000/20000/30000/60000/15000 und überspringt, wenn keine Variante öffnet. Ein aktuelles dortiges Messfenster fehlt. |
 | RM-115 — Die Releaseakte meldet, sie blockiert nicht | weiter offen → [RM-115](#rm-115-abschluss-050) | .github/workflows/build.yml hat --write-evidence und --release-check bereits, aber die Warnungsbehandlung besteht. Behebung älterer ELF-/Bibliotheksbefunde ersetzt keinen grünen vollständigen Artefaktnachweis. |
 | RM-116 — Vier Zählzeilen liegen im öffentlichen Baum | weiter offen → [RM-116](ROADMAP.md#rm-116) | Der Originalbefund stammt aus einer Serverprüfung vom 03.09.2026. Aktueller count.php/store_dir()-Pfad ist bereits geschützt; keine externe Löschung oder erneute Serverprüfung im Roadmap-Abgleich vorgenommen. |
 | RM-117 — Eine ausgelieferte Datei ohne Manifesteintrag hat keinen Prüfer | weiter offen → [RM-117](#rm-117) | tools/upload_website.py:584–599 promised_files liest weiterhin ausschließlich payload.packages.url/file; keine Seitenlinks. Manuelle Teilbyteprüfung von 0.3.0 ist keine dauerhafte vollständige Prüfsummenprüfung. |
@@ -24310,7 +24311,7 @@ bleibt, steht hier mit Kästchen.
   scharf. Messen: einmal `whoami /user` und den Besitzer der Datei im
   Runner ausgeben, dann entscheiden, ob `_owned_by_current_user` die
   Gruppe als Besitz anerkennt.
-- **Historischer Befund RM-114 (weiter offen; aktuelle Aufgabe [RM-114](ROADMAP.md#rm-114)):** **Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen.**
+- **Historischer Befund RM-114 (weiter offen; aktuelle Aufgabe [RM-114](#rm-114)):** **Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen.**
   `test_a_body_that_opens_up_while_being_simplified_says_so` fand die Wand
   bei 40 000 Dreiecken auf macos-latest dicht — die Fließkommaordnung des
   Vereinfachers ist je Architektur eine andere. Der Test sucht jetzt das
@@ -43150,3 +43151,28 @@ im Zustandsordner zeigen auf die neuen Dateien. `git grep -n .claude/.state -- t
 findet nur noch `mac-netz.yml` und den Kommentar in `tests/helpers.py` (Sonde des offenen
 RM-187) sowie erfundene Pfade in `test_affected_tests.py` und `test_roadmap.py`, die keine Datei
 lesen.
+
+## RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)
+
+<a id="rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026"></a>
+<a id="rm-114"></a>
+
+**RM-114 — Vereinfachungsziele auf Apple Silicon vermessen.** Die Vereinfachungs-Zielreihe der
+  dünnwandigen Hohlkugel auf Apple Silicon messen und den Warnungsnachweis dort zuverlässig
+  auslösen. Abnahme: dokumentiertes Ziel mit dichtem Eingang/offenem Ausgang und tatsächlicher
+  Warnung; kein Skip als Erfolg.
+
+  Seit `a559e947` überspringt der Test nicht mehr; ein sicher offener Ausgang löst die Warnung
+  auf jeder Plattform aus (`tests/test_subdivision.py::test_the_simplifier_reports_an_open_result_on_every_machine`,
+  auf macos-latest grün in den Tagläufen 37266459831 und 37409338027). Offen ist nur die
+  dokumentierte Zielreihe der Hohlkugel auf Apple Silicon.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
+
+**Nachweis (06.10.2026):** Der Lauf 37491131058 (Wegwerfzweig, Ziele 2 000 bis 100 000)
+misst die Zielreihe der Hohlkugel aus `tests/test_subdivision.py` auf macOS ARM, Ubuntu und
+Windows gleich: offen von 20 000 bis 35 000, dicht bis 17 500 und ab 40 000; ab 50 000 liefert
+die Vereinfachung stets dieselben 46 992 Dreiecke, dicht. Die Reihe im Test trifft damit beide
+Seiten, und der Test verlangt, dass mindestens ein Ziel die Wand öffnet und der Befund es dann
+sagt; ein Überspringen gibt es nicht mehr. Commit „Bausteine, Muster, Skizzenbögen und Teilen
+rechnen auf jeder Maschine gleich“.

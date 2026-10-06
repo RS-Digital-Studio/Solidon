@@ -47,6 +47,7 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
+from app.core.geom.transform import along as lying_along
 from app.core.geom.transform import composed, rotation, rotation_about, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.knowledge.parts.shapes import Kernel, building
@@ -70,7 +71,14 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM, MAX_FACET_SAG, dot3, format_length
+from app.core.units import (
+    DEGREE_UNIT,
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    dot3,
+    exact_acos_degrees,
+    format_length,
+)
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -1443,9 +1451,15 @@ def _rim_placement_suggestion(
     from app.core.units import format_length
 
     frame = frame_of(normal, origin)
-    basis = np.column_stack((frame.x_axis, frame.y_axis))
-    face_points = (triangles - np.asarray(origin)) @ basis
-    tool_points = (footprint - np.asarray(origin)) @ basis
+    # Elementweise statt ``@ basis``: Das ginge durch BLAS (RM-187).
+    face_offsets = np.asarray(triangles, dtype=np.float64) - np.asarray(origin)
+    tool_offsets = np.asarray(footprint, dtype=np.float64) - np.asarray(origin)
+    face_points = np.stack(
+        (lying_along(face_offsets, frame.x_axis), lying_along(face_offsets, frame.y_axis)), axis=-1
+    )
+    tool_points = np.stack(
+        (lying_along(tool_offsets, frame.x_axis), lying_along(tool_offsets, frame.y_axis)), axis=-1
+    )
     cancelled.raise_if_cancelled()
     area = union_all([Polygon(points) for points in face_points])
     outline = MultiPoint(tool_points).convex_hull
@@ -1461,7 +1475,10 @@ def _rim_placement_suggestion(
     # wäre hier wieder derselbe falsche Beleg wie bei der ursprünglichen Warnung.
     if not area.buffer(EPS_GEOM).covers(moved):
         return None
-    shift = basis @ np.asarray((du, dv))
+    shift = (
+        np.asarray(frame.x_axis, dtype=np.float64) * du
+        + np.asarray(frame.y_axis, dtype=np.float64) * dv
+    )
     return _(
         "Zusätzlicher Versatz in die Fläche: X {x}, Y {y}, Z {z}.",
         x=format_length(float(shift[0])),
@@ -2032,7 +2049,7 @@ def _lip_on_a_slant(
     rim = np.asarray(lip.rim, dtype=np.float64)
     points = rim[:, :1] * frame[:3, 0] + rim[:, 1:2] * frame[:3, 1] + mouth
     # Wie weit die Ebene der Fläche je Randpunkt entlang der Achse unter der Mündung liegt.
-    below = ((points - closest) @ facing) / along
+    below = lying_along(points - closest, facing) / along
     if float(below.max()) <= lip.height + EPS_GEOM:
         return None
     return Finding(
@@ -2045,7 +2062,7 @@ def _lip_on_a_slant(
         ),
         values={
             "part": spec.name,
-            "angle_deg": round(math.degrees(math.acos(min(1.0, along))), 1),
+            "angle_deg": round(exact_acos_degrees(along), 1),
         },
         # Regel 17: Die Richtung steht im Schritt.
         suggestions=(CORRECT_INPUT,),
