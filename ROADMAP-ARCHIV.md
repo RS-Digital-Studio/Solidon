@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
 | 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
@@ -9131,7 +9132,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-110 — Zwei Zwillinge lesen den Pfad eines offenen Handles | weiter offen → [RM-110](#rm-110) | app/core/scene/project.py:365 und app/core/updates.py:967 führen weiterhin zwei Implementierungen. Der Mac-F_GETPATH-Fehler ist bereits behoben; offen ist nur die gemeinsame Pflege. |
 | RM-111 — Der Sammellauf zwischen zwei Tests gilt nur noch für zwei Dateien | zusammengeführt → [RM-107](ROADMAP.md#rm-107) | tests/conftest.py:185–244 führt _DIALOG_MODULES und den eingeschränkten Sammellauf weiterhin. Derselbe verbliebene Diagnoseauftrag wie RM107. |
 | RM-112 — Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | zusammengeführt → [RM-135](ROADMAP.md#rm-135) | tests/test_filament_picker.py:534–538 markiert die Mac-Unterhöhe weiterhin xfail. RM135 betrifft denselben _around_the_list-Vertrag in der anderen Richtung. |
-| RM-113 — Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | weiter offen → [RM-113](ROADMAP.md#rm-113) | tests/test_licence_admin.py:45ff überspringt in CI weiterhin bei 'gehört nicht dem aktuellen Nutzer'. Aus der Vermutung Administratorengruppe folgt keine Erlaubnis, sie ungeprüft als Eigentümer anzuerkennen. |
+| RM-113 — Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | weiter offen → [RM-113](#rm-113) | tests/test_licence_admin.py:45ff überspringt in CI weiterhin bei 'gehört nicht dem aktuellen Nutzer'. Aus der Vermutung Administratorengruppe folgt keine Erlaubnis, sie ungeprüft als Eigentümer anzuerkennen. |
 | RM-114 — Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen | weiter offen → [RM-114](ROADMAP.md#rm-114) | tests/test_subdivision.py:480–485 probiert 40000/20000/30000/60000/15000 und überspringt, wenn keine Variante öffnet. Ein aktuelles dortiges Messfenster fehlt. |
 | RM-115 — Die Releaseakte meldet, sie blockiert nicht | weiter offen → [RM-115](#rm-115-abschluss-050) | .github/workflows/build.yml hat --write-evidence und --release-check bereits, aber die Warnungsbehandlung besteht. Behebung älterer ELF-/Bibliotheksbefunde ersetzt keinen grünen vollständigen Artefaktnachweis. |
 | RM-116 — Vier Zählzeilen liegen im öffentlichen Baum | weiter offen → [RM-116](ROADMAP.md#rm-116) | Der Originalbefund stammt aus einer Serverprüfung vom 03.09.2026. Aktueller count.php/store_dir()-Pfad ist bereits geschützt; keine externe Löschung oder erneute Serverprüfung im Roadmap-Abgleich vorgenommen. |
@@ -24298,7 +24299,7 @@ bleibt, steht hier mit Kästchen.
   übersieht `_around_the_list` dort etwas — den Umbruch des Hinweises bei
   breiterer Schrift, oder eine Knopfhöhe. Ohne Mac nicht messbar; der Test
   ist dort ein erwarteter Fehlschlag mit Grund, bis jemand misst.
-- **Historischer Befund RM-113 (weiter offen; aktuelle Aufgabe [RM-113](ROADMAP.md#rm-113)):** **Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer.**
+- **Historischer Befund RM-113 (weiter offen; aktuelle Aufgabe [RM-113](#rm-113)):** **Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer.**
   `read_token` lehnte im Tag-Lauf eine frisch geschriebene Datei mit
   „gehört nicht dem aktuellen Nutzer" ab (`runneradmin`); welche SID dort
   Besitzer ist, steht in keinem Protokoll — vermutlich die
@@ -43027,3 +43028,37 @@ Skizzenmodus am echten Gerät — geht in RM-070 auf, das ihn in seiner Register
 **Entfallen (06.10.2026, Entscheidung Robert):** Gebraucht werden nur noch die Dateien der
 Druckprojekte, und die liegen in `F:\3D Dateien`; das Repository „3D Drucker“ braucht keine
 eigene Sicherung.
+
+## RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)
+
+<a id="rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026"></a>
+<a id="rm-113"></a>
+
+**RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen.** Den Besitzer einer
+  frisch angelegten privaten Tokendatei auf dem Windows-Runner ermitteln und die Prüfung mit einer
+  tatsächlich nutzereigenen Datei fahren. Abnahme: SID und ACL dokumentiert, Test ohne bedingten
+  Skip grün; eine breitere Besitzfreigabe nur nach Sicherheitsprüfung.
+
+  **Diagnose gebaut (`736d4a46e`):** Der Skip in `tests/test_licence_admin.py` nennt Besitzer,
+  Nutzer und Standardbesitzer als SID. Der Skip-Grund mit der Runner-SID ist noch nicht belegt:
+  Die Windows-Kernprotokolle nennen nur die Zahl übersprungener Fälle; der Grund steht im
+  JUnit-Bericht `tests-core-windows-latest-*` des Taglaufs 37409338027 (Repository öffentlich).
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
+
+**Nachweis (06.10.2026):** Der Skip-Grund im JUnit-Bericht `tests-core-windows-latest-1` des
+Taglaufs 37409338027 nennt Besitzer, Nutzer und Standardbesitzer gleich:
+`S-1-5-21-1643835476-1616584234-1346609752-500` (runneradmin, das eingebaute Administratorkonto,
+RID 500). Abgelehnt wurde die Datei allein wegen eines Leseeintrags für `S-1-3-4`
+(„Eigentümerrechte“). Die Sonde auf dem Wegwerfzweig `diagnose/rm-113` (Läufe 37487280980 bis
+37490570168, `windows-latest`) zeigt die Zugriffsliste: Ein Ordner aus `mkdir(mode=0o700)` trägt
+SYSTEM, BUILTIN\Administrators und OWNER RIGHTS, eine Datei darin dieselben drei ausdrücklich
+gesetzt, nicht geerbt — deshalb entfernte `icacls /inheritance:r` im Test den Eintrag nie.
+**Sicherheitsprüfung:** `S-1-3-4` gibt Rechte nur an den jeweiligen Besitzer;
+`tools/licence_admin._ownership_problem` vertraut dem Eintrag erst, nachdem der Besitzer als
+Nutzer oder Standardbesitzer belegt ist. Eine breitere Besitzfreigabe gibt es nicht. Der
+bedingte Skip ist entfernt; im Sondenlauf 37490570168 bestehen
+`test_a_private_regular_token_file_is_read` ohne Skip und der neue
+`test_a_token_in_a_private_python_directory_is_read` (31 bestanden, 2 nur unter POSIX
+übersprungen). Der neue Test ist gegen den alten Code rot. Commit „Die Tokendatei gilt auch mit
+„Eigentümerrechte“ als privat“.
