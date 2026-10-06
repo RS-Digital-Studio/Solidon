@@ -158,8 +158,7 @@ im Einzelnen stehen unter denselben Überschriften in
   Gedeckte Punkte heißen *Verbunden*.
 * **Im Zeichenmodus ist der Reiter Auswahl verborgen** (`start_sketch`,
   `finish_sketch`; `_SelectionPage.reveal` holt ihn nicht). Die Einladung der
-  leeren Szene steht nicht über Skizze, offenem Operationsdialog oder Vorschau:
-  Wer einen dieser Zustände schaltet, ruft `MainWindow._show_invitation`.
+  leeren Szene weicht der Skizze (`fenster.md`, „Fenster“).
 * **Die Bedingungsliste trägt die Punktnummern auch im Konflikt**; nach ihnen
   sucht, wer eine Meldung des Lösers wiederfinden will.
 * **Die festen Punkte der Hilfsgeometrie sind eine Zeile der Liste**

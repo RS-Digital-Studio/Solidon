@@ -63,6 +63,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   (Druckdialog nach `exec`), sonst beim nächsten Ergebnis. Erst Zeigen zählt
   als gesehen; `_announce_written`/`handedOver` zählen nur erfolgreiche Datei,
   Slicen oder Öffnen, nie Versuch, Abbruch, Fehler oder Rückfrage.
+- Die Einladung der leeren Szene steht nicht über Skizze, offenem
+  Operationsdialog oder Vorschau: Wer einen dieser Zustände schaltet, ruft
+  `_show_invitation`.
 - Arbeitsbeginn auf der Startseite ersetzt das leere/offene Projekt über
   `_begin_from_the_start_screen` mit `_may_discard`; `start_empty` meldet Erfolg.
   `run_operation`/`start_sketch` sowie Einfügen/Download wechseln so in den
