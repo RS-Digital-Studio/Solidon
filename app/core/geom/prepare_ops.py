@@ -62,7 +62,7 @@ from app.core.geom.mesh import (
     face_components,
     lifted_caps,
     row_dots,
-    shifted,
+    shift_body,
     signed_volume,
     stable_arctan2,
 )
@@ -989,7 +989,7 @@ def _feature_solid(
 
     if feature.kind == "sphere":
         body = trimesh.creation.icosphere(radius=diameter / 2.0)
-        shifted(body, np.asarray(centre, dtype=float))
+        shift_body(body, np.asarray(centre, dtype=float))
         return MeshData.of(body)
 
     wanted = axis if axis is not None else feature.params.get("axis", (0.0, 0.0, 1.0))
@@ -1011,7 +1011,7 @@ def _feature_solid(
         )
         # ``cone`` steht mit der Spitze oben auf z=0; für einen Hohlraum zeigt
         # sie ins Material, also entlang der Achse.
-        shifted(body, (0.0, 0.0, -height / 2.0))
+        shift_body(body, (0.0, 0.0, -height / 2.0))
     elif feature.kind == "slot":
         # **Ein Langloch ist eine Bohrung mit zwei Bogenmittelpunkten.** Der
         # Umriss kommt aus derselben Funktion, die auch schneidet
@@ -1078,7 +1078,7 @@ def _feature_solid(
 
     turn = transform.rotation_between([0.0, 0.0, 1.0], direction)
     transform.moved(body, turn)
-    shifted(body, np.asarray(centre, dtype=float))
+    shift_body(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -1599,7 +1599,7 @@ def _measured_section(
         body,
         transform.rotation_between([0.0, 0.0, 1.0], _outward_axis(chain, feature)),
     )
-    shifted(body, np.asarray(centre, dtype=float))
+    shift_body(body, np.asarray(centre, dtype=float))
     return MeshData.of(body) if body.is_watertight and body.volume > EPS_GEOM else None
 
 
@@ -1675,7 +1675,7 @@ def _chain_plug(
         plug,
         transform.rotation_between(np.array([0.0, 0.0, 1.0]), axis),
     )
-    shifted(plug, centre + axis * float(along.min() + along.max()) / 2.0)
+    shift_body(plug, centre + axis * float(along.min() + along.max()) / 2.0)
     return boolean(
         "intersection",
         [MeshData.of(plug), shell(mesh)],
@@ -1863,7 +1863,7 @@ def _section_closed(
         for step in range(steps + 1):
             moved = tool.raw.copy()
             if step:
-                shifted(moved, axis * (reach * step / steps))
+                shift_body(moved, axis * (reach * step / steps))
             cut = boolean(
                 "difference",
                 [body, MeshData.of(moved)],
@@ -1949,7 +1949,7 @@ def _no_longer_through(
             np.array([0.0, 0.0, 1.0]), np.asarray(_feature_direction(feature), dtype=float)
         ),
     )
-    shifted(column, np.asarray(centre, dtype=float))
+    shift_body(column, np.asarray(centre, dtype=float))
     left = boolean(
         "intersection",
         [MeshData.of(column), mesh],
@@ -2338,7 +2338,7 @@ def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshD
         transform.rotation_between(np.array([0.0, 0.0, 1.0]), direction),
     )
     middle = float(along.min() + along.max()) / 2.0
-    shifted(cut, np.asarray(centre, dtype=float) + direction * middle)
+    shift_body(cut, np.asarray(centre, dtype=float) + direction * middle)
     return MeshData.of(cut)
 
 
@@ -2520,12 +2520,12 @@ def _closed_at(
         outward = np.asarray(_bore_vector(feature, "opening_normal"))
         reach = mesh.bounds.diagonal * 2.0
         envelope = trimesh.creation.box(extents=(reach * 2.0, reach * 2.0, reach))
-        shifted(envelope, (0.0, 0.0, -reach / 2.0))
+        shift_body(envelope, (0.0, 0.0, -reach / 2.0))
         transform.moved(
             envelope,
             transform.rotation_between([0.0, 0.0, 1.0], outward),
         )
-        shifted(envelope, mouth)
+        shift_body(envelope, mouth)
         tool = boolean(
             "intersection",
             [tool, MeshData.of(envelope)],
@@ -2789,11 +2789,11 @@ def _tool_for(
             dtype=np.float64,
         )
     body = built.raw.copy()
-    shifted(body, -np.asarray(measured, dtype=float))
+    shift_body(body, -np.asarray(measured, dtype=float))
     if not is_close(scale, 1.0):
         body.apply_scale(scale)  # type: ignore[no-untyped-call]
     transform.moved(body, matrix)
-    shifted(body, np.asarray(centre, dtype=float))
+    shift_body(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -2848,7 +2848,7 @@ def _air_of_the_bore(
     wide = (radius + 2.0 * FEATURE_OVERLAP) / units.inscribed_ratio(FEATURE_SECTIONS)
     envelope = lathe.cylinder(radius=wide, height=height, sections=FEATURE_SECTIONS)
     transform.moved(envelope, transform.rotation_between([0.0, 0.0, 1.0], up))
-    shifted(envelope, mouth - up * (height / 2.0))
+    shift_body(envelope, mouth - up * (height / 2.0))
     try:
         air = boolean(
             "difference",
@@ -2971,9 +2971,9 @@ def _pin_solid(
         + FEATURE_OVERLAP
     )
     body = lathe.cylinder(radius=radius, height=below + depth / 2.0, sections=FEATURE_SECTIONS)
-    shifted(body, (0.0, 0.0, (depth / 2.0 - below) / 2.0))
+    shift_body(body, (0.0, 0.0, (depth / 2.0 - below) / 2.0))
     transform.moved(body, transform.rotation_between([0.0, 0.0, 1.0], tip))
-    shifted(body, np.asarray(centre, dtype=float))
+    shift_body(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -4607,7 +4607,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         # der Senkungsübergänge rot). Verlängert wird deshalb der exakte
         # Körper selbst — nur an den Mündungen, nie am Boden.
         shifted_cavity = _chain_copy_tool(ctx, body, feature, chain).raw.copy()
-        shifted(shifted_cavity, travel)
+        shift_body(shifted_cavity, travel)
         cutting = MeshData.of(shifted_cavity)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed = boolean(
@@ -5062,7 +5062,7 @@ def _duplicate_cavity_chain(
     travel = np.asarray(target, dtype=float) - measured
     tool = _chain_copy_tool(ctx, body, feature, chain)
     shifted = tool.raw.copy()
-    shifted(shifted, travel)
+    shift_body(shifted, travel)
     cutting = MeshData.of(shifted)
     ctx.progress(0.2, str(_("Der ganze Hohlraum wird an der neuen Stelle angelegt …")))
     placed = boolean(
@@ -6758,7 +6758,7 @@ def _boxed_in(
         foot = middle - normal * (units.dot3(normal, middle) - plane.position)
         box = trimesh.creation.box(extents=(size, size, size))
         transform.moved(box, transform.rotation_between([0.0, 0.0, 1.0], normal))
-        shifted(box, foot - normal * (size / 2.0))
+        shift_body(box, foot - normal * (size / 2.0))
         boxes.append(MeshData.of(box))
     try:
         outcome = boolean(
@@ -6831,7 +6831,7 @@ def _turned_open_cone(
     ]
     solid = lathe.revolve(outline, sections=FEATURE_SECTIONS)
     transform.moved(solid, transform.rotation_between([0.0, 0.0, 1.0], outward))
-    shifted(solid, centre)
+    shift_body(solid, centre)
     transform.moved(solid, matrix)
     return MeshData.of(solid) if solid.is_watertight and solid.volume > EPS_GEOM else None
 
@@ -7460,12 +7460,12 @@ def _stretched_section(
     body = lathe.cylinder(
         radius=diameter / 2.0, height=height + extension, sections=FEATURE_SECTIONS
     )
-    shifted(body, (0.0, 0.0, extension / 2.0))
+    shift_body(body, (0.0, 0.0, extension / 2.0))
     transform.moved(
         body,
         transform.rotation_between([0.0, 0.0, 1.0], outward),
     )
-    shifted(body, np.asarray(feature.params["centre"], dtype=float))
+    shift_body(body, np.asarray(feature.params["centre"], dtype=float))
     return MeshData.of(body)
 
 
@@ -8407,7 +8407,7 @@ def _bore_tool_mesh(centre: Vec3, axis: Vec3, diameter: float, depth: float) -> 
     """Der Zylinder einer Bohrung als Netz — für die Nachbarprüfung am exakten Körper."""
     body = lathe.cylinder(radius=diameter / 2.0, height=depth, sections=BORE_SECTIONS)
     transform.moved(body, transform.rotation_between([0.0, 0.0, 1.0], list(axis)))
-    shifted(body, np.asarray(centre, dtype=float))
+    shift_body(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 
@@ -10953,7 +10953,7 @@ def _moved_after_resizing(
     )
     if cavity is not None:
         shifted = cavity.raw.copy()
-        shifted(shifted, travel)
+        shift_body(shifted, travel)
         findings.extend(
             _neighbour_bore_findings(source, feature, MeshData.of(shifted), ctx, moved=True)
         )
@@ -14831,7 +14831,7 @@ def _torus_ring_mesh(
     )
     direction = np.asarray(axis, dtype=float)
     transform.moved(body, np.asarray(transform.rotation_between((0.0, 0.0, 1.0), direction)))
-    shifted(body, np.asarray(centre, dtype=float))
+    shift_body(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
 

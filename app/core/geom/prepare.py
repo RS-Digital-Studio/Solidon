@@ -58,7 +58,7 @@ from app.core.geom.mesh import (
     concatenated,
     ray_hit_distances,
     row_dots,
-    shifted,
+    shift_body,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
 from app.core.geom.transform import Axis, translation
@@ -1184,7 +1184,7 @@ def slot_bore(
     if round_bore:
         tool = lathe.cylinder(radius=radius, height=high - low, sections=BORE_SECTIONS)
         if below or above:
-            shifted(tool, (0.0, 0.0, (high + low) / 2.0))
+            shift_body(tool, (0.0, 0.0, (high + low) / 2.0))
     else:
         tool = extrude_profile(
             slot_profile(radius=radius, travel=travel, angle_deg=angle_deg),
@@ -1768,7 +1768,7 @@ def drill_tool(
         height=depth + mouth_overlap,
         sections=BORE_SECTIONS,
     )
-    shifted(cylinder, (0.0, 0.0, (mouth_overlap - depth) / 2.0))
+    shift_body(cylinder, (0.0, 0.0, (mouth_overlap - depth) / 2.0))
     return MeshData.of(cylinder)
 
 
@@ -2006,7 +2006,7 @@ def drill(
             slot_angle=slot_angle,
         )
         cylinder = tool.raw.copy()
-        shifted(cylinder, (0.0, 0.0, mouth))
+        shift_body(cylinder, (0.0, 0.0, mouth))
         transform.moved(cylinder, _in_world(frame))
         outcome = boolean(
             "difference",
@@ -2066,9 +2066,9 @@ def drill(
     to_the_middle = 0.0
     if through:
         # Symmetrisch über beide Seiten hinaus: Mitte auf die Position.
-        shifted(cylinder, (0.0, 0.0, height / 2.0))
+        shift_body(cylinder, (0.0, 0.0, height / 2.0))
         transform.moved(cylinder, alignment)
-        shifted(cylinder, np.asarray(position, dtype=float))
+        shift_body(cylinder, np.asarray(position, dtype=float))
     else:
         # Das Werkzeug ist nicht mehr symmetrisch: Mündung bei null mit
         # Zugabe darüber, Boden exakt bei -height. Die Mündung muss aus dem
@@ -2089,7 +2089,7 @@ def drill(
             offset = offset - along * (height / 2.0)
         else:
             to_the_middle = into * height / 2.0
-        shifted(cylinder, offset)
+        shift_body(cylinder, offset)
 
     outcome = boolean(
         "difference",
@@ -2181,9 +2181,9 @@ def countersink(
     # er wird um die Überlappung angehoben, damit die zwei Flächen nicht
     # zusammenfallen (§39). Die halbe Drehung ist exakt (``transform.rotation``).
     transform.moved(cone, transform.rotation("x", 180.0))
-    shifted(cone, [0.0, 0.0, BOOLEAN_OVERLAP])
+    shift_body(cone, [0.0, 0.0, BOOLEAN_OVERLAP])
     transform.moved(cone, transform.rotation_between(np.array([0.0, 0.0, -1.0]), narrows))
-    shifted(cone, at)
+    shift_body(cone, at)
 
     outcome = boolean(
         "difference",
@@ -2423,7 +2423,7 @@ def plug(
         radius=filled / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
     )
     transform.moved(cylinder, _axis_alignment(axis))
-    shifted(cylinder, np.asarray(centre, dtype=float))
+    shift_body(cylinder, np.asarray(centre, dtype=float))
 
     # Erst verschneiden: der Stopfen darf nicht aus dem Körper herauswachsen,
     # den er füllt.
@@ -2693,7 +2693,7 @@ def compensate_elephant_foot(
         return mesh, [], None
 
     collar = concatenated(parts)
-    shifted(collar, [0.0, 0.0, bottom - BOOLEAN_OVERLAP / 2.0])
+    shift_body(collar, [0.0, 0.0, bottom - BOOLEAN_OVERLAP / 2.0])
     outcome = boolean("difference", [mesh, mesh.replacing(collar)], quality=quality)
     findings = list(outcome.findings)
     findings.append(
@@ -4253,7 +4253,7 @@ def check_join_path(
     for step in range(1, steps):
         back = distance * (steps - step) / steps
         probe = moving.raw.copy()
-        shifted(probe, -way * back)
+        shift_body(probe, -way * back)
         shared = shared_volume(probe, fixed.raw)
         if shared > worst:
             worst = shared

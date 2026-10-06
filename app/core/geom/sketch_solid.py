@@ -176,7 +176,6 @@ def _adaptive_outline(
     return points
 
 
-
 def _arc_points(
     start: tuple[float, float],
     via: tuple[float, float],

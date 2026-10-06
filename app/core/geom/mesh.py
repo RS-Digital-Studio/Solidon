@@ -642,16 +642,49 @@ def row_dots(first: np.ndarray, second: np.ndarray) -> np.ndarray:
     return np.asarray(a[..., 0] * b[..., 0] + a[..., 1] * b[..., 1] + a[..., 2] * b[..., 2])
 
 
-def shifted(body: object, offset: Sequence[float] | np.ndarray) -> None:
+#: Was ``trimesh`` bei einer reinen Verschiebung behält (``Trimesh.apply_transform``
+#: ohne Drehung): Normalen und Topologie hängen nicht an der Lage.
+_KEPT_BY_A_SHIFT: Final = (
+    "face_normals",
+    "vertex_normals",
+    "face_adjacency",
+    "face_adjacency_edges",
+    "face_adjacency_unshared",
+    "edges",
+    "edges_face",
+    "edges_sorted",
+    "edges_unique",
+    "edges_unique_idx",
+    "edges_unique_inverse",
+    "edges_sparse",
+    "body_count",
+    "faces_unique_edges",
+    "euler_number",
+)
+
+
+def shift_body(body: object, offset: Sequence[float] | np.ndarray) -> None:
     """Ein Netz an Ort und Stelle verschieben — der Ersatz für ``apply_translation``.
 
     ``trimesh`` verschiebt über ein Matrixprodukt mit einer Einheitsdrehung.
     Das ist rechnerisch exakt, geht aber durch BLAS, und der Rauschtest kann es
     von einem echten Produkt nicht unterscheiden (RM-187); elementweise bleibt
-    der Weg prüfbar. Was das Netz über sich weiß, rechnet es danach neu.
+    der Weg prüfbar. Gemerkt bleibt, was ``trimesh`` bei einer Verschiebung
+    behält (:data:`_KEPT_BY_A_SHIFT`): Neu gerechnete Normalen trügen die
+    letzte Stelle der neuen Lage, und Kopieren und Versetzen gesenkter
+    Bohrungen entschieden danach anders.
     """
     raw = cast("trimesh.Trimesh", body)
+    cache = getattr(raw, "_cache", None)
+    kept: dict[str, Any] = {}
+    if cache is not None:
+        cache.verify()
+        kept = {name: cache.cache[name] for name in _KEPT_BY_A_SHIFT if name in cache.cache}
     raw.vertices = np.asarray(raw.vertices, dtype=np.float64) + np.asarray(offset, dtype=np.float64)
+    if kept and cache is not None:
+        cache.verify()
+        cache.cache.update(kept)
+        cache.id_set()
 
 
 def periodic_sin_cos(angles: np.ndarray | float) -> tuple[np.ndarray, np.ndarray]:

@@ -16,7 +16,7 @@ plattformabhängig ist, sagt `kern.md`. Die Werkzeuge:
 |---|---|
 | Skalarprodukt, je Zeile zweier Felder | `units.dot3`, `mesh.row_dots` |
 | Lage vieler Punkte entlang einer Richtung | `transform.along` |
-| Punkte, Richtungen, Netze bewegen | `transform.moved_points`, `turned`, `mesh.shifted` |
+| Punkte, Richtungen, Netze bewegen | `transform.moved_points`, `turned`, `mesh.shift_body` |
 | 4x4-Matrizen zusammensetzen (`a @ b`) | `transform.composed` |
 | affine Matrix ohne LAPACK invertieren | `transform.inverse_affine` |
 | kürzeste Drehung zwischen zwei Richtungen | `transform.rotation_between` |
