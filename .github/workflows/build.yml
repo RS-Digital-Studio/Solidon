@@ -1548,6 +1548,12 @@ jobs:
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    # Ohne diese Zeile endete ein Tag-Lauf mit „failure“, sobald eine neue
+    # Fremdversion hier rot wird, und tools/sign_release.verify_ci_run nähme
+    # ihn nicht an: Das Windows-Setup wäre für diesen Tag nicht zu signieren
+    # (RM-350). Gelesen wird das Ergebnis im Lauf und am Bericht
+    # tests-latest-ubuntu.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

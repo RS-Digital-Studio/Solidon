@@ -122,7 +122,12 @@ Release-Bilder und gehören nicht in den Uploadpfad.
    Versionsstand feststellen; kein fest eingetragenes Beispiel-Tag. Laufkennung
    und Commit gehören zum Nachweis, `gh run watch <lauf-id> --exit-status`
    liefert den Abschluss. Gehen Commit und Tag zusammen hinaus, laufen zwei
-   Bauten über denselben Commit; der auf `main` lässt sich abbrechen.
+   Bauten über denselben Commit; der auf `main` lässt sich abbrechen. Der Job
+   „Neueste Versionen“ hält den Lauf nicht an (`continue-on-error`); sein
+   Ergebnis lesen und ein Rot als Punkt ins Register von `ROADMAP.md`.
+   **Bis der signierte Installer gebaut ist, geht nichts anderes auf `main`**:
+   `windows-signed-installer.yml` läuft am Kopf von `main` und nimmt außer
+   `sign_release.INSTALLER_ORCHESTRATION_FILES` keinen geänderten Pfad an.
 9. **Artefakte** gezielt aus diesem Lauf laden — die öffentlichen, nicht alle
    Zwischenstände mit Signier- oder privaten Dateien; Namen und Herkunft im
    Workflow abgleichen. Ein fertiger Baujob belegt weder Signierung,

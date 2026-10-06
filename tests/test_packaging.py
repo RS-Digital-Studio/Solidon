@@ -756,6 +756,19 @@ def test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build() 
     assert "if: success() || steps.types.outcome == 'failure'" in step_block(suite, "Tests")
 
 
+def test_a_red_latest_job_leaves_the_release_run_green() -> None:
+    """Der Versionswächter meldet, er hält nichts an (RM-350): Ein Rot dort
+    ließe den Tag-Lauf auf „failure“ enden, und ``sign_release.verify_ci_run``
+    verlangt „success“ — das Windows-Setup wäre nicht zu signieren."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    latest = job_block(workflow, "latest")
+    assert re.search(r"(?m)^    continue-on-error: true$", latest)
+    assert not re.search(r"(?m)^    needs:.*\blatest\b", workflow)
+    without = workflow.replace("    continue-on-error: true\n", "", 1)
+    assert without != workflow
+    assert not re.search(r"(?m)^    continue-on-error: true$", job_block(without, "latest"))
+
+
 @pytest.mark.parametrize(
     "job,dimensions",
     [
