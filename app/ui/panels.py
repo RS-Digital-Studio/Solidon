@@ -4369,6 +4369,9 @@ SLIDER_SPAN: Final = 20.0
 #: Datenrolle der Einfügemarke im Verlauf (P7.1): Die Zeile trägt keinen
 #: Schritt, ein Doppelklick beendet das Einfügen.
 MARKER_ROLE = int(Qt.ItemDataRole.UserRole) + 3
+#: Die Zeile steht unter dem *Objekt entfernen*, das ihr Ergebnis wegnimmt, und
+#: damit nicht an ihrer Stelle im Stapel: Eine Ablage dort hätte kein Ziel.
+NESTED_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 
 
 def history_step_titles(document: Document) -> dict[int, str]:
@@ -4385,9 +4388,6 @@ def replanned_steps(document: Document) -> frozenset[int]:
 
     Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
     Kennung an seiner neuen Stelle. Der Verlauf blendet sie deshalb aus, statt
-#: Die Zeile steht unter dem *Objekt entfernen*, das ihr Ergebnis wegnimmt, und
-#: damit nicht an ihrer Stelle im Stapel: Eine Ablage dort hätte kein Ziel.
-NESTED_ROLE = int(Qt.ItemDataRole.UserRole) + 4
     sie wie ein gelöschter Schritt durchzustreichen (§15.4 gilt dem Löschen).
     """
     found: set[int] = set()
@@ -4523,6 +4523,10 @@ def drop_before(row_ops: Sequence[tuple[int, ...]], row: int) -> int | None:
     return None
 
 
+#: Ein Ablageziel, das es nicht gibt — kein Strich, keine Ablage.
+_NOWHERE: Final = -1
+
+
 class _HistoryList(QListWidget):
     """Die Verlaufsliste, an der sich Schritte ziehen lassen (P7.2).
 
@@ -4538,10 +4542,6 @@ class _HistoryList(QListWidget):
     refused = Signal(str)
     """Warum die Stelle unter dem Zeiger nicht geht."""
     markerActivated = Signal()
-
-#: Ein Ablageziel, das es nicht gibt — kein Strich, keine Ablage.
-_NOWHERE: Final = -1
-
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -4583,6 +4583,11 @@ _NOWHERE: Final = -1
             return True, None
         rect = self.visualRect(index)
         row = index.row() + (1 if position.y() > rect.center().y() else 0)
+        below = self.item(row) if row < self.count() else None
+        if below is not None and below.data(NESTED_ROLE):
+            # Zwischen den Schritten unter einer Löschung liegt keine Stelle im
+            # Stapel — sie stehen dort, wo ihr Ergebnis endet.
+            return False, _NOWHERE
         return True, drop_before(self.row_ops(), row)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt
@@ -4599,11 +4604,6 @@ _NOWHERE: Final = -1
         if before not in self._targets:
             # Hier bewegte sich nichts: kein Strich, und kein Satz.
             self.setDropIndicatorShown(False)
-        below = self.item(row) if row < self.count() else None
-        if below is not None and below.data(NESTED_ROLE):
-            # Zwischen den Schritten unter einer Löschung liegt keine Stelle im
-            # Stapel — sie stehen dort, wo ihr Ergebnis endet.
-            return False, _NOWHERE
             super().dragMoveEvent(event)
             event.ignore()
             return
@@ -4770,6 +4770,8 @@ class HistoryPanel(QWidget):
         """Grundkörperschritte, die in den anderen Rechenkern können, mit dem Satz dafür."""
         self._drawn: frozenset[int] = frozenset()
         """Schritte mit einer gezeichneten Skizze — dort steht „Zeichnung weiterverwenden"."""
+        self._discarded = Discarded()
+        """Schritte, deren Ergebnis ein späterer Schritt wieder entfernt hat."""
         # Wie beim Objektbaum: ein Satz statt eines stummen Kastens.
         self._empty = QLabel(_empty_history_text(), self)
         self._empty.setWordWrap(True)
@@ -4786,8 +4788,6 @@ class HistoryPanel(QWidget):
         timeline_layout = QVBoxLayout(self.timeline)
         timeline_layout.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
         self.timeline_slider = QSlider(Qt.Orientation.Horizontal, self.timeline)
-        self._discarded = Discarded()
-        """Schritte, deren Ergebnis ein späterer Schritt wieder entfernt hat."""
         self.timeline_slider.setAccessibleName(tr("Stand im Verlauf"))
         self.timeline_slider.setSingleStep(1)
         self.timeline_slider.setPageStep(1)
@@ -4940,6 +4940,9 @@ class HistoryPanel(QWidget):
             for entry in document.ops
             if entry.suppressed is not None
         }
+        self._discarded = discarded(sorted(document.ops, key=lambda one: one.id))
+        removed_under = removal_groups(document, self._discarded)
+        nested = {op_id for members in removed_under.values() for op_id in members}
         self.stop_insert_action.setEnabled(inserting is not None)
         titles = history_step_titles(document)
         self._positions = {entry.id: index for index, entry in enumerate(document.ops, start=1)}
@@ -4956,9 +4959,6 @@ class HistoryPanel(QWidget):
                 deleted.add(op_id)
                 previous = before.get(op_id)
                 if previous is not None:
-        self._discarded = discarded(sorted(document.ops, key=lambda one: one.id))
-        removed_under = removal_groups(document, self._discarded)
-        nested = {op_id for members in removed_under.values() for op_id in members}
                     titles.setdefault(op_id, _op_title(previous.op))
         deleted_ids = frozenset(deleted - replanned)
         self._bakeable = frozenset(
@@ -5072,6 +5072,16 @@ class HistoryPanel(QWidget):
             if len(transaction.ops) == 1 and active_ops:
                 item.setData(Qt.ItemDataRole.UserRole, transaction.ops[0])
                 self._mark_state(item, document, transaction.ops[0], needs)
+            elif len(active_ops) > 1 and all(
+                op_id in self._discarded.steps for op_id in active_ops
+            ):
+                # Eine Teilung, deren Stücke alle wieder entfernt sind, sagt
+                # es schon an der zugeklappten Zeile.
+                self._mark_discarded(
+                    item,
+                    document,
+                    max(self._discarded.steps[op_id] for op_id in active_ops),
+                )
             # **Die Zeile trägt auch, was sie umfasst.** ``UserRole`` bleibt
             # die *eine* Operation zum Öffnen — eine Transaktion aus vier
             # Schritten hat keine, und das ist richtig, denn welchen sollte ein
@@ -5088,20 +5098,23 @@ class HistoryPanel(QWidget):
                 item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")
                 item.setData(GROUP_ROLE, transaction.id)
                 item.setToolTip(
-            elif len(active_ops) > 1 and all(
-                op_id in self._discarded.steps for op_id in active_ops
-            ):
-                # Eine Teilung, deren Stücke alle wieder entfernt sind, sagt
-                # es schon an der zugeklappten Zeile.
-                self._mark_discarded(
-                    item,
-                    document,
-                    max(self._discarded.steps[op_id] for op_id in active_ops),
-                )
                     tr("{count} Schritte — anklicken zum Auf- und Zuklappen.").format(
                         count=len(transaction.ops)
                     )
                 )
+            removed = removed_under.get(transaction.id, ())
+            if removed:
+                # **Die Löschung trägt, was mit ihr wegfällt** (Entscheidung
+                # Robert, 06.10.2026): ein Oberpunkt wie eine Transaktion aus
+                # mehreren Schritten, die Zahl als Wort an der Zeile (Regel 18).
+                if halted or stopped_at in removed:
+                    self._open_groups.add(transaction.id)
+                item.setText(f"{item.text()}  ({_with_removed(len(removed))})")
+                if len(transaction.ops) == 1:
+                    expanded = transaction.id in self._open_groups
+                    item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")
+                    item.setData(GROUP_ROLE, transaction.id)
+                item.setToolTip(f"{item.toolTip()}\n{_removed_group_tip(len(removed))}")
             self.list.addItem(item)
 
             if len(transaction.ops) > 1:
@@ -5118,19 +5131,6 @@ class HistoryPanel(QWidget):
                         next((entry.op for entry in document.ops if entry.id == op_id), "")
                     )
                     if child_symbol:
-            removed = removed_under.get(transaction.id, ())
-            if removed:
-                # **Die Löschung trägt, was mit ihr wegfällt** (Entscheidung
-                # Robert, 06.10.2026): ein Oberpunkt wie eine Transaktion aus
-                # mehreren Schritten, die Zahl als Wort an der Zeile (Regel 18).
-                if halted or stopped_at in removed:
-                    self._open_groups.add(transaction.id)
-                item.setText(f"{item.text()}  ({_with_removed(len(removed))})")
-                if len(transaction.ops) == 1:
-                    expanded = transaction.id in self._open_groups
-                    item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")
-                    item.setData(GROUP_ROLE, transaction.id)
-                item.setToolTip(f"{item.toolTip()}\n{_removed_group_tip(len(removed))}")
                         child.setIcon(icon(child_symbol, self.list))
                     if op_id not in deleted_ids:
                         child.setData(Qt.ItemDataRole.UserRole, op_id)
@@ -5154,6 +5154,11 @@ class HistoryPanel(QWidget):
                     # Zeilen, und die eine, die man sucht, steht irgendwo darin.
                     child.setHidden(transaction.id not in self._open_groups)
 
+            for op_id in removed:
+                self._add_removed_row(
+                    transaction.id, op_id, document, titles, needs, op_id == stopped_at
+                )
+
         for transaction in reversed(list(undone)):
             item = QListWidgetItem(f"{transaction.title}  ({tr('zurückgenommen')})")
             font = QFont(item.font())
@@ -5169,11 +5174,6 @@ class HistoryPanel(QWidget):
         self.list.scrollToBottom()
 
     # --- Umbau des Verlaufs (P7) -----------------------------------------------------
-
-            for op_id in removed:
-                self._add_removed_row(
-                    transaction.id, op_id, document, titles, needs, op_id == stopped_at
-                )
 
     def _list_action(self, label: str, key: str, slot: Callable[[], object]) -> QAction:
         """Eine Handlung am Verlauf mit Kürzel, das nur hier gilt (wie Entf)."""
@@ -5191,6 +5191,7 @@ class HistoryPanel(QWidget):
         titles: Mapping[int, str],
         replanned: Collection[int],
         needs: Sequence[StepNeed],
+        nested: Collection[int] = (),
     ) -> None:
         """Ein Einfügen oder Verschieben: eine Protokollzeile, darunter die Schritte (P7).
 
@@ -5207,7 +5208,6 @@ class HistoryPanel(QWidget):
             tr("{id} · Strg+Z nimmt den ganzen Umbau zurück.").format(id=transaction.id)
         )
         header.setData(OPS_ROLE, ())
-        nested: Collection[int] = (),
         self.list.addItem(header)
         for op_id in transaction.ops:
             if op_id in replanned or op_id in nested:
@@ -5273,31 +5273,6 @@ class HistoryPanel(QWidget):
         if tips:
             item.setToolTip("\n".join(tips))
 
-    def _add_marker(self, inserting: int) -> None:
-        """Die Einfügemarke vor ihrem Schritt — und alles danach ruhig gestellt (P7.1).
-
-        Gesucht und gedämpft wird nach der Stelle im Stapel, nicht nach der
-        Zeile: Unter einer Löschung stehen Schritte von weiter vorn.
-        """
-        at = self.list.count()
-        for row in range(self.list.count()):
-            entry = self.list.item(row)
-            if inserting in tuple(entry.data(OPS_ROLE) or ()):
-                at = row
-                group = entry.data(GROUP_ROLE)
-                if entry.isHidden() and group:
-                    self._open_groups.add(group)
-                    self._reflow_groups()
-                break
-        marker = QListWidgetItem(f"▸  {tr('Neue Schritte kommen hierhin')}")
-        font = QFont(marker.font())
-        font.setBold(True)
-        marker.setFont(font)
-        marker.setData(MARKER_ROLE, True)
-        marker.setData(OPS_ROLE, ())
-        marker.setToolTip(tr("Doppelklick oder Esc beendet das Einfügen."))
-        marker.setFlags(Qt.ItemFlag.ItemIsEnabled)
-        self.list.insertItem(at, marker)
     def _add_removed_row(
         self,
         group: str,
@@ -5336,6 +5311,31 @@ class HistoryPanel(QWidget):
         tips.append(_removed_tip(document, remover))
         item.setToolTip("\n".join(tips))
 
+    def _add_marker(self, inserting: int) -> None:
+        """Die Einfügemarke vor ihrem Schritt — und alles danach ruhig gestellt (P7.1).
+
+        Gesucht und gedämpft wird nach der Stelle im Stapel, nicht nach der
+        Zeile: Unter einer Löschung stehen Schritte von weiter vorn.
+        """
+        at = self.list.count()
+        for row in range(self.list.count()):
+            entry = self.list.item(row)
+            if inserting in tuple(entry.data(OPS_ROLE) or ()):
+                at = row
+                group = entry.data(GROUP_ROLE)
+                if entry.isHidden() and group:
+                    self._open_groups.add(group)
+                    self._reflow_groups()
+                break
+        marker = QListWidgetItem(f"▸  {tr('Neue Schritte kommen hierhin')}")
+        font = QFont(marker.font())
+        font.setBold(True)
+        marker.setFont(font)
+        marker.setData(MARKER_ROLE, True)
+        marker.setData(OPS_ROLE, ())
+        marker.setToolTip(tr("Doppelklick oder Esc beendet das Einfügen."))
+        marker.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        self.list.insertItem(at, marker)
         start = self._positions.get(inserting)
         for row in range(self.list.count()):
             entry = self.list.item(row)
