@@ -1813,6 +1813,266 @@ def test_a_preview_still_detects_where_a_later_step_needs_the_feature(monkeypatc
     assert len(runs) >= 1, "der gebohrte Körper wurde erkannt, weil hole_1 gebraucht wird"
 
 
+def _unconfirmed(shown: Any, confirmed: Any) -> list[str]:
+    """Erkannte Merkmale im Bild, die der Lauf mit Erkennung so nicht bestätigt.
+
+    Bestätigt heißt: derselbe Name, dieselben Dreiecke, dieselben Maße.
+    """
+
+    def differs(first: Any, second: Any) -> bool:
+        if isinstance(first, bool) or isinstance(second, bool):
+            return first != second
+        if isinstance(first, tuple | list):
+            return any(differs(a, b) for a, b in zip(first, second, strict=True))
+        return abs(float(first) - float(second)) > EPS_GEOM
+
+    found: list[str] = []
+    for name, feature in sorted(shown.features.items()):
+        if feature.provenance == "generated":
+            continue
+        partner = confirmed.features.get(name)
+        if partner is None or tuple(feature.face_indices) != tuple(partner.face_indices):
+            found.append(name)
+            continue
+        found.extend(
+            f"{name}.{key}"
+            for key in ("diameter", "depth", "through", "centre", "area")
+            if key in feature.params
+            and key in partner.params
+            and differs(feature.params[key], partner.params[key])
+        )
+    return found
+
+
+def _chamfered_pin(pushes: Callable[[dict[bool, str]], list[tuple[str, float]]]) -> Any:
+    """Der Kundenstift aus RM-537, nachgebaut, mit den gegebenen Versätzen.
+
+    Stift Ø 33,8 × 50 als Netz, 5 mm Fase an beiden Enden; ``pushes`` bekommt
+    die Namen der Stirnflächen (oben ``True``) und nennt Fläche und Weg je
+    *Fläche versetzen*. Zurück kommen Dokument, Profil, Quellen und Körper.
+    """
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    pin = trimesh.creation.cylinder(radius=16.9, height=50.0, sections=32)
+    pin.apply_translation((0.0, 0.0, 25.0))
+    profile = make_profile("centauri-carbon-2", "petg")
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/pin.stl", sha256=""
+    )
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(pin)
+    history = History(project.document)
+    history.apply("Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    body = project.document.ops[0].outputs[0]
+    history.apply(
+        "Fase",
+        [
+            OperationDraft(
+                op="chamfer_edges", inputs=(body,), params={"distance": 5.0, "edges": "horizontal"}
+            )
+        ],
+    )
+    sources = ProjectSources(project)
+    chamfered = evaluate(project.document, profile, sources=sources)
+    ends = {
+        feature.params["normal"][2] > 0: name
+        for name, feature in chamfered.scene.objects[body].features.items()
+        if feature.kind == "face" and abs(abs(feature.params["normal"][2]) - 1.0) < EPS_GEOM
+    }
+    assert set(ends) == {True, False}, "Voraussetzung: beide Stirnflächen sind erkannt"
+    for face, distance in pushes(ends):
+        history.apply(
+            "Versetzen",
+            [
+                OperationDraft(
+                    op="push_face", inputs=(body,), params={"face": face, "distance": distance}
+                )
+            ],
+        )
+    forget_cache()
+    return project.document, profile, sources, body, ends
+
+
+def _through(ends: dict[bool, str]) -> list[tuple[str, float]]:
+    """Oben −22 und unten −20 (je eine Sackbohrung), dann oben −70 durch — der Kundenfall."""
+    return [(ends[True], -22.0), (ends[False], -20.0), (ends[True], -70.0)]
+
+
+def test_the_picture_shows_no_blind_holes_that_a_later_push_drilled_through() -> None:
+    """RM-537: Ohne Erkennung stand der Stift mit zwei Sackbohrungen im Bild.
+
+    Die beiden Sackbohrungen braucht je ein Folgeschritt, also werden sie
+    erkannt. Der letzte Schritt reicht am Netz jedes Merkmal mit geleerten
+    Dreiecken und alten Maßen weiter; ohne Erkennung standen beide im Bild, und
+    wer eine wählte, verlor sie, sobald die Erkennung die durchgehende fand.
+    """
+    document, profile, sources, body, _ends = _chamfered_pin(_through)
+
+    picture = evaluate(document, profile, sources=sources, detect_features=False)
+    full = evaluate(document, profile, sources=sources)
+
+    assert picture.stopped_at is None and full.stopped_at is None
+    holes = [f for f in full.scene.objects[body].features.values() if f.kind == "hole"]
+    assert len(holes) == 1 and holes[0].params["through"], "Voraussetzung: eine durchgehende"
+    assert body in picture.recognition_left_out, "Voraussetzung: das Bild hat nicht erkannt"
+    assert not [
+        name
+        for name, feature in picture.scene.objects[body].features.items()
+        if feature.kind == "hole" and not feature.params.get("through")
+    ], "im Bild steht eine Sackbohrung, die der letzte Schritt durchgebohrt hat"
+    assert _unconfirmed(picture.scene.objects[body], full.scene.objects[body]) == []
+
+
+@pytest.mark.parametrize(
+    ("op", "params", "kept"),
+    [
+        # Bohren reicht die alten Merkmale unverändert weiter, über ein neues Netz.
+        ("drill_hole", {"diameter": 6.0, "x": 3.0, "y": 3.0, "z": 4.0}, False),
+        # Verschieben nimmt sie starr mit; das ist belegt und bleibt im Bild.
+        ("translate_object", {"dx": 5.0}, True),
+    ],
+)
+def test_the_picture_carries_only_features_the_recognition_confirms(
+    op: str, params: dict[str, Any], kept: bool
+) -> None:
+    """Die Zwillinge zu RM-537: was eine Operation unbelegt weiterreicht.
+
+    Kennt der Merker das Eingangsnetz (ein voller Lauf vorher im selben
+    Prozess), trägt der Körper vor dem letzten Schritt erkannte Merkmale. Ohne
+    Erkennung danach darf das Bild davon nur zeigen, was auch der Lauf mit
+    Erkennung so ausgibt — die starre Bewegung ja, das unverändert über ein
+    gebohrtes Netz gereichte nicht.
+    """
+    project, history, profile, cache, sources, first = _plate_project()
+    body = project.document.ops[0].outputs[0]
+    assert len(first.scene.objects[body].features) == 10
+    history.apply(op, [OperationDraft(op=op, inputs=(body,), params=params)])
+
+    picture = evaluate(
+        project.document, profile, sources=sources, cache=cache, detect_features=False
+    )
+    full = evaluate(project.document, profile, sources=sources, cache=cache)
+
+    assert picture.stopped_at is None and full.stopped_at is None
+    assert _unconfirmed(picture.scene.objects[body], full.scene.objects[body]) == []
+    shown = [f for f in picture.scene.objects[body].features.values() if f.provenance == "detected"]
+    assert bool(shown) is kept
+
+
+def test_a_generated_face_that_a_later_push_used_up_leaves_the_scene() -> None:
+    """RM-537, Nebenbefund: Erzeugte Flächen ohne Dreiecke blieben nach dem Durchdrücken stehen.
+
+    *Fläche versetzen* erklärt die gewählte Fläche als erzeugt. Am Kundenstift
+    drückte der letzte Versatz den Taschenboden durch das Teil; beide
+    Bodenflächen gibt es danach nicht mehr, und trotzdem standen ``face_1`` und
+    ``face_2`` ohne Dreiecke im Baum — wählbar, im Bild unsichtbar. Im Bild
+    vor der Erkennung stehen sie ebenso wenig: Was dort steht, steht danach
+    auch im Baum.
+    """
+    document, profile, sources, body, ends = _chamfered_pin(_through)
+
+    picture = evaluate(document, profile, sources=sources, detect_features=False)
+    full = evaluate(document, profile, sources=sources)
+
+    assert full.stopped_at is None
+    features = full.scene.objects[body].features
+    assert ends[True] not in features and ends[False] not in features, "verbrauchte Flächen"
+    assert all(f.face_indices for f in features.values() if f.kind == "face")
+    assert not [
+        finding
+        for finding in full.scene.report.findings
+        if finding.code in {"perceive.generated_lost", "perceive.referenced_lost"}
+    ], "der Schritt verbraucht seine eigene Fläche — kein Verlust, auf den jemand zeigt"
+    assert set(picture.scene.objects[body].features) <= set(features)
+
+
+def test_a_later_step_on_a_used_up_face_stops_with_the_lost_reference() -> None:
+    """Wer die verbrauchte Fläche danach noch nennt, hält an — mit Bezugsverlust.
+
+    Der Verlust steht am verbrauchenden Schritt und nennt den späteren; der
+    spätere hält mit dem Satz, dass die Fläche nicht mehr da ist — nicht mit
+    „keine Fläche gewählt“, denn gewählt war eine.
+    """
+    document, profile, sources, _body, ends = _chamfered_pin(
+        lambda ends: [*_through(ends), (ends[True], -1.0)]
+    )
+
+    full = evaluate(document, profile, sources=sources)
+
+    last, consuming = document.ops[-1], document.ops[-2]
+    assert full.stopped_at == last.id
+    lost = [
+        finding
+        for finding in full.scene.report.findings
+        if finding.code == "perceive.generated_lost"
+    ]
+    assert [(f.op_id, f.values["feature"]) for f in lost] == [(consuming.id, ends[True])]
+    assert str(last.id) in lost[0].values["where"]
+    halt = next(f for f in full.scene.report.findings if f.op_id == last.id)
+    assert halt.severity == "error"
+    assert "gibt es an dem Körper nicht mehr" in str(halt.message)
+
+
+def test_a_pushed_face_that_stays_keeps_its_name_and_triangles() -> None:
+    """Gegenfall: Eine Tasche ohne Durchbruch behält ihren Boden unter seinem Namen."""
+    document, profile, sources, body, ends = _chamfered_pin(
+        lambda ends: [(ends[True], -10.0), (ends[False], -10.0)]
+    )
+
+    full = evaluate(document, profile, sources=sources)
+
+    assert full.stopped_at is None
+    features = full.scene.objects[body].features
+    for name in (ends[True], ends[False]):
+        assert name in features and features[name].provenance == "generated"
+        assert features[name].face_indices, "der Boden trägt seine Dreiecke"
+
+
+def test_only_a_face_without_a_trace_counts_as_used_up() -> None:
+    """Verbraucht ist nur eine erzeugte Fläche, von der nichts mehr da ist.
+
+    Bleibt eine erkannte Fläche in ihrer Ebene, gleich gerichtet, gilt sie als
+    möglicherweise noch da. Eine Bausteinfläche, die nie Dreiecke hatte, und
+    jede andere Art ohne Dreiecke fragt die Regel nicht.
+    """
+    from app.core.scene.evaluate import _consumed_faces
+    from app.core.types import Feature
+
+    def face(name: str, z: float, *, provenance: str = "generated", triangles=()) -> Feature:
+        return Feature(
+            id=name,
+            kind="face",
+            provenance=provenance,  # type: ignore[arg-type]
+            params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, z), "area": 10.0},
+            face_indices=tuple(triangles),
+        )
+
+    declared = {
+        "face_gone": face("face_gone", 5.0),
+        "face_in_plane": face("face_in_plane", 10.0),
+        "face_part": face("face_part", 5.0),
+        "pin_part": Feature(
+            id="pin_part", kind="pin", provenance="generated", params={"diameter": 4.0}
+        ),
+    }
+    before = {
+        "face_gone": face("face_gone", 5.0, triangles=(1, 2)),
+        "face_in_plane": face("face_in_plane", 10.0, triangles=(3, 4)),
+        "face_part": face("face_part", 5.0),
+        "pin_part": dataclasses.replace(declared["pin_part"], face_indices=(5, 6)),
+    }
+    detected = {"face_9": face("face_9", 10.0, provenance="detected", triangles=(7, 8))}
+
+    assert _consumed_faces(declared, set(declared), before, detected, 100.0) == {"face_gone"}
+
+
 def test_coarse_steps_before_a_changed_step_rebuild_the_stack_without_gaps(monkeypatch) -> None:
     """Die grobe Vorschaustufe beim Ändern eines Schritts (§15.4, §2.8).
 

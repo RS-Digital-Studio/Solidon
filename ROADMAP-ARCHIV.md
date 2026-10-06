@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
 | 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
 | 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
@@ -43150,3 +43151,56 @@ im Zustandsordner zeigen auf die neuen Dateien. `git grep -n .claude/.state -- t
 findet nur noch `mac-netz.yml` und den Kommentar in `tests/helpers.py` (Sonde des offenen
 RM-187) sowie erfundene Pfade in `test_affected_tests.py` und `test_roadmap.py`, die keine Datei
 lesen.
+
+## RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)
+
+<a id="rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026"></a>
+<a id="rm-537"></a>
+
+**RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück, und Entf
+  entfernt dann den Körper.** Fund beim Nachstellen von RM-533 an der Kundendatei: Nach dem
+  Öffnen zeigt der Baum am Stift (`obj_3`) „Sackbohrung 10“ und „Sackbohrung 11“ (Ø 23,8, Tiefe
+  22,1 und 19,7, `provenance=detected`); dieselben Merkmale trägt eine Auswertung ohne Erkennung
+  (`detect_features=False`). Ist die Erstauswertung durch (in der Sonde mehrere Sekunden,
+  `busy`), steht dort eine durchgehende „Bohrung 12“ (Tiefe 50). Wer in dieser Zeit eine
+  Sackbohrung wählt, verliert sie: `ObjectTree._restore` findet die Kennung nicht mehr und wählt
+  den Körper, und Entf entfernt danach den ganzen Körper statt der Bohrung. Messung:
+  `sonde_merkmale.py` und `merkmale.txt` im Zustandsordner von RM-533. **Offen:** woher die
+  vorläufigen Sackbohrungen kommen (Übertrag aus einem früheren Stand statt Erkennung?), ob sie vor
+  dem Ende der Erkennung im Baum stehen sollen, und was mit einer Auswahl geschieht, deren Merkmal
+  verschwindet (den Körper zu wählen steht so im Docstring von `_restore`; leeren und ansagen wäre
+  die Alternative). **Abnahme:** Eine Merkmalswahl während der Erstauswertung überlebt sie oder
+  wird sichtbar aufgegeben, nie still zum Körper.
+
+**Erledigt (06.10.2026).** Drei Ursachen, drei Behebungen:
+
+- **Herkunft der vorläufigen Sackbohrungen:** Ohne Erkennung (Bild zuerst,
+  KUNDE-14) gab `_with_features` die Merkmalsliste der Operation ungeprüft aus.
+  *Fläche versetzen* reicht am Netz jedes Eingangsmerkmal mit geleerten
+  Dreiecken und alten Maßen weiter; so standen `hole_10`/`hole_11` (Tiefe 22,11
+  und 19,71) im Bild, wo op 17 längst eine durchgehende Bohrung gedrückt hatte.
+  `_proven_without_recognition` gibt ohne Erkennung nur noch aus, was belegt
+  ist: erzeugte Merkmale, unveränderte Dreiecke, starr Bewegtes; ein erkanntes
+  Merkmal mit geleerten Dreiecken oder über ein geändertes Netz unverändert
+  gereichtes fällt weg. Dieselbe Bauart hatten `remove_feature`, `plug_hole`,
+  `move_feature`, `cut_away`, `drill_hole`, `countersink_hole`, `smooth_mesh`,
+  `remesh_uniform`, `subdivide_surface`, `compensate_first_layer` (gemessen) —
+  die eine gemeinsame Stelle deckt sie ab.
+- **Verbrauchte Flächen:** Ein späterer Schritt, der eine erzeugte Fläche ganz
+  durchdrückt, ließ sie ohne Dreiecke im Ergebnis stehen (`face_1`, `face_2` am
+  Kundenstift). `_consumed_faces` nimmt sie heraus, wenn die Erkennung
+  vollständig lief und keine gleich gerichtete Fläche in ihrer Ebene liegt; nennt
+  ein späterer Schritt sie, hält er mit „Diese Fläche gibt es an dem Körper
+  nicht mehr …“ (`face_ops._chosen_face`, `_drafted_face`) und der Bezugsverlust
+  `perceive.generated_lost`.
+- **Die Wahl:** `ObjectTree.show_scene` hebt eine Merkmalswahl auf, die der
+  neue Stand nicht trägt, und meldet sie über `featuresLost`; das Fenster sagt
+  „„{Merkmal}“ gibt es nach der Neuberechnung nicht mehr, die Auswahl ist
+  aufgehoben.“ Entf trifft danach nichts statt des ganzen Körpers.
+
+Nachweis: `tests/test_evaluation.py` (Stiftnachbau mit Fase und drei
+`push_face`, Lochplatte mit Bohren am Ende, Verschieben als Gegenstück,
+verbrauchte Flächen samt späterem Bezug; ohne Fix rot, je Teilregel abgeschaltet
+genau ein Test rot), `tests/test_feature_panel.py`
+(`test_a_chosen_feature_that_the_new_state_lacks_is_given_up_not_the_body`).
+Regel: `oberflaeche.md` („Eine Auswahl fällt nie still auf etwas Größeres“).

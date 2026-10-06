@@ -346,6 +346,13 @@ Feldes, gedämpft fiel er unter WCAG 1.4.11.
 `test_a_field_keeps_the_edge_that_is_its_only_one` prüft gegen die Linienfarbe
 des Themas; was die leistet, ist eine Frage an das Thema.
 
+## Eine Auswahl fällt nie still auf etwas Größeres
+
+Trägt der neue Stand ein gewähltes Merkmal nicht mehr, hebt
+`ObjectTree.show_scene` die Wahl auf und meldet `featuresLost`; das Fenster
+sagt es als Quittung (RM-537). Still auf den Körper zu fallen hieß, dass Entf
+danach den ganzen Körper entfernte.
+
 ## Barrierefreiheit
 
 - **Keine Bedeutung allein über Farbe** (Regel 18): immer eine zweite

@@ -591,6 +591,66 @@ def test_regrouping_keeps_the_selected_feature_current_and_visible(qt_app: QAppl
     tree.close()
 
 
+def test_a_chosen_feature_that_the_new_state_lacks_is_given_up_not_the_body(
+    qt_app: QApplication,
+) -> None:
+    """RM-537: Verschwindet die gewählte Bohrung, ist nichts gewählt — nicht der Körper.
+
+    Am Kundenstift standen vor der Erkennung zwei Sackbohrungen im Baum, danach
+    eine durchgehende. Wer eine Sackbohrung gewählt hatte, bekam still den
+    Stift gewählt, und Entf entfernte den ganzen Körper. Jetzt hebt der Baum
+    die Wahl auf und meldet das Merkmal mit dem Namen, unter dem es zu sehen
+    war; das Fenster sagt es in der Statuszeile.
+    """
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.labels import feature_name
+    from app.ui.panels import ObjectTree
+
+    blind = Feature(
+        id="hole_10",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 23.8, "depth": 22.1, "through": False},
+    )
+    through = Feature(
+        id="hole_12",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 23.8, "depth": 50.0, "through": True},
+    )
+    entry = SceneObject(id="obj_3", name="Stift", mesh=plate(), features={"hole_10": blind})
+    tree = ObjectTree()
+    lost: list[list[str]] = []
+    tree.featuresLost.connect(lost.append)
+    try:
+        tree.show_scene(EvaluationResult(Scene(objects={entry.id: entry})))
+        tree.select_feature(entry.id, "hole_10")
+        assert tree.selected_feature() == "hole_10", "Voraussetzung"
+
+        tree.show_scene(
+            EvaluationResult(
+                Scene(objects={entry.id: replace(entry, features={"hole_12": through})})
+            )
+        )
+
+        assert tree.selected() is None, "der Körper ist nicht still gewählt"
+        assert tree.selected_feature() is None
+        assert lost == [[feature_name("hole_10", blind)]], lost
+
+        tree.select_feature(entry.id, "hole_12")
+        lost.clear()
+        tree.show_scene(
+            EvaluationResult(
+                Scene(objects={entry.id: replace(entry, features={"hole_12": through})})
+            )
+        )
+        assert tree.selected_feature() == "hole_12", "was bleibt, bleibt gewählt"
+        assert lost == []
+    finally:
+        tree.close()
+
+
 def test_choosing_another_feature_reports_it_once_without_an_empty_step(
     qt_app: QApplication,
 ) -> None:

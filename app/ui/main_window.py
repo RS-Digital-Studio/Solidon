@@ -3790,6 +3790,7 @@ class MainWindow(QMainWindow):
         # Zwei markierte Merkmale beantworten eine andere Frage als eines —
         # deshalb ein eigenes Signal und ein eigener Empfänger.
         self.object_tree.featuresSelected.connect(self._on_features_selected)
+        self.object_tree.featuresLost.connect(self._say_features_lost)
         # **Über ``launch_operation``, nicht ``run_operation``.** Genau dieser
         # Fehler ist für Menü und Palette schon behoben worden, das Kontextmenü
         # blieb hängen: Drei Operationen mit Gestenfeld stehen dort am Körper —
@@ -18067,6 +18068,29 @@ class MainWindow(QMainWindow):
             if chain is not None and any(link.id == other.id for link in chain):
                 return True
         return False
+
+    def _say_features_lost(self, names: list[str]) -> None:
+        """Eine Merkmalswahl, die der neue Stand nicht mehr trägt, ist aufgehoben (RM-537).
+
+        Sie fiel still auf den Körper zurück, und Entf entfernte danach den
+        ganzen Körper statt der Bohrung, die der Kunde gewählt hatte. Gesagt
+        wird es als Quittung, damit es die Laufanzeige überlebt.
+        """
+        if len(names) == 1:
+            self.announce(
+                tr(
+                    "„{feature}“ gibt es nach der Neuberechnung nicht mehr, die Auswahl ist "
+                    "aufgehoben.",
+                    feature=names[0],
+                )
+            )
+        else:
+            self.announce(
+                tr(
+                    "{count} gewählte Merkmale gibt es nach der Neuberechnung nicht mehr.",
+                    count=len(names),
+                )
+            )
 
     def _on_features_selected(self, chosen: list[Any]) -> None:
         """Der letzte Empfänger einer Auswahlrunde — danach steht fest, ob gemessen wird."""

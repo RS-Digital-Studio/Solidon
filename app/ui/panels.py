@@ -1734,6 +1734,19 @@ def _part_group(created_by: int | None, document: Document | None) -> tuple[str,
     return (str(found[1].title), int(found[0].id)) if found is not None else None
 
 
+def _carries(result: EvaluationResult, object_id: str, feature_id: str) -> bool:
+    """Ob der Körper im Ergebnis dieses Merkmal noch trägt."""
+    entry = result.scene.objects.get(object_id)
+    return entry is not None and feature_id in entry.features
+
+
+def _feature_name_in(result: EvaluationResult | None, object_id: str, feature_id: str) -> str:
+    """Der Name, unter dem der Kunde das Merkmal zuletzt gesehen hat."""
+    entry = result.scene.objects.get(object_id) if result is not None else None
+    feature = entry.features.get(feature_id) if entry is not None else None
+    return feature_name(feature_id, feature) if feature is not None else feature_id
+
+
 def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | None:
     """Die Zeile dieses Merkmals — über alle Ebenen unter ``item``.
 
@@ -1992,6 +2005,14 @@ class ObjectTree(QWidget):
     erhalten bleiben (Regel 2) — der Baum ruft keine Operation selbst auf.
 
     Das Merkmal ist ``None``, wenn die Zeile einen ganzen Körper meint."""
+
+    featuresLost = Signal(list)
+    """Gewählte Merkmale, die es nach dem neuen Stand nicht mehr gibt — ihre Namen.
+
+    Sie fielen still auf ihren Körper zurück (RM-537): Am Kundenstift wich
+    eine gewählte Sackbohrung nach der Erkennung einer durchgehenden, der
+    Baum wählte den Stift, und Entf entfernte danach den ganzen Körper. Die
+    Wahl wird jetzt aufgehoben, und das Fenster sagt es."""
 
     catalogRequested = Signal()
     """Den Bausteinkatalog öffnen — der kurze Weg vom gewählten Teil (§2.6).
@@ -2293,6 +2314,7 @@ class ObjectTree(QWidget):
         selected = self.selected_objects()
         selected_feature = self.selected_feature()
         selected_features = self.selected_features()
+        previous = self._result
         self._result = result
         self._document = document
         # **Das Leeren ist keine Auswahl.** ``clear()`` meldete „nichts
@@ -2653,10 +2675,27 @@ class ObjectTree(QWidget):
         # ``selected_feature`` hieß danach „keines“, und die Maßgruppe nach
         # *Übernehmen* hing an keinem Merkmal. Aufgelöst wird nur, was keine
         # einzelne Merkmalszeile war — ein Dach oder eine Mehrfachwahl.
-        if selected_feature is None and len(selected_features) > 1:
+        wanted = (
+            list(selected_features)
+            if selected_feature is None and len(selected_features) > 1
+            else [(selected[0], selected_feature)]
+            if selected_feature is not None and len(selected) == 1
+            else []
+        )
+        lost = [reference for reference in wanted if not _carries(result, *reference)]
+        if len(wanted) > 1:
             self.select_features(selected_features)
+        elif lost:
+            # **Nie still zum Körper** (RM-537): Gewählt war ein Merkmal, und
+            # nach der Entf-Taste wäre sonst der ganze Körper fort.
+            self._restore((), None)
+            self._on_selection()
         else:
             self._restore(selected, selected_feature)
+        if lost:
+            self.featuresLost.emit(
+                [_feature_name_in(previous, body, feature) for body, feature in lost]
+            )
         self._fit()
         # Erst steht der Baum, dann kommen die Bilder nach. Andersherum wartet
         # der Nutzer auf eine Liste, die längst fertig gerechnet ist.
