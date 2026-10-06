@@ -557,6 +557,13 @@ TOOLBAR_WORDS: Final = 2
 TOOLBAR_SEARCH_WORDS: Final = 1
 TOOLBAR_SIGNS: Final = 0
 
+#: Operationen, deren Menüeintrag ein Fensterbefehl ist, mit dessen Kennung
+#: (RM-507): Unter *Erzeugen* steht für ``load`` dieselbe Aktion wie
+#: *Datei → Modell einfügen …*, die den Dateidialog öffnet. Als eigene
+#: Palettenzeile stünde die Operation daneben, fast gleich benannt und mit
+#: anderer Wirkung.
+WINDOW_COMMAND_OPERATIONS: Final = {"load": "file.import"}
+
 #: Wie lange nach dem letzten Pinselzug gewartet wird, bevor die Wandstärke
 #: nachgerechnet wird (Entscheidung L). Bei jedem Zug zu rechnen hieße, den
 #: Pinsel zu verzögern, damit eine Zahl aktuell ist, die sich beim nächsten Zug
@@ -4588,7 +4595,7 @@ class MainWindow(QMainWindow):
                         # deshalb kann er nicht hier entstehen.
                         continue
                     place = self._subgroup_for(spec, target, subgroups)
-                    if spec.name == "load":
+                    if spec.name in WINDOW_COMMAND_OPERATIONS:
                         # **Derselbe Eintrag wie in *Datei*** (RM-507): Unter
                         # *Erzeugen* stand die Operation „Modell einfügen“
                         # neben „Modell einfügen …“ in *Datei* — zwei Zeilen,
@@ -4620,7 +4627,11 @@ class MainWindow(QMainWindow):
             ),
             symbol="split",
         )
-        self.selection_operations.add_window_action("auto_split", "prepare", self.auto_split_action)
+        if not self.selection_operations.add_window_action(
+            "auto_split", "prepare", self.auto_split_action
+        ):
+            # Ohne Vorbereiten-Gruppe bleibt *Bearbeiten* der Platz.
+            edit_menu.addAction(self.auto_split_action)
 
         # Was das Register kennt und diese Tabelle nicht, bekommt sein eigenes
         # Menü: eine neue Kategorie soll auftauchen, nicht verschwinden.
@@ -14290,6 +14301,7 @@ class MainWindow(QMainWindow):
                 shortcut=shortcut_for(entry.name, entry.shortcut, self.settings.shortcut_scheme),
             )
             for entry in palette_entries(for_feature=self.selected_feature_kind())
+            if entry.name not in WINDOW_COMMAND_OPERATIONS
             for usable, reason in (self._palette_availability(entry.name),)
         ]
         return [*entries, *extra]

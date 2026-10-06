@@ -1374,7 +1374,7 @@ def _empty_the_top_edge(data: dict[str, Any]) -> dict[str, Any]:
     **Ein Ausdruck bleibt, wie er ist, und bekommt ``legacy_zero_top``**: Ob er
     null ergibt, zeigt erst die Auswertung, und die Kette rechnet nicht. Mit
     dem Marker liest der Schritt eine Null wie damals als Oberkante
-    (``lid.stated_height``); eine Änderung am Schritt nimmt ihn heraus.
+    (``lid.stated_height``); erst eine neue Höhe nimmt ihn heraus.
     """
     operations = list(data.get("ops", []))
     for transaction in data.get("transactions", []):

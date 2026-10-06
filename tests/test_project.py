@@ -4620,6 +4620,28 @@ def test_v46_a_height_expression_keeps_reading_zero_as_the_top_edge() -> None:
     assert stated_height(validate(spec, {})) is None
 
 
+def test_v46_the_old_zero_stays_the_top_edge_until_the_height_changes() -> None:
+    """``legacy_zero_top`` fällt nur mit einer neuen Höhe (Review RM-526, K8).
+
+    Mit ``dropped_on_change=True`` hob jede Änderung den Marker auf: Wer an einem
+    alten Deckel, dessen Ausdruck null ergibt, nur die Stärke änderte, fand die
+    Öffnung danach auf dem Bett. Jetzt bleibt er bei der Stärke und fällt bei
+    der Höhe.
+    """
+    path = Path(__file__).parent / "data" / "projects" / "lid_top_edge_v46.p3d"
+    project = load(path)
+    history = History(project.document)
+    (lid,) = [entry for entry in project.document.ops if entry.op == "create_lid" and entry.id == 3]
+    marked = history.change_params(lid.id, {**lid.params, "z": "=0", "legacy_zero_top": True})
+    assert marked.params["legacy_zero_top"] is True, "ein ausdrücklicher Markerwert bleibt"
+
+    thicker = history.change_params(lid.id, {**marked.params, "thickness": 3.5})
+    assert thicker.params.get("legacy_zero_top") is True, "die Stärke lässt die Höhe, wie sie war"
+
+    lower = history.change_params(lid.id, {**thicker.params, "z": "=-5"})
+    assert not lower.params.get("legacy_zero_top"), "eine neue Höhe rechnet wie heute"
+
+
 #: Was der Stand vor RM-325 (``38006b338``, Format 40) aus ``slot_tool_v40.p3d``
 #: rechnete, gemessen beim Schreiben der Datei: je Körper das Volumen in mm³ und die
 #: Langlöcher als (Richtung, Länge). Elf Klötze 60 x 100 x 60 mm, je ein Langloch

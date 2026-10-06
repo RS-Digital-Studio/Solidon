@@ -898,17 +898,19 @@ def _saved_top_edge_marker() -> Any:
     Bis Format 46 hieß die Höhe null „Oberkante“. Eine Zahl null leert die
     Migration; ein **Ausdruck** wird erst bei der Auswertung zur Zahl, und ein
     Schritt aus einer solchen Datei liest sie mit dem Marker wie damals
-    (:func:`stated_height`). Eine Änderung am Schritt rechnet wie heute.
+    (:func:`stated_height`). Eine Änderung der Höhe rechnet wie heute.
     """
     return param(
         title=_("Höhe der Öffnung aus einem älteren Projekt"),
         default=False,
         placement="advanced",
         internal=True,
-        dropped_on_change=True,
+        # Nur die Höhe selbst hebt ihn auf: Wer an einem alten Deckel die Stärke
+        # ändert, behält die Öffnung, wo sie war (Review RM-526, K8).
+        dropped_on_change=("z",),
         doc=_(
             "Liest eine Höhe, die null ergibt, als Oberkante, wie Projekte bis Format 46. "
-            "Eine Änderung am Schritt rechnet wie heute."
+            "Eine neue Höhe rechnet wie heute."
         ),
     )
 
@@ -920,7 +922,9 @@ def stated_height(params: LidParams | ScrewLidParams) -> float | None:
     mit ``legacy_zero_top`` liest eine Null noch als Oberkante: Sein Ausdruck
     stammt aus einem Projekt bis Format 46 und ergab dort die Oberkante.
     """
-    if params.legacy_zero_top and params.z is not None and abs(params.z) <= EPS_GEOM:
+    # Genau die Lesart von damals (``stated or`` Oberkante), wie die Migration
+    # sie für eine gespeicherte Zahl liest — keine zweite Regel mit Toleranz.
+    if params.legacy_zero_top and params.z is not None and not params.z:
         return None
     return params.z
 

@@ -132,7 +132,7 @@ def param(
     optional: bool = False,
     sketch_planes: tuple[str, ...] = (),
     internal: bool = False,
-    dropped_on_change: bool = False,
+    dropped_on_change: bool | tuple[str, ...] = False,
     zero_text: TranslatableText | str | None = None,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt

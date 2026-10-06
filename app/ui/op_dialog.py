@@ -357,6 +357,11 @@ class ValueField(QWidget):
             self.spin.setSpecialValueText(
                 str(entry.zero_text) if entry.zero_text else tr("wie gemessen")
             )
+            # Ein Pfeil aus „leer“ heraus beginnt bei null, so weit das Schema
+            # es erlaubt — nicht an der Stufe unter der Untergrenze.
+            low = entry.minimum if entry.minimum is not None else -math.inf
+            high = entry.maximum if entry.maximum is not None else math.inf
+            self.spin.special_start = self._as_shown(min(max(0.0, low), high))
         elif self.names_its_zero():
             # **Die Null sagt, was sie bedeutet** (RM-513): „automatisch“ statt
             # „0,00 mm“. Qt zeigt den Sondertext am Mindestwert, und der ist

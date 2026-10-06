@@ -567,6 +567,25 @@ class _BoundedBehavior:
             bool(self.specialValueText()) and not body.removesuffix(self.suffix().strip()).strip()
         )
 
+    def stepBy(self: Any, steps: int) -> None:  # noqa: N802 - Qt-Name
+        """Aus dem Sonderwert heraus beginnt ein Schritt nach oben am ``special_start``.
+
+        Der Sonderwert eines ``optional``-Feldes sitzt eine Stufe unter der
+        Untergrenze, an einer Welthöhe ohne Grenze eine Million Millimeter tief;
+        ein Pfeil nach oben führte von „Oberkante“ auf -999 999,01 mm (Review
+        RM-526, K5).
+        """
+        start = getattr(self, "special_start", None)
+        if (
+            start is not None
+            and steps > 0
+            and self.specialValueText()
+            and self.value() <= self.minimum()
+        ):
+            self.setValue(start)
+            return
+        NumberSpin.stepBy(self, steps)
+
     def valueFromText(self: Any, text: str) -> float:  # noqa: N802 - Qt-Name
         """Wie :class:`NumberSpin`; ein geleertes Feld mit Sondertext ist der Mindestwert."""
         if self._empty_is_special(text):
@@ -717,6 +736,8 @@ class BoundedSpin(_BoundedBehavior, NumberSpin):
     def __init__(self, parent: QWidget | None = None) -> None:
         NumberSpin.__init__(self, parent)
         self._named_limits: tuple[float | None, float | None] = (None, None)
+        self.special_start: float | None = None
+        """Wohin ein Schritt aus dem Sonderwert führt (:meth:`stepBy`) — sonst Qts Stufe."""
 
 
 class LengthSpin(NumberSpin):

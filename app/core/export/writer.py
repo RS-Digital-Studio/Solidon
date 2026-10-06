@@ -576,7 +576,7 @@ def check_adhesion_on_bed(
     per_part: Sequence[PrintSettings] | None = None,
     flavour: SlicerFlavour = "other",
     support_foot: float | None = None,
-    support_outlines: Sequence[BaseGeometry | None] | None = None,
+    support_outline: Callable[[int], BaseGeometry | None] | None = None,
 ) -> list[Finding]:
     """Liegt der Rand um jedes Teil noch auf dem Bett?
 
@@ -591,10 +591,12 @@ def check_adhesion_on_bed(
     Stützverbreiterung, die das Profil nicht nennt, wird als unbekannt
     gemeldet, nicht geschätzt.
 
-    ``support_outlines`` nennt je Teil, wo es gestützt wird
-    (:func:`_support_outline`, ``analysis.overhang_outline``); ``None`` an
-    einer Stelle heißt: kein Überhang, kein Stützfuß. Ohne die Liste zählt der
-    Stützfuß um die ganze Aufsicht — eher zu weit als zu kurz.
+    ``support_outline`` nennt für das Teil mit dieser Nummer, wo es gestützt
+    wird (:func:`_support_outline`, ``analysis.overhang_outline``); ``None``
+    heißt: kein Überhang, kein Stützfuß. Gefragt wird erst, wenn der Fuß schon
+    um die ganze Aufsicht aus dem Bett reichte — der Umriss kostet einen
+    Schnitt je Teil (Review RM-312, K6). Ohne die Auskunft zählt der Stützfuß
+    um die ganze Aufsicht, eher zu weit als zu kurz.
     """
     rims = [
         rim_of(per_part[index] if per_part is not None else settings, flavour, support_foot)
@@ -620,22 +622,17 @@ def check_adhesion_on_bed(
             part = per_part[index] if per_part is not None else settings
             outlines.append((_first_layer_outline(mesh, part), rim.layer, False))
         if rim.top > 0.0:
-            supported = (
-                support_outlines[index]
-                if support_outlines is not None
-                else build_area.footprint(mesh)
-            )
+            supported: BaseGeometry | None = build_area.footprint(mesh)
+            if support_outline is not None and (
+                _rim_beyond_the_bed(supported, rim.top, half) > EPS_GEOM
+                or _rim_into_blocked_area(supported, rim.top, profile.printer) > EPS_GEOM
+            ):
+                supported = support_outline(index)
             if supported is not None:
                 outlines.append((supported, rim.top, True))
         over, message, by_foot = 0.0, _("Der Rand um ein Teil reicht über das Bett hinaus."), False
         for outline, reach, from_top in outlines:
-            low_x, low_y, high_x, high_y = outline.bounds
-            beyond = max(
-                -half[0] - (low_x - reach),
-                high_x + reach - half[0],
-                -half[1] - (low_y - reach),
-                high_y + reach - half[1],
-            )
+            beyond = _rim_beyond_the_bed(outline, reach, half)
             if beyond > over + EPS_GEOM:
                 over, by_foot = beyond, from_top
         if over <= EPS_GEOM:
@@ -695,6 +692,19 @@ def check_adhesion_on_bed(
             )
         )
     return findings
+
+
+def _rim_beyond_the_bed(outline: BaseGeometry, reach: float, half: tuple[float, float]) -> float:
+    """Wie weit ein Rand von ``reach`` um diesen Umriss über das Bett hinausreicht."""
+    low_x, low_y, high_x, high_y = outline.bounds
+    return float(
+        max(
+            -half[0] - (low_x - reach),
+            high_x + reach - half[0],
+            -half[1] - (low_y - reach),
+            high_y + reach - half[1],
+        )
+    )
 
 
 def _first_layer_outline(mesh: MeshData, settings: PrintSettings) -> BaseGeometry:
@@ -2536,10 +2546,9 @@ def write_assembly(
             per_part=own,
             flavour=flavour,
             support_foot=support_foot_for(settings, profile, setup),
-            support_outlines=[
-                _support_outline(entry, exported[entry.id], part, profile, cancelled)
-                for entry, part in zip(chosen, own, strict=True)
-            ],
+            support_outline=lambda index: _support_outline(
+                chosen[index], exported[chosen[index].id], own[index], profile, cancelled
+            ),
         )
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume

@@ -13550,10 +13550,20 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
     # **Und was rechts steht, nennt rechts** (11.09.2026): Diese Aktionen
     # haben keinen Eintrag in der Leiste, und ihr Weg beginnt bei der Karte.
     assert checked, "keine einzige Kopplung gefunden — dann prüft dieser Test nichts"
+    # Eine Operation, deren Menüeintrag ein Fensterbefehl ist, hat ihren Weg
+    # über dessen Aktion (RM-507, *Modell einfügen …*).
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
+
+    window.window_commands()  # füllt die Aktionen der Fensterbefehle
+    for name, key in WINDOW_COMMAND_OPERATIONS.items():
+        shared = window._palette_actions[key]
+        assert built[shared].removesuffix(" …") == menu_path(REGISTRY.get(name)), name
     ohne_weg = sorted(
         name
         for name, action in window._op_actions.items()
-        if action not in built and in_the_menu_bar(REGISTRY.get(name).category)
+        if action not in built
+        and in_the_menu_bar(REGISTRY.get(name).category)
+        and name not in WINDOW_COMMAND_OPERATIONS
     )
     assert not ohne_weg, f"diese Menüaktionen haben keinen genannten Weg: {ohne_weg}"
     rechts = [

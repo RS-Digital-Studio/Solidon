@@ -1124,3 +1124,5 @@ def test_auto_split_stands_with_the_other_ways_to_split(qt_app: QApplication) ->
     assert not row.isVisibleTo(panel), "an einer Fläche gilt er nicht"
     panel.set_context(0, _availability(0))
     assert not row.isVisibleTo(panel), "ohne Auswahl auch nicht"
+    # Ohne Gruppe sagt die Karte nein, und das Fenster legt die Aktion ins Menü.
+    assert not panel.add_window_action("anders", "keine_kategorie", action)

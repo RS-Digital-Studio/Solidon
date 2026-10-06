@@ -783,7 +783,7 @@ class SelectionOperationsPanel(QWidget):
         self._buttons[spec.name] = button
         return button
 
-    def add_window_action(self, name: str, category: str, action: QAction) -> None:
+    def add_window_action(self, name: str, category: str, action: QAction) -> bool:
         """Eine Handlung des Fensters als Zeile der Gruppe ihrer Kategorie.
 
         *Automatisch teilen* ist ein Ablauf über mehreren Operationen und kein
@@ -792,8 +792,14 @@ class SelectionOperationsPanel(QWidget):
         ihnen, am gewählten Körper, sortiert wie die Registerzeilen. Freigabe
         und Grund liest :meth:`_take_availability` von der Aktion — dieselbe,
         die Palette und Kürzel auslösen.
+
+        ``False``, wenn es die Gruppe nicht gibt (keine Operation der Kategorie
+        im Register): Dann sucht sich der Aufrufer einen anderen Platz — ein
+        Eintrag darf umziehen, nicht verschwinden.
         """
         _rank, title = _category_group(category)
+        if title not in self._groups:
+            return False
         section, toggle, buttons = self._groups[title]
         grid = self._grids[title]
         box = grid.parentWidget()
@@ -820,6 +826,7 @@ class SelectionOperationsPanel(QWidget):
         self._groups[title] = (section, toggle, tuple(ordered))
         self._arranged.pop(title, None)
         self._filter()
+        return True
 
     def _request_operation(self, spec: OperationSpec) -> None:
         """Den Registereintrag ohne dauerhafte Lambda-Rückbindung weiterreichen."""

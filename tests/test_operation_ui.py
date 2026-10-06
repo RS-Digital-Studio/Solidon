@@ -7278,6 +7278,36 @@ def test_every_accept_button_names_what_the_click_does() -> None:
     assert 'tr("Einfügen")' not in catalog_source
 
 
+def test_a_step_out_of_the_empty_state_starts_at_zero(qt_app: QApplication) -> None:
+    """Ein Pfeil nach oben aus „Oberkante“ führt auf null, nicht auf −999 999,01 mm.
+
+    Der leere Zustand eines ``optional``-Feldes sitzt eine Stufe unter der
+    Untergrenze; an der Höhe der Öffnung gibt es keine (Review RM-526, K5).
+    Zurück nach unten führt der Pfeil wieder auf den leeren Zustand. An einem
+    Feld mit Grenzen beginnt der Schritt bei null, so weit das Schema es erlaubt.
+    """
+    lid = OperationDialog(REGISTRY.get("create_lid"), {}, None)
+    hole = OperationDialog(REGISTRY.get("resize_hole"), {"obj_1": "Körper"})
+    try:
+        height = lid._editors["z"]
+        assert isinstance(height, ValueField)
+        assert height.value() is None
+        height.spin.stepBy(1)
+        assert height.value() == pytest.approx(0.0), "vom leeren Zustand auf null"
+        height.spin.stepBy(1)
+        assert height.value() == pytest.approx(1.0), "danach wie gewohnt"
+        height.spin.stepBy(-1)
+        height.spin.stepBy(-1)
+        assert height.value() == pytest.approx(-1.0), "unter null geht es weiter"
+        x = hole._editors["x"]
+        assert isinstance(x, ValueField)
+        x.spin.stepBy(1)
+        assert x.value() == pytest.approx(0.0)
+    finally:
+        lid.deleteLater()
+        hole.deleteLater()
+
+
 @pytest.mark.parametrize("key", [Qt.Key.Key_Return, None])
 def test_an_emptied_field_takes_its_named_value(qt_app: QApplication, key: Any) -> None:
     """Wer die Zahl löscht, meint, was der Sondertext sagt (RM-526).

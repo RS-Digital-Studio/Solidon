@@ -2077,9 +2077,26 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     verglichen = 0
     rechts = 0
     palette = 0
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
+
     for name, action in window._op_actions.items():
         spec = REGISTRY.get(name)
         genannt = blank(menu_path(spec))
+        if name in WINDOW_COMMAND_OPERATIONS:
+            # **Ihr Menüeintrag ist der Fensterbefehl** (RM-507): *Modell
+            # einfügen …* steht in *Datei* und *Erzeugen* als eine Aktion; der
+            # Weg nennt den Titel der Operation, das Menü trägt die
+            # Auslassungspunkte des Dialogs.
+            action = window._palette_actions[WINDOW_COMMAND_OPERATIONS[name]]
+            assert action in gebaut, f"{name}: kein Menüweg"
+            # Dieselbe Aktion in zwei Menüs: ``gebaut`` hält die zuletzt gebaute
+            # Stelle, und *Erzeugen* kommt nach *Datei*.
+            assert gebaut[action].removesuffix(" …") == genannt, (
+                f"{name}: nennt „{genannt}“, im Menü „{gebaut[action]}“"
+            )
+            assert name not in in_the_palette, f"{name}: zweite Palettenzeile neben dem Befehl"
+            verglichen += 1
+            continue
         if not in_the_menu_bar(spec.category):
             assert action not in gebaut, f"{name}: steht rechts und trotzdem in der Leiste"
             if spec.takes_whole_scene and name not in SCENE_ACTIONS_IN_THE_CARD:
