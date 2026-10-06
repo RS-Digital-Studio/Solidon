@@ -31,6 +31,7 @@ import stat
 import subprocess
 import sys
 import textwrap
+import time
 import tomllib
 from collections import Counter
 from dataclasses import dataclass
@@ -1040,6 +1041,77 @@ def test_the_workflow_runs_the_interpreter_the_project_demands() -> None:
         f"Diese CI-Jobs fahren {', '.join(behind)}, das Projekt verlangt aber mindestens "
         f"{required[0]}.{required[1]}. Ein solcher Job parst den eigenen Quelltext nicht mehr."
     )
+
+
+def test_each_test_process_removes_its_isolated_user_folder(tmp_path: Path) -> None:
+    """``tests/conftest.py`` gibt jedem Testprozess einen eigenen Nutzerordner
+    (§38) und räumt ihn beim Prozessende weg. Ohne das lagen nach einem Tag
+    Tor und Fensterläufen über dreitausend ``solidon-tests-*`` mit anderthalb
+    Gigabyte im Temp-Verzeichnis. Geprüft an einem echten Kindprozess: Der
+    Ordner besteht, solange er läuft, und ist danach fort — auch mit einer
+    offenen Protokolldatei darin, die Windows sonst nicht löschen lässt."""
+    environment = {
+        **os.environ,
+        "TMP": str(tmp_path),
+        "TEMP": str(tmp_path),
+        "TMPDIR": str(tmp_path),
+    }
+    script = (
+        "import logging, os, tests.conftest\n"
+        "folder = os.environ['HOME']\n"
+        "handler = logging.FileHandler(os.path.join(folder, 'app.log'), encoding='utf-8')\n"
+        "logging.getLogger('solidon-test-probe').addHandler(handler)\n"
+        "logging.getLogger('solidon-test-probe').warning('offen bis zum Ende')\n"
+        "print(folder)\n"
+        "print(os.path.isdir(folder))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    folder, existed = result.stdout.strip().splitlines()[-2:]
+    assert existed == "True"
+    assert Path(folder).parent == tmp_path and Path(folder).name.startswith("solidon-tests-")
+    assert not Path(folder).exists()
+    assert list(tmp_path.glob("solidon-tests-*")) == []
+
+
+def test_a_new_test_process_removes_folders_that_an_old_one_left(tmp_path: Path) -> None:
+    """Ein Ordner, den ein früherer Prozess nicht abräumen konnte (nativer
+    Abriss, gehaltene Absturzsperre), geht beim nächsten Start, sobald er
+    älter als ``STALE_ISOLATED_HOURS`` ist; ein junger fremder bleibt."""
+    import importlib
+
+    conftest = importlib.import_module("tests.conftest")
+    old = tmp_path / "solidon-tests-alt"
+    young = tmp_path / "solidon-tests-jung"
+    for folder in (old, young):
+        (folder / "logs").mkdir(parents=True)
+        (folder / "logs" / "app.log").write_text("x", encoding="utf-8")
+    past = time.time() - (conftest.STALE_ISOLATED_HOURS + 1) * 3600
+    os.utime(old, (past, past))
+    environment = {
+        **os.environ,
+        "TMP": str(tmp_path),
+        "TEMP": str(tmp_path),
+        "TMPDIR": str(tmp_path),
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", "import tests.conftest"],
+        cwd=_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert not old.exists()
+    assert young.is_dir()
 
 
 def test_the_ci_refuses_to_run_without_the_exact_kernel(monkeypatch: pytest.MonkeyPatch) -> None:

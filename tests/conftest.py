@@ -8,10 +8,14 @@ prüfen.
 
 from __future__ import annotations
 
+import atexit
 import gc
+import logging
 import os
+import shutil
 import sys
 import tempfile
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -32,6 +36,38 @@ import app.ui  # noqa: F401 — der Import ist die Wirkung, und er steht hinter 
 # was die Tests sehen — und schlimmer: ein Testlauf hinterließe Kalibrierungen
 # in seinem Profilordner.
 _ISOLATED = tempfile.mkdtemp(prefix="solidon-tests-")
+
+
+def _remove_isolated() -> None:
+    """Der Ordner gehört diesem Prozess und geht mit ihm: Jeder Arbeiter und
+    jede getrennt gefahrene Datei legt einen an, und ohne Abräumen lagen nach
+    einem Tag Tor und Fensterläufen über dreitausend davon im Temp-Verzeichnis.
+    Die Protokollhandler schließen vorher — ``logging`` selbst täte es erst
+    nach diesem Aufruf, und unter Windows bliebe die offene ``app.log`` liegen."""
+    logging.shutdown()
+    shutil.rmtree(_ISOLATED, ignore_errors=True)
+
+
+#: Wie alt der Ordner eines früheren Testprozesses sein muss, bevor ein neuer
+#: ihn abräumt. Kein Lauf dauert so lange; ein laufender bleibt unberührt.
+STALE_ISOLATED_HOURS = 24.0
+
+
+def _remove_stale_isolated() -> None:
+    """Räumt Ordner früherer Testprozesse, die ihr eigenes Ende nicht abräumen
+    konnte: nach einem nativen Abriss läuft kein ``atexit``, und die
+    Absturzsperre aus ``app.core.log`` hält ihre Datei bis zum Prozessende."""
+    limit = time.time() - STALE_ISOLATED_HOURS * 3600
+    for folder in Path(tempfile.gettempdir()).glob("solidon-tests-*"):
+        try:
+            if folder.is_dir() and folder.stat().st_mtime < limit:
+                shutil.rmtree(folder, ignore_errors=True)
+        except OSError:
+            continue
+
+
+atexit.register(_remove_isolated)
+_remove_stale_isolated()
 # HOME gehört dazu, und zwar für macOS: Dort läuft jede Nutzerverzeichnis-
 # Auflösung über ``Path.home()`` (~/Library/…), und ohne den Eintrag las und
 # schrieb die Suite in Roberts echtem Profil — §38 griff auf genau der
