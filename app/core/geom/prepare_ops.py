@@ -65,6 +65,7 @@ from app.core.geom.mesh import (
     shift_body,
     signed_volume,
     stable_arctan2,
+    stable_normals,
 )
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import (
@@ -1319,7 +1320,7 @@ def _body_from_faces(
             if not flat:
                 reach = float(np.max(np.linalg.norm(spread, axis=1)))
                 limit = max(FLAT_RIM, CURVED_RIM * 2.0 * reach)
-                if not (curved_rims or past_curved) or flatness > limit * len(ring) ** 0.5:
+                if not (curved_rims or past_curved) or flatness > limit * math.sqrt(len(ring)):
                     return None
                 built = _curved_rim_cap(
                     mesh, chosen, points, directed, next_index, past_curved=past_curved
@@ -1986,8 +1987,6 @@ def _inscribed_radius(tool: MeshData, centre: Vec3, direction: Vec3) -> float | 
     nichts. Die Normalen kommen aus ``stable_normals`` (RM-187), denn aus dem
     Abstand wird die Säule, an der „geht nicht mehr durch" hängt.
     """
-    from app.core.geom.mesh import stable_normals
-
     raw = tool.raw
     if not len(raw.faces):
         return None
@@ -2244,7 +2243,7 @@ def _axis_exits(
     forward = max(float(np.maximum(to_lower, to_upper)[bounded].min()), 0.0)
     backward = max(-float(np.minimum(to_lower, to_upper)[bounded].max()), 0.0)
     triangles = np.asarray(body.raw.triangles, dtype=np.float64)
-    normals = np.asarray(body.raw.face_normals, dtype=np.float64)
+    normals = stable_normals(body.raw)[0]
     exits = []
     for ray, box in ((axis, forward), (-axis, backward)):
         travel = box
@@ -2932,7 +2931,7 @@ def _toward_the_air(mesh: MeshData, feature: Feature) -> NDArray[np.float64] | N
         return None
     ends = centre + np.array([-1.0, 1.0])[:, None] * axis * (depth / 2.0 + 2.0 * FEATURE_OVERLAP)
     closest, _distance, faces = on_surface(mesh.raw, ends, index=surface_index_of(mesh))
-    signed = row_dots(ends - closest, np.asarray(mesh.raw.face_normals)[faces])
+    signed = row_dots(ends - closest, stable_normals(mesh.raw)[0][faces])
     inside = signed < -EPS_GEOM
     if bool(inside[0]) == bool(inside[1]):
         return None
@@ -3062,9 +3061,8 @@ def _rooted(
         if len(ordered) < 3:
             continue
         points = vertices[ordered]
-        if (
-            float(np.max(np.abs(transform.along(points - origin, normal))))
-            > FLAT_RIM * len(points) ** 0.5
+        if float(np.max(np.abs(transform.along(points - origin, normal)))) > FLAT_RIM * math.sqrt(
+            len(points)
         ):
             continue
         shifted = points - normal * FEATURE_OVERLAP
@@ -3148,7 +3146,7 @@ def _without_cavities(
         # einen Strahlenschnitt, der eine weitere Abhängigkeit bräuchte.
         index = index if index is not None else surface_index(tool.raw)
         closest, _distances, faces = on_surface(tool.raw, samples, index=index)
-        signed = row_dots(samples - closest, np.asarray(tool.raw.face_normals)[faces])
+        signed = row_dots(samples - closest, stable_normals(tool.raw)[0][faces])
         if not bool(np.any(signed < -EPS_GEOM)):
             continue
         # **Durch das Werkzeug, nicht um es herum.** Ein Zapfen, der in einer
@@ -3265,7 +3263,7 @@ def _feature_mount(
             if not polygon.is_valid or polygon.area <= EPS_GEOM:
                 continue
             for index in sorted(adjacent):
-                other_normal = np.asarray(mesh.raw.face_normals[index], dtype=np.float64)
+                other_normal = stable_normals(mesh.raw)[0][index]
                 if abs(float(transform.along(other_normal, normal))) < 1.0 - EPS_GEOM:
                     continue
                 centre = np.asarray(mesh.raw.triangles_center[index]) - origin
@@ -3331,7 +3329,7 @@ def _feature_mount(
 
     ends = centre + np.array([-1.0, 1.0])[:, None] * outward * (depth / 2.0 + EPS_GEOM * 16.0)
     closest, _, faces = on_surface(mesh.raw, ends, index=surface_index_of(mesh))
-    signed = row_dots(ends - closest, np.asarray(mesh.raw.face_normals)[faces])
+    signed = row_dots(ends - closest, stable_normals(mesh.raw)[0][faces])
     inside = signed < -EPS_GEOM
     if inside.all():
         raise ValidationError(field="at_feature", detail=NO_OWN_BODY, constraint="not_movable")
@@ -7142,7 +7140,7 @@ def _shares_in_material(
         probes.append(edge + inward * FEATURE_OVERLAP + normal * FEATURE_OVERLAP)
     every = np.vstack(probes)
     closest, _, at = on_surface(mesh.raw, every, index=surface_index_of(mesh))
-    body_normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
+    body_normals = stable_normals(mesh.raw)[0]
     signed = row_dots(every - closest, body_normals[at])
     shares: list[float] = []
     start = 0
@@ -7205,7 +7203,7 @@ def _past_the_mouths(
     raw = cavity.raw
     points = np.asarray(raw.vertices, dtype=np.float64)
     faces = np.asarray(raw.faces, dtype=np.int64)
-    normals = np.asarray(raw.face_normals, dtype=np.float64)
+    normals = stable_normals(raw)[0]
     lifts: list[tuple[Any, NDArray[np.float64], float]] = []
     candidates = []
     for facet in raw.facets:
@@ -7278,8 +7276,6 @@ def _continued_walls(
     läuft fast parallel aus, eine gerundete Mündungskante), wo der Rand kein
     Ring ist oder keine Ecke eine Richtung hat.
     """
-    from app.core.geom.mesh import stable_normals
-
     loop = _rim_loop(rim)
     if loop is None:
         return None
@@ -8282,7 +8278,7 @@ def _exits_below(
     from app.core.sketch.planes import frame_of
 
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
-    normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
+    normals = stable_normals(mesh.raw)[0]
     frame = frame_of((float(inward[0]), float(inward[1]), float(inward[2])), (0.0, 0.0, 0.0))
     across = np.asarray(frame.x_axis, dtype=np.float64), np.asarray(frame.y_axis, dtype=np.float64)
     back = MAX_FACET_SAG
@@ -11564,8 +11560,8 @@ def _resized_bore_floor(
     old_indices, new_indices = list(old.face_indices), list(new.face_indices)
     old_points = np.asarray(original.raw.vertices)[original.raw.faces[old_indices]].reshape(-1, 3)
     new_points = np.asarray(changed.raw.vertices)[changed.raw.faces[new_indices]].reshape(-1, 3)
-    normal = np.asarray(original.raw.face_normals)[old_indices[0]]
-    new_normals = np.asarray(changed.raw.face_normals)[new_indices]
+    normal = stable_normals(original.raw)[0][old_indices[0]]
+    new_normals = stable_normals(changed.raw)[0][new_indices]
     tolerance = weld_tolerance(max(original.bounds.diagonal, changed.bounds.diagonal))
     origin = old_points[0]
     moved_origin = origin + np.asarray(shift, dtype=np.float64)
@@ -15451,7 +15447,7 @@ def _thread_wall(
     inner, outer = _thread_bounds(feature, source)
     mesh = as_mesh_data(source.mesh)
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
-    normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
+    normals = stable_normals(mesh.raw)[0]
     frame = frame_of((float(axis[0]), float(axis[1]), float(axis[2])), (0.0, 0.0, 0.0))
     across = np.asarray(frame.x_axis, dtype=np.float64), np.asarray(frame.y_axis, dtype=np.float64)
     reach: float | None = None
@@ -15554,7 +15550,7 @@ def _material_at(source: SceneObject, point: np.ndarray) -> bool:
     raw = mesh.raw
     flat = np.asarray(point, dtype=float).reshape(1, 3)
     closest, _distance, triangle = on_surface(raw, flat, index=surface_index_of(mesh))
-    outward = float(units.dot3(flat[0] - closest[0], np.asarray(raw.face_normals)[triangle[0]]))
+    outward = float(units.dot3(flat[0] - closest[0], stable_normals(raw)[0][triangle[0]]))
     return outward <= EPS_GEOM
 
 
@@ -15830,7 +15826,6 @@ def _aligned_facets(
         return source, False
 
     from app.core.geom.attributes import carry_refined_units
-    from app.core.geom.mesh import stable_normals
     from app.core.perceive import patterns
 
     check_cancelled = cancelled.raise_if_cancelled if cancelled is not None else lambda: None
@@ -16000,7 +15995,7 @@ def _pattern_plug(
         and feature.params.get("carrier") == "plane"
         and feature.params.get("mode") == "engraved"
     ):
-        from app.core.geom.mesh import concatenated, stable_normals
+        from app.core.geom.mesh import concatenated
         from app.core.perceive.features import _one_body
         from app.core.perceive.patterns import _components
 
@@ -16152,7 +16147,7 @@ def _texture_plug_without_bores(
         if outside and outside <= owned_bores:
             continue
         _hub, normal, spread = units.plane_fit(points.tolist())
-        normals = np.asarray(body.face_normals)[sorted(outside)]
+        normals = stable_normals(body)[0][sorted(outside)]
         # Ein Schnitt durch die Zelle endet in seiner belegten Rückfläche.
         # Senkrechte fremde Wände sind dagegen kein Deckel dieser Textur.
         if (
@@ -18031,7 +18026,7 @@ def _top_triangles(mesh: MeshData) -> tuple[int, ...]:
     """Die Dreiecke der Oberseite — dieselbe Frage wie ``profiles.top_faces_of``
     am exakten Körper: nach oben gerichtet und auf der höchsten Ebene."""
     raw = mesh.raw
-    normals = np.asarray(raw.face_normals, dtype=np.float64)
+    normals = stable_normals(raw)[0]
     centres = np.asarray(raw.triangles_center, dtype=np.float64)
     top = float(mesh.bounds.maximum[2])
     chosen = np.flatnonzero((normals[:, 2] > 0.9) & (np.abs(centres[:, 2] - top) <= 1e-4))

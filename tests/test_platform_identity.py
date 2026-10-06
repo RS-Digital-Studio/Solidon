@@ -1359,6 +1359,70 @@ def _face_textures() -> str:
     return "|".join(prints)
 
 
+def _read_lattices() -> str:
+    """Ein gedrehtes Wabenfeld und ein Rändel um einen Griff, gelesen und neu geteilt.
+
+    Der Lesepfad der Gittermuster (``perceive.patterns``): die Richtungen zum
+    nächsten Nachbarn auf die Symmetrie gefaltet, das Hüllrechteck in der
+    Drehung des Feldes, Seiten und Diagonalen einer Raute und das Neuzeichnen
+    in den gedrehten Achsen des Feldes. :func:`_wrapped_texture` liest nur
+    eine Reihe von Rippen und berührt nichts davon.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    plate = _plate()
+    found = detect(plate)
+    top = next(
+        feature.id
+        for feature in found.values()
+        if feature.kind == "face" and float(feature.params.get("normal", (0, 0, 0))[2]) > 0.99
+    )
+    honeycomb = _registered_outputs(
+        "apply_texture",
+        plate,
+        found,
+        coverage="whole_face",
+        face=top,
+        pattern="hexagon",
+        pitch=6.0,
+        depth=0.6,
+        mode="engraved",
+        angle=17.0,
+    )[0]
+    shaft = MeshData.of(lathe.cylinder(radius=10.0, height=30.0, sections=96))
+    knurled = _registered(
+        "apply_texture",
+        shaft,
+        pattern="knurl_diamond",
+        wrap="cylinder",
+        wrap_diameter=20.0,
+        width=31.4,
+        height=16.0,
+        pitch=3.0,
+        depth=0.5,
+    )
+    prints = []
+    for textured, pitch in ((honeycomb, 7.0), (knurled, 3.5)):
+        read = detect(textured)
+        pattern = next(feature for feature in read.values() if feature.kind == "pattern")
+        changed = _registered_outputs(
+            "resize_feature", textured, read, at_feature=pattern.id, pitch=pitch
+        )
+        prints.append(
+            "|".join(
+                (
+                    str(pattern.params.get("style")),
+                    fingerprint(
+                        [float(pattern.params.get("angle", 0.0)), float(pattern.params["pitch"])]
+                    ),
+                    _mesh_print(changed[0]),
+                )
+            )
+        )
+    return "|".join(prints)
+
+
 def _sketch_arcs() -> str:
     """Eine Skizze mit Bögen und einem Vollkreis-Bogen, auf eine schräge Ebene gezogen (RM-187).
 
@@ -1495,6 +1559,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "pose_armature": _posed_plate,
     "turned_closures": _turned_closures,
     "prusa_support_angle": _automatic_support_angle,
+    "read_lattices": _read_lattices,
     "remesh_mesh": _refined_plate,
     "resize_chamber": _changed_chamber,
     "resize_closure": _changed_closure,
@@ -1530,12 +1595,27 @@ def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None
     Lage aus ``np.dot`` (``prepare.resize_bore``). Rot war er außerdem für
     *Drehen*, *Druckoptimal ausrichten*, den schrägen Schnitt, *An Merkmal
     ausrichten*, *Stellung geben* und *Offene Fläche schließen* (22.09.2026).
+
+    Vor beiden Läufen leert er die Merker der Erkennung: Sonst beantwortete
+    der verrauschte Lauf sie aus dem stillen, und die Naht eines umwickelten
+    Musters hing unbemerkt an ``math.cos`` (Review zu RM-187).
     """
+    _forget_what_the_perception_remembers()
     quiet = _WAYS[way]()
+    _forget_what_the_perception_remembers()
     with platform_noise():
         noisy = _WAYS[way]()
 
     assert noisy == quiet, f"{way} hängt an einer plattformabhängigen Rechnung"
+
+
+def _forget_what_the_perception_remembers() -> None:
+    """Die prozessweiten Merker der Erkennung leeren — Merkmale und Nachmessungen."""
+    from app.core.perceive.features import forget_cache
+    from app.core.perceive.local import forget_known
+
+    forget_cache()
+    forget_known()
 
 
 def test_the_noise_reaches_what_it_should() -> None:

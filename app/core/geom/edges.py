@@ -48,7 +48,13 @@ from app.core.errors import (
 from app.core.geom import lathe, transform
 from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
-from app.core.geom.mesh import MeshData, stable_arccos, stable_normals, stable_sin_cos
+from app.core.geom.mesh import (
+    MeshData,
+    shift_body,
+    stable_arccos,
+    stable_normals,
+    stable_sin_cos,
+)
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
 from app.core.types import CancelToken, Feature, Finding, Mesh, Quality, Vec3, is_a_cavity
@@ -2240,7 +2246,7 @@ def _mixed_corner_region(size: float, *, rounded: bool) -> tuple[MeshData, MeshD
     import trimesh
 
     region = trimesh.creation.box((2.0 * size, 2.0 * size, size))
-    region.apply_translation((0.0, 0.0, -size / 2.0))
+    shift_body(region, (0.0, 0.0, -size / 2.0))
     if not rounded:
         points = np.asarray(
             [
@@ -4244,7 +4250,7 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
         shape = _ball(radius, turn_limit=False)
         for point in knots:
             ball = shape.copy()
-            ball.apply_translation(point)
+            shift_body(ball, point)
             parts.append(ball)
     if not parts:
         raise GeometryError(

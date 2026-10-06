@@ -687,7 +687,9 @@ def shift_body(body: object, offset: Sequence[float] | np.ndarray) -> None:
         cache.id_set()
 
 
-def periodic_sin_cos(angles: np.ndarray | float) -> tuple[np.ndarray, np.ndarray]:
+def periodic_sin_cos(
+    angles: np.ndarray | Sequence[float] | float,
+) -> tuple[np.ndarray, np.ndarray]:
     """:func:`stable_sin_cos` für Winkel jeder Größe — erst um ganze Umläufe gefaltet.
 
     Der Winkel abzüglich der nächsten ganzen Zahl von Umläufen landet in

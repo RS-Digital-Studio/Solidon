@@ -34,8 +34,6 @@ from app.core.units import (
     MAX_FACET_SAG,
     circle_cos_sin,
     exact_atan2,
-    exact_cos,
-    exact_sin,
 )
 from app.i18n import _
 
@@ -97,8 +95,8 @@ def _adaptive_outline(
         # acos(1-sag/radius) würde dort schon auf null runden.
         share = math.sqrt(min(1.0, sag / (2.0 * radius)))
         # ``asin`` als ``atan2(x, √((1 - x)(1 + x)))`` über ``exact_atan2``, die
-        # Ecken über ``exact_cos``/``exact_sin``: ``math.asin``, ``math.cos``
-        # und ``math.sin`` runden je Maschine anders (RM-187).
+        # Ecken über :func:`_on_circle`: ``math.asin``, ``math.cos`` und
+        # ``math.sin`` runden je Maschine anders (RM-187).
         arc = exact_atan2(share, math.sqrt((1.0 - share) * (1.0 + share)))
         angle = min(math.pi / 2.0, 4.0 * arc)
         if angle <= 0.0 or not math.isfinite(sweep):
@@ -106,9 +104,10 @@ def _adaptive_outline(
         count = max(1, math.ceil(abs(sweep) / angle))
         if len(points) + count > MAX_OUTLINE_POINTS:
             raise resolution_error()
-        for index in range(1, count + 1):
-            theta = begin + sweep * index / count
-            append((centre[0] + radius * exact_cos(theta), centre[1] + radius * exact_sin(theta)))
+        for point in _on_circle(
+            centre, radius, [begin + sweep * index / count for index in range(1, count + 1)]
+        ):
+            append(point)
 
     def distance_to_chord(
         point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]
@@ -201,13 +200,11 @@ def _arc_points(
         if radius < EPS_GEOM:
             return [end]
         first = exact_atan2(ay - centre[1], ax - centre[0])
-        return [
-            (
-                centre[0] + radius * exact_cos(first + 2.0 * math.pi * index / ARC_STEPS),
-                centre[1] + radius * exact_sin(first + 2.0 * math.pi * index / ARC_STEPS),
-            )
-            for index in range(1, ARC_STEPS + 1)
-        ]
+        return _on_circle(
+            centre,
+            radius,
+            [first + 2.0 * math.pi * index / ARC_STEPS for index in range(1, ARC_STEPS + 1)],
+        )
     # Umkreismittelpunkt über die Determinante; sie ist zugleich das Maß dafür,
     # wie weit die drei Punkte von einer Geraden entfernt sind.
     d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
@@ -247,11 +244,27 @@ def _arc_points(
         span -= 2.0 * math.pi
 
     steps = max(2, int(abs(span) / (2.0 * math.pi) * ARC_STEPS) + 1)
-    points = []
-    for index in range(1, steps + 1):
-        angle = first + span * index / steps
-        points.append((ux + radius * exact_cos(angle), uy + radius * exact_sin(angle)))
-    return points
+    return _on_circle(
+        (ux, uy), radius, [first + span * index / steps for index in range(1, steps + 1)]
+    )
+
+
+def _on_circle(
+    centre: tuple[float, float], radius: float, angles: list[float]
+) -> list[tuple[float, float]]:
+    """Die Punkte eines Kreises zu diesen Winkeln — plattformgleich, als ein Feld gerechnet.
+
+    :func:`~app.core.geom.mesh.periodic_sin_cos` statt ``exact_cos`` und
+    ``exact_sin`` je Punkt (RM-187): Die rechnen in ``decimal``, und ein Bogen
+    hat hier bis zu einige hundert Ecken.
+    """
+    from app.core.geom.mesh import periodic_sin_cos
+
+    sines, cosines = periodic_sin_cos(angles)
+    return [
+        (centre[0] + radius * cosine, centre[1] + radius * sine)
+        for cosine, sine in zip(cosines.tolist(), sines.tolist(), strict=True)
+    ]
 
 
 def outline_points(
@@ -346,6 +359,8 @@ def extrude_profile(profile: Profile, height: float, frame: PlaneFrame) -> Any:
     import trimesh
     from shapely.geometry import Polygon as ShapelyPolygon
 
+    from app.core.geom.mesh import shift_body
+
     outer = outline_points(profile)
     if len(outer) < 3:
         raise ValueError("ein Umriss aus weniger als drei Punkten trägt keine Fläche")
@@ -366,7 +381,7 @@ def extrude_profile(profile: Profile, height: float, frame: PlaneFrame) -> Any:
 
     solid = trimesh.creation.extrude_polygon(shape, height=abs(height))
     if height < 0.0:
-        solid.apply_translation((0.0, 0.0, -abs(height)))
+        shift_body(solid, (0.0, 0.0, -abs(height)))
 
     # **Auf die Ebene drehen und schieben.** Die Extrusion liegt in XY bei
     # Z = 0; ``frame`` sagt, wo diese Ebene im Raum liegt. Die Spalten der

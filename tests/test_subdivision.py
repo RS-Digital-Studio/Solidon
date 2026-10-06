@@ -590,10 +590,9 @@ def test_a_target_missed_by_less_than_double_reaches_the_fallback(profile: Profi
 def _hollow_sphere(profile: Profile) -> MeshData:
     """Eine dünnwandige Hohlkugel — der Fall, in dem Vereinfachen wehtut.
 
-    Zwei Schalen im Abstand von 1,2 mm, dazu die Entlüftung: 46 992 Dreiecke
-    (gemessen am 06.10.2026 auf Windows, Linux und macOS ARM), von denen die
-    inneren dicht neben den äußeren liegen. Genau so kam die ausgehöhlte Ente
-    aus dem Kundendurchgang heraus.
+    Zwei Schalen im Abstand von 1,2 mm, dazu die Entlüftung: 196 224 Dreiecke,
+    von denen die inneren dicht neben den äußeren liegen. Genau so kam die
+    ausgehöhlte Ente aus dem Kundendurchgang heraus.
     """
     kugel = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=30.0))
     return run("hollow_object", object_of(kugel), profile, wall=1.2, vents=1).outputs[0].mesh
@@ -637,8 +636,8 @@ def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -
     #
     # **Die Reihe vom 06.10.2026 ist auf allen drei Runnern dieselbe** (RM-114,
     # Lauf 37491131058, Ziele 2 000 bis 100 000): offen von 20 000 bis 35 000,
-    # dicht bis 17 500 und ab 40 000; ab 50 000 bleibt es bei den 46 992
-    # Dreiecken der Kugel. Die Reihe unten trifft also beide Seiten, und
+    # dicht bis 17 500 und ab 40 000; ab 50 000 liefert die Vereinfachung
+    # stets dieselben 46 992 Dreiecke. Die Reihe unten trifft also beide Seiten, und
     # mindestens ein Ziel muss aufgehen — sonst prüfte die Schleife nur das
     # Schweigen.
     #

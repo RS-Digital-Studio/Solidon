@@ -25,7 +25,6 @@ from app.core.units import (
     EPS_GEOM,
     circle_point,
     exact_atan2,
-    exact_cos,
     exact_sin,
     is_zero,
     ring_area,
@@ -905,8 +904,7 @@ def _arc_midpoint(centre: Point2, start: Point2, end: Point2) -> Point2:
     radius = math.dist(centre, start)
     begin = exact_atan2(start[1] - centre[1], start[0] - centre[0])
     sweep = arc_sweep(centre, start, end)
-    middle = begin + sweep / 2.0
-    return (centre[0] + radius * exact_cos(middle), centre[1] + radius * exact_sin(middle))
+    return _on_circle(centre, radius, [begin + sweep / 2.0])[0]
 
 
 def _flipped(segment: ProfileSegment) -> ProfileSegment:
@@ -1338,12 +1336,23 @@ def _along_arc(centre: Point2, start: Point2, sweep: float, radius: float) -> tu
     """Die Punkte eines Bogens, von ``start`` aus um ``sweep`` gedreht."""
     begin = exact_atan2(start[1] - centre[1], start[0] - centre[0])
     steps = _steps_for(radius, sweep)
+    return _on_circle(centre, radius, [begin + sweep * index / steps for index in range(steps + 1)])
+
+
+def _on_circle(centre: Point2, radius: float, angles: list[float]) -> tuple[Point2, ...]:
+    """Die Punkte eines Kreises zu diesen Winkeln — plattformgleich, als ein Feld gerechnet.
+
+    :func:`~app.core.geom.mesh.periodic_sin_cos` statt ``exact_cos`` und
+    ``exact_sin`` je Punkt (RM-187): Die rechnen in ``decimal``, und die
+    Skizzenvorschau baut einen wachsenden Kreis bei jeder Mausbewegung neu —
+    mit bis zu :data:`_MOST_STEPS` Punkten fiel sie dabei unter die Bildrate.
+    """
+    from app.core.geom.mesh import periodic_sin_cos
+
+    sines, cosines = periodic_sin_cos(angles)
     return tuple(
-        (
-            centre[0] + radius * exact_cos(begin + sweep * index / steps),
-            centre[1] + radius * exact_sin(begin + sweep * index / steps),
-        )
-        for index in range(steps + 1)
+        (centre[0] + radius * cosine, centre[1] + radius * sine)
+        for cosine, sine in zip(cosines.tolist(), sines.tolist(), strict=True)
     )
 
 
@@ -1413,14 +1422,14 @@ def _along_spline(points: tuple[Point2, ...]) -> tuple[Point2, ...]:
             rest = 1.0 - share
             curve.append(
                 (
-                    rest**3 * first[0]
+                    rest * rest * rest * first[0]
                     + 3.0 * rest * rest * share * one[0]
                     + 3.0 * rest * share * share * two[0]
-                    + share**3 * second[0],
-                    rest**3 * first[1]
+                    + share * share * share * second[0],
+                    rest * rest * rest * first[1]
                     + 3.0 * rest * rest * share * one[1]
                     + 3.0 * rest * share * share * two[1]
-                    + share**3 * second[1],
+                    + share * share * share * second[1],
                 )
             )
     return tuple(curve)

@@ -59,6 +59,7 @@ from app.core.geom.mesh import (
     ray_hit_distances,
     row_dots,
     shift_body,
+    stable_normals,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
 from app.core.geom.transform import Axis, translation
@@ -314,7 +315,7 @@ def _flank_is_open(
     samples = np.asarray(position, dtype=float) + rim[None, :, :] + depths[:, None, None] * axis
     flat = samples.reshape(-1, 3)
     closest, _distance, triangle = on_surface(body.raw, flat, index=surface_index_of(body))
-    normals = np.asarray(body.raw.face_normals)[triangle]
+    normals = stable_normals(body.raw)[0][triangle]
     outward = row_dots(flat - closest, normals)
     solid = outward <= EPS_GEOM
     if old_opening is not None:
@@ -348,7 +349,7 @@ def inside_material(
     from app.core.geom.mesh import on_surface
 
     closest, _distance, triangle = on_surface(body.raw, points, index=surface_index_of(body))
-    normals = np.asarray(body.raw.face_normals, dtype=float)[triangle]
+    normals = stable_normals(body.raw)[0][triangle]
     offset = points - closest
     outward = (
         offset[:, 0] * normals[:, 0] + offset[:, 1] * normals[:, 1] + offset[:, 2] * normals[:, 2]
@@ -628,7 +629,7 @@ def mouth_over_the_edge(
     samples = mouth + rim[None, :, :] + depths[:, None, None] * unit
     flat = samples.reshape(-1, 3)
     closest, _distance, triangle = on_surface(body.raw, flat, index=surface_index_of(body))
-    normals = np.asarray(body.raw.face_normals)[triangle]
+    normals = stable_normals(body.raw)[0][triangle]
     outward = row_dots(flat - closest, normals)
     inside = (outward <= EPS_GEOM).reshape(len(depths), _RIM_POINTS)
     if bool(inside.all(axis=1).any()):
@@ -739,7 +740,7 @@ def _mouth_face(
     if not len(distances):
         return None
     first = int(np.argmin(distances))
-    normal = np.asarray(body.raw.face_normals[int(hit[first])], dtype=float)
+    normal = np.array(stable_normals(body.raw)[0][int(hit[first])], dtype=float)
     if abs(float(transform.along(normal, inward))) <= 0.1:
         return None
     return start + inward * float(distances[first]), normal
