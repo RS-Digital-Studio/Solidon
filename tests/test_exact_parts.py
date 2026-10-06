@@ -313,6 +313,35 @@ def test_printed_thread_exact_is_core_and_ridge_without_a_seam(internal: bool) -
     _roundtrip(body)
 
 
+@pytest.mark.parametrize("internal", [False, True])
+def test_a_printed_thread_of_its_own_measure_is_exact_too(internal: bool) -> None:
+    """Das eigene Maß baut am exakten Kern denselben genähten Körper wie M6.
+
+    Ø 66,6 mit der Regelsteigung 6 ist das Gewinde, das eine Bohrung von 60 mm
+    bekommt (Kundenvorschlag S-20261006-c66299).
+    """
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+
+    exact_kernel()
+    nominal, pitch, length = 66.6, 6.0, 12.0
+    values = {"size": CUSTOM_SIZE, "diameter": nominal, "pitch": 0.0, "length": length}
+    produced = _built("printed_thread", True, **values, internal=internal, play=0.0)
+    body = _sound(produced.mesh)
+    depth = pitch * shapes.RIDGE_SHARE
+    diameter = nominal - 2.0 * depth if internal else nominal
+    built = length + BOOLEAN_OVERLAP if internal else length
+    assert body.volume == pytest.approx(
+        thread_volume(diameter, pitch, built, internal=internal), rel=1e-6
+    )
+    assert body.bounds.maximum[0] == pytest.approx(nominal / 2.0, abs=1e-6)
+    thread = produced.features["thread_1"]
+    assert thread.params["pitch"] == pytest.approx(pitch)
+    assert thread.params["nominal"] == pytest.approx(nominal)
+    mesh = _built("printed_thread", False, **values, internal=internal, play=0.0)
+    assert 0.995 < mesh.mesh.volume / body.volume < 1.0, "die Sehnen folgen der Facettenregel"
+    _roundtrip(body)
+
+
 def test_printed_screw_exact_has_its_head_on_top_and_the_thread_below() -> None:
     exact_kernel()
     screw = standards.screw("M5")

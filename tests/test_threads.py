@@ -117,3 +117,79 @@ def test_the_screw_stays_under_its_nominal_diameter() -> None:
     male, _female = pair(size="M6", play=0.15)
 
     assert radii(male.mesh)[1] * 2.0 == pytest.approx(6.0 - 0.15, abs=0.01)
+
+
+def custom_pair(diameter: float, pitch: float = 0.0, play: float = 0.15, length: float = 12.0):
+    """Wie :func:`pair`, mit eigenem Maß statt einer Tabellengröße."""
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+
+    values = {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch, "length": length}
+    male = printed_thread(ThreadParams(**values, internal=False, play=play))
+    female = printed_thread(ThreadParams(**values, internal=True, play=play))
+    return male, female
+
+
+@pytest.mark.parametrize("diameter", [7.6, 66.6, 250.0])
+def test_a_thread_of_its_own_measure_interlocks_with_the_play_asked_for(diameter: float) -> None:
+    """Das Paar mit eigenem Maß hält dieselben Zusagen wie das aus der Tabelle.
+
+    Ø 66,6 ist das Gewinde, das eine Bohrung von 60 mm bekommt (Kundenvorschlag
+    S-20261006-c66299); Ø 250 liegt weit über jeder Tabelle.
+    """
+    from app.core.knowledge import standards
+    from app.core.units import MAX_FACET_SAG
+
+    male, female = custom_pair(diameter)
+    screw_core, screw_crest = radii(male.mesh)
+    hole_core, hole_crest = radii(female.mesh)
+    depth = standards.regular_pitch(diameter) * RIDGE_SHARE
+
+    # Die Kämme liegen auf Ecken und treffen das Maß; der Grund der Mutter ist
+    # die Bohrung ihres Werkzeugs, und deren Sehnen liegen bis zu
+    # ``MAX_FACET_SAG`` innerhalb — bei Ø 250 gemessen 0,03 mm, wie jede Rundung.
+    assert hole_crest - screw_crest == pytest.approx(0.15, abs=0.01)
+    assert hole_core - screw_core == pytest.approx(0.15, abs=MAX_FACET_SAG)
+    assert screw_crest * 2.0 == pytest.approx(diameter - 0.15, abs=0.01)
+    assert screw_crest - screw_core == pytest.approx(depth, abs=0.01)
+    assert as_mesh_data(male.mesh).is_watertight and as_mesh_data(female.mesh).is_watertight
+
+
+def test_a_stated_pitch_beats_the_regular_one() -> None:
+    """Eine feinere Steigung schneidet flacher — der Weg für die dünne Rohrwand."""
+    male, _female = custom_pair(66.6, pitch=2.0)
+    core, crest = radii(male.mesh)
+
+    assert crest - core == pytest.approx(2.0 * RIDGE_SHARE, abs=0.01)
+
+
+def test_a_pitch_too_coarse_for_the_diameter_is_refused_with_a_way_out() -> None:
+    """Ø 4 mit 5 mm Steigung hätte keinen Kern: eine Absage, die das Feld nennt."""
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as caught:
+        custom_pair(4.0, pitch=5.0)
+    assert caught.value.field == "pitch"
+    assert caught.value.suggestions
+
+
+def test_a_wide_thread_gets_chords_as_fine_as_any_other_rounding() -> None:
+    """Je Umlauf so viele Sehnen, dass die Abweichung unter ``MAX_FACET_SAG`` bleibt.
+
+    Bis Ø 46 sind es achtundvierzig wie bisher — jede Tabellengröße baut
+    unverändert —, darüber ein Vielfaches davon. Mit festen achtundvierzig wich
+    ein Gewinde Ø 500 um 0,53 mm von seiner Rundung ab, mehr als das Spiel.
+    """
+    import math
+
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.shapes import SEGMENTS, turn_segments
+    from app.core.units import MAX_FACET_SAG
+
+    for size in standards.screw_sizes():
+        # Das Innenwerkzeug reicht am weitesten hinaus: Nennmaß plus Spiel.
+        assert turn_segments(standards.screw(size).nominal / 2.0 + 1.0) == SEGMENTS, size
+    for radius in (24.0, 33.3, 125.0, 500.0):
+        count = turn_segments(radius)
+        assert count % SEGMENTS == 0
+        assert radius * (1.0 - math.cos(math.pi / count)) <= MAX_FACET_SAG + 1e-12
+        assert radius * (1.0 - math.cos(math.pi / (count - SEGMENTS))) > MAX_FACET_SAG

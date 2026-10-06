@@ -174,6 +174,14 @@ Eintritt an der Spitze bis unter den Kopf
 (`test_a_printed_screw_turns_through_its_printed_nut`). `build.threaded` baut
 den Vorlauf von einem Umlauf an beiden Kernen.
 
+**Ein Gewinde endet nicht an der Tabelle.** Passt keine Größe, nimmt es ein
+eigenes Maß (`fasteners.CUSTOM_SIZE`), dessen Kernloch die Bohrung ist. Jeder
+Gewindeweg — Baustein, *Schraube erstellen*, *Drehdeckel erzeugen*,
+Gegenstück — teilt die Grenzen `units.SMALLEST_THREAD`, `LARGEST_THREAD` und
+`COARSEST_PITCH`, und am Netz kommen die Sehnen je Umlauf aus
+`shapes.turn_segments` (Drehdeckel: `lid.turn_sections`); eine eigene Zahl
+dafür ist ein Zwilling.
+
 ## Was eine Richtung hat, wird an ihr gemessen
 
 Volumen, Wasserdichtheit und Hülle sehen eine verkehrt herum gebaute Nase

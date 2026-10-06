@@ -325,7 +325,8 @@ def test_a_part_seated_in_the_chosen_bore_is_built_there(profile, carrier):
 
 @pytest.mark.parametrize(
     ("carrier", "size", "named"),
-    [("plate_holes.stl", "M4", "M6"), ("screw_hole", "M6", "M8")],
+    # Im Schraubenloch M6 (Ø 6,6) passt keine Tabellengröße; der Satz nennt das eigene Maß.
+    [("plate_holes.stl", "M4", "M6"), ("screw_hole", "M6", "eigenem Maß")],
 )
 def test_a_thread_in_a_wider_bore_names_the_bore_not_the_body(profile, carrier, size, named):
     """Ein Gewinde, das in seiner Bohrung nichts abträgt, sagt, dass sie zu weit ist.

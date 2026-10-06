@@ -47,7 +47,8 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   (`tests/test_exact_body_parity.py`, `KEEP` statt `MESH`) ist die Abnahme je
   Gruppe.
 - **Ein Gewinde ist exakt ein genähter Körper**; der nackte Gang
-  (`shapes.thread_body`) bleibt eine Netzform.
+  (`shapes.thread_body`) bleibt eine Netzform. Am Netz bekommen Kern und Gang
+  je Umlauf `shapes.turn_segments` Sehnen (ein Vielfaches von `SEGMENTS`).
 - **Der Senkkopf bleibt exakt ein Verbund** aus Kegel und Gang (tangential,
   vereinigt ungültig aus STEP); ein lösbares Teil liegt ohnehin als Verbund am
   Träger (`exact.compound`, Gegenstück zu `ops._concatenated_with_slots`).
@@ -73,6 +74,10 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   Umbenennen im Rezept behält die Quelle. Einen `SurfacePatch` bekommen ebene
   Anschluss- und Dichtflächen erst, wenn alle Dreiecksecken auf ihrer Ebene
   liegen; gerundete Kontaktbänder und Vorgabemaße behaupten keinen Träger.
+- **Ein Gewinde hat jedes Maß**: eine Tabellengröße oder `fasteners.CUSTOM_SIZE`
+  mit Durchmesser und Steigung (`thread_measure`, null ist
+  `standards.regular_pitch`); an einer Bohrung ohne Tabellengröße wählt
+  `custom_thread_for` das Maß, dessen Kernloch sie ist.
 - **`build.thread`** beschreibt rechtsgängig (`handedness="right"`, Winkel und
   Höhe wachsen gemeinsam); Innenwerkzeug, Schraube, Mutter ändern den Drehsinn
   nie, Spiegelungen führen ihn nach, ein Importgewinde bekommt keine Vorgabe;

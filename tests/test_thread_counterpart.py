@@ -3,8 +3,9 @@
 Die drei Paare in ``counterpart.PAIRS`` setzen beide Hälften neu. Ein
 eingelesener Bolzen oder ein gedrucktes Gewinde hat seine Hälfte schon: Was
 fehlt, ist das gegengleiche Gewinde am anderen Teil und die Passung
-dazwischen. Das Maß kommt aus dem Gewinde selbst und muss ein Tabellenmaß
-treffen — ein Gewinde Ø 6,4 mit Steigung 1,1 wird nicht still zu M6.
+dazwischen. Das Maß kommt aus dem Gewinde selbst: eine Tabellengröße, wo es
+eine trifft, sonst sein eigenes — ein Gewinde Ø 6,4 mit Steigung 1,1 wird
+nicht still zu M6.
 """
 
 from __future__ import annotations
@@ -21,10 +22,11 @@ from app.core.counterpart import (
     apply_thread_counterpart,
     attach_thread_fit,
     thread_counterpart_draft,
-    thread_size_for,
+    thread_values_for,
 )
 from app.core.errors import ValidationError
 from app.core.knowledge import standards
+from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
 from app.core.scene import ResultCache, evaluate
 from app.core.scene.fits import active_fits
 from app.core.scene.history import History, OperationDraft
@@ -63,33 +65,48 @@ def _generated(
     return Feature(id="thread_1", kind="thread", provenance=provenance, params=params)  # type: ignore[arg-type]
 
 
-def _two_plates(profile: Profile, kind: str) -> tuple[Document, ResultCache]:
+def _two_plates(
+    profile: Profile, kind: str, *, width: float = 40.0, depth: float = 30.0
+) -> tuple[Document, ResultCache]:
     """Zwei Platten nebeneinander, je Kern — die Ausgangslage jedes Gegenstücks."""
     document = new_project("centauri-carbon-2", "petg").document
     box = "create_brep_box" if kind == "brep" else "create_box"
     drafts = [
-        OperationDraft(op=box, params={"width": 40.0, "depth": 30.0, "height": 10.0}),
-        OperationDraft(op=box, params={"width": 40.0, "depth": 30.0, "height": 10.0}),
+        OperationDraft(op=box, params={"width": width, "depth": depth, "height": 10.0}),
+        OperationDraft(op=box, params={"width": width, "depth": depth, "height": 10.0}),
     ]
     History(document).apply("Zwei Platten", drafts)
     History(document).apply(
         "Die zweite daneben",
-        [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 60.0})],
+        [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": width + 20.0})],
     )
     return document, ResultCache()
 
 
 def _with_thread(
-    document: Document, cache: ResultCache, profile: Profile, *, internal: bool
+    document: Document,
+    cache: ResultCache,
+    profile: Profile,
+    *,
+    internal: bool,
+    size: dict[str, object] | None = None,
 ) -> tuple[Feature, Scene]:
-    """Ein M6 × 1 an der ersten Platte — als Bolzen auf ihr oder als Gewinde in ihr."""
+    """Ein M6 × 1 an der ersten Platte — als Bolzen auf ihr oder als Gewinde in ihr.
+
+    ``size`` nennt statt M6 eine andere Größe, auch ein eigenes Maß.
+    """
     History(document).apply(
         "Gewinde an der ersten Platte",
         [
             OperationDraft(
                 op="insert_printed_thread",
                 inputs=("obj_1",),
-                params={"size": "M6", "length": 8.0, "internal": internal, "z": 10.0},
+                params={
+                    **(size or {"size": "M6"}),
+                    "length": 8.0,
+                    "internal": internal,
+                    "z": 10.0,
+                },
             )
         ],
     )
@@ -122,17 +139,21 @@ def test_the_reach_never_lets_one_thread_match_two_table_sizes() -> None:
         assert not both_near, f"{first.size} und {second.size} liegen innerhalb der Grenze"
 
 
-def test_a_thread_names_its_table_size_and_a_stray_one_names_the_nearest() -> None:
-    assert thread_size_for(_generated(6.0, 1.0)) == "M6"
+def test_a_thread_names_its_table_size_and_a_stray_one_keeps_its_own_measure() -> None:
+    assert thread_values_for(_generated(6.0, 1.0)) == {"size": "M6"}
     # Ein gemessenes Gewinde liegt neben dem Nennmaß — die Spiel- und
     # Messabweichung bleibt innerhalb der Grenze.
-    assert thread_size_for(_generated(5.9, 1.0, provenance="native")) == "M6"
-    assert thread_size_for(_generated(8.1, 1.25)) == "M8"
-    with pytest.raises(ValidationError) as caught:
-        thread_size_for(_generated(6.4, 1.1))
-    assert caught.value.constraint == "no_standard_size"
-    assert caught.value.values["nearest"] == "M6"
-    assert caught.value.suggestions, "Regel 17"
+    assert thread_values_for(_generated(5.9, 1.0, provenance="native")) == {"size": "M6"}
+    assert thread_values_for(_generated(8.1, 1.25)) == {"size": "M8"}
+    # Zwischen zwei Größen wird es nicht still M6, es behält sein Maß.
+    assert thread_values_for(_generated(6.4, 1.1)) == {
+        "size": CUSTOM_SIZE,
+        "diameter": 6.4,
+        "pitch": 1.1,
+    }
+    # Ein gedrucktes Gewinde nennt sein Nennmaß neben dem gebauten; das gilt.
+    printed = thread_values_for(_generated(66.85, 6.0, nominal=66.6))
+    assert printed == {"size": CUSTOM_SIZE, "diameter": 66.6, "pitch": 6.0}
 
 
 def test_the_draft_is_the_opposite_thread_in_the_table_size() -> None:
@@ -484,15 +505,66 @@ def test_a_multi_start_thread_is_refused_with_a_sentence() -> None:
     assert caught.value.constraint == "multi_start"
 
 
-def test_a_thread_beyond_the_table_says_where_the_table_ends() -> None:
-    """Ein M10 aus einer Datei: Die Tabelle reicht bis M8, und der Satz sagt das.
+def test_a_thread_beyond_the_table_gets_its_own_measure() -> None:
+    """Ein M10 aus einer Datei bekommt sein Gegenstück, nicht mehr eine Absage.
 
-    Bis zum 22.09.2026 hieß es „Setzen Sie das Gegenstück als Baustein mit der
-    nächsten Größe" und nannte M8 — für einen Bolzen M10 kein Gegenstück,
-    sondern ein Loch, durch das er fällt.
+    Bis zum 22.09.2026 hieß es „nächste Größe M8" — für einen Bolzen M10 ein
+    Loch, durch das er fällt —, danach „die Bibliothek reicht bis M8". Seit
+    dem 06.10.2026 baut das Bausteingewinde jedes Maß (Kundenvorschlag
+    S-20261006-c66299: ein Innengewinde in einem Rohr mit 60 mm). Abgesagt
+    wird nur, was kein Bausteingewinde bauen kann.
     """
-    feature = _generated(10.0, 1.5)
-    with pytest.raises(ValidationError) as caught:
-        thread_size_for(feature)
-    assert caught.value.constraint == "beyond_table"
-    assert caught.value.values["largest"] == "M8"
+    assert thread_values_for(_generated(10.0, 1.5)) == {
+        "size": CUSTOM_SIZE,
+        "diameter": 10.0,
+        "pitch": 1.5,
+    }
+    for diameter, pitch in ((1500.0, 6.0), (1.0, 0.25), (60.0, 30.0)):
+        with pytest.raises(ValidationError) as caught:
+            thread_values_for(_generated(diameter, pitch))
+        assert caught.value.constraint == "beyond_threads", (diameter, pitch)
+        assert caught.value.suggestions, "Regel 17"
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_thread_in_a_pipe_of_sixty_gets_a_bolt_of_its_own_measure(
+    profile: Profile, kind: str
+) -> None:
+    """Das Gewinde aus dem Kundenvorschlag: innen Ø 66,6 × 6 und sein Bolzen, als Paar.
+
+    Eine Bohrung von 60 mm bekommt beim Klick ein Innengewinde mit eigenem Maß
+    (``fasteners.size_for_thread``). Das Gegenstück nimmt dasselbe Maß, beide
+    tragen ihr Spiel, und die Passung misst genau das.
+    """
+    from app.core.knowledge.parts.fasteners import size_for_thread
+    from app.core.scene.fits import check, resolve
+
+    _kernel_or_skip(kind)
+    chosen = size_for_thread(60.0)
+    assert chosen["size"] == CUSTOM_SIZE and chosen["diameter"] == pytest.approx(66.6)
+    document, cache = _two_plates(profile, kind, width=100.0, depth=100.0)
+    size = {key: chosen[key] for key in ("size", "diameter", "pitch")}
+    thread, _scene = _with_thread(document, cache, profile, internal=True, size=size)
+    assert thread.params["nominal"] == pytest.approx(66.6)
+    assert thread.params["pitch"] == pytest.approx(6.0)
+
+    applied = apply_thread_counterpart(
+        document, thread, "obj_1", "obj_2", {"x": 120.0, "y": 0.0, "z": 10.0}
+    )
+    step = document.ops[-1]
+    assert step.params["size"] == CUSTOM_SIZE and step.params["internal"] is False
+    assert step.params["diameter"] == pytest.approx(66.6)
+    assert step.params["pitch"] == pytest.approx(6.0)
+
+    result = evaluate(document, profile, cache=cache)
+    assert result.stopped_at is None
+    applied = attach_thread_fit(document, applied, thread, result.scene)
+    assert applied.fit is not None, [str(f.message) for f in applied.findings]
+    checked = evaluate(document, profile, cache=cache)
+    findings = check(checked.scene, profile, document=document)
+    assert not [entry for entry in findings if entry.code.startswith("fit.")], [
+        (entry.code, dict(entry.values)) for entry in findings
+    ]
+    bolt = resolve(checked.scene, applied.fit.b)
+    assert bolt is not None
+    assert bolt.params["diameter"] == pytest.approx(66.6 - profile.material.clearance)

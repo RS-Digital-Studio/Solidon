@@ -82,7 +82,14 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, is_close
+from app.core.units import (
+    COARSEST_PITCH,
+    EPS_GEOM,
+    LARGEST_THREAD,
+    MAX_FACET_SAG,
+    SMALLEST_THREAD,
+    is_close,
+)
 from app.i18n import TranslatableText, _
 
 
@@ -573,8 +580,8 @@ class ThreadParams(PositionedPrimitiveParams):
         title=_("Nenndurchmesser"),
         default=10.0,
         unit="mm",
-        minimum=2.0,
-        maximum=100.0,
+        minimum=SMALLEST_THREAD,
+        maximum=LARGEST_THREAD,
         doc=_("Außendurchmesser über die Gewindespitzen — das Maß, das M10 meint."),
     )
     pitch: float = param(
@@ -582,7 +589,7 @@ class ThreadParams(PositionedPrimitiveParams):
         default=1.5,
         unit="mm",
         minimum=0.25,
-        maximum=8.0,
+        maximum=COARSEST_PITCH,
         doc=_(
             "Höhenzuwachs je Umdrehung. Ob sich die Gewindegänge sauber drucken lassen, hängt "
             "von Drucker, Material und Einstellungen ab; prüfen Sie ein kleines Passungsstück."

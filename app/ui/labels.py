@@ -1406,6 +1406,10 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "hinge_front": _("Die Achse liegt an der vorderen Seite der Öffnung."),
     "hinge_left": _("Die Achse liegt an der linken Seite der Öffnung."),
     "hinge_right": _("Die Achse liegt an der rechten Seite der Öffnung."),
+    "custom_size": _(
+        "Durchmesser und Steigung frei, etwa für ein Rohr. Ohne Steigung gilt die übliche zum "
+        "Durchmesser."
+    ),
 }
 
 
@@ -1702,8 +1706,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "name": _("Name"),
     "neck": _("Hals"),
     "needed": _("Nötig"),
-    # ``counterpart``: die nächste Tabellengröße zu einem Gewinde ohne Norm.
-    "nearest": _("Nächste Größe"),
     "node": _("Knoten"),
     "nominal": _("Nennmaß"),
     "nozzle": _("Düse"),

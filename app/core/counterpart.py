@@ -58,7 +58,13 @@ from app.core.types import (
     thread_is_left_handed,
     thread_is_tapered,
 )
-from app.core.units import is_close
+from app.core.units import (
+    COARSEST_PITCH,
+    LARGEST_THREAD,
+    SMALLEST_THREAD,
+    format_length,
+    is_close,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -353,9 +359,9 @@ def attach_fit(
 # oder ein gedrucktes Gewinde hat seine Hälfte schon: Was fehlt, ist das
 # Gegenstück am anderen Teil — zum Außengewinde das Innengewinde, zum
 # Innengewinde der Bolzen —, und die Passung dazwischen. Das Maß kommt aus dem
-# Gewinde selbst, und weil das Bausteingewinde nach der Normteiltabelle baut
-# (§24.2), muss es ein Tabellenmaß treffen: Ein Gewinde Ø 6,4 mit Steigung 1,1
-# wird nicht still zu M6 (Konzept §13.4).
+# Gewinde selbst: eine Tabellengröße, wo es eine trifft, sonst sein eigenes
+# Maß. Ein Gewinde Ø 6,4 mit Steigung 1,1 wird nicht still zu M6
+# (Konzept §13.4), sondern bekommt ein Gegenstück Ø 6,4 mit Steigung 1,1.
 
 #: Wie nah Durchmesser und Steigung an einem Tabellenmaß liegen müssen —
 #: beides deutlich unter dem halben Abstand zweier Nachbargrößen der Tabelle
@@ -366,14 +372,18 @@ def attach_fit(
 THREAD_SIZE_REACH: Final = (0.2, 0.02)
 
 
-def thread_size_for(feature: Feature) -> str:
-    """Das Normmaß zu einem Gewinde — oder die Absage, die die nächste Größe nennt.
+def thread_values_for(feature: Feature) -> dict[str, Any]:
+    """Die Größe des Bausteingewindes, das zu diesem Gewinde passt.
 
-    **Und eine Absage, die sagt, wo die Tabelle endet.** Ein Bolzen M10 aus
-    einer Datei bekam bis zum 22.09.2026 „nächste Größe M8" genannt — für ihn
-    kein Gegenstück, sondern ein Loch, durch das er fällt. Liegt das Gewinde
-    über der größten Tabellengröße, nennt der Satz sie als Grenze.
+    Trifft es eine Tabellengröße in Durchmesser und Steigung, ist es diese —
+    ein gemessenes M6 bleibt ein M6. Sonst nimmt das Gegenstück das eigene Maß
+    des Gewindes (``fasteners.CUSTOM_SIZE``). Bis zum 06.10.2026 endete die
+    Antwort an der Tabelle: über M8 und zwischen zwei Größen gab es kein
+    Gegenstück, nur einen Satz. Abgesagt wird nur noch außerhalb dessen, was
+    ein Bausteingewinde überhaupt baut (``units.LARGEST_THREAD``).
     """
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+
     # Ein gedrucktes Gewinde nennt sein Nennmaß neben dem gebauten
     # (``build.thread``); das gebaute liegt um das Spiel daneben, bei TPU weiter
     # als die Erkennungsgrenze.
@@ -383,57 +393,34 @@ def thread_size_for(feature: Feature) -> str:
     else:
         diameter = float(feature.params.get("diameter", 0.0))
     pitch = float(feature.params.get("pitch", 0.0))
-    sizes = standards.screw_sizes()
-    largest = max(sizes, key=lambda size: standards.screw(size).nominal)
-    if diameter > standards.screw(largest).nominal + THREAD_SIZE_REACH[0]:
-        raise ValidationError(
-            field="at_feature",
-            detail=_(
-                "Dieses Gewinde ist größer als die Gewinde der Bibliothek — sie reichen bis "
-                "{largest}. Ein Gegenstück dazu lässt sich hier nicht setzen.",
-                largest=largest,
-            ),
-            values={
-                "feature": feature.id,
-                "diameter": diameter,
-                "pitch": pitch,
-                "largest": largest,
-            },
-            constraint="beyond_table",
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
-    nearest: tuple[float, str] | None = None
-    for size in sizes:
+    for size in standards.screw_sizes():
         screw = standards.screw(size)
         if (
             abs(screw.nominal - diameter) <= THREAD_SIZE_REACH[0]
             and abs(screw.pitch - pitch) <= THREAD_SIZE_REACH[1]
         ):
-            return size
-        distance = abs(screw.nominal - diameter) + abs(screw.pitch - pitch)
-        if nearest is None or distance < nearest[0]:
-            nearest = (distance, size)
-    raise ValidationError(
-        field="at_feature",
-        detail=_(
-            "Zu diesem Gewinde passt kein Normmaß aus der Tabelle. "
-            "Setzen Sie das Gegenstück als Baustein mit der nächsten Größe."
-        ),
-        values={
-            "feature": feature.id,
-            "diameter": diameter,
-            "pitch": pitch,
-            "nearest": nearest[1] if nearest is not None else "",
-        },
-        constraint="no_standard_size",
-        suggestions=(CHANGE_SELECTION, CANCEL),
-    )
+            return {"size": size}
+    if not (SMALLEST_THREAD <= diameter <= LARGEST_THREAD and 0.0 < pitch <= COARSEST_PITCH):
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Ein Gegenstück aus der Bibliothek reicht von Ø {smallest} bis Ø {largest} und "
+                "bis zur Steigung {coarsest}. Dieses Gewinde liegt außerhalb.",
+                smallest=format_length(SMALLEST_THREAD),
+                largest=format_length(LARGEST_THREAD),
+                coarsest=format_length(COARSEST_PITCH),
+            ),
+            values={"feature": feature.id, "diameter": diameter, "pitch": pitch},
+            constraint="beyond_threads",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    return {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch}
 
 
 def thread_counterpart_draft(
     feature: Feature, second_object: ObjectId, second_place: Mapping[str, Any]
 ) -> OperationDraft:
-    """Der eine Schritt: das gegengleiche Bausteingewinde am anderen Teil, im Tabellenmaß."""
+    """Der eine Schritt: das gegengleiche Bausteingewinde am anderen Teil, im passenden Maß."""
     if feature.kind != "thread":
         raise ValidationError(
             field="at_feature",
@@ -486,10 +473,9 @@ def thread_counterpart_draft(
             constraint="thread_shape",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
-    size = thread_size_for(feature)
     length = float(feature.params.get("length", 0.0))
     params: dict[str, Any] = {
-        "size": size,
+        **thread_values_for(feature),
         "internal": not bool(feature.params.get("internal", False)),
         **dict(second_place),
     }
@@ -726,8 +712,8 @@ def coupled_step_change(
 
     * **Gedrucktes Gewinde** (``insert_printed_thread``) mit neuer Größe: Ist
       das Gegengewinde ebenfalls ein gedrucktes Gewinde und danach nicht mehr
-      geändert worden, bekommt es dieselbe Größe — die Tabelle hält beide
-      Hälften zusammen.
+      geändert worden, bekommt es dieselbe Größe — die Tabelle oder dasselbe
+      eigene Maß hält beide Hälften zusammen (:func:`_printed_size`).
     * **Merkmal ändern** am Gewinde: Der Partnerschritt am Gegenstück (der
       zuletzt gesetzte, bevorzugt aus derselben Transaktion) bekommt die
       Steigung und den Durchmesser, den die Passung verlangt; gibt es keinen,
@@ -747,7 +733,7 @@ def coupled_step_change(
     body = entry.inputs[0]
     if entry.op == "resize_feature":
         own = FeatureRef(body, str(new.get("at_feature", "")))
-    elif entry.op == "insert_printed_thread" and new.get("size") != entry.params.get("size"):
+    elif entry.op == "insert_printed_thread" and _printed_size(new) != _printed_size(entry.params):
         made = scene.objects.get(body)
         name = next(
             (
@@ -781,7 +767,10 @@ def coupled_step_change(
         if entry.op == "insert_printed_thread":
             creator = next((step for step in document.ops if step.id == partner.created_by), None)
             if not resizes and creator is not None and creator.op == entry.op:
-                edits[creator.id] = {**creator.params, "size": new["size"]}
+                edits[creator.id] = {
+                    **creator.params,
+                    **{key: new[key] for key in _PRINTED_SIZE_FIELDS if key in new},
+                }
             continue
         diameter, pitch = new.get("diameter"), new.get("pitch", 0.0)
         if not isinstance(diameter, int | float) or not isinstance(pitch, int | float):
@@ -806,6 +795,25 @@ def coupled_step_change(
                 OperationDraft(op="resize_feature", inputs=(other.object_id,), params=values)
             )
     return StepCoupling(edits, tuple(drafts)) if edits or drafts else None
+
+
+#: Die Felder, die das Maß eines gedruckten Gewindes bestimmen.
+_PRINTED_SIZE_FIELDS: Final = ("size", "diameter", "pitch")
+
+
+def _printed_size(params: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Was an einem gedruckten Gewinde das Maß bestimmt.
+
+    Die Größe, beim eigenen Maß dazu Durchmesser und Steigung — an einer
+    Tabellengröße ändern die beiden Felder nichts, und ein Schritt, der nur sie
+    ändert, ist keiner, den das Gegenstück mitmachen müsste.
+    """
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+
+    size = params.get("size")
+    if size != CUSTOM_SIZE:
+        return (size,)
+    return (size, params.get("diameter"), params.get("pitch", 0.0))
 
 
 def _later_resizes(document: Document, ref: FeatureRef, *, after: OpId) -> list[Operation]:

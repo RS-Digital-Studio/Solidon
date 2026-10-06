@@ -465,6 +465,24 @@ def ridge_profile(
     )
 
 
+def turn_segments(radius: float) -> int:
+    """Wie viele Sehnen ein Gewinde je Umlauf am Netz bekommt: ein Vielfaches von ``SEGMENTS``.
+
+    So viele, dass die Sehne am äußersten ``radius`` des Gangs höchstens
+    ``MAX_FACET_SAG`` von der Rundung abweicht. Achtundvierzig halten das bis
+    Ø 46 mm, und dort bleibt es — alle Tabellengewinde bauen wie bisher. Ein
+    Gewinde mit eigenem Maß darüber bekam bis zum 06.10.2026 ebenfalls nur
+    achtundvierzig, bei Ø 66 ein Vieleck mit 0,07 mm Abweichung, bei Ø 500 mit
+    0,53 mm — mehr als das Spiel, mit dem Schraube und Mutter ineinandergehen.
+    Ein Vielfaches, damit Kern und Gang auf denselben Winkeln liegen und ein
+    Werkzeug mit ``SEGMENTS`` Ecken weiter auf jeder zweiten, dritten … sitzt.
+    """
+    count = SEGMENTS
+    while radius * (1.0 - exact_cos(math.pi / count)) > MAX_FACET_SAG:
+        count += SEGMENTS
+    return count
+
+
 def thread_body(
     diameter: float,
     pitch: float,

@@ -60,6 +60,17 @@ EPS_SETTING: Final[float] = 1e-6
 #: und genau davor steht die Zusage, dass beide dieselbe Kante gleich nennen.
 MAX_FACET_SAG: Final[float] = 0.05
 
+#: Wie groß ein erzeugtes Gewinde werden darf, im Nenndurchmesser und in der
+#: Steigung — eine Grenze für *Druckbares Gewinde* mit eigenem Maß, *Schraube
+#: erstellen* und *Drehdeckel erzeugen* zugleich. Bis zum 06.10.2026 hatte jede
+#: ihre eigene (M8, Ø 100, Ø 400), und ein Kunde fand für das Innengewinde in
+#: seinem Rohr mit 60 mm keinen Weg. Ein Meter ist größer als jeder Bauraum;
+#: die Grenze sagt nur, dass ein Feld eine hat. Unten begrenzt die kleinste
+#: Schraube der Tabelle, M2.
+SMALLEST_THREAD: Final[float] = 2.0
+LARGEST_THREAD: Final[float] = 1000.0
+COARSEST_PITCH: Final[float] = 20.0
+
 #: Wie viele Körper eine eingelesene Baugruppe höchstens trägt — dieselbe Zahl
 #: wie ``scene.project.MAX_PROJECT_OBJECTS``: Jeder Körper wird ein Objekt im
 #: Stapel, und mehr ließe sich nie speichern. 3MF (``ingest.threemf``) und STEP

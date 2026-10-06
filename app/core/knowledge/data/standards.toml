@@ -12,6 +12,9 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 12 seit dem 06.10.2026: Die Regelsteigungen über M8 sind als eigene
+# Tabellenart `pitches` dazugekommen, für Gewinde mit eigenem Maß. Kein
+# bestehender Wert hat sich geändert.
 # Version 11: Benannte Motedis-Nuten aus Zeichnung und STEP; alte Profilwerte
 # bleiben für gespeicherte Konstruktionen erhalten.
 # Version 10 seit dem 02.10.2026: Die Rohrreihe ist als eigene Tabellenart
@@ -47,7 +50,7 @@
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "11"
+version = "12"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -151,6 +154,93 @@ hex = 6.0
 pitch = 1.25
 clearance_fine = 8.4
 clearance_coarse = 10.0
+
+# --- Regelsteigungen über der Schraubentabelle ----------------------------------
+# Ein Gewinde mit eigenem Maß (Baustein *Druckbares Gewinde*, Größe „Eigenes
+# Maß") bekommt ohne Angabe die Regelsteigung seines Durchmessers: die der
+# größten Größe aus Schrauben- und dieser Tabelle, die er erreicht. Darum steht
+# hier keine Größe der Schraubentabelle ein zweites Mal, und oberhalb von M64
+# bleibt es bei 6 mm.
+# nominal: Nenndurchmesser · pitch: Regelsteigung (grobe Reihe)
+# Quelle: die Auswahlgrößen nach ISO 262 mit ihrer groben Steigung, wie sie
+# frei veröffentlichte Gewindetabellen nennen (Wikipedia „ISO metric screw
+# thread", Tabelle „ISO 262 selected sizes", gelesen am 06.10.2026). Seit
+# Version 12.
+
+[[pitches]]
+size = "M10"
+nominal = 10.0
+pitch = 1.5
+
+[[pitches]]
+size = "M12"
+nominal = 12.0
+pitch = 1.75
+
+[[pitches]]
+size = "M14"
+nominal = 14.0
+pitch = 2.0
+
+[[pitches]]
+size = "M16"
+nominal = 16.0
+pitch = 2.0
+
+[[pitches]]
+size = "M18"
+nominal = 18.0
+pitch = 2.5
+
+[[pitches]]
+size = "M20"
+nominal = 20.0
+pitch = 2.5
+
+[[pitches]]
+size = "M22"
+nominal = 22.0
+pitch = 2.5
+
+[[pitches]]
+size = "M24"
+nominal = 24.0
+pitch = 3.0
+
+[[pitches]]
+size = "M27"
+nominal = 27.0
+pitch = 3.0
+
+[[pitches]]
+size = "M30"
+nominal = 30.0
+pitch = 3.5
+
+[[pitches]]
+size = "M36"
+nominal = 36.0
+pitch = 4.0
+
+[[pitches]]
+size = "M42"
+nominal = 42.0
+pitch = 4.5
+
+[[pitches]]
+size = "M48"
+nominal = 48.0
+pitch = 5.0
+
+[[pitches]]
+size = "M56"
+nominal = 56.0
+pitch = 5.5
+
+[[pitches]]
+size = "M64"
+nominal = 64.0
+pitch = 6.0
 
 # --- Sechskantmuttern -----------------------------------------------------------
 # width: Schlüsselweite · height: Höhe (Regelmutter, m max nach ISO 4032)

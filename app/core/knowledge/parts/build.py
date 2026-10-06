@@ -112,9 +112,12 @@ def threaded(
         return twins.threaded(diameter, pitch, length, internal=internal, bottom=bottom)
     depth = pitch * shapes.RIDGE_SHARE
     core_diameter = diameter if internal else diameter - 2.0 * depth
-    core = shapes.cylinder(core_diameter + 2.0 * BOOLEAN_OVERLAP, length)
+    # Kern und Gang auf denselben Winkeln, so fein, wie der Kamm es verlangt.
+    segments = shapes.turn_segments(diameter / 2.0 + depth if internal else diameter / 2.0)
+    core = shapes.cylinder(core_diameter + 2.0 * BOOLEAN_OVERLAP, length, segments=segments)
     ridge = shapes.moved(
-        shapes.thread_body(diameter, pitch, length + pitch, internal=internal), (0.0, 0.0, -pitch)
+        shapes.thread_body(diameter, pitch, length + pitch, segments=segments, internal=internal),
+        (0.0, 0.0, -pitch),
     )
     body = union(core, ridge)
     limit = shapes.cylinder(diameter * 2.0 + 4.0, length)

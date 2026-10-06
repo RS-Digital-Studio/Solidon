@@ -187,11 +187,12 @@ def test_snap_arm_anchor_is_on_its_named_surface(thickness: float) -> None:
 @pytest.mark.parametrize("size,length", [("M3", 8.0), ("M6", 8.0), ("M8", 7.3)])
 def test_printed_thread_fits_its_actual_internal_tool(size, length):
     from app.core.geom.boolean import boolean
-    from app.core.knowledge.parts.fasteners import _printed_thread
+    from app.core.knowledge.parts.fasteners import _printed_thread, thread_measure
     from app.core.knowledge.parts.shapes import moved
 
-    male = _printed_thread(size, length, False, 0.15).mesh
-    tool = moved(_printed_thread(size, length, True, 0.15).mesh, (0, 0, length))
+    nominal, pitch = thread_measure(size)
+    male = _printed_thread(nominal, pitch, length, False, 0.15).mesh
+    tool = moved(_printed_thread(nominal, pitch, length, True, 0.15).mesh, (0, 0, length))
     outside = boolean("difference", [male, tool], allow_empty=True)
     assert outside.mesh.volume < 1e-5
 

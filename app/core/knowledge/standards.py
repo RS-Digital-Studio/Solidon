@@ -22,6 +22,7 @@ from typing import Any, Final
 
 from app.core.errors import ValidationError
 from app.core.log import get_logger
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -56,6 +57,15 @@ class Screw:
     Durchgangsloch einer M5 und keine Bohrung „zwischen zwei Größen". Die
     Zuordnung eines exakten Maßes bleibt bei ``clearance`` (mittlere Reihe).
     """
+
+
+@dataclass(frozen=True, slots=True)
+class Pitch:
+    """Die Regelsteigung einer Größe über der Schraubentabelle — für Gewinde mit eigenem Maß."""
+
+    size: str
+    nominal: float
+    pitch: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +179,7 @@ class Tables:
 
     version: str
     screws: dict[str, Screw]
+    pitches: dict[str, Pitch]
     nuts: dict[str, Nut]
     washers: dict[str, Washer]
     inserts: dict[str, Insert]
@@ -200,6 +211,7 @@ def load(path: Path | None = None) -> Tables:
         # gepresst wird, das Lager nach seiner Bohrung. Diese Reihenfolge
         # erreicht auch die Größenwahl im Bausteindialog.
         screws=_index(Screw, data.get("screws", ()), "screws", source, "nominal"),
+        pitches=_index(Pitch, data.get("pitches", ()), "pitches", source, "nominal"),
         nuts=_index(Nut, data.get("nuts", ()), "nuts", source),
         washers=_index(Washer, data.get("washers", ()), "washers", source),
         inserts=_index(Insert, data.get("inserts", ()), "inserts", source, "hole"),
@@ -339,6 +351,20 @@ def _validate(tables: Tables, source: Path) -> None:
         if measures["head"] < measures["nominal"] or measures["countersink"] < measures["head"]:
             raise _invalid("screws", screw.size, "head_diameters", source)
 
+    # Die Regelsteigungen setzen die Schraubentabelle fort: Keine Größe steht
+    # in beiden, keine liegt unter der größten Schraube, und die Steigung fällt
+    # mit wachsendem Durchmesser nie — sonst bekäme ein größeres Gewinde mit
+    # eigenem Maß einen feineren Gang als ein kleineres.
+    largest_screw = max((screw.nominal for screw in tables.screws.values()), default=0.0)
+    for entry in tables.pitches.values():
+        _finite_positive(entry.pitch, "pitches", entry.size, "pitch", source)
+        if entry.size in tables.screws or entry.nominal <= largest_screw:
+            raise _invalid("pitches", entry.size, "beyond_screws", source)
+    steps: list[Screw | Pitch] = [*tables.screws.values(), *tables.pitches.values()]
+    for smaller, larger in pairwise(steps):
+        if larger.pitch < smaller.pitch:
+            raise _invalid("pitches", larger.size, "pitch_rises", source)
+
     for nut in tables.nuts.values():
         _finite_positive(nut.width, "nuts", nut.size, "width", source)
         _finite_positive(nut.height, "nuts", nut.size, "height", source)
@@ -399,6 +425,7 @@ def _validate(tables: Tables, source: Path) -> None:
 #: man die zweite still vergisst. `tests/test_parts.py` hält beides zusammen.
 TABLES: Final[dict[str, str]] = {
     "screw": "screws",
+    "pitch": "pitches",
     "nut": "nuts",
     "washer": "washers",
     "insert": "inserts",
@@ -447,6 +474,21 @@ def screw(size: str) -> Screw:
     """Eine Schraubengröße, oder ein klarer Fehler, der nennt, was bekannt ist."""
     found: Screw = _lookup(load().screws, size, "screw")
     return found
+
+
+def regular_pitch(diameter: float) -> float:
+    """Die Regelsteigung zu einem Nenndurchmesser, auch zwischen und über den Tabellengrößen.
+
+    Die Steigung der größten Größe aus Schrauben- und Steigungstabelle, die der
+    Durchmesser erreicht; unter der kleinsten die der kleinsten. Ein Gewinde
+    mit eigenem Maß Ø 66 bekommt so die 6 mm der M64, eines mit Ø 9 die
+    1,25 mm der M8 — dieselbe Reihe, nach der ein Normgewinde gebaut ist.
+    """
+    tables = load()
+    steps: list[Screw | Pitch] = [*tables.screws.values(), *tables.pitches.values()]
+    # Ein gemessenes M64 mit 63,9999999 ist ein M64 (Regel 6).
+    reached = [entry.pitch for entry in steps if entry.nominal <= diameter + EPS_GEOM]
+    return reached[-1] if reached else steps[0].pitch
 
 
 def nut(size: str) -> Nut:

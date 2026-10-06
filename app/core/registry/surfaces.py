@@ -336,6 +336,9 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "hinge_front": _("Vorn"),
     "hinge_left": _("Links"),
     "hinge_right": _("Rechts"),
+    # Die Gewindegröße ohne Tabelle: Durchmesser und Steigung stehen in eigenen
+    # Feldern (``fasteners.CUSTOM_SIZE``).
+    "custom_size": _("Eigenes Maß"),
 }
 
 

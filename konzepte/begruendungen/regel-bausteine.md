@@ -114,6 +114,14 @@ zum 22.09.2026 nie mit breiten oder langen Stufen."
 > bestanden. Der exakte Zwilling hatte den Vorlauf von einem Umlauf schon;
 > `build.threaded` baut ihn seitdem auch am Netz.
 
+Warum ein Gewinde nicht an der Tabelle endet: Bis zum 06.10.2026 kannte der
+Baustein nur M2 bis M8, *Schraube erstellen* reichte bis Ø 100 und der
+Drehdeckel bis Ø 400 — drei Grenzen für dieselbe Frage. Ein Kunde fand für das
+Innengewinde in seinem Rohr mit 60 mm keinen Weg (Vorgang
+S-20261006-c66299); Robert: „keine Beschränkungen". Mit dem größeren Maß kam
+die Sehnenzahl: Feste achtundvierzig je Umlauf wichen bei Ø 500 um 0,53 mm
+von der Rundung ab, mehr als das Spiel eines Paars.
+
 ## Was eine Richtung hat, wird an ihr gemessen
 
 > Rastnase und Schnapphaken standen bis zum 22.09.2026 verkehrt herum — die

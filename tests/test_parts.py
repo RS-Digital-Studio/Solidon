@@ -309,7 +309,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_7106_cartesian_boundaries() -> None:
+def test_the_library_really_has_7306_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -327,9 +327,11 @@ def test_the_library_really_has_7106_cartesian_boundaries() -> None:
     Seit dem 04.10.2026 die 2320 der acht Audit-Bausteine (RM-184):
     Bajonett und Raumboden je 512, Stangenverbinder 384, Kanalnaht,
     Rastdrehscheibe und Raumwand je 256, Schlauchtülle 128, Fensterscheibe 16.
+    Seit dem 06.10.2026 kommen 200 dazu: Das druckbare Gewinde hat ein eigenes
+    Maß mit Durchmesser und Steigung an je zwei Grenzen (56 → 256).
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 7106
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 7306
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -4280,6 +4282,46 @@ def test_an_external_thread_turns_into_the_internal_thread_of_the_same_size(
     overlap = boolean("intersection", [hole, MeshData.of(placed)], allow_empty=True)
 
     assert overlap.mesh.volume <= EPS_GEOM * (hole.raw.area + placed.area)
+
+
+def test_a_pipe_of_sixty_takes_an_internal_thread_and_its_bolt_turns_through(
+    profile: Profile,
+) -> None:
+    """Der Kundenvorschlag S-20261006-c66299: ein Innengewinde in einem Rohr mit 60 mm.
+
+    Das Rohr Ø 76 / 60 bekommt das Gewinde, das ``size_for_thread`` an seiner
+    Bohrung vorwählt (Ø 66,6, Regelsteigung 6). Gemessen wird, was der Kunde
+    braucht: Das Rohr bleibt ein geschlossenes Teil mit Wand um die Gänge, die
+    Gänge schneiden in die Wand, und ein Bolzen desselben Maßes läuft über die
+    ganze Länge hindurch, ohne irgendwo Material zu treffen.
+    """
+    from app.core.knowledge.parts.build import subtract
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE, size_for_thread
+    from app.core.units import EPS_GEOM
+
+    chosen = size_for_thread(60.0)
+    assert chosen["size"] == CUSTOM_SIZE
+    spec = PARTS.get("printed_thread")
+    play = profile.material.clearance
+    length = 18.0
+    tool = spec.fn(spec.params(**chosen, length=length, play=play)).mesh
+    bolt_values = {**chosen, "internal": False}
+    bolt = spec.fn(spec.params(**bolt_values, length=2.0 * length, play=play)).mesh
+    pipe = subtract(shapes.cylinder(76.0, length), shapes.cylinder(60.0, length + 1.0))
+    pipe = subtract(shapes.moved(pipe, (0.0, 0.0, -length)), tool)
+
+    assert pipe.is_watertight and pipe.component_count == 1
+    radial = np.hypot(pipe.raw.vertices[:, 0], pipe.raw.vertices[:, 1])
+    inner = radial[radial < 37.0]
+    # Die Gänge reichen bis zum Nennmaß plus Spiel in die Wand, die Wand dahinter bleibt.
+    assert float(inner.max()) * 2.0 == pytest.approx(chosen["diameter"] + play, abs=0.05)
+    assert 76.0 - float(inner.max()) * 2.0 > 2.0 * 4.0, "um die Gänge steht Wand"
+    # Wie beim Tabellenpaar: Der Bolzen beginnt eine ganze Zahl von Steigungen
+    # unter dem Gewinde und läuft in Phase hindurch.
+    placed = bolt.raw.copy()
+    placed.apply_translation((0.0, 0.0, -2.0 * length))
+    overlap = boolean("intersection", [pipe, MeshData.of(placed)], allow_empty=True)
+    assert overlap.mesh.volume <= EPS_GEOM * (pipe.raw.area + placed.area)
 
 
 @pytest.mark.parametrize("size", ["M2", "M3", "M6", "M8"])
