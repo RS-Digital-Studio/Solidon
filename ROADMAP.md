@@ -141,6 +141,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Am Runner im Sandkasten mit den Manifestrechten belegt; offen nur der Lauf mit dem ausgelieferten Solidon-Flatpak 0.5.3 und das Öffnen im Fenster |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): Lader-Weg bauen, Rückfall „nur öffnen“ mit Satz im Druckdialog; Abnahme am Linux-Runner mit AppImage und Flatpak |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Fällig seit 06.10.: mit 0.5.3 antworten; Entwurf liegt lokal bereit |
+| [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -4654,6 +4655,59 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   feststeht, ob die nächste Version es behebt: Ursache in zwei Sätzen, die Versionsnummer und dass
   die Flatseal-Freigabe für den Session-Bus nicht nötig ist. Entwurf in Roberts lokaler Ablage.
   Abnahme: nach dem Release versandt, Versandstatus dokumentiert.
+
+<a id="rm-532"></a>
+
+- [~] **RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung.**
+  Kundenvorschlag S-20261006-c66299 (0.5.3, ohne Rückadresse): Ein Innengewinde in einem Rohr mit
+  mindestens 60 mm Innendurchmesser ging nicht, *Druckbares Gewinde* endete bei M8. Robert:
+  „keine Beschränkungen“.
+
+  **Gebaut** auf dem Zweig `gewinde-eigenes-mass` (ein Commit `63d7a7826` auf `a2b7451b6`, 41
+  Dateien; dieselben Änderungen liegen ungestaged im Arbeitsbaum des Rechners, auf dem sie
+  entstanden):
+  - Baustein: Größe *Eigenes Maß* (`fasteners.CUSTOM_SIZE`), Nenndurchmesser 2 bis 1000 mm vorn,
+    Steigung hinten (null ist die Regelsteigung, `standards.regular_pitch` über die neue Tabelle
+    `pitches` M10 bis M64 nach der ISO-262-Auswahl); `thread_measure`, Absage `no_core` bei einer
+    Steigung ohne Kern.
+  - Bohrung: Ohne Tabellengröße wählt `custom_thread_for` das Maß, dessen Kernloch die Bohrung
+    ist (Ø 60 → Ø 66,6 mit Steigung 6, Ø 6,5 → Ø 7,6 × 1); der Satz über dem Dialog nennt es.
+  - Gegenstück: `counterpart.thread_values_for` ersetzt `thread_size_for` — Tabellengröße oder
+    eigenes Maß, Absage nur außerhalb der Grenzen (`beyond_threads`); ein geänderter Schritt
+    koppelt über das ganze Maß.
+  - Gemeinsame Grenzen `units.SMALLEST_THREAD`, `LARGEST_THREAD`, `COARSEST_PITCH`, auch für
+    *Schraube erstellen* (war Ø 100) und *Drehdeckel erzeugen* (war Ø 400).
+  - Netz: Sehnen je Umlauf nach der Facettenregel (`shapes.turn_segments`, bis Ø 46 unverändert
+    48), Drehdeckel ebenso (`lid.turn_sections`, `cache_version` 7).
+  - Texte in sechs Sprachen, zwei Handbuchabsätze, Website 61 → 76 hinterlegte Normmaße, Karten,
+    Regel `bausteine.md`, Begründungen. Tests: Rohrfall, Paar mit eigenem Maß an beiden Kernen,
+    Gegenstück Ø 66,6, Drehdeckel Ø 300, Tabellenprüfung, Sehnenregel. Sonde am echten Fenster:
+    An einer 60-mm-Bohrung steht *Eigenes Maß* mit Ø 66,60 mm vorbelegt, vier Felder vorn.
+
+  **Offen, in dieser Reihenfolge:**
+  1. Bereichsnachweis: Alle 49 Bausteine sind veraltet (gemeinsame Formen und Normteiltabelle
+     geändert). `tools/check_part_ranges.py` auf dem Zweig fahren und `part_ranges.toml`
+     committen; `printed_thread` hat jetzt 256 Ecken bis Ø 1000 und läuft am längsten. Während
+     des Laufs weder Bausteindateien noch `shapes`, `build` oder `standards` ändern, sonst ist er
+     wertlos.
+  2. Volles Entwicklungstor auf dem Zweig. Der letzte Lauf (auf `306ff7bf2`) hatte zehn rote
+     Tests; neun sind auf dem Zweig behoben (alte Signatur von `_printed_thread` im Test,
+     `beyond_threads` einsortiert, totes Wertlabel `nearest`, Eckenzahl 7306, Zeilenumbruch vor
+     §13.4, Website-Zahl, Steigungssatz zu lang), der zehnte ist der Bereichsnachweis. Seitdem
+     nicht neu gefahren.
+  3. Merge nach main (Kataloge bei Konflikt je Schlüssel vereinigen), dann der Sitzung „Stift
+     für Bohrung“ (Fragebogen S-20261006-5be329) den Hash nennen: Sie baut den Gewindebolzen
+     auf `thread_values_for`, `CUSTOM_SIZE` und `thread_measure` und wartet darauf.
+  4. Danach auf dem Rechner, auf dem es entstand, die ungestagten Gewindeänderungen nicht noch
+     einmal übernehmen; sie sind dann über main da.
+  5. Beim Release: Handbuch erzeugen (die Erzeugnisprüfung in `test_wording` meldet die zwei
+     geänderten Absätze), das Bild *Ein Gewinde in eine Bohrung* nur bei Änderung.
+  6. Entscheidung Robert: *Schraube*, *Gedruckte Mutter*, Schraubenloch, Mutternfalle und
+     Einpressbuchse bleiben an der Normteiltabelle M2 bis M8 (Kopf, Schlüsselweite, Scheibe).
+     Soll die Tabelle bis M64 wachsen, mit Herstellerdaten je Größe?
+
+  Abnahme: Bereichsnachweis passt zu allen 49 Bausteinen, Tor grün, auf main gemergt. Eine
+  Kundenantwort entfällt, der Vorschlag kam ohne Rückadresse.
 
 <a id="rm-072"></a>
 
