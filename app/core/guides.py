@@ -59,6 +59,10 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # „Bausteine" unten im Auswahlfenster: der Katalog, von der gewählten
         # Fläche aus, ohne Umweg über das Menü
         "selection.parts",
+        # „Filament und Druck“ unter der Liste der Auswahl und der Filamentwähler
+        # darin: Dort wird gefärbt, am Körper wie an der Fläche (RM-510)
+        "filament.section",
+        "filament.picker",
         # Der Druckdialog: Drucker oben, „Slicen" und „Druckdatei speichern …"
         "print.printer",
         "print.slice",
@@ -724,11 +728,10 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "viewport",
             ),
             step(
-                _("Rechts unter *Auswahl*: Klicken Sie auf *Filament auf eine Fläche*."),
-                "operation:paint_slot",
+                _("Rechts unter *Auswahl*: Klappen Sie *Filament und Druck* auf."),
+                "filament.section",
             ),
-            step(_("Wählen Sie das *Filament* für diese Fläche."), "field:slot"),
-            step(_("Klicken Sie auf *Filament auf eine Fläche*."), "dialog.accept"),
+            step(_("Wählen Sie dort das Filament für diese Fläche."), "filament.picker"),
             step(
                 _(
                     "Die Fläche hat ihre Farbe. Gedruckt wird wie in "

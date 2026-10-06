@@ -1666,22 +1666,23 @@ def story_two_colours(run: GuideRun) -> None:
     body = web.select_body(run.window, 0)
     run.capture(1, points={"viewport": _face_spot(run, body)})
     run.capture(2)
-    guide_targets.widget_for(run.window, "operation:paint_slot").click()
-    run.settle(40)
-    dialog = _open_dialog(run, "Filament auf eine Fläche")
-    slot = dialog._editors["slot"]
-    index = next((row for row in range(slot.count()) if names[1] in str(slot.itemText(row))), -1)
-    if index < 0:
-        raise SystemExit(f"Das Filamentfeld bietet „{names[1]}“ nicht an")
-    slot.setCurrentIndex(index)
-    # Wie der Klick in die Liste: Erst ``activated`` übernimmt Name und Farbe
-    # der Spule (``FilamentField._chosen``). Ohne das Signal bekam die Fläche
-    # einen Slot ohne Farbe, und das Ergebnisbild zeigte eine graue Platte.
-    slot.activated.emit(index)
-    run.settle(60)
+    # Gefärbt wird im Filamentwähler unter „Filament und Druck“ (RM-510),
+    # an der gewählten Fläche wie am Körper; einen eigenen Dialog gibt es nicht.
+    heading = guide_targets.widget_for(run.window, "filament.section")
+    guide_targets.area_for(run.window, "filament.section")
+    if not heading.isChecked():
+        heading.click()
+    run.settle(30)
     run.capture(3)
-    run.capture(4)
-    guide_targets.widget_for(run.window, "dialog.accept").click()
+    picker = guide_targets.widget_for(run.window, "filament.picker")
+    index = next(
+        (row for row in range(picker.count()) if names[1] in str(picker.itemText(row))), -1
+    )
+    if index < 0:
+        raise SystemExit(f"Der Filamentwähler bietet „{names[1]}“ nicht an")
+    picker.setCurrentIndex(index)
+    # Wie der Klick in die Liste: Erst ``activated`` übergibt die Spule.
+    picker.activated.emit(index)
     web.until_quiet(run.app, run.session, "Filament")
     run.window.object_tree.select_object(None)
     run.window.right.setCurrentWidget(run.window.report)

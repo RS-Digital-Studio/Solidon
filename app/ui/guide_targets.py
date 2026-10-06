@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QScrollArea,
+    QToolButton,
     QWidget,
 )
 
@@ -260,8 +261,25 @@ _START: Final[dict[str, str]] = {
     "start.manual": "manual_button",
 }
 
+
 #: Was sich nur mit einer Frage an den Zustand finden lässt.
+def _filament_section(window: MainWindow) -> QWidget:
+    """Die Klappe „Filament und Druck“ unter der Liste der Auswahl."""
+    section = window.selection_operations.print_section
+    heading = section.findChild(QToolButton, "sectionHeading")
+    if heading is None:
+        raise MissingTargetError("filament.section: keine Klappe „Filament und Druck“")
+    return heading
+
+
+def _filament_picker(window: MainWindow) -> QWidget:
+    """Der Filamentwähler in der Klappe — dort wird gefärbt (RM-510)."""
+    return window.quick_filament.picker
+
+
 _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
+    "filament.section": _filament_section,
+    "filament.picker": _filament_picker,
     "statusbar": lambda window: window.statusBar(),
     "report.action": _report_action,
     "report.slicer": _report_slicer,
@@ -348,6 +366,8 @@ def area_for(window: MainWindow, name: str) -> QRect:
             return _global(shown)
         return _open_menu_entry(action, name)
     widget = widget_for(window, name)
+    if not widget.isVisible() and name in _FINDERS:
+        _reveal(window, widget)
     if not widget.isVisible():
         tab = _tab_of_a_page_behind(window, widget)
         if tab is not None:
