@@ -4912,7 +4912,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Homebrew; vorher fand Solidon dort von Cura nur das Fenster. Cura unter Linux: RM-521.
 
   Offen: derselbe Weg mit dem ausgelieferten Solidon-Flatpak der nächsten Version und das Öffnen
-  im Fenster des Slicers. Danach den Zweig löschen.
+  im Fenster des Slicers. Sonde und Workflows liegen unter
+  `.claude/.state/slicer-sonde-2026-10-05/`; für einen neuen Lauf auf einem Wegwerfzweig
+  `probe_slicers.py` ins Wurzelverzeichnis und die beiden `.yml` nach `.github/workflows/`
+  legen. Der Zweig `diagnose/slicer-erkennung` wird damit nicht mehr gebraucht.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
 

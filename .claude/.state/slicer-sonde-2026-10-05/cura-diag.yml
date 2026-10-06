@@ -1,0 +1,54 @@
+# Wegwerfzweig: Wie startet man Curas CuraEngine außerhalb seines AppRun?
+name: Cura-Diagnose
+
+on:
+  push:
+    branches: [diagnose/slicer-erkennung]
+    paths: [.github/workflows/cura-diag.yml]
+
+jobs:
+  cura:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Flatpak und AppImage
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak libfuse2t64 file binutils
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y --noninteractive flathub com.ultimaker.cura
+          mkdir -p ~/Applications && cd ~/Applications
+          gh release download --repo Ultimaker/Cura --pattern '*linux-X64.AppImage'
+          chmod +x ./*.AppImage
+
+      - name: AppDir ansehen
+        continue-on-error: true
+        run: |
+          f=/var/lib/flatpak/app/com.ultimaker.cura/current/active/files/cura
+          ls -la "$f" | head -50
+          echo "== AppRun"; file "$f/AppRun"; head -c 3000 "$f/AppRun" | strings | head -40
+          echo "== AppRun.env"; cat "$f/AppRun.env" 2>/dev/null | head -60
+          echo "== .env"; cat "$f/.env" 2>/dev/null | head -60
+          echo "== lib64"; ls -la "$f/lib64" | head
+          echo "== Bibliotheksordner"; find "$f" -maxdepth 3 -type d -name "*lib*" | head -30
+          echo "== Bedarf"; readelf -d "$f/CuraEngine" | grep -E "NEEDED|RUNPATH|RPATH"
+
+      - name: Aufrufe im Flatpak
+        continue-on-error: true
+        run: |
+          libs=$(find /var/lib/flatpak/app/com.ultimaker.cura/current/active/files/cura -maxdepth 4 -type d \( -name "x86_64-linux-gnu" -o -name lib -o -name lib64 \) | sed 's#/var/lib/flatpak/app/com.ultimaker.cura/current/active/files#/app#' | tr '\n' ':')
+          echo "Bibliothekspfad: $libs"
+          flatpak run --command=sh com.ultimaker.cura -c "cd /app/cura && ./lib64/ld-linux-x86-64.so.2 --library-path '$libs/app/cura' ./CuraEngine help 2>&1 | head -8"
+          echo "== mit APPDIR"
+          flatpak run --env=APPDIR=/app/cura --cwd=/app/cura --command=/app/cura/AppRun com.ultimaker.cura --help 2>&1 | head -8 || true
+
+      - name: Aufrufe im ausgepackten AppImage
+        continue-on-error: true
+        run: |
+          cd ~/Applications && ./*.AppImage --appimage-extract > /dev/null
+          r=~/Applications/squashfs-root
+          cd "$r" && ./CuraEngine help 2>&1 | head -5 || true
+          libs=$(find "$r" -maxdepth 4 -type d \( -name "x86_64-linux-gnu" -o -name lib -o -name lib64 \) | tr '\n' ':')
+          "$r/lib64/ld-linux-x86-64.so.2" --library-path "$libs$r" "$r/CuraEngine" help 2>&1 | head -8 || true

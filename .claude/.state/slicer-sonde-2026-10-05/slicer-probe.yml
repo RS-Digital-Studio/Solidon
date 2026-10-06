@@ -1,0 +1,167 @@
+# Wegwerfzweig: Slicer-Erkennung und Übergabe auf Linux und beiden Macs messen.
+# Wird nach der Auswertung mit dem Zweig gelöscht.
+name: Slicer-Sonde
+
+on:
+  push:
+    branches: [diagnose/slicer-erkennung]
+    paths-ignore: [.github/workflows/cura-diag.yml]
+
+env:
+  OLD_SHA: 2198642c814cb967e2dc036397b369e781e11710
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PROBE_OUT: ${{ github.workspace }}/probe-out
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+
+      - name: Systempakete
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak xvfb xauth dbus dbus-x11 \
+            libfuse2t64 libegl1 libgl1 libwebkit2gtk-4.1-0 libgtk-3-0t64 libglu1-mesa \
+            libgstreamer-plugins-base1.0-0 libgstreamer1.0-0 libsecret-1-0 libosmesa6 locales
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - name: Slicer als Flatpak
+        run: |
+          for app in com.orcaslicer.OrcaSlicer com.prusa3d.PrusaSlicer com.bambulab.BambuStudio com.ultimaker.cura; do
+            sudo flatpak install -y --noninteractive flathub "$app" || echo "::warning::$app nicht installiert"
+          done
+          sudo flatpak install -y --noninteractive flathub org.freedesktop.Platform//25.08
+          ls -la /var/lib/flatpak/exports/bin
+          for app in com.orcaslicer.OrcaSlicer com.prusa3d.PrusaSlicer com.bambulab.BambuStudio com.ultimaker.cura; do
+            echo "== $app"; ls /var/lib/flatpak/app/$app/current/active/files/share 2>&1 | head -20
+          done
+
+      - name: Slicer als AppImage
+        run: |
+          mkdir -p ~/Applications && cd ~/Applications
+          set +e
+          gh release download --repo OrcaSlicer/OrcaSlicer --pattern '*Linux_AppImage_Ubuntu2404_V*.AppImage' --skip-existing
+          gh release download --repo bambulab/BambuStudio --pattern '*ubuntu-24.04*.AppImage' --skip-existing
+          gh release download --repo prusa3d/PrusaSlicer --pattern '*linux-x64-newer-distros*.AppImage' --skip-existing
+          gh release download --repo Ultimaker/Cura --pattern '*linux-X64.AppImage' --skip-existing
+          gh release download --repo ELEGOO-3D/ElegooSlicer --pattern '*.AppImage' --skip-existing
+          gh release download --repo CrealityOfficial/CrealityPrint --pattern '*.AppImage' --skip-existing
+          set -e
+          chmod +x ./*.AppImage || true
+          ls -la
+
+      - name: Python für draußen und für den Sandkasten
+        run: |
+          python -m pip install -c constraints.txt -e ".[geom]" uv
+                    python -m uv python install --install-dir "$HOME/uvpy" 3.14.8
+          PY=$(ls -d "$HOME"/uvpy/cpython-3.14.8-*/bin/python3.14 | head -1)
+          echo "verwaltetes Python: $PY"
+          "$PY" -m venv "$HOME/sbx"
+          readlink -f "$HOME/sbx/bin/python"
+          "$HOME/sbx/bin/python" -m pip install -q -c constraints.txt -e ".[geom]"
+          git worktree add --detach "$HOME/old" "$OLD_SHA"
+          cp probe_slicers.py "$HOME/old/"
+
+      - name: Cura im Flatpak ansehen
+        continue-on-error: true
+        run: |
+          f=/var/lib/flatpak/app/com.ultimaker.cura/current/active/files
+          ls -la "$f/cura" | head -40
+          file "$f/cura/CuraEngine" || true
+          readelf -l "$f/cura/CuraEngine" | grep -i interpreter || true
+          flatpak run --help | grep -i cwd || true
+          flatpak run --cwd=/app/cura --command=/app/cura/CuraEngine com.ultimaker.cura help 2>&1 | head -5 || true
+          cat /var/lib/flatpak/app/com.ultimaker.cura/current/active/files/bin/start-cura-flatpak.sh || true
+
+      - name: Eigene Drucker anlegen
+        run: python probe_slicers.py seed
+
+      - name: Vorher, draußen
+        working-directory: /home/runner/old
+        run: python probe_slicers.py linux-draussen-vorher
+
+      - name: Nachher, draußen, mit Slicen
+        run: xvfb-run -a python probe_slicers.py linux-draussen-nachher --slice
+
+      - name: Vorher, im Sandkasten mit den Rechten von 0.5.2
+        working-directory: /home/runner/old
+        run: |
+          args=$(sed -n '/^finish-args:/,/^modules:/p' packaging/de.rsdigital.solidon3d.yml | sed -n 's/^  - //p' | tr '\n' ' ')
+          echo "Rechte: $args"
+          dbus-run-session -- xvfb-run -a flatpak run --command="$HOME/sbx/bin/python" $args \
+            --env=PROBE_OUT="$PROBE_OUT" org.freedesktop.Platform//25.08 probe_slicers.py linux-sandkasten-vorher
+
+      - name: Nachher, im Sandkasten mit den neuen Rechten, mit Slicen
+        run: |
+          args=$(sed -n '/^finish-args:/,/^modules:/p' packaging/de.rsdigital.solidon3d.yml | sed -n 's/^  - //p' | tr '\n' ' ')
+          echo "Rechte: $args"
+          dbus-run-session -- xvfb-run -a flatpak run --command="$HOME/sbx/bin/python" $args \
+            --env=PROBE_OUT="$PROBE_OUT" org.freedesktop.Platform//25.08 probe_slicers.py linux-sandkasten-nachher --slice
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: probe-linux
+          path: probe-out/
+          if-no-files-found: warn
+
+  macos:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-26-intel]
+    env:
+      PROBE_OUT: ${{ github.workspace }}/probe-out
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+
+      - name: Slicer über Homebrew
+        run: |
+          uname -m; sw_vers
+          for cask in orcaslicer prusaslicer bambu-studio ultimaker-cura elegoo-slicer creality-print superslicer; do
+            brew install --cask "$cask" || echo "::warning::$cask nicht installiert"
+          done
+          sudo xattr -dr com.apple.quarantine /Applications/*.app 2>/dev/null || true
+          ls /Applications
+          for app in /Applications/*.app; do echo "== $app"; ls "$app/Contents/MacOS" "$app/Contents/Resources" 2>&1 | head -12; done
+
+      - name: Python
+        run: |
+          python -m pip install -c constraints.txt -e ".[geom]"
+          git worktree add --detach "$HOME/old" "$OLD_SHA"
+          cp probe_slicers.py "$HOME/old/"
+
+      - name: Eigene Drucker anlegen
+        run: python probe_slicers.py seed
+
+      - name: Vorher
+        working-directory: /Users/runner/old
+        run: python probe_slicers.py mac-${{ runner.arch }}-vorher
+
+      - name: Nachher, mit Slicen
+        run: python probe_slicers.py mac-${{ runner.arch }}-nachher --slice
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: probe-mac-${{ runner.arch }}
+          path: probe-out/
+          if-no-files-found: warn
