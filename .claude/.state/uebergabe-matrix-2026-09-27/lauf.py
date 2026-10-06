@@ -54,7 +54,8 @@ from app.core.bootstrap import load_operations  # noqa: E402
 assert Path(app.__file__).resolve().is_relative_to(ROOT), app.__file__
 load_operations()
 
-import gcode_lesen  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # RM-530: Matrix in tools/
+from tools import matrix_gcode as gcode_lesen  # noqa: E402
 from app.core.errors import AppError  # noqa: E402
 from app.core.export import handover, slicer_profiles  # noqa: E402
 from app.core.export.writer import write_assembly  # noqa: E402

@@ -82,8 +82,10 @@ Handbuch (Parametertabelle), Agent (Werkzeugbeschreibung) und Kommandozeile
 (`oberflaeche.md`, „Gestufte Tiefe“): `OperationDialog._couple_dependent_fields`
 nimmt es samt Beschriftung heraus und bringt es mit der Bedingung wieder;
 dahinter bleibt es gesperrt und begründet, damit kein verborgenes Feld den
-Fokus bekommt, und `adjustSize` läuft nur, wenn sich eine Zeile bewegt hat
-(`test_a_rectangle_shows_only_the_rows_a_rectangle_has`). Im Merkmalfenster
+Fokus bekommt. Die Höhe folgt nur, wenn sich eine Zeile bewegt hat, einen
+Ereignisumlauf später über `_queue_refit` und nicht über `adjustSize`, das bei
+zwei Dritteln der Bildschirmhöhe deckelt und eine aufgeklappte Rückseite
+kappte (`test_a_rectangle_shows_only_the_rows_a_rectangle_has`). Im Merkmalfenster
 folgt `FeaturePanel._follow_conditions` demselben `ActionField.depends_on`: Das
 Feld verschwindet samt Beschriftung, kommt mit seinem Wert zurück und wird
 nicht gesperrt — die Sperre gehört dem Kettenhalt (`_settle_lock`). Ein

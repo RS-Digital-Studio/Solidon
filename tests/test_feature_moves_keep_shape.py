@@ -37,6 +37,7 @@ from tests.helpers import (
     BOTH_ENDS,
     cavity_under,
     contains,
+    exact_kernel,
     narrowest_hole,
     sloped_slot_plate,
     widened_bore,
@@ -1274,6 +1275,7 @@ def _rounded_mouth(*, at: float = -8.0, rounding: float = 1.0) -> Any:
     x = ``at`` — die Mündungskante der Zylindersenkung in der ebenen Unterseite
     um ``rounding`` gerundet, wie an der Lochplatte gs-100 (dort in einer
     gekrümmten Fläche, RM-259)."""
+    exact_kernel()
     from OCP.BRepAdaptor import BRepAdaptor_Curve
 
     from app.core.brep import edit
@@ -1391,6 +1393,7 @@ def test_the_exact_filling_asks_the_faces_around_the_rim_and_not_only_its_own() 
     abtastet: in der Rinne R 40 auch die ebene Unterseite hinter der Kante der
     Rinne, die den Rand nicht berührt, und keine Fläche des Hohlraums.
     """
+    exact_kernel()
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.BRepTools import BRepTools
     from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane

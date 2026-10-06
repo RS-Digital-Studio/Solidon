@@ -195,7 +195,7 @@ danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in
 `valueFromText`. Als Typprüfung bleibt `QDoubleSpinBox` richtig.
 
-**Eine Grenze lehnt ab, sie kürzt nicht — gebaut an drei Orten.** Die **Parameterleiste** und die Zahlenfelder des
+**Eine Grenze lehnt ab, sie kürzt nicht.** Die **Parameterleiste** und die Zahlenfelder des
 **Operationsdialogs** (`op_dialog.ValueField`, auch die Stückzahl) tragen ein
 `labels.BoundedSpin`: Eine Zahl jenseits der Grenzen bleibt markiert stehen,
 `valueRefused` meldet sie, der Anzeigende nennt die Grenze des Schemas

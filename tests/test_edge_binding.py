@@ -203,6 +203,7 @@ def _bound_middle(seen: dict[str, Any]) -> tuple[float, float, float]:
     """Die Mitte der Kante, die als gebundener Index beim Kern ankam."""
     (index,) = seen["selected_edges"]
     if seen["kernel"] == "brep":
+        exact_kernel()
         from OCP.BRepGProp import BRepGProp
         from OCP.GProp import GProp_GProps
 
