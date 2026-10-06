@@ -765,7 +765,7 @@ def _sketch_editor(theme: Theme) -> str:
         (_("Waagerecht"), "(0, 1)"),
         (_("Rechtwinklig"), "(1, 2)"),
         (_("Abstand 40 mm"), "(0, 1)"),
-        (_("Deckung"), "(3, 4)"),
+        (_("Verbunden"), "(3, 4)"),
         (_("Tangential"), "(4, 5)"),
     )
     for index, (kind, targets) in enumerate(entries):

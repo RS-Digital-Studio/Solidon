@@ -165,7 +165,15 @@ def test_the_history_folds_removed_steps_under_their_removal(qt_app: Any) -> Non
     try:
         panel.show_document(history.document)
         head = _row_of(panel, ops[5].id)
-        assert head.text().startswith("▸") and head.text().endswith("(mit 2 Schritten)")
+        # Zugeklappt nennt die Zeile die Nummern, die sie verbirgt (RM-519):
+        # Sonst sprang die Zählung an ihr wie an einer Gruppe.
+        assert head.text().startswith("▸") and head.text().endswith("(mit 2 Schritten: 4–5)")
+        shown = " ".join(
+            item.text()
+            for index in range(panel.list.count())
+            if not (item := panel.list.item(index)).isHidden()
+        )
+        assert all(str(number) in shown for number in range(1, 7)), shown
         assert "Entfernt, was die 2 Schritte darunter ergeben." in head.toolTip()
         at = panel.list.row(head)
         for offset, step in enumerate((ops[3], ops[4]), start=1):

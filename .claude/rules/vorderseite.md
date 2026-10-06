@@ -115,3 +115,16 @@ reicht sie aus dem Parameterschema weiter. Titel, Eingabe und Ablehnung
 verschwinden gemeinsam; verborgene Werte bleiben erhalten und sperren die
 Übernahme nicht. Stille Wertaktualisierung und wiederverwendete Gruppen
 berechnen die Sichtbarkeit erneut (`FeaturePanel._follow_measure_conditions`).
+
+## Die linken Karten zeigen nur, was gilt (RM-519)
+
+Warum: `konzepte/begruendungen/regel-oberflaeche.md`, „Die linken Karten“.
+
+- **Parameterkarte:** unter einer Zeile nur „Nicht verwendet“; wie viele feste
+  Zahlen passen, sagt der Bindeknopf (`binding_button_text`), wo, die Kurzhilfe.
+- **Objektbaum:** Die Filamentspalte trägt die Spule, das Wort steht in
+  Kurzhilfe und Lesername; der Farbpunkt ist rund, ohne eigenes Filament
+  gestrichelt (`filament_chip`). Die Maßspalte ist nie schmaler als ihr Kopf.
+- **Verlauf:** Jede zugeklappte Zeile nennt die Nummern, die sie verbirgt
+  (`step_span`), auch die Löschgruppe. Der Kernwechsel steht im Kontextmenü
+  zuletzt hinter einem Trennstrich (`HistoryPanel.context_menu`).

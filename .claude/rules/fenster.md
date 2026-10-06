@@ -63,6 +63,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   (Druckdialog nach `exec`), sonst beim nächsten Ergebnis. Erst Zeigen zählt
   als gesehen; `_announce_written`/`handedOver` zählen nur erfolgreiche Datei,
   Slicen oder Öffnen, nie Versuch, Abbruch, Fehler oder Rückfrage.
+- Die Einladung der leeren Szene steht nicht über Skizze, offenem
+  Operationsdialog oder Vorschau: Wer einen dieser Zustände schaltet, ruft
+  `_show_invitation`.
 - Arbeitsbeginn auf der Startseite ersetzt das leere/offene Projekt über
   `_begin_from_the_start_screen` mit `_may_discard`; `start_empty` meldet Erfolg.
   `run_operation`/`start_sketch` sowie Einfügen/Download wechseln so in den
@@ -102,12 +105,11 @@ werden:
   `warning` (`dialogs.confirm_export`; der Lizenzhinweis §16.3 ist `info`),
   Weitergehen als Vorgabe; der Dialog nennt die ersten Sätze.
 - **Slicer-Übergabe:** `confirm_handover` fragt vor *Slicen* und *Im Slicer
-  öffnen* nur bei **Fehlern** der gewählten Platten, nicht bei Warnungen — die
-  Übergabe ist oft der Blick ins gewohnte Programm; Weitergehen ist die Vorgabe.
+  öffnen* nur bei **Fehlern** der gewählten Platten, nicht bei Warnungen;
+  Weitergehen ist die Vorgabe.
 - **Danach weiß der Kunde, wo die Datei liegt:** *Ordner zeigen* steht neben der
   Ankündigung, solange sie steht (`announce` nimmt ihn mit der nächsten mit),
-  und öffnet über `QDesktopServices` (Qt kennt die Plattform und im Flatpak das
-  Portal).
+  und öffnet über `QDesktopServices`.
 - **Wer nur hinsieht, wird nicht gefragt:** Beim Schließen fragt das Fenster nur,
   wenn etwas verloren ginge, das nicht in den Dateien des Kunden steht
   (`ingest.plan.is_only_imported` über `Session.only_imported`).
@@ -139,8 +141,7 @@ wird nur, wenn Zurückgenommenes verworfen würde (§15.4,
   (`Session.displayed_document`), und jede Operation über `Session.apply` landet
   dort. Abläufe mit eigener Buchführung (Teilen mit Stiften, Deckel, Gegenstück,
   Auto Split, Erzeugen, Agentenvorschlag) sagen ab, mit *Einfügen beenden* als
-  Weg; Export und Druckeinstellungen beenden das Einfügen zuerst — hinaus geht
-  das fertige Teil, nicht der Zwischenstand. Erzeugen fragt vor dem Start
+  Weg; Export und Druckeinstellungen beenden das Einfügen zuerst. Erzeugen fragt vor dem Start
   (`_generation_refusal`); sagt *Übernehmen* ab, bleibt der Dialog mit seinen
   Versuchen offen (`GenerateDialog.take`).
 

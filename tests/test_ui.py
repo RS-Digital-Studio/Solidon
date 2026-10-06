@@ -6762,6 +6762,69 @@ def test_the_history_keeps_the_title_of_a_deleted_child(qt_app: QApplication) ->
     assert len(deleted) - len(deleted.lstrip()) == indent, (deleted, kept)
 
 
+def test_a_step_span_names_the_numbers_of_a_group() -> None:
+    """Ohne Fenster: Eine Gruppenzeile trägt die Nummern ihrer Schritte (RM-519)."""
+    from app.ui.panels import step_span
+
+    assert step_span([3, 4]) == "3–4"
+    assert step_span([4, 3, 5]) == "3–5"
+    assert step_span([2, 3, 6]) == "2–3, 6", "nach einem Verschieben eine Lücke"
+    assert step_span([7]) == "7"
+    assert step_span([]) == ""
+
+
+def test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last(
+    qt_app: QApplication,
+) -> None:
+    """Jede Schrittnummer ist zu sehen, und der Kernwechsel steht hinten (RM-519).
+
+    Die zugeklappte Gruppe trug keine Nummer, und die Zählung sprang von 2 auf
+    5. *Als Dreiecksmodell rechnen* stand im Kontextmenü an zweiter Stelle,
+    gleich nach *Parameter ändern …* — für die seltenste Handlung im Menü.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.types import Document, Operation, Transaction
+    from app.ui.panels import HistoryPanel
+
+    load_operations()
+    document = Document(
+        format_version=17,
+        app_version="0.1.3",
+        ops=[
+            Operation(id=1, op="create_brep_box"),
+            Operation(id=2, op="drill_hole"),
+            Operation(id=3, op="drill_hole"),
+            Operation(id=4, op="rename_object"),
+        ],
+        transactions=[
+            Transaction(id="t1", title="Quader", ops=(1,)),
+            Transaction(id="t2", title="Kabel und Befestigung", ops=(2, 3)),
+            Transaction(id="t3", title="Name", ops=(4,)),
+        ],
+    )
+    panel = HistoryPanel()
+    panel.show_document(document)
+    shown = [
+        item.text()
+        for row in range(panel.list.count())
+        if not (item := panel.list.item(row)).isHidden()
+    ]
+    assert shown[0].startswith("1  Quader"), shown
+    assert shown[1] == "▸  2–3  Kabel und Befestigung", shown
+    assert shown[2].startswith("4  Name"), shown
+
+    menu = panel.context_menu(panel.list.item(0))
+    assert menu is not None
+    actions = menu.actions()
+    assert actions[0].objectName() == "history.edit"
+    switch = next(action for action in actions if action.objectName() == "history.kernel")
+    assert switch.text() == "Als Dreiecksmodell rechnen"
+    assert actions[-1] is switch, [action.text() for action in actions]
+    assert actions[-2].isSeparator(), "hinter einem Trennstrich"
+    menu.deleteLater()
+    panel.deleteLater()
+
+
 def test_history_context_delete_uses_the_visible_multiple_selection(
     qt_app: QApplication,
 ) -> None:
@@ -14215,6 +14278,12 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     tree = ObjectTree()
     tree.resize(LEFT_WIDTH, 200)
     QTreeWidgetItem(tree.tree, ["Halter", "60 × 40 × 11 mm"])
+    # Gezeigt, damit der Baum die Breite der Karte wirklich hat: Ungezeigt
+    # stand er auf Qts Vorgabe von hundert Punkten, und die Teilung maß dann
+    # eine Karte, die es nicht gibt — seit die Überschrift der Maßspalte immer
+    # ganz dasteht (RM-519), bliebe dort für den Namen fast nichts.
+    tree.show()
+    qt_app.processEvents()
     tree._size_columns()
 
     header = tree.tree.header()
@@ -14223,6 +14292,8 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     assert header.sectionSize(0) > header.sectionSize(1), (
         "der Name ist die Auskunft, das Maß die Beigabe"
     )
+    tree.close()
+    tree.deleteLater()
 
 
 def test_the_object_tree_grows_with_its_content(qt_app: QApplication) -> None:
@@ -19141,7 +19212,12 @@ def test_the_object_tree_offers_the_filament_where_the_body_stands(
     tree = window.object_tree.tree
 
     assert tree.columnCount() == 3
-    assert tree.headerItem().text(FILAMENT_COLUMN) == str(tr("Filament"))
+    # Der Kopf trägt die Spule und das Wort nur für Kurzhilfe und Leser (RM-519).
+    heading = tree.headerItem()
+    assert heading.text(FILAMENT_COLUMN) == ""
+    assert not heading.icon(FILAMENT_COLUMN).isNull()
+    assert heading.toolTip(FILAMENT_COLUMN) == str(tr("Filament"))
+    assert heading.data(FILAMENT_COLUMN, Qt.ItemDataRole.AccessibleTextRole) == str(tr("Filament"))
     assert tree.columnWidth(FILAMENT_COLUMN) > 0, "eine Spalte ohne Breite zeigt nichts"
 
     row = tree.topLevelItem(0)
@@ -19161,6 +19237,89 @@ def test_the_object_tree_offers_the_filament_where_the_body_stands(
     asked.clear()
     window.object_tree._on_cell_clicked(tree.indexFromItem(row, 0))
     assert asked == [], "ein Klick auf den Namen wählt aus und weist nichts zu"
+
+
+def test_the_object_tree_cuts_no_heading_in_any_language(qt_app: QApplication) -> None:
+    """In jeder Sprache steht der Kopf des Objektbaums ganz da (RM-519).
+
+    „Filament“ stand in der festen, schmalen Farbspalte als „Fila“. Gemessen
+    wird je Sprache, ob jede Überschrift samt Rand in ihre Spalte passt — die
+    Filamentspalte trägt die Spule, und die muss hineinpassen.
+    """
+    from PySide6.QtWidgets import QStyle
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene.evaluate import evaluate
+    from app.core.types import Document, Operation
+    from app.i18n import set_language
+    from app.i18n.catalog import available_languages, install_language
+    from app.ui.panels import FILAMENT_COLUMN, ObjectTree
+
+    load_operations()
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops = [Operation(id=1, op="create_box", params={}, outputs=("obj_1",))]
+    result = evaluate(document, make_profile("centauri-carbon-2", "petg"))
+    assert result.scene.objects
+    languages = available_languages()
+    assert len(languages) >= 6
+    try:
+        for language in languages:
+            install_language(language)
+            set_language(language)
+            panel = ObjectTree()
+            panel.resize(260, 300)
+            panel.show_scene(result, document)
+            panel.show()
+            for _ in range(5):
+                qt_app.processEvents()
+            tree = panel.tree
+            header = tree.header()
+            margin = header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin, None, header)
+            heading = tree.headerItem()
+            for column in range(tree.columnCount()):
+                text = heading.text(column)
+                needed = header.fontMetrics().horizontalAdvance(text) + 2 * margin
+                if not heading.icon(column).isNull():
+                    icon_side = header.style().pixelMetric(
+                        QStyle.PixelMetric.PM_SmallIconSize, None, header
+                    )
+                    needed += icon_side + (margin if text else 0)
+                assert header.sectionSize(column) >= needed, (
+                    f"{language}: Spalte {column} „{text}“ braucht {needed}, "
+                    f"hat {header.sectionSize(column)}"
+                )
+            assert heading.text(FILAMENT_COLUMN) == "", f"{language}: kein Wort in der Farbspalte"
+            panel.close()
+            panel.deleteLater()
+    finally:
+        set_language("de")
+
+
+def test_the_filament_dot_is_round_and_says_without_colour_whether_it_was_chosen(
+    qt_app: QApplication,
+) -> None:
+    """Ein runder Punkt statt eines Kästchens, das wie ein Haken aussah (RM-519).
+
+    Die Ecke bleibt frei — dort hatte das alte Quadrat Farbe. Und ob ein
+    Filament zugewiesen ist, unterscheidet der Rand, nicht die Farbe (Regel 18):
+    dieselbe Farbe, zwei verschiedene Bilder.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.panels import FILAMENT_CHIP, filament_chip
+
+    host = QLabel()
+    side = FILAMENT_CHIP
+    chosen = filament_chip("#3070c0", True, host).pixmap(side, side).toImage()
+    plain = filament_chip("#3070c0", False, host).pixmap(side, side).toImage()
+    for image in (chosen, plain):
+        # Das Quadrat war hier voll deckend; der Kreis streift die Stelle
+        # höchstens mit seiner Kantenglättung.
+        assert image.pixelColor(2, 2).alpha() < 128, "die Ecke bleibt frei"
+        assert image.pixelColor(side // 2, side // 2).alpha() == 255, "die Mitte ist gefüllt"
+    assert chosen != plain, "zugewiesen und nicht zugewiesen sehen auch farbgleich verschieden aus"
+    host.deleteLater()
 
 
 def test_a_clicked_edge_reaches_the_selection_window(
