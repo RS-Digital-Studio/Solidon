@@ -204,6 +204,9 @@ Stellen halten das, beide sind nötig:
   korrigieren* mit Rat als Tooltip; der Fehlerdialog zeigt Räte über
   `dialogs.unhandled_advice` als Sätze. Knopfzeile, Kontextmenü und Vorwahl
   benutzen denselben Abgleich.
+- **Vorgewählt werden nur Fehler und Warnungen** mit Handlung (`_preselect`,
+  RM-512): Die gewählte Zeile trägt die Akzentkante, ihre Handlung den
+  Hauptknopf, und ein Hinweis, der das tut, liest sich wie eine Warnung.
 - Lokale Erkennung behält die Zielkörper des Befunds; erst der Originaltreffer
   bestimmt einen. Baumauswahl ersetzt dieses Ziel nicht. Maus und Tastatur
   verwenden denselben Treffer.
@@ -309,6 +312,21 @@ Ansichtsseite steht in `griffe.md`.
   Verwerfen verwendet `make_danger` (Fehlerrot, Schrift aus `readable_on`,
   Handlungswort; etwa *Abbrechen* unter *Übernehmen*). `test_style.py` prüft
   gezeichnete Fläche/Schrift und verbietet den direkten Default-Aufruf.
+- **Höchstens ein Akzentknopf je Fenster** (RM-512). Jeder Knopf mit
+  `DestructiveRole` trägt `make_danger`, nie zugleich `make_primary`; eine
+  Rückfrage vor unwiederbringlichem Verwerfen hat keinen Hauptknopf
+  (`no_primary`, Escape = Abbrechen, Enter erst nach Tab), denn ein Akzent auf
+  dem Ausgang wäre ein Ausgang als Hauptknopf. Handlungen eines Hinweises
+  (`ErrorNotice`, Rat und Übermaß im Druckdialog) sind normale Knöpfe, die mit
+  `primary` vorn: Das Fenster hat seinen Hauptknopf schon. Aus `Action.primary`
+  wird ein Hauptknopf nur im Fehlerdialog (`show_error`, die erste) und im
+  Prüfbericht (`_show_offers`). Wächter: `test_style.py`.
+- **Im Ruhezustand trägt genau ein Element den Akzent: *Bausteine***
+  (RM-512, `test_resting_state.py`, Flächen und Linien ab 40 px, hell und
+  dunkel). Was im Ruhezustand dauerhaft steht, sagt „du bist hier“ und nimmt
+  keinen Akzent: Kartenränder die Linienfarbe (`overlay.card_stylesheet`), der
+  aktive Reiter eine Kante in der Schriftfarbe. Die Tour macht *Weiter* beim
+  Leseschritt zum Hauptknopf, *Schritt überspringen* bei einer Übung nicht.
 - Dialoge ohne Hauptaktion rufen `no_primary`, andere `make_primary` auch bei
   anfangs gesperrtem Knopf. Sonst macht Qt beim ersten Anzeigen den ersten
   `autoDefault`-Knopf selbst zum Hauptknopf. Nur ein gezeigtes Fenster belegt

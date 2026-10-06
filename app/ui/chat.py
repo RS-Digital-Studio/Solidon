@@ -39,7 +39,7 @@ from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
 from app.ui.labels import volume
 from app.ui.leash import stop_watching_the_dying, weak_slot
-from app.ui.style import NORMAL, set_level
+from app.ui.style import NORMAL, make_primary, set_level
 from app.ui.theme import UNDONE_COLOUR
 
 #: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
@@ -279,7 +279,11 @@ class ChatPanel(QWidget):
         self.questions_view.setVisible(False)
         self.questions_toggle.toggled.connect(self._show_questions)
 
-        self.accept_button = QPushButton(tr("Übernehmen"), self)
+        # Übernehmen ist die Handlung, auf die der Vorschlag wartet — der
+        # Hauptknopf, wie in jedem anderen Fenster (RM-512). Verwerfen bleibt
+        # ein normaler Knopf und nicht rot: Der Vorschlag war eine Vorschau,
+        # das Dokument hat ihn nie gesehen, und die Frage lässt sich neu stellen.
+        self.accept_button = make_primary(QPushButton(tr("Übernehmen"), self))
         self.accept_button.clicked.connect(self.accepted)
         self.discard_button = QPushButton(tr("Verwerfen"), self)
         self.discard_button.clicked.connect(self.discarded)

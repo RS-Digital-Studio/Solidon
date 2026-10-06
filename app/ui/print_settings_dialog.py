@@ -3207,10 +3207,10 @@ class PrintSettingsDialog(QDialog):
             for action in (SPLIT_MODEL, SCALE_TO_FIT)
             if problem is not None and action.id in handlers
         ]
+        # Normale Knöpfe: Der Hauptknopf des Dialogs ist die Übergabe, ein
+        # Rat daneben bekommt keinen zweiten (RM-512).
         for action in offered:
             button = QPushButton(str(action.label), self._oversize_actions)
-            if action.primary:
-                make_primary(button)
             button.clicked.connect(
                 weak_slot(self, PrintSettingsDialog._run_oversize_action, action.id)
             )
@@ -7808,10 +7808,9 @@ class PrintSettingsDialog(QDialog):
             if problem is not None and not self._advice_pending
             else []
         )
-        for action in offered:
+        # Wie beim Übermaß: ein Rat ist kein zweiter Hauptknopf (RM-512).
+        for action in sorted(offered, key=lambda action: not action.primary):
             button = QPushButton(str(action.label), self._advice_offers)
-            if action.primary:
-                make_primary(button)
             button.clicked.connect(
                 weak_slot(self, PrintSettingsDialog._run_advice_action, action.id)
             )

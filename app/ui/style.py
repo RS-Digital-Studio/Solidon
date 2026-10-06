@@ -1794,7 +1794,8 @@ QTreeView::item:selected, QListView::item:selected, QTableView::item:selected {{
     background: {highlight};
     color: {on_highlight};
 }}
-/* Der Bericht wählt den ersten lösbaren Befund selbst vor. Diese dauerhafte
+/* Der Bericht wählt den ersten lösbaren Fehler oder die erste lösbare Warnung
+   selbst vor, nie einen Hinweis (RM-512). Diese dauerhafte
    Vorauswahl ist Orientierung, kein zweiter Handlungsaufruf neben dem
    akzentuierten Lösungsknopf: ruhige Fläche plus Akzentkante kodieren sie
    weiterhin doppelt, ohne im Ruhezustand eine zweite Signalfläche zu bilden. */
@@ -1834,17 +1835,20 @@ QTabBar::tab {{
     padding: {TIGHT}px {ROOMY}px;
 }}
 QTabBar::tab:hover {{ color: {text}; background: {hover}; }}
-/* Der aktive Reiter trägt eine Akzentkante — und zwar zusätzlich zu Fläche,
-   Farbe und Fettschrift, die er schon hatte (Regel 18 bleibt unberührt).
-   Vorher unterschied ihn vom stillen allein der Flächenwechsel, und der lag
-   bei 1,10 Kontrast: Ob Prüfbericht oder Chat gilt, war eine Frage des
-   zweiten Blicks. Das obere Padding gibt die drei Pixel wieder her, sonst
-   rutscht die Beschriftung nach unten. */
+/* Der aktive Reiter trägt eine Kante in der Schriftfarbe — zusätzlich zu
+   Fläche, Farbe und Fettschrift, die er schon hatte (Regel 18 bleibt
+   unberührt). Vorher unterschied ihn vom stillen allein der Flächenwechsel,
+   und der lag bei 1,10 Kontrast: Ob Prüfbericht oder Chat gilt, war eine
+   Frage des zweiten Blicks. Die Kante ist nicht bernsteinfarben: Ein Reiter
+   sagt „du bist hier", und im Ruhezustand des Fensters trägt genau ein
+   Element den Akzent, der Hauptknopf (RM-512, ``test_resting_state.py``).
+   Das obere Padding gibt die drei Pixel wieder her, sonst rutscht die
+   Beschriftung nach unten. */
 QTabBar::tab:selected {{
     color: {text};
     background: {base};
     border-color: {line};
-    border-top: 3px solid {accent_line};
+    border-top: 3px solid {text};
     border-bottom-color: {base};
     padding-top: {max(TIGHT - 2, 0)}px;
     font-weight: 600;

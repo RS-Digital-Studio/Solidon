@@ -400,7 +400,17 @@ from app.ui.sketch_editor import (
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
-from app.ui.style import NORMAL, ROOMY, TIGHT, divider, make_primary, menu_heading, set_level
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    TIGHT,
+    divider,
+    make_danger,
+    make_primary,
+    menu_heading,
+    no_primary,
+    set_level,
+)
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
 from app.ui.tab_signal import SignalTabBar
@@ -8188,7 +8198,11 @@ class MainWindow(QMainWindow):
         )
         remove = box.addButton(tr("Löschen"), QMessageBox.ButtonRole.DestructiveRole)
         cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(cancel)
+        # Rot, und Enter löscht nicht: Die Nachfrage steht nur hier, weil das
+        # Löschen abhängige Schritte und den Redo-Zweig mitnimmt. Abbrechen
+        # bleibt ein Ausgang ohne Akzent — Escape nimmt ihn (RM-512).
+        make_danger(remove)
+        no_primary(box)
         box.setEscapeButton(cancel)
         box.exec()
         if box.clickedButton() is not remove:

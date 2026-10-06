@@ -8008,14 +8008,61 @@ def test_the_chosen_map_comes_back_after_a_change(window: MainWindow) -> None:
     assert window.viewport.analysis_map is not None, "die gewählte Karte kam nicht wieder"
 
 
+@pytest.mark.parametrize(
+    ("severity", "chosen"), [("info", False), ("warning", True), ("error", True)]
+)
+def test_only_errors_and_warnings_are_preselected(
+    monkeypatch: pytest.MonkeyPatch, severity: str, chosen: bool
+) -> None:
+    """Ein Hinweis mit Handlung ist nicht vorgewählt — auch nicht am Körper (RM-512).
+
+    Vorgewählt heißt: Akzentkante an der Zeile, Hauptknopf an ihrer Handlung.
+    Ein Hinweis, der das tut, liest sich wie eine Warnung und nimmt dem
+    ruhenden Fenster sein eines Licht; seine Handlung steht einen Klick auf
+    die Zeile entfernt. Ohne Fenster: Gefragt wird nur, welche Zeile
+    ``_preselect`` wählt.
+    """
+    from app.ui import panels
+
+    finding = Finding(
+        "arrange.below_bed",
+        severity,  # type: ignore[arg-type]
+        "Ein Objekt steckt unter dem Druckbett.",
+        object_id="obj_1",
+        suggestions=(Action("place_on_bed", "Auf das Bett setzen"),),
+    )
+    item = SimpleNamespace(
+        data=lambda role: finding if role == Qt.ItemDataRole.UserRole else (),
+        isHidden=lambda: False,
+    )
+    rows: list[int] = []
+    panel = SimpleNamespace(
+        _document=None,
+        _stopped_at=None,
+        _live_objects={},
+        list=SimpleNamespace(
+            selectedItems=list,
+            count=lambda: 1,
+            item=lambda _row: item,
+            setCurrentRow=rows.append,
+        ),
+    )
+    monkeypatch.setattr(panels, "handlers_of", lambda _panel: {"place_on_bed": print})
+    monkeypatch.setattr(panels, "handled_actions", lambda *_args, **_kwargs: finding.suggestions)
+
+    panels.ReportPanel._preselect(panel)  # type: ignore[arg-type]
+
+    assert (rows == [0]) is chosen, f"{severity}: gewählt {rows}"
+
+
 def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -> None:
     """„Druckbereit · 1 × Hinweis“ statt einer Zählung neben Hinweisen (KUNDE-06).
 
     Der Hinweis zu den Startwerten des Materials steht bei jeder frischen
     Installation an jedem Teil; mit ihm stand der Satz praktisch nie da, und die
     Zeile des Hinweises war vorgewählt — in der Auswahlfarbe, mit orangem Knopf,
-    wie eine Warnung. Ein Hinweis am Körper bleibt vorwählbar; eine Warnung
-    nimmt das Urteil weg.
+    wie eine Warnung. Vorgewählt werden nur Fehler und Warnungen (RM-512),
+    auch ein Hinweis am Körper nicht; eine Warnung nimmt das Urteil weg.
     """
     import trimesh
 
@@ -8066,7 +8113,8 @@ def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -
         assert panel.summary.text().startswith(tr("Entscheidung erforderlich"))
         assert "1 Warnung" in panel.list_toggle.text()
 
-        # Gegenprobe: Ein Hinweis **am Körper** mit Handlung wird vorgewählt.
+        # Auch ein Hinweis **am Körper** mit Handlung bleibt ungewählt: Seine
+        # Zeile und sein Hauptknopf wären im ruhenden Fenster ein zweites Licht.
         below = Finding(
             code="arrange.below_bed",
             severity="info",
@@ -8080,8 +8128,24 @@ def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -
                 scene=Scene(objects=objects, report=Report(findings=(material, below)))
             )
         )
+        assert not panel.list.selectedItems(), "ein Hinweis ist nicht vorgewählt"
+
+        # Gegenprobe: Derselbe Sachverhalt als Warnung — so meldet ihn die
+        # Exportprüfung — wird mit seiner Handlung vorgewählt.
+        warned = Finding(
+            code="arrange.below_bed",
+            severity="warning",
+            message="Ein Objekt steckt unter dem Druckbett.",
+            object_id="obj_1",
+            suggestions=(Action("place_on_bed", "Auf das Bett setzen"),),
+        )
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(objects=objects, report=Report(findings=(material, warned)))
+            )
+        )
         chosen = panel.list.selectedItems()
-        assert chosen and chosen[0].data(Qt.ItemDataRole.UserRole).code == "arrange.below_bed"
+        assert chosen and chosen[0].data(Qt.ItemDataRole.UserRole).severity == "warning"
     finally:
         panel.deleteLater()
         host.deleteLater()

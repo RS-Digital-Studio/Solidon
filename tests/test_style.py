@@ -9,6 +9,7 @@ wird, ist nach zehn Änderungen keine mehr.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -928,13 +929,17 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
 def test_the_three_questions_mark_their_answer_twice(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Speichern, Trotzdem exportieren, Verwerfen: die Antwort trägt den Akzent
-    **und** die halbfette Schrift.
+    """Speichern und Trotzdem exportieren: die Antwort trägt den Akzent
+    **und** die halbfette Schrift. Verwerfen trägt keines von beiden, sondern
+    das Fehlerrot (RM-512).
 
     ``QMessageBox.setDefaultButton`` setzt nur den Default — gezeichnet in
     der Akzentfarbe, aber in normaler Schrift, und Farbe allein ist keine
     zweite Kodierung (Regel 18). Der Quelltextwächter darüber sieht das
     nicht: Er sucht ``setDefault(True)``, und das ruft hier Qt selbst.
+
+    *Abgeschnittene Schritte verwerfen?* hat keinen Hauptknopf: Verwerfen ist
+    unwiederbringlich, und ein Akzent darauf lüde genau dazu ein.
     """
     from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QMessageBox
@@ -954,12 +959,23 @@ def test_the_three_questions_mark_their_answer_twice(
     dialogs.confirm_discard(3, ["Eins", "Zwei", "Drei"])
 
     assert len(seen) == 3
-    for box in seen:
+    for box in seen[:2]:
         answer = box.defaultButton()
         assert answer is not None, box.windowTitle()
         assert answer.font().weight() >= QFont.Weight.DemiBold, (
             f"{box.windowTitle()}: „{answer.text()}“ nur über die Farbe hervorgehoben"
         )
+        assert answer.property("danger") is not True, f"{box.windowTitle()}: rot und Hauptknopf"
+
+    discard_box = seen[2]
+    assert discard_box.defaultButton() is None, "Verwerfen ist kein Hauptknopf"
+    (discard,) = [
+        button
+        for button in discard_box.buttons()
+        if discard_box.buttonRole(button) == QMessageBox.ButtonRole.DestructiveRole
+    ]
+    assert discard.property("danger") is True
+    assert not discard.isDefault() and discard.font().weight() < QFont.Weight.DemiBold
 
 
 #: Die Dialoge, die sich ohne fremden Zustand bauen lassen, als Bauanweisungen.
@@ -1204,6 +1220,23 @@ def test_the_tab_bar_shows_where_the_keyboard_is() -> None:
     assert "QTabBar::tab:focus {" not in sheet, (
         "Ein Fokusrahmen an jedem Reiter markiert die ganze Leiste statt einer Stelle."
     )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_the_active_tab_says_where_you_are_without_the_accent(theme: str) -> None:
+    """Der aktive Reiter steht im Ruhezustand immer da — also nicht in Bernstein.
+
+    Seine Kante trug ``accent_line`` und war damit eine von fünf Stellen, die
+    im ruhenden Fenster leuchteten (RM-512). Sie nimmt die Schriftfarbe; Fläche,
+    Schriftfarbe und Fettschrift bleiben die übrigen Kodierungen.
+    """
+    sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+    rule = sheet.split("QTabBar::tab:selected {", 1)[1].split("}", 1)[0]
+    colours = THEMES[theme]  # type: ignore[index]
+
+    assert f"border-top: 3px solid {colours['text']};" in rule
+    assert colours["accent_line"] not in rule and colours["highlight"] not in rule
+    assert "font-weight: 600" in rule, "die zweite Kodierung bleibt"
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
@@ -2136,6 +2169,231 @@ def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None
         apply_theme(qt_app, previous_theme)
         qt_app.setPalette(previous_palette)
         qt_app.setStyleSheet(previous_sheet)
+
+
+def _functions_of_the_surface() -> list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
+    """Jede Funktion unter ``app/ui`` mit ihrem Dateinamen — die Wächter unten
+    lesen Knopf und Farbe dort, wo beide zusammenkommen."""
+    found = []
+    for path in sorted(UI.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                found.append((path.name, node))
+    return found
+
+
+def _called(node: ast.AST, name: str) -> list[ast.Call]:
+    """Die Aufrufe von ``name`` in einem Ausdruck, gleich ob frei oder als Attribut."""
+    calls = []
+    for inner in ast.walk(node):
+        if isinstance(inner, ast.Call):
+            target = inner.func
+            called = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "")
+            if called == name:
+                calls.append(inner)
+    return calls
+
+
+def _labels(node: ast.AST) -> set[str]:
+    """Die Beschriftungen, die ein Ausdruck über ``tr("…")`` setzt."""
+    return {
+        str(call.args[0].value)
+        for call in _called(node, "tr")
+        if call.args and isinstance(call.args[0], ast.Constant)
+    }
+
+
+def _made(function: ast.AST, name: str) -> set[str]:
+    """Welche Knöpfe eine Funktion an ``make_primary`` oder ``make_danger`` gibt."""
+    return {ast.unparse(call.args[0]) for call in _called(function, name) if call.args}
+
+
+def test_every_destructive_button_is_drawn_red() -> None:
+    """Wer ``DestructiveRole`` sagt, zeigt es auch — mit ``make_danger`` (RM-512).
+
+    Die Rolle ordnet den Knopf in der Leiste ein; gezeichnet wurde er wie
+    jeder andere, und *Verwerfen* in *Ungesicherte Änderungen* stand
+    unauffällig neben *Speichern*. Ohne Fenster: Gesucht wird je Funktion
+    jeder ``addButton`` mit der Rolle und dazu ein ``make_danger`` für
+    denselben Knopf.
+    """
+    seen = 0
+    offenders: list[str] = []
+    for file, function in _functions_of_the_surface():
+        red = _made(function, "make_danger")
+        for statement in ast.walk(function):
+            if not isinstance(statement, (ast.Assign, ast.Expr)):
+                continue
+            for call in _called(statement, "addButton"):
+                if "DestructiveRole" not in ast.unparse(call):
+                    continue
+                if isinstance(statement, ast.Assign) and statement.value is call:
+                    button = ast.unparse(statement.targets[0])
+                elif call.args and not _labels(call.args[0]):
+                    button = ast.unparse(call.args[0])
+                else:
+                    button = ast.unparse(call)
+                seen += 1
+                if button not in red:
+                    offenders.append(f"{file}:{call.lineno} {button}")
+    assert seen >= 5, f"nur {seen} verwerfende Knöpfe gefunden — sucht der Wächter noch?"
+    assert not offenders, f"DestructiveRole ohne make_danger: {sorted(set(offenders))}"
+
+
+def test_no_button_is_red_and_primary_at_once() -> None:
+    """Rot heißt „das ist nicht zurückzuholen“, der Akzent „tu das“ (RM-512).
+
+    *Verwerfen* in *Abgeschnittene Schritte verwerfen?* war Hauptknopf: Die
+    Eingabetaste warf weg, was kein Undo zurückholt, und der Akzent lud dazu
+    ein. Ein Knopf trägt höchstens eines von beiden.
+    """
+    offenders = []
+    for file, function in _functions_of_the_surface():
+        both = _made(function, "make_danger") & _made(function, "make_primary")
+        offenders += [f"{file}:{function.name} {button}" for button in both]
+        offenders += [
+            f"{file}:{function.name} {ast.unparse(call)}"
+            for call in _called(function, "make_danger")
+            if call.args and _called(call.args[0], "make_primary")
+        ]
+    assert not offenders, offenders
+
+
+#: Wo *Abbrechen* das Fehlerrot trägt, obwohl es nichts Unwiederbringliches
+#: verwirft. **Offene Entscheidung:** Robert wollte es am 11.09.2026 so („das
+#: abbrechen mit rotem hintergrund“, ``86c4975aa``), RM-512 verlangt Rot genau
+#: am unwiederbringlichen Verwerfen. Bis das entschieden ist, bleiben die zwei
+#: bestehenden Stellen, und keine kommt dazu.
+RED_EXITS_PENDING_DECISION = {("filament_assignment.py", "Abbrechen"), ("panels.py", "Abbrechen")}
+
+
+def test_no_exit_is_drawn_red() -> None:
+    """*Abbrechen* und *Schließen* verwerfen nichts, also tragen sie kein Rot.
+
+    Ein roter Ausgang neben einem roten *Verwerfen* macht beide gleich laut:
+    Wer den sicheren Weg sucht, findet zwei Warnfarben. Bekannt sind die
+    Stellen aus :data:`RED_EXITS_PENDING_DECISION`.
+    """
+    exits = {"Abbrechen", "Schließen"}
+    found = set()
+    for file, function in _functions_of_the_surface():
+        assigned = {
+            ast.unparse(node.targets[0]): _labels(node.value)
+            for node in ast.walk(function)
+            if isinstance(node, ast.Assign) and len(node.targets) == 1
+        }
+        for call in _called(function, "make_danger"):
+            if not call.args:
+                continue
+            labels = _labels(call.args[0]) | assigned.get(ast.unparse(call.args[0]), set())
+            found |= {(file, label) for label in labels & exits}
+    assert found <= RED_EXITS_PENDING_DECISION, sorted(found - RED_EXITS_PENDING_DECISION)
+
+
+#: Wo eine Handlung mit ``primary`` den Hauptknopf bekommen darf: im
+#: Fehlerdialog, der nur aus dem Fehler und seinen Handlungen besteht, und im
+#: Prüfbericht, dessen gewählter Befund seine eine Lösung anbietet.
+PRIMARY_ACTIONS_LEAD_IN = {("dialogs.py", "show_error"), ("panels.py", "_show_offers")}
+
+
+def test_a_hint_never_brings_a_second_primary_into_a_window() -> None:
+    """Hinweishandlungen im Dialog sind normale Knöpfe (RM-512).
+
+    ``ErrorNotice`` machte jede Handlung mit ``primary`` zum Hauptknopf — in
+    einem Dialog, der seinen eigenen schon hatte. 57 Handlungen tragen die
+    Marke; sobald eine davon erschien, standen zwei Akzentknöpfe da, und
+    ``setDefault`` nahm dem Dialog Enter weg. Dasselbe im Druckdialog bei Rat
+    und Übermaß. Erlaubt ist es nur, wo der Fehler das Fenster ist.
+    """
+    offenders = []
+    for file, function in _functions_of_the_surface():
+        if (file, function.name) in PRIMARY_ACTIONS_LEAD_IN:
+            continue
+        for node in ast.walk(function):
+            if not (isinstance(node, ast.If) and ast.unparse(node.test).endswith(".primary")):
+                continue
+            if any(_called(statement, "make_primary") for statement in node.body):
+                offenders.append(f"{file}:{node.lineno} {function.name}")
+    assert not offenders, offenders
+
+
+def test_a_dialog_with_a_hint_keeps_one_primary(qt_app: QApplication) -> None:
+    """Ein Dialog mit Hauptknopf zeigt einen Hinweis samt Handlung — und hat
+    danach weiterhin genau einen Akzentknopf (RM-512).
+
+    Am angezeigten Fenster gezählt, denn erst dort vergibt Qt den Default.
+    Die Handlung ist *Diesen Schritt ändern*, eine der Handlungen mit
+    ``primary``.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QDialog, QDialogButtonBox, QPushButton, QVBoxLayout
+
+    from app.core.errors import CHANGE_THIS_STEP, AppError
+    from app.ui.dialogs import ErrorNotice
+    from app.ui.style import make_primary
+
+    dialog = QDialog()
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    layout = QVBoxLayout(dialog)
+    notice = ErrorNotice(dialog)
+    layout.addWidget(notice)
+    box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel, dialog)
+    apply = make_primary(box.addButton("Übernehmen", QDialogButtonBox.ButtonRole.AcceptRole))
+    layout.addWidget(box)
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        assert CHANGE_THIS_STEP.primary, "die Probe braucht eine Handlung mit primary"
+        notice.set_error(
+            AppError(title="Probe", detail="x", suggestions=(CHANGE_THIS_STEP,)),
+            {CHANGE_THIS_STEP.id: lambda _error: None},
+        )
+        qt_app.processEvents()
+
+        offered = [button for button in notice.findChildren(QPushButton) if button.isVisible()]
+        assert [button.text() for button in offered] == [str(CHANGE_THIS_STEP.label)]
+        leading = [button for button in dialog.findChildren(QPushButton) if button.isDefault()]
+        assert leading == [apply], f"Akzentknöpfe: {[button.text() for button in leading]}"
+        assert all(button.font().weight() < QFont.Weight.DemiBold for button in offered), (
+            "die Handlung des Hinweises ist halbfett — ein Hauptknopf ohne Farbe"
+        )
+    finally:
+        dialog.hide()
+        dialog.deleteLater()
+
+
+def test_an_error_with_two_recommended_ways_still_has_one_primary(
+    qt_app: QApplication,
+) -> None:
+    """Zwei Handlungen mit ``primary`` im Fehlerdialog: Hauptknopf wird die erste."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QMessageBox, QPushButton
+
+    from app.core.errors import CHANGE_THIS_STEP, RETRY, AppError
+    from app.ui import dialogs
+
+    caught: list[QMessageBox] = []
+    real = QMessageBox.exec
+    QMessageBox.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
+    try:
+        dialogs.show_error(
+            AppError(title="Probe", detail="x", suggestions=(RETRY, CHANGE_THIS_STEP)),
+            handlers={RETRY.id: lambda _e: None, CHANGE_THIS_STEP.id: lambda _e: None},
+        )
+    finally:
+        QMessageBox.exec = real  # type: ignore[method-assign]
+    (box,) = caught
+    try:
+        box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        box.show()
+        qt_app.processEvents()
+        leading = [button.text() for button in box.findChildren(QPushButton) if button.isDefault()]
+        assert leading == [str(RETRY.label)], leading
+    finally:
+        box.hide()
+        box.deleteLater()
 
 
 def test_a_shortcut_search_without_a_hit_says_so(qt_app: QApplication) -> None:

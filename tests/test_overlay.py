@@ -816,21 +816,18 @@ def test_a_list_pinned_below_qts_default_hint_does_not_shrink_its_zone(
     )
 
 
-def test_the_card_edge_carries_the_accent() -> None:
-    """Ein grauer Rand über einem grauen Modell in einem grauen Raum ist die
-    Kante, die man sucht statt sieht.
+def test_the_card_edge_carries_the_line_colour_not_the_accent() -> None:
+    """Die Kante einer Karte sagt, wo sie aufhört — und nicht „hier handeln“.
 
-    Der Akzent steht damit an mehr als einer Stelle zugleich — das war eine
-    bewusste Entscheidung und keine Nachlässigkeit. Der Test hält sie fest,
-    damit sie nicht beim nächsten Aufräumen still zurückgedreht wird.
+    Mit Bernsteinkante leuchteten im Ruhezustand drei Karten neben dem einen
+    Hauptknopf (RM-512); ein Signal an vier Stellen ist keines mehr. Die
+    Kante nimmt die Trennfarbe, die auch Felder und Listen umrandet.
     """
     for theme in ("dark", "light"):
         sheet = card_stylesheet(theme)  # type: ignore[arg-type]
-        accent = THEMES[theme]["accent_line"]  # type: ignore[index]
-        assert f"border: 1px solid {accent}" in sheet, theme
-        # Und nicht mehr die Trennfarbe: Die steht weiter zwischen Zeilen und
-        # Feldern, nur nicht mehr an der Kante der Karte.
-        assert f"border: 1px solid {THEMES[theme]['line']}" not in sheet  # type: ignore[index]
+        assert f"border: 1px solid {THEMES[theme]['line']}" in sheet, theme  # type: ignore[index]
+        for accent in ("accent_line", "highlight"):
+            assert THEMES[theme][accent] not in sheet, f"{theme}: {accent}"  # type: ignore[index]
 
 
 def test_the_dodge_margin_covers_the_card_it_dodges(window: MainWindow) -> None:
@@ -907,7 +904,7 @@ def test_the_drawn_card_really_shows_its_border(window: MainWindow) -> None:
     zone = window.overlay.left
     assert zone is not None
     picture = zone.grab().toImage()
-    accent = QColor(THEMES["dark"]["accent_line"])
+    edge = QColor(THEMES["dark"]["line"])
 
     # Ohne die Rundungen oben und unten: dort schneidet die Maske, und eine
     # Ecke ist keine Kante.
@@ -920,8 +917,8 @@ def test_the_drawn_card_really_shows_its_border(window: MainWindow) -> None:
         return [
             y
             for y in rows
-            if abs(QColor(picture.pixel(x, y)).red() - accent.red()) <= 30
-            and abs(QColor(picture.pixel(x, y)).green() - accent.green()) <= 30
+            if abs(QColor(picture.pixel(x, y)).red() - edge.red()) <= 30
+            and abs(QColor(picture.pixel(x, y)).green() - edge.green()) <= 30
         ]
 
     # Die Karte liegt links bündig am Fensterrand (Robert, 05.10.2026): Ihre

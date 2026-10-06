@@ -5585,21 +5585,22 @@ def keep_the_files_place(window: MainWindow) -> None:
 
 
 def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWindow) -> None:
-    """Die Knopfzeile des Prüfberichts steht ohne einen Klick da (§2.7).
+    """Die Knopfzeile des Prüfberichts steht bei einer Warnung ohne einen Klick da (§2.7).
 
     Sie zeigt die Handlungen des **gewählten** Befunds — und gewählt war nach
     dem Öffnen keiner. Der Kunde sah eine Liste und darunter nichts; dass ein
     Klick auf eine Listenzeile Knöpfe freischaltet, muss man wissen. §2.7
     verspricht anklickbare Handlungen, nicht auffindbare.
 
-    Gemessen an einem **zweiten** Modell mit ausgeschalteten Haken am
-    Ladeschritt: Das erste Modell eines Projekts kommt aufgesetzt und mittig
-    herein, jedes weitere aufgesetzt an eine freie Stelle (§17.1, Schritt 6).
-    Die Dateilage hat nur, wer *Auf das Bett setzen* und *An eine freie Stelle
-    legen* ausschaltet — ``block_with_rounded_edge.stl`` liegt dann von Z -10
-    bis +10 —, der Bericht meldet ``arrange.below_bed``, und *Auf das Bett
-    setzen* löst es mit einem Klick. Vorher standen dort **null** Knöpfe und
-    ``currentRow()`` auf −1.
+    **Vorgewählt werden nur Fehler und Warnungen** (RM-512): Die gewählte
+    Zeile trägt die Akzentkante, ihre Handlung den Hauptknopf, und ein
+    Hinweis, der das tut, ist im ruhenden Fenster ein zweites Licht. Gemessen
+    an demselben Sachverhalt in beiden Gewichten: ``block_with_rounded_edge.stl``
+    liegt als **zweites** Modell mit ausgeschalteten Haken am Ladeschritt von
+    Z -10 bis +10 (sonst käme es aufgesetzt an eine freie Stelle, §17.1,
+    Schritt 6). Die Auswertung meldet ``arrange.below_bed`` als Hinweis — er
+    bleibt ungewählt —, die Exportprüfung denselben Befund als Warnung, und
+    die steht mit *Auf das Bett setzen* gewählt da.
 
     Zwei Entscheidungen im Testaufbau, beide notwendig:
 
@@ -5623,23 +5624,30 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
     keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
 
-    codes = [
-        window.report.list.item(row).data(Qt.ItemDataRole.UserRole).code
+    findings = [
+        window.report.list.item(row).data(Qt.ItemDataRole.UserRole)
         for row in range(window.report.list.count())
     ]
-    assert "arrange.below_bed" in codes, "dieses Modell steckt unter dem Bett"
+    below = next((entry for entry in findings if entry.code == "arrange.below_bed"), None)
+    assert below is not None, "dieses Modell steckt unter dem Bett"
+    assert below.severity == "info", "die Auswertung meldet es als Hinweis"
+    assert not [entry for entry in findings if entry.severity in ("error", "warning")], (
+        f"ohne Warnung prüft der erste Teil nichts: {[entry.code for entry in findings]}"
+    )
+    assert window.report.list.currentRow() < 0, "ein Hinweis ist nicht vorgewählt"
 
-    assert window.report.list.currentRow() >= 0, "kein Befund ist vorgewählt"
+    window.report.add_findings([dataclasses.replace(below, severity="warning")])
+
+    assert window.report.list.currentRow() >= 0, "die Warnung ist nicht vorgewählt"
+    chosen = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole)
+    assert (chosen.code, chosen.severity) == ("arrange.below_bed", "warning"), (
+        f"vorgewählt ist {chosen.code!r} ({chosen.severity})"
+    )
     offered = [
         button.text().replace("&", "")
         for button in window.report._offers.findChildren(QAbstractButton)
     ]
     assert offered, "ohne einen Klick steht keine Handlung als Knopf da"
-
-    chosen = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole)
-    assert chosen.code == "arrange.below_bed", (
-        f"vorgewählt ist {chosen.code!r} — der Befund ohne Handlung nützt hier nichts"
-    )
 
 
 def test_the_split_and_retry_button_lays_the_pieces_on_the_plates(
@@ -7791,8 +7799,11 @@ def test_history_deletion_warns_before_discarding_redo(
     def reject(box: QMessageBox) -> int:
         shown.append(box.text())
         cancel = next(entry for entry in box.buttons() if entry.text() == tr("Abbrechen"))
+        remove = next(entry for entry in box.buttons() if entry.text() == tr("Löschen"))
         assert box.icon() == QMessageBox.Icon.Warning
-        assert box.defaultButton() is cancel, "Abbrechen ist nicht die sichere Vorgabe"
+        # Enter löscht nicht, und der Ausgang trägt keinen Akzent (RM-512).
+        assert box.defaultButton() is None, "weder Löschen noch Abbrechen ist Hauptknopf"
+        assert remove.property("danger") is True, "Löschen trägt das Fehlerrot"
         assert box.escapeButton() is cancel, "Escape muss den Vorgang abbrechen"
         cancel.click()
         return 0
@@ -19524,6 +19535,15 @@ def test_no_second_window_appears_along_the_way(window: MainWindow) -> None:
         window.session.wait_for_idle()
     keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
+    # Ein Hinweis ist nicht vorgewählt (RM-512) — gewählt wird er wie vom Kunden.
+    listing = window.report.list
+    listing.setCurrentRow(
+        next(
+            row
+            for row in range(listing.count())
+            if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "arrange.below_bed"
+        )
+    )
     QApplication.processEvents()
     assert window.report._offers.findChildren(QPushButton), (
         "ohne einen Befundknopf prüft dieser Test den Verdacht nicht"

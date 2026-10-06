@@ -438,9 +438,12 @@ class TourPanel(QWidget):
         self.next_button.setVisible(not finished)
         if not finished:
             current_step = tour.steps[self._current]
-            self.next_button.setText(
-                tr("Schritt überspringen") if current_step.done is not None else tr("Weiter")
-            )
+            exercise = current_step.done is not None
+            self.next_button.setText(tr("Schritt überspringen") if exercise else tr("Weiter"))
+            # Bei einer Übung ist die Handlung im Fenster dran, nicht das
+            # Überspringen: ein normaler Knopf ohne Akzent. Beim Leseschritt
+            # ist *Weiter* der eine Weg und bleibt Hauptknopf (RM-512).
+            _lead(self.next_button, leading=not exercise)
         following = self._next_example() if finished else None
         self.follow_button.setVisible(following is not None)
         if following is not None:
@@ -499,3 +502,19 @@ class TourPanel(QWidget):
             host.deleteLater()
         self._row_hosts.clear()
         self._rows.clear()
+
+
+def _lead(button: QPushButton, *, leading: bool) -> None:
+    """Macht einen Knopf zum Hauptknopf oder nimmt ihm Akzent und Halbfett.
+
+    :func:`make_primary` setzt beides, und ein Knopf, dessen Rolle mit dem
+    Schritt wechselt, muss beides auch wieder abgeben — sonst bliebe die
+    halbfette Schrift ohne Akzent stehen, eine Hervorhebung ohne Grund.
+    """
+    if leading:
+        make_primary(button)
+        return
+    button.setDefault(False)
+    font = button.font()
+    font.setWeight(QFont.Weight.Normal)
+    button.setFont(font)

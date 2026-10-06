@@ -6850,6 +6850,12 @@ class ReportPanel(QWidget):
           schwerste, aber nicht immer der, der etwas anzubieten hat —
           ``ingest.welded`` steht regelmäßig darüber und hat keine. Ihn
           vorzuwählen ließe die Zeile wieder leer.
+        * **Nur Fehler und Warnungen** (RM-512). Eine vorgewählte Zeile trägt
+          die Akzentkante und ihre Handlung den Hauptknopf; ein Hinweis, der
+          das tut, liest sich wie eine Warnung (KUNDE-06: „Material
+          kalibrieren“ über jedem sauberen Modell) und nimmt dem Ruhezustand
+          sein eines Licht. Seine Handlung steht einen Klick auf die Zeile
+          entfernt.
         """
         if self.list.selectedItems():
             return
@@ -6859,12 +6865,7 @@ class ReportPanel(QWidget):
             if item.isHidden():
                 continue
             finding = item.data(Qt.ItemDataRole.UserRole)
-            if finding.severity == "info" and finding.object_id is None:
-                # **Ein Hinweis zur Einrichtung ist nicht der erste Schritt am
-                # Teil** (KUNDE-06). „Material kalibrieren“ stand vorgewählt,
-                # in der Auswahlfarbe, mit orangem Hauptknopf, über jedem
-                # sauberen Modell — und las sich wie eine Warnung. Ein Hinweis
-                # am Körper (*Auf das Bett setzen*) bleibt vorwählbar.
+            if finding.severity not in ("error", "warning"):
                 continue
             if handled_actions(
                 finding,
