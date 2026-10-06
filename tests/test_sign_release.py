@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -1048,6 +1049,49 @@ def test_ci_run_requires_the_exact_successful_manual_main_workflow(
         sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
 
 
+_JOBS_QUERY = f"repos/{sign_release.REPOSITORY}/actions/runs/123/jobs?per_page=100"
+
+
+def _jobs(*failed: str, attempt: int = 1) -> dict[str, object]:
+    """Die Jobliste des Laufs 123 im Versuch ``attempt``; die genannten Jobs sind rot."""
+    names = (
+        "Stil und Format",
+        "Suite (windows-latest, Teil 0)",
+        "Pakete (windows-latest)",
+        "Neueste Versionen",
+    )
+    jobs = [
+        {
+            "run_id": 123,
+            "run_attempt": attempt,
+            "name": name,
+            "status": "completed",
+            "conclusion": "failure" if name in failed else "success",
+        }
+        for name in names
+    ]
+    return {"total_count": len(jobs), "jobs": jobs}
+
+
+def _red_tag_run(
+    monkeypatch: pytest.MonkeyPatch, listing: dict[str, object]
+) -> tuple[dict[str, object], list[str]]:
+    """Ein rot beendeter Tag-Lauf im ersten Versuch mit der gegebenen Jobliste."""
+    run, _ref, _annotation, calls = _tag_run_api(monkeypatch)
+    run["conclusion"] = "failure"
+    run["run_attempt"] = 1
+    original = sign_release._run
+
+    def read(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[2] != _JOBS_QUERY:
+            return original(command, **kwargs)
+        calls.append(command[2])
+        return subprocess.CompletedProcess(command, 0, json.dumps(listing))
+
+    monkeypatch.setattr(sign_release, "_run", read)
+    return run, calls
+
+
 def _tag_run_api(
     monkeypatch: pytest.MonkeyPatch, annotated: bool = False
 ) -> tuple[dict[str, object], dict[str, object], dict[str, object], list[str]]:
@@ -1068,6 +1112,7 @@ def _tag_run_api(
     }
     replies = {
         f"repos/{sign_release.REPOSITORY}/actions/runs/123": run,
+        _JOBS_QUERY: _jobs(),
         f"repos/{sign_release.REPOSITORY}/git/ref/tags/{tag}": ref,
         f"repos/{sign_release.REPOSITORY}/git/tags/{'34' * 20}": annotation,
     }
@@ -1159,6 +1204,99 @@ def test_only_the_current_real_release_tag_can_authorise_signing(
         }
     with pytest.raises(sign_release.SigningError):
         sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
+
+
+def test_a_tag_run_red_only_in_an_advisory_job_authorises_signing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Rot allein in „Neueste Versionen“ sagt nichts über das Paket (RM-350)."""
+    run, calls = _red_tag_run(monkeypatch, _jobs("Neueste Versionen"))
+    assert sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW) == run
+    assert _JOBS_QUERY in calls
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "product_job",
+        "advisory_and_product",
+        "nothing_red",
+        "unfinished",
+        "cancelled",
+        "incomplete",
+        "other_attempt",
+        "other_run",
+        "empty",
+        "not_a_list",
+    ],
+)
+def test_a_red_tag_run_stays_locked_unless_only_an_advisory_job_failed(
+    monkeypatch: pytest.MonkeyPatch, problem: str
+) -> None:
+    """Jedes andere Rot, ein offener Job oder eine unvollständige Liste hält an."""
+    listing = _jobs("Neueste Versionen")
+    jobs = listing["jobs"]
+    assert isinstance(jobs, list)
+    if problem == "product_job":
+        listing = _jobs("Suite (windows-latest, Teil 0)")
+    elif problem == "advisory_and_product":
+        listing = _jobs("Neueste Versionen", "Pakete (windows-latest)")
+    elif problem == "nothing_red":
+        listing = _jobs()
+    elif problem == "unfinished":
+        jobs[1]["status"] = "in_progress"
+    elif problem == "cancelled":
+        jobs[1]["conclusion"] = "cancelled"
+    elif problem == "incomplete":
+        listing["total_count"] = 120
+    elif problem == "other_attempt":
+        listing = _jobs("Neueste Versionen", attempt=2)
+    elif problem == "other_run":
+        jobs[0]["run_id"] = 456
+    elif problem == "empty":
+        listing = {"total_count": 0, "jobs": []}
+    else:
+        listing = {"total_count": 4, "jobs": "vier"}
+    _red_tag_run(monkeypatch, listing)
+    with pytest.raises(sign_release.SigningError, match="CI-Lauf"):
+        sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
+
+
+def test_the_advisory_exception_never_covers_the_installer_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Installerlauf hat keinen meldenden Job — rot ist dort rot."""
+    record = {
+        **_ci_record("123", sign_release.INSTALLER_WORKFLOW),
+        "conclusion": "failure",
+        "run_attempt": 1,
+    }
+    replies = {
+        f"repos/{sign_release.REPOSITORY}/actions/runs/123": record,
+        _JOBS_QUERY: _jobs("Neueste Versionen"),
+    }
+    monkeypatch.setattr(sign_release.shutil, "which", lambda name: "gh")
+    monkeypatch.setattr(
+        sign_release,
+        "_run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command, 0, json.dumps(replies[command[2]])
+        ),
+    )
+    with pytest.raises(sign_release.SigningError, match="CI-Lauf"):
+        sign_release.verify_ci_run("123", sign_release.INSTALLER_WORKFLOW)
+
+
+def test_every_advisory_job_is_a_job_of_the_main_build_that_nothing_waits_for() -> None:
+    """Der Name in ``ADVISORY_JOBS`` trifft einen Job von ``build.yml``, und kein
+    Paket- oder Prüfjob hängt an ihm — sonst wäre sein Rot keine bloße Meldung."""
+    root = Path(__file__).resolve().parent.parent
+    workflow = (root / sign_release.BUILD_WORKFLOW).read_text(encoding="utf-8")
+    assert sign_release.ADVISORY_JOBS
+    for name in sign_release.ADVISORY_JOBS:
+        found = re.search(rf"(?m)^  ([a-z][a-z0-9_-]*):\n    name: {re.escape(name)}$", workflow)
+        assert found is not None, name
+        assert not re.search(rf"(?m)^    needs:.*\b{re.escape(found.group(1))}\b", workflow)
 
 
 @pytest.mark.parametrize(

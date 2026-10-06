@@ -139,7 +139,10 @@ Diese beiden Dateien werden für den beauftragten Release als Assets eines
 **unveröffentlichten GitHub-Release-Entwurfs** hinterlegt. Der separate
 Installer-Workflow lädt sie anhand dieses Entwurfs, vergleicht die Herkunft
 mit dem erfolgreichen Anwendungslauf und prüft Hash, Signatur und das genaue
-Herausgeberzertifikat. Der Anwendungslauf muss erfolgreich abgeschlossen und
+Herausgeberzertifikat. Der Anwendungslauf muss erfolgreich abgeschlossen sein
+— rot allein im meldenden Job „Neueste Versionen“ zählt als erfolgreich
+(`sign_release.ADVISORY_JOBS`; die Jobliste wird vollständig gelesen, jeder
+andere Job muss grün oder übersprungen sein) — und
 entweder manuell über `workflow_dispatch` auf `main` oder durch den Push des
 zur Anwendungsversion passenden Tags `v<Version>` gestartet sein. Beim Tag-Lauf
 prüft das Werkzeug die tatsächliche GitHub-Tagreferenz und ihren Zielcommit;

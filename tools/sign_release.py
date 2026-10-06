@@ -73,6 +73,11 @@ INSTALLER_METADATA = "windows-installer-build.json"
 REPOSITORY = "RS-Digital-Studio/Solidon"
 BUILD_WORKFLOW = ".github/workflows/build.yml"
 INSTALLER_WORKFLOW = ".github/workflows/windows-signed-installer.yml"
+#: Jobs des Hauptbaus, die melden und nichts anhalten (RM-350): Kein Job hängt
+#: an ihnen, und ihr Rot sagt nichts über das Paket. Der Name steht so in
+#: ``build.yml``; wird nur einer von ihnen rot, endet der Lauf trotzdem mit
+#: „failure“ (:func:`_only_advisory_jobs_failed`).
+ADVISORY_JOBS = frozenset({"Neueste Versionen"})
 INSTALLER_ORCHESTRATION_FILES = frozenset(
     {
         INSTALLER_WORKFLOW,
@@ -781,8 +786,38 @@ def _verify_release_tag(commit: str) -> None:
         ) from exc
 
 
+def _only_advisory_jobs_failed(run_id: str, record: dict[str, Any]) -> bool:
+    """Sagt, ob ein rot beendeter Hauptbau allein an einem meldenden Job hängt.
+
+    So entschiede GitHub selbst, trüge der Job ``continue-on-error``: Die
+    Jobliste des letzten Versuchs ist vollständig gelesen, jeder Job
+    abgeschlossen, jeder außer :data:`ADVISORY_JOBS` erfolgreich oder
+    übersprungen, und mindestens einer von ihnen ist tatsächlich rot."""
+    listing = _github_metadata(f"actions/runs/{run_id}/jobs?per_page=100")
+    jobs = listing.get("jobs")
+    if not isinstance(jobs, list) or not jobs or listing.get("total_count") != len(jobs):
+        return False
+    advisory_failed = False
+    for job in jobs:
+        if (
+            not isinstance(job, dict)
+            or str(job.get("run_id")) != run_id
+            or job.get("run_attempt") != record.get("run_attempt")
+            or job.get("status") != "completed"
+        ):
+            return False
+        if job.get("name") in ADVISORY_JOBS and job.get("conclusion") == "failure":
+            advisory_failed = True
+        elif job.get("conclusion") not in {"success", "skipped"}:
+            return False
+    return advisory_failed
+
+
 def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
-    """Bindet einen erfolgreichen GitHub-Lauf an Repository, Workflow und Commit."""
+    """Bindet einen erfolgreichen GitHub-Lauf an Repository, Workflow und Commit.
+
+    Erfolgreich heißt „success“ — oder beim Hauptbau ein „failure“, das allein
+    an einem meldenden Job hängt (:data:`ADVISORY_JOBS`, RM-350)."""
     if re.fullmatch(r"[1-9][0-9]*", run_id) is None:
         raise SigningError(
             "Ungültige CI-Laufnummer — die numerische ID aus GitHub Actions angeben."
@@ -803,7 +838,7 @@ def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
             workflow not in {BUILD_WORKFLOW, INSTALLER_WORKFLOW}
             or str(record.get("id")) != run_id
             or record.get("status") != "completed"
-            or record.get("conclusion") != "success"
+            or record.get("conclusion") not in {"success", "failure"}
             or not (manual_main or release_tag)
             or record.get("path") != workflow
             or record.get("repository", {}).get("full_name") != REPOSITORY
@@ -811,6 +846,10 @@ def verify_ci_run(run_id: str, workflow: str) -> dict[str, Any]:
             or re.fullmatch(r"[0-9a-fA-F]{40}", str(record.get("head_sha", ""))) is None
         ):
             raise ValueError("Lauf passt nicht")
+        if record.get("conclusion") == "failure" and not (
+            workflow == BUILD_WORKFLOW and _only_advisory_jobs_failed(run_id, record)
+        ):
+            raise ValueError("Lauf ist rot")
     except (ValueError, TypeError, AttributeError) as exc:
         raise SigningError(
             f"CI-Lauf {run_id} ist kein erfolgreich abgeschlossener Lauf von {workflow} "
