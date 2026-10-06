@@ -43110,6 +43110,8 @@ einsetzen* tragen ihren Titel. Im Menü *Erzeugen* heißt der Skizzeneintrag *Ze
 wie der Knopf, und *Modell einfügen …* ist dieselbe `QAction` wie in *Datei*. Startknöpfe
 und Leiste hießen seit RM-515 schon gleich. Regeln: `grenzen.md` („Ein Text, eine
 Wirkung“), `uebersetzung.md`, Bauplan nur im Titel *In Einzelteile aufteilen*.
+**Entschieden (Robert, 06.10.2026):** der Bauplan trägt den neuen Titel, und die
+Operation heißt *An Ebene teilen*.
 
 **Nachweis:** `test_registry_consistency.py::test_every_way_to_split_says_teilen` (am
 Stand davor rot: „trennen“, „zerlegen“), `test_operation_ui.py::test_every_accept_button_names_what_the_click_does`

@@ -179,7 +179,7 @@ verschieben lassen) — im 3D-Druck meint „play“ Wackeln, und ein Feld „Pl
 neben einem Satz über „clearance“ sind für den Kunden zwei Dinge.
 
 **Jeder Weg, ein Teil zu teilen, sagt „teilen“, und keine zwei heißen gleich**
-(RM-507): das Werkzeug *Teilen* (en Split, es Dividir, fr Diviser, it Dividi,
+(RM-507, Entscheidung Robert 06.10.2026): das Werkzeug *Teilen* (en Split, es Dividir, fr Diviser, it Dividi,
 pt Dividir), die Operationen *An Ebene teilen*, *An gezeichneter Linie teilen*
 und *In Einzelteile aufteilen*, der Ablauf *Automatisch teilen*. Drei Verben für
 eine Sache ließen den Kunden suchen, ein gemeinsamer Name schickte ihn an den
