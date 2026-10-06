@@ -1,592 +1,592 @@
 {
-  "version": "0.5.2",
+  "version": "0.5.3",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.5.2.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.5.2.exe",
-      "size": 171570128,
-      "sha256": "708a4bd0022936968136b8d00d8e2b30097a0c6dd26b1db6bc83857152c76798"
+      "file": "Solidon3D-Setup-0.5.3.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.5.3.exe",
+      "size": 168805088,
+      "sha256": "ccbeee491b33af520ce43d603f78625d667fce294137fbc86e57a09a6ce2ed93"
     },
     "linux": {
-      "file": "Solidon3D-0.5.2-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.2-x86_64.flatpak",
-      "size": 191917944,
-      "sha256": "17a1c0f19770d1cf98ea44d6fb9467c0569d8abc2080cab26daa21b26677b9b0"
+      "file": "Solidon3D-0.5.3-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.5.3-x86_64.flatpak",
+      "size": 188490208,
+      "sha256": "997319c8994028718ad216a75ddb058f8bd6aab09276f7070dedb982becdb185"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.5.2-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.2-macos-arm64.pkg",
-      "size": 194061065,
-      "sha256": "ea542424b8f8c816dd3f741cd3428b301726e5265fa1078207a567ddd53b2d92"
+      "file": "Solidon3D-0.5.3-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.5.3-macos-arm64.pkg",
+      "size": 191258668,
+      "sha256": "0e0b26d99aa7dda290453e22de1e1fdc4ed265b3102076b4487383ad2c5458b7"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.5.2-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.2-macos-x86_64.pkg",
-      "size": 209794728,
-      "sha256": "8afd6b3030a6da1764acf31f324ce09dc4c367a4783a65ad2479716ad4f86ca4"
+      "file": "Solidon3D-0.5.3-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.5.3-macos-x86_64.pkg",
+      "size": 207011314,
+      "sha256": "be78adc4a463c68aefb826a6dea9c697b985a248a36acc733d2d7d8dfbc8f67a"
     }
   },
   "changes": {
     "de": [
-      "Neu ist die Grundform *Rohr anlegen*: Außendurchmesser und Höhe, dazu wahlweise Wandstärke oder Innendurchmesser, in einem Schritt.",
-      "Neu ist der Baustein *Lasche mit Loch*: eine flache Lasche an jeder Fläche, Loch und Maße passend zur Schraube von M3 bis M8.",
-      "Neu ist die *Rohrschelle* für gängige Rohre von 15 bis 40 mm oder jedes eigene Maß bis 110 mm, mit Klemmschraube M3 bis M6 und dem Spiel aus Ihrem Material.",
-      "Neu ist der Assistent *Behälter mit Deckel*: rund oder eckig, mit Schraub-, Steck- oder Klappdeckel, auf Wunsch mit Fächern, Einsatz und Streulöchern. Alle Hauptmaße stehen als Parameter bereit.",
-      "Die Vorbereitung des 3MF-Exports lässt sich abbrechen. Bei mehreren Druckplatten nutzt Solidon bereits berechnete Schichten und Vorschläge wieder.",
-      "Beim Öffnen älterer Projekte werden unbenutzte Filamente nicht mehr an den Slicer übergeben. Die Profile der benutzten Filamente bleiben zugeordnet.",
-      "Weitere Modelle finden auch hinter der zwölften Druckplatte einen freien Platz. Mitgebrachte Platten behalten ihre Aufteilung.",
-      "Weitere Modelle kommen bei unterschiedlichen Filamenten auf getrennte Druckplatten, wenn der Drucker nicht genügend Düsen hat.",
-      "Der Winkel eines Langlochs an einer eingelesenen Bohrung zeigt in die erwartete Richtung und bleibt so, wenn Sie die Feinheit ändern.",
-      "Ein Langloch in einer Seitenwand, die nach links oder rechts zeigt, lässt sich kürzen, schmaler ziehen und drehen. Ältere Projekte behalten ihre Langlöcher, bis Sie den Schritt ändern.",
-      "An STEP-Körpern gilt ein Langloch in einer schrägen Fläche nicht mehr als seitlich überstehend, und ein zweiter Zug an einem Langloch, das in eine Stufe läuft, füllt den Körper nicht mehr auf.",
-      "Ein Langloch durch eine schräge oder gefaste Platte zeigt an STEP-Körpern seine ganze Tiefe, und seine Kopie über den Rand hinaus meldet an STL- und STEP-Teilen dasselbe.",
-      "Verrunden einer Kantengruppe an einem STEP-Körper rundet jetzt die Kanten, die gehen, statt ganz abzusagen. Jede ausgelassene Kante findet *Stelle zeigen*.",
-      "Kanten an einer Wand, die nicht dicker ist als der Radius, bleiben scharf, und der Prüfbericht nennt den Radius, der dort passt. Bisher sagte die ganze Rundung ab.",
-      "Hat ein STEP-Körper an einer gewählten Stelle keine eigene Kante, bietet der Prüfbericht *Flächenbearbeitung beenden und erneut versuchen* an. Am Dreiecksmodell wird sie mitgerundet.",
-      "Fehlt Platz für den Austausch mit dem Rechenprozess, rechnet Solidon den Schritt trotzdem und sagt es im Prüfbericht. Bisher brach er mit dem Rat ab, gröber zu rechnen.",
-      "Mit *Auf beiden Seiten* setzt *Text aufbringen* die Schrift auch auf die Rückseite, von außen lesbar. Das passt für Fahnen, Schilder und Anhänger.",
-      "Schriftzüge werden genauer gesetzt: Die Buchstaben stehen an ihrer Stelle, und runde Bögen folgen der Schrift, statt bei kleinen Größen bis zu 2 Prozent Fläche zu verlieren.",
-      "Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.",
-      "Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.",
-      "Abbrechen während *Noch ein Versuch* bricht nur den laufenden Versuch ab. Die fertigen bleiben zur Wahl.",
-      "Jeder Versuch in der Liste nennt seinen Satz oder sein Bild und den Startwert. Passt Ihre Eingabe nicht mehr zum gewählten Versuch, sagt der Dialog, welcher übernommen wird.",
-      "Das Bildmodell holt *Bildmodell einrichten …* auch, wenn die übrigen Gewichte schon da sind.",
-      "Auf dem Mac beendet sich Solidon nicht mehr kurz nach dem Start. In Version 0.5.1 geschah das auf jedem Mac, auch ohne angeschlossene 3D-Maus.",
-      "Der Haken *Maße als Parameter anlegen* steht beim ersten Mal an und merkt sich danach Ihre letzte Wahl, auch über einen Neustart.",
-      "Dialoge öffnen in der Größe ihres Inhalts, ohne Leerraum, und eine Größe, die Sie selbst gezogen haben, bleibt."
+      "Rechts steht eine Karte mit den Reitern *Auswahl*, *Prüfbericht* und *Chat*. Neue Warnungen holen den Prüfbericht nicht mehr nach vorn, sein Reiter zeigt sie mit Zeichen und Zahl.",
+      "Oben im Fenster finden Sie jede Funktion über *Funktion suchen* (Strg+Umschalt+P). Die Karte der Funktionen ist geordnet wie die Menüleiste.",
+      "In der Auswahl ist an einem Merkmal eine Handlung zur Zeit offen. Die übrigen nennen zugeklappt ihre Werte.",
+      "Operationsdialoge zeigen vorn höchstens vier Felder und einen Satz. Selten geänderte Werte stehen unter *Weitere Einstellungen*, Grenzen unter *Wann nicht?*.",
+      "Eine Null mit Bedeutung heißt im Feld, was sie bewirkt, etwa „automatisch“, „ohne“ oder „aus dem Material“.",
+      "Alle Dialoge haben dieselbe Form mit flachen Abschnitten und einer gemeinsamen Kante für die Beschriftungen, auch Einstellungen, KI-Dialog und Freischaltung.",
+      "Der Prüfbericht zeigt zuerst die Befunde, darüber eine Zeile mit Status und Zählern. *Exportieren …* steht neben *An den Slicer übergeben …*.",
+      "Befunde, Tourschritte und Hinweise sind kürzer. Wo ein Knopf die Handlung anbietet, wiederholt der Satz sie nicht.",
+      "Die Handlung *Modell nachbauen* steht am gewählten Körper.",
+      "Der Startbildschirm zeigt die vier Einstiege groß oben. *Erste Schritte* fragt Sprache, Slicer und Drucker und klappt den Rest zu.",
+      "Der Bausteinkatalog zeigt je Kachel Bild und Titel. An einer Bohrung zeigt *Passende Bausteine …* nur, was in eine Bohrung gehört.",
+      "Neu ist Anycubic Slicer Next mit allen 39 Anycubic-Druckern, unter Windows, macOS und Linux.",
+      "Unter Linux findet Solidon OrcaSlicer, Bambu Studio und PrusaSlicer als Flatpak samt Ihren Druckern und Profilen, auch aus Solidons eigenem Flatpak.",
+      "Slicer als AppImage bieten unter Linux auch ihre eingerichteten Herstellerdrucker an.",
+      "Auf dem Mac erzeugt Solidon die Druckdatei jetzt auch mit Cura. Bisher fand es nur Curas Fenster.",
+      "Creality Print 7 bringt seine eigenen Drucker und den zuletzt gewählten mit.",
+      "Die Druckerlisten nennen jeden Drucker einmal, ohne Düsenvarianten. Die Düse wählen Sie im Druckdialog.",
+      "Eine im Druckdialog gewählte Düse bleibt erhalten, wenn Sie danach die Einstellungen speichern.",
+      "Wechseln Sie für PrusaSlicer oder SuperSlicer die Düse, bekommt der Slicer das passende Druckerprofil dazu.",
+      "Solidon bietet mehr Drucker an, auch solche, deren Profil Bett oder Düse nicht nennt, etwa Creality CR-20 und Anycubic i3 Mega in PrusaSlicer.",
+      "Der Druckdialog zeigt vorn Slicer, Drucker, Düse, Filamente, Qualität, Fülldichte und Stützen, der Rest steht unter *Weitere Einstellungen*.",
+      "Jeder Grund eines Vorschlags im Druckdialog passt in eine Zeile. *Druckdatei speichern* erscheint, sobald es eine Druckdatei gibt.",
+      "Ein Gewinde oder eine Einpressbuchse in einer gewählten Bohrung hält nicht mehr mit „außerhalb der Fläche“ an. Ist die Bohrung zu weit, nennt Solidon passende Größen.",
+      "An einer gewählten Bohrung stehen im Bild nur Durchmesser, Tiefe und zwei Kantenmaße. Bezüge heißen nach ihrer Seite, etwa „Außenkante links“.",
+      "In Zoll nennt der Satz über einer Bohrung ihr Maß in Zoll.",
+      "Das Vorschauband nennt in einer Zeile, was sich ändert, Längen in Ihrer Anzeigeeinheit.",
+      "Halter und Platten mit Bohrungen, Senkungen und Schrift baut *Modell nachbauen* jetzt als Umriss mit abgezogenen Taschen nach. Findet es keinen Aufbau, sagt es das.",
+      "Übernehmen Sie beim Zeichnen den Schnitt eines umgewandelten Körpers, kommen seine Kreise und Bögen als Kreise und Bögen an.",
+      "Lässt sich ein Teil nicht in Flächen und Kanten umwandeln, nennt Solidon Grund und Ausweg, statt mit einem unerwarteten Fehler zu enden.",
+      "Der KI-Hinweis sagt je Ziel in zwei Sätzen, was gesendet wird. Weil sich der Text geändert hat, bestätigen Sie ihn einmal neu.",
+      "Die Beschreibungen der empfohlenen lokalen Modelle sind kürzer."
     ],
     "en": [
-      "New is the basic shape *Add a tube*: outer diameter and height, plus either wall thickness or inner diameter, in one step.",
-      "New is the part *Tab with hole*: a flat tab on any face, with hole and size matching the screw from M3 to M8.",
-      "New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.",
-      "New is the *Container with lid* assistant: round or rectangular, with a screw, push-on or hinged lid, plus compartments, an insert and shaker holes if you like. All main dimensions are parameters.",
-      "Preparing a 3MF export can be cancelled. For jobs with several build plates, Solidon reuses calculated layers and suggestions.",
-      "Unused filaments from older projects are no longer sent to the slicer. Profiles stay linked to the filaments still in use.",
-      "Additional models can find a free spot beyond the twelfth build plate. Imported plates keep their layout.",
-      "Additional models with different filaments are placed on separate build plates when the printer does not have enough nozzles.",
-      "The angle of a slot on an imported hole points in the expected direction and stays that way when you change the fineness.",
-      "A slot in a side wall facing left or right can be shortened, narrowed and turned. Projects from earlier versions keep their slots until you change the step.",
-      "On STEP bodies, a slot in a slanted face no longer counts as sticking out at the side, and a second drag on a slot that runs into a step no longer fills the body up.",
-      "A slot through a slanted or chamfered plate shows its full depth on STEP bodies, and its copy beyond the edge reports the same on STL and STEP parts.",
-      "Rounding a group of edges on a STEP body now rounds the edges that work instead of refusing the whole group. *Show the place* finds every edge that was left out.",
-      "Edges on a wall no thicker than the radius stay sharp, and the report names the radius that fits there. Previously the whole fillet was refused.",
-      "If a STEP body has no edge of its own at a selected location, the report offers *End face editing and try again*. On the triangle model that spot is rounded too.",
-      "If there is no space left for the exchange with the computing process, Solidon still computes the step and says so in the report. Previously it stopped with advice to compute more coarsely.",
-      "With *On both sides*, *Put text on* also places the lettering on the back, readable from outside. That suits flags, signs and tags.",
-      "Lettering is set more precisely: the letters stand in their place, and curves follow the font instead of losing up to 2 percent of their area at small sizes.",
-      "Symmetry in *Sculpt* mirrors at the centre of the body, also away from the middle of the bed. Older projects keep their shape.",
-      "The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.",
-      "Cancelling during *One more attempt* only stops the running attempt. The finished ones remain to choose from.",
-      "Every attempt in the list names its sentence or image and its seed. If your input no longer matches the chosen attempt, the dialog says which one will be applied.",
-      "The image model is now fetched by *Set up image model …* even when the other weights are already there.",
-      "On a Mac, Solidon no longer quits shortly after it starts. In version 0.5.1 this happened on every Mac, even without a 3D mouse connected.",
-      "The *Create the dimensions as parameters* tick is set the first time and then remembers your last choice, even across a restart.",
-      "Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays."
+      "On the right, a card holds the tabs *Selection*, *Report* and *Chat*. New warnings no longer bring the report to the front; its tab shows them with a symbol and a count.",
+      "At the top of the window, *Search functions* (Ctrl+Shift+P) finds any function. The map of functions follows the order of the menu bar.",
+      "In the selection, a feature has one action open at a time. The others stay collapsed and show their values.",
+      "Operation dialogs show at most four fields and one sentence up front. Rarely changed values are under *More settings*, limits under *When to avoid it?*.",
+      "A zero with a meaning says in the field what it does, such as “automatic”, “none” or “from material”.",
+      "All dialogs share one layout with flat sections and a common edge for the labels, including the settings, the AI dialog and activation.",
+      "The report shows the findings first, with a line of status and counters above them. *Export …* sits next to *Hand over to the slicer …*.",
+      "Findings, tour steps and hints are shorter. Where a button offers the action, the sentence no longer repeats it.",
+      "The *Rebuild model* action sits on the selected body.",
+      "The start screen shows the four ways to begin in large at the top. *First steps* asks for language, slicer and printer and collapses the rest.",
+      "The part catalogue shows a picture and a title on each tile. On a hole, *Matching parts …* shows only what belongs in a hole.",
+      "New is Anycubic Slicer Next with all 39 Anycubic printers, on Windows, macOS and Linux.",
+      "On Linux, Solidon finds OrcaSlicer, Bambu Studio and PrusaSlicer installed as Flatpak, with your printers and profiles, also from Solidon's own Flatpak.",
+      "Slicers installed as AppImage on Linux also offer the vendor printers you have set up in them.",
+      "On the Mac, Solidon now also creates the print file with Cura. Until now it only found Cura's window.",
+      "Creality Print 7 brings its own printers and the one you selected last.",
+      "The printer lists name each printer once, without nozzle variants. You choose the nozzle in the print dialog.",
+      "A nozzle chosen in the print dialog is kept when you save the settings afterwards.",
+      "If you change the nozzle for PrusaSlicer or SuperSlicer, the slicer gets the matching printer profile with it.",
+      "Solidon offers more printers, including ones whose profile names neither bed nor nozzle, such as the Creality CR-20 and Anycubic i3 Mega in PrusaSlicer.",
+      "The print dialog shows slicer, printer, nozzle, filaments, quality, infill density and supports up front; the rest is under *More settings*.",
+      "Each reason for a suggestion in the print dialog fits on one line. *Save print file* appears as soon as there is a print file.",
+      "A thread or heat-set insert in a selected hole no longer stops with “outside the surface”. If the hole is too wide, Solidon names suitable sizes.",
+      "On a selected hole, the view shows only diameter, depth and two edge distances. References are named after their side, such as “Outer edge left”.",
+      "In inches, the sentence above a hole gives its size in inches.",
+      "The preview strip says in one line what changes, with lengths in your display unit.",
+      "For holders and plates with holes, countersinks and lettering, *Rebuild model* now builds an outline with pockets cut away. If it finds no structure, it says so.",
+      "If you take the section of a converted body into a sketch, its circles and arcs arrive as circles and arcs.",
+      "If a part cannot be converted to faces and edges, Solidon names the reason and a way out instead of ending with an unexpected error.",
+      "The AI notice says in two sentences per destination what is sent. Because the text has changed, you confirm it once more.",
+      "The descriptions of the recommended local models are shorter."
     ],
     "es": [
-      "Nueva es la forma básica «Añadir un tubo»: diámetro exterior y altura, y además espesor de pared o diámetro interior, en un solo paso.",
-      "Nuevo es el bloque «Pestaña con agujero»: una pestaña plana en cualquier cara, con agujero y medidas según el tornillo de M3 a M8.",
-      "Nueva es la «Abrazadera de tubo» para tubos habituales de 15 a 40 mm o cualquier medida propia hasta 110 mm, con tornillo de apriete M3 a M6 y la holgura de su material.",
-      "Nuevo asistente «Recipiente con tapa»: redondo o rectangular, tapa de rosca, a presión o abatible, y si quiere compartimentos, inserto y agujeros de espolvoreo. Sus cotas principales son parámetros.",
-      "Se puede cancelar la preparación de la exportación 3MF. En trabajos con varias placas, Solidon reutiliza las capas y sugerencias ya calculadas.",
-      "Los filamentos sin uso de proyectos antiguos ya no se envían al slicer. Los perfiles siguen asociados a los filamentos utilizados.",
-      "Los modelos añadidos encuentran espacio también después de la duodécima placa. Las placas importadas conservan su distribución.",
-      "Los modelos añadidos con filamentos distintos van en placas separadas si la impresora no tiene suficientes boquillas.",
-      "El ángulo de una ranura en un taladro importado apunta en la dirección esperada y se mantiene al cambiar la finura.",
-      "Una ranura en una pared lateral orientada a la izquierda o a la derecha se puede acortar, estrechar y girar. Los proyectos de versiones anteriores conservan sus ranuras hasta que cambie el paso.",
-      "En cuerpos STEP, una ranura en una cara inclinada ya no cuenta como sobresaliente por el lado, y un segundo arrastre en una ranura que llega a un escalón ya no rellena el cuerpo.",
-      "Una ranura a través de una chapa inclinada o achaflanada muestra toda su profundidad en cuerpos STEP, y su copia más allá del borde da el mismo aviso en piezas STL y STEP.",
-      "Redondear un grupo de aristas en un cuerpo STEP redondea ahora las aristas posibles en lugar de rechazar todo. «Mostrar el punto» encuentra cada arista omitida.",
-      "Las aristas junto a una pared no más gruesa que el radio quedan vivas, y el informe indica el radio que cabe allí. Antes se rechazaba todo el redondeo.",
-      "Si un cuerpo STEP no tiene arista propia en una zona elegida, el informe ofrece «Finalizar la edición de caras y volver a intentarlo». En el modelo de triángulos se redondea también.",
-      "Si no queda espacio para el intercambio con el proceso de cálculo, Solidon calcula el paso igualmente y lo indica en el informe. Antes se detenía aconsejando calcular más grueso.",
-      "Con «En ambas caras», «Aplicar texto» pone las letras también en la cara posterior, legibles desde fuera. Sirve para banderas, carteles y colgantes.",
-      "Los rótulos se componen con más precisión: las letras quedan en su sitio y las curvas siguen la fuente, en vez de perder hasta un 2 por ciento de superficie en tamaños pequeños.",
-      "La simetría al «Modelar» refleja en el centro del cuerpo, también lejos del centro de la placa. Los proyectos antiguos conservan su forma.",
-      "El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.",
-      "Cancelar durante «Otro intento» solo detiene el intento en curso. Los terminados siguen disponibles para elegir.",
-      "Cada intento de la lista indica su frase o su imagen y su semilla. Si su entrada ya no coincide con el intento elegido, el diálogo dice cuál se aplicará.",
-      "El modelo de imagen se descarga con «Configurar modelo de imagen …» aunque los demás pesos ya estén.",
-      "En el Mac, Solidon ya no se cierra poco después de arrancar. En la versión 0.5.1 ocurría en todos los Mac, incluso sin un ratón 3D conectado.",
-      "La casilla «Crear las medidas como parámetros» viene marcada la primera vez y luego recuerda su última elección, también tras reiniciar.",
-      "Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene."
+      "A la derecha hay una tarjeta con las pestañas *Selección*, *Informe de comprobación* y *Chat*. Los avisos nuevos ya no traen el informe al frente; su pestaña los indica con un símbolo y un número.",
+      "Arriba en la ventana, *Buscar función* (Ctrl+Mayús+P) encuentra cualquier función. El mapa de funciones sigue el orden de la barra de menús.",
+      "En la selección, cada característica tiene una sola acción abierta a la vez. Las demás quedan plegadas y muestran sus valores.",
+      "Los diálogos de operación muestran delante como mucho cuatro campos y una frase. Lo que rara vez se cambia está en *Más ajustes*, los límites en *¿Cuándo evitarla?*.",
+      "Un cero con significado dice en el campo lo que hace, por ejemplo «automático», «sin» o «del material».",
+      "Todos los diálogos tienen la misma forma, con secciones planas y un borde común para las etiquetas, también los ajustes, el diálogo de IA y la activación.",
+      "El informe de comprobación muestra primero los hallazgos, con una línea de estado y contadores encima. *Exportar …* está junto a *Entregar al slicer …*.",
+      "Hallazgos, pasos del recorrido y avisos son más cortos. Donde un botón ofrece la acción, la frase ya no la repite.",
+      "La acción *Reconstruir modelo* está en el cuerpo seleccionado.",
+      "La pantalla de inicio muestra arriba, en grande, las cuatro formas de empezar. *Primeros pasos* pregunta idioma, slicer e impresora y pliega el resto.",
+      "El catálogo de bloques muestra imagen y título en cada ficha. En un taladro, *Bloques adecuados …* muestra solo lo que va en un taladro.",
+      "Se añade Anycubic Slicer Next, con las 39 impresoras de Anycubic, en Windows, macOS y Linux.",
+      "En Linux, Solidon encuentra OrcaSlicer, Bambu Studio y PrusaSlicer instalados como Flatpak, con sus impresoras y perfiles, también desde el propio Flatpak de Solidon.",
+      "En Linux, los slicers en AppImage también ofrecen las impresoras de fabricante que tenga configuradas en ellos.",
+      "En el Mac, Solidon ahora también genera el archivo de impresión con Cura. Hasta ahora solo encontraba la ventana de Cura.",
+      "Creality Print 7 aporta sus propias impresoras y la última que eligió.",
+      "Las listas de impresoras nombran cada impresora una sola vez, sin variantes de boquilla. La boquilla se elige en los ajustes de impresión.",
+      "La boquilla elegida en los ajustes de impresión se mantiene aunque después guarde los ajustes del programa.",
+      "Si cambia la boquilla para PrusaSlicer o SuperSlicer, el slicer recibe también el perfil de impresora que corresponde.",
+      "Solidon ofrece más impresoras, también aquellas cuyo perfil no indica placa ni boquilla, como la Creality CR-20 y la Anycubic i3 Mega en PrusaSlicer.",
+      "Los ajustes de impresión muestran delante slicer, impresora, boquilla, filamentos, calidad, densidad de relleno y soportes; el resto está en *Más ajustes*.",
+      "Cada motivo de una sugerencia en los ajustes de impresión cabe en una línea. *Guardar archivo de impresión* aparece en cuanto hay un archivo de impresión.",
+      "Una rosca o un inserto termofijado en un taladro seleccionado ya no se detiene con «fuera de la superficie». Si el taladro es demasiado ancho, Solidon indica tamaños adecuados.",
+      "En un taladro seleccionado, la vista muestra solo diámetro, profundidad y dos cotas a aristas. Las referencias se nombran por su lado, por ejemplo «Arista exterior izquierda».",
+      "En pulgadas, la frase sobre un taladro da su medida en pulgadas.",
+      "La franja de vista previa dice en una línea qué cambia, con las longitudes en su unidad de visualización.",
+      "En soportes y placas con taladros, avellanados y texto, *Reconstruir modelo* crea ahora un contorno con alojamientos restados. Si no encuentra una estructura, lo dice.",
+      "Si al dibujar toma la sección de un cuerpo convertido, sus círculos y arcos llegan como círculos y arcos.",
+      "Si una pieza no se puede convertir en caras y aristas, Solidon indica el motivo y una salida en lugar de terminar con un error inesperado.",
+      "El aviso de IA explica en dos frases por destino qué se envía. Como el texto ha cambiado, tendrá que confirmarlo una vez más.",
+      "Las descripciones de los modelos locales recomendados son más cortas."
     ],
     "fr": [
-      "Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.",
-      "Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.",
-      "Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.",
-      "Nouvel assistant « Récipient avec couvercle » : rond ou rectangulaire, couvercle vissé, emboîté ou à charnière, en option compartiments, insert et trous saupoudreurs. Ses cotes sont des paramètres.",
-      "La préparation de l’export 3MF peut être annulée. Pour plusieurs plateaux, Solidon réutilise les couches et les suggestions déjà calculées.",
-      "Les filaments inutilisés des anciens projets ne sont plus transmis au logiciel de tranchage. Les profils restent associés aux filaments utilisés.",
-      "Les modèles ajoutés trouvent aussi une place après le douzième plateau. Les plateaux importés gardent leur disposition.",
-      "Les modèles ajoutés avec des filaments différents sont placés sur des plateaux séparés si l’imprimante n’a pas assez de buses.",
-      "L'angle d'un trou oblong sur un perçage importé pointe dans la direction attendue et la garde quand vous changez la finesse.",
-      "Un trou oblong dans une paroi latérale tournée à gauche ou à droite se raccourcit, s'amincit et pivote. Les projets antérieurs gardent leurs trous oblongs jusqu'à ce que vous modifiiez l'étape.",
-      "Sur les corps STEP, un trou oblong dans une face inclinée ne passe plus pour débordant sur le côté, et un second étirement d'un trou oblong qui finit dans un gradin ne remplit plus le corps.",
-      "Un trou oblong à travers une plaque inclinée ou chanfreinée montre toute sa profondeur sur les corps STEP, et sa copie au-delà du bord donne le même message sur les pièces STL et STEP.",
-      "Arrondir un groupe d'arêtes d'un corps STEP arrondit désormais les arêtes possibles au lieu de tout refuser. « Montrer l'endroit » retrouve chaque arête omise.",
-      "Les arêtes contre une paroi pas plus épaisse que le rayon restent vives, et le rapport indique le rayon qui y tient. Jusqu'ici, tout l'arrondi était refusé.",
-      "Si un corps STEP n'a pas d'arête propre à un endroit choisi, le rapport propose « Terminer la modification des faces et réessayer ». Sur le modèle en triangles, il est aussi arrondi.",
-      "S'il ne reste plus de place pour l'échange avec le processus de calcul, Solidon calcule quand même l'étape et le signale dans le rapport. Avant, il s'arrêtait en conseillant un calcul plus grossier.",
-      "Avec « Sur les deux faces », « Appliquer du texte » pose aussi les lettres au dos, lisibles de l'extérieur. Pratique pour drapeaux, panneaux et étiquettes.",
-      "Les inscriptions sont composées plus précisément : les lettres restent à leur place, et les courbes suivent la police au lieu de perdre jusqu'à 2 % de surface en petite taille.",
-      "La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.",
-      "Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.",
-      "Annuler pendant « Encore un essai » n'arrête que l'essai en cours. Les essais terminés restent au choix.",
-      "Chaque essai de la liste indique sa phrase ou son image et sa graine. Si votre saisie ne correspond plus à l'essai choisi, la boîte de dialogue dit lequel sera appliqué.",
-      "Le modèle d'image est téléchargé par « Configurer le modèle d'image … » même si les autres poids sont déjà là.",
-      "Sur Mac, Solidon ne se ferme plus peu après le démarrage. Dans la version 0.5.1, cela arrivait sur chaque Mac, même sans souris 3D branchée.",
-      "La case « Créer les cotes comme paramètres » est cochée la première fois, puis retient votre dernier choix, même après un redémarrage.",
-      "Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée."
+      "À droite, une carte porte les onglets *Sélection*, *Rapport de contrôle* et *Chat*. Un nouvel avertissement ne fait plus passer le rapport devant ; son onglet l'indique par un symbole et un nombre.",
+      "En haut de la fenêtre, *Rechercher une fonction* (Ctrl+Maj+P) trouve chaque fonction. La carte des fonctions suit l'ordre de la barre de menus.",
+      "Dans la sélection, une seule action est ouverte à la fois sur une caractéristique. Les autres restent repliées et affichent leurs valeurs.",
+      "Les dialogues d'opération montrent au plus quatre champs et une phrase à l'avant. Les valeurs rarement changées sont sous *Autres réglages*, les limites sous *Quand l'éviter ?*.",
+      "Un zéro qui a un sens dit dans le champ ce qu'il fait, par exemple « automatique », « sans » ou « selon le matériau ».",
+      "Toutes les boîtes de dialogue ont la même forme, avec des sections plates et un bord commun pour les libellés, y compris les réglages, le dialogue IA et le déverrouillage.",
+      "Le rapport de contrôle montre d'abord les constats, avec au-dessus une ligne d'état et des compteurs. *Exporter …* se trouve à côté de *Transmettre au slicer …*.",
+      "Constats, étapes de la visite et indications sont plus courts. Quand un bouton propose l'action, la phrase ne la répète plus.",
+      "L'action *Reconstruire le modèle* se trouve sur le corps sélectionné.",
+      "L'écran d'accueil montre en grand, en haut, les quatre façons de commencer. *Premiers pas* demande langue, slicer et imprimante et replie le reste.",
+      "Le catalogue de blocs montre une image et un titre par vignette. Sur un perçage, *Blocs adaptés …* ne montre que ce qui va dans un perçage.",
+      "Nouveau : Anycubic Slicer Next, avec les 39 imprimantes Anycubic, sous Windows, macOS et Linux.",
+      "Sous Linux, Solidon trouve OrcaSlicer, Bambu Studio et PrusaSlicer installés en Flatpak, avec vos imprimantes et profils, y compris depuis le Flatpak de Solidon.",
+      "Sous Linux, les slicers en AppImage proposent aussi les imprimantes de fabricant que vous y avez configurées.",
+      "Sur Mac, Solidon crée désormais aussi le fichier d'impression avec Cura. Jusqu'ici, il ne trouvait que la fenêtre de Cura.",
+      "Creality Print 7 apporte ses propres imprimantes et la dernière que vous avez choisie.",
+      "Les listes d'imprimantes nomment chaque imprimante une seule fois, sans variantes de buse. La buse se choisit dans les réglages d'impression.",
+      "Une buse choisie dans les réglages d'impression est conservée si vous enregistrez ensuite les réglages de l'application.",
+      "Si vous changez de buse pour PrusaSlicer ou SuperSlicer, le slicer reçoit aussi le profil d'imprimante correspondant.",
+      "Solidon propose plus d'imprimantes, y compris celles dont le profil n'indique ni plateau ni buse, comme la Creality CR-20 et l'Anycubic i3 Mega dans PrusaSlicer.",
+      "Les réglages d'impression montrent d'abord slicer, imprimante, buse, filaments, qualité, densité de remplissage et supports ; le reste est sous *Autres réglages*.",
+      "Chaque raison d'une suggestion dans les réglages d'impression tient sur une ligne. *Enregistrer le fichier d'impression* apparaît dès qu'un fichier d'impression existe.",
+      "Un filetage ou un insert à chaud dans un perçage sélectionné ne s'arrête plus sur « hors de la surface ». Si le perçage est trop large, Solidon indique des tailles adaptées.",
+      "Sur un perçage sélectionné, la vue n'affiche que diamètre, profondeur et deux cotes d'arête. Les références portent le nom de leur côté, par exemple « Arête extérieure à gauche ».",
+      "En pouces, la phrase au-dessus d'un perçage donne sa taille en pouces.",
+      "Le bandeau d'aperçu dit en une ligne ce qui change, avec les longueurs dans votre unité d'affichage.",
+      "Pour les supports et plaques avec perçages, fraisures et texte, *Reconstruire le modèle* crée désormais un contour dont les logements sont retirés. S'il ne trouve aucune structure, il le dit.",
+      "Si vous reprenez dans une esquisse la coupe d'un corps converti, ses cercles et ses arcs arrivent comme cercles et arcs.",
+      "Si une pièce ne peut pas être convertie en faces et arêtes, Solidon donne la raison et une issue au lieu de finir sur une erreur inattendue.",
+      "L'information sur l'IA dit en deux phrases, pour chaque destination, ce qui est envoyé. Le texte ayant changé, vous la confirmez une nouvelle fois.",
+      "Les descriptions des modèles locaux recommandés sont plus courtes."
     ],
     "it": [
-      "Nuova è la forma di base «Crea un tubo»: diametro esterno e altezza, più spessore di parete o diametro interno, in un solo passo.",
-      "Nuovo è il blocco «Aletta con foro»: un'aletta piatta su qualsiasi faccia, con foro e misure adatti alla vite da M3 a M8.",
-      "Nuova è la «Fascetta per tubo» per i tubi comuni da 15 a 40 mm o qualsiasi misura tua fino a 110 mm, con vite di serraggio da M3 a M6 e il gioco del tuo materiale.",
-      "Nuovo assistente «Contenitore con coperchio»: tondo o rettangolare, coperchio a vite, a incastro o a cerniera e, se vuoi, scomparti, inserto e fori spargitori. Le misure principali sono parametri.",
-      "La preparazione dell’esportazione 3MF può essere annullata. Con più piatti, Solidon riutilizza gli strati e i suggerimenti già calcolati.",
-      "I filamenti inutilizzati dei vecchi progetti non vengono più inviati allo slicer. I profili restano associati ai filamenti in uso.",
-      "I modelli aggiunti trovano spazio anche oltre il dodicesimo piatto. I piatti importati mantengono la loro disposizione.",
-      "I modelli aggiunti con filamenti diversi vengono collocati su piatti separati se la stampante non ha abbastanza ugelli.",
-      "L'angolo di un'asola su un foro importato punta nella direzione attesa e la mantiene quando cambi la finezza.",
-      "Un'asola in una parete laterale rivolta a sinistra o a destra si può accorciare, restringere e ruotare. I progetti delle versioni precedenti mantengono le loro asole finché non cambi il passaggio.",
-      "Sui corpi STEP un'asola in una faccia inclinata non risulta più sporgente di lato, e un secondo trascinamento su un'asola che finisce in un gradino non riempie più il corpo.",
-      "Un'asola attraverso una piastra inclinata o smussata mostra tutta la sua profondità sui corpi STEP, e la sua copia oltre il bordo dà lo stesso messaggio su pezzi STL e STEP.",
-      "Arrotondare un gruppo di spigoli su un corpo STEP arrotonda ora gli spigoli possibili invece di rifiutare tutto. «Mostra il punto» trova ogni spigolo escluso.",
-      "Gli spigoli accanto a una parete non più spessa del raggio restano vivi, e il report indica il raggio che lì entra. Finora veniva rifiutato l'intero raccordo.",
-      "Se un corpo STEP non ha uno spigolo proprio in un punto scelto, il report offre «Termina la modifica delle facce e riprova». Sul modello a triangoli viene arrotondato anche lì.",
-      "Se manca spazio per lo scambio con il processo di calcolo, Solidon calcola comunque il passaggio e lo segnala nel report. Prima si fermava consigliando un calcolo più grossolano.",
-      "Con «Su entrambe le facce», «Applica testo» mette le lettere anche sul retro, leggibili da fuori. Va bene per bandierine, cartelli e targhette.",
-      "Le scritte vengono composte con più precisione: le lettere stanno al loro posto e le curve seguono il carattere, invece di perdere fino al 2 per cento di superficie nelle misure piccole.",
-      "La simmetria in «Modella» specchia al centro del corpo, anche lontano dal centro del piano. I progetti più vecchi mantengono la loro forma.",
-      "Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore.",
-      "Annullare durante «Un altro tentativo» ferma solo il tentativo in corso. Quelli finiti restano da scegliere.",
-      "Ogni tentativo nell'elenco indica la sua frase o immagine e il seme. Se il tuo input non corrisponde più al tentativo scelto, la finestra dice quale verrà applicato.",
-      "Il modello di immagine viene scaricato da «Configura modello immagine …» anche se gli altri pesi ci sono già.",
-      "Su Mac, Solidon non si chiude più poco dopo l'avvio. Nella versione 0.5.1 succedeva su ogni Mac, anche senza un mouse 3D collegato.",
-      "La spunta «Creare le misure come parametri» è attiva la prima volta e poi ricorda la tua ultima scelta, anche dopo un riavvio.",
-      "Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta."
+      "A destra c'è una scheda con le linguette *Selezione*, *Rapporto di verifica* e *Chat*. I nuovi avvisi non portano più il rapporto in primo piano; la sua linguetta li mostra con un simbolo e un numero.",
+      "In alto nella finestra trovi ogni funzione con *Cerca funzione* (Ctrl+Maiusc+P). La mappa delle funzioni segue l'ordine della barra dei menu.",
+      "Nella selezione, su una caratteristica è aperta una sola azione alla volta. Le altre restano chiuse e mostrano i loro valori.",
+      "Le finestre delle operazioni mostrano davanti al massimo quattro campi e una frase. I valori cambiati di rado stanno in *Altre impostazioni*, i limiti in *Quando evitarla?*.",
+      "Uno zero con un significato dice nel campo cosa fa, per esempio «automatico», «senza» o «dal materiale».",
+      "Tutte le finestre di dialogo hanno la stessa forma, con sezioni piatte e un bordo comune per le etichette, anche impostazioni, finestra dell'IA e sblocco.",
+      "Il rapporto di verifica mostra prima i rilievi, con sopra una riga di stato e contatori. *Esporta …* sta accanto a *Passa allo slicer …*.",
+      "Rilievi, passi del tour e suggerimenti sono più brevi. Dove un pulsante offre l'azione, la frase non la ripete più.",
+      "L'azione *Ricostruisci modello* si trova sul corpo selezionato.",
+      "La schermata iniziale mostra in grande, in alto, i quattro modi per cominciare. *Primi passi* chiede lingua, slicer e stampante e chiude il resto.",
+      "Il catalogo dei blocchi mostra immagine e titolo in ogni riquadro. Su un foro, *Blocchi adatti …* mostra solo ciò che va in un foro.",
+      "Novità: Anycubic Slicer Next con tutte le 39 stampanti Anycubic, su Windows, macOS e Linux.",
+      "Su Linux Solidon trova OrcaSlicer, Bambu Studio e PrusaSlicer installati come Flatpak, con le tue stampanti e i tuoi profili, anche dal Flatpak di Solidon.",
+      "Su Linux anche gli slicer in AppImage offrono le stampanti dei produttori che vi hai configurato.",
+      "Su Mac Solidon ora crea il file di stampa anche con Cura. Prima trovava solo la finestra di Cura.",
+      "Creality Print 7 porta con sé le sue stampanti e l'ultima che hai scelto.",
+      "Gli elenchi delle stampanti nominano ogni stampante una sola volta, senza varianti di ugello. L'ugello lo scegli nelle impostazioni di stampa.",
+      "Un ugello scelto nelle impostazioni di stampa resta anche se poi salvi le impostazioni del programma.",
+      "Se cambi ugello per PrusaSlicer o SuperSlicer, lo slicer riceve anche il profilo di stampante adatto.",
+      "Solidon offre più stampanti, anche quelle il cui profilo non indica piano o ugello, come la Creality CR-20 e la Anycubic i3 Mega in PrusaSlicer.",
+      "Le impostazioni di stampa mostrano davanti slicer, stampante, ugello, filamenti, qualità, densità di riempimento e supporti; il resto sta in *Altre impostazioni*.",
+      "Ogni motivo di un suggerimento nelle impostazioni di stampa sta in una riga. *Salva file di stampa* compare appena c'è un file di stampa.",
+      "Una filettatura o un inserto a caldo in un foro selezionato non si ferma più con «fuori dalla superficie». Se il foro è troppo largo, Solidon indica le misure adatte.",
+      "Su un foro selezionato la vista mostra solo diametro, profondità e due quote dai bordi. I riferimenti prendono il nome dal loro lato, per esempio «Bordo esterno a sinistra».",
+      "In pollici, la frase sopra un foro ne indica la misura in pollici.",
+      "La fascia dell'anteprima dice in una riga cosa cambia, con le lunghezze nella tua unità di visualizzazione.",
+      "Per supporti e piastre con fori, svasature e scritte, *Ricostruisci modello* ora crea un contorno con le sedi sottratte. Se non trova una struttura, lo dice.",
+      "Se in uno schizzo riprendi la sezione di un corpo convertito, i suoi cerchi e archi arrivano come cerchi e archi.",
+      "Se un pezzo non si può convertire in facce e spigoli, Solidon indica il motivo e una via d'uscita invece di finire con un errore imprevisto.",
+      "L'avviso sull'IA dice in due frasi, per ogni destinazione, cosa viene inviato. Dato che il testo è cambiato, lo confermi ancora una volta.",
+      "Le descrizioni dei modelli locali consigliati sono più brevi."
     ],
     "pt": [
-      "Nova é a forma base «Criar um tubo»: diâmetro exterior e altura, mais espessura de parede ou diâmetro interior, num só passo.",
-      "Novo é o bloco «Patilha com furo»: uma patilha plana em qualquer face, com furo e medidas à medida do parafuso de M3 a M8.",
-      "Nova é a «Abraçadeira de tubo» para tubos comuns de 15 a 40 mm ou qualquer medida própria até 110 mm, com parafuso de aperto M3 a M6 e a folga do seu material.",
-      "Novo assistente «Recipiente com tampa»: redondo ou retangular, tampa de rosca, de encaixe ou articulada e, se quiser, compartimentos, inserto e furos de polvilhar. As cotas principais são parâmetros.",
-      "A preparação da exportação 3MF pode ser cancelada. Em trabalhos com várias placas, o Solidon reutiliza as camadas e sugestões já calculadas.",
-      "Os filamentos não utilizados de projetos antigos deixam de ser enviados ao slicer. Os perfis continuam associados aos filamentos em uso.",
-      "Os modelos adicionados encontram espaço também após a décima segunda placa. As placas importadas mantêm a sua disposição.",
-      "Os modelos adicionados com filamentos diferentes ficam em placas separadas quando a impressora não tem bicos suficientes.",
-      "O ângulo de um furo oblongo num furo importado aponta na direção esperada e mantém-se ao mudar a finura.",
-      "Um furo oblongo numa parede lateral virada para a esquerda ou para a direita pode ser encurtado, estreitado e rodado. Projetos de versões anteriores mantêm os furos oblongos até alterar o passo.",
-      "Em corpos STEP, um furo oblongo numa face inclinada já não conta como saliente de lado, e um segundo arrasto num furo oblongo que entra num degrau já não enche o corpo.",
-      "Um furo oblongo através de uma chapa inclinada ou chanfrada mostra toda a profundidade em corpos STEP, e a sua cópia para lá da borda dá a mesma mensagem em peças STL e STEP.",
-      "Arredondar um grupo de arestas num corpo STEP arredonda agora as arestas possíveis em vez de recusar tudo. «Mostrar o ponto» encontra cada aresta omitida.",
-      "As arestas junto a uma parede não mais espessa do que o raio ficam vivas, e o relatório indica o raio que cabe ali. Antes, todo o arredondamento era recusado.",
-      "Se um corpo STEP não tiver aresta própria num local escolhido, o relatório oferece «Terminar a edição de faces e tentar de novo». No modelo de triângulos também é arredondado.",
-      "Se faltar espaço para a troca com o processo de cálculo, o Solidon calcula o passo mesmo assim e indica-o no relatório. Antes parava com o conselho de calcular de forma mais grosseira.",
-      "Com «Nas duas faces», «Aplicar texto» põe as letras também no verso, legíveis por fora. Serve para bandeiras, placas e etiquetas.",
-      "As inscrições são compostas com mais precisão: as letras ficam no seu lugar e as curvas seguem a fonte, em vez de perder até 2 por cento de área em tamanhos pequenos.",
-      "A simetria em «Modelar» espelha no centro do corpo, também longe do centro da mesa. Os projetos antigos mantêm a sua forma.",
-      "O pincel de modelação atua só sobre a face virada para ele. Rebaixar uma placa fina já não empurra também a face de baixo.",
-      "Cancelar durante «Mais uma tentativa» só para a tentativa em curso. As terminadas continuam disponíveis para escolher.",
-      "Cada tentativa da lista indica a sua frase ou imagem e a semente. Se a sua entrada já não corresponder à tentativa escolhida, o diálogo diz qual será aplicada.",
-      "O modelo de imagem é descarregado por «Configurar modelo de imagem …» mesmo que os outros pesos já existam.",
-      "No Mac, o Solidon já não fecha pouco depois de arrancar. Na versão 0.5.1 isto acontecia em todos os Mac, mesmo sem um rato 3D ligado.",
-      "A caixa «Criar as medidas como parâmetros» vem marcada da primeira vez e depois lembra a sua última escolha, mesmo após reiniciar.",
-      "Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se."
+      "À direita há um cartão com os separadores *Seleção*, *Relatório de verificação* e *Chat*. Os avisos novos já não trazem o relatório para a frente; o separador mostra-os com um símbolo e um número.",
+      "No topo da janela encontra qualquer função em *Pesquisar função* (Ctrl+Shift+P). O mapa de funções segue a ordem da barra de menus.",
+      "Na seleção, cada característica tem uma só ação aberta de cada vez. As outras ficam recolhidas e mostram os seus valores.",
+      "Os diálogos de operação mostram à frente no máximo quatro campos e uma frase. Os valores raramente alterados estão em *Mais definições*, os limites em *Quando evitar?*.",
+      "Um zero com significado diz no campo o que faz, por exemplo «automático», «sem» ou «do material».",
+      "Todos os diálogos têm a mesma forma, com secções planas e uma margem comum para as etiquetas, também as definições, o diálogo de IA e a ativação.",
+      "O relatório de verificação mostra primeiro as constatações e, por cima, uma linha com estado e contadores. *Exportar …* fica ao lado de *Entregar ao slicer …*.",
+      "Constatações, passos da visita guiada e indicações são mais curtos. Onde um botão oferece a ação, a frase já não a repete.",
+      "A ação *Reconstruir modelo* está no corpo selecionado.",
+      "O ecrã inicial mostra em grande, no topo, as quatro formas de começar. *Primeiros passos* pergunta idioma, slicer e impressora e recolhe o resto.",
+      "O catálogo de blocos mostra imagem e título em cada mosaico. Num furo, *Blocos adequados …* mostra só o que cabe num furo.",
+      "Novidade: Anycubic Slicer Next com as 39 impressoras Anycubic, no Windows, macOS e Linux.",
+      "No Linux, o Solidon encontra OrcaSlicer, Bambu Studio e PrusaSlicer instalados como Flatpak, com as suas impressoras e perfis, também a partir do Flatpak do próprio Solidon.",
+      "No Linux, os slicers em AppImage também oferecem as impressoras de fabricante que neles configurou.",
+      "No Mac, o Solidon passa a criar o ficheiro de impressão também com o Cura. Até agora só encontrava a janela do Cura.",
+      "O Creality Print 7 traz as suas próprias impressoras e a última que escolheu.",
+      "As listas de impressoras indicam cada impressora uma só vez, sem variantes de bico. O bico escolhe-se nas definições de impressão.",
+      "Um bico escolhido nas definições de impressão mantém-se quando depois guarda as definições do programa.",
+      "Se mudar o bico para o PrusaSlicer ou o SuperSlicer, o slicer recebe também o perfil de impressora correspondente.",
+      "O Solidon oferece mais impressoras, também aquelas cujo perfil não indica mesa nem bico, como a Creality CR-20 e a Anycubic i3 Mega no PrusaSlicer.",
+      "As definições de impressão mostram à frente slicer, impressora, bico, filamentos, qualidade, densidade de preenchimento e suportes; o resto está em *Mais definições*.",
+      "Cada motivo de uma sugestão nas definições de impressão cabe numa linha. *Guardar o ficheiro de impressão* aparece assim que existe um ficheiro de impressão.",
+      "Uma rosca ou uma bucha de inserção a quente num furo selecionado já não para com «fora da superfície». Se o furo for demasiado largo, o Solidon indica tamanhos adequados.",
+      "Num furo selecionado, a vista mostra só diâmetro, profundidade e duas cotas às arestas. As referências têm o nome do seu lado, por exemplo «Aresta exterior à esquerda».",
+      "Em polegadas, a frase sobre um furo indica a sua medida em polegadas.",
+      "A faixa de pré-visualização diz numa linha o que muda, com os comprimentos na sua unidade de apresentação.",
+      "Em suportes e placas com furos, escareamentos e texto, *Reconstruir modelo* cria agora um contorno com alojamentos subtraídos. Se não encontrar uma estrutura, di-lo.",
+      "Se num esboço aproveitar o corte de um corpo convertido, os seus círculos e arcos chegam como círculos e arcos.",
+      "Se uma peça não puder ser convertida em faces e arestas, o Solidon indica o motivo e uma saída em vez de terminar com um erro inesperado.",
+      "O aviso de IA diz em duas frases, por destino, o que é enviado. Como o texto mudou, confirma-o mais uma vez.",
+      "As descrições dos modelos locais recomendados são mais curtas."
     ]
   },
   "notes_by_language": {
-    "de": "Neu sind der Assistent „Behälter mit Deckel“, „Modell nachbauen“ im Prüfbericht und ein Regler über dem Verlauf, mit dem Sie jeden früheren Stand ansehen und dort weiterarbeiten. Grundkörper und Bausteine setzen Sie dort an, wo Sie auf die Fläche klicken, und mehrere Dateien öffnen Sie in einem Schritt. Vor der Übergabe an den Slicer prüft Solidon Bettrand, Brim und Sperrflächen, und alle Übersetzungen sind durchgesehen.",
-    "en": "New are the “Container with lid” assistant, “Rebuild model” in the report and a slider above the history that shows any earlier state and lets you continue from there. Primitives and parts go where you click on the face, and several files open in one step. Before handing over to the slicer, Solidon checks the bed edge, brim and exclusion areas, and every translation has been reviewed.",
-    "es": "Novedades: el asistente «Recipiente con tapa», «Reconstruir modelo» en el informe de comprobación y un control sobre el historial para ver cualquier estado anterior y seguir trabajando desde ahí. Los cuerpos básicos y las piezas se colocan donde hace clic en la cara, y varios archivos se abren en un solo paso. Antes de pasar al slicer, Solidon comprueba el borde de la placa, el borde de adherencia y las zonas prohibidas, y todas las traducciones están revisadas.",
-    "fr": "Nouveautés : l'assistant « Récipient avec couvercle », « Reconstruire le modèle » dans le rapport de contrôle et un curseur au-dessus de l'historique pour revoir tout état antérieur et reprendre le travail à partir de là. Les corps de base et les pièces se placent là où vous cliquez sur la face, et plusieurs fichiers s'ouvrent en une seule étape. Avant le passage au slicer, Solidon vérifie le bord du plateau, la bordure et les zones interdites, et toutes les traductions ont été revues.",
-    "it": "Novità: l'assistente «Contenitore con coperchio», «Ricostruisci modello» nel rapporto di verifica e un cursore sopra la cronologia per rivedere qualsiasi stato precedente e continuare da lì. Corpi base e componenti vanno dove fai clic sulla faccia, e più file si aprono in un solo passaggio. Prima di passare allo slicer, Solidon controlla il bordo del piano, il brim e le zone escluse, e tutte le traduzioni sono state riviste.",
-    "pt": "Novidades: o assistente «Recipiente com tampa», «Reconstruir modelo» no relatório de verificação e um cursor sobre o histórico para ver qualquer estado anterior e continuar a partir daí. Corpos básicos e peças ficam onde clica na face, e vários ficheiros abrem-se num só passo. Antes de passar ao slicer, o Solidon verifica a borda da mesa, a aba e as zonas de exclusão, e todas as traduções foram revistas."
+    "de": "Auswahl, Prüfbericht und Chat stehen rechts jetzt in einer Karte, und jede Funktion finden Sie oben über „Funktion suchen“. Dialoge zeigen vorn nur noch das Wichtigste. Neu ist Anycubic Slicer Next, und unter Linux findet Solidon Slicer als Flatpak und AppImage samt Ihren Druckern. Gewinde und Einpressbuchsen lassen sich wieder in eine gewählte Bohrung setzen.",
+    "en": "Selection, Report and Chat now share one card on the right, and “Search functions” at the top finds any function. Dialogs show only what matters up front. Anycubic Slicer Next is new, and on Linux Solidon finds slicers installed as Flatpak or AppImage together with your printers. Threads and heat-set inserts go into a selected hole again.",
+    "es": "Selección, Informe de comprobación y Chat están ahora en una sola tarjeta a la derecha, y «Buscar función», arriba, encuentra cualquier función. Los diálogos muestran delante solo lo esencial. Se añade Anycubic Slicer Next, y en Linux Solidon encuentra slicers instalados como Flatpak o AppImage junto con sus impresoras. Las roscas y los insertos termofijados vuelven a colocarse en un taladro seleccionado.",
+    "fr": "Sélection, Rapport de contrôle et Chat sont désormais réunis dans une carte à droite, et « Rechercher une fonction », en haut, trouve chaque fonction. Les dialogues ne montrent plus à l'avant que l'essentiel. Nouveau : Anycubic Slicer Next, et sous Linux Solidon trouve les slicers installés en Flatpak ou AppImage avec vos imprimantes. Filetages et inserts à chaud se placent de nouveau dans un perçage sélectionné.",
+    "it": "Selezione, Rapporto di verifica e Chat stanno ora in un'unica scheda a destra, e con «Cerca funzione», in alto, trovi ogni funzione. Le finestre di dialogo mostrano davanti solo l'essenziale. Novità: Anycubic Slicer Next, e su Linux Solidon trova gli slicer installati come Flatpak o AppImage insieme alle tue stampanti. Filettature e inserti a caldo si mettono di nuovo in un foro selezionato.",
+    "pt": "Seleção, Relatório de verificação e Chat estão agora num só cartão à direita, e «Pesquisar função», no topo, encontra qualquer função. Os diálogos mostram à frente só o essencial. Novidade: Anycubic Slicer Next, e no Linux o Solidon encontra slicers instalados como Flatpak ou AppImage com as suas impressoras. Roscas e buchas de inserção a quente voltam a ser colocadas num furo selecionado."
   },
   "groups": {
     "de": [
       {
-        "title": "Neue Formen und Bausteine",
+        "title": "Bedienung und System",
         "points": [
-          "Neu ist die Grundform *Rohr anlegen*: Außendurchmesser und Höhe, dazu wahlweise Wandstärke oder Innendurchmesser, in einem Schritt.",
-          "Neu ist der Baustein *Lasche mit Loch*: eine flache Lasche an jeder Fläche, Loch und Maße passend zur Schraube von M3 bis M8.",
-          "Neu ist die *Rohrschelle* für gängige Rohre von 15 bis 40 mm oder jedes eigene Maß bis 110 mm, mit Klemmschraube M3 bis M6 und dem Spiel aus Ihrem Material.",
-          "Neu ist der Assistent *Behälter mit Deckel*: rund oder eckig, mit Schraub-, Steck- oder Klappdeckel, auf Wunsch mit Fächern, Einsatz und Streulöchern. Alle Hauptmaße stehen als Parameter bereit."
+          "Rechts steht eine Karte mit den Reitern *Auswahl*, *Prüfbericht* und *Chat*. Neue Warnungen holen den Prüfbericht nicht mehr nach vorn, sein Reiter zeigt sie mit Zeichen und Zahl.",
+          "Oben im Fenster finden Sie jede Funktion über *Funktion suchen* (Strg+Umschalt+P). Die Karte der Funktionen ist geordnet wie die Menüleiste.",
+          "In der Auswahl ist an einem Merkmal eine Handlung zur Zeit offen. Die übrigen nennen zugeklappt ihre Werte.",
+          "Operationsdialoge zeigen vorn höchstens vier Felder und einen Satz. Selten geänderte Werte stehen unter *Weitere Einstellungen*, Grenzen unter *Wann nicht?*.",
+          "Eine Null mit Bedeutung heißt im Feld, was sie bewirkt, etwa „automatisch“, „ohne“ oder „aus dem Material“.",
+          "Alle Dialoge haben dieselbe Form mit flachen Abschnitten und einer gemeinsamen Kante für die Beschriftungen, auch Einstellungen, KI-Dialog und Freischaltung.",
+          "Der Prüfbericht zeigt zuerst die Befunde, darüber eine Zeile mit Status und Zählern. *Exportieren …* steht neben *An den Slicer übergeben …*.",
+          "Befunde, Tourschritte und Hinweise sind kürzer. Wo ein Knopf die Handlung anbietet, wiederholt der Satz sie nicht.",
+          "Die Handlung *Modell nachbauen* steht am gewählten Körper.",
+          "Der Startbildschirm zeigt die vier Einstiege groß oben. *Erste Schritte* fragt Sprache, Slicer und Drucker und klappt den Rest zu.",
+          "Der Bausteinkatalog zeigt je Kachel Bild und Titel. An einer Bohrung zeigt *Passende Bausteine …* nur, was in eine Bohrung gehört."
         ]
       },
       {
         "title": "Drucken und Übergabe an den Slicer",
         "points": [
-          "Die Vorbereitung des 3MF-Exports lässt sich abbrechen. Bei mehreren Druckplatten nutzt Solidon bereits berechnete Schichten und Vorschläge wieder.",
-          "Beim Öffnen älterer Projekte werden unbenutzte Filamente nicht mehr an den Slicer übergeben. Die Profile der benutzten Filamente bleiben zugeordnet.",
-          "Weitere Modelle finden auch hinter der zwölften Druckplatte einen freien Platz. Mitgebrachte Platten behalten ihre Aufteilung.",
-          "Weitere Modelle kommen bei unterschiedlichen Filamenten auf getrennte Druckplatten, wenn der Drucker nicht genügend Düsen hat."
+          "Neu ist Anycubic Slicer Next mit allen 39 Anycubic-Druckern, unter Windows, macOS und Linux.",
+          "Unter Linux findet Solidon OrcaSlicer, Bambu Studio und PrusaSlicer als Flatpak samt Ihren Druckern und Profilen, auch aus Solidons eigenem Flatpak.",
+          "Slicer als AppImage bieten unter Linux auch ihre eingerichteten Herstellerdrucker an.",
+          "Auf dem Mac erzeugt Solidon die Druckdatei jetzt auch mit Cura. Bisher fand es nur Curas Fenster.",
+          "Creality Print 7 bringt seine eigenen Drucker und den zuletzt gewählten mit.",
+          "Die Druckerlisten nennen jeden Drucker einmal, ohne Düsenvarianten. Die Düse wählen Sie im Druckdialog.",
+          "Eine im Druckdialog gewählte Düse bleibt erhalten, wenn Sie danach die Einstellungen speichern.",
+          "Wechseln Sie für PrusaSlicer oder SuperSlicer die Düse, bekommt der Slicer das passende Druckerprofil dazu.",
+          "Solidon bietet mehr Drucker an, auch solche, deren Profil Bett oder Düse nicht nennt, etwa Creality CR-20 und Anycubic i3 Mega in PrusaSlicer.",
+          "Der Druckdialog zeigt vorn Slicer, Drucker, Düse, Filamente, Qualität, Fülldichte und Stützen, der Rest steht unter *Weitere Einstellungen*.",
+          "Jeder Grund eines Vorschlags im Druckdialog passt in eine Zeile. *Druckdatei speichern* erscheint, sobald es eine Druckdatei gibt."
         ]
       },
       {
         "title": "Bohrungen, Langlöcher und Teilen",
         "points": [
-          "Der Winkel eines Langlochs an einer eingelesenen Bohrung zeigt in die erwartete Richtung und bleibt so, wenn Sie die Feinheit ändern.",
-          "Ein Langloch in einer Seitenwand, die nach links oder rechts zeigt, lässt sich kürzen, schmaler ziehen und drehen. Ältere Projekte behalten ihre Langlöcher, bis Sie den Schritt ändern.",
-          "An STEP-Körpern gilt ein Langloch in einer schrägen Fläche nicht mehr als seitlich überstehend, und ein zweiter Zug an einem Langloch, das in eine Stufe läuft, füllt den Körper nicht mehr auf.",
-          "Ein Langloch durch eine schräge oder gefaste Platte zeigt an STEP-Körpern seine ganze Tiefe, und seine Kopie über den Rand hinaus meldet an STL- und STEP-Teilen dasselbe."
-        ]
-      },
-      {
-        "title": "Verrunden und Fasen",
-        "points": [
-          "Verrunden einer Kantengruppe an einem STEP-Körper rundet jetzt die Kanten, die gehen, statt ganz abzusagen. Jede ausgelassene Kante findet *Stelle zeigen*.",
-          "Kanten an einer Wand, die nicht dicker ist als der Radius, bleiben scharf, und der Prüfbericht nennt den Radius, der dort passt. Bisher sagte die ganze Rundung ab.",
-          "Hat ein STEP-Körper an einer gewählten Stelle keine eigene Kante, bietet der Prüfbericht *Flächenbearbeitung beenden und erneut versuchen* an. Am Dreiecksmodell wird sie mitgerundet.",
-          "Fehlt Platz für den Austausch mit dem Rechenprozess, rechnet Solidon den Schritt trotzdem und sagt es im Prüfbericht. Bisher brach er mit dem Rat ab, gröber zu rechnen."
+          "Ein Gewinde oder eine Einpressbuchse in einer gewählten Bohrung hält nicht mehr mit „außerhalb der Fläche“ an. Ist die Bohrung zu weit, nennt Solidon passende Größen.",
+          "An einer gewählten Bohrung stehen im Bild nur Durchmesser, Tiefe und zwei Kantenmaße. Bezüge heißen nach ihrer Seite, etwa „Außenkante links“.",
+          "In Zoll nennt der Satz über einer Bohrung ihr Maß in Zoll.",
+          "Das Vorschauband nennt in einer Zeile, was sich ändert, Längen in Ihrer Anzeigeeinheit."
         ]
       },
       {
         "title": "Formen, Schrift und Zeichnen",
         "points": [
-          "Mit *Auf beiden Seiten* setzt *Text aufbringen* die Schrift auch auf die Rückseite, von außen lesbar. Das passt für Fahnen, Schilder und Anhänger.",
-          "Schriftzüge werden genauer gesetzt: Die Buchstaben stehen an ihrer Stelle, und runde Bögen folgen der Schrift, statt bei kleinen Größen bis zu 2 Prozent Fläche zu verlieren.",
-          "Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.",
-          "Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit."
+          "Halter und Platten mit Bohrungen, Senkungen und Schrift baut *Modell nachbauen* jetzt als Umriss mit abgezogenen Taschen nach. Findet es keinen Aufbau, sagt es das.",
+          "Übernehmen Sie beim Zeichnen den Schnitt eines umgewandelten Körpers, kommen seine Kreise und Bögen als Kreise und Bögen an.",
+          "Lässt sich ein Teil nicht in Flächen und Kanten umwandeln, nennt Solidon Grund und Ausweg, statt mit einem unerwarteten Fehler zu enden."
         ]
       },
       {
         "title": "Erzeugen mit KI",
         "points": [
-          "Abbrechen während *Noch ein Versuch* bricht nur den laufenden Versuch ab. Die fertigen bleiben zur Wahl.",
-          "Jeder Versuch in der Liste nennt seinen Satz oder sein Bild und den Startwert. Passt Ihre Eingabe nicht mehr zum gewählten Versuch, sagt der Dialog, welcher übernommen wird.",
-          "Das Bildmodell holt *Bildmodell einrichten …* auch, wenn die übrigen Gewichte schon da sind."
-        ]
-      },
-      {
-        "title": "Bedienung und System",
-        "points": [
-          "Auf dem Mac beendet sich Solidon nicht mehr kurz nach dem Start. In Version 0.5.1 geschah das auf jedem Mac, auch ohne angeschlossene 3D-Maus.",
-          "Der Haken *Maße als Parameter anlegen* steht beim ersten Mal an und merkt sich danach Ihre letzte Wahl, auch über einen Neustart.",
-          "Dialoge öffnen in der Größe ihres Inhalts, ohne Leerraum, und eine Größe, die Sie selbst gezogen haben, bleibt."
+          "Der KI-Hinweis sagt je Ziel in zwei Sätzen, was gesendet wird. Weil sich der Text geändert hat, bestätigen Sie ihn einmal neu.",
+          "Die Beschreibungen der empfohlenen lokalen Modelle sind kürzer."
         ]
       }
     ],
     "en": [
       {
-        "title": "New shapes and parts",
+        "title": "Operation and system",
         "points": [
-          "New is the basic shape *Add a tube*: outer diameter and height, plus either wall thickness or inner diameter, in one step.",
-          "New is the part *Tab with hole*: a flat tab on any face, with hole and size matching the screw from M3 to M8.",
-          "New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.",
-          "New is the *Container with lid* assistant: round or rectangular, with a screw, push-on or hinged lid, plus compartments, an insert and shaker holes if you like. All main dimensions are parameters."
+          "On the right, a card holds the tabs *Selection*, *Report* and *Chat*. New warnings no longer bring the report to the front; its tab shows them with a symbol and a count.",
+          "At the top of the window, *Search functions* (Ctrl+Shift+P) finds any function. The map of functions follows the order of the menu bar.",
+          "In the selection, a feature has one action open at a time. The others stay collapsed and show their values.",
+          "Operation dialogs show at most four fields and one sentence up front. Rarely changed values are under *More settings*, limits under *When to avoid it?*.",
+          "A zero with a meaning says in the field what it does, such as “automatic”, “none” or “from material”.",
+          "All dialogs share one layout with flat sections and a common edge for the labels, including the settings, the AI dialog and activation.",
+          "The report shows the findings first, with a line of status and counters above them. *Export …* sits next to *Hand over to the slicer …*.",
+          "Findings, tour steps and hints are shorter. Where a button offers the action, the sentence no longer repeats it.",
+          "The *Rebuild model* action sits on the selected body.",
+          "The start screen shows the four ways to begin in large at the top. *First steps* asks for language, slicer and printer and collapses the rest.",
+          "The part catalogue shows a picture and a title on each tile. On a hole, *Matching parts …* shows only what belongs in a hole."
         ]
       },
       {
         "title": "Printing and slicer handover",
         "points": [
-          "Preparing a 3MF export can be cancelled. For jobs with several build plates, Solidon reuses calculated layers and suggestions.",
-          "Unused filaments from older projects are no longer sent to the slicer. Profiles stay linked to the filaments still in use.",
-          "Additional models can find a free spot beyond the twelfth build plate. Imported plates keep their layout.",
-          "Additional models with different filaments are placed on separate build plates when the printer does not have enough nozzles."
+          "New is Anycubic Slicer Next with all 39 Anycubic printers, on Windows, macOS and Linux.",
+          "On Linux, Solidon finds OrcaSlicer, Bambu Studio and PrusaSlicer installed as Flatpak, with your printers and profiles, also from Solidon's own Flatpak.",
+          "Slicers installed as AppImage on Linux also offer the vendor printers you have set up in them.",
+          "On the Mac, Solidon now also creates the print file with Cura. Until now it only found Cura's window.",
+          "Creality Print 7 brings its own printers and the one you selected last.",
+          "The printer lists name each printer once, without nozzle variants. You choose the nozzle in the print dialog.",
+          "A nozzle chosen in the print dialog is kept when you save the settings afterwards.",
+          "If you change the nozzle for PrusaSlicer or SuperSlicer, the slicer gets the matching printer profile with it.",
+          "Solidon offers more printers, including ones whose profile names neither bed nor nozzle, such as the Creality CR-20 and Anycubic i3 Mega in PrusaSlicer.",
+          "The print dialog shows slicer, printer, nozzle, filaments, quality, infill density and supports up front; the rest is under *More settings*.",
+          "Each reason for a suggestion in the print dialog fits on one line. *Save print file* appears as soon as there is a print file."
         ]
       },
       {
         "title": "Holes, slots and splitting",
         "points": [
-          "The angle of a slot on an imported hole points in the expected direction and stays that way when you change the fineness.",
-          "A slot in a side wall facing left or right can be shortened, narrowed and turned. Projects from earlier versions keep their slots until you change the step.",
-          "On STEP bodies, a slot in a slanted face no longer counts as sticking out at the side, and a second drag on a slot that runs into a step no longer fills the body up.",
-          "A slot through a slanted or chamfered plate shows its full depth on STEP bodies, and its copy beyond the edge reports the same on STL and STEP parts."
-        ]
-      },
-      {
-        "title": "Fillets and chamfers",
-        "points": [
-          "Rounding a group of edges on a STEP body now rounds the edges that work instead of refusing the whole group. *Show the place* finds every edge that was left out.",
-          "Edges on a wall no thicker than the radius stay sharp, and the report names the radius that fits there. Previously the whole fillet was refused.",
-          "If a STEP body has no edge of its own at a selected location, the report offers *End face editing and try again*. On the triangle model that spot is rounded too.",
-          "If there is no space left for the exchange with the computing process, Solidon still computes the step and says so in the report. Previously it stopped with advice to compute more coarsely."
+          "A thread or heat-set insert in a selected hole no longer stops with “outside the surface”. If the hole is too wide, Solidon names suitable sizes.",
+          "On a selected hole, the view shows only diameter, depth and two edge distances. References are named after their side, such as “Outer edge left”.",
+          "In inches, the sentence above a hole gives its size in inches.",
+          "The preview strip says in one line what changes, with lengths in your display unit."
         ]
       },
       {
         "title": "Sculpting, text and sketching",
         "points": [
-          "With *On both sides*, *Put text on* also places the lettering on the back, readable from outside. That suits flags, signs and tags.",
-          "Lettering is set more precisely: the letters stand in their place, and curves follow the font instead of losing up to 2 percent of their area at small sizes.",
-          "Symmetry in *Sculpt* mirrors at the centre of the body, also away from the middle of the bed. Older projects keep their shape.",
-          "The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along."
+          "For holders and plates with holes, countersinks and lettering, *Rebuild model* now builds an outline with pockets cut away. If it finds no structure, it says so.",
+          "If you take the section of a converted body into a sketch, its circles and arcs arrive as circles and arcs.",
+          "If a part cannot be converted to faces and edges, Solidon names the reason and a way out instead of ending with an unexpected error."
         ]
       },
       {
         "title": "Generating with AI",
         "points": [
-          "Cancelling during *One more attempt* only stops the running attempt. The finished ones remain to choose from.",
-          "Every attempt in the list names its sentence or image and its seed. If your input no longer matches the chosen attempt, the dialog says which one will be applied.",
-          "The image model is now fetched by *Set up image model …* even when the other weights are already there."
-        ]
-      },
-      {
-        "title": "Operation and system",
-        "points": [
-          "On a Mac, Solidon no longer quits shortly after it starts. In version 0.5.1 this happened on every Mac, even without a 3D mouse connected.",
-          "The *Create the dimensions as parameters* tick is set the first time and then remembers your last choice, even across a restart.",
-          "Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays."
+          "The AI notice says in two sentences per destination what is sent. Because the text has changed, you confirm it once more.",
+          "The descriptions of the recommended local models are shorter."
         ]
       }
     ],
     "es": [
       {
-        "title": "Formas y bloques nuevos",
+        "title": "Manejo y sistema",
         "points": [
-          "Nueva es la forma básica «Añadir un tubo»: diámetro exterior y altura, y además espesor de pared o diámetro interior, en un solo paso.",
-          "Nuevo es el bloque «Pestaña con agujero»: una pestaña plana en cualquier cara, con agujero y medidas según el tornillo de M3 a M8.",
-          "Nueva es la «Abrazadera de tubo» para tubos habituales de 15 a 40 mm o cualquier medida propia hasta 110 mm, con tornillo de apriete M3 a M6 y la holgura de su material.",
-          "Nuevo asistente «Recipiente con tapa»: redondo o rectangular, tapa de rosca, a presión o abatible, y si quiere compartimentos, inserto y agujeros de espolvoreo. Sus cotas principales son parámetros."
+          "A la derecha hay una tarjeta con las pestañas *Selección*, *Informe de comprobación* y *Chat*. Los avisos nuevos ya no traen el informe al frente; su pestaña los indica con un símbolo y un número.",
+          "Arriba en la ventana, *Buscar función* (Ctrl+Mayús+P) encuentra cualquier función. El mapa de funciones sigue el orden de la barra de menús.",
+          "En la selección, cada característica tiene una sola acción abierta a la vez. Las demás quedan plegadas y muestran sus valores.",
+          "Los diálogos de operación muestran delante como mucho cuatro campos y una frase. Lo que rara vez se cambia está en *Más ajustes*, los límites en *¿Cuándo evitarla?*.",
+          "Un cero con significado dice en el campo lo que hace, por ejemplo «automático», «sin» o «del material».",
+          "Todos los diálogos tienen la misma forma, con secciones planas y un borde común para las etiquetas, también los ajustes, el diálogo de IA y la activación.",
+          "El informe de comprobación muestra primero los hallazgos, con una línea de estado y contadores encima. *Exportar …* está junto a *Entregar al slicer …*.",
+          "Hallazgos, pasos del recorrido y avisos son más cortos. Donde un botón ofrece la acción, la frase ya no la repite.",
+          "La acción *Reconstruir modelo* está en el cuerpo seleccionado.",
+          "La pantalla de inicio muestra arriba, en grande, las cuatro formas de empezar. *Primeros pasos* pregunta idioma, slicer e impresora y pliega el resto.",
+          "El catálogo de bloques muestra imagen y título en cada ficha. En un taladro, *Bloques adecuados …* muestra solo lo que va en un taladro."
         ]
       },
       {
         "title": "Imprimir y entregar al slicer",
         "points": [
-          "Se puede cancelar la preparación de la exportación 3MF. En trabajos con varias placas, Solidon reutiliza las capas y sugerencias ya calculadas.",
-          "Los filamentos sin uso de proyectos antiguos ya no se envían al slicer. Los perfiles siguen asociados a los filamentos utilizados.",
-          "Los modelos añadidos encuentran espacio también después de la duodécima placa. Las placas importadas conservan su distribución.",
-          "Los modelos añadidos con filamentos distintos van en placas separadas si la impresora no tiene suficientes boquillas."
+          "Se añade Anycubic Slicer Next, con las 39 impresoras de Anycubic, en Windows, macOS y Linux.",
+          "En Linux, Solidon encuentra OrcaSlicer, Bambu Studio y PrusaSlicer instalados como Flatpak, con sus impresoras y perfiles, también desde el propio Flatpak de Solidon.",
+          "En Linux, los slicers en AppImage también ofrecen las impresoras de fabricante que tenga configuradas en ellos.",
+          "En el Mac, Solidon ahora también genera el archivo de impresión con Cura. Hasta ahora solo encontraba la ventana de Cura.",
+          "Creality Print 7 aporta sus propias impresoras y la última que eligió.",
+          "Las listas de impresoras nombran cada impresora una sola vez, sin variantes de boquilla. La boquilla se elige en los ajustes de impresión.",
+          "La boquilla elegida en los ajustes de impresión se mantiene aunque después guarde los ajustes del programa.",
+          "Si cambia la boquilla para PrusaSlicer o SuperSlicer, el slicer recibe también el perfil de impresora que corresponde.",
+          "Solidon ofrece más impresoras, también aquellas cuyo perfil no indica placa ni boquilla, como la Creality CR-20 y la Anycubic i3 Mega en PrusaSlicer.",
+          "Los ajustes de impresión muestran delante slicer, impresora, boquilla, filamentos, calidad, densidad de relleno y soportes; el resto está en *Más ajustes*.",
+          "Cada motivo de una sugerencia en los ajustes de impresión cabe en una línea. *Guardar archivo de impresión* aparece en cuanto hay un archivo de impresión."
         ]
       },
       {
         "title": "Taladros, ranuras y división",
         "points": [
-          "El ángulo de una ranura en un taladro importado apunta en la dirección esperada y se mantiene al cambiar la finura.",
-          "Una ranura en una pared lateral orientada a la izquierda o a la derecha se puede acortar, estrechar y girar. Los proyectos de versiones anteriores conservan sus ranuras hasta que cambie el paso.",
-          "En cuerpos STEP, una ranura en una cara inclinada ya no cuenta como sobresaliente por el lado, y un segundo arrastre en una ranura que llega a un escalón ya no rellena el cuerpo.",
-          "Una ranura a través de una chapa inclinada o achaflanada muestra toda su profundidad en cuerpos STEP, y su copia más allá del borde da el mismo aviso en piezas STL y STEP."
-        ]
-      },
-      {
-        "title": "Redondear y achaflanar",
-        "points": [
-          "Redondear un grupo de aristas en un cuerpo STEP redondea ahora las aristas posibles en lugar de rechazar todo. «Mostrar el punto» encuentra cada arista omitida.",
-          "Las aristas junto a una pared no más gruesa que el radio quedan vivas, y el informe indica el radio que cabe allí. Antes se rechazaba todo el redondeo.",
-          "Si un cuerpo STEP no tiene arista propia en una zona elegida, el informe ofrece «Finalizar la edición de caras y volver a intentarlo». En el modelo de triángulos se redondea también.",
-          "Si no queda espacio para el intercambio con el proceso de cálculo, Solidon calcula el paso igualmente y lo indica en el informe. Antes se detenía aconsejando calcular más grueso."
+          "Una rosca o un inserto termofijado en un taladro seleccionado ya no se detiene con «fuera de la superficie». Si el taladro es demasiado ancho, Solidon indica tamaños adecuados.",
+          "En un taladro seleccionado, la vista muestra solo diámetro, profundidad y dos cotas a aristas. Las referencias se nombran por su lado, por ejemplo «Arista exterior izquierda».",
+          "En pulgadas, la frase sobre un taladro da su medida en pulgadas.",
+          "La franja de vista previa dice en una línea qué cambia, con las longitudes en su unidad de visualización."
         ]
       },
       {
         "title": "Modelar, texto y dibujo",
         "points": [
-          "Con «En ambas caras», «Aplicar texto» pone las letras también en la cara posterior, legibles desde fuera. Sirve para banderas, carteles y colgantes.",
-          "Los rótulos se componen con más precisión: las letras quedan en su sitio y las curvas siguen la fuente, en vez de perder hasta un 2 por ciento de superficie en tamaños pequeños.",
-          "La simetría al «Modelar» refleja en el centro del cuerpo, también lejos del centro de la placa. Los proyectos antiguos conservan su forma.",
-          "El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior."
+          "En soportes y placas con taladros, avellanados y texto, *Reconstruir modelo* crea ahora un contorno con alojamientos restados. Si no encuentra una estructura, lo dice.",
+          "Si al dibujar toma la sección de un cuerpo convertido, sus círculos y arcos llegan como círculos y arcos.",
+          "Si una pieza no se puede convertir en caras y aristas, Solidon indica el motivo y una salida en lugar de terminar con un error inesperado."
         ]
       },
       {
         "title": "Generar con IA",
         "points": [
-          "Cancelar durante «Otro intento» solo detiene el intento en curso. Los terminados siguen disponibles para elegir.",
-          "Cada intento de la lista indica su frase o su imagen y su semilla. Si su entrada ya no coincide con el intento elegido, el diálogo dice cuál se aplicará.",
-          "El modelo de imagen se descarga con «Configurar modelo de imagen …» aunque los demás pesos ya estén."
-        ]
-      },
-      {
-        "title": "Manejo y sistema",
-        "points": [
-          "En el Mac, Solidon ya no se cierra poco después de arrancar. En la versión 0.5.1 ocurría en todos los Mac, incluso sin un ratón 3D conectado.",
-          "La casilla «Crear las medidas como parámetros» viene marcada la primera vez y luego recuerda su última elección, también tras reiniciar.",
-          "Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene."
+          "El aviso de IA explica en dos frases por destino qué se envía. Como el texto ha cambiado, tendrá que confirmarlo una vez más.",
+          "Las descripciones de los modelos locales recomendados son más cortas."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Nouvelles formes et nouveaux blocs",
+        "title": "Utilisation et système",
         "points": [
-          "Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.",
-          "Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.",
-          "Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.",
-          "Nouvel assistant « Récipient avec couvercle » : rond ou rectangulaire, couvercle vissé, emboîté ou à charnière, en option compartiments, insert et trous saupoudreurs. Ses cotes sont des paramètres."
+          "À droite, une carte porte les onglets *Sélection*, *Rapport de contrôle* et *Chat*. Un nouvel avertissement ne fait plus passer le rapport devant ; son onglet l'indique par un symbole et un nombre.",
+          "En haut de la fenêtre, *Rechercher une fonction* (Ctrl+Maj+P) trouve chaque fonction. La carte des fonctions suit l'ordre de la barre de menus.",
+          "Dans la sélection, une seule action est ouverte à la fois sur une caractéristique. Les autres restent repliées et affichent leurs valeurs.",
+          "Les dialogues d'opération montrent au plus quatre champs et une phrase à l'avant. Les valeurs rarement changées sont sous *Autres réglages*, les limites sous *Quand l'éviter ?*.",
+          "Un zéro qui a un sens dit dans le champ ce qu'il fait, par exemple « automatique », « sans » ou « selon le matériau ».",
+          "Toutes les boîtes de dialogue ont la même forme, avec des sections plates et un bord commun pour les libellés, y compris les réglages, le dialogue IA et le déverrouillage.",
+          "Le rapport de contrôle montre d'abord les constats, avec au-dessus une ligne d'état et des compteurs. *Exporter …* se trouve à côté de *Transmettre au slicer …*.",
+          "Constats, étapes de la visite et indications sont plus courts. Quand un bouton propose l'action, la phrase ne la répète plus.",
+          "L'action *Reconstruire le modèle* se trouve sur le corps sélectionné.",
+          "L'écran d'accueil montre en grand, en haut, les quatre façons de commencer. *Premiers pas* demande langue, slicer et imprimante et replie le reste.",
+          "Le catalogue de blocs montre une image et un titre par vignette. Sur un perçage, *Blocs adaptés …* ne montre que ce qui va dans un perçage."
         ]
       },
       {
         "title": "Imprimer et transmettre au slicer",
         "points": [
-          "La préparation de l’export 3MF peut être annulée. Pour plusieurs plateaux, Solidon réutilise les couches et les suggestions déjà calculées.",
-          "Les filaments inutilisés des anciens projets ne sont plus transmis au logiciel de tranchage. Les profils restent associés aux filaments utilisés.",
-          "Les modèles ajoutés trouvent aussi une place après le douzième plateau. Les plateaux importés gardent leur disposition.",
-          "Les modèles ajoutés avec des filaments différents sont placés sur des plateaux séparés si l’imprimante n’a pas assez de buses."
+          "Nouveau : Anycubic Slicer Next, avec les 39 imprimantes Anycubic, sous Windows, macOS et Linux.",
+          "Sous Linux, Solidon trouve OrcaSlicer, Bambu Studio et PrusaSlicer installés en Flatpak, avec vos imprimantes et profils, y compris depuis le Flatpak de Solidon.",
+          "Sous Linux, les slicers en AppImage proposent aussi les imprimantes de fabricant que vous y avez configurées.",
+          "Sur Mac, Solidon crée désormais aussi le fichier d'impression avec Cura. Jusqu'ici, il ne trouvait que la fenêtre de Cura.",
+          "Creality Print 7 apporte ses propres imprimantes et la dernière que vous avez choisie.",
+          "Les listes d'imprimantes nomment chaque imprimante une seule fois, sans variantes de buse. La buse se choisit dans les réglages d'impression.",
+          "Une buse choisie dans les réglages d'impression est conservée si vous enregistrez ensuite les réglages de l'application.",
+          "Si vous changez de buse pour PrusaSlicer ou SuperSlicer, le slicer reçoit aussi le profil d'imprimante correspondant.",
+          "Solidon propose plus d'imprimantes, y compris celles dont le profil n'indique ni plateau ni buse, comme la Creality CR-20 et l'Anycubic i3 Mega dans PrusaSlicer.",
+          "Les réglages d'impression montrent d'abord slicer, imprimante, buse, filaments, qualité, densité de remplissage et supports ; le reste est sous *Autres réglages*.",
+          "Chaque raison d'une suggestion dans les réglages d'impression tient sur une ligne. *Enregistrer le fichier d'impression* apparaît dès qu'un fichier d'impression existe."
         ]
       },
       {
         "title": "Perçages, trous oblongs et découpe",
         "points": [
-          "L'angle d'un trou oblong sur un perçage importé pointe dans la direction attendue et la garde quand vous changez la finesse.",
-          "Un trou oblong dans une paroi latérale tournée à gauche ou à droite se raccourcit, s'amincit et pivote. Les projets antérieurs gardent leurs trous oblongs jusqu'à ce que vous modifiiez l'étape.",
-          "Sur les corps STEP, un trou oblong dans une face inclinée ne passe plus pour débordant sur le côté, et un second étirement d'un trou oblong qui finit dans un gradin ne remplit plus le corps.",
-          "Un trou oblong à travers une plaque inclinée ou chanfreinée montre toute sa profondeur sur les corps STEP, et sa copie au-delà du bord donne le même message sur les pièces STL et STEP."
-        ]
-      },
-      {
-        "title": "Congés et chanfreins",
-        "points": [
-          "Arrondir un groupe d'arêtes d'un corps STEP arrondit désormais les arêtes possibles au lieu de tout refuser. « Montrer l'endroit » retrouve chaque arête omise.",
-          "Les arêtes contre une paroi pas plus épaisse que le rayon restent vives, et le rapport indique le rayon qui y tient. Jusqu'ici, tout l'arrondi était refusé.",
-          "Si un corps STEP n'a pas d'arête propre à un endroit choisi, le rapport propose « Terminer la modification des faces et réessayer ». Sur le modèle en triangles, il est aussi arrondi.",
-          "S'il ne reste plus de place pour l'échange avec le processus de calcul, Solidon calcule quand même l'étape et le signale dans le rapport. Avant, il s'arrêtait en conseillant un calcul plus grossier."
+          "Un filetage ou un insert à chaud dans un perçage sélectionné ne s'arrête plus sur « hors de la surface ». Si le perçage est trop large, Solidon indique des tailles adaptées.",
+          "Sur un perçage sélectionné, la vue n'affiche que diamètre, profondeur et deux cotes d'arête. Les références portent le nom de leur côté, par exemple « Arête extérieure à gauche ».",
+          "En pouces, la phrase au-dessus d'un perçage donne sa taille en pouces.",
+          "Le bandeau d'aperçu dit en une ligne ce qui change, avec les longueurs dans votre unité d'affichage."
         ]
       },
       {
         "title": "Sculpter, texte et esquisse",
         "points": [
-          "Avec « Sur les deux faces », « Appliquer du texte » pose aussi les lettres au dos, lisibles de l'extérieur. Pratique pour drapeaux, panneaux et étiquettes.",
-          "Les inscriptions sont composées plus précisément : les lettres restent à leur place, et les courbes suivent la police au lieu de perdre jusqu'à 2 % de surface en petite taille.",
-          "La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.",
-          "Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure."
+          "Pour les supports et plaques avec perçages, fraisures et texte, *Reconstruire le modèle* crée désormais un contour dont les logements sont retirés. S'il ne trouve aucune structure, il le dit.",
+          "Si vous reprenez dans une esquisse la coupe d'un corps converti, ses cercles et ses arcs arrivent comme cercles et arcs.",
+          "Si une pièce ne peut pas être convertie en faces et arêtes, Solidon donne la raison et une issue au lieu de finir sur une erreur inattendue."
         ]
       },
       {
         "title": "Générer avec l'IA",
         "points": [
-          "Annuler pendant « Encore un essai » n'arrête que l'essai en cours. Les essais terminés restent au choix.",
-          "Chaque essai de la liste indique sa phrase ou son image et sa graine. Si votre saisie ne correspond plus à l'essai choisi, la boîte de dialogue dit lequel sera appliqué.",
-          "Le modèle d'image est téléchargé par « Configurer le modèle d'image … » même si les autres poids sont déjà là."
-        ]
-      },
-      {
-        "title": "Utilisation et système",
-        "points": [
-          "Sur Mac, Solidon ne se ferme plus peu après le démarrage. Dans la version 0.5.1, cela arrivait sur chaque Mac, même sans souris 3D branchée.",
-          "La case « Créer les cotes comme paramètres » est cochée la première fois, puis retient votre dernier choix, même après un redémarrage.",
-          "Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée."
+          "L'information sur l'IA dit en deux phrases, pour chaque destination, ce qui est envoyé. Le texte ayant changé, vous la confirmez une nouvelle fois.",
+          "Les descriptions des modèles locaux recommandés sont plus courtes."
         ]
       }
     ],
     "it": [
       {
-        "title": "Nuove forme e nuovi blocchi",
+        "title": "Uso e sistema",
         "points": [
-          "Nuova è la forma di base «Crea un tubo»: diametro esterno e altezza, più spessore di parete o diametro interno, in un solo passo.",
-          "Nuovo è il blocco «Aletta con foro»: un'aletta piatta su qualsiasi faccia, con foro e misure adatti alla vite da M3 a M8.",
-          "Nuova è la «Fascetta per tubo» per i tubi comuni da 15 a 40 mm o qualsiasi misura tua fino a 110 mm, con vite di serraggio da M3 a M6 e il gioco del tuo materiale.",
-          "Nuovo assistente «Contenitore con coperchio»: tondo o rettangolare, coperchio a vite, a incastro o a cerniera e, se vuoi, scomparti, inserto e fori spargitori. Le misure principali sono parametri."
+          "A destra c'è una scheda con le linguette *Selezione*, *Rapporto di verifica* e *Chat*. I nuovi avvisi non portano più il rapporto in primo piano; la sua linguetta li mostra con un simbolo e un numero.",
+          "In alto nella finestra trovi ogni funzione con *Cerca funzione* (Ctrl+Maiusc+P). La mappa delle funzioni segue l'ordine della barra dei menu.",
+          "Nella selezione, su una caratteristica è aperta una sola azione alla volta. Le altre restano chiuse e mostrano i loro valori.",
+          "Le finestre delle operazioni mostrano davanti al massimo quattro campi e una frase. I valori cambiati di rado stanno in *Altre impostazioni*, i limiti in *Quando evitarla?*.",
+          "Uno zero con un significato dice nel campo cosa fa, per esempio «automatico», «senza» o «dal materiale».",
+          "Tutte le finestre di dialogo hanno la stessa forma, con sezioni piatte e un bordo comune per le etichette, anche impostazioni, finestra dell'IA e sblocco.",
+          "Il rapporto di verifica mostra prima i rilievi, con sopra una riga di stato e contatori. *Esporta …* sta accanto a *Passa allo slicer …*.",
+          "Rilievi, passi del tour e suggerimenti sono più brevi. Dove un pulsante offre l'azione, la frase non la ripete più.",
+          "L'azione *Ricostruisci modello* si trova sul corpo selezionato.",
+          "La schermata iniziale mostra in grande, in alto, i quattro modi per cominciare. *Primi passi* chiede lingua, slicer e stampante e chiude il resto.",
+          "Il catalogo dei blocchi mostra immagine e titolo in ogni riquadro. Su un foro, *Blocchi adatti …* mostra solo ciò che va in un foro."
         ]
       },
       {
         "title": "Stampare e passare allo slicer",
         "points": [
-          "La preparazione dell’esportazione 3MF può essere annullata. Con più piatti, Solidon riutilizza gli strati e i suggerimenti già calcolati.",
-          "I filamenti inutilizzati dei vecchi progetti non vengono più inviati allo slicer. I profili restano associati ai filamenti in uso.",
-          "I modelli aggiunti trovano spazio anche oltre il dodicesimo piatto. I piatti importati mantengono la loro disposizione.",
-          "I modelli aggiunti con filamenti diversi vengono collocati su piatti separati se la stampante non ha abbastanza ugelli."
+          "Novità: Anycubic Slicer Next con tutte le 39 stampanti Anycubic, su Windows, macOS e Linux.",
+          "Su Linux Solidon trova OrcaSlicer, Bambu Studio e PrusaSlicer installati come Flatpak, con le tue stampanti e i tuoi profili, anche dal Flatpak di Solidon.",
+          "Su Linux anche gli slicer in AppImage offrono le stampanti dei produttori che vi hai configurato.",
+          "Su Mac Solidon ora crea il file di stampa anche con Cura. Prima trovava solo la finestra di Cura.",
+          "Creality Print 7 porta con sé le sue stampanti e l'ultima che hai scelto.",
+          "Gli elenchi delle stampanti nominano ogni stampante una sola volta, senza varianti di ugello. L'ugello lo scegli nelle impostazioni di stampa.",
+          "Un ugello scelto nelle impostazioni di stampa resta anche se poi salvi le impostazioni del programma.",
+          "Se cambi ugello per PrusaSlicer o SuperSlicer, lo slicer riceve anche il profilo di stampante adatto.",
+          "Solidon offre più stampanti, anche quelle il cui profilo non indica piano o ugello, come la Creality CR-20 e la Anycubic i3 Mega in PrusaSlicer.",
+          "Le impostazioni di stampa mostrano davanti slicer, stampante, ugello, filamenti, qualità, densità di riempimento e supporti; il resto sta in *Altre impostazioni*.",
+          "Ogni motivo di un suggerimento nelle impostazioni di stampa sta in una riga. *Salva file di stampa* compare appena c'è un file di stampa."
         ]
       },
       {
         "title": "Fori, asole e divisione",
         "points": [
-          "L'angolo di un'asola su un foro importato punta nella direzione attesa e la mantiene quando cambi la finezza.",
-          "Un'asola in una parete laterale rivolta a sinistra o a destra si può accorciare, restringere e ruotare. I progetti delle versioni precedenti mantengono le loro asole finché non cambi il passaggio.",
-          "Sui corpi STEP un'asola in una faccia inclinata non risulta più sporgente di lato, e un secondo trascinamento su un'asola che finisce in un gradino non riempie più il corpo.",
-          "Un'asola attraverso una piastra inclinata o smussata mostra tutta la sua profondità sui corpi STEP, e la sua copia oltre il bordo dà lo stesso messaggio su pezzi STL e STEP."
-        ]
-      },
-      {
-        "title": "Raccordi e smussi",
-        "points": [
-          "Arrotondare un gruppo di spigoli su un corpo STEP arrotonda ora gli spigoli possibili invece di rifiutare tutto. «Mostra il punto» trova ogni spigolo escluso.",
-          "Gli spigoli accanto a una parete non più spessa del raggio restano vivi, e il report indica il raggio che lì entra. Finora veniva rifiutato l'intero raccordo.",
-          "Se un corpo STEP non ha uno spigolo proprio in un punto scelto, il report offre «Termina la modifica delle facce e riprova». Sul modello a triangoli viene arrotondato anche lì.",
-          "Se manca spazio per lo scambio con il processo di calcolo, Solidon calcola comunque il passaggio e lo segnala nel report. Prima si fermava consigliando un calcolo più grossolano."
+          "Una filettatura o un inserto a caldo in un foro selezionato non si ferma più con «fuori dalla superficie». Se il foro è troppo largo, Solidon indica le misure adatte.",
+          "Su un foro selezionato la vista mostra solo diametro, profondità e due quote dai bordi. I riferimenti prendono il nome dal loro lato, per esempio «Bordo esterno a sinistra».",
+          "In pollici, la frase sopra un foro ne indica la misura in pollici.",
+          "La fascia dell'anteprima dice in una riga cosa cambia, con le lunghezze nella tua unità di visualizzazione."
         ]
       },
       {
         "title": "Modellare, testo e schizzo",
         "points": [
-          "Con «Su entrambe le facce», «Applica testo» mette le lettere anche sul retro, leggibili da fuori. Va bene per bandierine, cartelli e targhette.",
-          "Le scritte vengono composte con più precisione: le lettere stanno al loro posto e le curve seguono il carattere, invece di perdere fino al 2 per cento di superficie nelle misure piccole.",
-          "La simmetria in «Modella» specchia al centro del corpo, anche lontano dal centro del piano. I progetti più vecchi mantengono la loro forma.",
-          "Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore."
+          "Per supporti e piastre con fori, svasature e scritte, *Ricostruisci modello* ora crea un contorno con le sedi sottratte. Se non trova una struttura, lo dice.",
+          "Se in uno schizzo riprendi la sezione di un corpo convertito, i suoi cerchi e archi arrivano come cerchi e archi.",
+          "Se un pezzo non si può convertire in facce e spigoli, Solidon indica il motivo e una via d'uscita invece di finire con un errore imprevisto."
         ]
       },
       {
         "title": "Generare con l'IA",
         "points": [
-          "Annullare durante «Un altro tentativo» ferma solo il tentativo in corso. Quelli finiti restano da scegliere.",
-          "Ogni tentativo nell'elenco indica la sua frase o immagine e il seme. Se il tuo input non corrisponde più al tentativo scelto, la finestra dice quale verrà applicato.",
-          "Il modello di immagine viene scaricato da «Configura modello immagine …» anche se gli altri pesi ci sono già."
-        ]
-      },
-      {
-        "title": "Uso e sistema",
-        "points": [
-          "Su Mac, Solidon non si chiude più poco dopo l'avvio. Nella versione 0.5.1 succedeva su ogni Mac, anche senza un mouse 3D collegato.",
-          "La spunta «Creare le misure come parametri» è attiva la prima volta e poi ricorda la tua ultima scelta, anche dopo un riavvio.",
-          "Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta."
+          "L'avviso sull'IA dice in due frasi, per ogni destinazione, cosa viene inviato. Dato che il testo è cambiato, lo confermi ancora una volta.",
+          "Le descrizioni dei modelli locali consigliati sono più brevi."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Novas formas e blocos",
+        "title": "Utilização e sistema",
         "points": [
-          "Nova é a forma base «Criar um tubo»: diâmetro exterior e altura, mais espessura de parede ou diâmetro interior, num só passo.",
-          "Novo é o bloco «Patilha com furo»: uma patilha plana em qualquer face, com furo e medidas à medida do parafuso de M3 a M8.",
-          "Nova é a «Abraçadeira de tubo» para tubos comuns de 15 a 40 mm ou qualquer medida própria até 110 mm, com parafuso de aperto M3 a M6 e a folga do seu material.",
-          "Novo assistente «Recipiente com tampa»: redondo ou retangular, tampa de rosca, de encaixe ou articulada e, se quiser, compartimentos, inserto e furos de polvilhar. As cotas principais são parâmetros."
+          "À direita há um cartão com os separadores *Seleção*, *Relatório de verificação* e *Chat*. Os avisos novos já não trazem o relatório para a frente; o separador mostra-os com um símbolo e um número.",
+          "No topo da janela encontra qualquer função em *Pesquisar função* (Ctrl+Shift+P). O mapa de funções segue a ordem da barra de menus.",
+          "Na seleção, cada característica tem uma só ação aberta de cada vez. As outras ficam recolhidas e mostram os seus valores.",
+          "Os diálogos de operação mostram à frente no máximo quatro campos e uma frase. Os valores raramente alterados estão em *Mais definições*, os limites em *Quando evitar?*.",
+          "Um zero com significado diz no campo o que faz, por exemplo «automático», «sem» ou «do material».",
+          "Todos os diálogos têm a mesma forma, com secções planas e uma margem comum para as etiquetas, também as definições, o diálogo de IA e a ativação.",
+          "O relatório de verificação mostra primeiro as constatações e, por cima, uma linha com estado e contadores. *Exportar …* fica ao lado de *Entregar ao slicer …*.",
+          "Constatações, passos da visita guiada e indicações são mais curtos. Onde um botão oferece a ação, a frase já não a repete.",
+          "A ação *Reconstruir modelo* está no corpo selecionado.",
+          "O ecrã inicial mostra em grande, no topo, as quatro formas de começar. *Primeiros passos* pergunta idioma, slicer e impressora e recolhe o resto.",
+          "O catálogo de blocos mostra imagem e título em cada mosaico. Num furo, *Blocos adequados …* mostra só o que cabe num furo."
         ]
       },
       {
         "title": "Imprimir e entregar ao slicer",
         "points": [
-          "A preparação da exportação 3MF pode ser cancelada. Em trabalhos com várias placas, o Solidon reutiliza as camadas e sugestões já calculadas.",
-          "Os filamentos não utilizados de projetos antigos deixam de ser enviados ao slicer. Os perfis continuam associados aos filamentos em uso.",
-          "Os modelos adicionados encontram espaço também após a décima segunda placa. As placas importadas mantêm a sua disposição.",
-          "Os modelos adicionados com filamentos diferentes ficam em placas separadas quando a impressora não tem bicos suficientes."
+          "Novidade: Anycubic Slicer Next com as 39 impressoras Anycubic, no Windows, macOS e Linux.",
+          "No Linux, o Solidon encontra OrcaSlicer, Bambu Studio e PrusaSlicer instalados como Flatpak, com as suas impressoras e perfis, também a partir do Flatpak do próprio Solidon.",
+          "No Linux, os slicers em AppImage também oferecem as impressoras de fabricante que neles configurou.",
+          "No Mac, o Solidon passa a criar o ficheiro de impressão também com o Cura. Até agora só encontrava a janela do Cura.",
+          "O Creality Print 7 traz as suas próprias impressoras e a última que escolheu.",
+          "As listas de impressoras indicam cada impressora uma só vez, sem variantes de bico. O bico escolhe-se nas definições de impressão.",
+          "Um bico escolhido nas definições de impressão mantém-se quando depois guarda as definições do programa.",
+          "Se mudar o bico para o PrusaSlicer ou o SuperSlicer, o slicer recebe também o perfil de impressora correspondente.",
+          "O Solidon oferece mais impressoras, também aquelas cujo perfil não indica mesa nem bico, como a Creality CR-20 e a Anycubic i3 Mega no PrusaSlicer.",
+          "As definições de impressão mostram à frente slicer, impressora, bico, filamentos, qualidade, densidade de preenchimento e suportes; o resto está em *Mais definições*.",
+          "Cada motivo de uma sugestão nas definições de impressão cabe numa linha. *Guardar o ficheiro de impressão* aparece assim que existe um ficheiro de impressão."
         ]
       },
       {
         "title": "Furos, furos oblongos e divisão",
         "points": [
-          "O ângulo de um furo oblongo num furo importado aponta na direção esperada e mantém-se ao mudar a finura.",
-          "Um furo oblongo numa parede lateral virada para a esquerda ou para a direita pode ser encurtado, estreitado e rodado. Projetos de versões anteriores mantêm os furos oblongos até alterar o passo.",
-          "Em corpos STEP, um furo oblongo numa face inclinada já não conta como saliente de lado, e um segundo arrasto num furo oblongo que entra num degrau já não enche o corpo.",
-          "Um furo oblongo através de uma chapa inclinada ou chanfrada mostra toda a profundidade em corpos STEP, e a sua cópia para lá da borda dá a mesma mensagem em peças STL e STEP."
-        ]
-      },
-      {
-        "title": "Arredondar e chanfrar",
-        "points": [
-          "Arredondar um grupo de arestas num corpo STEP arredonda agora as arestas possíveis em vez de recusar tudo. «Mostrar o ponto» encontra cada aresta omitida.",
-          "As arestas junto a uma parede não mais espessa do que o raio ficam vivas, e o relatório indica o raio que cabe ali. Antes, todo o arredondamento era recusado.",
-          "Se um corpo STEP não tiver aresta própria num local escolhido, o relatório oferece «Terminar a edição de faces e tentar de novo». No modelo de triângulos também é arredondado.",
-          "Se faltar espaço para a troca com o processo de cálculo, o Solidon calcula o passo mesmo assim e indica-o no relatório. Antes parava com o conselho de calcular de forma mais grosseira."
+          "Uma rosca ou uma bucha de inserção a quente num furo selecionado já não para com «fora da superfície». Se o furo for demasiado largo, o Solidon indica tamanhos adequados.",
+          "Num furo selecionado, a vista mostra só diâmetro, profundidade e duas cotas às arestas. As referências têm o nome do seu lado, por exemplo «Aresta exterior à esquerda».",
+          "Em polegadas, a frase sobre um furo indica a sua medida em polegadas.",
+          "A faixa de pré-visualização diz numa linha o que muda, com os comprimentos na sua unidade de apresentação."
         ]
       },
       {
         "title": "Modelar, texto e esboço",
         "points": [
-          "Com «Nas duas faces», «Aplicar texto» põe as letras também no verso, legíveis por fora. Serve para bandeiras, placas e etiquetas.",
-          "As inscrições são compostas com mais precisão: as letras ficam no seu lugar e as curvas seguem a fonte, em vez de perder até 2 por cento de área em tamanhos pequenos.",
-          "A simetria em «Modelar» espelha no centro do corpo, também longe do centro da mesa. Os projetos antigos mantêm a sua forma.",
-          "O pincel de modelação atua só sobre a face virada para ele. Rebaixar uma placa fina já não empurra também a face de baixo."
+          "Em suportes e placas com furos, escareamentos e texto, *Reconstruir modelo* cria agora um contorno com alojamentos subtraídos. Se não encontrar uma estrutura, di-lo.",
+          "Se num esboço aproveitar o corte de um corpo convertido, os seus círculos e arcos chegam como círculos e arcos.",
+          "Se uma peça não puder ser convertida em faces e arestas, o Solidon indica o motivo e uma saída em vez de terminar com um erro inesperado."
         ]
       },
       {
         "title": "Gerar com IA",
         "points": [
-          "Cancelar durante «Mais uma tentativa» só para a tentativa em curso. As terminadas continuam disponíveis para escolher.",
-          "Cada tentativa da lista indica a sua frase ou imagem e a semente. Se a sua entrada já não corresponder à tentativa escolhida, o diálogo diz qual será aplicada.",
-          "O modelo de imagem é descarregado por «Configurar modelo de imagem …» mesmo que os outros pesos já existam."
-        ]
-      },
-      {
-        "title": "Utilização e sistema",
-        "points": [
-          "No Mac, o Solidon já não fecha pouco depois de arrancar. Na versão 0.5.1 isto acontecia em todos os Mac, mesmo sem um rato 3D ligado.",
-          "A caixa «Criar as medidas como parâmetros» vem marcada da primeira vez e depois lembra a sua última escolha, mesmo após reiniciar.",
-          "Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se."
+          "O aviso de IA diz em duas frases, por destino, o que é enviado. Como o texto mudou, confirma-o mais uma vez.",
+          "As descrições dos modelos locais recomendados são mais curtas."
         ]
       }
     ]
   },
-  "changes_total": 219,
-  "notes_version": "0.5.2",
-  "signature": "d756ec59e5ec6fd4e444c88309d3d4f1b4019bc3118bc5838761c27b7a045bde60b8e43d4d0859c19e78aee69d18c3de26541e4eee55e53d26a03b780e0bc50c"
+  "changes_total": 47,
+  "notes_version": "0.5.3",
+  "signature": "3c69adaf6db0e760a7994373921f3bcac7e65b33175fe01535fa708bf9d6669c2ae00cf14dcca340c67beecfdc8275b1a6c55815ff5c568dd7ecd18a9501ad04"
 }
