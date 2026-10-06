@@ -1,0 +1,181 @@
+diff --git a/app/ui/main_window.py b/app/ui/main_window.py
+index 764ae43a5..d746702b0 100644
+--- a/app/ui/main_window.py
++++ b/app/ui/main_window.py
+@@ -49,6 +49,7 @@ from PySide6.QtGui import (
+     QCursor,
+     QDragEnterEvent,
+     QDropEvent,
++    QKeyEvent,
+     QKeySequence,
+     QShortcut,
+     QShowEvent,
+@@ -69,11 +70,13 @@ from PySide6.QtWidgets import (
+     QMainWindow,
+     QMenu,
+     QMessageBox,
++    QPlainTextEdit,
+     QProgressBar,
+     QPushButton,
+     QSizePolicy,
+     QStackedWidget,
+     QTabWidget,
++    QTextEdit,
+     QToolBar,
+     QToolButton,
+     QVBoxLayout,
+@@ -251,7 +254,7 @@ from app.core.types import (
+ )
+ from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
+ from app.i18n import TranslatableText, _, format_decimal, tr
+-from app.ui import first_run
++from app.ui import app_events, first_run
+ from app.ui import settings as settings_module
+ from app.ui.ai_disclosure import (
+     DisclosureResult,
+@@ -386,6 +389,7 @@ from app.ui.settings import UiSettings, save_settings
+ from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
+ from app.ui.shortcut_schemes import (
+     delete_keys,
++    deletes,
+     install_navigation_keys,
+     redo_keys,
+     shortcut_for,
+@@ -723,6 +727,46 @@ FEATURE_TWINS: Final[dict[str, str]] = {
+ }
+ 
+ 
++class _DeleteRefusal(QObject):
++    """Entf an einer Auswahl, die gerade nicht entfernt werden kann, sagt warum.
++
++    Fragebogen S-20261006-5be329: „die Entf taste löscht weder Merkmal noch
++    Körper“. Hält die Kette an einem Schritt (§15.3) oder ist die Testzeit
++    abgelaufen, ist *Objekt entfernen* gesperrt, und mit ihm Entf. Qt führt
++    ein gesperrtes Kürzel nicht aus und meldet nichts: Der Druck geht als
++    gewöhnlicher Tastendruck an das Bedienelement mit dem Fokus, und dort
++    tut er nichts. Der Menüeintrag trug den Grund, die Taste nicht.
++
++    Ein Zuhörer am einen Filter der Anwendung (:mod:`app.ui.app_events`) und
++    keine zweite Aktion auf derselben Taste — zwei Aktionen auf Entf im
++    selben Bereich führt Qt beide nicht aus
++    (``test_no_two_shortcuts_in_the_window_collide``). Er sieht den Druck
++    nur, wenn kein freigegebenes Kürzel ihn genommen hat.
++    """
++
++    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
++        """Nimmt den Druck nur, wenn das Fenster den Grund gesagt hat.
++
++        Gefragt wird am Bedienelement mit dem Fokus: Ein Tastendruck, den es
++        nicht annimmt, wandert zu seinen Eltern und käme sonst je Stufe
++        einmal hier an.
++        """
++        if not isinstance(watched, QObject):  # laut Signatur unmöglich
++            return False  # type: ignore[unreachable]
++        window = self.parent()
++        if (
++            event.type() == QEvent.Type.KeyPress
++            and isinstance(event, QKeyEvent)
++            and not event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
++            and deletes(event.key(), sys.platform)
++            and isinstance(window, MainWindow)
++            and isinstance(watched, QWidget)
++            and watched is QApplication.focusWidget()
++        ):
++            return window._refuse_delete(watched)
++        return False
++
++
+ class _ActionNotice(SketchSelectionBadge):
+     """Dieselbe passive Quittung wie in der Skizze, am Ort der letzten Handlung."""
+ 
+@@ -2787,6 +2831,9 @@ class MainWindow(QMainWindow):
+         """Das Ergebnis, das während des Aufbaus hereinkam — nachgeholt, sobald
+         er fertig ist."""
+ 
++        self._scoped_actions: list[QAction] = []
++        """Die Aktionen auf nackten Tasten (:meth:`_scope_shortcut`) — für den
++        Reiter *Auswahl*, der nach den Menüs entsteht."""
+         self._build_central()
+         self._build_status_bar()
+         self._build_menus()
+@@ -5195,7 +5242,7 @@ class MainWindow(QMainWindow):
+     _BARE_KEYS = frozenset({"Del", "Delete"})
+ 
+     def _scope_shortcut(self, action: QAction, key: str) -> None:
+-        """Begrenzt nackte Tasten auf Objektbaum und Ansicht.
++        """Begrenzt nackte Tasten auf Objektbaum, Ansicht und den Reiter *Auswahl*.
+ 
+         „Entf" war fensterweit gebunden und löschte deshalb den ausgewählten
+         Körper, auch wenn der Fokus im Verlauf lag und ein Schritt markiert war
+@@ -5209,6 +5256,14 @@ class MainWindow(QMainWindow):
+         **Am Mac löscht auch ⌫** (:func:`shortcut_schemes.delete_keys`): Die
+         Taste „delete“ dort sendet Backspace, und Körper wie Merkmal blieben
+         sonst stehen, während die Texte die Taste nannten.
++
++        **Und im Reiter *Auswahl*** (Fragebogen S-20261006-5be329: „die Entf
++        taste löscht weder Merkmal noch Körper“): Wer dort ein Maß tippte oder
++        einen Knopf drückte, hatte den Fokus rechts, und die Taste tat nichts.
++        Der Reiter zeigt dieselbe Auswahl wie Baum und Ansicht. Seine Zahlen-
++        und Textfelder behalten Entf für sich — Qt fragt sie vor dem Kürzel
++        (``ShortcutOverride``). Der Reiter entsteht nach den Menüs; er nimmt
++        die Aktionen aus :attr:`_scoped_actions` in :meth:`_build_feature_dock`.
+         """
+         if key not in self._BARE_KEYS:
+             return
+@@ -5216,6 +5271,7 @@ class MainWindow(QMainWindow):
+         action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+         for widget in (self.object_tree, self.viewport):
+             widget.addAction(action)
++        self._scoped_actions.append(action)
+ 
+     def _add_variant_entries(self, category: str, target: Any, subgroups: dict[str, QMenu]) -> None:
+         """Für jede Variantengruppe dieser Kategorie **einen** Eintrag.
+@@ -14472,6 +14528,11 @@ class MainWindow(QMainWindow):
+         # vorn steht beim Start aber der Prüfbericht — wer eine Datei öffnet,
+         # hat noch nichts gewählt; die erste Auswahl holt ihn nach vorn.
+         self.feature_dock = column
++        # Entf gilt auch hier, und eine gesperrte Taste sagt ihren Grund
++        # (:meth:`_scope_shortcut`, :class:`_DeleteRefusal`).
++        for action in self._scoped_actions:
++            column.addAction(action)
++        app_events.listen(_DeleteRefusal(self), (QEvent.Type.KeyPress,))
+         self.right.insertTab(0, column, tr("Auswahl"))
+         self.right.setCurrentWidget(self.report)
+         self.feature_dock.start_watching()
+@@ -15140,6 +15277,36 @@ class MainWindow(QMainWindow):
+         self.announce(tr("Körper „{name}“ entfernt — Strg+Z holt ihn zurück.").format(name=name))
+         return False
+ 
++    def _refuse_delete(self, focus: QWidget) -> bool:
++        """Sagt, warum Entf an der Auswahl gerade nichts entfernt — ``True``, wenn gesagt.
++
++        Nur wo die Taste löschen würde (Objektbaum, Ansicht, Reiter
++        *Auswahl*), nie in einem Textfeld, und nur aus den zwei Gründen, die
++        eine Auswahl haben kann und trotzdem sperren: der Halt der Kette und
++        die Lizenzsperre. Ohne Auswahl gibt es nichts zu entfernen, und die
++        Taste bleibt, wem sie gehört — beim Messen dem letzten Maß. In den
++        Gesteneditoren gehört sie dem Editor. Der Satz ist der des
++        Menüeintrags (``_kind_hint``, ``_lock_hint``), mit dem Namen der
++        Handlung davor, die Entf an dieser Auswahl wäre.
++        """
++        action = self._op_actions.get("delete_object")
++        if action is None or action.isEnabled():
++            return False
++        if isinstance(focus, (QLineEdit, QAbstractSpinBox, QTextEdit, QPlainTextEdit)):
++            return False
++        scope = (self.object_tree, self.viewport, self.feature_dock)
++        if not any(widget is focus or widget.isAncestorOf(focus) for widget in scope):
++            return False
++        if not self.object_tree.selected_objects():
++            return False
++        if self._sketch_panel is not None or self.sculpting() or self.setting_armature():
++            return False
++        if self._halt_reason() is None and activation.state().unlocked:
++            return False
++        spec = self.feature_instead_of("delete_object") or REGISTRY.get("delete_object")
++        self.announce(tr("{name}: {value}", name=str(spec.title), value=action.statusTip()))
++        return True
++
+     def _selected_feature_object(self) -> Feature | None:
+         """Das gewählte Merkmal selbst — oder nichts, wenn keines gewählt ist."""
+         feature_id = self.object_tree.selected_feature()

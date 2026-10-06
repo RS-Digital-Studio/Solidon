@@ -142,6 +142,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): Lader-Weg bauen, Rückfall „nur öffnen“ mit Satz im Druckdialog; Abnahme am Linux-Runner mit AppImage und Flatpak |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Fällig seit 06.10.: mit 0.5.3 antworten; Entwurf liegt lokal bereit |
 | [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
+| [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Gebaut und an Sonde und Fenstertest belegt, nicht committet (Hunks im Arbeitsbaum des i9, Patches im Zustandsordner); offen Tor, Commit der eigenen Hunks und der Titel aus `_removal_entry` |
+| [RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig](#rm-534) | Kundenrückmeldungen | Ursache an der Kundendatei gemessen; Umsetzung in vier Teilen (Laufzustand, volle Kette selbst, Halt im Entwurf nie fein, kein Hin und Her) nicht begonnen |
+| [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Vier Entscheidungen Roberts (am Punkt); die Widersprüche und die drei falschen Ergebnisse unabhängig davon beheben |
+| [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
+| [RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück](#rm-537) | Kundenrückmeldungen | An der Kundendatei gemessen; offen die Herkunft der vorläufigen Merkmale und was eine Auswahl tut, deren Merkmal verschwindet |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -4717,3 +4722,148 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bereits versandte Nachrichten bei der Bearbeitung zuerst prüfen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#eine-kundenanfrage-aus-dem-dentalbereich-30082026).
+
+<a id="rm-533"></a>
+
+- [~] **RM-533 — Entf tut an der Auswahl still nichts (Fragebogen S-20261006-5be329).** Kunde:
+  „die Entf taste löscht weder Merkmal noch Körper je nachdem was ausgewählt ist“. Am HEAD mit der
+  Sitzungsdatei des Fragebogens nachgestellt (offscreen): Mit Fokus in Objektbaum oder Ansicht
+  entfernt Entf Körper und Merkmal richtig. Still bleibt die Taste in zwei Lagen. Erstens liegt
+  der Fokus im Reiter *Auswahl* (nach einem Maßfeld oder Knopf dort), und `_scope_shortcut` band
+  Entf nur an Baum und Ansicht. Zweitens hält die Kette an einem Schritt (im Kundenprotokoll
+  mehrfach: Fase, Verrunden, Merkmal entfernen) oder die Lizenz sperrt; dann sind *Objekt
+  entfernen* und *Merkmal entfernen* gesperrt, und Qt führt ein gesperrtes Kürzel ohne jede
+  Rückmeldung nicht aus.
+
+  Gebaut, nicht committet (Tor abgebrochen, Robert 06.10.: Stopp): `_scope_shortcut` merkt die
+  Aktionen in `_scoped_actions`, `_build_feature_dock` hängt sie an den Reiter; Text- und
+  Zahlenfelder behalten Entf über `ShortcutOverride`. Ein Zuhörer `_DeleteRefusal` am Filter der
+  Anwendung (`app_events`; keine zweite Aktion auf Entf, sonst `test_no_two_shortcuts_in_the_window_collide`)
+  ruft `MainWindow._refuse_delete`: Mit Auswahl, Fokus in Baum, Ansicht oder Reiter und Halt
+  oder Sperre sagt die Statuszeile „Objekt entfernen: Die Kette hält an Schritt 11 (Verrunden)
+  an — …“; ohne Auswahl bleibt die Taste stumm (beim Messen gehört sie dem letzten Maß). Satz in
+  `grenzen.md` („nackte Tasten bleiben an Objektbaum, Ansicht und Reiter *Auswahl*“).
+  Fenstertest `test_delete_answers_in_the_selection_tab_and_says_why_when_it_cannot` in
+  `tests/test_interface_limits.py` grün; Gegenproben ohne Fix und ohne Zuhörer rot. Die Hunks
+  liegen ungesichert im Arbeitsbaum des i9 und als Patches gegen `3a5d607f3` unter
+  `.claude/.state/umfrage-5be329-2026-10-06/` (`entf-*.patch`, Sonde `sonde_entf.py`).
+
+  Aus demselben Fragebogen erledigt: `c3e68671e` (das angehängte Absturzprotokoll war eine
+  überlebte COM-Ausnahme `0x8001010d`; der Bericht hängt nur noch an, was der Prozess nicht
+  überlebt hat) und `306ff7bf2` (am HEAD roter Zähltest seit `d3134f3d8`).
+
+  **Offen:** Tor über HEAD plus diese Hunks, dann Commit nur der eigenen Hunks (in
+  `main_window.py` und `grenzen.md` liegen fremde daneben). Der Titel der Ansage kommt heute aus
+  `feature_instead_of(...) or delete_object`; `_removal_entry()` der Rechtsklick-Arbeit
+  (Fragebogen S-20261006-5c132b) gibt dieselbe Auskunft richtiger (Baustein) — sobald sie auf main
+  ist, darauf umstellen, sonst bleibt ein Zwilling. **Abnahme:** Am echten Fenster entfernt Entf
+  mit Fokus auf einem Knopf im Reiter die Auswahl, im Zahlenfeld ändert es die Zahl, bei Halt
+  nennt es den Grund.
+
+<a id="rm-534"></a>
+
+- [ ] **RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig
+  (Fragebogen S-20261006-5be329).** Kunde: „manchmal wird im Prüfbericht auch Fehler angezeigt und
+  kurz darauf ist die Berechnung erst fertig“. Gemessen am HEAD `3a5d607f3` mit der Kundendatei
+  (Bericht `pruefbericht-bericht.md` im Zustandsordner von RM-533): Beim Wechsel des Radius
+  2,0 → 1,0 (Schritt 18) bleibt die Zeile „Der Radius ist für diese Kanten zu groß“ mit voller
+  Schwere stehen, der Kopf sagt „Übergabe nicht empfohlen“, die Statuszeile „Die Kette hält an“ —
+  3,7 s lang, bis das Ergebnis kommt. Der Hinweis „Die Bewertung läuft“ wird gerade dann
+  unterdrückt (`ReportPanel`: `self._review_missing and not counts["error"]`). Widerlegt sind
+  Zwischenstände aus dem Bild zuerst, `check_states` und die Vorschau eines offenen Dialogs.
+  Dazu ein eigener Fehler: Ein Halt im Entwurf gilt als fein. `evaluate.py` bricht beim Halt ab,
+  bevor `reads_quality` gesetzt wird, `fine_current` ist wahr, und Druckdialog und Export rechnen
+  die volle Kette nie, obwohl der Satz „… sagt erst die vollständige“ sie ankündigt. Am
+  Kundenschritt 6 (*Merkmal entfernen* am Stift) bestätigt die volle Kette den Fehler mit dem
+  besseren Satz („das Werkzeug deckt ihn vollständig ab“); der Kunde nahm zweimal *Reparieren und
+  erneut versuchen*, das dort nicht helfen konnte.
+
+  **Fix in vier Teilen (Entscheidung aus Kundensicht):** (1) Läuft eine Auswertung länger als
+  200 ms, sagt der Kopf „Wird neu berechnet …“; alte Zeilen bleiben als voriger Stand sichtbar,
+  mit Text als zweiter Kodierung (Regel 18), ihre Knöpfe gesperrt, die Reitermarke zählt sie nicht
+  neu, die Haltansage weicht dem Fortschritt; `print_contract.handoff_state` bekommt den
+  Laufzustand als eigenen Eingang. (2) Hält der Entwurf mit `BooleanFailedError` ohne Voxelstufe
+  an, rechnet die Sitzung die volle Kette einmal selbst; bis dahin steht der Laufzustand, kein
+  Fehler; *Voxelstufe erzwingen* bleibt. (3) Ein Halt im Entwurf ist nie `fine_current`. (4) Das
+  feine Urteil gilt für folgende Entwurfsläufe, solange Schritt und Eingang gleich sind — kein
+  Hin und Her. Tests, die heute Verhalten zusichern und bleiben: `test_print_contract.py`
+  (Übergabezustand ohne Lauf), `test_boolean.py` (Entwurfssatz), `test_ui.py` (`use_voxel_stage`);
+  der Halt gehört neben RM-494 in `test_evaluation.py`. **Abnahme:** Während eines Laufs steht
+  kein alter Fehler als gültig da; ein Export nach einem Entwurfshalt rechnet fein.
+
+<a id="rm-535"></a>
+
+- [ ] **RM-535 — Merkmal verschieben: Felder fehlen an Flächen, Karte und Operation sind uneins,
+  drei falsche Ergebnisse ohne Befund (Fragebogen S-20261006-5be329).** Kunde: „das Verschieben
+  mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“. Gemessen an HEAD
+  `3a5d607f3`, der Kundendatei und sechs Modellen mit 734 Merkmalen (Bericht
+  `verschieben-bericht.md` im Zustandsordner von RM-533): X/Y/Z stehen an Bohrung, Sackbohrung,
+  Langloch, Zapfen, Senkung, Verjüngung, Kugel, Einschluss, Wulst und Kehle. Keine Zeile haben
+  Verrundung, Fläche, Schrägfläche, gerundete Seite, Muster und Gewinde (Sätze in
+  `perceive/actions.py`); gesperrt sind Kegelstück, Kugel oder Kegel ohne eigenen Körper und die
+  Sackbohrung mit Zapfen. Am Kundenmodell haben 16 von 190 Merkmalen Felder, 174 keine (117
+  Verrundungen, 42 Flächen). Ursache ist `MOVABLE_KINDS` (`prepare_ops.py`), und die Karte
+  überspringt Zeilen ohne Handlung (`panels.py`, seit `fad4a15c5`, Test in
+  `test_feature_panel.py`); `app/core/perceive/CLAUDE.md` und `fenster.md` beschreiben das
+  Gegenteil. Der Flächenzug legt `push_face` sofort an, ohne Zahl und *Übernehmen*.
+
+  Fehler unabhängig von den Entscheidungen: An Wulst und Kehle stehen Felder, `move_feature`
+  sagt an allen vier geprüften Ringen ab (die Karte prüft nur `torus_is_the_body`, die Operation
+  auch `_torus_rims`). An der Sackbohrung mit Zapfen umgekehrt: Die Karte sperrt, die Operation
+  rechnet über `_air_of_the_bore`, und nach 0,5 mm erkennt Solidon zwei Sackbohrungen weniger.
+  Der Griff fragt nur die Art (`viewport.py`): An gesperrten Merkmalen endet sein Zug mit „Die
+  neue Stelle steht rechts unter Auswahl.“, an einer Verrundung greift er den Körper. Falsch ohne
+  Befund: Zapfen im Kundenmodell 0,5 mm in die Taschenwand −189 mm³ (danach 4 statt 6 Zapfen),
+  Zapfen Ø 30 im mini-pot bei 0,2/0,5/1,0 mm immer +240,65 mm³, Endfase am Stift bei 0,2 mm
+  +2218 mm³.
+
+  **Vorschlag:** Flächen bekommen *Fläche versetzen* mit dem Feld „Weg“ (erste Zeile in
+  `ACTION_ORDER` als `("move_feature", "push_face")`, der Weg beginnt bei 0); Karte, Operation und
+  Griff fragen dieselbe Funktion; eine zusammengelegte Absage steht wieder als Zeile.
+  **Entscheidungen Robert:** (a) der Flächenzug als Zahl mit *Übernehmen* statt sofortigem
+  Schritt (ändert die Zusage in `_on_face_dragged`); (b) Absagen wieder sichtbar, das nimmt
+  `fad4a15c5` teilweise zurück, oder die zwei Unterlagen angleichen; (c) Maße im Bild auch an
+  Zapfen, Senkung, Kugel und Ring (ändert die Entscheidung vom 10.09., dass *Merkmal verschieben*
+  auf Klick rechnet); (d) Tasche um einen Zapfen: absagen (Empfehlung) oder beide gemeinsam
+  versetzen. **Abnahme:** Ein Test über echte Netze, der heute an Ring und Sackbohrung mit Zapfen
+  rot ist; die drei falschen Ergebnisse rechnen richtig oder sagen mit Grund ab.
+
+<a id="rm-536"></a>
+
+- [ ] **RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung
+  (Fragebogen S-20261006-5be329).** Kundenwunsch: „… wenn man ein Gewinde bei der Bohrung oder
+  Senkung hat, dass man dafür auch das passende Gegenstück mit der Funktion erzeugen könnte“.
+  Heute baut `pin_for_bore` (`geom/lid_hinge.py`) einen glatten Zylinder (Bohrung minus Spiel,
+  so lang wie die Bohrung). Soll: Eine Senkung an der Mündung (Kette über
+  `relations.cavity_chain_state_at`) gibt einen bündigen Senkkopf im Winkel der Senkung, eine
+  Ansenkung einen Zylinderkopf, ein Innengewinde auf derselben Achse ein Außengewinde derselben
+  Größe und Steigung mit Spiel — über `counterpart.thread_values_for` und den Gewindebaustein in
+  `fasteners.py` (Tabellenmaß, sonst `CUSTOM_SIZE`; dieselben Absagen für links-, mehrgängig und
+  kegelig). Ein neuer Parameter hinter der Klappe wählt „passend zur Bohrung“ (Vorgabe) oder
+  „glatter Stift“; bestehende Projekte behalten ihr Ergebnis über eine Migration (Format 46 → 47,
+  Muster `_keep_slot_tools_as_they_were`). `leaves_inputs_unchanged` bleibt wahr (`outputs[0]` ist
+  der unveränderte Träger, Zusage an `bbd41ff2d`); beide Kerne, `cache_version`, ein Befund nennt
+  das Gebaute, Texte in allen Katalogen. Einzelheiten: `auftrag-stift.md` im Zustandsordner von
+  RM-533. **Wartet auf** den Merge von RM-532 (Zweig `gewinde-eigenes-mass`) auf main — die
+  Schnittstelle (`thread_values_for`, `CUSTOM_SIZE`, `thread_measure`, `size_for_thread`,
+  `custom_thread_for`) ist zugesagt, gebaut wird erst darauf. **Abnahme:** Korpustests an
+  `plate_countersunk.stl`, `plate_countersunk_blind.stl` und einer Bohrung mit
+  `insert_printed_thread`, Sollwerte mit Herkunft, Gegenprobe; eine alte Projektdatei mit Stift
+  rechnet unverändert.
+
+<a id="rm-537"></a>
+
+- [ ] **RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück, und Entf
+  entfernt dann den Körper.** Fund beim Nachstellen von RM-533 an der Kundendatei: Nach dem
+  Öffnen zeigt der Baum am Stift (`obj_3`) „Sackbohrung 10“ und „Sackbohrung 11“ (Ø 23,8, Tiefe
+  22,1 und 19,7, `provenance=detected`); dieselben Merkmale trägt eine Auswertung ohne Erkennung
+  (`detect_features=False`). Ist die Erstauswertung durch (in der Sonde mehrere Sekunden,
+  `busy`), steht dort eine durchgehende „Bohrung 12“ (Tiefe 50). Wer in dieser Zeit eine
+  Sackbohrung wählt, verliert sie: `ObjectTree._restore` findet die Kennung nicht mehr und wählt
+  den Körper, und Entf entfernt danach den ganzen Körper statt der Bohrung. Messung:
+  `sonde_merkmale.py` und `merkmale.txt` im Zustandsordner von RM-533. **Offen:** woher die
+  vorläufigen Sackbohrungen kommen (Übertrag aus einem früheren Stand statt Erkennung?), ob sie vor
+  dem Ende der Erkennung im Baum stehen sollen, und was mit einer Auswahl geschieht, deren Merkmal
+  verschwindet (den Körper zu wählen steht so im Docstring von `_restore`; leeren und ansagen wäre
+  die Alternative). **Abnahme:** Eine Merkmalswahl während der Erstauswertung überlebt sie oder
+  wird sichtbar aufgegeben, nie still zum Körper.
