@@ -1,24 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 190" width="190" height="190">
-<polygon points="44.9,172.6 8.0,79.1 8.0,96.2" fill="#b78a4c" stroke="#b78a4c" stroke-width="0.6" />
+<polygon points="44.9,172.6 8.0,79.1 8.0,96.2" fill="#886fba" stroke="#886fba" stroke-width="0.6" />
 <line x1="8.0" y1="96.2" x2="44.9" y2="172.6" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="182.0,110.9 131.9,162.9 131.9,180.0" fill="#8a6839" stroke="#8a6839" stroke-width="0.6" />
+<polygon points="182.0,110.9 131.9,162.9 131.9,180.0" fill="#66538c" stroke="#66538c" stroke-width="0.6" />
 <line x1="182.0" y1="110.9" x2="131.9" y2="180.0" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="131.9,180.0 44.9,155.6 44.9,172.6" fill="#c0914f" stroke="#c0914f" stroke-width="0.6" />
+<polygon points="131.9,180.0 44.9,155.6 44.9,172.6" fill="#8e74c2" stroke="#8e74c2" stroke-width="0.6" />
 <line x1="44.9" y1="172.6" x2="131.9" y2="180.0" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="182.0,93.8 131.9,162.9 182.0,110.9" fill="#8a6839" stroke="#8a6839" stroke-width="0.6" />
+<polygon points="182.0,93.8 131.9,162.9 182.0,110.9" fill="#66538c" stroke="#66538c" stroke-width="0.6" />
 <line x1="182.0" y1="110.9" x2="182.0" y2="93.8" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="44.9,155.6 8.0,79.1 44.9,172.6" fill="#b78a4c" stroke="#b78a4c" stroke-width="0.6" />
+<polygon points="44.9,155.6 8.0,79.1 44.9,172.6" fill="#886fba" stroke="#886fba" stroke-width="0.6" />
 <line x1="44.9" y1="172.6" x2="44.9" y2="155.6" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="145.1,17.4 58.1,10.0 44.9,155.6" fill="#aa8146" stroke="#aa8146" stroke-width="0.6" />
+<polygon points="145.1,17.4 58.1,10.0 44.9,155.6" fill="#7e67ad" stroke="#7e67ad" stroke-width="0.6" />
 <line x1="145.1" y1="17.4" x2="58.1" y2="10.0" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="131.9,162.9 44.9,155.6 131.9,180.0" fill="#c0914f" stroke="#c0914f" stroke-width="0.6" />
+<polygon points="131.9,162.9 44.9,155.6 131.9,180.0" fill="#8e74c2" stroke="#8e74c2" stroke-width="0.6" />
 <line x1="131.9" y1="180.0" x2="131.9" y2="162.9" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="58.1,10.0 8.0,79.1 44.9,155.6" fill="#aa8146" stroke="#aa8146" stroke-width="0.6" />
+<polygon points="58.1,10.0 8.0,79.1 44.9,155.6" fill="#7e67ad" stroke="#7e67ad" stroke-width="0.6" />
 <line x1="58.1" y1="10.0" x2="8.0" y2="79.1" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
 <line x1="8.0" y1="79.1" x2="44.9" y2="155.6" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="182.0,93.8 145.1,17.4 131.9,162.9" fill="#aa8146" stroke="#aa8146" stroke-width="0.6" />
+<polygon points="182.0,93.8 145.1,17.4 131.9,162.9" fill="#7e67ad" stroke="#7e67ad" stroke-width="0.6" />
 <line x1="182.0" y1="93.8" x2="145.1" y2="17.4" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
 <line x1="182.0" y1="93.8" x2="131.9" y2="162.9" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="145.1,17.4 44.9,155.6 131.9,162.9" fill="#aa8146" stroke="#aa8146" stroke-width="0.6" />
+<polygon points="145.1,17.4 44.9,155.6 131.9,162.9" fill="#7e67ad" stroke="#7e67ad" stroke-width="0.6" />
 <line x1="44.9" y1="155.6" x2="131.9" y2="162.9" stroke="#e6e9ee" stroke-width="0.9" stroke-linecap="round" />
 </svg>
