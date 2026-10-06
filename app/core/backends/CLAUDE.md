@@ -17,7 +17,7 @@ außer dem Chat benutzbar. Einzuhalten ist `.claude/rules/agentenschicht.md`
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Knoten, TripoSG-Quelltext, Pakete, Gewichte — und auf Wunsch das Bildmodell für den Weg aus Text (`fetch_image_model`, feste Revision, Prüfsumme, eigenes Häkchen im Dialog) |
 | `data/text_to_mesh.json`, `data/image_to_mesh.json` | Die ComfyUI-Abläufe der beiden Wege |
-| `data/comfyui/` | Die Knoten dazu (TripoSG, MIT) — fremder Code mit eigener Karte |
+| `data/comfyui/` | Die Knoten dazu (TripoSG; Lizenzkette offen, RM-003) — fremder Code mit eigener Karte |
 
 `comfy_setup.py` und `data/` liegen im Kern, weil `tools/` im gebauten Paket
 **nicht mitreist** — was der Nutzer aus der laufenden Anwendung heraus
