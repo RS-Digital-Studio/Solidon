@@ -1092,28 +1092,28 @@ def test_the_rule_file_counts_the_caveats_it_claims() -> None:
 
 
 def test_the_rule_files_count_the_operations_parameters_and_tools_they_claim() -> None:
-    """Dieselbe Klammer wie darüber, um drei weitere Zahlen.
+    """Dieselbe Klammer wie darüber, um die Zahlen der Agentenschicht.
 
-    Gemessen am 02.09.2026: `oberflaeche.md` nannte „457 Parameter der 86
-    Operationen", `agentenschicht.md` „90 Operationen und elf
-    Zusatzwerkzeuge" und „90 Operationen, 101 Werkzeuge". Das Register hatte
-    95 Operationen mit 581 Parametern, der Agent 106 Werkzeuge — drei Sätze,
-    zwei Dateien, alle plausibel und alle falsch. Wer eine Operation oder ein
-    Werkzeug hinzufügt, zieht die Sätze nach oder bekommt einen roten Lauf.
+    Gemessen am 02.09.2026: `agentenschicht.md` nannte „90 Operationen und
+    elf Zusatzwerkzeuge" und „90 Operationen, 101 Werkzeuge". Das Register
+    hatte 95 Operationen, der Agent 106 Werkzeuge — zwei Sätze, beide
+    plausibel und beide falsch. Wer eine Operation oder ein Werkzeug
+    hinzufügt, zieht die Sätze nach oder bekommt einen roten Lauf.
+
+    `oberflaeche.md` nennt seit der Durchsicht vom 06.10.2026 keine
+    Parameterzahl mehr („jeder Parameter jeder Operation“); die Sache selbst
+    prüft :func:`test_every_parameter_says_what_it_does`.
     """
     from app.core.agent.tools import EXTRA_TOOLS
     from app.core.agent.tools import tool_schemas as agent_tool_schemas
 
     rules = Path(__file__).resolve().parent.parent / ".claude" / "rules"
-    oberflaeche = (rules / "oberflaeche.md").read_text(encoding="utf-8")
     agentenschicht = (rules / "agentenschicht.md").read_text(encoding="utf-8")
 
-    parameter = re.search(r"(\d+) Parameter der (\d+)\s+Operationen", oberflaeche)
     heute = re.search(
         r"heute sind es (\d+)\s+Operationen und\s+([a-zäöüß]+)\s+Zusatzwerkzeuge", agentenschicht
     )
     stand = re.search(r"\*\*(\d+) Operationen, (\d+) Werkzeuge\*\*", agentenschicht)
-    assert parameter, "der Satz „… Parameter der … Operationen“ steht nicht mehr in oberflaeche.md"
     assert heute, "der Satz „heute sind es … Operationen und … Zusatzwerkzeuge“ fehlt"
     assert stand, "die Zeile „**… Operationen, … Werkzeuge**“ fehlt in agentenschicht.md"
     genannt_zusatz = _ZAHLWORT.get(heute.group(2).lower())
@@ -1124,15 +1124,8 @@ def test_the_rule_files_count_the_operations_parameters_and_tools_they_claim() -
     load_operations()
     alle = REGISTRY.all()
     assert alle, "leeres Register — dann prüft dieser Test nichts"
-    parameter_gesamt = sum(len(spec.params.spec()) for spec in alle)
     werkzeuge = len(agent_tool_schemas())
 
-    assert int(parameter.group(2)) == len(alle), (
-        f"oberflaeche.md nennt {parameter.group(2)} Operationen, das Register hat {len(alle)}"
-    )
-    assert int(parameter.group(1)) == parameter_gesamt, (
-        f"oberflaeche.md nennt {parameter.group(1)} Parameter, gezählt sind {parameter_gesamt}"
-    )
     assert int(heute.group(1)) == len(alle), (
         f"agentenschicht.md nennt heute {heute.group(1)} Operationen, das Register hat {len(alle)}"
     )
