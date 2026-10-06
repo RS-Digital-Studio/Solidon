@@ -423,7 +423,28 @@ POSIX zählt Signale negativ, Windows meldet einen `NTSTATUS` mit Fehlerschwere
 und freiem reserviertem Bit 28. Als DWORD gelieferte eigene Fehlercodes wie
 Bambus `-100` bleiben reguläre Absagen, auch wenn ihre Zahl größer ausfällt.
 
+## Cura unter Linux (`cura_linux.py`, RM-521)
+
+Aus der Karte verschoben (06.10.2026): `engine` liefert für die Dauer eines
+Laufs den Programmteil vor `slice` — Curas Lader aus `runtime/compat` mit dem
+Bibliothekspfad aus `AppRun.env` (`read_environment`, `linker`,
+`library_path`, `loader_command`); beim Flatpak über `flatpak run
+--filesystem=<Arbeitsordner> --command=<Lader>`, beim AppImage eingehängt
+(`mounted`, `mount_command`). Weil `_prepare_cura_cli` jede Definition, jedes
+Netz und das Ziel in den Arbeitsordner kopiert, braucht der Flatpak-Aufruf keine
+übersetzten `/app`-Pfade. `appimage_resources` legt den Druckerbestand einer
+AppImage-Cura einmal je Pfad, Änderungszeit und Größe im Nutzer-Cache ab
+(`stamp.json` merkt, ob die Rechenmaschine da war); der Druckdialog fragt über
+`handover.console_refusal` nur diese Marke und hängt nie selbst ein. Gemessen
+am Runner (Läufe 37504088443, 37528397381): Einhängen 0,01 s, erste Kopie
+3,3 s; Würfel auf dem K1 Max mit Flatpak und AppImage, draußen und im
+Sandkasten, gleich wie CuraEngine unter Windows.
+
 ## Warum `slicer_keys.py` existiert
+
+Die Wächter lesen gemessene Bestände: `tests/data/superslicer_3mf_keys.json`
+(was SuperSlicer annimmt) und `tests/data/slicer_values.json` (die unabhängig
+gemessenen Aufzählungswerte).
 
 Aus der Karte verschoben (05.10.2026): `NOT_TAKEN_BY_PROGRAM` gibt es, weil
 SuperSlicer an fremden 3MF-Schlüsseln abstürzt. `OMITTED_FROM_GCODE` gibt

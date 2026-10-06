@@ -2475,6 +2475,30 @@ def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
     assert not dialog.slice_button.toolTip()
 
 
+def test_a_cura_without_its_loader_only_offers_its_window(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-521: Findet Solidon den Lader einer Flatpak- oder AppImage-Cura nicht,
+    sperrt der Dialog *Slicen* mit dem Satz aus dem Kern, und der Öffnen-Knopf
+    bleibt der Weg. Die Lizenz ist frei, damit kein anderer Grund davor steht."""
+    from app.core.activation import store
+    from app.core.export import cura_linux
+
+    monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=5))
+    monkeypatch.setattr(handover, "console_refusal", lambda _found: cura_linux.WINDOW_ONLY)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    dialog._slicer_path = Path("UltiMaker-Cura-5.13.0-linux-X64.AppImage")
+    dialog._show_slicer_state()
+
+    reason = str(cura_linux.WINDOW_ONLY)
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == reason
+    assert dialog.slice_button.accessibleDescription() == reason
+    assert reason not in dialog.open_button.toolTip()
+
+
 def test_slicing_greys_out_until_the_profiles_are_chosen(
     qt_app: QApplication, session: Session
 ) -> None:

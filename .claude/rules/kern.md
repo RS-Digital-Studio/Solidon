@@ -421,6 +421,19 @@ lesen, weil das Manifest die Installationsordner, die Exporte und
 `~/.var/app/<Kennung>:ro` je Eintrag in `tools.SLICER_FLATPAKS` freigibt —
 ein Slicer, der neu auf Flathub erscheint, kommt dort dazu.
 
+**Cura rechnet unter Linux nur über seinen eigenen Lader** (RM-521,
+`export/cura_linux.py`): Flatpak und AppImage tragen dasselbe AppDir aus
+appimage-builder, CuraEngine nennt seinen Lader relativ. Gestartet wird
+`runtime/compat/<Lader>` mit dem **vollständigen** Pfad aus `AppRun.env`
+(LIBC-Pfad zuerst; gekürzt zieht die `libstdc++` des Rechners eine zu neue
+glibc nach). Das Cura-Flatpak gibt nur `home` und Wechselmedien frei, der
+Arbeitsordner kommt als `--filesystem` dazu. Ein AppImage bleibt für den Lauf
+eingehängt und wird in jedem Fall beendet; aus Solidons Flatpak legt
+`TMPDIR=exchange_dir()` den Einhängepunkt dorthin, wo beide ihn sehen, und
+`flatpak-spawn --watch-bus` hängt auch aus, wenn der Aufrufer ohne Signal
+stirbt. Fehlt der Lader, gibt es nur Curas Fenster (`WINDOW_ONLY`) — nie den
+Starter als Rechenweg, der öffnet nur das Fenster und schreibt nichts.
+
 ### Was auf einer Plattform gilt, ist keine Zusage
 
 **Eine Plattformkette ist eine Funktion mit der Plattform als Parameter**,

@@ -24,8 +24,8 @@ stehen mit Nachweis im Archiv.
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
 Auflagen werden daneben rechtzeitig bearbeitet. **Als Nächstes:** die Kundenblocker nach
-0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104), Cura rechnet unter
-Linux nicht (RM-521, Entscheidung Robert) — und die mit 0.5.3 fällige Antwort an den
+0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104), Cura unter Linux
+(RM-521, gebaut auf `kunden/rm-521`, wartet auf Tor und Merge) — und die mit 0.5.3 fällige Antwort an den
 Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
 Verkaufskandidat bis 25.10., Start am 01.11.2026 um 10:00 Uhr (RM-061). Daneben bleiben die
 Mac-/Linux-Nachweise und die CRA-Betriebsvorbereitung offen — deren Frist ist am 11.09.2026
@@ -136,7 +136,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen](#rm-040) | Kundenrückmeldungen | Aktuellen Kundenbericht mit Traceback und betroffener Datei reproduzieren |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Start, Fokus und IME am aktuellen Flatpak bestätigen |
 | [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Am Runner im Sandkasten mit den Manifestrechten belegt; offen nur der Lauf mit dem ausgelieferten Solidon-Flatpak 0.5.3 und das Öffnen im Fenster |
-| [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): Lader-Weg bauen, Rückfall „nur öffnen“ mit Satz im Druckdialog; Abnahme am Linux-Runner mit AppImage und Flatpak |
+| [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut auf `kunden/rm-521`, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: volles Tor, Merge nach main, Fenstertest des Druckdialogs beim Release |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Fällig seit 06.10.: mit 0.5.3 antworten; Entwurf liegt lokal bereit |
 | [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Gebaut und an Sonde und Fenstertest belegt, nicht committet (Hunks im Arbeitsbaum des i9, Patches im Zustandsordner); offen Tor, Commit der eigenen Hunks und der Titel aus `_removal_entry` |
@@ -4573,7 +4573,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-521"></a>
 
-- [ ] **RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak).** Solidon findet Cura als
+- [~] **RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak).** Solidon findet Cura als
   Flatpak samt 642 Druckern, rechnen kann es damit nicht, als AppImage findet es weder Drucker
   noch Rechenmaschine. Gemessen am Runner (Diagnoselauf 37340935632): Cura 5.13 ist mit
   appimage-builder gepackt, `CuraEngine` nennt seinen Lader relativ (`lib64/ld-linux-x86-64.so.2`),
@@ -4587,6 +4587,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `runtime/compat` mit dem Bibliothekspfad aus `AppRun.env` starten, beim AppImage über
   `--appimage-mount`; findet Solidon den Lader nicht, öffnet es Cura nur im Fenster und
   sagt das im Druckdialog.
+
+  **Gebaut** auf `kunden/rm-521` (`export/cura_linux.py`, Regel in `kern.md`): Flatpak über
+  `flatpak run --filesystem=<Arbeitsordner> --command=/app/cura/runtime/compat/<Lader>` mit dem
+  vollständigen Pfad aus `AppRun.env`, AppImage für den Lauf eingehängt, aus Solidons Flatpak mit
+  `TMPDIR` im Austauschordner und `flatpak-spawn --watch-bus`; Definitionen beider aus ihrem
+  Bestand, die Drucker der AppImage-Cura aus einer Kopie je Fassung im Nutzer-Cache (am Runner
+  3,3 s beim ersten Mal). Ohne Lader sperrt der Druckdialog *Slicen* mit einem Satz, das Fenster
+  bleibt. Belegt am Runner (Lauf 37528397381, Cura 5.13.0): Würfel auf dem K1 Max aus Curas
+  639 Druckern, Flatpak und AppImage, draußen und im Sandkasten mit den Manifestrechten — je
+  100 Schichten, 2945 Extrusionen, 1391,5 mm Filament, gleich wie CuraEngine 5.13 unter Windows;
+  keine Einhängung bleibt, auch nicht nach SIGKILL an `flatpak-spawn`.
+  **Offen:** volles Entwicklungstor auf dem Zweig, Merge nach main, der Fenstertest
+  `test_a_cura_without_its_loader_only_offers_its_window` beim Release.
 
 <a id="rm-522"></a>
 
