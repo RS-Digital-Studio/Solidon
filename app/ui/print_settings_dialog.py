@@ -178,6 +178,7 @@ from app.ui.style import (
     WrappedNote,
     expanded_width,
     fit_dialog_to_screen,
+    leading_action,
     make_primary,
     set_level,
 )
@@ -3017,7 +3018,7 @@ class PrintSettingsDialog(QDialog):
         )
         self.filament_label.setText(tr("Filamente"))
         self.material_link.setText(tr("Filamente …"))
-        make_primary(self.open_button if self.settings.handover == "open" else self.slice_button)
+        self._lead_handover(self.settings.handover == "open")
         self.setMinimumWidth(560)
         self._show_slicer_state()
         self._refit_sections()
@@ -3071,8 +3072,14 @@ class PrintSettingsDialog(QDialog):
         self.material_link.setText(tr("Material …"))
         # Ohne Konsolenlauf ist Öffnen der einzige Weg — und damit der
         # Hauptknopf, gleich was das Projekt gemerkt hat.
-        make_primary(self.open_button)
+        self._lead_handover(True)
         self.setMinimumWidth(560)
+
+    def _lead_handover(self, opening: bool) -> None:
+        """Macht *Im Slicer öffnen* oder *Slicen* zum Hauptknopf — und den
+        anderen wieder zu einem normalen Knopf, ohne halbfetten Rest."""
+        make_primary(self.open_button, leading=opening)
+        make_primary(self.slice_button, leading=not opening)
 
     def _share_toggled(self, on: bool) -> None:
         """Die Wahl gilt für die Anwendung, nicht für dieses Projekt (§29).
@@ -6169,7 +6176,7 @@ class PrintSettingsDialog(QDialog):
         # Projekt gemerkt) — entschieden beim Aufbau, nicht live: ein
         # Hauptknopf, der unter dem Zeiger wechselt, wäre Bewegung ohne
         # Auftrag.
-        make_primary(self.open_button if self.settings.handover == "open" else self.slice_button)
+        self._lead_handover(self.settings.handover == "open")
         self.save_button = QPushButton(tr("Druckdatei speichern …"), self)
         self.save_button.clicked.connect(self._save_gcode)
         # Erst einfügen, dann verbergen: ``addButton`` zeigt den Knopf wieder,
@@ -7809,7 +7816,8 @@ class PrintSettingsDialog(QDialog):
             else []
         )
         # Wie beim Übermaß: ein Rat ist kein zweiter Hauptknopf (RM-512).
-        for action in sorted(offered, key=lambda action: not action.primary):
+        lead = leading_action(offered)
+        for action in sorted(offered, key=lambda action: action is not lead):
             button = QPushButton(str(action.label), self._advice_offers)
             button.clicked.connect(
                 weak_slot(self, PrintSettingsDialog._run_advice_action, action.id)

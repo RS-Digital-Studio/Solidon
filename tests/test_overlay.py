@@ -825,9 +825,14 @@ def test_the_card_edge_carries_the_line_colour_not_the_accent() -> None:
     """
     for theme in ("dark", "light"):
         sheet = card_stylesheet(theme)  # type: ignore[arg-type]
-        assert f"border: 1px solid {THEMES[theme]['line']}" in sheet, theme  # type: ignore[index]
+        # Nur der Block der Karte selbst: Andere Teile des Stylesheets dürfen
+        # den Akzent tragen, wo er etwas verlangt.
+        edge = sheet.split(f"QWidget#{overlay.CARD}, QFrame#{overlay.MEASURE_CARD} {{", 1)[1].split(
+            "}", 1
+        )[0]
+        assert f"border: 1px solid {THEMES[theme]['line']}" in edge, theme  # type: ignore[index]
         for accent in ("accent_line", "highlight"):
-            assert THEMES[theme][accent] not in sheet, f"{theme}: {accent}"  # type: ignore[index]
+            assert THEMES[theme][accent] not in edge, f"{theme}: {accent}"  # type: ignore[index]
 
 
 def test_the_dodge_margin_covers_the_card_it_dodges(window: MainWindow) -> None:

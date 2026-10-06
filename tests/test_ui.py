@@ -7804,6 +7804,7 @@ def test_history_deletion_warns_before_discarding_redo(
         # Enter löscht nicht, und der Ausgang trägt keinen Akzent (RM-512).
         assert box.defaultButton() is None, "weder Löschen noch Abbrechen ist Hauptknopf"
         assert remove.property("danger") is True, "Löschen trägt das Fehlerrot"
+        assert box.focusWidget() is cancel, "der Fokus steht auf Abbrechen, nicht auf Löschen"
         assert box.escapeButton() is cancel, "Escape muss den Vorgang abbrechen"
         cancel.click()
         return 0

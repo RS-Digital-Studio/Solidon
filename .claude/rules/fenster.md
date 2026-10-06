@@ -204,9 +204,7 @@ Stellen halten das, beide sind nötig:
   korrigieren* mit Rat als Tooltip; der Fehlerdialog zeigt Räte über
   `dialogs.unhandled_advice` als Sätze. Knopfzeile, Kontextmenü und Vorwahl
   benutzen denselben Abgleich.
-- **Vorgewählt werden nur Fehler und Warnungen** mit Handlung (`_preselect`,
-  RM-512): Die gewählte Zeile trägt die Akzentkante, ihre Handlung den
-  Hauptknopf, und ein Hinweis, der das tut, liest sich wie eine Warnung.
+- Vorgewählt werden nur Fehler und Warnungen mit Handlung (`_preselect`).
 - Lokale Erkennung behält die Zielkörper des Befunds; erst der Originaltreffer
   bestimmt einen. Baumauswahl ersetzt dieses Ziel nicht. Maus und Tastatur
   verwenden denselben Treffer.
@@ -307,47 +305,23 @@ Ansichtsseite steht in `griffe.md`.
 
 ## Der Hauptknopf
 
-- Hauptaktionen entstehen über `style.make_primary`, nie direkt über
-  `setDefault(True)`: Akzent und halbfette Schrift bilden zwei Kodierungen.
-  Unwiederbringliches Verwerfen verwendet `make_danger` (Fehlerrot, Schrift aus
-  `readable_on`, Handlungswort); *Abbrechen* und *Schließen* nie, auch nicht
-  unter *Übernehmen* (Entscheidung Robert, 06.10.2026: RM-512 löst das rote
-  Abbrechen vom 11.09. ab). `test_style.py` prüft
-  gezeichnete Fläche/Schrift und verbietet den direkten Default-Aufruf.
-- **Höchstens ein Akzentknopf je Fenster** (RM-512). Jeder Knopf mit
-  `DestructiveRole` trägt `make_danger`, nie zugleich `make_primary`; eine
-  Rückfrage vor unwiederbringlichem Verwerfen hat keinen Hauptknopf
-  (`no_primary`, Escape = Abbrechen, Enter erst nach Tab), denn ein Akzent auf
-  dem Ausgang wäre ein Ausgang als Hauptknopf. Handlungen eines Hinweises
-  (`ErrorNotice`, Rat und Übermaß im Druckdialog) sind normale Knöpfe, die mit
-  `primary` vorn: Das Fenster hat seinen Hauptknopf schon. Aus `Action.primary`
-  wird ein Hauptknopf nur im Fehlerdialog (`show_error`, die erste) und im
-  Prüfbericht (`_show_offers`). Wächter: `test_style.py`.
-- **Im Ruhezustand trägt genau ein Element den Akzent: *Bausteine***
-  (RM-512, `test_resting_state.py`, Flächen und Linien ab 40 px, hell und
-  dunkel). Was im Ruhezustand dauerhaft steht, sagt „du bist hier“ und nimmt
-  keinen Akzent: Kartenränder die Linienfarbe (`overlay.card_stylesheet`), der
-  aktive Reiter eine Kante in der Schriftfarbe. Die Tour macht *Weiter* beim
-  Leseschritt zum Hauptknopf, *Schritt überspringen* bei einer Übung nicht.
-- Dialoge ohne Hauptaktion rufen `no_primary`, andere `make_primary` auch bei
-  anfangs gesperrtem Knopf. Sonst macht Qt beim ersten Anzeigen den ersten
-  `autoDefault`-Knopf selbst zum Hauptknopf. Nur ein gezeigtes Fenster belegt
-  dieses Verhalten.
-- Fokus verschiebt keinen Akzent. `style._FocusTakesNoAccent` wird einmal
-  durch `make_primary`/`no_primary` angemeldet, nimmt Nebenknöpfen `autoDefault`
-  und klickt den per Tab/Umschalt+Tab gewählten bei Enter selbst
-  (`enter_belongs_to_focus`). Maus, `setFocus` und von gesperrten/verborgenen
-  Knöpfen vertriebener Fokus (Qt meldet Tab) lassen Enter beim Hauptknopf.
-  Fensterwechsel erhält die Wahl; kein Dialog baut eigene Logik dafür.
-  `test_enter_key.py` und `test_style.py` prüfen zugestellten Fokus;
-  `WA_DontShowOnScreen` aktiviert kein Fenster.
-- Stylesheets ohne Selektor am Vorfahren ersetzen für gesetzte Eigenschaften
-  die Anwendungsfarben aller Nachkommen: besonders `background`, nicht ein
-  reines `border` wie `_flash_area`. Deshalb `objectName`-Selektoren; bei notwendiger
-  breiter Regel Hauptknopffarben ausdrücklich setzen (`#surveyNotice #surveyGive`)
-  und weiterhin `make_primary` verwenden. Klicktests belegen keine Knopffarbe.
-- Umschalter nennen das Werkzeug, Knöpfe die Handlung (*Trennen*, *Jetzt
-  trennen*); `test_interface_limits.py`.
+Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_style.py`.
+
+- Hauptknopf nur über `style.make_primary` (Akzent und Halbfett), abgeben mit
+  `leading=False`, nie `setDefault(True)`; wer führt, sagt `leading_action`.
+- Höchstens ein Akzentknopf je Fenster: Hinweishandlungen (`ErrorNotice`, Rat,
+  Übermaß) sind normale Knöpfe. Ohne Handlung `no_primary`, sonst macht Qt den
+  ersten `autoDefault`-Knopf zum Default.
+- `make_danger` genau an `DestructiveRole`, nie mit `make_primary`, nie an
+  Abbrechen/Schließen. Rückfragen vor Verwerfen oder Löschen: `no_primary`,
+  Fokus und Escape auf Abbrechen.
+- Ruhezustand: nur *Bausteine* im Akzent, Kartenrand in `line`, aktiver Reiter
+  in Schriftfarbe (`test_resting_state.py`).
+- Fokus verschiebt keinen Akzent (`_FocusTakesNoAccent`); Enter gehört dem per
+  Tab gewählten Knopf (`test_enter_key.py`).
+- Stylesheets an einen `objectName`: Typloses `background` am Vorfahren nimmt
+  allen Knöpfen darunter die Farbe. Klicktests belegen keine Knopffarbe.
+- Umschalter nennen das Werkzeug, Knöpfe die Handlung; `test_interface_limits.py`.
 
 ## Ein Dialog, der höher ist als sein Inhalt
 

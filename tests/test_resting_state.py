@@ -301,8 +301,9 @@ def test_at_rest_only_one_element_carries_the_accent(
     )
 
 
+@pytest.mark.parametrize("theme", ["dark", "light"])
 def test_the_measurement_would_notice_a_second_light(
-    qt_app: QApplication, window: MainWindow
+    qt_app: QApplication, window: MainWindow, theme: str
 ) -> None:
     """Die Gegenprobe zur Zusage darüber: Die Messung sieht ein zweites Licht.
 
@@ -311,15 +312,18 @@ def test_the_measurement_would_notice_a_second_light(
     von einer erfüllten Zusage nicht zu unterscheiden — beide melden „alles in
     Ordnung". Hier wird ein zweites Element absichtlich eingefärbt, einmal als
     Fläche und einmal als Linie; findet die Messung es nicht, misst sie nichts.
+    **In beiden Themen:** Dunkel ist ``accent_line`` derselbe Bernstein wie
+    ``highlight``; nur hell prüft die Linie, dass die Maske die zweite
+    Akzentfarbe kennt.
     """
-    _shown(qt_app, window, "dark")
+    _shown(qt_app, window, theme)
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     _settle(window, 60)
 
-    before = len(accent_elements(window, "dark"))
+    before = len(accent_elements(window, theme))
 
-    accent = THEMES["dark"]["highlight"]
+    accent = THEMES[theme]["highlight"]
     # **Mit Text, nicht nur mit Farbe.** Ein leeres ``QLabel`` ist wenige
     # Punkte breit und fällt durch den Mindestgrößen-Filter — die erste
     # Fassung färbte es ein und die Messung sah nichts, was aussah, als
@@ -327,14 +331,14 @@ def test_the_measurement_would_notice_a_second_light(
     window.status_message.setText("Gegenprobe: ein zweites Licht")
     window.status_message.setStyleSheet(f"background: {accent};")
     _settle(window, 20)
-    area = len(accent_elements(window, "dark"))
+    area = len(accent_elements(window, theme))
 
     # Und als Linie: zwei Punkte Kante über einem Schriftzug, weit unter dem
     # Drittel, das eine Fläche braucht — so stand ein Kartenrand da.
-    line = THEMES["dark"]["accent_line"]
+    line = THEMES[theme]["accent_line"]
     window.status_message.setStyleSheet(f"border-top: 2px solid {line};")
     _settle(window, 20)
-    lined = len(accent_elements(window, "dark"))
+    lined = len(accent_elements(window, theme))
     width = window.status_message.width()
     window.status_message.setStyleSheet("")
     window.status_message.setText("")

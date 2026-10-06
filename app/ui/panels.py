@@ -215,6 +215,7 @@ from app.ui.style import (
     SPACE,
     TARGET_SIZE,
     TIGHT,
+    leading_action,
     make_primary,
     rule,
     set_level,
@@ -6377,9 +6378,7 @@ class ReportPanel(QWidget):
             if finding is not None
             else []
         )
-        primary = next(
-            (action for action in offered if action.primary), offered[0] if offered else None
-        )
+        primary = leading_action(offered)
         # **Ein Zeige-Knopf** (Durchsicht B10): Bietet der Befund selbst das
         # Zeigen an, entfällt der eigene Knopf der Befundzeile.
         self._show_finding_context(
@@ -6831,14 +6830,14 @@ class ReportPanel(QWidget):
         Knöpfe freischaltet, muss man wissen, und §2.7 verspricht anklickbare
         Handlungen und nicht auffindbare.
 
-        Gemessen am häufigsten Fall überhaupt, dem ersten Öffnen eines
-        Modells: ``block_with_rounded_edge.stl`` liegt von Z -10 bis +10, der
-        Bericht meldet ``arrange.below_bed``, und *Auf das Bett setzen* löst es
-        mit einem Klick. Vor der Vorauswahl standen dort null Knöpfe, nach
-        einem Klick auf die Zeile einer — der Weg zur Lösung war einen Klick
-        länger als nötig, und dieser Klick stand nirgends geschrieben.
+        Gemessen an einer Warnung mit Ausweg: Steht ein Körper über den
+        Bauraum hinaus, meldet der Bericht ``arrange.out_of_build_volume``, und
+        darunter stehen *Modell teilen* und *Auf den Bauraum verkleinern* —
+        ohne Vorauswahl erst nach einem Klick auf die Zeile. Der Weg zur Lösung
+        war einen Klick länger als nötig, und dieser Klick stand nirgends
+        geschrieben.
 
-        Drei Bedingungen, und jede hat ihren Grund:
+        Vier Bedingungen, und jede hat ihren Grund:
 
         * **Nur ohne bestehende Wahl.** Eine Auswahl des Kunden zu
           überschreiben wäre schlimmer als keine Vorauswahl (§2.4).

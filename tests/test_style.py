@@ -975,6 +975,12 @@ def test_the_three_questions_mark_their_answer_twice(
         if discard_box.buttonRole(button) == QMessageBox.ButtonRole.DestructiveRole
     ]
     assert discard.property("danger") is True
+    (cancel,) = [
+        button
+        for button in discard_box.buttons()
+        if discard_box.buttonRole(button) == QMessageBox.ButtonRole.RejectRole
+    ]
+    assert discard_box.focusWidget() is cancel, "die Leertaste träfe Verwerfen"
     assert not discard.isDefault() and discard.font().weight() < QFont.Weight.DemiBold
 
 
@@ -2163,6 +2169,20 @@ def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None
                 wanted.blue(),
             ), f"{theme}: der Knopf ist {seen.name()}, nicht {wanted.name()}"
             assert contrast_ratio(readable_on(ROLES["error"]), ROLES["error"]) >= 4.5
+
+            # Gesperrt zeichnet er wie jeder gesperrte Knopf: Ein roter Knopf,
+            # der nichts tut, sieht bedienbar aus (RM-512, W1).
+            plain = QPushButton("Verwerfen", holder)
+            plain.resize(160, 40)
+            plain.move(0, 0)
+            button.setEnabled(False)
+            plain.setEnabled(False)
+            qt_app.processEvents()
+            red = button.grab().toImage().pixelColor(10, 20)
+            grey = plain.grab().toImage().pixelColor(10, 20)
+            assert red.name() == grey.name(), (
+                f"{theme}: gesperrt rot {red.name()}, gesperrt normal {grey.name()}"
+            )
             holder.deleteLater()
     finally:
         apply_theme(qt_app, previous_theme)
@@ -2241,21 +2261,35 @@ def test_every_destructive_button_is_drawn_red() -> None:
 
 
 def test_no_button_is_red_and_primary_at_once() -> None:
-    """Rot heißt „das ist nicht zurückzuholen“, der Akzent „tu das“ (RM-512).
+    """Rot heißt „das verwirft oder löscht“, der Akzent „tu das“ (RM-512).
 
     *Verwerfen* in *Abgeschnittene Schritte verwerfen?* war Hauptknopf: Die
     Eingabetaste warf weg, was kein Undo zurückholt, und der Akzent lud dazu
-    ein. Ein Knopf trägt höchstens eines von beiden.
+    ein. Ein Knopf trägt höchstens eines von beiden — auch nicht über
+    ``setDefaultButton`` oder ``setDefault``, die Qt mit dem Akzent zeichnet.
     """
     offenders = []
+    red_calls = lead_calls = 0
     for file, function in _functions_of_the_surface():
-        both = _made(function, "make_danger") & _made(function, "make_primary")
-        offenders += [f"{file}:{function.name} {button}" for button in both]
+        red = _made(function, "make_danger")
+        red_calls += len(_called(function, "make_danger"))
+        lead_calls += len(_called(function, "make_primary"))
+        led = _made(function, "make_primary") | _made(function, "setDefaultButton")
+        led |= {
+            ast.unparse(call.func.value)
+            for call in _called(function, "setDefault")
+            if isinstance(call.func, ast.Attribute)
+            and call.args
+            and not (isinstance(call.args[0], ast.Constant) and call.args[0].value is False)
+        }
+        offenders += [f"{file}:{function.name} {button}" for button in red & led]
         offenders += [
             f"{file}:{function.name} {ast.unparse(call)}"
             for call in _called(function, "make_danger")
             if call.args and _called(call.args[0], "make_primary")
         ]
+    # Über einer leeren Menge wäre der Wächter grün und prüfte nichts.
+    assert red_calls >= 6 and lead_calls > 30, (red_calls, lead_calls)
     assert not offenders, offenders
 
 
@@ -2270,6 +2304,7 @@ def test_no_exit_is_drawn_red() -> None:
     """
     exits = {"Abbrechen", "Schließen"}
     found = set()
+    labelled = 0
     for file, function in _functions_of_the_surface():
         assigned = {
             ast.unparse(node.targets[0]): _labels(node.value)
@@ -2280,13 +2315,17 @@ def test_no_exit_is_drawn_red() -> None:
             if not call.args:
                 continue
             labels = _labels(call.args[0]) | assigned.get(ast.unparse(call.args[0]), set())
+            labelled += bool(labels)
             found |= {(file, label) for label in labels & exits}
+    # Die Beschriftung muss gefunden werden, sonst sähe der Wächter kein Abbrechen.
+    assert labelled >= 4, f"nur {labelled} rote Knöpfe mit lesbarer Beschriftung"
     assert not found, sorted(found)
 
 
-#: Wo eine Handlung mit ``primary`` den Hauptknopf bekommen darf: im
-#: Fehlerdialog, der nur aus dem Fehler und seinen Handlungen besteht, und im
-#: Prüfbericht, dessen gewählter Befund seine eine Lösung anbietet.
+#: Wo die führende Handlung (``Action.primary``, ``leading_action``) den
+#: Hauptknopf bekommen darf: im Fehlerdialog, der nur aus dem Fehler und seinen
+#: Handlungen besteht, und im Prüfbericht, dessen gewählter Befund seine eine
+#: Lösung anbietet.
 PRIMARY_ACTIONS_LEAD_IN = {("dialogs.py", "show_error"), ("panels.py", "_show_offers")}
 
 
@@ -2299,16 +2338,20 @@ def test_a_hint_never_brings_a_second_primary_into_a_window() -> None:
     ``setDefault`` nahm dem Dialog Enter weg. Dasselbe im Druckdialog bei Rat
     und Übermaß. Erlaubt ist es nur, wo der Fehler das Fenster ist.
     """
-    offenders = []
+    leading = set()
     for file, function in _functions_of_the_surface():
-        if (file, function.name) in PRIMARY_ACTIONS_LEAD_IN:
+        if not _called(function, "make_primary"):
             continue
-        for node in ast.walk(function):
-            if not (isinstance(node, ast.If) and ast.unparse(node.test).endswith(".primary")):
-                continue
-            if any(_called(statement, "make_primary") for statement in node.body):
-                offenders.append(f"{file}:{node.lineno} {function.name}")
-    assert not offenders, offenders
+        reads = any(
+            isinstance(node, ast.Attribute) and node.attr == "primary"
+            for node in ast.walk(function)
+        )
+        if reads or _called(function, "leading_action"):
+            leading.add((file, function.name))
+    assert leading == PRIMARY_ACTIONS_LEAD_IN, (
+        f"Hauptknopf aus einer angebotenen Handlung: {sorted(leading)}, "
+        f"erlaubt und erwartet: {sorted(PRIMARY_ACTIONS_LEAD_IN)}"
+    )
 
 
 def test_a_dialog_with_a_hint_keeps_one_primary(qt_app: QApplication) -> None:
@@ -2384,6 +2427,86 @@ def test_an_error_with_two_recommended_ways_still_has_one_primary(
         qt_app.processEvents()
         leading = [button.text() for button in box.findChildren(QPushButton) if button.isDefault()]
         assert leading == [str(RETRY.label)], leading
+    finally:
+        box.hide()
+        box.deleteLater()
+
+
+def test_one_function_says_which_offered_action_leads() -> None:
+    """Welche Handlung führt, sagt ``leading_action`` — für Prüfbericht,
+    Fehlerdialog, Hinweise und Druckrat gleich (RM-512): die erste mit
+    ``primary``, sonst die erste überhaupt."""
+    from app.core.types import Action
+    from app.ui.style import leading_action
+
+    plain, other = Action("a", "A"), Action("b", "B")
+    marked = Action("c", "C", primary=True)
+    assert leading_action([plain, marked, other]) is marked
+    assert leading_action([plain, other]) is plain
+    assert leading_action([]) is None
+
+
+def test_a_button_that_hands_over_the_lead_loses_its_bold_too(qt_app: QApplication) -> None:
+    """``make_primary(button, leading=False)`` nimmt Default **und** Halbfett.
+
+    Qt nimmt dem alten Hauptknopf beim Wechsel nur den Default; halbfett ohne
+    Akzent blieb er stehen — im Druckdialog zwischen *Slicen* und *Im Slicer
+    öffnen*, in der Tour bei *Schritt überspringen*.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton
+
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    dialog = QDialog()
+    layout = QHBoxLayout(dialog)
+    opening, slicing = QPushButton("Im Slicer öffnen", dialog), QPushButton("Slicen", dialog)
+    layout.addWidget(opening)
+    layout.addWidget(slicing)
+    host = SimpleNamespace(open_button=opening, slice_button=slicing)
+    try:
+        PrintSettingsDialog._lead_handover(host, False)  # type: ignore[arg-type]
+        PrintSettingsDialog._lead_handover(host, True)  # type: ignore[arg-type]
+        assert opening.isDefault() and opening.font().weight() >= QFont.Weight.DemiBold
+        assert not slicing.isDefault(), "der abgegebene Knopf trägt noch den Akzent"
+        assert slicing.font().weight() < QFont.Weight.DemiBold, "und noch das Halbfett"
+    finally:
+        dialog.deleteLater()
+
+
+def test_an_error_without_a_recommendation_still_gets_a_drawn_lead(
+    qt_app: QApplication,
+) -> None:
+    """Ohne Handlung mit ``primary`` riet Qt den Hauptknopf — Akzent ohne
+    Halbfett (Regel 18). Jetzt führt die erste, mit beiden Kodierungen."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QMessageBox, QPushButton
+
+    from app.core.errors import CHOOSE_PRINTER, SCALE_TO_FIT, AppError
+    from app.ui import dialogs
+
+    assert not SCALE_TO_FIT.primary and not CHOOSE_PRINTER.primary
+    caught: list[QMessageBox] = []
+    real = QMessageBox.exec
+    QMessageBox.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
+    try:
+        dialogs.show_error(
+            AppError(title="Probe", detail="x", suggestions=(SCALE_TO_FIT, CHOOSE_PRINTER)),
+            handlers={SCALE_TO_FIT.id: lambda _e: None, CHOOSE_PRINTER.id: lambda _e: None},
+        )
+    finally:
+        QMessageBox.exec = real  # type: ignore[method-assign]
+    (box,) = caught
+    try:
+        box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        box.show()
+        qt_app.processEvents()
+        leading = [button for button in box.findChildren(QPushButton) if button.isDefault()]
+        assert [button.text() for button in leading] == [str(SCALE_TO_FIT.label)]
+        assert leading[0].font().weight() >= QFont.Weight.DemiBold
     finally:
         box.hide()
         box.deleteLater()

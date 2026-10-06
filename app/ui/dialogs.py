@@ -125,6 +125,7 @@ from app.ui.style import (
     expanded_width,
     fit_dialog_to_screen,
     fit_height_after_show,
+    leading_action,
     make_danger,
     make_large_target,
     make_primary,
@@ -3440,8 +3441,9 @@ class ErrorNotice(QWidget):
         # Hinweis steht in einem Fenster, das seinen Hauptknopf schon hat;
         # ein zweiter machte zwei Knöpfe laut, und ``setDefault`` nähme dem
         # Dialog obendrein Enter weg. Welche Handlung zuerst gemeint ist, sagt
-        # die Reihenfolge: die vorgeschlagene oben.
-        for action in sorted(actions, key=lambda action: not action.primary):
+        # die Reihenfolge: die führende oben.
+        lead = leading_action(actions)
+        for action in sorted(actions, key=lambda action: action is not lead):
             button = QPushButton(str(action.label), self)
             button.clicked.connect(weak_slot(self, ErrorNotice._activate, action.id))
             self._layout.addWidget(button)
@@ -3493,10 +3495,10 @@ def show_error(
         box.setInformativeText("\n".join(spoken))
 
     buttons: dict[Any, Action] = {}
-    # **Ein Hauptknopf, auch bei zwei empfohlenen Handlungen** (RM-512): die
-    # erste mit ``primary``. ``suggestions`` steht nach Rang, und zwei
-    # Akzentknöpfe nebeneinander sagen nicht, welcher gemeint ist.
-    lead = next((action for action in offered if action.primary), None)
+    # **Genau ein Hauptknopf** (RM-512), gewählt wie überall
+    # (``leading_action``): Zwei Akzentknöpfe sagen nicht, welcher gemeint
+    # ist, und ohne gesetzten rät Qt einen — mit Akzent, ohne Halbfett.
+    lead = leading_action(offered)
     for action in offered:
         role = (
             QMessageBox.ButtonRole.AcceptRole
@@ -4261,9 +4263,12 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     # **Rot und ohne Hauptknopf** (RM-512): Verwerfen ist unwiederbringlich,
     # also kein Akzent, der dazu einlädt, und keine Eingabetaste, die es im
     # Vorbeigehen tut. Abbrechen ist ein Ausgang und kein Hauptknopf; Escape
-    # nimmt ihn, Tab und Enter erreichen beide.
+    # nimmt ihn, Tab und Enter erreichen beide. Der Fokus steht auf Abbrechen:
+    # Qt gäbe ihn sonst dem ersten Knopf der Leiste, unter Windows dem roten,
+    # und die Leertaste verwürfe.
     make_danger(discard)
     no_primary(box)
     box.setEscapeButton(cancel)
+    cancel.setFocus()
     box.exec()
     return box.clickedButton() is discard

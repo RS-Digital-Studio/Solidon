@@ -8204,6 +8204,8 @@ class MainWindow(QMainWindow):
         make_danger(remove)
         no_primary(box)
         box.setEscapeButton(cancel)
+        # Fokus auf Abbrechen, sonst löschte die Leertaste (``confirm_discard``).
+        cancel.setFocus()
         box.exec()
         if box.clickedButton() is not remove:
             return
