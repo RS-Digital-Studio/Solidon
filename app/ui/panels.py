@@ -1806,20 +1806,22 @@ def _empty_history_text() -> str:
 #: Die Spalte, in der das Filament einer Zeile steht.
 FILAMENT_COLUMN = 2
 
-#: Ihre Breite in Bildpunkten — Farbfeld plus Rand, kein Text.
+#: Ihre Breite in Bildpunkten — Farbpunkt plus Rand; der Kopf trägt die Spule, kein Wort.
 FILAMENT_WIDTH = 34
 
-#: Kantenlänge des Farbfelds.
+#: Durchmesser des Farbpunkts samt Rand.
 FILAMENT_CHIP = 14
 
 
 def filament_chip(colour: str, assigned: bool, widget: QWidget) -> QIcon:
-    """Ein Farbfeld für die Filamentspalte.
+    """Ein runder Farbpunkt für die Filamentspalte.
 
-    **Zwei Kodierungen, nicht eine** (Regel 18): Ein zugewiesenes Filament
-    steht als gefülltes Feld, ein Körper ohne eigenes als leeres mit Rand.
-    Wer Farben nicht unterscheidet, sieht am Gefülltsein trotzdem, ob hier
-    etwas entschieden wurde.
+    **Rund, kein Kästchen** (RM-519): Das leere Quadrat mit Rand sah in der
+    Spalte aus wie ein Haken, den man setzen kann. **Zwei Kodierungen, nicht
+    eine** (Regel 18): Ein zugewiesenes Filament steht als Punkt mit
+    durchgezogenem Rand, ein Körper ohne eigenes als Punkt in der Farbe des
+    Teils mit gestricheltem Rand. Wer Farben nicht unterscheidet, sieht am
+    Rand trotzdem, ob hier etwas entschieden wurde.
     """
     # Ein mehrfarbiges Filament kommt als Feldwert mit Leerzeichen an
     # (``filament_picker.slot_colours``): die erste Farbe trägt Rand und
@@ -1834,16 +1836,18 @@ def filament_chip(colour: str, assigned: bool, widget: QWidget) -> QIcon:
     painter = QPainter(image)
     try:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        pen = QPen(QColor(colour) if assigned else QColor(colour).darker(140))
+        pen = QPen(QColor(colour) if assigned else QColor(colour).darker(160))
         pen.setWidthF(1.5 * scale)
+        if not assigned:
+            pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(colour) if assigned else Qt.BrushStyle.NoBrush)
+        painter.setBrush(QColor(colour))
         inset = 1.5 * scale
         chip = QRectF(inset, inset, side - 2 * inset, side - 2 * inset)
-        painter.drawRoundedRect(chip, 2.0 * scale, 2.0 * scale)
+        painter.drawEllipse(chip)
         if assigned and len(colours) > 1:
             clip = QPainterPath()
-            clip.addRoundedRect(chip, 2.0 * scale, 2.0 * scale)
+            clip.addEllipse(chip)
             painter.setClipPath(clip)
             painter.setPen(Qt.PenStyle.NoPen)
             for number, one in enumerate(colours):
@@ -1919,6 +1923,17 @@ class _ObjectTreeView(QTreeWidget):
 
     selection_allowed: Callable[[], bool] | None = None
     selection_refused: Callable[[], None] | None = None
+
+    resized = Signal()
+    """Die Sichtfläche hat ihre neue Breite — die Spalten teilen neu (RM-519).
+
+    Die Karte darum erfährt ihre Größe vor dem Baum: Beim ersten Zeigen
+    teilte ``ObjectTree.resizeEvent`` die alte Breite, und die Maßspalte stand
+    mit 25 Punkten da, „Maße“ im Kopf abgeschnitten."""
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Schnittstelle
+        super().resizeEvent(event)
+        self.resized.emit()
 
     def _refused(self) -> bool:
         """Ob die Auswahl gerade gehalten wird — und der Satz dazu, wenn ja."""
@@ -2004,7 +2019,14 @@ class ObjectTree(QWidget):
         self.tree = _ObjectTreeView(self)
         self.tree.setAccessibleName(tr("Objekte"))
         self.tree.setColumnCount(3)
-        self.tree.setHeaderLabels([tr("Objekt"), tr("Maße"), tr("Filament")])
+        self.tree.setHeaderLabels([tr("Objekt"), tr("Maße"), ""])
+        # **Die Spule statt des Worts** (RM-519): Die Spalte ist so schmal wie
+        # ihr Farbpunkt, und „Filament“ stand dort in jeder Sprache als „Fila“.
+        # Das Wort bleibt für Kurzhilfe und Bildschirmleser (Regel 18).
+        heading = self.tree.headerItem()
+        heading.setIcon(FILAMENT_COLUMN, icon("spool", self.tree))
+        heading.setToolTip(FILAMENT_COLUMN, tr("Filament"))
+        heading.setData(FILAMENT_COLUMN, Qt.ItemDataRole.AccessibleTextRole, tr("Filament"))
         # Die Maßspalte nimmt, was sie braucht; der Rest gehört den Namen.
         # Vorher standen beide auf derselben festen Breite, und auf dreifache
         # Fensterbreite gezogen blieb die Maßspalte schmal, während links
@@ -2034,6 +2056,7 @@ class ObjectTree(QWidget):
         # dem Namen ab, und der ist die Spalte, die man liest.
         header.setSectionResizeMode(FILAMENT_COLUMN, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(FILAMENT_COLUMN, FILAMENT_WIDTH)
+        self.tree.resized.connect(self._size_columns)
         # Ein Klick auf das Feld ist die Zuweisung — nicht erst ein Doppelklick
         # und kein Umweg über das Kontextmenü.
         self.tree.clicked.connect(self._on_cell_clicked)
@@ -2750,7 +2773,12 @@ class ObjectTree(QWidget):
         # schmaler Karte waren das 25 Punkte gegen 39 für das Maß.
         free = max(0, width - FILAMENT_WIDTH)
         needed = self.tree.sizeHintForColumn(1)
-        self.tree.header().resizeSection(1, max(0, min(needed, int(free * MEASURE_SHARE))))
+        # **Die Überschrift steht immer ganz da** (RM-519): ``sizeHintForColumn``
+        # misst nur die Zeilen, und der Anteil allein schnitt in mancher
+        # Sprache den Kopf ab. Ihr Platz geht dem Namen ab, nicht ihr Wort.
+        heading = self.tree.header().sectionSizeHint(1)
+        shared = max(heading, min(needed, int(free * MEASURE_SHARE)))
+        self.tree.header().resizeSection(1, max(0, min(shared, free)))
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Beim Breiterwerden neu teilen."""
@@ -3399,6 +3427,18 @@ def _empty_parameters_text() -> str:
     )
 
 
+def binding_button_text(count: int) -> str:
+    """Was am Bindeknopf der Parameterkarte steht — mit der Zahl der Stellen (RM-519).
+
+    Die Zahl stand vorher unter jeder Maßzeile („2 feste Zahlen passen“) und
+    las sich dort wie eine Überschrift; am Knopf sagt sie, was ein Klick
+    erledigt.
+    """
+    if count == 1:
+        return tr("Eine Zahl an ein Maß binden …")
+    return tr("{count} Zahlen an Maße binden …", count=count)
+
+
 class _CompactParameterUnitBox(QComboBox):
     """Zeigt die gewählte Einheit kurz und die Auswahlliste ausführlich.
 
@@ -3500,8 +3540,8 @@ class ParameterPanel(QWidget):
         self._titles: dict[str, QLabel] = {}
         """Die Beschriftung je Zeile."""
         self._hints: dict[str, QLabel] = {}
-        """Was unter der Zeile über ihre Verwendung steht („Nicht verwendet“,
-        „2 feste Zahlen passen“) — über die ganze Kartenbreite. In der schmalen
+        """Was unter der Zeile über ihre Verwendung steht — nur „Nicht
+        verwendet“, über die ganze Kartenbreite. In der schmalen
         Beschriftungsspalte brach es in vier Zeilen um, und die letzte stand
         unter der nächsten Zeile."""
         self._sliders: dict[str, QSlider] = {}
@@ -3539,7 +3579,7 @@ class ParameterPanel(QWidget):
         # Steht im Stapel eine feste Zahl, die genau zu einem Maß passt, folgt
         # sie ihm nicht. Der Knopf steht nur, wenn es solche Zahlen gibt
         # (``scene.parameter_binding``); die Wahl trifft der Dialog.
-        self.bind_button = QPushButton(tr("Feste Zahlen binden …"), self)
+        self.bind_button = QPushButton(self)
         self.bind_button.clicked.connect(self.bindRequested)
         _set_shown(self.bind_button, False)
         outer.addWidget(self._scroll)
@@ -3555,8 +3595,8 @@ class ParameterPanel(QWidget):
         Bedingung, unter der die ganze Verteilung stillsteht
         (``OverlayHost._share_room``). Wortgleich mit
         ``FilamentPanel._around_the_list`` ist das nicht: Dort stehen ein
-        Hinweis und drei Knöpfe, hier einer — zwei, solange *Feste Zahlen
-        binden* dasteht; ein verborgener Knopf bekommt auch keinen Abstand.
+        Hinweis und drei Knöpfe, hier einer — zwei, solange der Bindeknopf
+        dasteht; ein verborgener Knopf bekommt auch keinen Abstand.
         """
         margins = self._outer.contentsMargins()
         shown = [
@@ -3915,24 +3955,12 @@ class ParameterPanel(QWidget):
         """Beschriftung und Kurzhilfe einer Zeile nach dem jüngsten Ergebnis."""
         label = self._titles[name]
         uses = self._usage_result.parameter_usage if self._usage_result is not None else None
-        fitting = len(self._spots_for(name))
         unused = uses is not None and name in uses and not uses[name]
-        if unused and fitting:
-            usage = (
-                tr("Nicht verwendet — eine feste Zahl passt")
-                if fitting == 1
-                else tr("Nicht verwendet — {count} feste Zahlen passen", count=fitting)
-            )
-        elif unused:
-            usage = tr("Nicht verwendet")
-        elif fitting:
-            usage = (
-                tr("Eine feste Zahl passt")
-                if fitting == 1
-                else tr("{count} feste Zahlen passen", count=fitting)
-            )
-        else:
-            usage = ""
+        # **Unter der Zeile steht nur, was der Kunde sonst nicht sähe** (RM-519):
+        # ein Maß, das nichts bewirkt. „2 feste Zahlen passen“ stand unter jedem
+        # wirkenden Maß und las sich wie die Überschrift der nächsten Zeile; die
+        # Zahl steht jetzt am Bindeknopf, die Stellen in der Kurzhilfe.
+        usage = tr("Nicht verwendet") if unused else ""
         label.setText(title)
         note = self._usage_note(name)
         hint = self._hints.get(name)
@@ -4003,11 +4031,12 @@ class ParameterPanel(QWidget):
         return lines
 
     def _show_binding(self) -> None:
-        """*Feste Zahlen binden …* nur, wenn es eine gibt — mit ihrer Zahl am Knopf."""
+        """Der Bindeknopf nur, wenn es eine feste Zahl gibt — mit ihrer Zahl am Knopf."""
         result = self._usage_result
         spots = result.binding_spots if result is not None else ()
         shown = bool(spots)
         if shown:
+            self.bind_button.setText(binding_button_text(len(spots)))
             note = tr(
                 "{count} feste Zahlen passen zu Projektmaßen. Gebunden folgen sie dem Maß, "
                 "wenn Sie es ändern.",

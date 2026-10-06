@@ -11096,7 +11096,7 @@ class MainWindow(QMainWindow):
                 self.action_add_parameter,
             ),
             "edit.bind_parameters": (
-                tr("Feste Zahlen binden …"),
+                tr("Zahlen an Maße binden …"),
                 "",
                 self.action_bind_parameters,
             ),

@@ -22,7 +22,12 @@ from tests.ui_helpers import window as window
 def test_the_parameter_card_names_fitting_numbers_and_offers_to_bind(
     qt_app: QApplication, document: Document, profile: Profile
 ) -> None:
-    """Die Hauslänge liest nur den Boden; zwei feste Zahlen im Wandring passen zu ihr."""
+    """Die Hauslänge liest nur den Boden; zwei feste Zahlen im Wandring passen zu ihr.
+
+    **Die Zahl steht am Knopf, nicht unter dem Maß** (RM-519): „2 feste Zahlen
+    passen“ stand unter jedem wirkenden Maß und las sich wie die Überschrift
+    der nächsten Zeile. Unter einer Zeile steht nur noch „Nicht verwendet“.
+    """
     from app.core.scene.evaluate import evaluate
     from app.ui.panels import ParameterPanel
 
@@ -32,23 +37,29 @@ def test_the_parameter_card_names_fitting_numbers_and_offers_to_bind(
     panel = ParameterPanel()
     panel.show_document(document, result)
     assert not panel.bind_button.isHidden()
+    spots = len(result.binding_spots)
+    assert spots > 1
+    assert panel.bind_button.text() == f"{spots} Zahlen an Maße binden …"
     assert "feste Zahlen passen zu Projektmaßen" in panel.bind_button.toolTip()
     title = panel._titles["haus_laenge"]
-    hint = panel._hints["haus_laenge"]
-    # Außen 180 = Länge, innen 174 = Länge - 2 * Wand: zwei Stellen. **Der
-    # Hinweis steht unter der Zeile, nicht in ihrer Beschriftung**: In der
-    # schmalen Beschriftungsspalte brach er in vier Zeilen um, und die letzte
-    # stand unter der nächsten Zeile.
+    # Außen 180 = Länge, innen 174 = Länge - 2 * Wand: zwei Stellen. Wo sie
+    # stehen, sagt die Kurzhilfe der Zeile; eine Zeile darunter gibt es nicht.
     assert title.text() == "haus_laenge"
-    assert hint.text() == "2 feste Zahlen passen"
+    assert not panel._form.isRowVisible(panel._hints["haus_laenge"])
     assert "passt zu @haus_laenge" in title.toolTip()
-    assert "2 feste Zahlen passen" in title.accessibleDescription()
+    assert "passt zu @haus_laenge" in title.accessibleDescription()
     # Ein Maß, das wirkt und zu dem keine feste Zahl passt, bleibt eine Zeile:
     # Die Bodenstärke 4 liest der Boden, sonst steht sie nirgends.
     assert panel._titles["boden"].text() == "boden"
     assert not panel._form.isRowVisible(panel._hints["boden"])
-    # Ungenutzt bleibt ungenutzt, auch ohne passende Zahl.
-    assert panel._hints["tuer_breite"].text() == "Nicht verwendet"
+    shown = [name for name, hint in panel._hints.items() if panel._form.isRowVisible(hint)]
+    assert all(panel._hints[name].text() == "Nicht verwendet" for name in shown)
+    # Ungenutzt bleibt ungenutzt, auch ohne passende Zahl — und der Hinweis
+    # steht unter der Zeile, nicht in ihrer Beschriftung: In der schmalen
+    # Beschriftungsspalte brach er in vier Zeilen um.
+    title = panel._titles["tuer_breite"]
+    hint = panel._hints["tuer_breite"]
+    assert hint.text() == "Nicht verwendet"
     panel.resize(260, 900)
     panel.show()
     for _ in range(10):
@@ -61,6 +72,14 @@ def test_the_parameter_card_names_fitting_numbers_and_offers_to_bind(
     assert hint.width() > title.width(), "über die ganze Breite der Karte"
     assert hint.height() >= hint.heightForWidth(hint.width()) - 1, "nichts abgeschnitten"
     panel.close()
+
+
+def test_the_bind_button_names_how_many_numbers_it_binds() -> None:
+    """Ohne Fenster: Die Zahl der Stellen steht am Knopf, in Einzahl und Mehrzahl (RM-519)."""
+    from app.ui.panels import binding_button_text
+
+    assert binding_button_text(1) == "Eine Zahl an ein Maß binden …"
+    assert binding_button_text(6) == "6 Zahlen an Maße binden …"
 
 
 def test_without_fitting_numbers_the_button_stays_away(
