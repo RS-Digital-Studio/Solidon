@@ -347,6 +347,9 @@ def area_for(window: MainWindow, name: str) -> QRect:
         return _open_menu_entry(action, name)
     widget = widget_for(window, name)
     if not widget.isVisible():
+        tab = _tab_of_a_page_behind(window, widget)
+        if tab is not None:
+            return tab
         raise MissingTargetError(f"{name}: {type(widget).__name__} ist gerade nicht zu sehen")
     if isinstance(widget, RowCheckBox):
         return _checkbox_area(_in_view(widget))
@@ -381,6 +384,26 @@ def _in_view(widget: QWidget) -> QWidget:
 
 def _global(widget: QWidget) -> QRect:
     return QRect(widget.mapToGlobal(QPoint(0, 0)), widget.size())
+
+
+def _tab_of_a_page_behind(window: MainWindow, widget: QWidget) -> QRect | None:
+    """Der Reiter, hinter dem das Ziel steht, wenn seine Seite nicht vorn ist.
+
+    Seit RM-511 teilen sich Auswahl, Prüfbericht und Chat die rechte Karte,
+    und vorn steht immer nur eine Seite. Eine Legende über das ganze Fenster
+    nennt sie trotzdem einzeln; für die verdeckte zeigt die Nummer auf ihren
+    Reiter, dorthin klickt der Kunde.
+    """
+    tabs = window.right
+    for index in range(tabs.count()):
+        page = tabs.widget(index)
+        if page is not None and (page is widget or page.isAncestorOf(widget)):
+            if index == tabs.currentIndex() or not tabs.isVisible():
+                return None
+            bar = tabs.tabBar()
+            place = bar.tabRect(index)
+            return QRect(bar.mapToGlobal(place.topLeft()), place.size())
+    return None
 
 
 def _open_view(window: MainWindow) -> QRect:
