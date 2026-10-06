@@ -1255,6 +1255,7 @@ def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_ap
         panel.alertsChanged.connect(alerts.append)
         assert panel.summary.text() == "Übergabe nicht empfohlen", "Voraussetzung"
 
+        held = panel.list.item(0)
         panel.set_running(True)
         qt_app.processEvents()
         assert panel.summary.text() == "Übergabe nicht empfohlen", "unter 0,2 s bleibt es ruhig"
@@ -1266,7 +1267,10 @@ def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_ap
             "Die Bewertung läuft; der vorige Stand bleibt sichtbar."
         ), "der Grund weicht dem Fehler nicht mehr"
         assert panel.list.count() == 1, "die Zeile bleibt sichtbar (§15.3)"
-        assert panel.list.item(0).text().startswith("Voriger Stand: "), panel.list.item(0).text()
+        # An Ort und Stelle, nicht neu gebaut: Ein offenes Kontextmenü hält
+        # seine Zeile über den Wechsel hinweg.
+        assert panel.list.item(0) is held
+        assert held.text().startswith("Voriger Stand: "), held.text()
         assert panel.list.currentRow() == 0, "die Wahl des Kunden bleibt"
         buttons = [
             widget
@@ -1293,6 +1297,13 @@ def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_ap
         panel.set_running(False)
         QTest.qWait(DELAY_MS + 150)
         assert not panel.running(), "ein kurzer Lauf hinterlässt nichts"
+
+        held = panel.list.item(0)
+        panel.set_running(True)
+        QTest.qWait(DELAY_MS + 150)
+        panel.set_running(False)
+        assert panel.list.item(0) is held
+        assert not held.text().startswith("Voriger Stand"), held.text()
     finally:
         host.close()
         host.deleteLater()

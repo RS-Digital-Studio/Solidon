@@ -1385,6 +1385,11 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
             object_id="obj_1",
             feature_ids=("hole_1",),
         )
+        # Erst die Schichtbefunde abwarten: Kommen sie nach dem Griff nach der
+        # Zeile, baut ``add_findings`` die Liste neu, und die gehaltene Zeile
+        # ist gelöscht — ein Rennen des Tests, kein Fehler des Fensters.
+        window.wait_for_workers()
+        QApplication.processEvents()
         window.report.add_findings([finding])
         window.resize(1040, 760)
         window.show()

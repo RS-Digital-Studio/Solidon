@@ -1652,6 +1652,9 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
         def get(self, key: str) -> CachedResult | None:
             return None
 
+        def refusal(self, key: str) -> None:
+            return None
+
         def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
             self.written.append(to_disk)
 

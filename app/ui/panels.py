@@ -6482,15 +6482,43 @@ class ReportPanel(QWidget):
         changed = False
         for row in range(self.list.count()):
             item = self.list.item(row)
-            lines = item.data(_LINE_ROLE)
-            if not lines:
+            if not item.data(_LINE_ROLE):
                 continue
-            wanted = lines[1] if item.isSelected() else lines[0]
+            wanted = self._row_text(item)
             if item.text() != wanted:
                 item.setText(wanted)
                 changed = True
         if changed:
             self._grew()
+
+    def _row_text(self, item: QListWidgetItem) -> str:
+        """Der Satz einer Zeile: gewählt ganz, sonst der erste, im Lauf als voriger Stand.
+
+        **Der vorige Stand sagt es in Worten** (RM-534): gedämpft allein wäre
+        eine Bedeutung über die Farbe (Regel 18), und ein Fehler, den die
+        laufende Rechnung vielleicht widerruft, liest sich sonst als gültig.
+        """
+        short, whole = item.data(_LINE_ROLE)
+        line = whole if item.isSelected() else short
+        return tr("Voriger Stand: {line}", line=line) if self._running else line
+
+    def _paint_row(self, item: QListWidgetItem) -> None:
+        """Eine Zeile als aktueller oder voriger Stand, an Ort und Stelle (RM-534).
+
+        **Nie neu gebaut:** Wer eine Zeile hält — ein offenes Kontextmenü
+        (``_on_menu``) —, hielte nach einem ``_rebuild`` ein gelöschtes Objekt,
+        und die gewählte Handlung endete in einem Absturz.
+        """
+        finding: Finding = item.data(Qt.ItemDataRole.UserRole)
+        if item.data(_LINE_ROLE):
+            item.setText(self._row_text(item))
+        if self._running:
+            tone = self.list.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text)
+            item.setForeground(tone)
+        else:
+            tone = QColor(item.data(_TONE_ROLE))
+            item.setData(Qt.ItemDataRole.ForegroundRole, None)
+        item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
 
     def follow_export(self, allowed: bool, tip: str) -> None:
         """*Exportieren …* folgt dem Menüeintrag: dieselbe Sperre, derselbe Grund."""
@@ -6521,10 +6549,6 @@ class ReportPanel(QWidget):
 
     def _run_action_for(self, item: QListWidgetItem, action_id: str) -> None:
         """Knopf und Kontextmenü benutzen dieselbe Ziel- und Abbruchentscheidung."""
-        if self._running:
-            # Knopf und Menüeintrag sind gesperrt; das hier fängt, was zwischen
-            # Bau und Klick doch noch durchkam (RM-534).
-            return
         finding: Finding | None = item.data(Qt.ItemDataRole.UserRole)
         # **Eine Sammelzeile fragt, für welche Körper sie gelten soll.** Sie
         # vertritt sechs oder zwölf, und ihr Befund trägt nur den ersten davon;
@@ -7104,17 +7128,6 @@ class ReportPanel(QWidget):
                 self.list.palette().base().color().name(),
             )
         )
-        if self._running:
-            # **Der vorige Stand sagt es in Worten** (RM-534): gedämpft allein
-            # wäre eine Bedeutung über die Farbe (Regel 18), und ein Fehler,
-            # den die laufende Rechnung vielleicht widerruft, liest sich sonst
-            # als gültig.
-            short, whole = item.data(_LINE_ROLE)
-            short = tr("Voriger Stand: {line}", line=short)
-            item.setData(_LINE_ROLE, (short, tr("Voriger Stand: {line}", line=whole)))
-            item.setText(short)
-            tone = self.list.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text)
-            item.setForeground(tone)
         # Die Form trägt den Schweregrad, die Farbe verstärkt ihn nur: ein
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
         item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
@@ -7156,6 +7169,8 @@ class ReportPanel(QWidget):
         # nur hier und nicht in der sichtbaren Nicht-CAD-Zeile.
         item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, detail_text)
         self.list.addItem(item)
+        if self._running:
+            self._paint_row(item)
 
     def _count_up(self) -> None:
         """Die Zeile über der Liste aus der Liste selbst zählen.
@@ -7258,19 +7273,9 @@ class ReportPanel(QWidget):
         if running == self._running:
             return
         self._running = running
-        selected = self.list.selectedItems()
-        chosen = (
-            _identity(selected[0].data(Qt.ItemDataRole.UserRole)) if len(selected) == 1 else None
-        )
-        self._rebuild()
+        for row in range(self.list.count()):
+            self._paint_row(self.list.item(row))
         self._count_up()
-        self._refilter()
-        if chosen is not None:
-            for row in range(self.list.count()):
-                item = self.list.item(row)
-                if _identity(item.data(Qt.ItemDataRole.UserRole)) == chosen:
-                    self.list.setCurrentRow(row)
-                    break
         # Die Knöpfe hängen an der Wahl; ohne Wechsel baut sie niemand neu.
         self._show_offers()
         self._grew()
