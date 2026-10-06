@@ -13,7 +13,7 @@ nachsieht, was dem Modell gesagt wurde.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from pathlib import PurePosixPath
 from typing import Final
 
@@ -137,6 +137,7 @@ def digest(
     ``read_digest`` mit ``objects`` liefert.
     """
     plates = _plate_count(scene)
+    steps = _step_numbers(document)
     lines: list[str] = [_scene_line(scene)]
 
     if scene.parameters:
@@ -162,12 +163,31 @@ def digest(
     for object_id, entry in scene.objects.items():
         if only is not None and object_id not in only:
             continue
-        lines.extend(_object_lines(object_id, entry, plates, condensed=condensed))
+        lines.extend(_object_lines(object_id, entry, plates, steps, condensed=condensed))
 
     lines.extend(_finding_lines(scene))
     if document is not None:
-        lines.extend(_stack_lines(document))
+        lines.extend(_stack_lines(document, steps))
     return "\n".join(lines)
+
+
+def _step_numbers(document: Document | None) -> dict[int, int]:
+    """Je Schrittkennung die Nummer, unter der der Verlauf ihn zeigt (RM-529).
+
+    **Die sichtbare Nummer, nicht die Kennung.** Nach einem Einfügen vor
+    Schritt 3 trägt der sichtbare Schritt 3 die Kennung 9 (RM-368); der Agent
+    spricht mit dem Nutzer über den Verlauf, den dieser vor sich hat, und kein
+    Werkzeug nimmt eine Kennung entgegen. Dieselbe Rechnung wie
+    ``scene.history.step_position``, einmal je Steckbrief statt je Zeile.
+    """
+    if document is None:
+        return {}
+    return {operation.id: position for position, operation in enumerate(document.ops, start=1)}
+
+
+def _step_name(op_id: int, steps: Mapping[int, int]) -> str:
+    """``op3`` — ein Schritt, wie Merkmals-, Objekt- und Verlaufszeile ihn nennen."""
+    return f"op{steps.get(op_id, op_id)}"
 
 
 def _selection_lines(scene: Scene, selection: tuple[ObjectId, str]) -> list[str]:
@@ -372,7 +392,12 @@ def _plate_count(scene: Scene) -> int:
 
 
 def _object_lines(
-    object_id: ObjectId, entry: SceneObject, plates: int = 1, *, condensed: bool = False
+    object_id: ObjectId,
+    entry: SceneObject,
+    plates: int = 1,
+    steps: Mapping[int, int] | None = None,
+    *,
+    condensed: bool = False,
 ) -> list[str]:
     size = entry.mesh.bounds.size
     closed = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
@@ -400,21 +425,46 @@ def _object_lines(
         # liegt, sagt die Nummer nichts. Gezählt wird ab eins, wie überall, wo
         # ein Mensch sie liest (``export.writer`` schreibt ``plate + 1``).
         facts.append(f"{tr('Platte')} {entry.plate + 1}")
+    if steps is not None and entry.created_by in steps:
+        # **Der zuletzt beteiligte Schritt, nicht der erzeugende** — deshalb
+        # ``last_op`` und nicht ``created_by`` wie am Merkmal:
+        # ``SceneObject.created_by`` setzt jede Operation neu, die das Objekt
+        # ausgibt (§21.2). Mit dem Verlauf daneben findet der Agent zu „dem
+        # Teil von vorhin“ die Transaktion, die er zurücknehmen kann (RM-529).
+        facts.append(f"last_op={_step_name(entry.created_by, steps)}")
 
     lines = [f"{object_id}  {as_name(entry.name)}  " + ", ".join(facts)]
     lines.append("  " + _extent_line(entry))
     sleeves = sleeves_of(entry.features)
     if condensed:
-        lines.extend(_condensed_feature_lines(entry, sleeves))
+        lines.extend(_condensed_feature_lines(entry, sleeves, steps or {}))
         return lines
     for feature_id, feature in entry.features.items():
         lines.append(
-            "  " + _feature_line(feature_id, feature) + _wall_note(feature, sleeves.get(feature_id))
+            "  "
+            + _feature_line(feature_id, feature, steps or {})
+            + _wall_note(feature, sleeves.get(feature_id))
         )
     return lines
 
 
-def _condensed_feature_lines(entry: SceneObject, sleeves: dict[str, Sleeve]) -> list[str]:
+def _creator_note(feature: Feature, steps: Mapping[int, int]) -> str:
+    """``, created_by=op3`` an einem erzeugten Merkmal (§21.2, §23; RM-529).
+
+    Ohne die Herkunft konnte der Agent „ändere den Stift von vorhin“ nicht dem
+    Schritt zuordnen, der den Stift gesetzt hat, obwohl das Feld seit §21.2 an
+    jedem erzeugten Merkmal steht. Ein erkanntes Merkmal hat keinen Erzeuger
+    und bekommt nichts. Ohne Verlauf steht nichts da: Eine Nummer, die keine
+    Verlaufszeile auflöst, wäre ein Verweis ins Leere.
+    """
+    if feature.created_by is None or feature.created_by not in steps:
+        return ""
+    return f", created_by={_step_name(feature.created_by, steps)}"
+
+
+def _condensed_feature_lines(
+    entry: SceneObject, sleeves: dict[str, Sleeve], steps: Mapping[int, int]
+) -> list[str]:
     """Die Merkmale eines Körpers, gleiche zusammengefasst — in ihrer Reihenfolge.
 
     Gleich heißt: dieselbe Zeile, sobald Name und Lage fehlen. Ein Merkmal mit
@@ -426,7 +476,9 @@ def _condensed_feature_lines(entry: SceneObject, sleeves: dict[str, Sleeve]) -> 
     single: dict[str, str] = {}
     walled: set[str] = set()
     for feature_id, feature in entry.features.items():
-        line = _feature_line(feature_id, feature)
+        # Die Herkunft gehört zur Gleichheit: Zwölf Taschen aus einem Schritt
+        # sind eine Zeile, zwei gleiche aus zwei Schritten zwei.
+        line = _feature_line(feature_id, feature, steps)
         wall = _wall_note(feature, sleeves.get(feature_id))
         if wall:
             single[feature_id] = line + wall
@@ -593,7 +645,7 @@ def pattern_style_name(style: str) -> str:
     return _PATTERN_STYLES.get(style, _PATTERN_STYLES["other"]).translate()
 
 
-def _feature_line(feature_id: str, feature: Feature) -> str:
+def _feature_line(feature_id: str, feature: Feature, steps: Mapping[int, int] | None = None) -> str:
     """Ein Merkmal, mit dem Ort, an dem es sitzt — und woher seine Maße stammen.
 
     Die Position fehlte hier, und das machte den Steckbrief zu einer
@@ -609,9 +661,13 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
     Zeilenende statt „(gemessen)“ hinter jeder Zahl. Gemischte Quellen bleiben
     je Maß benannt. Bis zum 22.09.2026 trugen nur Fit und Vorgabe ein Wort,
     und der Agent las ein gemessenes Maß wie ein exaktes.
+
+    Mit ``steps`` steht dazu der erzeugende Schritt vor dem Maßvermerk
+    (:func:`_creator_note`); ohne — nach einem Schritt in
+    :func:`new_feature_lines` — wäre er der gerade getane.
     """
     shared = _shared_source(feature)
-    line = _feature_text(feature_id, feature, shared)
+    line = _feature_text(feature_id, feature, shared) + _creator_note(feature, steps or {})
     if shared is None:
         return line
     word = MEASURE_SOURCE_WORDS[shared]
@@ -1001,13 +1057,17 @@ def _finding_lines(scene: Scene) -> list[str]:
 _STACK_PARAM_LIMIT = 3
 
 
-def _stack_lines(document: Document) -> list[str]:
+def _stack_lines(document: Document, steps: Mapping[int, int]) -> list[str]:
     """Der Stapel in Kurzform — mit den gesetzten Hauptwerten (§26.1).
 
     Nur Titel und Op-Nummern trugen nichts: der Agent konnte aus dem Verlauf
     weder lernen, mit welchem Durchmesser gebohrt wurde, noch, was „t3"
     eigentlich getan hat. Jetzt steht die Op mit ihren wichtigsten Werten da;
     Objektlisten und Skizzen bleiben draußen, die stehen im Steckbrief selbst.
+
+    Vor jedem Aufruf steht seine Schrittnummer (``op3``), dieselbe wie hinter
+    ``created_by`` und ``last_op`` — so führt ein Merkmal über seinen Schritt
+    zur Transaktion (RM-529).
     """
     if not document.transactions:
         return []
@@ -1015,7 +1075,9 @@ def _stack_lines(document: Document) -> list[str]:
     parts = []
     for transaction in document.transactions:
         calls = ", ".join(
-            _op_call(operations[entry]) + _resting_mark(operations[entry])
+            f"{_step_name(entry, steps)} "
+            + _op_call(operations[entry])
+            + _resting_mark(operations[entry])
             if entry in operations
             else str(entry)
             for entry in transaction.ops
