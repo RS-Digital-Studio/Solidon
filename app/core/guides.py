@@ -275,10 +275,11 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "report.slicer",
             ),
             step(_("Prüfen Sie oben Drucker und Filament."), "print.printer"),
+            # Erst nach dem Slicen erscheint *Druckdatei speichern …* (RM-514);
+            # gezeigt wird deshalb der Knopf, mit dem es weitergeht.
             step(
-                _("*Slicen* rechnet die Druckdatei, *Druckdatei speichern …* legt sie ab."),
+                _("*Slicen* rechnet die Druckdatei. Danach legt *Druckdatei speichern …* sie ab."),
                 "print.slice",
-                "print.save",
             ),
         ),
         topics=("print",),
