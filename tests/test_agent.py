@@ -36,16 +36,11 @@ from app.core.types import (
     Scene,
     Severity,
 )
-from tests.helpers import exact_kernel, plate_project
+from tests.helpers import exact_kernel
+from tests.helpers import project as project
 from tests.scripted_backend import ScriptedBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def project() -> Project:
-    """Ein Projekt mit einer Platte auf dem Stapel — der Startpunkt von Weg 1."""
-    return plate_project()
 
 
 def scene_of(project: Project, profile: Profile) -> Scene:

@@ -20,17 +20,11 @@ from PySide6.QtWidgets import QApplication
 from app.core.geom.sculpt import strokes_from_text
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
-from app.ui.settings import UiSettings
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 from tests.ui_helpers import with_a_body
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    """Ein Fenster ohne Körper — jeder Test entscheidet selbst, ob er einen
-    braucht."""
-    return MainWindow(Session(), UiSettings())
 
 
 # --- hinein und heraus ----------------------------------------------------------

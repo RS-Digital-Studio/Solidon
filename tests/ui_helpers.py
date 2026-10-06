@@ -27,6 +27,14 @@ def session(qt_app: QApplication) -> Session:
 
 @pytest.fixture
 def window(qt_app: QApplication, session: Session) -> MainWindow:
+    """Ein Hauptfenster ohne Körper auf der Sitzung des Tests.
+
+    Eine Bauart für alle Fenstertests, damit zwei Aufbauten desselben Fensters
+    nicht auseinanderlaufen; eingebunden mit ``from tests.ui_helpers import
+    window as window`` und ebenso ``session``. Wer eine vorbereitete Sitzung
+    braucht, überschreibt ``session`` in seiner Datei, und das Fenster nimmt
+    sie. Einen Körper lädt jeder Test selbst (:func:`with_a_body`).
+    """
     # Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test
     # auf die Arbeiter jedes offenen Fensters.
     return MainWindow(session, UiSettings())
@@ -69,6 +77,26 @@ def with_a_body(window: MainWindow) -> str:
     object_id = window.object_tree.selected()
     assert object_id
     return str(object_id)
+
+
+def on_the_bore_wall(window: MainWindow, feature_id: str = "hole_1") -> tuple[float, float, float]:
+    """Eine Stelle auf der Wand dieser Bohrung von ``obj_1`` — also eine, die ein Klick
+    wirklich trifft.
+
+    Nämlich auf ihrer **Wand**, nicht auf ihrer Achse: Der Mittelpunkt einer
+    Bohrung liegt im Leeren, dort ist keine Oberfläche, und ein Picker kann ihn
+    nicht zurückgeben. Drei Tests in ``test_analysis_ui.py`` zeigten bis zum
+    22.08.2026 dorthin und waren grün, weil ``_feature_at`` damals das Merkmal
+    mit dem nächsten Mittelpunkt nahm — sie prüften gegen die Rechenweise,
+    nicht gegen einen Klick. Seit die Reichweite an den Dreiecken des Merkmals
+    hängt (§18.5), zeigen sie hierher. Die Höhe z = 2 liegt in der Lochplatte
+    aus dem Korpus (``plate_holes.stl``, aufgesetzt von z 0 bis 8).
+    """
+    entry = window.session.last_result.scene.objects["obj_1"]
+    feature = entry.features[feature_id]
+    centre = feature.params["centre"]
+    radius = float(feature.params["diameter"]) * 0.5
+    return (float(centre[0]) + radius, float(centre[1]), 2.0)
 
 
 def wait_for_export(window: MainWindow) -> None:

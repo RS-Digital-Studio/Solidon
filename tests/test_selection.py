@@ -38,6 +38,7 @@ from app.ui.settings import UiSettings
 from app.ui.viewport import Viewport
 from tests.helpers import exact_kernel
 from tests.render_fakes import RecordingRenderer
+from tests.ui_helpers import on_the_bore_wall
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -354,22 +355,6 @@ def test_free_body_drag_preserves_mixed_feature_and_body_selection(window: MainW
         restored = window.session.last_result.scene.objects[identifier].mesh.raw
         assert np.array_equal(restored.vertices, vertices)
         assert np.array_equal(restored.faces, faces)
-
-
-def on_the_bore_wall(window: MainWindow, feature_id: str = "hole_1") -> tuple[float, float, float]:
-    """Eine Stelle, die ein Klick auf diese Bohrung wirklich trifft.
-
-    Nämlich auf ihrer **Wand**, nicht auf ihrer Achse. Der Unterschied ist der
-    Grund, aus dem hier eine eigene Funktion steht: Der Mittelpunkt einer
-    Bohrung liegt im Leeren, dort ist keine Oberfläche, und ein Picker kann ihn
-    nicht zurückgeben. Tests, die ihn benutzten, prüften gegen eine Stelle, an
-    die kein Klick kommt.
-    """
-    entry = window.session.last_result.scene.objects["obj_1"]
-    feature = entry.features[feature_id]
-    centre = feature.params["centre"]
-    radius = float(feature.params["diameter"]) * 0.5
-    return (float(centre[0]) + radius, float(centre[1]), 2.0)
 
 
 def top_of(window: MainWindow) -> float:

@@ -34,15 +34,10 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Profile
 from tests.agent_cases import AMBIGUOUS, CASES, Case
-from tests.helpers import plate_project
+from tests.helpers import project as project
 from tests.scripted_backend import ScriptedBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def project() -> Project:
-    return plate_project()
 
 
 def good_answer(case: Case) -> list[Reply]:

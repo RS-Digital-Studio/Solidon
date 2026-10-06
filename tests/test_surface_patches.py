@@ -12,7 +12,7 @@ import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.types import Feature, SurfacePatch
 from app.core.units import EPS_GEOM
-from tests.helpers import exact_kernel
+from tests.helpers import a_foreign_slot, exact_kernel
 
 
 def _patch(kind: str = "cylinder", indices: tuple[int, ...] = (0, 1)) -> SurfacePatch:
@@ -246,7 +246,6 @@ def test_real_cylinder_and_planes_publish_their_distinct_sources() -> None:
 
 def test_closed_slots_keep_two_end_carriers_and_actual_flanks() -> None:
     from app.core.perceive.features import _fitted, _one_body, detect
-    from tests.test_slot_features import a_foreign_slot
 
     travel = 20.0
     source = a_foreign_slot(12.0, travel)
@@ -276,7 +275,6 @@ def test_stadium_parts_keep_the_accepted_frame_and_leave_crossing_triangles_unkn
 ) -> None:
     from app.core.perceive.features import StadiumFit, _fitted, _one_body
     from app.core.perceive.slots import slots_from_stadiums
-    from tests.test_slot_features import a_foreign_slot
 
     source = _one_body(a_foreign_slot(12.0, 0.5))
     measured, indices = _fitted(source).stadiums[0]
@@ -414,7 +412,6 @@ def test_merged_slot_chamfer_retains_its_true_apices_and_radian_half_angles() ->
 def test_a_slot_does_not_average_its_two_accepted_reference_radii() -> None:
     from app.core.perceive.features import _fitted, _one_body
     from app.core.perceive.slots import find_slots
-    from tests.test_slot_features import a_foreign_slot
 
     mesh = _one_body(a_foreign_slot(12.0, 20.0))
     fits = _fitted(mesh).fillets

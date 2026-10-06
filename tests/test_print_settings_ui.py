@@ -73,11 +73,7 @@ from app.ui.print_settings_dialog import (
 )
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-
-
-@pytest.fixture
-def session(qt_app: QApplication) -> Session:
-    return Session()
+from tests.ui_helpers import session as session
 
 
 @pytest.mark.parametrize("which", ["printer_choice", "machine_choice"])

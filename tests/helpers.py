@@ -8,10 +8,13 @@ mehr als eine Datei liest, steht hier — öffentlich benannt und ohne
 Testfunktion daneben, damit pytest die Datei nicht als Test sammelt.
 
 Hier liegt nur, was **keinen** Fensteraufbau braucht: Ein Helfer, der Qt
-zieht, gehört nicht in eine Datei, die auch Kerntests importieren.
+zieht, gehört nicht in eine Datei, die auch Kerntests importieren; der steht
+in ``tests/ui_helpers.py``.
 
-**Noch nicht hier:** ``test_cache.FakeCodec`` in der gesperrten Datei
-``test_native_references`` und ``test_slot_features.a_foreign_slot``.
+Eine Fixture, die mehrere Dateien teilen (``project``), steht hier einmal und
+wird mit ``from tests.helpers import project as project`` eingebunden: pytest
+findet sie im Namensraum der Testdatei, und der doppelte Name sagt ruff, dass
+der Import weitergereicht und nicht vergessen ist.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import io
+import json
 import math
 import os
 import shutil
@@ -47,6 +51,7 @@ from app.core.types import (
     Document,
     Feature,
     Finding,
+    Mesh,
     Operation,
     OpResult,
     Parameter,
@@ -272,6 +277,38 @@ class FakeMesh:
         return self.slots
 
 
+class FakeCodec:
+    """Steht für die Geometrieschicht, die den echten später liefert.
+
+    Schreibt nur die Kennzahlen eines :class:`FakeMesh` und liest sie als
+    solches zurück: Die Tests des Plattencaches prüfen Ablage, Budget und
+    Wiederherstellung, nicht das Netzformat.
+    """
+
+    suffix = ".json"
+
+    def stores(self, mesh: Mesh) -> bool:
+        return True
+
+    def dumps(self, mesh: Mesh) -> bytes:
+        source = mesh  # type: ignore[assignment]
+        return json.dumps(
+            {
+                "triangles": source.triangle_count,
+                "vertices": source.vertex_count,
+                "size": list(source.bounds.size),
+            }
+        ).encode("utf-8")
+
+    def loads(self, data: bytes) -> Mesh:
+        values = json.loads(data)
+        return FakeMesh(  # type: ignore[return-value]
+            triangles=values["triangles"],
+            vertices=values["vertices"],
+            size=tuple(values["size"]),
+        )
+
+
 def make_object(object_id: str = "obj_1", name: str = "Teil", **kwargs: object) -> SceneObject:
     """Ein Szenenobjekt auf einem :class:`FakeMesh` mit den genannten Kennzahlen."""
     return SceneObject(id=object_id, name=name, mesh=FakeMesh(**kwargs))  # type: ignore[arg-type]
@@ -371,6 +408,16 @@ def plate_project() -> Project:
         "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
     )
     return made
+
+
+@pytest.fixture
+def project() -> Project:
+    """Ein Projekt mit einer Platte auf dem Stapel — der Startpunkt von Weg 1.
+
+    Je Test frisch gebaut (:func:`plate_project`), eingebunden mit
+    ``from tests.helpers import project as project``.
+    """
+    return plate_project()
 
 
 def rounded_pattern_carrier(*, tilted: bool = False) -> SceneObject:
@@ -1308,6 +1355,31 @@ def plate_with_a_chamfered_slot() -> MeshData:
     )
     body = boolean("difference", [plate, MeshData.of(cutter)]).mesh
     return boolean("difference", [body, MeshData.of(chamfer)]).mesh
+
+
+def a_foreign_slot(diameter: float, travel: float) -> MeshData:
+    """Ein Langloch, wie es ein eingelesenes Netz hat — ohne Solidon-Operation.
+
+    ``drill`` lässt seit dem 11.09.2026 kein so knappes Langloch mehr zu
+    (:func:`app.core.geom.prepare.shortest_slot`); wer den Streifen darunter
+    prüfen will, muss schneiden wie ein fremdes Programm: Quader minus
+    aufgezogenes Stadion (RM-155).
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.geom.prepare import slot_profile
+    from app.core.geom.sketch_solid import extrude_profile
+    from app.core.types import PlaneFrame
+
+    plate_body = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 12.0)))
+    outline = slot_profile(radius=diameter / 2.0, travel=travel, angle_deg=0.0)
+    frame = PlaneFrame(
+        origin=(0.0, 0.0, -10.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 1.0, 0.0),
+        normal=(0.0, 0.0, 1.0),
+    )
+    tool = extrude_profile(outline, 20.0, frame)
+    return boolean("difference", [plate_body, MeshData.of(tool)]).mesh
 
 
 def countersunk_plate(profile: Profile) -> SceneObject:

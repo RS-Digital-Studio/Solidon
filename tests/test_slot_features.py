@@ -29,7 +29,7 @@ from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.prepare import drill, shortest_slot, slot_profile
+from app.core.geom.prepare import drill, shortest_slot
 from app.core.perceive.digest import _feature_line
 from app.core.perceive.features import _fitted, _one_body, detect
 from app.core.perceive.slots import find_slots
@@ -44,7 +44,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from tests.helpers import exact_kernel, inside, slanted_plate, stepped_plate
+from tests.helpers import a_foreign_slot, exact_kernel, inside, slanted_plate, stepped_plate
 
 
 def plate() -> MeshData:
@@ -1843,29 +1843,6 @@ def test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any(profile: Profil
 
 
 # --- RM-155: der Mantel aus einem Stück ------------------------------------------------
-
-
-def a_foreign_slot(diameter: float, travel: float) -> MeshData:
-    """Ein Langloch, wie es ein eingelesenes Netz hat — ohne Solidon-Operation.
-
-    ``drill`` lässt seit dem 11.09.2026 kein so knappes Langloch mehr zu
-    (:func:`app.core.geom.prepare.shortest_slot`); wer den Streifen darunter
-    prüfen will, muss schneiden wie ein fremdes Programm: Quader minus
-    aufgezogenes Stadion.
-    """
-    from app.core.geom.sketch_solid import extrude_profile
-    from app.core.types import PlaneFrame
-
-    plate_body = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 12.0)))
-    outline = slot_profile(radius=diameter / 2.0, travel=travel, angle_deg=0.0)
-    frame = PlaneFrame(
-        origin=(0.0, 0.0, -10.0),
-        x_axis=(1.0, 0.0, 0.0),
-        y_axis=(0.0, 1.0, 0.0),
-        normal=(0.0, 0.0, 1.0),
-    )
-    tool = extrude_profile(outline, 20.0, frame)
-    return boolean("difference", [plate_body, MeshData.of(tool)]).mesh
 
 
 @pytest.mark.parametrize(

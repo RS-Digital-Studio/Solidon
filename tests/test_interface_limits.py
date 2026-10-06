@@ -33,6 +33,8 @@ from app.ui.selection_operations import OPEN_UP_TO, SelectionOperationsPanel
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import shortcut_for
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -77,11 +79,6 @@ def _the_whole_catalogue() -> None:
     derselbe Aufruf, den auch die Kommandozeile macht.
     """
     load_operations()
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    return MainWindow(Session(), UiSettings())
 
 
 def test_the_menu_bar_stays_readable(window: MainWindow) -> None:

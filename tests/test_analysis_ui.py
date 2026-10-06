@@ -27,6 +27,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests.render_fakes import RecordingItem, RecordingRenderer
+from tests.ui_helpers import on_the_bore_wall
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -779,28 +780,6 @@ def select_plate(window: MainWindow) -> None:
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
-
-
-def on_the_bore_wall(window: MainWindow, feature_id: str) -> tuple[float, float, float]:
-    """Eine Stelle auf der Wand dieser Bohrung — also eine, die ein Klick
-    wirklich trifft.
-
-    Drei Tests dieser Datei zeigten bis zum 22.08.2026 auf den **Mittelpunkt**
-    einer Bohrung. Der liegt auf ihrer Achse, mitten im Leeren, und dort ist
-    keine Oberfläche: Ein ``vtkCellPicker`` kann diesen Punkt nicht
-    zurückgeben. Grün waren sie, weil ``_feature_at`` damals das Merkmal mit
-    dem nächsten Mittelpunkt nahm — sie prüften also gegen die Rechenweise und
-    nicht gegen einen Klick. Seit die Reichweite an den Dreiecken des Merkmals
-    hängt (§18.5), zeigen sie dorthin, wo gezeigt wird.
-
-    Die eigentliche Auswahltiefe steht in ``tests/test_selection.py``; hier
-    bleiben die drei Aussagen, um die es diesen Tests ging.
-    """
-    entry = window.session.last_result.scene.objects["obj_1"]
-    feature = entry.features[feature_id]
-    centre = feature.params["centre"]
-    radius = float(feature.params["diameter"]) * 0.5
-    return (float(centre[0]) + radius, float(centre[1]), 2.0)
 
 
 def wait_for_map(window: MainWindow) -> None:
