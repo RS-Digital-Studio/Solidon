@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
+| 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
 | 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-313: Der Versionswächter liefert seit v0.5.2 echte Ergebnisse (06.10.2026)](#rm-313-der-versionswächter-liefert-seit-v052-echte-ergebnisse-06102026) |
 | 2026-10-06 | [RM-234: Die Fensterverträge melden sich auch bei rotem Kern (06.10.2026)](#rm-234-die-fensterverträge-melden-sich-auch-bei-rotem-kern-06102026) |
@@ -9036,7 +9038,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-017 — Stegdicke und Kammertiefe sind an keinem echten Profil gemessen | weiter offen → [RM-017](#rm-017) | app/core/knowledge/data/standards.toml:396–420 führt weiterhin gebräuchliche Katalogwerte lip/depth 1,8/4,3 bzw. 2,0/5,5 sowie Herstellerspannen. Kein zugeordneter physischer Messbeleg gefunden. |
 | RM-018 — Fünf Fensterdateien reißen | zusammengeführt → [RM-021](ROADMAP.md#rm-021) | ROADMAP.md:4480–4538 fasst selbst bereits vier frühere Registerpunkte zusammen; app/ui/session.py:2471–2524 enthält heute wait_for_idle/processEvents an anderen Stellen. 8fcc9edc entfernte den VTK-Renderer. Aktuelle Nichtnull-Prozessausgänge bleiben echte rote Gates, auch nach bestandenen Assertions. |
 | RM-019 — Signatur C: der Hänger — kein Absturz, sondern Stillstand | zusammengeführt → [RM-021](ROADMAP.md#rm-021) | ROADMAP.md:4694–4712 nennt alte Qt/GIL-Mutex-Abzüge und ausdrücklich fehlenden kurzen Reproduzierer. Der Rendererwechsel widerlegt keine Qt-Lock-Inversion. Zusammenführen dient nur der gemeinsamen aktuellen Abnahme; Hänger und Abriss bleiben technisch getrennte Befundarten. |
-| RM-020 — `3D Drucker/` liegt nur auf einer Maschine | weiter offen → [RM-020](ROADMAP.md#rm-020) | Lokal geprüft: git -C '3D Drucker' remote -v liefert keinen Eintrag; letzter Commit ist inzwischen 0925604 (Besteckkorb kundenfertig und modular aufbereiten), git status --short umfasst 52 Zeilen. Die alten Angaben 5918740/83 Dateien/458 MB sind überholt. Kein Remote und keine Sicherung sind nicht dasselbe. |
+| RM-020 — `3D Drucker/` liegt nur auf einer Maschine | weiter offen → [RM-020](#rm-020) | Lokal geprüft: git -C '3D Drucker' remote -v liefert keinen Eintrag; letzter Commit ist inzwischen 0925604 (Besteckkorb kundenfertig und modular aufbereiten), git status --short umfasst 52 Zeilen. Die alten Angaben 5918740/83 Dateien/458 MB sind überholt. Kein Remote und keine Sicherung sind nicht dasselbe. |
 | RM-021 — Vier Stapel zeigen auf `session.py:1515` — die Stelle ist benannt, die Ursache nicht | weiter offen → [RM-021](ROADMAP.md#rm-021) | ROADMAP.md:5107–5129 belegt alte Abrisse sowie zwei grüne isolierte Läufe unter Python 3.14.7, fordert aber den zusammengeführten main-Lauf. app/ui/session.py:2452–2524 regelt release/wait_for_idle heute; tests/conftest.py:284,359,668 hält den Renderer-/Worker-Abbau. 8fcc9edc entfernte VTK-Rendering. Ohne neuen kompletten Gatebeleg wäre erledigt unzulässig. |
 | RM-022 — Verrundung und Fase gehen auf einem Netz nicht — Konzept liegt vor, Entscheidung offen | weiter offen → [RM-022](ROADMAP.md#rm-022) | konzepte/konzept-flaechenrueckgewinnung-2026-08.md und ROADMAP.md:5876–5921 enthalten eine Produktentscheidung, keinen freigegebenen Bauauftrag; 02914d5 erklärte den deaktivierten Einstieg. Bauplan §40 P12 fordert exakte B-Rep-Verrundung, nicht automatische Netzrekonstruktion. Keine neue Phase eigenmächtig freigegeben. |
 | RM-023 — Der Verweisfilter schlüsselt nach Objekt-Kennungen, die im Stapel wechseln | weiter offen → [RM-023](#rm-023) | app/core/scene/evaluate.py:255-265,558: referenced_features nach ObjectId; unverändert einmal aufgebaut. |
@@ -14007,7 +14009,7 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       (`TripoSGLoader`, `TripoSGImageToMesh`, `TripoSGPostprocess`,
       `TripoSGExportMesh`) statt „ein Knoten fehlt“.
 
-- **Historischer Befund RM-020 (weiter offen; aktuelle Aufgabe [RM-020](ROADMAP.md#rm-020)):** **`3D Drucker/` liegt nur auf einer Maschine.** Der Ordner hat ein
+- **Historischer Befund RM-020 (weiter offen; aktuelle Aufgabe [RM-020](#rm-020)):** **`3D Drucker/` liegt nur auf einer Maschine.** Der Ordner hat ein
       **eigenes** `.git` und **kein Remote** — 458 MB, 83 nicht committete
       Dateien, letzter Commit `5918740`. Die `CLAUDE.md` behauptete bis zum
       23.08.2026 das Gegenteil (*„im Repository: es wird auf drei Maschinen
@@ -42976,3 +42978,52 @@ Gegenprobe rot an den drei alten Stellen. Abbildung mit 0.5.2 neu erzeugt (`9b0e
 `website/handbuch/en/fit.svg` und `fit-dark.svg` zeigen „Clearance 0.25 mm“.
 `pytest -m rendered tests/test_manual.py::test_the_drawn_figures_are_the_ones_the_code_draws` am
 06.10.2026: sechs Sprachen grün, `[en]` eingeschlossen.
+
+## RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)
+
+<a id="rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026"></a>
+<a id="rm-183"></a>
+
+**RM-183 — Zeichenmodus am Fenster abnehmen.** Die
+  [Durchsicht](konzepte/durchsicht-zeichenmodus-2026-09.md) vom 16.09. hat zehn Befunde. Acht
+  sind am selben Tag gebaut: Gestensatz nur im Bild, vier Werkzeuggruppen mit Trennstrichen, der
+  Bedingungshinweis geht nach dem ersten Sehen — und die fünf, die Robert delegiert hat („mach
+  das beste für kunden daraus, weniger ist manchmal mehr"): *Fertig* klappt die sechs Arten
+  direkt auf statt eines Zwischendialogs, die Zeile der Karte sagt nur, was sonst nirgends
+  steht, der Rasterhaken „Auto" fällt, ein Zeichnen-Knopf je Skizzenfeld, keine Kürzel für die
+  Lochbilder. **Abzunehmen war am laufenden Fenster:** Rohrbogen mit gezeichneter Bahn und
+  Trichter mit gezeichnetem oberen Umriss (Z8),
+  die Tastaturfolge durch die Karte, die drei Trennstriche im dunklen Thema — und aus dem selben
+  Tag das Rollen im Merkmalfenster und die Rampe der 3D-Maus. Abnahme: je Fall ein gebauter
+  Körper oder ein Satz von Robert, was hakt.
+
+  **Am Fenster gefahren:** Führen mit gezeichneter Bahn und Überblenden mit gezeichnetem Umriss
+  (`f19a7b4b`, sechs Fehler behoben), Tabulatorfolge, Bildschirmleser und Trennstriche im
+  dunklen Thema (2,30:1) gemessen. Offen allein die Rampe der 3D-Maus am echten Gerät; sie steht
+  auch bei [RM-070](ROADMAP.md#rm-070) — ob dieser Rest dort aufgeht und der Punkt damit schließt,
+  entscheidet Robert.
+
+**Nachweis (06.10.2026):** Entscheidung Robert: Der Rest — die Rampe der 3D-Maus im
+Skizzenmodus am echten Gerät — geht in RM-070 auf, das ihn in seiner Registerzeile führt
+(„die Rampe im Skizzenmodus (aus RM-183)“).
+
+## RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)
+
+<a id="rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026"></a>
+<a id="rm-020"></a>
+
+**RM-020 — Sicherung der eigenständigen Druckprojekte belegen.** Den Sicherungsweg für das
+  eigenständige Repository 3D Drucker festlegen und belegen. Es hat weiterhin kein Git-Remote; ob
+  eine andere Sicherung existiert, ist hier nicht nachgewiesen. Abnahme: Robert entscheidet über
+  Remote oder anderen Sicherungsweg, und eine Wiederherstellungsprobe bestätigt den gesicherten
+  Stand. Einen externen Upload erst aus dieser Entscheidung ableiten.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#vier-wege-von-hand-während-die-suite-grün-war-23082026).
+  Das Druckprojekt-Repository liegt unter `F:\3D Dateien\3D Drucker` (HEAD `8bce3d8`, ohne
+  Remote, unverändert am 06.10.); die OneDrive-Kopie ist älter (HEAD `47321dd`, 29.08.) und
+  weicht ab, ist also keine Sicherung.
+  Robert 02.10.2026: Das Repository in der OneDrive-Kopie wird nicht benutzt und bleibt, wie es ist. Als Sicherung zählt es damit nicht; RM-020 braucht eine eigene Sicherung von `F:\3D Dateien\3D Drucker`.
+
+**Entfallen (06.10.2026, Entscheidung Robert):** Gebraucht werden nur noch die Dateien der
+Druckprojekte, und die liegen in `F:\3D Dateien`; das Repository „3D Drucker“ braucht keine
+eigene Sicherung.
