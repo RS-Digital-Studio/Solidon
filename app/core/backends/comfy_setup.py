@@ -843,6 +843,33 @@ def _writable_again(function: Callable[[str], object], path: str, _problem: Base
     function(path)
 
 
+def legacy_leftovers(comfyui: Path) -> tuple[Path, ...]:
+    """Was :func:`remove_legacy` entfernen wird — dieselbe Liste für Dialog und Löschung.
+
+    Der Einrichtungsdialog nennt diese Ordner samt Größe, bevor er etwas
+    anfasst (Entscheidung Robert, 07.10.2026): Gelöscht wird nur, was vorher
+    dastand.
+    """
+    nodes = comfyui / LEGACY_NODES
+    weights = comfyui / LEGACY_WEIGHTS
+    doomed: list[Path] = []
+    if (nodes / "nodes.py").is_file() and (nodes / "__init__.py").is_file():
+        doomed.append(nodes)
+    if (weights / LEGACY_MARKER).is_file():
+        doomed.append(weights)
+    doomed.extend(
+        leftover
+        for leftover in sorted(weights.parent.glob(weights.name + ".*"))
+        if leftover.is_dir() and (leftover.name.endswith(".part") or ".previous-" in leftover.name)
+    )
+    return tuple(doomed)
+
+
+def legacy_gigabytes(leftovers: tuple[Path, ...]) -> float:
+    """Wie viel Platz das Entfernen der alten Einrichtung frei macht, in GB."""
+    return sum(_gigabytes_in(folder) for folder in leftovers)
+
+
 def remove_legacy(comfyui: Path, progress: ProgressFn = _silent) -> bool:
     """Räumt weg, was Solidon für TripoSG selbst angelegt hat. Liefert, ob etwas ging.
 
@@ -856,18 +883,8 @@ def remove_legacy(comfyui: Path, progress: ProgressFn = _silent) -> bool:
     die alten Dateien nicht, und ein gesperrter Ordner ist kein Grund, keine
     Modelle zu laden.
     """
-    nodes = comfyui / LEGACY_NODES
     weights = comfyui / LEGACY_WEIGHTS
-    doomed: list[Path] = []
-    if (nodes / "nodes.py").is_file() and (nodes / "__init__.py").is_file():
-        doomed.append(nodes)
-    if (weights / LEGACY_MARKER).is_file():
-        doomed.append(weights)
-    doomed.extend(
-        leftover
-        for leftover in weights.parent.glob(weights.name + ".*")
-        if leftover.is_dir() and (leftover.name.endswith(".part") or ".previous-" in leftover.name)
-    )
+    doomed = legacy_leftovers(comfyui)
     if not doomed:
         return False
     progress(_("Alte TripoSG-Einrichtung von Solidon entfernen"))

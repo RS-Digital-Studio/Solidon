@@ -197,6 +197,7 @@
   "Als volle Spule eintragen": "Record as a full spool",
   "Alte Filamentwerte übernehmen": "Use previous filament values",
   "Alte TripoSG-Einrichtung von Solidon entfernen": "Removing Solidon's old TripoSG setup",
+  "Einrichten entfernt dabei Solidons alte TripoSG-Einrichtung, die kein Ablauf mehr liest: {folders} (rund {size} GB). Was Sie selbst dorthin gelegt haben, bleibt.": "Setting up also removes Solidon's old TripoSG setup, which no workflow reads any more: {folders} (about {size} GB). Anything you put there yourself stays.",
   "Am Anfang": "At the start",
   "Am Boden des Hohlraums war nur Platz für {placed} von {wanted} Entlüftungen. Der Hohlraum ist offen.": "The floor of the cavity only had room for {placed} of {wanted} vents. The cavity is open.",
   "Am Dreiecksmodell": "On the triangle model",

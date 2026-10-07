@@ -1086,6 +1086,7 @@ def test_comfy_folder_poll_does_not_replace_the_debounce_delay(
         _remember_model_choices=lambda: None,
         _set_start_enabled=lambda _enabled: None,
         _set_model_options=lambda _weights, _image: None,
+        _show_legacy=lambda _folders, _size: None,
     )
     monkeypatch.setattr(comfy_dialog, "set_role", lambda *_args: None)
 
@@ -1765,6 +1766,57 @@ def test_the_setup_dialog_names_version_licences_and_sizes_before_loading(
         said = " ".join(texts + [box.text() for box in dialog.findChildren(QCheckBox)])
         assert "TripoSG" not in said and "SDXL" not in said
     finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize(("language", "words"), [("de", "rund 7,5 GB"), ("en", "about 7.5 GB")])
+def test_the_setup_dialog_says_which_old_folders_it_removes_before_it_does(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, language: str, words: str
+) -> None:
+    """Entscheidung Robert (07.10.2026): Die Einrichtung räumt Solidons alte
+    TripoSG-Einrichtung weg — und sagt vorher, welche Ordner und wie viel.
+
+    Der Hinweis steht nur da, wo es die alte Einrichtung gibt; ein ComfyUI
+    ohne sie bekommt keinen Satz über etwas, das nicht da ist.
+    """
+    from app.core.backends import comfy_setup
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    old = tmp_path / "alt"
+    nodes = old / comfy_setup.LEGACY_NODES
+    nodes.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    weights = old / comfy_setup.LEGACY_WEIGHTS
+    weights.mkdir(parents=True)
+    (weights / comfy_setup.LEGACY_MARKER).write_text("{}", encoding="utf-8")
+    clean = tmp_path / "neu"
+    (clean / "custom_nodes").mkdir(parents=True)
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path(given or old))
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "legacy_gigabytes", lambda found: 7.5 if found else 0.0)
+    install_language(language)
+    set_language(language)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        said = dialog.legacy.text()
+        assert not dialog.legacy.isHidden(), "vor dem Einrichten steht da, was geht"
+        assert comfy_setup.LEGACY_NODES in said and comfy_setup.LEGACY_WEIGHTS in said
+        assert words in said, "und wie viel Platz das macht"
+        assert dialog.start_button.isEnabled(), "angesagt, nicht gesperrt"
+
+        dialog.folder.setText(str(clean))
+        dialog._refresh_folder_state()
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert dialog.legacy.isHidden(), "ohne alte Einrichtung kein Satz darüber"
+    finally:
+        set_language("de")
         dialog.release()
         dialog.deleteLater()
 

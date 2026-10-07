@@ -118,6 +118,9 @@ class _FolderProbeResult:
     image_model: bool = False
     reason: str = ""
     crashed: bool = False
+    legacy: tuple[str, ...] = ()
+    """Die Ordner der alten TripoSG-Einrichtung, relativ zu ComfyUI."""
+    legacy_gigabytes: float = 0.0
 
 
 def _probe_folder(generation: int, entered: str, results: Queue[_FolderProbeResult]) -> None:
@@ -126,6 +129,8 @@ def _probe_folder(generation: int, entered: str, results: Queue[_FolderProbeResu
         found = comfy_setup.find_comfyui(entered or None)
         weights = comfy_setup.weights_present(found)
         image_model = comfy_setup.image_model_present(found)
+        leftovers = comfy_setup.legacy_leftovers(found)
+        legacy_size = comfy_setup.legacy_gigabytes(leftovers)
     except comfy_setup.SetupFailed as problem:
         results.put(_FolderProbeResult(generation, entered, reason=str(problem)))
     except Exception as problem:
@@ -146,6 +151,8 @@ def _probe_folder(generation: int, entered: str, results: Queue[_FolderProbeResu
                 found=str(found),
                 weights=weights,
                 image_model=image_model,
+                legacy=tuple(path.relative_to(found).as_posix() for path in leftovers),
+                legacy_gigabytes=legacy_size,
             )
         )
 
@@ -229,6 +236,14 @@ class ComfySetupDialog(QDialog):
         self.image_model = QCheckBox(self._image_model_label, self)
         self._set_model_options(False, False)
 
+        # **Was die Einrichtung entfernt, steht vorher da** (Entscheidung Robert,
+        # 07.10.2026): Solidons alte TripoSG-Einrichtung, nur am eigenen
+        # Zeichen erkannt, mit Ordnern und Größe — sichtbar nur, wo es sie gibt.
+        self.legacy = WrappedNote(self)
+        self.legacy.grown.connect(self._fit_soon)
+        self.legacy.setTextFormat(Qt.TextFormat.PlainText)
+        self.legacy.setVisible(False)
+
         self.state = WrappedNote(self)
         self.state.grown.connect(self._fit_soon)
         self.state.setTextFormat(Qt.TextFormat.PlainText)
@@ -269,6 +284,7 @@ class ComfySetupDialog(QDialog):
         content_layout.addLayout(row)
         content_layout.addWidget(self.weights)
         content_layout.addWidget(self.image_model)
+        content_layout.addWidget(self.legacy)
         # **Zustand und Balken im Rollbereich** (RM-339): Eine gescheiterte
         # Einrichtung meldet jede Ausgabezeile des Prozesses. Außerhalb ließ
         # sie das Fenster über den Bildschirm wachsen, und *Einrichten* und
@@ -404,6 +420,7 @@ class ComfySetupDialog(QDialog):
         self._probe_target = entered
         self._probe_pending = True
         self._probe_requested = True
+        self._show_legacy((), 0.0)
         self._probe_timer.stop()
         self._probe_timer.start(0 if immediate else FOLDER_PROBE_DELAY_MS)
         self._probe_slow_timer.start(FOLDER_PROBE_SLOW_MS)
@@ -467,6 +484,8 @@ class ComfySetupDialog(QDialog):
                     result.found,
                     result.weights,
                     result.image_model,
+                    legacy=result.legacy,
+                    legacy_gigabytes=result.legacy_gigabytes,
                 )
             elif result.crashed:
                 self._folder_probe_crashed(result.generation, result.entered, result.reason)
@@ -474,7 +493,15 @@ class ComfySetupDialog(QDialog):
                 self._folder_probe_failed(result.generation, result.entered, result.reason)
 
     def _folder_probe_ready(
-        self, generation: int, entered: str, found: str, weights: bool, image_model: bool
+        self,
+        generation: int,
+        entered: str,
+        found: str,
+        weights: bool,
+        image_model: bool,
+        *,
+        legacy: tuple[str, ...] = (),
+        legacy_gigabytes: float = 0.0,
     ) -> None:
         """Nur die Antwort zum weiterhin sichtbaren Ordner darf die Häkchen setzen."""
         if (
@@ -493,8 +520,23 @@ class ComfySetupDialog(QDialog):
         self._probe_timed_out_generation = None
         self.progress.setVisible(False)
         self._set_model_options(weights, image_model)
+        self._show_legacy(legacy, legacy_gigabytes)
         self._set_start_enabled(True)
         set_role(self.state, "info", "")
+
+    def _show_legacy(self, folders: tuple[str, ...], gigabytes: float) -> None:
+        """Die Ordner der alten Einrichtung, die *Einrichten* entfernt — oder nichts."""
+        if not folders:
+            self.legacy.setVisible(False)
+            self.legacy.setText("")
+            return
+        text = tr(
+            "Einrichten entfernt dabei Solidons alte TripoSG-Einrichtung, die kein Ablauf "
+            "mehr liest: {folders} (rund {size} GB). Was Sie selbst dorthin gelegt haben, "
+            "bleibt."
+        ).format(folders=", ".join(folders), size=format_decimal(gigabytes, 1))
+        set_role(self.legacy, "info", text)
+        self.legacy.setVisible(True)
 
     def _folder_probe_failed(self, generation: int, entered: str, reason: str) -> None:
         """Einen nicht erreichbaren Ordner mit einem gangbaren nächsten Schritt melden."""
@@ -678,6 +720,7 @@ class ComfySetupDialog(QDialog):
         if not result.done:
             set_role(self.state, "warning", str(result.reason))
             return
+        self._show_legacy((), 0.0)
         # Der Neustart ist eine Vorsicht: Neue Modelldateien sieht ein laufendes
         # ComfyUI meist von selbst, eine entfernte alte Knotensammlung erst
         # nach dem Neustart.

@@ -197,6 +197,7 @@
   "Als volle Spule eintragen": "Registar como bobina cheia",
   "Alte Filamentwerte übernehmen": "Usar os valores anteriores do filamento",
   "Alte TripoSG-Einrichtung von Solidon entfernen": "A remover a antiga configuração do TripoSG do Solidon",
+  "Einrichten entfernt dabei Solidons alte TripoSG-Einrichtung, die kein Ablauf mehr liest: {folders} (rund {size} GB). Was Sie selbst dorthin gelegt haben, bleibt.": "A configuração remove também a antiga configuração do TripoSG do Solidon, que nenhum fluxo lê: {folders} (cerca de {size} GB). O que lá colocou mantém-se.",
   "Am Anfang": "No início",
   "Am Boden des Hohlraums war nur Platz für {placed} von {wanted} Entlüftungen. Der Hohlraum ist offen.": "No fundo da cavidade só havia espaço para {placed} de {wanted} respiros. A cavidade está aberta.",
   "Am Dreiecksmodell": "No modelo de triângulos",
