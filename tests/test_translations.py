@@ -1721,10 +1721,26 @@ def test_no_entry_mixes_two_apostrophes(language: str) -> None:
     assert not mixed, f"{language}: beide Apostrophe in einem Text:\n" + "\n".join(mixed)
 
 
+def model_text_files() -> list[Path]:
+    """Was das Sprachmodell liest: die Agentenschicht und der Steckbrief."""
+    return [
+        *sorted((PACKAGE_DIR / "core" / "agent").glob("*.py")),
+        PACKAGE_DIR / "core" / "perceive" / "digest.py",
+    ]
+
+
 def non_model_surface_files() -> list[Path]:
-    """Kommandozeile und die drei eigenständigen Kundenmeldungswege im Kern."""
+    """Kommandozeile und der ganze Kern außer den Modelltexten.
+
+    Bis RM-285 las die Prüfung im Kern nur ``install.py``, ``log.py`` und
+    ``support.py``; der Einrichtungsdialog für ComfyUI setzte derweil feste
+    Doppelpunkte vor übersetzte Sätze. Was sonst ans Modell oder an den Kunden
+    geht (``registry/surfaces``, ``knowledge/rules``, ``perceive/actions``),
+    war ungeschützt.
+    """
+    model = set(model_text_files())
     return sorted((PACKAGE_DIR / "cli").rglob("*.py")) + [
-        PACKAGE_DIR / "core" / name for name in ("install.py", "log.py", "support.py")
+        path for path in sorted((PACKAGE_DIR / "core").rglob("*.py")) if path not in model
     ]
 
 
@@ -1736,10 +1752,7 @@ def test_model_texts_do_not_append_a_fixed_colon() -> None:
     Verlauf des Kunden. Auf Deutsch bleibt jeder Text Zeichen für Zeichen,
     was er war.
     """
-    paths = [
-        *sorted((PACKAGE_DIR / "core" / "agent").glob("*.py")),
-        PACKAGE_DIR / "core" / "perceive" / "digest.py",
-    ]
+    paths = model_text_files()
     assert len(paths) > 5, "die Agentenschicht muss Quellen haben"
     offenders = [
         f"{path.relative_to(PACKAGE_DIR)}:{line}"
@@ -1752,7 +1765,7 @@ def test_model_texts_do_not_append_a_fixed_colon() -> None:
 def test_non_model_surface_labels_do_not_append_a_fixed_colon() -> None:
     """Modellkontext und Bereichsnachweis gehören zu ihren getrennten Abnahmen."""
     paths = non_model_surface_files()
-    assert paths, "die Kundentextprüfung muss Quellen lesen"
+    assert len(paths) > 100, "die Kundentextprüfung muss den Kern lesen"
     offenders = [
         f"{path.relative_to(PACKAGE_DIR)}:{line}"
         for path in paths
