@@ -83,6 +83,7 @@ INSTALLER_ORCHESTRATION_FILES = frozenset(
         INSTALLER_WORKFLOW,
         "tools/sign_release.py",
         "tools/windows_signed_installer.py",
+        "tools/check_windows_update.py",
         "tests/test_sign_release.py",
         "tests/test_windows_signed_installer.py",
         "tools/CLAUDE.md",

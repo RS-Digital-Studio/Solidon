@@ -75,6 +75,17 @@ grün sein, während das Paket beim Kunden nach Sekunden endet.
   dann auf ein Symbol. Eine neue Ausnahme braucht einen solchen Beleg.
 - `tests/test_packaging.py` hält die Schritte samt Gegenproben; ein neues
   Paketformat bekommt seinen Start, bevor es ausgeliefert wird.
+- **Das Windows-Setup wird bei jedem Release über die veröffentlichte Version
+  aktualisiert und deinstalliert** (`tools/check_windows_update.py`, Entscheidung
+  Robert): mit den Schaltern der Anwendung, danach Neustart und Starttest; eigene
+  Bausteine, Einstellungen, Profile und Filamentlager überstehen Update und
+  Deinstallation, das Programm hinterlässt nichts. Grund: Ein Kunde installiert
+  fast nie frisch, und ein Update, das seine Bausteine kostet, merkt erst er.
+  Ohne Versionssprung ist der Schritt rot, und nach jeder Installation muss jede
+  gesuchte Spur da sein — sonst prüft er ein Neuinstallieren oder ins Leere. Was
+  `[Registry]` im `.iss` schreibt, geht beim Deinstallieren wieder
+  (`uninsdelete…` oder ein eigener Elternschlüssel mit `uninsdeletekey`; Wächter in
+  `tests/test_windows_signed_installer.py`).
 
 ## Die Version wird vor dem Bau erhöht, und nur über das Werkzeug
 

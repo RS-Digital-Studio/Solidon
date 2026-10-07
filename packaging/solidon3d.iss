@@ -152,9 +152,13 @@ Root: HKA; Subkey: "Software\Classes\{#AppId}.part";   ValueType: string; ValueN
 Root: HKA; Subkey: "Software\Classes\{#AppId}.part\DefaultIcon";   ValueType: string; ValueName: ""; ValueData: "{app}\{#AppName}.exe,0"; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.part\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Tasks: associate
 ; Damit die Anwendung auch im Dialog „Öffnen mit" steht, wenn die Zuordnung
-; abgewählt wurde oder ein anderes Programm sie später übernimmt.
+; abgewählt wurde oder ein anderes Programm sie später übernimmt. Der Schlüssel
+; unter ``Applications`` gehört ganz dieser Anwendung und geht beim
+; Deinstallieren als Ganzes: ``uninsdeletekey`` an ``…\shell\open\command``
+; allein ließ ``shell\open`` und ``SupportedTypes`` stehen (RM-055).
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe";   Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#ProjectSuffix}"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#ProjectSuffix}"; ValueData: "";   Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#PartFileSuffix}"; ValueData: "";   Flags: uninsdeletevalue
 
 ; **Ein Update ersetzt den Laufzeitbaum, statt ihn zu überschreiben.** [Files]
