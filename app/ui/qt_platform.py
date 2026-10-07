@@ -100,7 +100,7 @@ def qpa_platform(platform: str, environ: Mapping[str, str]) -> str | None:
 def input_method_environment(
     platform: str, environ: Mapping[str, str], modules: Collection[str], *, portal: bool
 ) -> dict[str, str]:
-    """Was vor dem Anwendungsaufbau in der Umgebung stehen soll, damit Fcitx Eingaben bekommt.
+    """Was vor dem Anwendungsaufbau in der Umgebung stehen soll, damit Fcitx und IBus tippen.
 
     **Ein Fcitx-Nutzer tippte ins Leere** (RM-062, gemessen am ausgelieferten
     Flatpak 0.5.3): Das Qt aus PySide6 bringt nur die Eingabemodule
@@ -110,21 +110,26 @@ def input_method_environment(
     Umschaltung. Mit ``ibus`` legt Fcitx5 über seine IBus-Schnittstelle eine
     an.
 
-    Fcitx steht auf drei Arten in der Umgebung, und Qt liest
-    ``QT_IM_MODULES`` vor ``QT_IM_MODULE`` (``requested()``, Qt 6.11): eine
-    Liste wie ``wayland;fcitx`` (Fcitx-Wiki für GNOME und Sway) bekommt
-    ``ibus`` angehängt, ein einzelnes ``fcitx`` wird ``ibus``, und unter KDE,
-    wo nur ``XMODIFIERS=@im=fcitx`` steht, kommt ``QT_IM_MODULE=ibus`` dazu —
-    die Anwendung läuft dort über XWayland und bekäme sonst ``compose``.
+    Die Eingabemethode steht auf mehreren Arten in der Umgebung, und Qt liest
+    ``QT_IM_MODULES`` vor ``QT_IM_MODULE`` (``requested()``, Qt 6.11): Eine
+    Liste wie ``wayland;fcitx`` (Fcitx-Wiki für GNOME und Sway) ohne
+    mitgeliefertes Modul bekommt ``ibus`` angehängt, ein einzelnes ``fcitx``
+    wird ``ibus``, und wo kein Modul genannt ist und nur ``XMODIFIERS`` Fcitx
+    oder IBus nennt (KDE; GNOME mit IBus), kommt ``QT_IM_MODULE=ibus`` dazu —
+    die Anwendung läuft dort über XWayland und bekäme sonst ``compose``. Ein
+    ``wayland`` in ``QT_IM_MODULE`` gilt unter X11 als keines: Qt hat dort
+    kein solches Modul.
 
     **Außerhalb des Sandkastens prüft Qt für IBus ``ibus-daemon`` im PATH**
     (``QIBusPlatformInputContextPrivate``), und ein reines Fcitx5-System hat
-    keinen. ``portal`` sagt, ob ``IBUS_USE_PORTAL`` dazukommt: Dann spricht
-    Qt ``org.freedesktop.portal.IBus`` auf dem Sitzungsbus an, den Fcitx5
-    trägt. Gesetzt wird es nur, wo der Name antwortet
-    (:func:`fcitx_answers_as_ibus_portal`) — ein gültiger, aber stummer
-    IBus-Kontext nähme Qt den Rückfall auf ``compose`` und damit die toten
-    Tasten. Im Flatpak nimmt Qt das Portal von selbst.
+    keinen. ``portal`` sagt, ob für einen Fcitx-Nutzer ``IBUS_USE_PORTAL``
+    dazukommt — auch, wenn er ``ibus`` selbst gesetzt hat: Dann spricht Qt
+    ``org.freedesktop.portal.IBus`` auf dem Sitzungsbus an, den Fcitx5 trägt.
+    Gesetzt wird es nur, wo der Name antwortet
+    (:func:`fcitx_answers_as_ibus_portal`): Ohne Eigentümer bliebe der Kontext
+    ungültig (``isValid`` verlangt eine Verbindung), und der Weg über
+    ``ibus-daemon`` und seine Adressdatei, den Qt ohne die Variable nimmt,
+    ginge verloren. Im Flatpak nimmt Qt das Portal von selbst.
 
     Nichts geschieht, wo ein Fcitx-Modul beiliegt, keins für IBus, oder die
     Umgebung schon ein mitgeliefertes Modul nennt. ``modules`` sind die
@@ -145,16 +150,21 @@ def input_method_environment(
         if entry.strip()
     ]
     single = environ.get("QT_IM_MODULE", "").strip().casefold()
-    only_xim = (
-        not single and "@im=fcitx" in environ.get("XMODIFIERS", "").replace(" ", "").casefold()
-    )
+    if single == "wayland" and environ.get("QT_QPA_PLATFORM", "").strip().casefold().startswith(
+        X11
+    ):
+        single = ""
+    xim = environ.get("XMODIFIERS", "").replace(" ", "").casefold().partition("@im=")[2]
+    fcitx = any(entry in _FCITX for entry in listed) or single in _FCITX or xim in _FCITX
+    named = fcitx or xim == IBUS
     chosen: dict[str, str] = {}
     if listed:
-        if any(entry in _FCITX for entry in listed) and not any(map(shipped, listed)):
+        if named and not any(map(shipped, listed)):
             chosen["QT_IM_MODULES"] = environ["QT_IM_MODULES"].strip().rstrip(";") + ";" + IBUS
-    elif single in _FCITX or only_xim:
+    elif single in _FCITX or (not single and named):
         chosen["QT_IM_MODULE"] = IBUS
-    if chosen and portal and not environ.get("IBUS_USE_PORTAL", "").strip():
+    reaches_ibus = bool(chosen) or single == IBUS or IBUS in listed
+    if fcitx and reaches_ibus and portal and not environ.get("IBUS_USE_PORTAL", "").strip():
         chosen["IBUS_USE_PORTAL"] = "1"
     return chosen
 
@@ -164,7 +174,9 @@ def fcitx_answers_as_ibus_portal() -> bool:
 
     Gefragt über ``dbus-send``, vor Qt und ohne eigene D-Bus-Bibliothek; ohne
     Werkzeug, Bus oder Antwort binnen :data:`_PORTAL_QUESTION_SECONDS` heißt
-    es nein, und Qt bleibt beim Weg über ``ibus-daemon``.
+    es nein, und Qt bleibt beim Weg über ``ibus-daemon``. Die Umgebung trägt
+    die Anzeige mit (``graphical``): Ohne Busadresse startet libdbus den Bus
+    über X11.
     """
     tool = shutil.which("dbus-send")
     if tool is None:
@@ -214,11 +226,13 @@ def prefer_an_input_method_qt_has() -> dict[str, str]:
     nur gefragt, wenn sich etwas ändert und Qt nicht schon im Flatpak läuft.
     """
     modules = input_modules()
-    chosen = input_method_environment(sys.platform, os.environ, modules, portal=False)
+    chosen = input_method_environment(sys.platform, os.environ, modules, portal=True)
+    if "IBUS_USE_PORTAL" in chosen and (
+        Path("/.flatpak-info").exists() or not fcitx_answers_as_ibus_portal()
+    ):
+        chosen = input_method_environment(sys.platform, os.environ, modules, portal=False)
     if not chosen:
         return {}
-    if not Path("/.flatpak-info").exists() and fcitx_answers_as_ibus_portal():
-        chosen = input_method_environment(sys.platform, os.environ, modules, portal=True)
     for name, value in chosen.items():
         before = os.environ.get(name, "").strip()
         os.environ[name] = value

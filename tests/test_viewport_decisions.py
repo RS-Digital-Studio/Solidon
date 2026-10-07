@@ -420,7 +420,17 @@ def test_a_fcitx_user_gets_the_ibus_module_the_shipped_qt_brings() -> None:
     assert chosen({"QT_IM_MODULES": "wayland"}) == {}, "keine Fcitx-Liste"
     # KDE: nur XMODIFIERS, kein Modul — unter XWayland bliebe compose.
     assert chosen({"XMODIFIERS": "@im=fcitx"}) == {"QT_IM_MODULE": "ibus"}
-    assert chosen({"XMODIFIERS": "@im=ibus"}) == {}
+    # GNOME mit IBus unter XWayland: nur XMODIFIERS, und Qt bekäme compose.
+    assert chosen({"XMODIFIERS": "@im=ibus"}) == {"QT_IM_MODULE": "ibus"}
+    assert chosen({"XMODIFIERS": "@im=ibus", "QT_IM_MODULES": "wayland"}) == {
+        "QT_IM_MODULES": "wayland;ibus"
+    }
+    # Unter X11 gibt es kein Wayland-Eingabemodul.
+    on_x11 = {"QT_IM_MODULE": "wayland", "XMODIFIERS": "@im=fcitx", "QT_QPA_PLATFORM": "xcb"}
+    assert chosen(on_x11) == {"QT_IM_MODULE": "ibus"}
+    native = {"QT_IM_MODULE": "wayland", "XMODIFIERS": "@im=fcitx", "QT_QPA_PLATFORM": "wayland"}
+    assert chosen(native) == {}, "auf Wayland selbst ist wayland das Modul"
+    assert chosen({"XMODIFIERS": "@im=none"}) == {}
     assert chosen({"QT_IM_MODULE": "xim", "XMODIFIERS": "@im=fcitx"}) == {}, (
         "eine ausdrückliche Wahl bleibt"
     )
@@ -446,8 +456,9 @@ def test_outside_the_sandbox_qt_reaches_fcitx_over_the_ibus_portal() -> None:
     Ein reines Fcitx5-System hat keinen, und Qt fiel im AppImage und im
     Archiv trotz ``ibus`` auf ``compose`` zurück (``qibusplatforminputcontext.cpp``,
     Qt 6.11.2). Mit ``IBUS_USE_PORTAL`` spricht Qt das Portal an, das Fcitx5
-    trägt — aber nur, wo es antwortet: Ein stummer IBus-Kontext nähme Qt den
-    Rückfall auf ``compose`` und die toten Tasten.
+    trägt — aber nur, wo es antwortet: Sonst ginge der Weg über ``ibus-daemon``
+    und seine Adressdatei verloren. Auch wer ``ibus`` selbst gesetzt hat und
+    Fcitx benutzt, braucht das Portal; ein reiner IBus-Nutzer nicht.
     """
     from app.ui.qt_platform import input_method_environment
 
@@ -467,6 +478,11 @@ def test_outside_the_sandbox_qt_reaches_fcitx_over_the_ibus_portal() -> None:
         input_method_environment("linux", {"QT_IM_MODULE": "ibus"}, _SHIPPED_MODULES, portal=True)
         == {}
     ), "ohne Fcitx bleibt auch das Portal unberührt"
+    own_ibus = {"QT_IM_MODULE": "ibus", "XMODIFIERS": "@im=fcitx"}
+    assert input_method_environment("linux", own_ibus, _SHIPPED_MODULES, portal=True) == {
+        "IBUS_USE_PORTAL": "1"
+    }
+    assert input_method_environment("linux", own_ibus, _SHIPPED_MODULES, portal=False) == {}
 
 
 def test_the_portal_question_reads_the_session_bus_answer(monkeypatch: pytest.MonkeyPatch) -> None:
