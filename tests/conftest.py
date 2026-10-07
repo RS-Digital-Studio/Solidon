@@ -581,6 +581,51 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     discover.forget_cache()
 
 
+#: Unter dieser Variable ist ein fehlender Slicer ein Fehler statt ein Skip —
+#: gesetzt von ``.github/workflows/slicer-auswahl.yml``, wo jeder gewählte
+#: Slicertest sein Programm installiert vorfinden muss.
+REQUIRE_SLICERS = "SOLIDON_REQUIRE_SLICERS"
+
+
+@pytest.fixture
+def installed_slicer(request: pytest.FixtureRequest) -> Path:
+    """Der echte, auf dieser Maschine installierte Slicer, den der Marker nennt.
+
+    Die einzige Stelle, an der ein Test die Maschine nach einem Slicer fragen
+    darf (``test_slicer_selection.py`` hält das): ``@pytest.mark.slicer("cura")``
+    nennt das Programm in der Schreibweise von :func:`discover.program_mark`,
+    die Fixture sucht es wie die Anwendung (``discover.find_programs`` ohne die
+    Attrappe aus ``_machine_stays_out_of_it``). Über den Marker wählt
+    ``tools/ci_selection.py`` den Test für die Slicerauswahl auf Linux und
+    macOS, und der Workflow installiert genau die genannten Programme.
+
+    Fehlt das Programm, überspringt sich der Test — außer unter
+    :data:`REQUIRE_SLICERS`: Dort ist ein übersprungener Slicertest kein
+    Nachweis, sondern ein fehlender.
+    """
+    from app.core import tools
+
+    marker = request.node.get_closest_marker("slicer")
+    if marker is None or len(marker.args) != 1:
+        pytest.fail(
+            "installed_slicer braucht genau einen Marker @pytest.mark.slicer(<programm>)",
+            pytrace=False,
+        )
+    wanted = str(marker.args[0])
+    discover.forget_cache()
+    found = [
+        program
+        for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
+        if discover.program_mark(program.name) == wanted
+    ]
+    if found:
+        return Path(found[0])
+    message = f"{wanted} ist auf dieser Maschine nicht installiert"
+    if os.environ.get(REQUIRE_SLICERS):
+        pytest.fail(f"{message}, und {REQUIRE_SLICERS} verlangt es", pytrace=False)
+    pytest.skip(message)
+
+
 @pytest.fixture(autouse=True)
 def _remembered_features_stay_out_of_it() -> None:
     """Kein Test erbt die Erkennung eines anderen.

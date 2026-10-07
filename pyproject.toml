@@ -175,6 +175,7 @@ markers = [
   "windowed: baut Qt-Fenster außerhalb der qt_app-Fixture, auch im Kindprozess; nur beim Release",
   "rendering: fragt einen Grafikadapter ab oder baut, zeichnet oder liest einen echten Renderer; nur beim Release",
   "rendered: vergleicht gegen erzeugte Seiten oder Bilder — braucht einen Lauf von /erzeugen",
+  "slicer(programm): ruft einen installierten Slicer auf (Fixture installed_slicer); läuft vor dem Merge in slicer-auswahl.yml auf Linux und macOS",
 ]
 
 [tool.ruff]

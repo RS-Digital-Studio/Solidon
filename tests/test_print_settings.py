@@ -2867,22 +2867,19 @@ def _profile_keys(root: Path, kind: str) -> set[str]:
     return found
 
 
-def _installed_orca_profiles() -> Path | None:
-    """Der Profilbestand eines installierten Slicers der Orca-Familie."""
-    for base in (Path("C:/Program Files"), Path("/usr/share"), Path("/opt")):
-        if not base.is_dir():
-            continue
-        for folder in base.iterdir():
-            root = folder / "resources" / "profiles"
-            if not root.is_dir():
-                continue
-            for vendor in root.iterdir():
-                if (vendor / "filament").is_dir() and (vendor / "process").is_dir():
-                    return vendor
+def _installed_orca_profiles(executable: Path) -> Path | None:
+    """Ein Herstellerbestand dieses Slicers der Orca-Familie, mit Filament- und Prozessprofilen."""
+    root = slicer_profiles.install_root(executable)
+    if root is None:
+        return None
+    for vendor in sorted(root.iterdir()):
+        if (vendor / "filament").is_dir() and (vendor / "process").is_dir():
+            return vendor
     return None
 
 
-def test_every_orca_setting_sits_in_the_profile_it_claims() -> None:
+@pytest.mark.slicer("orcaslicer")
+def test_every_orca_setting_sits_in_the_profile_it_claims(installed_slicer: Path) -> None:
     """Die Probe aufs Exempel: stimmt die Zuordnung gegen einen echten Bestand?
 
     Ein Wert im falschen Profil wird von der Orca-Familie stillschweigend
@@ -2890,9 +2887,8 @@ def test_every_orca_setting_sits_in_the_profile_it_claims() -> None:
     Rückzug standen im Prozessprofil und kamen nie an. Auffallen konnte es
     nicht, weil kein Test die Aufteilung kannte.
     """
-    root = _installed_orca_profiles()
-    if root is None:
-        pytest.skip("kein Slicer der Orca-Familie installiert")
+    root = _installed_orca_profiles(installed_slicer)
+    assert root is not None, f"kein Herstellerbestand bei {installed_slicer}"
 
     known = {kind: _profile_keys(root, kind) for kind in ("process", "filament", "machine")}
     misplaced: list[str] = []
@@ -2903,7 +2899,7 @@ def test_every_orca_setting_sits_in_the_profile_it_claims() -> None:
     assert not misplaced, "Werte im falschen Profil:\n  " + "\n  ".join(misplaced)
 
 
-def _cura_definitions() -> dict[str, dict[str, object]] | None:
+def _cura_definitions(engine: Path) -> dict[str, dict[str, object]]:
     """Curas Einstellungsdefinition aus einer Installation, flach gelesen.
 
     Sie liegt neben jeder ``CuraEngine`` und nennt jeden gültigen Schlüssel,
@@ -2912,7 +2908,8 @@ def _cura_definitions() -> dict[str, dict[str, object]] | None:
     nicht aus einer Dokumentation, die für die installierte Version gelten mag
     oder nicht. Bei Prusa und Orca leistet das die Gegenprobe im G-Code; bei
     Cura kann sie es nicht, weil dort keine Einstellung in der Druckdatei
-    steht.
+    steht. Gefunden wird sie wie beim Slicen (``handover._cura_base``), auch im
+    Flatpak, im AppImage und im Mac-Bündel.
     """
     flat: dict[str, dict[str, object]] = {}
 
@@ -2924,31 +2921,18 @@ def _cura_definitions() -> dict[str, dict[str, object]] | None:
                 if isinstance(children, dict):
                     walk(children)
 
-    found = False
-    for base in (Path("C:/Program Files"), Path("/usr/share"), Path("/opt")):
-        if not base.is_dir():
-            continue
-        for folder in base.iterdir():
-            for definitions in (
-                folder / "share" / "cura" / "resources" / "definitions",
-                folder / "resources" / "definitions",
-            ):
-                for name in ("fdmprinter.def.json", "fdmextruder.def.json"):
-                    path = definitions / name
-                    if not path.is_file():
-                        continue
-                    try:
-                        loaded = json.loads(path.read_text(encoding="utf-8"))
-                    except OSError, ValueError:
-                        continue
-                    settings = loaded.get("settings")
-                    if isinstance(settings, dict):
-                        walk(settings)
-                        found = True
-    return flat if found else None
+    base = handover._cura_base(engine)
+    assert base, f"keine fdmprinter.def.json zu {engine}"
+    for name in ("fdmprinter.def.json", "fdmextruder.def.json"):
+        loaded = json.loads((Path(base).parent / name).read_text(encoding="utf-8"))
+        settings = loaded.get("settings")
+        assert isinstance(settings, dict), name
+        walk(settings)
+    return flat
 
 
-def test_every_cura_key_exists_in_the_definition() -> None:
+@pytest.mark.slicer("cura")
+def test_every_cura_key_exists_in_the_definition(installed_slicer: Path) -> None:
     """Ein Schlüssel, den Cura nicht kennt, wird stillschweigend verworfen.
 
     Genau das geschah mit ``outer_inset_first``: den Namen kennt Cura 5 nicht
@@ -2957,9 +2941,7 @@ def test_every_cura_key_exists_in_the_definition() -> None:
     Auffallen konnte es nicht, weil die Gegenprobe bei Cura nichts findet:
     ``CuraEngine`` schreibt seine Einstellungen nicht in die Druckdatei.
     """
-    known = _cura_definitions()
-    if known is None:
-        pytest.skip("keine Cura-Installation, deren Definition sich lesen ließe")
+    known = _cura_definitions(installed_slicer)
 
     profile = profiles.make_profile()
     written = handover.values_for(print_settings.resolve(profile), profile, "cura")
@@ -2967,7 +2949,8 @@ def test_every_cura_key_exists_in_the_definition() -> None:
     assert not unknown, "Schlüssel, die Cura nicht kennt: " + ", ".join(unknown)
 
 
-def test_nothing_cura_derives_is_left_to_its_default() -> None:
+@pytest.mark.slicer("cura")
+def test_nothing_cura_derives_is_left_to_its_default(installed_slicer: Path) -> None:
     """Die Gegenprobe zur Ableitungsstufe — und der Grund, warum es sie gibt.
 
     ``CuraEngine`` löst keine Vererbung auf: was Solidon schreibt, erreicht
@@ -2978,9 +2961,7 @@ def test_nothing_cura_derives_is_left_to_its_default() -> None:
     ``CURA_UNTOUCHED`` steht, die es nicht mehr braucht. Eine Liste, die nur
     wächst, erklärt am Ende nichts mehr.
     """
-    known = _cura_definitions()
-    if known is None:
-        pytest.skip("keine Cura-Installation, deren Definition sich lesen ließe")
+    known = _cura_definitions(installed_slicer)
 
     # Die belegte Beschleunigung erreicht auch ihren abgeleiteten Prime-Tower-Wert.
     profile = profiles.make_profile("sovol-sv06", "pla")
