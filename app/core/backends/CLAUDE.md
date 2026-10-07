@@ -104,12 +104,12 @@ Revisionen, Byte und SHA-256 stehen an `comfy_setup.SHAPE_FILES`,
   ausgeführt) und hält vor jedem Download an, wenn sie unter
   `mesh.MINIMUM_COMFYUI` liegt. Ohne Versionsdatei (ComfyUI Desktop) nennt
   der laufende Server fehlende Knoten (`missing_nodes`, `Readiness.NO_NODES`).
-- **`RemeshMesh` im Modus `udf` mit `drop_inverted_components` und
-  `drop_enclosed_components`**, davor `FillHoles`: Das Rohnetz von TRELLIS.2
-  hat keinen einheitlichen Umlaufsinn, `udf` legt um jede geschlossene Fläche
-  eine nach innen gewendete zweite Hülle. Begründung im Docstring von
-  `mesh.py`; Solidons Reparaturkette nimmt eine verbliebene Innenhülle mit
-  `repair(inner_shells=True)` (`generate.GENERATED_REPAIR`). Nach
+- **`RemeshMesh` im Modus `udf`, beide Verwurfschalter aus**, davor
+  `FillHoles`: Das Rohnetz von TRELLIS.2 hat keinen einheitlichen
+  Umlaufsinn, `udf` legt um jede Fläche eine nach innen gewendete zweite
+  Hülle. An einer dünnen Wand sind beide zusammen die Wand; die Innenhülle
+  eines vollen Körpers nimmt Solidons Reparatur mit `repair(inner_shells=True)`
+  (`generate.GENERATED_REPAIR`). Begründung im Docstring von `mesh.py`. Nach
   `DecimateMesh` füllt ein zweites `FillHoles` die kleinen Vierecklöcher, die
   das Ausdünnen offen lässt.
 

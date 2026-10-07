@@ -47,13 +47,16 @@ installiert, benutzt es ohne eine Zeile Code zu ändern.
 („Pixal3D & TRELLIS.2: Image to Model“), mit zwei Abweichungen, beide mit
 Grund. Die Kaskade endet bei 1024 statt 1536 Voxeln, weil 1536 nach den
 Angaben Dritter erst ab 24 GB Grafikspeicher trägt. Und ``RemeshMesh`` läuft
-im Modus ``udf`` mit ``drop_inverted_components`` und
-``drop_enclosed_components``: Das Rohnetz von TRELLIS.2 hat keinen
-einheitlichen Umlaufsinn (``flexible_dual_grid_to_mesh`` legt jedes Viereck
-je Achse gleich herum), also taugt ``sdf`` nicht, und ``udf`` legt um jede
-geschlossene Fläche eine zweite, nach innen gewendete Hülle — die die zwei
-Schalter wegnehmen. Davor schließt ``FillHoles`` kleine Löcher, sonst liefen
-Außen- und Innenhülle durch das Loch zu einer dünnen Haut zusammen.
+im Modus ``udf``: Das Rohnetz von TRELLIS.2 hat keinen einheitlichen
+Umlaufsinn (``flexible_dual_grid_to_mesh`` legt jedes Viereck je Achse gleich
+herum), also taugt ``sdf`` nicht. ``udf`` legt um jede Fläche eine zweite,
+nach innen gewendete Hülle. **Weggeworfen wird sie nicht in ComfyUI**
+(``drop_inverted_components`` und ``drop_enclosed_components`` aus): Bei einer
+dünnen Wand — Vase, Becher, Haken — sind beide Hüllen zusammen die Wand, und
+mit den Schaltern blieb am 07.10.2026 eine offene Haut ohne Dicke übrig
+(RM-550). Die Innenhülle eines vollen Körpers nimmt Solidons Reparatur
+(``repair(inner_shells=True)``). Davor schließt ``FillHoles`` kleine Löcher,
+nach dem Ausdünnen noch einmal.
 
 Was herauskommt, wird nie geglaubt — Generatoren erzeugen Netze mit Löchern,
 losen Komponenten und umgedrehten Normalen als Normalfall. Die Reparaturkette,

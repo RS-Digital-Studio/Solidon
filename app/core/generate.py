@@ -49,10 +49,10 @@ GENERATED_REPAIR: dict[str, bool] = {
     "small_components": True,
     "self_intersections": True,
     # Ein Bildmodell meint innen nichts. TRELLIS.2 liefert über ComfyUIs
-    # ``RemeshMesh`` (Modus ``udf``) um jede geschlossene Fläche eine zweite,
-    # nach innen gewendete Hülle; der Ablauf wirft sie schon dort weg
-    # (``drop_inverted_components``), und diese Zeile hält es, wenn ein
-    # anderer Ablauf das nicht tut — sonst druckte der Slicer einen hohlen
+    # ``RemeshMesh`` (Modus ``udf``) um jede Fläche eine zweite, nach innen
+    # gewendete Hülle. Der Ablauf lässt sie stehen, weil sie an einer dünnen
+    # Wand die zweite Seite der Wand ist (RM-550); bei einem vollen Körper
+    # liegt sie innen und fällt hier — sonst druckte der Slicer einen hohlen
     # Körper mit Wänden von Zehntelmillimetern.
     "inner_shells": True,
 }

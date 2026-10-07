@@ -1651,9 +1651,12 @@ def test_the_remesh_drops_the_inner_hull_and_the_cascade_fits_sixteen_gigabytes(
     ``RemeshMesh`` im Modus ``udf`` legt um jede geschlossene Fläche eine
     zweite, nach innen gewendete Hülle („the UDF inner shell“, sein eigener
     Tooltip); ``sdf`` taugt nicht, weil das Rohnetz von TRELLIS.2 keinen
-    einheitlichen Umlaufsinn hat. Also ``udf`` mit beiden Schaltern, die die
-    Innenhülle wegnehmen, und davor ``FillHoles``, damit Außen- und Innenhülle
-    nicht durch ein Loch zusammenlaufen. Und die Kaskade endet bei 1024 statt
+    einheitlichen Umlaufsinn hat. Also ``udf``, aber **ohne** die Schalter, die
+    die Innenhülle wegnehmen: An einer dünnen Wand ist sie die zweite Seite,
+    und mit ihnen kamen Vase und Becher am 07.10.2026 als offene Haut (RM-550);
+    die Innenhülle eines vollen Körpers nimmt Solidons Reparatur. Davor
+    ``FillHoles``, damit Außen- und Innenhülle nicht durch ein Loch
+    zusammenlaufen. Und die Kaskade endet bei 1024 statt
     1536 Voxeln — 1536 trägt nach den Angaben Dritter erst ab 24 GB.
     """
     graph = json.loads((WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
@@ -1661,8 +1664,11 @@ def test_the_remesh_drops_the_inner_hull_and_the_cascade_fits_sixteen_gigabytes(
 
     _key, remesh = by_kind["RemeshMesh"]
     assert remesh["inputs"]["sign_mode"] == "udf"
-    assert remesh["inputs"]["sign_mode.drop_inverted_components"] is True
-    assert remesh["inputs"]["sign_mode.drop_enclosed_components"] is True
+    assert remesh["inputs"]["sign_mode.drop_inverted_components"] is False
+    assert remesh["inputs"]["sign_mode.drop_enclosed_components"] is False
+    from app.core.generate import GENERATED_REPAIR
+
+    assert GENERATED_REPAIR["inner_shells"], "die Innenhülle eines vollen Körpers fällt in Solidon"
     fills = {key for key, node in graph.items() if node["class_type"] == "FillHoles"}
     assert remesh["inputs"]["mesh"][0] in fills, "erst Löcher schließen, dann neu vernetzen"
     _key, upsample = by_kind["Trellis2UpsampleStage"]

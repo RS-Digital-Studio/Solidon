@@ -98,8 +98,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise) |
-| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Weg läuft bis zum Export, die Körper bleiben meist offen (RM-550); offen Linux und macOS |
-| [RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-550) | KI und Generatoren | Gefunden am echten Lauf (07.10.): 8 von 9 Läufen offen, der Textweg liefert dünne Schalen; offen die Ursache in Reparatur und Textablauf |
+| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Text- und Bildweg bis zum Export, nach RM-550 5 von 7 Körpern geschlossen, Auswertung 15–60 s; offen RM-550-Rest, Linux und macOS |
+| [RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-550) | KI und Generatoren | Ursachen behoben (07.10.): berührende Stücke, Textweg über das Bild, 200 000 Dreiecke, beide UDF-Hüllen; 5 von 7 Läufen geschlossen; offen die Warnung „kreuzt sich selbst“ und zerfallene Rohnetze einzelner Startwerte |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte und (b) der Satz für gebündelte Aufrufe gebaut, lokal 28 gegen 27 von 39 (07.10.); offen: lokal endet ein Zug nach 8 bis 11 Schritten am Zugbudget statt am Schrittlimit |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -4003,6 +4003,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Abnahme:** an mindestens fünf
   Startwerten je Weg ein geschlossener Körper ohne Warnung, Test für die Stelle in Solidon, die
   ein geschlossenes Rohnetz offen meldet. Bauplan §6, §17, §27.
+
+  **Stand 07.10.2026 abends (Claude), Ursachen behoben:** (a) Die Reparatur strich an Kanten
+  mit vier Flächen — zwei Stücke, die sich berühren, rund zwanzig je Netz — Flächen und ließ
+  Schlitze ohne Fläche zurück; `repair.separate_touching_sheets` verdoppelt solche Kanten
+  (Korpus `cubes_touching_edge.glb`, Test vorher rot). (b) Der Textweg fährt zwei Aufträge,
+  Bild und danach den Bildablauf (`mesh.WORKFLOW_STAGES`): Bei gleichem Bild und Startwert ist
+  das Netz jetzt dasselbe wie aus dem Bild (25,72 cm³ beide). (c) Der Bildablauf dünnt auf
+  200 000 Dreiecke aus (Referenzgröße aus §31); die Auswertung dauert 15–60 s statt bis 445 s.
+  (d) `RemeshMesh` behält beide UDF-Hüllen: An einer dünnen Wand sind sie die Wand — Vase und
+  Becher kamen vorher als offene Haut, jetzt geschlossen (9,3 und 8,9 cm³); die Innenhülle eines
+  vollen Körpers nimmt `repair(inner_shells=True)`. Gemessen an sieben Läufen (Rakete Bild
+  Startwert 7 bis 10, Vase, Becher, Haken aus Text): **fünf geschlossen**, davon zwei ohne jeden
+  Befund und drei mit der Warnung „Die Oberfläche kreuzt sich selbst“ — die Kreuzungspaare
+  liegen alle an Stellen, an denen sich zwei Stücke berühren. Offen bleiben die Startwerte 8
+  und 9 desselben Bilds: Deren Rohnetz zerfällt schon in ComfyUI (bis 389 Teile, Ränder über
+  2 000 Kanten). **Offen:** (1) die Warnung an berührenden Stücken — entweder dort keine
+  Kreuzung melden oder die Berührung beim Reparieren auflösen; (2) zerfallene Rohnetze
+  erkennen und dem Kunden einen anderen Startwert anbieten statt eines offenen Körpers.
+  Messordner `output/konsolidierung-2026-10-07/messung-ki/weg3-neu`, `weg3-udf2`, `weg3-udf3`.
 
 ## Tests und Entwicklungswerkzeuge
 
