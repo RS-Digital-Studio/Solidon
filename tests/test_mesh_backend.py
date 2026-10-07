@@ -99,8 +99,16 @@ class Comfy:
             asked = sum(1 for entry in self.requests if "/history/" in entry)
             if asked < self.ready_after:
                 return b"{}"
+            # Netz und Bild: Der Weg aus Text holt zuerst das Bild, dann das Netz.
             return json.dumps(
-                {"job-1": {"outputs": {"4": {"meshes": [{"filename": "out.stl"}]}}}}
+                {
+                    "job-1": {
+                        "outputs": {
+                            "4": {"meshes": [{"filename": "out.stl"}]},
+                            "13": {"images": [{"filename": "bild.png", "type": "output"}]},
+                        }
+                    }
+                }
             ).encode("utf-8")
         if url.endswith("/upload/image"):
             return b'{"name": "uploaded.png"}'
@@ -171,15 +179,20 @@ def test_the_placeholders_arrive_with_their_type() -> None:
 
     backend(server).text_to_mesh("ein Halter", seed=17)
 
-    graph = server.graphs[0]
+    # Der Weg aus Text sind zwei Aufträge: Bild, dann Netz (RM-550).
+    assert len(server.graphs) == 2
+    nodes = [node for graph in server.graphs for node in graph.values()]
     texts = [
-        node["inputs"]["text"]
-        for node in graph.values()
-        if isinstance(node["inputs"].get("text"), str)
+        node["inputs"]["text"] for node in nodes if isinstance(node["inputs"].get("text"), str)
     ]
     assert any("ein Halter" in entry for entry in texts), "der Prompt steht im Graphen"
 
-    seeds = [node["inputs"]["seed"] for node in graph.values() if "seed" in node["inputs"]]
+    seeds = [
+        node["inputs"][key]
+        for node in nodes
+        for key in ("seed", "noise_seed")
+        if key in node["inputs"]
+    ]
     assert seeds, "irgendwo wird ein Startwert gesetzt"
     assert all(entry == 17 for entry in seeds), 'a number, not the string "17"'
     assert all(isinstance(entry, int) for entry in seeds)
@@ -202,7 +215,7 @@ def test_a_picture_is_uploaded_before_the_job() -> None:
 def test_the_job_is_polled_until_it_is_done() -> None:
     server = Comfy(ready_after=3)
 
-    backend(server).text_to_mesh("ein Halter")
+    backend(server).image_to_mesh(b"png")
 
     assert sum(1 for entry in server.requests if "/history/" in entry) == 3
 
@@ -298,7 +311,7 @@ def test_an_output_that_is_a_bare_path_is_found_too() -> None:
             return super().__call__(url, body, headers)
 
     server = Preview()
-    result = backend(server).text_to_mesh("ein Halter")
+    result = backend(server).image_to_mesh(b"png")
 
     assert result.mesh.triangle_count == 12
     holt = [entry for entry in server.requests if "/view?" in entry][-1]
@@ -326,7 +339,7 @@ def test_a_missing_workflow_is_a_clear_error(tmp_path: Path) -> None:
     assert "workflow" in str(problem.value.detail).lower()
 
 
-@pytest.mark.parametrize("name", ["text_to_mesh", "image_to_mesh"])
+@pytest.mark.parametrize("name", ["text_to_image", "image_to_mesh"])
 def test_the_shipped_workflows_are_valid_graphs(name: str) -> None:
     graph = json.loads((WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
 
@@ -345,9 +358,9 @@ def test_the_models_come_from_the_machine_it_runs_on() -> None:
 
     backend(server).text_to_mesh("ein Halter")
 
-    graph = server.graphs[0]
     chosen = [
         (node["class_type"], value)
+        for graph in server.graphs
         for node in graph.values()
         for field, value in node["inputs"].items()
         if field in ("unet_name", "vae_name", "clip_name")
@@ -360,7 +373,7 @@ def test_the_models_come_from_the_machine_it_runs_on() -> None:
     assert ("VAELoader", "flux2-vae.safetensors") in chosen, "nicht die fremde VAE"
     assert ("CLIPLoader", "qwen_3_4b_fp4_flux2.safetensors") in chosen
     assert ("CLIPVisionLoader", "dino_v3_vit_l.safetensors") in chosen
-    assert not any("{model:" in json.dumps(node) for node in graph.values())
+    assert not any("{model:" in json.dumps(graph) for graph in server.graphs)
 
 
 def test_an_unknown_model_is_better_than_none() -> None:
@@ -457,7 +470,7 @@ def test_the_machine_is_asked_once_per_input_not_once_per_node() -> None:
     steht, dass keine zweimal gefragt wird.
     """
     server = Comfy()
-    graph = json.loads((WORKFLOW_DIR / "text_to_mesh.json").read_text(encoding="utf-8"))
+    graph = json.loads((WORKFLOW_DIR / "image_to_mesh.json").read_text(encoding="utf-8"))
     rollen = {
         f"{node['class_type']}.{field}"
         for node in graph.values()
@@ -465,7 +478,7 @@ def test_the_machine_is_asked_once_per_input_not_once_per_node() -> None:
         if isinstance(value, str) and value.startswith("{model:")
     }
 
-    backend(server).text_to_mesh("ein Halter")
+    backend(server).image_to_mesh(b"png")
 
     asked = [entry for entry in server.requests if "/object_info/" in entry]
     assert len(asked) == len(set(asked)) == len(rollen)
@@ -501,7 +514,7 @@ def test_no_node_of_our_own_travels_with_the_application() -> None:
     """
     assert not (WORKFLOW_DIR / "comfyui").exists(), "kein eigener Knoten bei den Daten"
     described_nodes = _core_nodes()["nodes"]
-    for name in ("image_to_mesh", "text_to_mesh"):
+    for name in ("image_to_mesh", "text_to_image"):
         graph = json.loads((WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
         for kind in {str(node["class_type"]) for node in graph.values()}:
             module = described_nodes[kind]["python_module"]
@@ -1130,7 +1143,7 @@ def test_every_model_file_names_a_fixed_state_a_hash_and_a_role() -> None:
     from app.core.backends.mesh import MODEL_ROLES, role_candidates
 
     used: set[str] = set()
-    for name in ("image_to_mesh", "text_to_mesh"):
+    for name in ("image_to_mesh", "text_to_image"):
         used |= set(
             re.findall(r"\{model:([a-z_]+)\}", (WORKFLOW_DIR / f"{name}.json").read_text("utf-8"))
         )
@@ -1406,7 +1419,7 @@ def test_the_config_home_is_named_for_every_platform() -> None:
             os.environ["XDG_CONFIG_HOME"] = davor
 
 
-@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_mesh"])
+@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_image"])
 def test_no_shipped_workflow_needs_a_gpl_node(name: str) -> None:
     """**Regel 15 hing an einer Datendatei, und niemand hatte hingesehen.**
 
@@ -1424,11 +1437,12 @@ def test_no_shipped_workflow_needs_a_gpl_node(name: str) -> None:
     kinds = {str(entry.get("class_type")) for entry in graph.values()}
 
     assert "RMBG" not in kinds, "GPL-3.0 (Regel 15)"
-    assert "RemoveBackground" in kinds, "freigestellt wird mit ComfyUIs eigenem Knoten"
-    assert "LoadBackgroundRemovalModel" in kinds
+    if name == "image_to_mesh":
+        assert "RemoveBackground" in kinds, "freigestellt wird mit ComfyUIs eigenem Knoten"
+        assert "LoadBackgroundRemovalModel" in kinds
 
 
-@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_mesh"])
+@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_image"])
 def test_every_node_of_a_workflow_gets_its_inputs(name: str) -> None:
     """Jeder Verweis zeigt auf einen Knoten, der da ist, und auf einen Ausgang.
 
@@ -1577,7 +1591,7 @@ def test_the_node_descriptions_come_from_a_comfyui_new_enough() -> None:
     assert found >= MINIMUM_COMFYUI
 
 
-@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_mesh"])
+@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_image"])
 def test_every_input_of_every_core_node_is_set_as_comfyui_describes_it(name: str) -> None:
     """**Jeder Eingang jedes Knotens, gegen ComfyUIs eigene Beschreibung.**
 
@@ -1628,7 +1642,7 @@ def test_the_contract_check_catches_what_it_promises(change: str, expected: str)
     assert any(expected in entry for entry in breaks), breaks
 
 
-@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_mesh"])
+@pytest.mark.parametrize("name", ["image_to_mesh"])
 def test_the_remesh_drops_the_inner_hull_and_the_cascade_fits_sixteen_gigabytes(
     name: str,
 ) -> None:
@@ -1656,7 +1670,7 @@ def test_the_remesh_drops_the_inner_hull_and_the_cascade_fits_sixteen_gigabytes(
     _key, save = by_kind["SaveGLB"]
     assert save["inputs"]["filename_prefix"].startswith("solidon/")
     # Und nach dem Ausdünnen noch einmal: ``DecimateMesh`` ließ an echten
-    # Läufen rund zwanzig Vierecklöcher je Netz offen (07.10.2026, RM-548).
+    # Läufen rund zwanzig Vierecklöcher je Netz offen (07.10.2026, RM-550).
     last_fill = graph[save["inputs"]["mesh"][0]]
     assert last_fill["class_type"] == "FillHoles"
     assert graph[last_fill["inputs"]["mesh"][0]]["class_type"] == "DecimateMesh"
@@ -2563,7 +2577,7 @@ def test_every_role_that_can_be_chosen_has_a_name() -> None:
     from app.core.backends import mesh as mesh_module
 
     benutzt: set[str] = set()
-    for name in ("image_to_mesh", "text_to_mesh"):
+    for name in ("image_to_mesh", "text_to_image"):
         graph = json.loads((mesh_module.WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
         for node in graph.values():
             for value in (node.get("inputs") or {}).values():
@@ -2807,4 +2821,4 @@ def test_an_output_entry_of_the_wrong_shape_is_skipped_not_fatal() -> None:
 
     comfy = ComfyBackend(url="http://127.0.0.1:8188", transport=answer, poll_seconds=0.0)
 
-    assert comfy.text_to_mesh("ein Halter").mesh.triangle_count > 0
+    assert comfy.image_to_mesh(b"png").mesh.triangle_count > 0

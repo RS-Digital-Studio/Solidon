@@ -724,10 +724,16 @@
      "image": [
       [
        "example.png",
+       "solidon_04a8257163db40c7a972e716d5181a78.png",
+       "solidon_183eeace642f456eb2f405f2b7a7a437.png",
+       "solidon_4d84da2329804609a335705989d6b7d0.png",
        "solidon_639fd0540d8d4a3ab4646909f2790600.png",
+       "solidon_907f14efbf7e409699298d64d05a1672.png",
+       "solidon_d2943a775fdd4f67a15c30c57e1ed808.png",
        "solidon_e02de2ba75434160bc7b455694085aea.png",
        "solidon_e453fcf2f2f846b795b9a88ee68e74f1.png",
-       "solidon_e85be699794146528652fcadbb7b76e2.png"
+       "solidon_e85be699794146528652fcadbb7b76e2.png",
+       "solidon_f4d5ff80709046018cbfe259f7a1950c.png"
       ],
       {
        "image_upload": true
@@ -1042,6 +1048,34 @@
    "output": [],
    "output_node": true,
    "python_module": "comfy_extras.nodes_save_3d"
+  },
+  "SaveImage": {
+   "input": {
+    "hidden": {
+     "extra_pnginfo": "EXTRA_PNGINFO",
+     "prompt": "PROMPT"
+    },
+    "required": {
+     "filename_prefix": [
+      "STRING",
+      {
+       "default": "ComfyUI",
+       "tooltip": "The prefix for the file to save. This may include formatting information such as %date:yyyy-MM-dd% or %Empty Latent Image.width% to include values from nodes."
+      }
+     ],
+     "images": [
+      "IMAGE",
+      {
+       "tooltip": "The images to save."
+      }
+     ]
+    }
+   },
+   "output": [
+    "IMAGE"
+   ],
+   "output_node": true,
+   "python_module": "nodes"
   },
   "Trellis2Conditioning": {
    "input": {

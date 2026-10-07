@@ -321,7 +321,7 @@
         "23",
         0
       ],
-      "target_face_count": 700000,
+      "target_face_count": 200000,
       "placement_mode": "midpoint"
     }
   },

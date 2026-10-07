@@ -73,7 +73,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
@@ -144,9 +144,20 @@ DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
 MINIMUM_COMFYUI: Final = (0, 35, 0)
 MINIMUM_COMFYUI_TEXT: Final = ".".join(str(part) for part in MINIMUM_COMFYUI)
 
-#: Die mitgelieferten Workflow-Graphen, einer je Aufruf. Platzhalter darin
-#: werden vor dem Senden gefüllt: ``{prompt}``, ``{seed}``, ``{image}``.
+#: Die mitgelieferten Workflow-Graphen. Platzhalter darin werden vor dem
+#: Senden gefüllt: ``{prompt}``, ``{seed}``, ``{image}``.
 WORKFLOW_DIR = Path(__file__).parent / "data"
+
+#: Welche Graphen ein Weg nacheinander fährt. **Der Weg aus Text ist ein Bild
+#: und danach der Weg aus Bild** (RM-550): Als ein Graph lieferte er am
+#: 07.10.2026 bei gleichem Bild und Startwert eine dünne Schale (2,3 statt
+#: 25,7 cm³) und eine Vase mit negativem Volumen; als zwei Aufträge ist das
+#: Netz dasselbe wie aus dem Bild, und zwischen beiden gibt ComfyUI die
+#: Bildmodelle frei, bevor TRELLIS.2 lädt.
+WORKFLOW_STAGES: Final[dict[str, tuple[str, ...]]] = {
+    "text_to_mesh": ("text_to_image", "image_to_mesh"),
+    "image_to_mesh": ("image_to_mesh",),
+}
 
 _PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
@@ -891,12 +902,21 @@ class ComfyBackend:
         return tuple(missing)
 
     def _read_graph(self, workflow: str) -> dict[str, Any] | None:
-        """Der Ablauf als Daten, oder ``None`` wenn er nicht zu lesen ist."""
-        try:
-            loaded = json.loads((self.workflows / f"{workflow}.json").read_text(encoding="utf-8"))
-        except OSError, ValueError:
-            return None
-        return loaded if isinstance(loaded, dict) else None
+        """Der Ablauf als Daten, oder ``None`` wenn er nicht zu lesen ist.
+
+        Ein Weg aus mehreren Graphen (:data:`WORKFLOW_STAGES`) antwortet mit
+        allen Knoten seiner Stufen — gefragt wird, was der ganze Weg braucht.
+        """
+        merged: dict[str, Any] = {}
+        for stage in WORKFLOW_STAGES.get(workflow, (workflow,)):
+            try:
+                loaded = json.loads((self.workflows / f"{stage}.json").read_text(encoding="utf-8"))
+            except OSError, ValueError:
+                return None
+            if not isinstance(loaded, dict):
+                return None
+            merged.update({f"{stage}:{key}": node for key, node in loaded.items()})
+        return merged
 
     def _graph_nodes(self, workflow: str = "image_to_mesh") -> tuple[str, ...]:
         """Die Knotenarten, die der Ablauf anspricht — aus ihm gelesen.
@@ -928,8 +948,20 @@ class ComfyBackend:
     ) -> GeneratedMesh:
         if not prompt.strip():
             raise GenerationFailed(detail=_("Die Beschreibung ist leer."))
-        graph = self._graph("text_to_mesh", {"prompt": prompt, "seed": seed})
-        return self._run(graph, prompt=prompt, seed=seed, progress=progress, cancelled=cancelled)
+        graph = self._graph("text_to_image", {"prompt": prompt, "seed": seed})
+        image, _suffix = self._job(
+            graph,
+            self._download_image,
+            progress=lambda share, text: progress(0.4 * share, text),
+            cancelled=cancelled,
+        )
+        made = self.image_to_mesh(
+            image,
+            seed=seed,
+            progress=lambda share, text: progress(0.4 + 0.6 * share, text),
+            cancelled=cancelled,
+        )
+        return replace(made, prompt=prompt)
 
     def image_to_mesh(
         self,
@@ -1129,6 +1161,27 @@ class ComfyBackend:
         progress: ProgressFn,
         cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
+        payload_bytes, suffix = self._job(
+            graph, self._download, progress=progress, cancelled=cancelled
+        )
+        return GeneratedMesh(
+            mesh=read_mesh(payload_bytes, suffix),
+            payload=payload_bytes,
+            suffix=suffix,
+            backend=self.id,
+            prompt=prompt,
+            seed=seed,
+        )
+
+    def _job(
+        self,
+        graph: dict[str, Any],
+        download: Callable[[dict[str, Any]], tuple[bytes, str]],
+        *,
+        progress: ProgressFn,
+        cancelled: CancelledFn | None = None,
+    ) -> tuple[bytes, str]:
+        """Ein Auftrag an ComfyUI: abschicken, warten, Ergebnis holen, Karte freigeben."""
         with local_ai_slot(self.base, cancelled, lambda text: progress(0.0, text)):
             progress(0.1, str(_("Auftrag abschicken")))
             payload = json.dumps({"prompt": graph, "client_id": uuid.uuid4().hex}).encode("utf-8")
@@ -1144,15 +1197,7 @@ class ComfyBackend:
                 outputs = self._wait(str(job), progress, cancelled or _never)
                 complete = True
                 progress(0.9, str(_("Modell holen")))
-                payload_bytes, suffix = self._download(outputs)
-                return GeneratedMesh(
-                    mesh=read_mesh(payload_bytes, suffix),
-                    payload=payload_bytes,
-                    suffix=suffix,
-                    backend=self.id,
-                    prompt=prompt,
-                    seed=seed,
-                )
+                return download(outputs)
             except BaseException:
                 if not complete:
                     self._cancel_job(str(job))
@@ -1305,26 +1350,44 @@ class ComfyBackend:
 
     def _download(self, outputs: dict[str, Any]) -> tuple[bytes, str]:
         """Findet das Netz unter den Ausgaben und holt es."""
+        found = self._fetch(outputs, ("meshes", "3d", "result", "files"), MESH_SUFFIXES)
+        if found is None:
+            raise GenerationFailed(detail=_("Der Auftrag hat keine Netzdatei erzeugt."))
+        return found
+
+    def _download_image(self, outputs: dict[str, Any]) -> tuple[bytes, str]:
+        """Findet das Bild des Textwegs unter den Ausgaben und holt es."""
+        found = self._fetch(outputs, ("images",), IMAGE_SUFFIXES)
+        if found is None:
+            raise GenerationFailed(detail=_("Der Auftrag hat kein Bild erzeugt."))
+        return found
+
+    def _fetch(
+        self, outputs: dict[str, Any], keys: tuple[str, ...], suffixes: tuple[str, ...]
+    ) -> tuple[bytes, str] | None:
+        """Die erste Ausgabedatei unter diesen Schlüsseln mit einer dieser Endungen."""
         for node in outputs.values():
             if not isinstance(node, dict):
                 continue
-            for key in ("meshes", "3d", "result", "files"):
+            for key in keys:
                 listed = node.get(key)
                 for entry in listed if isinstance(listed, list) else ():
-                    located = _located(entry)
+                    located = _located(entry, suffixes)
                     if located is None:
                         continue
                     query, suffix = located
                     return self.transport(f"{self.base}/view?{query}", None, {}), suffix
-        raise GenerationFailed(detail=_("Der Auftrag hat keine Netzdatei erzeugt."))
+        return None
 
 
 #: Endungen, unter denen ein Körper unter den Ausgaben erkannt wird. Ein
 #: Auftrag legt neben ihm auch Bilder ab — die gehören nicht uns.
 MESH_SUFFIXES = (".glb", ".obj", ".ply", ".stl")
+#: Endungen des Bilds, das der Weg aus Text zuerst erzeugt.
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 
 
-def _located(entry: Any) -> tuple[str, str] | None:
+def _located(entry: Any, suffixes: tuple[str, ...] = MESH_SUFFIXES) -> tuple[str, str] | None:
     """Aus einem Ausgabeeintrag die Abfrage für ``/view`` und die Endung.
 
     Zwei Schreibweisen kommen wirklich vor, und beide müssen ankommen: ein
@@ -1348,7 +1411,7 @@ def _located(entry: Any) -> tuple[str, str] | None:
         return None
 
     suffix = PurePosixPath(name).suffix.lower()
-    if suffix not in MESH_SUFFIXES:
+    if suffix not in suffixes:
         return None
     query = urllib.parse.urlencode({"filename": name, "subfolder": subfolder, "type": kind})
     return query, suffix

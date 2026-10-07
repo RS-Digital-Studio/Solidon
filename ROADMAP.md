@@ -98,8 +98,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise) |
-| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Weg läuft bis zum Export, die Körper bleiben meist offen (RM-548); offen Linux und macOS |
-| [RM-548 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-548) | KI und Generatoren | Gefunden am echten Lauf (07.10.): 8 von 9 Läufen offen, der Textweg liefert dünne Schalen; offen die Ursache in Reparatur und Textablauf |
+| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Weg läuft bis zum Export, die Körper bleiben meist offen (RM-550); offen Linux und macOS |
+| [RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-550) | KI und Generatoren | Gefunden am echten Lauf (07.10.): 8 von 9 Läufen offen, der Textweg liefert dünne Schalen; offen die Ursache in Reparatur und Textablauf |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte und (b) der Satz für gebündelte Aufrufe gebaut, lokal 28 gegen 27 von 39 (07.10.); offen: lokal endet ein Zug nach 8 bis 11 Schritten am Zugbudget statt am Schrittlimit |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -3873,8 +3873,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   braucht 41–445 s. **Die Körper bleiben meist offen** (8 von 9 Läufen, Bild 5 von 6, Text 3 von
   3): `repair.still_open`; der Textweg liefert dünne Schalen (Rakete 2,3 cm³ gegen 25,7 cm³ aus
   dem Bildweg bei gleichem Bild und Startwert, Vase mit negativem Volumen). Der Fall gehört zu
-  [RM-548](#rm-548). Bericht, Rohnetze und Exporte (nicht versioniert):
-  `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Offen:** RM-548, danach dieselben Läufe
+  [RM-550](#rm-550). Bericht, Rohnetze und Exporte (nicht versioniert):
+  `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Offen:** RM-550, danach dieselben Läufe
   unter Linux und macOS.
 
 <a id="rm-251"></a>
@@ -3986,9 +3986,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   schlechter; gehostet vorher (Version 8) und nachher. Verschlechtert sich die Quote, gehen
   diese Sätze zurück.
 
-<a id="rm-548"></a>
+<a id="rm-550"></a>
 
-- [ ] **RM-548 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen.** Gefunden am
+- [ ] **RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen.** Gefunden am
   07.10.2026 beim ersten echten Lauf der TRELLIS.2-Kette ([RM-004](#rm-004), Claude). Von
   neun Läufen endete einer geschlossen; die übrigen melden `repair.still_open` („2 offene
   Stellen ließen sich nicht sicher schließen“). Gemessen an den Rohnetzen: (a) `DecimateMesh`

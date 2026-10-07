@@ -292,7 +292,7 @@ def test_the_shipped_workflows_name_no_gpl_node() -> None:
     from app.core.backends import mesh
 
     refused = {"RMBG": "ComfyUI-RMBG is GPL-3.0"}
-    for name in ("image_to_mesh", "text_to_mesh"):
+    for name in ("image_to_mesh", "text_to_image"):
         graph = json.loads((mesh.WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
         kinds = {str(entry.get("class_type")) for entry in graph.values()}
         for kind, why in refused.items():

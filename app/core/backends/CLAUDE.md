@@ -16,7 +16,7 @@ außer dem Chat benutzbar. Einzuhalten ist `.claude/rules/agentenschicht.md`
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte (`local_ai_slot`, `keep_warm`) |
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Fassung prüfen (`check_version`), Modelldateien laden (`ModelFile`: Repo, Revision, Byte, SHA-256, Zielordner, Rolle) — TRELLIS.2 und BiRefNet für den Bildweg, auf Wunsch FLUX.2 [klein] 4B für den Textweg —, Reste der TripoSG-Einrichtung räumen (`remove_legacy`) |
-| `data/text_to_mesh.json`, `data/image_to_mesh.json` | Die ComfyUI-Abläufe der beiden Wege, nur aus eingebauten Knoten (ab ComfyUI 0.35); geprüft gegen `tests/data/comfyui/object_info.json`, erzeugt mit `tools/comfy_node_info.py` |
+| `data/text_to_image.json`, `data/image_to_mesh.json` | Die ComfyUI-Abläufe: Bild aus Text und Netz aus Bild; der Weg aus Text fährt beide nacheinander (`mesh.WORKFLOW_STAGES`), nur aus eingebauten Knoten (ab ComfyUI 0.35); geprüft gegen `tests/data/comfyui/object_info.json`, erzeugt mit `tools/comfy_node_info.py` |
 
 `comfy_setup.py` und `data/` liegen im Kern, weil `tools/` im gebauten Paket
 **nicht mitreist** — was der Nutzer aus der laufenden Anwendung heraus

@@ -991,7 +991,9 @@ class RepairParams(BaseParams):
 
 @register_op(
     name="repair",
-    cache_version="4",
+    # 4: Hüllen im Inneren auf Wunsch entfernen (RM-003).
+    # 5: zwei Stücke, die sich an einer Kante berühren, bekommen je ihre Kante (RM-550).
+    cache_version="5",
     title=_("Reparieren"),
     category="repair",
     params=RepairParams,

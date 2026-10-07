@@ -74,7 +74,7 @@ from app.ui.style import (
 
 _log = get_logger(__name__)
 
-#: Die Modellrollen, die nur der Weg aus Text braucht (``text_to_mesh.json``).
+#: Die Modellrollen, die nur der Weg aus Text braucht (``text_to_image.json``).
 #: Fehlt allein eine davon, ist der Bildweg bereit, und der Satz sagt das.
 TEXT_ROLES: Final = frozenset({"image", "text_encoder", "image_vae"})
 

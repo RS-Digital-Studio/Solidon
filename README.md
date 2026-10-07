@@ -452,8 +452,8 @@ zu einem Zehntel auf dem Prozessor.
 `.venv/Scripts/python.exe tools/setup_comfyui.py` richtet ein, was der Dialog
 *Modelle einrichten …* einrichtet. Die Arbeit steckt in
 `app/core/backends/comfy_setup.py`; sie reist im Paket mit. Welche Knoten ein
-Ablauf benutzt, steht in `app/core/backends/data/text_to_mesh.json` und
-`image_to_mesh.json`; ändert sich ComfyUI, erneuert
+Ablauf benutzt, steht in `app/core/backends/data/text_to_image.json` und
+`image_to_mesh.json` (der Weg aus Text fährt beide nacheinander); ändert sich ComfyUI, erneuert
 `tools/comfy_node_info.py` die Knotenbeschreibung, gegen die die Suite beide
 Abläufe prüft. Die Dateien nennen Rollen und keine Dateinamen: Für einen
 anderen Generator wird die Datei ersetzt, nicht der Quelltext.
