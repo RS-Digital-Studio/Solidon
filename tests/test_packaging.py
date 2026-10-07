@@ -3320,6 +3320,49 @@ def test_a_slicer_selection_is_red_for_a_skip_a_missing_program_or_nothing() -> 
     assert "code != 0" in script
 
 
+@pytest.mark.parametrize(
+    ("wanted", "accepted"),
+    [
+        ("orcaslicer cura", True),
+        ("cura\nBASH_ENV=/tmp/fremd", False),
+        ("cura; rm -rf /", False),
+        ("Cura", False),
+    ],
+)
+def test_a_programme_input_reaches_the_environment_only_as_names(
+    tmp_path: Path, wanted: str, accepted: bool
+) -> None:
+    """Die Eingabe ``programme`` ist Text, kein Teil des Skripts (Review 1 P3, G-5).
+
+    Sie ging ungeprüft nach ``$GITHUB_ENV``; ein Zeilenumbruch setzte damit
+    weitere Variablen für jeden folgenden Schritt. Gefahren wird der echte
+    Block mit bash, wie auf dem Läufer.
+    """
+    job = job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection")
+    script = step_script(step_block(job, "Programme der Auswahl"))
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    environment = tmp_path / "github_env"
+    environment.write_text("", encoding="utf-8")
+    done = subprocess.run(
+        [shell, "-c", script],
+        cwd=tmp_path,
+        env=dict(os.environ, WANTED=wanted, SELECTION="", GITHUB_ENV=environment.as_posix()),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    written = environment.read_text(encoding="utf-8")
+    if accepted:
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert written == f"PROGRAMS={wanted}\n"
+    else:
+        assert done.returncode != 0, done.stdout
+        assert "::error::" in done.stdout
+        assert written == "", "nichts erreicht die Umgebung der folgenden Schritte"
+
+
 def test_the_slicer_selection_prepares_qt_like_the_window_selection() -> None:
     """Slicertests gehen durch den Druckdialog; dessen Systembibliotheken fehlen sonst."""
 

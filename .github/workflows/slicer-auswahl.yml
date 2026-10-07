@@ -100,6 +100,13 @@ jobs:
             echo "::error::Die Auswahl verlangt keinen Slicer — sie enthält keinen Slicertest."
             exit 1
           fi
+          # Nur Programmnamen gehen nach $GITHUB_ENV: Ein Zeilenumbruch in der
+          # Eingabe setzte sonst weitere Umgebungsvariablen für jeden
+          # folgenden Schritt (BASH_ENV, PYTHONPATH …).
+          if ! [[ "$programs" =~ ^[a-z]+( [a-z]+)*$ ]]; then
+            echo "::error::Programme sind kleingeschriebene Namen, durch je ein Leerzeichen getrennt, etwa \"orcaslicer cura\"."
+            exit 1
+          fi
           echo "Programme: $programs"
           echo "PROGRAMS=$programs" >> "$GITHUB_ENV"
 
