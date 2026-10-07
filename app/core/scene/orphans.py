@@ -200,7 +200,7 @@ def lineage(document: Document) -> dict[ObjectId, frozenset[ObjectId]]:
     ``obj_3:hole_1`` in der Szene steht — und statt der Frage aus §21.3 kam
     eine Sackgasse: „Die Schritte ab dort zurücknehmen und vor der Passung
     ausführen." Gemessen am 12.09.2026 an zwei Klötzen mit je einer Bohrung,
-    nach *In Einzelteile zerlegen* (RM-023).
+    nach *In Einzelteile aufteilen* (RM-023).
 
     Gefragt wird der **Stapel** und nicht die Szene: ``Operation.inputs`` und
     ``outputs`` bilden den DAG (§12), und daraus folgt, welcher Körper für
@@ -461,7 +461,7 @@ def _candidates(
     sie dort auch suchen würde.
 
     **Sonst über den Stammbaum** (:func:`lineage`, RM-023): Nach *In
-    Einzelteile zerlegen* trägt nur das erste Stück die alte Kennung, und ein
+    Einzelteile aufteilen* trägt nur das erste Stück die alte Kennung, und ein
     Verweis auf ``obj_1:hole_2`` fand sein Loch nicht mehr, obwohl es als
     ``obj_3:hole_1`` dasteht. Über alle Körper zu suchen wäre die falsche
     Abhilfe: Zwei Platten tragen beide ein ``hole_1``, und eine Frage nach

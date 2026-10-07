@@ -1386,6 +1386,52 @@ def _keep_bore_pins_plain(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+#: Die Operationen, deren Höhe der Öffnung bis Format 46 mit null „Oberkante“ hieß.
+_LID_OPERATIONS: Final = frozenset({"create_lid", "screw_lid"})
+
+
+def _empty_the_top_edge(data: dict[str, Any]) -> dict[str, Any]:
+    """46 → 47: Die Höhe der Öffnung eines Deckels mit null wird leer (RM-526).
+
+    Bis Format 46 hieß ``z = 0`` an *Deckel erzeugen* und *Drehdeckel
+    erzeugen* „Oberkante des Körpers“, jede andere Zahl war eine Welthöhe. Ab
+    Format 47 ist ``z`` ``optional``: leer heißt Oberkante, und die Null ist
+    das Bett wie jede andere Höhe. Eine gespeicherte Null wird deshalb leer —
+    auch in den Fassungen ``before`` und ``after`` jeder Änderung, damit ein
+    Rückgängig nicht die neue Null zurücklegt —, und ein Schritt ohne ``z``
+    hatte die Null als Vorgabe und bekommt jetzt die leere. Negative und
+    andere Höhen bleiben, was sie waren.
+
+    **Ein Ausdruck bleibt, wie er ist, und bekommt ``legacy_zero_top``**: Ob er
+    null ergibt, zeigt erst die Auswertung, und die Kette rechnet nicht. Mit
+    dem Marker liest der Schritt eine Null wie damals als Oberkante
+    (``lid.stated_height``); erst eine neue Höhe nimmt ihn heraus.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") not in _LID_OPERATIONS:
+            continue
+        params = operation.get("params")
+        if not isinstance(params, dict):
+            continue
+        height = params.get("z")
+        if isinstance(height, str):
+            params.setdefault("legacy_zero_top", True)
+        elif isinstance(height, int | float) and not isinstance(height, bool) and not height:
+            # Genau die Lesart von damals (``stated or`` Oberkante): Was als
+            # Zahl falsch war, hieß Oberkante — kein Vergleich mit Toleranz.
+            params["z"] = None
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1433,9 +1479,8 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=43, to_version=44, apply=_number_old_split_runs),
     Step(from_version=44, to_version=45, apply=_allow_revision_lineage),
     Step(from_version=45, to_version=46, apply=_keep_slot_tools_as_they_were),
-    # Format 47 kommt aus einer parallelen Arbeit (RM-526); bis sie da ist, geht
-    # dieser Schritt von 46 aus und wird beim Zusammenführen zu 47 → 48.
-    Step(from_version=46, to_version=48, apply=_keep_bore_pins_plain),
+    Step(from_version=46, to_version=47, apply=_empty_the_top_edge),
+    Step(from_version=47, to_version=48, apply=_keep_bore_pins_plain),
 )
 
 

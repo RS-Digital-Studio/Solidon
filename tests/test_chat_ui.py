@@ -1179,6 +1179,31 @@ def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> Non
     assert panel.cost_line.accessibleDescription() == ""
 
 
+def test_taking_a_proposal_is_the_primary_button(qt_app: QApplication) -> None:
+    """*Übernehmen* ist die Handlung, auf die ein Vorschlag wartet (RM-512).
+
+    Er stand als gewöhnlicher Knopf neben *Verwerfen*, gleich laut — wie in
+    keinem anderen Fenster. Hauptknopf heißt Akzent **und** halbfett; Verwerfen
+    trägt keines von beiden und auch kein Rot: Der Vorschlag war eine Vorschau.
+    """
+    from app.core.agent.proposal import Proposal
+
+    panel = ChatPanel()
+    try:
+        panel.show()
+        panel.show_proposal(ProposalPreview(proposal=Proposal(request="x")))
+        qt_app.processEvents()
+
+        assert panel.accept_button.isDefault()
+        assert panel.accept_button.font().weight() >= QFont.Weight.DemiBold
+        assert not panel.discard_button.isDefault()
+        assert panel.discard_button.font().weight() < QFont.Weight.DemiBold
+        assert panel.discard_button.property("danger") is not True
+    finally:
+        panel.hide()
+        panel.deleteLater()
+
+
 def test_no_cost_line_talks_about_budgets_and_tokens(qt_app: QApplication) -> None:
     """Die Zusammenfassung spricht Kundensprache — in allen vier Ausgängen.
 

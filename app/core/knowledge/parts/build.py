@@ -13,6 +13,7 @@ unter diesem Namen von ihr.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, cast
 
@@ -114,15 +115,55 @@ def threaded(
     core_diameter = diameter if internal else diameter - 2.0 * depth
     # Kern und Gang auf denselben Winkeln, so fein, wie der Kamm es verlangt.
     segments = shapes.turn_segments(diameter / 2.0 + depth if internal else diameter / 2.0)
-    core = shapes.cylinder(core_diameter + 2.0 * BOOLEAN_OVERLAP, length, segments=segments)
+    core = shapes.cylinder(
+        core_diameter + 2.0 * BOOLEAN_OVERLAP,
+        length,
+        segments=_core_segments(core_diameter / 2.0, segments),
+    )
+    # **Der Gang läuft über ganze Umläufe** und wird erst vom Schnittzylinder
+    # gekürzt — wie beim Drehdeckel (``lid._thread_tool_height``) und beim
+    # exakten Zwilling. ``thread_body`` verteilt ``round(Umläufe) · segments``
+    # Schritte über seine Höhe; bei einer krummen Umlaufzahl lagen die
+    # Stationen nicht mehr auf den Kernecken, und je Umlauf blieben weniger
+    # Sehnen, als ``turn_segments`` verlangt (Ø 46 auf 2 mm: 33 statt 48,
+    # Review RM-532 R1).
+    turns = math.ceil((length + pitch) / pitch - 1e-9)
     ridge = shapes.moved(
-        shapes.thread_body(diameter, pitch, length + pitch, segments=segments, internal=internal),
+        shapes.thread_body(diameter, pitch, turns * pitch, segments=segments, internal=internal),
         (0.0, 0.0, -pitch),
     )
     body = union(core, ridge)
     limit = shapes.cylinder(diameter * 2.0 + 4.0, length)
     body = intersect(body, limit)
     return shapes.moved(body, (0.0, 0.0, bottom)) if bottom else body
+
+
+def _core_segments(root: float, segments: int) -> int:
+    """Ecken des Netzkerns: so viele, dass er den Gang auch in der Sehnenmitte überdeckt.
+
+    Der Kern reicht ``BOOLEAN_OVERLAP`` über den Fuß des Gangs hinaus, damit
+    beide sich nicht nur auf derselben Zylinderfläche berühren. Am Netz liegt
+    seine Sehne aber um ``r · (1 - cos(π / n))`` innen, und wo das mehr ist als
+    die Überdeckung, endet der Kern in der Sehnenmitte unter dem Fuß des Gangs:
+    Dort blieb ein Splitter stehen — am Bolzen eine Kerbe, in der Mutter ein
+    Grat im Gang. Gemessen am 06.10.2026 an gedruckter Schraube und Mutter: ab
+    M12 mit 48 Sehnen (0,011 mm Sehnentiefe) überdeckten sich beide, bei M20
+    um 0,27 mm³, bei M42 um 10 mm³, gleich an welcher Stelle der Schraube
+    (Review RM-532, R1).
+
+    **Feiner statt weiter**: Ein Vielfaches der Gangsehnen, damit jede Station
+    des Gangs auf einer Kernecke liegt, und der Eckenradius bleibt der Fuß plus
+    Überdeckung — der Gewindegrund behält sein Maß. Bis M8 bleiben es die
+    Sehnen des Gangs, alle Tabellengewinde dort bauen wie zuvor.
+    """
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.units import exact_cos
+
+    reach = root + BOOLEAN_OVERLAP
+    count = segments
+    while reach * exact_cos(math.pi / count) < root:
+        count += segments
+    return count
 
 
 def compound(*parts: Form) -> Form:

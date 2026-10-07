@@ -40,6 +40,7 @@ from app.core.registry.registry import (
     variant_members,
 )
 from app.core.types import ParamSpec
+from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, _, format_decimal, sort_key
 
 #: Wie eine Seite heißt, in die eine Richtung zeigt — je Achse positiv, negativ.
@@ -384,6 +385,19 @@ def choice_label(value: str, *, format_measure: Callable[[float, bool], str] | N
         # eigenen Tabellenschlüssel. Dort ersetzt die lesbare Länge das
         # technische S, bei den gemeinsamen Schlüsseln bleibt M4 einfach M4.
         if insert.size != insert.thread:
+            # Zwei Buchsen mit Gewinde und Länge gleich (Ruthex M3S und die
+            # M3x5x4 mit 5 statt 4,6 mm außen) unterscheidet erst ihr
+            # Außendurchmesser; ohne ihn stünde zweimal „M3 · 4,00 mm“ zur Wahl.
+            twins = [
+                other
+                for other in standards.load().inserts.values()
+                if other.thread == insert.thread
+                and other.size != insert.size
+                and abs(other.length - insert.length) <= EPS_GEOM
+            ]
+            if twins:
+                outer = measure(insert.outer, False)
+                return f"{insert.thread} · Ø {outer} × {measure(insert.length, True)}"  # noqa: RUF001
             return f"{insert.thread} · {measure(insert.length, True)}"
         return value
     try:
@@ -651,7 +665,7 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         steps.append(str(CATEGORIES.get(spec.category, spec.category)))
 
     # **Eine Variante hat keinen eigenen Eintrag.** Die Menüleiste zeigt für
-    # ``VARIANT_GROUPS`` einen Eintrag je Gruppe („Aus Skizze erzeugen …"),
+    # ``VARIANT_GROUPS`` einen Eintrag je Gruppe („Zeichnen …"),
     # die Art wählt der Dialog. Der Weg nannte trotzdem „Erzeugen → Grundform
     # hochziehen" — einen Eintrag, den es nicht gibt, und der Agent schrieb
     # ihn in jede Werkzeugbeschreibung (Gesamtreview 05.09.2026, CORE-22).
@@ -695,7 +709,13 @@ def _panel_place(spec: OperationSpec) -> str:
         return str(_("Befehlspalette"))
     if spec.applies_to:
         kinds = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to if kind)
-        selection = _("bei gewähltem Merkmal: {kinds}", kinds=kinds)
+        if spec.also_on_body:
+            # **Beide Stellen, der Körper zuerst** (``also_on_body``): Oben am
+            # gewählten Körper ist die Hauptstelle. Wer nur das Merkmal nennt,
+            # schickt Palette, Agent und Handbuch an die Nebenstelle.
+            selection = _("bei gewähltem Körper oder Merkmal: {kinds}", kinds=kinds)
+        else:
+            selection = _("bei gewähltem Merkmal: {kinds}", kinds=kinds)
         return f"{_('Handlungen rechts')} ({selection})"
     return f"{_('Handlungen rechts')} ({_('bei gewähltem Körper')})"
 
@@ -1180,8 +1200,11 @@ def documentation(
                 # Die Merkmalsarten mit ihren Namen, nicht mit ihren
                 # Schlüsseln: „Features: face, hole" ist eine Zeile aus dem
                 # Register, keine aus einem Handbuch.
-                named = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to)
-                facts.append(str(_("Gilt für: {kinds}", kinds=named)))
+                kinds = [str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to]
+                if spec.also_on_body:
+                    # Wie der Ort: Sie gilt auch dem ganzen Körper.
+                    kinds.insert(0, str(_("Körper")))
+                facts.append(str(_("Gilt für: {kinds}", kinds=", ".join(kinds))))
             if facts:
                 lines.append(" · ".join(facts))
                 lines.append("")

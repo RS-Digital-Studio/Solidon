@@ -1,6 +1,6 @@
-"""Verteilt ``einheit.py`` über die Modelle — ein Prozess je Modell, mehrere nebeneinander.
+"""Verteilt ``matrix_unit.py`` über die Modelle — ein Prozess je Modell, mehrere nebeneinander.
 
-Aufruf: python treiber.py <code-wurzel> <ausgabeordner> <plan> [--arbeiter N]
+Aufruf: python tools/matrix_driver.py <code-wurzel> <ausgabeordner> <plan> [--arbeiter N]
 
 Pläne:
 
@@ -32,7 +32,8 @@ import threading
 import time
 from pathlib import Path
 
-from matrix_config import HOME, SLICERS
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tools.matrix_config import HOME, SLICERS
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(sys.argv[1]).resolve()
@@ -135,13 +136,10 @@ def _code_digest(root: Path) -> str:
         path = root / name
         if path.is_file():
             candidates[f"root/{name}"] = path
-    for name in ("treiber.py", "einheit.py", "matrix_config.py"):
+    for name in ("matrix_driver.py", "matrix_unit.py", "matrix_config.py", "matrix_gcode.py"):
         path = HERE / name
         if path.is_file():
             candidates[f"matrix/{name}"] = path
-    parser = HERE.parent / "uebergabe-matrix-2026-09-27" / "gcode_lesen.py"
-    if parser.is_file():
-        candidates["matrix/gcode_lesen.py"] = parser
     digest = hashlib.sha256()
     for name, path in sorted(candidates.items()):
         digest.update(name.encode("utf-8"))
@@ -179,9 +177,8 @@ def _slicer_identity() -> dict[str, object]:
     root = str(ROOT)
     if root not in sys.path:
         sys.path.insert(0, root)
-    from matrix_config import SLICER_FLAVOURS
-
     from app.core.export import slicer_profiles
+    from tools.matrix_config import SLICER_FLAVOURS
 
     result: dict[str, object] = {}
     for name, configured in SLICERS.items():
@@ -297,7 +294,7 @@ def _seal_result(model: Path, spec: str) -> bool:
     path = result_of(model)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return False
     if not isinstance(data, dict):
         return False
@@ -329,7 +326,7 @@ def done(model: Path, spec: str) -> bool:
         return False
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return False
     if not isinstance(data, dict):
         return False
@@ -410,7 +407,7 @@ def worker(
                     [
                         str(PYTHON),
                         "-u",
-                        str(HERE / "einheit.py"),
+                        str(HERE / "matrix_unit.py"),
                         str(ROOT),
                         str(model),
                         str(model_out),

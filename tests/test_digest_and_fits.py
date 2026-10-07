@@ -767,6 +767,185 @@ def test_the_stack_line_names_steps_that_are_off_or_resting(profile: Profile) ->
     assert "shell(thickness=2)," in history, "ein laufender Schritt bleibt ohne Vermerk"
 
 
+def test_the_stack_line_names_steps_whose_result_was_removed(profile: Profile) -> None:
+    """Ein Schritt, dessen Körper ein späterer wieder entfernt hat, trägt „Ergebnis entfernt“.
+
+    Review zu ``bbd41ff2d`` (K3): Das Verlaufsfeld zeigt es so, der Steckbrief für
+    Agent und Fehlerbericht vermerkte nur „aus“ und „ruht“ — der Agent las
+    Duplizieren und Verschieben einer entfernten Kopie als wirksam und suchte
+    die Kopie im Steckbrief. Beide lesen das Wort jetzt an derselben Stelle.
+    """
+    import re
+
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import new_project
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    for title, draft in (
+        ("Quader", OperationDraft(op="create_box", params={"width": 30.0, "height": 10.0})),
+        (
+            "Duplizieren",
+            OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 2}),
+        ),
+        ("Bewegen", OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 50.0})),
+        ("Entfernen", OperationDraft(op="delete_object", inputs=("obj_2",))),
+    ):
+        history.apply(title, [draft])
+
+    text = digest(plate_scene(profile), history.document)
+    line = next(line for line in text.splitlines() if line.startswith("Verlauf"))
+
+    assert re.search(r"op2 duplicate_object\([^)]*\) Ergebnis entfernt,", line), line
+    assert re.search(r"op3 translate_object\([^)]*\) Ergebnis entfernt,", line), line
+    assert re.search(r"op1 create_box\([^)]*\),", line), "der Quader wirkt weiter"
+    assert re.search(r"op4 delete_object\([^)]*\),", line), "das Entfernen wirkt"
+
+
+def test_the_digest_names_the_step_that_made_each_feature_of_an_example() -> None:
+    """RM-529: Bauplan §23 zeigt ``created_by=op3``, und §21.2 macht die
+    Provenienz zum Weg zu „dem Schritt, der es erzeugt hat“ — der Steckbrief
+    schrieb sie nicht. Ohne sie konnte der Agent „ändere den Stift von
+    vorhin“ keinem Schritt zuordnen.
+
+    Am mitgelieferten Halter (Weg 2), so wie der Kunde ihn öffnet: Jedes
+    erzeugte Merkmal nennt seinen Schritt, der Verlauf führt denselben Namen
+    vor dem Aufruf, und ein erkanntes Merkmal bleibt ohne Erzeuger.
+    """
+    from app.core import examples
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources, load
+
+    project = load(examples.directory() / "weg2-halter-konstruieren.p3d")
+    document = project.document
+    profile = profiles.make_profile(
+        document.printer or "centauri-carbon-2", document.material or "petg"
+    )
+    scene = evaluate(document, profile, sources=ProjectSources(project)).scene
+    text = digest(scene, document)
+    lines = text.splitlines()
+    history = next(line for line in lines if line.startswith("Verlauf"))
+    position = {operation.id: number for number, operation in enumerate(document.ops, start=1)}
+    by_id = {operation.id: operation for operation in document.ops}
+
+    made = [
+        (feature_id, feature.created_by)
+        for entry in scene.objects.values()
+        for feature_id, feature in entry.features.items()
+        if feature.created_by is not None
+    ]
+    assert len({step for _, step in made}) >= 3, "Grundkörper, Schraubenlöcher, Rippe"
+    for feature_id, step in made:
+        line = next(line for line in lines if line.startswith(f"  {feature_id}  "))
+        assert f", created_by=op{position[step]}" in line, line
+        assert f"op{position[step]} {by_id[step].op}(" in history, "der Verlauf löst ihn auf"
+
+    detected = next(line for line in lines if line.startswith("  face_1  "))
+    assert "created_by" not in detected, "ein erkanntes Merkmal hat keinen Erzeuger"
+    body = next(line for line in lines if line.startswith("obj_1  "))
+    assert f"last_op=op{position[scene.objects['obj_1'].created_by]}" in body
+
+
+def test_the_plan_shows_a_real_digest() -> None:
+    """Bauplan §23 zeigte bis RM-529 einen Steckbrief, den es nie gab
+    (``Stack:``, ``wasserdicht``, ``Ops 3–6``) — und mit ``created_by=op3``
+    eine Zeile, die der Code nicht schrieb. Jetzt ist das Beispiel ein
+    Ausschnitt einer echten Ausgabe: Jede Zeile steht in dieser Reihenfolge im
+    Steckbrief des Beispielprojekts, „…“ lässt Zeilen aus, „ · …“ am Ende den
+    Rest einer Zeile. Ändert sich das Format, wird das Beispiel nachgezogen.
+    """
+    from app.core import examples
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources, load
+
+    plan = (Path(__file__).parent.parent / "3d-agent-bauplan.md").read_text(encoding="utf-8")
+    section = plan.split("## 23. Steckbrief für den Agenten", 1)[1]
+    block = section.split("```", 2)[1].strip("\n").splitlines()
+    shown = [line for line in block if line.strip() != "…"]
+    assert len(shown) >= 8, "der Block wurde gefunden"
+
+    project = load(examples.directory() / "gehaeuse-mit-bausteinen.p3d")
+    document = project.document
+    profile = profiles.make_profile(
+        document.printer or "centauri-carbon-2", document.material or "petg"
+    )
+    scene = evaluate(document, profile, sources=ProjectSources(project)).scene
+    real = digest(scene, document, ("obj_1", "heatset_m4_bore_1")).splitlines()
+
+    at = 0
+    for line in shown:
+        head = line.removesuffix(" · …")
+        found = next(
+            (index for index in range(at, len(real)) if real[index].startswith(head)), None
+        )
+        assert found is not None, f"nicht im echten Steckbrief, oder nicht in dieser Folge: {line}"
+        if head == line:
+            assert real[found] == line, f"die Zeile geht anders weiter: {real[found]}"
+        at = found + 1
+
+
+def test_the_step_is_named_by_the_number_the_history_shows(profile: Profile) -> None:
+    """Nach einem Einfügen weichen Kennung und sichtbare Nummer ab (RM-368):
+    Der vor Schritt 2 eingefügte trägt die Kennung 9 und steht als Schritt 2
+    im Verlauf. Der Agent spricht mit dem Nutzer über diesen Verlauf — hieße
+    die Bohrung im Steckbrief „op9“, suchte der Nutzer einen Schritt, den es
+    nicht gibt.
+    """
+    scene = plate_scene(profile)
+    entry = scene.objects["obj_1"]
+    features = dict(entry.features)
+    features["hole_1"] = replace(features["hole_1"], created_by=9)
+    features["hole_2"] = replace(features["hole_2"], created_by=2)
+    scene.objects["obj_1"] = replace(entry, features=features, created_by=2)
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.extend(
+        [
+            Operation(id=1, op="create_box", params={"width": 80.0}),
+            Operation(id=9, op="drill_hole", params={"diameter": 5.2}),
+            Operation(id=2, op="chamfer", params={"size": 1.0}),
+        ]
+    )
+    document.transactions.extend(
+        [
+            Transaction(id="t1", title="Platte", ops=(1, 2), origin=Origin(by="user")),
+            Transaction(id="t2", title="Bohrung", ops=(9,), origin=Origin(by="agent")),
+        ]
+    )
+
+    lines = digest(scene, document).splitlines()
+    history = next(line for line in lines if line.startswith("Verlauf"))
+
+    assert ", created_by=op2" in next(line for line in lines if line.startswith("  hole_1  "))
+    assert ", created_by=op3" in next(line for line in lines if line.startswith("  hole_2  "))
+    assert "last_op=op3" in next(line for line in lines if line.startswith("obj_1  "))
+    assert "op2 drill_hole(diameter=5.2)" in history
+    assert "op1 create_box(width=80), op3 chamfer(size=1)" in history
+    assert "op9" not in "\n".join(lines)
+
+
+def test_a_condensed_digest_folds_alike_features_of_one_step_only(profile: Profile) -> None:
+    """Der verdichtete Steckbrief (RM-173) fasst gleiche Merkmale zusammen —
+    aber gleich heißt auch: aus demselben Schritt. Drei Bohrungen aus Schritt 1
+    und eine gleiche aus Schritt 2 sind zwei Auskünfte; zusammengelegt nennte
+    die Zeile einen Erzeuger, der nur für drei von vier stimmt.
+    """
+    scene = plate_scene(profile)
+    entry = scene.objects["obj_1"]
+    features = dict(entry.features)
+    for name, step in (("hole_1", 1), ("hole_2", 1), ("hole_3", 1), ("hole_4", 2)):
+        features[name] = replace(features[name], created_by=step)
+    scene.objects["obj_1"] = replace(entry, features=features)
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.extend([Operation(id=1, op="drill_hole"), Operation(id=2, op="drill_hole")])
+
+    full = digest(scene, document).splitlines()
+    short = digest(scene, document, condensed=True).splitlines()
+
+    assert len([line for line in full if "created_by=op1" in line]) == 3
+    group = next(line for line in short if line.startswith("  hole_1, hole_2, hole_3  (3"))
+    assert "created_by=op1" in group
+    assert "created_by=op2" in next(line for line in short if line.startswith("  hole_4  "))
+
+
 def test_a_new_object_name_writes_no_line_of_its_own(profile: Profile) -> None:
     """``new_feature_lines`` ist der zweite Text, den der Agent nach jedem
     Schritt liest — und er nannte den Namen ungefiltert.

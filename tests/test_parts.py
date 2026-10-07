@@ -309,7 +309,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_7306_cartesian_boundaries() -> None:
+def test_the_library_really_has_8382_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -328,10 +328,55 @@ def test_the_library_really_has_7306_cartesian_boundaries() -> None:
     Bajonett und Raumboden je 512, Stangenverbinder 384, Kanalnaht,
     Rastdrehscheibe und Raumwand je 256, Schlauchtülle 128, Fensterscheibe 16.
     Seit dem 06.10.2026 kommen 200 dazu: Das druckbare Gewinde hat ein eigenes
-    Maß mit Durchmesser und Steigung an je zwei Grenzen (56 → 256).
+    Maß mit Durchmesser und Steigung an je zwei Grenzen (56 → 256). Am selben
+    Tag 1076 mehr: Die Normteiltabelle reicht von M1.6 bis M64 (27 Größen),
+    Schraubenloch, Mutternfalle, Schraube, Mutter und Einpressbuchse haben ein
+    eigenes Maß, Wandhalter und Klemmschale nehmen je sechzehn Größen; zugleich zählt ein
+    Feld ohne Wirkung keine Ecken mehr (Gewinde 768 → 216, Schraubenloch 1536 →
+    400, auch Lagersitz, Kanalnaht, die Halter, Raumboden und Dichtung).
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 7306
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 8382
+
+
+def test_a_field_without_effect_does_not_multiply_the_corners() -> None:
+    """Ein Feld, dessen Bedingung in einer Ecke nicht erfüllt ist, steht dort auf seiner Vorgabe.
+
+    Der Baustein verwirft seinen Wert (``depends_on``); ihn an beiden Grenzen
+    zu bauen, baute dieselbe Ecke zweimal. Zwei Tabellengrößen und ein eigenes
+    Maß mit Durchmesser, dazu ein Haken, der nur bei eigenem Maß wirkt und
+    selbst eine Tiefe wirksam macht, und eine Länge ohne Bedingung:
+    (1 + 1 + 2 · (2 + 1)) · 2 = 16 statt 3 · 2 · 2 · 2 · 2 = 48.
+    """
+
+    @op_params
+    class SizedParams(BaseParams):
+        size: str = param(title="Größe", default="a", choices=("a", "b", "own"))
+        diameter: float = param(
+            title="Maß", default=5.0, minimum=1.0, maximum=9.0, depends_on=("size", ("own",))
+        )
+        flag: bool = param(title="Haken", default=False, depends_on=("size", ("own",)))
+        depth: float = param(
+            title="Tiefe", default=2.0, minimum=1.0, maximum=3.0, depends_on=("flag", (True,))
+        )
+        length: float = param(title="Länge", default=4.0, minimum=2.0, maximum=6.0)
+
+    from app.core.knowledge.parts import range_check
+
+    plan = core_corners(SizedParams)
+
+    assert len(plan) == range_check.corner_count(SizedParams) == 16
+    assert len({tuple(entry.items()) for entry in plan}) == len(plan)
+    assert all(list(entry) == ["size", "diameter", "flag", "depth", "length"] for entry in plan)
+    for entry in plan:
+        if entry["size"] != "own":
+            # Ohne eigenes Maß wirkt keines der drei Felder: alle auf ihrer Vorgabe.
+            assert (entry["diameter"], entry["flag"], entry["depth"]) == (5.0, False, 2.0)
+        elif not entry["flag"]:
+            assert entry["depth"] == 2.0
+    own = [entry for entry in plan if entry["size"] == "own"]
+    assert {entry["diameter"] for entry in own} == {1.0, 9.0}
+    assert {entry["depth"] for entry in own if entry["flag"]} == {1.0, 3.0}
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -2872,9 +2917,10 @@ width = 4.0
 def test_an_unknown_size_says_what_is_known() -> None:
     from app.core.errors import ValidationError
 
+    # M60 führt DIN 912 nicht als Zylinderschraube; die Tabelle springt von M56 auf M64.
     with pytest.raises(ValidationError) as raised:
-        standards.screw("M42")
-    assert "M4" in str(raised.value.values["known"])
+        standards.screw("M60")
+    assert "M56" in str(raised.value.values["known"])
 
 
 # --- Die Operationen, die aus den Bausteinen entstehen ----------------------------
@@ -4221,8 +4267,13 @@ def test_printed_nut_has_the_matching_internal_thread() -> None:
     assert not external.params["internal"] and internal.params["internal"]
 
 
-@pytest.mark.parametrize("size", ["M3", "M5", "M8"])
-def test_a_printed_screw_turns_through_its_printed_nut(size: str, profile: Profile) -> None:
+@pytest.mark.parametrize(
+    ("size", "diameter"),
+    [("M3", 20.0), ("M5", 20.0), ("M8", 20.0), ("M20", 20.0), ("custom_size", 11.0)],
+)
+def test_a_printed_screw_turns_through_its_printed_nut(
+    size: str, diameter: float, profile: Profile
+) -> None:
     """Schraube und Mutter überdecken sich an keiner Stelle ihres Wegs.
 
     Ein Gewindepaar wird an der Differenz geprüft, nicht daran, dass beide
@@ -4231,30 +4282,270 @@ def test_a_printed_screw_turns_through_its_printed_nut(size: str, profile: Profi
     Winkel null — und über die ganze Gewindelänge geschoben, vom Eintritt an der
     Spitze bis unter den Kopf. Bis zum 22.09.2026 fehlte dem Netzgewinde der
     Gang unter seinem ersten Umlauf: An der Unterseite der Mutter stand
-    Material im Gang, bei M8 und 0,2 mm Spiel 2,3 mm³ Überdeckung.
+    Material im Gang, bei M8 und 0,2 mm Spiel 2,3 mm³ Überdeckung. Seit der
+    Tabellenversion 13 auch eine Größe über M8 und ein Paar mit eigenem Maß
+    Ø 11, dessen Mutter abgeleitet ist und dessen Steigung die Regelsteigung.
     """
     from app.core.geom.boolean import BOOLEAN_OVERLAP
     from app.core.units import EPS_GEOM
 
     play = profile.material.clearance
-    pitch = standards.screw(size).pitch
+    if size == "custom_size":
+        pitch = standards.regular_pitch(diameter)
+        height = standards.derived_nut(diameter).height
+    else:
+        pitch = standards.screw(size).pitch
+        height = standards.nut(size).height
     screw_spec, nut_spec = PARTS.get("printed_screw"), PARTS.get("printed_nut")
-    length = 12.0
+    length = max(12.0, height + 4.0 * pitch)
     screw = screw_spec.fn(
-        screw_spec.params(size=size, length=length, countersunk=False, play=play)
+        screw_spec.params(size=size, diameter=diameter, length=length, countersunk=False, play=play)
     ).mesh
-    nut = nut_spec.fn(nut_spec.params(size=size, play=play)).mesh
+    nut = nut_spec.fn(nut_spec.params(size=size, diameter=diameter, play=play)).mesh
     # Der Gang der Schraube beginnt bei -length + OVERLAP, der der Mutter bei
     # -OVERLAP: Um die Differenz verschoben laufen beide in Phase.
     start = -length + 2.0 * BOOLEAN_OVERLAP
-    height = standards.nut(size).height
-    turns = int((length - height) // pitch)
+    # Bis unter den Kopf, nicht in ihn: Die Mutter steht um zwei Überdeckungen über
+    # ihrem Gang hinaus, und eine Länge aus ganzen Steigungen träfe den Kopf.
+    turns = int((length - height - 2.0 * BOOLEAN_OVERLAP) // pitch)
     for turn in (0, turns // 2, turns):
         placed = nut.raw.copy()
         placed.apply_translation((0.0, 0.0, start + turn * pitch))
         overlap = boolean("intersection", [screw, MeshData.of(placed)], allow_empty=True)
         tolerance = EPS_GEOM * (screw.raw.area + placed.area)
         assert overlap.mesh.volume <= tolerance, f"{size}, Umlauf {turn}: {overlap.mesh.volume}"
+
+
+# --- Normteile in jeder Größe (Tabellenversion 13) --------------------------------
+
+
+def _radial_extent(mesh: Any) -> float:
+    """Der größte Abstand einer Ecke von der Z-Achse — das gebaute Maß eines Rundteils."""
+    vertices = as_mesh_data(mesh).raw.vertices
+    return float(np.hypot(vertices[:, 0], vertices[:, 1]).max())
+
+
+def test_an_m12_screw_hole_drills_the_medium_clearance_of_13_5() -> None:
+    """ISO 273, mittlere Reihe: Das Durchgangsloch einer M12 misst 13,5 mm."""
+    spec = PARTS.get("screw_hole")
+    built = spec.fn(spec.params(size="M12", countersink=False))
+    assert built.features["bore_1"].params["diameter"] == pytest.approx(13.5)
+    assert 2.0 * _radial_extent(built.mesh) == pytest.approx(13.5, abs=0.01)
+    assert not built.findings, "eine Normgröße ist nicht abgeleitet"
+
+
+def test_an_m64_head_room_is_the_iso_4762_head_of_96() -> None:
+    """ISO 4762: Der Zylinderkopf einer M64 hat dk = 96 mm, und so weit wird ausgespart."""
+    spec = PARTS.get("screw_hole")
+    built = spec.fn(spec.params(size="M64", countersink=False, head_room=5.0))
+    assert built.features["head_room_1"].params["diameter"] == pytest.approx(96.0)
+    assert 2.0 * _radial_extent(built.mesh) == pytest.approx(96.0, abs=0.01)
+
+
+def test_an_m20_nut_trap_takes_the_iso_4032_width_of_30(profile: Profile) -> None:
+    """ISO 4032: Die Mutter M20 hat Schlüsselweite 30; die Tasche ist 30 plus Spiel breit."""
+    play = profile.material.clearance
+    spec = PARTS.get("nut_trap")
+    built = spec.fn(spec.params(size="M20", slide=0.0, screw_hole=False, play=play))
+    assert built.features["pocket_1"].params["diameter"] == pytest.approx(30.0 + play)
+    extent = as_mesh_data(built.mesh).bounds.size
+    # Ein Sechskant ist über die Flächen schmaler als über die Ecken.
+    assert float(min(extent[0], extent[1])) == pytest.approx(30.0 + play, abs=0.01)
+    assert float(extent[2]) == pytest.approx(18.0 + play / 2.0, abs=0.01)
+
+
+def test_a_screw_hole_of_its_own_measure_is_derived_and_says_so() -> None:
+    """Ø 11 liegt zwischen M10 und M12: Durchgangsloch 12,25, und der Befund nennt es abgeleitet.
+
+    Ø 12 als eigenes Maß ist die M12 selbst — gleiche Geometrie, kein Befund.
+    """
+    spec = PARTS.get("screw_hole")
+    own = spec.fn(spec.params(size="custom_size", diameter=11.0, countersink=False))
+    assert own.features["bore_1"].params["diameter"] == pytest.approx(12.25)
+    assert [finding.code for finding in own.findings] == ["parts.derived_size"]
+    assert own.findings[0].severity == "info"
+    assert "abgeleitet" in str(own.findings[0].message)
+
+    twelve = spec.fn(spec.params(size="custom_size", diameter=12.0, countersink=False))
+    table = spec.fn(spec.params(size="M12", countersink=False))
+    assert not twelve.findings
+    assert twelve.features["bore_1"].params == table.features["bore_1"].params
+    assert as_mesh_data(twelve.mesh).volume == pytest.approx(as_mesh_data(table.mesh).volume)
+
+
+def test_a_heatset_insert_of_its_own_measure_takes_hole_and_length_from_its_datasheet() -> None:
+    """Eine Buchse, die nicht in der Tabelle steht: Bohrung und Länge, wie eingetragen."""
+    spec = PARTS.get("heatset_m4")
+    built = spec.fn(
+        spec.params(size="custom_size", hole=14.0, length=15.0, extra_depth=1.0, lead_in=False)
+    )
+    bore = built.features["bore_1"].params
+    assert bore["diameter"] == pytest.approx(14.0)
+    assert bore["depth"] == pytest.approx(16.0)
+    assert 2.0 * _radial_extent(built.mesh) == pytest.approx(14.0, abs=0.01)
+
+
+def test_the_new_heatset_inserts_drill_the_hole_of_their_datasheet() -> None:
+    """Ruthex RX-M8x12,7: d3 = 9,6; CNC Kitchen M10 × 12,7: D2 = 12,0."""
+    spec = PARTS.get("heatset_m4")
+    for size, hole in (("M8", 9.6), ("M10", 12.0), ("M3x5x4", 4.4)):
+        built = spec.fn(spec.params(size=size, lead_in=False))
+        assert built.features["bore_1"].params["diameter"] == pytest.approx(hole), size
+
+
+def test_a_bore_beyond_the_table_still_gets_a_nut_trap_and_says_it_is_derived() -> None:
+    """Weiter als das Durchgangsloch der M64 (70): eine Mutter mit eigenem Maß.
+
+    Das kleinste eigene Maß, dessen abgeleitetes Durchgangsloch die Bohrung
+    aufnimmt — bei 80 mm Ø 73,14 —, und der Satz über dem Dialog nennt es
+    abgeleitet. Eine Buchse dagegen wählt nichts vor, sie nennt den Weg.
+    """
+    from app.core.knowledge.parts.fasteners import (
+        CUSTOM_SIZE,
+        insert_advice,
+        nut_trap_advice,
+        size_for_insert,
+        size_for_nut_trap,
+    )
+
+    assert size_for_nut_trap(70.0) == {"size": "M64"}
+    chosen = size_for_nut_trap(80.0)
+    assert chosen["size"] == CUSTOM_SIZE
+    assert chosen["diameter"] == pytest.approx(80.0 * 64.0 / 70.0)
+    assert standards.derived_screw(chosen["diameter"]).clearance == pytest.approx(80.0)
+    assert "abgeleitet" in str(nut_trap_advice(80.0))
+    assert size_for_insert(12.5) == {}
+    assert "Eigenes Maß" in str(insert_advice(12.5))
+
+
+def test_a_thread_without_a_core_is_a_declared_exclusion() -> None:
+    """Ø 1,6 mit 20 mm Steigung lässt keinen Kern stehen — erklärt, aus derselben Rechnung.
+
+    Der volle Bereichsnachweis zählte genau diese Ecken als Bruch: Der Bau
+    lehnte richtig ab, aber der Baustein erklärte es nicht.
+    """
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("printed_thread")
+    assert spec.feasible is not None
+    for internal in (True, False):
+        for play in (0.2, 1.0):
+            params = spec.params(
+                size="custom_size", diameter=1.6, pitch=20.0, internal=internal, play=play
+            )
+            reason = spec.feasible(params)
+            assert reason is not None
+            with pytest.raises(ValidationError) as caught:
+                spec.fn(params)
+            assert caught.value.constraint == "no_core"
+            assert str(caught.value.detail) == str(reason)
+    for values in ({"size": "M1.6", "play": 1.0}, {"size": "custom_size", "diameter": 1.6}):
+        assert spec.feasible(spec.params(**values, internal=False)) is None, values
+
+
+def _thread_in_a_tube(
+    profile: Profile, outer: float, inner: float, extra: dict[str, Any] | None = None
+) -> list[tuple[str, str]]:
+    """Ein Rohr und ein Gewinde in seiner Bohrung, vorgewählt wie beim Klick."""
+    from app.core.scene import ResultCache
+    from app.core.scene.placement import values_for
+
+    document = new_project("centauri-carbon-2", "petg").document
+    History(document).apply(
+        "Rohr",
+        [
+            OperationDraft(
+                op="create_tube",
+                params={
+                    "outer_diameter": outer,
+                    "inner_given": True,
+                    "inner_diameter": inner,
+                    "height": 20.0,
+                    "segments": 192,
+                },
+            )
+        ],
+    )
+    cache = ResultCache()
+    first = evaluate(document, profile, cache=cache)
+    hole = next(f for f in first.scene.objects["obj_1"].features.values() if f.kind == "hole")
+    prefill = values_for(REGISTRY.get("insert_printed_thread"), hole)
+    History(document).apply(
+        "Gewinde",
+        [
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={**prefill, **(extra or {}), "length": 12.0},
+            )
+        ],
+    )
+    result = evaluate(document, profile, cache=cache)
+    assert result.stopped_at is None
+    return [(finding.code, finding.severity) for finding in result.scene.report.findings]
+
+
+def test_an_internal_thread_through_a_thin_tube_wall_is_reported(profile: Profile) -> None:
+    """Die Restwand um ein Gewinde in einer Rohrbohrung wird gemessen und gemeldet.
+
+    Bis dahin blieb ein Gewinde, das eine Rohrwand bis auf 0,1 mm abtrug, ohne
+    Befund (Review RM-532, F2). Am Rohr ist die Außenwand kein Merkmal, und die
+    Prüfung am Endstand (``relations.thinnest_sleeve``) sieht sie nicht; das
+    Gewinde misst sie deshalb beim Setzen am Träger
+    (``fasteners.thread_at_hole``). Das Rohr 65/60 bekommt die M64, ihr Gang
+    reicht bis Ø 64,2 — 0,4 mm Wand. 72/60 lässt 3,9 mm und bleibt still.
+    """
+    thin = _thread_in_a_tube(profile, 65.0, 60.0)
+    assert ("parts.thread_thin_wall", "warning") in thin, thin
+    thick = _thread_in_a_tube(profile, 72.0, 60.0)
+    assert not any("thin_wall" in code for code, _severity in thick), thick
+
+
+def test_a_finer_pitch_that_drills_the_hole_out_says_so(profile: Profile) -> None:
+    """Nur die Steigung feiner, Nenndurchmesser gleich: Das Werkzeug bohrt die Bohrung auf.
+
+    Ø 66,6 mit Steigung 2 in einer 60-mm-Bohrung schneidet bei 64,6 an; der
+    Befund nennt den Nenndurchmesser, mit dem die Bohrung Kernloch bleibt
+    (60 + 2,2 = 62,2). Vorher geschah das still (Review RM-532, F3).
+    """
+    from app.core.knowledge.parts.fasteners import thread_at_hole
+    from app.core.types import Feature
+
+    def bore(diameter: float) -> Feature:
+        return Feature(
+            id="hole_1", kind="hole", provenance="detected", params={"diameter": diameter}
+        )
+
+    widened = _thread_in_a_tube(
+        profile, 72.0, 60.0, {"size": "custom_size", "diameter": 66.6, "pitch": 2.0}
+    )
+    assert ("parts.bore_widened", "warning") in widened, widened
+    spec = PARTS.get("printed_thread")
+    finding = thread_at_hole(
+        spec.params(size="custom_size", diameter=66.6, pitch=2.0, internal=True, play=0.2),
+        bore(60.0),
+        None,
+        profile,
+    )
+    assert finding is not None and finding.values["fitting_mm"] == pytest.approx(62.2)
+    assert finding.suggestions
+    fitting = spec.params(size="custom_size", diameter=62.2, pitch=2.0, internal=True, play=0.2)
+    assert thread_at_hole(fitting, bore(60.0), None, profile) is None
+    assert (
+        thread_at_hole(spec.params(size="M64", internal=True, play=0.2), bore(58.0), None, profile)
+        is None
+    )
+
+
+def test_two_inserts_of_the_same_thread_and_length_are_told_apart_by_their_outside() -> None:
+    """Ruthex M3S und M3x5x4 sind beide M3 × 4 — sie unterscheidet ihr Außendurchmesser."""
+    from app.core.registry.surfaces import choice_label
+
+    short, voron = choice_label("M3S"), choice_label("M3x5x4")
+    assert short != voron
+    assert "4,60" in short and "5,00" in voron
+    assert choice_label("M4S") == "M4 · 4,00 mm"
+    assert choice_label("M8") == "M8"
 
 
 def test_an_external_thread_turns_into_the_internal_thread_of_the_same_size(
@@ -4284,38 +4575,47 @@ def test_an_external_thread_turns_into_the_internal_thread_of_the_same_size(
     assert overlap.mesh.volume <= EPS_GEOM * (hole.raw.area + placed.area)
 
 
+@pytest.mark.parametrize(
+    ("bore", "size", "nominal"), [(60.0, "M64", 64.0), (70.0, "custom_size", 76.6)]
+)
 def test_a_pipe_of_sixty_takes_an_internal_thread_and_its_bolt_turns_through(
-    profile: Profile,
+    profile: Profile, bore: float, size: str, nominal: float
 ) -> None:
     """Der Kundenvorschlag S-20261006-c66299: ein Innengewinde in einem Rohr mit 60 mm.
 
-    Das Rohr Ø 76 / 60 bekommt das Gewinde, das ``size_for_thread`` an seiner
-    Bohrung vorwählt (Ø 66,6, Regelsteigung 6). Gemessen wird, was der Kunde
+    Das Rohr mit 8 mm Wand bekommt das Gewinde, das ``size_for_thread`` an
+    seiner Bohrung vorwählt: in 60 mm seit Tabellenversion 13 die Normgröße
+    M64 (Kernloch 58, Nennmaß 64), in 70 mm, wo keine Normgröße mehr passt, ein
+    eigenes Maß Ø 76,6 mit der Regelsteigung 6. Gemessen wird, was der Kunde
     braucht: Das Rohr bleibt ein geschlossenes Teil mit Wand um die Gänge, die
     Gänge schneiden in die Wand, und ein Bolzen desselben Maßes läuft über die
     ganze Länge hindurch, ohne irgendwo Material zu treffen.
     """
     from app.core.knowledge.parts.build import subtract
-    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE, size_for_thread
+    from app.core.knowledge.parts.fasteners import size_for_thread, thread_measure
     from app.core.units import EPS_GEOM
 
-    chosen = size_for_thread(60.0)
-    assert chosen["size"] == CUSTOM_SIZE
+    chosen = size_for_thread(bore)
+    assert chosen["size"] == size
+    assert thread_measure(
+        chosen["size"], chosen.get("diameter", 0.0), chosen.get("pitch", 0.0)
+    ) == (pytest.approx(nominal), pytest.approx(6.0))
     spec = PARTS.get("printed_thread")
     play = profile.material.clearance
     length = 18.0
+    outer = bore + 16.0
     tool = spec.fn(spec.params(**chosen, length=length, play=play)).mesh
     bolt_values = {**chosen, "internal": False}
     bolt = spec.fn(spec.params(**bolt_values, length=2.0 * length, play=play)).mesh
-    pipe = subtract(shapes.cylinder(76.0, length), shapes.cylinder(60.0, length + 1.0))
+    pipe = subtract(shapes.cylinder(outer, length), shapes.cylinder(bore, length + 1.0))
     pipe = subtract(shapes.moved(pipe, (0.0, 0.0, -length)), tool)
 
     assert pipe.is_watertight and pipe.component_count == 1
     radial = np.hypot(pipe.raw.vertices[:, 0], pipe.raw.vertices[:, 1])
-    inner = radial[radial < 37.0]
+    inner = radial[radial < outer / 2.0 - 1.0]
     # Die Gänge reichen bis zum Nennmaß plus Spiel in die Wand, die Wand dahinter bleibt.
-    assert float(inner.max()) * 2.0 == pytest.approx(chosen["diameter"] + play, abs=0.05)
-    assert 76.0 - float(inner.max()) * 2.0 > 2.0 * 4.0, "um die Gänge steht Wand"
+    assert float(inner.max()) * 2.0 == pytest.approx(nominal + play, abs=0.05)
+    assert outer - float(inner.max()) * 2.0 > 2.0 * 2.0, "um die Gänge steht Wand"
     # Wie beim Tabellenpaar: Der Bolzen beginnt eine ganze Zahl von Steigungen
     # unter dem Gewinde und läuft in Phase hindurch.
     placed = bolt.raw.copy()
@@ -5348,12 +5648,15 @@ def test_a_lug_carries_the_hole_of_its_screw_on_every_kind_of_face(
 
 def test_a_lug_follows_the_washer_of_its_screw_without_a_dimension() -> None:
     """Die Maßreihe statt eines Einzelmaßes: Ohne Breite und Länge folgt die Lasche
-    der Unterlegscheibe (ISO 7089) jeder Größe von M3 bis M8 — so breit wie sie,
+    der Unterlegscheibe (ISO 7089) jeder Größe von M3 bis M64 — so breit wie sie,
     so lang, dass sie neben der Fläche liegt, das Loch in der Mitte des runden Endes.
     """
     spec = PARTS.get("lug")
     sizes = next(entry for entry in spec.params.spec() if entry.name == "size").choices
-    assert tuple(sizes) == ("M3", "M4", "M5", "M6", "M8")
+    assert tuple(sizes) == tuple(
+        size for size in standards.screw_sizes() if standards.screw(size).nominal >= 3.0
+    )
+    assert sizes[0] == "M3" and sizes[-1] == "M64"
     for size in sizes:
         washer = standards.washer(size).outer
         built = spec.fn(spec.params(size=size))
@@ -6896,6 +7199,32 @@ def test_a_part_offers_its_own_actions_not_those_of_a_face() -> None:
     assert {field.name for field in moving.fields} == {"x", "y", "z"}
     assert not removing.fields, "Entfernen fragt nichts"
     assert removing.op is None, "es startet keine Operation, es nimmt den Schritt"
+
+
+@pytest.mark.parametrize("op", ["create_lid", "screw_lid"])
+def test_a_lid_offers_no_move_for_the_height_of_its_opening(op: str) -> None:
+    """Am Deckel ist ``z`` die Höhe der Öffnung, keine Lage (Review RM-526, B1).
+
+    Seit RM-526 ist sie leer, wenn sie Oberkante heißt. *Baustein verschieben*
+    bot sie als Feld an, mit dem Wert ``None``, und das Merkmalfenster warf beim
+    Klick auf Kragen oder Öffnung ``TypeError``. Verschoben wird ein Baustein in
+    der Ebene; ein Schema ohne ``x`` und ``y`` hat keine Lage. Jedes angebotene
+    Feld trägt einen Wert, den ein Zahlenfeld zeigen kann.
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import part_actions
+
+    load_operations()
+    spec = REGISTRY.get(op)
+    for params in ({}, {"z": None}, {"thickness": 2.4}):
+        actions = part_actions(SimpleNamespace(id=3, op=op, params=params), spec)
+        assert "Baustein verschieben" not in [str(action.title) for action in actions]
+        for action in actions:
+            for field in action.fields:
+                if field.kind in {"length", "angle", "count"}:
+                    assert field.value is not None, f"{op}.{field.name} ohne Wert"
 
 
 def test_only_a_collected_value_from_the_front_gets_a_way_of_its_own() -> None:

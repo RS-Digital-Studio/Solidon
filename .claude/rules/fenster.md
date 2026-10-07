@@ -42,6 +42,13 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   (`overlay.EDGE`, Entscheidung Robert), rund ist nur die freie Ecke; die
   rechte ist 400 breit, 25 % des Fensters, höchstens 540, nie schmaler als
   ihre vordere Seite (RM-488).
+- **Die Seitenkarten sind verschiebbar** (Bauplan §2.5): Lage als
+  `overlay.CardPlace` in `UiSettings.card_places`; gezogen wird ein Umriss
+  (`CardGrip`), ein Rand trägt eine Karte (`settled_places`), passt die
+  Anordnung nicht, gilt vorübergehend die Stammlage. Ansicht, Ansichtsleiste
+  und Tour lesen die Lücke über `free_span`, nie feste Seiten.
+  Beim Ziehen zeigen Umriss und Satz das Ergebnis (zweiter Umriss für die
+  andere, `_drag_sentence`); schwebend steht die Oberkante (`floating_top`).
 - Befunde und Halt holen den Bericht nie nach vorn: `SignalTabBar` zählt, blinkt
   und markiert Ungesehenes; `_focus_report` nur auf Bitte (Statuszähler,
   *Prüfbericht*, Exportprüfung, Slicen, G-Code).
@@ -63,6 +70,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   (Druckdialog nach `exec`), sonst beim nächsten Ergebnis. Erst Zeigen zählt
   als gesehen; `_announce_written`/`handedOver` zählen nur erfolgreiche Datei,
   Slicen oder Öffnen, nie Versuch, Abbruch, Fehler oder Rückfrage.
+- Die Einladung der leeren Szene steht nicht über Skizze, offenem
+  Operationsdialog oder Vorschau: Wer einen dieser Zustände schaltet, ruft
+  `_show_invitation`.
 - Arbeitsbeginn auf der Startseite ersetzt das leere/offene Projekt über
   `_begin_from_the_start_screen` mit `_may_discard`; `start_empty` meldet Erfolg.
   `run_operation`/`start_sketch` sowie Einfügen/Download wechseln so in den
@@ -102,12 +112,11 @@ werden:
   `warning` (`dialogs.confirm_export`; der Lizenzhinweis §16.3 ist `info`),
   Weitergehen als Vorgabe; der Dialog nennt die ersten Sätze.
 - **Slicer-Übergabe:** `confirm_handover` fragt vor *Slicen* und *Im Slicer
-  öffnen* nur bei **Fehlern** der gewählten Platten, nicht bei Warnungen — die
-  Übergabe ist oft der Blick ins gewohnte Programm; Weitergehen ist die Vorgabe.
+  öffnen* nur bei **Fehlern** der gewählten Platten, nicht bei Warnungen;
+  Weitergehen ist die Vorgabe.
 - **Danach weiß der Kunde, wo die Datei liegt:** *Ordner zeigen* steht neben der
   Ankündigung, solange sie steht (`announce` nimmt ihn mit der nächsten mit),
-  und öffnet über `QDesktopServices` (Qt kennt die Plattform und im Flatpak das
-  Portal).
+  und öffnet über `QDesktopServices`.
 - **Wer nur hinsieht, wird nicht gefragt:** Beim Schließen fragt das Fenster nur,
   wenn etwas verloren ginge, das nicht in den Dateien des Kunden steht
   (`ingest.plan.is_only_imported` über `Session.only_imported`).
@@ -139,8 +148,7 @@ wird nur, wenn Zurückgenommenes verworfen würde (§15.4,
   (`Session.displayed_document`), und jede Operation über `Session.apply` landet
   dort. Abläufe mit eigener Buchführung (Teilen mit Stiften, Deckel, Gegenstück,
   Auto Split, Erzeugen, Agentenvorschlag) sagen ab, mit *Einfügen beenden* als
-  Weg; Export und Druckeinstellungen beenden das Einfügen zuerst — hinaus geht
-  das fertige Teil, nicht der Zwischenstand. Erzeugen fragt vor dem Start
+  Weg; Export und Druckeinstellungen beenden das Einfügen zuerst. Erzeugen fragt vor dem Start
   (`_generation_refusal`); sagt *Übernehmen* ab, bleibt der Dialog mit seinen
   Versuchen offen (`GenerateDialog.take`).
 
@@ -204,6 +212,7 @@ Stellen halten das, beide sind nötig:
   korrigieren* mit Rat als Tooltip; der Fehlerdialog zeigt Räte über
   `dialogs.unhandled_advice` als Sätze. Knopfzeile, Kontextmenü und Vorwahl
   benutzen denselben Abgleich.
+- Vorgewählt werden nur Fehler und Warnungen mit Handlung (`_preselect`).
 - Lokale Erkennung behält die Zielkörper des Befunds; erst der Originaltreffer
   bestimmt einen. Baumauswahl ersetzt dieses Ziel nicht. Maus und Tastatur
   verwenden denselben Treffer.
@@ -281,7 +290,8 @@ Ansichtsseite steht in `griffe.md`.
   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt
   der Körper — mit Ansage und Strg+Z: Eine Fläche ist kein Ding, das man
   löscht, der Körper ist gemeint, und ein Teil, das Entf nicht löscht, ist eine
-  Sackgasse (Regel 19). *Ausblenden* heißt am Merkmal *Körper ausblenden*.
+  Sackgasse (Regel 19). Ohne Merkmal nimmt Entf alle markierten Körper
+  (`on_bodies`). *Ausblenden* heißt am Merkmal *Körper ausblenden*.
 - **Bei gewähltem Dach** fragt `_move_the_part` `_common_part_step`, und das
   Dach bekommt einen eigenen Griff (`_part_grip_anchor` →
   `Viewport.set_part_grip`; welches Merkmal ihn trägt, sagt das Fenster) statt
@@ -304,30 +314,23 @@ Ansichtsseite steht in `griffe.md`.
 
 ## Der Hauptknopf
 
-- Hauptaktionen entstehen über `style.make_primary`, nie direkt über
-  `setDefault(True)`: Akzent und halbfette Schrift bilden zwei Kodierungen.
-  Verwerfen verwendet `make_danger` (Fehlerrot, Schrift aus `readable_on`,
-  Handlungswort; etwa *Abbrechen* unter *Übernehmen*). `test_style.py` prüft
-  gezeichnete Fläche/Schrift und verbietet den direkten Default-Aufruf.
-- Dialoge ohne Hauptaktion rufen `no_primary`, andere `make_primary` auch bei
-  anfangs gesperrtem Knopf. Sonst macht Qt beim ersten Anzeigen den ersten
-  `autoDefault`-Knopf selbst zum Hauptknopf. Nur ein gezeigtes Fenster belegt
-  dieses Verhalten.
-- Fokus verschiebt keinen Akzent. `style._FocusTakesNoAccent` wird einmal
-  durch `make_primary`/`no_primary` angemeldet, nimmt Nebenknöpfen `autoDefault`
-  und klickt den per Tab/Umschalt+Tab gewählten bei Enter selbst
-  (`enter_belongs_to_focus`). Maus, `setFocus` und von gesperrten/verborgenen
-  Knöpfen vertriebener Fokus (Qt meldet Tab) lassen Enter beim Hauptknopf.
-  Fensterwechsel erhält die Wahl; kein Dialog baut eigene Logik dafür.
-  `test_enter_key.py` und `test_style.py` prüfen zugestellten Fokus;
-  `WA_DontShowOnScreen` aktiviert kein Fenster.
-- Stylesheets ohne Selektor am Vorfahren ersetzen für gesetzte Eigenschaften
-  die Anwendungsfarben aller Nachkommen: besonders `background`, nicht ein
-  reines `border` wie `_flash_area`. Deshalb `objectName`-Selektoren; bei notwendiger
-  breiter Regel Hauptknopffarben ausdrücklich setzen (`#surveyNotice #surveyGive`)
-  und weiterhin `make_primary` verwenden. Klicktests belegen keine Knopffarbe.
-- Umschalter nennen das Werkzeug, Knöpfe die Handlung (*Trennen*, *Jetzt
-  trennen*); `test_interface_limits.py`.
+Warum, mit Anlässen: `regel-fenster.md`, „Der Hauptknopf“; Wächter `test_style.py`.
+
+- Hauptknopf nur über `style.make_primary` (Akzent und Halbfett), abgeben mit
+  `leading=False`, nie `setDefault(True)`; wer führt, sagt `leading_action`.
+- Höchstens ein Akzentknopf je Fenster: Hinweishandlungen (`ErrorNotice`, Rat,
+  Übermaß) sind normale Knöpfe. Ohne Handlung `no_primary`, sonst macht Qt den
+  ersten `autoDefault`-Knopf zum Default.
+- `make_danger` genau an `DestructiveRole`, nie mit `make_primary`, nie an
+  Abbrechen/Schließen. Rückfragen vor Verwerfen oder Löschen: `no_primary`,
+  Fokus und Escape auf Abbrechen.
+- Ruhezustand: nur *Bausteine* im Akzent, Kartenrand in `line`, aktiver Reiter
+  in Schriftfarbe (`test_resting_state.py`).
+- Fokus verschiebt keinen Akzent (`_FocusTakesNoAccent`); Enter gehört dem per
+  Tab gewählten Knopf (`test_enter_key.py`).
+- Stylesheets an einen `objectName`: Typloses `background` am Vorfahren nimmt
+  allen Knöpfen darunter die Farbe. Klicktests belegen keine Knopffarbe.
+- Umschalter nennen das Werkzeug, Knöpfe die Handlung; `test_interface_limits.py`.
 
 ## Ein Dialog, der höher ist als sein Inhalt
 
@@ -428,35 +431,18 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 
 ## Wie die Karten ihre Höhe teilen
 
-`OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`:
+`OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`
+(`tests/test_overlay.py`): nie mit gerade gesetzten Höhen (`extra_height`,
+nicht `natural_height`); abgezogen wird, was nicht den Karten gehört; jede
+Karte nennt ihren Boden (`least_height`, nie über ihrem Wunsch); viele feste
+Zeilen rollen (`FittedScroller`). Ungleiche Zeilen misst `rows_height`, und
+`wanted_height` fragt dieselbe Quelle; was unter der Liste steht, gehört in
+beide Rechnungen.
 
-- **Gerechnet wird nie mit den Höhen, die gerade gesetzt wurden**;
-  `natural_height` taugt darin nicht, `extra_height`
-  rechnet strukturell (je Posten: Wunsch des Ganzen minus die Wünsche der
-  Karten darin).
-- **Was nicht den Karten gehört, wird abgezogen** (Abschnittsköpfe,
-  Parameterleiste, Layoutabstände).
-- **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`; aus `fit_to_rows`
-  mit drei Mindestzeilen und aus dem leeren Zustand über `fit_wrapped`), nie
-  höher als ihr Wunsch; verteilt wird nur, was darüber liegt.
-- **Eine Karte aus vielen festen Zeilen rollt, statt sich zu stauchen**
-  (`overlay.FittedScroller`, der Prüfbericht): Erst gibt die Liste bis zu ihrer
-  Mindesthöhe nach, dann rollt der Inhalt; die rechte Zone rechnet ihren
-  Wunsch an der Kartenbreite (`natural_height(zone, width=)`).
-
-`tests/test_overlay.py` hält alle drei. `fit_to_rows` rechnet mit
-**einer** Zeilenhöhe — ungleiche Zeilen (Objektbaum) misst `overlay.rows_height`, und
-`wanted_height` fragt dieselbe Quelle wie das Setzen. **Was unter der Liste
-steht, gehört in beide Rechnungen.**
-
-**Gesetzt wird einmal je Ereignisdurchlauf, nicht je Ereignis:** `_place_later`
-setzt über einen Nullzeitgeber — kein nachgereichtes Ereignis, denn die Listen
-legen ihre Zeilen selbst über einen Nullzeitgeber, und `rows_height` misst an
-`visualRect`; `resizeEvent` und `reflow` setzen sofort. Tests brauchen mehrere
-Runden `processEvents` — eine Zusicherung nach einer Runde misst einen
-Zwischenstand. `is_room_taker` antwortet je Widget-Typ einmal. **Wer Inhalt
-wachsen lässt, sagt es bis zur Zone** (`overlay.tell_the_zone`, dann
-`reflow`), sonst wächst die Karte in zwei Zügen.
+**Gesetzt wird einmal je Ereignisdurchlauf** (`_place_later`, Nullzeitgeber;
+`resizeEvent` und `reflow` sofort) — Tests brauchen mehrere Runden
+`processEvents`. **Wer Inhalt wachsen lässt, sagt es bis zur Zone**
+(`tell_the_zone`, dann `reflow`), sonst wächst die Karte in zwei Zügen.
 
 ## Rückmeldung und Fehlerbericht
 

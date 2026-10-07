@@ -39,7 +39,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | CI-01 bis CI-07 im Code belegt, Aufteilung in den Tagläufen 0.5.1 und 0.5.3 gelaufen; Fenstertabelle aus dem Taglauf 0.5.3 und Budget je Datei (`c379d5271`). Offen: CI-08 mit vergleichbarer Vorher-/Nachher-Auswertung, die Kerntabelle aus CI-Berichten und das Blättern in `tools/windows_signed_installer.py` |
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Bausteine, Abläufe, funktionale Gruppen, Projektmaße und das Abnahmewerkzeug gebaut (04.10.); offen: der echte Lauf der Einzeldateiabnahme über 187 Fälle am Fenster, die Fensterabnahmen der neuen Abläufe und Gruppen, Leistungsreihe |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Hänger durch die Speicherbereinigung im Arbeiter behoben (nur noch im Hauptfaden, 05.10.); der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen sind der Ereignistyp dahinter, die Gegenprobe auf Linux und Mac und die Vergleichsreihe |
@@ -48,8 +47,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Installerlauf 37418052743 (0.5.3) installiert und startet den Kundeninstaller mit Inno Setup 7.1.0; jedes Release startet das installierte Flatpak unter Xvfb. Offen: Aktualisieren/Deinstallieren auf fremdem Windows, Flatpak auf echter Linux-Grafik |
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Kunde mit zwei Intel-Macs (macOS 26): das Developer-ID-signierte Paket startet nicht, ad hoc signiert schon; am Runner nicht nachstellbar (Läufe 37361577881, 37362456615); wartet auf Terminalausgabe, `codesign --verify`, Absturzberichte und macOS-Version des Kunden. Daneben Intel-Fenster am Gerät und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
-| [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
-| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins; `shapes.thread_body` ist umgestellt, sein Weg in `_WAYS` fehlt (Liste am Punkt) |
+| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut (Taglauf 37266459831 grün); offen die drei Arbeitsplätze und der Blick in die Releaseakte |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -80,6 +78,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.); offen: Waschschüssel an 29 Druckern, die Minigolf-Platte als 3MF, der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max, vorher das Matrixwerkzeug (Blockleser, Stützmarke nach Volumen) |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
+| [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
+| [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
+| [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
@@ -88,16 +89,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
 | [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Probe über den echten Startweg beim nächsten Release (RM-213); D3D12 als Backend ist eine eigene Entscheidung |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Am echten Fenster prüfen, ob sich die Geste flüssig anfühlt (Release, RM-213) |
-| [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut |
+| [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut; dazu die vier Handwege der Merkmalbedienung (§4) |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
-| [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
-| [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
-| [RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich](#rm-526) | Bedienung und Darstellung | `z` als optionale Koordinate (leer heißt Oberkante), Migration 0 → leer |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -105,19 +102,15 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Gehosteter Lauf freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel; daneben der lokale Lauf nach RM-513 gegen `1ce7eac68` |
 | [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | (a) und (b) erledigt; offen die sechs Befunde aus dem Review 02.10., die einen Schritt meinen und *Diesen Schritt ändern* noch nicht tragen |
 | [RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat](#rm-529) | KI und Generatoren | `created_by` in Merkmals- und Objektzeile des Steckbriefs nachrüsten (Entscheidung Robert, 06.10.) |
-| [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): umräumen — erledigte und abgelöste Konzepte in einen Unterordner, alle Verweise nachziehen |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
-| [RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen](#rm-113) | Tests und Entwicklungswerkzeuge | Diagnose gebaut (`736d4a46e`); nächster Schritt: den Skip-Grund aus dem JUnit-Bericht `tests-core-windows-latest-*` des Taglaufs 37409338027 lesen und SID/ACL festhalten |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Genehmigt (Robert: „alles gründlich“); neun Helfer in `helpers.py`/`ui_helpers.py` (`95fd36d35`); offen `on_the_bore_wall`, `project`, `FakeCodec`, `a_foreign_slot`; entschieden (Robert, 06.10.): auch die großen Fenster-Fixtures zusammenführen |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Stimme mit Prüfsummen in `licences.toml` dokumentiert; offen: `/legal-review` zur Werbenutzung, Eintrag in `ASSET-RIGHTS.toml` und ein Test, der die Stimme prüft |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (d) und Teile von (b)/(c) mit `b03c0ddfe` erledigt; offen die Kopie `_select_data` samt Karte, die übrigen dünnen Hüllen aus (b), `section.section_volume` und `repair.fill_holes` (Liste am Punkt) |
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): `rendering`-Fälle in der Release-CI auch unter Linux und macOS, dazu der Wächter in `test_packaging.py` |
-| [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, `importorskip`, falscher `adjustSize`-Satz in `vorderseite.md`, „gebaut an drei Orten“ in `oberflaeche.md`, „Datei je Fakt“ |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Erster Lauf 02.10. im Archiv; der zweite war am 05.10. fällig und steht aus (bekannt: cadquery-ocp-novtk 8.0.1.1.0); Paketbeleg der Bauplattform unter RM-468 |
-| [RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft](#rm-530) | Tests und Entwicklungswerkzeuge | Skripte, die Tests und Workflows dauerhaft brauchen, aus `.claude/.state/` nach `tools/` ziehen |
-| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Auftrag Robert (06.10.): Fenstergruppe in der Release-CI auf allen drei Plattformen, dazu ein Slicer-Job, der je Plattform die Slicer installiert und Erkennung, Druckerlisten und Slicen prüft |
+| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.); offen acht Fälle, `build.yml`, die Wächter und der Slicer-Job |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -141,13 +134,19 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Am Runner im Sandkasten mit den Manifestrechten belegt; offen nur der Lauf mit dem ausgelieferten Solidon-Flatpak 0.5.3 und das Öffnen im Fenster |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): Lader-Weg bauen, Rückfall „nur öffnen“ mit Satz im Druckdialog; Abnahme am Linux-Runner mit AppImage und Flatpak |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Fällig seit 06.10.: mit 0.5.3 antworten; Entwurf liegt lokal bereit |
+| [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
+| [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Gebaut und an Sonde und Fenstertest belegt, nicht committet (Hunks im Arbeitsbaum des i9, Patches im Zustandsordner); offen Tor, Commit der eigenen Hunks und der Titel aus `_removal_entry` |
+| [RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig](#rm-534) | Kundenrückmeldungen | Ursache an der Kundendatei gemessen; Umsetzung in vier Teilen (Laufzustand, volle Kette selbst, Halt im Entwurf nie fein, kein Hin und Her) nicht begonnen |
+| [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Vier Entscheidungen Roberts (am Punkt); die Widersprüche und die drei falschen Ergebnisse unabhängig davon beheben |
+| [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
+| [RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück](#rm-537) | Kundenrückmeldungen | An der Kundendatei gemessen; offen die Herkunft der vorläufigen Merkmale und was eine Auswahl tut, deren Merkmal verschwindet |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
 
 Physische Spulen mit bis zu vier Farben, Regal, bewusster Import, Schnellauswahl
 und rücknehmbare Verbrauchsbuchungen sind angeschlossen; „Erste Schritte“ führt
-über Slicer und Drucker zum Lager. Das [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
+über Slicer und Drucker zum Lager. Das [Gestaltungs- und Gesamtreview](konzepte/archiv/review-filamente-2026-09.md)
 begründet Abwahl, Herstellerprofile und Buchungskorrekturen.
 
 [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
@@ -520,20 +519,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
 
-<a id="rm-114"></a>
-
-- [~] **RM-114 — Vereinfachungsziele auf Apple Silicon vermessen.** Die Vereinfachungs-Zielreihe der
-  dünnwandigen Hohlkugel auf Apple Silicon messen und den Warnungsnachweis dort zuverlässig
-  auslösen. Abnahme: dokumentiertes Ziel mit dichtem Eingang/offenem Ausgang und tatsächlicher
-  Warnung; kein Skip als Erfolg.
-
-  Seit `a559e947` überspringt der Test nicht mehr; ein sicher offener Ausgang löst die Warnung
-  auf jeder Plattform aus (`tests/test_subdivision.py::test_the_simplifier_reports_an_open_result_on_every_machine`,
-  auf macos-latest grün in den Tagläufen 37266459831 und 37409338027). Offen ist nur die
-  dokumentierte Zielreihe der Hohlkugel auf Apple Silicon.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
-
 <a id="rm-187"></a>
 
 - [~] **RM-187 — Dieselbe Geometrie auf jeder Plattform.** Am 17.09.2026 lieferte dasselbe
@@ -641,7 +626,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Stücke einer Schicht, und die Summe entsteht in einer festen Folge
   (`test_slice.py::test_the_support_volume_comes_out_the_same_on_any_number_of_workers`,
   Regel in `.claude/rules/kern.md`). Die Hubhöhe eines schräg gesetzten Bausteins rechnet
-  komponentenweise über `mesh.stable_normals` (`bba2c6ea7`). Neu offen sind drei Wege:
+  komponentenweise über `mesh.stable_normals` (`bba2c6ea7`). Neu offen waren drei Wege, alle
+  drei erledigt mit Paket A (unten):
 
   - **Der Teilungsweg rechnet Naht- und Stiftlagen über BLAS** (rest-teilen,
     REST-TEILEN-06, vor 0.5.0 entstanden): `autosplit` (`_reflected`, `cuts_through`,
@@ -674,6 +660,46 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (`rebuild._drill_tool`) dreht über `lathe.revolve` mit den Ecken aus `units.circle_point`
   statt über `trimesh.creation.revolve`; der Weg `rebuild_drill_tool` steht in `_WAYS` und war
   unter dem Plattformrauschen ohne den Fix rot.
+
+  **Paket A (06.10.2026):** Die drei Wege oben und der Rest aus dem Review vom 02.10. rechnen
+  plattformgleich: die Platzierung eines Bausteins (`parts/ops._matrix` über
+  `transform.composed`), Teilen (`autosplit`, `symmetry`, `pins`), alle Drehwege von *Merkmal
+  drehen* und überhaupt `prepare_ops` und `prepare` (Matrixprodukte, `np.dot`, `einsum`, Normen,
+  SVD, Neigungswinkel, Flächennormalen über `stable_normals`), Muster am Zylinder und in der Ebene
+  (`perceive.patterns` ganz, `texture_ops`), Skizzenbögen (`sketch_solid`, `sketch.profile`) und
+  Senkungen. Neue Wege in `_WAYS`: `slanted_part`, `thread_ridge`, `wrapped_texture`,
+  `face_textures`, `sketch_arcs`, `split_seam` und `read_lattices`; fünf davon waren am alten
+  Stand rot. Der Wächter leert vor dem stillen und vor dem verrauschten Lauf die Merker der
+  Erkennung: Vorher beantwortete der verrauschte Lauf die Erkennung aus dem stillen, und die Naht
+  eines umwickelten Musters hing unbemerkt an `math.cos`. Der Teilungskorpus (sieben Modelle) ist
+  vorher und nachher bitgleich bis auf ein Teil des Wabenhalters nach dem Stiftschnitt (zwei
+  Dreiecke, `pins.py`). Cache-Format 52.
+
+  **Offen nach Paket A:**
+
+  - **Einpassungen in `perceive`:** Achsen aus `eigh`, Kreis und Kugel aus `lstsq`, Ebenen aus
+    `svd` und der Löser `least_squares` in `refine.solve`. Entschieden ist ein eigener
+    deterministischer Kern (Entscheidung Robert, 06.10.2026): feste Summenfolge,
+    Householder-QR und Jacobi-SVD, kompiliert ohne zusammengezogene Multiplikation und
+    Addition, mit bitgleichem Rückfall in NumPy. Abnahme: Erkennungskorpus und Laufzeit vorher
+    und nachher, `_WAYS` grün auf drei Runnern.
+  - **Formen in `knowledge/parts/shapes.py`:** `_slot_outline` rechnet mit `np.cos` und trifft
+    Schlüsselloch und Lasche. Jede Änderung an `shapes.py` macht alle 49 Bereichsnachweise
+    ungültig (`tools/check_part_ranges.py --all`), deshalb gebündelt mit dem nächsten Posten;
+    danach Wege für Umrisse und gedrehte Bohrungen in `_WAYS`.
+  - **Potenzen `**` auf Gleitkommazahlen:** 166 Stellen im Kern, 115 davon `** 2`. Pythons `**`
+    ruft das `pow` der Plattform, und das rundet nicht immer korrekt: Auf Windows weicht
+    `x ** 2` in 1049 von zwei Millionen Werten von `x * x` ab, `x ** 0.5` ebenso oft von
+    `math.sqrt`; das Rauschen sieht beides nicht. Weg: Produkte, `math.sqrt` und Kehrwerte
+    ganzzahliger Potenzen (`1.0 / 10 ** n`), dazu ein Wächter über den Syntaxbaum, der `**` mit
+    Gleitkommaanteil im Kern ablehnt (die Regel steht in `kern.md`). Zuerst `units.plane_axes`:
+    Jeder Skizzen- und Merkmalsrahmen hängt daran.
+  - **Zwei Drehungen über BLAS**, älter als Paket A und von keinem Weg in `_WAYS` erreicht:
+    `geom/hollow.py` (`body.apply_transform(back)` beim Aushöhlen) und `geom/lattice.py`
+    (`plug.apply_transform(matrix)`, Drehung aus `units.plane_axes` samt Verschiebung). Weg:
+    `transform.moved` und je ein Weg in `_WAYS`.
+  - **Das Nachführen bewegter Merkmale** aus der Liste der Durchsicht 0.5.0 ist nicht neu
+    geprüft.
 
 <a id="rm-468"></a>
 
@@ -2529,6 +2555,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Releaseabnahme.
   B01-Export-/Sliceranschlüsse sind separat abgestimmt; RM298 bleibt `[~]`.
 
+  **Teilstand 06.10.2026, (d), Elternende unter Last:** Der Wächter des
+  rechnenden Helfers fiel im Tor neben Agenten-Suite und Toren in einem von drei
+  Läufen. Kein Zeitfenster im Jobobjekt: Das Ende war in allen 65 gebundenen
+  Sondenläufen eingeleitet, sobald der Elternprozess signalisiert war; nur der
+  Abschluss dauerte unter Volllast in `BELOW_NORMAL` bis 19,5 s, in 21 von 23
+  Läufen über 9 s (normale Klasse unter 0,8 s, ruhige Maschine 1 bis 2 ms).
+  Der Test sichert jetzt das eingeleitete Ende zu (`IsProcessDeleting`), der
+  Abbau hebt vorher die Klasse, Meldedateien werden bis zur Frist gelesen.
+  Verschränkt im selben Fenster: alt 6 von 8 rot, neu 8 von 8 grün; ohne
+  inneres Jobobjekt bleibt der neue Test an derselben Zusicherung rot. Das löst
+  die Zusage „innerhalb der Abbaufrist signalisiert“ aus
+  [rm298-lifecycle-2026-10-02.md](konzepte/nachweise-release-0.5.1/reports/rm298-lifecycle-2026-10-02.md)
+  ab. [Sonde und Läufe](konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/elternende.py),
+  Begründung `regel-tests.md`. RM298 bleibt `[~]`.
+
 <a id="rm-307"></a>
 
 - [~] **RM-307 — Auto Split: Reste aus dem Review der Vorauswahl.** Aus dem Release 0.5.1 (Fix `autosplit-lagen-051`,
@@ -2742,6 +2783,50 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Kanal und der entschiedenen Mündung, der Korpus ohne neue Kanalstücke.
   **Entschieden (Robert, 06.10.2026):** Die Mündung bleibt frei, wie Solidon es seit 0.5.3
   hält; offen ist nur die Abnahme.
+
+<a id="rm-539"></a>
+
+- [ ] **RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne
+  Befund.** Die Kabeldurchführung legt ihre Mündung an die angeklickte Fläche, die als
+  Außenseite gilt, und baut den Klemmblock dahinter (`parts/structure.py`,
+  `cable_relief_support` als `host_add`). Im Gehäuse-Beispiel stand sie auf der Oberseite des
+  Bodens: Der Block hing 5,25 mm unter dem Bett und über zwei Ränder (im Beispiel behoben,
+  `tools/make_examples.py`). Setzt ein Kunde sie so, sagt es nur `arrange.below_bed` als
+  Hinweis, dessen Handlung *Auf das Bett setzen* das Gehäuse auf den Block stellt; an einer
+  Seitenwand von innen kommt nichts. `parts/ops.py` vereinigt `host_add`, ohne zu prüfen, wo er
+  landet. **Offen:** ein Befund beim Einsetzen, wenn der Trägeraufbau außerhalb des Trägers oder
+  unter z = 0 liegt, mit einer Handlung, die die Richtung umkehrt, in allen Katalogen.
+  **Abnahme:** Kabeldurchführung von innen auf einen Boden und an eine Seitenwand gesetzt, je
+  ein Befund mit Handlung; danach sitzt der Block innen und der Boden auf dem Bett.
+
+<a id="rm-541"></a>
+
+- [ ] **RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer
+  Winkelbedingung.** `test_sketch_editor.py::test_the_angle_button_asks_for_its_degrees` setzt
+  45° und bekommt unter `macos-26-intel` 135°, unter Windows, Linux und macOS ARM 45° (Sonde
+  zu [RM-531](#rm-531), Lauf 37495714708). `least_squares` mit `method="trf"`
+  (`app/core/sketch/solver.py`) beginnt mit dem Vertrauensradius ‖x₀‖, und weil die
+  Unbekannten absolute Koordinaten sind, ist das in diesem Fall rund 13 mm: Der erste Schritt
+  reicht über beide Zweige, und welchen er trifft, entscheidet die Rechnung der Plattform.
+  Belegt ist der Radius, nicht die Rundung, die unter Intel kippt; an einem Intel-Rechner ist
+  nichts nachgerechnet. **Fix:** in Verschiebungen gegen den Ausgangsstand rechnen, damit der
+  erste Schritt am Zug hängt und nicht an der Lage des Ursprungs. Das ändert die Lösung
+  unterbestimmter Skizzen; deshalb vorher und nachher gegen die Skizzentests und die Budgets
+  aus §31 messen. **Abnahme:** der Test auf allen vier Plattformen grün, unterbestimmte Skizzen
+  bleiben am nächsten Stand zu ihrem Ausgang, die Laufzeit im Budget.
+
+<a id="rm-542"></a>
+
+- [ ] **RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration.** Das
+  [Konzept](konzepte/konzept-erstkonfiguration-2026-09.md) ist teilweise gebaut
+  (`app/ui/first_run.py`), seine Fragen an Robert standen in keinem Punkt: wie viele Schritte
+  der Erststart trägt; was mit einem Projekt geschieht, das einen anderen Slicer trägt, auch
+  wenn der hier fehlt; was bei leerem Filamentregal gilt; ob die Wahl am Drucker oder am
+  Projekt hängt; und was aus `slicer_filament_per_material` wird. Ob das Herstellerprofil
+  ([RM-281](#rm-281)) einige davon schon beantwortet, ist nicht belegt. **Zuerst** je Frage am
+  Code und an RM-281 prüfen, was heute gilt; **dann** entscheidet Robert den Rest.
+  **Abnahme:** je Frage eine datierte Entscheidung im Konzept und, wo sie Bau verlangt, die
+  Umsetzung oder ein eigener Punkt.
 
 ## Bedienung und Darstellung
 
@@ -3196,6 +3281,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `rm213-capture-review.md`,
   `import-history-move.md` (C14).
 
+  **Dazu (RM-099, 07.10.2026):** die vier Handwege der Merkmalbedienung aus §4 ihres
+  [Konzepts](konzepte/konzept-merkmalbedienung-2026-09.md), die bisher kein Punkt führte:
+  Bohrung wählen, Maße in der Szene ändern und rechts übernehmen, die Maße stehen danach
+  noch; am Gizmo verschieben, die Maße stehen danach; am Langlochknopf ziehen, Länge und
+  Richtung rechts übernehmen, unten keine Leiste; eine neue Bohrung über das Menü wie bisher.
+
 <a id="rm-232"></a>
 
 - [~] **RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden.**
@@ -3589,10 +3680,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bei allen drei Varianten). Tests: Tisch auf einem Mittelfuß (`test_advise.py`, 85 mm Platz, Brim
   vorgeschlagen), breites Teil auf schmalem Fuß (`test_export.py`), beide vorher rot.
 
-  **Offen (05.10.):** Der Stützfuß zählt die ganze Aufsicht, die Slicer stützen nur die Überhänge.
-  Die Waschschüssel am Kobra 2 mit Stützen bekommt deshalb weiter die Stützfußwarnung, obwohl die
-  erste Stützschicht im G-Code 15 mm vom Rand bleibt (Nachtrag 2: x 15,1–196,9, y 23,1–194,4 mm auf
-  220 mm). Richtig: den Fuß aus den Stützflächen der Schichtanalyse messen.
+  **Teilstand 06.10.2026 (Stützfuß unter den Überhängen):** Bis dahin zählte der Stützfuß die ganze
+  Aufsicht, die Slicer stützen nur die Überhänge; die Waschschüssel am Kobra 2 mit Stützen bekam
+  die Stützfußwarnung, obwohl die erste Stützschicht im G-Code 15 mm vom Rand blieb (Nachtrag 2:
+  x 15,1–196,9, y 23,1–194,4 mm auf 220 mm). Jetzt misst `check_adhesion_on_bed` den Fuß am Umriss
+  der Überhänge aus der Schichtanalyse (`analysis.overhang_outline`, im Export über
+  `writer._support_outline` aus denselben Schichten wie die Stützsperre); ohne Überhang gibt es
+  keinen Fuß. Am Kundenmodell, schräg auf 220 × 220 mm (Sonde): Öffnung oben, Überhänge
+  20,4–204,2 mm, vorher 5,61 mm Warnung, jetzt keine; Öffnung unten, Überhänge bis 0,5 mm vom Rand,
+  Warnung bleibt (5,32 mm). Test `test_export.py::test_the_support_foot_stands_under_the_overhangs_only`,
+  vorher rot (Platte mit Tisch in der Mitte, Teil mit Überhang bis zur Kante, Quader ohne Überhang).
 
 <a id="rm-502"></a>
 
@@ -3664,73 +3761,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
-<a id="rm-507"></a>
-
-- [ ] **RM-507 — Jede Funktion hat einen Namen, überall derselbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Teilen hat sieben Einträge mit drei Verben an vier Orten, „Automatisch teilen“ fällt
-  ins Menü *Bearbeiten*. Ein Druckdialog heißt „An den Slicer übergeben …“,
-  „Drucken vorbereiten …“ und „Drucker …“ (zugänglicher Name „Drucker wechseln“).
-  *Deckel erzeugen* bestätigt mit „Einsetzen“, der Katalog mit „Einfügen“; im Menü
-  *Erzeugen* stehen „Aus Skizze erzeugen …“ (Knopf „Zeichnen“) und „Modell einfügen“
-  doppelt; der Startbildschirm sagt „Modell öffnen“ und „Projekt öffnen“, die Leiste
-  „Modell einfügen“ und „Öffnen“.
-  **Fix:** Durchgehend „Teilen“ (Umschalter, „Jetzt teilen“, „An gezeichneter Linie
-  teilen“), „Automatisch teilen …“ in die Karte unter *Vorbereiten*; Kopfknopf und
-  zugänglicher Name „Druckeinstellungen …“, der Dateieintrag heißt wie der Knopf im
-  Bericht; ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“, auch im Katalog;
-  „Zeichnen …“ im Menü, dieselbe `QAction` für Modell einfügen; Startknöpfe wie die
-  Leiste. `grenzen.md` und alle Kataloge ziehen nach.
-  **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
-  Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
-  zwei Menüs mit verschiedener Wirkung.
-
-<a id="rm-512"></a>
-
-- [ ] **RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Im Ruhezustand des Hauptfensters leuchten sechs Akzente: Bernsteinkanten an linker
-  und rechter Karte, Werkzeugzeile und Reiter, dazu *Bausteine*, die vorgewählte
-  Hinweiszeile und ihr Hauptknopf „Diesen Schritt ändern“. Der Wächter
-  `test_resting_state.py` zählt keine Linien. Dialoge zeigen zwei Hauptknöpfe, sobald ein
-  Hinweis mit Handlung erscheint (57 Handlungen tragen `primary`); Rot tragen zwei
-  „Abbrechen“, „Verwerfen“ ist Hauptknopf; im Chat ist „Übernehmen“ kein Hauptknopf; in
-  der Tour ist „Schritt überspringen“ einer.
-  **Fix:** Kartenränder in der Linienfarbe; vorgewählt werden nur Fehler und Warnungen;
-  Hinweishandlungen im Dialog als normale Knöpfe; `make_danger` genau am
-  unwiederbringlichen Verwerfen, nie mit `make_primary`; Chat-Übernehmen
-  `make_primary`, Überspringen flach. Der Wächter zählt Akzentlinien ab 40 px mit.
-  **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
-  Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
-  mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
-
-<a id="rm-519"></a>
-
-- [ ] **RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Unter den Parameterfeldern steht „Eine feste Zahl passt“ / „2 feste Zahlen passen“
-  und liest sich wie die Überschrift der nächsten Zeile; die Filamentspalte des
-  Objektbaums ist abgeschnitten („Fila“) und ihre Felder wirken wie Haken; im Verlauf
-  springt die Nummer an einer Gruppenzeile, „Als Dreiecksmodell rechnen“ steht im
-  Kontextmenü an zweiter Stelle. Im Zeichenmodus zeigt das Auswahlfenster nichts
-  Brauchbares, die Bedingungsliste spricht Fachsprache, und die Einladung der leeren
-  Szene liegt über der Skizze.
-  **Fix:** Die Hinweiszeile entfällt bei verwendeten Maßen, die Zahl steht am Bindeknopf
-  („6 Zahlen an Maße binden …“), nur „Nicht verwendet“ bleibt; Spulensymbol als
-  Spaltenkopf, runder Farbpunkt; Gruppenzeile trägt „3–4“, Kernwechsel hinter einem
-  Trennstrich; im Zeichenmodus Dock und Einladung verborgen, Bedingungen nur des
-  gewählten Elements mit Zählzeile.
-  **Abnahme:** Im Zustand von main-window.png vier Parameterzeilen ohne Untertext; in
-  sechs Sprachen nichts abgeschnitten im Objektbaum; jede Schrittnummer sichtbar;
-  Neues Projekt → Zeichnen ohne Einladung und Dock, höchstens drei Bedingungszeilen.
-
-<a id="rm-526"></a>
-
-- [ ] **RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich.** Seit RM-513
-  hieß die Null in `create_lid.z` und `screw_lid.z` „Oberkante“, getragen von `minimum=0`;
-  damit hielten alte Projekte mit negativer Öffnungshöhe am Schritt an. Für 0.5.3 ist die
-  Grenze zurückgenommen (Durchsicht Kern, Fund 9), und hinter der Klappe steht die Null wieder
-  als Zahl. **Fix:** `z` als optionale Koordinate, leer heißt Oberkante, Migration 0 → leer
-  (Checkliste „Dateiformat ändern“). **Abnahme:** alte Projekte mit 0 und mit negativer Höhe
-  öffnen und rechnen gleich, das Feld zeigt „Oberkante“, wenn es leer ist.
 
 ## KI und Generatoren
 
@@ -3891,70 +3921,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 ## Tests und Entwicklungswerkzeuge
 
-<a id="ci-testlaufzeiten"></a>
-
-- [~] **CI-Testlaufzeiten — vollständige Prüfungen früher abschließen.**
-  Verbindliches [Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md), vor
-  Umsetzung erstellt: CI-01 bis CI-08 schützen Auswahl, Prozessisolation,
-  Plattformumfang, Paketfreigabe und Berichte. Umsetzung: unabhängige Kern- und
-  Fensterjobs, Versionswächter als Handstart-Opt-in, gebündelte Quellprüfungen
-  und Bausteinvorbereitung sowie thematische UI-Tests. Durchsicht 24.09.2026:
-  Kernsuite in drei Teilen je Plattform (`--ci-shard`, `tools/ci_shards.py`,
-  Kerntabelle aus einem lokalen JUnit-Lauf), drei Windows-Fenstergruppen,
-  Prüfausgabe wieder im CI-Protokoll und Schrittbericht, und der längste
-  Kernfall behoben: `test_seal_geometry[12.0]` 319 s → 24–34 s über die
-  räumliche Vorauswahl der Wandmessung (Konzept §4.4). Gemessener
-  CI-Zeitgewinn und die erste Kerntabelle aus CI-Berichten
-  (`tools/ci_shards.py core …`) stehen aus; die Kerntabelle
-  `tests/data/ci_core_durations.json` stammt noch aus einem lokalen Lauf vom 29.09. Offen
-  außerdem das Blättern in `tools/windows_signed_installer.py`, bevor ein Lauf 100 Artefakte
-  erreicht (Taglauf 0.5.3: 31). Erledigt sind seither der räumliche Index der Wandmessung
-  (`7e3442623`) und die Kandidaten `test_bore_mouth_resize`/`test_bore_floor_resize`
-  (`68cd2ef6f`), beide unten.
-
-  **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Der räumliche Index steht — ein Baum
-  aus Hüllquadern in `mesh.ray_hits_batch`, bitgleich zum Vollvergleich, Vollkugel mit
-  12 800 Dreiecken 31 → 0,5 s (`7e3442623`). Die beiden langsamsten Kernfälle liefen
-  über doppelte Mantelpunkte in `features._distinct_points` (134 Mio. Punktpaare):
-  `test_bore_mouth_resize…` 83,2 → 28,4 s, `test_bore_floor_resize…` 61,4 → 26,3 s
-  (`68cd2ef6f`). Das lokale Tor verteilt wie die CI mit `--dist worksteal`, 850 → 587 s
-  im Median, dieselben 17 166 Fälle (`c28e02c86`). CI-01 bis CI-07 sind im Code und an
-  der echten Sammlung erfüllt (die drei Kernteile sammeln zusammen 17 191 Fälle, keiner
-  doppelt, keine Datei in zwei Teilen).
-
-  **Releaselauf 0.5.1:** Der erfolgreiche
-  [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
-  vom 28.09.2026 enthält die neue Aufteilung: neun Kernjobs auf drei Plattformen,
-  drei plattformübergreifende Fensterverträge und drei Windows-Fenstergruppen.
-  Letztere liefen 18:36, 17:59 und 18:32 Minuten (Gruppen 0, 1, 2).
-  **CI-08 bleibt offen:** Den Gewinn gegenüber einem vergleichbaren Ausgangslauf
-  anhand der Testbestände, Berichte und Laufzeiten auswerten; ein grüner Lauf allein
-  belegt ihn nicht. Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
-
-  **Releaselauf 0.5.3:** Im ersten Versuch des Taglaufs 37409338027 riss die
-  Windows-Fenstergruppe 0 an der festen 900-s-Grenze. `c379d5271` schreibt die
-  Fenstertabelle `tests/data/ci_window_durations.json` aus den Windows-Berichten dieses
-  Taglaufs neu (`test_ui.py` 838 s statt der 665 s von vor seiner Aufteilung) und gibt jeder
-  Datei ein eigenes Budget (`tools/run_suite_isolated.py`, `BUDGET_HEADROOM = 1.5`,
-  `file_budget`).
-
-<a id="rm-099"></a>
-
-- [~] **RM-099 — Konzeptbestand und veraltete Verweise ordnen.** **Die Hälfte der Abnahme ist
-  erreicht:** `konzepte/README.md` führt 66 Ziele (80 Verweise), keines geht ins Leere; jede
-  Konzeptdatei steht im Index, und die 40 Konzeptziele aus `ROADMAP.md` lösen auf (nachgezählt
-  06.10.2026). „Alle Verweise gültig" ist damit eingelöst und gehört nicht mehr beauftragt.
-
-  Offen bleibt das **Umräumen**: Als überholt gekennzeichnet sind genau zwei Konzepte; einen
-  Ordner `konzepte/archiv/` gibt es nicht, eine eigene Notiz zur Weg-3-Lizenzentscheidung auch
-  nicht (sie steht nur als Fließtext in sechs Konzepten), und die beiden Bedienkonzepte unter
-  `.claude/` sind unarchiviert. Wie viel davon Robert archiviert haben will, ist eine
-  Entscheidung und keine Fleißarbeit — historische Begründungen bleiben in jedem Fall erhalten.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-  **Entschieden (Robert, 06.10.2026):** umräumen — erledigte und abgelöste Konzepte in
-  einen Unterordner, alle Verweise nachziehen, den Index aktuell halten.
-
 <a id="rm-103"></a>
 
 - [ ] **RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen.** Die großen
@@ -3970,20 +3936,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Punkt aufnimmt, misst neu.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#architektur-durchsicht-02092026).
-
-<a id="rm-113"></a>
-
-- [~] **RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen.** Den Besitzer einer
-  frisch angelegten privaten Tokendatei auf dem Windows-Runner ermitteln und die Prüfung mit einer
-  tatsächlich nutzereigenen Datei fahren. Abnahme: SID und ACL dokumentiert, Test ohne bedingten
-  Skip grün; eine breitere Besitzfreigabe nur nach Sicherheitsprüfung.
-
-  **Diagnose gebaut (`736d4a46e`):** Der Skip in `tests/test_licence_admin.py` nennt Besitzer,
-  Nutzer und Standardbesitzer als SID. Der Skip-Grund mit der Runner-SID ist noch nicht belegt:
-  Die Windows-Kernprotokolle nennen nur die Zahl übersprungener Fälle; der Grund steht im
-  JUnit-Bericht `tests-core-windows-latest-*` des Taglaufs 37409338027 (Repository öffentlich).
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
 
 <a id="rm-134"></a>
 
@@ -4161,40 +4113,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Entschieden (Robert, 06.10.2026):** Die Release-CI fährt die `rendering`-Fälle auch
   unter Linux und macOS.
 
-<a id="rm-349"></a>
-
-- [ ] **RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1.**
-  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-D.md`, `bericht-E.md`, `bericht-F.md`),
-  je einzeln abnehmbar. Registerzellen anderer Punkte werden hier nur gemeldet, geändert werden
-  sie von dem, der den Punkt bearbeitet:
-  - **E-N2, `c96f60a18` (Codex):** `tools/check_new_texts.py:171–195` (`missing()`) scheitert
-    nicht, wenn im Index kein Katalog liegt — `main() = 0` bei neuem unübersetztem Text
-    (Sonde `sonden\textwaechter\sonde_leere_kataloge.py`). Fix: leere Katalogliste als Fehler
-    mit Handlungsvorschlag, Test (`tests.md`: zuerst zählen).
-  - **F-N5, `337697db9`, `8cb4eae96` (Codex), Lücken älter:** `tests/CLAUDE.md:123` und der
-    RM-315-Abschluss behaupten `exact_kernel()` vor jedem OCP-Import;
-    `tests/test_feature_moves_keep_shape.py:1394` und
-    `tests/test_geometry_review_regressions.py:923` importieren OCP ohne Wächter (ohne OCP ein
-    `ImportError` statt Skip). Fix: `exact_kernel()` als erste Zeile, AST-Wächter in
-    `test_toolchain.py`.
-  - **F-N3, `72281a33e` (Claude):** `.claude/rules/fenster.md:398–399` trug als einzige Regel ein
-    Datum („Entscheidung Robert, 29.09.2026“). Erledigt mit `ea71f59f5` (05.10.).
-  - **F-N4, `bcaac7b53` (Claude):** `tests/test_manual.py:37` behält `importorskip("PySide6")`,
-    das die Commitmeldung zu entfernen verspricht. Fix: entfernen, sobald die Datei frei ist.
-  - **D-N4:** `.claude/rules/oberflaeche.md:198` („gebaut an drei Orten“) ist seit `d8e37581a`
-    falsch; der Satz „Noch nicht umgestellt …: die Druckeinstellungen“ ist verschwunden, die
-    Druckeinstellungen haben dort einen eigenen Absatz. Der falsche Satz aus
-    `.claude/rules/grenzen.md:194` („`adjustSize` läuft nur, wenn sich eine Zeile bewegt hat“)
-    steht heute in `.claude/rules/vorderseite.md:84–85` und ist seit `b837a73f8` falsch
-    (`app/ui/op_dialog.py`: „Und nicht über ``adjustSize``“).
-  - **Registerstände (F-N2, D-N4):** erledigt am 06.10.2026 mit der Fortschreibung der
-    Registerzeile von RM-134; RM-286 ist archiviert.
-  - **Beifund:** `.claude/README.md:16` sagt über `memory/` „eine Datei je Fakt“,
-    `CLAUDE.md:200` „Eine Datei je Thema“.
-  Abnahme: je Spiegelstrich Test oder korrigierte Stelle mit Commit. Beleg: Berichte unter
-  `F:\solidon-review-reports`.
-  Nachprüfung am Stand `6ce767031`: alle sieben Reste offen (E-N2, F-N5, F-N3, F-N4, D-N4, Registerstände, Beifund memory); nur `oberflaeche.md:202–203` ist im Arbeitsbaum ungesichert korrigiert.
-
 <a id="rm-467"></a>
 
 - [~] **RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren.**
@@ -4215,22 +4133,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   8.0.1.1.0 (in `constraints.txt` auf 8.0.1.0.0 festgelegt, der Wächter „Neueste Versionen“
   zog am Tag v0.5.3 die neue Fassung, die Lizenzbeilage kennt sie seit `036021393`).
 
-<a id="rm-530"></a>
-
-- [ ] **RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft.** `tests/test_delivery_tools.py` und
-  `tests/test_delivery_matrix_review.py` fahren Skripte aus
-  `.claude/.state/uebergabe-gesamt-2026-09-27/` (`einheit.py`, `bericht.py`, `treiber.py`) und
-  `uebergabe-matrix-2026-09-27/`; `.github/workflows/mac-netz.yml` und `tests/helpers.py`
-  greifen auf `.claude/.state/plattformgleichheit-2026-09-17/` zu. Ruff und mypy prüfen den
-  Zustandsordner nicht, und `uebergabe-gesamt-2026-09-27` soll nach dem Gesamtlauf weg — dann
-  bräche die Suite. Fund der Unterlagen-Durchsicht 06.10.2026. **Fix:** Was ein Test oder
-  Workflow dauerhaft braucht, zieht nach `tools/` (Regel in `.claude/README.md`), die Tests
-  zeigen dorthin. **Abnahme:** `git grep -n ".claude/.state" -- tests .github` findet nur
-  noch Sonden eines offenen Punkts, Ruff prüft die umgezogenen Skripte, die Liefertests bleiben grün.
-
 <a id="rm-531"></a>
 
-- [ ] **RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI.** Die
+- [~] **RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI.** Die
   Fenstergruppe läuft in der Release-CI nur unter Windows (Job `windows` in `build.yml`), Linux
   und macOS fahren nur die Fensterverträge (`--ci-group contracts`). Echte Slicer prüft keine CI:
   Erkennung, Herstellerbestand und Slicen unter Linux und macOS belegten bisher nur
@@ -4251,6 +4156,33 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Ein Tag-Lauf zeigt die Fenstergruppe auf drei Plattformen grün und je Plattform
   jeden installierbaren Slicer mit Druckerliste und Druckdatei; `test_packaging.py` hält die
   neuen Jobs im Vertrag.
+
+  **Entschieden (Robert, 06.10.2026):** Die Fenster- und Renderergruppe läuft auf allen vier
+  Paketplattformen (`windows-latest`, `ubuntu-24.04`, `macos-latest`, `macos-26-intel`) am Tag,
+  per Handstart und bei jedem Push auf main; Hausordnung und `/pruefen` ziehen nach, das lokale
+  Tor bleibt ohne Fenster. Die Abnahme gilt damit für vier Plattformen.
+
+  **Stand 07.10.2026:** Eine Sonde (Lauf 37495714708, `run_suite_isolated.py --release
+  --ci-group windowed`) fand außerhalb von Windows 31 rote Fälle in 23 Testfunktionen. Behoben
+  und über `fenster-auswahl.yml` auf allen vier Plattformen grün (Läufe 37556091095,
+  37560540258): Return öffnet am Mac den gewählten Listeneintrag (`return_opens` an
+  Startfläche, Befehlspalette und Prüfbericht, Anschlusstest und Wächter in
+  `test_native_keys.py`), die Befehlspalette misst ihre Kürzelspalte mit gebrochenen Metriken,
+  und zwölf Tests messen die Zusage statt einer Windows-Eigenheit (Aktualisierungsweg,
+  Kürzelschreibweise, Zeitgeber, Fäden, Kantenglättung, Menüeinzug). **Offen**, mit Plattform
+  (U Linux, A macOS ARM, I macOS Intel): `test_widget_lifetime[KeyDialog]` (UAI, einer von
+  zehn überlebt), `test_a_button_wraps_its_label_instead_of_cutting_it` (UAI, der Knopf bricht
+  nicht um), `test_no_element_of_the_bar_is_squeezed` (UAI, Felder 356/364 statt 398/404 px bei
+  1600 px), `test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200
+  Zeilen), `test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
+  `test_the_left_column_shares_its_height_with_all_four` (AI, Objekte 104 px, Boden 182 px bei
+  900 px Fensterhöhe), `test_chat_setup_follows_late_status_text…` (AI, der Text des
+  Schlüsseldialogs ist 105 statt 120 px hoch und rollt nicht) und
+  `test_black_lit_surfaces_still_show_their_shape` (I, Kontrast genau 10 bei verlangten mehr
+  als 10; Renderer, RM-344). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
+  ob der Test irrt oder der Kunde es sieht. Die Winkelbedingung auf dem Intel-Mac führt
+  [RM-541](#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
+  `test_packaging.py`, der Slicer-Job und die Unterlagen.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
@@ -4655,6 +4587,59 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die Flatseal-Freigabe für den Session-Bus nicht nötig ist. Entwurf in Roberts lokaler Ablage.
   Abnahme: nach dem Release versandt, Versandstatus dokumentiert.
 
+<a id="rm-532"></a>
+
+- [~] **RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung.**
+  Kundenvorschlag S-20261006-c66299 (0.5.3, ohne Rückadresse): Ein Innengewinde in einem Rohr mit
+  mindestens 60 mm Innendurchmesser ging nicht, *Druckbares Gewinde* endete bei M8. Robert:
+  „keine Beschränkungen“.
+
+  **Gebaut** auf dem Zweig `gewinde-eigenes-mass` (ein Commit `63d7a7826` auf `a2b7451b6`, 41
+  Dateien; dieselben Änderungen liegen ungestaged im Arbeitsbaum des Rechners, auf dem sie
+  entstanden):
+  - Baustein: Größe *Eigenes Maß* (`fasteners.CUSTOM_SIZE`), Nenndurchmesser 2 bis 1000 mm vorn,
+    Steigung hinten (null ist die Regelsteigung, `standards.regular_pitch` über die neue Tabelle
+    `pitches` M10 bis M64 nach der ISO-262-Auswahl); `thread_measure`, Absage `no_core` bei einer
+    Steigung ohne Kern.
+  - Bohrung: Ohne Tabellengröße wählt `custom_thread_for` das Maß, dessen Kernloch die Bohrung
+    ist (Ø 60 → Ø 66,6 mit Steigung 6, Ø 6,5 → Ø 7,6 × 1); der Satz über dem Dialog nennt es.
+  - Gegenstück: `counterpart.thread_values_for` ersetzt `thread_size_for` — Tabellengröße oder
+    eigenes Maß, Absage nur außerhalb der Grenzen (`beyond_threads`); ein geänderter Schritt
+    koppelt über das ganze Maß.
+  - Gemeinsame Grenzen `units.SMALLEST_THREAD`, `LARGEST_THREAD`, `COARSEST_PITCH`, auch für
+    *Schraube erstellen* (war Ø 100) und *Drehdeckel erzeugen* (war Ø 400).
+  - Netz: Sehnen je Umlauf nach der Facettenregel (`shapes.turn_segments`, bis Ø 46 unverändert
+    48), Drehdeckel ebenso (`lid.turn_sections`, `cache_version` 7).
+  - Texte in sechs Sprachen, zwei Handbuchabsätze, Website 61 → 76 hinterlegte Normmaße, Karten,
+    Regel `bausteine.md`, Begründungen. Tests: Rohrfall, Paar mit eigenem Maß an beiden Kernen,
+    Gegenstück Ø 66,6, Drehdeckel Ø 300, Tabellenprüfung, Sehnenregel. Sonde am echten Fenster:
+    An einer 60-mm-Bohrung steht *Eigenes Maß* mit Ø 66,60 mm vorbelegt, vier Felder vorn.
+
+  **Offen, in dieser Reihenfolge:**
+  1. Bereichsnachweis: Alle 49 Bausteine sind veraltet (gemeinsame Formen und Normteiltabelle
+     geändert). `tools/check_part_ranges.py` auf dem Zweig fahren und `part_ranges.toml`
+     committen; `printed_thread` hat jetzt 256 Ecken bis Ø 1000 und läuft am längsten. Während
+     des Laufs weder Bausteindateien noch `shapes`, `build` oder `standards` ändern, sonst ist er
+     wertlos.
+  2. Volles Entwicklungstor auf dem Zweig. Der letzte Lauf (auf `306ff7bf2`) hatte zehn rote
+     Tests; neun sind auf dem Zweig behoben (alte Signatur von `_printed_thread` im Test,
+     `beyond_threads` einsortiert, totes Wertlabel `nearest`, Eckenzahl 7306, Zeilenumbruch vor
+     §13.4, Website-Zahl, Steigungssatz zu lang), der zehnte ist der Bereichsnachweis. Seitdem
+     nicht neu gefahren.
+  3. Merge nach main (Kataloge bei Konflikt je Schlüssel vereinigen), dann der Sitzung „Stift
+     für Bohrung“ (Fragebogen S-20261006-5be329) den Hash nennen: Sie baut den Gewindebolzen
+     auf `thread_values_for`, `CUSTOM_SIZE` und `thread_measure` und wartet darauf.
+  4. Danach auf dem Rechner, auf dem es entstand, die ungestagten Gewindeänderungen nicht noch
+     einmal übernehmen; sie sind dann über main da.
+  5. Beim Release: Handbuch erzeugen (die Erzeugnisprüfung in `test_wording` meldet die zwei
+     geänderten Absätze), das Bild *Ein Gewinde in eine Bohrung* nur bei Änderung.
+  6. Entscheidung Robert: *Schraube*, *Gedruckte Mutter*, Schraubenloch, Mutternfalle und
+     Einpressbuchse bleiben an der Normteiltabelle M2 bis M8 (Kopf, Schlüsselweite, Scheibe).
+     Soll die Tabelle bis M64 wachsen, mit Herstellerdaten je Größe?
+
+  Abnahme: Bereichsnachweis passt zu allen 49 Bausteinen, Tor grün, auf main gemergt. Eine
+  Kundenantwort entfällt, der Vorschlag kam ohne Rückadresse.
+
 <a id="rm-072"></a>
 
 - [ ] **RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen.** Den Dental-Kunden
@@ -4663,3 +4648,148 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bereits versandte Nachrichten bei der Bearbeitung zuerst prüfen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#eine-kundenanfrage-aus-dem-dentalbereich-30082026).
+
+<a id="rm-533"></a>
+
+- [~] **RM-533 — Entf tut an der Auswahl still nichts (Fragebogen S-20261006-5be329).** Kunde:
+  „die Entf taste löscht weder Merkmal noch Körper je nachdem was ausgewählt ist“. Am HEAD mit der
+  Sitzungsdatei des Fragebogens nachgestellt (offscreen): Mit Fokus in Objektbaum oder Ansicht
+  entfernt Entf Körper und Merkmal richtig. Still bleibt die Taste in zwei Lagen. Erstens liegt
+  der Fokus im Reiter *Auswahl* (nach einem Maßfeld oder Knopf dort), und `_scope_shortcut` band
+  Entf nur an Baum und Ansicht. Zweitens hält die Kette an einem Schritt (im Kundenprotokoll
+  mehrfach: Fase, Verrunden, Merkmal entfernen) oder die Lizenz sperrt; dann sind *Objekt
+  entfernen* und *Merkmal entfernen* gesperrt, und Qt führt ein gesperrtes Kürzel ohne jede
+  Rückmeldung nicht aus.
+
+  Gebaut, nicht committet (Tor abgebrochen, Robert 06.10.: Stopp): `_scope_shortcut` merkt die
+  Aktionen in `_scoped_actions`, `_build_feature_dock` hängt sie an den Reiter; Text- und
+  Zahlenfelder behalten Entf über `ShortcutOverride`. Ein Zuhörer `_DeleteRefusal` am Filter der
+  Anwendung (`app_events`; keine zweite Aktion auf Entf, sonst `test_no_two_shortcuts_in_the_window_collide`)
+  ruft `MainWindow._refuse_delete`: Mit Auswahl, Fokus in Baum, Ansicht oder Reiter und Halt
+  oder Sperre sagt die Statuszeile „Objekt entfernen: Die Kette hält an Schritt 11 (Verrunden)
+  an — …“; ohne Auswahl bleibt die Taste stumm (beim Messen gehört sie dem letzten Maß). Satz in
+  `grenzen.md` („nackte Tasten bleiben an Objektbaum, Ansicht und Reiter *Auswahl*“).
+  Fenstertest `test_delete_answers_in_the_selection_tab_and_says_why_when_it_cannot` in
+  `tests/test_interface_limits.py` grün; Gegenproben ohne Fix und ohne Zuhörer rot. Die Hunks
+  liegen ungesichert im Arbeitsbaum des i9 und als Patches gegen `3a5d607f3` unter
+  `.claude/.state/umfrage-5be329-2026-10-06/` (`entf-*.patch`, Sonde `sonde_entf.py`).
+
+  Aus demselben Fragebogen erledigt: `c3e68671e` (das angehängte Absturzprotokoll war eine
+  überlebte COM-Ausnahme `0x8001010d`; der Bericht hängt nur noch an, was der Prozess nicht
+  überlebt hat) und `306ff7bf2` (am HEAD roter Zähltest seit `d3134f3d8`).
+
+  **Offen:** Tor über HEAD plus diese Hunks, dann Commit nur der eigenen Hunks (in
+  `main_window.py` und `grenzen.md` liegen fremde daneben). Der Titel der Ansage kommt heute aus
+  `feature_instead_of(...) or delete_object`; `_removal_entry()` der Rechtsklick-Arbeit
+  (Fragebogen S-20261006-5c132b) gibt dieselbe Auskunft richtiger (Baustein) — sobald sie auf main
+  ist, darauf umstellen, sonst bleibt ein Zwilling. **Abnahme:** Am echten Fenster entfernt Entf
+  mit Fokus auf einem Knopf im Reiter die Auswahl, im Zahlenfeld ändert es die Zahl, bei Halt
+  nennt es den Grund.
+
+<a id="rm-534"></a>
+
+- [ ] **RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig
+  (Fragebogen S-20261006-5be329).** Kunde: „manchmal wird im Prüfbericht auch Fehler angezeigt und
+  kurz darauf ist die Berechnung erst fertig“. Gemessen am HEAD `3a5d607f3` mit der Kundendatei
+  (Bericht `pruefbericht-bericht.md` im Zustandsordner von RM-533): Beim Wechsel des Radius
+  2,0 → 1,0 (Schritt 18) bleibt die Zeile „Der Radius ist für diese Kanten zu groß“ mit voller
+  Schwere stehen, der Kopf sagt „Übergabe nicht empfohlen“, die Statuszeile „Die Kette hält an“ —
+  3,7 s lang, bis das Ergebnis kommt. Der Hinweis „Die Bewertung läuft“ wird gerade dann
+  unterdrückt (`ReportPanel`: `self._review_missing and not counts["error"]`). Widerlegt sind
+  Zwischenstände aus dem Bild zuerst, `check_states` und die Vorschau eines offenen Dialogs.
+  Dazu ein eigener Fehler: Ein Halt im Entwurf gilt als fein. `evaluate.py` bricht beim Halt ab,
+  bevor `reads_quality` gesetzt wird, `fine_current` ist wahr, und Druckdialog und Export rechnen
+  die volle Kette nie, obwohl der Satz „… sagt erst die vollständige“ sie ankündigt. Am
+  Kundenschritt 6 (*Merkmal entfernen* am Stift) bestätigt die volle Kette den Fehler mit dem
+  besseren Satz („das Werkzeug deckt ihn vollständig ab“); der Kunde nahm zweimal *Reparieren und
+  erneut versuchen*, das dort nicht helfen konnte.
+
+  **Fix in vier Teilen (Entscheidung aus Kundensicht):** (1) Läuft eine Auswertung länger als
+  200 ms, sagt der Kopf „Wird neu berechnet …“; alte Zeilen bleiben als voriger Stand sichtbar,
+  mit Text als zweiter Kodierung (Regel 18), ihre Knöpfe gesperrt, die Reitermarke zählt sie nicht
+  neu, die Haltansage weicht dem Fortschritt; `print_contract.handoff_state` bekommt den
+  Laufzustand als eigenen Eingang. (2) Hält der Entwurf mit `BooleanFailedError` ohne Voxelstufe
+  an, rechnet die Sitzung die volle Kette einmal selbst; bis dahin steht der Laufzustand, kein
+  Fehler; *Voxelstufe erzwingen* bleibt. (3) Ein Halt im Entwurf ist nie `fine_current`. (4) Das
+  feine Urteil gilt für folgende Entwurfsläufe, solange Schritt und Eingang gleich sind — kein
+  Hin und Her. Tests, die heute Verhalten zusichern und bleiben: `test_print_contract.py`
+  (Übergabezustand ohne Lauf), `test_boolean.py` (Entwurfssatz), `test_ui.py` (`use_voxel_stage`);
+  der Halt gehört neben RM-494 in `test_evaluation.py`. **Abnahme:** Während eines Laufs steht
+  kein alter Fehler als gültig da; ein Export nach einem Entwurfshalt rechnet fein.
+
+<a id="rm-535"></a>
+
+- [ ] **RM-535 — Merkmal verschieben: Felder fehlen an Flächen, Karte und Operation sind uneins,
+  drei falsche Ergebnisse ohne Befund (Fragebogen S-20261006-5be329).** Kunde: „das Verschieben
+  mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“. Gemessen an HEAD
+  `3a5d607f3`, der Kundendatei und sechs Modellen mit 734 Merkmalen (Bericht
+  `verschieben-bericht.md` im Zustandsordner von RM-533): X/Y/Z stehen an Bohrung, Sackbohrung,
+  Langloch, Zapfen, Senkung, Verjüngung, Kugel, Einschluss, Wulst und Kehle. Keine Zeile haben
+  Verrundung, Fläche, Schrägfläche, gerundete Seite, Muster und Gewinde (Sätze in
+  `perceive/actions.py`); gesperrt sind Kegelstück, Kugel oder Kegel ohne eigenen Körper und die
+  Sackbohrung mit Zapfen. Am Kundenmodell haben 16 von 190 Merkmalen Felder, 174 keine (117
+  Verrundungen, 42 Flächen). Ursache ist `MOVABLE_KINDS` (`prepare_ops.py`), und die Karte
+  überspringt Zeilen ohne Handlung (`panels.py`, seit `fad4a15c5`, Test in
+  `test_feature_panel.py`); `app/core/perceive/CLAUDE.md` und `fenster.md` beschreiben das
+  Gegenteil. Der Flächenzug legt `push_face` sofort an, ohne Zahl und *Übernehmen*.
+
+  Fehler unabhängig von den Entscheidungen: An Wulst und Kehle stehen Felder, `move_feature`
+  sagt an allen vier geprüften Ringen ab (die Karte prüft nur `torus_is_the_body`, die Operation
+  auch `_torus_rims`). An der Sackbohrung mit Zapfen umgekehrt: Die Karte sperrt, die Operation
+  rechnet über `_air_of_the_bore`, und nach 0,5 mm erkennt Solidon zwei Sackbohrungen weniger.
+  Der Griff fragt nur die Art (`viewport.py`): An gesperrten Merkmalen endet sein Zug mit „Die
+  neue Stelle steht rechts unter Auswahl.“, an einer Verrundung greift er den Körper. Falsch ohne
+  Befund: Zapfen im Kundenmodell 0,5 mm in die Taschenwand −189 mm³ (danach 4 statt 6 Zapfen),
+  Zapfen Ø 30 im mini-pot bei 0,2/0,5/1,0 mm immer +240,65 mm³, Endfase am Stift bei 0,2 mm
+  +2218 mm³.
+
+  **Vorschlag:** Flächen bekommen *Fläche versetzen* mit dem Feld „Weg“ (erste Zeile in
+  `ACTION_ORDER` als `("move_feature", "push_face")`, der Weg beginnt bei 0); Karte, Operation und
+  Griff fragen dieselbe Funktion; eine zusammengelegte Absage steht wieder als Zeile.
+  **Entscheidungen Robert:** (a) der Flächenzug als Zahl mit *Übernehmen* statt sofortigem
+  Schritt (ändert die Zusage in `_on_face_dragged`); (b) Absagen wieder sichtbar, das nimmt
+  `fad4a15c5` teilweise zurück, oder die zwei Unterlagen angleichen; (c) Maße im Bild auch an
+  Zapfen, Senkung, Kugel und Ring (ändert die Entscheidung vom 10.09., dass *Merkmal verschieben*
+  auf Klick rechnet); (d) Tasche um einen Zapfen: absagen (Empfehlung) oder beide gemeinsam
+  versetzen. **Abnahme:** Ein Test über echte Netze, der heute an Ring und Sackbohrung mit Zapfen
+  rot ist; die drei falschen Ergebnisse rechnen richtig oder sagen mit Grund ab.
+
+<a id="rm-536"></a>
+
+- [ ] **RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung
+  (Fragebogen S-20261006-5be329).** Kundenwunsch: „… wenn man ein Gewinde bei der Bohrung oder
+  Senkung hat, dass man dafür auch das passende Gegenstück mit der Funktion erzeugen könnte“.
+  Heute baut `pin_for_bore` (`geom/lid_hinge.py`) einen glatten Zylinder (Bohrung minus Spiel,
+  so lang wie die Bohrung). Soll: Eine Senkung an der Mündung (Kette über
+  `relations.cavity_chain_state_at`) gibt einen bündigen Senkkopf im Winkel der Senkung, eine
+  Ansenkung einen Zylinderkopf, ein Innengewinde auf derselben Achse ein Außengewinde derselben
+  Größe und Steigung mit Spiel — über `counterpart.thread_values_for` und den Gewindebaustein in
+  `fasteners.py` (Tabellenmaß, sonst `CUSTOM_SIZE`; dieselben Absagen für links-, mehrgängig und
+  kegelig). Ein neuer Parameter hinter der Klappe wählt „passend zur Bohrung“ (Vorgabe) oder
+  „glatter Stift“; bestehende Projekte behalten ihr Ergebnis über eine Migration (Format 46 → 47,
+  Muster `_keep_slot_tools_as_they_were`). `leaves_inputs_unchanged` bleibt wahr (`outputs[0]` ist
+  der unveränderte Träger, Zusage an `bbd41ff2d`); beide Kerne, `cache_version`, ein Befund nennt
+  das Gebaute, Texte in allen Katalogen. Einzelheiten: `auftrag-stift.md` im Zustandsordner von
+  RM-533. **Wartet auf** den Merge von RM-532 (Zweig `gewinde-eigenes-mass`) auf main — die
+  Schnittstelle (`thread_values_for`, `CUSTOM_SIZE`, `thread_measure`, `size_for_thread`,
+  `custom_thread_for`) ist zugesagt, gebaut wird erst darauf. **Abnahme:** Korpustests an
+  `plate_countersunk.stl`, `plate_countersunk_blind.stl` und einer Bohrung mit
+  `insert_printed_thread`, Sollwerte mit Herkunft, Gegenprobe; eine alte Projektdatei mit Stift
+  rechnet unverändert.
+
+<a id="rm-537"></a>
+
+- [ ] **RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück, und Entf
+  entfernt dann den Körper.** Fund beim Nachstellen von RM-533 an der Kundendatei: Nach dem
+  Öffnen zeigt der Baum am Stift (`obj_3`) „Sackbohrung 10“ und „Sackbohrung 11“ (Ø 23,8, Tiefe
+  22,1 und 19,7, `provenance=detected`); dieselben Merkmale trägt eine Auswertung ohne Erkennung
+  (`detect_features=False`). Ist die Erstauswertung durch (in der Sonde mehrere Sekunden,
+  `busy`), steht dort eine durchgehende „Bohrung 12“ (Tiefe 50). Wer in dieser Zeit eine
+  Sackbohrung wählt, verliert sie: `ObjectTree._restore` findet die Kennung nicht mehr und wählt
+  den Körper, und Entf entfernt danach den ganzen Körper statt der Bohrung. Messung:
+  `sonde_merkmale.py` und `merkmale.txt` im Zustandsordner von RM-533. **Offen:** woher die
+  vorläufigen Sackbohrungen kommen (Übertrag aus einem früheren Stand statt Erkennung?), ob sie vor
+  dem Ende der Erkennung im Baum stehen sollen, und was mit einer Auswahl geschieht, deren Merkmal
+  verschwindet (den Körper zu wählen steht so im Docstring von `_restore`; leeren und ansagen wäre
+  die Alternative). **Abnahme:** Eine Merkmalswahl während der Erstauswertung überlebt sie oder
+  wird sichtbar aufgegeben, nie still zum Körper.

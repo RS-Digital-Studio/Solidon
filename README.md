@@ -244,11 +244,11 @@ Dialog — es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
 
 ### Welches Modell, und warum dieses
 
-Der mitgelieferte Ablauf benutzt **TripoSG**: Quelltext und Modellkarte weisen
-die MIT-Lizenz aus, die vollständige Lizenz- und Herkunftskette der Gewichte
-und der eingebundenen Modelle wird derzeit geprüft. Das ist der Grund für die
-Wahl: Das verbreitetere Hunyuan3D nimmt in seiner Lizenz die Europäische
-Union ausdrücklich aus.
+Der mitgelieferte Ablauf benutzt **TripoSG**: Quelltext und Modellkarte nennen
+die MIT-Lizenz. Gewählt wurde es, weil das verbreitetere Hunyuan3D in seiner
+Lizenz die Europäische Union ausdrücklich ausnimmt. Ein Teil des
+TripoSG-Quelltexts steht allerdings selbst unter Lizenzen von Tencent mit
+derselben Ausnahme; das wird gerade geklärt.
 
 Gemessen auf einer RTX 4080 braucht ein Körper rund 13 Sekunden und kommt mit
 300 000 bis 600 000 Dreiecken geschlossen und aus einem Stück heraus.
@@ -344,8 +344,8 @@ Schieberegler unter der Ansicht schaltet zwischen den Platten um.
 
 ## Zu groß für das Bett (Auto Split)
 
-**Bearbeiten → Automatisch teilen** schneidet ein Objekt, bis jedes Stück auf
-die Platte passt. Die Trennebene wird gesucht, nicht geraten: über dieselbe
+**Automatisch teilen** (rechts am gewählten Körper, unter *Vorbereiten*) schneidet
+ein Objekt, bis jedes Stück auf die Platte passt. Die Trennebene wird gesucht, nicht geraten: über dieselbe
 Schichtanalyse wie die Orientierungssuche, und bewertet wird eine Kontur statt
 mehrerer dünner Brücken, ein prismatischer Verlauf und die Ausgewogenheit.
 

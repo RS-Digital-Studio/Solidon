@@ -1,6 +1,6 @@
 """Fasst die Ergebnisse der Gesamtprüfung zu einem Bericht zusammen.
 
-Aufruf: python bericht.py <ergebnisordner> [<ergebnisordner> …] > bericht.md
+Aufruf: python tools/matrix_report.py <ergebnisordner> [<ergebnisordner> …] > bericht.md
 
 Jede Kombination aus Modell, Slicer und Drucker bekommt einen Zustand:
 
@@ -70,9 +70,7 @@ def state_of(entry: dict[str, Any]) -> tuple[str, list[str]]:
             if advice_flag:
                 flags.append(advice_flag)
             return "nur Fenster", flags
-        flags = [
-            str(r.get("title") or r.get("error"))[:80] for r in runs if not r.get("ok")
-        ]
+        flags = [str(r.get("title") or r.get("error"))[:80] for r in runs if not r.get("ok")]
         if advice_flag:
             flags.append(advice_flag)
         return "kein Druck", flags
@@ -133,7 +131,7 @@ def completed_matrix_run(folder: Path, identity: dict[str, Any]) -> bool:
     """Nur einen vom Treiber erfolgreich abgeschlossenen Lauf auswerten."""
     try:
         status = json.loads((folder / ".matrix-status").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return False
     return (
         isinstance(status, dict)
@@ -250,7 +248,7 @@ def main() -> int:
             for path in files:
                 try:
                     data = json.loads(path.read_text(encoding="utf-8"))
-                except (OSError, ValueError):
+                except OSError, ValueError:
                     ignored += 1
                     continue
                 if not belongs_to_run(data, identity):
@@ -272,7 +270,7 @@ def main() -> int:
         for path in files:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 ignored += 1
                 continue
             if isinstance(data, dict):
@@ -353,7 +351,7 @@ def main() -> int:
         for entry in result.get("combos", []):
             for run in entry.get("variants", {}).get("standard", []):
                 chain = run.get("chain") or run.get("chain_project") or {}
-                for key, (kind, wanted, found) in (chain.get("differences") or {}).items():
+                for key, (_kind, wanted, found) in (chain.get("differences") or {}).items():
                     keys[key].add(f"{entry['slicer']}/{entry['printer']}: {wanted} → {found}")
                 for key in chain.get("console") or {}:
                     console[key].add(f"{entry['slicer']}/{entry['printer']}")
@@ -454,7 +452,11 @@ def main() -> int:
                     f"| {Path(result.get('model', '?')).name} | {entry['slicer']}/{entry['printer']} "
                     f"| {run.get('support_m') or 0.0:.2f} | {'; '.join(ways)[:200]} |"
                 )
-    lines += ["", f"Der Slicer stützt, wo Solidon Stützen verlangt: {agreeing}; er stützt nicht: {disagreeing}.", ""]
+    lines += [
+        "",
+        f"Der Slicer stützt, wo Solidon Stützen verlangt: {agreeing}; er stützt nicht: {disagreeing}.",
+        "",
+    ]
     # Übernommene Vorschläge, die Stützen einschalten und trotzdem keine
     # bringen: ein zweiter Vorschlag hebt den ersten auf (Wedge-Lock, 04.10.2026).
     cancelled = [

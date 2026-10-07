@@ -77,7 +77,16 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 - **Ein Gewinde hat jedes Maß**: eine Tabellengröße oder `fasteners.CUSTOM_SIZE`
   mit Durchmesser und Steigung (`thread_measure`, null ist
   `standards.regular_pitch`); an einer Bohrung ohne Tabellengröße wählt
-  `custom_thread_for` das Maß, dessen Kernloch sie ist.
+  `custom_thread_for` das Maß, dessen Kernloch sie ist. Ohne tragenden Kern
+  oder unter `FINEST_PITCH` lehnt es ab und erklärt es (`thread_problem`,
+  `_thread_reason`); bohrt es seine Bohrung auf, sagt es das (`thread_at_hole`
+  über `PartSpec.at_hole_check`). Schraubenloch, Mutternfalle, Schraube und
+  Mutter nehmen `CUSTOM_SIZE` mit Nenndurchmesser (`_screw_of`, `_nut_of`,
+  `_washer_of`, Befund `parts.derived_size`), die Mutternfalle auch an einer
+  Bohrung über der Tabelle (`custom_nut_for`); die Einpressbuchse nimmt
+  Bohrung und Länge. Der Netzkern eines Gewindes überdeckt den Gang auch in
+  der Sehnenmitte (`build._core_segments`), der Gang läuft über ganze Umläufe;
+  ein Langloch hat Sehnen nach `MAX_FACET_SAG` (`shapes.slot_segments`).
 - **`build.thread`** beschreibt rechtsgängig (`handedness="right"`, Winkel und
   Höhe wachsen gemeinsam); Innenwerkzeug, Schraube, Mutter ändern den Drehsinn
   nie, Spiegelungen führen ihn nach, ein Importgewinde bekommt keine Vorgabe;

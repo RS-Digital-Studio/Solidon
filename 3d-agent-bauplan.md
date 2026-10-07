@@ -204,6 +204,13 @@ darüber. Leere oder zugeklappte Bereiche geben ihren Platz frei.
   und Warnungen.
 - **F9 blendet die rechte Karte ein oder aus.** Ein Warnungszähler in der
   Statusleiste führt auch bei ausgeblendeter Karte zum Prüfbericht zurück.
+- **Die beiden Seitenkarten lassen sich verschieben** (Entscheidung Robert):
+  am Griff oben rechts, mit der Maus oder den Pfeiltasten. Sie rasten an
+  einem Fensterrand ein oder schweben frei über der Ansicht; ein Rand trägt
+  eine Karte. Doppelklick auf den Griff und *Ansicht → Karten an
+  ihren Platz* stellen die Anordnung oben wieder her. Die Lage merken die
+  Einstellungen; sie ist Darstellung und steht nicht im Verlauf. Eigene
+  Fenster werden die Karten nicht.
 - Keine Betriebsarten-Umschaltung zwischen „Bearbeiten“ und „Konstruieren“.
   Alle Werkzeuge arbeiten an derselben Szene.
 
@@ -1849,21 +1856,32 @@ Werkstück.
 
 ## 23. Steckbrief für den Agenten
 
+Ausschnitt aus dem Steckbrief des Beispielprojekts *Gehäuse mit Bausteinen*,
+mit gewählter Einpressbohrung; ausgelassene Zeilen stehen als „…“:
+
 ```
-Szene: 2 Objekte, Drucker centauri-carbon-2, Material PETG (kalibriert)
-Parameter: breite=84.0 mm, hoehe=22.0 mm, wandstaerke=2.4 mm
-Auswahl: obj_2 · hole_3
-obj_2  "halterung_oben"  84 × 40 × 11 mm, 14.1 cm³, wasserdicht, auf Bett
-  face_1  planar 84×40, Normale -Z   (Aufstandsfläche)
-  hole_3  Ø 5.2 mm, Achse +Z, Durchgang, auf face_1
-  heatset_1  Baustein heatset_m4, auf face_1, created_by=op3
-  pin_1      Ø 4.0 mm, Achse +Z, Zapfen, created_by=op5   → Passung stift_1
-  hinweis Op 5 über Rückfallstufe "voxel" gelöst — Genauigkeit eingeschränkt
-  warnung Dünnstelle 0.9 mm nahe face_7
-obj_3  "halterung_unten" …
-Stack: t1 "Import und Reparatur" (Ops 1–2, Nutzer) ·
-       t2 "Teilen und verstiften" (Ops 3–6, Agent)
+Szene: 2 Objekte, Drucker centauri-carbon-2, Material petg (Startwert)
+Parameter: breite=70 mm · tiefe=50 mm · wand=8 mm
+Auswahl: obj_1 · heatset_m4_bore_1
+  Hohlraum: heatset_m4_bore_1 → cone_1 — eine Kette; Versetzen, Drehen und Verdoppeln nehmen alle Abschnitte mit
+obj_1  "Gehäuseboden"  70.0 × 50.0 × 13.2 mm, 30.4 cm³, geschlossen, 66% massiv, auf Bett, last_op=op6
+  liegt: x -35.0 … 35.0 · y -25.0 … 25.0 · z 0.0 … 13.2 mm
+  hole_1  Ø 3.40 mm (eingepasst), Achse +Z (eingepasst), Durchgang, bei (-25, -15, 2) (eingepasst), created_by=op2
+  cone_1  Senkung 90°, Ø 5.00 mm, Achse +Z, bei (25, -15, 8), created_by=op3 — Maße eingepasst
+  …
+  heatset_m4_bore_1  Ø 4.00 mm, Achse +Z, Sackloch, bei (25, -15, 4.9), created_by=op3 — Maße aus dem Schritt
+  …
+obj_2  "Prüfstück"  22.0 × 22.0 × 8.0 mm, 3.6 cm³, geschlossen, 93% massiv, auf Bett, last_op=op7
+  …
+Verlauf: t1 "Boden" (op1 create_box(width==@breite, depth==@tiefe, height==@wand, …), Nutzer) · t2 "Befestigung" (op2 insert_nut_trap(size=M3, x=-25, y=-15, …), op3 insert_heatset_m4(size=M3, x=25, y=-15, …), op4 insert_screw_hole(size=M3, depth=10, x=25, …), Nutzer) · …
 ```
+
+`created_by` nennt den Schritt, der ein Merkmal erzeugt hat (§21.2),
+`last_op` den Schritt, der das Objekt zuletzt ausgegeben hat; beide zählen
+wie der Verlauf, den der Nutzer sieht, und dieselbe Nummer steht im Verlauf
+vor dem Aufruf. Erkannte Merkmale tragen keinen Erzeuger. Passungen,
+Druckeinstellungen, Quellen und Befunde haben eigene Zeilen, wenn das Projekt
+sie trägt.
 
 Dazu die gerenderten Ansichten — beschriftete PNG-Bilder (schräg oben und
 von oben), gerendert von der Oberfläche, denn der Kern rastert nicht. Sie
@@ -2178,7 +2196,7 @@ mehrdeutige Anfragen und misst, ob gefragt statt geraten wird.
 
 Diese Liste ist abschließend — was hier nicht steht, gibt es nicht. Die vier
 Werkzeuge ab `read_digest` kamen mit der Agent-Vertiefung dazu
-(`konzepte/konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
+(`konzepte/archiv/konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
 die lesenden rechnen auf der Arbeitskopie, die schreibenden reisen als Teil
 der einen Transaktion des Vorschlags (§26.5, Regel 16).
 
@@ -2429,7 +2447,7 @@ Regel bei der Auswertung (§17.1), damit ein Rezept dieselbe Operation ohne
 diese Rückholung benutzen kann.
 
 **Und die Nummern der Teile hängen an der Geometrie, nicht am Rauschen.**
-*In Einzelteile zerlegen* ordnet nach Volumen; zwei gleich große Teile
+*In Einzelteile aufteilen* ordnet nach Volumen; zwei gleich große Teile
 entscheiden über ihre Lage. Gerechnete Volumina schwanken in den letzten
 Stellen mit der Tessellierung, und ein Tausch der Nummern nähme jedem späteren
 Schritt sein Ziel — die Kennung eines Objekts ist der Anker für alles, was
@@ -2998,7 +3016,7 @@ Installer und Lizenzschlüssel; im Fließtext und in Docstrings heißt es kurz
 „Solidon". Die zentrale Quelle ist `app/branding.py`.
 
 Die Begründung und die verworfenen Namen stehen in
-`konzepte/namensentscheidung-solidon.md`. Eine Produktentscheidung ist kein
+`konzepte/archiv/namensentscheidung-solidon.md`. Eine Produktentscheidung ist kein
 Markenfreigabenachweis; der noch erforderliche rechtliche Abgleich bleibt in
 [RM-093](ROADMAP.md#rm-093). Bei einer künftigen Namensänderung sind Domain,
 Pakete, Supportadresse, Dateizuordnungen und Signierung gemeinsam abzugleichen;

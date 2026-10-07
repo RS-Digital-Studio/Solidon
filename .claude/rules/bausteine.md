@@ -160,6 +160,15 @@ Abdruck des gefahrenen Stands (`parts/range_proof.py`).
   Eine Vorlage mit vielen Formen wird ein Baustein je Form mit gemeinsamem
   Unterbau (`holders.py`: vier Halter, je 256 oder 512 Ecken), keine
   Formwahl, die das Produkt sprengt.
+- **Ein Feld ohne Wirkung zählt keine Ecken**: Wo die Bedingung eines Feldes
+  (`depends_on`) in einer Ecke nicht erfüllt ist, steht es dort auf seiner
+  Vorgabe (`range_check.corners`). Das setzt voraus, dass der Baustein den
+  Wert dann wirklich verwirft; wer ein verstecktes Feld trotzdem liest, bricht
+  den Vertrag und den Nachweis zugleich.
+- **Eine Größenreihe passt in den Bereichstest oder wird begrenzt, mit
+  Grund**: Wandhalter (M2–M27), Klemmschale (M3–M33), Rohrschelle (M3–M6)
+  und Stangenverbinder (M3–M5) nehmen so viele Normgrößen, wie 512 Ecken oder
+  ihre Wand tragen; die Befestigungsbausteine nehmen alle und ein eigenes Maß.
 - **Ein Maß ohne Obergrenze ist ein Bereich ohne Rand**: Ohne `maximum` fährt
   der Test nur die Untergrenze. Jedes Längenmaß eines Bausteins trägt beide
   Grenzen; ausgenommen Winkel und Versatz der Trennebene an den Profilklemmen —
@@ -175,12 +184,34 @@ Eintritt an der Spitze bis unter den Kopf
 den Vorlauf von einem Umlauf an beiden Kernen.
 
 **Ein Gewinde endet nicht an der Tabelle.** Passt keine Größe, nimmt es ein
-eigenes Maß (`fasteners.CUSTOM_SIZE`), dessen Kernloch die Bohrung ist. Jeder
-Gewindeweg — Baustein, *Schraube erstellen*, *Drehdeckel erzeugen*,
-Gegenstück — teilt die Grenzen `units.SMALLEST_THREAD`, `LARGEST_THREAD` und
-`COARSEST_PITCH`, und am Netz kommen die Sehnen je Umlauf aus
+eigenes Maß (`fasteners.CUSTOM_SIZE`), dessen Kernloch die Bohrung ist — der
+Gangfuß des Druckprofils, kein ISO-Kernloch, und der Satz über dem Dialog sagt
+das. Jeder Gewindeweg — Baustein, *Schraube erstellen*, *Drehdeckel
+erzeugen*, Gegenstück — teilt die Grenzen `units.SMALLEST_THREAD`,
+`LARGEST_THREAD`, `FINEST_PITCH` und `COARSEST_PITCH` sowie den Kernanteil
+`THREAD_MIN_CORE_SHARE` (Bausteine über `fasteners.thread_problem`);
+benannte Ausnahmen sind der Drehdeckel (Steigung ab 1 mm, Hals null heißt
+automatisch). `test_every_thread_path_shares_the_same_limits` hält das. Am
+Netz kommen die Sehnen je Umlauf aus
 `shapes.turn_segments` (Drehdeckel: `lid.turn_sections`); eine eigene Zahl
-dafür ist ein Zwilling.
+dafür ist ein Zwilling. Der Netzkern überdeckt den Gang auch in der
+Sehnenmitte um `BOOLEAN_OVERLAP` (`build._core_segments`), und der Gang läuft
+über ganze Umläufe, bevor der Schnittzylinder kürzt; sonst bleiben ab M12
+Splitter im Gang, und Schraube und Mutter überdecken sich. Wo ein Bau ablehnt,
+erklärt der Baustein es über `feasible` aus derselben Regel
+(`fasteners.thread_problem`). Ein Innengewinde in einer Bohrung sagt, wenn es
+sie aufbohrt (`PartSpec.at_hole_check`, `parts.bore_widened`); die Restwand
+um ein Gewinde misst die Auswertung am Endstand wie um jede Bohrung
+(`relations._measured` liest `length`, `is_a_cavity` liest `internal`).
+
+**Eine Schraube endet auch nicht an der Tabelle.** Schraubenloch,
+Mutternfalle, Schraube und Mutter nehmen `CUSTOM_SIZE` mit Nenndurchmesser;
+Löcher, Kopf, Mutter und Scheibe leitet `standards.derived_screw`/
+`derived_nut`/`derived_washer` aus der Reihe ab (zwischen zwei Größen linear,
+jenseits im Verhältnis der Randgröße), und der Befund `parts.derived_size`
+nennt das Ergebnis abgeleitet. Eine Einpressbuchse mit eigenem Maß nimmt
+Bohrung und Länge aus dem Datenblatt des Kunden; ihr Außendurchmesser
+steht nicht da, weil nur das Loch gebaut wird.
 
 ## Was eine Richtung hat, wird an ihr gemessen
 
@@ -213,8 +244,8 @@ Stapel.
 ## Ein Rezept ist der eigene Baustein ohne Python
 
 Ein Ausschnitt des Op-Stapels plus die Beschreibung seiner Parameter, als
-Daten in `<Nutzerdaten>/parts/recipes/*.json` (`parts/recipe.py`, Konzept
-Befestigungssysteme §16–§19):
+Daten in `<Nutzerdaten>/parts/recipes/*.json` (`parts/recipe.py`,
+`konzepte/archiv/konzept-befestigungssysteme-2026-08.md` §16–§19):
 
 - **Der Dokument-Ausschnitt reist als Dokument** (`scene.serialise`) und erbt
   dessen Migrationen; die Hülle trägt ihre eigene `FORMAT_VERSION`.
@@ -286,7 +317,13 @@ Schritt:
 
 Zahlen sind frei verwendbar, Normtexte und Normtabellen nicht: Werte aus frei
 zugänglichen Herstellerangaben zusammentragen, keine Normblätter abschreiben,
-die Herkunft im Kommentar nennen.
+die Herkunft im Kommentar nennen. Jede Zeile der metrischen Reihe rechnet
+`tests/test_standards.py` gegen eine zweite Herleitung nach (Verhältnisse der
+Normen, Scheibenbohrung gleich feinem Durchgangsloch), und der Stand einer
+früheren Tabellenversion steht dort fest: Ein bestehender Wert ändert sich nur
+mit `LIBRARY_VERSION` und `PartChange`. Mutter und Scheibe gehören zu einer
+Schraube der Tabelle (`known_screw`), weil das eigene Maß von ihrem Nennmaß
+aus ableitet.
 
 ## Regelsammlung
 

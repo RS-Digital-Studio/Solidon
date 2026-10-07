@@ -330,7 +330,7 @@ class ViewNotice(QFrame):
         Stellen, die leuchteten, **ohne** dass der Kunde etwas getan hatte (B6
         der Design-Durchsicht). Vier Dauerleuchten machen aus einem Signal eine
         Tapete; die Begründung steht in
-        ``konzepte/konzept-akzentfarben-haushalt-2026-08.md``.
+        ``konzepte/archiv/konzept-akzentfarben-haushalt-2026-08.md``.
 
         Mit Kennung geschrieben und nie typlos: Eine Regel ohne Selektor gälte
         für jeden Knopf darin und nähme ihm die Farben des Anwendungs-

@@ -66,10 +66,23 @@ MAX_FACET_SAG: Final[float] = 0.05
 #: ihre eigene (M8, Ø 100, Ø 400), und ein Kunde fand für das Innengewinde in
 #: seinem Rohr mit 60 mm keinen Weg. Ein Meter ist größer als jeder Bauraum;
 #: die Grenze sagt nur, dass ein Feld eine hat. Unten begrenzt die kleinste
-#: Schraube der Tabelle, M2.
-SMALLEST_THREAD: Final[float] = 2.0
+#: Schraube der Tabelle, M1.6 — dieselben Grenzen tragen Schraube, Mutter und
+#: Schraubenloch mit eigenem Maß.
+SMALLEST_THREAD: Final[float] = 1.6
 LARGEST_THREAD: Final[float] = 1000.0
 COARSEST_PITCH: Final[float] = 20.0
+#: Die feinste Steigung, die ein erzeugtes Gewinde annimmt — die von *Schraube
+#: erstellen* seit je. Darunter wächst ein Gewinde ins Unendliche: Ø 20 x 0,01
+#: über 200 mm hätte am Netz über elf Millionen Dreiecke, und der Bau eines
+#: Bausteins nimmt keinen Abbruch entgegen. *Drehdeckel erzeugen* beginnt bei
+#: 1 mm, weil ein Schraubdeckel feiner nicht greift (``lid.ScrewLidParams``).
+FINEST_PITCH: Final[float] = 0.25
+#: Welcher Anteil des Außendurchmessers einem Bolzen als Kern bleiben muss. Die
+#: Prüfung fragte zuerst nur, ob überhaupt ein Kern übrig bleibt; herausgekommen
+#: ist ein Faden von 0,16 mm, wo jemand zwei Millimeter bestellt hatte. Ein
+#: Bolzen, dessen Kern unter einem Drittel liegt, ist keiner mehr — für
+#: *Schraube erstellen* (``brep.profiles``) wie für jedes Bausteingewinde.
+THREAD_MIN_CORE_SHARE: Final[float] = 0.33
 
 #: Wie viele Körper eine eingelesene Baugruppe höchstens trägt — dieselbe Zahl
 #: wie ``scene.project.MAX_PROJECT_OBJECTS``: Jeder Körper wird ein Objekt im
@@ -773,6 +786,15 @@ def exact_sin_degrees(degrees: float) -> float:
     return _exact_degrees(float(degrees))[1]
 
 
+def exact_tan_degrees(degrees: float) -> float:
+    """Tangens eines Winkels in Grad, als Quotient aus :func:`exact_sin_degrees`
+    und :func:`exact_cos_degrees` — der Ersatz für ``math.tan(math.radians(…))``,
+    dessen letzte Stelle an der Plattform hängt (RM-187). Bei 90 Grad ist der
+    Kosinus genau null und die Division ein Fehler, wie die Sache es ist.
+    """
+    return exact_sin_degrees(degrees) / exact_cos_degrees(degrees)
+
+
 def exact_atan_degrees(ratio: float) -> float:
     """Arkustangens in Grad, auf jeder Maschine dieselbe Zahl.
 
@@ -808,6 +830,29 @@ def exact_atan2_degrees(y: float, x: float) -> float:
         return base + (180.0 if y >= 0.0 else -180.0)
     base = exact_atan_degrees(x / y)
     return 90.0 - base if y > 0.0 else -90.0 - base
+
+
+def exact_acos_degrees(cosine: float) -> float:
+    """Arkuskosinus in Grad, auf jeder Maschine dieselbe Zahl (RM-187).
+
+    Als ``atan2(√((1 - c)(1 + c)), c)`` über :func:`exact_atan2_degrees`; die
+    Wurzel aus dem Produkt löscht an den Rändern nicht aus. Ein Kosinus
+    außerhalb von ``[-1, 1]`` — Rundung eines Skalarprodukts von Einheitsvektoren —
+    wird auf den Rand gelegt, wie ``min(1.0, …)`` vor ``math.acos`` es tat.
+    """
+    value = min(1.0, max(-1.0, float(cosine)))
+    return exact_atan2_degrees(math.sqrt((1.0 - value) * (1.0 + value)), value)
+
+
+def exact_atan2(y: float, x: float) -> float:
+    """:func:`exact_atan2_degrees` im Bogenmaß — der Ersatz für ``math.atan2`` (RM-187).
+
+    ``math.radians`` ist ein Produkt mit ``π/180`` und damit auf jeder
+    Maschine gleich gerundet. Der Arkussinus und der Arkuskosinus folgen
+    daraus: ``asin x = atan2(x, √((1 - x)(1 + x)))``, ``acos x`` mit den
+    Argumenten getauscht.
+    """
+    return math.radians(exact_atan2_degrees(y, x))
 
 
 @functools.lru_cache(maxsize=ANGLE_CACHE)

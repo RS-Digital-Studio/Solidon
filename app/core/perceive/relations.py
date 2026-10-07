@@ -276,7 +276,13 @@ def _measured(feature: Feature) -> _Measured | None:
     axis = axis_of(feature)
     centre = centre_of(feature)
     diameter = float(feature.params.get("diameter") or 0.0)
-    depth = float(feature.params.get("depth") or 0.0)
+    # **Ein Gewinde ist so lang, wie es ``length`` sagt** — ``depth`` ist an
+    # einem erkannten Gewinde die radiale Gangtiefe (``features``), an einem
+    # erzeugten fehlt es. Bis zum 06.10.2026 fiel jedes Gewinde hier heraus,
+    # und ein Innengewinde, das eine Rohrwand bis auf 0,1 mm abtrug, blieb ohne
+    # Befund (Review RM-532, F2). Sein Durchmesser ist das gebaute Maß.
+    key = "length" if feature.kind == "thread" else "depth"
+    depth = float(feature.params.get(key) or 0.0)
     if axis is None or centre is None or diameter <= EPS_GEOM or depth <= EPS_GEOM:
         return None
     return _Measured(feature, axis, centre, diameter, depth, is_a_cavity(feature))

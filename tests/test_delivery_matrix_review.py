@@ -12,8 +12,7 @@ from types import ModuleType
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / ".claude" / ".state" / "uebergabe-matrix-2026-09-27"
-DELIVERY = ROOT / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27"
+TOOLS = ROOT / "tools"
 
 
 def _load_module(
@@ -21,12 +20,14 @@ def _load_module(
     name: str,
     monkeypatch: pytest.MonkeyPatch,
     arguments: list[str],
-    search_paths: tuple[Path, ...] = (),
 ) -> ModuleType:
+    import tools
+
     monkeypatch.setattr(sys, "argv", [str(path), *arguments])
     monkeypatch.setattr(sys, "path", list(sys.path))
-    for search_path in reversed(search_paths):
-        sys.path.insert(0, str(search_path))
+    # ``matrix_unit`` bindet ``tools`` an seinen Ordner; danach kommt der
+    # Suchpfad des Testprozesses zurück.
+    monkeypatch.setattr(tools, "__path__", tools.__path__)
     specification = importlib.util.spec_from_file_location(name, path)
     assert specification is not None and specification.loader is not None
     module = importlib.util.module_from_spec(specification)
@@ -39,7 +40,7 @@ def test_an_advice_failure_is_reported_even_when_the_standard_run_succeeds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Ein erfolgreicher Standardlauf darf die fehlende Vorschlagsprüfung nicht verdecken."""
-    script = DELIVERY / "bericht.py"
+    script = TOOLS / "matrix_report.py"
     report = _load_module(script, "delivery_matrix_report_review", monkeypatch, [])
     entry = {
         "slicer": "orca",
@@ -88,7 +89,7 @@ def test_a_part_too_tall_for_the_printer_does_not_fit_instead_of_failing(
     Im Probelauf scheiterte der Minigolf-Satz am MINI (180 mm Bauhöhe) an
     ``_check_plate``; der Bericht zählte das als „kein Druck“.
     """
-    report = _load_module(DELIVERY / "bericht.py", "delivery_matrix_fit_review", monkeypatch, [])
+    report = _load_module(TOOLS / "matrix_report.py", "delivery_matrix_fit_review", monkeypatch, [])
     entry = {
         "slicer": "superslicer",
         "printer": "prusa-mini",
@@ -108,11 +109,10 @@ def test_the_slicers_own_reading_of_a_handed_chain_value_is_no_deviation(
     die Matrix meldete das als Abweichung von der Herstellerkette.
     """
     unit = _load_module(
-        DELIVERY / "einheit.py",
+        TOOLS / "matrix_unit.py",
         "delivery_matrix_handed_review",
         monkeypatch,
         [str(ROOT), str(tmp_path / "plate.stl"), str(tmp_path / "out"), "heim"],
-        (DELIVERY, MATRIX),
     )
     wanted = {"initial_layer_speed": ("process", "50%"), "outer_wall_speed": ("process", "150")}
     block = {"initial_layer_speed": "30", "outer_wall_speed": "120"}
@@ -133,13 +133,12 @@ def test_missing_startcode_is_not_attributed_to_the_manufacturer(
     key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein fehlender G-Code-Wert zählt nicht als Vergleich mit der Herstellerkette."""
-    script = DELIVERY / "einheit.py"
+    script = TOOLS / "matrix_unit.py"
     unit = _load_module(
         script,
         "delivery_matrix_unit_review",
         monkeypatch,
         [str(ROOT), str(tmp_path / "plate.stl"), str(tmp_path / "out"), "heim"],
-        (DELIVERY, MATRIX),
     )
     wanted = {key: ("machine", "G28\nG29\nG1 X10 E1")}
     missing = unit.against_chain({}, wanted)
@@ -164,13 +163,12 @@ def test_console_startcode_difference_is_not_attributed_to_the_manufacturer(
     key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein von der Konsole geänderter Startcode gilt nicht als Herstellervergleich."""
-    script = DELIVERY / "einheit.py"
+    script = TOOLS / "matrix_unit.py"
     unit = _load_module(
         script,
         "delivery_matrix_console_startcode_review",
         monkeypatch,
         [str(ROOT), str(tmp_path / "plate.stl"), str(tmp_path / "out"), "heim"],
-        (DELIVERY, MATRIX),
     )
     chain = unit.against_chain(
         {key: "G28\nG29"},
@@ -192,13 +190,12 @@ def test_startcode_commands_after_inline_comment_are_compared(
     key: str, found: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein weiterer Befehl nach einem Inline-Kommentar darf nicht verschwinden."""
-    script = DELIVERY / "einheit.py"
+    script = TOOLS / "matrix_unit.py"
     unit = _load_module(
         script,
         "delivery_matrix_startcode_tail_review",
         monkeypatch,
         [str(ROOT), str(tmp_path / "plate.stl"), str(tmp_path / "out"), "heim"],
-        (DELIVERY, MATRIX),
     )
     chain = unit.against_chain({key: found}, {key: ("machine", "G28")})
     row = {"ok": True, "chain": chain, "start_levelling": [], "start_purge_mm": 0.0}
@@ -215,13 +212,12 @@ def test_successful_run_without_a_chain_still_reports_startcode_findings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Cura/Prusa dürfen ohne Ketteneintrag trotzdem einen Bericht erzeugen."""
-    script = DELIVERY / "einheit.py"
+    script = TOOLS / "matrix_unit.py"
     unit = _load_module(
         script,
         "delivery_matrix_run_without_chain_review",
         monkeypatch,
         [str(ROOT), str(tmp_path / "plate.stl"), str(tmp_path / "out"), "heim"],
-        (DELIVERY, MATRIX),
     )
 
     flags = unit.flags_for("standard", {"ok": True}, None, {})
@@ -233,7 +229,7 @@ def test_full_circle_arcs_count_as_paths_and_detect_bed_overflow(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein Vollkreis ohne Endpunktänderung bleibt als Bahn, Länge und Übertritt sichtbar."""
-    script = MATRIX / "gcode_lesen.py"
+    script = TOOLS / "matrix_gcode.py"
     parser = _load_module(script, "delivery_matrix_gcode_review", monkeypatch, [])
     path = tmp_path / "circle.gcode"
     path.write_text(
@@ -257,13 +253,12 @@ def test_first_layer_speed_uses_full_arc_length_for_weighting(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein Vollkreis ohne XY-Endpunktänderung zählt mit seiner wirklichen Bahnlänge."""
-    script = DELIVERY / "einheit.py"
+    script = TOOLS / "matrix_unit.py"
     unit = _load_module(
         script,
         "delivery_matrix_full_circle_speed_review",
         monkeypatch,
         [str(ROOT), str(tmp_path / "plate.stl"), str(tmp_path / "out"), "heim"],
-        (DELIVERY, MATRIX),
     )
     path = tmp_path / "full-circle-speed.gcode"
     path.write_text(
@@ -280,7 +275,7 @@ def test_counterclockwise_quarter_arc_uses_its_absolute_centre(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """G90.1 steuert die Bogenmitte, ohne die XY-Bewegung auf eine Sehne zu reduzieren."""
-    script = MATRIX / "gcode_lesen.py"
+    script = TOOLS / "matrix_gcode.py"
     parser = _load_module(script, "delivery_matrix_gcode_absolute_arc_review", monkeypatch, [])
     path = tmp_path / "quarter-circle.gcode"
     path.write_text(
@@ -294,3 +289,67 @@ def test_counterclockwise_quarter_arc_uses_its_absolute_centre(
     assert reading.total["Outer wall"] == pytest.approx(5.0 * math.pi)
     assert reading.off_bed == {}
     assert len(segments) == 18
+
+
+@pytest.mark.parametrize("bound", [True, False], ids=["gebunden", "frei"])
+def test_the_matrix_keeps_its_own_siblings_when_another_root_comes_first(
+    tmp_path: Path, bound: bool
+) -> None:
+    """Review 06.10.2026, M2: ``tools`` ist ein Namensraumpaket.
+
+    Sein Suchpfad wird nach jeder Änderung von ``sys.path`` neu berechnet; legt
+    die Matrix eine andere Code-Wurzel davor, fand ``from tools import
+    matrix_gcode`` deren Fassung. ``matrix_config.own_package`` bindet ``tools``
+    an den Ordner der Matrix. Gegenprobe ``frei``: ohne Bindung lädt die
+    fremde Wurzel.
+    """
+    import subprocess
+
+    foreign = tmp_path / "fremd" / "tools"
+    foreign.mkdir(parents=True)
+    (foreign / "matrix_gcode.py").write_text("FREMD = True\n", encoding="utf-8")
+    script = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(ROOT)!r})\n"
+        "from tools import matrix_config\n"
+        f"if {bound!r}:\n"
+        "    matrix_config.own_package()\n"
+        f"sys.path.insert(0, {str(foreign.parent)!r})\n"
+        "from tools import matrix_gcode\n"
+        "print(matrix_gcode.__file__)\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    loaded = Path(done.stdout.strip()).resolve().parent
+    assert loaded == (TOOLS.resolve() if bound else foreign.resolve())
+
+
+def test_the_unit_binds_its_package_before_it_loads_a_sibling() -> None:
+    """Nachprüfung 06.10.2026, F2: ``matrix_unit`` ruft ``own_package`` auf
+    Modulebene, bevor es ``matrix_gcode`` lädt — ohne den Aufruf fände der
+    Import nach der Code-Wurzel wieder deren Fassung."""
+    import ast
+
+    tree = ast.parse((TOOLS / "matrix_unit.py").read_text(encoding="utf-8"))
+    bound = [
+        statement.lineno
+        for statement in tree.body
+        if isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Call)
+        and ast.unparse(statement.value.func) == "matrix_config.own_package"
+    ]
+    sibling = [
+        statement.lineno
+        for statement in tree.body
+        if isinstance(statement, ast.ImportFrom)
+        and statement.module == "tools"
+        and any(alias.name == "matrix_gcode" for alias in statement.names)
+    ]
+    assert bound and sibling and bound[0] < sibling[0], (bound, sibling)

@@ -15,7 +15,7 @@ sich selbst. Verlangt wird:
 * der Bericht ist da und stammt aus genau dieser Version;
 * das Hauptfenster war sichtbar;
 * die 3D-Ansicht hat ein Bild gezeichnet (nicht ohne Bildschirm);
-* das Absturzprotokoll des Laufs ist leer;
+* das Absturzprotokoll des Laufs trägt keinen Absturz (``log.fatal_records``);
 * kein Hilfsprozess überlebt sie (nicht im Flatpak: eigener PID-Raum, der mit
   der Anwendung endet).
 
@@ -32,8 +32,8 @@ Systems (``iconservicesagent``) in Metal ab, und jedes Programm, das ein
 Systemsymbol anfragt, wartet für immer (gemessen im Lauf 37150755506). Unter
 Linux startet der Aufrufer einen X-Server (``xvfb-run``).
 
-Nur Standardbibliothek und zwei leichte Module der Anwendung: Das Werkzeug
-läuft auch in Jobs, die keine Abhängigkeiten installieren.
+Nur Standardbibliothek und leichte Module der Anwendung ohne Qt und Geometrie:
+Das Werkzeug läuft auch in Jobs, die keine Abhängigkeiten installieren.
 """
 
 from __future__ import annotations
@@ -54,6 +54,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.branding import APP_NAME, APP_VERSION  # noqa: E402
+from app.core.log import fatal_records  # noqa: E402
 from app.core.paths import PROFILE_VARIABLES  # noqa: E402
 from app.ui.start_check import FORMAT, REPORT_VARIABLE, SECONDS  # noqa: E402
 from tools.check_frozen_helper import application, image_of, is_the_application  # noqa: E402
@@ -203,10 +204,12 @@ def judge(
             problems.append(f"Die 3D-Ansicht zeichnet nicht: {renderer['error']}")
         elif not renderer.get("brightest"):
             problems.append("Die 3D-Ansicht zeichnet ein schwarzes Bild.")
-    if crash_text.strip():
-        problems.append(
-            "Das Absturzprotokoll des Laufs ist nicht leer:\n" + crash_text.strip()[:2000]
-        )
+    # Was Solidon abgefangen und überlebt hat — eine COM-Ausnahme, ein
+    # Treibereintrag — bleibt mit dem Vermerk des geordneten Endes in der
+    # Datei und hält den Start nicht an; ein Absturz schon (``log.fatal_records``).
+    fatal = fatal_records(crash_text).strip()
+    if fatal:
+        problems.append("Das Absturzprotokoll des Laufs trägt einen Absturz:\n" + fatal[:2000])
     if helpers_alive:
         problems.append(
             f"Hilfsprozesse leben nach dem Ende weiter: {helpers_alive}. "

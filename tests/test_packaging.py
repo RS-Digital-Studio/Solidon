@@ -1237,6 +1237,14 @@ def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:
     assert verdict(0, _start_report(renderer={"present": True, "error": "Lost"}))
     assert verdict(0, _start_report(renderer={"present": False}), offscreen=True) == []
     assert verdict(0, _start_report(), crash_text="Fatal Python error")
+    caught = (
+        "Windows fatal exception: code 0x8001010d\n\n"
+        "Current thread 0x000056fc (most recent call first):\n"
+        '  File "app.py", line 685 in main\n'
+        "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n"
+    )
+    assert verdict(0, _start_report(), crash_text=caught) == [], "abgefangen, kein Absturz"
+    assert verdict(0, _start_report(), crash_text=caught.replace("0x56fc\n", "0x1a2b\n"))
     assert verdict(0, _start_report(), helpers_alive=[4711])
     assert verdict(0, _start_report(), tree_changed=["Contents/MacOS/neu.txt"])
 

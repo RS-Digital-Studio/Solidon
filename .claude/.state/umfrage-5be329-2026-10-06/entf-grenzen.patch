@@ -1,0 +1,19 @@
+diff --git a/.claude/rules/grenzen.md b/.claude/rules/grenzen.md
+index 29239d4fb..ee7d2fd6c 100644
+--- a/.claude/rules/grenzen.md
++++ b/.claude/rules/grenzen.md
+@@ -53,9 +53,11 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
+   dort** (Entscheidung Robert): `PANEL_CATEGORIES` (`registry.py`),
+   `in_the_menu_bar`, und `_build_menus` legt dafür kein Menü an. Die Aktionen
+   entstehen trotzdem am Fenster (Kürzel, Palette über `_op_actions` und das
+-  Feld *Funktion suchen …* oben, Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum
+-  und Ansicht** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
+-  zwei Aktionen auf einer Taste führt Qt beide nicht aus.
++  Feld *Funktion suchen …* oben, Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum,
++  Ansicht und Reiter *Auswahl*** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
++  zwei Aktionen auf einer Taste führt Qt beide nicht aus. Text- und Zahlenfelder
++  behalten Entf. Sperren Halt oder Lizenz das Entfernen, sagt die Taste den
++  Grund (`_DeleteRefusal`) — ein gesperrtes Kürzel schweigt sonst.
+ - **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*
+   (mit *Automatisch teilen*), *Erzeugen* samt Abschnitt *Bausteine* (Katalog,
+   Gegenstücke, Deckel ohne Kachel; `parts` steht in der Gruppe *Erzeugen*),

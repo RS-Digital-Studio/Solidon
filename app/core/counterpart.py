@@ -60,6 +60,7 @@ from app.core.types import (
 )
 from app.core.units import (
     COARSEST_PITCH,
+    FINEST_PITCH,
     LARGEST_THREAD,
     SMALLEST_THREAD,
     format_length,
@@ -379,10 +380,61 @@ def thread_values_for(feature: Feature) -> dict[str, Any]:
     ein gemessenes M6 bleibt ein M6. Sonst nimmt das Gegenstück das eigene Maß
     des Gewindes (``fasteners.CUSTOM_SIZE``). Bis zum 06.10.2026 endete die
     Antwort an der Tabelle: über M8 und zwischen zwei Größen gab es kein
-    Gegenstück, nur einen Satz. Abgesagt wird nur noch außerhalb dessen, was
-    ein Bausteingewinde überhaupt baut (``units.LARGEST_THREAD``).
+    Gegenstück, nur einen Satz. Abgesagt wird, was kein Bausteingewinde baut —
+    jenseits der gemeinsamen Grenzen oder ohne tragenden Kern
+    (``fasteners.thread_problem``), und zwar vor dem Schritt, nicht erst in der
+    Auswertung an einem Schritt, den der Kunde nicht eingegeben hat.
     """
-    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+    return _matched_thread(feature)[0]
+
+
+def thread_size_note(feature: Feature) -> Finding | None:
+    """Was das Gegenstück über die Wahl seines Maßes sagt — oder ``None``.
+
+    Dieselbe Entscheidung wie :func:`thread_values_for`, als Satz für den Kunden.
+    """
+    return _matched_thread(feature)[1]
+
+
+def _thread_tolerance(feature: Feature) -> tuple[float, float]:
+    """Wie weit ein Gewinde von einer Tabellengröße liegen darf, um sie zu meinen.
+
+    Die Erkennungsgrenze ``THREAD_SIZE_REACH`` plus das, was die Messung über
+    sich selbst sagt: die Wendelabweichung (``uncertainty``) für die Steigung,
+    der Kreisfehler (``fit_error``, beidseitig) für den Durchmesser. Ein
+    erzeugtes Gewinde trägt keines von beiden und wird genau verglichen.
+    """
+    pitch_error = feature.params.get("uncertainty")
+    diameter_error = feature.params.get("fit_error")
+    pitch_extra = (
+        abs(float(pitch_error))
+        if isinstance(pitch_error, int | float) and not isinstance(pitch_error, bool)
+        else 0.0
+    )
+    diameter_extra = (
+        2.0 * abs(float(diameter_error))
+        if isinstance(diameter_error, int | float) and not isinstance(diameter_error, bool)
+        else 0.0
+    )
+    return THREAD_SIZE_REACH[0] + diameter_extra, THREAD_SIZE_REACH[1] + pitch_extra
+
+
+def _matched_thread(feature: Feature) -> tuple[dict[str, Any], Finding | None]:
+    """Maß und Begründung des Gegenstücks — die eine Entscheidung für beide.
+
+    **Knapp neben einer Tabellengröße ist es die Tabellengröße, und der Befund
+    sagt es** (Review RM-532, R5). Bis dahin wurde ein gemessenes Ø 6,0 x 1,03
+    still ein eigenes Maß mit 1,03 Steigung — über 20 mm Länge 0,6 mm Phase
+    neben einem wirklichen M6 x 1, und die Passungsprüfung verglich danach
+    gemessen gegen gemessen. Liegt die Abweichung innerhalb dessen, was die
+    Messung selbst als Unsicherheit nennt, kann sie M6 x 1 und 6 x 1,03 nicht
+    unterscheiden, und gemeint ist fast immer das Normteil. Gefragt wird nicht:
+    Der Kunde wüsste es nicht besser als die Messung, und der Befund nennt beide
+    Maße, sodass *Merkmal ändern* das gemessene setzt, wo es wirklich so ist.
+    Außerhalb dieser Unsicherheit bleibt das gemessene Maß, und der Befund sagt,
+    dass es keine Normgröße ist.
+    """
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE, thread_problem
 
     # Ein gedrucktes Gewinde nennt sein Nennmaß neben dem gebauten
     # (``build.thread``); das gebaute liegt um das Spiel daneben, bei TPU weiter
@@ -399,22 +451,66 @@ def thread_values_for(feature: Feature) -> dict[str, Any]:
             abs(screw.nominal - diameter) <= THREAD_SIZE_REACH[0]
             and abs(screw.pitch - pitch) <= THREAD_SIZE_REACH[1]
         ):
-            return {"size": size}
-    if not (SMALLEST_THREAD <= diameter <= LARGEST_THREAD and 0.0 < pitch <= COARSEST_PITCH):
+            return {"size": size}, None
+    diameter_reach, pitch_reach = _thread_tolerance(feature)
+    near = [
+        size
+        for size in standards.screw_sizes()
+        if abs(standards.screw(size).nominal - diameter) <= diameter_reach
+        and abs(standards.screw(size).pitch - pitch) <= pitch_reach
+    ]
+    if near:
+        size = min(near, key=lambda entry: abs(standards.screw(entry).pitch - pitch))
+        return {"size": size}, Finding(
+            code="parts.counterpart_standard_size",
+            severity="info",
+            message=_(
+                "Gemessen sind Ø {diameter}, Steigung {pitch}: das ist {size} innerhalb der "
+                "Messunsicherheit. Ein anderes Maß setzt „Merkmal ändern“ am Gegenstück.",
+                diameter=format_length(diameter),
+                pitch=format_length(pitch),
+                size=size,
+            ),
+            values={"size": size, "diameter_mm": diameter, "pitch_mm": pitch},
+        )
+    problem = (
+        thread_problem(diameter, pitch, 0.0)
+        if SMALLEST_THREAD <= diameter <= LARGEST_THREAD and 0.0 < pitch <= COARSEST_PITCH
+        else None
+    )
+    if (
+        not (SMALLEST_THREAD <= diameter <= LARGEST_THREAD and 0.0 < pitch <= COARSEST_PITCH)
+        or problem is not None
+    ):
         raise ValidationError(
             field="at_feature",
             detail=_(
-                "Ein Gegenstück aus der Bibliothek reicht von Ø {smallest} bis Ø {largest} und "
-                "bis zur Steigung {coarsest}. Dieses Gewinde liegt außerhalb.",
+                "Ein Gegenstück aus der Bibliothek reicht von Ø {smallest} bis Ø {largest}, "
+                "Steigung {finest} bis {coarsest}, und braucht einen tragenden Kern. Dieses "
+                "Gewinde liegt außerhalb.",
                 smallest=format_length(SMALLEST_THREAD),
                 largest=format_length(LARGEST_THREAD),
+                finest=format_length(FINEST_PITCH),
                 coarsest=format_length(COARSEST_PITCH),
             ),
             values={"feature": feature.id, "diameter": diameter, "pitch": pitch},
             constraint="beyond_threads",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
-    return {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch}
+    note = None
+    if feature.provenance != "generated":
+        note = Finding(
+            code="parts.counterpart_own_measure",
+            severity="info",
+            message=_(
+                "Gemessen sind Ø {diameter} mit Steigung {pitch} — keine Normgröße. Das "
+                "Gegenstück nimmt dieses eigene Maß.",
+                diameter=format_length(diameter),
+                pitch=format_length(pitch),
+            ),
+            values={"diameter_mm": diameter, "pitch_mm": pitch},
+        )
+    return {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch}, note
 
 
 def refuse_unmatched_thread(feature: Feature) -> None:
@@ -528,10 +624,12 @@ def apply_thread_counterpart(
     step = document.ops[-1]
     made = [step.outputs[0]] if step.outputs else []
     _log.info("thread counterpart for %s/%s: %s", first_object, feature.id, ", ".join(made) or "?")
+    note = thread_size_note(feature)
     return CounterpartApplied(
         object_ids=[first_object, *made],
         op_ids=(step.id,),
         transaction=applied.id,
+        findings=[note] if note is not None else [],
     )
 
 
@@ -744,7 +842,7 @@ def coupled_step_change(
     body = entry.inputs[0]
     if entry.op == "resize_feature":
         own = FeatureRef(body, str(new.get("at_feature", "")))
-    elif entry.op == "insert_printed_thread" and _printed_size(new) != _printed_size(entry.params):
+    elif entry.op == "insert_printed_thread" and not _same_printed_size(new, entry.params):
         made = scene.objects.get(body)
         name = next(
             (
@@ -825,6 +923,23 @@ def _printed_size(params: Mapping[str, Any]) -> tuple[Any, ...]:
     if size != CUSTOM_SIZE:
         return (size,)
     return (size, params.get("diameter"), params.get("pitch", 0.0))
+
+
+def _same_printed_size(first: Mapping[str, Any], second: Mapping[str, Any]) -> bool:
+    """Ob zwei Parametersätze dasselbe Gewindemaß bauen — Zahlen nie mit ``==`` (Regel 6).
+
+    Ø 66,6 und 66,6 + 10⁻¹² sind dasselbe Maß; mit ``!=`` über das Tupel
+    koppelte der zweite Schritt den Partner, der danach gleich blieb.
+    """
+    left, right = _printed_size(first), _printed_size(second)
+    if len(left) != len(right) or left[0] != right[0]:
+        return False
+    return all(
+        is_close(float(a), float(b))
+        if isinstance(a, int | float) and isinstance(b, int | float)
+        else a == b
+        for a, b in zip(left[1:], right[1:], strict=True)
+    )
 
 
 def _later_resizes(document: Document, ref: FeatureRef, *, after: OpId) -> list[Operation]:

@@ -228,16 +228,19 @@ def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "checks": [],
         "release": _release_record(),
         "archive": archive,
+        "artifacts": [{"name": sign_release.ARTIFACT_NAME, "expired": False}],
     }
 
     def api(repository: str, suffix: str) -> Any:
         assert repository == REPOSITORY
         if suffix == f"actions/runs/{RUN_ID}":
             return _run_record()
-        if suffix.endswith("artifacts?per_page=100"):
+        if "/artifacts?per_page=100&page=" in suffix:
+            page = int(suffix.rsplit("=", 1)[1])
+            artifacts = state["artifacts"]
             return {
-                "total_count": 1,
-                "artifacts": [{"name": sign_release.ARTIFACT_NAME, "expired": False}],
+                "total_count": state.get("artifact_total", len(artifacts)),
+                "artifacts": artifacts[(page - 1) * 100 : page * 100],
             }
         assert suffix == f"releases/{RELEASE_ID}"
         return state["release"]
@@ -390,6 +393,42 @@ def test_archive_corruption_stops_before_the_executable_is_replaced(
         tool.prepare(**ci_input["args"])
     assert not (ci_input["args"]["work"] / "stage").exists()
     assert ci_input["checks"] == []
+
+
+def test_the_signing_archive_is_found_beyond_the_first_hundred_artifacts(
+    ci_input: dict[str, Any],
+) -> None:
+    """Ein Lauf mit mehr als 100 Artefakten: Das Archiv steht auf der zweiten Seite."""
+    others = [{"name": f"tests-{index}", "expired": False} for index in range(120)]
+    ci_input["artifacts"] = [*others, *ci_input["artifacts"]]
+    ci_input["extra_download"] = True
+
+    # Die Liste geht auf; angehalten wird erst beim Inhalt des Downloads.
+    with pytest.raises(sign_release.SigningError, match="Unbekannte Dateien"):
+        tool.prepare(**ci_input["args"])
+
+
+def test_a_second_signing_archive_on_the_second_page_is_ambiguous(
+    ci_input: dict[str, Any],
+) -> None:
+    """Ein zweites gleichnamiges Archiv hinter dem hundertsten Artefakt macht die
+    Quelle mehrdeutig — es wird nichts geladen (Review 06.10.2026 der zweiten
+    Lieferung, N2)."""
+    others = [{"name": f"tests-{index}", "expired": False} for index in range(120)]
+    ci_input["artifacts"] = [*ci_input["artifacts"], *others, *ci_input["artifacts"]]
+    with pytest.raises(sign_release.SigningError, match="mehrdeutig"):
+        tool.prepare(**ci_input["args"])
+    assert not (ci_input["args"]["work"]).exists()
+
+
+def test_an_artifact_list_that_does_not_add_up_stops_the_installer(
+    ci_input: dict[str, Any],
+) -> None:
+    """Nennt GitHub mehr Artefakte, als die Seiten tragen, wird nichts geladen."""
+    ci_input["artifact_total"] = 2
+    with pytest.raises(sign_release.SigningError, match="Artefaktliste ist unvollständig"):
+        tool.prepare(**ci_input["args"])
+    assert not (ci_input["args"]["work"]).exists()
 
 
 def test_additional_download_payload_is_not_silently_ignored(ci_input: dict[str, Any]) -> None:

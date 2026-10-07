@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
-from typing import Final
+from typing import Any, Final
 from urllib.parse import urlsplit, urlunsplit
 
 from app.branding import APP_VERSION
@@ -61,6 +61,19 @@ _KNOWN_TOKEN = re.compile(r"(?i)\b(?:sk|rk|pk)-[a-z0-9_-]{12,}\b")
 _configured = False
 _CRASH_PATTERN = re.compile(r"crash-\d{8}T\d{6}-[\w.+-]+-\d+-[0-9a-f]{16}\.log")
 _CRASH_KEEP = 5
+#: Wie viele beendete Läufe mit nur abgefangenen Ausnahmen bleiben — neben den
+#: Abstürzen, nicht an ihrer Stelle (:func:`_prune_crashes`).
+_CAUGHT_KEEP = 2
+#: Wie viel vom Ende einer Datei das Aufräumen liest, um Absturz von Abgefangenem zu trennen.
+_PRUNE_READ = 1 << 20
+#: Die Dateien eines Fehlerberichts, ein Name je Inhalt an einer Stelle: ``report``
+#: schreibt sie, der Hilfedialog beschreibt sie, das Aufräumen löscht sie. Drei Listen
+#: liefen auseinander, und ein Anhang hielt jeden Berichtsordner fest.
+REPORT_TEXT: Final = "bericht.txt"
+LOG_ATTACHMENT: Final = "protokoll.txt"
+CRASH_ATTACHMENT: Final = "absturzprotokoll.txt"
+CAUGHT_ATTACHMENT: Final = "abgefangen.txt"
+REPORT_FILES: Final = (REPORT_TEXT, LOG_ATTACHMENT, CRASH_ATTACHMENT, CAUGHT_ATTACHMENT)
 #: Je (Fehlerart, letzte Zeile) höchstens ein Berichtsordner in dieser Frist.
 _REPORT_THROTTLE_SECONDS: Final = 60.0
 _RECENT_REPORT_LIMIT: Final = 64
@@ -246,11 +259,105 @@ _RECORD_START = re.compile(
     r"|(?P<stamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\S* (?P<context>[^\r\n]+)))",
     re.MULTILINE,
 )
-#: Der Anlass der Zeile, die das geordnete Ende eines Laufs vermerkt.
+#: Der Anlass der Zeile, die das geordnete Ende eines Laufs vermerkt. Dahinter
+#: stehen die Fäden, die ihre Einträge davor überlebt haben — der Faden, der das
+#: Ende erreicht hat, und jeder, der da schon beendet war (:func:`_survivors`) —
+#: als ``threading.get_ident`` in der Schreibweise von faulthandlers
+#: „Current thread 0x…“.
 _NORMAL_END: Final = "normal end"
+_ENDING = re.compile(re.escape(_NORMAL_END) + r"(?P<threads>(?: 0x[0-9a-fA-F]+)*)")
+#: Der Faden, in dem faulthandler eine Ausnahme sah. Die Zeile steht im Abzug an
+#: beliebiger Stelle: aus dem Hauptfaden zuletzt, aus einem Nebenfaden zuerst.
+_FAULTING_THREAD = re.compile(r"^Current thread 0x(?P<thread>[0-9a-fA-F]+)", re.MULTILINE)
+#: ``GetExitCodeThread`` für einen Faden, der noch läuft.
+_STILL_ACTIVE: Final = 259
+#: ``OpenThread``-Recht zum Lesen des Exit-Codes. Bei Fäden ist es ``0x0800``;
+#: ``0x1000`` hieße dort THREAD_RESUME, und jede Abfrage scheiterte.
+_THREAD_QUERY_LIMITED_INFORMATION: Final = 0x0800
 
 
-def fatal_records(text: str, *, alive: bool = False) -> str:
+def _ending_threads(context: str | None) -> frozenset[int] | None:
+    """Die Fäden eines Vermerks, ``None`` für jede andere Zeile.
+
+    Leer heißt: Der Vermerk nennt keinen Faden und belegt jeden — so schrieben
+    ihn Bauten vor der Fadenangabe.
+    """
+    found = _ENDING.fullmatch(context or "")
+    if found is None:
+        return None
+    return frozenset(int(word, 16) for word in found.group("threads").split())
+
+
+def sorted_records(text: str, *, alive: bool, cut: bool = False) -> tuple[list[str], list[str]]:
+    """Die Einträge einer Absturzdatei, getrennt in tödliche und abgefangene.
+
+    **Abgefangen** ist ein Eintrag von faulthandler, wenn der Prozess noch
+    lebt und kein Ende vermerkt hat (``alive``), oder wenn hinter ihm ein
+    Vermerk steht, der seinen Faden nennt. Nach dem geordneten Ende gilt
+    damit nur als überlebt, was der Faden des Endes oder ein bis dahin
+    beendeter Faden schrieb (:func:`_survivors`). Stirbt ein Nebenfaden,
+    während der Hauptfaden schon in ``atexit`` steht, schreibt faulthandler,
+    und Windows beendet den Prozess erst danach — ein solcher Eintrag ist ein
+    Absturz. Ein noch laufender Nebenfaden zählt deshalb als tödlich, auch
+    wenn er seine Ausnahme vielleicht überlebt hat: lieber ein falscher
+    Absturz als ein verlorener. Ebenso ein Faden, den faulthandler nicht nennt —
+    ein Faden ohne Python-Zustand, etwa im Grafiktreiber.
+
+    Was vor dem ersten Eintrag steht, ist angeschnitten und zählt als tödlich —
+    außer ``cut`` sagt, dass nur das Ende der Datei gelesen ist: Dann ist es
+    der Rest eines Eintrags, dessen Kopf fehlt, und fällt weg, statt eine
+    Datei voller abgefangener Einträge zum Absturz zu machen.
+    """
+    starts = list(_RECORD_START.finditer(text))
+    if not starts:
+        return [text], []
+    records: list[tuple[re.Match[str], str]] = []
+    endings: list[tuple[int, frozenset[int]]] = []
+    lead = "" if cut else text[: starts[0].start()]
+    for match, following in zip(starts, [*starts[1:], None], strict=True):
+        end = following.start() if following is not None else len(text)
+        threads = _ending_threads(match.group("context"))
+        if threads is None:
+            records.append((match, text[match.start() : end]))
+            continue
+        endings.append((match.start(), threads))
+        # Nur die Vermerkzeile fällt weg. Schrieb sie sich mitten in einen
+        # Eintrag von faulthandler, gehört der Rest bis zum nächsten Kopf ihm.
+        line_end = text.find("\n", match.start(), end)
+        rest = text[line_end + 1 : end] if line_end >= 0 else ""
+        if rest.strip():
+            if records:
+                records[-1] = (records[-1][0], records[-1][1] + rest)
+            else:
+                lead += rest
+    fatal = [lead]
+    caught: list[str] = []
+    for match, record in records:
+        if not match.group("native"):
+            fatal.append(record)
+            continue
+        faulting = _FAULTING_THREAD.search(record)
+        thread = int(faulting.group("thread"), 16) if faulting is not None else None
+        survived = (alive and not endings) or any(
+            position > match.start() and (not threads or thread in threads)
+            for position, threads in endings
+        )
+        (caught if survived else fatal).append(record)
+    return fatal, caught
+
+
+def caught_records(text: str, *, alive: bool = False, cut: bool = False) -> str:
+    """Aus einer Absturzdatei die Ausnahmen, die der Prozess überlebt hat.
+
+    Kein Absturz — aber für eine Meldung ohne Absturz („die Ansicht wurde
+    schwarz“) oft der einzige Hinweis, etwa vom Grafiktreiber. Der
+    Fehlerbericht hängt sie unter eigenem Namen an (``report.caught_tail``).
+    Was als überlebt gilt, sagt :func:`sorted_records`.
+    """
+    return "".join(sorted_records(text, alive=alive, cut=cut)[1])
+
+
+def fatal_records(text: str, *, alive: bool = False, cut: bool = False) -> str:
     """Aus einer Absturzdatei, was kein überlebter Eintrag ist.
 
     faulthandler schreibt **jede** Windows-Ausnahme mit Fehlercode, bevor
@@ -260,25 +367,14 @@ def fatal_records(text: str, *, alive: bool = False) -> str:
     trotzdem als Absturzprotokoll an (Fragebogen S-20261006-5be329).
 
     Ein Eintrag von faulthandler zählt deshalb nur, wenn der Prozess ihn nicht
-    überlebt hat: Er gehört nicht dem laufenden Prozess (``alive``), und hinter
-    ihm steht kein Vermerk über ein geordnetes Ende. Unbehandelte
+    überlebt hat (:func:`sorted_records`): Der Prozess lebt nicht mehr, und
+    kein Vermerk über das geordnete Ende nennt seinen Faden. Unbehandelte
     Python-Fehler aus Slots und Fäden bleiben immer — sie sind Fehler, auch
     wenn das Programm weiterlief. Ein angeschnittener Anfang bleibt ebenfalls,
-    denn von ihm ist nicht zu sagen, wozu er gehört.
+    denn von ihm ist nicht zu sagen, wozu er gehört — außer ``cut`` sagt, dass
+    nur das Ende der Datei gelesen ist; dann fällt der kopflose Rest weg.
     """
-    starts = list(_RECORD_START.finditer(text))
-    if not starts:
-        return text
-    ends = [match.start() for match in starts if match.group("context") == _NORMAL_END]
-    last_end = ends[-1] if ends else -1
-    kept = [text[: starts[0].start()]]
-    for match, following in zip(starts, [*starts[1:], None], strict=True):
-        record = text[match.start() : following.start() if following is not None else len(text)]
-        if match.group("context") == _NORMAL_END:
-            continue
-        if match.group("native") and (alive or match.start() < last_end):
-            continue
-        kept.append(record)
+    kept = sorted_records(text, alive=alive, cut=cut)[0]
     return "".join(kept) if any(part.strip() for part in kept) else ""
 
 
@@ -287,14 +383,61 @@ def own_crash_path() -> Path | None:
     return _capture.path if _capture is not None else None
 
 
-def _note_normal_end() -> None:
-    """Vermerkt beim geordneten Ende, dass der Prozess alles bis hierher überlebt hat.
+def _thread_running(ident: int, platform: str = sys.platform) -> bool:
+    """Ob ein Faden mit dieser Kennung noch läuft.
 
-    Läuft über ``atexit``, also nach ``aboutToQuit`` und vor dem Abbau der
-    Module — eine Ausnahme, die erst danach tödlich wird, steht hinter dem
-    Vermerk und zählt. Bleibt nach :func:`fatal_records` nichts, wird die
-    Datei geleert, und der nächste Start räumt sie weg wie einen sauberen
-    Lauf (:func:`_prune_crashes`).
+    Ein Faden, der beim geordneten Ende nicht mehr läuft, hat seine Ausnahme
+    überlebt: Eine tödliche beendet unter Windows den ganzen Prozess, nicht
+    einen Faden. Unter Windows fragt die Funktion das System, auch nach einem
+    beendeten Faden, dessen Handle noch offen ist (ein QThread); im Zweifel —
+    eine wiedervergebene Kennung, eine gescheiterte Abfrage — gilt er als
+    laufend und sein Eintrag als Absturz. Unter Linux und macOS zählt nur, was
+    Python kennt: Dort überlebt kein nativer Eintrag, faulthandler löst das
+    Signal erneut aus, und hinter einem tödlichen steht nie ein Vermerk.
+    Die Plattform ist ein Parameter, damit jede Kette auf jeder Plattform
+    prüfbar bleibt (``kern.md``).
+    """
+    if any(thread.ident == ident for thread in threading.enumerate()):
+        return True
+    if platform != "win32":
+        return False
+    import ctypes
+
+    windows: Any = ctypes
+    kernel32 = windows.windll.kernel32
+    handle = kernel32.OpenThread(_THREAD_QUERY_LIMITED_INFORMATION, False, ident)
+    if not handle:
+        return False
+    try:
+        code = windows.c_ulong()
+        if not kernel32.GetExitCodeThread(handle, windows.byref(code)):
+            return True
+        return int(code.value) == _STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _survivors(text: str) -> list[int]:
+    """Die Fäden, deren Einträge der Prozess bis zum geordneten Ende überlebt hat.
+
+    Der Faden, der das Ende erreicht, und jeder Faden eines Eintrags, der da
+    nicht mehr läuft (:func:`_thread_running`).
+    """
+    own = threading.get_ident()
+    named = {int(found.group("thread"), 16) for found in _FAULTING_THREAD.finditer(text)}
+    return [own, *sorted(ident for ident in named - {own} if not _thread_running(ident))]
+
+
+def _note_normal_end() -> None:
+    """Vermerkt beim geordneten Ende, welche Fäden ihre Einträge überlebt haben.
+
+    Läuft über ``atexit`` im Hauptfaden, also nach ``aboutToQuit`` und vor dem
+    Abbau der Module — eine Ausnahme, die erst danach tödlich wird, steht
+    hinter dem Vermerk und zählt, ebenso eine aus einem Faden, der noch läuft
+    (:func:`sorted_records`). Abgefangene Einträge bleiben in der Datei, sie
+    sind der Hinweis für eine Meldung ohne Absturz; geleert wird nur, was
+    weder Tödliches noch Abgefangenes trägt, und der nächste Start räumt es
+    weg wie einen sauberen Lauf (:func:`_prune_crashes`).
     """
     with _capture_guard:
         current = _capture
@@ -304,13 +447,13 @@ def _note_normal_end() -> None:
             if not os.fstat(current.descriptor).st_size:
                 return
             text = current.path.read_bytes().decode("utf-8", errors="replace")
-            if not fatal_records(text, alive=True):
+            threads = "".join(f" 0x{ident:x}" for ident in _survivors(text))
+            ending = f"\n{datetime.now(UTC).isoformat()} {_NORMAL_END}{threads}\n"
+            fatal, caught = sorted_records(text + ending, alive=False)
+            if not any(part.strip() for part in fatal) and not caught:
                 os.ftruncate(current.descriptor, 0)
                 return
-            os.write(
-                current.descriptor,
-                f"\n{datetime.now(UTC).isoformat()} {_NORMAL_END}\n".encode(),
-            )
+            os.write(current.descriptor, ending.encode())
         except OSError as problem:
             _diagnostic_stderr(f"Absturzprotokoll: {exception_text(problem)}")
 
@@ -340,7 +483,7 @@ def _trim_automatic_reports(folder: Path, keep: int) -> None:
     for report in reports[keep:]:
         if report.is_symlink() or not report.is_dir():
             continue
-        for name in ("bericht.txt", "protokoll.txt", "absturzprotokoll.txt"):
+        for name in REPORT_FILES:
             (report / name).unlink(missing_ok=True)
         if not any(report.iterdir()):
             report.rmdir()
@@ -348,9 +491,35 @@ def _trim_automatic_reports(folder: Path, keep: int) -> None:
         folder.rmdir()
 
 
+def held_by_a_running_process(path: Path) -> bool:
+    """Ob die Absturzdatei einem Prozess gehört, der noch läuft — gefragt wird seine Sperre.
+
+    Zwei Projekte per Doppelklick sind zwei Prozesse. Lebend war für den
+    Fehlerbericht nur die eigene Datei, und die überlebte COM-Ausnahme des
+    anderen Fensters hing er als Absturzprotokoll an. Ohne Sperrdatei ist der
+    Prozess beendet; die Datei wird nicht angelegt.
+    """
+    lease = path.with_suffix(".lock")
+    try:
+        descriptor = os.open(lease, os.O_RDWR | getattr(os, "O_BINARY", 0))
+    except OSError:
+        return False
+    with os.fdopen(descriptor, "r+b") as stream:
+        try:
+            lock_file(stream)
+        except OSError:
+            return True
+    return False
+
+
 def _prune_crashes(folder: Path) -> None:
-    """Behält fünf beendete Läufe; die Betriebssystemsperre schützt lebende Prozesse."""
-    kept = 0
+    """Behält fünf beendete Läufe mit Absturz und zwei mit nur Abgefangenem.
+
+    Die Betriebssystemsperre schützt lebende Prozesse. Die zwei Mengen
+    zählen getrennt: Ein Grafiktreiber, der in jedem Lauf eine Ausnahme
+    wirft, die Solidon überlebt, verdrängt so keinen Absturz.
+    """
+    kept = caught = 0
     for path in crash_paths(folder):
         lease = path.with_suffix(".lock")
         try:
@@ -362,9 +531,19 @@ def _prune_crashes(folder: Path) -> None:
                 except OSError:
                     continue
                 size = path.stat().st_size
-                if size and kept < _CRASH_KEEP:
-                    kept += 1
-                    continue
+                if size:
+                    with path.open("rb") as source:
+                        # Das Ende trägt den Absturz; der Rest eines
+                        # angeschnittenen Eintrags davor fällt weg.
+                        source.seek(max(0, size - _PRUNE_READ))
+                        text = source.read().decode("utf-8", errors="replace")
+                    if fatal_records(text, cut=size > _PRUNE_READ):
+                        if kept < _CRASH_KEEP:
+                            kept += 1
+                            continue
+                    elif caught < _CAUGHT_KEEP:
+                        caught += 1
+                        continue
                 path.unlink()
                 _trim_automatic_reports(path.with_suffix(""), 0)
             lease.unlink(missing_ok=True)

@@ -44,9 +44,10 @@ absichtlich mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 ## Kontext
 
 Der Agent sieht den Steckbrief (Projektparameter, **aktuelle Auswahl**,
-Passungen samt Verletzt-Zustand, Druckeinstellungszeile, Quellen, Verlauf mit
-den gesetzten Werten), den Prüfbericht samt verwendeter Rückfallstufen, die
-gültigen Chatbeiträge und die Regelsammlung in ihrer Version — nicht den rohen
+Passungen samt Verletzt-Zustand, Druckeinstellungszeile, Quellen, Erzeuger je
+Merkmal, Verlauf mit den gesetzten Werten), den Prüfbericht samt verwendeter
+Rückfallstufen, die gültigen Chatbeiträge und die Regelsammlung in ihrer
+Version — nicht den rohen
 Verlauf; ein gedeckelter sagt, wie viele ältere Beiträge fehlen. Jedes
 Op-Ergebnis nennt die **neuen Merkmale mit IDs**; `read_digest` liest den
 Steckbrief der Arbeitskopie mitten im Zug neu, `read_standard` schlägt die
@@ -54,6 +55,10 @@ Normteiltabelle nach (§26.2 führt die abschließende Werkzeugliste). Die
 Werkzeugbeschreibungen tragen den Menüort („Menü: …"); daran hängt §2.6, der
 Chat als Suchfeld.
 
+- **Ein Schritt heißt im Steckbrief nach seiner sichtbaren Nummer** (`op3`,
+  wie der Verlauf sie zeigt), nie nach seiner Kennung — der Agent spricht mit
+  dem Nutzer über den Verlauf, den dieser vor sich hat; Bauplan §23 ist ein
+  echter Ausschnitt und wird nachgezogen, wenn sich das Format ändert.
 - Die Sitzung meldet Fortschritt je Schritt über einen Rückruf (`progress`,
   wie `ask` — kein Qt im Kern); Vorschläge zeigen Schritte, Token und
   Rückfragen in der Entscheidungszeile, eine erreichte Grenze ausgeschrieben.
