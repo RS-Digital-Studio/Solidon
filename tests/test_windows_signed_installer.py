@@ -668,7 +668,7 @@ def test_every_trace_of_an_installation_is_looked_for(tmp_path: Path) -> None:
 
     complete = look(present, on_disk)
     assert all(complete.values()), complete
-    assert len(complete) == 13, sorted(complete)
+    assert len(complete) == 14, sorted(complete)
     for path in on_disk:
         assert not all(look(present, on_disk - {path}).values()), f"{path} wird nicht gesucht"
     for entry in present:
@@ -727,6 +727,10 @@ def test_every_registry_entry_of_the_setup_goes_with_the_uninstall() -> None:
     ``OpenWithProgids`` leer stehen. Die Deinstallation geht rückwärts durch
     (Inno-Hilfe, „Installation Order“): Ein Elternschlüssel mit diesem Flag
     steht vor seinen Unterschlüsseln, sonst ist er bei der Prüfung nicht leer.
+    Das Flag nimmt nur den Schlüssel seiner Zeile; einen Elternschlüssel, den
+    das Setup nur mit anlegt, nimmt es nicht. Außer ``Software\\Classes`` und
+    ``Software\\Classes\\Applications`` braucht er deshalb eine eigene Zeile,
+    sonst blieb ``.p3d`` leer stehen.
     """
     import re
 
@@ -745,10 +749,25 @@ def test_every_registry_entry_of_the_setup_goes_with_the_uninstall() -> None:
     stranded = [
         subkey
         for subkey, flags in entries
-        if not flags & {"uninsdeletekey", "uninsdeletevalue"}
+        if not flags & {"uninsdeletekey", "uninsdeletevalue", "uninsdeletekeyifempty"}
         and not any(subkey.startswith(parent + "\\") for parent in owned)
     ]
     assert stranded == [], f"bleibt nach der Deinstallation stehen: {stranded}"
+    removed = {
+        subkey for subkey, flags in entries if flags & {"uninsdeletekey", "uninsdeletekeyifempty"}
+    }
+    shared = {"Software\\Classes", "Software\\Classes\\Applications"}
+    orphaned_parents = sorted(
+        {
+            parent
+            for subkey, flags in entries
+            if "uninsdeletekeyifempty" in flags
+            and (parent := subkey.rsplit("\\", 1)[0]) not in shared | removed
+        }
+    )
+    assert orphaned_parents == [], (
+        f"Elternschlüssel ohne eigene Zeile, er bleibt leer stehen: {orphaned_parents}"
+    )
     emptied = [
         subkey
         for subkey, flags in entries

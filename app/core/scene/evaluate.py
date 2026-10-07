@@ -2560,7 +2560,8 @@ def _needed_now(
 
     Die eine Antwort für jeden Weg, auf dem ein Schritt ein Merkmal abschneidet
     (eine beschnittene Fläche ohne Stück, ein erklärtes oder ungeprüft
-    mitreisendes Merkmal außerhalb des Körpers, eine Waise draußen): Ein
+    mitreisendes Merkmal außerhalb des Körpers, eine Waise draußen, eine
+    erzeugte Fläche, die der Schritt ganz verbraucht hat): Ein
     Verweis eines früheren Schritts ist verbraucht (:func:`_needed_after`), und
     über ihn nach einem gelungenen Schnitt zu warnen, hieße einen Fehler zu
     melden, wo keiner ist. Ohne die Angabe gilt jeder Verweis im Dokument.
