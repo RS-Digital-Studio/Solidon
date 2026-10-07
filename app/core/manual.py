@@ -2440,18 +2440,15 @@ def _with_download_sizes(page: Page) -> Page:
     from app.core.backends.llm import OLLAMA_SUGGESTIONS
 
     pulled = [gigabytes for _name, gigabytes, _note in OLLAMA_SUGGESTIONS]
-    return replace(
-        page,
-        body=replace(
-            page.body,
-            values={
-                "least": math.ceil(min(pulled)),
-                "most": math.ceil(max(pulled)),
-                "shape": Figure(f"{comfy_setup.WEIGHT_GIGABYTES:g}"),
-                "image": Figure(f"{comfy_setup.IMAGE_MODEL_GIGABYTES:g}"),
-            },
-        ),
-    )
+    # Platzhalter des Seitentexts, keine Befundwerte: Kein Tooltip zeigt sie
+    # einzeln (``labels.value_label`` gilt ihnen nicht).
+    sizes = {
+        "least": math.ceil(min(pulled)),
+        "most": math.ceil(max(pulled)),
+        "shape": Figure(f"{comfy_setup.WEIGHT_GIGABYTES:g}"),
+        "image": Figure(f"{comfy_setup.IMAGE_MODEL_GIGABYTES:g}"),
+    }
+    return replace(page, body=replace(page.body, values=sizes))
 
 
 def _with_its_guides(page: Page) -> Page:
