@@ -934,11 +934,12 @@ def _tangent_chain(
         IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
     )
     from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
+    from OCP.GeomAbs import GeomAbs_Cone
     from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
     from OCP.TopExp import TopExp, TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
-    from app.core.brep.canonical import CylinderSurface, outward_normal
+    from app.core.brep.canonical import ConeSurface, CylinderSurface, outward_normal
     from app.core.geom.faces import UPRIGHT_ENOUGH, leans_across
     from app.core.units import SAME_PLANE_AT_A_CORNER, is_close
 
@@ -958,7 +959,32 @@ def _tangent_chain(
             axis = surface.cylinder.Axis().Direction()
             along = abs(axis.X() * pull[0] + axis.Y() * pull[1] + axis.Z() * pull[2])
             return is_close(along, 1.0)
-        return False
+        # **Eine schon angestellte gerundete Ecke ist ein Kegel um die
+        # Entformungsrichtung** (Review P2, G2): Nach 3° am R5-Quader sind die
+        # Ecken ``GeomAbs_Cone`` mit Achse z und halbem Winkel 3°. Galten sie als
+        # „frei geformt“, sagte ein zweites Anstellen ab, obwohl OCC sie richtig
+        # nachstellt — der Winkel ist absolut, das Ergebnis das des senkrechten
+        # Körpers. Anstellbar ist er wie eine Ebene: Achse längs der Richtung
+        # und die Wand nicht weiter geneigt als ``UPRIGHT_ENOUGH``.
+        face = TopoDS.Face(faces[index])
+        adaptor = BRepAdaptor_Surface(face)
+        if isinstance(surface, ConeSurface):
+            cone_axis = surface.axis
+        elif adaptor.GetType() == GeomAbs_Cone:
+            direction = adaptor.Cone().Axis().Direction()
+            cone_axis = (direction.X(), direction.Y(), direction.Z())
+        else:
+            return False
+        along = abs(sum(a * b for a, b in zip(cone_axis, pull, strict=True)))
+        if not is_close(along, 1.0):
+            return False
+        low_u, high_u, low_v, high_v = BRepTools.UVBounds_s(face)
+        spot = adaptor.Value((low_u + high_u) / 2.0, (low_v + high_v) / 2.0)
+        normal = outward_normal(face, (spot.X(), spot.Y(), spot.Z()))
+        return (
+            normal is not None
+            and abs(sum(a * b for a, b in zip(normal, pull, strict=True))) < UPRIGHT_ENOUGH
+        )
 
     leaning: dict[int, bool] = {}
 

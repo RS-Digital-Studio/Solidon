@@ -450,11 +450,12 @@ def rounded_body(kind: str) -> SceneObject:
     )
 
 
-def rounded_drafted_volume() -> float:
+def rounded_drafted_volume(angle: float = ANGLE) -> float:
     """Querschnitt auf Höhe z: Rechteck mit gerundeten Ecken, alles um ``z·t`` eingerückt."""
+    slope = math.tan(math.radians(angle))
 
     def area(z: float) -> float:
-        inset = z * SLOPE
+        inset = z * slope
         radius = ROUND - inset
         return (WIDTH - 2 * inset) * (DEPTH - 2 * inset) - (4.0 - math.pi) * radius**2
 
@@ -481,6 +482,51 @@ def test_rounded_corners_are_drafted_with_their_walls(kind: str) -> None:
     assert not [entry for entry in result.findings if entry.code == "draft.tangent_faces"], (
         "ohne Auswahl ist die Kette kein Befund — alle Wände sind gemeint"
     )
+
+
+@pytest.mark.parametrize(("first", "second"), [(3.0, 2.0), (3.0, 5.0)])
+def test_a_drafted_rounded_body_takes_a_second_draft_absolutely(
+    first: float, second: float
+) -> None:
+    """Ein schon angestellter R5-Quader lässt sich exakt noch einmal anstellen (Review P2, G2).
+
+    Nach der ersten Schräge sind die Ecken Kegel um die Entformungsrichtung;
+    der exakte Kern sagte „frei geformte Ecke“ und baute nichts. Der Winkel ist
+    absolut: Soll ist der senkrechte R5 bei ``second`` — dasselbe
+    Querschnittsintegral wie oben (vor Einheit 2 gemessen: 22 663,183 und
+    21 335,440 mm³).
+    """
+    once = run(rounded_body("brep"), angle=first).outputs[0]
+    from app.core.brep.features import features_of
+
+    again = SceneObject(
+        id="obj_1", name="Teil", mesh=once.mesh, kind="brep", features=features_of(once.mesh)
+    )
+    result = run(again, angle=second)
+    assert result.outputs[0].mesh.volume == pytest.approx(rounded_drafted_volume(second), abs=1e-3)
+
+
+def test_a_drafted_housing_takes_a_second_draft_like_the_upright_one() -> None:
+    """Gehäuse 4 mm mit senkrechten R3 innen und außen: 1°, dann 2° wie gleich 2° (G2).
+
+    Innen und außen werden die Ecken nach 1° Kegel; das zweite Anstellen gilt
+    absolut und trifft das Gehäuse, das senkrecht auf 2° angestellt wird (vor
+    Einheit 2 gemessen: 11 073,785 mm³).
+    """
+    from app.core.brep.features import features_of
+
+    edit = exact_kernel()
+    housing = edit.fillet(exact_hollow(WALL), 3.0, "vertical")
+
+    def entry(solid: Any) -> SceneObject:
+        return SceneObject(
+            id="obj_1", name="Teil", mesh=solid, kind="brep", features=features_of(solid)
+        )
+
+    upright = run(entry(housing), angle=2.0).outputs[0].mesh.volume
+    once = run(entry(housing), angle=1.0).outputs[0].mesh
+    again = run(entry(once), angle=2.0).outputs[0].mesh.volume
+    assert again == pytest.approx(upright, abs=1e-3)
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -901,8 +947,11 @@ def test_a_conical_foot_at_a_rounded_corner_is_no_round(kind: str) -> None:
     """Ein Kegelstück um die Entformungsrichtung krümmt sich nur um sie herum (Review
     RM-230, F4): Seine Neigung bleibt, und es ist keine Verrundung. Exakt baut die
     Schräge genau das Querschnittsintegral; am Netz nannte die erste Fassung hier
-    eine Verrundung, die es nicht gibt."""
-    from app.core.geom.faces import DRAFT_BESIDE_A_ROUND
+    eine Verrundung, die es nicht gibt. Der Netzzwilling sagt ab, weil der
+    Sehnenzug am Kegelfuß durch die Wand liefe — mit diesem Satz, nicht mit dem
+    über eine Verrundung (Review P2, G5: Gebaut hätte der Zweig vorher still
+    bestanden)."""
+    from app.core.geom.faces import DRAFT_CUTS_THROUGH
 
     entry = exact_entry_as(kind, sloped_foot_block(5.0))
     if kind == "brep":
@@ -911,10 +960,9 @@ def test_a_conical_foot_at_a_rounded_corner_is_no_round(kind: str) -> None:
             sloped_foot_volume(5.0, 2.0), abs=1e-3
         )
         return
-    try:
+    with pytest.raises(AppError) as refused:
         run(entry, angle=2.0)
-    except AppError as refused:
-        assert refused.detail is not DRAFT_BESIDE_A_ROUND
+    assert refused.value.detail == DRAFT_CUTS_THROUGH
 
 
 def front_bottom_rounded(kind: str) -> SceneObject:

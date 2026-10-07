@@ -21,6 +21,7 @@ gehören.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any, Final
@@ -120,8 +121,11 @@ DRAFT_BESIDE_A_ROUND = _(
 #: fast stehender Zylinder (Review RM-230, F3). ``BRepOffsetAPI_DraftAngle``
 #: ließ sie still senkrecht stehen, und die gekippten Wände schnitten sich in sie
 #: ein: An der Ecke gab es keine Schräge, genau dort klemmt das Teil. Am Netz
-#: sind solche Ecken Streifen wie jede gerundete Ecke und gehen mit
-#: (:func:`_tangent_walls`).
+#: sind solche Ecken Streifen; ihr Zwilling sagt an der B-Spline-Ecke ebenfalls
+#: ab, aber mit dem Ecksatz und dem Rat zum Winkel (``_moved_corners``) — die
+#: Kerne sind dort uneins im Satz (RM-230, „Kerne uneins“). Eine schon
+#: angestellte gerundete Ecke ist ein Kegel und geht mit
+#: (``profiles._tangent_chain``, Review P2 G2, G4).
 DRAFT_BESIDE_A_FREE_FACE = _(
     "An einer angestellten Wand schließt ohne Kante eine gewölbte Fläche an, die sich "
     "nicht mit anstellen lässt, etwa eine frei geformte Ecke. Wählen Sie nur Wände, an "
@@ -773,8 +777,15 @@ def _round_beside_the_walls(
         members = np.asarray(region, dtype=np.int64)
         if not np.isin(members, seeds).any():
             continue
-        tilt = np.arcsin(np.clip(along[members], 0.0, 1.0))
-        if float(np.ptp(tilt)) > SHARP_EDGE_ANGLE:
+        # Die Spanne der Neigung ohne Arkussinus (Review P2, G3; ``kern.md``):
+        # Mit a = größter, b = kleinster Anteil längs der Richtung ist
+        # asin(a) - asin(b) > S genau dann, wenn sin(asin(a) - asin(b)) =
+        # a·sqrt(1 - b²) - b·sqrt(1 - a²) über sin S liegt — beide Winkel liegen
+        # in [0, π/2], und ``math.sqrt`` rundet korrekt.
+        high = min(max(float(along[members].max()), 0.0), 1.0)
+        low = min(max(float(along[members].min()), 0.0), 1.0)
+        spread = high * math.sqrt(1.0 - low * low) - low * math.sqrt(1.0 - high * high)
+        if spread > units.exact_sin(SHARP_EDGE_ANGLE):
             return True
     return False
 

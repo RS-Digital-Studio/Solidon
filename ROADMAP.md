@@ -60,7 +60,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß mit Kernen uneins |
+| [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß und B-Spline-Ecke mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
 | [RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still](#rm-545) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-413: Die Absage hängt an `kind == "hole"`; an der Senkung einer Kette, am Langloch und am gesenkten Baustein *Schraube* rechnen Versetzen, Entfernen, Kippen und Ändern weiter und verschmelzen oder beschneiden das Teil, exakt teils mit falschem Grund — die Frage an den Hohlraum hängen, auch an Kegeln ohne Kette |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
@@ -2043,6 +2043,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     freie Fläche ohne Kante an der Wand (B-Spline-Ecke) ließ der exakte Kern still senkrecht; dort
     sagt er jetzt `DRAFT_BESIDE_A_FREE_FACE`, der Netzzwilling mit seinem Ecksatz (Tests in
     `test_draft_chosen_faces.py`, Sonden `rm230\probe_umbau.py`, `rm230\probe_runde3.py`).
+    Eine schon angestellte gerundete Ecke (Kegel um die Entformungsrichtung) stellt der exakte
+    Kern wieder an; der Winkel gilt absolut (Review P2 Rest, G2).
   - **Offen — Fußrundung als Kette entfernen** (Review Einheit 2, Runde 2, F1): Der Weg einer
     CAD-Konstruktion (Rundung weg, anstellen, neu runden) trägt nur am einfachen Quader. Am
     exakten Tray meldete *Merkmal entfernen* an einer Fußrundung Erfolg und änderte nichts
@@ -2060,6 +2062,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     Das Netz sagt `DRAFT_CUTS_THROUGH`, exakt baut genau 23 489,548 mm³. Prüfkörper in
     `F:\solidon-review-reports\claude-2026-10-06\geometrie\review-einheit-2-3-sonden\` und
     `review-einheit-2-runde-2-sonden\`.
+  - **Offen — B-Spline-Ecke, Kerne uneins im Satz** (Review P2 Rest, G4): An einer stehenden
+    freien Fläche ohne Kante an der Wand sagen beide Kerne ab, aber verschieden — exakt
+    `DRAFT_BESIDE_A_FREE_FACE` („Wände ohne solche Fläche wählen“), der Netzzwilling mit dem
+    Ecksatz aus `_moved_corners` und dem Rat zum Winkel; `operationen.md` verlangt denselben
+    Satz. Zu bauen: Der Netzzwilling erkennt die freie Fläche vor der Rechnung wie der exakte
+    Kern. Sonde `output\konsolidierung-2026-10-07\review-p2-rest-sonden\r2b_frei.txt`.
 
 <a id="rm-253"></a>
 
