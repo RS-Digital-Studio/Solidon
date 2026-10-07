@@ -184,7 +184,9 @@ pt Dividir), die Operationen *An Ebene teilen*, *An gezeichneter Linie teilen*
 und *In Einzelteile aufteilen*, der Ablauf *Automatisch teilen*. Drei Verben für
 eine Sache ließen den Kunden suchen, ein gemeinsamer Name schickte ihn an den
 falschen Ort (`test_every_way_to_split_says_teilen`,
-`test_no_tool_or_operation_shares_its_name_with_another`).
+`test_no_tool_or_operation_shares_its_name_with_another`). Auch ein Satz, der
+das Teilen beschreibt, sagt „teilen“ oder „aufteilen“, nie „zerlegen“; die
+Übersetzungen folgen dem Namen der Operation.
 
 ## Übersetzen heißt neu schreiben, nicht flicken
 

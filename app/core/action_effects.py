@@ -144,7 +144,7 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
         "bekommen."
     ),
     "split_and_retry": _(
-        "Zerlegt den Körper vor dem Schritt in seine Teile und rechnet den Schritt neu."
+        "Teilt den Körper vor dem Schritt in seine Einzelteile auf und rechnet den Schritt neu."
     ),
     "release_protection": _(
         "Hebt die Sperre auf; Schnitte dürfen danach auch durch die geschützten Flächen gehen."

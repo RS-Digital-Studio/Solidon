@@ -119,7 +119,7 @@
     "Höhe des Behälters bis zum Rand; Hals und Deckel kommen darüber.",
     "Höhenzuwachs je Umdrehung. Ob sich die Gewindegänge sauber drucken lassen, hängt von Drucker, Material und Einstellungen ab; prüfen Sie ein kleines Passungsstück.",
     "Höhlt ein Objekt aus, mit Entlüftungen oder mit gewählten offenen Flächen. Spart Material und Zeit; am Dreiecksmodell stimmt die Wand im Rahmen des Rasters. Ein Körper mit bearbeitbaren Flächen bleibt exakt, wenn gewählte Flächen oder die Oberseite offen bleiben.",
-    "In wie viele Objekte zerlegt wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, nennt diese Operation die richtige.",
+    "In wie viele Objekte aufgeteilt wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, nennt diese Operation die richtige.",
     "Jede Stufe bleibt einzeln messbar; die Sockelbreite wächst um alle Wandstärken und Zwischenräume.",
     "Jede Stufe trägt so viele eingravierte Striche wie ihre Nummer; Maße, Spiele und Höhe bleiben unverändert.",
     "Kaum ein Dreieck liegt auf einer erkennbaren Fläche, und jedes würde eine eigene. Freie Formen bleiben besser ein Netz; mit weniger Dreiecken geht die Umwandlung trotzdem.",
