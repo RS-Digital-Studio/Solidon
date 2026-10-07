@@ -277,7 +277,8 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   `weld`: Suppe zuerst auf `EPS_GEOM` (`_read_soup`), dann nur an Rändern
   (`_joined_at_the_rims`), je Flächenblatt (`_sheets`, `_pseudo_angle`), nie
   zum Schlechteren (`_damage`). `remove_small_components` misst Fläche,
-  `remove_hollow_shells` Volumen.
+  `remove_hollow_shells` Volumen, `remove_inner_shells` (nur auf Wunsch)
+  Einschluss.
 - Gefüllt wird als Band (`_band_between`, `_wall_between_rims`), Fläche mit
   Löchern (`_bridged_holes`), glatteste Triangulierung (`_smoothest_fill`),
   über Ohren (`_loop_triangles`), zuletzt als Fächer — **nie eine Fläche auf

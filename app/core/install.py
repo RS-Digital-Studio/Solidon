@@ -319,14 +319,11 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     Requirement(
         id="comfyui",
         title="ComfyUI",
-        # ComfyUI allein erzeugt noch nichts: Es braucht die Knoten und das
-        # Modell dazu. Dass der zweite Schritt existiert, gehört an die
-        # Stelle, an der jemand den ersten tut — sonst installiert er ComfyUI
+        # ComfyUI allein erzeugt noch nichts: Es braucht die Modelle dazu.
+        # Dass der zweite Schritt existiert, gehört an die Stelle, an der
+        # jemand den ersten tut — sonst installiert er ComfyUI
         # und findet den Menüeintrag weiterhin ausgegraut.
-        what_for=_(
-            "3D-Modell aus Text oder Bild erzeugen. Solidon richtet danach die "
-            "benötigten Zusatzbausteine und das Erzeugungsmodell ein."
-        ),
+        what_for=_("3D-Modell aus Text oder Bild erzeugen. Solidon lädt danach die Modelle dazu."),
         kind="program",
         url="https://www.comfy.org/download",
         # Und den zweiten Schritt macht Solidon selbst. Der Satz hier nannte
@@ -334,7 +331,7 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
         # Befehl, den ein Kunde nicht ausführen kann, weil ``tools/`` im Paket
         # nicht mitreist.
         follow_up="comfyui",
-        follow_up_title=_("Knoten und Modell einrichten …"),
+        follow_up_title=_("Modelle einrichten …"),
     ),
 )
 

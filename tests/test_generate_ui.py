@@ -1558,15 +1558,19 @@ def test_the_dialog_names_the_middle_state_before_the_run(
 
     assert dialog.readiness is mesh.Readiness.NO_NODES
     assert not dialog.available, "bereit ist es damit nicht"
-    assert "fehlen aber noch Solidons Bausteine" in dialog.state.text()
+    # Seit TRELLIS.2 sind alle Knoten eingebaut: Fehlt einer, ist ComfyUI zu
+    # alt, und der Satz nennt die Version, ab der es geht (Regel 17).
+    assert "zu alt" in dialog.state.text()
+    assert mesh.MINIMUM_COMFYUI_TEXT in dialog.state.text()
     assert not dialog.setup.isHidden(), "und der Weg dorthin steht daneben"
-    assert "einrichten" in dialog.setup.text()
+    assert "Programme" in dialog.setup.text()
 
 
 def test_the_button_leads_where_the_state_says(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Zwei Lagen, zwei Ziele: die Liste der Programme oder die Einrichtung."""
+    """Zwei Ziele: die Liste der Programme, wo ComfyUI fehlt oder zu alt ist, die
+    Einrichtung, wo ein Modell fehlt — Knoten kann Solidon nicht nachlegen."""
     from app.core.backends import mesh
 
     class Lage:
@@ -1581,7 +1585,8 @@ def test_the_button_leads_where_the_state_says(
 
     for state, expected in (
         (mesh.Readiness.ABSENT, "programs"),
-        (mesh.Readiness.NO_NODES, "nodes"),
+        (mesh.Readiness.NO_NODES, "programs"),
+        (mesh.Readiness.NO_MODEL, "nodes"),
     ):
         dialog = GenerateDialog(backend=Lage(state))
         wait_for_readiness(dialog, qt_app)
@@ -1699,10 +1704,11 @@ def test_an_unexpected_generator_error_offers_a_working_report_action(
 def test_the_setup_dialog_says_how_long_a_step_has_been_running(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Einer der Schritte lädt 7,5 GB.
+    """Einer der Schritte lädt mehrere Gigabyte.
 
-    Die Zeit beginnt je Schritt neu: „Gewichte laden — rund 7,5 GB (240 s)"
-    sagt mehr als eine Gesamtzeit, denn nur dieser eine Schritt dauert.
+    Die Zeit beginnt je Schritt neu: „Modell für den Weg aus Bild laden — rund
+    8,0 GB (240 s)" sagt mehr als eine Gesamtzeit, denn nur dieser eine Schritt
+    dauert.
     """
     from app.core.backends import comfy_setup
     from app.ui.comfy_dialog import ComfySetupDialog
@@ -1712,9 +1718,9 @@ def test_the_setup_dialog_says_how_long_a_step_has_been_running(
     dialog = ComfySetupDialog()
     try:
         _wait_for_comfy_probe(dialog, qt_app)
-        dialog._note_step("Gewichte laden — rund 7,5 GB, das dauert")
+        dialog._note_step("Modell für den Weg aus Bild laden — rund 8,0 GB, das dauert")
 
-        assert "Gewichte laden" in dialog.state.text()
+        assert "Modell für den Weg aus Bild laden" in dialog.state.text()
         assert "(0 s)" in dialog.state.text(), "und wie lange er schon läuft"
 
         dialog._idle()
@@ -1729,7 +1735,7 @@ def test_the_dialog_asks_for_the_way_it_would_actually_run(qt_app: QApplication)
 
     Derselbe Dialog fährt beide Wege: Mit gewähltem Bild ``image_to_mesh``,
     ohne ``text_to_mesh``. Gefragt wurde immer der Bildweg — wer aus Text
-    erzeugen wollte und kein SDXL-Modell hatte, las „Bereit" und erfuhr es beim
+    erzeugen wollte und kein Bildmodell hatte, las „Bereit" und erfuhr es beim
     Abschicken.
     """
     from app.ui.generate_dialog import GenerateDialog
@@ -1747,7 +1753,7 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
 
     Ein Bild zu wählen umgeht das fehlende Bildmodell vollständig, und genau das
     steht dort: Aus Text wird erst ein Bild, und dafür braucht ComfyUI ein
-    SDXL-Modell.
+    Bildmodell.
     """
     from app.core.backends import mesh
     from app.ui.generate_dialog import GenerateDialog
@@ -1755,6 +1761,7 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
     dialog = GenerateDialog(backend=ScriptedMeshBackend())
     wait_for_readiness(dialog, qt_app)
     dialog._readiness = mesh.Readiness.NO_MODEL
+    dialog._missing_roles = frozenset({"image", "text_encoder"})
     dialog._update_state()
 
     gesagt = dialog.state.text()
@@ -1776,6 +1783,33 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
     dialog.setupRequested.connect(lambda: wege.append("setup"))
     dialog._ask_for_setup()
     assert wege == ["nodes"], "das Bildmodell holt die Einrichtung, nicht die Programmliste"
+
+
+def test_a_missing_shape_model_is_not_called_the_image_model(qt_app: QApplication) -> None:
+    """Fehlt TRELLIS.2, fehlt beiden Wegen etwas — und das ist nicht das Bildmodell.
+
+    Der Satz nannte bei jeder fehlenden Rolle das Bildmodell des Textwegs und
+    schickte zum Ausweg „ein Bild wählen“, der hier nichts hilft. Er nennt
+    jetzt das Modell, das fehlt, und seine Größe; der Knopf führt in dieselbe
+    Einrichtung.
+    """
+    from app.core.backends import comfy_setup, mesh
+    from app.ui.generate_dialog import GenerateDialog
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    wait_for_readiness(dialog, qt_app)
+    dialog._readiness = mesh.Readiness.NO_MODEL
+    dialog._missing_roles = frozenset({"shape", "image"})
+    dialog._update_state()
+
+    gesagt = dialog.state.text()
+    assert "Bild zu wählen" not in gesagt
+    assert f"{comfy_setup.WEIGHT_GIGABYTES:g}".replace(".", ",") in gesagt, "die Größe"
+    wege: list[str] = []
+    dialog.nodesRequested.connect(lambda: wege.append("nodes"))
+    dialog.setupRequested.connect(lambda: wege.append("setup"))
+    dialog._ask_for_setup()
+    assert wege == ["nodes"]
 
 
 class WaitingBackend:
@@ -1975,7 +2009,7 @@ def test_the_dialog_shows_what_comfyui_said(qt_app: QApplication) -> None:
             raise mesh.GenerationFailed(
                 title=_("Der Generator hat den Auftrag abgebrochen."),
                 detail=_("ComfyUI hat die Erzeugung mit einem Fehler beendet."),
-                values={"node": "TripoSGSampler", "reason": grund},
+                values={"node": "Trellis2ShapeStage", "reason": grund},
             )
 
     dialog = GenerateDialog(backend=Bricht())
@@ -1989,7 +2023,7 @@ def test_the_dialog_shows_what_comfyui_said(qt_app: QApplication) -> None:
 
     gesagt = dialog.state.text()
     assert grund in gesagt, "der Grund, mit dem jemand zum Support geht"
-    assert "TripoSGSampler" in gesagt, "und der Schritt, in dem es riss"
+    assert "Trellis2ShapeStage" in gesagt, "und der Schritt, in dem es riss"
     assert dialog.progress.isHidden(), "kein Balken über einem Lauf, den es nicht gibt"
     dialog.release()
 
@@ -2033,7 +2067,7 @@ def test_a_role_with_a_real_choice_gets_a_field(qt_app: QApplication) -> None:
         backend=MitAuswahl(
             {
                 "image": ("a_sdxl.safetensors", "b_sdxl.safetensors"),
-                "shape": ("nur_triposg.safetensors",),
+                "shape": ("nur_trellis.safetensors",),
                 "shape_vae": ("eins.safetensors", "zwei.safetensors"),
             }
         )

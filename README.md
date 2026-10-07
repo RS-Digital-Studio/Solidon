@@ -224,34 +224,38 @@ Geometrie stammt.
 
 ### Einrichten
 
-ComfyUI allein erzeugt noch nichts — es braucht die Knoten und das Modell dazu.
-Beides legt **Solidon selbst** hin: *Hilfe → Zusätzliche Programme*, in der
-Zeile von ComfyUI der Knopf *Knoten und Modell einrichten …*.
+ComfyUI bringt die Knoten für Weg 3 ab Version 0.35 selbst mit; es fehlen nur
+die Modelle. Die lädt **Solidon selbst**: *Hilfe → Zusätzliche Programme*, in
+der Zeile von ComfyUI der Knopf *Modelle einrichten …*.
 
 Der Dialog findet ComfyUI an den üblichen Stellen und liest bei **Comfy
 Desktop** dessen eigene Installationsaufstellung. Sonst lässt sich der Ordner
-angeben, in dem `custom_nodes` und `main.py` liegen. Solidon legt die Knoten
-hinein, holt den TripoSG-Quelltext, richtet zwei Stellen darin, zieht die
-fehlenden Pakete nach und lädt die Gewichte — rund 7,5 GB, abwählbar. Abbrechen
-geht zwischen den Schritten; was schon da ist, bleibt. Danach ComfyUI **einmal
-neu starten**: Es liest seine Knoten beim Start.
+angeben, in dem `custom_nodes` und `main.py` liegen. Zuerst prüft er die
+Version von ComfyUI; ist sie zu alt, sagt er es, bevor etwas geladen wird. Dann
+lädt er das Modell für den Weg aus Bild (rund 8 GB) und auf Wunsch das
+Bildmodell für den Weg aus Text (rund 8,3 GB), jede Datei in einem festen
+Stand und mit Prüfsumme. Abbrechen geht auch mitten im Download; ein neuer
+Lauf setzt fort.
 
-Für den Weg über **Text** kommt ein SDXL-Modell unter `models/checkpoints`
-dazu; für den Weg über ein **Bild** wird keines gebraucht.
+Fehlt beim Erzeugen ein Modell, führt Solidon zu diesem Dialog. Fehlt ein
+Knoten, ist ComfyUI zu alt, und Solidon sagt, ab welcher Version es geht.
 
-Fehlt die Knotensammlung, sagt Solidon das beim Erzeugen und führt zu diesem
-Dialog — es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
+### Welche Modelle, und unter welcher Lizenz
 
-### Welches Modell, und warum dieses
+| Aufgabe | Modell | Lizenz |
+|---|---|---|
+| Körper aus einem Bild | TRELLIS.2-4B von Microsoft | MIT |
+| Bild lesen (in TRELLIS.2) | DINOv3 ViT-L/16 von Meta | DINOv3 License: weltweit und gewerblich, mit Nutzungsbedingungen (u. a. keine Waffen, Handelskontrollen) |
+| Freistellen | BiRefNet | MIT |
+| Bild aus Text | FLUX.2 [klein] 4B von Black Forest Labs, Textkodierer Qwen3-4B | Apache-2.0 |
 
-Der mitgelieferte Ablauf benutzt **TripoSG**: Quelltext und Modellkarte nennen
-die MIT-Lizenz. Gewählt wurde es, weil das verbreitetere Hunyuan3D in seiner
-Lizenz die Europäische Union ausdrücklich ausnimmt. Ein Teil des
-TripoSG-Quelltexts steht allerdings selbst unter Lizenzen von Tencent mit
-derselben Ausnahme; das wird gerade geklärt.
+Solidon liefert keines davon mit; die Einrichtung lädt sie in das ComfyUI des
+Nutzers.
 
-Gemessen auf einer RTX 4080 braucht ein Körper rund 13 Sekunden und kommt mit
-300 000 bis 600 000 Dreiecken geschlossen und aus einem Stück heraus.
+Bis Oktober 2026 lief Weg 3 über **TripoSG**. Dessen Wurzellizenz ist MIT, ein
+Teil des Quelltexts steht aber unter der Tencent Hunyuan Community License und
+der FlashVDM-Lizenz, die die Europäische Union, Großbritannien und Südkorea
+ausnehmen. Die Einrichtung räumt, was sie damals selbst in ComfyUI angelegt hat.
 
 ## Was ohne zweites Programm geht
 
@@ -446,11 +450,12 @@ zu einem Zehntel auf dem Prozessor.
 ### ComfyUI aus dem Entwicklungsbaum
 
 `.venv/Scripts/python.exe tools/setup_comfyui.py` richtet ein, was der Dialog
-*Knoten und Modell einrichten …* einrichtet. Die Arbeit steckt in
-`app/core/backends/comfy_setup.py`, die Knoten in
-`app/core/backends/data/comfyui/`; beides reist im Paket mit. Welche Knoten ein
+*Modelle einrichten …* einrichtet. Die Arbeit steckt in
+`app/core/backends/comfy_setup.py`; sie reist im Paket mit. Welche Knoten ein
 Ablauf benutzt, steht in `app/core/backends/data/text_to_mesh.json` und
-`image_to_mesh.json`. Die Dateien nennen Rollen und keine Dateinamen: Für einen
+`image_to_mesh.json`; ändert sich ComfyUI, erneuert
+`tools/comfy_node_info.py` die Knotenbeschreibung, gegen die die Suite beide
+Abläufe prüft. Die Dateien nennen Rollen und keine Dateinamen: Für einen
 anderen Generator wird die Datei ersetzt, nicht der Quelltext.
 
 ### Paketieren

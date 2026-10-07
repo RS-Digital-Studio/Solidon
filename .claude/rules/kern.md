@@ -439,11 +439,13 @@ Sache: `Requirement.follow_up` benennt den zweiten Schritt, und
 
 Ein Einrichtungsschritt, der Fertigsein behauptet, ist schlechter als keiner.
 
-- **Am Ende nachsehen, die billige Prüfung zuerst**: `comfy_setup.nodes_load`
-  lädt die Knoten im Python von ComfyUI — zwei Sekunden, vor dem
-  7,5-GB-Download.
+- **Die billige Prüfung zuerst**: `comfy_setup.check_version` liest die
+  Fassung von ComfyUI vor dem ersten Download; ein zu altes nennt Version und
+  Weg, statt nach acht Gigabyte am fehlenden Knoten zu scheitern.
 - **Den ganzen Ablauf prüfen**, nicht einen Knoten daraus; `missing_nodes`
-  nennt die Namen (Regel 17).
+  nennt die Namen (Regel 17). Ein mitgelieferter Ablauf wird gegen ComfyUIs
+  eigene Knotenbeschreibung geprüft (`tests/data/comfyui/object_info.json`,
+  erzeugt mit `tools/comfy_node_info.py`), nicht gegen eine Liste im Test.
 - **Eine Paketliste gegen eine Installation prüfen, die nichts hat.**
 - **Ein fremdes Programm notiert, wo es liegt** (ComfyUI Desktop, auch einen
   selbst gewählten Ordner): diese Datei tolerant lesen, raten zuletzt.

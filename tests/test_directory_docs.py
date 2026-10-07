@@ -47,11 +47,7 @@ MEMORY_ENTRY = re.compile(r"\]\(([a-z0-9_-]+\.md)\)")
 OTHER_DOCUMENT = re.compile(r"\bRFC\b|\bKonzept\b|\bISO\b|\bDIN\b", re.IGNORECASE)
 
 #: Verzeichnisse, die keine eigene Karte brauchen.
-#:
-#: ``comfyui`` ist fremder Code und trägt trotzdem eine — die sagt gerade,
-#: dass er fremd ist. Ausgenommen ist er hier, weil seine *Unterordner* keine
-#: brauchen: Was dort liegt, gehört TripoSG, nicht uns.
-EXEMPT: frozenset[str] = frozenset({"__pycache__", "comfyui"})
+EXEMPT: frozenset[str] = frozenset({"__pycache__"})
 
 
 def plan_sections() -> set[str]:
@@ -107,10 +103,10 @@ def test_foreign_code_trees_are_not_entered(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Eigener Code bleibt sichtbar, auch unter einem gleichnamigen Vorfahren."""
-    root = tmp_path / "comfyui" / "repo"
+    root = tmp_path / "__pycache__" / "repo"
     package = root / "app"
     kept = package / "nested"
-    excluded = [package / "nested" / name for name in ("comfyui", "__pycache__")]
+    excluded = [package / "nested" / name for name in ("__pycache__",)]
     for folder in (kept, *(folder / "deep" for folder in excluded)):
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "source.py").write_text("", encoding="utf-8")

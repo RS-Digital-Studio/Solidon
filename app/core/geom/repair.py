@@ -4066,6 +4066,51 @@ def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
     return MeshData.of(body, slots=slots), len(pieces) - len(keep)
 
 
+def remove_inner_shells(
+    mesh: MeshData, *, cancelled: CancelToken | None = None
+) -> tuple[MeshData, int]:
+    """Wirft jede geschlossene Schale, die ganz in einer anderen liegt — Hohlraum oder Teil.
+
+    **Für erzeugte Netze, nicht für modellierte.** Ein Körper aus einem
+    Bildmodell meint innen nichts: Eine nach innen gewendete Hülle darin ist
+    kein gewollter Hohlraum, sondern die zweite Seite eines Abstandsfelds
+    (ComfyUIs ``RemeshMesh`` im Modus ``udf``), und gedruckt würde daraus ein
+    Körper mit Wänden von einem Bruchteil eines Millimeters. Ein modelliertes
+    Teil darf einen Hohlraum oder ein eingeschlossenes Teil tragen; dort
+    meldet :func:`parts_inside_parts`, statt zu raten (Regel 21) — deshalb
+    läuft dieser Schritt nur auf Wunsch (``RepairParams.inner_shells``).
+
+    Gefragt wird dieselbe Einschließung wie bei der Hohlraumerkennung
+    (:meth:`_Shells.inside`): keine Wand gekreuzt, eine Ecke innen. Was der
+    Strahl nicht entscheidet, bleibt. Erwartet ein geschlossenes Netz; an einem
+    offenen gibt es kein Innen.
+    """
+    body = mesh.raw
+    if not len(body.faces) or not body.is_watertight:
+        return mesh, 0
+    shells = _Shells(body, cancelled=cancelled)
+    count = len(shells.components)
+    if count < 2:
+        return mesh, 0
+    doomed = [
+        index
+        for index, found in shells.containers_of(range(count))
+        if any(answer is True for _other, answer in found)
+    ]
+    if not doomed or len(doomed) == count:
+        return mesh, 0
+    keep = np.ones(len(body.faces), dtype=bool)
+    for index in doomed:
+        keep[shells.components[index]] = False
+    cleaned = without_faces(body, keep)
+    slots = (
+        tuple(slot for slot, kept in zip(mesh.slots, keep, strict=True) if kept)
+        if mesh.slots
+        else ()
+    )
+    return MeshData.of(cleaned, slots=slots), len(doomed)
+
+
 def remove_open_splinters(
     mesh: MeshData, share: float = SMALL_COMPONENT_SHARE
 ) -> tuple[MeshData, int]:
@@ -4604,6 +4649,7 @@ def repair(
     small_components: bool = False,
     self_intersections: bool = False,
     inspect_intersections: bool = False,
+    inner_shells: bool = False,
     cancelled: CancelToken | None = None,
     progress: ProgressFn | None = None,
 ) -> RepairResult:
@@ -4844,6 +4890,31 @@ def repair(
         _intersection_findings(
             result, self_intersections=self_intersections, cancelled=cancelled, progress=progress
         )
+
+    # **Innen nichts, wenn es so verlangt ist** (:func:`remove_inner_shells`):
+    # nach dem Schließen und Ausrichten, denn erst dann gibt es ein Innen —
+    # und vor der Meldung darunter, die sonst ein Teil im Teil nennte, das
+    # gerade wegging.
+    if inner_shells and normals:
+        result.mesh, inner = remove_inner_shells(result.mesh, cancelled=cancelled)
+        if inner:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.inner_shells_removed",
+                    severity="info",
+                    message=_(
+                        "{removed} Hüllen im Inneren wurden entfernt. Das Modell ist "
+                        "jetzt innen voll.",
+                        removed=inner,
+                    )
+                    if inner > 1
+                    else _(
+                        "Eine Hülle im Inneren wurde entfernt. Das Modell ist jetzt innen voll."
+                    ),
+                    values={"removed": inner},
+                )
+            )
 
     # **Ein Teil im Teil wird gemeldet, nicht geraten** (Befund B9 der
     # Durchsicht 24.09.2026, :func:`parts_inside_parts`). Erst hier: Das

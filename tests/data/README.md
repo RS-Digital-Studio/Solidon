@@ -13,6 +13,8 @@ aufgenommen, nicht als Sonderfall im Code.
 
 `profile_slot_motedis.json`: Eigene Querschnittsmessungen aus den verlinkten Hersteller-STEP-Dateien für Motedis 2020 B-Typ/Nut 6 und 3030 B-Typ/Nut 8; Steg 1,5/2,2 mm, Kammer 4,0/6,8 mm und lichte Breiten über der Tiefe. `test_parts.py` prüft die Nutfeder in beiden Kernen gegen diese unabhängigen Maße. Eine physische Passungsprobe ist damit nicht behauptet.
 
+`comfyui/object_info.json`: ComfyUIs eigene Beschreibung (`/object_info`) aller Knoten, die `app/core/backends/data/image_to_mesh.json` und `text_to_mesh.json` ansprechen, samt ComfyUI-Version und Modul je Knoten — erzeugt mit `tools/comfy_node_info.py` im Python von ComfyUI, ohne Server und ohne Grafikkarte. Die Auswahllisten der Modelldateien zeigen den Bestand der erzeugenden Maschine und tragen nichts zur Prüfung bei. `test_mesh_backend.py` prüft beide Abläufe dagegen: jeder Eingang gesetzt, keiner unbekannt, Verbindungstypen, Auswahl und Grenzen, eingebaute Knoten.
+
 ## Projektdateien
 
 | Datei | Inhalt | Erwartung | Test |

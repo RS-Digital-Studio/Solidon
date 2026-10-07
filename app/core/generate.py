@@ -48,6 +48,13 @@ GENERATED_REPAIR: dict[str, bool] = {
     "fill_holes": True,
     "small_components": True,
     "self_intersections": True,
+    # Ein Bildmodell meint innen nichts. TRELLIS.2 liefert über ComfyUIs
+    # ``RemeshMesh`` (Modus ``udf``) um jede geschlossene Fläche eine zweite,
+    # nach innen gewendete Hülle; der Ablauf wirft sie schon dort weg
+    # (``drop_inverted_components``), und diese Zeile hält es, wenn ein
+    # anderer Ablauf das nicht tut — sonst druckte der Slicer einen hohlen
+    # Körper mit Wänden von Zehntelmillimetern.
+    "inner_shells": True,
 }
 
 #: Auf welche längste Kante ein erzeugter Körper gebracht wird.
@@ -239,9 +246,11 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
             "source": source_id,
             "unit": "mm",
             # **Eine erzeugte GLB steht auf glTF-Achsen** (RM-086). Hier stand
-            # „Rohachsen", und gemessen war das nie: TripoSG schreibt Y-oben
+            # „Rohachsen", und gemessen war das nie: TripoSG schrieb Y-oben
             # wie jede glTF-Datei — der Drache aus ``image_00001_.glb`` und die
-            # vier Puppenhausmöbel tragen ihre Höhe auf Y. Roh gelesen lag
+            # vier Puppenhausmöbel tragen ihre Höhe auf Y. TRELLIS.2 rechnet
+            # Z-oben, ComfyUIs ``VaeDecodeShapeTrellis`` dreht vor dem
+            # Speichern auf Y-oben, also gilt dasselbe. Roh gelesen lag
             # jeder erzeugte Körper auf dem Rücken. Gedreht wird wie beim
             # Import; die Meter der Spezifikation gelten dagegen nicht: Die
             # Einheit bleibt ``mm``, die Größe setzt der eigene Schritt

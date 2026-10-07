@@ -1,16 +1,15 @@
 """ComfyUI einrichten, aus der Anwendung heraus (Bauplan §27, §36).
 
 **Der Schritt, der bisher in einem Satz stand.** Wer ComfyUI installiert hatte,
-fand die Mesh-Erzeugung weiterhin ausgegraut: Es fehlen die Knoten, die der
-Ablauf anspricht, und das Modell, das sie laden. Die Auskunft dazu lautete
-„Einzurichten ist sie mit «python tools/setup_comfyui.py»" — an einen Kunden
-gerichtet, auf dessen Rechner es diese Datei nicht gibt, weil ``tools/`` im
-Paket nicht mitreist.
+fand die Mesh-Erzeugung weiterhin ausgegraut: Es fehlen die Modelle, die der
+Ablauf lädt. Die Auskunft dazu lautete „Einzurichten ist sie mit «python
+tools/setup_comfyui.py»" — an einen Kunden gerichtet, auf dessen Rechner es
+diese Datei nicht gibt, weil ``tools/`` im Paket nicht mitreist.
 
-Der Dialog tut die vier Schritte, die dort standen, und zeigt sie einzeln:
-Knoten hinlegen, TripoSG holen, zwei Stellen richten, Pakete nachziehen — und
-auf Wunsch die Gewichte, rund 7,5 GB. Abgebrochen wird zwischen den Schritten;
-was schon da ist, bleibt, und ein neuer Lauf setzt fort.
+Der Dialog prüft die Fassung von ComfyUI und lädt auf Wunsch die Modelle — für
+den Weg aus Bild und, eigenes Häkchen, das Bildmodell für den Weg aus Text.
+Die Knoten bringt ComfyUI selbst mit. Abgebrochen wird auch mitten im
+Download; was schon da ist, bleibt, und ein neuer Lauf setzt fort.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.backends import comfy_setup
+from app.core.backends import comfy_setup, mesh
 from app.core.errors import InternalError
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
@@ -57,7 +56,7 @@ from app.ui.style import (
 _log = get_logger(__name__)
 
 #: Wie oft die Laufzeit des laufenden Schritts nachgezogen wird. Einer davon
-#: lädt 7,5 GB — ohne die Zeit daneben ist ein unbestimmter Balken von einem
+#: lädt mehrere Gigabyte — ohne die Zeit daneben ist ein unbestimmter Balken von einem
 #: Hänger nicht zu unterscheiden.
 TICK_MS = 1000
 
@@ -77,7 +76,7 @@ _FOLDER_PROBE_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_FOLDER_PROBES)
 
 
 class _Worker(Worker):
-    """Die Einrichtung: git, pip, und ein Download von 7,5 GB — auf Wunsch zwei."""
+    """Die Einrichtung: Versionsprüfung und Downloads von mehreren Gigabyte."""
 
     done = Signal(object)
     failed = Signal(str)
@@ -162,14 +161,14 @@ def _probe_folder_with_slot(
 
 
 class ComfySetupDialog(QDialog):
-    """Knoten, Quelltext, Pakete und Gewichte — in einem Lauf."""
+    """Fassung prüfen und Modelle laden — in einem Lauf."""
 
     def __init__(self, parent: QWidget | None = None, *, image_model: bool | None = None) -> None:
         """``image_model`` belegt das Häkchen fürs Bildmodell vor.
 
         ``None`` heißt: an, wenn keines da ist. Wer aus dem Erzeugungsdialog
         kommt, weil ihm für den Weg aus Text genau dieses Modell fehlt, will
-        es; wer nur die Knoten nachzieht, sieht das Häkchen und entscheidet.
+        es; wer nur den Bildweg einrichtet, sieht das Häkchen und entscheidet.
         """
         super().__init__(parent)
         self.setWindowTitle(tr("ComfyUI einrichten"))
@@ -196,11 +195,12 @@ class ComfySetupDialog(QDialog):
 
         intro = QLabel(
             tr(
-                "ComfyUI erzeugt das 3D-Modell. Dafür braucht der Ablauf zusätzliche "
-                "Bausteine (Knoten) und ein Erzeugungsmodell — beides richtet Solidon "
-                "hier ein. ComfyUI selbst wird nicht verändert und danach einmal neu "
-                "gestartet."
-            ),
+                "ComfyUI erzeugt das 3D-Modell. Die Bausteine dafür bringt ComfyUI ab "
+                "Version {version} selbst mit, die Modelle lädt Solidon hier in dessen "
+                "Ordner. ComfyUI selbst wird nicht verändert. Die Modelle stehen unter der "
+                "MIT-Lizenz (TRELLIS.2, BiRefNet), unter Metas DINOv3-Lizenz (Bildkodierer) "
+                "und unter Apache-2.0 (FLUX.2 [klein])."
+            ).format(version=mesh.MINIMUM_COMFYUI_TEXT),
             self,
         )
         intro.setWordWrap(True)
@@ -214,13 +214,15 @@ class ComfySetupDialog(QDialog):
 
         self._weights_wanted = True
         self._image_model_wanted = True if image_model is None else image_model
-        self._weights_label = tr("Modell laden — rund 7,5 GB")
+        self._weights_label = tr("Modell für den Weg aus Bild laden — rund {size} GB").format(
+            size=format_decimal(comfy_setup.WEIGHT_GIGABYTES, 1)
+        )
         self._image_model_label = tr(
             "Bildmodell für den Weg aus Text laden — rund {size} GB"
         ).format(size=format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1))
         self.weights = QCheckBox(self._weights_label, self)
         # **Das Bildmodell als eigenes Häkchen** (21.09.2026). Es braucht nur
-        # der Weg aus Text, und es sind sieben Gigabyte — deshalb nicht still
+        # der Weg aus Text, und es sind acht Gigabyte — deshalb nicht still
         # mit den Gewichten, sondern benannt, mit Größe, abwählbar. Robert
         # tippte einen Satz und las, dass ein Bild verlangt wird: Bis dahin
         # holte Solidon dieses Modell gar nicht.
@@ -650,7 +652,7 @@ class ComfySetupDialog(QDialog):
     def _note_step(self, step: str) -> None:
         """Welcher Schritt gerade läuft. Vier bis fünf, und einer dauert lange.
 
-        Die Zeit beginnt je Schritt neu: „Gewichte laden — rund 7,5 GB (240 s)"
+        Die Zeit beginnt je Schritt neu: „Modell für den Weg aus Bild laden — rund 8,0 GB (240 s)"
         sagt mehr als eine Gesamtzeit, denn nur dieser eine Schritt dauert.
         """
         self._step = step
@@ -676,8 +678,9 @@ class ComfySetupDialog(QDialog):
         if not result.done:
             set_role(self.state, "warning", str(result.reason))
             return
-        # Der Neustart ist kein Detail: ComfyUI liest seine Knoten beim Start,
-        # und ohne ihn bleibt die Mesh-Erzeugung ausgegraut, obwohl alles liegt.
+        # Der Neustart ist eine Vorsicht: Neue Modelldateien sieht ein laufendes
+        # ComfyUI meist von selbst, eine entfernte alte Knotensammlung erst
+        # nach dem Neustart.
         set_role(
             self.state,
             "ok",
@@ -718,7 +721,7 @@ class ComfySetupDialog(QDialog):
         """Schließen bricht den Lauf ab — und wartet nicht auf ihn.
 
         Abgebrochen wird zwischen den Schritten und im Download je Block: ein
-        halb kopierter Knotenordner wäre schlimmer als ein Vorgang, der
+        halb kopierte Modelldatei wäre schlimmer als ein Vorgang, der
         ausläuft. Hier stand danach ``wait(2000)``, zwei Sekunden stehendes
         Fenster auf Esc hin, ohne Balken und ohne Zeile. Den Thread hält die
         Halteleine über den Dialog hinaus (:mod:`app.ui.leash`); seine

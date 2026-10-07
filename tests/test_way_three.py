@@ -318,6 +318,79 @@ def test_a_tiny_generated_body_survives_the_chain(project: Project, profile: Pro
     assert max(body.bounds.size) == pytest.approx(100.0, abs=1e-3), "und steht auf Arbeitsgröße"
 
 
+def _open_shell_with_inner_counter_hull() -> trimesh.Trimesh:
+    """Was TRELLIS.2 über ComfyUIs ``RemeshMesh`` im Modus ``udf`` liefern kann.
+
+    Außen eine Kugel mit einem Loch — das Rohnetz von TRELLIS.2 darf offen
+    sein —, innen eine zweite, nach innen gewendete Kugel knapp unter der
+    Außenhaut: die Gegenseite des Abstandsfelds. Auf dem Einheitswürfel, wie
+    ein Bildmodell liefert.
+    """
+    outer = trimesh.creation.icosphere(subdivisions=4, radius=1.0)
+    top = outer.triangles_center[:, 2] > 0.99
+    assert 0 < int(top.sum()) < 40, "ein Loch, kein abgeschnittener Deckel"
+    outer.update_faces(~top)
+    outer.remove_unreferenced_vertices()
+    assert not outer.is_watertight, "die Außenhaut ist offen"
+    inner = trimesh.creation.icosphere(subdivisions=4, radius=0.97)
+    inner.invert()
+    assert inner.volume < 0, "die Gegenhülle zeigt nach innen"
+    return trimesh.util.concatenate([outer, inner])
+
+
+def test_an_open_shell_with_an_inner_counter_hull_becomes_one_full_body(
+    project: Project, profile: Profile
+) -> None:
+    """Die Reparaturkette macht aus Außenhaut mit Loch und Gegenhülle einen vollen Körper.
+
+    Ohne den Schritt blieb die Gegenhülle als Hohlraum stehen — gültig,
+    geschlossen, und gedruckt ein Körper mit Wänden von anderthalb
+    Millimetern, der beim ersten Druck zerbricht. ComfyUI #16147 meldet genau
+    das für TRELLIS.2; der Ablauf wirft die Hülle schon in ComfyUI weg, diese
+    Kette hält es auch für einen Ablauf, der das nicht tut.
+    """
+    payload = bytes(
+        trimesh.exchange.export.export_mesh(
+            _open_shell_with_inner_counter_hull(), None, file_type="glb"
+        )
+    )
+    generation = from_text(
+        project, ScriptedMeshBackend(fallback=payload, suffix=".glb"), "eine Kugel", seed=7
+    )
+
+    scene = evaluated(project, profile)
+    body = scene.scene.objects[generation.object_id].mesh
+    codes = {finding.code for finding in scene.scene.report.findings}
+
+    assert "repair.inner_shells_removed" in codes, codes
+    assert body.is_watertight, "das Loch der Außenhaut ist zu"
+    assert body.component_count == 1, "die Gegenhülle ist weg"
+    # Auf Arbeitsgröße misst die Kugel 100 mm; voll hat sie das Volumen der
+    # Außenhaut, hohl nur rund ein Elftel davon (1 - 0,97³).
+    full = trimesh.creation.icosphere(subdivisions=4, radius=50.0).volume
+    assert body.volume == pytest.approx(full, rel=0.02)
+
+
+def test_a_modelled_cavity_stays_unless_asked() -> None:
+    """Ein modelliertes Teil darf einen Hohlraum tragen — der Schritt läuft nur auf Wunsch."""
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.repair import repair
+
+    outer = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    cavity = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cavity.invert()
+    hollow = MeshData.of(trimesh.util.concatenate([outer, cavity]))
+
+    kept = repair(hollow)
+    emptied = repair(hollow, inner_shells=True)
+
+    assert kept.mesh.component_count == 2, "ohne Wunsch bleibt der Hohlraum"
+    assert kept.mesh.volume == pytest.approx(8000.0 - 1000.0)
+    assert emptied.mesh.component_count == 1
+    assert emptied.mesh.volume == pytest.approx(8000.0)
+    assert "repair.inner_shells_removed" in {finding.code for finding in emptied.findings}
+
+
 @pytest.mark.parametrize(
     ("size", "expected"),
     [

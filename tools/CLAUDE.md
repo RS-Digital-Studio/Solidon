@@ -96,6 +96,7 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | `setup_activation_server.py` · `deploy_activation_server.py` · `licence_archive.py` | Startwert, Betreiberzugang und Datenbank vorbereiten · mit Sicherung ausliefern · Dateisperre und Satzformat des Lizenzarchivs |
 | `upload_website.py` · `make_stats_access.py` | Website hochladen · Zugang zur Statistik nach `appdata/stats-access.php`, nie in den öffentlichen Baum |
 | `setup_comfyui.py` · `start-solidon3d.cmd` | ComfyUI für Solidon einrichten · Start per Doppelklick aus dem Arbeitsbaum |
+| `comfy_node_info.py` | Schreibt ComfyUIs eigene Beschreibung der Knoten beider Abläufe nach `tests/data/comfyui/object_info.json` — im Python von ComfyUI, ohne Server und ohne Grafikkarte; nach einem ComfyUI-Update neu erzeugen, das die Abläufe betrifft |
 
 ## Fallen, die man einmal falsch macht
 

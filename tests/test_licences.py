@@ -228,45 +228,39 @@ def test_the_plan_names_these_as_forbidden(package: str) -> None:
     assert package in licences.load_policy().banned_packages
 
 
-def test_every_package_solidon_installs_elsewhere_is_on_record() -> None:
-    """**Was Solidon in eine fremde Umgebung installiert, gehört in die Akten.**
+def test_solidon_installs_no_package_into_comfyui() -> None:
+    """**Was Solidon in eine fremde Umgebung installiert, gehört in die Akten — heute nichts.**
 
-    Die Einrichtung von Weg 3 zieht Pakete in ComfyUIs eigenes Python nach.
-    Sie sind keine Abhängigkeit dieser Anwendung — nichts davon wird hier
-    importiert, und :func:`licences.check` sieht sie nicht —, aber Solidon legt
-    sie auf den Rechner eines Kunden.
-
-    Der Kommentar an ``comfy_setup.PACKAGES`` behauptete, alle Lizenzen seien
-    geprüft, und genau so eine Behauptung war der GPL-Knoten ``RMBG``: wahr
-    gemeint, von keinem Test gehalten, und im Ablauf stand er trotzdem. Diese
-    Prüfung ist der Unterschied zwischen einer Behauptung und einer Aktenlage.
-
-    Geprüft wird die Vollständigkeit und nicht die Lizenz selbst: Welche Lizenz
-    ein fremdes Paket führt, kann diese Suite nicht nachsehen — es ist hier
-    nicht installiert. Dass jedes davon **benannt** ist, kann sie.
+    Bis Oktober 2026 zog die Einrichtung von Weg 3 zehn Pakete in ComfyUIs
+    Python nach, und jedes stand hier mit Lizenz. Seit TRELLIS.2 ein Kernmodell
+    von ComfyUI ist, lädt sie nur Modelldateien. Wer wieder ein Paket
+    installiert, trägt es in ``licences.toml`` ein und baut diese Prüfung
+    zurück — still darf es nicht geschehen.
     """
+    import ast
+
     from app.core.backends import comfy_setup
 
-    policy = licences.load_policy()
-    known = {licences.normalise(name): record for name, record in policy.known.items()}
-    for entry in comfy_setup.PACKAGES:
-        name = licences.normalise(entry.split("==")[0])
-        assert name in known, f"{name} fehlt als direkte externe Freigabe"
-        assert licences.licence_allowed(known[name]["licence"], policy), name
+    tree = ast.parse(Path(comfy_setup.__file__).read_text(encoding="utf-8"))
+    literals = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    assert not any(value == "pip" for value in literals), "pip installiert in ComfyUI"
+    assert not any("pip install" in value for value in literals)
+    assert not hasattr(comfy_setup, "PACKAGES")
 
 
 def test_every_known_entry_names_a_package_that_exists_somewhere() -> None:
     """Ein ``[known]``-Eintrag gilt einem Paket, das hier installiert ist, in
-    ``constraints.txt`` steht (auch für andere Plattformen) oder das
-    ``comfy_setup.PACKAGES`` in ComfyUI legt.
+    ``constraints.txt`` steht (auch für andere Plattformen).
 
     Die Prüfungen oben lesen die installierten Pakete gegen die Liste, nicht
     umgekehrt — ein Eintrag, dessen Paket längst weg ist, altert dort still und
     gibt beim nächsten Einzug ungeprüft eine Lizenz frei.
     """
     from importlib import metadata
-
-    from app.core.backends import comfy_setup
 
     constraints = Path(__file__).parent.parent / "constraints.txt"
     pinned = {
@@ -275,7 +269,6 @@ def test_every_known_entry_names_a_package_that_exists_somewhere() -> None:
         if "==" in line and not line.startswith("#")
     }
     assert len(pinned) > 50, "constraints.txt ohne Pins — dann prüft der Fall nichts"
-    elsewhere = {licences.normalise(entry.split("==")[0]) for entry in comfy_setup.PACKAGES}
     known = licences.load_policy().known
     assert known, "leere Freigabeliste"
 
@@ -287,9 +280,7 @@ def test_every_known_entry_names_a_package_that_exists_somewhere() -> None:
         return True
 
     stale = sorted(
-        name
-        for name in known
-        if licences.normalise(name) not in pinned | elsewhere and not installed(name)
+        name for name in known if licences.normalise(name) not in pinned and not installed(name)
     )
     assert not stale, f"[known] nennt Pakete, die es hier nirgends gibt — austragen: {stale}"
 

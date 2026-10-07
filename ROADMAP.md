@@ -98,7 +98,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
 | [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
 | [RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich](#rm-526) | Bedienung und Darstellung | `z` als optionale Koordinate (leer heißt Oberkante), Migration 0 → leer |
-| [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
+| [RM-003 — Lizenzkette der Generatorkette klären](#rm-003) | KI und Generatoren | TRELLIS.2-Kette umgesetzt; Kanzleifragen DINOv3, DIS5K, Trainingsdaten offen |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) entschieden und gebaut: lokal 12 Schritte (`MAX_STEPS_LOCAL`, `steps_for`), gehostet 8; offen (b) der Satz im Prompt für gebündelte Aufrufe — braucht einen Suitelauf mit qwen3:14b vorher und nachher auf freier Karte |
@@ -214,7 +214,7 @@ bleiben eigene Aufgaben; siehe RM-011 und RM-002.
 
 ## P9 — Säule B und Farbe
 
-Backend-Grenze, ComfyUI-/TripoSG-Weg und Farbzuweisung stehen. Commit-/Gewichte-Pinning ist implementiert; offen bleiben die dokumentierte Lizenzkette und der vollständige plattformübergreifende Generatorlauf (RM-003, RM-004). Vorhandene Generatoren und Medien bleiben erhalten.
+Backend-Grenze, ComfyUI-Weg (TRELLIS.2 und FLUX.2 [klein]) und Farbzuweisung stehen. Commit-/Gewichte-Pinning ist implementiert; offen bleiben die dokumentierte Lizenzkette und der vollständige plattformübergreifende Generatorlauf (RM-003, RM-004). Vorhandene Generatoren und Medien bleiben erhalten.
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p9--säule-b-und-farbe).
 
@@ -3739,24 +3739,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-003"></a>
 
-- [ ] **RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären.** Die LICENSE-/NOTICE-Kette
-  des konkret eingesetzten TripoSG-Modellstands vollständig dokumentieren und die im NOTICE
-  genannten HunyuanDiT-/FlashVDM-Bedingungen gezielt fachlich beziehungsweise mit VAST klären.
-  Git-Commit, TripoSG-Gewichte und BiRefNet-Revision sind bereits gepinnt; LICENSE und NOTICE werden
-  übernommen. Seit dem 21.09.2026 holt die Einrichtung auf Wunsch auch das Bildmodell für den
-  Weg aus Text (`sd_xl_base_1.0.safetensors`, Revision `46216598`, CreativeML Open RAIL++-M von
-  Stability AI; die Nutzungsausschlüsse des Anhangs gelten dem Nutzer, das Handbuch nennt sie) —
-  es gehört mit in dieselbe Kanzleifrage. Abnahme: nachvollziehbare Zuordnung jedes eingesetzten
-  Bestandteils zu Revision, Lizenz und geklärten Bedingungen. Der bestehende Weg bleibt erhalten.
+- [ ] **RM-003 — Lizenzkette der Generatorkette klären.** Am 06.10.2026 ergab die Prüfung
+  der TripoSG-Kette: `triposg_transformer.py` trägt die Tencent Hunyuan Community License,
+  `triposg/LICENSE` die FlashVDM-Lizenz, beide ohne EU, Großbritannien und Südkorea. Robert
+  entschied den Ersatz: Weg 3 läuft über TRELLIS.2-4B (MIT) mit dem Bildkodierer DINOv3
+  (Metas DINOv3 License), Freistellen BiRefNet (MIT), Textweg FLUX.2 [klein] 4B mit Qwen3-4B
+  (Apache-2.0), alles eingebaute ComfyUI-Knoten ab 0.35, jede Datei mit Revision und SHA-256
+  (`comfy_setup.SHAPE_FILES`, `BACKGROUND`, `IMAGE_MODEL_FILES`). Die Einrichtung räumt Solidons
+  alten TripoSG-Knoten und dessen markierte Gewichte. Belege, Kandidatenvergleich und
+  Kanzleifragen: `konzepte/nachweise-generatoren-2026-10/`.
 
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#p9--säule-b-und-farbe).
-
-  **Stand laut Register bis 29.09.2026:** Lizenzkette der eingesetzten Modellrevisionen klären;
-  die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch
-  einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext
-  wie Gewichte‘ (Robert, 23.09.2026)
-  Beifund: Der Kommentar in `app/core/knowledge/data/licences.toml:53` sagt weiter ohne Vorbehalt
-  „TripoSG MIT“.
+  Offen: (1) DINOv3 License — Einbeziehung beim Kunden, Lizenztext vor dem Abruf zeigen und
+  Zustimmung einholen, §1.b.v (Waffen) in Solidons Bedingungen, §8 einseitige Änderung, Abruf
+  aus der Comfy-Org-Kopie ohne Lizenzkopie; (2) BiRefNet-Trainingsdaten DIS5K nur
+  nicht-kommerziell; (3) Objaverse-/HSSD-NC-Objekte in den 3D-Trainingsdaten; (4) Hinweispflichten
+  für Apache-2.0-Gewichte, die der Kunde über Solidons Einrichtung lädt. Abnahme: Antwort der
+  Kanzlei je Frage; mit ihr ziehen nach: Handbuch `generating`/`models_text`, `website/ki-modelle.html`
+  und `*/ai-models.html`, Einleitung von `comfy_dialog.py`, `licences.toml` („Was extern
+  läuft“), `README.md`. Der echte Lauf der neuen Kette gehört zu RM-004.
 
 <a id="rm-004"></a>
 

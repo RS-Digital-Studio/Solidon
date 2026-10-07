@@ -1,147 +1,456 @@
 {
   "1": {
-    "class_type": "CheckpointLoaderSimple",
+    "class_type": "UNETLoader",
     "inputs": {
-      "ckpt_name": "{model:image}"
+      "unet_name": "{model:image}",
+      "weight_dtype": "default"
     }
   },
   "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "{model:text_encoder}",
+      "type": "flux2",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "{model:image_vae}"
+    }
+  },
+  "4": {
     "class_type": "CLIPTextEncode",
     "inputs": {
       "text": "{prompt}, single complete object, centered, full object visible, three-quarter view, even studio lighting, plain white background, product photo, sharp focus",
       "clip": [
-        "1",
-        1
+        "2",
+        0
       ]
-    }
-  },
-  "3": {
-    "class_type": "CLIPTextEncode",
-    "inputs": {
-      "text": "blurry, multiple objects, cropped, cut off, close-up, text, watermark, hands, person, shadow, reflection, busy background",
-      "clip": [
-        "1",
-        1
-      ]
-    }
-  },
-  "4": {
-    "class_type": "EmptyLatentImage",
-    "inputs": {
-      "width": 1024,
-      "height": 1024,
-      "batch_size": 1
     }
   },
   "5": {
-    "class_type": "KSampler",
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "4",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "CFGGuider",
     "inputs": {
       "model": [
         "1",
         0
       ],
       "positive": [
-        "2",
-        0
-      ],
-      "negative": [
-        "3",
-        0
-      ],
-      "latent_image": [
         "4",
         0
       ],
-      "seed": "{seed}",
-      "steps": 25,
-      "cfg": 6.0,
-      "sampler_name": "dpmpp_2m",
-      "scheduler": "karras",
-      "denoise": 1.0
-    }
-  },
-  "6": {
-    "class_type": "VAEDecode",
-    "inputs": {
-      "samples": [
+      "negative": [
         "5",
         0
       ],
-      "vae": [
-        "1",
-        2
-      ]
+      "cfg": 1.0
     }
   },
   "7": {
-    "class_type": "RemoveBackground",
+    "class_type": "EmptyFlux2LatentImage",
     "inputs": {
-      "bg_removal_model": [
-        "12",
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    }
+  },
+  "8": {
+    "class_type": "Flux2Scheduler",
+    "inputs": {
+      "steps": 4,
+      "width": 1024,
+      "height": 1024
+    }
+  },
+  "9": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "10": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": "{seed}"
+    }
+  },
+  "11": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "10",
         0
       ],
-      "image": [
+      "guider": [
         "6",
+        0
+      ],
+      "sampler": [
+        "9",
+        0
+      ],
+      "sigmas": [
+        "8",
+        0
+      ],
+      "latent_image": [
+        "7",
         0
       ]
     }
   },
-  "8": {
-    "class_type": "TripoSGLoader",
-    "inputs": {
-      "model": "{model:shape}",
-      "precision": "float16"
-    }
-  },
-  "9": {
-    "class_type": "TripoSGImageToMesh",
-    "inputs": {
-      "pipeline": [
-        "8",
-        0
-      ],
-      "image": [
-        "6",
-        0
-      ],
-      "mask": [
-        "7",
-        0
-      ],
-      "steps": 50,
-      "guidance_scale": 7.0,
-      "seed": "{seed}",
-      "octree_depth": 8,
-      "crop_margin": 0.1
-    }
-  },
-  "10": {
-    "class_type": "TripoSGPostprocess",
-    "inputs": {
-      "mesh": [
-        "9",
-        0
-      ],
-      "keep_largest_only": true,
-      "remove_degenerate": true,
-      "target_faces": 0
-    }
-  },
-  "11": {
-    "class_type": "TripoSGExportMesh",
-    "inputs": {
-      "mesh": [
-        "10",
-        0
-      ],
-      "filename_prefix": "solidon/text",
-      "file_format": "glb"
-    }
-  },
   "12": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "13": {
     "class_type": "LoadBackgroundRemovalModel",
     "inputs": {
       "bg_removal_name": "{model:background}"
+    }
+  },
+  "14": {
+    "class_type": "RemoveBackground",
+    "inputs": {
+      "bg_removal_model": [
+        "13",
+        0
+      ],
+      "image": [
+        "12",
+        0
+      ]
+    }
+  },
+  "15": {
+    "class_type": "ImageCropToMask",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "masks": [
+        "14",
+        0
+      ],
+      "width": 1024,
+      "height": 1024,
+      "pad_factor": 1.0,
+      "grow_mask": 0,
+      "background": "#000000"
+    }
+  },
+  "16": {
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "{model:image_encoder}"
+    }
+  },
+  "17": {
+    "class_type": "Trellis2Conditioning",
+    "inputs": {
+      "clip_vision_model": [
+        "16",
+        0
+      ],
+      "image": [
+        "15",
+        0
+      ]
+    }
+  },
+  "18": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "{model:shape}",
+      "weight_dtype": "default"
+    }
+  },
+  "19": {
+    "class_type": "CFGOverride",
+    "inputs": {
+      "model": [
+        "18",
+        0
+      ],
+      "cfg": 1.0,
+      "start_percent": 0.667,
+      "end_percent": 1.0
+    }
+  },
+  "20": {
+    "class_type": "RescaleCFG",
+    "inputs": {
+      "model": [
+        "19",
+        0
+      ],
+      "multiplier": 0.7
+    }
+  },
+  "21": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": [
+        "20",
+        0
+      ],
+      "shift": 5.0
+    }
+  },
+  "22": {
+    "class_type": "EmptyTrellis2LatentStructure",
+    "inputs": {
+      "batch_size": 1
+    }
+  },
+  "23": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "21",
+        0
+      ],
+      "seed": "{seed}",
+      "steps": 12,
+      "cfg": 7.5,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+        "17",
+        0
+      ],
+      "negative": [
+        "17",
+        1
+      ],
+      "latent_image": [
+        "22",
+        0
+      ],
+      "denoise": 1.0
+    }
+  },
+  "24": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "{model:shape_vae}"
+    }
+  },
+  "25": {
+    "class_type": "VaeDecodeStructureTrellis2",
+    "inputs": {
+      "samples": [
+        "23",
+        0
+      ],
+      "vae": [
+        "24",
+        0
+      ],
+      "resolution": "32"
+    }
+  },
+  "26": {
+    "class_type": "Trellis2ShapeStage",
+    "inputs": {
+      "positive": [
+        "17",
+        0
+      ],
+      "negative": [
+        "17",
+        1
+      ],
+      "voxel": [
+        "25",
+        0
+      ]
+    }
+  },
+  "27": {
+    "class_type": "CFGOverride",
+    "inputs": {
+      "model": [
+        "18",
+        0
+      ],
+      "cfg": 1.0,
+      "start_percent": 0.769,
+      "end_percent": 1.0
+    }
+  },
+  "28": {
+    "class_type": "RescaleCFG",
+    "inputs": {
+      "model": [
+        "27",
+        0
+      ],
+      "multiplier": 0.5
+    }
+  },
+  "29": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "28",
+        0
+      ],
+      "seed": "{seed}",
+      "steps": 20,
+      "cfg": 7.5,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+        "26",
+        0
+      ],
+      "negative": [
+        "26",
+        1
+      ],
+      "latent_image": [
+        "26",
+        2
+      ],
+      "denoise": 1.0
+    }
+  },
+  "30": {
+    "class_type": "Trellis2UpsampleStage",
+    "inputs": {
+      "positive": [
+        "26",
+        0
+      ],
+      "negative": [
+        "26",
+        1
+      ],
+      "shape_latent": [
+        "29",
+        0
+      ],
+      "vae": [
+        "24",
+        0
+      ],
+      "target_resolution": 1024
+    }
+  },
+  "31": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "28",
+        0
+      ],
+      "seed": "{seed}",
+      "steps": 12,
+      "cfg": 7.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "30",
+        0
+      ],
+      "negative": [
+        "30",
+        1
+      ],
+      "latent_image": [
+        "30",
+        2
+      ],
+      "denoise": 1.0
+    }
+  },
+  "32": {
+    "class_type": "VaeDecodeShapeTrellis",
+    "inputs": {
+      "samples": [
+        "31",
+        0
+      ],
+      "vae": [
+        "24",
+        0
+      ]
+    }
+  },
+  "33": {
+    "class_type": "FillHoles",
+    "inputs": {
+      "mesh": [
+        "32",
+        0
+      ],
+      "max_perimeter": 0.03,
+      "weld_epsilon_rel": 1e-05,
+      "max_vertices": 16,
+      "fill_chains": false
+    }
+  },
+  "34": {
+    "class_type": "RemeshMesh",
+    "inputs": {
+      "mesh": [
+        "33",
+        0
+      ],
+      "resolution": 768,
+      "sign_mode": "udf",
+      "sign_mode.qef": false,
+      "sign_mode.drop_inverted_components": true,
+      "sign_mode.drop_enclosed_components": true,
+      "band": 1.0,
+      "project_back": 0.0,
+      "fix_poles": false,
+      "smooth_iters": 20,
+      "drop_small_components": 0.01,
+      "precluster_max_verts": 20000000
+    }
+  },
+  "35": {
+    "class_type": "DecimateMesh",
+    "inputs": {
+      "mesh": [
+        "34",
+        0
+      ],
+      "target_face_count": 700000,
+      "placement_mode": "midpoint"
+    }
+  },
+  "36": {
+    "class_type": "SaveGLB",
+    "inputs": {
+      "mesh": [
+        "35",
+        0
+      ],
+      "filename_prefix": "solidon/text"
     }
   }
 }
