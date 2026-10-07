@@ -74,6 +74,22 @@ def test_a_part_thread_keeps_only_the_pin_in_the_card(qt_app: QApplication) -> N
     assert not panel.isHidden() and panel._only is None, "ohne Baustein gilt die Karte ganz"
 
 
+def test_a_part_bore_offers_no_pin(qt_app: QApplication) -> None:
+    """An einer Bausteinbohrung bleibt die Karte zu (Review P2 N2, RM-552).
+
+    ``applies_to`` des Stifts nennt ``hole``, und so stand er an jedem
+    Schraubenloch allein in der Karte — und sagte dort ab, weil die Bohrung
+    durch die Senkung läuft. Ohne Baustein bleibt er an der Bohrung.
+    """
+    load_operations()
+    assert "hole" in REGISTRY.get("pin_for_bore").applies_to, "sonst prüft das nichts"
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1), feature_kind="hole", part_selected=True)
+    assert panel.isHidden()
+    panel.set_context(1, _availability(1), feature_kind="hole")
+    assert not panel.isHidden() and panel._fits_the_level("pin_for_bore")
+
+
 def test_the_panel_is_the_registry_without_the_parts_catalogue(qt_app: QApplication) -> None:
     """Die Oberfläche pflegt keine zweite Operationsliste.
 

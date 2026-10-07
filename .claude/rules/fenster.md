@@ -310,7 +310,7 @@ Ansichtsseite steht in `griffe.md`.
   baut, die ein Merkmal aus ihrem früheren Schritt noch einmal anfasst, fragt
   zuerst `created_by`.
 - **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* am
-  Innengewinde), nach Art und `not_offered_at`.
+  Innengewinde, an keiner anderen Art), danach `not_offered_at`.
 
 ## Der Hauptknopf
 

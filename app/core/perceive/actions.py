@@ -1147,9 +1147,12 @@ _ONLY_IN_A_BORE: Final[frozenset[str]] = frozenset({"pin_for_bore"})
 #: Robert, 07.10.2026, RM-536). Dort bedienen die Bausteinfelder den
 #: erzeugenden Schritt, und allgemeine Handlungen bleiben weg; der Stift aber
 #: ergänzt das Gewinde, statt es zu ändern — das Gegenstück gehört gerade an
-#: ein selbst gedrucktes Innengewinde. Ob er am gewählten Merkmal steht, sagen
-#: weiter Art und :func:`not_offered_at`.
-OFFERED_AT_A_PART: Final[frozenset[str]] = frozenset({"pin_for_bore"})
+#: ein selbst gedrucktes Innengewinde. Je Handlung steht hier die Art, an der
+#: sie bleibt — nur ``thread``, nicht jede Bohrung des Bausteins: Am
+#: Schraubenloch führte der Knopf in eine Absage über die Senkung, die Solidon
+#: selbst gebaut hat (Review P2 N2, RM-552). Das Außengewinde nimmt danach
+#: :func:`not_offered_at` weg.
+OFFERED_AT_A_PART: Final[Mapping[str, frozenset[str]]] = {"pin_for_bore": frozenset({"thread"})}
 
 
 def narrows_the_mouth(feature: Feature) -> bool:

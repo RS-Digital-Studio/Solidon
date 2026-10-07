@@ -1111,6 +1111,7 @@ class SelectionOperationsPanel(QWidget):
                 for name in OFFERED_AT_A_PART
                 if name in self._buttons
                 and name not in left_out
+                and feature_kind in OFFERED_AT_A_PART[name]
                 and feature_kind in self._at_which_kind.get(name, frozenset())
             )
             if part_selected and feature_kind
