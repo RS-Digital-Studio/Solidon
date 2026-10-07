@@ -322,13 +322,14 @@ wieder ausgeschnitten wird exakt das Merkmal, ohne Zugabe.
 
 `trimesh.creation.cylinder` ist eingeschrieben. Wiederhergestellt wird mit dem
 gemessenen Konturmaß und dem Wandmantel (`_tool_for`, `_placing_tool`); nur der
-Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Stolperfalle:
-`FEATURE_OVERLAP` deckt den Vieleckverlust zu — ohne sie fehlt die Deckung.
+Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Falle:
+`FEATURE_OVERLAP` verdeckt den Vieleckverlust.
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,
-`hole_diameter - pin_diameter`); wer radial einzieht, nimmt die Hälfte. Keine
-Konstante als Fertigungszugabe (Regel 7).
+`hole_diameter - pin_diameter`); wer einzieht, nimmt die Hälfte, im Hohlraum
+senkrecht zur Wand (`geom.bore_pin`). Keine Konstante als Fertigungszugabe
+(Regel 7).
 
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 

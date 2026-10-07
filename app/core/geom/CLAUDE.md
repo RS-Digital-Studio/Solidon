@@ -148,7 +148,8 @@ Ersatzweg prüft Geometrie, nie Metadaten)
 Flankenumriss) · `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
 GEOS-Rechteckecken, macOS/arm64) · `lid_hinge.py` (Deckelscharnier: Achse,
-Kragenraum, Augen; *Stift für Bohrung*) · `container_ops.py` (Behälter, Deckel,
+Kragenraum, Augen; *Stift für Bohrung*) · `bore_pin.py` (Kopf und
+Gewinde des passenden Stifts) · `container_ops.py` (Behälter, Deckel,
 Einsätze; Entwurf in `core/lid_flow.py`) · `counter_form_ops.py` (Taschen aus
 dem Schatten der Teile)
 

@@ -1135,6 +1135,9 @@ TAPER_IS_MATERIAL: Final = _(
 #: Trichter in das Material, das sie ist.
 _ONLY_AT_A_COUNTERSINK: Final[frozenset[str]] = frozenset({"countersink_hole"})
 
+#: Was nur in einem Hohlraum etwas baut: der Stift, der in ihn passt (RM-536).
+_ONLY_IN_A_BORE: Final[frozenset[str]] = frozenset({"pin_for_bore"})
+
 
 def narrows_the_mouth(feature: Feature) -> bool:
     """Ob dieser Kegel eine Verengung ist — die Erkennung trägt es als ``narrowing`` (R3)."""
@@ -1149,7 +1152,12 @@ def not_offered_at(feature: Feature) -> frozenset[str]:
     Senkung etwas tut (:data:`_ONLY_AT_A_COUNTERSINK`). Die Karte rechts liest
     diese Menge (``ui.selection_operations``) — oben in der Schnellzeile wie
     in der Liste darunter.
+
+    An einem **Außengewinde** fällt *Stift für Bohrung* weg (RM-536): Der Stift
+    gehört in ein Innengewinde, ``applies_to`` kennt nur die Art ``thread``.
     """
+    if feature.kind == "thread":
+        return frozenset() if feature.params.get("internal") else _ONLY_IN_A_BORE
     if feature.kind != "cone" or feature.params.get("partial"):
         return frozenset()
     if narrows_the_mouth(feature) or not feature.params.get("recess"):

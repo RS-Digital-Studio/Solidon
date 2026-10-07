@@ -36,11 +36,20 @@ from typing import Any, Final, cast
 
 import numpy as np
 
-from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, GeometryError, ValidationError
-from app.core.geom import transform
-from app.core.geom.mesh import MeshData
+from app.core.errors import (
+    ARRANGE_ON_BED,
+    CANCEL,
+    CHANGE_SELECTION,
+    CHANGE_THIS_STEP,
+    CORRECT_INPUT,
+    GeometryError,
+    ValidationError,
+)
+from app.core.geom import bore_pin, transform
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.build import bore, pin
+from app.core.knowledge.parts.build import bore, form_of, pin, thread, union
+from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
 from app.core.knowledge.parts.mechanics import (
     BarrelHingeParams,
     HingeEyeParams,
@@ -61,7 +70,7 @@ from app.core.types import (
     Vec3,
 )
 from app.core.units import EPS_GEOM
-from app.i18n import _
+from app.i18n import Figure, _
 
 #: Die Arten: kein Scharnier, ein mitgedrucktes Bolzenscharnier, drei Augen mit Stift.
 HINGES: Final = ("none", "barrel", "loose_pin")
@@ -85,6 +94,9 @@ HINGE_HOLE_FEATURE: Final = "lid_hinge_hole"
 
 #: Das Merkmal am Stift, den *Stift für Bohrung* baut.
 BORE_PIN_FEATURE: Final = "bore_pin"
+
+#: Das Außengewinde daran, wo die Bohrung ein Innengewinde trägt (RM-536).
+BORE_PIN_THREAD_FEATURE: Final = "bore_pin_thread"
 
 #: In wie viele Abschnitte längs der Achse der Kragen beschnitten wird. Je
 #: Abschnitt gilt der engste Abstand zur Gegenwand; mehr Abschnitte lassen an
@@ -415,8 +427,11 @@ class PinForBoreParams(BaseParams):
         title=_("Bohrung"),
         kind="feature",
         default="",
-        feature_kinds=("hole",),
-        doc=_("Die Bohrung, in die der Stift kommt — am Klappdeckel die Bohrung des Scharniers."),
+        feature_kinds=("hole", "thread"),
+        doc=_(
+            "Die Bohrung oder das Innengewinde, in das der Stift kommt — am Klappdeckel die "
+            "Bohrung des Scharniers."
+        ),
     )
     length: float = param(
         title=_("Länge"),
@@ -424,7 +439,10 @@ class PinForBoreParams(BaseParams):
         unit="mm",
         minimum=0.0,
         maximum=500.0,
-        doc=_("Null nimmt die Länge der Bohrung, am Scharnier die Breite über alle Augen."),
+        doc=_(
+            "Null nimmt die Länge der Bohrung, am Scharnier die Breite über alle Augen. Mit "
+            "Kopf zählt sie von der Mündung."
+        ),
         zero_text=ZERO_AUTOMATIC,
     )
     clearance: float = param(
@@ -440,13 +458,27 @@ class PinForBoreParams(BaseParams):
         ),
         zero_text=ZERO_FROM_PROFILE,
     )
+    # **Bis RM-536 gab es nur den glatten Stift**, auch an einer Senkung oder
+    # einem Gewinde. Gespeicherte Schritte bekommen „Glatter Stift“ bei der
+    # Migration (Format 48) und rechnen wie damals.
+    shape: str = param(
+        title=_("Form"),
+        default=bore_pin.TO_THE_BORE,
+        choices=bore_pin.PIN_SHAPES,
+        placement="advanced",
+        doc=_(
+            "Passend zur Bohrung bekommt eine Senkung einen Senkkopf, eine Ansenkung einen "
+            "Zylinderkopf und ein Innengewinde ein Außengewinde. Ein glatter Stift bleibt "
+            "ein Zylinder."
+        ),
+    )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
 
 
 def _hole_of(source: SceneObject, name: str) -> Feature:
-    """Die Bohrung, in die der Stift soll — oder die Absage, warum es keine ist."""
+    """Die Bohrung oder das Gewinde für den Stift — oder die Absage, warum es keines ist."""
     feature = source.features.get(name)
-    if feature is None or feature.kind != "hole":
+    if feature is None or feature.kind not in ("hole", "thread"):
         raise ValidationError(
             field="at_feature",
             detail=_("Ein Stift braucht eine Bohrung. Wählen Sie eine Bohrung an diesem Teil."),
@@ -490,23 +522,48 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     produces=2,
     keeps_inputs=1,
     leaves_inputs_unchanged=True,
-    applies_to=["hole"],
+    applies_to=["hole", "thread"],
+    # 2: Passend zur Bohrung (RM-536) — Senkkopf, Zylinderkopf und Außengewinde,
+    # wo bis dahin ein glatter Zylinder entstand.
+    cache_version="2",
     doc=_(
-        "Baut einen losen Stift, der in diese Bohrung passt: dünner um das Spiel aus "
-        "dem Materialprofil, so lang wie die Bohrung. Am Klappdeckel mit Stift ist "
-        "es die Achse durch alle drei Augen."
+        "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
+        "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "
+        "ist es die Achse durch alle drei Augen."
     ),
 )
 def pin_for_bore(ctx: OpContext) -> OpResult:
-    """Ein Stift als eigener Körper, in der Bohrung stehend (RM-184, Audit §6).
+    """Ein Stift als eigener Körper, in der Bohrung stehend (RM-184, Audit §6; RM-536).
 
     Der Stift hängt am Merkmal, nicht an Zahlen: Ändert sich der Deckelschritt
-    (Breite, Stiftmaß), folgt der Stift beim nächsten Rechnen.
+    (Breite, Stiftmaß), folgt der Stift beim nächsten Rechnen. Passend zur
+    Bohrung nimmt er ihre Senkung, Ansenkung und ihr Gewinde mit
+    (:mod:`app.core.geom.bore_pin`); eine schlichte Bohrung gibt in beiden
+    Formen denselben Zylinder.
     """
     params = cast(PinForBoreParams, ctx.params)
     source = ctx.inputs[0]
     hole = _hole_of(source, params.at_feature)
     clearance = params.clearance or for_object(ctx.profile, source).material.clearance
+    if params.shape == bore_pin.PLAIN_PIN:
+        if hole.kind != "hole":
+            raise ValidationError(
+                field="shape",
+                detail=bore_pin.PLAIN_NEEDS_A_BORE,
+                value=params.shape,
+                constraint="needs_a_bore",
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        return _plain_pin(ctx, source, hole, clearance)
+    cavity = bore_pin.cavity_of(hole, source.features, source.mesh)
+    if cavity.thread is None and not cavity.widenings:
+        return _plain_pin(ctx, source, hole, clearance)
+    return _matched_pin(ctx, source, cavity, clearance)
+
+
+def _plain_pin(ctx: OpContext, source: SceneObject, hole: Feature, clearance: float) -> OpResult:
+    """Der glatte Zylinder, Bohrung minus Spiel, so lang wie die Bohrung und mittig in ihr."""
+    params = cast(PinForBoreParams, ctx.params)
     diameter = float(hole.params.get("diameter", 0.0)) - clearance
     length = params.length or float(
         hole.params.get("span", 0.0) or hole.params.get("depth", 0.0) or 0.0
@@ -543,6 +600,36 @@ def pin_for_bore(ctx: OpContext) -> OpResult:
             )
         ]
     )
+    return _pin_result(
+        ctx,
+        source,
+        body,
+        features,
+        [
+            Finding(
+                code="pin_for_bore.made",
+                severity="info",
+                message=_(
+                    "Der Stift ist {diameter} dick, {length} lang und steht noch in der Bohrung. "
+                    "„Auf dem Bett anordnen“ legt ihn ab.",
+                    diameter=_format(diameter),
+                    length=_format(length),
+                ),
+                values={"diameter_mm": round(diameter, 3), "length_mm": round(length, 3)},
+            )
+        ],
+    )
+
+
+def _pin_result(
+    ctx: OpContext,
+    source: SceneObject,
+    body: shapes.Form,
+    features: dict[str, Feature],
+    findings: list[Finding],
+) -> OpResult:
+    """Der Träger unverändert vorn (``leaves_inputs_unchanged``), der Stift dahinter."""
+    params = cast(PinForBoreParams, ctx.params)
     if source.kind == "brep":
         from app.core.brep.features import features_of
 
@@ -559,20 +646,252 @@ def pin_for_bore(ctx: OpContext) -> OpResult:
                 features=features,
             ),
         ],
-        findings=[
-            Finding(
-                code="pin_for_bore.made",
-                severity="info",
-                message=_(
-                    "Der Stift ist {diameter} dick, {length} lang und steht noch in der Bohrung. "
-                    "„Auf dem Bett anordnen“ legt ihn ab.",
-                    diameter=_format(diameter),
-                    length=_format(length),
-                ),
-                values={"diameter_mm": round(diameter, 3), "length_mm": round(length, 3)},
-            )
-        ],
+        findings=findings,
     )
+
+
+def _matched_pin(
+    ctx: OpContext, source: SceneObject, cavity: bore_pin.Cavity, clearance: float
+) -> OpResult:
+    """Der Stift mit Kopf und Gewinde, wo die Bohrung sie trägt (RM-536).
+
+    Unten und oben endet er an der Mündung bündig, vor Material um das halbe
+    Spiel davor (``bore_pin.material_gap``). Eine eingetragene Länge zählt von
+    der Mündung nach innen; reicht sie durch einen Boden, sagt er ab.
+    """
+    params = cast(PinForBoreParams, ctx.params)
+    gap = clearance / 2.0
+    mesh = as_mesh_data(source.mesh)
+    origin, axis = cavity.origin, cavity.axis
+    zone = cavity.thread
+    crest = (zone.nominal - clearance) / 2.0 if zone is not None else 0.0
+    far = bore_pin.material_gap(mesh, origin, axis, cavity.low, -1.0, gap)
+    near = bore_pin.material_gap(mesh, origin, axis, cavity.high, 1.0, gap)
+    # **Ein Gewinde endet vor der engeren Bohrung darunter.** Auf der Achse ist
+    # dort Luft, aber der Kamm des Bolzens säße auf dem Absatz, an dem die Gänge
+    # der Bohrung enden (an M6 in Ø 5,2 gemessen: Abstand null).
+    narrow = (
+        zone is not None
+        and bore_pin.room_beyond(mesh, origin, axis, cavity.low, -1.0, gap) < crest + gap
+    )
+    deepest = cavity.low + gap if narrow else cavity.low - far + gap
+    top = cavity.high - max(0.0, gap - near)
+    bottom = max(cavity.low, deepest)
+    if params.length > 0.0:
+        bottom = top - params.length
+        if bottom < deepest - EPS_GEOM:
+            raise ValidationError(
+                field="length",
+                detail=bore_pin.TOO_LONG_FOR_THE_BORE,
+                value=params.length,
+                values={"maximum": round(top - deepest, 3), "length": params.length},
+                constraint="maximum",
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+    sections = list(cavity.sections)
+    root = 0.0
+    findings: list[Finding] = []
+    if zone is not None:
+        root = bore_pin.root_radius(zone, clearance)
+        sections.insert(
+            0, bore_pin.Section(zone.start, zone.end, root, root, zone.feature, virtual=True)
+        )
+    kernel = cast(Any, "brep" if source.kind == "brep" else "mesh")
+    centre: Vec3 = (float(origin[0]), float(origin[1]), float(origin[2]))
+    direction: Vec3 = (float(axis[0]), float(axis[1]), float(axis[2]))
+    with shapes.building(kernel):
+        pieces: list[shapes.Form] = []
+        smooth: list[tuple[float, float]] = []
+        if cavity.widenings or zone is None:
+            low = bottom
+            if zone is not None:
+                # Der Kern im Gewinde liegt ganz im Bolzen; er beginnt eine Steigung
+                # über dessen Stirnfläche, damit sich keine zwei Ebenen decken.
+                low = min(zone.end - EPS_GEOM, bottom + min(zone.pitch, (zone.end - bottom) / 2))
+            smooth = bore_pin.outline(sections, low, top, gap, root)
+            pieces.append(shapes.revolved(smooth))
+        if zone is not None:
+            thread_top = _thread_top(cavity, zone, top, crest, gap)
+            bolt, closest = _bolt(mesh, cavity, zone, bottom, thread_top, clearance)
+            pieces.append(bolt)
+            if closest is None:
+                findings.append(
+                    Finding(
+                        code="pin_for_bore.thread_unmeasured",
+                        severity="warning",
+                        message=_(
+                            "Die Lage der Gänge ließ sich nicht messen, im Teil können sie "
+                            "ineinander liegen. Auf dem Bett stört das nicht."
+                        ),
+                        suggestions=(ARRANGE_ON_BED,),
+                    )
+                )
+            elif closest < 0.0:
+                findings.append(
+                    Finding(
+                        code="pin_for_bore.thread_touches",
+                        severity="warning",
+                        message=_(
+                            "Im Teil berühren sich die Gänge von Stift und Bohrung um {depth}. "
+                            "Mehr Spiel hilft.",
+                            depth=_format(-closest),
+                        ),
+                        values={"overlap_mm": round(-closest, 4), "field": "clearance"},
+                        suggestions=(CHANGE_THIS_STEP, ARRANGE_ON_BED),
+                    )
+                )
+        body = union(*pieces) if len(pieces) > 1 else pieces[0]
+        body = _along(body, direction, centre)
+    middle = (bottom + top) / 2.0
+    where = origin + axis * middle
+    features = dict(
+        [
+            pin(
+                BORE_PIN_FEATURE,
+                (zone.nominal - clearance) if zone is not None else 2.0 * smooth[1][0],
+                (float(where[0]), float(where[1]), float(where[2])),
+                length=top - bottom,
+                axis=direction,
+            )
+        ]
+    )
+    if zone is not None:
+        thread_top = _thread_top(cavity, zone, top, crest, gap)
+        at = origin + axis * ((bottom + thread_top) / 2.0)
+        key, made = thread(
+            BORE_PIN_THREAD_FEATURE,
+            zone.nominal - clearance,
+            zone.pitch,
+            (float(at[0]), float(at[1]), float(at[2])),
+            axis=direction,
+            internal=False,
+            length=thread_top - bottom,
+        )
+        features[key] = dataclasses.replace(
+            made,
+            params={**made.params, "nominal": zone.nominal},
+            measure_sources={**made.measure_sources, "nominal": "parameter"},
+        )
+    findings.insert(0, _made(cavity, zone, smooth, top - bottom))
+    return _pin_result(ctx, source, body, features, findings)
+
+
+def _thread_top(
+    cavity: bore_pin.Cavity, zone: bore_pin.ThreadZone, top: float, crest: float, gap: float
+) -> float:
+    """Wo das Außengewinde oben endet: an der Mündung, oder unter dem Kopf.
+
+    Unter einer Senkung, die enger beginnt als der Kamm, endet es um das halbe
+    Spiel früher — sonst säße der Kamm an der Kegelwand, wo die Gänge der
+    Bohrung aufhören.
+    """
+    if not cavity.widenings:
+        return top
+    if cavity.widenings[0].inner < crest + gap:
+        return zone.end - gap
+    return zone.end
+
+
+def _bolt(
+    carrier: MeshData,
+    cavity: bore_pin.Cavity,
+    zone: bore_pin.ThreadZone,
+    bottom: float,
+    top: float,
+    clearance: float,
+) -> tuple[shapes.Form, float | None]:
+    """Das Außengewinde aus dem Gewindebaustein, in die Gänge der Bohrung gedreht.
+
+    Gebaut wird wie das Gegenstück eines vorhandenen Gewindes
+    (``counterpart.thread_values_for``, ``fasteners.printed_thread``): das
+    Tabellenmaß, sonst das eigene, und das Spiel des Profils. Die Drehung misst
+    ``bore_pin.thread_turn`` an einem Netzzwilling desselben Bolzens; zurück
+    kommt mit dem Körper der kleinste Abstand der Gänge im Halbmesser, ``None``
+    ohne Messung.
+    """
+    from app.core.knowledge.parts.fasteners import ThreadParams, printed_thread
+
+    raw = validate(
+        ThreadParams,
+        {**zone.values, "length": top - bottom, "internal": False, "play": clearance},
+    )
+    bolt = shapes.moved(form_of(printed_thread(raw)), (0.0, 0.0, bottom))
+    exact = shapes.building_exact()
+    with shapes.building("mesh"):
+        # Am Netz ist der Bolzen sein eigener Zwilling; exakt wird er einmal vernetzt gebaut.
+        twin = shapes.moved(form_of(printed_thread(raw)), (0.0, 0.0, bottom)) if exact else bolt
+        origin, axis = cavity.origin, cavity.axis
+        placed = _along(
+            twin,
+            (float(axis[0]), float(axis[1]), float(axis[2])),
+            (float(origin[0]), float(origin[1]), float(origin[2])),
+        )
+    measured = bore_pin.thread_turn(
+        np.asarray(carrier.raw.vertices, dtype=np.float64),
+        np.asarray(as_mesh_data(placed).raw.vertices, dtype=np.float64),
+        cavity.origin,
+        cavity.axis,
+        (max(zone.start, bottom), min(zone.end, top)),
+        zone.pitch,
+        zone.nominal / 2.0 + zone.pitch,
+    )
+    if measured is None:
+        return bolt, None
+    degrees, closest = measured
+    return shapes.turned(bolt, degrees, _Z), closest
+
+
+def _made(
+    cavity: bore_pin.Cavity,
+    zone: bore_pin.ThreadZone | None,
+    smooth: Sequence[tuple[float, float]],
+    length: float,
+) -> Finding:
+    """Der Befund, der sagt, was gebaut ist — Kopf, Gewinde, Länge."""
+    values: dict[str, Any] = {"length_mm": round(length, 3)}
+    head: Any = None
+    if cavity.widenings:
+        widest = cavity.widenings[-1]
+        top = 2.0 * smooth[-2][0]
+        values["head_diameter_mm"] = round(top, 3)
+        if widest.cone:
+            angle = math.degrees(2.0 * widest.half_angle)
+            values["countersink_angle_deg"] = round(angle, 1)
+            head = _("Senkkopf {angle}°", angle=Figure(f"{round(angle):d}"))
+        else:
+            head = _("Zylinderkopf Ø {diameter}", diameter=_format(top))
+    if zone is None:
+        shaft = 2.0 * smooth[1][0]
+        values["diameter_mm"] = round(shaft, 3)
+        message = _(
+            "Gebaut: Stift mit {head}, Schaft Ø {diameter}, {length} lang, noch in der "
+            "Bohrung. „Auf dem Bett anordnen“ legt ihn ab.",
+            head=head,
+            diameter=_format(shaft),
+            length=_format(length),
+        )
+        return Finding(code="pin_for_bore.made", severity="info", message=message, values=values)
+    size = str(zone.values["size"])
+    named = size if size != CUSTOM_SIZE else f"Ø{round(zone.nominal, 3):g}"
+    label = f"{named} × {round(zone.pitch, 4):g}"  # noqa: RUF001
+    values["thread"] = label
+    values["pitch_mm"] = round(zone.pitch, 4)
+    if head is not None:
+        message = _(
+            "Gebaut: Schraube mit {head} und Gewinde {thread}, {length} lang, noch in der "
+            "Bohrung. „Auf dem Bett anordnen“ legt sie ab.",
+            head=head,
+            thread=Figure(label),
+            length=_format(length),
+        )
+    else:
+        message = _(
+            "Gebaut: Gewindestift {thread}, {length} lang, noch in der Bohrung. „Auf dem "
+            "Bett anordnen“ legt ihn ab.",
+            thread=Figure(label),
+            length=_format(length),
+        )
+    return Finding(code="pin_for_bore.made", severity="info", message=message, values=values)
 
 
 def _format(value: float) -> str:

@@ -417,18 +417,14 @@ def thread_values_for(feature: Feature) -> dict[str, Any]:
     return {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch}
 
 
-def thread_counterpart_draft(
-    feature: Feature, second_object: ObjectId, second_place: Mapping[str, Any]
-) -> OperationDraft:
-    """Der eine Schritt: das gegengleiche Bausteingewinde am anderen Teil, im passenden Maß."""
-    if feature.kind != "thread":
-        raise ValidationError(
-            field="at_feature",
-            detail=_("Das Gegenstück zum Gewinde braucht ein Gewinde als Ausgang."),
-            value=feature.id,
-            constraint="not_a_thread",
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+def refuse_unmatched_thread(feature: Feature) -> None:
+    """Die Gewinde, zu denen die Bibliothek kein Gegenstück baut — mit dem Grund.
+
+    Linksgängig, mehrgängig, kegelig: Das Bausteingewinde ist rechtsgängig,
+    eingängig und zylindrisch. Dieselbe Frage stellen das Gegenstück am anderen
+    Teil (:func:`thread_counterpart_draft`) und *Stift für Bohrung*
+    (``geom.bore_pin``, RM-536), mit denselben Sätzen.
+    """
     if thread_is_left_handed(feature):
         raise ValidationError(
             field="at_feature",
@@ -473,6 +469,21 @@ def thread_counterpart_draft(
             constraint="thread_shape",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
+
+
+def thread_counterpart_draft(
+    feature: Feature, second_object: ObjectId, second_place: Mapping[str, Any]
+) -> OperationDraft:
+    """Der eine Schritt: das gegengleiche Bausteingewinde am anderen Teil, im passenden Maß."""
+    if feature.kind != "thread":
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Das Gegenstück zum Gewinde braucht ein Gewinde als Ausgang."),
+            value=feature.id,
+            constraint="not_a_thread",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    refuse_unmatched_thread(feature)
     length = float(feature.params.get("length", 0.0))
     params: dict[str, Any] = {
         **thread_values_for(feature),

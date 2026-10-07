@@ -1410,6 +1410,11 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
         "Durchmesser und Steigung frei, etwa für ein Rohr. Ohne Steigung gilt die übliche zum "
         "Durchmesser."
     ),
+    "to_the_bore": _(
+        "Mit Senkkopf in einer Senkung, Zylinderkopf in einer Ansenkung und Außengewinde in "
+        "einem Innengewinde."
+    ),
+    "plain_pin": _("Ein Zylinder, um das Spiel dünner als die Bohrung, ohne Kopf und Gewinde."),
 }
 
 
@@ -1467,6 +1472,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "font": _("Schrift"),
     "grip": _("Verengung"),
     "head_room": _("Kopftiefe"),
+    # Was *Stift für Bohrung* gebaut hat (RM-536).
+    "head_diameter": _("Kopfdurchmesser"),
+    "countersink_angle": _("Senkwinkel"),
+    "thread": _("Gewinde"),
     "angle": _("Winkel"),
     "intersection": _("Durchdringung"),
     "last_angle": _("Letzter Winkel"),

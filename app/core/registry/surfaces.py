@@ -339,6 +339,9 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # Die Gewindegröße ohne Tabelle: Durchmesser und Steigung stehen in eigenen
     # Feldern (``fasteners.CUSTOM_SIZE``).
     "custom_size": _("Eigenes Maß"),
+    # Die Form von *Stift für Bohrung* (RM-536).
+    "to_the_bore": _("Passend zur Bohrung"),
+    "plain_pin": _("Glatter Stift"),
 }
 
 

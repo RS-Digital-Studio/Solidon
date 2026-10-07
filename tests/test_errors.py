@@ -505,6 +505,12 @@ _NOT_A_RANGE = frozenset(
         # Achse, die keine der drei ist: ein Merkmal und eine Größe außerhalb
         # einer Liste, keine Spanne im Feld.
         "beyond_threads", "known_axis",
+        # *Stift für Bohrung* (RM-536): eine Kette, die sich an beiden Enden
+        # weitet, nicht lesbar ist, sich zur Mündung verengt oder über dem
+        # Gewinde enger wird; ein Außengewinde; der glatte Stift im Gewinde.
+        # Lagen und Formen, keine Zahl im Feld.
+        "two_heads", "chain_unreadable", "narrowing_mouth", "narrow_above_thread",
+        "not_a_bore", "needs_a_bore",
         # Ein fremdes Muster ohne gewählten Stil: eine Auswahl, keine Zahl.
         "pattern_style",
         # Nicht belegbare Texturoberflächen oder Rückseiten und verzerrte

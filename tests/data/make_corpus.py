@@ -181,6 +181,22 @@ def plate_countersunk_blind() -> None:
     write(trimesh.boolean.difference([plate, drill, sink]), "plate_countersunk_blind.stl")
 
 
+def plate_counterbored() -> None:
+    """Eine Platte mit **einer Stufenbohrung** — der Sitz einer Zylinderkopfschraube M5.
+
+    Durchgang Ø 5,5 mm (mittel nach ISO 273), Ansenkung Ø 10 mm, 5 mm tief, in
+    einer 10 mm dicken Platte. An ihr misst *Stift für Bohrung* den
+    Zylinderkopf (RM-536): Kopf Ø 10 minus Spiel, um das halbe Spiel über der
+    Ringstufe, oben bündig.
+    """
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    drill = trimesh.creation.cylinder(radius=2.75, height=40.0, sections=48)
+    # Von z = 0 bis über die Deckfläche bei z = 5: die Stufe liegt 5 mm tief.
+    seat = trimesh.creation.cylinder(radius=5.0, height=10.0, sections=48)
+    seat.apply_translation((0.0, 0.0, 5.0))
+    write(trimesh.boolean.difference([plate, drill, seat]), "plate_counterbored.stl")
+
+
 def sphere_socket() -> None:
     """Ein Block mit einer eingefrästen Kalotte — die Kugel als **Pfanne**.
 
@@ -825,6 +841,7 @@ if __name__ == "__main__":
     plate_holes_twin()
     plate_countersunk()
     plate_countersunk_blind()
+    plate_counterbored()
     sphere_socket()
     shallow_sphere_caps()
     indeterminate_sphere_cap()
