@@ -4365,6 +4365,37 @@ def test_field_limits_follow_the_largest_size_of_the_series() -> None:
         assert maximum("lug", "width") >= standards.washer(str(size)).outer, size
 
 
+def test_a_printed_screw_of_custom_size_has_a_wrench_sized_head() -> None:
+    """Der Sechskantkopf einer Schraube Ø 9 misst 15 mm über die Flächen, nicht 14,5.
+
+    Abgeleitet lag er zwischen M8 (13) und M10 (16) auf 14,5 mm — keine
+    Schlüsselweite (Review RM-532 Runde 2, K-N2). Die Tabellengrößen behalten
+    ihren Kopf.
+    """
+    spec = PARTS.get("printed_screw")
+    built = spec.fn(spec.params(size="custom_size", diameter=9.0, countersunk=False))
+    extent = as_mesh_data(built.mesh).raw.extents
+    assert min(float(extent[0]), float(extent[1])) == pytest.approx(15.0, abs=0.01)
+    table = spec.fn(spec.params(size="M8", countersunk=False))
+    extent = as_mesh_data(table.mesh).raw.extents
+    assert min(float(extent[0]), float(extent[1])) == pytest.approx(13.0, abs=0.01)
+
+
+def test_m60_says_that_only_its_head_is_derived() -> None:
+    """Ø 60 trifft abgeleitet die Normmaße von Steigung, Löchern, Mutter und Scheibe.
+
+    Der Befund nannte es „nicht genormt“ wie jedes andere eigene Maß; nur die
+    Zylinderschraube führt DIN 912 dort nicht (Review RM-532 Runde 2, K-N3).
+    """
+    spec = PARTS.get("nut_trap")
+    sixty = spec.fn(spec.params(size="custom_size", diameter=60.0))
+    [said] = [entry for entry in sixty.findings if entry.code == "parts.derived_size"]
+    assert "Normmaße" in str(said.message) and "Kopf" in str(said.message)
+    other = spec.fn(spec.params(size="custom_size", diameter=61.0))
+    [said] = [entry for entry in other.findings if entry.code == "parts.derived_size"]
+    assert "nicht genormt" in str(said.message) and "Normmaße" not in str(said.message)
+
+
 def test_a_countersink_without_a_standard_head_says_so() -> None:
     """DIN 7991 endet bei M24 — darüber ist die Senkung gerechnet, und das wird gesagt.
 

@@ -58,6 +58,7 @@ from app.core.units import (
     LARGEST_THREAD,
     SMALLEST_THREAD,
     THREAD_MIN_CORE_SHARE,
+    THREAD_MIN_GRIP_SHARE,
     format_length,
 )
 from app.i18n import TranslatableText, _
@@ -134,15 +135,27 @@ def _derived(made: PartResult, size: str, diameter: float) -> PartResult:
     """
     if size != CUSTOM_SIZE or standards.tabulated_size(diameter) is not None:
         return made
+    # Ø 60 ist ein ISO-Nennmaß ohne Zylinderschraube nach DIN 912: Abgeleitet
+    # treffen Steigung, Löcher, Mutter und Scheibe die Normwerte, nur der Kopf
+    # nicht. „Nicht genormt“ war dort zu viel gesagt (Review RM-532 Runde 2, K-N3).
+    message = (
+        _(
+            "Eigenes Maß Ø {diameter}: Steigung, Löcher, Mutter und Scheibe sind Normmaße; "
+            "nur der Kopf ist abgeleitet, eine Zylinderschraube dieser Größe ist nicht genormt.",
+            diameter=format_length(diameter),
+        )
+        if standards.headless_size(diameter)
+        else _(
+            "Eigenes Maß Ø {diameter}: Die Maße sind aus den Normgrößen daneben "
+            "abgeleitet und nicht genormt.",
+            diameter=format_length(diameter),
+        )
+    )
     made.findings.append(
         Finding(
             code="parts.derived_size",
             severity="info",
-            message=_(
-                "Eigenes Maß Ø {diameter}: Die Maße sind aus den Normgrößen daneben "
-                "abgeleitet und nicht genormt.",
-                diameter=format_length(diameter),
-            ),
+            message=message,
             values={"diameter_mm": diameter},
         )
     )
@@ -559,16 +572,27 @@ def custom_nut_for(bore: float) -> float | None:
     return nominal
 
 
+def _gripped_up_to(screw: standards.Screw) -> float:
+    """Die weiteste Bohrung, in der das Innengewinde dieser Größe noch trägt.
+
+    Das Nennmaß abzüglich des Anteils ``units.THREAD_MIN_GRIP_SHARE`` der
+    Gangtiefe auf beiden Seiten — darüber fasst der Gang zu wenig Wand.
+    """
+    return screw.nominal - 2.0 * shapes.RIDGE_SHARE * screw.pitch * THREAD_MIN_GRIP_SHARE
+
+
 def size_for_thread(diameter: float) -> dict[str, Any]:
     """Das Innengewinde, das in eine Bohrung dieses Durchmessers geschnitten
     werden kann — die größte Tabellengröße, sonst ein eigenes Maß.
 
     Für eine Tabellengröße zwei Schranken, beide fachlich und keine geratene
     Toleranz: Unterhalb des Kernlochdurchmessers greift das Werkzeug nicht ins
-    Material, oberhalb des Nennmaßes liegt die Bohrungswand außerhalb des
-    Gewindes. Eine Ø 6,5-Bohrung bekommt deshalb keine Tabellengröße — für M6
-    ist sie zu weit, für M8 zu eng —, sondern das eigene Maß Ø 7,6 x 1, dessen
-    Kernloch sie ist.
+    Material, und die Bohrung muss dem Gang mindestens den Anteil
+    ``units.THREAD_MIN_GRIP_SHARE`` seiner Tiefe lassen (:func:`_gripped_up_to`,
+    Review RM-532 Runde 2, K-N6) — knapp unter dem Nennmaß griffe der gedruckte
+    Bolzen nicht. Eine Ø 6,5-Bohrung bekommt deshalb keine Tabellengröße — für
+    M6 ist sie zu weit, für M8 zu eng —, sondern das eigene Maß Ø 7,6 x 1,
+    dessen Kernloch sie ist.
 
     Und ``internal``: Wer eine Bohrung anklickt und „Gewinde" wählt, meint
     Gänge in der Wand. Die Schemavorgabe steht auf Außengewinde, und das ist
@@ -593,7 +617,7 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     fitting = [
         size
         for size in standards.screw_sizes()
-        if standards.screw(size).tap <= diameter <= standards.screw(size).nominal
+        if standards.screw(size).tap <= diameter <= _gripped_up_to(standards.screw(size))
     ]
     if fitting:
         return {"size": fitting[-1], "internal": True}
@@ -1578,7 +1602,10 @@ def printed_screw(raw: BaseParams) -> PartResult:
         # z = 0 und damit vollständig **über** der Fläche.
         head = shapes.moved(head, (0.0, 0.0, -head_height))
     else:
-        head = shapes.moved(shapes.hexagon(screw.head, screw.head_height), (0.0, 0.0, thread_top))
+        # Mit eigenem Maß ist der Kopf über die Flächen eine Schlüsselweite der
+        # Reihe, keine gerechnete Zwischengröße (Review RM-532 Runde 2, K-N2).
+        across = standards.wrench_size(screw.head) if params.size == CUSTOM_SIZE else screw.head
+        head = shapes.moved(shapes.hexagon(across, screw.head_height), (0.0, 0.0, thread_top))
 
     # Die Länge meint ausdrücklich das Gewinde **unter** dem Kopf. Beim
     # Senkkopf ist dessen schmale Spitze die Trennstelle; z = 0 ist dagegen

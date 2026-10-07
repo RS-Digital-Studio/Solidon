@@ -83,6 +83,13 @@ FINEST_PITCH: Final[float] = 0.25
 #: Bolzen, dessen Kern unter einem Drittel liegt, ist keiner mehr — für
 #: *Schraube erstellen* (``brep.profiles``) wie für jedes Bausteingewinde.
 THREAD_MIN_CORE_SHARE: Final[float] = 0.33
+#: Welchen Anteil seiner Gangtiefe ein Innengewinde in einer vorhandenen Bohrung
+#: mindestens fassen muss, damit eine Tabellengröße sie meint. Zwischen Nennmaß
+#: und Kernloch wählte die Bohrung die größte Größe, deren Nennmaß sie nicht
+#: übersteigt — bei Ø 23,9 die M24, deren gedruckter Bolzen dort gar nicht mehr
+#: greift. Unter der halben Gangtiefe nimmt die Bohrung das eigene Maß, dessen
+#: Kernloch sie ist, mit voller Gangtiefe (Review RM-532 Runde 2, K-N6).
+THREAD_MIN_GRIP_SHARE: Final[float] = 0.5
 
 #: Wie viele Körper eine eingelesene Baugruppe höchstens trägt — dieselbe Zahl
 #: wie ``scene.project.MAX_PROJECT_OBJECTS``: Jeder Körper wird ein Objekt im

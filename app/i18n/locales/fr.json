@@ -3105,6 +3105,7 @@
   "Eigenes Materialprofil beider Einlagen für Spiel, Übermaß und Mindestwand.": "Profil de matériau propre aux deux garnitures pour le jeu, le serrage et la paroi minimale.",
   "Eigenes Maß": "Taille personnalisée",
   "Eigenes Maß Ø {diameter}: Die Maße sind aus den Normgrößen daneben abgeleitet und nicht genormt.": "Taille personnalisée Ø {diameter} : les cotes sont dérivées des tailles normalisées voisines et ne sont pas normalisées.",
+  "Eigenes Maß Ø {diameter}: Steigung, Löcher, Mutter und Scheibe sind Normmaße; nur der Kopf ist abgeleitet, eine Zylinderschraube dieser Größe ist nicht genormt.": "Taille personnalisée Ø {diameter} : pas, trous, écrou et rondelle sont des cotes normalisées ; seule la tête est dérivée, une vis à tête cylindrique de cette taille n'est pas normalisée.",
   "Eigenes Teil bauen": "Construire votre propre pièce",
   "Ein Abstand auf der Bezugsfläche und der Winkel der Fase zu ihr.": "Une distance sur la face de référence et l'angle du chanfrein par rapport à elle.",
   "Ein Auftrag läuft noch. Der Knopf wird frei, sobald er fertig ist.": "Une tâche est encore en cours. Le bouton se débloque dès qu'elle est terminée.",

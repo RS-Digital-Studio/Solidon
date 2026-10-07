@@ -3105,6 +3105,7 @@
   "Eigenes Materialprofil beider Einlagen für Spiel, Übermaß und Mindestwand.": "Perfil de material próprio dos dois insertos para folga, interferência e parede mínima.",
   "Eigenes Maß": "Medida própria",
   "Eigenes Maß Ø {diameter}: Die Maße sind aus den Normgrößen daneben abgeleitet und nicht genormt.": "Medida própria Ø {diameter}: as medidas derivam dos tamanhos normalizados vizinhos e não são normalizadas.",
+  "Eigenes Maß Ø {diameter}: Steigung, Löcher, Mutter und Scheibe sind Normmaße; nur der Kopf ist abgeleitet, eine Zylinderschraube dieser Größe ist nicht genormt.": "Medida própria Ø {diameter}: passo, furos, porca e anilha são medidas normalizadas; só a cabeça é derivada, um parafuso de cabeça cilíndrica deste tamanho não é normalizado.",
   "Eigenes Teil bauen": "Construir a sua própria peça",
   "Ein Abstand auf der Bezugsfläche und der Winkel der Fase zu ihr.": "Uma distância na face de referência e o ângulo do chanfro em relação a ela.",
   "Ein Auftrag läuft noch. Der Knopf wird frei, sobald er fertig ist.": "Uma tarefa ainda está em curso. O botão fica livre assim que terminar.",

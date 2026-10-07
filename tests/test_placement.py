@@ -527,8 +527,9 @@ def test_a_bore_that_fits_nothing_keeps_the_default() -> None:
         assert "size" not in values, f"{name} rät an einer {diameter}-mm-Bohrung eine Größe"
         assert values["at_feature"] == "hole_1", "die Zuordnung bleibt davon unberührt"
     assert values_for(REGISTRY.get("insert_nut_trap"), hole(diameter=40.0))["size"] == "M39"
-    # 40 mm liegt zwischen Kernloch und Nennmaß der M42; über M64 ein eigenes Maß.
-    thread = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=40.0))
+    # 38 mm liegt zwischen Kernloch (37,5) und Nennmaß der M42 und lässt dem Gang
+    # mehr als die halbe Tiefe; über M64 ein eigenes Maß.
+    thread = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=38.0))
     assert thread["size"] == "M42" and thread["at_feature"] == "hole_1"
     thread = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=80.0))
     assert thread["size"] == CUSTOM_SIZE and thread["at_feature"] == "hole_1"
@@ -887,3 +888,27 @@ def test_the_bore_sentence_names_its_diameter_in_the_display_unit(unit: str) -> 
     for said in (measured, native, blind):
         assert ("mm" in said.split()) is (unit == "mm"), said
         assert (" in" in said) is (unit == "in"), said
+
+
+@pytest.mark.parametrize(
+    ("diameter", "expected"),
+    [(22.0, "M24"), (22.3, "M24"), (23.9, "custom_size"), (40.0, "custom_size")],
+)
+def test_a_bore_just_under_the_nominal_size_takes_a_thread_that_grips(
+    diameter: float, expected: str
+) -> None:
+    """Eine Bohrung knapp unter dem Nennmaß ist kein Kernloch dieser Größe (Review RM-532, K-N6).
+
+    Ø 23,9 bekam die M24: Ihr gedruckter Bolzen reicht mit dem Spiel bis r 11,9 und
+    griff in die Bohrung mit r 11,95 gar nicht. Eine Tabellengröße muss dem Gang
+    die halbe Tiefe lassen (``units.THREAD_MIN_GRIP_SHARE``, M24: bis Ø 22,35);
+    sonst nimmt die Bohrung das eigene Maß mit voller Gangtiefe, Ø 23,9 → Ø 27,2.
+    """
+    from app.core.knowledge.parts.fasteners import size_for_thread
+
+    chosen = size_for_thread(diameter)
+    assert chosen["size"] == expected, chosen
+    if expected == "custom_size":
+        assert chosen["diameter"] > diameter + 0.5 * 2.0 * 0.55 * 1.0, chosen
+    if diameter == 23.9:
+        assert chosen["diameter"] == pytest.approx(27.2)

@@ -3105,6 +3105,7 @@
   "Eigenes Materialprofil beider Einlagen für Spiel, Übermaß und Mindestwand.": "Perfil de material propio de ambos revestimientos para holgura, apriete y pared mínima.",
   "Eigenes Maß": "Medida propia",
   "Eigenes Maß Ø {diameter}: Die Maße sind aus den Normgrößen daneben abgeleitet und nicht genormt.": "Medida propia Ø {diameter}: las medidas se derivan de los tamaños normalizados vecinos y no están normalizadas.",
+  "Eigenes Maß Ø {diameter}: Steigung, Löcher, Mutter und Scheibe sind Normmaße; nur der Kopf ist abgeleitet, eine Zylinderschraube dieser Größe ist nicht genormt.": "Medida propia Ø {diameter}: paso, agujeros, tuerca y arandela son medidas normalizadas; solo la cabeza es derivada, un tornillo de cabeza cilíndrica de este tamaño no está normalizado.",
   "Eigenes Teil bauen": "Crear su propia pieza",
   "Ein Abstand auf der Bezugsfläche und der Winkel der Fase zu ihr.": "Una distancia en la cara de referencia y el ángulo del chaflán respecto a ella.",
   "Ein Auftrag läuft noch. Der Knopf wird frei, sobald er fertig ist.": "Un trabajo sigue en curso. El botón se libera en cuanto termine.",

@@ -190,3 +190,14 @@ Vermutung, und eine Passung darauf geht still ins Leere." Warum die Tabelle
 der Paare gegen die Bibliothek geprüft wird: „die erste Fassung der Tabelle
 war geraten, und `printed_screw` kennt kein `diameter`, sondern `size` und
 `play`."
+
+## Herkunft der Normteiltabelle
+
+Die Werte von M1,6 bis M64 stammen von Händler- und Nachschlageseiten
+(PreciFast, Aspen Fasteners, fasten.it, schraube-mutter.de, wermac,
+mechcodex, engineeringhardware, Wikipedia), nicht von Herstellerblättern —
+für große Größen zeigt kaum ein Hersteller seine Maßtabelle frei. Der Zweck
+der Regel aus §24.2 ist, keine Normtabelle abzuschreiben; Zahlen sind frei.
+Deshalb zählen solche Seiten, wenn eine Stichprobe sie gegen eine zweite
+Quelle hält; die zweite Durchsicht von RM-532 hat das für jede Spalte getan
+und eine Abweichung gefunden (M1.6 Kernloch 1,3 statt 1,25 nach DIN 336).

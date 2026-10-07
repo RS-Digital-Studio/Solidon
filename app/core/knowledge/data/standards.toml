@@ -97,8 +97,22 @@ version = "13"
 # M60 steht bewusst nicht in der Tabelle: DIN 912 führt keine Zylinderschraube M60.
 # Als eigenes Maß leitet Ø 60 zwischen M56 und M64 ab und trifft dort die Normwerte
 # (Steigung 5,5, Mutter 90/48, Scheibe 66/110/10, Durchgang 62/66/70), was
-# `tests/test_standards.py` festhält.
+# `tests/test_standards.py` festhält. `headless` nennt solche Nennmaße: Ein
+# eigenes Maß dort sagt, dass nur der Kopf abgeleitet ist (Review RM-532 Runde 2,
+# K-N3).
 # `tests/test_standards.py` rechnet jede Zeile gegen eine zweite Herleitung nach.
+headless = [60.0]
+# Schlüsselweiten nach ISO 272, auf die ein eigenes Maß seinen Sechskant legt
+# (Review RM-532 Runde 2, K-N2): bis 65 Wikipedia „Schlüsselweite“ (gelesen am
+# 07.10.2026, mit 9, 11, 12, 14, 15 und den Weiten 17, 19, 22, 32 der früheren
+# DIN 931/933), darüber die Weiten der Muttern dieser Tabelle (ISO 4032) und 90
+# der M60 (wermac.org, wie oben). Jede Mutterweite steht darin
+# (`tests/test_standards.py`).
+wrenches = [
+  3.2, 4.0, 5.0, 5.5, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0,
+  18.0, 19.0, 21.0, 22.0, 24.0, 27.0, 30.0, 32.0, 34.0, 36.0, 41.0, 46.0, 50.0, 55.0, 60.0,
+  65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0,
+]
 
 [[screws]]
 size = "M1.6"

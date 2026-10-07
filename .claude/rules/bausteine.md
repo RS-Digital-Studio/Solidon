@@ -322,7 +322,10 @@ Schritt:
 
 Zahlen sind frei verwendbar, Normtexte und Normtabellen nicht: Werte aus frei
 zugänglichen Herstellerangaben zusammentragen, keine Normblätter abschreiben,
-die Herkunft im Kommentar nennen. Jede Zeile der metrischen Reihe rechnet
+die Herkunft je Spalte im Kommentar nennen (§24.2). Händler- und
+Nachschlageseiten, die diese Werte frei zeigen, zählen dazu, wenn eine
+Stichprobe sie gegen eine zweite Quelle hält (`test_table_values_match_their_published_source`);
+eine abgeschriebene Normtabelle bleibt draußen. Jede Zeile der metrischen Reihe rechnet
 `tests/test_standards.py` gegen eine zweite Herleitung nach (Verhältnisse der
 Normen, Scheibenbohrung gleich feinem Durchgangsloch), und der Stand einer
 früheren Tabellenversion steht dort fest: Ein bestehender Wert ändert sich nur
@@ -331,7 +334,10 @@ Schraube der Tabelle (`known_screw`), weil das eigene Maß von ihrem Nennmaß
 aus ableitet. Nennt keine Quelle einen Wert (Senkkopf über M24, M18, M22),
 steht er nach derselben Ableitungsregel gerechnet und gekennzeichnet in der
 Zeile (`countersink_derived`), und der Baustein sagt es am Ergebnis — eine
-Regel wie 2·d statt des Normwerts sieht der Kunde nicht.
+Regel wie 2·d statt des Normwerts sieht der Kunde nicht. Ein abgeleiteter
+Sechskant nimmt die nächste Schlüsselweite der Reihe `wrenches` (ISO 272),
+sonst gäbe es keinen Schlüssel dafür; `headless` nennt Nennmaße, an denen nur
+der Kopf abgeleitet ist (M60).
 
 ## Regelsammlung
 

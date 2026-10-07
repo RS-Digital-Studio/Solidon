@@ -3105,6 +3105,7 @@
   "Eigenes Materialprofil beider Einlagen für Spiel, Übermaß und Mindestwand.": "Separate material profile for both liners, defining clearance, interference and minimum wall.",
   "Eigenes Maß": "Custom size",
   "Eigenes Maß Ø {diameter}: Die Maße sind aus den Normgrößen daneben abgeleitet und nicht genormt.": "Custom size Ø {diameter}: the dimensions are derived from the neighbouring standard sizes and are not standardised.",
+  "Eigenes Maß Ø {diameter}: Steigung, Löcher, Mutter und Scheibe sind Normmaße; nur der Kopf ist abgeleitet, eine Zylinderschraube dieser Größe ist nicht genormt.": "Custom size Ø {diameter}: pitch, holes, nut and washer are standard dimensions; only the head is derived, a cap screw of this size is not standardised.",
   "Eigenes Teil bauen": "Build your own part",
   "Ein Abstand auf der Bezugsfläche und der Winkel der Fase zu ihr.": "A distance on the reference face and the angle of the chamfer to it.",
   "Ein Auftrag läuft noch. Der Knopf wird frei, sobald er fertig ist.": "A job is still running. The button unlocks as soon as it finishes.",

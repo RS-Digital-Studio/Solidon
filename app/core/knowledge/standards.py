@@ -184,6 +184,11 @@ class Tables:
     tubes: dict[str, Tube]
     boards: dict[str, Board]
     pipes: dict[str, Pipe]
+    headless: tuple[float, ...] = ()
+    wrenches: tuple[float, ...] = ()
+    """Schlüsselweiten nach ISO 272, aufsteigend — die Reihe für :func:`wrench_size`."""
+    """ISO-Nennmaße ohne Zylinderschraube nach DIN 912 (M60): Abgeleitet treffen
+    Steigung, Löcher, Mutter und Scheibe dort die Normwerte, nur der Kopf nicht."""
 
 
 def load(path: Path | None = None) -> Tables:
@@ -216,6 +221,16 @@ def load(path: Path | None = None) -> Tables:
         boards=_index(Board, data.get("boards", ()), "boards", source),
         # Nach dem Außendurchmesser, damit die Auswahl der Rohrschelle aufsteigt.
         pipes=_index(Pipe, data.get("pipes", ()), "pipes", source, "outer"),
+        headless=tuple(
+            _finite_positive(value, "headless", str(value), "nominal", source)
+            for value in data.get("headless", ())
+        ),
+        wrenches=tuple(
+            sorted(
+                _finite_positive(value, "wrenches", str(value), "width", source)
+                for value in data.get("wrenches", ())
+            )
+        ),
     )
     _validate(tables, source)
     if path is None:
@@ -490,6 +505,11 @@ def tabulated_size(diameter: float) -> str | None:
     return None
 
 
+def headless_size(diameter: float) -> bool:
+    """Ob ein eigenes Maß ein ISO-Nennmaß ohne genormten Zylinderkopf ist (``headless``)."""
+    return any(abs(value - diameter) <= EPS_GEOM for value in load().headless)
+
+
 def _along(rows: Sequence[tuple[float, tuple[float, ...]]], diameter: float) -> tuple[float, ...]:
     """Die Maße einer Reihe bei einem Durchmesser zwischen oder jenseits ihrer Größen.
 
@@ -560,7 +580,23 @@ def derived_nut(diameter: float) -> Nut:
         for entry in tables.nuts.values()
     )
     width, height = _along(rows, diameter)
-    return Nut(size="", width=width, height=height)
+    return Nut(size="", width=wrench_size(width), height=height)
+
+
+def wrench_size(width: float) -> float:
+    """Die Schlüsselweite der Tabelle, die einem gerechneten Maß am nächsten liegt.
+
+    Ein eigenes Maß leitet seine Schlüsselweite zwischen zwei Größen ab — Ø 9
+    bekäme 14,5 mm, Ø 13 19,5 mm, und dafür gibt es keinen Schlüssel (Review
+    RM-532 Runde 2, K-N2). Innerhalb der Reihe nach ISO 272 (``wrenches``)
+    nimmt das Maß die nächste Weite, bei Gleichstand die größere. Jenseits der
+    Reihe bleibt es gerechnet — dort ist ohnehin nichts genormt, und der Befund
+    ``parts.derived_size`` sagt es.
+    """
+    widths = load().wrenches
+    if not widths or width < widths[0] - EPS_GEOM or width > widths[-1] + EPS_GEOM:
+        return width
+    return min(widths, key=lambda entry: (abs(entry - width), -entry))
 
 
 def derived_washer(diameter: float) -> Washer:

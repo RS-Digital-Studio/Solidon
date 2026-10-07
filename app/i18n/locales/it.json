@@ -3105,6 +3105,7 @@
   "Eigenes Materialprofil beider Einlagen für Spiel, Übermaß und Mindestwand.": "Profilo di materiale specifico per entrambi gli inserti, con gioco, interferenza e parete minima.",
   "Eigenes Maß": "Misura personalizzata",
   "Eigenes Maß Ø {diameter}: Die Maße sind aus den Normgrößen daneben abgeleitet und nicht genormt.": "Misura personalizzata Ø {diameter}: le quote derivano dalle misure normalizzate vicine e non sono normalizzate.",
+  "Eigenes Maß Ø {diameter}: Steigung, Löcher, Mutter und Scheibe sind Normmaße; nur der Kopf ist abgeleitet, eine Zylinderschraube dieser Größe ist nicht genormt.": "Misura personalizzata Ø {diameter}: passo, fori, dado e rondella sono misure normalizzate; solo la testa è derivata, una vite a testa cilindrica di questa misura non è normalizzata.",
   "Eigenes Teil bauen": "Costruisci un pezzo tuo",
   "Ein Abstand auf der Bezugsfläche und der Winkel der Fase zu ihr.": "Una distanza sulla faccia di riferimento e l'angolo dello smusso rispetto a essa.",
   "Ein Auftrag läuft noch. Der Knopf wird frei, sobald er fertig ist.": "Un'attività è ancora in corso. Il pulsante si libera appena termina.",

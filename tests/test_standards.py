@@ -430,3 +430,22 @@ def test_m60_as_a_custom_size_derives_the_iso_values_between_m56_and_m64() -> No
         pytest.approx(110.0),
         pytest.approx(10.0),
     )
+
+
+def test_a_derived_hexagon_takes_a_wrench_size_of_the_series() -> None:
+    """Ein eigenes Maß legt seinen Sechskant auf eine Schlüsselweite (Review RM-532, K-N2).
+
+    Ø 9 bekam 14,5 mm über die Flächen, Ø 13 19,5 mm — dafür gibt es keinen
+    Schlüssel. Jetzt nimmt es die nächste Weite der Reihe nach ISO 272; jede
+    Mutterweite der Tabelle steht in dieser Reihe, und jenseits bleibt das Maß
+    gerechnet.
+    """
+    tables = standards.load()
+    assert {nut.width for nut in tables.nuts.values()} <= set(tables.wrenches)
+    assert standards.derived_nut(9.0).width == pytest.approx(15.0)
+    assert standards.derived_nut(13.0).width == pytest.approx(19.0)
+    assert standards.derived_nut(60.0).width == pytest.approx(90.0)
+    for diameter in (2.2, 7.0, 11.0, 25.0, 45.5, 61.0):
+        assert standards.derived_nut(diameter).width in tables.wrenches, diameter
+    beyond = standards.derived_nut(70.0).width
+    assert beyond > max(tables.wrenches) and beyond not in tables.wrenches

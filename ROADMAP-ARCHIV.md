@@ -43530,7 +43530,12 @@ Aufbohren gelten zugleich und die Wand wird längs der Gewindestrecke ab der Mü
 für M18 und M22 gerechnet mit `countersink_derived` und Befund `parts.countersink_derived` (N3);
 ein Maß hinter der Klappe, das erst die Wahl vorn verlangt, öffnet sie (N4); kürzere Sätze über
 der Bohrung samt Wortprüfung (N5); Kopftiefe und Laschenbreite aus der größten Größe (N6); ein
-Außengewinde begrenzt eine Wand mit seinem Kern (N7); M1.6 Kernloch 1,25 nach DIN 336.
+Außengewinde begrenzt eine Wand mit seinem Kern (N7); M1.6 Kernloch 1,25 nach DIN 336. Danach die
+Restfunde: Ein abgeleiteter Sechskant nimmt eine Schlüsselweite nach ISO 272 (K-N2), Ø 60 sagt,
+dass nur der Kopf abgeleitet ist (K-N3), der Satz „das ist M6 innerhalb der Messunsicherheit“
+steht über die Gewindepassung im Prüfbericht (K-N4), eine Tabellengröße an einer Bohrung
+verlangt die halbe Gangtiefe (`units.THREAD_MIN_GRIP_SHARE`, K-N6), und die Regel zur Herkunft
+der Normteiltabelle nennt Händler- und Nachschlageseiten mit Stichprobe (U-N3).
 
 **Nachweis:** Bereichsnachweis aller 49 Bausteine nach dem Merge in `stift-fuer-bohrung`
 (alle 49 bestanden, `printed_thread` 248 Ecken mit 8 erklärt ausgeschlossen, `screw_hole` 464, `wall_mount` 512); betroffene Tests je Schritt grün (Normteile 3713 bestanden ohne Fenster, Stift 1256),

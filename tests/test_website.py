@@ -139,10 +139,16 @@ def test_activation_privacy_names_both_abuse_counters_without_claiming_plain_ip_
 def _count(table: str) -> int:
     """Zählt die Maßeinträge einer Normteil- oder Druckertabelle.
 
-    ``version`` ist eine Angabe über die Tabelle, kein Eintrag in ihr.
+    ``version`` ist eine Angabe über die Tabelle, kein Eintrag in ihr, und
+    ebenso die Zahlenreihen daneben (``headless``, ``wrenches``): Sie beschreiben
+    die Ableitung eigener Maße, kein Normteil.
     """
     loaded = tomllib.loads((DATA / table).read_text(encoding="utf-8"))
-    return sum(len(v) for k, v in loaded.items() if k != "version" and isinstance(v, list))
+    return sum(
+        len(v)
+        for k, v in loaded.items()
+        if k != "version" and isinstance(v, list) and all(isinstance(e, dict) for e in v)
+    )
 
 
 @pytest.fixture(scope="module", autouse=True)

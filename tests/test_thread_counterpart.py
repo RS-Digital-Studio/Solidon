@@ -687,3 +687,51 @@ def test_a_changed_own_measure_takes_its_counterpart_along(profile: Profile) -> 
         document, result.scene, profile, own.id, {**own.params, "diameter": 66.6 + 1e-12}
     )
     assert same is None
+
+
+def test_the_standard_size_note_stays_in_the_report_with_the_fit(profile: Profile) -> None:
+    """Der Satz „das ist M6 innerhalb der Messunsicherheit“ steht im Prüfbericht.
+
+    Er stand nur in der Statuszeile (Review RM-532 Runde 2, K-N4); wer sie
+    verpasste, erfuhr nicht, dass M6 statt Ø 6 × 1,03 gebaut wurde. Jetzt sagt
+    ihn die Prüfung der Gewindepassung bei jeder Auswertung, an der gemessenen
+    Hälfte. Zwei Bibliotheksgewinde sagen nichts.
+    """
+    from app.core.scene.fits import check
+    from app.core.types import FeatureRef, Fit, SceneObject
+
+    measured = _generated(
+        6.0, 1.03, internal=True, provenance="native", uncertainty=0.05, handedness="right"
+    )
+    made = dataclasses.replace(
+        _generated(5.8, 1.0, handedness="right"),
+        params={**_generated(5.8, 1.0, handedness="right").params, "nominal": 6.0},
+    )
+
+    def scene_with(first: Feature) -> Scene:
+        objects = {
+            name: SceneObject(id=name, name=name, mesh=None, features={"thread_1": feature})  # type: ignore[arg-type]
+            for name, feature in (("obj_1", first), ("obj_2", made))
+        }
+        fit = Fit(
+            "thread",
+            FeatureRef("obj_1", "thread_1"),
+            FeatureRef("obj_2", "thread_1"),
+            "thread",
+            "auto:",
+        )
+        return Scene(objects=objects, profile=profile, fits=[fit])
+
+    found = [
+        entry for entry in check(scene_with(measured), profile) if entry.code.startswith("parts.")
+    ]
+    assert [entry.code for entry in found] == ["parts.counterpart_standard_size"], found
+    assert found[0].object_id == "obj_1" and found[0].feature_ids == ("thread_1",)
+
+    printed = dataclasses.replace(
+        _generated(6.2, 1.0, internal=True, handedness="right"),
+        params={**_generated(6.2, 1.0, internal=True, handedness="right").params, "nominal": 6.0},
+    )
+    assert not [
+        entry for entry in check(scene_with(printed), profile) if entry.code.startswith("parts.")
+    ]
