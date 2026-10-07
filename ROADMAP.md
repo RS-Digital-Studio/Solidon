@@ -95,6 +95,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
+| [RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile](#rm-543) | Bedienung und Darstellung | Gefunden beim Review von RM-134/316 (07.10.): `test_a_report_click_keeps_its_mark_across_the_async_map` zeitweise rot; offen die Ursache und ob der Kunde es sieht |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -103,11 +104,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | (a) und (b) erledigt; offen die sechs Befunde aus dem Review 02.10., die einen Schritt meinen und *Diesen Schritt ändern* noch nicht tragen |
 | [RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat](#rm-529) | KI und Generatoren | `created_by` in Merkmals- und Objektzeile des Steckbriefs nachrüsten (Entscheidung Robert, 06.10.) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
-| [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Genehmigt (Robert: „alles gründlich“); neun Helfer in `helpers.py`/`ui_helpers.py` (`95fd36d35`); offen `on_the_bore_wall`, `project`, `FakeCodec`, `a_foreign_slot`; entschieden (Robert, 06.10.): auch die großen Fenster-Fixtures zusammenführen |
+| [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Stimme mit Prüfsummen in `licences.toml` dokumentiert; offen: `/legal-review` zur Werbenutzung, Eintrag in `ASSET-RIGHTS.toml` und ein Test, der die Stimme prüft |
-| [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (d) und Teile von (b)/(c) mit `b03c0ddfe` erledigt; offen die Kopie `_select_data` samt Karte, die übrigen dünnen Hüllen aus (b), `section.section_volume` und `repair.fill_holes` (Liste am Punkt) |
+| [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (a) bis (d) bis auf zwei Namen erledigt (07.10.); offen `ai_disclosure._fit_content_height` (gewollt mit Fenstertest oder in `ContentHeight`) und `slice.analysis._opening_loss` ohne Produktionsaufrufer |
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): `rendering`-Fälle in der Release-CI auch unter Linux und macOS, dazu der Wächter in `test_packaging.py` |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Erster Lauf 02.10. im Archiv; der zweite war am 05.10. fällig und steht aus (bekannt: cadquery-ocp-novtk 8.0.1.1.0); Paketbeleg der Bauplattform unter RM-468 |
 | [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.); offen acht Fälle, `build.yml`, die Wächter und der Slicer-Job |
@@ -3762,6 +3763,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
 
+<a id="rm-543"></a>
+
+- [ ] **RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile.**
+  `tests/test_analysis_ui.py::test_a_report_click_keeps_its_mark_across_the_async_map` fährt
+  den Klick von der Berichtszeile bis zur fertigen Analysekarte mit echtem `QTimer`. Am
+  07.10.2026 war er lokal zweimal rot, an `d25f12366` und am Zweig von RM-134, einzeln wie im
+  Dateilauf, mit `RuntimeError: Internal C++ object (QListWidgetItem) already deleted`; am
+  selben Morgen lief er einzeln grün und im CI-Lauf 37560540258 auf allen vier Plattformen.
+  Ob der Test eine Zeile hält, die der Bericht beim Neuaufbau verwirft, oder ob die Oberfläche
+  nach dem Neuaufbau eine alte Zeile anfasst, ist offen. **Abnahme:** Ursache benannt; liegt sie
+  in der Oberfläche, ein Test, der den Neuaufbau zwischen Klick und Karte erzwingt; der Test
+  zwanzigmal hintereinander grün, auch unter Last.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -3970,6 +3984,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `with_a_body`, `on_the_bore_wall`) werden zusammengeführt; abgenommen im nächsten
   Release-Tor.
 
+  **Stand 07.10.2026:** Umgesetzt. `on_the_bore_wall` steht in `tests/ui_helpers.py`, die
+  Fixture `project`, `FakeCodec` und `a_foreign_slot` in `tests/helpers.py`; zwölf Kopien der
+  Fenster-Fixtures `window` und `session` binden die aus `ui_helpers` ein
+  (`test_locked_says_why` behält seine `session` mit Würfel, und das geteilte Fenster nimmt
+  sie). Über die 37 berührten Testdateien gesammelt 4508 Fälle vorher und nachher, mit gleichen
+  Namen in gleicher Reihenfolge; Review mit Nachprüfung (07.10.2026). **Offen** nur die Abnahme
+  im nächsten Release-Tor, wie entschieden.
+
 <a id="rm-272"></a>
 
 - [ ] **RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch.** Aus der Durchsicht
@@ -4081,6 +4103,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `section.section_volume`, `repair.fill_holes`; **(a)** die Kopie `_select_data` in
   `app/ui/print_settings_dialog.py:320` (Original `style.select_data`); die Karte
   `app/ui/CLAUDE.md` nennt `ContentHeight`, aber weder `select_data` noch `svg_pixmap`.
+
+  **Stand 07.10.2026:** Erledigt sind aus (b) `draft_vertical` (die Tests rufen
+  `draft_faces` und `draft_walls`), `placement.placement_tool` (`prepare_tool(...).mesh`),
+  `faces._upright_faces` (`_walls_along`), `slice.analysis._islands` (`_islands_many`),
+  `set_pickable` und `remove_pointer_listener` samt dem Abmeldetoken, die Hüllen
+  `_shadow_hull_of`, `_shadow_outline_of` und `_shadow_catchers` in `viewport.py` (die Tests
+  nehmen die freien Funktionen des Schattenarbeiters, der Bettumriss steht einmal in
+  `_shadow_bed`); `detect_faces` bleibt als Prüfweg, der Docstring sagt, wofür und was ihm
+  fehlt. Aus (c) `section.section_volume` (`cut(...).mesh.volume`) und `repair.fill_holes`
+  samt `_filled_with_count` (`repair` mit Lochfüllen allein), aus (a) `_select_data`
+  (`style.select_data`); die Karte nennt `select_data` und `svg_pixmap`. Review mit
+  Nachprüfung (07.10.2026). **Offen:** `ai_disclosure._fit_content_height` — gewollte
+  Variante mit Kriterium und Fenstertest oder in `style.ContentHeight` zusammenlegen
+  (`.claude/rules/zwillinge.md`); `slice.analysis._opening_loss` hat keinen
+  Produktionsaufrufer, nur Tests — als Prüfweg dokumentieren oder entfernen.
 
 <a id="rm-344"></a>
 
