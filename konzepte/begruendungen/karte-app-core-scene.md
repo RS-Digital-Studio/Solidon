@@ -850,7 +850,7 @@ ausdrückliche Lageänderung bleibt der ursprüngliche Auftrag erhalten.
 
 *Früher unter „Grenzen“.*
 
-`placement.prepare_tool` und `placement_tool` reichen aufgelöste Projektmaße
+`placement.prepare_tool` reicht aufgelöste Projektmaße
 an Bausteine mit `kind="sketch"` weiter. Die Zeichnung bleibt ein gespeicherter
 Ausdruck; nur der vorübergehende Bau erhält Zahlenwerte.
 

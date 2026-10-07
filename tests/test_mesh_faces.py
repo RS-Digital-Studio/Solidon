@@ -23,8 +23,8 @@ from app.core.geom import faces
 from app.core.geom.boolean import boolean
 from app.core.geom.faces import (
     SAME_PLANE_ENOUGH,
-    _upright_faces,
-    draft_vertical,
+    _walls_along,
+    draft_walls,
     push_face,
 )
 from app.core.geom.mesh import MeshData
@@ -39,6 +39,8 @@ CORPUS = pathlib.Path(__file__).parent / "data" / "meshes"
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 STEP = 10.0
 DRAFT = 3.0
+#: Die Entformungsrichtung „nach oben“, wie ``draft_walls`` sie ohne Angabe nimmt.
+UP = np.array([0.0, 0.0, 1.0])
 
 
 def block() -> MeshData:
@@ -189,7 +191,7 @@ def test_the_draft_keeps_the_standing_face_and_narrows_the_top() -> None:
     „positive closed volume": Die Kette fiel bis zur Voxelstufe durch, brauchte
     4,8 Sekunden und lag 0,13 % daneben.
     """
-    outcome = draft_vertical(block(), DRAFT)
+    outcome = draft_walls(block(), DRAFT)
     shaped = outcome.mesh.raw
     slope = math.tan(math.radians(DRAFT))
 
@@ -255,7 +257,6 @@ def test_the_draft_holds_where_wall_corners_stand_just_beside_the_neutral_plane(
     jeder Höhe ein Quadrat der halben Breite 20 − (z − 10)·tan α stehen;
     ∫₀²⁰ (2·(20 − (z − 10)·tan α))² dz = 32 000 + 8000/3·tan²α.
     """
-    from app.core.geom.faces import draft_walls
     from app.core.geom.section import _ON_PLANE
 
     body = box_with_a_seam(share * _ON_PLANE)
@@ -280,8 +281,8 @@ def test_both_kernels_draft_to_the_same_body() -> None:
     from app.core.brep import profiles as brep
     from app.core.brep.edit import box
 
-    exact = brep.draft_vertical(box(WIDTH, DEPTH, HEIGHT), DRAFT)
-    meshed = draft_vertical(block(), DRAFT).mesh.raw
+    exact, _added = brep.draft_faces(box(WIDTH, DEPTH, HEIGHT), DRAFT)
+    meshed = draft_walls(block(), DRAFT).mesh.raw
 
     assert exact.volume == pytest.approx(drafted_volume(DRAFT), abs=1e-6)
     assert meshed.volume == pytest.approx(exact.volume, abs=1e-6)
@@ -335,7 +336,7 @@ def test_the_draft_reaches_every_wall_not_just_the_recognised_ones() -> None:
     ]
     assert len(recognised) == 2, "die Voraussetzung des Befunds: zwei Wände sind kein Merkmal"
 
-    shaped = draft_vertical(plate, DRAFT).mesh.raw
+    shaped = draft_walls(plate, DRAFT).mesh.raw
 
     length, width, thickness = FOIL
     slope = math.tan(math.radians(DRAFT))
@@ -392,10 +393,10 @@ def test_the_facets_of_a_bore_do_not_become_walls() -> None:
     eine Mutationsprobe am 18.09.2026).
     """
     plate = MeshData.of(trimesh.load_mesh(str(CORPUS / "plate_countersunk.stl")))
-    walls = _upright_faces(plate)
+    walls = _walls_along(plate, UP)
     assert len(walls) == 4, f"nur die vier Außenwände, gefunden: {len(walls)}"
 
-    shaped = draft_vertical(plate, DRAFT).mesh
+    shaped = draft_walls(plate, DRAFT).mesh
 
     assert shaped.raw.is_watertight
     assert shaped.raw.volume < plate.raw.volume, "und angestellt ist er auch"
@@ -420,7 +421,7 @@ def test_a_degenerate_triangle_is_no_upright_wall() -> None:
     Dreiecken und zwölf entarteten. Also genau das, was Solidon selbst baut.
     """
     body = MeshData.of(trimesh.load_mesh(str(CORPUS / "degenerate.stl")))
-    walls = _upright_faces(body)
+    walls = _walls_along(body, UP)
 
     assert len(walls) == 6, "die Voraussetzung: sechs senkrechte Wände"
     for triangles, normal in walls:
@@ -435,7 +436,7 @@ def test_a_degenerate_triangle_is_no_upright_wall() -> None:
         length = float(np.linalg.norm(direction))
         assert length > EPS_GEOM, f"eine Wand ohne Richtung ({len(triangles)} Dreiecke)"
 
-    shaped = draft_vertical(body, DRAFT).mesh
+    shaped = draft_walls(body, DRAFT).mesh
     assert shaped.raw.is_watertight
     # Die Zahl aus dem Docstring, gemessen und nicht nur genannt. Ohne die
     # Ergänzung sind es drei Wände und 7385,755 mm³ — eine Zusicherung auf
@@ -479,7 +480,7 @@ def test_the_limit_counts_what_it_guesses_not_what_it_knows(
     assert len(recognised) == 2, "die Voraussetzung der Folie: zwei Wände sind Streifen"
 
     monkeypatch.setattr(faces, "MOST_WALLS_TO_GUESS", len(recognised) + 1)
-    walls = _upright_faces(plate)
+    walls = _walls_along(plate, UP)
 
     assert len(walls) > len(recognised), (
         "die ebenen Kandidaten kommen dazu, obwohl zwei Wände schon erkannt sind"
@@ -509,7 +510,7 @@ def test_a_guessed_wall_is_flat_all_over_and_not_only_at_its_first_triangle(
     welded = _one_body(body).raw
     monkeypatch.setattr(faces, "MOST_WALLS_TO_GUESS", 10_000)
 
-    walls = _upright_faces(body)
+    walls = _walls_along(body, UP)
 
     assert len(walls) > 12, "die Voraussetzung: diese Datei hat viele Kandidaten"
     for triangles, normal in walls:
@@ -533,7 +534,7 @@ def test_a_cylinder_is_not_mistaken_for_a_stack_of_walls() -> None:
     body.apply_translation((0.0, 0.0, 10.0))
 
     with pytest.raises(GeometryError) as problem:
-        draft_vertical(MeshData(body), DRAFT)
+        draft_walls(MeshData(body), DRAFT)
 
     # Seit P6.4 nennt der Satz die Entformungsrichtung — bei „nach oben“ sind
     # das die senkrechten Flächen (23.09.2026).
@@ -551,7 +552,7 @@ def test_an_open_mesh_is_turned_away_before_the_chain_wrecks_it() -> None:
     body = trimesh.load_mesh(str(CORPUS / "broken_open.stl"))
 
     with pytest.raises(GeometryError) as problem:
-        draft_vertical(MeshData(body), DRAFT)
+        draft_walls(MeshData(body), DRAFT)
 
     assert "nicht geschlossen" in str(problem.value.detail)
     assert problem.value.suggestions, "Regel 17: nie ohne Handlungsvorschlag"
@@ -568,7 +569,7 @@ def test_a_mesh_only_the_weld_closes_still_goes_through() -> None:
     body = MeshData(trimesh.load_mesh(str(CORPUS / "plate_countersunk.stl")))
     assert not body.raw.is_watertight, "die Voraussetzung: roh ist es offen"
 
-    shaped = draft_vertical(body, DRAFT).mesh
+    shaped = draft_walls(body, DRAFT).mesh
 
     assert shaped.raw.is_watertight
     assert shaped.raw.volume < body.raw.volume, "und es ist wirklich angestellt worden"
@@ -586,7 +587,7 @@ def test_a_loose_speck_the_wedge_eats_is_named() -> None:
     body = MeshData(trimesh.load_mesh(str(CORPUS / "two_components.stl")))
     assert body.component_count == 2, "die Voraussetzung: zwei Teile"
 
-    outcome = draft_vertical(body, DRAFT)
+    outcome = draft_walls(body, DRAFT)
 
     assert outcome.mesh.component_count == 1
     spoken = [entry for entry in outcome.findings if entry.code == "draft.parts_consumed"]

@@ -1813,7 +1813,7 @@ def test_the_pointer_listener_holds_the_view_only_weakly(
     viewport.renderer = renderer
     viewport._listen_to(renderer)
     assert len(renderer.listeners) == 1, "kein Zuhörer angemeldet"
-    (listener,) = renderer.listeners.values()
+    (listener,) = renderer.listeners
     listener(PointerEvent(kind="move", x=40, y=30))
     assert viewport._hover_at == (40, 30), "der Zuhörer erreicht die Ansicht nicht"
 
@@ -8865,7 +8865,7 @@ def test_a_shadow_is_computed_once_per_piece_and_drawn_once_per_body(
     Stück **und** Auffangfläche.
 
     Die Hülle braucht sie nur einmal je Stück: Eine tiefere Auffangfläche
-    verschiebt den Umriss, sie ändert ihn nicht (``_shadow_outline_of``). Und
+    verschiebt den Umriss, sie ändert ihn nicht (``shadow_outline_of``). Und
     die Vielecke eines Körpers tragen dieselbe Farbe, passen also in einen
     Aktor. Nach dem Umbau: 126 ms am echten Renderer. Seit dem 22.09.2026
     gehen die Umrisse aller Stücke in **einem** Aufruf durch GEOS

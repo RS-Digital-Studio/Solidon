@@ -212,16 +212,16 @@ Rückkehrziel (`action_projection`).
 * **Er folgt der Kamera, weil das Frontlicht es tut** (`shadow_direction`);
   `_redraw_shadows` zieht nach am Zugende (`on_end`), je Schritt der 3D-Maus und
   je Kameravorgabe — nie an einem Renderer-Ereignis.
-* **Er fällt auf die Fläche, auf der sein Körper steht** (`_shadow_catchers`:
+* **Er fällt auf die Fläche, auf der sein Körper steht** (`shadow_catchers`:
   Platte und jeder Körper, dessen Oberkante nicht über seiner Unterkante liegt),
   geschnitten an deren Umriss (`clip_polygon`) und an der Platte **des Körpers**
-  (`_bed_outline_for`, Kante aus `_bed_extent`; ohne gezeigten Bauraum wird
-  nicht geschnitten).
+  (`_shadow_bed` über `_bed_outline_for`, Kante aus `_bed_extent`; ohne
+  gezeigten Bauraum wird nicht geschnitten).
 * **Gerechnet je Körper, nicht je Auffangfläche**: der Umriss je Stück einmal auf
   seiner Unterkante (ebene Hülle über GEOS, als `base` an
   `shadow_outline_of`), dann nur verschoben — `ground` fällt in
   `shadow_points` als Summand heraus, die Klammer `maximum(…, 0)` greift dort
-  nie. Die konvexe Hülle je Körper einmal (`_shadow_hull_of`), über
+  nie. Die konvexe Hülle je Körper einmal (`shadow_hull_of`), über
   `SHADOW_HULL_POINTS` als Stichprobe plus Extrempunkte in vierzehn Richtungen.
 * **Ein Aktor je Körper**, fester Kapazität, nur neue Punkte
   (`_show_shadow_soups`), gemerkt in `_shadow_owners`; **jeder Zug zieht den

@@ -134,9 +134,9 @@ Ausführung der nachgelagerten Befund- und Orientierungssuche.
   kanonische Ecken); gleiche erben die Zahlen (`_repeated`).
 - **Gestapelt statt je Schicht**: Arbeiter bekommen Blöcke von höchstens
   `BATCH_LAYERS`, `_measure_batch` stellt jede Frage als **einen**
-  vektorisierten GEOS-Aufruf; die Einzelfunktionen (`_islands`,
-  `minimum_width`, `_opening_loss`, `_survives_opening`) sind Blöcke aus einem
-  Element. `_islands_many` baut den GEOS-Index der Vorgänger einmal.
+  vektorisierten GEOS-Aufruf; die Einzelfunktionen (`minimum_width`,
+  `_opening_loss`, `_survives_opening`) sind Blöcke aus einem Element. Inseln
+  fragt nur `_islands_many`, das den GEOS-Index der Vorgänger einmal baut.
   `FULL_WORKERS` steht bei sechs, die Messreihe an der Konstante.
 - **Spannweiten ohne Overlay**: `_supported_span` bündelt gleiche Richtungen
   und schneidet als Abtastzeile im optionalen Cythonkern oder in NumPy

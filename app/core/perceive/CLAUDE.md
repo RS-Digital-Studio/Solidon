@@ -177,8 +177,8 @@ hält beide Wege zusammen.
   (`no_own_body`), Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
   Kette mit Verengung (`narrowing_reason`), Kegel einer Kette bei *Merkmal
   ändern* (`_countersink_unsized` → `countersink_resize_refusal`), Verrundung
-  ohne zwei Ebenen (`fillet_blocked` — liest die Ebenen frisch aus
-  `detect_faces` wie `edges._around`, nicht die `face`-Einträge des Baums).
+  ohne zwei Ebenen (`fillet_blocked` — liest die Ebenen aus `planar_mask`
+  wie `edges._around`, nicht die `face`-Einträge des Baums).
 - `bore_action` bietet die ursprünglichen Schrittwerte an und ändert über
   `step` den vorhandenen Schritt; eine Transformation wird nicht
   zurückgerechnet. Eine ermittelte Kette geht als `cavity` an `actions_for()`

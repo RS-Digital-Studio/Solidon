@@ -194,8 +194,10 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 Prüfkörper und Wächter, die mehrere Testdateien lesen, stehen in
 `tests/helpers.py` unter öffentlichem Namen (`exact_kernel`, `ridged_shaft`,
 `the_torus` und die Maße des Schafts), nicht als `from tests.test_x import
-_privat` beim zufällig ersten Nutzer. Was dort noch fehlt, nennt der
-Modul-Docstring — die Quelldateien gehören anderen Umbauten.
+_privat` beim zufällig ersten Nutzer. Geteilte Fixtures stehen ebenso einmal —
+`project` in `helpers.py`, `window` und `session` in `ui_helpers.py` — und
+werden mit `from … import name as name` eingebunden; eine Datei, die eine
+vorbereitete Sitzung braucht, überschreibt nur `session`.
 
 ## Stolperfallen
 

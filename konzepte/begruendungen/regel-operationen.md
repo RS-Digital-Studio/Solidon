@@ -1981,8 +1981,8 @@ waren es fünf, vier davon in `tests/test_agent_suite.py`.
   liefert einen unveränderlichen `PlacementTool` mit lokalem Körper und
   ausgewähltem Merkmalsversatz. `surface_values(..., prepared_tool=...)`
   berechnet daraus neue Koordinaten ohne weiteren Körperbau; dieser Kontext
-  gehört zu genau den gewählten Eingaben. `placement_tool()` bleibt der
-  kompatible reine Mesh-Zugriff. Mündung oder Basis liegt bei null. Nur der
+  gehört zu genau den gewählten Eingaben; wer nur den Körper braucht, liest
+  `prepare_tool(...).mesh`. Mündung oder Basis liegt bei null. Nur der
   temporäre Anzeigeaktor erhält den `frame_of()`-Rahmen am Treffer. Winkel,
   Einsenkung und Schnittspiegelung stecken bereits im Werkzeug. Bausteine
   deklarieren ihre Richtungsfelder über `normal_fields()`, damit gleichnamige

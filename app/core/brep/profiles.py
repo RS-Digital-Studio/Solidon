@@ -747,17 +747,6 @@ def shell_open_at(
     return result
 
 
-def draft_vertical(
-    solid: Solid, angle_deg: float, *, cancelled: CancelToken | None = None
-) -> Solid:
-    """Stellt alle senkrechten Flächen um den Winkel an — der Weg aller alten Schritte.
-
-    Neutral bleibt die Unterkante des Körpers: dort behält der Körper sein Maß,
-    nach oben wird er schmaler. Gerechnet wie an gewählten Flächen
-    (:func:`draft_faces`)."""
-    return draft_faces(solid, angle_deg, cancelled=cancelled)[0]
-
-
 def draft_faces(
     solid: Solid,
     angle_deg: float,

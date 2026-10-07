@@ -10,23 +10,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-from PySide6.QtWidgets import QApplication
-
 from app.core.registry import REGISTRY
 from app.ui.main_window import MainWindow
 from app.ui.op_dialog import FeatureSetField, OperationDialog
-from app.ui.session import Session
-from app.ui.settings import UiSettings
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    # Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test
-    # auf die Arbeiter jedes offenen Fensters.
-    return MainWindow(Session(), UiSettings())
 
 
 def _plate_with_holes(window: MainWindow) -> tuple[str, str, int]:

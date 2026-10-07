@@ -2669,3 +2669,6 @@ verschiedener Reihenfolge anfordern.
 Der Mündungsumriss der Flächenplatzierung (`placement_flow.py`) trifft die
 Ebene längs der Werkzeugachse, nicht senkrecht zur Fläche; bei fast
 paralleler Achse bleibt statt des Umrisses der Werkzeugkörper sichtbar.
+Den Rahmen des Langlochs (Flächennormale beim Setzen, positive Merkmalachse
+beim Ziehen und Ändern, Gegenmündung rechtshändig) hält `.claude/rules/griffe.md`.
+*Früher in der Karte `app/ui/CLAUDE.md`.*

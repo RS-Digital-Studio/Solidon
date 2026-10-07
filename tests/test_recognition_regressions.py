@@ -12,7 +12,7 @@ import trimesh
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive import features
-from app.core.perceive.features import _fit_circle, detect, detect_faces, forget_cache
+from app.core.perceive.features import _fit_circle, detect, forget_cache
 from app.core.perceive.helix import find_helices
 from app.core.units import EPS_GEOM
 
@@ -61,7 +61,7 @@ def test_round_guide_with_three_detents_is_not_a_stadium() -> None:
 
 def test_waterfall_front_wall_is_outside_despite_the_lower_lip() -> None:
     """Die vordere Wand liegt über der Lippe und hat nach außen freien Raum."""
-    found = detect_faces(_corpus("waterfall"))
+    found = [entry for entry in detect(_corpus("waterfall")).values() if entry.kind == "face"]
     wall = [
         feature
         for feature in found
@@ -85,7 +85,7 @@ def test_bayonet_contact_planes_survive_a_large_unrelated_floor(
     name: str, height: float, expected_count: int, expected_area: float
 ) -> None:
     """Drei Nocken und drei Drehwege haben jeweils eigene horizontale Kontaktflächen."""
-    found = detect_faces(_corpus(name))
+    found = [entry for entry in detect(_corpus(name)).values() if entry.kind == "face"]
     contacts = [
         feature
         for feature in found

@@ -34,8 +34,7 @@ from app.core.types import (
     Scene,
     SceneObject,
 )
-from tests.helpers import FakeMesh, exact_kernel, make_object
-from tests.test_cache import FakeCodec
+from tests.helpers import FakeCodec, FakeMesh, exact_kernel, make_object
 
 # Über den Paketnamen käme die **Funktion** ``evaluate`` — das Paket exportiert
 # sie träge unter demselben Namen wie das Modul.

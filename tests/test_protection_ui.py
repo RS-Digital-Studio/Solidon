@@ -21,17 +21,10 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.split import SplitPlan
 from app.core.types import Finding
 from app.ui.main_window import MainWindow
-from app.ui.session import Session
-from app.ui.settings import UiSettings
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    # Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test
-    # auf die Arbeiter jedes offenen Fensters.
-    return MainWindow(Session(), UiSettings())
 
 
 def a_plate_with_a_face(window: MainWindow) -> tuple[str, str]:

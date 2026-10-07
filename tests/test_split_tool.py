@@ -18,22 +18,12 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from app.ui.main_window import MainWindow
-from app.ui.session import Session
-from app.ui.settings import UiSettings
 from app.ui.split_bar import POINTS_NEEDED, SplitBar, state_text
 from tests.render_fakes import RecordingRenderer
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def session(qt_app: QApplication) -> Session:
-    return Session()
-
-
-@pytest.fixture
-def window(qt_app: QApplication, session: Session) -> MainWindow:
-    return MainWindow(session, UiSettings())
 
 
 def with_a_cube(window: MainWindow) -> str:

@@ -3219,21 +3219,6 @@ def original_surface_hit(
     return selected
 
 
-def placement_tool(
-    spec: OperationSpec,
-    entered_values: Mapping[str, Any],
-    profile: Profile,
-    *,
-    source: SceneObject | None = None,
-    feature: Feature | None = None,
-    parameters: Mapping[str, float] | None = None,
-) -> MeshData:
-    """Der wirkliche lokale Werkzeugkörper; ausschließlich für die temporäre Vorschau."""
-    return prepare_tool(
-        spec, entered_values, profile, source=source, feature=feature, parameters=parameters
-    ).mesh
-
-
 def prepare_tool(
     spec: OperationSpec,
     entered_values: Mapping[str, Any],

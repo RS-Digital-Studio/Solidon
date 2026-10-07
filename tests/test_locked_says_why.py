@@ -67,6 +67,7 @@ from app.ui.sketch_editor import ExpressionDialog, PointDialog, SketchEditorDial
 from app.ui.support_dialog import SupportDialog
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -306,18 +307,6 @@ def session(qt_app: QApplication) -> Session:
     made.import_model(MESHES / "cube_clean.stl", raise_on_error=True)
     made.evaluate_now()
     return made
-
-
-@pytest.fixture
-def window(qt_app: QApplication, session: Session) -> MainWindow:
-    """Das Hauptfenster für die Menüprüfungen.
-
-    Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test auf
-    die Arbeiter jedes offenen Fensters — dieselbe Bauart wie in
-    ``test_ui.py``, damit zwei Aufbauten desselben Fensters nicht
-    auseinanderlaufen.
-    """
-    return MainWindow(session, UiSettings())
 
 
 def _silent_buttons(dialog: QDialog) -> list[str]:

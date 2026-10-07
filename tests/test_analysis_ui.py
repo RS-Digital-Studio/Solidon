@@ -27,6 +27,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests.render_fakes import RecordingItem, RecordingRenderer
+from tests.ui_helpers import on_the_bore_wall
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -779,28 +780,6 @@ def select_plate(window: MainWindow) -> None:
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
-
-
-def on_the_bore_wall(window: MainWindow, feature_id: str) -> tuple[float, float, float]:
-    """Eine Stelle auf der Wand dieser Bohrung — also eine, die ein Klick
-    wirklich trifft.
-
-    Drei Tests dieser Datei zeigten bis zum 22.08.2026 auf den **Mittelpunkt**
-    einer Bohrung. Der liegt auf ihrer Achse, mitten im Leeren, und dort ist
-    keine Oberfläche: Ein ``vtkCellPicker`` kann diesen Punkt nicht
-    zurückgeben. Grün waren sie, weil ``_feature_at`` damals das Merkmal mit
-    dem nächsten Mittelpunkt nahm — sie prüften also gegen die Rechenweise und
-    nicht gegen einen Klick. Seit die Reichweite an den Dreiecken des Merkmals
-    hängt (§18.5), zeigen sie dorthin, wo gezeigt wird.
-
-    Die eigentliche Auswahltiefe steht in ``tests/test_selection.py``; hier
-    bleiben die drei Aussagen, um die es diesen Tests ging.
-    """
-    entry = window.session.last_result.scene.objects["obj_1"]
-    feature = entry.features[feature_id]
-    centre = feature.params["centre"]
-    radius = float(feature.params["diameter"]) * 0.5
-    return (float(centre[0]) + radius, float(centre[1]), 2.0)
 
 
 def wait_for_map(window: MainWindow) -> None:
@@ -4390,7 +4369,7 @@ def test_the_shadow_keeps_its_length_whatever_the_view() -> None:
     assert max(lengths) - min(lengths) < 1e-9
 
 
-def test_the_shadow_hull_holds_the_corners_and_drops_the_rest(qt_app: QApplication) -> None:
+def test_the_shadow_hull_holds_the_corners_and_drops_the_rest() -> None:
     """Die Hülle wird einmal je Körper gerechnet, der Umriss je Ansicht.
 
     Vorher lief eine Triangulierung über **jeden** Punkt des Anzeigenetzes, und
@@ -4402,25 +4381,21 @@ def test_the_shadow_hull_holds_the_corners_and_drops_the_rest(qt_app: QApplicati
     import numpy as np
     import trimesh
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import shadow_hull_of, shadow_outline_of
 
-    viewport = Viewport()
-    try:
-        box = trimesh.creation.box(extents=(20.0, 20.0, 30.0)).subdivide().subdivide().subdivide()
-        body = np.asarray(box.vertices, dtype=float) + np.array([10.0, 10.0, 15.0])
-        hull = viewport._shadow_hull_of(body)
-        assert len(hull) == 8, "ein Quader hat acht Ecken, wie fein er auch vernetzt ist"
-        assert len(hull) < len(body) / 10
+    box = trimesh.creation.box(extents=(20.0, 20.0, 30.0)).subdivide().subdivide().subdivide()
+    body = np.asarray(box.vertices, dtype=float) + np.array([10.0, 10.0, 15.0])
+    hull = shadow_hull_of(body)
+    assert len(hull) == 8, "ein Quader hat acht Ecken, wie fein er auch vernetzt ist"
+    assert len(hull) < len(body) / 10
 
-        outline = viewport._shadow_outline_of(hull, (0.5, 0.0))
-        assert outline is not None and len(outline) > 0
-        assert np.allclose(outline[:, 2], 0.05), "der Schatten liegt auf der Platte"
-        # 30 mm hoch, halber Versatz je Millimeter: der Umriss reicht 15 mm
-        # weiter als der Körper.
-        assert outline[:, 0].max() == pytest.approx(35.0)
-        assert outline[:, 1].max() == pytest.approx(20.0)
-    finally:
-        viewport.deleteLater()
+    outline = shadow_outline_of(hull, (0.5, 0.0))
+    assert outline is not None and len(outline) > 0
+    assert np.allclose(outline[:, 2], 0.05), "der Schatten liegt auf der Platte"
+    # 30 mm hoch, halber Versatz je Millimeter: der Umriss reicht 15 mm
+    # weiter als der Körper.
+    assert outline[:, 0].max() == pytest.approx(35.0)
+    assert outline[:, 1].max() == pytest.approx(20.0)
 
 
 def test_thinning_a_dense_body_keeps_its_corners() -> None:
@@ -4458,7 +4433,7 @@ def test_a_small_body_is_not_thinned_at_all() -> None:
     assert _thinned_for_hull(points) is points
 
 
-def test_a_body_too_thin_for_a_hull_still_gets_one(qt_app: QApplication) -> None:
+def test_a_body_too_thin_for_a_hull_still_gets_one() -> None:
     """Ein ebener Körper hat keine räumliche Hülle — er wirft trotzdem.
 
     Qhull gibt bei entarteten Punktwolken auf. Sein Fehler darf nicht der
@@ -4466,16 +4441,12 @@ def test_a_body_too_thin_for_a_hull_still_gets_one(qt_app: QApplication) -> None
     """
     import numpy as np
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import shadow_hull_of, shadow_outline_of
 
-    viewport = Viewport()
-    try:
-        flat = np.array([[0.0, 0.0, 5.0], [10.0, 0.0, 5.0], [10.0, 10.0, 5.0], [0.0, 10.0, 5.0]])
-        hull = viewport._shadow_hull_of(flat)
-        assert hull is not None and len(hull) == 4
-        assert viewport._shadow_outline_of(hull, (0.5, 0.5)) is not None
-    finally:
-        viewport.deleteLater()
+    flat = np.array([[0.0, 0.0, 5.0], [10.0, 0.0, 5.0], [10.0, 10.0, 5.0], [0.0, 10.0, 5.0]])
+    hull = shadow_hull_of(flat)
+    assert hull is not None and len(hull) == 4
+    assert shadow_outline_of(hull, (0.5, 0.5)) is not None
 
 
 def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplication) -> None:
@@ -4489,7 +4460,7 @@ def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplicati
     """
     import numpy as np
 
-    from app.ui.viewport import Viewport, outline_of
+    from app.ui.viewport import Viewport, outline_of, shadow_catchers, shadow_outline_of
 
     viewport = Viewport()
     try:
@@ -4502,13 +4473,13 @@ def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplicati
         viewport._shadow_ground["plate"] = (0.0, 12.0, outline_of(plate))
         viewport._shadow_ground["tower"] = (12.0, 52.0, outline_of(tower))
 
-        catchers = viewport._shadow_catchers("tower")
+        catchers = shadow_catchers("tower", viewport._shadow_ground, viewport._shadow_bed("tower"))
         assert [ground for ground, _window in catchers] == [0.0, 12.0], (
             "die Grundplatte fängt, die Druckplatte fängt daneben"
         )
 
         ground, window = catchers[1]
-        outline = viewport._shadow_outline_of(tower, (0.5, 0.0), ground, window)
+        outline = shadow_outline_of(tower, (0.5, 0.0), ground, window)
         assert outline is not None
         assert np.allclose(outline[:, 2], 12.05), "er liegt auf der Grundplatte"
         # 40 mm über ihr, halber Versatz je Millimeter: 20 mm weiter als der
@@ -4522,7 +4493,7 @@ def test_a_body_on_the_plate_has_only_the_plate_below_it(qt_app: QApplication) -
     """Ein Körper daneben ist kein Boden, solange er nicht darunter liegt."""
     import numpy as np
 
-    from app.ui.viewport import Viewport, outline_of
+    from app.ui.viewport import Viewport, outline_of, shadow_catchers
 
     viewport = Viewport()
     try:
@@ -4531,7 +4502,8 @@ def test_a_body_on_the_plate_has_only_the_plate_below_it(qt_app: QApplication) -
         )
         viewport._shadow_ground["neighbour"] = (0.0, 30.0, outline_of(neighbour))
         viewport._shadow_ground["mine"] = (0.0, 20.0, outline_of(neighbour + 100.0))
-        assert [ground for ground, _window in viewport._shadow_catchers("mine")] == [0.0]
+        found = shadow_catchers("mine", viewport._shadow_ground, viewport._shadow_bed("mine"))
+        assert [ground for ground, _window in found] == [0.0]
     finally:
         viewport.deleteLater()
 
@@ -4545,19 +4517,20 @@ def test_the_shadow_is_cut_at_the_edge_of_the_plate(qt_app: QApplication) -> Non
     """
     import numpy as np
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import Viewport, shadow_catchers, shadow_outline_of
 
     viewport = Viewport()
     try:
         viewport._bed_extent = (100.0, 100.0)
         body = np.array([[x, y, z] for x in (40.0, 80.0) for y in (0.0, 10.0) for z in (0.0, 20.0)])
-        ground, window = viewport._shadow_catchers("body")[0]
-        outline = viewport._shadow_outline_of(body, (0.5, 0.0), ground, window)
+        found = shadow_catchers("body", viewport._shadow_ground, viewport._shadow_bed("body"))
+        ground, window = found[0]
+        outline = shadow_outline_of(body, (0.5, 0.0), ground, window)
         assert outline is not None
         assert outline[:, 0].max() == pytest.approx(50.0), "an der Kante ist Schluss"
 
         far = body + np.array([200.0, 0.0, 0.0])
-        assert viewport._shadow_outline_of(far, (0.5, 0.0), ground, window) is None, (
+        assert shadow_outline_of(far, (0.5, 0.0), ground, window) is None, (
             "was ganz daneben fällt, wirft gar keinen Schatten"
         )
     finally:
@@ -4567,11 +4540,12 @@ def test_the_shadow_is_cut_at_the_edge_of_the_plate(qt_app: QApplication) -> Non
 def test_without_a_build_volume_nothing_is_cut(qt_app: QApplication) -> None:
     """Ohne gezeigten Bauraum gibt es keine Kante, an der zu schneiden wäre."""
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import Viewport, shadow_catchers
 
     viewport = Viewport()
     try:
-        assert viewport._shadow_catchers("body") == [(0.0, None)]
+        found = shadow_catchers("body", viewport._shadow_ground, viewport._shadow_bed("body"))
+        assert found == [(0.0, None)]
     finally:
         viewport.deleteLater()
 

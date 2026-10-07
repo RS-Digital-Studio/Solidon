@@ -429,7 +429,7 @@ eigenen Renderers ist Anzeige und kein Griff, `set_axes_marker`, und niemand
 bewegt die Kamera mehr an der Ansicht vorbei.)
 
 **Ein Schatten fällt auf die Fläche, auf der sein Körper steht.** Nicht immer
-auf die Platte: `_shadow_catchers` sucht zu jedem Körper die Flächen unter ihm
+auf die Platte: `shadow_catchers` sucht zu jedem Körper die Flächen unter ihm
 — die Druckplatte und jeden Körper, dessen Oberkante nicht höher liegt als
 seine Unterkante. Ohne das löst sich der Schatten eines Turms auf einer 12 mm
 hohen Grundplatte von ihm ab und taucht erst daneben auf. Beide Stücke werden
@@ -490,7 +490,7 @@ stehen. Und **jeder Zug zieht den Schatten mit**, der am Griff
 **Was je Bild neu gerechnet wird, wird je Körper vorbereitet.** Der
 Schattenumriss lief als Triangulierung über jeden Punkt des Anzeigenetzes: 129
 ms bei zweiundachtzigtausend Dreiecken, je Körper und Szenenaufbau, im
-Qt-Hauptthread. Die konvexe Hülle steht einmal (`_shadow_hull_of`), ein
+Qt-Hauptthread. Die konvexe Hülle steht einmal (`shadow_hull_of`), ein
 Ansichtswechsel projiziert nur noch daraus. Und sie bekommt einen Kostendeckel:
 bei einer feinen Kugel liegt *jeder* Punkt auf der Hülle, und die Rechnung wäre
 teurer als das, was sie ersetzt. Über `SHADOW_HULL_POINTS` genügt eine

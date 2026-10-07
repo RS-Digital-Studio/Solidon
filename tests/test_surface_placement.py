@@ -1202,7 +1202,7 @@ def test_text_preview_and_real_body_share_geometry_and_orientation(normal, profi
         "font": "Liberation Serif",
         "style": "bold_italic",
     }
-    tool = placement.placement_tool(spec, values, profile)
+    tool = placement.prepare_tool(spec, values, profile).mesh
     point = (3.123456789, -2.1, 8.0)
     frame = frame_of(normal if np.linalg.norm(normal) else (0.0, 0.0, 1.0), point)
     matrix = np.eye(4)
@@ -1231,7 +1231,7 @@ def test_text_preview_and_real_body_share_geometry_and_orientation(normal, profi
     # **Und der Schnitt macht wirklich einen Unterschied.** Ohne diese Zeile
     # wäre der Test auch dann grün, wenn beide Seiten denselben falschen
     # nähmen — zwei gleich fehlerhafte Wege sehen aus wie Übereinstimmung.
-    plain = placement.placement_tool(spec, {**values, "style": "regular"}, profile)
+    plain = placement.prepare_tool(spec, {**values, "style": "regular"}, profile).mesh
     assert plain.volume < 0.9 * tool.volume, (plain.volume, tool.volume)
 
 
@@ -1261,7 +1261,7 @@ def test_drill_preview_and_actual_cut_share_the_same_local_tool(profile, monkeyp
     load_operations()
     mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0)))
     values = {"diameter": 4.0, "depth": 3.0, "compensate": False}
-    preview = placement.placement_tool(REGISTRY.get("drill_hole"), values, profile)
+    preview = placement.prepare_tool(REGISTRY.get("drill_hole"), values, profile).mesh
     captured = []
     original = module.boolean
 
@@ -1649,7 +1649,7 @@ def test_existing_feature_tool_matches_free_placement_and_preserves_ids(
     prepared = placement.prepare_surface(target, _top(target))
     hit = placement.at_point(prepared, (7.0, 6.0, 4.0))
     values = placement.surface_values(spec, hit, feature=feature, source=source)
-    tool = placement.placement_tool(spec, values, profile, source=source, feature=feature)
+    tool = placement.prepare_tool(spec, values, profile, source=source, feature=feature).mesh
     captured = []
     original = module.boolean
 
@@ -2123,7 +2123,9 @@ def test_drill_preview_and_actual_operation_use_the_objects_material(profile, mo
         "widening_depth": 1.0,
         "transition_angle": 90.0,
     }
-    preview = placement.placement_tool(REGISTRY.get("drill_hole"), values, profile, source=source)
+    preview = placement.prepare_tool(
+        REGISTRY.get("drill_hole"), values, profile, source=source
+    ).mesh
     captured = []
     original = module.boolean
 
@@ -2233,9 +2235,9 @@ def test_through_drill_preview_uses_the_target_size(profile):
     source = SceneObject(
         id="obj_1", name="Würfel", mesh=MeshData.of(trimesh.creation.box((20.0, 20.0, 20.0)))
     )
-    tool = placement.placement_tool(
+    tool = placement.prepare_tool(
         REGISTRY.get("drill_hole"), {"diameter": 4.0}, profile, source=source
-    )
+    ).mesh
     assert 20.0 <= float(np.ptp(tool.raw.vertices[:, 2])) < 35.0
 
 

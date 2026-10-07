@@ -3867,7 +3867,27 @@ def _filled_rounds(
 
     Gezählt wird über alle Runden; was ohne Dicke oder auf Wunsch offen blieb,
     sagt die letzte — diese Ringe kommen jede Runde wieder und bleiben jede
-    Runde offen.
+    Runde offen. Je Ring in der Reihenfolge von :func:`_fill_loops`: Band,
+    Fläche mit Löchern, glatteste Triangulierung, Ohren, Fächer. Auch eine
+    fehlende Wand kommt so zurück; eine Fläche ohne Dicke bleibt offen (RM-224).
+
+    **Der eigene Ringfüller, nicht der von trimesh.** Jener schließt Ringe aus
+    drei und vier Kanten, lehnt alles darüber ab (sein Fächer gilt nur für
+    konvexe Ränder, und er weiß nicht, ob der Rand konvex ist) — und er prüft
+    nicht, ob die Ecken des Rings schon anders verbunden sind: An einer
+    heruntergeladenen Katze machte er aus zwei Löchern zwei Verzweigungen.
+    :func:`fill_boundary_loops` verkettet die Ränder selbst, ohrt sie in ihrer
+    Ausgleichsebene und legt keine Fläche auf eine Kante, die schon zwei trägt.
+
+    **``closed`` zählt geschlossene Ringe, nicht Dichtheit.** Ein Ring, dessen
+    Rand sich selbst berührt oder auf einer verzweigten Kante liegt, bleibt
+    offen, während die übrigen schließen; der Bericht sagt beides, ohne sich zu
+    widersprechen (:func:`repair`, ``repair.holes_filled`` und
+    ``repair.still_open``). Eine große Öffnung ist ein eigener Fall: geschlossen
+    ``repair.wide_hole_filled``, auf Wunsch offen ``repair.wide_hole_kept`` und
+    dann kein ``still_open`` (RM-241).
+    Vernäht wird vorher und nicht hier (:func:`stitch_t_junctions`): Eine
+    T-Kreuzung sieht aus wie ein Loch und ist keines.
     """
     if not open_edge_count(mesh):
         return _Filled(mesh)
@@ -3959,58 +3979,6 @@ def _flat_still_open(mesh: MeshData, filled: _Filled) -> tuple[int, float]:
             edges += len(keys)
             area += spanned
     return edges, area
-
-
-def _filled_with_count(mesh: MeshData) -> tuple[MeshData, bool, int]:
-    """Wie :func:`fill_holes` ohne Vernähen, aber mit der Zahl der großen
-    Öffnungen für den Bericht."""
-    filled = _filled_rounds(mesh)
-    return filled.mesh, filled.closed > 0, filled.wide
-
-
-def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
-    """Schließt offene Kanten — über den eigenen Ringfüller, in der Reihenfolge
-    von :func:`_fill_loops`: Band, Fläche mit Löchern, glatteste
-    Triangulierung, Ohren, Fächer. Auch eine fehlende Wand kommt so zurück;
-    eine Fläche ohne Dicke bleibt offen (RM-224: Hier stand bis zum
-    25.09.2026 „nur kleine Löcher", aus der Zeit von trimeshs Füller).
-
-    Das Vernähen läuft zuerst: eine T-Kreuzung sieht aus wie ein Loch und ist
-    keines, und der Füller lässt sie exakt, wie er sie fand (siehe
-    :func:`stitch_t_junctions`). ``stitch=False`` ist für Aufrufer, die das
-    Vernähen selbst schon gefahren haben — ``repair()`` zahlte es sonst
-    doppelt, gemessener Faktor 2,1.
-
-    **Das zweite Rückgabestück heißt „es wurde gefüllt", nicht „es ist jetzt
-    dicht".** Der Unterschied ist ein Netz mit zwei Löchern, von denen eines
-    zu groß zum Überbrücken ist: Das kleine wurde geschlossen, das Netz blieb
-    offen, und die alte Antwort war ``False``. Der Bericht meldete daraufhin
-    beides zugleich — „an diesem Netz war nichts zu reparieren" und „das
-    Modell ist weiterhin nicht geschlossen" —, und wer das las, konnte den
-    Widerspruch nicht auflösen, weil beide Sätze auf ihre Art stimmten.
-    Gemessen wird an den offenen Kanten: weniger offene Kanten als vorher heißt
-    gefüllt, ob dicht oder nicht. Ob das Netz danach dicht ist, sagt
-    ``MeshData.is_watertight`` — der Aufrufer hat das Netz ja in der Hand.
-    """
-    working = mesh
-    body = working.raw.copy()
-    if body.is_watertight:
-        return mesh, False
-    if stitch:
-        working, _seams = stitch_t_junctions(working)
-        body = working.raw.copy()
-        if body.is_watertight:
-            return working, True
-    # **Der eigene Ringfüller, nicht der von trimesh.** Jener schließt Ringe
-    # aus drei und vier Kanten, lehnt alles darüber ab (sein Fächer gilt nur
-    # für konvexe Ränder, und er weiß nicht, ob der Rand konvex ist) — und er
-    # prüft nicht, ob die Ecken des Rings schon anders verbunden sind: An
-    # einer heruntergeladenen Katze machte er aus zwei Löchern zwei
-    # Verzweigungen. :func:`fill_boundary_loops` verkettet die Ränder selbst,
-    # ohrt sie in ihrer Ausgleichsebene und legt keine Fläche auf eine Kante,
-    # die schon zwei trägt.
-    filled, worked, _wide = _filled_with_count(working)
-    return filled, worked
 
 
 def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
