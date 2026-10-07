@@ -18740,7 +18740,7 @@ def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[LoosePart], i
     """Die losen Teile eines Körpers samt Volumen und Slots, größte zuerst —
     und wie viele Splitter dabei wegfielen.
 
-    Die eine Zählung für *In Einzelteile zerlegen* und für die Absage des
+    Die eine Zählung für *In Einzelteile aufteilen* und für die Absage des
     Ausrichtens, die diese Zerlegung vorschlägt: Ohne ``keep_tiny`` fällt
     weg, was unter einem Prozent des größten Teils liegt, und eine Stückzahl,
     die die Splitter mitzählte, ließe die Zerlegung an ihrer eigenen Prüfung
@@ -18820,15 +18820,15 @@ def _where_it_sits(body: Any) -> tuple[float, float, float]:
     return (float(centre[0]), float(centre[1]), float(centre[2]))
 
 
-#: Warum *In Einzelteile zerlegen* an einem Stück nichts tut — derselbe Satz
+#: Warum *In Einzelteile aufteilen* an einem Stück nichts tut — derselbe Satz
 #: im Menü (``requires_body="parts"``, ``labels.body_requirement``).
-ONE_PIECE: Final = _("Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.")
+ONE_PIECE: Final = _("Der Körper besteht aus einem Stück. Es gibt nichts aufzuteilen.")
 
 
 @register_op(
     name="split_bodies",
     result_kind="mesh",
-    title=_("In Einzelteile zerlegen"),
+    title=_("In Einzelteile aufteilen"),
     category="prepare",
     params=SplitBodiesParams,
     consumes=1,
@@ -18978,7 +18978,11 @@ def split_bodies(ctx: OpContext) -> OpResult:
     # beides — mit Stiften und ohne. Ein Titel, der die Stifte verspricht,
     # wäre für die Hälfte der Fälle falsch; das Feld *Passstifte* sagt,
     # welcher Fall gilt, und seine Null ist der ganze Unterschied.
-    title=_("Teilen"),
+    # **Und wieder „An Ebene teilen"** (RM-507): Alle Wege, ein Teil zu
+    # teilen, sagen „teilen“, und das Werkzeug der Werkzeugzeile heißt
+    # *Teilen*. Zwei Dinge unter einem Namen sucht der Kunde am falschen Ort;
+    # der Titel sagt, wie diese Operation teilt.
+    title=_("An Ebene teilen"),
     category="prepare",
     params=SplitPinnedParams,
     consumes=1,
@@ -19035,7 +19039,7 @@ def _cut_and_pin(
     numbers: tuple[int, int] = (0, 0),
     piece_count: int = 0,
 ) -> OpResult:
-    """Der gemeinsame Teil von *Teilen* und *An Linie trennen*.
+    """Der gemeinsame Teil von *An Ebene teilen* und *An Linie teilen*.
 
     Die beiden unterscheiden sich einzig darin, **woher die Ebene kommt** —
     aus einer Achse und einer Zahl oder aus zwei angeklickten Punkten. Alles
@@ -19757,8 +19761,8 @@ def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> Secti
         "Fläche versetzen."
     ),
     caveat=_(
-        "Wenn beide Seiten gebraucht werden, denn die andere Seite ist danach fort, samt "
-        "Bohrungen und Bausteinen. Dafür gibt es „Teilen“."
+        "Wenn beide Seiten gebraucht werden, denn die andere fällt samt Bohrungen weg. "
+        "Dafür gibt es „An Ebene teilen“."
     ),
 )
 def cut_away(ctx: OpContext) -> OpResult:
@@ -20018,7 +20022,7 @@ class SplitLineParams(BaseParams):
         maximum=6,
         doc=_(
             "Stifte auf der einen Hälfte, Bohrungen auf der anderen — sie halten die "
-            "Teile beim Kleben in Deckung. Null heißt: nur trennen."
+            "Teile beim Kleben in Deckung. Null heißt: nur teilen."
         ),
         zero_text=ZERO_NONE,
     )
@@ -20090,7 +20094,7 @@ class SplitLineParams(BaseParams):
 @register_op(
     name="split_line",
     result_kind="mesh",
-    title=_("An gezeichneter Linie trennen"),
+    title=_("An gezeichneter Linie teilen"),
     category="prepare",
     params=SplitLineParams,
     consumes=1,
@@ -20098,13 +20102,10 @@ class SplitLineParams(BaseParams):
     # Dieselbe Absage an einer Berührlinie wie bei *Teilen*.
     cache_version="3",
     icon="split",
-    doc=_(
-        "Trennt ein Objekt entlang einer im Bild gezeichneten Linie und setzt auf "
-        "Wunsch Passstifte in die Schnittfläche."
-    ),
+    doc=_("Teilt ein Objekt an einer im Bild gezeichneten Linie, auf Wunsch mit Passstiften."),
     caveat=_(
-        "Für einen Schnitt um eine Rundung herum, denn getrennt wird an einer geraden Ebene. "
-        "Dann zweimal trennen."
+        "Für einen Schnitt um eine Rundung herum, denn geteilt wird an einer geraden Ebene. "
+        "Dann zweimal teilen."
     ),
 )
 def split_line(ctx: OpContext) -> OpResult:
@@ -20469,7 +20470,7 @@ def _the_way_out_of(
     Platten. Die Operation darf sie nicht selbst zerlegen: Ihre Ausgänge
     stehen fest, bevor gerechnet wird, und eine andere Zahl hält die Kette an
     (§15.2). Also sagt sie, was ginge, und das Fenster tut es auf einen Klick
-    — *In Einzelteile zerlegen* vor diesen Schritt, danach derselbe Schritt
+    — *In Einzelteile aufteilen* vor diesen Schritt, danach derselbe Schritt
     noch einmal (``History.split_and_retry``), wie bei *Reparieren und erneut
     versuchen* (Regel 17).
 

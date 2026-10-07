@@ -20,7 +20,7 @@ from collections.abc import Callable, Iterable
 from typing import Final, override
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
-from PySide6.QtGui import QResizeEvent
+from PySide6.QtGui import QAction, QResizeEvent
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -174,14 +174,19 @@ def _card_group(spec: OperationSpec) -> tuple[tuple[int, int, int, int], str]:
     (``folded_categories``), ist hier eine eigene Gruppe hinter den direkten
     ihrer Menügruppe — so wird „Ändern“ am Körper keine Wand.
     """
-    group = str(group_title(spec.category))
+    return _category_group(spec.category)
+
+
+def _category_group(category: str) -> tuple[tuple[int, int, int, int], str]:
+    """:func:`_card_group` für eine Kategorie — auch für eine Handlung ohne Registereintrag."""
+    group = str(group_title(category))
     rank = menu_rank(group)
-    if spec.category not in folded_categories(spec.category):
+    if category not in folded_categories(category):
         return (rank, 0, 0, 0), group
-    categories = next((members for _title, members in MENU_GROUPS if spec.category in members), ())
-    place = categories.index(spec.category) if spec.category in categories else len(categories)
-    behind = int(spec.category in TOOL_STRIP_CATEGORIES)
-    return (rank, 1, behind, place), str(CATEGORIES.get(spec.category, spec.category))
+    categories = next((members for _title, members in MENU_GROUPS if category in members), ())
+    place = categories.index(category) if category in categories else len(categories)
+    behind = int(category in TOOL_STRIP_CATEGORIES)
+    return (rank, 1, behind, place), str(CATEGORIES.get(category, category))
 
 
 #: Wie hoch eine Zeile der Operationsliste ist (RM-510).
@@ -508,6 +513,9 @@ class SelectionOperationsPanel(QWidget):
         self._left_out: frozenset[str] = frozenset()
         """Was am gewählten Merkmal nicht angeboten wird, obwohl seine Art es
         trägt — am Kegel, der keine Senkung ist, *Senken* (R3)."""
+        self._window_actions: dict[str, QAction] = {}
+        """Handlungen des Fensters ohne Registereintrag, je Name ihre Aktion
+        (:meth:`add_window_action`). Freigabe und Grund kommen von der Aktion."""
 
         self.summary = QLabel("", self)
         self.summary.setWordWrap(True)
@@ -774,6 +782,51 @@ class SelectionOperationsPanel(QWidget):
         button.setProperty("operationTitle", str(spec.title))
         self._buttons[spec.name] = button
         return button
+
+    def add_window_action(self, name: str, category: str, action: QAction) -> bool:
+        """Eine Handlung des Fensters als Zeile der Gruppe ihrer Kategorie.
+
+        *Automatisch teilen* ist ein Ablauf über mehreren Operationen und kein
+        Registereintrag; es stand deshalb im Menü *Bearbeiten*, weit weg von
+        den übrigen Wegen, ein Teil zu teilen (RM-507). Hier steht es bei
+        ihnen, am gewählten Körper, sortiert wie die Registerzeilen. Freigabe
+        und Grund liest :meth:`_take_availability` von der Aktion — dieselbe,
+        die Palette und Kürzel auslösen.
+
+        ``False``, wenn es die Gruppe nicht gibt (keine Operation der Kategorie
+        im Register): Dann sucht sich der Aufrufer einen anderen Platz — ein
+        Eintrag darf umziehen, nicht verschwinden.
+        """
+        _rank, title = _category_group(category)
+        if title not in self._groups:
+            return False
+        section, toggle, buttons = self._groups[title]
+        grid = self._grids[title]
+        box = grid.parentWidget()
+        button = QToolButton(box)
+        label = action.text()
+        button.setText(label)
+        button.setIcon(action.icon())
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        button.setObjectName("operationRow")
+        button.setAutoRaise(True)
+        button.setMinimumHeight(LIST_ROW_HEIGHT)
+        button.setToolTip(action.toolTip())
+        button.setAccessibleDescription(action.toolTip())
+        button.clicked.connect(action.trigger)
+        button.setProperty("operationName", name)
+        button.setProperty("operationTitle", label)
+        self._buttons[name] = button
+        self._window_actions[name] = action
+        ordered = sorted(
+            (*buttons, button),
+            key=lambda entry: sort_key(str(entry.property("operationTitle") or entry.text())),
+        )
+        self._groups[title] = (section, toggle, tuple(ordered))
+        self._arranged.pop(title, None)
+        self._filter()
+        return True
 
     def _request_operation(self, spec: OperationSpec) -> None:
         """Den Registereintrag ohne dauerhafte Lambda-Rückbindung weiterreichen."""
@@ -1140,6 +1193,16 @@ class SelectionOperationsPanel(QWidget):
     def _take_availability(self, availability: Callable[[str], tuple[bool, str]]) -> None:
         """Freigabe und Hinweis jedes Knopfes nachführen — nur, wo sie sich ändern."""
         for name, button in self._buttons.items():
+            action = self._window_actions.get(name)
+            if action is not None:
+                # Die Aktion sagt beides selbst (``MainWindow._say_why``).
+                window_state = (action.isEnabled(), action.toolTip())
+                if self._states.get(name) != window_state:
+                    self._states[name] = window_state
+                    button.setEnabled(window_state[0])
+                    button.setToolTip(window_state[1])
+                    button.setAccessibleDescription(window_state[1])
+                continue
             enabled, reason = availability(name)
             state = (enabled, reason)
             if self._states.get(name) == state:

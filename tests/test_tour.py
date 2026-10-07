@@ -432,6 +432,8 @@ def test_skipping_an_action_is_not_drawn_as_completed(qt_app: object) -> None:
     erkannte Handlung erledigt oder auf Wunsch übersprungen wurde — durch Wort
     und Zeichen, nicht nur durch Farbe (Regel 18).
     """
+    from PySide6.QtGui import QFont
+
     from app.ui.session import Session
     from app.ui.tour import TourPanel
 
@@ -444,8 +446,15 @@ def test_skipping_an_action_is_not_drawn_as_completed(qt_app: object) -> None:
     panel = TourPanel(session)
     panel.start(examples.EXAMPLES[0], tour)
 
+    assert panel.next_button.text() == "Weiter"
+    assert panel.next_button.isDefault(), "beim Leseschritt ist Weiter der eine Weg"
+
     panel.advance()  # Leseschritt
     assert panel.next_button.text() == "Schritt überspringen"
+    # Die Übung findet im Fenster statt; Überspringen ist ein Nebenweg und
+    # trägt weder Akzent noch Halbfett (RM-512).
+    assert not panel.next_button.isDefault(), "Überspringen ist kein Hauptknopf"
+    assert panel.next_button.font().weight() < QFont.Weight.DemiBold
     assert panel._row_hosts[1].property("tourState") == "current"
 
     panel.advance()  # Handlung bewusst auslassen
@@ -455,7 +464,9 @@ def test_skipping_an_action_is_not_drawn_as_completed(qt_app: object) -> None:
     assert marker.accessibleName() == "Übersprungen"
     assert marker.pixmap().isNull(), "ein übersprungener Schritt trägt keinen Erledigt-Haken"
     assert panel._row_hosts[1].property("tourState") == "skipped"
-    assert panel.next_button.isDefault(), "die eindeutige nächste Handlung ist der Hauptknopf"
+    # Schritt 3 ist wieder eine Übung: Überspringen bleibt Nebenweg.
+    assert panel.next_button.text() == "Schritt überspringen"
+    assert not panel.next_button.isDefault(), "auch bei der nächsten Übung kein Hauptknopf"
 
     # Wer erst weiterliest und die Übung dann versteht, darf sie nachholen.
     # Der alte Stand prüfte nur ab dem aktuellen Schritt und ließ den Strich

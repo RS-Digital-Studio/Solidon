@@ -1985,7 +1985,8 @@ class ParamSpec:
 
     Der Wert reist als ``null`` in der Projektdatei, fehlt im Werkzeugschema
     des Agenten als Pflichtfeld und steht im Dialog als leeres Feld mit einem
-    Sondertext am Mindestwert."""
+    Sondertext am Mindestwert — „wie gemessen“, oder was :attr:`zero_text`
+    nennt."""
     internal: bool = False
     """Ein Marker, den eine Migration setzt, und kein Feld für den Kunden.
 
@@ -1993,15 +1994,18 @@ class ParamSpec:
     weder im Dialog noch im Werkzeugschema des Agenten: ``measured_frame``
     hieß dort „Richtung aus einem älteren Projekt“ und stand unter jeder neuen
     Langlochbohrung, die ihn nie braucht (RM-332, N5)."""
-    dropped_on_change: bool = False
+    dropped_on_change: bool | tuple[str, ...] = False
     """Ein interner Marker, den eine bewusste Änderung des Schritts aufhebt.
 
     Die Migration setzt ihn, damit ein gespeicherter Schritt rechnet wie beim
     Speichern; wer den Schritt ändert, bekommt die heutige Rechnung, und
     ``History.change_params`` nimmt ihn heraus, sobald sich ein anderer Wert
-    ändert (``legacy_slot_tool``, Migration 45 → 46). ``measured_frame`` trägt
-    ihn nicht: Dort meint der Marker, wie ein Winkel gelesen wird, und gilt bei
-    jeder Länge weiter."""
+    ändert (``legacy_slot_tool``, Migration 45 → 46). Eine Liste von Feldern
+    statt ``True`` hebt ihn nur auf, wenn sich eines davon ändert: Der Deckel
+    liest eine alte Null nur so lange als Oberkante, wie die Höhe der Öffnung
+    selbst bleibt (``legacy_zero_top``, Migration 46 → 47). ``measured_frame``
+    trägt ihn nicht: Dort meint der Marker, wie ein Winkel gelesen wird, und
+    gilt bei jeder Länge weiter."""
     sketch_planes: tuple[str, ...] = ()
     """Auf welchen Ebenen die Zeichnung dieses Skizzenfelds liegen darf.
 
@@ -2020,7 +2024,13 @@ class ParamSpec:
     sagt die Null etwas anderes als null Millimeter, und im Feld stand
     „0,00 mm“ (RM-513). Der Dialog zeigt den Namen am Mindestwert
     (``setSpecialValueText``) — deshalb nur an Feldern mit Mindestwert 0;
-    ``tests/test_registry_consistency.py`` hält beides."""
+    ``tests/test_registry_consistency.py`` hält beides.
+
+    **An einem ``optional``-Feld heißt so der leere Zustand** (RM-526): Dort
+    steht der Sonderwert eine Stufe unter dem Mindestwert, und ohne eigenen
+    Namen hieße er „wie gemessen“. Die Höhe der Öffnung eines Deckels ist eine
+    Welthöhe, in der die Null eine Zahl ist wie jede andere; leer heißt dort
+    „Oberkante“."""
 
 
 @runtime_checkable

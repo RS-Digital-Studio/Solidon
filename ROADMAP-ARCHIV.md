@@ -32,6 +32,10 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-06 | [CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)](#ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026) |
+| 2026-10-06 | [RM-519: Linke Karten und Zeichenmodus zeigen nur, was gerade gilt (06.10.2026)](#rm-519-linke-karten-und-zeichenmodus-zeigen-nur-was-gerade-gilt-06102026) |
+| 2026-10-06 | [RM-512: Im Ruhezustand leuchtet nur Bausteine, und Rot trägt nur das Verwerfen (06.10.2026)](#rm-512-im-ruhezustand-leuchtet-nur-bausteine-und-rot-trägt-nur-das-verwerfen-06102026) |
+| 2026-10-06 | [RM-507: Jede Funktion hat einen Namen, überall derselbe (06.10.2026)](#rm-507-jede-funktion-hat-einen-namen-überall-derselbe-06102026) |
+| 2026-10-06 | [RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)](#rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026) |
 | 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
 | 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
@@ -43151,6 +43155,219 @@ im Zustandsordner zeigen auf die neuen Dateien. `git grep -n .claude/.state -- t
 findet nur noch `mac-netz.yml` und den Kommentar in `tests/helpers.py` (Sonde des offenen
 RM-187) sowie erfundene Pfade in `test_affected_tests.py` und `test_roadmap.py`, die keine Datei
 lesen.
+
+## RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)
+
+<a id="rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026"></a>
+<a id="rm-526"></a>
+
+**RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich.** Seit RM-513
+  hieß die Null in `create_lid.z` und `screw_lid.z` „Oberkante“, getragen von `minimum=0`;
+  damit hielten alte Projekte mit negativer Öffnungshöhe am Schritt an. Für 0.5.3 ist die
+  Grenze zurückgenommen (Durchsicht Kern, Fund 9), und hinter der Klappe steht die Null wieder
+  als Zahl. **Fix:** `z` als optionale Koordinate, leer heißt Oberkante, Migration 0 → leer
+  (Checkliste „Dateiformat ändern“). **Abnahme:** alte Projekte mit 0 und mit negativer Höhe
+  öffnen und rechnen gleich, das Feld zeigt „Oberkante“, wenn es leer ist.
+
+**Umsetzung:** `create_lid.z` und `screw_lid.z` sind `optional` (Vorgabe leer) und
+tragen `zero_text` „Oberkante“ (`registry.params.ZERO_TOP_EDGE`); an einem
+`optional`-Feld nennt `zero_text` seitdem den leeren Zustand, sonst „wie gemessen“
+(`ParamSpec.zero_text`, `test_registry_consistency`). `lid.plane_of` nimmt ohne Zahl die
+Oberkante, jede Zahl ist eine Welthöhe, die Null das Bett. Format 47: Die Migration
+`_empty_the_top_edge` leert eine gespeicherte Null, auch in den Fassungen einer
+Änderung; ein Ausdruck bekommt `legacy_zero_top` und liest eine Null bei jeder
+Auswertung wie damals als Oberkante (`lid.stated_height`), bis jemand den Schritt
+ändert. Cache-Versionen `create_lid` 6, `screw_lid` 7. Ein geleertes Zahlenfeld mit
+Sondertext nimmt den Sonderwert an, über Eingabetaste und Fokuswechsel
+(`labels._BoundedBehavior._empty_is_special`); vorher stellte Qt still die vorige Zahl
+zurück, und zurück zur „Oberkante“ ging es nur mit dem Pfeil eine Million Millimeter
+tief. Mitbehoben: Drehpunkte zeigen leer „Körpermitte“, die freie Stelle und die
+Kanalhöhe „automatisch“ statt „wie gemessen“.
+
+**Nachweis:** `tests/data/projects/lid_top_edge_v46.p3d` vom Stand davor
+(`65e3ec97b`) geschrieben: Deckel und Drehdeckel bei null, ein Deckel bei -10 an einem
+Gehäuse unter dem Bett, eine Änderung der Stärke. Nach der Migration rechnen alle
+sechs Körper wie gespeichert, ohne Migration hielte der Deckel an
+(`test_project.py::test_v46_lids_at_zero_keep_the_top_edge`); der Ausdruck trägt den
+Marker (`test_v46_a_height_expression_keeps_reading_zero_as_the_top_edge`); leer und
+null an einem Gehäuse 20 mm unter dem Bett (`test_lid.py::test_an_empty_height_is_the_top_edge_and_zero_is_the_bed`);
+Fenstertests `test_a_named_zero_shows_its_name` und
+`test_an_emptied_field_takes_its_named_value` (Release, offscreen per Sonde grün).
+Changelog: ja — Höhe der Öffnung leer heißt Oberkante, ein geleertes Feld springt auf
+seinen Namen zurück.
+
+## RM-507: Jede Funktion hat einen Namen, überall derselbe (06.10.2026)
+
+<a id="rm-507-jede-funktion-hat-einen-namen-überall-derselbe-06102026"></a>
+<a id="rm-507"></a>
+
+**RM-507 — Jede Funktion hat einen Namen, überall derselbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Teilen hat sieben Einträge mit drei Verben an vier Orten, „Automatisch teilen“ fällt
+  ins Menü *Bearbeiten*. Ein Druckdialog heißt „An den Slicer übergeben …“,
+  „Drucken vorbereiten …“ und „Drucker …“ (zugänglicher Name „Drucker wechseln“).
+  *Deckel erzeugen* bestätigt mit „Einsetzen“, der Katalog mit „Einfügen“; im Menü
+  *Erzeugen* stehen „Aus Skizze erzeugen …“ (Knopf „Zeichnen“) und „Modell einfügen“
+  doppelt; der Startbildschirm sagt „Modell öffnen“ und „Projekt öffnen“, die Leiste
+  „Modell einfügen“ und „Öffnen“.
+  **Fix:** Durchgehend „Teilen“ (Umschalter, „Jetzt teilen“, „An gezeichneter Linie
+  teilen“), „Automatisch teilen …“ in die Karte unter *Vorbereiten*; Kopfknopf und
+  zugänglicher Name „Druckeinstellungen …“, der Dateieintrag heißt wie der Knopf im
+  Bericht; ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“, auch im Katalog;
+  „Zeichnen …“ im Menü, dieselbe `QAction` für Modell einfügen; Startknöpfe wie die
+  Leiste. `grenzen.md` und alle Kataloge ziehen nach.
+  **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
+  Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
+  zwei Menüs mit verschiedener Wirkung.
+
+**Umsetzung:** Alle Teilen-Wege sagen „teilen“: das Werkzeug *Teilen* mit *Jetzt
+teilen*, die Operationen *An Ebene teilen* (`split_pinned`, vorher „Teilen“ — der Name
+des Werkzeugs, und zwei Dinge unter einem Namen verbietet
+`test_no_tool_or_operation_shares_its_name_with_another`), *An gezeichneter Linie
+teilen* und *In Einzelteile aufteilen*, dazu die Handlungen der Befunde, Tour, Handbuch,
+Figur und Beispieltext in sechs Sprachen. *Automatisch teilen …* steht nicht mehr unter
+*Bearbeiten*, sondern am gewählten Körper in der Karte unter *Vorbereiten*
+(`SelectionOperationsPanel.add_window_action`, Freigabe und Grund von der Aktion). Der
+Kopfknopf heißt sichtbar und vorgelesen *Druckeinstellungen …*
+(`header.printer_button_text`), der Dateieintrag *An den Slicer übergeben …* wie der
+Knopf im Prüfbericht. Ein Operationsdialog bestätigt mit seinem Titel; ein Baustein,
+dessen Titel kein Verb trägt, mit „Einsetzen“ wie der Katalog (`op_dialog.accept_text`)
+— *Deckel erzeugen*, *Drehdeckel erzeugen*, *Behältereinsatz erzeugen* und *Kugellager
+einsetzen* tragen ihren Titel. Im Menü *Erzeugen* heißt der Skizzeneintrag *Zeichnen …*
+wie der Knopf, und *Modell einfügen …* ist dieselbe `QAction` wie in *Datei*. Startknöpfe
+und Leiste hießen seit RM-515 schon gleich. Regeln: `grenzen.md` („Ein Text, eine
+Wirkung“), `uebersetzung.md`, Bauplan nur im Titel *In Einzelteile aufteilen*.
+**Entschieden (Robert, 06.10.2026):** der Bauplan trägt den neuen Titel, und die
+Operation heißt *An Ebene teilen*.
+
+**Nachweis:** `test_registry_consistency.py::test_every_way_to_split_says_teilen` (am
+Stand davor rot: „trennen“, „zerlegen“), `test_operation_ui.py::test_every_accept_button_names_what_the_click_does`
+(Registertest über alle Knopftexte), `test_translations.py` (kein Werkzeug teilt seinen
+Namen mit einer Operation, in sechs Sprachen). Fenstertests, offscreen per Sonde grün,
+beim Release im Fensterlauf: `test_interface_limits.py::test_no_menu_text_stands_for_two_actions`
+(am Stand davor rot: „Modell einfügen“ zweimal, „Automatisch teilen“ im Menü),
+`test_header.py::test_the_printer_button_has_one_name_seen_and_read`,
+`test_selection_operations.py::test_auto_split_stands_with_the_other_ways_to_split`.
+Die Handbuchseiten und Bilder ziehen mit `/erzeugen` beim Release nach
+(`test_every_manual_paragraph_reaches_the_generated_page`). Changelog: ja — einheitliche
+Namen, *Automatisch teilen* rechts in der Auswahl, *Druckeinstellungen …* in der Kopfzeile.
+
+## RM-512: Im Ruhezustand leuchtet nur Bausteine, und Rot trägt nur das Verwerfen (06.10.2026)
+
+<a id="rm-512-im-ruhezustand-leuchtet-nur-bausteine-und-rot-trägt-nur-das-verwerfen-06102026"></a>
+<a id="rm-512"></a>
+
+**RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Im Ruhezustand des Hauptfensters leuchten sechs Akzente: Bernsteinkanten an linker
+  und rechter Karte, Werkzeugzeile und Reiter, dazu *Bausteine*, die vorgewählte
+  Hinweiszeile und ihr Hauptknopf „Diesen Schritt ändern“. Der Wächter
+  `test_resting_state.py` zählt keine Linien. Dialoge zeigen zwei Hauptknöpfe, sobald ein
+  Hinweis mit Handlung erscheint (57 Handlungen tragen `primary`); Rot tragen zwei
+  „Abbrechen“, „Verwerfen“ ist Hauptknopf; im Chat ist „Übernehmen“ kein Hauptknopf; in
+  der Tour ist „Schritt überspringen“ einer.
+  **Fix:** Kartenränder in der Linienfarbe; vorgewählt werden nur Fehler und Warnungen;
+  Hinweishandlungen im Dialog als normale Knöpfe; `make_danger` genau am
+  unwiederbringlichen Verwerfen, nie mit `make_primary`; Chat-Übernehmen
+  `make_primary`, Überspringen flach. Der Wächter zählt Akzentlinien ab 40 px mit.
+  **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
+  Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
+  mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
+
+**Umsetzung:** Kartenränder (`overlay.card_stylesheet`) in der Linienfarbe, der aktive Reiter
+mit einer Kante in der Schriftfarbe statt `accent_line`; im Ruhezustand leuchtet nur *Bausteine*
+(Roberts Hauptknopf ohne Auswahl). `ReportPanel._preselect` wählt nur Fehler und Warnungen
+vor. Hinweishandlungen (`ErrorNotice`, Rat und Übermaß im Druckdialog) sind normale Knöpfe,
+die empfohlene vorn; wer führt, sagt `style.leading_action` an allen vier Stellen, und
+`make_primary(button, leading=False)` gibt den Hauptknopf samt Halbfett ab. Jeder
+`DestructiveRole`-Knopf trägt `make_danger`, nie zugleich `make_primary`, gesperrt grau; die
+Rückfragen vor Verwerfen und Schritt löschen haben keinen Hauptknopf, Fokus und Escape auf
+*Abbrechen*. *Abbrechen* ist nirgends rot. **Entschieden (Robert, 06.10.2026):** RM-512 löst
+das rote *Abbrechen* vom 11.09. ab. Im Chat ist *Übernehmen* Hauptknopf, in der Tour *Weiter*
+beim Leseschritt, *Schritt überspringen* ein normaler Knopf. Regel `fenster.md` („Der
+Hauptknopf“), Begründungen in `konzepte/begruendungen/regel-fenster.md`. Commits `14d115582`,
+`eddac1b16`, `6ddad320f`.
+
+**Nachweis:** `test_resting_state.py` zählt neben Flächen jeden Strich in `highlight` oder
+`accent_line` ab 40 px am ganzen Fenster, hell und dunkel, ohne und mit Hinweis, und verlangt
+genau *Bausteine*; am Stand `65e3ec97b` rot mit vier bzw. fünf Elementen, die Gegenprobe sieht
+Fläche und Linie in beiden Themen. `test_style.py` hält fensterlos `DestructiveRole` ↔
+`make_danger`, nie rot und Hauptknopf zugleich (auch über `setDefaultButton`), kein rotes
+Abbrechen oder Schließen, Hauptknopf aus `Action.primary` nur in `show_error` und
+`_show_offers`, gesperrt rot gleich gesperrt normal, `leading_action` und die Abgabe des
+Halbfetts; die Wächter sichern ihre Grundmenge zu. `test_enter_key.py`: Leertaste verwirft
+nichts ohne Wahl. Review (solidon3d-review) in zwei Durchgängen, Urteil „kann rein“.
+Fenstertests offscreen per Sonde grün, im Release-Tor offen; am echten Fenster beim Release
+ansehen: Kontrast der grauen Kartenränder über dem Modell (dunkel 2,30, hell bis 1,73 gegen
+den Verlauf), Reiterkante, HiDPI (RM-213). Changelog: ja — ruhigere Oberfläche, ein
+Hauptknopf je Dialog, Rot nur beim Verwerfen.
+
+## RM-519: Linke Karten und Zeichenmodus zeigen nur, was gerade gilt (06.10.2026)
+
+<a id="rm-519-linke-karten-und-zeichenmodus-zeigen-nur-was-gerade-gilt-06102026"></a>
+<a id="rm-519"></a>
+
+**RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Unter den Parameterfeldern steht „Eine feste Zahl passt“ / „2 feste Zahlen passen“
+  und liest sich wie die Überschrift der nächsten Zeile; die Filamentspalte des
+  Objektbaums ist abgeschnitten („Fila“) und ihre Felder wirken wie Haken; im Verlauf
+  springt die Nummer an einer Gruppenzeile, „Als Dreiecksmodell rechnen“ steht im
+  Kontextmenü an zweiter Stelle. Im Zeichenmodus zeigt das Auswahlfenster nichts
+  Brauchbares, die Bedingungsliste spricht Fachsprache, und die Einladung der leeren
+  Szene liegt über der Skizze.
+  **Fix:** Die Hinweiszeile entfällt bei verwendeten Maßen, die Zahl steht am Bindeknopf
+  („6 Zahlen an Maße binden …“), nur „Nicht verwendet“ bleibt; Spulensymbol als
+  Spaltenkopf, runder Farbpunkt; Gruppenzeile trägt „3–4“, Kernwechsel hinter einem
+  Trennstrich; im Zeichenmodus Dock und Einladung verborgen, Bedingungen nur des
+  gewählten Elements mit Zählzeile.
+  **Abnahme:** Im Zustand von main-window.png vier Parameterzeilen ohne Untertext; in
+  sechs Sprachen nichts abgeschnitten im Objektbaum; jede Schrittnummer sichtbar;
+  Neues Projekt → Zeichnen ohne Einladung und Dock, höchstens drei Bedingungszeilen.
+
+**Umsetzung:** Parameterkarte: Unter einer Zeile steht nur noch „Nicht verwendet“; die Zahl
+passender fester Zahlen steht am Bindeknopf (`panels.binding_button_text`: „Eine Zahl an ein
+Maß binden …“ / „6 Zahlen an Maße binden …“), wo sie stehen, sagt die Kurzhilfe der Zeile samt
+Knopf; Palette und Dialog heißen wie der Knopf. Objektbaum: Der Kopf der Filamentspalte trägt
+das Symbol `spool`, das Wort nur Kurzhilfe und Lesername; `filament_chip` malt einen runden
+Punkt, ohne eigenes Filament mit gestricheltem Rand statt eines leeren Kästchens (Regel 18). Die
+Maßspalte bekommt mindestens ihre Überschrift, und der Baum teilt die Spalten neu, sobald er
+selbst seine Breite hat (`_ObjectTreeView.resized`; beim ersten Zeigen stand die Maßspalte sonst
+auf 25 Punkten). Verlauf: Eine Gruppenzeile trägt die Spanne ihrer Schritte (`panels.step_span`,
+„2–3“, nach Verschieben „2–3, 6“), die zugeklappte Löschgruppe die Nummern, die sie verbirgt
+(„mit 2 Schritten: 4–5“); das Kontextmenü entsteht in `HistoryPanel.context_menu`, der
+Kernwechsel steht zuletzt hinter einem Trennstrich. Zeichenmodus: Der Reiter *Auswahl* ist für
+die Dauer der Skizze verborgen und kommt danach zurück; `_SelectionPage.reveal` holt keinen
+verborgenen Reiter. Die Einladung der leeren Szene steht nicht über Skizze, offenem
+Operationsdialog oder Vorschau (`_show_invitation`). Die Bedingungsliste zeigt nur, was an
+gewählten Punkten hängt, dazu jeden Widerspruch; die Zählzeile darüber nennt die Gesamtzahl in
+zwei Sätzen (`sketch_editor.constraint_count_text`), ihre Breite hängt nicht am Text, sonst
+zoomte der Skizzendialog bei jedem Klick. „Deckung“ heißt *Verbunden*, in Knopf, Liste,
+Handbuchkapitel *Zeichnen* (sechs Sprachen) und Abbildung; Portugiesisch *Coincidente* wie in
+den Sketcher-Katalogen von FreeCAD (pt-PT und pt-BR), „Ligado“ hieße auf dem Umschaltknopf
+„eingeschaltet“. Mitbehoben: Der Doppelklick auf eine Maßkarte meldete einen Bedingungsindex,
+den das Panel als Listenzeile las; `change_constraint_value` nimmt jetzt den Index. Regeln in
+`vorderseite.md` („Die linken Karten zeigen nur, was gilt“), `zeichenflaeche.md` und
+`fenster.md` (Einladung), Begründungen in `konzepte/begruendungen/`. Commits `73c0993e2`,
+`18798029f`, `0e8de8334`, `6cd449a1d`, `9bd08446e`, `ca27aa9a7`.
+
+**Nachweis:** Ohne Fenster `test_the_bind_button_names_how_many_numbers_it_binds`,
+`test_a_step_span_names_the_numbers_of_a_group`,
+`test_the_count_line_says_how_many_constraints_there_are`. Fenstertests (Release, offscreen per
+Sonde grün): `test_the_box_with_lid_shows_its_four_measures_without_a_line_below` (Abnahme am
+Projekt von main-window.png), `test_the_object_tree_cuts_no_heading_in_any_language` (sechs
+Sprachen), `test_the_filament_dot_is_round_and_says_without_colour_whether_it_was_chosen`,
+`test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last`,
+`test_the_history_folds_removed_steps_under_their_removal`,
+`test_drawing_in_a_new_project_hides_the_invitation_and_the_selection_tab` (ohne Auswahl keine
+Bedingungszeile, mit gewählter Seite genau ihre Bedingungen; die Abnahme „höchstens drei“ gilt
+damit im Bildzustand ohne Auswahl), `test_choosing_a_line_does_not_zoom_the_sketch_dialog`,
+`test_the_constraint_list_shows_only_what_hangs_on_the_selection`,
+`test_leaving_the_sketch_brings_back_the_selection_tab_it_hid`,
+`test_a_double_click_on_a_measure_card_opens_its_value`. Review (solidon3d-review) in drei
+Durchgängen, Urteil „kann rein“. Am echten Fenster beim Release ansehen: Spule, Farbpunkt und
+Zählzeile in beiden Themen und auf HiDPI (RM-213); Handbuchseite, Abbildung `sketch-editor`,
+`main-window.png`, `sketch-mode.png` und `guide-draw-and-pull-4/-6` entstehen dann neu.
+Changelog: ja — Parameterkarte ohne Untertext, Zahl am Bindeknopf; Filamentspalte mit Spule und
+rundem Farbpunkt; durchgehende Schrittnummern im Verlauf; im Zeichnen weder Einladung noch
+Reiter Auswahl, die Bedingungen der Auswahl mit ihrer Zahl, „Verbunden“ statt „Deckung“.
 
 ## CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)
 

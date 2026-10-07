@@ -50,8 +50,10 @@ _ON_SELECTION = "#1c2026"
 #: ganzen Farbraum: 1,763 ist das Maximum).
 _SELECTION_PRESSED = "#c37310"
 
-#: Die Kante, mit der ein *bleibender* Zustand markiert wird — der aktive
-#: Reiter, der offene Abschnitt.
+#: Die Kante in der Akzentfarbe — Fokusring, aktives Werkzeug, laufender
+#: Tourschritt, gewählter Befund. Ein Zustand, der im Ruhezustand des Fensters
+#: dauerhaft steht (Kartenrand, aktiver Reiter), nimmt sie nicht: Dort trägt
+#: genau ein Element den Akzent (RM-512, ``tests/test_resting_state.py``).
 #:
 #: Warum nicht einfach :data:`_SELECTION`: Der Bernstein ist hell. Gegen das
 #: dunkle Fenster bringt er 5,4, gegen das helle nur **1,37** — dort wäre die

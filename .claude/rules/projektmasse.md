@@ -12,6 +12,9 @@ RM-184). `scene/parameter_binding.py` findet feste Zahlen, die genau zu Maßen
 passen, `ui/binding_dialog.py` lässt wählen, `History.bind_parameters`
 schreibt.
 
+- **Die Zahl steht am Knopf, nicht unter dem Maß** (RM-519, `vorderseite.md`):
+  wie viele feste Zahlen passen, sagt der Bindeknopf, wo sie stehen, die
+  Kurzhilfe der Zeile, auch am ungenutzten Maß.
 - **Gebunden wird nur, was der Kunde wählt** (Regel 21): Dieselbe Zahl kann
   aus zwei Maßen kommen, und eine zufällig gleiche Zahl ist keine Absicht.
   Vorgewählt ist nur `BindingSpot.certain` — eine Größe, und genau ein Maß
