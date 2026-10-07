@@ -34,16 +34,19 @@ _ADDED = PartChange("1", "2026-09-15", "Geteilte Profilklemme mit separat wechse
 
 #: Die Schraubengrößen der Klemme — aus der Normteiltabelle, soweit dort
 #: Schraube **und** Mutter stehen. Die Website verspricht Schrauben „zur
-#: gewählten Normgröße"; zu wählen war bis zum 22.09.2026 nur M4. M3 bis M6
-#: tragen Ohren und Aufnahmen über den ganzen Bereich; wo die Klemmtiefe für
-#: eine große Größe nicht reicht, sagt ``_shell_reason`` es mit Vorschlag.
-#: Das Klemmenpaar (``geom/profile_clamp_ops.py``) bietet dieselbe Auswahl an.
-#: Kein Eintrag im Änderungsverlauf: Eine neue Wahl ändert keine bestehende
-#: Schale, und ein Hinweis beim Öffnen wäre einer ohne Anlass.
+#: gewählten Normgröße"; zu wählen war bis zum 22.09.2026 nur M4, bis zum
+#: 06.10.2026 M3 bis M6. Jetzt M3 bis M33: Wo die Klemmtiefe für eine große
+#: Größe nicht reicht, sagt ``_shell_reason`` es mit Vorschlag — bei der
+#: größten Klemmtiefe von 80 mm reicht sie bis M42. Die Schale fährt 32 Ecken
+#: je Größe, und ``range_check.MAX_CORNERS`` lässt sechzehn zu; M3 bis M33 sind
+#: sechzehn, seit die Tabelle auch M33 und M39 führt. Das Klemmenpaar
+#: (``geom/profile_clamp_ops.py``) bietet dieselbe Auswahl an. Kein Eintrag im
+#: Änderungsverlauf: Eine neue Wahl ändert keine bestehende Schale, und ein
+#: Hinweis beim Öffnen wäre einer ohne Anlass.
 SCREW_SIZES: tuple[str, ...] = tuple(
     size
-    for size in ("M3", "M4", "M5", "M6")
-    if size in standards.screw_sizes() and size in standards.nut_sizes()
+    for size in standards.screw_sizes()
+    if 3.0 <= standards.screw(size).nominal <= 33.0 and size in standards.nut_sizes()
 )
 _SHELL_SEATED = PartChange(
     version="19",

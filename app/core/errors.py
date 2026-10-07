@@ -459,6 +459,8 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         "torus_tube",
         # Die Gangtiefe einer Steigung muss unter dem Radius bleiben (P2.6).
         "thread_pitch",
+        # Eine Steigung unter ``units.FINEST_PITCH`` baut kein Gewinde (RM-532).
+        "finest_pitch",
         # Ein geändertes Gewinde muss in seiner Wand bleiben (RM-184).
         "thread_wall",
         # Ein Deckelscharnier muss auf seine Seite passen und unter den Rand

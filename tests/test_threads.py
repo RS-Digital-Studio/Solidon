@@ -117,3 +117,209 @@ def test_the_screw_stays_under_its_nominal_diameter() -> None:
     male, _female = pair(size="M6", play=0.15)
 
     assert radii(male.mesh)[1] * 2.0 == pytest.approx(6.0 - 0.15, abs=0.01)
+
+
+def custom_pair(diameter: float, pitch: float = 0.0, play: float = 0.15, length: float = 12.0):
+    """Wie :func:`pair`, mit eigenem Maß statt einer Tabellengröße."""
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+
+    values = {"size": CUSTOM_SIZE, "diameter": diameter, "pitch": pitch, "length": length}
+    male = printed_thread(ThreadParams(**values, internal=False, play=play))
+    female = printed_thread(ThreadParams(**values, internal=True, play=play))
+    return male, female
+
+
+@pytest.mark.parametrize(("diameter", "pitch"), [(7.6, 1.0), (66.6, 6.0), (250.0, 6.0)])
+def test_a_thread_of_its_own_measure_interlocks_with_the_play_asked_for(
+    diameter: float, pitch: float
+) -> None:
+    """Das Paar mit eigenem Maß hält dieselben Zusagen wie das aus der Tabelle.
+
+    Ø 66,6 ist das Gewinde, das bis Tabellenversion 12 eine Bohrung von 60 mm
+    bekam (Kundenvorschlag S-20261006-c66299); Ø 250 liegt weit über jeder
+    Tabelle. Die Steigungen sind die groben nach ISO 262 als Zahl, nicht aus
+    ``standards`` gelesen — ein Fehler dort bliebe sonst grün: Ø 7,6 trägt die
+    1 mm der M6, Ø 66,6 und 250 die 6 mm der M64.
+    """
+    from app.core.units import MAX_FACET_SAG
+
+    male, female = custom_pair(diameter)
+    screw_core, screw_crest = radii(male.mesh)
+    hole_core, hole_crest = radii(female.mesh)
+    depth = pitch * RIDGE_SHARE
+
+    # Die Kämme liegen auf Ecken und treffen das Maß; der Grund der Mutter ist
+    # die Bohrung ihres Werkzeugs, und deren Sehnen liegen bis zu
+    # ``MAX_FACET_SAG`` innerhalb — bei Ø 250 gemessen 0,03 mm, wie jede Rundung.
+    assert hole_crest - screw_crest == pytest.approx(0.15, abs=0.01)
+    assert hole_core - screw_core == pytest.approx(0.15, abs=MAX_FACET_SAG)
+    assert screw_crest * 2.0 == pytest.approx(diameter - 0.15, abs=0.01)
+    assert screw_crest - screw_core == pytest.approx(depth, abs=0.01)
+    assert as_mesh_data(male.mesh).is_watertight and as_mesh_data(female.mesh).is_watertight
+
+
+def test_a_stated_pitch_beats_the_regular_one() -> None:
+    """Eine feinere Steigung schneidet flacher — der Weg für die dünne Rohrwand."""
+    male, _female = custom_pair(66.6, pitch=2.0)
+    core, crest = radii(male.mesh)
+
+    assert crest - core == pytest.approx(2.0 * RIDGE_SHARE, abs=0.01)
+
+
+def test_a_pitch_too_coarse_for_the_diameter_is_refused_with_a_way_out() -> None:
+    """Ø 4 mit 5 mm Steigung hätte keinen Kern: eine Absage, die das Feld nennt."""
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as caught:
+        custom_pair(4.0, pitch=5.0)
+    assert caught.value.field == "pitch"
+    assert caught.value.suggestions
+
+
+def test_a_wide_thread_gets_chords_as_fine_as_any_other_rounding() -> None:
+    """Je Umlauf so viele Sehnen, dass die Abweichung unter ``MAX_FACET_SAG`` bleibt.
+
+    Bis Ø 46 sind es achtundvierzig wie bisher — jede Tabellengröße bis M42
+    baut unverändert —, darüber ein Vielfaches davon, auch für M48 bis M64.
+    Mit festen achtundvierzig wich ein Gewinde Ø 500 um 0,53 mm von seiner
+    Rundung ab, mehr als das Spiel.
+    """
+    import math
+
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.shapes import SEGMENTS, turn_segments
+    from app.core.units import MAX_FACET_SAG
+
+    for size in standards.screw_sizes():
+        # Das Innenwerkzeug reicht am weitesten hinaus: Nennmaß plus Spiel.
+        radius = standards.screw(size).nominal / 2.0 + 1.0
+        expected = SEGMENTS if standards.screw(size).nominal <= 42.0 else 2 * SEGMENTS
+        assert turn_segments(radius) == expected, size
+    for radius in (24.0, 33.3, 125.0, 500.0):
+        count = turn_segments(radius)
+        assert count % SEGMENTS == 0
+        assert radius * (1.0 - math.cos(math.pi / count)) <= MAX_FACET_SAG + 1e-12
+        assert radius * (1.0 - math.cos(math.pi / (count - SEGMENTS))) > MAX_FACET_SAG
+
+
+@pytest.mark.parametrize(("diameter", "length"), [(46.0, 2.0), (46.0, 10.0), (500.0, 7.0)])
+def test_the_built_thread_has_the_chords_of_the_facet_rule_in_every_turn(
+    diameter: float, length: float, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gemessen am Bau, nicht an der Formel von ``turn_segments``.
+
+    ``thread_body`` verteilt ``round(Umläufe) · segments`` Schritte über seine
+    Höhe. Bei krummer Umlaufzahl blieben je Umlauf weniger Sehnen, als die
+    Facettenregel verlangt: Ø 46 auf 2 mm 33 statt 48 und 0,103 mm Abweichung
+    (Review RM-532, R1). ``build.threaded`` baut den Gang deshalb über ganze
+    Umläufe; geprüft wird, was es ``thread_body`` wirklich übergibt, und die
+    Abweichung, die daraus folgt.
+    """
+    from app.core.knowledge.parts import shapes
+    from app.core.units import MAX_FACET_SAG
+
+    seen: list[tuple[float, float, int]] = []
+    original = shapes.thread_body
+
+    def recorded(diameter: float, pitch: float, height: float, **kwargs: object) -> object:
+        seen.append((height, pitch, int(kwargs["segments"])))  # type: ignore[call-overload]
+        return original(diameter, pitch, height, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(shapes, "thread_body", recorded)
+    male, _female = custom_pair(diameter, length=length)
+    assert as_mesh_data(male.mesh).is_watertight
+    for height, pitch, segments in seen:
+        turns = height / pitch
+        assert turns == pytest.approx(round(turns), abs=1e-9), "ganze Umläufe"
+        steps = max(round(turns), 1) * segments
+        per_turn = steps / turns
+        radius = diameter / 2.0 + 0.15
+        assert radius * (1.0 - np.cos(np.pi / per_turn)) <= MAX_FACET_SAG + 1e-9
+
+
+def test_every_thread_path_shares_the_same_limits() -> None:
+    """Die Regel in ``bausteine.md`` ist Prosa — dieser Test hält sie (Review RM-532, R6).
+
+    Baustein, *Schraube erstellen*, Gegenstück und Drehdeckel lesen ihre
+    Grenzen aus ``units``; der Drehdeckel beginnt bei der Steigung bewusst bei
+    1 mm, weil ein Schraubdeckel feiner nicht greift.
+    """
+    from app.core.brep.ops import ThreadParams as ExactThreadParams
+    from app.core.geom.lid import ScrewLidParams
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import ThreadParams as PartThreadParams
+    from app.core.units import COARSEST_PITCH, FINEST_PITCH, LARGEST_THREAD, SMALLEST_THREAD
+
+    def bounds(params: type, name: str) -> tuple[object, object]:
+        entry = next(item for item in params.spec() if item.name == name)
+        return entry.minimum, entry.maximum
+
+    assert bounds(PartThreadParams, "diameter") == (SMALLEST_THREAD, LARGEST_THREAD)
+    assert bounds(PartThreadParams, "pitch")[1] == COARSEST_PITCH
+    assert bounds(ExactThreadParams, "diameter") == (SMALLEST_THREAD, LARGEST_THREAD)
+    assert bounds(ExactThreadParams, "pitch") == (FINEST_PITCH, COARSEST_PITCH)
+    assert bounds(ScrewLidParams, "pitch")[1] == COARSEST_PITCH
+    assert bounds(ScrewLidParams, "neck")[1] == LARGEST_THREAD
+    # Unten begrenzt die kleinste Schraube der Tabelle (Review RM-532, K6).
+    smallest = standards.screw(standards.screw_sizes()[0]).nominal
+    assert smallest == SMALLEST_THREAD
+
+
+def test_a_pitch_finer_than_the_finest_is_refused_with_a_way_out() -> None:
+    """0,01 mm Steigung baute am Netz Millionen Dreiecke ohne Abbruch (Review RM-532, R2)."""
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as caught:
+        custom_pair(20.0, pitch=0.1)
+    assert caught.value.constraint == "finest_pitch"
+    assert caught.value.suggestions
+    male, _female = custom_pair(20.0, pitch=0.25, length=2.0)
+    assert as_mesh_data(male.mesh).is_watertight
+
+
+def test_a_bolt_needs_a_core_of_a_third_of_its_diameter() -> None:
+    """Ø 2 × 1,6 außen ließ 0,04 mm Kern stehen und baute (Review RM-532, R3).
+
+    Dieselbe Regel wie *Schraube erstellen* (``units.THREAD_MIN_CORE_SHARE``),
+    für beide Hälften am Bolzen des Maßes geprüft — ein Innengewinde ohne
+    möglichen Bolzen hat kein Gegenstück.
+    """
+    from app.core.errors import ValidationError
+
+    for internal in (False, True):
+        with pytest.raises(ValidationError) as caught:
+            values = {"size": "custom_size", "diameter": 2.0, "pitch": 1.6, "length": 4.0}
+            printed_thread(ThreadParams(**values, internal=internal, play=0.2))
+        assert caught.value.constraint == "no_core"
+    # Die kleinste Tabellengröße mit dem größten Spiel hält die Regel noch.
+    male = printed_thread(ThreadParams(size="M1.6", length=4.0, internal=False, play=1.0))
+    assert as_mesh_data(male.mesh).is_watertight
+
+
+@pytest.mark.parametrize(
+    ("bore", "size"),
+    [(8.5, "M10"), (10.2, "M12"), (17.5, "M20"), (21.0, "M24"), (50.5, "M56"), (58.0, "M64")],
+)
+def test_an_iso_tap_drill_hole_gets_its_standard_thread(bore: float, size: str) -> None:
+    """Wer für M24 gebohrt hat, bekommt M24 — nicht ein eigenes Maß Ø 23,75 (Review RM-532, K1).
+
+    Das Kernloch als Bohrermaß (D − P) steht seit Tabellenversion 13 für jede
+    Größe bis M64 in der Tabelle; die Bohrung trifft deshalb die Normgröße.
+    """
+    from app.core.knowledge.parts.fasteners import size_for_thread
+
+    assert size_for_thread(bore) == {"size": size, "internal": True}
+
+
+@pytest.mark.parametrize(
+    ("bore", "found"), [(1.2, False), (1.25, True), (993.4, True), (993.5, False)]
+)
+def test_a_custom_thread_at_a_bore_ends_at_the_shared_limits(bore: float, found: bool) -> None:
+    """``custom_thread_for`` an der Kante: Ø 1,6 und Ø 1000 als Nennmaß (Review RM-532, R6).
+
+    Die Bohrung ist der Gangfuß, Nennmaß = Bohrung + 1,1 · Steigung: 1,215 + 0,385
+    = 1,6, 993,4 + 6,6 = 1000.
+    """
+    from app.core.knowledge.parts.fasteners import custom_thread_for
+
+    assert (custom_thread_for(bore) is not None) is found

@@ -1538,6 +1538,19 @@ Regel 7 im Gewand einer Fertigungszugabe. Sie untergrub die Kalibrierung
 je Seite. **Dass etwas nicht klemmt, ist die Aufgabe des Gleitspiels aus dem
 Profil**; dafür ist es da, und dafür wird es gemessen.
 
+*Stift für Bohrung* mit Senkkopf (RM-536) zeigt, warum die Hälfte senkrecht zur
+Wand gilt und nicht im Halbmesser: Eine Mündung „Senkung minus Spiel“ mit dem
+Winkel der Senkung ließe an einer 90°-Flanke nur `Spiel/2 · cos 45°` Luft, an
+`plate_countersunk.stl` mit PETG 0,088 statt 0,125 mm. Die Flanke rückt deshalb
+um `Spiel/2` senkrecht zu sich ein, die Mündung wird um `Spiel · √2` enger. Das
+Gewinde darin stand nach dem Bau zunächst auf seinem Absatz: An der Achse ist
+unter einem gedruckten M6 in Ø 5,2 Luft, der Kamm des Bolzens saß aber auf dem
+Ring, an dem die Gänge der Bohrung enden — Abstand null, ohne gemeinsames
+Volumen. Seither fragt das Ende des Gewindes die Weite dahinter
+(`bore_pin.room_beyond`). Die Lage der Gänge wird an den Ecken des Trägers
+gemessen (`bore_pin.thread_turn`): Ein um 100° gedrehter Träger ließ den
+ungedrehten Bolzen über 1 mm³ in seinen Gängen stehen.
+
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 
 Nicht ein zweites quer über dem ersten. Bis zum 15.09.2026 schnitt `slot_hole`

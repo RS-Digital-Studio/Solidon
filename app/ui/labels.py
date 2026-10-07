@@ -1454,6 +1454,15 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "hinge_front": _("Die Achse liegt an der vorderen Seite der Öffnung."),
     "hinge_left": _("Die Achse liegt an der linken Seite der Öffnung."),
     "hinge_right": _("Die Achse liegt an der rechten Seite der Öffnung."),
+    "custom_size": _(
+        "Durchmesser und Steigung frei, etwa für ein Rohr. Ohne Steigung gilt die übliche zum "
+        "Durchmesser."
+    ),
+    "to_the_bore": _(
+        "Mit Senkkopf in einer Senkung, Zylinderkopf in einer Ansenkung und Außengewinde in "
+        "einem Innengewinde."
+    ),
+    "plain_pin": _("Ein Zylinder, um das Spiel dünner als die Bohrung, ohne Kopf und Gewinde."),
 }
 
 
@@ -1511,6 +1520,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "font": _("Schrift"),
     "grip": _("Verengung"),
     "head_room": _("Kopftiefe"),
+    # Was *Stift für Bohrung* gebaut hat (RM-536).
+    "head_diameter": _("Kopfdurchmesser"),
+    "countersink_angle": _("Senkwinkel"),
+    "thread": _("Gewinde"),
     "angle": _("Winkel"),
     "intersection": _("Durchdringung"),
     "last_angle": _("Letzter Winkel"),
@@ -1592,6 +1605,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "core": _("Kern"),
     "count": _("Anzahl"),
     "counted": _("Verarbeitet"),
+    # ``fasteners.screw_hole``: der Durchmesser einer gerechneten Senkung.
+    "countersink": _("Senkung"),
     "cut": _("Schnitt"),
     # ``slicer.profile_value_replaced``: was statt eines abgelehnten Herstellerwerts hinausgeht.
     "default": _("Vorgabe"),
@@ -1670,6 +1685,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "findings": _("Befunde"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
+    # ``fasteners.thread_at_hole``: der Nenndurchmesser, mit dem die Bohrung Kernloch bleibt.
+    "fitting": _("Passender Nenndurchmesser"),
     "floor": _("Boden"),
     "flow_limit": _("Höchster Volumenstrom"),
     "format": _("Format"),
@@ -1750,8 +1767,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "name": _("Name"),
     "neck": _("Hals"),
     "needed": _("Nötig"),
-    # ``counterpart``: die nächste Tabellengröße zu einem Gewinde ohne Norm.
-    "nearest": _("Nächste Größe"),
     "node": _("Knoten"),
     "nominal": _("Nennmaß"),
     "nozzle": _("Düse"),

@@ -7838,7 +7838,10 @@ class ResizeFeatureParams(BaseParams):
     # 18: Ein geändertes Gewinde verliert das Nennmaß eines gedruckten — es ist
     # gebaut, wie es dasteht, ohne Spiel daneben.
     # 19: „hat dieses Maß schon“ öffnet den Schritt (RM-441).
-    cache_version="19",
+    # 20: Das neue Gewinde kommt aus ``build.threaded`` mit den Sehnen der
+    # Facettenregel (``shapes.turn_segments``), über ganze Umläufe und mit einem
+    # Kern, der den Gang auch in der Sehnenmitte überdeckt (Review RM-532, R1/R4).
+    cache_version="20",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -17547,12 +17550,16 @@ def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> 
 
 @op_params
 class CountersinkParams(BaseParams):
+    # Bis zum Senkkopf des größten Gewindes, das die Anwendung baut: Der
+    # Senkkopf ist 2·d (Normteiltabelle). Mit 100 mm endete das Feld unter dem
+    # Kopf einer M56, seit die Tabelle bis M64 reicht — an deren Bohrung trüge
+    # der Dialog 112 mm ein, die das Feld nicht annähme.
     diameter: float = param(
         title=_("Kopfdurchmesser"),
         default=8.4,
         unit="mm",
         minimum=0.5,
-        maximum=100.0,
+        maximum=2.0 * units.LARGEST_THREAD,
         doc=_(
             "Durchmesser des Schraubenkopfes, nicht der Bohrung darunter. Eine "
             "angeklickte Bohrung trägt den Kopf der passenden Schraube ein — "

@@ -208,6 +208,12 @@ MEINT_DEN_SCHRITT: dict[str, str | dict[str, str] | None] = {
     },
     "bore.resize_unchanged": "diameter",
     "bore.already_through": "depth",
+    "pin_for_bore.thread_touches": "clearance",
+    # Review RM-532 Runde 2, N2: Restwand und Aufbohren am Gewinde öffnen das Feld,
+    # das das Maß trägt — bei „Eigenes Maß“ den Nenndurchmesser, sonst die Größe.
+    "parts.thread_thin_wall": frozenset({"diameter", "size"}),
+    "parts.bore_widened": frozenset({"diameter", "size"}),
+    "parts.countersink_derived": "countersink",
 }
 
 #: Die Operationen, deren Dialog der Knopf öffnet — das Feld muss es an jeder
@@ -227,12 +233,20 @@ OPERATION_OF: dict[str, tuple[str, ...]] = {
     "resize_feature.unchanged": ("resize_feature",),
     "bore.resize_unchanged": ("resize_hole",),
     "bore.already_through": ("resize_hole",),
+    "pin_for_bore.thread_touches": ("pin_for_bore",),
 }
 
 #: Befunde mit Feld, die keine Operation öffnen: Der Baustein hat seinen eigenen
 #: Dialog. Jedes andere Kennwort mit Feld steht in ``OPERATION_OF`` — sonst
 #: liefe es ungeprüft gegen das Register.
-OHNE_OPERATION: frozenset[str] = frozenset({"parts.bore_too_wide"})
+OHNE_OPERATION: frozenset[str] = frozenset(
+    {
+        "parts.bore_too_wide",
+        "parts.thread_thin_wall",
+        "parts.bore_widened",
+        "parts.countersink_derived",
+    }
+)
 
 #: Helfer, die einen solchen Befund bauen; das Feld ist ihr zweites Argument
 #: oder ``field=``.
@@ -244,6 +258,15 @@ def _suggestion_names(node: ast.expr) -> set[str]:
     if isinstance(node, ast.Tuple | ast.List):
         return {element.id for element in node.elts if isinstance(element, ast.Name)}
     return set()
+
+
+def _fields(node: ast.expr) -> tuple[object, ...]:
+    """Die Felder eines ``"field":``-Werts: ausgeschrieben oder ``a if … else b``."""
+    if isinstance(node, ast.Constant):
+        return (node.value,)
+    if isinstance(node, ast.IfExp):
+        return _fields(node.body) + _fields(node.orelse)
+    return ("?",)
 
 
 def _codes(node: ast.expr | None) -> tuple[str, ...]:
@@ -315,7 +338,8 @@ def test_a_finding_about_a_step_value_opens_that_step() -> None:
                 argument = node.args[1] if len(node.args) > 1 else given.get("field")
                 named = argument.value if isinstance(argument, ast.Constant) else "?"
                 field = expected(code, function_of(node))
-                if named != field:
+                allowed = field if isinstance(field, frozenset) else {field}
+                if named not in allowed:
                     without.append(f"{place} {code}: Feld {named!r} statt {field!r}")
                 seen.append((code, named, place))
                 continue
@@ -331,18 +355,20 @@ def test_a_finding_about_a_step_value_opens_that_step() -> None:
                 if not _suggestion_names(keywords.get("suggestions", ast.Tuple(elts=[]))) & changes:
                     without.append(f"{where}: ohne Knopf zum Ändern des Schritts")
                 values = keywords.get("values")
-                named = None
+                named: tuple[object, ...] = (None,)
                 if isinstance(values, ast.Dict):
                     for key, value in zip(values.keys, values.values, strict=True):
                         if isinstance(key, ast.Constant) and key.value == "field":
-                            named = value.value if isinstance(value, ast.Constant) else "?"
+                            named = _fields(value)
                 if function_of(node) in BEFUND_HELFER:
                     continue  # der Helfer selbst; seine Aufrufe zählen oben
                 found[code] = found.get(code, 0) + 1
                 field = expected(code, function_of(node))
-                if named != field:
-                    without.append(f"{where}: Feld {named!r} statt {field!r}")
-                seen.append((code, named, place))
+                allowed = field if isinstance(field, frozenset) else {field}
+                for name in named:
+                    if name not in allowed:
+                        without.append(f"{where}: Feld {name!r} statt {sorted(map(str, allowed))}")
+                    seen.append((code, name, place))
     from app.core.bootstrap import load_operations
     from app.core.registry import REGISTRY
 

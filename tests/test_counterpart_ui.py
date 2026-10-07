@@ -520,3 +520,130 @@ def test_the_counterpart_labels_carry_no_colon(qt_app: QApplication) -> None:
         assert not [text for text in captions if text.rstrip().endswith(":")], captions
     finally:
         dialog.deleteLater()
+
+
+def test_a_measured_thread_keeps_its_size_note_in_the_report(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Satz über das Maß des Gegenstücks steht im Prüfbericht und bleibt dort.
+
+    Ein eingelesener Bolzen Ø 7 x 1 ist keine Normgröße; das Gegenstück nimmt
+    das gemessene Maß, und der Satz dazu stand nur in der Statuszeile (Review
+    RM-532 Runde 2, K-N4). Jetzt sagt ihn die Prüfung der Gewindepassung — nach
+    dem Klick und nach jeder weiteren Auswertung.
+    """
+    import hashlib
+
+    from app.core.brep.profiles import threaded_rod
+    from app.core.brep.step import write
+    from app.core.types import Source
+    from app.ui import counterpart_dialog as module
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        project = window.session.project
+        payload = write(threaded_rod(7.0, 1.0, 12.0))
+        project.sources["bolt"] = payload
+        project.document.sources["bolt"] = Source(
+            id="bolt",
+            kind="import",
+            path="sources/bolt.step",
+            sha256=hashlib.sha256(payload).hexdigest(),
+        )
+        window.session.history.apply(
+            "Bolzen", [OperationDraft(op="load_step", params={"source": "bolt"})]
+        )
+        window.session.evaluate_now()
+        result = window.session.last_result
+        assert result is not None
+        bolt = next(name for name in result.scene.objects if name not in (first, second))
+        threads = [
+            name
+            for name, feature in result.scene.objects[bolt].features.items()
+            if feature.kind == "thread"
+        ]
+        assert len(threads) == 1, "der eingelesene Bolzen trägt ein erkanntes Gewinde"
+        window.object_tree.select_features(
+            ((bolt, threads[0]), (second, _top_face(window, second)))
+        )
+        QApplication.processEvents()
+
+        def no_dialog(self: object) -> int:
+            raise AssertionError("am Gewinde gibt es nichts zu wählen — kein Dialog")
+
+        monkeypatch.setattr(module.CounterpartDialog, "exec", no_dialog)
+        window.action_counterpart()
+        assert window.session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        document = window.session.project.document
+        assert len(document.fits) == 1 and document.fits[0].kind == "thread"
+
+        def noted() -> list[str]:
+            return [
+                finding.object_id or ""
+                for finding in window.report._findings
+                if finding.code == "parts.counterpart_own_measure"
+            ]
+
+        assert noted() == [bolt], [finding.code for finding in window.report._findings]
+        window.session.evaluate_now()
+        assert window.session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        assert noted() == [bolt], "der Satz übersteht die nächste Auswertung"
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()
+
+
+def test_the_pin_for_a_bore_is_offered_at_an_internal_thread_only(qt_app: QApplication) -> None:
+    """Am Innengewinde steht *Stift für Bohrung* in der Karte, am Außengewinde nicht (RM-536).
+
+    Der Stift baut das passende Außengewinde in eine Gewindebohrung; an einem
+    Bolzen gibt es keine Bohrung, in die er gehört (``actions.not_offered_at``).
+    """
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        window.session.history.apply(
+            "Gewinde",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(first,),
+                    params={"size": "M6", "length": 8.0, "internal": True, "z": 10.0},
+                ),
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(second,),
+                    params={"size": "M6", "length": 8.0, "internal": False, "z": 10.0},
+                ),
+            ],
+        )
+        window.session.evaluate_now()
+        result = window.session.last_result
+        assert result is not None
+
+        def thread_of(object_id: str) -> str:
+            [name] = [
+                name
+                for name, feature in result.scene.objects[object_id].features.items()
+                if feature.kind == "thread" and feature.provenance == "generated"
+            ]
+            return name
+
+        offered: dict[bool, bool] = {}
+        for object_id, internal in ((first, True), (second, False)):
+            window.object_tree.select_features(((object_id, thread_of(object_id)),))
+            QApplication.processEvents()
+            window._update_actions()
+            assert window.selection_operations.chosen_level() == "thread"
+            offered[internal] = window.selection_operations._fits_the_level("pin_for_bore")
+        assert offered == {True: True, False: False}
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()

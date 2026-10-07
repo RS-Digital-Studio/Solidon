@@ -2271,10 +2271,19 @@ def test_a_bore_belongs_to_the_screw_whose_clearance_hole_it_is() -> None:
     anders beantwortet, und zwischen zwei Größen liegt kein Bereich, in dem
     stillschweigend die eine gewinnt.
     """
+    clearances = {standards.screw(size).clearance: size for size in standards.screw_sizes()}
     for size in standards.screw_sizes():
         entry = standards.screw(size)
-        assert screw_for_bore(entry.nominal) == size, f"{size} geht durch ihr eigenes Nennmaß"
+        # Ab M18 berühren sich die Bänder nach ISO 273: 20 mm ist das
+        # Durchgangsloch der M18 und das Nennmaß der M20 (ebenso 22, 24, 30 und
+        # fast jede Größe darüber).
+        # Dort gilt das Durchgangsloch — eine Bohrung ohne Luft ist keines.
+        expected = clearances.get(entry.nominal, size)
+        assert screw_for_bore(entry.nominal) == expected, f"{size} geht durch ihr eigenes Nennmaß"
         assert screw_for_bore(entry.clearance) == size, f"{size} passt in ihr Durchgangsloch"
+    nominals = {standards.screw(size).nominal for size in clearances.values()}
+    touching = [20.0, 22.0, 24.0, 30.0, 33.0, 36.0, 39.0, 42.0, 45.0, 48.0, 52.0, 56.0]
+    assert sorted(set(clearances) & nominals) == touching
 
     assert standards.screw("M5").nominal <= MEASURED_BORE <= standards.screw("M5").clearance, (
         "Grundlage des gemeldeten Falls: 5,19 mm liegt zwischen 5,00 und 5,50"
@@ -2522,6 +2531,27 @@ def test_the_clearance_series_are_those_of_iso_273() -> None:
         "M5": (5.3, 5.5, 5.8),
         "M6": (6.4, 6.6, 7.0),
         "M8": (8.4, 9.0, 10.0),
+        # Seit Tabellenversion 13, gegen Wikipedia „Durchgangsbohrung“ (ISO 273).
+        "M1.6": (1.7, 1.8, 2.0),
+        "M10": (10.5, 11.0, 12.0),
+        "M12": (13.0, 13.5, 14.5),
+        "M14": (15.0, 15.5, 16.5),
+        "M16": (17.0, 17.5, 18.5),
+        "M18": (19.0, 20.0, 21.0),
+        "M20": (21.0, 22.0, 24.0),
+        "M22": (23.0, 24.0, 26.0),
+        "M24": (25.0, 26.0, 28.0),
+        "M27": (28.0, 30.0, 32.0),
+        "M30": (31.0, 33.0, 35.0),
+        "M33": (34.0, 36.0, 38.0),
+        "M36": (37.0, 39.0, 42.0),
+        "M39": (40.0, 42.0, 45.0),
+        "M42": (43.0, 45.0, 48.0),
+        "M45": (46.0, 48.0, 52.0),
+        "M48": (50.0, 52.0, 56.0),
+        "M52": (54.0, 56.0, 62.0),
+        "M56": (58.0, 62.0, 66.0),
+        "M64": (66.0, 70.0, 74.0),
     }
     for size in standards.screw_sizes():
         entry = standards.screw(size)

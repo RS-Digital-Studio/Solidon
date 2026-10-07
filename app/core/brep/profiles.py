@@ -46,7 +46,7 @@ from app.core.sketch.profile import (
     spline_controls,
 )
 from app.core.types import CancelToken, PlaneFrame, Point2, Vec3
-from app.core.units import EPS_GEOM, is_close, is_zero
+from app.core.units import EPS_GEOM, THREAD_MIN_CORE_SHARE, is_close, is_zero
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -971,13 +971,10 @@ _THREAD_DEPTH_SHARE: Final = 0.6134
 #: damit zwischen zwei Umläufen Grund bleibt.
 _THREAD_FOOT_SHARE: Final = 0.375
 
-#: Wie viel vom Außendurchmesser der Kern mindestens behalten muss.
-#:
-#: Die Prüfung fragte nur, ob überhaupt ein Kern übrig bleibt. Bei M2 mit
-#: 1,5 mm Steigung sind das 0,08 mm Radius — formal mehr als null, und
-#: herausgekommen ist ein Faden von 0,16 mm, wo jemand zwei Millimeter bestellt
-#: hatte. Ein Bolzen, dessen Kern unter einem Drittel liegt, ist keiner mehr.
-_THREAD_MIN_CORE_SHARE: Final = 0.33
+#: Wie viel vom Außendurchmesser der Kern mindestens behalten muss — dieselbe
+#: Regel wie für jedes Bausteingewinde (``units.THREAD_MIN_CORE_SHARE``, dort
+#: der Anlass: M2 mit 1,5 mm Steigung ergab einen Faden von 0,16 mm).
+_THREAD_MIN_CORE_SHARE: Final = THREAD_MIN_CORE_SHARE
 
 
 #: Wie genau die 3D-Kurve einer Helix ihre Linie auf dem Zylinder trifft — eine

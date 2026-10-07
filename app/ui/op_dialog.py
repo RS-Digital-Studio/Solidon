@@ -3312,10 +3312,23 @@ class OperationDialog(QDialog):
         def follow() -> None:
             entered = self.values()
             changed = False
+            revealed = False
             for entry in rules:
                 editor = self._editors[entry.name]
                 inactive = inactive_dependency(entry, schema, entered)
                 active = inactive is None
+                if (
+                    active
+                    and shown.get(entry.name) is False
+                    and self._rows[entry.name] is self._advanced_form
+                    and isinstance(editor, ValueField)
+                    and not editor.names_its_zero()
+                ):
+                    # **Ein Maß, das erst die Wahl vorn verlangt, steht nicht
+                    # still hinter der Klappe** (Review RM-532 Runde 2, N4):
+                    # *Eigenes Maß* holt den Nenndurchmesser, und zugeklappt
+                    # baute seine Vorgabe 20 eine M20, ohne dass jemand sie sah.
+                    revealed = True
                 editor.setEnabled(active)
                 label = self._rows[entry.name].labelForField(editor)
                 if label is not None:
@@ -3375,6 +3388,8 @@ class OperationDialog(QDialog):
             # 800 Punkten Höhe: aufgeklappt 552, *Langloch* an 582, wieder
             # aus 533 — neunzehn Punkte unter dem Inhalt). Und einen
             # Ereignisumlauf später, nicht sofort: siehe ``_resize_to_content``.
+            if revealed and hasattr(self, "advanced") and not self.advanced.isChecked():
+                self.advanced.setChecked(True)
             if changed:
                 self._refresh_advanced_summary()
             if changed and self.isVisible():

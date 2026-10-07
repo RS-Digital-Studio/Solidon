@@ -1012,10 +1012,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "![](figure:part-cable-clip)\n\n"
             "**Druckbares Gewinde**: ein Innengewinde oder ein Gewindebolzen für ein "
             "gedrucktes Gegenstück, nicht für eine Metallschraube. Mit dem Haken bei "
-            "Innengewinde schneidet es auf einer Fläche sein Loch selbst. In eine vorhandene "
-            "Bohrung passt es, wenn sie zwischen Kernloch und Nennmaß liegt, siehe [Ein "
-            "Gewinde in eine Bohrung](manual:thread-a-hole). Ein Schraubenloch derselben "
-            "Größe ist dafür zu weit.\n\n"
+            "Innengewinde schneidet es auf einer Fläche sein Loch selbst. Neben den "
+            "M-Größen nimmt es unter *Eigenes Maß* jeden Durchmesser, etwa für ein Rohr. "
+            "In eine vorhandene Bohrung setzt es das Gewinde, das passt, siehe [Ein "
+            "Gewinde in eine Bohrung](manual:thread-a-hole).\n\n"
             "Dazu kommen Schraubenloch, Magnettasche, Kabeldurchführung, Rippe, "
             "Schlüsselloch, Kugellager einsetzen, Schraube, Gedruckte Mutter, "
             "Nutfeder, Wandhalter, Schnappverbindung, Passstift und Passbohrung, "
@@ -1838,9 +1838,14 @@ def profiles_text() -> str:
         str(
             _(
                 "Woher die Maße kommen, wenn ein Baustein ein Schraubenloch, eine "
-                "Mutternfalle oder ein Gewinde setzt. In eine Bohrung zwischen Kernloch und "
-                "Nennmaß passt ein druckbares Innengewinde dieser Größe. Nichts davon wird "
-                "geschätzt."
+                "Mutternfalle oder ein Gewinde setzt: aus der metrischen Reihe von M1.6 bis "
+                "M64. In eine Bohrung zwischen Kernloch und Nennmaß passt ein druckbares "
+                "Innengewinde dieser Größe. Passt keine, nimmt das Gewinde ein eigenes Maß, "
+                "dessen Kernloch die Bohrung ist. Auch Schraubenloch, Mutternfalle, Schraube "
+                "und Mutter nehmen unter *Eigenes Maß* jeden Durchmesser; ihre Maße sind dann "
+                "aus den Normgrößen daneben abgeleitet und nicht genormt, und der Prüfbericht "
+                "sagt das. Eine Einpressbuchse, die hier fehlt, bekommt Bohrung und Länge aus "
+                "ihrem Datenblatt."
             )
         )
     )

@@ -230,19 +230,17 @@ neuen schneiden — kein Unterschied zwischen den Kernen (Entscheidung Robert).
   Grundrechenarten; exakt `edit._continued_cap`, an derselben Nachbarschaft
   gemessen); der Klick ins Bild nimmt dasselbe Paar.
 - **Eine exakte Differenz gilt erst mit dichtem Zwilling** (`CUT_OVERLAPS`,
-  sonst `CUT_DID_NOT_HOLD`; Ketten, Bohrung, Langloch): OpenCASCADE scheitert
-  lagenabhängig still. Exakte Kopien werden nach Lage und Maß zugeordnet, dann
+  sonst `CUT_DID_NOT_HOLD`; Ketten, Bohrung, Langloch). Exakte Kopien werden nach Lage und Maß zugeordnet, dann
   benannt; der äußere Zylinder einer Kette ist beim Wiederfinden entlang der
   Achse frei; unlesbar heißt `CHAIN_NOT_READABLE`.
 - **Langloch und Lippentasche reisen ganz aus ihren Flächen** (gedreht, skaliert
-  oder ohne zwei ebene Ränder aus Kennzahlen). Steht im Zylinder nur ein Rand —
-  nicht „Merkmal ohne Dreiecke" —, ist das Werkzeug die Hülle der erklärten Maße
-  minus Körper; Nabe oder Zapfen bleiben `HOLE_IS_NOT_EMPTY`. Die Lippe
+  oder ohne zwei ebene Ränder aus Kennzahlen). Steht im Zylinder nur ein Rand, ist
+  das Werkzeug die Hülle der erklärten Maße minus Körper; Nabe oder Zapfen bleiben `HOLE_IS_NOT_EMPTY`. Die Lippe
   (`narrowing`) ändert sich über ihr eigenes Profil und wird nie gekippt
   (`perceive.actions.narrowing_reason`), solange die Erkennung keine gekippte
   Lippe liest; was sie nicht sieht, wird nicht nachgemessen.
 - **Zwei Werkzeuge stoßen am Netz nie nur in einer Ebene aneinander** — das
-  hintere reicht ins vordere; geprüft an Flächen dieser Ebene, nicht am Volumen.
+  hintere reicht ins vordere; geprüft an Flächen dieser Ebene.
 - **Eine Senkung auf ihrer Bohrung ändert ihr Maß über dieselben Profile**
   (Absage an einer Stelle: `countersink_resize_refusal`).
 - **Versetzen und Verdoppeln fragen die Nachbarwand**, beim Verdoppeln samt
@@ -323,12 +321,15 @@ wieder ausgeschnitten wird exakt das Merkmal, ohne Zugabe.
 
 `trimesh.creation.cylinder` ist eingeschrieben. Wiederhergestellt wird mit dem
 gemessenen Konturmaß und dem Wandmantel (`_tool_for`, `_placing_tool`); nur der
-Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`.
+Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Falle:
+`FEATURE_OVERLAP` verdeckt den Vieleckverlust.
+
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,
-`hole_diameter - pin_diameter`); wer radial einzieht, nimmt die Hälfte. Keine
-Konstante als Fertigungszugabe (Regel 7).
+`hole_diameter - pin_diameter`); wer einzieht, nimmt die Hälfte, im Hohlraum
+senkrecht zur Wand (`geom.bore_pin`). Keine Konstante als Fertigungszugabe
+(Regel 7).
 
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 

@@ -265,12 +265,20 @@ def cone(bottom: float, top: float, height: float, *, segments: int = SEGMENTS) 
     return MeshData.of(body)
 
 
-def slot(width: float, length: float, height: float, *, segments: int = SEGMENTS) -> Form:
-    """Ein Langloch: zwei Halbkreise mit einem Rechteck dazwischen."""
+def slot(width: float, length: float, height: float, *, segments: int | None = None) -> Form:
+    """Ein Langloch: zwei Halbkreise mit einem Rechteck dazwischen.
+
+    Ohne ``segments`` so viele Ecken, dass die Sehnen der Halbkreise höchstens
+    ``MAX_FACET_SAG`` innen liegen (:func:`slot_segments`) — bis zu einem
+    Halbmesser von 21,4 mm die achtundvierzig von früher. Darüber wich das runde
+    Ende einer Lasche für M64 bis zum 06.10.2026 um 0,13 mm vom Kreis ab.
+    """
     if building_exact():
         from app.core.knowledge.parts import exact as twins
 
         return twins.slot(width, length, height)
+    if segments is None:
+        segments = slot_segments(width / 2.0)
     if length <= width:
         return cylinder(width, height, segments=segments)
     body = trimesh.creation.extrude_polygon(
@@ -339,6 +347,19 @@ def tapered_bar(width: float, narrow: float, length: float, height: float, taper
             ]
         )
     return MeshData.of(trimesh.creation.extrude_polygon(_polygon(outline), height=height))
+
+
+def slot_segments(radius: float) -> int:
+    """Ecken eines Langlochs, ein Vielfaches von ``SEGMENTS``, mit Sehnen bis ``MAX_FACET_SAG``.
+
+    Gemessen am Umriss, wie :func:`_slot_outline` ihn legt: Jeder Halbkreis hat
+    ``segments // 2`` Punkte, also einen Schritt von ``π / (segments // 2 - 1)``,
+    und die tiefste Sehne liegt um ``r · (1 - cos(Schritt / 2))`` innen.
+    """
+    count = SEGMENTS
+    while radius * (1.0 - exact_cos(math.pi / (2.0 * (count // 2 - 1)))) > MAX_FACET_SAG:
+        count += SEGMENTS
+    return count
 
 
 def _slot_outline(width: float, length: float, segments: int) -> np.ndarray:
@@ -463,6 +484,25 @@ def ridge_profile(
         (crest, pitch * RIDGE_SHARE),
         (root, pitch * RIDGE_END),
     )
+
+
+def turn_segments(radius: float) -> int:
+    """Wie viele Sehnen ein Gewinde je Umlauf am Netz bekommt: ein Vielfaches von ``SEGMENTS``.
+
+    So viele, dass die Sehne am äußersten ``radius`` des Gangs höchstens
+    ``MAX_FACET_SAG`` von der Rundung abweicht. Achtundvierzig halten das bis
+    Ø 46 mm, und dort bleibt es — die Tabellengewinde bis M42 behalten ihre
+    Sehnenzahl (ihr Netz ändert sich trotzdem: ``THREAD_MESH_WHOLE_TURNS``). Ein
+    Gewinde mit eigenem Maß darüber bekam bis zum 06.10.2026 ebenfalls nur
+    achtundvierzig, bei Ø 66 ein Vieleck mit 0,07 mm Abweichung, bei Ø 500 mit
+    0,53 mm — mehr als das Spiel, mit dem Schraube und Mutter ineinandergehen.
+    Ein Vielfaches, damit Kern und Gang auf denselben Winkeln liegen und ein
+    Werkzeug mit ``SEGMENTS`` Ecken weiter auf jeder zweiten, dritten … sitzt.
+    """
+    count = SEGMENTS
+    while radius * (1.0 - exact_cos(math.pi / count)) > MAX_FACET_SAG:
+        count += SEGMENTS
+    return count
 
 
 def thread_body(
