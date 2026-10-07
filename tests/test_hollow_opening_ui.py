@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtWidgets import QApplication
+
 from app.core.registry import REGISTRY
 from app.i18n import tr
 from app.ui.main_window import MainWindow

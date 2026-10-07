@@ -5253,10 +5253,10 @@ def _with_features(
         if consumed or gone_here or withdrawn:
             # Dieselbe Sperre wie unten bei ``apply_mapping``: Ohne erkannte
             # Vorgänger übernähme ein neues Merkmal sonst ungeprüft den Namen
-            # der verbrauchten, weggeschnittenen oder weggenommenen Fläche. Gesperrt ist auch, was daneben
-            # eingehängt wird — sonst fiele der Ausweichname auf ein erzeugtes
-            # oder mitreisendes Merkmal und würde beim Zusammenführen still
-            # überschrieben.
+            # der verbrauchten, weggeschnittenen oder weggenommenen Fläche.
+            # Gesperrt ist auch, was daneben eingehängt wird — sonst fiele der
+            # Ausweichname auf ein erzeugtes oder mitreisendes Merkmal und würde
+            # beim Zusammenführen still überschrieben.
             detected = apply_mapping(
                 detected,
                 MatchResult(fresh=tuple(detected)),
