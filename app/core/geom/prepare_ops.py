@@ -3943,8 +3943,8 @@ HOLE_IS_NOT_EMPTY: Final = _(
 #: darin, schneidet es allein *Zum Langloch ziehen*; jede andere Handlung
 #: braucht die Bohrung an ihrem eigenen Teil (:func:`filled_bore_reason`).
 OTHER_PART_IN_THE_BORE: Final = _(
-    "In dieser Bohrung liegt ein getrenntes Teil. Zerlegen Sie den Körper in "
-    "Einzelteile, dann lässt sich die Bohrung ohne das Teil bearbeiten."
+    "In dieser Bohrung liegt ein getrenntes Teil. Teilen Sie den Körper in "
+    "Einzelteile auf, dann lässt sich die Bohrung ohne das Teil bearbeiten."
 )
 
 #: Die beiden Sätze für eine Bohrung, in deren Zylinder Material steht.
@@ -4371,7 +4371,7 @@ def _slot_in_separate_carrier(
                 constraint="separate_bore_contents",
                 detail=_(
                     "In dieser Bohrung liegt ein getrenntes Teil. Die neue Öffnung muss die "
-                    "alte vollständig umfassen. Zerlegen Sie den Körper in Einzelteile, "
+                    "alte vollständig umfassen. Teilen Sie den Körper in Einzelteile auf, "
                     "um nur die Bohrung zu verschieben oder schmaler zu machen."
                 ),
                 suggestions=(SPLIT_BODIES, CORRECT_INPUT, CANCEL),

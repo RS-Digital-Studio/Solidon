@@ -65,7 +65,7 @@ wäre beim nächsten Zuwachs des exakten Kerns unvollständig.
 Nicht die Bauart, sondern der Zustand — `"open"` (nicht wasserdicht),
 `"parts"` (mehr als ein Stück), `"cavity"` (ein Hohlraum, als `void` erkannt
 oder von *Aushöhlen* eingetragen). Drei Operationen tragen es: *Offene Fläche
-schließen*, *In Einzelteile zerlegen*, *Gitter füllen*. Gemessen am
+schließen*, *In Einzelteile aufteilen*, *Gitter füllen*. Gemessen am
 13.09.2026 über alle Dialoge: Ohne die Angabe öffneten sie an einem sauberen
 Quader einen Dialog, dessen Vorschau nur „Keine Vorschau: …" sagen konnte.
 `labels.body_requirement` liest die Angabe und sagt am Eintrag **denselben
@@ -1308,7 +1308,7 @@ Ring stehen). Am Laptop-Ständer trug `hole_3` seinen Mantel auf zwei Platten
 mit einem Zapfen darin; *Versetzen* verschmolz die Platten, der Zapfen
 verschwand im Stopfen, 531 mm³ ohne Befund. Eigen sind deshalb alle Teile, die
 den Mantel tragen (`_own_part_bore_clear`), und `_movable_feature` sowie
-*Bohrung ändern* sagen ab, mit *In Einzelteile zerlegen* als Weg. „Sie ist eine
+*Bohrung ändern* sagen ab, mit *In Einzelteile aufteilen* als Weg. „Sie ist eine
 Wand, keine Bohrung“ war dort auch als Satz falsch. Allein *Zum Langloch
 ziehen* schneidet ein belegt freies Teil darin mit; die Kontakt- und
 Materialfrage dafür gilt dem Träger und den Teilen, deren Hüllquader seinen

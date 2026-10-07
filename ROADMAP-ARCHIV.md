@@ -43552,7 +43552,7 @@ gefunden und eingetragen: die fünf offenen Entscheidungen der Erstkonfiguration
   wird am Netz wie am exakten Kern mit dem Zylinder aus den Kennzahlen gekürzt
   (`test_a_cross_pin_in_a_shaft_is_cut_only_inside_the_bore`). Gehört das Material in einer
   Bohrung einem anderen Teil, sagt es
-  `OTHER_PART_IN_THE_BORE` mit *In Einzelteile zerlegen*, im Menü und in jeder Handlung an
+  `OTHER_PART_IN_THE_BORE` mit *In Einzelteile aufteilen*, im Menü und in jeder Handlung an
   der Bohrung selbst (`_refuse_another_part_in_the_bore`, `resize_hole`, `_closed_at` über
   `filled_bore_refusal`). **Dabei gefunden:** Versetzen,
   Verdoppeln, Entfernen, Kippen, Verschließen und *Bohrung ändern* rechneten an einer Platte mit

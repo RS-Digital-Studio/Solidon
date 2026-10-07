@@ -1997,7 +1997,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   **Stand 06.10.2026 (Claude, mit RM-413):** In 14 der 28 Bohrungen steht ein fremdes Teil;
   dort sagen Menü und jede Merkmalshandlung jetzt „In dieser Bohrung liegt ein getrenntes Teil“
-  mit *In Einzelteile zerlegen*. Vorher rechneten die Handlungen dort: `hole_3` trägt seinen
+  mit *In Einzelteile aufteilen*. Vorher rechneten die Handlungen dort: `hole_3` trägt seinen
   Mantel auf zwei Platten mit einem Zapfen darin, *Merkmal versetzen* verschmolz die Platten, der
   Zapfen verschwand im Stopfen, −531 mm³ und zwei Teile weniger ohne Befund. `hole_11` hält am
   Treffer der kaputten Schale. **Offen** an den freien Bohrungen: Verdoppeln 8 mm quer bleibt ohne
