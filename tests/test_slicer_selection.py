@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import ast
 import textwrap
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -45,6 +45,8 @@ def _slicer_ids() -> frozenset[str]:
         ("konzepte/nachweise/lauf.json", True),
         ("app/i18n/locales/en.json", True),
         ("changelog/de.md", False),
+        ("DATENSCHUTZ.md", False),
+        ("THIRD-PARTY-NOTICES.md", False),
         ("app/i18n/__init__.py", False),
         ("app/ui/print_settings_dialog.py", False),
         ("app/core/knowledge/data/printers.toml", False),
@@ -55,6 +57,32 @@ def test_only_documents_and_catalogues_count_as_documentation(
 ) -> None:
     """Der Changelog zeigt das Update-Fenster; ein Katalog prüft ``test_translations``."""
     assert ci_selection.is_documentation(path) is documentation
+
+
+def test_markdown_the_application_reads_is_named_where_the_selection_looks() -> None:
+    """Jede ``.md``, die ``app/`` beim Namen liest, löst eine Auswahl aus (Review 1 P3, G-4).
+
+    Die Datenschutzauskunft und die Lizenzbeilage zeigt ein Fenster; als
+    Unterlage gelesen wählte eine Änderung dort keinen Fenstertest. Eine neue
+    Datei dieser Art fehlte in der Liste genauso still — deshalb liest der
+    Wächter die Namen aus dem Code.
+    """
+    named: set[str] = set()
+    for path in sorted((ROOT / "app").rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and PurePosixPath(node.value).suffix == ".md"
+                and " " not in node.value
+            ):
+                named.add(PurePosixPath(node.value).name)
+    assert named, "Voraussetzung: die Anwendung liest Markdown beim Namen"
+    assert named == ci_selection.READ_BY_THE_APPLICATION
+    for name in named:
+        assert (ROOT / name).is_file(), name
+        windows, _slicers = ci_selection.select([ROOT / name])
+        assert windows, f"{name}: eine Änderung wählt keinen Fenstertest"
 
 
 def test_documents_and_catalogues_select_neither_windows_nor_slicers() -> None:

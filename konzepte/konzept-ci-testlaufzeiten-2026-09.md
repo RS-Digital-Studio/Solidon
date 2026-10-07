@@ -49,7 +49,7 @@ Kernjob frühestens fertig ist, gleich wie viele Worker er hat.
 | CI-06 | Berichte nennen Auswahl, echte Prozessausgänge, Testzahlen und Zeiten; auch bei Fehlern werden vorhandene Berichte hochgeladen. | Berichtstests und `always()`-Artefaktschritte |
 | CI-07 | Gemeinsame Vorbereitung verändert keine Eingabe eines anderen Tests. Determinismus vergleicht weiterhin zwei unabhängig gebaute Ergebnisse. | Kopien für veränderliche Daten, unveränderte Zusicherungen und gezielte Gegenproben |
 | CI-08 | Laufzeitgewinn wird nur für einen abgeschlossenen vergleichbaren Lauf behauptet. Lokales Entwicklungstor und Release-Abnahme bleiben getrennt. | Nachweis mit Commit, Plattform, Befehl, Exit und Berichtspfad |
-| CI-09 | Vor dem Merge nach main und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge lösen nichts aus. Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py`; `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` und `tests/test_supply_chain.py` |
+| CI-09 | Vor dem Merge nach main und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge lösen der Kosten wegen nichts aus, außer dem Markdown, das die Anwendung selbst liest (`READ_BY_THE_APPLICATION`). Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py`; `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` und `tests/test_supply_chain.py` |
 
 Änderungen an diesen Zusagen benötigen eine bewusste Fortschreibung dieses
 Konzepts und der zuständigen Regeldatei. Tests dürfen nicht gestrichen,
@@ -107,7 +107,8 @@ dann, wenn der Job an seiner Frist endet.
 
 Vor dem Merge nach main (CI-09) bestimmt `tools/ci_selection.py` aus dem
 Diff des Zweigs gegen main die betroffenen Testdateien über denselben
-Importgraphen wie `tools/affected_tests.py`, ohne Unterlagen und Kataloge,
+Importgraphen wie `tools/affected_tests.py`, ohne Unterlagen und Kataloge
+(außer dem Markdown, das die Anwendung liest),
 und gibt zwei Semikolonlisten aus: je Datei die Fenster- und Rendererfälle
 (`--window-group windowed`) für `fenster-auswahl.yml` und die Fälle mit
 Marker `slicer` (`-m slicer`) für `slicer-auswahl.yml`. Beide Workflows

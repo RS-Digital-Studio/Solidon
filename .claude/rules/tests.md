@@ -25,7 +25,8 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   `tools/ci_selection.py` nennt sie zum Diff, `fenster-auswahl.yml` und
   `slicer-auswahl.yml` fahren sie per Handstart auf dem Zweig, beide grün vor
   dem Merge. Nur das Betroffene — macOS-Minuten kosten das Zehnfache.
-  Unterlagen und Kataloge lösen nichts aus.
+  Unterlagen und Kataloge lösen der Kosten wegen nichts aus, außer Markdown, das
+  die Anwendung liest.
 - **Neues bringt seinen Test für diese Auswahl mit** (Entscheidung Robert): eine
   neue oder geänderte Oberfläche ihren Fenstertest; eine Änderung an
   Slicerübergabe, Profilen, Druckerwahl, Druckzeit oder Slicererkennung ihren
