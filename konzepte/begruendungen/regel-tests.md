@@ -13,7 +13,7 @@ es die Zeile darüber. Die „Vorfall“-Verweise zeigen auf die Einträge in
 ## Entwicklung und Release
 
 Für CI-Aufteilung und wiederverwendete Testvorbereitung gilt der Prüfvertrag
-CI-01 bis CI-08 in `konzepte/konzept-ci-testlaufzeiten-2026-09.md`.
+CI-01 bis CI-09 in `konzepte/konzept-ci-testlaufzeiten-2026-09.md`.
 `test_packaging.py` schützt Jobabhängigkeiten, Plattformen, Releasegrenze
 und Berichte; `test_ci_runner.py` schützt vollständige Partitionen und echte
 Prozessausgänge. Eine Laufzeittabelle verteilt nur die aktuell gesammelte

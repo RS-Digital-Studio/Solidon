@@ -38,6 +38,21 @@ keine weitere Runde (Entscheidung Robert). Mehrere Punkte, die zusammen
 hinausgehen, teilen sich ein Review. Weil `post-commit` pusht, ist das Review
 vor dem Commit das Review vor dem Push.
 
+**Vor dem Merge nach main laufen die betroffenen Fenster- und Slicertests auf
+Linux und macOS** (Entscheidung Robert, `.claude/rules/tests.md`, CI-09):
+
+1. Die Einheit liegt auf einem eigenen Zweig, gepusht (Handstart braucht
+   einen Stand auf der Gegenstelle). Eine neue oder geänderte Oberfläche
+   bringt ihren Fenstertest mit, eine Änderung an Slicerübergabe, Profilen,
+   Druckerwahl, Druckzeit oder Slicererkennung ihren Test mit
+   `installed_slicer` und `@pytest.mark.slicer(<programm>)`.
+2. `.venv\Scripts\python.exe tools/ci_selection.py --diff origin/main...<zweig>`
+   nennt beide Listen und die zwei `gh workflow run …`-Befehle; mit
+   `--ref <zweig>` starten.
+3. Beide Läufe grün, bevor gemergt wird; ein roter wird behoben, nicht
+   übergangen. Meldet das Werkzeug keinen Fenster- und keinen Slicertest,
+   entfällt der Schritt. Die Laufnummern gehören in den Bericht.
+
 ## Die Einheit abgrenzen
 
 Andere Sitzungen arbeiten im selben Baum. Geliefert wird nur, was zu dieser

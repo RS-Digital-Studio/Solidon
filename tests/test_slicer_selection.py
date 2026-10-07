@@ -132,9 +132,9 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
             ):
                 found.append(f"{name}:{inner.lineno} {node.name}: {called.attr} ohne Isolation")
             if isinstance(called, ast.Attribute) and called.attr in _READS:
-                receiver = called.value
-                if _is_install_root(receiver):
-                    found.append(f"{name}:{inner.lineno} {node.name}: liest {ast.unparse(receiver)}")
+                receiver = ast.unparse(called.value)
+                if _is_install_root(called.value):
+                    found.append(f"{name}:{inner.lineno} {node.name}: liest {receiver}")
         for loop in ast.walk(node):
             if isinstance(loop, ast.For) and any(
                 _is_install_root(part) for part in ast.walk(loop.iter)

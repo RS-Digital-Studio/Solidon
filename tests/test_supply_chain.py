@@ -341,3 +341,34 @@ def test_the_linux_gate_checks_the_appimage_content_with_its_runtime() -> None:
     assert "--release-check --artifact-kind appimage" in job
     assert '--write-evidence --sbom "$appimage_sbom"' in job
     assert job.count("--release-check") == 2
+
+
+def test_every_slicer_of_the_selection_is_a_fixed_version_with_its_checksum() -> None:
+    """Slicer werden aufgerufen, nie mitgeliefert — und nie in beweglicher Fassung geholt.
+
+    Je Programm aus ``tests/test_real_slicers.py`` ein Rezept für Linux und
+    macOS; jede Datei mit HTTPS-Adresse ohne ``latest`` und SHA-256, das
+    Flatpak auf einem Commit, nichts aus einer Paketquelle ohne Prüfsumme.
+    """
+    from tests.test_real_slicers import PROGRAMS
+
+    text = (WORKFLOWS / "slicer-auswahl.yml").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^\s*gh=https://github\.com$", text)
+    recipes = text.split('case "$RUNNER_OS/$program" in', 1)[1].split("esac", 1)[0]
+    recipes = recipes.replace("$gh/", "https://github.com/")
+    calls = re.findall(r"(?m)^\s*(?:appimage|dmg|fetch) (\S+) \\\n\s*([0-9a-f]{64})\b", recipes)
+    downloads = re.findall(r"(?m)^\s*(?:appimage|dmg|fetch) ", recipes)
+
+    assert len(calls) == len(downloads) >= 2 * len(PROGRAMS)
+    assert all(url.startswith("https://") and "latest" not in url for url, _sha in calls)
+    for program in PROGRAMS:
+        for system in ("Linux", "macOS"):
+            assert f"{system}/{program})" in recipes, f"kein Rezept für {program} auf {system}"
+    commits = re.findall(r"--commit=([0-9a-f]{64})\b", recipes)
+    assert commits and all(
+        f'test "$(flatpak info --show-commit {app})" = {commit}' in recipes
+        for app, commit in zip(
+            re.findall(r"--commit=[0-9a-f]{64} (\S+)", recipes), commits, strict=True
+        )
+    )
+    assert not re.search(r"\bbrew\b|apt-get install -y (?!\"\$RUNNER_TEMP/)", recipes)

@@ -129,7 +129,13 @@ jobs:
             # Die Lizenzabfrage mancher Abbilder will ein „Y“; yes endet am
             # geschlossenen Rohr, und pipefail zählte das als Fehler.
             { yes || true; } | hdiutil attach "$RUNNER_TEMP/slicer.dmg" -nobrowse -noverify -mountpoint /Volumes/slicer > /dev/null
-            bundle=$(find /Volumes/slicer -maxdepth 1 -name '*.app' | head -1)
+            # PrusaSlicer legt sein Bündel eine Ebene tiefer ab.
+            bundle=$(find /Volumes/slicer -maxdepth 2 -name '*.app' -prune | head -1)
+            if [ -z "$bundle" ]; then
+              ls -la /Volumes/slicer
+              echo "::error::Kein Programmbündel im Abbild."
+              exit 1
+            fi
             sudo cp -R "$bundle" /Applications/
             hdiutil detach /Volumes/slicer
             sudo xattr -dr com.apple.quarantine "/Applications/$(basename "$bundle")" 2>/dev/null || true
