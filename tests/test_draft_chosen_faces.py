@@ -506,6 +506,54 @@ def test_a_drafted_rounded_body_takes_a_second_draft_absolutely(
     assert result.outputs[0].mesh.volume == pytest.approx(rounded_drafted_volume(second), abs=1e-3)
 
 
+def test_the_mesh_twin_still_refuses_a_smaller_second_draft() -> None:
+    """Am Netz sagt das zweite, kleinere Anstellen ab — die Kerne sind uneins (RM-230, N8).
+
+    Exakt trifft 3° → 2° den senkrechten R5 bei 2° (22 663,183 mm³). Der
+    Netzzwilling sagt ``DRAFT_CUTS_THROUGH`` mit dem Rat zum kleineren Winkel,
+    obwohl der Winkel schon kleiner ist; 3° → 5° baut er auf die Facetten genau.
+    Festgehalten, bis RM-230 das Netz nachzieht — dann wird dieser Test rot.
+    """
+    from app.core.geom.faces import DRAFT_CUTS_THROUGH
+
+    once = run(rounded_body("mesh"), angle=3.0).outputs[0].mesh
+    again = SceneObject(id="obj_1", name="Teil", mesh=once, features=detect(once))
+    assert refusal_of(again, angle=2.0).detail is DRAFT_CUTS_THROUGH
+    built = run(again, angle=5.0).outputs[0].mesh
+    assert built.volume == pytest.approx(rounded_drafted_volume(5.0), rel=2e-3)
+
+
+def test_a_drafted_body_of_splines_names_the_free_corner() -> None:
+    """Ein angestellter R5-Quader aus Spline-Flächen nennt beim zweiten Anstellen die Ecke (N8).
+
+    Seine Ecken sind Kegel aus Splines (``canonical.ConeSurface``), und OCC
+    stellt sie nicht an. Galten sie als anstellbar, endete das in „Stellen Sie
+    einen kleineren Winkel ein“, was nicht hilft; jetzt sagt die Absage, dass
+    eine gewölbte Fläche ohne Kante anschließt, und führt zur Auswahl.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+
+    from app.core.brep.canonical import ConeSurface
+    from app.core.brep.features import features_of
+    from app.core.errors import CHANGE_SELECTION
+    from app.core.geom.faces import DRAFT_BESIDE_A_FREE_FACE
+
+    once = run(rounded_body("brep"), angle=3.0).outputs[0].mesh
+    splines = type(once)(BRepBuilderAPI_NurbsConvert(once.shape, True).Shape())
+    corners = [
+        index
+        for index in range(len(splines.faces()))
+        if isinstance(splines.surface(index), ConeSurface)
+    ]
+    assert len(corners) == 4, "sonst prüft das den Spline-Kegel nicht"
+    again = SceneObject(
+        id="obj_1", name="Teil", mesh=splines, kind="brep", features=features_of(splines)
+    )
+    refused = refusal_of(again, angle=2.0)
+    assert refused.detail is DRAFT_BESIDE_A_FREE_FACE
+    assert CHANGE_SELECTION in refused.suggestions
+
+
 def test_a_drafted_housing_takes_a_second_draft_like_the_upright_one() -> None:
     """Gehäuse 4 mm mit senkrechten R3 innen und außen: 1°, dann 2° wie gleich 2° (G2).
 

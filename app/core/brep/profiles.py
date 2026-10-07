@@ -939,7 +939,7 @@ def _tangent_chain(
     from OCP.TopExp import TopExp, TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
-    from app.core.brep.canonical import ConeSurface, CylinderSurface, outward_normal
+    from app.core.brep.canonical import CylinderSurface, outward_normal
     from app.core.geom.faces import UPRIGHT_ENOUGH, leans_across
     from app.core.units import SAME_PLANE_AT_A_CORNER, is_close
 
@@ -966,15 +966,17 @@ def _tangent_chain(
         # nachstellt — der Winkel ist absolut, das Ergebnis das des senkrechten
         # Körpers. Anstellbar ist er wie eine Ebene: Achse längs der Richtung
         # und die Wand nicht weiter geneigt als ``UPRIGHT_ENOUGH``.
+        #
+        # **Nur ein nativer Kegel** (Review P2 N8): Einen Kegel aus einer
+        # Spline-Fläche stellt OCC nicht an, und durchgelassen endete er in
+        # „Stellen Sie einen kleineren Winkel ein“ statt im Satz über die frei
+        # geformte Ecke.
         face = TopoDS.Face(faces[index])
         adaptor = BRepAdaptor_Surface(face)
-        if isinstance(surface, ConeSurface):
-            cone_axis = surface.axis
-        elif adaptor.GetType() == GeomAbs_Cone:
-            direction = adaptor.Cone().Axis().Direction()
-            cone_axis = (direction.X(), direction.Y(), direction.Z())
-        else:
+        if adaptor.GetType() != GeomAbs_Cone:
             return False
+        direction = adaptor.Cone().Axis().Direction()
+        cone_axis = (direction.X(), direction.Y(), direction.Z())
         along = abs(sum(a * b for a, b in zip(cone_axis, pull, strict=True)))
         if not is_close(along, 1.0):
             return False
