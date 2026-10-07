@@ -44,6 +44,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -787,6 +788,41 @@ def _verify_release_tag(commit: str) -> None:
         ) from exc
 
 
+#: Einträge je Seite einer GitHub-Liste; mehr gibt die API nicht heraus.
+LISTING_PAGE = 100
+#: Oberhalb davon gilt eine Liste als unvollständig statt als endlos.
+LISTING_PAGES = 20
+
+
+def paged_listing(fetch: Callable[[str], Any], path: str, key: str) -> list[Any] | None:
+    """Eine GitHub-Liste über alle Seiten — ``None``, wenn sie nicht vollständig aufgeht.
+
+    Eine Seite trägt höchstens :data:`LISTING_PAGE` Einträge. Ein Taglauf
+    hatte mit 0.5.3 schon 31 Artefakte, und jede neue Plattform im Vertrag
+    der CI bringt weitere; wer nur die erste Seite liest, findet das
+    Signierarchiv auf der zweiten nie. Vollständig heißt: so viele Einträge,
+    wie ``total_count`` auf der ersten Seite nennt, und jede weitere Seite
+    nennt dieselbe Zahl — ändert sich die Liste zwischen zwei Abfragen, kann
+    ein Eintrag doppelt kommen oder fehlen.
+    """
+    items: list[Any] = []
+    expected: int | None = None
+    for page in range(1, LISTING_PAGES + 1):
+        listing = fetch(f"{path}?per_page={LISTING_PAGE}&page={page}")
+        chunk = listing.get(key) if isinstance(listing, dict) else None
+        total = listing.get("total_count") if isinstance(listing, dict) else None
+        if not isinstance(chunk, list) or type(total) is not int:
+            return None
+        if expected is None:
+            expected = total
+        elif total != expected:
+            return None
+        items.extend(chunk)
+        if len(items) >= expected or len(chunk) < LISTING_PAGE:
+            return items if len(items) == expected else None
+    return None
+
+
 def _only_advisory_jobs_failed(run_id: str, record: dict[str, Any]) -> bool:
     """Sagt, ob ein rot beendeter Hauptbau allein an einem meldenden Job hängt.
 
@@ -794,9 +830,8 @@ def _only_advisory_jobs_failed(run_id: str, record: dict[str, Any]) -> bool:
     Jobliste des letzten Versuchs ist vollständig gelesen, jeder Job
     abgeschlossen, jeder außer :data:`ADVISORY_JOBS` erfolgreich oder
     übersprungen, und mindestens einer von ihnen ist tatsächlich rot."""
-    listing = _github_metadata(f"actions/runs/{run_id}/jobs?per_page=100")
-    jobs = listing.get("jobs")
-    if not isinstance(jobs, list) or not jobs or listing.get("total_count") != len(jobs):
+    jobs = paged_listing(_github_metadata, f"actions/runs/{run_id}/jobs", "jobs")
+    if not jobs:
         return False
     advisory_failed = False
     for job in jobs:

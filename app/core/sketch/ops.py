@@ -31,6 +31,7 @@ from app.core.errors import (
 )
 from app.core.geom.boolean import fell_apart, without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
+from app.core.registry.params import ZERO_AUTOMATIC
 from app.core.sketch import planes, shapes
 from app.core.sketch.planes import (
     feature_plane_parts,
@@ -1988,7 +1989,7 @@ def _drawn_pairs(
 #
 # **Und trotzdem kein zweiter Menüeintrag** (Konzept §10: „Revolve-Cut wird
 # kein zweiter Eintrag, sondern ein Feld im Dialog"): Die drei stehen in der
-# Variantengruppe *Aus Skizze erzeugen …* direkt hinter ihrem Erzeuger — das
+# Variantengruppe *Zeichnen …* direkt hinter ihrem Erzeuger — das
 # Feld ist die Art. Werkzeug und Querschnitt kommen aus denselben Helfern wie
 # beim Erzeuger (`_revolve_section`, `_swept`, `_loft_outlines`); was dazukommt,
 # ist die Lage am Zielkörper und die Differenz in beiden Kernen.
@@ -2335,6 +2336,7 @@ class SketchSweepCutParams(BaseParams):
             "Auf welcher Höhe der Kanal beginnt. Leer heißt: an der Oberseite des Körpers, "
             "wenn er nach unten läuft, an der Unterseite, wenn er nach oben läuft."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
     turn: float = param(
         title=_("Drehung"),

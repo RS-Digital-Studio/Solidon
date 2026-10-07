@@ -1,6 +1,6 @@
 """Was eine Druckdatei tatsächlich tut — für alle drei Slicerfamilien.
 
-Kein Teil der Anwendung: ein Prüfwerkzeug für den Lauf „jedes Modell × jeder
+Kein Teil der Anwendung: ein Prüfwerkzeug für den Lauf „jedes Modell mal jeder
 Slicer“ (Robert, 27.09.2026). Die Marken sind dieselben, die Solidons eigener
 Leser kennt (``app/core/slice/gcode.py``): Schichten über ``;LAYER:n``,
 ``;LAYER_CHANGE`` oder ``; CHANGE_LAYER`` (die Orca-Familie schreibt mit
@@ -24,6 +24,7 @@ Gemessen wird:
 
 from __future__ import annotations
 
+import contextlib
 import math
 import re
 from dataclasses import dataclass, field
@@ -32,7 +33,9 @@ from pathlib import Path
 
 from app.core.slice import gcode as core_gcode
 
-LAYER_MARK = re.compile(r"^;\s*(?:LAYER\s*:\s*-?[0-9]+|LAYER_CHANGE|CHANGE_LAYER)\s*$", re.IGNORECASE)
+LAYER_MARK = re.compile(
+    r"^;\s*(?:LAYER\s*:\s*-?[0-9]+|LAYER_CHANGE|CHANGE_LAYER)\s*$", re.IGNORECASE
+)
 TYPE_MARK = re.compile(r"^;\s*(?:TYPE|FEATURE)\s*:\s*(?P<type>.+?)\s*$", re.IGNORECASE)
 COMMAND = re.compile(r"^G(?P<number>[0-9]+(?:\.[0-9]+)?)(?=\s|[A-Z]|$)", re.IGNORECASE)
 WORD = re.compile(r"(?P<name>[A-Z])(?P<value>[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))", re.IGNORECASE)
@@ -54,9 +57,17 @@ def kind_of(raw: str) -> str:
     lowered = raw.casefold()
     if "support" in lowered:
         return "support"
-    if lowered in ("skirt", "brim", "skirt/brim") or "skirt" in lowered or lowered.startswith("brim"):
+    if (
+        lowered in ("skirt", "brim", "skirt/brim")
+        or "skirt" in lowered
+        or lowered.startswith("brim")
+    ):
         return "rim"
-    if lowered in ("custom", "wipe", "prime tower", "wipe tower") or "prime" in lowered or "purge" in lowered:
+    if (
+        lowered in ("custom", "wipe", "prime tower", "wipe tower")
+        or "prime" in lowered
+        or "purge" in lowered
+    ):
         return "other"
     return "model"
 
@@ -94,7 +105,9 @@ class Reading:
             "model_m": round(model / 1000.0, 2),
             "support_m": round(support / 1000.0, 2),
             "rim_m": round(rim / 1000.0, 2),
-            "paths_m": {k: round(v / 1000.0, 2) for k, v in sorted(self.total.items(), key=lambda t: -t[1])},
+            "paths_m": {
+                k: round(v / 1000.0, 2) for k, v in sorted(self.total.items(), key=lambda t: -t[1])
+            },
             "first_layer_support_m": round(self.first_layer_support / 1000.0, 2),
             "first_layer_support_share": round(
                 self.first_layer_support / max(sum(first.paths.values()), 1e-9), 3
@@ -107,7 +120,9 @@ class Reading:
             "first_layers": [
                 {
                     "z": layer.z,
-                    "paths_mm": {k: round(v) for k, v in sorted(layer.paths.items(), key=lambda t: -t[1])},
+                    "paths_mm": {
+                        k: round(v) for k, v in sorted(layer.paths.items(), key=lambda t: -t[1])
+                    },
                     "runs": dict(sorted(layer.runs.items())),
                     "travels": layer.travels,
                     "long_travels": layer.long_travels,
@@ -216,9 +231,7 @@ def _move_geometry(
         arc_centres_absolute=centres_absolute,
     )
     extrema = tuple(
-        (point[0], point[1])
-        for point in points
-        if point[0] is not None and point[1] is not None
+        (point[0], point[1]) for point in points if point[0] is not None and point[1] is not None
     )
     return radius * sweep, extrema
 
@@ -340,8 +353,7 @@ def first_layer_segments(path: Path) -> dict[str, list[tuple[float, float, float
                 )
                 target = out[kind_of(kind)]
                 target.extend(
-                    (before[0], before[1], after[0], after[1])
-                    for before, after in pairwise(points)
+                    (before[0], before[1], after[0], after[1]) for before, after in pairwise(points)
                 )
             x, y = nx, ny
     return out
@@ -378,14 +390,14 @@ def read(path: Path, *, bed: tuple[float, float] | None = None, keep_layers: int
                     run_kind = None
                     continue
                 if stripped.startswith((";Z:", "; Z_HEIGHT:")) and pending_layer:
-                    try:
+                    with contextlib.suppress(ValueError):
                         pending_z = float(stripped.split(":", 1)[1])
-                    except ValueError:
-                        pass
                     continue
                 setting = SETTING.match(stripped)
                 if setting and setting.group("key").strip() in HEADER_KEYS:
-                    reading.header.setdefault(setting.group("key").strip(), setting.group("value")[:160])
+                    reading.header.setdefault(
+                        setting.group("key").strip(), setting.group("value")[:160]
+                    )
                 continue
             code = stripped.split(";", 1)[0].strip()
             upper = code.upper()
@@ -420,14 +432,18 @@ def read(path: Path, *, bed: tuple[float, float] | None = None, keep_layers: int
                 coordinates_absolute = False
                 continue
             if number == 92.0:
-                found = dict((m.group("name").upper(), m.group("value")) for m in WORD.finditer(arguments))
+                found = {
+                    m.group("name").upper(): m.group("value") for m in WORD.finditer(arguments)
+                }
                 if "E" in found:
                     last_e = float(found["E"])
                 continue
             if number not in (0.0, 1.0, 2.0, 3.0):
                 continue
             motion = int(number)
-            words = dict((m.group("name").upper(), float(m.group("value"))) for m in WORD.finditer(arguments))
+            words = {
+                m.group("name").upper(): float(m.group("value")) for m in WORD.finditer(arguments)
+            }
             nx = words.get("X", x) if coordinates_absolute else x + words.get("X", 0.0)
             ny = words.get("Y", y) if coordinates_absolute else y + words.get("Y", 0.0)
             pushed = 0.0
@@ -458,15 +474,15 @@ def read(path: Path, *, bed: tuple[float, float] | None = None, keep_layers: int
                 reading.total[kind] = reading.total.get(kind, 0.0) + length
                 if layer_index == 0 and kind_of(kind) == "support":
                     reading.first_layer_support += length
-                if bed is not None and kind_of(kind) != "other":
-                    if any(
-                        not (
-                            -0.5 <= point_x <= bed[0] + 0.5
-                            and -0.5 <= point_y <= bed[1] + 0.5
-                        )
+                if (
+                    bed is not None
+                    and kind_of(kind) != "other"
+                    and any(
+                        not (-0.5 <= point_x <= bed[0] + 0.5 and -0.5 <= point_y <= bed[1] + 0.5)
                         for point_x, point_y in points
-                    ):
-                        reading.off_bed[kind] = reading.off_bed.get(kind, 0) + 1
+                    )
+                ):
+                    reading.off_bed[kind] = reading.off_bed.get(kind, 0) + 1
                 if current is not None:
                     current.paths[kind] = current.paths.get(kind, 0.0) + length
                     if run_kind != kind:
@@ -509,13 +525,32 @@ def config_block(path: Path) -> dict[str, str]:
 #: soll: Namen, Objektmarken, Bindung an die Maschine, Zeitstempel.
 TECHNICAL = frozenset(
     {
-        "print_settings_id", "printer_settings_id", "filament_settings_id", "inherits",
-        "inherits_group", "compatible_printers", "compatible_printers_condition",
-        "compatible_prints", "compatible_prints_condition", "gcode_label_objects",
-        "filament_colour", "filament_multi_colour", "filament_colour_type", "print_compatible_printers",
-        "different_settings_to_system", "print_settings_id", "filament_ids", "filament_vendor",
-        "extruder_colour", "default_filament_colour", "filament_type", "filament_is_support",
-        "filament_shrink", "setting_id", "filament_id", "wipe_tower_x", "wipe_tower_y",
+        "print_settings_id",
+        "printer_settings_id",
+        "filament_settings_id",
+        "inherits",
+        "inherits_group",
+        "compatible_printers",
+        "compatible_printers_condition",
+        "compatible_prints",
+        "compatible_prints_condition",
+        "gcode_label_objects",
+        "filament_colour",
+        "filament_multi_colour",
+        "filament_colour_type",
+        "print_compatible_printers",
+        "different_settings_to_system",
+        "filament_ids",
+        "filament_vendor",
+        "extruder_colour",
+        "default_filament_colour",
+        "filament_type",
+        "filament_is_support",
+        "filament_shrink",
+        "setting_id",
+        "filament_id",
+        "wipe_tower_x",
+        "wipe_tower_y",
         "filament_self_index",
     }
 )
@@ -525,9 +560,11 @@ def config_difference(reference: dict[str, str], run: dict[str, str]) -> dict[st
     """Schlüssel, in denen ``run`` vom Herstellerlauf abweicht, ohne die technischen."""
     keys = (set(reference) | set(run)) - TECHNICAL
     # Die Spülmatrix zählt erst ab zwei Filamenten. Mit einem rechnet der
-    # Konsolenlauf „0", die Projektdatei ohne Matrix trägt Orcas 4×4-Vorgabe —
+    # Konsolenlauf „0", die Projektdatei ohne Matrix trägt Orcas 4x4-Vorgabe —
     # ein Unterschied des Ladewegs, kein Werkzeugwechsel.
-    if all(len(block.get("filament_settings_id", "").split(";")) <= 1 for block in (reference, run)):
+    if all(
+        len(block.get("filament_settings_id", "").split(";")) <= 1 for block in (reference, run)
+    ):
         keys.discard("flush_volumes_matrix")
     return {
         key: (reference.get(key, "—"), run.get(key, "—"))

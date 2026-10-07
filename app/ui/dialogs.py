@@ -125,6 +125,7 @@ from app.ui.style import (
     expanded_width,
     fit_dialog_to_screen,
     fit_height_after_show,
+    leading_action,
     make_danger,
     make_large_target,
     make_primary,
@@ -2411,6 +2412,7 @@ class ActivationDialog(QDialog):
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.addButton(self.forget_button, QDialogButtonBox.ButtonRole.DestructiveRole)
+        make_danger(self.forget_button)
         button_layout = buttons.layout()
         assert button_layout is not None
         button_layout.setSpacing(SPACE)
@@ -3435,10 +3437,14 @@ class ErrorNotice(QWidget):
         # Ursache, Werte und Handlungen wie beim Rat im Druckdialog.
         self._problem = problem.with_traceback(None)
         self._handlers = known
-        for action in actions:
+        # **Normale Knöpfe, auch für ``Action.primary``** (RM-512). Der
+        # Hinweis steht in einem Fenster, das seinen Hauptknopf schon hat;
+        # ein zweiter machte zwei Knöpfe laut, und ``setDefault`` nähme dem
+        # Dialog obendrein Enter weg. Welche Handlung zuerst gemeint ist, sagt
+        # die Reihenfolge: die führende oben.
+        lead = leading_action(actions)
+        for action in sorted(actions, key=lambda action: action is not lead):
             button = QPushButton(str(action.label), self)
-            if action.primary:
-                make_primary(button)
             button.clicked.connect(weak_slot(self, ErrorNotice._activate, action.id))
             self._layout.addWidget(button)
             self._buttons.append(button)
@@ -3489,10 +3495,14 @@ def show_error(
         box.setInformativeText("\n".join(spoken))
 
     buttons: dict[Any, Action] = {}
+    # **Genau ein Hauptknopf** (RM-512), gewählt wie überall
+    # (``leading_action``): Zwei Akzentknöpfe sagen nicht, welcher gemeint
+    # ist, und ohne gesetzten rät Qt einen — mit Akzent, ohne Halbfett.
+    lead = leading_action(offered)
     for action in offered:
         role = (
             QMessageBox.ButtonRole.AcceptRole
-            if action.primary
+            if action is lead
             else QMessageBox.ButtonRole.ActionRole
         )
         button = box.addButton(str(action.label), role)
@@ -3501,7 +3511,7 @@ def show_error(
         # fehlte nur das letzte Glied: Ohne ``make_primary`` bekam der Knopf
         # zwar Qts Akzentfarbe, aber nicht die halbfette Schrift, die neben ihr
         # die zweite Kodierung ist (Regel 18, Befund D3).
-        if action.primary:
+        if action is lead:
             make_primary(button)
         buttons[button] = action
     abbrechen = box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
@@ -4091,6 +4101,8 @@ def confirm_unsaved(title: str, parent: QWidget | None = None) -> str:
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
     box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
     make_primary(save)
+    # Rot, weil nach dem Schließen kein Undo zurückholt, was hier verworfen wird.
+    make_danger(discard)
     box.setDefaultButton(save)
     box.exec()
 
@@ -4217,6 +4229,7 @@ def confirm_generation_loss(running: bool, tries: int, parent: QWidget | None = 
     back = box.addButton(tr("Zur Erzeugung"), QMessageBox.ButtonRole.RejectRole)
     close = box.addButton(tr("Trotzdem schließen"), QMessageBox.ButtonRole.DestructiveRole)
     make_primary(back)
+    make_danger(close)
     box.setDefaultButton(back)
     box.setEscapeButton(back)
     box.exec()
@@ -4246,8 +4259,16 @@ def confirm_discard(count: int, names: Sequence[str] = (), parent: QWidget | Non
     if names:
         box.setInformativeText("\n".join(f"· {name}" for name in names))
     discard = box.addButton(tr("Verwerfen"), QMessageBox.ButtonRole.DestructiveRole)
-    box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
-    make_primary(discard)
-    box.setDefaultButton(discard)
+    cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+    # **Rot und ohne Hauptknopf** (RM-512): Verwerfen ist unwiederbringlich,
+    # also kein Akzent, der dazu einlädt, und keine Eingabetaste, die es im
+    # Vorbeigehen tut. Abbrechen ist ein Ausgang und kein Hauptknopf; Escape
+    # nimmt ihn, Tab und Enter erreichen beide. Der Fokus steht auf Abbrechen:
+    # Qt gäbe ihn sonst dem ersten Knopf der Leiste, unter Windows dem roten,
+    # und die Leertaste verwürfe.
+    make_danger(discard)
+    no_primary(box)
+    box.setEscapeButton(cancel)
+    cancel.setFocus()
     box.exec()
     return box.clickedButton() is discard

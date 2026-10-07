@@ -29,7 +29,12 @@ from typing import TYPE_CHECKING, Any
 from app.core.errors import ValidationError
 from app.core.geom import transform
 from app.core.types import PlaneFrame
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_cos_sin
+from app.core.units import (
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    circle_cos_sin,
+    exact_atan2,
+)
 from app.i18n import _
 
 if TYPE_CHECKING:  # pragma: no cover - nur für die Typprüfung
@@ -56,7 +61,12 @@ def _adaptive_outline(
     profile: Profile, max_sag: float, check_cancelled: Callable[[], None] | None
 ) -> list[tuple[float, float]]:
     """Die echte Kurve in Sehnen mit belegter maximaler Abweichung zerlegen."""
-    from app.core.sketch.profile import arc_through, ellipse_segment_points, spline_controls
+    from app.core.sketch.profile import (
+        arc_through,
+        ellipse_segment_points,
+        points_on_circle,
+        spline_controls,
+    )
 
     def resolution_error() -> ValidationError:
         return ValidationError(
@@ -88,15 +98,21 @@ def _adaptive_outline(
             raise resolution_error()
         # Diese Form bleibt auch bei sehr kleinem sag/radius auflösbar;
         # acos(1-sag/radius) würde dort schon auf null runden.
-        angle = min(math.pi / 2.0, 4.0 * math.asin(math.sqrt(min(1.0, sag / (2.0 * radius)))))
+        share = math.sqrt(min(1.0, sag / (2.0 * radius)))
+        # ``asin`` als ``atan2(x, √((1 - x)(1 + x)))`` über ``exact_atan2``, die
+        # Ecken über ``profile.points_on_circle``: ``math.asin``, ``math.cos`` und
+        # ``math.sin`` runden je Maschine anders (RM-187).
+        arc = exact_atan2(share, math.sqrt((1.0 - share) * (1.0 + share)))
+        angle = min(math.pi / 2.0, 4.0 * arc)
         if angle <= 0.0 or not math.isfinite(sweep):
             raise resolution_error()
         count = max(1, math.ceil(abs(sweep) / angle))
         if len(points) + count > MAX_OUTLINE_POINTS:
             raise resolution_error()
-        for index in range(1, count + 1):
-            theta = begin + sweep * index / count
-            append((centre[0] + radius * math.cos(theta), centre[1] + radius * math.sin(theta)))
+        for point in points_on_circle(
+            centre, radius, [begin + sweep * index / count for index in range(1, count + 1)]
+        ):
+            append(point)
 
     def distance_to_chord(
         point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]
@@ -155,7 +171,7 @@ def _adaptive_outline(
                     append(segment.end)
                 else:
                     centre, radius, sweep = arc
-                    begin = math.atan2(segment.start[1] - centre[1], segment.start[0] - centre[0])
+                    begin = exact_atan2(segment.start[1] - centre[1], segment.start[0] - centre[0])
                     circular(centre, radius, begin, sweep)
             else:
                 append(segment.end)
@@ -182,20 +198,22 @@ def _arc_points(
     und eine Tasche aus einem gezeichneten Vollkreis-Bogen endete auf dem
     Netzweg mit „Aus diesem Umriss entsteht kein Körper."
     """
+    from app.core.sketch.profile import points_on_circle
+
     (ax, ay), (bx, by), (cx, cy) = start, via, end
     if math.dist(start, end) < EPS_GEOM:
         centre = ((ax + bx) / 2.0, (ay + by) / 2.0)
         radius = math.dist(start, via) / 2.0
         if radius < EPS_GEOM:
             return [end]
-        first = math.atan2(ay - centre[1], ax - centre[0])
-        return [
-            (
-                centre[0] + radius * math.cos(first + 2.0 * math.pi * index / ARC_STEPS),
-                centre[1] + radius * math.sin(first + 2.0 * math.pi * index / ARC_STEPS),
+        first = exact_atan2(ay - centre[1], ax - centre[0])
+        return list(
+            points_on_circle(
+                centre,
+                radius,
+                [first + 2.0 * math.pi * index / ARC_STEPS for index in range(1, ARC_STEPS + 1)],
             )
-            for index in range(1, ARC_STEPS + 1)
-        ]
+        )
     # Umkreismittelpunkt über die Determinante; sie ist zugleich das Maß dafür,
     # wie weit die drei Punkte von einer Geraden entfernt sind.
     d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
@@ -215,9 +233,10 @@ def _arc_points(
     if radius < EPS_GEOM:
         return [end]
 
-    first = math.atan2(ay - uy, ax - ux)
-    middle = math.atan2(by - uy, bx - ux)
-    last = math.atan2(cy - uy, cx - ux)
+    # Winkel und Ecken über die exakten Funktionen (RM-187), wie beim Kreis.
+    first = exact_atan2(ay - uy, ax - ux)
+    middle = exact_atan2(by - uy, bx - ux)
+    last = exact_atan2(cy - uy, cx - ux)
 
     # **Die Richtung entscheidet der Zwischenpunkt.** Von Anfang zu Ende führen
     # zwei Wege um den Kreis; gemeint ist der, auf dem ``via`` liegt. Ohne diese
@@ -234,11 +253,11 @@ def _arc_points(
         span -= 2.0 * math.pi
 
     steps = max(2, int(abs(span) / (2.0 * math.pi) * ARC_STEPS) + 1)
-    points = []
-    for index in range(1, steps + 1):
-        angle = first + span * index / steps
-        points.append((ux + radius * math.cos(angle), uy + radius * math.sin(angle)))
-    return points
+    return list(
+        points_on_circle(
+            (ux, uy), radius, [first + span * index / steps for index in range(1, steps + 1)]
+        )
+    )
 
 
 def outline_points(
@@ -333,6 +352,8 @@ def extrude_profile(profile: Profile, height: float, frame: PlaneFrame) -> Any:
     import trimesh
     from shapely.geometry import Polygon as ShapelyPolygon
 
+    from app.core.geom.mesh import shift_body
+
     outer = outline_points(profile)
     if len(outer) < 3:
         raise ValueError("ein Umriss aus weniger als drei Punkten trägt keine Fläche")
@@ -353,7 +374,7 @@ def extrude_profile(profile: Profile, height: float, frame: PlaneFrame) -> Any:
 
     solid = trimesh.creation.extrude_polygon(shape, height=abs(height))
     if height < 0.0:
-        solid.apply_translation((0.0, 0.0, -abs(height)))
+        shift_body(solid, (0.0, 0.0, -abs(height)))
 
     # **Auf die Ebene drehen und schieben.** Die Extrusion liegt in XY bei
     # Z = 0; ``frame`` sagt, wo diese Ebene im Raum liegt. Die Spalten der

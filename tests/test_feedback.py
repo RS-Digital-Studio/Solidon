@@ -599,7 +599,7 @@ def test_the_card_edge_is_quiet_and_the_button_keeps_the_accent(
     Knopf, und der behält den Akzent.
 
     Die Trennlinie stammt aus
-    ``konzepte/konzept-akzentfarben-haushalt-2026-08.md`` und heißt
+    ``konzepte/archiv/konzept-akzentfarben-haushalt-2026-08.md`` und heißt
     **flüchtig gegen dauerhaft**: Die Kartenkante steht da, bevor irgendetwas
     geschieht, und gehört damit zu den leisen Formen.
 

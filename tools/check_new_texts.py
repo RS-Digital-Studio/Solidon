@@ -24,8 +24,10 @@ Aufruf im Hook oder zur gezielten statischen Entwicklungsprüfung::
     python tools/check_new_texts.py
 
 Rückgabe 1, wenn ein neuer Text in einem Katalog fehlt oder leer steht —
-dann gehört der Befund diesem Commit. Rückgabe 0 sonst, auch wenn andere
-Texte im gemeinsamen Arbeitsbaum noch unübersetzt sind.
+dann gehört der Befund diesem Commit — oder wenn der Index gar keinen
+Katalog trägt: Ohne Katalog fehlt nichts, und die Prüfung sähe aus wie
+bestanden. Rückgabe 0 sonst, auch wenn andere Texte im gemeinsamen
+Arbeitsbaum noch unübersetzt sind.
 """
 
 from __future__ import annotations
@@ -168,8 +170,17 @@ def added_texts() -> list[str]:
     return sorted(found)
 
 
+class NoCatalogError(RuntimeError):
+    """Der Index trägt keinen Sprachkatalog — die Prüfung hätte nichts gefunden."""
+
+
 def missing(texts: list[str]) -> dict[str, list[str]]:
-    """Welche davon in den Katalogen des Index fehlen oder leer stehen."""
+    """Welche davon in den Katalogen des Index fehlen oder leer stehen.
+
+    Ein Index ohne Katalog ist kein bestandener Fall, sondern ein falscher
+    Ort (``NoCatalogError``): Ein leerer Treffer meldete dasselbe wie
+    „alles übersetzt" (``.claude/rules/tests.md``, „Zuerst zählen“).
+    """
     listing = subprocess.run(
         ["git", "ls-files", "--cached", "-z", "--", ":(glob)app/i18n/locales/*.json"],
         capture_output=True,
@@ -178,8 +189,14 @@ def missing(texts: list[str]) -> dict[str, list[str]]:
         cwd=str(ROOT),
         check=True,
     ).stdout
+    paths = sorted(name for name in listing.split("\0") if name)
+    if not paths:
+        raise NoCatalogError(
+            f"Im Index von {ROOT} liegt kein Katalog unter app/i18n/locales/. "
+            "Den Hook im Solidon-Repository ausführen oder die Kataloge vormerken."
+        )
     gaps: dict[str, list[str]] = {}
-    for path in sorted(name for name in listing.split("\0") if name):
+    for path in paths:
         source = subprocess.run(
             ["git", "show", f":{path}"],
             capture_output=True,
@@ -199,7 +216,11 @@ def main() -> int:
     texts = added_texts()
     if not texts:
         return 0
-    gaps = missing(texts)
+    try:
+        gaps = missing(texts)
+    except NoCatalogError as problem:
+        print(problem)
+        return 1
     if not gaps:
         return 0
     for language, gone in sorted(gaps.items()):

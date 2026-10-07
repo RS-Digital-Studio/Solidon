@@ -2,7 +2,7 @@
 
 Ein Kunde lädt ein Modell herunter — einen Halter, einen Behälter, was auch
 immer — und will es an eine Lochwand hängen, ohne es nachzukonstruieren. Das
-Konzept ``konzepte/konzept-befestigungssysteme-2026-08.md`` beschreibt den Weg
+Konzept ``konzepte/archiv/konzept-befestigungssysteme-2026-08.md`` beschreibt den Weg
 in sieben Schritten; hier steht, was davon der Kern prüfen kann.
 
 **Was hier nicht geprüft wird und warum.** Die Schritte 2 und 3 sind Klicks —

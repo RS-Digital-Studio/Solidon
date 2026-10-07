@@ -943,6 +943,186 @@ def test_the_shared_exact_kernel_guard_keeps_its_import_errors_visible(
         exact_kernel()
 
 
+def _ocp_imports_without_guard(source: str) -> list[int]:
+    """Zeilen der ``OCP``-Importe, vor denen kein ``exact_kernel()`` steht.
+
+    Es zählt nur ein Aufruf, der den Import **dominiert**: eine eigene
+    Anweisung (``exact_kernel()`` oder ``edit = exact_kernel()``, auch unter
+    seinem Importnamen) vor dem Import im selben Block oder in einem Block, der
+    ihn umschließt, bis hinauf zum Modul. Ein Aufruf in einer inneren Funktion,
+    einem Lambda, einem anderen Zweig oder unter ``if False`` schützt nichts
+    (Review 06.10.2026, N6). Ein Helfer, den nur geschützte Tests rufen, zählt
+    nicht als geschützt — der nächste Aufrufer weiß davon nichts.
+    """
+    tree = ast.parse(source)
+    names = {"exact_kernel"}
+    parents: dict[ast.AST, ast.AST] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "tests.helpers":
+            names |= {
+                alias.asname or alias.name for alias in node.names if alias.name == "exact_kernel"
+            }
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+
+    def guard(statement: ast.stmt) -> bool:
+        value = (
+            statement.value
+            if isinstance(statement, (ast.Expr, ast.Assign, ast.AnnAssign))
+            else None
+        )
+        return (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id in names
+        )
+
+    def dominated(node: ast.AST) -> bool:
+        child, parent = node, parents.get(node)
+        while parent is not None:
+            for field in ("body", "orelse", "finalbody"):
+                block = getattr(parent, field, None)
+                if (
+                    isinstance(block, list)
+                    and child in block
+                    and any(guard(statement) for statement in block[: block.index(child)])
+                ):
+                    return True
+            child, parent = parent, parents.get(parent)
+        return False
+
+    unguarded: list[int] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            modules = [node.module or ""]
+        elif isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        else:
+            continue
+        if any(module.split(".")[0] == "OCP" for module in modules) and not dominated(node):
+            unguarded.append(node.lineno)
+    return sorted(unguarded)
+
+
+def test_the_exact_kernel_guard_stands_before_every_ocp_import() -> None:
+    """RM-349 (F-N5): Ohne das Extra ``brep`` wird ein OCP-Test ein Skip, kein ``ImportError``.
+
+    ``tests/CLAUDE.md`` verlangt ``exact_kernel()`` vor jedem ``OCP``-Import;
+    zwei Tests hielten sich nicht daran, und eine Zählung fand 62 solche
+    Importe in 16 Dateien, die meisten in Helfern.
+    """
+    files = sorted(
+        [*(_ROOT / "tests").glob("test_*.py"), _ROOT / "tests" / "helpers.py"],
+        key=lambda path: path.name,
+    )
+    reached = [path for path in files if "OCP" in path.read_text(encoding="utf-8")]
+    assert len(reached) > 20, f"zu wenige Dateien mit OCP gefunden: {len(reached)}"
+
+    found = [
+        f"tests/{path.name}:{line}"
+        for path in reached
+        for line in _ocp_imports_without_guard(path.read_text(encoding="utf-8"))
+    ]
+
+    assert not found, "OCP-Import ohne vorangehendes exact_kernel():\n" + "\n".join(found)
+
+
+def test_no_test_skips_over_a_fixed_dependency() -> None:
+    """RM-349 (F-N4): PySide6 ist fest, OCP läuft über ``exact_kernel()``.
+
+    ``importorskip("PySide6")`` machte aus einer kaputten Installation einen
+    übersprungenen Lauf; ``importorskip("OCP")`` übersprang auch einen
+    Importfehler im eigenen Kern, den ``exact_kernel()`` sichtbar hält.
+    """
+    files = sorted((_ROOT / "tests").glob("*.py"))
+    assert len(files) > 200, f"zu wenige Testdateien gefunden: {len(files)}"
+
+    found = [
+        f"tests/{path.name}:{line}: {module}"
+        for path in files
+        for line, module in _skipped_imports(path.read_text(encoding="utf-8"))
+        if module in {"PySide6", "OCP"}
+    ]
+
+    assert not found, "\n".join(found)
+
+
+def _skipped_imports(source: str) -> list[tuple[int, str]]:
+    """Aufrufe ``importorskip("…")`` mit Zeile und Paket — Aufrufe, nicht Text.
+
+    Das Paket ist das erste Glied des Namens, auch aus ``modname=``:
+    ``importorskip("PySide6.QtWidgets")`` überspringt genauso über eine
+    kaputte Installation hinweg (Review 06.10.2026, N7).
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, (ast.Attribute, ast.Name)):
+            continue
+        called = node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id
+        if called != "importorskip":
+            continue
+        given = [*node.args[:1], *(word.value for word in node.keywords if word.arg == "modname")]
+        for argument in given:
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                found.append((node.lineno, argument.value.split(".")[0]))
+    return found
+
+
+def test_the_skip_check_reads_calls_and_not_prose() -> None:
+    """Ein Docstring, der ``importorskip("OCP")`` erwähnt, ist kein Aufruf."""
+    source = (
+        'def f():\n    """Früher stand hier importorskip("OCP")."""\n'
+        '    pytest.importorskip("PySide6")\n    importorskip("hid")\n'
+        '    pytest.importorskip("PySide6.QtWidgets")\n'
+        '    pytest.importorskip(modname="OCP.BRepTools")\n'
+    )
+
+    assert _skipped_imports(source) == [
+        (3, "PySide6"),
+        (4, "hid"),
+        (5, "PySide6"),
+        (6, "OCP"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("def f():\n    from OCP.gp import gp_Pnt\n", [2]),
+        ("def f():\n    exact_kernel()\n    from OCP.gp import gp_Pnt\n", []),
+        ("def f():\n    from OCP.gp import gp_Pnt\n    exact_kernel()\n", [2]),
+        ("exact_kernel()\nimport OCP\n", []),
+        (
+            "from tests.helpers import exact_kernel as k\n"
+            "def f(kind):\n    if kind:\n        k()\n        import OCP.gp\n",
+            [],
+        ),
+        ("def g():\n    exact_kernel()\ndef f():\n    import OCP\n", [4]),
+        ("def f():\n    g = lambda: exact_kernel()\n    import OCP\n", [3]),
+        ("def f():\n    def g():\n        exact_kernel()\n    import OCP\n", [4]),
+        ("def f(a):\n    if a:\n        exact_kernel()\n    else:\n        import OCP\n", [5]),
+        ("if False:\n    exact_kernel()\nimport OCP\n", [3]),
+        ("def f():\n    edit = exact_kernel()\n    for _ in ():\n        import OCP\n", []),
+    ],
+    ids=[
+        "ohne",
+        "davor",
+        "danach",
+        "modul",
+        "alias-im-zweig",
+        "fremde-funktion",
+        "lambda",
+        "innere-funktion",
+        "anderer-zweig",
+        "if-false",
+        "zuweisung-umschliessend",
+    ],
+)
+def test_the_ocp_guard_check_reads_order_and_scope(source: str, expected: list[int]) -> None:
+    """Der Wächter oben, an Fällen mit bekanntem Ausgang."""
+    assert _ocp_imports_without_guard(source) == expected
+
+
 def _pyproject() -> dict[str, Any]:
     with (_ROOT / "pyproject.toml").open("rb") as handle:
         data: dict[str, Any] = tomllib.load(handle)

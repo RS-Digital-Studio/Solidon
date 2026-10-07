@@ -23,10 +23,11 @@ Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum Nutzer durch.
 mancher Knoten liest sie ungeprüft.
 
 **Warum TripoSG voreingestellt ist.** TripoSG (VAST-AI-Research) weist mit
-Quelltext und Modellkarte die MIT-Lizenz aus — die vollständige Lizenzkette
-der Gewichte und der eingebundenen Modelle wird geprüft (Register P9;
-Entscheidung Robert 02.09.2026: in Betrieb, solange die Prüfung nichts anderes
-ergibt) — und lässt sich lokal reproduzierbar einrichten. Gemessen an vier
+Wurzel-``LICENSE`` und Modellkarte die MIT-Lizenz aus und lässt sich lokal
+reproduzierbar einrichten. Die Kette ist offen (RM-003): Der Transformer, den
+jeder Auftrag ausführt, trägt im Dateikopf die Tencent Hunyuan Community
+License, deren Gebiet die EU ausnimmt; ein Ersatz wird gesucht (Robert,
+06.10.2026). Gemessen an vier
 Fällen vom glatten Drehkörper bis zur Figur mit dünnen Fortsätzen kam jedes
 Mal ein geschlossener Körper aus einem Stück heraus. Andere Modelle, darunter
 Hunyuan3D, haben eigene Bedingungen, die für die konkret eingesetzte Fassung
