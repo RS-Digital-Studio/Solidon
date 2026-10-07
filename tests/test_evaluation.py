@@ -688,6 +688,55 @@ def test_a_pin_whose_plate_is_removed_says_nothing_about_the_bore(profile: Profi
     assert "pin_for_bore.made" not in {entry.code for entry in after.scene.report.findings}
 
 
+def test_a_pin_whose_plate_is_removed_drops_its_thread_warning_too(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch „Im Teil berühren sich die Gänge …“ fällt mit der Platte (Review P2, G1).
+
+    Der Stift hat zwei Ausgänge, und ``evaluate`` ordnet einen Befund dann
+    keinem zu; nur ``object_ids`` bindet ihn an den Träger. Erzwungen wird die
+    Berührung über die Drehmessung (``bore_pin.thread_turn``).
+    """
+    from app.core.geom import bore_pin
+    from app.core.scene.project import new_project
+
+    monkeypatch.setattr(bore_pin, "thread_turn", lambda *args, **kwargs: (0.0, -0.05))
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    history.apply(
+        "Platte mit Gewinde",
+        [
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0}),
+            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 10.0}),
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"size": "M6", "length": 8.0, "internal": True, "at_feature": "hole_1"},
+            ),
+        ],
+    )
+    plate = evaluate(history.document, profile).scene.objects["obj_1"]
+    thread = next(name for name, entry in plate.features.items() if entry.kind == "thread")
+    history.apply(
+        "Stift",
+        [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": thread})],
+    )
+    before = evaluate(history.document, profile)
+    touching = [
+        entry
+        for entry in before.scene.report.findings
+        if entry.code == "pin_for_bore.thread_touches"
+    ]
+    assert touching and touching[0].object_ids == ("obj_1",), "die Gegenprobe davor"
+
+    history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=("obj_1",))])
+    after = evaluate(history.document, profile)
+
+    assert after.complete and len(after.scene.objects) == 1, "der Stift bleibt"
+    assert not [
+        entry for entry in after.scene.report.findings if entry.code.startswith("pin_for_bore.")
+    ]
+
+
 def _plate_with_pin(profile: Profile) -> tuple[History, str]:
     """Platte 40 × 30 × 10 mit Bohrung Ø 6 und *Stift für Bohrung* — Schritte 1 bis 3.
 

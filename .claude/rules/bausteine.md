@@ -42,6 +42,11 @@ Ausgabeformat, Normteilmaße aus der Tabelle, Vorschaubild gerendert von
 - **Das eingetragene Maß ist das Maß**: Eine Befestigung richtet sich nach der
   Breite (zwei Schlüssellöcher oder eines mittig, `holders._keyholes`), statt
   den Halter über sein Maß hinaus zu verbreitern.
+- **Die Grenze eines Bausteins, den eine Operation intern baut, ist nie ihr
+  Satz**: Sie prüft sie vorher und sagt mit eigenem Satz, was hilft — der Stift
+  an einem zu kurzen Gewinde nimmt die kürzeste druckbare Länge oder öffnet den
+  Gewindeschritt (`lid_hinge._printable_thread`, `change_creating_step`); die
+  rohe Grenze nannte ein Feld, dessen eigene Grenze passte.
 
 ## Ein Baustein in einer Bohrung misst sich an ihrer Wand
 
@@ -337,7 +342,10 @@ Zeile (`countersink_derived`), und der Baustein sagt es am Ergebnis — eine
 Regel wie 2·d statt des Normwerts sieht der Kunde nicht. Ein abgeleiteter
 Sechskant nimmt die nächste Schlüsselweite der Reihe `wrenches` (ISO 272),
 sonst gäbe es keinen Schlüssel dafür; `headless` nennt Nennmaße, an denen nur
-der Kopf abgeleitet ist (M60).
+der Kopf abgeleitet ist (M60). Ein eigenes Gewindemaß innerhalb von
+`THREAD_SIZE_REACH` neben einer Tabellengröße ist diese — eine Grenze für
+Vorwahl und Gegenstück (`standards.thread_size_near`), sonst stünde „kein
+Normgewinde“ über einer Normgröße.
 
 ## Regelsammlung
 

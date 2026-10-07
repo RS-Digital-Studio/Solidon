@@ -511,6 +511,9 @@ _NOT_A_RANGE = frozenset(
         # Lagen und Formen, keine Zahl im Feld.
         "two_heads", "chain_unreadable", "narrowing_mouth", "narrow_above_thread",
         "not_a_bore", "needs_a_bore",
+        # Ein Gewinde, das in seiner Bohrung kürzer bleibt als das kürzeste
+        # druckbare (Review P2, M2): eine Lage, die der frühere Schritt ändert.
+        "thread_too_short",
         # Ein fremdes Muster ohne gewählten Stil: eine Auswahl, keine Zahl.
         "pattern_style",
         # Nicht belegbare Texturoberflächen oder Rückseiten und verzerrte

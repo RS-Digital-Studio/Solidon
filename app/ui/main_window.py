@@ -24806,6 +24806,9 @@ class MainWindow(QMainWindow):
             # stand der Rat als Satz ohne Knopf.
             "sketch.pick_plane": self._correct_after_error,
             "resize_the_widening": self._resize_the_widening,
+            # Den früheren Schritt öffnen, der das Merkmal gesetzt hat — ein Stift an
+            # einem zu kurzen Gewinde braucht ein längeres Gewinde (Review P2, M2).
+            "change_creating_step": self._change_creating_step,
             "show_step_values": self._show_step_values,
             # **Die Absage beim Einlesen hatte nur „Abbrechen".** Eine
             # kaputte Datei lässt sich nicht korrigieren, und der Schritt,
@@ -25026,6 +25029,20 @@ class MainWindow(QMainWindow):
             # einen Millimeter, wächst die Senkung um denselben.
             given["diameter"] = round(outer - previous + diameter, 2)
         self.run_operation(REGISTRY.get("resize_feature"), given)
+
+    def _change_creating_step(self, error: AppError) -> None:
+        """*Gewindeschritt öffnen*: den Schritt, der das Merkmal des Fehlers erzeugt hat.
+
+        Die Absage steht an einem späteren Schritt, zu ändern ist der frühere —
+        welcher, nennt der Kern in ``values["creating_step"]``, das Feld in
+        ``values["field"]``. Derselbe Dialog wie *Eingabe korrigieren*, nur an
+        dem Schritt, in dem die Eingabe etwas ändert.
+        """
+        try:
+            step = int(str(error.values.get("creating_step", "")))
+        except ValueError:
+            return
+        self.edit_operation(step, str(error.values.get("field", "")))
 
     def _entry_of(self, error: AppError) -> Any:
         """Der Körper, den ein Fehler meint — oder nichts."""

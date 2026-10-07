@@ -17550,10 +17550,10 @@ def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> 
 
 @op_params
 class CountersinkParams(BaseParams):
-    # Bis zum Senkkopf des größten Gewindes, das die Anwendung baut: Der
-    # Senkkopf ist 2·d (Normteiltabelle). Mit 100 mm endete das Feld unter dem
-    # Kopf einer M56, seit die Tabelle bis M64 reicht — an deren Bohrung trüge
-    # der Dialog 112 mm ein, die das Feld nicht annähme.
+    # Bis zum Senkkopf des größten Gewindes, das die Anwendung baut: höchstens
+    # 2·d, über M24 abgeleitet (Normteiltabelle, ``countersink_derived``: M56
+    # 91 mm, M64 104 mm). Mit 100 mm endete das Feld unter dem Kopf der M64 —
+    # an deren Bohrung trüge der Dialog mehr ein, als das Feld annähme.
     diameter: float = param(
         title=_("Kopfdurchmesser"),
         default=8.4,

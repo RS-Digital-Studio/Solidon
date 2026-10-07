@@ -140,6 +140,12 @@ REPAIR_MESH = Action("repair_mesh", _("Netz reparieren"), primary=True)
 #: wäre keine** — der Kunde müsste den Faktor selbst ausrechnen. Die
 #: Handlung nennt deshalb das Ergebnis und nicht die Arbeit.
 RESIZE_THE_WIDENING = Action("resize_the_widening", _("Senkung mitziehen"), primary=True)
+#: Den **früheren** Schritt öffnen, der das Merkmal erzeugt hat, an dem ein
+#: späterer scheitert — welcher, steht in ``values["creating_step"]``, das Feld
+#: in ``values["field"]``. *Eingabe korrigieren* öffnete den angehaltenen
+#: Schritt, und dort hilft keine Eingabe: Ein Stift an einem 2 mm kurzen
+#: Gewinde braucht ein längeres Gewinde (Review P2 Bausteine, M2).
+CHANGE_THREAD_STEP = Action("change_creating_step", _("Gewindeschritt öffnen"), primary=True)
 SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
 #: Die Handlungen am Verlauf selbst (P7). Einschalten nimmt mit, was der
 #: Schritt braucht; der Schritt steht in ``values["reactivate"]`` beziehungsweise

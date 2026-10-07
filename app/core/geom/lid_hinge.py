@@ -41,6 +41,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CHANGE_THIS_STEP,
+    CHANGE_THREAD_STEP,
     CORRECT_INPUT,
     GeometryError,
     ValidationError,
@@ -526,7 +527,9 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     # 2: Passend zur Bohrung (RM-536) — Senkkopf, Zylinderkopf und Außengewinde,
     # wo bis dahin ein glatter Zylinder entstand. 3: Der Befund über den Bau
     # nennt den Träger (``object_ids``), und der Plattencache hält Befunde.
-    cache_version="3",
+    # 4: Jeder Befund des Stifts nennt den Träger, und ein zu kurzes Gewinde
+    # bekommt die kürzeste druckbare Länge oder eine eigene Absage (Review P2, G1, M2).
+    cache_version="4",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "
@@ -637,11 +640,11 @@ def _pin_result(
         features = {**features_of(cast(Any, body), cancelled=ctx.cancelled), **features}
     # **„Steht noch in der Bohrung“ spricht vom Träger** (Review zu ``bbd41ff2d``,
     # R-a): Der Satz nennt ihn in ``object_ids`` und fällt mit ihm, wenn ein
-    # späterer Schritt die Platte entfernt und den Stift behält.
+    # späterer Schritt die Platte entfernt und den Stift behält. Ebenso jeder
+    # andere Satz des Schritts — „im Teil berühren sich die Gänge“ und das
+    # gemessene Gewinde sprechen auch vom Träger (Review P2 Bausteine, G1).
     findings = [
-        dataclasses.replace(entry, object_ids=(source.id,))
-        if entry.code == "pin_for_bore.made" and not entry.object_ids
-        else entry
+        entry if entry.object_ids else dataclasses.replace(entry, object_ids=(source.id,))
         for entry in findings
     ]
     return OpResult(
@@ -698,9 +701,15 @@ def _matched_pin(
                 constraint="maximum",
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
+    findings: list[Finding] = []
+    if zone is not None:
+        bottom, lengthened = _printable_thread(
+            source, zone, bottom, _thread_top(cavity, zone, top, crest, gap), top, deepest
+        )
+        if lengthened is not None:
+            findings.append(lengthened)
     sections = list(cavity.sections)
     root = 0.0
-    findings: list[Finding] = []
     if zone is not None:
         root = bore_pin.root_radius(zone, clearance)
         sections.insert(
@@ -783,7 +792,96 @@ def _matched_pin(
             measure_sources={**made.measure_sources, "nominal": "parameter"},
         )
     findings.insert(0, _made(cavity, zone, smooth, top - bottom))
+    if zone is not None and zone.note is not None:
+        # Gemessen 6,0 x 1,03 und gebaut M6 x 1: Das Gegenstück sagt es, der Stift
+        # aus derselben Entscheidung ebenso (Review P2 Bausteine, G4).
+        findings.append(zone.note)
     return _pin_result(ctx, source, body, features, findings)
+
+
+def _printable_thread(
+    source: SceneObject,
+    zone: bore_pin.ThreadZone,
+    bottom: float,
+    top: float,
+    pin_top: float,
+    deepest: float,
+) -> tuple[float, Finding | None]:
+    """Wo der Gewindestift unten endet, damit sein Gewinde druckbar lang ist.
+
+    **Die Grenze des Gewindebausteins gehört nicht in den Satz des Stifts**
+    (Review P2 Bausteine, M2). An einem gedruckten M6 von 2 mm blieben dem
+    Bolzen nach dem halben Spiel 1,875 mm, und der Kunde las „Der Wert liegt
+    unter dem zulässigen Mindestwert“ am Feld *Länge*, dessen eigene Grenze 0
+    ist — jede Länge darunter wieder dasselbe, jede darüber „durch den Boden“.
+    Reicht die Bohrung für die kürzeste druckbare Gewindelänge, bekommt der
+    Stift sie, und ein Befund sagt, wie lang er dadurch wird; sonst sagt er ab,
+    warum, und öffnet den Schritt, der das Gewinde gesetzt hat. Zu lang sagt er
+    am eigenen Feld ab — eine kürzere Länge kürzt das Gewinde. ``top`` ist das
+    obere Ende des Gewindes, ``pin_top`` das des Stifts (über einem Kopf höher).
+    """
+    from app.core.knowledge.parts.fasteners import ThreadParams
+
+    (bounds,) = [entry for entry in ThreadParams.spec() if entry.name == "length"]
+    shortest = float(bounds.minimum or 0.0)
+    longest = float(bounds.maximum or math.inf)
+    if top - bottom > longest + EPS_GEOM:
+        raise ValidationError(
+            field="length",
+            detail=_(
+                "Das Gewinde des Stifts wäre {length} lang, gedruckt werden höchstens {maximum}. "
+                "Tragen Sie eine kürzere Länge ein.",
+                length=_format(top - bottom),
+                maximum=_format(longest),
+            ),
+            values={"maximum": round(longest, 3), "length": round(top - bottom, 3)},
+            constraint="maximum",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    if top - bottom >= shortest - EPS_GEOM:
+        return bottom, None
+    if top - shortest < deepest - EPS_GEOM:
+        room = max(top - deepest, 0.0)
+        step = source.features[zone.feature].created_by if zone.feature in source.features else None
+        values: dict[str, Any] = {"minimum": shortest, "room": round(room, 3)}
+        if step is not None:
+            raise ValidationError(
+                field="length",
+                detail=_(
+                    "Für einen gedruckten Stift ist das Gewinde zu kurz: Er braucht {minimum}, "
+                    "die Bohrung lässt {room}. Das Gewinde in seinem Schritt verlängern.",
+                    minimum=_format(shortest),
+                    room=_format(room),
+                ),
+                values={**values, "creating_step": step},
+                constraint="thread_too_short",
+                suggestions=(CHANGE_THREAD_STEP, CANCEL),
+            )
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Für einen gedruckten Stift ist das Gewinde zu kurz: Er braucht {minimum}, "
+                "die Bohrung lässt {room}. Eine Bohrung mit längerem Gewinde wählen.",
+                minimum=_format(shortest),
+                room=_format(room),
+            ),
+            values=values,
+            constraint="thread_too_short",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    lowered = top - shortest
+    return lowered, Finding(
+        code="pin_for_bore.lengthened",
+        severity="warning",
+        message=_(
+            "Der Stift ist {length} lang, damit sein Gewinde die kürzeste druckbare Länge "
+            "{minimum} hat.",
+            length=_format(pin_top - lowered),
+            minimum=_format(shortest),
+        ),
+        values={"minimum_mm": shortest, "field": "length"},
+        suggestions=(CHANGE_THIS_STEP,),
+    )
 
 
 def _thread_top(

@@ -44,7 +44,7 @@ from numpy.typing import NDArray
 from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData, as_mesh_data, ray_hit_distances
-from app.core.types import Feature, FeatureId, is_a_cavity
+from app.core.types import Feature, FeatureId, Finding, is_a_cavity
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from app.i18n import _
 
@@ -142,6 +142,9 @@ class ThreadZone:
     pitch: float
     values: Mapping[str, Any]
     feature: FeatureId
+    #: Was das Gegenstück über die Wahl seines Maßes sagt
+    #: (``counterpart.thread_size_note``) — der Stift sagt dasselbe (Review P2, G4).
+    note: Finding | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,16 +254,31 @@ def _beside(point: Any, origin: NDArray[np.float64], axis: NDArray[np.float64]) 
     return math.sqrt(float(lateral[0] ** 2 + lateral[1] ** 2 + lateral[2] ** 2))
 
 
-def _coaxial(feature: Feature, origin: NDArray[np.float64], axis: NDArray[np.float64]) -> bool:
-    """Ob ein Merkmal auf derselben Achse sitzt — Mitte neben der Achse, Richtung parallel."""
+def _coaxial(
+    feature: Feature, origin: NDArray[np.float64], axis: NDArray[np.float64], radius: float
+) -> bool:
+    """Ob ein Merkmal auf derselben Achse sitzt wie die Bohrung mit dem Halbmesser ``radius``.
+
+    **Dieselben Schwellen wie die Kettenerkennung** (Review P2 Bausteine, G3):
+    Richtung innerhalb von ``SINK_AXIS_LIMIT``, Mitte höchstens
+    ``radius · SINK_FIT_LIMIT`` quer zur Achse (``perceive.relations``). Eine
+    Kette, die die Erkennung als Senkbohrung liest, liest der Stift ebenso;
+    eigene, engere Schwellen sagten an einem Fremdnetz „lässt sich nicht
+    eindeutig lesen“ zu einer Kette, die der Bericht eben noch nannte.
+    """
+    from app.core.perceive.features import SINK_AXIS_LIMIT, SINK_FIT_LIMIT
+    from app.core.units import exact_cos_degrees
+
     centre = feature.params.get("centre")
     direction = feature.params.get("axis")
     if centre is None or direction is None:
         return False
     other = _unit(direction)
-    cross = np.cross(axis, other)
-    sine = math.sqrt(float(cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2))
-    return sine <= MAX_FACET_SAG / 10.0 and _beside(centre, origin, axis) <= MAX_FACET_SAG
+    cosine = abs(float(axis[0] * other[0] + axis[1] * other[1] + axis[2] * other[2]))
+    return (
+        cosine >= exact_cos_degrees(SINK_AXIS_LIMIT)
+        and _beside(centre, origin, axis) <= radius * SINK_FIT_LIMIT
+    )
 
 
 def _hole_section(
@@ -293,7 +311,11 @@ def _cone_section(
 
 
 def _chained(
-    chain: Sequence[Feature], origin: NDArray[np.float64], axis: NDArray[np.float64], value: str
+    chain: Sequence[Feature],
+    origin: NDArray[np.float64],
+    axis: NDArray[np.float64],
+    value: str,
+    radius: float,
 ) -> list[Section]:
     """Die Abschnitte einer Kettenseite, von der Bohrung aus nach außen, ohne Lücke.
 
@@ -304,7 +326,7 @@ def _chained(
     """
     sections: list[Section] = []
     for member in chain:
-        if not _coaxial(member, origin, axis):
+        if not _coaxial(member, origin, axis, radius):
             raise _unreadable(value)
         if member.kind == "hole":
             section = _hole_section(member, origin, axis)
@@ -356,12 +378,13 @@ def cavity_of(
     axis = _unit(bore.params.get("axis", (0.0, 0.0, 1.0)))
     if len(side) > 1 and _along(side[-1].params["centre"], origin, axis) < 0.0:
         axis = -axis
-    sections = _chained(side, origin, axis, feature.id)
+    radius = float(bore.params["diameter"]) / 2.0
+    sections = _chained(side, origin, axis, feature.id, radius)
     for candidate in features.values():
         if (
             candidate.kind == "thread"
             and candidate.params.get("internal")
-            and _coaxial(candidate, origin, axis)
+            and _coaxial(candidate, origin, axis, radius)
         ):
             zone = _thread_zone(candidate, origin, axis)
             bore_part = sections[0]
@@ -374,7 +397,7 @@ def _thread_zone(
     feature: Feature, origin: NDArray[np.float64], axis: NDArray[np.float64]
 ) -> ThreadZone:
     """Wo ein Innengewinde entlang der Achse liegt, mit dem Maß seines Gegenstücks."""
-    from app.core.counterpart import thread_values_for
+    from app.core.counterpart import thread_size_note, thread_values_for
     from app.core.knowledge.parts.fasteners import thread_measure
 
     refuse_thread(feature)
@@ -392,7 +415,15 @@ def _thread_zone(
             constraint="positive",
             suggestions=(CORRECT_INPUT, CANCEL),
         )
-    return ThreadZone(middle - half, middle + half, nominal, pitch, dict(values), feature.id)
+    return ThreadZone(
+        middle - half,
+        middle + half,
+        nominal,
+        pitch,
+        dict(values),
+        feature.id,
+        thread_size_note(feature),
+    )
 
 
 def refuse_thread(feature: Feature) -> None:
@@ -471,7 +502,7 @@ def _at_a_thread(feature: Feature, features: Mapping[FeatureId, Feature], mesh: 
         if candidate.id != feature.id
         and candidate.kind in {"hole", "cone"}
         and is_a_cavity(candidate)
-        and _coaxial(candidate, origin, axis)
+        and _coaxial(candidate, origin, axis, float(feature.params["diameter"]) / 2.0)
     ]
     up = _walk(others, zone, origin, axis)
     down = _walk(others, zone, origin, -axis)

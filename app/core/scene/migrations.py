@@ -1373,9 +1373,9 @@ def _keep_bore_pins_plain(data: dict[str, Any]) -> dict[str, Any]:
     keine Form nennt; wer die neue will, wählt sie im Schritt. Festgehalten an
     ``tests/data/projects/pin_for_bore_v46.p3d``, geschrieben vom Stand davor.
 
-    Bis die parallele Formatversion 47 da ist, beginnt der Schritt bei 46
-    (:data:`MIGRATIONS`); gelesen wird keine gespeicherte Version, denn das
-    Feld gab es vorher nicht.
+    Der Schritt geht von 47 auf 48 (:data:`MIGRATIONS`) und deckt damit auch
+    Dateien aus 46; gelesen wird keine gespeicherte Version, denn das Feld gab
+    es vorher nicht.
     """
     for operation in _saved_operations(data):
         if not isinstance(operation, dict) or operation.get("op") != "pin_for_bore":

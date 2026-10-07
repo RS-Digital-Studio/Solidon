@@ -18,6 +18,8 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
+THREADS = Path(__file__).parent / "data" / "threads"
+
 
 def _two_plates(window: MainWindow) -> tuple[str, str]:
     """Zwei Platten nebeneinander, gerechnet — die Ausgangslage."""
@@ -603,45 +605,103 @@ def test_the_pin_for_a_bore_is_offered_at_an_internal_thread_only(qt_app: QAppli
 
     Der Stift baut das passende Außengewinde in eine Gewindebohrung; an einem
     Bolzen gibt es keine Bohrung, in die er gehört (``actions.not_offered_at``).
+    **Erkannte Gewinde aus dem Korpus** (Review P2, G5): An einem gedruckten
+    Gewinde zeigt die Karte die Felder seines Bausteins statt der Handlungen
+    (``part_selected``), und der frühere Aufbau stellte den Bolzen neben die
+    Platte — beides prüfte die Karte nicht.
     """
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    offered: dict[bool, bool] = {}
+    for name, internal in (("m8_innen.step", True), ("m6_rechts.step", False)):
+        window = MainWindow(Session(), UiSettings())
+        try:
+            window.open_path(THREADS / name)
+            window.session.wait_for_idle()
+            result = window.session.evaluate_now()
+            object_id, entry = next(iter(result.scene.objects.items()))
+            [thread] = [key for key, feature in entry.features.items() if feature.kind == "thread"]
+            assert bool(entry.features[thread].params.get("internal")) is internal
+            window.object_tree.select_object(object_id)
+            window.object_tree.select_feature(object_id, thread)
+            QApplication.processEvents()
+            panel = window.selection_operations
+            assert not panel.isHidden(), "die Karte steht da, kein Baustein darüber"
+            assert panel.chosen_level() == "thread"
+            offered[internal] = panel._fits_the_level("pin_for_bore")
+        finally:
+            window.wait_for_workers()
+            release = getattr(type(window), "release", None)
+            if release is not None:
+                release(window)
+            window.deleteLater()
+    assert offered == {True: True, False: False}
+
+
+def test_a_thread_too_short_for_the_pin_opens_the_thread_step_at_its_length(
+    qt_app: QApplication,
+) -> None:
+    """*Gewindeschritt öffnen* am Stift öffnet das Gewinde, nicht den Stift (Review P2, M2).
+
+    Ein gedrucktes M6 von 2 mm lässt dem Stift weniger als die kürzeste
+    druckbare Gewindelänge; zu ändern ist das Gewinde. Geprüft an der ganzen
+    Kette: Befund, Knopf, Dialog des früheren Schritts, Cursor in *Länge*.
+    """
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    from app.ui.panels import as_error
+
     window = MainWindow(Session(), UiSettings())
     try:
-        first, second = _two_plates(window)
+        window.session.start_new("centauri-carbon-2", "petg")
         window.session.history.apply(
-            "Gewinde",
+            "Quader mit Gewinde",
             [
                 OperationDraft(
-                    op="insert_printed_thread",
-                    inputs=(first,),
-                    params={"size": "M6", "length": 8.0, "internal": True, "z": 10.0},
+                    op="create_box", params={"width": 30.0, "depth": 30.0, "height": 12.0}
+                ),
+                OperationDraft(
+                    op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}
                 ),
                 OperationDraft(
                     op="insert_printed_thread",
-                    inputs=(second,),
-                    params={"size": "M6", "length": 8.0, "internal": False, "z": 10.0},
+                    inputs=("obj_1",),
+                    params={"size": "M6", "length": 2.0, "internal": True, "at_feature": "hole_1"},
                 ),
             ],
         )
         window.session.evaluate_now()
         result = window.session.last_result
         assert result is not None
+        [thread] = [
+            name
+            for name, feature in result.scene.objects["obj_1"].features.items()
+            if feature.kind == "thread" and feature.provenance == "generated"
+        ]
+        window.session.history.apply(
+            "Stift",
+            [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": thread})],
+        )
+        window.session.evaluate_now()
+        result = window.session.last_result
+        assert result is not None
+        [finding] = [
+            entry for entry in result.scene.report.findings if entry.code.startswith("op.pin")
+        ]
+        assert "change_creating_step" in {action.id for action in finding.suggestions}
 
-        def thread_of(object_id: str) -> str:
-            [name] = [
-                name
-                for name, feature in result.scene.objects[object_id].features.items()
-                if feature.kind == "thread" and feature.provenance == "generated"
-            ]
-            return name
+        window.error_handlers()["change_creating_step"](as_error(finding))
+        QApplication.processEvents()
 
-        offered: dict[bool, bool] = {}
-        for object_id, internal in ((first, True), (second, False)):
-            window.object_tree.select_features(((object_id, thread_of(object_id)),))
-            QApplication.processEvents()
-            window._update_actions()
-            assert window.selection_operations.chosen_level() == "thread"
-            offered[internal] = window.selection_operations._fits_the_level("pin_for_bore")
-        assert offered == {True: True, False: False}
+        dialog = window._op_dialog
+        assert dialog is not None, "der Dialog ging nicht auf"
+        try:
+            assert dialog.spec.name == "insert_printed_thread"
+            inner = dialog._editors["length"].findChild(QDoubleSpinBox)
+            assert inner is not None and inner.hasFocus()
+        finally:
+            dialog.reject()
     finally:
         release = getattr(type(window), "release", None)
         if release is not None:

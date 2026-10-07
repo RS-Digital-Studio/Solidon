@@ -185,10 +185,10 @@ class Tables:
     boards: dict[str, Board]
     pipes: dict[str, Pipe]
     headless: tuple[float, ...] = ()
-    wrenches: tuple[float, ...] = ()
-    """Schlüsselweiten nach ISO 272, aufsteigend — die Reihe für :func:`wrench_size`."""
     """ISO-Nennmaße ohne Zylinderschraube nach DIN 912 (M60): Abgeleitet treffen
     Steigung, Löcher, Mutter und Scheibe dort die Normwerte, nur der Kopf nicht."""
+    wrenches: tuple[float, ...] = ()
+    """Schlüsselweiten nach ISO 272, aufsteigend — die Reihe für :func:`wrench_size`."""
 
 
 def load(path: Path | None = None) -> Tables:

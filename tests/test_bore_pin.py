@@ -417,6 +417,215 @@ def test_a_thread_without_a_counterpart_says_why(
     assert caught.value.suggestions
 
 
+def _short_thread(profile: Profile, length: float) -> SceneObject:
+    """Der Quader mit Ø 5 durch und einem gedruckten M6 von oben, ``length`` lang."""
+    return _box(
+        "mesh",
+        profile,
+        OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
+        OperationDraft(
+            op="insert_printed_thread",
+            inputs=("obj_1",),
+            params={"size": "M6", "length": length, "internal": True, "at_feature": "hole_1"},
+        ),
+    )
+
+
+def test_a_thread_too_short_for_a_printed_pin_opens_its_own_step(profile: Profile) -> None:
+    """Ein gedrucktes M6 von 2 mm lässt dem Stift 2 − Spiel/2: zu kurz, mit eigenem Satz.
+
+    Der Gewindebaustein druckt ab 2 mm (``ThreadParams.length``). Unter der Mündung
+    endet der Bolzen um das halbe Spiel vor der engeren Bohrung; bis Review P2
+    (Bausteine, M2) kam die Grenzmeldung des Bausteins am Feld *Länge* des Stifts
+    durch, und keine Länge half. Die Absage nennt beide Zahlen und öffnet den
+    Gewindeschritt am Feld *Länge*; an 2,2 mm baut der Stift.
+    """
+    gap = profile.material.clearance / 2.0
+    carrier = _short_thread(profile, 2.0)
+    name = _thread_of(carrier)
+    with pytest.raises(ValidationError) as caught:
+        run("pin_for_bore", carrier, profile, at_feature=name)
+    error = caught.value
+    assert error.constraint == "thread_too_short"
+    assert error.suggestions[0].id == "change_creating_step"
+    assert error.values["creating_step"] == carrier.features[name].created_by is not None
+    assert error.values["field"] == "length"
+    assert error.values["room"] == pytest.approx(2.0 - gap, abs=1e-3)
+    assert "Mindestwert" not in str(error.detail) and "zu kurz" in str(error.detail)
+
+    longer = _short_thread(profile, 2.2)
+    result = run("pin_for_bore", longer, profile, at_feature=_thread_of(longer))
+    assert _made(result).values["length_mm"] == pytest.approx(2.2 - gap, abs=1e-3)
+    assert not [entry for entry in result.findings if entry.code == "pin_for_bore.lengthened"]
+
+
+@pytest.mark.parametrize("length", [1.0, 2.0, 3.0])
+def test_a_short_countersunk_screw_gets_the_shortest_printable_thread(
+    length: float, profile: Profile
+) -> None:
+    """Senkung + M6 × 4 mit eingetragener Länge 1–3 mm: Das Gewinde wird 2 mm, gesagt.
+
+    Unter dem Senkkopf bliebe dem Gewinde bei 1 und 2 mm nichts, bei 3 mm 0,6 mm;
+    die Bohrung reicht für die kürzeste druckbare Länge 2 mm, also bekommt der
+    Stift sie (Review P2 Bausteine, M2). Das Gewinde endet unter der Senkung um
+    das halbe Spiel früher (``_thread_top``) — dort, wo es im Test ohne Länge
+    endet; der Stift reicht 2 mm darunter.
+    """
+    carrier = _plate(
+        "plate_countersunk.stl",
+        profile,
+        OperationDraft(
+            op="insert_printed_thread",
+            inputs=("obj_1",),
+            params={"size": "M6", "length": 4.0, "internal": True, "at_feature": "hole_1"},
+        ),
+    )
+    name = _thread_of(carrier)
+    whole = run("pin_for_bore", carrier, profile, at_feature=name)
+    thread_top = whole.outputs[1].features[BORE_PIN_THREAD_FEATURE]
+    end = float(thread_top.params["centre"][2]) + float(thread_top.params["length"]) / 2.0
+    result = run("pin_for_bore", carrier, profile, at_feature=name, length=length)
+    pin = result.outputs[1]
+    bounds = as_mesh_data(pin.mesh).raw.bounds[:, 2]
+    assert bounds[0] == pytest.approx(end - 2.0, abs=1e-3)
+    assert bounds[1] == pytest.approx(4.0, abs=1e-3)
+    (said,) = [entry for entry in result.findings if entry.code == "pin_for_bore.lengthened"]
+    assert said.severity == "warning" and said.values["field"] == "length"
+    assert _made(result).values["length_mm"] == pytest.approx(4.0 - (end - 2.0), abs=1e-3)
+    _loose(pin, carrier, profile.material.clearance)
+
+
+def test_a_measured_thread_rounded_to_its_size_says_so_at_the_pin(profile: Profile) -> None:
+    """Gemessen 6,0 x 1,03, gebaut M6 x 1: Der Stift sagt es wie das Gegenstück (Review P2, G4).
+
+    Dieselbe Entscheidung (``counterpart._matched_thread``) liefert Maß und Satz;
+    der Stift nahm das Maß und schwieg. Der Satz nennt den Träger.
+    """
+    carrier = _threaded("mesh", profile)
+    name = _thread_of(carrier)
+    feature = carrier.features[name]
+    measured = dataclasses.replace(
+        feature,
+        provenance="native",
+        params={**feature.params, "pitch": 1.03, "uncertainty": 0.05, "handedness": "right"},
+    )
+    carrier = dataclasses.replace(carrier, features={**carrier.features, name: measured})
+    result = run("pin_for_bore", carrier, profile, at_feature=name)
+    assert _made(result).values["thread"] == "M6 × 1"
+    (note,) = [
+        entry for entry in result.findings if entry.code == "parts.counterpart_standard_size"
+    ]
+    assert note.values["size"] == "M6" and note.object_ids == (carrier.id,)
+
+
+def _altered(carrier: SceneObject, name: str, **params: Any) -> SceneObject:
+    """Der Träger mit geänderten Kennzahlen eines Merkmals — der Fall ohne eigenes Netz."""
+    feature = carrier.features[name]
+    altered = dataclasses.replace(feature, params={**feature.params, **params})
+    return dataclasses.replace(carrier, features={**carrier.features, name: altered})
+
+
+def _cone_of(carrier: SceneObject) -> str:
+    (name,) = [key for key, entry in carrier.features.items() if entry.kind == "cone"]
+    return name
+
+
+def _tilted(vector: Any, degrees: float) -> tuple[float, float, float]:
+    """``vector`` um ``degrees`` zur x-Achse hin gekippt (für eine Achse längs z)."""
+    sign = 1.0 if float(vector[2]) >= 0.0 else -1.0
+    angle = math.radians(degrees)
+    return (math.sin(angle), 0.0, sign * math.cos(angle))
+
+
+def test_a_countersink_slightly_off_the_axis_still_reads_like_the_recognition(
+    profile: Profile,
+) -> None:
+    """Eine Senkung 1,5° schräg und 0,1 mm daneben ist dieselbe Kette (Review P2, G3).
+
+    Die Erkennung nimmt bis ``SINK_AXIS_LIMIT`` (2°) und ``r · SINK_FIT_LIMIT``
+    quer; der Stift prüfte mit 0,29° und 0,05 mm und sagte zu einer Kette, die
+    der Bericht eben noch nannte, „lässt sich nicht eindeutig lesen“. Jenseits
+    von 2° bleibt die Absage.
+    """
+    carrier = _plate("plate_countersunk.stl", profile)
+    cone = _cone_of(carrier)
+    feature = carrier.features[cone]
+    centre = [float(value) for value in feature.params["centre"]]
+    near = _altered(
+        carrier,
+        cone,
+        axis=_tilted(feature.params["axis"], 1.5),
+        centre=(centre[0] + 0.1, centre[1], centre[2]),
+    )
+    result = run("pin_for_bore", near, profile, at_feature="hole_1")
+    assert _made(result).values["countersink_angle_deg"] == pytest.approx(90.0, abs=0.5)
+
+    far = _altered(carrier, cone, axis=_tilted(feature.params["axis"], 10.0))
+    with pytest.raises(ValidationError) as caught:
+        run("pin_for_bore", far, profile, at_feature="hole_1")
+    assert caught.value.constraint == "chain_unreadable"
+    assert caught.value.suggestions
+
+
+def test_a_countersink_narrower_than_its_bore_is_a_narrowing_mouth(profile: Profile) -> None:
+    """Eine „Senkung“ enger als die Bohrung ist eine Verengung: Der Stift sagt es ab (G6)."""
+    carrier = _plate("plate_countersunk.stl", profile)
+    narrow = _altered(carrier, _cone_of(carrier), diameter=4.0)
+    with pytest.raises(ValidationError) as caught:
+        run("pin_for_bore", narrow, profile, at_feature="hole_1")
+    assert caught.value.constraint == "narrowing_mouth"
+    assert caught.value.suggestions
+
+
+def test_a_bore_narrower_above_its_thread_refuses_the_pin() -> None:
+    """Über dem Gewinde eine engere Bohrung: Durch sie käme der Stift nicht (G6).
+
+    Ein M6 auf z = 0 … 5 und darüber die gewählte Bohrung Ø 5 auf z = 4 … 12,
+    in ihrem eigenen Rahmen (``_threaded_bore``); eine weite Bohrung Ø 8
+    darüber ist die Gegenprobe.
+    """
+    origin = np.zeros(3)
+    axis = np.array([0.0, 0.0, 1.0])
+    zone = bore_pin.ThreadZone(0.0, 5.0, 6.0, 1.0, {"size": "M6"}, "thread_1")
+    narrow = [bore_pin.Section(4.0, 12.0, 2.5, 2.5, "hole_1")]
+    with pytest.raises(ValidationError) as caught:
+        bore_pin._threaded_bore(origin, axis, narrow, zone, "hole_1")
+    assert caught.value.constraint == "narrow_above_thread"
+    assert caught.value.suggestions
+    wide = [bore_pin.Section(4.0, 12.0, 4.0, 4.0, "hole_1")]
+    cavity = bore_pin._threaded_bore(origin, axis, wide, zone, "hole_1")
+    assert [(entry.start, entry.end) for entry in cavity.sections] == [(5.0, 12.0)]
+
+
+def test_a_clearance_as_wide_as_the_bore_leaves_no_pin() -> None:
+    """Ein Spiel, das den Schaft auf null bringt, sagt ``CLEARANCE_TOO_LARGE`` am Feld Spiel (G6).
+
+    Bohrung Ø 2 mit Senkung bis Ø 6 und das größte Spiel 2 mm: Vom Schaft bliebe
+    Halbmesser 0. Mit 1 mm Spiel bleibt er (Gegenprobe).
+    """
+    sections = [
+        bore_pin.Section(0.0, 8.0, 1.0, 1.0, "hole_1"),
+        bore_pin.Section(8.0, 10.0, 1.0, 3.0, "cone_1"),
+    ]
+    with pytest.raises(ValidationError) as caught:
+        bore_pin.outline(sections, 0.0, 10.0, 1.0)
+    assert caught.value.detail == bore_pin.CLEARANCE_TOO_LARGE
+    assert caught.value.field == "clearance" and caught.value.suggestions
+    assert bore_pin.outline(sections, 0.0, 10.0, 0.5)[1][0] == pytest.approx(0.5)
+
+
+def test_a_thread_whose_turn_cannot_be_measured_says_so(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Messung der Gänge baut der Stift und warnt, mit dem Träger im Befund (G6)."""
+    monkeypatch.setattr(bore_pin, "thread_turn", lambda *args, **kwargs: None)
+    carrier = _threaded("mesh", profile)
+    result = run("pin_for_bore", carrier, profile, at_feature=_thread_of(carrier))
+    (said,) = [entry for entry in result.findings if entry.code == "pin_for_bore.thread_unmeasured"]
+    assert said.severity == "warning" and said.suggestions
+    assert said.object_ids == (carrier.id,)
+
+
 def test_the_plain_pin_does_not_go_into_a_thread(profile: Profile) -> None:
     carrier = _threaded("mesh", profile)
     with pytest.raises(ValidationError) as caught:
