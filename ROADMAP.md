@@ -47,8 +47,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Installerlauf 37418052743 (0.5.3) installiert und startet den Kundeninstaller mit Inno Setup 7.1.0; jedes Release startet das installierte Flatpak unter Xvfb. Offen: Aktualisieren/Deinstallieren auf fremdem Windows, Flatpak auf echter Linux-Grafik |
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Kunde mit zwei Intel-Macs (macOS 26): das Developer-ID-signierte Paket startet nicht, ad hoc signiert schon; am Runner nicht nachstellbar (Läufe 37361577881, 37362456615); wartet auf Terminalausgabe, `codesign --verify`, Absturzberichte und macOS-Version des Kunden. Daneben Intel-Fenster am Gerät und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
-| [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
-| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins; `shapes.thread_body` ist umgestellt, sein Weg in `_WAYS` fehlt (Liste am Punkt) |
+| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut (Taglauf 37266459831 grün); offen die drei Arbeitsplätze und der Blick in die Releaseakte |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -79,6 +78,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.), B7 im Matrixwerkzeug gebaut (06.10.); offen: Waschschüssel an 29 Druckern und die Minigolf-Platte als 3MF (Lauf seit 06.10.), der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
+| [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
+| [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
@@ -87,7 +88,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
 | [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Probe über den echten Startweg beim nächsten Release (RM-213); D3D12 als Backend ist eine eigene Entscheidung |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Am echten Fenster prüfen, ob sich die Geste flüssig anfühlt (Release, RM-213) |
-| [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut |
+| [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut; dazu die vier Handwege der Merkmalbedienung (§4) |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
@@ -100,7 +101,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Gehosteter Lauf freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel; daneben der lokale Lauf nach RM-513 gegen `1ce7eac68` |
 | [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | (a) und (b) erledigt; offen die sechs Befunde aus dem Review 02.10., die einen Schritt meinen und *Diesen Schritt ändern* noch nicht tragen |
 | [RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat](#rm-529) | KI und Generatoren | `created_by` in Merkmals- und Objektzeile des Steckbriefs nachrüsten (Entscheidung Robert, 06.10.) |
-| [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): umräumen — erledigte und abgelöste Konzepte in einen Unterordner, alle Verweise nachziehen |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Genehmigt (Robert: „alles gründlich“); neun Helfer in `helpers.py`/`ui_helpers.py` (`95fd36d35`); offen `on_the_bore_wall`, `project`, `FakeCodec`, `a_foreign_slot`; entschieden (Robert, 06.10.): auch die großen Fenster-Fixtures zusammenführen |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -109,7 +109,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (d) und Teile von (b)/(c) mit `b03c0ddfe` erledigt; offen die Kopie `_select_data` samt Karte, die übrigen dünnen Hüllen aus (b), `section.section_volume` und `repair.fill_holes` (Liste am Punkt) |
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): `rendering`-Fälle in der Release-CI auch unter Linux und macOS, dazu der Wächter in `test_packaging.py` |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Erster Lauf 02.10. im Archiv; der zweite war am 05.10. fällig und steht aus (bekannt: cadquery-ocp-novtk 8.0.1.1.0); Paketbeleg der Bauplattform unter RM-468 |
-| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Auftrag Robert (06.10.): Fenstergruppe in der Release-CI auf allen drei Plattformen, dazu ein Slicer-Job, der je Plattform die Slicer installiert und Erkennung, Druckerlisten und Slicen prüft |
+| [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.); offen acht Fälle, `build.yml`, die Wächter und der Slicer-Job |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -145,7 +145,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 Physische Spulen mit bis zu vier Farben, Regal, bewusster Import, Schnellauswahl
 und rücknehmbare Verbrauchsbuchungen sind angeschlossen; „Erste Schritte“ führt
-über Slicer und Drucker zum Lager. Das [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
+über Slicer und Drucker zum Lager. Das [Gestaltungs- und Gesamtreview](konzepte/archiv/review-filamente-2026-09.md)
 begründet Abwahl, Herstellerprofile und Buchungskorrekturen.
 
 [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
@@ -518,20 +518,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
 
-<a id="rm-114"></a>
-
-- [~] **RM-114 — Vereinfachungsziele auf Apple Silicon vermessen.** Die Vereinfachungs-Zielreihe der
-  dünnwandigen Hohlkugel auf Apple Silicon messen und den Warnungsnachweis dort zuverlässig
-  auslösen. Abnahme: dokumentiertes Ziel mit dichtem Eingang/offenem Ausgang und tatsächlicher
-  Warnung; kein Skip als Erfolg.
-
-  Seit `a559e947` überspringt der Test nicht mehr; ein sicher offener Ausgang löst die Warnung
-  auf jeder Plattform aus (`tests/test_subdivision.py::test_the_simplifier_reports_an_open_result_on_every_machine`,
-  auf macos-latest grün in den Tagläufen 37266459831 und 37409338027). Offen ist nur die
-  dokumentierte Zielreihe der Hohlkugel auf Apple Silicon.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
-
 <a id="rm-187"></a>
 
 - [~] **RM-187 — Dieselbe Geometrie auf jeder Plattform.** Am 17.09.2026 lieferte dasselbe
@@ -639,7 +625,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Stücke einer Schicht, und die Summe entsteht in einer festen Folge
   (`test_slice.py::test_the_support_volume_comes_out_the_same_on_any_number_of_workers`,
   Regel in `.claude/rules/kern.md`). Die Hubhöhe eines schräg gesetzten Bausteins rechnet
-  komponentenweise über `mesh.stable_normals` (`bba2c6ea7`). Neu offen sind drei Wege:
+  komponentenweise über `mesh.stable_normals` (`bba2c6ea7`). Neu offen waren drei Wege, alle
+  drei erledigt mit Paket A (unten):
 
   - **Der Teilungsweg rechnet Naht- und Stiftlagen über BLAS** (rest-teilen,
     REST-TEILEN-06, vor 0.5.0 entstanden): `autosplit` (`_reflected`, `cuts_through`,
@@ -672,6 +659,46 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (`rebuild._drill_tool`) dreht über `lathe.revolve` mit den Ecken aus `units.circle_point`
   statt über `trimesh.creation.revolve`; der Weg `rebuild_drill_tool` steht in `_WAYS` und war
   unter dem Plattformrauschen ohne den Fix rot.
+
+  **Paket A (06.10.2026):** Die drei Wege oben und der Rest aus dem Review vom 02.10. rechnen
+  plattformgleich: die Platzierung eines Bausteins (`parts/ops._matrix` über
+  `transform.composed`), Teilen (`autosplit`, `symmetry`, `pins`), alle Drehwege von *Merkmal
+  drehen* und überhaupt `prepare_ops` und `prepare` (Matrixprodukte, `np.dot`, `einsum`, Normen,
+  SVD, Neigungswinkel, Flächennormalen über `stable_normals`), Muster am Zylinder und in der Ebene
+  (`perceive.patterns` ganz, `texture_ops`), Skizzenbögen (`sketch_solid`, `sketch.profile`) und
+  Senkungen. Neue Wege in `_WAYS`: `slanted_part`, `thread_ridge`, `wrapped_texture`,
+  `face_textures`, `sketch_arcs`, `split_seam` und `read_lattices`; fünf davon waren am alten
+  Stand rot. Der Wächter leert vor dem stillen und vor dem verrauschten Lauf die Merker der
+  Erkennung: Vorher beantwortete der verrauschte Lauf die Erkennung aus dem stillen, und die Naht
+  eines umwickelten Musters hing unbemerkt an `math.cos`. Der Teilungskorpus (sieben Modelle) ist
+  vorher und nachher bitgleich bis auf ein Teil des Wabenhalters nach dem Stiftschnitt (zwei
+  Dreiecke, `pins.py`). Cache-Format 52.
+
+  **Offen nach Paket A:**
+
+  - **Einpassungen in `perceive`:** Achsen aus `eigh`, Kreis und Kugel aus `lstsq`, Ebenen aus
+    `svd` und der Löser `least_squares` in `refine.solve`. Entschieden ist ein eigener
+    deterministischer Kern (Entscheidung Robert, 06.10.2026): feste Summenfolge,
+    Householder-QR und Jacobi-SVD, kompiliert ohne zusammengezogene Multiplikation und
+    Addition, mit bitgleichem Rückfall in NumPy. Abnahme: Erkennungskorpus und Laufzeit vorher
+    und nachher, `_WAYS` grün auf drei Runnern.
+  - **Formen in `knowledge/parts/shapes.py`:** `_slot_outline` rechnet mit `np.cos` und trifft
+    Schlüsselloch und Lasche. Jede Änderung an `shapes.py` macht alle 49 Bereichsnachweise
+    ungültig (`tools/check_part_ranges.py --all`), deshalb gebündelt mit dem nächsten Posten;
+    danach Wege für Umrisse und gedrehte Bohrungen in `_WAYS`.
+  - **Potenzen `**` auf Gleitkommazahlen:** 166 Stellen im Kern, 115 davon `** 2`. Pythons `**`
+    ruft das `pow` der Plattform, und das rundet nicht immer korrekt: Auf Windows weicht
+    `x ** 2` in 1049 von zwei Millionen Werten von `x * x` ab, `x ** 0.5` ebenso oft von
+    `math.sqrt`; das Rauschen sieht beides nicht. Weg: Produkte, `math.sqrt` und Kehrwerte
+    ganzzahliger Potenzen (`1.0 / 10 ** n`), dazu ein Wächter über den Syntaxbaum, der `**` mit
+    Gleitkommaanteil im Kern ablehnt (die Regel steht in `kern.md`). Zuerst `units.plane_axes`:
+    Jeder Skizzen- und Merkmalsrahmen hängt daran.
+  - **Zwei Drehungen über BLAS**, älter als Paket A und von keinem Weg in `_WAYS` erreicht:
+    `geom/hollow.py` (`body.apply_transform(back)` beim Aushöhlen) und `geom/lattice.py`
+    (`plug.apply_transform(matrix)`, Drehung aus `units.plane_axes` samt Verschiebung). Weg:
+    `transform.moved` und je ein Weg in `_WAYS`.
+  - **Das Nachführen bewegter Merkmale** aus der Liste der Durchsicht 0.5.0 ist nicht neu
+    geprüft.
 
 <a id="rm-468"></a>
 
@@ -2575,6 +2602,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Releaseabnahme.
   B01-Export-/Sliceranschlüsse sind separat abgestimmt; RM298 bleibt `[~]`.
 
+  **Teilstand 06.10.2026, (d), Elternende unter Last:** Der Wächter des
+  rechnenden Helfers fiel im Tor neben Agenten-Suite und Toren in einem von drei
+  Läufen. Kein Zeitfenster im Jobobjekt: Das Ende war in allen 65 gebundenen
+  Sondenläufen eingeleitet, sobald der Elternprozess signalisiert war; nur der
+  Abschluss dauerte unter Volllast in `BELOW_NORMAL` bis 19,5 s, in 21 von 23
+  Läufen über 9 s (normale Klasse unter 0,8 s, ruhige Maschine 1 bis 2 ms).
+  Der Test sichert jetzt das eingeleitete Ende zu (`IsProcessDeleting`), der
+  Abbau hebt vorher die Klasse, Meldedateien werden bis zur Frist gelesen.
+  Verschränkt im selben Fenster: alt 6 von 8 rot, neu 8 von 8 grün; ohne
+  inneres Jobobjekt bleibt der neue Test an derselben Zusicherung rot. Das löst
+  die Zusage „innerhalb der Abbaufrist signalisiert“ aus
+  [rm298-lifecycle-2026-10-02.md](konzepte/nachweise-release-0.5.1/reports/rm298-lifecycle-2026-10-02.md)
+  ab. [Sonde und Läufe](konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/elternende.py),
+  Begründung `regel-tests.md`. RM298 bleibt `[~]`.
+
 <a id="rm-307"></a>
 
 - [~] **RM-307 — Auto Split: Reste aus dem Review der Vorauswahl.** Aus dem Release 0.5.1 (Fix `autosplit-lagen-051`,
@@ -2771,6 +2813,35 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   unter z = 0 liegt, mit einer Handlung, die die Richtung umkehrt, in allen Katalogen.
   **Abnahme:** Kabeldurchführung von innen auf einen Boden und an eine Seitenwand gesetzt, je
   ein Befund mit Handlung; danach sitzt der Block innen und der Boden auf dem Bett.
+
+<a id="rm-541"></a>
+
+- [ ] **RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer
+  Winkelbedingung.** `test_sketch_editor.py::test_the_angle_button_asks_for_its_degrees` setzt
+  45° und bekommt unter `macos-26-intel` 135°, unter Windows, Linux und macOS ARM 45° (Sonde
+  zu [RM-531](#rm-531), Lauf 37495714708). `least_squares` mit `method="trf"`
+  (`app/core/sketch/solver.py`) beginnt mit dem Vertrauensradius ‖x₀‖, und weil die
+  Unbekannten absolute Koordinaten sind, ist das in diesem Fall rund 13 mm: Der erste Schritt
+  reicht über beide Zweige, und welchen er trifft, entscheidet die Rechnung der Plattform.
+  Belegt ist der Radius, nicht die Rundung, die unter Intel kippt; an einem Intel-Rechner ist
+  nichts nachgerechnet. **Fix:** in Verschiebungen gegen den Ausgangsstand rechnen, damit der
+  erste Schritt am Zug hängt und nicht an der Lage des Ursprungs. Das ändert die Lösung
+  unterbestimmter Skizzen; deshalb vorher und nachher gegen die Skizzentests und die Budgets
+  aus §31 messen. **Abnahme:** der Test auf allen vier Plattformen grün, unterbestimmte Skizzen
+  bleiben am nächsten Stand zu ihrem Ausgang, die Laufzeit im Budget.
+
+<a id="rm-542"></a>
+
+- [ ] **RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration.** Das
+  [Konzept](konzepte/konzept-erstkonfiguration-2026-09.md) ist teilweise gebaut
+  (`app/ui/first_run.py`), seine Fragen an Robert standen in keinem Punkt: wie viele Schritte
+  der Erststart trägt; was mit einem Projekt geschieht, das einen anderen Slicer trägt, auch
+  wenn der hier fehlt; was bei leerem Filamentregal gilt; ob die Wahl am Drucker oder am
+  Projekt hängt; und was aus `slicer_filament_per_material` wird. Ob das Herstellerprofil
+  ([RM-281](#rm-281)) einige davon schon beantwortet, ist nicht belegt. **Zuerst** je Frage am
+  Code und an RM-281 prüfen, was heute gilt; **dann** entscheidet Robert den Rest.
+  **Abnahme:** je Frage eine datierte Entscheidung im Konzept und, wo sie Bau verlangt, die
+  Umsetzung oder ein eigener Punkt.
 
 ## Bedienung und Darstellung
 
@@ -3224,6 +3295,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   C14-Schritte 1–6, Raster nur unter Windows. Belege unter
   `F:\solidon-review-reports\codex-2026-10-03\bedienung\`: `rm213-capture-review.md`,
   `import-history-move.md` (C14).
+
+  **Dazu (RM-099, 07.10.2026):** die vier Handwege der Merkmalbedienung aus §4 ihres
+  [Konzepts](konzepte/konzept-merkmalbedienung-2026-09.md), die bisher kein Punkt führte:
+  Bohrung wählen, Maße in der Szene ändern und rechts übernehmen, die Maße stehen danach
+  noch; am Gizmo verschieben, die Maße stehen danach; am Langlochknopf ziehen, Länge und
+  Richtung rechts übernehmen, unten keine Leiste; eine neue Bohrung über das Menü wie bisher.
 
 <a id="rm-232"></a>
 
@@ -3859,23 +3936,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 ## Tests und Entwicklungswerkzeuge
 
-<a id="rm-099"></a>
-
-- [~] **RM-099 — Konzeptbestand und veraltete Verweise ordnen.** **Die Hälfte der Abnahme ist
-  erreicht:** `konzepte/README.md` führt 66 Ziele (80 Verweise), keines geht ins Leere; jede
-  Konzeptdatei steht im Index, und die 40 Konzeptziele aus `ROADMAP.md` lösen auf (nachgezählt
-  06.10.2026). „Alle Verweise gültig" ist damit eingelöst und gehört nicht mehr beauftragt.
-
-  Offen bleibt das **Umräumen**: Als überholt gekennzeichnet sind genau zwei Konzepte; einen
-  Ordner `konzepte/archiv/` gibt es nicht, eine eigene Notiz zur Weg-3-Lizenzentscheidung auch
-  nicht (sie steht nur als Fließtext in sechs Konzepten), und die beiden Bedienkonzepte unter
-  `.claude/` sind unarchiviert. Wie viel davon Robert archiviert haben will, ist eine
-  Entscheidung und keine Fleißarbeit — historische Begründungen bleiben in jedem Fall erhalten.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-  **Entschieden (Robert, 06.10.2026):** umräumen — erledigte und abgelöste Konzepte in
-  einen Unterordner, alle Verweise nachziehen, den Index aktuell halten.
-
 <a id="rm-103"></a>
 
 - [ ] **RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen.** Die großen
@@ -4090,7 +4150,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-531"></a>
 
-- [ ] **RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI.** Die
+- [~] **RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI.** Die
   Fenstergruppe läuft in der Release-CI nur unter Windows (Job `windows` in `build.yml`), Linux
   und macOS fahren nur die Fensterverträge (`--ci-group contracts`). Echte Slicer prüft keine CI:
   Erkennung, Herstellerbestand und Slicen unter Linux und macOS belegten bisher nur
@@ -4111,6 +4171,33 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Ein Tag-Lauf zeigt die Fenstergruppe auf drei Plattformen grün und je Plattform
   jeden installierbaren Slicer mit Druckerliste und Druckdatei; `test_packaging.py` hält die
   neuen Jobs im Vertrag.
+
+  **Entschieden (Robert, 06.10.2026):** Die Fenster- und Renderergruppe läuft auf allen vier
+  Paketplattformen (`windows-latest`, `ubuntu-24.04`, `macos-latest`, `macos-26-intel`) am Tag,
+  per Handstart und bei jedem Push auf main; Hausordnung und `/pruefen` ziehen nach, das lokale
+  Tor bleibt ohne Fenster. Die Abnahme gilt damit für vier Plattformen.
+
+  **Stand 07.10.2026:** Eine Sonde (Lauf 37495714708, `run_suite_isolated.py --release
+  --ci-group windowed`) fand außerhalb von Windows 31 rote Fälle in 23 Testfunktionen. Behoben
+  und über `fenster-auswahl.yml` auf allen vier Plattformen grün (Läufe 37556091095,
+  37560540258): Return öffnet am Mac den gewählten Listeneintrag (`return_opens` an
+  Startfläche, Befehlspalette und Prüfbericht, Anschlusstest und Wächter in
+  `test_native_keys.py`), die Befehlspalette misst ihre Kürzelspalte mit gebrochenen Metriken,
+  und zwölf Tests messen die Zusage statt einer Windows-Eigenheit (Aktualisierungsweg,
+  Kürzelschreibweise, Zeitgeber, Fäden, Kantenglättung, Menüeinzug). **Offen**, mit Plattform
+  (U Linux, A macOS ARM, I macOS Intel): `test_widget_lifetime[KeyDialog]` (UAI, einer von
+  zehn überlebt), `test_a_button_wraps_its_label_instead_of_cutting_it` (UAI, der Knopf bricht
+  nicht um), `test_no_element_of_the_bar_is_squeezed` (UAI, Felder 356/364 statt 398/404 px bei
+  1600 px), `test_a_long_setup_failure_stays_in_the_scroll_area` (UAI, kein Rollbalken bei 200
+  Zeilen), `test_the_sketch_area_fits_a_laptop_screen` (AI, 977 statt höchstens 900 px),
+  `test_the_left_column_shares_its_height_with_all_four` (AI, Objekte 104 px, Boden 182 px bei
+  900 px Fensterhöhe), `test_chat_setup_follows_late_status_text…` (AI, der Text des
+  Schlüsseldialogs ist 105 statt 120 px hoch und rollt nicht) und
+  `test_black_lit_surfaces_still_show_their_shape` (I, Kontrast genau 10 bei verlangten mehr
+  als 10; Renderer, RM-344). Jeder Fall wird zuerst am Paket seiner Plattform nachgestellt:
+  ob der Test irrt oder der Kunde es sieht. Die Winkelbedingung auf dem Intel-Mac führt
+  [RM-541](#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
+  `test_packaging.py`, der Slicer-Job und die Unterlagen.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

@@ -1930,7 +1930,16 @@ def test_the_active_tool_says_it_at_its_edge_and_no_longer_shouts(
     # Eine eigene Umfärbung hielt das zusammen und ist mit der gedämpften Fläche
     # weggefallen. Was sie ersetzt, ist diese Zeile: Beide Knöpfe schreiben in
     # derselben Farbe, also kann kein Zeichen mehr aus der Reihe fallen.
-    assert ink == calm_ink, (
+    #
+    # Verglichen wird über den Kontrast, nicht auf den Hexwert: Kantengeglättete
+    # Schrift erreicht ihre Farbe nur, wo der Strich voll deckt, und unter
+    # Linux mischt jeder Punkt etwas von seiner Fläche ein — #1f222a gegen
+    # #252736, Kontrast 1,08 (RM-531). Eine umgeschaltete Schrift läge im
+    # dunklen Thema bei Text gegen Auswahlschrift, und die Schwelle muss
+    # deutlich darunter bleiben, damit die Zeile etwas fängt.
+    switched = contrast_ratio(THEMES["dark"]["text"], THEMES["dark"]["highlight_text"])
+    assert switched > 4 * 1.25, f"die Schwelle fängt keine umgeschaltete Schrift ({switched:.2f})"
+    assert contrast_ratio(ink, calm_ink) < 1.25, (
         f"{theme}: der aktive Knopf schreibt in {ink}, der ruhende in {calm_ink} — "
         "wer die Schriftfarbe umschaltet, muss auch das Symbol umfärben"
     )
@@ -1956,16 +1965,25 @@ def test_a_meaning_paints_its_mark_and_leaves_the_sentence_alone(
     lesbar, wo er am dringendsten ist. Dieselbe Entscheidung wie im
     Prüfbericht, und aus demselben Grund.
 
-    Gesucht wird nach **Farbton** und nicht nach dem Hexwert: Ein einzelnes
-    Zeichen hat wenige Punkte, und Kantenglättung macht aus jedem davon einen
-    Zwischenton. Dieselbe Technik wie beim Fortschrittsbalken nebenan — und mit
-    derselben Falle: „irgendwie bunt" trifft auch den Grund. Die Fensterfläche
-    des dunklen Themas ist blaugrau und kam auf 31 104 Treffer, mehr als jeder
-    Text je hätte. Verglichen wird deshalb gegen den Ton, den **diese** Rolle
-    haben soll, und die Sättigung trennt ihn vom Grund (63 gegen 125 und 187).
+    **Verglichen wird Bild gegen Bild, nicht Farbton gegen Farbton.** Dieselbe
+    Zeile wird ein zweites Mal gezeichnet, als frische Zeile ohne ``set_role``
+    und ihr Auszeichnungstext ohne jede Auszeichnung; was sich unterscheidet,
+    ist genau das, was die Rolle einfärbt. Gezählte Farbtöne trafen unter Linux die Farbsäume der
+    Subpixel-Kantenglättung: Jeder Strich des Satzes bekam einen orangen Rand,
+    und der ungefärbte Satz kam auf mehr „warnfarbige" als gewöhnliche Punkte
+    (RM-531). Der Vergleich kennt keine Schrift und keine Glättung — gleich
+    gezeichnet heißt gleich.
+
+    Und ein drittes Bild, ebenfalls ohne ``set_role``, mit unverändertem
+    Auszeichnungstext: Es muss der Zeile gleichen. Was ``set_role`` neben dem
+    Text noch täte — eine Farbe am Label, eine Stilregel über die Eigenschaft
+    ``role`` —, fiele sonst nicht auf, beim Erfolg gar nicht (Review
+    06.10.2026, U2-N3).
     """
+    import math
+
     from PySide6.QtCore import Qt
-    from PySide6.QtGui import QColor
+    from PySide6.QtGui import QColor, QFontMetricsF, QImage
     from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
     from app.ui.palette import ROLE_MARKS, text_colour
@@ -1975,55 +1993,98 @@ def test_a_meaning_paints_its_mark_and_leaves_the_sentence_alone(
     before = qt_app.styleSheet()
     apply_theme(qt_app, theme)  # type: ignore[arg-type]
     apply_style(qt_app, theme)  # type: ignore[arg-type]
+    sentence = "Dieser Rechner ist noch nicht aktiviert."
 
-    def painted(role: str) -> tuple[int, int]:
-        """Punkte im Ton dieser Rolle und Punkte in gewöhnlicher Schrift."""
-        wanted = QColor(text_colour(role, THEMES[theme]["window"])) if role != "ok" else None
+    def drawn(role: str, way: str) -> tuple[QImage, float]:
+        """Die Zeile als Bild und die Breite ihres Zeichens samt Abstand.
+
+        ``bare`` und ``plain`` sind frische Zeilen ohne ``set_role``: ``bare``
+        mit dessen Auszeichnungstext, ``plain`` ohne jede Auszeichnung.
+        """
         host = QWidget()
         layout = QVBoxLayout(host)
         label = QLabel(host)
-        set_role(label, role, "Dieser Rechner ist noch nicht aktiviert.")
+        set_role(label, role, sentence)
+        if way != "role":
+            markup = label.text()
+            label.hide()
+            label = QLabel(host)
+            label.setTextFormat(Qt.TextFormat.RichText)
+            label.setText(markup if way == "bare" else re.sub(r"<[^>]+>", "", markup))
         layout.addWidget(label)
         host.resize(460, 60)
         host.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
         host.show()
         QApplication.processEvents()
         image = host.grab().toImage()
-        ink = QColor(THEMES[theme]["text"])
-        tinted = plain = 0
-        for y in range(image.height()):
-            for x in range(image.width()):
-                colour = QColor(image.pixel(x, y))
-                hue, saturation, _value, _alpha = colour.getHsv()
-                near = wanted is not None and abs(hue - wanted.hue()) <= 20
-                if near and saturation >= 100:
-                    tinted += 1
-                elif abs(colour.red() - ink.red()) < 40 and abs(colour.blue() - ink.blue()) < 40:
-                    plain += 1
+        mark = QFontMetricsF(label.font()).horizontalAdvance(ROLE_MARKS[role] + "\u00a0")
         host.close()
-        return tinted, plain
+        return image, mark
+
+    def differing(first: QImage, second: QImage) -> list[tuple[int, int]]:
+        assert first.size() == second.size()
+        return [
+            (x, y)
+            for y in range(first.height())
+            for x in range(first.width())
+            if first.pixel(x, y) != second.pixel(x, y)
+        ]
 
     try:
-        marks = {role: painted(role) for role in ROLE_MARKS}
+        pictures: dict[str, tuple[QImage, QImage, QImage, float]] = {}
+        for role in ROLE_MARKS:
+            image, mark = drawn(role, "role")
+            plain, _mark = drawn(role, "plain")
+            bare, _mark = drawn(role, "bare")
+            pictures[role] = (image, plain, bare, mark)
     finally:
         qt_app.setStyleSheet(before)
         apply_theme(qt_app, "dark")  # type: ignore[arg-type]
 
-    for role in ("warning", "info"):
-        tinted, plain = marks[role]
-        assert tinted > 0, f"{theme}: {role} zeichnet sein Zeichen ohne Farbe"
-        assert plain > tinted * 5, (
-            f"{theme}: {role} färbt den Satz mit ({plain} gewöhnliche gegen {tinted} farbige "
-            "Punkte) — die Farbe gehört dem Zeichen"
+    for role in ROLE_MARKS:
+        image, _plain, bare, _mark = pictures[role]
+        styled = differing(image, bare)
+        assert not styled, (
+            f"{theme}: set_role({role}) ändert neben seinem Text {len(styled)} Punkte — "
+            "eine Farbe an der Zeile oder eine Stilregel über role; die Farbe gehört dem Zeichen"
         )
+
+    for role in ("warning", "info"):
+        image, plain, _bare, mark = pictures[role]
+        tinted = differing(image, plain)
+        assert tinted, f"{theme}: {role} zeichnet sein Zeichen ohne Farbe"
+        wanted = QColor(text_colour(role, THEMES[theme]["window"]))
+        hued = [
+            point for point in tinted if abs(QColor(image.pixel(*point)).hue() - wanted.hue()) <= 20
+        ]
+        assert hued, f"{theme}: {role} färbt sein Zeichen, aber nicht in seiner Farbe"
+        left = min(x for x, _y in tinted)
+        reach = left + math.ceil(mark)
+        beyond = sorted({x for x, _y in tinted if x > reach})
+        assert not beyond, (
+            f"{theme}: {role} färbt den Satz mit (Spalten {beyond[:5]} … hinter dem "
+            f"Zeichen, das bei {reach} endet) — die Farbe gehört dem Zeichen"
+        )
+        ground = image.pixel(image.width() - 1, image.height() - 1)
+        written = sum(
+            1
+            for y in range(image.height())
+            for x in range(reach + 1, image.width())
+            if image.pixel(x, y) != ground
+        )
+        assert written > 50, f"{theme}: {role} — rechts vom Zeichen steht kein Satz"
 
     # **Und der Erfolg trägt gar keine.** Er verlangt nichts, er bestätigt; das
     # Zeichen ist die richtige Lautstärke und eine eigene Dauerfarbe die
     # falsche. Wer hier ein Grün nachrüstet, macht diesen Test rot — und das
     # ist der Zweck der Zeile.
-    tinted, plain = marks["ok"]
-    assert tinted == 0, f"{theme}: der Erfolg leuchtet ({tinted} farbige Punkte)"
-    assert plain > 0, f"{theme}: der Erfolg zeichnet gar nichts"
+    image, plain, _bare, _mark = pictures["ok"]
+    lit = differing(image, plain)
+    assert not lit, f"{theme}: der Erfolg leuchtet ({len(lit)} farbige Punkte)"
+    ground = image.pixel(image.width() - 1, image.height() - 1)
+    assert any(
+        image.pixel(x, y) != ground for y in range(image.height()) for x in range(image.width())
+    ), f"{theme}: der Erfolg zeichnet gar nichts"
 
 
 def test_a_meaning_can_no_longer_be_set_as_a_loudness(qt_app: QApplication) -> None:

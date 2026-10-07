@@ -75,7 +75,15 @@ from typing import Any, Final, Literal, NamedTuple
 import numpy as np
 
 from app.core import units
-from app.core.geom.mesh import MeshData, unique_edges
+from app.core.geom.mesh import (
+    MeshData,
+    periodic_sin_cos,
+    shift_body,
+    stable_arccos,
+    stable_arctan2,
+    stable_normals,
+    unique_edges,
+)
 from app.core.types import Feature, FeatureId, MeasureSource, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -169,11 +177,12 @@ SAME_MEASURE: Final = 0.05
 #: Weltachse und keiner Ebene aus zwei davon in einem runden Winkel — um Z
 #: und um X projiziert unter 58,28 Grad, um Y unter 69,09 Grad.
 _GOLDEN: Final = (1.0 + math.sqrt(5.0)) / 2.0
-_GOLDEN_LENGTH: Final = math.sqrt(1.0 + _GOLDEN**2 + _GOLDEN**4)
+_GOLDEN_SQUARE: Final = _GOLDEN * _GOLDEN
+_GOLDEN_LENGTH: Final = math.sqrt(1.0 + _GOLDEN_SQUARE + _GOLDEN_SQUARE * _GOLDEN_SQUARE)
 SEAM_DIRECTION: Final[tuple[float, float, float]] = (
     1.0 / _GOLDEN_LENGTH,
     _GOLDEN / _GOLDEN_LENGTH,
-    _GOLDEN**2 / _GOLDEN_LENGTH,
+    _GOLDEN_SQUARE / _GOLDEN_LENGTH,
 )
 
 #: Ab welcher Richtungsänderung eine Ecke des Mündungsumrisses zählt — fünf
@@ -722,7 +731,7 @@ def _anchor_of(pattern: Pattern) -> Vec3:
     Stummel — bei unveränderter Teilung (Review, 22.09.2026).
     """
     centre = np.asarray(pattern.centre, dtype=float)
-    distances = [float(np.linalg.norm(cell.centre - centre)) for cell in pattern.cells]
+    distances = [math.hypot(*(cell.centre - centre)) for cell in pattern.cells]
     # **Gleich nahe Zellen unterscheidet die Rundung nicht** (RM-275): Hat das
     # Feld eine gerade Zellenzahl, liegt seine Mitte zwischen zwei oder vier
     # Zellen, und die nächste war die mit dem kleineren Rundungsrest — nach
@@ -733,7 +742,7 @@ def _anchor_of(pattern: Pattern) -> Vec3:
         cell for cell, distance in zip(pattern.cells, distances, strict=True) if distance <= reach
     ]
     towards = np.asarray(SEAM_DIRECTION, dtype=float)
-    chosen = max(tied, key=lambda cell: float((cell.centre - centre) @ towards))
+    chosen = max(tied, key=lambda cell: units.dot3(cell.centre - centre, towards))
     return _vec(chosen.centre)
 
 
@@ -1212,16 +1221,14 @@ def _cell_floors(
         for second in pins[position + 1 :]:
             one, other = owned[names[first]].params, owned[names[second]].params
             axis = np.asarray(one.get("axis", (0.0, 0.0, 0.0)), dtype=float)
-            if abs(float(axis @ np.asarray(other.get("axis", (0.0, 0.0, 0.0)), dtype=float))) < (
-                1.0 - SAME_MEASURE
-            ):
+            if abs(units.dot3(axis, other.get("axis", (0.0, 0.0, 0.0)))) < 1.0 - SAME_MEASURE:
                 continue
             radius = float(one.get("diameter", 0.0)) / 2.0
             offset = np.asarray(other.get("centre", (0.0, 0.0, 0.0)), dtype=float) - np.asarray(
                 one.get("centre", (0.0, 0.0, 0.0)), dtype=float
             )
-            beside = offset - axis * float(offset @ axis)
-            if float(np.linalg.norm(beside)) > SAME_MEASURE * radius + units.MAX_FACET_SAG:
+            beside = offset - axis * units.dot3(offset, axis)
+            if math.hypot(*beside) > SAME_MEASURE * radius + units.MAX_FACET_SAG:
                 continue
             if max(pieces[first], pieces[second]) < MIN_STRIPS:
                 continue
@@ -1476,8 +1483,7 @@ class _CellMeasure:
         self.owner = owner
         self.triangles = np.asarray(body.faces, dtype=np.int64)
         self.points = np.asarray(body.vertices, dtype=float)
-        self.triangle_normals = np.asarray(body.face_normals, dtype=float)
-        self.triangle_areas = np.asarray(body.area_faces, dtype=float)
+        self.triangle_normals, self.triangle_areas = stable_normals(body)
         self.normals = {
             name: np.asarray(feature.params.get("normal", (0.0, 0.0, 0.0)), dtype=float)
             for name, feature in owned.items()
@@ -1497,7 +1503,7 @@ class _CellMeasure:
                 return None
             # Zwei Träger sind nur dann eine durchgehende Zelle, wenn sie
             # einander gegenüberliegen; sonst ist es eine Ecke.
-            if float(first @ second) > -1.0 + SAME_MEASURE:
+            if units.dot3(first, second) > -1.0 + SAME_MEASURE:
                 return None
             through = True
             carrier = _front_carrier(carrier, self.normals, self.owned)
@@ -1533,9 +1539,9 @@ class _CellMeasure:
         if feature.kind == "pin":
             axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 0.0)), dtype=float)
             radius = float(feature.params.get("diameter", 0.0)) / 2.0
-            if float(np.linalg.norm(axis)) < EPS_GEOM or radius <= EPS_GEOM:
+            if math.hypot(*axis) < EPS_GEOM or radius <= EPS_GEOM:
                 return None
-            axis = axis / float(np.linalg.norm(axis))
+            axis = axis / math.hypot(*axis)
             if reference is None:
                 reference = _plane_axes(axis)[0]
             frame = Frame.cylinder(
@@ -1549,7 +1555,7 @@ class _CellMeasure:
             sag = _facet_sag(frame, self.points, self.triangles[indices])
             return dataclasses.replace(frame, sag=sag)
         normal = self.normals.get(name)
-        if normal is None or float(np.linalg.norm(normal)) < EPS_GEOM:
+        if normal is None or math.hypot(*normal) < EPS_GEOM:
             return None
         return Frame.plane(normal)
 
@@ -1571,11 +1577,23 @@ class _CellMeasure:
         )
         flat, _heights = frame.developed(centroids)
         reference = _seam_reference(flat[:, 0] / frame.radius, _seam_toward(frame))
-        x_axis = frame.x_axis * math.cos(reference) + frame.y_axis * math.sin(reference)
+        x_axis = frame.x_axis * units.exact_cos(reference) + frame.y_axis * units.exact_sin(
+            reference
+        )
         seamed = self._frame_for(name, reference=x_axis)
         if seamed is not None:
             self.frames[name] = seamed
             self.seamed.add(name)
+
+
+def _flat_along(points: np.ndarray, direction: np.ndarray) -> np.ndarray:
+    """``points @ direction`` in den zwei Achsen der Abwicklung — ohne BLAS (RM-187).
+
+    Zwei Produkte und eine Summe je Punkt, jede als eigene NumPy-Operation:
+    das zweidimensionale Gegenstück zu :func:`app.core.geom.transform.along`.
+    """
+    raw = np.asarray(points, dtype=np.float64)
+    return np.asarray(raw[..., 0] * float(direction[0]) + raw[..., 1] * float(direction[1]))
 
 
 def _seam_toward(frame: Frame) -> float:
@@ -1586,10 +1604,10 @@ def _seam_toward(frame: Frame) -> float:
     Mantels. Steht die Achse genau in dieser Richtung, gilt die erste Achse.
     """
     towards = np.asarray(SEAM_DIRECTION, dtype=float)
-    across = towards - frame.normal * float(towards @ frame.normal)
-    if float(np.linalg.norm(across)) < EPS_GEOM:
+    across = towards - frame.normal * units.dot3(towards, frame.normal)
+    if math.hypot(*across) < EPS_GEOM:
         return 0.0
-    return math.atan2(float(across @ frame.y_axis), float(across @ frame.x_axis))
+    return units.exact_atan2(units.dot3(across, frame.y_axis), units.dot3(across, frame.x_axis))
 
 
 def _seam_reference(angles: np.ndarray, toward: float) -> float:
@@ -1632,15 +1650,13 @@ def _carriers_of(
     if any(owned[name].kind != "face" for name in carrier):
         return carrier if len(carrier) == 1 else None
     first = normals[carrier[0]]
-    if float(np.linalg.norm(first)) < EPS_GEOM:
+    if math.hypot(*first) < EPS_GEOM:
         return None
     if owners.size == 2:
         second = normals[carrier[1]]
-        if float(np.linalg.norm(second)) < EPS_GEOM:
+        if math.hypot(*second) < EPS_GEOM:
             return None
-        alignment = float(first @ second) / (
-            float(np.linalg.norm(first)) * float(np.linalg.norm(second))
-        )
+        alignment = units.dot3(first, second) / (math.hypot(*first) * math.hypot(*second))
         if alignment > -1.0 + SAME_MEASURE:
             return None
     return carrier
@@ -1687,7 +1703,7 @@ def _measure_cell(
     # Rauten eines Kreuzrändels unter die Mitte (22.09.2026).
     centroids = frame.developed(points[triangles[indices]].mean(axis=1))[1]
     weights = triangle_areas[indices]
-    level = float(centroids @ weights / max(float(weights.sum()), EPS_GEOM))
+    level = float((centroids * weights).sum()) / max(float(weights.sum()), EPS_GEOM)
     raised = not through and level > (top + bottom) / 2.0
     plane = bottom if raised else top
     # Am Zylinder liegen die Ecken der Mündung auf seinen Facetten, und die
@@ -1776,7 +1792,7 @@ def _round_member(feature: Feature, frame: Frame) -> bool:
         return False
     if frame.kind == "cylinder" and feature.kind in {"hole", "pin"}:
         axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 0.0)), dtype=float)
-        if abs(float(axis @ frame.normal)) >= 1.0 - SAME_MEASURE:
+        if abs(units.dot3(axis, frame.normal)) >= 1.0 - SAME_MEASURE:
             return False
     return True
 
@@ -1848,11 +1864,15 @@ def _straight_share(
     als Flanke und sähe allein wie eine Welle aus. ``axis_world`` ist die
     Streifenachse in der Welt — am Zylinder die Tangente an der Zelle.
     """
+    from app.core.geom.transform import along
+
     normals_here = triangle_normals[indices]
-    walls = np.abs(normals_here @ normal) < 0.5
+    walls = np.abs(along(normals_here, normal)) < 0.5
     if not walls.any():
         return 1.0, 0.0
-    parallel = np.abs(normals_here[walls] @ axis_world) <= units.exact_sin_degrees(CORNER_DEGREES)
+    parallel = np.abs(along(normals_here[walls], axis_world)) <= units.exact_sin_degrees(
+        CORNER_DEGREES
+    )
     total = float(triangle_areas[indices][walls].sum())
     if total <= EPS_GEOM:
         return 1.0, 0.0
@@ -1953,7 +1973,7 @@ class Frame:
     @classmethod
     def plane(cls, normal: np.ndarray) -> Frame:
         unit = np.asarray(normal, dtype=float)
-        unit = unit / max(float(np.linalg.norm(unit)), EPS_GEOM)
+        unit = unit / max(math.hypot(*unit), EPS_GEOM)
         x_axis, y_axis = _plane_axes(unit)
         return cls(kind="plane", normal=unit, x_axis=x_axis, y_axis=y_axis, origin=np.zeros(3))
 
@@ -2007,17 +2027,24 @@ class Frame:
         ``±π·R`` — im Blatt des Trägers an derselben Stelle. Wer viele Zellen
         auf einmal fragt, fragt sie deshalb einzeln.
         """
+        from app.core.geom.transform import along as lying_along
+
         points = np.atleast_2d(np.asarray(points, dtype=float))
         if self.kind == "plane":
-            flat = np.column_stack((points @ self.x_axis, points @ self.y_axis))
-            return flat, points @ self.normal
+            flat = np.column_stack(
+                (lying_along(points, self.x_axis), lying_along(points, self.y_axis))
+            )
+            return flat, lying_along(points, self.normal)
+        # Lagen, Winkel und Mitte ohne BLAS und ohne die Winkelfunktionen der
+        # Plattform (RM-187): Die Abwicklung wird zu Geometrie, wenn ein Muster
+        # neu gezeichnet oder ein Stopfen auf den Mantel gelegt wird.
         offset = points - self.origin
-        along = offset @ self.normal
+        along = lying_along(offset, self.normal)
         radial = offset - np.outer(along, self.normal)
         reach = np.linalg.norm(radial, axis=1)
-        cosines, sines = radial @ self.x_axis, radial @ self.y_axis
-        theta = np.arctan2(sines, cosines)
-        middle = math.atan2(float(sines.sum()), float(cosines.sum()))
+        cosines, sines = lying_along(radial, self.x_axis), lying_along(radial, self.y_axis)
+        theta = stable_arctan2(sines, cosines)
+        middle = float(stable_arctan2(float(sines.sum()), float(cosines.sum())))
         theta = middle + (theta - middle + math.pi) % (2.0 * math.pi) - math.pi
         return np.column_stack((theta * self.radius, along)), reach - self.radius
 
@@ -2040,7 +2067,8 @@ class Frame:
                 + np.outer(heights, self.normal)
             )
         theta = flat[:, 0] / self.radius
-        radial = np.outer(np.cos(theta), self.x_axis) + np.outer(np.sin(theta), self.y_axis)
+        sines, cosines = periodic_sin_cos(theta)
+        radial = np.outer(cosines, self.x_axis) + np.outer(sines, self.y_axis)
         base = self._facet_radius(theta) if faceted else self.radius
         points = (
             self.origin + np.outer(flat[:, 1], self.normal) + radial * (base + heights)[:, None]
@@ -2106,7 +2134,7 @@ class Frame:
         chosen = np.where(past >= corners[before], after, before)
         gap = np.abs((angles[chosen] - wrapped + math.pi) % (2.0 * math.pi) - math.pi)
         step = float(np.median(np.diff(angles))) if len(angles) > 1 else math.pi
-        away = np.cos(wrapped - angles[chosen])
+        away = periodic_sin_cos(wrapped - angles[chosen])[1]
         base = offsets[chosen] / np.maximum(away, EPS_GEOM)
         return np.where(gap <= step, base, self.radius)
 
@@ -2115,14 +2143,14 @@ class Frame:
         if self.kind == "plane":
             return self.normal
         theta = float(flat[0]) / self.radius
-        return self.x_axis * math.cos(theta) + self.y_axis * math.sin(theta)
+        return self.x_axis * units.exact_cos(theta) + self.y_axis * units.exact_sin(theta)
 
     def tangent(self, flat: np.ndarray, direction: np.ndarray) -> np.ndarray:
         """Eine Richtung der Abwicklung als Richtung in der Welt, an dieser Stelle."""
         if self.kind == "plane":
             return self.x_axis * float(direction[0]) + self.y_axis * float(direction[1])
         theta = float(flat[0]) / self.radius
-        around = -self.x_axis * math.sin(theta) + self.y_axis * math.cos(theta)
+        around = -self.x_axis * units.exact_sin(theta) + self.y_axis * units.exact_cos(theta)
         return around * float(direction[0]) + self.normal * float(direction[1])
 
     def placed(self, body: Any, *, faceted: bool = False) -> Any:
@@ -2731,14 +2759,14 @@ class _Outline:
             points=polygon,
             edges=edges,
             lengths=np.linalg.norm(edges, axis=1),
-            angles=np.arctan2(edges[:, 1], edges[:, 0]),
+            angles=stable_arctan2(edges[:, 1], edges[:, 0]),
         )
 
     @property
     def area(self) -> float:
         """Schnürsenkel — die Fläche des geschlossenen Umrisses."""
         x, y = self.points[:, 0], self.points[:, 1]
-        return float(abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))) / 2.0)
+        return abs(float((x * np.roll(y, -1)).sum()) - float((y * np.roll(x, -1)).sum())) / 2.0
 
     @property
     def centroid(self) -> np.ndarray:
@@ -2765,7 +2793,7 @@ class _Outline:
     def longest_edge(self) -> np.ndarray:
         """Die Richtung der längsten Kante, als Einheitsvektor."""
         longest = self.edges[int(np.argmax(self.lengths))]
-        return np.asarray(longest / max(float(np.linalg.norm(longest)), EPS_GEOM), dtype=float)
+        return np.asarray(longest / max(math.hypot(*longest), EPS_GEOM), dtype=float)
 
     @property
     def turns(self) -> np.ndarray:
@@ -2857,8 +2885,8 @@ def _style_of(
     if corners == 4 and len(sides) == 4:
         points = outline.corner_points()
         diagonals = (
-            float(np.linalg.norm(points[2] - points[0])),
-            float(np.linalg.norm(points[3] - points[1])),
+            math.hypot(*(points[2] - points[0])),
+            math.hypot(*(points[3] - points[1])),
         )
         if _all_alike(sides) and _all_alike(diagonals):
             return "knurl_diamond"
@@ -3018,7 +3046,7 @@ def _grid_of(flat: np.ndarray) -> tuple[str, float, float] | None:
     if float(regular.mean()) < REGULAR_SHARE:
         return None
     vectors = flat[neighbours[:, 1]] - flat
-    angles = np.degrees(np.arctan2(vectors[regular, 1], vectors[regular, 0]))
+    angles = np.degrees(stable_arctan2(vectors[regular, 1], vectors[regular, 0]))
     lattice, angle = _fold_directions(angles)
     if lattice is None:
         return None
@@ -3038,13 +3066,13 @@ def _rows_of(group: Sequence[Cell], *, least: int = MIN_STRIPS) -> tuple[str, fl
     """
     axes = np.array([cell.axis for cell in group], dtype=float)
     # Achsen gleichrichten, sonst hebt sich das Mittel auf.
-    axes[axes @ axes[0] < 0.0] *= -1.0
+    axes[_flat_along(axes, axes[0]) < 0.0] *= -1.0
     axis = axes.mean(axis=0)
-    length = float(np.linalg.norm(axis))
+    length = math.hypot(*axis)
     if length <= EPS_GEOM:
         return None
     axis /= length
-    deviation = np.degrees(np.arccos(np.clip(axes @ axis, -1.0, 1.0)))
+    deviation = np.degrees(stable_arccos(_flat_along(axes, axis)))
     if float(deviation.max()) > SAME_DIRECTION_DEGREES:
         return None
     across = np.array([-axis[1], axis[0]])
@@ -3057,7 +3085,7 @@ def _rows_of(group: Sequence[Cell], *, least: int = MIN_STRIPS) -> tuple[str, fl
     regular = np.abs(steps - spacing) <= SAME_MEASURE * spacing
     if float(regular.mean()) < REGULAR_SHARE:
         return None
-    angle = round(math.degrees(math.atan2(float(across[1]), float(across[0]))), 6) % 180.0
+    angle = round(units.exact_atan2_degrees(float(across[1]), float(across[0])), 6) % 180.0
     return "linear", 0.0 if angle >= 180.0 - 1e-6 else angle, spacing
 
 
@@ -3066,16 +3094,15 @@ def _strip_position(cell: Cell, axis: np.ndarray, across: np.ndarray) -> float:
     edges = np.roll(cell.outline, -1, axis=0) - cell.outline
     lengths = np.linalg.norm(edges, axis=1)
     along = lengths > EPS_GEOM
-    along[along] = np.abs(edges[along] @ axis) / lengths[along] >= units.exact_cos_degrees(
-        CORNER_DEGREES
-    )
+    reach = np.abs(_flat_along(edges[along], axis))
+    along[along] = reach / lengths[along] >= units.exact_cos_degrees(CORNER_DEGREES)
     if not along.any():
-        return float(cell.flat_centre @ across)
+        return float(_flat_along(cell.flat_centre, across))
     # Die zwei Randlinien des Streifens sind die äußersten Kanten; ihre Mitte
     # ist die Mittellinie — nicht ein Mittel über Kantenlängen, das an einem
     # abgeschnittenen Streifen zur längeren Kante zöge.
     midpoints = (cell.outline[along] + np.roll(cell.outline, -1, axis=0)[along]) / 2.0
-    offsets = midpoints @ across
+    offsets = _flat_along(midpoints, across)
     return float(offsets.min() + offsets.max()) / 2.0
 
 
@@ -3091,7 +3118,8 @@ def _fold_directions(angles: np.ndarray) -> tuple[str | None, float]:
     """
     for lattice, period in (("linear", 180.0), ("square", 90.0), ("hexagonal", 60.0)):
         folded = np.radians(angles % period) * (360.0 / period)
-        mean = math.atan2(float(np.sin(folded).mean()), float(np.cos(folded).mean()))
+        sines, cosines = periodic_sin_cos(folded)
+        mean = units.exact_atan2(float(sines.mean()), float(cosines.mean()))
         spread = np.degrees(np.abs((folded - mean + math.pi) % (2 * math.pi) - math.pi)) / (
             360.0 / period
         )
@@ -3139,8 +3167,10 @@ def _field(
     )
     _area, width, height, middle, angle, style = chosen
     frame = first.frame
-    radians = math.radians(lattice_angle)
-    direction = frame.tangent(middle, np.array([math.cos(radians), math.sin(radians)]))
+    direction = frame.tangent(
+        middle,
+        np.array([units.exact_cos_degrees(lattice_angle), units.exact_sin_degrees(lattice_angle)]),
+    )
     return Pattern(
         style=style,
         cells=tuple(cells),
@@ -3190,8 +3220,8 @@ def _box(outlines: np.ndarray, angle: float) -> tuple[float, float, float, np.nd
     """
     along = np.array([units.exact_cos_degrees(angle), units.exact_sin_degrees(angle)])
     across = np.array([-along[1], along[0]])
-    reach_u = outlines @ along
-    reach_v = outlines @ across
+    reach_u = _flat_along(outlines, along)
+    reach_v = _flat_along(outlines, across)
     width = float(reach_u.max() - reach_u.min())
     height = float(reach_v.max() - reach_v.min())
     middle = (
@@ -3224,8 +3254,8 @@ def _belongs_to(cell: Cell, pattern: Pattern) -> bool:
     middle = pattern.frame.developed(np.asarray(pattern.centre, dtype=float))[0][0]
     offset = cell.flat_centre - middle
     return (
-        abs(float(offset @ along)) <= pattern.width / 2.0 + pattern.pitch
-        and abs(float(offset @ across)) <= pattern.height / 2.0 + pattern.pitch
+        abs(float(_flat_along(offset, along))) <= pattern.width / 2.0 + pattern.pitch
+        and abs(float(_flat_along(offset, across))) <= pattern.height / 2.0 + pattern.pitch
     )
 
 
@@ -3378,7 +3408,7 @@ def mouths_of(
     if indices.size == 0:
         return []
     normal = np.asarray(feature.params.get("normal", (0.0, 0.0, 1.0)), dtype=float)
-    if float(np.linalg.norm(normal)) <= EPS_GEOM:
+    if math.hypot(*normal) <= EPS_GEOM:
         return []
     frame = frame_for(feature, mesh, features)
     lift = float(
@@ -3495,7 +3525,7 @@ def plug_for(
             # nur an den Ecken gebogen wurde, hat seinen Boden in der Mitte
             # der Zelle um so viel tiefer als am Rand.
             low, _low_v, high, _high_v = mouth.polygon.bounds
-            reach += (high - low) ** 2 / (8.0 * frame.radius)
+            reach += (high - low) * (high - low) / (8.0 * frame.radius)
         height = mouth.depth if through else mouth.depth + BOOLEAN_OVERLAP + reach
         polygon = _mouth_with_margin(mouth, frame)
         middle = float(polygon.centroid.x)
@@ -3514,11 +3544,15 @@ def plug_for(
                 # Der gemessene Mantel begrenzt diesen Stopfen anschließend
                 # exakt. Der zusätzliche Hub deckt die Sehne seiner gebogenen
                 # Dreiecke auf beiden Seiten der Trägerfacette.
-                prism.apply_scale((1.0, 1.0, (height + frame.clearance) / height))
+                # Elementweise statt ``apply_scale``: Das ginge als Matrix
+                # durch BLAS (RM-187).
+                prism.vertices = np.asarray(prism.vertices, dtype=float) * np.array(
+                    [1.0, 1.0, (height + frame.clearance) / height]
+                )
                 bottom = lift - frame.clearance if raised else lift - height
             else:
                 bottom = lift if raised else lift - height
-            prism.apply_translation((0.0, 0.0, bottom))
+            shift_body(prism, (0.0, 0.0, bottom))
             parts.append(prism)
     if not parts:
         return None
@@ -3537,7 +3571,8 @@ def cylinder_envelope(
     angles, _offsets, corners = frame.facets
     theta = angles + corners
     radius = frame._facet_radius(theta)
-    polygon = Polygon(np.column_stack((np.cos(theta) * radius, np.sin(theta) * radius)))
+    sines, cosines = periodic_sin_cos(theta)
+    polygon = Polygon(np.column_stack((cosines * radius, sines * radius)))
     body = _extruded(polygon, frame.span[1] - frame.span[0])
     if body is None:
         return None
@@ -3569,18 +3604,18 @@ def carrier_of(feature: Feature, features: Mapping[FeatureId, Feature]) -> Featu
     if params.get("carrier") == "cylinder":
         return _cylinder_carrier_of(feature, features)
     normal = np.asarray(params.get("normal", (0.0, 0.0, 1.0)), dtype=float)
-    normal = normal / max(float(np.linalg.norm(normal)), EPS_GEOM)
-    lift = float(np.asarray(params.get("centre", (0.0, 0.0, 0.0)), dtype=float) @ normal)
+    normal = normal / max(math.hypot(*normal), EPS_GEOM)
+    lift = units.dot3(params.get("centre", (0.0, 0.0, 0.0)), normal)
     depth = float(params.get("cell_depth", 0.0))
     best: Feature | None = None
     for candidate in features.values():
         if candidate.kind != "face" or not candidate.face_indices:
             continue
         other = np.asarray(candidate.params.get("normal", (0.0, 0.0, 0.0)), dtype=float)
-        if float(other @ normal) < 1.0 - SAME_MEASURE:
+        if units.dot3(other, normal) < 1.0 - SAME_MEASURE:
             continue
         centre = np.asarray(candidate.params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
-        if abs(float(centre @ normal) - lift) > _flat_tolerance(depth) + units.MAX_FACET_SAG:
+        if abs(units.dot3(centre, normal) - lift) > _flat_tolerance(depth) + units.MAX_FACET_SAG:
             continue
         # Gerundet wie im Nummernschlüssel: Bei zwei gleich großen Flächen
         # bleibt die mit der kleineren Nummer, nicht die mit der größeren
@@ -3602,15 +3637,15 @@ def _cylinder_carrier_of(feature: Feature, features: Mapping[FeatureId, Feature]
         if candidate.kind != "pin" or not candidate.face_indices:
             continue
         axis = np.asarray(candidate.params.get("axis", (0.0, 0.0, 0.0)), dtype=float)
-        if abs(float(axis @ frame.normal)) < 1.0 - SAME_MEASURE:
+        if abs(units.dot3(axis, frame.normal)) < 1.0 - SAME_MEASURE:
             continue
         other = float(candidate.params.get("diameter", 0.0))
         if abs(other - diameter) > SAME_MEASURE * max(other, diameter, EPS_GEOM):
             continue
         centre = np.asarray(candidate.params.get("centre", (0.0, 0.0, 0.0)), dtype=float)
         offset = centre - frame.origin
-        beside = offset - frame.normal * float(offset @ frame.normal)
-        if float(np.linalg.norm(beside)) > SAME_MEASURE * frame.radius + units.MAX_FACET_SAG:
+        beside = offset - frame.normal * units.dot3(offset, frame.normal)
+        if math.hypot(*beside) > SAME_MEASURE * frame.radius + units.MAX_FACET_SAG:
             continue
         if best is None or len(candidate.face_indices) > len(best.face_indices):
             best = candidate
@@ -3639,20 +3674,16 @@ class Field:
     around: float = 0.0
     """Der Umfang, wenn das Feld einmal um den Zylinder reicht — sonst null."""
 
-    def _turn(self) -> np.ndarray:
-        radians = math.radians(self.angle)
-        return np.array(
-            [
-                [math.cos(radians), -math.sin(radians)],
-                [math.sin(radians), math.cos(radians)],
-            ]
-        )
+    def _turn(self) -> tuple[float, float]:
+        """Kosinus und Sinus der Felddrehung — plattformgleich (RM-187)."""
+        return units.exact_cos_degrees(self.angle), units.exact_sin_degrees(self.angle)
 
     def flat(self, point: Vec3) -> tuple[float, float]:
         """Ein Weltpunkt in den Achsen des Feldes."""
         developed = self.frame.developed(np.asarray(point, dtype=float))[0][0] - self.middle
-        local = self._turn().T @ developed
-        return float(local[0]), float(local[1])
+        cos, sin = self._turn()
+        x, y = float(developed[0]), float(developed[1])
+        return cos * x + sin * y, cos * y - sin * x
 
     def placed(self, tool: MeshData, *, beyond: float = 0.0) -> MeshData:
         """Ein flacher Körper aus den Achsen des Feldes in die Welt.
@@ -3669,7 +3700,9 @@ class Field:
         import trimesh
 
         vertices = np.asarray(tool.raw.vertices, dtype=float)
-        developed = vertices[:, :2] @ self._turn().T + self.middle
+        cos, sin = self._turn()
+        x, y = vertices[:, 0], vertices[:, 1]
+        developed = np.column_stack((cos * x - sin * y, sin * x + cos * y)) + self.middle
         if beyond > 0.0 and self.frame.span is not None:
             developed = _through_the_ends(
                 developed,

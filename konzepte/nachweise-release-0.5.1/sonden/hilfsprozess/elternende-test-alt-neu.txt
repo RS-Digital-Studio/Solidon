@@ -1,0 +1,29 @@
+Lebenszyklustest vorher und nachher, verschränkt im selben Fenster, 06.10.2026.
+
+alt: Worktree auf d25f12366 (Test mit Frist: Helfer binnen 10 s fort).
+neu: Hauptbaum mit dem Patch dieser Einheit (Zusicherung des eingeleiteten
+     Endes, Abbau in normaler Klasse, Meldedateien bis zur Frist gelesen).
+Je Lauf ein Prozess:
+  python -m pytest -q -p no:cacheprovider \
+    tests/test_kernel_process_lifecycle.py::test_active_helper_ends_with_a_killed_parent
+Exit direkt nach dem Lauf gelesen; Last = Win32_Processor.LoadPercentage
+unmittelbar danach (fremde Tore und eine Agenten-Suite liefen nebenher).
+
+19:45:51  Runde 1  alt  Exit 1  Last 100 %  1 failed in 34.14s  — Zusicherung Zeile 308 (Helfer nach 10 s nicht fort); Abbau Zeile 116 (TerminateProcess 5, nach 10 s nicht fort)
+19:46:14  Runde 1  neu  Exit 0  Last 100 %  1 passed in 9.01s
+19:46:53  Runde 2  alt  Exit 1  Last 100 %  1 failed in 21.22s  — Zusicherung Zeile 308 (Helfer nach 10 s nicht fort)
+19:47:18  Runde 2  neu  Exit 0  Last 100 %  1 passed in 9.62s
+19:47:59  Runde 3  alt  Exit 0  Last 100 %  1 passed in 17.64s
+19:48:31  Runde 3  neu  Exit 0  Last 100 %  1 passed in 11.54s
+19:49:17  Runde 4  alt  Exit 0  Last 100 %  1 passed in 21.92s
+19:50:00  Runde 4  neu  Exit 0  Last 100 %  1 passed in 20.22s
+19:51:00  Runde 5  alt  Exit 1  Last 100 %  1 failed in 36.45s  — Zusicherung Zeile 308 (Helfer nach 10 s nicht fort)
+19:51:36  Runde 5  neu  Exit 0  Last 100 %  1 passed in 19.34s
+19:52:32  Runde 6  alt  Exit 1  Last 100 %  1 failed in 34.99s  — Zusicherung Zeile 308 (Helfer nach 10 s nicht fort); Abbau Zeile 116 (TerminateProcess 5, nach 10 s nicht fort)
+19:53:08  Runde 6  neu  Exit 0  Last 100 %  1 passed in 11.07s
+19:54:05  Runde 7  alt  Exit 1  Last 100 %  1 failed in 29.12s  — Zusicherung Zeile 308 (Helfer nach 10 s nicht fort)
+19:54:53  Runde 7  neu  Exit 0  Last 100 %  1 passed in 22.60s
+19:55:55  Runde 8  alt  Exit 1  Last 100 %  1 failed in 35.84s  — Zusicherung Zeile 308 (Helfer nach 10 s nicht fort); Abbau Zeile 116 (TerminateProcess 5, nach 10 s nicht fort)
+19:56:29  Runde 8  neu  Exit 0  Last 100 %  1 passed in 14.06s
+
+Ergebnis: alt 6 von 8 rot, neu 8 von 8 grün.

@@ -10,7 +10,7 @@
 >
 > Dieses Dokument ist die fachliche Grundlage; die Arbeitspakete in §6 sind
 > commit-fähig und gehören ins Register von `ROADMAP.md`, nicht hierher. Es
-> ergänzt `konzept-veroeffentlichung-1.0.md` (§2 D, Rollenentscheidung Merchant
+> ergänzt `archiv/konzept-veroeffentlichung-1.0.md` (§2 D, Rollenentscheidung Merchant
 > of Record) und `konzept-aktivierungsserver-2026-08.md` (B2, der Kauffluss);
 > **keines von beiden wird hier umgeworfen.**
 >
@@ -30,7 +30,7 @@ Sieben Befunde, jeder mit Beleg. Sie tragen die Entscheidungen in §2.
 Stellen „Version 1.0 ist für den 1. November 2026 geplant. Sie ist noch kein
 Angebot; Preis und Vertragsbedingungen werden vor ihrem Angebot
 veröffentlicht" (`website/index.html:713`, `:318`, `:812`). Die 69 € in
-`konzept-veroeffentlichung-1.0.md:274` stehen dort als „der Preis, den die
+`archiv/konzept-veroeffentlichung-1.0.md:274` stehen dort als „der Preis, den die
 Seite heute nennt" und sind überholt; die 49/79 € weiter oben hat das Konzept
 selbst als überholt markiert. **Die Preisstaffel bricht also keine
 Ankündigung** — und weil noch kein Angebot draußen ist, auch keine

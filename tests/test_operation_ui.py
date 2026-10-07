@@ -8013,8 +8013,6 @@ def test_a_historical_preview_reports_waiting_before_its_input_is_ready(
     window, monkeypatch, ending
 ):
     """Die Vorbereitung des alten Eingangszustands gehört zur sichtbaren Wartezeit."""
-    from PySide6.QtTest import QTest
-
     from app.ui.main_window import _PreviewOrder
 
     select(window)
@@ -8036,7 +8034,12 @@ def test_a_historical_preview_reports_waiting_before_its_input_is_ready(
     window._request_order_preview(approval)
     assert pending and not previews
     assert window._progress_states["preview"].active
-    QTest.qWait(250)
+    # Der Wartehinweis hängt an seinem Zeitgeber, nicht an der Uhr: Mit
+    # ``qWait(250)`` stand auf dem Intel-Mac-Runner noch keine Notiz (RM-531).
+    busy = window._preview_busy
+    assert busy.isActive(), "der Wartehinweis ist aufgezogen"
+    busy.stop()
+    busy.timeout.emit()
     assert notes[-1] == tr("Vorschau wird gerechnet …")
     if ending == "cancel":
         window._cancel_preview_run()

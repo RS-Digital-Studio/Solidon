@@ -123,6 +123,9 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
 - **Eine Splinekurve für Vorschau und Körper**: `profile.spline_controls`
   (Catmull-Rom-Bézier) für 2D-Schnittprüfung und B-Rep, eine Kante je
   Teilkurve, Drehsinn aus dem exakten Integral.
+- **Ein Bogenpunkt für Vorschau und Körper**: `profile.points_on_circle` setzt
+  die Ecken eines Bogens plattformgleich (`mesh.periodic_sin_cos`), für die
+  Skizze wie für `geom.sketch_solid`.
 - **Kettenenden rasten aufeinander ein** (`profile._starting_at`): verkettet
   wird über `_JOIN_TOL`, der exakte Kern verbindet Kanten nur auf 10⁻⁷ —
   dazwischen entstand ein undichter Körper. Ein Erzeuger meldet einen

@@ -18,6 +18,19 @@ from app.core import updates
 from app.ui.update_dialog import CHANGES_START_HEIGHT, UpdateDialog
 
 
+def _windows_setup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Installation ist ein Windows-Setup, ohne ``sys.platform`` zu verstellen.
+
+    ``updates.sys`` ist das ``sys`` des ganzen Prozesses. Auf ``win32``
+    verstellt, griff unter Linux und macOS ``leash._prompt_handover`` nach
+    ``ctypes.windll``, und der Download-Arbeiter starb, bevor er den Abbruch
+    sah (RM-531). Verstellt werden deshalb nur die zwei Antworten, nach denen
+    das Fenster fragt.
+    """
+    monkeypatch.setattr(updates, "install_kind", lambda system="": updates.KIND_WINDOWS_SETUP)
+    monkeypatch.setattr(updates, "platform_key", lambda: updates.PLATFORM_WINDOWS)
+
+
 def release(**changes: object) -> updates.Release:
     """Ein Fund, wie ihn ``updates.check`` liefert."""
     values: dict[str, object] = {
@@ -46,7 +59,7 @@ def test_the_window_says_what_is_new(qt_app: QApplication, monkeypatch: pytest.M
     nichts, woran er sie beantworten könnte.
     """
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
 
@@ -60,7 +73,7 @@ def test_the_change_list_starts_at_its_content_height_and_can_grow(
 ) -> None:
     """Kurze Hinweise lassen keinen leeren Rollbereich; längere wachsen beim Ziehen."""
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     short = UpdateDialog(release(changes={"de": ("Erster kurzer Punkt.", "Zweiter kurzer Punkt.")}))
     long = UpdateDialog(
@@ -124,7 +137,7 @@ def test_the_window_shows_the_headings_of_the_changelog(
     from app.core.changes import Group
 
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(
         release(
@@ -156,7 +169,7 @@ def test_a_release_without_groups_still_lists_its_points(
     hier, weil hier steht, was der Kunde sieht.
     """
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
 
@@ -186,7 +199,7 @@ def test_the_changelog_box_opens_no_browser_and_lets_you_copy(
     from PySide6.QtCore import Qt
 
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
 
@@ -212,7 +225,7 @@ def test_a_link_from_the_server_stays_a_harmless_sentence(
     from app.core.changes import Group
 
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(
         release(
@@ -233,7 +246,7 @@ def test_without_points_the_list_stays_away(
 ) -> None:
     """Ein leerer Kasten ist eine Überschrift ohne Inhalt."""
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release(changes={}))
 
@@ -243,7 +256,7 @@ def test_without_points_the_list_stays_away(
 
 def test_the_offer_names_the_size(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
 
@@ -260,7 +273,10 @@ def test_where_nothing_can_be_started_the_page_takes_the_lead(
     er, und der Weg zur Seite bekommt den Hauptknopf.
     """
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "linux")
+    # Das ausgepackte Archiv unter Linux, wieder ohne ``sys.platform`` des
+    # ganzen Prozesses zu verstellen (``_windows_setup``).
+    monkeypatch.setattr(updates, "install_kind", lambda system="": updates.KIND_TARBALL)
+    monkeypatch.setattr(updates, "platform_key", lambda: updates.PLATFORM_LINUX)
 
     dialog = UpdateDialog(release())
 
@@ -278,7 +294,7 @@ def test_a_ready_package_still_needs_a_click(
     passiert.
     """
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
     package = tmp_path / "Solidon3D-Setup-99.0.0.exe"
     package.write_bytes(b"ein Paket")
 
@@ -302,7 +318,7 @@ def test_cancelling_says_that_nothing_is_left(
     """Ein Abbruch ist kein Fehler (§15.6) — und die Auskunft, dass nichts
     liegen bleibt, nimmt die Frage vorweg."""
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
     dialog._was_cancelled()
@@ -323,7 +339,7 @@ def test_escape_while_loading_cancels_the_download(
     from app.core.errors import OperationCancelled
 
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
     seen: list[bool] = []
     gate = threading.Event()
 
@@ -350,7 +366,7 @@ def test_escape_while_loading_cancels_the_download(
 def test_a_problem_offers_the_page(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
     """Regel 17: Ein Fehler endet nie mit „fehlgeschlagen"."""
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
     from app.core.errors import ExternalToolError
 
     dialog = UpdateDialog(release())
@@ -364,7 +380,7 @@ def test_the_progress_counts_in_the_bar(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release())
     dialog._stepped(0.5, "90 / 179 MB")
@@ -384,7 +400,7 @@ def test_a_capped_list_points_at_the_full_changelog(
     ohne diesen Satz sähe die gekürzte Liste aus wie die ganze.
     """
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     dialog = UpdateDialog(release(changes_total=115))
 
@@ -405,7 +421,7 @@ def test_a_complete_list_says_nothing_about_a_website(
     Fassung.
     """
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
 
     for total in (2, 0):
         dialog = UpdateDialog(release(changes_total=total))
@@ -419,7 +435,7 @@ def test_the_link_follows_the_language_of_the_window(
 ) -> None:
     """Ein deutscher Satz mit einer englischen Seite dahinter wäre halb übersetzt."""
     monkeypatch.setattr(updates, "packaged", lambda: True)
-    monkeypatch.setattr(updates.sys, "platform", "win32")
+    _windows_setup(monkeypatch)
     monkeypatch.setattr("app.ui.update_dialog.get_language", lambda: "pt")
 
     dialog = UpdateDialog(release(changes_total=115))
