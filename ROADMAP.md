@@ -99,7 +99,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Belege in `konzepte/nachweise-generatoren-2026-10/`; entschieden (Robert, 06.10.): TRELLIS.2-4B statt TripoSG, Bildmodell und Freisteller nach bestem Ergebnis (gewählt FLUX.2 [klein] 4B statt SDXL); offen der Umbau von Weg 3 (Claude, in Arbeit) und die Kanzleifragen zur neuen Kette |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
-| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte und (b) der Satz für gebündelte Aufrufe gebaut, lokal 28 gegen 27 von 39 (07.10.); offen: lokal endet ein Zug nach 8 bis 11 Schritten am Zugbudget statt am Schrittlimit |
+| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Genehmigt (Robert: „alles gründlich“); neun Helfer in `helpers.py`/`ui_helpers.py` (`95fd36d35`); offen `on_the_bore_wall`, `project`, `FakeCodec`, `a_foreign_slot`; entschieden (Robert, 06.10.): auch die großen Fenster-Fixtures zusammenführen |
@@ -3900,6 +3900,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (120 000), weil lokal jeder Schritt die ganze Anfrage neu einliest (11 000 bis 14 000 Token) —
   die 12 Schritte aus (a) sind lokal nicht erreichbar. Messdateien
   `.claude/.state/ki-2026-10-06/messung/` (`suite_rm529_256b6b130`, `suite_rm251b_014_285`).
+
+  **Lokales Zugbudget (07.10.2026, Claude):** Ein lokaler Zug hat
+  `MAX_TOKENS_LOCAL` = 180 000 (`session.tokens_for`, je Schritt so viel wie gehostet), Test:
+  ein Zug mit 13 000 Token je Schritt erreicht 12 Schritte, mit dem alten Deckel hielt er nach
+  10. Gemessen auf demselben Stand mit und ohne Budget (qwen3:14b, freie Karte): **27 gegen 27
+  von 39**, Fall für Fall dieselben Entscheidungen; die zehn Fälle am Limit enden jetzt an den 12
+  Schritten statt am Budget, der Lauf dauert 69 statt 62 Minuten. Die Quote vom Lauf davor (28)
+  stand auf dem Stand vor Commit A (`1867d0439`); der Unterschied liegt nicht am Budget.
+  Messdateien `output/konsolidierung-2026-10-07/messung-ki/` (`suite_ohne_budget`,
+  `suite_rm251_budget`).
+  **`drill_on_feature` geklärt:** Fünf Läufe je Stand im Wechsel (`65e3ec97b` vor RM-529 und
+  mit RM-529/RM-251): je einmal *Bohrung*, viermal *Merkmal verdoppeln* — die Kopie richtig
+  daneben. Der Steckbrief unterscheidet sich zwischen den Ständen nur um `last_op=op1`; kein
+  Einfluss. Gezählt hatte der Fall nur `drill_hole`; `Case.also_good` lässt die gleichwertige
+  Handlung gelten (Test in `test_agent_suite.py`).
+  **Offen:** Zehn mehrteilige Fälle (which_hole, magnet_lid, wall_holder, hinge, snap_box,
+  dowels, inserts, free_shape, handrail_bend, drill_on_feature) enden lokal weiter am Limit;
+  qwen3:14b bündelt trotz Prompt-Version 9 kaum (1,0 Aufrufe je Schritt). Nächster Schritt:
+  an zwei dieser Fälle nachsehen, wofür die Schritte verbraucht werden (Nachforderungen,
+  ungültige Aufrufe, Wiederholungen).
 
 <a id="rm-016"></a>
 
