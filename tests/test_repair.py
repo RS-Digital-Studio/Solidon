@@ -4062,3 +4062,48 @@ def test_two_bodies_touching_along_an_edge_are_separated_not_cut_open() -> None:
     codes = {finding.code for finding in healed.findings}
     assert "repair.sheets_separated" in codes
     assert "repair.still_open" not in codes and "repair.branching_resolved" not in codes
+
+
+def test_the_load_step_separates_touching_sheets_under_a_new_cache_version(
+    profile: Profile,
+) -> None:
+    """Der Ladeschritt schließt offene Netze über ``repair`` und erbt dessen Änderung (RM-550).
+
+    Gehoben wurde nur ``repair``; ``load`` blieb auf „6“, obwohl dieselbe
+    Datei seither ein anderes Netz und andere Befunde ergibt: vorher 1833
+    statt 2000 Volumen, ``repair.branching_resolved`` und
+    ``repair.holes_filled`` statt ``repair.sheets_separated`` (Review 1 P3,
+    G-12). Ein Ergebnis unter der alten Version gehört nicht in denselben
+    Cacheplatz.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.ingest.plan import import_plan
+    from app.core.scene.project import checksum
+
+    load_operations()
+    payload = (MESHES / "cubes_touching_edge.glb").read_bytes()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/cubes_touching_edge.glb", sha256=checksum(payload)
+    )
+    project.sources["src_1"] = payload
+    plan = import_plan("src_1", "cubes_touching_edge.glb", payload, first_model=True)
+    History(project.document).apply(plan.title, [plan.draft])
+
+    result = evaluate(
+        project.document,
+        profile,
+        sources=ProjectSources(project),
+        ask=lambda _question, choices: choices[0],
+    )
+
+    (entry,) = result.scene.objects.values()
+    loaded = as_mesh_data(entry.mesh)
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert loaded.is_watertight and loaded.triangle_count == 24, "keine Fläche fällt weg"
+    assert "repair.sheets_separated" in codes, codes
+    assert not codes & {"repair.branching_resolved", "repair.holes_filled"}, codes
+    assert int(REGISTRY.get("load").cache_version) >= 7, (
+        "das Ergebnis des Ladeschritts hat sich mit RM-550 geändert"
+    )

@@ -217,7 +217,10 @@ class LoadParams(BaseParams):
     # 4: Das Schließen in Schritt 4b füllt Löcher in ihrer Form, Außen gilt
     # je Schale (Durchsicht der Reparatur, 24.09.2026) — dieselbe Datei
     # ergibt ein anderes Netz als unter 3.
-    cache_version="6",
+    # 7: Das Schließen offener Netze ruft ``repair(holes=True)``, und das
+    # verdoppelt seit RM-550 Berührkanten, statt Flächen zu streichen — andere
+    # Netze und Befunde aus derselben Datei (``repair`` 5).
+    cache_version="7",
     # Heißt wie der Knopf in Werkzeugleiste und Datei-Menü — zwei Namen für
     # dieselbe Handlung ließen den Kunden einen Unterschied suchen.
     title=_("Modell einfügen"),
