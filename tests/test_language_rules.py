@@ -322,6 +322,7 @@ def test_identifiers_are_english(path: Path) -> None:
         if any(character in UMLAUTS for character in name)
     ]
     offenders += _field_docstring_offenders(path, tree)
+    offenders += _orphaned_docstrings(path, tree)
     assert not offenders, "\n".join(offenders)
 
 
@@ -543,6 +544,59 @@ def _field_docstring_offenders(path: Path, tree: ast.AST) -> list[str]:
         for line, text in field_docstrings(tree)
         if len(text) >= 25 and reads_as_english(text)
     ]
+
+
+def _orphaned_docstrings(path: Path, tree: ast.AST) -> list[str]:
+    """Ein Feld-Docstring steht hinter seinem Feld, nicht hinter einem zweiten Satz.
+
+    Zwei Zeichenketten hintereinander heißen: Die zweite hat ihr Feld
+    verloren. So geschah es, als ein neues Feld zwischen ein altes und dessen
+    Docstring gesetzt wurde (``move_refused`` vor dem Satz zu ``_part_grip``,
+    Review 1 P3, G-2) — der Satz las sich danach als Doku des neuen Felds.
+    """
+    found: list[str] = []
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list):
+            continue
+        for before, after in itertools.pairwise(body):
+            texts = [
+                entry.value.value
+                for entry in (before, after)
+                if isinstance(entry, ast.Expr)
+                and isinstance(entry.value, ast.Constant)
+                and isinstance(entry.value.value, str)
+            ]
+            if len(texts) == 2:
+                found.append(
+                    f"{path.name}:{after.lineno} Docstring ohne eigenes Feld: "
+                    f"{texts[1].splitlines()[0][:60]}"
+                )
+    return found
+
+
+def test_a_docstring_that_lost_its_field_is_found() -> None:
+    """Gegenprobe: das Muster aus G-2 und der Normalfall daneben."""
+    lost = ast.parse(
+        "class A:\n"
+        "    def __init__(self):\n"
+        "        self.grip = None\n"
+        "        self.refused = None\n"
+        '        """Ob abgesagt wird."""\n'
+        '        """Woran der Griff hängt."""\n'
+    )
+    kept = ast.parse(
+        "class A:\n"
+        "    def __init__(self):\n"
+        "        self.grip = None\n"
+        '        """Woran der Griff hängt."""\n'
+        "        self.refused = None\n"
+        '        """Ob abgesagt wird."""\n'
+    )
+    assert _orphaned_docstrings(Path("a.py"), lost) == [
+        "a.py:6 Docstring ohne eigenes Feld: Woran der Griff hängt."
+    ]
+    assert _orphaned_docstrings(Path("a.py"), kept) == []
 
 
 def _imports_of(tree: ast.Module) -> list[tuple[int, str]]:

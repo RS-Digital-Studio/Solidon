@@ -1744,6 +1744,7 @@ class Session(QObject):
     projectChanged = Signal()
     """Stapel, Pfad oder Titel haben sich geändert; die Leisten laden neu."""
     failed = Signal(object)
+    """Eine ``AppError``, die die Oberfläche als Vorschlag zeigt (§2.7)."""
     revisionDone = Signal(object)
     """Ein Umbau des Verlaufs ist übernommen (P7) — trägt die ``Revision`` samt Befunden."""
     insertionChanged = Signal(object)
@@ -1755,7 +1756,6 @@ class Session(QObject):
     Stand festgeschrieben ist (RM-365)."""
     bakeCancelled = Signal()
     """Das Festschreiben wurde abgebrochen — geändert ist nichts."""
-    """Eine ``AppError``, die die Oberfläche als Vorschlag zeigt (§2.7)."""
     counterpartFinished = Signal(object)
     """Die Passung eines Gegenstücks ist nachgetragen — trägt die neuen Befunde.
 

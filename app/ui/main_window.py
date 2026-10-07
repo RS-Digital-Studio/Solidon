@@ -3539,6 +3539,10 @@ class MainWindow(QMainWindow):
         """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
         läuft."""
         self._sculpt_check = QTimer(self)
+        """Die Wandstärkenprüfung läuft **nach** der Geste, nicht in ihr
+        (Entscheidung L). Bei jedem Zug zu rechnen hieße, den Pinsel um eine
+        Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
+        nächsten Zug wieder ändert."""
         self._usage = UsageClock(self)
         """Die Uhr des Feedbackbogens (§37.2).
 
@@ -3574,10 +3578,6 @@ class MainWindow(QMainWindow):
         """Die Nummer der jüngsten Wandprüfung. Eine Antwort mit einer
         anderen gehört zu einem Stand, den es nicht mehr gibt — ein Zug
         danach, ein Rückgängig oder das Ende der Sitzung."""
-        """Die Wandstärkenprüfung läuft **nach** der Geste, nicht in ihr
-        (Entscheidung L). Bei jedem Zug zu rechnen hieße, den Pinsel um eine
-        Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
-        nächsten Zug wieder ändert."""
         self._sculpt_strokes: list[Stroke] = []
         self._sculpt_gesture: int | None = None
         self._sculpt_gesture_number = 0
