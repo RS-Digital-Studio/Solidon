@@ -950,3 +950,16 @@ rückwärts höchstens 1 MiB für die letzten 400 Zeilen, nie das gesamte Protok
 Lücken: Im KI-Hinweis stand die Überschrift allein über einer leeren Fläche.
 Ein Beispiel für ein Widget, das den Platz nutzt, ist die Versuchsliste des
 Erzeugen-Dialogs nach dem Lauf.
+
+## Absagen als Zeile, Verschieben mit Maßen im Bild (RM-535)
+
+Seit dem 15.09.2026 (`fad4a15c5`) ließ das Merkmalfenster jede Zeile ohne
+Handlung weg. Am Kundenmodell hatten danach 174 von 190 Merkmalen keine Zeile
+zum Versetzen und keinen Satz, warum; die Karte des Wahrnehmungskerns und diese
+Regel beschrieben weiter das Gegenteil. Robert (06.10.2026): „alles
+einheitlich, Bohrung Vorbild für alle Funktionen“ — die Absage steht wieder als
+Zeile, gleich begründete zusammengelegt (`_folded`). Aus demselben Satz folgt,
+dass *Merkmal verschieben* an Zapfen, Senkung, Kugel und Ring wie *Bohrung
+ändern* ins Bild führt; die Entscheidung vom 10.09.2026, dass Verschieben auf
+Klick rechnet, ist damit zurückgenommen. Der Kunde schrieb: „das Verschieben
+mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“.

@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.bootstrap import load_operations
-from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.perceive import actions, features
 from app.core.perceive.actions import EDGE_OPERATIONS, EDGE_VARIANTS, actions_for
 from app.core.registry import REGISTRY, validate
@@ -1611,7 +1611,6 @@ def test_the_radius_panel_edits_a_detected_rounding_without_changing_its_neighbo
     """Anklicken und unverändert übernehmen bewahrt das Teil; ein neuer Radius wirkt lokal."""
     from app.core.brep import edit
     from app.core.brep.features import features_of
-    from app.core.geom.mesh import as_mesh_data
     from app.core.types import SceneObject
     from tests.test_mesh_edges import run
 
@@ -1998,8 +1997,14 @@ def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
     assert "gemeinsam verschoben" in text
 
 
-def test_a_handling_that_does_not_apply_is_hidden(qt_app: QApplication) -> None:
-    """Unpassende Handlungen belegen im Merkmalpanel keinen Platz."""
+def test_a_handling_that_does_not_apply_stands_with_its_reason(qt_app: QApplication) -> None:
+    """Was nicht geht, steht als eine Zeile mit seinem Grund (RM-535).
+
+    Seit dem 15.09.2026 fielen Absagen weg; am Kundenmodell hatten danach 174
+    von 190 Merkmalen keine Zeile zum Versetzen und keinen Satz, warum (Robert
+    06.10.2026: „alles einheitlich, Bohrung Vorbild für alle Funktionen“).
+    Gleich begründete Absagen liegen in **einer** Zeile, angeklickt wird nichts.
+    """
     loop = Feature(
         id="edge_loop_1",
         kind="edge_loop",
@@ -2007,25 +2012,23 @@ def test_a_handling_that_does_not_apply_is_hidden(qt_app: QApplication) -> None:
         params={"centre": (0.0, 0.0, 0.0), "open_edges": 4},
     )
     ungültig = [action for action in actions_for(loop) if action.op is None]
-    assert ungültig, "ohne abgelehnte Handlungen prüft dieser Test nichts"
+    assert len(ungültig) > 1, "ohne mehrere Absagen prüft dieser Test das Zusammenlegen nicht"
     assert all(str(action.reason).strip() for action in ungültig), "jede nennt ihren Grund"
 
     panel = FeaturePanel()
     panel.show_feature("edge_loop_1", loop)
 
     assert not buttons(panel), "keine Handlung ist anklickbar"
-    reasons = [
-        label for row in panel._built for label in row.findChildren(QLabel) if "—" in label.text()
-    ]
-    assert not reasons
-    texte = " ".join(
+    zeilen = [
         label.text()
         for row in panel._built
-        for label in row.findChildren(QWidget)
-        if hasattr(label, "text")
-    )
-    for action in ungültig:
-        assert str(action.reason) not in texte
+        for label in row.findChildren(QLabel)
+        if "—" in label.text()
+    ]
+    for grund in dict.fromkeys(str(action.reason) for action in ungültig):
+        mit_grund = [zeile for zeile in zeilen if zeile.endswith(grund)]
+        assert len(mit_grund) == 1, (grund, zeilen)
+    assert str(ungültig[0].title) in " ".join(zeilen)
 
 
 def test_an_opening_where_nothing_applies_says_why_once(
@@ -2059,7 +2062,8 @@ def test_an_opening_where_nothing_applies_says_why_once(
         for label in panel.findChildren(QLabel)
         if str(HOLE_IS_NOT_EMPTY) in label.text()
     ]
-    assert said == [str(HOLE_IS_NOT_EMPTY)], said
+    # Eine Zeile, alle Titel davor (RM-535: Absagen stehen als Zeile).
+    assert len(said) == 1 and said[0].endswith(str(HOLE_IS_NOT_EMPTY)), said
 
 
 def test_a_changed_number_is_reported_before_it_is_done(qt_app: QApplication) -> None:
@@ -2130,7 +2134,9 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
     from app.i18n import tr
 
     identifier, feature = a_face()
-    assert all(action.op is None for action in actions_for(feature)), "sonst prüft das nichts"
+    # Seit RM-535 gilt an der Fläche genau eine Zeile: *Fläche versetzen*.
+    offered = {action.op for action in actions_for(feature)} - {None}
+    assert offered == {"push_face"}, "sonst prüft das nichts"
 
     panel = FeaturePanel()
     panel.show_feature(identifier, feature)
@@ -2144,6 +2150,33 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
         assert knopf.isEnabled() and not knopf.isHidden()
         knopf.click()
         assert gerufen[-1] == (identifier, cut), text
+
+
+def test_a_face_moves_by_a_distance_from_its_own_row(qt_app: QApplication) -> None:
+    """*Fläche versetzen* steht als Zeile mit dem Weg, wie *Merkmal verschieben*
+    an der Bohrung (RM-535, Robert 06.10.2026: „alles einheitlich“).
+
+    Der Weg beginnt bei 0 und nicht bei der Vorgabe des Dialogs (2 mm): Ein
+    *Übernehmen* ohne Hinsehen versetzte sonst still. Übernommen wird mit der
+    Fläche unter ``face`` — dem Namen, unter dem die Operation sie führt.
+    """
+    from app.i18n import tr
+
+    identifier, feature = a_face()
+    panel = FeaturePanel()
+    angefordert: list[tuple[str, dict[str, object]]] = []
+    panel.operationRequested.connect(lambda op, werte: angefordert.append((op, werte)))
+    panel.show_feature(identifier, feature)
+
+    titel = str(tr("Fläche versetzen"))
+    assert titel in buttons(panel)
+    zeile = next(row for row in panel._shown_rows.values() if row.op == "push_face")
+    weg = zeile.widgets["distance"]
+    assert weg.value_mm() == pytest.approx(0.0)
+    assert panel.take_values("push_face", {"distance": -1.5})
+    assert weg.value_mm() == pytest.approx(-1.5)
+    press(panel, titel)
+    assert angefordert == [("push_face", {"face": identifier, "distance": pytest.approx(-1.5)})]
 
 
 def test_a_face_offers_the_seam_protection_toggle(qt_app: QApplication) -> None:
@@ -2672,9 +2705,14 @@ def test_a_partly_reused_panel_matches_a_fresh_one_and_tabs_like_the_eye(
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QLineEdit
 
+    from tests.helpers import ridged_shaft
+
     load_operations()
-    mesh = read_mesh((MESHES / "post_with_fillet.stl").read_bytes(), ".stl")
-    found = features.detect(mesh)
+    # Der Schaft mit freistehendem Wulst: Der Wulst an ``post_with_fillet``
+    # lässt sich nicht vom Körper trennen, dort sagt seit RM-535 jede Zeile ab.
+    shaft = ridged_shaft("mesh", recess=False)
+    mesh = as_mesh_data(shaft.mesh)
+    found = shaft.features
     pin_id = next(key for key, value in found.items() if value.kind == "pin")
     torus_id = next(key for key, value in found.items() if value.kind == "torus")
     panel = FeaturePanel()

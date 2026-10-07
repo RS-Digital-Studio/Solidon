@@ -583,3 +583,14 @@ Gesichert durch `tests/test_selection.py::test_nothing_on_the_gizmo_leaves_ascii
 und zwar mit genau diesen vier französischen Namen als Eingabe. Ein Absatz
 hier wird gelesen, wenn jemand ihn sucht; der Test wird rot, wenn jemand es
 wieder tut.
+
+## Der Flächenzug schlägt vor, der Griff fragt die Karte (RM-535)
+
+Der Zug am Flächengriff war bis zum 06.10.2026 sofort ein Schritt. Im Verlauf
+des Kunden standen drei *Fläche versetzen* mit ungerundeten Wegen
+(minus 22,11372262396192 mm und andere), ohne dass je eine Zahl zu sehen war;
+an der Bohrung schlägt derselbe Zug nur vor, und *Übernehmen* rechnet. Robert
+(a): wie an der Bohrung. Der Griff hing nach der Art an jedem Merkmal; an der
+Tasche um einen Zapfen endete sein Zug mit „Die neue Stelle steht rechts unter
+Auswahl.“, und dort stand nichts. Er fragt jetzt dieselbe Antwort wie die
+Karte (`FeaturePanel.refuses`, im Kern `actions.move_refusal`).

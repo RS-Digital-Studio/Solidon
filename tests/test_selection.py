@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -2570,7 +2571,9 @@ def test_the_handle_of_a_chosen_face_pushes_that_face(window: MainWindow) -> Non
     )
     face_id, feature = oben
     window.object_tree.select_object("obj_1")
-    view.select_feature(face_id)
+    window.object_tree.select_feature("obj_1", face_id)
+    for _ in range(20):
+        QApplication.processEvents()
 
     ziel = view.gizmo_target()
     assert ziel is not None and ziel.id == face_id, (
@@ -2596,6 +2599,18 @@ def test_the_handle_of_a_chosen_face_pushes_that_face(window: MainWindow) -> Non
     )
     assert gezogen[-1][1] == pytest.approx(2.0), f"und den Weg entlang ihr: {gezogen[-1][1]}"
 
+    # **Seit RM-535 ein Vorschlag**: Der Weg steht in *Fläche versetzen*, und
+    # erst *Übernehmen* legt den Schritt an — wie der Zug an der Bohrung.
+    vorher = len(window.session.project.document.ops)
+    zeile = next(r for r in window.feature_panel._shown_rows.values() if r.op == "push_face")
+    assert zeile.widgets["distance"].value_mm() == pytest.approx(2.0)
+    assert len(window.session.project.document.ops) == vorher, "gezogen ist noch nicht getan"
+    window.feature_panel._apply.click()
+    for _ in range(200):
+        QApplication.processEvents()
+        if len(window.session.project.document.ops) > vorher:
+            break
+        time.sleep(0.02)
     window.session.wait_for_idle()
     letzter = window.session.project.document.ops[-1]
     assert letzter.op == "push_face", f"der Verlauf trägt {letzter.op}"

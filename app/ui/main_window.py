@@ -3136,6 +3136,8 @@ class MainWindow(QMainWindow):
         left_layout.addStretch(1)
 
         self.viewport = Viewport(self)
+        # Der Griff fragt die Karte, ob *Merkmal verschieben* hier gilt (RM-535).
+        self.viewport.move_refused = partial(self.feature_panel.refuses, "move_feature")
         self.viewport.differenceApplied.connect(self._preview_rendered)
         self.viewport.differenceFailed.connect(self._preview_render_failed)
         self.viewport.sceneApplied.connect(self._preview_base_ready)
@@ -15260,25 +15262,33 @@ class MainWindow(QMainWindow):
         return True
 
     def _on_face_dragged(self, feature_id: str, distance: float) -> None:
-        """Ein Zug am Flächengriff wird eine Operation (§18.11, Regel 2).
+        """Ein Zug am Flächengriff schlägt einen Weg vor — die Zeile rechts nimmt ihn.
 
-        Der Viewport hat das Signal seit dem Gizmo an der Fläche gesendet, und
-        niemand hörte zu: der Griff ließ sich ziehen, das Modell blieb, wie es
-        war. Ein Signal ohne Empfänger fällt in keinem Review auf und in keinem
-        Test, der nur den Sender prüft.
+        **Wie der Zug an der Bohrung** (RM-535, Robert 06.10.2026: „alles
+        einheitlich, Bohrung Vorbild für alle Funktionen“): Der Weg geht in das
+        Feld *Weg* von *Fläche versetzen*, die Vorschau zeigt ihn, und erst
+        *Übernehmen* legt den Schritt an (Regel 2). Bis dahin war der Zug
+        selbst der Schritt; am Kundenmodell standen drei *Fläche versetzen* mit
+        Wegen wie minus 22,11372262396192 mm im Verlauf, ohne dass je eine Zahl zu
+        sehen war.
 
-        Ein Zug, eine Transaktion — dieselbe Zusage wie beim Verschieben des
-        ganzen Körpers, nur dass hier die Fläche wandert und die Nachbarwände
-        mitwachsen.
+        Steht die Zeile nicht im Fenster — eine Fläche aus einem Baustein, ein
+        Fenster ohne Merkmal —, bleibt es beim Schritt aus dem Zug: Ein Zug
+        ohne Ort, an dem er landet, ginge sonst verloren.
 
-        **Gesendet wird die Fläche und nicht mehr ihre Normale** (10.09.2026).
-        Der Schritt trug ``nx/ny/nz``, und die Operation bewegte damit jede
+        **Gesendet wird die Fläche und nicht ihre Normale** (10.09.2026). Der
+        Schritt trug ``nx/ny/nz``, und die Operation bewegte damit jede
         Fläche, die dorthin zeigt: An einer Treppe wanderten beide Stufen
         zugleich, 24000,0 mm³ statt 21000,0, während der Kunde eine einzelne
-        angefasst hatte. Der Viewport wusste die ganze Zeit, welche es ist.
+        angefasst hatte.
         """
         selected = self.object_tree.selected()
         if selected is None:
+            return
+        if self.object_tree.selected_feature() == feature_id and self.feature_panel.take_values(
+            "push_face", {"distance": float(distance)}
+        ):
+            self.feature_panel.preview_armed()
             return
         self.session.apply(
             REGISTRY.get("push_face").title,
@@ -18112,6 +18122,9 @@ class MainWindow(QMainWindow):
             alone=result is not None and len(result.scene.objects) == 1,
             protected=feature_id in self.session.protected_features(entry.id),
         )
+        # Erst jetzt steht fest, ob die Karte das Versetzen anbietet — der Griff
+        # fragt sie (RM-535) und war womöglich schon vorher gebaut.
+        self.viewport.refresh_gizmo()
         if textures:
             self.feature_panel.offer_texture_steps(
                 textures, self._parameter_values(), document=self.session.project.document

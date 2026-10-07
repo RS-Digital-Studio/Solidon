@@ -304,3 +304,40 @@ def test_both_kernels_agree_on_the_moved_ring(profile: Profile) -> None:
     assert np.allclose(
         as_mesh_data(meshed.mesh).bounds.maximum, exact.mesh.bounds.maximum, atol=0.05
     )
+
+
+def test_the_panel_greys_out_a_ring_the_operation_cannot_separate(profile: Profile) -> None:
+    """RM-535: Karte und Operation fragen dieselbe Funktion (``prepare_ops.torus_refusal``).
+
+    Die Karte fragte nur, ob der Ring der ganze Körper ist, und zeigte an Wulst
+    und Kehle X/Y/Z. *Übernehmen* endete dann mit „lässt sich nicht vom Körper
+    trennen“ — an allen vier Ringen der Kundenmessung. Nachgestellt mit der
+    halben Ringfläche: Ihre Ränder sind keine zwei Kreise um die Achse.
+    """
+    from dataclasses import replace
+
+    from app.core.geom.prepare_ops import TORUS_NOT_SEPARABLE
+    from app.core.perceive.actions import actions_for
+
+    source = ridged_shaft("mesh", recess=False)
+    ring = the_torus(source)
+    mesh = as_mesh_data(source.mesh)
+    centres = np.asarray(mesh.raw.triangles_center)[np.asarray(ring.face_indices)]
+    half = tuple(
+        int(index)
+        for index, centre in zip(ring.face_indices, centres, strict=True)
+        if centre[1] > 0.0
+    )
+    assert 0 < len(half) < len(ring.face_indices), "Voraussetzung: die halbe Ringfläche"
+    torn = replace(ring, face_indices=half)
+    source = replace(source, features={**source.features, ring.id: torn})
+
+    with pytest.raises(ValidationError) as caught:
+        run("move_feature", source, profile, at_feature=ring.id, x=0.0, y=0.0, z=12.0)
+    rows = actions_for(torn, source.features, mesh=mesh)
+
+    assert caught.value.detail is TORUS_NOT_SEPARABLE, str(caught.value.detail)
+    assert rows and all(row.op is None for row in rows), [(row.title, row.op) for row in rows]
+    assert {str(row.reason) for row in rows if row.reason} >= {str(TORUS_NOT_SEPARABLE)}
+    whole = actions_for(ring, {**source.features, ring.id: ring}, mesh=mesh)
+    assert any(row.op == "move_feature" for row in whole), "der ganze Wulst bleibt versetzbar"

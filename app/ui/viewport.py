@@ -3127,12 +3127,15 @@ def placed_feature_kinds() -> frozenset[str]:
     Zuwachs die Hälfte.
     """
     from app.core.registry import REGISTRY
-    from app.ui.panels import LEADS_INTO_THE_VIEW
+    from app.ui.panels import LEADS_INTO_THE_VIEW, MEASURED_WHILE_MOVED
 
     kinds: set[str] = set()
     for name in LEADS_INTO_THE_VIEW:
         if REGISTRY.has(name):
             kinds.update(REGISTRY.get(name).applies_to or ())
+    # *Merkmal verschieben* führt an diesen Arten ins Bild (RM-535).
+    if REGISTRY.has("move_feature"):
+        kinds.update(MEASURED_WHILE_MOVED & set(REGISTRY.get("move_feature").applies_to or ()))
     return frozenset(kinds)
 
 
@@ -5725,6 +5728,9 @@ class Viewport(QWidget):
         self._selected_features: tuple[FeatureId, ...] = ()
         self._selected_feature_refs: tuple[tuple[ObjectId, FeatureId], ...] = ()
         self._part_grip: FeatureId | None = None
+        self.move_refused: Callable[[FeatureId], bool] | None = None
+        """Ob die Karte rechts *Merkmal verschieben* an diesem Merkmal absagt —
+        gesetzt vom Fenster (``FeaturePanel.refuses``, RM-535)."""
         """An welchem Merkmal der Griff hängt, wenn ein **Baustein** gewählt ist.
 
         Sein Dach im Objektbaum wählt alle seine Merkmale zugleich; „das
@@ -14176,7 +14182,17 @@ class Viewport(QWidget):
         # keine Operation tragen (:attr:`moves_as_a_part`), und ebenso an
         # seiner Fläche: Die ist kein Press/Pull-Ziel (:meth:`gizmo_target`),
         # sondern der Baustein selbst.
-        if feature.kind in movable_feature_kinds() or self.moves_as_a_part(feature):
+        if self.moves_as_a_part(feature):
+            return feature
+        # **Und nur, wo das Merkmal sich versetzen lässt** (RM-535): dieselbe
+        # Antwort wie die Zeile rechts (``actions.move_refusal`` über
+        # :attr:`move_refused`). Nach der Art allein hing der Griff an der
+        # Tasche um einen Zapfen und an einem abgetrennten Ring, und sein Zug
+        # endete mit „Die neue Stelle steht rechts unter Auswahl.“ — dort
+        # stand nichts.
+        if feature.kind in movable_feature_kinds() and not (
+            self.move_refused is not None and self.move_refused(marked)
+        ):
             return feature
         return None
 
@@ -14333,6 +14349,11 @@ class Viewport(QWidget):
             return
         self._feature_gizmo_blocked = blocked
         self._knobs_stay = stay
+        self.set_gizmo(self._gizmo_wanted)
+
+    def refresh_gizmo(self) -> None:
+        """Den Griff neu setzen, wie er gewünscht ist — nach einer neuen Antwort
+        der Karte (:attr:`move_refused`)."""
         self.set_gizmo(self._gizmo_wanted)
 
     def set_transform_reference(self, point: Vec3 | None) -> None:

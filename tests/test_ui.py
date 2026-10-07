@@ -292,6 +292,7 @@ def _answers_stand_in(monkeypatch: pytest.MonkeyPatch, *, known: bool) -> Any:
             clear=lambda: calls.append(("clear", None)),
         ),
         feature_dock=SimpleNamespace(reveal=lambda: None),
+        viewport=SimpleNamespace(refresh_gizmo=lambda: calls.append(("gizmo", None))),
         object_tree=SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole_1"),
         part_step_of=lambda _feature: None,
         _answer_in_worker=lambda feature_id, *_a: calls.append(("worker", feature_id)),
@@ -324,7 +325,12 @@ def test_a_large_body_asks_its_feature_answers_in_the_worker_unless_they_are_kno
     MainWindow._show_feature_fields(view, "hole_1", view.entry, view.result)
 
     if known:
-        assert view.calls == [("show", "hole_1"), ("in_view", None), ("layout", None)]
+        assert view.calls == [
+            ("show", "hole_1"),
+            ("gizmo", None),
+            ("in_view", None),
+            ("layout", None),
+        ]
     else:
         assert view.calls == [("worker", "hole_1"), ("layout", None)], "kein Aufbau davor"
 
@@ -337,7 +343,12 @@ def test_without_the_worker_the_feature_fields_build_directly(
 
     MainWindow._show_feature_fields(view, "hole_1", view.entry, view.result, allow_worker=False)
 
-    assert view.calls == [("show", "hole_1"), ("in_view", None), ("layout", None)]
+    assert view.calls == [
+        ("show", "hole_1"),
+        ("gizmo", None),
+        ("in_view", None),
+        ("layout", None),
+    ]
 
 
 @pytest.mark.parametrize("case", ["current", "superseded", "elsewhere", "stale"])
@@ -14023,6 +14034,131 @@ def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
     assert moved.params["distance"] == pytest.approx(3.0)
     assert moved.params["face"] == top.id, "der Schritt nennt die Fläche, die gezogen wurde"
     assert "nz" not in moved.params or moved.params["nz"] == pytest.approx(1.0)
+
+
+def test_dragging_the_chosen_face_fills_its_distance_until_it_is_applied(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Der Flächenzug schlägt einen Weg vor, wie der Zug an der Bohrung (RM-535).
+
+    Ist die Fläche gewählt, landet der Weg im Feld *Weg* von *Fläche
+    versetzen*, und erst *Übernehmen* legt den Schritt an — am Kundenmodell
+    standen sonst drei gezogene Wege ungerundet im Verlauf, ohne dass je eine
+    Zahl zu sehen war.
+    """
+    window.run_remote("create_box", {"width": 20.0, "depth": 20.0, "height": 20.0})
+    window.session.wait_for_idle(60_000)
+    object_id, body = next(iter(window.session.last_result.scene.objects.items()))
+    top = next(
+        entry
+        for entry in body.features.values()
+        if entry.kind == "face" and entry.params["normal"][2] > 0.9
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, top.id)
+    wait_until(qt_app, lambda: "push_face" in {e.op for e in window.feature_panel._runs.values()})
+
+    window.viewport.faceDragged.emit(top.id, 3.0)
+    qt_app.processEvents()
+
+    assert [entry.op for entry in window.session.project.document.ops] == ["create_box"]
+    row = next(r for r in window.feature_panel._shown_rows.values() if r.op == "push_face")
+    assert row.widgets["distance"].value_mm() == pytest.approx(3.0)
+
+    window.feature_panel._apply.click()
+    wait_until(qt_app, lambda: len(window.session.project.document.ops) == 2)
+    window.session.wait_for_idle(60_000)
+    moved = window.session.project.document.ops[-1]
+    assert moved.op == "push_face"
+    assert moved.params["face"] == top.id
+    assert moved.params["distance"] == pytest.approx(3.0)
+
+
+def test_the_grip_and_the_card_agree_whether_a_feature_moves(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Griff und Karte fragen dieselbe Funktion (RM-535, ``actions.move_refusal``).
+
+    An der Tasche um einen Zapfen sagt die Karte mit Grund ab und kein Griff
+    hängt dort; sein Zug endete sonst mit „Die neue Stelle steht rechts unter
+    Auswahl.“, und dort stand nichts. Der Zapfen darin bleibt versetzbar.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.core.perceive.actions import HOLE_HOLDS_A_PIN
+
+    window.open_path(MESHES / "pocket_with_pin.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    pocket = next(fid for fid, f in entry.features.items() if f.kind == "hole")
+    pin = next(fid for fid, f in entry.features.items() if f.kind == "pin")
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, pocket)
+    wait_until(qt_app, lambda: window.feature_panel._answered == pocket)
+    said = " ".join(label.text() for label in window.feature_panel.findChildren(QLabel))
+    assert str(HOLE_HOLDS_A_PIN) in said, "die Absage steht als Zeile mit Grund"
+    assert window.feature_panel.refuses("move_feature", pocket)
+    assert window.viewport.gizmo_feature() is None, "kein Griff an der gesperrten Tasche"
+
+    window.object_tree.select_feature(object_id, pin)
+    wait_until(qt_app, lambda: window.feature_panel._answered == pin)
+    assert not window.feature_panel.refuses("move_feature", pin)
+    chosen = window.viewport.gizmo_feature()
+    assert chosen is not None and chosen.id == pin
+
+
+@pytest.mark.parametrize(
+    ("mesh", "kind"),
+    [
+        ("post_with_fillet.stl", "pin"),
+        ("plate_countersunk.stl", "cone"),
+        ("sphere_socket.stl", "sphere"),
+    ],
+)
+def test_moving_a_feature_brings_its_measures_into_the_view(
+    window: MainWindow, qt_app: QApplication, mesh: str, kind: str
+) -> None:
+    """Maße im Bild an Zapfen, Senkung und Kugel wie an der Bohrung (RM-535 (c)).
+
+    Ein Klick auf das Merkmal bringt *Merkmal verschieben* mit seinen Maßen in
+    die Szene; Felder und Bild teilen sich einen Entwurf, und erst
+    *Übernehmen* rechnet. Bis dahin rechnete *Merkmal verschieben* auf Klick
+    (Entscheidung vom 10.09.2026, von Robert am 06.10.2026 zurückgenommen).
+    """
+    # Ohne Renderer sagt ``PlacementFlow.can_place()`` nein; die Attrappe stellt
+    # her, was der Kunde hat (`.claude/rules/tests.md`).
+    from tests.render_fakes import RecordingRenderer
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.open_path(MESHES / mesh)
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    chosen = next(fid for fid, f in entry.features.items() if f.kind == kind)
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, chosen)
+    for _ in range(50):
+        qt_app.processEvents()
+    wait_until(
+        qt_app,
+        lambda: (
+            window._quiet_placement is not None
+            and window._quiet_placement.spec_of().name == "move_feature"
+        ),
+    )
+    try:
+        assert window._quiet_target == (object_id, chosen)
+        host = window._quiet_host
+        assert host is not None and host.values().get("at_feature") == chosen
+        assert [step.op for step in window.session.project.document.ops] == ["load"], (
+            "gezeigt, nicht getan"
+        )
+    finally:
+        window.end_quiet_placement()
+        qt_app.processEvents()
 
 
 @pytest.mark.parametrize("cancel", [False, True])

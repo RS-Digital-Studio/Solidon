@@ -136,7 +136,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Entschieden (Robert, am Punkt); Flächenzug, Absagen, Maßgruppe, Tasche und Zapfen nach diesen Entscheidungen bauen, die drei falschen Ergebnisse beheben |
 | [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
@@ -4905,44 +4904,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   echten Fenster beim Release (RM-213): Rechtsklick an einem und an zwei Körpern, Entf an zwei
   Körpern mit einem Strg+Z zurück, *Aushöhlen* an einer Fläche, eine Karte schweben lassen und
   zurücklegen, in beiden Themen.
-
-<a id="rm-535"></a>
-
-- [ ] **RM-535 — Merkmal verschieben: Felder fehlen an Flächen, Karte und Operation sind uneins,
-  drei falsche Ergebnisse ohne Befund (Fragebogen S-20261006-5be329).** Kunde: „das Verschieben
-  mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“. Gemessen an HEAD
-  `3a5d607f3`, der Kundendatei und sechs Modellen mit 734 Merkmalen (Bericht
-  `verschieben-bericht.md` im Zustandsordner von RM-533): X/Y/Z stehen an Bohrung, Sackbohrung,
-  Langloch, Zapfen, Senkung, Verjüngung, Kugel, Einschluss, Wulst und Kehle. Keine Zeile haben
-  Verrundung, Fläche, Schrägfläche, gerundete Seite, Muster und Gewinde (Sätze in
-  `perceive/actions.py`); gesperrt sind Kegelstück, Kugel oder Kegel ohne eigenen Körper und die
-  Sackbohrung mit Zapfen. Am Kundenmodell haben 16 von 190 Merkmalen Felder, 174 keine (117
-  Verrundungen, 42 Flächen). Ursache ist `MOVABLE_KINDS` (`prepare_ops.py`), und die Karte
-  überspringt Zeilen ohne Handlung (`panels.py`, seit `fad4a15c5`, Test in
-  `test_feature_panel.py`); `app/core/perceive/CLAUDE.md` und `fenster.md` beschreiben das
-  Gegenteil. Der Flächenzug legt `push_face` sofort an, ohne Zahl und *Übernehmen*.
-
-  Fehler unabhängig von den Entscheidungen: An Wulst und Kehle stehen Felder, `move_feature`
-  sagt an allen vier geprüften Ringen ab (die Karte prüft nur `torus_is_the_body`, die Operation
-  auch `_torus_rims`). An der Sackbohrung mit Zapfen umgekehrt: Die Karte sperrt, die Operation
-  rechnet über `_air_of_the_bore`, und nach 0,5 mm erkennt Solidon zwei Sackbohrungen weniger.
-  Der Griff fragt nur die Art (`viewport.py`): An gesperrten Merkmalen endet sein Zug mit „Die
-  neue Stelle steht rechts unter Auswahl.“, an einer Verrundung greift er den Körper. Falsch ohne
-  Befund: Zapfen im Kundenmodell 0,5 mm in die Taschenwand −189 mm³ (danach 4 statt 6 Zapfen),
-  Zapfen Ø 30 im mini-pot bei 0,2/0,5/1,0 mm immer +240,65 mm³, Endfase am Stift bei 0,2 mm
-  +2218 mm³.
-
-  **Vorschlag:** Flächen bekommen *Fläche versetzen* mit dem Feld „Weg“ (erste Zeile in
-  `ACTION_ORDER` als `("move_feature", "push_face")`, der Weg beginnt bei 0); Karte, Operation und
-  Griff fragen dieselbe Funktion; eine zusammengelegte Absage steht wieder als Zeile.
-  **Entschieden (Robert, 06.10.2026):** (a) „alles einheitlich, Bohrung Vorbild für alle
-  Funktionen“ — der Flächenzug schlägt vor wie an der Bohrung, *Übernehmen* rechnet; (b)
-  nicht geltende Handlungen stehen wieder als eine Zeile mit Grund; (c) *Merkmal verschieben*
-  führt an Zapfen, Senkung, Verjüngung, Kugel, Ring und Einschluss ins Bild mit Maßgruppe
-  (ändert die Entscheidung vom 10.09.); (d) „beides einzeln handhaben und Tasche allein
-  bearbeitbar und Zapfen“ — Tasche und Zapfen je einzeln bearbeitbar. Wulst/Kehle fragen in
-  Karte und Operation dieselbe Funktion (`398c7ea43` auf `kunden/rm-535`). **Abnahme:** Ein Test über echte Netze, der heute an Ring und Sackbohrung mit Zapfen
-  rot ist; die drei falschen Ergebnisse rechnen richtig oder sagen mit Grund ab.
 
 <a id="rm-536"></a>
 
