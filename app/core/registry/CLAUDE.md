@@ -160,6 +160,12 @@ Kürzel, Startwert wo nötig).
   — Lage ist keine Form. Beide Felder sind Entscheidungen:
   `tests/test_history.py` verlangt sie von jeder Operation dieser Bauart
   (`REBUILDS_ITS_CARRIER`, `EACH_BODY_BY_ITSELF`).
+- **`features_complete`**: Die Operation gibt die Merkmale jeder Ausgabe
+  vollständig aus; die Auswertung vergleicht nur diese und trägt nichts
+  Erzeugtes nach, das Weggenommene bleibt als Name vergeben. Wer schneidet und
+  dabei bewegt, bewegt die Merkmale selbst und setzt es (*Prüfstück erzeugen*
+  auf dem Bett) — sonst stünde Altes an alter Stelle. Ohne das Flag heißt ein
+  leeres `features` „nicht ausgefüllt“.
 - **`replace_state()`** ist ausschließlich der Commit-Schritt für einen in
   einem isolierten Register vollständig geprüften Rezeptzustand — ohne zweite
   Validierung, damit nach einer atomar veröffentlichten Rezeptdatei kein

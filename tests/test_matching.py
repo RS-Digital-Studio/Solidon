@@ -1962,7 +1962,9 @@ def test_a_thread_travels_unchecked_because_detection_cannot_see_it() -> None:
 
     Ein Gewinde entsteht in einem Baustein (§24.1); ``detect`` kennt die Art
     nicht. Gegen die Geometrie geprüft fände es niemals einen Partner und wäre
-    nach der ersten Operation fort.
+    nach der ersten Operation fort. Ungeprüft heißt aber nicht für immer: Hat
+    ein Schritt es mit seiner ganzen Ausdehnung aus dem Körper geschnitten,
+    fällt es weg (``tests/test_cut_features.py``).
     """
     import dataclasses
 

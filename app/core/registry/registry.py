@@ -787,6 +787,18 @@ class OperationSpec:
     ``load`` oder *Dreiecke verringern* gilt das ausdrücklich nicht — dort ist
     „neu erkannt" kein Beleg dafür, dass etwas entstanden ist.
     """
+    features_complete: bool = False
+    """Die Operation gibt die Merkmale jeder Ausgabe vollständig aus.
+
+    Was sie nicht ausgibt, hat sie weggenommen, und ``scene.evaluate
+    ._with_features`` trägt kein erzeugtes Merkmal des Eingangs nach. Ohne die
+    Angabe gilt ein leeres oder lückenhaftes ``features`` als „nicht
+    ausgefüllt" — viele Operationen meinen damit nichts —, und was die
+    Erkennung nicht prüfen kann, reist ungeprüft mit, bis ein Schritt es ganz
+    aus dem Körper schneidet. *Prüfstück erzeugen* setzt es: Es legt sein
+    Stück auf das Bett und bewegt die Merkmale selbst; ein mitgetragener
+    Eintrag stünde an der alten Stelle über dem Bett.
+    """
     leaves_separate_parts: bool = False
     """Die Operation legt gewollt ein eigenes, loses Teil neben ihren Träger.
 
@@ -1071,6 +1083,7 @@ def register_op(
     leaves_inputs_unchanged: bool = False,
     shapes_with_other_inputs: bool = False,
     touches_features: bool = False,
+    features_complete: bool = False,
     leaves_separate_parts: bool = False,
     retriangulates: bool = False,
     expected_triangles: Callable[[Any, Any], Any] | None = None,
@@ -1113,6 +1126,7 @@ def register_op(
                 leaves_inputs_unchanged=leaves_inputs_unchanged,
                 shapes_with_other_inputs=shapes_with_other_inputs,
                 touches_features=touches_features,
+                features_complete=features_complete,
                 leaves_separate_parts=leaves_separate_parts,
                 retriangulates=retriangulates,
                 expected_triangles=expected_triangles,
