@@ -2533,6 +2533,7 @@ def _plate_with_a_second_body(
     pin_span: tuple[float, float] = (0.0, 15.0),
     pin_diameter: float = 5.0,
     cavity: bool = False,
+    touching_elsewhere: bool = False,
 ) -> SceneObject:
     """Platte 40 x 20 x 10 mit Bohrung Ø 6 und ein zweiter Körper im selben Objekt.
 
@@ -2541,7 +2542,9 @@ def _plate_with_a_second_body(
     ``above_bore``: ein zweiter Klotz liegt im späteren Langloch, aber oberhalb
     der Platte. Sonst steht ein Klotz 15 mm neben der Platte. ``slot`` zieht die
     Bohrung vorher auf 12 mm. Exakt ein Verbund getrennter Körper, am Netz dessen
-    Tessellierung: Beide Kerne sehen dieselbe Form.
+    Tessellierung: Beide Kerne sehen dieselbe Form. ``touching_elsewhere``
+    stellt weit daneben zwei Würfel 10 mm dazu, die sich an einer Fläche
+    berühren.
     """
     exact_kernel()
     from OCP.BRep import BRep_Builder
@@ -2586,6 +2589,9 @@ def _plate_with_a_second_body(
     builder.MakeCompound(compound)
     builder.Add(compound, plate.shape)
     builder.Add(compound, second.shape)
+    if touching_elsewhere:
+        for x in (60.0, 70.0):
+            builder.Add(compound, edit.moved(edit.box(10.0, 10.0, 10.0), (x, 0.0, 0.0)).shape)
     solid = Solid(compound)
     if kernel == "brep":
         return SceneObject(
@@ -2624,6 +2630,242 @@ def test_a_separate_pin_does_not_turn_a_through_slot_into_a_blind_slot(
     slot = next(feature for feature in found.values() if feature.kind == "slot")
     assert slot.params["through"] is True
     assert slot.params["depth"] == pytest.approx(10.0)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_parts_touching_far_from_the_bore_do_not_block_the_slot_at_a_free_pin(
+    profile: Profile, kernel: str
+) -> None:
+    """Zwei Würfel, die sich weit daneben berühren, sperren den Zug am freien Stift nicht (RM-413).
+
+    Die Kontaktfrage galt allen Teilen der Baugruppe: Menü und Operation sagten
+    „sie ist eine Wand, keine Bohrung“, obwohl der Stift frei in der Bohrung
+    stand. Gefragt wird jetzt der Träger und, was ihn berühren oder in seiner
+    Bohrung stehen kann.
+    """
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry = _plate_with_a_second_body(kernel, inside=True, touching_elsewhere=True)
+    feature_id = _bore_in(entry, "hole")
+    mesh = as_mesh_data(entry.mesh)
+    assert mesh.component_count == 4, "Platte, Stift und zwei Würfel"
+    rows = actions_for(entry.features[feature_id], entry.features, mesh=mesh)
+    assert [row.op for row in rows if row.op is not None] == ["slot_hole"]
+
+    output, _findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=feature_id, slot_length=12.0
+    )
+
+    pieces = sorted(
+        as_mesh_data(output.mesh).raw.split(only_watertight=False),
+        key=lambda piece: float(piece.bounds[0, 0]),
+    )
+    assert len(pieces) == 4, f"Platte, Stiftrest und zwei Würfel erwartet: {len(pieces)}"
+    plate, pin = sorted(pieces[:2], key=lambda piece: -abs(float(piece.volume)))
+    first, second = pieces[2:]
+    assert abs(float(pin.volume)) == pytest.approx(math.pi * 2.5**2 * 5.0, abs=1.0)
+    assert float(pin.bounds[0, 2]) == pytest.approx(10.0, abs=0.02)
+    assert abs(float(plate.volume)) == pytest.approx(
+        8000.0 - (36.0 + 9.0 * math.pi) * 10.0, abs=2.0
+    )
+    assert abs(float(first.volume)) == pytest.approx(1000.0, abs=1e-6)
+    assert abs(float(second.volume)) == pytest.approx(1000.0, abs=1e-6)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_free_bore_leaves_parts_touching_far_away_as_they_are(
+    profile: Profile, kernel: str
+) -> None:
+    """Am freien Zug bleiben ferne Teile, die sich berühren, getrennt und unverändert (RM-413).
+
+    Vorher vereinigte der gemeinsame Weg (``merge_face_contacts``) alle Teile,
+    die sich berühren, auch weit neben dem Träger. Jetzt geht der Zug über den
+    Träger allein, und was fern liegt, kommt so zurück, wie es kam.
+    """
+    load_operations()
+    entry = _plate_with_a_second_body(kernel, inside=False, touching_elsewhere=True)
+    assert as_mesh_data(entry.mesh).component_count == 4, "Platte, Klotz und zwei Würfel"
+
+    output = run_op(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
+
+    pieces = sorted(
+        as_mesh_data(output.mesh).raw.split(only_watertight=False),
+        key=lambda piece: float(piece.bounds[0, 0]),
+    )
+    assert len(pieces) == 4, f"Platte, Klotz und zwei Würfel erwartet: {len(pieces)}"
+    plate, *blocks = pieces
+    assert abs(float(plate.volume)) == pytest.approx(
+        8000.0 - (36.0 + 9.0 * math.pi) * 10.0, abs=2.0
+    )
+    for block, low in zip(blocks, (35.0, 55.0, 65.0), strict=True):
+        assert abs(float(block.volume)) == pytest.approx(1000.0, abs=1e-6)
+        assert float(block.bounds[0, 0]) == pytest.approx(low, abs=1e-6)
+
+
+def test_a_loose_negative_skin_far_from_the_carrier_does_not_block_the_slot(
+    profile: Profile,
+) -> None:
+    """Eine lose negative Haut weit neben dem Träger gehört nicht zu seiner Frage (RM-413).
+
+    Sie stand bis zum 06.10.2026 bei x = 40 in
+    ``test_an_unproved_negative_skin_does_not_release_the_slot`` und sperrte den
+    Zug am freien Stift. Jetzt fragt der Zug nur, was den Träger berühren oder
+    in seiner Bohrung stehen kann (``_near_the_carrier``); die Haut kommt
+    unverändert zurück.
+    """
+    from app.core.perceive.actions import actions_for
+    from app.core.perceive.features import forget_cache
+
+    entry = _plate_with_a_second_body("mesh", inside=True)
+    feature = entry.features[_bore_in(entry, "hole")]
+    skin = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    skin.apply_translation((40.0, 0.0, 5.0))
+    skin.invert()
+    entry = dataclasses.replace(
+        entry, mesh=MeshData.of(trimesh.util.concatenate((entry.mesh.raw, skin)))
+    )
+    forget_cache()
+    load_operations()
+    rows = actions_for(feature, entry.features, mesh=entry.mesh)
+    assert "slot_hole" in [row.op for row in rows if row.op is not None]
+
+    output = run_op("slot_hole", entry, profile, at_feature=feature.id, slot_length=12.0)
+
+    pieces = as_mesh_data(output.mesh).raw.split(only_watertight=False)
+    skins = [piece for piece in pieces if float(piece.volume) < 0.0]
+    assert len(skins) == 1
+    assert float(skins[0].volume) == pytest.approx(-8.0, abs=1e-9)
+    np.testing.assert_allclose(skins[0].bounds, [[39.0, -1.0, 4.0], [41.0, 1.0, 6.0]], atol=1e-9)
+    assert len([item for item in output.features.values() if item.kind == "slot"]) == 1
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_moving_a_bore_with_a_separate_pin_names_the_other_part(
+    profile: Profile, kernel: str
+) -> None:
+    """Liegt ein getrenntes Teil in der Bohrung, sagt das Versetzen genau das (RM-413).
+
+    Vorher hieß es „sie ist eine Wand, keine Bohrung. Bearbeiten Sie ihre
+    Flächen einzeln.“ — an einer freien Bohrung mit einem Stift darin falsch,
+    und der Weg half nicht. Jetzt nennt der Satz das andere Teil, und der Weg
+    sind die Einzelteile; Menü und Operation sagen dasselbe.
+    """
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry = _plate_with_a_second_body(kernel, inside=True)
+    feature_id = _bore_in(entry, "hole")
+    rows = actions_for(entry.features[feature_id], entry.features, mesh=as_mesh_data(entry.mesh))
+    moved = [row for row in rows if row.op is None and str(row.title) == "Merkmal verschieben"]
+    assert moved and all(row.reason is OTHER_PART_IN_THE_BORE for row in moved)
+
+    with pytest.raises(ValidationError) as caught:
+        run_op("move_feature", entry, profile, at_feature=feature_id, x=5.0, y=0.0, z=0.0)
+
+    assert caught.value.detail is OTHER_PART_IN_THE_BORE
+    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+
+
+#: Die sechs Handlungen an einer Bohrung, mit Werten, die an der Platte aus
+#: :func:`_plate_with_a_second_body` rechnen würden.
+_BORE_OPS: dict[str, dict[str, float]] = {
+    "move_feature": {"x": 5.0, "y": 0.0, "z": 5.0},
+    "duplicate_feature": {"x": 12.0, "y": 0.0, "z": 5.0},
+    "remove_feature": {},
+    "rotate_feature": {"angle": 10.0},
+    "plug_hole": {},
+    "resize_hole": {"diameter": 7.0},
+}
+
+
+@pytest.mark.parametrize("pin_diameter", [5.0, 2.0])
+@pytest.mark.parametrize("op", sorted(_BORE_OPS))
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_every_bore_op_names_the_separate_pin(
+    profile: Profile, kernel: str, op: str, pin_diameter: float
+) -> None:
+    """Jede Handlung an der Bohrung sagt am getrennten Stift ab (RM-413).
+
+    Am Stand vor der Absage rechneten 32 von 48 Fällen still falsch (diese
+    Platte und ein Sackloch, je Ø 5 und Ø 2, beide Kerne): Der Stift
+    verschmolz mit der Platte, wurde abgeschnitten, oder an der neuen Stelle
+    stand ein loser Kern. *Bohrung ändern* auf Ø 7 schnitt
+    den Stift Ø 5 von 293 auf 97 mm³ ab. ``resize_hole`` läuft nicht über
+    ``_movable_feature`` und hat seine eigene Absage. *Verdoppeln* lässt die
+    alte Stelle stehen und sagt trotzdem ab wie das Menü: Am Netz wäre die
+    Kopie die Luft um den Stift gewesen, ein Ring mit Kern. Der Stift Ø 2 lässt
+    am Netz die Lippenregel aus, der Stift Ø 5 trifft sie.
+    """
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE
+
+    load_operations()
+    entry = _plate_with_a_second_body(kernel, inside=True, pin_diameter=pin_diameter)
+
+    with pytest.raises(ValidationError) as caught:
+        run_op(op, entry, profile, at_feature=_bore_in(entry, "hole"), **_BORE_OPS[op])
+
+    assert caught.value.detail is OTHER_PART_IN_THE_BORE
+    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_bore_through_two_plates_with_a_pin_names_the_pin(profile: Profile, kernel: str) -> None:
+    """Eine Bohrung durch zwei aufeinanderliegende Platten mit einem Stift darin (RM-253).
+
+    Am Laptop-Ständer trägt ``hole_3`` ihren Mantel auf zwei Teilen, und ein
+    Zapfen steht darin. Weil kein einzelnes Teil den ganzen Mantel trug, galt
+    der Zapfen als eigenes Material der Bohrung, und *Merkmal versetzen*
+    rechnete: Die zwei Platten verschmolzen, der Zapfen verschwand im Stopfen,
+    531 mm³ ohne Befund. Eigen sind alle Teile, die den Mantel tragen.
+    """
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE, filled_bore_reason
+
+    exact_kernel()
+    load_operations()
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    for low in (0.0, 10.0):
+        plate = edit.cut_bore(
+            edit.moved(edit.box(40.0, 20.0, 10.0), (0.0, 0.0, low)),
+            position=(0.0, 0.0, low + 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=12.0,
+        )
+        builder.Add(compound, plate.shape)
+    builder.Add(compound, edit.moved(edit.cylinder(3.0, 16.0), (0.0, 0.0, 2.0)).shape)
+    solid = Solid(compound)
+    if kernel == "brep":
+        entry = SceneObject(
+            id="obj_1", name="Platten", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    else:
+        mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+        entry = SceneObject(id="obj_1", name="Platten", mesh=mesh, features=detect(mesh))
+    body = as_mesh_data(entry.mesh)
+    assert body.component_count == 3, "Voraussetzung: zwei Platten und ein Stift"
+    bores = [
+        feature
+        for feature in entry.features.values()
+        if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+    ]
+    assert bores, "Voraussetzung: die Bohrung ist erkannt"
+    for feature in bores:
+        assert filled_bore_reason(body, feature) is OTHER_PART_IN_THE_BORE
+        with pytest.raises(ValidationError) as caught:
+            run_op("move_feature", entry, profile, at_feature=feature.id, x=8.0, y=0.0, z=10.0)
+        assert caught.value.detail is OTHER_PART_IN_THE_BORE
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -2795,14 +3037,87 @@ def test_a_closed_void_in_the_plate_keeps_a_separate_pin_editable(
     assert len([item for item in output.features.values() if item.kind == "slot"]) == 1
 
 
+def _shaft_with_a_cross_pin(kernel: str) -> SceneObject:
+    """Volle Welle Ø 30 × 40, quer hindurch eine Bohrung Ø 6 auf halber Höhe, darin
+    ein freier Stift Ø 5, 36 mm lang — er ragt an beiden Seiten 3 mm heraus."""
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    def across(start: float, radius: float, length: float) -> Any:
+        frame = gp_Ax2(gp_Pnt(start, 0.0, 20.0), gp_Dir(1.0, 0.0, 0.0))
+        return BRepPrimAPI_MakeCylinder(frame, radius, length).Shape()
+
+    shaft = BRepAlgoAPI_Cut(
+        BRepPrimAPI_MakeCylinder(15.0, 40.0).Shape(), across(-20.0, 3.0, 40.0)
+    ).Shape()
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, shaft)
+    builder.Add(compound, across(-18.0, 2.5, 36.0))
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Welle", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Welle", mesh=mesh, features=detect(mesh))
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_cross_pin_in_a_shaft_is_cut_only_inside_the_bore(profile: Profile, kernel: str) -> None:
+    """Ein Querstift in einer Welle: Der Langlochzug kürzt ihn nur in der Bohrung (RM-413).
+
+    Die Mündungen liegen im Mantel der Welle, die Bohrungswand schließt sich
+    nicht an zwei ebenen Ringen. Am Netz endete der Zug deshalb mit „sie ist
+    eine Wand, keine Bohrung“, während das Menü das getrennte Teil nannte und
+    der exakte Kern rechnete (Review Einheit 1, Runde 2). Jetzt nimmt das Netz
+    wie der exakte Kern den Zylinder aus den Kennzahlen: Vom Stift bleiben die
+    zwei Enden außerhalb der Welle, je 3 mm lang.
+    """
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry = _shaft_with_a_cross_pin(kernel)
+    bore = next(
+        name
+        for name, feature in entry.features.items()
+        if feature.kind == "hole" and abs(float(feature.params["diameter"]) - 6.0) < 0.3
+    )
+    rows = actions_for(entry.features[bore], entry.features, mesh=as_mesh_data(entry.mesh))
+    assert [row.op for row in rows if row.op is not None] == ["slot_hole"]
+
+    output = run_op("slot_hole", entry, profile, at_feature=bore, slot_length=12.0)
+
+    pieces = sorted(
+        abs(float(piece.volume))
+        for piece in as_mesh_data(output.mesh).raw.split(only_watertight=False)
+    )
+    assert len(pieces) == 3, f"Welle und zwei Stiftenden erwartet: {pieces}"
+    end = math.pi * 2.5**2 * 3.0
+    assert pieces[0] == pytest.approx(end, rel=0.02)
+    assert pieces[1] == pytest.approx(end, rel=0.02)
+
+
 @pytest.mark.parametrize("case", ["outside", "negative_child", "undecided"])
 @pytest.mark.parametrize("entry_point", ["menu", "operation"])
 def test_an_unproved_negative_skin_does_not_release_the_slot(
     profile: Profile, monkeypatch: pytest.MonkeyPatch, case: str, entry_point: str
 ) -> None:
-    """Eine lose oder widersprüchliche negative Haut ist keine belegte Hohlkammer."""
+    """Eine lose oder widersprüchliche negative Haut ist keine belegte Hohlkammer.
+
+    ``outside`` liegt im Spalt zwischen Stift und Bohrungswand: Eine Haut weit
+    neben dem Träger gehört nicht zu seiner Frage (RM-413).
+    """
     from app.core.geom import repair
-    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE
     from app.core.perceive.actions import actions_for
     from app.core.perceive.features import forget_cache
 
@@ -2818,8 +3133,9 @@ def test_an_unproved_negative_skin_does_not_release_the_slot(
 
         monkeypatch.setattr(repair._Shells, "inside", unreadable_negative_skin)
     else:
-        extra = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
-        extra.apply_translation((40.0 if case == "outside" else 12.0, 0.0, 5.0))
+        size = 0.2 if case == "outside" else 2.0
+        extra = trimesh.creation.box(extents=(size, size, size))
+        extra.apply_translation((2.75 if case == "outside" else 12.0, 0.0, 5.0))
         extra.invert()
         entry = dataclasses.replace(
             entry, mesh=MeshData.of(trimesh.util.concatenate((entry.mesh.raw, extra)))
@@ -2832,7 +3148,8 @@ def test_an_unproved_negative_skin_does_not_release_the_slot(
     else:
         with pytest.raises(ValidationError) as caught:
             run_op("slot_hole", entry, profile, at_feature=feature.id, slot_length=12.0)
-        assert caught.value.detail is HOLE_IS_NOT_EMPTY
+        assert caught.value.detail is OTHER_PART_IN_THE_BORE
+        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -2843,7 +3160,7 @@ def test_only_the_slot_action_accepts_a_separate_pin(
 ) -> None:
     """Die Freigabe gilt dem gemessenen Fremdkörper, nicht der Lippen-Ausnahme."""
     from app.core.geom.prepare_ops import (
-        HOLE_IS_NOT_EMPTY,
+        OTHER_PART_IN_THE_BORE,
         hole_has_separate_contents,
         hole_is_clear,
     )
@@ -2856,7 +3173,7 @@ def test_only_the_slot_action_accepts_a_separate_pin(
     mesh = as_mesh_data(entry.mesh)
     assert not hole_is_clear(mesh, feature), "Die allgemeine Sicherheitsfrage bleibt streng."
     assert hole_has_separate_contents(mesh, feature)
-    assert no_own_body(feature, (), False, mesh) is HOLE_IS_NOT_EMPTY
+    assert no_own_body(feature, (), False, mesh) is OTHER_PART_IN_THE_BORE
     rows = actions_for(feature, entry.features, mesh=mesh)
     assert [row.op for row in rows if row.op is not None] == ["slot_hole"]
 
@@ -2877,6 +3194,7 @@ def test_a_fixed_boss_is_not_a_separate_pin_for_the_slot(
     from app.core.brep.kernel import Solid
     from app.core.geom.prepare_ops import (
         HOLE_IS_NOT_EMPTY,
+        OTHER_PART_IN_THE_BORE,
         hole_has_separate_contents,
         hole_is_clear,
     )
@@ -2928,8 +3246,14 @@ def test_a_fixed_boss_is_not_a_separate_pin_for_the_slot(
     assert rows and all(row.op is None for row in rows)
     with pytest.raises(ValidationError) as caught:
         run_op("slot_hole", entry, profile, at_feature=feature.id, slot_length=72.0)
-    assert caught.value.detail is HOLE_IS_NOT_EMPTY
-    assert caught.value.suggestions
+    # Angeformt ist die Nabe Material der Bohrung; als eigenes Teil sagt es der
+    # andere Satz, mit dem Weg über die Einzelteile (RM-413).
+    fused = connection == "fused"
+    assert caught.value.detail is (HOLE_IS_NOT_EMPTY if fused else OTHER_PART_IN_THE_BORE)
+    assert [action.id for action in caught.value.suggestions] == [
+        "change_selection" if fused else "split_bodies",
+        "cancel",
+    ]
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -2951,7 +3275,7 @@ def test_a_buried_plate_is_not_a_separate_body_in_its_bore(
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.brep.kernel import Solid
-    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, hole_is_clear
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE, hole_is_clear
     from app.core.geom.repair import parts_inside_parts, parts_that_cross
     from app.core.perceive.actions import actions_for
 
@@ -3018,8 +3342,8 @@ def test_a_buried_plate_is_not_a_separate_body_in_its_bore(
                 at_feature=feature.id,
                 slot_length=12.0,
             )
-        assert caught.value.detail is HOLE_IS_NOT_EMPTY
-        assert caught.value.suggestions
+        assert caught.value.detail is OTHER_PART_IN_THE_BORE
+        assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
     assert np.array_equal(mesh.raw.vertices, original.vertices)
     assert np.array_equal(mesh.raw.faces, original.faces)
 
@@ -3616,7 +3940,7 @@ def test_an_undecided_containment_does_not_release_a_separate_pin(
 ) -> None:
     """Ein unentschiedener Strahl ist kein Beleg für einen freien Stift."""
     from app.core.geom import repair
-    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, hole_has_separate_contents
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE, hole_has_separate_contents
     from app.core.perceive.actions import actions_for
     from app.core.perceive.features import forget_cache
 
@@ -3639,7 +3963,7 @@ def test_an_undecided_containment_does_not_release_a_separate_pin(
     assert rows and all(row.op is None for row in rows)
     with pytest.raises(ValidationError) as caught:
         run_op("slot_hole", entry, profile, at_feature=feature.id, slot_length=12.0)
-    assert caught.value.detail is HOLE_IS_NOT_EMPTY
+    assert caught.value.detail is OTHER_PART_IN_THE_BORE
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])

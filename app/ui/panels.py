@@ -8011,8 +8011,6 @@ def feature_answers(
         unit = group_of(feature_id, functional)
         if unit is not None:
             unit_name = numbered_titles(functional)[unit.key]
-    if cancelled is not None:
-        cancelled.raise_if_cancelled()
     return _FeatureAnswers(cavity, tuple(actions), groups, unit, unit_name)
 
 

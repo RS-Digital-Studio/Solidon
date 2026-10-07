@@ -1269,26 +1269,7 @@ def parts_inside_parts(body: trimesh.Trimesh) -> list[tuple[float, float, float]
     aller belegt umschließenden Schalen: ab eins liegt die Schale im Material.
     Gefragt nach :func:`turn_shells_outward`, am geschlossenen Netz.
     """
-    return [place for place, depth, _undecided in _part_containment(body) if depth >= 1]
-
-
-def has_nested_parts(body: trimesh.Trimesh, *, cancelled: CancelToken | None = None) -> bool | None:
-    """Ob eine positive Schale im Material einer anderen liegt; ``None`` ohne Beleg.
-
-    Dieselbe Materialtiefe wie :func:`parts_inside_parts`, aber eine unsichere
-    Einschließung wird nicht als freie Baugruppe ausgegeben. Nur ``False``
-    belegt, dass keine positive Schale ganz in fremdem Material liegt.
-    Wie die Diagnose setzt die Frage ein geschlossenes, konsistent gerichtetes
-    Netz voraus.
-    Überschneidung und Kontakt bleiben die eigene Frage :func:`parts_that_cross`.
-    """
-    undecided = False
-    for _place, depth, unknown in _part_containment(body, cancelled=cancelled):
-        if unknown:
-            undecided = True
-        elif depth >= 1:
-            return True
-    return None if undecided else False
+    return [place for place, depth in _part_containment(body) if depth >= 1]
 
 
 def material_part_count(mesh: MeshData, *, cancelled: CancelToken | None = None) -> int | None:
@@ -1392,23 +1373,18 @@ def material_part_families(
     return families
 
 
-def _part_containment(
-    body: trimesh.Trimesh, *, cancelled: CancelToken | None = None
-) -> Iterator[tuple[Vec3, int, bool]]:
-    """Ort, belegte Materialtiefe und offene Strahlenfrage je positiver Schale."""
-    if cancelled is not None:
-        cancelled.raise_if_cancelled()
+def _part_containment(body: trimesh.Trimesh) -> Iterator[tuple[Vec3, int]]:
+    """Ort und belegte Materialtiefe je positiver Schale."""
     if not len(body.faces):
         return
-    shells = _Shells(body, cancelled=cancelled)
+    shells = _Shells(body)
     positive = np.flatnonzero(shells.volumes > 0.0)
     if len(positive) < 2:
         return
     for index, found in shells.containers_of(positive.tolist()):
         depth = sum(1 if shells.volumes[other] > 0.0 else -1 for other, answer in found if answer)
         middle = (shells.low[index] + shells.high[index]) / 2.0
-        place = (float(middle[0]), float(middle[1]), float(middle[2]))
-        yield place, depth, any(answer is None for _other, answer in found)
+        yield (float(middle[0]), float(middle[1]), float(middle[2])), depth
 
 
 def nested_part_families(body: trimesh.Trimesh) -> list[np.ndarray]:

@@ -925,6 +925,11 @@ class _FeatureAnswersWorker(Worker):
     (``placement_flow.for_a_worker``, ``on_the_copy``): Die trägen trimesh-
     Merker sind nicht threadsicher, und dieselbe Kopie nimmt danach der
     Platzierungsfluss — was hier warm wird, bleibt es dort.
+
+    Der Abbruch gilt, solange gerechnet wird. Eine fertige Antwort geht auch
+    hinaus, wenn ein neuer Klick den Arbeiter inzwischen abgelöst hat: Sie ist
+    vollständig, und der Klick zurück auf ihr Merkmal braucht sie
+    (``MainWindow._answers_arrived``).
     """
 
     done = Signal(object)
@@ -943,7 +948,6 @@ class _FeatureAnswersWorker(Worker):
         try:
             self.cancelled.raise_if_cancelled()
             answers = self._compute()
-            self.cancelled.raise_if_cancelled()
         except OperationCancelled:
             return
         self.done.emit(answers)

@@ -2431,18 +2431,15 @@ def _closed_at(
                     merge_face_contacts=True,
                 )
             )
-    if (
+    if feature.kind == "hole" and not (
         cavity
         and separate_contents
         and hole_has_separate_contents(mesh, feature, cancelled=cancelled)
     ):
-        # Nur der Langlochzug darf fremde Körper innerhalb der Bohrung schneiden.
-        # Sein Stopfen wird unten wie jede Bohrung an den eigenen Rändern gekappt.
-        tool = _feature_solid(feature, centre)
-    else:
-        tool = _tool_for(
-            mesh, feature, centre, alone=alone, quality=quality, seed=seed, cancelled=cancelled
-        )
+        # Den Stopfen einer Bohrung bauen unten Kennzahlen und Ränder; vom
+        # Werkzeug bliebe nur die Absage, wenn Material im Zylinder steht. Nur
+        # der Langlochzug darf getrennte Körper in der Bohrung schneiden.
+        _checked_bore_air(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
     # **Wo die Bohrung wirklich endet, sagen ihre Randringe** (22.09.2026). Ein
     # Stopfen aus Kennzahlen hat Deckel quer zu seiner Achse; eine schräge
     # Bohrung mündet aber in den Plattenflächen, und die Achsspanne ihrer Wand
@@ -2453,8 +2450,6 @@ def _closed_at(
     # den Flächen, aus denen die Bohrung kommt — und darf dafür zuerst länger
     # gebaut werden, denn geschnitten wird danach.
     planes = _rim_planes(mesh, feature) if cavity else ()
-    if planes and feature.kind == "slot":
-        tool = _feature_solid(_longer(feature), centre)
     # **Und für den Zapfen gilt dasselbe wie für die Bohrung**, nur andersherum:
     # Beim Abtragen muss das Werkzeug das Vieleck des Zapfens umschreiben,
     # sonst bleiben zwischen seinen Facetten und denen des Werkzeugs Splitter
@@ -2490,6 +2485,12 @@ def _closed_at(
         own = _pin_body(mesh, feature) if feature.kind == "pin" else None
         if own is not None:
             tool = _past_the_mouths(mesh, own)
+    elif planes and feature.kind == "slot":
+        tool = _feature_solid(_longer(feature), centre)
+    else:
+        tool = _tool_for(
+            mesh, feature, centre, alone=alone, quality=quality, seed=seed, cancelled=cancelled
+        )
     clipped = _cut_at_the_rims(tool, planes) if planes else None
     if clipped is not None:
         tool = clipped
@@ -2677,28 +2678,7 @@ def _tool_for(
     den **heutigen** Grund nennt und nicht den von gestern — siehe
     :data:`NO_OWN_BODY`.
     """
-    air: MeshData | None = None
-    if feature.kind == "hole" and not hole_is_clear(mesh, feature):
-        # Im Zylinder steht Material: eine Radinnenwand mit Speichen oder ein
-        # Topf mit Zapfen, kein Bohrungsmantel. Ob die Flächen einen Körper
-        # hergeben, ist dann gleich — der Pfropfen schlösse den Zapfen ein,
-        # und der Zylinder an der neuen Stelle nähme die Speichen mit. Gefragt
-        # wird vor dem Flächenkörper, der hier umsonst gebaut würde.
-        #
-        # **Außer, wo es nur ein Rand an der Wand ist** (Durchsicht 0.5.1,
-        # BOHRUNG-13): Die Haltelippe einer Magnettasche verengt die Mündung
-        # von Ø 8,25 auf 7,95 und zählte als Material im Zylinder. Dort ist das
-        # Werkzeug die Luft der Tasche selbst (:func:`_air_of_the_bore`), samt
-        # Lippe — gleich, ob die Erkennung dem Merkmal Flächen zuordnet.
-        air = _air_of_the_bore(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
-        if air is None:
-            raise ValidationError(
-                field="at_feature",
-                detail=HOLE_IS_NOT_EMPTY,
-                values={"feature": feature.id, "kind": feature.kind},
-                constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
-            )
+    air = _checked_bore_air(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
     # Beim Versetzen zählt der vorhandene Sehnenzug, nicht der Radius durch
     # die Dreiecksmitten. Sonst schrumpft eine fremd tessellierte Bohrung.
     # Und der Körper aus den Flächen endet bündig in den Oberflächen — als
@@ -2783,6 +2763,37 @@ def _tool_for(
     transform.moved(body, matrix)
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body)
+
+
+def _checked_bore_air(
+    mesh: MeshData,
+    feature: Feature,
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> MeshData | None:
+    """Die Luft einer Tasche, in deren Zylinder nur ein Rand steht; ``None`` für
+    eine freie Bohrung und jedes andere Merkmal.
+
+    Steht im Zylinder Material — eine Radinnenwand mit Speichen oder ein Topf
+    mit Zapfen, kein Bohrungsmantel —, sagt die Frage ab
+    (:func:`filled_bore_refusal`): Ein Pfropfen schlösse den Zapfen ein, und
+    der Zylinder an der neuen Stelle nähme die Speichen mit. Gefragt wird vor
+    jedem Flächenkörper, der sonst umsonst gebaut würde.
+
+    **Außer, wo es nur ein Rand an der Wand ist** (Durchsicht 0.5.1,
+    BOHRUNG-13): Die Haltelippe einer Magnettasche verengt die Mündung von
+    Ø 8,25 auf 7,95 und zählte als Material im Zylinder. Dort ist das Werkzeug
+    die Luft der Tasche selbst (:func:`_air_of_the_bore`), samt Lippe — gleich,
+    ob die Erkennung dem Merkmal Flächen zuordnet.
+    """
+    if feature.kind != "hole" or hole_is_clear(mesh, feature):
+        return None
+    air = _air_of_the_bore(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
+    if air is None:
+        raise filled_bore_refusal(mesh, feature)
+    return air
 
 
 def _bore_air_frame(
@@ -3726,6 +3737,7 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
         # entlang +Z (gemessen 29.09.2026, Regel 21).
         if feature.kind in EXACT_CAVITY_KINDS:
             _bore_vector(feature, "axis")
+        _refuse_another_part_in_the_bore(source, feature)
         return feature
     raise ValidationError(
         field="at_feature",
@@ -3733,6 +3745,32 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
         values={"feature": name, "kind": feature.kind, "op": op},
         constraint="not_movable",
     )
+
+
+def _refuse_another_part_in_the_bore(source: SceneObject, feature: Feature) -> None:
+    """Sagt ab, wenn im Zylinder dieser Bohrung ein getrenntes Teil steht.
+
+    Verschließen, Versetzen, Entfernen, Kippen und Ändern füllen die alte
+    Stelle oder schneiden durch sie — und verschmolzen dabei still den Stift,
+    der darin stand, mit dem Träger oder schnitten ihn ab: Am Netz galt ein
+    Stift Ø 5 in einer Bohrung Ø 6 als Haltelippe (:func:`_only_a_rim_inside`),
+    der exakte Weg fragte gar nicht (RM-413, gemessen 06.10.2026: nach
+    *Merkmal versetzen* ein Körper statt zwei). Das Menü sagt es seit jeher
+    (``perceive.actions.no_own_body``); hier sagt es die Operation auch.
+
+    *Verdoppeln* lässt die alte Stelle stehen und sagt trotzdem ab: Das Menü
+    stellt die Zeile seit jeher grau, und am Netz baute die Lippenregel die
+    Kopie aus der Luft um den Stift — ein Ring mit Kern (Review Einheit 1,
+    N1). Allein *Zum Langloch ziehen* schneidet ein freies Teil darin mit
+    (:func:`hole_has_separate_contents`) und fragt das selbst.
+    """
+    if feature.kind != "hole" or not feature.face_indices:
+        return
+    body = as_mesh_data(source.mesh)
+    if hole_is_clear(body, feature):
+        return
+    if filled_bore_reason(body, feature) is OTHER_PART_IN_THE_BORE:
+        raise filled_bore_refusal(body, feature)
 
 
 #: Wenn die Flächen eines beweglichen Merkmals es nicht als eigenen Körper
@@ -3861,6 +3899,19 @@ HOLE_IS_NOT_EMPTY: Final = _(
     "Bearbeiten Sie ihre Flächen einzeln."
 )
 
+#: Warum eine Bohrung nicht bearbeitbar ist, in deren Zylinder nur Material
+#: **eines anderen Teils** steht (Review ``e3dff1907``, F10): Ihr eigenes Teil
+#: ist dort frei, und „sie ist eine Wand“ wäre falsch. Steht das Teil frei
+#: darin, schneidet es allein *Zum Langloch ziehen*; jede andere Handlung
+#: braucht die Bohrung an ihrem eigenen Teil (:func:`filled_bore_reason`).
+OTHER_PART_IN_THE_BORE: Final = _(
+    "In dieser Bohrung liegt ein getrenntes Teil. Zerlegen Sie den Körper in "
+    "Einzelteile, dann lässt sich die Bohrung ohne das Teil bearbeiten."
+)
+
+#: Die beiden Sätze für eine Bohrung, in deren Zylinder Material steht.
+FILLED_BORE_REASONS: Final = (HOLE_IS_NOT_EMPTY, OTHER_PART_IN_THE_BORE)
+
 #: Wie weit innerhalb des gemessenen Radius :func:`hole_is_clear` nach
 #: Dreiecksmitten sucht — die eigene Wand liegt auf dem Radius, ein Steg,
 #: eine Nabe oder ein Zapfen deutlich darunter.
@@ -3918,6 +3969,77 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
 def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: float) -> bool:
     """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecksmitten."""
     return not len(_inside_the_bore(mesh, feature, radius, depth))
+
+
+def filled_bore_reason(mesh: MeshData, feature: Feature) -> TranslatableText:
+    """Warum diese Bohrung, in deren Zylinder Material steht, keine ist.
+
+    :data:`OTHER_PART_IN_THE_BORE`, wenn ihr eigenes Teil dort frei ist und
+    das Material zu einem anderen gehört — sonst :data:`HOLE_IS_NOT_EMPTY`.
+    Gemerkt je Körper und Bohrung wie :func:`hole_is_clear`.
+    """
+    from app.core.perceive.features import remembered
+
+    if not feature.face_indices:
+        return HOLE_IS_NOT_EMPTY
+    own_part_clear: bool = remembered(
+        "own_part_bore_clear",
+        mesh.raw,
+        feature.face_indices,
+        lambda: _own_part_bore_clear(mesh, feature),
+        extra=(
+            tuple(feature.params["centre"]),
+            tuple(feature.params.get("axis", (0.0, 0.0, 1.0))),
+            float(feature.params.get("diameter", 0.0)),
+            float(feature.params.get("depth", 0.0)),
+        ),
+    )
+    return OTHER_PART_IN_THE_BORE if own_part_clear else HOLE_IS_NOT_EMPTY
+
+
+def _own_part_bore_clear(mesh: MeshData, feature: Feature) -> bool:
+    """Ob der Zylinder dieser Bohrung an ihren eigenen Teilen allein leer ist.
+
+    Eigen sind die Teile, die ihren Mantel tragen — eines, oder mehrere, wenn
+    die Bohrung durch aufeinanderliegende Teile geht (am Laptop-Ständer
+    ``hole_3`` durch zwei Platten mit einem Zapfen darin).
+    """
+    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    if int(chosen.min()) < 0 or int(chosen.max()) >= mesh.triangle_count:
+        return False
+    groups = face_components(mesh.raw)
+    if len(groups) < 2:
+        return False
+    carrying = [group for group in groups if np.isin(chosen, group).any()]
+    if len(carrying) == len(groups):
+        return False
+    own = np.sort(np.concatenate(carrying))
+    part = trimesh.Trimesh(
+        vertices=np.asarray(mesh.raw.vertices),
+        faces=np.asarray(mesh.raw.faces)[own],
+        process=False,
+    )
+    own_feature = dataclasses.replace(
+        feature, face_indices=tuple(int(value) for value in np.searchsorted(own, chosen))
+    )
+    return hole_is_clear(MeshData.of(part), own_feature)
+
+
+def filled_bore_refusal(mesh: MeshData, feature: Feature) -> ValidationError:
+    """Die Absage an einer Bohrung, in deren Zylinder Material steht — mit dem
+    Weg, der zum Grund passt (:func:`filled_bore_reason`)."""
+    reason = filled_bore_reason(mesh, feature)
+    return ValidationError(
+        field="at_feature",
+        detail=reason,
+        values={"feature": feature.id, "kind": feature.kind},
+        constraint="not_movable",
+        suggestions=(
+            (SPLIT_BODIES, CANCEL)
+            if reason is OTHER_PART_IN_THE_BORE
+            else (CHANGE_SELECTION, CANCEL)
+        ),
+    )
 
 
 def hole_has_separate_contents(
@@ -3980,14 +4102,15 @@ def _hole_has_separate_contents_read(
         return False
     groups = face_components(mesh.raw)
     check_cancelled()
-    if len(groups) < 2:
+    near_groups = _near_the_carrier(mesh.raw, groups, chosen)
+    if near_groups is None or len(near_groups) < 2:
         return False
     welded = _welded(mesh)
     check_cancelled()
     faces = np.asarray(welded.faces)
     vertices = np.asarray(welded.vertices)
     host_found = False
-    for group in groups:
+    for group in near_groups:
         check_cancelled()
         indices = np.sort(group)
         part = trimesh.Trimesh(vertices=vertices, faces=faces[indices], process=False)
@@ -4006,11 +4129,21 @@ def _hole_has_separate_contents_read(
     if not host_found:
         return False
     check_cancelled()
+    if len(near_groups) == len(groups):
+        body, own = mesh.raw, chosen
+    else:
+        near = np.sort(np.concatenate(near_groups))
+        body = trimesh.Trimesh(
+            vertices=np.asarray(mesh.raw.vertices),
+            faces=np.asarray(mesh.raw.faces)[near],
+            process=False,
+        )
+        own = np.searchsorted(near, chosen)
     try:
-        # Ohne eigene Teileliste: Die Antwort bleibt am Netz, und die Boolesche
-        # Vorprüfung von *Zum Langloch ziehen* liest sie dort (RM-381).
+        # Ohne eigene Teileliste: Am ganzen Netz bleibt die Antwort dort, und die
+        # Boolesche Vorprüfung von *Zum Langloch ziehen* liest sie (RM-381).
         contact = parts_that_cross(
-            mesh.raw,
+            body,
             cancelled=cancelled,
             max_pairs=None,
             include_face_contacts=True,
@@ -4027,23 +4160,58 @@ def _hole_has_separate_contents_read(
     # Auch ohne Oberflächenschnitt kann ein Körper in fremdem Material liegen.
     # Nur entschiedene Materialfamilien tragen die Ausnahme; Innenhäute gehören
     # zu ihrem Träger und werden bei dessen Bohrung mitgeprüft.
-    families = material_part_families(mesh.raw, cancelled=cancelled)
+    families = material_part_families(body, cancelled=cancelled)
     check_cancelled()
     if families is None or len(families) < 2:
         return False
     for family in families:
         check_cancelled()
         indices = np.sort(family)
-        if np.isin(chosen, indices).all():
-            part = trimesh.Trimesh(vertices=vertices, faces=faces[indices], process=False)
+        if np.isin(own, indices).all():
+            part = trimesh.Trimesh(
+                vertices=np.asarray(body.vertices),
+                faces=np.asarray(body.faces)[indices],
+                process=False,
+            )
             own_feature = dataclasses.replace(
                 feature,
-                face_indices=tuple(int(value) for value in np.searchsorted(indices, chosen)),
+                face_indices=tuple(int(value) for value in np.searchsorted(indices, own)),
             )
             clear = hole_is_clear(MeshData.of(part), own_feature)
             check_cancelled()
             return clear
     return False
+
+
+def _near_the_carrier(
+    raw: trimesh.Trimesh, groups: Sequence[NDArray[np.int64]], chosen: NDArray[np.int64]
+) -> list[NDArray[np.int64]] | None:
+    """Der Träger und jedes Teil, das ihn berühren oder in seiner Bohrung stehen
+    kann — ``None``, wenn kein Teil alle gewählten Dreiecke trägt.
+
+    Wie Inhalt und Träger zusammenhängen, fragen Kontaktsuche und
+    Materialfamilien; zwei Teile, die sich weit daneben berühren, sagen
+    darüber nichts (Review ``e3dff1907``, F10: ein freier Stift galt als Wand,
+    weil sich zwei Würfel außerhalb der Platte berührten). Wessen Hüllquader
+    den des Trägers nicht berührt, kann weder an ihn stoßen noch in seiner
+    Bohrung stehen, noch in seinem Material stecken. Hängt der Inhalt über
+    eine Kette fremder Teile am Träger, berührt das letzte Glied den Träger
+    und gehört dazu — die Kontaktsuche sperrt dann wie bisher.
+    """
+    carrier = next(
+        (number for number, group in enumerate(groups) if np.isin(chosen, group).all()), None
+    )
+    if carrier is None:
+        return None
+    vertices, faces = np.asarray(raw.vertices), np.asarray(raw.faces)
+    corners = [vertices[np.unique(faces[group])] for group in groups]
+    low, high = corners[carrier].min(axis=0), corners[carrier].max(axis=0)
+    return [
+        np.asarray(group, dtype=np.int64)
+        for points, group in zip(corners, groups, strict=True)
+        if bool(np.all(points.min(axis=0) <= high + EPS_GEOM))
+        and bool(np.all(points.max(axis=0) >= low - EPS_GEOM))
+    ]
 
 
 def _slot_has_multiple_bodies(mesh: MeshData, cancelled: CancelToken) -> bool:
@@ -4076,6 +4244,8 @@ def _slot_in_separate_carrier(
     Ein Stopfen darf getrennte Teile nicht verbinden. Die unveränderte
     Eingabe belegt deshalb zuerst geschlossene, kontaktfreie Materialteile
     samt Innenhäuten. Berührende Körper bleiben beim gemeinsamen Pfad.
+    Gefragt werden der Träger und die Teile in seiner Nähe
+    (:func:`_near_the_carrier`); was weit daneben liegt, geht unverändert mit.
     """
     from app.core.geom.repair import (
         CROSSING_SEARCH_INCOMPLETE_DETAIL,
@@ -4089,11 +4259,26 @@ def _slot_in_separate_carrier(
     if not _slot_has_multiple_bodies(body, ctx.cancelled):
         return None
     raw = _welded(body)
-    if not raw.is_watertight or not raw.is_winding_consistent:
+    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    if chosen.size == 0:
+        return None
+    groups = face_components(raw)
+    near_groups = _near_the_carrier(raw, groups, chosen)
+    if near_groups is None:
+        return None
+    near = None if len(near_groups) == len(groups) else np.sort(np.concatenate(near_groups))
+    nearby = (
+        raw
+        if near is None
+        else trimesh.Trimesh(
+            vertices=np.asarray(raw.vertices), faces=np.asarray(raw.faces)[near], process=False
+        )
+    )
+    if not nearby.is_watertight or not nearby.is_winding_consistent:
         return None
     try:
         contact = parts_that_cross(
-            raw,
+            nearby,
             cancelled=ctx.cancelled,
             max_pairs=None,
             include_face_contacts=True,
@@ -4105,12 +4290,18 @@ def _slot_in_separate_carrier(
         return None
     if contact is not None:
         return None
-    families = material_part_families(raw, cancelled=ctx.cancelled)
-    if families is None or len(families) < 2:
+    families = material_part_families(nearby, cancelled=ctx.cancelled)
+    if families is None:
         return None
-    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    far = -1
+    if near is not None:
+        families = [near[np.sort(family)] for family in families]
+        far = len(families)
+        families.append(np.setdiff1d(np.arange(len(raw.faces), dtype=np.int64), near))
+    if len(families) < 2:
+        return None
     owners = [index for index, family in enumerate(families) if np.isin(chosen, family).all()]
-    if chosen.size == 0 or len(owners) != 1:
+    if len(owners) != 1:
         return None
     has_contents = feature.kind == "hole" and hole_has_separate_contents(
         body, feature, cancelled=ctx.cancelled
@@ -4207,10 +4398,12 @@ def _slot_in_separate_carrier(
                 return tuple(int(value) for value in np.searchsorted(indices, faces))
 
             slots = tuple(body.slots[int(face)] for face in indices) if body.slots else ()
+            # Was weit daneben liegt, geht ohne Verschweißung so mit, wie es kam.
+            origin = body.raw if index == far else raw
             mesh_part = MeshData.of(
                 trimesh.Trimesh(
-                    vertices=np.asarray(raw.vertices),
-                    faces=np.asarray(raw.faces)[indices],
+                    vertices=np.asarray(origin.vertices),
+                    faces=np.asarray(origin.faces)[indices],
                     process=False,
                 ),
                 slots,
@@ -4260,9 +4453,19 @@ def _slot_in_separate_carrier(
         else:
             tool_mesh = _body_from_faces(body, feature.face_indices, allowed_rings=(2,))
             if tool_mesh is None:
-                raise GeometryError(detail=HOLE_IS_NOT_EMPTY, suggestions=(SPLIT_BODIES, CANCEL))
+                # Mündungen in einer gekrümmten Fläche — eine Querbohrung durch
+                # eine Welle — schließen sich nicht an zwei ebenen Ringen. Dann
+                # wie am exakten Kern der Zylinder aus den Kennzahlen; vorher
+                # sagte der Zug hier „sie ist eine Wand“, während das Menü das
+                # getrennte Teil nannte (Review Einheit 1, Runde 2).
+                tool_mesh = _bore_tool_mesh(
+                    _bore_vector(feature, "centre"),
+                    _bore_vector(feature, "axis"),
+                    _bore_number(feature, "diameter"),
+                    _bore_number(feature, "depth"),
+                )
             for index, part in enumerate(parts):
-                if index != carrier:
+                if index not in (carrier, far):
                     cut_part = boolean(
                         "difference",
                         [as_mesh_data(part), tool_mesh],
@@ -6029,7 +6232,9 @@ class RemoveFeatureParams(BaseParams):
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 16: Mantel und Musterstopfen teilen achsparallele Facetten samt ihrer
     # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
-    cache_version="16",
+    # 17: ein getrenntes Teil in der Bohrung hält mit Weg an, statt still zu
+    # verschmelzen (RM-413).
+    cache_version="17",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -8364,7 +8569,9 @@ def _with_new_depth(feature: Feature, plan: _DepthPlan) -> Feature:
 
 
 def _bore_tool_mesh(centre: Vec3, axis: Vec3, diameter: float, depth: float) -> MeshData:
-    """Der Zylinder einer Bohrung als Netz — für die Nachbarprüfung am exakten Körper."""
+    """Der Zylinder einer Bohrung als Netz — für die Nachbarprüfung am exakten Körper
+    und als Schneidwerkzeug des Langlochzugs am Netz, wo sich die Bohrungswand nicht
+    schließen lässt (:func:`_slot_in_separate_carrier`); eine Änderung gilt beiden."""
     body = lathe.cylinder(radius=diameter / 2.0, height=depth, sections=BORE_SECTIONS)
     transform.moved(body, transform.rotation_between([0.0, 0.0, 1.0], list(axis)))
     body.apply_translation(np.asarray(centre, dtype=float))
@@ -8487,6 +8694,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     params = cast(ResizeHoleParams, ctx.params)
     source = ctx.inputs[0]
     feature = _chosen_bore(source, params.at_feature, op="resize_hole")
+    _refuse_another_part_in_the_bore(source, feature)
     # **Auch das Ändern führt eine Stelle** (Robert, 10.09.2026: „auch beim
     # ändern einer bohrung"). Damit bekommt *Bohrung ändern* dieselbe
     # Flächenplatzierung wie *Bohrung setzen*: Die Maße zu Kanten und Mitten
@@ -9182,7 +9390,9 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 17: exakt fragt die Kante am gefüllten Körper über die Schnittlänge, und ein
     #     Zug ohne Schließen zählt die alte Öffnung für die Kantenfrage als Material
     #     (RM-411).
-    cache_version="17",
+    # 18: gefragt werden nur Teile am Träger; ferne Teile kommen unverändert
+    #     zurück (RM-413).
+    cache_version="18",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -9261,13 +9471,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         and not hole_is_clear(body, feature)
         and not hole_has_separate_contents(body, feature, cancelled=ctx.cancelled)
     ):
-        raise ValidationError(
-            field="at_feature",
-            detail=HOLE_IS_NOT_EMPTY,
-            values={"feature": feature.id, "kind": feature.kind},
-            constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+        raise filled_bore_refusal(body, feature)
     # **Die Stelle kommt aus den Feldern, wo welche stehen** (Robert,
     # 10.09.2026: „einfach wie wenn ich eine bohrung setze"). Damit ist *Zum
     # Langloch ziehen* dieselbe Bedienung wie *Bohrung setzen*: Die
@@ -17473,7 +17677,9 @@ class PlugParams(BaseParams):
     # 4: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 5: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 6: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
-    cache_version="6",
+    # 7: ein getrenntes Teil in der Bohrung hält mit Weg an, statt still zu
+    # verschmelzen (RM-413).
+    cache_version="7",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
