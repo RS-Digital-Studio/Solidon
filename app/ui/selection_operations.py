@@ -40,6 +40,7 @@ from app.core.registry import (
     MENU_GROUPS,
     REGISTRY,
     OperationSpec,
+    PaletteEntry,
     catalogue_operations,
     caveat_line,
     folded_categories,
@@ -48,6 +49,7 @@ from app.core.registry import (
 )
 from app.core.registry.surfaces import SCENE_ACTIONS_IN_THE_CARD, menu_rank
 from app.i18n import sort_key, tr
+from app.ui.command_palette import fold, found_in_rounds
 from app.ui.icons import icon, icon_name_for
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.overlay import ContentScroller
@@ -475,6 +477,13 @@ class SelectionOperationsPanel(QWidget):
         self._nothing_chosen = False
         """Ob gerade nichts gewählt ist — die Stufe der ganzen Szene."""
         self._buttons: dict[str, QToolButton] = {}
+        self._list_twins: dict[str, QToolButton] = {}
+        """Je Hauptaktion ihr Knopf in der Liste — verborgen, solange sie oben steht.
+
+        Eine Hauptaktion der einen Stufe kann an einer anderen gelten, ohne dort
+        oben zu stehen: *Aushöhlen* an einer Fläche, *Reparieren* am ganzen
+        Körper. Ohne Listenknopf stand sie dann nirgends (gemessen 06.10.2026;
+        Fragebogen zu 0.5.3)."""
         self._groups: dict[str, tuple[QWidget, QToolButton, tuple[QToolButton, ...]]] = {}
         """Je Gruppe ihr Abschnitt, sein Umschalter und ihre Knöpfe.
 
@@ -492,6 +501,15 @@ class SelectionOperationsPanel(QWidget):
         self._query = ""
         """Der zuletzt eingegebene Suchtext — ein Stufenwechsel darf ihn nicht
         vergessen."""
+        self._entries = {
+            spec.name: PaletteEntry(
+                name=spec.name, title=spec.title, category=spec.category, doc=spec.doc
+            )
+            for spec in operations
+        }
+        """Je Handlung die Zeile, gegen die gesucht wird — wie in der Palette
+        (:func:`~app.ui.command_palette.found_in_rounds`): Titel, Name,
+        Beschreibung und Kundenwörter, gefaltet."""
         self._wrapped_for: tuple[int, int, tuple[str, ...], tuple[int, ...]] | None = None
         """Für welche Breiten und Hauptaktionen die Beschriftungen zuletzt
         umbrochen wurden (:meth:`_wrap_labels`)."""
@@ -597,10 +615,11 @@ class SelectionOperationsPanel(QWidget):
         grouped: dict[str, list[OperationSpec]] = {}
         ranks: dict[str, tuple[int, int, int, int]] = {}
         for spec in operations:
-            # Was oben stehen kann, steht nicht auch darunter: zwei Knöpfe für
-            # dieselbe Handlung sind eine Frage ohne Antwort.
-            if spec.name in self._quick_buttons:
-                continue
+            # **Was oben steht, steht nicht auch darunter** — zwei Knöpfe für
+            # dieselbe Handlung sind eine Frage ohne Antwort. Entschieden wird
+            # das je Stufe in :meth:`_filter`, nicht hier: Bis zum 06.10.2026
+            # bekam eine Hauptaktion gar keinen Listenknopf, und wo sie galt,
+            # ohne oben zu stehen, fehlte sie ganz (:attr:`_list_twins`).
             rank, title = _card_group(spec)
             ranks[title] = min(rank, ranks.get(title, rank))
             grouped.setdefault(title, []).append(spec)
@@ -621,7 +640,7 @@ class SelectionOperationsPanel(QWidget):
             self._grids[title] = box_layout
             buttons: list[QToolButton] = []
             for spec in sorted(grouped[title], key=lambda entry: sort_key(entry.title)):
-                button = self._operation_button(spec, box)
+                button = self._operation_button(spec, box, twin=spec.name in self._quick_buttons)
                 button.setObjectName("operationRow")
                 button.setAutoRaise(True)
                 button.setMinimumHeight(LIST_ROW_HEIGHT)
@@ -760,8 +779,14 @@ class SelectionOperationsPanel(QWidget):
             self._settle_print_section()
         return super().eventFilter(watched, event)
 
-    def _operation_button(self, spec: OperationSpec, parent: QWidget | None = None) -> QToolButton:
-        """Einen Registereintrag als direkte, tastaturfähige Handlung bauen."""
+    def _operation_button(
+        self, spec: OperationSpec, parent: QWidget | None = None, *, twin: bool = False
+    ) -> QToolButton:
+        """Einen Registereintrag als direkte, tastaturfähige Handlung bauen.
+
+        ``twin`` baut den Listenknopf einer Hauptaktion (:attr:`_list_twins`);
+        unter ihrem Namen in :attr:`_buttons` bleibt der Knopf oben.
+        """
         button = QToolButton(parent or self)
         button.setText(str(spec.title))
         button.setIcon(icon(icon_name_for(spec), button))
@@ -780,7 +805,7 @@ class SelectionOperationsPanel(QWidget):
         # einem Umbruch mitten im Titel fände „bohrung verschließen" sich
         # selbst nicht mehr.
         button.setProperty("operationTitle", str(spec.title))
-        self._buttons[spec.name] = button
+        (self._list_twins if twin else self._buttons)[spec.name] = button
         return button
 
     def add_window_action(self, name: str, category: str, action: QAction) -> bool:
@@ -1161,15 +1186,21 @@ class SelectionOperationsPanel(QWidget):
             self._query = query
         # Ohne Auswahl ist das Suchfeld verborgen; ein Suchtext von der
         # letzten Auswahl filterte sonst unsichtbar die Handlungen weg.
-        wanted = "" if self._nothing_chosen else self._query.strip().casefold()
-        found = 0
+        wanted = "" if self._nothing_chosen else self._query.strip()
+        hits = self._search_hits(wanted)
+        # Ein getroffener Hauptknopf oben ist ein Treffer — sonst sagte die
+        # Liste „Kein Treffer“ unter dem Knopf, der gesucht war.
+        found = sum(1 for name in self._quick_shown if name in hits) if wanted else 0
         for title, (section, toggle, buttons) in self._groups.items():
             shown = 0
             for button in buttons:
-                label = str(button.property("operationTitle") or button.text())
-                match = not wanted or wanted in f"{title} {label}".casefold()
-                fits = self._fits_the_level(str(button.property("operationName")))
-                visible = match and fits and button.isEnabled()
+                name = str(button.property("operationName"))
+                visible = (
+                    (not wanted or name in hits)
+                    and self._fits_the_level(name)
+                    and button.isEnabled()
+                    and name not in self._quick_shown
+                )
                 button.setVisible(visible)
                 shown += visible
             section.setVisible(shown > 0)
@@ -1184,11 +1215,71 @@ class SelectionOperationsPanel(QWidget):
                 # zweien offen. Gerechnet wird an der Stufe, nicht am Bestand.
                 toggle.setChecked(shown <= OPEN_UP_TO)
             found += shown
-        self._say_there_is_nothing(found, bool(wanted))
+        self._say_there_is_nothing(found, bool(wanted), self._needs_another_choice(hits))
         # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
         # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
         self._arrange_groups()
         self._wrap_labels()
+
+    def _search_hits(self, wanted: str) -> frozenset[str]:
+        """Welche Handlungen der Suchtext trifft — wie in der Befehlspalette.
+
+        Titel, Name, Beschreibung und Kundenwörter, gefaltet, in den Runden
+        von :func:`~app.ui.command_palette.found_in_rounds`: „verschmelzen“
+        findet *Vereinigen*, „aushoehlen“ das *Aushöhlen*, „löschen“ das
+        *Objekt entfernen*. Bis zum 06.10.2026 verglich die Karte nur Titel
+        und Gruppe und fand keines davon (Fragebogen zu 0.5.3). **Eine
+        getroffene Gruppe** nimmt ihre Handlungen mit, wie bisher: „formgebung“
+        zeigt die ganze Gruppe.
+        """
+        if not wanted:
+            return frozenset()
+        found, _loosened = found_in_rounds(tuple(self._entries.values()), wanted)
+        parts = fold(wanted).split()
+        in_a_group = {
+            str(button.property("operationName"))
+            for title, (_section, _toggle, buttons) in self._groups.items()
+            if all(part in fold(title) for part in parts)
+            for button in buttons
+        }
+        return frozenset(str(entry.name) for entry in found) | in_a_group
+
+    def _needs_another_choice(self, hits: frozenset[str]) -> str:
+        """Der Satz zu einem Treffer, der an dieser Auswahl nicht geht — oder nichts.
+
+        Wer an einem Körper „verschmelzen“ sucht, meint *Vereinigen*, und das
+        braucht zwei. Ein „Kein Treffer“ wäre falsch und eine Sackgasse; der
+        Grund aus der Freigabe (:meth:`_take_availability`) sagt, wie das
+        zweite Objekt dazukommt. Genannt wird der erste Treffer in der
+        Reihenfolge des Titels, der einen Grund trägt.
+        """
+        locked = [
+            name
+            for name in hits
+            if name in self._buttons
+            and self._states.get(name, (True, ""))[1]
+            and not self._states.get(name, (True, ""))[0]
+        ]
+        if not locked:
+            return ""
+        name = min(locked, key=lambda entry: sort_key(str(self._entries[entry].title)))
+        return tr(
+            "{name}: {value}", name=str(self._entries[name].title), value=self._states[name][1]
+        )
+
+    def button_for(self, name: str) -> QToolButton | None:
+        """Der Knopf, an dem die Handlung gerade steht — oben oder ihre Zeile in der Liste.
+
+        Eine Hauptaktion hat zwei (:attr:`_list_twins`), und sichtbar ist
+        höchstens einer. Wer auf die Handlung zeigt — Anleitung, Tour —, fragt
+        hier und nicht nach dem oberen: An einer Fläche steht *Aushöhlen* nur
+        in der Liste. Steht sie gerade nirgends (Suche, Stufe), ist es der
+        Knopf, der an dieser Stufe für sie gilt.
+        """
+        twin = self._list_twins.get(name)
+        if twin is not None and name not in self._quick_shown:
+            return twin
+        return self._buttons.get(name)
 
     def _take_availability(self, availability: Callable[[str], tuple[bool, str]]) -> None:
         """Freigabe und Hinweis jedes Knopfes nachführen — nur, wo sie sich ändern."""
@@ -1208,14 +1299,17 @@ class SelectionOperationsPanel(QWidget):
             if self._states.get(name) == state:
                 continue
             self._states[name] = state
-            button.setEnabled(enabled)
-            spec_tip = button.property("operationTip")
-            if spec_tip is None:
-                spec_tip = button.toolTip()
-                button.setProperty("operationTip", spec_tip)
-            tip = str(spec_tip) if enabled or not reason else reason
-            button.setToolTip(tip)
-            button.setAccessibleDescription(tip)
+            for shown in (button, self._list_twins.get(name)):
+                if shown is None:
+                    continue
+                shown.setEnabled(enabled)
+                spec_tip = shown.property("operationTip")
+                if spec_tip is None:
+                    spec_tip = shown.toolTip()
+                    shown.setProperty("operationTip", spec_tip)
+                tip = str(spec_tip) if enabled or not reason else reason
+                shown.setToolTip(tip)
+                shown.setAccessibleDescription(tip)
 
     def _without_a_selection(self, availability: Callable[[str], tuple[bool, str]]) -> None:
         """Ohne Auswahl: die Handlungen für alle Körper und der Weg zu den Bausteinen.
@@ -1250,7 +1344,7 @@ class SelectionOperationsPanel(QWidget):
         else:
             self.catalogRequested.emit()
 
-    def _say_there_is_nothing(self, found: int, searching: bool) -> None:
+    def _say_there_is_nothing(self, found: int, searching: bool, elsewhere: str = "") -> None:
         """Die leere Liste sagt, warum sie leer ist — und lädt nicht zum Suchen ein.
 
         Zwei verschiedene Leeren, und sie brauchen zwei Sätze: Wer **sucht**,
@@ -1263,6 +1357,10 @@ class SelectionOperationsPanel(QWidget):
         „Weitere Operationen durchsuchen" verspricht, während die Liste
         darunter leer ist und leer bleibt, stellt eine Frage, auf die es
         keine Antwort gibt (Befund Robert, 18.09.2026).
+
+        ``elsewhere`` ist der Satz zu einem Treffer, der eine andere Auswahl
+        braucht (:meth:`_needs_another_choice`) — er tritt an die Stelle von
+        „Kein Treffer“, denn es gibt einen, nur nicht hier.
         """
         if self._nothing_chosen:
             # Ohne Auswahl gibt es nichts zu durchsuchen: Was dasteht, sind
@@ -1288,7 +1386,7 @@ class SelectionOperationsPanel(QWidget):
             # Liste und zugleich der Weg zurück.
             self.search.setVisible(True)
             self.scroller.setVisible(False)
-            self._nothing.setText(tr("Kein Treffer — versuchen Sie ein anderes Wort."))
+            self._nothing.setText(elsewhere or tr("Kein Treffer — versuchen Sie ein anderes Wort."))
             self._nothing.setVisible(True)
             return
         self._only_this_sentence(tr("Was sich hier tun lässt, steht oben bei den Maßen."))

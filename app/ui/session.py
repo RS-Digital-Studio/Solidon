@@ -98,7 +98,14 @@ from app.core.scene import (
     orphans,
 )
 from app.core.scene.evaluate import conversion_finding, evaluate
-from app.core.scene.history import Dependencies, MoveTarget, RevisionPlan, StepNeed, change_for
+from app.core.scene.history import (
+    Dependencies,
+    MoveTarget,
+    RevisionPlan,
+    StepNeed,
+    change_for,
+    shown_before,
+)
 from app.core.scene.parameter_usage import bounds_refusal, bounds_refusal_with
 from app.core.scene.project import (
     Project,
@@ -4964,17 +4971,11 @@ class Session(QObject):
     def displayed_document(self) -> Any:
         """Das Dokument, das die Oberfläche zeigt — bei einer Einfügemarke der Stand davor.
 
-        Eine flache Kopie mit den Schritten vor der Marke und ohne Passungen:
-        Passungen gelten dem Endstand, und am Stand davor wäre ihr Merkmal oft
-        noch gar nicht da (§14). Das Dokument selbst bleibt, wie es ist.
+        Die Regel steht einmal (``history.shown_before``): Der Verlauf rechnet
+        an demselben Stand, was ein späterer Schritt wieder entfernt. Das
+        Dokument selbst bleibt, wie es ist.
         """
-        document = self.project.document
-        marker = self._insert_before
-        if marker is None:
-            return document
-        return dataclasses.replace(
-            document, ops=[entry for entry in document.ops if entry.id < marker], fits=[]
-        )
+        return shown_before(self.project.document, self._insert_before)
 
     def start_inserting(self, before: int) -> bool:
         """Die Einfügemarke vor ``before`` setzen (P7.1).

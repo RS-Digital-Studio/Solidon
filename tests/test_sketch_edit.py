@@ -719,8 +719,6 @@ def test_section_ends_within_the_kernels_own_tolerance_become_one_point() -> Non
     als beide Eckpunkttoleranzen zusammen — nicht mehr: Bei Toleranzen eines
     sauberen Körpers bleibt dieselbe Lücke stehen. Doppelte Kanten und
     Strecken ohne Länge entfallen."""
-    from tests.helpers import exact_kernel
-
     exact_kernel()
     from app.core.brep.section import SectionCurve, _joined
 
@@ -1660,8 +1658,6 @@ def test_the_outline_of_an_exact_face_keeps_its_circle_and_its_arcs() -> None:
     die Rundung einer Ecke als Bogen — und zwar richtig herum, auf der Deck-
     wie auf der Bodenfläche, deren Rahmen gespiegelt liegt. Geprüft an der
     Fläche, die der gelöste Umriss einschließt."""
-    from tests.helpers import exact_kernel
-
     brep = exact_kernel()
     from app.core.brep.features import features_of
     from app.core.sketch import solve_sketch
@@ -1735,8 +1731,6 @@ def test_the_outline_of_an_exact_plate_with_a_slot_keeps_its_hole() -> None:
     keinen Umriss (gefunden an der Platte, 23.09.2026). Soll ist die Analytik:
     40·30 − (12·6 + π·3²), an Deck- und Bodenfläche.
     """
-    from tests.helpers import exact_kernel
-
     brep = exact_kernel()
     from app.core.brep.features import features_of
     from app.core.sketch import solve_sketch

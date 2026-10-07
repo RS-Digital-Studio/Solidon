@@ -154,7 +154,8 @@ passt nicht — mach es passend" stellt uns neben zwei eingestellte Programme.
 
 ### 2.4 Generieren (Säule B)
 
-**Stand:** ComfyUI lokal über HTTP, Hunyuan3D 2.1 als Graph in einer Datendatei,
+**Stand:** ComfyUI lokal über HTTP, Hunyuan3D 2.1 als Graph in einer Datendatei
+(Modellwahl heute: [Weg 3 — Lizenzkette](../entscheidung-weg-3-lizenzkette.md)),
 `text_to_mesh` über SDXL als Zwischenschritt, danach zwingend die
 Reparaturkette. Kein gehosteter Backend (P11 offen).
 
@@ -631,9 +632,9 @@ zitieren will, holt sie sich beim Projekt.
 
 ## Nachtrag 19.09.2026 — Netz zu parametrischem CAD
 
-Anlass ist der CAD-Plan ([konzept-vollwertiges-cad-2026-09.md](konzept-vollwertiges-cad-2026-09.md))
+Anlass ist der CAD-Plan ([konzept-vollwertiges-cad-2026-09.md](../konzept-vollwertiges-cad-2026-09.md))
 mit seiner Zusage, Netz und exakten Körper gleich bearbeitbar zu machen und ein
-importiertes Netz nachzubauen. Die [Durchsicht vom 19.09.](durchsicht-cad-konzepte-2026-09.md)
+importiertes Netz nachzubauen. Die [Durchsicht vom 19.09.](../durchsicht-cad-konzepte-2026-09.md)
 hat dazu die Hersteller-Hilfen gelesen; hier steht, was der Markt dort kann,
 Stand September 2026.
 

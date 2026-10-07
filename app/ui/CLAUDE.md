@@ -130,7 +130,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 |---|---|
 | `viewport.py` | Viewport: Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse, Schnitt, `PreviewBanner`; Zuordnung mit Kandidat und Vorbezug |
 | `render/` | der Renderer hinter der Ansicht — eigene Karte |
-| `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, Raumvertrag `is_room_taker`, `FittedScroller`; ein natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
+| `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, `CardGrip`, `is_room_taker`, `FittedScroller`; natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
 | `cursors.py` | Mauszeiger (§19.3, Regel 18) |
 | `spacemouse.py` | 3D-Maus: hidapi, auf macOS 3Dconnexion; reine `camera_step` gemeinsam für Kappe, gedrücktes Rad und Flugtasten |
 
@@ -254,7 +254,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `guide_targets.py` | Ziele für Tour und `tools/make_guides.py`: `widget_for`, `area_for`, `action_for`; fehlend: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
-| `shortcut_schemes.py` | Kürzelbelegungen und Plattformtasten, eine Quelle; `NavigationKeys` lässt Pos1, Ende, Bild auf und Bild ab dem fokussierten Inhalt |
+| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac |
 | `command_palette.py` | die Befehlspalette (§2.6, §19.2) |
 
 ### Einstellungen und Rückmeldung

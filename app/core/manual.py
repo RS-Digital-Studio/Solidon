@@ -283,10 +283,13 @@ def _where_to_start_page() -> Page:
         str(
             _(
                 "**Auswählen geht in zwei Stufen.** Der erste Klick wählt das ganze Teil, "
-                "der zweite die Fläche darin; `Esc` geht eine Stufe zurück. Rechts unter "
-                "*Auswahl* stehen dann die Handlungen, die dazu passen. Der Rechtsklick "
-                "zeigt, was es nur an dieser Stelle gibt: den Schritt, aus dem sie stammt, "
-                "das Zeichnen auf der Fläche und das Ausblenden des Körpers."
+                "der zweite die Fläche darin; `Esc` geht eine Stufe zurück. Ein gerade "
+                "angelegtes Teil ist schon gewählt, dort wählt der erste Klick die Fläche. "
+                "Ein weiteres Teil nehmen Sie mit gedrückter Umschalt- oder `Strg`-Taste "
+                "dazu, am Mac mit `⌘`. Rechts unter *Auswahl* stehen dann die Handlungen, "
+                "die dazu passen. Der Rechtsklick zeigt den Schritt, aus dem die Stelle "
+                "stammt, das Zeichnen auf der Fläche, das Ausblenden, *Objekt entfernen* "
+                "und bei mehreren Teilen *Vereinigen*."
             )
         ),
         str(
@@ -402,7 +405,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Rechts daneben drei Reiter:** *Auswahl*, *Prüfbericht* und *Chat*. Beim "
             "Zeichnen kommt einer für die Bedingungen dazu, in der Tour einer für ihre "
             "Schritte. F9 blendet den ganzen Bereich aus; dann hat das Modell den Platz, "
-            "und die Statusleiste zählt die offenen Befunde.\n\n"
+            "und die Statusleiste zählt die offenen Befunde. Beide Karten lassen sich "
+            "am Griff oben rechts verschieben, mit der Maus oder den Pfeiltasten. Ein "
+            "Doppelklick auf den Griff oder *Ansicht → Karten an ihren Platz* legt sie "
+            "zurück.\n\n"
             "**Die Auswahl** kommt nach vorn, sobald Sie im Bild oder im Objektbaum etwas "
             "anklicken. Oben stehen die Maße dessen, was Sie "
             "angeklickt haben, darunter die passenden Handlungen, vorn die häufigsten: "
@@ -581,7 +587,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "markierten bleibt der Reiter, wie er war.\n\n## Was mit einem Merkmal "
             "sonst noch geht\n\n**Entf trifft das Merkmal, nicht den Körper.** Ist "
             "eine Bohrung gewählt, nimmt die Taste die Bohrung weg; ohne gewähltes "
-            "Merkmal löscht sie das Objekt.\n\n**Der Griff sitzt am gewählten "
+            "Merkmal löscht sie alle markierten Objekte.\n\n**Der Griff sitzt am gewählten "
             "Merkmal.** Wer eine Bohrung wählt und *Bewegen* holt, findet ihn an "
             "ihrer Öffnung. Ein Zug daran wird *Merkmal verschieben* oder *Merkmal "
             "drehen*, das Teil bleibt stehen. Einen Skalierwürfel gibt es dort "

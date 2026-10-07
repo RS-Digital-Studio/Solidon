@@ -867,7 +867,7 @@ eine Ecke, Klick.** Eine Ecke sind zwei Linienenden am selben Ort — gesucht
 ## Die Karte unten: vier Gruppen, ein Hinweis, kein doppelter Satz
 
 Robert: „das zeichen panel ein bisschen übersichtlicher gestalten". Drei
-Dinge, alle drei aus der Durchsicht `konzepte/durchsicht-zeichenmodus-2026-09.md`:
+Dinge, alle drei aus der Durchsicht `konzepte/archiv/durchsicht-zeichenmodus-2026-09.md`:
 
 * **Die Werkzeuge stehen in vier Gruppen mit drei Strichen** (`style.divider`):
   Auswählen — Punkt, Linie, Rechteck, Kreis, Bogen, Kurve, Vieleck, Langloch —

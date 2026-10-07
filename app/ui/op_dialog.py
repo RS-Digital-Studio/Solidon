@@ -3365,9 +3365,11 @@ class OperationDialog(QDialog):
                     self._rows["angle"].setRowVisible(editor, active)
                     shown["angle"] = active
                     changed = True
-            # Eine Zeile weniger ist ein kürzerer Dialog, eine mehr ein
-            # längerer. Nur wenn sich etwas bewegt hat: ``follow`` läuft bei
-            # jedem Tastendruck. Und nicht über ``adjustSize`` — das deckelt
+            # Eine Zeile mehr ist ein längerer Dialog; eine weniger gibt keine
+            # Höhe zurück, sonst spränge der Rahmen bei jedem Statuswechsel
+            # (passiv, ``style._content_size_for_intent``, RM-487). Nur wenn
+            # sich etwas bewegt hat: ``follow`` läuft bei jedem Tastendruck.
+            # Und nicht über ``adjustSize`` — das deckelt
             # bei zwei Dritteln der Bildschirmhöhe und kappte eine aufgeklappte
             # Rückseite (gemessen 14.09.2026, *Bohrung setzen* offscreen bei
             # 800 Punkten Höhe: aufgeklappt 552, *Langloch* an 582, wieder

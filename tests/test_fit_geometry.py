@@ -353,7 +353,14 @@ def native_pair(profile: Profile, *, floor: bool = False) -> Scene:
 
 
 def native_bytes(scene: Scene) -> dict[str, bytes]:
-    """Auch Topologie- und Prüfkennzeichen zählen zum unveränderten nativen Eingang."""
+    """Auch Topologie- und Prüfkennzeichen zählen zum unveränderten nativen Eingang.
+
+    Eine Szene ohne Körper braucht keinen exakten Kern: Die Netzfälle rufen
+    den Helfer mit leerer nativer Szene und übersprangen sich sonst ohne
+    OpenCASCADE (Review 06.10.2026, N5).
+    """
+    if not scene.objects:
+        return {}
     exact_kernel()
     from io import BytesIO
 

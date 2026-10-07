@@ -49,6 +49,7 @@ from PySide6.QtGui import (
     QCursor,
     QDragEnterEvent,
     QDropEvent,
+    QKeyEvent,
     QKeySequence,
     QShortcut,
     QShowEvent,
@@ -69,11 +70,13 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
     QTabWidget,
+    QTextEdit,
     QToolBar,
     QToolButton,
     QVBoxLayout,
@@ -250,8 +253,8 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
-from app.i18n import TranslatableText, _, format_decimal, tr
-from app.ui import first_run
+from app.i18n import TranslatableText, _, format_decimal, key_platform, tr
+from app.ui import app_events, first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
     DisclosureResult,
@@ -261,7 +264,7 @@ from app.ui.ai_disclosure import (
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
-from app.ui.command_palette import CommandPalette, fold
+from app.ui.command_palette import CommandPalette, fold, native_key
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
@@ -336,7 +339,10 @@ from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog
 from app.ui.overlay import (
     CARD_PADDING,
+    SIDE_CARDS,
     CardColumn,
+    CardGrip,
+    CardPlace,
     CurrentPageTabs,
     OverlayHost,
     card_stylesheet,
@@ -386,6 +392,7 @@ from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
     delete_keys,
+    deletes,
     install_navigation_keys,
     redo_keys,
     shortcut_for,
@@ -435,6 +442,11 @@ RECENT_WAIT_S = 0.05
 
 #: Wie oft danach nachgesehen wird, ob die Prüfung zurück ist.
 RECENT_POLL_MS = 100
+
+#: Wie lange nach dem letzten Verschieben einer Seitenkarte die Einstellungen
+#: geschrieben werden — lang genug für eine gehaltene Pfeiltaste, kurz genug,
+#: dass ein Absturz danach die Lage nicht verliert.
+CARD_PLACES_SAVE_MS = 500
 
 #: Zwei Sätze, die diese Datei je viermal sagte.
 #:
@@ -738,6 +750,46 @@ FEATURE_TWINS: Final[dict[str, str]] = {
     "scale_object": "resize_feature",
     "delete_object": "remove_feature",
 }
+
+
+class _DeleteRefusal(QObject):
+    """Entf an einer Auswahl, die gerade nicht entfernt werden kann, sagt warum.
+
+    Fragebogen S-20261006-5be329: „die Entf taste löscht weder Merkmal noch
+    Körper“. Hält die Kette an einem Schritt (§15.3) oder ist die Testzeit
+    abgelaufen, ist *Objekt entfernen* gesperrt, und mit ihm Entf. Qt führt
+    ein gesperrtes Kürzel nicht aus und meldet nichts: Der Druck geht als
+    gewöhnlicher Tastendruck an das Bedienelement mit dem Fokus, und dort
+    tut er nichts. Der Menüeintrag trug den Grund, die Taste nicht.
+
+    Ein Zuhörer am einen Filter der Anwendung (:mod:`app.ui.app_events`) und
+    keine zweite Aktion auf derselben Taste — zwei Aktionen auf Entf im
+    selben Bereich führt Qt beide nicht aus
+    (``test_no_two_shortcuts_in_the_window_collide``). Er sieht den Druck
+    nur, wenn kein freigegebenes Kürzel ihn genommen hat.
+    """
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Nimmt den Druck nur, wenn das Fenster den Grund gesagt hat.
+
+        Gefragt wird am Bedienelement mit dem Fokus: Ein Tastendruck, den es
+        nicht annimmt, wandert zu seinen Eltern und käme sonst je Stufe
+        einmal hier an.
+        """
+        if not isinstance(watched, QObject):  # laut Signatur unmöglich
+            return False  # type: ignore[unreachable]
+        window = self.parent()
+        if (
+            event.type() == QEvent.Type.KeyPress
+            and isinstance(event, QKeyEvent)
+            and not event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
+            and deletes(event.key(), sys.platform)
+            and isinstance(window, MainWindow)
+            and isinstance(watched, QWidget)
+            and watched is QApplication.focusWidget()
+        ):
+            return window._refuse_delete(watched)
+        return False
 
 
 class _ActionNotice(SketchSelectionBadge):
@@ -2265,9 +2317,23 @@ def _needs_objects(count: int) -> str:
     """
     if count <= 1:
         return tr("Wählen Sie zuerst ein Objekt im Objektbaum.")
+    # Am Mac nimmt ⌘ und Klick dazu, nicht Control: „Strg“ ist für Qt dort die
+    # Befehlstaste (``app.i18n.keys``). ``native_keys`` wandelt nur Kürzel mit
+    # „+“, „Strg und Klick“ bliebe stehen — die Taste kommt als Wert.
+    key = "⌘" if key_platform() == "darwin" else tr("Strg", context="Taste")
+    if count == 2:
+        return tr(
+            "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder {key}"
+            " und Klick — im Objektbaum oder im Bild.",
+            key=key,
+        )
+    # Ab drei Eingängen die Zahl: *Einlagen für neues Profil* nimmt vier, und „braucht
+    # zwei Objekte“ ließ den Kunden nach dem zweiten ratlos stehen.
     return tr(
-        "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder Strg"
-        " und Klick — im Objektbaum oder im Bild."
+        "Diese Operation braucht {count} Objekte. Weitere dazu mit Umschalt oder {key}"
+        " und Klick — im Objektbaum oder im Bild.",
+        count=count,
+        key=key,
     )
 
 
@@ -2808,6 +2874,9 @@ class MainWindow(QMainWindow):
         """Das Ergebnis, das während des Aufbaus hereinkam — nachgeholt, sobald
         er fertig ist."""
 
+        self._scoped_actions: list[QAction] = []
+        """Die Aktionen auf nackten Tasten (:meth:`_scope_shortcut`) — für den
+        Reiter *Auswahl*, der nach den Menüs entsteht."""
         self._build_central()
         self._build_status_bar()
         self._build_menus()
@@ -2892,6 +2961,13 @@ class MainWindow(QMainWindow):
     # --- construction -----------------------------------------------------------
 
     def _build_central(self) -> None:
+        # **Der Griff einer Seitenkarte entsteht vor ihrem Inhalt**: Die
+        # Fokuskette folgt der Entstehung, und ein Umhängen im selben Fenster
+        # lässt seinen Platz darin stehen. So steht er vorn in der Tabfolge
+        # seiner Karte (``CardGrip``); Wirt und Ecke bekommt er, wenn die
+        # Karten stehen. Der rechte entsteht vor dem Bericht.
+        self._left_grip = CardGrip(None, "left", tr("Karte Objekte verschieben"), self)
+        self._left_grip.hide()
         self.object_tree = ObjectTree(self)
         # Die Vorschaubilder im Baum werden für ein Thema gezeichnet — beim
         # Aufbau ist das die Einstellung, nicht die Vorgabe der Klasse.
@@ -3586,6 +3662,9 @@ class MainWindow(QMainWindow):
         bottom_layout.addWidget(self.pose_bar)
         bottom_layout.addWidget(self.tools)
 
+        # Vor dem ersten Inhalt der rechten Karte, siehe ``_left_grip``.
+        self._right_grip = CardGrip(None, "right", tr("Karte Auswahl verschieben"), self)
+        self._right_grip.hide()
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
         self.report.bundleActivated.connect(self._on_bundle_activated)
@@ -3628,7 +3707,10 @@ class MainWindow(QMainWindow):
         # aus dem Fenster und verbarg Merkmale/Bausteine vollständig.
         self.right.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored)
         self.right.setMinimumHeight(120)
-        self.right.addTab(self.report, tr("Prüfbericht"))
+        # **Ein kurzer Name am Reiter** (Kontext „Reiter“): In vier Sprachen ist
+        # der volle Name doppelt so lang, und die Leiste neben dem Griff zeigte
+        # Rollpfeile. Handbuch und Menü behalten den vollen Namen.
+        self.right.addTab(self.report, tr("Prüfbericht", context="Reiter"))
         self.right.addTab(self.chat, tr("Chat"))
         # Der Reiter trägt, wie viele Fehler und Warnungen hinter ihm stehen.
         # Ohne die Zahl bleibt eine Warnung unsichtbar, solange Chat oder Tour
@@ -3699,6 +3781,32 @@ class MainWindow(QMainWindow):
         self.right.setObjectName("rightTabs")
         self.overlay = OverlayHost(self.middle_stack, self)
         self.overlay.set_zones(left, self.right_column, bottom)
+        # **Die Seitenkarten lassen sich verschieben** (Entscheidung Robert,
+        # 06.10.2026, nach dem Fragebogen zu 0.5.3: „Bewegliche Menüs?“). Der
+        # Griff steht links in der Ecke der Kopfzeile *Objekte*, rechts neben
+        # den Reitern; wo die Karten liegen, merken die Einstellungen.
+        self.card_grips = (self._left_grip, self._right_grip)
+        for grip in self.card_grips:
+            grip.attach(self.overlay)
+        self._left_grip.sit_in_corner(left)
+        self.right.setCornerWidget(self._right_grip, Qt.Corner.TopRightCorner)
+        self._right_grip.show()
+        saved = self.settings.card_places if isinstance(self.settings.card_places, dict) else {}
+        self.overlay.set_places({key: CardPlace.read(saved.get(key), key) for key in SIDE_CARDS})
+        # **Gespeichert wird gebündelt:** Jeder Pfeildruck am Griff legt die
+        # Karte neu, und die Datei je Druck zu schreiben hieß beim Halten der
+        # Taste Dutzende Schreibvorgänge je Sekunde im Hauptfaden — unter
+        # Windows kann ``replace`` dabei kurz scheitern. Der Wert steht sofort
+        # in ``settings``, die Datei folgt einmal; ``closeEvent`` holt nach.
+        self._card_places_save = QTimer(self)
+        self._card_places_save.setSingleShot(True)
+        self._card_places_save.setInterval(CARD_PLACES_SAVE_MS)
+        self._card_places_save.timeout.connect(weak_slot(self, MainWindow._write_card_places))
+        self._message_before_card_hint: str | None = None
+        """Was in der Statuszeile stand, bevor ein Zug am Griff sie nahm."""
+        self.overlay.placesChanged.connect(self._remember_card_places)
+        self.overlay.dragHint.connect(self._show_card_hint)
+        self.overlay.cardNotice.connect(self.announce)
         # Die zwei Einladungen liegen in der Ansicht, die schwebenden Karten
         # darüber: Was unter einer Karte steht, sieht niemand. Beide kennen
         # deshalb die drei Zonen und die Ansichtsleiste und suchen sich den
@@ -4693,6 +4801,13 @@ class MainWindow(QMainWindow):
             # zwei, die gar nicht verschwanden.
             tr("Prüfbericht und Chat ein- oder ausblenden."),
         )
+        self._add_action(
+            view_menu,
+            tr("Karten an ihren Platz"),
+            None,
+            self.action_reset_cards,
+            tr("Legt verschobene Karten zurück an den Rand, an dem sie anfangs lagen."),
+        )
         # Robert, 02.09.2026: „eine Option, wo man schnell hinkommt, um die
         # Druckplatte auszublenden". Ein Haken mit Kürzel, in der Palette
         # gelistet, und der Zustand bleibt über den Neustart.
@@ -5224,7 +5339,7 @@ class MainWindow(QMainWindow):
     _BARE_KEYS = frozenset({"Del", "Delete"})
 
     def _scope_shortcut(self, action: QAction, key: str) -> None:
-        """Begrenzt nackte Tasten auf Objektbaum und Ansicht.
+        """Begrenzt nackte Tasten auf Objektbaum, Ansicht und den Reiter *Auswahl*.
 
         „Entf" war fensterweit gebunden und löschte deshalb den ausgewählten
         Körper, auch wenn der Fokus im Verlauf lag und ein Schritt markiert war
@@ -5238,6 +5353,14 @@ class MainWindow(QMainWindow):
         **Am Mac löscht auch ⌫** (:func:`shortcut_schemes.delete_keys`): Die
         Taste „delete“ dort sendet Backspace, und Körper wie Merkmal blieben
         sonst stehen, während die Texte die Taste nannten.
+
+        **Und im Reiter *Auswahl*** (Fragebogen S-20261006-5be329: „die Entf
+        taste löscht weder Merkmal noch Körper“): Wer dort ein Maß tippte oder
+        einen Knopf drückte, hatte den Fokus rechts, und die Taste tat nichts.
+        Der Reiter zeigt dieselbe Auswahl wie Baum und Ansicht. Seine Zahlen-
+        und Textfelder behalten Entf für sich — Qt fragt sie vor dem Kürzel
+        (``ShortcutOverride``). Der Reiter entsteht nach den Menüs; er nimmt
+        die Aktionen aus :attr:`_scoped_actions` in :meth:`_build_feature_dock`.
         """
         if key not in self._BARE_KEYS:
             return
@@ -5245,6 +5368,7 @@ class MainWindow(QMainWindow):
         action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         for widget in (self.object_tree, self.viewport):
             widget.addAction(action)
+        self._scoped_actions.append(action)
 
     def _add_variant_entries(self, category: str, target: Any, subgroups: dict[str, QMenu]) -> None:
         """Für jede Variantengruppe dieser Kategorie **einen** Eintrag.
@@ -5835,11 +5959,11 @@ class MainWindow(QMainWindow):
                 return str(_NEEDS_BODY)
             if braucht == 1:
                 return str(tr("Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum."))
-            return str(
-                tr("Wählen Sie dafür {count} Objekte aus — im Bild oder im Objektbaum.").format(
-                    count=braucht
-                )
-            )
+            # **Derselbe Satz wie beim Tastendruck** (:func:`_needs_objects`):
+            # Er sagt, wie das zweite Objekt dazukommt. „Wählen Sie dafür 2
+            # Objekte aus“ ließ genau das offen, und ein Anfänger fand
+            # *Vereinigen* deshalb nicht (Fragebogen zu 0.5.3).
+            return _needs_objects(braucht)
         # Der Satz steht in ``labels``: das Kontextmenü am Körper braucht ihn
         # auch, und zwei Stellen mit derselben Auskunft driften.
         reason = kind_requirement(spec, kinds, spoiled_the_exact_body(self.session.last_result))
@@ -8269,6 +8393,42 @@ class MainWindow(QMainWindow):
         self.viewport.set_bed_visible(visible)
         self._store_settings()
         self.announce(tr("Druckplatte wieder da.") if visible else tr("Druckplatte ausgeblendet."))
+
+    def _remember_card_places(self, places: dict[str, str]) -> None:
+        """Wo die Seitenkarten liegen, für den nächsten Start (:class:`CardPlace`).
+
+        Der Wert gilt sofort, die Datei wird gebündelt geschrieben
+        (:data:`CARD_PLACES_SAVE_MS`, ``_card_places_save``).
+        """
+        self.settings.card_places = dict(places)
+        self._card_places_save.start()
+
+    def _write_card_places(self) -> None:
+        """Der gebündelte Schreibvorgang nach dem letzten Verschieben."""
+        self._store_settings()
+
+    def _show_card_hint(self, text: str) -> None:
+        """Was das Loslassen der gezogenen Karte täte — leer stellt die Zeile wieder her.
+
+        **Eine stehende Meldung bleibt:** Im Zeichenmodus und am Skelett steht
+        dort die Anleitung, und die Karten bleiben auch dann beweglich. Ein Zug
+        am Griff, der die Zeile beim Loslassen leerte, nahm sie mit.
+        """
+        bar = self.statusBar()
+        if text:
+            if self._message_before_card_hint is None:
+                self._message_before_card_hint = bar.currentMessage()
+            bar.showMessage(text)
+            return
+        before, self._message_before_card_hint = self._message_before_card_hint, None
+        if before:
+            bar.showMessage(before)
+        else:
+            bar.clearMessage()
+
+    def action_reset_cards(self) -> None:
+        """*Ansicht → Karten an ihren Platz*: beide Seitenkarten zurück an ihren Rand."""
+        self.overlay.reset_cards()
 
     def action_toggle_right(self) -> None:
         visible = not self.settings.right_panel_visible
@@ -14524,6 +14684,11 @@ class MainWindow(QMainWindow):
         # vorn steht beim Start aber der Prüfbericht — wer eine Datei öffnet,
         # hat noch nichts gewählt; die erste Auswahl holt ihn nach vorn.
         self.feature_dock = column
+        # Entf gilt auch hier, und eine gesperrte Taste sagt ihren Grund
+        # (:meth:`_scope_shortcut`, :class:`_DeleteRefusal`).
+        for action in self._scoped_actions:
+            column.addAction(action)
+        app_events.listen(_DeleteRefusal(self), (QEvent.Type.KeyPress,))
         self.right.insertTab(0, column, tr("Auswahl"))
         self.right.setCurrentWidget(self.report)
         self.feature_dock.start_watching()
@@ -14580,6 +14745,14 @@ class MainWindow(QMainWindow):
         self.viewport.selection_refused = selection_refused
         self.object_tree.tree.selection_allowed = selection_allowed
         self.object_tree.tree.selection_refused = selection_refused
+
+        def selection_entries(menu: QMenu) -> None:
+            """*Vereinigen* und *Entfernen* im Kontextmenü von Baum und Ansicht."""
+            window = window_ref()
+            if window is not None:
+                window._add_selection_entries(menu)
+
+        self.object_tree.selection_entries = selection_entries
         self._measures_to_resume: str = ""
         """Das Merkmal, an dem die Maße nach dem Übernehmen wieder ins Bild kommen.
 
@@ -15150,6 +15323,74 @@ class MainWindow(QMainWindow):
         sister: OperationSpec | None = instead_of(spec.name, feature.kind)
         return sister
 
+    def _add_selection_entries(self, menu: QMenu) -> None:
+        """*Vereinigen* und *Entfernen* am Rechtsklick (Entscheidung Robert, 06.10.2026).
+
+        Wer vom Slicer kommt, sucht beides dort: Cura, Orca und PrusaSlicer
+        tragen *Löschen* im Kontextmenü des Objekts, Cura dazu
+        *Zusammenführen*, und der Fragebogen zu 0.5.3 fragte nach genau diesen
+        zwei. Alle übrigen Operationen bleiben rechts in der Karte.
+
+        Beide Einträge gehen den Weg ihrer Taste (:meth:`launch_operation`),
+        tragen sie hinter dem Tabulator — dort setzt ``QMenu`` die
+        Kürzelspalte, ohne dass eine zweite Aktion die Taste bindet — und
+        sind gesperrt, wo die Taste nichts täte, mit demselben Grund
+        (:meth:`_reason_locked`).
+        """
+        chosen = self.object_tree.selected_objects()
+        if not chosen:
+            return
+        result = self.session.last_result
+        objects = len(result.scene.objects) if result is not None else 0
+        kinds = self._kinds_of_selection()
+        entries: list[tuple[OperationSpec, tuple[str, str], str]] = []
+        if len(chosen) > 1 and not self.object_tree.selected_features():
+            union = REGISTRY.get("union_objects")
+            key = shortcut_for(union.name, union.shortcut, self.settings.shortcut_scheme)
+            entries.append(
+                (
+                    union,
+                    (str(union.title), first_sentence(str(union.doc))),
+                    native_key(key) if key else "",
+                )
+            )
+        entries.append(
+            (
+                REGISTRY.get("delete_object"),
+                self._removal_entry(),
+                delete_keys(sys.platform)[0].toString(QKeySequence.SequenceFormat.NativeText),
+            )
+        )
+        menu.addSeparator()
+        for spec, (title, sentence), key in entries:
+            action = menu.addAction(f"{title}\t{key}" if key else title)
+            locked = self._reason_locked(spec, kinds, objects, len(chosen))
+            action.setEnabled(locked is None)
+            action.setToolTip(locked or sentence)
+            action.triggered.connect(weak_slot(self, MainWindow.launch_operation, spec))
+
+    def _removal_entry(self) -> tuple[str, str]:
+        """Was Entf an der Auswahl tut, als Titel und Satz — derselbe Weg wie :meth:`run_operation`.
+
+        Am Baustein fällt sein Schritt, an einem Merkmal mit eigener
+        Operation (Bohrung, Zapfen) greift sie, sonst fällt der Körper
+        (:meth:`_delete_the_chosen_feature`). Ein Eintrag „Objekt entfernen“
+        an einer Bohrung, der dann die Bohrung schließt, wäre ein Versprechen,
+        das die Handlung nicht hält.
+        """
+        features = self.object_tree.selected_features()
+        if features:
+            if self._common_part_step(features) is not None:
+                return (
+                    tr("Baustein entfernen"),
+                    tr("Nimmt den Schritt aus dem Verlauf. Strg+Z holt ihn zurück."),
+                )
+            instead = self.feature_instead_of("delete_object")
+            if instead is not None:
+                return str(instead.title), first_sentence(str(instead.doc))
+        removal = REGISTRY.get("delete_object")
+        return str(removal.title), first_sentence(str(removal.doc))
+
     def _delete_the_chosen_feature(self) -> bool:
         """Entf mit gewählten Merkmalen trifft, was gemeint ist — und sagt es.
 
@@ -15191,6 +15432,47 @@ class MainWindow(QMainWindow):
         name = self._object_names().get(object_id or "", "")
         self.announce(tr("Körper „{name}“ entfernt — Strg+Z holt ihn zurück.").format(name=name))
         return False
+
+    def _refuse_delete(self, focus: QWidget) -> bool:
+        """Sagt, warum Entf an der Auswahl gerade nichts entfernt — ``True``, wenn gesagt.
+
+        Nur wo die Taste löschen würde (Objektbaum, Ansicht, Reiter
+        *Auswahl*), nie in einem Textfeld, und nur aus den zwei Gründen, die
+        eine Auswahl haben kann und trotzdem sperren: der Halt der Kette und
+        die Lizenzsperre. Ohne Auswahl gibt es nichts zu entfernen, und die
+        Taste bleibt, wem sie gehört — beim Messen mit dem Fokus in der Ansicht
+        dem letzten Maß (:meth:`Viewport.measuring`). In den Gesteneditoren gehört sie dem
+        Editor. Der Satz ist der des Menüeintrags (``_kind_hint``,
+        ``_lock_hint``), mit dem Titel davor, den das Kontextmenü für Entf an
+        dieser Auswahl trägt (:meth:`_removal_entry`).
+        """
+        action = self._op_actions.get("delete_object")
+        if action is None or action.isEnabled():
+            return False
+        if isinstance(focus, (QLineEdit, QAbstractSpinBox, QTextEdit, QPlainTextEdit)):
+            return False
+        scope = (self.object_tree, self.viewport, self.feature_dock)
+        if not any(widget is focus or widget.isAncestorOf(focus) for widget in scope):
+            return False
+        if not self.object_tree.selected_objects():
+            return False
+        if self._sketch_panel is not None or self.sculpting() or self.setting_armature():
+            return False
+        if self.viewport.measuring() and (
+            focus is self.viewport or self.viewport.isAncestorOf(focus)
+        ):
+            # Die Ansicht nimmt die Taste beim Messen selbst (letztes Maß), aber
+            # erst in ihrem Filter an der Grafikfläche — dieser Zuhörer hängt am
+            # Filter der Anwendung und käme davor. Mit dem Fokus im Baum oder
+            # im Reiter kommt die Taste dort nie an; dann sagt sie den Grund.
+            return False
+        if self._halt_reason() is None and activation.state().unlocked:
+            return False
+        # Der Titel des Kontextmenüs: An einem Bausteinmerkmal ist Entf
+        # *Baustein entfernen*, nicht der Zwilling der Operation.
+        title, _sentence = self._removal_entry()
+        self.announce(tr("{name}: {value}", name=title, value=action.statusTip()))
+        return True
 
     def _selected_feature_object(self) -> Feature | None:
         """Das gewählte Merkmal selbst — oder nichts, wenn keines gewählt ist."""
@@ -19768,13 +20050,14 @@ class MainWindow(QMainWindow):
 
         ``on_bodies`` wendet dieselbe Operation auf **mehrere** Körper an, mit
         denselben Werten und in **einer** Transaktion (Regel 16: ein Undo nimmt
-        sie vollständig zurück). Der Weg kommt aus dem Prüfbericht: Eine
-        Sammelzeile vertritt sechs oder zwölf Körper, und ihre Handlung fragt
-        beim Klick, für welche davon sie gelten soll. Der Dialog fragt die
-        Werte dabei **einmal** — sechs gleiche Dialoge hintereinander wären
-        dieselbe Frage sechsmal. Die Auswahl im Objektbaum bleibt außen vor:
-        Was hier gilt, hat der Kunde in der Liste angehakt und nicht im Baum
-        markiert.
+        sie vollständig zurück). Zwei Wege kommen hierher. Aus dem Prüfbericht:
+        Eine Sammelzeile vertritt sechs oder zwölf Körper, und ihre Handlung
+        fragt beim Klick, für welche davon sie gelten soll; was dort gilt, hat
+        der Kunde in der Liste angehakt, die Auswahl im Objektbaum bleibt außen
+        vor. Und Entf an mehreren markierten Körpern (*Objekt entfernen*): Dann
+        sind es gerade die Markierungen im Baum, ein Schritt je Körper in
+        Klickreihenfolge. Der Dialog fragt die Werte **einmal** — sechs gleiche
+        Dialoge hintereinander wären dieselbe Frage sechsmal.
         """
         if not self._quiet_command_allowed() or not self._begin_from_the_start_screen():
             return
@@ -19806,6 +20089,15 @@ class MainWindow(QMainWindow):
             self._local_features.invalidate()
         if spec.name == "delete_object" and self._delete_the_chosen_feature():
             return
+        # **Entf meint alles Markierte** (Fragebogen zu 0.5.3: „einfach in der
+        # Objektliste markieren und entfernen“). ``delete_object`` verbraucht
+        # einen Körper, und mit zwei markierten nahm die Taste still nur den
+        # ersten. Ein Schritt je Körper in einer Transaktion, wie die
+        # Sammelzeile des Prüfberichts — ein Strg+Z holt alle zurück.
+        if spec.name == "delete_object" and on_bodies is None:
+            marked = self.object_tree.selected_objects()
+            if len(marked) > 1 and not self.object_tree.selected_features():
+                on_bodies = marked
         spec = self._sister_for_the_chosen_feature(spec) or spec
         instead = self.feature_instead_of(spec.name)
         if instead is not None:
@@ -26757,6 +27049,8 @@ class MainWindow(QMainWindow):
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         self.settings.circle_measure = circle_measure()
+        # Eine gebündelte Kartenlage geht mit dieser Zeile in die Datei.
+        self._card_places_save.stop()
         self._store_settings()
         self._usage.stop()
         # Erst hier steht fest, dass das echte Anwendungsfenster wirklich

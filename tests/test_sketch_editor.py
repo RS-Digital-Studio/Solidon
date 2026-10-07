@@ -3768,7 +3768,7 @@ def test_every_sketch_shortcut_is_named_somewhere_on_screen(qt_app: QApplication
     Sie hier zu verlangen hieße, jede Skizzenleiste müsste die halbe
     Menüleiste wiederholen.
     """
-    from PySide6.QtGui import QShortcut
+    from PySide6.QtGui import QKeySequence, QShortcut
     from PySide6.QtWidgets import QAbstractButton, QComboBox
 
     from app.ui.main_window import MainWindow
@@ -3790,20 +3790,30 @@ def test_every_sketch_shortcut_is_named_somewhere_on_screen(qt_app: QApplication
 
         # Dem Fenster gehörig, nicht der Skizze: Zoom und Reiterwechsel.
         des_fensters = {"Ctrl++", "Ctrl+-", "Ctrl+Tab", "Ctrl+Shift+Tab"}
+        # **Verglichen wird in beiden Schreibweisen**, portabel und nativ: Auf
+        # dem Mac steht ⌘Z, nicht Ctrl+Z, und der Test meldete drei richtig
+        # beschriftete Kürzel als stumm; Esc und Pos1 schreibt die Leiste dort
+        # weiter portabel (RM-531). Ausgewählt wird über den portablen Namen.
         tasten = {
-            shortcut.key().toString()
+            shortcut.key().toString(): shortcut.key().toString(
+                QKeySequence.SequenceFormat.NativeText
+            )
             for shortcut in window.findChildren(QShortcut)
             if shortcut.isEnabled() and shortcut.key().toString()
         }
         eigene = {
-            taste for taste in tasten if taste not in des_fensters and not taste.startswith("Alt+")
+            taste: geschrieben
+            for taste, geschrieben in tasten.items()
+            if taste not in des_fensters and not taste.startswith("Alt+")
         }
         assert len(eigene) > 10, "ohne aufgebaute Leiste prüft diese Zählung nichts"
 
         stumm = [
             taste
-            for taste in sorted(eigene)
-            if f"({taste})" not in sichtbar and f" {taste}" not in sichtbar
+            for taste, geschrieben in sorted(eigene.items())
+            if not any(
+                f"({form})" in sichtbar or f" {form}" in sichtbar for form in (taste, geschrieben)
+            )
         ]
         assert not stumm, (
             f"diese Kürzel des Skizzenmodus stehen nirgends an der Oberfläche: {stumm}"

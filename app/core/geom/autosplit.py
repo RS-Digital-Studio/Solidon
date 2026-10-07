@@ -23,6 +23,7 @@ Näherung wieder zusammenzukleben ergibt ein genähertes Teil (§11.1).
 
 from __future__ import annotations
 
+import math
 import threading
 import weakref
 from collections import OrderedDict
@@ -793,7 +794,7 @@ def _reflected(candidate: Candidate, mirror: SectionPlane) -> tuple[Candidate, b
     """
     normal = np.asarray(candidate.plane.normal, dtype=float)
     across = np.asarray(mirror.normal, dtype=float)
-    dot = float(normal @ across)
+    dot = units.dot3(normal, across)
     turned = normal - 2.0 * dot * across
     position = candidate.position - 2.0 * mirror.position * dot
     flipped = bool(turned["xyz".index(candidate.axis)] < 0.0)
@@ -984,7 +985,7 @@ def cuts_through(plane: SectionPlane, protect: Sequence[Any]) -> bool:
         points = np.asarray(patch, dtype=float)
         if not len(points):
             continue
-        away = points @ normal - plane.position
+        away = transform.along(points, normal) - plane.position
         if away.min() < -EPS_GEOM and away.max() > EPS_GEOM:
             return True
     return False
@@ -1238,7 +1239,7 @@ def _gaps(
     ``p`` liegt.
     """
     direction = np.asarray(normal if normal is not None else AXIS_NORMALS[axis], dtype=float)
-    heights = np.asarray(mesh.raw.vertices, dtype=float) @ direction
+    heights = transform.along(np.asarray(mesh.raw.vertices, dtype=float), direction)
     edges = np.asarray(mesh.raw.edges_unique, dtype=np.int64)
     if not len(heights) or not len(edges):
         return []
@@ -1684,7 +1685,7 @@ def _tilted(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         direction = np.asarray(normal, dtype=float)
-        heights = vertices @ direction
+        heights = transform.along(vertices, direction)
         low, high = float(heights.min()), float(heights.max())
         inset = (high - low) * 0.05
         positions = np.linspace(low + inset, high - inset, TILT_SAMPLES)
@@ -2191,7 +2192,7 @@ def _notch_depth(
     eine Hantel mit 201 mm² Hals die bestmögliche Punktzahl.
     """
     direction = normal if normal is not None else AXIS_NORMALS[axis]
-    heights = np.asarray(mesh.raw.vertices, dtype=float) @ np.asarray(direction, dtype=float)
+    heights = transform.along(np.asarray(mesh.raw.vertices, dtype=float), direction)
     low = float(heights.min()) + PRISM_STEP
     high = float(heights.max()) - PRISM_STEP
     if high <= low:
@@ -2259,7 +2260,7 @@ def _judge(
         centre = float(mesh.bounds.centre[index])
         span = float(mesh.bounds.size[index]) or 1.0
     else:
-        heights = np.asarray(mesh.raw.vertices, dtype=float) @ np.asarray(normal, dtype=float)
+        heights = transform.along(np.asarray(mesh.raw.vertices, dtype=float), normal)
         centre = float(heights.min() + heights.max()) / 2.0
         span = float(heights.max() - heights.min()) or 1.0
 
@@ -2311,7 +2312,7 @@ def upright_normal(normal: Vec3) -> np.ndarray:
     genauso wie für eine Achse.
     """
     direction = np.asarray(normal, dtype=float)
-    length = float(np.linalg.norm(direction))
+    length = math.hypot(float(direction[0]), float(direction[1]), float(direction[2]))
     if length <= EPS_GEOM:
         return np.eye(4)
     direction = direction / length
