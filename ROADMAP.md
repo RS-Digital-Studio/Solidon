@@ -99,7 +99,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Weg läuft bis zum Export, die Körper bleiben meist offen (RM-548); offen Linux und macOS |
-| [RM-548 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-548) | KI und Generatoren | Gefunden am echten Lauf (07.10.): 6 von 7 Läufen offen, der Textweg liefert dünne Schalen; offen die Ursache in Reparatur und Textablauf |
+| [RM-548 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-548) | KI und Generatoren | Gefunden am echten Lauf (07.10.): 8 von 9 Läufen offen, der Textweg liefert dünne Schalen; offen die Ursache in Reparatur und Textablauf |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte und (b) der Satz für gebündelte Aufrufe gebaut, lokal 28 gegen 27 von 39 (07.10.); offen: lokal endet ein Zug nach 8 bis 11 Schritten am Zugbudget statt am Schrittlimit |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -3870,7 +3870,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `from_image`, Auswertung, Speichern und Wiederöffnen, STL und 3MF). Beide Wege laufen bis zum
   Export, wiedergeöffnet gleich; ein Auftrag kostet kalt 125 s (Bild) und 350 s (Text), warm
   21–26 s, die Karte bleibt unter 16 GB. Rohnetze um 700 000 Dreiecke, die Auswertung in Solidon
-  braucht 41–445 s. **Die Körper bleiben meist offen** (6 von 7 Läufen, Bild 3 von 4, Text 3 von
+  braucht 41–445 s. **Die Körper bleiben meist offen** (8 von 9 Läufen, Bild 5 von 6, Text 3 von
   3): `repair.still_open`; der Textweg liefert dünne Schalen (Rakete 2,3 cm³ gegen 25,7 cm³ aus
   dem Bildweg bei gleichem Bild und Startwert, Vase mit negativem Volumen). Der Fall gehört zu
   [RM-548](#rm-548). Bericht, Rohnetze und Exporte (nicht versioniert):
@@ -3990,14 +3990,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 - [ ] **RM-548 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen.** Gefunden am
   07.10.2026 beim ersten echten Lauf der TRELLIS.2-Kette ([RM-004](#rm-004), Claude). Von
-  sieben Läufen endete einer geschlossen; die übrigen melden `repair.still_open` („2 offene
+  neun Läufen endete einer geschlossen; die übrigen melden `repair.still_open` („2 offene
   Stellen ließen sich nicht sicher schließen“). Gemessen an den Rohnetzen: (a) `DecimateMesh`
   ließ rund zwanzig Vierecklöcher je Netz offen — behoben mit einem zweiten `FillHoles` nach dem
   Ausdünnen, danach hat das Rohnetz des Bildwegs keine offene Kante mehr, Solidon meldet trotzdem
   offen; die Ursache liegt also zwischen Einlesen, *Auf Maß bringen* und *Reparieren*. (b) Der
   Textweg liefert bei gleichem Bild und Startwert eine dünne Schale (2,3 statt 25,7 cm³), die
-  Vase ein Netz mit negativem Volumen und zwei langen offenen Rändern; beim Bildweg kam das an
-  einem von vier Läufen vor (Startwert 8). Zu prüfen: das Bild des Textwegs als PNG durch den
+  Vase ein Netz mit negativem Volumen und zwei langen offenen Rändern; beim Bildweg kam ähnliches an
+  zwei von sechs Läufen vor (Startwerte 8 und 9, lange offene Ränder, bis 388 Teile). Zu prüfen: das Bild des Textwegs als PNG durch den
   Bildablauf schicken, `RemeshMesh` mit `sdf` gegen `udf`. (c) 700 000 Dreiecke kosten die
   Auswertung bis 445 s; `target_face_count` gegen Druckbedarf abwägen. Rohnetze und Berichte:
   `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Abnahme:** an mindestens fünf
