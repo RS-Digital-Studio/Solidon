@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)](#ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026) |
 | 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
 | 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
@@ -43150,3 +43151,69 @@ im Zustandsordner zeigen auf die neuen Dateien. `git grep -n .claude/.state -- t
 findet nur noch `mac-netz.yml` und den Kommentar in `tests/helpers.py` (Sonde des offenen
 RM-187) sowie erfundene Pfade in `test_affected_tests.py` und `test_roadmap.py`, die keine Datei
 lesen.
+
+## CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)
+
+<a id="ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026"></a>
+<a id="ci-testlaufzeiten"></a>
+
+**CI-Testlaufzeiten — vollständige Prüfungen früher abschließen.**
+  Verbindliches [Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md), vor
+  Umsetzung erstellt: CI-01 bis CI-08 schützen Auswahl, Prozessisolation,
+  Plattformumfang, Paketfreigabe und Berichte. Umsetzung: unabhängige Kern- und
+  Fensterjobs, Versionswächter als Handstart-Opt-in, gebündelte Quellprüfungen
+  und Bausteinvorbereitung sowie thematische UI-Tests. Durchsicht 24.09.2026:
+  Kernsuite in drei Teilen je Plattform (`--ci-shard`, `tools/ci_shards.py`,
+  Kerntabelle aus einem lokalen JUnit-Lauf), drei Windows-Fenstergruppen,
+  Prüfausgabe wieder im CI-Protokoll und Schrittbericht, und der längste
+  Kernfall behoben: `test_seal_geometry[12.0]` 319 s → 24–34 s über die
+  räumliche Vorauswahl der Wandmessung (Konzept §4.4). Gemessener
+  CI-Zeitgewinn und die erste Kerntabelle aus CI-Berichten
+  (`tools/ci_shards.py core …`) stehen aus; die Kerntabelle
+  `tests/data/ci_core_durations.json` stammt noch aus einem lokalen Lauf vom 29.09. Offen
+  außerdem das Blättern in `tools/windows_signed_installer.py`, bevor ein Lauf 100 Artefakte
+  erreicht (Taglauf 0.5.3: 31). Erledigt sind seither der räumliche Index der Wandmessung
+  (`7e3442623`) und die Kandidaten `test_bore_mouth_resize`/`test_bore_floor_resize`
+  (`68cd2ef6f`), beide unten.
+
+  **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Der räumliche Index steht — ein Baum
+  aus Hüllquadern in `mesh.ray_hits_batch`, bitgleich zum Vollvergleich, Vollkugel mit
+  12 800 Dreiecken 31 → 0,5 s (`7e3442623`). Die beiden langsamsten Kernfälle liefen
+  über doppelte Mantelpunkte in `features._distinct_points` (134 Mio. Punktpaare):
+  `test_bore_mouth_resize…` 83,2 → 28,4 s, `test_bore_floor_resize…` 61,4 → 26,3 s
+  (`68cd2ef6f`). Das lokale Tor verteilt wie die CI mit `--dist worksteal`, 850 → 587 s
+  im Median, dieselben 17 166 Fälle (`c28e02c86`). CI-01 bis CI-07 sind im Code und an
+  der echten Sammlung erfüllt (die drei Kernteile sammeln zusammen 17 191 Fälle, keiner
+  doppelt, keine Datei in zwei Teilen).
+
+  **Releaselauf 0.5.1:** Der erfolgreiche
+  [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
+  vom 28.09.2026 enthält die neue Aufteilung: neun Kernjobs auf drei Plattformen,
+  drei plattformübergreifende Fensterverträge und drei Windows-Fenstergruppen.
+  Letztere liefen 18:36, 17:59 und 18:32 Minuten (Gruppen 0, 1, 2).
+  **CI-08 bleibt offen:** Den Gewinn gegenüber einem vergleichbaren Ausgangslauf
+  anhand der Testbestände, Berichte und Laufzeiten auswerten; ein grüner Lauf allein
+  belegt ihn nicht. Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
+
+  **Releaselauf 0.5.3:** Im ersten Versuch des Taglaufs 37409338027 riss die
+  Windows-Fenstergruppe 0 an der festen 900-s-Grenze. `c379d5271` schreibt die
+  Fenstertabelle `tests/data/ci_window_durations.json` aus den Windows-Berichten dieses
+  Taglaufs neu (`test_ui.py` 838 s statt der 665 s von vor seiner Aufteilung) und gibt jeder
+  Datei ein eigenes Budget (`tools/run_suite_isolated.py`, `BUDGET_HEADROOM = 1.5`,
+  `file_budget`).
+
+**Nachweis (06.10.2026):** **CI-08** steht als §7 im
+[Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md): Bei gleicher Runnerzeit (154 gegen 156
+min) kamen alle Testergebnisse im Taglauf 0.5.1 (36454861126) nach 18,6 statt 78,8 min wie in
+0.5.0 (35982366247), bei 7,5 Prozent mehr Kernfällen; seither wuchs der Bestand um ein Drittel
+und die Wartezeit auf 28 bis 30 min (0.5.2, 0.5.3). **Die Kerntabelle**
+`tests/data/ci_core_durations.json` ist aus den Windows-Kernberichten des Taglaufs 37409338027
+(0.5.3) geschrieben; außerhalb der Stichprobe gemessen liegt der längste Teil bei 47,1 min und
+die Teile höchstens 2,2 min auseinander, mit der lokalen Tabelle waren es 53,6 und 11,7 min.
+**Das Blättern:** `sign_release.paged_listing` liest GitHub-Listen über alle Seiten, verlangt
+auf jeder Seite dieselbe Gesamtzahl und hält sonst fail-closed an;
+`tools/windows_signed_installer.py` liest so die Artefakte, `sign_release` die Jobs eines rot
+beendeten Hauptbaus, mit Tests für ein Archiv und einen roten Pflichtjob hinter dem hundertsten
+Eintrag. Regel `auslieferung.md` und ihre Begründung nachgezogen. Zwei Reviews mit Nachprüfung
+(06.10.2026). Die Ausweitung der Fenster- und Renderergruppe auf alle Paketplattformen führt
+[RM-531](ROADMAP.md#rm-531).

@@ -39,7 +39,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | CI-01 bis CI-07 im Code belegt, Aufteilung in den Tagläufen 0.5.1 und 0.5.3 gelaufen; Fenstertabelle aus dem Taglauf 0.5.3 und Budget je Datei (`c379d5271`). Offen: CI-08 mit vergleichbarer Vorher-/Nachher-Auswertung, die Kerntabelle aus CI-Berichten und das Blättern in `tools/windows_signed_installer.py` |
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Bausteine, Abläufe, funktionale Gruppen, Projektmaße und das Abnahmewerkzeug gebaut (04.10.); offen: der echte Lauf der Einzeldateiabnahme über 187 Fälle am Fenster, die Fensterabnahmen der neuen Abläufe und Gruppen, Leistungsreihe |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Hänger durch die Speicherbereinigung im Arbeiter behoben (nur noch im Hauptfaden, 05.10.); der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen sind der Ereignistyp dahinter, die Gegenprobe auf Linux und Mac und die Vergleichsreihe |
@@ -3909,53 +3908,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beispiel in Bauplan §23 ist eine echte Ausgabe, Agenten-Suite vorher und nachher.
 
 ## Tests und Entwicklungswerkzeuge
-
-<a id="ci-testlaufzeiten"></a>
-
-- [~] **CI-Testlaufzeiten — vollständige Prüfungen früher abschließen.**
-  Verbindliches [Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md), vor
-  Umsetzung erstellt: CI-01 bis CI-08 schützen Auswahl, Prozessisolation,
-  Plattformumfang, Paketfreigabe und Berichte. Umsetzung: unabhängige Kern- und
-  Fensterjobs, Versionswächter als Handstart-Opt-in, gebündelte Quellprüfungen
-  und Bausteinvorbereitung sowie thematische UI-Tests. Durchsicht 24.09.2026:
-  Kernsuite in drei Teilen je Plattform (`--ci-shard`, `tools/ci_shards.py`,
-  Kerntabelle aus einem lokalen JUnit-Lauf), drei Windows-Fenstergruppen,
-  Prüfausgabe wieder im CI-Protokoll und Schrittbericht, und der längste
-  Kernfall behoben: `test_seal_geometry[12.0]` 319 s → 24–34 s über die
-  räumliche Vorauswahl der Wandmessung (Konzept §4.4). Gemessener
-  CI-Zeitgewinn und die erste Kerntabelle aus CI-Berichten
-  (`tools/ci_shards.py core …`) stehen aus; die Kerntabelle
-  `tests/data/ci_core_durations.json` stammt noch aus einem lokalen Lauf vom 29.09. Offen
-  außerdem das Blättern in `tools/windows_signed_installer.py`, bevor ein Lauf 100 Artefakte
-  erreicht (Taglauf 0.5.3: 31). Erledigt sind seither der räumliche Index der Wandmessung
-  (`7e3442623`) und die Kandidaten `test_bore_mouth_resize`/`test_bore_floor_resize`
-  (`68cd2ef6f`), beide unten.
-
-  **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Der räumliche Index steht — ein Baum
-  aus Hüllquadern in `mesh.ray_hits_batch`, bitgleich zum Vollvergleich, Vollkugel mit
-  12 800 Dreiecken 31 → 0,5 s (`7e3442623`). Die beiden langsamsten Kernfälle liefen
-  über doppelte Mantelpunkte in `features._distinct_points` (134 Mio. Punktpaare):
-  `test_bore_mouth_resize…` 83,2 → 28,4 s, `test_bore_floor_resize…` 61,4 → 26,3 s
-  (`68cd2ef6f`). Das lokale Tor verteilt wie die CI mit `--dist worksteal`, 850 → 587 s
-  im Median, dieselben 17 166 Fälle (`c28e02c86`). CI-01 bis CI-07 sind im Code und an
-  der echten Sammlung erfüllt (die drei Kernteile sammeln zusammen 17 191 Fälle, keiner
-  doppelt, keine Datei in zwei Teilen).
-
-  **Releaselauf 0.5.1:** Der erfolgreiche
-  [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
-  vom 28.09.2026 enthält die neue Aufteilung: neun Kernjobs auf drei Plattformen,
-  drei plattformübergreifende Fensterverträge und drei Windows-Fenstergruppen.
-  Letztere liefen 18:36, 17:59 und 18:32 Minuten (Gruppen 0, 1, 2).
-  **CI-08 bleibt offen:** Den Gewinn gegenüber einem vergleichbaren Ausgangslauf
-  anhand der Testbestände, Berichte und Laufzeiten auswerten; ein grüner Lauf allein
-  belegt ihn nicht. Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
-
-  **Releaselauf 0.5.3:** Im ersten Versuch des Taglaufs 37409338027 riss die
-  Windows-Fenstergruppe 0 an der festen 900-s-Grenze. `c379d5271` schreibt die
-  Fenstertabelle `tests/data/ci_window_durations.json` aus den Windows-Berichten dieses
-  Taglaufs neu (`test_ui.py` 838 s statt der 665 s von vor seiner Aufteilung) und gibt jeder
-  Datei ein eigenes Budget (`tools/run_suite_isolated.py`, `BUDGET_HEADROOM = 1.5`,
-  `file_budget`).
 
 <a id="rm-099"></a>
 
