@@ -3264,3 +3264,73 @@ def test_frozen_helper_end_budget_control_reproduces_the_old_deadline_failure(
     assert idle.joins[0] == pytest.approx(state.product_grace)
     assert idle.kills == 1 and idle.exitcode == -9
     assert problems == ["Ein untätiger Hilfsprozess endete beim Schließen nicht selbst."]
+
+
+# --- CI-09: die Auswahl vor dem Merge auf Linux und macOS -----------------------
+
+_WINDOW_SELECTION: Final = WORKFLOW.parent / "fenster-auswahl.yml"
+_SLICER_SELECTION: Final = WORKFLOW.parent / "slicer-auswahl.yml"
+
+
+def _matrix_of(job: str) -> list[str]:
+    line = next(line for line in job.splitlines() if line.strip().startswith("os: ["))
+    return [entry.strip() for entry in line.split("[", 1)[1].split("]", 1)[0].split(",")]
+
+
+def test_the_selections_before_a_merge_run_where_packages_run() -> None:
+    """Fenster auf jeder Paketplattform, Slicer auf jeder außer Windows (CI-09).
+
+    Windows deckt für Slicer das lokale Tor; Linux und macOS gibt es an keinem
+    Arbeitsplatz, und genau dort sah bisher niemand einen echten Slicer.
+    """
+    packaged = _matrix_of(job_block(WORKFLOW.read_text(encoding="utf-8"), "package"))
+    windows = _matrix_of(job_block(_WINDOW_SELECTION.read_text(encoding="utf-8"), "selection"))
+    slicers = _matrix_of(job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection"))
+
+    assert sorted(windows) == sorted(packaged)
+    assert sorted(slicers) == sorted(
+        runner for runner in packaged if not runner.startswith("windows")
+    )
+    assert any(runner.endswith("-intel") for runner in slicers)
+
+
+@pytest.mark.parametrize("path", [_WINDOW_SELECTION, _SLICER_SELECTION], ids=lambda p: p.name)
+def test_a_selection_starts_by_hand_and_runs_each_choice_in_its_own_process(path: Path) -> None:
+    """Handstart mit der Eingabe ``tests``; sie kommt über die Umgebung, nie in den Befehl."""
+    text = path.read_text(encoding="utf-8")
+    trigger = text.split("\non:\n", 1)[1].split("\n\n", 1)[0]
+
+    assert re.findall(r"(?m)^  (\w+):", trigger) == ["workflow_dispatch"], trigger
+    assert "SELECTION: ${{ inputs.tests }}" in text
+    assert "${{ inputs.tests }}" not in text.split("SELECTION: ${{ inputs.tests }}", 1)[1]
+    assert 'os.environ["SELECTION"].split(";")' in text
+    assert "subprocess.call(" in text and "for " in text
+
+
+def test_a_slicer_selection_is_red_for_a_skip_a_missing_program_or_nothing() -> None:
+    """Ein übersprungener Slicertest belegt nichts; ein leerer Lauf auch nicht."""
+    from tests.conftest import REQUIRE_SLICERS
+
+    job = job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection")
+    script = step_script(step_block(job, "Ausgewählte Slicertests"))
+
+    assert f'{REQUIRE_SLICERS}: "1"' in job
+    assert "--junitxml={report}" in script
+    assert 'totals["tests"] == 0 or totals["skipped"]' in script
+    assert "code != 0" in script
+
+
+def test_the_slicer_selection_prepares_qt_like_the_window_selection() -> None:
+    """Slicertests gehen durch den Druckdialog; dessen Systembibliotheken fehlen sonst."""
+
+    def packages(path: Path) -> set[str]:
+        job = job_block(path.read_text(encoding="utf-8"), "selection")
+        step = next(
+            block
+            for block in re.split(r"(?m)^      - ", job)
+            if block.startswith("name: Qt-Systembibliotheken")
+        )
+        return set(re.findall(r"\b(lib[\w.+-]+|xvfb|xauth|fontconfig|fonts-[\w-]+)\b", step))
+
+    missing = packages(_WINDOW_SELECTION) - packages(_SLICER_SELECTION)
+    assert not missing, f"in slicer-auswahl.yml fehlt: {sorted(missing)}"

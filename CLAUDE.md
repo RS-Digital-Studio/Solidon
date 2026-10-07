@@ -57,7 +57,7 @@ bash .claude/scripts/suite-getrennt.sh
 .venv\Scripts\python.exe -m mypy
 ```
 
-**Fenster-, Renderer- und Leistungsprüfungen nur beim Release** (`AGENTS.md`,
+**Fenster-, Renderer- und Leistungsprüfungen lokal nur beim Release** (`AGENTS.md`,
 „Arbeitsweise“). `pytest -q` am Stück kommt nicht durch (nativer Abriss im
 Fensterteil); das Tor trennt Fenster und Renderer ab:
 

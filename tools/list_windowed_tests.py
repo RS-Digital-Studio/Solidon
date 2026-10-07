@@ -87,6 +87,8 @@ class WindowedCollector:
         self.files: set[Path] = set()
         self.plain_files: set[Path] = set()
         self.window_counts: dict[Path, int] = {}
+        #: Je Datei die Programme ihrer Slicertests (``pytest.mark.slicer``).
+        self.slicer_programs: dict[Path, set[str]] = {}
         self.include_rendered = include_rendered
         self.collected_count = 0
 
@@ -98,6 +100,8 @@ class WindowedCollector:
         if not self.include_rendered and item.get_closest_marker("rendered") is not None:
             return
         path = Path(str(item.path)).resolve()
+        for marker in item.iter_markers("slicer"):
+            self.slicer_programs.setdefault(path, set()).update(str(arg) for arg in marker.args)
         if needs_release_isolation(item):
             self.files.add(path)
             self.window_counts[path] = self.window_counts.get(path, 0) + 1
@@ -177,6 +181,21 @@ def collect_ci_window_counts(
     """Zählt Fenster- und Rendererfälle ohne Leistung und Erzeugnisvergleiche."""
     collector = _collect(paths, confcutdir=confcutdir)
     return dict(sorted(collector.window_counts.items()))
+
+
+def collect_ci_selection(
+    paths: Sequence[Path], *, confcutdir: Path | None = None
+) -> tuple[tuple[Path, ...], dict[Path, tuple[str, ...]]]:
+    """Fensterdateien und je Datei die Slicer ihrer ``slicer``-Fälle, in einer Sammlung.
+
+    Für ``tools/ci_selection.py``: Eine Sammlung über die betroffenen Dateien
+    kostet mit der Oberfläche über eine Minute, zwei kosteten das Doppelte.
+    """
+    collector = _collect(paths, confcutdir=confcutdir)
+    programs = {
+        path: tuple(sorted(found)) for path, found in sorted(collector.slicer_programs.items())
+    }
+    return tuple(sorted(collector.files)), programs
 
 
 def _collect(

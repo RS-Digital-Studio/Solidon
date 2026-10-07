@@ -165,9 +165,9 @@ Dialoge.
   Entwicklungstor — alle Tests ohne Fenster, Renderer und Leistung, ruff, format, mypy —
   läuft **vor dem Commit**, nicht nach jedem Schritt (Entscheidung Robert). Ein
   Schritt, der seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
-- **Fenster-, Renderer- und Leistungsprüfungen laufen ausschließlich beim Release**,
-  auch nicht als betroffene Teilmenge. Ein grüner Entwicklungslauf ersetzt
-  diesen Nachweis nicht.
+- **Fenster, Renderer und Leistung lokal nur beim Release**; vor dem Merge
+  fährt die CI die betroffenen auf Linux und macOS (`/liefern`). Ein grüner
+  Entwicklungslauf ersetzt das nicht.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**
   (Weg in `/erzeugen`).
 - **Die CI-Aufteilung hat einen geprüften Vertrag**

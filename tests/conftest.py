@@ -85,7 +85,7 @@ from app.core.activation import store as activation_store
 from app.core.knowledge import profiles
 from app.core.perceive import features, local
 from app.core.types import Document, Profile
-from tests.helpers import FakeMesh
+from tests.helpers import FakeMesh, first_start
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
@@ -579,6 +579,59 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(discover, "unpatched_find_programs", discover.find_programs, raising=False)
     monkeypatch.setattr(discover, "find_programs", only_what_was_set_plural)
     discover.forget_cache()
+
+
+#: Unter dieser Variable ist ein fehlender Slicer ein Fehler statt ein Skip —
+#: gesetzt von ``.github/workflows/slicer-auswahl.yml``, wo jeder gewählte
+#: Slicertest sein Programm installiert vorfinden muss.
+REQUIRE_SLICERS = "SOLIDON_REQUIRE_SLICERS"
+
+
+@pytest.fixture
+def installed_slicer(request: pytest.FixtureRequest) -> Path:
+    """Der echte, auf dieser Maschine installierte Slicer, den der Marker nennt.
+
+    Die einzige Stelle, an der ein Test die Maschine nach einem Slicer fragen
+    darf (``test_slicer_selection.py`` hält das): ``@pytest.mark.slicer("cura")``
+    nennt das Programm in der Schreibweise von :func:`discover.program_mark`,
+    die Fixture sucht es wie die Anwendung (``discover.find_programs`` ohne die
+    Attrappe aus ``_machine_stays_out_of_it``). Über den Marker wählt
+    ``tools/ci_selection.py`` den Test für die Slicerauswahl auf Linux und
+    macOS, und der Workflow installiert genau die genannten Programme.
+
+    Ein AppImage der Orca-Familie bekommt dabei, was sein erster Start
+    hinterlässt (``tests.helpers.first_start``) — ohne ihn sieht Solidon dort
+    keinen Herstellerdrucker, und der Kunde hat ihn hinter sich.
+
+    Fehlt das Programm, überspringt sich der Test — außer unter
+    :data:`REQUIRE_SLICERS`: Dort ist ein übersprungener Slicertest kein
+    Nachweis, sondern ein fehlender.
+    """
+    from app.core import tools
+
+    marker = request.node.get_closest_marker("slicer")
+    if marker is None or len(marker.args) != 1:
+        pytest.fail(
+            "installed_slicer braucht genau einen Marker @pytest.mark.slicer(<programm>)",
+            pytrace=False,
+        )
+    wanted = str(marker.args[0])
+    discover.forget_cache()
+    found = [
+        program
+        for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
+        if discover.program_mark(program.name) == wanted
+    ]
+    if found:
+        program = Path(found[0])
+        # Ein AppImage der Orca-Familie zeigt seinen Herstellerbestand erst
+        # nach dem ersten Start; der Kunde hat ihn hinter sich.
+        first_start(program)
+        return program
+    message = f"{wanted} ist auf dieser Maschine nicht installiert"
+    if os.environ.get(REQUIRE_SLICERS):
+        pytest.fail(f"{message}, und {REQUIRE_SLICERS} verlangt es", pytrace=False)
+    pytest.skip(message)
 
 
 @pytest.fixture(autouse=True)

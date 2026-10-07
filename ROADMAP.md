@@ -4381,6 +4381,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   [RM-541](#rm-541). Danach die Umstellung in `build.yml`, die Wächter in
   `test_packaging.py`, der Slicer-Job und die Unterlagen.
 
+  **Stand 07.10.2026, Auswahl vor dem Merge (Entscheidung Robert, CI-09):**
+  `tools/ci_selection.py` nennt zum Diff die betroffenen Fenster- und Slicertests,
+  `fenster-auswahl.yml` und `slicer-auswahl.yml` fahren sie per Handstart auf dem Zweig.
+  Slicertests tragen `slicer(<programm>)` und holen das Programm über `installed_slicer`
+  (Wächter `test_slicer_selection.py`); `test_real_slicers.py` slict einen Würfel über den
+  Weg des Druckdialogs in allen sieben Slicern. Lauf 37593226567: auf Ubuntu 24.04, macOS
+  ARM und Intel je 13 von 13 Fällen grün, keiner übersprungen; Gegenprobe 37594281698 rot
+  an fehlendem Programm und leerer Auswahl wie verlangt; Fensterauswahl 37591643343 auf
+  vier Plattformen grün. Offen bleibt hier der Tag-Job in `build.yml` aus dem Fix oben.
+
 ## Veröffentlichung, Betrieb und Vertrieb
 
 <a id="rm-002"></a>

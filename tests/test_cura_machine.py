@@ -606,27 +606,16 @@ def test_a_printer_with_a_foreign_definition_name_hands_over_fdmprinter(tmp_path
     assert handover._cura_printer_definition(engine, printer) == ""
 
 
-def _installed_cura() -> Path | None:
-    """Die echte Cura-Installation dieses Rechners, wenn es eine gibt."""
-    for base in (Path("C:/Program Files"), Path("/usr/share"), Path("/opt")):
-        if not base.is_dir():
-            continue
-        for folder in sorted(base.iterdir()):
-            engine = folder / "CuraEngine.exe"
-            if engine.is_file() and handover._cura_base(engine):
-                return engine
-    return None
-
-
-def test_every_cura_definition_in_the_printer_table_is_installed() -> None:
+@pytest.mark.slicer("cura")
+def test_every_cura_definition_in_the_printer_table_is_installed(
+    installed_slicer: Path,
+) -> None:
     """Ein Tippfehler in ``printers.toml`` fiele sonst nur als Befund beim Kunden auf.
 
     Gegen die Installation dieses Rechners (Cura 5.13 am 27.09.2026); ohne
-    Cura prüft der Test nichts und sagt das.
+    Cura prüft der Test nichts und sagt das (``installed_slicer``).
     """
-    engine = _installed_cura()
-    if engine is None:
-        pytest.skip("keine Cura-Installation auf diesem Rechner")
+    engine = installed_slicer
     named = {
         identifier: printer.cura_definition
         for identifier, printer in profiles.printer_profiles().items()
@@ -1017,13 +1006,12 @@ def test_the_ender3_v3_se_and_ke_are_printers_of_their_own(
         ("creality-ender3-v3-ke", ("M109 S215", "Draw the first line"), "true"),
     ],
 )
+@pytest.mark.slicer("cura")
 def test_the_se_and_ke_start_with_the_code_of_their_definition(
-    printer: str, lines: tuple[str, ...], bed_prepend: str
+    printer: str, lines: tuple[str, ...], bed_prepend: str, installed_slicer: Path
 ) -> None:
     """Gegen die echte Installation: Startcode gefüllt, Endcode ohne offene Klammer."""
-    engine = _installed_cura()
-    if engine is None:
-        pytest.skip("keine Cura-Installation auf diesem Rechner")
+    engine = installed_slicer
     machine = handover._cura_machine(
         handover.SlicerSetup(engine, "cura"),
         profiles.make_profile(printer, "pla"),
