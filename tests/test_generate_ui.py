@@ -1155,7 +1155,7 @@ def test_slow_and_outdated_comfy_folder_probes_do_not_freeze_or_change_the_dialo
     def setup(folder: str | Path | None, **_kwargs: object) -> comfy_setup.Result:
         setup_paths.append(str(folder))
         setup_started.set()
-        return comfy_setup.Result(comfyui=Path(folder or slow), nodes=Path("nodes"), weights=True)
+        return comfy_setup.Result(comfyui=Path(folder or slow), weights=True)
 
     monkeypatch.setattr(comfy_setup, "setup", setup)
     dialog = ComfySetupDialog(image_model=True)
@@ -1725,6 +1725,45 @@ def test_the_setup_dialog_says_how_long_a_step_has_been_running(
 
         dialog._idle()
         assert not dialog._tick.isActive(), "danach zählt nichts mehr"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_setup_dialog_names_version_licences_and_sizes_before_loading(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vor dem ersten Download steht da, was geladen wird und unter welcher Lizenz.
+
+    RM-003: Die Modelle stammen aus drei Lizenzen (MIT, Metas DINOv3-Lizenz,
+    Apache-2.0); wer sie lädt, liest das im Dialog, nicht erst im Handbuch. Die
+    Mindestfassung von ComfyUI steht daneben, weil die Knoten seit TRELLIS.2 aus
+    ComfyUI selbst kommen, und jede Größe kommt aus den Modelldateien — kein
+    Satz nennt mehr TripoSG oder SDXL.
+    """
+    from PySide6.QtWidgets import QCheckBox, QLabel
+
+    from app.core.backends import comfy_setup, mesh
+    from app.i18n import format_decimal
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path("C:/ComfyUI"))
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: False)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        texts = [label.text() for label in dialog.findChildren(QLabel)]
+        intro = next((text for text in texts if "DINOv3" in text), "")
+
+        assert mesh.MINIMUM_COMFYUI_TEXT in intro, "ab welcher Fassung ComfyUI reicht"
+        for licence in ("MIT", "TRELLIS.2", "BiRefNet", "DINOv3", "Apache-2.0", "FLUX.2 [klein]"):
+            assert licence in intro, licence
+        assert format_decimal(comfy_setup.WEIGHT_GIGABYTES, 1) in dialog.weights.text()
+        assert format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1) in dialog.image_model.text()
+        assert dialog.weights.isEnabled() and dialog.image_model.isEnabled()
+        said = " ".join(texts + [box.text() for box in dialog.findChildren(QCheckBox)])
+        assert "TripoSG" not in said and "SDXL" not in said
     finally:
         dialog.release()
         dialog.deleteLater()
