@@ -2822,6 +2822,7 @@ def test_a_bore_through_two_plates_with_a_pin_names_the_pin(profile: Profile, ke
     rechnete: Die zwei Platten verschmolzen, der Zapfen verschwand im Stopfen,
     531 mm³ ohne Befund. Eigen sind alle Teile, die den Mantel tragen.
     """
+    exact_kernel()
     from OCP.BRep import BRep_Builder
     from OCP.TopoDS import TopoDS_Compound
 
@@ -2830,7 +2831,6 @@ def test_a_bore_through_two_plates_with_a_pin_names_the_pin(profile: Profile, ke
     from app.core.brep.kernel import Solid
     from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE, filled_bore_reason
 
-    exact_kernel()
     load_operations()
     compound = TopoDS_Compound()
     builder = BRep_Builder()
