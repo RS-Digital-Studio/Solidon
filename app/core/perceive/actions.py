@@ -896,6 +896,12 @@ def actions_for(
         and only_a_rim_inside(mesh, feature)
     )
     moving_blocked = move_blocked(feature, features, mesh)
+    # **Ein getrenntes Teil ist kein Zapfen der Bohrung**: Für ein loses Teil
+    # darin gilt der Satz mit dem Weg über die Einzelteile (RM-413), wie ihn
+    # die Operation sagt (``prepare_ops._refuse_another_part_in_the_bore``);
+    # der Zapfensatz gilt einem Zapfen desselben Teils (RM-535).
+    if moving_blocked is HOLE_HOLDS_A_PIN and own_body_blocked is OTHER_PART_IN_THE_BORE:
+        moving_blocked = None
 
     for candidates in rows:
         known = [spec for spec in map(_spec_or_none, candidates) if spec is not None]
