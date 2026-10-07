@@ -35,6 +35,7 @@ from app.core.export import cura_linux, handover, slicer_profiles
 from app.core.knowledge import print_settings, profiles
 from tests.cura_fakes import (
     APPRUN_ENV,
+    FAILING_MOUNT,
     FLATPAK_LIBRARIES,
     K1_MAX_START,
     MOUNT_SCRIPT,
@@ -2501,31 +2502,33 @@ def test_a_mount_ends_when_solidon_dies_hard(tmp_path: Path, guard: str) -> None
     fake.write_text(f'#!/bin/sh\necho $$ > "{pidfile}"\necho "{tmp_path}"\nexec sleep 60\n')
     fake.chmod(0o755)
     root = Path(__file__).resolve().parent.parent
-    holder = subprocess.Popen(
+    pid = 0
+    # Der Block schließt das Rohr des Kindes und wartet auf es; ohne ihn blieb
+    # sein Lese-Ende offen (ResourceWarning, CI-Lauf 37565457904).
+    with subprocess.Popen(
         [sys.executable, "-c", _HOLDER, str(fake), guard],
         cwd=root,
         env={**os.environ, "PYTHONPATH": str(root)},
         stdout=subprocess.PIPE,
-    )
-    assert holder.stdout is not None
-    pid = 0
-    try:
-        assert holder.stdout.readline().decode().strip() == str(tmp_path)
-        pid = int(pidfile.read_text(encoding="utf-8"))
-        assert _alive(pid)
-        holder.kill()
-        holder.wait(10)
-        deadline = time.monotonic() + 1.0
-        while _alive(pid) and time.monotonic() < deadline:
-            time.sleep(0.02)
-        if guard == "setpriv":
-            assert not _alive(pid), "mit setpriv endet das Einhängen mit Solidon"
-        else:
-            assert _alive(pid), "ohne setpriv bleibt es stehen — sonst prüfte der Test nichts"
-    finally:
-        holder.kill()
-        if pid and _alive(pid):
-            os.kill(pid, signal.SIGKILL)
+    ) as holder:
+        assert holder.stdout is not None
+        try:
+            assert holder.stdout.readline().decode().strip() == str(tmp_path)
+            pid = int(pidfile.read_text(encoding="utf-8"))
+            assert _alive(pid)
+            holder.kill()
+            holder.wait(10)
+            deadline = time.monotonic() + 1.0
+            while _alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.02)
+            if guard == "setpriv":
+                assert not _alive(pid), "mit setpriv endet das Einhängen mit Solidon"
+            else:
+                assert _alive(pid), "ohne setpriv bleibt es stehen — sonst prüfte der Test nichts"
+        finally:
+            holder.kill()
+            if pid and _alive(pid):
+                os.kill(pid, signal.SIGKILL)
 
 
 def test_a_hanging_mount_keeps_its_reason(tmp_path: Path) -> None:
@@ -2629,3 +2632,39 @@ def test_before_its_first_copy_an_appimage_is_still_unknown(
     assert cura_linux.appimage_resources(appimage) is not None
     assert not cura_linux.still_unknown(appimage)
     assert handover.console_refusal(appimage) is not None
+
+
+@pytest.mark.parametrize("way", ["point", "silent", "cancelled", "failing", "missing"])
+def test_every_way_out_of_a_mount_closes_its_pipes(tmp_path: Path, way: str) -> None:
+    """Jeder Ausgang des Einhängens schließt beide Rohre: mit Punkt, ohne Antwort,
+    abgebrochen, gescheitert und ohne startbares Programm. Ein offenes Rohr wäre
+    je Lauf ein Deskriptor beim Kunden; Python meldet es als ``ResourceWarning``,
+    sobald der Prozess fortgeräumt wird — auf jeder Plattform."""
+    import gc
+    import warnings
+
+    from app.core.scene.cancel import CancelSignal
+
+    mount = tmp_path / "einhaengen.py"
+    mount.write_text(MOUNT_SCRIPT, encoding="utf-8")
+    failing = tmp_path / "scheitern.py"
+    failing.write_text(FAILING_MOUNT, encoding="utf-8")
+    command = {
+        "point": [sys.executable, str(mount), str(tmp_path)],
+        "silent": [sys.executable, str(mount)],
+        "cancelled": [sys.executable, str(mount)],
+        "failing": [sys.executable, str(failing)],
+        "missing": [str(tmp_path / "gibt-es-nicht.AppImage"), "--appimage-mount"],
+    }[way]
+    token = CancelSignal()
+    if way == "cancelled":
+        token.cancel()
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        with cura_linux._mounted(command, token, seconds=1.0) as found:
+            assert (found.point == tmp_path) == (way == "point")
+        gc.collect()
+
+    leaks = [str(entry.message) for entry in caught if issubclass(entry.category, ResourceWarning)]
+    assert not leaks
