@@ -1106,10 +1106,14 @@ def test_the_estimate_of_a_box_stays_where_the_installed_slicer_was_measured(
         model_meshes=run.meshes,
         expected_tools=run.used_tools,
     )
+    # Eine leere Kennung ist ein Rückschritt im G-Code-Leser, keine andere
+    # Fassung: Sie verschwände sonst auf jedem Rechner im Übersprungenen
+    # (Review P2 N9).
+    assert outcome.metrics.slicer, f"{program}: die Kopfzeile der Druckdatei nennt keinen Slicer"
     if not _same_version(outcome.metrics.slicer, version):
         pytest.skip(
             f"{program}: gemessen an Fassung {version}, installiert ist "
-            f"{outcome.metrics.slicer or 'eine unbekannte'} — nachmessen (schichtanalyse.md)"
+            f"{outcome.metrics.slicer} — nachmessen (schichtanalyse.md)"
         )
     printed = outcome.metrics.printing_seconds
     estimated = run.comparison.seconds if run.comparison is not None else None
