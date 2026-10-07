@@ -51,6 +51,13 @@ Sehne zählt, und welche Decke ein Profil ohne Brückenstützen als Brücke lies
 vermischt (Regel 14). Ohne belegtes
 Mindestdrucktempo gibt es keine :class:`Motion` und damit keine Zahl —
 eine Mindestdauer, die niemand belegt, wird nicht behauptet.
+
+**Sie ist eine Berichtsmessung und darf schnell rechnen** (``kern.md``):
+Winkelfunktionen der Plattform (``math.tan`` in :func:`_support_columns`,
+``np.arccos``, ``np.sin``, ``np.hypot``) und Clippers runde Versätze ändern
+eine Zeit höchstens um ULP, weit unter den Schwellen 15 % und Faktor 2 der
+Gegenprobe, und je Maschine bleibt sie bitgleich. Was über Absage oder
+Ergebnis entscheidet, steht hier nicht; BLAS kommt trotzdem nicht vor.
 """
 
 from __future__ import annotations
@@ -425,8 +432,8 @@ def _shape(section: manifold3d.CrossSection) -> tuple[float, float, int]:
             continue
         step = np.roll(points, -1, axis=0) - points
         boundary += float(np.hypot(step[:, 0], step[:, 1]).sum())
-        signed = float(np.dot(points[:, 0], np.roll(points[:, 1], -1)))
-        signed -= float(np.dot(points[:, 1], np.roll(points[:, 0], -1)))
+        signed = float((points[:, 0] * np.roll(points[:, 1], -1)).sum())
+        signed -= float((points[:, 1] * np.roll(points[:, 0], -1)).sum())
         pieces += signed > 0.0
     return float(section.area()), boundary, pieces
 
@@ -852,9 +859,7 @@ def _support_columns(
     Splitter an, sondern eine Fläche — ohne das rechnete die Gegenprobe am
     Reiniger 695 statt 73 Minuten Stütze, fast alles Anfahrten.
     """
-    tree = settings.support.style == "tree" or (
-        settings.support.style == "auto" and motion.support_tree
-    )
+    tree = uses_tree_supports(settings, motion)
     closing = 0.0 if tree else max(motion.support_closing or 0.0, 0.0)
     count = len(materials)
     columns = [manifold3d.CrossSection() for _ in range(count)]
@@ -976,7 +981,10 @@ def _support_parts(
     return body, contact
 
 
-def _is_tree(settings: PrintSettings, motion: Motion) -> bool:
+def uses_tree_supports(settings: PrintSettings, motion: Motion) -> bool:
+    """Ob der Slicer mit diesen Werten Baumstützen setzt — gewählt oder als „automatisch“
+    seines Profils. Eine Antwort für Zeitmodell und Gegenprobe
+    (``estimate.time_comparison_blocked``)."""
     style = settings.support.style
     return style == "tree" or (style == "auto" and motion.support_tree)
 
@@ -997,7 +1005,7 @@ def _support_lines(
     width = settings.layers.line_width
     flow = settings.filament.max_flow
     body, contact = _support_parts(supports, index, settings)
-    tree = _is_tree(settings, motion)
+    tree = uses_tree_supports(settings, motion)
     density = max(settings.support.density, 0.0)
     contact_density = motion.support_interface_density or 1.0
     for area, share, speed, joined in (
@@ -1051,7 +1059,7 @@ def support_material(
     width = settings.layers.line_width
     density = max(settings.support.density, 0.0)
     contact_density = motion.support_interface_density or 1.0
-    tree = _is_tree(settings, motion)
+    tree = uses_tree_supports(settings, motion)
     total = 0.0
     for index, column in enumerate(columns):
         if column.is_empty():

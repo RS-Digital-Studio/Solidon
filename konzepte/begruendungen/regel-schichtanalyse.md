@@ -576,6 +576,21 @@ an Pilz, Seitenablage, Wedge-Lock, Reiniger und Schüssel bei 0,94 bis 1,14 der
 Druckdatei.
 Bäume folgen keinem Umfang; dort bleibt die Grenze `SUPPORT_TIME_AGREEMENT`.
 
+**Wo die Zeitgegenprobe schweigt** (Review P2 Rest, Z1): An 46 Läufen sank
+die mittlere Abweichung mit RM-281 von 13,5 auf 10,9 %, aber die neuen
+Vergleiche brachten Fehlalarme über 15 % dort, wo das Zeitmodell den Slicer
+nicht kennt — CuraEngine (Leerfahrt mit Combing; vier der zwölf
+Zeitwarnungen, 13,2 → 15,9 %) und Baumstützen (Waschschüssel in ElegooSlicer
+und Bambu Studio −18,8 und −18,5 %). Der Kunde las „weichen deutlich ab“ mit
+*Druckeinstellungen öffnen*. Bis RM-281 beides baut, sagt
+`time_comparison_blocked` den Grund.
+
+**Die Fassung gehört zur Messung** (Review P2 Rest, Z2): `SLICER_DEVIATION`
+ist die gemessene Abweichung desselben Codes, ein Änderungswächter. Eine
+andere Slicerfassung auf einem der drei Rechner hätte das Tor rot gemacht,
+ohne dass sich Code änderte; deshalb trägt jede Zeile ihre Fassung, und eine
+andere wird übersprungen statt rot.
+
 ## Was die Analyse liefert
 
 Überhangfläche je Schicht, Stützvolumen, Querschnittsverlauf, **Inseln**

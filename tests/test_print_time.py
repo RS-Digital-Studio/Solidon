@@ -523,6 +523,69 @@ def test_the_time_is_not_compared_when_the_slicer_supports_differently() -> None
     assert time_comparison_blocked([estimate], GcodeMetrics(support_mm3=None))
 
 
+def test_the_time_is_not_compared_where_curaengine_drives_its_own_travels() -> None:
+    """CuraEngine fährt mit Combing, das Zeitmodell kennt das noch nicht (Review P2 Rest, Z1).
+
+    An 46 Läufen trug CuraEngine vier der zwölf Zeitwarnungen über 15 %, auch
+    ohne Stützen. Bis RM-281 die Leerfahrten baut, schweigt die Zeitgegenprobe
+    dort mit Grund; ein anderer Slicer mit denselben Zahlen wird verglichen.
+    """
+    from app.core.slice.estimate import PlateComparison, time_comparison_blocked
+    from app.core.slice.gcode import GcodeMetrics
+
+    plain = PlateComparison(0, 0.0, 50)
+    cura = GcodeMetrics(support_mm3=0.0, slicer="Cura_SteamEngine 5.8.1")
+    prusa = GcodeMetrics(support_mm3=0.0, slicer="PrusaSlicer-2.9.2+win64")
+    assert "CuraEngine" in str(time_comparison_blocked([plain], cura))
+    assert time_comparison_blocked([plain], prusa) == ""
+
+
+def test_the_time_is_not_compared_where_the_slicer_grows_trees() -> None:
+    """Baumstützen fahren Bahnen, die das Zeitmodell noch nicht kennt (Review P2 Rest, Z1).
+
+    Waschschüssel mit Baumstützen in ElegooSlicer und Bambu Studio: −18,8 und
+    −18,5 % als Fehlalarm. ``plate_comparison`` sagt, ob ein Baum steht —
+    gewählt oder als „automatisch“ eines Profils mit Bäumen —, und die
+    Gegenprobe schweigt dort mit Grund; dieselbe Stützmenge als Raster wird
+    verglichen.
+    """
+    from app.core.slice.estimate import (
+        PlateComparison,
+        plate_comparison,
+        time_comparison_blocked,
+    )
+    from app.core.slice.gcode import GcodeMetrics
+    from app.core.types import SceneObject
+
+    printed = GcodeMetrics(support_mm3=1000.0)
+    grid = PlateComparison(0, 1000.0, 50)
+    trees = PlateComparison(0, 1000.0, 50, tree_supports=True)
+    assert time_comparison_blocked([grid], printed) == ""
+    assert "Baumstützen" in str(time_comparison_blocked([trees], printed))
+
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    stem.apply_translation((0.0, 0.0, 5.0))
+    cap = trimesh.creation.box(extents=(30.0, 30.0, 2.0))
+    cap.apply_translation((0.0, 0.0, 11.0))
+    mesh = MeshData.of(trimesh.boolean.union([stem, cap]))
+    entry = SceneObject(id="pilz", name="Pilz", mesh=mesh)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    supported = _supported()
+    found: dict[tuple[str, bool], bool] = {}
+    for style, profile_trees in (("tree", False), ("auto", True), ("auto", False)):
+        settings = print_settings.with_path(supported, "support.style", style)
+        comparison = plate_comparison(
+            0,
+            [(entry, mesh, settings)],
+            profile,
+            keep_arrangement=True,
+            separate_objects=True,
+            motion=_motion(support_tree=profile_trees),
+        )
+        found[(style, profile_trees)] = comparison.tree_supports
+    assert found == {("tree", False): True, ("auto", True): True, ("auto", False): False}
+
+
 def test_a_profile_without_bridge_supports_leaves_time_and_support_unchecked() -> None:
     """Kobra 2 (``bridge_no_support = 1``): OrcaSlicer las die Pilzunterseite als
     Brücke und stützte nur ihren Rand — mit Stützen +96 % gerechnet, ohne −32 %.
@@ -905,22 +968,50 @@ def test_what_the_chain_leaves_open_comes_from_the_measured_program_defaults() -
 
 #: Wie weit Solidons Druckzeit am Quader (40, 40, 20 mm) von der Druckdatei des
 #: Slicers abliegt, in Prozent — gemessen am Druckdialogweg mit dem
-#: Herstellerprofil ohne Stützen (RM-281, 07.10.2026, ElegooSlicer 1.5.3.5,
-#: PrusaSlicer 2.9.6, CuraEngine 5.13.0, OrcaSlicer 2.4.2, Bambu Studio
-#: 02.08.02.61, Creality Print 7.2). Programm → (Drucker, Abweichung).
-SLICER_DEVIATION: dict[str, tuple[str, float]] = {
-    "elegooslicer": ("centauri-carbon-2", -5.7),
-    "prusaslicer": ("prusa-mk4s", 1.4),
-    "cura": ("sovol-sv06", -13.2),
-    "orcaslicer": ("anycubic-kobra-2", -9.2),
-    "bambustudio": ("bambu-p1s", 0.1),
-    "crealityprint": ("creality-k1", -0.6),
+#: Herstellerprofil ohne Stützen (RM-281, 07.10.2026; Creality Print an 7.3
+#: nachgemessen). Programm → (Drucker, Abweichung, gemessene Fassung). Die
+#: Fassung steht hier, weil eine andere die Zeit verschiebt, ohne dass sich
+#: Code ändert: Weicht die installierte ab,
+#: überspringt der Test mit beiden Fassungen statt rot zu werden, und das
+#: Nachmessen ist ein Release-Schritt (``schichtanalyse.md``, Review P2 Rest, Z2).
+SLICER_DEVIATION: dict[str, tuple[str, float, str]] = {
+    "elegooslicer": ("centauri-carbon-2", -5.7, "1.5.3.5"),
+    "prusaslicer": ("prusa-mk4s", 1.4, "2.9.6"),
+    "cura": ("sovol-sv06", -13.2, "5.13.0"),
+    "orcaslicer": ("anycubic-kobra-2", -9.2, "2.4.2"),
+    "bambustudio": ("bambu-p1s", 0.1, "02.08.02.61"),
+    "crealityprint": ("creality-k1", -0.5, "7.3"),
 }
 
 #: Wie viele Prozentpunkte ein Lauf von der Messung abweichen darf: eine
 #: andere Fassung des Slicers verschiebt seine Zeit, eine Rechenänderung in
 #: Solidon soll es nicht unbemerkt tun.
 SLICER_SPREAD = 3.0
+
+
+def _same_version(generated: str, measured: str) -> bool:
+    """Ob die Druckdatei (``GcodeMetrics.slicer``, „generated by …“) die gemessene Fassung nennt.
+
+    Verglichen wird Stelle für Stelle so weit, wie die Messung sie nennt:
+    „7.2“ trifft „7.2.0.4012“, aber nicht „7.20“.
+    """
+    import re
+
+    found = re.search(r"\d+(?:\.\d+)+", generated)
+    if found is None:
+        return False
+    wanted = measured.split(".")
+    return found.group(0).split(".")[: len(wanted)] == wanted
+
+
+def test_a_version_matches_digit_group_by_digit_group() -> None:
+    """Die Fassungsprüfung des Slicer-Tests vergleicht Stellen, nicht Zeichen (Z2)."""
+    assert _same_version("Cura_SteamEngine 5.13.0", "5.13.0")
+    assert _same_version("PrusaSlicer-2.9.6+win64 on 2026-10-07", "2.9.6")
+    assert _same_version("CrealityPrint 7.2.0.4012", "7.2")
+    assert not _same_version("CrealityPrint 7.20.1", "7.2")
+    assert not _same_version("OrcaSlicer 2.4.3", "2.4.2")
+    assert not _same_version("", "2.4.2")
 
 
 def _installed_slicer(program: str) -> object | None:
@@ -968,8 +1059,9 @@ def test_the_estimate_of_a_box_stays_where_the_installed_slicer_was_measured(
     gestreckt) auf dem Weg des Druckdialogs, Druckzeit ab der ersten Schicht
     aus der Druckdatei gegen Solidons Schätzung. Die Abweichung bleibt
     innerhalb von :data:`SLICER_SPREAD` Punkten um die Messung; übersprungen
-    wird nur ohne installierten Slicer — so läuft der Test auch auf Linux und
-    macOS, wo der Slicer liegt."""
+    wird ohne installierten Slicer und bei einer anderen Fassung als der
+    gemessenen — so läuft der Test auch auf Linux und macOS, wo der Slicer
+    liegt, und ein Rechner mit anderer Fassung wird nicht rot."""
     from pathlib import Path
 
     from app.core.export import handover, manufacturer
@@ -979,7 +1071,7 @@ def test_the_estimate_of_a_box_stays_where_the_installed_slicer_was_measured(
     exe = _installed_slicer(program)
     if exe is None:
         pytest.skip(f"{program} ist hier nicht installiert")
-    printer, measured = SLICER_DEVIATION[program]
+    printer, measured, version = SLICER_DEVIATION[program]
     profile = profiles.make_profile(printer, "pla")
     setup = _setup_like_the_dialog(exe, profile)
     foundation = manufacturer.base_settings(profile, print_settings.resolve(profile).quality, setup)
@@ -1014,6 +1106,11 @@ def test_the_estimate_of_a_box_stays_where_the_installed_slicer_was_measured(
         model_meshes=run.meshes,
         expected_tools=run.used_tools,
     )
+    if not _same_version(outcome.metrics.slicer, version):
+        pytest.skip(
+            f"{program}: gemessen an Fassung {version}, installiert ist "
+            f"{outcome.metrics.slicer or 'eine unbekannte'} — nachmessen (schichtanalyse.md)"
+        )
     printed = outcome.metrics.printing_seconds
     estimated = run.comparison.seconds if run.comparison is not None else None
     assert printed and estimated, f"{program}: Druckdatei {printed}, Schätzung {estimated}"

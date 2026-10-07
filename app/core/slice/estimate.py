@@ -283,6 +283,9 @@ class PlateComparison:
     die Schichtanalyse sie selbst für nötig hält."""
     channels_blocked: bool = False
     """Ob auf dieser Platte eine Kanalsperre hinausging."""
+    tree_supports: bool = False
+    """Ob der Slicer hier Baumstützen setzt — deren Fahrten trägt das Zeitmodell
+    noch nicht (:func:`time_comparison_blocked`, RM-281)."""
 
 
 def support_floor(profile: Profile) -> float:
@@ -486,6 +489,11 @@ def plate_comparison(
         settings.support.block_channels and bool(model_support(result).channels)
         for result, settings in supported_groups
     )
+    from app.core.slice.print_time import uses_tree_supports
+
+    tree = motion is not None and any(
+        uses_tree_supports(settings, motion) for _result, settings in supported_groups
+    )
     if arranged_apart:
         return PlateComparison(
             plate,
@@ -495,6 +503,7 @@ def plate_comparison(
             seconds=seconds,
             support_floor_mm3=floor_mm3,
             channels_blocked=blocked,
+            tree_supports=tree,
         )
     if not uniform:
         for index, mesh in enumerate(meshes):
@@ -512,6 +521,7 @@ def plate_comparison(
                         seconds=seconds,
                         support_floor_mm3=floor_mm3,
                         channels_blocked=blocked,
+                        tree_supports=tree,
                     )
     support = 0.0
     for result, settings in groups:
@@ -535,6 +545,7 @@ def plate_comparison(
                     seconds=seconds,
                     support_floor_mm3=floor_mm3,
                     channels_blocked=blocked,
+                    tree_supports=tree,
                 )
         if motion is not None:
             # Dieselben Säulen, die die Druckzeit fährt: voller Überstand und
@@ -552,6 +563,7 @@ def plate_comparison(
         seconds=seconds,
         support_floor_mm3=floor_mm3,
         channels_blocked=blocked,
+        tree_supports=tree,
     )
 
 
@@ -717,9 +729,22 @@ def time_comparison_blocked(
     anders, wäre eine Zeitwarnung nur die Stützwarnung ein zweites Mal; die
     steht mit beiden Mengen schon im Bericht (:func:`plate_findings`).
     Verglichen werden die Mengen nur als Bedingung, nie verrechnet (Regel 14).
+
+    **Und wo das Zeitmodell den Slicer nachweislich nicht trägt** (Review P2
+    Rest, Z1; RM-281): Die Leerfahrten von CuraEngine (Combing) und die Bahnen
+    von Baumstützen rechnet es noch nicht nach. Gemessen an 46 Läufen brachten
+    beide die neuen Zeitwarnungen über 15 % — CuraEngine vier der zwölf —, und
+    der Kunde las „Die Werte weichen deutlich voneinander ab“ mit
+    *Druckeinstellungen öffnen*, als läge es an ihm. Bis RM-281 sie baut, sagt
+    die Gegenprobe, warum sie hier schweigt.
     """
     if not expected:
         return ""
+    if "cura" in measured.slicer.casefold():
+        return _(
+            "Die Leerfahrten von CuraEngine rechnet das Zeitmodell noch nicht nach; "
+            "die Druckzeit bleibt ungeprüft."
+        )
     if all(
         entry.support_material_mm3 is not None and entry.support_material_mm3 <= EPS_GEOM
         for entry in expected
@@ -731,6 +756,11 @@ def time_comparison_blocked(
     )
     if missing is not None:
         return missing or _("Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.")
+    if any(entry.tree_supports for entry in expected):
+        return _(
+            "Die Bahnen von Baumstützen rechnet das Zeitmodell noch nicht nach; "
+            "die Druckzeit bleibt ungeprüft."
+        )
     if measured.support_mm3 is None or "support" in measured.uncertain_material_roles:
         return _("Die Druckdatei weist die vollständige Stützmenge nicht eindeutig aus.")
     estimated = sum(entry.support_material_mm3 or 0.0 for entry in expected)
