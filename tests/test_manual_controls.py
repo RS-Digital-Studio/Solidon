@@ -51,8 +51,10 @@ from app.core.bootstrap import load_operations
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 
-#: Ein kursiv ausgezeichneter Name: ein Sternchen, kein zweites daneben.
-NAME: Final = re.compile(r"(?<![*\w])\*([^*\n]{1,60})\*(?!\*)")
+#: Ein kursiv ausgezeichneter Name: ein Sternchen, kein zweites daneben, und
+#: innen kein Leerraum am Rand — sonst lesen sich Listenpunkt und Name einer
+#: Zeile „* *Merkmal verschieben*“ als leerer Name „* *“.
+NAME: Final = re.compile(r"(?<![*\w])\*([^*\s](?:[^*\n]{0,58}[^*\s])?)\*(?!\*)")
 
 #: Was hinter einem Namen stehen darf, wenn das Programm ihn als Anfang eines
 #: längeren Textes zeigt: „Bestimmt — jedes Maß steht fest.“ Dieselben
@@ -189,6 +191,56 @@ def test_a_falsified_name_is_found() -> None:
         [("probe", "Erst *Bohrung setzen*, dann *Bohrung setzten* und *Übernehmen*.")], texts
     )
     assert findings == ["probe: *Bohrung setzten*"]
+
+
+def _translated_program_texts(language: str, german: set[str]) -> set[str]:
+    """Was das Programm in ``language`` für die deutschen Programmtexte sagt.
+
+    Ein Schlüssel mit Kontext steht als ``Kontext\\x04Text`` im Katalog.
+    """
+    from app.i18n.catalog import read_catalog
+
+    return {
+        _plain(value)
+        for key, value in read_catalog(language).items()
+        if _plain(key.split("\x04")[-1]) in german
+    }
+
+
+def _translated_pages(language: str) -> list[tuple[str, str]]:
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        return [(page.key, page.text()) for page in _written_pages()]
+    finally:
+        set_language("de")
+
+
+def _other_languages() -> list[str]:
+    from app.i18n import SOURCE_LANGUAGE
+    from app.i18n.catalog import available_languages
+
+    return [language for language in available_languages() if language != SOURCE_LANGUAGE]
+
+
+@pytest.mark.parametrize("language", _other_languages())
+def test_an_italic_name_in_a_translation_is_the_translated_control(language: str) -> None:
+    """Die Übersetzung nennt den Knopf so, wie ihn das übersetzte Programm zeigt.
+
+    Spanisch und Portugiesisch nannten *Merkmal bearbeiten* im Handbuch
+    „Editar detalle“ und „Editar elemento“, das Programm zeigt „Editar
+    característica“ — der Kunde sucht einen Knopf, den es nicht gibt.
+    """
+    texts = _translated_program_texts(language, _program_texts())
+    pages = _translated_pages(language)
+    findings = _unsaid_names(pages, texts)
+    assert not findings, f"{language}: {len(findings)} Namen zeigt das Programm so nicht:\n" + (
+        "\n".join(findings)
+    )
+    assert _unsaid_names([("probe", "*Bohrung setzten*")], texts) == ["probe: *Bohrung setzten*"]
 
 
 def _foreign_fields(pages: Iterable[tuple[str, str]], controls: set[str]) -> list[str]:
