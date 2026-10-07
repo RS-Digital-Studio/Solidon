@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 
 from app.core import guides
 from app.ui.labels import RowCheckBox
+from app.ui.overlay import MARGIN, free_span
 
 if TYPE_CHECKING:
     from app.ui.main_window import MainWindow
@@ -329,7 +330,7 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
             raise MissingTargetError(f"{name}: kein offener Dialog mit diesem Feld")
         return editor
     if kind == "operation":
-        button = window.selection_operations._buttons.get(rest)
+        button = window.selection_operations.button_for(rest)
         if button is not None and button.isVisible():
             return button
     return _named(window, kind, rest)
@@ -356,7 +357,7 @@ def area_for(window: MainWindow, name: str) -> QRect:
     if kind in ("command", "operation"):
         action = _action_for(window, kind, rest)
         if kind == "operation":
-            button = window.selection_operations._buttons.get(rest)
+            button = window.selection_operations.button_for(rest)
             if button is not None and not button.isVisible():
                 _reveal(window, button)
             if button is not None and button.isVisible():
@@ -466,12 +467,19 @@ def _open_view(window: MainWindow) -> QRect:
     # Rahmen der Nachbarkarte liegt und seine Nummer Platz neben ihr findet.
     gap = 16
     left, top, right, bottom = view.left(), view.top() + gap, view.right(), view.bottom()
-    card = window.overlay.left
-    if card is not None and card.isVisible():
-        left = max(left, _global(card).right() + 1 + gap)
-    column = window.right_column
-    if column.isVisible():
-        right = min(right, _global(column).left() - 1 - gap)
+    # **Die Lücke zwischen den Karten, wo sie auch stehen** — seit sie sich
+    # verschieben lassen, liegt die Auswahl womöglich links (``free_span``,
+    # dieselbe Rechnung, mit der die Ansicht ihnen ausweicht).
+    host = window.overlay
+    cards = [
+        zone.geometry() for zone in (host.left, host.right) if zone is not None and zone.isVisible()
+    ]
+    covered_left, covered_right = free_span(host.width(), cards)
+    origin = host.mapToGlobal(QPoint(0, 0))
+    if covered_left:
+        left = max(left, origin.x() + covered_left - MARGIN + gap)
+    if covered_right:
+        right = min(right, origin.x() + host.width() - covered_right + MARGIN - 1 - gap)
     strip = window.overlay.bottom
     if strip is not None and strip.isVisible():
         bottom = min(bottom, _global(strip).top() - 1 - gap)

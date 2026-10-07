@@ -69,6 +69,43 @@ def test_a_clicked_side_face_is_the_opening_of_the_hollowing_dialog(window: Main
         dialog.reject()
 
 
+def test_a_chosen_face_offers_hollowing_in_the_card_and_becomes_the_opening(
+    window: MainWindow,
+) -> None:
+    """Rechts unter *Auswahl* steht *Aushöhlen* auch an einer Fläche.
+
+    Fragebogen zu 0.5.3: „Aushöhlen erscheint nicht so, wie im Handbuch
+    beschrieben.“ Ein angelegter Quader ist gewählt, der Klick darauf nahm die
+    Oberseite, und an einer Fläche stand *Aushöhlen* weder vorn noch in der
+    Liste. Jetzt steht es dort, und der Knopf trägt die Fläche als Öffnung ein
+    — oben offen, wie die Anleitung *Ein Gehäuse mit Deckel* es will.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    top = next(
+        identifier
+        for identifier, feature in entry.features.items()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.9
+    )
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, top)
+    panel = window.selection_operations
+    assert panel.chosen_level() == "face"
+    assert panel._buttons["hollow_object"].isHidden(), "oben steht es an der Fläche nicht"
+    button = panel._list_twins["hollow_object"]
+    assert not button.isHidden() and button.isEnabled(), "aber in der Liste darunter"
+
+    button.click()
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    try:
+        assert dialog.values()["openings"] == [top], "die gewählte Fläche ist die Öffnung"
+    finally:
+        dialog.reject()
+
+
 def test_hollowing_at_the_clicked_side_ends_in_the_history_with_the_face(
     window: MainWindow,
 ) -> None:
@@ -112,3 +149,38 @@ def test_hollowing_at_the_clicked_side_ends_in_the_history_with_the_face(
         "die Decke bleibt zu"
     )
     assert opened.volume < entry.mesh.volume, "es wurde ausgehöhlt"
+
+
+def test_a_guide_finds_hollowing_in_the_list_at_a_chosen_face(qt_app: QApplication) -> None:
+    """Eine Anleitung, die auf *Aushöhlen* zeigt, findet an der Fläche den Listenknopf.
+
+    ``guide_targets`` las nur den oberen Knopf; an einer Fläche ist der
+    verborgen, und Rahmen wie Nummer fanden kein Ziel, obwohl die Handlung in
+    der Liste stand (Zwilling zu ``_list_twins``).
+    """
+    from app.ui.guide_targets import area_for, widget_for
+    from tests.ui_helpers import shown_window
+
+    windows = shown_window(qt_app)
+    window = next(windows)
+    try:
+        window.open_path(MESHES / "cube_clean.stl")
+        window.session.wait_for_idle()
+        result = window.session.evaluate_now()
+        object_id, entry = next(iter(result.scene.objects.items()))
+        top = next(
+            identifier
+            for identifier, feature in entry.features.items()
+            if feature.kind == "face" and feature.params["normal"][2] > 0.9
+        )
+        window.object_tree.select_object(object_id)
+        window.object_tree.select_feature(object_id, top)
+        window.right.setCurrentWidget(window.feature_dock)
+        qt_app.processEvents()
+        twin = window.selection_operations._list_twins["hollow_object"]
+        area = area_for(window, "operation:hollow_object")
+        assert twin.isVisible(), "der Listenknopf wird hervorgeholt"
+        assert widget_for(window, "operation:hollow_object") is twin
+        assert area.contains(twin.mapToGlobal(twin.rect().center())), area
+    finally:
+        next(windows, None)

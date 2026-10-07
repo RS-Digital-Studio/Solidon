@@ -27,6 +27,7 @@ from PySide6.QtCore import (
     QEvent,
     QPoint,
     QPointF,
+    QRect,
     Qt,
     QTimer,
     Signal,
@@ -3429,11 +3430,62 @@ class ViewBar(QFrame):
         # Ohne den Abzug rutschte die Leiste mit dem ``raise_`` darüber genau
         # dorthin, wo sie vorher unsichtbar lag.
         covered = getattr(parent, "_zone_margins", (0, 0, 0))[2]
-        self.move(
+        spot = QRect(
             max(parent.width() - self.width() - ORIENTATION_MARGIN, 0),
             max(parent.height() - self.height() - covered - ORIENTATION_MARGIN, 0),
+            self.width(),
+            self.height(),
         )
+        # **Und neben jede Seitenkarte, die sie verdecken würde** — eine hohe
+        # rechte Karte reichte bis über sie, und seit die Karten verschiebbar
+        # sind, kann jede dort stehen (``Viewport.set_card_rects``). Von rechts
+        # nach links, damit die Leiste vor der nächsten Karte haltmacht.
+        cards = getattr(parent, "_card_rects", ())
+        for card in sorted(cards, key=lambda rect: -rect.left()):
+            if card.intersects(spot):
+                spot.moveLeft(max(card.left() - self.width() - ORIENTATION_MARGIN, 0))
+        if any(card.intersects(spot) for card in cards):
+            spot = self._spot_when_the_gap_is_too_narrow(spot, cards, parent)
+        self.move(spot.topLeft())
         self.raise_()
+
+    def _spot_when_the_gap_is_too_narrow(
+        self, spot: QRect, cards: Sequence[QRect], parent: QWidget
+    ) -> QRect:
+        """Wohin die Leiste kommt, wenn die Lücke zwischen zwei hohen Karten zu schmal ist.
+
+        Die Schleife davor rückte sie bis an den linken Rand und ließ sie dort
+        unter der linken Karte liegen. **Zuerst unter die kürzere Karte**, an
+        ihre rechte Kante: Dort ist das Bild frei, wenn sie weniger tief reicht.
+        **Sonst in die Lücke**, an ihren linken Rand — so bleibt wenigstens der
+        Anfang der Leiste zu sehen statt keiner ihrer Knöpfe.
+        """
+        band = QRect(0, spot.top(), parent.width(), spot.height())
+        reaching = [card for card in cards if card.intersects(band)]
+        shorter = min(reaching, key=lambda card: card.bottom())
+        below = QRect(spot)
+        below.moveTop(shorter.bottom() + 1 + ORIENTATION_MARGIN)
+        below.moveLeft(
+            min(
+                max(shorter.right() - self.width() - ORIENTATION_MARGIN, 0),
+                max(parent.width() - self.width() - ORIENTATION_MARGIN, 0),
+            )
+        )
+        if below.bottom() < parent.height() and not any(card.intersects(below) for card in cards):
+            return below
+        start = 0
+        gaps: list[tuple[int, int]] = []
+        for left, right in sorted((card.left(), card.right() + 1) for card in reaching):
+            if left > start:
+                gaps.append((start, left))
+            start = max(start, right)
+        if start < parent.width():
+            gaps.append((start, parent.width()))
+        if not gaps:
+            return spot
+        widest = max(gaps, key=lambda gap: (gap[1] - gap[0], gap[0]))
+        spot.moveLeft(widest[0] + ORIENTATION_MARGIN)
+        return spot
 
 
 #: Die Grundkörper, mit denen die leere Szene einlädt — Namen aus dem Register,
@@ -5249,6 +5301,9 @@ class Viewport(QWidget):
         self._sketch_frame: PlaneFrame | None = None
         self._zone_margins: tuple[int, int, int] = (0, 0, 0)
         """Verdeckte Bildränder links, rechts und unten, in Bildpunkten."""
+        self._card_rects: tuple[QRect, ...] = ()
+        """Wo die Seitenkarten über der Ansicht stehen — die Ansichtsleiste
+        weicht ihnen aus (:meth:`set_card_rects`)."""
         self._sketch_occlusion_shift: Vec3 = (0.0, 0.0, 0.0)
         """Der wirklich angewandte Kameraausgleich, in Weltkoordinaten.
 
@@ -9370,6 +9425,10 @@ class Viewport(QWidget):
         # der nächsten Ruhepause neu.
         self._clear_snap_preview()
         self._update_cursor()
+
+    def measuring(self) -> bool:
+        """Ob gerade gemessen wird — dann gehören Entf und die Rücktaste dem letzten Maß."""
+        return self._measure_mode != "off"
 
     def undo_measurement(self) -> None:
         """Nimmt das zuletzt gesetzte Maß zurück — nur dieses (§18.3).
@@ -16818,6 +16877,18 @@ class Viewport(QWidget):
         self.cameraMoved.emit()
         self._draw()
 
+    def set_card_rects(self, rects: tuple[QRect, ...]) -> None:
+        """Die Seitenkarten melden, wo sie stehen — seit sie sich verschieben lassen.
+
+        Die Ansichtsleiste unten rechts lag unter einer hohen rechten Karte;
+        mit verschiebbaren Karten kann jede über ihr stehen. Sie rückt deshalb
+        neben jede Karte, die sie verdeckte (:meth:`ViewBar.place`).
+        """
+        if rects == self._card_rects:
+            return
+        self._card_rects = rects
+        self.view_bar.place()
+
     def set_zone_margins(self, left: int, right: int, bottom: int = 0) -> None:
         """Die schwebenden Karten melden, welchen Bildraum sie verdecken.
 
@@ -17739,6 +17810,13 @@ class Viewport(QWidget):
         Die Stufe geht dabei nicht verloren: Ein Rechtsklick, der eine Bohrung
         wählt, setzt die Auswahl auf sie — der nächste Linksklick daneben führt
         also von dort weiter und nicht von vorn.
+
+        **Eine Gruppe bleibt eine Gruppe** (Entscheidung Robert, 06.10.2026):
+        Trifft der Rechtsklick einen von mehreren gewählten Körpern, meint er
+        alle, und das Menü trägt *Vereinigen* — wie in Cura, Orca und
+        PrusaSlicer, wo man mehrere Teile markiert und dann mit rechts
+        zusammenführt oder löscht. Das Genaueste unter dem Zeiger nimmt er nur,
+        wo er keine Mehrfachauswahl trifft.
         """
         if not self.user_selection_allowed():
             self._refuse_selection()
@@ -17777,6 +17855,12 @@ class Viewport(QWidget):
         # §25); zurückgerechnet suchte der Rechtsklick sie auf Platte 2 eine
         # Bettbreite daneben und fand keine. Nur die Körper- und
         # Merkmalssuche darunter fragt die Szene.
+        if self._selected_more and self._click_target(self._from_view(point), direct=True)[0] in (
+            self._selected,
+            *self._selected_more,
+        ):
+            self.contextMenuAt.emit(x, y)
+            return
         if not self._edge_click(x, y, point, direct=True):
             self._select_at(self._from_view(point), direct=True)
         self.contextMenuAt.emit(x, y)

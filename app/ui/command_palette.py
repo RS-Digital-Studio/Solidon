@@ -7,6 +7,7 @@ eine Tabelle davon liest.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import lru_cache
 from typing import Final, cast
 
@@ -230,6 +231,36 @@ def matches(entry: PaletteEntry, query: str, *, stem: bool = False, any_word: bo
     return all(stem_of(part) in haystack for part in parts if len(part) >= STEM_LENGTH)
 
 
+def found_in_rounds(entries: Sequence[PaletteEntry], query: str) -> tuple[list[PaletteEntry], bool]:
+    """Was eine Suche trifft, in den Runden der Palette — und ob die letzte gelockert hat.
+
+    **Zwei Runden, und die zweite nur bei Bedarf.** Genau passende Treffer
+    zuerst; findet sich keiner, wird auf den Wortstamm gelockert — „bohren"
+    fand sonst nichts, weil die Operation „Bohrung setzen" heißt. Immer zu
+    lockern hieße, zwischen guten Treffern dauerhaft Ungefähres zu zeigen.
+
+    **Und eine dritte für mehrwortige Fragen.** „ecke abrunden" fand nichts,
+    obwohl „abrunden" das *Verrunden* findet; „zu viele dreiecke" nichts,
+    obwohl „dreiecke" auf *Dreiecke verringern* führt (Bedienweg-Durchsicht
+    14.09.2026, sieben von 71 Kundenwörtern leer). Erst wenn kein Eintrag auf
+    alle Wörter passt, genügt eines — und ``True`` sagt es dem Aufrufer, denn
+    eine Liste, die stillschweigend weniger prüft, sieht aus wie eine genaue.
+
+    **Eine Rechnung für jedes Suchfeld über Operationen**: die Palette und die
+    Suche in der Karte der Handlungen. Die Karte verglich bis zum 06.10.2026
+    nur Titel und Gruppe, und „verschmelzen“ fand dort nichts, während die
+    Palette *Vereinigen* zeigte (Fragebogen zu 0.5.3).
+    """
+    found = [entry for entry in entries if matches(entry, query)]
+    if not found and query.strip():
+        found = [entry for entry in entries if matches(entry, query, stem=True)]
+    loosened = False
+    if not found and len(query.split()) > 1:
+        found = [entry for entry in entries if matches(entry, query, any_word=True)]
+        loosened = bool(found)
+    return found, loosened
+
+
 def word_hits(entry: PaletteEntry, query: str) -> int:
     """Wie viele Wörter der Anfrage diesen Eintrag treffen — ganz oder am Stamm.
 
@@ -412,26 +443,7 @@ class CommandPalette(QDialog):
 
     def _refilter(self, query: str) -> None:
         self.list.clear()
-        # **Zwei Runden, und die zweite nur bei Bedarf.** Genau passende
-        # Treffer zuerst; findet sich keiner, wird auf den Wortstamm gelockert
-        # — „bohren" fand sonst nichts, weil die Operation „Bohrung setzen"
-        # heißt. Immer zu lockern hieße, zwischen guten Treffern dauerhaft
-        # Ungefähres zu zeigen.
-        found = [entry for entry in self._entries if matches(entry, query)]
-        if not found and query.strip():
-            found = [entry for entry in self._entries if matches(entry, query, stem=True)]
-        # **Und eine dritte für mehrwortige Fragen.** „ecke abrunden" fand
-        # nichts, obwohl „abrunden" das *Verrunden* findet; „zu viele
-        # dreiecke" nichts, obwohl „dreiecke" auf *Dreiecke verringern* führt
-        # (Bedienweg-Durchsicht 14.09.2026, sieben von 71 Kundenwörtern
-        # leer). Erst wenn kein Eintrag auf alle Wörter passt, genügt eines —
-        # sortiert nach Trefferzahl und mit einer Zeile darüber, die das sagt:
-        # Eine Liste, die stillschweigend weniger prüft, sieht aus wie eine
-        # genaue.
-        loosened = False
-        if not found and len(query.split()) > 1:
-            found = [entry for entry in self._entries if matches(entry, query, any_word=True)]
-            loosened = bool(found)
+        found, loosened = found_in_rounds(self._entries, query)
         # Stabil nach Güte: Titel vor Name vor Beschreibung, und innerhalb
         # derselben Güte bleibt die Reihenfolge aus ``applies_to`` stehen.
         #

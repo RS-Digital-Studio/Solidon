@@ -49,9 +49,12 @@ gefalteten, getrennt durch einen nackten Trennstrich.
   dort** (Entscheidung Robert): `PANEL_CATEGORIES` (`registry.py`),
   `in_the_menu_bar`, und `_build_menus` legt dafür kein Menü an. Die Aktionen
   entstehen trotzdem am Fenster (Kürzel, Palette über `_op_actions` und das
-  Feld *Funktion suchen …* oben, Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum
-  und Ansicht** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
-  zwei Aktionen auf einer Taste führt Qt beide nicht aus.
+  Feld *Funktion suchen …* oben, Kürzelübersicht „Handlungen rechts“); **nackte Tasten bleiben an Objektbaum,
+  Ansicht und Reiter *Auswahl*** (`_scope_shortcut`), sonst läge Entf über *Schritt löschen*, und
+  zwei Aktionen auf einer Taste führt Qt beide nicht aus. Text- und Zahlenfelder
+  behalten Entf. Sperren Halt oder Lizenz das Entfernen, sagt die Taste den
+  Grund (`_DeleteRefusal`, Titel aus `_removal_entry`, still beim Messen in der Ansicht) — ein
+  gesperrtes Kürzel schweigt sonst.
 - **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*,
   *Erzeugen* samt *Bausteine* (Katalog, Gegenstücke, Deckel ohne Kachel),
   *Ansicht*, *Hilfe*; *Automatisch teilen* steht in der Karte
@@ -72,12 +75,15 @@ gefalteten, getrennt durch einen nackten Trennstrich.
   Szene stehen unter dem Satz die Wege, die er nennt (`PartCatalog.offer_ways`:
   *Quader anlegen*, *Modell einfügen …*). Ein modaler Katalog, der „wählen Sie
   im Objektbaum“ sagt, ist eine Sackgasse (RM-356).
-- **Das Kontextmenü an Körper und Merkmal trägt keine Operationen**
+- **Das Kontextmenü an Körper und Merkmal trägt keine Liste der Operationen**
   (Entscheidung Robert), nur *Diesen Schritt ändern*, *Auf dieser Fläche
-  zeichnen* und die Sichtbarkeit; der Viewport zeigt dasselbe Menü.
+  zeichnen*, die Sichtbarkeit, *Entfernen* (heißt, was Entf tut) und bei
+  mehreren Körpern *Vereinigen* (`_add_selection_entries`); der Viewport zeigt
+  dasselbe Menü.
 - **Der Wegweiser nennt den Ort:** `menu_path` schreibt „Handlungen rechts
   (bei gewähltem Körper) → Vereinigen“, „(bei gewähltem Merkmal: Fläche)“,
-  „(ohne Auswahl)“ oder „Befehlspalette“, sonst den Menüweg; Werkzeugbeschreibungen
+  bei `also_on_body` „(bei gewähltem Körper oder Merkmal: …)“, „(ohne
+  Auswahl)“ oder „Befehlspalette“, sonst den Menüweg; Werkzeugbeschreibungen
   und Palettenzeilen nennen ihn mit „Ort:“, Handbuch und Tour dieselben Orte
   (`test_every_menu_path_in_the_texts_exists_in_the_menu_bar`).
 - **`HANDLE_INSTEAD`** (`panels.py`): An der Bohrung ist der Griff die Zeile
@@ -127,11 +133,14 @@ Robert).
   auf den Körper), und `_fits_the_level` lässt die Karte leer.
 - **Was das Merkmalfenster als Feld zeigt, bekommt keinen zweiten Knopf**
   (Entscheidung Robert; die Liste steht im Kern, `perceive.actions.ACTION_ORDER`,
-  gelesen über `_shown_as_fields()`) — wie eine Hauptaktion nicht auch in der
-  Suchliste steht. Eine Art aus lauter Feldern hat eine leere Karte (ein Test,
-  der dort eine Liste verlangt, prüft die Gewohnheit); wer eine Handlung aus der
+  gelesen über `_shown_as_fields()`) — wie eine Hauptaktion, solange sie oben
+  steht, nicht auch in der Suchliste. Eine Art aus lauter Feldern hat eine
+  leere Karte (ein Test, der dort eine Liste verlangt, prüft die Gewohnheit);
+  wer eine Handlung aus der
   Karte nimmt, zählt je Merkmalsart nach, was übrig bleibt (*Senken* am Kegel
   hat eine eigene Zeile in `QUICK_FEATURES`).
+- **Jede Hauptaktion hat ihre Zeile in der Liste, verborgen, solange sie oben
+  steht** (`_list_twins`); Anleitung und Tour fragen `button_for`.
 - **Die Suchliste folgt der Menüleiste, in jeder Sprache** (`_card_group`:
   `menu_rank`; eine Kategorie, die das Menü faltet, ist eine eigene Gruppe, die
   der Werkzeugzeile steht am Ende ihrer Gruppe, `TOOL_STRIP_CATEGORIES`),
@@ -149,6 +158,9 @@ Robert).
   Darüber steht „Gilt für alle Körper.", ohne Suchfeld; ein
   Suchtext von der letzten Auswahl filtert dort nichts weg
   (`SelectionOperationsPanel._without_a_selection`).
+- **Die Suche der Karte rechnet wie die Palette** (`found_in_rounds`); ein
+  Treffer, der an der Auswahl nicht geht, nennt seinen Sperrgrund statt „Kein
+  Treffer“.
 - **Eine Karte ohne Liste lädt nicht zum Suchen ein:** Das Suchfeld verschwindet
   mit der Liste, ein Satz nennt, wo die Handlungen stehen; wer sucht und nichts
   findet, behält es, mit *In allen Funktionen suchen* (Palette, dasselbe Wort).

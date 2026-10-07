@@ -130,7 +130,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 |---|---|
 | `viewport.py` | Viewport: Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse, Schnitt, `PreviewBanner`; Zuordnung mit Kandidat und Vorbezug |
 | `render/` | der Renderer hinter der Ansicht — eigene Karte |
-| `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, Raumvertrag `is_room_taker`, `FittedScroller`; ein natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
+| `overlay.py` | Zonen über der Ansicht (§2.5): `OverlayHost`, `CardColumn`, `CardGrip`, `is_room_taker`, `FittedScroller`; natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
 | `cursors.py` | Mauszeiger (§19.3, Regel 18) |
 | `spacemouse.py` | 3D-Maus: hidapi, auf macOS 3Dconnexion; reine `camera_step` gemeinsam für Kappe, gedrücktes Rad und Flugtasten |
 
