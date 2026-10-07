@@ -132,13 +132,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-242 — Testphase der Vollversion nachreichen](#rm-242) | Veröffentlichung, Betrieb und Vertrieb | Robert 25.09.2026: 1.0 startet ohne Testphase, sie kommt später — Januar (Unentschlossene noch zu 69 €) oder Februar 2027 mit dem Preissprung. Offen: Termin, ob frühere Demo-Geräte sie bekommen (heute T15: nein), Release mit gesetztem `TRIAL_FROM` |
 | [RM-351 — Die Website bietet 0.5.1 an und nennt im Downloadhinweis 0.5.0 als signierte Fassung](#rm-351) | Veröffentlichung, Betrieb und Vertrieb | Hinweis seit `1d9373efa` in sechs Sprachen versionsneutral („ab 0.5.0“), in 0.5.2 und 0.5.3; offen der Wächter aus der Abnahme — oder Roberts Verzicht, weil der Satz keine Version mehr an das Angebot bindet |
 | [RM-528 — Die Installation kennt nur einen Release-Schlüssel](#rm-528) | Veröffentlichung, Betrieb und Vertrieb | Schlüsselliste in `updates.py` bauen und ausliefern, bevor der Release-Schlüssel wechselt (Entscheidung Robert, 06.10.) |
-| [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (`QT_IM_MODULE=fcitx` → `ibus`), offen der Nachweis im nächsten Paket |
+| [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung → `ibus`, außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): Lader-Weg bauen, Rückfall „nur öffnen“ mit Satz im Druckdialog; Abnahme am Linux-Runner mit AppImage und Flatpak |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
 | [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Gebaut und an Sonde und Fenstertest belegt, nicht committet (Hunks im Arbeitsbaum des i9, Patches im Zustandsordner); offen Tor, Commit der eigenen Hunks und der Titel aus `_removal_entry` |
 | [RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig](#rm-534) | Kundenrückmeldungen | Ursache an der Kundendatei gemessen; Umsetzung in vier Teilen (Laufzustand, volle Kette selbst, Halt im Entwurf nie fein, kein Hin und Her) nicht begonnen |
-| [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Vier Entscheidungen Roberts (am Punkt); die Widersprüche und die drei falschen Ergebnisse unabhängig davon beheben |
+| [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Entschieden (Robert, am Punkt); Flächenzug, Absagen, Maßgruppe, Tasche und Zapfen nach diesen Entscheidungen bauen, die drei falschen Ergebnisse beheben |
 | [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
 | [RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück](#rm-537) | Kundenrückmeldungen | An der Kundendatei gemessen; offen die Herkunft der vorläufigen Merkmale und was eine Auswahl tut, deren Merkmal verschwindet |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
@@ -4525,11 +4525,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **kein Fcitx-Modul**. Mit `QT_IM_MODULE=fcitx` lädt Qt `compose`, und Fcitx5
   bekommt keine Eingabesitzung; mit `ibus` legt Fcitx5 über seine
   IBus-Schnittstelle eine mit Fokus an, und „Würfel ß äöü“ kommt im Textfeld an.
-  **Abhilfe:** `qt_platform.prefer_an_input_method_qt_has` setzt bei `fcitx`
-  ohne beiliegendes Fcitx-Modul vor dem Qt-Start `ibus`; der Fehlerbericht nennt
-  den Vorwert. **Offen:** derselbe Lauf mit dem nächsten Paket und
-  `QT_IM_MODULE=fcitx` — Fcitx5 legt eine Eingabesitzung an (Workflow
-  `.claude/.state/flatpak-abnahme-2026-10-06/abnahme-eingabe.yml`).
+  **Abhilfe:** `qt_platform.prefer_an_input_method_qt_has` setzt bei Fcitx in
+  der Umgebung ohne beiliegendes Fcitx-Modul vor dem Qt-Start `ibus` — auch für
+  eine Liste in `QT_IM_MODULES` (GNOME, Sway) und für KDE mit nur
+  `XMODIFIERS=@im=fcitx`. Außerhalb des Flatpak prüft Qt 6.11 für IBus
+  `ibus-daemon` im PATH (Quelltext `qibusplatforminputcontext.cpp`), den ein
+  reines Fcitx5-System nicht hat; antwortet Fcitx5 als
+  `org.freedesktop.portal.IBus`, setzt die Anwendung `IBUS_USE_PORTAL=1`. Der
+  Fehlerbericht nennt jeden Vorwert; der Starttest des Pakets verlangt unter
+  Linux das IBus-Modul. **Offen:** am nächsten Paket (Workflow
+  `.claude/.state/flatpak-abnahme-2026-10-06/abnahme-eingabe.yml` erweitern):
+  Flatpak mit `QT_IM_MODULE=fcitx`; AppImage und tar.gz aus demselben Bau mit
+  Fcitx5 (a) ohne `ibus`-Paket, (b) mit installiertem, nicht laufendem
+  `ibus-daemon`, (c) mit `ibus-daemon`, den Fcitx5 ablöst; dazu
+  `QT_IM_MODULES=wayland;fcitx` und nur `XMODIFIERS=@im=fcitx`. Je Fall
+  Fcitx-Protokoll (`--verbose=ibusfrontend=5`) mit Eingabesitzung und Text im
+  Feld.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
 

@@ -165,6 +165,7 @@ def judge(
     crash_text: str,
     helpers_alive: list[int],
     tree_changed: list[str],
+    linux: bool = False,
 ) -> list[str]:
     """Was am Lauf nicht stimmt — leer, wenn er bestanden ist."""
     problems: list[str] = []
@@ -216,6 +217,13 @@ def judge(
         problems.append(
             "Die Anwendung hat in ihren eigenen Ordner geschrieben — nach einer "
             f"Signatur bräche das sie: {tree_changed[:10]}"
+        )
+    modules = [str(name).casefold() for name in report.get("input_modules", ())]
+    if linux and not any("ibus" in name for name in modules):
+        problems.append(
+            "Das Paket bringt kein IBus-Eingabemodul mit (platforminputcontexts: "
+            f"{modules}): Fcitx- und IBus-Nutzer tippen ins Leere (RM-062). "
+            "Die Qt-Plugins im Paket prüfen."
         )
     return problems
 
@@ -291,6 +299,7 @@ def check(args: argparse.Namespace) -> int:
             crash_text=crash_text,
             helpers_alive=alive,
             tree_changed=changed,
+            linux=sys.platform.startswith("linux"),
         )
         print(json.dumps(report, ensure_ascii=False, indent=2) if report else "(kein Bericht)")
         print(

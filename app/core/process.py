@@ -739,8 +739,13 @@ def run_limited(
     cancelled: Callable[[], bool] | None = None,
     finished: Callable[[], bool] | None = None,
     linger: float = FINISHED_LINGER_SECONDS,
+    graphical: bool = False,
 ) -> subprocess.CompletedProcess[bytes]:
     """Führt einen Befehl mit Zeit-, Ausgabe- und Prozessbaumgrenze aus.
+
+    ``graphical`` gibt dem Befehl Anzeige und Sitzungsbus mit
+    (:func:`trusted_environment`) — für eine Frage an die Sitzung, nicht für
+    einen Slicer.
 
     ``finished`` sagt, ob der Prozess sein Ergebnis vollständig abgelegt hat.
     Von da an wartet der Lauf höchstens ``linger`` Sekunden auf das Ende und
@@ -765,7 +770,7 @@ def run_limited(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=cwd,
-        env=trusted_environment(),
+        env=trusted_environment(graphical=graphical),
         **process_group_options(no_window=True, suspended=True),
     )
     assert process.stdout is not None

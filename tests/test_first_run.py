@@ -856,7 +856,7 @@ def test_a_report_describes_the_window_session_where_there_is_one(
         *reports.SESSION_KEYS,
         "WAYLAND_DISPLAY",
         reports.QT_PLATFORM_BEFORE_VARIABLE,
-        reports.QT_IM_BEFORE_VARIABLE,
+        *reports.INPUT_BEFORE_VARIABLES.values(),
     ):
         monkeypatch.delenv(key, raising=False)
     assert not any(key.lower() in reports.environment() for key in reports.SESSION_KEYS), (

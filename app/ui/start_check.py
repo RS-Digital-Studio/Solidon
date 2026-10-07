@@ -82,6 +82,7 @@ def describe(window: Any, seconds: float) -> dict[str, Any]:
 
     from app.branding import APP_VERSION
     from app.core.log import install_crash_logging, log_path
+    from app.ui.qt_platform import input_modules
 
     return {
         "format": FORMAT,
@@ -100,6 +101,10 @@ def describe(window: Any, seconds: float) -> dict[str, Any]:
         # Gibt die eigene Datei zurück; eingerichtet ist sie seit dem Start.
         "crash_file": str(install_crash_logging() or ""),
         "helpers": [child.pid for child in multiprocessing.active_children()],
+        # Was der Paketbau an Eingabemodulen mitnahm (RM-062): Ohne IBus-Modul
+        # tippt ein Fcitx-Nutzer unter Linux ins Leere, und die Abhilfe in
+        # ``qt_platform`` schaltet sich still ab.
+        "input_modules": list(input_modules()),
     }
 
 

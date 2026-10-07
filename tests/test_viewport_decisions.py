@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import gc
 import math
+import sys
 import threading
 import time
 import weakref
@@ -385,42 +386,131 @@ def test_the_choice_lands_in_the_environment_and_remembers_what_stood_there(
     assert QT_PLATFORM_BEFORE_VARIABLE not in os.environ
 
 
+_SHIPPED_MODULES = (
+    "libcomposeplatforminputcontextplugin.so",
+    "libibusplatforminputcontextplugin.so",
+    "libqtvirtualkeyboardplugin.so",
+)
+
+
 def test_a_fcitx_user_gets_the_ibus_module_the_shipped_qt_brings() -> None:
     """RM-062: Mit ``QT_IM_MODULE=fcitx`` tippte ein Fcitx-Nutzer ins Leere.
 
     Gemessen am ausgelieferten Flatpak 0.5.3 (Lauf 37507999423): Das Qt aus
     PySide6 bringt ``compose``, ``ibus`` und ``qtvirtualkeyboard`` mit, kein
     Fcitx-Modul. Mit ``fcitx`` fiel Qt auf ``compose`` zurück, und Fcitx5 sah
-    keine Eingabesitzung; mit ``ibus`` legte es eine mit Fokus an.
+    keine Eingabesitzung; mit ``ibus`` legte es eine mit Fokus an. Fcitx steht
+    auf drei Arten in der Umgebung (Fcitx-Wiki): einzeln, als Liste für GNOME
+    und Sway, und unter KDE nur in ``XMODIFIERS``.
     """
-    from app.ui.qt_platform import im_module
+    from app.ui.qt_platform import input_method_environment
 
-    shipped = (
-        "libcomposeplatforminputcontextplugin.so",
-        "libibusplatforminputcontextplugin.so",
-        "libqtvirtualkeyboardplugin.so",
+    shipped = _SHIPPED_MODULES
+
+    def chosen(environ: dict[str, str], modules: tuple[str, ...] = shipped) -> dict[str, str]:
+        return input_method_environment("linux", environ, modules, portal=False)
+
+    assert chosen({"QT_IM_MODULE": "fcitx"}) == {"QT_IM_MODULE": "ibus"}
+    assert chosen({"QT_IM_MODULE": " Fcitx5 "}) == {"QT_IM_MODULE": "ibus"}
+    # GNOME und Sway: Qt liest die Liste zuerst, und keiner ihrer Einträge liegt bei.
+    assert chosen({"QT_IM_MODULE": "fcitx", "QT_IM_MODULES": "wayland;fcitx"}) == {
+        "QT_IM_MODULES": "wayland;fcitx;ibus"
+    }
+    assert chosen({"QT_IM_MODULES": "fcitx;ibus"}) == {}, "die Liste nennt schon ein Modul"
+    assert chosen({"QT_IM_MODULES": "wayland"}) == {}, "keine Fcitx-Liste"
+    # KDE: nur XMODIFIERS, kein Modul — unter XWayland bliebe compose.
+    assert chosen({"XMODIFIERS": "@im=fcitx"}) == {"QT_IM_MODULE": "ibus"}
+    assert chosen({"XMODIFIERS": "@im=ibus"}) == {}
+    assert chosen({"QT_IM_MODULE": "xim", "XMODIFIERS": "@im=fcitx"}) == {}, (
+        "eine ausdrückliche Wahl bleibt"
     )
-    assert im_module("linux", {"QT_IM_MODULE": "fcitx"}, shipped) == "ibus"
-    assert im_module("linux", {"QT_IM_MODULE": " Fcitx5 "}, shipped) == "ibus"
     with_fcitx = (*shipped, "libfcitx5platforminputcontextplugin.so")
-    assert im_module("linux", {"QT_IM_MODULE": "fcitx"}, with_fcitx) is None, (
+    assert chosen({"QT_IM_MODULE": "fcitx"}, with_fcitx) == {}, (
         "liegt ein Fcitx-Modul bei, bleibt die Wahl des Nutzers"
     )
-    assert im_module("linux", {"QT_IM_MODULE": "fcitx"}, shipped[:1]) is None, (
+    assert chosen({"QT_IM_MODULE": "fcitx"}, shipped[:1]) == {}, (
         "ohne IBus-Modul wäre ibus nur ein zweites Nichts"
     )
-    both = {"QT_IM_MODULE": "fcitx", "QT_IM_MODULES": "fcitx;ibus"}
-    assert im_module("linux", both, shipped) is None, "eine Liste probiert Qt selbst durch"
     for other in ("ibus", "xim", "compose", ""):
-        assert im_module("linux", {"QT_IM_MODULE": other}, shipped) is None
-    assert im_module("win32", {"QT_IM_MODULE": "fcitx"}, shipped) is None
-    assert im_module("darwin", {"QT_IM_MODULE": "fcitx"}, shipped) is None
+        assert chosen({"QT_IM_MODULE": other}) == {}
+    for platform in ("win32", "darwin"):
+        assert (
+            input_method_environment(platform, {"QT_IM_MODULE": "fcitx"}, shipped, portal=True)
+            == {}
+        )
+
+
+def test_outside_the_sandbox_qt_reaches_fcitx_over_the_ibus_portal() -> None:
+    """RM-062: Außerhalb des Flatpak verlangt Qt für IBus ein ``ibus-daemon`` im PATH.
+
+    Ein reines Fcitx5-System hat keinen, und Qt fiel im AppImage und im
+    Archiv trotz ``ibus`` auf ``compose`` zurück (``qibusplatforminputcontext.cpp``,
+    Qt 6.11.2). Mit ``IBUS_USE_PORTAL`` spricht Qt das Portal an, das Fcitx5
+    trägt — aber nur, wo es antwortet: Ein stummer IBus-Kontext nähme Qt den
+    Rückfall auf ``compose`` und die toten Tasten.
+    """
+    from app.ui.qt_platform import input_method_environment
+
+    fcitx = {"QT_IM_MODULE": "fcitx"}
+    assert input_method_environment("linux", fcitx, _SHIPPED_MODULES, portal=True) == {
+        "QT_IM_MODULE": "ibus",
+        "IBUS_USE_PORTAL": "1",
+    }
+    assert input_method_environment("linux", fcitx, _SHIPPED_MODULES, portal=False) == {
+        "QT_IM_MODULE": "ibus"
+    }
+    already = {"QT_IM_MODULE": "fcitx", "IBUS_USE_PORTAL": "1"}
+    assert "IBUS_USE_PORTAL" not in input_method_environment(
+        "linux", already, _SHIPPED_MODULES, portal=True
+    )
+    assert (
+        input_method_environment("linux", {"QT_IM_MODULE": "ibus"}, _SHIPPED_MODULES, portal=True)
+        == {}
+    ), "ohne Fcitx bleibt auch das Portal unberührt"
+
+
+def test_the_portal_question_reads_the_session_bus_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``dbus-send`` sagt, ob jemand das Portal trägt.
+
+    Ohne Werkzeug, Antwort oder Bus heißt es nein.
+    """
+    import subprocess
+
+    from app.ui import qt_platform
+
+    asked: list[tuple[list[str], bool]] = []
+
+    def answering(stdout: bytes, code: int = 0) -> Any:
+        def run(command: list[str], **options: Any) -> Any:
+            asked.append((command, options.get("graphical", False)))
+            return subprocess.CompletedProcess(command, code, stdout, b"")
+
+        return run
+
+    monkeypatch.setattr(qt_platform.shutil, "which", lambda _name: "/usr/bin/dbus-send")
+    monkeypatch.setattr(qt_platform, "run_limited", answering(b"   boolean true\n"))
+    assert qt_platform.fcitx_answers_as_ibus_portal()
+    command, graphical = asked[-1]
+    assert command[-1] == "string:org.freedesktop.portal.IBus"
+    assert graphical, "ohne Sitzungsbus in der Umgebung fände dbus-send nichts"
+    monkeypatch.setattr(qt_platform, "run_limited", answering(b"   boolean false\n"))
+    assert not qt_platform.fcitx_answers_as_ibus_portal()
+    monkeypatch.setattr(qt_platform, "run_limited", answering(b"", code=1))
+    assert not qt_platform.fcitx_answers_as_ibus_portal()
+
+    def broken(command: list[str], **_options: Any) -> Any:
+        raise subprocess.TimeoutExpired(command, 2.0)
+
+    monkeypatch.setattr(qt_platform, "run_limited", broken)
+    assert not qt_platform.fcitx_answers_as_ibus_portal()
+    monkeypatch.setattr(qt_platform.shutil, "which", lambda _name: None)
+    assert not qt_platform.fcitx_answers_as_ibus_portal()
 
 
 def test_the_input_method_lands_in_the_environment_and_the_report_names_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Gesetzt wird einmal, der Vorwert steht im Fehlerbericht — wie bei der Plattform."""
+    """Gesetzt wird einmal, die Vorwerte stehen im Fehlerbericht — wie bei der Plattform."""
     import os
 
     from app.core import report
@@ -430,22 +520,71 @@ def test_the_input_method_lands_in_the_environment_and_the_report_names_it(
     monkeypatch.setattr(
         qt_platform, "input_modules", lambda: ("libibusplatforminputcontextplugin.so",)
     )
+    monkeypatch.setattr(qt_platform, "fcitx_answers_as_ibus_portal", lambda: True)
+    for name in ("QT_IM_MODULE", "QT_IM_MODULES", "XMODIFIERS", "IBUS_USE_PORTAL"):
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    for before in report.INPUT_BEFORE_VARIABLES.values():
+        monkeypatch.setenv(before, "")
+        monkeypatch.delenv(before)
     monkeypatch.setenv("QT_IM_MODULE", "fcitx")
-    monkeypatch.setenv("QT_IM_MODULES", "")
-    monkeypatch.delenv("QT_IM_MODULES")
-    monkeypatch.setenv(report.QT_IM_BEFORE_VARIABLE, "")
-    monkeypatch.delenv(report.QT_IM_BEFORE_VARIABLE)
 
-    assert qt_platform.prefer_an_input_method_qt_has() == "ibus"
+    assert qt_platform.prefer_an_input_method_qt_has() == {
+        "QT_IM_MODULE": "ibus",
+        "IBUS_USE_PORTAL": "1",
+    }
     assert os.environ["QT_IM_MODULE"] == "ibus"
-    assert os.environ[report.QT_IM_BEFORE_VARIABLE] == "fcitx"
-    assert qt_platform.prefer_an_input_method_qt_has() is None, "die eigene Wahl bleibt"
-    assert report.environment()["qt_im_module"] == "ibus (von Solidon3D gesetzt, vorher fcitx)"
+    assert os.environ["IBUS_USE_PORTAL"] == "1"
+    assert os.environ[report.INPUT_BEFORE_VARIABLES["QT_IM_MODULE"]] == "fcitx"
+    assert qt_platform.prefer_an_input_method_qt_has() == {}, "die eigene Wahl bleibt"
+    found = report.environment()
+    assert found["qt_im_module"] == "ibus (von Solidon3D gesetzt, vorher fcitx)"
+    assert found["ibus_use_portal"] == "1 (von Solidon3D gesetzt, vorher nicht gesetzt)"
 
     monkeypatch.setattr(qt_platform.sys, "platform", "win32")
     monkeypatch.setenv("QT_IM_MODULE", "fcitx")
-    assert qt_platform.prefer_an_input_method_qt_has() is None
+    assert qt_platform.prefer_an_input_method_qt_has() == {}
     assert os.environ["QT_IM_MODULE"] == "fcitx"
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Qt-Eingabemodule nur unter Linux")
+def test_the_installed_qt_brings_an_ibus_module_and_no_fcitx_one() -> None:
+    """RM-062: Die Abhilfe hängt an genau diesen Dateien des mitgelieferten Qt.
+
+    Verschiebt ein PySide6-Wechsel das Plugin oder legt eines für Fcitx bei,
+    schaltet sich ``input_method_environment`` still ab — hier wird es rot.
+    Das Paket prüft dasselbe im Starttest (``tools/check_frozen_start.py``).
+    """
+    from app.ui.qt_platform import input_modules
+
+    found = [name.casefold() for name in input_modules()]
+    assert any("ibus" in name for name in found), found
+    assert not any("fcitx" in name for name in found), found
+
+
+def test_both_start_paths_choose_platform_and_input_before_the_application() -> None:
+    """Plattform und Eingabemodul liest Qt beim Aufbau — danach gesetzt wirkt nichts."""
+    import ast
+    import inspect
+
+    from app.ui import app
+
+    tree = ast.parse(inspect.getsource(app))
+    starts = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in {"main", "build_application"}
+    }
+    assert set(starts) == {"main", "build_application"}
+    for name, function in starts.items():
+        lines: dict[str, int] = {}
+        for node in ast.walk(function):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                lines.setdefault(node.func.id, node.lineno)
+        assert "QApplication" in lines, name
+        for chooser in ("prefer_x11_for_the_viewport", "prefer_an_input_method_qt_has"):
+            assert chooser in lines, f"{name} ruft {chooser} nicht"
+            assert lines[chooser] < lines["QApplication"], f"{name}: {chooser} nach QApplication"
 
 
 def test_a_wayland_session_keeps_the_view_out_and_says_what_to_do(
