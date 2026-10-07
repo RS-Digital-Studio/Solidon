@@ -3288,7 +3288,9 @@ def test_the_selections_before_a_merge_run_where_packages_run() -> None:
     slicers = _matrix_of(job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection"))
 
     assert sorted(windows) == sorted(packaged)
-    assert sorted(slicers) == sorted(runner for runner in packaged if not runner.startswith("windows"))
+    assert sorted(slicers) == sorted(
+        runner for runner in packaged if not runner.startswith("windows")
+    )
     assert any(runner.endswith("-intel") for runner in slicers)
 
 
@@ -3313,7 +3315,7 @@ def test_a_slicer_selection_is_red_for_a_skip_a_missing_program_or_nothing() -> 
     script = step_script(step_block(job, "Ausgewählte Slicertests"))
 
     assert f'{REQUIRE_SLICERS}: "1"' in job
-    assert '--junitxml={report}' in script
+    assert "--junitxml={report}" in script
     assert 'totals["tests"] == 0 or totals["skipped"]' in script
     assert "code != 0" in script
 

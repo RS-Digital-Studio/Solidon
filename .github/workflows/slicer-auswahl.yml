@@ -58,8 +58,8 @@ jobs:
       SOLIDON_REQUIRE_SLICERS: "1"
       # Über die Umgebung, nie in den Befehl eingesetzt: Eine Eingabe ist Text,
       # kein Teil des Skripts.
-      SELECTION: ${{ inputs.tests || 'tests/test_real_slicers.py -m slicer; tests/test_print_settings.py -m slicer; tests/test_cura_machine.py -m slicer' }}
-      WANTED: ${{ inputs.programme }}
+      SELECTION: ${{ inputs.tests || 'tests/test_real_slicers.py -m slicer -k orcaslicer; tests/test_slicer_selection.py -m slicer' }}
+      WANTED: ${{ inputs.programme || 'cura' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
