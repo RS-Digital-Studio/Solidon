@@ -3558,7 +3558,9 @@ class PrintSettingsDialog(QDialog):
         )
         return True
 
-    def _saved_printer(self, entry: Any, *, inline_nozzle: bool = False) -> bool:
+    def _saved_printer(
+        self, entry: Any, *, inline_nozzle: bool = False, slicer: Path | None = None
+    ) -> bool:
         """Das geänderte Druckerprofil ablegen — oder sagen, warum es nicht ging.
 
         ``save_printer`` schreibt in das Nutzerprofil, und das kann scheitern:
@@ -3566,10 +3568,15 @@ class PrintSettingsDialog(QDialog):
         lief bis hierher aus dem Slot heraus, das Feld zeigte die neue Düse
         und der Drucker rechnete weiter mit der alten — ein Widerspruch ohne
         Satz (Regel 17). Beim Düsendurchmesser steht der Grund direkt an der
-        Düsenwahl; bei der Düsenzahl bleibt er in der Zustandszeile.
+        Düsenwahl; bei der Düsenzahl bleibt er in der Zustandszeile. Mit
+        ``slicer`` wird ein Drucker dieses Slicers abgelegt, samt Marke
+        (:func:`~app.ui.first_run.keep_slicer_printer`).
         """
         try:
-            profiles.save_printer(entry)
+            if slicer is None:
+                profiles.save_printer(entry)
+            else:
+                keep_slicer_printer(entry.id, {entry.id: entry}, slicer)
         except AppError as problem:
             _log.warning("printer profile could not be saved: %s", problem)
             message = tr(
@@ -5295,7 +5302,9 @@ class PrintSettingsDialog(QDialog):
         """Den Drucker des Slicers wählen, als hätte der Kunde ihn oben gewählt."""
         candidate = self._cura_printer_candidate
         if candidate is not None and candidate.id == self._slicers_printer:
-            if not self._saved_printer(candidate):
+            # Mit der Marke seines Slicers, wie jede andere Wahl aus dessen Liste
+            # (Review P2 Rest, D1): Ohne sie stand er danach unter jedem Slicer.
+            if not self._saved_printer(candidate, slicer=self._slicer_path):
                 return
             self._cura_printer_candidate = None
             self._fill_printer_choice()

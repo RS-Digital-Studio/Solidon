@@ -191,6 +191,24 @@ def test_a_taken_slicer_printer_is_offered_only_under_its_slicer(own_printers: P
     assert legacy.id not in first_run.slicer_printer_ids(_ELEGOO, ())
 
 
+def test_a_taken_printer_keeps_its_slicer_when_saved_without_one(own_printers: Path) -> None:
+    """Abgelegt unter Anycubic Slicer Next, dann mit leerem Slicer gespeichert:
+    Die Marke bleibt (Review P2 Rest, D1).
+
+    Die Einstellungen leeren die gefundenen Drucker beim Wechsel auf „Später
+    auswählen“ nicht; *Speichern* legte den Drucker dann ohne Programm ab, und
+    er stand unter jedem Slicer.
+    """
+    kobra = _kobra()
+    assert first_run.keep_slicer_printer(kobra.id, {kobra.id: kobra}, _ANYCUBIC) == kobra
+    mark = profiles.printer_slicer(kobra.id)
+    assert mark
+
+    assert first_run.keep_slicer_printer(kobra.id, {kobra.id: kobra}, "") is None
+    assert profiles.printer_slicer(kobra.id) == mark
+    assert kobra.id not in first_run.slicer_printer_ids(_ELEGOO, ())
+
+
 def test_an_old_survey_does_not_change_the_list_after_a_slicer_change(
     own_printers: Path,
 ) -> None:

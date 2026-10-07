@@ -1648,11 +1648,19 @@ def keep_slicer_printer(
     des Slicers, oder er liegt schon so da. Ein früher ohne Programm
     gespeicherter bekommt es nachgetragen. Ein Schreibfehler geht an den
     Aufrufer (:class:`~app.core.errors.AppError`), der ihn an seiner Stelle sagt.
+
+    **Ohne Slicer gibt es nichts abzulegen** (Review P2 Rest, D1): Mit leerem
+    Pfad war die Marke leer, und ``save_printer`` schrieb den Drucker ohne sie
+    — wer in den Einstellungen auf „Später auswählen“ wechselte und
+    speicherte, fand den Drucker aus Anycubic Slicer Next danach unter jedem
+    Slicer.
     """
     found = discovered.get(identifier)
     if found is None:
         return None
-    mark = discover.program_mark(Path(slicer).name)
+    mark = discover.program_mark(Path(slicer).name) if slicer else ""
+    if not mark:
+        return None
     saved = profiles.printer_profiles().get(identifier)
     profile = with_saved_nozzle(found, saved)
     if saved == profile and profiles.printer_slicer(identifier) == mark:
