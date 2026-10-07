@@ -5585,21 +5585,22 @@ def keep_the_files_place(window: MainWindow) -> None:
 
 
 def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWindow) -> None:
-    """Die Knopfzeile des Prüfberichts steht ohne einen Klick da (§2.7).
+    """Die Knopfzeile des Prüfberichts steht bei einer Warnung ohne einen Klick da (§2.7).
 
     Sie zeigt die Handlungen des **gewählten** Befunds — und gewählt war nach
     dem Öffnen keiner. Der Kunde sah eine Liste und darunter nichts; dass ein
     Klick auf eine Listenzeile Knöpfe freischaltet, muss man wissen. §2.7
     verspricht anklickbare Handlungen, nicht auffindbare.
 
-    Gemessen an einem **zweiten** Modell mit ausgeschalteten Haken am
-    Ladeschritt: Das erste Modell eines Projekts kommt aufgesetzt und mittig
-    herein, jedes weitere aufgesetzt an eine freie Stelle (§17.1, Schritt 6).
-    Die Dateilage hat nur, wer *Auf das Bett setzen* und *An eine freie Stelle
-    legen* ausschaltet — ``block_with_rounded_edge.stl`` liegt dann von Z -10
-    bis +10 —, der Bericht meldet ``arrange.below_bed``, und *Auf das Bett
-    setzen* löst es mit einem Klick. Vorher standen dort **null** Knöpfe und
-    ``currentRow()`` auf −1.
+    **Vorgewählt werden nur Fehler und Warnungen** (RM-512): Die gewählte
+    Zeile trägt die Akzentkante, ihre Handlung den Hauptknopf, und ein
+    Hinweis, der das tut, ist im ruhenden Fenster ein zweites Licht. Gemessen
+    an demselben Sachverhalt in beiden Gewichten: ``block_with_rounded_edge.stl``
+    liegt als **zweites** Modell mit ausgeschalteten Haken am Ladeschritt von
+    Z -10 bis +10 (sonst käme es aufgesetzt an eine freie Stelle, §17.1,
+    Schritt 6). Die Auswertung meldet ``arrange.below_bed`` als Hinweis — er
+    bleibt ungewählt —, die Exportprüfung denselben Befund als Warnung, und
+    die steht mit *Auf das Bett setzen* gewählt da.
 
     Zwei Entscheidungen im Testaufbau, beide notwendig:
 
@@ -5623,23 +5624,30 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
     keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
 
-    codes = [
-        window.report.list.item(row).data(Qt.ItemDataRole.UserRole).code
+    findings = [
+        window.report.list.item(row).data(Qt.ItemDataRole.UserRole)
         for row in range(window.report.list.count())
     ]
-    assert "arrange.below_bed" in codes, "dieses Modell steckt unter dem Bett"
+    below = next((entry for entry in findings if entry.code == "arrange.below_bed"), None)
+    assert below is not None, "dieses Modell steckt unter dem Bett"
+    assert below.severity == "info", "die Auswertung meldet es als Hinweis"
+    assert not [entry for entry in findings if entry.severity in ("error", "warning")], (
+        f"ohne Warnung prüft der erste Teil nichts: {[entry.code for entry in findings]}"
+    )
+    assert window.report.list.currentRow() < 0, "ein Hinweis ist nicht vorgewählt"
 
-    assert window.report.list.currentRow() >= 0, "kein Befund ist vorgewählt"
+    window.report.add_findings([dataclasses.replace(below, severity="warning")])
+
+    assert window.report.list.currentRow() >= 0, "die Warnung ist nicht vorgewählt"
+    chosen = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole)
+    assert (chosen.code, chosen.severity) == ("arrange.below_bed", "warning"), (
+        f"vorgewählt ist {chosen.code!r} ({chosen.severity})"
+    )
     offered = [
         button.text().replace("&", "")
         for button in window.report._offers.findChildren(QAbstractButton)
     ]
     assert offered, "ohne einen Klick steht keine Handlung als Knopf da"
-
-    chosen = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole)
-    assert chosen.code == "arrange.below_bed", (
-        f"vorgewählt ist {chosen.code!r} — der Befund ohne Handlung nützt hier nichts"
-    )
 
 
 def test_the_split_and_retry_button_lays_the_pieces_on_the_plates(
@@ -6754,6 +6762,69 @@ def test_the_history_keeps_the_title_of_a_deleted_child(qt_app: QApplication) ->
     assert len(deleted) - len(deleted.lstrip()) == indent, (deleted, kept)
 
 
+def test_a_step_span_names_the_numbers_of_a_group() -> None:
+    """Ohne Fenster: Eine Gruppenzeile trägt die Nummern ihrer Schritte (RM-519)."""
+    from app.ui.panels import step_span
+
+    assert step_span([3, 4]) == "3–4"
+    assert step_span([4, 3, 5]) == "3–5"
+    assert step_span([2, 3, 6]) == "2–3, 6", "nach einem Verschieben eine Lücke"
+    assert step_span([7]) == "7"
+    assert step_span([]) == ""
+
+
+def test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last(
+    qt_app: QApplication,
+) -> None:
+    """Jede Schrittnummer ist zu sehen, und der Kernwechsel steht hinten (RM-519).
+
+    Die zugeklappte Gruppe trug keine Nummer, und die Zählung sprang von 2 auf
+    5. *Als Dreiecksmodell rechnen* stand im Kontextmenü an zweiter Stelle,
+    gleich nach *Parameter ändern …* — für die seltenste Handlung im Menü.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.types import Document, Operation, Transaction
+    from app.ui.panels import HistoryPanel
+
+    load_operations()
+    document = Document(
+        format_version=17,
+        app_version="0.1.3",
+        ops=[
+            Operation(id=1, op="create_brep_box"),
+            Operation(id=2, op="drill_hole"),
+            Operation(id=3, op="drill_hole"),
+            Operation(id=4, op="rename_object"),
+        ],
+        transactions=[
+            Transaction(id="t1", title="Quader", ops=(1,)),
+            Transaction(id="t2", title="Kabel und Befestigung", ops=(2, 3)),
+            Transaction(id="t3", title="Name", ops=(4,)),
+        ],
+    )
+    panel = HistoryPanel()
+    panel.show_document(document)
+    shown = [
+        item.text()
+        for row in range(panel.list.count())
+        if not (item := panel.list.item(row)).isHidden()
+    ]
+    assert shown[0].startswith("1  Quader"), shown
+    assert shown[1] == "▸  2–3  Kabel und Befestigung", shown
+    assert shown[2].startswith("4  Name"), shown
+
+    menu = panel.context_menu(panel.list.item(0))
+    assert menu is not None
+    actions = menu.actions()
+    assert actions[0].objectName() == "history.edit"
+    switch = next(action for action in actions if action.objectName() == "history.kernel")
+    assert switch.text() == "Als Dreiecksmodell rechnen"
+    assert actions[-1] is switch, [action.text() for action in actions]
+    assert actions[-2].isSeparator(), "hinter einem Trennstrich"
+    menu.deleteLater()
+    panel.deleteLater()
+
+
 def test_history_context_delete_uses_the_visible_multiple_selection(
     qt_app: QApplication,
 ) -> None:
@@ -7791,8 +7862,12 @@ def test_history_deletion_warns_before_discarding_redo(
     def reject(box: QMessageBox) -> int:
         shown.append(box.text())
         cancel = next(entry for entry in box.buttons() if entry.text() == tr("Abbrechen"))
+        remove = next(entry for entry in box.buttons() if entry.text() == tr("Löschen"))
         assert box.icon() == QMessageBox.Icon.Warning
-        assert box.defaultButton() is cancel, "Abbrechen ist nicht die sichere Vorgabe"
+        # Enter löscht nicht, und der Ausgang trägt keinen Akzent (RM-512).
+        assert box.defaultButton() is None, "weder Löschen noch Abbrechen ist Hauptknopf"
+        assert remove.property("danger") is True, "Löschen trägt das Fehlerrot"
+        assert box.focusWidget() is cancel, "der Fokus steht auf Abbrechen, nicht auf Löschen"
         assert box.escapeButton() is cancel, "Escape muss den Vorgang abbrechen"
         cancel.click()
         return 0
@@ -8685,7 +8760,7 @@ def test_an_auto_split_finding_opens_the_drawn_split_tool(
         button.text().replace("&", ""): button
         for button in window.report._offers.findChildren(QPushButton)
     }
-    label = tr("An gezeichneter Linie trennen")
+    label = tr("An gezeichneter Linie teilen")
     assert label in buttons, f"angeboten wurden nur: {sorted(buttons)}"
     buttons[label].click()
 
@@ -13550,10 +13625,20 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
     # **Und was rechts steht, nennt rechts** (11.09.2026): Diese Aktionen
     # haben keinen Eintrag in der Leiste, und ihr Weg beginnt bei der Karte.
     assert checked, "keine einzige Kopplung gefunden — dann prüft dieser Test nichts"
+    # Eine Operation, deren Menüeintrag ein Fensterbefehl ist, hat ihren Weg
+    # über dessen Aktion (RM-507, *Modell einfügen …*).
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
+
+    window.window_commands()  # füllt die Aktionen der Fensterbefehle
+    for name, key in WINDOW_COMMAND_OPERATIONS.items():
+        shared = window._palette_actions[key]
+        assert built[shared].removesuffix(" …") == menu_path(REGISTRY.get(name)), name
     ohne_weg = sorted(
         name
         for name, action in window._op_actions.items()
-        if action not in built and in_the_menu_bar(REGISTRY.get(name).category)
+        if action not in built
+        and in_the_menu_bar(REGISTRY.get(name).category)
+        and name not in WINDOW_COMMAND_OPERATIONS
     )
     assert not ohne_weg, f"diese Menüaktionen haben keinen genannten Weg: {ohne_weg}"
     rechts = [
@@ -14193,6 +14278,12 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     tree = ObjectTree()
     tree.resize(LEFT_WIDTH, 200)
     QTreeWidgetItem(tree.tree, ["Halter", "60 × 40 × 11 mm"])
+    # Gezeigt, damit der Baum die Breite der Karte wirklich hat: Ungezeigt
+    # stand er auf Qts Vorgabe von hundert Punkten, und die Teilung maß dann
+    # eine Karte, die es nicht gibt — seit die Überschrift der Maßspalte immer
+    # ganz dasteht (RM-519), bliebe dort für den Namen fast nichts.
+    tree.show()
+    qt_app.processEvents()
     tree._size_columns()
 
     header = tree.tree.header()
@@ -14201,6 +14292,8 @@ def test_the_object_tree_fits_its_measures_in_the_card(qt_app: QApplication) -> 
     assert header.sectionSize(0) > header.sectionSize(1), (
         "der Name ist die Auskunft, das Maß die Beigabe"
     )
+    tree.close()
+    tree.deleteLater()
 
 
 def test_the_object_tree_grows_with_its_content(qt_app: QApplication) -> None:
@@ -19254,7 +19347,12 @@ def test_the_object_tree_offers_the_filament_where_the_body_stands(
     tree = window.object_tree.tree
 
     assert tree.columnCount() == 3
-    assert tree.headerItem().text(FILAMENT_COLUMN) == str(tr("Filament"))
+    # Der Kopf trägt die Spule und das Wort nur für Kurzhilfe und Leser (RM-519).
+    heading = tree.headerItem()
+    assert heading.text(FILAMENT_COLUMN) == ""
+    assert not heading.icon(FILAMENT_COLUMN).isNull()
+    assert heading.toolTip(FILAMENT_COLUMN) == str(tr("Filament"))
+    assert heading.data(FILAMENT_COLUMN, Qt.ItemDataRole.AccessibleTextRole) == str(tr("Filament"))
     assert tree.columnWidth(FILAMENT_COLUMN) > 0, "eine Spalte ohne Breite zeigt nichts"
 
     row = tree.topLevelItem(0)
@@ -19274,6 +19372,89 @@ def test_the_object_tree_offers_the_filament_where_the_body_stands(
     asked.clear()
     window.object_tree._on_cell_clicked(tree.indexFromItem(row, 0))
     assert asked == [], "ein Klick auf den Namen wählt aus und weist nichts zu"
+
+
+def test_the_object_tree_cuts_no_heading_in_any_language(qt_app: QApplication) -> None:
+    """In jeder Sprache steht der Kopf des Objektbaums ganz da (RM-519).
+
+    „Filament“ stand in der festen, schmalen Farbspalte als „Fila“. Gemessen
+    wird je Sprache, ob jede Überschrift samt Rand in ihre Spalte passt — die
+    Filamentspalte trägt die Spule, und die muss hineinpassen.
+    """
+    from PySide6.QtWidgets import QStyle
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene.evaluate import evaluate
+    from app.core.types import Document, Operation
+    from app.i18n import set_language
+    from app.i18n.catalog import available_languages, install_language
+    from app.ui.panels import FILAMENT_COLUMN, ObjectTree
+
+    load_operations()
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops = [Operation(id=1, op="create_box", params={}, outputs=("obj_1",))]
+    result = evaluate(document, make_profile("centauri-carbon-2", "petg"))
+    assert result.scene.objects
+    languages = available_languages()
+    assert len(languages) >= 6
+    try:
+        for language in languages:
+            install_language(language)
+            set_language(language)
+            panel = ObjectTree()
+            panel.resize(260, 300)
+            panel.show_scene(result, document)
+            panel.show()
+            for _ in range(5):
+                qt_app.processEvents()
+            tree = panel.tree
+            header = tree.header()
+            margin = header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin, None, header)
+            heading = tree.headerItem()
+            for column in range(tree.columnCount()):
+                text = heading.text(column)
+                needed = header.fontMetrics().horizontalAdvance(text) + 2 * margin
+                if not heading.icon(column).isNull():
+                    icon_side = header.style().pixelMetric(
+                        QStyle.PixelMetric.PM_SmallIconSize, None, header
+                    )
+                    needed += icon_side + (margin if text else 0)
+                assert header.sectionSize(column) >= needed, (
+                    f"{language}: Spalte {column} „{text}“ braucht {needed}, "
+                    f"hat {header.sectionSize(column)}"
+                )
+            assert heading.text(FILAMENT_COLUMN) == "", f"{language}: kein Wort in der Farbspalte"
+            panel.close()
+            panel.deleteLater()
+    finally:
+        set_language("de")
+
+
+def test_the_filament_dot_is_round_and_says_without_colour_whether_it_was_chosen(
+    qt_app: QApplication,
+) -> None:
+    """Ein runder Punkt statt eines Kästchens, das wie ein Haken aussah (RM-519).
+
+    Die Ecke bleibt frei — dort hatte das alte Quadrat Farbe. Und ob ein
+    Filament zugewiesen ist, unterscheidet der Rand, nicht die Farbe (Regel 18):
+    dieselbe Farbe, zwei verschiedene Bilder.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.panels import FILAMENT_CHIP, filament_chip
+
+    host = QLabel()
+    side = FILAMENT_CHIP
+    chosen = filament_chip("#3070c0", True, host).pixmap(side, side).toImage()
+    plain = filament_chip("#3070c0", False, host).pixmap(side, side).toImage()
+    for image in (chosen, plain):
+        # Das Quadrat war hier voll deckend; der Kreis streift die Stelle
+        # höchstens mit seiner Kantenglättung.
+        assert image.pixelColor(2, 2).alpha() < 128, "die Ecke bleibt frei"
+        assert image.pixelColor(side // 2, side // 2).alpha() == 255, "die Mitte ist gefüllt"
+    assert chosen != plain, "zugewiesen und nicht zugewiesen sehen auch farbgleich verschieden aus"
+    host.deleteLater()
 
 
 def test_a_clicked_edge_reaches_the_selection_window(
@@ -19659,6 +19840,15 @@ def test_no_second_window_appears_along_the_way(window: MainWindow) -> None:
         window.session.wait_for_idle()
     keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
+    # Ein Hinweis ist nicht vorgewählt (RM-512) — gewählt wird er wie vom Kunden.
+    listing = window.report.list
+    listing.setCurrentRow(
+        next(
+            row
+            for row in range(listing.count())
+            if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "arrange.below_bed"
+        )
+    )
     QApplication.processEvents()
     assert window.report._offers.findChildren(QPushButton), (
         "ohne einen Befundknopf prüft dieser Test den Verdacht nicht"

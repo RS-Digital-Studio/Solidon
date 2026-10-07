@@ -584,3 +584,21 @@ auf, weil ein früherer Test die Anwendung schon gebaut hat; ob das passiert,
 entscheidet `pytest-randomly`. Also nimmt jeder Test, der ein Widget anfasst,
 `qt_app` oder eine Fixture, die darauf aufbaut — auch der, der scheinbar nur
 eine Zeichenkette prüft.
+
+## Die linken Karten
+
+Gehört zu `vorderseite.md`, „Die linken Karten zeigen nur, was gilt“ (RM-519,
+Durchsicht der Oberfläche 0.5.2, A15, A20, A21).
+
+- **Parameterkarte.** „Eine feste Zahl passt“ / „2 feste Zahlen passen“ stand
+  unter jedem wirkenden Maß und las sich wie die Überschrift der nächsten
+  Zeile. Die Zahl gehört an den Knopf, der sie erledigt. Am ungenutzten Maß
+  bleibt die Stelle in der Kurzhilfe, weil das Binden es dort erst wirksam macht.
+- **Filamentspalte.** Die Spalte ist so schmal wie ihr Farbpunkt; „Filament“
+  stand dort in jeder Sprache als „Fila“. Das leere Quadrat ohne Zuweisung sah
+  aus wie ein Haken, den man setzen kann. Beim ersten Zeigen teilte die Karte
+  die Spalten nach der alten Baumbreite, und die Maßspalte stand auf 25 Punkten.
+- **Verlauf.** Die zugeklappte Gruppe trug keine Nummer, die Zählung sprang
+  von 2 auf 5, und wer „Operation 4“ aus einer Fehlermeldung suchte, fand sie
+  nicht. Der Kernwechsel stand gleich nach *Parameter ändern …* und las sich
+  wie eine alltägliche Handlung; er ist die seltenste im Menü.

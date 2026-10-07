@@ -1248,8 +1248,11 @@ def test_every_zero_that_means_something_has_a_name() -> None:
 def test_a_named_zero_stands_where_the_dialog_can_show_it() -> None:
     """Der Name erscheint am Mindestwert (``setSpecialValueText``) — also nur dort, wo der null ist.
 
-    An einem Feld, das darunter reicht oder „nicht gesagt“ kennt, stünde er nie
-    da: eine Angabe ohne Wirkung. Die Ausnahmeliste hält ihre Gründe aktuell.
+    An einem Feld, das darunter reicht, stünde er nie da: eine Angabe ohne
+    Wirkung. Ein Feld, das „nicht gesagt“ kennt, trägt seinen Sonderwert eine
+    Stufe unter dem Mindestwert; dort nennt der Name den leeren Zustand
+    (RM-526), gleich wo der Mindestwert liegt. Die Ausnahmeliste hält ihre
+    Gründe aktuell.
     """
     load_operations()
     misplaced = sorted(
@@ -1259,9 +1262,7 @@ def test_a_named_zero_stands_where_the_dialog_can_show_it() -> None:
         if entry.zero_text
         and (
             entry.kind not in {"float", "int"}
-            or entry.optional
-            or entry.minimum is None
-            or entry.minimum != 0
+            or (not entry.optional and (entry.minimum is None or entry.minimum != 0))
         )
     )
     assert not misplaced, f"zero_text ohne Mindestwert null: {misplaced}"
@@ -1294,3 +1295,32 @@ def test_an_open_box_has_no_vent_row() -> None:
         if entry.placement == "front" and (entry.depends_on is None or True in entry.depends_on[1])
     ]
     assert front_when_open == ["wall", "open_top"], front_when_open
+
+
+def test_every_way_to_split_says_teilen() -> None:
+    """Ein Name je Funktion: Teilen hieß Teilen, Trennen und Zerlegen (RM-507, A6).
+
+    Sieben Einträge mit drei Verben an vier Orten — wer „teilen“ suchte, fand
+    *An gezeichneter Linie trennen* und *In Einzelteile zerlegen* nicht. Geprüft
+    werden die Operationen mit ``split`` im Namen und die Handlungen der
+    Befunde, die teilen, an der deutschen Quelle.
+    """
+    from app.core import errors
+    from app.i18n import source_text
+
+    load_operations()
+    titles = {spec.name: source_text(spec.title) for spec in registered() if "split" in spec.name}
+    titles.update(
+        {
+            action.id: source_text(action.label)
+            for action in vars(errors).values()
+            if isinstance(action, errors.Action) and "split" in action.id
+        }
+    )
+    assert len(titles) >= 6, f"zu wenige Teilen-Wege gefunden: {titles}"
+    wrong = {
+        name: title
+        for name, title in titles.items()
+        if re.search(r"trenn|zerleg", title, re.IGNORECASE) or "teil" not in title.casefold()
+    }
+    assert not wrong, f"Teilen-Wege mit anderem Verb: {wrong}"

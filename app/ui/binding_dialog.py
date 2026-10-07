@@ -72,7 +72,7 @@ class BindingDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Feste Zahlen binden"))
+        self.setWindowTitle(tr("Zahlen an Maße binden"))
         self._spots = tuple(spots)
         self._checks: list[QCheckBox] = []
         self._choices: list[QComboBox] = []

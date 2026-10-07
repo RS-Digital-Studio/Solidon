@@ -368,8 +368,9 @@ des Themas; was die leistet, ist eine Frage an das Thema.
   kommen vom Kunden (Farbwähler, Filamentkatalog). Die Pinselleiste zeigt
   Farbfeld **und** Name, „neu“ für einen fehlenden Slot.
 - **Ein Hauptknopf entsteht über `style.make_primary()`** (Akzentfarbe **und**
-  halbfett), nie über `setDefault(True)`; ein verwerfender über
-  `style.make_danger()`, ein Fenster ohne Handlung nimmt `style.no_primary()`,
+  halbfett), nie über `setDefault(True)`; einer mit `DestructiveRole` über
+  `style.make_danger()`, ein Fenster ohne Handlung und eine Rückfrage vor
+  Verwerfen nehmen `style.no_primary()`,
   und ein Stylesheet geht an einen `objectName`, nie typlos (`fenster.md`, „Der
   Hauptknopf“).
 - Differenzansicht Blau/Orange, nicht Rot/Grün; Analysekarten mit

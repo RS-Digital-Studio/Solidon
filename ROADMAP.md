@@ -80,6 +80,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.); offen: Waschschüssel an 29 Druckern, die Minigolf-Platte als 3MF, der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max, vorher das Matrixwerkzeug (Blockleser, Stützmarke nach Volumen) |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
+| [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
@@ -92,12 +93,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
-| [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
-| [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
-| [RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich](#rm-526) | Bedienung und Darstellung | `z` als optionale Koordinate (leer heißt Oberkante), Migration 0 → leer |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -2745,6 +2742,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Entschieden (Robert, 06.10.2026):** Die Mündung bleibt frei, wie Solidon es seit 0.5.3
   hält; offen ist nur die Abnahme.
 
+<a id="rm-539"></a>
+
+- [ ] **RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne
+  Befund.** Die Kabeldurchführung legt ihre Mündung an die angeklickte Fläche, die als
+  Außenseite gilt, und baut den Klemmblock dahinter (`parts/structure.py`,
+  `cable_relief_support` als `host_add`). Im Gehäuse-Beispiel stand sie auf der Oberseite des
+  Bodens: Der Block hing 5,25 mm unter dem Bett und über zwei Ränder (im Beispiel behoben,
+  `tools/make_examples.py`). Setzt ein Kunde sie so, sagt es nur `arrange.below_bed` als
+  Hinweis, dessen Handlung *Auf das Bett setzen* das Gehäuse auf den Block stellt; an einer
+  Seitenwand von innen kommt nichts. `parts/ops.py` vereinigt `host_add`, ohne zu prüfen, wo er
+  landet. **Offen:** ein Befund beim Einsetzen, wenn der Trägeraufbau außerhalb des Trägers oder
+  unter z = 0 liegt, mit einer Handlung, die die Richtung umkehrt, in allen Katalogen.
+  **Abnahme:** Kabeldurchführung von innen auf einen Boden und an eine Seitenwand gesetzt, je
+  ein Befund mit Handlung; danach sitzt der Block innen und der Boden auf dem Bett.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -3591,10 +3603,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bei allen drei Varianten). Tests: Tisch auf einem Mittelfuß (`test_advise.py`, 85 mm Platz, Brim
   vorgeschlagen), breites Teil auf schmalem Fuß (`test_export.py`), beide vorher rot.
 
-  **Offen (05.10.):** Der Stützfuß zählt die ganze Aufsicht, die Slicer stützen nur die Überhänge.
-  Die Waschschüssel am Kobra 2 mit Stützen bekommt deshalb weiter die Stützfußwarnung, obwohl die
-  erste Stützschicht im G-Code 15 mm vom Rand bleibt (Nachtrag 2: x 15,1–196,9, y 23,1–194,4 mm auf
-  220 mm). Richtig: den Fuß aus den Stützflächen der Schichtanalyse messen.
+  **Teilstand 06.10.2026 (Stützfuß unter den Überhängen):** Bis dahin zählte der Stützfuß die ganze
+  Aufsicht, die Slicer stützen nur die Überhänge; die Waschschüssel am Kobra 2 mit Stützen bekam
+  die Stützfußwarnung, obwohl die erste Stützschicht im G-Code 15 mm vom Rand blieb (Nachtrag 2:
+  x 15,1–196,9, y 23,1–194,4 mm auf 220 mm). Jetzt misst `check_adhesion_on_bed` den Fuß am Umriss
+  der Überhänge aus der Schichtanalyse (`analysis.overhang_outline`, im Export über
+  `writer._support_outline` aus denselben Schichten wie die Stützsperre); ohne Überhang gibt es
+  keinen Fuß. Am Kundenmodell, schräg auf 220 × 220 mm (Sonde): Öffnung oben, Überhänge
+  20,4–204,2 mm, vorher 5,61 mm Warnung, jetzt keine; Öffnung unten, Überhänge bis 0,5 mm vom Rand,
+  Warnung bleibt (5,32 mm). Test `test_export.py::test_the_support_foot_stands_under_the_overhangs_only`,
+  vorher rot (Platte mit Tisch in der Mitte, Teil mit Überhang bis zur Kante, Quader ohne Überhang).
 
 <a id="rm-502"></a>
 
@@ -3666,73 +3684,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
-<a id="rm-507"></a>
-
-- [ ] **RM-507 — Jede Funktion hat einen Namen, überall derselbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Teilen hat sieben Einträge mit drei Verben an vier Orten, „Automatisch teilen“ fällt
-  ins Menü *Bearbeiten*. Ein Druckdialog heißt „An den Slicer übergeben …“,
-  „Drucken vorbereiten …“ und „Drucker …“ (zugänglicher Name „Drucker wechseln“).
-  *Deckel erzeugen* bestätigt mit „Einsetzen“, der Katalog mit „Einfügen“; im Menü
-  *Erzeugen* stehen „Aus Skizze erzeugen …“ (Knopf „Zeichnen“) und „Modell einfügen“
-  doppelt; der Startbildschirm sagt „Modell öffnen“ und „Projekt öffnen“, die Leiste
-  „Modell einfügen“ und „Öffnen“.
-  **Fix:** Durchgehend „Teilen“ (Umschalter, „Jetzt teilen“, „An gezeichneter Linie
-  teilen“), „Automatisch teilen …“ in die Karte unter *Vorbereiten*; Kopfknopf und
-  zugänglicher Name „Druckeinstellungen …“, der Dateieintrag heißt wie der Knopf im
-  Bericht; ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“, auch im Katalog;
-  „Zeichnen …“ im Menü, dieselbe `QAction` für Modell einfügen; Startknöpfe wie die
-  Leiste. `grenzen.md` und alle Kataloge ziehen nach.
-  **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
-  Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
-  zwei Menüs mit verschiedener Wirkung.
-
-<a id="rm-512"></a>
-
-- [ ] **RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Im Ruhezustand des Hauptfensters leuchten sechs Akzente: Bernsteinkanten an linker
-  und rechter Karte, Werkzeugzeile und Reiter, dazu *Bausteine*, die vorgewählte
-  Hinweiszeile und ihr Hauptknopf „Diesen Schritt ändern“. Der Wächter
-  `test_resting_state.py` zählt keine Linien. Dialoge zeigen zwei Hauptknöpfe, sobald ein
-  Hinweis mit Handlung erscheint (57 Handlungen tragen `primary`); Rot tragen zwei
-  „Abbrechen“, „Verwerfen“ ist Hauptknopf; im Chat ist „Übernehmen“ kein Hauptknopf; in
-  der Tour ist „Schritt überspringen“ einer.
-  **Fix:** Kartenränder in der Linienfarbe; vorgewählt werden nur Fehler und Warnungen;
-  Hinweishandlungen im Dialog als normale Knöpfe; `make_danger` genau am
-  unwiederbringlichen Verwerfen, nie mit `make_primary`; Chat-Übernehmen
-  `make_primary`, Überspringen flach. Der Wächter zählt Akzentlinien ab 40 px mit.
-  **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
-  Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
-  mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
-
-<a id="rm-519"></a>
-
-- [ ] **RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Unter den Parameterfeldern steht „Eine feste Zahl passt“ / „2 feste Zahlen passen“
-  und liest sich wie die Überschrift der nächsten Zeile; die Filamentspalte des
-  Objektbaums ist abgeschnitten („Fila“) und ihre Felder wirken wie Haken; im Verlauf
-  springt die Nummer an einer Gruppenzeile, „Als Dreiecksmodell rechnen“ steht im
-  Kontextmenü an zweiter Stelle. Im Zeichenmodus zeigt das Auswahlfenster nichts
-  Brauchbares, die Bedingungsliste spricht Fachsprache, und die Einladung der leeren
-  Szene liegt über der Skizze.
-  **Fix:** Die Hinweiszeile entfällt bei verwendeten Maßen, die Zahl steht am Bindeknopf
-  („6 Zahlen an Maße binden …“), nur „Nicht verwendet“ bleibt; Spulensymbol als
-  Spaltenkopf, runder Farbpunkt; Gruppenzeile trägt „3–4“, Kernwechsel hinter einem
-  Trennstrich; im Zeichenmodus Dock und Einladung verborgen, Bedingungen nur des
-  gewählten Elements mit Zählzeile.
-  **Abnahme:** Im Zustand von main-window.png vier Parameterzeilen ohne Untertext; in
-  sechs Sprachen nichts abgeschnitten im Objektbaum; jede Schrittnummer sichtbar;
-  Neues Projekt → Zeichnen ohne Einladung und Dock, höchstens drei Bedingungszeilen.
-
-<a id="rm-526"></a>
-
-- [ ] **RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich.** Seit RM-513
-  hieß die Null in `create_lid.z` und `screw_lid.z` „Oberkante“, getragen von `minimum=0`;
-  damit hielten alte Projekte mit negativer Öffnungshöhe am Schritt an. Für 0.5.3 ist die
-  Grenze zurückgenommen (Durchsicht Kern, Fund 9), und hinter der Klappe steht die Null wieder
-  als Zahl. **Fix:** `z` als optionale Koordinate, leer heißt Oberkante, Migration 0 → leer
-  (Checkliste „Dateiformat ändern“). **Abnahme:** alte Projekte mit 0 und mit negativer Höhe
-  öffnen und rechnen gleich, das Feld zeigt „Oberkante“, wenn es leer ist.
 
 ## KI und Generatoren
 

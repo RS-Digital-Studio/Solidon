@@ -37,10 +37,13 @@ Dialogs“ und „Bedingte Felder“.
 - **Eine Null mit Bedeutung trägt ihren Namen** (`param(zero_text=…)`, nur bei
   Mindestwert 0, angezeigt über `setSpecialValueText`): „automatisch“, „ohne“,
   „aus dem Material“ — die Wörter stehen als `ZERO_*` in `registry/params.py`,
-  `test_registry_consistency` sucht jedes `doc`, das die Null erklärt.
+  `test_registry_consistency` sucht jedes `doc`, das die Null erklärt. An einem
+  `optional`-Feld nennt `zero_text` den leeren Zustand („Oberkante“, sonst „wie
+  gemessen“); dort ist die Null eine Zahl. Ein geleertes Feld mit Sondertext
+  nimmt den Sonderwert an (`labels._BoundedBehavior`).
 - **„fx“ steht nur, wenn das Projekt Parameter hat oder das Feld einen Ausdruck
   trägt**; „=“ und „@“ im Zahlenfeld führen weiter in den Ausdruck.
-- **Die Vorgabe trifft den Körper, nicht den Ursprung:** *Teilen* in seiner
+- **Die Vorgabe trifft den Körper, nicht den Ursprung:** *An Ebene teilen* in seiner
   Mitte (`_plane_through`), *Dreiecke verringern* bei der Hälfte seiner
   Dreiecke, *Dreiecke angleichen* bei einem Fünfzigstel seiner längsten Kante
   (`_measured_from_body`, `EDGE_SHARE`) — gefragt nach den Feldern
@@ -112,3 +115,16 @@ reicht sie aus dem Parameterschema weiter. Titel, Eingabe und Ablehnung
 verschwinden gemeinsam; verborgene Werte bleiben erhalten und sperren die
 Übernahme nicht. Stille Wertaktualisierung und wiederverwendete Gruppen
 berechnen die Sichtbarkeit erneut (`FeaturePanel._follow_measure_conditions`).
+
+## Die linken Karten zeigen nur, was gilt (RM-519)
+
+Warum: `konzepte/begruendungen/regel-oberflaeche.md`, „Die linken Karten“.
+
+- **Parameterkarte:** unter einer Zeile nur „Nicht verwendet“; wie viele feste
+  Zahlen passen, sagt der Bindeknopf (`binding_button_text`), wo, die Kurzhilfe.
+- **Objektbaum:** Die Filamentspalte trägt die Spule, das Wort steht in
+  Kurzhilfe und Lesername; der Farbpunkt ist rund, ohne eigenes Filament
+  gestrichelt (`filament_chip`). Die Maßspalte ist nie schmaler als ihr Kopf.
+- **Verlauf:** Jede zugeklappte Zeile nennt die Nummern, die sie verbirgt
+  (`step_span`), auch die Löschgruppe. Der Kernwechsel steht im Kontextmenü
+  zuletzt hinter einem Trennstrich (`HistoryPanel.context_menu`).

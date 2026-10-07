@@ -595,7 +595,8 @@ class RimReach:
     layer: float = 0.0
     """Über den Umriss der ersten Schicht: Brim und Skirt um ihn (RM-312)."""
     top: float = 0.0
-    """Über die Aufsicht: der Stützfuß unter Überhängen und der Skirt um ihn."""
+    """Über die Überhänge: der Stützfuß unter ihnen und der Skirt um ihn —
+    ohne ihren Umriss über die ganze Aufsicht (``writer.check_adhesion_on_bed``)."""
     auto_brim: bool = False
     """Der Auto-Brim der Orca-Familie zählt mit seiner Höchstbreite."""
     support_foot: bool = False
@@ -624,10 +625,10 @@ def rim_of(
     nur, wo das Bett Platz lässt).
 
     **Zwei Umrisse, zwei Reichweiten** (RM-312): Brim und Skirt liegen um die
-    erste Schicht (``layer``), der Stützfuß unter den Überhängen und damit um
-    die Aufsicht (``top``). Gemessen von der Aufsicht allein bekam ein Teil,
-    das oben breiter ist als am Fuß, eine Warnung, obwohl der Rand auf dem Bett
-    blieb (garden-hose-holder am MINI, Waschschüssel am Kobra 2).
+    erste Schicht (``layer``), der Stützfuß unter den Überhängen (``top``,
+    ``analysis.overhang_outline``). Gemessen von der Aufsicht allein bekam ein
+    Teil, das oben breiter ist als am Fuß, eine Warnung, obwohl der Rand auf dem
+    Bett blieb (garden-hose-holder am MINI, Waschschüssel am Kobra 2).
     """
     adhesion = settings.adhesion
     auto = adhesion.kind == "auto" and flavour == "orca"

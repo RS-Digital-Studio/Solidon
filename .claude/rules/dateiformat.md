@@ -33,7 +33,7 @@ welcher (§24.5, §32).
   `Document.carried_profiles`): Name, Bauraum, Düse, Verfahren, Schichtwerte,
   nur für nicht mitgelieferte Kennungen. Der zweite Rechner rechnet damit und
   bietet die Übernahme an; einen unbekannten Drucker ersetzt er durch den
-  allgemeinen desselben Verfahrens und sagt es. Passungen aus *Teilen* und
+  allgemeinen desselben Verfahrens und sagt es. Passungen aus *An Ebene teilen* und
   *Deckel* stehen auf `auto:` und folgen dem Material ihrer Körper (Migration
   29 → 30, `material_fits_v29.p3d`).
 - **Ein ausgeschalteter Schritt steht in der Datei, mit dem, was er traf**
@@ -135,7 +135,7 @@ Grenzen des Schließens (Entscheidung Robert):
 - **Ineinandersteckende Teile**: `ingest.multiple_components` fragt am
   geschlossenen Netz `repair.parts_that_cross` (Paare im Überlapp der
   Hüllquader, frühes Ende, eigenes Budget) und bietet *Überschneidungen
-  auflösen* vor *In Einzelteile zerlegen*; Flächenberührung und Spiel wie
+  auflösen* vor *In Einzelteile aufteilen*; Flächenberührung und Spiel wie
   beim Kettenglied zählen nicht.
 - **Was ausblieb, ist keine Zeile**: Ein Verschweißen oder Entfernen, das das
   Netz aufgerissen hätte, geht ins Protokoll, nicht in den Bericht.

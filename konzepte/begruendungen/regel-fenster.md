@@ -119,6 +119,11 @@ Erleichterung:
   „Zuletzt geöffnet" — vorher stand dort nur, was als Projekt geöffnet wurde,
   und ohne die Frage beim Schließen wäre die Datei eine Suche im Dateidialog.
 
+## Der Verlauf lässt sich umbauen
+
+* **Export und Druckeinstellungen beenden das Einfügen zuerst:** Hinaus geht
+  das fertige Teil, nicht der Zwischenstand vor der Einfügemarke.
+
 ## Hinter einen Halt kommt kein Schritt
 
 **Hinter einen Halt kommt kein Schritt** (§15.3). Hält die Kette an einem
@@ -548,12 +553,51 @@ Kodierung (Regel 18). `tests/test_style.py` misst gegen die Schrift, mit der
 wirklich gezeichnet wird, und verbietet `setDefault(True)` außerhalb von
 `style.py`.
 
-**Ein Knopf, der verwirft, entsteht über `style.make_danger()`** — das
-Fehlerrot der Palette (`ROLES["error"]`) als Fläche, die Schrift darauf aus
-`readable_on`, das Wort als zweite Kodierung (Regel 18). *Abbrechen* unter
-*Übernehmen* im Merkmalfenster ist der Fall: gleich breit wie der Hauptknopf,
-und ohne eigene Farbe dessen Zwilling (Robert, 11.09.2026). `tests/test_style.py`
-misst die Fläche am gezeichneten Knopf.
+**Ein Knopf, der verwirft oder löscht (`DestructiveRole`), entsteht über
+`style.make_danger()`** — das Fehlerrot der Palette (`ROLES["error"]`) als
+Fläche, die Schrift darauf aus `readable_on`, das Wort als zweite Kodierung
+(Regel 18). Gesperrt fällt er auf die Sperrfarbe wie jeder Knopf; ein roter
+Knopf, der nichts tut, war das Erste, was ein Erstkunde im Freischaltdialog sah.
+*Abbrechen* unter *Übernehmen* trug das Rot vom 11.09.2026 an, damit es nicht
+wie der Zwilling des Hauptknopfs aussah. **Entscheidung Robert, 06.10.2026:
+RM-512 löst das rote Abbrechen ab** — ein roter Ausgang neben einem roten
+*Verwerfen* macht beide gleich laut, und wer den sicheren Weg sucht, findet zwei
+Warnfarben. *Löschen* im Verlauf ist rot, obwohl Strg+Z den Schritt
+zurückholt: Die Nachfrage gibt es nur, weil abhängige Schritte und der
+Redo-Zweig mitgehen, und Rot an *Löschen* erwartet der Kunde.
+
+**Höchstens ein Akzentknopf je Fenster (RM-512).** In der Durchsicht 0.5.2
+zeigten Dialoge zwei Hauptknöpfe, sobald ein Hinweis mit Handlung erschien:
+`ErrorNotice` machte jede Handlung mit `primary` zum Hauptknopf, in einem
+Fenster, das seinen eigenen schon hatte, und `setDefault` nahm dem Dialog
+obendrein Enter weg. Dasselbe im Druckdialog bei Rat und Übermaß. Welche
+Handlung führt, entschieden vier Stellen mit zwei Regeln; seitdem eine Funktion,
+`style.leading_action`. Ein Knopf, der die Führung abgibt, verliert mit
+`make_primary(button, leading=False)` Default **und** Halbfett — Qt nimmt beim
+Wechsel nur den Default, und ein halbfetter Knopf ohne Akzent ist eine
+Hervorhebung ohne Grund (Tour, Druckdialog Slicen/Öffnen).
+
+**Rückfragen vor Verwerfen und Löschen haben keinen Hauptknopf.** Ein Akzent
+auf *Verwerfen* lüde zum Unwiederbringlichen ein, einer auf *Abbrechen* machte
+einen Ausgang zum Hauptknopf. `no_primary` allein reichte nicht: Qt gab den
+Anfangsfokus dem ersten Knopf der Leiste, unter Windows dem roten, und die
+Leertaste löste ihn aus. Der Fokus steht deshalb auf *Abbrechen*: Leertaste
+und Enter brechen ab, verworfen wird erst, wenn Tab den roten Knopf wählt.
+
+**Fokus verschiebt keinen Akzent.** Fensterwechsel erhält die Wahl der
+Tastatur; kein Dialog baut eigene Logik dafür. Von gesperrten oder verborgenen
+Knöpfen vertriebener Fokus meldet Qt als Tab und gibt Enter trotzdem nicht ab.
+`WA_DontShowOnScreen` aktiviert kein Fenster, also prüfen die Tests mit
+zugestelltem Fokusereignis.
+
+**Im Ruhezustand ein Licht (RM-512).** Drei Karten mit Bernsteinkante und die
+Kante des aktiven Reiters leuchteten neben *Bausteine*, dazu eine vorgewählte
+Hinweiszeile mit Hauptknopf. Was dauerhaft steht, sagt „du bist hier“ und nicht
+„tu das“: Kartenrand in der Linienfarbe, Reiterkante in der Schriftfarbe, und
+vorgewählt werden nur Fehler und Warnungen. *Bausteine* ist der Hauptweg ohne
+Auswahl (Entscheidung Robert, `grenzen.md`). Der Wächter zählt Linien ab 40 px
+mit, weil ein Rand kein Drittel seines Widgets ist und die Flächenmessung ihn
+nie sah.
 
 **Und wo keiner gesetzt wird, setzt Qt selbst einen.** Das ist die stille
 Hälfte derselben Regel, und sie ist die häufigere: `QDialog` macht beim
@@ -569,8 +613,9 @@ Zwei Dinge folgen daraus:
 * **Ein Fenster ohne Handlung nimmt `style.no_primary()`.** Es räumt den
   Default ab (`setAutoDefault(False)`), und das ist kein Verstoß gegen „ein
   Hauptknopf je Fenster", sondern deren Kehrseite: Wer nichts zu tun anbietet,
-  hat auch nichts zu empfehlen. Wer eine Handlung hat, nimmt `make_primary` —
-  auch wenn der Knopf gesperrt startet.
+  hat auch nichts zu empfehlen. Ebenso eine Rückfrage vor Verwerfen oder
+  Löschen (oben). Wer sonst eine Handlung hat, nimmt `make_primary` — auch
+  wenn der Knopf gesperrt startet.
 * **Gefunden wird das nur am angezeigten Fenster.** Vor dem `show()` meldet
   `isDefault()` überall `False`; ein Quelltext-Wächter nach `setDefault(True)`
   sieht gar nichts, weil es niemand ruft. `tests/test_style.py` hält deshalb
@@ -595,7 +640,9 @@ ohne die man an fünf Stellen sucht, an denen nichts ist: Ein typloses
 (`main_window.py`) — nimmt dem Hauptknopf gar nichts, weil `QPushButton` im
 Anwendungs-Stylesheet eine eigene `border`-Regel trägt und die gewinnt.
 Gefährlich ist allein dieselbe Eigenschaft, die der Knopf braucht, und das ist
-`background`.
+`background`. Wo eine breite Regel nötig ist, setzt sie die Hauptknopffarben
+ausdrücklich (`#surveyNotice #surveyGive`), und der Knopf nimmt weiter
+`make_primary`.
 
 **Ein `QDialog` ist dabei nicht der Unterschied**, auch wenn es zuerst so
 aussah: Ohne Stylesheet färbt der Knopf in einem schlichten `QWidget` genauso
