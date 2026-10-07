@@ -285,7 +285,7 @@ def test_the_cancelable_local_transport_rejects_an_oversized_body(
     zurückkam.
     """
     connection = _LocalConnection(_LocalAnswer(b"x" * (llm.MAX_RESPONSE_BYTES + 1)))
-    monkeypatch.setattr(llm.http.client, "HTTPConnection", lambda *_a, **_o: connection)
+    monkeypatch.setattr(llm, "_local_connection", lambda *_a, **_o: connection)
 
     with pytest.raises(llm.BackendUnavailable) as raised:
         llm.post_json_local_cancelable("http://127.0.0.1:11434/api/chat", {}, {}, _NeverCancelled())
@@ -306,7 +306,7 @@ def test_the_cancelable_local_transport_redacts_a_foreign_error_text(
         status=500,
     )
     connection = _LocalConnection(antwort)
-    monkeypatch.setattr(llm.http.client, "HTTPConnection", lambda *_a, **_o: connection)
+    monkeypatch.setattr(llm, "_local_connection", lambda *_a, **_o: connection)
 
     with pytest.raises(llm.BackendUnavailable) as raised:
         llm.post_json_local_cancelable("http://127.0.0.1:11434/api/chat", {}, {}, _NeverCancelled())

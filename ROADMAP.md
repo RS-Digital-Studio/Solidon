@@ -44,11 +44,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Hänger durch die Speicherbereinigung im Arbeiter behoben (nur noch im Hauptfaden, 05.10.); der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen sind der Ereignistyp dahinter, die Gegenprobe auf Linux und Mac und die Vergleichsreihe |
 | [RM-050 — Kopier- und Pufferkosten großer Szenen am Fenster messen](#rm-050) | Plattformen, Pakete und Grafik | VTK ausgebaut (`5a57e261`), matplotlib durch HarfBuzz ersetzt (`25d5536ee`); offen die kopierten Bytes und Pufferkosten je großer Szene am Fenster |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der 0.5.3-Pakete am echten Linux- und Mac-Bildschirm; der Release-Starttest belegt Fenster und 3D-Ansicht nur unter Xvfb und am ARM-Runner |
-| [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Installerlauf 37418052743 (0.5.3) installiert und startet den Kundeninstaller mit Inno Setup 7.1.0; jedes Release startet das installierte Flatpak unter Xvfb. Offen: Aktualisieren/Deinstallieren auf fremdem Windows, Flatpak auf echter Linux-Grafik |
-| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Kunde mit zwei Intel-Macs (macOS 26): das Developer-ID-signierte Paket startet nicht, ad hoc signiert schon; am Runner nicht nachstellbar (Läufe 37361577881, 37362456615); wartet auf Terminalausgabe, `codesign --verify`, Absturzberichte und macOS-Version des Kunden. Daneben Intel-Fenster am Gerät und die übrigen Unix-Fälle |
-| [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
+| [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Aktualisieren und Deinstallieren prüft der Installer-Workflow ab dem nächsten Release (`tools/check_windows_update.py`, am Runner von 0.5.2 auf 0.5.3 grün); offen: der Lauf im Release ohne Ausnahme für den behobenen Registerrest, Flatpak auf echter Linux-Grafik, Offline-Start |
+| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Kunde mit zwei Intel-Macs (macOS 26): das Developer-ID-signierte Paket startet nicht, ad hoc signiert schon; am Runner nicht nachstellbar (Läufe 37361577881, 37362456615); wartet auf Terminalausgabe, `codesign --verify`, Absturzberichte und macOS-Version des Kunden. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
+| [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
-| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut (Taglauf 37266459831 grün); offen die drei Arbeitsplätze und der Blick in die Releaseakte |
+| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Messung vor RM-281 C; mit Herstellerbündel neu messen, dann entscheidet Robert über Vorgaben |
@@ -438,6 +438,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Der Bau protokolliert **Inno Setup 7.1.0**. Das schließt die beiden CI-Nachweise,
   nicht die Linux-Grafikabnahme oder den Installationsweg auf fremdem Windows.
 
+  **Aktualisieren und Deinstallieren sind ein fester Release-Schritt (06.10.2026):** Der
+  Windows-Runner gilt dafür als fremdes Windows (Entscheidung Robert). Nach dem stillen
+  Installieren fährt der Installer-Workflow `tools/check_windows_update.py`: die veröffentlichte
+  Version aus `website/version.json` frisch installieren (Größe und SHA-256 geprüft), eigene
+  Bausteine, Einstellungen, Profile und Filamente anlegen, mit den Argumenten des Update-Wegs
+  (`updates.SETUP_ARGUMENTS`) auf den neuen Installer aktualisieren, Version, Installationsort,
+  Neustart und unveränderte Nutzerdaten prüfen, starten, deinstallieren und nach Resten suchen
+  (Wächter in `tests/test_windows_signed_installer.py`). Ohne Versionssprung ist der Schritt
+  rot, und nach jeder Installation muss jede gesuchte Spur da sein. Am Runner aktualisierte das
+  Werkzeug von 0.5.2 auf 0.5.3 und deinstallierte grün (Lauf 37565369075); das 0.5.2-Setup kam
+  aus dem Installerlauf 37275100665, weil die Website alte Setups räumt und unter dem alten
+  Namen das aktuelle ausliefert (`website/.htaccess`, `veraltet.php`). Dabei gefunden und im
+  `.iss` behoben: Die Deinstallation ließ `Software\Classes\Applications\Solidon3D.exe` mit
+  `SupportedTypes` stehen; bei 0.5.2 und 0.5.3 bleibt er, der Messlauf nahm ihn deshalb aus.
+  Dass ohne Ausnahme nichts zurückbleibt, belegt der Lauf im nächsten Release.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-der-gesamtreview-liegen-ließ-05092026).
 
 <a id="rm-104"></a>
@@ -452,22 +468,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Testabdeckung entsprechend nachziehen. Bereits reparierte Skizzen-/B-Rep-/Dialogbefunde bleiben
   abgeschlossen.
 
-  **Zwei sporadische Befunde aus den Tag-Läufen von v0.4.1 (13.09.2026), beide
-  mit nicht strenger `xfail`-Marke im Test — der Bau läuft, der Fall steht
-  hier, und ein grüner Runner-Lauf gilt nicht als Nachweis:** Auf **macOS**
-  kommt der Abbruch eines lokalen Ollama-Aufrufs nicht sicher in einer
-  Sekunde an — der Weg schließt den Socket aus dem wartenden Thread
-  (`shutdown`, `detach`); in drei Läufen waren drei, zwei und dann eine Stufe
-  rot — jede der vier einmal, auch die mit Verbindungsende
-  (`test_backends.py`). Ein Umbau auf einen
-  Leser mit kurzem Socket-Timeout, der das Token selbst prüft, ist der
-  naheliegende Weg; gemessen wird er auf einem Mac. Auf **Linux (Xvfb)** reißt
-  der Renderer-Kindprozess des HiDPI-Grifftests sporadisch mit Exit -11 —
-  erst bei `QT_SCALE_FACTOR=2`, dann bei beiden Werten grün, dann bei 1
-  (`test_render_factory.py`) — ob Softwarerenderer des Runners oder
-  Anwendung, sagt nur ein Linux mit Bildschirm. Abnahme beider: dreimal in Folge auf der Plattform
-  grün ohne Marke. Der Changelog-Punkt zum Abbruch während der Antwort ist für
-  0.4.1 gestrichen, bis er auf allen drei Plattformen belegt ist.
+  **Die zwei sporadischen Befunde aus den Tag-Läufen von v0.4.1 sind geschlossen
+  (06.10.2026).** Der Abbruch eines lokalen Ollama-Aufrufs kam auf macOS nicht sicher an: Der
+  wartende Faden weckte das blockierte `recv` mit `shutdown`, und das wirkte dort nicht
+  verlässlich. Jetzt liest und sendet der Anfragefaden an einem `llm._WatchedSocket`, der den
+  Abbruch selbst in Scheiben von 50 ms bemerkt; schon Angekommenes liest er zuerst, weil Windows
+  bei `shutdown` über Ungelesenem die Verbindung zurücksetzt. Ohne `xfail`-Marke grün: macOS und
+  Ubuntu je 20 von 20 (Lauf 37533806573), Windows 40 von 40 am i9. Nebenbei gemessen:
+  `socket.getfqdn` brauchte am macOS-Runner 35 s, auf Ubuntu 2 ms; die Testserver und der
+  Fernsteuerungsserver der Anwendung, der im Hauptfaden startet, lösen ihren Namen nicht mehr auf.
+  Der HiDPI-Grifftest unter Xvfb lief ohne Marke 20 von 20 grün über beide Skalen (Lauf
+  37492243563); die Marke ist entfernt. Der Changelog-Punkt zum Abbruch während der Antwort ist
+  damit auf allen drei Plattformen belegt. [Befund und Nachweis](ROADMAP-ARCHIV.md#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026).
+
+  **Offen aus demselben Befund:** `app/ui/remote_server.py` (`abort_active`) weckt beim Beenden
+  der Fernsteuerung lesende Handler mit `shutdown` aus einem fremden Faden — der Weg, der unter
+  macOS nicht sicher ankam. Begrenzt ist es durch `REQUEST_TIMEOUT`, und `stop()` wartet höchstens
+  5 s. Weg: dieselbe Überwachung wie beim lokalen Modell oder ein Beleg am Mac, dass der Handler
+  dort endet.
 
   **Befund 03.10.2026, Intel-Runner (`macos-26-intel`, Lauf 37150755506):** Das
   veröffentlichte Intel-Paket 0.5.1 hängt dort beim ersten Zeigen des Fensters im
@@ -516,6 +534,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Worker-/Widget-Lebensdauer erneut eingrenzen. Abnahme: protokollierte Testreihenfolge pro Worker,
   reproduzierbarer Auslöser und saubere Prozessabschlüsse; getrennte Fensterdateien bleiben bis
   dahin Teil des Prüfverfahrens.
+
+  **Messung 06.10.2026 (Wegwerfzweig, Läufe 37491131058 und 37525358642):** Der Linux-Sammellauf
+  der Fenstertests mit vier Arbeitern und Verteilung `load` verlor einen Arbeiter mit „Fatal
+  Python error: Aborted“ unmittelbar nach dem bestandenen
+  `test_overlay.py::test_dragging_the_window_lets_nothing_lag_behind`; derselbe Lauf mit
+  Verteilung `loadfile` blieb bei 99 % stehen. Die Overlay-Datei allein ist auf Ubuntu 20 von 20
+  grün, mit und ohne ausdrücklichen Fensterabbau. Der Auslöser hängt also an den Vorgängern im
+  selben Arbeiter. Nächster Schritt: die Testfolge des abgestürzten Arbeiters aus seinem
+  Protokoll nachstellen und halbieren.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
 
@@ -714,8 +741,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   macOS dieselben Ergebnisse wie main (Handstart 37060439101 gegen 37058800949).
   Der Taglauf 37266459831 (v0.5.2) ist vollständig grün, alle vier Paketjobs bauen mit
   `python-version: 3.14.8`, alle Releaseakte-Jobs sind grün; v0.5.3 (Taglauf 37409338027) baut
-  wieder alle Pakete. Ob die Releaseakte 3.14.8 nennt, ist nicht nachgesehen.
-  **Offen:** der Blick in die Releaseakte und die drei Arbeitsplätze. Deren Installation
+  wieder alle Pakete. **Nachgesehen 07.10.2026:** Die Stückliste im App-Baum des
+  Windows-Pakets 0.5.3 (Artefakt `solidon3d-windows-signing-input` des Taglaufs, Prüfsumme
+  stimmt) nennt CPython runtime 3.14.8, OpenSSL 3.5.9 und libffi 3.4.4; die mitgelieferte
+  `python314.dll` trägt Datei- und Produktversion 3.14.8. Die Releaseakte-Prüfung liest
+  dieselbe Stückliste.
+  **Offen:** die drei Arbeitsplätze. Deren Installation
   ersetzt `python314.dll` unter jeder laufenden Umgebung und geht nur, wenn keine Sitzung rechnet.
   **Abnahme:** Taglauf oder Vollstart mit allen Paketen grün, die Releaseakte nennt 3.14.8;
   `check_env` meldet auf jedem Arbeitsplatz 3.14.8.
