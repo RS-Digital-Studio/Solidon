@@ -350,10 +350,14 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "field:height",
             ),
             step(_("Klicken Sie auf *Quader anlegen*."), "dialog.accept"),
+            # **Ein neues Teil ist schon gewählt** (``_queue_created_choice``):
+            # Der erste Klick nimmt deshalb die Fläche. „Zweimal: erst das Teil,
+            # dann die Fläche“ stimmte nur, wenn vorher etwas anderes gewählt war
+            # (Fragebogen zu 0.5.3).
             step(
                 _(
-                    "Klicken Sie zweimal auf die Oberseite: erst ist das Teil gewählt, "
-                    "dann die Fläche."
+                    "Klicken Sie auf die Oberseite. Der neue Quader ist schon gewählt, "
+                    "also wählt der Klick die Fläche."
                 ),
                 "viewport",
             ),
@@ -393,10 +397,14 @@ GUIDES: Final[tuple[Guide, ...]] = (
             # Klick und Knopf in je einem Bild: Zusammen wurde der Ausschnitt
             # das ganze Fenster, und *Aushöhlen* war nicht mehr zu lesen
             # (Probelauf 27.09.2026).
+            # **Kein Klick auf den neuen Quader**: Er ist nach dem Anlegen schon
+            # gewählt, und ein Klick darauf nahm die Oberseite — an einer Fläche
+            # stand *Aushöhlen* dann nicht, wo das nächste Bild es zeigt
+            # (Fragebogen zu 0.5.3).
             step(
                 _(
                     "Legen Sie wie in [Das erste eigene Teil](manual:first-part) "
-                    "einen Quader an und klicken Sie darauf."
+                    "einen Quader an. Danach ist er schon gewählt."
                 ),
                 "viewport",
             ),

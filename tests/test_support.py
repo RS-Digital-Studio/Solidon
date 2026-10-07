@@ -765,18 +765,25 @@ def test_a_crash_report_names_the_place_without_the_user_folder() -> None:
     assert "raise FileNotFoundError" not in detail, "keine Quellzeilen"
 
 
-def _crash_child(
-    tmp_path: Path, body: str, *, installed: bool = True
-) -> subprocess.CompletedProcess[str]:
-    """Ein echter kopfloser Prozess mit vollständig getrenntem Nutzerprofil."""
+def _child_environment(tmp_path: Path) -> dict[str, str]:
+    """Die Umgebung eines Kindprozesses mit vollständig getrenntem Nutzerprofil."""
     import os
-    import sys
-    import textwrap
 
     environment = dict(os.environ)
     for key in ("APPDATA", "LOCALAPPDATA", "HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME"):
         environment[key] = str(tmp_path)
     environment["PYTHONUTF8"] = "1"
+    return environment
+
+
+def _crash_child(
+    tmp_path: Path, body: str, *, installed: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """Ein echter kopfloser Prozess mit vollständig getrenntem Nutzerprofil."""
+    import sys
+    import textwrap
+
+    environment = _child_environment(tmp_path)
     setup = """
 import os
 import sys
@@ -992,10 +999,9 @@ def test_a_survived_exception_is_no_crash(
 def test_a_com_exception_the_process_survives_never_reaches_the_report(tmp_path: Path) -> None:
     """Der echte Weg: faulthandler schreibt, ein Behandler fängt, der Prozess lebt weiter.
 
-    Solange er läuft, hängt der Fehlerbericht den Eintrag nicht an; endet er
-    geordnet, ist die Datei leer und wird beim nächsten Start aufgeräumt. Ein
-    Python-Fehler im selben Lauf hält die Datei — mit dem Vermerk, der den
-    überlebten Eintrag davor ausweist.
+    Solange er läuft, hängt der Fehlerbericht den Eintrag nicht als Absturz an;
+    endet er geordnet, steht der Vermerk dahinter, und der Eintrag reist nur
+    noch als abgefangen mit. Ein Python-Fehler im selben Lauf bleibt ein Fehler.
     """
     body = """
 import ctypes
@@ -1020,7 +1026,9 @@ if "--python" in sys.argv:
     survived = _crash_child(tmp_path / "allein", body)
     assert survived.returncode == 0, survived.stderr
     alone = Path(survived.stdout.splitlines()[0])
-    assert alone.read_bytes() == b"", "nichts Tödliches: geleert wie ein sauberer Lauf"
+    assert b"normal end" in alone.read_bytes(), "das Ende ist vermerkt"
+    assert report_module.crash_tail(alone.parent) == b"", "nichts Tödliches"
+    assert b"0x8001010d" in report_module.caught_tail(alone.parent), "abgefangen, nicht weg"
 
     with_error = _crash_child(
         tmp_path / "mit-fehler", body.replace('"--python" in sys.argv', "True")
@@ -1031,6 +1039,359 @@ if "--python" in sys.argv:
     assert "0x8001010d" in raw and "im Slot" in raw and "normal end" in raw
     attached = report_module.crash_tail(kept.parent).decode("utf-8")
     assert "im Slot" in attached and "0x8001010d" not in attached
+
+
+#: Derselbe Eintrag aus einem anderen Faden als dem, der das Ende vermerkt.
+_ELSEWHERE = _FATAL.replace("0x000056fc", "0x00001a2b")
+
+
+@pytest.mark.parametrize(
+    ("text", "kept", "caught"),
+    [
+        (_SURVIVED + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n", [], ["0x8001010d"]),
+        (
+            _ELSEWHERE + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n",
+            ["access violation"],
+            [],
+        ),
+        (_ELSEWHERE + _ENDED, [], ["access violation"]),
+    ],
+    ids=["eigener-faden", "fremder-faden", "vermerk-ohne-faden"],
+)
+def test_only_the_thread_that_reached_the_end_survived_its_exception(
+    text: str, kept: list[str], caught: list[str]
+) -> None:
+    """Das geordnete Ende belegt nur den Faden, der es erreicht hat.
+
+    Eine Zugriffsverletzung in einem Nebenfaden, während der Hauptfaden
+    schon in ``atexit`` steht, schreibt faulthandler — und Windows beendet
+    den Prozess erst danach. Galt jeder Eintrag vor dem Vermerk als überlebt,
+    leerte das Ende genau diesen Beleg.
+    """
+    from app.core.log import caught_records, fatal_records
+
+    for word in kept:
+        assert word in fatal_records(text)
+    for word in caught:
+        assert word not in fatal_records(text)
+        assert word in caught_records(text)
+
+
+def test_an_ending_names_every_thread_that_survived() -> None:
+    """Der Vermerk nennt jeden Faden, der seine Einträge überlebt hat.
+
+    Neben dem Faden des Endes auch einen, der da schon beendet war: Eine
+    tödliche Ausnahme beendet unter Windows den Prozess, nicht den Faden.
+    """
+    from app.core.log import caught_records, fatal_records
+
+    text = _ELSEWHERE + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc 0x1a2b\n"
+    assert "access violation" in caught_records(text)
+    assert fatal_records(text) == ""
+
+
+def test_an_ending_written_into_a_record_keeps_its_stack() -> None:
+    """faulthandler schreibt ohne Sperre in vielen kleinen Stücken.
+
+    Fällt der Vermerk des Hauptfadens mitten in den Eintrag eines sterbenden
+    Nebenfadens, gehört der Rest danach weiter zu diesem Eintrag — mit seinem
+    Stapel und seinem Faden.
+    """
+    from app.core.log import fatal_records
+
+    head, _, rest = _ELSEWHERE.partition("Current thread")
+    text = head + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\nCurrent thread" + rest
+    kept = fatal_records(text)
+    assert "access violation" in kept and "viewport.py" in kept, kept
+
+
+def test_a_running_process_that_noted_its_end_is_judged_by_the_ending() -> None:
+    """Gesperrt heißt nicht überlebt, sobald das Ende vermerkt ist.
+
+    Ein Prozess, der den Vermerk geschrieben hat und noch nicht beendet ist —
+    etwa, weil Windows gerade den Absturz eines Nebenfadens meldet —, hält
+    seine Sperre noch. Sein Eintrag gilt dann nach dem Vermerk.
+    """
+    from app.core.log import fatal_records
+
+    text = _ELSEWHERE + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n"
+    assert "access violation" in fatal_records(text, alive=True)
+
+
+def test_a_large_file_of_caught_exceptions_stays_caught(tmp_path: Path) -> None:
+    """Gelesen wird nur das Ende großer Dateien; ein Rest ohne Kopf ist kein Absturz.
+
+    Ab etwa 250 abgefangenen Einträgen je Lauf begann das Fenster mitten in
+    einem davon. Der Rest zählte als angeschnitten und damit als tödlich:
+    Das Aufräumen verdrängte mit fünf solchen Dateien einen echten Absturz,
+    und der Bericht hängte ein Bruchstück als Absturzprotokoll an.
+    """
+    from app.core import log
+
+    entry = _SURVIVED + "".join(f'  File "modul{n}.py", line {n} in f\n' for n in range(60))
+    body = entry * (log._PRUNE_READ // len(entry) + 50)
+    crash = tmp_path / "crash-20261001T120000-0.5.3-123-0000000000000001.log"
+    crash.write_text(_FATAL, encoding="utf-8")
+    for number in range(5):
+        big = tmp_path / f"crash-2026100{number + 2}T120000-0.5.3-123-{number + 2:016x}.log"
+        big.write_text(body + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n", "utf-8")
+
+    attached = dict(report_module.diagnostic_attachments(normal=b"", directory=tmp_path))
+    crashes = attached.get("absturzprotokoll.txt", b"")
+    assert crashes.count(b"--- crash-") == 1 and b"modul" not in crashes, crashes[:400]
+    log._prune_crashes(tmp_path)
+
+    assert crash in log.crash_paths(tmp_path), "der echte Absturz bleibt"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-Ausnahmen gibt es nur unter Windows")
+def test_an_ended_thread_with_an_open_handle_survived(tmp_path: Path) -> None:
+    """So endet ein QThread: beendet, aber Qt hält sein Handle offen.
+
+    Gefragt wird das System nach dem Exit-Code. Mit dem falschen Zugriffsrecht
+    (``0x1000`` statt ``0x0800``) scheiterte jede Abfrage, der Faden galt als
+    laufend, und seine überlebte Ausnahme stand im Absturzprotokoll.
+    """
+    done = _crash_child(
+        tmp_path,
+        """
+import ctypes
+kernel32 = ctypes.windll.kernel32
+handler_type = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)
+handler = handler_type(lambda pointers: -1)  # EXCEPTION_CONTINUE_EXECUTION
+kernel32.AddVectoredExceptionHandler.restype = ctypes.c_void_p
+kernel32.AddVectoredExceptionHandler.argtypes = [ctypes.c_ulong, handler_type]
+kernel32.AddVectoredExceptionHandler(0, handler)
+start_type = ctypes.WINFUNCTYPE(ctypes.c_uint32, ctypes.c_void_p)
+
+def body(_):
+    kernel32.RaiseException(0x8001010D, 0, 0, None)
+    return 0
+
+start = start_type(body)
+kernel32.CreateThread.restype = ctypes.c_void_p
+kernel32.CreateThread.argtypes = [
+    ctypes.c_void_p, ctypes.c_size_t, start_type, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p,
+]
+handle = kernel32.CreateThread(None, 0, start, None, 0, None)
+kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+assert kernel32.WaitForSingleObject(handle, 10000) == 0
+""",
+    )
+    assert done.returncode == 0, done.stderr
+    path = Path(done.stdout.splitlines()[0])
+    assert b"0x8001010d" not in report_module.crash_tail(path.parent)
+    assert b"0x8001010d" in report_module.caught_tail(path.parent)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-Ausnahmen gibt es nur unter Windows")
+def test_a_worker_that_survived_and_ended_is_caught(tmp_path: Path) -> None:
+    """Der echte Weg aus R2: Ein Nebenfaden überlebt seine Ausnahme und endet.
+
+    Nach dem geordneten Ende steht er im Vermerk und reist als abgefangen,
+    nicht als Absturz.
+    """
+    done = _crash_child(
+        tmp_path,
+        """
+import ctypes, threading
+
+handler_type = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)
+handler = handler_type(lambda pointers: -1)  # EXCEPTION_CONTINUE_EXECUTION
+kernel32 = ctypes.windll.kernel32
+kernel32.AddVectoredExceptionHandler.restype = ctypes.c_void_p
+kernel32.AddVectoredExceptionHandler.argtypes = [ctypes.c_ulong, handler_type]
+kernel32.AddVectoredExceptionHandler(0, handler)
+worker = threading.Thread(target=lambda: kernel32.RaiseException(0x8001010D, 0, 0, None))
+worker.start()
+worker.join()
+""",
+    )
+    assert done.returncode == 0, done.stderr
+    path = Path(done.stdout.splitlines()[0])
+    assert b"0x8001010d" not in report_module.crash_tail(path.parent)
+    assert b"0x8001010d" in report_module.caught_tail(path.parent)
+
+
+def test_the_server_takes_every_attachment_the_client_can_send() -> None:
+    """Der Server nimmt so viele Anhänge, wie der Hilfedialog schicken kann.
+
+    Bild, Sitzung und die drei Protokolle aus ``log.REPORT_FILES``; mit
+    ``abgefangen.txt`` sind es fünf. ``MAX_FILES`` in ``support.php`` darf nicht
+    darunter liegen, sonst weist der Server eine vollständige Sendung ab.
+    """
+    import re
+
+    from app.core.log import REPORT_FILES, REPORT_TEXT
+
+    php = (Path(__file__).resolve().parents[1] / "website" / "api" / "support.php").read_text(
+        encoding="utf-8"
+    )
+    found = re.search(r"const MAX_FILES = (\d+);", php)
+    assert found is not None
+    logs = [name for name in REPORT_FILES if name != REPORT_TEXT]
+    assert int(found.group(1)) >= 2 + len(logs), (found.group(1), logs)
+
+
+def test_caught_exceptions_never_keep_a_report_folder(tmp_path: Path) -> None:
+    """Der Anhang ``abgefangen.txt`` hielt jeden automatischen Berichtsordner fest.
+
+    Das Aufräumen kannte ihn nicht: Die Ordner wuchsen beim Kunden ohne Grenze,
+    und eine entfernte Absturzdatei ließ ihren Ordner als Waise zurück.
+    """
+    done = _crash_child(
+        tmp_path,
+        f"""
+from app.core import log
+with capture.open("a", encoding="utf-8") as stream:
+    stream.write({_SURVIVED!r})
+for number in range(8):
+    kind = type(f'Fehler{{number}}', (RuntimeError,), {{}})
+    try:
+        raise kind(f'Fehler {{number}}')
+    except RuntimeError as problem:
+        sys.excepthook(type(problem), problem, problem.__traceback__)
+folder = capture.with_suffix('')
+assert len(list(folder.glob('bericht-*'))) == 5, list(folder.iterdir())
+assert all((report / 'abgefangen.txt').exists() for report in folder.glob('bericht-*'))
+log._trim_automatic_reports(folder, 0)
+assert not folder.exists(), list(folder.iterdir())
+""",
+    )
+    assert done.returncode == 0, done.stderr
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-Ausnahmen gibt es nur unter Windows")
+def test_a_crash_in_another_thread_during_shutdown_is_kept(tmp_path: Path) -> None:
+    """Der echte Weg aus R3: Nebenfaden stirbt, während der Hauptfaden geordnet endet."""
+    done = _crash_child(
+        tmp_path,
+        """
+import atexit, ctypes, faulthandler, threading, time
+
+handler_type = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)
+
+def hold(pointers):
+    time.sleep(2.0)  # steht für die Zeit, die Windows bis zum Prozessende braucht
+    return 0  # EXCEPTION_CONTINUE_SEARCH
+
+keep = handler_type(hold)
+kernel32 = ctypes.windll.kernel32
+kernel32.AddVectoredExceptionHandler.restype = ctypes.c_void_p
+kernel32.AddVectoredExceptionHandler.argtypes = [ctypes.c_ulong, handler_type]
+
+def crash_at_shutdown():
+    kernel32.AddVectoredExceptionHandler(0, keep)
+    threading.Thread(target=faulthandler._read_null, daemon=True).start()
+    time.sleep(0.5)
+
+atexit.register(crash_at_shutdown)
+""",
+    )
+    path = Path(done.stdout.splitlines()[0])
+    assert b"access violation" in path.read_bytes(), "der Beleg bleibt auf der Platte"
+    assert b"access violation" in report_module.crash_tail(path.parent)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-Ausnahmen gibt es nur unter Windows")
+def test_a_second_running_solidon_is_no_crash(tmp_path: Path) -> None:
+    """Ein zweites Fenster lebt noch — sein überlebter Eintrag ist kein Absturz.
+
+    Zwei Projekte per Doppelklick sind zwei Prozesse mit zwei Absturzdateien.
+    Lebend war bisher nur die eigene; die überlebte COM-Ausnahme des anderen
+    hing der Fehlerbericht als Absturzprotokoll an — das Symptom aus dem
+    Fragebogen S-20261006-5be329, nur über einen Umweg. Ob ein Prozess lebt,
+    sagt seine Sperre, wie beim Aufräumen.
+    """
+    import textwrap
+    import time
+
+    ready = tmp_path / "bereit.txt"
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            textwrap.dedent(
+                """
+                import ctypes, sys, time
+                from pathlib import Path
+                from app.core.log import install_crash_logging
+                ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002)
+                capture = install_crash_logging()
+                handler_type = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)
+                handler = handler_type(lambda pointers: -1)
+                kernel32 = ctypes.windll.kernel32
+                kernel32.AddVectoredExceptionHandler.restype = ctypes.c_void_p
+                kernel32.AddVectoredExceptionHandler.argtypes = [ctypes.c_ulong, handler_type]
+                kernel32.AddVectoredExceptionHandler(0, handler)
+                kernel32.RaiseException(0x8001010D, 0, 0, None)
+                # Erst ganz schreiben, dann umbenennen: Der Test sieht die
+                # Datei nie halb geschrieben.
+                partial = Path(sys.argv[1] + ".teil")
+                partial.write_text(str(capture), encoding="utf-8")
+                partial.replace(sys.argv[1])
+                sys.stdin.readline()
+                """
+            ),
+            str(ready),
+        ],
+        cwd=Path(__file__).resolve().parent.parent,
+        env=_child_environment(tmp_path),
+        stdin=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
+    try:
+        assert child.stdin is not None
+        deadline = time.monotonic() + 60.0
+        while not ready.exists() and child.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert ready.exists(), "das zweite Fenster hat seine Datei nicht genannt"
+        other = Path(ready.read_text(encoding="utf-8"))
+        assert b"0x8001010d" in other.read_bytes()
+        assert b"0x8001010d" not in report_module.crash_tail(other.parent), "es läuft noch"
+        assert b"0x8001010d" in report_module.caught_tail(other.parent), "abgefangen, nicht weg"
+    finally:
+        if child.stdin is not None:
+            child.stdin.close()
+        child.wait(timeout=30)
+
+
+def test_caught_exceptions_travel_apart_from_crashes(tmp_path: Path) -> None:
+    """Was der Prozess überlebt hat, ist kein Absturz — aber oft der einzige Hinweis.
+
+    „Die Ansicht wurde schwarz“ ohne Absturz: Der Eintrag des Grafiktreibers
+    steht dann nur als überlebte Ausnahme da. Er reist unter eigenem Namen
+    mit, nicht als Absturzprotokoll und nicht gar nicht.
+    """
+    survived = tmp_path / "crash-20261006T120000-0.5.3-123-0000000000000001.log"
+    survived.write_text(
+        _SURVIVED + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n", encoding="utf-8"
+    )
+
+    attached = dict(report_module.diagnostic_attachments(normal=b"", directory=tmp_path))
+
+    assert "absturzprotokoll.txt" not in attached
+    assert b"0x8001010d" in attached["abgefangen.txt"]
+
+
+def test_retention_keeps_crashes_ahead_of_caught_exceptions(tmp_path: Path) -> None:
+    """Ein Treiber, der in jedem Lauf eine Ausnahme wirft, verdrängt keinen Absturz."""
+    from app.core import log
+
+    crash = tmp_path / "crash-20261001T120000-0.5.3-123-0000000000000001.log"
+    crash.write_text(_FATAL, encoding="utf-8")
+    for number in range(8):
+        caught = tmp_path / f"crash-2026100{number + 2}T120000-0.5.3-123-{number + 2:016x}.log"
+        caught.write_text(
+            _SURVIVED + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n", encoding="utf-8"
+        )
+
+    log._prune_crashes(tmp_path)
+
+    left = log.crash_paths(tmp_path)
+    assert crash in left, "der Absturz bleibt"
+    assert len(left) == 1 + 2, "zwei Läufe mit Abgefangenem bleiben (app/core/CLAUDE.md)"
 
 
 def test_repeated_installation_uses_one_file_and_leaves_clean_runs_empty(tmp_path: Path) -> None:
@@ -1097,12 +1458,18 @@ def test_attached_logs_carry_no_user_folder(tmp_path: Path) -> None:
     opened = f"Datei geöffnet: {home / 'Downloads' / 'teil.stl'}"
     recent = tmp_path / "crash-20260920T120000-0.4.4-123-0000000000000001.log"
     recent.write_text(f'  File "{home / "x" / "viewport.py"}", line 7 in paint\n', "utf-8")
+    survived = tmp_path / "crash-20260920T110000-0.4.4-123-0000000000000002.log"
+    survived.write_text(
+        _SURVIVED.replace('"app.py"', f'"{home / "x" / "app.py"}"')
+        + "\n2026-10-06T12:00:00+00:00 normal end 0x56fc\n",
+        "utf-8",
+    )
 
     attached = dict(
         report_module.diagnostic_attachments(normal=opened.encode("utf-8"), directory=tmp_path)
     )
 
-    for name in ("protokoll.txt", "absturzprotokoll.txt"):
+    for name in ("protokoll.txt", "absturzprotokoll.txt", "abgefangen.txt"):
         text = attached[name].decode("utf-8")
         assert str(home).casefold() not in text.casefold(), text
     assert attached["protokoll.txt"].decode("utf-8").endswith("teil.stl")

@@ -30,7 +30,7 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 | `recognition_time.py` | Zeitspanne der Vollerkennung aus einer Rechenprobe je Prozess — nur Anzeige, keine Uhr in `detect` (§15.1) |
 | `surfaces.py` | Teilträger (`SurfacePatch`): `valid_patch`, `planar_patch`, `clipped_patches`, `reindexed_patches` |
 | `actions.py` | Was der Kunde an einem Merkmal tun kann und was nicht (unten) |
-| `digest.py` | Steckbrief für den Agenten (§23); `_selection_lines` fragt denselben Weg wie das Panel; Schritte heißen nach ihrer sichtbaren Nummer (`_step_numbers`): `created_by=op3` am erzeugten Merkmal, `last_op` am Objekt, dieselbe Nummer vor jedem Aufruf im Verlauf |
+| `digest.py` | Steckbrief für den Agenten (§23); `_selection_lines` fragt denselben Weg wie das Panel; Schritte heißen nach ihrer sichtbaren Nummer (`_step_numbers`): `created_by=op3` am erzeugten Merkmal, `last_op` am Objekt, dieselbe Nummer vor jedem Aufruf im Verlauf; dahinter „aus“, „ruht“ oder „Ergebnis entfernt“ mit dem Wort des Verlaufsfelds (`scene.history.step_state_word`, träge geladen) |
 | `maps.py` | Analysekarten (§18.4, unten) |
 
 `__init__.py` trägt nur den Paketdocstring.

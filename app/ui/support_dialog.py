@@ -48,7 +48,7 @@ from app.branding import SUPPORT_ADDRESS
 from app.core import discover, feedback, support
 from app.core import report as reports
 from app.core.errors import CANCEL, AppError, FileWriteError
-from app.core.log import get_logger, log_path
+from app.core.log import CAUGHT_ATTACHMENT, LOG_ATTACHMENT, get_logger, log_path
 from app.core.paths import ensure_dir, user_data_dir
 from app.core.support import (
     KIND_BUG,
@@ -615,11 +615,16 @@ class SupportDialog(QDialog):
                     )
                     self._logs = ()
             for name, data in self._logs:
-                description = (
-                    tr("Die letzten Zeilen")
-                    if name == "protokoll.txt"
-                    else tr("Lokale Absturzprotokolle ohne lokale Variablen oder Projektgeometrie")
-                )
+                if name == LOG_ATTACHMENT:
+                    description = tr("Die letzten Zeilen")
+                elif name == CAUGHT_ATTACHMENT:
+                    description = tr(
+                        "Fehler, die Solidon abgefangen hat. Kein Absturz, aber oft ein Hinweis."
+                    )
+                else:
+                    description = tr(
+                        "Lokale Absturzprotokolle ohne lokale Variablen oder Projektgeometrie"
+                    )
                 found.append(support.Attachment(name, data, description))
         return found
 

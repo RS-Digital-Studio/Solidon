@@ -39,6 +39,11 @@ Merkmal, Befehlspalette, Agent, Kommandozeile.
 
 - **Registereintrag:** das Kürzel gegen das Register prüfen; Dubletten fallen
   im Konsistenztest auf.
+- **Kennungen:** Wer einen Eingang unter seiner Kennung zurückgibt und Neues
+  daneben legt, setzt `leaves_inputs_unchanged` oder steht mit Grund in
+  `REBUILDS_ITS_CARRIER`; wer mehrere Körper zurückgibt, `shapes_with_other_inputs`
+  oder `EACH_BODY_BY_ITSELF` (`tests/test_history.py`). Daran misst der Verlauf,
+  was ein entfernter Körper hinterlässt.
 - **Parameterschema:** vorn zwei bis drei Werte, alles andere hinten.
   Fertigungsspiel über das Materialprofil, numerische Grenzen aus dem
   zuständigen Kern, keine Streuzahl. Jeder `doc`-Satz sagt, was der Wert

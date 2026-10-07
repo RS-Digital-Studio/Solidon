@@ -553,3 +553,40 @@ def test_the_menu_guard_finds_what_it_looks_for(qt_app: QApplication) -> None:
 
     assert not silent, "der Grund ist gesetzt"
     assert hidden == ["(oberste Ebene)"], hidden
+
+
+def test_the_missing_objects_sentence_counts_and_names_the_mac_key() -> None:
+    """Der Satz nennt die Zahl, die die Operation braucht — und am Mac ⌘ statt Strg.
+
+    Seit Menüeintrag, Palette und Kartensuche ihn mit ``needed_inputs`` rufen,
+    sagte *Einlagen für neues Profil* (vier Eingänge) „braucht zwei Objekte“. Und
+    „Umschalt oder Strg und Klick“ schickte am Mac auf eine Taste, die dort
+    nichts dazunimmt: Die Mehrfachauswahl liegt auf ⌘.
+    """
+    from app.core.registry import needed_inputs
+    from app.i18n import set_key_platform
+    from app.ui.main_window import _needs_objects
+
+    load_operations()
+    takes = needed_inputs(REGISTRY.get("replace_profile_liners"))
+    assert takes == 4, "der Fall braucht eine Operation mit mehr als zwei Eingängen"
+    many = _needs_objects(takes)
+    assert many.startswith("Diese Operation braucht 4 Objekte."), many
+    assert "zwei" not in many
+    two = _needs_objects(2)
+    assert two.startswith("Diese Operation braucht zwei Objekte."), two
+    assert "Umschalt oder Strg und Klick" in two and "Umschalt oder Strg und Klick" in many
+    try:
+        set_key_platform("darwin")
+        for sentence in (_needs_objects(2), _needs_objects(takes)):
+            assert "Umschalt oder ⌘ und Klick" in sentence, sentence
+            assert "Strg" not in sentence, sentence
+    finally:
+        set_key_platform("")
+
+
+def test_a_locked_operation_with_four_inputs_asks_for_four(window: MainWindow) -> None:
+    """Am Fenster: Der Sperrgrund von *Einlagen für neues Profil* nennt vier Objekte."""
+    _with_a_selected_body(window)
+    reason = window._reason_locked(REGISTRY.get("replace_profile_liners"), [], 1, 1)
+    assert reason is not None and reason.startswith("Diese Operation braucht 4 Objekte."), reason
