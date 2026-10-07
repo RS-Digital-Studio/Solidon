@@ -110,6 +110,37 @@ def test_spanish_tours_name_the_visible_actions() -> None:
         set_language("de")
 
 
+@pytest.mark.parametrize(
+    ("language", "foreign"),
+    [("es", r"\b(?:elementos?|detalles?)\b"), ("pt", r"\b(?:elementos?|pormenor(?:es)?)\b")],
+)
+def test_a_feature_keeps_the_programs_word_in_spanish_and_portuguese(
+    language: str, foreign: str
+) -> None:
+    """Ein Merkmal heißt „característica“, im Programm wie im Handbuch (Einheitlichkeit).
+
+    Die Knöpfe sagten es längst, Handbuch und einige Meldungen sagten daneben
+    „detalle(s)“ beziehungsweise „elemento(s)“ — der Kunde suchte einen
+    Unterschied, den es nicht gibt (Handbuch-Wächter, Entscheidung zum
+    Fließtext). Ein anderes Wort ist nur dort richtig, wo die Quelle selbst
+    ein anderes nennt: *Element*, *Gegenstück*, *Detail*, *Einzelheit*.
+    """
+    catalog = read_catalog(language)
+    other_word = re.compile(r"element|gegenstück|detail|einzelheit", re.IGNORECASE)
+    drifted = [
+        f"{key[:70]!r} → {value[:90]!r}"
+        for key, value in catalog.items()
+        if re.search(r"merkmal", key, re.IGNORECASE)
+        and re.search(foreign, value, re.IGNORECASE)
+        and not other_word.search(key)
+    ]
+    assert not drifted, "\n".join(drifted)
+    named = [value for key, value in catalog.items() if re.search(r"merkmal", key, re.IGNORECASE)]
+    assert sum("característica" in value.casefold() for value in named) > 50, (
+        "Voraussetzung: das Programm nennt Merkmale „característica“"
+    )
+
+
 def test_french_range_check_warns_for_any_failed_corner() -> None:
     """Ein einziger gescheiterter Eckpunkt ist bereits ein Warnfall."""
     catalog = read_catalog("fr")
