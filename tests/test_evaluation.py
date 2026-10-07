@@ -26,6 +26,7 @@ from app.core.types import (
     Finding,
     Fit,
     OpContext,
+    OpId,
     OpResult,
     Parameter,
     Profile,
@@ -1869,6 +1870,9 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
             self.written: list[bool] = []
 
         def get(self, key: str) -> CachedResult | None:
+            return None
+
+        def refusal(self, key: str) -> None:
             return None
 
         def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
@@ -7357,6 +7361,673 @@ def test_a_hole_change_that_the_first_stage_holds_does_not_ask_for_the_quality()
 
     assert not first.reads_quality, "Voraussetzung: das Einlesen fragt nicht"
     assert changed.complete and not changed.reads_quality
+
+
+def _short_chain_finds_nothing(monkeypatch: pytest.MonkeyPatch, *, nor_the_full: bool) -> list[str]:
+    """Die verlustfreien Stufen liefern nichts, wie am Kundenteil (RM-534).
+
+    Mit ``nor_the_full`` auch die übrigen — die volle Kette bestätigt den
+    Halt. Zurück kommt die Liste der gerufenen Stufen.
+    """
+    import trimesh
+
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+
+    real = boolean_module._run_stage
+    called: list[str] = []
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        called.append(name)
+        if nor_the_full or name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    return called
+
+
+def _drilled_box(profile: Profile) -> Any:
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={})])
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 10.0, "depth": 0.0},
+            )
+        ],
+    )
+    return project.document
+
+
+def _window(document: Document, profile: Profile, **options: Any) -> Any:
+    """Wie Fensterlauf, Verlaufsumbau und Agent: Entwurf, und wo nur die kurze Kette ausgeht, fein.
+
+    Vorschauen rechnen ohne ``full_chain_when_stuck`` (RM-534, §17.2).
+    """
+    return evaluate(document, profile, quality="draft", full_chain_when_stuck=True, **options)
+
+
+def _asking_cut(registry: Registry, *, stages: Any = None) -> None:
+    """Eine Operation, die erst fragt und dann bohrt — wie *Abdichten* (RM-534).
+
+    ``stages`` gibt der Booleschen eine feste Kette, wie es ein Schritt tut,
+    der ausdrücklich nur eine Stufe will.
+    """
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+
+    @register_op(
+        name="asking_cut",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def cut(ctx: OpContext) -> OpResult:
+        ctx.ask("Welche Seite?", ["links", "rechts"])
+        block = MeshData.of(trimesh.creation.box((20.0, 20.0, 20.0)))
+        # Die Güte fragt der Schritt auch selbst, wie jede Operation mit Rundungen.
+        sections = 64 if ctx.quality == "fine" else 32
+        tool = MeshData.of(trimesh.creation.cylinder(radius=2.5, height=40.0, sections=sections))
+        outcome = boolean(
+            "difference", [block, tool], quality=ctx.quality, seed=ctx.seed, stages=stages
+        )
+        return OpResult(
+            outputs=[SceneObject(id="", name="Probe", mesh=outcome.mesh)], solver=outcome.solver
+        )
+
+
+def test_a_halt_that_read_the_quality_is_no_fine_verdict(
+    document: Document, profile: Profile
+) -> None:
+    """RM-534: Ein Entwurfshalt, der nach der Güte gefragt hat, ist nie fein.
+
+    Die Auswertung brach beim Halt ab, bevor sie die Frage nach der Güte
+    festhielt; die Sitzung hielt den Halt deshalb für fein, und Druckdialog
+    wie Export bestellten die feine Rechnung nie — obwohl sie anders hätte
+    ausgehen können.
+    """
+    registry = Registry()
+
+    @register_op(
+        name="draft_only_fails",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def make(ctx: OpContext) -> OpResult:
+        if ctx.quality == "draft":
+            raise GeometryError()
+        return OpResult(outputs=[SceneObject(id="", name="Probe", mesh=_mesh(10.0))])
+
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="draft_only_fails")])
+
+    halted = evaluate(document, profile, quality="draft", registry=registry)
+
+    assert halted.stopped_at == document.ops[-1].id, "Voraussetzung: der Entwurf hält an"
+    assert halted.reads_quality, "der Halt gilt als fein, und keiner rechnet fein nach"
+
+
+def test_a_draft_run_goes_the_full_chain_where_the_short_one_ends(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Im Entwurf rechnet derselbe Lauf den einen Schritt mit allen Stufen.
+
+    Der Kunde sah „… sagt erst die vollständige“ als Fehler und nahm
+    *Reparieren und erneut versuchen*, das nicht helfen konnte. Jetzt kommt
+    das Ergebnis der vollen Kette, und es ist genau das der feinen Rechnung.
+    Fensterlauf, Verlaufsumbau und Agent tun es, mit oder ohne Cache, und
+    der nächste Lauf trifft es im Cache.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+    drill = document.ops[-1].id
+
+    cold = _window(document, profile)
+    rescued = _window(document, profile, cache=cache)
+    fine = evaluate(document, profile, quality="fine")
+    called.clear()
+    again = _window(document, profile, cache=cache)
+
+    assert rescued.complete, [str(finding.message) for finding in rescued.scene.report.findings]
+    assert rescued.solvers[drill].strategy == "jittered", rescued.solvers[drill]
+    assert rescued.reads_quality, "ein fein gerechneter Schritt fragt nach der Güte"
+    shown = rescued.scene.objects["obj_1"].mesh
+    expected = fine.scene.objects["obj_1"].mesh
+    assert shown.triangle_count == expected.triangle_count
+    assert math.isclose(shown.volume, expected.volume, rel_tol=1e-12)
+    assert cold.complete and cold.object_hashes == rescued.object_hashes, (
+        "ohne Cache sagt der Fensterlauf etwas anderes als mit"
+    )
+    assert again.complete and not called, f"der zweite Lauf rechnete neu: {called}"
+
+
+def test_a_rescued_step_is_kept_even_when_a_later_one_stops(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Was die volle Kette gerettet hat, rechnet hinter einem Halt nicht noch einmal.
+
+    Ein angehaltener Lauf legt sonst nichts in den Cache (§15.6). Ohne
+    Ausnahme kostete am Kundenteil jede Änderung an einem späteren,
+    anhaltenden Schritt die 17 s des geretteten noch einmal.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    History(document).apply(
+        "Bohrung, die es nicht gibt",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_99", "diameter": 6.0},
+            )
+        ],
+    )
+    cache = ResultCache()
+    rescued = document.ops[-2].id
+
+    first = _window(document, profile, cache=cache)
+    assert first.stopped_at == document.ops[-1].id, "Voraussetzung: der letzte Schritt hält an"
+    assert first.solvers[rescued].strategy == "jittered", "Voraussetzung: der vorige ist gerettet"
+    called.clear()
+    second = _window(document, profile, cache=cache)
+
+    assert second.stopped_at == document.ops[-1].id
+    assert "jittered" not in called, f"der gerettete Schritt rechnete noch einmal: {called}"
+
+
+def test_the_full_chain_says_its_verdict_once_with_the_step_of_today(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Bestätigt die volle Kette den Halt, gilt ihr Satz, und zwar ohne Nachrechnen.
+
+    Am Kundenteil sagte sie „Das Werkzeug deckt ihn vollständig ab“, der
+    hilfreichere Satz. Jede Änderung dahinter rechnete den Schritt sonst
+    wieder mit allen Stufen — 17 s für dieselbe Auskunft. Der gemerkte Satz
+    trägt die Kennung, die der Schritt heute hat: Verschieben und Einfügen
+    vergeben neue bei gleichem Schlüssel, und ein Befund am alten Schritt
+    führte *Eingabe korrigieren* ins Leere.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+    drill = document.ops[-1].id
+
+    first = _window(document, profile, cache=cache)
+    tried = list(called)
+    called.clear()
+    renumbered = dataclasses.replace(
+        document,
+        ops=[*document.ops[:-1], dataclasses.replace(document.ops[-1], id=OpId(drill + 1000))],
+    )
+    second = _window(renumbered, profile, cache=cache)
+
+    assert first.stopped_at == drill and second.stopped_at == drill + 1000
+    assert "voxel" in tried, f"die volle Kette lief nicht: {tried}"
+    halt = next(finding for finding in first.scene.report.findings if finding.op_id == drill)
+    assert all(action.id != "use_voxel_stage" for action in halt.suggestions), (
+        "der Satz verweist weiter auf eine Kette, die schon gelaufen ist"
+    )
+    assert first.reads_quality and second.reads_quality
+    assert not called, f"der zweite Lauf rechnete den Schritt noch einmal: {called}"
+    again = next(finding for finding in second.scene.report.findings if finding.code == halt.code)
+    assert again.op_id == drill + 1000, "der gemerkte Halt nennt den Schritt von damals"
+    assert str(again.message) == str(halt.message)
+
+
+def test_a_helper_that_died_in_the_full_chain_is_tried_again(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Gemerkt wird nur das Urteil der vollen Kette, kein verlorener Hilfsprozess.
+
+    Der Satz dazu rät, den Schritt noch einmal zu versuchen; gemerkt hielt
+    der nächste Lauf an, ohne eine Stufe zu rufen — eine Sackgasse bis zum
+    Projektwechsel.
+    """
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.kernel_process import KernelHelperLostError
+
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    patched = boolean_module._run_stage
+    lost = [True]
+
+    def dies_once(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name == "jittered" and lost:
+            lost.clear()
+            raise KernelHelperLostError()
+        return patched(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", dies_once)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+
+    first = _window(document, profile, cache=cache)
+    second = _window(document, profile, cache=cache)
+
+    assert first.stopped_at == document.ops[-1].id, "Voraussetzung: der Hilfsprozess starb"
+    assert second.complete, "der verlorene Hilfsprozess wurde als Urteil gemerkt"
+    assert "jittered" in called
+
+
+def test_a_question_of_the_step_comes_once_per_run(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Rechnet der Schritt mit der vollen Kette nach, kommt seine Frage nicht noch einmal.
+
+    Der zweite Aufruf bekam dasselbe ``ctx.ask``, und im Fenster stand
+    dieselbe Frage im selben Lauf zweimal am Bildschirm.
+    """
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    registry = Registry()
+    _asking_cut(registry)
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
+    asked: list[str] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    result = _window(document, profile, registry=registry, ask=answer)
+
+    assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+    assert result.solvers[document.ops[-1].id].strategy == "jittered"
+    assert asked == ["Welche Seite?"]
+
+
+def test_a_halt_after_a_question_is_not_kept(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Hat der Schritt gefragt, merkt sich der Cache sein Urteil nicht.
+
+    Die Antwort steht nirgends im Schlüssel; der nächste Lauf fragt wieder,
+    und eine andere Wahl kann anders ausgehen.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    registry = Registry()
+    _asking_cut(registry)
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
+    asked: list[str] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    cache = ResultCache()
+    first = _window(document, profile, registry=registry, ask=answer, cache=cache)
+    called.clear()
+    second = _window(document, profile, registry=registry, ask=answer, cache=cache)
+
+    assert first.stopped_at == second.stopped_at == document.ops[-1].id
+    assert asked == ["Welche Seite?", "Welche Seite?"]
+    assert "voxel" in called, "der zweite Lauf nahm ein gemerktes Urteil statt zu fragen"
+
+
+def test_a_move_is_judged_with_the_full_chain_like_the_window(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Der Verlaufsumbau sagt nicht ab, was das Fenster danach rechnet.
+
+    Er prüfte das umgebaute Dokument im Entwurf ohne volle Kette und sagte
+    „Das würde die Kette anhalten — geändert wurde nichts“ über einen
+    Schritt, den das Fenster gerettet hätte.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+    from app.core.scene.revision import dependencies, revise
+
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={})])
+    history.apply(
+        "Schieben", [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 5.0})]
+    )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 10.0, "depth": 0.0},
+            )
+        ],
+    )
+    cache = ResultCache()
+    window = _window(history.document, profile, cache=cache)
+    assert window.complete, "Voraussetzung: der Entwurf rettet die Bohrung"
+    ops = history.operations
+    context = dependencies(history.document, window)
+    plan = history.plan_move([ops[2].id], ops[1].id, context)
+
+    revision = revise(
+        history,
+        plan,
+        evaluate=lambda document: _window(document, profile, cache=cache),
+        baseline=window,
+        context=context,
+    )
+
+    assert revision.result.complete
+    moved = revision.plan.document(history.document)
+    assert [entry.op for entry in sorted(moved.ops, key=lambda entry: entry.id)] == [
+        "create_box",
+        "drill_hole",
+        "translate_object",
+    ]
+
+
+def test_the_agent_keeps_a_step_that_only_the_full_chain_carries(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Der Agent verwirft keinen Schritt, den das Fenster rechnet.
+
+    Er prüfte jeden Schritt im Entwurf ohne volle Kette, nahm ihn bei
+    „… sagt erst die vollständige“ zurück und meldete „Die Kette hält an“.
+    Und er rechnet den geretteten Schritt nicht nach jedem weiteren neu.
+    """
+    from app.core.agent.session import AgentSession
+    from app.core.backends.llm import Reply, ToolCall
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import ProjectSources, new_project
+    from tests.scripted_backend import ScriptedBackend
+
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="drill_hole",
+                            arguments={
+                                "objects": ["obj_1"],
+                                "diameter": 5.0,
+                                "x": 0.0,
+                                "y": 0.0,
+                                "z": 10.0,
+                                "depth": 0.0,
+                            },
+                        ),
+                    )
+                ),
+                Reply(tool_calls=(ToolCall(id="2", name="create_box", arguments={}),)),
+                Reply(text="Loch gebohrt, zweiter Quader daneben."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Bohr ein Loch in den Quader")
+
+    assert [draft.op for draft in proposal.drafts] == ["drill_hole", "create_box"]
+    assert proposal.stopped != "halted", [str(finding.message) for finding in proposal.findings]
+    assert "jittered" in called, "Voraussetzung: nur die volle Kette trägt den Schritt"
+    assert called.count("jittered") == 1, f"jede Prüfung rechnete den Schritt neu: {called}"
+
+
+@pytest.mark.parametrize("stages", [("direct",), ("direct", "welded")])
+def test_a_step_that_wants_its_own_stages_gets_no_full_chain(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch, stages: Any
+) -> None:
+    """RM-534: Verlangt ein Schritt ausdrücklich seine Stufen, bleibt es dabei.
+
+    Auch die Entwurfskette selbst, ausdrücklich verlangt: Die volle Güte gäbe
+    ihm dieselben Stufen noch einmal — in jedem Lauf umsonst, und danach
+    dieselbe Absage. Entscheidend ist, ob die Güte gekürzt hat
+    (``BooleanFailedError.cut_short``), nicht welche Stufen liefen.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    registry = Registry()
+    _asking_cut(registry, stages=stages)
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
+
+    result = _window(document, profile, registry=registry, ask=lambda _q, c: c[0])
+
+    assert result.stopped_at == document.ops[-1].id
+    assert called == list(stages), called
+
+
+def test_window_revision_and_agent_go_the_full_chain_and_previews_do_not() -> None:
+    """RM-534, Anschluss: Wer den Schalter setzt, steht im Quelltext fest (§17.2).
+
+    Fensterlauf, Verlaufsumbau und Agent entscheiden über den Stand und setzen
+    ``full_chain_when_stuck``; jede andere Auswertung der Sitzung ist eine
+    Vorschau und setzt ihn nicht — sonst kostete ein überdeckendes Werkzeug
+    je Wert im Dialog die 20 s der Voxelstufe.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+
+    def own_nodes(function: ast.AST) -> list[ast.AST]:
+        # Jeder Aufruf zählt bei seiner innersten Funktion: ``_RevisionWorker.work``
+        # umschließt nur das innere ``run`` und ist selbst keine Vorschau.
+        found: list[ast.AST] = []
+        pending = list(ast.iter_child_nodes(function))
+        while pending:
+            node = pending.pop()
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+                continue
+            found.append(node)
+            pending.extend(ast.iter_child_nodes(node))
+        return found
+
+    def calls(path: str) -> dict[str, list[bool]]:
+        tree = ast.parse((root / path).read_text(encoding="utf-8"))
+        found: dict[str, list[bool]] = {}
+        for function in ast.walk(tree):
+            if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for node in own_nodes(function):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "evaluate"
+                ):
+                    flagged = any(
+                        keyword.arg == "full_chain_when_stuck"
+                        and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is True
+                        for keyword in node.keywords
+                    )
+                    found.setdefault(function.name, []).append(flagged)
+        return found
+
+    window = calls("app/ui/session.py")
+    agent = calls("app/core/agent/session.py")
+    assert window["run_evaluation"] == [True]
+    assert window["run"] == [True], "der Verlaufsumbau rechnet wie das Fenster danach"
+    assert agent["_evaluate"] == [True]
+    previews = {
+        name: flags for name, flags in window.items() if name not in {"run_evaluation", "run"}
+    }
+    assert previews and not any(any(flags) for flags in previews.values()), previews
+
+
+def test_a_preview_takes_known_verdicts_but_never_computes_the_full_chain(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534, §17.2: Vorschauen bleiben beim Entwurf (Entscheidung Robert).
+
+    Die Voxelstufe kostet an einem überdeckenden Werkzeug 20 s, und eine
+    Vorschau läuft je Wert im Dialog. Sie rechnet die volle Kette deshalb nie
+    selbst: Kalt hält sie mit ``short_chain_only`` — das sperrt *Übernehmen*
+    nicht —, und was der Fensterlauf schon gerettet hat, nimmt sie.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+
+    cold = evaluate(document, profile, quality="draft", cache=cache)
+    assert cold.stopped_at == document.ops[-1].id
+    assert cold.short_chain_only, "der Halt der Vorschau ist als schnelle Rechnung gekennzeichnet"
+    assert "jittered" not in called and "voxel" not in called, called
+    _window(document, profile, cache=cache)
+    called.clear()
+    warm = evaluate(document, profile, quality="draft", cache=cache)
+
+    assert warm.complete and not called, "die Vorschau nimmt das Ergebnis der vollen Kette"
+    assert not warm.short_chain_only
+
+
+def test_a_window_halt_is_no_short_chain_halt(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach der vollen Kette ist ein Halt ein Urteil, kein Halt der schnellen Rechnung."""
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    document = _drilled_box(profile)
+
+    halted = _window(document, profile)
+
+    assert halted.stopped_at == document.ops[-1].id and not halted.short_chain_only
+
+
+def test_a_memory_shortage_in_the_full_chain_is_not_kept(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Eine Stufe, der der Speicher ausging, urteilt nicht über den Schritt.
+
+    Gemerkt hielt der nächste Lauf an, ohne eine Stufe zu rufen — eine
+    Sackgasse bis zum Projektwechsel, dieselbe Bauart wie beim verlorenen
+    Hilfsprozess.
+    """
+    from app.core.geom import boolean as boolean_module
+
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    patched = boolean_module._run_stage
+    short = [True]
+
+    def runs_out(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name == "voxel" and short:
+            short.clear()
+            raise MemoryError
+        return patched(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", runs_out)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+
+    first = _window(document, profile, cache=cache)
+    called.clear()
+    second = _window(document, profile, cache=cache)
+
+    assert first.stopped_at == second.stopped_at == document.ops[-1].id
+    assert "voxel" in called, f"der Speichermangel wurde als Urteil gemerkt: {called}"
+
+
+def test_a_foreign_failure_that_read_the_quality_is_no_fine_verdict(
+    document: Document, profile: Profile
+) -> None:
+    """RM-534: Auch ein Programmfehler nach der Frage nach der Güte hält nicht als fein."""
+    registry = Registry()
+
+    @register_op(
+        name="draft_breaks",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def make(ctx: OpContext) -> OpResult:
+        if ctx.quality == "draft":
+            raise RuntimeError("nur im Entwurf")
+        return OpResult(outputs=[SceneObject(id="", name="Probe", mesh=_mesh(10.0))])
+
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="draft_breaks")])
+
+    halted = evaluate(document, profile, quality="draft", registry=registry)
+
+    assert halted.stopped_at == document.ops[-1].id
+    assert halted.reads_quality
+
+
+def test_the_full_chain_says_in_the_progress_why_the_step_takes_longer(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Fortschrittszeile nennt den Schritt und warum er jetzt länger rechnet."""
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    said: list[str] = []
+
+    _window(document, profile, progress=lambda _fraction, text: said.append(text))
+
+    assert any("die vollständige läuft" in text for text in said), said
+
+
+def test_a_rescued_step_that_asked_waits_for_a_complete_run(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Sofort gemerkt wird nur, was ohne Frage entstand.
+
+    Die Antwort steht nirgends im Schlüssel; erst ein vollständiger Lauf legt
+    das Ergebnis in den Cache, wie jedes andere. Hält ein späterer Schritt,
+    fragt der nächste Lauf wieder.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    registry = Registry()
+    _asking_cut(registry)
+
+    @register_op(
+        name="always_stops",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def stops(ctx: OpContext) -> OpResult:
+        raise GeometryError()
+
+    History(document, registry=registry).apply(
+        "Probe", [OperationDraft(op="asking_cut"), OperationDraft(op="always_stops")]
+    )
+    asked: list[str] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    cache = ResultCache()
+    _window(document, profile, registry=registry, ask=answer, cache=cache)
+    called.clear()
+    _window(document, profile, registry=registry, ask=answer, cache=cache)
+
+    assert asked == ["Welche Seite?", "Welche Seite?"]
+    assert "jittered" in called, (
+        "ein Ergebnis mit Frage ging vor einem vollständigen Lauf in den Cache"
+    )
 
 
 @pytest.mark.parametrize("following", [False, True])

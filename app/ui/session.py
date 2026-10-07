@@ -1231,6 +1231,13 @@ def _kernel_gave_up(result: EvaluationResult) -> bool:
     )
 
 
+#: Was das Band einer Vorschau sagt, deren schnelle Rechnung an einem Schritt
+#: nicht durchkam (RM-534): Übernehmen rechnet ihn vollständig.
+SHORT_CHAIN_PREVIEW: Final = _(
+    "Die schnelle Vorschau kommt hier nicht durch. Übernehmen rechnet den Schritt vollständig."
+)
+
+
 def _stop_reason(result: EvaluationResult) -> str:
     """Warum die Kette anhielt — der Befund, der den Halt trägt.
 
@@ -1465,6 +1472,9 @@ class _RevisionWorker(Worker):
                 cancelled=self.cancel,
                 cache=session.cache,
                 sources=self._sources,
+                # Der Umbau entscheidet wie der Fensterlauf danach (RM-534):
+                # sonst sagte er ab, was das Fenster rechnet.
+                full_chain_when_stuck=True,
             )
 
         try:
@@ -1814,6 +1824,12 @@ class Session(QObject):
 
         Ist es gesetzt, ist es auch ``last_result``; ``result_current`` ist dann
         falsch, weil die Merkmale noch fehlen (siehe :meth:`picture_first`)."""
+        self.picture_current = False
+        """Ob :attr:`picture` den Stand des Dokuments zeigt (RM-534).
+
+        Eine Änderung während der Erkennung lässt das Bild stehen, bis das
+        nächste kommt; bis dahin gehören seine Zeilen im Bericht zum vorigen
+        Stand."""
         self.pending_orphan_check = False
         """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
         einmal, nicht immer."""
@@ -2412,6 +2428,7 @@ class Session(QObject):
         self._bind_filament_profiles()
         self._dirty = True
         self.result_current = False
+        self.picture_current = False
         self._keep_insertion_valid()
         self.projectChanged.emit()
         self.evaluate_async()
@@ -5220,6 +5237,7 @@ class Session(QObject):
     def evaluate_async(self) -> None:
         """Ein Lauf je Dokument; eine neuere Anfrage ersetzt eine wartende (§15.6)."""
         self.result_current = False
+        self.picture_current = False
         self.check_states.clear()
         if self._worker is not None and self._worker.isRunning():
             self._rerun_pending = True
@@ -5339,6 +5357,9 @@ class Session(QObject):
             on_recognition_answer=self._recognition_answered_in_worker,
             missing_basis=missing_profile_basis(document),
             check_status=worker.checkWith.emit if isinstance(worker, _EvaluationWorker) else None,
+            # Die Antwort der kurzen Kette ist im Fenster keine: Der Bericht
+            # sagte „… sagt erst die vollständige“, und keiner fragte sie (RM-534).
+            full_chain_when_stuck=True,
         )
         # Bei jedem Lauf und nicht nur beim Öffnen: Solange mit einem
         # mitgebrachten oder einem Ersatzdrucker gerechnet wird, sagt es der
@@ -5613,6 +5634,7 @@ class Session(QObject):
             selection=self._selection,
             cancelled=self.agent_cancel,
             progress=self.agentProgress.emit,
+            cache=self.cache,
             views=self._pending_views,
         )
         proposal = agent.propose(request)
@@ -5933,6 +5955,13 @@ class Session(QObject):
                 counted=counted,
                 unseen=unseen,
             )
+        if result.stopped_at is not None and result.short_chain_only:
+            # **Die schnelle Rechnung kam nicht durch — das ist kein Urteil über
+            # den Schritt** (RM-534, §17.2): Eine Vorschau rechnet die volle
+            # Kette nicht selbst, *Übernehmen* tut es. Gesperrt wird nichts,
+            # und das Band sagt, was beim Übernehmen geschieht, statt den
+            # Entwurfssatz als Fehler zu zeigen.
+            return result.scene, None, str(SHORT_CHAIN_PREVIEW)
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
             # sähe aus wie „keine Änderung", und das wäre gelogen.
@@ -6559,6 +6588,7 @@ class Session(QObject):
             return
         self.last_result = picture
         self.picture = picture
+        self.picture_current = True
         self.result_generation += 1
         self.result_current = False
         self.pictureChanged.emit(picture)

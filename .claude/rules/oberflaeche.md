@@ -271,6 +271,11 @@ eine neue Freigabe. Nur eine ausdrücklich gemeldete Rückfrage darf ohne Ergebn
 zum Übernehmen weitergehen; eine erfolgreiche Rechnung mit ausgelassenem Bild
 liefert eine leere `SceneDifference`, kein `None`.
 
+## Der Prüfbericht nennt den vorigen Stand
+
+Rechnet es über 200 ms, steht das Alte als „Voriger Stand:“ mit gesperrten
+Handlungen da (`ReportPanel.set_running`, RM-534).
+
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 
 **Wo Felder stehen, tragen sie ihren Namen — und „wo“ heißt jede Stelle**, nicht
@@ -349,10 +354,8 @@ des Themas.
 
 ## Eine Auswahl fällt nie still auf etwas Größeres
 
-Trägt der neue Stand ein gewähltes Merkmal nicht mehr, hebt
-`ObjectTree.show_scene` die Wahl auf und merkt sie in `lost_selection`;
-`MainWindow._say_features_lost` sagt es nach den Wiederwahlen und nur ohne
-eigene Handlung seit dem letzten aktuellen Bild (Warum: Begründung).
+Fehlt ein gewähltes Merkmal im neuen Stand, hebt `ObjectTree.show_scene` die
+Wahl auf (`lost_selection`), und `MainWindow._say_features_lost` sagt es.
 
 ## Barrierefreiheit
 
@@ -409,8 +412,7 @@ auch Funktionen ohne Widget; ein übergebenes Argument hat Vorrang.
 
 Oberflächentests laufen offscreen (`tests/conftest.py`); eine neue Ansicht ohne
 Test in `tests/test_ui.py` oder einer spezielleren Datei ist unfertig. Ein
-Widget im Test braucht `qt_app` (`tests.md`) — ohne endet der Lauf je nach
-Reihenfolge mit 0xC0000409 ohne ein Wort.
+Widget im Test braucht `qt_app` (`tests.md`; Warum: Begründung).
 
 **Ein modaler Dialog auf einem Startweg hält die ganze Suite an** —
 `QDialog.exec()` wartet offscreen auf einen Klick, den es nie gibt, und die

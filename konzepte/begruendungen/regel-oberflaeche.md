@@ -490,6 +490,19 @@ Wiederwahlen, weil die den Körper aus `lost_selection` lesen, und nur ohne
 eigene Handlung seit dem letzten aktuellen Bild — sonst überschriebe es deren
 Quittung mit Rückweg (Regel 19).
 
+Wann gesprochen wird: erst nach den Wiederwahlen, weil die den Körper aus
+`lost_selection` lesen, und nur ohne eigene Handlung seit dem letzten aktuellen
+Bild — sonst überschriebe es deren Quittung mit Rückweg (Regel 19).
+
+## Der Prüfbericht sagt, wenn er zum vorigen Stand gehört
+
+Rechnet es über 200 ms und gehört das Gezeigte nicht zum Dokument, sagt der
+Kopf „Wird neu berechnet …“; was beim Beginn dastand, trägt „Voriger Stand:“
+in `muted`, ohne Folgezeile, Handlungen gesperrt (`ReportPanel.set_running`,
+Anschluss `MainWindow._follow_the_run_in_the_report`). Endet der Lauf ohne
+Ergebnis, steht der Grund auch unter einem Fehler (`set_stale`). Sonst liest
+der Kunde einen widerrufenen Fehler als gültig (RM-534).
+
 ## Barrierefreiheit
 
 Die Grauleiter der Ersatzfarben stand im Original mitten im Punkt „Dasselbe

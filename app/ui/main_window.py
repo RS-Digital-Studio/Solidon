@@ -387,7 +387,7 @@ from app.ui.render.api import PointerEvent
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
-from app.ui.session import AskRequest, Session, TriangleCounts
+from app.ui.session import SHORT_CHAIN_PREVIEW, AskRequest, Session, TriangleCounts
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
@@ -21733,6 +21733,8 @@ class MainWindow(QMainWindow):
             click()
 
         told: list[str] = []
+        passed_on: list[bool] = []
+        """Gesetzt, wenn nur die schnelle Rechnung nicht durchkam (:func:`explained`)."""
 
         def pictured(difference: Any) -> None:
             """Das erste Bild gibt weder Auftrag noch wartenden Übernehmen-Klick frei."""
@@ -21766,6 +21768,16 @@ class MainWindow(QMainWindow):
         def explained(reason: str) -> None:
             """Eine fachliche Absage kann ein nachgereichtes leeres Bild nicht aufheben."""
             told.append(reason)
+            if reason == str(SHORT_CHAIN_PREVIEW):
+                # **Die schnelle Rechnung kam nicht durch — das ist keine
+                # Absage** (RM-534, §17.2): Ein Bild gibt es ohne die volle
+                # Kette nicht, und die rechnet *Übernehmen*. Das Band sagt es;
+                # gewartet wird auf kein Bild, gesperrt wird nichts.
+                passed_on.append(True)
+                approval.required = False
+                self._preview_explained(reason)
+                self._refresh_preview_block()
+                return
             if approval.required is not False:
                 approval.problem = reason
             self._preview_explained(reason)
@@ -21780,7 +21792,7 @@ class MainWindow(QMainWindow):
             approval.reviewing = False
             self._finish_preview_progress()
             if difference is None:
-                if not approval.questioned:
+                if not approval.questioned and not passed_on:
                     failed(None)
                 else:
                     self._show_preview(None)
@@ -23548,6 +23560,7 @@ class MainWindow(QMainWindow):
         # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
         self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result, self.session.project.document)
+        self._follow_the_run_in_the_report()
         if self._pose_report_target is not None:
             if self._pose_report_target in result.scene.objects:
                 self._gesture_analysis_changed()
@@ -23740,6 +23753,9 @@ class MainWindow(QMainWindow):
         if self._announcement_document is not self.session.project.document:
             self._announcement_document = self.session.project.document
             self.announce("")
+        # Eine Änderung während der Erkennung meldet kein ``busyChanged``; das
+        # Bild davor gehört ab hier zum vorigen Stand.
+        self._follow_the_run_in_the_report()
         # Eine gezeichnete Trennlinie liegt auf einem Körper, den es nach einer
         # Änderung am Dokument so nicht mehr geben muss — ein neues Projekt,
         # ein Undo, eine Operation von woanders. Sie stehen zu lassen hieße,
@@ -23852,14 +23868,14 @@ class MainWindow(QMainWindow):
 
     def _update_review_status(self) -> None:
         """Bindet Prüfzustände an denselben Dokumentstand wie den Bericht."""
+        from app.ui.print_contract import NOT_CURRENT_REASON
+
         target = self.session.review_target()
         reasons = list(target.missing)
-        if self.session.busy:
-            reasons.append(tr("Die Bewertung läuft; der vorige Stand bleibt sichtbar."))
-        elif not self.session.result_current:
-            reasons.append(
-                tr("Für den aktuellen Stand liegt noch keine abgeschlossene Bewertung vor.")
-            )
+        # Dass gerechnet wird, sagt der Bericht selbst, sobald es dauert
+        # (``ReportPanel.set_running``) — eine Quelle für den Satz (RM-534).
+        if not self.session.result_current:
+            reasons.append(str(NOT_CURRENT_REASON))
         states = tuple(self.session.check_states.values())
         if not states and self.session.result_current and self.session.last_result is not None:
             states = self.session.last_result.check_states
@@ -24256,6 +24272,13 @@ class MainWindow(QMainWindow):
 
     def _on_busy(self, busy: bool) -> None:
         self._update_review_status()
+        self._follow_the_run_in_the_report()
+        if busy and self._halted:
+            # **Die Haltansage weicht dem Fortschritt** (RM-534): Sie galt dem
+            # Stand, der gerade neu gerechnet wird. Hält die Kette wieder an,
+            # sagt das Ergebnis es neu.
+            self._halted = False
+            self.announce("")
         if busy:
             self._run_timing.begin()
         else:
@@ -24287,6 +24310,23 @@ class MainWindow(QMainWindow):
             self._resume_preview_after_idle()
             self._resume_map_after_idle()
             self._export_when_current()
+
+    def _follow_the_run_in_the_report(self) -> None:
+        """Der Bericht sagt, wenn seine Zeilen zum vorigen Stand gehören (RM-534).
+
+        Das ist so, solange gerechnet wird und das Gezeigte nicht zum
+        Dokument gehört. Ein Bild vor der Erkennung gehört dazu (KUNDE-14):
+        Seine Zeilen sind die des neuen Stands, nur noch nicht vollständig —
+        das sagt der Prüfumfang. Nach einer Änderung währenddessen gehört es
+        nicht mehr dazu. Endet der Lauf ohne Ergebnis, abgebrochen oder
+        gescheitert, sagt der Bericht, dass er zum letzten vollständigen
+        Stand gehört.
+        """
+        session = self.session
+        shown = session.picture is not None and session.picture_current
+        unsettled = not session.result_current and not shown
+        self.report.set_running(session.busy and unsettled)
+        self.report.set_stale(not session.busy and unsettled and session.last_result is not None)
 
     def _resume_map_after_idle(self) -> None:
         """Die gewählte Analysekarte kommt nach der Rechnung wieder.

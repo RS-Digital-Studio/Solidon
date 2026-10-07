@@ -136,7 +136,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   Konkurrenz um einen Verweis hält vorher an, Netzgruppen benennen keine native
   Topologie um. Jede Ausgabe wird samt Zuordnung und Hash vorbereitet, bevor
   Eingänge verbraucht werden; Cache und Fertigmeldung erst nach der letzten
-  Abschlussprüfung.
+  Abschlussprüfung, außer dem Urteil der vollen Kette (`_FullChain`, `kern.md`).
 - **Die Frage vor der Vollerkennung** (Regel in `kern.md`):
   `_full_recognition_allowed`, `_ask_once_for_large_bodies`,
   `_recognition_choice`, `_skipped_recognition` (`perceive.too_large`),
@@ -233,9 +233,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   Prozesswert zu lesen gibt, nimmt `False` heraus. Der volle `profile_key`
   bleibt bytegleich — er benennt auch Filamentbuchungen.
 - **Merkmale reisen durch beide Ebenen** (`cache.feature_to_data`): Maßquellen
-  (fehlende bleiben unbekannt; `bore_advice` trennt Beleg, Schätzung und
-  Vorgabe, auch im eigenen Bausteinsatz; `at_hole_advice` erhält weiter nur
-  den Durchmesser) und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter
+  und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter
   Name ohne Beleg behält keinen Formnachweis). **Nicht geprüft wird die
   Dreieckszahl**: Der Cache trägt die **rohe** Ausgabe; erst `_with_features`
   bindet — vorbereitete Objekte zu cachen ist verworfen. `_warm_figures` fasst

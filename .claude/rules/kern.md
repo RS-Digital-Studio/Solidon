@@ -183,7 +183,8 @@ ihn ruft, hält das Fenster an (RM-212).
   ausgelasteten Kernen (RM-380). `test_a_job_gives_the_same_bytes_in_the_helper_as_here`
   misst es je Rechnung im Hilfsprozess.
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
-  Verfeinerung die erwartete des Ergebnisses.
+  Verfeinerung die erwartete des Ergebnisses, bei der Voxelstufe
+  (`kernel_jobs.voxel`) die Zellzahl des Rasters.
 - **Ein voller Datenträger pausiert, er schaltet nicht ab** (RM-436): ENOSPC
   beim Transfer rechnet für `FULL_DISK_PAUSE_SECONDS` im Prozess, danach nimmt
   die nächste große Rechnung den Hilfsprozess wieder. Jede Rechnung, die deshalb
@@ -300,6 +301,17 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 `OpContext.scene` ist nur lesend (Regel 3). Zweimal auswerten ist identisch;
 eine geänderte Objektzahl hält die Auswertung an, statt still
 weiterzurechnen.
+
+**Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
+eine Vorschau nie** (RM-534, §17.2): Ein Halt mit `BooleanFailedError` aus
+gekürzter Kette (`cut_short`) an einem Schritt, der nach der Güte fragte,
+rechnet mit `full_chain_when_stuck` im selben Lauf voll (`_FullChain`) —
+gesetzt nur in `Session.run_evaluation`, `_RevisionWorker` und
+`AgentSession`. Eine Vorschau nimmt ein vorliegendes Urteil aus dem Cache,
+hält sonst mit `short_chain_only`, *Übernehmen* bleibt frei.
+`ResultCache.refuse` merkt nur ein Urteil mit gelaufener Voxelstufe und ohne
+`transient`; auf die Platte geht nur ein vollständiger Durchlauf (§15.6). Ein
+Halt nimmt `reads_quality` mit, sonst gälte ein Entwurfshalt als fein.
 
 **Ein Befund über mehrere Körper nennt sie alle** (`Finding.object_ids`;
 `prepare.named_for` setzt sie aus den Indizes, *Fügeweg prüfen* selbst): Die

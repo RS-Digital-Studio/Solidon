@@ -136,7 +136,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig](#rm-534) | Kundenrückmeldungen | Ursache an der Kundendatei gemessen; Umsetzung in vier Teilen (Laufzustand, volle Kette selbst, Halt im Entwurf nie fein, kein Hin und Her) nicht begonnen |
 | [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Entschieden (Robert, am Punkt); Flächenzug, Absagen, Maßgruppe, Tasche und Zapfen nach diesen Entscheidungen bauen, die drei falschen Ergebnisse beheben |
 | [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
@@ -4906,37 +4905,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   echten Fenster beim Release (RM-213): Rechtsklick an einem und an zwei Körpern, Entf an zwei
   Körpern mit einem Strg+Z zurück, *Aushöhlen* an einer Fläche, eine Karte schweben lassen und
   zurücklegen, in beiden Themen.
-
-<a id="rm-534"></a>
-
-- [ ] **RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig
-  (Fragebogen S-20261006-5be329).** Kunde: „manchmal wird im Prüfbericht auch Fehler angezeigt und
-  kurz darauf ist die Berechnung erst fertig“. Gemessen am HEAD `3a5d607f3` mit der Kundendatei
-  (Bericht `pruefbericht-bericht.md` im Zustandsordner von RM-533): Beim Wechsel des Radius
-  2,0 → 1,0 (Schritt 18) bleibt die Zeile „Der Radius ist für diese Kanten zu groß“ mit voller
-  Schwere stehen, der Kopf sagt „Übergabe nicht empfohlen“, die Statuszeile „Die Kette hält an“ —
-  3,7 s lang, bis das Ergebnis kommt. Der Hinweis „Die Bewertung läuft“ wird gerade dann
-  unterdrückt (`ReportPanel`: `self._review_missing and not counts["error"]`). Widerlegt sind
-  Zwischenstände aus dem Bild zuerst, `check_states` und die Vorschau eines offenen Dialogs.
-  Dazu ein eigener Fehler: Ein Halt im Entwurf gilt als fein. `evaluate.py` bricht beim Halt ab,
-  bevor `reads_quality` gesetzt wird, `fine_current` ist wahr, und Druckdialog und Export rechnen
-  die volle Kette nie, obwohl der Satz „… sagt erst die vollständige“ sie ankündigt. Am
-  Kundenschritt 6 (*Merkmal entfernen* am Stift) bestätigt die volle Kette den Fehler mit dem
-  besseren Satz („das Werkzeug deckt ihn vollständig ab“); der Kunde nahm zweimal *Reparieren und
-  erneut versuchen*, das dort nicht helfen konnte.
-
-  **Fix in vier Teilen (Entscheidung aus Kundensicht):** (1) Läuft eine Auswertung länger als
-  200 ms, sagt der Kopf „Wird neu berechnet …“; alte Zeilen bleiben als voriger Stand sichtbar,
-  mit Text als zweiter Kodierung (Regel 18), ihre Knöpfe gesperrt, die Reitermarke zählt sie nicht
-  neu, die Haltansage weicht dem Fortschritt; `print_contract.handoff_state` bekommt den
-  Laufzustand als eigenen Eingang. (2) Hält der Entwurf mit `BooleanFailedError` ohne Voxelstufe
-  an, rechnet die Sitzung die volle Kette einmal selbst; bis dahin steht der Laufzustand, kein
-  Fehler; *Voxelstufe erzwingen* bleibt. (3) Ein Halt im Entwurf ist nie `fine_current`. (4) Das
-  feine Urteil gilt für folgende Entwurfsläufe, solange Schritt und Eingang gleich sind — kein
-  Hin und Her. Tests, die heute Verhalten zusichern und bleiben: `test_print_contract.py`
-  (Übergabezustand ohne Lauf), `test_boolean.py` (Entwurfssatz), `test_ui.py` (`use_voxel_stage`);
-  der Halt gehört neben RM-494 in `test_evaluation.py`. **Abnahme:** Während eines Laufs steht
-  kein alter Fehler als gültig da; ein Export nach einem Entwurfshalt rechnet fein.
 
 <a id="rm-535"></a>
 

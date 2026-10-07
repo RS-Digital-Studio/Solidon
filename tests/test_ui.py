@@ -18102,6 +18102,161 @@ def test_the_halt_message_goes_when_the_chain_runs_again(window: MainWindow) -> 
     )
 
 
+def test_a_new_run_takes_the_halt_message_and_the_report_follows_it(window: MainWindow) -> None:
+    """RM-534: Rechnet es, gilt der Halt von vorhin nicht als Stand.
+
+    „Die Kette hält an“ stand in der Statuszeile, bis das nächste Ergebnis
+    kam, und der Bericht zeigte den alten Fehler mit voller Schwere — 3,7 s
+    am Kundenteil, während die Rechnung lief, die ihn widerrief. Jetzt weicht
+    die Ansage dem Lauf, der Bericht geht in den Laufzustand (nach 0,2 s,
+    ``ReportPanel.set_running``), und hält die Kette wieder an, sagt das
+    Ergebnis es neu.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+    window.session.apply(
+        "Bohrung setzen",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={"diameter": 5000.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    drill = window.session.project.document.ops[-1].id
+    assert "hält an" in window._announcement, "Voraussetzung: die Kette hält an"
+
+    assert window.session.change_params(drill, {"diameter": 6000.0})
+
+    assert window.session.busy, "Voraussetzung: es rechnet"
+    assert window._announcement == "", "die Haltansage weicht dem Lauf"
+    assert window.report._running_delay.isActive() or window.report.running(), (
+        "der Bericht weiß, dass seine Zeilen zum vorigen Stand gehören"
+    )
+    window.session.wait_for_idle()
+    assert window.session.last_result.stopped_at == drill
+    assert "hält an" in window._announcement, "das neue Ergebnis sagt den Halt neu"
+    assert not window.report.running(), "ein Ergebnis ist kein voriger Stand"
+
+
+def test_the_window_goes_the_full_chain_where_the_short_one_ends(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534, Anschluss: Das Fenster rechnet den Schritt mit allen Stufen, der Dialog sperrt nicht.
+
+    Der Kern kann es; hier wird belegt, dass die Anwendung es tut. Am
+    Kundenteil hielt die kurze Kette mit „… sagt erst die vollständige“, und
+    keiner fragte die vollständige. Die übrigen Schritte bleiben im Entwurf —
+    der Lauf ist deshalb nicht fein, und Export wie Slicer rechnen weiter nach.
+    Und der Kunde änderte den Radius im Dialog: Dessen Vorschau sperrte
+    *Übernehmen* mit dem Entwurfssatz. Die Vorschau rechnet die volle Kette
+    nicht selbst (§17.2), sagt aber, dass *Übernehmen* es tut, und sperrt
+    nichts.
+    """
+    import trimesh
+
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+    real = boolean_module._run_stage
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    window.session.apply(
+        "Bohrung setzen",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={"diameter": 3.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    drill = window.session.project.document.ops[-1].id
+    result = window.session.last_result
+
+    assert result.stopped_at is None, [str(entry.message) for entry in result.scene.report.findings]
+    assert result.solvers[drill].strategy == "jittered", result.solvers[drill]
+    assert window.session.last_quality == "draft"
+    assert not window.session.fine_current, "ein Schritt fein macht den Lauf nicht fein"
+
+    from time import monotonic, sleep
+
+    window.edit_operation(drill, given={"diameter": 4.0})
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert window.session.wait_for_idle(30_000)
+    deadline = monotonic() + 30
+    while monotonic() < deadline:
+        QApplication.processEvents()
+        if dialog._accept_button.isEnabled() and dialog.can_accept():
+            break
+        sleep(0.01)
+    band = window.viewport.banner.note.text()
+    assert "Übernehmen rechnet den Schritt vollständig" in band, band
+    assert dialog._accept_button.isEnabled(), "der Entwurfssatz sperrt Übernehmen nicht"
+    dialog.accept()
+    assert window._op_dialog is not dialog
+    assert window.session.wait_for_idle(30_000)
+    changed = window.session.last_result
+    assert changed.stopped_at is None, [
+        str(entry.message) for entry in changed.scene.report.findings
+    ]
+    assert changed.solvers[drill].strategy == "jittered"
+
+
+def test_the_report_follows_a_change_during_recognition_and_a_cancelled_run(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Ein Bild nach einer Änderung und ein abgebrochener Lauf sind kein gültiger Stand.
+
+    Eine Änderung während der Erkennung meldet kein ``busyChanged``; das Bild
+    davor galt weiter als aktuell, seine Zeilen standen ohne Vorsatz und mit
+    freien Knöpfen da. Und nach einem Abbruch las sich der alte Bericht wieder
+    als gültig.
+    """
+    from app.ui.session import Session
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    session = window.session
+    session.picture = session.last_result
+    session.picture_current = True
+    session.result_current = False
+    monkeypatch.setattr(Session, "busy", property(lambda _self: True))
+
+    window._follow_the_run_in_the_report()
+    assert not window.report._running_delay.isActive(), "das Bild zeigt den heutigen Stand"
+
+    seen: list[bool] = []
+    session.projectChanged.connect(lambda: seen.append(session.picture_current))
+    monkeypatch.setattr(session, "evaluate_async", lambda: None)
+    session._changed()
+    assert seen and seen[-1] is False, (
+        "die Änderung nimmt dem Bild die Geltung, bevor das Fenster fragt"
+    )
+    assert window.report._running_delay.isActive() or window.report.running(), (
+        "nach der Änderung gehört das Bild zum vorigen Stand"
+    )
+
+    monkeypatch.setattr(Session, "busy", property(lambda _self: False))
+    session.picture = None
+    window._follow_the_run_in_the_report()
+    assert not window.report.running()
+    assert window.report._stale, "abgebrochen: der Bericht gehört zum letzten vollständigen Stand"
+
+
 def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) -> None:
     """Die Bausteine haben keinen Menüort mehr — dafür einen am gewählten Teil.
 

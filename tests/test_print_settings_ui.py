@@ -782,6 +782,7 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         _foundation_cache=None,
         _map_request=None,
         _announcement_document=document,
+        _follow_the_run_in_the_report=lambda: None,
         _split_points=(),
         _quiet_host=None,
         _drop_feature_preview=lambda: None,

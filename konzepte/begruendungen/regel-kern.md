@@ -404,3 +404,29 @@ den Fall, den ein grüner CI-Lauf nicht zurückholt." Und `ComfyBackend.readines
 > Und die erste Frage ist, ob das Zielprogramm es **selbst** kann: ComfyUI
 > kann freistellen, seit 0.33, mit Gewichten unter MIT. Damit fiel neben der
 > Lizenz auch ein Installationsschritt weg.
+
+## Wo die kurze Kette nur ausgeht (RM-534)
+
+Die Regel in voller Länge, mit dem Warum:
+
+**Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
+eine Vorschau nie** (RM-534, §17.2): Hält ein Schritt mit einem
+`BooleanFailedError`, dessen Kette die Güte gekürzt hat (`cut_short`, nicht
+eine verlangte Stufenfolge) und der *Voxelstufe erzwingen* anbietet, und hat
+er nach der Güte gefragt, rechnet `evaluate` ihn mit `full_chain_when_stuck`
+im selben Lauf mit der vollen Kette (`_FullChain`). Gesetzt wird es nur in
+`Session.run_evaluation`, `_RevisionWorker` und `AgentSession` — die
+Voxelstufe kostet an einem überdeckenden Werkzeug Sekunden, in einer Vorschau
+je Wert. Eine Vorschau nimmt ein Urteil der vollen Kette aus dem Cache und
+hält sonst mit `short_chain_only`; das Band sagt `SHORT_CHAIN_PREVIEW`, und
+*Übernehmen* bleibt frei. Eine Frage des ersten Durchgangs beantwortet der
+zweite aus dem Gedächtnis (`_WatchedAsk.again`). Ohne Frage merkt sich die
+Speicherebene sofort das gerettete Ergebnis und das Urteil der vollen Kette
+(`ResultCache.refuse`: nur ein `BooleanFailedError` mit gelaufener
+Voxelstufe und ohne `transient` — Speichermangel ist kein Urteil —, als
+Ausnahme; der Befund entsteht am Treffer mit der heutigen Kennung), auch wenn
+ein späterer Schritt anhält; auf die Platte geht nur ein vollständiger
+Durchlauf (§15.6). Der Agent rechnet mit dem Sitzungscache
+(`AgentSession.cache`). Ein Halt nimmt mit, ob der Schritt nach der Güte
+fragte (`reads_quality`); sonst gilt ein Entwurfshalt als fein, und Export wie
+Slicer rechnen nie nach.

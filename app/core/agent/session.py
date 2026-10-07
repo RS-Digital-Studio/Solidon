@@ -65,6 +65,7 @@ from app.core.knowledge import rules
 from app.core.log import get_logger
 from app.core.perceive.digest import digest, new_feature_lines
 from app.core.registry import GATHERED_KINDS, REGISTRY, Registry, validate
+from app.core.scene.cache import ResultCache
 from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.fits import numbered_name
 from app.core.scene.history import History, OperationDraft
@@ -371,6 +372,11 @@ class AgentSession:
     einer Antwort des Modells gibt es keine Stelle dafür."""
     progress: ProgressFn | None = None
     """Meldet je Schritt, was gerade läuft — siehe :data:`ProgressFn`."""
+    cache: ResultCache = field(default_factory=ResultCache)
+    """Die Ergebnisse, die der Zug zwischen seinen Prüfungen wiederverwendet —
+    im Fenster der Sitzungscache. Ohne ihn rechnete jede Prüfung nach einem
+    Schritt den ganzen Stapel neu, einen von der vollen Kette geretteten
+    Schritt eingeschlossen (RM-534)."""
     views: tuple[tuple[str, bytes], ...] = ()
     """Gerenderte Ansichten der Szene (§23), beschriftete PNG-Bilder. Sie
     erreichen nur ein Backend mit ``supports_images`` — der Textpfad bleibt
@@ -1091,6 +1097,9 @@ class AgentSession:
             registry=self.registry,
             sources=self.sources,
             ask=lambda question, options: self.ask(question, list(options)),
+            cache=self.cache,
+            # Der Agent prüft jeden Schritt wie das Fenster danach (RM-534).
+            full_chain_when_stuck=True,
         )
 
     def _origin(self, active: rules.RuleSet) -> Origin:

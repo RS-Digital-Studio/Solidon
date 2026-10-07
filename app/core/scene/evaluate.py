@@ -42,8 +42,10 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
     SUPPRESS_STEP,
+    USE_VOXEL_STAGE,
     AmbiguityError,
     AppError,
+    BooleanFailedError,
     InternalError,
     NativeReferenceLost,
     OperationCancelled,
@@ -149,6 +151,7 @@ from app.core.types import (
     OpContext,
     Operation,
     OpId,
+    OpResult,
     Parameter,
     ParameterName,
     Profile,
@@ -289,6 +292,12 @@ class EvaluationResult:
     ``progress`` und ``cancelled`` sie im Hintergrund nach — die Schritte
     selbst treffen dort den Cache, es rechnet nur die Erkennung. Leer heißt:
     Der Merker kannte alles, oder es gab nichts zu erkennen."""
+    short_chain_only: bool = False
+    """Ob der Lauf hielt, weil die Güte die Kette gekürzt hat und er die volle nicht rechnen durfte.
+
+    Das ist der Halt einer Vorschau (RM-534): Er sagt nichts über den Schritt,
+    nur über die schnelle Rechnung — *Übernehmen* rechnet ihn vollständig und
+    wird deshalb nicht gesperrt."""
     reads_quality: bool = True
     """Ob ein Schritt dieses Laufs nach der Güte gefragt hat (``ctx.quality``).
 
@@ -463,6 +472,7 @@ def evaluate(
     on_recognition_answer: RecognitionAnswered | None = None,
     check_status: Callable[[CheckState], None] | None = None,
     missing_basis: tuple[str, ...] = (),
+    full_chain_when_stuck: bool = False,
 ) -> EvaluationResult:
     """Rechnet die Szene, die das Dokument beschreibt.
 
@@ -480,6 +490,14 @@ def evaluate(
     auch bei Abbruch ohne Ergebnis. ``missing_basis`` nennt vom Aufrufer
     nicht bestätigte Grundlagen; etwa ein ersetztes Druckerprofil bestätigt
     keine Druckerwahl. Davon abhängige Prüfungen bleiben ``not_started``.
+
+    ``full_chain_when_stuck`` gilt Fensterlauf, Verlaufsumbau und Agent: Hält
+    ein Schritt im Entwurf nur an, weil die Güte die Kette gekürzt hat
+    (:func:`_only_the_short_chain`), rechnet derselbe Lauf ihn fein weiter,
+    also mit allen Stufen (RM-534, §17.2). Eine Vorschau rechnet das nie
+    selbst: Die Voxelstufe kostet an einem überdeckenden Werkzeug 20 s, und
+    das je Wert im Dialog. Sie nimmt, was die volle Kette schon geurteilt hat
+    (Ergebnis oder Halt im Cache), und hält sonst mit ``short_chain_only``.
     """
     checks = _EvaluationChecks(check_status, missing_basis, cancelled or NeverCancelled())
     checks.start()
@@ -498,6 +516,7 @@ def evaluate(
             detect_features=detect_features,
             on_recognition_answer=on_recognition_answer,
             checks=checks,
+            full_chain_when_stuck=full_chain_when_stuck,
         )
     except OperationCancelled:
         checks.finish("cancelled")
@@ -617,6 +636,7 @@ def _evaluate(
     detect_features: bool = True,
     on_recognition_answer: RecognitionAnswered | None = None,
     checks: _EvaluationChecks | None = None,
+    full_chain_when_stuck: bool = False,
 ) -> EvaluationResult:
     """Geometrie und Befunde auswerten; auch ein Halt erhält anschließend Verwendungsdaten."""
     if checks is None:
@@ -687,6 +707,7 @@ def _evaluate(
     # ``_without_stray_inputs`` und ``_without_absent_inputs``.
     ran: list[Operation] = []
     reads_quality = False
+    short_chain_only = False
     pending: list[tuple[str, CachedResult, bool]] = []
     #: Körper, deren Erkennung ``detect_features=False`` ausgelassen hat.
     recognition_left_out: set[ObjectId] = set()
@@ -966,6 +987,17 @@ def _evaluate(
             stopped_at = operation.id
             break
         cached = cache.get(key) if cache is not None else None
+        refused = cache.refusal(key) if cache is not None and cached is None else None
+        if refused is not None:
+            # Die volle Kette hat über diesen Schritt schon geurteilt (RM-534):
+            # derselbe Satz, ohne ihn noch einmal mit allen Stufen zu rechnen.
+            # Der Befund entsteht hier neu, mit der Kennung, die der Schritt
+            # heute trägt — Verschieben und Einfügen vergeben neue bei
+            # gleichem Schlüssel.
+            findings.append(_finding_from(refused, operation))
+            stopped_at = operation.id
+            reads_quality = True
+            break
 
         if cached is not None:
             # Unverändert weiterreichen: der Umbau hier warf ohne Not den
@@ -1027,9 +1059,28 @@ def _evaluate(
                 bound_edges=binding.selections,
             )
             kernel_process.take_notice()
+            full_chain = _FullChain(
+                allowed=quality == "draft" and full_chain_when_stuck,
+                quality=asked_quality,
+                ask=watched,
+                announce=partial(_announce_full_chain, progress, position / total, spec.title),
+            )
             try:
-                produced = spec.fn(context)
+                produced = full_chain.run(spec.fn, context)
             except AppError as error:
+                # **Ein Halt, der nach der Güte gefragt hat, ist kein feines
+                # Urteil** (RM-534): Ohne diese Zeile hielt die Sitzung einen
+                # Entwurfshalt für fein, und Druckdialog wie Export rechneten
+                # die volle Kette nie — obwohl der Satz im Bericht genau sie
+                # ankündigte.
+                reads_quality = reads_quality or asked_quality.read or full_chain.ran
+                if cache is not None and full_chain.judged(error) and not watched.used:
+                    cache.refuse(key, error.with_traceback(None))
+                short_chain_only = (
+                    not full_chain.ran
+                    and isinstance(error, BooleanFailedError)
+                    and _only_the_short_chain(error)
+                )
                 findings.append(_finding_from(error, operation))
                 stopped_at = operation.id
                 break
@@ -1058,6 +1109,8 @@ def _evaluate(
                     problem,
                     exc_info=problem,
                 )
+                # Auch dieser Halt fragte womöglich nach der Güte (RM-534).
+                reads_quality = reads_quality or asked_quality.read or full_chain.ran
                 wrapped = InternalError(
                     detail=f"{type(problem).__name__}: {problem}",
                     values={"operation": str(operation.op)},
@@ -1120,9 +1173,19 @@ def _evaluate(
                 transform=produced.transform,
                 continuations=tuple(tuple(entries) for entries in produced.feature_continuations),
                 answered=dict(produced.answered),
-                reads_quality=asked_quality.read,
+                reads_quality=asked_quality.read or full_chain.ran,
             )
-            reads_quality = reads_quality or asked_quality.read
+            reads_quality = reads_quality or asked_quality.read or full_chain.ran
+            if full_chain.ran and cache is not None and not watched.used:
+                # **Was die volle Kette gerettet hat, merkt sich die
+                # Speicherebene sofort** (RM-534) — auch wenn ein späterer
+                # Schritt anhält und dieser Lauf sonst nichts in den Cache
+                # legt. Das Ergebnis folgt allein aus seinem Schlüssel, ohne
+                # Frage; ohne diese Zeile rechnete jede Änderung hinter einem
+                # Halt den geretteten Schritt noch einmal mit allen Stufen. Auf
+                # die Platte geht es wie jedes Ergebnis erst mit einem
+                # vollständigen Lauf (§15.6).
+                cache.put(key, result, to_disk=False)
 
         if len(result.objects) != len(operation.outputs):
             findings.append(_object_count_finding(operation, len(result.objects)))
@@ -1661,7 +1724,87 @@ def _evaluate(
         fit_sights=fit_sights,
         recognition_left_out=frozenset(recognition_left_out & scene.objects.keys()),
         reads_quality=reads_quality,
+        short_chain_only=short_chain_only,
     )
+
+
+def _only_the_short_chain(error: BooleanFailedError) -> bool:
+    """Ob der Halt nur sagt, dass die kurze Kette ausging (§17.2).
+
+    Gekürzt haben muss die Güte, nicht der Aufrufer: Ein Schritt, der
+    ausdrücklich nur eine Stufe oder die Entwurfskette verlangt, bekommt mit
+    der vollen Güte nichts anderes (``BooleanFailedError.cut_short``). Und die
+    Ausnahme muss selbst *Voxelstufe erzwingen* anbieten — eine zweite
+    Entscheidung derselben Frage liefe auseinander.
+    """
+    return error.cut_short and any(action.id == USE_VOXEL_STAGE.id for action in error.suggestions)
+
+
+def _announce_full_chain(
+    progress: ProgressFn, fraction: float, step: TranslatableText | str
+) -> None:
+    """Sagt in der Fortschrittszeile, warum dieser Schritt jetzt länger dauert."""
+    progress(
+        fraction,
+        str(
+            _(
+                "{step}: Die schnelle Rechnung kam nicht weiter, die vollständige läuft …",
+                step=step,
+            )
+        ),
+    )
+
+
+@dataclass
+class _FullChain:
+    """Ein Schritt, an dem im Entwurf nur die kurze Kette ausging, rechnet weiter (RM-534).
+
+    Im Entwurf endet die Kette nach zwei Stufen (§17.2, §31). Blieb dort
+    nichts übrig, sagte der Bericht „… sagt erst die vollständige“, die
+    Kette hielt an, und der Kunde nahm *Reparieren und erneut versuchen* —
+    zweimal, am Kundenteil, wo die volle Kette den Fehler dann mit einem
+    hilfreicheren Satz bestätigte. Jetzt rechnet derselbe Lauf genau diesen
+    Schritt fein, also mit allen Stufen; die Schritte davor und danach
+    bleiben im Entwurf. Das ist deterministisch: Ob die kurze Kette ausgeht, hängt nur an
+    den Eingängen des Schritts, also auch, ob er fein rechnet.
+
+    Eine Frage, die der Schritt im ersten Durchgang gestellt hat, beantwortet
+    der zweite aus dem Gedächtnis (``_WatchedAsk.again``) — gefragt wird je
+    Lauf einmal.
+    """
+
+    allowed: bool
+    quality: _WatchedQuality
+    ask: _WatchedAsk
+    announce: Callable[[], None]
+    ran: bool = False
+    """Ob die volle Kette gerechnet hat — ihr Ergebnis und ihr Halt fragen nach der Güte."""
+
+    def run(self, fn: Callable[[OpContext], OpResult], context: OpContext) -> OpResult:
+        try:
+            return fn(context)
+        except BooleanFailedError as error:
+            if not self.allowed or not self.quality.read or not _only_the_short_chain(error):
+                raise
+        self.ran = True
+        self.announce()
+        self.ask.again()
+        return fn(dataclasses.replace(context, quality=cast(Quality, _WatchedQuality("fine"))))
+
+    def judged(self, error: AppError) -> bool:
+        """Ob ``error`` das Urteil der vollen Kette ist — und damit eines, das bleibt.
+
+        Nur das merkt sich der Cache (``ResultCache.refuse``): Ein verlorener
+        Hilfsprozess, eine ohne Wahl geschlossene Frage oder eine Stufe, der
+        der Speicher ausging, sagt nichts über den Schritt, und ihr Satz rät,
+        es noch einmal zu versuchen.
+        """
+        return (
+            self.ran
+            and isinstance(error, BooleanFailedError)
+            and "voxel" in tuple(error.attempted)
+            and not error.transient
+        )
 
 
 class _WatchedQuality(str):
@@ -5612,11 +5755,21 @@ class _WatchedAsk:
     die zu fragen anfängt, ohne es aufzuschreiben.
     """
 
-    __slots__ = ("_ask", "used")
+    __slots__ = ("_ask", "_given", "_replay", "used")
 
     def __init__(self, ask: AskFn) -> None:
         self._ask = ask
+        self._given: dict[tuple[str, tuple[str, ...]], str] = {}
+        self._replay = False
         self.used = False
+
+    def again(self) -> None:
+        """Derselbe Schritt rechnet noch einmal: Was er schon gefragt hat, kommt aus dem Gedächtnis.
+
+        Für die volle Kette nach der kurzen (``_FullChain``, RM-534). Ohne das
+        stand dieselbe Frage im selben Lauf zweimal am Bildschirm.
+        """
+        self._replay = True
 
     def optional(self, question: str, choices: list[str]) -> str:
         """Eine optionale Vollerkennung darf geschlossen werden; der Import läuft weiter.
@@ -5631,8 +5784,11 @@ class _WatchedAsk:
 
     def __call__(self, question: str, choices: list[str]) -> str:
         self.used = True
+        asked_as = (question, tuple(choices))
+        if self._replay and asked_as in self._given:
+            return self._given[asked_as]
         try:
-            return self._ask(question, choices)
+            answer = self._ask(question, choices)
         except QuestionDeclined:
             # **Ohne Wahl geschlossen heißt: dieser Schritt wartet** — nicht
             # „die Rechnung ist abgebrochen". Jede Frage eines Schritts geht
@@ -5642,6 +5798,8 @@ class _WatchedAsk:
             raise AmbiguityError(
                 QUESTION_LEFT_OPEN, suggestions=(CORRECT_INPUT, SHOW_HISTORY)
             ) from None
+        self._given[asked_as] = answer
+        return answer
 
 
 #: Der Befund, wenn eine Frage eines Schritts ohne Wahl geschlossen wurde

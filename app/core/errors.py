@@ -711,6 +711,8 @@ class BooleanFailedError(GeometryError):
         *,
         attempted: tuple[SolverStage, ...] = (),
         seed: int | None = None,
+        cut_short: bool = False,
+        transient: bool = False,
         **kwargs: Any,
     ) -> None:
         # **„Auf allen Stufen" war beim Arbeiten im Fenster nie wahr.** Dort
@@ -738,6 +740,10 @@ class BooleanFailedError(GeometryError):
         )
         self.attempted = attempted
         self.seed = seed
+        self.cut_short = cut_short
+        """Ob die Güte die Kette gekürzt hat und nicht der Aufrufer (RM-534)."""
+        self.transient = transient
+        """Ob eine Stufe am Speicher scheiterte — dann urteilt die Kette nicht über den Schritt."""
 
 
 class OutOfBuildVolume(GeometryError):
