@@ -373,7 +373,9 @@ def _support_seconds(
 def test_supports_run_their_path_through_their_speed_outside_the_minimum_layer_time() -> None:
     """Unter dem Hut steht je Schicht der Ring ``30² − (10 + 2 · 0,5)²`` mm²
     (seitlicher Abstand zum Stiel), gefüllt mit 20 % Bahn von 0,5 mm Breite:
-    ``779 · 0,2 / 0,5`` mm je Schicht bei 40 mm/s.
+    ``779 · 0,2 / 0,5`` mm je Schicht, dazu die Verbindungen am Rand des
+    Musters, ``SUPPORT_CONNECTION_SHARE`` seines Umfangs ``4 · 30 + 4 · 11`` mm,
+    alles bei 40 mm/s.
 
     Die Mindestschichtzeit bremst und zählt die Stütze nicht: Gemessen am Pilz
     lag die Rechnung mit Abbremsen 19 % (PrusaSlicer) und 11 % (CuraEngine)
@@ -382,7 +384,8 @@ def test_supports_run_their_path_through_their_speed_outside_the_minimum_layer_t
     """
     result = _mushroom()
     motion = _motion(support_speed=40.0)
-    per_layer = (30.0 * 30.0 - 11.0 * 11.0) * 0.2 / 0.5 / 40.0
+    edge = print_time.SUPPORT_CONNECTION_SHARE * (4.0 * 30.0 + 4.0 * 11.0)
+    per_layer = ((30.0 * 30.0 - 11.0 * 11.0) * 0.2 / 0.5 + edge) / 40.0
     for minimum in (0.0, 5.0):
         settings = _supported(cooling__minimum_layer_time=minimum)
         added = _support_seconds(result, settings, motion)
@@ -392,14 +395,16 @@ def test_supports_run_their_path_through_their_speed_outside_the_minimum_layer_t
 
 def test_the_contact_layers_under_the_overhang_print_dense_at_their_own_speed() -> None:
     """Zwei Kontaktschichten direkt unter dem Hut: dort die volle Fläche mit der
-    Kontaktdichte des Profils und dem Kontakttempo, darunter das Muster."""
+    Kontaktdichte des Profils und dem Kontakttempo, ohne Randverbindungen,
+    darunter das Muster mit ihnen."""
     result = _mushroom()
     ring = 30.0 * 30.0 - 11.0 * 11.0
     motion = _motion(
         support_speed=40.0, support_interface_speed=20.0, support_interface_density=0.5
     )
     layers = _under_the_cap(result)
-    expected = (layers - 2) * ring * 0.2 / 0.5 / 40.0 + 2 * ring * 0.5 / 0.5 / 20.0
+    edge = print_time.SUPPORT_CONNECTION_SHARE * (4.0 * 30.0 + 4.0 * 11.0)
+    expected = (layers - 2) * (ring * 0.2 / 0.5 + edge) / 40.0 + 2 * ring * 0.5 / 0.5 / 20.0
 
     added = _support_seconds(result, _supported(support__interface_layers=2), motion)
 
@@ -558,3 +563,341 @@ def test_a_profile_without_bridge_supports_leaves_time_and_support_unchecked() -
     assert with_support.support_material_mm3 is None and with_support.support_reason
     assert without.seconds is not None and without.seconds > 0.0
     assert not without.seconds_reason
+
+
+# --- Was der Slicer aus dem Herstellerprofil macht (RM-281, Zeitschätzung) ---------------
+
+
+def _seconds(result: SliceResult, settings: PrintSettings, motion: print_time.Motion) -> float:
+    return print_time.plate_seconds([(result, settings)], motion)
+
+
+def test_neighbouring_lines_lie_a_flow_spacing_apart() -> None:
+    """Orca und PrusaSlicer legen Vollbahnen ``Breite − Höhe · (1 − π/4)``
+    auseinander (``Flow::spacing``), Cura eine Breite. Die erste Schicht des
+    Würfels füllt ``18²`` mm² mit 25 mm/s; der Unterschied ist genau die
+    Mehrlänge ``324 · (1/Abstand − 1/0,5)``."""
+    settings = _settings(shell__bottom_layers=1)
+    result = _box(20.0, 20.0, 20.0)
+    gap = 0.5 - 0.2 * (1.0 - math.pi / 4.0)
+
+    width = _seconds(result, settings, _motion())
+    spaced = _seconds(result, settings, _motion(flow_spacing=True))
+
+    assert print_time.spacing(0.5, 0.2, _motion(flow_spacing=True)) == pytest.approx(gap)
+    assert spaced - width == pytest.approx(324.0 * (1.0 / gap - 1.0 / 0.5) / 25.0, rel=1e-3)
+
+
+def test_a_shell_thickness_adds_layers_where_the_count_falls_short() -> None:
+    """Orca ``bottom_shell_thickness`` (Kobra 2: 3 Schichten, 1,2 mm): Der
+    Slicer legt weiter Vollschichten, bis die Dicke erreicht ist. Am Würfel mit
+    einer Bodenschicht werden die Schichten 2 bis 6 voll statt leer:
+    ``5 · 324 / 0,5 / 200`` s."""
+    assert print_time.shell_layers(3, 1.2, 0.2) == 6
+    assert print_time.shell_layers(5, 1.0, 0.2) == 5
+    assert print_time.shell_layers(3, None, 0.2) == 3
+    assert print_time.shell_layers(0, 1.0, 0.2) == 0
+    settings = _settings(shell__bottom_layers=1)
+    result = _box(20.0, 20.0, 4.0)
+
+    plain = _seconds(result, settings, _motion())
+    thick = _seconds(result, settings, _motion(bottom_shell_thickness=1.2))
+
+    assert thick - plain == pytest.approx(5 * 324.0 / 0.5 / 200.0, rel=1e-3)
+
+
+def _frustum() -> SliceResult:
+    """Ein Pyramidenstumpf 20 × 20 unten, 8 × 8 oben, 6 mm hoch: 45° Wände."""
+    body = trimesh.Trimesh(
+        vertices=[
+            (-10, -10, 0),
+            (10, -10, 0),
+            (10, 10, 0),
+            (-10, 10, 0),
+            (-4, -4, 6),
+            (4, -4, 6),
+            (4, 4, 6),
+            (-4, 4, 6),
+        ],
+        faces=[
+            (0, 2, 1),
+            (0, 3, 2),
+            (4, 5, 6),
+            (4, 6, 7),
+            (0, 1, 5),
+            (0, 5, 4),
+            (1, 2, 6),
+            (1, 6, 5),
+            (2, 3, 7),
+            (2, 7, 6),
+            (3, 0, 4),
+            (3, 4, 7),
+        ],
+    )
+    body.fix_normals()
+    return slice_body(MeshData.of(body), 0.2, first_layer_height=0.2, support_volume=False)
+
+
+def test_on_a_slope_the_fill_of_the_shell_layers_above_decides_what_stays_sparse() -> None:
+    """``ensure_vertical_shell_thickness``: Dünn bleibt nur, was auch in den
+    Deckschichten darüber Füllfläche ist. Am 45°-Stumpf weicht die Füllfläche
+    je Schicht 0,2 mm je Seite zurück; mit drei Deckschichten wird ein Rand von
+    zwei Schichten, 0,4 mm, voll, nach Orcas Glättung 0,2 Abstände mehr. Bei
+    Dichte null kostet nur dieser Rand Zeit: ``(a² − (a − 2 · Rand)²) / 0,5 /
+    200`` je Schicht mit Füllfläche ``a = 18 − 2 z``. Die innere Brücke unter
+    der Deckschicht fährt hier wie die Vollfüllung, sonst verschöbe die
+    kleinere dünne Fläche darunter auch sie."""
+    settings = _settings(shell__top_layers=3, speed__bridge=200.0)
+    result = _frustum()
+    band = 0.4 + 0.2 * 1.05 * 0.5
+    expected = 0.0
+    for layer in result.layers[1:]:
+        side = 18.0 - 2.0 * layer.z
+        if layer.z < 6.0 - 3 * 0.2 and side > 2.0 * band:
+            expected += (side * side - (side - 2.0 * band) ** 2) / 0.5 / 200.0
+
+    plain = _seconds(result, settings, _motion(nozzle=0.5))
+    shells = _seconds(result, settings, _motion(nozzle=0.5, vertical_shells=True))
+
+    assert shells - plain == pytest.approx(expected, rel=0.05)
+
+
+def test_sparse_lines_are_joined_along_the_wall_by_the_measured_share() -> None:
+    """Orca verbindet die Enden der dünnen Füllung am Rand (``connect_infill``):
+    beim Zickzack ``CONNECTION_SHARE["rectilinear"]`` des Umfangs ``4 · 18`` mm
+    je Schicht über der ersten, bei 200 mm/s. Ein Muster ohne Messung und Cura
+    (kein ``zig_zaggify_infill``) bekommen nichts."""
+    settings = _settings(infill__density=0.2)
+    result = _box(20.0, 20.0, 20.0)
+    share = print_time.CONNECTION_SHARE["rectilinear"]
+
+    unknown = _seconds(result, settings, _motion(flow_spacing=True, sparse_pattern="gyroid"))
+    joined = _seconds(result, settings, _motion(flow_spacing=True, sparse_pattern="rectilinear"))
+    cura = _seconds(result, settings, _motion(sparse_pattern="rectilinear"))
+
+    assert joined - unknown == pytest.approx(99 * share * 72.0 / 200.0, rel=1e-3)
+    assert cura == pytest.approx(_seconds(result, settings, _motion()), rel=CLOSE)
+
+
+def test_the_next_wall_loop_of_an_island_starts_without_retraction() -> None:
+    """Die Schleifen einer Insel liegen eine Bahn auseinander, unter
+    ``retraction_minimum_travel``: Ein Würfel mit drei Wänden zieht je Schicht
+    einmal zurück, nicht dreimal (1 mm mit 10 mm/s hin und zurück, 0,2 s)."""
+    settings = _settings(shell__wall_count=3)
+    result = _box(20.0, 20.0, 20.0)
+    retracting = _settings(shell__wall_count=3, retraction__length=1.0, retraction__speed=10.0)
+
+    added = _seconds(result, retracting, _motion()) - _seconds(result, settings, _motion())
+
+    assert added == pytest.approx(100 * 0.2, rel=1e-3)
+
+
+def _tube() -> SliceResult:
+    outer = trimesh.creation.cylinder(radius=20.0, height=2.0, sections=128)
+    inner = trimesh.creation.cylinder(radius=18.0, height=3.0, sections=128)
+    body = outer.difference(inner)
+    body.apply_translation((0.0, 0.0, 1.0))
+    return slice_body(MeshData.of(body), 0.2, first_layer_height=0.2, support_volume=False)
+
+
+def test_a_narrow_solid_runs_as_loops_along_its_shape() -> None:
+    """Orca ``detect_narrow_internal_solid_infill``: Vollfüllung ohne Kern von
+    vier Abständen läuft als Schleife entlang der Form statt in kurzen Bahnen
+    quer. Ohne Trägheit derselbe Weg, also dieselbe Zeit; mit Beschleunigung
+    und Halt an jeder Ecke (kein Ruck) ist die Schleife deutlich schneller."""
+    result = _tube()
+    settings = _settings(shell__wall_count=1, shell__bottom_layers=10)
+    loops = _motion(narrow_solid_loops=True)
+    assert _seconds(result, settings, loops) == pytest.approx(
+        _seconds(result, settings, _motion()), rel=1e-3
+    )
+    braking = {
+        "shell__wall_count": 1,
+        "speed__acceleration": 1000.0,
+        "speed__outer_wall_acceleration": 1000.0,
+    }
+    walls = _seconds(result, _settings(**braking), _motion())
+    solid = _settings(shell__bottom_layers=10, **braking)
+
+    across = _seconds(result, solid, _motion()) - walls
+    along = _seconds(result, solid, loops) - walls
+
+    assert along < 0.3 * across
+
+
+def test_the_support_reaches_the_whole_overhang_not_only_beyond_the_angle() -> None:
+    """Orca und Prusa weiten einen erkannten Überhang auf den ganzen Überstand
+    über die Schicht darunter (``detect_overhangs``: „Offset the support regions
+    back to a full overhang“). Ein Keil, der je 0,2-mm-Schicht 0,4 mm je Seite
+    ausladet, bei 45° Grenze: Die Säulen füllen den Raum unter beiden Flanken,
+    ``2 · ∫ (10 − 2 z) · 20 dz`` von 0 bis 5 = 1000 mm³. Vorher stützte jede
+    Schicht nur den halben Überstand, und die Säulen standen in Streifen."""
+    body = trimesh.Trimesh(
+        vertices=[
+            (-5, -10, 0),
+            (5, -10, 0),
+            (15, -10, 5),
+            (-15, -10, 5),
+            (-5, 10, 0),
+            (5, 10, 0),
+            (15, 10, 5),
+            (-15, 10, 5),
+        ],
+        faces=[
+            (0, 1, 2),
+            (0, 2, 3),
+            (4, 6, 5),
+            (4, 7, 6),
+            (0, 4, 5),
+            (0, 5, 1),
+            (1, 5, 6),
+            (1, 6, 2),
+            (2, 6, 7),
+            (2, 7, 3),
+            (3, 7, 4),
+            (3, 4, 0),
+        ],
+    )
+    body.fix_normals()
+    result = slice_body(
+        MeshData.of(body), 0.2, first_layer_height=0.2, overhang_angle=45.0, support_volume=False
+    )
+    settings = _supported(
+        support__style="tree",
+        support__density=1.0,
+        support__xy_gap=0.0,
+        support__threshold_angle=45.0,
+    )
+
+    volume = print_time.support_material(result, settings, _motion())
+
+    assert volume == pytest.approx(1000.0, rel=0.05)
+
+
+def test_the_plate_comparison_takes_its_support_from_the_columns_of_the_time() -> None:
+    """Mit :class:`Motion` rechnet die Gegenprobe die Stützmenge aus denselben
+    Säulen wie die Druckzeit (:func:`print_time.support_material`), nicht aus
+    dem Rauminhalt mal Dichte."""
+    from app.core.slice.estimate import plate_comparison
+    from app.core.slice.findings import analysed
+    from app.core.types import SceneObject
+
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    stem.apply_translation((0.0, 0.0, 5.0))
+    cap = trimesh.creation.box(extents=(30.0, 30.0, 2.0))
+    cap.apply_translation((0.0, 0.0, 11.0))
+    mesh = MeshData.of(trimesh.boolean.union([stem, cap]))
+    settings = _supported()
+    entry = SceneObject(id="pilz", name="Pilz", mesh=mesh)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    motion = _motion(support_speed=40.0)
+
+    compared = plate_comparison(
+        0,
+        [(entry, mesh, settings)],
+        profile,
+        keep_arrangement=True,
+        separate_objects=True,
+        motion=motion,
+    )
+    limits = profiles.analysis_limits(
+        profiles.for_process(profile, settings, effective=True), entry
+    )
+    result = analysed(mesh, settings, settings.support.threshold_angle, limits[0])
+
+    assert compared.support_material_mm3 == pytest.approx(
+        print_time.support_material(result, settings, motion), rel=CLOSE
+    )
+
+
+def test_the_manufacturer_chain_names_what_the_slicer_makes_of_the_layers() -> None:
+    """Orca: Bahnbreiten je Rolle (Anteile von der Düse), Mindestdicke der
+    Schalen, ganze senkrechte Schalen, kleinste dünne Fläche, schmale
+    Vollfüllung als Schleife, Füllmuster. Prusa: dieselben
+    Fragen unter seinen Schlüsseln; beide legen Bahnen nach ``Flow::spacing``."""
+    from app.core.export import manufacturer
+
+    orca = manufacturer.orca_motion(
+        {
+            **_ELEGOO_PROCESS,
+            "outer_wall_line_width": "0.42",
+            "inner_wall_line_width": "0.45",
+            "sparse_infill_line_width": "112.5%",
+            "internal_solid_infill_line_width": "0.42",
+            "top_surface_line_width": "0.42",
+            "top_shell_thickness": "1.0",
+            "bottom_shell_thickness": "1.2",
+            "ensure_vertical_shell_thickness": "ensure_all",
+            "minimum_sparse_infill_area": "15",
+            "sparse_infill_pattern": "rectilinear",
+        },
+        _ELEGOO_MACHINE,
+        {"slow_down_min_speed": ["20"]},
+        0.4,
+    )
+    moderate = manufacturer.orca_motion(
+        {
+            **_ELEGOO_PROCESS,
+            "ensure_vertical_shell_thickness": "ensure_moderate",
+            "detect_narrow_internal_solid_infill": "0",
+        },
+        _ELEGOO_MACHINE,
+        {"slow_down_min_speed": ["20"]},
+        0.4,
+    )
+    prusa = manufacturer.prusa_motion(
+        {
+            "min_print_speed": "15",
+            "external_perimeter_extrusion_width": "0.45",
+            "perimeter_extrusion_width": "0.45",
+            "infill_extrusion_width": "0.45",
+            "solid_infill_extrusion_width": "0.45",
+            "top_infill_extrusion_width": "0.42",
+            "top_solid_min_thickness": "0.7",
+            "bottom_solid_min_thickness": "0.5",
+            "ensure_vertical_shell_thickness": "enabled",
+            "solid_infill_below_area": "0",
+            "fill_pattern": "grid",
+        },
+        0.4,
+    )
+
+    assert orca is not None and moderate is not None and prusa is not None
+    assert (orca.outer_wall_width, orca.inner_wall_width) == (0.42, 0.45)
+    assert orca.sparse_width == pytest.approx(0.45)
+    assert (orca.solid_width, orca.top_width) == (0.42, 0.42)
+    assert orca.flow_spacing and prusa.flow_spacing
+    assert (orca.top_shell_thickness, orca.bottom_shell_thickness) == (1.0, 1.2)
+    assert orca.vertical_shells and not moderate.vertical_shells
+    assert orca.minimum_sparse_area == 15.0
+    assert orca.narrow_solid_loops and not moderate.narrow_solid_loops
+    assert orca.sparse_pattern == "rectilinear"
+    assert (prusa.outer_wall_width, prusa.top_width) == (0.45, 0.42)
+    assert (prusa.top_shell_thickness, prusa.bottom_shell_thickness) == (0.7, 0.5)
+    assert prusa.vertical_shells
+    assert prusa.minimum_sparse_area is None
+    assert prusa.sparse_pattern == "grid"
+
+
+def test_what_the_chain_leaves_open_comes_from_the_measured_program_defaults() -> None:
+    """ElegooSlicer und OrcaSlicer fahren die innere Brücke mit 150 % der
+    Brücke, auch wo die Kette des Herstellers den Schlüssel nicht nennt
+    (Konfigurationsblock der Seitenablage, 06.10.2026); ohne den Wert rechnete
+    die Zeitgegenprobe sie mit dem Brückentempo, 50 statt 75 mm/s."""
+    from app.core.export import manufacturer
+
+    process = {
+        key: value for key, value in _ELEGOO_PROCESS.items() if key != "internal_bridge_speed"
+    }
+    for program in ("elegooslicer", "orcaslicer"):
+        motion = manufacturer.orca_motion(
+            {**manufacturer.PROGRAM_DEFAULTS[program], **process},
+            _ELEGOO_MACHINE,
+            {"slow_down_min_speed": ["20"]},
+            0.4,
+        )
+        assert motion is not None
+        assert motion.internal_bridge_speed == pytest.approx(75.0), program
+    for program, value in (("orcaslicer", "ensure_all"), ("bambustudio", "enabled")):
+        assert manufacturer.PROGRAM_DEFAULTS[program]["ensure_vertical_shell_thickness"] == value
+    assert manufacturer.PRUSA_PROGRAM_DEFAULTS["ensure_vertical_shell_thickness"] == "enabled"

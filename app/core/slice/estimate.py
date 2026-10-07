@@ -536,7 +536,14 @@ def plate_comparison(
                     support_floor_mm3=floor_mm3,
                     channels_blocked=blocked,
                 )
-        support += support_material(result.support_volume, settings)
+        if motion is not None:
+            # Dieselben Säulen, die die Druckzeit fährt: voller Überstand und
+            # Verbindungen am Rand wie im Slicer (:func:`print_time.support_material`).
+            from app.core.slice import print_time
+
+            support += print_time.support_material(result, settings, motion, cancelled=cancelled)
+        else:
+            support += support_material(result.support_volume, settings)
     return PlateComparison(
         plate,
         support,
@@ -689,12 +696,14 @@ def _support_missing(expected: PlateComparison, printed: float, estimated: float
 
 
 #: Um welchen Faktor Stützmenge der Schätzung und der Druckdatei höchstens
-#: auseinanderliegen, damit der Zeitvergleich mit Stützen etwas sagt. Gemessen
-#: (04.10.2026, Stand ohne Kanten- und Brückenfälle): Pilz in fünf Slicern
-#: 0,75 bis 1,77, Seitenablage bis 0,53; die Waschschüssel 0,24 bis 0,37 und
-#: der Arbeitsplattenreiniger 0,08 — dort stützt der Slicer gewölbte Flächen,
-#: die die Schichtanalyse als schmale Bänder liest, und eine Zeitwarnung hieße
-#: nur, dass die Stützen andere sind.
+#: auseinanderliegen, damit der Zeitvergleich mit Stützen etwas sagt. Seit die
+#: Menge aus den Säulen der Druckzeit kommt (:func:`print_time.support_material`,
+#: 06.10.2026), liegt sie bei Musterstützen an Pilz, Seitenablage, Wedge-Lock,
+#: Arbeitsplattenreiniger und Waschschüssel zwischen 0,94 und 1,14 der
+#: Druckdatei (PrusaSlicer, CuraEngine; Creality Print 0,54 bis 1,06). Bäume
+#: folgen keinem Umfang: Bambu Studio 0,59 bis 1,16, ElegooSlicer 0,12 am
+#: Reiniger bis 1,78 am Pilz — dort hieße eine Zeitwarnung nur, dass die
+#: Stützen andere sind.
 SUPPORT_TIME_AGREEMENT = 2.0
 
 

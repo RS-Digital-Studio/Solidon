@@ -223,7 +223,8 @@ ohne Mindesttempo keine Zeit), verglichen ab der ersten Schicht
 (`GcodeMetrics.printing_seconds`). Beide tragen `source="internal"`.
 **Stützen zählen außerhalb der Mindestschichtzeit**; stützt der Slicer ganz
 anders oder das Profil keine Brücken, bleibt die Zeit offen
-(`estimate.time_comparison_blocked`). Stützen ein, im G-Code unter
+(`estimate.time_comparison_blocked`); Stützmenge und -zeit teilen die Säulen
+(`print_time.support_material`). Stützen ein, im G-Code unter
 `estimate.support_floor`: `gcode.support_missing`, wo `advise.support_need`
 Stützen verlangt.
 
