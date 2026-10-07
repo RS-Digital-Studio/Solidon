@@ -589,7 +589,12 @@ class Renderer(ABC):
     # --- Zeiger -------------------------------------------------------------------
 
     @abstractmethod
-    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> int: ...
+    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> None:
+        """Ein Zuhörer für jede Zeigergeste, bis der Renderer schließt.
+
+        Abmelden gibt es nicht: Die Ansicht hört zu, solange der Renderer
+        lebt, und ``close`` löst alle (RM-316).
+        """
 
     @abstractmethod
     def deliver_pointer(self, kind: str, event: Any) -> None:

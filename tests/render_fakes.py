@@ -180,7 +180,7 @@ class RecordingRenderer(Renderer):
         self.scale = scale
         self.picks: dict[tuple[int, int], Pick] = {}
         self.item_picks: dict[tuple[int, int], Item] = {}
-        self.listeners: dict[int, Callable[[PointerEvent], None]] = {}
+        self.listeners: list[Callable[[PointerEvent], None]] = []
         self.delivered: list[PointerEvent] = []
         self.closed = False
         self.clips = 0
@@ -467,10 +467,8 @@ class RecordingRenderer(Renderer):
     def place_axes_marker(self, corner: tuple[float, float, float, float]) -> None:
         self.marker_corners.append(corner)
 
-    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> int:
-        token = len(self.listeners) + 1
-        self.listeners[token] = listener
-        return token
+    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> None:
+        self.listeners.append(listener)
 
     def deliver_pointer(self, kind: str, event: Any) -> None:
         """Ein Qt-Ereignis wie der echte Renderer in eine Zeigergeste übersetzen."""
@@ -495,7 +493,7 @@ class RecordingRenderer(Renderer):
             bool(modifiers & Qt.KeyboardModifier.AltModifier),
         )
         self.delivered.append(pointer)
-        for listener in list(self.listeners.values()):
+        for listener in list(self.listeners):
             listener(pointer)
 
     def close(self) -> None:

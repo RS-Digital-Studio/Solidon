@@ -13026,6 +13026,12 @@ def detect_faces(
     sich so die Flächen vor dem Musterfalten (etwa die Zellen einer Wabe) und
     die Menge, die :func:`planar_mask` trägt. Die Nummerierung erklärt
     :func:`_largest_first`.
+
+    **Gerechnet wird auf dem Netz, wie es kommt.** :func:`detect` schweißt
+    vorher (``_one_body``) und nimmt die ebenen Reststücke dazu
+    (``fitted.flat``); beides fehlt hier. Ein ungeschweißtes Netz ergibt
+    deshalb keine Fläche — ``plate_holes.stl`` mit ``process=False``: hier 0,
+    in :func:`detect` 6 (Review 07.10.2026).
     """
     body = mesh.raw
     entries = _planar_face_entries(mesh, planar=planar, check_cancelled=check_cancelled)

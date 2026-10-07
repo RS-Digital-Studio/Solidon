@@ -1595,7 +1595,7 @@ def test_the_pointer_listener_holds_the_view_only_weakly(
     viewport.renderer = renderer
     viewport._listen_to(renderer)
     assert len(renderer.listeners) == 1, "kein Zuhörer angemeldet"
-    (listener,) = renderer.listeners.values()
+    (listener,) = renderer.listeners
     listener(PointerEvent(kind="move", x=40, y=30))
     assert viewport._hover_at == (40, 30), "der Zuhörer erreicht die Ansicht nicht"
 

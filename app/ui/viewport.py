@@ -5162,7 +5162,6 @@ class Viewport(QWidget):
         self._navigator: Navigator | None = None
         """Die Kameraführung (§2.9); sie bekommt jede Zeigergeste, die kein
         Griff nimmt (:meth:`_on_pointer`)."""
-        self._pointer_token: int | None = None
         self._actors: dict[ObjectId, Item] = {}
         self._placement_pointer: Callable[[PointerEvent], bool] | None = None
         self._placement_resume: Callable[[PointerEvent], bool] | None = None
@@ -6056,7 +6055,7 @@ class Viewport(QWidget):
             if found is not None:
                 found._on_pointer(event)
 
-        self._pointer_token = renderer.add_pointer_listener(on_pointer)
+        renderer.add_pointer_listener(on_pointer)
 
     def release_renderer(self) -> None:
         """Den Renderer schließen, solange sein Grafikkontext noch lebt.
@@ -6073,7 +6072,6 @@ class Viewport(QWidget):
             return
         self.renderer = None
         self._navigator = None
-        self._pointer_token = None
         try:
             renderer.close()
         except Exception as problem:  # pragma: no cover - hängt am nativen Treiber

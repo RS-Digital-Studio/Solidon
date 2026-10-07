@@ -236,6 +236,9 @@ und stellt die gemessenen Werte wieder her (`_drag_kind` bleibt `"slot"`).
   Länge, Richtung und Breite; geänderte Breite und Mitte gehen mit, der
   Flächenbezug beginnt an der Zielmitte. Ist eine Tiefenänderung offen, bleibt
   deren Editor zuständig, und der Langlochzug wird mit Hinweis verworfen.
+* **Ein Langloch nimmt beim Setzen die Flächennormale**, beim Ziehen und Ändern
+  die positive Merkmalachse; die Gegenmündung liegt rechtshändig
+  (`placement_flow.py`).
 * **Ein Feldwert überlebt den Neuaufbau seines Griffs**: Länge, Richtung und
   Breite werden vor dem Aufbau an das Merkmal gebunden; Panel und Maßgruppe
   teilen denselben vollständigen Auftrag, kein Griffsignal verliert die Breite.

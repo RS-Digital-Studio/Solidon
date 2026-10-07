@@ -3879,10 +3879,13 @@ def _filled_rounds(
     :func:`fill_boundary_loops` verkettet die Ränder selbst, ohrt sie in ihrer
     Ausgleichsebene und legt keine Fläche auf eine Kante, die schon zwei trägt.
 
-    **``closed`` zählt geschlossene Ringe, nicht Dichtheit.** Ein Netz mit
-    einem kleinen und einem zu großen Loch ist nach dem Füllen gefüllt und
-    trotzdem offen; der Bericht sagt beides, ohne sich zu widersprechen
-    (:func:`repair`, ``repair.holes_filled`` und ``repair.still_open``).
+    **``closed`` zählt geschlossene Ringe, nicht Dichtheit.** Ein Ring, dessen
+    Rand sich selbst berührt oder auf einer verzweigten Kante liegt, bleibt
+    offen, während die übrigen schließen; der Bericht sagt beides, ohne sich zu
+    widersprechen (:func:`repair`, ``repair.holes_filled`` und
+    ``repair.still_open``). Eine große Öffnung ist ein eigener Fall: geschlossen
+    ``repair.wide_hole_filled``, auf Wunsch offen ``repair.wide_hole_kept`` und
+    dann kein ``still_open`` (RM-241).
     Vernäht wird vorher und nicht hier (:func:`stitch_t_junctions`): Eine
     T-Kreuzung sieht aus wie ein Loch und ist keines.
     """

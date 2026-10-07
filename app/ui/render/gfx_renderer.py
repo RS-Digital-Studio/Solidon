@@ -949,8 +949,7 @@ class GfxRenderer(Renderer):
         import pygfx as gfx
 
         self._gfx = gfx
-        self._listeners: dict[int, Callable[[PointerEvent], None]] = {}
-        self._next_token = 1
+        self._listeners: list[Callable[[PointerEvent], None]] = []
         self._items: dict[int, GfxItem] = {}
         self._pick_objects: dict[int, Any] = {}
         self._scene_revision = 0
@@ -1128,7 +1127,7 @@ class GfxRenderer(Renderer):
         event.accept()
 
     def _emit(self, event: PointerEvent) -> None:
-        for listener in list(self._listeners.values()):
+        for listener in list(self._listeners):
             listener(event)
 
     @staticmethod
@@ -2475,11 +2474,8 @@ class GfxRenderer(Renderer):
         button = _button_of(event.button()) if kind in ("press", "release") else None
         self._pointer(kind, event, button)
 
-    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> int:
-        token = self._next_token
-        self._next_token += 1
-        self._listeners[token] = listener
-        return token
+    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> None:
+        self._listeners.append(listener)
 
     def close(self) -> None:
         self._listeners.clear()

@@ -18,6 +18,8 @@ from app.core.geom.mesh import as_mesh_data
 from app.ui.labels import set_display_unit
 from app.ui.main_window import MainWindow
 from app.ui.transform_bar import TransformBar
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -45,15 +47,6 @@ def test_the_values_bar_rotates_the_selected_feature_with_its_axis_and_angle(
     assert drafts[0].op == "rotate_feature"
     assert drafts[0].inputs == ("obj_1",)
     assert drafts[0].params == {"at_feature": "hole_1", "axis": "y", "angle": 37.0}
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    """Ein Fenster wie in ``test_ui.py`` — aufgeräumt wird zentral in conftest."""
-    from app.ui.session import Session
-    from app.ui.settings import UiSettings
-
-    return MainWindow(Session(), UiSettings())
 
 
 @pytest.fixture
