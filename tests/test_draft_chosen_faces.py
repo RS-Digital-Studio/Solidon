@@ -531,6 +531,7 @@ def test_a_drafted_body_of_splines_names_the_free_corner() -> None:
     einen kleineren Winkel ein“, was nicht hilft; jetzt sagt die Absage, dass
     eine gewölbte Fläche ohne Kante anschließt, und führt zur Auswahl.
     """
+    exact_kernel()
     from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
 
     from app.core.brep.canonical import ConeSurface

@@ -811,7 +811,7 @@ def test_the_pattern_guard_reads_the_manual_and_unplaced_returns() -> None:
     eingeordnet = {entry.text for entry in customer_texts(application_sources())}
     texte = kundentexte()
     handbuch = next(text for text in texte if text.startswith("Woher die Maße kommen"))
-    zu_weit = next(text for text in texte if text.startswith("Für {size} ist die Bohrung zu weit"))
+    zu_weit = next(text for text in texte if text.startswith("Für {size} zu weit, der Gang"))
     assert handbuch not in eingeordnet and zu_weit not in eingeordnet, "sonst prüft das nichts"
 
 

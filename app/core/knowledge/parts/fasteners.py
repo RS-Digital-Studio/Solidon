@@ -767,8 +767,8 @@ def thread_advice(diameter: float) -> TranslatableText:
         wide = _too_wide_for(diameter)
         if wide is not None:
             return _(
-                "Für {size} ist die Bohrung zu weit, der Gang griffe nicht. Passend ist ein "
-                "Innengewinde mit eigenem Maß Ø {diameter}, Steigung {pitch}.",
+                "Für {size} zu weit, der Gang griffe nicht. Eigenes Maß: Ø {diameter}, "
+                "Steigung {pitch}.",
                 diameter=format_length(nominal),
                 pitch=format_length(pitch),
                 size=wide,
