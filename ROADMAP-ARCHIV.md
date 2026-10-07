@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)](#ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026) |
@@ -43495,3 +43496,31 @@ Bauplan, Regeln und Code sind nachgezogen (`tools/docs_scan.py --frage 3` ohne t
 Linkprüfung vorher und nachher ohne neuen). Review mit Nachprüfung (06./07.10.2026). Dabei
 gefunden und eingetragen: die fünf offenen Entscheidungen der Erstkonfiguration als
 [RM-542](ROADMAP.md#rm-542).
+
+## RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)
+
+<a id="rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026"></a>
+
+**Zwei sporadische Befunde aus den Tag-Läufen von v0.4.1 (13.09.2026), beide
+mit nicht strenger `xfail`-Marke im Test — der Bau läuft, der Fall steht
+hier, und ein grüner Runner-Lauf gilt nicht als Nachweis:** Auf **macOS**
+kommt der Abbruch eines lokalen Ollama-Aufrufs nicht sicher in einer
+Sekunde an — der Weg schließt den Socket aus dem wartenden Thread
+(`shutdown`, `detach`); in drei Läufen waren drei, zwei und dann eine Stufe
+rot — jede der vier einmal, auch die mit Verbindungsende
+(`test_backends.py`). Ein Umbau auf einen
+Leser mit kurzem Socket-Timeout, der das Token selbst prüft, ist der
+naheliegende Weg; gemessen wird er auf einem Mac. Auf **Linux (Xvfb)** reißt
+der Renderer-Kindprozess des HiDPI-Grifftests sporadisch mit Exit -11 —
+erst bei `QT_SCALE_FACTOR=2`, dann bei beiden Werten grün, dann bei 1
+(`test_render_factory.py`) — ob Softwarerenderer des Runners oder
+Anwendung, sagt nur ein Linux mit Bildschirm. Abnahme beider: dreimal in Folge auf der Plattform
+grün ohne Marke. Der Changelog-Punkt zum Abbruch während der Antwort ist für
+0.4.1 gestrichen, bis er auf allen drei Plattformen belegt ist.
+
+**Nachweis (06.10.2026):** Beide Marken sind entfernt. Der Anfragefaden liest und sendet
+an einem `llm._WatchedSocket`, der den Abbruch selbst bemerkt; ohne `xfail`-Marke grün auf
+macOS und Ubuntu je 20 von 20 (Lauf 37533806573) und Windows 40 von 40 am i9. Der
+HiDPI-Grifftest lief unter Xvfb 20 von 20 über beide Skalen (Lauf 37492243563). Commit
+„Abbrechen erreicht das lokale Modell auch auf dem Mac sofort“; der offene Rest von RM-104
+steht weiter im Register.
