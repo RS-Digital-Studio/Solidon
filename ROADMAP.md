@@ -100,7 +100,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | Oberfläche, Kommandozeile, Agenten- und Steckbrieftexte und der ganze Kern gerahmt, der Wächter liest den ganzen Kern (07.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile](#rm-543) | Bedienung und Darstellung | Gefunden beim Review von RM-134/316 (07.10.): `test_a_report_click_keeps_its_mark_across_the_async_map` zeitweise rot; offen die Ursache und ob der Kunde es sieht |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Text- und Bildweg bis zum Export, nach RM-550 5 von 7 Körpern geschlossen, Auswertung 15–60 s; offen RM-550-Rest, Linux und macOS |
 | [RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-550) | KI und Generatoren | Ursachen behoben (07.10.): berührende Stücke, Textweg über das Bild, 200 000 Dreiecke, beide UDF-Hüllen; 5 von 7 Läufen geschlossen; offen die Warnung „kreuzt sich selbst“ und zerfallene Rohnetze einzelner Startwerte |
@@ -3958,19 +3957,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
-<a id="rm-543"></a>
-
-- [ ] **RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile.**
-  `tests/test_analysis_ui.py::test_a_report_click_keeps_its_mark_across_the_async_map` fährt
-  den Klick von der Berichtszeile bis zur fertigen Analysekarte mit echtem `QTimer`. Am
-  07.10.2026 war er lokal zweimal rot, an `d25f12366` und am Zweig von RM-134, einzeln wie im
-  Dateilauf, mit `RuntimeError: Internal C++ object (QListWidgetItem) already deleted`; am
-  selben Morgen lief er einzeln grün und im CI-Lauf 37560540258 auf allen vier Plattformen.
-  Ob der Test eine Zeile hält, die der Bericht beim Neuaufbau verwirft, oder ob die Oberfläche
-  nach dem Neuaufbau eine alte Zeile anfasst, ist offen. **Abnahme:** Ursache benannt; liegt sie
-  in der Oberfläche, ein Test, der den Neuaufbau zwischen Klick und Karte erzwingt; der Test
-  zwanzigmal hintereinander grün, auch unter Last.
 
 <a id="rm-547"></a>
 

@@ -1366,7 +1366,8 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
         )
         # Erst die Schichtbefunde abwarten: Kommen sie nach dem Griff nach der
         # Zeile, baut ``add_findings`` die Liste neu, und die gehaltene Zeile
-        # ist gelöscht — ein Rennen des Tests, kein Fehler des Fensters.
+        # ist gelöscht — ein Rennen des Tests, kein Fehler des Fensters
+        # (RM-543, belegt im Test danach).
         window.wait_for_workers()
         QApplication.processEvents()
         window.report.add_findings([finding])
@@ -1422,6 +1423,85 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
         viewport._finding_timer.stop()
         viewport._hide_finding_mark(render=False)
         if owned_renderer is not None:
+            viewport.renderer = None
+
+
+def test_a_report_rebuild_takes_the_held_row_and_the_click_still_reaches_its_map(
+    window: MainWindow,
+) -> None:
+    """RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster.
+
+    Nachkommende Befunde (``add_findings``, etwa die Schichtanalyse) bauen die
+    Liste neu (``_rebuild`` leert sie). Eine Zeile, die jemand vorher gegriffen
+    hat, ist danach ein gelöschtes C++-Objekt, und der nächste Zugriff wirft
+    genau den Fehler aus RM-543 — ``visualItemRect(item)`` im Test, wenn die
+    Befunde zwischen Griff und Klick kamen. Die Oberfläche selbst liest die
+    Zeile nur im Druck (``ReportList.mousePressEvent``) und reicht danach den
+    Befund weiter: Ein Neuaufbau **zwischen Klick und fertiger Karte** lässt
+    Karte und Marke stehen.
+    """
+    from PySide6.QtTest import QTest
+    from shiboken6 import isValid
+
+    def row_of(wanted: Finding) -> Any:
+        return next(
+            window.report.list.item(row)
+            for row in range(window.report.list.count())
+            if window.report.list.item(row).data(Qt.ItemDataRole.UserRole) is wanted
+        )
+
+    viewport = window.viewport
+    owned = viewport.renderer is None
+    if owned:
+        viewport.renderer = RecordingRenderer()
+        viewport.show_scene(window.session.last_result)
+    try:
+        select_plate(window)
+        window.wait_for_workers()
+        QApplication.processEvents()
+        finding = Finding(
+            code="fit.violated",
+            severity="warning",
+            message="Diese Passung ist zu eng.",
+            object_id="obj_1",
+            feature_ids=("hole_1",),
+        )
+        window.report.add_findings([finding])
+        window.resize(1040, 760)
+        window.show()
+        QApplication.processEvents()
+
+        held = row_of(finding)
+        later = [
+            Finding(code="slice.late", severity="info", message="Nachgereicht.", object_id="obj_1")
+        ]
+        window.report.add_findings(later)
+        assert not isValid(held), "der Neuaufbau löscht die gegriffene Zeile"
+        with pytest.raises(RuntimeError, match="already deleted"):
+            window.report.list.visualItemRect(held)
+
+        row = row_of(finding)
+        window.report.list.scrollToItem(row)
+        QApplication.processEvents()
+        QTest.mouseClick(
+            window.report.list.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=window.report.list.visualItemRect(row).center(),
+        )
+        window.report.add_findings(
+            [Finding(code="slice.later", severity="info", message="Noch eins.", object_id="obj_1")]
+        )
+        assert not isValid(row), "Voraussetzung: der Neuaufbau kam zwischen Klick und Karte"
+        wait_for_map(window)
+
+        assert viewport.analysis_map is not None and viewport.analysis_map.kind == "fits"
+        assert viewport._finding_mark is not None, "die Marke steht nach der Karte"
+        assert len(viewport._finding_actors) == 2
+    finally:
+        window.hide()
+        viewport._finding_timer.stop()
+        viewport._hide_finding_mark(render=False)
+        if owned:
             viewport.renderer = None
 
 

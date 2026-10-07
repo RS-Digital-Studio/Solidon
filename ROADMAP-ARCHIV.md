@@ -38,6 +38,7 @@ entfernt hat.
 | 2026-10-06 | [RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)](#rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026) |
 | 2026-10-07 | [RM-535: Karte, Operation und Griff fragen dieselbe Funktion, und das Material reist beim Versetzen, wie es ist (07.10.2026)](#rm-535-karte-operation-und-griff-fragen-dieselbe-funktion-und-das-material-reist-beim-versetzen-wie-es-ist-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
+| 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
 | 2026-10-06 | [RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)](#rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026) |
@@ -44095,3 +44096,36 @@ keine Sammlungsversion. Agenten-Suite lokal mit Prompt-Version 9 nicht schlechte
 von 39, siehe [RM-251](ROADMAP.md#rm-251)); kein Referenzfall ruft die beiden Werkzeuge. Die
 gehostete Abnahme der geänderten Beschreibungen steht in [RM-016](ROADMAP.md#rm-016).
 Umgesetzt von Claude.
+
+## RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)
+
+<a id="rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026"></a>
+<a id="rm-543"></a>
+
+**RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile.**
+  `tests/test_analysis_ui.py::test_a_report_click_keeps_its_mark_across_the_async_map` fährt
+  den Klick von der Berichtszeile bis zur fertigen Analysekarte mit echtem `QTimer`. Am
+  07.10.2026 war er lokal zweimal rot, an `d25f12366` und am Zweig von RM-134, einzeln wie im
+  Dateilauf, mit `RuntimeError: Internal C++ object (QListWidgetItem) already deleted`; am
+  selben Morgen lief er einzeln grün und im CI-Lauf 37560540258 auf allen vier Plattformen.
+  Ob der Test eine Zeile hält, die der Bericht beim Neuaufbau verwirft, oder ob die Oberfläche
+  nach dem Neuaufbau eine alte Zeile anfasst, ist offen. **Abnahme:** Ursache benannt; liegt sie
+  in der Oberfläche, ein Test, der den Neuaufbau zwischen Klick und Karte erzwingt; der Test
+  zwanzigmal hintereinander grün, auch unter Last.
+
+**Erledigt (07.10.2026).** Die Ursache lag im Test. Nachkommende Befunde —
+die Schichtanalyse über `ReportPanel.add_findings` — bauen die Liste neu
+(`_rebuild` leert sie), und der Test hielt die Zeile über `scrollToItem` und
+`processEvents` bis `visualItemRect(item)`: Kamen die Befunde dazwischen, warf
+genau dieser Zugriff `RuntimeError: Internal C++ object (QListWidgetItem)
+already deleted`. Die Oberfläche liest die Zeile nur im Druck
+(`ReportList.mousePressEvent`) und reicht danach den Befund weiter.
+Belegt in `tests/test_analysis_ui.py::test_a_report_rebuild_takes_the_held_row_and_the_click_still_reaches_its_map`:
+Ein Neuaufbau zwischen Griff und Klick löscht die gehaltene Zeile mit genau
+diesem Fehler; ein Neuaufbau zwischen Klick und fertiger Karte lässt Karte,
+Marke und beide Aktoren stehen. Gegenprobe: Liest die Oberfläche die Zeile
+nach dem Druck noch einmal (verzögertes `leftPressed`), bleibt die Karte aus
+und der Test ist rot. Der Kundentest wartet seither auf die Arbeiter, bevor
+er greift (`b8d2d6264`). Beide Tests 20-mal hintereinander grün, unter Last
+von 28 rechnenden Prozessen auf 32 Kernen. Gefunden im Review 1 von
+Konsolidierungspaket 3 (G-11), behoben von Claude.
