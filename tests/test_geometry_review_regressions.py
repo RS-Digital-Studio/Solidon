@@ -604,6 +604,11 @@ def test_colouring_preserves_the_hollow_space(review_run) -> None:
 
     missing_shell = boolean("difference", [painted.mesh, output], allow_empty=True)
     assert missing_shell.mesh.volume < 1e-6
+    # Die Streben kreuzen sich an jedem Knoten. Als internes Werkzeug
+    # (``object_ids=(…, None)``) fragt die Kette sie nicht; mit einer
+    # Szenenkennung ginge die Vorvereinigung über sie, und der Schritt hielte an
+    # ihnen an oder warnte mit diesem Befund über Teile, die der Kunde nie hatte
+    # (RM-385).
     assert "boolean.parts_not_united" not in [finding.code for finding in result.findings]
 
 
