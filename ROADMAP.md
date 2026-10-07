@@ -75,8 +75,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie](#rm-425) | Geometrie, Erkennung und Druckvorbereitung | S01 als bleibender Test, drei Körper, alle Achsen, verschobene Spiegelmitte, Vorschau samt Rücknahme und alte Züge geprüft (06.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-504 — Importierte Texturen als gemeinsame Auswahl](#rm-504) | Geometrie, Erkennung und Druckvorbereitung | Zusammenfassung kleiner Felder und STEP-Muster gebaut und belegt (04.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
-| [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.), B7 im Matrixwerkzeug gebaut (06.10.); offen: Waschschüssel an 29 Druckern und die Minigolf-Platte als 3MF (Lauf seit 06.10.), der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max |
-| [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
+| [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.), B7 im Matrixwerkzeug gebaut (06.10.); Minigolf-Platte als 3MF an allen 39 geschnitten, Waschschüssel an 19 von 39; offen: B8 (Kobra 3 Max V2 weicht im Standardlauf von der Herstellerkette ab), die übrigen 20 Drucker der Waschschüssel, der Plan `modelle` |
+| [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; Korpus gemessen (205 Körper, keine neuen Kanalstücke, kein geänderter Stützbedarf, keine neue Sperre); offen die Abnahme in Anycubic, Elegoo und Orca |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
@@ -2776,9 +2776,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `x.p3d`, und liegt dauerhaft daneben im Korpus
   (`F:\3D Dateien\Mini+Golf+All+Set-P1S_stls\minigolf-platte.3mf`, Neubau mit
   `platte_bauen.py` dort).
-  **Offen:** die Waschschüssel an den übrigen 29 Druckern und die Minigolf-Platte als 3MF an
-  allen 39 (Lauf seit 06.10.2026, `F:\solidon-review-reports\claude-2026-10-06\geometrie\
-  rm525\`), danach der Plan `modelle` über den Korpus an Kobra S1 und S1 Max.
+  **Lauf 06./07.10.2026** (Treiber mit dem Werkzeug vor der Durchsicht von B7, Auswertung
+  mit dem heutigen Bericht; `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm525\`,
+  `auswertung\notiz.md`): Die Minigolf-Platte (3MF, acht Teile) ist an allen 39 Druckern
+  geschnitten, ohne Absage und ohne Abweichung von der Herstellerkette, keine Stützmarke. Die
+  Waschschüssel lief in die Grenze von 6 h je Modell und ist an 19 von 39 geschnitten; der
+  Treiber nimmt sie wieder auf. Auffällig: 37 Marken „Zeit ab Schicht 1 weicht ab“ (RM-281) und
+  8 „Zeit ×1,5 bis ×1,8 ohne zusätzliche Stütze“ im Lauf mit Vorschlägen — die Vorschläge
+  `speed.inner_wall = 60` und `speed.acceleration = 2000` bremsen schnelle Drucker; ob das ein
+  Fehlalarm ist, entscheidet die Abnahme.
+  **B8 (neu):** Am **Kobra 3 Max V2** mit Anycubic PLA druckt Solidons Konsolenlauf ohne
+  Vorschläge an der Waschschüssel anders als die Kette des Herstellers:
+  `fan_cooling_layer_time` 100 → 80 (Düse 0,25 und 0,4), `nozzle_temperature` 220 → 205 (0,6
+  und 0,8), `nozzle_temperature_initial_layer` 220 → 215 (0,8). An der Minigolf-Platte standen
+  dieselben Drucker ohne Abweichung. Zu klären, ob Solidon die Filamentkette dort anders liest
+  als die Konsole oder die Konsole beim zweiten Modell ein anderes Filament wählt.
+  **Offen:** B8, die übrigen 20 Drucker der Waschschüssel, danach der Plan `modelle` über den
+  Korpus an Kobra S1 und S1 Max.
   **Abnahme:** jede Kombination geschnitten oder mit Absage samt Ausweg, kein Druck neben dem
   Bett, Block gleich Herstellerkette außer ausgewiesenen Abweichungen, kein Fehlalarm.
 
@@ -2798,6 +2812,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Kanal und der entschiedenen Mündung, der Korpus ohne neue Kanalstücke.
   **Entschieden (Robert, 06.10.2026):** Die Mündung bleibt frei, wie Solidon es seit 0.5.3
   hält; offen ist nur die Abnahme.
+  **Korpus gemessen (06./07.10.2026):** Die Kanalfrage vor dem Deckenumbau (`c2223045d`) gegen
+  den heutigen Stand, je Körper an den Rastern 0,08 und 0,2 mm: 214 Dateien aus
+  `F:\3D Dateien`, 205 gemessen, 9 über 400 000 Dreiecke übersprungen, keine Fehler. Kein
+  Körper bekommt mehr Kanalstücke, 32 Körper weniger (57 Raster), der Stützbedarf ändert sich
+  nirgends, und nirgends entsteht eine neue Sperre — der Korpusteil der Abnahme ist erfüllt
+  (`F:\solidon-review-reports\claude-2026-10-06\geometrie\rm527\auswertung.txt`). Offen die
+  Waschschüssel in Anycubic, Elegoo und Orca mit freiem Kanal und freier Mündung.
 
 <a id="rm-539"></a>
 
