@@ -200,6 +200,11 @@ MEINT_DEN_SCHRITT: dict[str, str | frozenset[str] | None] = {
     "rotate_feature.unchanged": frozenset({"angle", "axis"}),
     "resize_feature.unchanged": frozenset({"diameter", "pitch"}),
     "bore.resize_unchanged": "diameter",
+    # Review RM-532 Runde 2, N2: Restwand und Aufbohren am Gewinde öffnen das Feld,
+    # das das Maß trägt — bei „Eigenes Maß“ den Nenndurchmesser, sonst die Größe.
+    "parts.thread_thin_wall": frozenset({"diameter", "size"}),
+    "parts.bore_widened": frozenset({"diameter", "size"}),
+    "parts.countersink_derived": "countersink",
 }
 
 
@@ -208,6 +213,15 @@ def _suggestion_names(node: ast.expr) -> set[str]:
     if isinstance(node, ast.Tuple | ast.List):
         return {element.id for element in node.elts if isinstance(element, ast.Name)}
     return set()
+
+
+def _fields(node: ast.expr) -> tuple[object, ...]:
+    """Die Felder eines ``"field":``-Werts: ausgeschrieben oder ``a if … else b``."""
+    if isinstance(node, ast.Constant):
+        return (node.value,)
+    if isinstance(node, ast.IfExp):
+        return _fields(node.body) + _fields(node.orelse)
+    return ("?",)
 
 
 def _codes(node: ast.expr | None) -> tuple[str, ...]:
@@ -271,13 +285,14 @@ def test_a_finding_about_a_step_value_opens_that_step() -> None:
                     without.append(f"{where}: ohne Knopf zum Ändern des Schritts")
                 field = MEINT_DEN_SCHRITT[code]
                 values = keywords.get("values")
-                named = None
+                named: tuple[object, ...] = (None,)
                 if isinstance(values, ast.Dict):
                     for key, value in zip(values.keys, values.values, strict=True):
                         if isinstance(key, ast.Constant) and key.value == "field":
-                            named = value.value if isinstance(value, ast.Constant) else "?"
+                            named = _fields(value)
                 allowed = field if isinstance(field, frozenset) else {field}
-                if named not in allowed:
-                    without.append(f"{where}: Feld {named!r} statt {sorted(map(str, allowed))}")
+                for name in named:
+                    if name not in allowed:
+                        without.append(f"{where}: Feld {name!r} statt {sorted(map(str, allowed))}")
     assert set(found) == set(MEINT_DEN_SCHRITT), f"Befund nicht gefunden: {found}"
     assert not without, "\n".join(without)

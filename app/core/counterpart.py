@@ -400,23 +400,19 @@ def _thread_tolerance(feature: Feature) -> tuple[float, float]:
     """Wie weit ein Gewinde von einer Tabellengröße liegen darf, um sie zu meinen.
 
     Die Erkennungsgrenze ``THREAD_SIZE_REACH`` plus das, was die Messung über
-    sich selbst sagt: die Wendelabweichung (``uncertainty``) für die Steigung,
-    der Kreisfehler (``fit_error``, beidseitig) für den Durchmesser. Ein
-    erzeugtes Gewinde trägt keines von beiden und wird genau verglichen.
+    sich selbst sagt: die Wendelabweichung (``uncertainty``) für die Steigung.
+    Einen Kreisfehler (``fit_error``) trägt ein Gewindemerkmal nicht — den
+    haben nur Zylinder, Kegel, Kugel und Torus (Review RM-532 Runde 2, U-N1).
+    Ein erzeugtes Gewinde trägt auch keine Wendelabweichung und wird genau
+    verglichen.
     """
     pitch_error = feature.params.get("uncertainty")
-    diameter_error = feature.params.get("fit_error")
     pitch_extra = (
         abs(float(pitch_error))
         if isinstance(pitch_error, int | float) and not isinstance(pitch_error, bool)
         else 0.0
     )
-    diameter_extra = (
-        2.0 * abs(float(diameter_error))
-        if isinstance(diameter_error, int | float) and not isinstance(diameter_error, bool)
-        else 0.0
-    )
-    return THREAD_SIZE_REACH[0] + diameter_extra, THREAD_SIZE_REACH[1] + pitch_extra
+    return THREAD_SIZE_REACH[0], THREAD_SIZE_REACH[1] + pitch_extra
 
 
 def _matched_thread(feature: Feature) -> tuple[dict[str, Any], Finding | None]:

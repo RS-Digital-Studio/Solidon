@@ -33,6 +33,7 @@ from app.core.types import (
     PartResult,
     Profile,
     Quality,
+    Vec3,
 )
 from app.i18n import TranslatableText, _
 
@@ -54,9 +55,12 @@ HoleAdvice = Callable[[float], "TranslatableText | str | None"]
 """Aus dem gemessenen Durchmesser einer Bohrung der Satz, den der Dialog dieses
 Bausteins darüber zeigt — ``None`` lässt den allgemeinen Satz stehen."""
 
-HoleCheck = Callable[[BaseParams, Feature, Any, Profile | None], Finding | None]
+HoleCheck = Callable[
+    [BaseParams, Feature, Any, Profile | None, Vec3 | None, Vec3 | None], Sequence[Finding]
+]
 """Was ein Baustein über die Bohrung sagt, in der er sitzt — aus seinen Werten, ihrem
-Merkmal, dem Träger vor dem Schnitt und dem Profil; ``None``, wo es nichts zu sagen gibt."""
+Merkmal, dem Träger vor dem Schnitt, dem Profil, der Mündung und der Richtung nach außen;
+leer, wo es nichts zu sagen gibt."""
 
 HostCut = Callable[[BaseParams], PartResult | None]
 """Optionales Werkzeug, das ein lösbares Teil am Träger vorbereitet.
@@ -818,8 +822,11 @@ def register_part(
 #: Version 23: Herstellerbezogene Nutfedern mit verjüngtem Kopf; bisherige
 #: Profilgrößen bleiben für gespeicherte Konstruktionen maßgleich.
 #: Version 24: Das runde Ende einer Lasche über 42,8 mm Breite bekommt Sehnen
-#: nach ``MAX_FACET_SAG`` (``shapes.slot_segments``, 06.10.2026); schmalere
-#: Laschen und alle übrigen Bausteine bleiben maßgleich.
+#: nach ``MAX_FACET_SAG`` (``shapes.slot_segments``, 06.10.2026), und ein
+#: Netzgewinde läuft über ganze Umläufe und wird auf Länge geschnitten
+#: (``THREAD_MESH_WHOLE_TURNS`` an Gewinde, Schraube und Mutter): Die Maße
+#: bleiben, das Netz eines Gewindes mit krummer Umlaufzahl ändert sich.
+#: Schmalere Laschen und alle übrigen Bausteine bleiben maßgleich.
 LIBRARY_VERSION: Final = "24"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie

@@ -1596,6 +1596,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "core": _("Kern"),
     "count": _("Anzahl"),
     "counted": _("Verarbeitet"),
+    # ``fasteners.screw_hole``: der Durchmesser einer gerechneten Senkung.
+    "countersink": _("Senkung"),
     "cut": _("Schnitt"),
     # ``slicer.profile_value_replaced``: was statt eines abgelehnten Herstellerwerts hinausgeht.
     "default": _("Vorgabe"),

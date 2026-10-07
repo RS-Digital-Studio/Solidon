@@ -58,6 +58,10 @@ class Screw:
     Durchgangsloch einer M5 und keine Bohrung „zwischen zwei Größen". Die
     Zuordnung eines exakten Maßes bleibt bei ``clearance`` (mittlere Reihe).
     """
+    countersink_derived: bool = False
+    """Ob ``countersink`` gerechnet statt genormt ist: Für diese Größe nennt keine
+    Quelle einen Senkkopf (über M24, M18, M22, ein eigenes Maß über M24). Das
+    Schraubenloch sagt es am Ergebnis (Review RM-532 Runde 2, N3)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -531,7 +535,18 @@ def derived_screw(diameter: float) -> Screw:
     ]
     values = dict(zip((*fields, *series), _along(rows, diameter), strict=True))
     pitch = regular_pitch(diameter)
-    return Screw(size="", nominal=diameter, tap=diameter - pitch, pitch=pitch, **values)
+    # Zwischen zwei genormten Senkköpfen ist die Senkung abgeleitet wie jedes
+    # andere Maß (das sagt ``parts.derived_size``); über dem größten gibt es
+    # keinen Senkkopf mehr, den eine Schraube haben könnte.
+    normed = [entry.nominal for entry in load().screws.values() if not entry.countersink_derived]
+    return Screw(
+        size="",
+        nominal=diameter,
+        tap=diameter - pitch,
+        pitch=pitch,
+        countersink_derived=diameter > max(normed),
+        **values,
+    )
 
 
 def derived_nut(diameter: float) -> Nut:

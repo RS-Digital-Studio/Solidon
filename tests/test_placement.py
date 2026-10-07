@@ -519,13 +519,14 @@ def test_a_bore_that_fits_nothing_keeps_the_default() -> None:
     assert between["diameter"] == pytest.approx(6.5 + 2.0 * 0.55 * 1.0)
 
     # Die Buchse endet an der Tabelle (CNC Kitchen M10, Loch 12,0) — welches Loch eine
-    # andere braucht, sagt ihr Datenblatt. Die Mutternfalle hat bei 40 mm die M42
-    # und über dem größten Gewinde (Durchgangsloch über 1093,75) keine Größe.
+    # andere braucht, sagt ihr Datenblatt. Die Mutternfalle hat bei 40 mm die M39
+    # (40 ist ihr feines Durchgangsloch nach ISO 273) und über dem größten Gewinde
+    # (Durchgangsloch über 1093,75) keine Größe.
     for name, diameter in (("insert_heatset_m4", 40.0), ("insert_nut_trap", 1200.0)):
         values = values_for(REGISTRY.get(name), hole(diameter=diameter))
         assert "size" not in values, f"{name} rät an einer {diameter}-mm-Bohrung eine Größe"
         assert values["at_feature"] == "hole_1", "die Zuordnung bleibt davon unberührt"
-    assert values_for(REGISTRY.get("insert_nut_trap"), hole(diameter=40.0))["size"] == "M42"
+    assert values_for(REGISTRY.get("insert_nut_trap"), hole(diameter=40.0))["size"] == "M39"
     # 40 mm liegt zwischen Kernloch und Nennmaß der M42; über M64 ein eigenes Maß.
     thread = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=40.0))
     assert thread["size"] == "M42" and thread["at_feature"] == "hole_1"
@@ -588,9 +589,9 @@ def test_the_sentence_over_a_bore_names_the_size_the_dialog_chose() -> None:
     said, _choices = bore_advice(5.19, ask=False, feature=hole(diameter=5.19), spec=gewinde)
     assert "Innengewinde M6" in said and "Durchgangsloch" not in said, said
     said, _choices = bore_advice(6.5, ask=False, feature=hole(diameter=6.5), spec=gewinde)
-    assert "Innengewinde mit eigenem Maß: Ø 7,60 mm, Steigung 1,00 mm" in said, said
+    assert "Innengewinde mit eigenem Maß Ø 7,60 mm, Steigung 1,00 mm" in said, said
     said, _choices = bore_advice(1.0, ask=False, feature=hole(diameter=1.0), spec=gewinde)
-    assert "Kernloch des kleinsten Gewindes mit Ø 1,60 mm" in said, said
+    assert "Kernloch des kleinsten mit Ø 1,60 mm" in said, said
 
     # Gegenprobe: Die Senkung behält den Satz über die Schraube, die hindurchgeht.
     said, _choices = bore_advice(
@@ -821,10 +822,13 @@ def test_part_bore_advice_none_keeps_the_general_size_answer() -> None:
     spec = REGISTRY.get("insert_printed_screw")
     part = part_of(spec.name)
     assert part is not None and part.at_hole_advice is not None
-    assert part.at_hole_advice(40.0) is None
+    # 7,5 mm ist kein Durchgangsloch der Tabelle: Zwischen dem groben der M6 (7,0)
+    # und dem feinen der M8 (8,4) gibt es keine Schraube, die gedruckte schweigt.
+    # 40 mm taugt dafür nicht mehr: Seit der zweiten Wahl ist es das feine Loch der M39.
+    assert part.at_hole_advice(7.5) is None
     status = MeasureStatus("estimated", source="fit", available=True)
-    plain = bore_advice(40.0, ask=False, status=status)
-    assert bore_advice(40.0, ask=False, status=status, spec=spec) == plain
+    plain = bore_advice(7.5, ask=False, status=status)
+    assert bore_advice(7.5, ask=False, status=status, spec=spec) == plain
 
 
 @pytest.mark.parametrize("language", available_languages())

@@ -1036,6 +1036,30 @@ def test_the_confirm_button_names_the_operation(qt_app: QApplication) -> None:
     assert ok.text().replace("&", "") == str(spec.title)
 
 
+def test_choosing_a_custom_size_opens_the_flap_with_its_diameter(qt_app: QApplication) -> None:
+    """*Eigenes Maß* zeigt den Nenndurchmesser, der hinter der Klappe steht (Review RM-532, N4).
+
+    Vorn ist kein Platz für ein viertes Feld, und zugeklappt baute die Vorgabe
+    20 still eine M20. Die Wahl vorn öffnet jetzt die Klappe; ohne sie bleibt
+    sie zu, wie beim Öffnen des Dialogs.
+    """
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+
+    spec = REGISTRY.get("insert_screw_hole")
+    diameter = next(entry for entry in spec.params.spec() if entry.name == "diameter")
+    assert diameter.placement == "advanced", "sonst beweist dieser Test nichts"
+
+    dialog = OperationDialog(spec, [], None)
+    assert not dialog.advanced.isChecked()
+    size = dialog._editors["size"]
+    assert isinstance(size, QComboBox)
+    size.setCurrentIndex(size.findData("M8"))
+    assert not dialog.advanced.isChecked(), "eine Normgröße verlangt nichts dahinter"
+    size.setCurrentIndex(size.findData(CUSTOM_SIZE))
+    assert dialog.advanced.isChecked()
+    assert dialog._advanced_form.isRowVisible(dialog._editors["diameter"])
+
+
 def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplication) -> None:
     """Ein gerade entschiedener Wert gehört dorthin, wo er zu sehen ist."""
     spec = REGISTRY.get("drill_hole")

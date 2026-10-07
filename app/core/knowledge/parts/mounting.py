@@ -516,6 +516,11 @@ _LUG_SCREWS: Final = tuple(
     if standards.screw(size).nominal >= 3.0 and size in standards.washer_sizes()
 )
 
+#: Die breiteste Lasche trägt die größte Scheibe (M64: 115 mm). Eine feste 100
+#: ließ ein eingetragenes Maß die eigene Vorgabe der großen Größen nicht
+#: erreichen (Review RM-532 Runde 2, N6).
+_WIDEST_LUG: Final = max(standards.washer(size).outer for size in _LUG_SCREWS)
+
 LUG_END_FOLLOWS_ITS_ROUNDING = PartChange(
     version="24",
     date="2026-10-06",
@@ -552,7 +557,7 @@ class LugParams(BaseParams):
         default=0.0,
         unit="mm",
         minimum=0.0,
-        maximum=100.0,
+        maximum=_WIDEST_LUG,
         doc=_(
             "Quer zur Lasche gemessen. Null heißt: so breit wie die Unterlegscheibe der Schraube."
         ),
