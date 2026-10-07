@@ -2189,7 +2189,7 @@ mehrdeutige Anfragen und misst, ob gefragt statt geraten wird.
 
 Diese Liste ist abschließend — was hier nicht steht, gibt es nicht. Die vier
 Werkzeuge ab `read_digest` kamen mit der Agent-Vertiefung dazu
-(`konzepte/konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
+(`konzepte/archiv/konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
 die lesenden rechnen auf der Arbeitskopie, die schreibenden reisen als Teil
 der einen Transaktion des Vorschlags (§26.5, Regel 16).
 
@@ -3009,7 +3009,7 @@ Installer und Lizenzschlüssel; im Fließtext und in Docstrings heißt es kurz
 „Solidon". Die zentrale Quelle ist `app/branding.py`.
 
 Die Begründung und die verworfenen Namen stehen in
-`konzepte/namensentscheidung-solidon.md`. Eine Produktentscheidung ist kein
+`konzepte/archiv/namensentscheidung-solidon.md`. Eine Produktentscheidung ist kein
 Markenfreigabenachweis; der noch erforderliche rechtliche Abgleich bleibt in
 [RM-093](ROADMAP.md#rm-093). Bei einer künftigen Namensänderung sind Domain,
 Pakete, Supportadresse, Dateizuordnungen und Signierung gemeinsam abzugleichen;
