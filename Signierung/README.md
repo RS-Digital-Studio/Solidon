@@ -305,7 +305,11 @@ Geheimnisse, die `build.yml` erwartet:
 | `APPLE_TEAM_ID` | die Team-ID |
 
 Die CI macht dann je Architektur (Apple Silicon und Intel): `codesign` mit
-Hardened Runtime und Zeitstempel, `notarytool submit --wait` (Apples Prüfung,
+Hardened Runtime und Zeitstempel, erst tief über das ganze Bundle, dann das
+Hauptprogramm noch einmal mit genau einer Ausnahme,
+`com.apple.security.cs.allow-unsigned-executable-memory` — ohne sie hängt
+das Intel-Paket auf macOS 26 schon beim Start (RM-104,
+`.claude/rules/auslieferung.md`) —, `notarytool submit --wait` (Apples Prüfung,
 meist Minuten), `stapler` heftet das Ticket an und prüft es, `spctl` prüft
 zuletzt den Installationsweg. Notarisierung kostet nichts.
 

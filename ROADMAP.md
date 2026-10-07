@@ -24,7 +24,8 @@ stehen mit Nachweis im Archiv.
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
 Auflagen werden daneben rechtzeitig bearbeitet. **Als Nächstes:** die Kundenblocker nach
-0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104), Cura rechnet unter
+0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104; Ursache eingegrenzt,
+Signierschritt korrigiert, kommt mit dem nächsten Tag), Cura rechnet unter
 Linux nicht (RM-521, Entscheidung Robert) — und die mit 0.5.3 fällige Antwort an den
 Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
 Verkaufskandidat bis 25.10., Start am 01.11.2026 um 10:00 Uhr (RM-061). Daneben bleiben die
@@ -45,7 +46,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-050 — Kopier- und Pufferkosten großer Szenen am Fenster messen](#rm-050) | Plattformen, Pakete und Grafik | VTK ausgebaut (`5a57e261`), matplotlib durch HarfBuzz ersetzt (`25d5536ee`); offen die kopierten Bytes und Pufferkosten je großer Szene am Fenster |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der 0.5.3-Pakete am echten Linux- und Mac-Bildschirm; der Release-Starttest belegt Fenster und 3D-Ansicht nur unter Xvfb und am ARM-Runner |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Aktualisieren und Deinstallieren prüft der Installer-Workflow ab dem nächsten Release (`tools/check_windows_update.py`, am Runner von 0.5.2 auf 0.5.3 grün); offen: der Lauf im Release ohne Ausnahme für den behobenen Registerrest, Flatpak auf echter Linux-Grafik, Offline-Start |
-| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Kunde mit zwei Intel-Macs (macOS 26): das Developer-ID-signierte Paket startet nicht, ad hoc signiert schon; am Runner nicht nachstellbar (Läufe 37361577881, 37362456615); wartet auf Terminalausgabe, `codesign --verify`, Absturzberichte und macOS-Version des Kunden. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
+| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Notarisierung im Handstart (Lauf 37530876754); offen der Start beim Kunden, Gegenprobe dafür `solidon-gegenprobe.sh`. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
@@ -505,25 +506,89 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   mit Developer ID signierte Paket nicht, ad hoc signiert schon. Nie geprüft ist genau dieser Fall:
   Der Intel-Starttest der Releaseakte läuft ohne Bildschirm (`--offscreen`, also ohne
   Cocoa-Plattform und ohne 3D-Ansicht, `"renderer": {"present": false}` im Tag-Lauf
-  37266459831). Signiert wird mit Hardened Runtime und ohne Entitlements
+  37266459831). Signiert wurde bis 0.5.3 mit Hardened Runtime und ohne Entitlements
   (`build.yml`, Job `macos-app-sign`, Schritt „App mit Developer-ID signieren und Schlüssel
-  wieder sperren“); was die Ad-hoc-Signatur davon aufhebt (ausführbarer
-  Schreibspeicher für libffi-Rückrufe von wgpu und ctypes auf x86_64, Bibliotheksprüfung), ist
-  ungemessen. Erfragt sind die Terminalausgabe des direkten Starts, `codesign --verify --deep
-  --strict` am installierten Paket, Absturzberichte und die genaue macOS-Version. Der Messweg in
-  `.claude/.state/mac-start-2026-10-05/` misst Zeiten und sichert Protokolle.
+  wieder sperren“); was die Ad-hoc-Signatur davon aufhob (ausführbarer
+  Schreibspeicher für libffi-Rückrufe von wgpu und ctypes auf x86_64, Bibliotheksprüfung), war
+  ungemessen. Erfragt waren die Terminalausgabe des direkten Starts, `codesign --verify --deep
+  --strict` am installierten Paket, Absturzberichte und die genaue macOS-Version; die Antworten
+  stehen unter dem 06.10. Der Messweg in `.claude/.state/mac-start-2026-10-05/` misst Zeiten und
+  sichert Protokolle.
 
   **Gemessen am 05.10.2026 abends (Läufe 37361577881 und 37362456615, Wegwerfzweig):** Das
   veröffentlichte 0.5.2 startet über LaunchServices mit Quarantäne auf beiden Runnern
   (Intel offscreen, ARM mit Fenster und 3D-Ansicht) in rund 30 s bis zum Fenster, Developer-ID-
-  wie ad-hoc-signiert gleich; Gatekeeper hält am Runner nichts auf. Der Verdacht auf
-  Schreib-und-Ausführ-Speicher ist **widerlegt**: Ein verschiebbares Python 3.14.8 mit cffi 2.1.1
-  und wgpu 0.32.0, ad hoc mit Hardened Runtime ohne Entitlements signiert
-  (`flags=0x10002(adhoc,runtime)`), erzeugt auf dem Intel-Runner cffi- und ctypes-Rückrufe und
-  bekommt von wgpu einen Metal-Adapter („Apple Paravirtual device“); ARM ebenso. Eine
-  Entitlement-Änderung wäre damit geraten. Offen bleibt der Unterschied zwischen dem Runner und
-  einem echten Intel-Mac mit Fenster — die erfragten Angaben des Kunden entscheiden.
-  Messweg: `hardened_probe.py` und `mac-hardened-diag.yml` im selben Ordner.
+  wie ad-hoc-signiert gleich; Gatekeeper hält am Runner nichts auf. Ein verschiebbares
+  Python 3.14.8 mit cffi 2.1.1 und wgpu 0.32.0, ad hoc mit Hardened Runtime ohne Entitlements
+  signiert (`flags=0x10002(adhoc,runtime)`), erzeugte auf dem Intel-Runner cffi- und
+  ctypes-Rückrufe; der daraus gezogene Schluss, der Verdacht auf Schreib-und-Ausführ-Speicher sei
+  widerlegt, war **falsch**: Am Runner greift dieser Schutz nicht (unten). Messweg:
+  `hardened_probe.py` und `mac-hardened-diag.yml` im selben Ordner.
+
+  **Ursache eingegrenzt am 06.10.2026** — belegt an Quelltext und fremden Geräten, am Gerät des
+  Kunden offen. Seine Angaben zu 0.5.3 (zu Hause): MacBookPro16,1 (Intel), macOS 26.5 (25F71),
+  `codesign --verify --deep --strict` „valid on disk“ — die Installation ist heil. Der direkte
+  Start schrieb kein Zeichen, Strg+C wirkte nicht, ein Protokoll gab es nicht. Der Stand schreibt
+  sonst beim Aufbau des Hauptfensters `QWidget::setMinimumSize: (/QLabel) Negative sizes (0,-1)`
+  auf stderr (`panels.fit_wrapped`; am Runner bei beiden Signaturen, hier mit
+  `QT_FORCE_STDERR_LOGGING=1` nachgemessen) — der Prozess stand also früher. Das erste
+  `import ctypes` liegt im Paket in PyInstallers Bootstrap (`pyiboot01_bootstrap` →
+  `pyimod03_ctypes.install`, 6.22.3), vor Laufzeithaken und `app.py`; ein Hänger dort hinterlässt
+  weder Absturzdatei noch Protokoll, wie beim Kunden. Umgehen lässt sich ctypes nicht (Bootstrap,
+  `app/core/process.py`, numpy). CPython legt seit
+  <https://github.com/python/cpython/issues/128485> beim Laden von `_ctypes` eine libffi-Closure
+  an (`_ctypes_mod_exec`); Apples libffi holt dafür auf x86_64 anonymen `PROT_EXEC`-Speicher, den
+  die Hardened Runtime ohne `com.apple.security.cs.allow-unsigned-executable-memory` verweigert,
+  und der Ausweichweg über Temp-Dateien kreist auf macOS 26 endlos — beschrieben an echten
+  Intel-Macs in <https://github.com/andreagrandi/draftomen/issues/905> (26.7.1) und
+  <https://github.com/PeonPing/peon-ping/issues/589> (Apples `osascript`, 26.6.2, Stapel
+  `ffi_closure_alloc` → `dlmmap` → `open_temp_exec_file_dir`). Ad hoc neu signiert fehlt die
+  Hardened Runtime, deshalb lief es; ARM nimmt Apples Trampolintabelle. Am Runner nicht
+  nachstellbar: `csrutil status` meldet auf beiden Mac-Runnern „disabled“ (Lauf 37488283777),
+  und dort greifen weder der Schutz vor ausführbarem Schreibspeicher noch die
+  Bibliotheksprüfung: Das ausgelieferte Developer-ID-Paket startet dort mit Hardened Runtime
+  ohne Liste (0.5.2, Lauf 37361577881), und ad hoc signierte Bibliotheken laden unter Hardened
+  Runtime (Lauf 37490502237, unten). Dass SIP der Grund ist, ist gefolgert. Widerlegt
+  ist eine hängende Online-Prüfung der Zertifikate: Mit stumm verworfenen OCSP-, CRL- und
+  Notarisierungsadressen startete das Developer-ID-Paket auf Intel und ARM in 8,5 bis 18,9 s bis
+  zu den Profilen (Lauf 37488781413).
+
+  **Korrektur:** `build.yml`, Job `macos-app-sign`, signiert erst tief und dann das Bundle ohne
+  `--deep` mit genau dieser Berechtigung, ein Rezept für beide Architekturen, und liest Schlüssel
+  und Wert zurück; `test_supply_chain.py` hält den Text (fünfzehn Abwandlungen gegengeprüft,
+  darunter auskommentierte Rücklesung, zweite Ausnahme, vertauschte `case`-Zweige). Am
+  veröffentlichten 0.5.3 mit dem wörtlich geschnittenen Signierteil, ad hoc statt Developer ID,
+  auf Intel und ARM gefahren (Lauf 37530339300): `--verify --deep --strict` grün, Start bis zu den
+  Profilen; der geschnittene Rücklesetext bricht ohne Liste und bei `<false/>` mit Exit 1 ab und
+  lässt die Liste durch. Die Liste hängt nur am Hauptprogramm, nicht an `Python.framework` und
+  `_cffi_backend` (Lauf 37490502237) — dass die ad hoc signierten Bibliotheken dort luden, zeigt,
+  dass auch die Bibliotheksprüfung am Runner nicht greift. Developer-ID-Signatur, Zeitstempel,
+  Notarisierung und Gatekeeper mit der Liste: Handstart von `build.yml` auf dem Zweig
+  `ci/rm-104-signatur` (Lauf 37530876754). **Offen:** der Start auf dem Intel-Mac des Kunden.
+
+  **Gegenprobe am Kundengerät:** `solidon-gegenprobe.sh` signiert die installierte Kopie zweimal ad
+  hoc mit `--options runtime` und `com.apple.security.cs.disable-library-validation` (ohne sie
+  lehnte die Bibliotheksprüfung die ad hoc signierten Bibliotheken ab), einmal ohne, einmal mit
+  `allow-unsigned-executable-memory`. Es hält an, wenn Solidon schon läuft (sonst holte ein Start
+  nur ein altes, hängendes nach vorn), startet beide Male mit Zeitmarke, wertet nur neue
+  Protokollzeilen, beendet „ohne“ nach drei Minuten mit SIGABRT und sucht im Absturzbericht nach
+  `ffi_closure_alloc`/`dlmmap`; der Rückweg zur Ad-hoc-Signatur ohne Hardened Runtime läuft über
+  `trap` auch bei Strg+C, TERM und geschlossenem Fenster. Am Runner gefahren (Lauf 37530339333):
+  Wächter, normal (dort startet auch „ohne“, Urteil „nicht bestätigt“), nachgestellter Hänger per
+  SIGSTOP (Urteil „bestätigt“, Bericht eingesammelt), Abbruch mit Rückweg, Absage auf ARM. Die
+  erste Mail vom 06.10. nannte eine Gegenprobe ohne `disable-library-validation` (sie wäre ohne
+  Aussage gescheitert), der Nachtrag eine mit, aber ohne Wächter und Stapel — belastbar ist das
+  Skript. Changelog: ja — notarisiert mit Hardened Runtime ohne Liste ist jedes Mac-Paket seit
+  0.4.1, am Kundengerät belegt 0.5.1 bis 0.5.3.
+
+  Messwege im selben Ordner: `mac_online_check.py` und `mac-online-check.yml`
+  (Zertifikatssperre), `mac-entitlement-check.yml` (Signierteil und Rücklesung),
+  `solidon-diagnose.sh` und `solidon-gegenprobe.sh` mit `mac-diagnose-skript.yml` (Startdiagnose
+  und Gegenprobe für einen Kunden-Mac, samt shellcheck). Die Diagnose hält bei laufendem Solidon
+  und bei einer ad hoc neu signierten Kopie an, fragt vor dem harten Beenden, ob ein Fenster zu
+  sehen ist, und sammelt nach SIGABRT den Absturzbericht ein — am Intel-Runner kam er an (Lauf
+  37530339333). Ob `sample` auf einem Kunden-Mac mit SIP einen Prozess mit Hardened Runtime lesen
+  darf, ist offen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).
 

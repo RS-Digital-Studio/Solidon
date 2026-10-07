@@ -1,0 +1,196 @@
+# Wegwerfzweig: prüft solidon-diagnose.sh und solidon-gegenprobe.sh (RM-104)
+# am veröffentlichten Paket 0.5.3, bevor ein Kunde sie ausführt.
+# Intel: Diagnose hält bei laufendem Solidon an, ohne es zu beenden; Hänger-
+# zweig (der Runner hängt beim ersten Fenster im Symboldienst); Diagnose hält
+# bei einer ad hoc neu signierten Kopie an. Gegenprobe normal (der Runner setzt
+# den Schutz vor ausführbarem Schreibspeicher nicht durch, also startet auch
+# „ohne“ — Urteil „nicht bestätigt“), mit nachgestelltem Hänger (ein Helfer
+# hält den ersten Solidon-Prozess mit SIGSTOP an — Urteil „bestätigt“), Wächter
+# und Rückweg. ARM: Diagnose „gestartet“ (Starttest schließt die Dialoge) und
+# „Fenster zu sehen“ (Antwort „ja“); die Gegenprobe sagt auf ARM ab.
+# Dazu shellcheck auf Ubuntu. Zum Fahren auf den Zweig diag/rm-104-nacht nach
+# .github/workflows/ kopieren und pushen; den Zweig nach der Auswertung löschen.
+name: Mac-Skripte für Kunden prüfen
+
+on:
+  push:
+    branches: [diag/rm-104-nacht]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: shellcheck
+        run: |
+          shellcheck --version | head -2
+          shellcheck -s bash -S warning .claude/.state/mac-start-2026-10-05/solidon-diagnose.sh .claude/.state/mac-start-2026-10-05/solidon-gegenprobe.sh
+
+  probe:
+    name: Skripte (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-26-intel, arch: x86_64 }
+          - { os: macos-latest, arch: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Paket wie beim Kunden installieren
+        run: |
+          package="Solidon3D-0.5.3-macos-${{ matrix.arch }}.pkg"
+          curl -fsSL -o "$package" "https://solidon3d.de/dl/$package"
+          xattr -w com.apple.quarantine "0083;$(printf '%x' "$(date +%s)");Safari;" "$package"
+          sudo installer -pkg "$package" -target /
+          rm -f "$package"
+          cp .claude/.state/mac-start-2026-10-05/solidon-diagnose.sh .claude/.state/mac-start-2026-10-05/solidon-gegenprobe.sh "$HOME/Downloads/"
+          /bin/bash -n "$HOME/Downloads/solidon-diagnose.sh"
+          /bin/bash -n "$HOME/Downloads/solidon-gegenprobe.sh"
+          mkdir -p diag-out
+      - name: Diagnose hält bei laufendem Solidon an, ohne es zu beenden
+        if: matrix.arch == 'x86_64'
+        run: |
+          set +e
+          open -a /Applications/Solidon3D.app
+          sleep 15
+          before=$(pgrep -o -x Solidon3D)
+          /bin/bash "$HOME/Downloads/solidon-diagnose.sh" < /dev/null > diag-out/diagnose-laeuft-schon.txt 2>&1
+          code=$?
+          after=$(pgrep -o -x Solidon3D)
+          cat diag-out/diagnose-laeuft-schon.txt
+          echo "Exit $code, vorher $before, nachher $after"
+          pkill -9 -x Solidon3D; sleep 3
+          ls -d "$HOME"/Desktop/solidon-diagnose-* 2>/dev/null && { echo "leerer Ordner liegen geblieben"; exit 1; }
+          [ "$code" = 1 ] && [ -n "$before" ] && [ "$before" = "$after" ]
+      - name: Diagnose, Hängerzweig (Intel)
+        if: matrix.arch == 'x86_64'
+        run: |
+          set +e
+          /bin/bash "$HOME/Downloads/solidon-diagnose.sh" < /dev/null
+          echo "Exit $?"
+          cp "$HOME"/Desktop/solidon-diagnose-*.zip diag-out/diagnose-haenger.zip
+          tail -3 "$HOME"/Desktop/solidon-diagnose-*/04-verlauf.txt
+          ls "$HOME"/Desktop/solidon-diagnose-*/absturzberichte/ | grep -q '\.ips$'
+          code=$?
+          rm -rf "$HOME"/Desktop/solidon-diagnose-*
+          pkill -9 -x Solidon3D; sleep 3
+          exit $code
+      - name: Gegenprobe normal (Intel, der Runner setzt den Schutz nicht durch)
+        if: matrix.arch == 'x86_64'
+        run: |
+          set +e
+          SOLIDON_GEGENPROBE_SEKUNDEN=150 /bin/bash "$HOME/Downloads/solidon-gegenprobe.sh" < /dev/null
+          echo "Exit $?"
+          dir=$(ls -d "$HOME"/Desktop/solidon-gegenprobe-*/ | head -1)
+          cat "$dir/ergebnis.txt"; cat "$dir/signatur.txt" | grep -E "^(===|CodeDirectory|Signature)|<key>"
+          cp "$HOME"/Desktop/solidon-gegenprobe-*.zip diag-out/gegenprobe-normal.zip
+          grep -q "^ohne: startet" "$dir/ergebnis.txt" && grep -q "^mit: startet" "$dir/ergebnis.txt" \
+            && grep -q "^Nicht bestätigt: Auch ohne" "$dir/ergebnis.txt" \
+            && codesign -dvv /Applications/Solidon3D.app 2>&1 | grep -q "flags=0x2(adhoc)"
+          code=$?
+          rm -rf "$HOME"/Desktop/solidon-gegenprobe-*
+          exit $code
+      - name: Gegenprobe mit nachgestelltem Hänger (Intel, SIGSTOP)
+        if: matrix.arch == 'x86_64'
+        run: |
+          set +e
+          ( for i in $(seq 1 600); do p=$(pgrep -n -x Solidon3D); if [ -n "$p" ]; then kill -STOP "$p"; echo "angehalten: $p"; break; fi; sleep 0.2; done ) &
+          SOLIDON_GEGENPROBE_SEKUNDEN=60 /bin/bash "$HOME/Downloads/solidon-gegenprobe.sh" < /dev/null
+          echo "Exit $?"
+          dir=$(ls -d "$HOME"/Desktop/solidon-gegenprobe-*/ | head -1)
+          cat "$dir/ergebnis.txt"; ls "$dir"
+          tail -3 "$dir/ohne-verlauf.txt"
+          cp "$HOME"/Desktop/solidon-gegenprobe-*.zip diag-out/gegenprobe-haenger.zip
+          grep -q "^ohne: haengt" "$dir/ergebnis.txt" && grep -q "^mit: startet" "$dir/ergebnis.txt" \
+            && grep -q "^Bestätigt:" "$dir/ergebnis.txt" && ls "$dir"/Solidon3D*.ips \
+            && codesign -dvv /Applications/Solidon3D.app 2>&1 | grep -q "flags=0x2(adhoc)"
+          code=$?
+          rm -rf "$HOME"/Desktop/solidon-gegenprobe-*
+          exit $code
+      - name: Diagnose hält bei ad hoc neu signierter Kopie an (Intel)
+        if: matrix.arch == 'x86_64'
+        run: |
+          set +e
+          /bin/bash "$HOME/Downloads/solidon-diagnose.sh" < /dev/null > diag-out/diagnose-adhoc.txt 2>&1
+          code=$?
+          cat diag-out/diagnose-adhoc.txt
+          [ "$code" = 1 ] && grep -q "von Hand neu signiert" diag-out/diagnose-adhoc.txt && [ -z "$(pgrep -x Solidon3D)" ]
+      - name: Gegenprobe hält bei laufendem Solidon an, Rückweg bei Abbruch (Intel)
+        if: matrix.arch == 'x86_64'
+        run: |
+          set +e
+          open -a /Applications/Solidon3D.app; sleep 15
+          before=$(pgrep -o -x Solidon3D)
+          /bin/bash "$HOME/Downloads/solidon-gegenprobe.sh" < /dev/null > diag-out/gegenprobe-laeuft-schon.txt 2>&1
+          code=$?
+          after=$(pgrep -o -x Solidon3D)
+          cat diag-out/gegenprobe-laeuft-schon.txt
+          echo "Exit $code, vorher $before, nachher $after"
+          pkill -9 -x Solidon3D; sleep 3
+          [ "$code" = 1 ] && [ -n "$before" ] && [ "$before" = "$after" ] || exit 1
+          # Abbruch mitten im ersten Durchgang: Der Rückweg muss trotzdem laufen.
+          SOLIDON_GEGENPROBE_SEKUNDEN=150 /bin/bash "$HOME/Downloads/solidon-gegenprobe.sh" < /dev/null > diag-out/gegenprobe-abbruch.txt 2>&1 &
+          script=$!
+          for i in $(seq 1 120); do [ -n "$(pgrep -x Solidon3D)" ] && break; sleep 1; done
+          sleep 5
+          # Ein Hintergrundprozess einer nicht interaktiven Shell ignoriert SIGINT
+          # von Anfang an; TERM steht für Strg+C und das geschlossene Fenster (HUP).
+          kill -TERM "$script"; wait "$script"
+          echo "Exit $?"
+          cat diag-out/gegenprobe-abbruch.txt
+          codesign -dvv /Applications/Solidon3D.app 2>&1 | grep -E "^CodeDirectory"
+          codesign -dvv /Applications/Solidon3D.app 2>&1 | grep -q "flags=0x2(adhoc)" && [ -z "$(pgrep -x Solidon3D)" ]
+      - name: Diagnose, Zweig „gestartet“ (ARM, Starttest schließt die Dialoge)
+        if: matrix.arch == 'arm64'
+        run: |
+          set +e
+          launchctl setenv SOLIDON3D_START_CHECK /tmp/start-report.json
+          printf 'Starttest\n' | /bin/bash "$HOME/Downloads/solidon-diagnose.sh"
+          echo "Exit $?"
+          launchctl unsetenv SOLIDON3D_START_CHECK
+          cat "$HOME"/Desktop/solidon-diagnose-*/ablauf.txt
+          grep -q "meldet nach" "$HOME"/Desktop/solidon-diagnose-*/ablauf.txt
+          code=$?
+          cp "$HOME"/Desktop/solidon-diagnose-*.zip diag-out/diagnose-gestartet.zip
+          rm -rf "$HOME"/Desktop/solidon-diagnose-*
+          rm -rf "$HOME/Library/Preferences/Solidon3D" "$HOME/Library/Application Support/Solidon3D"
+          pkill -9 -x Solidon3D; sleep 3
+          exit $code
+      - name: Diagnose, Zweig „Fenster zu sehen“ (ARM, Antwort „ja“)
+        if: matrix.arch == 'arm64'
+        run: |
+          set +e
+          printf 'ja\nErste Schritte\n' | /bin/bash "$HOME/Downloads/solidon-diagnose.sh"
+          echo "Exit $?"
+          cat "$HOME"/Desktop/solidon-diagnose-*/ablauf.txt
+          tail -3 "$HOME"/Desktop/solidon-diagnose-*/04-verlauf.txt
+          grep -q "Solidon3D läuft. Es wird jetzt wieder beendet." "$HOME"/Desktop/solidon-diagnose-*/ablauf.txt \
+            && [ -z "$(ls "$HOME"/Desktop/solidon-diagnose-*/absturzberichte/)" ] && [ -z "$(pgrep -x Solidon3D)" ]
+          code=$?
+          cp "$HOME"/Desktop/solidon-diagnose-*.zip diag-out/diagnose-fenster.zip
+          exit $code
+      - name: Gegenprobe sagt auf ARM ab
+        if: matrix.arch == 'arm64'
+        run: |
+          set +e
+          /bin/bash "$HOME/Downloads/solidon-gegenprobe.sh" < /dev/null > diag-out/gegenprobe-arm.txt 2>&1
+          code=$?
+          cat diag-out/gegenprobe-arm.txt
+          [ "$code" = 1 ] && grep -q "für Intel-Macs gedacht" diag-out/gegenprobe-arm.txt
+      - name: Sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mac-skripte-${{ matrix.arch }}
+          path: diag-out/
+          retention-days: 7
