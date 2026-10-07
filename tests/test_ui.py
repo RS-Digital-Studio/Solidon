@@ -5224,6 +5224,237 @@ def test_the_slot_that_was_pulled_stays_selected_after_apply(window: MainWindow)
     assert gewaehlt is not None, "das entstandene Langloch bleibt gewählt"
     assert entry.features[gewaehlt].kind == "slot"
     assert panel.feature_id == gewaehlt, "und das Merkmalfenster zeigt es"
+    assert "nach der Neuberechnung nicht mehr" not in window.status_message.text(), (
+        "das Langloch ist dieselbe Bohrung — nichts ist verloren"
+    )
+
+
+_LOST = "nach der Neuberechnung nicht mehr"
+"""Das Kennwort der Ansage einer verlorenen Merkmalswahl (RM-537)."""
+
+
+def _row_text(window: MainWindow, object_id: str, feature_id: str) -> str:
+    """Der Text der Merkmalszeile, wie der Baum ihn zeigt."""
+    return window.object_tree._labels[(object_id, feature_id)]
+
+
+def test_a_chosen_feature_the_recalculation_drops_is_given_up_and_said(
+    window: MainWindow,
+) -> None:
+    """RM-537, Anschluss: Trägt der nächste Stand die gewählte Bohrung nicht, sagt es die Zeile.
+
+    Ohne neue Handlung — wie nach dem Bild vor der Erkennung — ist nichts
+    gewählt, nicht still der Körper, und die Statuszeile nennt die Bohrung
+    mit dem Text ihrer Zeile im Baum.
+    """
+    object_id, hole = _a_chosen_hole(window)
+    shown = _row_text(window, object_id, hole)
+    result = window.session.last_result
+    entry = result.scene.objects[object_id]
+    without = dataclasses.replace(
+        result,
+        scene=dataclasses.replace(
+            result.scene,
+            objects={
+                **result.scene.objects,
+                object_id: dataclasses.replace(
+                    entry, features={k: v for k, v in entry.features.items() if k != hole}
+                ),
+            },
+        ),
+    )
+
+    window._show_scene(without)
+    QApplication.processEvents()
+
+    assert window.object_tree.selected() is None, "nicht still der Körper"
+    assert window.object_tree.selected_feature() is None
+    assert window.status_message.text() == tr(
+        "„{feature}“ gibt es nach der Neuberechnung nicht mehr, die Auswahl ist aufgehoben.",
+        feature=shown,
+    )
+
+
+def test_a_renamed_feature_found_again_is_no_lost_choice(window: MainWindow) -> None:
+    """RM-537, B1: Findet das Fenster das umbenannte Merkmal wieder, ist nichts verloren.
+
+    ``hole_1`` heißt nach *Zum Langloch ziehen* ``slot_1`` an derselben Stelle.
+    Der Baum hebt die Wahl auf; die Wiederwahl des Fensters holt sie an der
+    Stelle zurück — erst danach wird entschieden, ob etwas zu sagen ist.
+    """
+    object_id, hole = _a_chosen_hole(window)
+    result = window.session.last_result
+    entry = result.scene.objects[object_id]
+    feature = entry.features[hole]
+    centre = tuple(float(value) for value in feature.params["centre"])
+    slot = dataclasses.replace(feature, id="slot_9", kind="slot")
+    renamed = dataclasses.replace(
+        result,
+        scene=dataclasses.replace(
+            result.scene,
+            objects={
+                **result.scene.objects,
+                object_id: dataclasses.replace(
+                    entry,
+                    features={
+                        **{k: v for k, v in entry.features.items() if k != hole},
+                        "slot_9": slot,
+                    },
+                ),
+            },
+        ),
+    )
+    window._feature_to_keep, window._resume_near = hole, centre
+
+    window._show_scene(renamed)
+    QApplication.processEvents()
+
+    assert window.object_tree.selected_feature() == "slot_9", "an der Stelle wieder gewählt"
+    assert _LOST not in window.status_message.text()
+
+
+def test_deleting_the_body_of_a_chosen_face_keeps_the_receipt(window: MainWindow) -> None:
+    """RM-537, B2: Die Quittung mit dem Rückweg bleibt, wenn die eigene Handlung die Wahl nimmt."""
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    face = next(name for name, f in entry.features.items() if f.kind == "face")
+    window.object_tree.select_feature(object_id, face)
+    QApplication.processEvents()
+
+    window.run_operation(REGISTRY.get("delete_object"))
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    assert object_id not in window.session.last_result.scene.objects, "Voraussetzung"
+    assert _LOST not in window.status_message.text()
+    assert "Strg+Z" in window.status_message.text(), "der Rückweg steht in der Zeile"
+
+
+def test_removing_the_chosen_hole_says_no_loss(window: MainWindow) -> None:
+    """RM-537, B2: Entf an der gewählten Bohrung entfernt sie — das ist keine verlorene Wahl."""
+    object_id, hole = _a_chosen_hole(window)
+
+    window.run_operation(REGISTRY.get("delete_object"))
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    ops = [entry.op for entry in window.session.project.document.ops]
+    assert ops[-1] == "remove_feature", f"Voraussetzung: Entf entfernt die Bohrung, {ops}"
+    assert object_id in window.session.last_result.scene.objects, "der Körper bleibt"
+    assert hole not in window.session.last_result.scene.objects[object_id].features
+    assert window.object_tree.selected() is None, "nicht still der Körper"
+    assert _LOST not in window.status_message.text()
+
+
+def test_undo_with_the_new_hole_chosen_keeps_its_receipt(window: MainWindow) -> None:
+    """RM-537, B2: Nach Strg+Z steht „… zurückgenommen“, nicht der Verlust der neuen Bohrung."""
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    before = set(entry.features)
+    bounds = entry.mesh.bounds
+    window.session.apply(
+        REGISTRY.get("drill_hole").title,
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={
+                    "diameter": 3.0,
+                    "x": (bounds.minimum[0] + bounds.maximum[0]) / 2.0,
+                    "y": (bounds.minimum[1] + bounds.maximum[1]) / 2.0,
+                    "z": bounds.maximum[2],
+                },
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    drilled = window.session.last_result.scene.objects[object_id]
+    made = next(
+        name for name, f in drilled.features.items() if f.kind == "hole" and name not in before
+    )
+    window.object_tree.select_feature(object_id, made)
+    QApplication.processEvents()
+    drilling = window.session.history.transactions[-1]
+
+    window.action_undo()
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    assert made not in window.session.last_result.scene.objects[object_id].features
+    assert window.object_tree.selected() is None, "nicht still der Körper"
+    assert window.status_message.text() == main_window_module._history_feedback(
+        drilling, undone=True
+    ), "die Quittung des Undo steht"
+
+
+def test_the_mark_of_an_action_has_one_source(window: MainWindow) -> None:
+    """RM-537, zweite Durchsicht: Woran eine Handlung zu erkennen ist, sagt der Verlauf.
+
+    Zahl und Kennung der letzten Transaktion leitet ``History.document_mark``
+    her, für den Redo-Stapel wie für das Fenster; die Datei erkennt das
+    Fenster an der Projektgeneration der Sitzung — eine Objektkennung kann
+    nach dem Abräumen wieder vergeben werden.
+    """
+    _a_chosen_hole(window)
+    generation = window.session.project_generation
+
+    assert window._history_mark() == (
+        generation,
+        *(
+            str(value) if index else value
+            for index, value in enumerate(window.session.history.document_mark())
+        ),
+    )
+
+    window.session.start_new(window.settings.printer, window.settings.material)
+    assert window.session.wait_for_idle(30_000)
+    assert window._history_mark()[0] == window.session.project_generation != generation
+
+
+def test_an_outdated_result_neither_says_a_loss_nor_spends_the_mark(window: MainWindow) -> None:
+    """RM-537, zweite Durchsicht: Ein Lauf, der genau beim Abbruch fertig wird, zählt nicht.
+
+    Er kommt noch an, mit ``result_current`` falsch. Verbrauchte er die
+    Marke des Verlaufs, gälte das aktuelle Ergebnis danach als „ohne eigene
+    Handlung“, und die Ansage überschriebe die Quittung; sagte er selbst an,
+    nennte er einen Verlust aus einem Stand, der nicht mehr gilt.
+    """
+    object_id, hole = _a_chosen_hole(window)
+    window.announce("Quittung")
+    result = window.session.last_result
+    entry = result.scene.objects[object_id]
+    without = dataclasses.replace(
+        result,
+        scene=dataclasses.replace(
+            result.scene,
+            objects={
+                **result.scene.objects,
+                object_id: dataclasses.replace(
+                    entry, features={k: v for k, v in entry.features.items() if k != hole}
+                ),
+            },
+        ),
+    )
+    assert window._history_shown == window._history_mark(), "Voraussetzung: keine Handlung"
+    window.session.result_current = False
+    try:
+        window._show_scene(without)
+        QApplication.processEvents()
+        assert window.status_message.text() == "Quittung", "ein überholter Lauf sagt nichts an"
+
+        # Wie nach einer Handlung, deren Ergebnis noch aussteht: Die Marke
+        # gehört dem aktuellen Ergebnis, nicht dem überholten.
+        window._history_shown = None
+        window._show_scene(without)
+        QApplication.processEvents()
+        assert window._history_shown is None, "der überholte Lauf verbraucht die Marke nicht"
+    finally:
+        window.session.result_current = True
 
 
 def test_a_double_click_on_a_feature_opens_what_changes_it(window: MainWindow) -> None:

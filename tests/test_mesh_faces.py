@@ -794,6 +794,32 @@ def test_a_face_that_is_gone_is_a_sentence_and_not_a_wrong_body() -> None:
     assert problem.value.suggestions
 
 
+def test_a_named_face_that_is_gone_says_the_same_sentence_as_stale_triangles() -> None:
+    """RM-537, N3: Fehlt die gewählte Fläche, steht derselbe Satz wie bei alten Dreiecken.
+
+    Zwei Wege führen zu „Diese Fläche gibt es an dem Körper nicht mehr“ — die
+    fehlende Kennung (``face_ops``) und die Nummern, die ins Leere zeigen
+    (``faces._triangles_of``). Sie bauen den Fehler an einer Stelle, sonst
+    laufen Satz und Handlungen beim nächsten Nachbessern auseinander.
+    """
+    from app.core.geom.faces import gone_face_error
+
+    body = block()
+    top = face_looking_up(body)
+    stale = Feature(
+        id=top.id, kind="face", provenance=top.provenance, params=top.params, face_indices=(9999,)
+    )
+    with pytest.raises(GeometryError) as triangles:
+        push_face(body, stale, 2.0)
+    with pytest.raises(GeometryError) as missing:
+        run("push_face", imported(body), face="face_gone", distance=2.0)
+
+    expected = gone_face_error()
+    for problem in (triangles.value, missing.value):
+        assert str(problem.detail) == str(expected.detail)
+        assert problem.suggestions == expected.suggestions
+
+
 def test_the_exact_body_still_takes_the_exact_way() -> None:
     """Und der exakte Körper bleibt exakt — dieselbe Menüzeile, anderer Kern."""
     exact_kernel()

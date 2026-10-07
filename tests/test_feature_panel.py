@@ -591,6 +591,108 @@ def test_regrouping_keeps_the_selected_feature_current_and_visible(qt_app: QAppl
     tree.close()
 
 
+def test_a_chosen_feature_that_the_new_state_lacks_is_given_up_not_the_body(
+    qt_app: QApplication,
+) -> None:
+    """RM-537: Verschwindet die gewählte Bohrung, ist nichts gewählt — nicht der Körper.
+
+    Am Kundenstift standen vor der Erkennung zwei Sackbohrungen im Baum, danach
+    eine durchgehende. Wer eine Sackbohrung gewählt hatte, bekam still den
+    Stift gewählt, und Entf entfernte den ganzen Körper. Jetzt hebt der Baum
+    die Wahl auf und hält das Merkmal mit dem Text seiner Zeile fest
+    (``lost_selection``); ob es gesagt wird, entscheidet das Fenster.
+    """
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.labels import feature_name
+    from app.ui.panels import ObjectTree
+
+    blind = Feature(
+        id="hole_10",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 23.8, "depth": 22.1, "through": False},
+    )
+    through = Feature(
+        id="hole_12",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 23.8, "depth": 50.0, "through": True},
+    )
+    entry = SceneObject(id="obj_3", name="Stift", mesh=plate(), features={"hole_10": blind})
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(Scene(objects={entry.id: entry})))
+        tree.select_feature(entry.id, "hole_10")
+        assert tree.selected_feature() == "hole_10", "Voraussetzung"
+
+        tree.show_scene(
+            EvaluationResult(
+                Scene(objects={entry.id: replace(entry, features={"hole_12": through})})
+            )
+        )
+
+        assert tree.selected() is None, "der Körper ist nicht still gewählt"
+        assert tree.selected_feature() is None
+        assert tree.lost_selection == ((entry.id, "hole_10", feature_name("hole_10", blind)),), (
+            tree.lost_selection
+        )
+
+        tree.select_feature(entry.id, "hole_12")
+        tree.show_scene(
+            EvaluationResult(
+                Scene(objects={entry.id: replace(entry, features={"hole_12": through})})
+            )
+        )
+        assert tree.selected_feature() == "hole_12", "was bleibt, bleibt gewählt"
+        assert tree.lost_selection == ()
+    finally:
+        tree.close()
+
+
+def test_a_lost_choice_is_named_as_its_row_was(qt_app: QApplication) -> None:
+    """RM-537, N4: Verloren heißt ein Merkmal so, wie seine Zeile im Baum hieß.
+
+    Ein Baustein mit einer einzigen Zeile gibt ihr seinen Titel — die
+    eingesetzte Magnettasche heißt im Baum wie der Baustein und nicht
+    „Sackbohrung 1“. Die Ansage nannte den Merkmalsnamen, also etwas, das so
+    nie im Baum stand.
+    """
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Document, Operation, Scene, SceneObject
+    from app.ui.labels import feature_name
+    from app.ui.panels import ObjectTree
+
+    load_operations()
+    step = Operation(id=7, op="create_lid", inputs=("obj_3",), outputs=("obj_3", "obj_4"))
+    document = Document(format_version=1, app_version="test", ops=[step])
+    pocket = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="generated",
+        params={"diameter": 8.0, "depth": 3.0, "through": False},
+        created_by=7,
+    )
+    entry = SceneObject(id="obj_3", name="Halter", mesh=plate(), features={"hole_1": pocket})
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(Scene(objects={entry.id: entry})), document)
+        tree.select_feature(entry.id, "hole_1")
+        row = tree.tree.selectedItems()[0].text(0)
+        assert row == str(REGISTRY.get("create_lid").title), (
+            "Voraussetzung: die Zeile trägt den Titel"
+        )
+        assert row != feature_name("hole_1", pocket), "Voraussetzung: sonst prüft das nichts"
+
+        tree.show_scene(
+            EvaluationResult(Scene(objects={entry.id: replace(entry, features={})})), document
+        )
+
+        assert tree.lost_selection == ((entry.id, "hole_1", row),), tree.lost_selection
+    finally:
+        tree.close()
+
+
 def test_choosing_another_feature_reports_it_once_without_an_empty_step(
     qt_app: QApplication,
 ) -> None:

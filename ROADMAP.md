@@ -137,7 +137,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig](#rm-534) | Kundenrückmeldungen | Ursache an der Kundendatei gemessen; Umsetzung in vier Teilen (Laufzustand, volle Kette selbst, Halt im Entwurf nie fein, kein Hin und Her) nicht begonnen |
 | [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Entschieden (Robert, am Punkt); Flächenzug, Absagen, Maßgruppe, Tasche und Zapfen nach diesen Entscheidungen bauen, die drei falschen Ergebnisse beheben |
 | [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
-| [RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück](#rm-537) | Kundenrückmeldungen | An der Kundendatei gemessen; offen die Herkunft der vorläufigen Merkmale und was eine Auswahl tut, deren Merkmal verschwindet |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -4864,20 +4863,3 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `plate_countersunk.stl`, `plate_countersunk_blind.stl` und einer Bohrung mit
   `insert_printed_thread`, Sollwerte mit Herkunft, Gegenprobe; eine alte Projektdatei mit Stift
   rechnet unverändert.
-
-<a id="rm-537"></a>
-
-- [ ] **RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück, und Entf
-  entfernt dann den Körper.** Fund beim Nachstellen von RM-533 an der Kundendatei: Nach dem
-  Öffnen zeigt der Baum am Stift (`obj_3`) „Sackbohrung 10“ und „Sackbohrung 11“ (Ø 23,8, Tiefe
-  22,1 und 19,7, `provenance=detected`); dieselben Merkmale trägt eine Auswertung ohne Erkennung
-  (`detect_features=False`). Ist die Erstauswertung durch (in der Sonde mehrere Sekunden,
-  `busy`), steht dort eine durchgehende „Bohrung 12“ (Tiefe 50). Wer in dieser Zeit eine
-  Sackbohrung wählt, verliert sie: `ObjectTree._restore` findet die Kennung nicht mehr und wählt
-  den Körper, und Entf entfernt danach den ganzen Körper statt der Bohrung. Messung:
-  `sonde_merkmale.py` und `merkmale.txt` im Zustandsordner von RM-533. **Offen:** woher die
-  vorläufigen Sackbohrungen kommen (Übertrag aus einem früheren Stand statt Erkennung?), ob sie vor
-  dem Ende der Erkennung im Baum stehen sollen, und was mit einer Auswahl geschieht, deren Merkmal
-  verschwindet (den Körper zu wählen steht so im Docstring von `_restore`; leeren und ansagen wäre
-  die Alternative). **Abnahme:** Eine Merkmalswahl während der Erstauswertung überlebt sie oder
-  wird sichtbar aufgegeben, nie still zum Körper.

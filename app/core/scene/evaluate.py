@@ -102,6 +102,7 @@ from app.core.perceive.matching import (
     PlanarFaces,
     apply_mapping,
     declared_partners,
+    faces_in_plane,
     inherit_originators,
     match,
     moved_features,
@@ -167,6 +168,7 @@ from app.core.units import (
     EPS_DISPLAY,
     EPS_GEOM,
     MAX_FACET_SAG,
+    dot3,
     is_close,
     match_tolerance,
 )
@@ -1316,6 +1318,7 @@ def _evaluate(
                     # einzigen Eingang aus ihm — auch die der zweiten Hälfte
                     # nach *Teilen* (RM-217).
                     origin_mesh=inputs[0].mesh if len(inputs) == 1 else None,
+                    origin_features=inputs[0].features if len(inputs) == 1 else None,
                     texture_sources=(
                         inputs[1:]
                         if operation.op in {"union_objects", "intersect_objects"}
@@ -2635,6 +2638,58 @@ def _divided_partners(
     )
 
 
+def _consumed_faces(
+    declared: Mapping[FeatureId, Feature],
+    blind: Collection[FeatureId],
+    before: Mapping[FeatureId, Feature],
+    detected: Mapping[FeatureId, Feature],
+    diagonal: float,
+) -> set[FeatureId]:
+    """Die erzeugten Flächen, die dieser Schritt ganz verbraucht hat (RM-537).
+
+    Verbraucht heißt dreierlei: Die Fläche hatte vor dem Schritt Dreiecke
+    (``before``), die Operation gibt sie ohne Dreiecke aus und die
+    vollständige Erkennung fand weder einen Partner (``blind``) noch irgendeine
+    Fläche in ihrer Ebene, gleich gerichtet. Ein Baustein erklärt seine Flächen
+    ohne Dreiecke, bevor die Erkennung sie findet — die hatten vorher keine und
+    bleiben. Andere Arten, auch erzeugte Bohrungen und Zapfen ohne Dreiecke,
+    fragt diese Stelle nicht.
+
+    Die Normale wird mit Grundrechenarten auf Länge eins gebracht
+    (``units.dot3``, RM-187): An der Antwort hängt, ob ein späterer Schritt
+    anhält, und an der Toleranzgrenze entschiede sonst der BLAS-Kern.
+    """
+    import numpy as np
+
+    candidates = [
+        feature
+        for name, feature in declared.items()
+        if name in blind
+        and feature.kind == "face"
+        and not feature.face_indices
+        and (older := before.get(name)) is not None
+        and older.face_indices
+        and isinstance(feature.params.get("normal"), tuple | list)
+        and isinstance(feature.params.get("centre"), tuple | list)
+    ]
+    if not candidates:
+        return set()
+    faces_now = planar_faces(detected)
+    tolerance = match_tolerance(diagonal)
+    consumed: set[FeatureId] = set()
+    for feature in candidates:
+        normal = [float(value) for value in feature.params["normal"]]
+        length = math.sqrt(dot3(normal, normal))
+        if length <= 0.0:
+            continue
+        unit = np.asarray([value / length for value in normal], dtype=float)
+        centre = np.asarray(feature.params["centre"], dtype=float)
+        if faces_now.names and bool(faces_in_plane(faces_now, unit, centre, tolerance).any()):
+            continue
+        consumed.add(feature.id)
+    return consumed
+
+
 def _shift_between(before: BoundingBox, now: BoundingBox) -> Transform | None:
     """Die reine Verschiebung zwischen zwei Hüllquadern — oder ``None``.
 
@@ -2666,6 +2721,55 @@ def _inherited_features(
         if (older := previous.get(name)) is not None
         and dataclasses.replace(feature, params=older.params) == older
         and digest(feature.params) == digest(older.params)
+    }
+
+
+def _proven_without_recognition(
+    features: Mapping[FeatureId, Feature],
+    previous: Mapping[FeatureId, Feature],
+    inherited: Collection[FeatureId],
+    *,
+    unchanged: bool,
+    moved: bool,
+) -> dict[FeatureId, Feature]:
+    """Was ein Körper ohne Erkennung tragen darf: nur, was belegt ist (RM-537).
+
+    Ein erkanntes Merkmal in der Ausgabe einer Operation ist ein Vorgänger
+    für die Zuordnung, kein Ergebnis — der Weg mit Erkennung veröffentlicht
+    nur, was ``detect`` am neuen Netz wiederfindet. Ohne Erkennung fiel das
+    weg: *Fläche versetzen* reicht am Netz jedes Merkmal mit geleerten
+    Dreiecken und alten Maßen weiter, und am Kundenstift standen zwei
+    Sackbohrungen im Bild, wo der Schritt längst eine durchgehende gebohrt
+    hatte; wer eine wählte, verlor sie mit der Erkennung danach.
+
+    Erzeugte Merkmale bleiben (die Operation sagt sie zu), ebenso alles auf
+    unveränderten Dreiecken und was eine Bewegung starr mitgenommen hat.
+    Heraus fällt ein erkanntes Merkmal, dessen Dreiecke die Operation geleert
+    hat, und eines, das sie unverändert über ein geändertes Netz gereicht hat.
+    **Und eine erzeugte Fläche, deren Dreiecke die Operation geleert hat:** Ob
+    der Schritt sie verbraucht hat, sagt erst die Erkennung
+    (:func:`_consumed_faces`); stünde sie im Bild, verschwände eine Wahl
+    darauf danach — am Kundenstift ``face_1`` und ``face_2``.
+    """
+    if unchanged:
+        return dict(features)
+
+    def emptied(name: FeatureId, feature: Feature) -> bool:
+        older = previous.get(name)
+        return not feature.face_indices and older is not None and bool(older.face_indices)
+
+    return {
+        name: feature
+        for name, feature in features.items()
+        if (
+            feature.provenance == "generated"
+            and not (feature.kind == "face" and emptied(name, feature))
+        )
+        or (
+            feature.provenance != "generated"
+            and not emptied(name, feature)
+            and not (not moved and name in inherited)
+        )
     }
 
 
@@ -3906,6 +4010,7 @@ def _with_features(
     announced_gone: Collection[FeatureId] = frozenset(),
     advance: Callable[[float], None] | None = None,
     unrecognised: set[ObjectId] | None = None,
+    origin_features: Mapping[FeatureId, Feature] | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -3929,7 +4034,10 @@ def _with_features(
     das die Dreiecke der alten Merkmale zeigen, und fehlt ``source_mesh`` nur
     deshalb, weil ein einziger Eingang mehrere Ausgaben hat (*Teilen*), steht es
     trotzdem da: Ob eine alte Fläche nur geteilt ist, misst
-    :func:`_divided_in_place` an ihr. ``detect_features=False`` lässt
+    :func:`_divided_in_place` an ihr. ``origin_features`` sind die Merkmale
+    dieses einzigen Eingangs; ohne Erkennung misst eine neue Ausgabe ohne
+    eigenen Vorgänger an ihnen, was sie belegt weiterträgt
+    (:func:`_proven_without_recognition`). ``detect_features=False`` lässt
     die Erkennung aus, wo kein späterer Schritt und keine Passung ein Merkmal
     dieses Körpers braucht (siehe :func:`evaluate`).
 
@@ -4452,15 +4560,28 @@ def _with_features(
             # Dreiecken 1,1 der 2,2 Sekunden (gemessen am 22.09.2026) und
             # war beim Übernehmen ohnehin ein Merker-Treffer für genau ein
             # Netz — das letzte. Was der Merker kennt, kommt trotzdem;
-            # sonst bleibt der Körper bei dem, was die Operation ausgab, ohne
-            # Zuordnung und ohne Waisenbefund, wie bei ``perceive.too_many``.
+            # sonst bleibt der Körper bei dem, was die Operation ausgab und
+            # belegt (:func:`_proven_without_recognition`), ohne Zuordnung und
+            # ohne Waisenbefund, wie bei ``perceive.too_many``.
             remembered_features = known_detection(mesh)
             if remembered_features is None:
                 if unrecognised is not None:
                     unrecognised.add(entry.id)
+                # Eine neue Ausgabe ohne eigenen Vorgänger (die Hälften nach
+                # *Teilen*) misst sich am einzigen Eingang (``origin_features``):
+                # Sonst trugen beide Hälften im Bild die Merkmale der ganzen
+                # Platte mit deren Dreiecken und Maßen.
+                basis = previous or origin_features or {}
+                shown = _proven_without_recognition(
+                    output_features,
+                    basis,
+                    inherited if previous else _inherited_features(output_features, basis),
+                    unchanged=unchanged or (not previous and _same_triangles(origin_mesh, mesh)),
+                    moved=feature_movement is not None,
+                )
                 return (
-                    dataclasses.replace(entry, features=output_features)
-                    if feature_movement is not None
+                    dataclasses.replace(entry, features=shown)
+                    if feature_movement is not None or len(shown) != len(entry.features)
                     else entry
                 )
             detected = remembered_features
@@ -4697,6 +4818,9 @@ def _with_features(
     # erkennen. Mitgereiste Zellflächen dürfen daneben nicht wieder auftauchen.
     detected = without_pattern_cells(detected)
 
+    # Ob ``detected`` jede Fläche des Netzes kennt — nur dann sagt „kein
+    # Partner", dass eine Fläche fort ist (:func:`_consumed_faces`).
+    complete = not local_only and len(detected) <= FEATURE_LIMIT_COUNT
     if len(detected) > FEATURE_LIMIT_COUNT:
         findings.append(
             Finding(
@@ -4739,6 +4863,7 @@ def _with_features(
     # Gefragt wird über dieselbe Zuordnung, die auch sonst zuordnet: Wer keinen
     # Partner findet, ist ``orphaned``. Mehrdeutig zählt als gefunden — zwei
     # Kandidaten sind ein Kandidat zu viel, nicht keiner.
+    consumed: set[FeatureId] = set()
     if declared:
         watch.raise_if_cancelled()
         if say is not None:
@@ -4782,6 +4907,26 @@ def _with_features(
                 seen, orphaned=tuple(name for name in seen.orphaned if name not in cut_off)
             )
         blind = set(seen.orphaned)
+        # **Eine erzeugte Fläche, die der Schritt ganz verbraucht hat, fällt
+        # weg** (RM-537): Am Kundenstift drückte der letzte Versatz die
+        # Bodenfläche durch, und ``face_1``/``face_2`` standen weiter ohne
+        # Dreiecke im Baum. Wer sie danach noch nennt, bekommt den Bezugsverlust.
+        consumed = (
+            _consumed_faces(declared, blind, previous, detected, mesh.bounds.diagonal)
+            if complete
+            else set()
+        )
+        if consumed:
+            findings.extend(
+                _lost_reference_finding(name, True, needed, entry, operation)
+                for name in sorted(consumed)
+                if (name in needed if needed is not None else name in referenced)
+            )
+            declared = {name: feature for name, feature in declared.items() if name not in consumed}
+            seen = dataclasses.replace(
+                seen, orphaned=tuple(name for name in seen.orphaned if name not in consumed)
+            )
+            blind -= consumed
         # Randöffnungen sind geometrisch erkennbare Langlöcher. Fehlt ihre
         # Wand, darf ein mitgetragener Eintrag nicht zur ungeprüften Zusage
         # eines Bausteins werden. Der Vorgänger läuft unten durch die normale
@@ -4878,7 +5023,10 @@ def _with_features(
     carried = {
         name: feature
         for name, feature in previous.items()
-        if getattr(feature, "provenance", "detected") == "generated" and name not in declared
+        if getattr(feature, "provenance", "detected") == "generated"
+        and name not in declared
+        # Verbraucht ist schon oben entschieden und gemeldet.
+        and name not in consumed
     }
     # Mitnehmen heißt nicht glauben. Wo die Erkennung die Art des Merkmals
     # sieht, wird es wie ein erkanntes zugeordnet und fällt heraus, wenn es
@@ -4955,6 +5103,18 @@ def _with_features(
         }
 
     if not previous:
+        if consumed:
+            # Dieselbe Sperre wie unten bei ``apply_mapping``: Ohne erkannte
+            # Vorgänger übernähme ein neues Merkmal sonst ungeprüft den Namen
+            # der verbrauchten Fläche. Gesperrt ist auch, was daneben
+            # eingehängt wird — sonst fiele der Ausweichname auf ein erzeugtes
+            # oder mitreisendes Merkmal und würde beim Zusammenführen still
+            # überschrieben.
+            detected = apply_mapping(
+                detected,
+                MatchResult(fresh=tuple(detected)),
+                reserved={*unchecked, *declared, *consumed},
+            )
         return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
 
     centre = mesh.bounds.centre
@@ -5208,8 +5368,15 @@ def _with_features(
     # nicht an ein neues Merkmal (RM-222): Eine geänderte Bohrung reist unter
     # ihrem Namen in ``declared`` weiter, und eine neu gebohrte bekam diesen
     # Namen als ersten freien — und wurde beim Zusammenführen überschrieben.
+    # **Und der Name einer verbrauchten Fläche ist gesperrt wie der einer
+    # verwaisten** (RM-537): Sonst hieß eine im selben Schritt neu erkannte
+    # Taschenwand wie die durchgedrückte Deckfläche, und ein späterer Schritt
+    # auf diese versetzte still die Wand.
     mapped = apply_mapping(
-        detected, matched, previous=previous, reserved={*rigid_orphans, *unchecked, *declared}
+        detected,
+        matched,
+        previous=previous,
+        reserved={*rigid_orphans, *unchecked, *declared, *consumed},
     )
     # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.
     # ``apply_mapping`` trägt den *Namen* weiter, die Provenienz steckt aber im

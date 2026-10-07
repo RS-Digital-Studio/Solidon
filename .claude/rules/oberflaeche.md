@@ -348,6 +348,15 @@ Feldes, gedämpft fiel er unter WCAG 1.4.11.
 `test_a_field_keeps_the_edge_that_is_its_only_one` prüft gegen die Linienfarbe
 des Themas; was die leistet, ist eine Frage an das Thema.
 
+## Eine Auswahl fällt nie still auf etwas Größeres
+
+Trägt der neue Stand ein gewähltes Merkmal nicht mehr, hebt
+`ObjectTree.show_scene` die Wahl auf und hält sie samt Zeilentext in
+`lost_selection` fest (RM-537); sonst entfernte Entf danach den ganzen Körper.
+`MainWindow._say_features_lost` sagt es erst nach den Wiederwahlen (die lesen
+den Körper aus `lost_selection`) und nur ohne eigene Handlung seit dem letzten
+aktuellen Bild — sonst überschriebe es deren Quittung mit Rückweg (Regel 19).
+
 ## Barrierefreiheit
 
 - **Keine Bedeutung allein über Farbe** (Regel 18): immer eine zweite

@@ -32,6 +32,7 @@ entfernt hat.
 | Datum | Abschnitt |
 |---|---|
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
+| 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
@@ -43259,6 +43260,91 @@ Starter); Orca läuft danach. Im Lauf davor endete Orca nach drei Sekunden — d
 Testaufbau startete den Sitzungsbus vor Xvfb, und der Flatpak-Hilfsdienst
 kannte kein `DISPLAY`; auf einem Desktop hat er es. Workflow:
 `.claude/.state/flatpak-abnahme-2026-10-06/abnahme-flatpak.yml`.
+
+## RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)
+
+<a id="rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026"></a>
+<a id="rm-537"></a>
+
+**RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück, und Entf
+  entfernt dann den Körper.** Fund beim Nachstellen von RM-533 an der Kundendatei: Nach dem
+  Öffnen zeigt der Baum am Stift (`obj_3`) „Sackbohrung 10“ und „Sackbohrung 11“ (Ø 23,8, Tiefe
+  22,1 und 19,7, `provenance=detected`); dieselben Merkmale trägt eine Auswertung ohne Erkennung
+  (`detect_features=False`). Ist die Erstauswertung durch (in der Sonde mehrere Sekunden,
+  `busy`), steht dort eine durchgehende „Bohrung 12“ (Tiefe 50). Wer in dieser Zeit eine
+  Sackbohrung wählt, verliert sie: `ObjectTree._restore` findet die Kennung nicht mehr und wählt
+  den Körper, und Entf entfernt danach den ganzen Körper statt der Bohrung. Messung:
+  `sonde_merkmale.py` und `merkmale.txt` im Zustandsordner von RM-533. **Offen:** woher die
+  vorläufigen Sackbohrungen kommen (Übertrag aus einem früheren Stand statt Erkennung?), ob sie vor
+  dem Ende der Erkennung im Baum stehen sollen, und was mit einer Auswahl geschieht, deren Merkmal
+  verschwindet (den Körper zu wählen steht so im Docstring von `_restore`; leeren und ansagen wäre
+  die Alternative). **Abnahme:** Eine Merkmalswahl während der Erstauswertung überlebt sie oder
+  wird sichtbar aufgegeben, nie still zum Körper.
+
+**Erledigt (06.10.2026).** Drei Ursachen, drei Behebungen:
+
+- **Herkunft der vorläufigen Sackbohrungen:** Ohne Erkennung (Bild zuerst,
+  KUNDE-14) gab `_with_features` die Merkmalsliste der Operation ungeprüft aus.
+  *Fläche versetzen* reicht am Netz jedes Eingangsmerkmal mit geleerten
+  Dreiecken und alten Maßen weiter; so standen `hole_10`/`hole_11` (Tiefe 22,11
+  und 19,71) im Bild, wo op 17 längst eine durchgehende Bohrung gedrückt hatte.
+  `_proven_without_recognition` gibt ohne Erkennung nur noch aus, was belegt
+  ist: erzeugte Merkmale, unveränderte Dreiecke, starr Bewegtes; ein erkanntes
+  Merkmal mit geleerten Dreiecken oder über ein geändertes Netz unverändert
+  gereichtes fällt weg. Dieselbe Bauart hatten `remove_feature`, `plug_hole`,
+  `move_feature`, `cut_away`, `drill_hole`, `countersink_hole`, `smooth_mesh`,
+  `remesh_uniform`, `subdivide_surface`, `compensate_first_layer` (gemessen).
+  Eine neue Ausgabe ohne eigenen Vorgänger — die Hälften nach *Teilen* —
+  misst sich am einzigen Eingang (`origin_features`); beide Hälften trugen im
+  Bild sonst die Merkmale der ganzen Platte mit deren Dreiecken (Durchsicht,
+  N1). Gemessen sauber: Spiegeln, Kopien in Reihe, Merkmal vervielfachen.
+- **Verbrauchte Flächen:** Ein späterer Schritt, der eine erzeugte Fläche ganz
+  durchdrückt, ließ sie ohne Dreiecke im Ergebnis stehen (`face_1`, `face_2` am
+  Kundenstift). `_consumed_faces` nimmt sie heraus, wenn die Erkennung
+  vollständig lief und keine gleich gerichtete Fläche in ihrer Ebene liegt
+  (`matching.faces_in_plane`, dieselbe Rechnung wie `pieces_in_place`; die
+  Normale über `units.dot3`, nicht BLAS). Ihr Name bleibt im selben Schritt
+  gesperrt (`apply_mapping`, `reserved`); vorher bekam am Kasten mit Fase die
+  neue Taschenwand den Namen der durchgedrückten Deckfläche, und ein späterer
+  Schritt versetzte still die Wand (Durchsicht, B3). Nennt ein späterer
+  Schritt die Fläche, hält er mit „Diese Fläche gibt es an dem Körper nicht
+  mehr …“ (`faces.gone_face_error`, gerufen aus `face_ops._chosen_face`,
+  `_drafted_face` und `faces._triangles_of`) und dem Bezugsverlust
+  `perceive.generated_lost` am verbrauchenden Schritt.
+- **Die Wahl:** `ObjectTree.show_scene` hebt eine Merkmalswahl auf, die der
+  neue Stand nicht trägt, und hält sie mit dem Text ihrer Zeile in
+  `lost_selection` fest. `MainWindow._say_features_lost` entscheidet erst nach
+  den Wiederwahlen (Langloch aus der gewählten Bohrung, Baustein, neuer
+  Körper) und sagt „„{Zeile}“ gibt es nach der Neuberechnung nicht mehr, die
+  Auswahl ist aufgehoben.“ nur, wenn der Verlaufsstand seit dem letzten Bild
+  gleich ist und der Körper noch da — nach Entf, Undo oder einem neuen Schritt
+  bleibt deren Quittung mit dem Rückweg stehen. Entf trifft danach nichts statt
+  des ganzen Körpers. Die erste Fassung meldete aus dem Baum heraus: Die
+  Wiederwahl nach *Zum Langloch ziehen* fand den Körper nicht mehr, und die
+  Ansage überschrieb die Quittung eigener Handlungen (Durchsicht, B1/B2).
+  Der Verlaufsstand kommt aus `History.document_mark` (eine Quelle mit dem
+  Redo-Stapel) samt Projektgeneration der Sitzung; ein überholtes Ergebnis
+  (`result_current` falsch, nicht das Bild) sagt nichts an und verbraucht die
+  Marke nicht (zweite Durchsicht).
+- **Namenssperre, zweite Durchsicht:** Im frühen Ausgang ohne Vorgänger sperrt
+  das Ausweichen auch erzeugte und mitreisende Namen; sonst fiel der neue Name
+  der Wand auf `face_2` daneben und wurde beim Zusammenführen still
+  überschrieben. Eine abgeschnittene erzeugte Fläche (`cut_off`) braucht keine
+  eigene Sperre: Sie reist als erzeugtes Merkmal in die Zuordnung und endet
+  verwaist, und verwaiste Namen sperrt `apply_mapping` ohnehin; ein Test hält
+  diesen Weg fest.
+
+Nachweis: `tests/test_evaluation.py` (Stiftnachbau mit Fase und drei
+`push_face`, Lochplatte mit Bohren, Verschieben und Teilen am Ende, verbrauchte
+Flächen samt späterem Bezug, Kasten mit Fase für den gesperrten Namen,
+`_consumed_faces` direkt), `tests/test_matching.py`
+(`test_one_plane_question_for_pieces_and_used_up_faces`),
+`tests/test_mesh_faces.py` (derselbe Satz für fehlende Kennung und alte
+Dreiecke), `tests/test_platform_identity.py` (Weg `used_up_faces`),
+`tests/test_feature_panel.py` (Wahl aufgehoben, Name wie die Zeile) und
+`tests/test_ui.py` (Langloch bleibt gewählt, Ansage am Fenster, Quittung nach
+Entf an Fläche und Bohrung und nach Undo); jeder ohne seinen Fix rot.
+Regel: `oberflaeche.md` („Eine Auswahl fällt nie still auf etwas Größeres“).
 
 ## RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)
 

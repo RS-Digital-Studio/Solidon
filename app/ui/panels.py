@@ -1736,6 +1736,19 @@ def _part_group(created_by: int | None, document: Document | None) -> tuple[str,
     return (str(found[1].title), int(found[0].id)) if found is not None else None
 
 
+def _carries(result: EvaluationResult, object_id: str, feature_id: str) -> bool:
+    """Ob der Körper im Ergebnis dieses Merkmal noch trägt."""
+    entry = result.scene.objects.get(object_id)
+    return entry is not None and feature_id in entry.features
+
+
+def _feature_name_in(result: EvaluationResult | None, object_id: str, feature_id: str) -> str:
+    """Der Name des Merkmals, wenn seine Zeile nicht verzeichnet ist (``ObjectTree._labels``)."""
+    entry = result.scene.objects.get(object_id) if result is not None else None
+    feature = entry.features.get(feature_id) if entry is not None else None
+    return feature_name(feature_id, feature) if feature is not None else feature_id
+
+
 def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | None:
     """Die Zeile dieses Merkmals — über alle Ebenen unter ``item``.
 
@@ -2089,6 +2102,22 @@ class ObjectTree(QWidget):
         """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
         neu zeichnen kann — beim Ausblenden ändert sich nur die Anzeige."""
         self._document: Document | None = None
+        self._labels: dict[tuple[str, str], str] = {}
+        """Der Text jeder Merkmalszeile, wie er im Baum stand — Körper und Merkmal.
+
+        Eine Senkkette heißt „Bohrung 3 mit Senkung", ein Anker wie seine
+        Gruppe, ein Baustein mit einer Zeile wie der Baustein. Wer ein
+        verlorenes Merkmal ansagt, nennt diesen Text und keinen zweiten."""
+        self.lost_selection: tuple[tuple[str, str, str], ...] = ()
+        """Gewählte Merkmale, die der zuletzt gezeigte Stand nicht mehr trägt —
+        Körper, Merkmal und der Text ihrer Zeile.
+
+        Sie fielen still auf ihren Körper zurück (RM-537), und Entf entfernte
+        danach den ganzen Körper. Der Baum hebt die Wahl auf und hält hier
+        fest, was verloren ging; ob das gesagt wird, entscheidet das Fenster
+        erst nach seinen Wiederwahlen (``MainWindow._say_features_lost``) —
+        ein Langloch, das eben aus der gewählten Bohrung wurde, ist keine
+        verlorene Wahl."""
         self._theme: DrawingTheme = "dark"
         """Für welches Thema die Vorschaubilder gezeichnet werden."""
         self._previews: dict[str, QIcon] = {}
@@ -2325,6 +2354,10 @@ class ObjectTree(QWidget):
         selected = self.selected_objects()
         selected_feature = self.selected_feature()
         selected_features = self.selected_features()
+        previous = self._result
+        seen_labels = self._labels
+        self._labels = {}
+        self.lost_selection = ()
         self._result = result
         self._document = document
         # **Das Leeren ist keine Auswahl.** ``clear()`` meldete „nichts
@@ -2676,6 +2709,9 @@ class ObjectTree(QWidget):
                     only.setExpanded(True)
                     continue
                 group.setExpanded(True)
+            self._labels.update(
+                ((object_id, feature_id), child.text(0)) for feature_id, child in made.items()
+            )
             self.tree.addTopLevelItem(item)
             item.setExpanded(object_id in selected)
         self.tree.resizeColumnToContents(0)
@@ -2685,10 +2721,31 @@ class ObjectTree(QWidget):
         # ``selected_feature`` hieß danach „keines“, und die Maßgruppe nach
         # *Übernehmen* hing an keinem Merkmal. Aufgelöst wird nur, was keine
         # einzelne Merkmalszeile war — ein Dach oder eine Mehrfachwahl.
-        if selected_feature is None and len(selected_features) > 1:
+        wanted = (
+            list(selected_features)
+            if selected_feature is None and len(selected_features) > 1
+            else [(selected[0], selected_feature)]
+            if selected_feature is not None and len(selected) == 1
+            else []
+        )
+        lost = [reference for reference in wanted if not _carries(result, *reference)]
+        if len(wanted) > 1:
             self.select_features(selected_features)
+        elif lost:
+            # **Nie still zum Körper** (RM-537): Gewählt war ein Merkmal, und
+            # nach der Entf-Taste wäre sonst der ganze Körper fort.
+            self._restore((), None)
+            self._on_selection()
         else:
             self._restore(selected, selected_feature)
+        self.lost_selection = tuple(
+            (
+                body,
+                feature,
+                seen_labels.get((body, feature)) or _feature_name_in(previous, body, feature),
+            )
+            for body, feature in lost
+        )
         self._fit()
         # Erst steht der Baum, dann kommen die Bilder nach. Andersherum wartet
         # der Nutzer auf eine Liste, die längst fertig gerechnet ist.

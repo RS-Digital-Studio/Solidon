@@ -394,15 +394,27 @@ def _triangles_of(mesh: MeshData, feature: Feature) -> list[int]:
     total = len(mesh.raw.faces)
     chosen = [int(index) for index in feature.face_indices if 0 <= int(index) < total]
     if not chosen or len(chosen) != len(feature.face_indices):
-        raise GeometryError(
-            detail=_(
-                "Diese Fläche gibt es an dem Körper nicht mehr — ein Schritt davor "
-                "hat ihn verändert. Wählen Sie sie neu."
-            ),
-            values={"faces": len(feature.face_indices)},
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+        raise gone_face_error({"faces": len(feature.face_indices)})
     return chosen
+
+
+def gone_face_error(values: Mapping[str, Any] | None = None) -> GeometryError:
+    """Der Satz, wenn eine gewählte Fläche nicht mehr am Körper ist (Regel 17).
+
+    Ein Schritt davor hat sie neu vernetzt, verbraucht oder abgeschnitten;
+    die Auswertung meldet ein Verbrauchen dort als Bezugsverlust (RM-537).
+    Gewählt war eine Fläche, also ist die Neuwahl der Weg — nicht „keine
+    gewählt". Eine Stelle für den Satz, ob die Dreiecke nicht mehr passen
+    (:func:`_triangles_of`) oder die Kennung fehlt (``face_ops``).
+    """
+    return GeometryError(
+        detail=_(
+            "Diese Fläche gibt es an dem Körper nicht mehr — ein Schritt davor "
+            "hat ihn verändert. Wählen Sie sie neu."
+        ),
+        values=dict(values or {}),
+        suggestions=(CHANGE_SELECTION, CANCEL),
+    )
 
 
 def _must_be_flat(mesh: MeshData, triangles: list[int], normal: np.ndarray) -> None:
