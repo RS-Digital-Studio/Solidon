@@ -11,7 +11,7 @@ keine Geometrie, sie ruft Ops auf (Regel 1, 2). Weitere Regeln laden mit ihren
 Dateien: `fenster.md` (Fenster, Dialoge, Rückfragen, Verlauf, Prüfbericht,
 Merkmalfenster), `grenzen.md` (Grenzen, was wo steht, Dialogvorderseite,
 Zwillinge, Kürzel), `ansicht.md`, `griffe.md`, `kamera.md`, `wartezeit.md`,
-`zeichenflaeche.md`, `uebersetzung.md`. Warum:
+`zeichenflaeche.md`, `uebersetzung.md`, `druckerwahl.md`. Warum:
 `konzepte/begruendungen/regel-oberflaeche.md`.
 
 **Die Grenzen gelten für jeden**, auch wo `grenzen.md` nicht lädt: neun Menüs,
