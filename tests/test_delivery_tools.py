@@ -512,6 +512,31 @@ def test_the_commit_guard_compares_both_names_of_a_renamed_source(
     assert check_new_texts.main() == int(new_text)
 
 
+def test_the_commit_guard_stops_at_a_staged_file_it_cannot_read(
+    text_guard_repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Eine gestagte Fassung, die Python nicht liest, hält den Commit an.
+
+    ``bbd41ff2d`` ging mit einer ``panels.py`` durch, deren Einrückung
+    verschoben war: Der Wächter las die gestagte Fassung, ``ast.parse``
+    scheiterte, und die Datei galt als textlos — ihre sechs neuen Texte prüfte
+    niemand, und jeder Import der Datei scheiterte am HEAD. Der Kopf des Hooks
+    verspricht, dass eine nicht auswertbare Prüfung anhält.
+    """
+    from tools import check_new_texts
+
+    root = text_guard_repo
+    source = root / "app" / "message.py"
+    before = source.read_text(encoding="utf-8")
+    source.write_text(before + 'def f():\nreturn tr("Neuer Text")\n', encoding="utf-8")
+    _text_guard_git(root, "add", "app/message.py")
+    broken = len(before.splitlines()) + 2  # die Zeile ohne Einrückung unter ``def``
+
+    assert check_new_texts.main() == 2
+    said = capsys.readouterr().out
+    assert "app/message.py" in said and f"Zeile {broken}" in said, said
+
+
 def _commit_hook_with(
     tmp_path: Path,
     *,
@@ -743,6 +768,18 @@ def test_the_commit_hook_keeps_non_ascii_and_space_paths_as_one_name(
     )
 
     assert result.returncode == 1, result.stderr
+
+
+def test_the_commit_hook_stops_when_the_text_guard_cannot_read_a_staged_file(
+    tmp_path: Path,
+) -> None:
+    """Rückgabe 2 des Textwächters ist eine nicht auswertbare Prüfung, kein Kataloglückenbefund."""
+    result, _calls = _commit_hook_with(tmp_path, catalog_exit=2)
+
+    assert result.returncode == 1, result.stderr
+    assert "ABGEBROCHEN" in result.stderr, result.stderr
+    assert "Die Textprüfung konnte eine gestagte Datei nicht lesen." in result.stderr
+    assert "[neue Texte ohne Übersetzung]" not in result.stderr
 
 
 @pytest.mark.parametrize("git_exit, have_interpreter", [(128, True), (0, False)])

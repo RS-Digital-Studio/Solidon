@@ -61,6 +61,46 @@ sich das Merkmal, das `featureSelected` in derselben Runde schon gebaut hat,
 samt Aufbaustand des Fensters (`FeaturePanel.serial`). Wer ein weiteres Signal an
 dieselbe Geste hängt, prüft mit einem Zähler, wie oft der teure Teil läuft.
 
+### Verschiebbare Karten: Zug, Oberkante, Tabfolge, Speichern
+
+Aus der Durchsicht zu RM-538 (`output/review/punkte-0.5.3-2026-10-06/`):
+
+* **Umriss und Satz zeigen das Ergebnis, nicht den Zeiger.** `drag_to` legte den
+  Umriss an die Stelle unter dem Zeiger und sagte „schweben“; landete die Karte
+  nach Tausch oder Ausweichen woanders (in der Sonde 312 Punkte daneben), sagte
+  die zweite Kodierung etwas Falsches (Regel 18). Jetzt rechnet der Zug
+  `settled_places` mit den Größen aus `begin_drag` — `_card_sizes` teilt den
+  Listen Raum zu, je Mausbewegung wäre das ein Neuaufbau. Wandert die andere
+  Karte, zeigt ein zweiter Umriss wohin; je Fall steht ein eigener Satz
+  (`_drag_sentence`). Beim Überdecken bekommt die gezogene den Platz und die
+  andere rückt, wie es der Soll-Ablauf verlangt; liegt die andere am Rand,
+  rückt die gezogene.
+* **Eine schwebende Karte hält ihre Oberkante.** `down` war ein Anteil am
+  Spielraum unter der Karte, also lief beim Zuklappen die Kopfzeile unter dem
+  Zeiger weg (bei `down=0,5` von y=201 nach 275). Auch beim Aufklappen bis an
+  die Unterkante: Die erste Fassung rückte sie dort nach oben (200 → 87). Jetzt
+  rückt sie nur, wo unter ihr weniger als `FLOATING_LEAST` bliebe
+  (`floating_top`); sonst endet sie an der Unterkante, und ihr Inhalt rollt,
+  denn sie teilt ihren Listen den Raum unter ihrer Oberkante zu.
+* **Der Griff führt die Tabfolge seiner Karte an, weil er vor ihrem Inhalt
+  entsteht** (links vor dem Objektbaum, rechts vor dem Bericht) und ein
+  Umhängen im selben Fenster seinen Platz in der Kette lässt. Die erste
+  Fassung ordnete nachträglich um und lief dafür in Python über
+  `nextInFocusChain`: PySide hängt jedes so zurückgegebene Widget an seinen
+  Vorgänger, und der Speicherbereiniger nahm mit einer kurzlebigen Hülle den
+  Träger von Merkmalfenster und Karte der Handlungen mit (536 statt 699
+  Widgets, jede Auswahl warf „already deleted“). Den Wirt bekommt der Griff
+  deshalb erst danach (`CardGrip.attach`).
+* **Ein Druck ohne Wirkung sagt nichts**, ↓ löst eine Karte vom Rand: Die
+  Ansage „liegt wieder an ihrem Platz“ für einen senkrechten Pfeil, der nichts
+  tat, war eine Bestätigung für nichts; wer an der angedockten Karte ↓ drückt,
+  will sie tiefer.
+* **Gespeichert wird gebündelt** (`CARD_PLACES_SAVE_MS`, `closeEvent` holt
+  nach): Zehn Pfeildrücke schrieben die Datei zehnmal, synchron und atomar mit
+  `replace`, das unter Windows kurz scheitern kann. Nach dem Zug steht die
+  Meldung wieder da, die die Statuszeile vorher trug — im Zeichenmodus und am
+  Skelett ist das die Anleitung.
+
 ## Rückfragen
 
 *Bis zur Verdichtung in `oberflaeche.md`:*

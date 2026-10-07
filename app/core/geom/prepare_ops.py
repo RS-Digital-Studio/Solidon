@@ -17852,6 +17852,14 @@ class HollowParams(BaseParams):
     params=HollowParams,
     consumes=1,
     produces=1,
+    # **An einer gewählten Fläche angeboten — sie wird die Öffnung** (P6.3):
+    # Der Dialog trägt sie in *Öffnungen* ein (``values_for``). Ohne diese
+    # Zeile stand *Aushöhlen* an einer Fläche weder vorn noch in der Liste,
+    # und wer nach dem Anlegen eines Quaders auf ihn klickte — er war schon
+    # gewählt, der Klick nahm die Oberseite —, fand die Handlung nicht, die
+    # das Handbuch an dieser Stelle zeigt (Fragebogen zu 0.5.3).
+    applies_to=("face", "curved_face"),
+    also_on_body=True,
     doc=_(
         "Höhlt ein Objekt aus, mit Entlüftungen oder mit gewählten offenen Flächen. "
         "Spart Material und Zeit; am Dreiecksmodell stimmt die Wand im Rahmen des "
@@ -18448,6 +18456,9 @@ class TestPieceParams(BaseParams):
     consumes=VARIABLE,
     minimum_inputs=1,
     produces=VARIABLE,
+    # Die engste Stelle zwischen beiden Teilen setzt das Fenster, durch das
+    # jedes Stück geschnitten wird (``history.discarded``).
+    shapes_with_other_inputs=True,
     applies_to=["hole", "pin", "face"],
     doc=_(
         "Schneidet einen Würfel um eine Stelle heraus, um die Passung vor dem ganzen Teil "
@@ -20360,7 +20371,8 @@ class OrientParams(BaseParams):
 
 @register_op(
     name="orient_for_print",
-    cache_version="3",
+    # 4: Ein Überschneidungsbefund nennt beide Körper (``Finding.object_ids``).
+    cache_version="4",
     title=_("Druckoptimal ausrichten"),
     category="transform",
     params=OrientParams,
@@ -20697,7 +20709,8 @@ class ArrangeParams(BaseParams):
 
 @register_op(
     name="arrange_bed",
-    cache_version="2",
+    # 3: Ein Überschneidungsbefund nennt beide Körper (``Finding.object_ids``).
+    cache_version="3",
     title=_("Auf dem Bett anordnen"),
     category="scene",
     params=ArrangeParams,
@@ -20848,6 +20861,8 @@ class CollisionParams(BaseParams):
 
 @register_op(
     name="check_collisions",
+    # 2: Ein Überschneidungsbefund nennt beide Körper (``Finding.object_ids``).
+    cache_version="2",
     # „Überschneidungen" statt „Kollisionen": Der Kunde denkt bei Kollision an
     # einen Zusammenstoß, gemeint ist, dass zwei Teile ineinanderstecken.
     title=_("Überschneidungen prüfen"),
@@ -20945,6 +20960,8 @@ class JoinPathParams(BaseParams):
 
 @register_op(
     name="check_join_path",
+    # 2: Jeder Befund nennt beide Teile (``Finding.object_ids``).
+    cache_version="2",
     title=_("Fügeweg prüfen"),
     category="scene",
     params=JoinPathParams,
@@ -21005,9 +21022,16 @@ def check_join_path_op(ctx: OpContext) -> OpResult:
         pivot=pivot,
     )
     # Wie „Überschneidungen prüfen": Die Körper gehen unberührt hindurch, die
-    # Befunde sind das Ergebnis.
+    # Befunde sind das Ergebnis. Jeder spricht über beide Teile, ohne sie beim
+    # Index zu nennen — mit beiden Kennungen fällt er, wenn eines entfernt wird.
+    pair = (ctx.inputs[0].id, ctx.inputs[1].id)
     return OpResult(
-        outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs), answered=answered
+        outputs=list(ctx.inputs),
+        findings=[
+            dataclasses.replace(entry, object_ids=entry.object_ids or pair)
+            for entry in named_for(findings, ctx.inputs)
+        ],
+        answered=answered,
     )
 
 
