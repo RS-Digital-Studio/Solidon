@@ -147,6 +147,8 @@ from app.core.scene.history import (
     discarded,
     recognition_reopenable,
     repair_is_available,
+    shown_before,
+    step_state_word,
     step_titles,
 )
 from app.core.scene.parameter_binding import BindingSpot
@@ -2014,6 +2016,13 @@ class ObjectTree(QWidget):
     Ohne Kennung: Was gewählt ist, weiß das Fenster ohnehin, und der Katalog
     fragt es dort ab. Der Baum sagt nur, dass jemand ihn sehen will."""
 
+    selection_entries: Callable[[QMenu], None] | None = None
+    """Hängt *Vereinigen* und *Entfernen* an das Kontextmenü (:meth:`context_menu`).
+
+    Gesetzt vom Fenster: Wie *Entfernen* heißt, hängt daran, was Entf an der
+    Auswahl tut — am Baustein, an einer Bohrung, am Körper —, und das weiß nur
+    das Fenster (``MainWindow._removal_entry``)."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.tree = _ObjectTreeView(self)
@@ -3220,13 +3229,17 @@ class ObjectTree(QWidget):
         # auf eine Deckfläche zeigt, meint die Deckfläche (§18.5).
         self._add_sketch_on_face(menu)
         self._add_visibility(menu, chosen)
-        # **Keine Operationen mehr** (Robert, 11.09.2026: „ebenso dann beim
-        # rechtsklick im objektbaum"). Sie standen hier als dieselbe Liste wie
-        # rechts in der Karte der Handlungen — gruppiert, gefaltet, mit dem
-        # Katalog an der Stelle der Bausteine —, und zwei Orte für dieselbe
-        # Liste sind einer zu viel. Was bleibt, gibt es nur hier: der Weg vom
-        # Ergebnis zurück zum Schritt, die Skizze auf der Fläche und die
-        # Sichtbarkeit des Körpers.
+        # **Keine Liste der Operationen** (Robert, 11.09.2026: „ebenso dann
+        # beim rechtsklick im objektbaum"). Sie standen hier als dieselbe Liste
+        # wie rechts in der Karte der Handlungen, und zwei Orte für dieselbe
+        # Liste sind einer zu viel. **Zwei Handlungen kommen dazu** (Robert,
+        # 06.10.2026, nach dem Fragebogen zu 0.5.3): *Entfernen* und bei
+        # mehreren Körpern *Vereinigen* — die beiden, die jeder Slicer an
+        # dieser Stelle trägt. Welche Zeilen das sind und wie sie heißen,
+        # weiß das Fenster (:attr:`selection_entries`): *Entfernen* heißt, was
+        # Entf an dieser Auswahl tut.
+        if self.selection_entries is not None:
+            self.selection_entries(menu)
         return menu
 
     def _on_double_click(self, item: QTreeWidgetItem, column: int) -> None:
@@ -3289,12 +3302,17 @@ class ObjectTree(QWidget):
         if self.tree.selection_allowed is not None and not self.tree.selection_allowed():
             return
         item = self.tree.itemAt(position)
-        if item is not None:
+        if item is not None and not (item.isSelected() and len(self.tree.selectedItems()) > 1):
             # Der Rechtsklick meint die Zeile darunter. Ohne diese Auswahl
             # öffnete sich zwar das passende Kontextmenü, der Dialog erbte
             # aber ein vorher gewähltes Merkmal oder keines — ein Gewinde
             # stand dann nicht in der gerade angeklickten Bohrung. Geleert wird
             # ohne Zwischenmeldung, gemeldet der neue Stand.
+            #
+            # **Außer die Zeile gehört schon zu mehreren markierten** — dann
+            # meint der Klick die Gruppe, wie in jedem Dateimanager und in
+            # Cura: zwei Körper markieren, mit rechts *Vereinigen* oder
+            # *Objekt entfernen* (Entscheidung Robert, 06.10.2026).
             with QSignalBlocker(self.tree):
                 self.tree.clearSelection()
             item.setSelected(True)
@@ -4446,14 +4464,25 @@ def step_state(document: Document, op_id: int, gone: Discarded | None = None) ->
     Als Wort und nicht als Farbe (Regel 18). „Ergebnis entfernt" trägt ein
     Schritt, dessen Körper ein späterer Schritt wieder aus der Szene genommen
     hat (``history.discarded``, S-20261006-2a0261): Er rechnet, wirkt aber
-    nicht mehr auf den Endstand.
+    nicht mehr auf den Endstand. Das Wort kommt von ``history.step_state_word``,
+    wo auch der Steckbrief es liest.
     """
     entry = next((operation for operation in document.ops if operation.id == op_id), None)
-    if entry is None:
-        return ""
-    if entry.suppressed is not None:
-        return tr("aus") if entry.suppressed.chosen else tr("ruht")
-    return tr("Ergebnis entfernt") if gone is not None and op_id in gone.steps else ""
+    word = step_state_word(entry, gone) if entry is not None else None
+    return str(word) if word is not None else ""
+
+
+def discarded_as_shown(document: Document, inserting: int | None = None) -> Discarded:
+    """Was ein späterer Schritt am gezeigten Stand wieder entfernt hat (``history.discarded``).
+
+    Mit Einfügemarke zeigt die ganze Oberfläche den Stand davor
+    (``history.shown_before``, dieselbe Regel wie ``Session.displayed_document``):
+    Eine Löschung hinter der Marke rechnet dort nicht, also faltet sie im
+    Verlauf nichts unter sich, und kein Schritt davor trägt „Ergebnis entfernt“,
+    während Ansicht und Prüfbericht ihn zeigen (Review zu ``bbd41ff2d``, R2).
+    """
+    shown = shown_before(document, inserting)
+    return discarded(sorted(shown.ops, key=lambda one: one.id))
 
 
 def removal_groups(document: Document, gone: Discarded) -> dict[str, tuple[int, ...]]:
@@ -4589,7 +4618,39 @@ def drop_before(row_ops: Sequence[tuple[int, ...]], row: int) -> int | None:
 
 
 #: Ein Ablageziel, das es nicht gibt — kein Strich, keine Ablage.
-_NOWHERE: Final = -1
+NOWHERE: Final = -1
+
+
+class HistoryRow(NamedTuple):
+    """Eine Zeile des Verlaufs, wie eine Ablage sie liest."""
+
+    ops: tuple[int, ...]
+    """Die Schritte, die sie trägt."""
+    hidden: bool
+    """Zugeklappt — die Zeile ist nicht zu sehen."""
+    nested: bool
+    """Sie steht unter der Löschung, die ihr Ergebnis wegnimmt (``NESTED_ROLE``)."""
+
+
+def _droppable(rows: Sequence[HistoryRow]) -> list[tuple[int, ...]]:
+    """Je Zeile die Schritte, vor die sich ablegen lässt — sichtbar und an ihrer Stelle."""
+    return [() if entry.hidden or entry.nested else entry.ops for entry in rows]
+
+
+def drop_target(rows: Sequence[HistoryRow], row: int) -> int | None:
+    """Vor welchen Schritt eine Ablage vor Zeile ``row`` fällt.
+
+    ``None`` heißt ans Ende, :data:`NOWHERE`: Hier liegt keine Stelle im
+    Stapel. Zwischen den Schritten unter einer Löschung ist das so — sie stehen
+    dort, wo ihr Ergebnis endet, nicht an ihrer Stelle. Gefragt wird die erste
+    **sichtbare** Zeile darunter: Unter einer zugeklappten Löschung meint die
+    untere Hälfte ihrer Zeile dieselbe Stelle wie die obere der nächsten
+    (Review zu ``bbd41ff2d``, K2).
+    """
+    below = next((entry for entry in rows[max(row, 0) :] if not entry.hidden), None)
+    if below is not None and below.nested:
+        return NOWHERE
+    return drop_before(_droppable(rows), row)
 
 
 class _HistoryList(QListWidget):
@@ -4621,14 +4682,18 @@ class _HistoryList(QListWidget):
         self._targets: Mapping[int | None, str | None] = {}
         self._said = ""
 
+    def rows(self) -> list[HistoryRow]:
+        """Je Zeile die Schritte, die sie trägt, und ob sie zu sehen ist und an ihrer Stelle."""
+        return [
+            HistoryRow(
+                tuple(item.data(OPS_ROLE) or ()), item.isHidden(), bool(item.data(NESTED_ROLE))
+            )
+            for item in (self.item(row) for row in range(self.count()))
+        ]
+
     def row_ops(self) -> list[tuple[int, ...]]:
-        """Je Zeile die Schritte, die sie trägt — sichtbar oder nicht."""
-        found: list[tuple[int, ...]] = []
-        for row in range(self.count()):
-            item = self.item(row)
-            shown = not item.isHidden() and not item.data(NESTED_ROLE)
-            found.append(tuple(item.data(OPS_ROLE) or ()) if shown else ())
-        return found
+        """Je Zeile die Schritte, vor die sich ablegen lässt — sichtbar und an ihrer Stelle."""
+        return _droppable(self.rows())
 
     def startDrag(self, supportedActions: Qt.DropAction) -> None:  # noqa: N802, N803 - Qt
         self._moving = self.dragged()
@@ -4648,12 +4713,8 @@ class _HistoryList(QListWidget):
             return True, None
         rect = self.visualRect(index)
         row = index.row() + (1 if position.y() > rect.center().y() else 0)
-        below = self.item(row) if row < self.count() else None
-        if below is not None and below.data(NESTED_ROLE):
-            # Zwischen den Schritten unter einer Löschung liegt keine Stelle im
-            # Stapel — sie stehen dort, wo ihr Ergebnis endet.
-            return False, _NOWHERE
-        return True, drop_before(self.row_ops(), row)
+        before = drop_target(self.rows(), row)
+        return before != NOWHERE, before
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt
         if event.source() is self and self._moving:
@@ -5005,7 +5066,7 @@ class HistoryPanel(QWidget):
             for entry in document.ops
             if entry.suppressed is not None
         }
-        self._discarded = discarded(sorted(document.ops, key=lambda one: one.id))
+        self._discarded = discarded_as_shown(document, inserting)
         removed_under = removal_groups(document, self._discarded)
         nested = {op_id for members in removed_under.values() for op_id in members}
         self.stop_insert_action.setEnabled(inserting is not None)
@@ -5147,11 +5208,7 @@ class HistoryPanel(QWidget):
             ):
                 # Eine Teilung, deren Stücke alle wieder entfernt sind, sagt
                 # es schon an der zugeklappten Zeile.
-                self._mark_discarded(
-                    item,
-                    document,
-                    max(self._discarded.steps[op_id] for op_id in active_ops),
-                )
+                self._mark_discarded(item, document, active_ops)
             # **Die Zeile trägt auch, was sie umfasst.** ``UserRole`` bleibt
             # die *eine* Operation zum Öffnen — eine Transaktion aus vier
             # Schritten hat keine, und das ist richtig, denn welchen sollte ein
@@ -5377,11 +5434,18 @@ class HistoryPanel(QWidget):
         self.list.addItem(child)
         child.setHidden(group not in self._open_groups)
 
-    def _mark_discarded(self, item: QListWidgetItem, document: Document, remover: int) -> None:
-        """Die Zeile einer Transaktion, deren Ergebnis ``remover`` wieder entfernt hat."""
-        _grey_out(item, tr("Ergebnis entfernt"))
+    def _mark_discarded(
+        self, item: QListWidgetItem, document: Document, steps: Sequence[int]
+    ) -> None:
+        """Die Zeile einer Transaktion, deren Schritte alle ihr Ergebnis wieder verloren haben.
+
+        Das Wort ist das ihrer Schritte (:func:`step_state`, also
+        ``history.step_state_word``); die Kurzhilfe nennt den letzten Schritt,
+        der etwas davon entfernt.
+        """
+        _grey_out(item, step_state(document, steps[0], self._discarded))
         tips = [item.toolTip()] if item.toolTip() else []
-        tips.append(_removed_tip(document, remover))
+        tips.append(_removed_tip(document, max(self._discarded.steps[op_id] for op_id in steps)))
         item.setToolTip("\n".join(tips))
 
     def _add_marker(self, inserting: int) -> None:

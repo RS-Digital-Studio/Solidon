@@ -4091,23 +4091,32 @@ def named_for(findings: list[Finding], entries: Sequence[Any]) -> list[Finding]:
     bei zwei Körpern ist klar, welche gemeint sind, bei zwanzig steht man davor
     und sucht. Wer die Kennungen hat, trägt sie nach; das ist der Aufrufer,
     denn er hat die Szene.
+
+    **Ein Befund über ein Paar nennt beide Körper** (``Finding.object_ids``):
+    Am ersten hängt er für den Klick, mit dem zweiten fällt er, wenn ein
+    späterer Schritt ihn entfernt (Fund N1 zum Review von ``bbd41ff2d``).
     """
     import dataclasses
 
     named: list[Finding] = []
     for finding in findings:
         values = dict(finding.values)
-        first: Any = None
+        bodies: list[Any] = []
         for field_name in _INDEX_FIELDS:
             index = values.get(field_name)
             if not isinstance(index, int | float) or not 0 <= int(index) < len(entries):
                 continue
             entry = entries[int(index)]
             values[field_name] = entry.name
-            if first is None:
-                first = entry.id
+            if entry.id not in bodies:
+                bodies.append(entry.id)
         named.append(
-            dataclasses.replace(finding, object_id=finding.object_id or first, values=values)
+            dataclasses.replace(
+                finding,
+                object_id=finding.object_id or (bodies[0] if bodies else None),
+                object_ids=tuple(bodies) if len(bodies) > 1 else finding.object_ids,
+                values=values,
+            )
         )
     return named
 

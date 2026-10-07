@@ -408,6 +408,35 @@ def test_the_search_finds_by_title_name_and_documentation() -> None:
     assert not matches(entry, "bohrung")
 
 
+def test_the_card_finds_with_the_rounds_of_the_palette() -> None:
+    """Ein Kundenwort findet in der Karte der Handlungen, was es in der Palette findet.
+
+    Fragebogen zu 0.5.3: Ein Anfänger suchte *Vereinigen* als „verschmelzen“
+    und das Löschen als „löschen“. Die Suche der Karte verglich nur Titel und
+    Gruppe und fand keines davon, die Palette beides. Beide fragen jetzt
+    :func:`found_in_rounds`; hier die Rechnung, die Karte selbst in
+    ``tests/test_selection_operations.py``.
+    """
+    from app.core.bootstrap import load_operations
+    from app.ui.command_palette import found_in_rounds
+
+    load_operations()
+    entries = _palette_entries()
+
+    def found(query: str) -> set[str]:
+        return {str(entry.name) for entry in found_in_rounds(entries, query)[0]}
+
+    assert "union_objects" in found("verschmelzen"), "Kundenwort"
+    assert "union_objects" in found("zusammenfügen"), "Kundenwort mit Umlaut"
+    assert "delete_object" in found("löschen"), "Kundenwort ohne Titeltreffer"
+    assert "hollow_object" in found("aushoehlen"), "Faltung"
+    assert "drill_hole" in found("bohren"), "zweite Runde: der Wortstamm"
+    assert found_in_rounds(entries, "verschmelzen")[1] is False, "eine genaue Runde lockert nicht"
+    loose, loosened = found_in_rounds(entries, "loch bitte xyzzy")
+    assert loosened and loose, "dritte Runde: ein Wort von mehreren genügt, und sie sagt es"
+    assert found_in_rounds(entries, "xyzzy") == ([], False)
+
+
 def test_the_palette_lists_every_operation_but_the_merged_twins(qt_app: object) -> None:
     """Die Grundliste zeigt jede Handlung **einmal**.
 

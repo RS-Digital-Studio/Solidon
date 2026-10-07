@@ -210,6 +210,14 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
 
         _close_retry = _Retry()
 
+        class _CardPlacesSave:
+            def stop(self) -> None:
+                events.append("card_places.stop")
+
+        # Die gebündelt gespeicherte Kartenlage geht mit dem Schließen in die
+        # Datei: Ihr Zeitgeber hält an, und ``_store_settings`` schreibt sie.
+        _card_places_save = _CardPlacesSave()
+
         def setEnabled(self, enabled: bool) -> None:  # noqa: N802 — bildet die Qt-API nach
             events.append(f"window.setEnabled:{enabled}")
 
@@ -230,6 +238,7 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         "window.setEnabled:False",
         "window.wait_for_workers",
         "spacemouse.stop",
+        "card_places.stop",
         "settings.save",
         "usage.stop",
         "notice.clear",
