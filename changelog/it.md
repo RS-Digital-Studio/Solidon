@@ -15,6 +15,62 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.5.4
+
+### Uso e sistema
+
+- Solidon ora si avvia sui Mac Intel con macOS 26. La versione 0.5.3 vi si bloccava all'avvio.
+- Su Mac, *Annulla* interrompe subito una risposta in corso del modello locale.
+- Su Mac, Invio apre la voce selezionata nella schermata iniziale, in *Cerca funzione* e nel rapporto di verifica.
+- Su Linux, la scrittura con Fcitx5 e IBus arriva ora nel campo di testo anche nel Flatpak e nell'AppImage.
+- La disinstallazione su Windows non lascia nel registro voci dell'associazione dei file.
+- Canc funziona anche quando la linguetta *Selezione* ha il focus, e rimuove più corpi contrassegnati in un solo passaggio. Se il tasto non fa nulla, la barra di stato ne dice il motivo.
+- Il clic destro sui corpi offre *Rimuovi oggetto* e, con più corpi, *Unisci*. *Svuota* c'è anche su una faccia selezionata, che diventa l'apertura.
+- I pannelli a sinistra e a destra si spostano con la maniglia, si agganciano a un bordo o restano sospesi. *Vista → Pannelli al loro posto* li rimette a posto.
+- Durante il ricalcolo, il rapporto di verifica dice *Ricalcolo in corso …* e mostra le righe di prima come stato precedente. Finora i vecchi errori sembravano ancora validi.
+- Se il calcolo rapido fallisce in un passaggio, Solidon lo ricalcola a fondo nella stessa esecuzione invece di fermarsi.
+- Un rilievo che dice che un passaggio non ha avuto effetto apre quel passaggio sul campo giusto.
+- Dopo la rimozione di un corpo, il rapporto non ne parla più, e la cronologia mostra quali passaggi non lasciano più nulla.
+- Un foro selezionato non ricade più in silenzio sul suo corpo dopo il ricalcolo. Finora Canc poteva poi rimuovere l'intero corpo.
+- Ogni funzione ha lo stesso nome ovunque. Lo strumento *Dividi* offre *Dividi lungo un piano*, *Dividi lungo una linea tracciata* e *Dividi in pezzi distinti*.
+- Sul corpo selezionato, *Dividi automaticamente …* si trova ora sotto *Prepara*.
+- Nella finestra a riposo solo *Blocchi* risalta a colori. Il rosso resta ai pulsanti che scartano o eliminano, e le domande si aprono con il focus su *Annulla*.
+- In modalità disegno la linguetta *Selezione* è nascosta. L'elenco dei vincoli mostra quelli dei punti e delle linee selezionati, più ogni conflitto.
+- Nella scheda dei parametri, una misura mostra «Non utilizzato» solo quando è così. Il pulsante dice quanti numeri fissi si possono collegare alle misure.
+- La segnalazione di errore allega un registro di arresto anomalo solo dopo un vero arresto anomalo di Solidon.
+
+### Stampare e passare allo slicer
+
+- Su Linux, Solidon crea ora il file di stampa anche con Cura come Flatpak o AppImage.
+- La finestra di stampa offre le stampanti dello slicer scelto, come *Primi passi* e *Impostazioni*. Una stampante ripresa così resta legata al suo slicer.
+- Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
+- Se supporti e skirt stanno sul piano, il controllo lo misura ora solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
+
+### Filettature, fori e componenti normalizzati
+
+- Le filettature accettano ora qualsiasi diametro fino a 1000 mm, con *Filettatura stampabile*, in un foro, con *Crea vite* o *Crea coperchio a vite*.
+- Viti, dadi e rondelle ci sono secondo ISO da M1,6 a M64. Per altre misure, *Misura personalizzata* ricava le dimensioni dalle misure vicine e lo dice.
+- Con *Adatto al foro*, *Perno per foro* costruisce la controparte: una testa svasata a filo per una svasatura, una filettatura esterna di pari misura e passo per una interna.
+- Su una filettatura interna stampata, la selezione offre direttamente *Perno per foro*.
+- Se in un foro c'è un pezzo separato come un perno, le azioni sul foro lo dicono e offrono *Dividi in pezzi distinti*. Finora il perno veniva fuso in silenzio con la piastra.
+
+### Modificare e disegnare
+
+- Con *Sposta caratteristica* il materiale della caratteristica si sposta così com'è e il punto di prima viene riempito in modo pulito. Dove non si può, la selezione lo dice subito.
+- Su cordoni e gole, la selezione offre solo ciò che l'operazione sa davvero fare.
+- Se accanto a una parete c'è un raccordo, *Applica l'angolo di sformo* dice prima del calcolo che è d'intralcio e indica *Rimuovi caratteristica* come via d'uscita.
+- Quando tagli via una parte di un corpo, spariscono anche smussi, filettature e sedi per dadi dei blocchi che vi si trovavano.
+- In *Crea coperchio* e *Crea coperchio a vite*, un campo vuoto per l'altezza dell'apertura significa «Bordo superiore», e 0 è l'altezza del piano. I progetti più vecchi mantengono la loro apertura.
+- Un vincolo d'angolo in uno schizzo piccolo non ribalta più le linee.
+
+### Generare con l'IA
+
+- La finestra di generazione calcola in locale con TRELLIS.2 e FLUX.2 [klein] invece di TripoSG e SDXL. Da un testo nasce prima un'immagine, e dall'immagine il modello.
+- Prima del download, la configurazione indica licenze e dimensioni dei modelli. Rimuove la vecchia configurazione TripoSG di Solidon e dice prima quali cartelle sono e quanto occupano.
+- Le pareti sottili, per esempio di un vaso, arrivano chiuse e con uno spessore.
+- L'assistente risponde nella lingua in cui scrivi.
+- Con un modello locale l'assistente ha tanto spazio quanto con uno ospitato e porta a termine compiti fino a dodici passaggi.
+
 ## 0.5.3
 
 ### Uso e sistema

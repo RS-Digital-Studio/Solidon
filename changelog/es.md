@@ -16,6 +16,62 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.5.4
+
+### Manejo y sistema
+
+- Solidon ya arranca en los Mac con Intel y macOS 26. La versión 0.5.3 se quedaba colgada allí al iniciar.
+- En el Mac, *Cancelar* detiene al instante una respuesta en curso del modelo local.
+- En el Mac, Retorno abre la entrada seleccionada en la pantalla de inicio, en *Buscar función* y en el informe de comprobación.
+- En Linux, la escritura con Fcitx5 e IBus llega ahora al campo de texto también en el Flatpak y en el AppImage.
+- La desinstalación en Windows no deja en el registro entradas de la asociación de archivos.
+- Supr también funciona cuando la pestaña *Selección* tiene el foco, y quita varios cuerpos marcados en un solo paso. Si la tecla no hace nada, la barra de estado dice por qué.
+- El clic derecho en los cuerpos ofrece *Quitar objeto* y, con varios, *Unir*. *Vaciar* también está en una cara seleccionada, que pasa a ser la abertura.
+- Los paneles de la izquierda y la derecha se mueven por su asa, se acoplan a un borde o quedan flotando. *Vista → Paneles a su sitio* los devuelve.
+- Mientras recalcula, el informe de comprobación dice *Recalculando …* y muestra las líneas anteriores como estado previo. Antes, los errores viejos parecían seguir vigentes.
+- Si el cálculo rápido falla en un paso, Solidon lo calcula a fondo en la misma pasada en lugar de detenerse.
+- Un hallazgo que dice que un paso no tuvo efecto abre ese paso en el campo correspondiente.
+- Al quitar un cuerpo, el informe deja de hablar de él, y el historial muestra qué pasos ya no dejan nada.
+- Un taladro seleccionado ya no vuelve en silencio a su cuerpo tras recalcular. Antes, Supr podía quitar entonces el cuerpo entero.
+- Cada función se llama igual en todas partes. La herramienta *Dividir* ofrece *Dividir por un plano*, *Dividir por una línea dibujada* y *Dividir en piezas sueltas*.
+- En el cuerpo seleccionado, *Dividir automáticamente …* está ahora en *Preparar*.
+- En la ventana en reposo solo *Bloques* destaca en color. El rojo queda para los botones que descartan o borran, y las preguntas se abren con el foco en *Cancelar*.
+- En el modo de dibujo, la pestaña *Selección* se oculta. La lista de restricciones muestra las de los puntos y líneas seleccionados, además de cualquier conflicto.
+- En la tarjeta de parámetros, una medida solo muestra «Sin utilizar» cuando es así. El botón dice cuántos números fijos se pueden vincular a medidas.
+- El informe de errores adjunta un registro de fallo solo cuando Solidon se ha cerrado de verdad por un fallo.
+
+### Imprimir y entregar al slicer
+
+- En Linux, Solidon crea ahora el archivo de impresión también con Cura como Flatpak o AppImage.
+- El diálogo de impresión ofrece las impresoras del slicer elegido, como *Primeros pasos* y *Ajustes*. Una impresora adoptada así se queda con su slicer.
+- El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
+- Si los soportes y el skirt caben en la cama, la comprobación lo mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
+
+### Roscas, taladros y piezas normalizadas
+
+- Las roscas admiten ahora cualquier diámetro hasta 1000 mm, ya sea con *Rosca imprimible*, en un taladro, con *Crear tornillo* o *Generar tapa roscada*.
+- Tornillos, tuercas y arandelas están disponibles según ISO de M1,6 a M64. Para otros tamaños, *Medida propia* deriva las medidas de los tamaños vecinos y lo indica.
+- Con *Ajustado al taladro*, *Pasador para taladro* construye la contrapieza: una cabeza avellanada enrasada para un avellanado, una rosca exterior del mismo tamaño y paso para una interior.
+- En una rosca interior impresa, la selección ofrece directamente *Pasador para taladro*.
+- Si en un taladro hay una pieza separada, como un pasador, las acciones del taladro lo dicen y ofrecen *Dividir en piezas sueltas*. Antes, el pasador se fundía en silencio con la placa.
+
+### Editar y dibujar
+
+- Con *Mover característica*, el material de la característica viaja tal como está y el sitio anterior se rellena limpiamente. Donde no es posible, la selección lo dice de entrada.
+- En cordones y gargantas, la selección solo ofrece lo que la operación puede hacer de verdad.
+- Si junto a una pared hay un redondeo, *Aplicar ángulo de desmoldeo* avisa antes de calcular de que estorba y propone *Quitar característica* como salida.
+- Al recortar una parte de un cuerpo, desaparecen también los chaflanes, roscas y alojamientos de tuerca de los bloques que había en ella.
+- En *Generar tapa* y *Generar tapa roscada*, un campo vacío para la altura de la abertura significa «Borde superior», y 0 es la altura de la cama. Los proyectos antiguos conservan su abertura.
+- Una restricción de ángulo en un dibujo pequeño ya no voltea las líneas.
+
+### Generar con IA
+
+- El diálogo de generación calcula en local con TRELLIS.2 y FLUX.2 [klein] en lugar de TripoSG y SDXL. Un texto se convierte primero en imagen y la imagen, en el modelo.
+- Antes de descargar, la configuración indica licencias y tamaños de los modelos. Quita la antigua configuración de TripoSG de Solidon y dice antes qué carpetas son y cuánto ocupan.
+- Las paredes finas, por ejemplo de un jarrón, llegan cerradas y con grosor.
+- El asistente responde en el idioma en que usted escribe.
+- Con un modelo local, el asistente tiene tanto margen como con uno alojado y completa encargos de hasta doce pasos.
+
 ## 0.5.3
 
 ### Manejo y sistema
