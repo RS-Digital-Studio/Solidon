@@ -529,7 +529,9 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     # nennt den Träger (``object_ids``), und der Plattencache hält Befunde.
     # 4: Jeder Befund des Stifts nennt den Träger, und ein zu kurzes Gewinde
     # bekommt die kürzeste druckbare Länge oder eine eigene Absage (Review P2, G1, M2).
-    cache_version="4",
+    # 5: Ein Kettenglied neben der Achse nimmt seinen Abschnitt um den Versatz
+    # enger, das halbe Spiel bleibt rundum (Review P2 N7).
+    cache_version="5",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "

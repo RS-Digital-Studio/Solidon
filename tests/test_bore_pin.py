@@ -601,6 +601,52 @@ def test_a_countersink_slightly_off_the_axis_still_reads_like_the_recognition(
     assert caught.value.suggestions
 
 
+def _plate_with_a_shifted_countersink(shift: float, profile: Profile) -> SceneObject:
+    """Platte 30 x 30 x 8, Bohrung Ø 5,2 durch, Senkung 90° bis Ø 10,4, um ``shift`` in x versetzt.
+
+    Geladen über den Ladeweg der Anwendung, damit die Erkennung die Kette liest.
+    """
+    import io as buffers
+
+    box = trimesh.creation.box(extents=(30.0, 30.0, 8.0))
+    box.apply_translation((0.0, 0.0, 4.0))
+    bore = trimesh.creation.cylinder(radius=2.6, height=20.0, sections=96)
+    bore.apply_translation((0.0, 0.0, 4.0))
+    cone = trimesh.creation.cone(radius=5.2 + 1.0, height=(10.4 - 5.2) / 2.0 + 1.0, sections=96)
+    cone.apply_transform(trimesh.transformations.rotation_matrix(math.pi, (1, 0, 0)))
+    cone.apply_translation((shift, 0.0, 9.0))
+    buffer = buffers.BytesIO()
+    box.difference(bore).difference(cone).export(buffer, file_type="stl")
+    project = new_project("centauri-carbon-2", "petg")
+    project.sources["src_1"] = buffer.getvalue()
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/versatz.stl", sha256=""
+    )
+    History(project.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    return next(iter(result.scene.objects.values()))
+
+
+def test_a_countersink_beside_the_axis_keeps_the_clearance_all_round(profile: Profile) -> None:
+    """Eine Senkung 0,15 mm neben der Bohrung: Der Kopf hält rundum das halbe Spiel (Review P2 N7).
+
+    Die Kette liest sie als gleichachsig (``r · SINK_FIT_LIMIT``), gebaut wird
+    der Stift um die Achse der Bohrung. Vorher stand der Kopf auf der einen
+    Seite 0,05 mm vor der Wand statt 0,125 mm — am echten Netz gemessen, denn
+    an den Kennzahlen allein sieht man es nicht.
+    """
+    carrier = _plate_with_a_shifted_countersink(0.15, profile)
+    holes = [name for name, entry in carrier.features.items() if entry.kind == "hole"]
+    cones = [name for name, entry in carrier.features.items() if entry.kind == "cone"]
+    assert len(holes) == 1 and len(cones) == 1, "sonst liest die Erkennung keine Kette"
+    beside = math.hypot(*carrier.features[cones[0]].params["centre"][:2])
+    assert beside > 0.1, "die Senkung sitzt erkennbar neben der Achse"
+    result = run("pin_for_bore", carrier, profile, at_feature=holes[0])
+    _loose(result.outputs[1], carrier, profile.material.clearance)
+
+
 def test_a_countersink_narrower_than_its_bore_is_a_narrowing_mouth(profile: Profile) -> None:
     """Eine „Senkung“ enger als die Bohrung ist eine Verengung: Der Stift sagt es ab (G6)."""
     carrier = _plate("plate_countersunk.stl", profile)

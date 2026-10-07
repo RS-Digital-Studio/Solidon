@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import pairwise
 from typing import Any, Final
 
@@ -109,6 +109,8 @@ class Section:
     äußeren (``end``). ``shoulder`` sagt, dass er mit einer Ringstufe auf den
     Abschnitt davor folgt; ``virtual`` steht am Gewindebereich, dessen Umriss
     nicht versetzt wird, sondern innerhalb des Gewindekerns bleibt.
+    ``misfit`` ist, wie weit seine Wand der Achse näher kommen kann, weil sein
+    Merkmal nur fast gleichachsig sitzt (:func:`_misfit`).
     """
 
     start: float
@@ -118,6 +120,7 @@ class Section:
     feature: FeatureId = ""
     shoulder: bool = False
     virtual: bool = False
+    misfit: float = 0.0
 
     @property
     def cone(self) -> bool:
@@ -281,6 +284,35 @@ def _coaxial(
     )
 
 
+def _misfit(
+    feature: Feature, section: Section, origin: NDArray[np.float64], axis: NDArray[np.float64]
+) -> float:
+    """Wie weit die Wand dieses Glieds der Achse näher kommen kann, als sein Abschnitt sagt.
+
+    Die Kette nimmt ein Glied bis ``SINK_AXIS_LIMIT`` und ``r · SINK_FIT_LIMIT``
+    als gleichachsig (:func:`_coaxial`), gedreht wird der Stift aber um die
+    Achse der Bohrung. Eine Senkung 0,15 mm daneben kam dem Kopf auf einer
+    Seite um so viel näher, und von 0,125 mm halbem Spiel blieben 0,05 mm
+    (Review P2 N7). Gerechnet werden der Versatz der Mitte und die Neigung
+    über die Länge des Glieds: Eine Bohrung kippt um ihre Mitte, ein Kegel um
+    seine Mündung. :func:`_offset` nimmt den Abschnitt um so viel enger.
+    """
+    centre = feature.params.get("centre")
+    direction = feature.params.get("axis")
+    if centre is None:
+        return 0.0
+    beside = _beside(centre, origin, axis)
+    tilt = 0.0
+    if direction is not None:
+        other = _unit(direction)
+        cosine = min(1.0, abs(float(axis[0] * other[0] + axis[1] * other[1] + axis[2] * other[2])))
+        length = section.end - section.start
+        lever = length / 2.0 if feature.kind == "hole" else length
+        tilt = lever * math.sqrt(max(0.0, 1.0 - cosine * cosine))
+    misfit = beside + tilt
+    return misfit if misfit > EPS_GEOM else 0.0
+
+
 def _hole_section(
     feature: Feature, origin: NDArray[np.float64], axis: NDArray[np.float64]
 ) -> Section:
@@ -337,6 +369,7 @@ def _chained(
             section = found
         else:
             raise _unreadable(value)
+        section = replace(section, misfit=_misfit(member, section, origin, axis))
         if sections:
             section = _following(sections[-1], section, value)
         sections.append(section)
@@ -351,7 +384,15 @@ def _following(previous: Section, section: Section, value: str) -> Section:
     if inner < previous.outer - SECTION_REACH:
         raise _narrowing(value)
     shoulder = inner > previous.outer + SECTION_REACH
-    return Section(previous.end, section.end, inner, section.outer, section.feature, shoulder)
+    return Section(
+        previous.end,
+        section.end,
+        inner,
+        section.outer,
+        section.feature,
+        shoulder,
+        misfit=section.misfit,
+    )
 
 
 def cavity_of(
@@ -476,9 +517,7 @@ def _threaded_bore(
         inner = section.outer - (section.end - start) * math.tan(section.half_angle)
         if not above and not section.cone and inner < zone.nominal / 2.0 - SECTION_REACH:
             raise _narrow_above(value)
-        above.append(
-            Section(start, section.end, inner, section.outer, section.feature, section.shoulder)
-        )
+        above.append(replace(section, start=start, inner=inner))
     return Cavity(origin, axis, tuple(above), zone)
 
 
@@ -555,7 +594,13 @@ def _walk(
                 continue
             shoulder = section.inner > inner + SECTION_REACH
             found = Section(
-                reach, section.end, section.inner, section.outer, section.feature, shoulder
+                reach,
+                section.end,
+                section.inner,
+                section.outer,
+                section.feature,
+                shoulder,
+                misfit=_misfit(candidate, section, origin, axis),
             )
             break
         if found is None:
@@ -644,8 +689,9 @@ def _offset(section: Section, gap: float, root: float) -> _Line:
     half = section.half_angle
     slope = math.tan(half)
     # Senkrecht zur Flanke heißt im Halbmesser ``gap / cos``: am Zylinder genau
-    # ``gap``, an einer 90°-Senkung √2 · gap.
-    a = section.inner - section.start * slope - gap / math.cos(half)
+    # ``gap``, an einer 90°-Senkung √2 · gap. Eine Wand, die quer näher kommt,
+    # nimmt den Halbmesser um ``misfit`` enger (:func:`_misfit`).
+    a = section.inner - section.start * slope - gap / math.cos(half) - section.misfit
     return _Line(section.start, section.end, a, slope, section.shoulder)
 
 
