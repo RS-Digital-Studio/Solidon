@@ -530,10 +530,11 @@ class ComfySetupDialog(QDialog):
             self.legacy.setVisible(False)
             self.legacy.setText("")
             return
+        # Die genannten Ordner gehen ganz (``comfy_setup.remove_legacy``); der
+        # Satz verspricht deshalb nur, was stimmt: Andere Ordner bleiben.
         text = tr(
             "Einrichten entfernt dabei Solidons alte TripoSG-Einrichtung, die kein Ablauf "
-            "mehr liest: {folders} (rund {size} GB). Was Sie selbst dorthin gelegt haben, "
-            "bleibt."
+            "mehr liest: {folders} (rund {size} GB). Andere Ordner bleiben unberührt."
         ).format(folders=", ".join(folders), size=format_decimal(gigabytes, 1))
         set_role(self.legacy, "info", text)
         self.legacy.setVisible(True)
@@ -717,10 +718,24 @@ class ComfySetupDialog(QDialog):
         self._weights_present = result.weights
         self._image_model_present = result.image_model
         self._idle()
+        # **Was stehen blieb, sagt der Dialog samt Ausweg** (Review 1 P3, G-6).
+        # Meist hält ein laufendes ComfyUI eine Datei offen; dann lädt es den
+        # TripoSG-Quelltext weiter, und „Eingerichtet“ wäre nur halb wahr.
+        stayed = (
+            tr(
+                "Solidons alte TripoSG-Einrichtung ließ sich nicht ganz entfernen: {folders}. "
+                "ComfyUI beenden und Einrichten erneut starten."
+            ).format(folders=", ".join(result.legacy_left))
+            if result.legacy_left
+            else ""
+        )
         if not result.done:
-            set_role(self.state, "warning", str(result.reason))
+            set_role(self.state, "warning", " ".join(filter(None, (str(result.reason), stayed))))
             return
         self._show_legacy((), 0.0)
+        if stayed:
+            set_role(self.state, "warning", f"{tr('Die Modelle sind eingerichtet.')} {stayed}")
+            return
         # Der Neustart ist eine Vorsicht: Neue Modelldateien sieht ein laufendes
         # ComfyUI meist von selbst, eine entfernte alte Knotensammlung erst
         # nach dem Neustart.

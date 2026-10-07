@@ -1821,6 +1821,78 @@ def test_the_setup_dialog_says_which_old_folders_it_removes_before_it_does(
         dialog.deleteLater()
 
 
+def test_the_setup_dialog_promises_only_what_the_removal_keeps(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Die genannten Ordner gehen ganz; versprochen wird nur, dass andere bleiben (G-6).
+
+    Der Satz „Was Sie selbst dorthin gelegt haben, bleibt“ stimmte nicht:
+    ``remove_legacy`` löscht einen erkannten Ordner samt allem darin.
+    """
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    old = tmp_path / "alt"
+    nodes = old / comfy_setup.LEGACY_NODES
+    nodes.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path(given or old))
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: False)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        said = dialog.legacy.text()
+        assert "Andere Ordner bleiben unberührt." in said, said
+        assert "selbst dorthin gelegt" not in said
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("done", [True, False])
+def test_the_setup_dialog_names_an_old_folder_that_stayed_and_the_way_out(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, done: bool
+) -> None:
+    """Blieb von der alten Einrichtung etwas stehen, meldet der Dialog keinen Erfolg (G-6).
+
+    Ein laufendes ComfyUI hält den alten Knoten offen und lädt den
+    TripoSG-Quelltext weiter. Bis dahin las der Kunde „Eingerichtet“ und
+    erfuhr nichts davon; jetzt nennt die Zeile den Ordner und den Ausweg —
+    auch nach einem Abbruch.
+    """
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: tmp_path)
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: True)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: True)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        dialog._finished(
+            comfy_setup.Result(
+                comfyui=tmp_path,
+                weights=True,
+                image_model=True,
+                reason="" if done else "Abgebrochen.",
+                legacy_left=(comfy_setup.LEGACY_NODES,),
+            )
+        )
+        said = dialog.state.text()
+        assert comfy_setup.LEGACY_NODES in said, said
+        assert "ComfyUI beenden und Einrichten erneut starten" in said, said
+        assert dialog.state.property("role") == "warning"
+        assert "Eingerichtet. ComfyUI einmal neu starten" not in said
+
+        dialog._finished(comfy_setup.Result(comfyui=tmp_path, weights=True, image_model=True))
+        assert dialog.state.property("role") == "ok", "ohne Rest der gewohnte Satz"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_the_dialog_asks_for_the_way_it_would_actually_run(qt_app: QApplication) -> None:
     """**Ein Bild wechselt den Weg, also auch die Frage.**
 

@@ -25,6 +25,7 @@ selbst angelegt hat, räumt :func:`remove_legacy` weg.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
@@ -291,6 +292,9 @@ class Result:
     image_model: bool = False
     """Liegt das Bildmodell für den Weg aus Text?"""
     reason: TranslatableText | str = ""
+    legacy_left: tuple[str, ...] = ()
+    """Was von Solidons alter TripoSG-Einrichtung stehen blieb, relativ zu
+    ComfyUI (:func:`remove_legacy`) — der Dialog nennt es samt Ausweg."""
 
     @property
     def done(self) -> bool:
@@ -870,37 +874,44 @@ def legacy_gigabytes(leftovers: tuple[Path, ...]) -> float:
     return sum(_gigabytes_in(folder) for folder in leftovers)
 
 
-def remove_legacy(comfyui: Path, progress: ProgressFn = _silent) -> bool:
-    """Räumt weg, was Solidon für TripoSG selbst angelegt hat. Liefert, ob etwas ging.
+def remove_legacy(comfyui: Path, progress: ProgressFn = _silent) -> tuple[Path, ...]:
+    """Räumt weg, was Solidon für TripoSG selbst angelegt hat. Liefert, was stehen blieb.
 
     **Nur das Eigene, und nur am eigenen Zeichen erkannt.** Der Knotenordner
     trägt Solidons Namen und unsere zwei Dateien; ohne ihn lädt ComfyUI beim
     Start keinen TripoSG-Quelltext mehr (RM-003). Die Gewichte gehen nur, wenn
     unsere Abschlussmarke darin liegt — rund 7,5 GB, die kein Ablauf von
-    Solidon mehr liest. Was jemand selbst dorthin gelegt hat, bleibt.
+    Solidon mehr liest. Ein erkannter Ordner geht ganz, samt allem, was darin
+    liegt; andere Ordner bleiben unberührt. So sagt es auch der Dialog vorher.
 
     Ein Fehler beim Löschen hält die Einrichtung nicht an: Der neue Weg braucht
     die alten Dateien nicht, und ein gesperrter Ordner ist kein Grund, keine
-    Modelle zu laden.
+    Modelle zu laden. **Verschwiegen wird er nicht** (Review 1 P3, G-6): Hält
+    ein laufendes ComfyUI eine Datei offen, bleibt der Knotenordner stehen,
+    und ComfyUI lädt den TripoSG-Quelltext weiter. Die Ordner, die stehen
+    blieben, gehen zurück an :class:`Result` und von dort in den Dialog.
     """
     weights = comfyui / LEGACY_WEIGHTS
     doomed = legacy_leftovers(comfyui)
     if not doomed:
-        return False
+        return ()
     progress(_("Alte TripoSG-Einrichtung von Solidon entfernen"))
+    left: list[Path] = []
     for folder in doomed:
         try:
             shutil.rmtree(folder, onexc=_writable_again)
             _log.info("removed legacy %s", folder)
         except OSError as problem:
             _log.warning("legacy %s stays: %s", folder, problem)
+            left.append(folder)
     with_triposg = weights.parent
     if with_triposg.is_dir() and not any(with_triposg.iterdir()):
-        with_triposg.rmdir()
+        with contextlib.suppress(OSError):
+            with_triposg.rmdir()
     from app.core.paths import user_cache_dir
 
     shutil.rmtree(user_cache_dir() / LEGACY_SCRATCH, ignore_errors=True)
-    return True
+    return tuple(left)
 
 
 def setup(
@@ -926,44 +937,47 @@ def setup(
     found = find_comfyui(comfyui)
     check_version(found)
     progress(_("ComfyUI gefunden"))
-    remove_legacy(found, progress)
+    left = tuple(path.relative_to(found).as_posix() for path in remove_legacy(found, progress))
     if not weights and not image_model:
         return Result(
             comfyui=found,
             weights=weights_present(found),
             image_model=image_model_present(found),
+            legacy_left=left,
         )
     python = find_python(found)
     try:
         if weights:
             if cancelled is not None and cancelled():
-                return _stopped(found)
+                return _stopped(found, left)
             # Das Kleine zuerst: Wer abbricht, hat dann wenigstens den Teil,
             # der schnell ging.
             fetch_background(found, python, progress, cancelled)
             if cancelled is not None and cancelled():
-                return _stopped(found)
+                return _stopped(found, left)
             fetch_weights(found, python, progress, cancelled)
         if image_model:
             if cancelled is not None and cancelled():
-                return _stopped(found)
+                return _stopped(found, left)
             # Zuletzt, weil es der einzige Posten ist, den nur ein Weg braucht:
             # Wer hier abbricht, hat den Bildweg vollständig.
             fetch_image_model(found, python, progress, cancelled)
     except Cancelled:
-        return _stopped(found)
+        return _stopped(found, left)
     _log.info("comfy setup finished in %s", found)
     return Result(
         comfyui=found,
         weights=weights_present(found),
         image_model=image_model_present(found),
+        legacy_left=left,
     )
 
 
-def _stopped(comfyui: Path) -> Result:
+def _stopped(comfyui: Path, legacy_left: tuple[str, ...] = ()) -> Result:
     return Result(
         comfyui=comfyui,
         weights=weights_present(comfyui),
         image_model=image_model_present(comfyui),
         reason=_("Abgebrochen. Was schon da ist, bleibt — ein neuer Lauf setzt fort."),
+        legacy_left=legacy_left,
     )

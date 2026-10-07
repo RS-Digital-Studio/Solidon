@@ -626,8 +626,8 @@ def test_the_legacy_triposg_setup_is_removed_and_nothing_else(tmp_path: Path) ->
     """Was Solidon für TripoSG selbst angelegt hat, geht — am eigenen Zeichen erkannt.
 
     Der Knotenordner lädt sonst bei jedem Start von ComfyUI den TripoSG-Quelltext
-    (RM-003), und die 7,5 GB Gewichte liest kein Ablauf mehr. Was jemand selbst
-    in denselben Ordner gelegt hat — ohne unsere Marke —, bleibt.
+    (RM-003), und die 7,5 GB Gewichte liest kein Ablauf mehr. Gewichte ohne
+    unsere Marke und fremde Knoten bleiben.
     """
     from app.core.backends import comfy_setup
 
@@ -648,18 +648,57 @@ def test_the_legacy_triposg_setup_is_removed_and_nothing_else(tmp_path: Path) ->
     (foreign / "nodes.py").write_text("# fremd", encoding="utf-8")
     seen: list[str] = []
 
-    assert comfy_setup.remove_legacy(comfyui, lambda step: seen.append(str(step))) is True
+    assert comfy_setup.remove_legacy(comfyui, lambda step: seen.append(str(step))) == ()
 
     assert not nodes.exists() and not weights.exists() and not leftover.exists()
     assert foreign.is_dir(), "ein fremder Knoten bleibt"
     assert seen, "der Schritt sagt, was er tut"
-    assert comfy_setup.remove_legacy(comfyui) is False, "beim zweiten Mal ist nichts zu tun"
+    again: list[str] = []
+    assert comfy_setup.remove_legacy(comfyui, lambda step: again.append(str(step))) == ()
+    assert not again, "beim zweiten Mal ist nichts zu tun"
 
     # Ohne unsere Marke bleiben Gewichte, die jemand selbst dorthin gelegt hat.
     (weights / "model_index.json").parent.mkdir(parents=True)
     (weights / "model_index.json").write_text("{}", encoding="utf-8")
-    assert comfy_setup.remove_legacy(comfyui) is False
+    assert comfy_setup.remove_legacy(comfyui) == ()
     assert (weights / "model_index.json").is_file()
+
+
+def test_a_legacy_folder_that_stays_is_named_in_the_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hält ComfyUI eine Datei des alten Knotens offen, sagt das Ergebnis es (Review 1 P3, G-6).
+
+    Bis dahin stand nur eine Warnung im Protokoll, der Dialog meldete
+    „Eingerichtet“, und ComfyUI lud den TripoSG-Quelltext weiter. Die
+    Sperre ist nachgestellt: Ein laufendes ComfyUI hält ``nodes.py`` unter
+    Windows offen, und das Löschen endet mit „Zugriff verweigert“.
+    """
+    from app.core.backends import comfy_setup
+
+    comfyui = _comfyui_folder(tmp_path)
+    nodes = comfyui / comfy_setup.LEGACY_NODES
+    nodes.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    weights = comfyui / comfy_setup.LEGACY_WEIGHTS
+    weights.mkdir(parents=True)
+    (weights / comfy_setup.LEGACY_MARKER).write_text("{}", encoding="utf-8")
+    real = shutil.rmtree
+
+    def locked(path: Path, *args: object, **kwargs: object) -> None:
+        if Path(path) == nodes:
+            raise PermissionError(13, "Zugriff verweigert", str(nodes / "nodes.py"))
+        real(path, *args, **kwargs)
+
+    monkeypatch.setattr(comfy_setup.shutil, "rmtree", locked)
+
+    assert comfy_setup.remove_legacy(comfyui) == (nodes,)
+    assert nodes.is_dir() and not weights.exists(), "was ging, ging"
+
+    result = comfy_setup.setup(comfyui, weights=False, image_model=False)
+    assert result.legacy_left == (comfy_setup.LEGACY_NODES,)
+    assert result.done, "die Modelle sind davon nicht berührt"
 
 
 def test_the_legacy_node_goes_with_the_read_only_files_of_its_clone(tmp_path: Path) -> None:
@@ -683,7 +722,7 @@ def test_the_legacy_node_goes_with_the_read_only_files_of_its_clone(tmp_path: Pa
     packed.write_bytes(b"x")
     packed.chmod(stat.S_IREAD)
 
-    assert comfy_setup.remove_legacy(comfyui) is True
+    assert comfy_setup.remove_legacy(comfyui) == ()
 
     assert not nodes.exists()
 
