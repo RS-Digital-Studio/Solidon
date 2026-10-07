@@ -1911,6 +1911,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # der Schritt, an dem ein anderer hängt, und der Schritt, der wieder
     # rechnen soll — alle drei als Schrittnummer.
     "also": _("Ausschalten"),
+    # Der frühere Schritt, der das Merkmal gesetzt hat, an dem ein späterer
+    # scheitert (``errors.CHANGE_THREAD_STEP``, Review P2 Bausteine, M2).
+    "creating_step": _("Erzeugender Schritt"),
     "number": _("Schritt"),
     "other": _("Anderer Schritt"),
     "reactivate": _("Einschalten"),
