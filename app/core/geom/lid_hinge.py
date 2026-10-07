@@ -524,8 +524,9 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     leaves_inputs_unchanged=True,
     applies_to=["hole", "thread"],
     # 2: Passend zur Bohrung (RM-536) — Senkkopf, Zylinderkopf und Außengewinde,
-    # wo bis dahin ein glatter Zylinder entstand.
-    cache_version="2",
+    # wo bis dahin ein glatter Zylinder entstand. 3: Der Befund über den Bau
+    # nennt den Träger (``object_ids``), und der Plattencache hält Befunde.
+    cache_version="3",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "
@@ -634,6 +635,15 @@ def _pin_result(
         from app.core.brep.features import features_of
 
         features = {**features_of(cast(Any, body), cancelled=ctx.cancelled), **features}
+    # **„Steht noch in der Bohrung“ spricht vom Träger** (Review zu ``bbd41ff2d``,
+    # R-a): Der Satz nennt ihn in ``object_ids`` und fällt mit ihm, wenn ein
+    # späterer Schritt die Platte entfernt und den Stift behält.
+    findings = [
+        dataclasses.replace(entry, object_ids=(source.id,))
+        if entry.code == "pin_for_bore.made" and not entry.object_ids
+        else entry
+        for entry in findings
+    ]
     return OpResult(
         outputs=[
             source,

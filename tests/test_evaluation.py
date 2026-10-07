@@ -671,6 +671,23 @@ def test_a_removed_pin_leaves_no_finding_behind(profile: Profile) -> None:
     assert {"pin_for_bore.made", "prepare.halves_in_place"} <= both
 
 
+def test_a_pin_whose_plate_is_removed_says_nothing_about_the_bore(profile: Profile) -> None:
+    """Entfernt man die Platte und behält den Stift, steht er nicht mehr „in der Bohrung“.
+
+    Der Befund des Stifts nennt seinen Träger (``Finding.object_ids``) und fällt
+    mit ihm. Ohne das sprach er weiter von einer Bohrung, die es nicht mehr gibt.
+    """
+    history, pin = _plate_with_pin(profile)
+    before = evaluate(history.document, profile)
+    assert "pin_for_bore.made" in {entry.code for entry in before.scene.report.findings}
+
+    history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=("obj_1",))])
+    after = evaluate(history.document, profile)
+
+    assert after.complete and pin in after.scene.objects, "der Stift bleibt"
+    assert "pin_for_bore.made" not in {entry.code for entry in after.scene.report.findings}
+
+
 def _plate_with_pin(profile: Profile) -> tuple[History, str]:
     """Platte 40 × 30 × 10 mit Bohrung Ø 6 und *Stift für Bohrung* — Schritte 1 bis 3.
 
