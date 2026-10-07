@@ -8536,9 +8536,26 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow, the
     }
     zuteilung: dict[str, list[int]] = {name: [] for name in karten}
     knapp = geteilt = voll = False
+
+    def stand() -> list[tuple[int | None, int, int]]:
+        return [
+            (karte._room, karte.least_height(), karte.wanted_height()) for karte in karten.values()
+        ]
+
     for height in (600, 900, 1100, 1400):
         window.resize(1024, height)
-        QTest.qWait(20)
+        # **Gemessen wird der gesetzte Stand, nicht eine feste Frist.** Die
+        # Vorschaubilder des Baums kommen nach (``_render_pending``) und heben
+        # seinen Boden; auf einem langsamen Mac-Läufer stand nach 20 ms noch die
+        # Zuteilung von davor (110 gegen den neuen Boden 188). Gewartet wird,
+        # bis zwei Runden hintereinander dasselbe zeigen und nichts vorgemerkt ist.
+        vorher = None
+        for _runde in range(100):
+            QTest.qWait(20)
+            jetzt = stand()
+            if jetzt == vorher and window.overlay._pending is None:
+                break
+            vorher = jetzt
         host = window.overlay
         budget = host.height() - 2 * MARGIN - host._bottom_room() - extra_height(host.left)
         boeden = sum(karte.least_height() for karte in karten.values())
@@ -18535,7 +18552,10 @@ def test_the_header_gives_its_information_room_in_every_supported_width(
     beispiele = sorted((Path(__file__).parent.parent / "app" / "examples").glob("*.p3d"))
     assert beispiele, "ohne Beispielprojekt misst dieser Test die leere Lage"
     window.session.open_project(beispiele[0])
-    window.session.wait_for_idle()
+    # Mit Rückgabe und Reserve: Auf dem Intel-Mac-Läufer braucht das Beispiel
+    # knapp zehn Sekunden, die Vorgabefrist von ``wait_for_idle``. Lief sie
+    # ab, gab es noch kein Ergebnis und damit kein Außenmaß.
+    assert window.session.wait_for_idle(60_000), "das Beispiel wird fertig ausgewertet"
     window._on_project()
     window.set_display_unit("in")
     window.header.title.setText("Ein sehr langes Beispielprojekt für den schmalen Bildschirm*")

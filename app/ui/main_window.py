@@ -27109,6 +27109,13 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt name
         super().showEvent(event)
+        # **Der Fokus beginnt in der Ansicht.** Ohne eigene Wahl gab Qt ihn beim
+        # Aktivieren dem ersten Element der Tabulatorkette, dem Griff der
+        # linken Karte; der trug dann im Ruhezustand einen Fokusrahmen in der
+        # Akzentfarbe (gemessen unter macOS, wo das Fenster aktiv wird). In der
+        # Ansicht wirken die Flugtasten (§2.9) sofort.
+        if self.focusWidget() is None:
+            self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
         self.spacemouse.start()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
