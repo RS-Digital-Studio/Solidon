@@ -2325,15 +2325,21 @@ def test_the_new_name_for_a_used_up_one_spares_the_declared_names(
     assert len(walls) == 1, f"die neue Wand fehlt: {sorted(result.features)}"
 
 
-def test_a_cut_off_face_does_not_lend_its_name_either(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "with_floor", [False, True], ids=["ohne_vorgaenger", "mit_erkanntem_vorgaenger"]
+)
+def test_a_cut_off_face_does_not_lend_its_name_either(
+    monkeypatch: pytest.MonkeyPatch, with_floor: bool
+) -> None:
     """RM-537, zweite Durchsicht: Auch eine abgeschnittene erzeugte Fläche behält ihren Namen.
 
-    Der Zwilling der verbrauchten Fläche (``cut_off``) braucht keine eigene
-    Sperre: Er fällt aus ``declared``, reist aber als erzeugtes Merkmal in die
-    Zuordnung weiter und endet dort verwaist — ``apply_mapping`` sperrt
-    verwaiste Namen. Dieser Test hält den Weg fest: Kasten 40 × 40 × 10 auf
-    5 mm abgeschnitten, die erzeugte Deckfläche ``face_1`` liegt darüber, und
-    die Erkennung nennt eine Seitenwand ``face_1``.
+    Der Zwilling der verbrauchten Fläche (``cut_off``) fällt aus ``declared``
+    und ``carried``; sein Name bleibt über ``gone_here`` gesperrt, an beiden
+    Aufrufen von ``apply_mapping``. Kasten 40 × 40 × 10 auf 5 mm
+    abgeschnitten, die erzeugte Deckfläche ``face_1`` liegt darüber, und die
+    Erkennung nennt eine Seitenwand ``face_1``. Ohne erkannten Vorgänger läuft
+    die Zuordnung über ``if not previous``, mit der erkannten Bodenfläche
+    ``face_9`` über den unteren Aufruf.
     """
     import importlib
 
@@ -2374,6 +2380,19 @@ def test_a_cut_off_face_does_not_lend_its_name_either(monkeypatch: pytest.Monkey
         params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 5.0), "area": 1600.0},
         face_indices=(2, 3),
     )
+    bottom = tuple(int(i) for i in np.flatnonzero(normals[:, 2] < -0.99))
+    floor = Feature(
+        id="face_9",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 0.0, -1.0), "centre": (0.0, 0.0, 0.0), "area": 1600.0},
+        face_indices=bottom,
+    )
+    detected = {"face_1": wall, "face_7": cap}
+    before_features = {"face_1": lid}
+    if with_floor:
+        detected["face_8"] = dataclasses.replace(floor, id="face_8")
+        before_features["face_9"] = floor
     evaluation = importlib.import_module("app.core.scene.evaluate")
     cut: list[str] = []
     real_cut = evaluation._cut_by_the_step
@@ -2385,9 +2404,7 @@ def test_a_cut_off_face_does_not_lend_its_name_either(monkeypatch: pytest.Monkey
         return bool(found)
 
     monkeypatch.setattr(evaluation, "_cut_by_the_step", watched)
-    monkeypatch.setattr(
-        evaluation, "detect", lambda *_args, **_kwargs: {"face_1": wall, "face_7": cap}
-    )
+    monkeypatch.setattr(evaluation, "detect", lambda *_args, **_kwargs: dict(detected))
 
     result = _with_features(
         SceneObject(
@@ -2396,7 +2413,7 @@ def test_a_cut_off_face_does_not_lend_its_name_either(monkeypatch: pytest.Monkey
             mesh=after,
             features={"face_1": dataclasses.replace(lid, face_indices=())},
         ),
-        {"face_1": lid},
+        before_features,
         Operation(id=3, op="cut_away", inputs=("obj_1",), outputs=("obj_1",)),
         lambda _question, choices: choices[0],
         [],
@@ -2405,10 +2422,89 @@ def test_a_cut_off_face_does_not_lend_its_name_either(monkeypatch: pytest.Monkey
     )
 
     assert cut == ["face_1"], "Voraussetzung: der Schritt hat die Deckfläche abgeschnitten"
+    if with_floor:
+        assert "face_9" in result.features, "Voraussetzung: der Boden fand seinen Vorgänger"
     named = result.features.get("face_1")
     assert named is None or tuple(named.params["normal"]) == (0.0, 0.0, 1.0), (
         f"die Seitenwand trägt den Namen der Deckfläche: {named}"
     )
+
+
+@pytest.mark.parametrize("needed", [None, {"hole_1": ("op5",)}], ids=["frei", "gebraucht"])
+def test_a_cut_away_carried_feature_does_not_lend_its_name_either(
+    monkeypatch: pytest.MonkeyPatch, needed: dict[str, tuple[str, ...]] | None
+) -> None:
+    """Ein ungeprüft mitreisendes Merkmal, das der Schritt ganz wegschneidet, behält seinen Namen.
+
+    *Abschneiden* gibt seine Merkmale nicht vollständig aus, und eine
+    Bausteinbohrung (``recognised=False``) reist ungeprüft mit. Liegt sie
+    danach ganz außerhalb, fällt sie als ``dropped`` weg — ihr Name bleibt
+    über ``gone_here`` vergeben. Sonst hieße die neu erkannte Bohrung
+    ``hole_1``, und ein späterer Schritt auf ``hole_1`` träfe still sie,
+    statt anzuhalten (§21.3).
+    """
+    import importlib
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Feature, Operation, SceneObject
+
+    def box(height: float) -> MeshData:
+        made = trimesh.creation.box(extents=(40.0, 40.0, height))
+        made.apply_translation((0.0, 0.0, height / 2.0))
+        return MeshData.of(made)
+
+    before, after = box(10.0), box(5.0)
+    part_bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="generated",
+        recognised=False,
+        params={"centre": (0.0, 0.0, 9.0), "axis": (0.0, 0.0, 1.0), "diameter": 3.0, "depth": 1.0},
+    )
+    new_hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"centre": (10.0, 0.0, 2.5), "axis": (0.0, 0.0, 1.0), "diameter": 3.0, "depth": 5.0},
+        face_indices=(0, 1),
+    )
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    away: list[str] = []
+    real_away = evaluation._cut_away_here
+
+    def watched(feature: Feature, *args: Any) -> bool:
+        found = bool(real_away(feature, *args))
+        if found:
+            away.append(feature.id)
+        return found
+
+    monkeypatch.setattr(evaluation, "_cut_away_here", watched)
+    monkeypatch.setattr(evaluation, "detect", lambda *_args, **_kwargs: {"hole_1": new_hole})
+    findings: list[Finding] = []
+
+    result = _with_features(
+        SceneObject(id="obj_1", name="Kasten", mesh=after, features={}),
+        {"hole_1": part_bore},
+        Operation(id=3, op="cut_away", inputs=("obj_1",), outputs=("obj_1",)),
+        lambda _question, choices: choices[0],
+        findings,
+        previous_bounds=before.bounds,
+        source_mesh=before,
+        origin_mesh=before,
+        needed=needed,
+    )
+
+    assert away == ["hole_1"], "Voraussetzung: der Schritt hat die Bausteinbohrung weggeschnitten"
+    assert "hole_1" not in result.features, (
+        f"die neue Bohrung trägt den Namen der weggeschnittenen: {result.features.get('hole_1')}"
+    )
+    renamed = [f for f in result.features.values() if f.params.get("centre") == (10.0, 0.0, 2.5)]
+    assert len(renamed) == 1, f"die neue Bohrung fehlt: {sorted(result.features)}"
+    lost = [f.code for f in findings if f.code == "perceive.generated_lost"]
+    assert lost == (["perceive.generated_lost"] if needed else []), findings
 
 
 def test_a_used_up_face_does_not_lend_its_name_to_a_new_one() -> None:

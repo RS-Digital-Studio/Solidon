@@ -4961,8 +4961,9 @@ def _with_features(
     # Kandidaten sind ein Kandidat zu viel, nicht keiner.
     consumed: set[FeatureId] = set()
     #
-    # ``gone_here`` sammelt, was der Schritt weggeschnitten hat; es kommt unten
-    # auch nicht über ``carried`` zurück.
+    # ``gone_here`` sammelt, was der Schritt weggeschnitten hat — erklärte
+    # Merkmale hier, ungeprüft mitreisende unten (``dropped``); es kommt nicht
+    # über ``carried`` zurück, und sein Name bleibt vergeben.
     gone_here: set[FeatureId] = set()
     if declared:
         watch.raise_if_cancelled()
@@ -5032,7 +5033,7 @@ def _with_features(
             findings.extend(
                 _lost_reference_finding(name, True, needed, entry, operation)
                 for name in sorted(consumed)
-                if (name in needed if needed is not None else name in referenced)
+                if _needed_now(name, needed, referenced)
             )
             declared = {name: feature for name, feature in declared.items() if name not in consumed}
             seen = dataclasses.replace(
@@ -5195,6 +5196,7 @@ def _with_features(
             if _needed_now(name, needed, referenced)
         )
         unchecked = {name: f for name, f in unchecked.items() if name not in dropped}
+        gone_here |= dropped
 
     previous = {
         name: feature
@@ -5253,7 +5255,7 @@ def _with_features(
         if consumed or gone_here or withdrawn:
             # Dieselbe Sperre wie unten bei ``apply_mapping``: Ohne erkannte
             # Vorgänger übernähme ein neues Merkmal sonst ungeprüft den Namen
-            # der verbrauchten, weggeschnittenen oder weggenommenen Fläche.
+            # des verbrauchten, weggeschnittenen oder weggenommenen Merkmals.
             # Gesperrt ist auch, was daneben eingehängt wird — sonst fiele der
             # Ausweichname auf ein erzeugtes oder mitreisendes Merkmal und würde
             # beim Zusammenführen still überschrieben.
