@@ -59,8 +59,7 @@ bash .claude/scripts/suite-getrennt.sh
 ```
 
 **Fenster-, Renderer- und Leistungsprüfungen lokal nur beim Release** (`AGENTS.md`,
-„Arbeitsweise“); vor dem Merge nach main fahren die Läufer die betroffenen
-auf Linux und macOS (`tools/ci_selection.py`, `/liefern`). `pytest -q` am Stück kommt nicht durch (nativer Abriss im
+„Arbeitsweise“). `pytest -q` am Stück kommt nicht durch (nativer Abriss im
 Fensterteil); das Tor trennt Fenster und Renderer ab:
 
 ```

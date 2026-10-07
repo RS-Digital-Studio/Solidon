@@ -98,9 +98,7 @@ def test_a_changed_test_file_lands_in_both_lists_by_its_cases(tmp_path: Path) ->
 
     windows, slicers = ci_selection.select([probe, plain], tmp_path)
 
-    assert windows == [
-        "tests/test_probe.py -p tools.list_windowed_tests --window-group windowed"
-    ]
+    assert windows == ["tests/test_probe.py -p tools.list_windowed_tests --window-group windowed"]
     assert slicers == ["tests/test_probe.py -m slicer"]
     assert ci_selection.programs("; ".join(slicers), tmp_path) == ["cura"]
 

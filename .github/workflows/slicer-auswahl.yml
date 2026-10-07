@@ -21,9 +21,6 @@
 name: Slicerauswahl
 
 on:
-  # ERPROBUNG: Handstart geht erst, wenn die Datei auf main liegt. Vor dem Merge entfernen.
-  push:
-    branches: [ci/auswahl]
   workflow_dispatch:
     inputs:
       tests:
@@ -58,8 +55,8 @@ jobs:
       SOLIDON_REQUIRE_SLICERS: "1"
       # Über die Umgebung, nie in den Befehl eingesetzt: Eine Eingabe ist Text,
       # kein Teil des Skripts.
-      SELECTION: ${{ inputs.tests || 'tests/test_real_slicers.py -m slicer -k orcaslicer; tests/test_slicer_selection.py -m slicer' }}
-      WANTED: ${{ inputs.programme || 'cura' }}
+      SELECTION: ${{ inputs.tests }}
+      WANTED: ${{ inputs.programme }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
