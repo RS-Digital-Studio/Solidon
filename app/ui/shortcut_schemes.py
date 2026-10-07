@@ -191,6 +191,52 @@ class NavigationKeys(QObject):
         return handled
 
 
+#: Die Tasten, mit denen eine Liste ihren aktuellen Eintrag öffnet.
+_OPEN_KEYS: Final[frozenset[int]] = frozenset({int(Qt.Key.Key_Return), int(Qt.Key.Key_Enter)})
+
+
+class ReturnOpens(QObject):
+    """Return öffnet den aktuellen Eintrag einer Liste — auch auf dem Mac.
+
+    Qt meldet ``activated`` auf Return nur außerhalb von macOS; dort bearbeitet
+    Return einen Eintrag, und erst ⌘O öffnet ihn
+    (``QAbstractItemView::keyPressEvent``). Wer am Mac im Startbildschirm ein
+    Projekt anwählte und Return drückte, bekam nichts (RM-531). Auf ``darwin``
+    meldet der Filter die Aktivierung selbst; anderswo bleibt die Taste bei
+    Qt, das sie dort schon so versteht. Die Listen, an denen er hängt,
+    bearbeiten nichts an Ort und Stelle.
+    """
+
+    def __init__(self, view: QAbstractItemView, platform: str) -> None:
+        super().__init__(view)
+        self._platform = platform
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Nimmt Return und Enter ohne Zusatztaste an, wenn ein Eintrag aktuell ist."""
+        if (
+            self._platform == "darwin"
+            and isinstance(watched, QAbstractItemView)
+            and event.type() == QEvent.Type.KeyPress
+            and isinstance(event, QKeyEvent)
+            and int(event.key()) in _OPEN_KEYS
+            and event.modifiers()
+            in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.KeypadModifier)
+            and watched.currentIndex().isValid()
+        ):
+            watched.activated.emit(watched.currentIndex())
+            event.accept()
+            return True
+        handled: bool = super().eventFilter(watched, event)
+        return handled
+
+
+def return_opens(view: QAbstractItemView, platform: str) -> ReturnOpens:
+    """Hängt :class:`ReturnOpens` an ``view``; der Filter lebt so lange wie die Liste."""
+    keeper = ReturnOpens(view, platform)
+    view.installEventFilter(keeper)
+    return keeper
+
+
 #: Der eine Filter der Anwendung. Ein zweiter täte dasselbe zweimal.
 _INSTALLED: NavigationKeys | None = None
 

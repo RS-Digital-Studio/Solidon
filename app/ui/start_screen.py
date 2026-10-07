@@ -17,6 +17,7 @@ sieht, dass man sie anklicken kann.
 
 from __future__ import annotations
 
+import sys
 import time
 from itertools import pairwise
 from pathlib import Path
@@ -62,6 +63,7 @@ from app.ui.filament_inventory import paint_spool
 from app.ui.icons import icon
 from app.ui.leash import stop_watching_the_dying
 from app.ui.panels import collapsible
+from app.ui.shortcut_schemes import return_opens
 from app.ui.style import NORMAL, TIGHT, WIDE, make_large_target, make_primary, set_level
 from app.ui.theme import THEMES
 
@@ -765,9 +767,11 @@ class StartScreen(QWidget):
         # **Ein Klick öffnet** (RM-269): Ein Eintrag sieht aus wie ein Verweis,
         # ``itemActivated`` allein hieß unter Windows aber Doppelklick oder
         # Eingabetaste. Die Tastatur bleibt über ``itemActivated``; dass ein
-        # Doppelklick beide meldet, fängt :meth:`_on_recent` ab.
+        # Doppelklick beide meldet, fängt :meth:`_on_recent` ab. Am Mac
+        # meldet Qt Return nicht als Aktivierung — das tut ``return_opens``.
         self.recent_list.itemClicked.connect(self._on_recent)
         self.recent_list.itemActivated.connect(self._on_recent)
+        return_opens(self.recent_list, sys.platform)
         self.recent_list.viewport().setCursor(Qt.CursorShape.PointingHandCursor)
         self._recent_opened: tuple[str, float] = ("", 0.0)
         """Welcher Eintrag zuletzt öffnete, und wann (``time.monotonic``)."""
