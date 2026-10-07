@@ -7,10 +7,10 @@ from __future__ import annotations
 import http.server
 import json
 import socket
-import sys
 import threading
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
@@ -32,6 +32,7 @@ from app.core.backends.llm import (
     takes_temperature,
 )
 from app.core.errors import AppError, ExternalToolError, InternalError
+from tests.helpers import LoopbackServer
 from tests.scripted_backend import ScriptedBackend
 
 
@@ -537,36 +538,17 @@ def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:
     assert transport.calls == []
 
 
-#: **Auf macOS kommt der Abbruch nicht sicher in einer Sekunde an.** Der Weg
-#: schließt den Socket aus dem wartenden Thread (``shutdown`` und ``detach``);
-#: Linux und Windows beenden damit das ``recv`` des Anfrage-Threads sofort. Auf
-#: dem macOS-Runner war das in drei Tag-Läufen von v0.4.1 (13.09.2026) in drei,
-#: zwei und dann einer Stufe rot — jede der vier einmal, auch die mit
-#: Verbindungsende. Sporadisch also, in jeder Stufe, und gemessen nur in der
-#: CI; ohne Mac daneben wäre ein Umbau geraten (Regel 21).
-#: Die Marke ist deshalb **nicht** streng — ein grüner Lauf ist dort kein
-#: Nachweis und ein roter kein neuer Fund. Was zählt, steht bei RM-104.
-_MAC_KEEPS_READING = pytest.mark.xfail(
-    sys.platform == "darwin",
-    strict=False,
-    raises=AssertionError,
-    reason="macOS: der Abbruch weckt das blockierte recv nicht sicher in einer Sekunde (RM-104)",
-)
-
-
-@pytest.mark.parametrize(
-    "stage",
-    (
-        pytest.param("before_headers", marks=_MAC_KEEPS_READING),
-        pytest.param("http10", marks=_MAC_KEEPS_READING),
-        pytest.param("connection_close", marks=_MAC_KEEPS_READING),
-        pytest.param("keep_alive", marks=_MAC_KEEPS_READING),
-    ),
-)
+@pytest.mark.parametrize("stage", ("before_headers", "http10", "connection_close", "keep_alive"))
 def test_a_blocking_local_ollama_request_can_be_cancelled(
     monkeypatch: pytest.MonkeyPatch, stage: str
 ) -> None:
-    """Abbruch beendet auch nach den Headern den Request-Thread und seinen Socket."""
+    """Abbruch beendet auch nach den Headern den Request-Thread und seinen Socket.
+
+    Auf macOS war das bis RM-104 sporadisch rot, in jeder der vier Stufen: Der
+    wartende Faden weckte das blockierte ``recv`` mit ``shutdown``, und das
+    kam dort nicht sicher an. Seitdem bemerkt der Lesefaden den Abbruch selbst
+    (:func:`test_a_cancelled_read_ends_without_anyone_waking_it`).
+    """
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
 
@@ -616,7 +598,7 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
         def log_message(self, _format: str, *_args: object) -> None:
             pass
 
-    server = http.server.HTTPServer(("127.0.0.1", 0), Blocking)
+    server = LoopbackServer(("127.0.0.1", 0), Blocking)
     serving = threading.Thread(target=server.serve_forever, daemon=True)
     serving.start()
     token = CancelSignal()
@@ -659,6 +641,168 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
             request.join(2.0)
 
 
+def test_a_cancelled_read_ends_without_anyone_waking_it() -> None:
+    """Der Lesefaden bemerkt den Abbruch selbst, ohne dass ein anderer ihn weckt (RM-104).
+
+    Auf macOS weckte ``shutdown`` aus einem zweiten Faden das blockierte
+    ``recv`` nicht sicher: Am Runner kam der Abbruch in vier von fünf Läufen
+    nicht an, und der sechste wartete bis zur Jobfrist. Hier weckt niemand —
+    weder ``shutdown`` noch Schließen —, und die Gegenseite schweigt; das
+    Lesen muss trotzdem innerhalb weniger Prüfscheiben enden. Gegenprobe:
+    Ohne Abbruch steht es bis zu seiner Socket-Frist.
+    """
+    from app.core.scene.cancel import CancelSignal
+
+    for cancel, limit in ((True, 0.05), (False, 0.3)):
+        left, right = socket.socketpair()
+        token = CancelSignal()
+        watched = llm._WatchedSocket(left, token)
+        watched.settimeout(limit if not cancel else 30.0)
+        outcome: list[BaseException] = []
+
+        def read(watched: socket.socket = watched, outcome: list[BaseException] = outcome) -> None:
+            try:
+                watched.recv(1)
+            except OSError as error:
+                outcome.append(error)
+
+        reader = threading.Thread(target=read)
+        started = time.monotonic()
+        reader.start()
+        try:
+            if cancel:
+                time.sleep(limit)
+                token.cancel()
+            reader.join(5.0)
+            elapsed = time.monotonic() - started
+            assert not reader.is_alive(), "das Lesen steht trotz Abbruch"
+            expected = ConnectionAbortedError if cancel else TimeoutError
+            assert len(outcome) == 1 and isinstance(outcome[0], expected), outcome
+            assert elapsed < 2.0, f"{elapsed:.2f} s bis zum Ende"
+            if not cancel:
+                # Die Gegenprobe zählt nur, wenn das Lesen wirklich bis zur Frist stand.
+                assert elapsed >= limit * 0.9, f"{elapsed:.2f} s statt der Frist {limit} s"
+        finally:
+            watched.close()
+            right.close()
+
+
+def test_a_cancelled_read_still_returns_what_already_arrived() -> None:
+    """Angekommenes wird vor dem Abbruch gelesen, erst das nächste Lesen bricht ab (RM-104).
+
+    Ein ``shutdown`` über ungelesenen Daten setzt die Verbindung unter Windows
+    zurück; die Gegenstelle sähe dann einen Abbruch der Leitung statt des
+    Abbruchs der Anfrage. Deshalb fragt der Lesefaden erst, ob Daten da sind.
+    """
+    from app.core.scene.cancel import CancelSignal
+
+    left, right = socket.socketpair()
+    token = CancelSignal()
+    watched = llm._WatchedSocket(left, token)
+    watched.settimeout(5.0)
+    try:
+        right.sendall(b"x")
+        token.cancel()
+        assert watched.recv(1) == b"x"
+        with pytest.raises(ConnectionAbortedError):
+            watched.recv(1)
+    finally:
+        watched.close()
+        right.close()
+
+
+def test_a_cancelled_send_stops_before_it_writes() -> None:
+    """Auch das Senden fragt den Abbruch — eine Gegenstelle, die nicht liest, hält ihn nicht auf.
+
+    Vorher weckte der wartende Faden ein stehendes ``sendall`` mit ``shutdown``;
+    der überwachte Socket wird von außen nicht mehr geweckt und muss den
+    Abbruch selbst sehen. Beim Senden liegt nichts Ungelesenes an, also gilt
+    er dort sofort, und die Gegenstelle bekommt kein Byte.
+    """
+    from app.core.scene.cancel import CancelSignal
+
+    left, right = socket.socketpair()
+    token = CancelSignal()
+    watched = llm._WatchedSocket(left, token)
+    watched.settimeout(5.0)
+    right.settimeout(1.0)
+    try:
+        token.cancel()
+        with pytest.raises(ConnectionAbortedError):
+            watched.sendall(b"POST /api/chat HTTP/1.1\r\n\r\n")
+        assert right.recv(64) == b"", "die Gegenstelle bekam Daten trotz Abbruch"
+    finally:
+        watched.close()
+        right.close()
+
+
+def test_a_request_thread_that_does_not_end_does_not_hold_the_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nach dem Abbruch wartet der Aufrufer höchstens ``CANCEL_JOIN_SECONDS`` und sagt es.
+
+    Ein Anfragefaden, der nicht endet, hielte sonst die Oberfläche fest; das
+    alte unbegrenzte Warten tat genau das. Der Satz im Protokoll ist der
+    einzige Hinweis darauf, dass ein Faden zurückblieb.
+    """
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    stuck = threading.Event()
+    release = threading.Event()
+    left, right = socket.socketpair()
+    warnings: list[str] = []
+
+    class Stuck:
+        sock: socket.socket | None = None
+
+        def connect(self) -> None:
+            self.sock = left
+
+        def request(self, *_args: object, **_kwargs: object) -> None:
+            stuck.set()
+            release.wait(10.0)
+
+        def close(self) -> None:
+            pass
+
+    class Recorder:
+        def warning(self, message: str, *values: object) -> None:
+            warnings.append(message % values)
+
+    monkeypatch.setattr(llm, "_local_connection", lambda *_args: Stuck())
+    monkeypatch.setattr(llm, "CANCEL_JOIN_SECONDS", 0.3)
+    monkeypatch.setattr(llm, "_log", Recorder())
+    token = CancelSignal()
+    errors: list[BaseException] = []
+    elapsed: list[float] = []
+
+    def ask() -> None:
+        started = time.monotonic()
+        try:
+            llm.post_json_local_cancelable("http://127.0.0.1:11434/api/chat", {}, {}, token)
+        except BaseException as error:
+            errors.append(error)
+        elapsed.append(time.monotonic() - started)
+
+    caller = threading.Thread(target=ask)
+    try:
+        caller.start()
+        assert stuck.wait(2.0)
+        token.cancel()
+        caller.join(3.0)
+        assert not caller.is_alive(), "der Aufrufer wartet trotz Frist weiter"
+        assert len(errors) == 1 and isinstance(errors[0], OperationCancelled)
+        assert warnings and "endete nicht" in warnings[0], warnings
+        assert 0.3 <= elapsed[0] < 2.0, f"{elapsed[0]:.2f} s"
+    finally:
+        release.set()
+        caller.join(2.0)
+        right.close()
+        with suppress(OSError):
+            left.close()
+
+
 def test_a_connection_completed_after_cancellation_sends_no_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -677,9 +821,17 @@ def test_a_connection_completed_after_cancellation_sends_no_request(
         connecting.set()
         release_connect.wait(3.0)
         connection.sock = socket.socket()
+
+    watch = llm._WatchedConnection.connect
+
+    def connect_and_remember(connection: Any) -> None:
+        # Gemerkt wird der überwachte Socket: Den rohen leert ``detach()``
+        # schon beim Einsetzen, und seine Prüfung wäre immer wahr.
+        watch(connection)
         sockets.append(connection.sock)
 
     monkeypatch.setattr(llm.http.client.HTTPConnection, "connect", connect)
+    monkeypatch.setattr(llm._WatchedConnection, "connect", connect_and_remember)
     monkeypatch.setattr(
         llm.http.client.HTTPConnection,
         "request",
@@ -748,7 +900,7 @@ def test_cancelable_http_closes_its_response_on_success_and_error(
         def log_message(self, _format: str, *_args: object) -> None:
             pass
 
-    server = http.server.HTTPServer(("127.0.0.1", 0), Answer)
+    server = LoopbackServer(("127.0.0.1", 0), Answer)
     serving = threading.Thread(target=server.serve_forever, daemon=True)
     serving.start()
     try:

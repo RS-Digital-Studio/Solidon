@@ -17,6 +17,7 @@ import pytest
 import app.core.http as http_boundary
 from app.core.errors import ExternalToolError, ValidationError
 from app.core.ingest.fetch import ALLOWED_SUFFIXES, TIMEOUT_SECONDS, check_url, fetch_model
+from tests.helpers import LoopbackServer
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -88,7 +89,7 @@ def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
         "verify_public_peer",
         lambda peer, expected: None,
     )
-    httpd = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    httpd = LoopbackServer(("127.0.0.1", 0), _Handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     try:

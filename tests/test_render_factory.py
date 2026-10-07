@@ -309,29 +309,17 @@ print("native canvas drawn and released")
     assert "native canvas drawn and released" in done.stdout
 
 
-#: **Unter Xvfb reißt der Kindprozess sporadisch** (Tag-Läufe von v0.4.1,
-#: 13.09.2026: erst bei 200 Prozent, im nächsten Lauf bei beiden grün, im
-#: übernächsten bei 100 Prozent — Geräteverhältnis gemeldet, dann Exit -11).
-#: Ob das der Softwarerenderer des Runners ist oder die Anwendung, sagt nur
-#: ein Linux mit Bildschirm; bis dahin steht der Fall bei RM-104, und die
-#: Marke ist nicht streng: Sie hält den Bau nicht auf und verschweigt den
-#: Fall nicht.
-_XVFB_TEARS = pytest.mark.xfail(
-    sys.platform.startswith("linux"),
-    strict=False,
-    raises=AssertionError,
-    reason="Linux/Xvfb: der Renderer-Kindprozess reißt sporadisch (RM-104)",
-)
-
-
 @pytest.mark.windowed
 @pytest.mark.usefixtures("require_graphics_adapter")
-@pytest.mark.parametrize(
-    "scale",
-    [pytest.param(1, marks=_XVFB_TEARS), pytest.param(2, marks=_XVFB_TEARS)],
-)
+@pytest.mark.parametrize("scale", [1, 2])
 def test_native_item_pick_slack_stays_constant_on_hidpi_screens(scale: int) -> None:
-    """Drei logische Pixel neben einem Griff bleiben bei 100 und 200 Prozent greifbar."""
+    """Drei logische Pixel neben einem Griff bleiben bei 100 und 200 Prozent greifbar.
+
+    Unter Xvfb riss der Kindprozess in den Tag-Läufen von v0.4.1 (13.09.2026)
+    sporadisch mit Exit -11; der Fall trug bis zum 06.10.2026 eine nicht
+    strenge xfail-Marke (RM-104). Zwanzig Läufe in Folge unter Xvfb mit
+    lavapipe waren beide Maßstäbe grün (Lauf 37492243563), die Marke ist weg.
+    """
     platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
     if platform == "xcb" and not os.environ.get("DISPLAY"):
         if os.environ.get("CI"):

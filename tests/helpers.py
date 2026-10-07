@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import http.server
 import io
 import math
 import os
 import shutil
+import socketserver
 import struct
 import subprocess
 import time
@@ -1890,3 +1892,18 @@ def pbr_glb() -> bytes:
     body.visual = trimesh.visual.TextureVisuals(uv=uv, material=material)
     value = trimesh.Scene({"Farbig": body}).export(file_type="glb")
     return value if isinstance(value, bytes) else value.encode("utf-8")
+
+
+class LoopbackServer(http.server.HTTPServer):
+    """Ein Testserver auf der Rückschleife, ohne Namensauflösung beim Binden.
+
+    ``HTTPServer.server_bind`` fragt ``socket.getfqdn`` nach dem Namen der
+    Adresse. Am macOS-Runner dauerte diese Rückwärtsauflösung 35 s, auf
+    Ubuntu 2 ms (RM-104); den Namen liest kein Test.
+    """
+
+    def server_bind(self) -> None:
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)

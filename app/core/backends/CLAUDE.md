@@ -43,9 +43,15 @@ Messung ist die Agenten-Suite.
   `agentenschicht.md`.
 - **Der abbrechbare HTTP-Transport** hält den verbundenen Socket bis zum Ende
   des Request-Threads; ein Abbruch erreicht so auch bei HTTP/1.0 und
-  `Connection: close` den Antwortkörper, Antwort und Verbindung schließt der
-  Request-Thread, bevor der Aufrufer zurückkehrt. Entsteht die Verbindung erst
-  während eines Abbruchs, verhindert die erneute Tokenprüfung das POST.
+  `Connection: close` den Antwortkörper. Antwort und Verbindung schließt der
+  Request-Thread selbst; der Aufrufer wartet nach einem Abbruch höchstens
+  `CANCEL_JOIN_SECONDS` auf ihn und protokolliert, wenn er nicht endet.
+  Entsteht die Verbindung erst während eines Abbruchs, verhindert die erneute
+  Tokenprüfung das POST. Über HTTP liest und sendet der Request-Thread an einem
+  `_WatchedSocket`, der den Abbruch selbst bemerkt (`CANCEL_WATCH_SECONDS`):
+  Ein `shutdown` aus dem wartenden Thread weckte das `recv` unter macOS nicht
+  sicher, und über Ungelesenem setzt er die Verbindung unter Windows zurück.
+  Die Verbindung baut `_local_connection`; Tests setzen dort ihre Attrappe ein.
 - **`PROMPT_TOKENS` und `PROMPT_TOOL_COUNT`** stehen in `llm.py` und gehören
   zu derselben gezählten Anfrage; gezählt wird mit
   `tools/measure_local_model.py --count-tokens` (ein Antworttoken, JSON mit
