@@ -24,7 +24,9 @@ Aufruf im Hook oder zur gezielten statischen Entwicklungsprüfung::
     python tools/check_new_texts.py
 
 Rückgabe 1, wenn ein neuer Text in einem Katalog fehlt oder leer steht —
-dann gehört der Befund diesem Commit. Rückgabe 0 sonst, auch wenn andere
+dann gehört der Befund diesem Commit. Rückgabe 2, wenn eine gestagte Datei
+sich nicht als Python lesen lässt — dann ist die Prüfung nicht auswertbar,
+und der Hook hält mit diesem Grund an. Rückgabe 0 sonst, auch wenn andere
 Texte im gemeinsamen Arbeitsbaum noch unübersetzt sind.
 """
 
@@ -74,12 +76,28 @@ def _changed_files() -> list[tuple[str, str]]:
     return changed
 
 
+class UnreadableStageError(Exception):
+    """Die gestagte Fassung einer Datei lässt sich nicht als Python lesen."""
+
+    def __init__(self, path: str, problem: SyntaxError) -> None:
+        super().__init__(path, problem.lineno, problem.msg)
+        self.path = path
+        self.line = problem.lineno
+        self.reason = problem.msg
+
+
 def _texts_in(revision: str, path: str) -> set[str]:
     """Jeder Oberflächentext einer Fassung dieser Datei.
 
     ``revision`` ist, was ``git show`` versteht — ``""`` für den gestagten
     Stand (``:datei``), ``HEAD`` für den letzten Commit. Fehlt die Datei dort,
     ist die Antwort leer: Eine neue Datei hat keinen Vorzustand.
+
+    **Eine gestagte Fassung, die Python nicht liest, ist kein leerer Stand**
+    (:class:`UnreadableStageError`). ``bbd41ff2d`` kam so mit einer ``panels.py``
+    durch, deren Einrückung verschoben war: Die Datei galt als textlos, ihre
+    neuen Texte prüfte niemand, und am HEAD scheiterte jeder Import. Die
+    Fassung von ``HEAD`` bleibt nachsichtig — sie ist schon drin.
     """
     source = subprocess.run(
         ["git", "show", f"{revision}:{path}"],
@@ -93,7 +111,9 @@ def _texts_in(revision: str, path: str) -> set[str]:
         return set()
     try:
         tree = ast.parse(source.stdout)
-    except SyntaxError:
+    except SyntaxError as problem:
+        if revision == "":
+            raise UnreadableStageError(path, problem) from problem
         return set()
     found: set[str] = set()
     for node in ast.walk(tree):
@@ -196,7 +216,15 @@ def missing(texts: list[str]) -> dict[str, list[str]]:
 
 
 def main() -> int:
-    texts = added_texts()
+    try:
+        texts = added_texts()
+    except UnreadableStageError as problem:
+        print(
+            f"{problem.path}: Die gestagte Fassung lässt sich nicht lesen "
+            f"(Zeile {problem.line}: {problem.reason}). So geht sie nicht in den Commit — "
+            "die Datei beheben und neu vormerken."
+        )
+        return 2
     if not texts:
         return 0
     gaps = missing(texts)

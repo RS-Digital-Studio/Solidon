@@ -137,10 +137,18 @@ fi
 # liest Index gegen HEAD und fragt nur diese Texte gegen die Kataloge ab.
 # Eine fremde Kataloglücke gehört dadurch nicht zu diesem Commit; die Ausgabe
 # einer Fensterprüfung wird weder gestartet noch als Schalter ausgewertet.
-neu_und_offen=$("$python" tools/check_new_texts.py 2>&1) || {
-  meine="$meine [neue Texte ohne Übersetzung]"
-  echo "$neu_und_offen" >&2
-}
+neu_und_offen=$("$python" tools/check_new_texts.py 2>&1)
+case $? in
+  0) ;;
+  2)
+    prueffehler="${prueffehler:-Die Textprüfung konnte eine gestagte Datei nicht lesen.}"
+    echo "$neu_und_offen" >&2
+    ;;
+  *)
+    meine="$meine [neue Texte ohne Übersetzung]"
+    echo "$neu_und_offen" >&2
+    ;;
+esac
 
 if [ -n "$prueffehler" ]; then
   echo "pre-commit: ABGEBROCHEN — $prueffehler" >&2
