@@ -113,7 +113,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
-| `header.py` | Kopfzeile: Projektname, Druckerwechsel, die tatsächlich belegten Filamente (`mesh.slot_indices`) |
+| `header.py` | Kopfzeile: Projektname, `printer_button_text`, die belegten Filamente (`mesh.slot_indices`) |
 
 ### Brücke zum Kern
 
@@ -148,7 +148,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | Datei | Zweck |
 |---|---|
 | `panels.py` | die Panels links und der Prüfbericht rechts (§2.5): `ObjectTree`, `ParameterPanel`, `HistoryPanel`, `ReportPanel` mit `BodyChoiceDialog`, dazu das Merkmalfenster `FeaturePanel` (Handlungen, Kanten, Bausteine, Schutz vor Trennnähten, Passung anlegen) |
-| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES` |
+| `selection_operations.py` | Auswahlhandlungen im Reiter Auswahl, einmal aus Register (`quick_names`, `OPEN_UP_TO`, `PICKER_HANDLES`); ohne Auswahl: alle Körper; mehrere markierte Merkmalszeilen: `QUICK_SEVERAL_FEATURES`; `add_window_action` |
 | `tool_strip.py` | Werkzeugzeile unter der Ansicht (§2.4, §2.5) |
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |
@@ -162,7 +162,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 
 | Datei | Zweck |
 |---|---|
-| `op_dialog.py` | ausschließlich aus Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); vorn `lead_sentence` und die Lesezeile *Stelle* (`place_fields`, `place_text`) mit `aim_again` zurück zur Platzierung, hinten die Klappe mit `advanced_summary`; `show_seat`: *Auf das Bett* bei Erzeugern auf gewählter Fläche |
+| `op_dialog.py` | ausschließlich aus Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence` und die Lesezeile *Stelle* (`place_fields`, `place_text`) mit `aim_again` zurück zur Platzierung, hinten die Klappe mit `advanced_summary`; `show_seat`: *Auf das Bett* bei Erzeugern auf gewählter Fläche |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
@@ -211,7 +211,7 @@ stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis bleibt scroll
 | Datei | Zweck |
 |---|---|
 | `catalog.py` | Bausteinkatalog (§24.3, §2.6); `show_for_feature` filtert je Merkmalsart, `offer_ways` zum ersten Körper |
-| `recipe_dialog.py` | Auswahl als Baustein speichern; an einem wieder geöffneten eigenen Baustein heißt der Knopf *Baustein ersetzen* |
+| `recipe_dialog.py` | Auswahl als Baustein speichern; wieder geöffnet: *Baustein ersetzen* |
 | `counterpart_dialog.py` | Gegenstücke: zwei Stellen, Paar/Maße aus Bausteinschema und `Pair.shared` |
 
 Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
@@ -254,7 +254,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `guide_targets.py` | Ziele für Tour und `tools/make_guides.py`: `widget_for`, `area_for`, `action_for`; fehlend: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
-| `shortcut_schemes.py` | Kürzelbelegungen und Plattformtasten, eine Quelle; `NavigationKeys` lässt Pos1, Ende, Bild auf und Bild ab dem fokussierten Inhalt |
+| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac |
 | `command_palette.py` | die Befehlspalette (§2.6, §19.2) |
 
 ### Einstellungen und Rückmeldung

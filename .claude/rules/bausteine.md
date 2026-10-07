@@ -205,8 +205,8 @@ Stapel.
 ## Ein Rezept ist der eigene Baustein ohne Python
 
 Ein Ausschnitt des Op-Stapels plus die Beschreibung seiner Parameter, als
-Daten in `<Nutzerdaten>/parts/recipes/*.json` (`parts/recipe.py`, Konzept
-Befestigungssysteme §16–§19):
+Daten in `<Nutzerdaten>/parts/recipes/*.json` (`parts/recipe.py`,
+`konzepte/archiv/konzept-befestigungssysteme-2026-08.md` §16–§19):
 
 - **Der Dokument-Ausschnitt reist als Dokument** (`scene.serialise`) und erbt
   dessen Migrationen; die Hülle trägt ihre eigene `FORMAT_VERSION`.

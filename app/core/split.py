@@ -214,7 +214,7 @@ def plan_split(
     drafts = [
         OperationDraft(
             # Eine schiefe Ebene (RM-080, T3) geht als *An gezeichneter Linie
-            # trennen* in den Verlauf — derselbe Schnitt, eine freie Richtung.
+            # teilen* in den Verlauf — derselbe Schnitt, eine freie Richtung.
             op="split_pinned" if step.plane.normal is None else "split_line",
             inputs=(object_id,),
             params={
@@ -575,7 +575,7 @@ def apply_line_split(
         },
         plane,
         [SplitTarget(object_id, mesh, features)],
-        title=_("An gezeichneter Linie trennen"),
+        title=_("An gezeichneter Linie teilen"),
     )
     _log.info("split along a drawn line into %d part(s)", len(applied.object_ids))
     return applied

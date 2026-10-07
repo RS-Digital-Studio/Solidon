@@ -208,14 +208,14 @@ from app.ui.overlay import (
     tell_the_zone,
 )
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
-from app.ui.shortcut_schemes import delete_keys
+from app.ui.shortcut_schemes import delete_keys, return_opens
 from app.ui.style import (
     NORMAL,
     ROOMY,
     SPACE,
     TARGET_SIZE,
     TIGHT,
-    make_danger,
+    leading_action,
     make_primary,
     rule,
     set_level,
@@ -327,7 +327,7 @@ _PER_BODY_ACTIONS: Final[frozenset[str]] = frozenset(
 #: ``error.object_id``) oder wirken auf die Auswahl, die an einem verbrauchten
 #: Körper eine andere wäre. Nach *Modell teilen* stand am Laptopständer
 #: „Das Modell besteht aus 21 Teilen …“ am verbrauchten Körper mit
-#: *Überschneidungen auflösen* und *In Einzelteile zerlegen*, und ein Klick
+#: *Überschneidungen auflösen* und *In Einzelteile aufteilen*, und ein Klick
 #: legte eine Reparatur an einem Körper an, den es nicht mehr gibt. Was einen
 #: Schritt ändert (``NEEDS_OP``) oder die ganze Szene meint, gilt ohne ihn.
 #: Vollständig hält die Menge ``test_finding_actions`` am Handlerverzeichnis.
@@ -646,7 +646,7 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     "ingest.small_components": (REMOVE_SMALL_PARTS,),
     # **Ein Befund, dessen Handlung nebenan stand.** „Das Modell besteht aus
     # mehreren Teilen." trug nichts, während im selben Bericht „sehr kleine
-    # Einzelteile" den Knopf hatte — und *In Einzelteile zerlegen* stand in
+    # Einzelteile" den Knopf hatte — und *In Einzelteile aufteilen* stand in
     # der Karte unter 24 Handlungen (Bedienweg-Durchsicht 14.09.2026).
     "ingest.multiple_components": (SPLIT_BODIES,),
     # **Der Ausweg stand im Text des einen Befunds und das Ziel im anderen.**
@@ -1806,20 +1806,22 @@ def _empty_history_text() -> str:
 #: Die Spalte, in der das Filament einer Zeile steht.
 FILAMENT_COLUMN = 2
 
-#: Ihre Breite in Bildpunkten — Farbfeld plus Rand, kein Text.
+#: Ihre Breite in Bildpunkten — Farbpunkt plus Rand; der Kopf trägt die Spule, kein Wort.
 FILAMENT_WIDTH = 34
 
-#: Kantenlänge des Farbfelds.
+#: Durchmesser des Farbpunkts samt Rand.
 FILAMENT_CHIP = 14
 
 
 def filament_chip(colour: str, assigned: bool, widget: QWidget) -> QIcon:
-    """Ein Farbfeld für die Filamentspalte.
+    """Ein runder Farbpunkt für die Filamentspalte.
 
-    **Zwei Kodierungen, nicht eine** (Regel 18): Ein zugewiesenes Filament
-    steht als gefülltes Feld, ein Körper ohne eigenes als leeres mit Rand.
-    Wer Farben nicht unterscheidet, sieht am Gefülltsein trotzdem, ob hier
-    etwas entschieden wurde.
+    **Rund, kein Kästchen** (RM-519): Das leere Quadrat mit Rand sah in der
+    Spalte aus wie ein Haken, den man setzen kann. **Zwei Kodierungen, nicht
+    eine** (Regel 18): Ein zugewiesenes Filament steht als Punkt mit
+    durchgezogenem Rand, ein Körper ohne eigenes als Punkt in der Farbe des
+    Teils mit gestricheltem Rand. Wer Farben nicht unterscheidet, sieht am
+    Rand trotzdem, ob hier etwas entschieden wurde.
     """
     # Ein mehrfarbiges Filament kommt als Feldwert mit Leerzeichen an
     # (``filament_picker.slot_colours``): die erste Farbe trägt Rand und
@@ -1834,16 +1836,18 @@ def filament_chip(colour: str, assigned: bool, widget: QWidget) -> QIcon:
     painter = QPainter(image)
     try:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        pen = QPen(QColor(colour) if assigned else QColor(colour).darker(140))
+        pen = QPen(QColor(colour) if assigned else QColor(colour).darker(160))
         pen.setWidthF(1.5 * scale)
+        if not assigned:
+            pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(colour) if assigned else Qt.BrushStyle.NoBrush)
+        painter.setBrush(QColor(colour))
         inset = 1.5 * scale
         chip = QRectF(inset, inset, side - 2 * inset, side - 2 * inset)
-        painter.drawRoundedRect(chip, 2.0 * scale, 2.0 * scale)
+        painter.drawEllipse(chip)
         if assigned and len(colours) > 1:
             clip = QPainterPath()
-            clip.addRoundedRect(chip, 2.0 * scale, 2.0 * scale)
+            clip.addEllipse(chip)
             painter.setClipPath(clip)
             painter.setPen(Qt.PenStyle.NoPen)
             for number, one in enumerate(colours):
@@ -1919,6 +1923,17 @@ class _ObjectTreeView(QTreeWidget):
 
     selection_allowed: Callable[[], bool] | None = None
     selection_refused: Callable[[], None] | None = None
+
+    resized = Signal()
+    """Die Sichtfläche hat ihre neue Breite — die Spalten teilen neu (RM-519).
+
+    Die Karte darum erfährt ihre Größe vor dem Baum: Beim ersten Zeigen
+    teilte ``ObjectTree.resizeEvent`` die alte Breite, und die Maßspalte stand
+    mit 25 Punkten da, „Maße“ im Kopf abgeschnitten."""
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Schnittstelle
+        super().resizeEvent(event)
+        self.resized.emit()
 
     def _refused(self) -> bool:
         """Ob die Auswahl gerade gehalten wird — und der Satz dazu, wenn ja."""
@@ -2004,7 +2019,14 @@ class ObjectTree(QWidget):
         self.tree = _ObjectTreeView(self)
         self.tree.setAccessibleName(tr("Objekte"))
         self.tree.setColumnCount(3)
-        self.tree.setHeaderLabels([tr("Objekt"), tr("Maße"), tr("Filament")])
+        self.tree.setHeaderLabels([tr("Objekt"), tr("Maße"), ""])
+        # **Die Spule statt des Worts** (RM-519): Die Spalte ist so schmal wie
+        # ihr Farbpunkt, und „Filament“ stand dort in jeder Sprache als „Fila“.
+        # Das Wort bleibt für Kurzhilfe und Bildschirmleser (Regel 18).
+        heading = self.tree.headerItem()
+        heading.setIcon(FILAMENT_COLUMN, icon("spool", self.tree))
+        heading.setToolTip(FILAMENT_COLUMN, tr("Filament"))
+        heading.setData(FILAMENT_COLUMN, Qt.ItemDataRole.AccessibleTextRole, tr("Filament"))
         # Die Maßspalte nimmt, was sie braucht; der Rest gehört den Namen.
         # Vorher standen beide auf derselben festen Breite, und auf dreifache
         # Fensterbreite gezogen blieb die Maßspalte schmal, während links
@@ -2034,6 +2056,7 @@ class ObjectTree(QWidget):
         # dem Namen ab, und der ist die Spalte, die man liest.
         header.setSectionResizeMode(FILAMENT_COLUMN, QHeaderView.ResizeMode.Fixed)
         header.resizeSection(FILAMENT_COLUMN, FILAMENT_WIDTH)
+        self.tree.resized.connect(self._size_columns)
         # Ein Klick auf das Feld ist die Zuweisung — nicht erst ein Doppelklick
         # und kein Umweg über das Kontextmenü.
         self.tree.clicked.connect(self._on_cell_clicked)
@@ -2750,7 +2773,12 @@ class ObjectTree(QWidget):
         # schmaler Karte waren das 25 Punkte gegen 39 für das Maß.
         free = max(0, width - FILAMENT_WIDTH)
         needed = self.tree.sizeHintForColumn(1)
-        self.tree.header().resizeSection(1, max(0, min(needed, int(free * MEASURE_SHARE))))
+        # **Die Überschrift steht immer ganz da** (RM-519): ``sizeHintForColumn``
+        # misst nur die Zeilen, und der Anteil allein schnitt in mancher
+        # Sprache den Kopf ab. Ihr Platz geht dem Namen ab, nicht ihr Wort.
+        heading = self.tree.header().sectionSizeHint(1)
+        shared = max(heading, min(needed, int(free * MEASURE_SHARE)))
+        self.tree.header().resizeSection(1, max(0, min(shared, free)))
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Beim Breiterwerden neu teilen."""
@@ -3399,6 +3427,18 @@ def _empty_parameters_text() -> str:
     )
 
 
+def binding_button_text(count: int) -> str:
+    """Was am Bindeknopf der Parameterkarte steht — mit der Zahl der Stellen (RM-519).
+
+    Die Zahl stand vorher unter jeder Maßzeile („2 feste Zahlen passen“) und
+    las sich dort wie eine Überschrift; am Knopf sagt sie, was ein Klick
+    erledigt.
+    """
+    if count == 1:
+        return tr("Eine Zahl an ein Maß binden …")
+    return tr("{count} Zahlen an Maße binden …", count=count)
+
+
 class _CompactParameterUnitBox(QComboBox):
     """Zeigt die gewählte Einheit kurz und die Auswahlliste ausführlich.
 
@@ -3500,8 +3540,8 @@ class ParameterPanel(QWidget):
         self._titles: dict[str, QLabel] = {}
         """Die Beschriftung je Zeile."""
         self._hints: dict[str, QLabel] = {}
-        """Was unter der Zeile über ihre Verwendung steht („Nicht verwendet“,
-        „2 feste Zahlen passen“) — über die ganze Kartenbreite. In der schmalen
+        """Was unter der Zeile über ihre Verwendung steht — nur „Nicht
+        verwendet“, über die ganze Kartenbreite. In der schmalen
         Beschriftungsspalte brach es in vier Zeilen um, und die letzte stand
         unter der nächsten Zeile."""
         self._sliders: dict[str, QSlider] = {}
@@ -3539,7 +3579,7 @@ class ParameterPanel(QWidget):
         # Steht im Stapel eine feste Zahl, die genau zu einem Maß passt, folgt
         # sie ihm nicht. Der Knopf steht nur, wenn es solche Zahlen gibt
         # (``scene.parameter_binding``); die Wahl trifft der Dialog.
-        self.bind_button = QPushButton(tr("Feste Zahlen binden …"), self)
+        self.bind_button = QPushButton(self)
         self.bind_button.clicked.connect(self.bindRequested)
         _set_shown(self.bind_button, False)
         outer.addWidget(self._scroll)
@@ -3555,8 +3595,8 @@ class ParameterPanel(QWidget):
         Bedingung, unter der die ganze Verteilung stillsteht
         (``OverlayHost._share_room``). Wortgleich mit
         ``FilamentPanel._around_the_list`` ist das nicht: Dort stehen ein
-        Hinweis und drei Knöpfe, hier einer — zwei, solange *Feste Zahlen
-        binden* dasteht; ein verborgener Knopf bekommt auch keinen Abstand.
+        Hinweis und drei Knöpfe, hier einer — zwei, solange der Bindeknopf
+        dasteht; ein verborgener Knopf bekommt auch keinen Abstand.
         """
         margins = self._outer.contentsMargins()
         shown = [
@@ -3915,24 +3955,12 @@ class ParameterPanel(QWidget):
         """Beschriftung und Kurzhilfe einer Zeile nach dem jüngsten Ergebnis."""
         label = self._titles[name]
         uses = self._usage_result.parameter_usage if self._usage_result is not None else None
-        fitting = len(self._spots_for(name))
         unused = uses is not None and name in uses and not uses[name]
-        if unused and fitting:
-            usage = (
-                tr("Nicht verwendet — eine feste Zahl passt")
-                if fitting == 1
-                else tr("Nicht verwendet — {count} feste Zahlen passen", count=fitting)
-            )
-        elif unused:
-            usage = tr("Nicht verwendet")
-        elif fitting:
-            usage = (
-                tr("Eine feste Zahl passt")
-                if fitting == 1
-                else tr("{count} feste Zahlen passen", count=fitting)
-            )
-        else:
-            usage = ""
+        # **Unter der Zeile steht nur, was der Kunde sonst nicht sähe** (RM-519):
+        # ein Maß, das nichts bewirkt. „2 feste Zahlen passen“ stand unter jedem
+        # wirkenden Maß und las sich wie die Überschrift der nächsten Zeile; die
+        # Zahl steht jetzt am Bindeknopf, die Stellen in der Kurzhilfe.
+        usage = tr("Nicht verwendet") if unused else ""
         label.setText(title)
         note = self._usage_note(name)
         hint = self._hints.get(name)
@@ -3956,6 +3984,16 @@ class ParameterPanel(QWidget):
         if uses is None:
             return tr("Die Verwendung wird mit dem Modell geprüft.")
         if not uses:
+            # Ungenutzt, aber eine feste Zahl passt: Hier macht erst das Binden
+            # das Maß wirksam (RM-519) — die Stellen und der Weg dorthin.
+            if spots := self._spot_lines(name):
+                return "\n".join(
+                    [
+                        tr("Dieses Maß wird von keiner Operation verwendet. Es passt hier:"),
+                        *spots,
+                        tr("Der Knopf unter den Maßen bindet diese Zahlen an das Maß."),
+                    ]
+                )
             return tr(
                 "Dieses Maß wird von keiner Operation verwendet. Öffnen Sie einen Schritt "
                 "im Verlauf und tragen Sie =@{name} in das passende Maßfeld ein."
@@ -4003,11 +4041,12 @@ class ParameterPanel(QWidget):
         return lines
 
     def _show_binding(self) -> None:
-        """*Feste Zahlen binden …* nur, wenn es eine gibt — mit ihrer Zahl am Knopf."""
+        """Der Bindeknopf nur, wenn es eine feste Zahl gibt — mit ihrer Zahl am Knopf."""
         result = self._usage_result
         spots = result.binding_spots if result is not None else ()
         shown = bool(spots)
         if shown:
+            self.bind_button.setText(binding_button_text(len(spots)))
             note = tr(
                 "{count} feste Zahlen passen zu Projektmaßen. Gebunden folgen sie dem Maß, "
                 "wenn Sie es ändern.",
@@ -4460,8 +4499,34 @@ def removal_groups(document: Document, gone: Discarded) -> dict[str, tuple[int, 
     }
 
 
-def _with_removed(count: int) -> str:
-    """Wie viele Schritte unter einer Löschung stehen, für ihre Zeile."""
+def step_span(numbers: Iterable[int]) -> str:
+    """Die Schrittnummern einer zugeklappten Zeile im Verlauf, als Spanne (RM-519).
+
+    Ohne sie sprang die Zählung an der Gruppe — 1, 2, ▸ Kabel und
+    Befestigung, 5 —, und wer „Operation 4“ aus einer Fehlermeldung suchte,
+    fand sie nicht. Zusammenhängende Nummern stehen als Spanne, Lücken nach
+    einem Verschieben als Liste.
+    """
+    ordered = sorted(set(numbers))
+    runs: list[list[int]] = []
+    for number in ordered:
+        if runs and number == runs[-1][-1] + 1:
+            runs[-1].append(number)
+        else:
+            runs.append([number])
+    return ", ".join(str(run[0]) if len(run) == 1 else f"{run[0]}–{run[-1]}" for run in runs)
+
+
+def _with_removed(count: int, numbers: str = "") -> str:
+    """Wie viele Schritte unter einer Löschung stehen, für ihre Zeile — und welche.
+
+    Mit ``numbers`` (:func:`step_span`) nennt die zugeklappte Zeile die Nummern,
+    die sie verbirgt, wie eine zugeklappte Gruppe (RM-519).
+    """
+    if numbers:
+        if count == 1:
+            return tr("mit Schritt {number}", number=numbers)
+        return tr("mit {count} Schritten: {numbers}", count=count, numbers=numbers)
     if count == 1:
         return tr("mit einem Schritt")
     return tr("mit {count} Schritten").format(count=count)
@@ -5013,16 +5078,21 @@ class HistoryPanel(QWidget):
             # Schritts lautet „Bohrung setzen — Operation 4". Wer von dort
             # zurück in den Verlauf sieht, sucht diese Zahl.
             #
-            # Eine Transaktion aus mehreren Schritten bekommt keine: Sie
-            # *vertritt* keinen einzelnen, und ihre Kinder tragen ihre eigenen.
+            # Eine Transaktion aus mehreren Schritten trägt die Spanne ihrer
+            # Kinder (von 3 bis 4, RM-519): Ohne sie sprang die Zählung an der
+            # zugeklappten Gruppe von 2 auf 5.
             single = transaction.ops[0] if len(transaction.ops) == 1 else None
             # Ein gelöschter Schritt hat keine Stelle mehr — seine Kennung
             # stünde sonst als Nummer neben den Stellen der übrigen (RM-368).
-            number = (
-                f"{self._positions[single]}  "
-                if single is not None and single in self._positions
-                else ""
-            )
+            if single is not None:
+                span = str(self._positions[single]) if single in self._positions else ""
+            else:
+                span = step_span(
+                    self._positions[op_id]
+                    for op_id in transaction.ops
+                    if op_id in self._positions and op_id not in replanned
+                )
+            number = f"{span}  " if span else ""
             item = QListWidgetItem(f"{number}{transaction.title}{by}")
             halted = stopped_at is not None and stopped_at in transaction.ops
             if halted:
@@ -5109,7 +5179,10 @@ class HistoryPanel(QWidget):
                 # mehreren Schritten, die Zahl als Wort an der Zeile (Regel 18).
                 if halted or stopped_at in removed:
                     self._open_groups.add(transaction.id)
-                item.setText(f"{item.text()}  ({_with_removed(len(removed))})")
+                numbers = step_span(
+                    self._positions[op_id] for op_id in removed if op_id in self._positions
+                )
+                item.setText(f"{item.text()}  ({_with_removed(len(removed), numbers)})")
                 if len(transaction.ops) == 1:
                     expanded = transaction.id in self._open_groups
                     item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")
@@ -5644,18 +5717,27 @@ class HistoryPanel(QWidget):
         return tuple(int(op_id) for op_id in clicked)
 
     def _on_context_menu(self, position: QPoint) -> None:
-        """Was man mit einem Schritt tun kann, dort, wo er steht.
+        """Rechtsklick im Verlauf: das Menü der Zeile darunter."""
+        menu = self.context_menu(self.list.itemAt(position))
+        if menu is None:
+            return
+        menu.exec(self.list.viewport().mapToGlobal(position))
+        # Wie im Objektbaum: Das Menü gehört diesem Klick.
+        menu.deleteLater()
+
+    def context_menu(self, item: QListWidgetItem | None) -> QMenu | None:
+        """Was man mit einem Schritt tun kann, dort, wo er steht — gebaut, nicht gezeigt.
 
         Bisher gab es nur den Doppelklick, und den findet, wer ihn probiert.
         Angeboten wird, was der Stapel wirklich kann: einen Schritt öffnen,
         seine Zahlen ändern oder ihn samt abhängigen Schritten löschen
         (§15.4). Das Löschen bleibt eine Transaktion und damit rücknehmbar.
+        Getrennt vom Zeigen, weil ``QMenu.exec`` wie ein modaler Dialog wartet.
         """
-        item = self.list.itemAt(position)
         op_id = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         op_ids = self._operations_for_context(item)
         if not op_ids:
-            return
+            return None
 
         menu = QMenu(self)
         # Die Objektnamen ``history.*`` sind die Adresse, unter der eine
@@ -5667,11 +5749,6 @@ class HistoryPanel(QWidget):
             action.setObjectName("history.edit")
             action.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.operationActivated.emit(chosen)
-            )
-        if single_op is not None and single_op in self._switchable:
-            switch = menu.addAction(self._switchable[single_op])
-            switch.triggered.connect(
-                lambda _checked=False, chosen=single_op: self.kernelSwitchRequested.emit(chosen)
             )
         if single_op is not None and single_op in self._drawn:
             # **Eine Zeichnung für mehrere Schritte** (Befund E6): Außenkontur
@@ -5707,9 +5784,17 @@ class HistoryPanel(QWidget):
             frozen.triggered.connect(
                 lambda _checked=False, chosen=single_op: self.bakeRequested.emit(chosen)
             )
-        menu.exec(self.list.viewport().mapToGlobal(position))
-        # Wie im Objektbaum: Das Menü gehört diesem Klick.
-        menu.deleteLater()
+        if single_op is not None and single_op in self._switchable:
+            # **Der Kernwechsel steht hinten, hinter einem Strich** (RM-519):
+            # An zweiter Stelle, gleich nach *Parameter ändern …*, las er sich
+            # wie eine alltägliche Handlung — er ist die seltenste im Menü.
+            menu.addSeparator()
+            switch = menu.addAction(self._switchable[single_op])
+            switch.setObjectName("history.kernel")
+            switch.triggered.connect(
+                lambda _checked=False, chosen=single_op: self.kernelSwitchRequested.emit(chosen)
+            )
+        return menu
 
 
 #: Ab wie vielen Zeilen der Bericht seine Filterzeile zeigt.
@@ -5936,7 +6021,7 @@ class ReportPanel(QWidget):
     und genau dort stand der Kunde, der wissen wollte, ob er jetzt drucken
     kann, vor „Keine Befunde." und sonst nichts. Der Weg zum Slicer lag allein
     hinter *Datei → Druckeinstellungen …*, einem Namen, unter dem ein Laie nichts
-    sucht. Der Eintrag heißt *Drucken vorbereiten*. Das Fenster verdrahtet dieses
+    sucht. Der Eintrag heißt *An den Slicer übergeben*. Das Fenster verdrahtet dieses
     Signal mit demselben Dialog.
     """
 
@@ -6037,6 +6122,8 @@ class ReportPanel(QWidget):
         # Sammelzeile über 17 Körper wählte nichts (Fensterabnahme RM-131).
         self.list.leftPressed.connect(self._on_activated)
         self.list.itemActivated.connect(self._on_activated)
+        # Am Mac meldet Qt Return in der Liste nicht als Aktivierung.
+        return_opens(self.list, sys.platform)
         # Und was dagegen hilft, steht im Kontextmenü — siehe :meth:`_on_menu`.
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_menu)
@@ -6378,9 +6465,7 @@ class ReportPanel(QWidget):
             if finding is not None
             else []
         )
-        primary = next(
-            (action for action in offered if action.primary), offered[0] if offered else None
-        )
+        primary = leading_action(offered)
         # **Ein Zeige-Knopf** (Durchsicht B10): Bietet der Befund selbst das
         # Zeigen an, entfällt der eigene Knopf der Befundzeile.
         self._show_finding_context(
@@ -6832,14 +6917,14 @@ class ReportPanel(QWidget):
         Knöpfe freischaltet, muss man wissen, und §2.7 verspricht anklickbare
         Handlungen und nicht auffindbare.
 
-        Gemessen am häufigsten Fall überhaupt, dem ersten Öffnen eines
-        Modells: ``block_with_rounded_edge.stl`` liegt von Z -10 bis +10, der
-        Bericht meldet ``arrange.below_bed``, und *Auf das Bett setzen* löst es
-        mit einem Klick. Vor der Vorauswahl standen dort null Knöpfe, nach
-        einem Klick auf die Zeile einer — der Weg zur Lösung war einen Klick
-        länger als nötig, und dieser Klick stand nirgends geschrieben.
+        Gemessen an einer Warnung mit Ausweg: Steht ein Körper über den
+        Bauraum hinaus, meldet der Bericht ``arrange.out_of_build_volume``, und
+        darunter stehen *Modell teilen* und *Auf den Bauraum verkleinern* —
+        ohne Vorauswahl erst nach einem Klick auf die Zeile. Der Weg zur Lösung
+        war einen Klick länger als nötig, und dieser Klick stand nirgends
+        geschrieben.
 
-        Drei Bedingungen, und jede hat ihren Grund:
+        Vier Bedingungen, und jede hat ihren Grund:
 
         * **Nur ohne bestehende Wahl.** Eine Auswahl des Kunden zu
           überschreiben wäre schlimmer als keine Vorauswahl (§2.4).
@@ -6850,6 +6935,12 @@ class ReportPanel(QWidget):
           schwerste, aber nicht immer der, der etwas anzubieten hat —
           ``ingest.welded`` steht regelmäßig darüber und hat keine. Ihn
           vorzuwählen ließe die Zeile wieder leer.
+        * **Nur Fehler und Warnungen** (RM-512). Eine vorgewählte Zeile trägt
+          die Akzentkante und ihre Handlung den Hauptknopf; ein Hinweis, der
+          das tut, liest sich wie eine Warnung (KUNDE-06: „Material
+          kalibrieren“ über jedem sauberen Modell) und nimmt dem Ruhezustand
+          sein eines Licht. Seine Handlung steht einen Klick auf die Zeile
+          entfernt.
         """
         if self.list.selectedItems():
             return
@@ -6859,12 +6950,7 @@ class ReportPanel(QWidget):
             if item.isHidden():
                 continue
             finding = item.data(Qt.ItemDataRole.UserRole)
-            if finding.severity == "info" and finding.object_id is None:
-                # **Ein Hinweis zur Einrichtung ist nicht der erste Schritt am
-                # Teil** (KUNDE-06). „Material kalibrieren“ stand vorgewählt,
-                # in der Auswahlfarbe, mit orangem Hauptknopf, über jedem
-                # sauberen Modell — und las sich wie eine Warnung. Ein Hinweis
-                # am Körper (*Auf das Bett setzen*) bleibt vorwählbar.
+            if finding.severity not in ("error", "warning"):
                 continue
             if handled_actions(
                 finding,
@@ -8636,7 +8722,11 @@ class FeaturePanel(QWidget):
         self._apply.clicked.connect(self._run_armed)
         self._apply.setVisible(False)
         below.addWidget(self._apply)
-        self._cancel = make_danger(QPushButton(tr("Abbrechen"), self._footer))
+        # Ein normaler Knopf: Abbrechen verwirft nur eine Vorschau, die das
+        # Dokument nie gesehen hat. Rot trägt das unwiederbringliche Verwerfen
+        # (Entscheidung Robert, 06.10.2026: RM-512 löst das rote Abbrechen vom
+        # 11.09. ab).
+        self._cancel = QPushButton(tr("Abbrechen"), self._footer)
         self._cancel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._cancel.setToolTip(tr("Verwirft, was im Bild wartet — gerechnet wird nichts."))
         self._cancel.clicked.connect(self.cancelRequested)

@@ -953,6 +953,11 @@ def test_delivery_matrix_resumes_only_a_matching_well_formed_run(
     model = tmp_path / "plate.stl"
     output = tmp_path / "matrix"
     script = root / "tools" / "matrix_unit.py"
+    import tools
+
+    # ``matrix_unit`` bindet ``tools`` an seinen Ordner; danach kommt der
+    # Suchpfad des Testprozesses zurück.
+    monkeypatch.setattr(tools, "__path__", tools.__path__)
     monkeypatch.setattr(sys, "argv", [str(script), str(root), str(model), str(output), "heim"])
     monkeypatch.setattr(sys, "path", list(sys.path))
     specification = importlib.util.spec_from_file_location("delivery_matrix_unit", script)

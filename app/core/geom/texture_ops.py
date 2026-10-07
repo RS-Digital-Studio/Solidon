@@ -27,7 +27,7 @@ import numpy as np
 
 from app.core import units
 from app.core.errors import CORRECT_INPUT, Action, ValidationError, require_positive
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, periodic_sin_cos
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
@@ -124,7 +124,13 @@ def _ribs(
     columns = np.arange(-reach, reach + pitch, pitch)
     strips = [box(float(x), -reach, float(x) + land, reach) for x in columns]
     if diagonal:
-        strips = [affinity.rotate(strip, diagonal, origin=(0.0, 0.0)) for strip in strips]
+        # Gedreht über die exakten Winkelfunktionen: ``affinity.rotate`` nimmt
+        # ``math.cos`` der Plattform (RM-187); ``affine_transform`` rechnet
+        # elementweise.
+        cos, sin = units.exact_cos_degrees(diagonal), units.exact_sin_degrees(diagonal)
+        strips = [
+            affinity.affine_transform(strip, (cos, -sin, sin, cos, 0.0, 0.0)) for strip in strips
+        ]
     return _clip(strips, width, height)
 
 
@@ -157,7 +163,14 @@ def _waves(width: float, height: float, pitch: float, share: float = LAND_SHARE)
             constraint="pattern_size",
         )
     steps = np.arange(-last, last + 1, dtype=float) * step
-    offsets = amplitude * np.sin(2.0 * math.pi * steps / pitch)
+    # Die Stützstelle ``k`` liegt bei ``k/WAVE_STEPS`` einer Periode: ihr Sinus
+    # aus der Kreistafel, nicht aus ``np.sin`` der Plattform (RM-187).
+    offsets = np.array(
+        [
+            amplitude * units.circle_point(WAVE_STEPS, index % WAVE_STEPS)[1]
+            for index in range(-last, last + 1)
+        ]
+    )
     shapes: list[Any] = []
     columns, _rows = _grid_positions(width, height, pitch)
     for centre in columns:
@@ -230,8 +243,6 @@ def _diamonds(width: float, height: float, pitch: float, share: float = LAND_SHA
 
 def _dimples(width: float, height: float, pitch: float, fill: float = DIMPLE_FILL) -> list[Any]:
     """Noppen: runde Erhebungen im Raster, versetzt wie eine Wabe."""
-    from shapely.geometry import Point
-
     radius = pitch / 2.0 * fill
     step_y = pitch * math.sqrt(3.0) / 2.0
     shapes: list[Any] = []
@@ -241,7 +252,7 @@ def _dimples(width: float, height: float, pitch: float, fill: float = DIMPLE_FIL
         offset = (pitch / 2.0) if row % 2 else 0.0
         x = -width / 2.0 - pitch + offset
         while x <= width / 2.0 + pitch:
-            shapes.append(Point(x, y).buffer(radius, quad_segs=8))
+            shapes.append(_disc(x, y, radius, quad_segs=8))
             x += pitch
         y += step_y
         row += 1
@@ -284,16 +295,28 @@ def _voronoi(width: float, height: float, pitch: float, seed: int) -> list[Any]:
 
 def _noise(width: float, height: float, pitch: float, seed: int) -> list[Any]:
     """Rauschen: Streuflecken unterschiedlicher Größe, ohne erkennbares Raster."""
-    from shapely.geometry import Point
-
     rng = np.random.default_rng(seed)
     centres = _scattered(width, height, pitch, seed)
     radii = rng.uniform(pitch * 0.15, pitch * 0.45, size=len(centres))
     blobs = [
-        Point(float(x), float(y)).buffer(float(radius), quad_segs=6)
+        _disc(float(x), float(y), float(radius), quad_segs=6)
         for (x, y), radius in zip(centres, radii, strict=True)
     ]
     return _clip(blobs, width, height)
+
+
+def _disc(x: float, y: float, radius: float, *, quad_segs: int) -> Any:
+    """Ein Kreis als Vieleck mit ``4 · quad_segs`` Ecken aus der Kreistafel.
+
+    Statt ``Point.buffer``: GEOS rechnet die Bogenpunkte mit der
+    Mathematikbibliothek der Plattform, und jede Noppe trug deren letzte
+    Stelle (RM-187). ``units.circle_cos_sin`` ist auf jeder Maschine dieselbe.
+    """
+    from shapely.geometry import Polygon
+
+    return Polygon(
+        [(x + radius * cos, y + radius * sin) for cos, sin in units.circle_cos_sin(4 * quad_segs)]
+    )
 
 
 def pattern_shapes(
@@ -971,7 +994,10 @@ def wrapped(body: MeshData, diameter: float, *, cancelled: CancelToken | None = 
     points = np.asarray(body.raw.vertices, dtype=float)
     theta = points[:, 0] / radius
     reach = radius + points[:, 2]
-    turned = np.column_stack((reach * np.cos(theta), reach * np.sin(theta), points[:, 1]))
+    # Sinus und Kosinus aus Grundrechenarten (RM-187): ``np.cos`` rundet die
+    # letzte Stelle je Maschine anders, und jede Ecke des Felds hängt daran.
+    sines, cosines = periodic_sin_cos(theta)
+    turned = np.column_stack((reach * cosines, reach * sines, points[:, 1]))
     result = MeshData.of(trimesh.Trimesh(vertices=turned, faces=body.raw.faces, process=False))
     if body.bounds.size[0] >= math.pi * diameter - EPS_GEOM:
         # Zufällige Zellen sind an der Naht nicht periodisch. Zwei zuvor
@@ -1007,6 +1033,7 @@ def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) ->
     from app.core.geom.face_ops import _chosen_face, _no_face
     from app.core.geom.faces import FLAT_ENOUGH_FOR_A_TOOL, _triangles_of, face_normal
     from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.transform import along
     from app.core.sketch.planes import frame_of
 
     feature = _chosen_face(source, params.face)
@@ -1016,19 +1043,17 @@ def _face_texture_tool(source: SceneObject, params: TextureParams, seed: int) ->
     indices = _triangles_of(mesh, feature)
     normal = face_normal(feature)
     corners = np.asarray(mesh.raw.triangles)[indices]
-    origin = corners.reshape((-1, 3)).mean(axis=0)
+    origin = np.asarray(units.exact_centre(corners.reshape((-1, 3)).tolist()))
     frame = frame_of(normal, cast(Vec3, tuple(origin)))
-    basis = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
-    radians = math.radians(params.angle)
-    turn = np.array(
-        [
-            [math.cos(radians), -math.sin(radians), 0.0],
-            [math.sin(radians), math.cos(radians), 0.0],
-            [0.0, 0.0, 1.0],
-        ]
+    # Gedreht und in die Fläche gelegt ohne BLAS und ohne die Winkelfunktionen
+    # der Plattform (RM-187): Jede Ecke des Werkzeugs entsteht aus diesen Achsen.
+    cos, sin = units.exact_cos_degrees(params.angle), units.exact_sin_degrees(params.angle)
+    first, second = np.asarray(frame.x_axis, dtype=float), np.asarray(frame.y_axis, dtype=float)
+    basis = np.column_stack(
+        (cos * first + sin * second, cos * second - sin * first, np.asarray(frame.normal))
     )
-    basis = basis @ turn
-    local = (corners - origin) @ basis
+    offsets = corners - origin
+    local = np.stack([along(offsets, basis[:, column]) for column in range(3)], axis=-1)
     if np.max(np.abs(local[:, :, 2])) > FLAT_ENOUGH_FOR_A_TOOL:
         raise GeometryError(
             detail=_("Für ein Muster bis zum Rand wählen Sie eine ebene Fläche."),

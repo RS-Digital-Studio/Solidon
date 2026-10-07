@@ -1285,7 +1285,10 @@ def test_local_report_action_availability_receives_the_group_at_every_entry(monk
 
     from app.ui import panels
 
-    finding = Finding("perceive.too_large", "info", "Große Modelle", object_id="removed")
+    # Die Vorauswahl nimmt nur Fehler und Warnungen (RM-512); dort steht die
+    # Zeile deshalb als Warnung, damit sie überhaupt nach Handlungen fragt.
+    severity = "warning" if entry == "_preselect" else "info"
+    finding = Finding("perceive.too_large", severity, "Große Modelle", object_id="removed")
     bodies = ("removed", "mesh")
     objects = {"mesh": SimpleNamespace(kind="mesh")}
     item = SimpleNamespace(

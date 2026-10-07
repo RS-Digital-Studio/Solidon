@@ -543,10 +543,54 @@ class _BoundedBehavior:
       meldet die getippte Zahl, das Feld behält sie, markiert. Wer anzeigt,
       nennt die Grenze (:func:`limit_sentence`) und den Weg, sie zu ändern.
     * Pfeile und Rad klemmen an der Grenze, wie Qt es ohnehin tut.
+    * Ein geleertes Feld mit Sondertext nimmt den Sonderwert an
+      (:meth:`_empty_is_special`).
 
     Die Qt-Grenzen bleiben die echten Grenzen — die Breite des Feldes misst
     sich an ihnen, und ``value()`` liegt nie außerhalb.
     """
+
+    def _empty_is_special(self: Any, text: str) -> bool:
+        """Ob das Feld leer ist und einen Sondertext trägt — dann gilt der Sonderwert.
+
+        Wer die Zahl löscht, meint, was der Sondertext sagt: „Oberkante“,
+        „automatisch“, „Vorgabe des Slicers“. Qt nannte den leeren Text einen
+        Zwischenstand, Eingabetaste und Fokuswechsel stellten still die vorige
+        Zahl zurück, und zurück führten nur Pfeil und Rad bis unter die
+        kleinste Zahl — an einer Welthöhe ohne Untergrenze eine Million
+        Millimeter tief (RM-526).
+        """
+        # Qt lässt die Einheit stehen, wenn die Zahl gelöscht wird („ mm“), und
+        # ``_digits_only`` trennt sie nur mit ihrem Leerzeichen ab.
+        body = text.strip().removeprefix(self.prefix().strip())
+        return (
+            bool(self.specialValueText()) and not body.removesuffix(self.suffix().strip()).strip()
+        )
+
+    def stepBy(self: Any, steps: int) -> None:  # noqa: N802 - Qt-Name
+        """Aus dem Sonderwert heraus beginnt ein Schritt nach oben am ``special_start``.
+
+        Der Sonderwert eines ``optional``-Feldes sitzt eine Stufe unter der
+        Untergrenze, an einer Welthöhe ohne Grenze eine Million Millimeter tief;
+        ein Pfeil nach oben führte von „Oberkante“ auf -999 999,01 mm (Review
+        RM-526, K5).
+        """
+        start = getattr(self, "special_start", None)
+        if (
+            start is not None
+            and steps > 0
+            and self.specialValueText()
+            and self.value() <= self.minimum()
+        ):
+            self.setValue(start)
+            return
+        NumberSpin.stepBy(self, steps)
+
+    def valueFromText(self: Any, text: str) -> float:  # noqa: N802 - Qt-Name
+        """Wie :class:`NumberSpin`; ein geleertes Feld mit Sondertext ist der Mindestwert."""
+        if self._empty_is_special(text):
+            return float(self.minimum())
+        return float(NumberSpin.valueFromText(self, text))
 
     def validate(self: Any, text: str, pos: int) -> Any:
         """Wie :class:`NumberSpin` — nur ist eine Zahl jenseits der Grenzen ein
@@ -558,6 +602,8 @@ class _BoundedBehavior:
         Als Zwischenstand verwarf die Eingabetaste sonst die ganze Zahl und
         stellte still den alten Wert zurück (Code-Review 0.5.1, U-1).
         """
+        if self._empty_is_special(text):
+            return QValidator.State.Acceptable, text, pos
         checked: Any = NumberSpin.validate(self, text, pos)
         if checked[0] != QValidator.State.Invalid:
             return checked
@@ -690,6 +736,8 @@ class BoundedSpin(_BoundedBehavior, NumberSpin):
     def __init__(self, parent: QWidget | None = None) -> None:
         NumberSpin.__init__(self, parent)
         self._named_limits: tuple[float | None, float | None] = (None, None)
+        self.special_start: float | None = None
+        """Wohin ein Schritt aus dem Sonderwert führt (:meth:`stepBy`) — sonst Qts Stufe."""
 
 
 class LengthSpin(NumberSpin):
@@ -2289,7 +2337,7 @@ def body_requirement(spec: Any, facts: BodyFacts | None) -> str | None:
     Die dritte Schwester neben :func:`kind_requirement` und
     :func:`feature_requirement`: Nicht die Bauart, nicht das Merkmal, sondern
     der Zustand. Gemessen am 13.09.2026 über alle Dialoge: *Offene Fläche
-    schließen* am geschlossenen Quader, *In Einzelteile zerlegen* an einem
+    schließen* am geschlossenen Quader, *In Einzelteile aufteilen* an einem
     Stück und *Gitter füllen* am massiven Körper öffneten einen Dialog, dessen
     Vorschau nur „Keine Vorschau: …" sagen konnte — die Sackgasse aus Regel
     19, ein Fenster später. Hier steht der Satz, den die Operation beim

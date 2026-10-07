@@ -141,7 +141,8 @@ sich keine Lage, hält es an, und Creality Print braucht `CREALITY_ARRANGE_EDGE`
 Rand (`_check_creality_edge`). `arrangement_holds` prüft Kontur, Sperrzonen und
 Höhe, auch im Fenster. Die Außenkante der ersten Schicht rechnet
 `build_area.rim_of` (Orca-Auto-Brim bis `ORCA_AUTO_BRIM_MAX`, Stützfuß aus
-`Foundation.support_foot`, unbekannt: Befund, Skirt), auch für den Rat.
+`Foundation.support_foot`, unbekannt: Befund, Skirt), auch für den Rat; den
+Stützfuß an den Überhängen (`writer._support_outline`).
 
 | Prüfung | Frage |
 |---|---|
