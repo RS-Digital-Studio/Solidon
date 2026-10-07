@@ -473,7 +473,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   verlässlich. Jetzt liest und sendet der Anfragefaden an einem `llm._WatchedSocket`, der den
   Abbruch selbst in Scheiben von 50 ms bemerkt; schon Angekommenes liest er zuerst, weil Windows
   bei `shutdown` über Ungelesenem die Verbindung zurücksetzt. Ohne `xfail`-Marke grün: macOS und
-  Ubuntu je 20 von 20 (Lauf 37533806573), Windows 40 von 40 am i9. Nebenbei gemessen:
+  Ubuntu je 20 von 20, Endstand von `llm.py` mit Senden (Lauf 37591775378), Windows 40 von 40
+  am i9. Nebenbei gemessen:
   `socket.getfqdn` brauchte am macOS-Runner 35 s, auf Ubuntu 2 ms; die Testserver und der
   Fernsteuerungsserver der Anwendung, der im Hauptfaden startet, lösen ihren Namen nicht mehr auf.
   Der HiDPI-Grifftest unter Xvfb lief ohne Marke 20 von 20 grün über beide Skalen (Lauf
