@@ -2663,6 +2663,9 @@ class MainWindow(QMainWindow):
         self._export_waiting: tuple[Path, ExportFormat, Any] | None = None
         """Ein Export, der auf das nächste aktuelle Ergebnis wartet — Ziel,
         Format und das Projekt, für das er gemeint war (RM-352)."""
+        self._history_shown: tuple[int, int, str | None, int] | None = None
+        """Der Verlaufsstand beim letzten Bild (:meth:`_history_mark`) — ob eine
+        verlorene Merkmalswahl Folge einer Handlung des Kunden ist."""
         self._halted = False
         """Ob die stehende Meldung von einer angehaltenen Kette stammt.
 
@@ -3790,7 +3793,6 @@ class MainWindow(QMainWindow):
         # Zwei markierte Merkmale beantworten eine andere Frage als eines —
         # deshalb ein eigenes Signal und ein eigener Empfänger.
         self.object_tree.featuresSelected.connect(self._on_features_selected)
-        self.object_tree.featuresLost.connect(self._say_features_lost)
         # **Über ``launch_operation``, nicht ``run_operation``.** Genau dieser
         # Fehler ist für Menü und Palette schon behoben worden, das Kontextmenü
         # blieb hängen: Drei Operationen mit Gestenfeld stehen dort am Körper —
@@ -18069,13 +18071,59 @@ class MainWindow(QMainWindow):
                 return True
         return False
 
-    def _say_features_lost(self, names: list[str]) -> None:
+    def _history_mark(self) -> tuple[int, int, str | None, int]:
+        """Woran sich eine Handlung des Kunden seit dem letzten Bild erkennen lässt.
+
+        Dokument, Zahl und Kennung der letzten Transaktion, Länge des
+        Redo-Stapels: Ein neuer Schritt, ein Undo, ein Redo und eine andere
+        Datei ändern das, eine zweite Auswertung desselben Stands nicht.
+        """
+        document = self.session.project.document
+        history = self.session.history
+        transactions = history.transactions
+        return (
+            id(document),
+            len(transactions),
+            str(transactions[-1].id) if transactions else None,
+            len(history.undone),
+        )
+
+    def _say_features_lost(self, result: EvaluationResult) -> None:
         """Eine Merkmalswahl, die der neue Stand nicht mehr trägt, ist aufgehoben (RM-537).
 
         Sie fiel still auf den Körper zurück, und Entf entfernte danach den
-        ganzen Körper statt der Bohrung, die der Kunde gewählt hatte. Gesagt
-        wird es als Quittung, damit es die Laufanzeige überlebt.
+        ganzen Körper statt der Bohrung, die der Kunde gewählt hatte. Der Baum
+        hebt die Wahl auf (``ObjectTree.lost_selection``); gesagt wird es hier,
+        **nach** den Wiederwahlen des Fensters, und nur, wo der Verlust nicht
+        die Folge der eigenen Handlung ist:
+
+        * Hat eine Wiederwahl gegriffen (das Langloch, das eben aus der
+          gewählten Bohrung wurde, ein Baustein, ein neuer Körper), ist nichts
+          verloren.
+        * Hat der Kunde seit dem letzten Bild etwas getan — einen Schritt, ein
+          Undo, ein Redo —, steht dort die Quittung dieser Handlung mit ihrem
+          Rückweg (Regel 19), und die bleibt stehen.
+        * Fehlt der Körper selbst, ist kein Merkmal verloren gegangen.
+
+        Gesagt wird damit der Fall der Abnahme: Das Bild vor der Erkennung
+        trug ein Merkmal, die Erkennung danach nicht. Als Quittung, damit es
+        die Laufanzeige überlebt.
         """
+        mark = self._history_mark()
+        acted = mark != self._history_shown
+        self._history_shown = mark
+        names = [
+            name
+            for body, _feature, name in self.object_tree.lost_selection
+            if body in result.scene.objects
+        ]
+        if (
+            not names
+            or acted
+            or self.object_tree.selected() is not None
+            or self.object_tree.selected_features()
+        ):
+            return
         if len(names) == 1:
             self.announce(
                 tr(
@@ -18883,7 +18931,12 @@ class MainWindow(QMainWindow):
         self._reselect_the_part(result)
         if not wanted or near is None or self.object_tree.selected_feature() is not None:
             return
-        object_id = self.object_tree.selected()
+        # Der Baum hebt eine verlorene Merkmalswahl auf, statt still den
+        # Körper zu wählen (RM-537); welcher Körper es war, hält er fest.
+        object_id = self.object_tree.selected() or next(
+            (body for body, feature, _name in self.object_tree.lost_selection if feature == wanted),
+            None,
+        )
         if object_id is None:
             return
         entry = result.scene.objects.get(object_id)
@@ -23168,6 +23221,7 @@ class MainWindow(QMainWindow):
         # her, und eine Nachwahl davor ginge im Aufbau der Ansicht verloren.
         self._reselect_the_renamed(result)
         self._choose_the_created(result)
+        self._say_features_lost(result)
         # Und erst danach die Einträge — einmal, mit der Auswahl, die jetzt gilt.
         self._update_actions()
         if result.stopped_at is not None:

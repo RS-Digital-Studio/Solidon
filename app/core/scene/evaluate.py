@@ -102,6 +102,7 @@ from app.core.perceive.matching import (
     PlanarFaces,
     apply_mapping,
     declared_partners,
+    faces_in_plane,
     inherit_originators,
     match,
     moved_features,
@@ -167,6 +168,7 @@ from app.core.units import (
     EPS_DISPLAY,
     EPS_GEOM,
     MAX_FACET_SAG,
+    dot3,
     is_close,
     match_tolerance,
 )
@@ -1316,6 +1318,7 @@ def _evaluate(
                     # einzigen Eingang aus ihm — auch die der zweiten Hälfte
                     # nach *Teilen* (RM-217).
                     origin_mesh=inputs[0].mesh if len(inputs) == 1 else None,
+                    origin_features=inputs[0].features if len(inputs) == 1 else None,
                     texture_sources=(
                         inputs[1:]
                         if operation.op in {"union_objects", "intersect_objects"}
@@ -2626,10 +2629,12 @@ def _consumed_faces(
     ohne Dreiecke, bevor die Erkennung sie findet — die hatten vorher keine und
     bleiben. Andere Arten, auch erzeugte Bohrungen und Zapfen ohne Dreiecke,
     fragt diese Stelle nicht.
+
+    Die Normale wird mit Grundrechenarten auf Länge eins gebracht
+    (``units.dot3``, RM-187): An der Antwort hängt, ob ein späterer Schritt
+    anhält, und an der Toleranzgrenze entschiede sonst der BLAS-Kern.
     """
     import numpy as np
-
-    from app.core.perceive.features import PARALLEL_FACE_COSINE
 
     candidates = [
         feature
@@ -2648,17 +2653,14 @@ def _consumed_faces(
     tolerance = match_tolerance(diagonal)
     consumed: set[FeatureId] = set()
     for feature in candidates:
-        normal = np.asarray(feature.params["normal"], dtype=float)
-        length = float(np.linalg.norm(normal))
+        normal = [float(value) for value in feature.params["normal"]]
+        length = math.sqrt(dot3(normal, normal))
         if length <= 0.0:
             continue
-        unit = normal / length
+        unit = np.asarray([value / length for value in normal], dtype=float)
         centre = np.asarray(feature.params["centre"], dtype=float)
-        if faces_now.names:
-            facing = (faces_now.normals * unit).sum(axis=1) >= PARALLEL_FACE_COSINE
-            apart = np.abs(((faces_now.centres - centre) * unit).sum(axis=1))
-            if bool((facing & (apart <= tolerance)).any()):
-                continue
+        if faces_now.names and bool(faces_in_plane(faces_now, unit, centre, tolerance).any()):
+            continue
         consumed.add(feature.id)
     return consumed
 
@@ -3983,6 +3985,7 @@ def _with_features(
     announced_gone: Collection[FeatureId] = frozenset(),
     advance: Callable[[float], None] | None = None,
     unrecognised: set[ObjectId] | None = None,
+    origin_features: Mapping[FeatureId, Feature] | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -4006,7 +4009,10 @@ def _with_features(
     das die Dreiecke der alten Merkmale zeigen, und fehlt ``source_mesh`` nur
     deshalb, weil ein einziger Eingang mehrere Ausgaben hat (*Teilen*), steht es
     trotzdem da: Ob eine alte Fläche nur geteilt ist, misst
-    :func:`_divided_in_place` an ihr. ``detect_features=False`` lässt
+    :func:`_divided_in_place` an ihr. ``origin_features`` sind die Merkmale
+    dieses einzigen Eingangs; ohne Erkennung misst eine neue Ausgabe ohne
+    eigenen Vorgänger an ihnen, was sie belegt weiterträgt
+    (:func:`_proven_without_recognition`). ``detect_features=False`` lässt
     die Erkennung aus, wo kein späterer Schritt und keine Passung ein Merkmal
     dieses Körpers braucht (siehe :func:`evaluate`).
 
@@ -4536,11 +4542,16 @@ def _with_features(
             if remembered_features is None:
                 if unrecognised is not None:
                     unrecognised.add(entry.id)
+                # Eine neue Ausgabe ohne eigenen Vorgänger (die Hälften nach
+                # *Teilen*) misst sich am einzigen Eingang (``origin_features``):
+                # Sonst trugen beide Hälften im Bild die Merkmale der ganzen
+                # Platte mit deren Dreiecken und Maßen.
+                basis = previous or origin_features or {}
                 shown = _proven_without_recognition(
                     output_features,
-                    previous,
-                    inherited,
-                    unchanged=unchanged,
+                    basis,
+                    inherited if previous else _inherited_features(output_features, basis),
+                    unchanged=unchanged or (not previous and _same_triangles(origin_mesh, mesh)),
                     moved=feature_movement is not None,
                 )
                 return (
@@ -5067,6 +5078,13 @@ def _with_features(
         }
 
     if not previous:
+        if consumed:
+            # Dieselbe Sperre wie unten bei ``apply_mapping``: Ohne erkannte
+            # Vorgänger übernähme ein neues Merkmal sonst ungeprüft den Namen
+            # der verbrauchten Fläche.
+            detected = apply_mapping(
+                detected, MatchResult(fresh=tuple(detected)), reserved=consumed
+            )
         return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
 
     centre = mesh.bounds.centre
@@ -5320,8 +5338,15 @@ def _with_features(
     # nicht an ein neues Merkmal (RM-222): Eine geänderte Bohrung reist unter
     # ihrem Namen in ``declared`` weiter, und eine neu gebohrte bekam diesen
     # Namen als ersten freien — und wurde beim Zusammenführen überschrieben.
+    # **Und der Name einer verbrauchten Fläche ist gesperrt wie der einer
+    # verwaisten** (RM-537): Sonst hieß eine im selben Schritt neu erkannte
+    # Taschenwand wie die durchgedrückte Deckfläche, und ein späterer Schritt
+    # auf diese versetzte still die Wand.
     mapped = apply_mapping(
-        detected, matched, previous=previous, reserved={*rigid_orphans, *unchecked, *declared}
+        detected,
+        matched,
+        previous=previous,
+        reserved={*rigid_orphans, *unchecked, *declared, *consumed},
     )
     # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.
     # ``apply_mapping`` trägt den *Namen* weiter, die Provenienz steckt aber im

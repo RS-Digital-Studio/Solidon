@@ -349,9 +349,11 @@ des Themas; was die leistet, ist eine Frage an das Thema.
 ## Eine Auswahl fällt nie still auf etwas Größeres
 
 Trägt der neue Stand ein gewähltes Merkmal nicht mehr, hebt
-`ObjectTree.show_scene` die Wahl auf und meldet `featuresLost`; das Fenster
-sagt es als Quittung (RM-537). Still auf den Körper zu fallen hieß, dass Entf
-danach den ganzen Körper entfernte.
+`ObjectTree.show_scene` die Wahl auf und hält sie samt Zeilentext in
+`lost_selection` fest (RM-537); sonst entfernte Entf danach den ganzen Körper.
+`MainWindow._say_features_lost` sagt es erst nach den Wiederwahlen (die lesen
+den Körper aus `lost_selection`) und nur ohne eigene Handlung seit dem letzten
+Bild — sonst überschriebe es deren Quittung mit Rückweg (Regel 19).
 
 ## Barrierefreiheit
 

@@ -26,7 +26,13 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
-from app.core.geom.faces import draft_walls, push_face, pushed_features, tangent_faces_finding
+from app.core.geom.faces import (
+    draft_walls,
+    gone_face_error,
+    push_face,
+    pushed_features,
+    tangent_faces_finding,
+)
 from app.core.geom.mesh import as_mesh_data
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
@@ -300,7 +306,7 @@ def _drafted_face(source: SceneObject, name: str) -> Feature:
     """Ein gewähltes Flächenmerkmal — oder der Satz, warum es keines ist."""
     feature = source.features.get(name)
     if feature is None:
-        raise _gone_face() if name else _no_face()
+        raise gone_face_error() if name else _no_face()
     return feature
 
 
@@ -330,28 +336,10 @@ def _chosen_face(source: SceneObject, name: str) -> Feature | None:
         return None
     feature = source.features.get(name)
     if feature is None:
-        raise _gone_face()
+        raise gone_face_error()
     if feature.kind != "face":
         raise _no_face()
     return feature
-
-
-def _gone_face() -> Exception:
-    """Der Satz, wenn die benannte Fläche nicht mehr am Körper ist (Regel 17).
-
-    Ein Schritt davor hat sie verbraucht oder abgeschnitten; die Auswertung
-    meldet das dort als Bezugsverlust (RM-537). „Keine Fläche gewählt" stimmte
-    nicht: Gewählt war eine, und die Neuwahl ist der Weg.
-    """
-    from app.core.errors import CANCEL, CHANGE_SELECTION, GeometryError
-
-    return GeometryError(
-        detail=_(
-            "Diese Fläche gibt es an dem Körper nicht mehr — ein Schritt davor "
-            "hat ihn verändert. Wählen Sie sie neu."
-        ),
-        suggestions=(CHANGE_SELECTION, CANCEL),
-    )
 
 
 def _no_face() -> Exception:

@@ -2791,3 +2791,40 @@ def test_evaluation_proves_each_moved_mesh_only_once(profile, monkeypatch, step,
         assert result.complete, result.scene.report.findings
         assert calls, "ohne Bewegungsbeleg prüft dieser Lauf nichts"
         assert all(count == 1 for count in calls.values()), calls
+
+
+def test_one_plane_question_for_pieces_and_used_up_faces() -> None:
+    """RM-537, M2: Ob eine Fläche in einer Ebene liegt, rechnet eine Funktion.
+
+    Die Stücke einer alten Fläche (``pieces_in_place``) und der Rest einer
+    erzeugten (``scene.evaluate._consumed_faces``) fragten dasselbe in zwei
+    Abschriften. Gleich gerichtet und in der Ebene zählt; mit Hüllquader nur,
+    wessen Mitte darin liegt.
+    """
+    from app.core.perceive.matching import faces_in_plane, planar_faces
+
+    def face(name: str, normal: tuple[float, float, float], centre: tuple[float, ...]) -> Feature:
+        return Feature(
+            id=name,
+            kind="face",
+            provenance="detected",
+            params={"normal": normal, "centre": centre, "area": 1.0},
+        )
+
+    faces_now = planar_faces(
+        {
+            "in": face("in", (0.0, 0.0, 1.0), (1.0, 1.0, 5.0)),
+            "far": face("far", (0.0, 0.0, 1.0), (40.0, 0.0, 5.0)),
+            "back": face("back", (0.0, 0.0, -1.0), (1.0, 1.0, 5.0)),
+            "above": face("above", (0.0, 0.0, 1.0), (1.0, 1.0, 6.0)),
+        }
+    )
+    up, middle = np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, 5.0])
+
+    plane = faces_in_plane(faces_now, up, middle, 0.01)
+    boxed = faces_in_plane(
+        faces_now, up, middle, 0.01, box=(np.array([-5.0, -5.0, 4.0]), np.array([5.0, 5.0, 6.0]))
+    )
+
+    assert [n for n, hit in zip(faces_now.names, plane, strict=True) if hit] == ["in", "far"]
+    assert [n for n, hit in zip(faces_now.names, boxed, strict=True) if hit] == ["in"]

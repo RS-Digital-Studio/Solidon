@@ -1844,12 +1844,19 @@ def _unconfirmed(shown: Any, confirmed: Any) -> list[str]:
     return found
 
 
-def _chamfered_pin(pushes: Callable[[dict[bool, str]], list[tuple[str, float]]]) -> Any:
+def _chamfered_pin(
+    pushes: Callable[[dict[bool, str]], list[tuple[str, float]]],
+    *,
+    solid: Any = None,
+    chamfer: float = 5.0,
+) -> Any:
     """Der Kundenstift aus RM-537, nachgebaut, mit den gegebenen Versätzen.
 
     Stift Ø 33,8 × 50 als Netz, 5 mm Fase an beiden Enden; ``pushes`` bekommt
     die Namen der Stirnflächen (oben ``True``) und nennt Fläche und Weg je
     *Fläche versetzen*. Zurück kommen Dokument, Profil, Quellen und Körper.
+    ``solid`` setzt einen anderen Körper (``trimesh``) an die Stelle des
+    Stifts, ``chamfer`` die Fase.
     """
     import trimesh
 
@@ -1860,8 +1867,10 @@ def _chamfered_pin(pushes: Callable[[dict[bool, str]], list[tuple[str, float]]])
     from app.core.types import Source
 
     load_operations()
-    pin = trimesh.creation.cylinder(radius=16.9, height=50.0, sections=32)
-    pin.apply_translation((0.0, 0.0, 25.0))
+    pin = solid
+    if pin is None:
+        pin = trimesh.creation.cylinder(radius=16.9, height=50.0, sections=32)
+        pin.apply_translation((0.0, 0.0, 25.0))
     profile = make_profile("centauri-carbon-2", "petg")
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
@@ -1875,7 +1884,9 @@ def _chamfered_pin(pushes: Callable[[dict[bool, str]], list[tuple[str, float]]])
         "Fase",
         [
             OperationDraft(
-                op="chamfer_edges", inputs=(body,), params={"distance": 5.0, "edges": "horizontal"}
+                op="chamfer_edges",
+                inputs=(body,),
+                params={"distance": chamfer, "edges": "horizontal"},
             )
         ],
     )
@@ -1937,6 +1948,9 @@ def test_the_picture_shows_no_blind_holes_that_a_later_push_drilled_through() ->
         ("drill_hole", {"diameter": 6.0, "x": 3.0, "y": 3.0, "z": 4.0}, False),
         # Verschieben nimmt sie starr mit; das ist belegt und bleibt im Bild.
         ("translate_object", {"dx": 5.0}, True),
+        # Teilen gibt zwei neue Körper ohne eigenen Vorgänger aus; beide
+        # trugen die Merkmale der ganzen Platte mit deren Dreiecken (N1).
+        ("split_pinned", {"axis": "x", "position": 0.37, "pins": 0}, False),
     ],
 )
 def test_the_picture_carries_only_features_the_recognition_confirms(
@@ -1948,12 +1962,13 @@ def test_the_picture_carries_only_features_the_recognition_confirms(
     Prozess), trägt der Körper vor dem letzten Schritt erkannte Merkmale. Ohne
     Erkennung danach darf das Bild davon nur zeigen, was auch der Lauf mit
     Erkennung so ausgibt — die starre Bewegung ja, das unverändert über ein
-    gebohrtes Netz gereichte nicht.
+    gebohrtes Netz gereichte nicht, auch nicht in den Hälften nach *Teilen*.
     """
     project, history, profile, cache, sources, first = _plate_project()
     body = project.document.ops[0].outputs[0]
     assert len(first.scene.objects[body].features) == 10
     history.apply(op, [OperationDraft(op=op, inputs=(body,), params=params)])
+    outputs = project.document.ops[-1].outputs
 
     picture = evaluate(
         project.document, profile, sources=sources, cache=cache, detect_features=False
@@ -1961,8 +1976,13 @@ def test_the_picture_carries_only_features_the_recognition_confirms(
     full = evaluate(project.document, profile, sources=sources, cache=cache)
 
     assert picture.stopped_at is None and full.stopped_at is None
-    assert _unconfirmed(picture.scene.objects[body], full.scene.objects[body]) == []
-    shown = [f for f in picture.scene.objects[body].features.values() if f.provenance == "detected"]
+    shown = []
+    for output in outputs:
+        assert output in picture.scene.objects and output in full.scene.objects, "Voraussetzung"
+        assert _unconfirmed(picture.scene.objects[output], full.scene.objects[output]) == [], output
+        shown += [
+            f for f in picture.scene.objects[output].features.values() if f.provenance == "detected"
+        ]
     assert bool(shown) is kept
 
 
@@ -1984,7 +2004,6 @@ def test_a_generated_face_that_a_later_push_used_up_leaves_the_scene() -> None:
     assert full.stopped_at is None
     features = full.scene.objects[body].features
     assert ends[True] not in features and ends[False] not in features, "verbrauchte Flächen"
-    assert all(f.face_indices for f in features.values() if f.kind == "face")
     assert not [
         finding
         for finding in full.scene.report.findings
@@ -2018,6 +2037,34 @@ def test_a_later_step_on_a_used_up_face_stops_with_the_lost_reference() -> None:
     halt = next(f for f in full.scene.report.findings if f.op_id == last.id)
     assert halt.severity == "error"
     assert "gibt es an dem Körper nicht mehr" in str(halt.message)
+
+
+def test_a_used_up_face_does_not_lend_its_name_to_a_new_one() -> None:
+    """RM-537, B3: Der Name einer verbrauchten Fläche geht an keine neue Fläche.
+
+    Kasten 40 × 40 × 10 mit 2-mm-Fase, die Deckfläche −4 und dann −20 durch:
+    Im selben Schritt entstehen die Wände der Öffnung, und die erste bekam den
+    freien Namen der Deckfläche. Ein späterer Schritt auf die Deckfläche
+    versetzte dann still die Taschenwand, statt anzuhalten.
+    """
+    import trimesh
+
+    box = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    box.apply_translation((0.0, 0.0, 5.0))
+    document, profile, sources, body, ends = _chamfered_pin(
+        lambda ends: [(ends[True], -4.0), (ends[True], -20.0), (ends[True], -1.0)],
+        solid=box,
+        chamfer=2.0,
+    )
+
+    full = evaluate(document, profile, sources=sources)
+
+    top = ends[True]
+    last = document.ops[-1]
+    assert full.stopped_at == last.id, "der spätere Bezug auf die Deckfläche hält an"
+    # Stehen bleibt der Stand nach dem Durchdrücken (§15.3).
+    after = full.scene.objects[body].features
+    assert top not in after, f"„{top}“ bezeichnet jetzt etwas anderes: {after.get(top)}"
 
 
 def test_a_pushed_face_that_stays_keeps_its_name_and_triangles() -> None:

@@ -1741,7 +1741,7 @@ def _carries(result: EvaluationResult, object_id: str, feature_id: str) -> bool:
 
 
 def _feature_name_in(result: EvaluationResult | None, object_id: str, feature_id: str) -> str:
-    """Der Name, unter dem der Kunde das Merkmal zuletzt gesehen hat."""
+    """Der Name des Merkmals, wenn seine Zeile nicht verzeichnet ist (``ObjectTree._labels``)."""
     entry = result.scene.objects.get(object_id) if result is not None else None
     feature = entry.features.get(feature_id) if entry is not None else None
     return feature_name(feature_id, feature) if feature is not None else feature_id
@@ -2006,14 +2006,6 @@ class ObjectTree(QWidget):
 
     Das Merkmal ist ``None``, wenn die Zeile einen ganzen Körper meint."""
 
-    featuresLost = Signal(list)
-    """Gewählte Merkmale, die es nach dem neuen Stand nicht mehr gibt — ihre Namen.
-
-    Sie fielen still auf ihren Körper zurück (RM-537): Am Kundenstift wich
-    eine gewählte Sackbohrung nach der Erkennung einer durchgehenden, der
-    Baum wählte den Stift, und Entf entfernte danach den ganzen Körper. Die
-    Wahl wird jetzt aufgehoben, und das Fenster sagt es."""
-
     catalogRequested = Signal()
     """Den Bausteinkatalog öffnen — der kurze Weg vom gewählten Teil (§2.6).
 
@@ -2078,6 +2070,22 @@ class ObjectTree(QWidget):
         """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
         neu zeichnen kann — beim Ausblenden ändert sich nur die Anzeige."""
         self._document: Document | None = None
+        self._labels: dict[tuple[str, str], str] = {}
+        """Der Text jeder Merkmalszeile, wie er im Baum stand — Körper und Merkmal.
+
+        Eine Senkkette heißt „Bohrung 3 mit Senkung", ein Anker wie seine
+        Gruppe, ein Baustein mit einer Zeile wie der Baustein. Wer ein
+        verlorenes Merkmal ansagt, nennt diesen Text und keinen zweiten."""
+        self.lost_selection: tuple[tuple[str, str, str], ...] = ()
+        """Gewählte Merkmale, die der zuletzt gezeigte Stand nicht mehr trägt —
+        Körper, Merkmal und der Text ihrer Zeile.
+
+        Sie fielen still auf ihren Körper zurück (RM-537), und Entf entfernte
+        danach den ganzen Körper. Der Baum hebt die Wahl auf und hält hier
+        fest, was verloren ging; ob das gesagt wird, entscheidet das Fenster
+        erst nach seinen Wiederwahlen (``MainWindow._say_features_lost``) —
+        ein Langloch, das eben aus der gewählten Bohrung wurde, ist keine
+        verlorene Wahl."""
         self._theme: DrawingTheme = "dark"
         """Für welches Thema die Vorschaubilder gezeichnet werden."""
         self._previews: dict[str, QIcon] = {}
@@ -2315,6 +2323,9 @@ class ObjectTree(QWidget):
         selected_feature = self.selected_feature()
         selected_features = self.selected_features()
         previous = self._result
+        seen_labels = self._labels
+        self._labels = {}
+        self.lost_selection = ()
         self._result = result
         self._document = document
         # **Das Leeren ist keine Auswahl.** ``clear()`` meldete „nichts
@@ -2666,6 +2677,9 @@ class ObjectTree(QWidget):
                     only.setExpanded(True)
                     continue
                 group.setExpanded(True)
+            self._labels.update(
+                ((object_id, feature_id), child.text(0)) for feature_id, child in made.items()
+            )
             self.tree.addTopLevelItem(item)
             item.setExpanded(object_id in selected)
         self.tree.resizeColumnToContents(0)
@@ -2692,10 +2706,14 @@ class ObjectTree(QWidget):
             self._on_selection()
         else:
             self._restore(selected, selected_feature)
-        if lost:
-            self.featuresLost.emit(
-                [_feature_name_in(previous, body, feature) for body, feature in lost]
+        self.lost_selection = tuple(
+            (
+                body,
+                feature,
+                seen_labels.get((body, feature)) or _feature_name_in(previous, body, feature),
             )
+            for body, feature in lost
+        )
         self._fit()
         # Erst steht der Baum, dann kommen die Bilder nach. Andersherum wartet
         # der Nutzer auf eine Liste, die längst fertig gerechnet ist.
