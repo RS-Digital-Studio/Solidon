@@ -53,15 +53,15 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut (Taglauf 37266459831 grün); offen die drei Arbeitsplätze und der Blick in die Releaseakte |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
-| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Messung vor RM-281 C; mit Herstellerbündel neu messen, dann entscheidet Robert über Vorgaben |
+| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
-| [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
+| [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); Marke `xfail(linux)` gefallen (acht Linux-Läufe in Folge grün, 06.10.); offen allein das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31: organisch unter 2 s am Referenzrechner); der Drache braucht 6,9–9,0 s unter Last bei null Merkmalen; offen ein Hebel bis zum neuen Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt, ob ein weiterer Hebel kommt oder §31 für Schalen neu gefasst wird, entscheidet Robert |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, Außen-/Innen-Mischecke exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt, Netzschräge 2,3× langsamer — je Grenze bauen oder benennen |
+| [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Seit `6d395169c` rechnen Schritte abseits der selbstkreuzenden Schale mit Warnung, am Treffer hält der Schritt (RM-382). Am Original weiter: Verdoppeln ohne Wirkung, `no_longer_through` beim Versetzen und Kippen, Volumenzunahme beim Kippen; die Sonde braucht eine Messung ohne Differenz gegen die kaputte Schale |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitschätzung (ElegooSlicer −18 % an der Seitenablage, Stützmenge an gewölbten Flächen drei- bis zwölfmal unterschätzt, ihre Rechenzeit) |
@@ -1142,6 +1142,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die Marke `xfail(linux)` (fällt nach drei grünen Linux-Läufen in Folge) und das
   Beispielarchiv.
 
+  **Stand 06.10.2026 (Claude):** Die Marke `xfail(linux)` ist gefallen. In den acht
+  jüngsten grünen Läufen von „Bauen“ auf main (37404706101 bis 37495334264, Stände `f5b642e95`
+  bis `1b1547527`) lief `test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere` auf
+  ubuntu-24.04 jedes Mal grün durch (im JUnit-Bericht ohne `pytest.xfail`); die Werkzeuge rechnen
+  seit `9bc3d354e` plattformgleich. Beleg `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm166\`.
+  Offen allein das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde.
+
 <a id="rm-184"></a>
 
 - [~] **RM-184 — Dateiaudit vollständig umsetzen.** Grundlage sind 187 einzelne
@@ -1387,8 +1394,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     ein solches Hersteller-STEP beschaffen und in `tests/data/threads/` aufnehmen.
   * **P2.8** — die Erzeuger ohne Eingang rechnen weiter am Netz und sagen es
     (`shapes.mesh_only`): Organizer, Text, Zeichnung, zehn eigenständige
-    Bausteine und der Klemmensatz. Wartet auf Robert: den Mechanismus; empfohlen
-    ist ein beim Anlegen gesetzter Kernparameter.
+    Bausteine und der Klemmensatz. **Entschieden (Robert, 06.10.2026):** ein beim
+    Anlegen gesetzter Kernparameter — exakt, wo der Erzeuger es kann, ohne Kernwahl in
+    der Oberfläche; gespeicherte Schritte behalten per Migration das Netz. Nächster
+    Schritt: je Erzeuger den exakten Bau prüfen und den Parameter samt Migration bauen.
   * **Netz-Kugel nach Größe** — `create_sphere` erzeugt mit `segments=32`
     unabhängig vom Durchmesser 320 Facetten, bei 70 mm Durchmesser etwa
     0,3–0,4 mm Sehnenabweichung statt `units.MAX_FACET_SAG = 0,05 mm`
@@ -1537,6 +1546,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   sein Herstellerbündel und darüber nur die Abweichung, nicht mehr dieselben Solidon-Werte wie
   oben. Ob 1,19× heute noch gilt, ist ungemessen; zuerst mit dem Herstellerbündel neu messen,
   dann entscheidet Robert über Vorgaben.
+
+  **Neu gemessen (06.10.2026, Claude)** am Gewürzregal, eine Platte, Matrixwerkzeug mit
+  Herstellerbündel (`F:\solidon-review-reports\claude-2026-10-06\geometrie\rm191\befund.md`):
+  Am Prusa MK4S braucht PrusaSlicer mit Bündel 218,3 min und 131,5 g, OrcaSlicer mit seinem
+  MK4S-Profil 345,0 min und 132,8 g — Prusa ist dort schneller, bei gleicher Bahnlänge; der
+  Unterschied ist Tempo und Beschleunigung des Orca-Profils. Am Centauri Carbon 2 braucht
+  ElegooSlicer mit Bündel 231,9 min und 127,9 g, PrusaSlicer ohne CC2-Bündel mit Solidons Satz
+  407,2 min und 153,9 g. Ursache im G-Code: `perimeters = 3` und `extra_perimeters = 1` gegen
+  `wall_loops = 2` — die Innenwand ist mit 911 m doppelt so lang. Solidons Satz für einen
+  Drucker ohne Prusa-Bündel setzt die Wandzahl nicht, und PrusaSlicer nimmt seine eigene
+  Vorgabe. Nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und
+  `extra_perimeters = 0` aus der Familie des Druckers setzen, dann prusa:CC2 gegen elegoo:CC2
+  neu schneiden.
 
 <a id="rm-193"></a>
 
@@ -1880,6 +1902,45 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Maßausdrücken (§13); die Formschräge vieler Wände in Gruppen rechnen. Der
   wählbare Anfang gehört zu P5.1. Abnahme: je Grenze entweder gebaut oder mit
   Satz und Weg in der Oberfläche und im Handbuch benannt.
+
+  **Stand 06.10.2026 (Claude, nach Review):**
+  - **Anfang auf einem Ring:** benannt. Die Feldhilfe von *Anfang und Ende tauschen* sagt, dass
+    ein Ring an seinem linken Punkt beginnt und der Haken nur die Richtung kehrt; wählbar wird er
+    mit dem Maßeditor im Bild (P5.1).
+  - **Ecke aus Außen- und Innenkante:** am exakten Kern geprüft, er baut den Verlauf dort richtig
+    (`test_a_mixed_corner_takes_a_varying_radius_only_at_the_exact_kernel`, Abstand der Rundung
+    von der scharfen Kante auf ±0,02 mm). Am Netz bleibt die Absage mit Satz und Weg.
+  - **Zwischenstellen:** benannt. Die Feldhilfe sagt, dass sie feste Zahlen sind und sich nur
+    Anfangs- und Endradius an ein Projektmaß binden lassen.
+  - **Formschräge am Tray:** Ursache ist nicht die Menge der Wände (jeder der fünf Körper
+    scheitert einzeln), sondern die Rundung R 2 an jedem Wandfuß: OpenCASCADE rechnet sie neben
+    der gekippten Wand nicht nach (`Draft_FaceRecomputation`), das Netz behielt sie mit Knick oder
+    sagte je nach Winkel ab. Beide Kerne fragen jetzt vor der Rechnung nach einer Fläche, die ohne
+    Knick an eine Wand anschließt und schräg zur Entformungsrichtung liegt (exakt an neun Punkten
+    der Fläche, am Netz mit einer Neigung, die sich um mehr als die Knickschwelle ändert), und
+    sagen bei jedem Winkel `DRAFT_BESIDE_A_ROUND` mit dem Weg über die Wände ohne diese
+    Verrundung; *Formschräge anstellen* trägt den Vorbehalt. Fase, Querbohrung, eine ebene, flach
+    anstoßende Schräge und ein Kegelstück am Fuß einer gerundeten Ecke zählen nicht. Eine stehende
+    freie Fläche ohne Kante an der Wand (B-Spline-Ecke) ließ der exakte Kern still senkrecht; dort
+    sagt er jetzt `DRAFT_BESIDE_A_FREE_FACE`, der Netzzwilling mit seinem Ecksatz (Tests in
+    `test_draft_chosen_faces.py`, Sonden `rm230\probe_umbau.py`, `rm230\probe_runde3.py`).
+  - **Offen — Fußrundung als Kette entfernen** (Review Einheit 2, Runde 2, F1): Der Weg einer
+    CAD-Konstruktion (Rundung weg, anstellen, neu runden) trägt nur am einfachen Quader. Am
+    exakten Tray meldete *Merkmal entfernen* an einer Fußrundung Erfolg und änderte nichts
+    (`BRepAlgoAPI_Defeaturing` löschte die Fläche in der Kette mit den Eckstücken nicht) —
+    jetzt sagt es ab (`IsDeleted` in `_unround`); am Netz sagt es ab oder findet die Rundung
+    nicht. Zu bauen: exakt alle Flächen der Kette samt Eckstücken in einem `Defeaturing`, am
+    Netz die Kette in `unround`; Abnahme an Quader, Tray (exakt und Zwilling) und
+    `1x1-bin.stl`. Dann nennt der Satz den Weg wieder.
+  - **Offen — Netzschräge 0,41 statt 0,18 s** am einfachen Quader: unter §31, aber unberührt.
+  - **Offen — Fase am Fuß, Kerne uneins** (älter als dieser Stand, Review Einheit 2, E2-5): Nur die
+    Vorderwand eines Quaders mit Fase 2 mm an allen Unterkanten — exakt sagt bei 0,5° bis 5°
+    `DRAFT_CUTS_THROUGH` mit „kleineren Winkel“, was nicht hilft; das Netz baut mit 1 bis 10 mm³
+    zu viel gegen den Querschnitt. Am 3-mm-Kasten mit Fase 1 mm bei 3° sagt das Netz ab
+    (Fehlbetrag 6,3 mm³), exakt baut genau 7 406,993 mm³. Alle Wände mit Fase 2 mm bei 0,5°:
+    Das Netz sagt `DRAFT_CUTS_THROUGH`, exakt baut genau 23 489,548 mm³. Prüfkörper in
+    `F:\solidon-review-reports\claude-2026-10-06\geometrie\review-einheit-2-3-sonden\` und
+    `review-einheit-2-runde-2-sonden\`.
 
 <a id="rm-253"></a>
 
