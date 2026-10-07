@@ -217,10 +217,11 @@ Element).
 `slice/estimate.py` antwortet in Mikrosekunden für die Anzeige: Schale als
 Differenz zweier Körper (`3V/A`), nie Fläche mal Dicke; geprüft an kompakten
 **und** dünnwandigen Körpern (`tests/test_estimate.py`). **Die Zeitgegenprobe
-rechnet aus der Schichtanalyse** (`slice/print_time.py`): Mindestschichtzeit,
-belegtes Mindesttempo und Beschleunigung aus dem Herstellerprofil (`Motion`;
+rechnet aus der Schichtanalyse** mit dem Herstellerprofil (`Motion`;
 ohne Mindesttempo keine Zeit), verglichen ab der ersten Schicht
-(`GcodeMetrics.printing_seconds`). Beide tragen `source="internal"`.
+(`GcodeMetrics.printing_seconds`). Beide tragen `source="internal"`. Jede
+Änderung an der Zeit bringt einen Test am echten Slicer mit
+(`test_print_time.py`); nur die Druckdatei belegt sie.
 **Stützen zählen außerhalb der Mindestschichtzeit**; stützt der Slicer ganz
 anders oder das Profil keine Brücken, bleibt die Zeit offen
 (`estimate.time_comparison_blocked`); Stützmenge und -zeit teilen die Säulen

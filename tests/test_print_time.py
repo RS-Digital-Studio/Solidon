@@ -901,3 +901,124 @@ def test_what_the_chain_leaves_open_comes_from_the_measured_program_defaults() -
     for program, value in (("orcaslicer", "ensure_all"), ("bambustudio", "enabled")):
         assert manufacturer.PROGRAM_DEFAULTS[program]["ensure_vertical_shell_thickness"] == value
     assert manufacturer.PRUSA_PROGRAM_DEFAULTS["ensure_vertical_shell_thickness"] == "enabled"
+
+
+#: Wie weit Solidons Druckzeit am Quader (40, 40, 20 mm) von der Druckdatei des
+#: Slicers abliegt, in Prozent — gemessen am Druckdialogweg mit dem
+#: Herstellerprofil ohne Stützen (RM-281, 07.10.2026, ElegooSlicer 1.5.3.5,
+#: PrusaSlicer 2.9.6, CuraEngine 5.13.0, OrcaSlicer 2.4.2, Bambu Studio
+#: 02.08.02.61, Creality Print 7.2). Programm → (Drucker, Abweichung).
+SLICER_DEVIATION: dict[str, tuple[str, float]] = {
+    "elegooslicer": ("centauri-carbon-2", -5.7),
+    "prusaslicer": ("prusa-mk4s", 1.4),
+    "cura": ("sovol-sv06", -13.2),
+    "orcaslicer": ("anycubic-kobra-2", -9.2),
+    "bambustudio": ("bambu-p1s", 0.1),
+    "crealityprint": ("creality-k1", -0.6),
+}
+
+#: Wie viele Prozentpunkte ein Lauf von der Messung abweichen darf: eine
+#: andere Fassung des Slicers verschiebt seine Zeit, eine Rechenänderung in
+#: Solidon soll es nicht unbemerkt tun.
+SLICER_SPREAD = 3.0
+
+
+def _installed_slicer(program: str) -> object | None:
+    from app.core import discover, tools
+    from app.core.export import slicer_keys
+
+    # Die Suite fragt die Maschine sonst nicht (``_machine_stays_out_of_it``);
+    # dieser Test braucht genau den installierten Slicer.
+    for path in discover.unpatched_find_programs("slicer", tools.SLICERS):  # type: ignore[attr-defined]
+        if slicer_keys.program_of(path) == program:
+            return path
+    return None
+
+
+def _setup_like_the_dialog(exe: object, profile: object) -> object:
+    """Der Slicer, wie der Druckdialog ihn vorwählt (``tools/matrix_unit.prepared``):
+    Druckerprofil, Prozess der Stufe und PLA-Filament des Herstellers."""
+    from app.core.export import handover, manufacturer, slicer_profiles
+
+    setup = handover.detect(exe)
+    if setup.flavour not in ("orca", "prusa"):
+        return setup
+    found = list(slicer_profiles.find_profiles(exe, setup.flavour, ("machine", "process")))
+    machine, process = slicer_profiles.match(found, profile.printer)
+    if machine is None:
+        pytest.fail(f"{exe} kennt kein Herstellerprofil für {profile.printer.id}")
+    roots = slicer_profiles.profile_roots(setup.flavour, exe)
+    filaments = list(slicer_profiles.find_profiles(exe, setup.flavour, ("filament",)))
+    filament = slicer_profiles.match_filament(filaments, machine, "PLA", roots)
+    setup = replace(
+        setup,
+        machine_profile=machine.name,
+        base_process=process.name if process else "",
+        base_filament=slicer_profiles.identity(filament) if filament else "",
+    )
+    staged = manufacturer.for_stage(setup, profile, print_settings.resolve(profile).quality)
+    return staged if staged is not None else setup
+
+
+@pytest.mark.parametrize("program", sorted(SLICER_DEVIATION))
+def test_the_estimate_of_a_box_stays_where_the_installed_slicer_was_measured(
+    program: str, tmp_path
+) -> None:
+    """Am echten Slicer: Quader 40 × 40 × 20 (``cube_clean`` aus dem Korpus,
+    gestreckt) auf dem Weg des Druckdialogs, Druckzeit ab der ersten Schicht
+    aus der Druckdatei gegen Solidons Schätzung. Die Abweichung bleibt
+    innerhalb von :data:`SLICER_SPREAD` Punkten um die Messung; übersprungen
+    wird nur ohne installierten Slicer — so läuft der Test auch auf Linux und
+    macOS, wo der Slicer liegt."""
+    from pathlib import Path
+
+    from app.core.export import handover, manufacturer
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    exe = _installed_slicer(program)
+    if exe is None:
+        pytest.skip(f"{program} ist hier nicht installiert")
+    printer, measured = SLICER_DEVIATION[program]
+    profile = profiles.make_profile(printer, "pla")
+    setup = _setup_like_the_dialog(exe, profile)
+    foundation = manufacturer.base_settings(profile, print_settings.resolve(profile).quality, setup)
+    settings = print_settings.with_choice(
+        manufacturer.effective(None, foundation), "support.style", "none"
+    )
+    cube = trimesh.load(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
+    cube.apply_scale((2.0, 2.0, 1.0))
+    cube.apply_translation((0.0, 0.0, -cube.bounds[0][2]))
+    body = SceneObject(id="obj_1", name="Quader", mesh=MeshData.of(cube))
+    job = _PlateJob(
+        objects=(body,),
+        plates=(0,),
+        folder=tmp_path,
+        name="quader",
+        setup=setup,
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+        with_comparison=True,
+    )
+    run = _prepare_plate(job, 0)
+    outcome = handover.slice_model(
+        [run.model],
+        settings,
+        profile,
+        setup,
+        output_dir=tmp_path,
+        keep_arrangement=run.keep_arrangement,
+        slots=run.slots,
+        model_height=run.model_height,
+        model_meshes=run.meshes,
+        expected_tools=run.used_tools,
+    )
+    printed = outcome.metrics.printing_seconds
+    estimated = run.comparison.seconds if run.comparison is not None else None
+    assert printed and estimated, f"{program}: Druckdatei {printed}, Schätzung {estimated}"
+    deviation = (estimated / printed - 1.0) * 100.0
+    assert abs(deviation - measured) <= SLICER_SPREAD, (
+        f"{program}: Schätzung {estimated / 60:.1f} min gegen Druckdatei "
+        f"{printed / 60:.1f} min, {deviation:+.1f} % statt {measured:+.1f} %"
+    )

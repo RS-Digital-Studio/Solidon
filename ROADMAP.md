@@ -62,7 +62,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, Außen-/Innen-Mischecke exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt, Netzschräge 2,3× langsamer — je Grenze bauen oder benennen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Seit `6d395169c` rechnen Schritte abseits der selbstkreuzenden Schale mit Warnung, am Treffer hält der Schritt (RM-382). Am Original weiter: Verdoppeln ohne Wirkung, `no_longer_through` beim Versetzen und Kippen, Volumenzunahme beim Kippen; die Sonde braucht eine Messung ohne Differenz gegen die kaputte Schale |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitschätzung (ElegooSlicer −18 % an der Seitenablage, Stützmenge an gewölbten Flächen drei- bis zwölfmal unterschätzt, ihre Rechenzeit) |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); Zeitschätzung rechnet mit dem, was der Slicer aus dem Profil macht, Stützmenge aus den Säulen der Zeit (07.10., Seitenablage Orca-Familie −18 → −3 bis −12 %, Stützmenge Prusa/Cura 0,94 bis 1,14 der Druckdatei); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitreste: Creality Prints Mindestschichtzeit über Bogensehnen, Auto-Brim, Lückenfüllung, Curas Leerfahrt, Prusa-Stützen auf eigenen Schichthöhen, Baumstützen, Rechenzeit am Reiniger |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt als `prepare_ops_mit_drehen_heute.patch` gegen den Stand vom 27.09. (`2e496575b`, `202d5133a`) bei und muss vor Gebrauch auf den heutigen `prepare_ops.py` übertragen werden |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | (b) Eigenkreuzung endet beim ersten Gegenbeleg (Besenhalter 18,4 → 14,6–15,1 s, Laptop 26–28,6 → 20,1–20,9 s unter Last, Paare bitgleich), (c) ohne zweite Vereinigung gebaut; offen: (a) beim Öffnen am Fenster zuordnen, (b) lastfrei messen und mit Ziel führen |
@@ -2176,9 +2176,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     `b50d94d1d`); mit anderer Bahnbreite oder der Stufe „Fein“ stützten Analyse und
     Slicer sonst nach der Probe weiter.
 
-  **Offen:** die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitschätzung
-  (ElegooSlicer −18 % an der Seitenablage, Stützmenge an gewölbten Flächen drei- bis
-  zwölfmal unterschätzt, ihre Rechenzeit). Paket 3 (Mindestschichtzeit, Keilspitzen,
+  **Offen:** die Gesamtabnahme jedes Modell × jeder Slicer und die Reste der
+  Zeitschätzung (Teilstand 07.10. unten). Paket 3 (Mindestschichtzeit, Keilspitzen,
   Stützbedarf gegen das Urteil des Herstellers, Brückenregel, Inseln an Schrauben) ist am
   04.10. abgenommen (`a69a2d2d0`, Teilstand unten); die Reste der Slicer-Matrix führt
   [RM-312](#rm-312).
@@ -2231,6 +2230,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Seitenablage (Füllanker und senkrechte Schalen), Stützmenge an gewölbten Flächen drei- bis
   zwölfmal unterschätzt, Rechenzeit der Zeitschätzung. Belege unter
   `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\`.
+
+  **Teilstand 07.10.2026 (Zeitschätzung, Zweig `slice/rm-281-zeit`):** Die Zeitgegenprobe
+  rechnet mit dem, was der Slicer aus dem Profil macht: Bahnabstand nach `Flow::spacing`,
+  Breite je Rolle, Schalen bis zur Mindestdicke und senkrechte Schalen, Randverbindungen der
+  dünnen Füllung, schmale Vollfüllung als Schleife, ein Rückzug je Insel. Seitenablage ohne
+  Stützen gegen die Druckdatei: ElegooSlicer −17,9 → −11,7 %, OrcaSlicer −17,6 → −6,2 %,
+  Bambu Studio −12,9 → −3,0 %, PrusaSlicer −9,2 → +4,1 %, Creality Print −9,2 → +0,8 %,
+  CuraEngine −17,9 → −19,9 %. Die Stützmenge kommt aus denselben Säulen unter dem ganzen
+  Überstand (`print_time.support_material`): Druckdatei/Schätzung an der Waschschüssel 4,24 →
+  0,96, am Reiniger 13,10 → 0,97 (PrusaSlicer), geometrisches Mittel über 22 Läufe 2,69 → 1,32.
+  Rechenzeit der Gegenprobe mit Stützen unter Last: Schüssel 55–68 → 32–35 s CPU, Reiniger
+  46–49 → 37–40 s. Verschlechtert, weil vorher Fehler einander aufhoben: Pilz mit Stützen in
+  PrusaSlicer −0,5 → +13,4 %, Minigolf-Platte ElegooSlicer +0,2 → −13,5 %, Creality Print
+  −27 → −33 %. **Offen:** Creality Print rechnet die Mindestschichtzeit mit der Sehne seiner
+  Bögen (Zylinder −25 %, Kegel −29 %, Minigolf −33 %); Auto-Brim der Orca-Familie
+  (`Brim.cpp`, Seitenablage Elegoo 4,1 min); Lückenfüllung und ihre Anfahrten (Minigolf
+  Elegoo 1244 Rückzüge); Curas Leerfahrt mit Combing (Seitenablage −101 min) und seine
+  Vollfüllung am Kegelstumpf; PrusaSlicer-Stützen auf eigenen Schichthöhen ohne Abbremsen
+  (Pilz +13 %); Baumstützen (ElegooSlicer am Reiniger 8-mal mehr als geschätzt, Zeit dort
+  gesperrt); Rechenzeit am Reiniger (Clipper-Versatz an Netzen mit vielen Ecken). Bericht und
+  Tabellen unter `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm281-zeit\`.
 
 <a id="rm-259"></a>
 
