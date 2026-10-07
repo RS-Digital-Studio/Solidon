@@ -58,11 +58,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31: organisch unter 2 s am Referenzrechner); der Drache braucht 6,9–9,0 s unter Last bei null Merkmalen; offen ein Hebel bis zum neuen Ziel |
-| [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt, ob ein weiterer Hebel kommt oder §31 für Schalen neu gefasst wird, entscheidet Robert |
+| [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, Außen-/Innen-Mischecke exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt, Netzschräge 2,3× langsamer — je Grenze bauen oder benennen |
-| [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Seit `6d395169c` rechnen Schritte abseits der selbstkreuzenden Schale mit Warnung, am Treffer hält der Schritt (RM-382). Am Original weiter: Verdoppeln ohne Wirkung, `no_longer_through` beim Versetzen und Kippen, Volumenzunahme beim Kippen; die Sonde braucht eine Messung ohne Differenz gegen die kaputte Schale |
+| [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
+| [RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still](#rm-545) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-413: Die Absage hängt an `kind == "hole"`; an der Senkung einer Kette, am Langloch und am gesenkten Baustein *Schraube* rechnen Versetzen, Entfernen, Kippen und Ändern weiter und verschmelzen oder beschneiden das Teil, exakt teils mit falschem Grund — die Frage an den Hohlraum hängen, auch an Kegeln ohne Kette |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitschätzung (ElegooSlicer −18 % an der Seitenablage, Stützmenge an gewölbten Flächen drei- bis zwölfmal unterschätzt, ihre Rechenzeit) |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
@@ -71,11 +72,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Bekannte Durchgangswand misst örtlich nach, die letzte Vorschau erkennt nur noch den Folgebedarf; Senkplatte im Sitzungsweg 7,6/4,6/3,5 s (Ø 6/6,5/7, unter Last); offen: unter 3 s auf ruhiger Maschine |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | (a)–(f) im Code und in v0.5.2; offen: POSIX-Speicherbesitz und SIGBUS (b), §31-Hilfsprozessmarken auf der Referenzmaschine sowie Linux/macOS (d), native Abbruch- und Killlatenz am Fenster und auf dem Mac-Runner (e, f) — alles Release-Abnahme |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Native Vorauswahl `orientation_scores` bitgleich zur NumPy-Fassung, Stützraum am Suchnetz mit Stand am Original, Stand an den Toleranzrändern geprüft; T2 im Messfenster nativ 14,7–19,7 s, ohne Kern 16,5–23,4 s unter Fremdlast; offen: lastfreie Messung beider Wege und Nachweis zu (a) |
-| [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | Rat, `parts_united` exakt, Regel und Testdoppel mit `6d395169c` erledigt; offen: Archivsatz zur 1e7-Verschiebung belegen oder streichen, `test_geometry_review_regressions.py:607` bewerten, §17.2 mit Ansage |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | (a) `cuts_along` im Cythonkern, (b) mit RM-486 und unabhängigen Säulen, (c) Kanalfrage und Schichtansicht über den Merker gebaut; F0FF je zweimal bitgleich, Screen-Cover 0,7–0,9 statt 3,4–3,8 s, CC2-Box 5,1–5,5 statt 40,7–41,5 s; offen: Schichtansicht am Fenster beim Release (RM-213) |
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Schnelle Ausrichtung prüft den Bauraum erst am betrachteten Kandidaten und teilt gleiche Formen, Gewinner unverändert; chufang schnell 65–68 statt 161 s, gründlich 150 s, beide unter Fremdlast; offen: lastfreie Vergleichsmessung an chufang und zwei Baugruppen |
-| [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
-| [RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie](#rm-425) | Geometrie, Erkennung und Druckvorbereitung | Fehlerfall S01 seit `f77576d19` behoben (0,000 statt 0,341 mm); offen: S01 als bleibender Test, dritter Körper, Achsen Y/Z, verschobene Spiegelmitte, alte Züge |
+| [RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie](#rm-425) | Geometrie, Erkennung und Druckvorbereitung | S01 als bleibender Test, drei Körper, alle Achsen, verschobene Spiegelmitte, Vorschau samt Rücknahme und alte Züge geprüft (06.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-504 — Importierte Texturen als gemeinsame Auswahl](#rm-504) | Geometrie, Erkennung und Druckvorbereitung | Zusammenfassung kleiner Felder und STEP-Muster gebaut und belegt (04.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.); offen: Waschschüssel an 29 Druckern, die Minigolf-Platte als 3MF, der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max, vorher das Matrixwerkzeug (Blockleser, Stützmarke nach Volumen) |
@@ -1741,6 +1740,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Breitenentscheidungen, nicht schneller), Zertifikate ohne belastbaren Vorteil. Beleg:
   `F:\solidon-review-reports\codex-2026-10-03\geometrie\druckvorbereitung\bericht.md` (RM-201).
 
+  **Entschieden (Robert, 06.10.2026):** §31 bleibt für hohle Körper bei 300 ms; gesucht wird
+  ein weiterer Hebel, ruhig gemessen an der Hohlkugel.
+
 <a id="rm-217"></a>
 
 - [~] **RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild.**
@@ -1972,6 +1974,51 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   kaputten Schale. Die Abtragsmessung „vor den Mündungen“ scheitert, weil die Messdifferenz der
   Sonde selbst die kaputte Schale trifft — die ursprüngliche Abnahme ist so weder erfüllt noch
   messbar; die Sonde braucht eine Messung ohne Differenz gegen die kaputte Schale.
+
+  **Stand 06.10.2026 (Claude, mit RM-413):** In 14 der 28 Bohrungen steht ein fremdes Teil;
+  dort sagen Menü und jede Merkmalshandlung jetzt „In dieser Bohrung liegt ein getrenntes Teil“
+  mit *In Einzelteile zerlegen*. Vorher rechneten die Handlungen dort: `hole_3` trägt seinen
+  Mantel auf zwei Platten mit einem Zapfen darin, *Merkmal versetzen* verschmolz die Platten, der
+  Zapfen verschwand im Stopfen, −531 mm³ und zwei Teile weniger ohne Befund. `hole_11` hält am
+  Treffer der kaputten Schale. **Offen** an den freien Bohrungen: Verdoppeln 8 mm quer bleibt ohne
+  Wirkung (`boolean.without_effect`, `feature_lost`), `hole_1` verliert beim Versetzen um 1,5 mm
+  und Kippen um 15° je rund 127 mm³ mit `no_longer_through`, `hole_2`/`hole_4` nehmen 1,4–1,9 mm³
+  zu. Ob das richtig ist, sagt erst ein Sollwert ohne Boolesche gegen die kaputte Schale (je Teil
+  Volumen und Dicke entlang der Achse). Sonden `m2_laptop_bohrungen.py`, `m3_hole3.py` unter
+  `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm253\`.
+
+<a id="rm-545"></a>
+
+- [ ] **RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still.**
+  Gefunden im Review der RM-413-Einheit (06.10.2026, Fund H1, ergänzt im Nachreview):
+  `F:\solidon-review-reports\claude-2026-10-06\geometrie\review-einheit-1.md` und
+  `review-einheit-1-runde-2.md`. Die Absage aus RM-413 (`_refuse_another_part_in_the_bore`,
+  `perceive.actions.no_own_body`) fragt nur `kind == "hole"`; über die anderen Glieder bleibt
+  derselbe Fehler erreichbar, am Basisstand wie heute. Je Zeile, die das Menü anbietet:
+  - **Senkbohrung mit Stift** (Bohrung Ø 6, Senkung 90° Ø 10, Stift Ø 5), an `cone_1`: Am Netz
+    ergeben Versetzen und Entfernen ein Teil statt zwei; Ändern (Ø 11) und Drehen (10°) schneiden
+    den Stift von 293,4 auf 97,4 mm³ ab, Befund nur `bore.over_the_edge`. Exakt sagen dieselben
+    vier Zeilen mit `CHAIN_NOT_READABLE` ab — falscher Grund, und die Kerne sagen Verschiedenes.
+    Verdoppeln rechnet an beiden Kernen richtig.
+  - **Langloch mit Stift** (`_plate_with_a_second_body(slot=True, inside=True)`), keine Zeile
+    grau: Versetzen, Entfernen und Kippen ergeben an beiden Kernen ein Teil; *Bohrung ändern*
+    (Ø 7) schneidet den Stift am Netz auf 97,6 mm³ ab und verschmilzt ihn exakt, beides ohne
+    Befund. Verdoppeln rechnet am Netz richtig und sagt exakt mit „bliebe offen“ ab.
+  - **Baustein *Schraube*** (`insert_printed_screw`, M6, gesenkt, `separate_from_host`, Netz):
+    An der Senkung verschmelzen Versetzen, Entfernen und Kippen die Schraube mit der Platte,
+    Ändern schneidet sie von 462,3 auf 260,5 mm³. Am Kopf `cone_1` schneiden Versetzen und
+    Entfernen den Kopf ab (261,6 mm³), Ändern und Kippen verschmelzen, Verdoppeln bleibt ohne
+    Wirkung und ohne Befund. Beide Kegel stehen in keiner Kette; die Bohrung ist nach dem
+    Einsetzen nicht mehr erkannt.
+  Weg: die Frage an den Hohlraum hängen statt an die Merkmalsart — ein Glied einer Kette fragt
+  die Bohrung mit (`cavity_chain_state_at`), ein Kegel ohne Kette seinen eigenen Hohlraum, für
+  `slot` eine Stadionfassung von `hole_is_clear` und `_own_part_bore_clear`; Menü und Operation
+  mit demselben Satz. Abnahme: An diesen Gliedern sagt jede Zeile, die das Menü heute anbietet,
+  an beiden Kernen mit `OTHER_PART_IN_THE_BORE` und `split_bodies, cancel` ab und steht im Menü
+  mit demselben Satz grau, oder sie rechnet mit unverändertem Teil (Teilezahl, Volumen des
+  Teils), an beiden Kernen gleich; je Fall und Zeile ein Test, am heutigen Stand rot. *Zum
+  Langloch ziehen* am freien Stift bleibt frei. Sonden: `review-einheit-1-sonden\` und
+  `review-einheit-1-runde-2-sonden\test_probe_rm545_zeilen.py`.
 
 <a id="rm-247"></a>
 
@@ -2561,36 +2608,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   31–183 fremden CPU-Sekunden, alle Nähte gleich. Beleg:
   `F:\solidon-review-reports\codex-2026-10-03\geometrie\druckvorbereitung\bericht.md` (RM-307).
 
-<a id="rm-385"></a>
-
-- [~] **RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`.**
-  Review 02.10.2026 der Commits bis `3fd3b1ace`, Funde 7–11.
-  - **Exakte Boolesche ohne konkreten Rat:** `app/core/brep/edit.py:1386` hat ihren konkreten Rat
-    verloren; `tests/test_brep.py:1385` vergleicht nur noch die Konstante.
-  - **`boolean.parts_united` nur am Netz:** Der exakte Kern vereinigt still (Kerne sagen
-    Verschiedenes, `operationen.md`).
-  - **Tests:** `tests/test_geometry_review_regressions.py:607` sichert etwas zu, das nicht mehr
-    eintreten kann; drei neue Tests prüfen Aufrufargumente statt Wirkung (siehe Bericht).
-  - **Unterlagen:** RM-253, RM-319 und RM-298 sind veraltet; der neue Halt steht weder in
-    `.claude/rules/operationen.md` noch in §17.2; „vorübergehend“ in den Karten stimmt nicht; die
-    Karte `app/core/geom/CLAUDE.md` trägt Implementierungsdetails, die in den Docstring gehören;
-    in `app/ui/CLAUDE.md` (`3739d46af`) zwei schiefe Formulierungen (Wahldialoge, „in einer
-    Transaktion“).
-  **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage; `tests/test_directory_docs.py`
-  grün. Beleg: `F:\solidon-review-reports\review-3fd3b1ace.md`.
-  Review 02.10. (`7f0de659d`): Wiederholt sich — `ROADMAP.md` sagt im integrierenden Commit selbst „Zentrales Tor und Integration stehen aus“; der neue Absatz in `app/core/geom/CLAUDE.md` trägt wieder Implementierungsdetails. Dazu `ROADMAP-ARCHIV.md:34158–34160` (aus `0eccbe952`): ein „weiterhin“ offener Solverfehler bei Weltverschiebung 1e7 ohne Registerpunkt; ein Nachbau rechnet richtig (`sonden\r2_boolean_weltversatz.txt`) — Fall benennen und registrieren oder die Aussage streichen.
-
-  **Stand 06.10.2026:** Mit `6d395169c` (v0.5.2) erledigt sind der erste und zweite
-  Spiegelstrich und die Unterlagen bis auf §17.2: Die exakte Boolesche nennt wieder Grund und
-  Weg (`BOOLEAN_REFUSED_DETAIL` in `app/core/brep/edit.py`), der exakte Kern meldet
-  `boolean.parts_united` (`geom/prepare_ops.py`), Regel, Karten und Begründungen sind
-  nachgezogen, die drei Testdoppel sind entfernt, und ein Wächter in `tests/test_toolchain.py`
-  verhindert neue. **Offen:** der Archivsatz zur Weltverschiebung 1e7 (aus `0eccbe952`, ohne
-  Registerpunkt) — belegen oder streichen; `tests/test_geometry_review_regressions.py:607` ist
-  unverändert, und ob die Zusicherung nach dem Umbau wieder Sinn hat (der Befund kann seit
-  `6d395169c` wieder auftreten), ist nicht geprüft; dass §17.2 den Halt nennt, geht nur mit
-  Ansage an den Bauplan.
-
 <a id="rm-405"></a>
 
 - [~] **RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen.**
@@ -2649,27 +2666,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   0,87/0,91 gegen 2,59/2,56 s. Alle Ausgabegeometrien gleich der bisherigen schnellen Suche. Beleg:
   `F:\solidon-review-reports\codex-2026-10-03\geometrie\druckvorbereitung\bericht.md` (RM-410).
 
-<a id="rm-413"></a>
-
-- [ ] **RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`.**
-  Review 02.10.2026, Funde F7–F11.
-  - **Toter Code:** `repair.has_nested_parts` (`app/core/geom/repair.py:1270–1286`) hat keinen
-    Aufrufer, obwohl Karte, Bericht und zwei Tests ihn als Teil der Freigabe führen; in `_closed_at`
-    (`prepare_ops.py:2227–2238`) wird ein Werkzeug gebaut und immer überschrieben.
-  - **Abgelöster Merkmalarbeiter verwirft seine fertige Antwort** (`app/ui/main_window.py:15366–15368`);
-    Docstring von `_answers_arrived` (`:15380–15383`) und `tests/test_ui.py:336` sagen das Gegenteil.
-  - **Doppelter Builder:** `app/core/brep/edit.py:3203–3216` baut die Rundung ein zweites Mal statt
-    über `_build_constant_fillet`; die Gegenprobe „Achsprüfung immer wahr“ in
-    `_same_cylinder_axis` lässt alle 57 Fälle grün; Docstring von `fillet_group` (`:810–816`) nennt
-    die Reihenfolge falsch.
-  - **Falscher Absagegrund:** Berühren sich zwei andere Teile der Baugruppe, sagt der Langlochzug am
-    freien Stift „sie ist eine Wand, keine Bohrung …“ — Grund falsch, Weg fehlt
-    (`sonden\r3_kontakt_anderswo.txt`).
-  - **Regel:** `.claude/rules/operationen.md` ist für drei Entscheidungen der Commits nicht
-    nachgezogen; das Verhalten steht stattdessen in den Karten.
-  **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage (Gegenprobe `_same_cylinder_axis`
-  rot). Beleg: `F:\solidon-review-reports\review-e3dff1907.md`.
-
 <a id="rm-425"></a>
 
 - [~] **RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie.**
@@ -2699,6 +2695,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Platte), alle Pinsel, Achse X und Züge ohne schräge Richtung. **Offen:** S01 als bleibender
   Test, ein dritter Körper, die Achsen Y und Z, eine verschobene Spiegelmitte und alte
   gespeicherte Züge.
+
+  **Stand 06.10.2026 (Claude):** S01 steht als bleibender Fall in `tests/test_sculpt.py`
+  (`test_the_slanted_s01_stroke_stays_mirror_equal`: Kugel R20 mit 1 280 Dreiecken, der Zug aus
+  dem Befund am Kern, über die registrierte Operation und an der Vorschau der Sitzung samt
+  Zurücknehmen und Wiederholen, bitgleich zur Operation). Dazu
+  `test_a_slanted_stroke_beside_any_mirror_plane_stays_mirror_equal`: Kugel, Platte und Hohlkugel,
+  Achsen X, Y und Z, Spiegelmitte am Nullpunkt und um (7, −3, 5) verschoben, Auftragen und Kneifen,
+  je spiegelgleich auf 1e-9 mm und die Ebene an ihrem Ort (36 Fälle). Alte Züge:
+  `test_an_old_stroke_near_the_mirror_plane_keeps_acting_twice` (ohne `mirror_once` hebt der
+  S01-Zug die Kugel bitgleich zur Probe am Stand `48106c57a` um 1,226 mm, neu um 1,049 mm), dazu
+  die Migrationsfälle in `tests/test_project.py`. Alle grün auch am Stand vor diesem Nachtrag —
+  sie halten fest, was `f77576d19` behoben hat. Offen allein die Fensterabnahme beim Release
+  (RM-213).
 
 <a id="rm-496"></a>
 

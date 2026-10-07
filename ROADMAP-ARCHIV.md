@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-413: Ein fremdes Teil in einer Bohrung wird nicht mehr still verschmolzen (06.10.2026)](#rm-413-ein-fremdes-teil-in-einer-bohrung-wird-nicht-mehr-still-verschmolzen-06102026) |
+| 2026-10-06 | [RM-385: Bauplan §17.2 nennt den Halt vor der Rückfallkette (06.10.2026)](#rm-385-bauplan-172-nennt-den-halt-vor-der-rückfallkette-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
 | 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
@@ -34564,6 +34566,13 @@ waren für die geprüften Dateien grün. Ein separater Boolescher Direktlauf bei
 einer Weltverschiebung von `1e7` liefert weiterhin unplausible Volumina; die
 Schnittprüfungsregression deckt diesen anderen Solverfehler nicht ab. Das
 vollständige Entwicklungstor steht für den gebündelten Arbeitsstand noch aus.
+**Berichtigung (RM-385, 06.10.2026):** Der Solverfehler bei `1e7` ließ sich
+nicht nachstellen und gilt nicht. Zwei überlappende Würfel, die zwei
+RM-319-Platten mit Bohrung und ein um 37° gekippter Zylinder durch einen Quader
+(Differenz, Vereinigung, Schnittmenge) rechnen bei Verschiebungen bis `1e8`
+bitgleich mit dem Ursprung, dicht und auf Stufe `direct`; der Satz nannte
+keinen Fall. Sonden `r2_boolean_weltversatz.py` und `r2_weltversatz_schraeg.py`
+unter `F:\solidon-review-reports\claude-2026-10-06\geometrie\`.
 
 **Statuskorrektur (02.10.2026):** Die vorherige Erledigt-Markierung war zu
 weit gefasst. Ein lesender Paket-Review trennt die geprüfte
@@ -42705,7 +42714,7 @@ Schritt mit der Warnung `boolean.parts_not_united`. Tests in `tests/test_boolean
 `test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`. Am echten Laptop-Ständer am
 06.10.: `hole_1` bis `hole_4` rechnen mit `boolean.parts_not_united`, `hole_11` hält mit dem
 Satz zur sich selbst kreuzenden Oberfläche. Dass §17.2 den Halt nennt, steht mit Ansage bei
-[RM-385](ROADMAP.md#rm-385); die übrigen Fehlbilder am Original bei [RM-253](ROADMAP.md#rm-253).
+[RM-385](#rm-385); die übrigen Fehlbilder am Original bei [RM-253](ROADMAP.md#rm-253).
 
 ## RM-383: Viele getrennte Teile halten keine Boolesche mehr an (06.10.2026)
 
@@ -43027,3 +43036,119 @@ Skizzenmodus am echten Gerät — geht in RM-070 auf, das ihn in seiner Register
 **Entfallen (06.10.2026, Entscheidung Robert):** Gebraucht werden nur noch die Dateien der
 Druckprojekte, und die liegen in `F:\3D Dateien`; das Repository „3D Drucker“ braucht keine
 eigene Sicherung.
+
+## RM-413: Ein fremdes Teil in einer Bohrung wird nicht mehr still verschmolzen (06.10.2026)
+
+<a id="rm-413-ein-fremdes-teil-in-einer-bohrung-wird-nicht-mehr-still-verschmolzen-06102026"></a>
+<a id="rm-413"></a>
+
+**RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`.**
+  Review 02.10.2026, Funde F7–F11.
+  - **Toter Code:** `repair.has_nested_parts` (`app/core/geom/repair.py:1270–1286`) hat keinen
+    Aufrufer, obwohl Karte, Bericht und zwei Tests ihn als Teil der Freigabe führen; in `_closed_at`
+    (`prepare_ops.py:2227–2238`) wird ein Werkzeug gebaut und immer überschrieben.
+  - **Abgelöster Merkmalarbeiter verwirft seine fertige Antwort** (`app/ui/main_window.py:15366–15368`);
+    Docstring von `_answers_arrived` (`:15380–15383`) und `tests/test_ui.py:336` sagen das Gegenteil.
+  - **Doppelter Builder:** `app/core/brep/edit.py:3203–3216` baut die Rundung ein zweites Mal statt
+    über `_build_constant_fillet`; die Gegenprobe „Achsprüfung immer wahr“ in
+    `_same_cylinder_axis` lässt alle 57 Fälle grün; Docstring von `fillet_group` (`:810–816`) nennt
+    die Reihenfolge falsch.
+  - **Falscher Absagegrund:** Berühren sich zwei andere Teile der Baugruppe, sagt der Langlochzug am
+    freien Stift „sie ist eine Wand, keine Bohrung …“ — Grund falsch, Weg fehlt
+    (`sonden\r3_kontakt_anderswo.txt`).
+  - **Regel:** `.claude/rules/operationen.md` ist für drei Entscheidungen der Commits nicht
+    nachgezogen; das Verhalten steht stattdessen in den Karten.
+  **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage (Gegenprobe `_same_cylinder_axis`
+  rot). Beleg: `F:\solidon-review-reports\review-e3dff1907.md`.
+
+**Abschluss (06.10.2026, Claude):** Alle fünf Reste behoben, je mit Test.
+- **Toter Code:** `repair.has_nested_parts` entfernt (die Freigabe fragt
+  `material_part_families`), `_part_containment` ohne die nur dort gebrauchten Werte; der
+  Abbruchtest fährt jetzt den lebenden Aufrufer
+  (`test_the_material_families_can_cancel_during_their_geometric_proof`). In `_closed_at`
+  entfällt der verworfene Werkzeugbau: Die Bohrung fragt nur noch die Absage
+  (`_checked_bore_air`, aus `_tool_for` gezogen); Zapfen und ein Langloch an seinen Rändern
+  bauen ihr Werkzeug ohne den vorher weggeworfenen Flächenkörper.
+- **Abgelöster Merkmalarbeiter:** Eine fertig gerechnete Antwort geht hinaus, auch wenn ein neuer
+  Klick den Arbeiter inzwischen abgelöst hat; abgebrochen wird nur während der Rechnung
+  (`test_a_replaced_answer_worker_still_delivers_a_finished_answer`, am Stand davor rot).
+- **Doppelter Builder:** `_build_constant_fillet` gibt den Builder mit, `_reround` baut darüber;
+  `_same_cylinder_axis` hat einen eigenen Gegenfall
+  (`test_the_offset_wall_is_found_only_on_the_same_cylinder_axis`, mit „immer wahr“ 2 von 4 rot).
+  Der Docstring von `fillet_group` nannte die Reihenfolge schon richtig.
+- **Falscher Absagegrund und mehr:** Die Kontaktfrage des Langlochzugs gilt dem Träger und den
+  Teilen, deren Hüllquader ihn berühren (`_near_the_carrier`); zwei Würfel, die sich weit daneben
+  berühren, sperren nicht mehr
+  (`test_parts_touching_far_from_the_bore_do_not_block_the_slot_at_a_free_pin`, am Stand davor
+  rot); ein Querstift in einer Welle, deren Bohrung sich nicht an zwei ebenen Ringen schließt,
+  wird am Netz wie am exakten Kern mit dem Zylinder aus den Kennzahlen gekürzt
+  (`test_a_cross_pin_in_a_shaft_is_cut_only_inside_the_bore`). Gehört das Material in einer
+  Bohrung einem anderen Teil, sagt es
+  `OTHER_PART_IN_THE_BORE` mit *In Einzelteile zerlegen*, im Menü und in jeder Handlung an
+  der Bohrung selbst (`_refuse_another_part_in_the_bore`, `resize_hole`, `_closed_at` über
+  `filled_bore_refusal`). **Dabei gefunden:** Versetzen,
+  Verdoppeln, Entfernen, Kippen, Verschließen und *Bohrung ändern* rechneten an einer Platte mit
+  einem Stift Ø 5 oder Ø 2 in der Bohrung (beide Kerne) und verschmolzen den Stift still mit der
+  Platte, schnitten ihn ab oder ließen am exakten Kern drei überlappende Körper stehen; jetzt
+  sagen alle 24 Fälle ab (`test_every_bore_op_names_the_separate_pin`,
+  `test_moving_a_bore_with_a_separate_pin_names_the_other_part`,
+  `test_a_bore_through_two_plates_with_a_pin_names_the_pin`, am Stand davor rot). Eigen
+  sind alle Teile, die den Mantel tragen (Laptop-Ständer `hole_3`, RM-253). **Nicht
+  erfasst** sind Senkung, Langloch und der gesenkte Baustein *Schraube*: Dort hängt die
+  Absage nicht, weil sie nach `kind == "hole"` fragt — registriert als RM-545.
+- **Regel:** `operationen.md` nennt den zweiten Satz und die Nachbarn des Trägers, der Grund steht
+  in `konzepte/begruendungen/regel-operationen.md`; die exakte Auslassung steht in `kanten.md`,
+  die Baugruppentiefe von `slot_hole` schon in der Regel.
+- **Review der Einheit** (`review-einheit-1.md`): *Bohrung ändern* und der Pfropfen in
+  `_closed_at` haben eigene Tests (`test_every_bore_op_names_the_separate_pin`,
+  `test_removing_or_plugging_a_wall_with_material_inside_says_so`), der abgelöste
+  Arbeiter auch mit dem echten `feature_answers`
+  (`test_the_real_answers_still_arrive_when_replaced_after_the_last_step`), ferne Teile und
+  eine ferne Negativhaut kommen unverändert zurück; je am Stand ohne die Stelle rot.
+  *Verdoppeln* sagt am getrennten Stift ebenso ab: Das Menü stellt die Zeile seit jeher
+  grau, und am Netz wäre die Kopie die Luft um den Stift gewesen. Der Satz heißt
+  „getrenntes Teil“ wie sein Geschwister in `slot_hole`.
+Belege und Sonden: `F:\solidon-review-reports\claude-2026-10-06\geometrie\`
+(`f10_ops.py` vorher/nachher, `rot-am-basisstand.txt`).
+
+## RM-385: Bauplan §17.2 nennt den Halt vor der Rückfallkette (06.10.2026)
+
+<a id="rm-385-bauplan-172-nennt-den-halt-vor-der-rückfallkette-06102026"></a>
+<a id="rm-385"></a>
+
+**RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`.**
+  Review 02.10.2026 der Commits bis `3fd3b1ace`, Funde 7–11.
+  - **Exakte Boolesche ohne konkreten Rat:** `app/core/brep/edit.py:1386` hat ihren konkreten Rat
+    verloren; `tests/test_brep.py:1385` vergleicht nur noch die Konstante.
+  - **`boolean.parts_united` nur am Netz:** Der exakte Kern vereinigt still (Kerne sagen
+    Verschiedenes, `operationen.md`).
+  - **Tests:** `tests/test_geometry_review_regressions.py:607` sichert etwas zu, das nicht mehr
+    eintreten kann; drei neue Tests prüfen Aufrufargumente statt Wirkung (siehe Bericht).
+  - **Unterlagen:** RM-253, RM-319 und RM-298 sind veraltet; der neue Halt steht weder in
+    `.claude/rules/operationen.md` noch in §17.2; „vorübergehend“ in den Karten stimmt nicht; die
+    Karte `app/core/geom/CLAUDE.md` trägt Implementierungsdetails, die in den Docstring gehören;
+    in `app/ui/CLAUDE.md` (`3739d46af`) zwei schiefe Formulierungen (Wahldialoge, „in einer
+    Transaktion“).
+  **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage; `tests/test_directory_docs.py`
+  grün. Beleg: `F:\solidon-review-reports\review-3fd3b1ace.md`.
+  Review 02.10. (`7f0de659d`): Wiederholt sich — `ROADMAP.md` sagt im integrierenden Commit selbst „Zentrales Tor und Integration stehen aus“; der neue Absatz in `app/core/geom/CLAUDE.md` trägt wieder Implementierungsdetails. Dazu `ROADMAP-ARCHIV.md:34158–34160` (aus `0eccbe952`): ein „weiterhin“ offener Solverfehler bei Weltverschiebung 1e7 ohne Registerpunkt; ein Nachbau rechnet richtig (`sonden\r2_boolean_weltversatz.txt`) — Fall benennen und registrieren oder die Aussage streichen.
+
+  **Stand 06.10.2026:** Mit `6d395169c` (v0.5.2) erledigt sind der erste und zweite
+  Spiegelstrich und die Unterlagen bis auf §17.2: Die exakte Boolesche nennt wieder Grund und
+  Weg (`BOOLEAN_REFUSED_DETAIL` in `app/core/brep/edit.py`), der exakte Kern meldet
+  `boolean.parts_united` (`geom/prepare_ops.py`), Regel, Karten und Begründungen sind
+  nachgezogen, die drei Testdoppel sind entfernt, und ein Wächter in `tests/test_toolchain.py`
+  verhindert neue. **Offen:** der Archivsatz zur Weltverschiebung 1e7 (aus `0eccbe952`, ohne
+  Registerpunkt) — belegen oder streichen; `tests/test_geometry_review_regressions.py:607` ist
+  unverändert, und ob die Zusicherung nach dem Umbau wieder Sinn hat (der Befund kann seit
+  `6d395169c` wieder auftreten), ist nicht geprüft; dass §17.2 den Halt nennt, geht nur mit
+  Ansage an den Bauplan.
+
+**Abschluss (06.10.2026, Claude):** Die drei Reste sind erledigt. Der Archivsatz zum
+Solverfehler bei einer Weltverschiebung von `1e7` ließ sich nicht nachstellen (Würfel,
+RM-319-Platten und ein gekippter Zylinder bis `1e8` bitgleich mit dem Ursprung) und ist dort
+berichtigt. `tests/test_geometry_review_regressions.py` (Gitter füllen): Bekäme das Gitter als
+Werkzeug eine Szenenkennung statt `None`, hielte der Schritt an den sich kreuzenden Streben an
+(`CROSSING_SHELL_IN_THE_WAY`), und der Test würde rot;
+die Zusicherung auf `boolean.parts_not_united` deckt den Rest ohne Kreuzung und steht jetzt mit
+Kommentar da. §17.2 nennt den Halt vor Stufe 1 (Ansage Robert, 06.10.2026).
