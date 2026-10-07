@@ -50,6 +50,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
+| [RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren Herstellerprofile](#rm-549) | Plattformen, Pakete und Grafik | Gefunden mit der Slicerauswahl (07.10.): ohne Vorwahl des Herstellerprofils lehnt die Orca-Familie den Auftrag ab; offen, ob der Druckdialog dann mit Grund und Weg endet |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Messung vor RM-281 C; mit Herstellerbündel neu messen, dann entscheidet Robert über Vorgaben |
@@ -79,6 +80,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.), B7 im Matrixwerkzeug gebaut (06.10.); Minigolf-Platte als 3MF an allen 39 geschnitten, Waschschüssel an 19 von 39; offen: B8 (Kobra 3 Max V2 weicht im Standardlauf von der Herstellerkette ab), die übrigen 20 Drucker der Waschschüssel, der Plan `modelle` |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; Korpus gemessen (205 Körper, keine neuen Kanalstücke, kein geänderter Stützbedarf, keine neue Sperre); offen die Abnahme in Anycubic, Elegoo und Orca |
 | [RM-546 — *Merkmal drehen* um die eigene Achse einer runden Bohrung tut nichts und sagt es nicht](#rm-546) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Review (06.10.); Befund `rotate_feature.unchanged` auch für eine Drehung, die die Form auf sich selbst abbildet |
+| [RM-548 — Lippentasche: die Karte sperrt Verdoppeln und Drehen, die Operation rechnet](#rm-548) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-535 (07.10.): dieselbe Uneinigkeit wie vorher beim Versetzen; Karte und Operation dieselbe Frage stellen lassen |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-540 — Ein angeschnittenes erzeugtes Merkmal behält sein volles Maß, und die Schnittwege ordnen es verschieden zu](#rm-540) | Geometrie, Erkennung und Druckvorbereitung | Zwilling seit der Ausdehnungsregel (06.10.); ein Kriterium für alle Schnittwege festlegen |
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
@@ -815,6 +817,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ersetzt `python314.dll` unter jeder laufenden Umgebung und geht nur, wenn keine Sitzung rechnet.
   **Abnahme:** Taglauf oder Vollstart mit allen Paketen grün, die Releaseakte nennt 3.14.8;
   `check_env` meldet auf jedem Arbeitsplatz 3.14.8.
+
+<a id="rm-549"></a>
+
+- [ ] **RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren
+  Herstellerprofile.** Gefunden am 07.10.2026 beim Bau der Slicerauswahl (CI-09): Die
+  AppImages der Orca-Familie legen ihre Herstellerprofile erst beim ersten Start an; ohne
+  Vorwahl des Herstellerprofils lehnt die Familie den Auftrag ab („process not compatible
+  with printer“). Der Druckdialog wählt vor, braucht dafür aber lesbare Profile; der
+  Slicertest legt den Zustand nach dem ersten Öffnen an (`tests.helpers.first_start`).
+  **Offen:** wie der Druckdialog bei einem nie geöffneten AppImage endet. **Abnahme:** am
+  Runner ein frisch entpacktes Orca-AppImage ohne ersten Start: Der Dialog nennt den Grund
+  und den Weg (das Programm einmal öffnen), oder Solidon liest die Profile aus dem Abbild.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -2988,6 +3002,15 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (Drehachse gleich Merkmalsachse durch die Mitte, rotationssymmetrische Art), denselben Befund
   mit *Diesen Schritt ändern* am Feld `axis` geben; `cache_version` erhöhen. **Abnahme:** Test an
   Bohrung, Zapfen und Senkung je Kern; ein Langloch bleibt drehbar. Bauplan §2.7.
+
+<a id="rm-548"></a>
+
+- [ ] **RM-548 — Lippentasche: die Karte sperrt Verdoppeln und Drehen, die Operation rechnet.**
+  Gefunden am 07.10.2026 beim Bau von RM-535 (Claude): Seit RM-535 fragen Karte, Operation und
+  Griff beim *Versetzen* dieselbe Funktion (`actions.move_refusal`); bei *Verdoppeln* und
+  *Drehen* sperrt die Karte eine Lippentasche (`narrowing`) noch, während die Operation
+  rechnet. **Abnahme:** Karte und Operation stellen je Handlung dieselbe Frage; ein Test über
+  die Korpusnetze wie `test_the_card_offers_a_move_exactly_where_the_operation_moves`.
 
 ## Bedienung und Darstellung
 
