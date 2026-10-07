@@ -229,6 +229,11 @@ OPERATION_OF: dict[str, tuple[str, ...]] = {
     "bore.already_through": ("resize_hole",),
 }
 
+#: Befunde mit Feld, die keine Operation öffnen: Der Baustein hat seinen eigenen
+#: Dialog. Jedes andere Kennwort mit Feld steht in ``OPERATION_OF`` — sonst
+#: liefe es ungeprüft gegen das Register.
+OHNE_OPERATION: frozenset[str] = frozenset({"parts.bore_too_wide"})
+
 #: Helfer, die einen solchen Befund bauen; das Feld ist ihr zweites Argument
 #: oder ``field=``.
 BEFUND_HELFER: dict[str, str] = {"_already_this_size": "resize_feature.unchanged"}
@@ -342,10 +347,14 @@ def test_a_finding_about_a_step_value_opens_that_step() -> None:
     from app.core.registry import REGISTRY
 
     load_operations()
+    with_field = {code for code, field in MEINT_DEN_SCHRITT.items() if field is not None}
+    assert with_field >= OHNE_OPERATION and not OHNE_OPERATION & set(OPERATION_OF), OHNE_OPERATION
+    unlisted = with_field - OHNE_OPERATION - set(OPERATION_OF)
+    assert not unlisted, f"ohne Operation in OPERATION_OF, ungeprüft gegen das Register: {unlisted}"
     for code, named, place in seen:
-        if named is None:
+        if named is None or code in OHNE_OPERATION:
             continue
-        for operation in OPERATION_OF.get(code, ()):
+        for operation in OPERATION_OF[code]:
             fields = {entry.name for entry in REGISTRY.get(operation).params.spec()}
             if named not in fields:
                 without.append(f"{place} {code}: {operation} hat kein Feld {named!r}")

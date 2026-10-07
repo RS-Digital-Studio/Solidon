@@ -1,0 +1,15 @@
+qwen3:14b — 39 Fälle, Baum F:/ki-529, Fenster 32768
+ok move                     54.0s  translate_object
+ok rotate                   57.9s  rotate_object
+ok on_bed                   49.7s  place_on_bed
+ok scale                    33.3s  scale_object
+ok repair                   61.2s  repair
+ok orient                  101.2s  orient_for_print, translate_object
+ok split                   100.3s  split_pinned  [1 ungültig]
+ok drill                   457.9s  drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole  [1 ungültig]
+-- drill_on_feature        101.6s  duplicate_feature  [1 ungültig]
+-- duplicate                91.0s  Das Sprachmodell hat nicht geantwortet.: {"error":"an error was encountered while running the model: CUDA error: out of 
+ok parameter                45.5s  keine Operation
+ok question                  8.8s  keine Operation
+-- printable                49.0s  place_on_bed
+ok how_long                 22.8s  keine Operation

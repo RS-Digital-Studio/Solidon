@@ -1,0 +1,44 @@
+qwen3:14b — 39 Fälle, Baum F:/ki-529, Fenster 32768
+ok move                     34.7s  translate_object
+ok rotate                   47.6s  rotate_object
+ok on_bed                   23.8s  place_on_bed
+ok scale                    19.4s  scale_object
+ok repair                   34.1s  repair
+ok orient                   30.2s  orient_for_print
+ok split                    28.5s  split_pinned
+ok drill                   278.8s  drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole  [1 ungültig]
+-- drill_on_feature         99.5s  duplicate_feature  [1 ungültig]
+ok duplicate                73.7s  duplicate_object, translate_object
+ok parameter                40.6s  keine Operation
+ok question                  9.0s  keine Operation
+-- printable               123.8s  place_on_bed, compensate_first_layer  [4 ungültig]
+ok how_long                 18.7s  keine Operation
+ok core_hole                46.7s  keine Operation
+ok switch_material          13.6s  keine Operation
+-- where_menu               79.7s  keine Operation  [gefragt]  [1 ungültig]
+ok where_hollow             14.2s  keine Operation
+ok which_hole              118.6s  resize_hole  [gefragt]  [3 ungültig]
+evaluation stopped at op 2: op.resize_feature.ValidationError: Eine Fläche gehört zur Oberfläche des Körpers; einzeln lässt sich an ihr nichts ändern. Was an ihr ansetzt, setzt am Körper an: „Fläche versetzen“ zieht sie hinein oder heraus, und Bohren, Beschriften und jeder Baustein brauchen sie als Unterlage.
+ok how_much_thinner        197.0s  keine Operation  [gefragt]
+ok join_what               150.6s  keine Operation  [gefragt]
+-- bracket                 151.4s  create_brep_box, insert_screw_hole  [4 ungültig]
+-- magnet_lid              154.4s  keine Operation  [gefragt]
+ok wall_holder              83.7s  create_brep_box, insert_wall_mount  [2 ungültig]
+-- cable_exit              216.0s  create_brep_box, drill_hole, create_brep_box, create_brep_box  [5 ungültig]
+evaluation stopped at op 2: op.insert_printed_thread.AppError: Er wird an eine Fläche oder eine Bohrung gesetzt, und ohne sie weiß er weder wohin noch in welche Richtung. Es ist auch keine Position eingetragen — so säße er im Nullpunkt des Objekts, halb darin und halb darunter.
+ok threaded_stud            99.4s  create_brep_cylinder, insert_printed_thread  [1 ungültig]
+ok nut_plate                60.7s  create_brep_box, insert_nut_trap
+-- spacer                  274.0s  create_brep_tube, drill_hole  [7 ungültig]
+ok hinge                   269.6s  create_brep_box, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge  [3 ungültig]
+-- snap_box                167.1s  keine Operation  [gefragt]
+ok keyhole_back            113.4s  create_brep_box, insert_keyhole  [gefragt]  [1 ungültig]
+-- stiffen                 245.5s  create_brep_box  [9 ungültig]
+-- dowels                  185.5s  create_brep_box, create_brep_box, drill_hole, drill_hole  [gefragt]  [10 ungültig]
+ok inserts                 328.5s  create_box, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, create_box, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4  [13 ungültig]
+ok parameterise             79.9s  create_brep_box  [1 ungültig]
+-- free_shape               71.4s  create_brep_cone
+ok hex_base                 93.1s  sketch_extrude
+-- pocket_plate             38.0s  create_brep_box, sketch_pocket
+ok handrail_bend            80.8s  sketch_sweep
+
+gut 27/39; gefragt 3/3; schemagültig 149/215; Baustein 7/13; Parameter 2/3; Zeit 69.9 min
