@@ -2576,15 +2576,17 @@ def test_the_rest_of_an_aborted_copy_is_cleared_once_it_is_old(
 ) -> None:
     """Bricht eine Kopie ab (Solidon stirbt), bleibt ein Zwischenordner ohne Marke.
     Geräumt wird er erst, wenn er älter ist als :data:`STALE_SECONDS` — ein
-    junger kann gerade ein zweiter Solidon füllen."""
+    junger kann gerade ein zweiter Solidon füllen. Geräumt wird nur die Form, die
+    ``_copy_resources`` anlegt (``mkdtemp``: 16 Hex-Zeichen, Bindestrich, acht
+    Zeichen aus a–z, 0–9, _); ein fremder Ordner mit Bindestrich bleibt."""
     root = cura_linux._cache_root()
-    old = root / "0123456789abcdef-abgebrochen"
-    young = root / "fedcba9876543210-laeuft"
-    other = root / "fremd"
-    for folder in (old, young, other):
+    old = root / "0123456789abcdef-a1b2_c3d"
+    young = root / "fedcba9876543210-x9y8z7w6"
+    others = [root / "fremd", root / "meine-sicherung", root / "0123456789abcdef-Abgebrochen"]
+    for folder in (old, young, *others):
         (folder / "share").mkdir(parents=True)
     past = time.time() - cura_linux.STALE_SECONDS - 60
-    for folder in (old, other):
+    for folder in (old, *others):
         os.utime(folder, (past, past))
     mounts: list[Path] = []
     appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts)
@@ -2592,7 +2594,8 @@ def test_the_rest_of_an_aborted_copy_is_cleared_once_it_is_old(
     assert cura_linux.appimage_resources(appimage) is not None
 
     assert not old.exists()
-    assert young.is_dir() and other.is_dir()
+    assert young.is_dir()
+    assert all(folder.is_dir() for folder in others), "fremde Ordner bleiben"
 
 
 def test_a_cause_is_logged_once_per_search(

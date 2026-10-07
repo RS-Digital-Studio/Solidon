@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -99,6 +100,13 @@ STAMP: Final = "stamp.json"
 #: Eine Kopie dauert Sekunden (am Runner 3,3 s); eine Stunde lässt jedem
 #: langsamen Rechner Luft.
 STALE_SECONDS: Final = 3600.0
+
+#: Der Name eines Zwischenordners, wie ``_copy_resources`` ihn anlegt: die
+#: Kennung (16 Hex-Zeichen aus ``_cache_folder``), Bindestrich und die acht
+#: Zeichen, die ``tempfile.mkdtemp`` anhängt (``_RandomNameSequence``:
+#: Kleinbuchstaben, Ziffern, Unterstrich). Nur diese Form wird geräumt; ein
+#: fremder Ordner bleibt.
+UNFINISHED: Final = re.compile(r"[0-9a-f]{16}-[a-z0-9_]{8}")
 
 #: Der Satz für Druckdialog und Absage, wenn Solidon mit dieser Cura nicht
 #: rechnen kann. Er nennt keine Ursache (Regel 21): Lader, ``AppRun.env``,
@@ -616,7 +624,7 @@ def _clear_vanished(keep: Path) -> None:
     """Kopien von AppImages räumen, die es nicht mehr gibt — ein Update trägt die
     Version im Dateinamen, und jede Kopie wiegt rund 26 MB.
 
-    Dazu die Zwischenordner abgebrochener Kopien (``<Kennung>-…`` ohne Marke),
+    Dazu die Zwischenordner abgebrochener Kopien (:data:`UNFINISHED`, ohne Marke),
     sobald sie älter als :data:`STALE_SECONDS` sind; eine jüngere kann gerade ein
     zweiter Solidon füllen. Was geräumt ist, verlässt auch den Merker — kommt
     das AppImage zurück (ein Stick), wird neu kopiert.
@@ -629,7 +637,7 @@ def _clear_vanished(keep: Path) -> None:
         stamp = _read_stamp(sibling)
         source = stamp.get("source") if stamp is not None else None
         if stamp is None:
-            if "-" not in sibling.name or not _older_than(sibling, STALE_SECONDS):
+            if not UNFINISHED.fullmatch(sibling.name) or not _older_than(sibling, STALE_SECONDS):
                 continue
         elif not isinstance(source, str) or Path(source).exists():
             continue
