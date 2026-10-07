@@ -634,7 +634,7 @@ def _installed_registry(tmp_path: Path) -> dict[tuple[str, str | None], str]:
         (update.PART_SUFFIX_KEY, ""): f"{APP_ID}.part",
         (update.PART_SUFFIX_KEY, "Content Type"): "application/vnd.solidon.part",
     }
-    for key in update.ASSOCIATION_KEYS:
+    for key in (*update.ASSOCIATION_KEYS, *update.EMPTIED_KEYS):
         present[(key, None)] = ""
     for suffix, kind in ((PROJECT_SUFFIX, "project"), (PART_FILE_SUFFIX, "part")):
         present[(rf"Software\Classes\{suffix}\OpenWithProgids", f"{APP_ID}.{kind}")] = ""
@@ -668,7 +668,7 @@ def test_every_trace_of_an_installation_is_looked_for(tmp_path: Path) -> None:
 
     complete = look(present, on_disk)
     assert all(complete.values()), complete
-    assert len(complete) == 10, sorted(complete)
+    assert len(complete) == 13, sorted(complete)
     for path in on_disk:
         assert not all(look(present, on_disk - {path}).values()), f"{path} wird nicht gesucht"
     for entry in present:
@@ -722,6 +722,11 @@ def test_every_registry_entry_of_the_setup_goes_with_the_uninstall() -> None:
     eigenen Schlüssel darüber, der ``uninsdeletekey`` trägt. Bis RM-055 blieb
     ``Applications\\Solidon3D.exe`` mit ``SupportedTypes`` nach der
     Deinstallation stehen: ``uninsdeletekey`` stand nur an ``…\\shell\\open\\command``.
+    Ein Wert ohne eigenen Schlüssel darüber nimmt seinen Schlüssel mit
+    ``uninsdeletekeyifempty`` mit, sonst blieben ``.solidon-part`` und
+    ``OpenWithProgids`` leer stehen. Die Deinstallation geht rückwärts durch
+    (Inno-Hilfe, „Installation Order“): Ein Elternschlüssel mit diesem Flag
+    steht vor seinen Unterschlüsseln, sonst ist er bei der Prüfung nicht leer.
     """
     import re
 
@@ -744,3 +749,21 @@ def test_every_registry_entry_of_the_setup_goes_with_the_uninstall() -> None:
         and not any(subkey.startswith(parent + "\\") for parent in owned)
     ]
     assert stranded == [], f"bleibt nach der Deinstallation stehen: {stranded}"
+    emptied = [
+        subkey
+        for subkey, flags in entries
+        if "uninsdeletevalue" in flags
+        and "uninsdeletekeyifempty" not in flags
+        and not any(subkey.startswith(parent + "\\") for parent in owned)
+    ]
+    assert emptied == [], f"bleibt nach der Deinstallation leer stehen: {emptied}"
+    checked_too_early = [
+        (subkey, below)
+        for index, (subkey, flags) in enumerate(entries)
+        if "uninsdeletekeyifempty" in flags
+        for below, _ in entries[:index]
+        if below.startswith(subkey + "\\")
+    ]
+    assert checked_too_early == [], (
+        f"Elternschlüssel nach seinem Unterschlüssel, er bleibt stehen: {checked_too_early}"
+    )

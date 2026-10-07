@@ -46,7 +46,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-050 — Kopier- und Pufferkosten großer Szenen am Fenster messen](#rm-050) | Plattformen, Pakete und Grafik | VTK ausgebaut (`5a57e261`), matplotlib durch HarfBuzz ersetzt (`25d5536ee`); offen die kopierten Bytes und Pufferkosten je großer Szene am Fenster |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der 0.5.3-Pakete am echten Linux- und Mac-Bildschirm; der Release-Starttest belegt Fenster und 3D-Ansicht nur unter Xvfb und am ARM-Runner |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Aktualisieren und Deinstallieren prüft der Installer-Workflow ab dem nächsten Release (`tools/check_windows_update.py`, am Runner von 0.5.2 auf 0.5.3 grün); offen: der Lauf im Release ohne Ausnahme für den behobenen Registerrest, Flatpak auf echter Linux-Grafik, Offline-Start |
-| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Notarisierung im Handstart (Lauf 37530876754); offen der Start beim Kunden, Gegenprobe dafür `solidon-gegenprobe.sh`. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
+| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); offen der Start beim Kunden, Gegenprobe dafür `solidon-gegenprobe.sh`. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
@@ -130,7 +130,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-242 — Testphase der Vollversion nachreichen](#rm-242) | Veröffentlichung, Betrieb und Vertrieb | Robert 25.09.2026: 1.0 startet ohne Testphase, sie kommt später — Januar (Unentschlossene noch zu 69 €) oder Februar 2027 mit dem Preissprung. Offen: Termin, ob frühere Demo-Geräte sie bekommen (heute T15: nein), Release mit gesetztem `TRIAL_FROM` |
 | [RM-351 — Die Website bietet 0.5.1 an und nennt im Downloadhinweis 0.5.0 als signierte Fassung](#rm-351) | Veröffentlichung, Betrieb und Vertrieb | Hinweis seit `1d9373efa` in sechs Sprachen versionsneutral („ab 0.5.0“), in 0.5.2 und 0.5.3; offen der Wächter aus der Abnahme — oder Roberts Verzicht, weil der Satz keine Version mehr an das Angebot bindet |
 | [RM-528 — Die Installation kennt nur einen Release-Schlüssel](#rm-528) | Veröffentlichung, Betrieb und Vertrieb | Schlüsselliste in `updates.py` bauen und ausliefern, bevor der Release-Schlüssel wechselt (Entscheidung Robert, 06.10.) |
-| [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung → `ibus`, außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv |
+| [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung, nur `XMODIFIERS=@im=ibus` oder `QT_IM_MODULE=wayland` unter `xcb` → `ibus`; Fcitx außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv, auch für die zwei IBus-Fälle |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: Abnahme beim Kunden mit dem nächsten Paket (Ubuntu 24.04, Solidon als Flatpak) |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
 | [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
@@ -410,8 +410,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Xvfb mit eigener Sitzungsbus-Instanz (`build.yml`). Der Installer-Workflow installiert den
   Kundeninstaller mit der signierten Anwendung still und startet ihn, Inno Setup 7.1.0 fest mit
   Prüfsumme (`windows-signed-installer.yml`); für 0.5.3 im Installerlauf 37418052743, Schritt
-  „Installer still installieren und starten“ grün. Offen: Aktualisieren und Deinstallieren,
-  fremdes Windows, Flatpak auf echter Linux-Grafik, Offline-Start.
+  „Installer still installieren und starten“ grün. Offen: Flatpak auf echter Linux-Grafik,
+  Offline-Start; Aktualisieren und Deinstallieren siehe unten.
 
   **Historischer Compilerbefund vom 10.09.2026:** Die CI suchte ISCC auf dem PATH und
   nahm 7 vor 6 — der Kommentar daneben hielt fest, dass das Runner-Image damals **6** trug.
@@ -562,7 +562,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `_cffi_backend` (Lauf 37490502237) — dass die ad hoc signierten Bibliotheken dort luden, zeigt,
   dass auch die Bibliotheksprüfung am Runner nicht greift. Developer-ID-Signatur, Zeitstempel,
   Notarisierung und Gatekeeper mit der Liste: Handstart von `build.yml` auf dem Zweig
-  `ci/rm-104-signatur` (Lauf 37530876754). **Offen:** der Start auf dem Intel-Mac des Kunden.
+  `ci/rm-104-signatur` (Lauf 37530876754): grün auf beiden Architekturen, samt
+  Installer-Signatur und macOS-Releaseakte mit Start des notarisierten Pakets; die
+  Notarisierung riss im ersten Versuch an einem Netzausfall des Runners ab und lief nach dem
+  Neustart der zwei Jobs durch. **Offen:** der Start auf dem Intel-Mac des Kunden.
 
   **Gegenprobe am Kundengerät:** `solidon-gegenprobe.sh` signiert die installierte Kopie zweimal ad
   hoc mit `--options runtime` und `com.apple.security.cs.disable-library-validation` (ohne sie
@@ -571,7 +574,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   nur ein altes, hängendes nach vorn), startet beide Male mit Zeitmarke, wertet nur neue
   Protokollzeilen, beendet „ohne“ nach drei Minuten mit SIGABRT und sucht im Absturzbericht nach
   `ffi_closure_alloc`/`dlmmap`; der Rückweg zur Ad-hoc-Signatur ohne Hardened Runtime läuft über
-  `trap` auch bei Strg+C, TERM und geschlossenem Fenster. Am Runner gefahren (Lauf 37530339333):
+  `trap` auch bei Strg+C, TERM und geschlossenem Fenster. Am Runner gefahren (Lauf 37532529293):
   Wächter, normal (dort startet auch „ohne“, Urteil „nicht bestätigt“), nachgestellter Hänger per
   SIGSTOP (Urteil „bestätigt“, Bericht eingesammelt), Abbruch mit Rückweg, Absage auf ARM. Die
   erste Mail vom 06.10. nannte eine Gegenprobe ohne `disable-library-validation` (sie wäre ohne
@@ -585,7 +588,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und Gegenprobe für einen Kunden-Mac, samt shellcheck). Die Diagnose hält bei laufendem Solidon
   und bei einer ad hoc neu signierten Kopie an, fragt vor dem harten Beenden, ob ein Fenster zu
   sehen ist, und sammelt nach SIGABRT den Absturzbericht ein — am Intel-Runner kam er an (Lauf
-  37530339333). Ob `sample` auf einem Kunden-Mac mit SIP einen Prozess mit Hardened Runtime lesen
+  37532529293, alle drei Jobs samt shellcheck grün). Ob `sample` auf einem Kunden-Mac mit SIP einen Prozess mit Hardened Runtime lesen
   darf, ist offen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-vier-plattform-lauf-seit-dem-06092026-08092026).
@@ -4711,7 +4714,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abhilfe:** `qt_platform.prefer_an_input_method_qt_has` setzt bei Fcitx in
   der Umgebung ohne beiliegendes Fcitx-Modul vor dem Qt-Start `ibus` — auch für
   eine Liste in `QT_IM_MODULES` (GNOME, Sway) und für KDE mit nur
-  `XMODIFIERS=@im=fcitx`. Außerhalb des Flatpak prüft Qt 6.11 für IBus
+  `XMODIFIERS=@im=fcitx`. Dasselbe gilt ungemessen für IBus-Nutzer unter
+  GNOME, bei denen nur `XMODIFIERS=@im=ibus` steht (unter XWayland nähme Qt
+  sonst `compose`), und für `QT_IM_MODULE=wayland` unter `xcb`, wo Qt kein
+  solches Modul hat. Außerhalb des Flatpak prüft Qt 6.11 für IBus
   `ibus-daemon` im PATH (Quelltext `qibusplatforminputcontext.cpp`), den ein
   reines Fcitx5-System nicht hat; antwortet Fcitx5 als
   `org.freedesktop.portal.IBus`, setzt die Anwendung `IBUS_USE_PORTAL=1`. Der
@@ -4723,7 +4729,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `ibus-daemon`, (c) mit `ibus-daemon`, den Fcitx5 ablöst; dazu
   `QT_IM_MODULES=wayland;fcitx` und nur `XMODIFIERS=@im=fcitx`. Je Fall
   Fcitx-Protokoll (`--verbose=ibusfrontend=5`) mit Eingabesitzung und Text im
-  Feld.
+  Feld. Für IBus in allen drei Paketen: nur `XMODIFIERS=@im=ibus` mit
+  laufendem `ibus-daemon`, und `QT_IM_MODULE=wayland` unter `xcb`; je Fall
+  Text im Feld und die Protokollzeile `qt input method set`.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
 

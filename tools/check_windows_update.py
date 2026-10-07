@@ -80,9 +80,17 @@ ASSOCIATION_KEYS: Final = (
     rf"Software\Classes\Applications\{APP_NAME}.exe",
 )
 
-#: Die Werte, die das Setup unter der Endung der Bausteindatei setzt; der
-#: Schlüssel selbst bleibt, er gehört auch anderen Programmen.
+#: Die Werte, die das Setup unter der Endung der Bausteindatei setzt.
 PART_SUFFIX_KEY: Final = rf"Software\Classes\{PART_FILE_SUFFIX}"
+
+#: Schlüssel, die auch anderen Programmen gehören können: Das Setup nimmt
+#: beim Deinstallieren nur die eigenen Werte und danach den Schlüssel, wenn er
+#: leer ist (``uninsdeletekeyifempty``). Auf dem frischen Runner ist er es.
+EMPTIED_KEYS: Final = (
+    rf"Software\Classes\{PROJECT_SUFFIX}\OpenWithProgids",
+    rf"Software\Classes\{PART_FILE_SUFFIX}\OpenWithProgids",
+    PART_SUFFIX_KEY,
+)
 
 #: Wie lange das Holen der Vorversion insgesamt dauern darf, und wie lange
 #: eine einzelne Leseoperation, in Sekunden.
@@ -278,6 +286,8 @@ def traces(
     found[f"Inhaltstyp der Endung {PART_FILE_SUFFIX}"] = (
         registry(PART_SUFFIX_KEY, "Content Type") is not None
     )
+    for key in EMPTIED_KEYS:
+        found[f"Schlüssel {key}"] = registry(key, None) is not None
     shortcut = start_menu / f"{APP_NAME}.lnk"
     found[f"Startmenü-Eintrag {shortcut}"] = exists(shortcut)
     return found

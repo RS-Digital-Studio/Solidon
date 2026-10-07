@@ -510,8 +510,8 @@ regelt `zeichenflaeche.md`.
   Xwayland). Wer die Plattform vor dem Aufbau liest oder setzt, auch ein
   Werkzeug in `tools/`, geht über diese Funktion.
 * **Das Eingabemodul muss im mitgelieferten Qt liegen** (RM-062): Bei Fcitx
-  setzt `qt_platform.prefer_an_input_method_qt_has` vorher `ibus`; der
-  Starttest des Pakets verlangt unter Linux das IBus-Modul.
+  oder wenn nur `XMODIFIERS` IBus nennt, setzt `prefer_an_input_method_qt_has`
+  vorher `ibus`; dessen Modul verlangt der Paketstart unter Linux.
 
 ## Was nur das Bild zeigt
 

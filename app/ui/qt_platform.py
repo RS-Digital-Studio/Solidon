@@ -237,7 +237,7 @@ def prefer_an_input_method_qt_has() -> dict[str, str]:
         before = os.environ.get(name, "").strip()
         os.environ[name] = value
         os.environ[INPUT_BEFORE_VARIABLES[name]] = before or QT_PLATFORM_UNSET
-    _log.info("qt input method set for fcitx: %s", chosen)
+    _log.info("qt input method set: %s", chosen)
     return chosen
 
 

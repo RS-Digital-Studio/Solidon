@@ -1199,10 +1199,13 @@ nicht nach.
 
 **Das Eingabemodul** (RM-062): PySide6 bringt `compose`, `ibus` und
 `qtvirtualkeyboard`, kein Fcitx-Modul. Nennt die Umgebung Fcitx
-(`QT_IM_MODULE`, `QT_IM_MODULES`, `XMODIFIERS`), nimmt
-`qt_platform.prefer_an_input_method_qt_has` vor der Anwendung `ibus`,
-außerhalb des Flatpak mit `IBUS_USE_PORTAL=1`, wo Fcitx5 das Portal trägt;
-die Herleitung steht an `input_method_environment`.
+(`QT_IM_MODULE`, `QT_IM_MODULES`, `XMODIFIERS`) oder nur `XMODIFIERS` IBus
+(GNOME unter XWayland, sonst bliebe `compose`), nimmt
+`qt_platform.prefer_an_input_method_qt_has` vor der Anwendung `ibus`; für
+Fcitx außerhalb des Flatpak mit `IBUS_USE_PORTAL=1`, wo Fcitx5 das Portal
+trägt. Weil ein `wayland` in `QT_IM_MODULE` unter X11 als keines zählt, wählt
+die Anwendung das Eingabemodul nach der Plattform. Die Herleitung steht an
+`input_method_environment`.
 
 ## Was nur das Bild zeigt
 

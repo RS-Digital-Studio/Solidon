@@ -523,6 +523,23 @@ def test_the_portal_question_reads_the_session_bus_answer(monkeypatch: pytest.Mo
     assert not qt_platform.fcitx_answers_as_ibus_portal()
 
 
+def _a_linux_without_input_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Linux mit dem ausgelieferten IBus-Modul, ohne Eingabevariablen und gemerkte Vorwerte."""
+    from app.core import report
+    from app.ui import qt_platform
+
+    monkeypatch.setattr(qt_platform.sys, "platform", "linux")
+    monkeypatch.setattr(
+        qt_platform, "input_modules", lambda: ("libibusplatforminputcontextplugin.so",)
+    )
+    for name in ("QT_IM_MODULE", "QT_IM_MODULES", "XMODIFIERS", "IBUS_USE_PORTAL"):
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+    for before in report.INPUT_BEFORE_VARIABLES.values():
+        monkeypatch.setenv(before, "")
+        monkeypatch.delenv(before)
+
+
 def test_the_input_method_lands_in_the_environment_and_the_report_names_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -532,17 +549,8 @@ def test_the_input_method_lands_in_the_environment_and_the_report_names_it(
     from app.core import report
     from app.ui import qt_platform
 
-    monkeypatch.setattr(qt_platform.sys, "platform", "linux")
-    monkeypatch.setattr(
-        qt_platform, "input_modules", lambda: ("libibusplatforminputcontextplugin.so",)
-    )
+    _a_linux_without_input_variables(monkeypatch)
     monkeypatch.setattr(qt_platform, "fcitx_answers_as_ibus_portal", lambda: True)
-    for name in ("QT_IM_MODULE", "QT_IM_MODULES", "XMODIFIERS", "IBUS_USE_PORTAL"):
-        monkeypatch.setenv(name, "")
-        monkeypatch.delenv(name)
-    for before in report.INPUT_BEFORE_VARIABLES.values():
-        monkeypatch.setenv(before, "")
-        monkeypatch.delenv(before)
     monkeypatch.setenv("QT_IM_MODULE", "fcitx")
 
     assert qt_platform.prefer_an_input_method_qt_has() == {
@@ -561,6 +569,56 @@ def test_the_input_method_lands_in_the_environment_and_the_report_names_it(
     monkeypatch.setenv("QT_IM_MODULE", "fcitx")
     assert qt_platform.prefer_an_input_method_qt_has() == {}
     assert os.environ["QT_IM_MODULE"] == "fcitx"
+
+
+@pytest.mark.parametrize("sandboxed", [False, True], ids=["ohne_antwort", "im_flatpak"])
+def test_without_an_answering_portal_qt_takes_the_way_over_ibus_daemon(
+    monkeypatch: pytest.MonkeyPatch, sandboxed: bool
+) -> None:
+    """RM-062: Trägt niemand das Portal, bleibt ``IBUS_USE_PORTAL`` ungesetzt.
+
+    Gesetzt ohne Eigentümer auf dem Bus bliebe der IBus-Kontext ungültig, und
+    der Weg über ``ibus-daemon`` ginge verloren; im Flatpak nimmt Qt das
+    Portal von selbst. Beide Male rechnet die Wahl ohne Portal neu.
+    """
+    import os
+    from types import SimpleNamespace
+
+    from app.ui import qt_platform
+
+    _a_linux_without_input_variables(monkeypatch)
+    monkeypatch.setattr(qt_platform, "fcitx_answers_as_ibus_portal", lambda: sandboxed)
+    monkeypatch.setattr(qt_platform, "Path", lambda _p: SimpleNamespace(exists=lambda: sandboxed))
+    monkeypatch.setenv("QT_IM_MODULE", "fcitx")
+    assert qt_platform.prefer_an_input_method_qt_has() == {"QT_IM_MODULE": "ibus"}
+    assert "IBUS_USE_PORTAL" not in os.environ
+
+    _a_linux_without_input_variables(monkeypatch)
+    monkeypatch.setenv("QT_IM_MODULE", "ibus")
+    monkeypatch.setenv("XMODIFIERS", "@im=fcitx")
+    assert qt_platform.prefer_an_input_method_qt_has() == {}, "der eigene Wert bleibt, wie er war"
+    assert "IBUS_USE_PORTAL" not in os.environ
+
+
+def test_without_a_need_for_the_portal_the_bus_is_not_asked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gefragt wird nur, wo das Portal dazukäme — ein IBus-Nutzer wartet nicht auf ``dbus-send``."""
+    from app.ui import qt_platform
+
+    def must_not_ask() -> bool:
+        raise AssertionError("ohne Portalbedarf wird der Sitzungsbus nicht gefragt")
+
+    for environ, expected in (
+        ({"XMODIFIERS": "@im=ibus"}, {"QT_IM_MODULE": "ibus"}),
+        ({"QT_IM_MODULE": "ibus"}, {}),
+        ({}, {}),
+    ):
+        _a_linux_without_input_variables(monkeypatch)
+        monkeypatch.setattr(qt_platform, "fcitx_answers_as_ibus_portal", must_not_ask)
+        for name, value in environ.items():
+            monkeypatch.setenv(name, value)
+        assert qt_platform.prefer_an_input_method_qt_has() == expected, environ
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Qt-Eingabemodule nur unter Linux")
@@ -601,6 +659,10 @@ def test_both_start_paths_choose_platform_and_input_before_the_application() -> 
         for chooser in ("prefer_x11_for_the_viewport", "prefer_an_input_method_qt_has"):
             assert chooser in lines, f"{name} ruft {chooser} nicht"
             assert lines[chooser] < lines["QApplication"], f"{name}: {chooser} nach QApplication"
+        # Die X11-Regel der Eingabe liest die Plattform, die die Ansicht vorher setzt.
+        assert lines["prefer_x11_for_the_viewport"] < lines["prefer_an_input_method_qt_has"], (
+            f"{name}: Eingabemodul vor der Plattform gewählt"
+        )
 
 
 def test_a_wayland_session_keeps_the_view_out_and_says_what_to_do(

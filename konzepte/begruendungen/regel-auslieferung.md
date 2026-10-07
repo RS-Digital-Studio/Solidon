@@ -85,9 +85,9 @@ Hauptprogramm, keine an `Python.framework` und `_cffi_backend` (Lauf
 37490502237); in der heutigen Fassung `--verify --deep --strict` grün, Start
 auf Intel und ARM, und der geschnittene Rücklesetext bricht ohne Liste und bei
 `<false/>` ab und lässt die Liste durch (Lauf 37530339300). Developer-ID-
-Zeitstempel und Notarisierung mit der Liste prüft ein Handstart von
-`build.yml` (Lauf 37530876754), die Wirkung erst ein echter Intel-Mac mit
-macOS 26.
+Zeitstempel und Notarisierung mit der Liste sind im Handstart von
+`build.yml` belegt (Lauf 37530876754, beide Architekturen grün), die Wirkung
+belegt erst ein echter Intel-Mac mit macOS 26.
 
 ## Was der Kunde bekommt, ist geprüft — und zwar die verteilte Menge
 

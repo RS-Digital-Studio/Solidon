@@ -2338,8 +2338,8 @@ def test_the_windows_installer_registers_only_the_branded_part_extension() -> No
     assert "{#AppId}.part" in script
     assert (
         'Subkey: "Software\\Classes\\{#PartFileSuffix}";   ValueType: string; '
-        'ValueName: ""; ValueData: "{#AppId}.part";   Flags: uninsdeletevalue; '
-        "Tasks: associate"
+        'ValueName: ""; ValueData: "{#AppId}.part";   '
+        "Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate"
     ) in script
     assert (
         'Subkey: "Software\\Classes\\{#ProjectSuffix}";   ValueType: string; ValueName: ""'
