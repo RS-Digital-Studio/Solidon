@@ -66,10 +66,14 @@ def test_a_token_in_a_private_python_directory_is_read(tmp_path: Path) -> None:
     private.mkdir(mode=0o700)
     token_file = private / "operator.token"
     token_file.write_text("ab" * 32, encoding="ascii")
-    granted = subprocess.run(
-        ["icacls", str(token_file)], check=True, capture_output=True
-    ).stdout.decode("cp850", "replace")
-    assert granted.count(":(") == 3, f"die Voraussetzung ist eine andere Liste: {granted}"
+    saved = tmp_path / "liste.txt"
+    subprocess.run(
+        ["icacls", str(token_file), "/save", str(saved)], check=True, capture_output=True
+    )
+    sddl = saved.read_text(encoding="utf-16-le")
+    assert sddl.count("(A;") == 3 and ";;;OW)" in sddl, (
+        f"die Voraussetzung ist eine andere Liste: {sddl}"
+    )
 
     assert licence_admin.read_token(token_file) == "ab" * 32
 
@@ -573,4 +577,29 @@ def test_a_refused_token_file_names_owner_and_reader_by_sid(tmp_path: Path) -> N
 
     cause = str(refused.value.__cause__)
     assert "Besitzer S-1-" in cause and "Standardbesitzer S-1-" in cause
-    assert "lesbar für S-1-1-0" in cause
+    assert "offen für S-1-1-0" in cause
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows-DACL")
+@pytest.mark.parametrize("right", ["WDAC", "WO"])
+def test_a_foreign_principal_that_could_take_the_token_is_refused(
+    tmp_path: Path, right: str
+) -> None:
+    """Review 06.10.2026, M1: Wer den Besitz nehmen kann, dem gilt danach
+    „Eigentümerrechte“ — ein fremder Eintrag mit WRITE_DAC oder WRITE_OWNER
+    macht die Datei so wenig privat wie ein fremder Leser."""
+    private = tmp_path / "privat"
+    private.mkdir(mode=0o700)
+    token_file = private / "operator.token"
+    token_file.write_text("ab" * 32, encoding="ascii")
+    subprocess.run(
+        ["icacls", str(token_file), "/grant", f"*S-1-1-0:({right})"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    with pytest.raises(licence_admin.OperatorError) as refused:
+        licence_admin.read_token(token_file)
+
+    assert "offen für S-1-1-0" in str(refused.value.__cause__)
