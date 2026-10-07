@@ -18,81 +18,33 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import sys
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from app.core.errors import ExternalToolError, ValidationError
-from app.core.export import handover
+from app.core import discover
+from app.core.errors import ExternalToolError, OperationCancelled, ValidationError
+from app.core.export import cura_linux, handover, slicer_profiles
 from app.core.knowledge import print_settings, profiles
-
-#: Der Startcode des K1 Max in Cura 5.13 (``creality_k1max.def.json``), wörtlich.
-K1_MAX_START = (
-    "M140 S0\nM104 S0 \nSTART_PRINT EXTRUDER_TEMP={material_print_temperature_layer_0} "
-    "BED_TEMP={material_bed_temperature_layer_0}\n"
+from tests.cura_fakes import (
+    APPRUN_ENV,
+    FAILING_MOUNT,
+    FLATPAK_LIBRARIES,
+    K1_MAX_START,
+    MOUNT_SCRIPT,
+    appimage_cura,
+    cura_installation,
+    ended_mounts,
+    failing_mount,
+    flatpak_cura,
 )
-
-
-def _cura(tmp_path: Path, start: str = K1_MAX_START, end: str = "END_PRINT") -> Path:
-    """Eine Cura-Installation mit ``fdmprinter``, einem K1 Max und seinem Extruderzug."""
-    install = tmp_path / "UltiMaker Cura 5.13.0"
-    resources = install / "share" / "cura" / "resources"
-    definitions = resources / "definitions"
-    extruders = resources / "extruders"
-    definitions.mkdir(parents=True)
-    extruders.mkdir(parents=True)
-    machine = {
-        "machine_start_gcode": {
-            "default_value": "G28 ;Home\nG1 Z15.0 F6000 ;Move the platform down 15mm"
-        },
-        "machine_end_gcode": {"default_value": "M104 S0\nM84"},
-        "machine_depth": {"default_value": 100},
-        "machine_name": {"default_value": "Unknown"},
-        "gantry_height": {"default_value": 99999, "value": "machine_height"},
-    }
-    (definitions / "fdmprinter.def.json").write_text(
-        json.dumps(
-            {
-                "version": 2,
-                "name": "FFF",
-                "metadata": {
-                    "setting_version": 27,
-                    "machine_extruder_trains": {"0": "fdmextruder"},
-                },
-                "settings": {"machine_settings": {"children": machine}},
-            }
-        ),
-        encoding="utf-8",
-    )
-    (definitions / "fdmextruder.def.json").write_text(
-        json.dumps({"version": 2, "name": "Extruder", "settings": {}}), encoding="utf-8"
-    )
-    (definitions / "creality_k1max.def.json").write_text(
-        json.dumps(
-            {
-                "version": 2,
-                "name": "Creality K1 Max",
-                "inherits": "fdmprinter",
-                "metadata": {"machine_extruder_trains": {"0": "creality_k1max_extruder_0"}},
-                "overrides": {
-                    "machine_start_gcode": {"default_value": start},
-                    "machine_end_gcode": {"default_value": end},
-                    "machine_name": {"default_value": "Creality K1 Max"},
-                    "gantry_height": {"value": 45},
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    (extruders / "creality_k1max_extruder_0.def.json").write_text(
-        json.dumps({"version": 2, "name": "Extruder 1", "inherits": "fdmextruder"}),
-        encoding="utf-8",
-    )
-    engine = install / "CuraEngine.exe"
-    engine.write_bytes(b"")
-    return engine
 
 
 def _written(engine: Path, printer: str, tmp_path: Path) -> handover.SlicerConfig:
@@ -114,7 +66,7 @@ def test_cura_reads_ascii_copies_and_keeps_the_original_paths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, explicit_output: bool
 ) -> None:
     """Alle CLI-Dateien sind lesbar; Teile, Blocker und eigene Namen bleiben erhalten."""
-    engine = _cura(tmp_path / "安装目录")
+    engine = cura_installation(tmp_path / "安装目录")
     model = tmp_path / f"{name}.stl"
     model_bytes = (Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes()
     model.write_bytes(model_bytes)
@@ -191,7 +143,7 @@ def test_cura_model_read_error_has_a_matching_recovery(
     """Eine nicht geladene Modelldatei verweist auf erneute Übergabe und Slicerwechsel."""
     from app.core.errors import CHECK_SLICER_PROFILE, RETRY, SHOW_SLICER_OUTPUT
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     model = tmp_path / "model.stl"
     model_bytes = (Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes()
     model.write_bytes(model_bytes)
@@ -330,7 +282,7 @@ def test_incomplete_cura_definition_copies_stop_before_starting(
 
 def test_cura_copies_the_fallback_extruder_definition(tmp_path: Path) -> None:
     """Auch der zweite -j-Pfad der allgemeinen Maschine bleibt im Arbeitsordner."""
-    engine = _cura(tmp_path / "安装")
+    engine = cura_installation(tmp_path / "安装")
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     config = _written(engine, "anycubic-kobra-2", workspace)
@@ -387,7 +339,7 @@ def test_cura_gets_the_start_code_of_its_printer(tmp_path: Path) -> None:
     Ordner ``extruders`` hinter ``-d``. Ein ``-e0 -j fdmextruder.def.json``
     darüber setzte die Vorgaben des Zugs zurück und fällt deshalb weg.
     """
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     config = _written(engine, "creality-k1-max", tmp_path)
     settings = print_settings.resolve(profiles.make_profile("creality-k1-max", "pla"))
 
@@ -428,7 +380,7 @@ def test_the_countercheck_sees_whether_cura_took_the_machine(tmp_path: Path) -> 
     ersten Schicht, Befehl für Befehl und in seiner Reihenfolge."""
     from app.core.slice import gcode
 
-    engine = _cura(tmp_path, start="G28 ;Home\nM420 S1 ;Bettnetz\nSTART_PRINT\n")
+    engine = cura_installation(tmp_path, start="G28 ;Home\nM420 S1 ;Bettnetz\nSTART_PRINT\n")
     machine = _written(engine, "creality-k1-max", tmp_path).cura_machine
     assert machine is not None and machine.name == "Creality K1 Max"
 
@@ -472,7 +424,7 @@ def test_a_calculation_in_a_placeholder_goes_through_solidons_own_evaluator(
     Dazu ``{name, 0}`` (Wert des ersten Zugs) und ein Name, den das Fenster
     unter einem zweiten führt (``print_temperature``).
     """
-    engine = _cura(
+    engine = cura_installation(
         tmp_path,
         start="M109 S{print_temperature, 0}\nM190 S{material_bed_temperature,0}",
         end="G1 X0 Y{machine_depth - 5} ;Present print\nM84",
@@ -507,7 +459,7 @@ def test_a_placeholder_solidon_cannot_fill_stops_the_handover(tmp_path: Path, st
     stand unverändert in der Druckdatei. Was Solidon nicht füllen kann, hält
     die Übergabe an und sagt, wohin es weitergeht (Regel 17, 21).
     """
-    engine = _cura(tmp_path, start=start)
+    engine = cura_installation(tmp_path, start=start)
 
     with pytest.raises(ExternalToolError) as caught:
         _written(engine, "creality-k1-max", tmp_path)
@@ -537,7 +489,7 @@ def test_curas_own_temperature_commands_stay_out_where_the_start_code_sets_them(
     Dieselbe Regel wie ``StartSliceJob.py`` im Fenster. Ohne sie stand am K1
     Max ``M190 S60`` vor ``START_PRINT … BED_TEMP=60`` (Prüfbericht §1.3).
     """
-    engine = _cura(tmp_path, start=start)
+    engine = cura_installation(tmp_path, start=start)
 
     config = _written(engine, "creality-k1-max", tmp_path)
 
@@ -556,7 +508,7 @@ def test_a_printer_cura_does_not_know_prints_with_fdmprinter_and_says_so(
     Mangel“). Für die erste Schicht ist es einer: kein Startcode des
     Herstellers, keine Spüllinie, kein Bettnetz.
     """
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     setup = handover.SlicerSetup(engine, "cura")
     unknown = profiles.make_profile("centauri-carbon-2", "pla")
     known = profiles.make_profile("creality-k1-max", "pla")
@@ -581,7 +533,7 @@ def test_cura_instance_identity_is_kept_and_cli_unknown_finding_survives(
 ) -> None:
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     setup = handover.SlicerSetup(engine, "cura")
     known = profiles.make_profile("creality-k1-max", "pla")
     # Ein in Cura vergrößertes Bett: Dieselbe Definition mit demselben Bett
@@ -618,7 +570,7 @@ def test_an_installation_without_the_printer_falls_back_like_an_unknown_one(
     tmp_path: Path,
 ) -> None:
     """Eine ältere Cura ohne die Datei: ``fdmprinter`` und derselbe Befund."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     (
         engine.parent / "share" / "cura" / "resources" / "definitions" / "creality_k1max.def.json"
     ).unlink()
@@ -648,7 +600,7 @@ def test_a_cura_definition_is_a_bare_name(name: str) -> None:
 
 def test_a_printer_with_a_foreign_definition_name_hands_over_fdmprinter(tmp_path: Path) -> None:
     """Ein Profil ohne Tabelle (``replace``) geht an derselben Prüfung vorbei nicht durch."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     printer = replace(profiles.printer("creality-k1-max"), cura_definition="../creality_k1max")
 
     assert handover._cura_printer_definition(engine, printer) == ""
@@ -934,7 +886,7 @@ def test_every_mesh_goes_in_with_its_own_values(tmp_path: Path) -> None:
     ``-l``; die Teile vor ihr bekommen keinen Wert, und die globalen Werte
     stehen vor dem ersten Netz.
     """
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     config = _written(engine, "creality-k1-max", tmp_path)
     model = tmp_path / "teil.stl"
     part = tmp_path / "teil-part-1.stl"
@@ -957,7 +909,7 @@ def test_every_mesh_goes_in_with_its_own_values(tmp_path: Path) -> None:
 
 def test_a_model_without_a_mesh_list_goes_in_as_it_is(tmp_path: Path) -> None:
     """Ein Modell, das nicht aus ``write_assembly`` kommt, geht unverändert hinein."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     config = _written(engine, "creality-k1-max", tmp_path)
     model = tmp_path / "fremd.stl"
     model.write_bytes(b"solid x\nendsolid x\n")
@@ -1145,7 +1097,7 @@ def _with_motion_limits(engine: Path) -> None:
 
 def test_cura_factory_motion_limits_reach_both_engine_levels(tmp_path: Path) -> None:
     """Numerisches ``value`` ersetzt den allgemeinen Default auch ohne Nutzerinstanz."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_motion_limits(engine)
     config = _written(engine, "creality-k1-max", tmp_path)
     command = handover._command(
@@ -1167,7 +1119,7 @@ def test_cura_factory_motion_limits_reach_both_engine_levels(tmp_path: Path) -> 
 
 def test_cura_process_accelerations_stay_inside_the_factory_limits(tmp_path: Path) -> None:
     """Auch die Blätter, die ``M204`` steuern, bleiben innerhalb der X-/Y-Grenzen."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_motion_limits(engine)
     config = _written(engine, "creality-k1-max", tmp_path)
 
@@ -1186,7 +1138,7 @@ def test_cura_process_accelerations_stay_inside_the_factory_limits(tmp_path: Pat
 
 def test_cura_part_acceleration_cannot_bypass_the_machine_limits(tmp_path: Path) -> None:
     """Ein Außenwandwert je Netz überschreibt den Plattenwert erst hinter ``-l``."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_motion_limits(engine)
     config = _written(engine, "creality-k1-max", tmp_path)
     model = tmp_path / "part.stl"
@@ -1212,7 +1164,7 @@ def test_cura_reports_a_limited_explicit_acceleration(
     tmp_path: Path, choose, path: str, key: str
 ) -> None:
     """Die bewusste Wahl bleibt sichtbar, auch wenn die Maschine weniger zulässt."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_motion_limits(engine)
     profile = profiles.make_profile("creality-k1-max", "pla")
     settings = choose(print_settings.resolve(profile), path, 2000.0)
@@ -1236,7 +1188,7 @@ def test_cura_slice_report_retains_plate_and_part_acceleration_limits(
     """Die fertige Druckdatei meldet beide Kürzungen, obwohl Cura keine Sollwerte rückliest."""
     from subprocess import CompletedProcess
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_motion_limits(engine)
     profile = profiles.make_profile("creality-k1-max", "pla")
     settings = print_settings.with_choice(
@@ -1283,7 +1235,7 @@ def test_cura_export_reports_limits_on_the_part_that_needs_the_accepted_value(
     from app.core.geom.mesh import MeshData
     from app.core.types import SceneObject, SettingAdvice
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_motion_limits(engine)
     definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
     active = slicer_profiles.CuraActiveMachine("Werkstatt", definition)
@@ -1338,7 +1290,7 @@ def test_cura_export_reports_limits_on_the_part_that_needs_the_accepted_value(
 @pytest.mark.parametrize("native", ["1000", "1e3", " 1000.0 "])
 def test_cura_numeric_text_is_a_limit_but_an_expression_is_not(tmp_path: Path, native: str) -> None:
     """Strateo3D IDEX420 speichert seine 1000 mm/s² als Text im Feld ``value``."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_motion_limits(engine)
     definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
     document = json.loads(definition.read_text(encoding="utf-8"))
@@ -1363,7 +1315,7 @@ def test_cura_window_profile_and_parts_keep_limits_and_report_the_original_choic
 
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_motion_limits(engine)
     definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
     active = slicer_profiles.CuraActiveMachine("Werkstatt", definition)
@@ -1435,7 +1387,7 @@ def _with_jerk(engine: Path, overrides: dict[str, object] | None = None) -> Path
 
 def test_native_jerk_reaches_both_engine_levels_and_preserves_role_choices(tmp_path: Path) -> None:
     """M205 und Zeitschätzung bekommen dieselben Rollen, auch ohne Beschleunigungswahl."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_wall_0": 3, "jerk_layer_0": 2})
     config = _written(engine, "creality-k1-max", tmp_path)
     command = handover._command(
@@ -1457,7 +1409,7 @@ def test_native_jerk_reaches_both_engine_levels_and_preserves_role_choices(tmp_p
 
 
 def test_disabled_native_jerk_stays_disabled(tmp_path: Path) -> None:
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_enabled": False, "jerk_print": "unknown()"})
     config = _written(engine, "creality-k1-max", tmp_path)
     assert config.written["jerk_enabled"] == "false"
@@ -1468,7 +1420,7 @@ def test_disabled_native_jerk_stays_disabled(tmp_path: Path) -> None:
 def test_unknown_native_jerk_never_falls_back_to_engine_defaults(
     tmp_path: Path, formula: str
 ) -> None:
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_wall_0": formula})
     with pytest.raises(ExternalToolError) as caught:
         _written(engine, "creality-k1-max", tmp_path)
@@ -1478,7 +1430,7 @@ def test_unknown_native_jerk_never_falls_back_to_engine_defaults(
 def test_jerk_instance_choice_recalculates_dependants_before_export(tmp_path: Path) -> None:
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     base = _with_jerk(engine)
     chain = slicer_profiles._cura_definition_values(
         base,
@@ -1502,7 +1454,7 @@ def test_cura_window_and_cli_use_the_same_native_jerk(
 
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_infill": 7, "jerk_travel_layer_0": 4})
     definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
     monkeypatch.setattr(
@@ -1536,7 +1488,7 @@ def test_cura_window_and_cli_use_the_same_native_jerk(
 
 @pytest.mark.parametrize("value", [-1, float("nan"), float("inf"), True, None, "broken"])
 def test_invalid_native_jerk_is_not_sent_to_cura(tmp_path: Path, value: object) -> None:
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_wall_0": value})
     with pytest.raises(ExternalToolError):
         _written(engine, "creality-k1-max", tmp_path)
@@ -1546,7 +1498,7 @@ def test_invalid_native_jerk_is_not_sent_to_cura(tmp_path: Path, value: object) 
 def test_explicit_instance_jerk_switch_wins(tmp_path: Path, native: bool, chosen: str) -> None:
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     base = _with_jerk(engine, {"jerk_enabled": native})
     chain = slicer_profiles._cura_definition_values(
         base, (), overrides={"jerk_enabled": chosen}, resolve_jerk=True
@@ -1593,7 +1545,7 @@ def _jerk_instance(engine: Path, tmp_path: Path) -> Path:
 def test_native_jerk_uses_all_selected_containers_in_priority_order(tmp_path: Path) -> None:
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine)
     user = _jerk_instance(engine, tmp_path)
     roots = (engine.parent / "share/cura", user)
@@ -1610,7 +1562,7 @@ def test_native_jerk_uses_all_selected_containers_in_priority_order(tmp_path: Pa
 def test_missing_selected_jerk_container_does_not_restore_factory_values(tmp_path: Path) -> None:
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine)
     user = _jerk_instance(engine, tmp_path)
     path = user / "quality_changes" / "changes.inst.cfg"
@@ -1624,7 +1576,7 @@ def test_only_active_jerk_rejects_different_extruder_roles(tmp_path: Path, enabl
     """Ausgeschaltete Rollen unterscheiden keine wirksame Maschinensteuerung."""
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_enabled": enabled, "jerk_support_roof": 5})
     user = _jerk_instance(engine, tmp_path)
     global_user = user / "user/local_user.inst.cfg"
@@ -1664,7 +1616,7 @@ def test_global_jerk_switch_ignores_stale_extruder_values(
     """Curas globale Schalter umgehen Extrudercontainer auch bei alten Restwerten."""
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine)
     user = _jerk_instance(engine, tmp_path)
     for name, value in (("local_user", global_value), ("extruder_user", not global_value)):
@@ -1697,7 +1649,7 @@ def test_jerk_switches_limit_effective_extruder_roles(
     """Nur wirksame Rollen und globale Schalter bestimmen die gemeinsame Steuerung."""
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_support_roof": 5})
     user = _jerk_instance(engine, tmp_path)
     container = user / "user/local_user.inst.cfg"
@@ -1761,7 +1713,7 @@ def test_disabled_unknown_travel_jerk_reaches_cli_and_window(
 
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_travel_enabled": False, role: "unknown()"})
     definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
     monkeypatch.setattr(
@@ -1811,7 +1763,7 @@ def test_jerk_handover_uses_only_active_definition_or_instance_roles(
 
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     choices = {"jerk_enabled": printing, "jerk_travel_enabled": travel, role: value}
     _with_jerk(engine, choices if source == "definition" else {})
     definition = engine.parent / "share/cura/resources/definitions/creality_k1max.def.json"
@@ -1890,7 +1842,7 @@ def test_concrete_process_switch_overrides_unknown_definition_switch(
 
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_enabled": "unknown()"})
     user = _jerk_instance(engine, tmp_path)
     container = user / f"{container_name}.inst.cfg"
@@ -1932,7 +1884,7 @@ def test_concrete_process_switch_overrides_unknown_definition_switch(
 def test_native_travel_and_first_layer_relationships_are_resolved(
     tmp_path: Path, spiral: bool, travel: float, first: float
 ) -> None:
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(
         engine,
         {
@@ -1959,14 +1911,14 @@ def test_native_travel_and_first_layer_relationships_are_resolved(
 def test_ambiguous_jerk_never_enables_engine_defaults(
     tmp_path: Path, key: str, value: object
 ) -> None:
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {key: value})
     with pytest.raises(ExternalToolError):
         _written(engine, "creality-k1-max", tmp_path)
 
 
 def test_missing_jerk_dependency_remains_unknown(tmp_path: Path) -> None:
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     base = _with_jerk(engine)
     data = json.loads(base.read_text(encoding="utf-8"))
     del data["settings"]["jerk"]["children"]["jerk_wall"]
@@ -1977,7 +1929,7 @@ def test_missing_jerk_dependency_remains_unknown(tmp_path: Path) -> None:
 
 def test_enabled_creality_jerk_keeps_its_native_travel_alias(tmp_path: Path) -> None:
     """Creality setzt Leerfahrt gleich Druck; die Sovol-Basis verdoppelt sie."""
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(engine, {"jerk_travel": "jerk_print"})
     config = _written(engine, "creality-k1-max", tmp_path)
     assert float(config.written["jerk_travel"]) == pytest.approx(5)
@@ -1991,7 +1943,7 @@ def test_unknown_jerk_keeps_printer_selection_and_active_bed_readable(
     """Unbekannte Bewegung sperrt die Übergabe, nicht die bekannten Maschinenmaße."""
     from app.core.export import slicer_profiles
 
-    engine = _cura(tmp_path)
+    engine = cura_installation(tmp_path)
     _with_jerk(
         engine,
         {
@@ -2030,3 +1982,689 @@ def test_unknown_jerk_keeps_printer_selection_and_active_bed_readable(
         handover.cura_profile_beside(tmp_path / "part.stl", settings, profile, setup)
     assert window_error.value.suggestions
     assert not (tmp_path / "part.curaprofile").exists()
+
+
+# Cura unter Linux: Flatpak und AppImage rechnen über Curas eigenen Lader (RM-521).
+
+
+def _sliced(
+    executable: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    during: Callable[[], None] | None = None,
+) -> tuple[list[str], Path]:
+    """Ein Würfel für den K1 Max über die echte Übergabe; zurück kommen Befehl und
+    Arbeitsordner. ``during`` läuft, während CuraEngine rechnen würde."""
+    model = tmp_path / "wuerfel.stl"
+    model.write_bytes((Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes())
+    captured: list[tuple[list[str], Path]] = []
+
+    def run(command: list[str], workspace: Path, *_args: object, **_kwargs: object):
+        _staged_from_the_workspace(command, workspace)
+        if during is not None:
+            during()
+        captured.append((list(command), workspace))
+        Path(command[command.index("-o") + 1]).write_text(_printed("G28"), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, b"", b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    profile = profiles.make_profile("creality-k1-max", "pla")
+    handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        handover.SlicerSetup(executable, "cura"),
+        output_dir=tmp_path / "aus",
+    )
+    assert len(captured) == 1
+    return captured[0]
+
+
+def _staged_from_the_workspace(command: list[str], workspace: Path) -> None:
+    """Hinter ``slice`` zeigt jeder Pfad in den Arbeitsordner, und die Maschine ist der
+    K1 Max — gefragt während des Laufs, danach ist der Ordner geräumt."""
+    after = command[command.index("slice") + 1 :]
+    paths = [
+        Path(after[index + 1])
+        for index, flag in enumerate(after[:-1])
+        if flag in {"-d", "-j", "-l", "-o"}
+    ]
+    assert paths and all(path.is_relative_to(workspace) for path in paths)
+    machine = Path(after[after.index("-j") + 1])
+    assert json.loads(machine.read_text(encoding="utf-8"))["name"] == "Creality K1 Max"
+
+
+def test_the_library_path_comes_from_apprun_env_in_its_order() -> None:
+    """Gekürzt fand CuraEngine am Runner die ``libstdc++`` des Rechners und
+    scheiterte an ``GLIBC_2.38``: Curas glibc zuerst, dann seine übrigen
+    Bibliotheken, jede einmal; eine fremde Variable bleibt draußen — ein ``$``
+    im Einhängepunkt selbst ist keine."""
+    variables = cura_linux.read_environment(APPRUN_ENV + "APPDIR_LIBRARY_PATH_X=$HOME/lib\n")
+
+    assert cura_linux.library_path(variables, "/app/cura") == FLATPAK_LIBRARIES
+    assert cura_linux.library_path({"APPDIR_LIBRARY_PATH": "$APPDIR:$OTHER/lib"}, "/m") == "/m"
+    assert cura_linux.library_path({"APPDIR_LIBRARY_PATH": "${APPDIR}/lib:$APPDIR"}, "/a$b") == (
+        "/a$b/lib:/a$b"
+    )
+    assert cura_linux.linker(variables) == "lib64/ld-linux-x86-64.so.2"
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("{'lib/ld-linux-aarch64.so.1'}", "lib/ld-linux-aarch64.so.1"),
+        ("{'/lib64/ld-linux-x86-64.so.2'}", cura_linux.DEFAULT_LINKER),
+        ("{'../../ld.so'}", cura_linux.DEFAULT_LINKER),
+        ("", cura_linux.DEFAULT_LINKER),
+    ],
+)
+def test_the_loader_stays_inside_the_appdir(written: str, expected: str) -> None:
+    assert cura_linux.linker({"APPDIR_LIBC_LINKER_PATH": written}) == expected
+
+
+@pytest.mark.parametrize("folder", ["cura", "Cura-5.14"])
+def test_cura_as_a_flatpak_computes_through_its_own_loader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, folder: str
+) -> None:
+    """Der Starter öffnet nur das Fenster, ``--command`` auf CuraEngine fand den
+    Lader nicht (RM-521). Gerechnet wird über den Lader aus ``runtime/compat``
+    mit dem Pfad aus ``AppRun.env``, der Arbeitsordner ist freigegeben, und die
+    Druckerdefinition kommt aus dem ``/app`` des Pakets — vorher fehlte ``-j``.
+    Lader und Bestand stehen am selben AppDir, wie auch der Ordner heißt."""
+    launcher = flatpak_cura(tmp_path, monkeypatch, folder=folder)
+
+    command, workspace = _sliced(launcher, monkeypatch, tmp_path)
+
+    inside = f"/app/{folder}"
+    assert command[: command.index("slice")] == [
+        "flatpak",
+        "run",
+        f"--filesystem={workspace}",
+        f"--command={inside}/runtime/compat/lib64/ld-linux-x86-64.so.2",
+        "com.ultimaker.cura",
+        "--library-path",
+        FLATPAK_LIBRARIES.replace("/app/cura", inside),
+        f"{inside}/CuraEngine",
+    ]
+    assert handover.console_refusal(launcher) is None
+    root = slicer_profiles.install_root(launcher)
+    assert root is not None and root.parent.parent.name == folder
+
+
+@pytest.mark.parametrize(
+    ("missing", "logged"),
+    [
+        ("environment", "AppRun.env"),
+        ("loader", "no loader"),
+        ("installation", "not visible"),
+    ],
+)
+def test_a_flatpak_cura_without_its_loader_only_opens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    missing: str,
+    logged: str,
+) -> None:
+    """Findet Solidon Lader, ``AppRun.env`` oder die Installation nicht, rechnet es
+    nicht, sondern sagt im Druckdialog, dass nur Curas Fenster bleibt — und die
+    Übergabe hält vor jedem Prozessstart mit demselben Satz an. Der Satz behauptet
+    keine Ursache (Regel 21); welche es war, steht im Protokoll."""
+    launcher = flatpak_cura(tmp_path, monkeypatch, **{missing: False})
+
+    with caplog.at_level("INFO", logger="app.core.export.cura_linux"):
+        refusal = handover.console_refusal(launcher)
+    assert refusal is not None
+    assert str(refusal) == str(cura_linux.WINDOW_ONLY)
+    assert "Lader" not in str(refusal) and "fehlt" not in str(refusal)
+    assert logged in caplog.text
+    with pytest.raises(ExternalToolError) as caught:
+        _sliced(launcher, monkeypatch, tmp_path)
+    assert str(caught.value.detail) == str(cura_linux.WINDOW_ONLY)
+    assert caught.value.suggestions
+    assert handover.window_program(launcher) == launcher, "das Fenster bleibt"
+
+
+def test_another_flatpak_slicer_is_not_refused_as_cura(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Sperrsatz gilt Cura. Orca als Flatpak hat kein ``cura/`` und keinen
+    Lader und rechnet trotzdem über seinen Starter."""
+    system = tmp_path / "flatpak"
+    launcher = system / "exports" / "bin" / "com.orcaslicer.OrcaSlicer"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("")
+    program = system / "app" / "com.orcaslicer.OrcaSlicer" / "current" / "active" / "files"
+    (program / "bin").mkdir(parents=True)
+    (program / "bin" / "orca-slicer").write_bytes(b"")
+    monkeypatch.setattr(discover, "_FLATPAK_EXPORTS", (str(launcher.parent),))
+    monkeypatch.setattr(discover, "_FLATPAK_INSTALLATIONS", (str(system),))
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+
+    assert cura_linux.needs_loader(launcher), "ein Flatpak ist es"
+    assert handover.console_refusal(launcher) is None
+
+
+def test_cura_as_an_appimage_computes_while_it_is_mounted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Abbild bleibt eingehängt, solange CuraEngine rechnet, und ist danach
+    beendet; CuraEngine startet über Lader und Pfad des Einhängepunkts. Die
+    Drucker kommen aus einer Kopie, die nur einmal je Fassung entsteht."""
+    mounts: list[Path] = []
+    appimage, point = appimage_cura(tmp_path, monkeypatch, mounts)
+    ended = ended_mounts(monkeypatch)
+    while_running: list[int] = []
+
+    command, _workspace = _sliced(
+        appimage, monkeypatch, tmp_path, during=lambda: while_running.append(len(ended))
+    )
+
+    assert while_running == [1], "nur das Einhängen der Kopie ist beendet, das des Laufs lebt"
+    assert command[: command.index("slice")] == [
+        str(point / "runtime" / "compat" / "lib64" / "ld-linux-x86-64.so.2"),
+        "--library-path",
+        cura_linux.library_path(cura_linux.read_environment(APPRUN_ENV), str(point)),
+        str(point / "CuraEngine"),
+    ]
+    assert len(ended) == 2 and all(process.poll() is not None for process in ended)
+    copy = slicer_profiles.install_root(appimage)
+    assert copy is not None and not copy.is_relative_to(point)
+    assert (
+        slicer_profiles.cura_resources(copy) / "definitions" / "creality_k1max.def.json"
+    ).is_file()
+    found = slicer_profiles.find_profiles(appimage, "cura", ("machine",))
+    assert "Creality K1 Max" in {entry.name for entry in found}
+    assert mounts.count(appimage) == 2, "einmal für die Kopie, einmal für den Lauf"
+    assert handover.console_refusal(appimage) is None
+
+
+def test_an_appimage_that_does_not_mount_says_why(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne FUSE scheitert das Einhängen. Die Absage sagt es mit Vorschlag, und
+    was die Laufzeit dazu schrieb, reist als Grund mit — nie startet Solidon
+    stattdessen das AppImage selbst als Rechenmaschine."""
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts)
+    failing_mount(tmp_path, monkeypatch, mounts)
+
+    with (
+        pytest.raises(ExternalToolError) as caught,
+        cura_linux.engine(appimage, tmp_path, "Cura") as _program,
+    ):
+        pytest.fail("ohne Einhängepunkt kein Programm")
+
+    assert str(caught.value.detail) == str(cura_linux.NOT_MOUNTED)
+    assert caught.value.suggestions
+    reason = str(caught.value.values["reason"])
+    assert "fuse: device not found" in reason and "127" in reason
+
+
+def test_cancelling_while_mounting_cancels_and_is_no_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Abbruch während des Einhängens ist ein Abbruch (§15.6), keine Absage
+    „ließ sich nicht einhängen“; der Einhängeprozess endet."""
+    from app.core.scene.cancel import CancelSignal
+
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, delay=60.0)
+    ended = ended_mounts(monkeypatch)
+    token = CancelSignal()
+    timer = threading.Timer(0.3, token.cancel)
+    timer.start()
+    try:
+        with (
+            pytest.raises(OperationCancelled),
+            cura_linux.engine(appimage, tmp_path, "Cura", token) as _program,
+        ):
+            pytest.fail("abgebrochen gibt es kein Programm")
+    finally:
+        timer.cancel()
+    assert len(ended) == 1 and ended[0].poll() is not None
+
+
+def test_the_window_thread_never_waits_for_the_printer_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Druckdialog fragt Curas Bestand im Fensterfaden (``_rebase``). Dort
+    antwortet die Kopie nur, wenn sie schon da ist: Weder hängt der Fensterfaden
+    selbst ein noch wartet er auf einen Arbeiter, der gerade kopiert."""
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, delay=2.0)
+    monkeypatch.setattr(cura_linux, "_never_waits", None)
+    cura_linux.never_wait_in(threading.current_thread())
+
+    assert slicer_profiles.install_root(appimage) is None
+    assert not mounts, "der Fensterfaden hängt nichts ein"
+
+    worker = threading.Thread(target=cura_linux.appimage_resources, args=(appimage,))
+    worker.start()
+    deadline = time.monotonic() + 10.0
+    while not mounts and time.monotonic() < deadline:
+        time.sleep(0.01)
+    started = time.monotonic()
+    assert slicer_profiles.install_root(appimage) is None
+    assert time.monotonic() - started < 1.0, "nicht auf den kopierenden Arbeiter gewartet"
+    worker.join(30.0)
+
+    copy = slicer_profiles.install_root(appimage)
+    assert copy is not None and (copy / "resources" / "definitions").is_dir()
+    assert len(mounts) == 1
+
+
+def test_the_window_waits_for_no_copy_and_rebases_after_the_worker() -> None:
+    """Der Anschluss: ``build_application`` nennt den Fensterfaden, der
+    Cura-Arbeiter des Druckdialogs legt die Kopie an, und sein Ergebnis gründet
+    für eine AppImage-Cura neu. Gelesen am Quelltext, ohne Fenster."""
+    import ast
+
+    root = Path(__file__).resolve().parent.parent
+
+    def body(path: str, *names: str) -> str:
+        tree = ast.parse((root / path).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == names[0] and len(names) > 1:
+                return next(
+                    ast.unparse(item)
+                    for item in node.body
+                    if isinstance(item, ast.FunctionDef) and item.name == names[1]
+                )
+            if isinstance(node, ast.FunctionDef) and node.name == names[0] and len(names) == 1:
+                return ast.unparse(node)
+        raise AssertionError(names)
+
+    build = body("app/ui/app.py", "build_application")
+    assert "cura_linux.never_wait_in(threading.current_thread())" in build
+    work = body("app/ui/print_settings_dialog.py", "_CuraPrinterWorker", "work")
+    assert work.index("install_root(self._executable)") < work.index("chosen_printer(")
+    found = body("app/ui/print_settings_dialog.py", "PrintSettingsDialog", "_cura_printer_found")
+    assert "self._foundation_key = None" in found and "self._rebase()" in found
+
+
+def test_the_printers_of_an_appimage_are_copied_once_per_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts)
+
+    first = cura_linux.appimage_resources(appimage)
+    again = cura_linux.appimage_resources(appimage)
+    assert first is not None and first == again
+    assert len(mounts) == 1
+    stamp = json.loads((first.parent.parent / cura_linux.STAMP).read_text(encoding="utf-8"))
+    assert stamp["engine"] is True
+
+    newer = appimage.stat().st_mtime_ns + 10**9
+    os.utime(appimage, ns=(newer, newer))
+    assert cura_linux.appimage_resources(appimage) == first
+    assert len(mounts) == 2, "eine neue Fassung wird neu gelesen"
+
+
+def test_the_copy_of_a_removed_appimage_is_cleared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cura trägt die Version im Dateinamen: Nach einem Update bliebe die Kopie
+    der alten Fassung (rund 26 MB) für immer liegen. Geräumt wird nur, was zu
+    keiner Datei mehr gehört."""
+    mounts: list[Path] = []
+    kept, _point = appimage_cura(
+        tmp_path / "andere", monkeypatch, mounts, name="Cura-Beta-5.14.0.AppImage"
+    )
+    kept_copy = cura_linux.appimage_resources(kept)
+    old, _point = appimage_cura(
+        tmp_path, monkeypatch, mounts, name="UltiMaker-Cura-5.12.0-linux-X64.AppImage"
+    )
+    old_copy = cura_linux.appimage_resources(old)
+    assert kept_copy is not None and old_copy is not None
+    old.unlink()
+
+    new, _point = appimage_cura(tmp_path / "neu", monkeypatch, mounts)
+    assert cura_linux.appimage_resources(new) is not None
+
+    assert not old_copy.exists(), "die Kopie der entfernten Fassung ist geräumt"
+    assert kept_copy.is_dir(), "die einer vorhandenen bleibt"
+
+
+def test_a_failed_copy_is_tried_again_after_searching_anew(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer nach der Meldung FUSE nachinstalliert und *Neu suchen* drückt, bekommt
+    Curas Drucker ohne Neustart; ohne neue Suche wird nicht bei jeder Frage
+    erneut eingehängt."""
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts)
+    working = cura_linux.mount_command
+    failing_mount(tmp_path, monkeypatch, mounts)
+
+    assert cura_linux.appimage_resources(appimage) is None
+    monkeypatch.setattr(cura_linux, "mount_command", working)
+    assert cura_linux.appimage_resources(appimage) is None
+    assert len(mounts) == 1, "das Nein gilt bis zur neuen Suche"
+
+    discover.forget_cache()
+    assert cura_linux.appimage_resources(appimage) is not None
+    assert len(mounts) == 2
+
+
+def test_a_copy_that_cannot_replace_the_old_one_says_why(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Bleibt die alte Kopie liegen (Rechte, offene Dateien), fehlen Curas Drucker —
+    das Protokoll nennt Ort und Grund statt eines angenommenen zweiten Solidon."""
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts)
+
+    def refuse(self: Path, target: Path) -> Path:
+        raise PermissionError(13, "Zugriff verweigert", str(self))
+
+    monkeypatch.setattr(Path, "rename", refuse)
+    with caplog.at_level("WARNING", logger="app.core.export.cura_linux"):
+        assert cura_linux.appimage_resources(appimage) is None
+    assert "cannot replace the printers" in caplog.text and "Zugriff verweigert" in caplog.text
+
+
+def test_an_appimage_without_its_loader_only_opens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was das Einlesen der Drucker über die Rechenmaschine erfahren hat, sagt der
+    Druckdialog, ohne selbst einzuhängen; vorher ist es unbekannt und sperrt nicht."""
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, loader=False)
+
+    assert handover.console_refusal(appimage) is None
+    assert not mounts, "der Dialog hängt nichts ein"
+    assert cura_linux.appimage_resources(appimage) is not None
+    refusal = handover.console_refusal(appimage)
+    assert refusal is not None and str(refusal) == str(cura_linux.WINDOW_ONLY)
+    with pytest.raises(ExternalToolError) as caught:
+        _sliced(appimage, monkeypatch, tmp_path)
+    assert str(caught.value.detail) == str(cura_linux.WINDOW_ONLY)
+
+
+def test_the_mount_ends_with_the_block_also_after_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = tmp_path / "einhaengen.py"
+    script.write_text(MOUNT_SCRIPT, encoding="utf-8")
+    ended = ended_mounts(monkeypatch)
+
+    with (
+        pytest.raises(RuntimeError),
+        cura_linux._mounted([sys.executable, str(script), str(tmp_path)], None) as mount,
+    ):
+        assert mount.point == tmp_path
+        raise RuntimeError("Lauf gescheitert")
+
+    assert len(ended) == 1 and ended[0].poll() is not None
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_a_mount_that_never_answers_gives_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cancelled: bool
+) -> None:
+    """Ohne Einhängepunkt kein Warten bis zum Zeitlimit des Slicers: Abbruch und
+    eigene Zeitgrenze beenden den Prozess, und es gibt keinen Punkt."""
+    from app.core.scene.cancel import CancelSignal
+
+    script = tmp_path / "stumm.py"
+    script.write_text(MOUNT_SCRIPT, encoding="utf-8")
+    token = CancelSignal()
+    if cancelled:
+        token.cancel()
+    ended = ended_mounts(monkeypatch)
+
+    with cura_linux._mounted([sys.executable, str(script)], token, seconds=1.0) as mount:
+        assert mount.point is None
+        assert mount.reason
+
+    assert len(ended) == 1 and ended[0].poll() is not None
+
+
+def test_from_solidons_flatpak_the_appimage_mounts_where_both_see_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Aus dem Sandkasten ist das ``/tmp`` des Rechners unsichtbar; die Laufzeit
+    beachtet ``TMPDIR``, und ``--watch-bus`` hängt auch dann aus, wenn
+    ``flatpak-spawn`` ohne Signal stirbt (gemessen am Runner)."""
+    appimage = tmp_path / "UltiMaker-Cura-5.13.0-linux-X64.AppImage"
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(discover, "exchange_dir", lambda: tmp_path / "austausch")
+
+    assert cura_linux.mount_command(appimage) == [
+        "flatpak-spawn",
+        "--host",
+        "--watch-bus",
+        f"--env=TMPDIR={tmp_path / 'austausch'}",
+        str(appimage),
+        "--appimage-mount",
+    ]
+    assert (tmp_path / "austausch").is_dir()
+
+
+@pytest.mark.parametrize("setpriv", ["/usr/bin/setpriv", None])
+def test_outside_a_flatpak_the_mount_command_carries_setpriv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setpriv: str | None
+) -> None:
+    """Draußen startet das Einhängen in eigener Prozessgruppe; stirbt Solidon hart,
+    erreicht es kein Signal. ``setpriv --pdeathsig`` schickt eines, wo es da ist."""
+    appimage = tmp_path / "UltiMaker-Cura-5.13.0-linux-X64.AppImage"
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    monkeypatch.setattr(cura_linux.shutil, "which", lambda name: setpriv)
+
+    expected = [str(appimage), "--appimage-mount"]
+    if setpriv:
+        expected = [setpriv, "--pdeathsig", "TERM", "--", *expected]
+    assert cura_linux.mount_command(appimage) == expected
+
+
+#: Ein Kindprozess wie Solidon: hängt über ``mount_command`` ein, meldet den
+#: Punkt und wartet; ``plain`` nimmt ihm ``setpriv``.
+_HOLDER = (
+    "import sys, time\n"
+    "from pathlib import Path\n"
+    "from app.core import discover\n"
+    "from app.core.export import cura_linux\n"
+    "discover.in_flatpak = lambda: False\n"
+    "if sys.argv[2] == 'plain':\n"
+    "    cura_linux.shutil.which = lambda name: None\n"
+    "with cura_linux._mounted(cura_linux.mount_command(Path(sys.argv[1])), None) as mount:\n"
+    "    print(mount.point, flush=True)\n"
+    "    time.sleep(60)\n"
+)
+
+
+def _alive(pid: int) -> bool:
+    """Lebt der Prozess — ein Zombie zählt nicht?"""
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()[0]
+    except OSError:
+        return False
+    return state != "Z"
+
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux") or shutil.which("setpriv") is None,
+    reason="setpriv --pdeathsig gibt es nur unter Linux mit util-linux",
+)
+@pytest.mark.parametrize("guard", ["setpriv", "plain"])
+def test_a_mount_ends_when_solidon_dies_hard(tmp_path: Path, guard: str) -> None:
+    """Das Verhalten, nicht nur der Befehl: Stirbt der Prozess, der eingehängt
+    hat, mit SIGKILL, endet das Einhängen binnen einer Sekunde — mit
+    ``setpriv``. Ohne bleibt es stehen (die Gegenprobe im selben Test), denn es
+    läuft in eigener Prozessgruppe. Braucht kein FUSE: das AppImage ist ein
+    Skript, das einen Punkt nennt und schläft."""
+    import signal
+
+    pidfile = tmp_path / "pid"
+    fake = tmp_path / "Fake.AppImage"
+    fake.write_text(f'#!/bin/sh\necho $$ > "{pidfile}"\necho "{tmp_path}"\nexec sleep 60\n')
+    fake.chmod(0o755)
+    root = Path(__file__).resolve().parent.parent
+    pid = 0
+    # Der Block schließt das Rohr des Kindes und wartet auf es; ohne ihn blieb
+    # sein Lese-Ende offen (ResourceWarning, CI-Lauf 37565457904).
+    with subprocess.Popen(
+        [sys.executable, "-c", _HOLDER, str(fake), guard],
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root)},
+        stdout=subprocess.PIPE,
+    ) as holder:
+        assert holder.stdout is not None
+        try:
+            assert holder.stdout.readline().decode().strip() == str(tmp_path)
+            pid = int(pidfile.read_text(encoding="utf-8"))
+            assert _alive(pid)
+            holder.kill()
+            holder.wait(10)
+            deadline = time.monotonic() + 1.0
+            while _alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.02)
+            if guard == "setpriv":
+                assert not _alive(pid), "mit setpriv endet das Einhängen mit Solidon"
+            else:
+                assert _alive(pid), "ohne setpriv bleibt es stehen — sonst prüfte der Test nichts"
+        finally:
+            holder.kill()
+            if pid and _alive(pid):
+                os.kill(pid, signal.SIGKILL)
+
+
+def test_a_hanging_mount_keeps_its_reason(tmp_path: Path) -> None:
+    """Schreibt das Einhängen einen Satz und hängt, reist der Satz mit — ``read``
+    kehrte erst nach vollem Puffer zurück und verlor ihn (wie ``process._drain``)."""
+    script = tmp_path / "haengt.py"
+    script.write_text(
+        "import sys, time\n"
+        "sys.stderr.write('fusermount3: mount failed: Operation not permitted\\n')\n"
+        "sys.stderr.flush()\n"
+        "time.sleep(60)\n",
+        encoding="utf-8",
+    )
+
+    with cura_linux._mounted([sys.executable, str(script)], None, seconds=1.0) as mount:
+        assert mount.point is None
+        assert "fusermount3: mount failed: Operation not permitted" in mount.reason
+        assert "no answer" in mount.reason
+
+
+def test_a_cleared_copy_leaves_the_memory_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein AppImage auf einem Stick: abgezogen, eine andere Cura kopiert (das räumt
+    die Kopie des Sticks), Stick wieder da — dann wird neu kopiert, statt einen
+    gelöschten Ordner zu nennen."""
+    mounts: list[Path] = []
+    stick, _point = appimage_cura(
+        tmp_path / "stick", monkeypatch, mounts, name="Cura-auf-dem-Stick.AppImage"
+    )
+    first = cura_linux.appimage_resources(stick)
+    assert first is not None and first.is_dir()
+    away = stick.with_name("weg.bin")
+    stick.rename(away)
+    other, _point = appimage_cura(tmp_path / "andere", monkeypatch, mounts)
+    assert cura_linux.appimage_resources(other) is not None
+    assert not first.exists(), "die Kopie des abgezogenen Sticks ist geräumt"
+    away.rename(stick)
+
+    again = cura_linux.appimage_resources(stick)
+
+    assert again is not None and again.is_dir()
+    assert mounts.count(stick) == 2
+
+
+def test_the_rest_of_an_aborted_copy_is_cleared_once_it_is_old(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bricht eine Kopie ab (Solidon stirbt), bleibt ein Zwischenordner ohne Marke.
+    Geräumt wird er erst, wenn er älter ist als :data:`STALE_SECONDS` — ein
+    junger kann gerade ein zweiter Solidon füllen. Geräumt wird nur die Form, die
+    ``_copy_resources`` anlegt (``mkdtemp``: 16 Hex-Zeichen, Bindestrich, acht
+    Zeichen aus a–z, 0–9, _); ein fremder Ordner mit Bindestrich bleibt."""
+    root = cura_linux._cache_root()
+    old = root / "0123456789abcdef-a1b2_c3d"
+    young = root / "fedcba9876543210-x9y8z7w6"
+    others = [root / "fremd", root / "meine-sicherung", root / "0123456789abcdef-Abgebrochen"]
+    for folder in (old, young, *others):
+        (folder / "share").mkdir(parents=True)
+    past = time.time() - cura_linux.STALE_SECONDS - 60
+    for folder in (old, *others):
+        os.utime(folder, (past, past))
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts)
+
+    assert cura_linux.appimage_resources(appimage) is not None
+
+    assert not old.exists()
+    assert young.is_dir()
+    assert all(folder.is_dir() for folder in others), "fremde Ordner bleiben"
+
+
+def test_a_cause_is_logged_once_per_search(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Der Druckdialog fragt bei jeder Feldänderung (``_show_slicer_state``); die
+    Ursache steht einmal im Protokoll, nach *Neu suchen* wieder."""
+    launcher = flatpak_cura(tmp_path, monkeypatch, installation=False)
+
+    with caplog.at_level("INFO", logger="app.core.export.cura_linux"):
+        for _change in range(3):
+            assert handover.console_refusal(launcher) is not None
+        assert caplog.text.count("not visible") == 1
+        discover.forget_cache()
+        assert handover.console_refusal(launcher) is not None
+    assert caplog.text.count("not visible") == 2
+
+
+def test_before_its_first_copy_an_appimage_is_still_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ob eine AppImage-Cura rechnen kann, weiß erst ihre Druckerkopie; bis dahin
+    ist es offen, nicht „ja“ (der Druckdialog sagt dann „Curas Drucker werden
+    gelesen …“)."""
+    mounts: list[Path] = []
+    appimage, _point = appimage_cura(tmp_path, monkeypatch, mounts, loader=False)
+    launcher = flatpak_cura(tmp_path / "flatpak", monkeypatch)
+
+    assert cura_linux.still_unknown(appimage)
+    assert not cura_linux.still_unknown(launcher)
+    assert cura_linux.appimage_resources(appimage) is not None
+    assert not cura_linux.still_unknown(appimage)
+    assert handover.console_refusal(appimage) is not None
+
+
+@pytest.mark.parametrize("way", ["point", "silent", "cancelled", "failing", "missing"])
+def test_every_way_out_of_a_mount_closes_its_pipes(tmp_path: Path, way: str) -> None:
+    """Jeder Ausgang des Einhängens schließt beide Rohre: mit Punkt, ohne Antwort,
+    abgebrochen, gescheitert und ohne startbares Programm. Ein offenes Rohr wäre
+    je Lauf ein Deskriptor beim Kunden; Python meldet es als ``ResourceWarning``,
+    sobald der Prozess fortgeräumt wird — auf jeder Plattform."""
+    import gc
+    import warnings
+
+    from app.core.scene.cancel import CancelSignal
+
+    mount = tmp_path / "einhaengen.py"
+    mount.write_text(MOUNT_SCRIPT, encoding="utf-8")
+    failing = tmp_path / "scheitern.py"
+    failing.write_text(FAILING_MOUNT, encoding="utf-8")
+    command = {
+        "point": [sys.executable, str(mount), str(tmp_path)],
+        "silent": [sys.executable, str(mount)],
+        "cancelled": [sys.executable, str(mount)],
+        "failing": [sys.executable, str(failing)],
+        "missing": [str(tmp_path / "gibt-es-nicht.AppImage"), "--appimage-mount"],
+    }[way]
+    token = CancelSignal()
+    if way == "cancelled":
+        token.cancel()
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        with cura_linux._mounted(command, token, seconds=1.0) as found:
+            assert (found.point == tmp_path) == (way == "point")
+        gc.collect()
+
+    leaks = [str(entry.message) for entry in caught if issubclass(entry.category, ResourceWarning)]
+    assert not leaks

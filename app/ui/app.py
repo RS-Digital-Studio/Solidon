@@ -30,6 +30,7 @@ if __name__ == "__main__":
 
 import importlib
 import sys
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -312,6 +313,7 @@ def build_application(
     # gebaut werden konnte. ``app.core.deferred`` hält diese Bibliotheken nun
     # bis zur ersten wirklichen Rechnung zurück; die Trennung hier bleibt die
     # sichtbare Grenze und der Schutz gegen dieselbe Regression.
+    from app.core.export import cura_linux
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
 
@@ -337,6 +339,9 @@ def build_application(
     # Vor dem ersten Arbeiter: Kein Faden außer diesem räumt Ringe mit
     # Qt-Objekten ab (``leash.collect_in_main_thread``, RM-021).
     collect_in_main_thread(application)
+    # Der Fensterfaden wartet nie auf die Druckerkopie einer AppImage-Cura;
+    # sie legt ein Arbeiter an (RM-521).
+    cura_linux.never_wait_in(threading.current_thread())
     reach_every_control_by_tab(application)
     application.setApplicationName(APP_NAME)
     application.setApplicationVersion(APP_VERSION)

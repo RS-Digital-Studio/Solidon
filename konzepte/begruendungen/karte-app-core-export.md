@@ -423,6 +423,31 @@ POSIX zählt Signale negativ, Windows meldet einen `NTSTATUS` mit Fehlerschwere
 und freiem reserviertem Bit 28. Als DWORD gelieferte eigene Fehlercodes wie
 Bambus `-100` bleiben reguläre Absagen, auch wenn ihre Zahl größer ausfällt.
 
+## Cura unter Linux (`cura_linux.py`, RM-521)
+
+Aus der Karte verschoben (06.10.2026): `engine` liefert für die Dauer eines
+Laufs den Programmteil vor `slice` — Curas Lader aus `runtime/compat` mit dem
+Bibliothekspfad aus `AppRun.env` (`read_environment`, `linker`,
+`library_path`, `loader_command`); beim Flatpak über `flatpak run
+--filesystem=<Arbeitsordner> --command=<Lader>`, beim AppImage eingehängt
+(`mounted`, `mount_command`). Weil `_prepare_cura_cli` jede Definition, jedes
+Netz und das Ziel in den Arbeitsordner kopiert, braucht der Flatpak-Aufruf keine
+übersetzten `/app`-Pfade. `appimage_resources` legt den Druckerbestand einer
+AppImage-Cura einmal je Pfad, Änderungszeit und Größe im Nutzer-Cache ab
+(`stamp.json` merkt, ob die Rechenmaschine da war), räumt Kopien von
+AppImages, die es nicht mehr gibt, und versucht eine gescheiterte Kopie nach
+*Neu suchen* (`discover.cache_generation`) wieder. Der Fensterfaden, den
+`build_application` über `never_wait_in` nennt, bekommt nur, was schon
+feststeht — weder hängt er ein, noch wartet er auf den Arbeiter, der gerade
+kopiert. `_rebase` im Druckdialog fragt Curas Bestand im Fensterfaden
+(`manufacturer.base_settings` → `install_root`); gemessen in der Durchsicht
+wartete er sonst 6,6 s auf eine Kopie mit 3 s Einhängezeit. Die Kopie legt
+`_CuraPrinterWorker` an, danach gründet der Dialog neu; `console_refusal`
+fragt nur die Marke. Gemessen am Runner (Läufe 37504088443, 37528397381):
+Einhängen 0,01 s, erste Kopie 3,3 s; Würfel auf dem K1 Max mit Flatpak und
+AppImage, draußen und im Sandkasten, gleich wie CuraEngine unter Windows.
+Eine Kopie wiegt rund 26 MB in rund 9 900 Dateien (Cura 5.13).
+
 ## Warum `slicer_keys.py` existiert
 
 Aus der Karte verschoben (05.10.2026): `NOT_TAKEN_BY_PROGRAM` gibt es, weil

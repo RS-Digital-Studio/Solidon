@@ -73,6 +73,7 @@ from app.core.errors import (
     OutOfBuildVolume,
 )
 from app.core.export import (
+    cura_linux,
     handover,
     manufacturer,
     readback,
@@ -2260,6 +2261,10 @@ class _CuraPrinterWorker(Worker):
         self._known = dict(known)
 
     def work(self) -> None:
+        # Hier und nicht im Fensterfaden entsteht die Druckerkopie einer
+        # AppImage-Cura (``cura_linux.never_wait_in``); danach gründet der
+        # Dialog neu (:meth:`PrintSettingsDialog._cura_printer_found`).
+        slicer_profiles.install_root(self._executable)
         printer_id = slicer_profiles.chosen_printer("cura", self._executable, self._known)
         if printer_id:
             self.done.emit(_CuraPrinterSuggestion(printer_id))
@@ -4740,6 +4745,11 @@ class PrintSettingsDialog(QDialog):
         ):
             return
         self._cura_printer_pending = False
+        if self._slicer_path is not None and cura_linux.is_appimage(self._slicer_path):
+            # Die Grundlage entstand vielleicht ohne die Kopie, die der
+            # Arbeiter eben angelegt hat (RM-521).
+            self._foundation_key = None
+            self._rebase()
         suggestion = cast(_CuraPrinterSuggestion, result)
         candidate = suggestion.candidate
         printer_id = suggestion.printer_id
@@ -6404,6 +6414,15 @@ class PrintSettingsDialog(QDialog):
                     "die Datei in seinem Fenster."
                 )
             )
+        elif self._cura_printer_pending and cura_linux.still_unknown(found):
+            # Ob eine AppImage-Cura rechnen kann, weiß erst ihre Druckerkopie,
+            # die der Cura-Arbeiter gerade anlegt (RM-521) — kein Knopf auf
+            # eine Vermutung.
+            reason = str(tr("Curas Drucker werden gelesen …"))
+        elif (window_only := handover.console_refusal(found)) is not None:
+            # Eine Cura ohne ihren Lader (RM-521): rechnen kann Solidon mit ihr
+            # nicht, ihr Fenster bleibt der Weg.
+            reason = str(window_only)
         elif oversize is not None:
             # Ein Teil, das in keiner Lage passt, lehnt jeder Slicer ab — der
             # ElegooSlicer mit -50 nach Minuten Vorbereitung (KUNDE-09). Im

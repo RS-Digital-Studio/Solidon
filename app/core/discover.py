@@ -329,15 +329,27 @@ def use_local_address(tool_id: str) -> None:
 #: Neustart gesehen wird.
 _cache: dict[str, Path | None] = {}
 
+#: Wie oft :func:`forget_cache` gelaufen ist. Wer selbst ein Nein merkt
+#: (``export.cura_linux``), vergleicht damit, statt hier eingetragen zu werden.
+_generation = 0
+
 
 def forget_cache() -> None:
     """Beim nächsten Mal neu suchen. Nach einer Installation und nach einer Angabe.
 
     Dazu gehört, was der Rechner über unsichtbare Flatpak-Ordner gesagt hat
-    (:func:`_hidden_on_host`).
+    (:func:`_hidden_on_host`), und jedes gemerkte Nein, das an
+    :func:`cache_generation` hängt.
     """
+    global _generation
     _cache.clear()
     _hidden.clear()
+    _generation += 1
+
+
+def cache_generation() -> int:
+    """Der Stand der Suche; ändert sich mit jedem :func:`forget_cache`."""
+    return _generation
 
 
 def refresh_path() -> bool:
