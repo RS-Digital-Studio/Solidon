@@ -352,7 +352,7 @@ des Themas.
 Trägt der neue Stand ein gewähltes Merkmal nicht mehr, hebt
 `ObjectTree.show_scene` die Wahl auf und merkt sie in `lost_selection`;
 `MainWindow._say_features_lost` sagt es nach den Wiederwahlen und nur ohne
-eigene Handlung seit dem letzten aktuellen Bild (Warum: Begründung).
+eigene Handlung seit dem letzten aktuellen Bild.
 
 ## Barrierefreiheit
 
