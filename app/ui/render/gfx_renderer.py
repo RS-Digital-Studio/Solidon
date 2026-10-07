@@ -82,8 +82,11 @@ HEADLIGHT_GAIN = 2.0
 AMBIENT_INTENSITY = 0.0
 
 #: Breite, schwache Reflexion macht auch schwarzes Filament räumlich lesbar.
-#: Diese Darstellung ändert weder die gespeicherte Farbe noch den Export.
-SURFACE_SPECULAR = 0.4
+#: Diese Darstellung ändert weder die gespeicherte Farbe noch den Export. Bei
+#: 0,4 lagen die drei Flächen eines schwarzen Würfels nur 10 bis 11 Stufen
+#: auseinander, je nach Grafikadapter genau an der Lesbarkeitsgrenze; 0,5 gibt
+#: 12 (``test_black_lit_surfaces_still_show_their_shape``).
+SURFACE_SPECULAR = 0.5
 SURFACE_SHININESS = 6.0
 
 #: Der Lichtsatz, den VTKs ``vtkLightKit`` aufstellt und den PyVista dem

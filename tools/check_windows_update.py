@@ -87,6 +87,7 @@ PART_SUFFIX_KEY: Final = rf"Software\Classes\{PART_FILE_SUFFIX}"
 #: beim Deinstallieren nur die eigenen Werte und danach den Schlüssel, wenn er
 #: leer ist (``uninsdeletekeyifempty``). Auf dem frischen Runner ist er es.
 EMPTIED_KEYS: Final = (
+    rf"Software\Classes\{PROJECT_SUFFIX}",
     rf"Software\Classes\{PROJECT_SUFFIX}\OpenWithProgids",
     rf"Software\Classes\{PART_FILE_SUFFIX}\OpenWithProgids",
     PART_SUFFIX_KEY,

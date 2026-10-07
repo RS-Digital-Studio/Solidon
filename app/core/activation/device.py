@@ -57,6 +57,9 @@ def _load_keyring() -> _Keyring:
                 "Installieren Sie Solidon vollständig neu oder wenden Sie sich an den Support."
             )
         ) from problem
+    from app.core.backends.keys import find_backend_once
+
+    find_backend_once(keyring)
     return keyring
 
 

@@ -146,6 +146,9 @@ Name: "associate"; Description: "{cm:FileAssociationTask}"
 ; nichts mehr darin steht (RM-055). Die Deinstallation geht ihr Protokoll
 ; rückwärts durch: Ein Unterschlüssel steht deshalb hinter seinem
 ; Elternschlüssel, sonst wäre der Elternschlüssel bei der Prüfung nicht leer.
+; Das Flag nimmt nur den Schlüssel seiner Zeile: Die Projektendung, unter der
+; das Setup keinen Wert setzt, braucht deshalb eine eigene Zeile.
+Root: HKA; Subkey: "Software\Classes\{#ProjectSuffix}";   Flags: uninsdeletekeyifempty; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#ProjectSuffix}\OpenWithProgids";   ValueType: string; ValueName: "{#AppId}.project"; ValueData: "";   Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.project";   ValueType: string; ValueName: ""; ValueData: "{cm:ProjectFileType}";   Flags: uninsdeletekey; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.project\DefaultIcon";   ValueType: string; ValueName: ""; ValueData: "{app}\{#AppName}.exe,0"; Tasks: associate

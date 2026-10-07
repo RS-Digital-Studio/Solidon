@@ -1262,10 +1262,14 @@ class SelectionOperationsPanel(QWidget):
         ]
         if not locked:
             return ""
-        name = min(locked, key=lambda entry: sort_key(str(self._entries[entry].title)))
-        return tr(
-            "{name}: {value}", name=str(self._entries[name].title), value=self._states[name][1]
-        )
+
+        # Der Titel steht am Knopf: Eine Fensterhandlung (*Automatisch teilen*,
+        # :meth:`add_window_action`) hat keinen Registereintrag in ``_entries``.
+        def title(entry: str) -> str:
+            return str(self._buttons[entry].property("operationTitle"))
+
+        name = min(locked, key=lambda entry: sort_key(title(entry)))
+        return tr("{name}: {value}", name=title(name), value=self._states[name][1])
 
     def button_for(self, name: str) -> QToolButton | None:
         """Der Knopf, an dem die Handlung gerade steht — oben oder ihre Zeile in der Liste.

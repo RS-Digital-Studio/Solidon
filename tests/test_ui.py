@@ -2163,12 +2163,29 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
         palette_entries,
         variant_members,
     )
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
 
-    labels = {action.text() for action in all_menu_actions(window)}
+    entries = all_menu_actions(window)
+    labels = {action.text() for action in entries}
     offered = {entry.name for entry in palette_entries()}
     gruppen = {str(group.title) for group in VARIANT_GROUPS}
 
     for spec in REGISTRY.all():
+        if spec.name in WINDOW_COMMAND_OPERATIONS:
+            # **Fünfter Fall, RM-507: der Fensterbefehl.** Unter der Kategorie
+            # hängt dieselbe ``QAction`` wie in *Datei* („Modell einfügen …“
+            # öffnet den Dateidialog), nicht ein zweiter, fast gleich
+            # benannter Eintrag. Die Operation behält ihre Aktion am Fenster;
+            # dass die Palette den Befehl anbietet, prüft
+            # ``test_theme_and_palette``.
+            command = window.import_action
+            assert WINDOW_COMMAND_OPERATIONS[spec.name] == "file.import", spec.name
+            assert sum(entry is command for entry in entries) >= 2, (
+                f"{spec.name}: der Fensterbefehl steht in Datei und unter seiner Kategorie"
+            )
+            assert str(spec.title) not in labels, f"{spec.name} steht zweimal im Menü"
+            assert spec.name in window._op_actions, f"{spec.name}: ohne Aktion keine Freigabe"
+            continue
         if spec.name in MENU_TWINS:
             # Beide Zwillinge tragen absichtlich denselben verständlichen
             # Titel. Am Text lässt sich deshalb nicht erkennen, ob Qt zwei
@@ -5153,6 +5170,17 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
     # erfunden wäre.
     for _ in range(3):
         QApplication.processEvents()
+    # **Niedriger, bis die Zeilen nicht mehr passen.** Mit echter Schrift
+    # (Linux, macOS) sind die Zeilen schmaler und niedriger als mit der
+    # Ersatzschrift von Windows offscreen; bei 700 Punkten passten sie dort
+    # ganz ins Sichtfeld (364 in 419), und der Test prüfte nichts. Gesucht
+    # wird deshalb die Fensterhöhe, bei der der Fund entsteht.
+    for hoehe in (600, 520, 460):
+        if panel.height() > roller.viewport().height():
+            break
+        window.resize(1600, hoehe)
+        for _ in range(3):
+            QApplication.processEvents()
     # **Die Voraussetzung des Funds, und sie ist schärfer als „der Inhalt
     # rollt".** Gerollt wird immer, sobald die Handlungsliste darunter steht;
     # der Knopf verschwindet erst, wenn die **Zeilen des Merkmals** allein
@@ -8530,9 +8558,26 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow, the
     }
     zuteilung: dict[str, list[int]] = {name: [] for name in karten}
     knapp = geteilt = voll = False
+
+    def stand() -> list[tuple[int | None, int, int]]:
+        return [
+            (karte._room, karte.least_height(), karte.wanted_height()) for karte in karten.values()
+        ]
+
     for height in (600, 900, 1100, 1400):
         window.resize(1024, height)
-        QTest.qWait(20)
+        # **Gemessen wird der gesetzte Stand, nicht eine feste Frist.** Die
+        # Vorschaubilder des Baums kommen nach (``_render_pending``) und heben
+        # seinen Boden; auf einem langsamen Mac-Läufer stand nach 20 ms noch die
+        # Zuteilung von davor (110 gegen den neuen Boden 188). Gewartet wird,
+        # bis zwei Runden hintereinander dasselbe zeigen und nichts vorgemerkt ist.
+        vorher = None
+        for _runde in range(100):
+            QTest.qWait(20)
+            jetzt = stand()
+            if jetzt == vorher and window.overlay._pending is None:
+                break
+            vorher = jetzt
         host = window.overlay
         budget = host.height() - 2 * MARGIN - host._bottom_room() - extra_height(host.left)
         boeden = sum(karte.least_height() for karte in karten.values())
@@ -9612,9 +9657,13 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
 
     ``ReportPanel._preselect`` wählt jetzt den obersten Befund vor, der eine
     Handlung anbietet — Rechtsklick, Knopfzeile, Vorauswahl sind drei Schritte
-    **einer** Bewegung, und §2.7 ist am Ende von ihr eingelöst. Was dieser Test
-    darunter prüft — welcher Befund welchen Knopf bekommt und welcher keinen —
-    ist davon unberührt und die eigentliche Zusage.
+    **einer** Bewegung, und §2.7 ist am Ende von ihr eingelöst. Vorgewählt
+    werden seit RM-512 nur Fehler und Warnungen; „unter der Platte“ ist ein
+    Hinweis, weil ein Klick genügt (``prepare._severity_for``), und bleibt
+    deshalb ungewählt — die Vorauswahl selbst prüft
+    ``test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks``. Was
+    dieser Test darunter prüft — welcher Befund welchen Knopf bekommt und
+    welcher keinen — ist davon unberührt und die eigentliche Zusage.
     """
     from PySide6.QtWidgets import QPushButton
 
@@ -9647,9 +9696,9 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
             return []
         return [b.text() for b in row.findChildren(QPushButton) if not b.isHidden()]
 
-    assert offered() == [str(errors.PLACE_ON_BED.label)], (
-        "die Vorauswahl zeigt die Handlung, bevor jemand klickt"
-    )
+    first = report.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert (first.code, first.severity) == ("arrange.below_bed", "info")
+    assert offered() == [], "ein Hinweis wird nicht vorgewählt (RM-512)"
 
     def choose(code: str) -> None:
         for row in range(report.list.count()):
@@ -18989,7 +19038,10 @@ def test_the_header_gives_its_information_room_in_every_supported_width(
     beispiele = sorted((Path(__file__).parent.parent / "app" / "examples").glob("*.p3d"))
     assert beispiele, "ohne Beispielprojekt misst dieser Test die leere Lage"
     window.session.open_project(beispiele[0])
-    window.session.wait_for_idle()
+    # Mit Rückgabe und Reserve: Auf dem Intel-Mac-Läufer braucht das Beispiel
+    # knapp zehn Sekunden, die Vorgabefrist von ``wait_for_idle``. Lief sie
+    # ab, gab es noch kein Ergebnis und damit kein Außenmaß.
+    assert window.session.wait_for_idle(60_000), "das Beispiel wird fertig ausgewertet"
     window._on_project()
     window.set_display_unit("in")
     window.header.title.setText("Ein sehr langes Beispielprojekt für den schmalen Bildschirm*")
