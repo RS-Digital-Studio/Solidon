@@ -395,6 +395,41 @@ exakter Körper, den `ShapeFix` formal heilt. Tangential anschließende Flächen
 sind notwendige Übergänge und gehen mit (Befund `draft.tangent_faces`, wo der
 Kunde Flächen gewählt hat).
 
+**Neben einer liegenden Rundung gibt es keine Schräge, und gefragt wird vorher**
+(RM-230, 06.10.2026). Am Tray `build_tray_v3.step` tragen alle Wände unten eine
+Rundung R 2; OpenCASCADE meldet an der ersten Wand `Draft_FaceRecomputation`,
+weil es die Rundung neben der gekippten Wand nicht nachrechnet. Am Netz scheiterte
+die Ecke, wo Fuß- und Eckrundung zusammenlaufen, und am einfachen Quader baute es
+bei 1° und 2° mit der alten Rundung samt Knick (22 921 statt 22 909 mm³ über den
+Weg aus dem Satz), bei 0,5°, 3° und 5° sagte es ab. Beide Kerne sagten „kleineren
+Winkel oder weniger Flächen“ — beides half nicht, und „in Gruppen rechnen“ (der
+erste Gedanke im Register) auch nicht: Jeder der fünf Körper scheitert für sich.
+Der Weg einer CAD-Konstruktion — erst anstellen, dann runden — trägt in Solidon
+noch nicht: *Merkmal entfernen* nimmt eine Fußrundung, die mit Eckstücken in
+einer Kette liegt, nicht weg (am exakten Tray meldete es Erfolg und änderte
+nichts, jetzt sagt es ab, `IsDeleted` in `_unround`). Der Satz nennt deshalb nur
+die Wände ohne diese Verrundung (RM-230).
+
+Die erste Fassung fragte erst nach dem Scheitern und nach jeder schrägen
+Nachbarfläche; dann hieß auch eine Fase oder eine Querbohrung „Rundung“, und der
+Rat zum Winkel, der dort hilft, fiel weg (Review Einheit 2). Gefragt wird jetzt
+an beiden Kernen vor der Rechnung, und nach der eigentlichen Ursache: eine Fläche,
+die nicht mitgestellt wird, ohne Knick an eine Wand anschließt und schräg zur
+Entformungsrichtung liegt. Exakt sammelt `_tangent_chain` sie mit: Normalen an der
+Kantenmitte, Schräglage an neun Punkten der Fläche (eine Vollrundung aus einer
+Fläche liegt in ihrer Mitte waagerecht). Eine tangentiale Fläche, die steht und
+sich nicht anstellen lässt — eine B-Spline-Ecke, ein fast stehender Zylinder —,
+ließ `BRepOffsetAPI_DraftAngle` still senkrecht, und die gekippten Wände schnitten
+sich in sie ein; dort sagt der exakte Kern jetzt `DRAFT_BESIDE_A_FREE_FACE`. Am
+Netz heißt ohne Knick: unter der Knickschwelle des Bildes; weil eine ebene
+Schräge, die mit 15° an eine Wand stößt, das auch tut, muss sich die Neigung
+dahinter um mehr als die Knickschwelle ändern — ein Kegelstück am Fuß einer
+gerundeten Ecke krümmt sich nur um die Entformungsrichtung und zählt nicht.
+Eine Fase am Fuß aller Wände eines Quaders schneiden beide Kerne
+mit, mit dem Volumen des analytischen Querschnitts
+(`test_a_wall_on_a_chamfered_foot_is_drafted_on_both_kernels`); an nur einer Wand
+oder am dünnen Kasten sagen die Kerne noch Verschiedenes (RM-230).
+
 ## Boolesches geht durch die Rückfallkette
 
 Die Rückfallkette (§17.2) hat fünf Stufen, und die erreichte Stufe gehört in

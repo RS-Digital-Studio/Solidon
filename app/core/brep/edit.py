@@ -3792,7 +3792,11 @@ def _unround(
     builder.Build()
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    if not builder.IsDone():
+    # **Fertig heißt nicht entfernt** (Review RM-230, F1): Am Tray meldet
+    # OpenCASCADE eine Fußrundung, die in einer Kette mit Eckstücken liegt,
+    # als gebaut, löscht aber nichts — der Körper kam unverändert und ohne
+    # Befund zurück. Gefragt wird deshalb auch, ob die Fläche weg ist.
+    if not builder.IsDone() or not builder.IsDeleted(face):
         raise GeometryError(
             detail=_(
                 "Diese Rundung lässt sich nicht wegnehmen — die Nachbarflächen "

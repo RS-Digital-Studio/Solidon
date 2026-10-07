@@ -270,7 +270,7 @@ Filter darin still mit.
 ## Eine Grenze steht dort, wo gewählt wird
 
 `caveat` im Registereintrag sagt, wann eine Operation die falsche Wahl ist.
-Dreiundsiebzig von hundertachtundsiebzig Operationen tragen einen (die Zahl prüft
+Vierundsiebzig von hundertachtundsiebzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
 Fortsetzung des `doc`-Satzes: im Tooltip unter dem Satz, beim Agenten in der

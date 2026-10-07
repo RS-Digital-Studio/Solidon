@@ -514,3 +514,473 @@ def test_the_selection_card_lists_the_draft_for_bodies_and_for_faces() -> None:
     specs = REGISTRY.all()
     assert "draft_faces" in {spec.name for spec in body_operations(specs)}
     assert "draft_faces" in {spec.name for spec in feature_operations(specs)}
+
+
+# --- Eine Rundung quer zur Entformungsrichtung: die Grenze beider Kerne ------------------
+
+
+def footed_body(
+    kind: str, edge: str, where: str = "bottom", wall: float | None = None
+) -> SceneObject:
+    """Der Quader (oder Kasten mit ``wall``) mit gerundeten oder gefasten Kanten
+    unten oder oben — wie der Rand eines Trays."""
+    from app.core.geom.edges import bevel_edges, round_edges
+
+    size = 2.0 if wall is None else 1.0
+    if kind == "mesh":
+        work = round_edges if edge == "fillet" else bevel_edges
+        mesh = work(block() if wall is None else hollow(wall), size, where).mesh
+        return SceneObject(id="obj_1", name="Teil", mesh=mesh, features=detect(mesh))
+    from app.core.brep.features import features_of
+
+    edit = exact_kernel()
+    work_exact = edit.fillet if edge == "fillet" else edit.chamfer
+    solid = work_exact(exact_block() if wall is None else exact_hollow(wall), size, where)
+    return SceneObject(
+        id="obj_1", name="Teil", mesh=solid, kind="brep", features=features_of(solid)
+    )
+
+
+def exact_entry_as(kind: str, solid: Any) -> SceneObject:
+    """Ein exakter Körper — oder sein Netzzwilling, wie ihn eine STL aus einem CAD bringt."""
+    from app.core.brep.features import features_of
+
+    if kind == "brep":
+        return SceneObject(
+            id="obj_1", name="Teil", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Teil", mesh=mesh, features=detect(mesh))
+
+
+def refusal_of(entry: SceneObject, **params: Any) -> AppError:
+    with pytest.raises(AppError) as caught:
+        run(entry, **params)
+    return caught.value
+
+
+@pytest.mark.parametrize("where", ["bottom", "top"])
+@pytest.mark.parametrize("angle", [0.5, 2.0, 5.0])
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_wall_beside_a_round_names_the_round_on_both_kernels(
+    kind: str, angle: float, where: str
+) -> None:
+    """RM-230: Liegt an den Wänden unten oder oben eine Rundung, gibt es keine Schräge.
+
+    Am Tray ``build_tray_v3.step`` tragen alle Wände unten eine Rundung R 2.
+    OpenCASCADE rechnet die Rundung neben der gekippten Wand nicht nach
+    (``Draft_FaceRecomputation``); das Netz behielt sie bei 2° mit Knick
+    (22 921 statt 22 909 mm³ über den Weg aus dem Satz) und sagte bei 0,5° und
+    5° ab. Beide sagten „kleineren Winkel oder weniger Flächen“, und beides
+    half nicht. Jetzt fragen beide vor der Rechnung und sagen bei jedem Winkel
+    denselben Satz; sein Weg sind die Wände ohne diese Verrundung. *Merkmal
+    entfernen* nimmt eine Fußrundung in einer Kette mit Eckstücken nicht weg
+    (RM-230), der Satz nennt es deshalb nicht.
+    """
+    from app.core.geom.faces import DRAFT_BESIDE_A_ROUND
+
+    refused = refusal_of(footed_body(kind, "fillet", where), angle=angle)
+
+    assert refused.detail is DRAFT_BESIDE_A_ROUND
+    assert [action.id for action in refused.suggestions] == ["change_selection", "cancel"]
+
+
+@pytest.mark.parametrize("angle", [2.0, 5.0])
+@pytest.mark.parametrize("kind", KINDS)
+def test_the_rounded_corner_of_a_tray_names_the_round_on_both_kernels(
+    kind: str, angle: float
+) -> None:
+    """Die Ecke des Trays: senkrecht R 5, am Fuß R 2 (Review RM-230, E2-3).
+
+    Am Netzzwilling nahm die Tangentenkette den ersten, fast stehenden Streifen
+    der Fußrundung als Wand mit; die Ecke sah dann keine schräge Fläche mehr,
+    und es blieb der alte Ecksatz mit „kleineren Winkel“, während der exakte
+    Kern die Rundung nannte. Gefragt wird jetzt am zweiten Streifen.
+    """
+    from app.core.geom.faces import DRAFT_BESIDE_A_ROUND
+
+    edit = exact_kernel()
+    tray = edit.fillet(edit.fillet(exact_block(), 5.0, "vertical"), 2.0, "bottom")
+
+    refused = refusal_of(exact_entry_as(kind, tray), angle=angle)
+
+    assert refused.detail is DRAFT_BESIDE_A_ROUND
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_chamfer_at_the_foot_of_a_thin_wall_keeps_the_angle_advice(kind: str) -> None:
+    """Eine Fase ist keine Rundung (Review RM-230, E2-2).
+
+    Am 3-mm-Kasten mit Fase am Fuß läuft die Schräge bei 5° durch die Wand; ein
+    kleinerer Winkel hilft (exakt baut 3° genau). Die erste Fassung zählte am
+    Netz jedes schräge Dreieck als Rundung und strich den Rat zum Winkel.
+    """
+    from app.core.geom.faces import DRAFT_CUTS_THROUGH
+
+    refused = refusal_of(footed_body(kind, "chamfer", wall=THIN_WALL), angle=ANGLE)
+
+    assert refused.detail is DRAFT_CUTS_THROUGH
+    assert CORRECT_INPUT in refused.suggestions
+
+
+@pytest.mark.parametrize("angle", [10.0, 20.0])
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_cross_bore_is_not_called_a_round(kind: str, angle: float) -> None:
+    """Eine liegende Bohrung durch eine Wand ist keine Rundung (Review RM-230, E2-2).
+
+    Ihr Mantel schließt mit Knick an die Wand an. Am exakten 3-mm-Kasten mit
+    Querbohrung nannte die erste Fassung bei 10° bis 30° die Rundung, am Netz
+    zählte jedes schräge Dreieck daneben; der Grund ist der Winkel, und der Rat
+    dazu bleibt.
+    """
+    edit = exact_kernel()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.kernel import Solid
+    from app.core.geom.faces import DRAFT_BESIDE_A_ROUND
+
+    rod = Solid(
+        BRepPrimAPI_MakeCylinder(
+            gp_Ax2(gp_Pnt(0.0, -DEPTH / 2.0 - 5.0, 10.0), gp_Dir(0.0, 1.0, 0.0)), 3.0, DEPTH + 10.0
+        ).Shape()
+    )
+    bored = edit.boolean("difference", [exact_hollow(THIN_WALL), rod])
+
+    refused = refusal_of(exact_entry_as(kind, bored), angle=angle)
+
+    assert refused.detail is not DRAFT_BESIDE_A_ROUND
+    assert CORRECT_INPUT in refused.suggestions
+
+
+def flat_slope_at_the_foot(tilt_deg: float = 15.0) -> Any:
+    """Der Quader, an der linken Wand unten eine **ebene** Schräge 15° gegen die
+    Wand, 4 mm hoch — sie stößt flacher an als die Knickschwelle des Netzes."""
+    exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    from app.core.brep.kernel import Solid
+
+    rise = 4.0
+    run_in = rise * math.tan(math.radians(tilt_deg))
+    outline = [
+        (-WIDTH / 2.0 + run_in, 0.0),
+        (WIDTH / 2.0, 0.0),
+        (WIDTH / 2.0, HEIGHT),
+        (-WIDTH / 2.0, HEIGHT),
+        (-WIDTH / 2.0, rise),
+    ]
+    polygon = BRepBuilderAPI_MakePolygon()
+    for x, z in outline:
+        polygon.Add(gp_Pnt(x, -DEPTH / 2.0, z))
+    polygon.Close()
+    face = BRepBuilderAPI_MakeFace(polygon.Wire()).Face()
+    return Solid(BRepPrimAPI_MakePrism(face, gp_Vec(0.0, DEPTH, 0.0)).Shape())
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_flat_slope_meeting_a_wall_shallowly_is_drafted_on_both_kernels(kind: str) -> None:
+    """Gegenrichtung: Eine ebene Schräge, die mit 15° an eine Wand stößt, ist keine
+    Rundung, obwohl die Kante am Netz unter der Knickschwelle von 20° liegt.
+
+    Am Netz zählt deshalb nur eine Fläche, die sich hinter der glatten Kante
+    krümmt. Beide Kerne bauen das Volumen des Querschnittsintegrals.
+    """
+    result = run(exact_entry_as(kind, flat_slope_at_the_foot()), angle=ANGLE)
+
+    shaped = as_mesh_data(result.outputs[0].mesh)
+    assert shaped.raw.is_watertight
+    volume = result.outputs[0].mesh.volume if kind == "brep" else shaped.volume
+    assert volume == pytest.approx(flat_slope_volume(), abs=1e-2)
+
+
+def flat_slope_volume(tilt_deg: float = 15.0, rise: float = 4.0) -> float:
+    """Querschnitt auf Höhe z: Die Schräge bleibt, die linke Wand kippt um ihren
+    Fuß; links begrenzt, was weiter innen liegt. Die rechte Wand kippt ebenso,
+    vorn und hinten beide."""
+    run_in = rise * math.tan(math.radians(tilt_deg))
+    meet = run_in / (SLOPE + run_in / rise)
+
+    def area(z: float) -> float:
+        wall = -WIDTH / 2.0 + z * SLOPE
+        left = max(-WIDTH / 2.0 + run_in * (1.0 - z / rise), wall) if z < rise else wall
+        return (WIDTH / 2.0 - z * SLOPE - left) * (DEPTH - 2.0 * z * SLOPE)
+
+    return sum(
+        integrate.quad(area, low, high)[0]
+        for low, high in ((0.0, meet), (meet, rise), (rise, HEIGHT))
+    )
+
+
+def chamfered_foot_volume(chamfer: float = 2.0) -> float:
+    """Querschnitt auf Höhe z: unten begrenzt die Fase (45°), darüber die
+    angestellte Wand; sie treffen sich bei ``z = c / (1 + tan w)``."""
+    meet = chamfer / (1.0 + SLOPE)
+
+    def area(z: float) -> float:
+        inset = chamfer - z if z < meet else z * SLOPE
+        return (WIDTH - 2.0 * inset) * (DEPTH - 2.0 * inset)
+
+    low, _error = integrate.quad(area, 0.0, meet)
+    high, _error = integrate.quad(area, meet, HEIGHT)
+    return low + high
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_wall_on_a_chamfered_foot_is_drafted_on_both_kernels(kind: str) -> None:
+    """Eine Fase am Fuß ist eben: Die gekippte Wand schneidet sie in einer neuen
+    Kante, an beiden Kernen gleich (RM-230, Gegenfall zur Rundung)."""
+    result = run(footed_body(kind, "chamfer"), angle=ANGLE)
+    shaped = as_mesh_data(result.outputs[0].mesh)
+    assert shaped.raw.is_watertight
+    volume = result.outputs[0].mesh.volume if kind == "brep" else shaped.volume
+    assert volume == pytest.approx(chamfered_foot_volume(), abs=1e-3)
+
+
+def bullnose_wall(seam_down: bool) -> Any:
+    """Eine 4 mm dicke Wand mit Vollrundung oben: eine Halbzylinderfläche über 180°,
+    die Naht unten (eine Fläche) oder oben (zwei Flächen)."""
+    edit = exact_kernel()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.kernel import Solid
+
+    seam = gp_Dir(0.0, 0.0, -1.0) if seam_down else gp_Dir(0.0, 0.0, 1.0)
+    frame = gp_Ax2(gp_Pnt(-WIDTH / 2.0, 0.0, 18.0), gp_Dir(1.0, 0.0, 0.0), seam)
+    rod = Solid(BRepPrimAPI_MakeCylinder(frame, 2.0, WIDTH).Shape())
+    wall = edit.moved(edit.box(WIDTH, 4.0, 18.0), (0.0, 0.0, 0.0))
+    return edit.boolean("union", [wall, rod])
+
+
+@pytest.mark.parametrize("seam_down", [True, False], ids=["naht_unten", "naht_oben"])
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_bullnose_on_top_is_a_round_wherever_its_seam_lies(kind: str, seam_down: bool) -> None:
+    """Eine Vollrundung aus einer Fläche liegt in ihrer UV-Mitte waagerecht (Review RM-230, F2).
+
+    Der exakte Kern fragte nur dort und riet mit Naht unten wieder zum kleineren
+    Winkel, das Netz nannte die Rundung. Gefragt wird jetzt an neun Punkten.
+    """
+    from app.core.geom.faces import DRAFT_BESIDE_A_ROUND
+
+    refused = refusal_of(exact_entry_as(kind, bullnose_wall(seam_down)), angle=3.0)
+
+    assert refused.detail is DRAFT_BESIDE_A_ROUND
+
+
+def spline_corner_block(radius: float = 5.0) -> Any:
+    """Der Quader 40 × 30 × 20 mit einer stehenden Ecke R 5 als B-Spline durch einen
+    Viertelkreis — so kommen gerundete Ecken aus manchem CAD."""
+    exact_kernel()
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakeWire,
+    )
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+    from OCP.collections import Array1_gp_Pnt
+    from OCP.GeomAPI import GeomAPI_PointsToBSpline
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    from app.core.brep.kernel import Solid
+
+    across, deep = WIDTH - radius, DEPTH - radius
+    count = 9
+    points = Array1_gp_Pnt(1, count)
+    for index in range(count):
+        turn = math.pi / 2.0 * index / (count - 1)
+        points.SetValue(
+            index + 1, gp_Pnt(across + radius * math.cos(turn), deep + radius * math.sin(turn), 0.0)
+        )
+    spline = GeomAPI_PointsToBSpline(points).Curve()
+    wire = BRepBuilderAPI_MakeWire()
+    wire.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, 0), gp_Pnt(WIDTH, 0, 0)).Edge())
+    wire.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(WIDTH, 0, 0), gp_Pnt(WIDTH, deep, 0.0)).Edge())
+    wire.Add(BRepBuilderAPI_MakeEdge(spline).Edge())
+    wire.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(across, DEPTH, 0.0), gp_Pnt(0, DEPTH, 0)).Edge())
+    wire.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(0, DEPTH, 0), gp_Pnt(0, 0, 0)).Edge())
+    face = BRepBuilderAPI_MakeFace(wire.Wire()).Face()
+    return Solid(BRepPrimAPI_MakePrism(face, gp_Vec(0.0, 0.0, HEIGHT)).Shape())
+
+
+def test_a_free_form_upright_corner_is_refused_instead_of_left_upright() -> None:
+    """Eine stehende B-Spline-Ecke ließ ``BRepOffsetAPI_DraftAngle`` still senkrecht
+    (Review RM-230, F3): Die gekippten Wände schnitten sich in sie ein — 22 975,12
+    statt 22 942,22 mm³ mit gekippter Ecke —, ohne Befund, und genau dort klemmt
+    das Teil beim Entformen. Der exakte Kern sagt jetzt vor der Rechnung ab."""
+    from app.core.geom.faces import DRAFT_BESIDE_A_FREE_FACE
+
+    refused = refusal_of(exact_entry_as("brep", spline_corner_block()), angle=2.0)
+
+    assert refused.detail is DRAFT_BESIDE_A_FREE_FACE
+    assert [action.id for action in refused.suggestions] == ["change_selection", "cancel"]
+
+
+def rounded_outline(width: float, depth: float, radius: float, height: float) -> Any:
+    """Ein Rechteck mit Eckradius als Draht auf der Höhe ``height`` (Radius 0: scharf)."""
+    exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+    from OCP.GC import GC_MakeArcOfCircle
+    from OCP.gp import gp_Pnt
+
+    half_w, half_d = width / 2.0, depth / 2.0
+    corners = (
+        (half_w - radius, -half_d + radius, -90.0),
+        (half_w - radius, half_d - radius, 0.0),
+        (-half_w + radius, half_d - radius, 90.0),
+        (-half_w + radius, -half_d + radius, 180.0),
+    )
+
+    def spot(cx: float, cy: float, degrees: float) -> Any:
+        turn = math.radians(degrees)
+        return gp_Pnt(cx + radius * math.cos(turn), cy + radius * math.sin(turn), height)
+
+    wire = BRepBuilderAPI_MakeWire()
+    previous = None
+    for cx, cy, start in corners:
+        first, middle, last = (
+            spot(cx, cy, start),
+            spot(cx, cy, start + 45.0),
+            spot(cx, cy, start + 90.0),
+        )
+        if previous is not None and previous.Distance(first) > 1e-9:
+            wire.Add(BRepBuilderAPI_MakeEdge(previous, first).Edge())
+        if radius > 0.0:
+            wire.Add(
+                BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(first, middle, last).Value()).Edge()
+            )
+        previous = last
+    opening = spot(*corners[0][:2], -90.0)
+    if previous is not None and previous.Distance(opening) > 1e-9:
+        wire.Add(BRepBuilderAPI_MakeEdge(previous, opening).Edge())
+    return wire.Wire()
+
+
+SLOPED_FOOT_TILT = 15.0
+SLOPED_FOOT_RISE = 4.0
+
+
+def sloped_foot_block(radius: float) -> Any:
+    """Der Quader mit Eckradius, unten ringsum eine ebene Schräge 15° gegen die Wand,
+    4 mm hoch — an den gerundeten Ecken wird sie zum Kegelstück."""
+    edit = exact_kernel()
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
+
+    from app.core.brep.kernel import Solid
+
+    run_in = SLOPED_FOOT_RISE * math.tan(math.radians(SLOPED_FOOT_TILT))
+    loft = BRepOffsetAPI_ThruSections(True, True)
+    loft.AddWire(rounded_outline(WIDTH - 2 * run_in, DEPTH - 2 * run_in, radius - run_in, 0.0))
+    loft.AddWire(rounded_outline(WIDTH, DEPTH, radius, SLOPED_FOOT_RISE))
+    loft.Build()
+    upper = edit.fillet(edit.box(WIDTH, DEPTH, HEIGHT - SLOPED_FOOT_RISE), radius, "vertical")
+    upper = edit.moved(upper, (0.0, 0.0, SLOPED_FOOT_RISE))
+    return edit.boolean("union", [Solid(loft.Shape()), upper])
+
+
+def sloped_foot_volume(radius: float, angle: float) -> float:
+    """Querschnitt auf Höhe z: Einzug ist das Größere aus Schräge und gekippter Wand,
+    der Eckradius schrumpft um den Einzug."""
+    slope = math.tan(math.radians(angle))
+    run_in = SLOPED_FOOT_RISE * math.tan(math.radians(SLOPED_FOOT_TILT))
+
+    def area(z: float) -> float:
+        wall = z * slope
+        inset = max(run_in * (1.0 - z / SLOPED_FOOT_RISE), wall) if z < SLOPED_FOOT_RISE else wall
+        return (WIDTH - 2 * inset) * (DEPTH - 2 * inset) - (4 - math.pi) * (radius - inset) ** 2
+
+    meet = run_in / (slope + run_in / SLOPED_FOOT_RISE)
+    spans = ((0.0, meet), (meet, SLOPED_FOOT_RISE), (SLOPED_FOOT_RISE, HEIGHT))
+    return sum(integrate.quad(area, low, high, limit=200)[0] for low, high in spans)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_a_conical_foot_at_a_rounded_corner_is_no_round(kind: str) -> None:
+    """Ein Kegelstück um die Entformungsrichtung krümmt sich nur um sie herum (Review
+    RM-230, F4): Seine Neigung bleibt, und es ist keine Verrundung. Exakt baut die
+    Schräge genau das Querschnittsintegral; am Netz nannte die erste Fassung hier
+    eine Verrundung, die es nicht gibt."""
+    from app.core.geom.faces import DRAFT_BESIDE_A_ROUND
+
+    entry = exact_entry_as(kind, sloped_foot_block(5.0))
+    if kind == "brep":
+        result = run(entry, angle=2.0)
+        assert result.outputs[0].mesh.volume == pytest.approx(
+            sloped_foot_volume(5.0, 2.0), abs=1e-3
+        )
+        return
+    try:
+        run(entry, angle=2.0)
+    except AppError as refused:
+        assert refused.detail is not DRAFT_BESIDE_A_ROUND
+
+
+def front_bottom_rounded(kind: str) -> SceneObject:
+    """Der Quader mit R 2 nur an der vorderen Unterkante."""
+    from app.core.geom.edges import edge_key, edges_of, round_edges
+
+    front = (0.0, -DEPTH / 2.0, 0.0)
+    if kind == "mesh":
+        body = block()
+        keys = [edge_key(edge) for edge in edges_of(body) if math.dist(edge.middle, front) < 1e-6]
+        assert len(keys) == 1, keys
+        mesh = round_edges(body, 2.0, "named", keys).mesh
+        return SceneObject(id="obj_1", name="Teil", mesh=mesh, features=detect(mesh))
+    edit = exact_kernel()
+    solid = exact_block()
+    keys = [edge_key(edge) for edge in edit.edges_of(solid) if math.dist(edge.middle, front) < 1e-6]
+    assert len(keys) == 1, keys
+    return exact_entry_as("brep", edit.fillet(solid, 2.0, "named", keys))
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_walls_without_the_round_are_the_way_out(kind: str) -> None:
+    """Der Weg, den der Satz nennt, trägt (Review RM-230, F5): Mit R 2 nur vorn unten
+    stellt die Rückwand allein 2° an — Volumen aus der Formel."""
+    entry = front_bottom_rounded(kind)
+    back = faces_facing(entry, (0.0, 1.0, 0.0))
+    assert back, "Voraussetzung: die Rückwand ist als Fläche erkannt"
+
+    result = run(entry, angle=2.0, faces=tuple(back))
+
+    expected = (
+        WIDTH * DEPTH * HEIGHT
+        - (1.0 - math.pi / 4.0) * 4.0 * WIDTH
+        - WIDTH * HEIGHT**2 * math.tan(math.radians(2.0)) / 2.0
+    )
+    if kind == "brep":
+        assert result.outputs[0].mesh.volume == pytest.approx(expected, abs=1e-3)
+    else:
+        assert as_mesh_data(result.outputs[0].mesh).volume == pytest.approx(expected, rel=2e-3)
+
+
+def test_removing_a_foot_round_of_a_tray_says_so_instead_of_doing_nothing() -> None:
+    """Am Tray meldete *Merkmal entfernen* eine Fußrundung als gebaut und gab den
+    Körper unverändert zurück (Review RM-230, F1): OpenCASCADE hat sie in der Kette
+    mit den Eckstücken nicht gelöscht, und gefragt wurde nur, ob es fertig ist."""
+    from app.core.brep.canonical import CylinderSurface
+    from app.core.errors import GeometryError
+
+    edit = exact_kernel()
+    tray = edit.fillet(edit.fillet(exact_block(), 5.0, "vertical"), 2.0, "bottom")
+    foot = next(
+        index
+        for index in range(len(tray.faces()))
+        if isinstance(surface := tray.surface(index), CylinderSurface)
+        and abs(float(surface.cylinder.Radius()) - 2.0) < 1e-6
+    )
+
+    with pytest.raises(GeometryError):
+        edit.unround(tray, (0.0, 0.0, 0.0), 2.0, selected_faces=[foot])
+
+    rounded = edit.fillet(exact_block(), 2.0, "bottom")
+    single = next(
+        index
+        for index in range(len(rounded.faces()))
+        if isinstance(rounded.surface(index), CylinderSurface)
+    )
+    assert edit.unround(rounded, (0.0, 0.0, 0.0), 2.0, selected_faces=[single]).volume > (
+        rounded.volume
+    )
