@@ -57,7 +57,12 @@ from app.core.perceive.local import forget_out_of_memory
 from app.core.registry import REGISTRY, cli_commands, documentation
 from app.core.registry.params import LIST_KINDS, NUMBER_KINDS, TEXT_KINDS
 from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
-from app.core.scene.history import RevisionPlan, recognition_reopenable
+from app.core.scene.history import (
+    RevisionPlan,
+    discarded,
+    recognition_reopenable,
+    step_state_word,
+)
 from app.core.scene.project import (
     Project,
     ProjectSources,
@@ -451,14 +456,27 @@ def command_info(args: argparse.Namespace) -> int:
         ops = ", ".join(str(entry) for entry in transaction.ops)
         # !s zuerst: ein übersetzbarer Titel kennt keine Formatbreite.
         print(f"  {transaction.id:<5} {transaction.title!s:<28} ({tr('Ops')} {ops})")
-    resting = [entry for entry in document.ops if entry.suppressed is not None]
-    if resting:
-        # Was nicht rechnet, steht dabei (P7.3) — ohne das sähe das Teil aus,
-        # als fehle ihm grundlos ein Schritt.
-        print(tr("Ausgeschaltet"))
-        for entry in resting:
-            state = tr("aus") if entry.suppressed and entry.suppressed.chosen else tr("ruht")
-            print(f"  {entry.id:<5} {entry.op:<28} ({state})")
+    # Was nicht wirkt, steht dabei (P7.3): was ausgeschaltet ist und was ein
+    # späterer Schritt wieder entfernt hat — ohne das sähe das Teil aus, als
+    # fehle ihm grundlos ein Schritt. Das Wort ist das des Verlaufsfelds und
+    # des Steckbriefs (``history.step_state_word``).
+    gone = discarded(sorted(document.ops, key=lambda one: one.id))
+    for heading, steps in (
+        (tr("Ausgeschaltet"), [entry for entry in document.ops if entry.suppressed is not None]),
+        (
+            tr("Ohne Wirkung"),
+            [
+                entry
+                for entry in document.ops
+                if entry.suppressed is None and entry.id in gone.steps
+            ],
+        ),
+    ):
+        if not steps:
+            continue
+        print(heading)
+        for entry in steps:
+            print(f"  {entry.id:<5} {entry.op:<28} ({step_state_word(entry, gone)})")
     print_report(result)
     return 0 if result.complete else 1
 

@@ -49,6 +49,7 @@ from PySide6.QtGui import (
     QCursor,
     QDragEnterEvent,
     QDropEvent,
+    QKeyEvent,
     QKeySequence,
     QShortcut,
     QShowEvent,
@@ -69,11 +70,13 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
     QTabWidget,
+    QTextEdit,
     QToolBar,
     QToolButton,
     QVBoxLayout,
@@ -250,8 +253,8 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
-from app.i18n import TranslatableText, _, format_decimal, tr
-from app.ui import first_run
+from app.i18n import TranslatableText, _, format_decimal, key_platform, tr
+from app.ui import app_events, first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
     DisclosureResult,
@@ -261,7 +264,7 @@ from app.ui.ai_disclosure import (
 from app.ui.analysis_bar import AnalysisBar, LayerBar, support_note
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
-from app.ui.command_palette import CommandPalette, fold
+from app.ui.command_palette import CommandPalette, fold, native_key
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
@@ -336,7 +339,10 @@ from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog
 from app.ui.overlay import (
     CARD_PADDING,
+    SIDE_CARDS,
     CardColumn,
+    CardGrip,
+    CardPlace,
     CurrentPageTabs,
     OverlayHost,
     card_stylesheet,
@@ -386,6 +392,7 @@ from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
     delete_keys,
+    deletes,
     install_navigation_keys,
     redo_keys,
     shortcut_for,
@@ -400,7 +407,17 @@ from app.ui.sketch_editor import (
 from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_paths, accepted_url, dropped_file
-from app.ui.style import NORMAL, ROOMY, TIGHT, divider, make_primary, menu_heading, set_level
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    TIGHT,
+    divider,
+    make_danger,
+    make_primary,
+    menu_heading,
+    no_primary,
+    set_level,
+)
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SupportNotice, SurveyNotice, UsageClock
 from app.ui.tab_signal import SignalTabBar
@@ -425,6 +442,11 @@ RECENT_WAIT_S = 0.05
 
 #: Wie oft danach nachgesehen wird, ob die Prüfung zurück ist.
 RECENT_POLL_MS = 100
+
+#: Wie lange nach dem letzten Verschieben einer Seitenkarte die Einstellungen
+#: geschrieben werden — lang genug für eine gehaltene Pfeiltaste, kurz genug,
+#: dass ein Absturz danach die Lage nicht verliert.
+CARD_PLACES_SAVE_MS = 500
 
 #: Zwei Sätze, die diese Datei je viermal sagte.
 #:
@@ -556,6 +578,13 @@ TOOLBAR_HYSTERESIS: Final = 80
 TOOLBAR_WORDS: Final = 2
 TOOLBAR_SEARCH_WORDS: Final = 1
 TOOLBAR_SIGNS: Final = 0
+
+#: Operationen, deren Menüeintrag ein Fensterbefehl ist, mit dessen Kennung
+#: (RM-507): Unter *Erzeugen* steht für ``load`` dieselbe Aktion wie
+#: *Datei → Modell einfügen …*, die den Dateidialog öffnet. Als eigene
+#: Palettenzeile stünde die Operation daneben, fast gleich benannt und mit
+#: anderer Wirkung.
+WINDOW_COMMAND_OPERATIONS: Final = {"load": "file.import"}
 
 #: Wie lange nach dem letzten Pinselzug gewartet wird, bevor die Wandstärke
 #: nachgerechnet wird (Entscheidung L). Bei jedem Zug zu rechnen hieße, den
@@ -723,6 +752,46 @@ FEATURE_TWINS: Final[dict[str, str]] = {
 }
 
 
+class _DeleteRefusal(QObject):
+    """Entf an einer Auswahl, die gerade nicht entfernt werden kann, sagt warum.
+
+    Fragebogen S-20261006-5be329: „die Entf taste löscht weder Merkmal noch
+    Körper“. Hält die Kette an einem Schritt (§15.3) oder ist die Testzeit
+    abgelaufen, ist *Objekt entfernen* gesperrt, und mit ihm Entf. Qt führt
+    ein gesperrtes Kürzel nicht aus und meldet nichts: Der Druck geht als
+    gewöhnlicher Tastendruck an das Bedienelement mit dem Fokus, und dort
+    tut er nichts. Der Menüeintrag trug den Grund, die Taste nicht.
+
+    Ein Zuhörer am einen Filter der Anwendung (:mod:`app.ui.app_events`) und
+    keine zweite Aktion auf derselben Taste — zwei Aktionen auf Entf im
+    selben Bereich führt Qt beide nicht aus
+    (``test_no_two_shortcuts_in_the_window_collide``). Er sieht den Druck
+    nur, wenn kein freigegebenes Kürzel ihn genommen hat.
+    """
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Nimmt den Druck nur, wenn das Fenster den Grund gesagt hat.
+
+        Gefragt wird am Bedienelement mit dem Fokus: Ein Tastendruck, den es
+        nicht annimmt, wandert zu seinen Eltern und käme sonst je Stufe
+        einmal hier an.
+        """
+        if not isinstance(watched, QObject):  # laut Signatur unmöglich
+            return False  # type: ignore[unreachable]
+        window = self.parent()
+        if (
+            event.type() == QEvent.Type.KeyPress
+            and isinstance(event, QKeyEvent)
+            and not event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
+            and deletes(event.key(), sys.platform)
+            and isinstance(window, MainWindow)
+            and isinstance(watched, QWidget)
+            and watched is QApplication.focusWidget()
+        ):
+            return window._refuse_delete(watched)
+        return False
+
+
 class _ActionNotice(SketchSelectionBadge):
     """Dieselbe passive Quittung wie in der Skizze, am Ort der letzten Handlung."""
 
@@ -863,6 +932,10 @@ class _SelectionPage(QWidget):
         nicht über eine laufende Tour, die vorn steht.
         """
         if not self._workspace_visible or self.dismissed or self._held:
+            return
+        if not self._tabs.isTabVisible(self._tabs.indexOf(self)):
+            # Verborgen im Zeichenmodus (RM-519): Eine Auswahl dort holt
+            # keinen Reiter nach vorn, den es gerade nicht gibt.
             return
         tour = self._tour
         if (
@@ -2244,9 +2317,23 @@ def _needs_objects(count: int) -> str:
     """
     if count <= 1:
         return tr("Wählen Sie zuerst ein Objekt im Objektbaum.")
+    # Am Mac nimmt ⌘ und Klick dazu, nicht Control: „Strg“ ist für Qt dort die
+    # Befehlstaste (``app.i18n.keys``). ``native_keys`` wandelt nur Kürzel mit
+    # „+“, „Strg und Klick“ bliebe stehen — die Taste kommt als Wert.
+    key = "⌘" if key_platform() == "darwin" else tr("Strg", context="Taste")
+    if count == 2:
+        return tr(
+            "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder {key}"
+            " und Klick — im Objektbaum oder im Bild.",
+            key=key,
+        )
+    # Ab drei Eingängen die Zahl: *Einlagen für neues Profil* nimmt vier, und „braucht
+    # zwei Objekte“ ließ den Kunden nach dem zweiten ratlos stehen.
     return tr(
-        "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder Strg"
-        " und Klick — im Objektbaum oder im Bild."
+        "Diese Operation braucht {count} Objekte. Weitere dazu mit Umschalt oder {key}"
+        " und Klick — im Objektbaum oder im Bild.",
+        count=count,
+        key=key,
     )
 
 
@@ -2790,6 +2877,9 @@ class MainWindow(QMainWindow):
         """Das Ergebnis, das während des Aufbaus hereinkam — nachgeholt, sobald
         er fertig ist."""
 
+        self._scoped_actions: list[QAction] = []
+        """Die Aktionen auf nackten Tasten (:meth:`_scope_shortcut`) — für den
+        Reiter *Auswahl*, der nach den Menüs entsteht."""
         self._build_central()
         self._build_status_bar()
         self._build_menus()
@@ -2874,6 +2964,13 @@ class MainWindow(QMainWindow):
     # --- construction -----------------------------------------------------------
 
     def _build_central(self) -> None:
+        # **Der Griff einer Seitenkarte entsteht vor ihrem Inhalt**: Die
+        # Fokuskette folgt der Entstehung, und ein Umhängen im selben Fenster
+        # lässt seinen Platz darin stehen. So steht er vorn in der Tabfolge
+        # seiner Karte (``CardGrip``); Wirt und Ecke bekommt er, wenn die
+        # Karten stehen. Der rechte entsteht vor dem Bericht.
+        self._left_grip = CardGrip(None, "left", tr("Karte Objekte verschieben"), self)
+        self._left_grip.hide()
         self.object_tree = ObjectTree(self)
         # Die Vorschaubilder im Baum werden für ein Thema gezeichnet — beim
         # Aufbau ist das die Einstellung, nicht die Vorgabe der Klasse.
@@ -3244,7 +3341,7 @@ class MainWindow(QMainWindow):
                 "exportiert wird, bleibt, wo es ist."
             ),
         )
-        # Trennen ist das eine Werkzeug der Zeile, das das Modell ändert und
+        # Teilen ist das eine Werkzeug der Zeile, das das Modell ändert und
         # nicht nur die Ansicht: Es ist der Handgriff, den ein Anfänger als
         # Erstes braucht, sobald ein Teil nicht auf die Platte passt, und ein
         # Menüweg dahin wäre einer zu viel. Was das Schließen zurücknimmt, ist
@@ -3254,7 +3351,7 @@ class MainWindow(QMainWindow):
         # über das Auswahlfenster am Merkmal, als Operation wie jede andere.)
         self.tools.add(
             "split",
-            tr("Trennen"),
+            tr("Teilen"),
             self.split_bar,
             # Auch eine gebundene Methode hält hier stark: Der Umschalter legt
             # sie in ein ``Tool`` und das in ein Wörterbuch — ein gewöhnlicher
@@ -3263,7 +3360,7 @@ class MainWindow(QMainWindow):
             weak_slot(self, lambda view: view._end_split()),
             symbol="split",
             hint=tr(
-                "Zwei Punkte auf dem Teil anklicken — dazwischen wird getrennt, "
+                "Zwei Punkte auf dem Teil anklicken — dazwischen wird geteilt, "
                 "gerade in den Bildschirm hinein. Die Hälften bekommen Stifte zum "
                 "Zusammenstecken, wenn der Haken steht."
             ),
@@ -3568,6 +3665,9 @@ class MainWindow(QMainWindow):
         bottom_layout.addWidget(self.pose_bar)
         bottom_layout.addWidget(self.tools)
 
+        # Vor dem ersten Inhalt der rechten Karte, siehe ``_left_grip``.
+        self._right_grip = CardGrip(None, "right", tr("Karte Auswahl verschieben"), self)
+        self._right_grip.hide()
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
         self.report.bundleActivated.connect(self._on_bundle_activated)
@@ -3610,7 +3710,10 @@ class MainWindow(QMainWindow):
         # aus dem Fenster und verbarg Merkmale/Bausteine vollständig.
         self.right.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored)
         self.right.setMinimumHeight(120)
-        self.right.addTab(self.report, tr("Prüfbericht"))
+        # **Ein kurzer Name am Reiter** (Kontext „Reiter“): In vier Sprachen ist
+        # der volle Name doppelt so lang, und die Leiste neben dem Griff zeigte
+        # Rollpfeile. Handbuch und Menü behalten den vollen Namen.
+        self.right.addTab(self.report, tr("Prüfbericht", context="Reiter"))
         self.right.addTab(self.chat, tr("Chat"))
         # Der Reiter trägt, wie viele Fehler und Warnungen hinter ihm stehen.
         # Ohne die Zahl bleibt eine Warnung unsichtbar, solange Chat oder Tour
@@ -3681,6 +3784,32 @@ class MainWindow(QMainWindow):
         self.right.setObjectName("rightTabs")
         self.overlay = OverlayHost(self.middle_stack, self)
         self.overlay.set_zones(left, self.right_column, bottom)
+        # **Die Seitenkarten lassen sich verschieben** (Entscheidung Robert,
+        # 06.10.2026, nach dem Fragebogen zu 0.5.3: „Bewegliche Menüs?“). Der
+        # Griff steht links in der Ecke der Kopfzeile *Objekte*, rechts neben
+        # den Reitern; wo die Karten liegen, merken die Einstellungen.
+        self.card_grips = (self._left_grip, self._right_grip)
+        for grip in self.card_grips:
+            grip.attach(self.overlay)
+        self._left_grip.sit_in_corner(left)
+        self.right.setCornerWidget(self._right_grip, Qt.Corner.TopRightCorner)
+        self._right_grip.show()
+        saved = self.settings.card_places if isinstance(self.settings.card_places, dict) else {}
+        self.overlay.set_places({key: CardPlace.read(saved.get(key), key) for key in SIDE_CARDS})
+        # **Gespeichert wird gebündelt:** Jeder Pfeildruck am Griff legt die
+        # Karte neu, und die Datei je Druck zu schreiben hieß beim Halten der
+        # Taste Dutzende Schreibvorgänge je Sekunde im Hauptfaden — unter
+        # Windows kann ``replace`` dabei kurz scheitern. Der Wert steht sofort
+        # in ``settings``, die Datei folgt einmal; ``closeEvent`` holt nach.
+        self._card_places_save = QTimer(self)
+        self._card_places_save.setSingleShot(True)
+        self._card_places_save.setInterval(CARD_PLACES_SAVE_MS)
+        self._card_places_save.timeout.connect(weak_slot(self, MainWindow._write_card_places))
+        self._message_before_card_hint: str | None = None
+        """Was in der Statuszeile stand, bevor ein Zug am Griff sie nahm."""
+        self.overlay.placesChanged.connect(self._remember_card_places)
+        self.overlay.dragHint.connect(self._show_card_hint)
+        self.overlay.cardNotice.connect(self.announce)
         # Die zwei Einladungen liegen in der Ansicht, die schwebenden Karten
         # darüber: Was unter einer Karte steht, sieht niemand. Beide kennen
         # deshalb die drei Zonen und die Ansichtsleiste und suchen sich den
@@ -4305,9 +4434,12 @@ class MainWindow(QMainWindow):
             ),
             symbol="export",
         )
+        # **Heißt wie der Knopf im Prüfbericht** (RM-507): „Drucken
+        # vorbereiten …“ öffnete denselben Dialog wie *An den Slicer übergeben …*
+        # und der Kopfknopf *Druckeinstellungen …* — drei Namen für einen Weg.
         self._add_action(
             file_menu,
-            tr("Drucken vorbereiten …"),
+            tr("An den Slicer übergeben …"),
             "Ctrl+P",
             self.action_print_settings,
             tr("Schichten, Temperaturen, Farbe und Stützen einstellen — und slicen lassen."),
@@ -4588,29 +4720,29 @@ class MainWindow(QMainWindow):
                         # deshalb kann er nicht hier entstehen.
                         continue
                     place = self._subgroup_for(spec, target, subgroups)
+                    if spec.name in WINDOW_COMMAND_OPERATIONS:
+                        # **Derselbe Eintrag wie in *Datei*** (RM-507): Unter
+                        # *Erzeugen* stand die Operation „Modell einfügen“
+                        # neben „Modell einfügen …“ in *Datei* — zwei Zeilen,
+                        # ein Name, zwei Wege. Wie beim Katalog hängt hier
+                        # dieselbe ``QAction``; die Operation behält ihre
+                        # Aktion am Fenster für Palette und Freigabe.
+                        place.addAction(self.import_action)
+                        self._op_actions[spec.name] = self._operation_action(None, spec)
+                        continue
                     self._op_actions[spec.name] = self._operation_action(place, spec)
                 self._add_variant_entries(section.category, target, subgroups)
 
         # *Automatisch teilen* ist kein Registereintrag, sondern ein Ablauf über
         # mehreren Operationen — und stand deshalb unter *Bearbeiten*, zwei
-        # Menüs entfernt von den anderen Wegen, ein Teil zu trennen. Wer ein zu
+        # Menüs entfernt von den anderen Wegen, ein Teil zu teilen. Wer ein zu
         # großes Teil vor sich hat, sucht nicht nach der Bauart einer Funktion,
-        # sondern nach dem Wort „teilen"; sie stehen jetzt beieinander.
-        #
-        # Gesucht wird über die **Kategorie** und nicht über den Menütitel:
-        # Der Titel ist übersetzt und umbenennbar, und ein Vergleich darauf
-        # ließe den Eintrag nach der nächsten Umbenennung still unter
-        # *Bearbeiten* zurück. Gibt es die Gruppe nicht, weil keine
-        # Vorbereiten-Operation registriert ist, bleibt *Bearbeiten* der Platz
-        # — ein Eintrag darf umziehen, nicht verschwinden.
-        prepare_group = next(
-            (str(title) for title, categories in MENU_GROUPS if "prepare" in categories), ""
-        )
-        prepare_menu = groups.get(prepare_group, edit_menu)
-        if prepare_menu is not edit_menu:
-            prepare_menu.addSeparator()
+        # sondern nach dem Wort „teilen“. Die übrigen Wege stehen rechts in der
+        # Auswahlkarte unter *Vorbereiten*, und dort steht seit RM-507 auch
+        # dieser (``SelectionOperationsPanel.add_window_action``); Palette und
+        # Freigabe gehen über dieselbe Aktion am Fenster.
         self.auto_split_action = self._add_action(
-            prepare_menu,
+            None,
             tr("Automatisch teilen …"),
             None,
             self.action_auto_split,
@@ -4620,6 +4752,11 @@ class MainWindow(QMainWindow):
             ),
             symbol="split",
         )
+        if not self.selection_operations.add_window_action(
+            "auto_split", "prepare", self.auto_split_action
+        ):
+            # Ohne Vorbereiten-Gruppe bleibt *Bearbeiten* der Platz.
+            edit_menu.addAction(self.auto_split_action)
 
         # Was das Register kennt und diese Tabelle nicht, bekommt sein eigenes
         # Menü: eine neue Kategorie soll auftauchen, nicht verschwinden.
@@ -4666,6 +4803,13 @@ class MainWindow(QMainWindow):
             # „Verlauf, Parameter und Chat", und wer F9 drückte, suchte die
             # zwei, die gar nicht verschwanden.
             tr("Prüfbericht und Chat ein- oder ausblenden."),
+        )
+        self._add_action(
+            view_menu,
+            tr("Karten an ihren Platz"),
+            None,
+            self.action_reset_cards,
+            tr("Legt verschobene Karten zurück an den Rand, an dem sie anfangs lagen."),
         )
         # Robert, 02.09.2026: „eine Option, wo man schnell hinkommt, um die
         # Druckplatte auszublenden". Ein Haken mit Kürzel, in der Palette
@@ -5198,7 +5342,7 @@ class MainWindow(QMainWindow):
     _BARE_KEYS = frozenset({"Del", "Delete"})
 
     def _scope_shortcut(self, action: QAction, key: str) -> None:
-        """Begrenzt nackte Tasten auf Objektbaum und Ansicht.
+        """Begrenzt nackte Tasten auf Objektbaum, Ansicht und den Reiter *Auswahl*.
 
         „Entf" war fensterweit gebunden und löschte deshalb den ausgewählten
         Körper, auch wenn der Fokus im Verlauf lag und ein Schritt markiert war
@@ -5212,6 +5356,14 @@ class MainWindow(QMainWindow):
         **Am Mac löscht auch ⌫** (:func:`shortcut_schemes.delete_keys`): Die
         Taste „delete“ dort sendet Backspace, und Körper wie Merkmal blieben
         sonst stehen, während die Texte die Taste nannten.
+
+        **Und im Reiter *Auswahl*** (Fragebogen S-20261006-5be329: „die Entf
+        taste löscht weder Merkmal noch Körper“): Wer dort ein Maß tippte oder
+        einen Knopf drückte, hatte den Fokus rechts, und die Taste tat nichts.
+        Der Reiter zeigt dieselbe Auswahl wie Baum und Ansicht. Seine Zahlen-
+        und Textfelder behalten Entf für sich — Qt fragt sie vor dem Kürzel
+        (``ShortcutOverride``). Der Reiter entsteht nach den Menüs; er nimmt
+        die Aktionen aus :attr:`_scoped_actions` in :meth:`_build_feature_dock`.
         """
         if key not in self._BARE_KEYS:
             return
@@ -5219,6 +5371,7 @@ class MainWindow(QMainWindow):
         action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         for widget in (self.object_tree, self.viewport):
             widget.addAction(action)
+        self._scoped_actions.append(action)
 
     def _add_variant_entries(self, category: str, target: Any, subgroups: dict[str, QMenu]) -> None:
         """Für jede Variantengruppe dieser Kategorie **einen** Eintrag.
@@ -5275,7 +5428,7 @@ class MainWindow(QMainWindow):
         ``symbol`` ist für die Einträge, die **keine** Registeroperation sind
         und deshalb nicht über :func:`icon_name_for` an ihr Zeichen kommen.
         Drei gab es davon, alle drei in Menüs, deren übrige Zeilen eines
-        tragen: *Aus Skizze erzeugen*, *Automatisch teilen* und
+        tragen: *Zeichnen …*, *Automatisch teilen* und
         *Bausteinkatalog* standen als Lücke in einer Symbolspalte.
         """
         action = QAction(label, self)
@@ -5304,7 +5457,9 @@ class MainWindow(QMainWindow):
         if inspect.ismethod(slot):
             slot = weak_slot(cast(QObject, slot.__self__), slot.__func__)
         action.triggered.connect(slot)
-        menu.addAction(action)
+        # Ohne Menü hängt sie am Fenster: Ein Kürzel greift, und eine Karte
+        # oder ein Knopf kann sie tragen (*Automatisch teilen*, RM-507).
+        (menu if menu is not None else self).addAction(action)
         return action
 
     def _update_actions(self) -> None:
@@ -5807,11 +5962,11 @@ class MainWindow(QMainWindow):
                 return str(_NEEDS_BODY)
             if braucht == 1:
                 return str(tr("Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum."))
-            return str(
-                tr("Wählen Sie dafür {count} Objekte aus — im Bild oder im Objektbaum.").format(
-                    count=braucht
-                )
-            )
+            # **Derselbe Satz wie beim Tastendruck** (:func:`_needs_objects`):
+            # Er sagt, wie das zweite Objekt dazukommt. „Wählen Sie dafür 2
+            # Objekte aus“ ließ genau das offen, und ein Anfänger fand
+            # *Vereinigen* deshalb nicht (Fragebogen zu 0.5.3).
+            return _needs_objects(braucht)
         # Der Satz steht in ``labels``: das Kontextmenü am Körper braucht ihn
         # auch, und zwei Stellen mit derselben Auskunft driften.
         reason = kind_requirement(spec, kinds, spoiled_the_exact_body(self.session.last_result))
@@ -8056,7 +8211,7 @@ class MainWindow(QMainWindow):
         self.announce(
             tr("Geschützt — „Automatisch teilen“ legt hier keine Naht.")
             if on
-            else tr("Freigegeben — hier darf wieder getrennt werden.")
+            else tr("Freigegeben — hier darf wieder geteilt werden.")
         )
 
     def _release_protection_after_error(self, error: AppError) -> None:
@@ -8191,8 +8346,14 @@ class MainWindow(QMainWindow):
         )
         remove = box.addButton(tr("Löschen"), QMessageBox.ButtonRole.DestructiveRole)
         cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(cancel)
+        # Rot, und Enter löscht nicht: Die Nachfrage steht nur hier, weil das
+        # Löschen abhängige Schritte und den Redo-Zweig mitnimmt. Abbrechen
+        # bleibt ein Ausgang ohne Akzent — Escape nimmt ihn (RM-512).
+        make_danger(remove)
+        no_primary(box)
         box.setEscapeButton(cancel)
+        # Fokus auf Abbrechen, sonst löschte die Leertaste (``confirm_discard``).
+        cancel.setFocus()
         box.exec()
         if box.clickedButton() is not remove:
             return
@@ -8235,6 +8396,42 @@ class MainWindow(QMainWindow):
         self.viewport.set_bed_visible(visible)
         self._store_settings()
         self.announce(tr("Druckplatte wieder da.") if visible else tr("Druckplatte ausgeblendet."))
+
+    def _remember_card_places(self, places: dict[str, str]) -> None:
+        """Wo die Seitenkarten liegen, für den nächsten Start (:class:`CardPlace`).
+
+        Der Wert gilt sofort, die Datei wird gebündelt geschrieben
+        (:data:`CARD_PLACES_SAVE_MS`, ``_card_places_save``).
+        """
+        self.settings.card_places = dict(places)
+        self._card_places_save.start()
+
+    def _write_card_places(self) -> None:
+        """Der gebündelte Schreibvorgang nach dem letzten Verschieben."""
+        self._store_settings()
+
+    def _show_card_hint(self, text: str) -> None:
+        """Was das Loslassen der gezogenen Karte täte — leer stellt die Zeile wieder her.
+
+        **Eine stehende Meldung bleibt:** Im Zeichenmodus und am Skelett steht
+        dort die Anleitung, und die Karten bleiben auch dann beweglich. Ein Zug
+        am Griff, der die Zeile beim Loslassen leerte, nahm sie mit.
+        """
+        bar = self.statusBar()
+        if text:
+            if self._message_before_card_hint is None:
+                self._message_before_card_hint = bar.currentMessage()
+            bar.showMessage(text)
+            return
+        before, self._message_before_card_hint = self._message_before_card_hint, None
+        if before:
+            bar.showMessage(before)
+        else:
+            bar.clearMessage()
+
+    def action_reset_cards(self) -> None:
+        """*Ansicht → Karten an ihren Platz*: beide Seitenkarten zurück an ihren Rand."""
+        self.overlay.reset_cards()
 
     def action_toggle_right(self) -> None:
         visible = not self.settings.right_panel_visible
@@ -11075,7 +11272,7 @@ class MainWindow(QMainWindow):
             "file.import": (tr("Modell einfügen …"), "Ctrl+I", self.action_import),
             "file.export": (tr("Exportieren …"), "Ctrl+E", self.action_export),
             "file.print_settings": (
-                tr("Drucken vorbereiten …"),
+                tr("An den Slicer übergeben …"),
                 "Ctrl+P",
                 self.action_print_settings,
             ),
@@ -11099,7 +11296,7 @@ class MainWindow(QMainWindow):
                 self.action_add_parameter,
             ),
             "edit.bind_parameters": (
-                tr("Feste Zahlen binden …"),
+                tr("Zahlen an Maße binden …"),
                 "",
                 self.action_bind_parameters,
             ),
@@ -11201,6 +11398,10 @@ class MainWindow(QMainWindow):
             # und eine Signatur zu ändern, um eine Frage zu beantworten, ist
             # der teurere Weg zum selben Ergebnis.
             self._palette_actions[key] = action
+        # **Was in keinem Menü steht, gilt genauso** (RM-507): *Automatisch
+        # teilen* hängt am Fenster und steht in der Auswahlkarte; über die
+        # Menüschleife allein stand es in der Palette ohne Sperre und Grund.
+        self._palette_actions.setdefault("edit.auto_split", self.auto_split_action)
         return found
 
     def _extra_availability(self, key: str) -> tuple[bool, str]:
@@ -11778,6 +11979,11 @@ class MainWindow(QMainWindow):
             self._tab_before_sketch = before
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), True)
         self.right.setCurrentWidget(self._constraints_room)
+        # **Der Reiter Auswahl geht für die Dauer der Skizze** (RM-519): Er
+        # zeigte dort nichts Brauchbares — gewählt wird auf dem Blatt, und was
+        # zur Auswahl gehört, steht in den Bedingungen und in der Karte unten.
+        self.right.setTabVisible(self.right.indexOf(self.feature_dock), False)
+        self._show_invitation()
         self._bottom_layout.insertWidget(0, panel)
         self._chain_sketch_card(panel)
         panel.sketchChanged.connect(self._redraw_sketch)
@@ -12918,6 +13124,10 @@ class MainWindow(QMainWindow):
         # der Fensterdatei, kein sichtbarer Rest.
         showing = self.right.currentWidget() is self._constraints_room
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), False)
+        # Der Reiter Auswahl kommt vor der Wahl zurück — er kann der von
+        # vorher sein —, aber nach dem Ausblenden: Sonst nähme Qt ihn als
+        # Nachbarn kurz nach vorn, und sein Verlassen räumte eine Vorschau ab.
+        self.right.setTabVisible(self.right.indexOf(self.feature_dock), True)
         if showing:
             # Wer während der Skizze selbst einen anderen Reiter gewählt hat,
             # behält ihn; sonst kommt der von vorher, ohne ihn der Prüfbericht.
@@ -12945,6 +13155,7 @@ class MainWindow(QMainWindow):
         self._restore_the_view_before_sketch()
         self.statusBar().clearMessage()
         self._update_actions()
+        self._show_invitation()
         if keep and target and not text:
             self.announce(tr("Die Zeichnung ist leer. Es wurde nichts übernommen."))
         if keep and text:
@@ -14283,6 +14494,7 @@ class MainWindow(QMainWindow):
                 shortcut=shortcut_for(entry.name, entry.shortcut, self.settings.shortcut_scheme),
             )
             for entry in palette_entries(for_feature=self.selected_feature_kind())
+            if entry.name not in WINDOW_COMMAND_OPERATIONS
             for usable, reason in (self._palette_availability(entry.name),)
         ]
         return [*entries, *extra]
@@ -14475,6 +14687,11 @@ class MainWindow(QMainWindow):
         # vorn steht beim Start aber der Prüfbericht — wer eine Datei öffnet,
         # hat noch nichts gewählt; die erste Auswahl holt ihn nach vorn.
         self.feature_dock = column
+        # Entf gilt auch hier, und eine gesperrte Taste sagt ihren Grund
+        # (:meth:`_scope_shortcut`, :class:`_DeleteRefusal`).
+        for action in self._scoped_actions:
+            column.addAction(action)
+        app_events.listen(_DeleteRefusal(self), (QEvent.Type.KeyPress,))
         self.right.insertTab(0, column, tr("Auswahl"))
         self.right.setCurrentWidget(self.report)
         self.feature_dock.start_watching()
@@ -14531,6 +14748,14 @@ class MainWindow(QMainWindow):
         self.viewport.selection_refused = selection_refused
         self.object_tree.tree.selection_allowed = selection_allowed
         self.object_tree.tree.selection_refused = selection_refused
+
+        def selection_entries(menu: QMenu) -> None:
+            """*Vereinigen* und *Entfernen* im Kontextmenü von Baum und Ansicht."""
+            window = window_ref()
+            if window is not None:
+                window._add_selection_entries(menu)
+
+        self.object_tree.selection_entries = selection_entries
         self._measures_to_resume: str = ""
         """Das Merkmal, an dem die Maße nach dem Übernehmen wieder ins Bild kommen.
 
@@ -15101,6 +15326,74 @@ class MainWindow(QMainWindow):
         sister: OperationSpec | None = instead_of(spec.name, feature.kind)
         return sister
 
+    def _add_selection_entries(self, menu: QMenu) -> None:
+        """*Vereinigen* und *Entfernen* am Rechtsklick (Entscheidung Robert, 06.10.2026).
+
+        Wer vom Slicer kommt, sucht beides dort: Cura, Orca und PrusaSlicer
+        tragen *Löschen* im Kontextmenü des Objekts, Cura dazu
+        *Zusammenführen*, und der Fragebogen zu 0.5.3 fragte nach genau diesen
+        zwei. Alle übrigen Operationen bleiben rechts in der Karte.
+
+        Beide Einträge gehen den Weg ihrer Taste (:meth:`launch_operation`),
+        tragen sie hinter dem Tabulator — dort setzt ``QMenu`` die
+        Kürzelspalte, ohne dass eine zweite Aktion die Taste bindet — und
+        sind gesperrt, wo die Taste nichts täte, mit demselben Grund
+        (:meth:`_reason_locked`).
+        """
+        chosen = self.object_tree.selected_objects()
+        if not chosen:
+            return
+        result = self.session.last_result
+        objects = len(result.scene.objects) if result is not None else 0
+        kinds = self._kinds_of_selection()
+        entries: list[tuple[OperationSpec, tuple[str, str], str]] = []
+        if len(chosen) > 1 and not self.object_tree.selected_features():
+            union = REGISTRY.get("union_objects")
+            key = shortcut_for(union.name, union.shortcut, self.settings.shortcut_scheme)
+            entries.append(
+                (
+                    union,
+                    (str(union.title), first_sentence(str(union.doc))),
+                    native_key(key) if key else "",
+                )
+            )
+        entries.append(
+            (
+                REGISTRY.get("delete_object"),
+                self._removal_entry(),
+                delete_keys(sys.platform)[0].toString(QKeySequence.SequenceFormat.NativeText),
+            )
+        )
+        menu.addSeparator()
+        for spec, (title, sentence), key in entries:
+            action = menu.addAction(f"{title}\t{key}" if key else title)
+            locked = self._reason_locked(spec, kinds, objects, len(chosen))
+            action.setEnabled(locked is None)
+            action.setToolTip(locked or sentence)
+            action.triggered.connect(weak_slot(self, MainWindow.launch_operation, spec))
+
+    def _removal_entry(self) -> tuple[str, str]:
+        """Was Entf an der Auswahl tut, als Titel und Satz — derselbe Weg wie :meth:`run_operation`.
+
+        Am Baustein fällt sein Schritt, an einem Merkmal mit eigener
+        Operation (Bohrung, Zapfen) greift sie, sonst fällt der Körper
+        (:meth:`_delete_the_chosen_feature`). Ein Eintrag „Objekt entfernen“
+        an einer Bohrung, der dann die Bohrung schließt, wäre ein Versprechen,
+        das die Handlung nicht hält.
+        """
+        features = self.object_tree.selected_features()
+        if features:
+            if self._common_part_step(features) is not None:
+                return (
+                    tr("Baustein entfernen"),
+                    tr("Nimmt den Schritt aus dem Verlauf. Strg+Z holt ihn zurück."),
+                )
+            instead = self.feature_instead_of("delete_object")
+            if instead is not None:
+                return str(instead.title), first_sentence(str(instead.doc))
+        removal = REGISTRY.get("delete_object")
+        return str(removal.title), first_sentence(str(removal.doc))
+
     def _delete_the_chosen_feature(self) -> bool:
         """Entf mit gewählten Merkmalen trifft, was gemeint ist — und sagt es.
 
@@ -15142,6 +15435,47 @@ class MainWindow(QMainWindow):
         name = self._object_names().get(object_id or "", "")
         self.announce(tr("Körper „{name}“ entfernt — Strg+Z holt ihn zurück.").format(name=name))
         return False
+
+    def _refuse_delete(self, focus: QWidget) -> bool:
+        """Sagt, warum Entf an der Auswahl gerade nichts entfernt — ``True``, wenn gesagt.
+
+        Nur wo die Taste löschen würde (Objektbaum, Ansicht, Reiter
+        *Auswahl*), nie in einem Textfeld, und nur aus den zwei Gründen, die
+        eine Auswahl haben kann und trotzdem sperren: der Halt der Kette und
+        die Lizenzsperre. Ohne Auswahl gibt es nichts zu entfernen, und die
+        Taste bleibt, wem sie gehört — beim Messen mit dem Fokus in der Ansicht
+        dem letzten Maß (:meth:`Viewport.measuring`). In den Gesteneditoren gehört sie dem
+        Editor. Der Satz ist der des Menüeintrags (``_kind_hint``,
+        ``_lock_hint``), mit dem Titel davor, den das Kontextmenü für Entf an
+        dieser Auswahl trägt (:meth:`_removal_entry`).
+        """
+        action = self._op_actions.get("delete_object")
+        if action is None or action.isEnabled():
+            return False
+        if isinstance(focus, (QLineEdit, QAbstractSpinBox, QTextEdit, QPlainTextEdit)):
+            return False
+        scope = (self.object_tree, self.viewport, self.feature_dock)
+        if not any(widget is focus or widget.isAncestorOf(focus) for widget in scope):
+            return False
+        if not self.object_tree.selected_objects():
+            return False
+        if self._sketch_panel is not None or self.sculpting() or self.setting_armature():
+            return False
+        if self.viewport.measuring() and (
+            focus is self.viewport or self.viewport.isAncestorOf(focus)
+        ):
+            # Die Ansicht nimmt die Taste beim Messen selbst (letztes Maß), aber
+            # erst in ihrem Filter an der Grafikfläche — dieser Zuhörer hängt am
+            # Filter der Anwendung und käme davor. Mit dem Fokus im Baum oder
+            # im Reiter kommt die Taste dort nie an; dann sagt sie den Grund.
+            return False
+        if self._halt_reason() is None and activation.state().unlocked:
+            return False
+        # Der Titel des Kontextmenüs: An einem Bausteinmerkmal ist Entf
+        # *Baustein entfernen*, nicht der Zwilling der Operation.
+        title, _sentence = self._removal_entry()
+        self.announce(tr("{name}: {value}", name=title, value=action.statusTip()))
+        return True
 
     def _selected_feature_object(self) -> Feature | None:
         """Das gewählte Merkmal selbst — oder nichts, wenn keines gewählt ist."""
@@ -17003,7 +17337,7 @@ class MainWindow(QMainWindow):
                 # dann täte, wäre nichts: der Körper unter ihr ist keiner mehr,
                 # den dieser Klick meint.
                 self._clear_split_line()
-                self.announce(tr("Bitte auf das Teil klicken, das getrennt werden soll."))
+                self.announce(tr("Bitte auf das Teil klicken, das geteilt werden soll."))
                 return
             self._split_target = target
         elif self.viewport.object_at(picked) != self._split_target:
@@ -19799,13 +20133,14 @@ class MainWindow(QMainWindow):
 
         ``on_bodies`` wendet dieselbe Operation auf **mehrere** Körper an, mit
         denselben Werten und in **einer** Transaktion (Regel 16: ein Undo nimmt
-        sie vollständig zurück). Der Weg kommt aus dem Prüfbericht: Eine
-        Sammelzeile vertritt sechs oder zwölf Körper, und ihre Handlung fragt
-        beim Klick, für welche davon sie gelten soll. Der Dialog fragt die
-        Werte dabei **einmal** — sechs gleiche Dialoge hintereinander wären
-        dieselbe Frage sechsmal. Die Auswahl im Objektbaum bleibt außen vor:
-        Was hier gilt, hat der Kunde in der Liste angehakt und nicht im Baum
-        markiert.
+        sie vollständig zurück). Zwei Wege kommen hierher. Aus dem Prüfbericht:
+        Eine Sammelzeile vertritt sechs oder zwölf Körper, und ihre Handlung
+        fragt beim Klick, für welche davon sie gelten soll; was dort gilt, hat
+        der Kunde in der Liste angehakt, die Auswahl im Objektbaum bleibt außen
+        vor. Und Entf an mehreren markierten Körpern (*Objekt entfernen*): Dann
+        sind es gerade die Markierungen im Baum, ein Schritt je Körper in
+        Klickreihenfolge. Der Dialog fragt die Werte **einmal** — sechs gleiche
+        Dialoge hintereinander wären dieselbe Frage sechsmal.
         """
         if not self._quiet_command_allowed() or not self._begin_from_the_start_screen():
             return
@@ -19837,6 +20172,15 @@ class MainWindow(QMainWindow):
             self._local_features.invalidate()
         if spec.name == "delete_object" and self._delete_the_chosen_feature():
             return
+        # **Entf meint alles Markierte** (Fragebogen zu 0.5.3: „einfach in der
+        # Objektliste markieren und entfernen“). ``delete_object`` verbraucht
+        # einen Körper, und mit zwei markierten nahm die Taste still nur den
+        # ersten. Ein Schritt je Körper in einer Transaktion, wie die
+        # Sammelzeile des Prüfberichts — ein Strg+Z holt alle zurück.
+        if spec.name == "delete_object" and on_bodies is None:
+            marked = self.object_tree.selected_objects()
+            if len(marked) > 1 and not self.object_tree.selected_features():
+                on_bodies = marked
         spec = self._sister_for_the_chosen_feature(spec) or spec
         instead = self.feature_instead_of(spec.name)
         if instead is not None:
@@ -20882,6 +21226,7 @@ class MainWindow(QMainWindow):
             # Vor dem Abräumen gefragt: die Freigabe hängt an der Vorschau.
             applies = accepted and (prepared is None or self._preview_can_apply(dialog, prepared()))
             self._op_dialog = None
+            self._show_invitation()
             self.viewport.set_feature_gizmo_blocked(False)
             # Zurück zur gestuften Auswahl: Ohne Dialog ist ein Klick wieder
             # eine Navigation und keine Antwort (§18.5).
@@ -20899,6 +21244,7 @@ class MainWindow(QMainWindow):
         dialog.manualRequested.connect(self.action_manual)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self._op_dialog = dialog
+        self._show_invitation()
         if dialog.spec.name == "apply_texture":
 
             def follow_texture_area() -> None:
@@ -22164,8 +22510,11 @@ class MainWindow(QMainWindow):
         """Eine Differenz ins Bild — oder die stehende heraus; keine Arbeit ohne Differenz."""
         if difference is None and not self._difference_standing:
             return
+        standing = self._difference_standing
         self._difference_standing = difference is not None
         self.viewport.show_difference(difference)
+        if standing != self._difference_standing:
+            self._show_invitation()
 
     def _clear_preview(self) -> None:
         """Die Vorschau geht — Rechnung und Bild —, ein wartender
@@ -22548,7 +22897,7 @@ class MainWindow(QMainWindow):
 
         Gefragt wird nach den Feldern, nicht nach dem Namen — und nach beiden
         Schreibweisen einer Ebene: *Teilen* führt ``axis`` und ``position``,
-        *An gezeichneter Linie trennen* ``normal_x/y/z`` und ``position``.
+        *An gezeichneter Linie teilen* ``normal_x/y/z`` und ``position``.
         Die zweite blieb bis zum 14.09.2026 außen vor, und sie hatte denselben
         Fehler: Gemessen über alle 110 Dialoge stand über *An gezeichneter
         Linie trennen* „Keine Vorschau: Diese Ebene teilt das Objekt nicht" —
@@ -22981,6 +23330,14 @@ class MainWindow(QMainWindow):
             self.session.backend_known and self.session.agent_backend is not None
         )
         halted = self._halted_before_a_body(result) if not self.session.busy else None
+        # **Nicht über einer Zeichnung, einem offenen Dialog oder einer
+        # Vorschau** (RM-519): Dort hat der Kunde längst angefangen, und die
+        # Karte lag mitten über der Skizze und dem gezogenen Körper.
+        covered = (
+            self._sketch_panel is not None
+            or self._op_dialog is not None
+            or self._difference_standing
+        )
         if halted is not None and not self._on_start_screen:
             # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
             number, step = halted
@@ -22994,10 +23351,15 @@ class MainWindow(QMainWindow):
                 if retained
                 else tr("Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht.")
             )
-            invitation.show_halted(
-                tr("Das Projekt hält an Schritt {number}: {step}").format(number=number, step=step),
-                reason,
-            )
+            if covered:
+                invitation.hide()
+            else:
+                invitation.show_halted(
+                    tr("Das Projekt hält an Schritt {number}: {step}").format(
+                        number=number, step=step
+                    ),
+                    reason,
+                )
             self.object_tree.say_why_empty(
                 reason
                 if retained
@@ -23008,7 +23370,7 @@ class MainWindow(QMainWindow):
             )
             return
         self.object_tree.say_why_empty("")
-        invitation.show_for(empty and not self._on_start_screen)
+        invitation.show_for(empty and not self._on_start_screen and not covered)
 
     def _halted_before_a_body(self, result: EvaluationResult | None) -> tuple[int, str] | None:
         """Position und Titel eines Halts ohne aktuell berechneten Körper.
@@ -24899,7 +25261,7 @@ class MainWindow(QMainWindow):
     def _split_into_bodies_after_error(self, error: AppError) -> None:
         """Ein Modell aus mehreren Teilen zerlegen — der Knopf am Befund, der es sagt.
 
-        Dieselbe Operation wie *In Einzelteile zerlegen* in der Karte, nur dort,
+        Dieselbe Operation wie *In Einzelteile aufteilen* in der Karte, nur dort,
         wo der Kunde gerade liest, dass es mehrere Teile sind (Bedienweg-
         Durchsicht 14.09.2026). Kein Bestätigungsdialog (Regel 19): Die
         Handlung ist ein Schritt im Verlauf, und Strg+Z nimmt sie zurück.
@@ -24950,7 +25312,7 @@ class MainWindow(QMainWindow):
 
         Der Vorschlag kommt vom Ausrichten (``prepare_ops._the_way_out_of``)
         und nennt den Körper und die Zahl seiner losen Teile; der Verlauf
-        setzt *In Einzelteile zerlegen* vor den angehaltenen Schritt und plant
+        setzt *In Einzelteile aufteilen* vor den angehaltenen Schritt und plant
         den Rest neu — derselbe Zug wie bei :meth:`_repair_after_error`
         (§17.1). Hält die Kette nicht mehr dort, bleibt die Zerlegung allein
         als nächster Schritt: Sie ist, was der Kunde angeklickt hat.
@@ -24974,7 +25336,7 @@ class MainWindow(QMainWindow):
     def _recount_after_error(self, error: AppError) -> None:
         """Die Stückzahl einer Zerlegung auf die gemessene Zahl setzen — ein Klick.
 
-        Der Vorschlag kommt von *In Einzelteile zerlegen* (``split_bodies``),
+        Der Vorschlag kommt von *In Einzelteile aufteilen* (``split_bodies``),
         wenn Stückzahl und Teile auseinanderliegen — als Warnung, wenn
         überzählige Teile ihrem Nachbarn zugeschlagen wurden, als Halt, wenn
         Teile fehlen. ``values["found"]`` ist die Zahl, die passt; der Verlauf
@@ -26731,6 +27093,8 @@ class MainWindow(QMainWindow):
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         self.settings.circle_measure = circle_measure()
+        # Eine gebündelte Kartenlage geht mit dieser Zeile in die Datei.
+        self._card_places_save.stop()
         self._store_settings()
         self._usage.stop()
         # Erst hier steht fest, dass das echte Anwendungsfenster wirklich

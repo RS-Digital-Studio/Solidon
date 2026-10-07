@@ -767,6 +767,40 @@ def test_the_stack_line_names_steps_that_are_off_or_resting(profile: Profile) ->
     assert "shell(thickness=2)," in history, "ein laufender Schritt bleibt ohne Vermerk"
 
 
+def test_the_stack_line_names_steps_whose_result_was_removed(profile: Profile) -> None:
+    """Ein Schritt, dessen Körper ein späterer wieder entfernt hat, trägt „Ergebnis entfernt“.
+
+    Review zu ``bbd41ff2d`` (K3): Das Verlaufsfeld zeigt es so, der Steckbrief für
+    Agent und Fehlerbericht vermerkte nur „aus“ und „ruht“ — der Agent las
+    Duplizieren und Verschieben einer entfernten Kopie als wirksam und suchte
+    die Kopie im Steckbrief. Beide lesen das Wort jetzt an derselben Stelle.
+    """
+    import re
+
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import new_project
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    for title, draft in (
+        ("Quader", OperationDraft(op="create_box", params={"width": 30.0, "height": 10.0})),
+        (
+            "Duplizieren",
+            OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 2}),
+        ),
+        ("Bewegen", OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 50.0})),
+        ("Entfernen", OperationDraft(op="delete_object", inputs=("obj_2",))),
+    ):
+        history.apply(title, [draft])
+
+    text = digest(plate_scene(profile), history.document)
+    line = next(line for line in text.splitlines() if line.startswith("Verlauf"))
+
+    assert re.search(r"op2 duplicate_object\([^)]*\) Ergebnis entfernt,", line), line
+    assert re.search(r"op3 translate_object\([^)]*\) Ergebnis entfernt,", line), line
+    assert re.search(r"op1 create_box\([^)]*\),", line), "der Quader wirkt weiter"
+    assert re.search(r"op4 delete_object\([^)]*\),", line), "das Entfernen wirkt"
+
+
 def test_the_digest_names_the_step_that_made_each_feature_of_an_example() -> None:
     """RM-529: Bauplan §23 zeigt ``created_by=op3``, und §21.2 macht die
     Provenienz zum Weg zu „dem Schritt, der es erzeugt hat“ — der Steckbrief

@@ -136,6 +136,10 @@ EAGER: Final[frozenset[tuple[str, str]]] = frozenset(
 #: Punkt und Normale auf der nativen Originalfläche. Die Tessellation belegt
 #: die Auswahl, ersetzt aber keine Tangente der exakten Fläche. Der optionale
 #: Kern wird erst im BRep-Zweig angefordert; der eifrige Kreis wächst nicht.
+#: ``perceive → scene``: Der Steckbrief vermerkt im Verlauf, welche Schritte ein
+#: späteres *Objekt entfernen* um ihre Wirkung gebracht hat, mit dem Wort des
+#: Verlaufsfelds (``history.discarded``, ``step_state_word``) statt einer
+#: zweiten Rechnung. Träge, damit der eifrige Kreis keine Kante dazubekommt.
 LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
     {
         ("brep", "knowledge"),
@@ -152,6 +156,7 @@ LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
         ("knowledge", "perceive"),
         ("knowledge", "sketch"),
         ("organizer", "perceive"),
+        ("perceive", "scene"),
         ("registry", "knowledge"),
         ("scene", "brep"),
         ("scene", "organizer"),

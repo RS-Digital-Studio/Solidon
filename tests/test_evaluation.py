@@ -626,33 +626,12 @@ def test_a_removed_pin_leaves_no_finding_behind(profile: Profile) -> None:
     Bohrung, *Stift für Bohrung*, verschieben, teilen, beide Hälften entfernen.
     Davor sagte der Bericht weiter „Der Stift … steht noch in der Bohrung" und
     „Die zwei Hälften liegen noch aneinander". Die Bohrung der Platte behält
-    ihren Befund; holt Strg+Z eine Hälfte zurück, kommen die Sätze des Stifts
-    wieder, denn dann gibt es ihn.
+    ihren Befund; holt Strg+Z eine Hälfte zurück, kommt der Satz über den Stift
+    wieder, denn dann gibt es ihn — der über die zwei Hälften erst mit der
+    zweiten (Review zu ``bbd41ff2d``, R1).
     """
-    from app.core.scene.project import new_project
-
-    document = new_project("centauri-carbon-2", "petg").document
-    history = History(document)
-    history.apply(
-        "Platte",
-        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0})],
-    )
-    history.apply(
-        "Bohren",
-        [
-            OperationDraft(
-                op="drill_hole",
-                inputs=("obj_1",),
-                params={"diameter": 6.0, "z": 10.0, "depth": 10.0},
-            )
-        ],
-    )
-    plate = evaluate(document, profile).scene.objects["obj_1"]
-    hole = next(name for name, entry in plate.features.items() if entry.kind == "hole")
-    history.apply(
-        "Stift", [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": hole})]
-    )
-    pin = history.operations[-1].outputs[1]
+    history, pin = _plate_with_pin(profile)
+    document = history.document
     history.apply(
         "Bewegen", [OperationDraft(op="translate_object", inputs=(pin,), params={"dx": 40.0})]
     )
@@ -684,10 +663,224 @@ def test_a_removed_pin_leaves_no_finding_behind(profile: Profile) -> None:
     )
 
     history.undo()
-    back = evaluate(document, profile)
-    assert {"pin_for_bore.made", "prepare.halves_in_place"} <= {
-        entry.code for entry in back.scene.report.findings
+    one = {entry.code for entry in evaluate(document, profile).scene.report.findings}
+    assert "pin_for_bore.made" in one, "die zurückgeholte Hälfte ist der Stift"
+    assert "prepare.halves_in_place" not in one, "die andere Hälfte bleibt entfernt"
+    history.undo()
+    both = {entry.code for entry in evaluate(document, profile).scene.report.findings}
+    assert {"pin_for_bore.made", "prepare.halves_in_place"} <= both
+
+
+def _plate_with_pin(profile: Profile) -> tuple[History, str]:
+    """Platte 40 × 30 × 10 mit Bohrung Ø 6 und *Stift für Bohrung* — Schritte 1 bis 3.
+
+    Gibt den Verlauf und die Kennung des Stifts zurück; die Platte ist ``obj_1``.
+    """
+    from app.core.scene.project import new_project
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    history.apply(
+        "Platte",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0})],
+    )
+    history.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "z": 10.0, "depth": 10.0},
+            )
+        ],
+    )
+    plate = evaluate(history.document, profile).scene.objects["obj_1"]
+    hole = next(name for name, entry in plate.features.items() if entry.kind == "hole")
+    history.apply(
+        "Stift", [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": hole})]
+    )
+    return history, history.operations[-1].outputs[1]
+
+
+@pytest.mark.parametrize(
+    ("op", "values"),
+    [
+        pytest.param("arrange_bed", {}, id="arrange_bed"),
+        pytest.param("translate_object", {"dx": 5.0}, id="translate_object"),
+        pytest.param("check_collisions", {}, id="check_collisions"),
+    ],
+)
+def test_a_step_over_plate_and_pin_does_not_bring_the_removed_pin_back(
+    profile: Profile, op: str, values: dict[str, Any]
+) -> None:
+    """Ein Schritt über Platte und Stift hält den entfernten Stift nicht im Bericht.
+
+    Review zu ``bbd41ff2d`` (F1, Lagen A und D): Nach *Auf dem Bett anordnen* —
+    dem Weg, den der Stiftbefund selbst empfiehlt —, einem gemeinsamen
+    Verschieben oder *Überschneidungen prüfen* stand nach dem Entfernen des
+    Stifts weiter „Der Stift … steht noch in der Bohrung“ im Bericht, und im
+    Verlauf wirkte sein Schritt. Der gemeinsame Schritt wirkt an der bleibenden
+    Platte weiter; Strg+Z holt den Stift und seinen Satz zurück.
+    """
+    from app.core.scene.history import discarded
+
+    history, pin = _plate_with_pin(profile)
+    pin_step = history.operations[-1].id
+    history.apply("Beide", [OperationDraft(op=op, inputs=("obj_1", pin), params=values)])
+    before = evaluate(history.document, profile)
+    assert "pin_for_bore.made" in {
+        entry.code for entry in before.scene.report.findings if entry.op_id == pin_step
+    }, "die Gegenprobe davor"
+
+    history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=(pin,))])
+    removal = history.operations[-1].id
+    after = evaluate(history.document, profile)
+
+    assert after.complete and set(after.scene.objects) == {"obj_1"}
+    assert not [entry for entry in after.scene.report.findings if entry.op_id == pin_step]
+    gone = discarded(history.document.ops)
+    assert gone.steps == {pin_step: removal}, "der gemeinsame Schritt wirkt an der Platte weiter"
+
+    history.undo()
+    back = evaluate(history.document, profile)
+    assert "pin_for_bore.made" in {
+        entry.code for entry in back.scene.report.findings if entry.op_id == pin_step
     }
+
+
+def test_a_removed_piece_takes_the_sentence_about_the_pieces_along(profile: Profile) -> None:
+    """Liegt nur noch ein Stück eines Schnitts im Modell, sagt der Bericht nichts über zwei.
+
+    Review zu ``bbd41ff2d`` (R1, Lage B): Nach Teilen und Entfernen einer
+    Hälfte stand weiter „Die zwei Hälften liegen im Modell noch aneinander“
+    mit *Auf dem Bett anordnen*. Der Satz hängt an der Quelle, die in der
+    bleibenden Hälfte weiterlebt, und fällt jetzt, sobald von den Stücken
+    seines Schnitts weniger als zwei bleiben. Ein Stück, das ein späterer
+    Schnitt weiter teilt, bleibt in dessen Stücken: Nach zwei Schnitten und
+    einem entfernten Stück des zweiten liegen noch zwei aneinander, und die
+    Mehrzahl wird wieder die Einzahl.
+    """
+    from app.core.scene.project import new_project
+
+    def halves(result: Any) -> list[str]:
+        return [
+            str(entry.message)
+            for entry in result.scene.report.findings
+            if entry.code == "prepare.halves_in_place"
+        ]
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0})],
+    )
+    for title, source, normal in (
+        ("Teilen", "obj_1", (1.0, 0.0)),
+        ("Noch einmal", "obj_3", (0.0, 1.0)),
+    ):
+        history.apply(
+            title,
+            [
+                OperationDraft(
+                    op="split_line",
+                    inputs=(source,),
+                    params={
+                        "normal_x": normal[0],
+                        "normal_y": normal[1],
+                        "normal_z": 0.0,
+                        "position": 0.0,
+                    },
+                )
+            ],
+        )
+    assert [entry.outputs for entry in history.operations[1:]] == [
+        ("obj_2", "obj_3"),
+        ("obj_4", "obj_5"),
+    ], "die Stücke heißen, wie die Schleife sie nennt"
+    assert halves(evaluate(history.document, profile)) == [
+        "Die Teile liegen im Modell noch aneinander. Zum Drucken nebeneinanderlegen."
+    ], "die Gegenprobe davor: drei Stücke, ein Satz in der Mehrzahl"
+
+    history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=("obj_4",))])
+    assert halves(evaluate(history.document, profile)) == [
+        "Die zwei Hälften liegen im Modell noch aneinander. Zum Drucken nebeneinanderlegen."
+    ], "obj_2 und obj_5 liegen noch aneinander"
+
+    history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=("obj_2",))])
+    alone = evaluate(history.document, profile)
+    assert set(alone.scene.objects) == {"obj_5"}
+    assert halves(alone) == [], "ein Stück allein liegt an nichts"
+
+
+def _boxes(*sizes: tuple[float, float, float, float]) -> History:
+    """Je Maß ``(Breite, Tiefe, Höhe, x)`` ein Quader auf dem Bett — ``obj_1``, ``obj_2`` …"""
+    from app.core.scene.project import new_project
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    for width, depth, height, x in sizes:
+        history.apply(
+            "Quader",
+            [
+                OperationDraft(
+                    op="create_box",
+                    params={"width": width, "depth": depth, "height": height, "x": x},
+                )
+            ],
+        )
+    return history
+
+
+def test_a_collision_with_a_removed_body_leaves_the_report(profile: Profile) -> None:
+    """Ein Überschneidungsbefund geht mit dem Körper, über den er spricht.
+
+    Fund N1 bei der Behebung des Reviews zu ``bbd41ff2d``: *Überschneidungen
+    prüfen* über eine Platte, einen Block darin und einen Quader abseits; danach
+    den Block entfernt. Im Bericht stand weiter „Zwei Objekte überschneiden
+    sich.“, an der bleibenden Platte. Der Befund nennt jetzt beide Körper
+    (``Finding.object_ids``) und fällt, sobald einer davon fort ist; wird der
+    unbeteiligte Quader entfernt, bleibt er.
+    """
+
+    def collisions(result: Any) -> list[Finding]:
+        return [
+            entry for entry in result.scene.report.findings if entry.code == "arrange.collision"
+        ]
+
+    history = _boxes((40.0, 30.0, 10.0, 0.0), (10.0, 10.0, 20.0, 15.0), (10.0, 10.0, 10.0, 80.0))
+    history.apply(
+        "Prüfen",
+        [OperationDraft(op="check_collisions", inputs=("obj_1", "obj_2", "obj_3"))],
+    )
+    assert len(collisions(evaluate(history.document, profile))) == 1, "Platte und Block"
+
+    history.apply("Abseits entfernen", [OperationDraft(op="delete_object", inputs=("obj_3",))])
+    assert len(collisions(evaluate(history.document, profile))) == 1, "ein Unbeteiligter ging"
+
+    history.undo()
+    history.apply("Block entfernen", [OperationDraft(op="delete_object", inputs=("obj_2",))])
+    after = evaluate(history.document, profile)
+    assert set(after.scene.objects) == {"obj_1", "obj_3"}
+    assert collisions(after) == [], "mit dem Block ist die Überschneidung fort"
+
+
+def test_a_join_path_with_a_removed_part_leaves_the_report(profile: Profile) -> None:
+    """Was *Fügeweg prüfen* über zwei Teile sagt, fällt, wenn eines davon fort ist.
+
+    Der Fügeweg nennt keinen Körper beim Index — er spricht immer über seine
+    beiden Eingänge, und an keinem stand der Befund. Nach dem Entfernen des
+    Blocks blieb „Die Teile überschneiden sich schon in ihrer Endlage“ stehen
+    (Fund N1).
+    """
+    history = _boxes((40.0, 30.0, 10.0, 0.0), (10.0, 10.0, 20.0, 15.0))
+    history.apply("Fügeweg", [OperationDraft(op="check_join_path", inputs=("obj_2", "obj_1"))])
+    check = history.operations[-1].id
+
+    def said(result: Any) -> set[str]:
+        return {entry.code for entry in result.scene.report.findings if entry.op_id == check}
+
+    assert said(evaluate(history.document, profile)) == {"join.blocked"}, "die Gegenprobe davor"
+
+    history.apply("Block entfernen", [OperationDraft(op="delete_object", inputs=("obj_2",))])
+    assert said(evaluate(history.document, profile)) == set()
 
 
 def test_the_report_carries_the_reason_not_only_the_kind(
@@ -1326,6 +1519,32 @@ def test_two_bodies_keep_their_own_sentence() -> None:
     )
 
     assert {entry.object_id for entry in kept} == {"obj_1", "obj_2"}
+
+
+def test_two_pairs_keep_their_own_sentence() -> None:
+    """Und zwei Paare mit demselben Satz sind zwei Paare.
+
+    Die Platte steckt in zwei gleich benannten Blöcken: Code, erster Körper und
+    Werte sind gleich, die Paare nicht (``Finding.object_ids``). Fiele eines
+    weg, nähme das Entfernen des anderen Blocks den letzten Satz über die
+    Platte mit (Fund N1).
+    """
+    from app.core.scene.evaluate import _without_repeats
+
+    def pair(second: str) -> Finding:
+        return Finding(
+            code="arrange.collision",
+            severity="warning",
+            message="Zwei Objekte überschneiden sich.",
+            op_id=4,
+            object_id="obj_1",
+            object_ids=("obj_1", second),
+            values={"a": "Platte", "b": "Block"},
+        )
+
+    kept = _without_repeats([pair("obj_2"), pair("obj_3")])
+
+    assert [entry.object_ids for entry in kept] == [("obj_1", "obj_2"), ("obj_1", "obj_3")]
 
 
 def test_a_changed_number_is_a_changed_sentence() -> None:

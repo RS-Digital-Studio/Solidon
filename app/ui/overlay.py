@@ -24,7 +24,10 @@ schwebenden Karten hätte nichts zu teilen: sie nehmen einander nichts weg.
 
 from __future__ import annotations
 
-from typing import Protocol, TypeGuard, override
+import weakref
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
+from typing import Final, Protocol, TypeGuard, override
 
 from PySide6.QtCore import (
     QAbstractItemModel,
@@ -33,28 +36,43 @@ from PySide6.QtCore import (
     QEvent,
     QModelIndex,
     QObject,
+    QPoint,
     QPropertyAnimation,
     QRect,
     QRectF,
     QSize,
     Qt,
     QTimer,
+    Signal,
 )
-from PySide6.QtGui import QPainterPath, QRegion, QResizeEvent
+from PySide6.QtGui import (
+    QContextMenuEvent,
+    QFocusEvent,
+    QKeyEvent,
+    QMouseEvent,
+    QPainterPath,
+    QRegion,
+    QResizeEvent,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QFrame,
+    QMenu,
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTabWidget,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
 )
 from shiboken6 import isValid
 
+from app.i18n import tr
+from app.ui.cursors import cursor
+from app.ui.icons import icon
 from app.ui.leash import stop_watching_the_dying
 from app.ui.style import ROOMY, SPACE
 from app.ui.theme import THEMES, Theme
@@ -225,6 +243,32 @@ CARD = "overlayCard"
 #: gerundet wie die Karten am Rand (RM-516).
 MEASURE_CARD = "placement_measure_fields"
 
+#: Die beiden Seitenkarten, benannt nach dem Rand, an dem sie von Haus aus
+#: liegen: ``left`` trägt Objekte, Parameter und Verlauf, ``right`` die Reiter
+#: Auswahl, Prüfbericht und Chat. Seit dem 06.10.2026 lassen sie sich
+#: verschieben (Entscheidung Robert nach dem Fragebogen zu 0.5.3, „Bewegliche
+#: Menüs?“); der Name bleibt der des Stammplatzes.
+SIDE_CARDS: Final = ("left", "right")
+
+#: Wie nah an einem Fensterrand eine losgelassene Karte einrastet, in
+#: Logikpunkten — weit genug, dass man den Rand nicht genau treffen muss.
+SNAP_TO_EDGE = 32
+
+#: Wie hoch eine schwebende Karte mindestens bleibt, bevor sie nach oben
+#: rückt (:func:`floating_top`) — Kopfzeile und einige Zeilen. Darüber hinaus
+#: rollt ihr Inhalt, statt dass die Oberkante wandert.
+FLOATING_LEAST = 200
+
+#: Wie weit eine Pfeiltaste am Griff die Karte schiebt, mit Umschalt weiter.
+NUDGE = 24
+NUDGE_FAR = 96
+
+#: Wie dick der Umriss ist, der beim Ziehen am Zeiger hängt.
+CARD_OUTLINE_WIDTH = 2
+
+#: Der Objektname der vier Umrisslinien, an dem das Stilblatt sie färbt.
+OUTLINE = "cardOutline"
+
 #: Das Polster zwischen der Randlinie einer Karte und ihrem Inhalt.
 #:
 #: Genau ein Pixel, denn genau einen ist die Linie breit. Ohne ihn malen die
@@ -331,6 +375,179 @@ def card_width(base: int, cap: int, window: int, share: float = GROWTH_SHARE) ->
     return int(min(grown, narrow))
 
 
+@dataclass(frozen=True, slots=True)
+class CardPlace:
+    """Wo eine Seitenkarte liegt: an einem Rand oder frei über der Ansicht.
+
+    ``edge`` ist ``"left"``, ``"right"`` oder leer für eine schwebende Karte;
+    dann sagen ``across`` und ``down`` als Anteil zwischen null und eins, wo
+    sie im Spielraum steht. **Anteile, keine Punkte:** Dieselbe Anordnung gilt
+    auf jedem Bildschirm und kann den Fensterrand rechnerisch nicht verlassen.
+    """
+
+    edge: str
+    across: float = 0.0
+    down: float = 0.0
+
+    def text(self) -> str:
+        """Die Form in den Einstellungen: ``left``, ``right`` oder ``float:0.4:0.2``."""
+        if self.edge:
+            return self.edge
+        # Gespeichert, nicht angezeigt: der Punkt ist hier Teil der Form.
+        return f"float:{round(self.across, 4)!r}:{round(self.down, 4)!r}"
+
+    @staticmethod
+    def read(text: object, home: str) -> CardPlace:
+        """Aus den Einstellungen — und bei allem, was nicht passt, der Stammplatz."""
+        if text in ("left", "right"):
+            return CardPlace(str(text))
+        if not isinstance(text, str) or not text.startswith("float:"):
+            return CardPlace(home)
+        parts = text.split(":")
+        try:
+            across, down = float(parts[1]), float(parts[2])
+        except IndexError, ValueError:
+            return CardPlace(home)
+        if len(parts) != 3 or not (0.0 <= across <= 1.0 and 0.0 <= down <= 1.0):
+            return CardPlace(home)
+        return CardPlace("", across, down)
+
+
+def _share(offset: int, span: int) -> float:
+    """Ein Versatz als Anteil am Spielraum, zwischen null und eins."""
+    return min(max(offset / max(span, 1), 0.0), 1.0)
+
+
+def card_rect(place: CardPlace, width: int, room: int, size: QSize) -> QRect:
+    """Wo eine Karte dieser Größe an diesem Platz steht.
+
+    ``room`` ist die Unterkante, über die keine Seitenkarte reicht — die
+    Werkzeugzeile darunter bleibt frei. Eine Karte am Rand liegt bündig oben
+    (:data:`EDGE`), eine schwebende hält :data:`MARGIN` zu allen Rändern.
+
+    **Die Oberkante einer schwebenden Karte steht fest**, gleich wie hoch sie
+    gerade ist (:func:`floating_top`): Sonst lief, wer eine Kopfzeile auf- oder
+    zuklappte, unter dem Zeiger weg. Wächst sie bis an die Unterkante, wird sie
+    dort begrenzt, und ihr Inhalt rollt.
+    """
+    breadth = min(size.width(), width)
+    if place.edge == "left":
+        return QRect(EDGE, EDGE, breadth, max(min(size.height(), room), 0))
+    if place.edge == "right":
+        return QRect(width - breadth - EDGE, EDGE, breadth, max(min(size.height(), room), 0))
+    top = floating_top(place, room, size.height())
+    left = MARGIN + round(place.across * max(width - breadth - 2 * MARGIN, 0))
+    return QRect(left, top, breadth, max(min(size.height(), room - top), 0))
+
+
+def floating_top(place: CardPlace, room: int, wanted: int = FLOATING_LEAST) -> int:
+    """Die Oberkante einer schwebenden Karte, die ``wanted`` hoch sein will.
+
+    ``down`` ist ein Anteil an der Höhe zwischen den Rändern, nicht am
+    Spielraum unter der Karte, also hängt die Oberkante nicht an ihrer Höhe.
+    Nach oben rückt sie nur, wo unter ihr weniger als :data:`FLOATING_LEAST`
+    bliebe — in einem kleineren Fenster, nicht weil eine Liste wächst.
+    """
+    anchored = MARGIN + round(place.down * max(room - 2 * MARGIN, 0))
+    return max(min(anchored, room - min(wanted, FLOATING_LEAST)), MARGIN)
+
+
+def dropped_place(rect: QRect, width: int, room: int, snap: int = SNAP_TO_EDGE) -> CardPlace:
+    """Wohin eine Karte kommt, deren Umriss hier losgelassen wird.
+
+    Bis ``snap`` Punkte vor einem Fensterrand rastet sie dort ein; die Tastatur
+    schiebt mit ``snap=0``, sonst käme eine Karte mit dem ersten Pfeil nie
+    vom Rand los.
+    """
+    if rect.left() - EDGE <= snap:
+        return CardPlace("left")
+    if width - EDGE - (rect.left() + rect.width()) <= snap:
+        return CardPlace("right")
+    return CardPlace(
+        "",
+        _share(rect.left() - MARGIN, width - rect.width() - 2 * MARGIN),
+        # Spiegelbildlich zu :func:`card_rect`: die Oberkante, nicht der Rest darunter.
+        _share(rect.top() - MARGIN, room - 2 * MARGIN),
+    )
+
+
+def _opposite(edge: str) -> str:
+    return "right" if edge == "left" else "left"
+
+
+def settled_places(
+    moved: str,
+    wanted: CardPlace,
+    places: Mapping[str, CardPlace],
+    sizes: Mapping[str, QSize],
+    width: int,
+    room: int,
+) -> dict[str, CardPlace] | None:
+    """Die Plätze beider Karten, wenn ``moved`` nach ``wanted`` soll — oder ``None``.
+
+    **Ein Rand trägt eine Karte:** Wer an den Rand der anderen will, tauscht
+    mit ihr; sie geht an den Rand, den die gezogene verlässt, und schwebte die,
+    an den gegenüberliegenden. **Überdecken sich die beiden, bekommt die
+    gezogene den Platz**, und die andere rückt waagrecht neben sie, wenn sie
+    schwebt. Liegt die andere am Rand oder passt sie nirgends hin, rückt die
+    gezogene neben die andere, sofern sie schwebt. Geht beides nicht, ist die
+    Antwort ``None``, und alles bleibt, wie es war — der Aufrufer sagt warum.
+    ``sizes`` nennt die Größe jeder sichtbaren Karte; eine unsichtbare
+    überdeckt nichts.
+    """
+    result = dict(places)
+    result[moved] = wanted
+    other = next(key for key in result if key != moved)
+    if wanted.edge and result[other].edge == wanted.edge:
+        result[other] = CardPlace(places[moved].edge or _opposite(wanted.edge))
+    if moved not in sizes or other not in sizes:
+        return result
+    mine = card_rect(result[moved], width, room, sizes[moved])
+    theirs = card_rect(result[other], width, room, sizes[other])
+    if not mine.intersects(theirs):
+        return result
+    turns = [(key, rect) for key, rect in ((other, mine), (moved, theirs)) if not result[key].edge]
+    for shifting, fixed in turns:
+        size = sizes[shifting]
+        for left in (fixed.left() + fixed.width() + MARGIN, fixed.left() - MARGIN - size.width()):
+            if MARGIN <= left <= width - size.width() - MARGIN:
+                beside = CardPlace(
+                    "",
+                    _share(left - MARGIN, width - size.width() - 2 * MARGIN),
+                    result[shifting].down,
+                )
+                if not card_rect(beside, width, room, size).intersects(fixed):
+                    result[shifting] = beside
+                    return result
+    return None
+
+
+def free_span(width: int, rects: Iterable[QRect]) -> tuple[int, int]:
+    """Der breiteste freie Streifen zwischen den Seitenkarten, als Rand links und rechts.
+
+    Jede Karte sperrt ihren waagrechten Bereich über die volle Höhe, samt
+    :data:`MARGIN` Abstand; bei Gleichstand gewinnt der linke Streifen. In der
+    Stammlage sind das dieselben Zahlen wie vor den verschiebbaren Karten:
+    links die Breite der linken Karte plus Abstand, rechts die der rechten.
+    """
+    blocked = sorted(
+        (max(rect.left() - MARGIN, 0), min(rect.left() + rect.width() + MARGIN, width))
+        for rect in rects
+    )
+    gaps: list[tuple[int, int]] = []
+    start = 0
+    for left, right in blocked:
+        if left > start:
+            gaps.append((start, left))
+        start = max(start, right)
+    if start < width:
+        gaps.append((start, width))
+    if not gaps:
+        return 0, 0
+    best = max(gaps, key=lambda gap: (gap[1] - gap[0], -gap[0]))
+    return best[0], width - best[1]
+
+
 def card_stylesheet(theme: Theme) -> str:
     """Das Aussehen einer schwebenden Karte, gespeist aus dem Thema.
 
@@ -338,11 +555,13 @@ def card_stylesheet(theme: Theme) -> str:
     steht ihr Text auf dem Modell, und beides ist grau. Der Rand ist keine
     Zierde, sondern die Kante, an der die Karte aufhört.
 
-    **Er trägt den Akzent, nicht die Trennfarbe.** Ein grauer Rand über einem
-    grauen Modell in einem grauen Raum ist die Kante, die man sucht statt
-    sieht — und das Fenster hatte, solange nichts ausgewählt war, keinen
-    einzigen farbigen Punkt. Dass der Akzent damit an mehr als einer Stelle
-    zugleich steht, ist der Preis dafür und war eine bewusste Entscheidung.
+    **Er trägt die Linienfarbe, nicht den Akzent** (RM-512). Drei Karten mit
+    Bernsteinkante, dazu der aktive Reiter, leuchteten im Ruhezustand neben dem
+    einen Hauptknopf — vier Linien und eine Fläche in derselben Signalfarbe,
+    und keine davon wollte etwas vom Kunden. Die Kante sagt, wo die Karte
+    aufhört; dafür reicht die Trennfarbe des Themas, die auch Felder und
+    Listen umrandet. Der Akzent bleibt dem, was zu tun ist
+    (``tests/test_resting_state.py``).
 
     **Wo das hingehört:** nach ``style.py``, zu den übrigen Formregeln. Es
     steht hier, weil die Karten neu sind und jene Datei gerade an anderer
@@ -366,7 +585,7 @@ def card_stylesheet(theme: Theme) -> str:
     return f"""
 QWidget#{CARD}, QFrame#{MEASURE_CARD} {{
     background: {colours["window"]};
-    border: 1px solid {colours["accent_line"]};
+    border: 1px solid {colours["line"]};
     border-radius: {ROOMY}px;
 }}
 
@@ -390,6 +609,10 @@ QWidget#{CARD}[{DOCK_PROPERTY}="right"] {{
     border-top-left-radius: 0px;
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;
+}}
+
+QWidget#{OUTLINE} {{
+    background: {colours["accent_line"]};
 }}
 """
 
@@ -983,6 +1206,15 @@ class OverlayHost(QWidget):
     ihre Geometrie zugewiesen, die Ansicht bekommt alles.
     """
 
+    placesChanged = Signal(object)
+    """Die Plätze der Seitenkarten haben sich geändert — als ``{Karte: Text}``
+    (:meth:`CardPlace.text`), zum Merken in den Einstellungen."""
+    dragHint = Signal(str)
+    """Was das Loslassen gerade täte, als Satz — leer, wenn nicht gezogen wird.
+    Die zweite Kodierung neben dem Umriss (Regel 18)."""
+    cardNotice = Signal(str)
+    """Wo eine Karte jetzt liegt, oder warum sie nicht dorthin kann."""
+
     def __init__(self, view: QWidget, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         # Vor ``setParent``: das Umhängen löst sofort ein Resize aus, und
@@ -992,6 +1224,20 @@ class OverlayHost(QWidget):
         self.right: QWidget | None = None
         self.bottom: QWidget | None = None
         self.veil: QWidget | None = None
+        self.places: dict[str, CardPlace] = {key: CardPlace(key) for key in SIDE_CARDS}
+        """Wo jede Seitenkarte liegen soll (:class:`CardPlace`) — gezeigt wird
+        sie dort, solange sich die beiden nicht überdecken (:meth:`_card_targets`)."""
+        self._targets: dict[str, QRect] = {}
+        """Die zuletzt gesetzten Ziele der sichtbaren Seitenkarten. Gemeldet wird
+        aus ihnen, nicht aus der Geometrie mitten in einer Gleitbewegung."""
+        self._docked: dict[str, str] = {}
+        """Welchen Rand jede Zone gerade trägt — nur bei einem Wechsel wird neu
+        poliert (:func:`_dock`)."""
+        self._drag: _CardDrag | None = None
+        self._outline: tuple[QWidget, ...] = ()
+        """Die vier Linien um die Stelle, an der die gezogene Karte landete."""
+        self._other_outline: tuple[QWidget, ...] = ()
+        """Die vier Linien um die Stelle, an die die andere Karte dabei wanderte."""
         self._moves: dict[int, QPropertyAnimation] = {}
         """Die laufende Bewegung je Zone — festgehalten, weil eine Animation,
         die niemand hält, mitten im Weg eingesammelt wird."""
@@ -1027,6 +1273,7 @@ class OverlayHost(QWidget):
         self.left, self.right, self.bottom = left, right, bottom
         for zone, side in ((left, "left"), (right, "right")):
             _dock(zone, side)
+            self._docked[side] = side
         # Eine zugeklappte Zone soll ihre Fläche zurückgeben. Qt meldet die
         # neue Wunschhöhe erst, wenn jemand danach fragt — also fragen wir bei
         # jeder Änderung an einem Kind nach.
@@ -1246,26 +1493,14 @@ class OverlayHost(QWidget):
         height = self.height()
         width = self.width()
 
-        # Links und rechts hängen oben und wachsen nur so weit nach unten, wie
-        # ihr Inhalt reicht — höchstens bis kurz vors untere Ende, damit die
-        # Werkzeugzeile frei bleibt.
-        room = max(height - EDGE - MARGIN - self._bottom_room(), 0)
-
-        if self.left.isVisibleTo(self):
-            self._share_room(self.left, room)
-            wanted = min(natural_height(self.left), room)
-            card = card_width(LEFT_WIDTH, LEFT_MAX, width)
-            self._move(self.left, QRect(EDGE, EDGE, card, wanted), moving)
-
-        if self.right.isVisibleTo(self):
-            self._share_room(self.right, room)
-            card = self._right_width(width)
-            wanted = min(natural_height(self.right, width=card), room)
-            self._move(
-                self.right,
-                QRect(width - card - EDGE, EDGE, card, wanted),
-                moving,
-            )
+        # Die Seitenkarten wachsen nur so weit nach unten, wie ihr Inhalt
+        # reicht — höchstens bis kurz vors untere Ende, damit die Werkzeugzeile
+        # frei bleibt. Wo sie stehen, sagen ihre Plätze (:class:`CardPlace`).
+        self._targets = self._card_targets(width, self.card_room())
+        for key, target in self._targets.items():
+            zone = self.side_zone(key)
+            if zone is not None:
+                self._move(zone, target, moving)
 
         # Die Werkzeugzeile sitzt mittig unten und ist so breit, wie sie sein
         # muss — nicht so breit wie das Fenster.
@@ -1278,6 +1513,268 @@ class OverlayHost(QWidget):
             )
 
         self._tell_the_view_about_the_zones()
+
+    def card_room(self) -> int:
+        """Die Unterkante, über die keine Seitenkarte reicht — darunter die Werkzeugzeile."""
+        return max(self.height() - EDGE - MARGIN - self._bottom_room(), 0)
+
+    def side_zone(self, key: str) -> QWidget | None:
+        """Die Zone einer Seitenkarte (:data:`SIDE_CARDS`)."""
+        return self.left if key == "left" else self.right if key == "right" else None
+
+    def _card_width(self, key: str, width: int) -> int:
+        """Wie breit eine Seitenkarte ist — gleich, wo sie steht."""
+        if key == "left":
+            return card_width(LEFT_WIDTH, LEFT_MAX, width)
+        return self._right_width(width)
+
+    def _card_sizes(
+        self, width: int, room: int, places: Mapping[str, CardPlace]
+    ) -> dict[str, QSize]:
+        """Breite und Höhe jeder sichtbaren Seitenkarte an diesen Plätzen.
+
+        **Eine schwebende Karte teilt zu, was sie bekommt:** den Raum unter
+        ihrer Oberkante (:func:`floating_top`), wie :func:`card_rect` sie
+        zeichnet. Mit ``room`` fehlten ihren Listen unten Punkte, und eine
+        wachsende Liste schob die Karte nach oben, statt zu rollen. Nie kürzer
+        als die Mindesthöhe, die die Zone selbst nennt — eine Zone ohne gültigen
+        Wunsch hieße sonst null Punkte hoch, und ein leeres Rechteck überdeckt
+        nichts.
+        """
+        sizes: dict[str, QSize] = {}
+        for key in SIDE_CARDS:
+            zone = self.side_zone(key)
+            if zone is None or not zone.isVisibleTo(self):
+                continue
+            place = places.get(key, CardPlace(key))
+            share = room if place.edge else max(room - floating_top(place, room), 0)
+            self._share_room(zone, share)
+            card = self._card_width(key, width)
+            wanted = natural_height(zone, width=card) if key == "right" else natural_height(zone)
+            sizes[key] = QSize(card, min(max(wanted, zone.minimumHeight()), share))
+        return sizes
+
+    def _card_targets(self, width: int, room: int) -> dict[str, QRect]:
+        """Wohin die sichtbaren Seitenkarten gehören, nach ihren Plätzen.
+
+        **Überdecken sie sich** — nach einer Größenänderung des Fensters, an
+        einem kleineren Bildschirm —, stehen beide vorübergehend an ihrem
+        Stammplatz; die eigene Anordnung bleibt gespeichert und gilt wieder,
+        sobald das Fenster reicht. Am Stammplatz passen beide immer
+        (:data:`NARROW_CARD_SHARE`). Der Rand, an dem eine Karte liegt, geht an
+        Stilblatt und Maske (:func:`_dock`); eine schwebende ist rundum rund.
+        """
+        places = dict(self.places)
+        sizes = self._card_sizes(width, room, places)
+        targets = {key: card_rect(places[key], width, room, size) for key, size in sizes.items()}
+        if len(targets) == len(SIDE_CARDS) and targets["left"].intersects(targets["right"]):
+            places = {key: CardPlace(key) for key in SIDE_CARDS}
+            # Am Rand gilt der ganze Raum, nicht der einer schwebenden Karte.
+            sizes = self._card_sizes(width, room, places)
+            targets = {
+                key: card_rect(places[key], width, room, size) for key, size in sizes.items()
+            }
+        for key in targets:
+            zone = self.side_zone(key)
+            if zone is not None and self._docked.get(key) != places[key].edge:
+                self._docked[key] = places[key].edge
+                _dock(zone, places[key].edge)
+        return targets
+
+    def set_places(self, places: Mapping[str, CardPlace]) -> None:
+        """Die Plätze aus den Einstellungen übernehmen — zwei Karten an einem Rand nie."""
+        wanted = {key: places.get(key, CardPlace(key)) for key in SIDE_CARDS}
+        if wanted["left"].edge and wanted["left"].edge == wanted["right"].edge:
+            wanted = {key: CardPlace(key) for key in SIDE_CARDS}
+        self.places = wanted
+        self._place(moving=False)
+        self._describe_grips()
+
+    def put_card(self, key: str, place: CardPlace) -> bool:
+        """Eine Seitenkarte an diesen Platz — mit Tausch und Ausweichen.
+
+        Die Regeln stehen bei :func:`settled_places`. Geht es nicht, bleibt
+        alles, wie es war, und :attr:`cardNotice` sagt warum (Regel 17: mit dem
+        Weg zurück). Ein Strg+Z nimmt das nicht zurück: Die Lage einer Karte
+        ist Darstellung wie die Kamera, kein Dokumentzustand (§2.1).
+        """
+        width, room = self.width(), self.card_room()
+        settled = settled_places(
+            key, place, self.places, self._card_sizes(width, room, self.places), width, room
+        )
+        if settled is None:
+            self.cardNotice.emit(
+                tr(
+                    "Neben der anderen Karte ist hier kein Platz. Doppelklick auf den "
+                    "Griff legt die Karte zurück."
+                )
+            )
+            return False
+        changed = settled != self.places
+        self.places = settled
+        self._place(moving=True)
+        self._describe_grips()
+        if changed:
+            self.placesChanged.emit({name: value.text() for name, value in settled.items()})
+        self.cardNotice.emit(_placed_sentence(key, settled[key]))
+        return True
+
+    def reset_cards(self) -> None:
+        """Beide Seitenkarten an ihren Stammplatz (*Ansicht → Karten an ihren Platz*)."""
+        home = {key: CardPlace(key) for key in SIDE_CARDS}
+        changed = home != self.places
+        self.places = home
+        self._place(moving=True)
+        self._describe_grips()
+        if changed:
+            self.placesChanged.emit({name: value.text() for name, value in home.items()})
+        self.cardNotice.emit(tr("Beide Karten liegen an ihrem Platz."))
+
+    def nudge(self, key: str, across: int, down: int) -> None:
+        """Eine Seitenkarte mit der Tastatur schieben — vom Rand los, wo sie anlag.
+
+        **Senkrecht löst sich eine Karte am Rand** und bleibt an ihrer Seite:
+        Wer an der angedockten Karte ↓ drückt, will sie tiefer haben. Ändert
+        der Druck nichts — ↑ oben am Fenster, ← am linken Rand —, sagt der
+        Griff nichts; eine Ansage „liegt wieder an ihrem Platz“ für einen
+        Druck ohne Wirkung wäre eine Bestätigung für nichts.
+        """
+        zone = self.side_zone(key)
+        if zone is None or not zone.isVisibleTo(self):
+            return
+        width, room = self.width(), self.card_room()
+        start = self._targets.get(key, zone.geometry())
+        moved = start.translated(across, down)
+        left = min(max(moved.left(), 0), max(width - moved.width(), 0))
+        top = min(max(moved.top(), 0), max(room - moved.height(), 0))
+        place = dropped_place(QRect(QPoint(left, top), moved.size()), width, room, 0)
+        current = self.places[key]
+        if down and not across and current.edge and place.edge == current.edge:
+            if top == start.top():
+                return
+            place = CardPlace(
+                "",
+                0.0 if current.edge == "left" else 1.0,
+                _share(top - MARGIN, room - 2 * MARGIN),
+            )
+        if place == current:
+            return
+        self.put_card(key, place)
+
+    def begin_drag(self, key: str, at: QPoint) -> None:
+        """Der Zug am Griff beginnt — ``at`` in Bildschirmkoordinaten.
+
+        **Die Größen der Karten werden hier einmal gemessen**, nicht je
+        Mausbewegung: :meth:`_card_sizes` teilt den Listen ihren Raum neu zu.
+        Ebenso werden die Umrisslinien hier gezeigt und nach oben geholt; je
+        Bewegung ändert sich nur ihre Geometrie (:meth:`drag_to`).
+        """
+        zone = self.side_zone(key)
+        if zone is None or not zone.isVisibleTo(self):
+            return
+        start = zone.geometry()
+        width, room = self.width(), self.card_room()
+        places = dict(self.places)
+        self._drag = _CardDrag(
+            key,
+            self.mapFromGlobal(at) - start.topLeft(),
+            start.size(),
+            places[key],
+            sizes=self._card_sizes(width, room, places),
+            before=places,
+            settled=places,
+        )
+        if not self._outline:
+            self._outline = tuple(self._outline_line() for _ in range(4))
+            self._other_outline = tuple(self._outline_line() for _ in range(4))
+        self._show_outline(self._outline, start)
+        for line in self._outline:
+            line.show()
+            line.raise_()
+        for line in self._other_outline:
+            line.raise_()
+        self.dragHint.emit(_drag_sentence(key, places, places, places[key]))
+
+    def drag_to(self, at: QPoint) -> None:
+        """Der Umriss folgt dem Zeiger — und zeigt, wo die Karte beim Loslassen landet.
+
+        Gerechnet wird mit :func:`settled_places`, derselben Regel wie beim
+        Loslassen: Der Umriss steht am Ergebnis, ein zweiter an der Stelle, an
+        die die andere Karte wanderte, und der Satz nennt den Fall (Regel 18:
+        Er ist die zweite Kodierung neben dem Umriss und muss stimmen).
+        """
+        drag = self._drag
+        if drag is None:
+            return
+        width, room = self.width(), self.card_room()
+        corner = self.mapFromGlobal(at) - drag.grab
+        left = min(max(corner.x(), 0), max(width - drag.size.width(), 0))
+        top = min(max(corner.y(), 0), max(room - drag.size.height(), 0))
+        drag.place = dropped_place(QRect(QPoint(left, top), drag.size), width, room)
+        drag.settled = settled_places(drag.key, drag.place, drag.before, drag.sizes, width, room)
+        size = drag.sizes.get(drag.key, drag.size)
+        other = next(name for name in SIDE_CARDS if name != drag.key)
+        wandering = False
+        if drag.settled is None:
+            self._show_outline(self._outline, card_rect(drag.place, width, room, size))
+        else:
+            self._show_outline(self._outline, card_rect(drag.settled[drag.key], width, room, size))
+            wandering = other in drag.sizes and drag.settled[other] != drag.before[other]
+            if wandering:
+                self._show_outline(
+                    self._other_outline,
+                    card_rect(drag.settled[other], width, room, drag.sizes[other]),
+                )
+        # Nur bei einem Wechsel: Gezeigt und verborgen wird ein natives Fenster.
+        for line in self._other_outline:
+            if line.isVisible() != wandering:
+                line.setVisible(wandering)
+        self.dragHint.emit(_drag_sentence(drag.key, drag.before, drag.settled, drag.place))
+
+    def end_drag(self, commit: bool) -> None:
+        """Loslassen legt die Karte hin; Escape und ein verlorener Fokus nicht."""
+        drag, self._drag = self._drag, None
+        self._hide_outline()
+        self.dragHint.emit("")
+        if drag is not None and commit:
+            self.put_card(drag.key, drag.place)
+
+    def dragging(self) -> str:
+        """Welche Karte gerade gezogen wird — leer, wenn keine."""
+        return self._drag.key if self._drag is not None else ""
+
+    def _show_outline(self, lines: tuple[QWidget, ...], rect: QRect) -> None:
+        """Vier Linien um die Stelle, an die eine Karte käme — nur ihre Geometrie.
+
+        **Linien, keine Karte und keine Maske:** Jede Karte ist ein natives
+        Fenster über der Grafikfläche und malt bei jeder Bewegung sofort; ein
+        Umriss mit Maske riss über Vulkan das Gerät (``ansicht.md``,
+        „Maßtinte“). Vier schmale Widgets ohne Durchsicht malen nur sich.
+        Gezeigt und nach oben geholt werden sie einmal (:meth:`begin_drag`).
+        """
+        top, bottom, left, right = lines
+        thick = CARD_OUTLINE_WIDTH
+        top.setGeometry(rect.left(), rect.top(), rect.width(), thick)
+        bottom.setGeometry(rect.left(), rect.top() + rect.height() - thick, rect.width(), thick)
+        left.setGeometry(rect.left(), rect.top(), thick, rect.height())
+        right.setGeometry(rect.left() + rect.width() - thick, rect.top(), thick, rect.height())
+
+    def _outline_line(self) -> QWidget:
+        line = QWidget(self)
+        line.setObjectName(OUTLINE)
+        line.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        line.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        line.hide()
+        return line
+
+    def _hide_outline(self) -> None:
+        for line in (*self._outline, *self._other_outline):
+            line.hide()
+
+    def _describe_grips(self) -> None:
+        """Jeder Griff sagt, wo seine Karte jetzt liegt (Bildschirmleser)."""
+        for grip in living(self, CardGrip):
+            grip.describe()
 
     def _right_width(self, width: int) -> int:
         """Wie breit die rechte Karte wird — nie schmaler als ihre vordere Seite.
@@ -1336,15 +1833,17 @@ class OverlayHost(QWidget):
         setter = getattr(target, "set_zone_margins", None)
         if not callable(setter):
             return
-        showing_left = self.left is not None and self.left.isVisibleTo(self)
-        showing_right = self.right is not None and self.right.isVisibleTo(self)
-        width = self.width()
-        right = self._right_width(width)
-        setter(
-            card_width(LEFT_WIDTH, LEFT_MAX, width) + EDGE + MARGIN if showing_left else 0,
-            right + EDGE + MARGIN if showing_right else 0,
-            self._bottom_room(),
-        )
+        # **Die Lücke zwischen den Karten, wo sie auch stehen** (Konzept
+        # verschiebbare Karten): Jede sichtbare Seitenkarte sperrt ihren
+        # Streifen, gemeldet wird der breiteste freie (:func:`free_span`). In
+        # der Stammlage sind das die Zahlen von vorher.
+        left, right = free_span(self.width(), self._targets.values())
+        setter(left, right, self._bottom_room())
+        # Die Ansichtsleiste weicht jeder Karte aus, die über ihr läge, nicht
+        # nur der unteren (``ViewBar.place``).
+        cards = getattr(target, "set_card_rects", None)
+        if callable(cards):
+            cards(tuple(self._targets.values()))
 
     def _share_room(self, zone: QWidget, room: int) -> None:
         """Den Karten einer Zone sagen, wie hoch sie werden dürfen.
@@ -1443,3 +1942,317 @@ class OverlayHost(QWidget):
         if self.bottom.hasHeightForWidth():
             tall = max(tall, self.bottom.heightForWidth(wanted))
         return wanted, tall
+
+
+@dataclass(slots=True)
+class _CardDrag:
+    """Ein laufender Zug am Griff: welche Karte, wo gegriffen, und wohin sie käme.
+
+    ``sizes`` und ``before`` gelten ab dem Griff (:meth:`OverlayHost.begin_drag`);
+    ``settled`` ist das Ergebnis, das das Loslassen gerade hätte, oder ``None``,
+    wenn neben der anderen Karte kein Platz ist.
+    """
+
+    key: str
+    grab: QPoint
+    size: QSize
+    place: CardPlace
+    sizes: dict[str, QSize]
+    before: dict[str, CardPlace]
+    settled: dict[str, CardPlace] | None
+
+
+#: Die Tasten, die der Griff mit Fokus selbst bedient (:meth:`CardGrip.event`).
+_GRIP_KEYS: Final = frozenset(
+    {
+        Qt.Key.Key_Left,
+        Qt.Key.Key_Right,
+        Qt.Key.Key_Up,
+        Qt.Key.Key_Down,
+        Qt.Key.Key_Return,
+        Qt.Key.Key_Enter,
+        Qt.Key.Key_Space,
+        Qt.Key.Key_Menu,
+    }
+)
+
+
+def _drag_sentence(
+    key: str,
+    before: Mapping[str, CardPlace],
+    settled: Mapping[str, CardPlace] | None,
+    wanted: CardPlace,
+) -> str:
+    """Was das Loslassen gerade täte, je Fall ein Satz — für die Statuszeile.
+
+    Der Satz beschreibt das Ergebnis von :func:`settled_places`, nicht die
+    Stelle unter dem Zeiger: Tausch, Ausweichen und „kein Platz“ sieht man so
+    vor dem Loslassen und nicht erst danach.
+    """
+    if settled is None:
+        return tr("Hier ist neben der anderen Karte kein Platz.")
+    other = next(name for name in settled if name != key)
+    mine, theirs = settled[key], settled[other]
+    if theirs == before[other]:
+        if mine.edge == "left":
+            return tr("Loslassen legt die Karte an den linken Rand.")
+        if mine.edge == "right":
+            return tr("Loslassen legt die Karte an den rechten Rand.")
+        if mine != wanted:
+            return tr("Loslassen legt die Karte neben die andere.")
+        return tr("Loslassen lässt die Karte hier schweben.")
+    if mine.edge and theirs.edge:
+        if before[key].edge:
+            return tr("Loslassen tauscht die beiden Karten.")
+        if mine.edge == "left":
+            return tr("Loslassen legt die Karte an den linken Rand, die andere an den rechten.")
+        return tr("Loslassen legt die Karte an den rechten Rand, die andere an den linken.")
+    if mine.edge == "left":
+        return tr("Loslassen legt die Karte an den linken Rand, die andere rückt beiseite.")
+    if mine.edge == "right":
+        return tr("Loslassen legt die Karte an den rechten Rand, die andere rückt beiseite.")
+    return tr("Loslassen lässt die Karte hier schweben, die andere rückt beiseite.")
+
+
+def _placed_sentence(key: str, place: CardPlace) -> str:
+    """Wo eine Karte jetzt liegt, mit dem Rückweg."""
+    if place == CardPlace(key):
+        return tr("Die Karte liegt wieder an ihrem Platz.")
+    if place.edge == "left":
+        return tr("Die Karte liegt jetzt links. Doppelklick auf den Griff legt sie zurück.")
+    if place.edge == "right":
+        return tr("Die Karte liegt jetzt rechts. Doppelklick auf den Griff legt sie zurück.")
+    return tr(
+        "Die Karte schwebt jetzt über der Ansicht. Doppelklick auf den Griff legt sie zurück."
+    )
+
+
+def _no_host() -> OverlayHost | None:
+    """Der Wirt eines Griffs, der noch keinen hat."""
+    return None
+
+
+class CardGrip(QToolButton):
+    """Der Griff, an dem eine Seitenkarte verschoben wird.
+
+    Entscheidung Robert, 06.10.2026, nach dem Fragebogen zu 0.5.3 („Bewegliche
+    Menüs?“): Die Karten links und rechts lassen sich innerhalb des Fensters
+    verschieben und rasten an den Rändern ein; ein eigenes Fenster werden sie
+    nicht — dort fehlten Strg+Z, Entf und die Palette, und ein Kind über der
+    Grafikfläche, das umzieht, macht seine Vorfahren nativ (Soll-Ablauf in
+    ``.claude/.state/fragebogen-5c132b/karten-soll-ablauf.md``).
+
+    **Ziehen zeigt einen Umriss am Zeiger**, erst das Loslassen legt die Karte
+    hin (:meth:`OverlayHost._show_outline`); Escape oder ein verlorener Fokus
+    brechen ab. **Doppelklick legt sie an ihren Stammplatz zurück.** Ein
+    einfacher Klick tut nichts. **Die Tastatur kann dasselbe:** Pfeile
+    schieben (mit Umschalt weiter), Eingabe-, Leer- und Menütaste nennen die
+    drei Plätze. Der Satz in der Statuszeile ist die zweite Kodierung neben
+    dem Umriss (Regel 18).
+
+    ``corner`` legt den Griff selbst in die obere rechte Ecke seines
+    Elternteils (die linke Karte, :meth:`sit_in_corner`); in einer Reiterkarte
+    steht er als Eckwidget, dort setzt Qt ihn (``QTabWidget.setCornerWidget``).
+
+    **Er entsteht vor dem Inhalt seiner Karte**, damit er in der Tabfolge
+    vorn steht: Die Fokuskette folgt der Entstehung, und ein Umhängen im
+    selben Fenster lässt seinen Platz darin stehen. Den Wirt bekommt er
+    deshalb erst danach (:meth:`attach`). Nachträglich umgeordnet wird nicht —
+    ein Lauf in Python über ``nextInFocusChain`` hängt jedes zurückgegebene
+    Widget an seinen Vorgänger, und der Speicherbereiniger nahm mit einer
+    kurzlebigen Hülle Merkmalfenster und Karte der Handlungen mit
+    (``oberflaeche.md``, „Die Tabulatortaste geht denselben Weg wie das Auge“).
+    """
+
+    def __init__(
+        self,
+        host: OverlayHost | None,
+        key: str,
+        name: str,
+        parent: QWidget,
+        *,
+        corner: bool = False,
+    ) -> None:
+        super().__init__(parent)
+        self._host: Callable[[], OverlayHost | None] = (
+            weakref.ref(host) if host is not None else _no_host
+        )
+        self.key = key
+        self._pressed: QPoint | None = None
+        self._dragging = False
+        self._corner = False
+        self.setObjectName("cardGrip")
+        self.setIcon(icon("grip", self))
+        self.setAutoRaise(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(cursor("move", self))
+        self.setAccessibleName(name)
+        self.setToolTip(tr("Karte verschieben. Doppelklick legt sie zurück."))
+        self.describe()
+        if corner:
+            self.sit_in_corner(parent)
+
+    def attach(self, host: OverlayHost) -> None:
+        """Den Wirt nachreichen, wenn der Griff vor ihm entstanden ist."""
+        self._host = weakref.ref(host)
+        self.describe()
+
+    def sit_in_corner(self, card: QWidget) -> None:
+        """In die obere rechte Ecke dieser Karte, über ihre Kopfzeile."""
+        if self.parentWidget() is not card:
+            self.setParent(card)
+        card.installEventFilter(self)
+        self._corner = True
+        self._seat()
+        self.show()
+
+    def describe(self) -> None:
+        """Wo die Karte liegt, als Satz für den Bildschirmleser."""
+        host = self._host()
+        place = host.places.get(self.key, CardPlace(self.key)) if host is not None else None
+        if place is None or place.edge == "left":
+            text = tr(
+                "Liegt links an. Pfeiltasten schieben die Karte, die Eingabetaste nennt die Plätze."
+            )
+        elif place.edge == "right":
+            text = tr(
+                "Liegt rechts an. Pfeiltasten schieben die Karte, die Eingabetaste "
+                "nennt die Plätze."
+            )
+        else:
+            text = tr(
+                "Schwebt über der Ansicht. Pfeiltasten schieben die Karte, die Eingabetaste "
+                "nennt die Plätze."
+            )
+        self.setAccessibleDescription(text)
+
+    def place_menu(self) -> QMenu:
+        """Die drei Plätze als Menü — gebaut hier, gezeigt in :meth:`_show_menu`."""
+        menu = QMenu(self)
+        for label, place in (
+            (tr("An den linken Rand"), CardPlace("left")),
+            (tr("An den rechten Rand"), CardPlace("right")),
+            (tr("An ihren Platz"), CardPlace(self.key)),
+        ):
+            action = menu.addAction(label)
+            action.triggered.connect(lambda _checked=False, place=place: self._put(place))
+        return menu
+
+    def _put(self, place: CardPlace) -> None:
+        host = self._host()
+        if host is not None:
+            host.put_card(self.key, place)
+
+    def _show_menu(self, at: QPoint | None = None) -> None:
+        menu = self.place_menu()
+        menu.exec(at if at is not None else self.mapToGlobal(QPoint(0, self.height())))
+        menu.deleteLater()
+
+    def _seat(self) -> None:
+        """In die obere rechte Ecke des Elternteils, über die Kopfzeile."""
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        self.adjustSize()
+        self.move(max(parent.width() - self.width() - CARD_PADDING, 0), CARD_PADDING)
+        self.raise_()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if self._corner and event.type() in (QEvent.Type.Resize, QEvent.Type.LayoutRequest):
+            self._seat()
+        return super().eventFilter(watched, event)
+
+    def _cancel(self) -> None:
+        host = self._host()
+        dragging, self._dragging, self._pressed = self._dragging, False, None
+        if dragging and host is not None:
+            host.end_drag(commit=False)
+
+    @override
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        self._pressed = event.globalPosition().toPoint()
+        self._dragging = False
+        event.accept()
+
+    @override
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        host = self._host()
+        if self._pressed is None or host is None:
+            return
+        at = event.globalPosition().toPoint()
+        if not self._dragging:
+            if (at - self._pressed).manhattanLength() < QApplication.startDragDistance():
+                return
+            self._dragging = True
+            host.begin_drag(self.key, self._pressed)
+        host.drag_to(at)
+
+    @override
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        host = self._host()
+        dragging, self._dragging, self._pressed = self._dragging, False, None
+        if dragging and host is not None:
+            host.end_drag(commit=True)
+        event.accept()
+
+    @override
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        self._put(CardPlace(self.key))
+        event.accept()
+
+    @override
+    def event(self, event: QEvent) -> bool:
+        """**Der Griff nimmt seine Tasten vor den Kürzeln des Fensters.**
+
+        Escape ist im Fenster gebunden (eine Auswahlstufe zurück), und Qt
+        stellt ein Kürzel vor den Tastendruck: Ohne das hier brach Escape einen
+        Zug nicht ab, er landete beim Loslassen trotzdem (gemessen 06.10.2026).
+        Beansprucht wird Escape nur während eines Zugs, die Pfeile, Eingabe,
+        Leer- und Menütaste, solange der Griff den Fokus hat.
+        """
+        if event.type() == QEvent.Type.ShortcutOverride and isinstance(event, QKeyEvent):
+            key = Qt.Key(event.key())
+            if (key == Qt.Key.Key_Escape and self._dragging) or key in _GRIP_KEYS:
+                event.accept()
+                return True
+        return super().event(event)
+
+    @override
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        key = Qt.Key(event.key())
+        if key == Qt.Key.Key_Escape and self._dragging:
+            self._cancel()
+            event.accept()
+            return
+        step = NUDGE_FAR if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else NUDGE
+        moves = {
+            Qt.Key.Key_Left: (-step, 0),
+            Qt.Key.Key_Right: (step, 0),
+            Qt.Key.Key_Up: (0, -step),
+            Qt.Key.Key_Down: (0, step),
+        }
+        host = self._host()
+        if key in moves and host is not None:
+            host.nudge(self.key, *moves[key])
+            event.accept()
+            return
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space, Qt.Key.Key_Menu):
+            self._show_menu()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    @override
+    def focusOutEvent(self, event: QFocusEvent) -> None:
+        self._cancel()
+        super().focusOutEvent(event)
+
+    @override
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        self._show_menu(event.globalPos())
+        event.accept()

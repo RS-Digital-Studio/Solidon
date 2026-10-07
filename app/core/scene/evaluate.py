@@ -1627,7 +1627,7 @@ def _evaluate(
         _without_repeats(
             _without_undone_placements(
                 _without_outdated(
-                    _without_settled(_without_discarded(findings, discarded(ran, source))),
+                    _without_settled(_without_discarded(findings, discarded(ran, source), ran)),
                     scene,
                     cancelled=token,
                 ),
@@ -2022,7 +2022,9 @@ def _why_it_stopped(findings: Sequence[Finding], stopped_at: int) -> str:
     return f"{reason} — {detail}" if detail else reason
 
 
-def _without_discarded(findings: Sequence[Finding], gone: Discarded) -> list[Finding]:
+def _without_discarded(
+    findings: Sequence[Finding], gone: Discarded, ran: Sequence[Operation]
+) -> list[Finding]:
     """Streicht Befunde über das, was ein späterer Schritt wieder entfernt hat.
 
     Der Anlass (S-20261006-2a0261): Ein Kunde setzte einen Stift in eine
@@ -2038,16 +2040,36 @@ def _without_discarded(findings: Sequence[Finding], gone: Discarded) -> list[Fin
     behält seine Befunde; über ihn weiß der Endstand nichts. Befunde ohne
     Schritt (die Prüfungen am Endstand) und die des anhaltenden Schritts
     bleiben, denn er hat nicht gerechnet.
+
+    **Der Satz über die Stücke eines Schnitts** (:data:`HALVES_IN_PLACE`) hängt
+    an der Quelle, die in einer bleibenden Hälfte weiterlebt. Er gilt nur,
+    solange von den Ausgängen seines Schritts (``ran``) zwei übrig sind — ein
+    Stück allein liegt an nichts (Review zu ``bbd41ff2d``, R1).
+
+    **Ein Befund über ein Paar** (``Finding.object_ids``: zwei Körper, die
+    sich überschneiden, zwei Teile auf ihrem Fügeweg) hängt am ersten und fällt
+    trotzdem, sobald einer von beiden fort ist (Fund N1).
     """
     if not gone.steps and not gone.outputs:
         return list(findings)
+    alone = {
+        entry.id
+        for entry in ran
+        if sum(name not in gone.outputs.get(entry.id, frozenset()) for name in entry.outputs) < 2
+    }
+
+    def speaks_of_the_lost(entry: Finding, op_id: OpId) -> bool:
+        lost = gone.outputs.get(op_id, frozenset())
+        return entry.object_id in lost or not lost.isdisjoint(entry.object_ids)
+
     return [
         entry
         for entry in findings
         if entry.op_id is None
         or (
             entry.op_id not in gone.steps
-            and entry.object_id not in gone.outputs.get(entry.op_id, frozenset())
+            and not speaks_of_the_lost(entry, entry.op_id)
+            and not (entry.code == HALVES_IN_PLACE and entry.op_id in alone)
         )
     ]
 
@@ -2259,7 +2281,8 @@ def _without_repeats(findings: Sequence[Finding]) -> list[Finding]:
     dieselbe Zahl über denselben Körper.
 
     **Verglichen werden Code, Körper, Schwere, Werte und Merkmalverweise**,
-    dazu die unveränderten Orts- und Konturdaten. Das ist Datenidentität,
+    bei einem Paar beide Körper (``object_ids``), dazu die unveränderten Orts-
+    und Konturdaten. Das ist Datenidentität,
     kein numerischer Geometrievergleich: Auch sehr nahe verschiedene Orte
     dürfen nicht durch Rundung oder eine Toleranz zusammenfallen. Die
     Schrittnummer gehört nicht zur Aussage. Ändert eine Operation die Zahl
@@ -2278,6 +2301,8 @@ def _without_repeats(findings: Sequence[Finding]) -> list[Finding]:
         key = (
             entry.code,
             entry.object_id,
+            # Zwei Paare mit gleich benannten Partnern sind zwei Aussagen.
+            entry.object_ids,
             entry.severity,
             tuple(sorted((name, str(value)) for name, value in (entry.values or {}).items())),
             entry.feature_ids,

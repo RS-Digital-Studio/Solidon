@@ -7,7 +7,7 @@
 > der es zuverlässig, schnell und dauerhaft hochwertig werden kann.
 
 Bezug: Bauplan §2, §9, §15, §23, §26, §31, §35, §36, §38, §39 und §42 sowie
-[`konzept-agent-vertiefung.md`](konzept-agent-vertiefung.md) und
+[`konzept-agent-vertiefung.md`](archiv/konzept-agent-vertiefung.md) und
 [`konzept-versionspflege-2026-08.md`](konzept-versionspflege-2026-08.md).
 
 ---

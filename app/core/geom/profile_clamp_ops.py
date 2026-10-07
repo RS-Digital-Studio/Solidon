@@ -627,6 +627,8 @@ def _check_liner_frame(
     consumes=4,
     produces=4,
     keeps_inputs=4,
+    # Die neuen Einlagen folgen dem Sitz der unteren Schale (``history.discarded``).
+    shapes_with_other_inputs=True,
     touches_features=True,
     material_params=("clamp_material", "liner_material"),
     doc=_(

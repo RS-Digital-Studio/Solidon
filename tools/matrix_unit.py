@@ -72,6 +72,9 @@ SPEC = sys.argv[4] if len(sys.argv) > 4 else "heim"
 # Code-Wurzel: Erst ``tools`` laden, dann die Wurzel davorlegen —
 # danach findet jedes ``from tools import …`` das geladene Paket.
 sys.path.insert(0, str(HERE.parent))
+from tools import matrix_config  # noqa: E402
+
+matrix_config.own_package()
 from tools.matrix_config import HOME, SLICERS  # noqa: E402
 
 sys.path.insert(0, str(ROOT))
@@ -120,6 +123,8 @@ from app.ui.print_settings_dialog import (  # noqa: E402
     _prepare_plate,
 )
 from tools import matrix_gcode  # noqa: E402
+
+assert Path(matrix_gcode.__file__).resolve().parent == HERE, matrix_gcode.__file__
 
 MATERIAL = "pla"
 #: Weniger Stützbahn als das in Metern heißt im Lauf ``stuetzen_auto``: Der

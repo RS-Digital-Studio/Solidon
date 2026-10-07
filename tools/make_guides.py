@@ -1178,7 +1178,9 @@ def story_housing_with_lid(run: GuideRun) -> None:
         raise SystemExit("Der Quader wurde nicht gerechnet")
     _face_id, face = _top_face(result.scene.objects[body])
     centre = tuple(float(value) for value in face.params["centre"])
-    run.capture(1, points={"viewport": _visible(run, (centre[0], centre[1], centre[2]))})
+    # Ein Ring, kein Zeiger: Der neue Quader ist schon gewählt, geklickt wird
+    # hier nicht (der Satz des Schritts sagt es).
+    run.capture(1, rings={"viewport": _visible(run, (centre[0], centre[1], centre[2]))})
     run.capture(2)
 
     guide_targets.widget_for(run.window, "operation:hollow_object").click()

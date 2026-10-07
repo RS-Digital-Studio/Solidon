@@ -466,7 +466,7 @@ class VariantGroup:
 #: Verlauf, wie die versteckten Zwillinge auch.
 VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
     VariantGroup(
-        title=_("Aus Skizze erzeugen …"),
+        title=_("Zeichnen …"),
         doc=_(
             "Aus einer Grundform oder einer gezeichneten Skizze einen Körper "
             "machen — hochziehen, um eine Achse drehen, an einem Bogen "
@@ -658,7 +658,7 @@ class OperationSpec:
 
     Die Schwester von ``requires_kind``, eine Frage weiter: Nicht die Bauart
     (Netz oder exakt), sondern der Zustand. *Offene Fläche schließen* braucht
-    eine offene Fläche, *In Einzelteile zerlegen* mehrere Teile, *Gitter
+    eine offene Fläche, *In Einzelteile aufteilen* mehrere Teile, *Gitter
     füllen* einen Hohlraum. Gemessen am 13.09.2026 über alle Dialoge: Ohne
     die Angabe öffneten die drei an einem sauberen Quader einen Dialog,
     dessen Vorschau nur „Keine Vorschau: …" sagen konnte — die Sackgasse aus
@@ -764,6 +764,17 @@ class OperationSpec:
     baut ihn dabei um. Gelesen von ``history.discarded``: Wird alles Neue eines
     solchen Schritts später entfernt, wirkt er nicht mehr, auch wenn der Träger
     bleibt (S-20261006-2a0261)."""
+    shapes_with_other_inputs: bool = False
+    """Die Operation formt einen Körper, den sie unter seiner Kennung zurückgibt, mit einem anderen.
+
+    *Gegenform einlassen* schneidet die Teile als Taschen in den Einsatz und
+    gibt alle unter ihrer Kennung zurück. Gelesen von ``history.discarded``:
+    Wird ein Teil danach entfernt, lebt es in der Tasche weiter, und was es
+    gebaut hat, wirkt. Ohne das Feld gibt ein Schritt über mehrere Körper jeden
+    für sich weiter (*Auf dem Bett anordnen*, gemeinsam verschieben,
+    *Überschneidungen prüfen*): Ein Eingang lebt, solange sein gleichnamiger
+    Ausgang lebt. **Lage ist keine Form** — dass ein entfernter Stift beim
+    Anordnen Platz brauchte, lässt seine Schritte nicht weiterwirken."""
     touches_features: bool = False
     """Ob diese Operation Merkmale **einführt** — nicht nur weiterreicht.
 
@@ -1058,6 +1069,7 @@ def register_op(
     produces_from: str | None = None,
     keeps_inputs: int = 0,
     leaves_inputs_unchanged: bool = False,
+    shapes_with_other_inputs: bool = False,
     touches_features: bool = False,
     leaves_separate_parts: bool = False,
     retriangulates: bool = False,
@@ -1099,6 +1111,7 @@ def register_op(
                 produces_from=produces_from,
                 keeps_inputs=keeps_inputs,
                 leaves_inputs_unchanged=leaves_inputs_unchanged,
+                shapes_with_other_inputs=shapes_with_other_inputs,
                 touches_features=touches_features,
                 leaves_separate_parts=leaves_separate_parts,
                 retriangulates=retriangulates,

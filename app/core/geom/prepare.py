@@ -53,12 +53,21 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.measure import surface_gap
-from app.core.geom.mesh import MeshData, as_mesh_data, concatenated, ray_hit_distances
+from app.core.geom.mesh import (
+    MeshData,
+    as_mesh_data,
+    concatenated,
+    ray_hit_distances,
+    row_dots,
+    shift_body,
+    stable_normals,
+)
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.print_settings import is_slender
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.registry import param
+from app.core.registry.params import ZERO_AUTOMATIC
 from app.core.types import (
     BoundingBox,
     CancelToken,
@@ -316,7 +325,7 @@ def _flank_is_open(
     """
     from app.core.geom.mesh import on_surface
 
-    reach = float(np.linalg.norm(np.asarray(body.bounds.maximum) - np.asarray(body.bounds.minimum)))
+    reach = float(math.hypot(*np.asarray(body.bounds.maximum) - np.asarray(body.bounds.minimum)))
     if reach <= EPS_GEOM or radius <= EPS_GEOM:
         return True
     axis = np.asarray(unit, dtype=float)
@@ -328,8 +337,8 @@ def _flank_is_open(
     samples = np.asarray(position, dtype=float) + rim[None, :, :] + depths[:, None, None] * axis
     flat = samples.reshape(-1, 3)
     closest, _distance, triangle = on_surface(body.raw, flat, index=surface_index_of(body))
-    normals = np.asarray(body.raw.face_normals)[triangle]
-    outward = np.einsum("ij,ij->i", flat - closest, normals)
+    normals = stable_normals(body.raw)[0][triangle]
+    outward = row_dots(flat - closest, normals)
     solid = outward <= EPS_GEOM
     if old_opening is not None:
         solid = solid | old_opening.holds(flat)
@@ -362,7 +371,7 @@ def inside_material(
     from app.core.geom.mesh import on_surface
 
     closest, _distance, triangle = on_surface(body.raw, points, index=surface_index_of(body))
-    normals = np.asarray(body.raw.face_normals, dtype=float)[triangle]
+    normals = stable_normals(body.raw)[0][triangle]
     offset = points - closest
     outward = (
         offset[:, 0] * normals[:, 0] + offset[:, 1] * normals[:, 1] + offset[:, 2] * normals[:, 2]
@@ -613,7 +622,7 @@ def mouth_over_the_edge(
     offene Flanke, die es nicht gab. Ohne Mündungsfläche bleibt es beim Kreis.
     """
     vector = np.asarray(inward, dtype=float)
-    length = float(np.linalg.norm(vector))
+    length = float(math.hypot(*vector))
     radius = diameter / 2.0
     if length <= EPS_GEOM or radius <= EPS_GEOM:
         return []
@@ -633,15 +642,17 @@ def mouth_over_the_edge(
         if face is not None:
             mouth, normal = face
             # Je Kranzpunkt entlang der Achse bis in die Ebene der Mündungsfläche.
-            rim = rim - np.outer((rim @ normal) / float(normal @ unit), unit)
+            rim = rim - np.outer(
+                (transform.along(rim, normal)) / float(transform.along(normal, unit)), unit
+            )
     from app.core.geom.mesh import on_surface
 
     depths = radius * np.asarray(_MOUTH_DEPTHS, dtype=float)
     samples = mouth + rim[None, :, :] + depths[:, None, None] * unit
     flat = samples.reshape(-1, 3)
     closest, _distance, triangle = on_surface(body.raw, flat, index=surface_index_of(body))
-    normals = np.asarray(body.raw.face_normals)[triangle]
-    outward = np.einsum("ij,ij->i", flat - closest, normals)
+    normals = stable_normals(body.raw)[0][triangle]
+    outward = row_dots(flat - closest, normals)
     inside = (outward <= EPS_GEOM).reshape(len(depths), _RIM_POINTS)
     if bool(inside.all(axis=1).any()):
         return []
@@ -751,8 +762,8 @@ def _mouth_face(
     if not len(distances):
         return None
     first = int(np.argmin(distances))
-    normal = np.asarray(body.raw.face_normals[int(hit[first])], dtype=float)
-    if abs(float(normal @ inward)) <= 0.1:
+    normal = np.array(stable_normals(body.raw)[0][int(hit[first])], dtype=float)
+    if abs(float(transform.along(normal, inward))) <= 0.1:
         return None
     return start + inward * float(distances[first]), normal
 
@@ -820,7 +831,7 @@ def _axes_over(mesh: HasBounds, position: Vec3, unit: Any, radius: float) -> lis
     lower, upper = mesh.bounds.minimum, mesh.bounds.maximum
     over: list[str] = []
     for index, name in enumerate("xyz"):
-        extent = radius * math.sqrt(max(0.0, 1.0 - float(unit[index]) ** 2))
+        extent = radius * math.sqrt(max(0.0, 1.0 - float(unit[index]) * float(unit[index])))
         if extent <= EPS_GEOM:
             continue
         outside = (
@@ -837,7 +848,7 @@ def _rim_around(unit: Any, radius: float) -> np.ndarray:
     axis = np.asarray(unit, dtype=float)
     helper = np.array([0.0, 0.0, 1.0]) if abs(float(axis[2])) < 0.9 else np.array([1.0, 0.0, 0.0])
     first = np.cross(axis, helper)
-    first /= float(np.linalg.norm(first))
+    first /= float(math.hypot(*first))
     second = np.cross(axis, first)
     # Der Kranz ist ein regelmaessiges Vieleck; seine Ecken kommen aus
     # Ganzzahlen und sind damit auf jeder Maschine dieselben (RM-187).
@@ -1189,7 +1200,7 @@ def slot_bore(
     if round_bore:
         tool = lathe.cylinder(radius=radius, height=high - low, sections=BORE_SECTIONS)
         if below or above:
-            tool.apply_translation((0.0, 0.0, (high + low) / 2.0))
+            shift_body(tool, (0.0, 0.0, (high + low) / 2.0))
     else:
         tool = extrude_profile(
             slot_profile(radius=radius, travel=travel, angle_deg=angle_deg),
@@ -1773,7 +1784,7 @@ def drill_tool(
         height=depth + mouth_overlap,
         sections=BORE_SECTIONS,
     )
-    cylinder.apply_translation((0.0, 0.0, (mouth_overlap - depth) / 2.0))
+    shift_body(cylinder, (0.0, 0.0, (mouth_overlap - depth) / 2.0))
     return MeshData.of(cylinder)
 
 
@@ -2011,7 +2022,7 @@ def drill(
             slot_angle=slot_angle,
         )
         cylinder = tool.raw.copy()
-        cylinder.apply_translation((0.0, 0.0, mouth))
+        shift_body(cylinder, (0.0, 0.0, mouth))
         transform.moved(cylinder, _in_world(frame))
         outcome = boolean(
             "difference",
@@ -2071,9 +2082,9 @@ def drill(
     to_the_middle = 0.0
     if through:
         # Symmetrisch über beide Seiten hinaus: Mitte auf die Position.
-        cylinder.apply_translation((0.0, 0.0, height / 2.0))
+        shift_body(cylinder, (0.0, 0.0, height / 2.0))
         transform.moved(cylinder, alignment)
-        cylinder.apply_translation(np.asarray(position, dtype=float))
+        shift_body(cylinder, np.asarray(position, dtype=float))
     else:
         # Das Werkzeug ist nicht mehr symmetrisch: Mündung bei null mit
         # Zugabe darüber, Boden exakt bei -height. Die Mündung muss aus dem
@@ -2082,7 +2093,7 @@ def drill(
         # sie zeigt, und das Werkzeug um seine Querachse drehen, wenn die
         # Zugabe sonst am Boden läge (gemessen 06.09.2026 an der y-Achse).
         into = _into_the_material(mesh, axis, position)
-        local_z = alignment[:3, :3] @ np.array([0.0, 0.0, 1.0])
+        local_z = transform.turned(np.array([0.0, 0.0, 1.0]), alignment)
         if float(np.sign(local_z[AXIS_INDEX[axis]])) == into:
             transform.moved(cylinder, transform.rotation("x", 180.0))
         transform.moved(cylinder, alignment)
@@ -2094,7 +2105,7 @@ def drill(
             offset = offset - along * (height / 2.0)
         else:
             to_the_middle = into * height / 2.0
-        cylinder.apply_translation(offset)
+        shift_body(cylinder, offset)
 
     outcome = boolean(
         "difference",
@@ -2168,7 +2179,7 @@ def countersink(
     dort ist ein Hohlraum mitten im Material statt einer Fase am Rand.
     ``centre`` nimmt die Position wörtlich, für den, der sie eintippt.
     """
-    depth = diameter / 2.0 / math.tan(math.radians(angle / 2.0))
+    depth = diameter / 2.0 / units.exact_tan_degrees(angle / 2.0)
     placement = sink_placement(mesh, axis, position, diameter, anchor)
     at = np.asarray(placement.position, dtype=float)
     outward = placement.outward
@@ -2186,9 +2197,9 @@ def countersink(
     # er wird um die Überlappung angehoben, damit die zwei Flächen nicht
     # zusammenfallen (§39). Die halbe Drehung ist exakt (``transform.rotation``).
     transform.moved(cone, transform.rotation("x", 180.0))
-    cone.apply_translation([0.0, 0.0, BOOLEAN_OVERLAP])
+    shift_body(cone, [0.0, 0.0, BOOLEAN_OVERLAP])
     transform.moved(cone, transform.rotation_between(np.array([0.0, 0.0, -1.0]), narrows))
-    cone.apply_translation(at)
+    shift_body(cone, at)
 
     outcome = boolean(
         "difference",
@@ -2428,7 +2439,7 @@ def plug(
         radius=filled / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
     )
     transform.moved(cylinder, _axis_alignment(axis))
-    cylinder.apply_translation(np.asarray(centre, dtype=float))
+    shift_body(cylinder, np.asarray(centre, dtype=float))
 
     # Erst verschneiden: der Stopfen darf nicht aus dem Körper herauswachsen,
     # den er füllt.
@@ -2698,7 +2709,7 @@ def compensate_elephant_foot(
         return mesh, [], None
 
     collar = concatenated(parts)
-    collar.apply_translation([0.0, 0.0, bottom - BOOLEAN_OVERLAP / 2.0])
+    shift_body(collar, [0.0, 0.0, bottom - BOOLEAN_OVERLAP / 2.0])
     outcome = boolean("difference", [mesh, mesh.replacing(collar)], quality=quality)
     findings = list(outcome.findings)
     findings.append(
@@ -3430,6 +3441,7 @@ def spot_param(axis: Literal["x", "y"]) -> Any:
             "Wo die Mitte des Modells liegt. Die freie Stelle wird einmal gesucht und "
             "hier festgehalten; leer sucht sie neu."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
 
 
@@ -4079,23 +4091,32 @@ def named_for(findings: list[Finding], entries: Sequence[Any]) -> list[Finding]:
     bei zwei Körpern ist klar, welche gemeint sind, bei zwanzig steht man davor
     und sucht. Wer die Kennungen hat, trägt sie nach; das ist der Aufrufer,
     denn er hat die Szene.
+
+    **Ein Befund über ein Paar nennt beide Körper** (``Finding.object_ids``):
+    Am ersten hängt er für den Klick, mit dem zweiten fällt er, wenn ein
+    späterer Schritt ihn entfernt (Fund N1 zum Review von ``bbd41ff2d``).
     """
     import dataclasses
 
     named: list[Finding] = []
     for finding in findings:
         values = dict(finding.values)
-        first: Any = None
+        bodies: list[Any] = []
         for field_name in _INDEX_FIELDS:
             index = values.get(field_name)
             if not isinstance(index, int | float) or not 0 <= int(index) < len(entries):
                 continue
             entry = entries[int(index)]
             values[field_name] = entry.name
-            if first is None:
-                first = entry.id
+            if entry.id not in bodies:
+                bodies.append(entry.id)
         named.append(
-            dataclasses.replace(finding, object_id=finding.object_id or first, values=values)
+            dataclasses.replace(
+                finding,
+                object_id=finding.object_id or (bodies[0] if bodies else None),
+                object_ids=tuple(bodies) if len(bodies) > 1 else finding.object_ids,
+                values=values,
+            )
         )
     return named
 
@@ -4221,7 +4242,7 @@ def check_join_path(
         return []
 
     way = np.asarray(direction, dtype=float)
-    length = float(np.linalg.norm(way))
+    length = float(math.hypot(*way))
     if pushing and length <= EPS_GEOM:
         return []
     if pushing:
@@ -4258,7 +4279,7 @@ def check_join_path(
     for step in range(1, steps):
         back = distance * (steps - step) / steps
         probe = moving.raw.copy()
-        probe.apply_translation(-way * back)
+        shift_body(probe, -way * back)
         shared = shared_volume(probe, fixed.raw)
         if shared > worst:
             worst = shared

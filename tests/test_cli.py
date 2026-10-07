@@ -493,6 +493,39 @@ def test_info_describes_the_evaluated_scene(
     assert "12" in printed
 
 
+def test_info_names_steps_whose_result_was_removed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Was ein späterer Schritt wieder entfernt hat, steht unter „Ohne Wirkung“.
+
+    Zweite Durchsicht zum Fix von ``bbd41ff2d`` (K-b): Die Kommandozeile
+    leitete „aus“ und „ruht“ selbst her und kannte „Ergebnis entfernt“ nicht,
+    während Verlaufsfeld und Steckbrief es nennen. Duplizieren wirkt nach dem
+    Entfernen der Kopie nicht mehr; das Einlesen wirkt weiter.
+    """
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+    main(["import", str(path), str(MESHES / "cube_clean.stl")])
+    assert main(["run", "duplicate_object", str(path), "--on", "obj_1", "--count", "2"]) == 0
+    copy = load(path).document.ops[-1]
+    assert copy.outputs == ("obj_1", "obj_2"), "die Kopie heißt, wie der Test sie entfernt"
+    assert main(["run", "delete_object", str(path), "--on", "obj_2"]) == 0
+    capsys.readouterr()
+
+    assert main(["info", str(path)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+
+    assert "Ohne Wirkung" in lines
+    below = lines[lines.index("Ohne Wirkung") + 1 :]
+    assert below and below[0].split() == [
+        str(copy.id),
+        "duplicate_object",
+        "(Ergebnis",
+        "entfernt)",
+    ]
+    assert not any("load" in line.split() for line in below), "das Einlesen wirkt weiter"
+
+
 def test_the_same_bytes_under_another_name_keep_their_own_name(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -345,6 +345,25 @@ def test_the_printer_button_is_a_direct_keyboard_path(qt_app: QApplication) -> N
     assert header.printer_button.toolTip()
 
 
+def test_the_printer_button_has_one_name_seen_and_read(qt_app: QApplication) -> None:
+    """„Drucker …“ sichtbar, „Drucker wechseln“ vorgelesen, „Druckeinstellungen“ im Dialog (RM-507).
+
+    Sichtbarer und zugänglicher Name kommen aus einem Schlüssel — auch nachdem
+    die Kopfzeile ihre Lage für eine andere Breite neu gelegt hat.
+    """
+    from app.ui.header import printer_button_text
+
+    header = HeaderBar()
+    header.resize(1600, header.sizeHint().height())
+    header.show()
+    QApplication.processEvents()
+    try:
+        assert header.printer_button.text() == printer_button_text()
+        assert header.printer_button.accessibleName() == printer_button_text()
+    finally:
+        header.close()
+
+
 def test_an_open_project_gives_the_header_readable_room_before_toolbar_words(
     window: MainWindow, qt_app: QApplication
 ) -> None:
