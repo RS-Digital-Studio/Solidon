@@ -821,6 +821,26 @@ def _in_a_wider_bore(spec: PartSpec, bore: Feature, built: Mesh) -> Finding | No
     )
 
 
+def _bore_check(
+    spec: PartSpec,
+    params: Any,
+    bore: Feature,
+    host: Any,
+    profile: Profile | None,
+    otherwise: Finding | None,
+) -> Finding | None:
+    """Was der Baustein selbst über die Bohrung sagt, in der er sitzt (``at_hole_check``).
+
+    ``host`` ist der Träger vor dem Schnitt. Erst danach, was die Operation
+    sonst zu sagen hätte: Ein Befund über die Bohrung erklärt mehr als „trägt
+    nichts ab".
+    """
+    if spec.at_hole_check is None:
+        return otherwise
+    said = spec.at_hole_check(params, bore, host, profile)
+    return said if said is not None else otherwise
+
+
 #: Ab welchem Anteil der Senkrechten eine Fläche als waagerecht gilt.
 #: cos(30°) — darunter laufen genug Schichten längs der Biegung, dass
 #: die dünne Stelle eines Filmscharniers reißt.
@@ -1201,7 +1221,9 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
         if nothing is None and subtractive:
             nothing = _cuts_no_layer(body, mesh, built, spec, ctx.profile)
         if bore is not None:
-            nothing = _in_a_wider_bore(spec, bore, built) or nothing
+            nothing = _in_a_wider_bore(spec, bore, built) or _bore_check(
+                spec, part_params, bore, body, ctx.profile, nothing
+            )
 
     features = _merged_features(
         source,
@@ -1804,7 +1826,9 @@ def _insert_at_exact(
         if nothing is None and subtractive:
             nothing = _cuts_no_layer(body, mesh, built, spec, ctx.profile)
         if bore is not None:
-            nothing = _in_a_wider_bore(spec, bore, built) or nothing
+            nothing = _in_a_wider_bore(spec, bore, built) or _bore_check(
+                spec, part_params, bore, body, ctx.profile, nothing
+            )
     _exact_result_checked(mesh)
     features = _merged_features(
         source,

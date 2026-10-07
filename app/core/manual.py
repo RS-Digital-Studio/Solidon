@@ -1829,10 +1829,14 @@ def profiles_text() -> str:
         str(
             _(
                 "Woher die Maße kommen, wenn ein Baustein ein Schraubenloch, eine "
-                "Mutternfalle oder ein Gewinde setzt. In eine Bohrung zwischen Kernloch und "
-                "Nennmaß passt ein druckbares Innengewinde dieser Größe. Passt keine, nimmt "
-                "das Gewinde ein eigenes Maß, dessen Kernloch die Bohrung ist. Nichts davon "
-                "wird geschätzt."
+                "Mutternfalle oder ein Gewinde setzt: aus der metrischen Reihe von M1.6 bis "
+                "M64. In eine Bohrung zwischen Kernloch und Nennmaß passt ein druckbares "
+                "Innengewinde dieser Größe. Passt keine, nimmt das Gewinde ein eigenes Maß, "
+                "dessen Kernloch die Bohrung ist. Auch Schraubenloch, Mutternfalle, Schraube "
+                "und Mutter nehmen unter *Eigenes Maß* jeden Durchmesser; ihre Maße sind dann "
+                "aus den Normgrößen daneben abgeleitet und nicht genormt, und der Prüfbericht "
+                "sagt das. Eine Einpressbuchse, die hier fehlt, bekommt Bohrung und Länge aus "
+                "ihrem Datenblatt."
             )
         )
     )

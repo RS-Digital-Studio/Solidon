@@ -12,6 +12,11 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 13 seit dem 06.10.2026: Schrauben, Muttern und Scheiben reichen über
+# die ISO-Größen von M1.6 bis M64 (ohne M60); die Regelsteigungen aus `pitches`
+# (Version 12) stehen jetzt bei ihren Schrauben, die Tabellenart entfällt. Dazu
+# die Einpressbuchsen Ruthex RX-M8x12,7 und RX-M3x5x4 und CNC Kitchen M10 ×
+# 12,7. Kein bestehender Wert hat sich geändert.
 # Version 12 seit dem 06.10.2026: Die Regelsteigungen über M8 sind als eigene
 # Tabellenart `pitches` dazugekommen, für Gewinde mit eigenem Maß. Kein
 # bestehender Wert hat sich geändert.
@@ -50,7 +55,7 @@
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "12"
+version = "13"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -58,11 +63,52 @@ version = "12"
 # head_height: Kopfhöhe · countersink: Kopfdurchmesser Senkkopf (ISO 10642)
 #   countersink ist bei allen Größen 2·d — nachgeschlagen am 02.09.2026: ISO 10642 /
 #   DIN 7991 nennen dk max = 2·d für M3 bis M8 (größere Zahlen in Händlertabellen
-#   sind die Senkung d2 der Durchgangsbohrung, nicht der Kopf); M2 und M2.5 stehen
-#   nicht in der Norm und folgen derselben Regel.
+#   sind die Senkung d2 der Durchgangsbohrung, nicht der Kopf); M1.6, M2 und M2.5
+#   stehen nicht in der Norm und folgen derselben Regel. Seit Version 13 auch M10
+#   bis M64. Das Maßblatt DIN 7991 von Aspen Fasteners nennt 2·d bis M12 (20, 24),
+#   darüber kleinere Köpfe (M14 27, M16 30, M20 36, M24 39) — bis M20 liegen
+#   beide Reihen im Bereich von ISO 10642. Über M20 führt keine Norm einen
+#   Senkkopf, DIN 7991 endet bei M24; die Regel 2·d gibt dort eine Senkung, in
+#   der ein Kopf nach DIN 7991 tiefer sitzt (M24: 48 statt 39).
 # hex: Schlüsselweite Innensechskant · pitch: Regelsteigung
 # clearance_fine / clearance_coarse: Durchgangsloch feine und grobe Reihe
 #   (ISO 273; die mittlere Reihe ist clearance). Seit Version 9.
+#
+# M1.6 und M10 bis M64 seit Version 13: die Größen der Version-12-Steigungstabelle,
+# dazu M1.6 und aus der zweiten Wahl nach ISO 262 M33, M39, M45 und M52. Herkunft
+# je Spalte, gelesen am 06.10.2026:
+#   pitch, tap, clearance_*: Gewindetabelle von PreciFast
+#     (precifast.de/tabelle-metrisches-gewinde-din-iso/: Kernloch als Bohrermaß,
+#     Steigung, Durchgangsloch fein/mittel/grob); die Durchgangslöcher zusätzlich
+#     gegen Wikipedia „Durchgangsbohrung" (ISO 273) — beide gleich, bis auf einen
+#     Druckfehler bei PreciFast (M56 fein 38 statt 58). Für M33 und M39 mechcodex.com
+#     „Metric Clearance Hole Sizes", für M45 und M52 engineeringhardware.com
+#     „Clearance Hole Sizes (ISO 273)" (dort auch M56 und M64, gleich). Kernloch der
+#     zweiten Wahl d − P.
+#   head, hex: DIN 912 / ISO 4762 — bis M24 Maßblatt von Aspen Fasteners
+#     (head_height dort k = d; das Blatt hat drei Druckfehler in k: M8 6, M12 1,
+#     M22 2); M1.6 (dk 3,0, max 3,14) und M27 bis M64 fasten.it „DIN 912" und
+#     schraube-mutter.de „DIN 912 Schraubenkopfdurchmesser" und „Schlüsselweiten von
+#     Innensechskantschrauben"; M33 50, M39 58, M45 68, M52 78 ebenda. M39 s 27 (s min
+#     27,065; eine Seite mit „37" hat einen Druckfehler).
+# M60 steht bewusst nicht in der Tabelle: DIN 912 führt keine Zylinderschraube M60.
+# Als eigenes Maß leitet Ø 60 zwischen M56 und M64 ab und trifft dort die Normwerte
+# (Steigung 5,5, Mutter 90/48, Scheibe 66/110/10, Durchgang 62/66/70), was
+# `tests/test_standards.py` festhält.
+# `tests/test_standards.py` rechnet jede Zeile gegen eine zweite Herleitung nach.
+
+[[screws]]
+size = "M1.6"
+nominal = 1.6
+clearance = 1.8
+tap = 1.3
+head = 3.0
+head_height = 1.6
+countersink = 3.2
+hex = 1.5
+pitch = 0.35
+clearance_fine = 1.7
+clearance_coarse = 2.0
 
 [[screws]]
 size = "M2"
@@ -155,92 +201,252 @@ pitch = 1.25
 clearance_fine = 8.4
 clearance_coarse = 10.0
 
-# --- Regelsteigungen über der Schraubentabelle ----------------------------------
-# Ein Gewinde mit eigenem Maß (Baustein *Druckbares Gewinde*, Größe „Eigenes
-# Maß") bekommt ohne Angabe die Regelsteigung seines Durchmessers: die der
-# größten Größe aus Schrauben- und dieser Tabelle, die er erreicht. Darum steht
-# hier keine Größe der Schraubentabelle ein zweites Mal, und oberhalb von M64
-# bleibt es bei 6 mm.
-# nominal: Nenndurchmesser · pitch: Regelsteigung (grobe Reihe)
-# Quelle: die Auswahlgrößen nach ISO 262 mit ihrer groben Steigung, wie sie
-# frei veröffentlichte Gewindetabellen nennen (Wikipedia „ISO metric screw
-# thread", Tabelle „ISO 262 selected sizes", gelesen am 06.10.2026). Seit
-# Version 12.
-
-[[pitches]]
+[[screws]]
 size = "M10"
 nominal = 10.0
+clearance = 11.0
+tap = 8.5
+head = 16.0
+head_height = 10.0
+countersink = 20.0
+hex = 8.0
 pitch = 1.5
+clearance_fine = 10.5
+clearance_coarse = 12.0
 
-[[pitches]]
+[[screws]]
 size = "M12"
 nominal = 12.0
+clearance = 13.5
+tap = 10.2
+head = 18.0
+head_height = 12.0
+countersink = 24.0
+hex = 10.0
 pitch = 1.75
+clearance_fine = 13.0
+clearance_coarse = 14.5
 
-[[pitches]]
+[[screws]]
 size = "M14"
 nominal = 14.0
+clearance = 15.5
+tap = 12.0
+head = 21.0
+head_height = 14.0
+countersink = 28.0
+hex = 12.0
 pitch = 2.0
+clearance_fine = 15.0
+clearance_coarse = 16.5
 
-[[pitches]]
+[[screws]]
 size = "M16"
 nominal = 16.0
+clearance = 17.5
+tap = 14.0
+head = 24.0
+head_height = 16.0
+countersink = 32.0
+hex = 14.0
 pitch = 2.0
+clearance_fine = 17.0
+clearance_coarse = 18.5
 
-[[pitches]]
+[[screws]]
 size = "M18"
 nominal = 18.0
+clearance = 20.0
+tap = 15.5
+head = 27.0
+head_height = 18.0
+countersink = 36.0
+hex = 14.0
 pitch = 2.5
+clearance_fine = 19.0
+clearance_coarse = 21.0
 
-[[pitches]]
+[[screws]]
 size = "M20"
 nominal = 20.0
+clearance = 22.0
+tap = 17.5
+head = 30.0
+head_height = 20.0
+countersink = 40.0
+hex = 17.0
 pitch = 2.5
+clearance_fine = 21.0
+clearance_coarse = 24.0
 
-[[pitches]]
+[[screws]]
 size = "M22"
 nominal = 22.0
+clearance = 24.0
+tap = 19.5
+head = 33.0
+head_height = 22.0
+countersink = 44.0
+hex = 17.0
 pitch = 2.5
+clearance_fine = 23.0
+clearance_coarse = 26.0
 
-[[pitches]]
+[[screws]]
 size = "M24"
 nominal = 24.0
+clearance = 26.0
+tap = 21.0
+head = 36.0
+head_height = 24.0
+countersink = 48.0
+hex = 19.0
 pitch = 3.0
+clearance_fine = 25.0
+clearance_coarse = 28.0
 
-[[pitches]]
+[[screws]]
 size = "M27"
 nominal = 27.0
+clearance = 30.0
+tap = 24.0
+head = 40.0
+head_height = 27.0
+countersink = 54.0
+hex = 19.0
 pitch = 3.0
+clearance_fine = 28.0
+clearance_coarse = 32.0
 
-[[pitches]]
+[[screws]]
 size = "M30"
 nominal = 30.0
+clearance = 33.0
+tap = 26.5
+head = 45.0
+head_height = 30.0
+countersink = 60.0
+hex = 22.0
 pitch = 3.5
+clearance_fine = 31.0
+clearance_coarse = 35.0
 
-[[pitches]]
+[[screws]]
+size = "M33"
+nominal = 33.0
+clearance = 36.0
+tap = 29.5
+head = 50.0
+head_height = 33.0
+countersink = 66.0
+hex = 24.0
+pitch = 3.5
+clearance_fine = 34.0
+clearance_coarse = 38.0
+
+[[screws]]
 size = "M36"
 nominal = 36.0
+clearance = 39.0
+tap = 32.0
+head = 54.0
+head_height = 36.0
+countersink = 72.0
+hex = 27.0
 pitch = 4.0
+clearance_fine = 37.0
+clearance_coarse = 42.0
 
-[[pitches]]
+[[screws]]
+size = "M39"
+nominal = 39.0
+clearance = 42.0
+tap = 35.0
+head = 58.0
+head_height = 39.0
+countersink = 78.0
+hex = 27.0
+pitch = 4.0
+clearance_fine = 40.0
+clearance_coarse = 45.0
+
+[[screws]]
 size = "M42"
 nominal = 42.0
+clearance = 45.0
+tap = 37.5
+head = 63.0
+head_height = 42.0
+countersink = 84.0
+hex = 32.0
 pitch = 4.5
+clearance_fine = 43.0
+clearance_coarse = 48.0
 
-[[pitches]]
+[[screws]]
+size = "M45"
+nominal = 45.0
+clearance = 48.0
+tap = 40.5
+head = 68.0
+head_height = 45.0
+countersink = 90.0
+hex = 36.0
+pitch = 4.5
+clearance_fine = 46.0
+clearance_coarse = 52.0
+
+[[screws]]
 size = "M48"
 nominal = 48.0
+clearance = 52.0
+tap = 43.0
+head = 72.0
+head_height = 48.0
+countersink = 96.0
+hex = 36.0
 pitch = 5.0
+clearance_fine = 50.0
+clearance_coarse = 56.0
 
-[[pitches]]
+[[screws]]
+size = "M52"
+nominal = 52.0
+clearance = 56.0
+tap = 47.0
+head = 78.0
+head_height = 52.0
+countersink = 104.0
+hex = 36.0
+pitch = 5.0
+clearance_fine = 54.0
+clearance_coarse = 62.0
+
+[[screws]]
 size = "M56"
 nominal = 56.0
+clearance = 62.0
+tap = 50.5
+head = 84.0
+head_height = 56.0
+countersink = 112.0
+hex = 41.0
 pitch = 5.5
+clearance_fine = 58.0
+clearance_coarse = 66.0
 
-[[pitches]]
+[[screws]]
 size = "M64"
 nominal = 64.0
+clearance = 70.0
+tap = 58.0
+head = 96.0
+head_height = 64.0
+countersink = 128.0
+hex = 46.0
 pitch = 6.0
+clearance_fine = 66.0
+clearance_coarse = 74.0
 
 # --- Sechskantmuttern -----------------------------------------------------------
 # width: Schlüsselweite · height: Höhe (Regelmutter, m max nach ISO 4032)
@@ -251,6 +457,19 @@ pitch = 6.0
 # beiden Normen gleich, deshalb fiel es nirgends auf. Eine M5-Mutternfalle war
 # damit 0,6 mm zu flach — bei der verbreitetsten Größe, und der Baustein
 # verspricht im caveat das Gegenteil.
+#
+# M1.6 und M10 bis M64 seit Version 13, s max und m max aus dem Maßblatt DIN 934 /
+# ISO 4032 von Aspen Fasteners; die Schlüsselweiten bis M42 zusätzlich gegen
+# Wikipedia „Schlüsselweite" (ISO 4032, ISO 272), M27 bis M64 samt M33, M39, M45 und
+# M52 gegen wermac.org „Dimensions Across Flats and Heights of Hex Nuts according to
+# ISO 4032". Ab M10 weicht die
+# Schlüsselweite von der alten DIN 934 ab (M10 16 statt 17, M12 18 statt 19, M14
+# 21 statt 22, M22 34 statt 32); hier steht die ISO-Reihe wie bei den Höhen.
+
+[[nuts]]
+size = "M1.6"
+width = 3.2
+height = 1.3
 
 [[nuts]]
 size = "M2"
@@ -287,10 +506,116 @@ size = "M8"
 width = 13.0
 height = 6.8
 
+[[nuts]]
+size = "M10"
+width = 16.0
+height = 8.4
+
+[[nuts]]
+size = "M12"
+width = 18.0
+height = 10.8
+
+[[nuts]]
+size = "M14"
+width = 21.0
+height = 12.8
+
+[[nuts]]
+size = "M16"
+width = 24.0
+height = 14.8
+
+[[nuts]]
+size = "M18"
+width = 27.0
+height = 15.8
+
+[[nuts]]
+size = "M20"
+width = 30.0
+height = 18.0
+
+[[nuts]]
+size = "M22"
+width = 34.0
+height = 19.4
+
+[[nuts]]
+size = "M24"
+width = 36.0
+height = 21.5
+
+[[nuts]]
+size = "M27"
+width = 41.0
+height = 23.8
+
+[[nuts]]
+size = "M30"
+width = 46.0
+height = 25.6
+
+[[nuts]]
+size = "M33"
+width = 50.0
+height = 28.7
+
+[[nuts]]
+size = "M36"
+width = 55.0
+height = 31.0
+
+[[nuts]]
+size = "M39"
+width = 60.0
+height = 33.4
+
+[[nuts]]
+size = "M42"
+width = 65.0
+height = 34.0
+
+[[nuts]]
+size = "M45"
+width = 70.0
+height = 36.0
+
+[[nuts]]
+size = "M48"
+width = 75.0
+height = 38.0
+
+[[nuts]]
+size = "M52"
+width = 80.0
+height = 42.0
+
+[[nuts]]
+size = "M56"
+width = 85.0
+height = 45.0
+
+[[nuts]]
+size = "M64"
+width = 95.0
+height = 51.0
+
 # --- Unterlegscheiben -----------------------------------------------------------
 # Flache Scheiben ohne Fase nach ISO 7089. Innen-, Außenmaß und Dicke aus den
-# frei zugänglichen Produktdaten von Würth; alle sieben Größen gehören zur
-# gleichen Reihe.
+# frei zugänglichen Produktdaten von Würth; die Größen M2 bis M8 gehören zur
+# gleichen Reihe. M1.6 und M10 bis M64 seit Version 13 nach ISO 7089 aus der Tabelle
+# von fasten.it „DIN EN ISO 7089" (DIN 125 ist zurückgezogen). Bis M36 ist die Bohrung
+# das feine Durchgangsloch nach ISO 273, ab M39 das mittlere (42, 45, 48, 52, 56, 62,
+# 70). DIN 125 hat ab M42 andere Werte (M42 43/78/7, M64 66/115/9); für eine Tasche
+# zählt die dickere ISO-Scheibe. Bis M8 bleibt der Würth-Stand.
+
+[[washers]]
+size = "M1.6"
+inner = 1.7
+outer = 4.0
+thickness = 0.3
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
 
 [[washers]]
 size = "M2"
@@ -341,6 +666,139 @@ outer = 16.0
 thickness = 1.6
 note = "ISO 7089; Würth-Produktdaten"
 
+[[washers]]
+size = "M10"
+inner = 10.5
+outer = 20.0
+thickness = 2.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M12"
+inner = 13.0
+outer = 24.0
+thickness = 2.5
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M14"
+inner = 15.0
+outer = 28.0
+thickness = 2.5
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M16"
+inner = 17.0
+outer = 30.0
+thickness = 3.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M18"
+inner = 19.0
+outer = 34.0
+thickness = 3.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M20"
+inner = 21.0
+outer = 37.0
+thickness = 3.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M22"
+inner = 23.0
+outer = 39.0
+thickness = 3.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M24"
+inner = 25.0
+outer = 44.0
+thickness = 4.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M27"
+inner = 28.0
+outer = 50.0
+thickness = 4.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M30"
+inner = 31.0
+outer = 56.0
+thickness = 4.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M33"
+inner = 34.0
+outer = 60.0
+thickness = 5.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M36"
+inner = 37.0
+outer = 66.0
+thickness = 5.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M39"
+inner = 42.0
+outer = 72.0
+thickness = 6.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M42"
+inner = 45.0
+outer = 78.0
+thickness = 8.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M45"
+inner = 48.0
+outer = 85.0
+thickness = 8.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M48"
+inner = 52.0
+outer = 92.0
+thickness = 8.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M52"
+inner = 56.0
+outer = 98.0
+thickness = 8.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M56"
+inner = 62.0
+outer = 105.0
+thickness = 10.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
+[[washers]]
+size = "M64"
+inner = 70.0
+outer = 115.0
+thickness = 10.0
+note = "ISO 7089; fasten.it „DIN EN ISO 7089“"
+
 # --- Heat-Set-Einpressbuchsen ---------------------------------------------------
 # Maße nach den gängigen Katalogangaben (Ruthex, CNC Kitchen). Das Loch wird
 # etwas enger als der Außendurchmesser gebohrt, damit sich Material verdrängt.
@@ -349,9 +807,17 @@ note = "ISO 7089; Würth-Produktdaten"
 # den STEP-Dateien des Herstellers gemessen und auf ein Zehntel gerundet. Die
 # Längen folgen den Produktbezeichnungen. `hole` bleibt das vom Hersteller
 # empfohlene Loch; kurze und lange Varianten derselben Gewindegröße benutzen
-# dasselbe. M8 bleibt draußen, obwohl eine STEP-Datei vorhanden ist: Die
-# Herstellerseite nennt dafür kein eindeutig zugeordnetes Bohrmaß, und ein
-# geratenes Loch wäre gerade an dieser Stelle schlechter als kein Eintrag.
+# dasselbe.
+#
+# Seit Version 13 aus den Maßtabellen der Hersteller, je Wert belegt: M8 und
+# M3x5x4 aus dem Ruthex-Produktdatenblatt der RX-Reihe (Stand 15.08.2022,
+# Seite 1, d1 = outer, L = length, d3 = hole; bis Version 12 fehlte M8, weil die
+# Herstellerseite kein Bohrmaß nannte — das Datenblatt nennt 9,6). M3x5x4 nennt
+# CNC Kitchen mit denselben drei Werten (Voron-Buchse). M10 gibt es nur bei
+# CNC Kitchen: Maßtabelle „Dimensions & Design Guidelines — Metric Size
+# Inserts" auf der Produktseite (D1 = outer, L = length, D2 = hole), gelesen am
+# 06.10.2026. CNC Kitchen empfiehlt bei M4 bis M8 ein um 0,1 mm weiteres Loch
+# als Ruthex; hier bleibt das Ruthex-Loch, weil die Reihe Ruthex ist.
 
 [[inserts]]
 size = "M2"
@@ -424,6 +890,30 @@ outer = 8.7
 length = 12.7
 hole = 8.0
 note = "Ruthex RX-M6x12.7; Außenmaß aus Hersteller-STEP"
+
+[[inserts]]
+size = "M3x5x4"
+thread = "M3"
+outer = 5.0
+length = 4.0
+hole = 4.4
+note = "Ruthex RX-M3x5x4; RX-Produktdatenblatt: d1=5,0 mm, L=4,0 mm, d3=4,4 mm; CNC Kitchen M3x5x4 (Voron) nennt dieselben Werte"
+
+[[inserts]]
+size = "M8"
+thread = "M8"
+outer = 10.1
+length = 12.7
+hole = 9.6
+note = "Ruthex RX-M8x12,7; RX-Produktdatenblatt: d1=10,1 mm, L=12,7 mm, d3=9,6 mm"
+
+[[inserts]]
+size = "M10"
+thread = "M10"
+outer = 12.6
+length = 12.7
+hole = 12.0
+note = "CNC Kitchen M10 x 12.7; Maßtabelle des Herstellers: D1=12,6 mm, L=12,7 mm, D2=12,0 mm"
 
 # --- Neodym-Magnete -------------------------------------------------------------
 

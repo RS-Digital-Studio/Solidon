@@ -511,13 +511,21 @@ def test_a_thread_beyond_the_table_gets_its_own_measure() -> None:
     Bis zum 22.09.2026 hieß es „nächste Größe M8" — für einen Bolzen M10 ein
     Loch, durch das er fällt —, danach „die Bibliothek reicht bis M8". Seit
     dem 06.10.2026 baut das Bausteingewinde jedes Maß (Kundenvorschlag
-    S-20261006-c66299: ein Innengewinde in einem Rohr mit 60 mm). Abgesagt
-    wird nur, was kein Bausteingewinde bauen kann.
+    S-20261006-c66299: ein Innengewinde in einem Rohr mit 60 mm), und die
+    Tabelle reicht bis M64: Das M10 ist eine Normgröße, ein Feingewinde M10 ×
+    1,25 und alles über M64 ein eigenes Maß. Abgesagt wird nur, was kein
+    Bausteingewinde bauen kann.
     """
-    assert thread_values_for(_generated(10.0, 1.5)) == {
+    assert thread_values_for(_generated(10.0, 1.5)) == {"size": "M10"}
+    assert thread_values_for(_generated(10.0, 1.25)) == {
         "size": CUSTOM_SIZE,
         "diameter": 10.0,
-        "pitch": 1.5,
+        "pitch": 1.25,
+    }
+    assert thread_values_for(_generated(80.0, 6.0)) == {
+        "size": CUSTOM_SIZE,
+        "diameter": 80.0,
+        "pitch": 6.0,
     }
     for diameter, pitch in ((1500.0, 6.0), (1.0, 0.25), (60.0, 30.0)):
         with pytest.raises(ValidationError) as caught:
@@ -526,22 +534,89 @@ def test_a_thread_beyond_the_table_gets_its_own_measure() -> None:
         assert caught.value.suggestions, "Regel 17"
 
 
+@pytest.mark.parametrize(
+    ("diameter", "pitch", "accepted"),
+    [
+        (1000.0, 6.0, True),
+        (1000.01, 6.0, False),
+        # Ø 1,41 ist über die Erkennungsgrenze noch eine M1.6, darunter nichts mehr.
+        (1.41, 0.35, True),
+        (1.39, 0.35, False),
+        (20.0, 0.25, True),
+        (20.0, 0.24, False),
+        (66.6, 20.0, True),
+        (66.6, 20.01, False),
+    ],
+)
+def test_the_counterpart_takes_its_limits_at_the_edge(
+    diameter: float, pitch: float, accepted: bool
+) -> None:
+    """Die Grenzen an der Kante, nicht weit daneben (Review RM-532, R6)."""
+    feature = _generated(diameter, pitch)
+    if accepted:
+        assert thread_values_for(feature)["size"] in (CUSTOM_SIZE, "M1.6")
+        return
+    with pytest.raises(ValidationError) as caught:
+        thread_values_for(feature)
+    assert caught.value.constraint == "beyond_threads"
+
+
+def test_a_thread_without_a_bolt_core_gets_no_counterpart_step() -> None:
+    """Ein erkanntes Innengewinde Ø 3 × 3 hat keinen Bolzen mit tragendem Kern.
+
+    Bis zum 06.10.2026 entstand ein Schritt, der erst in der Auswertung mit
+    ``no_core`` anhielt und „Eine feinere Steigung … wählen" an einem Schritt
+    sagte, den der Kunde nicht eingegeben hat (Review RM-532, K7). Jetzt sagt
+    es die Auswahl, bevor ein Schritt entsteht.
+    """
+    hole = _generated(3.0, 3.0, internal=True, provenance="native")
+    with pytest.raises(ValidationError) as caught:
+        thread_counterpart_draft(hole, "obj_2", {})
+    assert caught.value.constraint == "beyond_threads"
+    assert caught.value.suggestions
+
+
+def test_a_measured_thread_just_beside_a_table_size_becomes_that_size_and_says_so() -> None:
+    """Ø 6,0 × 1,03 mit 0,05 mm Wendelabweichung ist ein M6 × 1 — mit Befund (Review RM-532, R5).
+
+    Die Abweichung liegt innerhalb dessen, was die Messung selbst als
+    unsicher nennt; das Gegenstück wird die Normgröße, und der Befund nennt
+    die gemessenen Werte. Ohne diese Unsicherheit bleibt das gemessene Maß,
+    und der Befund sagt, dass es keine Normgröße ist.
+    """
+    from app.core.counterpart import thread_size_note
+
+    near = _generated(6.0, 1.03, provenance="native", uncertainty=0.05)
+    assert thread_values_for(near) == {"size": "M6"}
+    note = thread_size_note(near)
+    assert note is not None and note.code == "parts.counterpart_standard_size"
+    assert "M6" in str(note.message) and "1,03" in str(note.message)
+
+    exact = _generated(6.0, 1.03, provenance="native", uncertainty=0.0)
+    assert thread_values_for(exact) == {"size": CUSTOM_SIZE, "diameter": 6.0, "pitch": 1.03}
+    note = thread_size_note(exact)
+    assert note is not None and note.code == "parts.counterpart_own_measure"
+    assert thread_size_note(_generated(6.0, 1.0)) is None, "eine Normgröße braucht keinen Satz"
+
+
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
 def test_a_thread_in_a_pipe_of_sixty_gets_a_bolt_of_its_own_measure(
     profile: Profile, kind: str
 ) -> None:
-    """Das Gewinde aus dem Kundenvorschlag: innen Ø 66,6 × 6 und sein Bolzen, als Paar.
+    """Ein Gewinde mit eigenem Maß, innen Ø 66,6 × 6, und sein Bolzen, als Paar.
 
-    Eine Bohrung von 60 mm bekommt beim Klick ein Innengewinde mit eigenem Maß
-    (``fasteners.size_for_thread``). Das Gegenstück nimmt dasselbe Maß, beide
-    tragen ihr Spiel, und die Passung misst genau das.
+    So wählte der Klick in die Bohrung von 60 mm aus dem Kundenvorschlag bis
+    Tabellenversion 12 (``fasteners.size_for_thread``); seit Version 13 passt
+    dort die M64, das eigene Maß bleibt der Weg zwischen und über den
+    Normgrößen. Das Gegenstück nimmt dasselbe Maß, beide tragen ihr Spiel, und
+    die Passung misst genau das.
     """
     from app.core.knowledge.parts.fasteners import size_for_thread
     from app.core.scene.fits import check, resolve
 
     _kernel_or_skip(kind)
-    chosen = size_for_thread(60.0)
-    assert chosen["size"] == CUSTOM_SIZE and chosen["diameter"] == pytest.approx(66.6)
+    assert size_for_thread(60.0) == {"size": "M64", "internal": True}
+    chosen = {"size": CUSTOM_SIZE, "diameter": 66.6, "pitch": 0.0}
     document, cache = _two_plates(profile, kind, width=100.0, depth=100.0)
     size = {key: chosen[key] for key in ("size", "diameter", "pitch")}
     thread, _scene = _with_thread(document, cache, profile, internal=True, size=size)
@@ -568,3 +643,47 @@ def test_a_thread_in_a_pipe_of_sixty_gets_a_bolt_of_its_own_measure(
     bolt = resolve(checked.scene, applied.fit.b)
     assert bolt is not None
     assert bolt.params["diameter"] == pytest.approx(66.6 - profile.material.clearance)
+
+
+def test_a_changed_own_measure_takes_its_counterpart_along(profile: Profile) -> None:
+    """Die Kopplung des eigenen Maßes (Review RM-532, R6): Durchmesser und Steigung.
+
+    Am ersten Gewinde Ø 66,6 → 70 und, getrennt davon, Steigung → 4: Beide
+    erreichen den Partner. Ein Unterschied von 10⁻¹² ist kein neues Maß
+    (Regel 6, K3) und koppelt nichts.
+    """
+    from app.core.counterpart import coupled_step_change
+
+    document, cache = _two_plates(profile, "mesh", width=100.0, depth=100.0)
+    size = {"size": CUSTOM_SIZE, "diameter": 66.6, "pitch": 0.0}
+    thread, _scene = _with_thread(document, cache, profile, internal=True, size=size)
+    applied = apply_thread_counterpart(
+        document, thread, "obj_1", "obj_2", {"x": 120.0, "y": 0.0, "z": 10.0}
+    )
+    result = evaluate(document, profile, cache=cache)
+    applied = attach_thread_fit(document, applied, thread, result.scene)
+    assert applied.fit is not None
+    result = evaluate(document, profile, cache=cache)
+    own = next(
+        entry
+        for entry in document.ops
+        if entry.op == "insert_printed_thread" and entry.inputs == ("obj_1",)
+    )
+    partner = next(
+        entry
+        for entry in document.ops
+        if entry.op == "insert_printed_thread" and entry.inputs == ("obj_2",)
+    )
+
+    wider = coupled_step_change(
+        document, result.scene, profile, own.id, {**own.params, "diameter": 70.0}
+    )
+    assert wider is not None and wider.edits[partner.id]["diameter"] == pytest.approx(70.0)
+    finer = coupled_step_change(
+        document, result.scene, profile, own.id, {**own.params, "pitch": 4.0}
+    )
+    assert finer is not None and finer.edits[partner.id]["pitch"] == pytest.approx(4.0)
+    same = coupled_step_change(
+        document, result.scene, profile, own.id, {**own.params, "diameter": 66.6 + 1e-12}
+    )
+    assert same is None

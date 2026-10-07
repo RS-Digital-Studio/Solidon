@@ -85,6 +85,7 @@ from app.core.types import (
 from app.core.units import (
     COARSEST_PITCH,
     EPS_GEOM,
+    FINEST_PITCH,
     LARGEST_THREAD,
     MAX_FACET_SAG,
     SMALLEST_THREAD,
@@ -588,7 +589,7 @@ class ThreadParams(PositionedPrimitiveParams):
         title=_("Steigung"),
         default=1.5,
         unit="mm",
-        minimum=0.25,
+        minimum=FINEST_PITCH,
         maximum=COARSEST_PITCH,
         doc=_(
             "Höhenzuwachs je Umdrehung. Ob sich die Gewindegänge sauber drucken lassen, hängt "

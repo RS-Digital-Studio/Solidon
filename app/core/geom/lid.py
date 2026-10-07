@@ -1562,7 +1562,9 @@ def turn_sections(major: float, clearance: float) -> tuple[int, int]:
     des Gangs: achtundvierzig treffen jede zweite Ecke des 96-Ecks, darüber
     sind beide gleich. Bis zum 06.10.2026 hatte der Gang immer achtundvierzig;
     seit der Hals bis Ø 1000 reicht (``units.LARGEST_THREAD``), wären das dort
-    2,6 mm Abweichung gewesen. Bis Ø 46 bleibt alles, wie es war.
+    1,07 mm Abweichung gewesen (r 500,2 · (1 - cos π/48)). Achtundvierzig bleiben,
+    solange Halbmesser und Spiel zusammen unter 23,35 mm liegen — bei 0,2 mm
+    Spiel bis Ø 46,3, bei 0,4 mm bis Ø 45,9.
     """
     turn = turn_segments(major / 2.0 + clearance)
     return turn, max(NECK_SECTIONS, turn)
@@ -1633,6 +1635,9 @@ class ScrewLidParams(BaseParams):
         maximum=100.0,
         doc=_("Wie hoch der Gewindehals wird. Zwei Umdrehungen halten, drei sitzen fest."),
     )
+    # **Die benannte Ausnahme von ``units.FINEST_PITCH``**: Ein Schraubdeckel
+    # greift feiner als 1 mm nicht mehr sicher, und die Kappe soll mit der Hand
+    # aufgehen. Die übrigen Gewindewege beginnen bei 0,25.
     pitch: float = param(
         title=_("Steigung"),
         default=DEFAULT_PITCH,

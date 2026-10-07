@@ -338,7 +338,9 @@ def test_a_printed_thread_of_its_own_measure_is_exact_too(internal: bool) -> Non
     assert thread.params["pitch"] == pytest.approx(pitch)
     assert thread.params["nominal"] == pytest.approx(nominal)
     mesh = _built("printed_thread", False, **values, internal=internal, play=0.0)
-    assert 0.995 < mesh.mesh.volume / body.volume < 1.0, "die Sehnen folgen der Facettenregel"
+    # Mit ``turn_segments`` 0,99944, mit festen 48 Sehnen 0,99734 (Review RM-532,
+    # R6): Die Grenze muss zwischen beiden liegen, sonst prüft sie nichts.
+    assert 0.999 < mesh.mesh.volume / body.volume < 1.0, "die Sehnen folgen der Facettenregel"
     _roundtrip(body)
 
 

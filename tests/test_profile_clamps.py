@@ -918,23 +918,28 @@ def test_the_clamp_offers_every_table_screw_and_sizes_its_ears_by_it(profile):
     Jede angebotene Größe baut ihre Aufnahmen aus der Normteiltabelle: Die Ohren
     wachsen mit Kopf und Mutter, die Montagehinweise nennen die Größe.
     """
+    from app.core.errors import ValidationError
     from app.core.geom.profile_clamp_ops import ProfileClampSetParams, create_profile_clamp_set
     from app.core.knowledge.parts.profile_clamps import SCREW_SIZES, ProfileClampShellParams
 
-    assert SCREW_SIZES == ("M3", "M4", "M5", "M6")
+    # Seit Tabellenversion 13 M3 bis M33 — sechzehn Größen, so viele, wie der
+    # Bereichstest der Schale trägt; eine größere Größe braucht mehr Klemmtiefe.
+    assert SCREW_SIZES[0] == "M3" and SCREW_SIZES[-1] == "M33" and len(SCREW_SIZES) == 16
     for schema in (ProfileClampSetParams, ProfileClampShellParams):
         choices = next(entry.choices for entry in schema.spec() if entry.name == "screw_size")
         assert tuple(choices) == SCREW_SIZES
     widths = []
     for size in SCREW_SIZES:
-        built = create_profile_clamp_set(
-            _context(
-                ProfileClampSetParams(
-                    clamp_material="petg", liner_material="tpu-95a", screw_size=size
-                ),
-                profile,
+        values = {"clamp_material": "petg", "liner_material": "tpu-95a", "screw_size": size}
+        try:
+            built = create_profile_clamp_set(_context(ProfileClampSetParams(**values), profile))
+        except ValidationError as refused:
+            # Zu wenig Rand bei der Vorgabetiefe: eine Absage mit Ausweg, und mit der
+            # größten Klemmtiefe geht es.
+            assert refused.suggestions, size
+            built = create_profile_clamp_set(
+                _context(ProfileClampSetParams(**values, depth=80.0), profile)
             )
-        )
         shell = built.outputs[0].mesh
         assert shell.is_watertight and shell.component_count == 1, size
         hardware = next(f for f in built.findings if f.code == "profile_clamp.hardware")

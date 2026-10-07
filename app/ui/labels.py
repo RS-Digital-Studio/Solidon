@@ -1626,6 +1626,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "findings": _("Befunde"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
+    # ``fasteners.thread_at_hole``: der Nenndurchmesser, mit dem die Bohrung Kernloch bleibt.
+    "fitting": _("Passender Nenndurchmesser"),
     "floor": _("Boden"),
     "flow_limit": _("Höchster Volumenstrom"),
     "format": _("Format"),

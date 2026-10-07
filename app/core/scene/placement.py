@@ -243,8 +243,13 @@ def screw_for_bore(diameter: float) -> str | None:
     Unterhalb des **Nennmaßes** geht die Schraube nicht hindurch, oberhalb des
     **Durchgangslochs** ist die Bohrung weiter als das Normmaß für diese Größe.
 
-    Die Bänder der Größen berühren sich nicht (M4 endet bei 4,50, M5 beginnt
-    bei 5,00), es kann also höchstens eine Antwort geben. Und dazwischen wird
+    Bis M16 berühren sich die Bänder nicht (M4 endet bei 4,50, M5 beginnt
+    bei 5,00). Ab M18 tun sie es nach ISO 273 an einer Stelle: 20 mm ist das
+    Durchgangsloch der M18 und das Nennmaß der M20, ebenso 22, 24, 30 und die
+    meisten Größen darüber. Dort
+    gewinnt die kleinere Größe, weil ihre Zeile zuerst kommt, und das ist auch
+    die Antwort der Norm — eine Bohrung ohne Luft ist kein Durchgangsloch.
+    Und dazwischen wird
     nichts herbeigerundet: Wer keine bekommt, bekommt :func:`bore_advice` —
     genannt statt geraten (Regel 21). Zwei Konstanten, die dieselbe Frage
     verschieden beantworten, gäbe es damit auch nicht.

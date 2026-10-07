@@ -483,14 +483,14 @@ def test_a_bore_that_fits_no_thread_still_means_inside() -> None:
     """
     from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
 
-    wide = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=10.0))
+    wide = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=70.0))
     assert wide.get("internal") is True, (
-        "eine Ø 10-Bohrung bekommt ein Innengewinde — die Schemavorgabe steht auf "
+        "eine Ø 70-Bohrung bekommt ein Innengewinde — die Schemavorgabe steht auf "
         "Außengewinde und setzte einen Bolzen in das Loch"
     )
+    # Über M64 (Nennmaß 64) passt keine Tabellengröße mehr; Ø 70 nimmt die 6 der M64.
     assert wide["size"] == CUSTOM_SIZE
-    # Ø 10 nimmt erst die 1,25 der M8, kommt auf Ø 11,375 und damit zur 1,5 der M10.
-    assert wide["diameter"] == pytest.approx(10.0 + 2.0 * 0.55 * 1.5)
+    assert wide["diameter"] == pytest.approx(70.0 + 2.0 * 0.55 * 6.0)
     assert wide["pitch"] == 0.0, "die Steigung bleibt automatisch und trifft die Regelsteigung"
 
     narrow = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=1.0))
@@ -518,12 +518,18 @@ def test_a_bore_that_fits_nothing_keeps_the_default() -> None:
     assert between["size"] == CUSTOM_SIZE
     assert between["diameter"] == pytest.approx(6.5 + 2.0 * 0.55 * 1.0)
 
-    huge = hole(diameter=40.0)
-    for name in ("insert_heatset_m4", "insert_nut_trap"):
-        values = values_for(REGISTRY.get(name), huge)
-        assert "size" not in values, f"{name} rät an einer 40-mm-Bohrung eine Größe"
+    # Die Buchse endet an der Tabelle (CNC Kitchen M10, Loch 12,0) — welches Loch eine
+    # andere braucht, sagt ihr Datenblatt. Die Mutternfalle hat bei 40 mm die M42
+    # und über dem größten Gewinde (Durchgangsloch über 1093,75) keine Größe.
+    for name, diameter in (("insert_heatset_m4", 40.0), ("insert_nut_trap", 1200.0)):
+        values = values_for(REGISTRY.get(name), hole(diameter=diameter))
+        assert "size" not in values, f"{name} rät an einer {diameter}-mm-Bohrung eine Größe"
         assert values["at_feature"] == "hole_1", "die Zuordnung bleibt davon unberührt"
-    thread = values_for(REGISTRY.get("insert_printed_thread"), huge)
+    assert values_for(REGISTRY.get("insert_nut_trap"), hole(diameter=40.0))["size"] == "M42"
+    # 40 mm liegt zwischen Kernloch und Nennmaß der M42; über M64 ein eigenes Maß.
+    thread = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=40.0))
+    assert thread["size"] == "M42" and thread["at_feature"] == "hole_1"
+    thread = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=80.0))
     assert thread["size"] == CUSTOM_SIZE and thread["at_feature"] == "hole_1"
 
 
@@ -562,7 +568,11 @@ def test_the_sentence_over_a_bore_names_the_size_the_dialog_chose() -> None:
             said, choices = bore_advice(diameter, ask=False, feature=bore, spec=spec)
             assert said.startswith("Bohrungsmaß: "), said
             assert not choices, "ein Satz über dem Dialog fragt nicht"
-            named = [word for word in re.findall(r"M\d+(?:[.,]\d+)?", said) if word in sizes]
+            named = [
+                word
+                for word in re.findall(r"M\d+(?:[.,]\d+)?(?:S|x\d+x\d+)?", said)
+                if word in sizes
+            ]
             if chosen == CUSTOM_SIZE:
                 # Das eigene Maß nennt der Satz mit dem vorgewählten Durchmesser.
                 built = format_length(values_for(spec, bore)["diameter"])
@@ -580,7 +590,7 @@ def test_the_sentence_over_a_bore_names_the_size_the_dialog_chose() -> None:
     said, _choices = bore_advice(6.5, ask=False, feature=hole(diameter=6.5), spec=gewinde)
     assert "Innengewinde mit eigenem Maß: Ø 7,60 mm, Steigung 1,00 mm" in said, said
     said, _choices = bore_advice(1.0, ask=False, feature=hole(diameter=1.0), spec=gewinde)
-    assert "Kernloch von M2" in said, said
+    assert "Kernloch des kleinsten Gewindes mit Ø 1,60 mm" in said, said
 
     # Gegenprobe: Die Senkung behält den Satz über die Schraube, die hindurchgeht.
     said, _choices = bore_advice(
@@ -715,7 +725,7 @@ def test_part_bore_advice_qualifies_every_non_native_measure(
 @pytest.mark.parametrize(
     ("name", "diameter"),
     # Ein Gewinde sagt nur noch unter dem kleinsten Kernloch ab; Ø 6,5 bekommt ein eigenes Maß.
-    (("printed_thread", 1.0), ("heatset_m4", 40.0), ("nut_trap", 40.0)),
+    (("printed_thread", 1.0), ("heatset_m4", 40.0), ("nut_trap", 1200.0)),
 )
 def test_part_bore_advice_qualifies_negative_measurement_answers(
     name: str, diameter: float
