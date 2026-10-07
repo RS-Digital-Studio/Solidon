@@ -17,7 +17,6 @@ Zwei Zusagen tragen das Ganze, und beide stehen hier:
 from __future__ import annotations
 
 import math
-import sys
 from collections.abc import Callable
 from itertools import pairwise, product
 from pathlib import Path
@@ -491,12 +490,6 @@ def test_three_rounded_edges_meet_on_a_sphere_at_every_cube_corner() -> None:
         )
 
 
-@pytest.mark.xfail(
-    sys.platform.startswith("linux"),
-    strict=False,
-    raises=AssertionError,
-    reason="Linux: sporadisch ein Restpunkt bei 6,5 statt 3,0 im Normalenkegel (RM-166)",
-)
 def test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere() -> None:
     """Am Tetraeder berührt die Kugel y=0, z=0 und x+y+z=40.
 

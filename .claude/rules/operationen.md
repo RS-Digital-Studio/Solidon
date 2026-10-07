@@ -102,9 +102,9 @@ Stehen in `kanten.md`.
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
 Liegt ein Werkzeug der Formschräge nicht ganz im Material (oder ganz davor),
-sagen beide Kerne mit demselben Satz ab — keine still niedrigere Wand, kein von
-`ShapeFix` formal geheilter Körper. Tangentiale Nachbarflächen gehen mit
-(`draft.tangent_faces`).
+sagen beide Kerne denselben Satz, nie `ShapeFix`. Tangentiale Nachbarflächen
+gehen mit (`draft.tangent_faces`); liegt eine schräg, sagen beide vorher
+`DRAFT_BESIDE_A_ROUND`.
 
 ## Boolesches geht durch die Rückfallkette
 

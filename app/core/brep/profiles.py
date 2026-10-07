@@ -15,7 +15,7 @@ import math
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from itertools import pairwise
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from app.core.brep.canonical import PlaneSurface
 from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, box_limits, require
@@ -785,7 +785,13 @@ def draft_faces(
     from OCP.BRepOffsetAPI import BRepOffsetAPI_DraftAngle
     from OCP.gp import gp_Ax3, gp_Dir, gp_Pln, gp_Pnt
 
-    from app.core.geom.faces import DRAFT_CUTS_THROUGH, UPRIGHT_ENOUGH, _across_the_pull
+    from app.core.geom.faces import (
+        DRAFT_BESIDE_A_FREE_FACE,
+        DRAFT_BESIDE_A_ROUND,
+        DRAFT_CUTS_THROUGH,
+        UPRIGHT_ENOUGH,
+        _across_the_pull,
+    )
 
     if not 0.0 < angle_deg <= 30.0:
         raise ValidationError(
@@ -830,7 +836,16 @@ def draft_faces(
                 )
             if abs(sum(a * b for a, b in zip(normal, pull, strict=True))) > UPRIGHT_ENOUGH:
                 raise _across_the_pull()
-    grown = _tangent_chain(working, chosen, pull, cancelled)
+    grown, beside = _tangent_chain(working, chosen, pull, cancelled)
+    if beside is not None:
+        # Vor der Rechnung, wie am Netz: ``Draft_FaceRecomputation`` rechnet
+        # die Rundung neben der gekippten Wand nicht nach (RM-230), und eine
+        # stehende freie Fläche bliebe still senkrecht.
+        raise GeometryError(
+            detail=DRAFT_BESIDE_A_ROUND if beside == "round" else DRAFT_BESIDE_A_FREE_FACE,
+            suggestions=(CHANGE_SELECTION, CANCEL),
+            values={"angle_deg": round(angle_deg, 2)},
+        )
     added = len(grown) - len(set(chosen))
     chosen = grown
     axis = next(number for number, value in enumerate(pull) if abs(value) > 0.5)
@@ -844,6 +859,7 @@ def draft_faces(
         "Die Formschräge lässt sich an diesen Flächen nicht anlegen. Stellen Sie "
         "einen kleineren Winkel ein, oder wählen Sie weniger Flächen."
     )
+
     faces = working.faces()
     for index in chosen:
         if cancelled is not None:
@@ -885,7 +901,7 @@ def _tangent_chain(
     chosen: Sequence[int],
     pull: tuple[float, float, float],
     cancelled: CancelToken | None,
-) -> list[int]:
+) -> tuple[list[int], Literal["round", "upright"] | None]:
     """Die gewählten Flächen und alles, was tangential an sie anschließt und mitkann.
 
     Mit kann eine ebene Fläche, die in Entformungsrichtung steht, und ein
@@ -900,8 +916,20 @@ def _tangent_chain(
     Vorgabe (``Flag=True``) ohnehin mit; gezählt wird hier, damit der Befund
     dieselbe Menge nennt wie am Netz und eine Absage vorher fällt, wo eine
     tangentiale Fläche nicht mitkann.
+
+    Zurück kommt auch, ob tangential eine Fläche anschließt, die **nicht**
+    mitkann (RM-230): ``"round"``, wenn sie irgendwo schräg zur
+    Entformungsrichtung liegt — eine liegende Verrundung am Fuß oder oben, die
+    ``Draft_FaceRecomputation`` neben der gekippten Wand nicht nachrechnet;
+    gefragt an einem Raster von neun Punkten, denn eine Vollrundung aus einer
+    Fläche liegt in ihrer Mitte waagerecht. ``"upright"``, wenn sie steht —
+    eine frei geformte Ecke oder ein fast stehender Zylinder: ``Add`` ließ sie
+    still senkrecht, und die gekippten Wände schnitten sich in sie ein. Eine
+    Fase oder eine Querbohrung schließt mit Knick an. Am Netz fragt
+    ``faces._round_beside_the_walls`` nach der Rundung.
     """
-    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+    from OCP.BRepTools import BRepTools
     from OCP.collections import (
         IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
     )
@@ -911,7 +939,7 @@ def _tangent_chain(
     from OCP.TopoDS import TopoDS
 
     from app.core.brep.canonical import CylinderSurface, outward_normal
-    from app.core.geom.faces import UPRIGHT_ENOUGH
+    from app.core.geom.faces import UPRIGHT_ENOUGH, leans_across
     from app.core.units import SAME_PLANE_AT_A_CORNER, is_close
 
     faces = solid.faces()
@@ -932,9 +960,28 @@ def _tangent_chain(
             return is_close(along, 1.0)
         return False
 
+    leaning: dict[int, bool] = {}
+
+    def leans(index: int) -> bool:
+        if index not in leaning:
+            face = TopoDS.Face(faces[index])
+            low_u, high_u, low_v, high_v = BRepTools.UVBounds_s(face)
+            adaptor = BRepAdaptor_Surface(face)
+            found = False
+            for share_u in (0.25, 0.5, 0.75):
+                for share_v in (0.25, 0.5, 0.75):
+                    spot = adaptor.Value(
+                        low_u + share_u * (high_u - low_u), low_v + share_v * (high_v - low_v)
+                    )
+                    normal = outward_normal(face, (spot.X(), spot.Y(), spot.Z()))
+                    found = found or (normal is not None and leans_across(normal, pull))
+            leaning[index] = found
+        return leaning[index]
+
     grown = list(dict.fromkeys(chosen))
     seen = set(grown)
     queue = list(grown)
+    beside: Literal["round", "upright"] | None = None
     while queue:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -950,7 +997,7 @@ def _tangent_chain(
             point = (middle.X(), middle.Y(), middle.Z())
             for shape in neighbours.FindFromKey(edge):
                 other = int(known.FindIndex(shape)) - 1
-                if other < 0 or other in seen or not draftable(other):
+                if other < 0 or other in seen:
                     continue
                 one = outward_normal(faces[current], point)
                 two = outward_normal(faces[other], point)
@@ -958,10 +1005,16 @@ def _tangent_chain(
                     continue
                 if 1.0 - sum(a * b for a, b in zip(one, two, strict=True)) > SAME_PLANE_AT_A_CORNER:
                     continue
+                if not draftable(other):
+                    if leans(other):
+                        beside = "round"
+                    elif beside is None:
+                        beside = "upright"
+                    continue
                 seen.add(other)
                 grown.append(other)
                 queue.append(other)
-    return grown
+    return grown, beside
 
 
 #: Gewindetiefe je Steigung: 5H/8 des scharfen Dreiecksprofils (metrisches ISO).
