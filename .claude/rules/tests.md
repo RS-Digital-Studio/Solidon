@@ -257,6 +257,16 @@ einzeln laufen grün. Deshalb:
   kein Beweis, zwei ungleiche sofort einer.
 - ComfyUI läuft mit rund einem Gigabyte im Hintergrund mit — bei der Lastfrage
   mitzählen.
+- **Ein Prozessende braucht Rechenzeit; zugesichert wird, dass es eingeleitet
+  ist.** Ein zurückgestellter Prozess bekommt unter Volllast die Zeitscheiben
+  für sein Ende erst nach Sekunden; `IsProcessDeleting` sagt sofort, ob das
+  Betriebssystem es eingeleitet hat (`test_kernel_process_lifecycle.py`). Wer
+  danach abbaut, hebt vorher die Klasse (wie `process.hurry_helper`); ist die
+  Zusage die Freigabe (Speicher, Griffe, Ordner), wartet er danach auf den
+  Abschluss.
+- **Eine eben umbenannte Datei sperrt kurz**: Eine Meldung, die über
+  `Path.replace` erscheint, liest der Wartende mit Wiederholung bis zu seiner
+  Frist, nie mit einem einzelnen `read_text`.
 
 ### Wenn ein Lauf steht: py-spy
 

@@ -2554,6 +2554,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Releaseabnahme.
   B01-Export-/Sliceranschlüsse sind separat abgestimmt; RM298 bleibt `[~]`.
 
+  **Teilstand 06.10.2026, (d), Elternende unter Last:** Der Wächter des
+  rechnenden Helfers fiel im Tor neben Agenten-Suite und Toren in einem von drei
+  Läufen. Kein Zeitfenster im Jobobjekt: Das Ende war in allen 65 gebundenen
+  Sondenläufen eingeleitet, sobald der Elternprozess signalisiert war; nur der
+  Abschluss dauerte unter Volllast in `BELOW_NORMAL` bis 19,5 s, in 21 von 23
+  Läufen über 9 s (normale Klasse unter 0,8 s, ruhige Maschine 1 bis 2 ms).
+  Der Test sichert jetzt das eingeleitete Ende zu (`IsProcessDeleting`), der
+  Abbau hebt vorher die Klasse, Meldedateien werden bis zur Frist gelesen.
+  Verschränkt im selben Fenster: alt 6 von 8 rot, neu 8 von 8 grün; ohne
+  inneres Jobobjekt bleibt der neue Test an derselben Zusicherung rot. Das löst
+  die Zusage „innerhalb der Abbaufrist signalisiert“ aus
+  [rm298-lifecycle-2026-10-02.md](konzepte/nachweise-release-0.5.1/reports/rm298-lifecycle-2026-10-02.md)
+  ab. [Sonde und Läufe](konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/elternende.py),
+  Begründung `regel-tests.md`. RM298 bleibt `[~]`.
+
 <a id="rm-307"></a>
 
 - [~] **RM-307 — Auto Split: Reste aus dem Review der Vorauswahl.** Aus dem Release 0.5.1 (Fix `autosplit-lagen-051`,
