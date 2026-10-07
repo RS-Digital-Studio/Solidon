@@ -346,9 +346,20 @@ def test_an_open_shell_with_an_inner_counter_hull_becomes_one_full_body(
     Ohne den Schritt blieb die Gegenhülle als Hohlraum stehen — gültig,
     geschlossen, und gedruckt ein Körper mit Wänden von anderthalb
     Millimetern, der beim ersten Druck zerbricht. ComfyUI #16147 meldet genau
-    das für TRELLIS.2; der Ablauf wirft die Hülle schon in ComfyUI weg, diese
-    Kette hält es auch für einen Ablauf, der das nicht tut.
+    das für TRELLIS.2. Seit ``1a05c7a50`` behält der Ablauf die Hülle in
+    ComfyUI bewusst — an einer dünnen Wand ist sie die zweite Seite (RM-550) —,
+    und diese Kette ist der einzige Ort, an dem die Innenhülle eines vollen
+    Körpers fällt. Die erste Zusicherung hält das fest.
     """
+    import json
+
+    from app.core.backends.mesh import WORKFLOW_DIR
+
+    shipped = json.loads((WORKFLOW_DIR / "image_to_mesh.json").read_text(encoding="utf-8"))
+    remesh = next(node for node in shipped.values() if node["class_type"] == "RemeshMesh")
+    assert remesh["inputs"]["sign_mode.drop_inverted_components"] is False, (
+        "der Ablauf wirft die Hülle nicht weg — die Reparatur ist der einzige Ort"
+    )
     payload = bytes(
         trimesh.exchange.export.export_mesh(
             _open_shell_with_inner_counter_hull(), None, file_type="glb"

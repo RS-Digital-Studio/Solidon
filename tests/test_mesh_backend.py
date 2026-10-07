@@ -1718,7 +1718,7 @@ def test_the_contract_check_catches_what_it_promises(change: str, expected: str)
 
 
 @pytest.mark.parametrize("name", ["image_to_mesh"])
-def test_the_remesh_drops_the_inner_hull_and_the_cascade_fits_sixteen_gigabytes(
+def test_the_remesh_keeps_the_inner_hull_and_the_cascade_fits_sixteen_gigabytes(
     name: str,
 ) -> None:
     """Die zwei Abweichungen von ComfyUIs Vorlage, festgehalten.
