@@ -711,6 +711,50 @@ def test_a_printed_inner_thread_offers_only_the_pin_in_the_card(qt_app: QApplica
         window.deleteLater()
 
 
+def _a_pin_on_a_short_thread(window: MainWindow) -> None:
+    """Ein gedrucktes M6 von 2 mm und darauf der Stift, der dafür zu wenig Gewinde hat."""
+    window.session.start_new("centauri-carbon-2", "petg")
+    window.session.history.apply(
+        "Quader mit Gewinde",
+        [
+            OperationDraft(op="create_box", params={"width": 30.0, "depth": 30.0, "height": 12.0}),
+            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"size": "M6", "length": 2.0, "internal": True, "at_feature": "hole_1"},
+            ),
+        ],
+    )
+    window.session.evaluate_now()
+    result = window.session.last_result
+    assert result is not None
+    [thread] = [
+        name
+        for name, feature in result.scene.objects["obj_1"].features.items()
+        if feature.kind == "thread" and feature.provenance == "generated"
+    ]
+    window.session.history.apply(
+        "Stift",
+        [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": thread})],
+    )
+    window.session.evaluate_now()
+
+
+def _length_has_the_cursor(window: MainWindow) -> None:
+    """Offen ist der Dialog des Gewindes, und der Cursor steht in *Länge*."""
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    dialog = window._op_dialog
+    assert dialog is not None, "der Dialog ging nicht auf"
+    try:
+        assert dialog.spec.name == "insert_printed_thread"
+        inner = dialog._editors["length"].findChild(QDoubleSpinBox)
+        assert inner is not None and inner.hasFocus()
+    finally:
+        dialog.reject()
+
+
 def test_a_thread_too_short_for_the_pin_opens_the_thread_step_at_its_length(
     qt_app: QApplication,
 ) -> None:
@@ -720,42 +764,11 @@ def test_a_thread_too_short_for_the_pin_opens_the_thread_step_at_its_length(
     druckbare Gewindelänge; zu ändern ist das Gewinde. Geprüft an der ganzen
     Kette: Befund, Knopf, Dialog des früheren Schritts, Cursor in *Länge*.
     """
-    from PySide6.QtWidgets import QDoubleSpinBox
-
     from app.ui.panels import as_error
 
     window = MainWindow(Session(), UiSettings())
     try:
-        window.session.start_new("centauri-carbon-2", "petg")
-        window.session.history.apply(
-            "Quader mit Gewinde",
-            [
-                OperationDraft(
-                    op="create_box", params={"width": 30.0, "depth": 30.0, "height": 12.0}
-                ),
-                OperationDraft(
-                    op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}
-                ),
-                OperationDraft(
-                    op="insert_printed_thread",
-                    inputs=("obj_1",),
-                    params={"size": "M6", "length": 2.0, "internal": True, "at_feature": "hole_1"},
-                ),
-            ],
-        )
-        window.session.evaluate_now()
-        result = window.session.last_result
-        assert result is not None
-        [thread] = [
-            name
-            for name, feature in result.scene.objects["obj_1"].features.items()
-            if feature.kind == "thread" and feature.provenance == "generated"
-        ]
-        window.session.history.apply(
-            "Stift",
-            [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": thread})],
-        )
-        window.session.evaluate_now()
+        _a_pin_on_a_short_thread(window)
         result = window.session.last_result
         assert result is not None
         [finding] = [
@@ -765,15 +778,58 @@ def test_a_thread_too_short_for_the_pin_opens_the_thread_step_at_its_length(
 
         window.error_handlers()["change_creating_step"](as_error(finding))
         QApplication.processEvents()
+        _length_has_the_cursor(window)
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()
 
-        dialog = window._op_dialog
-        assert dialog is not None, "der Dialog ging nicht auf"
-        try:
-            assert dialog.spec.name == "insert_printed_thread"
-            inner = dialog._editors["length"].findChild(QDoubleSpinBox)
-            assert inner is not None and inner.hasFocus()
-        finally:
-            dialog.reject()
+
+def test_the_pin_dialog_offers_to_open_the_thread_step(qt_app: QApplication) -> None:
+    """Im Dialog des Stifts steht *Gewindeschritt öffnen* an der Absage (Review P2 N6).
+
+    Wo der Kunde die Absage zuerst sieht, in der Vorschau des Dialogs, stand
+    der Satz ohne Knopf: Der Dialog zeigt nur Handlungen, die er selbst
+    einlöst. Der Knopf schließt ihn jetzt und öffnet das Gewinde an *Länge*.
+    """
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.errors import CHANGE_THREAD_STEP
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        _a_pin_on_a_short_thread(window)
+        pin_step = window.session.history.operations[-1].id
+        window.edit_operation(pin_step)
+        pin_dialog = window._op_dialog
+        assert pin_dialog is not None and pin_dialog.spec.name == "pin_for_bore"
+        # Übernehmen vor dem Bild fordert die Vorschau an und wartet auf sie
+        # (``preview_defer``); sie sagt ab, und nichts wird übernommen.
+        QTest.qWait(100)
+        assert window.session.wait_for_idle(60_000)
+        pin_dialog.accept()
+        label = str(CHANGE_THREAD_STEP.label)
+        button = None
+        for _round in range(100):
+            QTest.qWait(100)
+            assert window.session.wait_for_idle(60_000)
+            button = next(
+                (
+                    entry
+                    for entry in pin_dialog.findChildren(QPushButton)
+                    if entry.text() == label and entry.isVisible()
+                ),
+                None,
+            )
+            if button is not None:
+                break
+        assert button is not None, "die Absage im Dialog trägt keinen Knopf zum Gewinde"
+        button.click()
+        QApplication.processEvents()
+        assert window._op_dialog is not pin_dialog, "der Dialog des Stifts ging nicht zu"
+        _length_has_the_cursor(window)
     finally:
         release = getattr(type(window), "release", None)
         if release is not None:

@@ -6457,6 +6457,47 @@ def test_a_refused_preview_offers_in_the_dialog_what_the_dialog_carries_out() ->
     assert set(MainWindow._refusal_handlers(view, nothing_to_prepare, refusal)) == {"use_reachable"}
 
 
+def test_a_refused_pin_preview_opens_the_thread_step_from_the_dialog() -> None:
+    """*Gewindeschritt öffnen* löst der Dialog selbst ein (Review P2 N6).
+
+    Die Vorschau zeigt nur Handlungen mit örtlichem Handler; ohne ihn stand die
+    Absage des Stifts im Dialog ohne Knopf. Der Knopf schließt den Dialog und
+    öffnet den Schritt aus ``values["creating_step"]`` — ohne Schritt keiner.
+    """
+    from types import SimpleNamespace
+
+    from app.core.errors import CANCEL, CHANGE_THREAD_STEP, ValidationError
+
+    rejected: list[bool] = []
+    opened: list[tuple[object, object]] = []
+    view = SimpleNamespace(
+        _preview_is_current=lambda approval: True,
+        _change_creating_step=lambda error: opened.append(
+            (error.values["creating_step"], error.values["field"])
+        ),
+    )
+    view._creating_step_from_dialog = lambda approval, error: MainWindow._creating_step_from_dialog(
+        view, approval, error
+    )
+    approval = SimpleNamespace(
+        owner=SimpleNamespace(reject=lambda: rejected.append(True)),
+        order=SimpleNamespace(change_op=None, drafts=(), changes=None),
+    )
+    refusal = ValidationError(
+        field="length",
+        detail="zu kurz",
+        values={"creating_step": 3},
+        constraint="thread_too_short",
+        suggestions=(CHANGE_THREAD_STEP, CANCEL),
+    )
+    handlers = MainWindow._refusal_handlers(view, approval, refusal)
+    assert set(handlers) == {"change_creating_step"}
+    handlers["change_creating_step"](refusal)
+    assert rejected == [True] and opened == [(3, "length")]
+    bare = ValidationError(field="length", detail="zu kurz", suggestions=refusal.suggestions)
+    assert MainWindow._refusal_handlers(view, approval, bare) == {}, "ohne Schritt kein Knopf"
+
+
 def test_a_step_prepared_from_the_dialog_is_one_move() -> None:
     """Vorbereitung und Schritt aus dem Dialog: eine Transaktion, der Dialog geht zu.
 
