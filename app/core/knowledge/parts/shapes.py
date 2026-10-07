@@ -491,7 +491,8 @@ def turn_segments(radius: float) -> int:
 
     So viele, dass die Sehne am äußersten ``radius`` des Gangs höchstens
     ``MAX_FACET_SAG`` von der Rundung abweicht. Achtundvierzig halten das bis
-    Ø 46 mm, und dort bleibt es — die Tabellengewinde bis M42 bauen wie bisher. Ein
+    Ø 46 mm, und dort bleibt es — die Tabellengewinde bis M42 behalten ihre
+    Sehnenzahl (ihr Netz ändert sich trotzdem: ``THREAD_MESH_WHOLE_TURNS``). Ein
     Gewinde mit eigenem Maß darüber bekam bis zum 06.10.2026 ebenfalls nur
     achtundvierzig, bei Ø 66 ein Vieleck mit 0,07 mm Abweichung, bei Ø 500 mit
     0,53 mm — mehr als das Spiel, mit dem Schraube und Mutter ineinandergehen.

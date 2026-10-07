@@ -283,9 +283,30 @@ def _measured(feature: Feature) -> _Measured | None:
     # Befund (Review RM-532, F2). Sein Durchmesser ist das gebaute Maß.
     key = "length" if feature.kind == "thread" else "depth"
     depth = float(feature.params.get(key) or 0.0)
+    inside = is_a_cavity(feature)
+    if feature.kind == "thread" and not inside:
+        diameter = _thread_core(feature, diameter)
     if axis is None or centre is None or diameter <= EPS_GEOM or depth <= EPS_GEOM:
         return None
-    return _Measured(feature, axis, centre, diameter, depth, is_a_cavity(feature))
+    return _Measured(feature, axis, centre, diameter, depth, inside)
+
+
+def _thread_core(feature: Feature, diameter: float) -> float:
+    """Der Kern eines Außengewindes — dort ist die Wand eines hohlen Bolzens am dünnsten.
+
+    Am Innengewinde ist das gebaute Maß der Grund der Nut, und gegen eine
+    Außenwand zählt genau der. Am Außengewinde ist ``diameter`` die Spitze des
+    Gangs; die Wand zu einer Bohrung darin endet aber am Kern, um die
+    Gangtiefe tiefer (Review RM-532 Runde 2, N7). Ein erkanntes Gewinde nennt
+    die Gangtiefe als ``depth``, ein erzeugtes trägt sie als Anteil seiner
+    Steigung (``shapes.RIDGE_SHARE``).
+    """
+    ridge = float(feature.params.get("depth") or 0.0)
+    if ridge <= EPS_GEOM:
+        from app.core.knowledge.parts.shapes import RIDGE_SHARE
+
+        ridge = float(feature.params.get("pitch") or 0.0) * RIDGE_SHARE
+    return diameter - 2.0 * ridge
 
 
 def _sleeve_between(one: _Measured, other: _Measured) -> Sleeve | None:

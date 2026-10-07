@@ -79,8 +79,10 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   `standards.regular_pitch`); an einer Bohrung ohne Tabellengröße wählt
   `custom_thread_for` das Maß, dessen Kernloch sie ist. Ohne tragenden Kern
   oder unter `FINEST_PITCH` lehnt es ab und erklärt es (`thread_problem`,
-  `_thread_reason`); bohrt es seine Bohrung auf, sagt es das (`thread_at_hole`
-  über `PartSpec.at_hole_check`). Schraubenloch, Mutternfalle, Schraube und
+  `_thread_reason`); bohrt es seine Bohrung auf oder bleibt nach außen zu wenig
+  Wand, sagt es das (`thread_at_hole` über `PartSpec.at_hole_check`, Strahlen
+  am Träger in `_wall_around`, Mündung und Richtung aus `ops._mouth_frame`).
+  Schraubenloch, Mutternfalle, Schraube und
   Mutter nehmen `CUSTOM_SIZE` mit Nenndurchmesser (`_screw_of`, `_nut_of`,
   `_washer_of`, Befund `parts.derived_size`), die Mutternfalle auch an einer
   Bohrung über der Tabelle (`custom_nut_for`); die Einpressbuchse nimmt

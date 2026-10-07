@@ -328,6 +328,53 @@ def test_the_lead_above_the_first_field_stays_short_in_every_language() -> None:
     assert not over, f"zu viele Wörter über dem ersten Feld: {over}"
 
 
+def test_the_bore_sentence_of_a_part_stays_short_in_every_language() -> None:
+    """Der Satz über eine angeklickte Bohrung hält dieselbe Grenze (Review RM-532 Runde 2, N5).
+
+    Über dem Dialog eines Bausteins, der aus der Bohrung seine Größe nimmt,
+    steht neben der Einleitung „Bohrungsmaß: …“ und sein eigener Satz
+    (``PartSpec.at_hole_advice``). Die Fassungen mit eigenem Maß hatten allein
+    25 bis 30 Wörter, und gezählt hat sie niemand. Gezählt wird jeder Zweig —
+    Normgröße, eigenes Maß, keine Größe — mit dem Maß aus der Konstruktion und
+    mit dem eingepassten, dessen Satz „Einschätzung anhand dieses Maßes“ trägt.
+    """
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene.placement import bore_advice
+    from app.core.types import MeasureStatus
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import available_languages, install_language
+
+    statuses = (
+        MeasureStatus("exact", source="native", available=True),
+        MeasureStatus("estimated", source="fit", available=True),
+    )
+    # Je Zweig eine Bohrung: unter dem kleinsten Gewinde, Normgrößen, zwischen
+    # zwei Größen, über der Tabelle und über dem größten Gewinde.
+    bores = (1.0, 3.4, 5.2, 6.6, 7.5, 21.0, 40.0, 70.0, 120.0, 1200.0)
+    parts = [
+        spec for spec in REGISTRY.all() if (part := part_of(spec.name)) and part.at_hole_advice
+    ]
+    assert len(parts) >= 4, [spec.name for spec in parts]
+    before = get_language()
+    over: list[str] = []
+    try:
+        for language in available_languages():
+            install_language(language)
+            set_language(language)
+            limit = MAX_LEAD_WORDS if language == "de" else MAX_LEAD_WORDS_TRANSLATED
+            for spec in parts:
+                for status in statuses:
+                    for diameter in bores:
+                        said, _choices = bore_advice(
+                            diameter, ask=False, spec=spec, status=status, measured="5,20 mm"
+                        )
+                        if _words(said) > limit:
+                            over.append(f"{language} {spec.name} {diameter}: {said}")
+    finally:
+        set_language(before)
+    assert not over, "zu viele Wörter im Bohrungssatz:\n" + "\n".join(over)
+
+
 def test_the_lead_is_the_first_sentence_and_names_the_limit_briefly() -> None:
     """Der Dialog zeigt den ersten Satz, die Grenze nur als Überschrift (RM-513, C2)."""
     from app.ui.command_palette import first_sentence

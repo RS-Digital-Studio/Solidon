@@ -262,9 +262,13 @@ def test_the_metric_series_runs_from_m1_6_to_m64_in_every_table() -> None:
         ("nuts", "M52", "width", 80.0),
         ("washers", "M45", "outer", 85.0),
         ("washers", "M20", "outer", 37.0),
-        # PreciFast: das Kernloch als Bohrermaß, M12 10,2 und M1,6 1,3.
+        # PreciFast: das Kernloch als Bohrermaß, M12 10,2; M1,6 nach DIN 336 1,25
+        # (Wikipedia „Metrisches ISO-Gewinde“ — PreciFast nennt 1,3).
         ("screws", "M12", "tap", 10.2),
-        ("screws", "M1.6", "tap", 1.3),
+        ("screws", "M1.6", "tap", 1.25),
+        # DIN 7991 (Aspen Fasteners): Senkkopf dk unter 2·d ab M14.
+        ("screws", "M14", "countersink", 27.0),
+        ("screws", "M24", "countersink", 39.0),
         # DIN 912 (Aspen Fasteners): Kopf und Innensechskant der M24.
         ("screws", "M24", "head", 36.0),
         ("screws", "M24", "hex", 19.0),
@@ -290,10 +294,12 @@ def test_every_screw_row_agrees_with_a_second_derivation(size: str) -> None:
     fiele in keiner Validierung auf. Die Gegenprobe rechnet aus Nennmaß und
     Steigung nach, was die Normen als Verhältnisse festlegen:
 
-    * Kopfhöhe k = d und Senkkopf 2·d (ISO 4762, Regel der Tabelle);
+    * Kopfhöhe k = d (ISO 4762); Senkkopf 2·d bis M12, darüber nach DIN 7991
+      zwischen 1,6·d und 2·d, und wo die Tabelle ihn rechnet, nach der
+      Ableitungsregel aus den genormten Köpfen;
     * Kopf dk = 1,5·d ab M12 auf einen halben Millimeter (M27 hat 40 statt
       40,5 — die Norm rundet auf ganze Millimeter), darunter breiter, bis 1,9·d;
-    * Kernloch d − P, oder das Bohrermaß daneben (M1.6 1,3, M8 6,8, M12 10,2);
+    * Kernloch d − P, oder das Bohrermaß daneben (M8 6,8, M12 10,2);
     * Durchgangsloch mittel 1,06·d bis 1,2·d, grob höchstens 1,3·d;
     * die Scheibenbohrung nach ISO 7089 — aus einer zweiten Norm und einer
       anderen Quelle — ist bis M36 das feine Durchgangsloch, ab M39 das mittlere;
@@ -303,7 +309,17 @@ def test_every_screw_row_agrees_with_a_second_derivation(size: str) -> None:
     screw = tables.screws[size]
     d, pitch = screw.nominal, screw.pitch
     assert screw.head_height == pytest.approx(d)
-    assert screw.countersink == pytest.approx(2.0 * d)
+    if screw.countersink_derived:
+        normed = [
+            (entry.nominal, (entry.countersink,))
+            for entry in tables.screws.values()
+            if not entry.countersink_derived
+        ]
+        assert screw.countersink == pytest.approx(standards._along(normed, d)[0])
+    elif d <= 12.0:
+        assert screw.countersink == pytest.approx(2.0 * d)
+    else:
+        assert 1.6 * d <= screw.countersink < 2.0 * d
     if d >= 12.0:
         assert abs(screw.head - 1.5 * d) <= 0.5
     else:
@@ -360,6 +376,8 @@ def test_a_custom_size_between_two_sizes_lies_between_their_values() -> None:
     assert screw.pitch == pytest.approx(1.5)
     assert screw.tap == pytest.approx(9.5)
     assert screw.countersink == pytest.approx(22.0)
+    assert not screw.countersink_derived
+    assert standards.derived_screw(30.5).countersink_derived, "über M24 kein Senkkopf"
     assert standards.derived_nut(11.0).width == pytest.approx(17.0)
     assert standards.derived_washer(11.0).outer == pytest.approx(22.0)
 

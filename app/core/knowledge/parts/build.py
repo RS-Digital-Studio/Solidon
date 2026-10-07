@@ -154,7 +154,7 @@ def _core_segments(root: float, segments: int) -> int:
     **Feiner statt weiter**: Ein Vielfaches der Gangsehnen, damit jede Station
     des Gangs auf einer Kernecke liegt, und der Eckenradius bleibt der Fuß plus
     Überdeckung — der Gewindegrund behält sein Maß. Bis M8 bleiben es die
-    Sehnen des Gangs, alle Tabellengewinde dort bauen wie zuvor.
+    Sehnen des Gangs; die Sehnenzahl dieser Tabellengewinde ändert sich nicht.
     """
     from app.core.geom.boolean import BOOLEAN_OVERLAP
     from app.core.units import exact_cos

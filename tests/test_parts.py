@@ -4342,6 +4342,48 @@ def test_an_m64_head_room_is_the_iso_4762_head_of_96() -> None:
     assert 2.0 * _radial_extent(built.mesh) == pytest.approx(96.0, abs=0.01)
 
 
+def test_field_limits_follow_the_largest_size_of_the_series() -> None:
+    """Kopftiefe und Laschenbreite reichen bis zur größten Größe (Review RM-532 Runde 2, N6).
+
+    Fest 50 und 100 mm: Der Zylinderkopf der M64 (64 mm) ließ sich nicht ganz
+    versenken, und die Lasche der M56 und M64 folgt ohne Angabe ihrer Scheibe
+    (105, 115 mm), die ein eingetragenes Maß nicht erreichte.
+    """
+    from app.core.knowledge import standards
+
+    def maximum(part: str, field: str) -> float:
+        entry = next(e for e in PARTS.get(part).params.spec() if e.name == field)
+        assert entry.maximum is not None
+        return float(entry.maximum)
+
+    head = standards.screw("M64").head_height + standards.washer("M64").thickness
+    assert maximum("screw_hole", "head_room") >= head
+    lug = PARTS.get("lug")
+    sizes = next(e for e in lug.params.spec() if e.name == "size").choices or ()
+    assert sizes
+    for size in sizes:
+        assert maximum("lug", "width") >= standards.washer(str(size)).outer, size
+
+
+def test_a_countersink_without_a_standard_head_says_so() -> None:
+    """DIN 7991 endet bei M24 — darüber ist die Senkung gerechnet, und das wird gesagt.
+
+    Die Regel 2·d gab jeder Größe eine Senkung, ab M14 größer als der genormte
+    Senkkopf (M24: 48 statt 39) und über M24 für einen Kopf, den es nicht gibt
+    (Review RM-532 Runde 2, N3). Die M24 senkt jetzt nach DIN 7991 und schweigt,
+    die M30 sagt, dass ihre Senkung abgeleitet ist; ohne Senkkopf nichts.
+    """
+    spec = PARTS.get("screw_hole")
+    normed = spec.fn(spec.params(size="M24"))
+    assert normed.features["countersink_1"].params["diameter"] == pytest.approx(39.0)
+    assert not normed.findings
+    derived = spec.fn(spec.params(size="M30"))
+    assert [finding.code for finding in derived.findings] == ["parts.countersink_derived"]
+    assert derived.findings[0].values["field"] == "countersink"
+    assert derived.findings[0].suggestions
+    assert not spec.fn(spec.params(size="M30", countersink=False)).findings
+
+
 def test_an_m20_nut_trap_takes_the_iso_4032_width_of_30(profile: Profile) -> None:
     """ISO 4032: Die Mutter M20 hat Schlüsselweite 30; die Tasche ist 30 plus Spiel breit."""
     play = profile.material.clearance
@@ -4501,6 +4543,50 @@ def test_an_internal_thread_through_a_thin_tube_wall_is_reported(profile: Profil
     assert not any("thin_wall" in code for code, _severity in thick), thick
 
 
+def test_following_the_thin_wall_advice_clears_the_finding(profile: Profile) -> None:
+    """Der Rat des Restwand-Befunds wirkt (Review RM-532 Runde 2, N2).
+
+    Er riet zu einer feineren Steigung — die ändert die Wand nicht, sie hängt am
+    Außenmaß des Gangs. Jetzt rät er zu einem kleineren Nennmaß mit feinerer
+    Steigung: Ø 62,2 × 2 ist Kernloch der 60er-Bohrung und lässt dem Rohr 65/60
+    1,3 mm Wand. Der Knopf öffnet das Feld, das das Maß trägt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge.parts.fasteners import thread_at_hole
+    from app.core.types import Feature
+
+    followed = _thread_in_a_tube(
+        profile, 65.0, 60.0, {"size": "custom_size", "diameter": 62.2, "pitch": 2.0}
+    )
+    assert not any("thin_wall" in code for code, _severity in followed), followed
+    assert not any("bore_widened" in code for code, _severity in followed), followed
+
+    spec = PARTS.get("printed_thread")
+    tube = MeshData(raw=trimesh.creation.annulus(r_min=30.0, r_max=32.5, height=20.0, sections=192))
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 60.0, "depth": 20.0},
+    )
+    table = thread_at_hole(
+        spec.params(size="M64", internal=True, play=0.2), bore, tube, profile, (0, 0, 10), (0, 0, 1)
+    )
+    assert [finding.values["field"] for finding in table] == ["size"], table
+    own = thread_at_hole(
+        spec.params(size="custom_size", diameter=64.0, pitch=2.0, internal=True, play=0.2),
+        bore,
+        tube,
+        profile,
+        (0, 0, 10),
+        (0, 0, 1),
+    )
+    assert [finding.code for finding in own] == ["parts.thread_thin_wall", "parts.bore_widened"]
+    assert {finding.values["field"] for finding in own} == {"diameter"}
+
+
 def test_a_finer_pitch_that_drills_the_hole_out_says_so(profile: Profile) -> None:
     """Nur die Steigung feiner, Nenndurchmesser gleich: Das Werkzeug bohrt die Bohrung auf.
 
@@ -4521,19 +4607,19 @@ def test_a_finer_pitch_that_drills_the_hole_out_says_so(profile: Profile) -> Non
     )
     assert ("parts.bore_widened", "warning") in widened, widened
     spec = PARTS.get("printed_thread")
-    finding = thread_at_hole(
+    [finding] = thread_at_hole(
         spec.params(size="custom_size", diameter=66.6, pitch=2.0, internal=True, play=0.2),
         bore(60.0),
         None,
         profile,
     )
-    assert finding is not None and finding.values["fitting_mm"] == pytest.approx(62.2)
+    assert finding.values["fitting_mm"] == pytest.approx(62.2)
     assert finding.suggestions
     fitting = spec.params(size="custom_size", diameter=62.2, pitch=2.0, internal=True, play=0.2)
-    assert thread_at_hole(fitting, bore(60.0), None, profile) is None
+    assert thread_at_hole(fitting, bore(60.0), None, profile) == []
     assert (
         thread_at_hole(spec.params(size="M64", internal=True, play=0.2), bore(58.0), None, profile)
-        is None
+        == []
     )
 
 

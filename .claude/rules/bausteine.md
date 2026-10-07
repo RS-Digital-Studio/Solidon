@@ -200,9 +200,14 @@ Sehnenmitte um `BOOLEAN_OVERLAP` (`build._core_segments`), und der Gang läuft
 Splitter im Gang, und Schraube und Mutter überdecken sich. Wo ein Bau ablehnt,
 erklärt der Baustein es über `feasible` aus derselben Regel
 (`fasteners.thread_problem`). Ein Innengewinde in einer Bohrung sagt, wenn es
-sie aufbohrt (`PartSpec.at_hole_check`, `parts.bore_widened`); die Restwand
-um ein Gewinde misst die Auswertung am Endstand wie um jede Bohrung
-(`relations._measured` liest `length`, `is_a_cavity` liest `internal`).
+sie aufbohrt (`PartSpec.at_hole_check`, `parts.bore_widened`), und misst die
+Wand nach außen selbst, mit Strahlen am Träger vor dem Schnitt längs seiner
+Strecke ab der Mündung (`parts.thread_thin_wall`) — an einem Rohr ist die
+Außenwand kein Merkmal, und die Prüfung am Endstand sähe sie nicht. Beide
+Befunde können zugleich gelten, und ihr Knopf öffnet das Feld, das das Maß
+trägt. Am Endstand misst die Auswertung die Wand wie um jede Bohrung
+(`relations._measured` liest `length`, `is_a_cavity` liest `internal`; ein
+Außengewinde zählt mit seinem Kern, nicht mit der Spitze des Gangs).
 
 **Eine Schraube endet auch nicht an der Tabelle.** Schraubenloch,
 Mutternfalle, Schraube und Mutter nehmen `CUSTOM_SIZE` mit Nenndurchmesser;
@@ -323,7 +328,10 @@ Normen, Scheibenbohrung gleich feinem Durchgangsloch), und der Stand einer
 früheren Tabellenversion steht dort fest: Ein bestehender Wert ändert sich nur
 mit `LIBRARY_VERSION` und `PartChange`. Mutter und Scheibe gehören zu einer
 Schraube der Tabelle (`known_screw`), weil das eigene Maß von ihrem Nennmaß
-aus ableitet.
+aus ableitet. Nennt keine Quelle einen Wert (Senkkopf über M24, M18, M22),
+steht er nach derselben Ableitungsregel gerechnet und gekennzeichnet in der
+Zeile (`countersink_derived`), und der Baustein sagt es am Ergebnis — eine
+Regel wie 2·d statt des Normwerts sieht der Kunde nicht.
 
 ## Regelsammlung
 

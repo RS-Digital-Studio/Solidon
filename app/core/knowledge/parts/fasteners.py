@@ -18,7 +18,7 @@ import math
 from dataclasses import replace
 from typing import Any, Final, cast
 
-from app.core.errors import CHANGE_SIZE, ValidationError
+from app.core.errors import CHANGE_SIZE, CHANGE_THIS_STEP, ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
@@ -49,6 +49,7 @@ from app.core.types import (
     ParamPlacement,
     PartResult,
     Profile,
+    Vec3,
 )
 from app.core.units import (
     COARSEST_PITCH,
@@ -68,6 +69,13 @@ from app.i18n import TranslatableText, _
 CUSTOM_SIZE: Final = "custom_size"
 
 _SCREWS = standards.screw_sizes()
+
+#: Wie tief Kopf und Scheibe höchstens einsinken: der höchste Zylinderkopf und
+#: die dickste Scheibe der Tabelle (M64: 64 + 10 mm). Eine feste 50 ließ die
+#: Köpfe ab M56 nicht ganz versenken (Review RM-532 Runde 2, N6).
+_DEEPEST_HEAD_ROOM: Final = max(standards.screw(size).head_height for size in _SCREWS) + max(
+    standards.washer(size).thickness for size in standards.washer_sizes()
+)
 _NUTS = standards.nut_sizes()
 _INSERTS = standards.insert_sizes()
 
@@ -288,7 +296,7 @@ class ScrewHoleParams(BaseParams):
         default=0.0,
         unit="mm",
         minimum=0.0,
-        maximum=50.0,
+        maximum=_DEEPEST_HEAD_ROOM,
         placement="advanced",
         doc=_("Wie tief Schraubenkopf und Unterlegscheibe in das Bauteil einsinken."),
     )
@@ -396,7 +404,31 @@ def screw_hole(raw: BaseParams) -> PartResult:
             )
         )
 
-    return _derived(result(union(*parts), *features), params.size, params.diameter)
+    made = _derived(result(union(*parts), *features), params.size, params.diameter)
+    if params.countersink and screw.countersink_derived:
+        # Review RM-532 Runde 2, N3: Über M24 führt keine Norm einen Senkkopf, M18
+        # und M22 nennt die Quelle der Tabelle nicht — die Senkung ist dort
+        # gerechnet, und wer eine Schraube kauft, findet womöglich keine dazu.
+        named = params.size if params.size != CUSTOM_SIZE else f"Ø {format_length(screw.nominal)}"
+        made.findings.append(
+            Finding(
+                code="parts.countersink_derived",
+                severity="info",
+                message=_(
+                    "Für {size} kennt die Normteiltabelle keinen genormten Senkkopf; die Senkung "
+                    "Ø {diameter} ist abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.",
+                    size=named,
+                    diameter=format_length(screw.countersink),
+                ),
+                values={
+                    "part": "screw_hole",
+                    "field": "countersink",
+                    "countersink_mm": screw.countersink,
+                },
+                suggestions=(CHANGE_THIS_STEP,),
+            )
+        )
+    return made
 
 
 def _countersink_feature(diameter: float, top: float, depth: float) -> tuple[str, Feature]:
@@ -616,8 +648,8 @@ def insert_advice(diameter: float) -> TranslatableText:
     size = size_for_insert(diameter).get("size")
     if size is None:
         return _(
-            "Keine Einpressbuchse der Normteiltabelle hat ein so weites Loch. Unter "
-            "„Eigenes Maß“ tragen Sie Bohrung und Länge aus dem Datenblatt Ihrer Buchse ein."
+            "Keine Buchse der Normteiltabelle hat ein so weites Loch; ihre Maße unter "
+            "„Eigenes Maß“ eintragen."
         )
     return _(
         "Passend ist die Einpressbuchse {size}; ihr Einpressloch weitet diese Bohrung auf.",
@@ -632,14 +664,13 @@ def nut_trap_advice(diameter: float) -> TranslatableText:
     size = values.get("size")
     if size == CUSTOM_SIZE:
         return _(
-            "Passend ist eine Mutter mit eigenem Maß Ø {diameter}; ihr Schraubenloch nimmt "
-            "diese Bohrung auf. Ihre Maße sind aus den Normgrößen abgeleitet und nicht genormt.",
+            "Passend ist eine Mutter mit eigenem Maß Ø {diameter}, abgeleitet und nicht genormt.",
             diameter=format_length(values["diameter"]),
         )
     if size is None:
         return _(
-            "Keine Mutter passt zu so einem weiten Schraubenloch: Es ist weiter als das des "
-            "größten Gewindes mit Ø {largest}.",
+            "Keine Mutter passt: Das Schraubenloch ist weiter als das des größten Gewindes "
+            "mit Ø {largest}.",
             largest=format_length(LARGEST_THREAD),
         )
     return _("Passend ist die Mutter {size}; ihr Schraubenloch nimmt diese Bohrung auf.", size=size)
@@ -663,8 +694,8 @@ def thread_advice(diameter: float) -> TranslatableText:
     if size == CUSTOM_SIZE:
         nominal, pitch = thread_measure(CUSTOM_SIZE, values["diameter"], values["pitch"])
         return _(
-            "In diese Bohrung passt ein Innengewinde mit eigenem Maß: Ø {diameter}, "
-            "Steigung {pitch}. Die Bohrung bleibt sein Kernloch; ein Normgewinde ist es nicht.",
+            "In diese Bohrung passt ein Innengewinde mit eigenem Maß Ø {diameter}, "
+            "Steigung {pitch}, kein Normgewinde.",
             diameter=format_length(nominal),
             pitch=format_length(pitch),
         )
@@ -677,8 +708,8 @@ def thread_advice(diameter: float) -> TranslatableText:
             largest=format_length(LARGEST_THREAD),
         )
     return _(
-        "Kein Gewinde passt in diese Bohrung: Sie ist enger als das Kernloch des kleinsten "
-        "Gewindes mit Ø {smallest}.",
+        "Kein Gewinde passt: Die Bohrung ist enger als das Kernloch des kleinsten mit "
+        "Ø {smallest}.",
         smallest=format_length(SMALLEST_THREAD),
     )
 
@@ -687,21 +718,29 @@ def thread_advice(diameter: float) -> TranslatableText:
 #: Restwand um ein Gewinde gemessen wird — dieselbe Dichte wie *Merkmal ändern*
 #: an einem Gewinde (``prepare_ops._thread_wall``).
 _WALL_RAYS: Final = 24
-_WALL_RINGS: Final = (-0.4, 0.0, 0.4)
+_WALL_RINGS: Final = (0.15, 0.5, 0.85)
 
 
 def thread_at_hole(
-    raw: BaseParams, bore: Feature, host: Any, profile: Profile | None
-) -> Finding | None:
-    """Was ein Innengewinde über seine Bohrung sagt: Restwand und Aufbohren.
+    raw: BaseParams,
+    bore: Feature,
+    host: Any,
+    profile: Profile | None,
+    mouth: Vec3 | None = None,
+    outward: Vec3 | None = None,
+) -> list[Finding]:
+    """Was ein Innengewinde über seine Bohrung sagt: Restwand und Aufbohren, beides.
 
     **Die Restwand** (Review RM-532, F2): An einem Rohr ist die Außenwand kein
     Merkmal, die Prüfung am Endstand (``relations.thinnest_sleeve``) sieht sie
     nicht. Gemessen wird deshalb hier, mit Strahlen quer zur Achse am Träger
-    vor dem Schnitt: der erste Austritt jenseits der Bohrung ist die Außenwand,
-    und was zwischen ihr und dem Grund des Gangs bleibt, muss die Mindestwand
-    des Materials tragen. Ein Rohr 65/60 mit der M64 behielt 0,4 mm, ohne ein
-    Wort.
+    vor dem Schnitt, auf der Strecke, die das Gewinde von der Mündung
+    (``mouth``) gegen ``outward`` einnimmt: Der erste Austritt jenseits der
+    Bohrung ist die Außenwand, und was zwischen ihr und dem Grund des Gangs
+    bleibt, muss die Mindestwand des Materials tragen. Ein Rohr 65/60 mit der
+    M64 behielt 0,4 mm, ohne ein Wort. Die Wand hängt am Außenmaß des Gangs,
+    nicht an der Steigung — der Rat nennt deshalb das kleinere Nennmaß
+    (Review RM-532 Runde 2, N2).
 
     **Das Aufbohren** (Review RM-532, F3): An der Bohrung wählt
     :func:`size_for_thread` ein Maß, dessen Kernloch sie ist. Wer danach nur die
@@ -711,46 +750,82 @@ def thread_at_hole(
     Steigung 2 auf 64,6 aufgebohrt, 2358 mm³ mehr Abtrag. Gemeldet wird, sobald
     das Werkzeug die Bohrung um mehr als das Spiel übersteigt; der Satz nennt
     den Nenndurchmesser, mit dem sie bei dieser Steigung Kernloch bleibt.
+
+    Beide Befunde öffnen den Schritt an dem Feld, das das Maß trägt: bei
+    *Eigenes Maß* am Nenndurchmesser, sonst an der Größe.
     """
     params = cast(ThreadParams, raw)
     if not params.internal:
-        return None
+        return []
+    own = params.size == CUSTOM_SIZE
     nominal, pitch = thread_measure(params.size, params.diameter, params.pitch)
     hole = float(bore.params["diameter"])
-    thin = _thin_wall_around(bore, host, (nominal + params.play) / 2.0, profile)
-    if thin is not None:
-        return thin
     depth = pitch * shapes.RIDGE_SHARE
+    found: list[Finding] = []
+    wall = _wall_around(bore, host, mouth, outward, params.length)
+    least = profile.minimum_wall_thickness if profile is not None else None
+    if wall is not None and least is not None:
+        left = wall - (nominal + params.play) / 2.0
+        if left < least - EPS_GEOM:
+            message = _(
+                "Um das Gewinde bleiben {wall} Wand, das Material braucht {least}. Ein "
+                "kleineres Nennmaß mit feinerer Steigung oder ein dickeres Teil wählen.",
+                wall=format_length(max(left, 0.0)),
+                least=format_length(least),
+            )
+            found.append(
+                Finding(
+                    code="parts.thread_thin_wall",
+                    severity="warning",
+                    message=message,
+                    values={
+                        "part": "printed_thread",
+                        "field": "diameter" if own else "size",
+                        "wall_mm": left,
+                        "least_mm": least,
+                    },
+                    suggestions=(CHANGE_SIZE,),
+                )
+            )
     core = nominal - 2.0 * depth + params.play
-    if core <= hole + params.play + EPS_GEOM:
-        return None
-    fitting = hole + 2.0 * depth
-    return Finding(
-        code="parts.bore_widened",
-        severity="warning",
-        message=_(
+    if core > hole + params.play + EPS_GEOM:
+        fitting = hole + 2.0 * depth
+        message = _(
             "Das Gewinde bohrt die Bohrung von {bore} auf {core} auf. Mit Steigung {pitch} "
             "bliebe sie Kernloch für Ø {fitting}.",
             bore=format_length(hole),
             core=format_length(core),
             pitch=format_length(pitch),
             fitting=format_length(fitting),
-        ),
-        values={
-            "part": "printed_thread",
-            "field": "diameter",
-            "bore_mm": hole,
-            "core_mm": core,
-            "fitting_mm": fitting,
-        },
-        suggestions=(CHANGE_SIZE,),
-    )
+        )
+        found.append(
+            Finding(
+                code="parts.bore_widened",
+                severity="warning",
+                message=message,
+                values={
+                    "part": "printed_thread",
+                    "field": "diameter" if own else "size",
+                    "bore_mm": hole,
+                    "core_mm": core,
+                    "fitting_mm": fitting,
+                },
+                suggestions=(CHANGE_SIZE,),
+            )
+        )
+    return found
 
 
-def _thin_wall_around(
-    bore: Feature, host: Any, crest: float, profile: Profile | None
-) -> Finding | None:
-    """Die Wand, die zwischen dem Grund des Gangs (``crest``) und der Außenseite bleibt."""
+def _wall_around(
+    bore: Feature, host: Any, mouth: Vec3 | None, outward: Vec3 | None, length: float
+) -> float | None:
+    """Wie weit die Außenseite des Trägers von der Achse liegt, an der engsten Stelle.
+
+    Gemessen auf der Strecke des Gewindes, von der Mündung gegen ``outward``
+    (Review RM-532 Runde 2, K-N5: um die Bohrungsmitte gemessen traf der
+    Strahl an einer abgesetzten Wand die falsche Stelle). Ohne Mündung um die
+    Mitte der Bohrung.
+    """
     import numpy as np
 
     from app.core.geom.mesh import as_mesh_data
@@ -759,22 +834,31 @@ def _thin_wall_around(
     from app.core.sketch.planes import frame_of
     from app.core.units import MAX_FACET_SAG, circle_point
 
-    if profile is None or host is None:
+    if host is None:
         return None
-    axis, centre = axis_of(bore), centre_of(bore)
-    if axis is None or centre is None:
-        return None
+    if mouth is not None and outward is not None:
+        axis = np.asarray(outward, dtype=np.float64)
+        origins = [
+            np.asarray(mouth, dtype=np.float64) - axis * (share * length) for share in _WALL_RINGS
+        ]
+    else:
+        stated, centre = axis_of(bore), centre_of(bore)
+        if stated is None or centre is None:
+            return None
+        axis = np.asarray(stated, dtype=np.float64)
+        depth = float(bore.params.get("depth") or 0.0)
+        origins = [
+            np.asarray(centre, dtype=np.float64) + axis * ((share - 0.5) * depth)
+            for share in _WALL_RINGS
+        ]
     mesh = as_mesh_data(host)
     triangles = np.asarray(mesh.raw.triangles, dtype=np.float64)
     normals = np.asarray(mesh.raw.face_normals, dtype=np.float64)
-    direction = np.asarray(axis, dtype=np.float64)
-    frame = frame_of((float(direction[0]), float(direction[1]), float(direction[2])), (0, 0, 0))
+    frame = frame_of((float(axis[0]), float(axis[1]), float(axis[2])), (0, 0, 0))
     across = np.asarray(frame.x_axis, dtype=np.float64), np.asarray(frame.y_axis, dtype=np.float64)
     radius = float(bore.params["diameter"]) / 2.0
-    length = float(bore.params.get("depth") or 0.0)
     reach: float | None = None
-    for share in _WALL_RINGS:
-        origin = np.asarray(centre, dtype=np.float64) + direction * (share * length)
+    for origin in origins:
         for index in range(_WALL_RAYS):
             cosine, sine = circle_point(_WALL_RAYS, index)
             way = across[0] * cosine + across[1] * sine
@@ -782,26 +866,9 @@ def _thin_wall_around(
             facing = (normals[hit] * way).sum(axis=1)
             exits = distances[(facing > 0.0) & (distances > radius + MAX_FACET_SAG)]
             if len(exits):
-                found = float(exits.min())
-                reach = found if reach is None else min(reach, found)
-    if reach is None:
-        return None
-    wall = reach - crest
-    least = profile.minimum_wall_thickness
-    if wall >= least - EPS_GEOM:
-        return None
-    return Finding(
-        code="parts.thread_thin_wall",
-        severity="warning",
-        message=_(
-            "Um das Gewinde bleiben {wall} Wand, das Material braucht {least}. Feinere "
-            "Steigung, kleineres Nennmaß oder dickeres Teil wählen.",
-            wall=format_length(max(wall, 0.0)),
-            least=format_length(least),
-        ),
-        values={"part": "printed_thread", "field": "pitch", "wall_mm": wall, "least_mm": least},
-        suggestions=(CHANGE_SIZE,),
-    )
+                nearest = float(exits.min())
+                reach = nearest if reach is None else min(reach, nearest)
+    return reach
 
 
 def printed_screw_advice(diameter: float) -> TranslatableText | None:
