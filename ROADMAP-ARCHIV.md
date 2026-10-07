@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-07 | [RM-535: Karte, Operation und Griff fragen dieselbe Funktion, und das Material reist beim Versetzen, wie es ist (07.10.2026)](#rm-535-karte-operation-und-griff-fragen-dieselbe-funktion-und-das-material-reist-beim-versetzen-wie-es-ist-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)](#ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026) |
@@ -43495,3 +43496,62 @@ Bauplan, Regeln und Code sind nachgezogen (`tools/docs_scan.py --frage 3` ohne t
 Linkprüfung vorher und nachher ohne neuen). Review mit Nachprüfung (06./07.10.2026). Dabei
 gefunden und eingetragen: die fünf offenen Entscheidungen der Erstkonfiguration als
 [RM-542](ROADMAP.md#rm-542).
+
+## RM-535: Karte, Operation und Griff fragen dieselbe Funktion, und das Material reist beim Versetzen, wie es ist (07.10.2026)
+
+<a id="rm-535-karte-operation-und-griff-fragen-dieselbe-funktion-und-das-material-reist-beim-versetzen-wie-es-ist-07102026"></a>
+<a id="rm-535"></a>
+
+**RM-535 — Merkmal verschieben: Felder fehlen an Flächen, Karte und Operation sind uneins,
+  drei falsche Ergebnisse ohne Befund (Fragebogen S-20261006-5be329).** Kunde: „das Verschieben
+  mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“. Gemessen an HEAD
+  `3a5d607f3`, der Kundendatei und sechs Modellen mit 734 Merkmalen (Bericht
+  `verschieben-bericht.md` im Zustandsordner von RM-533): X/Y/Z stehen an Bohrung, Sackbohrung,
+  Langloch, Zapfen, Senkung, Verjüngung, Kugel, Einschluss, Wulst und Kehle. Keine Zeile haben
+  Verrundung, Fläche, Schrägfläche, gerundete Seite, Muster und Gewinde (Sätze in
+  `perceive/actions.py`); gesperrt sind Kegelstück, Kugel oder Kegel ohne eigenen Körper und die
+  Sackbohrung mit Zapfen. Am Kundenmodell haben 16 von 190 Merkmalen Felder, 174 keine (117
+  Verrundungen, 42 Flächen). Ursache ist `MOVABLE_KINDS` (`prepare_ops.py`), und die Karte
+  überspringt Zeilen ohne Handlung (`panels.py`, seit `fad4a15c5`, Test in
+  `test_feature_panel.py`); `app/core/perceive/CLAUDE.md` und `fenster.md` beschreiben das
+  Gegenteil. Der Flächenzug legt `push_face` sofort an, ohne Zahl und *Übernehmen*.
+
+  Fehler unabhängig von den Entscheidungen: An Wulst und Kehle stehen Felder, `move_feature`
+  sagt an allen vier geprüften Ringen ab (die Karte prüft nur `torus_is_the_body`, die Operation
+  auch `_torus_rims`). An der Sackbohrung mit Zapfen umgekehrt: Die Karte sperrt, die Operation
+  rechnet über `_air_of_the_bore`, und nach 0,5 mm erkennt Solidon zwei Sackbohrungen weniger.
+  Der Griff fragt nur die Art (`viewport.py`): An gesperrten Merkmalen endet sein Zug mit „Die
+  neue Stelle steht rechts unter Auswahl.“, an einer Verrundung greift er den Körper. Falsch ohne
+  Befund: Zapfen im Kundenmodell 0,5 mm in die Taschenwand −189 mm³ (danach 4 statt 6 Zapfen),
+  Zapfen Ø 30 im mini-pot bei 0,2/0,5/1,0 mm immer +240,65 mm³, Endfase am Stift bei 0,2 mm
+  +2218 mm³.
+
+  **Vorschlag:** Flächen bekommen *Fläche versetzen* mit dem Feld „Weg“ (erste Zeile in
+  `ACTION_ORDER` als `("move_feature", "push_face")`, der Weg beginnt bei 0); Karte, Operation und
+  Griff fragen dieselbe Funktion; eine zusammengelegte Absage steht wieder als Zeile.
+  **Entscheidungen Robert:** (a) der Flächenzug als Zahl mit *Übernehmen* statt sofortigem
+  Schritt (ändert die Zusage in `_on_face_dragged`); (b) Absagen wieder sichtbar, das nimmt
+  `fad4a15c5` teilweise zurück, oder die zwei Unterlagen angleichen; (c) Maße im Bild auch an
+  Zapfen, Senkung, Kugel und Ring (ändert die Entscheidung vom 10.09., dass *Merkmal verschieben*
+  auf Klick rechnet); (d) Tasche um einen Zapfen: absagen (Empfehlung) oder beide gemeinsam
+  versetzen. **Abnahme:** Ein Test über echte Netze, der heute an Ring und Sackbohrung mit Zapfen
+  rot ist; die drei falschen Ergebnisse rechnen richtig oder sagen mit Grund ab.
+
+**Nachweis (07.10.2026, `aa72450ca`):** Karte, `move_feature` und Griff fragen
+`actions.move_refusal` — die Zeile *Merkmal verschieben* der Karte (`actions_for(only=)`);
+`move_feature` sagt mit ihrem Satz ab, der Griff liest sie über `FeaturePanel.refuses`. Wulst und
+Kehle nehmen `torus_refusal` (Commit `398c7ea43`); die Tasche um einen Zapfen sagt ab
+(`HOLE_HOLDS_A_PIN`, Entscheidung (d)), eine Haltelippe sperrt nicht mehr; ein Zapfen oder eine
+Kuppel, die der ganze Körper sind, sagen ab (`FEATURE_SPANS_THE_BODY`). Starr versetzt reist das
+Material, wie es ist (`_placing_tool(carried_from=)`, `_carried_cavities`, `cache_version` 15):
+Zapfen 0,5 mm in die Taschenwand minus 3,85 statt minus 178 mm³ am Korpus, Minitopf
+0,000 statt +240,65 mm³ (bei 0,2 und 1,0 mm, Zapfen am Ziel wiedererkannt), Endfase am Stift ohne
+erkanntes Sackloch unter 1 mm³ statt +2 224 mm³. Die Fläche trägt *Fläche versetzen* mit dem Weg
+ab 0 als Zeile, der Flächenzug schreibt dorthin und *Übernehmen* legt den Schritt an (a);
+Absagen stehen wieder als Zeile mit Grund (b); *Merkmal verschieben* führt an Zapfen, Senkung,
+Kugel und Ring ins Bild (c, `MEASURED_WHILE_MOVED`). Abnahmetest über Korpusnetze
+`test_the_card_offers_a_move_exactly_where_the_operation_moves` (neu im Korpus
+`pocket_with_pin.stl`, `cup_on_stem.stl`, `pin_with_end_chamfers.stl`): vor `398c7ea43` rot an
+Wulst (`post_with_fillet.stl`) und Sackbohrung mit Zapfen, dazu am ganzen Zapfen und an der
+ganzen Kuppel; Fenstertests für Flächenzug, Griff und Maße im Bild. Am echten Fenster
+abzunehmen bleibt die Maßgruppe an Zapfen, Senkung, Kugel und Ring (Release).
