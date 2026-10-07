@@ -576,9 +576,12 @@ def test_the_sentence_over_a_bore_names_the_size_the_dialog_chose() -> None:
                 if word in sizes
             ]
             if chosen == CUSTOM_SIZE:
-                # Das eigene Maß nennt der Satz mit dem vorgewählten Durchmesser.
+                # Das eigene Maß nennt der Satz mit dem vorgewählten Durchmesser —
+                # „mit eigenem Maß“ oder, wo die Größe zu weit ist, „Eigenes Maß:“.
                 built = format_length(values_for(spec, bore)["diameter"])
-                assert "eigenem Maß" in said and str(built).replace(".", ",") in said, (
+                assert (
+                    re.search(r"[Ee]igene[ms] Maß", said) and str(built).replace(".", ",") in said
+                ), (
                     spec.name,
                     diameter,
                     said,
