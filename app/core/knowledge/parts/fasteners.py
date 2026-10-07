@@ -609,7 +609,9 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     M1): Knapp unter dem Gangfuß einer Größe läge es weniger als
     ``standards.THREAD_SIZE_REACH`` neben ihr — Ø 40 ergäbe 44,95 x 4,5, eine
     M45 bis auf 0,05 mm. Dort gilt die Normgröße, wie beim Gegenstück eines
-    gemessenen Gewindes, und :func:`thread_at_hole` meldet das Aufbohren.
+    gemessenen Gewindes, und :func:`thread_at_hole` meldet das Aufbohren —
+    sofern ihr Gang in dieser Bohrung greift; an der M1.6-Kante (Ø 1,408 bis
+    1,415) bleibt das eigene Maß.
 
     Und ``internal``: Wer eine Bohrung anklickt und „Gewinde" wählt, meint
     Gänge in der Wand. Die Schemavorgabe steht auf Außengewinde, und das ist
@@ -643,7 +645,10 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     if custom is None:
         return {"internal": True}
     near = standards.thread_size_near(*custom)
-    if near is not None:
+    # Die Rundung nimmt die Normgröße nur, wo ihr Gang noch greift: An der
+    # M1.6 ist ``THREAD_SIZE_REACH`` weiter als 0,55 der Steigung, und Ø 1,41
+    # bekäme eine M1.6, deren Gang nicht in die Wand reicht (Review P2 N3).
+    if near is not None and diameter <= _gripped_up_to(standards.screw(near)):
         return {"size": near, "internal": True}
     # Die Steigung bleibt auf „automatisch": Das Maß ist so gewählt, dass die
     # Regelsteigung seines Durchmessers genau die ist, mit der es gerechnet wurde.

@@ -331,14 +331,46 @@ def test_a_bore_at_the_printed_root_gets_its_standard_thread(
     assert "Normgewinde" not in str(thread_advice(bore))
 
 
-@pytest.mark.parametrize(("bore", "size", "root"), [(13.6, "M16", 13.8), (40.0, "M45", 40.05)])
+@pytest.mark.parametrize(("bore", "size"), [(4.95, "M6"), (20.8, "M24")])
+def test_where_the_pitch_changes_the_printed_root_decides(bore: float, size: str) -> None:
+    """Zwischen Gangfuß und Bohrermaß liegt die Normgröße, auch ohne Rundung (Review P2 N4a).
+
+    Die Tabellengröße beginnt am Gangfuß D − 1,1 P (M6 4,9, M24 20,7), nicht am
+    Bohrermaß D − P (5,0 und 21,0). Wo der kleinere Nachbar eine andere Steigung
+    hat, fängt die Rundung das nicht auf: Das eigene Maß wäre Ø 5,83 x 0,8 und
+    Ø 23,55 x 2,5, keines davon nahe einer Normgröße.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import custom_thread_for, size_for_thread
+
+    custom = custom_thread_for(bore)
+    assert custom is not None and standards.thread_size_near(*custom) is None, (
+        "sonst entschiede die Rundung, nicht der Gangfuß"
+    )
+    assert size_for_thread(bore) == {"size": size, "internal": True}
+
+
+def test_the_sentence_says_which_standard_size_is_too_wide() -> None:
+    """An Ø 6 nennt der Satz die M6, der die Bohrung zu weit ist, und das eigene Maß (N4b).
+
+    An Ø 6,5 hat keine Größe dieses Nennmaß, und der Satz bleibt der allgemeine.
+    """
+    from app.core.knowledge.parts.fasteners import thread_advice
+
+    wide = str(thread_advice(6.0))
+    assert "M6" in wide and "7,10" in wide and "weit" in wide, wide
+    plain = str(thread_advice(6.5))
+    assert "weit" not in plain and "7,60" in plain, plain
+
+
+@pytest.mark.parametrize(("bore", "size", "root"), [(13.65, "M16", 13.8), (40.0, "M45", 40.05)])
 def test_a_bore_just_under_the_root_takes_the_standard_size_and_is_widened(
     bore: float, size: str, root: float
 ) -> None:
     """Knapp unter dem Gangfuß rundet die Vorwahl auf die Normgröße wie das Gegenstück.
 
     Das eigene Maß an Ø 40 wäre 40 + 1,1 · 4,5 = 44,95 x 4,5, eine M45 bis auf
-    0,05 mm; an Ø 13,6 wäre es 15,8 x 2. Beide liegen innerhalb von
+    0,05 mm; an Ø 13,65 wäre es 15,85 x 2. Beide liegen innerhalb von
     ``standards.THREAD_SIZE_REACH`` neben der Normgröße, und wer eine M45 hat,
     müsste raten (Review P2, M1). Gewählt wird die Normgröße, und das Gewinde
     sagt, dass es die Bohrung bis zum Gangfuß aufweitet (``parts.bore_widened``).
@@ -376,19 +408,42 @@ def test_no_preselected_custom_thread_is_a_standard_size() -> None:
     gab es Bänder von 0,35 mm unter jedem Kernloch ab M16, in denen „kein
     Normgewinde“ über einer Normgröße stand. Abgetastet in 0,01-mm-Schritten
     vom kleinsten Kernloch bis über M64.
+
+    **Und jede gewählte Tabellengröße greift** (Review P2 N3): Die Rundung
+    darf keine Größe nehmen, deren Gang die Wand nicht erreicht. Die eine
+    Ausnahme ist benannt: An der M1.6 ist die Erkennungsgrenze weiter als
+    0,55 der Steigung, und Ø 1,41 behält sein eigenes Maß neben ihr.
     """
     from app.core.knowledge import standards
-    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE, size_for_thread, thread_measure
+    from app.core.knowledge.parts.fasteners import (
+        CUSTOM_SIZE,
+        _gripped_up_to,
+        size_for_thread,
+        thread_measure,
+    )
 
     hits = []
+    loose = []
+    customs = sized = 0
     for step in range(125, 7000):
-        chosen = size_for_thread(step / 100.0)
-        if chosen.get("size") != CUSTOM_SIZE:
+        bore = step / 100.0
+        chosen = size_for_thread(bore)
+        size = chosen.get("size")
+        if size is not None and size != CUSTOM_SIZE:
+            sized += 1
+            if bore > _gripped_up_to(standards.screw(size)):
+                loose.append((bore, size))
             continue
+        if size is None:
+            continue
+        customs += 1
         nominal, pitch = thread_measure(CUSTOM_SIZE, chosen["diameter"], chosen["pitch"])
-        if standards.thread_size_near(nominal, pitch) or standards.tabulated_size(nominal):
-            hits.append((step / 100.0, nominal, pitch))
-    assert hits == []
+        near = standards.thread_size_near(nominal, pitch) or standards.tabulated_size(nominal)
+        if near:
+            hits.append((bore, near))
+    assert customs > 0 and sized > 0, "ohne beide Fälle prüft die Abtastung nichts"
+    assert loose == [], "eine gewählte Normgröße greift nicht"
+    assert hits == [(1.41, "M1.6")], "nur die benannte M1.6-Kante"
 
 
 @pytest.mark.parametrize(
