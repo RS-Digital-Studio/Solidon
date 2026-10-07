@@ -5159,6 +5159,17 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
     # erfunden wäre.
     for _ in range(3):
         QApplication.processEvents()
+    # **Niedriger, bis die Zeilen nicht mehr passen.** Mit echter Schrift
+    # (Linux, macOS) sind die Zeilen schmaler und niedriger als mit der
+    # Ersatzschrift von Windows offscreen; bei 700 Punkten passten sie dort
+    # ganz ins Sichtfeld (364 in 419), und der Test prüfte nichts. Gesucht
+    # wird deshalb die Fensterhöhe, bei der der Fund entsteht.
+    for hoehe in (600, 520, 460):
+        if panel.height() > roller.viewport().height():
+            break
+        window.resize(1600, hoehe)
+        for _ in range(3):
+            QApplication.processEvents()
     # **Die Voraussetzung des Funds, und sie ist schärfer als „der Inhalt
     # rollt".** Gerollt wird immer, sobald die Handlungsliste darunter steht;
     # der Knopf verschwindet erst, wenn die **Zeilen des Merkmals** allein
