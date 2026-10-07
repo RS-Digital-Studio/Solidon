@@ -11,7 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import os  # noqa: E402
 
 os.environ["GESAMT_AUSRICHTEN"] = "0"
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # RM-530: Matrix in tools/
+# RM-530: die Matrix in tools/ — angehängt, damit ``app`` weiter aus der
+# Code-Wurzel kommt, die das Skript davorgelegt hat (Review 06.10.2026, N11).
+sys.path.append(str(Path(__file__).resolve().parents[3]))
 from tools import matrix_unit as einheit  # noqa: E402
 
 objects, findings = einheit.load(Path(sys.argv[2]))
