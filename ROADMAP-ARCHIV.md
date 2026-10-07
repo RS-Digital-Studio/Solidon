@@ -43092,20 +43092,21 @@ einfacher:
   Bewertung vorliegt (`set_stale`). `handoff_state` hat den Eingang `running`.
 - **Teil 2 und 4, volle Kette:** Statt eines zweiten, ganz feinen Laufs der
   Sitzung rechnet die Auswertung genau den Schritt, an dem nur die kurze Kette
-  ausging, im selben Lauf mit allen Stufen weiter (`_FullChain`), und zwar in
-  jedem Entwurfslauf: Fenster, Vorschau im Schrittdialog, Verlaufsumbau und
-  Agent sagen über denselben Stand dasselbe. Die erste Fassung tat es nur im
-  Fensterlauf; die Durchsicht zeigte, dass dann die Dialogvorschau *Übernehmen*
-  mit dem Entwurfssatz sperrte, der Umbau absagte und der Agent den Schritt
-  verwarf, und dass dieselbe Vorschau kalt und warm Verschiedenes sagte. Grund
-  aus Kundensicht: Die Schritte davor und danach bleiben im Entwurf, der Kunde
-  wartet auf einen Schritt statt auf die ganze Kette (am Kundenteil 17 s).
-  Eskaliert wird nur, wenn genau die Entwurfskette lief und der Schritt nach der
-  Güte fragte; eine Frage des ersten Durchgangs beantwortet der zweite aus dem
-  Gedächtnis. Ohne Frage merkt sich die Speicherebene das gerettete Ergebnis
-  sofort, auch hinter einem späteren Halt, und das Urteil der vollen Kette
+  ausging, im selben Lauf mit allen Stufen weiter (`_FullChain`) — im
+  Fensterlauf, im Verlaufsumbau und beim Agenten (`full_chain_when_stuck`),
+  damit sie über denselben Stand dasselbe sagen. Eine Vorschau bleibt beim
+  Entwurf (Entscheidung Robert): Sie nimmt ein Urteil der vollen Kette, das
+  schon vorliegt, hält sonst mit `short_chain_only` und sperrt *Übernehmen*
+  nicht, denn Übernehmen rechnet den Schritt vollständig. Die zweite
+  Durchsicht hatte gezeigt, dass die Voxelstufe sonst in jeder Vorschau lief,
+  sich nicht abbrechen ließ und je Wert im Dialog 20 s kostete; sie läuft
+  seither im Hilfsprozess (`kernel_jobs`) und bricht mit ihm ab. Eskaliert wird
+  nur, wenn genau die Entwurfskette lief und der Schritt nach der Güte fragte;
+  eine Frage des ersten Durchgangs beantwortet der zweite aus dem Gedächtnis.
+  Ohne Frage merkt sich die Speicherebene das gerettete Ergebnis sofort, auch
+  hinter einem späteren Halt, und das Urteil der vollen Kette
   (`ResultCache.refuse`, nur ein `BooleanFailedError` mit gelaufener
-  Voxelstufe — kein verlorener Hilfsprozess, keine geschlossene Frage); der
+  Voxelstufe und ohne `transient` — Speichermangel ist kein Urteil); der
   gemerkte Halt nennt die Kennung, die der Schritt heute trägt. Der Agent
   rechnet mit dem Sitzungscache. Der Bauplan §17.2 nennt das seither.
 - **Teil 3:** Ein Halt nimmt mit, ob der Schritt nach der Güte fragte
@@ -43122,8 +43123,11 @@ Nachweis: `tests/test_evaluation.py`
 `test_a_halt_after_a_question_is_not_kept`,
 `test_a_move_is_judged_with_the_full_chain_like_the_window`,
 `test_the_agent_keeps_a_step_that_only_the_full_chain_carries`,
-`test_a_step_that_wants_one_stage_gets_no_full_chain`; jeder rot, wenn sein
-Teil der Behebung fehlt), `tests/test_print_contract.py`
+`test_a_step_that_wants_one_stage_gets_no_full_chain`,
+`test_window_revision_and_agent_go_the_full_chain_and_previews_do_not`,
+`test_a_preview_takes_known_verdicts_but_never_computes_the_full_chain`,
+`test_a_window_halt_is_no_short_chain_halt`; jeder rot, wenn sein Teil der
+Behebung fehlt), `tests/test_print_contract.py`
 (`test_a_running_evaluation_goes_before_every_finding`),
 `tests/test_print_contract_ui.py`
 (`test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors`,
