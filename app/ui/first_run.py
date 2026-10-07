@@ -208,9 +208,7 @@ class _PrinterSurvey(Worker):
         flavour = detect(self.executable).flavour
         found = slicer_profiles.discover_printers(self.executable, flavour)
         known = {profile.id: profile for profile in found}
-        identifiers = tuple(
-            sorted({profile.id for profile in found} | set(profiles.user_printer_profiles()))
-        )
+        identifiers = slicer_printer_ids(self.executable, found)
         suggested = slicer_profiles.chosen_printer(
             flavour, self.executable, known
         ) or slicer_profiles.chosen_printer(flavour, self.executable, profiles.printer_profiles())
@@ -1183,11 +1181,10 @@ class FirstRunDialog(QDialog):
             return False
         if self.printer.currentData() != "__custom__":
             identifier = str(self.printer.currentData() or "")
-            if identifier not in self._discovered_printers:
-                return True
-            saved = profiles.printer_profiles().get(identifier)
-            chosen = with_saved_nozzle(self._discovered_printers[identifier], saved)
-            return saved == chosen or self._persist_printer(chosen)
+            slicer = str(self.slicer.currentData() or "")
+            return self._persist_printer(
+                lambda: keep_slicer_printer(identifier, self._discovered_printers, slicer)
+            )
         name = self.printer_name.text().strip()
         if not name:
             self.printer_state.setText(tr("Geben Sie Ihrem Drucker einen Namen."))
@@ -1219,17 +1216,17 @@ class FirstRunDialog(QDialog):
                 layer_height=self._chosen_layer_height(),
                 extrusion_width=nozzle * template.extrusion_width / template.nozzle_diameter,
             )
-        if not self._persist_printer(entry):
+        if not self._persist_printer(lambda: profiles.save_printer(entry)):
             return False
         self._insert_printer_choice(name, entry.id)
         select_data(self.printer, entry.id)
         self._suggested_printer = entry.id
         return True
 
-    def _persist_printer(self, entry: PrinterProfile) -> bool:
+    def _persist_printer(self, save: Callable[[], object]) -> bool:
         """Ein ausgewähltes Profil speichern; ein Schreibfehler hält die Auswahl offen."""
         try:
-            profiles.save_printer(entry)
+            save()
         except (AppError, OSError) as problem:
             _log.warning("selected printer could not be saved: %s", problem)
             self.printer_state.setText(
@@ -1409,7 +1406,7 @@ class FirstRunDialog(QDialog):
             return
         _log.warning("first run printer survey crashed: %s", detail)
         self._printer_survey = None
-        self._fill_printers(tuple(profiles.user_printer_profiles()))
+        self._fill_printers(slicer_printer_ids(Path(self._surveyed_slicer), ()))
         self.printer_state.setText(
             tr(
                 "Drucker konnten nicht gelesen werden. Wählen Sie einen anderen "
@@ -1623,6 +1620,44 @@ def printers_on_offer(
     known = known_printers(discovered)
     allowed = allowed_printers(identifiers, known)
     return {identifier: entry for identifier, entry in known.items() if identifier in allowed}
+
+
+def slicer_printer_ids(executable: Path, found: Iterable[PrinterProfile]) -> tuple[str, ...]:
+    """Was ein Slicer zur Wahl stellt: seine Drucker und die eigenen, die unter
+    ihm stehen (:func:`app.core.knowledge.profiles.user_printer_profiles`).
+
+    Jeder im Druckdialog gewählte Drucker eines Slicers wurde ein eigener und
+    stand danach unter jedem Slicer: Wer drei Drucker aus Anycubic Slicer Next
+    ausprobierte, sah sie auch unter ElegooSlicer.
+    """
+    mark = discover.program_mark(executable.name)
+    return tuple(
+        sorted({profile.id for profile in found} | set(profiles.user_printer_profiles(mark)))
+    )
+
+
+def keep_slicer_printer(
+    identifier: str, discovered: Mapping[str, PrinterProfile], slicer: Path | str
+) -> PrinterProfile | None:
+    """Einen gewählten Drucker des Slicers ablegen, mit seinem Programm —
+    Erststart, Einstellungen und Druckdialog.
+
+    Erst die Wahl macht ihn zum Drucker dieses Rechners; eine am Drucker
+    gesetzte Düse bleibt (:func:`with_saved_nozzle`). Zurück kommt der
+    abgelegte Drucker, ``None``, wenn es nichts abzulegen gab: kein Drucker
+    des Slicers, oder er liegt schon so da. Ein früher ohne Programm
+    gespeicherter bekommt es nachgetragen. Ein Schreibfehler geht an den
+    Aufrufer (:class:`~app.core.errors.AppError`), der ihn an seiner Stelle sagt.
+    """
+    found = discovered.get(identifier)
+    if found is None:
+        return None
+    mark = discover.program_mark(Path(slicer).name)
+    saved = profiles.printer_profiles().get(identifier)
+    profile = with_saved_nozzle(found, saved)
+    if saved == profile and profiles.printer_slicer(identifier) == mark:
+        return None
+    return profiles.save_printer(profile, slicer=mark)
 
 
 def allowed_printers(identifiers: Iterable[str], known: Mapping[str, PrinterProfile]) -> set[str]:

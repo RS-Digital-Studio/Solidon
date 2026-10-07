@@ -549,15 +549,10 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     """
 
     def only_what_was_set(tool_id: str, names: object) -> object:
-        # ``remembered_path`` wie die echte Suche (``_remembered_program``):
-        # ``remember_path`` legt unter ``slicer:path`` ab, und ``remembered``
-        # las nur den alten Schlüssel — ein so gemerkter Slicer kam aus der
-        # Suche nicht zurück, und der Dialog vergaß ihn wieder.
-        chosen = discover.remembered_path(tool_id)
-        from pathlib import Path
-
-        path = Path(chosen) if chosen else None
-        return path if path is not None and path.is_file() else None
+        # Der gemerkte Pfad, **wie die echte Suche ihn annimmt**: Schlüssel,
+        # Mac-Bündel als Ordner, Host-Pfad im Flatpak. Eine eigene Lesart hier
+        # las erst nur den alten Schlüssel und nahm dann nur eine Datei an.
+        return discover._remembered_program(tool_id)
 
     # Das Original bleibt unter eigenem Namen erreichbar, für die wenigen
     # Tests, die **genau es** prüfen wollen (`test_discover.py`). Ohne diese

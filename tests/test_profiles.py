@@ -93,6 +93,55 @@ def test_a_failed_printer_save_preserves_the_previous_file(
     assert not tuple(tmp_path.glob("*.tmp"))
 
 
+def test_a_printer_taken_from_a_slicer_stays_with_that_slicer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Erst der Slicer, dann seine Drucker: Ein im Druckdialog gewählter Drucker
+    aus Anycubic Slicer Next stand danach auch unter ElegooSlicer zur Wahl, wie
+    ein selbst angelegter. Übernommene Drucker tragen ihr Programm
+    (``discover.program_mark``), selbst angelegte und vorher gespeicherte ohne
+    Marke bleiben unter jedem Slicer. Ein erneutes Speichern ohne Angabe, etwa
+    nach einer Düsenwahl, behält die Marke; das Profil selbst trägt sie nicht.
+    """
+    original_profiles_dir = profiles.user_profiles_dir
+
+    def restore_profile_cache() -> None:
+        profiles.user_profiles_dir = original_profiles_dir
+        profiles.reload()
+
+    request.addfinalizer(restore_profile_cache)
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    template = profiles.printer(profiles.DEFAULT_PRINTER)
+    own = replace(template, id="user-werkstatt", title="Werkstatt")
+    kobra = replace(template, id="slicer-orca-kobra-s1", title="Anycubic Kobra S1 0.4 nozzle")
+    profiles.save_printer(own)
+    profiles.save_printer(kobra, slicer="anycubicslicernext")
+    profiles.reload()
+
+    assert set(profiles.user_printer_profiles("anycubicslicernext")) == {own.id, kobra.id}
+    assert set(profiles.user_printer_profiles("elegooslicer")) == {own.id}
+    assert set(profiles.user_printer_profiles()) == {own.id, kobra.id}, "ohne Slicer alle"
+    assert profiles.printer_slicer(kobra.id) == "anycubicslicernext"
+    assert profiles.printer_slicer(own.id) == ""
+
+    two = replace(kobra, nozzles=2)
+    profiles.save_printer(two)
+
+    assert profiles.printer(kobra.id) == two, "die Marke ist keine Druckereigenschaft"
+    assert profiles.printer_slicer(kobra.id) == "anycubicslicernext"
+    assert set(profiles.user_printer_profiles("elegooslicer")) == {own.id}
+
+    (tmp_path / "printers.toml").write_text(
+        '["slicer-orca-alt"]\n"title" = "Alt"\n"build_volume" = [220.0, 220.0, 250.0]\n',
+        encoding="utf-8",
+    )
+    profiles.reload()
+
+    assert set(profiles.user_printer_profiles("elegooslicer")) == {"slicer-orca-alt"}, (
+        "ein Drucker aus der Zeit vor der Marke erscheint weiter"
+    )
+
+
 def test_starting_set_is_present() -> None:
     printers = profiles.printer_profiles()
     assert profiles.DEFAULT_PRINTER in printers
