@@ -450,8 +450,7 @@ ein Slicer, der neu auf Flathub erscheint, kommt dort dazu.
 `export/cura_linux.py`): Flatpak und AppImage tragen dasselbe AppDir aus
 appimage-builder, CuraEngine nennt seinen Lader relativ. Gestartet wird
 `runtime/compat/<Lader>` mit dem **vollständigen** Pfad aus `AppRun.env`
-(LIBC-Pfad zuerst; gekürzt zieht die `libstdc++` des Rechners eine zu neue
-glibc nach). Das Cura-Flatpak gibt nur `home` und Wechselmedien frei, der
+(LIBC-Pfad zuerst). Das Cura-Flatpak gibt nur `home` und Wechselmedien frei, der
 Arbeitsordner kommt als `--filesystem` dazu. Ein AppImage bleibt für den Lauf
 eingehängt und wird beim Verlassen des Blocks beendet, auch nach Fehler und
 Abbruch; aus Solidons Flatpak legt `TMPDIR=exchange_dir()` den Einhängepunkt
@@ -468,10 +467,8 @@ Fenster und schreibt nichts.
 
 **Eine Plattformkette ist eine Funktion mit der Plattform als Parameter**,
 kein `sys.platform` im Rumpf (`parts_for`, `guesses_for`, `config_home`,
-`cursors.system_size`): Ein Zweig, den nur ein Mac sieht, wird nirgends
-geprüft, und `mypy` meldet `sys.platform`-Ketten auf den anderen Maschinen
-als `unreachable`, was die Linux-CI nie sieht. Prüfen mit
-`mypy --platform linux|darwin|win32`.
+`cursors.system_size`); geprüft mit `mypy --platform linux|darwin|win32`
+(Grund in `konzepte/begruendungen/regel-kern.md`).
 
 Braucht ein Programm mehr als Installation, ist das eine Eigenschaft der
 Sache: `Requirement.follow_up` benennt den zweiten Schritt, und
@@ -484,7 +481,7 @@ Ein Einrichtungsschritt, der Fertigsein behauptet, ist schlechter als keiner.
 
 - **Die billige Prüfung zuerst**: `comfy_setup.check_version` liest die
   Fassung von ComfyUI vor dem ersten Download; ein zu altes nennt Version und
-  Weg, statt nach acht Gigabyte am fehlenden Knoten zu scheitern.
+  Weg.
 - **Den ganzen Ablauf prüfen**, nicht einen Knoten daraus; `missing_nodes`
   nennt die Namen (Regel 17). Ein mitgelieferter Ablauf wird gegen ComfyUIs
   eigene Knotenbeschreibung geprüft (`tests/data/comfyui/object_info.json`,
