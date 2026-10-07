@@ -118,6 +118,18 @@ def steps_for(backend: object) -> int:
 #: §26.5 waren damit nicht fahrbar — der Vorschlag hielt mit ``tokens`` an und
 #: zeigte einen halben Zug.
 MAX_TOKENS = 120_000
+#: Das Zugbudget für ein Modell auf dem eigenen Rechner: je Schritt so viel
+#: wie gehostet, für :data:`MAX_STEPS_LOCAL` Schritte. Lokal liest jeder
+#: Schritt die ganze Anfrage neu (kein Zwischenspeicher, 11 000 bis 14 000
+#: Token); mit 120 000 endeten neun von 39 Suitefällen nach 8 bis 11
+#: Schritten am Budget, und die 12 Schritte aus RM-251 waren nicht erreichbar.
+MAX_TOKENS_LOCAL = MAX_TOKENS * MAX_STEPS_LOCAL // MAX_STEPS
+
+
+def tokens_for(backend: object) -> int:
+    """Wie viele gewichtete Token ein Zug mit diesem Modell höchstens verbraucht (§26.5)."""
+    return MAX_TOKENS_LOCAL if isinstance(backend, OllamaBackend) else MAX_TOKENS
+
 
 AskFn = Callable[[str, list[str]], str]
 
@@ -345,7 +357,8 @@ class AgentSession:
     temperature: float = 0.0
     max_steps: int = 0
     """Null heißt: nach dem Modell (:func:`steps_for`)."""
-    max_tokens: int = MAX_TOKENS
+    max_tokens: int = 0
+    """Null heißt: nach dem Modell (:func:`tokens_for`)."""
     selection: tuple[ObjectId, str] | None = None
     cancelled: CancelToken | None = None
     """§15.6: ein Zug dauert zehn bis sechzig Sekunden, und so lange muss er
@@ -365,6 +378,8 @@ class AgentSession:
     def __post_init__(self) -> None:
         if self.max_steps <= 0:
             self.max_steps = steps_for(self.backend)
+        if self.max_tokens <= 0:
+            self.max_tokens = tokens_for(self.backend)
 
     def propose(self, request: str) -> Proposal:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts

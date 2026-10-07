@@ -3181,3 +3181,41 @@ def test_a_local_model_gets_twelve_steps_and_a_hosted_one_eight(profile: Profile
     assert AgentSession(backend=local, document=document, profile=profile).max_steps == 12
     fixed = AgentSession(backend=local, document=document, profile=profile, max_steps=3)
     assert fixed.max_steps == 3
+
+
+def test_a_local_turn_reaches_its_twelve_steps_before_its_token_budget(
+    project: Project, profile: Profile
+) -> None:
+    """RM-251: Die 12 lokalen Schritte sind auch fahrbar, nicht nur erlaubt.
+
+    Lokal liest jeder Schritt die ganze Anfrage neu ein, ohne Zwischenspeicher.
+    Mit dem gehosteten Budget von 120 000 Token hielt ein Zug mit 13 000 Token je
+    Schritt nach dem zehnten mit ``tokens`` an — in der Suite vom 07.10.2026 neun
+    von 39 Fällen. Das gehostete Modell behält sein Budget.
+    """
+    from app.core.agent.session import MAX_TOKENS, MAX_TOKENS_LOCAL, tokens_for
+    from app.core.agent.tools import READ_DIGEST
+    from app.core.backends.llm import OllamaBackend
+
+    def transport(url: str, headers: object, payload: dict) -> dict:
+        return {
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"function": {"name": READ_DIGEST, "arguments": {}}}],
+            },
+            "done": True,
+            "done_reason": "stop",
+            "prompt_eval_count": 13_000,
+            "eval_count": 200,
+        }
+
+    local = OllamaBackend(model="qwen3:14b", url="http://localhost:11434", transport=transport)
+    assert tokens_for(local) == MAX_TOKENS_LOCAL > MAX_TOKENS == tokens_for(object())
+    agent = AgentSession(backend=local, document=project.document, profile=profile)
+    assert agent.max_tokens == MAX_TOKENS_LOCAL
+
+    proposal = agent.propose("Sieh dir das Modell an.")
+
+    assert proposal.steps == 12, proposal.stopped
+    assert proposal.stopped == "steps"
