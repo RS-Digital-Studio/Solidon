@@ -1060,6 +1060,56 @@ def test_choosing_a_custom_size_opens_the_flap_with_its_diameter(qt_app: QApplic
     assert dialog._advanced_form.isRowVisible(dialog._editors["diameter"])
 
 
+def test_a_wide_bore_preselects_a_custom_thread_with_its_diameter_in_front(
+    qt_app: QApplication,
+) -> None:
+    """An einer 60-mm-Bohrung steht *Eigenes Maß* mit Ø 66,6 vorn (RM-532).
+
+    *Druckbares Gewinde* endete bei M8; ein Rohr mit 60 mm Bohrung bekam kein
+    Gewinde. Jetzt wählt die Bohrung das eigene Maß, dessen Kernloch sie ist,
+    und der Nenndurchmesser steht vorn, wo man ihn sieht.
+    """
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+    from app.core.scene.placement import values_for
+    from app.core.types import Feature
+
+    spec = REGISTRY.get("insert_printed_thread")
+    hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 60.0, "depth": 20.0, "centre": (0.0, 0.0, 0.0), "axis": (0, 0, 1)},
+    )
+    # Die Stelle selbst ist ohne Körper kein Wert des Dialogs; geprüft wird das Maß.
+    values = {key: value for key, value in values_for(spec, hole).items() if key != "at_feature"}
+    dialog = OperationDialog(spec, [], None, values=values)
+    size = dialog._editors["size"]
+    assert isinstance(size, QComboBox)
+    assert size.currentData() == CUSTOM_SIZE
+    diameter = dialog._editors["diameter"]
+    assert dialog._rows["diameter"] is not dialog._advanced_form, "das Maß steht vorn"
+    assert dialog._rows["diameter"].isRowVisible(diameter)
+    assert dialog.values()["diameter"] == pytest.approx(66.6)
+
+
+def test_the_pin_for_a_bore_offers_its_shape_behind_the_flap(qt_app: QApplication) -> None:
+    """*Stift für Bohrung* wählt hinter der Klappe „Passend zur Bohrung“ oder „Glatter Stift“.
+
+    Vorgabe ist das passende Gegenstück (RM-536); der glatte Stift von vorher
+    bleibt wählbar.
+    """
+    from app.core.geom import bore_pin
+
+    spec = REGISTRY.get("pin_for_bore")
+    dialog = OperationDialog(spec, [], None)
+    shape = dialog._editors["shape"]
+    assert isinstance(shape, QComboBox)
+    assert dialog._rows["shape"] is dialog._advanced_form
+    assert shape.currentData() == bore_pin.TO_THE_BORE
+    assert [shape.itemData(index) for index in range(shape.count())] == list(bore_pin.PIN_SHAPES)
+    assert all(shape.itemText(index).strip() for index in range(shape.count()))
+
+
 def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplication) -> None:
     """Ein gerade entschiedener Wert gehört dorthin, wo er zu sehen ist."""
     spec = REGISTRY.get("drill_hole")
