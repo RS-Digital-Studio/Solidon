@@ -38,6 +38,7 @@ from app.core.build_area import (
 from app.core.deferred import trimesh
 from app.core.errors import (
     ARRANGE_ON_BED,
+    CHANGE_THIS_STEP,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     SHOW_HISTORY,
@@ -58,6 +59,7 @@ from app.core.geom.transform import Axis, translation
 from app.core.knowledge.print_settings import is_slender
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.registry import param
+from app.core.registry.params import ZERO_AUTOMATIC
 from app.core.types import (
     BoundingBox,
     CancelToken,
@@ -112,6 +114,26 @@ def bore_geometry_error(value: str | None = None) -> ValidationError:
         ),
         value=value,
         constraint="no_geometry",
+    )
+
+
+def unchanged_bore(diameter: float, *, with_depth: bool = False) -> Finding:
+    """Die Bohrung hat schon das verlangte Maß — für Netz und exakten Körper.
+
+    Bis RM-441 stand der Befund zweimal da, hier und in ``prepare_ops``, mit
+    demselben Satz. Er meint den Wert des Schritts, also öffnet sein Knopf
+    diesen Schritt am Durchmesser (RM-374).
+    """
+    return Finding(
+        code="bore.resize_unchanged",
+        severity="info",
+        message=(
+            _("Die Bohrung hat bereits diesen Durchmesser und diese Tiefe.")
+            if with_depth
+            else _("Die Bohrung hat bereits diesen Durchmesser.")
+        ),
+        values={"diameter": format_length(diameter), "field": "diameter"},
+        suggestions=(CHANGE_THIS_STEP,),
     )
 
 
@@ -902,14 +924,7 @@ def resize_bore(
             mesh=mesh,
             solver=None,
             diameter=cut_diameter,
-            findings=[
-                Finding(
-                    code="bore.resize_unchanged",
-                    severity="info",
-                    message=_("Die Bohrung hat bereits diesen Durchmesser."),
-                    values={"diameter": format_length(cut_diameter)},
-                )
-            ],
+            findings=[unchanged_bore(cut_diameter)],
         )
 
     vector = np.asarray(direction, dtype=float)
@@ -3416,6 +3431,7 @@ def spot_param(axis: Literal["x", "y"]) -> Any:
             "Wo die Mitte des Modells liegt. Die freie Stelle wird einmal gesucht und "
             "hier festgehalten; leer sucht sie neu."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
 
 

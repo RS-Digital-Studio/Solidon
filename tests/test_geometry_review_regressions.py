@@ -925,6 +925,7 @@ def test_g04_crossing_line_and_circle_boundaries_are_rejected() -> None:
 
 def test_g08_the_old_crossing_interpolation_is_a_valid_drawn_outline() -> None:
     """Dieser Umriss kreuzte nur die fremde Interpolation, nicht die Vorschau."""
+    exact_kernel()
     from OCP.BRepCheck import BRepCheck_Analyzer
 
     from app.core.sketch.profile import regions_of, signed_area

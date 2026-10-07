@@ -295,8 +295,6 @@ def test_customer_parameter_table_names_choices_and_their_conditions() -> None:
 def test_choice_names_are_shared_and_measurements_keep_the_ui_formatter() -> None:
     """Eine Tabelle, aber im Fenster weiterhin dessen Einheit und Zahlenschreibweise."""
     from app.core.registry import surfaces
-
-    pytest.importorskip("PySide6")
     from app.ui import labels
 
     assert labels._CHOICE_NAMES is surfaces._CHOICE_NAMES

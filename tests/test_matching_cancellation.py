@@ -23,12 +23,11 @@ from app.core.registry import REGISTRY
 from app.core.scene.cancel import CancelSignal
 from app.core.sketch.planes import frame_of
 from app.core.types import OpContext, Operation, Profile, Scene, SceneObject
+from tests.helpers import exact_kernel
 
 
 def _source(kind: str, *, entrance: bool = False) -> SceneObject:
     """Eine wirkliche Bohrung, wahlweise mit dem eindeutigen Einlauf derselben Achse."""
-    from tests.helpers import exact_kernel
-
     exact_kernel()
     stock = edit.box(40.0, 30.0, 12.0)
     if entrance:
@@ -48,6 +47,7 @@ def _source(kind: str, *, entrance: bool = False) -> SceneObject:
 def _geometry_bytes(source: SceneObject) -> bytes:
     """Die Originalgeometrie vor der abgebrochenen Folgeoperation festhalten."""
     if isinstance(source.mesh, Solid):
+        exact_kernel()
         from OCP.BRepTools import BRepTools
 
         stream = io.BytesIO()

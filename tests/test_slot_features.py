@@ -2874,8 +2874,6 @@ def test_pulling_a_bore_preserves_a_second_body_beyond_the_measured_depth(
 ) -> None:
     """Der Zug endet an der gemessenen Bohrung, nicht an der Baugruppenhülle."""
     if kernel == "brep":
-        from tests.helpers import exact_kernel
-
         exact_kernel()
     entry = _plate_with_a_second_body(kernel, inside=True)
     feature_id = _bore_in(entry, "hole")
@@ -2894,6 +2892,7 @@ def test_pulling_a_bore_preserves_a_second_body_beyond_the_measured_depth(
     assert float(pieces[0].bounds[0, 2]) == pytest.approx(10.0, abs=0.02)
     assert float(pieces[0].bounds[1, 2]) == pytest.approx(15.0, abs=0.02)
     if kernel == "brep":
+        exact_kernel()
         from OCP.TopAbs import TopAbs_SOLID
         from OCP.TopExp import TopExp_Explorer
         from OCP.TopoDS import TopoDS
@@ -3972,8 +3971,6 @@ def test_a_through_slot_does_not_cut_a_second_body_past_the_bore(
 ) -> None:
     """Ein fremder Körper in Verlängerung des Langlochs bleibt erhalten."""
     if kernel == "brep":
-        from tests.helpers import exact_kernel
-
         exact_kernel()
     entry = _plate_with_a_second_body(kernel, inside=False, above_bore=True)
     feature_id = _bore_in(entry, "hole")
@@ -3999,8 +3996,6 @@ def test_a_through_slot_does_not_cut_a_second_body_past_the_bore(
 def _touching_plates_with_a_bore(kernel: str, profile: Profile) -> SceneObject:
     """Zwei 40 x 20 x 10 mm große Platten berühren sich bei z = 10 mm."""
     if kernel == "brep":
-        from tests.helpers import exact_kernel
-
         exact_kernel()
         from OCP.BRep import BRep_Builder
         from OCP.TopoDS import TopoDS_Compound
@@ -4085,8 +4080,6 @@ def test_pulling_a_bore_through_touching_plates_keeps_one_slot_and_all_material(
     den Halbkreisen und deren Kreisfläche, nicht aus einem vorigen Lauf.
     """
     if kernel == "brep":
-        from tests.helpers import exact_kernel
-
         exact_kernel()
     from app.core.errors import SHOW_LOCATION
 
@@ -4174,8 +4167,6 @@ def test_touching_plates_are_united_although_the_body_has_more_parts_than_the_im
     from app.core.geom import repair as repair_module
 
     if kernel == "brep":
-        from tests.helpers import exact_kernel
-
         exact_kernel()
     entry = _touching_plates_with_a_bore(kernel, profile)
     monkeypatch.setattr(repair_module, "CROSSING_PARTS_MAX", 1)

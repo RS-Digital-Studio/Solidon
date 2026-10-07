@@ -24,6 +24,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CHANGE_SIZE,
+    CHANGE_THIS_STEP,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
     RECOUNT_AND_RETRY,
@@ -118,6 +119,7 @@ from app.core.geom.prepare import (
     split_at_plane,
     split_findings,
     surface_index_of,
+    unchanged_bore,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
 from app.core.geom.transform import (
@@ -3407,10 +3409,14 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
             outputs=[source],
             findings=[
                 Finding(
-                    code=f"{operation}.unchanged",
+                    # Ausgeschrieben statt ``f"{operation}…"``: Den Knopf zum
+                    # Schritt prüft ``test_finding_ways`` am Kennwort.
+                    code="duplicate_feature.unchanged" if duplicate else "move_feature.unchanged",
                     severity="info",
                     message=_("Das Merkmal liegt schon dort — nichts zu versetzen."),
                     feature_ids=(feature.id,),
+                    values={"field": "x"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -4637,7 +4643,7 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 11: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
     # 12: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
     # 13: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
-    cache_version="13",
+    cache_version="14",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4697,6 +4703,8 @@ def move_feature(ctx: OpContext) -> OpResult:
                     severity="info",
                     message=_("Das Merkmal liegt schon dort — nichts zu versetzen."),
                     feature_ids=(feature.id,),
+                    values={"field": "x"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -5013,7 +5021,7 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 10: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
     # 11: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
     # 12: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
-    cache_version="12",
+    cache_version="13",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -5073,6 +5081,8 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
                         "nichts verdoppelt."
                     ),
                     feature_ids=(feature.id,),
+                    values={"field": "x"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -6462,7 +6472,7 @@ class RotateFeatureParams(BaseParams):
     # 7: beim Schließen einer Bohrung werden flächig berührende Körper verbunden (RM-319).
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
-    cache_version="9",
+    cache_version="10",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -6512,6 +6522,8 @@ def rotate_feature(ctx: OpContext) -> OpResult:
                     severity="info",
                     message=_("Ohne Winkel bleibt alles, wie es ist."),
                     feature_ids=(feature.id,),
+                    values={"field": "angle"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -7823,7 +7835,7 @@ class ResizeFeatureParams(BaseParams):
     # Durchbruch, Befund ``thread.thin_wall`` unter der Mindestwand (RM-184).
     # 18: Ein geändertes Gewinde verliert das Nennmaß eines gedruckten — es ist
     # gebaut, wie es dasteht, ohne Spiel daneben.
-    cache_version="18",
+    cache_version="19",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -7890,6 +7902,8 @@ def resize_feature(ctx: OpContext) -> OpResult:
                     severity="info",
                     message=_("Das Merkmal hat dieses Maß schon."),
                     feature_ids=(feature.id,),
+                    values={"field": "diameter"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -8670,7 +8684,7 @@ OPEN_BODY_DETAIL: Final = _(
     # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 16: exakt fragt die Kante am gefüllten Körper, wo gefüllt wurde (RM-411).
-    cache_version="16",
+    cache_version="17",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -8729,7 +8743,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         wish = None
     if same_diameter and not moved_hole and wish is None:
         return OpResult(
-            outputs=[source], findings=[_unchanged_bore(cut, with_depth=params.depth is not None)]
+            outputs=[source], findings=[unchanged_bore(cut, with_depth=params.depth is not None)]
         )
     if params.entrance_mode == "follow" and not (same_diameter and not moved_hole):
         reading, read, united_first = _exact_entrance_context(ctx, feature)
@@ -12179,20 +12193,6 @@ def _mesh_bore_span(mesh: MeshData, feature: Feature, axis: Vec3) -> tuple[float
     return (lower, upper) if math.isfinite(upper - lower) and upper - lower > EPS_GEOM else None
 
 
-def _unchanged_bore(diameter: float, *, with_depth: bool = False) -> Finding:
-    """Die gemeinsame Auskunft für Netz und exakten Körper."""
-    return Finding(
-        code="bore.resize_unchanged",
-        severity="info",
-        message=(
-            _("Die Bohrung hat bereits diesen Durchmesser und diese Tiefe.")
-            if with_depth
-            else _("Die Bohrung hat bereits diesen Durchmesser.")
-        ),
-        values={"diameter": format_length(diameter)},
-    )
-
-
 def _expected_bore(feature: Feature, diameter: float) -> Feature:
     """Das alte Merkmal mit dem einen Maß, das diese Operation bewusst ändert."""
     return dataclasses.replace(
@@ -15267,6 +15267,9 @@ def _rotate_torus(
                     severity="info",
                     message=_("Um seine eigene Achse gedreht sieht ein Ring aus wie vorher."),
                     feature_ids=(feature.id,),
+                    # Gemeint ist die Drehachse: um eine andere gekippt, bewegt sich der Ring.
+                    values={"field": "axis"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -15364,6 +15367,8 @@ def _resize_torus(
                     severity="info",
                     message=_("Das Merkmal hat dieses Maß schon."),
                     feature_ids=(feature.id,),
+                    values={"field": "diameter"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -16585,6 +16590,8 @@ def _resize_pattern(
                     severity="info",
                     message=_("Das Merkmal hat dieses Maß schon."),
                     feature_ids=(feature.id,),
+                    values={"field": "pitch"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -16827,6 +16834,8 @@ def _resize_thread(
                     severity="info",
                     message=_("Das Merkmal hat dieses Maß schon."),
                     feature_ids=(feature.id,),
+                    values={"field": "diameter"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )
@@ -18937,7 +18946,7 @@ def _loose_parts(mesh: MeshData, *, keep_tiny: bool) -> tuple[list[LoosePart], i
     """Die losen Teile eines Körpers samt Volumen und Slots, größte zuerst —
     und wie viele Splitter dabei wegfielen.
 
-    Die eine Zählung für *In Einzelteile zerlegen* und für die Absage des
+    Die eine Zählung für *In Einzelteile aufteilen* und für die Absage des
     Ausrichtens, die diese Zerlegung vorschlägt: Ohne ``keep_tiny`` fällt
     weg, was unter einem Prozent des größten Teils liegt, und eine Stückzahl,
     die die Splitter mitzählte, ließe die Zerlegung an ihrer eigenen Prüfung
@@ -19017,15 +19026,15 @@ def _where_it_sits(body: Any) -> tuple[float, float, float]:
     return (float(centre[0]), float(centre[1]), float(centre[2]))
 
 
-#: Warum *In Einzelteile zerlegen* an einem Stück nichts tut — derselbe Satz
+#: Warum *In Einzelteile aufteilen* an einem Stück nichts tut — derselbe Satz
 #: im Menü (``requires_body="parts"``, ``labels.body_requirement``).
-ONE_PIECE: Final = _("Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.")
+ONE_PIECE: Final = _("Der Körper besteht aus einem Stück. Es gibt nichts aufzuteilen.")
 
 
 @register_op(
     name="split_bodies",
     result_kind="mesh",
-    title=_("In Einzelteile zerlegen"),
+    title=_("In Einzelteile aufteilen"),
     category="prepare",
     params=SplitBodiesParams,
     consumes=1,
@@ -19175,7 +19184,11 @@ def split_bodies(ctx: OpContext) -> OpResult:
     # beides — mit Stiften und ohne. Ein Titel, der die Stifte verspricht,
     # wäre für die Hälfte der Fälle falsch; das Feld *Passstifte* sagt,
     # welcher Fall gilt, und seine Null ist der ganze Unterschied.
-    title=_("Teilen"),
+    # **Und wieder „An Ebene teilen"** (RM-507): Alle Wege, ein Teil zu
+    # teilen, sagen „teilen“, und das Werkzeug der Werkzeugzeile heißt
+    # *Teilen*. Zwei Dinge unter einem Namen sucht der Kunde am falschen Ort;
+    # der Titel sagt, wie diese Operation teilt.
+    title=_("An Ebene teilen"),
     category="prepare",
     params=SplitPinnedParams,
     consumes=1,
@@ -19232,7 +19245,7 @@ def _cut_and_pin(
     numbers: tuple[int, int] = (0, 0),
     piece_count: int = 0,
 ) -> OpResult:
-    """Der gemeinsame Teil von *Teilen* und *An Linie trennen*.
+    """Der gemeinsame Teil von *An Ebene teilen* und *An Linie teilen*.
 
     Die beiden unterscheiden sich einzig darin, **woher die Ebene kommt** —
     aus einer Achse und einer Zahl oder aus zwei angeklickten Punkten. Alles
@@ -19954,8 +19967,8 @@ def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> Secti
         "Fläche versetzen."
     ),
     caveat=_(
-        "Wenn beide Seiten gebraucht werden, denn die andere Seite ist danach fort, samt "
-        "Bohrungen und Bausteinen. Dafür gibt es „Teilen“."
+        "Wenn beide Seiten gebraucht werden, denn die andere fällt samt Bohrungen weg. "
+        "Dafür gibt es „An Ebene teilen“."
     ),
 )
 def cut_away(ctx: OpContext) -> OpResult:
@@ -20215,7 +20228,7 @@ class SplitLineParams(BaseParams):
         maximum=6,
         doc=_(
             "Stifte auf der einen Hälfte, Bohrungen auf der anderen — sie halten die "
-            "Teile beim Kleben in Deckung. Null heißt: nur trennen."
+            "Teile beim Kleben in Deckung. Null heißt: nur teilen."
         ),
         zero_text=ZERO_NONE,
     )
@@ -20287,7 +20300,7 @@ class SplitLineParams(BaseParams):
 @register_op(
     name="split_line",
     result_kind="mesh",
-    title=_("An gezeichneter Linie trennen"),
+    title=_("An gezeichneter Linie teilen"),
     category="prepare",
     params=SplitLineParams,
     consumes=1,
@@ -20295,13 +20308,10 @@ class SplitLineParams(BaseParams):
     # Dieselbe Absage an einer Berührlinie wie bei *Teilen*.
     cache_version="3",
     icon="split",
-    doc=_(
-        "Trennt ein Objekt entlang einer im Bild gezeichneten Linie und setzt auf "
-        "Wunsch Passstifte in die Schnittfläche."
-    ),
+    doc=_("Teilt ein Objekt an einer im Bild gezeichneten Linie, auf Wunsch mit Passstiften."),
     caveat=_(
-        "Für einen Schnitt um eine Rundung herum, denn getrennt wird an einer geraden Ebene. "
-        "Dann zweimal trennen."
+        "Für einen Schnitt um eine Rundung herum, denn geteilt wird an einer geraden Ebene. "
+        "Dann zweimal teilen."
     ),
 )
 def split_line(ctx: OpContext) -> OpResult:
@@ -20666,7 +20676,7 @@ def _the_way_out_of(
     Platten. Die Operation darf sie nicht selbst zerlegen: Ihre Ausgänge
     stehen fest, bevor gerechnet wird, und eine andere Zahl hält die Kette an
     (§15.2). Also sagt sie, was ginge, und das Fenster tut es auf einen Klick
-    — *In Einzelteile zerlegen* vor diesen Schritt, danach derselbe Schritt
+    — *In Einzelteile aufteilen* vor diesen Schritt, danach derselbe Schritt
     noch einmal (``History.split_and_retry``), wie bei *Reparieren und erneut
     versuchen* (Regel 17).
 
@@ -21220,6 +21230,8 @@ def _reshape_the_fillet(
                     severity="info",
                     message=_("Das Merkmal hat dieses Maß schon."),
                     feature_ids=(name,),
+                    values={"field": "diameter"},
+                    suggestions=(CHANGE_THIS_STEP,),
                 )
             ],
         )

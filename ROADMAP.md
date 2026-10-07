@@ -39,7 +39,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | CI-01 bis CI-07 im Code belegt, Aufteilung in den Tagläufen 0.5.1 und 0.5.3 gelaufen; Fenstertabelle aus dem Taglauf 0.5.3 und Budget je Datei (`c379d5271`). Offen: CI-08 mit vergleichbarer Vorher-/Nachher-Auswertung, die Kerntabelle aus CI-Berichten und das Blättern in `tools/windows_signed_installer.py` |
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Bausteine, Abläufe, funktionale Gruppen, Projektmaße und das Abnahmewerkzeug gebaut (04.10.); offen: der echte Lauf der Einzeldateiabnahme über 187 Fälle am Fenster, die Fensterabnahmen der neuen Abläufe und Gruppen, Leistungsreihe |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Hänger durch die Speicherbereinigung im Arbeiter behoben (nur noch im Hauptfaden, 05.10.); der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen sind der Ereignistyp dahinter, die Gegenprobe auf Linux und Mac und die Vergleichsreihe |
@@ -79,6 +78,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.); offen: Waschschüssel an 29 Druckern, die Minigolf-Platte als 3MF, der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max, vorher das Matrixwerkzeug (Blockleser, Stützmarke nach Volumen) |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
+| [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
@@ -91,12 +91,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
-| [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
-| [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
-| [RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich](#rm-526) | Bedienung und Darstellung | `z` als optionale Koordinate (leer heißt Oberkante), Migration 0 → leer |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -106,16 +102,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat](#rm-529) | KI und Generatoren | `created_by` in Merkmals- und Objektzeile des Steckbriefs nachrüsten (Entscheidung Robert, 06.10.) |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): umräumen — erledigte und abgelöste Konzepte in einen Unterordner, alle Verweise nachziehen |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
-| [RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen](#rm-113) | Tests und Entwicklungswerkzeuge | Diagnose gebaut (`736d4a46e`); nächster Schritt: den Skip-Grund aus dem JUnit-Bericht `tests-core-windows-latest-*` des Taglaufs 37409338027 lesen und SID/ACL festhalten |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Genehmigt (Robert: „alles gründlich“); neun Helfer in `helpers.py`/`ui_helpers.py` (`95fd36d35`); offen `on_the_bore_wall`, `project`, `FakeCodec`, `a_foreign_slot`; entschieden (Robert, 06.10.): auch die großen Fenster-Fixtures zusammenführen |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Stimme mit Prüfsummen in `licences.toml` dokumentiert; offen: `/legal-review` zur Werbenutzung, Eintrag in `ASSET-RIGHTS.toml` und ein Test, der die Stimme prüft |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (d) und Teile von (b)/(c) mit `b03c0ddfe` erledigt; offen die Kopie `_select_data` samt Karte, die übrigen dünnen Hüllen aus (b), `section.section_volume` und `repair.fill_holes` (Liste am Punkt) |
 | [RM-344 — Renderertests laufen in der CI nur noch unter Windows](#rm-344) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): `rendering`-Fälle in der Release-CI auch unter Linux und macOS, dazu der Wächter in `test_packaging.py` |
-| [RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1](#rm-349) | Tests und Entwicklungswerkzeuge | Review seit 0.5.1: Textwächter ohne Katalog, OCP ohne Wächter, `importorskip`, falscher `adjustSize`-Satz in `vorderseite.md`, „gebaut an drei Orten“ in `oberflaeche.md`, „Datei je Fakt“ |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Erster Lauf 02.10. im Archiv; der zweite war am 05.10. fällig und steht aus (bekannt: cadquery-ocp-novtk 8.0.1.1.0); Paketbeleg der Bauplattform unter RM-468 |
-| [RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft](#rm-530) | Tests und Entwicklungswerkzeuge | Skripte, die Tests und Workflows dauerhaft brauchen, aus `.claude/.state/` nach `tools/` ziehen |
 | [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Auftrag Robert (06.10.): Fenstergruppe in der Release-CI auf allen drei Plattformen, dazu ein Slicer-Job, der je Plattform die Slicer installiert und Erkennung, Druckerlisten und Slicen prüft |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -2758,6 +2751,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Entschieden (Robert, 06.10.2026):** Die Mündung bleibt frei, wie Solidon es seit 0.5.3
   hält; offen ist nur die Abnahme.
 
+<a id="rm-539"></a>
+
+- [ ] **RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne
+  Befund.** Die Kabeldurchführung legt ihre Mündung an die angeklickte Fläche, die als
+  Außenseite gilt, und baut den Klemmblock dahinter (`parts/structure.py`,
+  `cable_relief_support` als `host_add`). Im Gehäuse-Beispiel stand sie auf der Oberseite des
+  Bodens: Der Block hing 5,25 mm unter dem Bett und über zwei Ränder (im Beispiel behoben,
+  `tools/make_examples.py`). Setzt ein Kunde sie so, sagt es nur `arrange.below_bed` als
+  Hinweis, dessen Handlung *Auf das Bett setzen* das Gehäuse auf den Block stellt; an einer
+  Seitenwand von innen kommt nichts. `parts/ops.py` vereinigt `host_add`, ohne zu prüfen, wo er
+  landet. **Offen:** ein Befund beim Einsetzen, wenn der Trägeraufbau außerhalb des Trägers oder
+  unter z = 0 liegt, mit einer Handlung, die die Richtung umkehrt, in allen Katalogen.
+  **Abnahme:** Kabeldurchführung von innen auf einen Boden und an eine Seitenwand gesetzt, je
+  ein Befund mit Handlung; danach sitzt der Block innen und der Boden auf dem Bett.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -3604,10 +3612,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bei allen drei Varianten). Tests: Tisch auf einem Mittelfuß (`test_advise.py`, 85 mm Platz, Brim
   vorgeschlagen), breites Teil auf schmalem Fuß (`test_export.py`), beide vorher rot.
 
-  **Offen (05.10.):** Der Stützfuß zählt die ganze Aufsicht, die Slicer stützen nur die Überhänge.
-  Die Waschschüssel am Kobra 2 mit Stützen bekommt deshalb weiter die Stützfußwarnung, obwohl die
-  erste Stützschicht im G-Code 15 mm vom Rand bleibt (Nachtrag 2: x 15,1–196,9, y 23,1–194,4 mm auf
-  220 mm). Richtig: den Fuß aus den Stützflächen der Schichtanalyse messen.
+  **Teilstand 06.10.2026 (Stützfuß unter den Überhängen):** Bis dahin zählte der Stützfuß die ganze
+  Aufsicht, die Slicer stützen nur die Überhänge; die Waschschüssel am Kobra 2 mit Stützen bekam
+  die Stützfußwarnung, obwohl die erste Stützschicht im G-Code 15 mm vom Rand blieb (Nachtrag 2:
+  x 15,1–196,9, y 23,1–194,4 mm auf 220 mm). Jetzt misst `check_adhesion_on_bed` den Fuß am Umriss
+  der Überhänge aus der Schichtanalyse (`analysis.overhang_outline`, im Export über
+  `writer._support_outline` aus denselben Schichten wie die Stützsperre); ohne Überhang gibt es
+  keinen Fuß. Am Kundenmodell, schräg auf 220 × 220 mm (Sonde): Öffnung oben, Überhänge
+  20,4–204,2 mm, vorher 5,61 mm Warnung, jetzt keine; Öffnung unten, Überhänge bis 0,5 mm vom Rand,
+  Warnung bleibt (5,32 mm). Test `test_export.py::test_the_support_foot_stands_under_the_overhangs_only`,
+  vorher rot (Platte mit Tisch in der Mitte, Teil mit Überhang bis zur Kante, Quader ohne Überhang).
 
 <a id="rm-502"></a>
 
@@ -3679,73 +3693,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
-<a id="rm-507"></a>
-
-- [ ] **RM-507 — Jede Funktion hat einen Namen, überall derselbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Teilen hat sieben Einträge mit drei Verben an vier Orten, „Automatisch teilen“ fällt
-  ins Menü *Bearbeiten*. Ein Druckdialog heißt „An den Slicer übergeben …“,
-  „Drucken vorbereiten …“ und „Drucker …“ (zugänglicher Name „Drucker wechseln“).
-  *Deckel erzeugen* bestätigt mit „Einsetzen“, der Katalog mit „Einfügen“; im Menü
-  *Erzeugen* stehen „Aus Skizze erzeugen …“ (Knopf „Zeichnen“) und „Modell einfügen“
-  doppelt; der Startbildschirm sagt „Modell öffnen“ und „Projekt öffnen“, die Leiste
-  „Modell einfügen“ und „Öffnen“.
-  **Fix:** Durchgehend „Teilen“ (Umschalter, „Jetzt teilen“, „An gezeichneter Linie
-  teilen“), „Automatisch teilen …“ in die Karte unter *Vorbereiten*; Kopfknopf und
-  zugänglicher Name „Druckeinstellungen …“, der Dateieintrag heißt wie der Knopf im
-  Bericht; ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“, auch im Katalog;
-  „Zeichnen …“ im Menü, dieselbe `QAction` für Modell einfügen; Startknöpfe wie die
-  Leiste. `grenzen.md` und alle Kataloge ziehen nach.
-  **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
-  Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
-  zwei Menüs mit verschiedener Wirkung.
-
-<a id="rm-512"></a>
-
-- [ ] **RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Im Ruhezustand des Hauptfensters leuchten sechs Akzente: Bernsteinkanten an linker
-  und rechter Karte, Werkzeugzeile und Reiter, dazu *Bausteine*, die vorgewählte
-  Hinweiszeile und ihr Hauptknopf „Diesen Schritt ändern“. Der Wächter
-  `test_resting_state.py` zählt keine Linien. Dialoge zeigen zwei Hauptknöpfe, sobald ein
-  Hinweis mit Handlung erscheint (57 Handlungen tragen `primary`); Rot tragen zwei
-  „Abbrechen“, „Verwerfen“ ist Hauptknopf; im Chat ist „Übernehmen“ kein Hauptknopf; in
-  der Tour ist „Schritt überspringen“ einer.
-  **Fix:** Kartenränder in der Linienfarbe; vorgewählt werden nur Fehler und Warnungen;
-  Hinweishandlungen im Dialog als normale Knöpfe; `make_danger` genau am
-  unwiederbringlichen Verwerfen, nie mit `make_primary`; Chat-Übernehmen
-  `make_primary`, Überspringen flach. Der Wächter zählt Akzentlinien ab 40 px mit.
-  **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
-  Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
-  mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
-
-<a id="rm-519"></a>
-
-- [ ] **RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Unter den Parameterfeldern steht „Eine feste Zahl passt“ / „2 feste Zahlen passen“
-  und liest sich wie die Überschrift der nächsten Zeile; die Filamentspalte des
-  Objektbaums ist abgeschnitten („Fila“) und ihre Felder wirken wie Haken; im Verlauf
-  springt die Nummer an einer Gruppenzeile, „Als Dreiecksmodell rechnen“ steht im
-  Kontextmenü an zweiter Stelle. Im Zeichenmodus zeigt das Auswahlfenster nichts
-  Brauchbares, die Bedingungsliste spricht Fachsprache, und die Einladung der leeren
-  Szene liegt über der Skizze.
-  **Fix:** Die Hinweiszeile entfällt bei verwendeten Maßen, die Zahl steht am Bindeknopf
-  („6 Zahlen an Maße binden …“), nur „Nicht verwendet“ bleibt; Spulensymbol als
-  Spaltenkopf, runder Farbpunkt; Gruppenzeile trägt „3–4“, Kernwechsel hinter einem
-  Trennstrich; im Zeichenmodus Dock und Einladung verborgen, Bedingungen nur des
-  gewählten Elements mit Zählzeile.
-  **Abnahme:** Im Zustand von main-window.png vier Parameterzeilen ohne Untertext; in
-  sechs Sprachen nichts abgeschnitten im Objektbaum; jede Schrittnummer sichtbar;
-  Neues Projekt → Zeichnen ohne Einladung und Dock, höchstens drei Bedingungszeilen.
-
-<a id="rm-526"></a>
-
-- [ ] **RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich.** Seit RM-513
-  hieß die Null in `create_lid.z` und `screw_lid.z` „Oberkante“, getragen von `minimum=0`;
-  damit hielten alte Projekte mit negativer Öffnungshöhe am Schritt an. Für 0.5.3 ist die
-  Grenze zurückgenommen (Durchsicht Kern, Fund 9), und hinter der Klappe steht die Null wieder
-  als Zahl. **Fix:** `z` als optionale Koordinate, leer heißt Oberkante, Migration 0 → leer
-  (Checkliste „Dateiformat ändern“). **Abnahme:** alte Projekte mit 0 und mit negativer Höhe
-  öffnen und rechnen gleich, das Feld zeigt „Oberkante“, wenn es leer ist.
 
 ## KI und Generatoren
 
@@ -3906,53 +3853,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 ## Tests und Entwicklungswerkzeuge
 
-<a id="ci-testlaufzeiten"></a>
-
-- [~] **CI-Testlaufzeiten — vollständige Prüfungen früher abschließen.**
-  Verbindliches [Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md), vor
-  Umsetzung erstellt: CI-01 bis CI-08 schützen Auswahl, Prozessisolation,
-  Plattformumfang, Paketfreigabe und Berichte. Umsetzung: unabhängige Kern- und
-  Fensterjobs, Versionswächter als Handstart-Opt-in, gebündelte Quellprüfungen
-  und Bausteinvorbereitung sowie thematische UI-Tests. Durchsicht 24.09.2026:
-  Kernsuite in drei Teilen je Plattform (`--ci-shard`, `tools/ci_shards.py`,
-  Kerntabelle aus einem lokalen JUnit-Lauf), drei Windows-Fenstergruppen,
-  Prüfausgabe wieder im CI-Protokoll und Schrittbericht, und der längste
-  Kernfall behoben: `test_seal_geometry[12.0]` 319 s → 24–34 s über die
-  räumliche Vorauswahl der Wandmessung (Konzept §4.4). Gemessener
-  CI-Zeitgewinn und die erste Kerntabelle aus CI-Berichten
-  (`tools/ci_shards.py core …`) stehen aus; die Kerntabelle
-  `tests/data/ci_core_durations.json` stammt noch aus einem lokalen Lauf vom 29.09. Offen
-  außerdem das Blättern in `tools/windows_signed_installer.py`, bevor ein Lauf 100 Artefakte
-  erreicht (Taglauf 0.5.3: 31). Erledigt sind seither der räumliche Index der Wandmessung
-  (`7e3442623`) und die Kandidaten `test_bore_mouth_resize`/`test_bore_floor_resize`
-  (`68cd2ef6f`), beide unten.
-
-  **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Der räumliche Index steht — ein Baum
-  aus Hüllquadern in `mesh.ray_hits_batch`, bitgleich zum Vollvergleich, Vollkugel mit
-  12 800 Dreiecken 31 → 0,5 s (`7e3442623`). Die beiden langsamsten Kernfälle liefen
-  über doppelte Mantelpunkte in `features._distinct_points` (134 Mio. Punktpaare):
-  `test_bore_mouth_resize…` 83,2 → 28,4 s, `test_bore_floor_resize…` 61,4 → 26,3 s
-  (`68cd2ef6f`). Das lokale Tor verteilt wie die CI mit `--dist worksteal`, 850 → 587 s
-  im Median, dieselben 17 166 Fälle (`c28e02c86`). CI-01 bis CI-07 sind im Code und an
-  der echten Sammlung erfüllt (die drei Kernteile sammeln zusammen 17 191 Fälle, keiner
-  doppelt, keine Datei in zwei Teilen).
-
-  **Releaselauf 0.5.1:** Der erfolgreiche
-  [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
-  vom 28.09.2026 enthält die neue Aufteilung: neun Kernjobs auf drei Plattformen,
-  drei plattformübergreifende Fensterverträge und drei Windows-Fenstergruppen.
-  Letztere liefen 18:36, 17:59 und 18:32 Minuten (Gruppen 0, 1, 2).
-  **CI-08 bleibt offen:** Den Gewinn gegenüber einem vergleichbaren Ausgangslauf
-  anhand der Testbestände, Berichte und Laufzeiten auswerten; ein grüner Lauf allein
-  belegt ihn nicht. Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
-
-  **Releaselauf 0.5.3:** Im ersten Versuch des Taglaufs 37409338027 riss die
-  Windows-Fenstergruppe 0 an der festen 900-s-Grenze. `c379d5271` schreibt die
-  Fenstertabelle `tests/data/ci_window_durations.json` aus den Windows-Berichten dieses
-  Taglaufs neu (`test_ui.py` 838 s statt der 665 s von vor seiner Aufteilung) und gibt jeder
-  Datei ein eigenes Budget (`tools/run_suite_isolated.py`, `BUDGET_HEADROOM = 1.5`,
-  `file_budget`).
-
 <a id="rm-099"></a>
 
 - [~] **RM-099 — Konzeptbestand und veraltete Verweise ordnen.** **Die Hälfte der Abnahme ist
@@ -3985,20 +3885,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Punkt aufnimmt, misst neu.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#architektur-durchsicht-02092026).
-
-<a id="rm-113"></a>
-
-- [~] **RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen.** Den Besitzer einer
-  frisch angelegten privaten Tokendatei auf dem Windows-Runner ermitteln und die Prüfung mit einer
-  tatsächlich nutzereigenen Datei fahren. Abnahme: SID und ACL dokumentiert, Test ohne bedingten
-  Skip grün; eine breitere Besitzfreigabe nur nach Sicherheitsprüfung.
-
-  **Diagnose gebaut (`736d4a46e`):** Der Skip in `tests/test_licence_admin.py` nennt Besitzer,
-  Nutzer und Standardbesitzer als SID. Der Skip-Grund mit der Runner-SID ist noch nicht belegt:
-  Die Windows-Kernprotokolle nennen nur die Zahl übersprungener Fälle; der Grund steht im
-  JUnit-Bericht `tests-core-windows-latest-*` des Taglaufs 37409338027 (Repository öffentlich).
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
 
 <a id="rm-134"></a>
 
@@ -4176,40 +4062,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Entschieden (Robert, 06.10.2026):** Die Release-CI fährt die `rendering`-Fälle auch
   unter Linux und macOS.
 
-<a id="rm-349"></a>
-
-- [ ] **RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1.**
-  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-D.md`, `bericht-E.md`, `bericht-F.md`),
-  je einzeln abnehmbar. Registerzellen anderer Punkte werden hier nur gemeldet, geändert werden
-  sie von dem, der den Punkt bearbeitet:
-  - **E-N2, `c96f60a18` (Codex):** `tools/check_new_texts.py:171–195` (`missing()`) scheitert
-    nicht, wenn im Index kein Katalog liegt — `main() = 0` bei neuem unübersetztem Text
-    (Sonde `sonden\textwaechter\sonde_leere_kataloge.py`). Fix: leere Katalogliste als Fehler
-    mit Handlungsvorschlag, Test (`tests.md`: zuerst zählen).
-  - **F-N5, `337697db9`, `8cb4eae96` (Codex), Lücken älter:** `tests/CLAUDE.md:123` und der
-    RM-315-Abschluss behaupten `exact_kernel()` vor jedem OCP-Import;
-    `tests/test_feature_moves_keep_shape.py:1394` und
-    `tests/test_geometry_review_regressions.py:923` importieren OCP ohne Wächter (ohne OCP ein
-    `ImportError` statt Skip). Fix: `exact_kernel()` als erste Zeile, AST-Wächter in
-    `test_toolchain.py`.
-  - **F-N3, `72281a33e` (Claude):** `.claude/rules/fenster.md:398–399` trug als einzige Regel ein
-    Datum („Entscheidung Robert, 29.09.2026“). Erledigt mit `ea71f59f5` (05.10.).
-  - **F-N4, `bcaac7b53` (Claude):** `tests/test_manual.py:37` behält `importorskip("PySide6")`,
-    das die Commitmeldung zu entfernen verspricht. Fix: entfernen, sobald die Datei frei ist.
-  - **D-N4:** `.claude/rules/oberflaeche.md:198` („gebaut an drei Orten“) ist seit `d8e37581a`
-    falsch; der Satz „Noch nicht umgestellt …: die Druckeinstellungen“ ist verschwunden, die
-    Druckeinstellungen haben dort einen eigenen Absatz. Der falsche Satz aus
-    `.claude/rules/grenzen.md:194` („`adjustSize` läuft nur, wenn sich eine Zeile bewegt hat“)
-    steht heute in `.claude/rules/vorderseite.md:84–85` und ist seit `b837a73f8` falsch
-    (`app/ui/op_dialog.py`: „Und nicht über ``adjustSize``“).
-  - **Registerstände (F-N2, D-N4):** erledigt am 06.10.2026 mit der Fortschreibung der
-    Registerzeile von RM-134; RM-286 ist archiviert.
-  - **Beifund:** `.claude/README.md:16` sagt über `memory/` „eine Datei je Fakt“,
-    `CLAUDE.md:200` „Eine Datei je Thema“.
-  Abnahme: je Spiegelstrich Test oder korrigierte Stelle mit Commit. Beleg: Berichte unter
-  `F:\solidon-review-reports`.
-  Nachprüfung am Stand `6ce767031`: alle sieben Reste offen (E-N2, F-N5, F-N3, F-N4, D-N4, Registerstände, Beifund memory); nur `oberflaeche.md:202–203` ist im Arbeitsbaum ungesichert korrigiert.
-
 <a id="rm-467"></a>
 
 - [~] **RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren.**
@@ -4229,19 +4081,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Der zweite Lauf war am 05.10. fällig und steht aus; bekannt ist seither `cadquery-ocp-novtk`
   8.0.1.1.0 (in `constraints.txt` auf 8.0.1.0.0 festgelegt, der Wächter „Neueste Versionen“
   zog am Tag v0.5.3 die neue Fassung, die Lizenzbeilage kennt sie seit `036021393`).
-
-<a id="rm-530"></a>
-
-- [ ] **RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft.** `tests/test_delivery_tools.py` und
-  `tests/test_delivery_matrix_review.py` fahren Skripte aus
-  `.claude/.state/uebergabe-gesamt-2026-09-27/` (`einheit.py`, `bericht.py`, `treiber.py`) und
-  `uebergabe-matrix-2026-09-27/`; `.github/workflows/mac-netz.yml` und `tests/helpers.py`
-  greifen auf `.claude/.state/plattformgleichheit-2026-09-17/` zu. Ruff und mypy prüfen den
-  Zustandsordner nicht, und `uebergabe-gesamt-2026-09-27` soll nach dem Gesamtlauf weg — dann
-  bräche die Suite. Fund der Unterlagen-Durchsicht 06.10.2026. **Fix:** Was ein Test oder
-  Workflow dauerhaft braucht, zieht nach `tools/` (Regel in `.claude/README.md`), die Tests
-  zeigen dorthin. **Abnahme:** `git grep -n ".claude/.state" -- tests .github` findet nur
-  noch Sonden eines offenen Punkts, Ruff prüft die umgezogenen Skripte, die Liefertests bleiben grün.
 
 <a id="rm-531"></a>
 

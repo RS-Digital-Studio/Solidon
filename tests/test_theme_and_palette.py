@@ -357,9 +357,9 @@ def test_the_surfaces_stand_apart(theme: str) -> None:
 
 @pytest.mark.parametrize("theme", list(THEMES))
 def test_the_accent_line_carries_on_its_own_window(theme: str) -> None:
-    """Die Kante des aktiven Reiters ist der einzige Ort, an dem der Akzent
-    einen *bleibenden* Zustand zeigt. Sie muss auf beiden Untergründen tragen —
-    der Bernstein selbst bringt gegen das helle Fenster nur 1,37.
+    """Die Akzentkante — Fokusring, aktives Werkzeug, laufender Tourschritt —
+    muss auf beiden Untergründen tragen; der Bernstein selbst bringt gegen das
+    helle Fenster nur 1,37.
     """
     colours = THEMES[theme]  # type: ignore[index]
     assert contrast_ratio(colours["accent_line"], colours["window"]) >= 3.0
@@ -957,6 +957,24 @@ def test_every_customer_word_belongs_to_a_row_of_the_palette() -> None:
         if not REGISTRY.has(name) and f'"{name}": (' not in fenster
     ]
     assert not fehlend, "diese Kundenwörter zeigen auf nichts: " + ", ".join(fehlend)
+
+
+def test_an_operation_shown_as_a_window_command_hands_over_its_words() -> None:
+    """Seit RM-507 zeigt die Palette *Modell einfügen* nur als Fensterbefehl
+    ``file.import``; die Operation ``load`` hat dort keine Zeile mehr. Ihre
+    Kundenwörter hingen nur an ihr, und „STL“ oder „Zoll“ fanden das Einlesen
+    nicht mehr (Nachprüfung N1)."""
+    from app.core.registry.search import SYNONYMS, customer_phrases
+    from app.core.registry.surfaces import PaletteEntry
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
+
+    assert WINDOW_COMMAND_OPERATIONS, "keine Operation als Fensterbefehl — der Test prüfte nichts"
+    for name, command in WINDOW_COMMAND_OPERATIONS.items():
+        assert SYNONYMS.get(name) == SYNONYMS.get(command), command
+        assert set(customer_phrases(name)) <= set(customer_phrases(command)), command
+    einlesen = PaletteEntry(name="file.import", title="Modell einfügen …", doc="", category="file")
+    for wort in ("stl", "zoll", "importieren"):
+        assert matches(einlesen, wort), wort
 
 
 # --- Der Körper steht auf der Platte, nicht in ihr (B35) ---------------------

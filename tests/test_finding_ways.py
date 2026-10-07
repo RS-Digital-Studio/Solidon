@@ -182,8 +182,10 @@ def test_every_error_and_warning_has_a_way() -> None:
 #: (RM-374, Vorgabe Robert 02.10.2026). Sie tragen den Knopf, der genau diesen
 #: Schritt zum Ändern öffnet (``errors.CHANGE_*``, Kennung ``change_step``).
 #: Wer einen solchen Befund baut, trägt ihn hier ein — mit dem Feld, in das
-#: der Cursor gehört, oder ``None`` für den Schritt als Ganzes.
-MEINT_DEN_SCHRITT: dict[str, str | None] = {
+#: der Cursor gehört, oder ``None`` für den Schritt als Ganzes. Mehrere Felder
+#: stehen da, wo derselbe Befund an verschiedenen Merkmalsarten verschiedene
+#: Werte meint (Ring und Bohrung beim Drehen, Muster und Zapfen beim Ändern).
+MEINT_DEN_SCHRITT: dict[str, str | frozenset[str] | None] = {
     "transform.fitted": "largest",
     "transform.without_effect": None,
     "lattice.filled": "cell",
@@ -191,6 +193,13 @@ MEINT_DEN_SCHRITT: dict[str, str | None] = {
     "hollow.done": "wall",
     "thread.thin_wall": "diameter",
     "parts.bore_too_wide": "size",
+    # RM-441: die sechs „hat nichts getan“-Befunde aus dem Review vom 02.10.2026.
+    "mesh.already_below_target": "triangles",
+    "move_feature.unchanged": "x",
+    "duplicate_feature.unchanged": "x",
+    "rotate_feature.unchanged": frozenset({"angle", "axis"}),
+    "resize_feature.unchanged": frozenset({"diameter", "pitch"}),
+    "bore.resize_unchanged": "diameter",
 }
 
 
@@ -199,6 +208,29 @@ def _suggestion_names(node: ast.expr) -> set[str]:
     if isinstance(node, ast.Tuple | ast.List):
         return {element.id for element in node.elts if isinstance(element, ast.Name)}
     return set()
+
+
+def _codes(node: ast.expr | None) -> tuple[str, ...]:
+    """Die Kennwörter eines ``code=``: ausgeschrieben oder ``a if … else b``."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return (node.value,)
+    if isinstance(node, ast.IfExp):
+        return _codes(node.body) + _codes(node.orelse)
+    return ()
+
+
+def _hidden_code(node: ast.expr | None) -> bool:
+    """Ein zusammengesetztes Kennwort, das auf einen Eintrag oben endet.
+
+    ``code=f"{operation}.unchanged"`` stand so bis RM-441 da: Für diesen
+    Wächter war die Stelle unsichtbar, und sie trug keinen Knopf.
+    """
+    if not isinstance(node, ast.JoinedStr) or not node.values:
+        return False
+    tail = node.values[-1]
+    if not (isinstance(tail, ast.Constant) and isinstance(tail.value, str)):
+        return False
+    return any(code.endswith(tail.value) for code in MEINT_DEN_SCHRITT if "." in tail.value)
 
 
 def test_a_finding_about_a_step_value_opens_that_step() -> None:
@@ -227,21 +259,25 @@ def test_a_finding_about_a_step_value_opens_that_step() -> None:
             ):
                 continue
             keywords = {keyword.arg: keyword.value for keyword in node.keywords}
-            code = keywords.get("code")
-            if not (isinstance(code, ast.Constant) and code.value in MEINT_DEN_SCHRITT):
-                continue
-            found[code.value] = found.get(code.value, 0) + 1
-            where = f"app/core/{path.relative_to(root).as_posix()}:{node.lineno} {code.value}"
-            if not _suggestion_names(keywords.get("suggestions", ast.Tuple(elts=[]))) & changes:
-                without.append(f"{where}: ohne Knopf zum Ändern des Schritts")
-            field = MEINT_DEN_SCHRITT[code.value]
-            values = keywords.get("values")
-            named = None
-            if isinstance(values, ast.Dict):
-                for key, value in zip(values.keys, values.values, strict=True):
-                    if isinstance(key, ast.Constant) and key.value == "field":
-                        named = value.value if isinstance(value, ast.Constant) else "?"
-            if named != field:
-                without.append(f"{where}: Feld {named!r} statt {field!r}")
+            place = f"app/core/{path.relative_to(root).as_posix()}:{node.lineno}"
+            if _hidden_code(keywords.get("code")):
+                without.append(f"{place}: Kennwort zusammengesetzt — ausschreiben")
+            for code in _codes(keywords.get("code")):
+                if code not in MEINT_DEN_SCHRITT:
+                    continue
+                found[code] = found.get(code, 0) + 1
+                where = f"{place} {code}"
+                if not _suggestion_names(keywords.get("suggestions", ast.Tuple(elts=[]))) & changes:
+                    without.append(f"{where}: ohne Knopf zum Ändern des Schritts")
+                field = MEINT_DEN_SCHRITT[code]
+                values = keywords.get("values")
+                named = None
+                if isinstance(values, ast.Dict):
+                    for key, value in zip(values.keys, values.values, strict=True):
+                        if isinstance(key, ast.Constant) and key.value == "field":
+                            named = value.value if isinstance(value, ast.Constant) else "?"
+                allowed = field if isinstance(field, frozenset) else {field}
+                if named not in allowed:
+                    without.append(f"{where}: Feld {named!r} statt {sorted(map(str, allowed))}")
     assert set(found) == set(MEINT_DEN_SCHRITT), f"Befund nicht gefunden: {found}"
     assert not without, "\n".join(without)

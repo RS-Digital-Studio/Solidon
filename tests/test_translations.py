@@ -1406,9 +1406,10 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
     Gemessen in der Durchsicht 0.5.1: Das Werkzeug *Trennen* (eine gezogene
     Linie) und die Operation *Teilen* (eine eingetippte Ebene) hießen en, es,
     fr und pt gleich — „Split“, „Separar“, „Séparer“ —, it „Dividi“ gegen
-    „Dividere“, dasselbe Verb. Verglichen werden ganze Namen und bei
-    Einwortnamen der Wortstamm (:data:`GROUP_STEM`), wie bei den
-    Kataloggruppen. *Trennen* und *Abschneiden* vergleichen außerdem das
+    „Dividere“, dasselbe Verb. Seit RM-507 sagen alle Wege „teilen“: das
+    Werkzeug *Teilen*, die Operation *An Ebene teilen*. Verglichen werden ganze
+    Namen und bei Einwortnamen der Wortstamm (:data:`GROUP_STEM`), wie bei den
+    Kataloggruppen. *Teilen* und *Abschneiden* vergleichen außerdem das
     erste Verb: Eine Ergänzung wie „away“ macht daraus keine andere Aktion.
     """
     from app.core.bootstrap import load_operations
@@ -1418,7 +1419,7 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
     catalog = read_catalog(language)
     tools = _toolbar_names()
     titles = sorted({spec.title.msgid for spec in REGISTRY.all()})
-    assert "Trennen" in tools and len(tools) >= 5, f"Werkzeugzeile nicht gelesen: {tools}"
+    assert "Teilen" in tools and len(tools) >= 5, f"Werkzeugzeile nicht gelesen: {tools}"
     assert len(titles) > 100, f"nur {len(titles)} Operationstitel — dann prüft das nichts"
 
     def said(text: str) -> str:
@@ -1437,7 +1438,7 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
                 continue
             a, b = said(tool), said(title)
             one_word = " " not in a and " " not in b
-            separate_cutting_actions = (tool, title) == ("Trennen", "Abschneiden")
+            separate_cutting_actions = (tool, title) == ("Teilen", "Abschneiden")
             if a == b or (
                 (one_word or separate_cutting_actions)
                 and _first_word_stem(a) == _first_word_stem(b)

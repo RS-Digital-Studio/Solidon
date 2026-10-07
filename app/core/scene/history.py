@@ -951,7 +951,7 @@ class History:
         """Zerlegt einen Körper vor einem angehaltenen Schritt und plant neu.
 
         Dasselbe Muster wie :meth:`repair_and_retry`, mit *In Einzelteile
-        zerlegen* statt der Reparatur: Der vollständige Suffix ab
+        aufteilen* statt der Reparatur: Der vollständige Suffix ab
         ``stopped_at`` wird ersetzt, davor kommt ``split_bodies`` auf
         ``target`` mit der Stückzahl ``count``, und alte wie neue Fassung
         reisen in **einer** Transaktion (§15.5, Regel 16). Der Anlass ist das
@@ -1662,16 +1662,25 @@ class History:
         self._reseed()
         merged = {**entry.params, **params}
         # **Ein Altmarker gilt dem gespeicherten Schritt, nicht seiner Änderung**
-        # (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert, rechnet
-        # der Schritt wie heute. Wer alle Werte durchreicht, reicht den Marker
-        # unverändert mit; nur ein ausdrücklich anderer Markerwert bleibt stehen.
-        markers = [item.name for item in spec.params.spec() if item.dropped_on_change]
-        if markers and any(
-            merged.get(name) != entry.params.get(name) for name in params if name not in markers
-        ):
-            for name in markers:
-                if merged.get(name) == entry.params.get(name):
-                    merged.pop(name, None)
+        # (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert — oder
+        # einer der Werte, die der Marker nennt —, rechnet der Schritt wie heute.
+        # Wer alle Werte durchreicht, reicht den Marker unverändert mit; nur ein
+        # ausdrücklich anderer Markerwert bleibt stehen.
+        markers = [item for item in spec.params.spec() if item.dropped_on_change]
+        marker_names = {item.name for item in markers}
+        altered = {
+            name
+            for name in params
+            if name not in marker_names and merged.get(name) != entry.params.get(name)
+        }
+        for item in markers:
+            watched = (
+                altered
+                if item.dropped_on_change is True
+                else altered & set(item.dropped_on_change or ())
+            )
+            if watched and merged.get(item.name) == entry.params.get(item.name):
+                merged.pop(item.name, None)
         draft = OperationDraft(op=entry.op, inputs=entry.inputs, params=merged)
         outputs = self._outputs_for(spec, draft) if spec.produces_from else entry.outputs
         # **Dieselbe Zahl heißt nicht dieselben Körper.** Eine Auswahl aus

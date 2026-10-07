@@ -28,6 +28,22 @@ SLICER_FLAVOURS: dict[str, Literal["orca", "prusa", "cura"]] = {
     "superslicer": "prusa",
 }
 
+
+def own_package() -> None:
+    """Bindet das Paket ``tools`` an den Ordner dieser Datei.
+
+    ``tools`` ist ein Namensraumpaket ohne ``__init__.py``; sein Suchpfad
+    wird nach jeder Änderung von ``sys.path`` neu berechnet. Legt die Matrix
+    danach eine andere Code-Wurzel davor, fände ``from tools import
+    matrix_gcode`` deren Fassung, und der Codefingerabdruck des Treibers
+    bände den Lauf an eine Datei, die gar nicht lief (Review 06.10.2026, M2).
+    Als feste Liste gesetzt, sucht ``tools`` nur noch hier.
+    """
+    import tools
+
+    tools.__path__ = [str(Path(__file__).resolve().parent)]
+
+
 HOME: dict[str, str] = {
     "elegoo": "centauri-carbon-2",
     "bambu": "bambu-p1s",

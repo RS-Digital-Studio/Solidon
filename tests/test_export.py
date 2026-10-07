@@ -8,7 +8,7 @@ import zipfile
 from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
-from typing import get_args
+from typing import Any, get_args
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -1922,13 +1922,155 @@ def _wide_on_a_foot(profile: Profile, gap: float) -> MeshData:
     return MeshData.of(trimesh.boolean.union([foot, plate]))
 
 
+def _slab_with_an_inner_overhang(profile: Profile, gap: float) -> MeshData:
+    """Eine Platte 60 × 60 × 4 mm, deren rechte Kante ``gap`` mm vor dem Bettrand
+    liegt; mitten darauf eine Säule mit einem Tisch 20 × 20 mm. Gestützt wird
+    nur unter dem Tisch, und der steht 20 mm innerhalb der Platte."""
+    half = profile.printer.build_volume[0] / 2.0
+    centre = half - gap - 30.0
+    slab = trimesh.creation.box((60.0, 60.0, 4.0))
+    slab.apply_translation((centre, 0.0, 2.0))
+    column = trimesh.creation.box((6.0, 6.0, 8.0))
+    column.apply_translation((centre, 0.0, 8.0))
+    table = trimesh.creation.box((20.0, 20.0, 2.0))
+    table.apply_translation((centre, 0.0, 13.0))
+    return MeshData.of(trimesh.boolean.union([slab, column, table]))
+
+
+def test_the_support_foot_stands_under_the_overhangs_only() -> None:
+    """RM-312: Der Stützfuß stand um die ganze Aufsicht, die Slicer stützen nur
+    die Überhänge. Die Waschschüssel am Kobra 2 mit Stützen bekam die Warnung,
+    obwohl die erste Stützschicht im G-Code 15 mm vom Rand blieb. Gemessen wird
+    jetzt an den Überhängen der Schichtanalyse (``analysis.overhang_outline``):
+    Eine Platte bis 4 mm vor dem Rand (der Skirt um sie bleibt auf dem Bett) mit
+    einem Tisch in der Mitte bekommt keine Warnung, ein Teil, dessen Überhang
+    bis an den Rand reicht, weiter die alte. Ohne Überhang gibt es keinen Fuß.
+    Am Kundenmodell (Waschschüssel am Kobra 2, Öffnung oben, schräg) stehen die
+    Überhänge 20 mm vom Rand: vorher 5,61 mm Warnung, jetzt keine."""
+    from app.core.slice.analysis import overhang_outline, slice_body
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    skirt = print_settings.with_path(settings, "adhesion.kind", "skirt")
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_loops", 1)
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_distance", 2.0)
+    supported = print_settings.with_path(skirt, "support.style", "grid")
+    line = supported.layers.first_layer_line_width
+
+    def outline(mesh: MeshData) -> Any:
+        return overhang_outline(slice_body(mesh, 0.2, "support", overhang_angle=45.0))
+
+    inner = _slab_with_an_inner_overhang(profile, 4.0)
+    under_the_table = outline(inner)
+    assert under_the_table is not None
+    assert under_the_table.bounds[2] == pytest.approx(inner.bounds.maximum[0] - 20.0, abs=0.5)
+    assert check_adhesion_on_bed([inner], supported, profile, flavour="prusa", support_foot=3.0), (
+        "Gegenprobe: an der ganzen Aufsicht gemessen warnt es"
+    )
+    assert (
+        check_adhesion_on_bed(
+            [inner],
+            supported,
+            profile,
+            flavour="prusa",
+            support_foot=3.0,
+            support_outline=lambda _index: under_the_table,
+        )
+        == []
+    ), "der Fuß steht unter dem Tisch, 20 mm vom Rand der Platte"
+
+    wide = _wide_on_a_foot(profile, 2.0)
+    [found] = check_adhesion_on_bed(
+        [wide],
+        supported,
+        profile,
+        flavour="prusa",
+        support_foot=3.0,
+        support_outline=lambda _index: outline(wide),
+    )
+    assert found.values["field"] == "adhesion.skirt_loops"
+    assert found.values["distance"] == format_length(3.0 + 2.0 + line - 2.0), (
+        "der Überhang der Platte reicht bis an ihre Kante"
+    )
+
+    plain = _near_the_edge(profile, 4.0)
+    assert outline(plain) is None, "ein Quader hat keinen Überhang"
+    assert (
+        check_adhesion_on_bed(
+            [plain],
+            supported,
+            profile,
+            flavour="prusa",
+            support_foot=3.0,
+            support_outline=lambda _index: None,
+        )
+        == []
+    ), "ohne Überhang keine Stütze und kein Fuß"
+
+
+def test_the_export_asks_the_overhangs_for_the_support_foot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Anschluss zu RM-312: ``write_assembly`` fragt die Überhänge (Review, K7).
+
+    Gefragt wird nur, wo der Fuß schon um die ganze Aufsicht aus dem Bett
+    reichte (K6). Die Platte mit dem Tisch in der Mitte bekommt über den
+    Exportweg keine Warnung, das Teil mit Überhang bis zur Kante die Warnung des
+    Stützfußes; ein Teil in der Mitte des Betts schneidet nichts nach. Ersetzt
+    ist nur die Verbreiterung aus dem Herstellerprofil — ohne Slicer bliebe
+    sie unbekannt.
+    """
+    from app.core.slice import analysis
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    skirt = print_settings.with_path(settings, "adhesion.kind", "skirt")
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_loops", 1)
+    skirt = print_settings.with_path(skirt, "adhesion.skirt_distance", 2.0)
+    supported = print_settings.with_choice(skirt, "support.style", "grid")
+    monkeypatch.setattr(writer, "support_foot_for", lambda *_args, **_kwargs: 3.0)
+    asked: list[int] = []
+    original = analysis.overhang_outline
+
+    def counted(result: Any) -> Any:
+        asked.append(1)
+        return original(result)
+
+    monkeypatch.setattr(analysis, "overhang_outline", counted)
+
+    def codes(mesh: MeshData, name: str) -> list[str]:
+        entry = scene_object(object_id=name, mesh=mesh)
+        _written, findings = write_assembly(
+            [entry],
+            tmp_path / name,
+            project_name=name,
+            profile=profile,
+            settings=supported,
+            flavour="prusa",
+            for_slicer=True,
+            mesh_plan=({entry.id: mesh}, False),
+        )
+        return [item.code for item in findings]
+
+    assert "arrange.adhesion_off_bed" not in codes(
+        _slab_with_an_inner_overhang(profile, 4.0), "innen"
+    )
+    assert asked == [1], "der Fuß um die Aufsicht reichte hinaus, also wurde gefragt"
+    assert "arrange.adhesion_off_bed" in codes(_wide_on_a_foot(profile, 2.0), "breit")
+    asked.clear()
+    middle = _boxed("Mitte", (10.0, 10.0, 5.0), (0.0, 0.0)).mesh
+    assert "arrange.adhesion_off_bed" not in codes(middle, "mitte")
+    assert asked == [], "in der Mitte des Betts kein Schnitt für den Fuß"
+
+
 def test_brim_and_skirt_are_measured_around_the_first_layer() -> None:
     """RM-312: Brim und Skirt legen die Slicer um die erste Schicht, gemessen
     wurde an der Aufsicht. Teile, die oben breiter sind als am Fuß, bekamen
     eine Warnung, obwohl der Rand auf dem Bett blieb (garden-hose-holder am
     MINI ohne Stützen; Waschschüssel am Kobra 2: Brim im G-Code 4,5 mm, 21 mm
-    vom Rand). Der Stützfuß liegt unter den Überhängen und wird weiter an der
-    Aufsicht gemessen."""
+    vom Rand). Der Stützfuß liegt unter den Überhängen; ohne deren Umriss misst
+    die Prüfung ihn an der ganzen Aufsicht (die Überhänge prüft
+    :func:`test_the_support_foot_stands_under_the_overhangs_only`)."""
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
     brim = print_settings.with_path(settings, "adhesion.kind", "brim")

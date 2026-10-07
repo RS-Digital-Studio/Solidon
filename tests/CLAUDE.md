@@ -125,7 +125,9 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
   `conftest.py` an, statt dass sich die Dateien des exakten Kerns still
   überspringen. Es importiert das eigene Kernelmodul regulär, damit dessen
   Importfehler nicht als fehlendes Extra verschwinden;
-  `test_toolchain.py` prüft beides.
+  `test_toolchain.py` prüft beides und, dass jeder `OCP`-Import in einer
+  Testdatei oder `helpers.py` lexikalisch hinter einem Aufruf steht, auch
+  in Helfern, die bisher nur geschützte Tests rufen.
 - **Testdateien importieren keine privaten Namen voneinander.** Gemeinsame
   Daten und Konstruktoren liegen unter öffentlichen Namen in `helpers.py`
   oder `ui_helpers.py`; der AST-Wächter samt Gegenprobe steht in

@@ -33,6 +33,14 @@ entfernt hat.
 |---|---|
 | 2026-10-06 | [RM-413: Ein fremdes Teil in einer Bohrung wird nicht mehr still verschmolzen (06.10.2026)](#rm-413-ein-fremdes-teil-in-einer-bohrung-wird-nicht-mehr-still-verschmolzen-06102026) |
 | 2026-10-06 | [RM-385: Bauplan §17.2 nennt den Halt vor der Rückfallkette (06.10.2026)](#rm-385-bauplan-172-nennt-den-halt-vor-der-rückfallkette-06102026) |
+| 2026-10-06 | [CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)](#ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026) |
+| 2026-10-06 | [RM-519: Linke Karten und Zeichenmodus zeigen nur, was gerade gilt (06.10.2026)](#rm-519-linke-karten-und-zeichenmodus-zeigen-nur-was-gerade-gilt-06102026) |
+| 2026-10-06 | [RM-512: Im Ruhezustand leuchtet nur Bausteine, und Rot trägt nur das Verwerfen (06.10.2026)](#rm-512-im-ruhezustand-leuchtet-nur-bausteine-und-rot-trägt-nur-das-verwerfen-06102026) |
+| 2026-10-06 | [RM-507: Jede Funktion hat einen Namen, überall derselbe (06.10.2026)](#rm-507-jede-funktion-hat-einen-namen-überall-derselbe-06102026) |
+| 2026-10-06 | [RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)](#rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026) |
+| 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
+| 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
+| 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
 | 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
@@ -9133,7 +9141,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-110 — Zwei Zwillinge lesen den Pfad eines offenen Handles | weiter offen → [RM-110](#rm-110) | app/core/scene/project.py:365 und app/core/updates.py:967 führen weiterhin zwei Implementierungen. Der Mac-F_GETPATH-Fehler ist bereits behoben; offen ist nur die gemeinsame Pflege. |
 | RM-111 — Der Sammellauf zwischen zwei Tests gilt nur noch für zwei Dateien | zusammengeführt → [RM-107](ROADMAP.md#rm-107) | tests/conftest.py:185–244 führt _DIALOG_MODULES und den eingeschränkten Sammellauf weiterhin. Derselbe verbliebene Diagnoseauftrag wie RM107. |
 | RM-112 — Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | zusammengeführt → [RM-135](ROADMAP.md#rm-135) | tests/test_filament_picker.py:534–538 markiert die Mac-Unterhöhe weiterhin xfail. RM135 betrifft denselben _around_the_list-Vertrag in der anderen Richtung. |
-| RM-113 — Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | weiter offen → [RM-113](ROADMAP.md#rm-113) | tests/test_licence_admin.py:45ff überspringt in CI weiterhin bei 'gehört nicht dem aktuellen Nutzer'. Aus der Vermutung Administratorengruppe folgt keine Erlaubnis, sie ungeprüft als Eigentümer anzuerkennen. |
+| RM-113 — Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | weiter offen → [RM-113](#rm-113) | tests/test_licence_admin.py:45ff überspringt in CI weiterhin bei 'gehört nicht dem aktuellen Nutzer'. Aus der Vermutung Administratorengruppe folgt keine Erlaubnis, sie ungeprüft als Eigentümer anzuerkennen. |
 | RM-114 — Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen | weiter offen → [RM-114](ROADMAP.md#rm-114) | tests/test_subdivision.py:480–485 probiert 40000/20000/30000/60000/15000 und überspringt, wenn keine Variante öffnet. Ein aktuelles dortiges Messfenster fehlt. |
 | RM-115 — Die Releaseakte meldet, sie blockiert nicht | weiter offen → [RM-115](#rm-115-abschluss-050) | .github/workflows/build.yml hat --write-evidence und --release-check bereits, aber die Warnungsbehandlung besteht. Behebung älterer ELF-/Bibliotheksbefunde ersetzt keinen grünen vollständigen Artefaktnachweis. |
 | RM-116 — Vier Zählzeilen liegen im öffentlichen Baum | weiter offen → [RM-116](ROADMAP.md#rm-116) | Der Originalbefund stammt aus einer Serverprüfung vom 03.09.2026. Aktueller count.php/store_dir()-Pfad ist bereits geschützt; keine externe Löschung oder erneute Serverprüfung im Roadmap-Abgleich vorgenommen. |
@@ -24300,7 +24308,7 @@ bleibt, steht hier mit Kästchen.
   übersieht `_around_the_list` dort etwas — den Umbruch des Hinweises bei
   breiterer Schrift, oder eine Knopfhöhe. Ohne Mac nicht messbar; der Test
   ist dort ein erwarteter Fehlschlag mit Grund, bis jemand misst.
-- **Historischer Befund RM-113 (weiter offen; aktuelle Aufgabe [RM-113](ROADMAP.md#rm-113)):** **Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer.**
+- **Historischer Befund RM-113 (weiter offen; aktuelle Aufgabe [RM-113](#rm-113)):** **Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer.**
   `read_token` lehnte im Tag-Lauf eine frisch geschriebene Datei mit
   „gehört nicht dem aktuellen Nutzer" ab (`runneradmin`); welche SID dort
   Besitzer ist, steht in keinem Protokoll — vermutlich die
@@ -43036,6 +43044,405 @@ Skizzenmodus am echten Gerät — geht in RM-070 auf, das ihn in seiner Register
 **Entfallen (06.10.2026, Entscheidung Robert):** Gebraucht werden nur noch die Dateien der
 Druckprojekte, und die liegen in `F:\3D Dateien`; das Repository „3D Drucker“ braucht keine
 eigene Sicherung.
+
+## RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)
+
+<a id="rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026"></a>
+<a id="rm-113"></a>
+
+**RM-113 — Besitzerprüfung der Tokendatei auf dem Windows-Runner belegen.** Den Besitzer einer
+  frisch angelegten privaten Tokendatei auf dem Windows-Runner ermitteln und die Prüfung mit einer
+  tatsächlich nutzereigenen Datei fahren. Abnahme: SID und ACL dokumentiert, Test ohne bedingten
+  Skip grün; eine breitere Besitzfreigabe nur nach Sicherheitsprüfung.
+
+  **Diagnose gebaut (`736d4a46e`):** Der Skip in `tests/test_licence_admin.py` nennt Besitzer,
+  Nutzer und Standardbesitzer als SID. Der Skip-Grund mit der Runner-SID ist noch nicht belegt:
+  Die Windows-Kernprotokolle nennen nur die Zahl übersprungener Fälle; der Grund steht im
+  JUnit-Bericht `tests-core-windows-latest-*` des Taglaufs 37409338027 (Repository öffentlich).
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-ci-kam-zum-ersten-mal-bis-zum-ende-02092026).
+
+**Nachweis (06.10.2026):** Der Skip-Grund im JUnit-Bericht `tests-core-windows-latest-1` des
+Taglaufs 37409338027 nennt Besitzer, Nutzer und Standardbesitzer gleich:
+`S-1-5-21-1643835476-1616584234-1346609752-500` (runneradmin, das eingebaute Administratorkonto,
+RID 500). Abgelehnt wurde die Datei allein wegen eines Leseeintrags für `S-1-3-4`
+(„Eigentümerrechte“). Die Sonde auf dem Wegwerfzweig `diagnose/rm-113` (Läufe 37487280980 bis
+37490570168, `windows-latest`) zeigt die Zugriffsliste: Ein Ordner aus `mkdir(mode=0o700)` trägt
+SYSTEM, BUILTIN\Administrators und OWNER RIGHTS, eine Datei darin dieselben drei ausdrücklich
+gesetzt, nicht geerbt — deshalb entfernte `icacls /inheritance:r` im Test den Eintrag nie.
+**Sicherheitsprüfung:** `S-1-3-4` gibt Rechte nur an den jeweiligen Besitzer;
+`tools/licence_admin._ownership_problem` vertraut dem Eintrag erst, nachdem der Besitzer als
+Nutzer oder Standardbesitzer belegt ist. Eine breitere Besitzfreigabe gibt es nicht. Der
+bedingte Skip ist entfernt; im Sondenlauf 37490570168 bestehen
+`test_a_private_regular_token_file_is_read` ohne Skip und der neue
+`test_a_token_in_a_private_python_directory_is_read` (31 bestanden, 2 nur unter POSIX
+übersprungen). Der neue Test ist gegen den alten Code rot. Commit „Die Tokendatei gilt auch mit
+„Eigentümerrechte“ als privat“.
+
+## RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)
+
+<a id="rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026"></a>
+<a id="rm-349"></a>
+
+**RM-349 — Werkzeuge und Unterlagen: Reste aus dem Review seit 0.5.1.**
+  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-D.md`, `bericht-E.md`, `bericht-F.md`),
+  je einzeln abnehmbar. Registerzellen anderer Punkte werden hier nur gemeldet, geändert werden
+  sie von dem, der den Punkt bearbeitet:
+  - **E-N2, `c96f60a18` (Codex):** `tools/check_new_texts.py:171–195` (`missing()`) scheitert
+    nicht, wenn im Index kein Katalog liegt — `main() = 0` bei neuem unübersetztem Text
+    (Sonde `sonden\textwaechter\sonde_leere_kataloge.py`). Fix: leere Katalogliste als Fehler
+    mit Handlungsvorschlag, Test (`tests.md`: zuerst zählen).
+  - **F-N5, `337697db9`, `8cb4eae96` (Codex), Lücken älter:** `tests/CLAUDE.md:123` und der
+    RM-315-Abschluss behaupten `exact_kernel()` vor jedem OCP-Import;
+    `tests/test_feature_moves_keep_shape.py:1394` und
+    `tests/test_geometry_review_regressions.py:923` importieren OCP ohne Wächter (ohne OCP ein
+    `ImportError` statt Skip). Fix: `exact_kernel()` als erste Zeile, AST-Wächter in
+    `test_toolchain.py`.
+  - **F-N3, `72281a33e` (Claude):** `.claude/rules/fenster.md:398–399` trug als einzige Regel ein
+    Datum („Entscheidung Robert, 29.09.2026“). Erledigt mit `ea71f59f5` (05.10.).
+  - **F-N4, `bcaac7b53` (Claude):** `tests/test_manual.py:37` behält `importorskip("PySide6")`,
+    das die Commitmeldung zu entfernen verspricht. Fix: entfernen, sobald die Datei frei ist.
+  - **D-N4:** `.claude/rules/oberflaeche.md:198` („gebaut an drei Orten“) ist seit `d8e37581a`
+    falsch; der Satz „Noch nicht umgestellt …: die Druckeinstellungen“ ist verschwunden, die
+    Druckeinstellungen haben dort einen eigenen Absatz. Der falsche Satz aus
+    `.claude/rules/grenzen.md:194` („`adjustSize` läuft nur, wenn sich eine Zeile bewegt hat“)
+    steht heute in `.claude/rules/vorderseite.md:84–85` und ist seit `b837a73f8` falsch
+    (`app/ui/op_dialog.py`: „Und nicht über ``adjustSize``“).
+  - **Registerstände (F-N2, D-N4):** erledigt am 06.10.2026 mit der Fortschreibung der
+    Registerzeile von RM-134; RM-286 ist archiviert.
+  - **Beifund:** `.claude/README.md:16` sagt über `memory/` „eine Datei je Fakt“,
+    `CLAUDE.md:200` „Eine Datei je Thema“.
+  Abnahme: je Spiegelstrich Test oder korrigierte Stelle mit Commit. Beleg: Berichte unter
+  `F:\solidon-review-reports`.
+  Nachprüfung am Stand `6ce767031`: alle sieben Reste offen (E-N2, F-N5, F-N3, F-N4, D-N4, Registerstände, Beifund memory); nur `oberflaeche.md:202–203` ist im Arbeitsbaum ungesichert korrigiert.
+
+**Nachweis (06.10.2026):** **E-N2:** `tools/check_new_texts.py` meldet einen Index ohne
+Sprachkatalog als Fehler (`NoCatalogError`, Rückgabe 1 mit Handlungsvorschlag);
+`tests/test_delivery_tools.py::test_the_commit_guard_fails_without_any_catalog_in_the_index`.
+**F-N5:** Gezählt standen 62 `OCP`-Importe in 16 Dateien ohne vorangehendes `exact_kernel()`,
+die meisten in Helfern; alle gesichert.
+`tests/test_toolchain.py::test_the_exact_kernel_guard_stands_before_every_ocp_import` prüft das
+lexikalisch (am alten Stand 62 Treffer, jetzt keiner),
+`test_the_ocp_guard_check_reads_order_and_scope` an sechs Fällen mit bekanntem Ausgang;
+`tests/CLAUDE.md` nennt den Wächter. **F-N3** mit `ea71f59f5`. **F-N4:**
+`importorskip("PySide6")` ist aus `test_manual.py` und dem Zwilling in `test_registry.py`
+entfernt, `importorskip("OCP")` in `test_sketch_edit.py` durch `exact_kernel()` ersetzt;
+`test_no_test_skips_over_a_fixed_dependency` liest die Aufrufe über den AST, nicht den Text.
+**D-N4:** `oberflaeche.md` nennt keine Ortszahl mehr, `vorderseite.md` die Höhenanpassung über
+`_queue_refit` statt `adjustSize`. **Registerstände** am 06.10.2026. **Beifund:**
+`.claude/README.md` sagt seit `cd58a0b27` „eine Datei je Thema“. Entwicklungstor am Stand der
+Umsetzung: ruff, Format und mypy grün, Suite 24 075 bestanden, 1 rot —
+`test_kernel_process_lifecycle.py::test_active_helper_ends_with_a_killed_parent`, am reinen
+main-Stand in einem von vier Einzelläufen ebenso rot und nicht berührt.
+
+## RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)
+
+<a id="rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026"></a>
+<a id="rm-530"></a>
+
+**RM-530 — Tests lesen Skripte aus dem Zustandsordner, den kein Wächter prüft.** `tests/test_delivery_tools.py` und
+  `tests/test_delivery_matrix_review.py` fahren Skripte aus
+  `.claude/.state/uebergabe-gesamt-2026-09-27/` (`einheit.py`, `bericht.py`, `treiber.py`) und
+  `uebergabe-matrix-2026-09-27/`; `.github/workflows/mac-netz.yml` und `tests/helpers.py`
+  greifen auf `.claude/.state/plattformgleichheit-2026-09-17/` zu. Ruff und mypy prüfen den
+  Zustandsordner nicht, und `uebergabe-gesamt-2026-09-27` soll nach dem Gesamtlauf weg — dann
+  bräche die Suite. Fund der Unterlagen-Durchsicht 06.10.2026. **Fix:** Was ein Test oder
+  Workflow dauerhaft braucht, zieht nach `tools/` (Regel in `.claude/README.md`), die Tests
+  zeigen dorthin. **Abnahme:** `git grep -n ".claude/.state" -- tests .github` findet nur
+  noch Sonden eines offenen Punkts, Ruff prüft die umgezogenen Skripte, die Liefertests bleiben grün.
+
+**Nachweis (06.10.2026):** `treiber.py`, `einheit.py`, `bericht.py`, `matrix_config.py` und
+`gcode_lesen.py` liegen per `git mv` als `tools/matrix_driver.py`, `matrix_unit.py`,
+`matrix_report.py`, `matrix_config.py` und `matrix_gcode.py`. Sie importieren ihre Nachbarn über
+das Paket `tools` aus ihrem eigenen Baum und legen erst danach die Code-Wurzel davor, die weiter
+ein anderer Stand sein darf;
+`tests/test_affected_tests.py::test_tests_and_tools_import_their_neighbours_with_the_package_prefix`
+hält das. Ruff prüft die Dateien (26 Befunde behoben). `tests/test_delivery_tools.py` und
+`tests/test_delivery_matrix_review.py` laden sie von dort ohne zusätzlichen Suchpfad, 535 Fälle
+mit der Sprachprüfung grün. Laufskripte, `UEBERGABE.md`, die Anycubic-Hülle und die alten Sonden
+im Zustandsordner zeigen auf die neuen Dateien. `git grep -n .claude/.state -- tests .github`
+findet nur noch `mac-netz.yml` und den Kommentar in `tests/helpers.py` (Sonde des offenen
+RM-187) sowie erfundene Pfade in `test_affected_tests.py` und `test_roadmap.py`, die keine Datei
+lesen.
+
+## RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)
+
+<a id="rm-526-leer-heißt-oberkante-und-die-null-der-deckelhöhe-ist-das-bett-06102026"></a>
+<a id="rm-526"></a>
+
+**RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich.** Seit RM-513
+  hieß die Null in `create_lid.z` und `screw_lid.z` „Oberkante“, getragen von `minimum=0`;
+  damit hielten alte Projekte mit negativer Öffnungshöhe am Schritt an. Für 0.5.3 ist die
+  Grenze zurückgenommen (Durchsicht Kern, Fund 9), und hinter der Klappe steht die Null wieder
+  als Zahl. **Fix:** `z` als optionale Koordinate, leer heißt Oberkante, Migration 0 → leer
+  (Checkliste „Dateiformat ändern“). **Abnahme:** alte Projekte mit 0 und mit negativer Höhe
+  öffnen und rechnen gleich, das Feld zeigt „Oberkante“, wenn es leer ist.
+
+**Umsetzung:** `create_lid.z` und `screw_lid.z` sind `optional` (Vorgabe leer) und
+tragen `zero_text` „Oberkante“ (`registry.params.ZERO_TOP_EDGE`); an einem
+`optional`-Feld nennt `zero_text` seitdem den leeren Zustand, sonst „wie gemessen“
+(`ParamSpec.zero_text`, `test_registry_consistency`). `lid.plane_of` nimmt ohne Zahl die
+Oberkante, jede Zahl ist eine Welthöhe, die Null das Bett. Format 47: Die Migration
+`_empty_the_top_edge` leert eine gespeicherte Null, auch in den Fassungen einer
+Änderung; ein Ausdruck bekommt `legacy_zero_top` und liest eine Null bei jeder
+Auswertung wie damals als Oberkante (`lid.stated_height`), bis jemand den Schritt
+ändert. Cache-Versionen `create_lid` 6, `screw_lid` 7. Ein geleertes Zahlenfeld mit
+Sondertext nimmt den Sonderwert an, über Eingabetaste und Fokuswechsel
+(`labels._BoundedBehavior._empty_is_special`); vorher stellte Qt still die vorige Zahl
+zurück, und zurück zur „Oberkante“ ging es nur mit dem Pfeil eine Million Millimeter
+tief. Mitbehoben: Drehpunkte zeigen leer „Körpermitte“, die freie Stelle und die
+Kanalhöhe „automatisch“ statt „wie gemessen“.
+
+**Nachweis:** `tests/data/projects/lid_top_edge_v46.p3d` vom Stand davor
+(`65e3ec97b`) geschrieben: Deckel und Drehdeckel bei null, ein Deckel bei -10 an einem
+Gehäuse unter dem Bett, eine Änderung der Stärke. Nach der Migration rechnen alle
+sechs Körper wie gespeichert, ohne Migration hielte der Deckel an
+(`test_project.py::test_v46_lids_at_zero_keep_the_top_edge`); der Ausdruck trägt den
+Marker (`test_v46_a_height_expression_keeps_reading_zero_as_the_top_edge`); leer und
+null an einem Gehäuse 20 mm unter dem Bett (`test_lid.py::test_an_empty_height_is_the_top_edge_and_zero_is_the_bed`);
+Fenstertests `test_a_named_zero_shows_its_name` und
+`test_an_emptied_field_takes_its_named_value` (Release, offscreen per Sonde grün).
+Changelog: ja — Höhe der Öffnung leer heißt Oberkante, ein geleertes Feld springt auf
+seinen Namen zurück.
+
+## RM-507: Jede Funktion hat einen Namen, überall derselbe (06.10.2026)
+
+<a id="rm-507-jede-funktion-hat-einen-namen-überall-derselbe-06102026"></a>
+<a id="rm-507"></a>
+
+**RM-507 — Jede Funktion hat einen Namen, überall derselbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Teilen hat sieben Einträge mit drei Verben an vier Orten, „Automatisch teilen“ fällt
+  ins Menü *Bearbeiten*. Ein Druckdialog heißt „An den Slicer übergeben …“,
+  „Drucken vorbereiten …“ und „Drucker …“ (zugänglicher Name „Drucker wechseln“).
+  *Deckel erzeugen* bestätigt mit „Einsetzen“, der Katalog mit „Einfügen“; im Menü
+  *Erzeugen* stehen „Aus Skizze erzeugen …“ (Knopf „Zeichnen“) und „Modell einfügen“
+  doppelt; der Startbildschirm sagt „Modell öffnen“ und „Projekt öffnen“, die Leiste
+  „Modell einfügen“ und „Öffnen“.
+  **Fix:** Durchgehend „Teilen“ (Umschalter, „Jetzt teilen“, „An gezeichneter Linie
+  teilen“), „Automatisch teilen …“ in die Karte unter *Vorbereiten*; Kopfknopf und
+  zugänglicher Name „Druckeinstellungen …“, der Dateieintrag heißt wie der Knopf im
+  Bericht; ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“, auch im Katalog;
+  „Zeichnen …“ im Menü, dieselbe `QAction` für Modell einfügen; Startknöpfe wie die
+  Leiste. `grenzen.md` und alle Kataloge ziehen nach.
+  **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
+  Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
+  zwei Menüs mit verschiedener Wirkung.
+
+**Umsetzung:** Alle Teilen-Wege sagen „teilen“: das Werkzeug *Teilen* mit *Jetzt
+teilen*, die Operationen *An Ebene teilen* (`split_pinned`, vorher „Teilen“ — der Name
+des Werkzeugs, und zwei Dinge unter einem Namen verbietet
+`test_no_tool_or_operation_shares_its_name_with_another`), *An gezeichneter Linie
+teilen* und *In Einzelteile aufteilen*, dazu die Handlungen der Befunde, Tour, Handbuch,
+Figur und Beispieltext in sechs Sprachen. *Automatisch teilen …* steht nicht mehr unter
+*Bearbeiten*, sondern am gewählten Körper in der Karte unter *Vorbereiten*
+(`SelectionOperationsPanel.add_window_action`, Freigabe und Grund von der Aktion). Der
+Kopfknopf heißt sichtbar und vorgelesen *Druckeinstellungen …*
+(`header.printer_button_text`), der Dateieintrag *An den Slicer übergeben …* wie der
+Knopf im Prüfbericht. Ein Operationsdialog bestätigt mit seinem Titel; ein Baustein,
+dessen Titel kein Verb trägt, mit „Einsetzen“ wie der Katalog (`op_dialog.accept_text`)
+— *Deckel erzeugen*, *Drehdeckel erzeugen*, *Behältereinsatz erzeugen* und *Kugellager
+einsetzen* tragen ihren Titel. Im Menü *Erzeugen* heißt der Skizzeneintrag *Zeichnen …*
+wie der Knopf, und *Modell einfügen …* ist dieselbe `QAction` wie in *Datei*. Startknöpfe
+und Leiste hießen seit RM-515 schon gleich. Regeln: `grenzen.md` („Ein Text, eine
+Wirkung“), `uebersetzung.md`, Bauplan nur im Titel *In Einzelteile aufteilen*.
+**Entschieden (Robert, 06.10.2026):** der Bauplan trägt den neuen Titel, und die
+Operation heißt *An Ebene teilen*.
+
+**Nachweis:** `test_registry_consistency.py::test_every_way_to_split_says_teilen` (am
+Stand davor rot: „trennen“, „zerlegen“), `test_operation_ui.py::test_every_accept_button_names_what_the_click_does`
+(Registertest über alle Knopftexte), `test_translations.py` (kein Werkzeug teilt seinen
+Namen mit einer Operation, in sechs Sprachen). Fenstertests, offscreen per Sonde grün,
+beim Release im Fensterlauf: `test_interface_limits.py::test_no_menu_text_stands_for_two_actions`
+(am Stand davor rot: „Modell einfügen“ zweimal, „Automatisch teilen“ im Menü),
+`test_header.py::test_the_printer_button_has_one_name_seen_and_read`,
+`test_selection_operations.py::test_auto_split_stands_with_the_other_ways_to_split`.
+Die Handbuchseiten und Bilder ziehen mit `/erzeugen` beim Release nach
+(`test_every_manual_paragraph_reaches_the_generated_page`). Changelog: ja — einheitliche
+Namen, *Automatisch teilen* rechts in der Auswahl, *Druckeinstellungen …* in der Kopfzeile.
+
+## RM-512: Im Ruhezustand leuchtet nur Bausteine, und Rot trägt nur das Verwerfen (06.10.2026)
+
+<a id="rm-512-im-ruhezustand-leuchtet-nur-bausteine-und-rot-trägt-nur-das-verwerfen-06102026"></a>
+<a id="rm-512"></a>
+
+**RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Im Ruhezustand des Hauptfensters leuchten sechs Akzente: Bernsteinkanten an linker
+  und rechter Karte, Werkzeugzeile und Reiter, dazu *Bausteine*, die vorgewählte
+  Hinweiszeile und ihr Hauptknopf „Diesen Schritt ändern“. Der Wächter
+  `test_resting_state.py` zählt keine Linien. Dialoge zeigen zwei Hauptknöpfe, sobald ein
+  Hinweis mit Handlung erscheint (57 Handlungen tragen `primary`); Rot tragen zwei
+  „Abbrechen“, „Verwerfen“ ist Hauptknopf; im Chat ist „Übernehmen“ kein Hauptknopf; in
+  der Tour ist „Schritt überspringen“ einer.
+  **Fix:** Kartenränder in der Linienfarbe; vorgewählt werden nur Fehler und Warnungen;
+  Hinweishandlungen im Dialog als normale Knöpfe; `make_danger` genau am
+  unwiederbringlichen Verwerfen, nie mit `make_primary`; Chat-Übernehmen
+  `make_primary`, Überspringen flach. Der Wächter zählt Akzentlinien ab 40 px mit.
+  **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
+  Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
+  mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
+
+**Umsetzung:** Kartenränder (`overlay.card_stylesheet`) in der Linienfarbe, der aktive Reiter
+mit einer Kante in der Schriftfarbe statt `accent_line`; im Ruhezustand leuchtet nur *Bausteine*
+(Roberts Hauptknopf ohne Auswahl). `ReportPanel._preselect` wählt nur Fehler und Warnungen
+vor. Hinweishandlungen (`ErrorNotice`, Rat und Übermaß im Druckdialog) sind normale Knöpfe,
+die empfohlene vorn; wer führt, sagt `style.leading_action` an allen vier Stellen, und
+`make_primary(button, leading=False)` gibt den Hauptknopf samt Halbfett ab. Jeder
+`DestructiveRole`-Knopf trägt `make_danger`, nie zugleich `make_primary`, gesperrt grau; die
+Rückfragen vor Verwerfen und Schritt löschen haben keinen Hauptknopf, Fokus und Escape auf
+*Abbrechen*. *Abbrechen* ist nirgends rot. **Entschieden (Robert, 06.10.2026):** RM-512 löst
+das rote *Abbrechen* vom 11.09. ab. Im Chat ist *Übernehmen* Hauptknopf, in der Tour *Weiter*
+beim Leseschritt, *Schritt überspringen* ein normaler Knopf. Regel `fenster.md` („Der
+Hauptknopf“), Begründungen in `konzepte/begruendungen/regel-fenster.md`. Commits `14d115582`,
+`eddac1b16`, `6ddad320f`.
+
+**Nachweis:** `test_resting_state.py` zählt neben Flächen jeden Strich in `highlight` oder
+`accent_line` ab 40 px am ganzen Fenster, hell und dunkel, ohne und mit Hinweis, und verlangt
+genau *Bausteine*; am Stand `65e3ec97b` rot mit vier bzw. fünf Elementen, die Gegenprobe sieht
+Fläche und Linie in beiden Themen. `test_style.py` hält fensterlos `DestructiveRole` ↔
+`make_danger`, nie rot und Hauptknopf zugleich (auch über `setDefaultButton`), kein rotes
+Abbrechen oder Schließen, Hauptknopf aus `Action.primary` nur in `show_error` und
+`_show_offers`, gesperrt rot gleich gesperrt normal, `leading_action` und die Abgabe des
+Halbfetts; die Wächter sichern ihre Grundmenge zu. `test_enter_key.py`: Leertaste verwirft
+nichts ohne Wahl. Review (solidon3d-review) in zwei Durchgängen, Urteil „kann rein“.
+Fenstertests offscreen per Sonde grün, im Release-Tor offen; am echten Fenster beim Release
+ansehen: Kontrast der grauen Kartenränder über dem Modell (dunkel 2,30, hell bis 1,73 gegen
+den Verlauf), Reiterkante, HiDPI (RM-213). Changelog: ja — ruhigere Oberfläche, ein
+Hauptknopf je Dialog, Rot nur beim Verwerfen.
+
+## RM-519: Linke Karten und Zeichenmodus zeigen nur, was gerade gilt (06.10.2026)
+
+<a id="rm-519-linke-karten-und-zeichenmodus-zeigen-nur-was-gerade-gilt-06102026"></a>
+<a id="rm-519"></a>
+
+**RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
+  Unter den Parameterfeldern steht „Eine feste Zahl passt“ / „2 feste Zahlen passen“
+  und liest sich wie die Überschrift der nächsten Zeile; die Filamentspalte des
+  Objektbaums ist abgeschnitten („Fila“) und ihre Felder wirken wie Haken; im Verlauf
+  springt die Nummer an einer Gruppenzeile, „Als Dreiecksmodell rechnen“ steht im
+  Kontextmenü an zweiter Stelle. Im Zeichenmodus zeigt das Auswahlfenster nichts
+  Brauchbares, die Bedingungsliste spricht Fachsprache, und die Einladung der leeren
+  Szene liegt über der Skizze.
+  **Fix:** Die Hinweiszeile entfällt bei verwendeten Maßen, die Zahl steht am Bindeknopf
+  („6 Zahlen an Maße binden …“), nur „Nicht verwendet“ bleibt; Spulensymbol als
+  Spaltenkopf, runder Farbpunkt; Gruppenzeile trägt „3–4“, Kernwechsel hinter einem
+  Trennstrich; im Zeichenmodus Dock und Einladung verborgen, Bedingungen nur des
+  gewählten Elements mit Zählzeile.
+  **Abnahme:** Im Zustand von main-window.png vier Parameterzeilen ohne Untertext; in
+  sechs Sprachen nichts abgeschnitten im Objektbaum; jede Schrittnummer sichtbar;
+  Neues Projekt → Zeichnen ohne Einladung und Dock, höchstens drei Bedingungszeilen.
+
+**Umsetzung:** Parameterkarte: Unter einer Zeile steht nur noch „Nicht verwendet“; die Zahl
+passender fester Zahlen steht am Bindeknopf (`panels.binding_button_text`: „Eine Zahl an ein
+Maß binden …“ / „6 Zahlen an Maße binden …“), wo sie stehen, sagt die Kurzhilfe der Zeile samt
+Knopf; Palette und Dialog heißen wie der Knopf. Objektbaum: Der Kopf der Filamentspalte trägt
+das Symbol `spool`, das Wort nur Kurzhilfe und Lesername; `filament_chip` malt einen runden
+Punkt, ohne eigenes Filament mit gestricheltem Rand statt eines leeren Kästchens (Regel 18). Die
+Maßspalte bekommt mindestens ihre Überschrift, und der Baum teilt die Spalten neu, sobald er
+selbst seine Breite hat (`_ObjectTreeView.resized`; beim ersten Zeigen stand die Maßspalte sonst
+auf 25 Punkten). Verlauf: Eine Gruppenzeile trägt die Spanne ihrer Schritte (`panels.step_span`,
+„2–3“, nach Verschieben „2–3, 6“), die zugeklappte Löschgruppe die Nummern, die sie verbirgt
+(„mit 2 Schritten: 4–5“); das Kontextmenü entsteht in `HistoryPanel.context_menu`, der
+Kernwechsel steht zuletzt hinter einem Trennstrich. Zeichenmodus: Der Reiter *Auswahl* ist für
+die Dauer der Skizze verborgen und kommt danach zurück; `_SelectionPage.reveal` holt keinen
+verborgenen Reiter. Die Einladung der leeren Szene steht nicht über Skizze, offenem
+Operationsdialog oder Vorschau (`_show_invitation`). Die Bedingungsliste zeigt nur, was an
+gewählten Punkten hängt, dazu jeden Widerspruch; die Zählzeile darüber nennt die Gesamtzahl in
+zwei Sätzen (`sketch_editor.constraint_count_text`), ihre Breite hängt nicht am Text, sonst
+zoomte der Skizzendialog bei jedem Klick. „Deckung“ heißt *Verbunden*, in Knopf, Liste,
+Handbuchkapitel *Zeichnen* (sechs Sprachen) und Abbildung; Portugiesisch *Coincidente* wie in
+den Sketcher-Katalogen von FreeCAD (pt-PT und pt-BR), „Ligado“ hieße auf dem Umschaltknopf
+„eingeschaltet“. Mitbehoben: Der Doppelklick auf eine Maßkarte meldete einen Bedingungsindex,
+den das Panel als Listenzeile las; `change_constraint_value` nimmt jetzt den Index. Regeln in
+`vorderseite.md` („Die linken Karten zeigen nur, was gilt“), `zeichenflaeche.md` und
+`fenster.md` (Einladung), Begründungen in `konzepte/begruendungen/`. Commits `73c0993e2`,
+`18798029f`, `0e8de8334`, `6cd449a1d`, `9bd08446e`, `ca27aa9a7`.
+
+**Nachweis:** Ohne Fenster `test_the_bind_button_names_how_many_numbers_it_binds`,
+`test_a_step_span_names_the_numbers_of_a_group`,
+`test_the_count_line_says_how_many_constraints_there_are`. Fenstertests (Release, offscreen per
+Sonde grün): `test_the_box_with_lid_shows_its_four_measures_without_a_line_below` (Abnahme am
+Projekt von main-window.png), `test_the_object_tree_cuts_no_heading_in_any_language` (sechs
+Sprachen), `test_the_filament_dot_is_round_and_says_without_colour_whether_it_was_chosen`,
+`test_the_history_counts_through_a_group_and_keeps_the_kernel_switch_last`,
+`test_the_history_folds_removed_steps_under_their_removal`,
+`test_drawing_in_a_new_project_hides_the_invitation_and_the_selection_tab` (ohne Auswahl keine
+Bedingungszeile, mit gewählter Seite genau ihre Bedingungen; die Abnahme „höchstens drei“ gilt
+damit im Bildzustand ohne Auswahl), `test_choosing_a_line_does_not_zoom_the_sketch_dialog`,
+`test_the_constraint_list_shows_only_what_hangs_on_the_selection`,
+`test_leaving_the_sketch_brings_back_the_selection_tab_it_hid`,
+`test_a_double_click_on_a_measure_card_opens_its_value`. Review (solidon3d-review) in drei
+Durchgängen, Urteil „kann rein“. Am echten Fenster beim Release ansehen: Spule, Farbpunkt und
+Zählzeile in beiden Themen und auf HiDPI (RM-213); Handbuchseite, Abbildung `sketch-editor`,
+`main-window.png`, `sketch-mode.png` und `guide-draw-and-pull-4/-6` entstehen dann neu.
+Changelog: ja — Parameterkarte ohne Untertext, Zahl am Bindeknopf; Filamentspalte mit Spule und
+rundem Farbpunkt; durchgehende Schrittnummern im Verlauf; im Zeichnen weder Einladung noch
+Reiter Auswahl, die Bedingungen der Auswahl mit ihrer Zahl, „Verbunden“ statt „Deckung“.
+
+## CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)
+
+<a id="ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026"></a>
+<a id="ci-testlaufzeiten"></a>
+
+**CI-Testlaufzeiten — vollständige Prüfungen früher abschließen.**
+  Verbindliches [Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md), vor
+  Umsetzung erstellt: CI-01 bis CI-08 schützen Auswahl, Prozessisolation,
+  Plattformumfang, Paketfreigabe und Berichte. Umsetzung: unabhängige Kern- und
+  Fensterjobs, Versionswächter als Handstart-Opt-in, gebündelte Quellprüfungen
+  und Bausteinvorbereitung sowie thematische UI-Tests. Durchsicht 24.09.2026:
+  Kernsuite in drei Teilen je Plattform (`--ci-shard`, `tools/ci_shards.py`,
+  Kerntabelle aus einem lokalen JUnit-Lauf), drei Windows-Fenstergruppen,
+  Prüfausgabe wieder im CI-Protokoll und Schrittbericht, und der längste
+  Kernfall behoben: `test_seal_geometry[12.0]` 319 s → 24–34 s über die
+  räumliche Vorauswahl der Wandmessung (Konzept §4.4). Gemessener
+  CI-Zeitgewinn und die erste Kerntabelle aus CI-Berichten
+  (`tools/ci_shards.py core …`) stehen aus; die Kerntabelle
+  `tests/data/ci_core_durations.json` stammt noch aus einem lokalen Lauf vom 29.09. Offen
+  außerdem das Blättern in `tools/windows_signed_installer.py`, bevor ein Lauf 100 Artefakte
+  erreicht (Taglauf 0.5.3: 31). Erledigt sind seither der räumliche Index der Wandmessung
+  (`7e3442623`) und die Kandidaten `test_bore_mouth_resize`/`test_bore_floor_resize`
+  (`68cd2ef6f`), beide unten.
+
+  **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Der räumliche Index steht — ein Baum
+  aus Hüllquadern in `mesh.ray_hits_batch`, bitgleich zum Vollvergleich, Vollkugel mit
+  12 800 Dreiecken 31 → 0,5 s (`7e3442623`). Die beiden langsamsten Kernfälle liefen
+  über doppelte Mantelpunkte in `features._distinct_points` (134 Mio. Punktpaare):
+  `test_bore_mouth_resize…` 83,2 → 28,4 s, `test_bore_floor_resize…` 61,4 → 26,3 s
+  (`68cd2ef6f`). Das lokale Tor verteilt wie die CI mit `--dist worksteal`, 850 → 587 s
+  im Median, dieselben 17 166 Fälle (`c28e02c86`). CI-01 bis CI-07 sind im Code und an
+  der echten Sammlung erfüllt (die drei Kernteile sammeln zusammen 17 191 Fälle, keiner
+  doppelt, keine Datei in zwei Teilen).
+
+  **Releaselauf 0.5.1:** Der erfolgreiche
+  [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
+  vom 28.09.2026 enthält die neue Aufteilung: neun Kernjobs auf drei Plattformen,
+  drei plattformübergreifende Fensterverträge und drei Windows-Fenstergruppen.
+  Letztere liefen 18:36, 17:59 und 18:32 Minuten (Gruppen 0, 1, 2).
+  **CI-08 bleibt offen:** Den Gewinn gegenüber einem vergleichbaren Ausgangslauf
+  anhand der Testbestände, Berichte und Laufzeiten auswerten; ein grüner Lauf allein
+  belegt ihn nicht. Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
+
+  **Releaselauf 0.5.3:** Im ersten Versuch des Taglaufs 37409338027 riss die
+  Windows-Fenstergruppe 0 an der festen 900-s-Grenze. `c379d5271` schreibt die
+  Fenstertabelle `tests/data/ci_window_durations.json` aus den Windows-Berichten dieses
+  Taglaufs neu (`test_ui.py` 838 s statt der 665 s von vor seiner Aufteilung) und gibt jeder
+  Datei ein eigenes Budget (`tools/run_suite_isolated.py`, `BUDGET_HEADROOM = 1.5`,
+  `file_budget`).
+
+**Nachweis (06.10.2026):** **CI-08** steht als §7 im
+[Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md): Bei gleicher Runnerzeit (154 gegen 156
+min) kamen alle Testergebnisse im Taglauf 0.5.1 (36454861126) nach 18,6 statt 78,8 min wie in
+0.5.0 (35982366247), bei 7,5 Prozent mehr Kernfällen; seither wuchs der Bestand um ein Drittel
+und die Wartezeit auf 28 bis 30 min (0.5.2, 0.5.3). **Die Kerntabelle**
+`tests/data/ci_core_durations.json` ist aus den Windows-Kernberichten des Taglaufs 37409338027
+(0.5.3) geschrieben; außerhalb der Stichprobe gemessen liegt der längste Teil bei 47,1 min und
+die Teile höchstens 2,2 min auseinander, mit der lokalen Tabelle waren es 53,6 und 11,7 min.
+**Das Blättern:** `sign_release.paged_listing` liest GitHub-Listen über alle Seiten, verlangt
+auf jeder Seite dieselbe Gesamtzahl und hält sonst fail-closed an;
+`tools/windows_signed_installer.py` liest so die Artefakte, `sign_release` die Jobs eines rot
+beendeten Hauptbaus, mit Tests für ein Archiv und einen roten Pflichtjob hinter dem hundertsten
+Eintrag. Regel `auslieferung.md` und ihre Begründung nachgezogen. Zwei Reviews mit Nachprüfung
+(06.10.2026). Die Ausweitung der Fenster- und Renderergruppe auf alle Paketplattformen führt
+[RM-531](ROADMAP.md#rm-531).
 
 ## RM-413: Ein fremdes Teil in einer Bohrung wird nicht mehr still verschmolzen (06.10.2026)
 
