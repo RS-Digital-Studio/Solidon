@@ -538,7 +538,9 @@ def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:
     assert transport.calls == []
 
 
-@pytest.mark.parametrize("stage", ("before_headers", "http10", "connection_close", "keep_alive"))
+@pytest.mark.parametrize(
+    "stage", ("before_headers", "http10", "connection_close", "keep_alive", "late_body")
+)
 def test_a_blocking_local_ollama_request_can_be_cancelled(
     monkeypatch: pytest.MonkeyPatch, stage: str
 ) -> None:
@@ -548,6 +550,12 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
     wartende Faden weckte das blockierte ``recv`` mit ``shutdown``, und das
     kam dort nicht sicher an. Seitdem bemerkt der Lesefaden den Abbruch selbst
     (:func:`test_a_cancelled_read_ends_without_anyone_waking_it`).
+
+    Schickt die Gegenstelle noch etwas, nachdem der Aufrufer geschlossen hat,
+    sieht sie das Ende als Reset statt als geordnetes Ende — auch das ist der
+    Abbruch. Auf macOS lag es am Zufall der Fadenfolge, ob das Stück der Antwort
+    vor oder nach dem Schließen ankam; ``late_body`` stellt die zweite Folge
+    fest her.
     """
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
@@ -555,6 +563,7 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
     started = threading.Event()
     disconnected = threading.Event()
     release_response = threading.Event()
+    client_gone = threading.Event()
     read_limited = llm.read_limited
 
     def read_response(response: Any, **kwargs: Any) -> bytes:
@@ -578,12 +587,21 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
                 if stage == "connection_close":
                     self.send_header("Connection", "close")
                 self.end_headers()
-                self.wfile.write(b"{")
-                self.wfile.flush()
+                if stage != "late_body":
+                    self.wfile.write(b"{")
+                    self.wfile.flush()
             self.connection.settimeout(2.0)
             try:
+                if stage == "late_body":
+                    client_gone.wait(3.0)
+                    self.wfile.write(b"{")
+                    self.wfile.flush()
                 if not self.connection.recv(1):
                     disconnected.set()
+            except ConnectionError:
+                # Auch ein Reset ist das Ende der Leitung: Kommt Antwort nach dem
+                # Schließen an, beantwortet der Kern des Aufrufers sie mit RST.
+                disconnected.set()
             except TimeoutError:
                 pass
             release_response.wait(3.0)
@@ -625,6 +643,7 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
         assert len(requests) == 1
         token.cancel()
         worker.join(1.0)
+        client_gone.set()
 
         assert not worker.is_alive(), "der lokale HTTP-Aufruf läuft trotz Abbruch weiter"
         assert len(errors) == 1 and isinstance(errors[0], OperationCancelled)
