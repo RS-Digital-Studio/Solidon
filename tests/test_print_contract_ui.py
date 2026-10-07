@@ -1258,10 +1258,22 @@ def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_ap
         assert panel.finding_consequence.isVisible(), "Voraussetzung: der Fehler hat eine Folge"
 
         held = panel.list.item(0)
+        from app.ui import panels as panels_module
+
+        drawn: list[str] = []
+        real_icon = panels_module.icon
+
+        def noting(name: str, *args: object, **kwargs: object) -> object:
+            drawn.append(name)
+            return real_icon(name, *args, **kwargs)
+
+        panels_module.icon = noting
         panel.set_running(True)
         qt_app.processEvents()
         assert panel.summary.text() == "Übergabe nicht empfohlen", "unter 0,2 s bleibt es ruhig"
         QTest.qWait(DELAY_MS + 150)
+        panels_module.icon = real_icon
+        assert "running" in drawn, "der Kopf zeigt die Uhr, nicht das Fehlersymbol"
 
         assert panel.running()
         assert panel.summary.text() == "Wird neu berechnet …"
@@ -1320,6 +1332,55 @@ def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_ap
         panel.set_running(False)
         assert panel.list.item(0) is held
         assert not held.text().startswith("Voriger Stand"), held.text()
+    finally:
+        host.close()
+        host.deleteLater()
+
+
+def test_a_menu_opened_before_the_run_does_nothing_after_it(qt_app, monkeypatch):
+    """RM-534: Beginnt der Laufzustand, während das Kontextmenü offen ist, wirkt die Wahl nicht.
+
+    Die Einträge waren beim Öffnen frei; gewählt wurde nach Beginn des Laufs,
+    und die Handlung traf den Befund des vorigen Stands.
+    """
+    from PySide6.QtWidgets import QMenu, QVBoxLayout, QWidget
+
+    from app.ui import panels
+
+    ran: list[object] = []
+
+    class Host(QWidget):
+        def error_handlers(self):
+            return {"arrange_on_bed": lambda error: ran.append(error)}
+
+    host = Host()
+    QVBoxLayout(host).addWidget(panel := ReportPanel(host))
+    stale = Finding("arrange.collision", "error", "Zwei Körper überschneiden sich.", object_id="a")
+    try:
+        panel.show_result(
+            EvaluationResult(
+                Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((stale,)))
+            )
+        )
+        host.show()
+        qt_app.processEvents()
+        item = panel.list.item(0)
+        place = panel.list.visualItemRect(item).center()
+        opened: list[bool] = []
+
+        class RunStartsWhileOpen(QMenu):
+            """Ein Menü, während dessen der Lauf beginnt (``QMenu.exec`` hält offscreen an)."""
+
+            def exec(self, *_args: object) -> object:
+                opened.append(all(action.isEnabled() for action in self.actions()))
+                panel._show_running(True)
+                return self.actions()[0]
+
+        monkeypatch.setattr(panels, "QMenu", RunStartsWhileOpen)
+        panel._on_menu(place)
+
+        assert opened == [True], "Voraussetzung: beim Öffnen war der Eintrag frei"
+        assert ran == [], "die Handlung traf den Befund des vorigen Stands"
     finally:
         host.close()
         host.deleteLater()

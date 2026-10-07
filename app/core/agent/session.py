@@ -1098,6 +1098,8 @@ class AgentSession:
             sources=self.sources,
             ask=lambda question, options: self.ask(question, list(options)),
             cache=self.cache,
+            # Der Agent prüft jeden Schritt wie das Fenster danach (RM-534).
+            full_chain_when_stuck=True,
         )
 
     def _origin(self, active: rules.RuleSet) -> Origin:

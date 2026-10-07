@@ -440,6 +440,85 @@ def _graph() -> Any:
     return graph
 
 
+def _voxel_parts() -> Any:
+    """``trimesh`` mit Rasterung und Marching Cubes für :func:`voxel`.
+
+    Ein kleiner Probelauf statt einer Importliste: Was ``voxelized``,
+    ``fill`` und ``matrix_to_marching_cubes`` unterwegs nachladen (``scipy``,
+    ``skimage``), steht in keinem Kopf, und nachgeladen in zurückgestellter
+    Klasse verhungerte es (RM-380, :data:`PREPARATIONS`).
+    """
+    import trimesh
+    import trimesh.voxel.ops
+
+    probe = trimesh.creation.box(extents=(1.0, 1.0, 1.0)).voxelized(pitch=0.5).fill()
+    trimesh.voxel.ops.matrix_to_marching_cubes(matrix=np.asarray(probe.matrix), pitch=0.5)
+    return trimesh
+
+
+def _rasterised(body: Any, origin: np.ndarray, pitch: float, shape: tuple[int, ...]) -> np.ndarray:
+    """Legt einen Körper auf das gemeinsame Raster."""
+    grid = body.voxelized(pitch=pitch).fill()
+    offset = np.round((np.asarray(grid.transform)[:3, 3] - origin) / pitch).astype(int)
+    target = np.zeros(shape, dtype=bool)
+    source = np.asarray(grid.matrix, dtype=bool)
+
+    starts = np.maximum(offset, 0)
+    ends = np.minimum(offset + np.array(source.shape), np.array(shape))
+    if np.any(ends <= starts):
+        return target
+
+    target_slice = tuple(slice(int(a), int(b)) for a, b in zip(starts, ends, strict=True))
+    source_slice = tuple(
+        slice(int(a - o), int(b - o)) for a, b, o in zip(starts, ends, offset, strict=True)
+    )
+    target[target_slice] = source[source_slice]
+    return target
+
+
+def voxel(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> Outcome:
+    """Stufe 4 der Booleschen Kette (``boolean._voxel``) über ``bodies`` Körper.
+
+    Raster (``low``, ``pitch``, ``shape0`` bis ``shape2``) und Budget
+    entscheidet der Aufrufer. ``outcome`` ist ``"empty"``, wenn keine Zelle
+    bleibt, sonst ``"mesh"`` mit ``vertices``, ``faces`` und ``normals`` aus
+    Marching Cubes, aufs Raster zurückgeschoben.
+    """
+    trimesh = _voxel_parts()
+    count = int(values["bodies"])
+    kind = str(values["kind"])
+    pitch = float(values["pitch"])
+    shape = tuple(int(values[f"shape{axis}"]) for axis in range(3))
+    low = np.asarray(arrays["low"], dtype=np.float64)
+    combined: np.ndarray | None = None
+    for index in range(count):
+        check()
+        body = trimesh.Trimesh(
+            vertices=arrays[f"vertices{index}"], faces=arrays[f"faces{index}"], process=False
+        )
+        cells = _rasterised(body, low, pitch, shape)
+        if combined is None:
+            combined = cells
+        elif kind == "union":
+            combined = combined | cells
+        elif kind == "difference":
+            combined = combined & ~cells
+        else:
+            combined = combined & cells
+    check()
+    if combined is None or not combined.any():
+        return {}, {"outcome": "empty"}
+    built = trimesh.voxel.ops.matrix_to_marching_cubes(matrix=combined, pitch=pitch)
+    # matrix_to_marching_cubes legt Zelle (0,0,0) an den Ursprung; aufs Raster
+    # zurückschieben.
+    built.apply_translation(low)
+    return {
+        "vertices": np.array(built.vertices, dtype=np.float64, order="C", copy=True),
+        "faces": np.array(built.faces, dtype=np.int64, order="C", copy=True),
+        "normals": np.array(built.vertex_normals, dtype=np.float64, order="C", copy=True),
+    }, {"outcome": "mesh"}
+
+
 def slice_sections(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> Outcome:
     """Gerichtete Schichtschnitte eines unverändert übernommenen Volumens.
 
@@ -488,6 +567,7 @@ JOBS: Final[dict[str, Callable[[Mapping[str, np.ndarray], Values, Check], Outcom
     "simplify_closed": simplify_closed,
     "min_gap": min_gap,
     "component_labels": component_labels,
+    "voxel": voxel,
 }
 
 #: Was eine Rechnung nachlädt, bevor sie rechnet — der Hilfsprozess ruft es nach
@@ -504,7 +584,10 @@ JOBS: Final[dict[str, Callable[[Mapping[str, np.ndarray], Values, Check], Outcom
 #: schon geladen.
 #: ``test_a_job_gives_the_same_bytes_in_the_helper_as_here`` verlangt von jeder
 #: Rechnung, dass sie zurückgestellt kein Modul mehr nachlädt.
-PREPARATIONS: Final[dict[str, Callable[[], object]]] = {"component_labels": _graph}
+PREPARATIONS: Final[dict[str, Callable[[], object]]] = {
+    "component_labels": _graph,
+    "voxel": _voxel_parts,
+}
 
 
 # --- Felder im gemeinsamen Speicher -------------------------------------------------

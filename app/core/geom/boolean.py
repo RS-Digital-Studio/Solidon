@@ -249,6 +249,10 @@ def boolean(
             values={"location": met},
         )
     attempted: list[SolverStage] = []
+    cut_short = False
+    """Ob die Güte die Kette beendet hat — nicht eine ausdrücklich verlangte Stufenfolge."""
+    transient = False
+    """Ob eine Stufe am Speicher scheiterte; ihr Ausfall sagt nichts über die Eingabe."""
     emptied = False
     """Ob eine Stufe sauber gerechnet hat und dabei nichts übrig blieb.
 
@@ -266,6 +270,7 @@ def boolean(
         # davon, rechnet der Entwurf dasselbe wie die feine Rechnung, und die
         # Auswertung weiß, dass der Export nicht nachrechnen muss.
         if stages is None and stage not in DRAFT_CHAIN and quality != "fine":
+            cut_short = True
             break
         # Zwischen den Stufen, nicht mittendrin: eine Stufe ist ein nativer
         # Aufruf und kooperativ nicht zu unterbrechen — aber vier Versuche
@@ -291,6 +296,7 @@ def boolean(
             raise
         except Exception as problem:  # Kerne scheitern auf kerneigene Arten
             _log.warning("boolean stage %s failed: %s", stage, problem)
+            transient = transient or isinstance(problem, MemoryError)
             continue
         if result is None or not _plausible(result, allow_empty):
             if result is not None and result.triangle_count == 0:
@@ -348,6 +354,8 @@ def boolean(
             ),
             attempted=tuple(attempted),
             seed=seed,
+            cut_short=cut_short,
+            transient=transient,
         )
     if emptied:
         # Hier ist die Kette wirklich zu Ende, und dann sagt „nichts übrig"
@@ -366,6 +374,8 @@ def boolean(
             suggestions=(CORRECT_INPUT, CANCEL),
             attempted=tuple(attempted),
             seed=seed,
+            cut_short=cut_short,
+            transient=transient,
         )
     raise BooleanFailedError(
         detail=_(
@@ -374,6 +384,8 @@ def boolean(
         ),
         attempted=tuple(attempted),
         seed=seed,
+        cut_short=cut_short,
+        transient=transient,
     )
 
 
@@ -713,7 +725,7 @@ def _run_stage(
     if stage == "jittered":
         disturbed = [_jitter(mesh, seed, index) for index, mesh in enumerate(meshes)]
         return _kernel(kind, [mesh.raw for mesh in disturbed], meshes[0], cancelled)
-    return _voxel(kind, meshes)
+    return _voxel(kind, meshes, cancelled)
 
 
 def _welded_input(mesh: MeshData) -> MeshData:
@@ -872,12 +884,21 @@ def _jitter(mesh: MeshData, seed: int | None, index: int) -> MeshData:
     return mesh.replacing(body)
 
 
-def _voxel(kind: BooleanKind, meshes: list[MeshData]) -> MeshData | None:
+def _voxel(
+    kind: BooleanKind, meshes: list[MeshData], cancelled: CancelToken | None = None
+) -> MeshData | None:
     """Stufe 4: die Frage auf einem Raster entscheiden, die Antwort neu
     vernetzen.
 
     Robust, wo die Topologie es nicht ist, und es kostet Genauigkeit — darum
     sagt der Bericht es jedes Mal, wenn diese Stufe benutzt wurde (§17.3).
+
+    **Gerechnet wird in ``kernel_jobs.voxel``**, an einem großen Raster im
+    Hilfsprozess: Rasterung und Marching Cubes halten den Interpreter
+    Sekunden an und ließen sich im Prozess nicht abbrechen — am Quader 40 mm
+    mit überdeckender Bohrung 20 s, und ein neuer Lauf wartete so lange
+    (RM-534). Ein Abbruch beendet jetzt den Hilfsprozess (§15.6). Raster und
+    Budget entscheidet diese Seite.
     """
     diagonal = max(mesh.bounds.diagonal for mesh in meshes)
     pitch = max(diagonal * VOXEL_PITCH_RELATIVE, 0.05)
@@ -916,47 +937,33 @@ def _voxel(kind: BooleanKind, meshes: list[MeshData]) -> MeshData | None:
         )
         return None
 
-    combined = _rasterise(meshes[0], low, pitch, shape)
-    for mesh in meshes[1:]:
-        other = _rasterise(mesh, low, pitch, shape)
-        if kind == "union":
-            combined = combined | other
-        elif kind == "difference":
-            combined = combined & ~other
-        else:
-            combined = combined & other
-
-    if not combined.any():
+    arrays: dict[str, np.ndarray] = {"low": np.asarray(low, dtype=np.float64)}
+    for index, mesh in enumerate(meshes):
+        arrays[f"vertices{index}"] = np.asarray(mesh.raw.vertices)
+        arrays[f"faces{index}"] = np.asarray(mesh.raw.faces)
+    arrays_out, reported = kernel_process.run(
+        "voxel",
+        arrays,
+        {
+            "bodies": len(meshes),
+            "kind": kind,
+            "pitch": pitch,
+            **{f"shape{axis}": shape[axis] for axis in range(3)},
+        },
+        weight=cells,
+        cancelled=cancelled,
+    )
+    if reported["outcome"] == "empty":
         # Leer, und Marching Cubes hat nichts zum Ablaufen. Wie bei den
         # Kernstufen: der leere Körper geht weiter, _plausible urteilt.
         return meshes[0].replacing(trimesh.Trimesh())
-    body = trimesh.voxel.ops.matrix_to_marching_cubes(matrix=combined, pitch=pitch)
-    # matrix_to_marching_cubes legt Zelle (0,0,0) an den Ursprung; aufs Raster
-    # zurückschieben.
-    body.apply_translation(low)
-    return meshes[0].replacing(body)
-
-
-def _rasterise(
-    mesh: MeshData, origin: np.ndarray, pitch: float, shape: tuple[int, ...]
-) -> np.ndarray:
-    """Legt einen Körper auf das gemeinsame Raster."""
-    grid = mesh.raw.voxelized(pitch=pitch).fill()
-    offset = np.round((np.asarray(grid.transform)[:3, 3] - origin) / pitch).astype(int)
-    target = np.zeros(shape, dtype=bool)
-    source = np.asarray(grid.matrix, dtype=bool)
-
-    starts = np.maximum(offset, 0)
-    ends = np.minimum(offset + np.array(source.shape), np.array(shape))
-    if np.any(ends <= starts):
-        return target
-
-    target_slice = tuple(slice(int(a), int(b)) for a, b in zip(starts, ends, strict=True))
-    source_slice = tuple(
-        slice(int(a - o), int(b - o)) for a, b, o in zip(starts, ends, offset, strict=True)
+    body = trimesh.Trimesh(
+        vertices=arrays_out["vertices"],
+        faces=arrays_out["faces"],
+        vertex_normals=arrays_out["normals"],
+        process=False,
     )
-    target[target_slice] = source[source_slice]
-    return target
+    return meshes[0].replacing(body)
 
 
 def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:

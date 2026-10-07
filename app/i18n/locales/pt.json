@@ -2444,6 +2444,7 @@
   "Die neue Tiefe vom Rand bis zum Boden. Der Boden wandert, der Rand bleibt. Null behält das gemessene Maß.": "A nova profundidade da borda ao fundo. O fundo desloca-se, a borda fica. Zero mantém o valor medido.",
   "Die nötige Wandstärke hängt von Material, Druckeinstellungen und Belastung ab.": "A espessura necessária depende do material, das definições e da carga.",
   "Die obere Schale nimmt die Muttern auf.": "A carcaça superior recebe as porcas.",
+  "Die schnelle Vorschau kommt hier nicht durch. Übernehmen rechnet den Schritt vollständig.": "A pré-visualização rápida não consegue passar aqui. Aplicar calcula o passo por completo.",
   "Die sichere Deaktivierungsanfrage ließ sich nicht speichern. Der Rechner bleibt aktiviert; wählen Sie einen beschreibbaren Profilordner.": "Não foi possível guardar o pedido de desativação segura. O computador permanece ativado; escolha uma pasta de perfil com permissão de escrita.",
   "Die signierten Aktivierungsdaten haben den falschen Aufbau.": "A estrutura dos dados de ativação assinados não é válida.",
   "Die signierten Aktivierungsdaten sind unvollständig.": "Os dados de ativação assinados estão incompletos.",

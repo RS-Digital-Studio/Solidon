@@ -2444,6 +2444,7 @@
   "Die neue Tiefe vom Rand bis zum Boden. Der Boden wandert, der Rand bleibt. Null behält das gemessene Maß.": "The new depth from rim to floor. The floor moves, the rim stays. Zero keeps the measured size.",
   "Die nötige Wandstärke hängt von Material, Druckeinstellungen und Belastung ab.": "The required wall thickness depends on material, print settings and load.",
   "Die obere Schale nimmt die Muttern auf.": "The upper shell takes the nuts.",
+  "Die schnelle Vorschau kommt hier nicht durch. Übernehmen rechnet den Schritt vollständig.": "The quick preview cannot get through here. Apply calculates the step completely.",
   "Die sichere Deaktivierungsanfrage ließ sich nicht speichern. Der Rechner bleibt aktiviert; wählen Sie einen beschreibbaren Profilordner.": "The secure deactivation request could not be saved. The computer remains activated; choose a writable profile folder.",
   "Die signierten Aktivierungsdaten haben den falschen Aufbau.": "The signed activation data has an invalid structure.",
   "Die signierten Aktivierungsdaten sind unvollständig.": "The signed activation data is incomplete.",

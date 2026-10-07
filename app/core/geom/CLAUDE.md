@@ -106,8 +106,8 @@ neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
 der Aufrufer)
 
-**Hilfsprozess** — `kernel_jobs.py`: GIL-Aufrufe (`manifold3d`, `csgraph`)
-mit reinen Feldern; `JOBS` Einstieg, `serve` Helfer, `pack`/`copied` geteilter
+**Hilfsprozess** — `kernel_jobs.py`: GIL-Aufrufe (`manifold3d`, `csgraph`,
+die Voxelstufe `voxel`) mit reinen Feldern; `JOBS` Einstieg, `serve` Helfer, `pack`/`copied` geteilter
 Speicher. `_opened`: nur ENOMEM und Windows 8/14/1450/1455 werden
 `MemoryError`; ENOSPC bleibt Transfer-`OSError` und pausiert den Helfer.
 `kernel_process.py`: bitgleiches `run`, Vorrat, Abbruch/Tod/Rückfall,

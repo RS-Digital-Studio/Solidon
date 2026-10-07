@@ -794,10 +794,10 @@ def test_g13_voxel_cell_budget_does_not_overflow(monkeypatch) -> None:
     far = raw.copy()
     far.apply_translation((104857.6,) * 3)
 
-    def forbidden(*args):
+    def forbidden(*args, **kwargs):
         pytest.fail("budget must reject before raster allocation")
 
-    monkeypatch.setattr(bo, "_rasterise", forbidden)
+    monkeypatch.setattr(bo.kernel_process, "run", forbidden)
     assert bo._voxel("union", [MeshData.of(raw), MeshData.of(far)]) is None
 
 

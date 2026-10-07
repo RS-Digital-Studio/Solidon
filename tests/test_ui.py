@@ -17818,14 +17818,16 @@ def test_a_new_run_takes_the_halt_message_and_the_report_follows_it(window: Main
 def test_the_window_goes_the_full_chain_where_the_short_one_ends(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-534, Anschluss: Fenster und Schrittdialog rechnen den Schritt mit allen Stufen.
+    """RM-534, Anschluss: Das Fenster rechnet den Schritt mit allen Stufen, der Dialog sperrt nicht.
 
     Der Kern kann es; hier wird belegt, dass die Anwendung es tut. Am
     Kundenteil hielt die kurze Kette mit „… sagt erst die vollständige“, und
     keiner fragte die vollständige. Die übrigen Schritte bleiben im Entwurf —
     der Lauf ist deshalb nicht fein, und Export wie Slicer rechnen weiter nach.
     Und der Kunde änderte den Radius im Dialog: Dessen Vorschau sperrte
-    *Übernehmen* mit dem Entwurfssatz, obwohl das Fenster den Schritt rettete.
+    *Übernehmen* mit dem Entwurfssatz. Die Vorschau rechnet die volle Kette
+    nicht selbst (§17.2), sagt aber, dass *Übernehmen* es tut, und sperrt
+    nichts.
     """
     import trimesh
 
@@ -17862,10 +17864,23 @@ def test_the_window_goes_the_full_chain_where_the_short_one_ends(
     assert window.session.last_quality == "draft"
     assert not window.session.fine_current, "ein Schritt fein macht den Lauf nicht fein"
 
+    from time import monotonic, sleep
+
     window.edit_operation(drill, given={"diameter": 4.0})
     dialog = window._op_dialog
     assert dialog is not None
-    _accept_after_preview(window, dialog)
+    assert window.session.wait_for_idle(30_000)
+    deadline = monotonic() + 30
+    while monotonic() < deadline:
+        QApplication.processEvents()
+        if dialog._accept_button.isEnabled() and dialog.can_accept():
+            break
+        sleep(0.01)
+    band = window.viewport.banner.note.text()
+    assert "Übernehmen rechnet den Schritt vollständig" in band, band
+    assert dialog._accept_button.isEnabled(), "der Entwurfssatz sperrt Übernehmen nicht"
+    dialog.accept()
+    assert window._op_dialog is not dialog
     assert window.session.wait_for_idle(30_000)
     changed = window.session.last_result
     assert changed.stopped_at is None, [
@@ -17897,8 +17912,13 @@ def test_the_report_follows_a_change_during_recognition_and_a_cancelled_run(
     window._follow_the_run_in_the_report()
     assert not window.report._running_delay.isActive(), "das Bild zeigt den heutigen Stand"
 
-    session.picture_current = False
-    session.projectChanged.emit()
+    seen: list[bool] = []
+    session.projectChanged.connect(lambda: seen.append(session.picture_current))
+    monkeypatch.setattr(session, "evaluate_async", lambda: None)
+    session._changed()
+    assert seen and seen[-1] is False, (
+        "die Änderung nimmt dem Bild die Geltung, bevor das Fenster fragt"
+    )
     assert window.report._running_delay.isActive() or window.report.running(), (
         "nach der Änderung gehört das Bild zum vorigen Stand"
     )

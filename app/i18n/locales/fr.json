@@ -2444,6 +2444,7 @@
   "Die neue Tiefe vom Rand bis zum Boden. Der Boden wandert, der Rand bleibt. Null behält das gemessene Maß.": "La nouvelle profondeur du bord au fond. Le fond se déplace, le bord reste. Zéro garde la cote mesurée.",
   "Die nötige Wandstärke hängt von Material, Druckeinstellungen und Belastung ab.": "L'épaisseur nécessaire dépend du matériau, des réglages et de la charge.",
   "Die obere Schale nimmt die Muttern auf.": "La coque supérieure reçoit les écrous.",
+  "Die schnelle Vorschau kommt hier nicht durch. Übernehmen rechnet den Schritt vollständig.": "L'aperçu rapide n'aboutit pas ici. Appliquer calcule l'étape entièrement.",
   "Die sichere Deaktivierungsanfrage ließ sich nicht speichern. Der Rechner bleibt aktiviert; wählen Sie einen beschreibbaren Profilordner.": "La demande de désactivation sécurisée n'a pas pu être enregistrée. L'ordinateur reste activé ; choisissez un dossier de profil accessible en écriture.",
   "Die signierten Aktivierungsdaten haben den falschen Aufbau.": "La structure des données d'activation signées est invalide.",
   "Die signierten Aktivierungsdaten sind unvollständig.": "Les données d'activation signées sont incomplètes.",

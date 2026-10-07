@@ -6633,6 +6633,14 @@ def _drilled_box(profile: Profile) -> Any:
     return project.document
 
 
+def _window(document: Document, profile: Profile, **options: Any) -> Any:
+    """Wie Fensterlauf, Verlaufsumbau und Agent: Entwurf, und wo nur die kurze Kette ausgeht, fein.
+
+    Vorschauen rechnen ohne ``full_chain_when_stuck`` (RM-534, §17.2).
+    """
+    return evaluate(document, profile, quality="draft", full_chain_when_stuck=True, **options)
+
+
 def _asking_cut(registry: Registry, *, stages: Any = None) -> None:
     """Eine Operation, die erst fragt und dann bohrt — wie *Abdichten* (RM-534).
 
@@ -6711,20 +6719,19 @@ def test_a_draft_run_goes_the_full_chain_where_the_short_one_ends(
     Der Kunde sah „… sagt erst die vollständige“ als Fehler und nahm
     *Reparieren und erneut versuchen*, das nicht helfen konnte. Jetzt kommt
     das Ergebnis der vollen Kette, und es ist genau das der feinen Rechnung.
-    Jeder Entwurfslauf tut es, mit oder ohne Cache — Fenster, Vorschau,
-    Verlaufsumbau und Agent sagen über denselben Stand dasselbe —, und der
-    nächste trifft es im Cache.
+    Fensterlauf, Verlaufsumbau und Agent tun es, mit oder ohne Cache, und
+    der nächste Lauf trifft es im Cache.
     """
     called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     document = _drilled_box(profile)
     cache = ResultCache()
     drill = document.ops[-1].id
 
-    cold = evaluate(document, profile, quality="draft")
-    rescued = evaluate(document, profile, quality="draft", cache=cache)
+    cold = _window(document, profile)
+    rescued = _window(document, profile, cache=cache)
     fine = evaluate(document, profile, quality="fine")
     called.clear()
-    again = evaluate(document, profile, quality="draft", cache=cache)
+    again = _window(document, profile, cache=cache)
 
     assert rescued.complete, [str(finding.message) for finding in rescued.scene.report.findings]
     assert rescued.solvers[drill].strategy == "jittered", rescued.solvers[drill]
@@ -6734,7 +6741,7 @@ def test_a_draft_run_goes_the_full_chain_where_the_short_one_ends(
     assert shown.triangle_count == expected.triangle_count
     assert math.isclose(shown.volume, expected.volume, rel_tol=1e-12)
     assert cold.complete and cold.object_hashes == rescued.object_hashes, (
-        "ohne Cache sagt der Entwurf etwas anderes als mit"
+        "ohne Cache sagt der Fensterlauf etwas anderes als mit"
     )
     assert again.complete and not called, f"der zweite Lauf rechnete neu: {called}"
 
@@ -6763,11 +6770,11 @@ def test_a_rescued_step_is_kept_even_when_a_later_one_stops(
     cache = ResultCache()
     rescued = document.ops[-2].id
 
-    first = evaluate(document, profile, quality="draft", cache=cache)
+    first = _window(document, profile, cache=cache)
     assert first.stopped_at == document.ops[-1].id, "Voraussetzung: der letzte Schritt hält an"
     assert first.solvers[rescued].strategy == "jittered", "Voraussetzung: der vorige ist gerettet"
     called.clear()
-    second = evaluate(document, profile, quality="draft", cache=cache)
+    second = _window(document, profile, cache=cache)
 
     assert second.stopped_at == document.ops[-1].id
     assert "jittered" not in called, f"der gerettete Schritt rechnete noch einmal: {called}"
@@ -6790,14 +6797,14 @@ def test_the_full_chain_says_its_verdict_once_with_the_step_of_today(
     cache = ResultCache()
     drill = document.ops[-1].id
 
-    first = evaluate(document, profile, quality="draft", cache=cache)
+    first = _window(document, profile, cache=cache)
     tried = list(called)
     called.clear()
     renumbered = dataclasses.replace(
         document,
         ops=[*document.ops[:-1], dataclasses.replace(document.ops[-1], id=OpId(drill + 1000))],
     )
-    second = evaluate(renumbered, profile, quality="draft", cache=cache)
+    second = _window(renumbered, profile, cache=cache)
 
     assert first.stopped_at == drill and second.stopped_at == drill + 1000
     assert "voxel" in tried, f"die volle Kette lief nicht: {tried}"
@@ -6838,8 +6845,8 @@ def test_a_helper_that_died_in_the_full_chain_is_tried_again(
     document = _drilled_box(profile)
     cache = ResultCache()
 
-    first = evaluate(document, profile, quality="draft", cache=cache)
-    second = evaluate(document, profile, quality="draft", cache=cache)
+    first = _window(document, profile, cache=cache)
+    second = _window(document, profile, cache=cache)
 
     assert first.stopped_at == document.ops[-1].id, "Voraussetzung: der Hilfsprozess starb"
     assert second.complete, "der verlorene Hilfsprozess wurde als Urteil gemerkt"
@@ -6864,7 +6871,7 @@ def test_a_question_of_the_step_comes_once_per_run(
         asked.append(question)
         return choices[0]
 
-    result = evaluate(document, profile, quality="draft", registry=registry, ask=answer)
+    result = _window(document, profile, registry=registry, ask=answer)
 
     assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
     assert result.solvers[document.ops[-1].id].strategy == "jittered"
@@ -6890,11 +6897,9 @@ def test_a_halt_after_a_question_is_not_kept(
         return choices[0]
 
     cache = ResultCache()
-    first = evaluate(document, profile, quality="draft", registry=registry, ask=answer, cache=cache)
+    first = _window(document, profile, registry=registry, ask=answer, cache=cache)
     called.clear()
-    second = evaluate(
-        document, profile, quality="draft", registry=registry, ask=answer, cache=cache
-    )
+    second = _window(document, profile, registry=registry, ask=answer, cache=cache)
 
     assert first.stopped_at == second.stopped_at == document.ops[-1].id
     assert asked == ["Welche Seite?", "Welche Seite?"]
@@ -6933,7 +6938,7 @@ def test_a_move_is_judged_with_the_full_chain_like_the_window(
         ],
     )
     cache = ResultCache()
-    window = evaluate(history.document, profile, quality="draft", cache=cache)
+    window = _window(history.document, profile, cache=cache)
     assert window.complete, "Voraussetzung: der Entwurf rettet die Bohrung"
     ops = history.operations
     context = dependencies(history.document, window)
@@ -6942,7 +6947,7 @@ def test_a_move_is_judged_with_the_full_chain_like_the_window(
     revision = revise(
         history,
         plan,
-        evaluate=lambda document: evaluate(document, profile, quality="draft", cache=cache),
+        evaluate=lambda document: _window(document, profile, cache=cache),
         baseline=window,
         context=context,
     )
@@ -7011,23 +7016,243 @@ def test_the_agent_keeps_a_step_that_only_the_full_chain_carries(
     assert called.count("jittered") == 1, f"jede Prüfung rechnete den Schritt neu: {called}"
 
 
-def test_a_step_that_wants_one_stage_gets_no_full_chain(
-    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("stages", [("direct",), ("direct", "welded")])
+def test_a_step_that_wants_its_own_stages_gets_no_full_chain(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch, stages: Any
 ) -> None:
-    """RM-534: Rechnet ein Schritt ausdrücklich nur eine Stufe, bleibt es dabei.
+    """RM-534: Verlangt ein Schritt ausdrücklich seine Stufen, bleibt es dabei.
 
-    Die volle Güte gäbe ihm dieselbe Stufe noch einmal — ein zweiter Lauf
-    umsonst, und danach dieselbe Absage.
+    Auch die Entwurfskette selbst, ausdrücklich verlangt: Die volle Güte gäbe
+    ihm dieselben Stufen noch einmal — in jedem Lauf umsonst, und danach
+    dieselbe Absage. Entscheidend ist, ob die Güte gekürzt hat
+    (``BooleanFailedError.cut_short``), nicht welche Stufen liefen.
     """
     called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
     registry = Registry()
-    _asking_cut(registry, stages=("direct",))
+    _asking_cut(registry, stages=stages)
     History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
 
-    result = evaluate(document, profile, quality="draft", registry=registry, ask=lambda _q, c: c[0])
+    result = _window(document, profile, registry=registry, ask=lambda _q, c: c[0])
 
     assert result.stopped_at == document.ops[-1].id
-    assert called == ["direct"], called
+    assert called == list(stages), called
+
+
+def test_window_revision_and_agent_go_the_full_chain_and_previews_do_not() -> None:
+    """RM-534, Anschluss: Wer den Schalter setzt, steht im Quelltext fest (§17.2).
+
+    Fensterlauf, Verlaufsumbau und Agent entscheiden über den Stand und setzen
+    ``full_chain_when_stuck``; jede andere Auswertung der Sitzung ist eine
+    Vorschau und setzt ihn nicht — sonst kostete ein überdeckendes Werkzeug
+    je Wert im Dialog die 20 s der Voxelstufe.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+
+    def own_nodes(function: ast.AST) -> list[ast.AST]:
+        # Jeder Aufruf zählt bei seiner innersten Funktion: ``_RevisionWorker.work``
+        # umschließt nur das innere ``run`` und ist selbst keine Vorschau.
+        found: list[ast.AST] = []
+        pending = list(ast.iter_child_nodes(function))
+        while pending:
+            node = pending.pop()
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+                continue
+            found.append(node)
+            pending.extend(ast.iter_child_nodes(node))
+        return found
+
+    def calls(path: str) -> dict[str, list[bool]]:
+        tree = ast.parse((root / path).read_text(encoding="utf-8"))
+        found: dict[str, list[bool]] = {}
+        for function in ast.walk(tree):
+            if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for node in own_nodes(function):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "evaluate"
+                ):
+                    flagged = any(
+                        keyword.arg == "full_chain_when_stuck"
+                        and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is True
+                        for keyword in node.keywords
+                    )
+                    found.setdefault(function.name, []).append(flagged)
+        return found
+
+    window = calls("app/ui/session.py")
+    agent = calls("app/core/agent/session.py")
+    assert window["run_evaluation"] == [True]
+    assert window["run"] == [True], "der Verlaufsumbau rechnet wie das Fenster danach"
+    assert agent["_evaluate"] == [True]
+    previews = {
+        name: flags for name, flags in window.items() if name not in {"run_evaluation", "run"}
+    }
+    assert previews and not any(any(flags) for flags in previews.values()), previews
+
+
+def test_a_preview_takes_known_verdicts_but_never_computes_the_full_chain(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534, §17.2: Vorschauen bleiben beim Entwurf (Entscheidung Robert).
+
+    Die Voxelstufe kostet an einem überdeckenden Werkzeug 20 s, und eine
+    Vorschau läuft je Wert im Dialog. Sie rechnet die volle Kette deshalb nie
+    selbst: Kalt hält sie mit ``short_chain_only`` — das sperrt *Übernehmen*
+    nicht —, und was der Fensterlauf schon gerettet hat, nimmt sie.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+
+    cold = evaluate(document, profile, quality="draft", cache=cache)
+    assert cold.stopped_at == document.ops[-1].id
+    assert cold.short_chain_only, "der Halt der Vorschau ist als schnelle Rechnung gekennzeichnet"
+    assert "jittered" not in called and "voxel" not in called, called
+    _window(document, profile, cache=cache)
+    called.clear()
+    warm = evaluate(document, profile, quality="draft", cache=cache)
+
+    assert warm.complete and not called, "die Vorschau nimmt das Ergebnis der vollen Kette"
+    assert not warm.short_chain_only
+
+
+def test_a_window_halt_is_no_short_chain_halt(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach der vollen Kette ist ein Halt ein Urteil, kein Halt der schnellen Rechnung."""
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    document = _drilled_box(profile)
+
+    halted = _window(document, profile)
+
+    assert halted.stopped_at == document.ops[-1].id and not halted.short_chain_only
+
+
+def test_a_memory_shortage_in_the_full_chain_is_not_kept(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Eine Stufe, der der Speicher ausging, urteilt nicht über den Schritt.
+
+    Gemerkt hielt der nächste Lauf an, ohne eine Stufe zu rufen — eine
+    Sackgasse bis zum Projektwechsel, dieselbe Bauart wie beim verlorenen
+    Hilfsprozess.
+    """
+    from app.core.geom import boolean as boolean_module
+
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    patched = boolean_module._run_stage
+    short = [True]
+
+    def runs_out(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name == "voxel" and short:
+            short.clear()
+            raise MemoryError
+        return patched(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", runs_out)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+
+    first = _window(document, profile, cache=cache)
+    called.clear()
+    second = _window(document, profile, cache=cache)
+
+    assert first.stopped_at == second.stopped_at == document.ops[-1].id
+    assert "voxel" in called, f"der Speichermangel wurde als Urteil gemerkt: {called}"
+
+
+def test_a_foreign_failure_that_read_the_quality_is_no_fine_verdict(
+    document: Document, profile: Profile
+) -> None:
+    """RM-534: Auch ein Programmfehler nach der Frage nach der Güte hält nicht als fein."""
+    registry = Registry()
+
+    @register_op(
+        name="draft_breaks",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def make(ctx: OpContext) -> OpResult:
+        if ctx.quality == "draft":
+            raise RuntimeError("nur im Entwurf")
+        return OpResult(outputs=[SceneObject(id="", name="Probe", mesh=_mesh(10.0))])
+
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="draft_breaks")])
+
+    halted = evaluate(document, profile, quality="draft", registry=registry)
+
+    assert halted.stopped_at == document.ops[-1].id
+    assert halted.reads_quality
+
+
+def test_the_full_chain_says_in_the_progress_why_the_step_takes_longer(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Fortschrittszeile nennt den Schritt und warum er jetzt länger rechnet."""
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    said: list[str] = []
+
+    _window(document, profile, progress=lambda _fraction, text: said.append(text))
+
+    assert any("die vollständige läuft" in text for text in said), said
+
+
+def test_a_rescued_step_that_asked_waits_for_a_complete_run(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Sofort gemerkt wird nur, was ohne Frage entstand.
+
+    Die Antwort steht nirgends im Schlüssel; erst ein vollständiger Lauf legt
+    das Ergebnis in den Cache, wie jedes andere. Hält ein späterer Schritt,
+    fragt der nächste Lauf wieder.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    registry = Registry()
+    _asking_cut(registry)
+
+    @register_op(
+        name="always_stops",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def stops(ctx: OpContext) -> OpResult:
+        raise GeometryError()
+
+    History(document, registry=registry).apply(
+        "Probe", [OperationDraft(op="asking_cut"), OperationDraft(op="always_stops")]
+    )
+    asked: list[str] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    cache = ResultCache()
+    _window(document, profile, registry=registry, ask=answer, cache=cache)
+    called.clear()
+    _window(document, profile, registry=registry, ask=answer, cache=cache)
+
+    assert asked == ["Welche Seite?", "Welche Seite?"]
+    assert "jittered" in called, (
+        "ein Ergebnis mit Frage ging vor einem vollständigen Lauf in den Cache"
+    )
 
 
 @pytest.mark.parametrize("following", [False, True])

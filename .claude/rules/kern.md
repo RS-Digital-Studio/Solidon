@@ -175,7 +175,8 @@ ihn ruft, hält das Fenster an (RM-212).
   ausgelasteten Kernen (RM-380). `test_a_job_gives_the_same_bytes_in_the_helper_as_here`
   misst es je Rechnung im Hilfsprozess.
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
-  Verfeinerung die erwartete des Ergebnisses.
+  Verfeinerung die erwartete des Ergebnisses, bei der Voxelstufe
+  (`kernel_jobs.voxel`) die Zellzahl des Rasters.
 - **Ein voller Datenträger pausiert, er schaltet nicht ab** (RM-436): ENOSPC
   beim Transfer rechnet für `FULL_DISK_PAUSE_SECONDS` im Prozess, danach nimmt
   die nächste große Rechnung den Hilfsprozess wieder. Jede Rechnung, die deshalb
@@ -293,21 +294,27 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 eine geänderte Objektzahl hält die Auswertung an, statt still
 weiterzurechnen.
 
-**Wo die kurze Kette nur ausgeht, rechnet der Entwurf weiter** (RM-534,
-§17.2): Hält ein Schritt nach genau `DRAFT_CHAIN` mit einem
-`BooleanFailedError`, der *Voxelstufe erzwingen* anbietet, und hat er nach der
-Güte gefragt, rechnet `evaluate` ihn im selben Lauf mit der vollen Kette
-(`_FullChain`) — in jedem Entwurfslauf, sonst sagen Fenster, Vorschau,
-Verlaufsumbau und Agent über denselben Stand Verschiedenes. Eine Frage des
-ersten Durchgangs beantwortet der zweite aus dem Gedächtnis
-(`_WatchedAsk.again`). Ohne Frage merkt sich die Speicherebene sofort das
-gerettete Ergebnis und das Urteil der vollen Kette (`ResultCache.refuse`: nur
-ein `BooleanFailedError` mit gelaufener Voxelstufe, als Ausnahme — der Befund
-entsteht am Treffer mit der heutigen Kennung), auch wenn ein späterer Schritt
-anhält; auf die Platte geht nur ein vollständiger Durchlauf (§15.6). Der Agent
-rechnet mit dem Sitzungscache (`AgentSession.cache`). Ein Halt nimmt mit, ob
-der Schritt nach der Güte fragte (`reads_quality`); sonst gilt ein
-Entwurfshalt als fein, und Export wie Slicer rechnen nie nach.
+**Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
+eine Vorschau nie** (RM-534, §17.2): Hält ein Schritt mit einem
+`BooleanFailedError`, dessen Kette die Güte gekürzt hat (`cut_short`, nicht
+eine verlangte Stufenfolge) und der *Voxelstufe erzwingen* anbietet, und hat
+er nach der Güte gefragt, rechnet `evaluate` ihn mit `full_chain_when_stuck`
+im selben Lauf mit der vollen Kette (`_FullChain`). Gesetzt wird es nur in
+`Session.run_evaluation`, `_RevisionWorker` und `AgentSession` — die
+Voxelstufe kostet an einem überdeckenden Werkzeug Sekunden, in einer Vorschau
+je Wert. Eine Vorschau nimmt ein Urteil der vollen Kette aus dem Cache und
+hält sonst mit `short_chain_only`; das Band sagt `SHORT_CHAIN_PREVIEW`, und
+*Übernehmen* bleibt frei. Eine Frage des ersten Durchgangs beantwortet der
+zweite aus dem Gedächtnis (`_WatchedAsk.again`). Ohne Frage merkt sich die
+Speicherebene sofort das gerettete Ergebnis und das Urteil der vollen Kette
+(`ResultCache.refuse`: nur ein `BooleanFailedError` mit gelaufener
+Voxelstufe und ohne `transient` — Speichermangel ist kein Urteil —, als
+Ausnahme; der Befund entsteht am Treffer mit der heutigen Kennung), auch wenn
+ein späterer Schritt anhält; auf die Platte geht nur ein vollständiger
+Durchlauf (§15.6). Der Agent rechnet mit dem Sitzungscache
+(`AgentSession.cache`). Ein Halt nimmt mit, ob der Schritt nach der Güte
+fragte (`reads_quality`); sonst gilt ein Entwurfshalt als fein, und Export wie
+Slicer rechnen nie nach.
 
 ## Am Dokument wird nie vorbei geschrieben
 

@@ -1224,6 +1224,13 @@ def _kernel_gave_up(result: EvaluationResult) -> bool:
     )
 
 
+#: Was das Band einer Vorschau sagt, deren schnelle Rechnung an einem Schritt
+#: nicht durchkam (RM-534): Übernehmen rechnet ihn vollständig.
+SHORT_CHAIN_PREVIEW: Final = _(
+    "Die schnelle Vorschau kommt hier nicht durch. Übernehmen rechnet den Schritt vollständig."
+)
+
+
 def _stop_reason(result: EvaluationResult) -> str:
     """Warum die Kette anhielt — der Befund, der den Halt trägt.
 
@@ -1458,6 +1465,9 @@ class _RevisionWorker(Worker):
                 cancelled=self.cancel,
                 cache=session.cache,
                 sources=self._sources,
+                # Der Umbau entscheidet wie der Fensterlauf danach (RM-534):
+                # sonst sagte er ab, was das Fenster rechnet.
+                full_chain_when_stuck=True,
             )
 
         try:
@@ -5346,6 +5356,9 @@ class Session(QObject):
             on_recognition_answer=self._recognition_answered_in_worker,
             missing_basis=missing_profile_basis(document),
             check_status=worker.checkWith.emit if isinstance(worker, _EvaluationWorker) else None,
+            # Die Antwort der kurzen Kette ist im Fenster keine: Der Bericht
+            # sagte „… sagt erst die vollständige“, und keiner fragte sie (RM-534).
+            full_chain_when_stuck=True,
         )
         # Bei jedem Lauf und nicht nur beim Öffnen: Solange mit einem
         # mitgebrachten oder einem Ersatzdrucker gerechnet wird, sagt es der
@@ -5941,6 +5954,13 @@ class Session(QObject):
                 counted=counted,
                 unseen=unseen,
             )
+        if result.stopped_at is not None and result.short_chain_only:
+            # **Die schnelle Rechnung kam nicht durch — das ist kein Urteil über
+            # den Schritt** (RM-534, §17.2): Eine Vorschau rechnet die volle
+            # Kette nicht selbst, *Übernehmen* tut es. Gesperrt wird nichts,
+            # und das Band sagt, was beim Übernehmen geschieht, statt den
+            # Entwurfssatz als Fehler zu zeigen.
+            return result.scene, None, str(SHORT_CHAIN_PREVIEW)
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
             # sähe aus wie „keine Änderung", und das wäre gelogen.

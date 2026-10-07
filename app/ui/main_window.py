@@ -381,7 +381,7 @@ from app.ui.render.api import PointerEvent
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
-from app.ui.session import AskRequest, Session, TriangleCounts
+from app.ui.session import SHORT_CHAIN_PREVIEW, AskRequest, Session, TriangleCounts
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
@@ -21354,6 +21354,8 @@ class MainWindow(QMainWindow):
             click()
 
         told: list[str] = []
+        passed_on: list[bool] = []
+        """Gesetzt, wenn nur die schnelle Rechnung nicht durchkam (:func:`explained`)."""
 
         def pictured(difference: Any) -> None:
             """Das erste Bild gibt weder Auftrag noch wartenden Übernehmen-Klick frei."""
@@ -21387,6 +21389,16 @@ class MainWindow(QMainWindow):
         def explained(reason: str) -> None:
             """Eine fachliche Absage kann ein nachgereichtes leeres Bild nicht aufheben."""
             told.append(reason)
+            if reason == str(SHORT_CHAIN_PREVIEW):
+                # **Die schnelle Rechnung kam nicht durch — das ist keine
+                # Absage** (RM-534, §17.2): Ein Bild gibt es ohne die volle
+                # Kette nicht, und die rechnet *Übernehmen*. Das Band sagt es;
+                # gewartet wird auf kein Bild, gesperrt wird nichts.
+                passed_on.append(True)
+                approval.required = False
+                self._preview_explained(reason)
+                self._refresh_preview_block()
+                return
             if approval.required is not False:
                 approval.problem = reason
             self._preview_explained(reason)
@@ -21401,7 +21413,7 @@ class MainWindow(QMainWindow):
             approval.reviewing = False
             self._finish_preview_progress()
             if difference is None:
-                if not approval.questioned:
+                if not approval.questioned and not passed_on:
                     failed(None)
                 else:
                     self._show_preview(None)
