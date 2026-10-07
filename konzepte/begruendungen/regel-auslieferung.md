@@ -26,6 +26,13 @@ Der Anlass, aus der Regel verschoben (RM-505): 0.5.1 bestand Suite, Bau,
 Signatur und Notarisierung und beendete sich auf jedem Mac nach 20 bis 40
 Sekunden — kein Schritt hatte das ausgelieferte Programm je gestartet.
 
+Verlangt war bis 0.5.3 ein leeres Absturzprotokoll. faulthandler schreibt aber
+auch Windows-Ausnahmen, die das System selbst abfängt (COM `0x8001010d`,
+Fragebogen S-20261006-5be329); seitdem zählt nur, was `log.fatal_records` als
+tödlich ausweist. Eine Ausnahme, die der Hauptfaden überlebt hat, hält den
+Starttest damit nicht mehr an; eine aus einem Treiberfaden ohne Python-Zustand
+nennt faulthandler keinem Faden zu, und sie zählt weiter als Absturz.
+
 ## Die Version wird vor dem Bau erhöht, und nur über das Werkzeug
 
 Warum ein nie veröffentlichter Fehler nicht in den Changelog gehört: „— der
