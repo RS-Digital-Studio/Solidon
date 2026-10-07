@@ -1197,6 +1197,13 @@ liest oder setzt, geht über diese eine Funktion — die Werkzeuge in `tools/`,
 die `QT_QPA_PLATFORM` entfernen, weil sie das echte Fenster wollen, bauen sie
 nicht nach.
 
+**Das Eingabemodul** (RM-062): PySide6 bringt `compose`, `ibus` und
+`qtvirtualkeyboard`, kein Fcitx-Modul. Nennt die Umgebung Fcitx
+(`QT_IM_MODULE`, `QT_IM_MODULES`, `XMODIFIERS`), nimmt
+`qt_platform.prefer_an_input_method_qt_has` vor der Anwendung `ibus`,
+außerhalb des Flatpak mit `IBUS_USE_PORTAL=1`, wo Fcitx5 das Portal trägt;
+die Herleitung steht an `input_method_environment`.
+
 ## Was nur das Bild zeigt
 
 Die Regel ist keine neue, sondern die aus §35 an ein Widget gerichtet:

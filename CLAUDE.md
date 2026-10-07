@@ -165,13 +165,12 @@ Feldliste steht deshalb als Tabelle, nicht als Codeblock.
 Kleine Schritte, Test zuerst bei Geometrie, kein Revert, nie stillschweigend
 raten — das steht in `AGENTS.md`. Dazu:
 
-- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald das Tor
-  grün und das Review behoben ist — in logischen Einheiten, nur die eigenen
-  Pfade, mit `Co-Authored-By`, ohne Rückfrage (Entscheidung Robert).
-  Zusammengeführt wird per Merge; `/liefern` bündelt das.
-- **Vor jedem Push nach main ein Review** (Entscheidung Robert, jede Sitzung,
-  auch für Unterlagen und Review-Fixes) mit dem Agenten `solidon3d-review`,
-  danach eigene Worktrees und Zweige abbauen; wie, steht in `/liefern`.
+- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald Tor und
+  Review grün sind — in logischen Einheiten, nur die eigenen Pfade, mit
+  `Co-Authored-By`, ohne Rückfrage, per Merge (Entscheidung Robert).
+- **Vor jedem Push nach main ein Review** mit `solidon3d-review`, auch für
+  Unterlagen und Review-Fixes (Entscheidung Robert); danach eigene Worktrees
+  und Zweige abbauen. `/liefern` bündelt beides.
 - **`.githooks/post-commit` pusht** jeden Commit, weil auf drei Maschinen
   gearbeitet wird. Er holt und rebasiert nicht — ist die Gegenstelle weiter,
   scheitert er und sagt es. `SOLIDON_KEIN_PUSH=1` hält einen Commit lokal,

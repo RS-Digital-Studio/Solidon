@@ -236,8 +236,7 @@ Licht und Deckkraft wirken auf hellem und dunklem Grund verschieden; eine Zahl
 stimmt nur für ein Thema. `HEADLIGHT`: Nur das Frontlicht (von fünf,
 `LIGHT_KIT`) trifft die zugewandten Wände; auf dem dunkleren Körper des hellen
 Themas hilft nur mehr Licht (0,45 statt 0,25). `SHADOW_OPACITY`: im hellen
-Thema 0,03, so laut wie im dunklen (Entscheidung Robert). Ambient- und
-Glanzanteil sind gemessen verworfen. **Falle:** Liest die Zeichenstelle die Konstante statt des gemerkten
+Thema 0,03, so laut wie im dunklen (Entscheidung Robert). **Falle:** Liest die Zeichenstelle die Konstante statt des gemerkten
 Werts, ist das Paar wirkungslos, und ein Methodentest bleibt grün —
 `test_viewport_decisions.py` hält je Paar Richtung, Setzen in `set_theme` und
 Lesen beim Zeichnen.
@@ -510,13 +509,9 @@ regelt `zeichenflaeche.md`.
   `unavailable_hint()` nennt, was fehlt (mit `DISPLAY` die Bibliothek, ohne
   Xwayland). Wer die Plattform vor dem Aufbau liest oder setzt, auch ein
   Werkzeug in `tools/`, geht über diese Funktion.
-* **Das Eingabemodul muss im mitgelieferten Qt liegen** (RM-062): PySide6
-  bringt `compose`, `ibus` und `qtvirtualkeyboard`, kein Fcitx-Modul. Nennt
-  die Umgebung Fcitx (`QT_IM_MODULE`, `QT_IM_MODULES`, `XMODIFIERS`), setzt
-  `qt_platform.prefer_an_input_method_qt_has` vor der Anwendung `ibus`,
-  außerhalb des Flatpak mit `IBUS_USE_PORTAL=1`, wo Fcitx5 das Portal trägt
-  (Herleitung: `input_method_environment`). Der Starttest des Pakets verlangt
-  unter Linux das IBus-Modul.
+* **Das Eingabemodul muss im mitgelieferten Qt liegen** (RM-062): Bei Fcitx
+  setzt `qt_platform.prefer_an_input_method_qt_has` vorher `ibus`; der
+  Starttest des Pakets verlangt unter Linux das IBus-Modul.
 
 ## Was nur das Bild zeigt
 

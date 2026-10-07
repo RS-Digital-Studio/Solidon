@@ -336,26 +336,23 @@ Parameter mit Vorgabe — PySide reicht `checked` hinein.
 
 Ruhe- und Fokusrahmen jedes Eingabefelds sind gleich breit (zwei Punkte); der
 Fokus wechselt auf `accent_line` und wird gestrichelt (`style.py`), denn Regel
-18 verlangt die zweite Kodierung. Grund: Qt rechnet die Höhe des
-Aufklappmenüs aus dem Innenrechteck der Combobox, ein breiterer Fokusrahmen
-schneidet einen halben Eintrag ab. `:on`, `outline` und ein Rahmen in den
-`margin` sind gemessen untauglich. `tests/test_style.py`:
+18 verlangt die zweite Kodierung; ein breiterer Fokusrahmen schnitte im
+Aufklappmenü einen halben Eintrag ab (Herleitung: Begründung).
+`tests/test_style.py`:
 `test_an_open_combo_box_shows_every_entry_it_has` (am Fenster, mit Fokus, samt
 Gegenprobe) und `test_the_focus_ring_never_changes_the_size_of_a_field`.
 
 **Der Ruherahmen behält die volle Linienfarbe** — er ist die einzige Kante des
 Feldes, gedämpft fiel er unter WCAG 1.4.11.
 `test_a_field_keeps_the_edge_that_is_its_only_one` prüft gegen die Linienfarbe
-des Themas; was die leistet, ist eine Frage an das Thema.
+des Themas.
 
 ## Eine Auswahl fällt nie still auf etwas Größeres
 
 Trägt der neue Stand ein gewähltes Merkmal nicht mehr, hebt
-`ObjectTree.show_scene` die Wahl auf und hält sie samt Zeilentext in
-`lost_selection` fest (RM-537); sonst entfernte Entf danach den ganzen Körper.
-`MainWindow._say_features_lost` sagt es erst nach den Wiederwahlen (die lesen
-den Körper aus `lost_selection`) und nur ohne eigene Handlung seit dem letzten
-aktuellen Bild — sonst überschriebe es deren Quittung mit Rückweg (Regel 19).
+`ObjectTree.show_scene` die Wahl auf und merkt sie in `lost_selection`;
+`MainWindow._say_features_lost` sagt es nach den Wiederwahlen und nur ohne
+eigene Handlung seit dem letzten aktuellen Bild (Warum: Begründung).
 
 ## Barrierefreiheit
 

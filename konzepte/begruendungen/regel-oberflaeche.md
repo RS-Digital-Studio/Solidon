@@ -480,6 +480,16 @@ Frage an das Thema (im hellen bringt sie seit je nur 2,43), dass der Rahmen sie
 nicht unterschreitet, eine an das Stylesheet.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
+## Eine Auswahl fällt nie still auf etwas Größeres
+
+Fiel eine Merkmalswahl beim neuen Stand still auf den Körper zurück, entfernte
+Entf danach den ganzen Körper statt der Bohrung (RM-537). Deshalb hebt
+`ObjectTree.show_scene` die Wahl auf und hält sie samt Zeilentext in
+`lost_selection` fest. `MainWindow._say_features_lost` spricht erst nach den
+Wiederwahlen, weil die den Körper aus `lost_selection` lesen, und nur ohne
+eigene Handlung seit dem letzten aktuellen Bild — sonst überschriebe es deren
+Quittung mit Rückweg (Regel 19).
+
 ## Barrierefreiheit
 
 Die Grauleiter der Ersatzfarben stand im Original mitten im Punkt „Dasselbe
