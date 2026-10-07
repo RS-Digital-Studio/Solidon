@@ -45,7 +45,6 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPainter,
     QPainterPath,
-    QPalette,
     QPen,
     QPixmap,
     QResizeEvent,
@@ -223,7 +222,7 @@ from app.ui.style import (
     set_level,
 )
 from app.ui.tab_signal import count_phrases
-from app.ui.theme import UNDONE_COLOUR
+from app.ui.theme import THEMES, UNDONE_COLOUR, current_theme
 
 _log = get_logger(__name__)
 
@@ -5980,6 +5979,15 @@ class ReportPanel(QWidget):
         voller Schwere da, darüber „Übergabe nicht empfohlen“, während die
         Rechnung, die ihn widerrief, lief. Gesetzt wird er erst nach
         :data:`DELAY_MS` (§2.8) — ein Lauf aus dem Cache bleibt ruhig."""
+        self._stale = False
+        """Siehe :meth:`set_stale`."""
+        self._previous_keys: frozenset[tuple[Any, ...]] = frozenset()
+        """Die Befunde, die beim Beginn des Laufzustands dastanden (:func:`_identity`).
+
+        Was währenddessen dazukommt — die Sätze eines Teilungsplans über
+        ``add_findings`` —, gehört zum neuen Stand und steht ohne Vorsatz da.
+        Über die Identität und nicht an der Zeile: ``add_findings`` baut die
+        Liste neu."""
         self._running_delay = QTimer(self)
         self._running_delay.setSingleShot(True)
         self._running_delay.setInterval(DELAY_MS)
@@ -6333,7 +6341,8 @@ class ReportPanel(QWidget):
 
         consequence = finding_consequence(finding)
         self.finding_consequence.setText(consequence)
-        self.finding_consequence.setVisible(bool(consequence))
+        # Die Folge eines Befunds vom vorigen Stand ist keine (RM-534).
+        self.finding_consequence.setVisible(bool(consequence) and not self._previous(item))
         self.finding_details.setPlainText(item.toolTip().replace(" · ", "\n"))
 
     def _show_offers(self) -> None:
@@ -6423,7 +6432,7 @@ class ReportPanel(QWidget):
                     self.offer_effect.show()
             if action is primary:
                 make_primary(button)
-            if self._running:
+            if self._previous(items[0]):
                 # Der Befund gehört zum vorigen Stand (RM-534); eine Handlung
                 # daran träfe ein Teil, das es gleich nicht mehr gibt.
                 button.setEnabled(False)
@@ -6500,7 +6509,13 @@ class ReportPanel(QWidget):
         """
         short, whole = item.data(_LINE_ROLE)
         line = whole if item.isSelected() else short
-        return tr("Voriger Stand: {line}", line=line) if self._running else line
+        return tr("Voriger Stand: {line}", line=line) if self._previous(item) else line
+
+    def _previous(self, item: QListWidgetItem) -> bool:
+        """Ob die Zeile gerade als voriger Stand dasteht (RM-534, :attr:`_previous_keys`)."""
+        return self._running and (
+            _identity(item.data(Qt.ItemDataRole.UserRole)) in self._previous_keys
+        )
 
     def _paint_row(self, item: QListWidgetItem) -> None:
         """Eine Zeile als aktueller oder voriger Stand, an Ort und Stelle (RM-534).
@@ -6512,8 +6527,10 @@ class ReportPanel(QWidget):
         finding: Finding = item.data(Qt.ItemDataRole.UserRole)
         if item.data(_LINE_ROLE):
             item.setText(self._row_text(item))
-        if self._running:
-            tone = self.list.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text)
+        if self._previous(item):
+            # Gedämpft, aber lesbar: Die Sperrfarbe stand hell bei 3,1 : 1 —
+            # unter der Grenze, die dieser Bericht selbst nennt (§2.9).
+            tone = QColor(THEMES[current_theme()]["muted"])
             item.setForeground(tone)
         else:
             tone = QColor(item.data(_TONE_ROLE))
@@ -6733,6 +6750,7 @@ class ReportPanel(QWidget):
         # das Fenster es neu (:meth:`set_running`).
         self._running_delay.stop()
         self._running = False
+        self._stale = False
         self._stopped_at = result.stopped_at if result is not None else None
         self._live_objects = dict(result.scene.objects) if result is not None else {}
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
@@ -7234,6 +7252,12 @@ class ReportPanel(QWidget):
         reason = self._review_missing[0] if self._review_missing and not counts["error"] else ""
         if self._running:
             reason = tr("Die Bewertung läuft; der vorige Stand bleibt sichtbar.")
+        elif self._stale and counts["error"]:
+            # Abgebrochen oder gescheitert: Der Fehler gehört zum letzten
+            # vollständigen Stand, und das sagt die Zeile auch neben ihm.
+            from app.ui.print_contract import NOT_CURRENT_REASON
+
+            reason = str(NOT_CURRENT_REASON)
         self.review_reason.setText(reason)
         self.review_reason.setVisible(bool(reason))
 
@@ -7262,6 +7286,17 @@ class ReportPanel(QWidget):
         self._running_delay.stop()
         self._show_running(False)
 
+    def set_stale(self, stale: bool) -> None:
+        """Ob der Bericht nach Abbruch oder Fehler zum letzten vollständigen Stand gehört.
+
+        Dann steht „Für den aktuellen Stand liegt noch keine abgeschlossene
+        Bewertung vor.“ auch unter einem Fehler — sonst las sich der alte
+        Bericht nach dem Abbruch wieder als gültig (RM-534).
+        """
+        if stale != self._stale:
+            self._stale = stale
+            self._count_up()
+
     def running(self) -> bool:
         """Ob die Zeilen gerade als voriger Stand dastehen — siehe :meth:`set_running`."""
         return self._running
@@ -7273,6 +7308,14 @@ class ReportPanel(QWidget):
         if running == self._running:
             return
         self._running = running
+        self._previous_keys = (
+            frozenset(
+                _identity(self.list.item(row).data(Qt.ItemDataRole.UserRole))
+                for row in range(self.list.count())
+            )
+            if running
+            else frozenset()
+        )
         for row in range(self.list.count()):
             self._paint_row(self.list.item(row))
         self._count_up()
@@ -7448,7 +7491,7 @@ class ReportPanel(QWidget):
         for action in offered:
             entry = menu.addAction(str(action.label))
             # Dieselbe Sperre wie an den Knöpfen darunter (RM-534).
-            entry.setEnabled(not self._running)
+            entry.setEnabled(not self._previous(item))
             chosen[entry] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
         # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
@@ -7458,7 +7501,9 @@ class ReportPanel(QWidget):
         # wird. Wie im Objektbaum gehört das Menü diesem Klick.
         action_id = chosen[picked].id if picked is not None else None
         menu.deleteLater()
-        if action_id is None:
+        # Während das Menü offen war, kann ein Ergebnis die Zeile ersetzt oder
+        # ein Lauf sie zum vorigen Stand gemacht haben.
+        if action_id is None or not isValid(item) or self._previous(item):
             return
         if action_id == PLACE_ON_BED.id and group:
             self._run_bound_bed_action(bed_error, document)

@@ -1265,10 +1265,13 @@ ausgelassenen Bereinigungsschritt.
 
 Die erfolgreiche Stufe steht in der Op. Stufe 4 kostet Genauigkeit und wird im
 Prüfbericht ausgewiesen, nicht stillschweigend verwendet. In Entwurfsqualität
-(§31) endet die Kette nach Stufe 2, um Iterationen schnell zu halten. Bleibt
-dort im Fenster von einem Schritt nichts übrig, rechnet derselbe Lauf diesen
+(§31) endet die Kette nach Stufe 2, um Iterationen schnell zu halten. Geht
+dort an einem Schritt nur die kurze Kette aus, rechnet derselbe Lauf diesen
 einen Schritt mit der vollen Kette, statt mit dem Urteil der kurzen
-anzuhalten; Vorschauen bleiben beim Entwurf.
+anzuhalten — in jedem Entwurfslauf, damit Fenster, Vorschau, Verlaufsumbau und
+Agent über denselben Stand dasselbe sagen. Ihr Urteil über den Schritt merkt
+sich die Sitzung im Speicher, auch wenn der Lauf danach anhält; auf die Platte
+geht es erst mit einem vollständigen Durchlauf (§15.6).
 
 ### 17.3 Prüfbericht
 Alles aus §17.1 und §17.2 landet in einem Bericht je Objekt, sichtbar im

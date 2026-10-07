@@ -405,6 +405,13 @@ def review_difference(
 #: Wie viele Zeilen neue und behobene Befunde zusammen höchstens belegen (RM-516).
 _SHOWN_LINES: Final = 3
 
+#: Der Grund unter dem Kopf, solange der gezeigte Bericht nicht zum Dokument
+#: gehört — vom Fenster in den Prüfumfang gelegt, vom Bericht auch neben einem
+#: Fehler gezeigt, wenn die Rechnung abbrach oder scheiterte (RM-534).
+NOT_CURRENT_REASON: Final = _(
+    "Für den aktuellen Stand liegt noch keine abgeschlossene Bewertung vor."
+)
+
 
 def _identity(finding: Finding) -> tuple[str, str | None, str]:
     """Derselbe Befund in zwei Ständen: Kennung, Körper und Satz."""

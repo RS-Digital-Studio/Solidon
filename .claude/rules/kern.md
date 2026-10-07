@@ -293,14 +293,21 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 eine geänderte Objektzahl hält die Auswertung an, statt still
 weiterzurechnen.
 
-**Wo die kurze Kette nur ausgeht, rechnet der Fensterlauf weiter** (RM-534,
-§17.2): Mit `full_chain_when_stuck` rechnet `evaluate` einen Schritt, dessen
-`BooleanFailedError` *Voxelstufe erzwingen* anbietet, gleich mit der vollen
-Kette (`_FullChain`); sein Ergebnis liegt unter dem Entwurfsschlüssel, ein Halt
-der vollen Kette nur in der Speicherebene (`ResultCache.refuse`, §15.6). Nur
-`Session.run_evaluation` setzt es — eine Vorschau bleibt beim Entwurfssatz.
-Ein Halt nimmt mit, ob der Schritt nach der Güte fragte (`reads_quality`);
-sonst gilt ein Entwurfshalt als fein, und Export wie Slicer rechnen nie nach.
+**Wo die kurze Kette nur ausgeht, rechnet der Entwurf weiter** (RM-534,
+§17.2): Hält ein Schritt nach genau `DRAFT_CHAIN` mit einem
+`BooleanFailedError`, der *Voxelstufe erzwingen* anbietet, und hat er nach der
+Güte gefragt, rechnet `evaluate` ihn im selben Lauf mit der vollen Kette
+(`_FullChain`) — in jedem Entwurfslauf, sonst sagen Fenster, Vorschau,
+Verlaufsumbau und Agent über denselben Stand Verschiedenes. Eine Frage des
+ersten Durchgangs beantwortet der zweite aus dem Gedächtnis
+(`_WatchedAsk.again`). Ohne Frage merkt sich die Speicherebene sofort das
+gerettete Ergebnis und das Urteil der vollen Kette (`ResultCache.refuse`: nur
+ein `BooleanFailedError` mit gelaufener Voxelstufe, als Ausnahme — der Befund
+entsteht am Treffer mit der heutigen Kennung), auch wenn ein späterer Schritt
+anhält; auf die Platte geht nur ein vollständiger Durchlauf (§15.6). Der Agent
+rechnet mit dem Sitzungscache (`AgentSession.cache`). Ein Halt nimmt mit, ob
+der Schritt nach der Güte fragte (`reads_quality`); sonst gilt ein
+Entwurfshalt als fein, und Export wie Slicer rechnen nie nach.
 
 ## Am Dokument wird nie vorbei geschrieben
 

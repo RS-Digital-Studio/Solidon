@@ -23291,6 +23291,9 @@ class MainWindow(QMainWindow):
         if self._announcement_document is not self.session.project.document:
             self._announcement_document = self.session.project.document
             self.announce("")
+        # Eine Änderung während der Erkennung meldet kein ``busyChanged``; das
+        # Bild davor gehört ab hier zum vorigen Stand.
+        self._follow_the_run_in_the_report()
         # Eine gezeichnete Trennlinie liegt auf einem Körper, den es nach einer
         # Änderung am Dokument so nicht mehr geben muss — ein neues Projekt,
         # ein Undo, eine Operation von woanders. Sie stehen zu lassen hieße,
@@ -23403,14 +23406,14 @@ class MainWindow(QMainWindow):
 
     def _update_review_status(self) -> None:
         """Bindet Prüfzustände an denselben Dokumentstand wie den Bericht."""
+        from app.ui.print_contract import NOT_CURRENT_REASON
+
         target = self.session.review_target()
         reasons = list(target.missing)
-        if self.session.busy:
-            reasons.append(tr("Die Bewertung läuft; der vorige Stand bleibt sichtbar."))
-        elif not self.session.result_current:
-            reasons.append(
-                tr("Für den aktuellen Stand liegt noch keine abgeschlossene Bewertung vor.")
-            )
+        # Dass gerechnet wird, sagt der Bericht selbst, sobald es dauert
+        # (``ReportPanel.set_running``) — eine Quelle für den Satz (RM-534).
+        if not self.session.result_current:
+            reasons.append(str(NOT_CURRENT_REASON))
         states = tuple(self.session.check_states.values())
         if not states and self.session.result_current and self.session.last_result is not None:
             states = self.session.last_result.check_states
@@ -23850,14 +23853,18 @@ class MainWindow(QMainWindow):
         """Der Bericht sagt, wenn seine Zeilen zum vorigen Stand gehören (RM-534).
 
         Das ist so, solange gerechnet wird und das Gezeigte nicht zum
-        Dokument gehört. Ein Bild vor der Erkennung gehört schon dazu
-        (KUNDE-14): Seine Zeilen sind die des neuen Stands, nur noch nicht
-        vollständig — das sagt der Prüfumfang.
+        Dokument gehört. Ein Bild vor der Erkennung gehört dazu (KUNDE-14):
+        Seine Zeilen sind die des neuen Stands, nur noch nicht vollständig —
+        das sagt der Prüfumfang. Nach einer Änderung währenddessen gehört es
+        nicht mehr dazu. Endet der Lauf ohne Ergebnis, abgebrochen oder
+        gescheitert, sagt der Bericht, dass er zum letzten vollständigen
+        Stand gehört.
         """
         session = self.session
-        self.report.set_running(
-            session.busy and not session.result_current and session.picture is None
-        )
+        shown = session.picture is not None and session.picture_current
+        unsettled = not session.result_current and not shown
+        self.report.set_running(session.busy and unsettled)
+        self.report.set_stale(not session.busy and unsettled and session.last_result is not None)
 
     def _resume_map_after_idle(self) -> None:
         """Die gewählte Analysekarte kommt nach der Rechnung wieder.

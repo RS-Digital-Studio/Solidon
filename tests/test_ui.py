@@ -17725,13 +17725,14 @@ def test_a_new_run_takes_the_halt_message_and_the_report_follows_it(window: Main
 def test_the_window_goes_the_full_chain_where_the_short_one_ends(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-534, Anschluss: Die Auswertung im Fenster rechnet den Schritt mit allen Stufen.
+    """RM-534, Anschluss: Fenster und Schrittdialog rechnen den Schritt mit allen Stufen.
 
-    Der Kern kann es (``evaluate(full_chain_when_stuck=True)``); hier wird
-    belegt, dass die Anwendung es tut. Am Kundenteil hielt die kurze Kette mit
-    „… sagt erst die vollständige“, und keiner fragte die vollständige. Die
-    übrigen Schritte bleiben im Entwurf — der Lauf ist deshalb nicht fein, und
-    Export wie Slicer rechnen weiter nach.
+    Der Kern kann es; hier wird belegt, dass die Anwendung es tut. Am
+    Kundenteil hielt die kurze Kette mit „… sagt erst die vollständige“, und
+    keiner fragte die vollständige. Die übrigen Schritte bleiben im Entwurf —
+    der Lauf ist deshalb nicht fein, und Export wie Slicer rechnen weiter nach.
+    Und der Kunde änderte den Radius im Dialog: Dessen Vorschau sperrte
+    *Übernehmen* mit dem Entwurfssatz, obwohl das Fenster den Schritt rettete.
     """
     import trimesh
 
@@ -17767,6 +17768,53 @@ def test_the_window_goes_the_full_chain_where_the_short_one_ends(
     assert result.solvers[drill].strategy == "jittered", result.solvers[drill]
     assert window.session.last_quality == "draft"
     assert not window.session.fine_current, "ein Schritt fein macht den Lauf nicht fein"
+
+    window.edit_operation(drill, given={"diameter": 4.0})
+    dialog = window._op_dialog
+    assert dialog is not None
+    _accept_after_preview(window, dialog)
+    assert window.session.wait_for_idle(30_000)
+    changed = window.session.last_result
+    assert changed.stopped_at is None, [
+        str(entry.message) for entry in changed.scene.report.findings
+    ]
+    assert changed.solvers[drill].strategy == "jittered"
+
+
+def test_the_report_follows_a_change_during_recognition_and_a_cancelled_run(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Ein Bild nach einer Änderung und ein abgebrochener Lauf sind kein gültiger Stand.
+
+    Eine Änderung während der Erkennung meldet kein ``busyChanged``; das Bild
+    davor galt weiter als aktuell, seine Zeilen standen ohne Vorsatz und mit
+    freien Knöpfen da. Und nach einem Abbruch las sich der alte Bericht wieder
+    als gültig.
+    """
+    from app.ui.session import Session
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    session = window.session
+    session.picture = session.last_result
+    session.picture_current = True
+    session.result_current = False
+    monkeypatch.setattr(Session, "busy", property(lambda _self: True))
+
+    window._follow_the_run_in_the_report()
+    assert not window.report._running_delay.isActive(), "das Bild zeigt den heutigen Stand"
+
+    session.picture_current = False
+    session.projectChanged.emit()
+    assert window.report._running_delay.isActive() or window.report.running(), (
+        "nach der Änderung gehört das Bild zum vorigen Stand"
+    )
+
+    monkeypatch.setattr(Session, "busy", property(lambda _self: False))
+    session.picture = None
+    window._follow_the_run_in_the_report()
+    assert not window.report.running()
+    assert window.report._stale, "abgebrochen: der Bericht gehört zum letzten vollständigen Stand"
 
 
 def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) -> None:

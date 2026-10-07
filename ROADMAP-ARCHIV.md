@@ -43066,45 +43066,66 @@ eigene Sicherung.
   der Halt gehört neben RM-494 in `test_evaluation.py`. **Abnahme:** Während eines Laufs steht
   kein alter Fehler als gültig da; ein Export nach einem Entwurfshalt rechnet fein.
 
-**Erledigt (06.10.2026).** Alle vier Teile sind gebaut, Teil 2 und 4 anders als
-vorgeschlagen und dafür einfacher:
+**Erledigt (06.10.2026, nach der Durchsicht am 07.10.2026 vervollständigt).**
+Alle vier Teile sind gebaut, Teil 2 und 4 anders als vorgeschlagen und dafür
+einfacher:
 
 - **Teil 1, Laufzustand:** `ReportPanel.set_running` aus
-  `MainWindow._follow_the_run_in_the_report` (bei jedem Wechsel von `busy` und
-  nach jedem gezeigten Ergebnis). Nach 200 ms sagt der Kopf „Wird neu berechnet
-  …“ mit Uhr (`icons.PATHS["running"]`), jede Zeile beginnt mit „Voriger
-  Stand:“ und ist gedämpft, Knöpfe und Kontextmenü sind gesperrt, die
-  Reiterzahl bleibt. `handoff_state` hat den Eingang `running`. Die Haltansage
-  weicht in `_on_busy` dem Lauf. Ein Bild vor der Erkennung gilt nicht als
-  voriger Stand.
+  `MainWindow._follow_the_run_in_the_report` (bei jedem Wechsel von `busy`,
+  nach jedem gezeigten Ergebnis und nach jeder Änderung am Dokument). Nach
+  200 ms sagt der Kopf „Wird neu berechnet …“ mit Uhr (`icons.PATHS["running"]`);
+  die Zeilen, die beim Beginn dastanden, beginnen mit „Voriger Stand:“ in
+  `muted` (lesbar, nicht die Sperrfarbe mit 3,1 : 1), ohne Folgezeile, Knöpfe
+  und Kontextmenü gesperrt — auch wenn der Lauf beginnt, während das Menü offen
+  ist. Was währenddessen über `add_findings` dazukommt, gehört zum neuen
+  Stand. Die Reiterzahl bleibt, die Haltansage weicht in `_on_busy` dem Lauf.
+  Ein Bild vor der Erkennung gehört zum Dokument, bis es sich ändert
+  (`Session.picture_current`). Endet der Lauf ohne Ergebnis, sagt der Bericht
+  auch unter einem Fehler, dass für den aktuellen Stand keine abgeschlossene
+  Bewertung vorliegt (`set_stale`). `handoff_state` hat den Eingang `running`.
 - **Teil 2 und 4, volle Kette:** Statt eines zweiten, ganz feinen Laufs der
-  Sitzung rechnet die Auswertung im Fenster genau den Schritt, an dem die kurze
-  Kette ausging, mit allen Stufen weiter (`evaluate(full_chain_when_stuck=True)`,
-  `_FullChain`; nur `Session.run_evaluation` setzt es, Vorschauen nicht). Grund
+  Sitzung rechnet die Auswertung genau den Schritt, an dem nur die kurze Kette
+  ausging, im selben Lauf mit allen Stufen weiter (`_FullChain`), und zwar in
+  jedem Entwurfslauf: Fenster, Vorschau im Schrittdialog, Verlaufsumbau und
+  Agent sagen über denselben Stand dasselbe. Die erste Fassung tat es nur im
+  Fensterlauf; die Durchsicht zeigte, dass dann die Dialogvorschau *Übernehmen*
+  mit dem Entwurfssatz sperrte, der Umbau absagte und der Agent den Schritt
+  verwarf, und dass dieselbe Vorschau kalt und warm Verschiedenes sagte. Grund
   aus Kundensicht: Die Schritte davor und danach bleiben im Entwurf, der Kunde
-  wartet auf einen Schritt statt auf die ganze Kette (am Kundenteil 17 s), und
-  ein Entwurfsurteil steht nie als Fehler da. Das Ergebnis liegt unter dem
-  Entwurfsschlüssel im Cache, also gibt es kein Hin und Her mehr; bestätigt die
-  volle Kette den Halt, merkt die Speicherebene ihren Satz
-  (`ResultCache.refuse`), und der nächste Lauf sagt ihn ohne Nachrechnen. Der
-  Bauplan §17.2 nennt das seither (mit Ansage an Robert).
+  wartet auf einen Schritt statt auf die ganze Kette (am Kundenteil 17 s).
+  Eskaliert wird nur, wenn genau die Entwurfskette lief und der Schritt nach der
+  Güte fragte; eine Frage des ersten Durchgangs beantwortet der zweite aus dem
+  Gedächtnis. Ohne Frage merkt sich die Speicherebene das gerettete Ergebnis
+  sofort, auch hinter einem späteren Halt, und das Urteil der vollen Kette
+  (`ResultCache.refuse`, nur ein `BooleanFailedError` mit gelaufener
+  Voxelstufe — kein verlorener Hilfsprozess, keine geschlossene Frage); der
+  gemerkte Halt nennt die Kennung, die der Schritt heute trägt. Der Agent
+  rechnet mit dem Sitzungscache. Der Bauplan §17.2 nennt das seither.
 - **Teil 3:** Ein Halt nimmt mit, ob der Schritt nach der Güte fragte
   (`reads_quality`); `fine_current` ist nach einem Entwurfshalt falsch, Export
   und Druckdialog bestellen die feine Rechnung.
 
 Nachweis: `tests/test_evaluation.py`
-(`test_a_halt_of_the_short_chain_is_no_fine_verdict`,
-`test_the_window_run_goes_the_full_chain_where_the_short_one_ends`,
-`test_the_full_chain_says_its_verdict_once`,
-`test_a_preview_keeps_the_answer_of_the_short_chain`; die ersten drei am Stand
-davor rot), `tests/test_print_contract.py`
+(`test_a_halt_that_read_the_quality_is_no_fine_verdict`,
+`test_a_draft_run_goes_the_full_chain_where_the_short_one_ends`,
+`test_a_rescued_step_is_kept_even_when_a_later_one_stops`,
+`test_the_full_chain_says_its_verdict_once_with_the_step_of_today`,
+`test_a_helper_that_died_in_the_full_chain_is_tried_again`,
+`test_a_question_of_the_step_comes_once_per_run`,
+`test_a_halt_after_a_question_is_not_kept`,
+`test_a_move_is_judged_with_the_full_chain_like_the_window`,
+`test_the_agent_keeps_a_step_that_only_the_full_chain_carries`,
+`test_a_step_that_wants_one_stage_gets_no_full_chain`; jeder rot, wenn sein
+Teil der Behebung fehlt), `tests/test_print_contract.py`
 (`test_a_running_evaluation_goes_before_every_finding`),
 `tests/test_print_contract_ui.py`
-(`test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors`),
+(`test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors`,
+`test_a_report_after_a_cancelled_run_says_it_is_not_current`),
 `tests/test_ui.py` (`test_a_new_run_takes_the_halt_message_and_the_report_follows_it`,
-`test_the_window_goes_the_full_chain_where_the_short_one_ends`, ohne die
-Eskalation in der Sitzung rot). Regeln: `kern.md` („Auswertung“),
-`wartezeit.md` („Wartezeit“).
+`test_the_window_goes_the_full_chain_where_the_short_one_ends` mit Übernehmen im
+Schrittdialog, `test_the_report_follows_a_change_during_recognition_and_a_cancelled_run`).
+Regeln: `kern.md` („Auswertung“), `oberflaeche.md` („Der Prüfbericht sagt, wenn
+er zum vorigen Stand gehört“).
 
 ## RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)
 

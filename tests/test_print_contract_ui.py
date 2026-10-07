@@ -9,6 +9,7 @@ from PySide6.QtTest import QTest
 from app.core.scene import EvaluationResult
 from app.core.types import Finding, Report, Scene
 from app.ui.panels import ReportPanel
+from app.ui.theme import THEMES, current_theme
 from tests.helpers import make_object
 
 
@@ -1254,6 +1255,7 @@ def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_ap
         qt_app.processEvents()
         panel.alertsChanged.connect(alerts.append)
         assert panel.summary.text() == "Übergabe nicht empfohlen", "Voraussetzung"
+        assert panel.finding_consequence.isVisible(), "Voraussetzung: der Fehler hat eine Folge"
 
         held = panel.list.item(0)
         panel.set_running(True)
@@ -1281,6 +1283,20 @@ def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_ap
         assert not any(button.isEnabled() for button in buttons), "aber gesperrt"
         assert "vorigen Stand" in buttons[0].toolTip()
         assert alerts == [], "die Reitermarke zählt den alten Fehler nicht neu"
+        assert not panel.finding_consequence.isVisible(), (
+            "die Folge eines Befunds vom vorigen Stand steht nicht als gültig da"
+        )
+        muted = THEMES[current_theme()]["muted"]
+        assert held.foreground().color().name() == muted, "gedämpft, aber lesbar (§2.9)"
+
+        # Was während des Laufs dazukommt — der Satz eines Teilungsplans —,
+        # gehört zum neuen Stand; die Liste wird dabei neu gebaut.
+        panel.add_findings([Finding("split.plan", "info", "Die Hälften liegen bereit.")])
+        rows = [panel.list.item(row).text() for row in range(panel.list.count())]
+        assert "Die Hälften liegen bereit." in rows, rows
+        assert any(text.startswith("Voriger Stand: ") for text in rows), (
+            "der alte Fehler wurde mit dem Neubau wieder gültig"
+        )
 
         fresh = Finding("a.note", "info", "Ausgehöhlt.", object_id="a")
         panel.show_result(
@@ -1307,3 +1323,29 @@ def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_ap
     finally:
         host.close()
         host.deleteLater()
+
+
+def test_a_report_after_a_cancelled_run_says_it_is_not_current(qt_app):
+    """RM-534: Nach Abbruch oder Fehler steht der alte Bericht nicht wieder als gültig da.
+
+    Der Grund unter dem Kopf wich bisher jedem Fehler; nach dem Abbruch las
+    sich ein Fehler des letzten vollständigen Stands wie einer des Dokuments.
+    """
+    from app.ui.print_contract import NOT_CURRENT_REASON
+
+    panel = ReportPanel()
+    old = Finding("arrange.collision", "error", "Zwei Körper überschneiden sich.", object_id="a")
+    try:
+        panel.show_result(
+            EvaluationResult(Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((old,))))
+        )
+        panel.set_review_context("Geometrieprüfung: ganze Szene", ())
+        assert panel.review_reason.text() == "", "Voraussetzung: ein gültiger Fehler sagt genug"
+
+        panel.set_stale(True)
+
+        assert panel.review_reason.text() == str(NOT_CURRENT_REASON)
+        panel.set_stale(False)
+        assert panel.review_reason.text() == ""
+    finally:
+        panel.deleteLater()

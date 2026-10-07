@@ -1807,6 +1807,12 @@ class Session(QObject):
 
         Ist es gesetzt, ist es auch ``last_result``; ``result_current`` ist dann
         falsch, weil die Merkmale noch fehlen (siehe :meth:`picture_first`)."""
+        self.picture_current = False
+        """Ob :attr:`picture` den Stand des Dokuments zeigt (RM-534).
+
+        Eine Änderung während der Erkennung lässt das Bild stehen, bis das
+        nächste kommt; bis dahin gehören seine Zeilen im Bericht zum vorigen
+        Stand."""
         self.pending_orphan_check = False
         """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
         einmal, nicht immer."""
@@ -2405,6 +2411,7 @@ class Session(QObject):
         self._bind_filament_profiles()
         self._dirty = True
         self.result_current = False
+        self.picture_current = False
         self._keep_insertion_valid()
         self.projectChanged.emit()
         self.evaluate_async()
@@ -5219,6 +5226,7 @@ class Session(QObject):
     def evaluate_async(self) -> None:
         """Ein Lauf je Dokument; eine neuere Anfrage ersetzt eine wartende (§15.6)."""
         self.result_current = False
+        self.picture_current = False
         self.check_states.clear()
         if self._worker is not None and self._worker.isRunning():
             self._rerun_pending = True
@@ -5338,9 +5346,6 @@ class Session(QObject):
             on_recognition_answer=self._recognition_answered_in_worker,
             missing_basis=missing_profile_basis(document),
             check_status=worker.checkWith.emit if isinstance(worker, _EvaluationWorker) else None,
-            # Die Antwort der kurzen Kette ist im Fenster keine: Der Bericht
-            # sagte „… sagt erst die vollständige“, und keiner fragte sie (RM-534).
-            full_chain_when_stuck=True,
         )
         # Bei jedem Lauf und nicht nur beim Öffnen: Solange mit einem
         # mitgebrachten oder einem Ersatzdrucker gerechnet wird, sagt es der
@@ -5615,6 +5620,7 @@ class Session(QObject):
             selection=self._selection,
             cancelled=self.agent_cancel,
             progress=self.agentProgress.emit,
+            cache=self.cache,
             views=self._pending_views,
         )
         proposal = agent.propose(request)
@@ -6561,6 +6567,7 @@ class Session(QObject):
             return
         self.last_result = picture
         self.picture = picture
+        self.picture_current = True
         self.result_generation += 1
         self.result_current = False
         self.pictureChanged.emit(picture)

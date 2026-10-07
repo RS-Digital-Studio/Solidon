@@ -30,6 +30,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final, Protocol, cast
 
+from app.core.errors import AppError
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, results_cache_dir
 from app.core.scene.serialise import (
@@ -289,14 +290,16 @@ class ResultCache:
         self._cost = 0
         self._budget = triangle_budget
         self._disk = disk
-        self._refusals: OrderedDict[str, Finding] = OrderedDict()
+        self._refusals: OrderedDict[str, AppError] = OrderedDict()
         """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
 
         Ein Ergebnis gibt es dort nicht, also auch keinen Eintrag oben. Ohne
         dieses Gedächtnis rechnete jede Änderung hinter einem solchen Schritt
         ihn noch einmal mit allen Stufen — am Kundenteil 17 s, um denselben
-        Satz zu sagen. Nur im Speicher: Ein Halt ist kein vollständiger
-        Durchlauf (§15.6), und die Platte trägt nur, was einer hinterlassen hat."""
+        Satz zu sagen. Gemerkt wird die Ausnahme, nicht der Befund: Den baut
+        die Auswertung am Treffer mit der Kennung, die der Schritt dann trägt.
+        Nur im Speicher — die Platte trägt nur, was ein vollständiger
+        Durchlauf hinterlassen hat (§15.6)."""
         self.statistics = CacheStatistics()
         self._lock = threading.RLock()
         """Ein Schloss, weil mehr als ein Faden hier hineinschreibt.
@@ -380,15 +383,15 @@ class ResultCache:
         if self._disk is not None and to_disk:
             self._disk.put(key, result)
 
-    def refuse(self, key: str, finding: Finding) -> None:
+    def refuse(self, key: str, error: AppError) -> None:
         """Merkt, dass der Schritt unter ``key`` auch mit der vollen Kette anhält."""
         with self._lock:
             self._refusals.pop(key, None)
-            self._refusals[key] = finding
+            self._refusals[key] = error
             while len(self._refusals) > _REFUSALS_KEPT:
                 self._refusals.popitem(last=False)
 
-    def refusal(self, key: str) -> Finding | None:
+    def refusal(self, key: str) -> AppError | None:
         """Der gemerkte Halt der vollen Kette unter ``key``, sonst ``None``."""
         with self._lock:
             return self._refusals.get(key)

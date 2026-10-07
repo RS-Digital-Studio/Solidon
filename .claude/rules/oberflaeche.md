@@ -271,6 +271,15 @@ eine neue Freigabe. Nur eine ausdrücklich gemeldete Rückfrage darf ohne Ergebn
 zum Übernehmen weitergehen; eine erfolgreiche Rechnung mit ausgelassenem Bild
 liefert eine leere `SceneDifference`, kein `None`.
 
+## Der Prüfbericht sagt, wenn er zum vorigen Stand gehört
+
+Rechnet es über 200 ms und gehört das Gezeigte nicht zum Dokument, sagt der
+Kopf „Wird neu berechnet …“; was beim Beginn dastand, trägt „Voriger Stand:“
+in `muted`, ohne Folgezeile, Handlungen gesperrt (`ReportPanel.set_running`,
+Anschluss `MainWindow._follow_the_run_in_the_report`). Endet der Lauf ohne
+Ergebnis, steht der Grund auch unter einem Fehler (`set_stale`). Sonst liest
+der Kunde einen widerrufenen Fehler als gültig (RM-534).
+
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 
 **Wo Felder stehen, tragen sie ihren Namen — und „wo“ heißt jede Stelle**, nicht

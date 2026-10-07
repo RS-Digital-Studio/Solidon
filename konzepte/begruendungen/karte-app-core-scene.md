@@ -443,6 +443,11 @@ weiter: Ohne verlässliche Auskunft darf keine Leeranzeige „ungenutzt“ behau
 
 *Früher unter „Der Kreislauf“.*
 
+Aus der Karte verschoben, als dort das Urteil der vollen Kette (RM-534)
+dazukam: Bei den Maßquellen, die durch beide Cache-Ebenen reisen, bleiben
+fehlende unbekannt; `bore_advice` trennt Beleg, Schätzung und Vorgabe, auch
+im eigenen Bausteinsatz; `at_hole_advice` erhält weiter nur den Durchmesser.
+
 **Was eine Operation liest, steht im Schlüssel** — auch das Profil jedes
 Eingangs mit eigenem Material (`evaluate._body_profiles`, mit Kalibrierung)
 und jedes Drucker- und Materialfeld in `profile_key`, das eine Operation

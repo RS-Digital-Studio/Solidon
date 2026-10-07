@@ -45,14 +45,6 @@ Einzelnen stehen unter denselben Überschriften in
 Die letzte gültige Darstellung bleibt sichtbar — nie ein leerer Viewport, nie
 ein blockierendes Fenster; lange Rechnungen laufen nicht im Qt-Hauptthread.
 
-**Der Prüfbericht sagt, wenn seine Zeilen zum vorigen Stand gehören** (RM-534):
-Rechnet es länger als 200 ms und gehört das Gezeigte nicht zum Dokument
-(`MainWindow._follow_the_run_in_the_report`), steht im Kopf „Wird neu berechnet
-…“ mit Uhr, vor jeder Zeile „Voriger Stand:“, ihre Handlungen gesperrt
-(`ReportPanel.set_running`); die Reiterzahl bleibt, ein alter Fehler blinkt
-nicht als neuer, und die Haltansage weicht dem Lauf. Ein Bild vor der
-Erkennung ist kein voriger Stand.
-
 Die Wartezeit einer historischen Vorschau beginnt bereits beim Vorbereiten
 ihres Eingangszustands. Die folgende Änderung setzt weder Uhr noch Hinweis
 zurück; Abbruch und Fehler beenden beide Phasen gemeinsam.
