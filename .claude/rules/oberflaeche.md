@@ -142,10 +142,9 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   Gedankenstriche im Übermaß; der zusammenfassende Schlusssatz. Dagegen:
   kürzer, ruhig ein unfertiger Gedanke oder umgangssprachlicher Einwurf, ein
   Absatz ungerundet. Gilt auch im Gespräch mit Robert. Semikolon, die Formel
-  „Nur …:“ und Fachwörter der Datenhaltung hält `test_wording` mit
-  eingefrorenem Bestand über jeden Katalogtext, Handbuch eingeschlossen
-  (`tests/data/text_patterns.json`, RM-509); ein Semikolon, das nur die
-  Übersetzung trägt, ebenso (`translated_semicolons.json`).
+  „Nur …:“ und Fachwörter der Datenhaltung hält `test_wording` über jeden
+  Katalogtext samt Übersetzung mit eingefrorenem Bestand
+  (`tests/data/text_patterns.json`, `translated_semicolons.json`, RM-509).
 - **Nach außen heißt es „Version“, nicht „Fassung“** (Entscheidung Robert) —
   ein zweites Wort lässt den Kunden einen Unterschied suchen. Intern (Commits,
   Roadmap, Konzepte, Regeln) darf „Fassung“ bleiben; sinngemäß für jedes zweite
@@ -155,10 +154,8 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   er bemerkt („die Setup-Datei ist 23 Megabyte größer“), eine Zusage, die er
   prüfen kann. Keine Zählung behobener eigener Fehler, kein Umfang unserer
   Arbeit („31 von 37 Dialogen geprüft“), keine Zahl der Stellen, an denen eine
-  Zusage neu eingelöst wurde: Der Kunde liest daraus, was bis gestern fehlte,
-  und die Zahl veraltet mit dem nächsten Fund — das Verhalten zu beschreiben
-  ist der bessere Satz. In `ROADMAP.md`, Commits und Karten bleibt die
-  Fehlerzählung richtig.
+  Zusage neu eingelöst wurde — das Verhalten zu beschreiben ist der bessere
+  Satz. In `ROADMAP.md`, Commits und Karten bleibt die Fehlerzählung richtig.
 - **Gewonnene Druckzeit als Anteil** (Entscheidung Robert): „rund 40 Prozent
   kürzer“ — „rund“, wenn an einem Modell gemessen —, nicht die Stunden eines
   fremden Modells. Rechenzeiten bleiben in Sekunden.
