@@ -81,6 +81,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
 | [RM-546 — *Merkmal drehen* um die eigene Achse einer runden Bohrung tut nichts und sagt es nicht](#rm-546) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Review (06.10.); Befund `rotate_feature.unchanged` auch für eine Drehung, die die Form auf sich selbst abbildet |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
+| [RM-540 — Ein angeschnittenes erzeugtes Merkmal behält sein volles Maß, und die Schnittwege ordnen es verschieden zu](#rm-540) | Geometrie, Erkennung und Druckvorbereitung | Zwilling seit der Ausdehnungsregel (06.10.); ein Kriterium für alle Schnittwege festlegen |
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
@@ -2891,6 +2892,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   unter z = 0 liegt, mit einer Handlung, die die Richtung umkehrt, in allen Katalogen.
   **Abnahme:** Kabeldurchführung von innen auf einen Boden und an eine Seitenwand gesetzt, je
   ein Befund mit Handlung; danach sitzt der Block innen und der Boden auf dem Bett.
+
+<a id="rm-540"></a>
+
+- [ ] **RM-540 — Ein angeschnittenes erzeugtes Merkmal behält sein volles Maß, und die
+  Schnittwege ordnen es verschieden zu.** Seit dem 06.10.2026 streicht die Auswertung ein
+  erzeugtes Merkmal erst, wenn ein Schritt es mit seiner ganzen Ausdehnung aus dem Körper
+  geschnitten hat (`evaluate._cut_away_here`); ein Gewinde, unterhalb seiner Mitte
+  abgeschnitten, bleibt am Netz (`tests/test_cut_features.py`) — mit seiner vollen alten Länge,
+  die die Unterdrückung der Wendelphantome begrenzt, und ungeprüft. Dasselbe gilt für Bohrung,
+  Fase und `lid_cavity` an einem Prüfstück: Die Passung bleibt messbar, das Maß ist das alte.
+  `prepare_ops._features_after_split` ordnet dagegen nach der Mitte zu: *Teilen* gibt das
+  Gewinde nur einer Hälfte, und das exakte *Abschneiden* verliert es laut Review auf der anderen
+  (nicht nachgemessen). **Offen:** ein Kriterium für alle Schnittwege (nach Ausdehnung zuordnen,
+  Maß kürzen oder neu messen), an beiden Kernen gleich. **Abnahme:** ein Bolzen, durch sein
+  Gewinde geteilt und abgeschnitten, an Netz und exaktem Kern: dasselbe Gewinde mit derselben
+  Länge an derselben Hälfte; ein Prüfstück durch eine Bohrung nennt ihre Tiefe im Stück.
 
 <a id="rm-541"></a>
 

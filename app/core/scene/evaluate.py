@@ -1338,6 +1338,7 @@ def _evaluate(
                         for name in entry.feature_ids
                     ),
                     unrecognised=recognition_left_out,
+                    features_complete=spec.features_complete,
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -1874,9 +1875,11 @@ PLACEMENT_STATE_CODES: Final = frozenset(
 #: wiederzuerkennen"). Die Reparatur ändert das Netz mit Absicht (Bedienweg C5,
 #: 24.09.2026); das Teilen verbraucht mit Absicht, was an der Schnittfläche lag
 #: (RM-217, KUNDE-11): Am vergrößerten Organizer standen nach *Modell teilen*
-#: zehn solche Hinweise, und auf keines der Merkmale zeigte etwas. Ein Verlust
-#: **mit** Verweis bleibt an jedem Schritt eine Warnung.
-QUIET_LOSSES: Final = frozenset({"repair", "split_pinned", "split_line"})
+#: zehn solche Hinweise, und auf keines der Merkmale zeigte etwas. Ebenso das
+#: Prüfstück: Es verbraucht mit Absicht alles außerhalb seines Fensters, und
+#: auf das Bett gelegt findet die Flächensuche seine Stücke nicht an den alten
+#: Dreiecken. Ein Verlust **mit** Verweis bleibt an jedem Schritt eine Warnung.
+QUIET_LOSSES: Final = frozenset({"repair", "split_pinned", "split_line", "test_piece"})
 
 #: Der Satz, mit dem ein Schnitt sagt, dass seine Stücke noch dort stehen, wo
 #: sie im ganzen Teil standen (``prepare_ops._halves_still_together``).
@@ -2474,6 +2477,95 @@ def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
         value < low - EPS_DISPLAY or value > high + EPS_DISPLAY
         for value, low, high in zip(position, bounds.minimum, bounds.maximum, strict=True)
     )
+
+
+def _cut_away_entirely(feature: Feature, bounds: BoundingBox) -> bool:
+    """Liegt dieses Merkmal mit seiner ganzen Ausdehnung außerhalb des Körpers?
+
+    Die Mitte allein sagt das nicht (anders als in der Waisenschleife, die nur
+    fragt, ob ein schon verlorenes Merkmal einen Hinweis wert ist):
+    ``lid_cavity`` sitzt im Schwerpunkt der Öffnung, ein Gewinde auf seiner
+    Achse, und ein Prüfstück an der Wand einer Dose trägt beide doch. Gemessen
+    wird ein Quader, der das Merkmal sicher umschließt — Länge oder Tiefe ganz
+    längs der Achse, denn nicht jede Art misst von ihrer Mitte, der halbe
+    Durchmesser quer dazu und beim Langloch seine Länge ganz entlang
+    ``direction``. Wo die Maße keine solche Grenze hergeben, etwa eine Fläche,
+    die nur ihren Inhalt kennt, bleibt das Merkmal; ein beschnittenes mit
+    Dreiecken entscheidet :func:`_cut_by_the_step`.
+    """
+    params = feature.params
+    centre = params.get("centre")
+    axis = params.get("axis")
+    slot = params.get("direction")
+    if not isinstance(centre, tuple | list) or len(centre) != 3:
+        return False
+    if not isinstance(axis, tuple | list) or len(axis) != 3:
+        return False
+    if slot is not None and (not isinstance(slot, tuple | list) or len(slot) != 3):
+        return False
+    try:
+        radius = float(params.get("diameter") or 0.0) / 2.0 or float(params.get("radius") or 0.0)
+        length = float(params.get("length") or 0.0)
+        along = max(length, float(params.get("depth") or 0.0))
+        direction = [float(value) for value in axis]
+        sideways = [float(value) for value in slot] if slot is not None else [0.0, 0.0, 0.0]
+        middle = [float(value) for value in centre]
+    except TypeError, ValueError:
+        return False
+    norm = math.sqrt(sum(value * value for value in direction))
+    span = math.sqrt(sum(value * value for value in sideways))
+    if radius <= 0.0 or along <= 0.0 or norm <= EPS_GEOM:
+        return False
+    if slot is not None and span <= EPS_GEOM:
+        return False
+    for index, (value, low, high) in enumerate(
+        zip(middle, bounds.minimum, bounds.maximum, strict=True)
+    ):
+        share = min(abs(direction[index]) / norm, 1.0)
+        reach = share * along + math.sqrt(max(0.0, 1.0 - share * share)) * radius
+        if slot is not None:
+            reach += min(abs(sideways[index]) / span, 1.0) * length
+        if value + reach < low - EPS_DISPLAY or value - reach > high + EPS_DISPLAY:
+            return True
+    return False
+
+
+def _cut_away_here(
+    feature: Feature,
+    before: Feature | None,
+    bounds: BoundingBox,
+    previous_bounds: BoundingBox | None,
+) -> bool:
+    """Hat **dieser** Schritt das Merkmal weggeschnitten?
+
+    Ganz außerhalb liegt es jetzt (:func:`_cut_away_entirely`), und vorher lag
+    es das noch nicht — gemessen an seinem Vorgänger und dem Körper vor dem
+    Schritt. Ein Baustein darf ein Merkmal neben dem Körper erklären (das
+    Gegenstück setzt eine Bohrung neben die Platte, und eine Passung hängt
+    daran); das hat kein späterer Schritt weggeschnitten, auch nicht *Material
+    ändern*. Ohne Vorgänger oder Körper davor hat der Schritt nichts
+    weggenommen, das man ihm zuschreiben könnte.
+    """
+    if before is None or previous_bounds is None:
+        return False
+    return _cut_away_entirely(feature, bounds) and not _cut_away_entirely(before, previous_bounds)
+
+
+def _needed_now(
+    name: FeatureId,
+    needed: Mapping[FeatureId, tuple[str, ...]] | None,
+    referenced: Collection[FeatureId],
+) -> bool:
+    """Braucht nach diesem Schritt noch jemand das Merkmal, das er weggeschnitten hat?
+
+    Die eine Antwort für jeden Weg, auf dem ein Schritt ein Merkmal abschneidet
+    (eine beschnittene Fläche ohne Stück, ein erklärtes oder ungeprüft
+    mitreisendes Merkmal außerhalb des Körpers, eine Waise draußen): Ein
+    Verweis eines früheren Schritts ist verbraucht (:func:`_needed_after`), und
+    über ihn nach einem gelungenen Schnitt zu warnen, hieße einen Fehler zu
+    melden, wo keiner ist. Ohne die Angabe gilt jeder Verweis im Dokument.
+    """
+    return name in needed if needed is not None else name in referenced
 
 
 def _divided_in_place(feature: Feature | None, faces_now: PlanarFaces, source: Mesh | None) -> bool:
@@ -4011,6 +4103,7 @@ def _with_features(
     advance: Callable[[float], None] | None = None,
     unrecognised: set[ObjectId] | None = None,
     origin_features: Mapping[FeatureId, Feature] | None = None,
+    features_complete: bool = False,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -4087,6 +4180,9 @@ def _with_features(
     ``unrecognised`` nimmt den Körper auf, dessen Erkennung ``detect_features=False``
     ausgelassen hat — wo sie gerechnet oder gefragt hätte. Ein zweiter Lauf mit
     Erkennung holt sie nach (:attr:`EvaluationResult.recognition_left_out`).
+
+    ``features_complete`` kommt aus dem Register (``OperationSpec``): Die
+    Ausgabe trägt ihre Merkmale vollständig, nichts Erzeugtes wird nachgetragen.
     """
     watch = cancelled or NeverCancelled()
     if unrecognised is not None:
@@ -4864,6 +4960,10 @@ def _with_features(
     # Partner findet, ist ``orphaned``. Mehrdeutig zählt als gefunden — zwei
     # Kandidaten sind ein Kandidat zu viel, nicht keiner.
     consumed: set[FeatureId] = set()
+    #
+    # ``gone_here`` sammelt, was der Schritt weggeschnitten hat; es kommt unten
+    # auch nicht über ``carried`` zurück.
+    gone_here: set[FeatureId] = set()
     if declared:
         watch.raise_if_cancelled()
         if say is not None:
@@ -4896,11 +4996,23 @@ def _with_features(
                 mesh.bounds,
             )
         }
+        # **Und was dieser Schritt ohne Partner ganz aus dem Körper geschnitten
+        # hat, ebenso** (:func:`_cut_away_here`) — auch ein Merkmal, das die
+        # Erkennung nie sieht: Das Prüfstück aus dem Gehäuse-Beispiel trug die
+        # Einführfase einer Buchse 40 mm neben sich.
+        cut_off |= {
+            name
+            for name in seen.orphaned
+            if _cut_away_here(
+                declared[name], features_before.get(name), mesh.bounds, previous_bounds
+            )
+        }
+        gone_here |= cut_off
         if cut_off:
             findings.extend(
                 _lost_reference_finding(name, True, needed, entry, operation)
                 for name in sorted(cut_off)
-                if name in referenced
+                if _needed_now(name, needed, referenced)
             )
             declared = {name: feature for name, feature in declared.items() if name not in cut_off}
             seen = dataclasses.replace(
@@ -5009,6 +5121,24 @@ def _with_features(
             if feature.provenance == "detected"
         },
     }
+    # **Gibt die Operation ihre Merkmale vollständig aus, vergleicht die
+    # Zuordnung nur diese** (``OperationSpec.features_complete``). Das Übrige
+    # hat sie weggenommen, und an seiner alten Stelle träfe es zufällig ein
+    # neues: Am abgelegten Prüfstück hieß die Schnittfläche wie die Bettfläche
+    # des Turms, weil beide bei z = 0 liegen.
+    withdrawn: set[FeatureId] = set()
+    if features_complete:
+        withdrawn = set(previous) - set(output_features)
+        findings.extend(
+            _lost_reference_finding(
+                name, previous[name].provenance == "generated", needed, entry, operation
+            )
+            for name in sorted(withdrawn)
+            if _needed_now(name, needed, referenced)
+        )
+        # Und in der Lage der Ausgabe: Was ``declared`` hier selbst streicht,
+        # käme sonst über ``carried`` an der alten Stelle zurück.
+        previous = {name: output_features[name] for name in previous if name in output_features}
 
     # **Ein erzeugtes Merkmal, das die Operation nicht selbst wieder ausgibt,
     # wird mitgenommen — nicht vergessen.** Hier stand bis zum 22.08.2026, dass
@@ -5025,8 +5155,9 @@ def _with_features(
         for name, feature in previous.items()
         if getattr(feature, "provenance", "detected") == "generated"
         and name not in declared
-        # Verbraucht ist schon oben entschieden und gemeldet.
+        # Verbraucht und weggeschnitten ist schon oben entschieden und gemeldet.
         and name not in consumed
+        and name not in gone_here
     }
     # Mitnehmen heißt nicht glauben. Wo die Erkennung die Art des Merkmals
     # sieht, wird es wie ein erkanntes zugeordnet und fällt heraus, wenn es
@@ -5048,6 +5179,22 @@ def _with_features(
     # es entsteht in einem Baustein, ``detect`` kennt die Art nicht, und geprüft
     # verlöre es jede Operation.
     unchecked = {name: f for name, f in carried.items() if name not in checked}
+    # **Ungeprüft heißt nicht: auch weggeschnitten.** Was dieser Schritt ganz
+    # aus dem Körper geschnitten hat (:func:`_cut_away_here`), fällt weg wie ein
+    # Merkmal ohne Partner oben: *Abschneiden* gibt nur die Merkmale seiner
+    # Seite aus, und die Fase einer Buchse auf der anderen kam hier zurück.
+    dropped = {
+        name
+        for name, f in unchecked.items()
+        if _cut_away_here(f, features_before.get(name), mesh.bounds, previous_bounds)
+    }
+    if dropped:
+        findings.extend(
+            _lost_reference_finding(name, True, needed, entry, operation)
+            for name in sorted(dropped)
+            if _needed_now(name, needed, referenced)
+        )
+        unchecked = {name: f for name, f in unchecked.items() if name not in dropped}
 
     previous = {
         name: feature
@@ -5103,17 +5250,17 @@ def _with_features(
         }
 
     if not previous:
-        if consumed:
+        if consumed or gone_here or withdrawn:
             # Dieselbe Sperre wie unten bei ``apply_mapping``: Ohne erkannte
             # Vorgänger übernähme ein neues Merkmal sonst ungeprüft den Namen
-            # der verbrauchten Fläche. Gesperrt ist auch, was daneben
+            # der verbrauchten, weggeschnittenen oder weggenommenen Fläche. Gesperrt ist auch, was daneben
             # eingehängt wird — sonst fiele der Ausweichname auf ein erzeugtes
             # oder mitreisendes Merkmal und würde beim Zusammenführen still
             # überschrieben.
             detected = apply_mapping(
                 detected,
                 MatchResult(fresh=tuple(detected)),
-                reserved={*unchecked, *declared, *consumed},
+                reserved={*unchecked, *declared, *consumed, *gone_here, *withdrawn},
             )
         return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
 
@@ -5199,8 +5346,11 @@ def _with_features(
         # es wurde weggeschnitten, und zwar von jemandem, der genau das wollte.
         # Ein Prüfstück schneidet 22 mm aus einem 70er Gehäuse: acht Merkmale
         # bleiben draußen, und acht Warnungen darüber sind acht Warnungen über
-        # eine gelungene Operation.
-        if _outside(old_feature, mesh.bounds, False):
+        # eine gelungene Operation. Braucht es danach noch jemand, gilt die
+        # Warnung unten — wie an jedem Weg, der etwas abschneidet (``_needed_now``).
+        if _outside(old_feature, mesh.bounds, False) and not _needed_now(
+            old_id, needed, referenced
+        ):
             continue
 
         # Ein verschwundener Defekt ist kein Verlust, sondern das Ziel. Eine
@@ -5376,7 +5526,10 @@ def _with_features(
         detected,
         matched,
         previous=previous,
-        reserved={*rigid_orphans, *unchecked, *declared, *consumed},
+        # Was die Operation weggenommen, verbraucht oder weggeschnitten hat,
+        # bleibt vergeben: Ein neues Merkmal unter einem alten Namen träfe jeden
+        # späteren Bezug darauf still.
+        reserved={*rigid_orphans, *unchecked, *declared, *consumed, *gone_here, *withdrawn},
     )
     # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.
     # ``apply_mapping`` trägt den *Namen* weiter, die Provenienz steckt aber im

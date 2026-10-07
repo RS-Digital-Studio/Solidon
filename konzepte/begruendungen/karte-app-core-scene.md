@@ -439,6 +439,36 @@ Skizzen und Stellungen verwenden `nested_references(strict=True)`. Dessen
 Sammler parsen ihren Text einmal und reichen unlesbare Inhalte als Fehler
 weiter: Ohne verlässliche Auskunft darf keine Leeranzeige „ungenutzt“ behaupten.
 
+Aus der Karte verschoben (Endstand): Das Zusammenlegen in `_without_repeats`
+ist Datenidentität ohne geometrische Näherung oder Rundung. Und weil
+`_finding_from` `location` und `outline` als räumliche Felder übernimmt,
+führt `as_error` beim Rückweg zu den tatsächlichen Punkten statt zu deren Text.
+
+Ein Schritt, der schneidet, nimmt auch Merkmale weg, die die Erkennung nie
+sieht (Einführfase einer Buchse, Mutterntasche, Gewinde). Sie reisten
+ungeprüft mit, und das Prüfstück des Gehäuse-Beispiels trug die Fase einer
+Buchse 40 mm neben sich; *Abschneiden* ebenso. Gestrichen wird nur, was vor
+dem Schritt noch im Körper lag (`_cut_away_here`): Ein Baustein, der ein
+Merkmal neben dem Körper erklärt, hat es nicht weggeschnitten — weder im
+selben Schritt noch ein späterer. Das Gegenstück setzt seine Bohrung ohne Ort
+neben die Platte, eine Passung hängt daran, und *Material ändern* danach
+strich sie in der zweiten Fassung als weggeschnitten (`tests/test_cut_features.py`).
+
+Entschieden wird an der Ausdehnung, nicht an der Mitte (Review der ersten
+Fassung): `lid_cavity` und `lid_collar` sitzen im Schwerpunkt der Öffnung, und
+ein Prüfstück an der Wand einer Dose verlor so beide Passungsmerkmale, der
+Bericht zeigte `fit.missing_feature`; ein Gewinde, unterhalb seiner Mitte
+abgeschnitten, verschwand ganz. Gewarnt wird nur, wenn nach dem Schritt noch
+jemand das Merkmal braucht (`_needed_now`) — an allen vier Stellen, die etwas
+abschneiden.
+
+Das Prüfstück legt sein Stück auf das Bett, ohne dass die Auswertung die
+Bewegung kennt. Es bewegt die Merkmale selbst und erklärt seine Ausgabe für
+vollständig (`features_complete`); sonst verglich die Zuordnung Altes an alter
+Stelle, und die Schnittfläche unten hieß wie die Bettfläche des Turms. Eine
+Fläche, die das Fenster teilt, findet die Auswertung nur ohne Bewegung an
+ihren alten Dreiecken wieder; bewegt reist sie deshalb nicht mit und heißt neu.
+
 ## Cache und Hashes
 
 *Früher unter „Der Kreislauf“.*

@@ -18421,7 +18421,11 @@ class TestPieceParams(BaseParams):
     # statt in der Sprache der Rechnung im Ergebnis-Cache zu stehen.
     # 3 (RM-184): Das Fenster wird plattformgleich verschoben; ein Stück aus
     # einem Schritt davor könnte die letzte Stelle einer anderen Maschine tragen.
-    cache_version="3",
+    # 4: Das Stück gibt die Merkmale des Teils aus, mit ihm bewegt.
+    cache_version="4",
+    # Und nur die: Was es nicht ausgibt, hat das Fenster weggenommen
+    # (``_features_of_the_piece``); nachgetragen stünde es über dem Bett.
+    features_complete=True,
     title=_("Prüfstück erzeugen"),
     category="prepare",
     params=TestPieceParams,
@@ -18481,6 +18485,11 @@ def test_piece(ctx: OpContext) -> OpResult:
     # ginge durch ein Matrixprodukt, und das Fenster trüge die letzte Stelle
     # der Maschine (``tests/test_platform_identity.py``, ``fit_pieces``).
     transform.moved(window, translation(centre))
+    half = params.size / 2.0
+    window_box: tuple[Vec3, Vec3] = (
+        (centre[0] - half, centre[1] - half, centre[2] - half),
+        (centre[0] + half, centre[1] + half, centre[2] + half),
+    )
     pieces: list[MeshData] = []
     solvers: list[SolverInfo | None] = []
     findings: list[Finding] = []
@@ -18512,11 +18521,12 @@ def test_piece(ctx: OpContext) -> OpResult:
 
     for index in range(1, len(pieces)):
         findings.extend(_fit_in_the_piece(pieces[0], pieces[index], params.size, ctx))
+    cut = pieces
     if params.on_bed:
         pieces = _side_by_side([place_on_bed(piece) for piece in pieces])
 
     outputs: list[SceneObject] = []
-    for entry, mesh, piece in zip(ctx.inputs, meshes, pieces, strict=True):
+    for entry, mesh, before, piece in zip(ctx.inputs, meshes, cut, pieces, strict=True):
         share = abs(piece.volume) / max(abs(mesh.volume), EPS_GEOM)
         # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort. Mehrere
         # Stücke tragen den Namen ihres Teils, sonst hießen sie gleich.
@@ -18525,7 +18535,14 @@ def test_piece(ctx: OpContext) -> OpResult:
             if len(pieces) == 1
             else _("Prüfstück {name}", name=entry.name)
         )
-        outputs.append(dataclasses.replace(entry, mesh=piece, name=name, features={}))
+        outputs.append(
+            dataclasses.replace(
+                entry,
+                mesh=piece,
+                name=name,
+                features=_features_of_the_piece(entry, mesh, window_box, before, piece),
+            )
+        )
         findings.append(
             Finding(
                 code="prepare.test_piece",
@@ -18637,6 +18654,65 @@ def _fit_in_the_piece(
             values={"gap_mm": round(gap, 3)},
         )
     ]
+
+
+def _features_of_the_piece(
+    entry: SceneObject,
+    mesh: MeshData,
+    window: tuple[Vec3, Vec3],
+    cut: MeshData,
+    placed: MeshData,
+) -> dict[FeatureId, Feature]:
+    """Die Merkmale des Teils, mit dem Stück bewegt.
+
+    Das Stück trägt sie dort, wo sie im Teil lagen, bis *Auf das Bett setzen*
+    es absenkt und weitere Stücke danebenrückt. Ohne diese Bewegung blieben
+    sie über dem Bett stehen: Am Turm verlor die Bohrung einer Buchse ihren
+    Namen, und ihre Fase stand 50 mm über dem Stück. Was außerhalb des
+    Fensters lag, nimmt die Auswertung heraus, an derselben Stelle wie bei
+    jedem Schnitt (``evaluate._with_features``, weggeschnitten).
+
+    **Eine Fläche, die das Fenster teilt, reist nur ohne Bewegung mit.** Ihr
+    Stück findet die Auswertung an ihren alten Dreiecken
+    (``evaluate._divided_partners``), und nach einer Bewegung liegen die
+    woanders: Am abgelegten Stück stand ``face_top`` sonst mit der alten Mitte
+    und 380 statt 52 mm². Bewegt gibt das Stück deshalb nur die ebenen Flächen
+    aus, deren Dreiecke ganz im Fenster liegen; die geteilte heißt neu.
+    """
+    shift = tuple(
+        float(placed.bounds.minimum[axis]) - float(cut.bounds.minimum[axis]) for axis in range(3)
+    )
+    features: Mapping[FeatureId, Feature] = entry.features
+    if not all(is_zero(value) for value in shift):
+        from app.core.perceive.matching import transformed_features
+
+        features = transformed_features(
+            {
+                name: feature
+                for name, feature in features.items()
+                if not (feature.kind == "face" and feature.face_indices)
+                or _inside_the_window(mesh, feature.face_indices, window)
+            },
+            as_transform(translation((shift[0], shift[1], shift[2]))),
+        ).candidates
+    return _without_old_triangles(features)
+
+
+def _inside_the_window(mesh: MeshData, faces: Sequence[int], window: tuple[Vec3, Vec3]) -> bool:
+    """Liegen alle Ecken dieser Dreiecke im Fenster (auf die Anzeigestelle)?
+
+    Nummern, die nicht in dieses Netz zeigen, belegen nichts: dann nein.
+    """
+    triangles = np.asarray(mesh.raw.faces)
+    picked = np.asarray(faces, dtype=np.int64)
+    if not len(picked) or picked.min() < 0 or picked.max() >= len(triangles):
+        return False
+    corners = np.asarray(mesh.raw.vertices)[triangles[picked]]
+    low, high = window
+    return bool(
+        np.all(corners.min(axis=(0, 1)) >= np.asarray(low) - EPS_DISPLAY)
+        and np.all(corners.max(axis=(0, 1)) <= np.asarray(high) + EPS_DISPLAY)
+    )
 
 
 def _side_by_side(pieces: list[MeshData]) -> list[MeshData]:
