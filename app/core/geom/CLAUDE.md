@@ -266,18 +266,18 @@ erzeugt, wird vor den Verbindern abgesagt (`check_cut_contact`): Schnittfläche
 und Modellwand treffen sich längs einer Linie. `CutContactError` zeigt zum
 Verschieben auf das Lagefeld. `split_at_plane` prüft beide Hälften, `cut_away`
 nur die behaltene. War der Eingang schon offen, bleibt seine eigene
-Reparaturdiagnose bestehen. Auto Split lässt Kontaktkandidaten bei Konturzahl
-und Vorauswahl aus und nennt den Grund, falls keine verwendbare Lage bleibt.
+Reparaturdiagnose bestehen. Auto Split lässt Kontaktkandidaten aus und nennt
+den Grund, falls keine verwendbare Lage bleibt.
 Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 
 **Reparatur** (`repair.py`):
 
 - `repair()` übernimmt eine Bereinigung nur, wenn offene plus verzweigte
-  Kanten nicht zunehmen (`_tears_it_further`). Verschweißt wird überall mit
-  `weld`: Suppe zuerst auf `EPS_GEOM` (`_read_soup`), dann nur an Rändern
-  (`_joined_at_the_rims`), je Flächenblatt (`_sheets`, `_pseudo_angle`), nie
-  zum Schlechteren (`_damage`). `remove_small_components` misst Fläche,
-  `remove_hollow_shells` Volumen.
+  Kanten nicht zunehmen (`_tears_it_further`). `weld` verschweißt die Suppe
+  auf `EPS_GEOM` (`_read_soup`), dann an Rändern (`_joined_at_the_rims`), je
+  Flächenblatt (`_sheets`, `_pseudo_angle`), nie schlechter (`_damage`).
+  Entfernt wird nach Fläche (`remove_small_components`), Volumen
+  (`remove_hollow_shells`), auf Wunsch Einschluss (`remove_inner_shells`).
 - Gefüllt wird als Band (`_band_between`, `_wall_between_rims`), Fläche mit
   Löchern (`_bridged_holes`), glatteste Triangulierung (`_smoothest_fill`),
   über Ohren (`_loop_triangles`), zuletzt als Fächer — **nie eine Fläche auf

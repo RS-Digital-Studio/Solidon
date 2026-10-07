@@ -4035,3 +4035,30 @@ def test_repair_removes_a_previously_edited_pin_from_features_and_cached_replay(
     assert missing.scene.objects[original.id].mesh.volume == pytest.approx(
         math.prod(dimensions["stock_size"])
     )
+
+
+def test_two_bodies_touching_along_an_edge_are_separated_not_cut_open() -> None:
+    """Zwei Würfel, die sich an einer Kante berühren: vier Flächen an einer Kante.
+
+    So kommen die Netze von TRELLIS.2 aus ComfyUI (RM-550): rund zwanzig solche
+    Kanten je Netz, wo sich die Oberfläche an einer Linie selbst berührt. Die
+    Reparatur strich bisher je Kante zwei Flächen und hinterließ Schlitze ohne
+    Fläche, die der Füller nicht schließen kann — „2 offene Stellen ließen sich
+    nicht sicher schließen“ an einem Netz, das vorher keine offene Kante hatte.
+    Richtig ist, die Kante zu verdoppeln: Je zwei Flächen, die zusammen einen
+    Körper schließen, bekommen ihre eigene Kante, am selben Ort.
+    """
+    # Als GLB, mit gemeinsamen Ecken wie aus ComfyUI — eine STL hätte das
+    # Verschweißen schon getrennt gelassen.
+    before = read_mesh((MESHES / "cubes_touching_edge.glb").read_bytes(), ".glb")
+    assert branching_edge_count(before) == 1 and open_edge_count(before) == 0, "der Fall"
+
+    healed = repair(before)
+
+    assert healed.mesh.is_watertight, "beide Würfel sind geschlossen"
+    assert healed.mesh.triangle_count == 24, "keine Fläche fällt weg"
+    assert math.isclose(healed.mesh.volume, 2000.0, rel_tol=1e-9)
+    assert branching_edge_count(healed.mesh) == 0
+    codes = {finding.code for finding in healed.findings}
+    assert "repair.sheets_separated" in codes
+    assert "repair.still_open" not in codes and "repair.branching_resolved" not in codes

@@ -252,14 +252,6 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "A", "C4", "FURB", "ICN",
 # SetupFailed sagt wie GenerationFailed, was passiert ist, und der Satz daneben
 # sagt, was jetzt hilft — dasselbe Muster, dieselbe Ausnahme.
 "app/core/backends/comfy_setup.py" = ["N818"]
-# Die ComfyUI-Knoten stehen nicht unter unserer Formvorschrift, sondern unter
-# der von ComfyUI: Ordner mit Bindestrich (N999), ``INPUT_TYPES`` in
-# Großbuchstaben (N802), und der Modell-Cache am Knoten ist Absicht (RUF012).
-# Wer das umbenennt, hat Knoten, die ComfyUI nicht mehr findet. Sie liegen
-# unter den Daten des Kerns und nicht mehr in ``tools/``: von dort erreicht
-# sie das gebaute Paket nicht, und die Anwendung soll die Einrichtung selbst
-# können statt auf ein Skript zu verweisen, das der Kunde nicht hat.
-"app/core/backends/data/comfyui/*" = ["N999", "N802", "RUF012"]
 # Die Suite muss die Nutzerverzeichnisse umbiegen, bevor irgendetwas sie liest,
 # also kommen diese beiden Importe nach dem Setzen der Umgebung (§38).
 "tests/conftest.py" = ["E402"]
@@ -293,12 +285,6 @@ python_version = "3.14"
 files = ["app"]
 strict = true
 warn_unreachable = true
-# Die ComfyUI-Knoten sind kein Modul dieser Anwendung, sondern eine Datei, die
-# in eine fremde Installation kopiert wird. Ihr Ordnername trägt den
-# Bindestrich, den ComfyUI verlangt, und mypy hält das für ein kaputtes Paket:
-# „contains __init__.py but is not a valid Python package name". Umbenennen
-# heißt Knoten, die ComfyUI nicht mehr findet.
-exclude = "app/core/backends/data/comfyui/"
 
 [[tool.mypy.overrides]]
 # Pakete ohne `py.typed`. trimesh und scikit-image bringen es mit und stehen

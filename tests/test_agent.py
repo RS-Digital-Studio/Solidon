@@ -743,6 +743,86 @@ def test_a_guessed_pose_is_rejected_like_the_skeleton(project: Project, profile:
     assert "danach" not in answer.content, "die Ablehnung verspricht keinen zweiten Versuch"
 
 
+@pytest.mark.parametrize(
+    ("name", "word"), [("sculpt_strokes", "Pinselstriche"), ("pose_armature", "Skeletteditor")]
+)
+def test_a_brush_or_skeleton_call_without_gestures_is_refused(
+    name: str, word: str, project: Project, profile: Profile
+) -> None:
+    """RM-014: Das Schema bietet Züge und Skelett nicht an — gerufen werden
+    konnten *Formen* und *Stellung geben* trotzdem, nur leer. Nachgestellt am
+    06.10.2026: Der Vorschlag trug danach einen Schritt ``sculpt_strokes``
+    ohne einen einzigen Zug. Ohne die Geste tut die Operation nichts, und das
+    Modell kann sie nicht liefern; also wird der leere Aufruf abgelehnt wie
+    der geratene, mit dem Satz, der den Nutzer an die richtige Stelle schickt.
+    """
+    backend = ScriptedBackend(
+        answers=[
+            Reply(tool_calls=(ToolCall(id="1", name=name, arguments={"objects": ["obj_1"]}),)),
+            Reply(text="Dann beschreibe ich den Weg."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Mach die Form weicher")
+
+    assert proposal.drafts == [], "ein leerer Formschritt wird nie eine Operation"
+    assert proposal.invalid_calls == 1
+    answer = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
+    assert word in answer.content
+
+
+def test_the_model_answers_in_the_language_the_user_writes() -> None:
+    """Review RM-251 b: Der Systemprompt verlangte „auf Deutsch“ — in jeder der
+    sechs Sprachen. Wer mit englischer Oberfläche englisch schreibt, bekam
+    deutsche Antworten. Die Sprache folgt dem Nutzer, nicht dem Quelltext."""
+    from app.core.agent.prompt import system_prompt
+
+    for compact in (False, True):
+        text = system_prompt(compact=compact)
+        assert "auf Deutsch" not in text
+        assert "in der Sprache, in der der Nutzer schreibt" in text
+
+
+def test_every_gathered_kind_names_its_own_way_back() -> None:
+    """Review RM-014: Kanten und Punkte bekamen den Skizzensatz („benutze die
+    Grundformen und Maße“) — an *Kanten runden* löst der nichts. Jede Art aus
+    ``GATHERED_KINDS`` nennt ihren eigenen Weg."""
+    from app.core.registry import GATHERED_KINDS
+
+    sentences = {kind: tools.gathered_refusal(kind) for kind in GATHERED_KINDS}
+    assert len(GATHERED_KINDS) >= 5, "die Menge wurde gelesen"
+    assert len(set(sentences.values())) == len(sentences), sentences
+
+
+def test_the_brush_and_skeleton_tools_say_that_the_user_sets_the_gestures() -> None:
+    """Die Sperre verhindert den leeren Schritt, die Beschreibung den Versuch
+    (RM-014): Wer vorher liest, dass nur der Nutzer Züge und Skelett setzt,
+    nennt ihm gleich den Weg. Statt einer Regel in der Sammlung, die jede
+    Anfrage Platz kostet, steht der Satz an den zwei Werkzeugen — voll und in
+    der Kurzfassung des lokalen Angebots.
+    """
+    from app.core.registry import GATHERED_KINDS, REGISTRY
+
+    assert tools.USER_ONLY_KINDS <= GATHERED_KINDS
+    user_only = {
+        spec.name: kind
+        for spec in REGISTRY.all()
+        if (kind := tools.user_only_kind(spec)) is not None
+    }
+    assert user_only == {"sculpt_strokes": "strokes", "pose_armature": "armature"}
+    for compact in (False, True):
+        schemas = {entry["name"]: entry for entry in tools.operation_tools(compact=compact)}
+        for name, kind in user_only.items():
+            assert tools.gathered_refusal(kind) in schemas[name]["description"], (name, compact)
+        assert tools.gathered_refusal("strokes") not in schemas["sketch_extrude"]["description"]
+
+
 def test_an_operation_that_stops_the_chain_is_dropped(project: Project, profile: Profile) -> None:
     agent = session(
         project,
@@ -3096,3 +3176,41 @@ def test_a_local_model_gets_twelve_steps_and_a_hosted_one_eight(profile: Profile
     assert AgentSession(backend=local, document=document, profile=profile).max_steps == 12
     fixed = AgentSession(backend=local, document=document, profile=profile, max_steps=3)
     assert fixed.max_steps == 3
+
+
+def test_a_local_turn_reaches_its_twelve_steps_before_its_token_budget(
+    project: Project, profile: Profile
+) -> None:
+    """RM-251: Die 12 lokalen Schritte sind auch fahrbar, nicht nur erlaubt.
+
+    Lokal liest jeder Schritt die ganze Anfrage neu ein, ohne Zwischenspeicher.
+    Mit dem gehosteten Budget von 120 000 Token hielt ein Zug mit 13 000 Token je
+    Schritt nach dem zehnten mit ``tokens`` an — in der Suite vom 07.10.2026 neun
+    von 39 Fällen. Das gehostete Modell behält sein Budget.
+    """
+    from app.core.agent.session import MAX_TOKENS, MAX_TOKENS_LOCAL, tokens_for
+    from app.core.agent.tools import READ_DIGEST
+    from app.core.backends.llm import OllamaBackend
+
+    def transport(url: str, headers: object, payload: dict) -> dict:
+        return {
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"function": {"name": READ_DIGEST, "arguments": {}}}],
+            },
+            "done": True,
+            "done_reason": "stop",
+            "prompt_eval_count": 13_000,
+            "eval_count": 200,
+        }
+
+    local = OllamaBackend(model="qwen3:14b", url="http://localhost:11434", transport=transport)
+    assert tokens_for(local) == MAX_TOKENS_LOCAL > MAX_TOKENS == tokens_for(object())
+    agent = AgentSession(backend=local, document=project.document, profile=profile)
+    assert agent.max_tokens == MAX_TOKENS_LOCAL
+
+    proposal = agent.propose("Sieh dir das Modell an.")
+
+    assert proposal.steps == 12, proposal.stopped
+    assert proposal.stopped == "steps"

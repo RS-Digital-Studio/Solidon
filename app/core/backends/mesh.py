@@ -11,50 +11,52 @@ fertig ist. Der Graph ist eine Datendatei, kein Code — wer einen anderen
 Generator installiert hat, tauscht die Datei aus, statt Python zu flicken.
 
 Woran die mitgelieferten Graphen hängen, steht deshalb hier und nicht im Code:
-an der Knotensammlung ``ComfyUI-TripoSG-Solidon`` samt dem Modell ``TripoSG``
-unter ``models/triposg``, an einem BiRefNet-Gewicht unter
-``models/background_removal`` fürs Freistellen, und ``text_to_mesh``
-zusätzlich an einem SDXL-Modell. Letzteres ist kein Umweg,
-sondern die Sache selbst: TripoSG kennt keinen Texteingang, Text wird erst zu
-einem Bild und das Bild zum Körper. Fehlt eines davon, sagt ComfyUI beim
-Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum Nutzer durch.
-Über die HTTP-API muss dabei **jeder** Eingang gesetzt sein, auch ein als
-``optional`` deklarierter: die Oberfläche schickt sie immer alle mit, und
-mancher Knoten liest sie ungeprüft.
+an **eingebauten Knoten** von ComfyUI ab Version 0.35 und an Modelldateien in
+dessen ``models``-Ordnern. Der Bildweg nimmt TRELLIS.2-4B (Microsoft, MIT) mit
+dem Bildkodierer DINOv3 und BiRefNet zum Freistellen; der Textweg macht vorher
+mit FLUX.2 [klein] 4B (Apache-2.0) ein Bild auf weißem Grund. Das ist kein
+Umweg, sondern die Sache selbst: TRELLIS.2 kennt keinen Texteingang. Fehlt
+ein Knoten, ist das ComfyUI zu alt, und :meth:`ComfyBackend.missing_nodes`
+nennt ihn mit Namen. Über die HTTP-API muss dabei **jeder** Eingang gesetzt
+sein, auch ein als ``optional`` deklarierter: die Oberfläche schickt sie immer
+alle mit, und mancher Knoten liest sie ungeprüft. Die Unterfelder einer
+dynamischen Auswahl (``sign_mode`` an ``RemeshMesh``) heißen dort
+``sign_mode.qef`` — so baut ComfyUI sie aus ``DynamicCombo`` zusammen.
+``tests/test_mesh_backend.py`` prüft beide Graphen gegen die Beschreibungen,
+die ComfyUI selbst liefert (``tests/data/comfyui/object_info.json``, erzeugt
+mit ``tools/comfy_node_info.py``).
 
-**Warum TripoSG voreingestellt ist.** TripoSG (VAST-AI-Research) weist mit
-Wurzel-``LICENSE`` und Modellkarte die MIT-Lizenz aus und lässt sich lokal
-reproduzierbar einrichten. Die Kette ist offen (RM-003): Der Transformer, den
-jeder Auftrag ausführt, trägt im Dateikopf die Tencent Hunyuan Community
-License, deren Gebiet die EU ausnimmt; ein Ersatz wird gesucht (Robert,
-06.10.2026). Gemessen an vier
-Fällen vom glatten Drehkörper bis zur Figur mit dünnen Fortsätzen kam jedes
-Mal ein geschlossener Körper aus einem Stück heraus. Andere Modelle, darunter
-Hunyuan3D, haben eigene Bedingungen, die für die konkret eingesetzte Fassung
-vor dem Einsatz geprüft werden müssen.
+**Warum nicht mehr TripoSG.** Bis Oktober 2026 stand hier TripoSG
+(VAST-AI-Research) mit eigener Knotensammlung; Wurzel-``LICENSE`` und
+Modellkarte nennen MIT. Entscheidung Robert vom 02.09.2026: TripoSG bleibt in
+Betrieb, solange die Rechtsprüfung nichts anderes ergibt. Am 06.10.2026 ergab
+sie (RM-003): Der Transformer, den jeder Auftrag ausführt, trägt im Dateikopf
+die Tencent Hunyuan Community License, deren Gebiet die EU, Großbritannien und
+Südkorea ausnimmt, und der FlashVDM-Anteil eine Lizenz mit denselben
+Ausnahmen. Robert entschied den Ersatz durch TRELLIS.2, das seit ComfyUI 0.34
+ohne fremden Knoten und ohne kompilierte Erweiterung im Kern läuft. Belege und
+Vergleich der Kandidaten: ``konzepte/nachweise-generatoren-2026-10/``.
 
 Solidon liefert weiterhin keine Gewichte mit. Erst die ausdrücklich gestartete
 Einrichtung holt sie in das lokale ComfyUI; welches Modell eingesetzt wird,
 entscheidet der Nutzer. Der mitgelieferte Graph nennt deshalb Rollen
 (``{model:shape}``) und keine Datei: Wer ein anderes Modell mit derselben Rolle
-installiert, benutzt es ohne eine Zeile Code zu ändern. Weitere frei
-lizenzierte Kerne für dieselbe Aufgabe sind Step1X-3D (Apache-2.0) und TRELLIS
-(MIT).
+installiert, benutzt es ohne eine Zeile Code zu ändern.
 
-**Freigestellt wird mit ComfyUIs eigenen Knoten**, und dahinter steht eine
-Lizenzsache: Der Ablauf sprach ``RMBG`` aus ``ComfyUI-RMBG`` an, und das ist
-GPL-3.0 — Regel 15 lässt keine GPL-Abhängigkeit zu. Aufgefallen ist es, als
-der Weg zum ersten Mal wirklich gefahren wurde. ComfyUI kann es seit 0.33
-selbst (``LoadBackgroundRemovalModel`` und ``RemoveBackground``), die Gewichte
-sind BiRefNet unter MIT, und damit fällt neben der Lizenzfrage auch ein
-Installationsschritt weg. Ein älteres ComfyUI kennt die Knoten nicht — dann
-nennt :meth:`ComfyBackend.missing_nodes` sie mit Namen.
-
-Die Zahlen im Graphen sind gemessen, nicht geraten: ``octree_depth`` steht auf
-8, weil 9 bei vierfacher Dreieckszahl und doppelter Laufzeit keinen sichtbaren
-Unterschied brachte; ``steps`` steht auf 50, weil bei 25 die dünnen Flächen
-sichtbar ausfransen. Zusammen sind das rund dreizehn Sekunden je Körper auf
-einer RTX 4080.
+**Die Zahlen im Graphen kommen aus der offiziellen ComfyUI-Vorlage**
+(„Pixal3D & TRELLIS.2: Image to Model“), mit zwei Abweichungen, beide mit
+Grund. Die Kaskade endet bei 1024 statt 1536 Voxeln, weil 1536 nach den
+Angaben Dritter erst ab 24 GB Grafikspeicher trägt. Und ``RemeshMesh`` läuft
+im Modus ``udf``: Das Rohnetz von TRELLIS.2 hat keinen einheitlichen
+Umlaufsinn (``flexible_dual_grid_to_mesh`` legt jedes Viereck je Achse gleich
+herum), also taugt ``sdf`` nicht. ``udf`` legt um jede Fläche eine zweite,
+nach innen gewendete Hülle. **Weggeworfen wird sie nicht in ComfyUI**
+(``drop_inverted_components`` und ``drop_enclosed_components`` aus): Bei einer
+dünnen Wand — Vase, Becher, Haken — sind beide Hüllen zusammen die Wand, und
+mit den Schaltern blieb am 07.10.2026 eine offene Haut ohne Dicke übrig
+(RM-550). Die Innenhülle eines vollen Körpers nimmt Solidons Reparatur
+(``repair(inner_shells=True)``). Davor schließt ``FillHoles`` kleine Löcher,
+nach dem Ausdünnen noch einmal.
 
 Was herauskommt, wird nie geglaubt — Generatoren erzeugen Netze mit Löchern,
 losen Komponenten und umgedrehten Normalen als Normalfall. Die Reparaturkette,
@@ -73,8 +75,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
@@ -137,9 +139,28 @@ _DEFAULT_OPENER: Final = opener_for
 
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
 
-#: Die mitgelieferten Workflow-Graphen, einer je Aufruf. Platzhalter darin
-#: werden vor dem Senden gefüllt: ``{prompt}``, ``{seed}``, ``{image}``.
+#: Seit wann ComfyUI die Knoten der Abläufe selbst kennt — und mit welcher
+#: Fassung Solidon rechnet. TRELLIS.2 kam mit v0.34.0 in den Kern; v0.35.0
+#: bringt die Speichersenkung (#16054) und die Korrektur der Aufmerksamkeit
+#: (#16029). Die Einrichtung liest die Fassung vor dem Download
+#: (``comfy_setup.check_version``), der laufende Server nennt fehlende Knoten.
+MINIMUM_COMFYUI: Final = (0, 35, 0)
+MINIMUM_COMFYUI_TEXT: Final = ".".join(str(part) for part in MINIMUM_COMFYUI)
+
+#: Die mitgelieferten Workflow-Graphen. Platzhalter darin werden vor dem
+#: Senden gefüllt: ``{prompt}``, ``{seed}``, ``{image}``.
 WORKFLOW_DIR = Path(__file__).parent / "data"
+
+#: Welche Graphen ein Weg nacheinander fährt. **Der Weg aus Text ist ein Bild
+#: und danach der Weg aus Bild** (RM-550): Als ein Graph lieferte er am
+#: 07.10.2026 bei gleichem Bild und Startwert eine dünne Schale (2,3 statt
+#: 25,7 cm³) und eine Vase mit negativem Volumen; als zwei Aufträge ist das
+#: Netz dasselbe wie aus dem Bild, und zwischen beiden gibt ComfyUI die
+#: Bildmodelle frei, bevor TRELLIS.2 lädt.
+WORKFLOW_STAGES: Final[dict[str, tuple[str, ...]]] = {
+    "text_to_mesh": ("text_to_image", "image_to_mesh"),
+    "image_to_mesh": ("image_to_mesh",),
+}
 
 _PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
@@ -155,8 +176,9 @@ class ModelRole:
 
     ``prefer`` ist eine Rangfolge, nicht eine Menge: das erste Muster, auf das
     etwas passt, gewinnt. ``avoid`` schließt vorher aus, denn manche Namen
-    liegen im selben Ordner und sehen nur ähnlich aus — der Formkern und die
-    Bildmodelle wohnen beide unter ``checkpoints``.
+    liegen im selben Ordner und sehen nur ähnlich aus — der Formkern und das
+    Bildmodell wohnen beide unter ``diffusion_models``, ihre VAEs beide unter
+    ``vae``.
     """
 
     prefer: tuple[str, ...]
@@ -165,53 +187,93 @@ class ModelRole:
     """Wie die Rolle heißt, wenn ein Mensch sie wählen soll.
 
     **Hier und nicht in der Oberfläche**, aus demselben Grund, aus dem die
-    Muster hier stehen: Wer eine Rolle hinzufügt, gibt ihr ihren Namen mit.
-    Eine Tabelle daneben wäre am Tag der nächsten Rolle unvollständig, und der
-    Kunde läse dort ihren Schlüssel — „shape_vae" ist kein Wort (Regel 20).
-
-    Leer heißt: nicht zur Wahl stellen. ``shape_vae`` ist so ein Fall — die
-    Rolle gehört zu einem Ablauf, den Solidon nicht mitliefert, und ein Feld
-    dafür wäre eine Frage nach etwas, das niemand hat.
+    Muster hier stehen: Wer eine Rolle hinzufügt, gibt ihr ihren Namen mit
+    (Regel 20). Leer heißt: nicht zur Wahl stellen — eine VAE oder ein
+    Textkodierer gehören fest zu ihrem Modell, und ein Feld dafür wäre eine
+    Frage, die niemand beantworten kann.
     """
+    strict: bool = True
+    """Nur nehmen, was ein Muster aus ``prefer`` trifft.
+
+    **Im geteilten Ordner ist „irgendeine Datei“ die falsche.** Unter
+    ``diffusion_models`` liegen Formkern und Bildmodell nebeneinander, oft dazu
+    Video- und Bildmodelle anderer Abläufe; nähme der Bildweg dort die erste
+    Datei, scheiterte der Auftrag mitten im Lauf an einem Modell, das nicht
+    passt — und die Bereitschaft hätte „bereit“ gesagt. Streng heißt: Was kein
+    Muster trifft, fehlt (:meth:`ComfyBackend.missing_models`), und die
+    Einrichtung bietet an, es zu holen. Nur das Freistellen hat einen eigenen
+    Ordner, in dem jede Datei ihre Aufgabe kann.
+    """
+
+
+def role_candidates(role: str, options: Sequence[str]) -> list[str]:
+    """Die Dateien aus ``options``, die diese Rolle ausfüllen — in Rangfolge.
+
+    Dieselbe Antwort für die Auflösung beim Erzeugen (:meth:`ComfyBackend._pick`),
+    für die Frage, ob etwas fehlt, für die Auswahl im Dialog und für die
+    Einrichtung, die entscheidet, ob sie lädt (``comfy_setup.file_present``).
+    Eine unbekannte Rolle hat keine.
+    """
+    wanted = MODEL_ROLES.get(role)
+    if wanted is None:
+        return []
+    usable = [entry for entry in options if not any(bad in entry.lower() for bad in wanted.avoid)]
+    ranked: list[str] = []
+    for hint in wanted.prefer:
+        ranked.extend(entry for entry in usable if hint in entry.lower() and entry not in ranked)
+    if wanted.strict:
+        return ranked
+    # Keines der Muster passte. Das ist hier kein Fehler: Im eigenen Ordner
+    # kann jede Datei die Aufgabe, und eine ist besser als keine.
+    rest = [entry for entry in (usable or list(options)) if entry not in ranked]
+    return ranked + rest
 
 
 #: Die Rollen, die ein mitgelieferter Graph benennen darf. Wer einen eigenen
 #: Graphen einsetzt, benutzt dieselben Namen — oder trägt die Datei fest ein,
 #: was weiterhin erlaubt ist und dann eben nicht mitwandert.
 MODEL_ROLES: Final[dict[str, ModelRole]] = {
+    # FLUX.2 [klein] 4B, und zwar nur diese Fassung: Die 9B-Fassung steht
+    # unter einer nicht-kommerziellen Lizenz, und ``base`` ist das nicht
+    # destillierte Modell, das zwanzig Schritte und eine andere Führung will
+    # als der Ablauf (vier Schritte, CFG 1).
     "image": ModelRole(
-        prefer=("juggernaut", "dreamshaper", "sd_xl", "sdxl", "xl"),
-        avoid=("hunyuan", "3d", "vae", "refiner", "inpaint", "turbo"),
+        prefer=("flux-2-klein-4b", "flux2-klein-4b", "flux2_klein_4b", "flux-2-klein_4b"),
+        avoid=("base", "9b", "trellis", "pixal"),
         title=_("Bild aus Text"),
     ),
-    # TripoSG steht vorn, weil der mitgelieferte Graph es benutzt und weil es
-    # das einzige der drei ist, dessen Lizenz hier keine Frage aufwirft. Die
-    # Hunyuan-Muster bleiben stehen: wer sie installiert hat und einen eigenen
-    # Graphen fährt, soll nicht deshalb ins Leere greifen.
-    # ``scribble`` ist ausgeschlossen, weil es nicht dasselbe Modell in einer
-    # anderen Größe ist, sondern ein anderes: es erwartet eine Kritzelei als
-    # Eingang und macht aus einem Lichtbild Unsinn.
+    "text_encoder": ModelRole(prefer=("qwen_3_4b", "qwen3_4b", "qwen3-4b", "qwen-3-4b")),
+    "image_vae": ModelRole(prefer=("flux2-vae", "flux2_vae", "flux-2-vae", "flux_2_vae")),
+    # TRELLIS.2 in jeder Fassung (int8, bf16) — nicht Pixal3D, das denselben
+    # Ablauf mit einem anderen Bildkodierer und eigener Kamera braucht.
     "shape": ModelRole(
-        prefer=("triposg", "tripo", "step1x", "hunyuan3d-dit", "hunyuan3d", "hunyuan"),
-        avoid=("vae", "scribble"),
+        prefer=("trellis_2", "trellis2", "trellis.2", "trellis-2"),
+        avoid=("vae", "pixal"),
         title=_("Körper aus Bild"),
     ),
-    "shape_vae": ModelRole(prefer=("hunyuan3d-vae", "hunyuan3d", "vae"), avoid=("dit",)),
-    # Freistellen. ``lucida`` steht vorn, weil es die feinere Kante zieht und
-    # doppelt so groß ist — wer beides hat, will das bessere; wer nur
-    # ``birefnet`` hat, bekommt es. Beide sind BiRefNet-Gewichte unter MIT.
-    "background": ModelRole(prefer=("lucida", "birefnet"), title=_("Freistellen")),
+    "shape_vae": ModelRole(
+        prefer=("trellis_2_shape_vae", "trellis2_shape_vae", "trellis-2-shape-vae"),
+        avoid=("texture",),
+    ),
+    # DINOv3 ViT-L/16. Die NAF-Fassung aus dem Pixal3D-Paket ist laut
+    # ComfyUI-Doku für TRELLIS.2 gleichwertig, steht aber hinter dem
+    # schlichten Kodierer, den Solidon selbst lädt.
+    "image_encoder": ModelRole(prefer=("dino_v3_vit_l", "dinov3_vit_l", "dino_v3", "dinov3")),
+    # Freistellen. ``lucida`` steht vorn, weil es die feinere Kante zieht —
+    # wer beides hat, will das bessere; wer nur ``birefnet`` hat, bekommt es.
+    # Beide sind BiRefNet-Gewichte unter MIT.
+    "background": ModelRole(prefer=("lucida", "birefnet"), title=_("Freistellen"), strict=False),
 }
 
 
 #: Woran eine gemerkte Modellwahl hängt — je Rolle ein eigener Schlüssel.
 #:
 #: **Die Rollenauflösung rät gut und rät trotzdem.** ``prefer`` und ``avoid``
-#: treffen das Übliche: Wer ein Juggernaut liegen hat, will es vor dem
-#: Basismodell. Aber wer drei SDXL-Feintunings nebeneinander hat, hat sie aus
-#: einem Grund, und keiner davon steht in einem Muster — das eine zeichnet
-#: Produktfotos, das andere Comicfiguren. Genau wie beim Sprachmodell gehört
-#: die Wahl dem Kunden, und genau wie dort bleibt sie gemerkt (§38).
+#: treffen das Übliche; wer zwei passende Dateien nebeneinander hat — die
+#: int8- und die bf16-Fassung von TRELLIS.2, BiRefNet und lucida —, hat sie
+#: aus einem Grund, und der steht in keinem Muster. Genau wie beim
+#: Sprachmodell gehört die Wahl dem Kunden, und genau wie dort bleibt sie
+#: gemerkt (§38).
 MODEL_SETTING_PREFIX: Final = "comfy_model_"
 
 #: Was „nimm, was passt" heißt — der Wert, bei dem :func:`configured_model`
@@ -588,10 +650,10 @@ class Readiness(StrEnum):
     """Wie weit dieses ComfyUI vorbereitet ist.
 
     Vier Antworten statt eines Wahrheitswerts, und jede zieht einen anderen
-    Satz und einen anderen Knopf nach sich: Wo nichts läuft, hilft die Liste
-    der zusätzlichen Programme; wo die Knoten fehlen, hilft der
-    Einrichtungsdialog; und wo etwas antwortet, das wir nicht kennen, wird
-    nichts behauptet.
+    Satz und einen anderen Knopf nach sich: Wo nichts läuft oder Knoten
+    fehlen (ComfyUI zu alt), hilft die Liste der zusätzlichen Programme; wo
+    ein Modell fehlt, hilft der Einrichtungsdialog; und wo etwas antwortet,
+    das wir nicht kennen, wird nichts behauptet.
     """
 
     READY = "ready"
@@ -599,12 +661,6 @@ class Readiness(StrEnum):
     NO_NODES = "no_nodes"
     NO_MODEL = "no_model"
     UNKNOWN = "unknown"
-
-
-#: Woran ein Knoten aus unserer Sammlung zu erkennen ist. Der Ablauf nennt ihn
-#: mit vollem Namen; hier steht nur der Anfang, damit ein zweiter Knoten aus
-#: derselben Sammlung nicht nachgetragen werden muss.
-OWN_NODE_PREFIX: Final = "TripoSG"
 
 
 def _failed(entry: dict[str, Any]) -> None:
@@ -742,14 +798,16 @@ class ComfyBackend:
         """Welche Modellrollen dieses ComfyUI **nicht** ausfüllen kann.
 
         **Der Textweg erfuhr es beim Abschicken.** Er braucht zusätzlich ein
-        SDXL-Modell — TripoSG kennt keinen Texteingang, Text wird erst zu einem
-        Bild. Wer keines installiert hatte, tippte seinen Satz, drückte
+        Bildmodell — TRELLIS.2 kennt keinen Texteingang, Text wird erst zu
+        einem Bild. Wer keines installiert hatte, tippte seinen Satz, drückte
         *Erzeugen* und bekam „ComfyUI hat für diese Aufgabe kein Modell
         anzubieten". Die Auskunft war die ganze Zeit einen Aufruf entfernt, und
         zwar denselben, den die Auflösung ohnehin macht.
 
-        Gefragt wird je Rolle und nicht je Datei: Was die Rolle ausfüllt,
-        entscheidet der Rechner, auf dem es läuft (:data:`MODEL_ROLES`).
+        Gefragt wird je Rolle und nicht je Datei, mit derselben Antwort wie
+        beim Erzeugen (:func:`role_candidates`): Eine Datei im geteilten Ordner,
+        die kein Muster trifft, füllt die Rolle nicht aus. Eine gemerkte Wahl,
+        die ComfyUI anbietet, zählt.
         """
         graph = self._read_graph(workflow)
         if graph is None:
@@ -773,7 +831,11 @@ class ComfyBackend:
                 key = f"{kind}.{field_name}"
                 if key not in offered:
                     offered[key] = self._offered(kind, field_name)
-                if not offered[key] and role not in missing:
+                if role in missing:
+                    continue
+                if role_candidates(role, offered[key]):
+                    continue
+                if configured_model(role) not in offered[key]:
                     missing.append(role)
         return tuple(missing)
 
@@ -815,7 +877,7 @@ class ComfyBackend:
                 key = f"{kind}.{field_name}"
                 if key not in offered:
                     offered[key] = self._offered(kind, field_name)
-                choices[found.group(1)] = tuple(offered[key])
+                choices[found.group(1)] = tuple(role_candidates(found.group(1), offered[key]))
         return choices
 
     def missing_nodes(self, workflow: str = "image_to_mesh") -> tuple[str, ...]:
@@ -843,12 +905,21 @@ class ComfyBackend:
         return tuple(missing)
 
     def _read_graph(self, workflow: str) -> dict[str, Any] | None:
-        """Der Ablauf als Daten, oder ``None`` wenn er nicht zu lesen ist."""
-        try:
-            loaded = json.loads((self.workflows / f"{workflow}.json").read_text(encoding="utf-8"))
-        except OSError, ValueError:
-            return None
-        return loaded if isinstance(loaded, dict) else None
+        """Der Ablauf als Daten, oder ``None`` wenn er nicht zu lesen ist.
+
+        Ein Weg aus mehreren Graphen (:data:`WORKFLOW_STAGES`) antwortet mit
+        allen Knoten seiner Stufen — gefragt wird, was der ganze Weg braucht.
+        """
+        merged: dict[str, Any] = {}
+        for stage in WORKFLOW_STAGES.get(workflow, (workflow,)):
+            try:
+                loaded = json.loads((self.workflows / f"{stage}.json").read_text(encoding="utf-8"))
+            except OSError, ValueError:
+                return None
+            if not isinstance(loaded, dict):
+                return None
+            merged.update({f"{stage}:{key}": node for key, node in loaded.items()})
+        return merged
 
     def _graph_nodes(self, workflow: str = "image_to_mesh") -> tuple[str, ...]:
         """Die Knotenarten, die der Ablauf anspricht — aus ihm gelesen.
@@ -880,8 +951,20 @@ class ComfyBackend:
     ) -> GeneratedMesh:
         if not prompt.strip():
             raise GenerationFailed(detail=_("Die Beschreibung ist leer."))
-        graph = self._graph("text_to_mesh", {"prompt": prompt, "seed": seed})
-        return self._run(graph, prompt=prompt, seed=seed, progress=progress, cancelled=cancelled)
+        graph = self._graph("text_to_image", {"prompt": prompt, "seed": seed})
+        image, _suffix = self._job(
+            graph,
+            self._download_image,
+            progress=lambda share, text: progress(0.4 * share, text),
+            cancelled=cancelled,
+        )
+        made = self.image_to_mesh(
+            image,
+            seed=seed,
+            progress=lambda share, text: progress(0.4 + 0.6 * share, text),
+            cancelled=cancelled,
+        )
+        return replace(made, prompt=prompt)
 
     def image_to_mesh(
         self,
@@ -956,14 +1039,6 @@ class ComfyBackend:
         if key not in offered:
             offered[key] = self._offered(class_type, field)
         options = offered[key]
-        if not options:
-            raise GenerationFailed(
-                detail=_(
-                    "ComfyUI hat für diese Aufgabe kein Modell anzubieten. Es "
-                    "fehlt die Modelldatei, nicht die Einstellung."
-                ),
-                values={"role": role, "node": class_type},
-            )
 
         # **Die Wahl des Kunden schlägt jedes Muster** (:func:`configured_model`).
         # Geprüft wird sie gegen das, was ComfyUI **jetzt** anbietet: Eine
@@ -976,17 +1051,21 @@ class ComfyBackend:
         if chosen:
             _log.info("chosen model %s for role %s is gone, falling back", chosen, role)
 
-        usable = [
-            entry for entry in options if not any(bad in entry.lower() for bad in wanted.avoid)
-        ] or options
-        for hint in wanted.prefer:
-            for entry in usable:
-                if hint in entry.lower():
-                    return entry
-        # Keines der Muster passte. Das ist kein Fehler: der Nutzer hat ein
-        # Modell, das wir nicht kennen, und eines ist besser als keines.
-        _log.info("no model matched role %s, taking %s", role, usable[0])
-        return usable[0]
+        candidates = role_candidates(role, options)
+        if not candidates:
+            # **Eine Datei im geteilten Ordner ist nicht irgendeine Datei**
+            # (:attr:`ModelRole.strict`): Hier stand der Rückfall auf die
+            # erste, und der Auftrag scheiterte erst im Lauf an einem Modell,
+            # das nicht passt.
+            raise GenerationFailed(
+                detail=_(
+                    "ComfyUI hat für diese Aufgabe kein Modell anzubieten. Es "
+                    "fehlt die Modelldatei, nicht die Einstellung."
+                ),
+                values={"role": role, "node": class_type},
+                suggestions=(INSTALL_MISSING, CANCEL),
+            )
+        return candidates[0]
 
     def _offered(self, class_type: str, field: str) -> list[str]:
         """Was ComfyUI für diesen Eingang zur Auswahl stellt."""
@@ -1010,21 +1089,20 @@ class ComfyBackend:
         # Ein ComfyUI ohne diesen Knoten antwortet mit einem leeren Objekt,
         # nicht mit einem Fehler. Wer das nicht unterscheidet, meldet gleich
         # darauf „es fehlt die Modelldatei" — und schickt jemanden Gewichte
-        # suchen, dem in Wahrheit die Knotensammlung fehlt.
+        # suchen, dem in Wahrheit ein neueres ComfyUI fehlt.
         if class_type not in described:
             raise GenerationFailed(
                 title=_("Die 3D-Modell-Erzeugung konnte nicht starten."),
-                # Der Satz nannte hier „«python tools/setup_comfyui.py»" — einen
-                # Befehl, den ein Kunde nicht ausführen kann: ``tools/`` reist
-                # im Paket nicht mit. Solidon richtet die Knoten selbst ein,
-                # und der Weg dorthin ist der Knopf, den der Vorschlag anbietet.
+                # **Seit TRELLIS.2 sind alle Knoten eingebaut**: Fehlt einer,
+                # ist dieses ComfyUI zu alt, und keine Einrichtung von Solidon
+                # kann ihn nachlegen. Welche Version es braucht, steht in den
+                # Werten — der Satz trägt keine Zahl (§33.1).
                 detail=_(
-                    "Dieses ComfyUI kennt den Knoten nicht, den der Ablauf "
-                    "benutzt. Die Knotensammlung fehlt — nicht das Modell. "
-                    "Einrichten lässt sie sich unter „Zusätzliche Programme“; "
-                    "danach ComfyUI neu starten."
+                    "Dieses ComfyUI kennt einen Knoten des Ablaufs nicht — es ist "
+                    "älter als die Version, die Solidon braucht. ComfyUI "
+                    "aktualisieren und danach neu starten."
                 ),
-                values={"node": class_type},
+                values={"node": class_type, "needed": MINIMUM_COMFYUI_TEXT},
                 suggestions=(INSTALL_MISSING, CANCEL),
             )
 
@@ -1036,13 +1114,13 @@ class ComfyBackend:
             if not isinstance(entry, list) or not entry:
                 continue
             # **Zwei Formen, und beide kommen aus demselben Server.** Klassisch
-            # steht die Auswahlliste als erstes Element (``[["TripoSG"], {…}]``)
+            # steht die Auswahlliste als erstes Element (``[["a.safetensors"], {…}]``)
             # — ein Typname wie ``"INT"`` steht an derselben Stelle und ist
             # keine. Die neuen eingebauten Knoten schreiben statt der Liste
             # ``"COMBO"`` und legen die Namen in die Beschreibung daneben
             # (``["COMBO", {"options": […]}]``).
             #
-            # Gemessen an einem ComfyUI 0.33: ``TripoSGLoader`` klassisch,
+            # Gemessen an einem ComfyUI 0.33: ``UNETLoader`` klassisch,
             # ``LoadBackgroundRemovalModel`` neu. Wer nur die alte Form liest,
             # hält jede neue Auswahl für leer und meldet „es fehlt die
             # Modelldatei", obwohl sie daliegt — genau das ist passiert.
@@ -1086,6 +1164,27 @@ class ComfyBackend:
         progress: ProgressFn,
         cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
+        payload_bytes, suffix = self._job(
+            graph, self._download, progress=progress, cancelled=cancelled
+        )
+        return GeneratedMesh(
+            mesh=read_mesh(payload_bytes, suffix),
+            payload=payload_bytes,
+            suffix=suffix,
+            backend=self.id,
+            prompt=prompt,
+            seed=seed,
+        )
+
+    def _job(
+        self,
+        graph: dict[str, Any],
+        download: Callable[[dict[str, Any]], tuple[bytes, str]],
+        *,
+        progress: ProgressFn,
+        cancelled: CancelledFn | None = None,
+    ) -> tuple[bytes, str]:
+        """Ein Auftrag an ComfyUI: abschicken, warten, Ergebnis holen, Karte freigeben."""
         with local_ai_slot(self.base, cancelled, lambda text: progress(0.0, text)):
             progress(0.1, str(_("Auftrag abschicken")))
             payload = json.dumps({"prompt": graph, "client_id": uuid.uuid4().hex}).encode("utf-8")
@@ -1101,15 +1200,7 @@ class ComfyBackend:
                 outputs = self._wait(str(job), progress, cancelled or _never)
                 complete = True
                 progress(0.9, str(_("Modell holen")))
-                payload_bytes, suffix = self._download(outputs)
-                return GeneratedMesh(
-                    mesh=read_mesh(payload_bytes, suffix),
-                    payload=payload_bytes,
-                    suffix=suffix,
-                    backend=self.id,
-                    prompt=prompt,
-                    seed=seed,
-                )
+                return download(outputs)
             except BaseException:
                 if not complete:
                     self._cancel_job(str(job))
@@ -1254,33 +1345,52 @@ class ComfyBackend:
         except AppError, OSError, ValueError:
             return 0
         pending = queue.get("queue_pending")
-        for index, entry in enumerate(pending if isinstance(pending, list) else ()):
+        waiting: list[Any] = pending if isinstance(pending, list) else []
+        for index, entry in enumerate(waiting):
             if isinstance(entry, list) and job in [str(field) for field in entry]:
                 return index + 1
         return 0
 
     def _download(self, outputs: dict[str, Any]) -> tuple[bytes, str]:
         """Findet das Netz unter den Ausgaben und holt es."""
+        found = self._fetch(outputs, ("meshes", "3d", "result", "files"), MESH_SUFFIXES)
+        if found is None:
+            raise GenerationFailed(detail=_("Der Auftrag hat keine Netzdatei erzeugt."))
+        return found
+
+    def _download_image(self, outputs: dict[str, Any]) -> tuple[bytes, str]:
+        """Findet das Bild des Textwegs unter den Ausgaben und holt es."""
+        found = self._fetch(outputs, ("images",), IMAGE_SUFFIXES)
+        if found is None:
+            raise GenerationFailed(detail=_("Der Auftrag hat kein Bild erzeugt."))
+        return found
+
+    def _fetch(
+        self, outputs: dict[str, Any], keys: tuple[str, ...], suffixes: tuple[str, ...]
+    ) -> tuple[bytes, str] | None:
+        """Die erste Ausgabedatei unter diesen Schlüsseln mit einer dieser Endungen."""
         for node in outputs.values():
             if not isinstance(node, dict):
                 continue
-            for key in ("meshes", "3d", "result", "files"):
+            for key in keys:
                 listed = node.get(key)
                 for entry in listed if isinstance(listed, list) else ():
-                    located = _located(entry)
+                    located = _located(entry, suffixes)
                     if located is None:
                         continue
                     query, suffix = located
                     return self.transport(f"{self.base}/view?{query}", None, {}), suffix
-        raise GenerationFailed(detail=_("Der Auftrag hat keine Netzdatei erzeugt."))
+        return None
 
 
 #: Endungen, unter denen ein Körper unter den Ausgaben erkannt wird. Ein
 #: Auftrag legt neben ihm auch Bilder ab — die gehören nicht uns.
 MESH_SUFFIXES = (".glb", ".obj", ".ply", ".stl")
+#: Endungen des Bilds, das der Weg aus Text zuerst erzeugt.
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 
 
-def _located(entry: Any) -> tuple[str, str] | None:
+def _located(entry: Any, suffixes: tuple[str, ...] = MESH_SUFFIXES) -> tuple[str, str] | None:
     """Aus einem Ausgabeeintrag die Abfrage für ``/view`` und die Endung.
 
     Zwei Schreibweisen kommen wirklich vor, und beide müssen ankommen: ein
@@ -1304,7 +1414,7 @@ def _located(entry: Any) -> tuple[str, str] | None:
         return None
 
     suffix = PurePosixPath(name).suffix.lower()
-    if suffix not in MESH_SUFFIXES:
+    if suffix not in suffixes:
         return None
     query = urllib.parse.urlencode({"filename": name, "subfolder": subfolder, "type": kind})
     return query, suffix

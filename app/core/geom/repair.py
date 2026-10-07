@@ -3774,6 +3774,127 @@ def resolve_branching_edges(mesh: MeshData) -> tuple[MeshData, int]:
     return mesh, total
 
 
+def _union_root(groups: dict[int, int]) -> Callable[[int], int]:
+    """Die Wurzel einer Fläche in einer Vereinigungsmenge, mit Pfadverkürzung."""
+
+    def root(face: int) -> int:
+        while groups[face] != face:
+            groups[face] = groups[groups[face]]
+            face = groups[face]
+        return face
+
+    return root
+
+
+def separate_touching_sheets(mesh: MeshData) -> tuple[MeshData, int]:
+    """Eine Kante mit vier Flächen, an der sich zwei Körperstücke berühren, verdoppeln.
+
+    Die andere Lesart von „mehr als zwei Flächen an einer Kante“ neben dem
+    übereinandergeklappten Material (:func:`resolve_branching_edges`): Zwei
+    geschlossene Stücke berühren sich längs einer Linie, wie zwei Würfel an
+    einer Kante. TRELLIS.2 liefert über ComfyUI rund zwanzig solche Kanten je
+    Netz (RM-550). Eine Fläche zu streichen, schnitt dort einen Schlitz ohne
+    Fläche auf, den kein Füller schließen kann.
+
+    Aufgelöst wird nur, wo es genau vier Flächen sind, zwei laufen die Kante
+    hin und zwei zurück. Von den zwei Paarungen aus je einer Hin- und einer
+    Rückfläche gilt die, bei der die Flächen eines Paars einander deutlicher
+    hinter sich haben — dort liegt das Material des Stücks; am TRELLIS.2-Netz
+    war das an 18 von 20 Kanten für beide Paare eindeutig, an zwei für eines,
+    und ein Schlitz ohne Fläche wäre das Schlechtere. Gleichstand bleibt
+    stehen. Jedes Paar bekommt seine eigene Kante; die Ecken teilen sich in
+    ihre Fächer wie bei :func:`split_pinched_vertices`, am selben Ort, die Form
+    bleibt.
+    """
+    body = mesh.raw
+    table = _edge_table(mesh)
+    rows = table.rows(4)
+    if not len(rows):
+        return mesh, 0
+    faces = np.asarray(body.faces, dtype=np.int64)
+    points = np.asarray(body.vertices, dtype=float)
+    directed = np.asarray(body.edges, dtype=np.int64)
+    normals = np.asarray(body.face_normals, dtype=float)
+    order = np.argsort(table.inverse[rows], kind="stable")
+    rows = rows[order].reshape(-1, 4)
+    pairs: dict[tuple[int, int], int] = {}
+    for quad in rows.tolist():
+        quad_faces = [row // 3 for row in quad]
+        start = directed[quad[0]][0]
+        forward = [row for row in quad if directed[row][0] == start]
+        backward = [row for row in quad if directed[row][0] != start]
+        if len(set(quad_faces)) != 4 or len(forward) != 2 or len(backward) != 2:
+            continue
+
+        def wing(row: int) -> np.ndarray:
+            face = faces[row // 3]
+            third = face[(face != directed[row][0]) & (face != directed[row][1])]
+            return points[third[0]] - points[directed[row][0]] if len(third) else np.zeros(3)
+
+        def depth(first: int, second: int) -> float:
+            """Wie weit die beiden Flächen einander hinter sich haben (negativ = ja)."""
+            return float(normals[first // 3] @ wing(second) + normals[second // 3] @ wing(first))
+
+        pairings = [
+            ((forward[0], backward[index]), (forward[1], backward[1 - index])) for index in (0, 1)
+        ]
+        scores = [sum(depth(*pair) for pair in pairing) for pairing in pairings]
+        if math.isclose(scores[0], scores[1], abs_tol=EPS_GEOM):
+            continue
+        for first, second in pairings[int(np.argmin(scores))]:
+            pairs[(first // 3, second // 3)] = 1
+            pairs[(second // 3, first // 3)] = 1
+    if not pairs:
+        return mesh, 0
+
+    # Die Fächer je betroffener Ecke: Flächen hängen über eine Kante mit zwei
+    # Flächen zusammen, an einer verdoppelten Kante nur innerhalb ihres Paars.
+    corners = np.unique([faces[face] for face, _partner in pairs])
+    new_faces = faces.copy()
+    extra: list[np.ndarray] = []
+    split = 0
+    for corner in corners.tolist():
+        around = np.flatnonzero((faces == corner).any(axis=1)).tolist()
+        groups: dict[int, int] = {face: face for face in around}
+        root = _union_root(groups)
+        by_edge: dict[int, list[int]] = {}
+        for face in around:
+            for slot in range(3):
+                a, b = faces[face][slot], faces[face][(slot + 1) % 3]
+                if corner not in (a, b):
+                    continue
+                by_edge.setdefault(int(table.inverse[face * 3 + slot]), []).append(face)
+        for edge, touching in by_edge.items():
+            if table.counts[edge] == 2 and len(touching) == 2:
+                groups[root(touching[0])] = root(touching[1])
+            elif table.counts[edge] == 4:
+                for one in touching:
+                    for other in touching:
+                        if one < other and (one, other) in pairs:
+                            groups[root(one)] = root(other)
+        fans: dict[int, list[int]] = {}
+        for face in around:
+            fans.setdefault(root(face), []).append(face)
+        for fan in list(fans.values())[1:]:
+            replacement = len(points) + len(extra)
+            extra.append(points[corner])
+            for face in fan:
+                new_faces[face] = np.where(new_faces[face] == corner, replacement, new_faces[face])
+            split += 1
+    if not split:
+        return mesh, 0
+    vertices = np.vstack([points, np.asarray(extra, dtype=float)])
+    separated = trimesh.Trimesh(vertices=vertices, faces=new_faces, process=False)
+    _carried_colours(body, separated, np.arange(len(new_faces), dtype=np.int64))
+    candidate = MeshData.of(separated, slots=mesh.slots)
+    # **Die Probe**, wie beim Streichen: weniger Verzweigung, kein neuer Rand.
+    resolved = branching_edge_count(mesh) - branching_edge_count(candidate)
+    if resolved <= 0 or open_edge_count(candidate) > open_edge_count(mesh):
+        return mesh, 0
+    _log.info("separated %d touching sheet edge(s)", resolved)
+    return candidate, resolved
+
+
 def _resolve_branching_once(mesh: MeshData) -> tuple[MeshData, int]:
     """Ein Durchgang von :func:`resolve_branching_edges`."""
     body = mesh.raw
@@ -4008,6 +4129,51 @@ def remove_hollow_shells(mesh: MeshData) -> tuple[MeshData, int]:
         else ()
     )
     return MeshData.of(body, slots=slots), len(pieces) - len(keep)
+
+
+def remove_inner_shells(
+    mesh: MeshData, *, cancelled: CancelToken | None = None
+) -> tuple[MeshData, int]:
+    """Wirft jede geschlossene Schale, die ganz in einer anderen liegt — Hohlraum oder Teil.
+
+    **Für erzeugte Netze, nicht für modellierte.** Ein Körper aus einem
+    Bildmodell meint innen nichts: Eine nach innen gewendete Hülle darin ist
+    kein gewollter Hohlraum, sondern die zweite Seite eines Abstandsfelds
+    (ComfyUIs ``RemeshMesh`` im Modus ``udf``), und gedruckt würde daraus ein
+    Körper mit Wänden von einem Bruchteil eines Millimeters. Ein modelliertes
+    Teil darf einen Hohlraum oder ein eingeschlossenes Teil tragen; dort
+    meldet :func:`parts_inside_parts`, statt zu raten (Regel 21) — deshalb
+    läuft dieser Schritt nur auf Wunsch (``RepairParams.inner_shells``).
+
+    Gefragt wird dieselbe Einschließung wie bei der Hohlraumerkennung
+    (:meth:`_Shells.inside`): keine Wand gekreuzt, eine Ecke innen. Was der
+    Strahl nicht entscheidet, bleibt. Erwartet ein geschlossenes Netz; an einem
+    offenen gibt es kein Innen.
+    """
+    body = mesh.raw
+    if not len(body.faces) or not body.is_watertight:
+        return mesh, 0
+    shells = _Shells(body, cancelled=cancelled)
+    count = len(shells.components)
+    if count < 2:
+        return mesh, 0
+    doomed = [
+        index
+        for index, found in shells.containers_of(range(count))
+        if any(answer is True for _other, answer in found)
+    ]
+    if not doomed or len(doomed) == count:
+        return mesh, 0
+    keep = np.ones(len(body.faces), dtype=bool)
+    for index in doomed:
+        keep[shells.components[index]] = False
+    cleaned = without_faces(body, keep)
+    slots = (
+        tuple(slot for slot, kept in zip(mesh.slots, keep, strict=True) if kept)
+        if mesh.slots
+        else ()
+    )
+    return MeshData.of(cleaned, slots=slots), len(doomed)
 
 
 def remove_open_splinters(
@@ -4548,6 +4714,7 @@ def repair(
     small_components: bool = False,
     self_intersections: bool = False,
     inspect_intersections: bool = False,
+    inner_shells: bool = False,
     cancelled: CancelToken | None = None,
     progress: ProgressFn | None = None,
 ) -> RepairResult:
@@ -4653,7 +4820,28 @@ def repair(
     if holes:
         # **Zuerst die Verzweigungen, dann die Löcher.** Eine Kante mit drei
         # Nachbarn ist kein Loch, und der Füller kann sie nicht sehen; was das
-        # Auflösen öffnet, schließt er dagegen gleich mit.
+        # Auflösen öffnet, schließt er dagegen gleich mit. Zuerst die Kanten,
+        # an denen sich zwei Stücke berühren: Dort fällt keine Fläche.
+        result.mesh, separated = separate_touching_sheets(result.mesh)
+        if separated:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.sheets_separated",
+                    severity="info",
+                    message=_(
+                        "An {edges} Kanten berührten sich zwei Stücke. Sie liegen jetzt "
+                        "getrennt aneinander.",
+                        edges=separated,
+                    )
+                    if separated > 1
+                    else _(
+                        "An einer Kante berührten sich zwei Stücke. Sie liegen jetzt "
+                        "getrennt aneinander."
+                    ),
+                    values={"edges": separated},
+                )
+            )
         result.mesh, unbranched = resolve_branching_edges(result.mesh)
         if unbranched:
             result.changed = True
@@ -4788,6 +4976,31 @@ def repair(
         _intersection_findings(
             result, self_intersections=self_intersections, cancelled=cancelled, progress=progress
         )
+
+    # **Innen nichts, wenn es so verlangt ist** (:func:`remove_inner_shells`):
+    # nach dem Schließen und Ausrichten, denn erst dann gibt es ein Innen —
+    # und vor der Meldung darunter, die sonst ein Teil im Teil nennte, das
+    # gerade wegging.
+    if inner_shells and normals:
+        result.mesh, inner = remove_inner_shells(result.mesh, cancelled=cancelled)
+        if inner:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.inner_shells_removed",
+                    severity="info",
+                    message=_(
+                        "{removed} Hüllen im Inneren wurden entfernt. Das Modell ist "
+                        "jetzt innen voll.",
+                        removed=inner,
+                    )
+                    if inner > 1
+                    else _(
+                        "Eine Hülle im Inneren wurde entfernt. Das Modell ist jetzt innen voll."
+                    ),
+                    values={"removed": inner},
+                )
+            )
 
     # **Ein Teil im Teil wird gemeldet, nicht geraten** (Befund B9 der
     # Durchsicht 24.09.2026, :func:`parts_inside_parts`). Erst hier: Das

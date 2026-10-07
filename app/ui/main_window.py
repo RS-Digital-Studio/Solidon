@@ -87,7 +87,7 @@ from shiboken6 import isValid
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
-from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
+from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import Deferred as RemoteDeferred
 from app.core.agent.session import (
     MAX_STEPS,
@@ -109,7 +109,6 @@ from app.core.agent.tools import (
     READ_STANDARD,
     SET_PARAMETER,
     SET_PRINT_TARGET,
-    STANDARD_KINDS,
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
@@ -20732,21 +20731,16 @@ class MainWindow(QMainWindow):
             wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
             return digest(result.scene, self.session.project.document, only=wanted or None)
         if name == READ_STANDARD:
-            kind = str(values.get("kind", ""))
-            if kind not in STANDARD_KINDS:
-                return tr("Diese Tabelle gibt es nicht: {kinds}").format(
-                    kinds=", ".join(STANDARD_KINDS)
-                )
-            return standard_text(kind, str(values.get("size", "")).strip())
+            # Eine unbekannte Tabelle beantwortet ``standard_text`` mit demselben
+            # Satz wie im Chat (Review RM-285).
+            return standard_text(str(values.get("kind", "")), str(values.get("size", "")).strip())
         if name == READ_ANALYSIS:
             result = self.session.last_result
             if result is None:
                 return tr("Es ist nichts geöffnet.")
             kind = str(values.get("kind", ""))
             if kind not in ANALYSIS_KINDS:
-                return tr("Diese Analyse gibt es nicht: {kinds}").format(
-                    kinds=", ".join(ANALYSIS_KINDS)
-                )
+                return unknown_analysis(kind)
             # **Gerechnet wird im Faden des Fernaufrufs, nicht hier** (RM-144).
             # Dieser Weg läuft im Qt-Hauptthread, und die Orientierungssuche
             # kostet Sekunden — gemessen 5,3 s an der kleinen Referenzplatte;
@@ -20920,7 +20914,10 @@ class MainWindow(QMainWindow):
             if beyond is not None:
                 return str(beyond)
             return tr("Der Wert wurde nicht gesetzt — den Grund zeigt das Fenster.")
-        return tr("Parameter gesetzt: {name} = {value}", name=name, value=number)
+        # Derselbe Satz wie im Chat, mit Einheit (Review RM-285).
+        return tr("Parameter gesetzt: {name} = {value} {unit}").format(
+            name=name, value=f"{number:g}", unit=existing.unit
+        )
 
     def _draw_sketch_in_space(
         self, op_id: int, op_name: str, dialog: QDialog, text: str, *, field_name: str = ""

@@ -97,15 +97,15 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut; dazu die vier Handwege der Merkmalbedienung (§4) |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
-| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
+| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | Oberfläche, Kommandozeile, Agenten- und Steckbrieftexte und der ganze Kern gerahmt, der Wächter liest den ganzen Kern (07.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile](#rm-543) | Bedienung und Darstellung | Gefunden beim Review von RM-134/316 (07.10.): `test_a_report_click_keeps_its_mark_across_the_async_map` zeitweise rot; offen die Ursache und ob der Kunde es sieht |
-| [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Belege in `konzepte/nachweise-generatoren-2026-10/`; entschieden (Robert, 06.10.): TRELLIS.2-4B statt TripoSG, Bildmodell und Freisteller nach bestem Ergebnis (gewählt FLUX.2 [klein] 4B statt SDXL); offen der Umbau von Weg 3 (Claude, in Arbeit) und die Kanzleifragen zur neuen Kette |
-| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
-| [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
-| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) entschieden und gebaut: lokal 12 Schritte (`MAX_STEPS_LOCAL`, `steps_for`), gehostet 8; offen (b) der Satz im Prompt für gebündelte Aufrufe — braucht einen Suitelauf mit qwen3:14b vorher und nachher auf freier Karte — und die Klärung von `drill_on_feature`, das mit RM-529 kippte |
-| [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Gehosteter Lauf freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel; daneben der lokale Lauf nach RM-513 gegen `1ce7eac68` |
+| [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise) |
+| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Text- und Bildweg bis zum Export, nach RM-550 5 von 7 Körpern geschlossen, Auswertung 15–60 s; offen RM-550-Rest, Linux und macOS |
+| [RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-550) | KI und Generatoren | Ursachen behoben (07.10.): berührende Stücke, Textweg über das Bild, 200 000 Dreiecke, beide UDF-Hüllen; 5 von 7 Läufen geschlossen; offen die Warnung „kreuzt sich selbst“ und zerfallene Rohnetze einzelner Startwerte |
+| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
+| [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -209,7 +209,7 @@ bleiben eigene Aufgaben; siehe RM-011 und RM-002.
 
 ## P9 — Säule B und Farbe
 
-Backend-Grenze, ComfyUI-/TripoSG-Weg und Farbzuweisung stehen. Commit-/Gewichte-Pinning ist implementiert; offen bleiben die dokumentierte Lizenzkette und der vollständige plattformübergreifende Generatorlauf (RM-003, RM-004). Vorhandene Generatoren und Medien bleiben erhalten.
+Backend-Grenze, ComfyUI-Weg (TRELLIS.2 und FLUX.2 [klein]) und Farbzuweisung stehen. Commit-/Gewichte-Pinning ist implementiert; offen bleiben die dokumentierte Lizenzkette und der vollständige plattformübergreifende Generatorlauf (RM-003, RM-004). Vorhandene Generatoren und Medien bleiben erhalten.
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p9--säule-b-und-farbe).
 
@@ -257,7 +257,7 @@ Der beauftragte Ausbau ist umgesetzt. Die vier im Konzept begründet ausgeschlos
 
 ## P16 — Organische Modellierung
 
-Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vorschlag für die Regelsammlung samt kostenpflichtigem Vorher-/Nachher-Suitelauf steht in RM-014. Er ist keine fehlende Umsetzung des Formwerkzeugs.
+Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach einer Formenregel in der Sammlung ist entschieden (keine Regel, ein Satz am Werkzeug, [RM-014](ROADMAP-ARCHIV.md#rm-014)); der gehostete Suitelauf dazu steht in RM-016.
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p16--organische-modellierung).
 
@@ -3735,6 +3735,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Render- und Leistungsabnahme bleibt dem Release vorbehalten.
   Registerabgleich 02.10. (Stand `4449e3370`): Oberfläche und Kommandozeile erledigt, beide Doppelpunkt-Wächter grün; offen nur die Modelltexte (Abnahme kostet Geld, nicht gefahren).
 
+  **Stand 07.10.2026 (Claude), Agententeil:** Die 43 festen Doppelpunkte der sieben
+  Agenten- und Steckbriefdateien stehen in vollständigen Rahmen (`tr("Verlauf: {transactions}")`
+  usw.), ganze Zeilen statt Halbrahmen, wo Einzelwörter sonst großgeschrieben mitten im Satz
+  standen (`_scene_line`, `_print_settings_line`); Chat und MCP teilen die Sätze für unbekannte
+  Analysen und Tabellen und „Parameter gesetzt: {name} = {value} {unit}“. Kataloge je Sprache
+  +39/−29 ohne geänderten gemeinsamen Schlüssel. Der Wächter in `tests/test_translations.py`
+  erkennt auch `f"{x}: " + tr(…)` und ist am Stand davor mit 43 Funden rot. Deutsch ist Zeichen
+  für Zeichen gleich; die Agenten-Suite lief trotzdem mit (siehe [RM-251](#rm-251)).
+  **Nachtrag 07.10.2026:** Mit dem Umbau aus [RM-003](#rm-003) ist `comfy_setup.py` frei von
+  festen Doppelpunkten, und der Wächter liest den ganzen Kern außer den Modelltexten, die ihr
+  eigener Test prüft; am Stand davor meldet er `comfy_setup.py` 537, 739 und 757. Offen allein
+  die Fensterabnahme beim Release (RM-213).
+
 <a id="rm-312"></a>
 
 - [~] **RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl.**
@@ -4006,6 +4019,25 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Trainingsdaten der Freisteller, ComfyUI als getrenntes Programm). Der echte Lauf je Plattform
   bleibt RM-004.
 
+  **Stand 07.10.2026 (Claude), Umbau umgesetzt:** Weg 3 läuft über TRELLIS.2-4B (MIT) mit dem
+  Bildkodierer DINOv3 (Metas DINOv3 License), Freistellen BiRefNet (MIT), Textweg FLUX.2 [klein]
+  4B mit Qwen3-4B (Apache-2.0), alles eingebaute ComfyUI-Knoten ab 0.35, jede Datei mit Revision
+  und SHA-256 (`comfy_setup.SHAPE_FILES`, `BACKGROUND`, `IMAGE_MODEL_FILES`). Die Einrichtung räumt
+  Solidons alten TripoSG-Knoten und dessen markierte Gewichte; Git-Objektdateien des alten
+  Klons sind schreibgeschützt und werden mit entfernt (an einer Kopie der echten Einrichtung
+  geprüft). **Entschieden (Robert, 07.10.2026):** Die Einrichtung entfernt Solidons eigene alte
+  TripoSG-Einrichtung, nur am eigenen Zeichen erkannt, und der Einrichtungsdialog nennt vorher
+  Ordner und ungefähre Größe, in allen sechs Sprachen, mit Fenstertest
+  (`comfy_setup.legacy_leftovers`). Echter Lauf unter Windows in [RM-004](#rm-004).
+  **Offen:** (1) DINOv3 License — Einbeziehung beim Kunden, Lizenztext vor dem Abruf zeigen und
+  Zustimmung einholen, §1.b.v (Waffen) in Solidons Bedingungen, §8 einseitige Änderung, Abruf
+  aus der Comfy-Org-Kopie ohne Lizenzkopie; (2) BiRefNet-Trainingsdaten DIS5K nur
+  nicht-kommerziell; (3) Objaverse-/HSSD-NC-Objekte in den 3D-Trainingsdaten; (4) Hinweispflichten
+  für Apache-2.0-Gewichte, die der Kunde über Solidons Einrichtung lädt. Abnahme: Antwort der
+  Kanzlei je Frage; mit ihr ziehen nach: Handbuch `generating`/`models_text`, `website/ki-modelle.html`
+  und `*/ai-models.html`, Einleitung von `comfy_dialog.py`, `licences.toml` („Was extern
+  läuft“), `README.md`. Der echte Lauf der neuen Kette gehört zu RM-004.
+
 <a id="rm-004"></a>
 
 - [ ] **RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen.** Den
@@ -4018,15 +4050,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p9--säule-b-und-farbe).
 
-<a id="rm-014"></a>
-
-- [~] **RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden.** Entscheiden, ob
-  zusätzlich zur bestehenden Sperre für geratene Skizzen, Pinselzüge und Skelettdaten eine
-  erklärende Agentenregel gebraucht wird. Abnahme: Entscheidung dokumentiert; bei einer
-  Regeländerung Sammlungsversion sowie vergleichbare Agenten-Suite-Läufe davor und danach. Weg 4,
-  Beispiel, Handbuch und Website sind bereits umgesetzt.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#p16--organische-modellierung).
+  **Windows, 07.10.2026 (Claude), TRELLIS.2-Kette:** RTX 4080 16 GB, ComfyUI 0.37.0, alle
+  Dateien mit Revision und SHA-256 aus `comfy_setup`; Solidons Weg ohne Fenster (`from_text`,
+  `from_image`, Auswertung, Speichern und Wiederöffnen, STL und 3MF). Beide Wege laufen bis zum
+  Export, wiedergeöffnet gleich; ein Auftrag kostet kalt 125 s (Bild) und 350 s (Text), warm
+  21–26 s, die Karte bleibt unter 16 GB. Rohnetze um 700 000 Dreiecke, die Auswertung in Solidon
+  braucht 41–445 s. **Die Körper bleiben meist offen** (8 von 9 Läufen, Bild 5 von 6, Text 3 von
+  3): `repair.still_open`; der Textweg liefert dünne Schalen (Rakete 2,3 cm³ gegen 25,7 cm³ aus
+  dem Bildweg bei gleichem Bild und Startwert, Vase mit negativem Volumen). Der Fall gehört zu
+  [RM-550](#rm-550). Bericht, Rohnetze und Exporte (nicht versioniert):
+  `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Offen:** RM-550, danach dieselben Läufe
+  unter Linux und macOS.
 
 <a id="rm-251"></a>
 
@@ -4074,6 +4108,41 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   auf schlecht; das Modell rief `duplicate_feature` statt zu bohren. Ob Rauschen oder Folge
   von RM-529, wird hier geklärt. Messdateien `.claude/.state/ki-2026-10-06/messung/`.
 
+  **(b) gebaut und lokal gemessen (07.10.2026, Claude):** Prompt-Version 9 sagt im kompakten
+  Prompt, dass ein Schritt mehrere Aufrufe tragen darf und angekündigte Werkzeuge im selben
+  Schritt geholt werden; eine Kurzform bleibt für jeden Aufruf ihres Schritts eine Kurzform
+  (`ToolOffer.stubs()`, Test in `test_tool_offer.py`). Mit im Lauf: die Sprachzeile „Antworte
+  kurz und in der Sprache, in der der Nutzer schreibt“, RM-014 und der Agententeil von RM-285.
+  `PROMPT_TOKENS` 8 453 → 8 511. Agenten-Suite qwen3:14b, Fenster 32 768, freie Karte, gegen den
+  Lauf mit RM-529 (`65e3ec97b` + RM-529): **28 gegen 27 von 39 gut**, ungültige Aufrufe 43 gegen
+  66, 215 Schritte für 226 Aufrufe gegen 206 für 215, 71 gegen 70 Minuten. Einzelfälle kippen in
+  beide Richtungen; mehr Bündelung zeigt der Lauf nicht. Gehostet nicht abgenommen (kein
+  Schlüssel), das steht in [RM-016](#rm-016). **Befund:** Am Schrittlimit endet nur noch
+  `how_much_thinner`; neun Fälle enden nach 8 bis 11 Schritten am Zugbudget `MAX_TOKENS`
+  (120 000), weil lokal jeder Schritt die ganze Anfrage neu einliest (11 000 bis 14 000 Token) —
+  die 12 Schritte aus (a) sind lokal nicht erreichbar. Messdateien
+  `.claude/.state/ki-2026-10-06/messung/` (`suite_rm529_256b6b130`, `suite_rm251b_014_285`).
+
+  **Lokales Zugbudget (07.10.2026, Claude):** Ein lokaler Zug hat
+  `MAX_TOKENS_LOCAL` = 180 000 (`session.tokens_for`, je Schritt so viel wie gehostet), Test:
+  ein Zug mit 13 000 Token je Schritt erreicht 12 Schritte, mit dem alten Deckel hielt er nach
+  10. Gemessen auf demselben Stand mit und ohne Budget (qwen3:14b, freie Karte): **27 gegen 27
+  von 39**, Fall für Fall dieselben Entscheidungen; die zehn Fälle am Limit enden jetzt an den 12
+  Schritten statt am Budget, der Lauf dauert 69 statt 62 Minuten. Die Quote vom Lauf davor (28)
+  stand auf dem Stand vor Commit A (`1867d0439`); der Unterschied liegt nicht am Budget.
+  Messdateien `output/konsolidierung-2026-10-07/messung-ki/` (`suite_ohne_budget`,
+  `suite_rm251_budget`).
+  **`drill_on_feature` geklärt:** Fünf Läufe je Stand im Wechsel (`65e3ec97b` vor RM-529 und
+  mit RM-529/RM-251): je einmal *Bohrung*, viermal *Merkmal verdoppeln* — die Kopie richtig
+  daneben. Der Steckbrief unterscheidet sich zwischen den Ständen nur um `last_op=op1`; kein
+  Einfluss. Gezählt hatte der Fall nur `drill_hole`; `Case.also_good` lässt die gleichwertige
+  Handlung gelten (Test in `test_agent_suite.py`).
+  **Offen:** Zehn mehrteilige Fälle (which_hole, magnet_lid, wall_holder, hinge, snap_box,
+  dowels, inserts, free_shape, handrail_bend, drill_on_feature) enden lokal weiter am Limit;
+  qwen3:14b bündelt trotz Prompt-Version 9 kaum (1,0 Aufrufe je Schritt). Nächster Schritt:
+  an zwei dieser Fälle nachsehen, wofür die Schritte verbraucht werden (Nachforderungen,
+  ungültige Aufrufe, Wiederholungen).
+
 <a id="rm-016"></a>
 
 - [~] **RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen.** Die Agenten-Suite gegen
@@ -4115,6 +4184,54 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Freigegeben (Robert, 06.10.2026):** der gehostete Lauf. Auf dem Arbeitsrechner liegt
   kein Anthropic-Schlüssel (weder im Schlüsselbund noch in `SOLIDON3D_LLM_KEY_ANTHROPIC`);
   der Lauf startet, sobald einer hinterlegt ist.
+
+  **Lokal nach RM-513 (06.10.2026, Claude):** qwen3:14b, Fenster 32 768, freie Karte:
+  `65e3ec97b` 25 von 39 gut gegen die Referenz `1ce7eac68` mit 22 — keine Verschlechterung,
+  kein Feld bekommt seinen Satz zurück. Im Lauf `65e3ec97b` endete `inserts` mit „CUDA out of
+  memory“ ohne Schritt. Messdateien `.claude/.state/ki-2026-10-06/messung/`.
+  **Mit dem gehosteten Lauf abzunehmen (07.10.2026):** Prompt-Version 9 — der Satz für
+  gebündelte Aufrufe ([RM-251](#rm-251) (b), wirkt nur im kompakten Prompt), die Zeile
+  „Antworte kurz und in der Sprache, in der der Nutzer schreibt“ (gilt auch gehostet) und die
+  Sätze an `sculpt_strokes` und `pose_armature` (RM-014). Lokal ist Version 9 gemessen und nicht
+  schlechter; gehostet vorher (Version 8) und nachher. Verschlechtert sich die Quote, gehen
+  diese Sätze zurück.
+
+<a id="rm-550"></a>
+
+- [ ] **RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen.** Gefunden am
+  07.10.2026 beim ersten echten Lauf der TRELLIS.2-Kette ([RM-004](#rm-004), Claude). Von
+  neun Läufen endete einer geschlossen; die übrigen melden `repair.still_open` („2 offene
+  Stellen ließen sich nicht sicher schließen“). Gemessen an den Rohnetzen: (a) `DecimateMesh`
+  ließ rund zwanzig Vierecklöcher je Netz offen — behoben mit einem zweiten `FillHoles` nach dem
+  Ausdünnen, danach hat das Rohnetz des Bildwegs keine offene Kante mehr, Solidon meldet trotzdem
+  offen; die Ursache liegt also zwischen Einlesen, *Auf Maß bringen* und *Reparieren*. (b) Der
+  Textweg liefert bei gleichem Bild und Startwert eine dünne Schale (2,3 statt 25,7 cm³), die
+  Vase ein Netz mit negativem Volumen und zwei langen offenen Rändern; beim Bildweg kam ähnliches an
+  zwei von sechs Läufen vor (Startwerte 8 und 9, lange offene Ränder, bis 388 Teile). Zu prüfen: das Bild des Textwegs als PNG durch den
+  Bildablauf schicken, `RemeshMesh` mit `sdf` gegen `udf`. (c) 700 000 Dreiecke kosten die
+  Auswertung bis 445 s; `target_face_count` gegen Druckbedarf abwägen. Rohnetze und Berichte:
+  `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Abnahme:** an mindestens fünf
+  Startwerten je Weg ein geschlossener Körper ohne Warnung, Test für die Stelle in Solidon, die
+  ein geschlossenes Rohnetz offen meldet. Bauplan §6, §17, §27.
+
+  **Stand 07.10.2026 abends (Claude), Ursachen behoben:** (a) Die Reparatur strich an Kanten
+  mit vier Flächen — zwei Stücke, die sich berühren, rund zwanzig je Netz — Flächen und ließ
+  Schlitze ohne Fläche zurück; `repair.separate_touching_sheets` verdoppelt solche Kanten
+  (Korpus `cubes_touching_edge.glb`, Test vorher rot). (b) Der Textweg fährt zwei Aufträge,
+  Bild und danach den Bildablauf (`mesh.WORKFLOW_STAGES`): Bei gleichem Bild und Startwert ist
+  das Netz jetzt dasselbe wie aus dem Bild (25,72 cm³ beide). (c) Der Bildablauf dünnt auf
+  200 000 Dreiecke aus (Referenzgröße aus §31); die Auswertung dauert 15–60 s statt bis 445 s.
+  (d) `RemeshMesh` behält beide UDF-Hüllen: An einer dünnen Wand sind sie die Wand — Vase und
+  Becher kamen vorher als offene Haut, jetzt geschlossen (9,3 und 8,9 cm³); die Innenhülle eines
+  vollen Körpers nimmt `repair(inner_shells=True)`. Gemessen an sieben Läufen (Rakete Bild
+  Startwert 7 bis 10, Vase, Becher, Haken aus Text): **fünf geschlossen**, davon zwei ohne jeden
+  Befund und drei mit der Warnung „Die Oberfläche kreuzt sich selbst“ — die Kreuzungspaare
+  liegen alle an Stellen, an denen sich zwei Stücke berühren. Offen bleiben die Startwerte 8
+  und 9 desselben Bilds: Deren Rohnetz zerfällt schon in ComfyUI (bis 389 Teile, Ränder über
+  2 000 Kanten). **Offen:** (1) die Warnung an berührenden Stücken — entweder dort keine
+  Kreuzung melden oder die Berührung beim Reparieren auflösen; (2) zerfallene Rohnetze
+  erkennen und dem Kunden einen anderen Startwert anbieten statt eines offenen Körpers.
+  Messordner `output/konsolidierung-2026-10-07/messung-ki/weg3-neu`, `weg3-udf2`, `weg3-udf3`.
 
 ## Tests und Entwicklungswerkzeuge
 

@@ -121,9 +121,8 @@ class ToolOffer:
             # Beide enden mit dessen Titel, und ``operation_tools`` rahmt ihn
             # nur in dem, was es selbst schreibt. Was hier dazukommt, rahmt
             # dieselbe Funktion.
-            description = (
-                f"{schema['description']} {tr('Ort')}: "
-                f"{framed_if_foreign(name, menu_path(spec, registry))}."
+            description = f"{schema['description']} " + tr("Ort: {place}.").format(
+                place=framed_if_foreign(name, menu_path(spec, registry))
             )
             # Der versteckte Zwilling ist zweite Wahl — in beiden Fassungen,
             # sonst verlöre er den Satz, sobald er ausführlich wird.
@@ -210,6 +209,17 @@ class ToolOffer:
     def is_stub(self, name: str) -> bool:
         """Ob diese Operation gerade nur in Kurzform dasteht."""
         return name in self._stubs and name not in self.detailed
+
+    def stubs(self) -> frozenset[str]:
+        """Was in der Liste dieses Schritts nur als Kurzform stand.
+
+        Die Sitzung liest das **einmal je Schritt**, bevor sie die Aufrufe
+        abarbeitet: :meth:`introduce` und :meth:`promote` machen eine Kurzform
+        sofort ausführlich, und ein zweiter Aufruf derselben Kurzform im
+        selben Schritt liefe sonst mit Werten, deren Felder das Modell nie
+        gesehen hat (Regel 21; Review RM-251 b).
+        """
+        return frozenset(name for name in self._stubs if name not in self.detailed)
 
     def promote(self, names: Iterable[str]) -> None:
         """Diese Operationen ab dem nächsten Schritt ausführlich zeigen."""

@@ -1357,19 +1357,22 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "[Zusätzliche Programme einrichten](manual:extras).\n\n**Was "
             "zurückkommt, ist eine Oberfläche, keine Konstruktion**, ohne "
             "Bohrungen und Passungen und oft nicht geschlossen. Bohrungen und "
-            "Passungen entstehen danach als eigene Schritte.\n\n**Der mitgelieferte "
-            "Ablauf setzt auf TripoSG.** Quelltext und Modellkarte nennen die "
-            "MIT-Lizenz, ein Teil des Quelltexts steht aber unter Lizenzen von "
-            "Tencent, die die Europäische Union ausnehmen. Das wird gerade geklärt. "
-            "Andere Modelle haben eigene Bedingungen, die für die eingesetzte "
-            "Version zu prüfen sind.\n\n**Das "
+            "Passungen entstehen danach als eigene Schritte.\n\n**Die Modelle und "
+            "ihre Lizenzen.** Den Körper macht TRELLIS.2 von Microsoft (MIT-Lizenz). "
+            "Es liest das Bild mit DINOv3 von Meta, das unter Metas DINOv3-Lizenz "
+            "steht: weltweit und gewerblich nutzbar, mit Nutzungsbedingungen, unter "
+            "anderem nicht für Waffen. Freigestellt wird mit BiRefNet (MIT). Für den "
+            "Weg aus Text malt FLUX.2 [klein] 4B von Black Forest Labs vorher ein Bild "
+            "(Apache-2.0). Solidon liefert keines davon mit, die Einrichtung lädt sie "
+            "in Ihr ComfyUI.\n\n**Das "
             "Erzeugte liegt im Projekt wie eine hineingezogene Datei**, denn "
             "dieselbe Anfrage liefert nach einem Modellwechsel etwas anderes. "
             "Darüber stehen gewöhnliche Schritte wie *Reparieren*. Anfrage und "
             "Startwert bleiben dabei; derselbe Startwert liefert dasselbe "
             "Ergebnis, soweit das Modell es zulässt.\n\n**Die Reparaturkette läuft "
             "ohne Nachfrage**: Löcher schließen, doppelte Punkte zusammenführen, "
-            "Außenseiten angleichen. Laden, Größe, Reparatur und Aufsetzen bilden "
+            "Außenseiten angleichen, Hüllen im Inneren entfernen, damit der Körper "
+            "innen voll ist. Laden, Größe, Reparatur und Aufsetzen bilden "
             "einen Schritt: Ein Strg+Z nimmt das ganze erzeugte Modell zurück, im "
             "Verlauf bleibt jeder Teil einzeln änderbar."
         ),
@@ -1431,18 +1434,19 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "\n"
             "## ComfyUI für das Erzeugen aus Text oder Bild\n"
             "\n"
-            "ComfyUI braucht die Knoten, die der Ablauf anspricht, und das Modell dazu. Beides "
-            "legt Solidon hinein, über *Knoten und Modell einrichten …* in der Zeile von "
-            "ComfyUI oder direkt aus *Datei → Modell erzeugen*, wenn dort ComfyUI ohne Knoten "
-            "läuft. Die **Desktop-Version** von comfy.org findet Solidon selbst, für die "
-            "tragbare geben Sie notfalls den Ordner mit `custom_nodes` und `main.py` an.\n"
+            "Die Knoten für diesen Weg bringt ComfyUI ab Version 0.35 selbst mit, die Modelle "
+            "lädt Solidon dazu: über *Modelle einrichten …* in der Zeile von ComfyUI oder "
+            "direkt aus *Datei → Modell erzeugen*, wenn dort ein Modell fehlt. Die "
+            "**Desktop-Version** von comfy.org findet Solidon selbst, für die tragbare geben "
+            "Sie notfalls den Ordner mit `custom_nodes` und `main.py` an.\n"
             "\n"
-            "Die Einrichtung holt den festgelegten TripoSG-Quelltext, zieht fehlende Pakete "
-            "nach und **prüft, ob ComfyUI die Knoten laden kann**. Auf Wunsch folgen das Modell "
-            "mit rund 7,5 GB und für den Weg aus Text das Bildmodell mit rund 6,9 GB. Ein "
-            "abgebrochener Lauf setzt fort, wo er stand. **Danach ComfyUI einmal neu starten**, "
-            "sonst bleibt *Modell erzeugen* ausgegraut. Während einer Erzeugung zeigt Solidon "
-            "die verstrichene Zeit; bricht etwas ab, steht der Satz von ComfyUI im Dialog."
+            "Die Einrichtung **prüft zuerst die Version von ComfyUI**; ist sie zu alt, sagt "
+            "sie es, bevor etwas geladen wird. Auf Wunsch folgen das Modell für den Weg aus "
+            "Bild mit rund 8 GB und für den Weg aus Text das Bildmodell mit rund 8,3 GB, jede "
+            "Datei in einem festen Stand und mit Prüfsumme. Ein abgebrochener Lauf setzt fort, "
+            "wo er stand. **Danach ComfyUI einmal neu starten.** Während einer Erzeugung zeigt "
+            "Solidon die verstrichene Zeit; bricht etwas ab, steht der Satz von ComfyUI im "
+            "Dialog."
         ),
     ),
     Page(
@@ -2059,7 +2063,7 @@ def models_text() -> str:
     **Die Auskunft gab es, verteilt auf vier Stellen.** Die Modellauswahl im
     Chat-Dialog nannte Größe und Trefferquote, das Handbuch nannte eines davon
     im Fließtext, der Erzeugungsdialog nannte für den Textweg gar keines („ein
-    SDXL-Modell“ — welches, stand nirgends), und was Solidon selbst einrichtet,
+    Bildmodell“ — welches, stand nirgends), und was Solidon selbst einrichtet,
     stand in den Konstanten von ``comfy_setup``. Wer wissen wollte, was er
     braucht, bevor er anfängt, fand vier Teilantworten.
 
@@ -2141,30 +2145,40 @@ def models_text() -> str:
             "",
             str(
                 _(
-                    "Laufen in ComfyUI, nebeneinander, und alle drei richtet "
-                    "Solidon ein — in der Liste der zusätzlichen Programme steht in "
-                    "der Zeile von ComfyUI *Knoten und Modell einrichten …*. Das "
-                    "dritte braucht nur der Weg aus Text; es ist deshalb ein "
-                    "eigenes Häkchen."
+                    "Laufen in ComfyUI, nacheinander, und alle drei richtet Solidon "
+                    "ein — in der Liste der zusätzlichen Programme steht in der Zeile "
+                    "von ComfyUI *Modelle einrichten …*. Das dritte braucht nur der "
+                    "Weg aus Text; es ist deshalb ein eigenes Häkchen."
                 )
             ),
             "",
-            f"| {_('Wofür')} | {_('Modell')} | {_('Größe')} | {_('Woher')} |",
-            "|---|---|---|---|",
-            "| {wofuer} | TripoSG | {groesse} | {woher} |".format(
+            f"| {_('Wofür')} | {_('Modell')} | {_('Lizenz')} | {_('Größe')} | {_('Woher')} |",
+            "|---|---|---|---|---|",
+            "| {wofuer} | TRELLIS.2-4B, DINOv3 | MIT, {dino} | {groesse} | {woher} |".format(
                 wofuer=_("Aus einem Bild einen Körper"),
-                groesse=f"{decimal(comfy_setup.WEIGHT_GIGABYTES, 1)} GB",
+                dino=_("DINOv3-Lizenz von Meta"),
+                groesse=f"{decimal(comfy_setup.SHAPE_GIGABYTES, 1)} GB",
                 woher=_("richtet Solidon ein"),
             ),
-            "| {wofuer} | BiRefNet | {groesse} | {woher} |".format(
+            "| {wofuer} | BiRefNet | MIT | {groesse} | {woher} |".format(
                 wofuer=_("Das Objekt freistellen"),
                 groesse=f"{comfy_setup.BACKGROUND_MEGABYTES} MB",
                 woher=_("richtet Solidon ein"),
             ),
-            "| {wofuer} | SDXL | {groesse} | {woher} |".format(
+            "| {wofuer} | FLUX.2 [klein] 4B, Qwen3-4B | Apache-2.0 | {groesse} | {woher} |".format(
                 wofuer=_("Aus Text erst ein Bild"),
                 groesse=f"{decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1)} GB",
                 woher=_("richtet Solidon ein, auf Wunsch"),
+            ),
+            "",
+            str(
+                _(
+                    "TRELLIS.2 von Microsoft steht unter der MIT-Lizenz. Es liest das "
+                    "Bild mit DINOv3 von Meta, und dafür gilt Metas DINOv3-Lizenz: "
+                    "weltweit und gewerblich nutzbar, mit Nutzungsbedingungen, unter "
+                    "anderem nicht für Waffen und nicht gegen Handelsbeschränkungen. "
+                    "Wer TRELLIS.2 benutzt, nimmt diese Bedingungen an."
+                )
             ),
             "",
             f"### {_('Das Bildmodell')}",
@@ -2172,7 +2186,7 @@ def models_text() -> str:
             str(
                 _(
                     "Nur für den Weg aus Text. Wer ein Foto oder eine Zeichnung "
-                    "mitbringt, braucht es nie — und sieben Gigabyte für einen Weg, "
+                    "mitbringt, braucht es nie — und acht Gigabyte für einen Weg, "
                     "den ein vorhandenes Bild umgeht, lädt Solidon niemandem "
                     "ungefragt herunter. Deshalb ist es in der Einrichtung ein "
                     "eigenes Häkchen; fehlt es beim Erzeugen, führt der Knopf "
@@ -2182,28 +2196,25 @@ def models_text() -> str:
             "",
             str(
                 _(
-                    "Geholt wird **{file}** aus dem Verzeichnis *{source}* auf "
-                    "Hugging Face, in einem festen Stand und mit Prüfsumme, nach "
-                    "*{folder}* im Ordner von ComfyUI. Wer es lieber selbst "
-                    "hinlegt, legt es dorthin; danach ComfyUI einmal neu starten, "
-                    "und *Modell erzeugen* nimmt auch einen Satz statt eines "
-                    "Bildes an. Seine Lizenz ist die CreativeML Open RAIL++-M von "
-                    "Stability AI; was sie an Nutzung ausschließt, steht in ihrem "
-                    "Anhang und gilt dem, der das Modell benutzt."
+                    "Geholt werden **{file}** aus dem Verzeichnis *{source}* auf "
+                    "Hugging Face, dazu der Textkodierer und die VAE, jede Datei in "
+                    "einem festen Stand und mit Prüfsumme, in die passenden Ordner "
+                    "unter *models* im Ordner von ComfyUI. Wer sie lieber selbst "
+                    "hinlegt, legt sie dorthin. FLUX.2 [klein] 4B und Qwen3-4B stehen "
+                    "unter der Lizenz Apache-2.0."
                 )
             ).format(
-                file=comfy_setup.IMAGE_MODEL_FILE,
-                source=comfy_setup.IMAGE_MODEL_REPO,
-                folder=comfy_setup.IMAGE_MODEL_FOLDER,
+                file=comfy_setup.IMAGE_MODEL_FILES[0].name,
+                source=comfy_setup.IMAGE_MODEL_FILES[0].repo,
             ),
             "",
             str(
                 _(
-                    "Ein anderes SDXL-Modell geht auch: Solidon nimmt, was im Ordner "
-                    "liegt, und bevorzugt dabei *juggernaut* und *dreamshaper* vor "
-                    "dem Basismodell. Nicht genommen werden Modelle mit *refiner*, "
-                    "*inpaint* oder *turbo* im Namen — sie lösen eine andere "
-                    "Aufgabe."
+                    "Der Ablauf ist auf die schnelle Fassung von FLUX.2 [klein] 4B "
+                    "eingestellt. Die 9B-Fassung und das Basismodell nimmt Solidon "
+                    "nicht, auch wenn sie im Ordner liegen: Die 9B-Fassung darf "
+                    "nicht gewerblich genutzt werden, das Basismodell braucht andere "
+                    "Einstellungen."
                 )
             ),
             "",
@@ -2211,13 +2222,12 @@ def models_text() -> str:
             "",
             str(
                 _(
-                    "Gemessen auf einer RTX 4080: aus einem **Bild** rund fünfzehn "
-                    "Sekunden, aus **Text** rund zweieinhalb Minuten. Der "
-                    "Unterschied ist das Bildmodell — es lädt erst sieben Gigabyte "
-                    "in den Grafikspeicher und rechnet dann ein Bild, bevor "
-                    "überhaupt ein Körper entsteht. Danach kommt in beiden Fällen "
-                    "dieselbe Kette: auf Arbeitsgröße bringen, reparieren, und bei "
-                    "sehr feinen Netzen die Dreiecke verringern."
+                    "Das hängt vor allem an der Grafikkarte. Aus **Text** dauert es "
+                    "länger als aus einem **Bild**: Vorher lädt das Bildmodell in den "
+                    "Grafikspeicher und rechnet ein Bild, danach erst das Modell für "
+                    "den Körper. Dann kommt in beiden Fällen dieselbe Kette: auf "
+                    "Arbeitsgröße bringen, reparieren, und bei sehr feinen Netzen die "
+                    "Dreiecke verringern."
                 )
             ),
             "",

@@ -79,6 +79,33 @@ def test_a_remote_orientation_analysis_is_the_chat_answer_computed_off_the_windo
     assert len(window.session.project.document.transactions) == before, "lesend, kein Schritt"
 
 
+def test_remote_and_chat_answer_alike_for_unknown_kinds_and_set_values(
+    window: MainWindow,
+) -> None:
+    """Review RM-285 (N2): Die Fernsteuerung sagte eigene Sätze.
+
+    „Diese Analyse gibt es nicht: layers, estimate, …“ nannte die gefragte Art
+    nicht und listete die gültigen, als gäbe es *sie* nicht; „Parameter
+    gesetzt“ kam ohne Einheit. Jetzt antworten Chat und MCP aus einer Quelle.
+    """
+    from app.core.agent.analysis import unknown_analysis
+    from app.core.agent.session import standard_text
+
+    window.run_remote("create_box", {"width": 30.0, "depth": 10.0, "height": 40.0})
+
+    analysis = window.run_remote("read_analysis", {"kind": "wobble"})
+    assert analysis == unknown_analysis("wobble")
+    assert "wobble" in analysis
+
+    table = window.run_remote("read_standard", {"kind": "rivet", "size": "M3"})
+    assert table == standard_text("rivet", "M3")
+    assert "rivet" in table
+
+    window.run_remote("add_parameter", {"name": "breite", "value": 30.0, "unit": "mm"})
+    answer = window.run_remote("set_parameter", {"name": "breite", "value": 42.5})
+    assert answer == "Parameter gesetzt: breite = 42.5 mm"
+
+
 def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
     """Der Herkunftsvermerk (§26.4).
 

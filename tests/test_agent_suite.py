@@ -1123,3 +1123,31 @@ def test_a_twin_counts_as_the_same_act_in_the_score() -> None:
     assert exact.good, "die erste Wahl des Menüs erfüllt den Fall"
     assert mesh.good, "der Zwilling ebenso"
     assert not missing.good, "ohne Quader bleibt es ein Fehler"
+
+
+def test_another_op_that_does_the_same_counts_where_the_case_names_it() -> None:
+    """``Case.also_good``: *Merkmal verdoppeln* legt dieselbe Bohrung daneben.
+
+    Gezählt wird nur, was der Fall nennt — eine andere Operation bleibt ein
+    Fehler, und keine Operation auch.
+    """
+    from tests.agent_cases import by_id
+    from tools.run_agent_suite import Outcome
+
+    case = by_id("drill_on_feature")
+    assert case.also_good == (("duplicate_feature",),), "der Fall, um den es geht"
+
+    assert Outcome(case=case, operations=("drill_hole",)).good
+    assert Outcome(case=case, operations=("duplicate_feature",)).good
+    assert not Outcome(case=case, operations=("move_feature",)).good
+    assert not Outcome(case=case, operations=()).good
+
+
+def test_every_alternative_names_registered_tools() -> None:
+    offered = set(tools.names())
+
+    for case in CASES:
+        for alternative in case.also_good:
+            assert alternative, f"{case.id}: leere Alternative zählte jede Antwort"
+            for name in alternative:
+                assert name in offered, f"{case.id}: {name} is not a tool"
