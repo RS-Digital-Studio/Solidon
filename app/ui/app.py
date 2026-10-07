@@ -60,7 +60,7 @@ from app.i18n.catalog import install_language
 from app.ui import app_events, cursors, start_check, window_chrome
 from app.ui.icons import application_icon
 from app.ui.leash import Worker, WorkerLeash, collect_in_main_thread, configure_gil_switching
-from app.ui.qt_platform import prefer_x11_for_the_viewport
+from app.ui.qt_platform import prefer_an_input_method_qt_has, prefer_x11_for_the_viewport
 from app.ui.settings import UiSettings, load_settings
 from app.ui.splash import SplashScreen
 from app.ui.theme import apply_theme, enable_hidpi
@@ -332,8 +332,10 @@ def build_application(
     existing = QApplication.instance()
     if existing is None:
         # Beides gehört vor die Anwendung: Die Plattform steht mit ihrem
-        # Aufbau fest, und die 3D-Ansicht hat auf Wayland kein Bild.
+        # Aufbau fest, und die 3D-Ansicht hat auf Wayland kein Bild. Ebenso
+        # das Eingabemodul — Qt liest es beim Aufbau (RM-062).
         prefer_x11_for_the_viewport()
+        prefer_an_input_method_qt_has()
         enable_hidpi()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
     # Vor dem ersten Arbeiter: Kein Faden außer diesem räumt Ringe mit
@@ -507,6 +509,7 @@ def main(argv: list[str] | None = None) -> int:
     # von sich aus Wayland, und dort hat die 3D-Ansicht kein Bild. Gibt es ein
     # X11-Display, läuft die Anwendung darauf (``app.ui.qt_platform``).
     prefer_x11_for_the_viewport()
+    prefer_an_input_method_qt_has()
     enable_hidpi()
     # Der Hauptfaden bekommt den GIL neben einem rechnenden Arbeiter nach
     # einer Millisekunde statt nach fünf (``leash.GIL_SWITCH_S``, RM-258).

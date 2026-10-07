@@ -1247,6 +1247,16 @@ def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:
     assert verdict(0, _start_report(), crash_text=caught.replace("0x56fc\n", "0x1a2b\n"))
     assert verdict(0, _start_report(), helpers_alive=[4711])
     assert verdict(0, _start_report(), tree_changed=["Contents/MacOS/neu.txt"])
+    # RM-062: Unter Linux muss das IBus-Eingabemodul im Paket liegen.
+    shipped = ["libcomposeplatforminputcontextplugin.so", "libibusplatforminputcontextplugin.so"]
+    assert verdict(0, _start_report(input_modules=shipped), linux=True) == []
+    assert any(
+        "IBus" in text for text in verdict(0, _start_report(input_modules=shipped[:1]), linux=True)
+    )
+    assert any("IBus" in text for text in verdict(0, _start_report(), linux=True)), (
+        "ein Bericht ohne Angabe ist kein Beleg"
+    )
+    assert verdict(0, _start_report(input_modules=[])) == [], "unter Windows und macOS nicht"
 
 
 def test_the_start_check_sees_what_the_application_writes_into_its_own_tree(

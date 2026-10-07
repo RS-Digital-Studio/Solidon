@@ -510,6 +510,13 @@ regelt `zeichenflaeche.md`.
   `unavailable_hint()` nennt, was fehlt (mit `DISPLAY` die Bibliothek, ohne
   Xwayland). Wer die Plattform vor dem Aufbau liest oder setzt, auch ein
   Werkzeug in `tools/`, geht über diese Funktion.
+* **Das Eingabemodul muss im mitgelieferten Qt liegen** (RM-062): PySide6
+  bringt `compose`, `ibus` und `qtvirtualkeyboard`, kein Fcitx-Modul. Nennt
+  die Umgebung Fcitx (`QT_IM_MODULE`, `QT_IM_MODULES`, `XMODIFIERS`), setzt
+  `qt_platform.prefer_an_input_method_qt_has` vor der Anwendung `ibus`,
+  außerhalb des Flatpak mit `IBUS_USE_PORTAL=1`, wo Fcitx5 das Portal trägt
+  (Herleitung: `input_method_environment`). Der Starttest des Pakets verlangt
+  unter Linux das IBus-Modul.
 
 ## Was nur das Bild zeigt
 

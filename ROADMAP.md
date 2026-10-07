@@ -129,16 +129,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-242 — Testphase der Vollversion nachreichen](#rm-242) | Veröffentlichung, Betrieb und Vertrieb | Robert 25.09.2026: 1.0 startet ohne Testphase, sie kommt später — Januar (Unentschlossene noch zu 69 €) oder Februar 2027 mit dem Preissprung. Offen: Termin, ob frühere Demo-Geräte sie bekommen (heute T15: nein), Release mit gesetztem `TRIAL_FROM` |
 | [RM-351 — Die Website bietet 0.5.1 an und nennt im Downloadhinweis 0.5.0 als signierte Fassung](#rm-351) | Veröffentlichung, Betrieb und Vertrieb | Hinweis seit `1d9373efa` in sechs Sprachen versionsneutral („ab 0.5.0“), in 0.5.2 und 0.5.3; offen der Wächter aus der Abnahme — oder Roberts Verzicht, weil der Satz keine Version mehr an das Angebot bindet |
 | [RM-528 — Die Installation kennt nur einen Release-Schlüssel](#rm-528) | Veröffentlichung, Betrieb und Vertrieb | Schlüsselliste in `updates.py` bauen und ausliefern, bevor der Release-Schlüssel wechselt (Entscheidung Robert, 06.10.) |
-| [RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen](#rm-038) | Kundenrückmeldungen | mailto-Weg gebaut, Rückfall ohne Mailprogramm sagt, was jetzt geht, lange Berichte werden gekürzt (`29dcefa4`, `736d4a46`); offen der Portalweg im ausgelieferten Flatpak |
-| [RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen](#rm-040) | Kundenrückmeldungen | Aktuellen Kundenbericht mit Traceback und betroffener Datei reproduzieren |
-| [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Start, Fokus und IME am aktuellen Flatpak bestätigen |
-| [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Am Runner im Sandkasten mit den Manifestrechten belegt; offen nur der Lauf mit dem ausgelieferten Solidon-Flatpak 0.5.3 und das Öffnen im Fenster |
+| [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung → `ibus`, außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: Abnahme beim Kunden mit dem nächsten Paket (Ubuntu 24.04, Solidon als Flatpak) |
-| [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Fällig seit 06.10.: mit 0.5.3 antworten; Entwurf liegt lokal bereit |
+| [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
 | [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Gebaut und an Sonde und Fenstertest belegt, nicht committet (Hunks im Arbeitsbaum des i9, Patches im Zustandsordner); offen Tor, Commit der eigenen Hunks und der Titel aus `_removal_entry` |
 | [RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig](#rm-534) | Kundenrückmeldungen | Ursache an der Kundendatei gemessen; Umsetzung in vier Teilen (Laufzustand, volle Kette selbst, Halt im Entwurf nie fein, kein Hin und Her) nicht begonnen |
-| [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Vier Entscheidungen Roberts (am Punkt); die Widersprüche und die drei falschen Ergebnisse unabhängig davon beheben |
+| [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Entschieden (Robert, am Punkt); Flächenzug, Absagen, Maßgruppe, Tasche und Zapfen nach diesen Entscheidungen bauen, die drei falschen Ergebnisse beheben |
 | [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
 | [RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück](#rm-537) | Kundenrückmeldungen | An der Kundendatei gemessen; offen die Herkunft der vorläufigen Merkmale und was eine Auswahl tut, deren Merkmal verschwindet |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
@@ -4593,28 +4590,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 ## Kundenrückmeldungen
 
-<a id="rm-038"></a>
-
-- [~] **RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen.** `SupportDialog` übergibt
-  Betreff und Nachricht inzwischen direkt als Klartext an `ComposeEmail`; die alte Forderung nach
-  gekürztem mailto-Text ist überholt. Abnahme im ausgelieferten Paket: Umlaute, Satzzeichen und
-  Zeilenumbrüche kommen unverändert im Mailentwurf an; fehlendes Portal liefert eine Rückmeldung und
-  den gespeicherten Ordner als Rückweg.
-
-  Gebaut: `ComposeEmail` mit Klartext (`app/ui/support_dialog.py`), Code und Tests grün. Offen
-  nur der Portalweg im ausgelieferten Flatpak, abzunehmen am Gerät.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-linux-kunde-und-was-sein-protokoll-trug-06092026).
-
-<a id="rm-040"></a>
-
-- [ ] **RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen.**
-  Traceback-Protokollierung und Übergabe in den Fehlerbericht sind gebaut. Abnahme: neuer Bericht
-  aus einer aktuellen Fassung nennt die konkrete Ausnahme und betroffene Datei; Ursache nachgestellt
-  und erforderlicher Fix geprüft.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-034-06092026).
-
 <a id="rm-062"></a>
 
 - [~] **RM-062 — Eingabemethode im aktuellen Flatpak bestätigen.** Die Fcitx-Berechtigungen und der
@@ -4627,33 +4602,31 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Xvfb mit Sitzungsbus (`build.yml`); die Fcitx-Rechte stehen im Manifest
   (`packaging/de.rsdigital.solidon3d.yml`). Das belegt den Start unter X11, nicht Fokus oder IME.
 
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
-
-<a id="rm-064"></a>
-
-- [~] **RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen.** Erkennung, Hostpfade und
-  Austauschordner sind repariert. Seit `ce4e66ffb` liest Solidon Herstellerprofile und eigene
-  Drucker eines Slicer-Flatpaks (`/app/share/<Programm>/profiles`, `~/.var/app/<Kennung>/config`),
-  das Manifest gibt beides lesend frei, und eine Portalkopie aus dem Dateidialog wird zum Starter
-  (Kundenmeldung 05.10.2026: Ubuntu 24.04, Orca 2.5 als Flatpak, keine Drucker, nur ein alter aus
-  `~/.config`). Dazu `91b42fc13` (Cura im Mac-Bündel, `.app`-Wahl, Creality Print 7),
-  `b1d2b69ff` (eingerichtete Drucker eines AppImage aus `system/`) und `b79f8a07e` (PrusaSlicer
-  als Flatpak rechnet über `--command`, sein Startskript ruft im Hintergrund auf).
-
-  Am 05.10.2026 am Runner belegt (Zweig `diagnose/slicer-erkennung`, Läufe 37336128130,
-  37337780033, 37339765628, je vorher/nachher): Unter Linux fand der Stand von 0.5.2 im Sandkasten
-  mit seinen Rechten **kein** Slicer-Flatpak und außerhalb bei Orca nur den Drucker aus
-  `~/.config`. Danach bieten Orca-, Bambu- und Prusa-Flatpak sowie Orca-, Elegoo- und
-  Creality-AppImage ihre Herstellerdrucker und den eigenen an und slicen einen Würfel —
-  außerhalb und im Sandkasten mit den Manifestrechten. Auf beiden Macs (macOS 26.6, ARM und
-  Intel) slicen PrusaSlicer, Creality Print, Cura, ElegooSlicer, Bambu Studio und OrcaSlicer aus
-  Homebrew; vorher fand Solidon dort von Cura nur das Fenster. Cura unter Linux: RM-521.
-
-  Offen: derselbe Weg mit dem ausgelieferten Solidon-Flatpak 0.5.3 (es enthält `ce4e66ffb`,
-  `91b42fc13`, `b1d2b69ff` und `b79f8a07e`) und das Öffnen im Fenster des Slicers. Sonde und
-  Workflows liegen unter `.claude/.state/slicer-sonde-2026-10-05/`; für einen neuen Lauf auf
-  einem Wegwerfzweig `probe_slicers.py` ins Wurzelverzeichnis und die beiden `.yml` nach
-  `.github/workflows/` legen. Der Zweig `diagnose/slicer-erkennung` ist gelöscht.
+  **Gemessen am ausgelieferten Flatpak 0.5.3 (06.10.2026, Runner genügt —
+  Entscheidung Robert):** Läufe
+  [37507999423](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37507999423)
+  und [37524814548](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37524814548),
+  ubuntu-24.04, Xvfb, Fcitx 5.1. Das Paket startet ohne Zusatzschalter auf X11.
+  Im Paket liegen die Qt-Eingabemodule `compose`, `ibus` und `qtvirtualkeyboard`,
+  **kein Fcitx-Modul**. Mit `QT_IM_MODULE=fcitx` lädt Qt `compose`, und Fcitx5
+  bekommt keine Eingabesitzung; mit `ibus` legt Fcitx5 über seine
+  IBus-Schnittstelle eine mit Fokus an, und „Würfel ß äöü“ kommt im Textfeld an.
+  **Abhilfe:** `qt_platform.prefer_an_input_method_qt_has` setzt bei Fcitx in
+  der Umgebung ohne beiliegendes Fcitx-Modul vor dem Qt-Start `ibus` — auch für
+  eine Liste in `QT_IM_MODULES` (GNOME, Sway) und für KDE mit nur
+  `XMODIFIERS=@im=fcitx`. Außerhalb des Flatpak prüft Qt 6.11 für IBus
+  `ibus-daemon` im PATH (Quelltext `qibusplatforminputcontext.cpp`), den ein
+  reines Fcitx5-System nicht hat; antwortet Fcitx5 als
+  `org.freedesktop.portal.IBus`, setzt die Anwendung `IBUS_USE_PORTAL=1`. Der
+  Fehlerbericht nennt jeden Vorwert; der Starttest des Pakets verlangt unter
+  Linux das IBus-Modul. **Offen:** am nächsten Paket (Workflow
+  `.claude/.state/flatpak-abnahme-2026-10-06/abnahme-eingabe.yml` erweitern):
+  Flatpak mit `QT_IM_MODULE=fcitx`; AppImage und tar.gz aus demselben Bau mit
+  Fcitx5 (a) ohne `ibus`-Paket, (b) mit installiertem, nicht laufendem
+  `ibus-daemon`, (c) mit `ibus-daemon`, den Fcitx5 ablöst; dazu
+  `QT_IM_MODULES=wayland;fcitx` und nur `XMODIFIERS=@im=fcitx`. Je Fall
+  Fcitx-Protokoll (`--verbose=ibusfrontend=5`) mit Eingabesitzung und Text im
+  Feld.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
 
@@ -4695,6 +4668,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   feststeht, ob die nächste Version es behebt: Ursache in zwei Sätzen, die Versionsnummer und dass
   die Flatseal-Freigabe für den Session-Bus nicht nötig ist. Entwurf in Roberts lokaler Ablage.
   Abnahme: nach dem Release versandt, Versandstatus dokumentiert.
+
+  Text für 0.5.3 fertig (06.10.2026) in Roberts lokaler Ablage; jede Aussage darin ist am
+  ausgelieferten Paket belegt (RM-064 im Archiv) oder durch einen Test aus 0.5.3
+  (`test_the_portal_copy_of_a_launcher_is_remembered_as_the_launcher`). Robert
+  schickt ihn; danach den Versand hier eintragen.
 
 <a id="rm-532"></a>
 
@@ -4855,12 +4833,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Vorschlag:** Flächen bekommen *Fläche versetzen* mit dem Feld „Weg“ (erste Zeile in
   `ACTION_ORDER` als `("move_feature", "push_face")`, der Weg beginnt bei 0); Karte, Operation und
   Griff fragen dieselbe Funktion; eine zusammengelegte Absage steht wieder als Zeile.
-  **Entscheidungen Robert:** (a) der Flächenzug als Zahl mit *Übernehmen* statt sofortigem
-  Schritt (ändert die Zusage in `_on_face_dragged`); (b) Absagen wieder sichtbar, das nimmt
-  `fad4a15c5` teilweise zurück, oder die zwei Unterlagen angleichen; (c) Maße im Bild auch an
-  Zapfen, Senkung, Kugel und Ring (ändert die Entscheidung vom 10.09., dass *Merkmal verschieben*
-  auf Klick rechnet); (d) Tasche um einen Zapfen: absagen (Empfehlung) oder beide gemeinsam
-  versetzen. **Abnahme:** Ein Test über echte Netze, der heute an Ring und Sackbohrung mit Zapfen
+  **Entschieden (Robert, 06.10.2026):** (a) „alles einheitlich, Bohrung Vorbild für alle
+  Funktionen“ — der Flächenzug schlägt vor wie an der Bohrung, *Übernehmen* rechnet; (b)
+  nicht geltende Handlungen stehen wieder als eine Zeile mit Grund; (c) *Merkmal verschieben*
+  führt an Zapfen, Senkung, Verjüngung, Kugel, Ring und Einschluss ins Bild mit Maßgruppe
+  (ändert die Entscheidung vom 10.09.); (d) „beides einzeln handhaben und Tasche allein
+  bearbeitbar und Zapfen“ — Tasche und Zapfen je einzeln bearbeitbar. Wulst/Kehle fragen in
+  Karte und Operation dieselbe Funktion (`398c7ea43` auf `kunden/rm-535`). **Abnahme:** Ein Test über echte Netze, der heute an Ring und Sackbohrung mit Zapfen
   rot ist; die drei falschen Ergebnisse rechnen richtig oder sagen mit Grund ab.
 
 <a id="rm-536"></a>
