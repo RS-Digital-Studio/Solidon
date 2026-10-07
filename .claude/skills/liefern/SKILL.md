@@ -32,9 +32,11 @@ Prüfbaum (ein Worktree auf HEAD mit genau den eigenen Änderungen) oder, nach
 Schritt 5 unten, über den vorgemerkten Index (`git diff --cached`); ohne
 Angabe läse er im Hauptbaum alle fremden Änderungen mit. Jeder Fund wird
 behoben oder mit Beleg als kein Fehler festgehalten; ein Fix ändert den Stand,
-also danach die betroffenen Tests, und das Behobene wird noch einmal
-durchgesehen. Weil `post-commit` pusht, ist das Review vor dem Commit das
-Review vor dem Push.
+also danach die betroffenen Tests. Eine Nachprüfung als zweites Review gibt es
+nur, wenn das erste mehrere mittlere oder schwere Befunde hatte, und danach
+keine weitere Runde (Entscheidung Robert). Mehrere Punkte, die zusammen
+hinausgehen, teilen sich ein Review. Weil `post-commit` pusht, ist das Review
+vor dem Commit das Review vor dem Push.
 
 ## Die Einheit abgrenzen
 
