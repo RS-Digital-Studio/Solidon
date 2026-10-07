@@ -165,6 +165,8 @@ from app.core.types import (
     SceneObject,
     Transaction,
     measure_status,
+    replanned_steps,
+    step_numbers,
 )
 from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
@@ -4497,24 +4499,6 @@ def history_step_titles(document: Document) -> dict[int, str]:
     return {op_id: str(title) for op_id, title in step_titles(document).items()}
 
 
-def replanned_steps(document: Document) -> frozenset[int]:
-    """Schritte, die ein Einfügen oder Verschieben neu gefasst hat (P7).
-
-    Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
-    Kennung an seiner neuen Stelle. Der Verlauf blendet sie deshalb aus, statt
-    sie wie ein gelöschter Schritt durchzustreichen (§15.4 gilt dem Löschen).
-    """
-    found: set[int] = set()
-    for transaction in document.transactions:
-        changes = transaction.changes
-        if transaction.revision not in ("insert", "move") or changes is None:
-            continue
-        found.update(
-            op_id for op_id, version in (changes.after.edited_ops or {}).items() if version is None
-        )
-    return frozenset(found)
-
-
 def step_state(document: Document, op_id: int, gone: Discarded | None = None) -> str:
     """Ob ein Schritt wirkt — leer, „aus", „ruht" (P7.3) oder „Ergebnis entfernt".
 
@@ -5128,7 +5112,7 @@ class HistoryPanel(QWidget):
         nested = {op_id for members in removed_under.values() for op_id in members}
         self.stop_insert_action.setEnabled(inserting is not None)
         titles = history_step_titles(document)
-        self._positions = {entry.id: index for index, entry in enumerate(document.ops, start=1)}
+        self._positions = step_numbers(document.ops)
         replanned = replanned_steps(document)
         deleted: set[int] = set()
         for transaction in document.transactions:
@@ -5220,13 +5204,17 @@ class HistoryPanel(QWidget):
             # ein Wort aus dem Code, und das Ausrufezeichen davor erklärte sie
             # nicht (22.09.2026). Die Kennung bleibt vorn: Mit ihr nennt die
             # Übernommen-Leiste des Chats denselben Schritt.
+            # Die Nummern aus ``self._positions``, einmal je Neuaufbau gezählt —
+            # je Zeile neu gezählt kostete der Verlauf bei 2000 Schritten
+            # 189 ms mehr (Review RM-529).
+            positions = self._positions
             steps = (
-                tr("Schritt {number}").format(number=step_number(document, transaction.ops[0]))
+                tr("Schritt {number}").format(
+                    number=positions.get(transaction.ops[0], transaction.ops[0])
+                )
                 if len(transaction.ops) == 1
                 else tr("Schritte {numbers}").format(
-                    numbers=", ".join(
-                        str(step_number(document, entry)) for entry in transaction.ops
-                    )
+                    numbers=", ".join(str(positions.get(entry, entry)) for entry in transaction.ops)
                 )
                 if transaction.ops
                 # **Eine Änderung am Projekt vertritt keinen Schritt** — dort

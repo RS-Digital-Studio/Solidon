@@ -3423,19 +3423,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
         target, old_centre, atol=EPS_GEOM, rtol=0.0
     ):
         return OpResult(
-            outputs=[source],
-            findings=[
-                Finding(
-                    # Ausgeschrieben statt ``f"{operation}…"``: Den Knopf zum
-                    # Schritt prüft ``test_finding_ways`` am Kennwort.
-                    code="duplicate_feature.unchanged" if duplicate else "move_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal liegt schon dort — nichts zu versetzen."),
-                    feature_ids=(feature.id,),
-                    values={"field": "x"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            outputs=[source], findings=[_already_in_place(feature.id, duplicate=duplicate)]
         )
     if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS and len(geometry.related) <= 1:
         return _exact_place_oriented_cavity(
@@ -4476,6 +4464,7 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 11: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
     # 12: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
     # 13: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
+    # 14: „liegt schon dort“ öffnet den Schritt (RM-441).
     cache_version="14",
     title=_("Merkmal verschieben"),
     category="holes",
@@ -4528,19 +4517,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     target: Vec3 = (params.x, params.y, params.z)
 
     if all(is_close(a, b) for a, b in zip(centre, target, strict=True)):
-        return OpResult(
-            outputs=[source],
-            findings=[
-                Finding(
-                    code="move_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal liegt schon dort — nichts zu versetzen."),
-                    feature_ids=(feature.id,),
-                    values={"field": "x"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
-        )
+        return OpResult(outputs=[source], findings=[_already_in_place(feature.id, duplicate=False)])
 
     body = as_mesh_data(source.mesh)
     state = cavity_chain_state_at(feature, source.features, body)
@@ -4854,7 +4831,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 10: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
     # 11: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
     # 12: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
-    cache_version="13",
+    # 13: „dasselbe Merkmal“ öffnet den Schritt (RM-441).
+    # 14: im Weg mit freier Richtung „nichts verdoppelt“ statt „nichts zu versetzen“.
+    cache_version="14",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -4903,22 +4882,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         # Kein Fehler, sondern ein Hinweis: Die Boolesche liefe auf sich selbst
         # und ließe den Körper, wie er ist. Regel 19 — was zurücknehmbar ist,
         # bekommt keine Nachfrage, und was nichts tut, keine Ausnahme.
-        return OpResult(
-            outputs=[source],
-            findings=[
-                Finding(
-                    code="duplicate_feature.unchanged",
-                    severity="info",
-                    message=_(
-                        "Ein zweites Merkmal an derselben Stelle ist dasselbe Merkmal — "
-                        "nichts verdoppelt."
-                    ),
-                    feature_ids=(feature.id,),
-                    values={"field": "x"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
-        )
+        return OpResult(outputs=[source], findings=[_already_in_place(feature.id, duplicate=True)])
 
     body = as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
@@ -6303,6 +6267,7 @@ class RotateFeatureParams(BaseParams):
     # 7: beim Schließen einer Bohrung werden flächig berührende Körper verbunden (RM-319).
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
+    # 10: „ohne Winkel“ öffnet den Schritt (RM-441).
     cache_version="10",
     title=_("Merkmal drehen"),
     category="holes",
@@ -7667,6 +7632,7 @@ class ResizeFeatureParams(BaseParams):
     # Durchbruch, Befund ``thread.thin_wall`` unter der Mindestwand (RM-184).
     # 18: Ein geändertes Gewinde verliert das Nennmaß eines gedruckten — es ist
     # gebaut, wie es dasteht, ohne Spiel daneben.
+    # 19: „hat dieses Maß schon“ öffnet den Schritt (RM-441).
     cache_version="19",
     title=_("Merkmal ändern"),
     category="holes",
@@ -7728,16 +7694,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
     if is_close(params.diameter, previous):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(feature.id,),
-                    values={"field": "diameter"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(feature.id, "diameter")],
         )
 
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
@@ -8218,6 +8175,9 @@ def _depth_wish(
                 severity="info",
                 message=_("Die Bohrung geht bereits ganz durch."),
                 feature_ids=(feature.id,),
+                # Gemeint ist die Tiefe dieses Schritts (Review RM-441).
+                values={"field": "depth"},
+                suggestions=(CHANGE_THIS_STEP,),
             )
         return None
     if through:
@@ -8514,7 +8474,9 @@ OPEN_BODY_DETAIL: Final = _(
     # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 16: exakt fragt die Kante am gefüllten Körper, wo gefüllt wurde (RM-411).
-    cache_version="17",
+    # 17: „hat bereits diesen Durchmesser“ öffnet den Schritt (RM-441).
+    # 18: „geht bereits ganz durch“ öffnet den Schritt an der Tiefe (Review RM-441).
+    cache_version="18",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -12030,6 +11992,46 @@ def _mesh_bore_span(mesh: MeshData, feature: Feature, axis: Vec3) -> tuple[float
     return (lower, upper) if math.isfinite(upper - lower) and upper - lower > EPS_GEOM else None
 
 
+def _already_in_place(feature_id: str, *, duplicate: bool) -> Finding:
+    """*Merkmal versetzen* oder *verdoppeln* an die Stelle, an der es schon sitzt.
+
+    Der Weg entlang der Achse und der mit freier Richtung bauten den Befund je
+    für sich, und nach dem Verdoppeln stand dort einmal der Satz übers
+    Versetzen (Review RM-441). Der Knopf öffnet den Schritt an der Lage.
+    """
+    return Finding(
+        # Ausgeschrieben statt ``f"{operation}…"``: Den Knopf zum Schritt
+        # prüft ``test_finding_ways`` am Kennwort.
+        code="duplicate_feature.unchanged" if duplicate else "move_feature.unchanged",
+        severity="info",
+        message=(
+            _("Ein zweites Merkmal an derselben Stelle ist dasselbe Merkmal — nichts verdoppelt.")
+            if duplicate
+            else _("Das Merkmal liegt schon dort — nichts zu versetzen.")
+        ),
+        feature_ids=(feature_id,),
+        values={"field": "x"},
+        suggestions=(CHANGE_THIS_STEP,),
+    )
+
+
+def _already_this_size(feature_id: str, field: str) -> Finding:
+    """*Merkmal ändern* auf das Maß, das das Merkmal schon hat — an jeder Merkmalsart.
+
+    Bis zum Review von RM-441 stand der Befund fünfmal wortgleich da, je Art
+    (Bohrung und Zapfen, Ring, Muster, Gewinde, Rundung) ein Zweig; nur das
+    Feld, das der Knopf öffnet, wechselt.
+    """
+    return Finding(
+        code="resize_feature.unchanged",
+        severity="info",
+        message=_("Das Merkmal hat dieses Maß schon."),
+        feature_ids=(feature_id,),
+        values={"field": field},
+        suggestions=(CHANGE_THIS_STEP,),
+    )
+
+
 def _expected_bore(feature: Feature, diameter: float) -> Feature:
     """Das alte Merkmal mit dem einen Maß, das diese Operation bewusst ändert."""
     return dataclasses.replace(
@@ -15203,16 +15205,7 @@ def _resize_torus(
     ):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(feature.id,),
-                    values={"field": "diameter"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(feature.id, "diameter")],
         )
     cavity = is_a_cavity(feature)
     changed = dataclasses.replace(
@@ -16427,16 +16420,7 @@ def _resize_pattern(
     ):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(feature.id,),
-                    values={"field": "pitch"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(feature.id, "pitch")],
         )
     _reject_oversized("pitch", new_pitch, source.mesh, kind="length")
     # Voronoi und Rauschen kennen keine Zellbreite — ihre Zellen sind so groß,
@@ -16671,16 +16655,7 @@ def _resize_thread(
     ):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(feature.id,),
-                    values={"field": "diameter"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(feature.id, "diameter")],
         )
     walls = _thread_wall(source, feature, diameter, pitch, ctx.profile)
     centre, axis, low, high, start, stop = _thread_span(
@@ -21090,16 +21065,7 @@ def _reshape_the_fillet(
     if is_close(radius, float(source.features[name].params["radius"])):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(name,),
-                    values={"field": "diameter"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(name, "diameter")],
         )
     if source.features[name].params.get("tangent", False):
         from app.core.perceive.actions import WALL_BLENDS_INTO_ITS_NEIGHBOURS

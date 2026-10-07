@@ -79,11 +79,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.); offen: Waschschüssel an 29 Druckern, die Minigolf-Platte als 3MF, der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max, vorher das Matrixwerkzeug (Blockleser, Stützmarke nach Volumen) |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
+| [RM-546 — *Merkmal drehen* um die eigene Achse einer runden Bohrung tut nichts und sagt es nicht](#rm-546) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Review (06.10.); Befund `rotate_feature.unchanged` auch für eine Drehung, die die Form auf sich selbst abbildet |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
+| [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge und Quelltexte durchgesehen und behoben (04.10., `871cc29e6`), Handbuch und Stempel mit 0.5.3 erzeugt; offen allein die Fensterabnahme der längeren Knopfnamen auf 1280 px (RM-213) |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Gegenprobe liest Export- und Slicerdateien zurück, Nebenfolge je Handlung aus dem Kern, Folge je Befund, Kandidatenprüfung nennt nur Neues und Behobenes, NM 1–11 ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
@@ -97,13 +99,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile](#rm-543) | Bedienung und Darstellung | Gefunden beim Review von RM-134/316 (07.10.): `test_a_report_click_keeps_its_mark_across_the_async_map` zeitweise rot; offen die Ursache und ob der Kunde es sieht |
-| [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
+| [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Belege in `konzepte/nachweise-generatoren-2026-10/`; entschieden (Robert, 06.10.): TRELLIS.2-4B statt TripoSG, Bildmodell und Freisteller nach bestem Ergebnis (gewählt FLUX.2 [klein] 4B statt SDXL); offen der Umbau von Weg 3 (Claude, in Arbeit) und die Kanzleifragen zur neuen Kette |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) entschieden und gebaut: lokal 12 Schritte (`MAX_STEPS_LOCAL`, `steps_for`), gehostet 8; offen (b) der Satz im Prompt für gebündelte Aufrufe — braucht einen Suitelauf mit qwen3:14b vorher und nachher auf freier Karte |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Gehosteter Lauf freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel; daneben der lokale Lauf nach RM-513 gegen `1ce7eac68` |
-| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | (a) und (b) erledigt; offen die sechs Befunde aus dem Review 02.10., die einen Schritt meinen und *Diesen Schritt ändern* noch nicht tragen |
-| [RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat](#rm-529) | KI und Generatoren | `created_by` in Merkmals- und Objektzeile des Steckbriefs nachrüsten (Entscheidung Robert, 06.10.) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Umgesetzt (07.10.): die offenen Helfer und zwölf Kopien der Fenster-Fixtures an einem Ort, 4508 = 4508 gesammelte Fälle; offen die Abnahme im nächsten Release-Tor (Robert, 06.10.) |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -2921,6 +2921,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** je Frage eine datierte Entscheidung im Konzept und, wo sie Bau verlangt, die
   Umsetzung oder ein eigener Punkt.
 
+<a id="rm-546"></a>
+
+- [ ] **RM-546 — *Merkmal drehen* um die eigene Achse einer runden Bohrung tut nichts und sagt es
+  nicht.** Gefunden am 06.10.2026 beim Review von RM-441 (Claude): Eine Durchgangsbohrung Ø 5
+  mit Achse +Z, um `axis="z"` um 45° gedreht, liefert denselben Körper und keinen Befund; nur
+  `angle=0` meldet `rotate_feature.unchanged`. Das widerspricht „Eine Operation, die nichts
+  bewirkt hat, sagt das“ (`.claude/rules/operationen.md`), und das Modell erfährt nicht, dass der
+  Schritt wirkungslos war. **Fix:** Bildet die Drehung das Werkzeug auf sich selbst ab
+  (Drehachse gleich Merkmalsachse durch die Mitte, rotationssymmetrische Art), denselben Befund
+  mit *Diesen Schritt ändern* am Feld `axis` geben; `cache_version` erhöhen. **Abnahme:** Test an
+  Bohrung, Zapfen und Senkung je Kern; ein Langloch bleibt drehbar. Bauplan §2.7.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -3868,11 +3880,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   in der Oberfläche, ein Test, der den Neuaufbau zwischen Klick und Karte erzwingt; der Test
   zwanzigmal hintereinander grün, auch unter Last.
 
+<a id="rm-547"></a>
+
+- [ ] **RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt
+  „gelöscht“.** Gefunden am 06.10.2026 beim Review von RM-529 (Claude): Setzen
+  `History.split_and_retry`, *Reparieren* oder *Verringern und erneut versuchen* einen Schritt
+  davor, plant der Verlauf den Rest unter neuen Kennungen neu; Verlaufsfeld und Steckbrief
+  nennen die alten Schritte dann „gelöscht“, obwohl sie weiterrechnen. `types.replanned_steps`
+  kennt nur Einfügen und Verschieben (`Transaction.revision`). **Entschieden (Claude,
+  Produktabwägung):** Ein Schritt, der unter neuer Kennung weiterrechnet, ist nicht gelöscht —
+  er wird wie ein beim Umbau neu gefasster ausgeblendet. **Abnahme:** Test über
+  `split_and_retry` und eine Reparatur davor: keine Zeile „gelöscht“, jeder lebende Schritt
+  einmal unter seiner sichtbaren Nummer, im Fenster wie im Steckbrief. Bauplan §15.4.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
 
-- [ ] **RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären.** Die LICENSE-/NOTICE-Kette
+- [~] **RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen.** Die LICENSE-/NOTICE-Kette
   des konkret eingesetzten TripoSG-Modellstands vollständig dokumentieren und die im NOTICE
   genannten HunyuanDiT-/FlashVDM-Bedingungen gezielt fachlich beziehungsweise mit VAST klären.
   Git-Commit, TripoSG-Gewichte und BiRefNet-Revision sind bereits gepinnt; LICENSE und NOTICE werden
@@ -3888,8 +3913,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch
   einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext
   wie Gewichte‘ (Robert, 23.09.2026)
-  Beifund: Der Kommentar in `app/core/knowledge/data/licences.toml:53` sagt weiter ohne Vorbehalt
-  „TripoSG MIT“.
+
+  **Stand 06.10.2026 (Claude):** Die Kette ist an den gepinnten Revisionen nachgelesen
+  (`konzepte/nachweise-generatoren-2026-10/lizenzkette.md`): TripoSGs Transformer trägt den
+  Kopf der Tencent Hunyuan Community License, die die EU ausnimmt; BiRefNet lernte aus DIS5K,
+  das nur nicht-kommerziell ist. Kein Kundentext nennt TripoSG mehr vorbehaltlos MIT (`d25f12366`). Der
+  Entwurf einer Anfrage an VAST liegt dort, gesendet ist er nicht. **Entschieden (Robert,
+  06.10.2026):** TRELLIS.2-4B über die ComfyUI-Kernknoten statt TripoSG, Bildmodell und
+  Freisteller nach bestem Ergebnis — gewählt ist FLUX.2 [klein] 4B statt SDXL, den Freisteller
+  wählt der Umbau; Begründung, Revisionen und Prüfsummen in `ersatz.md`. **Offen:** der Umbau von Weg 3 auf diese Kette
+  (Einrichtung, Abläufe, Schließen der offenen Netze vor der Reparatur, Kundentexte,
+  `licences.toml`), danach die Fragen an eine Kanzlei aus `ersatz.md` (DINOv3-Lizenz,
+  Trainingsdaten der Freisteller, ComfyUI als getrenntes Programm). Der echte Lauf je Plattform
+  bleibt RM-004.
 
 <a id="rm-004"></a>
 
@@ -3995,35 +4031,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Freigegeben (Robert, 06.10.2026):** der gehostete Lauf. Auf dem Arbeitsrechner liegt
   kein Anthropic-Schlüssel (weder im Schlüsselbund noch in `SOLIDON3D_LLM_KEY_ANTHROPIC`);
   der Lauf startet, sobald einer hinterlegt ist.
-
-<a id="rm-441"></a>
-
-- [~] **RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen.**
-  Fund 02.10.2026 beim Abschluss von RM-372/RM-374 (Claude). (a) Der Befund `hollow.done`
-  (`app/core/geom/hollow.py`) meint einen änderbaren Schritt und trägt noch nicht
-  *Diesen Schritt ändern* — Vorgabe Robert zu RM-374, ausgelassen, weil `hollow.py` bei Codex
-  offen lag; danach `MEINT_DEN_SCHRITT` in `tests/test_finding_ways.py` nachziehen.
-  (b) `weg3-generiert-aufbereiten.p3d` trägt noch die früheren getrennten Transaktionen; beim
-  Release mit `tools/make_examples.py` neu erzeugen. **Abnahme:** Test für (a); (b) im
-  Release-Lauf. Bauplan §2.7, §15.5.
-  Review 02.10. (`73d83b55b`, RM-374 archiviert mit `9983e9923`): Die Vorgabe „jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf“ ist nicht erfüllt — ohne Knopf bleiben `mesh.already_below_target` (`app/core/geom/mesh_ops.py:2222`, im Fenster geprüft), `rotate_feature.unchanged`, `resize_feature.unchanged`, `move_feature.unchanged`, `{operation}.unchanged` (`prepare_ops.py`) und `bore.resize_unchanged` (`prepare.py`, `prepare_ops.py`); dieser Punkt nennt bisher nur `hollow.done`. Beleg `F:\solidon-review-reports\verif-73d83b55b-claude.md`.
-  **Stand 02.10.2026 abends:** (a) erledigt (Claude, Thread „Bedienung und KI“): Beide `hollow.done` tragen *Diesen Schritt ändern* mit `field: wall`, `MEINT_DEN_SCHRITT` nennt sie. Offen (b).
-  **Stand 06.10.2026:** (b) erledigt im Release-Lauf 0.5.3: `make_examples.py` hat alle
-  Beispielprojekte neu erzeugt (`ac0d11486`), `weg3-generiert-aufbereiten.p3d` trägt die
-  Transaktionen des heutigen Codes. Offen bleibt der Review-Fund: Die sechs Befunde oben
-  (`mesh.already_below_target`, `rotate_feature.unchanged`, `resize_feature.unchanged`,
-  `move_feature.unchanged`, `{operation}.unchanged`, `bore.resize_unchanged`) tragen den Knopf
-  noch nicht und stehen nicht in `MEINT_DEN_SCHRITT`; je Befund mit `cache_version` der Op.
-
-<a id="rm-529"></a>
-
-- [ ] **RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat.** Bauplan §23 zeigt im
-  Steckbrief `created_by=op3`, und §21.2 macht die Provenienz zur Grundlage für „den Schritt
-  ändern, der es erzeugt hat“. `app/core/perceive/digest.py` schreibt sie weder in die
-  Merkmals- noch in die Objektzeile; der Agent braucht sie für Anfragen wie „ändere den Stift
-  von vorhin“. **Entschieden (Robert, 06.10.2026):** nachrüsten. **Abnahme:** Der Steckbrief
-  nennt bei erzeugten Merkmalen den erzeugenden Schritt, Test an einem Beispielprojekt, das
-  Beispiel in Bauplan §23 ist eine echte Ausgabe, Agenten-Suite vorher und nachher.
 
 ## Tests und Entwicklungswerkzeuge
 

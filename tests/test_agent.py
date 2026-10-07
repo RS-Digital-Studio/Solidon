@@ -1459,6 +1459,116 @@ def test_the_check_passes_on_an_operation_without_effect(
     assert "boolean.without_effect" in {finding.code for finding in findings}
 
 
+def _box_with_a_bore() -> tuple[Project, History]:
+    """Quader 30 × 20 × 10 mit einer Durchgangsbohrung Ø 5 in der Mitte, ohne Kompensation."""
+    made = new_project("centauri-carbon-2", "petg")
+    history = History(made.document)
+    history.apply(
+        "Quader", [OperationDraft(op="create_box", params={"width": 30.0, "depth": 20.0})]
+    )
+    history.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"x": 0.0, "y": 0.0, "z": 10.0, "diameter": 5.0, "compensate": False},
+            )
+        ],
+    )
+    return made, history
+
+
+#: Die Bohrung sitzt mit ihrer Mitte bei z = 5: Versetzen und Verdoppeln
+#: dorthin lassen sie, wo sie ist.
+_AT_ITS_CENTRE = {"at_feature": "hole_1", "x": 0.0, "y": 0.0, "z": 5.0}
+
+
+@pytest.mark.parametrize(
+    ("step", "code"),
+    [
+        (OperationDraft(op="translate_object", inputs=("obj_1",)), "transform.without_effect"),
+        (
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "at_feature": "hole_1"},
+            ),
+            "bore.resize_unchanged",
+        ),
+        (
+            OperationDraft(op="move_feature", inputs=("obj_1",), params=_AT_ITS_CENTRE),
+            "move_feature.unchanged",
+        ),
+        (
+            OperationDraft(op="duplicate_feature", inputs=("obj_1",), params=_AT_ITS_CENTRE),
+            "duplicate_feature.unchanged",
+        ),
+        (
+            OperationDraft(
+                op="rotate_feature",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "angle": 0.0},
+            ),
+            "rotate_feature.unchanged",
+        ),
+    ],
+    ids=[
+        "moved-by-nothing",
+        "same-bore",
+        "moved-onto-itself",
+        "duplicated-onto-itself",
+        "no-angle",
+    ],
+)
+def test_the_check_passes_on_a_step_that_did_nothing(
+    profile: Profile, step: OperationDraft, code: str
+) -> None:
+    """Review RM-441: Von den Befunden „der Schritt hat nichts getan“ reichte
+    die Prüfung nur ``mesh.already_below_target`` durch. Nach einem Schritt
+    ohne Wirkung schrieb das Modell sonst über eine Bohrung, Bewegung,
+    Verdoppelung oder Drehung, die es nicht gab. Am echten Schritt an der
+    Bohrung Ø 5 aus ``drill_hole``.
+    """
+    made, history = _box_with_a_bore()
+    before = evaluate(made.document, profile).scene
+    history.apply("Nichts", [step])
+
+    result = evaluate(made.document, profile)
+
+    assert code in {finding.code for finding in result.scene.report.findings}, "der Fall entsteht"
+    assert code in {finding.code for finding in checks.check(result, before)}
+
+
+def test_an_old_step_without_effect_does_not_reach_the_model_again(profile: Profile) -> None:
+    """Review RM-441, 6.1: Der Befund eines früheren Schritts ohne Wirkung — hier
+    ein Verschieben des Nutzers um nichts — steht im Prüfbericht jeder späteren
+    Auswertung. Ging er nach jedem Zug ans Modell, las es nach einer wirksamen
+    Bohrung „Der Körper steht danach genau dort, wo er stand“ und bezog es auf
+    sich. Er erreicht das Modell nur mit dem Schritt, der ihn erzeugt.
+    """
+    made, history = _box_with_a_bore()
+    history.apply("Nichts", [OperationDraft(op="translate_object", inputs=("obj_1",))])
+    before = evaluate(made.document, profile).scene
+    assert "transform.without_effect" in {f.code for f in before.report.findings}, "der Fall"
+    history.apply(
+        "Zweite Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"x": 8.0, "y": 0.0, "z": 10.0, "diameter": 3.0},
+            )
+        ],
+    )
+
+    result = evaluate(made.document, profile)
+    passed = {finding.code for finding in checks.check(result, before)}
+
+    assert "transform.without_effect" in {f.code for f in result.scene.report.findings}
+    assert "transform.without_effect" not in passed, passed
+
+
 @pytest.mark.parametrize(
     ("depth", "falls_apart"),
     [(40.0, False), (6.0, True)],
