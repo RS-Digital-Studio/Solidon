@@ -134,7 +134,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: Abnahme beim Kunden mit dem nächsten Paket (Ubuntu 24.04, Solidon als Flatpak) |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
 | [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
-| [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Gebaut und an Sonde und Fenstertest belegt, nicht committet (Hunks im Arbeitsbaum des i9, Patches im Zustandsordner); offen Tor, Commit der eigenen Hunks und der Titel aus `_removal_entry` |
+| [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
+| [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig](#rm-534) | Kundenrückmeldungen | Ursache an der Kundendatei gemessen; Umsetzung in vier Teilen (Laufzustand, volle Kette selbst, Halt im Entwurf nie fein, kein Hin und Her) nicht begonnen |
 | [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Entschieden (Robert, am Punkt); Flächenzug, Absagen, Maßgruppe, Tasche und Zapfen nach diesen Entscheidungen bauen, die drei falschen Ergebnisse beheben |
 | [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
@@ -4861,13 +4862,36 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   überlebte COM-Ausnahme `0x8001010d`; der Bericht hängt nur noch an, was der Prozess nicht
   überlebt hat) und `306ff7bf2` (am HEAD roter Zähltest seit `d3134f3d8`).
 
-  **Offen:** Tor über HEAD plus diese Hunks, dann Commit nur der eigenen Hunks (in
+  **Stand 07.10.2026:** Auf main mit `377069520` (Merge `f4960774a`), zusammen mit RM-538;
+  der Titel der Ansage kommt aus `_removal_entry` (Baustein heißt „Baustein entfernen“), der
+  Zwilling über `feature_instead_of` ist damit weg. Drei Durchsichten
+  (review-rm533-rm538, Runde 1 bis 3), alle Funde behoben. **Offen** allein die Abnahme unten
+  am echten Fenster beim Release (RM-213).
+
+  Früher offen: Tor über HEAD plus diese Hunks, dann Commit nur der eigenen Hunks (in
   `main_window.py` und `grenzen.md` liegen fremde daneben). Der Titel der Ansage kommt heute aus
   `feature_instead_of(...) or delete_object`; `_removal_entry()` der Rechtsklick-Arbeit
   (Fragebogen S-20261006-5c132b) gibt dieselbe Auskunft richtiger (Baustein) — sobald sie auf main
   ist, darauf umstellen, sonst bleibt ein Zwilling. **Abnahme:** Am echten Fenster entfernt Entf
   mit Fokus auf einem Knopf im Reiter die Auswahl, im Zahlenfeld ändert es die Zahl, bei Halt
   nennt es den Grund.
+
+<a id="rm-538"></a>
+
+- [~] **RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an
+  der Fläche, verschiebbare Karten (Fragebogen S-20261006-5c132b).** Gebaut mit `377069520`
+  (Merge `f4960774a`): Der Rechtsklick an Körpern bietet *Objekt entfernen* und bei mehreren
+  *Vereinigen*, über denselben Weg wie Entf und mit demselben Sperrgrund; Entf an mehreren
+  markierten Körpern entfernt alle in einem Schritt; *Aushöhlen* steht auch an einer gewählten
+  Fläche, die die Öffnung wird (Palette, Agent und Handbuch nennen Körper und Merkmal, ebenso
+  bei Formschräge und Reparieren). Die linke und die rechte Karte lassen sich am Griff
+  verschieben, an den Rand legen oder schweben lassen; Doppelklick oder *Ansicht → Karten an
+  ihren Platz* legt sie zurück, der Griff steht zuerst in der Tabfolge, die Lage wird
+  gebündelt gespeichert. Agenten-Suite (qwen3:14b) vorher und nachher 25 von 39 gut. Drei
+  Durchsichten (review-rm533-rm538), alle Funde behoben. **Offen** allein die Abnahme am
+  echten Fenster beim Release (RM-213): Rechtsklick an einem und an zwei Körpern, Entf an zwei
+  Körpern mit einem Strg+Z zurück, *Aushöhlen* an einer Fläche, eine Karte schweben lassen und
+  zurücklegen, in beiden Themen.
 
 <a id="rm-534"></a>
 
