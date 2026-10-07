@@ -157,6 +157,10 @@ WORKFLOW_DIR = Path(__file__).parent / "data"
 #: 25,7 cm³) und eine Vase mit negativem Volumen; als zwei Aufträge ist das
 #: Netz dasselbe wie aus dem Bild, und zwischen beiden gibt ComfyUI die
 #: Bildmodelle frei, bevor TRELLIS.2 lädt.
+#:
+#: **Eine Quelle für Prüfung und Lauf** (Review 1 P3, G-7): ``_read_graph``
+#: fragt nach den Knoten dieser Stufen, und ``ComfyBackend.text_to_mesh`` und
+#: ``image_to_mesh`` fahren genau sie. Der Weg aus Text endet im Weg aus Bild.
 WORKFLOW_STAGES: Final[dict[str, tuple[str, ...]]] = {
     "text_to_mesh": ("text_to_image", "image_to_mesh"),
     "image_to_mesh": ("image_to_mesh",),
@@ -951,7 +955,10 @@ class ComfyBackend:
     ) -> GeneratedMesh:
         if not prompt.strip():
             raise GenerationFailed(detail=_("Die Beschreibung ist leer."))
-        graph = self._graph("text_to_image", {"prompt": prompt, "seed": seed})
+        # Die erste Stufe malt das Bild, der Rest ist der Weg aus Bild
+        # (:data:`WORKFLOW_STAGES`, ``test_mesh_backend`` hält beides gleich).
+        picture = WORKFLOW_STAGES["text_to_mesh"][0]
+        graph = self._graph(picture, {"prompt": prompt, "seed": seed})
         image, _suffix = self._job(
             graph,
             self._download_image,
@@ -978,7 +985,8 @@ class ComfyBackend:
             raise GenerationFailed(detail=_("Das Bild ist leer."))
         progress(0.05, str(_("Bild übertragen")))
         name = self._upload(image)
-        graph = self._graph("image_to_mesh", {"image": name, "seed": seed})
+        (shape,) = WORKFLOW_STAGES["image_to_mesh"]
+        graph = self._graph(shape, {"image": name, "seed": seed})
         return self._run(graph, prompt="", seed=seed, progress=progress, cancelled=cancelled)
 
     # --- die drei Schritte ---

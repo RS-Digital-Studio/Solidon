@@ -167,6 +167,42 @@ def test_a_prompt_goes_through_the_shipped_workflow() -> None:
     assert result.payload == stl(), "the file is kept as it came (§16.1)"
 
 
+def test_the_text_way_runs_the_stages_its_check_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prüfung und Lauf lesen dieselben Stufen (Review 1 P3, G-7).
+
+    ``_read_graph`` fragte die Knoten aus ``WORKFLOW_STAGES``, der Lauf fuhr
+    fest ``text_to_image`` und dann den Bildweg — ein umbenannter oder
+    getauschter Bildgraph wäre geprüft und nicht gefahren worden. Der Test
+    tauscht die erste Stufe gegen einen Graphen mit eigener Kennung.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    stages = mesh_module.WORKFLOW_STAGES
+    assert stages["text_to_mesh"][1:] == stages["image_to_mesh"], (
+        "der Weg aus Text endet im Weg aus Bild"
+    )
+    for name in ("text_to_image", "image_to_mesh"):
+        shutil.copy(WORKFLOW_DIR / f"{name}.json", tmp_path / f"{name}.json")
+    swapped = json.loads((WORKFLOW_DIR / "text_to_image.json").read_text(encoding="utf-8"))
+    for node in swapped.values():
+        node.setdefault("_meta", {})["title"] = "getauschte Stufe"
+    (tmp_path / "anderes_bild.json").write_text(json.dumps(swapped), encoding="utf-8")
+    monkeypatch.setitem(stages, "text_to_mesh", ("anderes_bild", *stages["image_to_mesh"]))
+    server = Comfy()
+    generator = ComfyBackend(transport=server, poll_seconds=0.0, workflows=tmp_path)
+
+    generator.text_to_mesh("ein Halter", seed=3)
+
+    assert len(server.graphs) == 2
+    first = server.graphs[0]
+    assert all(node.get("_meta", {}).get("title") == "getauschte Stufe" for node in first.values())
+    assert set(generator._graph_nodes("text_to_mesh")) >= {
+        str(node["class_type"]) for graph in server.graphs for node in graph.values()
+    }, "was läuft, hat die Prüfung gefragt"
+
+
 def test_the_placeholders_arrive_with_their_type() -> None:
     """ComfyUI prüft den Typ jedes Eingangs — ein Startwert als Text wird
     abgelehnt.
