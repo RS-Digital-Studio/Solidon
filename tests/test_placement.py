@@ -892,7 +892,7 @@ def test_the_bore_sentence_names_its_diameter_in_the_display_unit(unit: str) -> 
 
 @pytest.mark.parametrize(
     ("diameter", "expected"),
-    [(22.0, "M24"), (22.3, "M24"), (23.9, "custom_size"), (40.0, "custom_size")],
+    [(22.0, "M24"), (22.3, "M24"), (22.4, "custom_size"), (23.9, "M27")],
 )
 def test_a_bore_just_under_the_nominal_size_takes_a_thread_that_grips(
     diameter: float, expected: str
@@ -901,8 +901,10 @@ def test_a_bore_just_under_the_nominal_size_takes_a_thread_that_grips(
 
     Ø 23,9 bekam die M24: Ihr gedruckter Bolzen reicht mit dem Spiel bis r 11,9 und
     griff in die Bohrung mit r 11,95 gar nicht. Eine Tabellengröße muss dem Gang
-    die halbe Tiefe lassen (``units.THREAD_MIN_GRIP_SHARE``, M24: bis Ø 22,35);
-    sonst nimmt die Bohrung das eigene Maß mit voller Gangtiefe, Ø 23,9 → Ø 27,2.
+    die halbe Tiefe lassen (``units.THREAD_MIN_GRIP_SHARE``, M24: bis
+    24 − 0,55 · 3 = Ø 22,35); darüber nimmt die Bohrung das eigene Maß mit voller
+    Gangtiefe, Ø 22,4 → 22,4 + 1,1 · 3 = Ø 25,7. Ø 23,9 liegt über dem Gangfuß der
+    M27 (27 − 1,1 · 3 = 23,7) und ist ihre Bohrung (Review P2, M1).
     """
     from app.core.knowledge.parts.fasteners import size_for_thread
 
@@ -910,5 +912,5 @@ def test_a_bore_just_under_the_nominal_size_takes_a_thread_that_grips(
     assert chosen["size"] == expected, chosen
     if expected == "custom_size":
         assert chosen["diameter"] > diameter + 0.5 * 2.0 * 0.55 * 1.0, chosen
-    if diameter == 23.9:
-        assert chosen["diameter"] == pytest.approx(27.2)
+    if diameter == 22.4:
+        assert chosen["diameter"] == pytest.approx(25.7)

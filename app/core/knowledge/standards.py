@@ -505,6 +505,33 @@ def tabulated_size(diameter: float) -> str | None:
     return None
 
 
+#: Wie nah Durchmesser und Steigung an einem Tabellenmaß liegen müssen, um es zu
+#: meinen — beides deutlich unter dem halben Abstand zweier Nachbargrößen der
+#: Tabelle (M2 → M2.5: 0,5 im Durchmesser, 0,05 in der Steigung), damit kein Maß
+#: zwei Größen trifft; ``tests/test_thread_counterpart.py`` hält das gegen die
+#: Tabelle. Keine Fertigungstoleranz, sondern eine Erkennungsgrenze wie
+#: ``units.match_tolerance``. Eine Quelle für das Gegenstück eines Gewindes
+#: (``counterpart._matched_thread``) und die Vorwahl an einer Bohrung
+#: (``fasteners.size_for_thread``, Review P2 M1): Beide runden dasselbe Maß auf
+#: dieselbe Größe.
+THREAD_SIZE_REACH: Final = (0.2, 0.02)
+
+
+def thread_size_near(diameter: float, pitch: float) -> str | None:
+    """Die Tabellengröße, die ein Gewinde dieses Maßes meint — sonst ``None``.
+
+    Getroffen ist sie, wenn Durchmesser und Steigung innerhalb von
+    :data:`THREAD_SIZE_REACH` liegen.
+    """
+    for entry in load().screws.values():
+        if (
+            abs(entry.nominal - diameter) <= THREAD_SIZE_REACH[0]
+            and abs(entry.pitch - pitch) <= THREAD_SIZE_REACH[1]
+        ):
+            return entry.size
+    return None
+
+
 def headless_size(diameter: float) -> bool:
     """Ob ein eigenes Maß ein ISO-Nennmaß ohne genormten Zylinderkopf ist (``headless``)."""
     return any(abs(value - diameter) <= EPS_GEOM for value in load().headless)

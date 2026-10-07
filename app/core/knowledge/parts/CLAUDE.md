@@ -77,8 +77,11 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 - **Ein Gewinde hat jedes Maß**: eine Tabellengröße oder `fasteners.CUSTOM_SIZE`
   mit Durchmesser und Steigung (`thread_measure`, null ist
   `standards.regular_pitch`); an einer Bohrung ohne Tabellengröße wählt
-  `custom_thread_for` das Maß, dessen Kernloch sie ist; eine Tabellengröße nur,
-  wenn die Bohrung dem Gang die halbe Tiefe lässt (`units.THREAD_MIN_GRIP_SHARE`).
+  `custom_thread_for` das Maß, dessen Kernloch sie ist; eine Tabellengröße ab
+  ihrem gedruckten Gangfuß, solange die Bohrung dem Gang die halbe Tiefe lässt
+  (`units.THREAD_MIN_GRIP_SHARE`), und ein eigenes Maß innerhalb von
+  `standards.THREAD_SIZE_REACH` neben einer Größe wird diese — dieselbe Grenze
+  wie beim Gegenstück (`standards.thread_size_near`).
   Ohne tragenden Kern oder unter `FINEST_PITCH` lehnt es ab und erklärt es (`thread_problem`,
   `_thread_reason`); bohrt es seine Bohrung auf oder bleibt nach außen zu wenig
   Wand, sagt es das (`thread_at_hole` über `PartSpec.at_hole_check`, Strahlen

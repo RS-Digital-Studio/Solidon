@@ -428,8 +428,8 @@ def screw_hole(raw: BaseParams) -> PartResult:
                 code="parts.countersink_derived",
                 severity="info",
                 message=_(
-                    "Für {size} kennt die Normteiltabelle keinen genormten Senkkopf. Die Senkung "
-                    "Ø {diameter} ist abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.",
+                    "Für {size} ist kein Senkkopf genormt, die Senkung Ø {diameter} ist "
+                    "abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.",
                     size=named,
                     diameter=format_length(screw.countersink),
                 ),
@@ -581,18 +581,35 @@ def _gripped_up_to(screw: standards.Screw) -> float:
     return screw.nominal - 2.0 * shapes.RIDGE_SHARE * screw.pitch * THREAD_MIN_GRIP_SHARE
 
 
+def _printed_root(screw: standards.Screw) -> float:
+    """Der Gangfuß des gedruckten Innengewindes dieser Größe: Nennmaß minus zwei Gangtiefen.
+
+    Die engste Bohrung, die das Gewinde ohne Aufbohren nimmt — an derselben
+    Stelle misst :func:`custom_thread_for` das eigene Maß und
+    :func:`thread_at_hole` das Aufbohren (Review P2, M1). Das ISO-Bohrermaß
+    ``tap`` = D - P liegt ein Zehntel der Steigung darüber.
+    """
+    return screw.nominal - 2.0 * shapes.RIDGE_SHARE * screw.pitch
+
+
 def size_for_thread(diameter: float) -> dict[str, Any]:
     """Das Innengewinde, das in eine Bohrung dieses Durchmessers geschnitten
     werden kann — die größte Tabellengröße, sonst ein eigenes Maß.
 
     Für eine Tabellengröße zwei Schranken, beide fachlich und keine geratene
-    Toleranz: Unterhalb des Kernlochdurchmessers greift das Werkzeug nicht ins
-    Material, und die Bohrung muss dem Gang mindestens den Anteil
-    ``units.THREAD_MIN_GRIP_SHARE`` seiner Tiefe lassen (:func:`_gripped_up_to`,
-    Review RM-532 Runde 2, K-N6) — knapp unter dem Nennmaß griffe der gedruckte
-    Bolzen nicht. Eine Ø 6,5-Bohrung bekommt deshalb keine Tabellengröße — für
-    M6 ist sie zu weit, für M8 zu eng —, sondern das eigene Maß Ø 7,6 x 1,
-    dessen Kernloch sie ist.
+    Toleranz: Die Bohrung ist mindestens der Gangfuß des gedruckten Gewindes
+    (:func:`_printed_root`), sonst bohrte es auf, und sie lässt dem Gang
+    mindestens den Anteil ``units.THREAD_MIN_GRIP_SHARE`` seiner Tiefe
+    (:func:`_gripped_up_to`, Review RM-532 Runde 2, K-N6) — knapp unter dem
+    Nennmaß griffe der gedruckte Bolzen nicht. Eine Ø 6,5-Bohrung bekommt
+    deshalb keine Tabellengröße — für M6 ist sie zu weit, für M8 zu eng —,
+    sondern das eigene Maß Ø 7,6 x 1, dessen Kernloch sie ist.
+
+    **Ein eigenes Maß, das eine Tabellengröße trifft, ist diese** (Review P2,
+    M1): Knapp unter dem Gangfuß einer Größe läge es weniger als
+    ``standards.THREAD_SIZE_REACH`` neben ihr — Ø 40 ergäbe 44,95 x 4,5, eine
+    M45 bis auf 0,05 mm. Dort gilt die Normgröße, wie beim Gegenstück eines
+    gemessenen Gewindes, und :func:`thread_at_hole` meldet das Aufbohren.
 
     Und ``internal``: Wer eine Bohrung anklickt und „Gewinde" wählt, meint
     Gänge in der Wand. Die Schemavorgabe steht auf Außengewinde, und das ist
@@ -617,16 +634,36 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     fitting = [
         size
         for size in standards.screw_sizes()
-        if standards.screw(size).tap <= diameter <= _gripped_up_to(standards.screw(size))
+        if _printed_root(standards.screw(size)) <= diameter + EPS_GEOM
+        and diameter <= _gripped_up_to(standards.screw(size))
     ]
     if fitting:
         return {"size": fitting[-1], "internal": True}
     custom = custom_thread_for(diameter)
     if custom is None:
         return {"internal": True}
+    near = standards.thread_size_near(*custom)
+    if near is not None:
+        return {"size": near, "internal": True}
     # Die Steigung bleibt auf „automatisch": Das Maß ist so gewählt, dass die
     # Regelsteigung seines Durchmessers genau die ist, mit der es gerechnet wurde.
     return {"size": CUSTOM_SIZE, "diameter": custom[0], "pitch": 0.0, "internal": True}
+
+
+def _too_wide_for(diameter: float) -> str | None:
+    """Die Tabellengröße, deren Nennmaß diese Bohrung hat, die ihr aber zu weit ist.
+
+    An Ø 3, 6, 8 und 10 erwartet man M3 bis M10; der Gang einer solchen Größe
+    läge nicht mehr zur Hälfte in der Wand (:func:`_gripped_up_to`). Der Satz
+    über dem Dialog nennt sie, damit niemand rätselt, wo das M6 blieb.
+    """
+    wide = [
+        size
+        for size in standards.screw_sizes()
+        if _gripped_up_to(standards.screw(size)) < diameter
+        and diameter <= standards.screw(size).nominal + EPS_GEOM
+    ]
+    return wide[-1] if wide else None
 
 
 def custom_thread_for(bore: float) -> tuple[float, float] | None:
@@ -711,12 +748,24 @@ def thread_advice(diameter: float) -> TranslatableText:
     darunter, Nennmaß 6 mm darüber. Wo keine Tabellengröße passt, nennt der
     Satz das eigene Maß, das :func:`size_for_thread` vorwählt, und dass es kein
     Normgewinde ist; eine Absage bleibt unter dem kleinsten Gewinde und dort, wo
-    das Gewinde größer als ``units.LARGEST_THREAD`` würde.
+    das Gewinde größer als ``units.LARGEST_THREAD`` würde. Ein eigenes Maß, das
+    eine Tabellengröße trifft, gibt es hier nicht (:func:`size_for_thread`);
+    hat die Bohrung das Nennmaß einer Größe, die ihr zu weit ist, nennt der
+    Satz sie (Review P2, M1).
     """
     values = size_for_thread(diameter)
     size = values.get("size")
     if size == CUSTOM_SIZE:
         nominal, pitch = thread_measure(CUSTOM_SIZE, values["diameter"], values["pitch"])
+        wide = _too_wide_for(diameter)
+        if wide is not None:
+            return _(
+                "Zu weit für {size}; passend ist ein Innengewinde mit eigenem Maß Ø {diameter}, "
+                "Steigung {pitch}.",
+                diameter=format_length(nominal),
+                pitch=format_length(pitch),
+                size=wide,
+            )
         return _(
             "In diese Bohrung passt ein Innengewinde mit eigenem Maß Ø {diameter}, "
             "Steigung {pitch}, kein Normgewinde.",

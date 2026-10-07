@@ -109,7 +109,7 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
   **Ein Gewinde bringt seine Hälfte mit**: `thread_counterpart_draft` setzt am
   anderen Teil das gegengleiche Bausteingewinde im **Tabellenmaß**, wo es
   eines trifft, sonst im eigenen Maß (`thread_values_for`, Grenze
-  `THREAD_SIZE_REACH` — Ø 6,4 × 1,1 wird nicht still M6), `apply_thread_counterpart` legt an,
+  `standards.THREAD_SIZE_REACH` — Ø 6,4 × 1,1 wird nicht still M6), `apply_thread_counterpart` legt an,
   `attach_thread_fit` hängt die Gewindepassung an. `_made_feature` nimmt das
   **erzeugte** Merkmal, nicht das daneben erkannte zweite; der Schritt bleibt
   beim Nachtragen der letzte, ein geänderter Verlauf bekommt einen Befund.

@@ -312,6 +312,86 @@ def test_an_iso_tap_drill_hole_gets_its_standard_thread(bore: float, size: str) 
 
 
 @pytest.mark.parametrize(
+    ("nominal", "pitch", "size"), [(16.0, 2.0, "M16"), (27.0, 3.0, "M27"), (45.0, 4.5, "M45")]
+)
+def test_a_bore_at_the_printed_root_gets_its_standard_thread(
+    nominal: float, pitch: float, size: str
+) -> None:
+    """Eine Bohrung am Gangfuß des gedruckten Gewindes ist dessen Kernloch (Review P2, M1).
+
+    Der Gangfuß liegt bei D − 2 · ``RIDGE_SHARE`` · P (Steigungen nach ISO 261):
+    M16 13,8, M27 23,7, M45 40,05. Die Tabellengröße begann am Bohrermaß D − P,
+    und dazwischen kam ein eigenes Maß, das genau die Normgröße war — „Ø 16,00,
+    Steigung 2,00, kein Normgewinde“.
+    """
+    from app.core.knowledge.parts.fasteners import size_for_thread, thread_advice
+
+    bore = nominal - 2.0 * RIDGE_SHARE * pitch
+    assert size_for_thread(bore) == {"size": size, "internal": True}
+    assert "Normgewinde" not in str(thread_advice(bore))
+
+
+@pytest.mark.parametrize(("bore", "size", "root"), [(13.6, "M16", 13.8), (40.0, "M45", 40.05)])
+def test_a_bore_just_under_the_root_takes_the_standard_size_and_is_widened(
+    bore: float, size: str, root: float
+) -> None:
+    """Knapp unter dem Gangfuß rundet die Vorwahl auf die Normgröße wie das Gegenstück.
+
+    Das eigene Maß an Ø 40 wäre 40 + 1,1 · 4,5 = 44,95 x 4,5, eine M45 bis auf
+    0,05 mm; an Ø 13,6 wäre es 15,8 x 2. Beide liegen innerhalb von
+    ``standards.THREAD_SIZE_REACH`` neben der Normgröße, und wer eine M45 hat,
+    müsste raten (Review P2, M1). Gewählt wird die Normgröße, und das Gewinde
+    sagt, dass es die Bohrung bis zum Gangfuß aufweitet (``parts.bore_widened``).
+    """
+    from app.core.knowledge.parts.fasteners import (
+        ThreadParams,
+        custom_thread_for,
+        size_for_thread,
+        thread_at_hole,
+    )
+    from app.core.knowledge.standards import THREAD_SIZE_REACH
+    from app.core.types import Feature
+
+    custom = custom_thread_for(bore)
+    assert custom is not None
+    assert 0.0 < float(size[1:]) - custom[0] <= THREAD_SIZE_REACH[0], "sonst prüft das nichts"
+    chosen = size_for_thread(bore)
+    assert chosen == {"size": size, "internal": True}
+    hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": bore, "depth": 10.0, "centre": (0.0, 0.0, 0.0), "axis": (0, 0, 1)},
+    )
+    params = ThreadParams(**chosen, length=10.0, play=0.2)
+    widened = [entry for entry in thread_at_hole(params, hole, None, None) if entry.values]
+    assert [entry.code for entry in widened] == ["parts.bore_widened"]
+    assert widened[0].values["core_mm"] == pytest.approx(root + 0.2)
+
+
+def test_no_preselected_custom_thread_is_a_standard_size() -> None:
+    """Kein eigenes Maß der Vorwahl liegt innerhalb der Erkennungsgrenze einer Normgröße.
+
+    Gegenstück und Vorwahl runden mit derselben Grenze (Review P2, M1); vorher
+    gab es Bänder von 0,35 mm unter jedem Kernloch ab M16, in denen „kein
+    Normgewinde“ über einer Normgröße stand. Abgetastet in 0,01-mm-Schritten
+    vom kleinsten Kernloch bis über M64.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE, size_for_thread, thread_measure
+
+    hits = []
+    for step in range(125, 7000):
+        chosen = size_for_thread(step / 100.0)
+        if chosen.get("size") != CUSTOM_SIZE:
+            continue
+        nominal, pitch = thread_measure(CUSTOM_SIZE, chosen["diameter"], chosen["pitch"])
+        if standards.thread_size_near(nominal, pitch) or standards.tabulated_size(nominal):
+            hits.append((step / 100.0, nominal, pitch))
+    assert hits == []
+
+
+@pytest.mark.parametrize(
     ("bore", "found"), [(1.2, False), (1.25, True), (993.4, True), (993.5, False)]
 )
 def test_a_custom_thread_at_a_bore_ends_at_the_shared_limits(bore: float, found: bool) -> None:

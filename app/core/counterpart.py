@@ -364,13 +364,10 @@ def attach_fit(
 # Maß. Ein Gewinde Ø 6,4 mit Steigung 1,1 wird nicht still zu M6
 # (Konzept §13.4), sondern bekommt ein Gegenstück Ø 6,4 mit Steigung 1,1.
 
-#: Wie nah Durchmesser und Steigung an einem Tabellenmaß liegen müssen —
-#: beides deutlich unter dem halben Abstand zweier Nachbargrößen der Tabelle
-#: (M2 → M2.5: 0,5 im Durchmesser, 0,05 in der Steigung), damit kein Maß
-#: zwei Größen trifft; ``tests/test_thread_counterpart.py`` hält das gegen die
-#: Tabelle. Keine Fertigungstoleranz, sondern eine Erkennungsgrenze wie
-#: ``units.match_tolerance``.
-THREAD_SIZE_REACH: Final = (0.2, 0.02)
+#: Wie nah ein Gewinde an einem Tabellenmaß liegen muss, steht bei der Tabelle
+#: (``standards.THREAD_SIZE_REACH``): Die Vorwahl an einer Bohrung rundet mit
+#: derselben Grenze.
+THREAD_SIZE_REACH: Final = standards.THREAD_SIZE_REACH
 
 
 def thread_values_for(feature: Feature) -> dict[str, Any]:
@@ -441,13 +438,9 @@ def _matched_thread(feature: Feature) -> tuple[dict[str, Any], Finding | None]:
     else:
         diameter = float(feature.params.get("diameter", 0.0))
     pitch = float(feature.params.get("pitch", 0.0))
-    for size in standards.screw_sizes():
-        screw = standards.screw(size)
-        if (
-            abs(screw.nominal - diameter) <= THREAD_SIZE_REACH[0]
-            and abs(screw.pitch - pitch) <= THREAD_SIZE_REACH[1]
-        ):
-            return {"size": size}, None
+    exact = standards.thread_size_near(diameter, pitch)
+    if exact is not None:
+        return {"size": exact}, None
     diameter_reach, pitch_reach = _thread_tolerance(feature)
     near = [
         size
