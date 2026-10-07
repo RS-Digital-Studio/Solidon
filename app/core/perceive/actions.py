@@ -1614,7 +1614,15 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
         and entry.placement == "front"
         and name not in placement_params
     )
-    placement = tuple(name for name in ("x", "y", "z") if name in schema)
+    # **Verschoben wird in der Ebene**: ohne ``x`` und ``y`` keine Lage. Am
+    # Deckel ist ``z`` die Höhe der Öffnung, leer heißt Oberkante (RM-526);
+    # als „Baustein verschieben“ angeboten stand dort ``None`` in einem
+    # Zahlenfeld, und das Merkmalfenster warf beim Klick auf den Kragen.
+    placement = (
+        tuple(name for name in ("x", "y", "z") if name in schema)
+        if {"x", "y"} <= schema.keys()
+        else ()
+    )
 
     actions: list[FeatureAction] = []
     if measures:

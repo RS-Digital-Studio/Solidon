@@ -513,6 +513,79 @@ def test_no_example_greets_the_customer_with_a_warning(evaluated) -> None:
     )
 
 
+def test_every_example_stands_on_the_bed(evaluated) -> None:
+    """Ein mitgeliefertes Beispiel steht so, wie es gedruckt wird.
+
+    „Gehäuse mit Bausteinen“ steckte 5,25 mm unter dem Druckbett, und gesagt
+    hat es nur ein Hinweis (``arrange.below_bed``) — am Nachbarn darüber vorbei,
+    der Warnungen zählt. Dessen Handlung *Auf das Bett setzen* hätte das
+    Gehäuse auf seinen Klemmblock gestellt und den Boden in die Luft gehoben;
+    falsch war die Lage der Kabeldurchführung, nicht die des Körpers. Deshalb
+    gilt hier jeder Befund über die Lage zum Bett, auch der leiseste.
+    """
+    from app.core.scene.evaluate import PLACEMENT_STATE_CODES
+
+    daneben: list[str] = []
+    for entry in examples.EXAMPLES:
+        _project, result = evaluated(entry.id)
+        assert result.scene.objects, f"{entry.id}: kein Körper, nichts geprüft"
+        daneben.extend(
+            f"{entry.id}: {finding.code} an {finding.object_id}"
+            for finding in result.scene.report.findings
+            if finding.code in PLACEMENT_STATE_CODES
+        )
+
+    assert not daneben, "Beispiele stehen nicht auf dem Bett:\n" + "\n".join(daneben)
+
+
+def test_the_housing_clamps_its_cable_inside_the_floor(evaluated) -> None:
+    """Die Kabeldurchführung baut ihre Zugentlastung hinter der Wand, gegenüber
+    der Mündung (§24.1, ``cable_relief_support``) — die Mündung ist die
+    Außenseite.
+
+    Das Beispiel setzte sie auf die Oberseite des Bodens, also innen: Der
+    Klemmblock hing unter dem Boden, 5,25 mm unter dem Bett, und ragte über
+    den linken und den hinteren Rand (Bauplan §23 zitierte „x -35.6 … 35.0 ·
+    y -25.0 … 29.6“). Von unten eingeführt sitzt er auf dem Boden, im Gehäuse
+    und innerhalb seines Umrisses.
+    """
+    project, result = evaluated("gehaeuse-mit-bausteinen")
+    parameters = project.document.parameters
+    breite = parameters["breite"].value
+    tiefe = parameters["tiefe"].value
+    wand = parameters["wand"].value
+    floor = result.scene.objects["obj_1"]
+    bounds = floor.mesh.bounds
+
+    assert bounds.minimum == pytest.approx((-breite / 2.0, -tiefe / 2.0, 0.0), abs=EPS_GEOM)
+    assert bounds.maximum[:2] == pytest.approx((breite / 2.0, tiefe / 2.0), abs=EPS_GEOM)
+    relief = floor.features["cable_gland_relief_1"].params["centre"]
+    assert float(relief[2]) > wand, "die Klemmstelle liegt im Gehäuse, über dem Boden"
+
+
+@pytest.mark.parametrize("wand", [8.0, 10.0])
+def test_the_housing_test_piece_stays_clear_of_the_strain_relief(wand: float) -> None:
+    """Der Klemmblock wächst mit der Wandstärke (je Seite eine Wand), und die
+    Tour lässt sie auf 10 drehen. Das Prüfstück um die Mutternfalle (Fenster
+    bis x = -13) bleibt so hoch wie der Boden: Bei 10 mm reicht der Block bis
+    x = -12,625, kaum 0,4 mm vor dem Fenster — der Kommentar in
+    ``make_examples.housing`` verspricht das, und hier steht es fest.
+    """
+    import dataclasses
+
+    project = load(examples.directory() / "gehaeuse-mit-bausteinen.p3d")
+    parameters = project.document.parameters
+    parameters["wand"] = dataclasses.replace(parameters["wand"], value=wand)
+    result = evaluate(project.document, _profile_of(project), sources=ProjectSources(project))
+
+    assert result.complete
+    piece = result.scene.objects["obj_2"].mesh.bounds
+    assert piece.maximum[2] == pytest.approx(wand, abs=EPS_GEOM), "kein Stück Klemmblock darin"
+    floor = result.scene.objects["obj_1"].mesh.bounds
+    assert floor.minimum[2] == pytest.approx(0.0, abs=EPS_GEOM)
+    assert floor.maximum[2] > wand, "der Klemmblock steht auf dem Boden"
+
+
 def test_the_split_example_does_not_ask_for_work_it_already_did(
     profile: Profile, evaluated
 ) -> None:

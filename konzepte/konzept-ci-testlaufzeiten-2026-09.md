@@ -1,6 +1,6 @@
 # Kürzere CI-Läufe bei unverändertem Prüfvertrag
 
-Stand: 24.09.2026. Von Robert beauftragt: erst dieses Konzept, danach die
+Stand: 24.09.2026, Nachweis in §7 vom 06.10.2026. Von Robert beauftragt: erst dieses Konzept, danach die
 vollständige Umsetzung. Der laufende Umsetzungs- und Abnahmestand gehört in
 `ROADMAP.md`; dieses Dokument beschreibt Entscheidungen und Nachweise.
 
@@ -202,3 +202,38 @@ sammelt für sich. Solange das Repository privat ist, laufen ohnehin keine
 Jobs; die Rechenzeit zählt erst im öffentlichen Release-Fenster, und dort
 kostet sie nichts. Rechenzeit sinkt durch vermiedene Mehrfacharbeit und
 behobene Ausreißer, deren Wirkung gesondert gemessen wird.
+
+## 7. Nachweis CI-08
+
+Verglichen werden Tagläufe von `build.yml` im ersten Versuch; die Zeit läuft
+vom Start des ersten Jobs bis zum Ende des letzten Kern- oder Fensterjobs, die
+Runnerzeit ist die Summe dieser Jobs (GitHub-Jobliste). Kernfälle sind die
+gesammelten Fälle unter Windows, Fensterfälle die der seriellen Windows-Gruppe,
+beides aus den Protokollen und JUnit-Berichten (`tests-*`).
+
+| Lauf | Commit | Aufteilung | Kernfälle | Fensterfälle | bis zum letzten Testjob | Runnerzeit Tests |
+|---|---|---|---:|---:|---:|---:|
+| v0.5.0, 35982366247 | `0895c4a69` | ein Job je Plattform | 17 138 | 3 414 in 90 Dateien | 78,8 min | 154 min |
+| v0.5.1, 36454861126 | `585869a2c` | 3 Kernteile, 3 Fenstergruppen | 18 415 | 3 524 | 18,6 min | 156 min |
+| v0.5.2, 37266459831 | `4d234e2a1` | wie 0.5.1 | 24 026 | 4 288 | 28,1 min | 202 min |
+| v0.5.3, 37409338027 | `34e1b3364` | wie 0.5.1 | 24 341 | 4 355 | 29,6 min | 218 min |
+
+Belegt ist damit: Bei gleicher Runnerzeit (154 gegen 156 min) kamen alle
+Testergebnisse 0.5.1 nach 18,6 statt 78,8 min, bei 7,5 Prozent mehr
+Kernfällen. Alle Testjobs dieser Läufe waren im ersten Versuch grün bis auf
+Fenstergruppe 0 von 0.5.3: Sie riss an der festen 900-s-Grenze, ihre 29,6 min
+enden also an einem roten Job, und ihre Fallzahl stammt aus dem zweiten
+Versuch (seitdem je Datei ein Budget aus der Fenstertabelle, `c379d5271`).
+Seither ist der Bestand um ein Drittel gewachsen, und die Wartezeit stieg mit
+ihm auf 28 bis 30 min — der Gewinn bleibt ein Faktor, keine feste
+Minutenzahl.
+
+Die Kerntabelle stammt jetzt aus den Windows-Berichten von v0.5.3. An deren
+eigenen Zeiten verteilt sie die drei Windows-Kernteile gleich auf je 46,1 min
+Rechenzeit; das ist dieselbe Stichprobe und sagt wenig. Außerhalb davon, mit
+einer Tabelle aus 0.5.2 auf dem Weg von `tools/ci_shards.py` an den Zeiten von
+0.5.3 gemessen, ist der längste Teil 47,1 min und liegen die Teile höchstens
+2,2 min auseinander (47,1 / 46,3 / 44,9); mit der lokalen Tabelle vom 29.09.
+waren es 53,6 und 11,7 min (53,6 / 41,9 / 42,8). Schon Hundertstelsekunden in
+der Tabelle verschieben die Teile um eine Minute — die Zahlen sagen etwas über
+die Spanne, nicht über einzelne Teile.

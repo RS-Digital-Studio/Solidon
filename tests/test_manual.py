@@ -196,6 +196,32 @@ def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
     assert "drei Minuten auf der Grafikkarte" not in extras
 
 
+@pytest.mark.parametrize("language", sorted(available_languages()))
+def test_the_window_page_says_how_a_moved_card_comes_back(language: str) -> None:
+    """Wer eine Karte verschoben hat, findet im Handbuch den Weg zurück — in jeder Sprache.
+
+    Griff, Doppelklick und *Ansicht → Karten an ihren Platz* standen nur im
+    Tooltip und in der Ansage. Der Menüweg steht so da, wie die Leiste ihn in
+    dieser Sprache zeigt.
+    """
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    if language != "de":
+        install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        window = next(page for page in manual.pages() if page.key == "window")
+        body = str(window.body)
+        assert f"*{tr('Ansicht')} → {tr('Karten an ihren Platz')}*" in body, body[-600:]
+        # Die Reiter heißen im Satz, wie sie am Reiter stehen — der kurze Name
+        # des Prüfberichts (Kontext „Reiter“), nicht der der Sache.
+        tabs = (tr("Auswahl"), tr("Prüfbericht", context="Reiter"), tr("Chat"))
+        assert all(f"*{tab}*" in body for tab in tabs), (language, tabs)
+    finally:
+        set_language("de")
+
+
 @pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_website_page_carries_every_chapter(language: str) -> None:

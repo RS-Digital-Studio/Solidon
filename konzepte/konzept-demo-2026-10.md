@@ -1,7 +1,7 @@
 # Konzept: Öffentliche Demo bis 30.10.2026
 
 Stand 12.08.2026, nachrecherchiert am 19.08.2026, Produktübergang entschieden
-am 28.08.2026. Baut auf `konzept-veroeffentlichung-1.0.md` auf und
+am 28.08.2026. Baut auf `archiv/konzept-veroeffentlichung-1.0.md` auf und
 ändert dessen §7-Entscheidung „keine Beta-Version" — mit Begründung, siehe §2 A.
 Dieses Dokument ist die fachliche Grundlage der Demo-Phase. Der Übergang zum
 Verkauf wird seit dem 16.09.2026 im

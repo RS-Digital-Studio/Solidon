@@ -89,6 +89,9 @@ def stem_of(word: str) -> str:
     return word[: max(STEM_LENGTH, len(word) - STEM_CUT)]
 
 
+#: Operation *Modell einfügen* und Fensterbefehl ``file.import`` teilen die Wörter.
+_READ_IN_SYNONYMS: Final = ("oeffnen", "importieren", "stl", "datei")
+
 #: Wörter, die ein Kunde tippt, und die Operationen, die er damit meint.
 #:
 #: **Gemessen, nicht geraten.** Am 23.08.2026 wurden 42 Wörter durchprobiert,
@@ -166,7 +169,10 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     # war ein Fachbegriff.
     "duplicate_object": ("kopieren", "klonen", "zweites teil"),
     "delete_object": ("loeschen", "wegwerfen", "rauswerfen"),
-    "load": ("oeffnen", "importieren", "stl", "datei"),
+    "load": _READ_IN_SYNONYMS,
+    # Die Palette zeigt das Einlesen als Fensterbefehl (``WINDOW_COMMAND_OPERATIONS``
+    # in ``ui/main_window.py``), nicht als Operation; seine Wörter gehen mit.
+    "file.import": _READ_IN_SYNONYMS,
     # Beide heißen seit dem Filament-Umbau „färben" und stehen im Menü
     # nebeneinander; die Suchwörter trennen sie nach dem, was der Kunde
     # meint — das ganze Teil oder die eine Fläche. „Pinseln" und „anmalen"
@@ -194,6 +200,9 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
 #: machen beide ein Teil steifer. Ein Text, ein Katalogeintrag.
 _STRONGER: Final = _("stabiler; stabiler machen; verstärken; Versteifung", context="Suchwörter")
 _HANG_UP: Final = _("an die Wand hängen; aufhängen; Wandhalterung", context="Suchwörter")
+# Ein Modell in Zoll kommt über das Einlesen herein, dort steht die
+# Einheit; Handbuch und Palette nannten das Wort bis dahin nirgends.
+_READ_IN: Final = _("Modell laden; STL öffnen; importieren; Zoll", context="Suchwörter")
 
 #: Die Kundenwörter **je Sprache** — was jemand tippt, der das Register nie
 #: gelesen hat, in der Sprache, in der er tippt.
@@ -302,9 +311,8 @@ CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
     "subtract_objects": _("herausschneiden; Form ausschneiden", context="Suchwörter"),
     "pattern": _("Reihe; mehrere Kopien; vervielfältigen", context="Suchwörter"),
     "paint_slot": _("bemalen; Fläche anmalen", context="Suchwörter"),
-    # Ein Modell in Zoll kommt über das Einlesen herein, dort steht die
-    # Einheit; Handbuch und Palette nannten das Wort bis dahin nirgends.
-    "load": _("Modell laden; STL öffnen; importieren; Zoll", context="Suchwörter"),
+    "load": _READ_IN,
+    "file.import": _READ_IN,
 }
 
 

@@ -43,6 +43,16 @@ from app.ui.style import TARGET_SIZE, TIGHT, divider, set_level
 from app.ui.tool_strip import BarComboBox
 
 
+def printer_button_text() -> str:
+    """Der Name des Druckknopfs der Kopfzeile — sichtbar und vorgelesen derselbe (RM-507).
+
+    Der Knopf hieß „Drucker …“, für den Bildschirmleser „Drucker wechseln“,
+    und der Dialog dahinter heißt *Druckeinstellungen*: drei Namen für einen
+    Weg. Der Drucker steht im Dialog ganz oben.
+    """
+    return tr("Druckeinstellungen …")
+
+
 def project_name(title: str) -> str:
     """Der Titel ohne seine Dateiendung.
 
@@ -332,7 +342,7 @@ class HeaderBar(QWidget):
         self.printer = _EphemeralLabel("", self, tail_words=2)
         set_level(self.printer, "caption")
         self.printer_button = QToolButton(self)
-        self.printer_button.setText(tr("Drucker …"))
+        self.printer_button.setText(printer_button_text())
         self.printer_button.setIcon(icon("print_settings", self.printer_button))
         # **Mit Beschriftung, nicht nur als Symbol.** Der Text stand hier schon,
         # gezeigt wurde er nie — `ToolButtonIconOnly` warf ihn weg, und damit
@@ -463,7 +473,7 @@ class HeaderBar(QWidget):
         # jedes Mal wieder weggenommen. Der einzige Weg zu den
         # Druckeinstellungen war damit ein Symbol ohne Wort.
         self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.printer_button.setAccessibleName(tr("Drucker wechseln"))
+        self.printer_button.setAccessibleName(printer_button_text())
         if compact:
             self._layout.addWidget(self.title, 0, 0)
             self._layout.addWidget(self.bounds, 0, 1)

@@ -14,7 +14,7 @@
 >
 > Die Behebung steht in ``units.circle_point`` und ``geom.lathe``; der Nachweis
 > in ``tests/test_platform_identity.py`` und im Register unter
-> [RM-187](../ROADMAP.md#rm-187).
+> [RM-187](../../ROADMAP.md#rm-187).
 >
 > **Was daraus zu lernen ist**, und es ist teurer als der Entwurf: Ich hatte
 > eine Ursache zugeordnet („FMA entsteht auf ARM von selbst"), sie erklärte den
@@ -164,4 +164,4 @@ nichts. Ein Wechsel muss besser sein als das, nicht nur schneller.
 
 ## Die dritte Möglichkeit: Geogram
 
-Steht in `konzepte/geogram-als-zweiter-kern.md`.
+Steht in `konzepte/archiv/geogram-als-zweiter-kern.md`.

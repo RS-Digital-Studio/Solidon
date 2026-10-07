@@ -34,7 +34,6 @@
   "Spannt einen Körper zwischen der Grundform und ihrer verkleinerten Kopie in der Höhe auf — Pyramidenstumpf, Kegelstumpf, Trichter.",
   "Stellt gewählte Flächen um einen Winkel an, oder alle Wände in Entformungsrichtung — zum Entformen, oder damit ein Stapelbehälter sich stapeln lässt.",
   "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.",
-  "Trennt ein Objekt entlang einer im Bild gezeichneten Linie und setzt auf Wunsch Passstifte in die Schnittfläche.",
   "Versetzt ein erkanntes Merkmal an eine andere Stelle: Bohrung, Langloch, Zapfen, Senkung, Verjüngung, Kuppel, Pfanne, Wulst, Kehle oder Lufteinschluss.",
   "Wiederholt erkannte Merkmale in einer Reihe, auf einem Kreis oder gespiegelt: Bohrung, Senkung, Langloch, Zapfen, Verjüngung, Kuppel, Wulst oder Kehle. Die Quelle bleibt maßgebend — ändert sich ihr Maß im Verlauf, folgen die Kopien.",
   "Zieht den Umriss hoch und verbindet ihn mit dem gewählten Körper — ein Körper, ein Schritt. Ein exakter Körper bleibt exakt, ein eingelesenes Netz bleibt ein Netz.",

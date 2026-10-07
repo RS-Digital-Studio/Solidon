@@ -314,7 +314,9 @@ Die Fokuskette folgt der Reihenfolge, in der Widgets **entstanden** sind, nicht
 dem Layout. Wer ein Element später umhängt, zieht sie mit
 `QWidget.setTabOrder` von hinten nach (`FeaturePanel._settle_tab_order`;
 unsichtbare und gesperrte übergeht Qt). Geprüft wird gegen das Layout, nicht
-gegen Bildpunkte (`test_the_tab_key_goes_down_the_panel_like_the_eye`).
+gegen Bildpunkte (`test_the_tab_key_goes_down_the_panel_like_the_eye`). **Nie
+in Python über `nextInFocusChain` laufen:** PySide hängt das Ergebnis an das
+befragte Widget, der Bereiniger löscht dann echte mit (`CardGrip`).
 
 ## Ein Rad über einem Feld ohne Fokus rollt die Seite
 
@@ -359,8 +361,9 @@ des Themas; was die leistet, ist eine Frage an das Thema.
   kommen vom Kunden (Farbwähler, Filamentkatalog). Die Pinselleiste zeigt
   Farbfeld **und** Name, „neu“ für einen fehlenden Slot.
 - **Ein Hauptknopf entsteht über `style.make_primary()`** (Akzentfarbe **und**
-  halbfett), nie über `setDefault(True)`; ein verwerfender über
-  `style.make_danger()`, ein Fenster ohne Handlung nimmt `style.no_primary()`,
+  halbfett), nie über `setDefault(True)`; einer mit `DestructiveRole` über
+  `style.make_danger()`, ein Fenster ohne Handlung und eine Rückfrage vor
+  Verwerfen nehmen `style.no_primary()`,
   und ein Stylesheet geht an einen `objectName`, nie typlos (`fenster.md`, „Der
   Hauptknopf“).
 - Differenzansicht Blau/Orange, nicht Rot/Grün; Analysekarten mit

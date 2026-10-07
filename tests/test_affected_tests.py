@@ -345,6 +345,21 @@ def test_tests_and_tools_import_their_neighbours_with_the_package_prefix() -> No
     assert bare_local_imports(graph) == []
 
 
+def test_a_tool_its_tests_load_by_path_selects_those_tests() -> None:
+    """Review 06.10.2026, M3: Ein Werkzeug, das beim Import ``sys.argv`` liest,
+    laden seine Tests über den Pfad — ohne Importkante. Seit die Matrix in
+    ``tools/`` liegt, fehlte ``test_delivery_matrix_review.py`` in jeder
+    Auswahl zu ihr."""
+    root = Path(__file__).resolve().parents[1]
+
+    files, reasons = affected([root / "tools" / "matrix_unit.py"], ImportGraph())
+
+    names = {path.name for path in files}
+    assert {"test_delivery_matrix_review.py", "test_delivery_tools.py"} <= names
+    chosen = next(path for path in files if path.name == "test_delivery_matrix_review.py")
+    assert reasons[chosen] == "nennt matrix_unit.py"
+
+
 def test_a_deleted_module_still_counts_as_a_code_change(tree: Path) -> None:
     """B-14 aus dem Gesamtreview vom 05.09.2026: Ein gelöschtes Modul stand
     in keinem Graphen mehr, also fiel weder sein Name noch ``touches_code``

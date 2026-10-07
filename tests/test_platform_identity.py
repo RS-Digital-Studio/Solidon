@@ -1251,6 +1251,286 @@ def _tangential_rounds() -> str:
     return hashlib.sha256(repr(decisions).encode()).hexdigest()[:16]
 
 
+def _thread_ridge() -> str:
+    """Der Gang eines druckbaren Gewindes, außen und als Loch (RM-187).
+
+    Seine Ringe drehen über ``units.exact_cos``/``exact_sin`` (``27c7a29e9``);
+    gefragt ist, ob der ganze Gang daran hängt — Teilung, Profil und Naht
+    eingeschlossen.
+    """
+    from app.core.knowledge.parts.shapes import thread_body
+
+    return "|".join(
+        _mesh_print(thread_body(8.0, 1.25, 6.0, internal=internal)) for internal in (False, True)
+    )
+
+
+def _slanted_part() -> str:
+    """Ein Baustein schräg an die Platte gesetzt, mit Drehung und Aufrichten (RM-187).
+
+    Die Platzierung setzt Einsenken, Drehen, Umlegen und Verschieben zu einer
+    Matrix zusammen (``knowledge.parts.ops._matrix``). Zwei Zweige: die freie
+    Richtung, wie ein Klick auf eine schräge Fläche sie im Schema speichert,
+    und ein benanntes Flächenmerkmal, an dem ein Baustein mit Oben sich
+    zusätzlich aufrichtet (``_roll_upright``).
+    """
+    from app.core.types import Feature
+
+    plate = _plate()
+    face = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.31, -0.22, 0.93), "centre": (-3.7, 5.3, 8.0)},
+    )
+    free = _registered(
+        "insert_screw_hole", plate, x=-3.7, y=5.3, z=8.0, nx=0.31, ny=-0.22, nz=0.93, angle=23.0
+    )
+    clamp = _registered_outputs(
+        "insert_pipe_clamp", plate, {"face_1": face}, at_feature="face_1", angle=23.0
+    )
+    return f"{_mesh_print(free)}|{_mesh_print(clamp[0])}"
+
+
+def _wrapped_texture() -> str:
+    """Ein Rippenfeld um einen Griff gelegt, danach seine Teilung geändert (RM-187).
+
+    Beide Wege biegen eine Abwicklung um den Zylinder: das Aufbringen über
+    ``texture_ops`` (Winkel aus der Lage im Blatt), das Ändern über den
+    gelesenen Rahmen des Musters (``perceive.patterns.Frame`` —
+    ``developed``, ``world`` und die Facetten des Trägers). Das Feld reicht
+    nicht ganz herum, damit es eine Mitte und zwei Ränder hat.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    shaft = MeshData.of(lathe.cylinder(radius=10.0, height=30.0, sections=96))
+    textured = _registered(
+        "apply_texture",
+        shaft,
+        pattern="rib",
+        wrap="cylinder",
+        wrap_diameter=20.0,
+        width=31.4,
+        height=16.0,
+        pitch=2.5,
+        depth=0.6,
+    )
+    found = detect(textured)
+    pattern = next(feature for feature in found.values() if feature.kind == "pattern")
+    resized = _registered_outputs(
+        "resize_feature", textured, found, at_feature=pattern.id, pitch=3.0
+    )
+    return f"{_mesh_print(textured)}|{_mesh_print(resized[0])}"
+
+
+def _face_textures() -> str:
+    """Muster auf der ganzen Deckfläche der Platte, um 17 Grad gedreht (RM-187).
+
+    Welle, schräges Rändel, Noppen und Rauschen: Stützstellen der Sinuslinie,
+    gedrehte Stege, Kreise und Streuflecken entstehen je aus eigenen Winkeln,
+    und die Fläche legt sie über ihre gedrehten Achsen in die Welt
+    (``texture_ops._face_texture_tool``). Die Bohrungen bleiben frei.
+    """
+    from app.core.perceive.features import detect
+
+    plate = _plate()
+    found = detect(plate)
+    top = next(
+        feature.id
+        for feature in found.values()
+        if feature.kind == "face" and float(feature.params.get("normal", (0, 0, 0))[2]) > 0.99
+    )
+    prints = []
+    for pattern in ("wave", "knurl_diamond", "dimple", "noise"):
+        textured = _registered_outputs(
+            "apply_texture",
+            plate,
+            found,
+            coverage="whole_face",
+            face=top,
+            pattern=pattern,
+            pitch=4.0,
+            depth=0.6,
+            mode="engraved",
+            angle=17.0,
+        )
+        prints.append(_mesh_print(textured[0]))
+    return "|".join(prints)
+
+
+def _read_lattices() -> str:
+    """Ein gedrehtes Wabenfeld und ein Rändel um einen Griff, gelesen und neu geteilt.
+
+    Der Lesepfad der Gittermuster (``perceive.patterns``): die Richtungen zum
+    nächsten Nachbarn auf die Symmetrie gefaltet, das Hüllrechteck in der
+    Drehung des Feldes, Seiten und Diagonalen einer Raute und das Neuzeichnen
+    in den gedrehten Achsen des Feldes. :func:`_wrapped_texture` liest nur
+    eine Reihe von Rippen und berührt nichts davon.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    plate = _plate()
+    found = detect(plate)
+    top = next(
+        feature.id
+        for feature in found.values()
+        if feature.kind == "face" and float(feature.params.get("normal", (0, 0, 0))[2]) > 0.99
+    )
+    honeycomb = _registered_outputs(
+        "apply_texture",
+        plate,
+        found,
+        coverage="whole_face",
+        face=top,
+        pattern="hexagon",
+        pitch=6.0,
+        depth=0.6,
+        mode="engraved",
+        angle=17.0,
+    )[0]
+    shaft = MeshData.of(lathe.cylinder(radius=10.0, height=30.0, sections=96))
+    knurled = _registered(
+        "apply_texture",
+        shaft,
+        pattern="knurl_diamond",
+        wrap="cylinder",
+        wrap_diameter=20.0,
+        width=31.4,
+        height=16.0,
+        pitch=3.0,
+        depth=0.5,
+    )
+    prints = []
+    for textured, pitch in ((honeycomb, 7.0), (knurled, 3.5)):
+        read = detect(textured)
+        pattern = next(feature for feature in read.values() if feature.kind == "pattern")
+        changed = _registered_outputs(
+            "resize_feature", textured, read, at_feature=pattern.id, pitch=pitch
+        )
+        prints.append(
+            "|".join(
+                (
+                    str(pattern.params.get("style")),
+                    fingerprint(
+                        [float(pattern.params.get("angle", 0.0)), float(pattern.params["pitch"])]
+                    ),
+                    _mesh_print(changed[0]),
+                )
+            )
+        )
+    return "|".join(prints)
+
+
+def _sketch_arcs() -> str:
+    """Eine Skizze mit Bögen und einem Vollkreis-Bogen, auf eine schräge Ebene gezogen (RM-187).
+
+    Die Bögen tastet ``sketch_solid._arc_points`` ab, auf ``MAX_FACET_SAG``
+    genau ``_adaptive_outline`` — beide über Winkel um den Umkreismittelpunkt.
+    """
+    from app.core.geom.sketch_solid import extrude_profile, outline_points
+    from app.core.sketch.planes import frame_of
+    from app.core.sketch.profile import Profile, ProfileSegment
+
+    outer = Profile(
+        segments=(
+            ProfileSegment(kind="line", start=(-20.0, -9.0), end=(17.0, -9.0)),
+            ProfileSegment(kind="arc", start=(17.0, -9.0), end=(17.0, 7.0), via=(23.3, -1.1)),
+            ProfileSegment(kind="line", start=(17.0, 7.0), end=(-20.0, 7.0)),
+            ProfileSegment(kind="arc", start=(-20.0, 7.0), end=(-20.0, -9.0), via=(-24.1, -0.7)),
+        ),
+        holes=(
+            Profile(
+                segments=(
+                    ProfileSegment(
+                        kind="arc", start=(-3.0, -1.0), end=(-3.0, -1.0), via=(4.3, -1.0)
+                    ),
+                )
+            ),
+        ),
+    )
+    frame = frame_of((0.21, -0.33, 0.92), (1.5, -2.5, 3.0))
+    solid = extrude_profile(outer, 6.0, frame)
+    adaptive = outline_points(outer, max_sag=0.01)
+    return f"{len(solid.faces)}/{fingerprint(solid.vertices)}|{fingerprint(adaptive)}"
+
+
+_Z_SHAPE: list[Any] = []
+
+
+def _split_seam() -> str:
+    """Auto Split am Z aus zwei Stäben und einer Strebe: schräge Naht, Hälften, Stifte (RM-187).
+
+    Der Körper aus ``test_autosplit`` (zu lang fürs Bett, jede achsparallele
+    Naht trifft zwei Stäbe) entsteht einmal und außerhalb des Rauschens. Unter
+    ihm laufen die Suche bis zur gekippten Ebene, das Teilen und die Planung
+    samt Stiftlagen; dazu die Spiegelebene eines gedrehten Quaders.
+    """
+    import manifold3d
+
+    from app.core.deferred import trimesh
+    from app.core.geom import autosplit
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.symmetry import mirror_plane
+    from app.core.geom.transform import moved_points, rotation_about
+    from app.core.knowledge import profiles
+    from app.core.split import plan_split
+
+    if not _Z_SHAPE:
+        first = manifold3d.Manifold.cube((240.0, 20.0, 20.0)).translate((-200.0, -10.0, 0.0))
+        second = manifold3d.Manifold.cube((240.0, 20.0, 20.0)).translate((-40.0, 140.0, 0.0))
+        strut = (
+            manifold3d.Manifold.cube((math.hypot(160.0, 150.0), 20.0, 20.0), center=True)
+            .rotate((0.0, 0.0, math.degrees(math.atan2(150.0, 160.0))))
+            .translate((0.0, 75.0, 10.0))
+        )
+        built = (first + second + strut).to_mesh64()
+        _Z_SHAPE.append(
+            MeshData.of(
+                trimesh.Trimesh(
+                    vertices=np.array(built.vert_properties[:, :3]),
+                    faces=np.array(built.tri_verts),
+                    process=False,
+                )
+            )
+        )
+    mesh = _Z_SHAPE[0]
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    candidate = autosplit.find_plane(mesh, profile)
+    assert candidate is not None and candidate.normal is not None, "die Probe muss schräg teilen"
+    outcome = autosplit.split_to_fit(mesh, profile)
+    plan = plan_split(mesh, "obj_1", profile)
+    seams = [
+        value
+        for draft in plan.drafts
+        for _key, value in sorted(draft.params.items())
+        if isinstance(value, float)
+    ]
+    pins = [
+        value
+        for connector in plan.connectors
+        if connector is not None
+        for value in (*(axis for spot in connector.positions for axis in spot), *connector.normal)
+    ]
+    assert pins, "die Probe muss Stifte setzen"
+    block = trimesh.creation.box(extents=(30.0, 18.0, 12.0))
+    block.vertices = np.asarray(block.vertices) + np.array([4.0, -3.0, 6.0])
+    turn = rotation_about((0.0, 0.0, 1.0), (4.0, -3.0, 6.0), 37.0)
+    block.vertices = moved_points(np.asarray(block.vertices), turn)
+    mirror = mirror_plane(MeshData.of(block), (float(turn[0, 0]), float(turn[1, 0]), 0.0))
+    assert mirror is not None, "der gedrehte Quader hat seine Spiegelebene"
+    return "|".join(
+        [
+            fingerprint([*candidate.normal, candidate.position]),
+            *(_mesh_print(part) for part in outcome.parts),
+            fingerprint(seams),
+            fingerprint(pins),
+            fingerprint([*mirror.normal, mirror.position, mirror.deviation]),
+        ]
+    )
+
+
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "bent_lettering": _bent_lettering,
@@ -1265,6 +1545,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "curved_mouth": _curved_mouth,
     "differently_split_contact_edge": _differently_split_contact_edge,
     "drill_hole": _drilled_along_the_face,
+    "face_textures": _face_textures,
     "fill_band": _bore_wall_band,
     "hinged_lid": _hinged_lid,
     "fill_bridged": _top_with_holes,
@@ -1278,6 +1559,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "pose_armature": _posed_plate,
     "turned_closures": _turned_closures,
     "prusa_support_angle": _automatic_support_angle,
+    "read_lattices": _read_lattices,
     "remesh_mesh": _refined_plate,
     "resize_chamber": _changed_chamber,
     "resize_closure": _changed_closure,
@@ -1287,10 +1569,15 @@ _WAYS: dict[str, Callable[[], str]] = {
     "resize_hole": _changed_bore,
     "rotate_object": _turned_plate,
     "section_cut": _slanted_cut,
+    "sketch_arcs": _sketch_arcs,
+    "slanted_part": _slanted_part,
+    "split_seam": _split_seam,
     "step_assembly": _step_assembly,
     "tangential_rounds": _tangential_rounds,
     "traced_outline": _traced_outline,
     "thicken": _thickened_skin,
+    "thread_ridge": _thread_ridge,
+    "wrapped_texture": _wrapped_texture,
     "support_columns": _support_columns,
 }
 
@@ -1308,12 +1595,27 @@ def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None
     Lage aus ``np.dot`` (``prepare.resize_bore``). Rot war er außerdem für
     *Drehen*, *Druckoptimal ausrichten*, den schrägen Schnitt, *An Merkmal
     ausrichten*, *Stellung geben* und *Offene Fläche schließen* (22.09.2026).
+
+    Vor beiden Läufen leert er die Merker der Erkennung: Sonst beantwortete
+    der verrauschte Lauf sie aus dem stillen, und die Naht eines umwickelten
+    Musters hing unbemerkt an ``math.cos`` (Review zu RM-187).
     """
+    _forget_what_the_perception_remembers()
     quiet = _WAYS[way]()
+    _forget_what_the_perception_remembers()
     with platform_noise():
         noisy = _WAYS[way]()
 
     assert noisy == quiet, f"{way} hängt an einer plattformabhängigen Rechnung"
+
+
+def _forget_what_the_perception_remembers() -> None:
+    """Die prozessweiten Merker der Erkennung leeren — Merkmale und Nachmessungen."""
+    from app.core.perceive.features import forget_cache
+    from app.core.perceive.local import forget_known
+
+    forget_cache()
+    forget_known()
 
 
 def test_the_noise_reaches_what_it_should() -> None:

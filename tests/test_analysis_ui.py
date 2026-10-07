@@ -1814,35 +1814,55 @@ def test_the_view_and_the_tree_show_the_same_menu(window: MainWindow) -> None:
     menu.deleteLater()
 
 
-def test_the_context_menu_carries_no_operations_any_more(window: MainWindow) -> None:
-    """Rechtsklick auf Körper oder Fläche: kein Operationsverzeichnis mehr.
+def _offered_titles(menu: Any) -> set[str]:
+    """Die Einträge eines Kontextmenüs ohne Kürzelspalte (hinter dem Tabulator)."""
+    return {
+        action.text().replace("&", "").split("\t")[0]
+        for entry in menu.actions()
+        for action in (entry.menu().actions() if entry.menu() else [entry])
+        if not action.isSeparator()
+    }
+
+
+def _a_second_body(window: MainWindow) -> list[str]:
+    """Ein Quader neben der Platte — die Lage, in der *Vereinigen* gilt."""
+    from app.core.scene import OperationDraft
+
+    window.session.apply("Quader", [OperationDraft(op="create_box")])
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    bodies = list(result.scene.objects)
+    assert len(bodies) == 2, f"die Lage dieses Tests sind zwei Körper: {bodies}"
+    return bodies
+
+
+def test_the_context_menu_offers_removal_and_union_but_no_list(window: MainWindow) -> None:
+    """Rechtsklick: *Entfernen* immer, *Vereinigen* bei zwei Körpern — sonst keine Operationen.
 
     Bis zum 11.09.2026 stand dort dieselbe Liste wie rechts in der Karte der
-    Handlungen — gruppiert, gefaltet, mit dem Katalog an der Stelle der
-    Bausteine —, und zwei Orte für dieselbe Liste sind einer zu viel (Robert:
-    „ebenso dann beim rechtsklick im objektbaum"). Was bleibt, gibt es nur
-    hier: der Weg vom Ergebnis zurück zum Schritt, die Skizze auf der Fläche
-    und die Sichtbarkeit. Die Operationen stehen rechts — an derselben
-    Auswahl, mit Grund, wenn eine nicht geht.
+    Handlungen, und zwei Orte für dieselbe Liste sind einer zu viel (Robert:
+    „ebenso dann beim rechtsklick im objektbaum"). Am 06.10.2026 kamen zwei
+    Handlungen zurück, die jeder Slicer an dieser Stelle trägt (Robert, nach
+    dem Fragebogen zu 0.5.3: „Objekt einfach löschen … in der Objektliste
+    markieren und entfernen?“ und „Zwei Objekte verschmelzen“). Die übrigen
+    stehen weiter rechts, an derselben Auswahl, mit Grund, wenn eine nicht
+    geht.
+
+    **Entfernen heißt, was Entf tut**: am Körper und an einer bloßen Fläche
+    *Objekt entfernen*, an einer Bohrung deren eigene Operation.
     """
     from app.core.registry import REGISTRY
 
     titles = {str(spec.title) for spec in REGISTRY.all()}
-
-    def offered(menu) -> set[str]:
-        return {
-            action.text().replace("&", "")
-            for entry in menu.actions()
-            for action in (entry.menu().actions() if entry.menu() else [entry])
-            if not action.isSeparator()
-        }
+    removal = str(REGISTRY.get("delete_object").title)
 
     select_plate(window)
     menu = window.object_tree.context_menu()
     assert menu is not None
-    body = offered(menu)
-    assert body, "Sichtbarkeit steht darin"
-    assert not (body & titles), f"am Körper stehen noch Operationen: {sorted(body & titles)}"
+    body = _offered_titles(menu)
+    assert tr("Ausblenden") in body, "die Sichtbarkeit bleibt"
+    assert body & titles == {removal}, f"am Körper nur Entfernen: {sorted(body & titles)}"
     assert not any(entry.menu() is not None for entry in menu.actions()), "und kein Untermenü"
     menu.deleteLater()
     assert set(window.selection_operations._buttons) & {"union_objects", "hollow_object"}, (
@@ -1855,14 +1875,97 @@ def test_the_context_menu_carries_no_operations_any_more(window: MainWindow) -> 
     window.object_tree.select_feature(object_id, face)
     menu = window.object_tree.context_menu()
     assert menu is not None
-    at_face = offered(menu)
-    assert not (at_face & titles), (
-        f"an der Fläche stehen noch Operationen: {sorted(at_face & titles)}"
+    at_face = _offered_titles(menu)
+    assert at_face & titles == {removal}, (
+        f"an der Fläche entfernt Entf den Körper, und so heißt der Eintrag: {sorted(at_face)}"
     )
     assert tr("Auf dieser Fläche zeichnen") in at_face, (
         f"die Skizze auf der Fläche bleibt: {sorted(at_face)}"
     )
     menu.deleteLater()
+
+    window.object_tree.select_feature(object_id, "hole_1")
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+    at_hole = _offered_titles(menu) & titles
+    assert at_hole == {str(REGISTRY.get("remove_feature").title)}, (
+        f"an der Bohrung nimmt Entf die Bohrung, nicht den Körper: {sorted(at_hole)}"
+    )
+    menu.deleteLater()
+
+    bodies = _a_second_body(window)
+    window.object_tree.select_objects(bodies)
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+    both = _offered_titles(menu)
+    union = str(REGISTRY.get("union_objects").title)
+    assert both & titles == {union, removal}, f"bei zwei Körpern: {sorted(both & titles)}"
+    next(action for action in menu.actions() if action.text().startswith(union)).trigger()
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None and len(result.scene.objects) == 1, "die beiden sind eins"
+    assert window.session.project.document.ops[-1].op == "union_objects"
+    menu.deleteLater()
+
+
+def test_a_right_click_on_a_marked_row_keeps_the_group(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei markierte Zeilen, Rechtsklick auf eine davon: beide bleiben gewählt.
+
+    Sonst bot das Menü nie *Vereinigen* an — der Rechtsklick wählte nur die
+    Zeile darunter, und eine Gruppe ging verloren, bevor ihr Menü aufging
+    (Fragebogen zu 0.5.3). Eine **nicht** markierte Zeile wählt er weiterhin
+    allein: Dort meint er sie, und ein Dialog erbte sonst eine fremde Auswahl.
+    Das Menü selbst bleibt hier zu — ``QMenu.exec`` wartet offscreen auf
+    einen Klick, den es nie gibt.
+    """
+    bodies = _a_second_body(window)
+    tree = window.object_tree
+    monkeypatch.setattr(tree, "context_menu", lambda: None)
+    view = tree.tree
+    rows = [view.topLevelItem(index) for index in range(view.topLevelItemCount())]
+    assert len(rows) == 2
+
+    tree.select_objects(bodies)
+    tree._on_context_menu(view.visualItemRect(rows[1]).center())
+    assert set(tree.selected_objects()) == set(bodies), "die Gruppe bleibt"
+
+    first = str(rows[0].data(0, Qt.ItemDataRole.UserRole))
+    second = str(rows[1].data(0, Qt.ItemDataRole.UserRole))
+    tree.select_object(first)
+    tree._on_context_menu(view.visualItemRect(rows[1]).center())
+    assert tree.selected_objects() == (second,), "eine fremde Zeile meint der Klick allein"
+
+
+def test_entf_takes_every_marked_body_in_one_step(window: MainWindow) -> None:
+    """Zwei markiert, Entf: beide weg — und ein Strg+Z holt beide zurück.
+
+    Fragebogen zu 0.5.3: „einfach in der Objektliste markieren und entfernen“.
+    ``delete_object`` verbraucht einen Körper, und mit zwei markierten nahm
+    die Taste still nur den ersten (gemessen am 06.10.2026 an zwei Quadern:
+    ein Schritt, ein Körper blieb). Jetzt ein Schritt je Körper in **einer**
+    Transaktion, wie die Sammelzeile des Prüfberichts.
+    """
+    from app.core.registry import REGISTRY
+
+    bodies = _a_second_body(window)
+    window.object_tree.select_objects(bodies)
+    window.run_operation(REGISTRY.get("delete_object"))
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None and not result.scene.objects, "beide markierten sind weg"
+    assert [entry.op for entry in window.session.project.document.ops][-2:] == [
+        "delete_object",
+        "delete_object",
+    ]
+
+    window.session.undo()
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None and set(result.scene.objects) == set(bodies), (
+        "ein Strg+Z holt beide zurück"
+    )
 
 
 def test_no_menu_shows_the_same_line_twice(window: MainWindow) -> None:
@@ -2047,8 +2150,10 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
     assert dialog.spec.name == "insert_printed_thread", dialog.spec.name
 
     # Übernehmen wartet auf die dargestellte Vorschau (20.09.2026): erst
-    # rechnen und zeigen lassen, dann klicken — wie der Kunde es sieht.
-    window.session.wait_for_idle()
+    # rechnen und zeigen lassen, dann klicken — wie der Kunde es sieht. Die
+    # Vorschau des Gewindeschritts braucht unter Last über die zehn Sekunden
+    # der Vorgabe; gewartet wird deshalb länger, und das Ergebnis zählt.
+    assert window.session.wait_for_idle(60_000), "die Vorschau rechnet nach einer Minute noch"
     for _ in range(40):
         QApplication.processEvents()
     assert dialog.can_accept(), dialog.toolTip()
@@ -6487,8 +6592,10 @@ def test_the_history_shows_what_kind_of_step_each_line_is(qt_app: QApplication) 
     Die Nummer ist keine Zierde — der Fehlerdialog nennt „Operation: 4", und
     ein geöffneter Schritt heißt „Bohrung setzen — Operation 4". Sie steht
     deshalb an jeder Zeile, die genau einen Schritt vertritt; eine
-    Transaktion aus mehreren bekommt keine, ihre Kinder tragen ihre eigenen.
+    zugeklappte Transaktion aus mehreren trägt die Spanne ihrer Kinder
+    („3–4“, RM-519), sonst sprang die sichtbare Zählung an ihr von 2 auf 5.
     """
+    import re
     from pathlib import Path
 
     from app.ui.panels import HistoryPanel
@@ -6515,6 +6622,13 @@ def test_the_history_shows_what_kind_of_step_each_line_is(qt_app: QApplication) 
             assert str(single) in row.text(), (
                 f"Schritt {single} nennt seine Nummer nicht: {row.text()!r}"
             )
+        # Und zugeklappt, wie der Verlauf aufgeht, ist jede Nummer zu sehen.
+        shown = " ".join(row.text() for row in rows if not row.isHidden())
+        numbers = {int(number) for number in re.findall(r"\d+", shown)}
+        for low, high in re.findall(r"(\d+)–(\d+)", shown):
+            numbers.update(range(int(low), int(high) + 1))
+        steps = len(session.project.document.ops)
+        assert set(range(1, steps + 1)) <= numbers, f"es fehlen Nummern: {shown!r}"
     finally:
         panel.deleteLater()
 
@@ -8008,14 +8122,61 @@ def test_the_chosen_map_comes_back_after_a_change(window: MainWindow) -> None:
     assert window.viewport.analysis_map is not None, "die gewählte Karte kam nicht wieder"
 
 
+@pytest.mark.parametrize(
+    ("severity", "chosen"), [("info", False), ("warning", True), ("error", True)]
+)
+def test_only_errors_and_warnings_are_preselected(
+    monkeypatch: pytest.MonkeyPatch, severity: str, chosen: bool
+) -> None:
+    """Ein Hinweis mit Handlung ist nicht vorgewählt — auch nicht am Körper (RM-512).
+
+    Vorgewählt heißt: Akzentkante an der Zeile, Hauptknopf an ihrer Handlung.
+    Ein Hinweis, der das tut, liest sich wie eine Warnung und nimmt dem
+    ruhenden Fenster sein eines Licht; seine Handlung steht einen Klick auf
+    die Zeile entfernt. Ohne Fenster: Gefragt wird nur, welche Zeile
+    ``_preselect`` wählt.
+    """
+    from app.ui import panels
+
+    finding = Finding(
+        "arrange.below_bed",
+        severity,  # type: ignore[arg-type]
+        "Ein Objekt steckt unter dem Druckbett.",
+        object_id="obj_1",
+        suggestions=(Action("place_on_bed", "Auf das Bett setzen"),),
+    )
+    item = SimpleNamespace(
+        data=lambda role: finding if role == Qt.ItemDataRole.UserRole else (),
+        isHidden=lambda: False,
+    )
+    rows: list[int] = []
+    panel = SimpleNamespace(
+        _document=None,
+        _stopped_at=None,
+        _live_objects={},
+        list=SimpleNamespace(
+            selectedItems=list,
+            count=lambda: 1,
+            item=lambda _row: item,
+            setCurrentRow=rows.append,
+        ),
+    )
+    monkeypatch.setattr(panels, "handlers_of", lambda _panel: {"place_on_bed": print})
+    monkeypatch.setattr(panels, "handled_actions", lambda *_args, **_kwargs: finding.suggestions)
+
+    panels.ReportPanel._preselect(panel)  # type: ignore[arg-type]
+
+    assert (rows == [0]) is chosen, f"{severity}: gewählt {rows}"
+
+
 def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -> None:
     """„Druckbereit · 1 × Hinweis“ statt einer Zählung neben Hinweisen (KUNDE-06).
 
     Der Hinweis zu den Startwerten des Materials steht bei jeder frischen
     Installation an jedem Teil; mit ihm stand der Satz praktisch nie da, und die
     Zeile des Hinweises war vorgewählt — in der Auswahlfarbe, mit orangem Knopf,
-    wie eine Warnung. Ein Hinweis am Körper bleibt vorwählbar; eine Warnung
-    nimmt das Urteil weg.
+    wie eine Warnung. Vorgewählt werden nur Fehler und Warnungen (RM-512),
+    auch ein Hinweis am Körper nicht; eine Warnung nimmt das Urteil weg.
     """
     import trimesh
 
@@ -8066,7 +8227,8 @@ def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -
         assert panel.summary.text().startswith(tr("Entscheidung erforderlich"))
         assert "1 Warnung" in panel.list_toggle.text()
 
-        # Gegenprobe: Ein Hinweis **am Körper** mit Handlung wird vorgewählt.
+        # Auch ein Hinweis **am Körper** mit Handlung bleibt ungewählt: Seine
+        # Zeile und sein Hauptknopf wären im ruhenden Fenster ein zweites Licht.
         below = Finding(
             code="arrange.below_bed",
             severity="info",
@@ -8080,8 +8242,24 @@ def test_a_part_with_only_notes_is_called_ready_to_print(qt_app: QApplication) -
                 scene=Scene(objects=objects, report=Report(findings=(material, below)))
             )
         )
+        assert not panel.list.selectedItems(), "ein Hinweis ist nicht vorgewählt"
+
+        # Gegenprobe: Derselbe Sachverhalt als Warnung — so meldet ihn die
+        # Exportprüfung — wird mit seiner Handlung vorgewählt.
+        warned = Finding(
+            code="arrange.below_bed",
+            severity="warning",
+            message="Ein Objekt steckt unter dem Druckbett.",
+            object_id="obj_1",
+            suggestions=(Action("place_on_bed", "Auf das Bett setzen"),),
+        )
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(objects=objects, report=Report(findings=(material, warned)))
+            )
+        )
         chosen = panel.list.selectedItems()
-        assert chosen and chosen[0].data(Qt.ItemDataRole.UserRole).code == "arrange.below_bed"
+        assert chosen and chosen[0].data(Qt.ItemDataRole.UserRole).severity == "warning"
     finally:
         panel.deleteLater()
         host.deleteLater()

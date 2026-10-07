@@ -70,6 +70,10 @@ class UiSettings:
     Millimetern."""
     language: str = SOURCE_LANGUAGE
     right_panel_visible: bool = True
+    card_places: dict[str, str] = field(default_factory=dict)
+    """Wo die Seitenkarten liegen, wenn jemand sie verschoben hat
+    (``overlay.CardPlace.text``: ``left``, ``right`` oder ``float:x:y``).
+    Leer heißt Stammplatz; was nicht passt, gilt ebenso."""
     printer: str = ""
     material: str = ""
     print_quality: str = ""

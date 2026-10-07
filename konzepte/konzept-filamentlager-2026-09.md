@@ -26,7 +26,7 @@
 ## 1. Was es schon gibt
 
 Der Filamentkatalog ist seit dem 28.08.2026 in Betrieb (Konzept
-[Filamente statt nummerierter Slots](konzept-filamente-2026-08.md), Bauplan
+[Filamente statt nummerierter Slots](archiv/konzept-filamente-2026-08.md), Bauplan
 §20). Er kann mehr, als man ihm ansieht:
 
 | Was | Wo | Zustand |
