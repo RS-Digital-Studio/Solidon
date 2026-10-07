@@ -76,7 +76,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie](#rm-425) | Geometrie, Erkennung und Druckvorbereitung | S01 als bleibender Test, drei Körper, alle Achsen, verschobene Spiegelmitte, Vorschau samt Rücknahme und alte Züge geprüft (06.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-504 — Importierte Texturen als gemeinsame Auswahl](#rm-504) | Geometrie, Erkennung und Druckvorbereitung | Zusammenfassung kleiner Felder und STEP-Muster gebaut und belegt (04.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
-| [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.); offen: Waschschüssel an 29 Druckern, die Minigolf-Platte als 3MF, der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max, vorher das Matrixwerkzeug (Blockleser, Stützmarke nach Volumen) |
+| [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.), B7 im Matrixwerkzeug gebaut (06.10.); offen: Waschschüssel an 29 Druckern und die Minigolf-Platte als 3MF (Lauf seit 06.10.), der Plan `modelle` über `F:\3D Dateien` an Kobra S1 und S1 Max |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; offen die Abnahme in Anycubic, Elegoo und Orca |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
@@ -2727,10 +2727,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (`F:\solidon-review-reports\claude-2026-10-05\anycubic-matrix\auswertung.md`). B1 bis B6
   sind für 0.5.3 behoben und an 13 gezielten Fällen im Slicer belegt, B2 gilt für die ganze
   Orca-Familie.
-  **Offen:** die Waschschüssel an den übrigen 29 Druckern, die Minigolf-Platte als 3MF (der Pfad
-  im Treiber zeigte auf einen gelöschten Ordner), der Plan `modelle` über den Korpus an Kobra S1
-  und S1 Max. Vorher am Matrixwerkzeug den Blockleser für `; CONFIG_BLOCK_START = begin` und
-  die Marke „Stützvorschlag ohne Stütze“ nach Volumen statt Metern (B7).
+  **B7 gebaut (06.10.2026):** Der Blockleser liest `; CONFIG_BLOCK_START = begin`, und beide
+  Stützmarken („Stützvorschlag ohne Stütze“, „Slicer stützt nicht“) wie auch „gegen das Urteil
+  des Slicers“ urteilen nach Volumen gegen `estimate.support_floor` wie das Hauptfenster; ohne
+  Volumen markiert die Matrix nichts. Die Minigolf-Platte ist neu gebaut, acht Teile aus
+  `x.p3d`, und liegt dauerhaft daneben im Korpus
+  (`F:\3D Dateien\Mini+Golf+All+Set-P1S_stls\minigolf-platte.3mf`, Neubau mit
+  `platte_bauen.py` dort).
+  **Offen:** die Waschschüssel an den übrigen 29 Druckern und die Minigolf-Platte als 3MF an
+  allen 39 (Lauf seit 06.10.2026, `F:\solidon-review-reports\claude-2026-10-06\geometrie\
+  rm525\`), danach der Plan `modelle` über den Korpus an Kobra S1 und S1 Max.
   **Abnahme:** jede Kombination geschnitten oder mit Absage samt Ausweg, kein Druck neben dem
   Bett, Block gleich Herstellerkette außer ausgewiesenen Abweichungen, kein Fehlalarm.
 
