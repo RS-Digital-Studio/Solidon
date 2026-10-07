@@ -5945,6 +5945,53 @@ def test_a_hole_with_material_inside_is_a_wall_and_every_row_says_so() -> None:
     assert hole_is_clear(clean, hole)
 
 
+@pytest.mark.parametrize("op", ["remove_feature", "plug_hole"])
+def test_removing_or_plugging_a_wall_with_material_inside_says_so(
+    profile: Profile, op: str
+) -> None:
+    """Entfernen und Verschließen sagen an der Topfwand mit Zapfen ab, über die Operation.
+
+    Beide füllen die alte Stelle über ``_closed_at``, und dort fragt
+    ``_checked_bore_air``, ob im Zylinder Material steht. Ohne die Frage füllte
+    der Pfropfen den Topf samt Zapfen ganz: 9 922 → 22 965 mm³, ohne Absage
+    (Review Einheit 1, 06.10.2026). Der Test oben ruft ``_tool_for`` direkt
+    und hält diesen Anschluss nicht.
+    """
+    from app.core.errors import ValidationError
+    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    mesh = _cup_with_a_boss_inside()
+    found = detect(mesh)
+    wall = max(
+        (feature for feature in found.values() if feature.kind == "hole"),
+        key=lambda feature: float(feature.params["diameter"]),
+    )
+    entry = SceneObject(id="obj_1", name="Topf", mesh=mesh, features=found)
+    spec = REGISTRY.get(op)
+
+    with pytest.raises(ValidationError) as problem:
+        spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(at_feature=wall.id),
+                profile=profile,
+                quality="fine",
+                seed=7,
+                progress=lambda *_: None,
+                ask=lambda _question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+
+    assert problem.value.detail is HOLE_IS_NOT_EMPTY
+    assert [action.id for action in problem.value.suggestions] == ["change_selection", "cancel"]
+
+
 def test_a_pocket_over_a_small_hole_in_its_floor_is_not_through() -> None:
     """Der Minigolf-Becher (15.09.2026): Topf Ø 116, im Boden eine Bohrung Ø 8 auf
     derselben Achse. Über der Achse lag kein Dreieck, also galt der Topf als

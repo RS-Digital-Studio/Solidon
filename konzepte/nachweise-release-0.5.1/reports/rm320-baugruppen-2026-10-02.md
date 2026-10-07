@@ -80,7 +80,9 @@ ausreichte.
 Vorzeichenfragen und antwortet jetzt ausdrücklich mit `True`, `False` oder
 `None`. Nur das entschiedene `False` erlaubt die Sonderfreigabe. Die
 Diagnose `parts_inside_parts` teilt über `_part_containment` dieselbe Rechnung,
-behält aber ihre bisherige Auswahl und Signatur. Ein freier kurzer Stift von
+behält aber ihre bisherige Auswahl und Signatur. (Nachtrag RM-413: Die
+Freigabe fragt seit dem letzten Nachgang `material_part_families`;
+`has_nested_parts` hatte danach keinen Aufrufer mehr und ist entfernt.) Ein freier kurzer Stift von
 z = 2 bis 8 mm in der tatsächlichen Luft der Bohrung bleibt an beiden Kernen
 mit Ø2 und Ø5 zulässig. Negative Innenhäute und freie Teile in einem Innenraum
 werden getrennt von positiv eingeschlossenem Material geprüft.

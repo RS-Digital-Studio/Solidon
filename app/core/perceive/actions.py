@@ -736,12 +736,16 @@ def actions_for(
         touches_other, reason = state.touches_other, state.reason
         cavity = state.chain if state.chain is not None else ()
     own_body_blocked = no_own_body(feature, cavity, touches_other, mesh, reason=reason)
-    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, hole_has_separate_contents
+    from app.core.geom.prepare_ops import (
+        FILLED_BORE_REASONS,
+        OTHER_PART_IN_THE_BORE,
+        hole_has_separate_contents,
+    )
 
     # Ein Langloch schneidet fremde Teile nur innerhalb seiner Bohrungstiefe.
     # Die übrigen Handlungen behalten die Absage für Material im Hohlraum.
     separate_contents = (
-        own_body_blocked is HOLE_IS_NOT_EMPTY
+        own_body_blocked is OTHER_PART_IN_THE_BORE
         and mesh is not None
         and hole_has_separate_contents(mesh, feature, cancelled=cancelled)
     )
@@ -765,7 +769,7 @@ def actions_for(
         elif (
             fitting is not None
             and own_body_blocked is not None
-            and (fitting.name in _NEED_AN_OWN_BODY or own_body_blocked is HOLE_IS_NOT_EMPTY)
+            and (fitting.name in _NEED_AN_OWN_BODY or own_body_blocked in FILLED_BORE_REASONS)
             and not (fitting.name == "slot_hole" and separate_contents)
         ):
             actions.append(FeatureAction(title=fitting.title, op=None, reason=own_body_blocked))
@@ -1045,16 +1049,17 @@ def no_own_body(
       (``prepare_ops.hole_is_clear``, ``HOLE_IS_NOT_EMPTY``): Ihr Werkzeug
       wäre ein voller Zylinder, der die Speichen mitnimmt (Uhrenteil 06,
       minus 49 Prozent Volumen). Hier steht jede Zeile grau, nicht nur die
-      Körperhandlungen.
+      Körperhandlungen. Gehört das Material einem anderen Teil, sagt es
+      ``OTHER_PART_IN_THE_BORE`` (``prepare_ops.filled_bore_reason``).
     """
     if feature.kind == "hole" and mesh is not None and feature.face_indices:
         # **Vor der Kette gefragt**, denn ``_tool_for`` fragt es an jeder
         # Bohrung: Eine Radinnenwand mit Speichen, an deren Mündung eine Fase
         # erkannt wurde, ist eine Kette — und trotzdem keine Bohrung.
-        from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, hole_is_clear
+        from app.core.geom.prepare_ops import filled_bore_reason, hole_is_clear
 
         if not hole_is_clear(mesh, feature):
-            return HOLE_IS_NOT_EMPTY
+            return filled_bore_reason(mesh, feature)
     if feature.kind not in ("hole", "cone", "sphere") or cavity:
         return None
     if touches_other and feature.kind != "sphere":

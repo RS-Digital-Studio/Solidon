@@ -373,6 +373,95 @@ def test_the_arriving_answer_is_kept_and_built_only_where_it_still_belongs(
     assert view.calls == expected[case]
 
 
+@pytest.mark.parametrize("replaced", ["before", "during", "after"])
+def test_a_replaced_answer_worker_still_delivers_a_finished_answer(replaced: str) -> None:
+    """Abgelöst während der Rechnung heißt verworfen, nach der Rechnung geliefert (RM-413).
+
+    Der Arbeiter prüfte den Abbruch auch nach fertiger Rechnung und warf die
+    Antwort dann weg; ``_answers_arrived`` merkt sie für den Klick zurück, aber
+    sie kam dort nie an.
+    """
+    from app.core.errors import OperationCancelled
+    from app.ui.main_window import _FeatureAnswersWorker
+
+    computed: list[str] = []
+
+    def compute() -> str:
+        if replaced == "during":
+            worker.cancel()
+            raise OperationCancelled()
+        computed.append("antwort")
+        if replaced == "after":
+            worker.cancel()
+        return "antwort"
+
+    worker = _FeatureAnswersWorker(compute)
+    delivered: list[object] = []
+    worker.done.connect(delivered.append)
+    if replaced == "before":
+        worker.cancel()
+
+    worker.work()
+
+    assert delivered == (["antwort"] if replaced == "after" else [])
+    assert computed == (["antwort"] if replaced == "after" else [])
+
+
+def test_the_real_answers_still_arrive_when_replaced_after_the_last_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dasselbe mit dem echten ``panels.feature_answers`` (Review Einheit 1, N2).
+
+    Abgelöst wird im letzten Rechenschritt, der Gruppenfrage. Die Attrappe oben
+    ersetzt die Rechnung; prüfte ``feature_answers`` nach der Gruppenfrage noch
+    einmal den Abbruch, bliebe sie grün, und die Antwort käme nie an.
+    """
+    import sys
+
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive import groups as groups_module
+    from app.core.perceive.features import detect
+    from app.ui.main_window import _FeatureAnswersWorker
+    from app.ui.panels import feature_answers
+
+    bores = [trimesh.creation.cylinder(radius=2.0, height=14.0, sections=48) for _ in range(2)]
+    bores[0].apply_translation((-10.0, 0.0, 0.0))
+    bores[1].apply_translation((10.0, 0.0, 0.0))
+    mesh = boolean(
+        "difference",
+        [MeshData.of(trimesh.creation.box(extents=(40.0, 20.0, 6.0)))]
+        + [MeshData.of(bore) for bore in bores],
+    ).mesh
+    found = detect(mesh)
+    feature_id, feature = next(
+        (name, entry) for name, entry in found.items() if entry.kind == "hole"
+    )
+    original = groups_module.group_of
+    replaced: list[str] = []
+
+    def group_of(*args: Any, **kwargs: Any) -> Any:
+        result = original(*args, **kwargs)
+        if sys._getframe(1).f_code.co_name == "feature_answers":
+            worker.cancel()
+            replaced.append("abgelöst")
+        return result
+
+    monkeypatch.setattr(groups_module, "group_of", group_of)
+    worker = _FeatureAnswersWorker(
+        lambda: feature_answers(feature_id, feature, found, mesh, cancelled=worker.cancelled)
+    )
+    delivered: list[Any] = []
+    worker.done.connect(delivered.append)
+
+    worker.work()
+
+    assert replaced == ["abgelöst"], "Voraussetzung: die Gruppenfrage lief"
+    assert len(delivered) == 1 and delivered[0].actions
+
+
 @pytest.mark.parametrize("current", [True, False])
 def test_a_crashed_answer_worker_reports_instead_of_waiting(
     current: bool, monkeypatch: pytest.MonkeyPatch

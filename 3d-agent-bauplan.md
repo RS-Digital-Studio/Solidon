@@ -1274,6 +1274,11 @@ Die erfolgreiche Stufe steht in der Op. Stufe 4 kostet Genauigkeit und wird im
 Prüfbericht ausgewiesen, nicht stillschweigend verwendet. In Entwurfsqualität
 (§31) endet die Kette nach Stufe 2, um Iterationen schnell zu halten.
 
+Vor Stufe 1 vereinigt die Kette Teile, die ineinanderstecken; gelingt das
+nicht, rechnet sie mit den Teilen weiter und meldet es
+(`boolean.parts_not_united`). Trifft der Schritt dabei eine Schale, die sich
+selbst kreuzt, hält sie vor jeder Stufe mit Befund und Handlungsvorschlag an.
+
 ### 17.3 Prüfbericht
 Alles aus §17.1 und §17.2 landet in einem Bericht je Objekt, sichtbar im
 rechten Bereich, im Steckbrief und in `report.json`. Der Agent muss wissen,

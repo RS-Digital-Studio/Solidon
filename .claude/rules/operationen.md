@@ -286,8 +286,9 @@ eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
 - **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt neu
   und seitlich auf der gesetzten Achse bis zur Facettengrenze.
 - **Eine Bohrung, in deren Zylinder Material steht, ist keine** (`hole_is_clear`
-  über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
-  ganze Mündung, nicht die Achse.
+  über jede Oberfläche, `HOLE_IS_NOT_EMPTY`, fremde Teile
+  `OTHER_PART_IN_THE_BORE`); ob man hindurchsieht, sagt die ganze Mündung. Nur
+  `slot_hole` schneidet ein freies Teil mit (`_near_the_carrier`).
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
   Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
@@ -322,8 +323,7 @@ wieder ausgeschnitten wird exakt das Merkmal, ohne Zugabe.
 
 `trimesh.creation.cylinder` ist eingeschrieben. Wiederhergestellt wird mit dem
 gemessenen Konturmaß und dem Wandmantel (`_tool_for`, `_placing_tool`); nur der
-Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Stolperfalle:
-`FEATURE_OVERLAP` deckt den Vieleckverlust zu — ohne sie fehlt die Deckung.
+Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`.
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,

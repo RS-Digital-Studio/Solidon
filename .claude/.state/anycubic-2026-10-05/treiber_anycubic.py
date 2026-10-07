@@ -34,7 +34,9 @@ WORKERS = int(sys.argv[sys.argv.index("--arbeiter") + 1]) if "--arbeiter" in sys
 CORPUS = Path(r"F:\3D Dateien")
 MASKS = ["FF0000", "FF000000", "F000"]
 PRINTER_PLAN = [
-    Path(r"F:\3D Druck\output\review\minigolf-2026-09-27\druckauftrag\solidon-0936.3mf"),
+    # Die alte ``solidon-0936.3mf`` ging im örtlichen ``output/`` verloren; die neue
+    # Platte liegt neben ihrer Quelle ``x.p3d`` im Korpus (RM-525).
+    CORPUS / "Mini+Golf+All+Set-P1S_stls" / "minigolf-platte.3mf",
     CORPUS / "Wedge-Lock (Set).stl",
     CORPUS / "HydroBowl+–+Smart+Fruit+&+Veggie+Washer (1)" / "washing bowl v1.stl",  # noqa: RUF001
 ]

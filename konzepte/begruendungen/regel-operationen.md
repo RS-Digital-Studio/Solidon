@@ -65,7 +65,7 @@ wäre beim nächsten Zuwachs des exakten Kerns unvollständig.
 Nicht die Bauart, sondern der Zustand — `"open"` (nicht wasserdicht),
 `"parts"` (mehr als ein Stück), `"cavity"` (ein Hohlraum, als `void` erkannt
 oder von *Aushöhlen* eingetragen). Drei Operationen tragen es: *Offene Fläche
-schließen*, *In Einzelteile zerlegen*, *Gitter füllen*. Gemessen am
+schließen*, *In Einzelteile aufteilen*, *Gitter füllen*. Gemessen am
 13.09.2026 über alle Dialoge: Ohne die Angabe öffneten sie an einem sauberen
 Quader einen Dialog, dessen Vorschau nur „Keine Vorschau: …" sagen konnte.
 `labels.body_requirement` liest die Angabe und sagt am Eintrag **denselben
@@ -1296,6 +1296,26 @@ Das Merkmalfenster fragt sie bei jedem Klick zweimal, und an der Lochplatte
 mit 360 000 Dreiecken kostete jede Antwort 90 ms, weil die Endebenen dafür
 eine Kopie des Netzes verschweißen — der Bohrungsklick 258 → 83 ms
 (22.09.2026). Der Merker stirbt mit dem Körper.
+
+**Gehört das Material einem anderen Teil, sagt es ein eigener Satz**
+(`OTHER_PART_IN_THE_BORE`, RM-413/RM-253, 06.10.2026). Das Menü stellte die
+Zeilen schon grau, die Operationen rechneten aber: Am Netz galt ein Stift Ø 5
+in einer Bohrung Ø 6 als Haltelippe (`_only_a_rim_inside`), der exakte Weg
+fragte gar nicht, und *Versetzen*, *Verschließen*, *Entfernen* und *Kippen*
+füllten die alte Stelle und verschmolzen den Stift still mit der Platte
+(ein Körper statt zwei; *Bohrung ändern* schnitt ihn ab oder ließ einen losen
+Ring stehen). Am Laptop-Ständer trug `hole_3` seinen Mantel auf zwei Platten
+mit einem Zapfen darin; *Versetzen* verschmolz die Platten, der Zapfen
+verschwand im Stopfen, 531 mm³ ohne Befund. Eigen sind deshalb alle Teile, die
+den Mantel tragen (`_own_part_bore_clear`), und `_movable_feature` sowie
+*Bohrung ändern* sagen ab, mit *In Einzelteile aufteilen* als Weg. „Sie ist eine
+Wand, keine Bohrung“ war dort auch als Satz falsch. Allein *Zum Langloch
+ziehen* schneidet ein belegt freies Teil darin mit; die Kontakt- und
+Materialfrage dafür gilt dem Träger und den Teilen, deren Hüllquader seinen
+berühren (`_near_the_carrier`) — zwei Würfel, die sich weit daneben
+berühren, sperrten vorher den Zug (Review `e3dff1907`, F10). Wer über eine
+Kette fremder Teile am Träger hängt, berührt ihn mit dem letzten Glied und
+sperrt weiter.
 
 **Und was für eine runde Bohrung an ihrer Mitte gefragt wird, wird an einem
 Langloch an beiden Enden gefragt** (`prepare.slot_ends`). Die Mitte steckt tief

@@ -233,8 +233,8 @@ Rundung, Radius aus `measured_radius`)
   Träger ab; Nachbarn bleiben getrennt, Stifte werden nur im bisherigen
   Bohrungshohlraum gekürzt. Verbindender Versatz/Verkleinerung verlangt vorher
   Zerlegung. `hole_has_separate_contents` gibt ausschließlich diesen Zug frei:
-  eigener Träger innen frei, Kontaktprüfung am ganzen Träger. Angeschlossene
-  Naben/Speichen bleiben gesperrt, auch neben anderen Körpern (RM-320).
+  eigener Träger innen frei, Kontaktprüfung am Träger und seinen Nachbarn
+  (`_near_the_carrier`). Angeschlossene Naben/Speichen bleiben gesperrt (RM-320).
   Menü und Ausführung teilen den abbrechbaren Beleg; nur fertige Belege werden
   gemerkt. `repair.material_part_families` ordnet negative Innenhäute positiven
   Materialkörpern zu; negative Wurzel, gleiche Eltern-/Kindvorzeichen oder
@@ -290,12 +290,12 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   Vereinigung. Die Lochfüllung des Imports schaltet diese Diagnose nicht zu.
 - Außen gilt je Verschachtelungsbaum (`turn_shells_outward`), Vorzeichen nur
   aus `mesh.signed_volume`/`_shell_volumes`. `_Shells.inside` verlangt ganzes
-  Umschließen; Schalen im Material werden gemeldet. `has_nested_parts` und
-  `parts_inside_parts` teilen die Materialtiefe, unklare Strahlen ergeben
-  `None`. `material_part_families` verlangt auch an negativen Häuten eindeutig
-  alternierende Elternketten mit positiver Wurzel; positive Hohlrauminseln
-  bleiben eigene Familien. Aufrufer belegen Dichtheit/Kontaktfreiheit;
-  `None` gibt nichts frei. `material_part_count` zählt erst nach Vorbeleg.
+  Umschließen; Schalen im Material werden gemeldet. `parts_inside_parts`
+  zählt nur belegte Materialtiefe. `material_part_families` verlangt auch an
+  negativen Häuten eindeutig alternierende Elternketten mit positiver Wurzel;
+  positive Hohlrauminseln bleiben eigene Familien. Aufrufer belegen
+  Dichtheit/Kontaktfreiheit; `None` gibt nichts frei. `material_part_count`
+  zählt erst nach Vorbeleg.
   Beide optionalen Abbruchtoken reichen durch `_Shells` bis Gitterzertifikat
   und Kreuzungssuche; die Standardschnittstellen bleiben erhalten.
 

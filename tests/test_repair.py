@@ -2083,9 +2083,12 @@ def test_a_part_inside_a_part_is_named_and_left_as_it_is() -> None:
 def test_the_nested_parts_question_keeps_material_and_uncertainty_apart(
     monkeypatch: pytest.MonkeyPatch, case: str
 ) -> None:
-    """Nur ein entschiedenes Nein belegt freie Teile; eine Rassel liegt in Luft."""
+    """Gemeldet wird nur belegtes Material.
+
+    Eine Rassel liegt in Luft, und ein offener Strahl meldet nichts.
+    """
     from app.core.geom import repair as repair_module
-    from app.core.geom.repair import has_nested_parts, parts_inside_parts
+    from app.core.geom.repair import parts_inside_parts
 
     inner = _box(10.0, at=(2.0, 1.0, 0.5))
     pieces = [_box(20.0), inner]
@@ -2099,9 +2102,7 @@ def test_the_nested_parts_question_keeps_material_and_uncertainty_apart(
     elif case == "undecided":
         monkeypatch.setattr(repair_module._Shells, "inside", lambda *args: None)
     body = trimesh.util.concatenate(pieces)
-    expected = None if case == "undecided" else case == "buried"
 
-    assert has_nested_parts(body) is expected
     assert len(parts_inside_parts(body)) == int(case == "buried")
 
 
@@ -2459,7 +2460,7 @@ def test_material_part_count_passes_the_token_to_the_component_worker(monkeypatc
 
 
 @pytest.mark.parametrize("phase", ["shells", "ray", "certificate", "crossing"])
-def test_the_nested_parts_question_can_cancel_during_its_geometric_proof(
+def test_the_material_families_can_cancel_during_their_geometric_proof(
     monkeypatch: pytest.MonkeyPatch, phase: str
 ) -> None:
     """Schalenaufbau, Strahl, Gitterzertifikat und genaue Suche tragen den Abbruch."""
@@ -2511,7 +2512,7 @@ def test_the_nested_parts_question_can_cancel_during_its_geometric_proof(
 
     monkeypatch.setattr(module, name, stopped)
     with pytest.raises(OperationCancelled):
-        repair_module.has_nested_parts(body, cancelled=token)
+        repair_module.material_part_families(body, cancelled=token)
     assert calls == 1, "Der Abbruch muss an der gewählten Geometriephase ankommen."
     if phase == "certificate":
         assert certificate_checks == 2, "Der Abbruch muss während der Gitterprüfung erfolgen."

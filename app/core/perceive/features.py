@@ -7445,6 +7445,7 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "cavity_surface",
         "same_surface_patch",
         "hole_is_clear",
+        "own_part_bore_clear",
         "hole_has_separate_contents",
         "has_own_body",
         "moved_twin",
