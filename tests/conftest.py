@@ -85,7 +85,7 @@ from app.core.activation import store as activation_store
 from app.core.knowledge import profiles
 from app.core.perceive import features, local
 from app.core.types import Document, Profile
-from tests.helpers import FakeMesh
+from tests.helpers import FakeMesh, first_start
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
@@ -599,6 +599,10 @@ def installed_slicer(request: pytest.FixtureRequest) -> Path:
     ``tools/ci_selection.py`` den Test für die Slicerauswahl auf Linux und
     macOS, und der Workflow installiert genau die genannten Programme.
 
+    Ein AppImage der Orca-Familie bekommt dabei, was sein erster Start
+    hinterlässt (``tests.helpers.first_start``) — ohne ihn sieht Solidon dort
+    keinen Herstellerdrucker, und der Kunde hat ihn hinter sich.
+
     Fehlt das Programm, überspringt sich der Test — außer unter
     :data:`REQUIRE_SLICERS`: Dort ist ein übersprungener Slicertest kein
     Nachweis, sondern ein fehlender.
@@ -619,7 +623,11 @@ def installed_slicer(request: pytest.FixtureRequest) -> Path:
         if discover.program_mark(program.name) == wanted
     ]
     if found:
-        return Path(found[0])
+        program = Path(found[0])
+        # Ein AppImage der Orca-Familie zeigt seinen Herstellerbestand erst
+        # nach dem ersten Start; der Kunde hat ihn hinter sich.
+        first_start(program)
+        return program
     message = f"{wanted} ist auf dieser Maschine nicht installiert"
     if os.environ.get(REQUIRE_SLICERS):
         pytest.fail(f"{message}, und {REQUIRE_SLICERS} verlangt es", pytrace=False)

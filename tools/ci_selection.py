@@ -91,6 +91,7 @@ def _relative(path: Path, root: Path) -> str:
 
 def select(changed: Iterable[Path], root: Path = ROOT) -> tuple[list[str], list[str]]:
     """Fensterauswahlen und Slicerauswahlen zu diesen geänderten Dateien."""
+    root = root.resolve()
     relevant = [path for path in changed if not is_documentation(_relative(path, root))]
     if not relevant:
         return [], []

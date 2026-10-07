@@ -47,7 +47,7 @@ jobs:
   selection:
     name: Slicerauswahl (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -126,7 +126,9 @@ jobs:
           }
           dmg() {  # Adresse, SHA-256 — das Bündel nach /Applications
             fetch "$1" "$2" "$RUNNER_TEMP/slicer.dmg"
-            yes | hdiutil attach "$RUNNER_TEMP/slicer.dmg" -nobrowse -noverify -mountpoint /Volumes/slicer > /dev/null
+            # Die Lizenzabfrage mancher Abbilder will ein „Y“; yes endet am
+            # geschlossenen Rohr, und pipefail zählte das als Fehler.
+            { yes || true; } | hdiutil attach "$RUNNER_TEMP/slicer.dmg" -nobrowse -noverify -mountpoint /Volumes/slicer > /dev/null
             bundle=$(find /Volumes/slicer -maxdepth 1 -name '*.app' | head -1)
             sudo cp -R "$bundle" /Applications/
             hdiutil detach /Volumes/slicer
@@ -148,7 +150,9 @@ jobs:
                 # Commit-Kennung ist die Prüfsumme des Inhalts.
                 sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
                 sudo flatpak install -y --noninteractive flathub com.prusa3d.PrusaSlicer
-                flatpak info --show-commit com.prusa3d.PrusaSlicer
+                sudo flatpak update -y --noninteractive \
+                  --commit=bf3534e4ffc688bbaf625206f27f9333b1b8820d3425dae19d3083b47e08ce79 com.prusa3d.PrusaSlicer
+                test "$(flatpak info --show-commit com.prusa3d.PrusaSlicer)" = bf3534e4ffc688bbaf625206f27f9333b1b8820d3425dae19d3083b47e08ce79
                 flatpak info com.prusa3d.PrusaSlicer | head -12 ;;
               macOS/prusaslicer)
                 dmg $gh/prusa3d/PrusaSlicer/releases/download/version_2.9.6/PrusaSlicer-2.9.6.dmg \

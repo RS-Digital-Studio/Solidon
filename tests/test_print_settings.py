@@ -2869,12 +2869,10 @@ def _profile_keys(root: Path, kind: str) -> set[str]:
 
 def _installed_orca_profiles(executable: Path) -> Path | None:
     """Ein Herstellerbestand dieses Slicers der Orca-Familie, mit Filament- und Prozessprofilen."""
-    root = slicer_profiles.install_root(executable)
-    if root is None:
-        return None
-    for vendor in sorted(root.iterdir()):
-        if (vendor / "filament").is_dir() and (vendor / "process").is_dir():
-            return vendor
+    for root in slicer_profiles.profile_roots("orca", executable):
+        for vendor in sorted(entry for entry in root.iterdir() if entry.is_dir()):
+            if (vendor / "filament").is_dir() and (vendor / "process").is_dir():
+                return vendor
     return None
 
 
