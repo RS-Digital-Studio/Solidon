@@ -23,13 +23,6 @@ import pytest
 
 # Oberflächentests brauchen eine Qt-Plattform, die ohne Bildschirm funktioniert.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-# **Unter macOS rechnet Qt Stilmaße gegen 72 dpi** (``qstyleBaseDpi`` in
-# ``qstylehelper``), offscreen meldet aber 96 wie überall. Damit wurde jedes
-# Maß des Stils um ein Drittel größer als auf einem echten Mac — Symbole 21
-# statt 16 Punkte, und die Werkzeugzeile der Skizze sprengte mit 977 Punkten
-# ihre Grenze. Mit 72 dpi rechnet der Stil wie auf einem Mac.
-if sys.platform == "darwin" and os.environ["QT_QPA_PLATFORM"] == "offscreen":
-    os.environ.setdefault("QT_FONT_DPI", "72")
 # Und PySide seine Typen vollständig, bevor das erste Fenster entsteht: Das
 # Paket ``app.ui`` setzt ``PYSIDE6_OPTION_LAZY`` beim Betreten (Begründung
 # dort), und diese Datei lädt vor jeder Testdatei — auch vor denen, die
