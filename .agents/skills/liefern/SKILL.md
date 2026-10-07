@@ -4,9 +4,8 @@ description: >
   Schließt eine fertige, geprüfte Arbeitseinheit ab: eigene Pfade abgrenzen,
   mit deutscher Meldung committen und pushen — ein Commitauftrag schließt den
   Push ein. Ist die Gegenstelle weiter, wird per Merge zusammengeführt, nie per
-  Rebase. Nur auf Roberts Ansage.
+  Rebase. Nach grünem Tor und behobenem Review ohne Rückfrage.
 argument-hint: "[optional: Thema oder Pfade der Einheit; „nicht pushen“]"
-disable-model-invocation: true
 allowed-tools: Bash, Read, Write, Grep, Glob
 ---
 
@@ -14,7 +13,9 @@ allowed-tools: Bash, Read, Write, Grep, Glob
 
 ## Auftrag
 
-**Commit heißt Commit und Push.** Der Push gehört ohne Rückfrage dazu; nur ein
+**Commit heißt Commit und Push.** Grünes Tor und behobenes Review sind die
+Freigabe (Entscheidung Robert) — danach wird ohne Rückfrage geliefert, und der
+Push gehört ohne Rückfrage dazu; nur ein
 ausdrückliches „nicht pushen“ von Robert hält den Commit lokal — dann für genau
 diesen Aufruf `SOLIDON_KEIN_PUSH=1`. Holen und Zusammenführen gehören dazu,
 wenn der Push daran scheitert. Tag, Release und Force-Push sind eigene Aufträge.
@@ -23,6 +24,17 @@ Vorher ist das Entwicklungstor nach `.agents/skills/pruefen/SKILL.md` grün. Ein
 denselben Stand muss nicht wiederholt werden; was sich seither geändert hat,
 wird geprüft. Ein roter oder abgebrochener Lauf wird mit Ursache gemeldet und
 nicht committet.
+
+**Vor dem Commit steht ein Review** über genau den Stand, der hinausgeht
+(Entscheidung Robert: vor jedem Push nach main, immer, auch für Unterlagen
+und für Fixes aus einem früheren Review) — Agent `solidon3d-review` über den
+Prüfbaum (ein Worktree auf HEAD mit genau den eigenen Änderungen) oder, nach
+Schritt 5 unten, über den vorgemerkten Index (`git diff --cached`); ohne
+Angabe läse er im Hauptbaum alle fremden Änderungen mit. Jeder Fund wird
+behoben oder mit Beleg als kein Fehler festgehalten; ein Fix ändert den Stand,
+also danach die betroffenen Tests, und das Behobene wird noch einmal
+durchgesehen. Weil `post-commit` pusht, ist das Review vor dem Commit das
+Review vor dem Push.
 
 ## Die Einheit abgrenzen
 
@@ -88,5 +100,12 @@ laufenden Arbeitsrunde: nicht aufheben, melden.
 
 Die Kennung aus der Ausgabe von `git commit` verwenden, nicht ein später
 weitergewandertes `HEAD`, und `git show --stat <kennung>` gegen die Einheit
-halten. Melden: je Commit Kennung und Aussage, Prüfstand, Push-Ergebnis und
-was an eigenen und fremden Änderungen im Baum bleibt.
+halten. Melden: je Commit Kennung und Aussage, Prüfstand, Review,
+Push-Ergebnis und was an eigenen und fremden Änderungen im Baum bleibt.
+
+Danach die eigenen Worktrees und Prüfbäume abbauen, deren Stand auf main liegt
+und die nichts Ungesichertes tragen — belegt mit `git merge-base
+--is-ancestor <zweig> origin/main`, bei einem Prüfbaum ohne Zweig je Datei
+`git hash-object` gegen den Blob im Commit. Dann `git worktree remove`,
+`git worktree prune`, Zweige lokal und auf der Gegenstelle löschen; fremde
+nicht anfassen.
