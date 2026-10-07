@@ -67,6 +67,7 @@ from app.core.geom.transform import Axis, translation
 from app.core.knowledge.print_settings import is_slender
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.registry import param
+from app.core.registry.params import ZERO_AUTOMATIC
 from app.core.types import (
     BoundingBox,
     CancelToken,
@@ -3440,6 +3441,7 @@ def spot_param(axis: Literal["x", "y"]) -> Any:
             "Wo die Mitte des Modells liegt. Die freie Stelle wird einmal gesucht und "
             "hier festgehalten; leer sucht sie neu."
         ),
+        zero_text=ZERO_AUTOMATIC,
     )
 
 

@@ -106,8 +106,6 @@ def test_a_buried_countersink_keeps_its_volume_when_moved(profile: Profile) -> N
     """Eine Senkung, deren Mündung unter der Oberfläche liegt, ist ein vergrabener
     Hohlraum: Ihr Deckel ist Material, keine Mündung, und bekommt beim Versetzen
     keine Zugabe. Volumen und Tiefe bleiben; die offene Kette daneben ebenso."""
-    from tests.helpers import exact_kernel
-
     exact_kernel()
     load_operations()
     outcomes = {}
@@ -2229,8 +2227,6 @@ def _touching_plates(kernel: str, *, sunk: bool, one_piece: bool = False) -> Sce
     from app.core.perceive.features import detect
 
     if kernel == "brep":
-        from tests.helpers import exact_kernel
-
         edit = exact_kernel()
         from OCP.BRep import BRep_Builder
         from OCP.TopoDS import TopoDS_Compound

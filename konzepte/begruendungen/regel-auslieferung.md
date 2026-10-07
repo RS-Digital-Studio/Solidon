@@ -10,8 +10,10 @@ Regeln lagen in Karten, Erinnerungen und Commit-Meldungen verstreut
 
 ## Die Pflichtprüfungen geben das Paket frei
 
-Zur Grenze von 100 Artefakten je Release-Lauf: „Am 25.09.2026 waren es rund
-45".
+Warum über alle Seiten gelesen wird: GitHub gibt eine Liste höchstens zu 100
+Einträgen je Seite heraus, und ein Taglauf hatte mit 0.5.3 schon 31 Artefakte;
+jede Plattform, die der Vertrag der CI dazunimmt, bringt weitere. Wer nur die
+erste Seite liest, fände das Signierarchiv auf der zweiten nie.
 
 Warum der Job „Neueste Versionen“ nur meldet (RM-350): Am Tag v0.5.3 wurde er
 rot (`cadquery-ocp-novtk 8.0.1.1.0` ohne festgeschriebenen Lizenztext), der

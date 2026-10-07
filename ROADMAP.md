@@ -39,7 +39,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | CI-01 bis CI-07 im Code belegt, Aufteilung in den Tagläufen 0.5.1 und 0.5.3 gelaufen; Fenstertabelle aus dem Taglauf 0.5.3 und Budget je Datei (`c379d5271`). Offen: CI-08 mit vergleichbarer Vorher-/Nachher-Auswertung, die Kerntabelle aus CI-Berichten und das Blättern in `tools/windows_signed_installer.py` |
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Bausteine, Abläufe, funktionale Gruppen, Projektmaße und das Abnahmewerkzeug gebaut (04.10.); offen: der echte Lauf der Einzeldateiabnahme über 187 Fälle am Fenster, die Fensterabnahmen der neuen Abläufe und Gruppen, Leistungsreihe |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Hänger durch die Speicherbereinigung im Arbeiter behoben (nur noch im Hauptfaden, 05.10.); der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen sind der Ereignistyp dahinter, die Gegenprobe auf Linux und Mac und die Vergleichsreihe |
@@ -92,12 +91,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); offen: der Stützfuß nur unter den Überhängen statt unter der ganzen Aufsicht, der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-507 — Jede Funktion hat einen Namen, überall derselbe](#rm-507) | Bedienung und Darstellung | Teilen statt Trennen/Zerlegen, ein Name für den Druckdialog, Einsetzen gegen Einfügen, Zeichnen im Menü |
-| [RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe](#rm-512) | Bedienung und Darstellung | Kartenränder neutral, Vorauswahl nur bei Fehler und Warnung, ein Hauptknopf je Dialog, Rot nur fürs Verwerfen |
-| [RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt](#rm-519) | Bedienung und Darstellung | „Feste Zahlen“-Zeilen weg, Filamentspalte mit Farbpunkt, durchgehende Verlaufsnummern, Dock und Einladung im Zeichenmodus aus |
-| [RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich](#rm-526) | Bedienung und Darstellung | `z` als optionale Koordinate (leer heißt Oberkante), Migration 0 → leer |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -3634,10 +3629,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bei allen drei Varianten). Tests: Tisch auf einem Mittelfuß (`test_advise.py`, 85 mm Platz, Brim
   vorgeschlagen), breites Teil auf schmalem Fuß (`test_export.py`), beide vorher rot.
 
-  **Offen (05.10.):** Der Stützfuß zählt die ganze Aufsicht, die Slicer stützen nur die Überhänge.
-  Die Waschschüssel am Kobra 2 mit Stützen bekommt deshalb weiter die Stützfußwarnung, obwohl die
-  erste Stützschicht im G-Code 15 mm vom Rand bleibt (Nachtrag 2: x 15,1–196,9, y 23,1–194,4 mm auf
-  220 mm). Richtig: den Fuß aus den Stützflächen der Schichtanalyse messen.
+  **Teilstand 06.10.2026 (Stützfuß unter den Überhängen):** Bis dahin zählte der Stützfuß die ganze
+  Aufsicht, die Slicer stützen nur die Überhänge; die Waschschüssel am Kobra 2 mit Stützen bekam
+  die Stützfußwarnung, obwohl die erste Stützschicht im G-Code 15 mm vom Rand blieb (Nachtrag 2:
+  x 15,1–196,9, y 23,1–194,4 mm auf 220 mm). Jetzt misst `check_adhesion_on_bed` den Fuß am Umriss
+  der Überhänge aus der Schichtanalyse (`analysis.overhang_outline`, im Export über
+  `writer._support_outline` aus denselben Schichten wie die Stützsperre); ohne Überhang gibt es
+  keinen Fuß. Am Kundenmodell, schräg auf 220 × 220 mm (Sonde): Öffnung oben, Überhänge
+  20,4–204,2 mm, vorher 5,61 mm Warnung, jetzt keine; Öffnung unten, Überhänge bis 0,5 mm vom Rand,
+  Warnung bleibt (5,32 mm). Test `test_export.py::test_the_support_foot_stands_under_the_overhangs_only`,
+  vorher rot (Platte mit Tisch in der Mitte, Teil mit Überhang bis zur Kante, Quader ohne Überhang).
 
 <a id="rm-502"></a>
 
@@ -3709,73 +3710,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `F:\solidon-review-reports\claude-2026-10-04\druckvertrag-oberflaeche\`. Offen allein die
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
-
-<a id="rm-507"></a>
-
-- [ ] **RM-507 — Jede Funktion hat einen Namen, überall derselbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Teilen hat sieben Einträge mit drei Verben an vier Orten, „Automatisch teilen“ fällt
-  ins Menü *Bearbeiten*. Ein Druckdialog heißt „An den Slicer übergeben …“,
-  „Drucken vorbereiten …“ und „Drucker …“ (zugänglicher Name „Drucker wechseln“).
-  *Deckel erzeugen* bestätigt mit „Einsetzen“, der Katalog mit „Einfügen“; im Menü
-  *Erzeugen* stehen „Aus Skizze erzeugen …“ (Knopf „Zeichnen“) und „Modell einfügen“
-  doppelt; der Startbildschirm sagt „Modell öffnen“ und „Projekt öffnen“, die Leiste
-  „Modell einfügen“ und „Öffnen“.
-  **Fix:** Durchgehend „Teilen“ (Umschalter, „Jetzt teilen“, „An gezeichneter Linie
-  teilen“), „Automatisch teilen …“ in die Karte unter *Vorbereiten*; Kopfknopf und
-  zugänglicher Name „Druckeinstellungen …“, der Dateieintrag heißt wie der Knopf im
-  Bericht; ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“, auch im Katalog;
-  „Zeichnen …“ im Menü, dieselbe `QAction` für Modell einfügen; Startknöpfe wie die
-  Leiste. `grenzen.md` und alle Kataloge ziehen nach.
-  **Abnahme:** Kein Kundentitel der Teilwege enthält „trenn“; sichtbarer und zugänglicher
-  Name kommen aus einem Schlüssel; Registertest über alle Knopftexte; kein Text steht in
-  zwei Menüs mit verschiedener Wirkung.
-
-<a id="rm-512"></a>
-
-- [ ] **RM-512 — Im Ruhezustand trägt genau ein Element die Akzentfarbe.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Im Ruhezustand des Hauptfensters leuchten sechs Akzente: Bernsteinkanten an linker
-  und rechter Karte, Werkzeugzeile und Reiter, dazu *Bausteine*, die vorgewählte
-  Hinweiszeile und ihr Hauptknopf „Diesen Schritt ändern“. Der Wächter
-  `test_resting_state.py` zählt keine Linien. Dialoge zeigen zwei Hauptknöpfe, sobald ein
-  Hinweis mit Handlung erscheint (57 Handlungen tragen `primary`); Rot tragen zwei
-  „Abbrechen“, „Verwerfen“ ist Hauptknopf; im Chat ist „Übernehmen“ kein Hauptknopf; in
-  der Tour ist „Schritt überspringen“ einer.
-  **Fix:** Kartenränder in der Linienfarbe; vorgewählt werden nur Fehler und Warnungen;
-  Hinweishandlungen im Dialog als normale Knöpfe; `make_danger` genau am
-  unwiederbringlichen Verwerfen, nie mit `make_primary`; Chat-Übernehmen
-  `make_primary`, Überspringen flach. Der Wächter zählt Akzentlinien ab 40 px mit.
-  **Abnahme:** Im Ruhezustand, hell und dunkel, genau ein Akzentelement einschließlich
-  Linien; höchstens ein Akzentknopf je Dialog, auch mit sichtbarem Hinweis; jeder Knopf
-  mit `DestructiveRole` trägt `danger`, kein Abbrechen- oder Schließen-Knopf.
-
-<a id="rm-519"></a>
-
-- [ ] **RM-519 — Linke Karten und Zeichenmodus zeigen nur, was gerade gilt.** Aus der [Durchsicht der Oberfläche 0.5.2](konzepte/durchsicht-oberflaeche-0.5.2-2026-10.md).
-  Unter den Parameterfeldern steht „Eine feste Zahl passt“ / „2 feste Zahlen passen“
-  und liest sich wie die Überschrift der nächsten Zeile; die Filamentspalte des
-  Objektbaums ist abgeschnitten („Fila“) und ihre Felder wirken wie Haken; im Verlauf
-  springt die Nummer an einer Gruppenzeile, „Als Dreiecksmodell rechnen“ steht im
-  Kontextmenü an zweiter Stelle. Im Zeichenmodus zeigt das Auswahlfenster nichts
-  Brauchbares, die Bedingungsliste spricht Fachsprache, und die Einladung der leeren
-  Szene liegt über der Skizze.
-  **Fix:** Die Hinweiszeile entfällt bei verwendeten Maßen, die Zahl steht am Bindeknopf
-  („6 Zahlen an Maße binden …“), nur „Nicht verwendet“ bleibt; Spulensymbol als
-  Spaltenkopf, runder Farbpunkt; Gruppenzeile trägt „3–4“, Kernwechsel hinter einem
-  Trennstrich; im Zeichenmodus Dock und Einladung verborgen, Bedingungen nur des
-  gewählten Elements mit Zählzeile.
-  **Abnahme:** Im Zustand von main-window.png vier Parameterzeilen ohne Untertext; in
-  sechs Sprachen nichts abgeschnitten im Objektbaum; jede Schrittnummer sichtbar;
-  Neues Projekt → Zeichnen ohne Einladung und Dock, höchstens drei Bedingungszeilen.
-
-<a id="rm-526"></a>
-
-- [ ] **RM-526 — Die Deckelhöhe kennt „Oberkante“ und negative Höhen zugleich.** Seit RM-513
-  hieß die Null in `create_lid.z` und `screw_lid.z` „Oberkante“, getragen von `minimum=0`;
-  damit hielten alte Projekte mit negativer Öffnungshöhe am Schritt an. Für 0.5.3 ist die
-  Grenze zurückgenommen (Durchsicht Kern, Fund 9), und hinter der Klappe steht die Null wieder
-  als Zahl. **Fix:** `z` als optionale Koordinate, leer heißt Oberkante, Migration 0 → leer
-  (Checkliste „Dateiformat ändern“). **Abnahme:** alte Projekte mit 0 und mit negativer Höhe
-  öffnen und rechnen gleich, das Feld zeigt „Oberkante“, wenn es leer ist.
 
 ## KI und Generatoren
 
@@ -3935,53 +3869,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beispiel in Bauplan §23 ist eine echte Ausgabe, Agenten-Suite vorher und nachher.
 
 ## Tests und Entwicklungswerkzeuge
-
-<a id="ci-testlaufzeiten"></a>
-
-- [~] **CI-Testlaufzeiten — vollständige Prüfungen früher abschließen.**
-  Verbindliches [Konzept](konzepte/konzept-ci-testlaufzeiten-2026-09.md), vor
-  Umsetzung erstellt: CI-01 bis CI-08 schützen Auswahl, Prozessisolation,
-  Plattformumfang, Paketfreigabe und Berichte. Umsetzung: unabhängige Kern- und
-  Fensterjobs, Versionswächter als Handstart-Opt-in, gebündelte Quellprüfungen
-  und Bausteinvorbereitung sowie thematische UI-Tests. Durchsicht 24.09.2026:
-  Kernsuite in drei Teilen je Plattform (`--ci-shard`, `tools/ci_shards.py`,
-  Kerntabelle aus einem lokalen JUnit-Lauf), drei Windows-Fenstergruppen,
-  Prüfausgabe wieder im CI-Protokoll und Schrittbericht, und der längste
-  Kernfall behoben: `test_seal_geometry[12.0]` 319 s → 24–34 s über die
-  räumliche Vorauswahl der Wandmessung (Konzept §4.4). Gemessener
-  CI-Zeitgewinn und die erste Kerntabelle aus CI-Berichten
-  (`tools/ci_shards.py core …`) stehen aus; die Kerntabelle
-  `tests/data/ci_core_durations.json` stammt noch aus einem lokalen Lauf vom 29.09. Offen
-  außerdem das Blättern in `tools/windows_signed_installer.py`, bevor ein Lauf 100 Artefakte
-  erreicht (Taglauf 0.5.3: 31). Erledigt sind seither der räumliche Index der Wandmessung
-  (`7e3442623`) und die Kandidaten `test_bore_mouth_resize`/`test_bore_floor_resize`
-  (`68cd2ef6f`), beide unten.
-
-  **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Der räumliche Index steht — ein Baum
-  aus Hüllquadern in `mesh.ray_hits_batch`, bitgleich zum Vollvergleich, Vollkugel mit
-  12 800 Dreiecken 31 → 0,5 s (`7e3442623`). Die beiden langsamsten Kernfälle liefen
-  über doppelte Mantelpunkte in `features._distinct_points` (134 Mio. Punktpaare):
-  `test_bore_mouth_resize…` 83,2 → 28,4 s, `test_bore_floor_resize…` 61,4 → 26,3 s
-  (`68cd2ef6f`). Das lokale Tor verteilt wie die CI mit `--dist worksteal`, 850 → 587 s
-  im Median, dieselben 17 166 Fälle (`c28e02c86`). CI-01 bis CI-07 sind im Code und an
-  der echten Sammlung erfüllt (die drei Kernteile sammeln zusammen 17 191 Fälle, keiner
-  doppelt, keine Datei in zwei Teilen).
-
-  **Releaselauf 0.5.1:** Der erfolgreiche
-  [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
-  vom 28.09.2026 enthält die neue Aufteilung: neun Kernjobs auf drei Plattformen,
-  drei plattformübergreifende Fensterverträge und drei Windows-Fenstergruppen.
-  Letztere liefen 18:36, 17:59 und 18:32 Minuten (Gruppen 0, 1, 2).
-  **CI-08 bleibt offen:** Den Gewinn gegenüber einem vergleichbaren Ausgangslauf
-  anhand der Testbestände, Berichte und Laufzeiten auswerten; ein grüner Lauf allein
-  belegt ihn nicht. Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
-
-  **Releaselauf 0.5.3:** Im ersten Versuch des Taglaufs 37409338027 riss die
-  Windows-Fenstergruppe 0 an der festen 900-s-Grenze. `c379d5271` schreibt die
-  Fenstertabelle `tests/data/ci_window_durations.json` aus den Windows-Berichten dieses
-  Taglaufs neu (`test_ui.py` 838 s statt der 665 s von vor seiner Aufteilung) und gibt jeder
-  Datei ein eigenes Budget (`tools/run_suite_isolated.py`, `BUDGET_HEADROOM = 1.5`,
-  `file_budget`).
 
 <a id="rm-099"></a>
 

@@ -645,7 +645,7 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         steps.append(str(CATEGORIES.get(spec.category, spec.category)))
 
     # **Eine Variante hat keinen eigenen Eintrag.** Die Menüleiste zeigt für
-    # ``VARIANT_GROUPS`` einen Eintrag je Gruppe („Aus Skizze erzeugen …"),
+    # ``VARIANT_GROUPS`` einen Eintrag je Gruppe („Zeichnen …"),
     # die Art wählt der Dialog. Der Weg nannte trotzdem „Erzeugen → Grundform
     # hochziehen" — einen Eintrag, den es nicht gibt, und der Agent schrieb
     # ihn in jede Werkzeugbeschreibung (Gesamtreview 05.09.2026, CORE-22).

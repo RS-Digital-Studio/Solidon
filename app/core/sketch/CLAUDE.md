@@ -174,7 +174,7 @@ reichen `ctx.cancelled` an `brep.features.features_of` weiter.
   `brep.profiles.loft`), verbunden in der Folge von `regions_of`, und der
   `doc`-Satz sagt es.
 - **Drehen, Führen und Überblenden schneiden auch**: je Werkzeug eine Operation
-  mit einem Eingang direkt hinter ihrem Erzeuger in *Aus Skizze erzeugen …*,
+  mit einem Eingang direkt hinter ihrem Erzeuger in *Zeichnen …*,
   kein Umschalter (die Eingangszahl steht je Operation fest, `grenzen.md`); das
   Werkzeug entsteht exakt über die Helfer der Erzeuger, liegt über einen
   geprüften Starrkörperzug am Ziel und wird exakt oder über die Rückfallkette
