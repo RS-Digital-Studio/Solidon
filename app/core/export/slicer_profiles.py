@@ -192,6 +192,8 @@ def install_root(executable: Path) -> Path | None:
 
     **Eine Cura als AppImage trägt ihn im Abbild**, das nur eingehängt lesbar
     ist; gelesen wird eine Kopie im Nutzer-Cache (:func:`cura_linux.appimage_resources`).
+    Im Fensterfaden (:func:`cura_linux.never_wait_in`) heißt ``None`` dort „noch
+    nicht kopiert“, nicht „kein Bestand“.
     """
     mark = discover.program_mark(executable.name)
     if mark == "cura" and cura_linux.is_appimage(executable):

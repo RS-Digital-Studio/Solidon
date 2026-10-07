@@ -6407,6 +6407,11 @@ class PrintSettingsDialog(QDialog):
                     "die Datei in seinem Fenster."
                 )
             )
+        elif self._cura_printer_pending and cura_linux.still_unknown(found):
+            # Ob eine AppImage-Cura rechnen kann, weiß erst ihre Druckerkopie,
+            # die der Cura-Arbeiter gerade anlegt (RM-521) — kein Knopf auf
+            # eine Vermutung.
+            reason = str(tr("Curas Drucker werden gelesen …"))
         elif (window_only := handover.console_refusal(found)) is not None:
             # Eine Cura ohne ihren Lader (RM-521): rechnen kann Solidon mit ihr
             # nicht, ihr Fenster bleibt der Weg.

@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 import pytest
 import trimesh
-from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtCore import QCoreApplication, QPoint, QRect, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -2498,6 +2498,134 @@ def test_a_cura_without_its_loader_only_offers_its_window(
     assert dialog.slice_button.accessibleDescription() == reason
     assert dialog.open_button.isEnabled(), "Curas Fenster bleibt der Weg"
     assert reason not in dialog.open_button.toolTip()
+
+
+def _cura_appimage_dialog(
+    session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **appimage: Any
+) -> tuple[PrintSettingsDialog, list[Path]]:
+    """Ein Druckdialog mit einer AppImage-Cura, deren Kopie noch aussteht, im
+    Betrieb der Anwendung: Der Fensterfaden wartet nie (``build_application``)."""
+    from app.core.activation import store
+    from app.core.export import cura_linux
+    from tests.cura_fakes import appimage_cura
+
+    monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=5))
+    mounts: list[Path] = []
+    found, _point = appimage_cura(tmp_path, monkeypatch, mounts, **appimage)
+    monkeypatch.setattr(cura_linux, "_never_waits", None)
+    cura_linux.never_wait_in(threading.current_thread())
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    dialog._slicer_path = found
+    return dialog, mounts
+
+
+def _until_mounted(mounts: list[Path]) -> None:
+    deadline = time.monotonic() + 10.0
+    while not mounts and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert mounts, "der Cura-Arbeiter hat nicht eingehängt"
+
+
+def test_the_dialog_rebases_without_waiting_and_again_after_curas_copy(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """RM-521: Während der Cura-Arbeiter die Druckerkopie einer AppImage-Cura
+    anlegt, gründet der Dialog ohne zu warten (Fensterfaden); danach gründet er
+    mit Curas Bestand neu."""
+    from app.core.export import manufacturer, slicer_profiles
+
+    seen: list[tuple[float, bool]] = []
+    original = manufacturer.base_settings
+
+    def spy(profile: Any, quality: Any, setup: Any) -> Any:
+        started = time.monotonic()
+        result = original(profile, quality, setup)
+        root = slicer_profiles.install_root(setup.executable) if setup is not None else None
+        seen.append((time.monotonic() - started, root is not None))
+        return result
+
+    monkeypatch.setattr(manufacturer, "base_settings", spy)
+    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=3.0)
+    dialog._start_profile_search()
+    _until_mounted(mounts)
+    started = time.monotonic()
+    dialog._foundation_key = None
+    dialog._rebase()
+    during = time.monotonic() - started
+
+    assert dialog.wait_for_cura_printer(60_000)
+    QCoreApplication.processEvents()
+    dialog.release()
+
+    assert during < 1.0, "der Fensterfaden wartet nicht auf die Kopie"
+    assert seen and seen[-1][1], "nach dem Arbeiter gründet der Dialog mit Curas Bestand"
+
+
+def test_a_dialog_closed_during_curas_copy_gets_no_rebase(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Schließen wartet nicht auf den kopierenden Arbeiter, und sein spätes
+    Ergebnis gründet den geschlossenen Dialog nicht mehr neu."""
+    from app.ui import leash
+
+    calls: list[str] = []
+    original = PrintSettingsDialog._rebase
+
+    def counted(self: PrintSettingsDialog, *args: object) -> None:
+        calls.append("rebase")
+        original(self, *args)
+
+    monkeypatch.setattr(PrintSettingsDialog, "_rebase", counted)
+    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0)
+    dialog._start_profile_search()
+    _until_mounted(mounts)
+    started = time.monotonic()
+    dialog.reject()
+    closing = time.monotonic() - started
+    before = len(calls)
+    leash.wait_for_all(60_000)
+    for _round in range(5):
+        QCoreApplication.processEvents()
+    dialog.release()
+
+    assert closing < 1.0
+    assert len(calls) == before
+
+
+@pytest.mark.parametrize("loader", [True, False])
+def test_slicing_waits_with_a_reason_until_curas_copy_tells(
+    qt_app: QApplication,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    loader: bool,
+) -> None:
+    """Ob eine AppImage-Cura rechnen kann, weiß erst ihre Kopie. Bis dahin steht
+    „Curas Drucker werden gelesen …“ an *Slicen* (kein Knopf auf eine
+    Vermutung), danach frei oder der Sperrsatz."""
+    from app.core.export import cura_linux
+
+    reading = str(tr("Curas Drucker werden gelesen …"))
+    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0, loader=loader)
+    dialog._start_profile_search()
+    _until_mounted(mounts)
+    dialog._show_slicer_state()
+
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == reading
+    assert dialog.open_button.isEnabled()
+
+    assert dialog.wait_for_cura_printer(60_000)
+    QCoreApplication.processEvents()
+    dialog._show_slicer_state()
+    after = dialog.slice_button.toolTip()
+    dialog.release()
+
+    assert after != reading
+    if not loader:
+        assert after == str(cura_linux.WINDOW_ONLY)
 
 
 def test_slicing_greys_out_until_the_profiles_are_chosen(

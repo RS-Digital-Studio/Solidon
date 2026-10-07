@@ -943,6 +943,7 @@
   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura accetta le impostazioni solo come profilo. Si trova accanto al modello: in Cura scegli Gestisci profili → Importa.",
   "Cura-Drucker": "Stampante Cura",
   "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, oder wählen Sie einen anderen Slicer.": "Non è stato possibile montare l'AppImage di Cura. Verifica che Cura si avvii da solo oppure scegli un altro slicer.",
+  "Curas Drucker werden gelesen …": "Lettura delle stampanti di Cura in corso …",
   "Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.": "Qui è andato storto qualcosa che nessuno aveva previsto.",
   "Dafür braucht Solidon einen Lizenzschlüssel und die einmalige Geräteaktivierung (Hilfe → Solidon freischalten …).": "Per questa operazione Solidon richiede una chiave di licenza e l'attivazione unica del dispositivo (Aiuto → Sblocca Solidon …).",
   "Dafür braucht Solidon hier eine Paketverwaltung, und sie ist nicht eingerichtet: {program}. {action}": "Per questo Solidon ha bisogno qui di un gestore di pacchetti, e non è configurato: {program}. {action}",

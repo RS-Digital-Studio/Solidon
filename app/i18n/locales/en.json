@@ -943,6 +943,7 @@
   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura imports settings as a profile file, saved beside the model. In Cura, choose Manage profiles → Import.",
   "Cura-Drucker": "Cura printer",
   "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, oder wählen Sie einen anderen Slicer.": "Cura's AppImage could not be mounted. Check whether Cura starts on its own, or choose a different slicer.",
+  "Curas Drucker werden gelesen …": "Reading Cura's printers …",
   "Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.": "An unexpected error occurred.",
   "Dafür braucht Solidon einen Lizenzschlüssel und die einmalige Geräteaktivierung (Hilfe → Solidon freischalten …).": "Solidon needs a licence key and one-time device activation for this (Help → Unlock Solidon …).",
   "Dafür braucht Solidon hier eine Paketverwaltung, und sie ist nicht eingerichtet: {program}. {action}": "The required package manager is not set up: {program}. {action}",

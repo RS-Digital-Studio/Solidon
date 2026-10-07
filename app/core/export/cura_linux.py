@@ -95,6 +95,11 @@ REASON_BYTES: Final = 4096
 #: Die Marke einer abgelegten Kopie: Quelle, Stand und ob die Rechenmaschine da ist.
 STAMP: Final = "stamp.json"
 
+#: Ab wann ein Zwischenordner ohne Marke als Rest einer abgebrochenen Kopie gilt.
+#: Eine Kopie dauert Sekunden (am Runner 3,3 s); eine Stunde lässt jedem
+#: langsamen Rechner Luft.
+STALE_SECONDS: Final = 3600.0
+
 #: Der Satz für Druckdialog und Absage, wenn Solidon mit dieser Cura nicht
 #: rechnen kann. Er nennt keine Ursache (Regel 21): Lader, ``AppRun.env``,
 #: CuraEngine oder eine für Solidon unsichtbare Installation — welche es war,
@@ -109,6 +114,20 @@ NOT_MOUNTED: Final = _(
     "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, "
     "oder wählen Sie einen anderen Slicer."
 )
+
+
+#: Was :func:`_tell` schon gesagt hat, je Stand der Suche. Der Druckdialog
+#: fragt bei jeder Feldänderung; eine Ursache gehört einmal ins Protokoll.
+_told: dict[str, int] = {}
+
+
+def _tell(message: str, *args: object) -> None:
+    """Eine Ursache einmal je Stand der Suche protokollieren (``discover.forget_cache``)."""
+    text = message % args
+    generation = discover.cache_generation()
+    if _told.get(text) != generation:
+        _told[text] = generation
+        _log.info(message, *args)
 
 
 def is_appimage(executable: Path) -> bool:
@@ -170,15 +189,15 @@ def loader_command(here: Path, there: PurePath) -> list[str] | None:
     try:
         variables = read_environment((here / ENVIRONMENT).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as problem:
-        _log.info("no readable %s below %s: %s", ENVIRONMENT, here, problem)
+        _tell("no readable %s below %s: %s", ENVIRONMENT, here, problem)
         return None
     name = linker(variables)
     if not (here / COMPAT / name).is_file() or not (here / ENGINE).is_file():
-        _log.info("cura below %s has no loader %s or no %s", here, name, ENGINE)
+        _tell("cura below %s has no loader %s or no %s", here, name, ENGINE)
         return None
     libraries = library_path(variables, str(there))
     if not libraries:
-        _log.info("%s below %s names no library path", ENVIRONMENT, here)
+        _tell("%s below %s names no library path", ENVIRONMENT, here)
         return None
     return [str(there / COMPAT / name), "--library-path", libraries, str(there / ENGINE)]
 
@@ -193,7 +212,7 @@ def flatpak_appdir(app_id: str) -> tuple[Path, PurePosixPath] | None:
     """
     files = discover.flatpak_files(app_id)
     if files is None:
-        _log.info("the installation of %s is not visible from here", app_id)
+        _tell("the installation of %s is not visible from here", app_id)
         return None
     try:
         inner = sorted(entry for entry in files.iterdir() if entry.is_dir())
@@ -202,7 +221,7 @@ def flatpak_appdir(app_id: str) -> tuple[Path, PurePosixPath] | None:
     for folder in (files, *inner):
         if (folder / "share" / "cura").is_dir():
             return folder, FLATPAK_ROOT.joinpath(*folder.relative_to(files).parts)
-    _log.info("%s carries no share/cura below %s", app_id, files)
+    _tell("%s carries no share/cura below %s", app_id, files)
     return None
 
 
@@ -226,6 +245,15 @@ def engine_missing(executable: Path) -> bool:
     if is_appimage(executable):
         return _known_engine(executable) is False
     return False
+
+
+def still_unknown(executable: Path) -> bool:
+    """Steht bei einer AppImage-Cura noch aus, ob sie rechnen kann?
+
+    Wahr, bis ihre Druckerkopie eine Marke hat. Der Druckdialog hält *Slicen*
+    so lange mit einem Grund an, statt auf eine Vermutung zu wirken.
+    """
+    return is_appimage(executable) and _known_engine(executable) is None
 
 
 def window_only(tool: str) -> ExternalToolError:
@@ -372,10 +400,15 @@ def _mounted(
 
 
 def _collect(stream: IO[bytes] | None, into: bytearray) -> None:
-    """Die Fehlerausgabe lesen, bis sie endet; behalten wird der Anfang."""
+    """Die Fehlerausgabe lesen, bis sie endet; behalten wird der Anfang.
+
+    ``read1`` wie ``process._drain``: ``read`` kehrte erst nach vollem Puffer
+    oder am Ende zurück, und ein hängendes Einhängen verlor seinen Satz.
+    """
     if stream is None:
         return
-    for chunk in iter(lambda: stream.read(1024), b""):
+    read = getattr(stream, "read1", stream.read)
+    for chunk in iter(lambda: read(1024), b""):
         if len(into) < REASON_BYTES:
             into.extend(chunk[: REASON_BYTES - len(into)])
 
@@ -581,7 +614,13 @@ def _replace(
 
 def _clear_vanished(keep: Path) -> None:
     """Kopien von AppImages räumen, die es nicht mehr gibt — ein Update trägt die
-    Version im Dateinamen, und jede Kopie wiegt rund 26 MB."""
+    Version im Dateinamen, und jede Kopie wiegt rund 26 MB.
+
+    Dazu die Zwischenordner abgebrochener Kopien (``<Kennung>-…`` ohne Marke),
+    sobald sie älter als :data:`STALE_SECONDS` sind; eine jüngere kann gerade ein
+    zweiter Solidon füllen. Was geräumt ist, verlässt auch den Merker — kommt
+    das AppImage zurück (ein Stick), wird neu kopiert.
+    """
     try:
         siblings = [entry for entry in _cache_root().iterdir() if entry.is_dir() and entry != keep]
     except OSError:
@@ -589,11 +628,24 @@ def _clear_vanished(keep: Path) -> None:
     for sibling in siblings:
         stamp = _read_stamp(sibling)
         source = stamp.get("source") if stamp is not None else None
-        if not isinstance(source, str) or Path(source).exists():
+        if stamp is None:
+            if "-" not in sibling.name or not _older_than(sibling, STALE_SECONDS):
+                continue
+        elif not isinstance(source, str) or Path(source).exists():
             continue
         try:
             shutil.rmtree(sibling)
         except OSError as problem:
             _log.warning("cannot clear the old printers at %s: %s", sibling, problem)
-        else:
-            _log.info("cleared the printers of a removed appimage: %s", source)
+            continue
+        _log.info("cleared the printers at %s (%s)", sibling, source or "unfinished copy")
+        for key, (found, _usable) in list(_resources.items()):
+            if found.is_relative_to(sibling):
+                del _resources[key]
+
+
+def _older_than(folder: Path, seconds: float) -> bool:
+    try:
+        return time.time() - folder.stat().st_mtime > seconds
+    except OSError:
+        return False
