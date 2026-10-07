@@ -197,6 +197,10 @@ def install_root(executable: Path) -> Path | None:
     if mark == "cura" and cura_linux.is_appimage(executable):
         return cura_linux.appimage_resources(executable)
     app = discover.flatpak_app(executable)
+    if mark == "cura" and app:
+        # Curas AppDir bestimmt eine Stelle, für Bestand und Lader zugleich.
+        appdir = cura_linux.flatpak_appdir(app)
+        return appdir[0] / "share" / "cura" if appdir is not None else None
     files = discover.flatpak_files(app) if app else None
     if files is not None:
         try:

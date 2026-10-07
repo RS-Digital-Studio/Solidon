@@ -428,11 +428,16 @@ appimage-builder, CuraEngine nennt seinen Lader relativ. Gestartet wird
 (LIBC-Pfad zuerst; gekürzt zieht die `libstdc++` des Rechners eine zu neue
 glibc nach). Das Cura-Flatpak gibt nur `home` und Wechselmedien frei, der
 Arbeitsordner kommt als `--filesystem` dazu. Ein AppImage bleibt für den Lauf
-eingehängt und wird in jedem Fall beendet; aus Solidons Flatpak legt
-`TMPDIR=exchange_dir()` den Einhängepunkt dorthin, wo beide ihn sehen, und
-`flatpak-spawn --watch-bus` hängt auch aus, wenn der Aufrufer ohne Signal
-stirbt. Fehlt der Lader, gibt es nur Curas Fenster (`WINDOW_ONLY`) — nie den
-Starter als Rechenweg, der öffnet nur das Fenster und schreibt nichts.
+eingehängt und wird beim Verlassen des Blocks beendet, auch nach Fehler und
+Abbruch; aus Solidons Flatpak legt `TMPDIR=exchange_dir()` den Einhängepunkt
+dorthin, wo beide ihn sehen, und `flatpak-spawn --watch-bus` hängt auch aus,
+wenn der Aufrufer ohne Signal stirbt. Draußen deckt das nur `setpriv
+--pdeathsig` ab, wo es da ist; ohne `setpriv` bleibt die Einhängung nach einem
+harten Ende von Solidon stehen. Die Druckerkopie einer AppImage-Cura legt ein
+Arbeiter an, der Fensterfaden wartet nie darauf (`never_wait_in`). Kann
+Solidon nicht rechnen, gibt es nur Curas Fenster (`WINDOW_ONLY`, ohne
+behauptete Ursache) — nie den Starter als Rechenweg, der öffnet nur das
+Fenster und schreibt nichts.
 
 ### Was auf einer Plattform gilt, ist keine Zusage
 

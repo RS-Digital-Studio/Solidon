@@ -434,17 +434,21 @@ Bibliothekspfad aus `AppRun.env` (`read_environment`, `linker`,
 Netz und das Ziel in den Arbeitsordner kopiert, braucht der Flatpak-Aufruf keine
 übersetzten `/app`-Pfade. `appimage_resources` legt den Druckerbestand einer
 AppImage-Cura einmal je Pfad, Änderungszeit und Größe im Nutzer-Cache ab
-(`stamp.json` merkt, ob die Rechenmaschine da war); der Druckdialog fragt über
-`handover.console_refusal` nur diese Marke und hängt nie selbst ein. Gemessen
-am Runner (Läufe 37504088443, 37528397381): Einhängen 0,01 s, erste Kopie
-3,3 s; Würfel auf dem K1 Max mit Flatpak und AppImage, draußen und im
-Sandkasten, gleich wie CuraEngine unter Windows.
+(`stamp.json` merkt, ob die Rechenmaschine da war), räumt Kopien von
+AppImages, die es nicht mehr gibt, und versucht eine gescheiterte Kopie nach
+*Neu suchen* (`discover.cache_generation`) wieder. Der Fensterfaden, den
+`build_application` über `never_wait_in` nennt, bekommt nur, was schon
+feststeht — weder hängt er ein, noch wartet er auf den Arbeiter, der gerade
+kopiert. `_rebase` im Druckdialog fragt Curas Bestand im Fensterfaden
+(`manufacturer.base_settings` → `install_root`); gemessen in der Durchsicht
+wartete er sonst 6,6 s auf eine Kopie mit 3 s Einhängezeit. Die Kopie legt
+`_CuraPrinterWorker` an, danach gründet der Dialog neu; `console_refusal`
+fragt nur die Marke. Gemessen am Runner (Läufe 37504088443, 37528397381):
+Einhängen 0,01 s, erste Kopie 3,3 s; Würfel auf dem K1 Max mit Flatpak und
+AppImage, draußen und im Sandkasten, gleich wie CuraEngine unter Windows.
+Eine Kopie wiegt rund 26 MB in rund 9 900 Dateien (Cura 5.13).
 
 ## Warum `slicer_keys.py` existiert
-
-Die Wächter lesen gemessene Bestände: `tests/data/superslicer_3mf_keys.json`
-(was SuperSlicer annimmt) und `tests/data/slicer_values.json` (die unabhängig
-gemessenen Aufzählungswerte).
 
 Aus der Karte verschoben (05.10.2026): `NOT_TAKEN_BY_PROGRAM` gibt es, weil
 SuperSlicer an fremden 3MF-Schlüsseln abstürzt. `OMITTED_FROM_GCODE` gibt

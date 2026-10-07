@@ -2496,6 +2496,7 @@ def test_a_cura_without_its_loader_only_offers_its_window(
     assert not dialog.slice_button.isEnabled()
     assert dialog.slice_button.toolTip() == reason
     assert dialog.slice_button.accessibleDescription() == reason
+    assert dialog.open_button.isEnabled(), "Curas Fenster bleibt der Weg"
     assert reason not in dialog.open_button.toolTip()
 
 

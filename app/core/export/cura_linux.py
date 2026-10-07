@@ -21,12 +21,13 @@ CuraEngine als Argument (Entscheidung Robert, 06.10.2026):
 
 Findet Solidon Lader, ``AppRun.env`` oder CuraEngine nicht, rechnet es mit
 dieser Cura nicht, sondern öffnet die Datei nur in ihrem Fenster
-(:data:`WINDOW_ONLY`).
+(:data:`WINDOW_ONLY`); den Grund schreibt es ins Protokoll.
 
 Die Drucker einer AppImage-Cura liegen im Abbild. :func:`appimage_resources`
 hängt es einmal je Fassung kurz ein und legt die Ordner, die Solidon liest, im
 Nutzer-Cache ab — beständig, denn jeder Einhängepunkt heißt anders, und eine
-Profilliste darf nicht in einen verschwundenen Ordner zeigen.
+Profilliste darf nicht in einen verschwundenen Ordner zeigen. Der Fensterfaden
+wartet darauf nie (:func:`never_wait_in`).
 """
 
 from __future__ import annotations
@@ -40,8 +41,9 @@ import threading
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path, PurePath, PurePosixPath
-from typing import Final
+from typing import IO, Final
 
 from app.core import discover
 from app.core.errors import CHOOSE_SLICER, EXPORT_ONLY, ExternalToolError
@@ -70,10 +72,9 @@ COMPAT: Final = PurePosixPath("runtime/compat")
 #: Der Lader, den ``CuraEngine`` verlangt, wenn ``AppRun.env`` keinen nennt.
 DEFAULT_LINKER: Final = "lib64/ld-linux-x86-64.so.2"
 
-#: Wo das Flatpak ``com.ultimaker.cura`` sein AppDir sieht — und unter welchem
-#: Ordner seines ``/app`` es auf dem Rechner liegt.
-FLATPAK_APPDIR: Final = PurePosixPath("/app/cura")
-FLATPAK_FOLDER: Final = "cura"
+#: Wo ein Flatpak seine Installation sieht; das AppDir liegt darunter in dem
+#: Ordner, der ``share/cura`` trägt (bei Cura 5.13 ``/app/cura``).
+FLATPAK_ROOT: Final = PurePosixPath("/app")
 
 #: Die zwei Bibliothekspfade aus ``AppRun.env``, in dieser Reihenfolge: erst
 #: Curas glibc, dann seine übrigen Bibliotheken. Gekürzt fand CuraEngine die
@@ -88,13 +89,25 @@ RESOURCE_FOLDERS: Final = ("definitions", "extruders", "intent", "materials", "q
 #: Wie lange das Einhängen dauern darf. Gemessen: 0,01 s.
 MOUNT_SECONDS: Final = 30.0
 
+#: Wie viel von der Fehlerausgabe des Einhängens als Grund mitreist.
+REASON_BYTES: Final = 4096
+
 #: Die Marke einer abgelegten Kopie: Quelle, Stand und ob die Rechenmaschine da ist.
 STAMP: Final = "stamp.json"
 
-#: Der Satz für Druckdialog und Absage, wenn Solidon mit dieser Cura nicht rechnen kann.
+#: Der Satz für Druckdialog und Absage, wenn Solidon mit dieser Cura nicht
+#: rechnen kann. Er nennt keine Ursache (Regel 21): Lader, ``AppRun.env``,
+#: CuraEngine oder eine für Solidon unsichtbare Installation — welche es war,
+#: steht im Protokoll.
 WINDOW_ONLY: Final = _(
-    "Mit dieser Cura-Installation kann Solidon nicht selbst slicen, weil ihr Lader für "
-    "CuraEngine fehlt. Öffnen Sie die Datei in Curas Fenster."
+    "Mit dieser Cura-Installation kann Solidon nicht selbst slicen. "
+    "Öffnen Sie die Datei in Curas Fenster."
+)
+
+#: Die Absage, wenn sich das AppImage nicht einhängen ließ.
+NOT_MOUNTED: Final = _(
+    "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst startet, "
+    "oder wählen Sie einen anderen Slicer."
 )
 
 
@@ -132,14 +145,16 @@ def linker(variables: Mapping[str, str]) -> str:
 def library_path(variables: Mapping[str, str], appdir: str) -> str:
     """Der Bibliothekspfad für den Lader, mit ``appdir`` statt ``$APPDIR``.
 
-    Einträge mit einer anderen Variable bleiben weg; doppelte zählen einmal.
+    Einträge mit einer anderen Variable bleiben weg — gefragt vor dem
+    Einsetzen, denn ein ``$`` im AppDir selbst ist kein Verweis. Doppelte
+    zählen einmal.
     """
     seen: list[str] = []
     for name in LIBRARY_VARIABLES:
         for entry in variables.get(name, "").split(":"):
-            expanded = entry.replace("${APPDIR}", appdir).replace("$APPDIR", appdir)
-            if not expanded or "$" in expanded:
+            if not entry or "$" in entry.replace("${APPDIR}", "").replace("$APPDIR", ""):
                 continue
+            expanded = entry.replace("${APPDIR}", appdir).replace("$APPDIR", appdir)
             expanded = expanded.rstrip("/") or "/"
             if expanded not in seen:
                 seen.append(expanded)
@@ -163,15 +178,32 @@ def loader_command(here: Path, there: PurePath) -> list[str] | None:
         return None
     libraries = library_path(variables, str(there))
     if not libraries:
+        _log.info("%s below %s names no library path", ENVIRONMENT, here)
         return None
     return [str(there / COMPAT / name), "--library-path", libraries, str(there / ENGINE)]
 
 
-def flatpak_appdir(app_id: str) -> Path | None:
-    """Curas AppDir in seiner Flatpak-Installation, wie Solidon es liest."""
+def flatpak_appdir(app_id: str) -> tuple[Path, PurePosixPath] | None:
+    """Curas AppDir im Flatpak ``app_id``: wie Solidon es liest und wie Cura es sieht.
+
+    Es ist der Ordner unter ``files``, der ``share/cura`` trägt — dieselbe Stelle,
+    an der :func:`slicer_profiles.install_root` Curas Bestand findet, denn sie
+    fragt hier. Ohne Sicht auf die Installation (eine Freigabe fehlt) sagt es
+    das Protokoll.
+    """
     files = discover.flatpak_files(app_id)
-    folder = files / FLATPAK_FOLDER if files is not None else None
-    return folder if folder is not None and folder.is_dir() else None
+    if files is None:
+        _log.info("the installation of %s is not visible from here", app_id)
+        return None
+    try:
+        inner = sorted(entry for entry in files.iterdir() if entry.is_dir())
+    except OSError:
+        inner = []
+    for folder in (files, *inner):
+        if (folder / "share" / "cura").is_dir():
+            return folder, FLATPAK_ROOT.joinpath(*folder.relative_to(files).parts)
+    _log.info("%s carries no share/cura below %s", app_id, files)
+    return None
 
 
 def needs_loader(executable: Path) -> bool:
@@ -190,7 +222,7 @@ def engine_missing(executable: Path) -> bool:
     app = discover.flatpak_app(executable)
     if app:
         appdir = flatpak_appdir(app)
-        return appdir is None or loader_command(appdir, FLATPAK_APPDIR) is None
+        return appdir is None or loader_command(*appdir) is None
     if is_appimage(executable):
         return _known_engine(executable) is False
     return False
@@ -211,12 +243,13 @@ def engine(
 
     ``None``, wenn das gewählte Programm selbst rechnet — CuraEngine unter
     Windows, im Mac-Bündel oder aus dem Paketverwalter. Fehlt einer Flatpak-
-    oder AppImage-Cura der Lader, endet es mit :func:`window_only`.
+    oder AppImage-Cura der Lader, endet es mit :func:`window_only`; ein
+    AppImage bleibt bis zum Ende des Blocks eingehängt.
     """
     app = discover.flatpak_app(executable)
     if app:
         appdir = flatpak_appdir(app)
-        command = loader_command(appdir, FLATPAK_APPDIR) if appdir is not None else None
+        command = loader_command(*appdir) if appdir is not None else None
         if command is None:
             raise window_only(tool)
         loader, *rest = command
@@ -225,84 +258,138 @@ def engine(
     if not is_appimage(executable):
         yield None
         return
-    with mounted(executable, cancelled) as point:
+    with mounted(executable, cancelled) as mount:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        if point is None:
+        if mount.point is None:
             raise ExternalToolError(
                 tool=tool,
-                detail=_(
-                    "Curas AppImage ließ sich nicht einhängen. Prüfen Sie, ob Cura selbst "
-                    "startet, oder wählen Sie einen anderen Slicer."
-                ),
+                detail=NOT_MOUNTED,
+                values={"reason": mount.reason} if mount.reason else {},
                 suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
             )
-        command = loader_command(point, point)
+        command = loader_command(mount.point, mount.point)
         if command is None:
             raise window_only(tool)
         yield command
 
 
 def mount_command(appimage: Path) -> list[str]:
-    """``--appimage-mount``, aus Solidons Flatpak heraus auf dem Rechner.
+    """``--appimage-mount`` so, dass das Einhängen mit Solidon endet.
 
-    ``--watch-bus`` beendet das Einhängen auch dann, wenn ``flatpak-spawn``
-    ohne Signal stirbt; ein SIGTERM reicht es selbst weiter.
+    Aus Solidons Flatpak heraus läuft es über ``flatpak-spawn --host``;
+    ``--watch-bus`` hängt auch dann aus, wenn ``flatpak-spawn`` ohne Signal
+    stirbt, ein SIGTERM reicht es selbst weiter (gemessen am Runner). Draußen
+    startet es in eigener Prozessgruppe, und stirbt Solidon hart, erreichte es
+    kein Signal: ``setpriv --pdeathsig TERM`` schickt eines, wenn ``setpriv``
+    da ist (util-linux). Das Signal gilt dem Faden, der startet — er hält den
+    Block bis zum Ende.
     """
-    if not discover.in_flatpak():
-        return [str(appimage), "--appimage-mount"]
-    place = ensure_dir(discover.exchange_dir())
-    return [
-        "flatpak-spawn",
-        "--host",
-        "--watch-bus",
-        f"--env=TMPDIR={place}",
-        str(appimage),
-        "--appimage-mount",
-    ]
+    if discover.in_flatpak():
+        place = ensure_dir(discover.exchange_dir())
+        return [
+            "flatpak-spawn",
+            "--host",
+            "--watch-bus",
+            f"--env=TMPDIR={place}",
+            str(appimage),
+            "--appimage-mount",
+        ]
+    guard = shutil.which("setpriv")
+    prefix = [guard, "--pdeathsig", "TERM", "--"] if guard else []
+    return [*prefix, str(appimage), "--appimage-mount"]
+
+
+@dataclass(frozen=True, slots=True)
+class Mount:
+    """Ein Einhängen: der Punkt, solange der Block läuft, oder der Grund, warum keiner kam."""
+
+    point: Path | None
+    reason: str = ""
 
 
 @contextmanager
-def mounted(appimage: Path, cancelled: CancelToken | None = None) -> Iterator[Path | None]:
-    """Das eingehängte AppImage, solange der Block läuft — oder ``None``.
+def mounted(appimage: Path, cancelled: CancelToken | None = None) -> Iterator[Mount]:
+    """Das eingehängte AppImage, solange der Block läuft.
 
     Die Laufzeit schreibt den Einhängepunkt als erste Zeile und wartet; endet
     der Prozess, hängt sie aus und räumt den Ordner (gemessen für SIGTERM und
-    SIGKILL). Beendet wird in jedem Fall, auch bei Abbruch und Fehler.
+    SIGKILL). Beendet wird beim Verlassen des Blocks in jedem Fall, auch bei
+    Abbruch und Fehler; stirbt Solidon selbst, sorgt :func:`mount_command`
+    dafür. Gestartet wird im Austauschordner: Aus dem Flatpak reicht
+    ``flatpak-spawn`` den Arbeitsordner an den Rechner weiter, und
+    Solidons ``/app`` gibt es dort nicht.
     """
-    with _mounted(mount_command(appimage), cancelled) as point:
-        yield point
+    cwd = ensure_dir(discover.exchange_dir()) if discover.in_flatpak() else trusted_cwd()
+    with _mounted(mount_command(appimage), cancelled, cwd=cwd) as mount:
+        yield mount
 
 
 @contextmanager
 def _mounted(
-    command: Sequence[str], cancelled: CancelToken | None, seconds: float = MOUNT_SECONDS
-) -> Iterator[Path | None]:
+    command: Sequence[str],
+    cancelled: CancelToken | None,
+    *,
+    cwd: Path | None = None,
+    seconds: float | None = None,
+) -> Iterator[Mount]:
     try:
         process = subprocess.Popen(
             list(command),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            cwd=trusted_cwd(),
+            stderr=subprocess.PIPE,
+            cwd=cwd or trusted_cwd(),
             env=trusted_environment(),
             **process_group_options(no_window=True),
         )
     except OSError as problem:
-        _log.info("cannot mount with %s: %s", " ".join(command), problem)
-        yield None
+        _log.warning("cannot mount with %s: %s", " ".join(command), problem)
+        yield Mount(None, str(problem))
         return
+    errors = bytearray()
+    drain = threading.Thread(
+        target=_collect, args=(process.stderr, errors), daemon=True, name="appimage-errors"
+    )
+    drain.start()
     try:
-        line = _first_line(process, seconds, cancelled)
+        line = _first_line(process, MOUNT_SECONDS if seconds is None else seconds, cancelled)
         point = Path(line) if line else None
-        if point is None or not point.is_absolute() or not point.is_dir():
-            _log.info("the appimage gave no usable mount point: %r", line)
-            point = None
-        yield point
+        if cancelled is not None and cancelled.is_cancelled:
+            yield Mount(None, "cancelled")
+        elif point is None or not point.is_absolute() or not point.is_dir():
+            reason = _reason(process, drain, errors)
+            _log.warning("the appimage gave no usable mount point %r: %s", line, reason)
+            yield Mount(None, reason)
+        else:
+            yield Mount(point)
     finally:
         terminate_process_tree(process)
-        if process.stdout is not None:
-            process.stdout.close()
+        drain.join(1.0)
+        for stream in (process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+
+
+def _collect(stream: IO[bytes] | None, into: bytearray) -> None:
+    """Die Fehlerausgabe lesen, bis sie endet; behalten wird der Anfang."""
+    if stream is None:
+        return
+    for chunk in iter(lambda: stream.read(1024), b""):
+        if len(into) < REASON_BYTES:
+            into.extend(chunk[: REASON_BYTES - len(into)])
+
+
+def _reason(process: subprocess.Popen[bytes], drain: threading.Thread, errors: bytearray) -> str:
+    """Was das Einhängen dazu gesagt hat: Fehlerausgabe und Rückgabewert, wenn es endete."""
+    try:
+        code = process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:
+        code = None
+    drain.join(1.0)
+    text = bytes(errors).decode("utf-8", errors="replace").strip()
+    ended = f"exit code {code}" if code is not None else "no answer"
+    return f"{text} ({ended})" if text else ended
 
 
 def _first_line(
@@ -329,9 +416,25 @@ def _first_line(
 
 
 #: Was über eine AppImage-Cura schon feststeht, je Pfad, Änderungszeit und Größe:
-#: der Ordner ``share/cura`` der Kopie (oder ``None``) und ob die Rechenmaschine da ist.
-_resources: dict[tuple[str, int, int], tuple[Path | None, bool | None]] = {}
+#: der Ordner ``share/cura`` der Kopie und ob die Rechenmaschine da ist.
+_resources: dict[tuple[str, int, int], tuple[Path, bool]] = {}
+#: Fassungen, deren Kopie scheiterte, mit dem Stand der Suche
+#: (:func:`discover.cache_generation`): *Neu suchen* versucht es wieder.
+_failed: dict[tuple[str, int, int], int] = {}
 _building = threading.Lock()
+#: Der Faden, der nie auf Einhängen und Kopie wartet (:func:`never_wait_in`).
+_never_waits: threading.Thread | None = None
+
+
+def never_wait_in(thread: threading.Thread | None) -> None:
+    """Dieser Faden wartet nie auf eine Druckerkopie — die Oberfläche nennt ihren Fensterfaden.
+
+    Dort antwortet :func:`appimage_resources` nur mit dem, was schon feststeht;
+    die Kopie legen Arbeiter an (``print_settings_dialog._CuraPrinterWorker``).
+    Ohne Angabe wartet jeder Faden, und die Kommandozeile kopiert selbst.
+    """
+    global _never_waits
+    _never_waits = thread
 
 
 def _key(appimage: Path) -> tuple[str, int, int] | None:
@@ -342,9 +445,13 @@ def _key(appimage: Path) -> tuple[str, int, int] | None:
     return (str(appimage), info.st_mtime_ns, info.st_size)
 
 
+def _cache_root() -> Path:
+    return user_cache_dir() / "cura-appimage"
+
+
 def _cache_folder(appimage: Path) -> Path:
     digest = hashlib.sha256(str(appimage).encode("utf-8")).hexdigest()[:16]
-    return user_cache_dir() / "cura-appimage" / digest
+    return _cache_root() / digest
 
 
 def appimage_resources(appimage: Path) -> Path | None:
@@ -352,18 +459,33 @@ def appimage_resources(appimage: Path) -> Path | None:
 
     Einmal je Fassung (Pfad, Änderungszeit, Größe): einhängen, die Ordner aus
     :data:`RESOURCE_FOLDERS` in den Nutzer-Cache kopieren, aushängen. Danach
-    liest jede Frage die Kopie; ein neues AppImage ersetzt sie. Scheitert es,
-    bleibt es in dieser Sitzung beim Nein, statt bei jeder Frage neu zu starten.
+    liest jede Frage die Kopie; ein neues AppImage ersetzt sie, und Kopien
+    verschwundener AppImages werden geräumt. Scheitert es, bleibt es beim
+    Nein, bis :func:`discover.forget_cache` neu suchen lässt. Im Faden aus
+    :func:`never_wait_in` antwortet es nur mit dem, was schon feststeht.
     """
     key = _key(appimage)
     if key is None:
         return None
-    if key in _resources:
-        return _resources[key][0]
+    known = _resources.get(key)
+    if known is not None:
+        return known[0]
+    if threading.current_thread() is _never_waits:
+        stamped = _stamped(appimage, key)
+        if stamped is None:
+            return None
+        _resources[key] = stamped
+        return stamped[0]
     with _building:
-        if key not in _resources:
-            _resources[key] = _stamped(appimage, key) or _copy_resources(appimage, key)
-    return _resources[key][0]
+        if key not in _resources and _failed.get(key) != discover.cache_generation():
+            stamped = _stamped(appimage, key) or _copy_resources(appimage, key)
+            if stamped is None:
+                _failed[key] = discover.cache_generation()
+            else:
+                _failed.pop(key, None)
+                _resources[key] = stamped
+    known = _resources.get(key)
+    return known[0] if known is not None else None
 
 
 def _known_engine(appimage: Path) -> bool | None:
@@ -371,69 +493,107 @@ def _known_engine(appimage: Path) -> bool | None:
     key = _key(appimage)
     if key is None:
         return None
-    if key not in _resources:
-        stamped = _stamped(appimage, key)
-        if stamped is None:
-            return None
-        _resources[key] = stamped
-    return _resources[key][1]
+    known = _resources.get(key)
+    if known is None:
+        known = _stamped(appimage, key)
+        if known is not None:
+            _resources[key] = known
+    return known[1] if known is not None else None
 
 
 def _stamped(appimage: Path, key: tuple[str, int, int]) -> tuple[Path, bool] | None:
     """Die abgelegte Kopie, wenn ihre Marke zu dieser Fassung passt."""
     folder = _cache_folder(appimage)
-    try:
-        stamp = json.loads((folder / STAMP).read_text(encoding="utf-8"))
-    except OSError, ValueError:
-        return None
-    if not isinstance(stamp, dict) or [
-        stamp.get("source"),
-        stamp.get("mtime_ns"),
-        stamp.get("size"),
-    ] != list(key):
+    stamp = _read_stamp(folder)
+    if stamp is None or [stamp.get("source"), stamp.get("mtime_ns"), stamp.get("size")] != list(
+        key
+    ):
         return None
     return folder / "share" / "cura", bool(stamp.get("engine"))
 
 
-def _copy_resources(appimage: Path, key: tuple[str, int, int]) -> tuple[Path | None, bool | None]:
+def _read_stamp(folder: Path) -> dict[str, object] | None:
+    try:
+        stamp = json.loads((folder / STAMP).read_text(encoding="utf-8"))
+    except OSError, ValueError:
+        return None
+    return stamp if isinstance(stamp, dict) else None
+
+
+def _copy_resources(appimage: Path, key: tuple[str, int, int]) -> tuple[Path, bool] | None:
     folder = _cache_folder(appimage)
     started = time.monotonic()
-    with mounted(appimage) as point:
-        if point is None:
-            return None, None
-        resources = point / "share" / "cura" / "resources"
+    with mounted(appimage) as mount:
+        if mount.point is None:
+            return None
+        resources = mount.point / "share" / "cura" / "resources"
         if not resources.is_dir():
-            _log.info("%s carries no cura resources", appimage.name)
-            return None, None
+            _log.warning("%s carries no cura resources", appimage.name)
+            return None
         try:
             fresh = Path(tempfile.mkdtemp(prefix=f"{folder.name}-", dir=ensure_dir(folder.parent)))
         except OSError as problem:
             _log.warning("cannot keep the printers of %s: %s", appimage.name, problem)
-            return None, None
+            return None
         try:
             target = fresh / "share" / "cura" / "resources"
             for name in RESOURCE_FOLDERS:
                 if (resources / name).is_dir():
                     shutil.copytree(resources / name, target / name)
-            usable = loader_command(point, point) is not None
+            usable = loader_command(mount.point, mount.point) is not None
             stamp = {"source": key[0], "mtime_ns": key[1], "size": key[2], "engine": usable}
             (fresh / STAMP).write_text(json.dumps(stamp), encoding="utf-8")
         except OSError as problem:
             shutil.rmtree(fresh, ignore_errors=True)
             _log.warning("cannot keep the printers of %s: %s", appimage.name, problem)
-            return None, None
-    shutil.rmtree(folder, ignore_errors=True)
+            return None
+    kept = _replace(folder, fresh, appimage, key)
+    if kept is not None:
+        _log.info(
+            "kept the printers of %s in %.1f s (engine %s)",
+            appimage.name,
+            time.monotonic() - started,
+            "found" if usable else "missing",
+        )
+        _clear_vanished(folder)
+    return kept
+
+
+def _replace(
+    folder: Path, fresh: Path, appimage: Path, key: tuple[str, int, int]
+) -> tuple[Path, bool] | None:
+    """Die neue Kopie an die Stelle der alten — oder die eines zweiten Solidon, wenn sie passt."""
     try:
+        if folder.exists():
+            shutil.rmtree(folder)
         fresh.rename(folder)
-    except OSError:
-        # Ein zweiter Solidon war schneller; seine Kopie gilt, wenn sie passt.
+    except OSError as problem:
         shutil.rmtree(fresh, ignore_errors=True)
         stamped = _stamped(appimage, key)
-        return stamped if stamped is not None else (None, None)
-    _log.info(
-        "kept the printers of %s in %.1f s (engine %s)",
-        appimage.name,
-        time.monotonic() - started,
-        "found" if usable else "missing",
-    )
-    return folder / "share" / "cura", usable
+        if stamped is None:
+            _log.warning(
+                "cannot replace the printers of %s at %s: %s", appimage.name, folder, problem
+            )
+        return stamped
+    stamp = _read_stamp(folder) or {}
+    return folder / "share" / "cura", bool(stamp.get("engine"))
+
+
+def _clear_vanished(keep: Path) -> None:
+    """Kopien von AppImages räumen, die es nicht mehr gibt — ein Update trägt die
+    Version im Dateinamen, und jede Kopie wiegt rund 26 MB."""
+    try:
+        siblings = [entry for entry in _cache_root().iterdir() if entry.is_dir() and entry != keep]
+    except OSError:
+        return
+    for sibling in siblings:
+        stamp = _read_stamp(sibling)
+        source = stamp.get("source") if stamp is not None else None
+        if not isinstance(source, str) or Path(source).exists():
+            continue
+        try:
+            shutil.rmtree(sibling)
+        except OSError as problem:
+            _log.warning("cannot clear the old printers at %s: %s", sibling, problem)
+        else:
+            _log.info("cleared the printers of a removed appimage: %s", source)
