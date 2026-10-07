@@ -109,7 +109,9 @@ Revisionen, Byte und SHA-256 stehen an `comfy_setup.SHAPE_FILES`,
   hat keinen einheitlichen Umlaufsinn, `udf` legt um jede geschlossene Fläche
   eine nach innen gewendete zweite Hülle. Begründung im Docstring von
   `mesh.py`; Solidons Reparaturkette nimmt eine verbliebene Innenhülle mit
-  `repair(inner_shells=True)` (`generate.GENERATED_REPAIR`).
+  `repair(inner_shells=True)` (`generate.GENERATED_REPAIR`). Nach
+  `DecimateMesh` füllt ein zweites `FillHoles` die kleinen Vierecklöcher, die
+  das Ausdünnen offen lässt.
 
 ## Grenzen
 

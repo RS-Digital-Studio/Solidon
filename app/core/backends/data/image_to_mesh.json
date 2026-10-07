@@ -329,10 +329,23 @@
     "class_type": "SaveGLB",
     "inputs": {
       "mesh": [
-        "24",
+        "26",
         0
       ],
       "filename_prefix": "solidon/image"
+    }
+  },
+  "26": {
+    "class_type": "FillHoles",
+    "inputs": {
+      "mesh": [
+        "24",
+        0
+      ],
+      "max_perimeter": 0.03,
+      "weld_epsilon_rel": 1e-05,
+      "max_vertices": 16,
+      "fill_chains": false
     }
   }
 }

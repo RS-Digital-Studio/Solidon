@@ -94,11 +94,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut; dazu die vier Handwege der Merkmalbedienung (§4) |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
-| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | Oberfläche, Kommandozeile und die Agenten- und Steckbrieftexte gerahmt (07.10.); offen die Einrichtungstexte in `comfy_setup.py`, der Wächter über ganz `app/core` und die Fensterabnahme beim Release |
+| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | Oberfläche, Kommandozeile, Agenten- und Steckbrieftexte und der ganze Kern gerahmt, der Wächter liest den ganzen Kern (07.10.); offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
-| [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut (07.10.); offen die Kanzleifragen zur neuen Kette (DINOv3-Lizenz, Trainingsdaten von BiRefNet und TRELLIS.2, Apache-Hinweise) |
-| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
+| [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise) |
+| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07.10.): Weg läuft bis zum Export, die Körper bleiben meist offen (RM-548); offen Linux und macOS |
+| [RM-548 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen](#rm-548) | KI und Generatoren | Gefunden am echten Lauf (07.10.): 6 von 7 Läufen offen, der Textweg liefert dünne Schalen; offen die Ursache in Reparatur und Textablauf |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte und (b) der Satz für gebündelte Aufrufe gebaut, lokal 28 gegen 27 von 39 (07.10.); offen: lokal endet ein Zug nach 8 bis 11 Schritten am Zugbudget statt am Schrittlimit |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -3570,10 +3571,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   +39/−29 ohne geänderten gemeinsamen Schlüssel. Der Wächter in `tests/test_translations.py`
   erkennt auch `f"{x}: " + tr(…)` und ist am Stand davor mit 43 Funden rot. Deutsch ist Zeichen
   für Zeichen gleich; die Agenten-Suite lief trotzdem mit (siehe [RM-251](#rm-251)).
-  **Offen:** `app/core/backends/comfy_setup.py` setzt vor übersetzte Sätze einen festen
-  Doppelpunkt (Kundentext im Einrichtungsdialog), und der Wächter liest außerhalb der
-  Agentendateien nur `install.py`, `log.py` und `support.py` — er soll über ganz `app/core`
-  laufen, sobald `comfy_setup.py` frei ist (beides mit dem Umbau aus [RM-003](#rm-003)).
+  **Nachtrag 07.10.2026:** Mit dem Umbau aus [RM-003](#rm-003) ist `comfy_setup.py` frei von
+  festen Doppelpunkten, und der Wächter liest den ganzen Kern außer den Modelltexten, die ihr
+  eigener Test prüft; am Stand davor meldet er `comfy_setup.py` 537, 739 und 757. Offen allein
+  die Fensterabnahme beim Release (RM-213).
 
 <a id="rm-312"></a>
 
@@ -3837,7 +3838,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Bildkodierer DINOv3 (Metas DINOv3 License), Freistellen BiRefNet (MIT), Textweg FLUX.2 [klein]
   4B mit Qwen3-4B (Apache-2.0), alles eingebaute ComfyUI-Knoten ab 0.35, jede Datei mit Revision
   und SHA-256 (`comfy_setup.SHAPE_FILES`, `BACKGROUND`, `IMAGE_MODEL_FILES`). Die Einrichtung räumt
-  Solidons alten TripoSG-Knoten und dessen markierte Gewichte. **Offen:** (1) DINOv3 License — Einbeziehung beim Kunden, Lizenztext vor dem Abruf zeigen und
+  Solidons alten TripoSG-Knoten und dessen markierte Gewichte; Git-Objektdateien des alten
+  Klons sind schreibgeschützt und werden mit entfernt (an einer Kopie der echten Einrichtung
+  geprüft). **Entschieden (Robert, 07.10.2026):** Die Einrichtung entfernt Solidons eigene alte
+  TripoSG-Einrichtung, nur am eigenen Zeichen erkannt, und der Einrichtungsdialog nennt vorher
+  Ordner und ungefähre Größe, in allen sechs Sprachen, mit Fenstertest
+  (`comfy_setup.legacy_leftovers`). Echter Lauf unter Windows in [RM-004](#rm-004).
+  **Offen:** (1) DINOv3 License — Einbeziehung beim Kunden, Lizenztext vor dem Abruf zeigen und
   Zustimmung einholen, §1.b.v (Waffen) in Solidons Bedingungen, §8 einseitige Änderung, Abruf
   aus der Comfy-Org-Kopie ohne Lizenzkopie; (2) BiRefNet-Trainingsdaten DIS5K nur
   nicht-kommerziell; (3) Objaverse-/HSSD-NC-Objekte in den 3D-Trainingsdaten; (4) Hinweispflichten
@@ -3857,6 +3864,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   bestehende Generatoren und Medien bleiben erhalten.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p9--säule-b-und-farbe).
+
+  **Windows, 07.10.2026 (Claude), TRELLIS.2-Kette:** RTX 4080 16 GB, ComfyUI 0.37.0, alle
+  Dateien mit Revision und SHA-256 aus `comfy_setup`; Solidons Weg ohne Fenster (`from_text`,
+  `from_image`, Auswertung, Speichern und Wiederöffnen, STL und 3MF). Beide Wege laufen bis zum
+  Export, wiedergeöffnet gleich; ein Auftrag kostet kalt 125 s (Bild) und 350 s (Text), warm
+  21–26 s, die Karte bleibt unter 16 GB. Rohnetze um 700 000 Dreiecke, die Auswertung in Solidon
+  braucht 41–445 s. **Die Körper bleiben meist offen** (6 von 7 Läufen, Bild 3 von 4, Text 3 von
+  3): `repair.still_open`; der Textweg liefert dünne Schalen (Rakete 2,3 cm³ gegen 25,7 cm³ aus
+  dem Bildweg bei gleichem Bild und Startwert, Vase mit negativem Volumen). Der Fall gehört zu
+  [RM-548](#rm-548). Bericht, Rohnetze und Exporte (nicht versioniert):
+  `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Offen:** RM-548, danach dieselben Läufe
+  unter Linux und macOS.
 
 <a id="rm-251"></a>
 
@@ -3966,6 +3985,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Sätze an `sculpt_strokes` und `pose_armature` (RM-014). Lokal ist Version 9 gemessen und nicht
   schlechter; gehostet vorher (Version 8) und nachher. Verschlechtert sich die Quote, gehen
   diese Sätze zurück.
+
+<a id="rm-548"></a>
+
+- [ ] **RM-548 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen.** Gefunden am
+  07.10.2026 beim ersten echten Lauf der TRELLIS.2-Kette ([RM-004](#rm-004), Claude). Von
+  sieben Läufen endete einer geschlossen; die übrigen melden `repair.still_open` („2 offene
+  Stellen ließen sich nicht sicher schließen“). Gemessen an den Rohnetzen: (a) `DecimateMesh`
+  ließ rund zwanzig Vierecklöcher je Netz offen — behoben mit einem zweiten `FillHoles` nach dem
+  Ausdünnen, danach hat das Rohnetz des Bildwegs keine offene Kante mehr, Solidon meldet trotzdem
+  offen; die Ursache liegt also zwischen Einlesen, *Auf Maß bringen* und *Reparieren*. (b) Der
+  Textweg liefert bei gleichem Bild und Startwert eine dünne Schale (2,3 statt 25,7 cm³), die
+  Vase ein Netz mit negativem Volumen und zwei langen offenen Rändern; beim Bildweg kam das an
+  einem von vier Läufen vor (Startwert 8). Zu prüfen: das Bild des Textwegs als PNG durch den
+  Bildablauf schicken, `RemeshMesh` mit `sdf` gegen `udf`. (c) 700 000 Dreiecke kosten die
+  Auswertung bis 445 s; `target_face_count` gegen Druckbedarf abwägen. Rohnetze und Berichte:
+  `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Abnahme:** an mindestens fünf
+  Startwerten je Weg ein geschlossener Körper ohne Warnung, Test für die Stelle in Solidon, die
+  ein geschlossenes Rohnetz offen meldet. Bauplan §6, §17, §27.
 
 ## Tests und Entwicklungswerkzeuge
 

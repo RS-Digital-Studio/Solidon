@@ -1649,12 +1649,17 @@ def test_the_remesh_drops_the_inner_hull_and_the_cascade_fits_sixteen_gigabytes(
     assert remesh["inputs"]["sign_mode"] == "udf"
     assert remesh["inputs"]["sign_mode.drop_inverted_components"] is True
     assert remesh["inputs"]["sign_mode.drop_enclosed_components"] is True
-    fill_key, _fill = by_kind["FillHoles"]
-    assert remesh["inputs"]["mesh"][0] == fill_key, "erst Löcher schließen, dann neu vernetzen"
+    fills = {key for key, node in graph.items() if node["class_type"] == "FillHoles"}
+    assert remesh["inputs"]["mesh"][0] in fills, "erst Löcher schließen, dann neu vernetzen"
     _key, upsample = by_kind["Trellis2UpsampleStage"]
     assert upsample["inputs"]["target_resolution"] == 1024
     _key, save = by_kind["SaveGLB"]
     assert save["inputs"]["filename_prefix"].startswith("solidon/")
+    # Und nach dem Ausdünnen noch einmal: ``DecimateMesh`` ließ an echten
+    # Läufen rund zwanzig Vierecklöcher je Netz offen (07.10.2026, RM-548).
+    last_fill = graph[save["inputs"]["mesh"][0]]
+    assert last_fill["class_type"] == "FillHoles"
+    assert graph[last_fill["inputs"]["mesh"][0]]["class_type"] == "DecimateMesh"
 
 
 def _history(job: str, *, error: str = "", node: str = "") -> bytes:
