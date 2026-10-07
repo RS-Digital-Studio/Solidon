@@ -29,7 +29,7 @@ from typing import Final, Literal
 from app.core import guides
 from app.core.registry import documentation
 from app.core.registry.registry import CATEGORIES, REGISTRY, Registry
-from app.i18n import TranslatableText, _
+from app.i18n import Figure, TranslatableText, _
 
 #: Die fünf Teile des Handbuchs (Konzept Handbuch §4). Gegliedert wird nach
 #: dem, was der Kunde vorhat, nicht nach den Bereichen des Programms: Wer
@@ -1413,7 +1413,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "1. **Läuft es?** Der Dialog sagt es, und ein Knopf startet es. Läuft es auf einem "
             "anderen Rechner, gehört seine Adresse in die Liste der zusätzlichen Programme.\n"
             "2. **Ein Modell holen.** Die Auswahl nennt die installierten und die bewährten. "
-            "*Modell holen* lädt sieben bis neunzehn Gigabyte; ein abgebrochener Download setzt "
+            "*Modell holen* lädt {least} bis {most} GB; ein abgebrochener Download setzt "
             "später fort.\n"
             "3. **Werkzeuge prüfen.** Ob ein Modell Werkzeuge wirklich aufruft, zeigt nur eine "
             "Probe mit einem echten Zug. Antwortet der Chat, führt aber nichts aus, hilft ein "
@@ -1443,11 +1443,11 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "\n"
             "Die Einrichtung **prüft zuerst die Version von ComfyUI**; ist sie zu alt, sagt "
             "sie es, bevor etwas geladen wird. Auf Wunsch folgen das Modell für den Weg aus "
-            "Bild mit rund 8 GB und für den Weg aus Text das Bildmodell mit rund 8,3 GB, jede "
-            "Datei in einem festen Stand und mit Prüfsumme. Ein abgebrochener Lauf setzt fort, "
-            "wo er stand. **Danach ComfyUI einmal neu starten.** Während einer Erzeugung zeigt "
-            "Solidon die verstrichene Zeit; bricht etwas ab, steht der Satz von ComfyUI im "
-            "Dialog."
+            "Bild mit rund {shape} GB und für den Weg aus Text das Bildmodell mit rund "
+            "{image} GB, jede Datei in einem festen Stand und mit Prüfsumme. Ein abgebrochener "
+            "Lauf setzt fort, wo er stand. **Danach ComfyUI einmal neu starten.** Während "
+            "einer Erzeugung zeigt Solidon die verstrichene Zeit; bricht etwas ab, steht der "
+            "Satz von ComfyUI im Dialog."
         ),
     ),
     Page(
@@ -2187,11 +2187,12 @@ def models_text() -> str:
             str(
                 _(
                     "Nur für den Weg aus Text. Wer ein Foto oder eine Zeichnung "
-                    "mitbringt, braucht es nie — und acht Gigabyte für einen Weg, "
+                    "mitbringt, braucht es nie — und rund {size} GB für einen Weg, "
                     "den ein vorhandenes Bild umgeht, lädt Solidon niemandem "
                     "ungefragt herunter. Deshalb ist es in der Einrichtung ein "
                     "eigenes Häkchen; fehlt es beim Erzeugen, führt der Knopf "
-                    "*Bildmodell einrichten …* direkt dorthin."
+                    "*Bildmodell einrichten …* direkt dorthin.",
+                    size=Figure(f"{comfy_setup.IMAGE_MODEL_GIGABYTES:g}"),
                 )
             ),
             "",
@@ -2408,13 +2409,49 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
         page.key: page
         for page in (
             _where_to_start_page(),
-            *(_with_its_guides(page) for page in INTRODUCTION),
+            *(_with_its_guides(_with_download_sizes(page)) for page in INTRODUCTION),
             _spacemouse_page(),
             *(guide_page(guide) for guide in guides.GUIDES),
         )
     }
     arranged = tuple(replace(written[key], part=part) for part, keys in OUTLINE for key in keys)
     return (*arranged, *knowledge_pages(), *generated)
+
+
+#: Seiten, deren Text Downloadgrößen nennt — als Platzhalter, gefüllt in
+#: :func:`_with_download_sizes`.
+SIZED_PAGES: Final = frozenset({"extras"})
+
+
+def _with_download_sizes(page: Page) -> Page:
+    """Die Größen der Downloads kommen aus den Konstanten, nicht aus dem Satz.
+
+    ``comfy_setup`` rechnet sie aus den Dateien, ``llm.OLLAMA_SUGGESTIONS``
+    nennt die bewährten Modelle samt Größe; getippt veralteten sie beim
+    nächsten Stand (Review 1 P3, G-9). Gefüllt wird erst hier, weil beide
+    Module zu laden eine Drittelsekunde kostet — beim Import des Handbuchs
+    für jede Seite, die sie nicht braucht.
+    """
+    if page.key not in SIZED_PAGES or not isinstance(page.body, TranslatableText):
+        return page
+    import math
+
+    from app.core.backends import comfy_setup
+    from app.core.backends.llm import OLLAMA_SUGGESTIONS
+
+    pulled = [gigabytes for _name, gigabytes, _note in OLLAMA_SUGGESTIONS]
+    return replace(
+        page,
+        body=replace(
+            page.body,
+            values={
+                "least": math.ceil(min(pulled)),
+                "most": math.ceil(max(pulled)),
+                "shape": Figure(f"{comfy_setup.WEIGHT_GIGABYTES:g}"),
+                "image": Figure(f"{comfy_setup.IMAGE_MODEL_GIGABYTES:g}"),
+            },
+        ),
+    )
 
 
 def _with_its_guides(page: Page) -> Page:

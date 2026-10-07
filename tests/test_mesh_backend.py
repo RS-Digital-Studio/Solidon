@@ -2156,21 +2156,44 @@ def test_the_sizes_come_from_the_files_and_not_from_the_keyboard() -> None:
     assert round(image / 1e9, 1) == comfy_setup.IMAGE_MODEL_GIGABYTES
     assert math.ceil(comfy_setup.BACKGROUND.size / 1e6) == comfy_setup.BACKGROUND_MEGABYTES
 
-    tree = ast.parse(Path(comfy_setup.__file__).read_text(encoding="utf-8"))
-    texts = [
-        node.args[0].value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "_"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-    ]
-    sized = [text for text in texts if re.search(r"\b[GM]B\b", text)]
-    assert sized, "kein Text mit Größe gefunden — der Test prüfte nichts"
-    for text in sized:
-        assert not re.search(r"\d\s*[GM]B\b", text), f"getippte Größe in {text!r}"
+    from app.core import manual
+
+    # **Und das Handbuch** (Review 1 P3, G-9): Es nannte „rund 8 GB“, „rund
+    # 8,3 GB“, „acht Gigabyte“ und für Ollama „sieben bis neunzehn
+    # Gigabyte“ — getippt, während die Konstanten sie ausrechnen.
+    spelled = (
+        r"\b(?:ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|\w+zehn|zwanzig)"
+        r"\s+[GM]igabyte"
+    )
+    for module in (comfy_setup, manual):
+        tree = ast.parse(Path(module.__file__ or "").read_text(encoding="utf-8"))
+        texts = [
+            node.args[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ]
+        sized = [text for text in texts if re.search(r"\b[GM]B\b", text)]
+        assert sized, f"kein Text mit Größe in {module.__name__} — der Test prüfte nichts"
+        for text in texts:
+            assert not re.search(r"\d\s*[GM]B\b", text), f"getippte Größe in {text!r}"
+            assert not re.search(spelled, text, re.IGNORECASE), f"getippte Größe in {text!r}"
+
+    from app.i18n import format_decimal
+
+    extras = next(page for page in manual.pages() if page.key == "extras")
+    written = str(extras.body)
+    assert f"rund {format_decimal(comfy_setup.WEIGHT_GIGABYTES)} GB" in written
+    assert f"rund {format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES)} GB" in written
+    assert "{" not in written, "jeder Platzhalter ist gefüllt"
+    image_paragraph = manual.models_text()
+    assert f"rund {format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES)} GB für einen Weg" in (
+        image_paragraph
+    )
 
 
 # --- Eine Adresse aus Nutzerhand (24.08.2026) -------------------------------------
