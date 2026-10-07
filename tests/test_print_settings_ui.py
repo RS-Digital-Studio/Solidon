@@ -5713,6 +5713,106 @@ def test_the_print_dialog_offers_the_printers_of_its_slicer(
         discover.remember_path("slicer", "")
 
 
+def test_the_print_dialog_says_whose_printers_it_lists_and_what_went_wrong(
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Die Druckerliste folgt dem Slicer darüber: Kurzhilfe und Suchzeile nennen
+    ihn. Scheitert das Ablegen des gewählten Druckers, springt die Wahl zurück,
+    die Vorgabe für neue Projekte bleibt, und der Grund steht unter dem Drucker
+    — in der Zustandszeile überschrieb ihn der nächste Sperrgrund (Regel 17).
+    Eine gescheiterte Erhebung zeigt alle Drucker und sagt es; vorher still.
+    """
+    from app.core import discover
+    from app.core.errors import FileWriteError
+    from app.core.export import slicer_profiles
+    from app.core.types import PrinterProfile
+
+    original_profiles_dir = profiles.user_profiles_dir
+
+    def restore_profile_cache() -> None:
+        profiles.user_profiles_dir = original_profiles_dir
+        profiles.reload()
+
+    request.addfinalizer(restore_profile_cache)
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path / "profiles")
+    profiles.reload()
+    kobra = PrinterProfile(
+        id="slicer-kobra-s1",
+        title="Anycubic Kobra S1 0.4 nozzle",
+        build_volume=(250.0, 250.0, 250.0),
+        vendor="Anycubic",
+    )
+    monkeypatch.setattr(slicer_profiles, "discover_printers", lambda *_args: (kobra,))
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    executable = tmp_path / "AnycubicSlicerNext" / "AnycubicSlicerNext.exe"
+    executable.parent.mkdir()
+    executable.write_text("", encoding="utf-8")
+    discover.remember_path("slicer", str(executable))
+    session = Session()
+    settings = UiSettings()
+    dialog = PrintSettingsDialog(session, settings)
+    try:
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+        assert dialog.wait_for_printer_survey(), "die Drucker des Slicers kamen nicht"
+        tip = (
+            "Mit diesem Drucker rechnet das Projekt. Zur Wahl stehen die Drucker aus "
+            "Anycubic Slicer Next und Ihre eigenen."
+        )
+        assert dialog.printer_choice.toolTip() == tip
+        assert dialog.printer_choice.accessibleDescription() == tip
+        assert dialog.printer_label.toolTip() == tip
+        assert dialog.printer_choice.search_field.placeholderText() == (
+            "Drucker aus Anycubic Slicer Next suchen …"
+        )
+        assert dialog.printer_state.isHidden(), "ohne Grund keine Zeile"
+
+        before = session.profile.printer.id
+        default = settings.printer
+
+        def full_disk(_profile: PrinterProfile, **_values: object) -> PrinterProfile:
+            raise FileWriteError(detail="kein Platz")
+
+        monkeypatch.setattr(profiles, "save_printer", full_disk)
+        index = dialog.printer_choice.findData(kobra.id)
+        dialog.printer_choice.setCurrentIndex(index)
+        dialog.printer_choice.activated.emit(index)
+
+        assert session.profile.printer.id == before
+        assert dialog.printer_choice.currentData() == before, "die Wahl springt zurück"
+        assert settings.printer == default, "der nicht abgelegte Drucker wird keine Vorgabe"
+        assert not dialog.printer_state.isHidden()
+        assert dialog.printer_state.text() == (
+            "Der Drucker ließ sich nicht speichern. Prüfen Sie den freien Speicherplatz "
+            "und die Schreibrechte, und wählen Sie ihn erneut."
+        )
+        dialog._show_slicer_state()
+        assert "wählen Sie ihn erneut" in dialog.printer_state.text(), (
+            "die Zustandszeile überschreibt den Grund nicht"
+        )
+
+        def unreadable(*_args: object) -> tuple[PrinterProfile, ...]:
+            raise RuntimeError("Bestand kaputt")
+
+        monkeypatch.setattr(slicer_profiles, "discover_printers", unreadable)
+        dialog._start_printer_survey()
+        assert dialog.wait_for_printer_survey(), "die gescheiterte Erhebung kam nicht zurück"
+
+        assert dialog.printer_choice.findData("centauri-carbon-2") >= 0, "alle bekannten"
+        assert dialog.printer_state.text() == (
+            "Die Drucker von Anycubic Slicer Next ließen sich nicht lesen. Wählen Sie Ihren "
+            "aus allen bekannten Druckern oder einen anderen Slicer."
+        )
+        assert dialog.printer_choice.search_field.placeholderText() == "Drucker suchen …"
+    finally:
+        session.wait_for_idle()
+        dialog.release()
+        dialog.deleteLater()
+        discover.remember_path("slicer", "")
+
+
 def test_only_a_picked_printer_becomes_the_next_projects_printer(
     qt_app: QApplication,
 ) -> None:

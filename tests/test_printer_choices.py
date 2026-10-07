@@ -117,6 +117,208 @@ def test_every_printer_list_offers_the_printers_of_the_chosen_slicer(
     assert first_run.known_printers(discovered)[s1_max.id] == offered[s1_max.id]
 
 
+@pytest.fixture
+def own_printers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> Path:
+    """Ein leerer Ordner für die eigenen Drucker; danach gilt wieder der alte Bestand."""
+    original_profiles_dir = profiles.user_profiles_dir
+
+    def restore_profile_cache() -> None:
+        profiles.user_profiles_dir = original_profiles_dir
+        profiles.reload()
+
+    request.addfinalizer(restore_profile_cache)
+    folder = tmp_path / "profiles"
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: folder)
+    profiles.reload()
+    return folder
+
+
+_ANYCUBIC = Path("C:/Programme/AnycubicSlicerNext/AnycubicSlicerNext.exe")
+_ELEGOO = Path("C:/Programme/ElegooSlicer/elegoo-slicer.exe")
+
+
+def _kobra(model: str = "Kobra S1") -> PrinterProfile:
+    return _variant(
+        0.4,
+        title=f"Anycubic {model} 0.4 nozzle",
+        vendor="Anycubic",
+        identifier="slicer-orca-" + model.lower().replace(" ", "-"),
+    )
+
+
+def _choices(slicer: Path, *found: PrinterProfile) -> first_run.PrinterChoices:
+    return first_run.PrinterChoices(
+        slicer, first_run.slicer_printer_ids(slicer, found), "", profiles=found
+    )
+
+
+def test_a_taken_slicer_printer_is_offered_only_under_its_slicer(own_printers: Path) -> None:
+    """Erst der Slicer, dann seine Drucker — auch für die, die schon gewählt
+    wurden. Wer drei Drucker aus Anycubic Slicer Next ausprobierte, sah sie
+    danach auch unter ElegooSlicer, denn jeder gewählte wurde ein eigener
+    Drucker. Abgelegt trägt er sein Programm und steht nur dort; ein selbst
+    angelegter und einer aus der Zeit vor der Marke stehen überall.
+    """
+    kobra = _kobra()
+    workshop = profiles.save_printer(
+        replace(profiles.printer(profiles.DEFAULT_PRINTER), id="user-werkstatt", title="Werkstatt")
+    )
+
+    assert first_run.keep_slicer_printer(kobra.id, {kobra.id: kobra}, _ANYCUBIC) == kobra
+    assert first_run.keep_slicer_printer(kobra.id, {kobra.id: kobra}, _ANYCUBIC) is None, (
+        "schon abgelegt, nichts zu schreiben"
+    )
+    assert first_run.keep_slicer_printer("elsewhere", {kobra.id: kobra}, _ANYCUBIC) is None
+
+    under_elegoo = first_run.slicer_printer_ids(_ELEGOO, ())
+    under_anycubic = first_run.slicer_printer_ids(_ANYCUBIC, ())
+
+    assert workshop.id in under_elegoo and workshop.id in under_anycubic
+    assert kobra.id in under_anycubic
+    assert kobra.id not in under_elegoo
+    assert kobra.id not in first_run.printers_on_offer(under_elegoo, {})
+
+    legacy = _kobra("Kobra 3")
+    profiles.save_printer(legacy)
+    assert legacy.id in first_run.slicer_printer_ids(_ELEGOO, ()), (
+        "ein früher gespeicherter Drucker ohne Programm erscheint weiter"
+    )
+    assert first_run.keep_slicer_printer(legacy.id, {legacy.id: legacy}, _ANYCUBIC) == legacy, (
+        "wird er unter seinem Slicer gewählt, bekommt er die Marke nachgetragen"
+    )
+    assert legacy.id not in first_run.slicer_printer_ids(_ELEGOO, ())
+
+
+def test_an_old_survey_does_not_change_the_list_after_a_slicer_change(
+    own_printers: Path,
+) -> None:
+    """Die Antwort der Erhebung für Anycubic Slicer Next kommt, nachdem der
+    Kunde auf ElegooSlicer gewechselt hat: Sie ändert weder Liste noch Satz."""
+    from app.ui.print_settings_dialog import SlicerPrinters
+
+    offer = SlicerPrinters()
+    first, second = object(), object()
+    kobra, centauri = _kobra(), _variant(0.4, title="Elegoo Centauri Carbon 2", vendor="Elegoo")
+    offer.begin(_ANYCUBIC, first)
+    offer.begin(_ELEGOO, second)
+
+    assert not offer.found(first, _choices(_ANYCUBIC, kobra))
+    assert not offer.failed(first)
+    assert (offer.source, offer.identifiers, offer.discovered) == (None, None, {})
+    assert offer.survey is second
+
+    assert offer.found(second, _choices(_ELEGOO, centauri))
+    offered = offer.offered(profiles.printer_profiles())
+
+    assert centauri.id in offered and kobra.id not in offered
+    assert "centauri-carbon-2" not in offered, "ein Tabellendrucker, den der Slicer nicht nennt"
+    assert offer.survey is None
+    assert not offer.found(second, _choices(_ELEGOO, centauri)), "eine Antwort gilt einmal"
+
+
+def test_a_crashed_survey_offers_every_printer_and_says_so(own_printers: Path) -> None:
+    """Scheitert die Erhebung, zeigt der Dialog alle bekannten Drucker — wie
+    vor der Erhebung, aber nicht mehr still: Der Satz unter dem Drucker nennt
+    den Slicer und den Weg (Regel 17)."""
+    from app.ui.print_settings_dialog import SlicerPrinters
+
+    offer = SlicerPrinters()
+    survey = object()
+    offer.begin(_ANYCUBIC, survey)
+    known = profiles.printer_profiles()
+
+    assert offer.failed(survey)
+    assert offer.offered(known) == dict(known)
+    assert offer.note() == (
+        "Die Drucker von Anycubic Slicer Next ließen sich nicht lesen. Wählen Sie Ihren "
+        "aus allen bekannten Druckern oder einen anderen Slicer."
+    )
+    offer.begin(_ELEGOO, object())
+    assert offer.note() == "", "eine neue Erhebung räumt den Satz"
+
+
+def test_a_slicer_printer_that_cannot_be_kept_says_why_and_changes_nothing(
+    own_printers: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scheitert das Ablegen eines gewählten Slicer-Druckers, bleibt das
+    Projekt beim alten, und der Grund steht unter dem Drucker. In der
+    Zustandszeile überschrieb ihn der nächste Sperrgrund, etwa eine
+    Profillücke, und die Wahl sprang ohne Satz zurück (Regel 17)."""
+    from app.core.errors import FileWriteError
+    from app.ui.print_settings_dialog import SlicerPrinters
+
+    offer = SlicerPrinters()
+    survey = object()
+    kobra = _kobra()
+    offer.begin(_ANYCUBIC, survey)
+    offer.found(survey, _choices(_ANYCUBIC, kobra))
+    real_save = profiles.save_printer
+
+    def full_disk(_profile: PrinterProfile, **_values: object) -> PrinterProfile:
+        raise FileWriteError(detail="kein Platz")
+
+    monkeypatch.setattr(profiles, "save_printer", full_disk)
+
+    assert not offer.keep(kobra.id)
+    assert kobra.id not in profiles.user_printer_profiles()
+    assert offer.note() == (
+        "Der Drucker ließ sich nicht speichern. Prüfen Sie den freien Speicherplatz und "
+        "die Schreibrechte, und wählen Sie ihn erneut."
+    )
+
+    monkeypatch.setattr(profiles, "save_printer", real_save)
+
+    assert offer.keep(kobra.id)
+    assert kobra.id in profiles.user_printer_profiles("anycubicslicernext")
+    assert offer.note() == ""
+    assert offer.keep(profiles.DEFAULT_PRINTER), "ein bekannter Drucker braucht kein Ablegen"
+
+
+def test_a_slicer_without_printers_of_its_own_leaves_every_printer_on_offer(
+    own_printers: Path,
+) -> None:
+    """Nennt der Slicer keinen eigenen Drucker (Resin-Slicer, unlesbarer
+    Bestand), gibt es nichts, wonach sich filtern ließe: Jeder bekannte bleibt
+    wählbar, und die Liste behauptet keinen Slicer."""
+    from app.ui.print_settings_dialog import SlicerPrinters
+
+    offer = SlicerPrinters()
+    survey = object()
+    offer.begin(_ANYCUBIC, survey)
+    known = profiles.printer_profiles()
+
+    assert offer.found(survey, _choices(_ANYCUBIC))
+    assert offer.offered(known) == dict(known)
+    assert offer.note() == ""
+    assert offer.hint() == (
+        "Mit diesem Drucker rechnet das Projekt. Zur Wahl stehen alle bekannten Drucker.",
+        "Drucker suchen …",
+    )
+
+
+def test_the_printer_list_says_whose_printers_it_shows(own_printers: Path) -> None:
+    """Die Liste oben folgt dem Slicer, der darüber gewählt ist, und nichts an
+    ihr sagte das: Wer einen Tabellendrucker suchte, den sein Slicer nicht
+    führt, fand nichts und musste raten. Kurzhilfe und Suchzeile nennen den
+    Slicer, solange seine Drucker die Liste bestimmen."""
+    from app.ui.print_settings_dialog import SlicerPrinters
+
+    offer = SlicerPrinters()
+    survey = object()
+    offer.begin(_ANYCUBIC, survey)
+    offer.found(survey, _choices(_ANYCUBIC, _kobra()))
+
+    assert offer.hint() == (
+        "Mit diesem Drucker rechnet das Projekt. Zur Wahl stehen die Drucker aus "
+        "Anycubic Slicer Next und Ihre eigenen.",
+        "Drucker aus Anycubic Slicer Next suchen …",
+    )
+    offer.begin(None, None)
+    assert offer.hint()[1] == "Drucker suchen …", "ohne Slicer kein Slicer im Satz"
+
+
 def test_variants_of_one_printer_become_one_choice(qt_app) -> None:
     """Eine Zeile je Modell, mit der Düse im Hinweis; eine Wahl steht für ihr
     Modell, ein selbst angelegter Drucker bleibt für sich."""

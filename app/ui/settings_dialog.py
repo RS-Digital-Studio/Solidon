@@ -56,12 +56,13 @@ from app.ui.first_run import (
     _PrinterSurvey,
     add_printer_choices,
     choose_slicer_file,
+    keep_slicer_printer,
     known_printers,
     preferred_printer,
     printers_on_offer,
     select_program,
+    slicer_printer_ids,
     valid_printer_choice,
-    with_saved_nozzle,
 )
 from app.ui.icons import icon
 from app.ui.labels import TrackSlider, by_title, slicer_title, wheel_needs_focus
@@ -697,12 +698,8 @@ class SettingsDialog(QDialog):
     def save_external_choices(self) -> None:
         """Nur Speichern übernimmt das gewählte fremde Profil und den Programmpfad."""
         chosen = str(self.printer.currentData() or "")
-        found = self._discovered_printers.get(chosen)
         try:
-            saved = profiles.printer_profiles().get(chosen)
-            profile = with_saved_nozzle(found, saved) if found is not None else None
-            if profile is not None and saved != profile:
-                profiles.save_printer(profile)
+            keep_slicer_printer(chosen, self._discovered_printers, self.slicer_path)
             if not discover.same_program(discover.remembered_path("slicer"), self.slicer_path):
                 discover.remember_path("slicer", self.slicer_path)
         except OSError as problem:
@@ -837,7 +834,7 @@ class SettingsDialog(QDialog):
             return
         _log.warning("settings printer survey crashed: %s", detail)
         self._printer_survey = None
-        self._fill_printers(tuple(profiles.user_printer_profiles()))
+        self._fill_printers(slicer_printer_ids(Path(self.slicer_path), ()))
         self.printer_state.setText(
             tr(
                 "Drucker konnten nicht gelesen werden. Wählen Sie einen anderen Slicer "

@@ -395,16 +395,16 @@ Zustand und Mitgabe über den Knöpfen, außerhalb des Rollbereichs.
 
 **Slicer vor Drucker, überall** (Entscheidung Robert): Erststart, Einstellungen
 und Druckdialog lesen die Drucker über dieselbe Erhebung, bieten dieselbe Liste
-(`printers_on_offer`), beides jederzeit wechselbar. Der Slicer steht unter
-„Anwendung“ vor den Druckervorgaben. Ein neues Profil bleibt im Entwurf, bis
-gespeichert oder im Druckdialog gewählt (`_keep_slicer_printer`), auch beim
-Sprachwechsel, ebenso der Programmpfad. Ohne eigene Drucker des Slicers bietet
-der Druckdialog alle bekannten. Im Erstlauf gelten Sprache, Slicerpfad und
-gespeicherte Drucker sofort. Verspätete Antworten früherer Auswahl ändern
-nichts. Je Modell eine Zeile ohne Düse (Entscheidung Robert,
-`add_printer_choices`); die Düse wählt der Druckdialog, Speichern behält sie
-(`with_saved_nozzle`). Die Suchzeile filtert live, erst eine ausdrückliche
-Auswahl übernimmt, Escape schließt nur die Liste.
+(`printers_on_offer`), beides jederzeit wechselbar; in den Einstellungen steht
+der Slicer unter „Anwendung“. Ein neues Profil bleibt im Entwurf, auch beim
+Sprachwechsel, wie der Programmpfad, bis gespeichert oder im Druckdialog
+gewählt (`keep_slicer_printer`), dann nur unter seinem Slicer; eigene ohne
+Marke stehen unter jedem. Ohne eigene Drucker des Slicers zeigt der
+Druckdialog alle; Gründe stehen unter der Druckerwahl, Kurzhilfe und Suche
+nennen den Slicer (`SlicerPrinters`). Im Erstlauf gelten Sprache, Slicerpfad
+und gespeicherte Drucker sofort; verspätete Antworten früherer Auswahl ändern
+nichts. Je Modell eine Zeile ohne Düse (`add_printer_choices`); die Düse wählt
+der Druckdialog, Speichern behält sie (`with_saved_nozzle`).
 
 ## `setParent(None)` macht ein Kind zum Fenster
 
