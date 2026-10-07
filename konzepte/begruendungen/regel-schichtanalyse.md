@@ -544,6 +544,38 @@ Bruchteil der Bahn legt. Gefragt wird nur, wo `advise.support_need` Stützen
 verlangt — ein Tunnel ohne weiteren Überhang bekommt mit Stützen und Sperre zu
 Recht keine. Ein Profil ohne Brückenstützen bleibt ungeprüft wie die Zeit.
 
+**Was der Slicer aus dem Profil macht (RM-281, Zeitschätzung, 06.10.2026).**
+An der Seitenablage lag die Zeitgegenprobe in ElegooSlicer, OrcaSlicer und
+CuraEngine 18 % unter der Druckdatei. Eine Nachrechnung der Druckdatei je
+Bahnart (Ruck-Planer wie `GCodeProcessor`, −4 bis +2 % zur Druckdatei) und
+rechenbare Körper (Quader, Zylinder, Kegelstumpf, Kegel) in sechs Slicern
+zeigten die Ursachen: Nachbarbahnen liegen `Breite − Höhe · (1 − π/4)`
+auseinander (`Flow::spacing`), jede Rolle hat ihre eigene Bahnbreite, die
+Schalenzahl wächst bis zur Mindestdicke (Kobra 2: 6 statt 3 Bodenschichten),
+`ensure_vertical_shell_thickness` füllt an schrägen Wänden voll, wo einer
+Schalenschicht die Füllfläche fehlt, die dünne Füllung verbindet ihre Enden am
+Rand (Zickzack 40 %, Gitter 33 %, Kreuzschraffur 30 % ihres Umfangs), und
+schmale Vollfüllung läuft als Schleife statt in kurzen Bahnen. Zwischen den
+Schleifen einer Insel zieht der Slicer nicht zurück; ein schräger Hub („Auto
+Lift“) spart dagegen nichts, die Z-Achse bremst die Leerfahrt (0,24 bis 0,26 s
+je Anfahrt). ElegooSlicer und OrcaSlicer fahren die innere Brücke mit 150 %,
+auch wo die Kette sie nicht nennt. Nachher an der Seitenablage: ElegooSlicer
+−12 %, OrcaSlicer −6 %, Bambu Studio −3 %, PrusaSlicer +4 %, Creality Print
++1 %; Messreihe im Bericht
+`F:\solidon-review-reports\claude-2026-10-06\geometrie\rm281-zeit\`.
+
+**Stützmenge aus den Säulen der Zeit.** Orca und Prusa weiten einen
+erkannten Überhang auf den ganzen Überstand über die Schicht darunter
+(`detect_overhangs`: „Offset the support regions back to a full overhang“).
+Solidons Rauminhalt stützte je Schicht nur den Teil jenseits der
+Überhangweite; an gewölbten Flächen blieb davon ein Splitter, an der
+Klingenspitze des Arbeitsplattenreinigers fast nichts (13-mal zu wenig in
+PrusaSlicer). Mit vollem Überstand, Schließen und den Randverbindungen des
+Musters (60 % des Säulenumfangs) liegt die Menge in PrusaSlicer und CuraEngine
+an Pilz, Seitenablage, Wedge-Lock, Reiniger und Schüssel bei 0,94 bis 1,14 der
+Druckdatei.
+Bäume folgen keinem Umfang; dort bleibt die Grenze `SUPPORT_TIME_AGREEMENT`.
+
 ## Was die Analyse liefert
 
 Überhangfläche je Schicht, Stützvolumen, Querschnittsverlauf, **Inseln**
