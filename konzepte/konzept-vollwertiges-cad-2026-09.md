@@ -488,7 +488,7 @@ müssen genau diese Lücke schließen. Ein HLR-Aufruf ist kein Abnahmenachweis.
 
 ### 8.1 Der naive Nähweg ist tot — aus einem anderen Grund als notiert
 
-[konzept-flaechenrueckgewinnung-2026-08.md](konzept-flaechenrueckgewinnung-2026-08.md)
+[konzept-flaechenrueckgewinnung-2026-08.md](archiv/konzept-flaechenrueckgewinnung-2026-08.md)
 verwarf ihn mit „108 Dreiecke → 108 Flächen, 324 Kanten". Die Messung stimmt,
 aber `ShapeUpgrade_UnifySameDomain` wurde damals nicht gefahren:
 
@@ -714,7 +714,7 @@ Randbedingung jedes Vorschlags in diesem Papier.
 - **Leere Skizze, *Fertig* — wortlos.** Kein Dialog, keine Statuszeile. Daneben
   sagen *Hochziehen* und *Abtragen* korrekt „Erst einen geschlossenen Umriss
   zeichnen." Das Verhalten ist entschieden und getestet; der Satz fehlt, den
-  [konzept-einfache-bedienung-2026-09.md](konzept-einfache-bedienung-2026-09.md) §2.1
+  [konzept-einfache-bedienung-2026-09.md](archiv/konzept-einfache-bedienung-2026-09.md) §2.1
   ausdrücklich verlangt.
 
 ---

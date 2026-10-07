@@ -48,7 +48,13 @@ from app.core.errors import (
 from app.core.geom import lathe, transform
 from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, BooleanOutcome, boolean, deepest
 from app.core.geom.measure import SHARP_EDGE_ANGLE
-from app.core.geom.mesh import MeshData, stable_arccos, stable_normals
+from app.core.geom.mesh import (
+    MeshData,
+    shift_body,
+    stable_arccos,
+    stable_normals,
+    stable_sin_cos,
+)
 from app.core.geom.repair import remove_hollow_shells
 from app.core.log import get_logger
 from app.core.types import CancelToken, Feature, Finding, Mesh, Quality, Vec3, is_a_cavity
@@ -2240,7 +2246,7 @@ def _mixed_corner_region(size: float, *, rounded: bool) -> tuple[MeshData, MeshD
     import trimesh
 
     region = trimesh.creation.box((2.0 * size, 2.0 * size, size))
-    region.apply_translation((0.0, 0.0, -size / 2.0))
+    shift_body(region, (0.0, 0.0, -size / 2.0))
     if not rounded:
         points = np.asarray(
             [
@@ -3282,10 +3288,19 @@ def _reaches(normals: np.ndarray, size: float, *, rounded: bool) -> np.ndarray:
     für ein ganzes Feld von Normalenpaaren."""
     if not rounded:
         return np.full(len(normals), float(size))
-    dots = np.clip(np.einsum("ij,ij->i", normals[:, 0], normals[:, 1]), -1.0, 1.0)
-    half = (math.pi - np.arccos(dots)) / 2.0
+    # Skalarprodukt, Winkel und Tangens aus Grundrechenarten (RM-187): Die
+    # Reichweite entscheidet, ob eine Rundung auf ihre Flächen passt, und
+    # ``einsum``, ``arccos`` und ``tan`` runden je Maschine anders.
+    first, second = normals[:, 0], normals[:, 1]
+    dots = np.clip(
+        first[:, 0] * second[:, 0] + first[:, 1] * second[:, 1] + first[:, 2] * second[:, 2],
+        -1.0,
+        1.0,
+    )
+    half = (math.pi - stable_arccos(dots)) / 2.0
     valid = (half > EPS_GEOM) & (half < math.pi / 2.0 - EPS_GEOM)
-    return np.where(valid, size / np.tan(np.where(valid, half, 1.0)), np.inf)
+    sines, cosines = stable_sin_cos(np.where(valid, half, 1.0))
+    return np.where(valid, size * cosines / sines, np.inf)
 
 
 def too_large_for_the_faces(
@@ -4235,7 +4250,7 @@ def _rod_along(entry: MeshEdge, radius: float) -> list[MeshData]:
         shape = _ball(radius, turn_limit=False)
         for point in knots:
             ball = shape.copy()
-            ball.apply_translation(point)
+            shift_body(ball, point)
             parts.append(ball)
     if not parts:
         raise GeometryError(

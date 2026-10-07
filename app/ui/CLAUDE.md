@@ -254,7 +254,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `guide_targets.py` | Ziele für Tour und `tools/make_guides.py`: `widget_for`, `area_for`, `action_for`; fehlend: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
-| `shortcut_schemes.py` | Kürzelbelegungen und Plattformtasten, eine Quelle; `NavigationKeys` lässt Pos1, Ende, Bild auf und Bild ab dem fokussierten Inhalt |
+| `shortcut_schemes.py` | Kürzel und Plattformtasten, eine Quelle; `NavigationKeys`: Pos1/Ende/Bild an den Fokus; `return_opens`: Return öffnet am Mac |
 | `command_palette.py` | die Befehlspalette (§2.6, §19.2) |
 
 ### Einstellungen und Rückmeldung

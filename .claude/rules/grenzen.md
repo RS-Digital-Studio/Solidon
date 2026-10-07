@@ -7,6 +7,7 @@ paths:
   - "app/ui/op_dialog.py"
   - "app/ui/tool_strip.py"
   - "app/ui/command_palette.py"
+  - "app/ui/shortcut_schemes.py"
   - "app/ui/catalog.py"
   - "app/ui/selection_operations.py"
 ---
@@ -349,6 +350,11 @@ Aktionen aus („Ambiguous shortcut overload“). `tests/test_ui.py`
 Qts Strg+Umschalt+Z die Taste Strg+Y, die Tour und Texte nennen. Wer eine
 dieser Handlungen bindet oder eine Taste dafür abfängt, fragt dort; beim
 Messen nimmt die Ansicht die Rücktaste vor dem Kürzel an (letztes Maß).
+
+**Eine Liste, die über `itemActivated` öffnet, trägt `return_opens`:** Am Mac
+bearbeitet Qt mit Return den Eintrag, statt ihn zu öffnen; der Filter meldet
+die Aktivierung dort selbst. `tests/test_native_keys.py` hält den Anschluss
+der drei Listen und liest `app/ui` nach einer vierten ohne Filter.
 
 ## Sortiert wird nach dem Titel, gesucht in der Sprache des Kunden
 

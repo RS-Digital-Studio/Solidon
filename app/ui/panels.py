@@ -210,7 +210,7 @@ from app.ui.overlay import (
     tell_the_zone,
 )
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
-from app.ui.shortcut_schemes import delete_keys
+from app.ui.shortcut_schemes import delete_keys, return_opens
 from app.ui.style import (
     NORMAL,
     ROOMY,
@@ -6186,6 +6186,8 @@ class ReportPanel(QWidget):
         # Sammelzeile über 17 Körper wählte nichts (Fensterabnahme RM-131).
         self.list.leftPressed.connect(self._on_activated)
         self.list.itemActivated.connect(self._on_activated)
+        # Am Mac meldet Qt Return in der Liste nicht als Aktivierung.
+        return_opens(self.list, sys.platform)
         # Und was dagegen hilft, steht im Kontextmenü — siehe :meth:`_on_menu`.
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_menu)

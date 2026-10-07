@@ -206,7 +206,7 @@ Unterschied nicht sichtbar wird.
 ### 2.1 SindriCAD, Stand 24.08.2026
 
 Nachgeholt an diesem Tag; die Vorgängerzahlen stehen in
-`konzepte/konzept-sindricad.md`.
+`konzepte/archiv/konzept-sindricad.md`.
 
 | | 04.08. | 19.08. | 24.08. |
 |---|---|---|---|

@@ -56,7 +56,7 @@ Damit ist Resin-Unterstützung **keine Erweiterung des Produkts, sondern das
 Entfernen einer Hürde vor einer Tür, die längst offen steht**: Das
 Wettbewerbskonzept führt die Meshmixer-Lücke als „führend — und die am
 meisten unterschätzte Position im ganzen Programm"
-(`konzept-wettbewerb-2026-08.md` §2.3). Der Dentalkunde bestätigt sie aus
+(`archiv/konzept-wettbewerb-2026-08.md` §2.3). Der Dentalkunde bestätigt sie aus
 einer Branche, die dort nicht vorkam.
 
 ## 2. Was der Bestand schon kann

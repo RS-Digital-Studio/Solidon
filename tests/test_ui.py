@@ -13,6 +13,7 @@ import dataclasses
 import itertools
 import logging
 import re
+import sys
 import threading
 import time
 from pathlib import Path
@@ -11172,7 +11173,10 @@ def test_a_labelled_button_still_teaches_what_it_does_and_which_key(
 
     tip = window._toolbar_import.toolTip()
     assert window.import_action.statusTip() in tip, "der Satz kommt aus dem Menüeintrag"
-    assert "Ctrl+I" in tip or "Strg+I" in tip, "und das Kürzel steht dabei"
+    # In der Schreibweise der Plattform, als Sollwert von außen und nicht mit
+    # der Formel des Codes: Auf dem Mac steht dort ⌘I (RM-531).
+    expected = ("⌘I",) if sys.platform == "darwin" else ("Ctrl+I", "Strg+I")
+    assert any(key in tip for key in expected), f"und das Kürzel steht dabei: {tip!r}"
 
     # Die drei ohne Menüpendant tragen ihren eigenen Satz — leer wäre keiner.
     assert len(window._toolbar_sketch.toolTip()) > len("Zeichnen")
@@ -12015,9 +12019,14 @@ def test_split_restores_the_complete_export_progress(
 
 
 def test_split_uses_its_own_real_status_and_bar_timers(window: MainWindow) -> None:
-    """Ein sichtbarer Agent schenkt dem neuen Split keine seiner Wartezeit."""
-    from PySide6.QtTest import QTest
+    """Ein sichtbarer Agent schenkt dem neuen Split keine seiner Wartezeit.
 
+    **Gezählt wird an den Zeitgebern, nicht an der Uhr.** Mit echten
+    Wartezeiten (``qWait``) überschoss der Mac-Runner das Fenster kurz vor
+    zwei Sekunden, und der Balken des Splits stand schon da (RM-531). Was
+    die Zusage trägt, ist, dass der Split beim Start **eigene** Zeitgeber
+    mit voller Frist aufzieht; ausgelöst werden sie danach von Hand.
+    """
     window._on_agent_busy(True)
     window._on_agent_progress(2, "Netz prüfen")
     agent = _progress_snapshot(window)
@@ -12026,22 +12035,20 @@ def test_split_uses_its_own_real_status_and_bar_timers(window: MainWindow) -> No
         window.session.splitBusyChanged.emit(True)
         window.session.splitProgressChanged.emit(0.65, tr("Ausrichtung suchen"))
 
-        QTest.qWait(main_window_module.DELAY_MS // 2)
-        assert _progress_snapshot(window) == agent, (
-            "vor 0,2 s bleibt der Agent vollständig sichtbar"
-        )
+        assert _progress_snapshot(window) == agent, "zuerst bleibt der Agent vollständig sichtbar"
+        status, bar = window._split_patience, window._split_bar_delay
+        assert status.isActive() and bar.isActive(), "der Split zieht eigene Zeitgeber auf"
+        assert status.remainingTime() > main_window_module.DELAY_MS // 2
+        assert bar.remainingTime() > main_window_module.BAR_AFTER_MS - main_window_module.DELAY_MS
 
-        QTest.qWait(main_window_module.DELAY_MS)
+        status.stop()
+        status.timeout.emit()
         between = _progress_snapshot(window)
         assert between[0].startswith(tr("Ausrichtung suchen"))
         assert between[1:] == agent[1:], "vor zwei Sekunden bleiben Balken und Abbruch beim Agenten"
 
-        QTest.qWait(main_window_module.BAR_AFTER_MS - 2 * main_window_module.DELAY_MS)
-        before_bar = _progress_snapshot(window)
-        assert before_bar[0].startswith(tr("Ausrichtung suchen"))
-        assert before_bar[1:] == agent[1:], "auch kurz vor zwei Sekunden bleibt der Agent"
-
-        QTest.qWait(main_window_module.DELAY_MS)
+        bar.stop()
+        bar.timeout.emit()
         assert window._progress_owner == "split"
         assert window.progress.accessibleName() == tr("Fortschritt: Automatisch teilen")
         assert window.cancel_button.accessibleDescription() == tr(
@@ -17897,18 +17904,35 @@ def test_every_menu_indents_its_text_the_same(window: MainWindow) -> None:
     kennt.
     """
     from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPalette
     from PySide6.QtWidgets import QMenu
 
-    from app.ui.style import apply_style
+    from app.ui import theme as theme_module
 
     # **Drei Vorbereitungen, und ohne jede einzelne misst der Test nichts.**
     # Qt legt die Geometrie eines Menüs erst fest, wenn sein Fenster gezeigt
     # wurde. Und die Suite fährt **ohne Stylesheet** — Qt zeichnet dann sein
     # eigenes Menü, schwarz auf weiß, mit anderen Abständen als die Anwendung
     # sie hat. Ein Test, der eine Einrückung misst, muss die Betriebslage
-    # herstellen; sonst prüft er eine Lage, die kein Kunde je sieht.
-    vorher = QApplication.instance().styleSheet()
-    apply_style(QApplication.instance(), "dark")
+    # herstellen, und zwar **ganz**: Stil, Palette und Stylesheet. Mit dem
+    # Stylesheet allein maß er in der Palette, die ein früherer Test
+    # hinterließ — nach ``action_theme("light")`` fand er keinen Text mehr
+    # (RM-531). Danach kommt die vorige Lage zurück — mit dem Grundstil: Bei
+    # gesetztem Stylesheet meldet ``style()`` den Stylesheet-Stil, dessen Name
+    # leer ist, und ``setStyle("")`` täte nichts (Review 06.10.2026, U2-N6).
+    application = QApplication.instance()
+    palette_before = QPalette(application.palette())
+    sheet_before = application.styleSheet()
+    application.setStyleSheet("")
+    vorher = (
+        application.style().name(),
+        palette_before,
+        sheet_before,
+        application.property(theme_module._THEME_PROPERTY),
+        theme_module._ACTIVE,
+    )
+    application.setProperty(theme_module._THEME_PROPERTY, None)
+    theme_module.apply_theme(application, "dark")
     window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
     window.show()
     QApplication.processEvents()
@@ -17957,7 +17981,12 @@ def test_every_menu_indents_its_text_the_same(window: MainWindow) -> None:
             if start is not None:
                 starts[action.text()] = start
     finally:
-        QApplication.instance().setStyleSheet(vorher)
+        style, palette, sheet, marked, active = vorher
+        application.setStyle(style)
+        application.setPalette(palette)
+        application.setStyleSheet(sheet)
+        application.setProperty(theme_module._THEME_PROPERTY, marked)
+        theme_module._ACTIVE = active
 
     # Ohne diese Zeile prüfte der Vergleich unten eine leere Menge — und die
     # ist immer einig mit sich selbst. Sechs der neun Menüs bestehen nur aus
@@ -17969,7 +17998,13 @@ def test_every_menu_indents_its_text_the_same(window: MainWindow) -> None:
     # an, dort liegt der Rahmen. Eine Null heißt, dass die Messung nicht
     # gemessen hat — und vier Nullen sind sich einig wie vier richtige Werte.
     assert all(start > 0 for start in starts.values()), f"die Messung hat nichts gefunden: {starts}"
-    assert len(set(starts.values())) == 1, (
+    # Ein Bildpunkt Spiel, und er gehört der Schrift: Gemessen wird die erste
+    # Spalte mit Tinte, und die hängt am Anfangsbuchstaben. „Erzeugen“ misst an
+    # „Grundformen“, die übrigen an B und R; das runde G hat den kleineren
+    # Seitenabstand und kam mit gebrochenen Metriken einen Bildpunkt früher
+    # (Cocoa 41 gegen 42, FreeType 36 gegen 37, RM-531). Der Fehler, den der
+    # Test hält, war ein Sprung um zwanzig.
+    assert max(starts.values()) - min(starts.values()) <= 1, (
         f"die Textspalte springt zwischen den Menüs: {starts} — "
         "ein Menü ohne jedes Symbol reserviert die Spalte nicht"
     )

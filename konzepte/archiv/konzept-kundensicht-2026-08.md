@@ -250,7 +250,7 @@ Rechtsklick auf einen Körper, mit und ohne Auswahl, öffnet ein Menü mit
 §18.5 sieht dort die Operationen aus `applies_to` vor — den Weg, auf dem man
 etwas tut, ohne den Namen des Merkmals zu kennen. Das Menü wird korrekt aus
 `object_tree.context_menu()` geholt
-([main_window.py:2665](app/ui/main_window.py:2665)); es steht nur nichts darin.
+([main_window.py:2665](../../app/ui/main_window.py)); es steht nur nichts darin.
 Wer eine Bohrung senken will, geht weiter über die Menüleiste.
 
 ### 2.2 „Bohrung setzen" öffnet auf einem Punkt neben dem Teil
@@ -288,7 +288,7 @@ Vorschlag, Grund — und die dritte endet in jeder Zeile auf „…":
 
 Der Grund ist das, was den Vorschlag rechtfertigt. Der Dialog ist 561 px
 breit auf einem 2560 px breiten Bildschirm; die Mindestbreite steht auf 560
-([print_settings_dialog.py:763](app/ui/print_settings_dialog.py:763)).
+([print_settings_dialog.py:763](../../app/ui/print_settings_dialog.py)).
 
 **Zu tun:** Die Tabelle bekommt die Breite, die ihre dritte Spalte braucht,
 oder der Grund wandert in eine zweite Zeile unter den Vorschlag.
@@ -353,7 +353,7 @@ zwei Ebenen. Sechs davon tragen ein Kürzel. Für ein Programm, das mit CAD
 verglichen wird, ist das wenig — dort ist die Tastatur der schnelle Weg.
 
 Die Belegung ist umschaltbar („default" und „fusion",
-[shortcut_schemes.py](app/ui/shortcut_schemes.py)), das Gerüst steht also.
+[shortcut_schemes.py](../../app/ui/shortcut_schemes.py)), das Gerüst steht also.
 
 ---
 

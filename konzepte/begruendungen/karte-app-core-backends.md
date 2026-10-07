@@ -17,7 +17,7 @@
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte |
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Knoten, TripoSG-Quelltext, Pakete, die Gewichte — und seit dem 21.09.2026 auf Wunsch das Bildmodell für den Weg aus Text (`fetch_image_model`, feste Revision, Prüfsumme, eigenes Häkchen im Dialog) |
-| `data/comfyui/` | Die Knoten dazu (TripoSG, MIT) |
+| `data/comfyui/` | Die Knoten dazu (TripoSG; Lizenzkette offen, RM-003) |
 
 *Früher unter „Das Skript-Modell der Suite liegt nicht mehr hier“.*
 
