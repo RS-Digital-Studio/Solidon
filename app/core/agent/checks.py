@@ -27,7 +27,8 @@ VOLUME_FACTOR = 10.0
 #: Codes, die die Prüfung aus der Auswertung durchreicht, weil sie genau das
 #: sagen, wonach §26.5 fragt.
 #:
-#: Die beiden letzten kamen aus einem Chatlauf: „5 mm mittig durch" ergab ein
+#: ``bore.over_the_edge`` und ``boolean.without_effect`` (unter
+#: :data:`DID_NOTHING`) kamen aus einem Chatlauf: „5 mm mittig durch" ergab ein
 #: Loch an der Ecke, weil das Modell den Quader ab dem Ursprung wähnte statt um
 #: ihn herum. Der Befund dazu entstand — und blieb im Prüfbericht liegen, denn
 #: was hier nicht steht, sieht das Modell nie. Es schrieb danach „Das Loch ist
@@ -41,16 +42,33 @@ PASSED_THROUGH = (
     # Dieselbe Sorte Fehler eine Stufe weiter: Das Werkzeug hat den Körper
     # nicht gestreift, sondern zerlegt (Fund des Reviews, 13.09.2026).
     "bore.splits_the_body",
-    "boolean.without_effect",
-    # Und zwei Schritte, die gar nichts getan haben (Messung 14.09.2026). Der
-    # erste ist der Fall, den ein zweiter Aufruf behebt: Das Ziel lag über der
-    # vorhandenen Dreieckszahl, eine kleinere Zahl gibt ihm etwas zu tun. Beim
-    # zweiten kann das Modell nichts nachbessern — ein Skelett setzt nur der
-    # Nutzer —, und genau deshalb muss es davon erfahren: Sonst schreibt es
-    # „der Arm ist jetzt angewinkelt" über einen Körper, der unverändert
-    # dasteht.
+)
+
+#: Befunde „dieser Schritt hat nichts getan“. Sie gehen ans Modell, wenn der
+#: geprüfte Schritt sie erzeugt hat — also nur, wenn sie gegen den Stand davor
+#: neu sind. Sonst las das Modell nach jedem wirksamen Zug den Befund eines
+#: alten Schritts ohne Wirkung, auch eines Nutzerschritts, und bezog ihn auf
+#: sich (Review RM-441, 6.1).
+#:
+#: Die ersten beiden kamen aus einer Messung (14.09.2026). Der eine ist der
+#: Fall, den ein zweiter Aufruf behebt: Das Ziel lag über der vorhandenen
+#: Dreieckszahl, eine kleinere Zahl gibt ihm etwas zu tun. Beim anderen kann
+#: das Modell nichts nachbessern — ein Skelett setzt nur der Nutzer —, und
+#: genau deshalb muss es davon erfahren: Sonst schreibt es „der Arm ist jetzt
+#: angewinkelt" über einen Körper, der unverändert dasteht. Die übrigen sind
+#: dieselbe Sorte an anderen Schritten (Review RM-441): Ohne sie meldete das
+#: Modell eine Verdoppelung, Drehung oder Bohrung, die es nicht gab.
+DID_NOTHING = (
     "mesh.already_below_target",
     "pose.no_armature",
+    "boolean.without_effect",
+    "transform.without_effect",
+    "move_feature.unchanged",
+    "duplicate_feature.unchanged",
+    "rotate_feature.unchanged",
+    "resize_feature.unchanged",
+    "bore.resize_unchanged",
+    "bore.already_through",
 )
 
 #: Der Satz der Auswertung über einen zerfallenen Körper. Nach einer Operation,
@@ -107,7 +125,11 @@ def check(
             finding.code in PASSED_THROUGH
             or finding.code.startswith("fit.")
             or (
-                (finding.converts_exact_body or (separate_parts and finding.code == BODY_SPLIT))
+                (
+                    finding.converts_exact_body
+                    or finding.code in DID_NOTHING
+                    or (separate_parts and finding.code == BODY_SPLIT)
+                )
                 and (before is None or finding not in before.report.findings)
             )
         )

@@ -66,6 +66,7 @@ from app.core.types import (
     Suppression,
     Transaction,
     TransactionId,
+    step_numbers,
 )
 from app.i18n import TranslatableText, _
 
@@ -3452,10 +3453,7 @@ def step_position(operations: Sequence[Operation], op_id: OpId) -> int:
     sichtbare Schritt 3 die Kennung 9. Gelesen wird die Stelle; ohne Treffer
     bleibt die Kennung. ``ui.labels.step_number`` fragt hier.
     """
-    for position, entry in enumerate(operations, start=1):
-        if entry.id == op_id:
-            return position
-    return op_id
+    return step_numbers(operations).get(op_id, op_id)
 
 
 def step_titles(

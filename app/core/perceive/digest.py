@@ -28,6 +28,8 @@ from app.core.types import (
     Scene,
     SceneObject,
     measure_status,
+    replanned_steps,
+    step_numbers,
 )
 from app.core.units import EPS_GEOM, format_length, format_volume, round_display
 from app.i18n import TranslatableText, _, tr
@@ -180,12 +182,10 @@ def _step_numbers(document: Document | None) -> dict[int, int]:
     **Die sichtbare Nummer, nicht die Kennung.** Nach einem Einfügen vor
     Schritt 3 trägt der sichtbare Schritt 3 die Kennung 9 (RM-368); der Agent
     spricht mit dem Nutzer über den Verlauf, den dieser vor sich hat, und kein
-    Werkzeug nimmt eine Kennung entgegen. Dieselbe Rechnung wie
-    ``scene.history.step_position``, einmal je Steckbrief statt je Zeile.
+    Werkzeug nimmt eine Kennung entgegen. Die Zählung ist ``types.step_numbers``,
+    dieselbe wie im Verlauf.
     """
-    if document is None:
-        return {}
-    return {operation.id: position for position, operation in enumerate(document.ops, start=1)}
+    return step_numbers(document.ops) if document is not None else {}
 
 
 def _step_name(op_id: int, steps: Mapping[int, int]) -> str:
@@ -1080,21 +1080,34 @@ def _stack_lines(document: Document, steps: Mapping[int, int]) -> list[str]:
 
     operations = {operation.id: operation for operation in document.ops}
     gone = discarded(sorted(document.ops, key=lambda one: one.id))
+    # Was ein Einfügen oder Verschieben neu gefasst hat, steht unter der
+    # Transaktion des Umbaus mit seiner neuen Kennung; die alte Zeile blendet
+    # das Verlaufsfeld genauso aus (``types.replanned_steps``).
+    superseded = replanned_steps(document)
     parts = []
     for transaction in document.transactions:
+        if transaction.ops and all(entry in superseded for entry in transaction.ops):
+            continue
+        # Ein gelöschter Schritt steht noch in seiner Transaktion, rechnet aber
+        # nicht und hat keine Nummer im Verlauf: Er heißt „gelöscht“ wie im
+        # Verlaufsfeld. Bis zum Review von RM-529 stand hier seine rohe
+        # Kennung — „2“ neben „op2“, einem anderen Schritt. Die Löschung selbst
+        # bleibt mit ihrem Titel stehen: Der Agent kann sie zurücknehmen.
         calls = ", ".join(
             f"{_step_name(entry, steps)} "
             + _op_call(operations[entry])
             + _resting_mark(operations[entry], gone)
             if entry in operations
-            else str(entry)
+            else tr("gelöscht")
             for entry in transaction.ops
+            if entry in operations or entry not in superseded
         )
         by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
         # Der Titel einer Transaktion ist ein Name aus der Projektdatei wie
         # jeder andere — und einer, den der Agent selbst vorgeschlagen haben
         # kann (§32).
-        parts.append(f"{transaction.id} {as_name(transaction.title)} ({calls}, {by})")
+        listed = f"{calls}, {by}" if calls else by
+        parts.append(f"{transaction.id} {as_name(transaction.title)} ({listed})")
     return [f"{tr('Verlauf')}: " + " · ".join(parts)]
 
 

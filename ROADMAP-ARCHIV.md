@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-441: Jeder Befund, der sagt, dass ein Schritt nichts getan hat, öffnet diesen Schritt (06.10.2026)](#rm-441-jeder-befund-der-sagt-dass-ein-schritt-nichts-getan-hat-öffnet-diesen-schritt-06102026) |
+| 2026-10-06 | [RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)](#rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)](#ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026) |
@@ -36494,7 +36496,7 @@ Entwicklungstor grün (19735 bestanden, ruff, format, mypy ohne Befund).
   vorher; Strg+Y → Hashes gleich. Bauplan §15.5, §2.1.
   **Vorgabe Robert 02.10.2026 — allgemein:** dieselbe Bündelung für jeden zusammengehörigen Ablauf, der heute mehrere Transaktionen anlegt (Erzeugen, Import mit Reparatur, Assistenten); Abnahme an mindestens drei unterschiedlichen Abläufen.
 
-**Abschluss:** `generate.into_project` legt eine Transaktion „Modell erzeugen“ an, die Ops stehen einzeln im Verlauf; die Körperkennung kommt vorab aus `History.next_object_id()`, bei Absage wird die Quelle entfernt. Allgemein sammelt `Session.one_step()` mehrere `apply` zu einer Transaktion, die Sammelzeile in `panels._run_action_for` läuft darin; alte Titel in `generate.EARLIER_TITLES`. Abgenommen an Erzeugen (Strg+Z leer, Strg+Y bitgleich), Agentenrücknahme, Sammelzeile *Auf den Bauraum verkleinern* über zwei Körper und Einfügen mit Reparatur. Rest in [RM-441](ROADMAP.md#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
+**Abschluss:** `generate.into_project` legt eine Transaktion „Modell erzeugen“ an, die Ops stehen einzeln im Verlauf; die Körperkennung kommt vorab aus `History.next_object_id()`, bei Absage wird die Quelle entfernt. Allgemein sammelt `Session.one_step()` mehrere `apply` zu einer Transaktion, die Sammelzeile in `panels._run_action_for` läuft darin; alte Titel in `generate.EARLIER_TITLES`. Abgenommen an Erzeugen (Strg+Z leer, Strg+Y bitgleich), Agentenrücknahme, Sammelzeile *Auf den Bauraum verkleinern* über zwei Körper und Einfügen mit Reparatur. Rest in [RM-441](#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
 ## RM-374: Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern* (02.10.2026)
 
@@ -36515,7 +36517,7 @@ Entwicklungstor grün (19735 bestanden, ruff, format, mypy ohne Befund).
   Maß; Änderung auf 150 mm → Körper 150 mm. Bauplan §2.7, §2.6.
   **Vorgabe Robert 02.10.2026 — allgemein:** jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf zum Ändern dieses Schritts (nicht nur `transform.fitted`); Abnahme an mindestens drei unterschiedlichen Befunden.
 
-**Abschluss:** Handlung `change_step` (`errors.py`) mit *Größe ändern*, *Diesen Schritt ändern*, *Reliefhöhe ändern* und *Zellgröße ändern*, eingelöst über `_correct_after_error`/`edit_operation`; Befunde `transform.fitted`, `transform.without_effect`, `lattice.filled`, `displace.applied`; `cache_version` erhöht bei translate, rotate, scale, fit_to_size, lattice_fill, displace_image. Wächter `MEINT_DEN_SCHRITT` in `test_finding_ways`. Rest in [RM-441](ROADMAP.md#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
+**Abschluss:** Handlung `change_step` (`errors.py`) mit *Größe ändern*, *Diesen Schritt ändern*, *Reliefhöhe ändern* und *Zellgröße ändern*, eingelöst über `_correct_after_error`/`edit_operation`; Befunde `transform.fitted`, `transform.without_effect`, `lattice.filled`, `displace.applied`; `cache_version` erhöht bei translate, rotate, scale, fit_to_size, lattice_fill, displace_image. Wächter `MEINT_DEN_SCHRITT` in `test_finding_ways`. Rest in [RM-441](#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
 ## RM-439: Die Formleiste nennt die Pinselstärke in fünf Sprachen Wanddicke (02.10.2026)
 
@@ -43495,3 +43497,69 @@ Bauplan, Regeln und Code sind nachgezogen (`tools/docs_scan.py --frage 3` ohne t
 Linkprüfung vorher und nachher ohne neuen). Review mit Nachprüfung (06./07.10.2026). Dabei
 gefunden und eingetragen: die fünf offenen Entscheidungen der Erstkonfiguration als
 [RM-542](ROADMAP.md#rm-542).
+
+## RM-441: Jeder Befund, der sagt, dass ein Schritt nichts getan hat, öffnet diesen Schritt (06.10.2026)
+
+<a id="rm-441-jeder-befund-der-sagt-dass-ein-schritt-nichts-getan-hat-öffnet-diesen-schritt-06102026"></a>
+<a id="rm-441"></a>
+
+**RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen.**
+  Fund 02.10.2026 beim Abschluss von RM-372/RM-374 (Claude). (a) Der Befund `hollow.done`
+  (`app/core/geom/hollow.py`) meint einen änderbaren Schritt und trägt noch nicht
+  *Diesen Schritt ändern* — Vorgabe Robert zu RM-374, ausgelassen, weil `hollow.py` bei Codex
+  offen lag; danach `MEINT_DEN_SCHRITT` in `tests/test_finding_ways.py` nachziehen.
+  (b) `weg3-generiert-aufbereiten.p3d` trägt noch die früheren getrennten Transaktionen; beim
+  Release mit `tools/make_examples.py` neu erzeugen. **Abnahme:** Test für (a); (b) im
+  Release-Lauf. Bauplan §2.7, §15.5.
+  Review 02.10. (`73d83b55b`, RM-374 archiviert mit `9983e9923`): Die Vorgabe „jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf“ ist nicht erfüllt — ohne Knopf bleiben `mesh.already_below_target` (`app/core/geom/mesh_ops.py:2222`, im Fenster geprüft), `rotate_feature.unchanged`, `resize_feature.unchanged`, `move_feature.unchanged`, `{operation}.unchanged` (`prepare_ops.py`) und `bore.resize_unchanged` (`prepare.py`, `prepare_ops.py`); dieser Punkt nennt bisher nur `hollow.done`. Beleg `F:\solidon-review-reports\verif-73d83b55b-claude.md`.
+  **Stand 02.10.2026 abends:** (a) erledigt (Claude, Thread „Bedienung und KI“): Beide `hollow.done` tragen *Diesen Schritt ändern* mit `field: wall`, `MEINT_DEN_SCHRITT` nennt sie. Offen (b).
+  **Stand 06.10.2026:** (b) erledigt im Release-Lauf 0.5.3: `make_examples.py` hat alle
+  Beispielprojekte neu erzeugt (`ac0d11486`), `weg3-generiert-aufbereiten.p3d` trägt die
+  Transaktionen des heutigen Codes. Offen bleibt der Review-Fund: Die sechs Befunde oben
+  (`mesh.already_below_target`, `rotate_feature.unchanged`, `resize_feature.unchanged`,
+  `move_feature.unchanged`, `{operation}.unchanged`, `bore.resize_unchanged`) tragen den Knopf
+  noch nicht und stehen nicht in `MEINT_DEN_SCHRITT`; je Befund mit `cache_version` der Op.
+
+**Abschluss:** (a) `hollow.done` am 02.10.2026, (b) das Beispielprojekt im Release-Lauf
+0.5.3 (`ac0d11486`). Der Review-Fund mit `1b1547527`: `mesh.already_below_target`,
+`move_feature.unchanged`, `duplicate_feature.unchanged`, `rotate_feature.unchanged`,
+`resize_feature.unchanged` und `bore.resize_unchanged` tragen *Diesen Schritt ändern* mit
+dem Feld, das der Befund meint, die Operationen mit erhöhter `cache_version`. Nach den
+Reviews vom 06.10. nachgebessert: `bore.already_through` öffnet den Schritt an der Tiefe;
+der Wächter `tests/test_finding_ways.py` hält das Feld je Stelle und prüft es gegen das
+Parameterschema jeder Operation, die der Knopf öffnet; zwei Helfer statt wortgleicher
+Befunde (`prepare_ops._already_this_size` an fünf Merkmalsarten, `_already_in_place` für
+Versetzen und Verdoppeln), *Merkmal verdoppeln* sagt auch im Weg mit freier Richtung
+„nichts verdoppelt“ (`cache_version` 14); `agent.checks.DID_NOTHING` reicht diese Befunde
+ans Modell, wenn der geprüfte Schritt sie erzeugt hat — sonst meldete es eine
+Verdoppelung, Drehung oder Bohrung, die es nicht gab, oder las nach jedem Zug den Befund
+eines alten Schritts. Umgesetzt von Claude.
+
+## RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)
+
+<a id="rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026"></a>
+<a id="rm-529"></a>
+
+**RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat.** Bauplan §23 zeigt im
+Steckbrief `created_by=op3`, und §21.2 macht die Provenienz zur Grundlage für „den Schritt
+ändern, der es erzeugt hat“. `app/core/perceive/digest.py` schreibt sie weder in die
+Merkmals- noch in die Objektzeile; der Agent braucht sie für Anfragen wie „ändere den Stift
+von vorhin“. **Entschieden (Robert, 06.10.2026):** nachrüsten. **Abnahme:** Der Steckbrief
+nennt bei erzeugten Merkmalen den erzeugenden Schritt, Test an einem Beispielprojekt, das
+Beispiel in Bauplan §23 ist eine echte Ausgabe, Agenten-Suite vorher und nachher.
+
+**Stand 06.10.2026 (Claude):** Gebaut mit `256b6b130`: `created_by=op3` am erzeugten
+Merkmal, `last_op` am Objekt, dieselbe Nummer vor jedem Aufruf im Verlauf, Bauplan §23 ein
+echter Ausschnitt. Nach dem Review nachgebessert: Die Nummer ist die sichtbare
+(`types.step_numbers`, eine Zählung für Verlauf, Fenster und Steckbrief), eine beim Umbau neu
+gefasste Transaktion fehlt wie im Fenster, auch in Dateien vor Format 45
+(`types.replanned_steps`), ein gelöschter Schritt heißt „gelöscht“, und der Wächter über §23
+vergleicht die Form, nicht die Zahlen. **Offen:** die Agenten-Suite mit
+qwen3:14b vorher (`d25f12366`) und nachher auf freier Karte.
+
+**Abschluss:** Gebaut mit `256b6b130`, nach den Reviews vom 06.10. nachgebessert (eine Zählung
+mit dem Verlauf über `types.step_numbers`, neu gefasste Transaktionen über
+`types.replanned_steps` auch in Dateien vor Format 45). Agenten-Suite mit qwen3:14b, Kontext
+32768: vorher (`65e3ec97b`) 25 von 39 gut, nachher (`256b6b130`) 27 von 39; `drill_on_feature`
+kippte dabei von gut auf schlecht und ist RM-251 zur Klärung mitgegeben. Messdateien
+`.claude/.state/ki-2026-10-06/messung/`. Umgesetzt von Claude.

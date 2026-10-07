@@ -3,6 +3,7 @@ description: "Die LLM-Schicht — ein Vorschlag ist eine Transaktion, die drei V
 paths:
   - "app/core/agent/**/*.py"
   - "app/core/backends/**/*.py"
+  - "app/core/perceive/digest.py"
 ---
 
 # Regeln für die Agentenschicht und die Backends
@@ -56,9 +57,11 @@ Werkzeugbeschreibungen tragen den Menüort („Menü: …"); daran hängt §2.6,
 Chat als Suchfeld.
 
 - **Ein Schritt heißt im Steckbrief nach seiner sichtbaren Nummer** (`op3`,
-  wie der Verlauf sie zeigt), nie nach seiner Kennung — der Agent spricht mit
-  dem Nutzer über den Verlauf, den dieser vor sich hat; Bauplan §23 ist ein
-  echter Ausschnitt und wird nachgezogen, wenn sich das Format ändert.
+  `types.step_numbers` wie Verlauf und Fenster), nie nach seiner Kennung — der
+  Agent spricht mit dem Nutzer über den Verlauf, den dieser vor sich hat. Eine
+  beim Umbau ganz neu gefasste Transaktion fehlt dort wie im Fenster. Bauplan
+  §23 ist ein echter Ausschnitt und wird nachgezogen, wenn sich das Format
+  ändert.
 - Die Sitzung meldet Fortschritt je Schritt über einen Rückruf (`progress`,
   wie `ask` — kein Qt im Kern); Vorschläge zeigen Schritte, Token und
   Rückfragen in der Entscheidungszeile, eine erreichte Grenze ausgeschrieben.
