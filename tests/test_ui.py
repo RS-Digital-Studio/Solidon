@@ -18352,6 +18352,106 @@ def test_the_window_goes_the_full_chain_where_the_short_one_ends(
     assert changed.solvers[drill].strategy == "jittered"
 
 
+@pytest.mark.parametrize(
+    ("name", "kind", "op", "field", "step"),
+    [
+        ("plate_holes.stl", "hole", "resize_hole", "Durchmesser", 1.0),
+        ("pocket_with_pin.stl", "pin", "move_feature", "X", 0.3),
+    ],
+)
+def test_the_feature_card_applies_what_the_short_chain_could_not_preview(
+    window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    kind: str,
+    op: str,
+    field: str,
+    step: float,
+) -> None:
+    """RM-534 an der Merkmalkarte: Nach „Übernehmen rechnet den Schritt vollständig“ übernimmt es.
+
+    Die Maßgruppe der Karte verlangt ein gezeigtes Bild
+    (``requires_displayed_preview``). Kam die schnelle Rechnung nicht durch,
+    stellte jede Freigabefrage die Bildpflicht für denselben Auftrag zurück
+    (``_set_preview_order``): Ein Bild kam nie, der Klick hing an der
+    Vorschau, und der Verlauf blieb, wie er war (Review 1 P3, H-1). Dasselbe
+    galt für *Merkmal verschieben* an einem Zapfen, das seit RM-535 über
+    dieselbe Maßgruppe läuft und Boolesche Schritte rechnet.
+    """
+    import trimesh
+    from PySide6.QtTest import QTest
+
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+    from app.core.registry import REGISTRY
+    from app.ui.labels import LengthSpin
+    from tests.render_fakes import RecordingRenderer
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.open_path(MESHES / name)
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    chosen = next(key for key, feature in entry.features.items() if feature.kind == kind)
+    real = boolean_module._run_stage
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, chosen)
+    if op == "resize_hole":
+        window.feature_panel._in_view.click()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    host = window._quiet_host
+    flow = window._quiet_placement
+    try:
+        assert host is not None and flow is not None, "die Karte trägt die Maßgruppe"
+        assert flow.spec_of().name == op and flow._measure_group is not None
+        assert host.requires_displayed_preview, "Voraussetzung: die Karte verlangt ein Bild"
+        title = tr(str(REGISTRY.get(op).title))
+        fields = {
+            spin.accessibleName().rsplit(" — ", 1)[-1]: spin
+            for spin in flow._measure_group.findChildren(LengthSpin)
+            if title in spin.accessibleName()
+        }
+        before = len(window.session.project.document.ops)
+        # Die Geste vor dem Tippen beginnt den Entwurf (``_hole_fields_in_placement``).
+        QTest.keyClick(fields[field].lineEdit(), Qt.Key.Key_End)
+        fields[field].set_value_mm(fields[field].value_mm() + step)
+        QApplication.processEvents()
+        band = ""
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+            band = window.viewport.banner.note.text()
+            approval = window._preview_approval
+            if "vollständig" in band and approval is not None and not approval.computing:
+                break
+            time.sleep(0.01)
+        assert "Übernehmen rechnet den Schritt vollständig" in band, band
+        assert host.can_accept(), "die Freigabefrage stellt die Bildpflicht nicht zurück"
+        assert host.can_accept(), "auch nicht beim zweiten Mal"
+        flow._measure_accept.click()
+        assert window.session.wait_for_idle(30_000)
+        ops = window.session.project.document.ops
+        assert len(ops) == before + 1, "Übernehmen legt den Schritt an"
+        assert ops[-1].op == op and ops[-1].params["at_feature"] == chosen
+        last = window.session.last_result
+        assert last.stopped_at is None, [str(entry.message) for entry in last.scene.report.findings]
+        assert last.solvers[ops[-1].id].strategy not in boolean_module.DRAFT_CHAIN, (
+            "der Fensterlauf rettet ihn mit der vollen Kette"
+        )
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+
+
 def test_the_report_follows_a_change_during_recognition_and_a_cancelled_run(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -2468,6 +2468,11 @@ class _PreviewApproval:
     questioned: bool = False
     """Die Vorschau hielt an einer Rückfrage: Ein Bild gibt es erst nach der
     Antwort, und *Übernehmen* stellt sie (RM-389)."""
+    passed_on: bool = False
+    """Die schnelle Rechnung kam nicht durch: Ein Bild gibt es ohne die volle
+    Kette nicht, und die rechnet *Übernehmen* (RM-534, §17.2). Wie bei
+    :attr:`questioned` kehrt die Bildpflicht für diesen Auftrag nicht zurück —
+    sonst wartete der Klick auf ein Bild, das nie kommt."""
     computing: bool = False
     """Die angeforderte Vorschau rechnet noch — bis ihre Antwort da ist."""
     reviewing: bool = False
@@ -21498,6 +21503,7 @@ class MainWindow(QMainWindow):
                 getattr(owner, "requires_displayed_preview", False)
                 and previous.required is False
                 and not previous.questioned
+                and not previous.passed_on
             ):
                 previous.required = True
                 self._refresh_preview_block()
@@ -21743,8 +21749,6 @@ class MainWindow(QMainWindow):
             click()
 
         told: list[str] = []
-        passed_on: list[bool] = []
-        """Gesetzt, wenn nur die schnelle Rechnung nicht durchkam (:func:`explained`)."""
 
         def pictured(difference: Any) -> None:
             """Das erste Bild gibt weder Auftrag noch wartenden Übernehmen-Klick frei."""
@@ -21782,8 +21786,9 @@ class MainWindow(QMainWindow):
                 # **Die schnelle Rechnung kam nicht durch — das ist keine
                 # Absage** (RM-534, §17.2): Ein Bild gibt es ohne die volle
                 # Kette nicht, und die rechnet *Übernehmen*. Das Band sagt es;
-                # gewartet wird auf kein Bild, gesperrt wird nichts.
-                passed_on.append(True)
+                # gewartet wird auf kein Bild, gesperrt wird nichts — auch
+                # nicht beim nächsten ``_set_preview_order`` desselben Auftrags.
+                approval.passed_on = True
                 approval.required = False
                 self._preview_explained(reason)
                 self._refresh_preview_block()
@@ -21802,7 +21807,7 @@ class MainWindow(QMainWindow):
             approval.reviewing = False
             self._finish_preview_progress()
             if difference is None:
-                if not approval.questioned and not passed_on:
+                if not approval.questioned and not approval.passed_on:
                     failed(None)
                 else:
                     self._show_preview(None)
