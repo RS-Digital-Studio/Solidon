@@ -15,10 +15,12 @@ Eine Operation ist die einzige Stelle, an der Geometrie entsteht oder sich
 
 ## Vollständig oder gar nicht
 
-Regel 4 mit der Checkliste in `AGENTS.md` (`/neue-op`);
-`tests/test_registry_consistency.py` fängt unvollständige Ops und doppelte
-Kürzel. `ctx.quality`: Entwurf zum Iterieren, Fein für Export und Prüfbericht;
-**eine Entwurfsstufe nur über einem Budget und mit Befund** (`blend.draft_grid`).
+Regel 4 mit der Checkliste in `AGENTS.md` (`/neue-op`). `ctx.quality`: Entwurf
+zum Iterieren, Fein für Export und Prüfbericht; **eine Entwurfsstufe nur über
+einem Budget und mit Befund** (`blend.draft_grid`). **Wer Eingänge unter ihrer
+Kennung zurückgibt, sagt, ob er sie unverändert lässt oder einen mit einem
+anderen formt** (`registry/CLAUDE.md`), sonst spricht ein entfernter Körper
+weiter aus dem Bericht.
 
 ## Was die Operation verlangt, steht im Register
 
@@ -48,9 +50,7 @@ Alles bleibt bearbeitbar (Robert). `caveat` erklärt Sehnenzug bis
 
 ## Ein Parameter sagt, was er bewirkt
 
-Titel, Vorgabe, Einheit, Grenzen und ein `doc`-Satz über die Wirkung. Vorn die
-zwei, drei Werte, die man ändert, der Rest hinter „Weitere Einstellungen"
-(§2.4).
+Titel, Vorgabe, Einheit, Grenzen und ein `doc`-Satz über die Wirkung.
 
 ### Eine Zahl, die nicht gesagt wurde (`optional`)
 
@@ -63,8 +63,8 @@ einen Ort; die übrigen behalten den gemessenen Wert, nicht null.
 
 ### Sammelparameter (`kind` in `sketch`, `strokes`, `armature`)
 
-Fünf Eigenschaften, geprüft über das Register (`tests/test_gesture_ops.py`): im
-Op-Hash, übersteht die Projektdatei, reiner Text, für den Agenten unsichtbar
+Fünf Eigenschaften, geprüft über das Register: im Op-Hash, übersteht die
+Projektdatei, reiner Text, für den Agenten unsichtbar
 (`json_schema()` lässt ihn aus, die Sitzung lehnt ihn ab), auf der Rückseite des
 Dialogs. **Projektparameter, die darin gelesen werden, gehören in den
 Cache-Schlüssel** (`resolve_params` sieht nur die oberste Ebene):

@@ -5637,6 +5637,7 @@
   "Ohne Trennrichtung gibt es keine Ebene.": "Without a split direction there is no plane.",
   "Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein.": "Without a distance nothing moves — this value must not be zero.",
   "Ohne Winkel bleibt alles, wie es ist.": "Without an angle nothing changes.",
+  "Ohne Wirkung": "Without effect",
   "Ohne diesen Schritt hielte Schritt {number} an: {reason}": "Without this step, step {number} would stop: {reason}",
   "Ohne dieses Merkmal rechnen": "Compute without this feature",
   "Ohne passende Grafikkarte dauert beides ein Vielfaches. Was abbricht, ist ein Fehler und keine Langsamkeit — dann steht der Satz von ComfyUI im Dialog, samt dem Schritt, in dem es riss.": "Without a suitable graphics card both take many times as long. If something breaks off, it is an error, not slowness — the dialog then shows ComfyUI's own message and the step where it broke off.",

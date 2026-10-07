@@ -5637,6 +5637,7 @@
   "Ohne Trennrichtung gibt es keine Ebene.": "Sans direction de séparation, il n'y a pas de plan.",
   "Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein.": "Sans distance, rien ne bouge — cette valeur ne doit pas être nulle.",
   "Ohne Winkel bleibt alles, wie es ist.": "Sans angle, rien ne change.",
+  "Ohne Wirkung": "Sans effet",
   "Ohne diesen Schritt hielte Schritt {number} an: {reason}": "Sans cette étape, l'étape {number} s'arrêterait : {reason}",
   "Ohne dieses Merkmal rechnen": "Calculer sans cette caractéristique",
   "Ohne passende Grafikkarte dauert beides ein Vielfaches. Was abbricht, ist ein Fehler und keine Langsamkeit — dann steht der Satz von ComfyUI im Dialog, samt dem Schritt, in dem es riss.": "Sans carte graphique adaptée, les deux prennent bien plus longtemps. Ce qui s'interrompt est une erreur et non de la lenteur — la phrase de ComfyUI figure alors dans la boîte de dialogue, avec l'étape où cela s'est interrompu.",

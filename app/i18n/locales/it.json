@@ -5637,6 +5637,7 @@
   "Ohne Trennrichtung gibt es keine Ebene.": "Senza direzione di divisione non c'è alcun piano.",
   "Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein.": "Senza distanza non si muove nulla — questo valore non può essere zero.",
   "Ohne Winkel bleibt alles, wie es ist.": "Senza angolo non cambia nulla.",
+  "Ohne Wirkung": "Senza effetto",
   "Ohne diesen Schritt hielte Schritt {number} an: {reason}": "Senza questo passaggio si fermerebbe il passaggio {number}: {reason}",
   "Ohne dieses Merkmal rechnen": "Calcola senza questa caratteristica",
   "Ohne passende Grafikkarte dauert beides ein Vielfaches. Was abbricht, ist ein Fehler und keine Langsamkeit — dann steht der Satz von ComfyUI im Dialog, samt dem Schritt, in dem es riss.": "Senza una scheda grafica adatta entrambe durano molto di più. Ciò che si interrompe è un errore e non lentezza: allora la frase di ComfyUI compare nella finestra, insieme al passaggio in cui si è interrotto.",

@@ -5637,6 +5637,7 @@
   "Ohne Trennrichtung gibt es keine Ebene.": "Sem direção de separação não há plano.",
   "Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein.": "Sem percurso nada se move — este valor não pode ser zero.",
   "Ohne Winkel bleibt alles, wie es ist.": "Sem ângulo nada muda.",
+  "Ohne Wirkung": "Sem efeito",
   "Ohne diesen Schritt hielte Schritt {number} an: {reason}": "Sem este passo, o passo {number} pararia: {reason}",
   "Ohne dieses Merkmal rechnen": "Calcular sem esta característica",
   "Ohne passende Grafikkarte dauert beides ein Vielfaches. Was abbricht, ist ein Fehler und keine Langsamkeit — dann steht der Satz von ComfyUI im Dialog, samt dem Schritt, in dem es riss.": "Sem uma placa gráfica adequada ambos demoram muito mais. O que se interrompe é um erro e não lentidão — então a frase do ComfyUI aparece no diálogo, com o passo em que se partiu.",
