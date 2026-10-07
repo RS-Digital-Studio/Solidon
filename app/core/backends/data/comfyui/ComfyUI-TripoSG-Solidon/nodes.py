@@ -1,9 +1,13 @@
-"""TripoSG als ComfyUI-Knoten — Bild zu Körper, ohne Lizenzhaken.
+"""TripoSG als ComfyUI-Knoten — Bild zu Körper.
 
 Warum es diesen Knoten gibt: Hunyuan3D liefert gute Formen, steht aber unter
 der Tencent Community License, und deren Geltungsbereich schließt die
-Europäische Union ausdrücklich aus. TripoSG (VAST-AI-Research) steht unter
-MIT — Code und Gewichte — und ist damit das, was hier gebraucht wird.
+Europäische Union ausdrücklich aus. TripoSG (VAST-AI-Research) weist im
+Wurzel-``LICENSE`` und in der Modellkarte MIT aus. **Das ist nicht die ganze
+Kette** (RM-003): ``triposg/models/transformers/triposg_transformer.py``, den
+jeder Auftrag ausführt, trägt im Kopf die Tencent Hunyuan Community License,
+``triposg/LICENSE`` die FlashVDM Community License — beide nehmen die EU aus.
+Die Klärung mit VAST bzw. einer Kanzlei steht aus.
 
 Der Knoten hält sich an vier Dinge, die über die Qualität entscheiden:
 

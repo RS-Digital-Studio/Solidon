@@ -305,6 +305,7 @@ def affected(
     reasons: dict[Path, str] = {}
     changed_modules: set[str] = set()
     deleted_modules: set[str] = set()
+    named_tools: list[str] = []
     touches_code = False
     for path in changed:
         relative = (
@@ -323,6 +324,8 @@ def affected(
                     reasons.setdefault(graph.modules[name], "selbst geändert")
                 if name.startswith(("app.", "tools.")) or name in ("app", "tools"):
                     touches_code = True
+                if name.startswith("tools."):
+                    named_tools.append(path.name)
             elif name.split(".", 1)[0] in PACKAGES:
                 # Gelöschte Module und Paketinitialisierer bleiben über ihre
                 # Importkanten erreichbar, auch Helfer unter tests/.
@@ -354,6 +357,20 @@ def affected(
                 if deleted_modules
                 else "importiert eine geänderte Datei",
             )
+    # Ein Werkzeug, das beim Import ``sys.argv`` liest, laden seine Tests über
+    # den Pfad — ohne Importkante. Seit die Matrix in ``tools/`` liegt, fehlte
+    # ihr Prüftest in jeder Auswahl zu ihr (Review 06.10.2026, M3). Nach den
+    # Importkanten, damit deren genauerer Grund stehen bleibt.
+    if named_tools:
+        texts = {
+            test_path: test_path.read_text(encoding="utf-8")
+            for name, test_path in graph.modules.items()
+            if name.startswith("tests.") and test_path.name.startswith("test_")
+        }
+        for file_name in named_tools:
+            for test_path, text in texts.items():
+                if file_name in text:
+                    reasons.setdefault(test_path, f"nennt {file_name}")
     if touches_code:
         for name in _tree_readers(graph):
             reasons.setdefault(graph.modules[name], "liest den ganzen Baum")

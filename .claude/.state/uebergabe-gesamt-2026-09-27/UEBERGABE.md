@@ -2,6 +2,12 @@
 
 ## Matrixwerkzeug für die Gesamtabnahme (04.10.2026, RM-281 Paket 3)
 
+**Seit RM-530 liegt das Werkzeug in `tools/`:** `treiber.py` heißt
+`tools/matrix_driver.py`, `einheit.py` `tools/matrix_unit.py`, `bericht.py`
+`tools/matrix_report.py`, `matrix_config.py` `tools/matrix_config.py` und
+`gcode_lesen.py` aus `uebergabe-matrix-2026-09-27/` `tools/matrix_gcode.py`.
+Die alten Namen unten meinen diese Dateien; geändert wird nur noch dort.
+
 Stand des Zweigs `claude/rm281-paket3`: `einheit.py` geht den Weg des
 Druckdialogs mit dessen eigenem Code (`_AdviceWorker._calculate`,
 `_PlateJob`/`_prepare_plate`, Aufruf aus `_SliceWorker`, `plates_findings`),
@@ -12,8 +18,8 @@ Auslegen über Platten, wenn die Übergabe „keine Anordnung“ meldet. Bilder 
 Pillow. Aufruf aus dem Arbeitsbaum, Kerne über die Masken im Treiber:
 
 ```
-python .claude/.state/uebergabe-gesamt-2026-09-27/treiber.py <code-wurzel> <ausgabe> probe|modelle|drucker [--arbeiter 2]
-python .claude/.state/uebergabe-gesamt-2026-09-27/bericht.py <ausgabe> > bericht.md
+python tools/matrix_driver.py <code-wurzel> <ausgabe> probe|modelle|drucker [--arbeiter 2]
+python tools/matrix_report.py <ausgabe> > bericht.md
 ```
 
 `probe` sind die drei Abnahmemodelle über die sieben Heimkombinationen; der
@@ -315,8 +321,8 @@ neuen Schnappschuss auf dem aktuellen Stand anlegen und alle Pläne neu starten.
 Ausgaben der Gesamtprüfung darunter (`gesamt-2026-09-27/`). Die Pfade unten nennen, wohin
 die Werkzeuge schreiben; frühere Ergebnisse liegen dort nicht mehr.
 
-- Werkzeuge: `.claude/.state/uebergabe-gesamt-2026-09-27/` (`treiber.py`,
-  `einheit.py`, `bericht.py`, `alle_plaene.sh`/`.ps1`). Ausgaben:
+- Werkzeuge: `tools/matrix_driver.py`, `tools/matrix_unit.py`,
+  `tools/matrix_report.py`, hier `alle_plaene.sh`/`.ps1`. Ausgaben:
   `output/review/gesamt-2026-09-27/` (`drucker/`, `modelle/`, `prusa-c3/`,
   `drucker-alt-9b58af5/`).
 - Schnappschuss `F:\3D Druck.gesamt` steht auf `b4579e943` (vor Stufe C!).

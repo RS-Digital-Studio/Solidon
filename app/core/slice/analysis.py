@@ -3120,6 +3120,30 @@ class ModelSupport:
     des Stücks. Die Stützsperre spart ihre Säulen aus (:func:`channel_space`)."""
 
 
+def overhang_outline(result: SliceResult) -> ShapelyPolygon | MultiPolygon | None:
+    """Wo gestützt wird, in der Aufsicht: alle Überhänge des Körpers vereinigt (RM-312).
+
+    Die Slicer setzen Stützen und ihren verbreiterten Fuß unter die Überhänge,
+    nicht unter das ganze Teil. Gemessen an der Aufsicht bekam die
+    Waschschüssel am Kobra 2 mit Stützen eine Warnung, der Stützfuß reiche über
+    das Bett, während die erste Stützschicht im G-Code 15 mm vom Rand blieb.
+    Ein Überhang über dem Modell steht mit darin — seine Säule endet auf dem
+    Modell, nicht auf dem Bett; der Umriss ist damit eher zu groß als zu klein.
+    ``None`` ohne Überhang: Dann stützt kein Slicer, und es gibt keinen Fuß.
+    """
+    pieces = [
+        ShapelyPolygon(piece.outline, piece.holes)
+        for layer in result.layers
+        for piece in layer.overhangs
+    ]
+    if not pieces:
+        return None
+    joined = unary_union(pieces)
+    if joined.is_empty:
+        return None
+    return joined if isinstance(joined, ShapelyPolygon | MultiPolygon) else None
+
+
 def support_on_model(result: SliceResult) -> bool:
     """Endet eine Stützsäule außerhalb eines Kanals auf dem **Modell**? (§22.2)
 

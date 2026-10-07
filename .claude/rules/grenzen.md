@@ -27,7 +27,7 @@ Die Zahlen hält `tests/test_interface_limits.py`, die Breitengrenze
 |---|---|
 | Menüs in der Leiste | ≤ 9 |
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
-| Umschalter in der Werkzeugzeile | ≤ 8 — heute sieben: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen — auf `Alt+1` bis `Alt+7` |
+| Umschalter in der Werkzeugzeile | ≤ 8 — heute sieben: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Teilen — auf `Alt+1` bis `Alt+7` |
 | Felder auf der Vorderseite eines Operationsdialogs, gezählt, was zugleich dasteht (Felder anderer Varianten stehen nicht da) | ≤ 4, bei mindestens 90 % der Operationen ≤ 3 (Bauplan §2.4, Entscheidung Robert) |
 | Wörter über dem ersten Feld (Platzierungssatz, erster Satz der Beschreibung, Überschrift „Wann nicht?“) | ≤ 25, übersetzt ≤ 35 |
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
@@ -38,14 +38,10 @@ achte Platz der Werkzeugzeile ist keine Einladung: Eine Funktion, die eine
 Leiste will, verdrängt eine andere oder ist keine wert (`MAX_TOOLS`).
 
 **Gefaltet wird je Kategorie und nur so weit, bis der Rest passt:**
-`folded_categories` (`app/core/registry/surfaces.py`) nimmt die hinteren
-Kategorien aus `MENU_GROUPS` (dort von häufig nach selten); die Rechnung liegt
-im Kern, damit `menu_path` dieselbe Antwort gibt wie die Leiste. Eine direkt
-stehende Kategorie behält ihren Namen als Überschrift (`addSection`; zählt nicht
-in der Zeilengrenze, `isSeparator()` bleibt wahr), außer sie ist die einzige
-(„Bausteine → Bausteine“). Die direkten stehen vor den gefalteten, getrennt
-durch einen nackten Trennstrich, denn eine Überschrift benennt alles bis zum
-nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein.
+`folded_categories` (`registry/surfaces.py`, auch für `menu_path`) nimmt die
+hinteren Kategorien aus `MENU_GROUPS`. Eine direkte Kategorie trägt ihren Namen
+als Überschrift, außer sie ist die einzige; die direkten stehen vor den
+gefalteten, getrennt durch einen nackten Trennstrich.
 
 ## Wo eine Operation steht
 
@@ -59,10 +55,13 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
   behalten Entf. Sperren Halt oder Lizenz das Entfernen, sagt die Taste den
   Grund (`_DeleteRefusal`, Titel aus `_removal_entry`, still beim Messen in der Ansicht) — ein
   gesperrtes Kürzel schweigt sonst.
-- **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*
-  (mit *Automatisch teilen*), *Erzeugen* samt Abschnitt *Bausteine* (Katalog,
-  Gegenstücke, Deckel ohne Kachel; `parts` steht in der Gruppe *Erzeugen*),
-  *Ansicht*, *Hilfe*.
+- **In der Leiste bleibt, was keine Auswahl braucht:** *Datei*, *Bearbeiten*,
+  *Erzeugen* samt *Bausteine* (Katalog, Gegenstücke, Deckel ohne Kachel),
+  *Ansicht*, *Hilfe*; *Automatisch teilen* steht in der Karte
+  (`add_window_action`).
+- **Ein Text, eine Wirkung** (RM-507): gleicher Menütext ist dieselbe
+  `QAction`; Dialoge bestätigen mit `op_dialog.accept_text`; sichtbarer und
+  zugänglicher Name kommen aus einem Schlüssel.
 - **Den Menüort einer Operation mit Auswahl entscheidet ihre Kachel, nicht ihre
   Kategorie:** `catalogue_operations()` (`surfaces.py`) ist die Quelle für
   Leiste, Karte, `menu_path` und Wächter; `create_lid` und `screw_lid` stehen
@@ -98,7 +97,7 @@ bekommt:
 
 | Weg | Ort an der Oberfläche |
 |---|---|
-| Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Trennen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
+| Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Teilen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
 | Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen“: erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig“), Menü *Erzeugen*, Karte der Handlungen; Grundkörper tragen vorn *Maße als Parameter anlegen* (§13) |
 | Weg 3 — generieren | Chat, Generierungsdialog, Einladung der leeren Szene |
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — am gewählten oder einzigen Körper, sonst sagen sie es vorher) |
@@ -187,7 +186,7 @@ sie lädt mit Operationsdialog, Merkmalfenster und Parameterschema.
   (`MainWindow.run_operation`), ausdrückliche Werte haben Vorrang. Beim
   Wiederöffnen bleiben die gespeicherten Rollen stehen.
 - **Auch ein Sammeleintrag beginnt am gemeinsamen Einstieg**
-  (`MainWindow.launch_operation`): *Aus Skizze erzeugen* öffnet unmittelbar
+  (`MainWindow.launch_operation`): *Zeichnen …* öffnet unmittelbar
   die Zeichnung, wie Palette und Kürzel.
 
 ## Zwillinge: eine Handlung, zwei Rechenkerne
@@ -266,7 +265,7 @@ Filter darin still mit.
 - **Was am gewählten Körper nie etwas tun kann, sagt es am Menüeintrag**
   (`requires_body` und `lid.reason_against`, deklariert nach `operationen.md`,
   „Was die Operation verlangt, steht im Register“) — *Offene Fläche schließen*,
-  *In Einzelteile zerlegen*, *Gitter füllen*, die Deckel an der gewählten
+  *In Einzelteile aufteilen*, *Gitter füllen*, die Deckel an der gewählten
   Fläche, einmal je Merkmal und Auswertung gerechnet; *An Merkmal ausrichten*
   verlangt sein Ziel (`_NEEDS_TARGET`), und der Dialog sperrt mit demselben
   Satz, wenn die Liste leer ist. Was an einer Zahl im Dialog hängt, sagt das

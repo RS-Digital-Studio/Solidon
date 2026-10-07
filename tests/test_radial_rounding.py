@@ -223,6 +223,7 @@ def test_a_radial_edit_stays_within_its_selected_angular_patch(kind: str, profil
     """Material auf der Gegenseite derselben Achse liegt außerhalb der gewählten Haut."""
     source = _clip(kind)
     if kind == "brep":
+        exact_kernel()
         from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
         from OCP.gp import gp_Pnt
 

@@ -27,17 +27,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_VERSION
 from app.core import figures, manual, markup
 from app.core.bootstrap import load_operations
 from app.core.registry.registry import CATEGORIES, REGISTRY
 from app.i18n import tr
-
-pytest.importorskip("PySide6")
-
-from PySide6.QtWidgets import QApplication
-
 from app.i18n.catalog import available_languages
 from app.ui.manual_window import ManualWindow
 from tools.make_figures import SAMPLE_OBJECT, SAMPLE_PRINTER, figure_sketch

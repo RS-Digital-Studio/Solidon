@@ -438,9 +438,12 @@ class TourPanel(QWidget):
         self.next_button.setVisible(not finished)
         if not finished:
             current_step = tour.steps[self._current]
-            self.next_button.setText(
-                tr("Schritt überspringen") if current_step.done is not None else tr("Weiter")
-            )
+            exercise = current_step.done is not None
+            self.next_button.setText(tr("Schritt überspringen") if exercise else tr("Weiter"))
+            # Bei einer Übung ist die Handlung im Fenster dran, nicht das
+            # Überspringen: ein normaler Knopf ohne Akzent. Beim Leseschritt
+            # ist *Weiter* der eine Weg und bleibt Hauptknopf (RM-512).
+            make_primary(self.next_button, leading=not exercise)
         following = self._next_example() if finished else None
         self.follow_button.setVisible(following is not None)
         if following is not None:

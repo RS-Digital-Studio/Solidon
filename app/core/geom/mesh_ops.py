@@ -26,6 +26,7 @@ import numpy as np
 from app.core.deferred import trimesh
 from app.core.errors import (
     CANCEL,
+    CHANGE_THIS_STEP,
     CORRECT_INPUT,
     DECIMATE_AND_RETRY,
     REMESH_AND_RETRY,
@@ -1574,7 +1575,8 @@ class DecimateParams(BaseParams):
     ),
     # „2" mit dem Parameter ``method``: Der gemessene Weg rechnet wie zuvor,
     # der Schlüssel alter Einträge passt aber nicht mehr zum neuen Schema.
-    cache_version="2",
+    # „3": ``mesh.already_below_target`` öffnet den Schritt (RM-441).
+    cache_version="3",
     # Die Vorschau zeigt das neue Netz, keine Volumendifferenz, und verkleinert
     # den Körper nicht vorab — eine Verkleinerung vor dem Verkleinern hätte
     # schon weniger Dreiecke als fast jedes Ziel (RESTVERLAUF-04).
@@ -2230,7 +2232,11 @@ def _simplification_findings(
                     "target": target,
                     "before": before.triangle_count,
                     "after": after.triangle_count,
+                    "field": "triangles",
                 },
+                # Gemeint ist das Ziel dieses Schritts: Wer verringern wollte,
+                # setzt es unter die Dreieckszahl des Körpers (RM-441).
+                suggestions=(CHANGE_THIS_STEP,),
             )
         ]
     if after.triangle_count <= target or after.triangle_count > before.triangle_count:
