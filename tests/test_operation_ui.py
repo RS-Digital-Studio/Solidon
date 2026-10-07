@@ -2385,6 +2385,10 @@ def test_texture_panel_changes_existing_step_with_live_preview(
     assert created.face_indices
     names, owners = cell_owner_table(body.features, body.mesh.triangle_count)
     assert np.all(owners[np.asarray(created.face_indices)] == names.index(created.id))
+    # Die gewählte Fläche gibt es nicht mehr; die Wahl geht auf ihr Muster
+    # über, statt aufgehoben zu werden (RM-537, ``_reselect_the_successor``).
+    assert window.object_tree.selected() == object_id
+    assert window.object_tree.selected_feature() == created.id
     window._on_feature_picked(created.id)
     panel = window.feature_panel
     assert panel.shown_part_step() == operation.id
