@@ -2207,3 +2207,10 @@ Fertigungsspiel getrennt vom gemessenen Überdeckungsvolumen.
 `difference.surface_distance_bound` gibt Tochterzellen die Eckwerte der
 Mutterzelle mit, statt sie neu zu rechnen; so wird der Formvergleich des
 Nachbaus (RM-022) gut doppelt so schnell bei gleichem Ergebnis.
+
+## Schnitt an einer Ebene vor dem Verschweißen
+
+Wer mit `trimesh` an einer Ebene teilt und danach verschweißt, legt vorher auf
+die Ebene, was trimesh zu ihr zählt (`section.settled_on_plane`): Ecke und
+Schnittkopie stünden sonst bis 1e-8 mm auseinander, und das Verschweißen über
+gerundete Koordinaten verfehlte sie — der Körper bliebe offen.

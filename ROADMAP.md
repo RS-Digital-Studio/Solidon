@@ -134,12 +134,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Am Runner im Sandkasten mit den Manifestrechten belegt; offen nur der Lauf mit dem ausgelieferten Solidon-Flatpak 0.5.3 und das Öffnen im Fenster |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): Lader-Weg bauen, Rückfall „nur öffnen“ mit Satz im Druckdialog; Abnahme am Linux-Runner mit AppImage und Flatpak |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Fällig seit 06.10.: mit 0.5.3 antworten; Entwurf liegt lokal bereit |
-| [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Gebaut und an Sonde und Fenstertest belegt, nicht committet (Hunks im Arbeitsbaum des i9, Patches im Zustandsordner); offen Tor, Commit der eigenen Hunks und der Titel aus `_removal_entry` |
 | [RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig](#rm-534) | Kundenrückmeldungen | Ursache an der Kundendatei gemessen; Umsetzung in vier Teilen (Laufzustand, volle Kette selbst, Halt im Entwurf nie fein, kein Hin und Her) nicht begonnen |
 | [RM-535 — Merkmal verschieben: Felder an Flächen, Karte und Operation uneins, falsche Ergebnisse ohne Befund](#rm-535) | Kundenrückmeldungen | Vier Entscheidungen Roberts (am Punkt); die Widersprüche und die drei falschen Ergebnisse unabhängig davon beheben |
-| [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
 | [RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück](#rm-537) | Kundenrückmeldungen | An der Kundendatei gemessen; offen die Herkunft der vorläufigen Merkmale und was eine Auswahl tut, deren Merkmal verschwindet |
+| [RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg](#rm-544) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): alle Gewindearten samt Einstellung der Auswahllisten; baut auf RM-532 (jedes Maß) und RM-536 (Stift für Bohrung) auf |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -4587,59 +4586,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die Flatseal-Freigabe für den Session-Bus nicht nötig ist. Entwurf in Roberts lokaler Ablage.
   Abnahme: nach dem Release versandt, Versandstatus dokumentiert.
 
-<a id="rm-532"></a>
-
-- [~] **RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung.**
-  Kundenvorschlag S-20261006-c66299 (0.5.3, ohne Rückadresse): Ein Innengewinde in einem Rohr mit
-  mindestens 60 mm Innendurchmesser ging nicht, *Druckbares Gewinde* endete bei M8. Robert:
-  „keine Beschränkungen“.
-
-  **Gebaut** auf dem Zweig `gewinde-eigenes-mass` (ein Commit `63d7a7826` auf `a2b7451b6`, 41
-  Dateien; dieselben Änderungen liegen ungestaged im Arbeitsbaum des Rechners, auf dem sie
-  entstanden):
-  - Baustein: Größe *Eigenes Maß* (`fasteners.CUSTOM_SIZE`), Nenndurchmesser 2 bis 1000 mm vorn,
-    Steigung hinten (null ist die Regelsteigung, `standards.regular_pitch` über die neue Tabelle
-    `pitches` M10 bis M64 nach der ISO-262-Auswahl); `thread_measure`, Absage `no_core` bei einer
-    Steigung ohne Kern.
-  - Bohrung: Ohne Tabellengröße wählt `custom_thread_for` das Maß, dessen Kernloch die Bohrung
-    ist (Ø 60 → Ø 66,6 mit Steigung 6, Ø 6,5 → Ø 7,6 × 1); der Satz über dem Dialog nennt es.
-  - Gegenstück: `counterpart.thread_values_for` ersetzt `thread_size_for` — Tabellengröße oder
-    eigenes Maß, Absage nur außerhalb der Grenzen (`beyond_threads`); ein geänderter Schritt
-    koppelt über das ganze Maß.
-  - Gemeinsame Grenzen `units.SMALLEST_THREAD`, `LARGEST_THREAD`, `COARSEST_PITCH`, auch für
-    *Schraube erstellen* (war Ø 100) und *Drehdeckel erzeugen* (war Ø 400).
-  - Netz: Sehnen je Umlauf nach der Facettenregel (`shapes.turn_segments`, bis Ø 46 unverändert
-    48), Drehdeckel ebenso (`lid.turn_sections`, `cache_version` 7).
-  - Texte in sechs Sprachen, zwei Handbuchabsätze, Website 61 → 76 hinterlegte Normmaße, Karten,
-    Regel `bausteine.md`, Begründungen. Tests: Rohrfall, Paar mit eigenem Maß an beiden Kernen,
-    Gegenstück Ø 66,6, Drehdeckel Ø 300, Tabellenprüfung, Sehnenregel. Sonde am echten Fenster:
-    An einer 60-mm-Bohrung steht *Eigenes Maß* mit Ø 66,60 mm vorbelegt, vier Felder vorn.
-
-  **Offen, in dieser Reihenfolge:**
-  1. Bereichsnachweis: Alle 49 Bausteine sind veraltet (gemeinsame Formen und Normteiltabelle
-     geändert). `tools/check_part_ranges.py` auf dem Zweig fahren und `part_ranges.toml`
-     committen; `printed_thread` hat jetzt 256 Ecken bis Ø 1000 und läuft am längsten. Während
-     des Laufs weder Bausteindateien noch `shapes`, `build` oder `standards` ändern, sonst ist er
-     wertlos.
-  2. Volles Entwicklungstor auf dem Zweig. Der letzte Lauf (auf `306ff7bf2`) hatte zehn rote
-     Tests; neun sind auf dem Zweig behoben (alte Signatur von `_printed_thread` im Test,
-     `beyond_threads` einsortiert, totes Wertlabel `nearest`, Eckenzahl 7306, Zeilenumbruch vor
-     §13.4, Website-Zahl, Steigungssatz zu lang), der zehnte ist der Bereichsnachweis. Seitdem
-     nicht neu gefahren.
-  3. Merge nach main (Kataloge bei Konflikt je Schlüssel vereinigen), dann der Sitzung „Stift
-     für Bohrung“ (Fragebogen S-20261006-5be329) den Hash nennen: Sie baut den Gewindebolzen
-     auf `thread_values_for`, `CUSTOM_SIZE` und `thread_measure` und wartet darauf.
-  4. Danach auf dem Rechner, auf dem es entstand, die ungestagten Gewindeänderungen nicht noch
-     einmal übernehmen; sie sind dann über main da.
-  5. Beim Release: Handbuch erzeugen (die Erzeugnisprüfung in `test_wording` meldet die zwei
-     geänderten Absätze), das Bild *Ein Gewinde in eine Bohrung* nur bei Änderung.
-  6. Entscheidung Robert: *Schraube*, *Gedruckte Mutter*, Schraubenloch, Mutternfalle und
-     Einpressbuchse bleiben an der Normteiltabelle M2 bis M8 (Kopf, Schlüsselweite, Scheibe).
-     Soll die Tabelle bis M64 wachsen, mit Herstellerdaten je Größe?
-
-  Abnahme: Bereichsnachweis passt zu allen 49 Bausteinen, Tor grün, auf main gemergt. Eine
-  Kundenantwort entfällt, der Vorschlag kam ohne Rückadresse.
-
 <a id="rm-072"></a>
 
 - [ ] **RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen.** Den Dental-Kunden
@@ -4754,29 +4700,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   versetzen. **Abnahme:** Ein Test über echte Netze, der heute an Ring und Sackbohrung mit Zapfen
   rot ist; die drei falschen Ergebnisse rechnen richtig oder sagen mit Grund ab.
 
-<a id="rm-536"></a>
-
-- [ ] **RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung
-  (Fragebogen S-20261006-5be329).** Kundenwunsch: „… wenn man ein Gewinde bei der Bohrung oder
-  Senkung hat, dass man dafür auch das passende Gegenstück mit der Funktion erzeugen könnte“.
-  Heute baut `pin_for_bore` (`geom/lid_hinge.py`) einen glatten Zylinder (Bohrung minus Spiel,
-  so lang wie die Bohrung). Soll: Eine Senkung an der Mündung (Kette über
-  `relations.cavity_chain_state_at`) gibt einen bündigen Senkkopf im Winkel der Senkung, eine
-  Ansenkung einen Zylinderkopf, ein Innengewinde auf derselben Achse ein Außengewinde derselben
-  Größe und Steigung mit Spiel — über `counterpart.thread_values_for` und den Gewindebaustein in
-  `fasteners.py` (Tabellenmaß, sonst `CUSTOM_SIZE`; dieselben Absagen für links-, mehrgängig und
-  kegelig). Ein neuer Parameter hinter der Klappe wählt „passend zur Bohrung“ (Vorgabe) oder
-  „glatter Stift“; bestehende Projekte behalten ihr Ergebnis über eine Migration (Format 46 → 47,
-  Muster `_keep_slot_tools_as_they_were`). `leaves_inputs_unchanged` bleibt wahr (`outputs[0]` ist
-  der unveränderte Träger, Zusage an `bbd41ff2d`); beide Kerne, `cache_version`, ein Befund nennt
-  das Gebaute, Texte in allen Katalogen. Einzelheiten: `auftrag-stift.md` im Zustandsordner von
-  RM-533. **Wartet auf** den Merge von RM-532 (Zweig `gewinde-eigenes-mass`) auf main — die
-  Schnittstelle (`thread_values_for`, `CUSTOM_SIZE`, `thread_measure`, `size_for_thread`,
-  `custom_thread_for`) ist zugesagt, gebaut wird erst darauf. **Abnahme:** Korpustests an
-  `plate_countersunk.stl`, `plate_countersunk_blind.stl` und einer Bohrung mit
-  `insert_printed_thread`, Sollwerte mit Herkunft, Gegenprobe; eine alte Projektdatei mit Stift
-  rechnet unverändert.
-
 <a id="rm-537"></a>
 
 - [ ] **RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück, und Entf
@@ -4793,3 +4716,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   verschwindet (den Körper zu wählen steht so im Docstring von `_restore`; leeren und ansagen wäre
   die Alternative). **Abnahme:** Eine Merkmalswahl während der Erstauswertung überlebt sie oder
   wird sichtbar aufgegeben, nie still zum Körper.
+
+<a id="rm-544"></a>
+
+- [ ] **RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg.** Anlass ist
+  derselbe Kundenvorschlag wie bei RM-532 (S-20261006-c66299, Innengewinde in einem Rohr); Rohre
+  tragen meist Whitworth-Rohrgewinde. Solidon kennt nur metrische Gewinde nach ISO 261/262 und
+  sagt bei links-, mehrgängigen und kegeligen ab. **Entschieden (Robert, 06.10.2026):** „alle“ —
+  neben metrisch in jedem Maß auch G (zylindrisches Rohrgewinde, ISO 228-1, 55°-Flanken, Gänge je
+  Zoll) sowie UNC und UNF (60°, Gänge je Zoll). **Umfang:** Tabelle der Nennmaße und Gänge je
+  Zoll mit Herkunft (`standards.toml`, Version erhöhen), das Flankenprofil als Parameter der
+  Gewindeform (55° gerundet / 60°), *Eigenes Maß* auch in Zoll (Gänge je Zoll statt Steigung),
+  dieselben Wege wie RM-532: Druckbares Gewinde, Bohrung mit Gewinde, Gegenstück
+  (`counterpart.thread_values_for`), *Schraube erstellen*, *Drehdeckel erzeugen*, Stift für
+  Bohrung (RM-536), Erkennung einer gemessenen Bohrung als Zoll- oder Rohrgewinde mit Rückfrage
+  bei Mehrdeutigkeit (Regel 21). **Einstellung (Robert, 06.10.2026):** In den Einstellungen
+  wählt der Kunde, welche Gewindearten in den Auswahllisten stehen (metrisch, G, UNC, UNF,
+  später die zweite Stufe), Vorgabe alle. Die Wahl ist Darstellung, kein Dokumentzustand: Ein
+  Schritt, der eine ausgeblendete Art trägt, zeigt und rechnet sie weiter, und die Erkennung
+  schlägt nur eingeblendete Arten vor. Zweite Stufe, weil „alle“ auch die heutigen Absagen meint:
+  kegelige Rohrgewinde (R nach ISO 7-1, NPT), Linksgewinde und mehrgängige Gewinde.
+  **Abnahme:** Paar G 1/2 innen und außen greift an beiden Kernen, Kernmaße gegen ISO 228-1,
+  UNC 1/4-20 gegen ASME B1.1; Bereichsnachweis, Tor, Texte in sechs Sprachen, Handbuchabsatz;
+  die zweite Stufe mit eigener Abnahme.

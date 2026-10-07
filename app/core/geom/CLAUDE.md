@@ -74,9 +74,8 @@ Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
   `body_split` ist das eine Urteil über einen zerfallenden Körper.
 - **Wer mit `trimesh` an einer Ebene teilt und danach verschweißt**
   (`section._apply`, `faces._draft_tools`), legt vorher auf die Ebene, was
-  trimesh zu ihr zählt (`section.settled_on_plane`): Ecke und Schnittkopie
-  stünden sonst bis 1e-8 mm auseinander, und das Verschweißen über gerundete
-  Koordinaten verfehlte sie — der Körper bliebe offen.
+  trimesh zu ihr zählt (`section.settled_on_plane`), sonst bliebe der Körper
+  offen.
 - `kernel_jobs.slice_sections` liefert direkte Schichtschnitte als Ringfelder
   über `kernel_process.run`; Aufbau und Schnitt sind gemeinsam abbrechbar.
 - Eine Änderung am gemeinsamen Kern entwertet den Ergebnis-Cache
