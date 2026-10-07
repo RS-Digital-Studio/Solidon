@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
 
 from app.core import expressions, manual
 from app.core.errors import AppError
+from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
 from app.core.registry import OperationSpec, inactive_dependency
 from app.core.registry.surfaces import chooses_a_centre, first_sentence, normal_fields_of
 from app.core.types import ParamSpec
@@ -116,6 +117,11 @@ MAX_FRONT_FIELDS: Final = 4
 
 #: Wie viele Feldnamen die zugeklappten „Weitere Einstellungen“ nennen.
 ADVANCED_NAMES_SHOWN: Final = 3
+
+#: Die Wahl, hinter der ein Maß der Rückseite etwas anderes meint als seine
+#: Vorgabe: *Eigenes Maß* einer Größenauswahl. Nur sie klappt die Rückseite auf
+#: (``_couple_dependent_fields``, Review RM-532 N4 und Review P2 G2).
+_CUSTOM_SIZE: Final = CUSTOM_SIZE
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
@@ -3323,11 +3329,15 @@ class OperationDialog(QDialog):
                     and self._rows[entry.name] is self._advanced_form
                     and isinstance(editor, ValueField)
                     and not editor.names_its_zero()
+                    and _CUSTOM_SIZE in (entry.depends_on or ("", ()))[1]
                 ):
                     # **Ein Maß, das erst die Wahl vorn verlangt, steht nicht
                     # still hinter der Klappe** (Review RM-532 Runde 2, N4):
                     # *Eigenes Maß* holt den Nenndurchmesser, und zugeklappt
                     # baute seine Vorgabe 20 eine M20, ohne dass jemand sie sah.
+                    # **Nur dort** (Review P2, G2): Ein abgewähltes Langloch
+                    # holt Felder zurück, deren Vorgaben nichts anderes bauen
+                    # als vorher, und die Rückseite bleibt zu.
                     revealed = True
                 editor.setEnabled(active)
                 label = self._rows[entry.name].labelForField(editor)

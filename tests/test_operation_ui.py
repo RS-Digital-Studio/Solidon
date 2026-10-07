@@ -1060,6 +1060,34 @@ def test_choosing_a_custom_size_opens_the_flap_with_its_diameter(qt_app: QApplic
     assert dialog._advanced_form.isRowVisible(dialog._editors["diameter"])
 
 
+def test_a_choice_that_brings_back_fields_elsewhere_leaves_the_flap_closed(
+    qt_app: QApplication,
+) -> None:
+    """Nur *Eigenes Maß* klappt die Rückseite auf, nicht jedes zurückkehrende Feld (Review P2, G2).
+
+    *Bohrung setzen*: Langloch an und wieder aus holt *Tiefe der Aufweitung* und
+    den Übergangswinkel hinter der Klappe zurück. Ihre Vorgaben bauen dasselbe
+    wie vorher; aufgeklappt stand nach dem Abwählen eine Rückseite voller
+    unveränderter Werte da. Die Zeilen kommen zurück, die Klappe bleibt zu.
+    """
+    from PySide6.QtWidgets import QCheckBox
+
+    spec = REGISTRY.get("drill_hole")
+    depth = next(entry for entry in spec.params.spec() if entry.name == "widening_depth")
+    assert depth.placement == "advanced" and depth.depends_on == ("slotted", (False,))
+
+    dialog = OperationDialog(spec, [], None)
+    assert not dialog.advanced.isChecked()
+    slotted = dialog._editors["slotted"]
+    toggle = slotted if isinstance(slotted, QCheckBox) else slotted.findChild(QCheckBox)
+    assert toggle is not None
+    toggle.setChecked(True)
+    assert not dialog._advanced_form.isRowVisible(dialog._editors["widening_depth"])
+    toggle.setChecked(False)
+    assert dialog._advanced_form.isRowVisible(dialog._editors["widening_depth"])
+    assert not dialog.advanced.isChecked(), "die Rückseite bleibt zu"
+
+
 def test_a_wide_bore_preselects_a_custom_thread_with_its_diameter_in_front(
     qt_app: QApplication,
 ) -> None:
