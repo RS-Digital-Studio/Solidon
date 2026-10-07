@@ -1,0 +1,94 @@
+# Wegwerfzweig: fährt den Signierteil aus build.yml (Job macos-app-sign,
+# Berechtigung für ausführbaren Speicher, RM-104) an einem echten Artefakt,
+# bevor er am Tag läuft. Geschnitten wird wörtlich aus build.yml; nur die
+# Developer-ID-Identität wird gegen ad hoc getauscht und der Zeitstempel
+# weggelassen. Danach muss das Paket starten, und der geschnittene Rücklesetext
+# muss drei Signaturen richtig beurteilen: ohne Liste und mit `<false/>`
+# Abbruch, mit der Liste durch. Zum Fahren auf den Zweig diag/rm-104-nacht nach
+# .github/workflows/ kopieren und pushen; den Zweig nach der Auswertung löschen.
+name: Mac-Signatur mit Berechtigung prüfen
+
+on:
+  push:
+    branches: [diag/rm-104-nacht]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Signierteil (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-26-intel, arch: x86_64 }
+          - { os: macos-latest, arch: arm64 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Paket wie beim Kunden installieren
+        run: |
+          package="Solidon3D-0.5.3-macos-${{ matrix.arch }}.pkg"
+          curl -fsSL -o "$package" "https://solidon3d.de/dl/$package"
+          xattr -w com.apple.quarantine "0083;$(printf '%x' "$(date +%s)");Safari;" "$package"
+          sudo installer -pkg "$package" -target /
+          rm -f "$package"
+      - name: Signierteil und Rücklesung aus build.yml schneiden
+        run: |
+          awk '/- name: App mit Developer-ID signieren und Schlüssel wieder sperren/{f=1} f&&/^      - name: Signierte App/{exit} f' .github/workflows/build.yml \
+            | sed -n '/entitlements=/,$p' | sed 's/^          //' \
+            | sed 's/ --keychain "\$keychain" --sign "\$identity"/ --sign -/; s/ --timestamp//' > signing.sh
+          sed -n '/^granted=/,/^esac/p' signing.sh > readback.sh
+          grep -q 'allow-unsigned-executable-memory' signing.sh
+          grep -q '^esac' readback.sh
+          echo "=== signing.sh"; cat signing.sh
+          echo "=== readback.sh"; cat readback.sh
+      - name: Signierteil fahren
+        run: |
+          sudo env RUNNER_TEMP="$RUNNER_TEMP" ARTIFACT_APP=/Applications/Solidon3D.app bash -c 'set -euo pipefail; source ./signing.sh'
+          echo "Exit Signierteil: $?"
+      - name: Signatur lesen
+        run: |
+          set +e
+          app=/Applications/Solidon3D.app
+          codesign -dvv "$app" 2>&1 | grep -E "^(Identifier|CodeDirectory|Signature)"
+          echo "--- Berechtigungen des Hauptprogramms"
+          codesign -d --entitlements - --xml "$app" 2>/dev/null; echo
+          echo "--- Berechtigungen einer Bibliothek (soll leer sein)"
+          codesign -d --entitlements - --xml "$app/Contents/Frameworks/Python.framework" 2>&1; echo
+          codesign -d --entitlements - --xml "$app/Contents/Frameworks/_cffi_backend.cpython-314-darwin.so" 2>&1; echo
+          codesign --verify --deep --strict --verbose=1 "$app"; echo "verify: $?"
+      - name: Starten
+        run: |
+          rm -rf "$HOME/Library/Logs/Solidon3D" "$HOME/Library/Application Support/Solidon3D" "$HOME/Library/Preferences/Solidon3D"
+          open -a /Applications/Solidon3D.app
+          for second in $(seq 1 150); do
+            sleep 1
+            if grep -q "material profiles" "$HOME/Library/Logs/Solidon3D/app.log" 2>/dev/null; then
+              echo "Profile geladen nach $second s"; found=1; break
+            fi
+          done
+          pkill -9 -x Solidon3D || true
+          [ "${found:-0}" = 1 ]
+      - name: Geschnittene Rücklesung gegen drei Signaturen
+        run: |
+          set +e
+          app=/Applications/Solidon3D.app
+          check() {
+            ARTIFACT_APP="$app" bash -c 'set -euo pipefail; source ./readback.sh' > "rb-$1.txt" 2>&1
+            code=$?
+            echo "$1: Exit $code $(tail -1 "rb-$1.txt")"
+            [ "$code" = "$2" ]
+          }
+          sudo codesign --force --options runtime --sign - "$app"
+          check ohne-liste 1 || exit 1
+          printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' '<plist version="1.0">' '<dict>' '    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>' '    <false/>' '</dict>' '</plist>' > false.plist
+          sudo codesign --force --options runtime --entitlements false.plist --sign - "$app"
+          codesign -d --entitlements - --xml "$app" 2>/dev/null; echo
+          check wert-false 1 || exit 1
+          sudo env RUNNER_TEMP="$RUNNER_TEMP" ARTIFACT_APP="$app" bash -c 'set -euo pipefail; source ./signing.sh'
+          check mit-liste 0 || exit 1
