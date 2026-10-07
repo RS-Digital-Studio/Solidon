@@ -294,15 +294,6 @@ eigenen Filter zu hängen — Regel in `wartezeit.md`) ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
 über hidapi, auf dem Mac der Treiberweg über das 3Dconnexion-Framework des
 Kunden, die Abbildung als reine Funktion — Regel in `ansicht.md`).
-Ein gefundenes, aber nicht zugängliches Gerät zählt als gesehen. Der Leser
-unterscheidet die Zugriffssperre von einer leeren oder gescheiterten Suche;
-der Controller meldet sie einmal je Sitzung und sucht weiter. Das Fenster
-zeigt dazu einen Hilfezugang in der Statusleiste. Die kopierte Linux-Regel
-begrenzt `uaccess` auf die erkannte USB-Hersteller-/Produktkennung; weder
-globale Schreibrechte noch eine automatische Berechtigungsänderung gehören dazu.
-**`camera_step` hat drei Aufrufer, nicht einen:** die Kappe, das Kippen mit
-dem gedrückten Rad und die Flugtasten. Wer dort an einer Achse dreht, dreht
-an allen dreien
 
 *Früher unter „Die Karte › Ansicht“.*
 
@@ -661,18 +652,6 @@ Die Maßtinte — Linien, Pfeilspitzen, Zuordnungsmarken — liegt im Renderer
 (`_Dimensions`, oben unter RM-198); ein Qt-Widget mit Maske über der
 pygfx-Renderfläche gibt es seit dem 21.09.2026 nicht mehr, und ein
 vollflächiges `WA_NoSystemBackground`-Widget darüber bleibt ausgeschlossen.
-Die Zahlenfelder sind Qt-Fenster und liegen von sich aus über dem Bild —
-deckend, ohne Maske; `occupied` hält beim Verteilen die **Felder** von
-Setzpunkt, Griff, Körper und voneinander fern, die Tinte darunter spart
-nichts aus. Die gefüllte Werkzeugvorschau zeigt ihre Oberfläche ohne
-innere Dreieckskanten.
-Resize eigener Maßfelder ist ein Layoutergebnis und startet keinen weiteren
-Aufbau; nur Viewport und Rendererwidget verändern die verfügbare Fläche.
-
-*Früher unter „Die Karte › Ansicht“.*
-
-Ein vollflächiges `WA_NoSystemBackground`-Widget über der pygfx-Renderfläche
-bleibt ausgeschlossen (die Maßtinte liegt im Renderer, oben unter RM-198).
 Die Zahlenfelder sind Qt-Fenster und liegen von sich aus über dem Bild —
 deckend, ohne Maske; `occupied` hält beim Verteilen die **Felder** von
 Setzpunkt, Griff, Körper und voneinander fern, die Tinte darunter spart

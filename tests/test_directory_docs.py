@@ -424,3 +424,66 @@ def test_headings_of_rules_and_maps_carry_no_date() -> None:
         if line.startswith("#") and DATE.search(line)
     ]
     assert not dated, "Überschriften mit Datum:\n" + "\n".join(dated)
+
+
+#: Ab so vielen gleichen Wörtern in Folge steht eine Aussage zweimal da.
+REPEATED_WORDS = 16
+
+
+def repeated_passages(text: str, words: int = REPEATED_WORDS) -> list[str]:
+    """Wortfolgen, die in einem Text ein zweites Mal stehen — ohne Tabellen und Code.
+
+    Tabellenzeilen tragen gleiche Messreihen, Codeblöcke gleiche Aufrufe und
+    die Herkunftszeilen der Begründungen („*Früher unter …*“) denselben alten
+    Abschnitt; gemeint ist Prosa, die beim Verschieben stehen blieb.
+    """
+    prose: list[str] = []
+    fenced = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced or line.lstrip().startswith("|") or line.startswith("*Früher unter"):
+            continue
+        prose.extend(line.split())
+    first: dict[tuple[str, ...], int] = {}
+    found: list[str] = []
+    for index in range(len(prose) - words + 1):
+        run = tuple(prose[index : index + words])
+        seen = first.setdefault(run, index)
+        if index - seen >= words:
+            found.append(" ".join(run))
+    return found
+
+
+def test_every_statement_stands_once_in_its_document() -> None:
+    """Jede Aussage einmal — auch innerhalb einer Regel, Karte oder Begründung.
+
+    Beim Kürzen von ``oberflaeche.md`` wanderte ein Absatz in die Begründung,
+    in der er schon stand, und las sich dort zweimal hintereinander (Review 1
+    P3, G-8); in ``karte-app-ui.md`` stand ein ganzer Block zweimal.
+    """
+    documents = [
+        *rule_files(),
+        *maps(),
+        *sorted((ROOT / "konzepte" / "begruendungen").glob("*.md")),
+    ]
+    assert len(documents) > 30, "Voraussetzung: die Unterlagen werden gefunden"
+    twice = [
+        f"  {path.relative_to(ROOT).as_posix()}: {passages[0][:100]} …"
+        for path in documents
+        if (passages := repeated_passages(path.read_text(encoding="utf-8")))
+    ]
+    assert not twice, "Zweimal im selben Dokument:\n" + "\n".join(twice)
+
+
+def test_a_paragraph_left_behind_is_found_and_a_table_is_not() -> None:
+    """Gegenprobe: der Absatz aus G-8, und gleiche Tabellenzeilen zählen nicht."""
+    sentence = (
+        "spricht erst nach den Wiederwahlen, weil die den Körper aus `lost_selection` "
+        "lesen, und nur ohne eigene Handlung seit dem letzten aktuellen Bild."
+    )
+    assert repeated_passages(f"Erstens {sentence}\n\nWann gesprochen wird: {sentence}\n")
+    assert not repeated_passages(f"Erstens {sentence}\n")
+    row = "| 5 000 | 7 556 | 0,0489 mm | 1 | 5,20 mm | 842,7 mm³ | 3 | 4 | 5 | 6 | 7 |\n"
+    assert not repeated_passages(row * 3)

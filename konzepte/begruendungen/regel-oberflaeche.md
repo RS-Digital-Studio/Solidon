@@ -490,10 +490,6 @@ Wiederwahlen, weil die den Körper aus `lost_selection` lesen, und nur ohne
 eigene Handlung seit dem letzten aktuellen Bild — sonst überschriebe es deren
 Quittung mit Rückweg (Regel 19).
 
-Wann gesprochen wird: erst nach den Wiederwahlen, weil die den Körper aus
-`lost_selection` lesen, und nur ohne eigene Handlung seit dem letzten aktuellen
-Bild — sonst überschriebe es deren Quittung mit Rückweg (Regel 19).
-
 ## Der Prüfbericht sagt, wenn er zum vorigen Stand gehört
 
 Rechnet es über 200 ms und gehört das Gezeigte nicht zum Dokument, sagt der
