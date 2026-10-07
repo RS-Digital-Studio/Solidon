@@ -5628,10 +5628,28 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
         assert dialog.adopt_printer.text() == f"{title} übernehmen"
         assert dialog.adopt_printer.accessibleDescription() == dialog.adopt_printer.toolTip()
 
+        from app.core import discover
+
+        # Jede Ablage zählt, nicht nur der Stand danach: Die Wahl, die der
+        # Übernahme folgt, schreibt die Marke ein zweites Mal und verdeckte eine
+        # erste Ablage ohne sie (Review P2 N10).
+        saves: list[tuple[str, str | None]] = []
+        save = profiles.save_printer
+
+        def recorded(profile: PrinterProfile, *, slicer: str | None = None) -> PrinterProfile:
+            saves.append((profile.id, slicer))
+            return save(profile, slicer=slicer)
+
+        monkeypatch.setattr(profiles, "save_printer", recorded)
         dialog.adopt_printer.click()
 
         assert candidate.id in profiles.printer_profiles(), "erst der Klick speichert das Profil"
         assert profiles.printer(candidate.id) == candidate
+        mark = discover.program_mark("Cura.exe")
+        assert mark, "sonst prüft die Marke nichts"
+        assert profiles.printer_slicer(candidate.id) == mark
+        mine = [slicer for identifier, slicer in saves if identifier == candidate.id]
+        assert mine and mine[0] == mark, f"die Übernahme legt ohne Marke ab: {mine}"
         assert session.profile.printer.id == candidate.id
         assert settings.printer == candidate.id
         assert session.project.document.material == "petg"
