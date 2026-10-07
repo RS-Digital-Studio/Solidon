@@ -94,14 +94,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut; dazu die vier Handwege der Merkmalbedienung (§4) |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Doppelter Rollenlauf, 96 Sichtbarkeitswechsel, ein zusätzlicher Bildauftrag und ein verspäteter Hover-Neuaufbau entfernt (139/347 Fälle); am Fenster Baumklick 87–94 ms, Bildklick vor dem Hover-Fix 105–146 ms; offen: Abnahme unter 100 ms auf ruhiger Maschine am MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
-| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
+| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | Oberfläche, Kommandozeile und die Agenten- und Steckbrieftexte gerahmt (07.10.); offen die Einrichtungstexte in `comfy_setup.py`, der Wächter über ganz `app/core` und die Fensterabnahme beim Release |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Belege in `konzepte/nachweise-generatoren-2026-10/`; entschieden (Robert, 06.10.): TRELLIS.2-4B statt TripoSG, Bildmodell und Freisteller nach bestem Ergebnis (gewählt FLUX.2 [klein] 4B statt SDXL); offen der Umbau von Weg 3 (Claude, in Arbeit) und die Kanzleifragen zur neuen Kette |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
-| [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
-| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) entschieden und gebaut: lokal 12 Schritte (`MAX_STEPS_LOCAL`, `steps_for`), gehostet 8; offen (b) der Satz im Prompt für gebündelte Aufrufe — braucht einen Suitelauf mit qwen3:14b vorher und nachher auf freier Karte |
-| [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Gehosteter Lauf freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel; daneben der lokale Lauf nach RM-513 gegen `1ce7eac68` |
+| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte und (b) der Satz für gebündelte Aufrufe gebaut, lokal 28 gegen 27 von 39 (07.10.); offen: lokal endet ein Zug nach 8 bis 11 Schritten am Zugbudget statt am Schrittlimit |
+| [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
 | [RM-134 — Doppelte Testhilfen zusammenführen](#rm-134) | Tests und Entwicklungswerkzeuge | Genehmigt (Robert: „alles gründlich“); neun Helfer in `helpers.py`/`ui_helpers.py` (`95fd36d35`); offen `on_the_bore_wall`, `project`, `FakeCodec`, `a_foreign_slot`; entschieden (Robert, 06.10.): auch die großen Fenster-Fixtures zusammenführen |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie, bis dahin Intel Default Settings; offen MemTest86 über Nacht und der Tausch selbst; die Pakete von 0.5.3 kommen aus der CI, Handbuch, Bilder und Signatur entstehen weiter hier |
@@ -258,7 +257,7 @@ Der beauftragte Ausbau ist umgesetzt. Die vier im Konzept begründet ausgeschlos
 
 ## P16 — Organische Modellierung
 
-Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vorschlag für die Regelsammlung samt kostenpflichtigem Vorher-/Nachher-Suitelauf steht in RM-014. Er ist keine fehlende Umsetzung des Formwerkzeugs.
+Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach einer Formenregel in der Sammlung ist entschieden (keine Regel, ein Satz am Werkzeug, [RM-014](ROADMAP-ARCHIV.md#rm-014)); der gehostete Suitelauf dazu steht in RM-016.
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p16--organische-modellierung).
 
@@ -3563,6 +3562,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Render- und Leistungsabnahme bleibt dem Release vorbehalten.
   Registerabgleich 02.10. (Stand `4449e3370`): Oberfläche und Kommandozeile erledigt, beide Doppelpunkt-Wächter grün; offen nur die Modelltexte (Abnahme kostet Geld, nicht gefahren).
 
+  **Stand 07.10.2026 (Claude), Agententeil:** Die 43 festen Doppelpunkte der sieben
+  Agenten- und Steckbriefdateien stehen in vollständigen Rahmen (`tr("Verlauf: {transactions}")`
+  usw.), ganze Zeilen statt Halbrahmen, wo Einzelwörter sonst großgeschrieben mitten im Satz
+  standen (`_scene_line`, `_print_settings_line`); Chat und MCP teilen die Sätze für unbekannte
+  Analysen und Tabellen und „Parameter gesetzt: {name} = {value} {unit}“. Kataloge je Sprache
+  +39/−29 ohne geänderten gemeinsamen Schlüssel. Der Wächter in `tests/test_translations.py`
+  erkennt auch `f"{x}: " + tr(…)` und ist am Stand davor mit 43 Funden rot. Deutsch ist Zeichen
+  für Zeichen gleich; die Agenten-Suite lief trotzdem mit (siehe [RM-251](#rm-251)).
+  **Offen:** `app/core/backends/comfy_setup.py` setzt vor übersetzte Sätze einen festen
+  Doppelpunkt (Kundentext im Einrichtungsdialog), und der Wächter liest außerhalb der
+  Agentendateien nur `install.py`, `log.py` und `support.py` — er soll über ganz `app/core`
+  laufen, sobald `comfy_setup.py` frei ist (beides mit dem Umbau aus [RM-003](#rm-003)).
+
 <a id="rm-312"></a>
 
 - [~] **RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl.**
@@ -3833,16 +3845,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p9--säule-b-und-farbe).
 
-<a id="rm-014"></a>
-
-- [~] **RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden.** Entscheiden, ob
-  zusätzlich zur bestehenden Sperre für geratene Skizzen, Pinselzüge und Skelettdaten eine
-  erklärende Agentenregel gebraucht wird. Abnahme: Entscheidung dokumentiert; bei einer
-  Regeländerung Sammlungsversion sowie vergleichbare Agenten-Suite-Läufe davor und danach. Weg 4,
-  Beispiel, Handbuch und Website sind bereits umgesetzt.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#p16--organische-modellierung).
-
 <a id="rm-251"></a>
 
 - [~] **RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit.** Gefunden am
@@ -3883,6 +3885,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `MAX_STEPS_LOCAL`, `steps_for`; eine ausdrücklich gesetzte Grenze gilt weiter). Test
   `test_agent.py::test_a_local_model_gets_twelve_steps_and_a_hosted_one_eight`. Offen bleibt
   (b); er ändert den Prompt und wird erst mit Suite vorher und nachher gebaut.
+
+  **(b) gebaut und lokal gemessen (07.10.2026, Claude):** Prompt-Version 9 sagt im kompakten
+  Prompt, dass ein Schritt mehrere Aufrufe tragen darf und angekündigte Werkzeuge im selben
+  Schritt geholt werden; eine Kurzform bleibt für jeden Aufruf ihres Schritts eine Kurzform
+  (`ToolOffer.stubs()`, Test in `test_tool_offer.py`). Mit im Lauf: die Sprachzeile „Antworte
+  kurz und in der Sprache, in der der Nutzer schreibt“, RM-014 und der Agententeil von RM-285.
+  `PROMPT_TOKENS` 8 453 → 8 511. Agenten-Suite qwen3:14b, Fenster 32 768, freie Karte, gegen den
+  Lauf mit RM-529 (`65e3ec97b` + RM-529): **28 gegen 27 von 39 gut**, ungültige Aufrufe 43 gegen
+  66, 215 Schritte für 226 Aufrufe gegen 206 für 215, 71 gegen 70 Minuten. Einzelfälle kippen in
+  beide Richtungen; mehr Bündelung zeigt der Lauf nicht. Gehostet nicht abgenommen (kein
+  Schlüssel), das steht in [RM-016](#rm-016). **Befund:** Am Schrittlimit endet nur noch
+  `how_much_thinner`; neun Fälle enden nach 8 bis 11 Schritten am Zugbudget `MAX_TOKENS`
+  (120 000), weil lokal jeder Schritt die ganze Anfrage neu einliest (11 000 bis 14 000 Token) —
+  die 12 Schritte aus (a) sind lokal nicht erreichbar. Messdateien
+  `.claude/.state/ki-2026-10-06/messung/` (`suite_rm529_256b6b130`, `suite_rm251b_014_285`).
 
 <a id="rm-016"></a>
 
@@ -3925,6 +3942,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Freigegeben (Robert, 06.10.2026):** der gehostete Lauf. Auf dem Arbeitsrechner liegt
   kein Anthropic-Schlüssel (weder im Schlüsselbund noch in `SOLIDON3D_LLM_KEY_ANTHROPIC`);
   der Lauf startet, sobald einer hinterlegt ist.
+
+  **Lokal nach RM-513 (06.10.2026, Claude):** qwen3:14b, Fenster 32 768, freie Karte:
+  `65e3ec97b` 25 von 39 gut gegen die Referenz `1ce7eac68` mit 22 — keine Verschlechterung,
+  kein Feld bekommt seinen Satz zurück. Im Lauf `65e3ec97b` endete `inserts` mit „CUDA out of
+  memory“ ohne Schritt. Messdateien `.claude/.state/ki-2026-10-06/messung/`.
+  **Mit dem gehosteten Lauf abzunehmen (07.10.2026):** Prompt-Version 9 — der Satz für
+  gebündelte Aufrufe ([RM-251](#rm-251) (b), wirkt nur im kompakten Prompt), die Zeile
+  „Antworte kurz und in der Sprache, in der der Nutzer schreibt“ (gilt auch gehostet) und die
+  Sätze an `sculpt_strokes` und `pose_armature` (RM-014). Lokal ist Version 9 gemessen und nicht
+  schlechter; gehostet vorher (Version 8) und nachher. Verschlechtert sich die Quote, gehen
+  diese Sätze zurück.
 
 ## Tests und Entwicklungswerkzeuge
 

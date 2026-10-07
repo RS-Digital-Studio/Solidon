@@ -2357,7 +2357,12 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Mit *Verschluss ändern* (RM-184, Spiel und Drehweg) derselbe Aufruf:
 #: **8 453 Token bei 189 Werkzeugen**, 25,8 % des Fensters; SHA-256
 #: ``bb36dc9645bc5e70ab4f401b5172ce70c1db4e60904b63617f0995a1391625b2``.
-PROMPT_TOKENS: Final = 8453
+#: Mit Prompt-Version 9 (RM-251 (b): mehrere Aufrufe je Schritt, Antwort in
+#: der Sprache des Nutzers; RM-014: Gestenwerkzeuge nennen den Weg zum Nutzer)
+#: ohne neue Operation derselbe Aufruf: **8 511 Token bei 189 Werkzeugen**,
+#: 26,0 % des Fensters; SHA-256
+#: ``4d29895bd0d4dc34a8829d920a3deb3590385e051c21926147b7e931d564f67c``.
+PROMPT_TOKENS: Final = 8511
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird

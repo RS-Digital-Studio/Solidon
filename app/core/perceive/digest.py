@@ -153,11 +153,14 @@ def digest(
             f"{as_value(name)}={round_display(parameter.value):g} {as_value(parameter.unit)}"
             for name, parameter in scene.parameters.items()
         )
-        lines.append(f"{tr('Parameter')}: {values}")
+        lines.append(tr("Parameter: {values}").format(values=values))
 
     if selection is not None:
         object_id, feature_id = selection
-        lines.append(f"{tr('Auswahl')}: {object_id}" + (f" · {feature_id}" if feature_id else ""))
+        lines.append(
+            tr("Auswahl: {selection}").format(selection=object_id)
+            + (f" · {feature_id}" if feature_id else "")
+        )
         lines.extend(_selection_lines(scene, selection))
 
     if document is not None:
@@ -309,7 +312,7 @@ def _fit_lines(document: Document, scene: Scene) -> list[str]:
             f"{as_value(fit.name)} {as_value(fit.a)} ↔ {as_value(fit.b)} "
             f"({as_value(fit.kind)}, {as_value(fit.tolerance)}){state}"
         )
-    return [f"{tr('Passungen')}: " + " · ".join(parts)]
+    return [tr("Passungen: {fits}").format(fits=" · ".join(parts))]
 
 
 def _print_settings_line(document: Document) -> list[str]:
@@ -327,9 +330,19 @@ def _print_settings_line(document: Document) -> list[str]:
     width = settings.layers.line_width
     # Titel und Stufe stehen im Projekt, also gerahmt beziehungsweise
     # abgeflacht (§32) — der Titel ist ein Name, die Stufe ein Schlüssel.
+    # Eine Zeile, ein Rahmen: Aus Einzelwörtern stand in den übrigen Sprachen
+    # „2 Walls“ großgeschrieben mitten im Satz (Review RM-285, N4).
     return [
-        f"{tr('Druckeinstellungen')}: {as_name(settings.title)} ({as_value(settings.quality)}), "
-        f"{walls} {tr('Wände')} × {width:g} mm = {settings.wall_thickness:g} mm {tr('Wand')}"
+        tr(
+            "Druckeinstellungen: {title} ({quality}), "
+            "{walls} Wände × {width} mm = {thickness} mm Wand"
+        ).format(
+            title=as_name(settings.title),
+            quality=as_value(settings.quality),
+            walls=walls,
+            width=f"{width:g}",
+            thickness=f"{settings.wall_thickness:g}",
+        )
     ]
 
 
@@ -348,7 +361,7 @@ def _source_lines(document: Document) -> list[str]:
         f"{source_id} {as_name(PurePosixPath(source.path).name)} ({as_value(source.kind)})"
         for source_id, source in document.sources.items()
     ]
-    return [f"{tr('Quellen')}: " + " · ".join(parts)]
+    return [tr("Quellen: {sources}").format(sources=" · ".join(parts))]
 
 
 def _scene_line(scene: Scene) -> str:
@@ -369,10 +382,17 @@ def _scene_line(scene: Scene) -> str:
         )
         state = f" ({calibration})"
     plates = _plate_count(scene)
-    spread = f", {plates} {tr('Platten')}" if plates > 1 else ""
-    return (
-        f"{tr('Szene')}: {len(scene.objects)} {tr('Objekte')}{spread}, "
-        f"{tr('Drucker')} {printer}, {tr('Material')} {material}{state}"
+    # Ganze Zeilen als Rahmen, sonst stünden „Plates, Printer …, Material …“
+    # großgeschrieben mitten im Satz (Review RM-285, N4).
+    if plates > 1:
+        return tr(
+            "Szene: {count} Objekte, {plates} Platten, "
+            "Drucker {printer}, Material {material}{state}"
+        ).format(
+            count=len(scene.objects), plates=plates, printer=printer, material=material, state=state
+        )
+    return tr("Szene: {count} Objekte, Drucker {printer}, Material {material}{state}").format(
+        count=len(scene.objects), printer=printer, material=material, state=state
     )
 
 
@@ -593,7 +613,7 @@ def _extent_line(entry: SceneObject) -> str:
         f"{name} {lower[index]:.1f} … {upper[index]:.1f}"
         for index, name in enumerate(("x", "y", "z"))
     )
-    return f"{tr('liegt')}: {spans} mm"
+    return tr("liegt: {spans} mm").format(spans=spans)
 
 
 def _solidity(entry: SceneObject) -> float | None:
@@ -1108,7 +1128,7 @@ def _stack_lines(document: Document, steps: Mapping[int, int]) -> list[str]:
         # kann (§32).
         listed = f"{calls}, {by}" if calls else by
         parts.append(f"{transaction.id} {as_name(transaction.title)} ({listed})")
-    return [f"{tr('Verlauf')}: " + " · ".join(parts)]
+    return [tr("Verlauf: {transactions}").format(transactions=" · ".join(parts))]
 
 
 def _resting_mark(operation: Operation, gone: Discarded) -> str:
@@ -1181,10 +1201,15 @@ def new_feature_lines(before: Scene, after: Scene) -> list[str]:
         if object_id not in before.objects:
             # Derselbe Rahmen wie in ``_object_lines``: Der Name kommt aus der
             # Projektdatei oder aus einem Werkzeugaufruf des Modells (§32).
-            lines.append(f"{tr('Neues Objekt')}: {object_id} {as_name(entry.name)}")
+            lines.append(
+                tr("Neues Objekt: {object} {name}").format(
+                    object=object_id, name=as_name(entry.name)
+                )
+            )
         for feature_id, feature in fresh.items():
             lines.append(
-                f"{tr('Neues Merkmal')}: {_feature_line(feature_id, feature)} "
+                tr("Neues Merkmal: {feature}").format(feature=_feature_line(feature_id, feature))
+                + " "
                 f"({tr('auf')} {object_id})"
             )
     return lines

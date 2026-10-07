@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-07 | [RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)](#rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026) |
 | 2026-10-06 | [RM-441: Jeder Befund, der sagt, dass ein Schritt nichts getan hat, öffnet diesen Schritt (06.10.2026)](#rm-441-jeder-befund-der-sagt-dass-ein-schritt-nichts-getan-hat-öffnet-diesen-schritt-06102026) |
 | 2026-10-06 | [RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)](#rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
@@ -9044,7 +9045,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-011 — Auf einem fremden Rechner installieren | weiter offen → [RM-011](ROADMAP.md#rm-011) | ROADMAP.md:2381–2383 hat weiterhin keinen zugeordneten Feldlaufbeleg. CI-Paketierung und einzelne Kundenmeldungen ersetzen keinen vollständigen, versionierten Erstinstallationsweg. Mit dem P8-Mac-Feldlauf koordinieren, aber der allgemeine Kunden-Erststart ist eine eigene Abnahme. |
 | RM-012 — Offen: den helikalen Gang so bauen, dass er überall schließt | zusammengeführt → [RM-104](ROADMAP.md#rm-104) | Der referenzierte test_a_sound_thread_still_goes_through samt Linux-/Darwin-xfail existiert seit 684c439a nicht mehr. Aktuell tests/test_sketch_ops.py:714–740. Die alten MakePipeShell-Versuche sind historische Diagnose und begründen allein keinen heutigen Architekturumbau. |
 | RM-013 — Offen: dieser eine Test | zusammengeführt → [RM-104](ROADMAP.md#rm-104) | tests/test_chat_ui.py:425 hat keine Skip-Markierung und führt weiterhin zwei run_remote-Aufrufe aus. 8fcc9edc entfernte den VTK-Renderer, build.yml:226–246 führt Fensterdateien wieder aus. Alte Aussage, dieser Test werde auf Linux übersprungen, trifft nicht mehr zu; mangels eigenem Linux-Lauf keine Behoben-Behauptung. |
-| RM-014 — P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung | weiter offen → [RM-014](ROADMAP.md#rm-014) | app/core/agent/session.py:123 und 793 verwendet _gathered_refusal und GATHERED_KINDS; app/core/knowledge/data/rules.toml enthält weiterhin keine zusätzliche Formenregel. ROADMAP.md:2977–3020 grenzt genau diese Entscheidung als einzigen Rest ab. Historische Sprachanzahlen (Website zwei, Handbuch fünf) sind überholt. |
+| RM-014 — P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung | weiter offen → [RM-014](#rm-014) | app/core/agent/session.py:123 und 793 verwendet _gathered_refusal und GATHERED_KINDS; app/core/knowledge/data/rules.toml enthält weiterhin keine zusätzliche Formenregel. ROADMAP.md:2977–3020 grenzt genau diese Entscheidung als einzigen Rest ab. Historische Sprachanzahlen (Website zwei, Handbuch fünf) sind überholt. |
 | RM-015 — Er tritt auch in einer einzelnen Datei auf, und die Rate schwankt stark | zusammengeführt → [RM-021](ROADMAP.md#rm-021) | ROADMAP.md:3288–3310 erklärt selbst, dass Code, Stelle und ursprüngliche Protokolle fehlen und 27 verwertbare spätere Läufe nicht abrissen. Python und Renderer wurden inzwischen ersetzt. Der Eintrag liefert keine eigenständig abnehmbare aktuelle Aufgabe. |
 | RM-016 — Gegen Sonnet 5 ist die Suite nicht gefahren | weiter offen → [RM-016](ROADMAP.md#rm-016) | app/core/backends/llm.py:604–628 führt claude-sonnet-5 als Vorgabe und den fehlenden Suite-Lauf ausdrücklich; Thinking-Blöcke werden weiterhin nicht zurückgegeben. REFUSAL_STOPS:133, Reply.refused:226–227 und app/core/agent/session.py:406 behandeln refusal inzwischen. Der entsprechende alte Nebenpunkt ist erledigt. Kein kostenpflichtiger Modelllauf gestartet. |
 | RM-017 — Stegdicke und Kammertiefe sind an keinem echten Profil gemessen | weiter offen → [RM-017](#rm-017) | app/core/knowledge/data/standards.toml:396–420 führt weiterhin gebräuchliche Katalogwerte lip/depth 1,8/4,3 bzw. 2,0/5,5 sowie Herstellerspannen. Kein zugeordneter physischer Messbeleg gefunden. |
@@ -12136,7 +12137,7 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       dem Code oder aus der Tastatur des Nutzers stammt. Genau diese
       Unterscheidung ist das Feld — die Migration von 6 hält fest, warum ein
       nachträglicher Abgleich mit dem Katalog der falsche Weg wäre.
-- **Historischer Befund RM-014 (weiter offen; aktuelle Aufgabe [RM-014](ROADMAP.md#rm-014)):** **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Die
+- **Historischer Befund RM-014 (weiter offen; aktuelle Aufgabe [RM-014](#rm-014)):** **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Die
       Sperre steht; offen ist nur noch, ob eine Regel dazukommt.
 
       **Handbuch:** ein Kapitel *Formen* mit dem Abschnitt, den `AGENTS.md`
@@ -43563,3 +43564,29 @@ mit dem Verlauf über `types.step_numbers`, neu gefasste Transaktionen über
 32768: vorher (`65e3ec97b`) 25 von 39 gut, nachher (`256b6b130`) 27 von 39; `drill_on_feature`
 kippte dabei von gut auf schlecht und ist RM-251 zur Klärung mitgegeben. Messdateien
 `.claude/.state/ki-2026-10-06/messung/`. Umgesetzt von Claude.
+
+## RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)
+
+<a id="rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026"></a>
+<a id="rm-014"></a>
+
+**RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden.** Entscheiden, ob
+  zusätzlich zur bestehenden Sperre für geratene Skizzen, Pinselzüge und Skelettdaten eine
+  erklärende Agentenregel gebraucht wird. Abnahme: Entscheidung dokumentiert; bei einer
+  Regeländerung Sammlungsversion sowie vergleichbare Agenten-Suite-Läufe davor und danach. Weg 4,
+  Beispiel, Handbuch und Website sind bereits umgesetzt.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#p16--organische-modellierung).
+
+**Abschluss:** Entschieden (Claude, Produktabwägung, 07.10.2026): keine zusätzliche Regel in
+der Sammlung, weil die Sperre schon im Code steht und eine Regel sie nur wiederholte. Stattdessen
+tragen `sculpt_strokes` und `pose_armature` in ihrer Beschreibung den Satz, dass der Nutzer die
+Gesten selbst setzt und der Agent ihm beschreibt, wo er ansetzen soll (`tools.USER_ONLY_KINDS`);
+auch der leere Aufruf wird abgelehnt — in der Sitzung und über MCP mit derselben Prüfung
+(`tools.refused_gathered`), und MCP bietet die beiden gar nicht erst an. Jede gesammelte Art
+(Skizze, Pinsel, Skelett, Kanten, Punkte) nennt in der Ablehnung ihren eigenen Weg
+(`tools.gathered_refusal`), ein Test hält das für jede Art. Regelsammlung unverändert, daher
+keine Sammlungsversion. Agenten-Suite lokal mit Prompt-Version 9 nicht schlechter (28 gegen 27
+von 39, siehe [RM-251](ROADMAP.md#rm-251)); kein Referenzfall ruft die beiden Werkzeuge. Die
+gehostete Abnahme der geänderten Beschreibungen steht in [RM-016](ROADMAP.md#rm-016).
+Umgesetzt von Claude.
