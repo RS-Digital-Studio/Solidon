@@ -649,6 +649,32 @@ def test_the_legacy_triposg_setup_is_removed_and_nothing_else(tmp_path: Path) ->
     assert (weights / "model_index.json").is_file()
 
 
+def test_the_legacy_node_goes_with_the_read_only_files_of_its_clone(tmp_path: Path) -> None:
+    """Git legt Objektdateien schreibgeschützt an; der alte Knoten trägt einen Klon.
+
+    An der echten Einrichtung dieser Maschine verweigerte Windows sie mit
+    „Zugriff verweigert“, und der Ordner blieb samt ``nodes.py`` stehen —
+    ComfyUI hätte den TripoSG-Quelltext weiter geladen.
+    """
+    import stat
+
+    from app.core.backends import comfy_setup
+
+    comfyui = _comfyui_folder(tmp_path)
+    nodes = comfyui / comfy_setup.LEGACY_NODES
+    objects = nodes / "_clone" / ".git" / "objects" / "01"
+    objects.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    packed = objects / "4ade418c1415c6a21b2cf6a958b6757058282f"
+    packed.write_bytes(b"x")
+    packed.chmod(stat.S_IREAD)
+
+    assert comfy_setup.remove_legacy(comfyui) is True
+
+    assert not nodes.exists()
+
+
 def test_a_folder_without_custom_nodes_is_not_comfyui(tmp_path: Path) -> None:
     """Und der Satz sagt, woran man es erkennt — nicht bloß „nicht gefunden"."""
     from app.core.backends import comfy_setup

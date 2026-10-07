@@ -31,6 +31,7 @@ import os
 import queue
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import threading
@@ -830,6 +831,18 @@ def fetch_image_model(
     )
 
 
+def _writable_again(function: Callable[[str], object], path: str, _problem: BaseException) -> None:
+    """Hebt den Schreibschutz auf und versucht es noch einmal (``shutil.rmtree``).
+
+    Git legt seine Objektdateien schreibgeschützt an, und unter Windows
+    verweigert ``rmtree`` sie dann mit „Zugriff verweigert“. Der alte
+    TripoSG-Knoten trägt einen Klon (``_clone/.git``): An der echten Einrichtung
+    blieb der Ordner samt ``nodes.py`` stehen, und ComfyUI lud ihn weiter.
+    """
+    Path(path).chmod(stat.S_IWRITE)
+    function(path)
+
+
 def remove_legacy(comfyui: Path, progress: ProgressFn = _silent) -> bool:
     """Räumt weg, was Solidon für TripoSG selbst angelegt hat. Liefert, ob etwas ging.
 
@@ -860,7 +873,7 @@ def remove_legacy(comfyui: Path, progress: ProgressFn = _silent) -> bool:
     progress(_("Alte TripoSG-Einrichtung von Solidon entfernen"))
     for folder in doomed:
         try:
-            shutil.rmtree(folder)
+            shutil.rmtree(folder, onexc=_writable_again)
             _log.info("removed legacy %s", folder)
         except OSError as problem:
             _log.warning("legacy %s stays: %s", folder, problem)
