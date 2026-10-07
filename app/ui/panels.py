@@ -1999,6 +1999,13 @@ class ObjectTree(QWidget):
     Ohne Kennung: Was gewählt ist, weiß das Fenster ohnehin, und der Katalog
     fragt es dort ab. Der Baum sagt nur, dass jemand ihn sehen will."""
 
+    selection_entries: Callable[[QMenu], None] | None = None
+    """Hängt *Vereinigen* und *Entfernen* an das Kontextmenü (:meth:`context_menu`).
+
+    Gesetzt vom Fenster: Wie *Entfernen* heißt, hängt daran, was Entf an der
+    Auswahl tut — am Baustein, an einer Bohrung, am Körper —, und das weiß nur
+    das Fenster (``MainWindow._removal_entry``)."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.tree = _ObjectTreeView(self)
@@ -3192,13 +3199,17 @@ class ObjectTree(QWidget):
         # auf eine Deckfläche zeigt, meint die Deckfläche (§18.5).
         self._add_sketch_on_face(menu)
         self._add_visibility(menu, chosen)
-        # **Keine Operationen mehr** (Robert, 11.09.2026: „ebenso dann beim
-        # rechtsklick im objektbaum"). Sie standen hier als dieselbe Liste wie
-        # rechts in der Karte der Handlungen — gruppiert, gefaltet, mit dem
-        # Katalog an der Stelle der Bausteine —, und zwei Orte für dieselbe
-        # Liste sind einer zu viel. Was bleibt, gibt es nur hier: der Weg vom
-        # Ergebnis zurück zum Schritt, die Skizze auf der Fläche und die
-        # Sichtbarkeit des Körpers.
+        # **Keine Liste der Operationen** (Robert, 11.09.2026: „ebenso dann
+        # beim rechtsklick im objektbaum"). Sie standen hier als dieselbe Liste
+        # wie rechts in der Karte der Handlungen, und zwei Orte für dieselbe
+        # Liste sind einer zu viel. **Zwei Handlungen kommen dazu** (Robert,
+        # 06.10.2026, nach dem Fragebogen zu 0.5.3): *Entfernen* und bei
+        # mehreren Körpern *Vereinigen* — die beiden, die jeder Slicer an
+        # dieser Stelle trägt. Welche Zeilen das sind und wie sie heißen,
+        # weiß das Fenster (:attr:`selection_entries`): *Entfernen* heißt, was
+        # Entf an dieser Auswahl tut.
+        if self.selection_entries is not None:
+            self.selection_entries(menu)
         return menu
 
     def _on_double_click(self, item: QTreeWidgetItem, column: int) -> None:
@@ -3261,12 +3272,17 @@ class ObjectTree(QWidget):
         if self.tree.selection_allowed is not None and not self.tree.selection_allowed():
             return
         item = self.tree.itemAt(position)
-        if item is not None:
+        if item is not None and not (item.isSelected() and len(self.tree.selectedItems()) > 1):
             # Der Rechtsklick meint die Zeile darunter. Ohne diese Auswahl
             # öffnete sich zwar das passende Kontextmenü, der Dialog erbte
             # aber ein vorher gewähltes Merkmal oder keines — ein Gewinde
             # stand dann nicht in der gerade angeklickten Bohrung. Geleert wird
             # ohne Zwischenmeldung, gemeldet der neue Stand.
+            #
+            # **Außer die Zeile gehört schon zu mehreren markierten** — dann
+            # meint der Klick die Gruppe, wie in jedem Dateimanager und in
+            # Cura: zwei Körper markieren, mit rechts *Vereinigen* oder
+            # *Objekt entfernen* (Entscheidung Robert, 06.10.2026).
             with QSignalBlocker(self.tree):
                 self.tree.clearSelection()
             item.setSelected(True)

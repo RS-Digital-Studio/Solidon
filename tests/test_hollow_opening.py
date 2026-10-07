@@ -189,6 +189,26 @@ def test_a_clicked_face_fills_the_opening_field_and_a_bore_does_not(profile: Pro
     assert values_for(spec, bore, "obj_1") == {}
 
 
+def test_hollowing_is_offered_where_its_opening_can_be_chosen() -> None:
+    """An einer gewählten Fläche steht *Aushöhlen* — die Fläche wird die Öffnung.
+
+    Fragebogen zu 0.5.3: „Aushöhlen erscheint nicht so, wie im Handbuch
+    beschrieben.“ Ein frisch angelegter Quader ist gewählt, der Klick darauf
+    nahm die Oberseite, und an einer Fläche bot die Karte *Aushöhlen* gar
+    nicht an, obwohl der Dialog genau sie als Öffnung einträgt. Angeboten wird
+    es jetzt an jeder Art, die das Feld *Öffnungen* nimmt, und am ganzen
+    Körper wie bisher.
+    """
+    load_operations()
+    spec = REGISTRY.get("hollow_object")
+    openings = next(entry for entry in spec.params.spec() if entry.name == "openings")
+
+    assert openings.feature_kinds, "ohne Arten prüft der Vergleich nichts"
+    assert set(spec.applies_to) == set(openings.feature_kinds), "angeboten, wo die Öffnung entsteht"
+    assert spec.also_on_body, "am ganzen Körper bleibt es"
+    assert spec in REGISTRY.for_feature("face"), "die Karte fragt dieselbe Zuordnung"
+
+
 @pytest.mark.parametrize(
     ("open_at", "constraint"),
     [

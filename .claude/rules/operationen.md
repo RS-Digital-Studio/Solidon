@@ -34,8 +34,8 @@ Kürzel. `ctx.quality`: Entwurf zum Iterieren, Fein für Export und Prüfbericht
   `lid.reason_against`, `MainWindow._lid_reason`, `LID_OPS`.
 - Ops prüfen Merkmalsarten über ihren `applies_to`-Registereintrag und
   `perceive.actions.reason_against`, auch für Chat/CLI; keine Modulliste.
-- Ebene verlangt `face`; reine Dreiecksarbeit (`paint_slot`, `clear_filament`)
-  nimmt zusätzlich die eigene Art `curved_face`.
+- Ebene verlangt `face`; `paint_slot`, `clear_filament` und *Aushöhlen*
+  (Fläche wird Öffnung) nehmen auch `curved_face`.
 
 ## Den Kern wählt der Körper, nicht der Kunde
 

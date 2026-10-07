@@ -204,6 +204,13 @@ darüber. Leere oder zugeklappte Bereiche geben ihren Platz frei.
   und Warnungen.
 - **F9 blendet die rechte Karte ein oder aus.** Ein Warnungszähler in der
   Statusleiste führt auch bei ausgeblendeter Karte zum Prüfbericht zurück.
+- **Die beiden Seitenkarten lassen sich verschieben** (Entscheidung Robert):
+  am Griff oben rechts, mit der Maus oder den Pfeiltasten. Sie rasten an
+  einem Fensterrand ein oder schweben frei über der Ansicht; ein Rand trägt
+  eine Karte. Doppelklick auf den Griff und *Ansicht → Karten an
+  ihren Platz* stellen die Anordnung oben wieder her. Die Lage merken die
+  Einstellungen; sie ist Darstellung und steht nicht im Verlauf. Eigene
+  Fenster werden die Karten nicht.
 - Keine Betriebsarten-Umschaltung zwischen „Bearbeiten“ und „Konstruieren“.
   Alle Werkzeuge arbeiten an derselben Szene.
 

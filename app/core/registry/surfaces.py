@@ -689,7 +689,13 @@ def _panel_place(spec: OperationSpec) -> str:
         return str(_("Befehlspalette"))
     if spec.applies_to:
         kinds = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to if kind)
-        selection = _("bei gewähltem Merkmal: {kinds}", kinds=kinds)
+        if spec.also_on_body:
+            # **Beide Stellen, der Körper zuerst** (``also_on_body``): Oben am
+            # gewählten Körper ist die Hauptstelle. Wer nur das Merkmal nennt,
+            # schickt Palette, Agent und Handbuch an die Nebenstelle.
+            selection = _("bei gewähltem Körper oder Merkmal: {kinds}", kinds=kinds)
+        else:
+            selection = _("bei gewähltem Merkmal: {kinds}", kinds=kinds)
         return f"{_('Handlungen rechts')} ({selection})"
     return f"{_('Handlungen rechts')} ({_('bei gewähltem Körper')})"
 
@@ -1174,8 +1180,11 @@ def documentation(
                 # Die Merkmalsarten mit ihren Namen, nicht mit ihren
                 # Schlüsseln: „Features: face, hole" ist eine Zeile aus dem
                 # Register, keine aus einem Handbuch.
-                named = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to)
-                facts.append(str(_("Gilt für: {kinds}", kinds=named)))
+                kinds = [str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to]
+                if spec.also_on_body:
+                    # Wie der Ort: Sie gilt auch dem ganzen Körper.
+                    kinds.insert(0, str(_("Körper")))
+                facts.append(str(_("Gilt für: {kinds}", kinds=", ".join(kinds))))
             if facts:
                 lines.append(" · ".join(facts))
                 lines.append("")

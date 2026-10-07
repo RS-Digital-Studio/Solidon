@@ -56,6 +56,10 @@ _HEAD: Final = (
 #: verschiedene Programme.
 PATHS: Final[dict[str, str]] = {
     "add": '<path d="M12 5v14M5 12h14" />',
+    # Sechs Punkte, zwei Spalten: der Griff einer verschiebbaren Karte
+    # (``overlay.CardGrip``) — dasselbe Zeichen wie in Listen, deren Zeilen
+    # man ziehen kann.
+    "grip": '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" />',
     "remove": '<path d="M5 12h14" />',
     "cancel": '<path d="M6 6l12 12M18 6 6 18" />',
     "delete": ('<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 10v7M14 10v7" />'),

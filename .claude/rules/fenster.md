@@ -42,6 +42,13 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   (`overlay.EDGE`, Entscheidung Robert), rund ist nur die freie Ecke; die
   rechte ist 400 breit, 25 % des Fensters, höchstens 540, nie schmaler als
   ihre vordere Seite (RM-488).
+- **Die Seitenkarten sind verschiebbar** (Bauplan §2.5): Lage als
+  `overlay.CardPlace` in `UiSettings.card_places`; gezogen wird ein Umriss
+  (`CardGrip`), ein Rand trägt eine Karte (`settled_places`), passt die
+  Anordnung nicht, gilt vorübergehend die Stammlage. Ansicht, Ansichtsleiste
+  und Tour lesen die Lücke über `free_span`, nie feste Seiten.
+  Beim Ziehen zeigen Umriss und Satz das Ergebnis (zweiter Umriss für die
+  andere, `_drag_sentence`); schwebend steht die Oberkante (`floating_top`).
 - Befunde und Halt holen den Bericht nie nach vorn: `SignalTabBar` zählt, blinkt
   und markiert Ungesehenes; `_focus_report` nur auf Bitte (Statuszähler,
   *Prüfbericht*, Exportprüfung, Slicen, G-Code).
@@ -281,7 +288,8 @@ Ansichtsseite steht in `griffe.md`.
   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt
   der Körper — mit Ansage und Strg+Z: Eine Fläche ist kein Ding, das man
   löscht, der Körper ist gemeint, und ein Teil, das Entf nicht löscht, ist eine
-  Sackgasse (Regel 19). *Ausblenden* heißt am Merkmal *Körper ausblenden*.
+  Sackgasse (Regel 19). Ohne Merkmal nimmt Entf alle markierten Körper
+  (`on_bodies`). *Ausblenden* heißt am Merkmal *Körper ausblenden*.
 - **Bei gewähltem Dach** fragt `_move_the_part` `_common_part_step`, und das
   Dach bekommt einen eigenen Griff (`_part_grip_anchor` →
   `Viewport.set_part_grip`; welches Merkmal ihn trägt, sagt das Fenster) statt
@@ -428,35 +436,18 @@ Sie ist für den Absturz da (§38), nie dafür, eine Entscheidung zu überstimme
 
 ## Wie die Karten ihre Höhe teilen
 
-`OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`:
+`OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`
+(`tests/test_overlay.py`): nie mit gerade gesetzten Höhen (`extra_height`,
+nicht `natural_height`); abgezogen wird, was nicht den Karten gehört; jede
+Karte nennt ihren Boden (`least_height`, nie über ihrem Wunsch); viele feste
+Zeilen rollen (`FittedScroller`). Ungleiche Zeilen misst `rows_height`, und
+`wanted_height` fragt dieselbe Quelle; was unter der Liste steht, gehört in
+beide Rechnungen.
 
-- **Gerechnet wird nie mit den Höhen, die gerade gesetzt wurden**;
-  `natural_height` taugt darin nicht, `extra_height`
-  rechnet strukturell (je Posten: Wunsch des Ganzen minus die Wünsche der
-  Karten darin).
-- **Was nicht den Karten gehört, wird abgezogen** (Abschnittsköpfe,
-  Parameterleiste, Layoutabstände).
-- **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`; aus `fit_to_rows`
-  mit drei Mindestzeilen und aus dem leeren Zustand über `fit_wrapped`), nie
-  höher als ihr Wunsch; verteilt wird nur, was darüber liegt.
-- **Eine Karte aus vielen festen Zeilen rollt, statt sich zu stauchen**
-  (`overlay.FittedScroller`, der Prüfbericht): Erst gibt die Liste bis zu ihrer
-  Mindesthöhe nach, dann rollt der Inhalt; die rechte Zone rechnet ihren
-  Wunsch an der Kartenbreite (`natural_height(zone, width=)`).
-
-`tests/test_overlay.py` hält alle drei. `fit_to_rows` rechnet mit
-**einer** Zeilenhöhe — ungleiche Zeilen (Objektbaum) misst `overlay.rows_height`, und
-`wanted_height` fragt dieselbe Quelle wie das Setzen. **Was unter der Liste
-steht, gehört in beide Rechnungen.**
-
-**Gesetzt wird einmal je Ereignisdurchlauf, nicht je Ereignis:** `_place_later`
-setzt über einen Nullzeitgeber — kein nachgereichtes Ereignis, denn die Listen
-legen ihre Zeilen selbst über einen Nullzeitgeber, und `rows_height` misst an
-`visualRect`; `resizeEvent` und `reflow` setzen sofort. Tests brauchen mehrere
-Runden `processEvents` — eine Zusicherung nach einer Runde misst einen
-Zwischenstand. `is_room_taker` antwortet je Widget-Typ einmal. **Wer Inhalt
-wachsen lässt, sagt es bis zur Zone** (`overlay.tell_the_zone`, dann
-`reflow`), sonst wächst die Karte in zwei Zügen.
+**Gesetzt wird einmal je Ereignisdurchlauf** (`_place_later`, Nullzeitgeber;
+`resizeEvent` und `reflow` sofort) — Tests brauchen mehrere Runden
+`processEvents`. **Wer Inhalt wachsen lässt, sagt es bis zur Zone**
+(`tell_the_zone`, dann `reflow`), sonst wächst die Karte in zwei Zügen.
 
 ## Rückmeldung und Fehlerbericht
 

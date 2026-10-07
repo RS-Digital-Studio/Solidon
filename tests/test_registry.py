@@ -638,3 +638,31 @@ def test_repair_stands_at_the_body_too() -> None:
     repair = REGISTRY.get("repair")
     assert repair.also_on_body
     assert "edge_loop" in repair.applies_to, "an der offenen Kante bleibt es"
+
+
+@pytest.mark.parametrize("name", ["hollow_object", "draft_faces", "repair"])
+def test_an_action_on_body_and_feature_names_both_places(name: str) -> None:
+    """``also_on_body``: Ort und „Gilt für“ nennen den Körper vor dem Merkmal.
+
+    *Aushöhlen* kam an die Fläche dazu, und der Ort lautete danach nur noch
+    „bei gewähltem Merkmal: Fläche, Gerundete Seite“ — Palette, Agent und
+    Handbuch verloren die Hauptstelle oben am gewählten Körper.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import menu_path
+    from app.core.registry.registry import FEATURE_TITLES
+
+    load_operations()
+    spec = REGISTRY.get(name)
+    assert spec.also_on_body and spec.applies_to, name
+    kinds = ", ".join(str(FEATURE_TITLES[kind]) for kind in spec.applies_to)
+    where = menu_path(spec)
+    assert where == (
+        f"Handlungen rechts (bei gewähltem Körper oder Merkmal: {kinds}) → {spec.title}"
+    ), where
+    reference = documentation(REGISTRY, spec.category, technical=False)
+    assert f"Gilt für: Körper, {kinds}" in reference, name
+    # Gegenprobe: Ohne ``also_on_body`` bleibt es beim Merkmal allein.
+    hole = REGISTRY.get("resize_hole")
+    assert not hole.also_on_body
+    assert "Körper oder Merkmal" not in menu_path(hole)

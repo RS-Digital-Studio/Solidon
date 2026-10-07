@@ -17796,6 +17796,14 @@ class HollowParams(BaseParams):
     params=HollowParams,
     consumes=1,
     produces=1,
+    # **An einer gewählten Fläche angeboten — sie wird die Öffnung** (P6.3):
+    # Der Dialog trägt sie in *Öffnungen* ein (``values_for``). Ohne diese
+    # Zeile stand *Aushöhlen* an einer Fläche weder vorn noch in der Liste,
+    # und wer nach dem Anlegen eines Quaders auf ihn klickte — er war schon
+    # gewählt, der Klick nahm die Oberseite —, fand die Handlung nicht, die
+    # das Handbuch an dieser Stelle zeigt (Fragebogen zu 0.5.3).
+    applies_to=("face", "curved_face"),
+    also_on_body=True,
     doc=_(
         "Höhlt ein Objekt aus, mit Entlüftungen oder mit gewählten offenen Flächen. "
         "Spart Material und Zeit; am Dreiecksmodell stimmt die Wand im Rahmen des "

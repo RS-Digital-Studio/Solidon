@@ -95,9 +95,15 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
         for _section, _toggle, buttons in panel._groups.values()
         for button in buttons
     }
+    # **Jede Hauptaktion hat auch ihre Zeile in der Liste**, verborgen, wo sie
+    # oben steht (Fragebogen zu 0.5.3). Bis zum 06.10.2026 verbot dieser Test
+    # die Zeile ganz — und hielt damit die Lücke fest: *Aushöhlen* an einer
+    # Fläche und *Reparieren* am ganzen Körper gelten dort, stehen dort nicht
+    # oben und standen deshalb nirgends. Die Zusage ist „nie oben und unten
+    # zugleich“, und die prüft die Schleife unten je Lage.
     for name in all_quick_names():
         assert name in panel._quick_buttons, f"{name} steht in keiner Lage als Knopf da"
-        assert name not in in_the_list, f"{name} stünde oben und in der Liste"
+        assert name in in_the_list, f"{name} fehlt in der Liste, wo es gilt, ohne oben zu stehen"
 
     # **Ausgeschrieben, nicht aus der Tabelle gelesen.** Für die Merkmalsarten
     # ist die Erwartung seit dem 09.09.2026 nicht mehr die Tabelle selbst: Was
@@ -133,10 +139,69 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
             name for name, button in panel._quick_buttons.items() if not button.isHidden()
         )
         assert set(shown) == set(wanted), f"{bodies} Körper, {kind or 'kein'} Merkmal: {shown}"
+        twice = [name for name in shown if not panel._list_twins[name].isHidden()]
+        assert not twice, f"oben und in der Liste zugleich: {twice}"
 
     # **Das Merkmal hat Vorrang vor der Menge.** Wer eine Bohrung angeklickt
     # hat, meint sie und nicht den Körper darunter.
     assert quick_names(2, "hole") == quick_names(1, "hole")
+
+
+def test_a_main_action_of_another_level_stands_in_the_list(qt_app: QApplication) -> None:
+    """*Aushöhlen* an einer Fläche: nicht oben, aber in der Liste — und klickbar.
+
+    Fragebogen zu 0.5.3. Die Hauptaktion des Körpers gilt an einer Fläche
+    (die Fläche wird die Öffnung), steht dort aber nicht oben; ihr Knopf in
+    der Liste tritt dann an ihre Stelle und trägt dieselbe Freigabe.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    requested: list[str] = []
+    panel.operationRequested.connect(lambda spec: requested.append(spec.name))
+
+    panel.set_context(1, _availability(1))
+    assert not panel._buttons["hollow_object"].isHidden(), "am Körper oben"
+    assert panel._list_twins["hollow_object"].isHidden(), "und deshalb nicht darunter"
+
+    panel.set_context(1, _availability(1), feature_kind="face")
+    assert panel._buttons["hollow_object"].isHidden(), "an der Fläche nicht oben"
+    twin = panel._list_twins["hollow_object"]
+    assert not twin.isHidden() and twin.isEnabled(), "aber in der Liste"
+    twin.click()
+    assert requested == ["hollow_object"], "und er führt in dieselbe Handlung"
+
+    panel.set_context(
+        1,
+        lambda name: (False, "Gesperrt.") if name == "hollow_object" else (True, ""),
+        feature_kind="face",
+    )
+    assert twin.isHidden(), "eine gesperrte Handlung steht wie oben nicht da"
+    assert twin.toolTip() == "Gesperrt.", "und trägt den Grund wie ihr Knopf oben"
+
+
+def test_the_button_of_an_action_is_the_one_that_stands(qt_app: QApplication) -> None:
+    """``button_for`` nennt den Knopf, an dem die Handlung gerade steht — oben oder in der Liste.
+
+    Anleitungen und Tour fragen danach (``guide_targets``). Sie lasen nur den
+    oberen Knopf, und an einer Fläche zeigte ``operation:hollow_object`` auf
+    einen verborgenen — der Rahmen fand kein Ziel, obwohl die Handlung in der
+    Liste stand.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+
+    panel.set_context(1, _availability(1))
+    assert panel.button_for("hollow_object") is panel._buttons["hollow_object"], "am Körper oben"
+
+    panel.set_context(1, _availability(1), feature_kind="face")
+    assert panel.button_for("hollow_object") is panel._list_twins["hollow_object"], (
+        "an der Fläche ihre Zeile in der Liste"
+    )
+    plain = next(name for name in panel._buttons if name not in panel._list_twins)
+    assert panel.button_for(plain) is panel._buttons[plain], (
+        "ohne Listenzwilling bleibt es der eine Knopf"
+    )
+    assert panel.button_for("no_such_operation") is None
 
 
 def test_what_the_feature_does_not_offer_leaves_the_front_row() -> None:
@@ -202,6 +267,45 @@ def test_the_panel_leaves_out_what_the_feature_does_not_offer(qt_app: QApplicati
 
     panel.set_context(1, _availability(1), feature_kind="cone")
     assert "countersink_hole" in front()
+
+
+def test_the_search_finds_customer_words_and_names_what_another_choice_needs(
+    qt_app: QApplication,
+) -> None:
+    """„löschen“ findet *Objekt entfernen*, „verschmelzen“ nennt, was *Vereinigen* braucht.
+
+    Fragebogen zu 0.5.3: Ein Anfänger fand weder das Löschen noch das
+    Vereinigen. Die Suche der Karte verglich nur Titel und Gruppe; sie rechnet
+    jetzt wie die Palette (``found_in_rounds``). Und ein Treffer, der an
+    dieser Auswahl nicht geht, ist kein „Kein Treffer“: Der Satz nennt seinen
+    Sperrgrund — im Fenster der, der sagt, wie das zweite Objekt dazukommt.
+    """
+    from app.i18n import tr
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1))
+
+    panel.search.setText("löschen")
+    assert not panel._buttons["delete_object"].isHidden(), "Kundenwort ohne Titeltreffer"
+    assert panel._nothing.isHidden()
+
+    panel.search.setText("verschmelzen")
+    assert not panel._nothing.isHidden()
+    assert panel._nothing.text() == tr(
+        "{name}: {value}",
+        name=str(REGISTRY.get("union_objects").title),
+        value="Dafür müssen 2 Körper ausgewählt sein.",
+    )
+    assert not panel._everywhere.isHidden(), "der Weg in alle Funktionen bleibt"
+
+    panel.search.setText("xyzzy")
+    assert panel._nothing.text() == tr("Kein Treffer — versuchen Sie ein anderes Wort.")
+
+    panel.search.setText("")
+    panel.set_context(2, _availability(2))
+    panel.search.setText("verschmelzen")
+    assert panel._nothing.isHidden(), "bei zwei Körpern ist *Vereinigen* oben ein Treffer"
 
 
 def test_selection_changes_update_in_place_and_explain_disabled_actions(
