@@ -18452,6 +18452,90 @@ def test_the_feature_card_applies_what_the_short_chain_could_not_preview(
         QApplication.processEvents()
 
 
+def test_the_agent_finds_in_the_session_cache_what_the_window_run_rescued(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534, Anschluss: Die Sitzung gibt dem Agenten ihren Cache (``run_proposal``).
+
+    Der Fensterlauf rettet die Bohrung mit der vollen Kette. Ein Agentenzug
+    danach prüft denselben Stand und findet ihn im Sitzungscache — mit einem
+    eigenen Cache rechnete er die volle Kette in jedem Zug noch einmal
+    (Review 1 P3, G-1; der Kerntest in ``test_evaluation.py`` nutzt den
+    Vorgabecache der ``AgentSession`` und sieht das nicht).
+    """
+    import trimesh
+
+    from app.core.agent.session import AgentSession
+    from app.core.backends.llm import Reply, ToolCall
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+    from tests.scripted_backend import ScriptedBackend
+
+    real = boolean_module._run_stage
+    called: list[str] = []
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        called.append(name)
+        if name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    assert session.wait_for_idle(30_000)
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    session.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 10.0, "depth": 0.0},
+            )
+        ],
+    )
+    assert session.wait_for_idle(30_000)
+    drill = session.project.document.ops[-1].id
+    assert session.last_result.solvers[drill].strategy == "jittered", (
+        "Voraussetzung: der Fensterlauf rettet die Bohrung mit der vollen Kette"
+    )
+    called.clear()
+    backend = ScriptedBackend(
+        answers=[
+            Reply(tool_calls=(ToolCall(id="1", name="create_box", arguments={}),)),
+            Reply(text="Ein zweiter Quader steht daneben."),
+        ]
+    )
+    # Gezählt wird der Zug selbst. Die Vorschau danach prüft den Druck und
+    # rechnet deshalb fein (``review_print``) — mit voller Kette ohnehin.
+    real_evaluate = AgentSession._evaluate
+    checked: list[Any] = []
+    in_the_turn: list[str] = []
+
+    def evaluate(agent: AgentSession, document: Any) -> Any:
+        start = len(called)
+        result = real_evaluate(agent, document)
+        checked.append(result)
+        in_the_turn.extend(called[start:])
+        return result
+
+    monkeypatch.setattr(AgentSession, "_evaluate", evaluate)
+
+    preview = session.run_proposal("Stell einen zweiten Quader daneben.", backend)
+
+    assert preview.proposal.stopped != "halted", [
+        str(finding.message) for finding in preview.proposal.findings
+    ]
+    assert [draft.op for draft in preview.proposal.drafts] == ["create_box"]
+    assert checked, "Voraussetzung: der Zug prüft seinen Stand"
+    assert all(result.solvers[drill].strategy == "jittered" for result in checked), (
+        "jede Prüfung trägt die gerettete Bohrung"
+    )
+    assert set(in_the_turn) <= set(boolean_module.DRAFT_CHAIN), (
+        f"der Zug rechnete die gerettete Bohrung neu, statt sie im Sitzungscache zu finden: "
+        f"{in_the_turn}"
+    )
+
+
 def test_the_report_follows_a_change_during_recognition_and_a_cancelled_run(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
