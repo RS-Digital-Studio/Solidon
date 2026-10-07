@@ -2792,7 +2792,8 @@ def _tool_for(
     body = built.raw.copy()
     shift_body(body, -np.asarray(measured, dtype=float))
     if not is_close(scale, 1.0):
-        body.apply_scale(scale)  # type: ignore[no-untyped-call]
+        # Elementweise statt ``apply_scale``: Das ginge als Matrix durch BLAS (RM-187).
+        body.vertices = np.asarray(body.vertices, dtype=np.float64) * scale
     transform.moved(body, matrix)
     shift_body(body, np.asarray(centre, dtype=float))
     return MeshData.of(body)

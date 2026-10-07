@@ -61,7 +61,12 @@ def _adaptive_outline(
     profile: Profile, max_sag: float, check_cancelled: Callable[[], None] | None
 ) -> list[tuple[float, float]]:
     """Die echte Kurve in Sehnen mit belegter maximaler Abweichung zerlegen."""
-    from app.core.sketch.profile import arc_through, ellipse_segment_points, spline_controls
+    from app.core.sketch.profile import (
+        arc_through,
+        ellipse_segment_points,
+        points_on_circle,
+        spline_controls,
+    )
 
     def resolution_error() -> ValidationError:
         return ValidationError(
@@ -95,7 +100,7 @@ def _adaptive_outline(
         # acos(1-sag/radius) würde dort schon auf null runden.
         share = math.sqrt(min(1.0, sag / (2.0 * radius)))
         # ``asin`` als ``atan2(x, √((1 - x)(1 + x)))`` über ``exact_atan2``, die
-        # Ecken über :func:`_on_circle`: ``math.asin``, ``math.cos`` und
+        # Ecken über ``profile.points_on_circle``: ``math.asin``, ``math.cos`` und
         # ``math.sin`` runden je Maschine anders (RM-187).
         arc = exact_atan2(share, math.sqrt((1.0 - share) * (1.0 + share)))
         angle = min(math.pi / 2.0, 4.0 * arc)
@@ -104,7 +109,7 @@ def _adaptive_outline(
         count = max(1, math.ceil(abs(sweep) / angle))
         if len(points) + count > MAX_OUTLINE_POINTS:
             raise resolution_error()
-        for point in _on_circle(
+        for point in points_on_circle(
             centre, radius, [begin + sweep * index / count for index in range(1, count + 1)]
         ):
             append(point)
@@ -193,6 +198,8 @@ def _arc_points(
     und eine Tasche aus einem gezeichneten Vollkreis-Bogen endete auf dem
     Netzweg mit „Aus diesem Umriss entsteht kein Körper."
     """
+    from app.core.sketch.profile import points_on_circle
+
     (ax, ay), (bx, by), (cx, cy) = start, via, end
     if math.dist(start, end) < EPS_GEOM:
         centre = ((ax + bx) / 2.0, (ay + by) / 2.0)
@@ -200,10 +207,12 @@ def _arc_points(
         if radius < EPS_GEOM:
             return [end]
         first = exact_atan2(ay - centre[1], ax - centre[0])
-        return _on_circle(
-            centre,
-            radius,
-            [first + 2.0 * math.pi * index / ARC_STEPS for index in range(1, ARC_STEPS + 1)],
+        return list(
+            points_on_circle(
+                centre,
+                radius,
+                [first + 2.0 * math.pi * index / ARC_STEPS for index in range(1, ARC_STEPS + 1)],
+            )
         )
     # Umkreismittelpunkt über die Determinante; sie ist zugleich das Maß dafür,
     # wie weit die drei Punkte von einer Geraden entfernt sind.
@@ -244,27 +253,11 @@ def _arc_points(
         span -= 2.0 * math.pi
 
     steps = max(2, int(abs(span) / (2.0 * math.pi) * ARC_STEPS) + 1)
-    return _on_circle(
-        (ux, uy), radius, [first + span * index / steps for index in range(1, steps + 1)]
+    return list(
+        points_on_circle(
+            (ux, uy), radius, [first + span * index / steps for index in range(1, steps + 1)]
+        )
     )
-
-
-def _on_circle(
-    centre: tuple[float, float], radius: float, angles: list[float]
-) -> list[tuple[float, float]]:
-    """Die Punkte eines Kreises zu diesen Winkeln — plattformgleich, als ein Feld gerechnet.
-
-    :func:`~app.core.geom.mesh.periodic_sin_cos` statt ``exact_cos`` und
-    ``exact_sin`` je Punkt (RM-187): Die rechnen in ``decimal``, und ein Bogen
-    hat hier bis zu einige hundert Ecken.
-    """
-    from app.core.geom.mesh import periodic_sin_cos
-
-    sines, cosines = periodic_sin_cos(angles)
-    return [
-        (centre[0] + radius * cosine, centre[1] + radius * sine)
-        for cosine, sine in zip(cosines.tolist(), sines.tolist(), strict=True)
-    ]
 
 
 def outline_points(

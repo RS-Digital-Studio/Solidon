@@ -696,7 +696,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     `x ** 2` in 1049 von zwei Millionen Werten von `x * x` ab, `x ** 0.5` ebenso oft von
     `math.sqrt`; das Rauschen sieht beides nicht. Weg: Produkte, `math.sqrt` und Kehrwerte
     ganzzahliger Potenzen (`1.0 / 10 ** n`), dazu ein Wächter über den Syntaxbaum, der `**` mit
-    Gleitkommaanteil im Kern ablehnt (die Regel steht in `kern.md`).
+    Gleitkommaanteil im Kern ablehnt (die Regel steht in `kern.md`). Zuerst `units.plane_axes`:
+    Jeder Skizzen- und Merkmalsrahmen hängt daran.
+  - **Zwei Drehungen über BLAS**, älter als Paket A und von keinem Weg in `_WAYS` erreicht:
+    `geom/hollow.py` (`body.apply_transform(back)` beim Aushöhlen) und `geom/lattice.py`
+    (`plug.apply_transform(matrix)`, Drehung aus `units.plane_axes` samt Verschiebung). Weg:
+    `transform.moved` und je ein Weg in `_WAYS`.
   - **Das Nachführen bewegter Merkmale** aus der Liste der Durchsicht 0.5.0 ist nicht neu
     geprüft.
 

@@ -904,7 +904,7 @@ def _arc_midpoint(centre: Point2, start: Point2, end: Point2) -> Point2:
     radius = math.dist(centre, start)
     begin = exact_atan2(start[1] - centre[1], start[0] - centre[0])
     sweep = arc_sweep(centre, start, end)
-    return _on_circle(centre, radius, [begin + sweep / 2.0])[0]
+    return points_on_circle(centre, radius, [begin + sweep / 2.0])[0]
 
 
 def _flipped(segment: ProfileSegment) -> ProfileSegment:
@@ -1336,16 +1336,20 @@ def _along_arc(centre: Point2, start: Point2, sweep: float, radius: float) -> tu
     """Die Punkte eines Bogens, von ``start`` aus um ``sweep`` gedreht."""
     begin = exact_atan2(start[1] - centre[1], start[0] - centre[0])
     steps = _steps_for(radius, sweep)
-    return _on_circle(centre, radius, [begin + sweep * index / steps for index in range(steps + 1)])
+    return points_on_circle(
+        centre, radius, [begin + sweep * index / steps for index in range(steps + 1)]
+    )
 
 
-def _on_circle(centre: Point2, radius: float, angles: list[float]) -> tuple[Point2, ...]:
+def points_on_circle(centre: Point2, radius: float, angles: list[float]) -> tuple[Point2, ...]:
     """Die Punkte eines Kreises zu diesen Winkeln — plattformgleich, als ein Feld gerechnet.
 
     :func:`~app.core.geom.mesh.periodic_sin_cos` statt ``exact_cos`` und
     ``exact_sin`` je Punkt (RM-187): Die rechnen in ``decimal``, und die
     Skizzenvorschau baut einen wachsenden Kreis bei jeder Mausbewegung neu —
     mit bis zu :data:`_MOST_STEPS` Punkten fiel sie dabei unter die Bildrate.
+    Eine Quelle für Skizze und extrudierten Körper
+    (``geom.sketch_solid``): Beide Bögen tragen dieselben Ecken.
     """
     from app.core.geom.mesh import periodic_sin_cos
 
