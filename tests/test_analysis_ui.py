@@ -2150,8 +2150,10 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
     assert dialog.spec.name == "insert_printed_thread", dialog.spec.name
 
     # Übernehmen wartet auf die dargestellte Vorschau (20.09.2026): erst
-    # rechnen und zeigen lassen, dann klicken — wie der Kunde es sieht.
-    window.session.wait_for_idle()
+    # rechnen und zeigen lassen, dann klicken — wie der Kunde es sieht. Die
+    # Vorschau des Gewindeschritts braucht unter Last über die zehn Sekunden
+    # der Vorgabe; gewartet wird deshalb länger, und das Ergebnis zählt.
+    assert window.session.wait_for_idle(60_000), "die Vorschau rechnet nach einer Minute noch"
     for _ in range(40):
         QApplication.processEvents()
     assert dialog.can_accept(), dialog.toolTip()
