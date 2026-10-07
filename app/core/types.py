@@ -1643,6 +1643,13 @@ class Finding:
     source: MetricSource = "internal"
     suggestions: tuple[Action, ...] = ()
     """Konkrete Auswege, wenn der Befund aus einer Ausnahme entstand (§2.7)."""
+    object_ids: tuple[ObjectId, ...] = ()
+    """Alle Körper, über die der Befund spricht, wenn es mehr als einer ist.
+
+    Ein Paar, das sich überschneidet, nennt beide; ``object_id`` bleibt der
+    eine, den ein Klick wählt. Die Auswertung streicht den Befund, sobald einer
+    davon wieder entfernt ist (``scene.evaluate._without_discarded``). Nicht in
+    der Projektdatei, wohl aber im Plattencache — wie ``outline``."""
 
     @property
     def converts_exact_body(self) -> bool:

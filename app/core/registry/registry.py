@@ -764,6 +764,17 @@ class OperationSpec:
     baut ihn dabei um. Gelesen von ``history.discarded``: Wird alles Neue eines
     solchen Schritts später entfernt, wirkt er nicht mehr, auch wenn der Träger
     bleibt (S-20261006-2a0261)."""
+    shapes_with_other_inputs: bool = False
+    """Die Operation formt einen Körper, den sie unter seiner Kennung zurückgibt, mit einem anderen.
+
+    *Gegenform einlassen* schneidet die Teile als Taschen in den Einsatz und
+    gibt alle unter ihrer Kennung zurück. Gelesen von ``history.discarded``:
+    Wird ein Teil danach entfernt, lebt es in der Tasche weiter, und was es
+    gebaut hat, wirkt. Ohne das Feld gibt ein Schritt über mehrere Körper jeden
+    für sich weiter (*Auf dem Bett anordnen*, gemeinsam verschieben,
+    *Überschneidungen prüfen*): Ein Eingang lebt, solange sein gleichnamiger
+    Ausgang lebt. **Lage ist keine Form** — dass ein entfernter Stift beim
+    Anordnen Platz brauchte, lässt seine Schritte nicht weiterwirken."""
     touches_features: bool = False
     """Ob diese Operation Merkmale **einführt** — nicht nur weiterreicht.
 
@@ -1058,6 +1069,7 @@ def register_op(
     produces_from: str | None = None,
     keeps_inputs: int = 0,
     leaves_inputs_unchanged: bool = False,
+    shapes_with_other_inputs: bool = False,
     touches_features: bool = False,
     leaves_separate_parts: bool = False,
     retriangulates: bool = False,
@@ -1099,6 +1111,7 @@ def register_op(
                 produces_from=produces_from,
                 keeps_inputs=keeps_inputs,
                 leaves_inputs_unchanged=leaves_inputs_unchanged,
+                shapes_with_other_inputs=shapes_with_other_inputs,
                 touches_features=touches_features,
                 leaves_separate_parts=leaves_separate_parts,
                 retriangulates=retriangulates,

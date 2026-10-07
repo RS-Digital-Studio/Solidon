@@ -44,7 +44,7 @@ from app.core.errors import (
 )
 from app.core.log import get_logger
 from app.core.perceive.match_records import EDGE_DOMAIN, domain_of, recognition_answer_key
-from app.core.registry import REGISTRY, VARIABLE, Registry, needed_inputs
+from app.core.registry import REGISTRY, VARIABLE, OperationSpec, Registry, needed_inputs
 from app.core.registry.params import body_keys
 from app.core.scene import bundling
 from app.core.types import (
@@ -152,6 +152,10 @@ def discarded(operations: Sequence[Operation], registry: Registry = REGISTRY) ->
     Bohrung* gibt den Träger zurück, wie er kam, und ohne den Stift wirkt der
     Schritt nicht mehr.
 
+    **Ein Schritt über mehrere Körper gibt jeden für sich weiter** —
+    *Auf dem Bett anordnen*, Platte und Stift gemeinsam verschieben: Wer davon
+    wieder entfernt wird, lebt nicht im Rest fort (:func:`_feeding`).
+
     **Ob ein Körper weiterlebt, hängt an der Stelle im Stapel.** Ein Träger,
     aus dessen Bohrung ein Stift entstand, lebt bis dahin im Stift fort, auch
     wenn er danach entfernt wird; was ihn erst danach noch änderte, wirkt
@@ -189,7 +193,7 @@ def discarded(operations: Sequence[Operation], registry: Registry = REGISTRY) ->
             continue
         made = [name for name in entry.outputs if name not in handed_on]
         if any(name in alive for name in made):
-            alive.update(entry.inputs)
+            alive.update(_feeding(entry, spec, alive))
             continue
         if made:
             touched[entry.id] = [
@@ -221,6 +225,58 @@ def discarded(operations: Sequence[Operation], registry: Registry = REGISTRY) ->
         if rest:
             groups[head] = rest
     return Discarded(steps=steps, outputs=outputs, groups=groups)
+
+
+def step_state_word(operation: Operation, gone: Discarded | None = None) -> TranslatableText | None:
+    """Ob ein Schritt wirkt, als Wort: „aus“, „ruht“ (P7.3), „Ergebnis entfernt“ — oder nichts.
+
+    Ausgeschaltet geht vor, denn wer nicht rechnet, hat kein Ergebnis, das ein
+    späterer entfernen könnte. „Ergebnis entfernt“ trägt ein Schritt in
+    ``gone.steps`` (:func:`discarded`). Das Verlaufsfeld (``ui.panels.step_state``)
+    und der Steckbrief für Agent und Fehlerbericht (``perceive.digest``) lesen
+    das Wort hier, damit beide über einen Schritt dasselbe sagen.
+    """
+    if operation.suppressed is not None:
+        return _("aus") if operation.suppressed.chosen else _("ruht")
+    if gone is not None and operation.id in gone.steps:
+        return _("Ergebnis entfernt")
+    return None
+
+
+def shown_before(document: Document, marker: OpId | None) -> Document:
+    """Das Dokument, das die Oberfläche bei einer Einfügemarke zeigt: der Stand davor (P7.1).
+
+    Eine flache Kopie mit den Schritten vor ``marker`` und ohne Passungen —
+    Passungen gelten dem Endstand, und am Stand davor wäre ihr Merkmal oft noch
+    gar nicht da (§14). Ohne Marke das Dokument selbst. Die eine Regel für
+    Ansicht und Prüfbericht (``Session.displayed_document``) und den Verlauf,
+    der daran rechnet, was ein späterer Schritt wieder entfernt
+    (``ui.panels.discarded_as_shown``).
+    """
+    if marker is None:
+        return document
+    return dataclasses.replace(
+        document, ops=[entry for entry in document.ops if entry.id < marker], fits=[]
+    )
+
+
+def _feeding(
+    entry: Operation, spec: OperationSpec | None, alive: Collection[ObjectId]
+) -> list[ObjectId]:
+    """Die Eingänge eines wirkenden Schritts, die in das eingehen, was von ihm bleibt.
+
+    ``alive`` sagt, welche seiner Ausgänge weiterleben. Ein Schritt ohne neuen
+    Körper reicht jeden fortgesetzten für sich weiter: Ein solcher Eingang
+    lebt, solange sein gleichnamiger Ausgang lebt, ein verbrauchter
+    (*Vereinigen*), weil er im Bleibenden steckt. Wer Neues baut oder einen
+    Körper mit einem anderen formt (``OperationSpec.shapes_with_other_inputs``),
+    speist mit allen Eingängen, ebenso ein Schritt, den das Register nicht
+    kennt — im Zweifel lebt ein Körper, und sein Befund bleibt stehen.
+    """
+    kept = set(entry.outputs)
+    if spec is None or spec.shapes_with_other_inputs or not kept <= set(entry.inputs):
+        return list(entry.inputs)
+    return [name for name in entry.inputs if name not in kept or name in alive]
 
 
 def _structural_objects(operations: Sequence[Operation]) -> set[ObjectId]:

@@ -293,6 +293,11 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 eine geänderte Objektzahl hält die Auswertung an, statt still
 weiterzurechnen.
 
+**Ein Befund über mehrere Körper nennt sie alle** (`Finding.object_ids`;
+`prepare.named_for` setzt sie aus den Indizes, *Fügeweg prüfen* selbst): Die
+Auswertung streicht ihn, sobald ein späterer Schritt einen davon entfernt —
+ohne die Liste spräche er weiter über Entferntes.
+
 ## Am Dokument wird nie vorbei geschrieben
 
 Jede Änderung am Dokument ist eine Transaktion, auch ohne Operation:

@@ -152,6 +152,13 @@ Kürzel, Startwert wo nötig).
   sie kamen, und legt nur Neues daneben (*Stift für Bohrung*, *Objekt
   duplizieren*); `scene.history.discarded` liest es. `keeps_inputs` sagt das
   nicht — auch *Vereinigen* setzt seinen ersten Eingang fort.
+- **`shapes_with_other_inputs`**: Die Operation gibt mehrere Körper unter ihrer
+  Kennung zurück und formt einen mit einem anderen (*Gegenform einlassen*,
+  *Prüfstück erzeugen*, *Einlagen für neues Profil*). Ohne das Feld reicht
+  `discarded` jeden für sich weiter, und ein entfernter lebt nicht im Rest fort
+  — Lage ist keine Form. Beide Felder sind Entscheidungen:
+  `tests/test_history.py` verlangt sie von jeder Operation dieser Bauart
+  (`REBUILDS_ITS_CARRIER`, `EACH_BODY_BY_ITSELF`).
 - **`replace_state()`** ist ausschließlich der Commit-Schritt für einen in
   einem isolierten Register vollständig geprüften Rezeptzustand — ohne zweite
   Validierung, damit nach einer atomar veröffentlichten Rezeptdatei kein

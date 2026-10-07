@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Collection, Mapping
 from pathlib import PurePosixPath
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from app.core import units
 from app.core.perceive.actions import MEASURE_SOURCE_WORDS, measure_qualifier
@@ -31,6 +31,9 @@ from app.core.types import (
 )
 from app.core.units import EPS_GEOM, format_length, format_volume, round_display
 from app.i18n import TranslatableText, _, tr
+
+if TYPE_CHECKING:
+    from app.core.scene.history import Discarded
 
 #: Wie viele Zeichen ein Name aus einer fremden Datei im Steckbrief belegen
 #: darf.
@@ -1071,13 +1074,18 @@ def _stack_lines(document: Document, steps: Mapping[int, int]) -> list[str]:
     """
     if not document.transactions:
         return []
+    # Träge, wie jede Kante von ``perceive`` nach ``scene``
+    # (``tests/test_core_package_direction.py``).
+    from app.core.scene.history import discarded
+
     operations = {operation.id: operation for operation in document.ops}
+    gone = discarded(sorted(document.ops, key=lambda one: one.id))
     parts = []
     for transaction in document.transactions:
         calls = ", ".join(
             f"{_step_name(entry, steps)} "
             + _op_call(operations[entry])
-            + _resting_mark(operations[entry])
+            + _resting_mark(operations[entry], gone)
             if entry in operations
             else str(entry)
             for entry in transaction.ops
@@ -1090,15 +1098,18 @@ def _stack_lines(document: Document, steps: Mapping[int, int]) -> list[str]:
     return [f"{tr('Verlauf')}: " + " · ".join(parts)]
 
 
-def _resting_mark(operation: Operation) -> str:
-    """„ aus" oder „ ruht" hinter einem Schritt, der nicht rechnet (P7.3).
+def _resting_mark(operation: Operation, gone: Discarded) -> str:
+    """„ aus", „ ruht" oder „ Ergebnis entfernt" hinter einem Schritt, der nicht wirkt (P7.3).
 
     Ohne Vermerk suchte der Agent das Ergebnis eines ausgeschalteten Schritts
-    im Steckbrief vergeblich — oder legte es ein zweites Mal an.
+    im Steckbrief vergeblich — oder legte es ein zweites Mal an —, ebenso das
+    eines Schritts, dessen Körper ein späterer wieder entfernt hat. Das Wort
+    ist das des Verlaufsfelds (``history.step_state_word``).
     """
-    if operation.suppressed is None:
-        return ""
-    return " " + (tr("aus") if operation.suppressed.chosen else tr("ruht"))
+    from app.core.scene.history import step_state_word
+
+    word = step_state_word(operation, gone)
+    return f" {word}" if word is not None else ""
 
 
 def _op_call(operation: Operation) -> str:
