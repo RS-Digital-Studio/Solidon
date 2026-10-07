@@ -172,6 +172,12 @@ hält beide Wege zusammen.
 - **Was nicht gilt, steht trotzdem da** (`op=None` mit Satz), und **jedes Feld
   trägt seinen gemessenen Wert** — eine andere Vorgabe wäre eine stille
   Änderung. `ActionField.measurement` ist der Ausgangswert.
+- **Versetzen fragt eine Funktion**: `move_refusal` ist die Zeile *Merkmal
+  verschieben* (`actions_for(only=)`); `move_feature` und der Griff
+  (`FeaturePanel.refuses`) lesen sie. Nur dort sagt `move_blocked` zusätzlich
+  ab (Zapfen oder Kuppel als ganzer Körper, Zapfen in der Bohrung), und eine
+  Haltelippe (`only_a_rim_inside`) sperrt nicht. An der Fläche steht in dieser
+  Zeile *Fläche versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`).
 - **Grau mit dem Satz der Operation**: geteilter Hohlraum
   (`_shares_its_cavity`; ohne Netz keine Sperre), kein eigener Körper
   (`no_own_body`), Verengung (`cone_reason`, `not_offered_at`), Bohrung einer

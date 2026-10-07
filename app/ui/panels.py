@@ -7773,6 +7773,15 @@ def _group_reason_texts() -> dict[str, str]:
 #: sie hier ein — und nimmt ihr damit den unmittelbaren Klick.
 LEADS_INTO_THE_VIEW: Final[frozenset[str]] = frozenset({"slot_hole", "resize_hole"})
 
+#: An welchen Merkmalsarten *Merkmal verschieben* ins Bild führt wie *Bohrung
+#: ändern* an der Bohrung: Ein Klick bringt die Maße zu Kanten und Mitten in
+#: die Szene, der Griff schlägt vor, *Übernehmen* rechnet (RM-535, Robert
+#: 06.10.2026: „alles einheitlich, Bohrung Vorbild für alle Funktionen“; das
+#: nimmt die Entscheidung vom 10.09.2026 zurück, dass Verschieben auf Klick
+#: rechnet). Die Bohrung selbst und das Langloch haben ihre Maße schon über
+#: :data:`LEADS_INTO_THE_VIEW`; ein Einschluss hat keine Mündung zum Anfassen.
+MEASURED_WHILE_MOVED: Final[frozenset[str]] = frozenset({"pin", "cone", "sphere", "torus"})
+
 #: Unter welchem Namen ein Merkmalsfeld sagt, welchen Parameter es trägt —
 #: rechts im Merkmalfenster wie in der Maßgruppe im Bild, damit der Fokus von
 #: einem zum anderen wandern kann (``MainWindow._hand_the_measures_over``).
@@ -7926,14 +7935,34 @@ def _explain_source(editor: QWidget, field: Any) -> None:
         inner.setAccessibleDescription(hint)
 
 
+def feature_reference(op: str | None) -> str:
+    """Unter welchem Parameter diese Operation ihr Merkmal führt.
+
+    ``at_feature`` bei den Merkmalshandlungen; eine Operation ohne ihn nennt
+    es in ihrem einzigen Merkmalsparameter — *Fläche versetzen* in ``face``,
+    seit sie als Zeile im Merkmalfenster steht (RM-535).
+    """
+    from app.core.registry import REGISTRY
+
+    if op is None or not REGISTRY.has(op):
+        return "at_feature"
+    names = [entry.name for entry in REGISTRY.get(op).params.spec() if entry.kind == "feature"]
+    return "at_feature" if "at_feature" in names or len(names) != 1 else str(names[0])
+
+
 def feature_field_values(
     fields: Sequence[Any],
     widgets: Mapping[str, QWidget],
     fixed: Sequence[tuple[str, Any]] = (),
     *,
     feature_id: str | None = None,
+    op: str | None = None,
 ) -> dict[str, Any]:
     """Was in den Feldern dieser Handlung steht, in der Einheit des Kerns.
+
+    Das gezeigte Merkmal steht unter dem Namen, unter dem ``op`` es führt
+    (:func:`feature_reference`): ``at_feature``, an *Fläche versetzen*
+    ``face`` (RM-535).
 
     ``fixed`` sind die Werte, die die Handlung mitbringt und die niemand
     eingibt — an einer angeklickten Kante die Auswahl ``named`` und ihr
@@ -7947,7 +7976,7 @@ def feature_field_values(
     if feature_id is not None:
         # ``at_feature`` ist kein Feld: Welches Merkmal gemeint ist, steht
         # in der Auswahl, und eine Frage danach hätte ihre Antwort schon.
-        params["at_feature"] = feature_id
+        params[feature_reference(op)] = feature_id
     params.update(dict(fixed))
     for field in fields:
         widget = widgets.get(str(field.name))
@@ -8460,9 +8489,10 @@ def _focus_stops(row: QWidget) -> list[QWidget]:
     ]
 
 
-def _leads_into_the_view(op: str) -> bool:
+def _leads_into_the_view(op: str, kind: str | None = None) -> bool:
     """Ob dieser Knopf ins Bild führt, statt sofort auszuführen."""
-    return op in LEADS_INTO_THE_VIEW and _places_on_a_surface(op)
+    measured = op == "move_feature" and kind in MEASURED_WHILE_MOVED
+    return (op in LEADS_INTO_THE_VIEW or measured) and _places_on_a_surface(op)
 
 
 def _explained(action: Any) -> str:
@@ -8604,8 +8634,12 @@ class FeaturePanel(QWidget):
     Ein Panel, das ``kind == "hole"`` fragte, führte dieselbe Tabelle ein
     zweites Mal und wüsste beim nächsten neuen Merkmal die Hälfte.
 
-    Nicht anwendbare Handlungen werden ausgeblendet. Eine vorübergehend
-    gesperrte Eingabe behält dagegen ihre Werte und die sichtbare Rückmeldung.
+    **Was nicht geht, steht als Zeile mit seinem Grund** (RM-535, Robert
+    06.10.2026: „alles einheitlich, Bohrung Vorbild für alle Funktionen“).
+    Gleich begründete Absagen legt :func:`_folded` zu einer Zeile zusammen;
+    eine Lücke ließe den Kunden raten, ob die Handlung fehlt oder vergessen
+    wurde (Regel 17). Eine vorübergehend gesperrte Eingabe behält ihre Werte
+    und die sichtbare Rückmeldung.
     """
 
     #: Registername und Parameter — dieselbe Form, die der Operationsdialog
@@ -8813,6 +8847,8 @@ class FeaturePanel(QWidget):
         self._built: list[QWidget] = []
         self._serial = 0
         self._feature_id: str | None = None
+        self._feature_kind: str | None = None
+        self._answered: str | None = None
         self._part_operation: int | None = None
         self._groups: dict[str, FeatureActionGroup] = {}
         self._into_view: Callable[[], None] | None = None
@@ -8929,6 +8965,8 @@ class FeaturePanel(QWidget):
             widget.deleteLater()
         self._built.clear()
         self._feature_id = None
+        self._feature_kind = None
+        self._answered = None
         self._part_operation = None
         self._groups = {}
         self._said_notes.clear()
@@ -9175,6 +9213,7 @@ class FeaturePanel(QWidget):
         cavity = answers.cavity
         self.clear(rebuilding=True)
         self._feature_id = feature_id
+        self._feature_kind = feature.kind
         _set_shown(self._empty, False)
 
         # **Die Herkunft nur, wenn sie warnt** (RM-510): „gemessen“ hinter jedem
@@ -9263,29 +9302,18 @@ class FeaturePanel(QWidget):
 
         actions = answers.actions
         self._groups = dict(answers.groups)
-        # Unpassende Aktionen belegen keine Zeile. Der Kern behält ihre
-        # Gründe für andere Aufrufer; das Panel zeigt die verfügbaren Wege.
+        # **Eine Absage steht als Zeile mit ihrem Grund** (RM-535): „Verschieben,
+        # Drehen und Verdoppeln — eine Verrundung gehört zu ihrer Kante.“ Seit
+        # dem 15.09.2026 fielen sie weg, und am Kundenmodell hatten 174 von 190
+        # Merkmalen keine Zeile zum Versetzen und keinen Satz, warum.
         for action in _folded(actions):
-            if action.op is None and getattr(action, "step", None) is None:
-                continue
             line = self._separate()
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
-            self._blocks[next(reversed(self._runs))] = (line, row)
-
-        # **Eine Öffnung, an der nichts geht, sagt warum** (Durchsicht 0.5.1).
-        # Am Laptop-Ständer lehnt der Kern an 13 von 28 Bohrungen jede
-        # Handlung mit demselben Satz ab („In dieser Bohrung steht Material
-        # …“); das Fenster zeigte Name, Maß und *Baustein einsetzen …*, und
-        # der Kunde wartete auf Maße im Bild, die nie kamen. An einer Bohrung
-        # ist der Grund eine Auskunft; an Kante und Fläche bleibt es bei der
-        # Regel oben, dort sagt der Katalog darunter, was geht.
-        if feature.kind in ("hole", "slot", "cone") and not any(
-            action.op is not None or getattr(action, "step", None) is not None for action in actions
-        ):
-            for reason in dict.fromkeys(str(action.reason) for action in actions if action.reason):
-                self.show_note(reason)
+            if action.op is not None or getattr(action, "step", None) is not None:
+                self._blocks[next(reversed(self._runs))] = (line, row)
+        self._answered = feature_id
 
         if feature.kind == "face":
             self._build_sketch_entries(feature_id)
@@ -10074,7 +10102,7 @@ class FeaturePanel(QWidget):
             take=partial(self._take_row, row),
             in_view=(
                 partial(self._row_in_view, row)
-                if step is None and _leads_into_the_view(op_name)
+                if step is None and _leads_into_the_view(op_name, self._feature_kind)
                 else None
             ),
             op=op_name,
@@ -10466,7 +10494,7 @@ class FeaturePanel(QWidget):
 
     def _row_values(self, row: _ActionRow) -> dict[str, Any]:
         """Was in den Feldern dieser Zeile steht — mit dem gezeigten Merkmal."""
-        return self._values(row.entries, row.widgets, row.fixed)
+        return self._values(row.entries, row.widgets, row.fixed, op=row.op)
 
     def _run_row(self, row: _ActionRow, _checked: bool = False) -> None:
         """Führt die Handlung dieser Zeile aus — mit ihren heutigen Feldern.
@@ -10838,6 +10866,20 @@ class FeaturePanel(QWidget):
         self._settle_apply_block()
         if changed and entry.op != NO_OPERATION and not self._active_field_refusal():
             self.handlingArmed.emit(entry.op, entry.values())
+
+    def refuses(self, op: str, feature_id: str) -> bool:
+        """Ob das Fenster an diesem Merkmal eine Zeile dieser Operation **ohne**
+        Handlung zeigt — die Antwort des Kerns (``actions.move_refusal``), nicht
+        geraten.
+
+        Für den Griff im Bild (RM-535): Er hing an jedem Merkmal einer
+        versetzbaren Art, und an einem gesperrten endete sein Zug mit „Die neue
+        Stelle steht rechts unter Auswahl.“ — dort stand nichts. ``False``,
+        solange die Antwort für dieses Merkmal noch aussteht.
+        """
+        if self._answered != feature_id:
+            return False
+        return not any(entry.op == op for entry in self._runs.values())
 
     def take_values(self, op: str, values: Mapping[str, Any], *, arm: bool = True) -> bool:
         """Vorgeschlagene Zahlen in die Felder dieser Handlung — und sie scharf.
@@ -11299,6 +11341,15 @@ class FeaturePanel(QWidget):
 
     def _group_changed(self, _checked: bool) -> None:
         """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße."""
+        self.preview_armed()
+
+    def preview_armed(self) -> None:
+        """Die Vorschau der scharfen Handlung mit ihren heutigen Feldern bestellen.
+
+        Für Zahlen, die nicht getippt wurden: ein geänderter Umfang, ein Zug
+        am Flächengriff (RM-535), der den Weg über :meth:`take_values` ohne
+        Meldung einträgt.
+        """
         entry = self._runs.get(self._armed or "")
         if entry is not None and entry.op != NO_OPERATION:
             self.valuesChanged.emit(entry.op, entry.values())
@@ -11454,9 +11505,10 @@ class FeaturePanel(QWidget):
         fields: Sequence[Any],
         widgets: Mapping[str, QWidget],
         fixed: Sequence[tuple[str, Any]] = (),
+        op: str | None = None,
     ) -> dict[str, Any]:
         """Panelwerte mit dem dort angezeigten Merkmal lesen."""
-        return feature_field_values(fields, widgets, fixed, feature_id=self._feature_id)
+        return feature_field_values(fields, widgets, fixed, feature_id=self._feature_id, op=op)
 
     def _emit(
         self,
@@ -11471,7 +11523,7 @@ class FeaturePanel(QWidget):
         Ist der Haken gesetzt, gilt sie allen gleichartigen Merkmalen des
         Körpers, und das Fenster macht daraus **eine** Transaktion.
         """
-        params = self._values(fields, widgets, fixed)
+        params = self._values(fields, widgets, fixed, op=op)
         if every is not None and every.isChecked() and self._feature_id is not None:
             targets = self.preview_targets(op)
             if not targets:

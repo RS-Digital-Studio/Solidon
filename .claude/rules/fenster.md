@@ -240,6 +240,9 @@ Stellen halten das, beide sind nötig:
   `clear()`, mit dem `show_feature` beginnt). Weggelassen wird die Wiederholung,
   nicht die Auskunft — ab der zweiten Handlung trägt der Haken sie in Tooltip,
   Statuszeile und zugänglicher Beschreibung.
+- **Eine Absage steht als Zeile mit ihrem Grund** (RM-535): `_show_feature_rows`
+  lässt keine aus. *Merkmal verschieben* führt an Zapfen, Senkung, Kugel und Ring
+  ins Bild wie *Bohrung ändern* (`MEASURED_WHILE_MOVED`).
 - **Ein zusammengelegter Grund spricht für alle, unter denen er steht:**
   `_folded` macht aus gleich begründeten Absagen eine Zeile („Verschieben,
   Ändern, Drehen, Verdoppeln und Entfernen — <Satz>“); der Satz verneint die

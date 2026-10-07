@@ -190,8 +190,7 @@ Gruppenweg `cavity_topology_unavailable`), und wer den Zustand liest, liest ihn
 mit. Geteilt steht einmal (`relations.cavity_is_shared`). Was einen geteilten
 Hohlraum nicht nehmen kann, sagt ab statt still ein Stück zu bearbeiten — nur
 noch *Zum Langloch ziehen* (`NEEDS_A_PLAIN_BORE`, derselbe Satz im
-Merkmalfenster); Versetzen, Drehen und Verdoppeln nehmen die ganze Kette mit
-(Entscheidung Robert).
+Merkmalfenster); Versetzen, Drehen und Verdoppeln nehmen die ganze Kette mit.
 
 ## Gekippt wird bis zur alten Randebene
 
@@ -234,13 +233,14 @@ neuen schneiden — kein Unterschied zwischen den Kernen (Entscheidung Robert).
   lagenabhängig still. Exakte Kopien werden nach Lage und Maß zugeordnet, dann
   benannt; der äußere Zylinder einer Kette ist beim Wiederfinden entlang der
   Achse frei; unlesbar heißt `CHAIN_NOT_READABLE`.
-- **Langloch und Lippentasche reisen ganz aus ihren Flächen** (gedreht, skaliert
-  oder ohne zwei ebene Ränder aus Kennzahlen). Steht im Zylinder nur ein Rand —
-  nicht „Merkmal ohne Dreiecke" —, ist das Werkzeug die Hülle der erklärten Maße
-  minus Körper; Nabe oder Zapfen bleiben `HOLE_IS_NOT_EMPTY`. Die Lippe
-  (`narrowing`) ändert sich über ihr eigenes Profil und wird nie gekippt
-  (`perceive.actions.narrowing_reason`), solange die Erkennung keine gekippte
-  Lippe liest; was sie nicht sieht, wird nicht nachgemessen.
+- **Langloch und Lippentasche reisen aus ihren Flächen** (gedreht, skaliert
+  oder ohne zwei ebene Ränder aus Kennzahlen); nur ein Rand im Zylinder
+  (`only_a_rim_inside`): erklärte Hülle minus Körper; Nabe, Zapfen:
+  `HOLE_IS_NOT_EMPTY`. Die Lippe ändert ihr Profil, nie gekippt
+  (`narrowing_reason`); Ungesehenes wird nicht nachgemessen.
+- **Starr versetzt reist das Material, wie es ist** (`carried_from`): Werkzeug ∩
+  Körper; Durchlaufendes bleibt an der alten Stelle, Umschließendes und
+  Innenliegendes wird nicht geschnitten (`_carried_cavities`).
 - **Zwei Werkzeuge stoßen am Netz nie nur in einer Ebene aneinander** — das
   hintere reicht ins vordere; geprüft an Flächen dieser Ebene, nicht am Volumen.
 - **Eine Senkung auf ihrer Bohrung ändert ihr Maß über dieselben Profile**

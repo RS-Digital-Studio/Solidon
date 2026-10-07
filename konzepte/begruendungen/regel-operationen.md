@@ -2266,3 +2266,27 @@ Hinweis auf die andere — ein Zug in neuer Richtung dreht das Langloch
 **Langloch ohne Zugabe:** `slot_hole` schneidet ohne `FEATURE_OVERLAP`
 (`overlap=0.0`), damit beide Wege — Ziehen und Ändern — und beide Kerne
 dasselbe Langloch schneiden.
+
+## Versetzen: Kette, Material, eine Frage (RM-535)
+
+**Ganze Kette:** Versetzen, Drehen und Verdoppeln nehmen die ganze Hohlraumkette
+mit — Entscheidung Robert; nur *Zum Langloch ziehen* sagt an einer geteilten
+Kette ab.
+
+**Material, wie es ist:** Der volle Körper aus den Flächen füllte, was im
+Merkmal hohl ist, und die Hohlräume aus Kennzahlen gaben es nur grob zurück.
+Am Minitopf (Zapfen Ø 30 um eine Tasche Ø 28 mit Deckelfalz) stand nach jedem
+Versetzen +240,65 mm³, gleich wie weit; der nachgebaute Becher im Korpus
+(`cup_on_stem.stl`) verlor 529,6 mm³. Eine Tasche, die den Zapfen umschließt,
+schnitt ihn ab 0,5 mm ganz weg (Kundenmodell minus 189 mm³, Korpus
+`pocket_with_pin.stl` minus 178 mm³). Ein Sackloch, das von unten in einen
+Stift reicht, ging bis zu dessen anderem Ende (minus 5 722 mm³), und eine
+Endfase füllte die Mündung eines nicht erkannten Sacklochs (+2 218 mm³ beim
+Kunden). Das Material an der alten Stelle zu schneiden und zu verschieben ist
+die Antwort der Bohrung, die ihre Luft versetzt (`_air_of_the_bore`).
+
+**Eine Frage:** Die Karte bot an Wulst und Kehle X/Y/Z an, an denen die
+Operation absagte, und sperrte die Tasche um einen Zapfen, in der sie rechnete;
+der Griff fragte nur die Art. `actions.move_refusal` ist die Zeile der Karte,
+und Operation und Griff lesen sie. Robert (d): Die Tasche um einen Zapfen sagt
+ab, statt beide gemeinsam zu versetzen.

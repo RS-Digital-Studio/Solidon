@@ -115,7 +115,8 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
         (1, ""): QUICK_BODY,
         (2, ""): QUICK_BODIES,
         (5, ""): QUICK_BODIES,
-        (1, "face"): QUICK_FEATURES["face"],
+        # *Fläche versetzen* steht seit RM-535 als Zeile mit dem Weg darüber.
+        (1, "face"): ("drill_hole", "sketch_pocket"),
         (1, "hole"): ("countersink_hole", "plug_hole", "pattern_feature"),
         (1, "cone"): ("countersink_hole", "pattern_feature"),
         (1, "slot"): ("pattern_feature",),
