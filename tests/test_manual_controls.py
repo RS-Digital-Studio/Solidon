@@ -422,6 +422,48 @@ def test_every_italic_way_of_every_written_page_is_in_the_menu_bar(
     ]
 
 
+#: Eine Tastenkombination in jeder Sprache: Strg+K, Ctrl+K, Maj+…, F9.
+_MODIFIER: Final = r"(?:Strg|Ctrl|Control|Umschalt|Shift|Maj|Mayús|Alt|Cmd)"
+ANY_LANGUAGE_KEY: Final = re.compile(
+    rf"(?<![\w+]){_MODIFIER}\+(?:{_MODIFIER}\+)*(?:F\d{{1,2}}|[A-Z0-9])(?![\w+])"
+    r"|(?<![\w+])F\d{1,2}(?![\w+])"
+)
+_SAME_MODIFIER: Final = {"Strg": "Ctrl", "Control": "Ctrl", "Umschalt": "Shift", "Maj": "Shift"}
+
+
+def _keys_of(text: str) -> list[str]:
+    """Die Kombinationen eines Textes, gleich geschrieben in jeder Sprache."""
+    found = []
+    for key in ANY_LANGUAGE_KEY.findall(text):
+        for said, same in _SAME_MODIFIER.items():
+            key = key.replace(said, same)
+        found.append(key.replace("Mayús", "Shift"))
+    return sorted(found)
+
+
+@pytest.mark.parametrize("language", _other_languages())
+def test_a_translation_names_the_keys_the_source_names(language: str) -> None:
+    """Strg+K im Deutschen ist Ctrl+K in der Übersetzung, nicht Ctrl+J.
+
+    Welche Taste im Fenster belegt ist, prüft der Fenstertest an der Quelle;
+    hier folgt jede Übersetzung ihr Seite für Seite.
+    """
+    source = {key: _keys_of(text) for key, text in _written_pages_text()}
+    translated = _translated_pages(language)
+    assert sum(len(keys) for keys in source.values()) >= 10, "zu wenige Tasten gefunden"
+    findings = [
+        f"{key}: {source[key]} → {_keys_of(text)}"
+        for key, text in translated
+        if _keys_of(text) != source[key]
+    ]
+    assert not findings, f"{language}:\n" + "\n".join(findings)
+    assert _keys_of("Ctrl+J, Maj+F9") != _keys_of("Strg+K, Umschalt+F9")
+
+
+def _written_pages_text() -> list[tuple[str, str]]:
+    return [(page.key, page.text()) for page in _written_pages()]
+
+
 #: Tasten, die das Handbuch nennt und die keine Belegung im Fenster sind → wo sie wirken.
 KEYS_IN_PLACE: Final[dict[str, str]] = {}
 
