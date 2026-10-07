@@ -198,7 +198,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: - 51 (RM-226, Nachtrag 04.10.2026): Die Tessellierung eines exakten Körpers
 #:   trägt keine Dreiecke ohne Fläche mehr. Ein gespeicherter Netzzwilling trüge
 #:   sie noch und läse nach der ersten Booleschen andere Merkmale als vorher.
-CACHE_FORMAT_VERSION: Final = 51
+#: - 52 (RM-187): Bausteine, Muster, Skizzenbögen, Teilen und die Schritte aus
+#:   ``prepare_ops`` rechnen ohne BLAS, LAPACK und die Winkelfunktionen der
+#:   Plattform. Gespeicherte Ergebnisse und Mustererkennungen trügen noch die
+#:   letzte Stelle der Maschine, auf der sie entstanden.
+CACHE_FORMAT_VERSION: Final = 52
 
 
 @dataclass(frozen=True, slots=True)

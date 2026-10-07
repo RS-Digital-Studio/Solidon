@@ -28,8 +28,6 @@ from tests.helpers import exact_kernel
 
 def _source(kind: str, *, entrance: bool = False) -> SceneObject:
     """Eine wirkliche Bohrung, wahlweise mit dem eindeutigen Einlauf derselben Achse."""
-    from tests.helpers import exact_kernel
-
     exact_kernel()
     stock = edit.box(40.0, 30.0, 12.0)
     if entrance:

@@ -1414,6 +1414,9 @@ def test_the_palette_greys_out_what_the_menu_greys_out(window: MainWindow) -> No
     assert any("Rückgängig" in title for title in titles), (
         f"Rückgängig ist ohne Verlauf gesperrt, die Palette sieht es nicht: {sorted(titles)}"
     )
+    # *Automatisch teilen* steht seit RM-507 in keinem Menü mehr, nur noch in
+    # der Auswahlkarte — die Palette sperrt es trotzdem mit Grund.
+    assert "edit.auto_split" in blocked, f"Automatisch teilen ohne Sperre: {sorted(titles)}"
 
     # Und was geht, sagt nichts: ein Grund an einem offenen Eintrag wäre eine
     # Warnung ohne Anlass.
@@ -1692,6 +1695,36 @@ def _menu_titles_and_entries(menu: QMenu) -> list[str]:
         elif text:
             found.append(text)
     return found
+
+
+def test_no_menu_text_stands_for_two_actions(window: MainWindow) -> None:
+    """Kein Text steht in zwei Menüs mit verschiedener Wirkung (RM-507, A18).
+
+    Unter *Erzeugen* stand die Operation „Modell einfügen“ neben „Modell
+    einfügen …“ in *Datei*, zwei Wege unter einem Namen. Gleicher Text ist
+    erlaubt, wenn es dieselbe ``QAction`` ist (der Katalog, das Einfügen);
+    verglichen wird ohne ``&`` und Auslassungspunkte. *Automatisch teilen*
+    steht in keinem Menü mehr, sondern bei den Teilen-Wegen der Auswahlkarte.
+    """
+    owners: dict[str, set[int]] = {}
+
+    def walk(menu: QMenu) -> None:
+        for action in menu.actions():
+            below = action.menu()
+            if isinstance(below, QMenu):
+                walk(below)
+            elif not action.isSeparator() and action.text():
+                text = action.text().replace("&", "").replace("…", "").strip()
+                owners.setdefault(text, set()).add(id(action))
+
+    for entry in window.menuBar().actions():
+        if isinstance(menu := entry.menu(), QMenu):
+            walk(menu)
+    assert len(owners) > 40, "die Menüleiste ist kaum gefüllt — dann prüft das nichts"
+    doubled = sorted(text for text, actions in owners.items() if len(actions) > 1)
+    assert not doubled, f"ein Text, mehrere Aktionen: {doubled}"
+    assert "Automatisch teilen" not in owners
+    assert window.auto_split_action in window.selection_operations._window_actions.values()
 
 
 def test_every_menu_path_in_the_texts_leads_somewhere(window: MainWindow) -> None:
@@ -2041,9 +2074,26 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     verglichen = 0
     rechts = 0
     palette = 0
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
+
     for name, action in window._op_actions.items():
         spec = REGISTRY.get(name)
         genannt = blank(menu_path(spec))
+        if name in WINDOW_COMMAND_OPERATIONS:
+            # **Ihr Menüeintrag ist der Fensterbefehl** (RM-507): *Modell
+            # einfügen …* steht in *Datei* und *Erzeugen* als eine Aktion; der
+            # Weg nennt den Titel der Operation, das Menü trägt die
+            # Auslassungspunkte des Dialogs.
+            action = window._palette_actions[WINDOW_COMMAND_OPERATIONS[name]]
+            assert action in gebaut, f"{name}: kein Menüweg"
+            # Dieselbe Aktion in zwei Menüs: ``gebaut`` hält die zuletzt gebaute
+            # Stelle, und *Erzeugen* kommt nach *Datei*.
+            assert gebaut[action].removesuffix(" …") == genannt, (
+                f"{name}: nennt „{genannt}“, im Menü „{gebaut[action]}“"
+            )
+            assert name not in in_the_palette, f"{name}: zweite Palettenzeile neben dem Befehl"
+            verglichen += 1
+            continue
         if not in_the_menu_bar(spec.category):
             assert action not in gebaut, f"{name}: steht rechts und trotzdem in der Leiste"
             if spec.takes_whole_scene and name not in SCENE_ACTIONS_IN_THE_CARD:

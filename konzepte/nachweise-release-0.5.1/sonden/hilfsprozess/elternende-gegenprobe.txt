@@ -1,0 +1,31 @@
+Gegenprobe des endgültigen Tests, 06.10.2026, Stand 4e3b40c79 plus Patch der Einheit
+(Worktree nur mit diesen Änderungen), Windows 11, CPython 3.14.7.
+
+Ohne inneres Jobobjekt:
+  SOLIDON_TEST_KERNEL_LIFECYCLE_FAULT=no-binding python -m pytest -q -p no:cacheprovider \
+    tests/test_kernel_process_lifecycle.py::test_active_helper_ends_with_a_killed_parent
+  Exit 1, rot an der Zusicherung des eingeleiteten Endes (Auszug):
+
+                  # Das Jobobjekt schließt mit dem Griff, den das Elternende abräumt;
+                  # die Frist begrenzt nur das Warten der Gegenprobe ohne Bindung.
+                  deadline = time.monotonic() + _STOP_SECONDS
+                  while not helper.ending() and time.monotonic() < deadline:
+                      time.sleep(0.02)
+                  ending = helper.ending()
+                  _write_mark(
+                      tmp_path / "finished.json",
+                      {"helper_ending": int(ending), "helper_ended": int(helper.ended())},
+                  )
+  >               assert ending, (
+                      "Der aktive Helfer überlebt das harte Elternende; das innere Jobobjekt fehlt."
+                  )
+  E               AssertionError: Der aktive Helfer überlebt das harte Elternende; das innere Jobobjekt fehlt.
+  E               assert False
+
+  tests\test_kernel_process_lifecycle.py:407: AssertionError
+  =========================== short test summary info ===========================
+  FAILED tests/test_kernel_process_lifecycle.py::test_active_helper_ends_with_a_killed_parent
+  1 failed in 25.69s
+
+Derselbe Befehl ohne Fehlervariable, unmittelbar danach:
+  Exit 0, 1 passed in 16.33s

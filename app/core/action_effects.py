@@ -138,7 +138,7 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
     "scale_to_fit": _("Verkleinert alle Maße gleichmäßig, auch Bohrungen und Passungen."),
     # Teilen und Zerlegen
     "split_model": _("Aus einem Körper werden mehrere Stücke mit Schnittflächen und Verbindern."),
-    "split_along_line": _("Aus einem Körper werden mehrere, getrennt an der gezeichneten Linie."),
+    "split_along_line": _("Aus einem Körper werden mehrere, geteilt an der gezeichneten Linie."),
     "split_bodies": _(
         "Aus einem Körper werden mehrere; jedes Teil kann eigenes Material und eigene Lage "
         "bekommen."

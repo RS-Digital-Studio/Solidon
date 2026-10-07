@@ -26,7 +26,7 @@
 > weiter, falls die Frage je aus einem anderen Grund zurückkommt.
 >
 > Der Nachweis steht in ``tests/test_platform_identity.py``, der Fall im
-> Register unter [RM-187](../ROADMAP.md#rm-187).
+> Register unter [RM-187](../../ROADMAP.md#rm-187).
 
 **Stand:** 17.09.2026 · **Recherche und Konzept, nichts davon gebaut — und
 nichts davon zu bauen.** · Schwester von

@@ -466,7 +466,7 @@ class VariantGroup:
 #: Verlauf, wie die versteckten Zwillinge auch.
 VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
     VariantGroup(
-        title=_("Aus Skizze erzeugen …"),
+        title=_("Zeichnen …"),
         doc=_(
             "Aus einer Grundform oder einer gezeichneten Skizze einen Körper "
             "machen — hochziehen, um eine Achse drehen, an einem Bogen "
@@ -658,7 +658,7 @@ class OperationSpec:
 
     Die Schwester von ``requires_kind``, eine Frage weiter: Nicht die Bauart
     (Netz oder exakt), sondern der Zustand. *Offene Fläche schließen* braucht
-    eine offene Fläche, *In Einzelteile zerlegen* mehrere Teile, *Gitter
+    eine offene Fläche, *In Einzelteile aufteilen* mehrere Teile, *Gitter
     füllen* einen Hohlraum. Gemessen am 13.09.2026 über alle Dialoge: Ohne
     die Angabe öffneten die drei an einem sauberen Quader einen Dialog,
     dessen Vorschau nur „Keine Vorschau: …" sagen konnte — die Sackgasse aus

@@ -27,6 +27,7 @@ dieselbe Reihenfolge, dieselbe exakte Abstandsrechnung.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Final
 
@@ -34,6 +35,7 @@ import numpy as np
 
 from app.core import units
 from app.core.geom.mesh import MeshData, max_distance_to_surface
+from app.core.geom.transform import along
 from app.core.types import CancelToken, Vec3
 from app.core.units import EPS_GEOM
 
@@ -76,32 +78,35 @@ def mirror_plane(
     faces = np.asarray(raw.faces, dtype=np.int64)
     if not len(vertices) or not len(faces):
         return None
+    # Längen, Lagen und Momente ohne BLAS (RM-187): Die Spiegelebene entscheidet,
+    # wo Auto Split teilt, und ``@`` rundet je Maschine anders.
     direction = np.asarray(normal, dtype=float)
-    length = float(np.linalg.norm(direction))
+    length = math.hypot(float(direction[0]), float(direction[1]), float(direction[2]))
     if length <= EPS_GEOM:
         return None
     direction = direction / length
 
-    heights = vertices @ direction
+    heights = along(vertices, direction)
     low, high = float(heights.min()), float(heights.max())
     if high - low <= EPS_GEOM:
         return None
     position = (low + high) / 2.0
-    tolerance = units.match_tolerance(float(np.linalg.norm(mesh.bounds.size)))
+    tolerance = units.match_tolerance(math.hypot(*(float(size) for size in mesh.bounds.size)))
 
     triangles = vertices[faces]
     centroids = triangles.mean(axis=1)
     areas = 0.5 * np.linalg.norm(
         np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]), axis=1
     )
-    total = float(areas.sum())
+    total = math.fsum(areas.tolist())
     if total <= EPS_GEOM:
         return None
-    if abs(float(areas @ (centroids @ direction)) / total - position) > tolerance:
+    moment = math.fsum((areas * along(centroids, direction)).tolist())
+    if abs(moment / total - position) > tolerance:
         return None
 
     points = np.concatenate([vertices, centroids])
-    reflected = points - 2.0 * (points @ direction - position)[:, None] * direction
+    reflected = points - 2.0 * (along(points, direction) - position)[:, None] * direction
     stride = max(1, len(reflected) // PROBE_POINTS)
     if cancelled is not None:
         cancelled.raise_if_cancelled()

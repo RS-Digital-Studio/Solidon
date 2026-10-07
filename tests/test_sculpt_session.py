@@ -963,15 +963,22 @@ def test_baking_keeps_the_fine_result(window: MainWindow, monkeypatch: pytest.Mo
     Volumen 2,6 % weniger, die Form bis 0,94 mm verschoben. Festgeschrieben wird die
     feine Rechnung — sie ist es, die gerechnet wird, und danach stehen dieselben
     Dreiecke und dasselbe Volumen wie in der feinen Auswertung."""
+    import threading
+
     import app.ui.session as session_module
 
     object_id, op_id = with_a_cone_session(window)
     fine = window.session.evaluate_now().scene.objects[object_id].mesh
     asked: list[str] = []
     real = session_module.evaluate
+    caller = threading.get_ident()
 
     def spied(document: Any, *args: Any, **kwargs: Any) -> Any:
-        asked.append(str(kwargs.get("quality")))
+        # Nur die Rechnung des Festschreibens selbst: Die Entwurfsrechnung, die
+        # das Fenster danach im Arbeiter startet, lief am Mac schon, bevor hier
+        # gezählt wurde, und ist kein Teil der Zusage (RM-531).
+        if threading.get_ident() == caller:
+            asked.append(str(kwargs.get("quality")))
         return real(document, *args, **kwargs)
 
     monkeypatch.setattr(session_module, "evaluate", spied)
@@ -1680,9 +1687,11 @@ def test_save_before_project_switch_waits_for_the_gesture_result_dialog(
         assert window._has_unsaved_gestures()
         assert len(window.session.project.document.ops) == before
         QTest.qWait(350)
-        assert window.session.wait_for_idle()
+        # Mit der Frist der übrigen Tests dieser Datei: Auf dem Intel-Mac-Runner
+        # reichten die zehn Sekunden der Vorgabe nicht (RM-531).
+        assert window.session.wait_for_idle(30_000)
         dialog.accept()
-        assert window.session.wait_for_idle()
+        assert window.session.wait_for_idle(30_000)
         assert not window._has_unsaved_gestures()
         assert window._may_discard()
     assert window.session.wait_for_idle()

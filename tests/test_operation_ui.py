@@ -7227,8 +7227,8 @@ def test_fx_stands_only_where_there_is_something_to_reckon_with(qt_app: QApplica
 def test_a_named_zero_shows_its_name(qt_app: QApplication) -> None:
     """„0,00 mm“ hieß „aus dem Material“ oder „automatisch“ (C8).
 
-    Die Höhe der Öffnung trägt keinen Namen mehr: Sie ist eine Welthöhe ohne
-    Mindestwert (Durchsicht 0.5.3, Fund 9), und Qt zeigt den Namen nur dort.
+    Die Höhe der Öffnung ist eine Welthöhe ohne Mindestwert (Durchsicht 0.5.3,
+    Fund 9); ihr Name „Oberkante“ steht am leeren Zustand (RM-526).
     """
     lid = OperationDialog(REGISTRY.get("create_lid"), {}, None)
     container = OperationDialog(REGISTRY.get("create_container"), {}, None)
@@ -7237,12 +7237,116 @@ def test_a_named_zero_shows_its_name(qt_app: QApplication) -> None:
         assert isinstance(play, ValueField)
         assert play.spin.text() == tr("aus dem Material", context="Nullwert")
         assert lid.values()["clearance"] == 0.0, "der Wert bleibt die Null"
+        height = lid._editors["z"]
+        assert isinstance(height, ValueField)
+        assert height.spin.text() == tr("Oberkante", context="Nullwert")
+        assert lid.values()["z"] is None, "leer bleibt leer"
         neck = container._editors["neck"]
         assert isinstance(neck, ValueField)
         assert neck.spin.text() == tr("automatisch", context="Nullwert")
     finally:
         lid.deleteLater()
         container.deleteLater()
+
+
+def test_every_accept_button_names_what_the_click_does() -> None:
+    """Ein Titel mit Verb ist sein Knopftext, sonst „Einsetzen“ (RM-507, C19).
+
+    *Deckel erzeugen* bestätigte mit „Einsetzen“, der Katalog mit „Einfügen“.
+    Jede Operation außerhalb der Bausteine trägt ihren Titel; ein Baustein
+    heißt nach dem, was er ist, und setzt „ein“ — außer sein Titel sagt
+    selbst, was der Klick tut. Die Menge dieser Ausnahmen steht hier, damit
+    ein neuer Baustein mit Verb im Titel bewusst dazukommt.
+    """
+    from app.ui.op_dialog import accept_text
+
+    bootstrap.load_operations()
+    insert = str(tr("Einsetzen"))
+    own = {
+        spec.name
+        for spec in REGISTRY.all()
+        if spec.category == "parts" and accept_text(spec) == str(spec.title)
+    }
+    assert own == {"add_container_insert", "create_lid", "insert_bearing_seat", "screw_lid"}
+    for spec in REGISTRY.all():
+        expected = insert if spec.category == "parts" and spec.name not in own else str(spec.title)
+        assert accept_text(spec) == expected, spec.name
+    catalog_source = (Path(__file__).parent.parent / "app" / "ui" / "catalog.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'ok.setText(tr("Einsetzen"))' in catalog_source, "der Katalog setzt ebenso ein"
+    assert 'tr("Einfügen")' not in catalog_source
+
+
+def test_a_step_out_of_the_empty_state_starts_at_zero(qt_app: QApplication) -> None:
+    """Ein Pfeil nach oben aus „Oberkante“ führt auf null, nicht auf −999 999,01 mm.
+
+    Der leere Zustand eines ``optional``-Feldes sitzt eine Stufe unter der
+    Untergrenze; an der Höhe der Öffnung gibt es keine (Review RM-526, K5).
+    Zurück nach unten führt der Pfeil wieder auf den leeren Zustand. An einem
+    Feld mit Grenzen beginnt der Schritt bei null, so weit das Schema es erlaubt.
+    """
+    lid = OperationDialog(REGISTRY.get("create_lid"), {}, None)
+    hole = OperationDialog(REGISTRY.get("resize_hole"), {"obj_1": "Körper"})
+    try:
+        height = lid._editors["z"]
+        assert isinstance(height, ValueField)
+        assert height.value() is None
+        height.spin.stepBy(1)
+        assert height.value() == pytest.approx(0.0), "vom leeren Zustand auf null"
+        height.spin.stepBy(1)
+        assert height.value() == pytest.approx(1.0), "danach wie gewohnt"
+        height.spin.stepBy(-1)
+        height.spin.stepBy(-1)
+        assert height.value() == pytest.approx(-1.0), "unter null geht es weiter"
+        x = hole._editors["x"]
+        assert isinstance(x, ValueField)
+        x.spin.stepBy(1)
+        assert x.value() == pytest.approx(0.0)
+    finally:
+        lid.deleteLater()
+        hole.deleteLater()
+
+
+@pytest.mark.parametrize("key", [Qt.Key.Key_Return, None])
+def test_an_emptied_field_takes_its_named_value(qt_app: QApplication, key: Any) -> None:
+    """Wer die Zahl löscht, meint, was der Sondertext sagt (RM-526).
+
+    Qt nannte das leere Feld einen Zwischenstand; Eingabetaste und Fokuswechsel
+    stellten still die vorige Zahl zurück. Zurück zu „Oberkante“ führten nur
+    Pfeil und Rad bis unter die kleinste Zahl, an einer Welthöhe ohne
+    Untergrenze eine Million Millimeter tief. Dasselbe gilt für eine benannte
+    Null: Geleert heißt das Spiel wieder „aus dem Material“.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QFocusEvent
+    from PySide6.QtTest import QTest
+
+    dialog = OperationDialog(REGISTRY.get("create_lid"), {}, None)
+    dialog.show()
+    try:
+        for name, named, empty in (
+            ("z", tr("Oberkante", context="Nullwert"), None),
+            ("clearance", tr("aus dem Material", context="Nullwert"), 0.0),
+        ):
+            field = dialog._editors[name]
+            assert isinstance(field, ValueField)
+            field.set_value(1.5)
+            assert dialog.values()[name] == pytest.approx(1.5)
+            field.spin.setFocus()
+            field.spin.lineEdit().selectAll()
+            QTest.keyClick(field.spin.lineEdit(), Qt.Key.Key_Delete)
+            if key is None:
+                QApplication.sendEvent(
+                    field.spin, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.TabFocusReason)
+                )
+            else:
+                QTest.keyClick(field.spin.lineEdit(), key)
+            assert dialog.values()[name] == empty, name
+            assert field.spin.text() == named, name
+    finally:
+        dialog.reject()
+        dialog.deleteLater()
 
 
 def test_an_open_box_hides_its_vents_and_drops_them(qt_app: QApplication) -> None:
@@ -7909,8 +8013,6 @@ def test_a_historical_preview_reports_waiting_before_its_input_is_ready(
     window, monkeypatch, ending
 ):
     """Die Vorbereitung des alten Eingangszustands gehört zur sichtbaren Wartezeit."""
-    from PySide6.QtTest import QTest
-
     from app.ui.main_window import _PreviewOrder
 
     select(window)
@@ -7932,7 +8034,12 @@ def test_a_historical_preview_reports_waiting_before_its_input_is_ready(
     window._request_order_preview(approval)
     assert pending and not previews
     assert window._progress_states["preview"].active
-    QTest.qWait(250)
+    # Der Wartehinweis hängt an seinem Zeitgeber, nicht an der Uhr: Mit
+    # ``qWait(250)`` stand auf dem Intel-Mac-Runner noch keine Notiz (RM-531).
+    busy = window._preview_busy
+    assert busy.isActive(), "der Wartehinweis ist aufgezogen"
+    busy.stop()
+    busy.timeout.emit()
     assert notes[-1] == tr("Vorschau wird gerechnet …")
     if ending == "cancel":
         window._cancel_preview_run()

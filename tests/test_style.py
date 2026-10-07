@@ -9,6 +9,7 @@ wird, ist nach zehn Änderungen keine mehr.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -928,13 +929,17 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
 def test_the_three_questions_mark_their_answer_twice(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Speichern, Trotzdem exportieren, Verwerfen: die Antwort trägt den Akzent
-    **und** die halbfette Schrift.
+    """Speichern und Trotzdem exportieren: die Antwort trägt den Akzent
+    **und** die halbfette Schrift. Verwerfen trägt keines von beiden, sondern
+    das Fehlerrot (RM-512).
 
     ``QMessageBox.setDefaultButton`` setzt nur den Default — gezeichnet in
     der Akzentfarbe, aber in normaler Schrift, und Farbe allein ist keine
     zweite Kodierung (Regel 18). Der Quelltextwächter darüber sieht das
     nicht: Er sucht ``setDefault(True)``, und das ruft hier Qt selbst.
+
+    *Abgeschnittene Schritte verwerfen?* hat keinen Hauptknopf: Verwerfen ist
+    unwiederbringlich, und ein Akzent darauf lüde genau dazu ein.
     """
     from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QMessageBox
@@ -954,12 +959,29 @@ def test_the_three_questions_mark_their_answer_twice(
     dialogs.confirm_discard(3, ["Eins", "Zwei", "Drei"])
 
     assert len(seen) == 3
-    for box in seen:
+    for box in seen[:2]:
         answer = box.defaultButton()
         assert answer is not None, box.windowTitle()
         assert answer.font().weight() >= QFont.Weight.DemiBold, (
             f"{box.windowTitle()}: „{answer.text()}“ nur über die Farbe hervorgehoben"
         )
+        assert answer.property("danger") is not True, f"{box.windowTitle()}: rot und Hauptknopf"
+
+    discard_box = seen[2]
+    assert discard_box.defaultButton() is None, "Verwerfen ist kein Hauptknopf"
+    (discard,) = [
+        button
+        for button in discard_box.buttons()
+        if discard_box.buttonRole(button) == QMessageBox.ButtonRole.DestructiveRole
+    ]
+    assert discard.property("danger") is True
+    (cancel,) = [
+        button
+        for button in discard_box.buttons()
+        if discard_box.buttonRole(button) == QMessageBox.ButtonRole.RejectRole
+    ]
+    assert discard_box.focusWidget() is cancel, "die Leertaste träfe Verwerfen"
+    assert not discard.isDefault() and discard.font().weight() < QFont.Weight.DemiBold
 
 
 #: Die Dialoge, die sich ohne fremden Zustand bauen lassen, als Bauanweisungen.
@@ -1204,6 +1226,23 @@ def test_the_tab_bar_shows_where_the_keyboard_is() -> None:
     assert "QTabBar::tab:focus {" not in sheet, (
         "Ein Fokusrahmen an jedem Reiter markiert die ganze Leiste statt einer Stelle."
     )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_the_active_tab_says_where_you_are_without_the_accent(theme: str) -> None:
+    """Der aktive Reiter steht im Ruhezustand immer da — also nicht in Bernstein.
+
+    Seine Kante trug ``accent_line`` und war damit eine von fünf Stellen, die
+    im ruhenden Fenster leuchteten (RM-512). Sie nimmt die Schriftfarbe; Fläche,
+    Schriftfarbe und Fettschrift bleiben die übrigen Kodierungen.
+    """
+    sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+    rule = sheet.split("QTabBar::tab:selected {", 1)[1].split("}", 1)[0]
+    colours = THEMES[theme]  # type: ignore[index]
+
+    assert f"border-top: 3px solid {colours['text']};" in rule
+    assert colours["accent_line"] not in rule and colours["highlight"] not in rule
+    assert "font-weight: 600" in rule, "die zweite Kodierung bleibt"
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
@@ -1891,7 +1930,16 @@ def test_the_active_tool_says_it_at_its_edge_and_no_longer_shouts(
     # Eine eigene Umfärbung hielt das zusammen und ist mit der gedämpften Fläche
     # weggefallen. Was sie ersetzt, ist diese Zeile: Beide Knöpfe schreiben in
     # derselben Farbe, also kann kein Zeichen mehr aus der Reihe fallen.
-    assert ink == calm_ink, (
+    #
+    # Verglichen wird über den Kontrast, nicht auf den Hexwert: Kantengeglättete
+    # Schrift erreicht ihre Farbe nur, wo der Strich voll deckt, und unter
+    # Linux mischt jeder Punkt etwas von seiner Fläche ein — #1f222a gegen
+    # #252736, Kontrast 1,08 (RM-531). Eine umgeschaltete Schrift läge im
+    # dunklen Thema bei Text gegen Auswahlschrift, und die Schwelle muss
+    # deutlich darunter bleiben, damit die Zeile etwas fängt.
+    switched = contrast_ratio(THEMES["dark"]["text"], THEMES["dark"]["highlight_text"])
+    assert switched > 4 * 1.25, f"die Schwelle fängt keine umgeschaltete Schrift ({switched:.2f})"
+    assert contrast_ratio(ink, calm_ink) < 1.25, (
         f"{theme}: der aktive Knopf schreibt in {ink}, der ruhende in {calm_ink} — "
         "wer die Schriftfarbe umschaltet, muss auch das Symbol umfärben"
     )
@@ -1917,16 +1965,25 @@ def test_a_meaning_paints_its_mark_and_leaves_the_sentence_alone(
     lesbar, wo er am dringendsten ist. Dieselbe Entscheidung wie im
     Prüfbericht, und aus demselben Grund.
 
-    Gesucht wird nach **Farbton** und nicht nach dem Hexwert: Ein einzelnes
-    Zeichen hat wenige Punkte, und Kantenglättung macht aus jedem davon einen
-    Zwischenton. Dieselbe Technik wie beim Fortschrittsbalken nebenan — und mit
-    derselben Falle: „irgendwie bunt" trifft auch den Grund. Die Fensterfläche
-    des dunklen Themas ist blaugrau und kam auf 31 104 Treffer, mehr als jeder
-    Text je hätte. Verglichen wird deshalb gegen den Ton, den **diese** Rolle
-    haben soll, und die Sättigung trennt ihn vom Grund (63 gegen 125 und 187).
+    **Verglichen wird Bild gegen Bild, nicht Farbton gegen Farbton.** Dieselbe
+    Zeile wird ein zweites Mal gezeichnet, als frische Zeile ohne ``set_role``
+    und ihr Auszeichnungstext ohne jede Auszeichnung; was sich unterscheidet,
+    ist genau das, was die Rolle einfärbt. Gezählte Farbtöne trafen unter Linux die Farbsäume der
+    Subpixel-Kantenglättung: Jeder Strich des Satzes bekam einen orangen Rand,
+    und der ungefärbte Satz kam auf mehr „warnfarbige" als gewöhnliche Punkte
+    (RM-531). Der Vergleich kennt keine Schrift und keine Glättung — gleich
+    gezeichnet heißt gleich.
+
+    Und ein drittes Bild, ebenfalls ohne ``set_role``, mit unverändertem
+    Auszeichnungstext: Es muss der Zeile gleichen. Was ``set_role`` neben dem
+    Text noch täte — eine Farbe am Label, eine Stilregel über die Eigenschaft
+    ``role`` —, fiele sonst nicht auf, beim Erfolg gar nicht (Review
+    06.10.2026, U2-N3).
     """
+    import math
+
     from PySide6.QtCore import Qt
-    from PySide6.QtGui import QColor
+    from PySide6.QtGui import QColor, QFontMetricsF, QImage
     from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
     from app.ui.palette import ROLE_MARKS, text_colour
@@ -1936,55 +1993,98 @@ def test_a_meaning_paints_its_mark_and_leaves_the_sentence_alone(
     before = qt_app.styleSheet()
     apply_theme(qt_app, theme)  # type: ignore[arg-type]
     apply_style(qt_app, theme)  # type: ignore[arg-type]
+    sentence = "Dieser Rechner ist noch nicht aktiviert."
 
-    def painted(role: str) -> tuple[int, int]:
-        """Punkte im Ton dieser Rolle und Punkte in gewöhnlicher Schrift."""
-        wanted = QColor(text_colour(role, THEMES[theme]["window"])) if role != "ok" else None
+    def drawn(role: str, way: str) -> tuple[QImage, float]:
+        """Die Zeile als Bild und die Breite ihres Zeichens samt Abstand.
+
+        ``bare`` und ``plain`` sind frische Zeilen ohne ``set_role``: ``bare``
+        mit dessen Auszeichnungstext, ``plain`` ohne jede Auszeichnung.
+        """
         host = QWidget()
         layout = QVBoxLayout(host)
         label = QLabel(host)
-        set_role(label, role, "Dieser Rechner ist noch nicht aktiviert.")
+        set_role(label, role, sentence)
+        if way != "role":
+            markup = label.text()
+            label.hide()
+            label = QLabel(host)
+            label.setTextFormat(Qt.TextFormat.RichText)
+            label.setText(markup if way == "bare" else re.sub(r"<[^>]+>", "", markup))
         layout.addWidget(label)
         host.resize(460, 60)
         host.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
         host.show()
         QApplication.processEvents()
         image = host.grab().toImage()
-        ink = QColor(THEMES[theme]["text"])
-        tinted = plain = 0
-        for y in range(image.height()):
-            for x in range(image.width()):
-                colour = QColor(image.pixel(x, y))
-                hue, saturation, _value, _alpha = colour.getHsv()
-                near = wanted is not None and abs(hue - wanted.hue()) <= 20
-                if near and saturation >= 100:
-                    tinted += 1
-                elif abs(colour.red() - ink.red()) < 40 and abs(colour.blue() - ink.blue()) < 40:
-                    plain += 1
+        mark = QFontMetricsF(label.font()).horizontalAdvance(ROLE_MARKS[role] + "\u00a0")
         host.close()
-        return tinted, plain
+        return image, mark
+
+    def differing(first: QImage, second: QImage) -> list[tuple[int, int]]:
+        assert first.size() == second.size()
+        return [
+            (x, y)
+            for y in range(first.height())
+            for x in range(first.width())
+            if first.pixel(x, y) != second.pixel(x, y)
+        ]
 
     try:
-        marks = {role: painted(role) for role in ROLE_MARKS}
+        pictures: dict[str, tuple[QImage, QImage, QImage, float]] = {}
+        for role in ROLE_MARKS:
+            image, mark = drawn(role, "role")
+            plain, _mark = drawn(role, "plain")
+            bare, _mark = drawn(role, "bare")
+            pictures[role] = (image, plain, bare, mark)
     finally:
         qt_app.setStyleSheet(before)
         apply_theme(qt_app, "dark")  # type: ignore[arg-type]
 
-    for role in ("warning", "info"):
-        tinted, plain = marks[role]
-        assert tinted > 0, f"{theme}: {role} zeichnet sein Zeichen ohne Farbe"
-        assert plain > tinted * 5, (
-            f"{theme}: {role} färbt den Satz mit ({plain} gewöhnliche gegen {tinted} farbige "
-            "Punkte) — die Farbe gehört dem Zeichen"
+    for role in ROLE_MARKS:
+        image, _plain, bare, _mark = pictures[role]
+        styled = differing(image, bare)
+        assert not styled, (
+            f"{theme}: set_role({role}) ändert neben seinem Text {len(styled)} Punkte — "
+            "eine Farbe an der Zeile oder eine Stilregel über role; die Farbe gehört dem Zeichen"
         )
+
+    for role in ("warning", "info"):
+        image, plain, _bare, mark = pictures[role]
+        tinted = differing(image, plain)
+        assert tinted, f"{theme}: {role} zeichnet sein Zeichen ohne Farbe"
+        wanted = QColor(text_colour(role, THEMES[theme]["window"]))
+        hued = [
+            point for point in tinted if abs(QColor(image.pixel(*point)).hue() - wanted.hue()) <= 20
+        ]
+        assert hued, f"{theme}: {role} färbt sein Zeichen, aber nicht in seiner Farbe"
+        left = min(x for x, _y in tinted)
+        reach = left + math.ceil(mark)
+        beyond = sorted({x for x, _y in tinted if x > reach})
+        assert not beyond, (
+            f"{theme}: {role} färbt den Satz mit (Spalten {beyond[:5]} … hinter dem "
+            f"Zeichen, das bei {reach} endet) — die Farbe gehört dem Zeichen"
+        )
+        ground = image.pixel(image.width() - 1, image.height() - 1)
+        written = sum(
+            1
+            for y in range(image.height())
+            for x in range(reach + 1, image.width())
+            if image.pixel(x, y) != ground
+        )
+        assert written > 50, f"{theme}: {role} — rechts vom Zeichen steht kein Satz"
 
     # **Und der Erfolg trägt gar keine.** Er verlangt nichts, er bestätigt; das
     # Zeichen ist die richtige Lautstärke und eine eigene Dauerfarbe die
     # falsche. Wer hier ein Grün nachrüstet, macht diesen Test rot — und das
     # ist der Zweck der Zeile.
-    tinted, plain = marks["ok"]
-    assert tinted == 0, f"{theme}: der Erfolg leuchtet ({tinted} farbige Punkte)"
-    assert plain > 0, f"{theme}: der Erfolg zeichnet gar nichts"
+    image, plain, _bare, _mark = pictures["ok"]
+    lit = differing(image, plain)
+    assert not lit, f"{theme}: der Erfolg leuchtet ({len(lit)} farbige Punkte)"
+    ground = image.pixel(image.width() - 1, image.height() - 1)
+    assert any(
+        image.pixel(x, y) != ground for y in range(image.height()) for x in range(image.width())
+    ), f"{theme}: der Erfolg zeichnet gar nichts"
 
 
 def test_a_meaning_can_no_longer_be_set_as_a_loudness(qt_app: QApplication) -> None:
@@ -2094,11 +2194,10 @@ def test_the_error_dialog_accents_the_action_and_never_the_way_out(qt_app: objec
 
 
 def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None:
-    """Ein Knopf, der verwirft, trägt das Fehlerrot der Palette als Fläche.
-
-    *Abbrechen* steht unter *Übernehmen*, gleich breit — ohne eigene Farbe
-    sähe er aus wie dessen Zwilling (Robert, 11.09.2026: „das abbrechen mit
-    rotem hintergrund"). Gemessen am gezeichneten Knopf, nicht am Stylesheet:
+    """Ein Knopf, der unwiederbringlich verwirft, trägt das Fehlerrot der
+    Palette als Fläche — *Verwerfen* vor dem Schließen eines geänderten
+    Projekts, nicht *Abbrechen* (Entscheidung Robert, 06.10.2026: RM-512 löst
+    das rote Abbrechen vom 11.09. ab). Gemessen am gezeichneten Knopf, nicht am Stylesheet:
     Ein Selektor, den Qt nicht liest, färbt nichts. Die Schrift darauf muss
     lesbar bleiben (§19.3), und das Wort ist die zweite Kodierung (Regel 18).
     """
@@ -2117,7 +2216,7 @@ def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None
             apply_theme(qt_app, theme)
             qt_app.setStyleSheet(stylesheet(theme, 10))
             holder = QWidget()
-            button = make_danger(QPushButton("Abbrechen", holder))
+            button = make_danger(QPushButton("Verwerfen", holder))
             button.resize(160, 40)
             holder.resize(200, 60)
             holder.show()
@@ -2131,11 +2230,347 @@ def test_a_danger_button_is_drawn_in_the_error_red(qt_app: QApplication) -> None
                 wanted.blue(),
             ), f"{theme}: der Knopf ist {seen.name()}, nicht {wanted.name()}"
             assert contrast_ratio(readable_on(ROLES["error"]), ROLES["error"]) >= 4.5
+
+            # Gesperrt zeichnet er wie jeder gesperrte Knopf: Ein roter Knopf,
+            # der nichts tut, sieht bedienbar aus (RM-512, W1).
+            plain = QPushButton("Verwerfen", holder)
+            plain.resize(160, 40)
+            plain.move(0, 0)
+            button.setEnabled(False)
+            plain.setEnabled(False)
+            qt_app.processEvents()
+            red = button.grab().toImage().pixelColor(10, 20)
+            grey = plain.grab().toImage().pixelColor(10, 20)
+            assert red.name() == grey.name(), (
+                f"{theme}: gesperrt rot {red.name()}, gesperrt normal {grey.name()}"
+            )
             holder.deleteLater()
     finally:
         apply_theme(qt_app, previous_theme)
         qt_app.setPalette(previous_palette)
         qt_app.setStyleSheet(previous_sheet)
+
+
+def _functions_of_the_surface() -> list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]]:
+    """Jede Funktion unter ``app/ui`` mit ihrem Dateinamen — die Wächter unten
+    lesen Knopf und Farbe dort, wo beide zusammenkommen."""
+    found = []
+    for path in sorted(UI.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                found.append((path.name, node))
+    return found
+
+
+def _called(node: ast.AST, name: str) -> list[ast.Call]:
+    """Die Aufrufe von ``name`` in einem Ausdruck, gleich ob frei oder als Attribut."""
+    calls = []
+    for inner in ast.walk(node):
+        if isinstance(inner, ast.Call):
+            target = inner.func
+            called = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "")
+            if called == name:
+                calls.append(inner)
+    return calls
+
+
+def _labels(node: ast.AST) -> set[str]:
+    """Die Beschriftungen, die ein Ausdruck über ``tr("…")`` setzt."""
+    return {
+        str(call.args[0].value)
+        for call in _called(node, "tr")
+        if call.args and isinstance(call.args[0], ast.Constant)
+    }
+
+
+def _made(function: ast.AST, name: str) -> set[str]:
+    """Welche Knöpfe eine Funktion an ``make_primary`` oder ``make_danger`` gibt."""
+    return {ast.unparse(call.args[0]) for call in _called(function, name) if call.args}
+
+
+def test_every_destructive_button_is_drawn_red() -> None:
+    """Wer ``DestructiveRole`` sagt, zeigt es auch — mit ``make_danger`` (RM-512).
+
+    Die Rolle ordnet den Knopf in der Leiste ein; gezeichnet wurde er wie
+    jeder andere, und *Verwerfen* in *Ungesicherte Änderungen* stand
+    unauffällig neben *Speichern*. Ohne Fenster: Gesucht wird je Funktion
+    jeder ``addButton`` mit der Rolle und dazu ein ``make_danger`` für
+    denselben Knopf.
+    """
+    seen = 0
+    offenders: list[str] = []
+    for file, function in _functions_of_the_surface():
+        red = _made(function, "make_danger")
+        for statement in ast.walk(function):
+            if not isinstance(statement, (ast.Assign, ast.Expr)):
+                continue
+            for call in _called(statement, "addButton"):
+                if "DestructiveRole" not in ast.unparse(call):
+                    continue
+                if isinstance(statement, ast.Assign) and statement.value is call:
+                    button = ast.unparse(statement.targets[0])
+                elif call.args and not _labels(call.args[0]):
+                    button = ast.unparse(call.args[0])
+                else:
+                    button = ast.unparse(call)
+                seen += 1
+                if button not in red:
+                    offenders.append(f"{file}:{call.lineno} {button}")
+    assert seen >= 5, f"nur {seen} verwerfende Knöpfe gefunden — sucht der Wächter noch?"
+    assert not offenders, f"DestructiveRole ohne make_danger: {sorted(set(offenders))}"
+
+
+def test_no_button_is_red_and_primary_at_once() -> None:
+    """Rot heißt „das verwirft oder löscht“, der Akzent „tu das“ (RM-512).
+
+    *Verwerfen* in *Abgeschnittene Schritte verwerfen?* war Hauptknopf: Die
+    Eingabetaste warf weg, was kein Undo zurückholt, und der Akzent lud dazu
+    ein. Ein Knopf trägt höchstens eines von beiden — auch nicht über
+    ``setDefaultButton`` oder ``setDefault``, die Qt mit dem Akzent zeichnet.
+    """
+    offenders = []
+    red_calls = lead_calls = 0
+    for file, function in _functions_of_the_surface():
+        red = _made(function, "make_danger")
+        red_calls += len(_called(function, "make_danger"))
+        lead_calls += len(_called(function, "make_primary"))
+        led = _made(function, "make_primary") | _made(function, "setDefaultButton")
+        led |= {
+            ast.unparse(call.func.value)
+            for call in _called(function, "setDefault")
+            if isinstance(call.func, ast.Attribute)
+            and call.args
+            and not (isinstance(call.args[0], ast.Constant) and call.args[0].value is False)
+        }
+        offenders += [f"{file}:{function.name} {button}" for button in red & led]
+        offenders += [
+            f"{file}:{function.name} {ast.unparse(call)}"
+            for call in _called(function, "make_danger")
+            if call.args and _called(call.args[0], "make_primary")
+        ]
+    # Über einer leeren Menge wäre der Wächter grün und prüfte nichts.
+    assert red_calls >= 6 and lead_calls > 30, (red_calls, lead_calls)
+    assert not offenders, offenders
+
+
+def test_no_exit_is_drawn_red() -> None:
+    """*Abbrechen* und *Schließen* verwerfen nichts, also tragen sie kein Rot.
+
+    Ein roter Ausgang neben einem roten *Verwerfen* macht beide gleich laut:
+    Wer den sicheren Weg sucht, findet zwei Warnfarben. Auch *Abbrechen* unter
+    *Übernehmen* im Merkmalfenster und in der Filamentwahl ist ein normaler
+    Knopf (Entscheidung Robert, 06.10.2026: RM-512 löst das rote Abbrechen vom
+    11.09. ab).
+    """
+    exits = {"Abbrechen", "Schließen"}
+    found = set()
+    labelled = 0
+    for file, function in _functions_of_the_surface():
+        assigned = {
+            ast.unparse(node.targets[0]): _labels(node.value)
+            for node in ast.walk(function)
+            if isinstance(node, ast.Assign) and len(node.targets) == 1
+        }
+        for call in _called(function, "make_danger"):
+            if not call.args:
+                continue
+            labels = _labels(call.args[0]) | assigned.get(ast.unparse(call.args[0]), set())
+            labelled += bool(labels)
+            found |= {(file, label) for label in labels & exits}
+    # Die Beschriftung muss gefunden werden, sonst sähe der Wächter kein Abbrechen.
+    assert labelled >= 4, f"nur {labelled} rote Knöpfe mit lesbarer Beschriftung"
+    assert not found, sorted(found)
+
+
+#: Wo die führende Handlung (``Action.primary``, ``leading_action``) den
+#: Hauptknopf bekommen darf: im Fehlerdialog, der nur aus dem Fehler und seinen
+#: Handlungen besteht, und im Prüfbericht, dessen gewählter Befund seine eine
+#: Lösung anbietet.
+PRIMARY_ACTIONS_LEAD_IN = {("dialogs.py", "show_error"), ("panels.py", "_show_offers")}
+
+
+def test_a_hint_never_brings_a_second_primary_into_a_window() -> None:
+    """Hinweishandlungen im Dialog sind normale Knöpfe (RM-512).
+
+    ``ErrorNotice`` machte jede Handlung mit ``primary`` zum Hauptknopf — in
+    einem Dialog, der seinen eigenen schon hatte. 57 Handlungen tragen die
+    Marke; sobald eine davon erschien, standen zwei Akzentknöpfe da, und
+    ``setDefault`` nahm dem Dialog Enter weg. Dasselbe im Druckdialog bei Rat
+    und Übermaß. Erlaubt ist es nur, wo der Fehler das Fenster ist.
+    """
+    leading = set()
+    for file, function in _functions_of_the_surface():
+        if not _called(function, "make_primary"):
+            continue
+        reads = any(
+            isinstance(node, ast.Attribute) and node.attr == "primary"
+            for node in ast.walk(function)
+        )
+        if reads or _called(function, "leading_action"):
+            leading.add((file, function.name))
+    assert leading == PRIMARY_ACTIONS_LEAD_IN, (
+        f"Hauptknopf aus einer angebotenen Handlung: {sorted(leading)}, "
+        f"erlaubt und erwartet: {sorted(PRIMARY_ACTIONS_LEAD_IN)}"
+    )
+
+
+def test_a_dialog_with_a_hint_keeps_one_primary(qt_app: QApplication) -> None:
+    """Ein Dialog mit Hauptknopf zeigt einen Hinweis samt Handlung — und hat
+    danach weiterhin genau einen Akzentknopf (RM-512).
+
+    Am angezeigten Fenster gezählt, denn erst dort vergibt Qt den Default.
+    Die Handlung ist *Diesen Schritt ändern*, eine der Handlungen mit
+    ``primary``.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QDialog, QDialogButtonBox, QPushButton, QVBoxLayout
+
+    from app.core.errors import CHANGE_THIS_STEP, AppError
+    from app.ui.dialogs import ErrorNotice
+    from app.ui.style import make_primary
+
+    dialog = QDialog()
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    layout = QVBoxLayout(dialog)
+    notice = ErrorNotice(dialog)
+    layout.addWidget(notice)
+    box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel, dialog)
+    apply = make_primary(box.addButton("Übernehmen", QDialogButtonBox.ButtonRole.AcceptRole))
+    layout.addWidget(box)
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        assert CHANGE_THIS_STEP.primary, "die Probe braucht eine Handlung mit primary"
+        notice.set_error(
+            AppError(title="Probe", detail="x", suggestions=(CHANGE_THIS_STEP,)),
+            {CHANGE_THIS_STEP.id: lambda _error: None},
+        )
+        qt_app.processEvents()
+
+        offered = [button for button in notice.findChildren(QPushButton) if button.isVisible()]
+        assert [button.text() for button in offered] == [str(CHANGE_THIS_STEP.label)]
+        leading = [button for button in dialog.findChildren(QPushButton) if button.isDefault()]
+        assert leading == [apply], f"Akzentknöpfe: {[button.text() for button in leading]}"
+        assert all(button.font().weight() < QFont.Weight.DemiBold for button in offered), (
+            "die Handlung des Hinweises ist halbfett — ein Hauptknopf ohne Farbe"
+        )
+    finally:
+        dialog.hide()
+        dialog.deleteLater()
+
+
+def test_an_error_with_two_recommended_ways_still_has_one_primary(
+    qt_app: QApplication,
+) -> None:
+    """Zwei Handlungen mit ``primary`` im Fehlerdialog: Hauptknopf wird die erste."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QMessageBox, QPushButton
+
+    from app.core.errors import CHANGE_THIS_STEP, RETRY, AppError
+    from app.ui import dialogs
+
+    caught: list[QMessageBox] = []
+    real = QMessageBox.exec
+    QMessageBox.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
+    try:
+        dialogs.show_error(
+            AppError(title="Probe", detail="x", suggestions=(RETRY, CHANGE_THIS_STEP)),
+            handlers={RETRY.id: lambda _e: None, CHANGE_THIS_STEP.id: lambda _e: None},
+        )
+    finally:
+        QMessageBox.exec = real  # type: ignore[method-assign]
+    (box,) = caught
+    try:
+        box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        box.show()
+        qt_app.processEvents()
+        leading = [button.text() for button in box.findChildren(QPushButton) if button.isDefault()]
+        assert leading == [str(RETRY.label)], leading
+    finally:
+        box.hide()
+        box.deleteLater()
+
+
+def test_one_function_says_which_offered_action_leads() -> None:
+    """Welche Handlung führt, sagt ``leading_action`` — für Prüfbericht,
+    Fehlerdialog, Hinweise und Druckrat gleich (RM-512): die erste mit
+    ``primary``, sonst die erste überhaupt."""
+    from app.core.types import Action
+    from app.ui.style import leading_action
+
+    plain, other = Action("a", "A"), Action("b", "B")
+    marked = Action("c", "C", primary=True)
+    assert leading_action([plain, marked, other]) is marked
+    assert leading_action([plain, other]) is plain
+    assert leading_action([]) is None
+
+
+def test_a_button_that_hands_over_the_lead_loses_its_bold_too(qt_app: QApplication) -> None:
+    """``make_primary(button, leading=False)`` nimmt Default **und** Halbfett.
+
+    Qt nimmt dem alten Hauptknopf beim Wechsel nur den Default; halbfett ohne
+    Akzent blieb er stehen — im Druckdialog zwischen *Slicen* und *Im Slicer
+    öffnen*, in der Tour bei *Schritt überspringen*.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton
+
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    dialog = QDialog()
+    layout = QHBoxLayout(dialog)
+    opening, slicing = QPushButton("Im Slicer öffnen", dialog), QPushButton("Slicen", dialog)
+    layout.addWidget(opening)
+    layout.addWidget(slicing)
+    host = SimpleNamespace(open_button=opening, slice_button=slicing)
+    try:
+        PrintSettingsDialog._lead_handover(host, False)  # type: ignore[arg-type]
+        PrintSettingsDialog._lead_handover(host, True)  # type: ignore[arg-type]
+        assert opening.isDefault() and opening.font().weight() >= QFont.Weight.DemiBold
+        assert not slicing.isDefault(), "der abgegebene Knopf trägt noch den Akzent"
+        assert slicing.font().weight() < QFont.Weight.DemiBold, "und noch das Halbfett"
+    finally:
+        dialog.deleteLater()
+
+
+def test_an_error_without_a_recommendation_still_gets_a_drawn_lead(
+    qt_app: QApplication,
+) -> None:
+    """Ohne Handlung mit ``primary`` riet Qt den Hauptknopf — Akzent ohne
+    Halbfett (Regel 18). Jetzt führt die erste, mit beiden Kodierungen."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QMessageBox, QPushButton
+
+    from app.core.errors import CHOOSE_PRINTER, SCALE_TO_FIT, AppError
+    from app.ui import dialogs
+
+    assert not SCALE_TO_FIT.primary and not CHOOSE_PRINTER.primary
+    caught: list[QMessageBox] = []
+    real = QMessageBox.exec
+    QMessageBox.exec = lambda self: (caught.append(self), 0)[1]  # type: ignore[method-assign]
+    try:
+        dialogs.show_error(
+            AppError(title="Probe", detail="x", suggestions=(SCALE_TO_FIT, CHOOSE_PRINTER)),
+            handlers={SCALE_TO_FIT.id: lambda _e: None, CHOOSE_PRINTER.id: lambda _e: None},
+        )
+    finally:
+        QMessageBox.exec = real  # type: ignore[method-assign]
+    (box,) = caught
+    try:
+        box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        box.show()
+        qt_app.processEvents()
+        leading = [button for button in box.findChildren(QPushButton) if button.isDefault()]
+        assert [button.text() for button in leading] == [str(SCALE_TO_FIT.label)]
+        assert leading[0].font().weight() >= QFont.Weight.DemiBold
+    finally:
+        box.hide()
+        box.deleteLater()
 
 
 def test_a_shortcut_search_without_a_hit_says_so(qt_app: QApplication) -> None:

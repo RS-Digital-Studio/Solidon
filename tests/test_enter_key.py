@@ -48,7 +48,12 @@ def test_only_the_keyboard_hands_enter_to_the_focused_button(
 
 
 def _answer(
-    qt_app: Any, ask: Callable[[], object], target: str | None, *, switch: bool = False
+    qt_app: Any,
+    ask: Callable[[], object],
+    target: str | None,
+    *,
+    switch: bool = False,
+    key: Qt.Key = Qt.Key.Key_Return,
 ) -> object:
     """Stellt die Rückfrage mit ``exec()`` und antwortet per Tastatur.
 
@@ -57,6 +62,7 @@ def _answer(
     Enter in ein anderes Fenster und zurück (RM-415). Bleibt die Box offen
     — etwa weil Enter nichts auslöste —, schließt der Wächter sie mit
     ``reject``, und der Test sieht das als Fehler statt zu hängen.
+    ``key`` drückt statt Enter eine andere Taste, etwa die Leertaste.
     """
     from PySide6.QtCore import QTimer
     from PySide6.QtTest import QTest
@@ -81,9 +87,13 @@ def _answer(
                 box.reject()
                 return
             if target is not None:
-                for _ in range(TAB_LIMIT):
+                # Mindestens einmal Tab: Steht der Fokus beim Öffnen schon auf
+                # dem Ziel (*Abbrechen* in einer Rückfrage ohne Hauptknopf,
+                # RM-512), hat ihn nicht die Tastatur gewählt — geprüft wird
+                # hier aber die Wahl per Tab.
+                for attempt in range(TAB_LIMIT):
                     focused = QApplication.focusWidget()
-                    if isinstance(focused, QPushButton) and focused.text() == target:
+                    if attempt and isinstance(focused, QPushButton) and focused.text() == target:
                         break
                     QTest.keyClick(focused or box, Qt.Key.Key_Tab)
                 focused = QApplication.focusWidget()
@@ -104,7 +114,7 @@ def _answer(
                 QApplication.processEvents()
                 if not box.isActiveWindow() or QApplication.focusWidget() is not chosen:
                     problems.append("nach dem Fensterwechsel steht der Fokus woanders")
-            QTest.keyClick(QApplication.focusWidget() or box, Qt.Key.Key_Return)
+            QTest.keyClick(QApplication.focusWidget() or box, key)
         finally:
             if box.isVisible():
                 problems.append("Enter hat die Rückfrage nicht beantwortet")
@@ -132,8 +142,23 @@ def test_enter_on_the_tabbed_cancel_keeps_the_cut_off_steps(qt_app: Any) -> None
     from app.ui.dialogs import confirm_discard
 
     assert _answer(qt_app, lambda: confirm_discard(3, ("Bohrung", "Fase")), "Abbrechen") is False
-    # Gegenprobe: Ohne Tab bleibt Enter beim Hauptknopf.
-    assert _answer(qt_app, lambda: confirm_discard(3, ("Bohrung", "Fase")), None) is True
+    # Gegenprobe: Tab auf *Verwerfen*, Enter — verworfen.
+    assert _answer(qt_app, lambda: confirm_discard(3, ("Bohrung", "Fase")), "Verwerfen") is True
+    # Und ohne Tab verwirft Enter nichts: Die Rückfrage hat keinen Hauptknopf
+    # (RM-512), der Fokus steht auf *Abbrechen*, und Enter nimmt diesen Weg.
+    assert _answer(qt_app, lambda: confirm_discard(3, ("Bohrung", "Fase")), None) is False
+
+
+def test_the_space_bar_does_not_discard_where_nothing_was_chosen(qt_app: Any) -> None:
+    """Ohne Hauptknopf stand der Fokus beim Öffnen auf dem roten *Verwerfen*,
+    und die Leertaste verwarf, was kein Undo zurückholt (RM-512, W2). Der Fokus
+    gehört *Abbrechen*."""
+    from app.ui.dialogs import confirm_discard
+
+    answer = _answer(
+        qt_app, lambda: confirm_discard(3, ("Bohrung", "Fase")), None, key=Qt.Key.Key_Space
+    )
+    assert answer is False, "die Leertaste hat verworfen"
 
 
 @pytest.mark.parametrize(
@@ -153,7 +178,7 @@ def test_enter_on_a_tabbed_button_of_unsaved_changes_does_not_save(
     ("ask", "target", "expected"),
     [
         ("discard", "Abbrechen", False),
-        ("discard", None, True),
+        ("discard", "Verwerfen", True),
         ("unsaved", "Abbrechen", "cancel"),
         ("unsaved", "Verwerfen", "discard"),
         ("unsaved", None, "save"),

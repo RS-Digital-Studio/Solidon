@@ -24,7 +24,7 @@ from app.ui.filament_picker import (
     swatch,
 )
 from app.ui.leash import weak_slot
-from app.ui.style import TIGHT, make_danger, make_primary, set_level
+from app.ui.style import TIGHT, make_primary, set_level
 
 
 class QuickFilamentPicker(QWidget):
@@ -69,7 +69,7 @@ class QuickFilamentPicker(QWidget):
         self.apply_button.clicked.connect(self.accept)
         self.apply_button.hide()
         layout.addWidget(self.apply_button)
-        self.cancel_button = make_danger(QPushButton(tr("Abbrechen"), self))
+        self.cancel_button = QPushButton(tr("Abbrechen"), self)
         self.cancel_button.clicked.connect(self.cancel_preview)
         self.cancel_button.hide()
         layout.addWidget(self.cancel_button)

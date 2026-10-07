@@ -1495,7 +1495,7 @@ def parts_that_cross(
 
     Befund A5 der Bedienweg-Durchsicht (24.09.2026): Zwei ineinandergeschobene
     Würfel kamen als „Das Modell besteht aus mehreren Teilen" mit *In
-    Einzelteile zerlegen* an — die Handlung, die aus einem Teil zwei
+    Einzelteile aufteilen* an — die Handlung, die aus einem Teil zwei
     überlappende macht. Dass sie ineinanderstecken, erfuhr der Kunde erst beim
     Reparieren.
 
@@ -1802,7 +1802,7 @@ def parts_can_be_merged(mesh: MeshData) -> bool:
 def part_inside_finding(places: Sequence[tuple[float, float, float]], components: int) -> Finding:
     """Der Befund zu :func:`parts_inside_parts` — derselbe aus Import und Reparatur.
 
-    ``components`` ist die Teilezahl des Körpers; *In Einzelteile zerlegen*
+    ``components`` ist die Teilezahl des Körpers; *In Einzelteile aufteilen*
     plant daraus seine Ausgänge.
     """
     return Finding(

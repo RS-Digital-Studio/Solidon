@@ -7,11 +7,13 @@ eine Tabelle davon liest.
 
 from __future__ import annotations
 
+import math
+import sys
 from functools import lru_cache
 from typing import Final, cast
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QRect, QSize, Qt
-from PySide6.QtGui import QKeyEvent, QKeySequence, QPainter, QPalette
+from PySide6.QtGui import QFontMetricsF, QKeyEvent, QKeySequence, QPainter, QPalette
 from PySide6.QtWidgets import (
     QDialog,
     QLineEdit,
@@ -40,6 +42,7 @@ from app.core.registry.search import (
 from app.core.registry.search import fold as fold
 from app.core.registry.surfaces import first_sentence as first_sentence
 from app.i18n import tr
+from app.ui.shortcut_schemes import return_opens
 from app.ui.style import NORMAL, TIGHT, WIDE
 
 
@@ -317,9 +320,15 @@ class _Rows(QStyledItemDelegate):
         text_height = 2 * line_height + TIGHT if separator else line_height
         area.setTop(area.top() + max(0, (area.height() - text_height) // 2))
         title_area = QRect(area.left(), area.top(), area.width(), line_height)
+        # **Gebrochen gemessen und aufgerundet.** ``QFontMetrics`` gibt ganze
+        # Pixel und rundet zur nächsten, das Kürzen rechnet mit der echten Breite: Mit
+        # Cocoas gebrochenen Metriken bekam „Ctrl+B“ 38 Pixel für 38,4 und
+        # stand als „Ctrl…“ in der Palette (RM-531).
+        exact = QFontMetricsF(plain.font)
         shortcut_width = min(
             max(
-                (metrics.horizontalAdvance(key) for key in (*self._shortcuts, shortcut)), default=0
+                (math.ceil(exact.horizontalAdvance(key)) for key in (*self._shortcuts, shortcut)),
+                default=0,
             ),
             max(0, area.width() // 2),
         )
@@ -399,6 +408,8 @@ class CommandPalette(QDialog):
         )
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list.itemActivated.connect(self.accept)
+        # Am Mac meldet Qt Return in der Liste nicht als Aktivierung.
+        return_opens(self.list, sys.platform)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
