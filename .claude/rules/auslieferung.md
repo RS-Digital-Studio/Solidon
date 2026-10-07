@@ -23,10 +23,10 @@ Paketfreigabe. Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
 
 - Die Teilmatrix eines Jobs ist genau `0 … N−1` für das `N` in seinem Aufruf;
   wer Teile dazunimmt, ändert beides zusammen.
-- **Ein Release-Lauf trägt höchstens 100 Artefakte**:
-  `tools/windows_signed_installer.py` liest die Liste mit `per_page=100` und
-  hält fail-closed an, wenn sie unvollständig ist. Wer Teile oder Berichte
-  dazunimmt, zählt nach oder baut dort das Blättern.
+- **GitHub-Listen werden über alle Seiten gelesen** (`sign_release.paged_listing`,
+  je Seite 100): Artefakte im Installerlauf, Jobs bei der Freigabe eines rot
+  beendeten Hauptbaus. Geht die Zahl nicht auf oder ändert sie sich zwischen
+  den Seiten, hält der Lauf fail-closed an.
 - Alle CI-Jobs haben einheitlich zwei Stunden, einschließlich Paketbau,
   Signierfolge, Releaseaktenprüfung und Diagnose; ausdrücklich begrenzte
   Prüfschritte nutzen dieselbe Frist und verlängern die Jobfrist nicht. Die
@@ -61,14 +61,18 @@ weil er meist hart endet.
 Entscheidung Robert: auf allen unterstützten Plattformen, in jedem
 Release-Lauf. `tools/check_frozen_start.py` startet wie ein erster Kunde
 (leeres Profil, Erstlauf) und verlangt Fenster, gezeichnete 3D-Ansicht, ein
-Ende mit 0, leeres Absturzprotokoll, keinen überlebenden Hilfsprozess und
+Ende mit 0, keinen Absturz im Absturzprotokoll, keinen überlebenden Hilfsprozess und
 einen unveränderten Paketbaum; die Anwendung steht dafür
 `start_check.SECONDS` lang und schließt sich selbst (`app/ui/start_check.py`).
 Gestartet wird der gebaute Baum im Paketjob aller vier Runner, AppImage und
 Flatpak, das installierte Windows-Setup in `build.yml` und in
 `windows-signed-installer.yml` und das finale Mac-Paket nach Quarantäne,
 Installer und Gatekeeper. Grund: Suite, Bau, Signatur und Notarisierung können
-grün sein, während das Paket beim Kunden nach Sekunden endet.
+grün sein, während das Paket beim Kunden nach Sekunden endet. Eine Ausnahme,
+die der Hauptfaden oder ein bis zum Ende beendeter Faden überlebt hat (etwa COM),
+steht mit dem Vermerk des geordneten Endes im Protokoll und hält den Start nicht
+an (`log.fatal_records`); eine aus einem noch laufenden Faden oder einem ohne
+Python-Zustand (Treiber) zählt als Absturz.
 
 - **Ohne Bildschirm (`--offscreen`) nur der Intel-Mac-Runner**: Sein
   Symboldienst (`iconservicesagent`) stürzt in Metal ab, jedes Fenster wartet

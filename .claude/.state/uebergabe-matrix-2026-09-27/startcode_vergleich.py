@@ -12,7 +12,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, r"F:\3D Druck.minigolf")
 
-import gcode_lesen  # noqa: E402
+# RM-530: die Matrix in tools/ — angehängt, damit ``app`` weiter aus der
+# Code-Wurzel kommt, die das Skript davorgelegt hat (Review 06.10.2026, N11).
+sys.path.append(str(Path(__file__).resolve().parents[3]))
+from tools import matrix_gcode as gcode_lesen  # noqa: E402
 
 from app.core.export import slicer_profiles  # noqa: E402
 

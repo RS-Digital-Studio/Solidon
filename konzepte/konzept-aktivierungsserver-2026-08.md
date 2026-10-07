@@ -213,7 +213,7 @@ den Server nie.
 ### B2 — Der Kauffluss: Zahlungsanbieter, Schlüsselvorrat, Auslieferung
 
 **Die Rollenentscheidung steht und wird hier nicht neu getroffen**
-(`konzept-veroeffentlichung-1.0.md` §2 D): verkauft wird über einen Merchant
+(`archiv/konzept-veroeffentlichung-1.0.md` §2 D): verkauft wird über einen Merchant
 of Record. Der MoR ist rechtlich selbst der Verkäufer — er schuldet und
 meldet die Umsatzsteuer im Land des Käufers, stellt die Rechnung, trägt
 Widerrufsbelehrung und Betrugsprüfung im Checkout. Robert liefert den
@@ -1047,7 +1047,7 @@ Schlüssel; (3) der Konstruktor des Dialogs macht keinen Netzaufruf
    Zertifikat. Verkauf ohne Testphase bedeutet auch keine versteckte
    Vierzehn-Tage-Schonfrist; für Offline-Rechner trägt der Dateiweg.
 9. Zahlungsanbieter (dieselbe offene Frage wie
-   `konzept-veroeffentlichung-1.0.md` §7, hier mit neuem Stand): Nach dem
+   `archiv/konzept-veroeffentlichung-1.0.md` §7, hier mit neuem Stand): Nach dem
    Befund vom 26.08.2026 (B2) liefert kein empfohlener Anbieter einen
    eigenen Schlüsselvorrat mehr nativ aus — der Kauf braucht den
    Webhook-Endpunkt in jedem Fall. Vorschlag: **Paddle Billing** mit

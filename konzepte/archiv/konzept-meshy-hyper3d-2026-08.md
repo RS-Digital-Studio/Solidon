@@ -165,7 +165,7 @@ Paar für Paar.
 
 | | Meshy | Rodin | Solidon |
 |---|---|---|---|
-| Text→Netz | ja, unter 1 min | ja, ~5 s | über ComfyUI, lokal, Hunyuan3D 2.1 |
+| Text→Netz | ja, unter 1 min | ja, ~5 s | über ComfyUI, lokal, Hunyuan3D 2.1 (Modellwahl heute: [Weg 3 — Lizenzkette](../entscheidung-weg-3-lizenzkette.md)) |
 | Bild→Netz | ja | ja, mit Multi-View | ja, dasselbe Backend |
 | Steuerung der Form | Prompt | **Hüllquader, Voxel, Punktwolke** | Prompt |
 | PBR-Texturen | 4K | 4K | nein |
@@ -954,7 +954,8 @@ keine Maße.
 `steps`, `guidance_scale`, `seed`, `attention_mode` — und sonst nichts. Kein
 Hüllquader, keine Voxel, keine Punktwolke. Das liegt nicht am Workflow, sondern
 am Modell: Formvorgabe ist ein Merkmal von Rodins Gen-2.5, nicht der
-Knotensammlung Hunyuan3D 2.1. Ein anderes Modell könnte es mitbringen, und der
+Knotensammlung Hunyuan3D 2.1 (Modellwahl heute:
+[Weg 3 — Lizenzkette](../entscheidung-weg-3-lizenzkette.md)). Ein anderes Modell könnte es mitbringen, und der
 Workflow ist eine Datendatei — das ist der Grund, warum §27 ihn als Datei führt
 und nicht als Code.
 
@@ -1118,7 +1119,7 @@ Stand, nicht die Absicht.
 | **B7** Preisrechnung | 240–360 $/Jahr gegen 49 € einmal, beide Sprachen |
 | **B8** Vorschaubilder im Objektbaum | gerendert, nach Objekt-Hash gecacht, eines je Ereignisschleife |
 | **B9** Kennzahlenkopf im Prüfbericht | wasserdicht · Volumen · Teile |
-| **B10** Rodins ControlNet | **beantwortet: nein** — Hunyuan3D 2.1 hat keine Formvorgabe |
+| **B10** Rodins ControlNet | **beantwortet: nein** — Hunyuan3D 2.1 hat keine Formvorgabe (Modellwahl heute: [Weg 3 — Lizenzkette](../entscheidung-weg-3-lizenzkette.md)) |
 | **B11** Qualitätsstufe als Angebot | als Restzeitschätzung umgesetzt; der Umschalter wäre eine Betriebsart gewesen |
 | **B12** Leerraum im Operationsdialog | 189 → 26 px; es war eine fehlende Größenrichtlinie |
 | **B13** Nicht-planarer Schnitt | **offen** — der Weg ist beantwortet (geneigte Ebene statt Hüllen), gebaut ist nichts: die Suche kennt weiter drei Achsen. Diese Zeile stand bis zum 14.08.2026 auf „beantwortet" und widersprach damit dem Nachtrag über ihr |

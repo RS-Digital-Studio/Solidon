@@ -4,7 +4,7 @@ Stand: 08.09.2026. Auftrag: das Filamentlager schöner gestalten, sämtliche
 Filamentwege nach `engineering:code-review` prüfen und bestätigte Befunde
 einschließlich ihrer Anschlüsse beheben. Maßstab sind Bauplan §2, §19, §20,
 §22, §25 und §29 sowie die präzisierten Verträge im
-[Filamentlagerkonzept](konzept-filamentlager-2026-09.md#14-review-und-präzisierte-verträge).
+[Filamentlagerkonzept](../konzept-filamentlager-2026-09.md#14-review-und-präzisierte-verträge).
 
 ## Umfang und sichtbares Ergebnis
 

@@ -576,6 +576,7 @@ def check_adhesion_on_bed(
     per_part: Sequence[PrintSettings] | None = None,
     flavour: SlicerFlavour = "other",
     support_foot: float | None = None,
+    support_outline: Callable[[int], BaseGeometry | None] | None = None,
 ) -> list[Finding]:
     """Liegt der Rand um jedes Teil noch auf dem Bett?
 
@@ -589,6 +590,13 @@ def check_adhesion_on_bed(
     :func:`rim_of` — mit Orca-Auto-Brim und Stützfuß (RM-312); eine
     Stützverbreiterung, die das Profil nicht nennt, wird als unbekannt
     gemeldet, nicht geschätzt.
+
+    ``support_outline`` nennt für das Teil mit dieser Nummer, wo es gestützt
+    wird (:func:`_support_outline`, ``analysis.overhang_outline``); ``None``
+    heißt: kein Überhang, kein Stützfuß. Gefragt wird erst, wenn der Fuß schon
+    um die ganze Aufsicht aus dem Bett reichte — der Umriss kostet einen
+    Schnitt je Teil (Review RM-312, K6). Ohne die Auskunft zählt der Stützfuß
+    um die ganze Aufsicht, eher zu weit als zu kurz.
     """
     rims = [
         rim_of(per_part[index] if per_part is not None else settings, flavour, support_foot)
@@ -607,23 +615,24 @@ def check_adhesion_on_bed(
             for axis in (0, 1)
         ):
             continue
-        # Brim und Skirt um die erste Schicht, der Stützfuß um die Aufsicht
-        # (RM-312); gewarnt wird nach dem, was weiter hinausreicht.
+        # Brim und Skirt um die erste Schicht, der Stützfuß unter den
+        # Überhängen (RM-312); gewarnt wird nach dem, was weiter hinausreicht.
         outlines = []
         if rim.layer > 0.0:
             part = per_part[index] if per_part is not None else settings
             outlines.append((_first_layer_outline(mesh, part), rim.layer, False))
         if rim.top > 0.0:
-            outlines.append((build_area.footprint(mesh), rim.top, True))
+            supported: BaseGeometry | None = build_area.footprint(mesh)
+            if support_outline is not None and (
+                _rim_beyond_the_bed(supported, rim.top, half) > EPS_GEOM
+                or _rim_into_blocked_area(supported, rim.top, profile.printer) > EPS_GEOM
+            ):
+                supported = support_outline(index)
+            if supported is not None:
+                outlines.append((supported, rim.top, True))
         over, message, by_foot = 0.0, _("Der Rand um ein Teil reicht über das Bett hinaus."), False
         for outline, reach, from_top in outlines:
-            low_x, low_y, high_x, high_y = outline.bounds
-            beyond = max(
-                -half[0] - (low_x - reach),
-                high_x + reach - half[0],
-                -half[1] - (low_y - reach),
-                high_y + reach - half[1],
-            )
+            beyond = _rim_beyond_the_bed(outline, reach, half)
             if beyond > over + EPS_GEOM:
                 over, by_foot = beyond, from_top
         if over <= EPS_GEOM:
@@ -683,6 +692,19 @@ def check_adhesion_on_bed(
             )
         )
     return findings
+
+
+def _rim_beyond_the_bed(outline: BaseGeometry, reach: float, half: tuple[float, float]) -> float:
+    """Wie weit ein Rand von ``reach`` um diesen Umriss über das Bett hinausreicht."""
+    low_x, low_y, high_x, high_y = outline.bounds
+    return float(
+        max(
+            -half[0] - (low_x - reach),
+            high_x + reach - half[0],
+            -half[1] - (low_y - reach),
+            high_y + reach - half[1],
+        )
+    )
 
 
 def _first_layer_outline(mesh: MeshData, settings: PrintSettings) -> BaseGeometry:
@@ -1862,6 +1884,27 @@ BLOCKER_MARGIN: Final = 0.5
 BLOCKER_SIMPLIFY: Final = 0.02
 
 
+def _support_outline(
+    entry: SceneObject,
+    mesh: MeshData,
+    settings: PrintSettings,
+    profile: Profile,
+    cancelled: CancelToken | None,
+) -> BaseGeometry | None:
+    """Wo dieses Teil gestützt wird, in der Aufsicht — ``None`` ohne Stützen oder Überhang.
+
+    Aus den Schichten, die auch die Stützsperre liest (:func:`_body_analysis`,
+    ``detail="support"``): Am selben Netz rechnet der Export sie einmal.
+    """
+    if settings.support.style == "none":
+        return None
+    from app.core.slice.analysis import overhang_outline
+
+    return overhang_outline(
+        _body_analysis(entry, mesh, settings, profile, cancelled, detail="support")
+    )
+
+
 def _support_blocker(
     entry: SceneObject,
     mesh: MeshData,
@@ -2503,6 +2546,9 @@ def write_assembly(
             per_part=own,
             flavour=flavour,
             support_foot=support_foot_for(settings, profile, setup),
+            support_outline=lambda index: _support_outline(
+                chosen[index], exported[chosen[index].id], own[index], profile, cancelled
+            ),
         )
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume

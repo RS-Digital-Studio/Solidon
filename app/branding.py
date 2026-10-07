@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime
 from typing import Final
 
 #: Produktname. Entschieden am 27.07.2026 als „Formwerk", geändert am
-#: 07.08.2026 — siehe ``konzepte/namensentscheidung-solidon.md``: eine
+#: 07.08.2026 — siehe ``konzepte/archiv/namensentscheidung-solidon.md``: eine
 #: Wort-/Bildmarke „3D FORMWERK" ist seit dem 03.08.2026 für „Entwurf von
 #: 3D-Modellen für den 3D-Druck" bestandskräftig, also für genau das, was
 #: diese Anwendung tut.

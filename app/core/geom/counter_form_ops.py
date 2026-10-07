@@ -155,6 +155,9 @@ def _matrix(u: np.ndarray, v: np.ndarray, w: np.ndarray, start: float) -> np.nda
     consumes=VARIABLE,
     minimum_inputs=2,
     produces=VARIABLE,
+    # Jedes Teil steht danach als Tasche im Einsatz, auch wenn es selbst
+    # entfernt wird (``history.discarded``).
+    shapes_with_other_inputs=True,
     doc=_(
         "Lässt in den zuerst gewählten Einsatz eine Tasche für jedes weitere Teil ein. "
         "Sie folgt dem Umriss des Teils mit Spiel, vom tiefsten Punkt bis durch die Oberseite, "

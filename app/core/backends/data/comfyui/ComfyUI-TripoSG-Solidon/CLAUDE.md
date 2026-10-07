@@ -1,6 +1,6 @@
 # Fremder Code — nicht bearbeiten
 
-Die ComfyUI-Knoten für TripoSG (MIT). Sie sind **nicht Teil der Anwendung**,
+Die ComfyUI-Knoten für TripoSG. Sie sind **nicht Teil der Anwendung**,
 sie werden in eine fremde ComfyUI-Installation kopiert
 (`app/core/backends/comfy_setup.py`).
 
@@ -22,4 +22,5 @@ Kern liegen.
 - **Die Sprachregel gilt hier nicht.** Englische Kommentare bleiben englisch.
 - Ändert sich hier etwas, ist der Grund eine Änderung an ComfyUI oder TripoSG
   — nicht eine an Solidon.
-- **MIT-Lizenz beachten:** Der Lizenzhinweis bleibt, wo er ist.
+- **Lizenzhinweise bleiben, wo sie sind.** TripoSG nennt im Wurzel-`LICENSE`
+  MIT, Teile des Quelltexts stehen unter Tencent-Lizenzen ohne EU (RM-003).

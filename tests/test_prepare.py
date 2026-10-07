@@ -7377,6 +7377,7 @@ def _double_plate_with_roundings(*, sharp_level: float | None = None) -> SceneOb
 
 def _native_rounding_bytes(entry: SceneObject) -> bytes:
     """Hält auch native Topologie, Randkurven und Kennzeichen der Eingabe fest."""
+    exact_kernel()
     import io
 
     from OCP.BRepTools import BRepTools
@@ -7388,6 +7389,7 @@ def _native_rounding_bytes(entry: SceneObject) -> bytes:
 
 def _assert_same_native_rounding_form(actual: SceneObject, expected: SceneObject) -> None:
     """Beide gerichteten Differenzen müssen leer sein, nicht nur gleich groß."""
+    exact_kernel()
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
 

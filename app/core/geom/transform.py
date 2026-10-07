@@ -51,6 +51,7 @@ def pattern_centre_param(
 ) -> Any:
     """Eine Koordinate des einmal aufgelösten Dreh- oder Spiegelpunkts."""
     from app.core.registry import param
+    from app.core.registry.params import ZERO_BODY_CENTRE
     from app.core.units import FEATURE_REACH
     from app.i18n import _
 
@@ -65,6 +66,7 @@ def pattern_centre_param(
         placement="advanced",
         depends_on=depends_on,
         doc=_("Dreh- oder Spiegelpunkt. Drei leere Koordinaten übernehmen einmal die Körpermitte."),
+        zero_text=ZERO_BODY_CENTRE,
     )
 
 

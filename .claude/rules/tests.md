@@ -39,8 +39,10 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   JUnit-Berichten mit Herkunftsvermerk — keine Zahl von Hand.
 - **Betroffene Tests folgen auch impliziten Paketimporten.** Eine Änderung an
   `__init__.py` betrifft die Importeure seiner Untermodule; gelöschte Module
-  und Testhelfer behalten ihre Nutzer. Die Git-Auswahl liest NUL-getrennte
-  Pfade und beide Seiten einer Umbenennung (`tools/affected_tests.py`).
+  und Testhelfer behalten ihre Nutzer. Ein Test, der ein Werkzeug über den
+  Pfad lädt, hat keine Importkante; er wird gewählt, weil er den Dateinamen
+  nennt. Die Git-Auswahl liest NUL-getrennte Pfade und beide Seiten einer
+  Umbenennung (`tools/affected_tests.py`).
 - **Beim Verschieben und Zusammenlegen von Tests** bleiben Fallnamen,
   Parameter, Marker und aufgelöste Fixtures erhalten, Parameterwerte und
   Zusicherungen nachvollziehbar — Fallzahlen sind kein Deckungsnachweis.
@@ -255,6 +257,16 @@ einzeln laufen grün. Deshalb:
   kein Beweis, zwei ungleiche sofort einer.
 - ComfyUI läuft mit rund einem Gigabyte im Hintergrund mit — bei der Lastfrage
   mitzählen.
+- **Ein Prozessende braucht Rechenzeit; zugesichert wird, dass es eingeleitet
+  ist.** Ein zurückgestellter Prozess bekommt unter Volllast die Zeitscheiben
+  für sein Ende erst nach Sekunden; `IsProcessDeleting` sagt sofort, ob das
+  Betriebssystem es eingeleitet hat (`test_kernel_process_lifecycle.py`). Wer
+  danach abbaut, hebt vorher die Klasse (wie `process.hurry_helper`); ist die
+  Zusage die Freigabe (Speicher, Griffe, Ordner), wartet er danach auf den
+  Abschluss.
+- **Eine eben umbenannte Datei sperrt kurz**: Eine Meldung, die über
+  `Path.replace` erscheint, liest der Wartende mit Wiederholung bis zu seiner
+  Frist, nie mit einem einzelnen `read_text`.
 
 ### Wenn ein Lauf steht: py-spy
 

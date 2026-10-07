@@ -30,6 +30,28 @@ unvollständige Op fällt dort auf, ein doppeltes Kürzel auch.
 worin der Agent arbeitet; Fein gilt beim Export und im finalen Prüfbericht.
 Eine Op, die beide gleich behandelt, sollte das bewusst tun.
 
+**Wer Eingänge unter ihrer Kennung zurückgibt, sagt, ob er sie unverändert
+lässt oder einen mit einem anderen formt** (Review zu `bbd41ff2d`, F1 und U2).
+`history.discarded` entscheidet daran, welche Schritte am Endstand nichts mehr
+hinterlassen; der Prüfbericht streicht ihre Befunde, der Verlauf faltet sie
+unter die Löschung. *Stift für Bohrung* reichte den Träger unverändert durch und
+war nicht markiert — nach dem Entfernen des Stifts stand im Kundenfall
+S-20261006-2a0261 weiter „Der Stift … steht noch in der Bohrung“. Die
+Gegenrichtung zeigte die Sonde zum Review: Ein Schritt über Platte und Stift
+(*Auf dem Bett anordnen*, beide verschieben, *Überschneidungen prüfen*)
+erklärte alle seine Eingänge für lebend und holte den entfernten Stift zurück.
+Seitdem reicht ein solcher Schritt jeden Körper für sich weiter; nur wer einen
+mit einem anderen formt, trägt `shapes_with_other_inputs` (*Gegenform
+einlassen*: die Tasche trägt die Form des entfernten Teils). Lage zählt dabei
+nicht als Form. Beide Felder sind Entscheidungen, keine Vorgaben:
+`tests/test_history.py` verlangt sie von jeder Operation dieser Bauart und
+belegt „jeder für sich“ an einem Lauf mit zwei Körpern.
+
+Mit diesem Satz kamen drei Verweise aus der Regel heraus, die wortgleich in den
+Karten stehen: `tests/test_registry_consistency.py` (Registerkarte,
+`tests/CLAUDE.md`), `tests/test_gesture_ops.py` (`tests/CLAUDE.md`) und „vorn
+die zwei, drei Werte“ (`AGENTS.md`, Checkliste neue Operation, Punkt 2).
+
 ## Was die Operation verlangt, steht im Register
 
 **Was die Operation von ihrer Eingabe verlangt, steht im Register.** Eine Op

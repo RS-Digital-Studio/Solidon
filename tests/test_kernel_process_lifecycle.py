@@ -2,8 +2,12 @@
 
 RM-298(d): Ein aktiver Kernaufruf liest weder Leitung noch Elternzustand.
 Sein Ende mit einem hart beendeten Elternprozess muss daher unter Windows
-vom Jobobjekt kommen. Die Priorität wird nach dem wirklichen ``serve``-Start
-beim Betriebssystem abgefragt, statt nur den Aufruf des Setzers zu zählen.
+vom Jobobjekt kommen. Zugesichert wird, dass das Betriebssystem dieses Ende
+eingeleitet hat, nicht wie schnell es abgeschlossen ist: Der rechnende Helfer
+steht eine Klasse tiefer, und unter fremder Volllast bekommen seine Fäden die
+Zeitscheibe, die jedes Ende braucht, erst nach Sekunden (RM-474). Die Priorität
+wird nach dem wirklichen ``serve``-Start beim Betriebssystem abgefragt, statt
+nur den Aufruf des Setzers zu zählen.
 
 Nur für die negativen Gegenproben setzt der Aufrufer
 ``SOLIDON_TEST_KERNEL_LIFECYCLE_FAULT`` auf ``no-binding`` oder ``no-priority``.
@@ -61,6 +65,8 @@ def _windows_api() -> Any:
     kernel32.GetProcessId.restype = ctypes.c_uint32
     kernel32.GetPriorityClass.argtypes = (ctypes.c_void_p,)
     kernel32.GetPriorityClass.restype = ctypes.c_uint32
+    kernel32.SetPriorityClass.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+    kernel32.SetPriorityClass.restype = ctypes.c_int
     kernel32.WaitForSingleObject.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
     kernel32.WaitForSingleObject.restype = ctypes.c_uint32
     kernel32.TerminateProcess.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
@@ -73,6 +79,54 @@ def _windows_api() -> Any:
 def _windows_error(message: str) -> OSError:
     windows: Any = ctypes
     return OSError(windows.get_last_error(), message)
+
+
+class _BasicInformation(ctypes.Structure):
+    """``PROCESS_BASIC_INFORMATION``, Felder in voller Zeigerbreite."""
+
+    _fields_ = [
+        ("exit_status", ctypes.c_long),
+        ("peb", ctypes.c_void_p),
+        ("affinity", ctypes.c_size_t),
+        ("base_priority", ctypes.c_long),
+        ("pid", ctypes.c_size_t),
+        ("parent_pid", ctypes.c_size_t),
+    ]
+
+
+class _ExtendedInformation(ctypes.Structure):
+    """``PROCESS_EXTENDED_BASIC_INFORMATION``; ``flags`` Bit 2 ist ``IsProcessDeleting``."""
+
+    _fields_ = [("size", ctypes.c_size_t), ("basic", _BasicInformation), ("flags", ctypes.c_uint32)]
+
+
+#: ``IsProcessDeleting``: Das Betriebssystem hat das Ende des Prozesses
+#: eingeleitet (Jobobjekt, ``TerminateProcess``); fort ist er, sobald jeder
+#: seiner Fäden es abgeschlossen hat.
+_PROCESS_DELETING = 0x4
+
+
+def _process_deleting(handle: int) -> bool:
+    """Liest ``IsProcessDeleting`` über ``NtQueryInformationProcess`` (Klasse 0, erweitert)."""
+    windows: Any = ctypes
+    ntdll = windows.WinDLL("ntdll")
+    ntdll.NtQueryInformationProcess.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+    )
+    ntdll.NtQueryInformationProcess.restype = ctypes.c_long
+    information = _ExtendedInformation()
+    information.size = ctypes.sizeof(information)
+    written = ctypes.c_uint32()
+    status = ntdll.NtQueryInformationProcess(
+        handle, 0, ctypes.byref(information), ctypes.sizeof(information), ctypes.byref(written)
+    )
+    if status != 0 or written.value != ctypes.sizeof(information):
+        raise OSError(f"NtQueryInformationProcess meldete {status & 0xFFFFFFFF:#010x}.")
+    return bool(information.flags & _PROCESS_DELETING)
 
 
 def _priority_class(kernel32: Any, handle: int | None) -> int:
@@ -104,14 +158,24 @@ class _HeldWindowsProcess:
             return False
         raise _windows_error("Das Prozessende konnte nicht abgefragt werden.")
 
+    def ending(self) -> bool:
+        """Ob das Betriebssystem das Ende eingeleitet hat — oder es schon vorüber ist."""
+        return self.ended() or _process_deleting(self._handle)
+
     def stop(self) -> None:
-        """Beendet exakt diesen Prozess; am Helfer ausschließlich beim Testabbau."""
+        """Beendet exakt diesen Prozess; am Helfer ausschließlich beim Testabbau.
+
+        Vorher in normaler Klasse wie ``process.hurry_helper``: Ein Ende braucht
+        für jeden Faden eine Zeitscheibe, und ein zurückgestellter Helfer bekommt
+        sie unter Volllast erst nach Sekunden (RM-474).
+        """
         if self.ended():
             return
+        self._api.SetPriorityClass(self._handle, 0x00000020)  # NORMAL_PRIORITY_CLASS
         if not self._api.TerminateProcess(self._handle, 1):
             problem = _windows_error("Der Testprozess konnte nicht beendet werden.")
-            # Ein schon eingeleitetes Job-Ende kann noch auf E/A warten:
-            # TerminateProcess meldet dann 5, bevor der Griff signalisiert ist.
+            # Ein schon eingeleitetes Ende (Jobobjekt) lehnt TerminateProcess
+            # mit 5 ab, bis der Griff signalisiert ist.
             if not self.ended(_STOP_SECONDS):
                 raise problem
         assert self.ended(_STOP_SECONDS), "Der Testprozess blieb beim Abbau am Leben."
@@ -139,13 +203,14 @@ def publish_process_handles_for_test(helper: Any, receiver_pid: int, path: Path)
         try:
             for handle in (helper.sentinel, kernel32.GetCurrentProcess()):
                 duplicate = ctypes.c_void_p()
-                # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE.
+                # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION
+                # | PROCESS_SET_INFORMATION (Klasse beim Abbau) | PROCESS_TERMINATE.
                 if not kernel32.DuplicateHandle(
                     kernel32.GetCurrentProcess(),
                     handle,
                     receiver,
                     ctypes.byref(duplicate),
-                    0x00101001,
+                    0x00101201,
                     False,
                     0,
                 ):
@@ -247,6 +312,23 @@ _PARENT = textwrap.dedent(
 )
 
 
+def _read_mark(path: Path, deadline: float) -> dict[str, int]:
+    """Liest eine Meldung, auch während ihr Umbenennen noch nicht ganz abgeschlossen ist.
+
+    Gleich nach ``Path.replace`` lehnt Windows das Öffnen des neuen Namens
+    gelegentlich mit einer Freigabeverletzung (32) ab, als ``PermissionError``
+    — gemessen in drei von acht Läufen 2 bis 30 von 3000 Öffnungen
+    (``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/elternende_umbenennen.py``).
+    """
+    while True:
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.02)
+
+
 def _wait_mark(path: Path, parent: subprocess.Popen, diagnostics: Path) -> dict[str, int]:
     """Wartet begrenzt auf die vollständige Meldung und erkennt frühen Elternabbruch."""
     deadline = time.monotonic() + _START_SECONDS
@@ -254,7 +336,7 @@ def _wait_mark(path: Path, parent: subprocess.Popen, diagnostics: Path) -> dict[
         assert parent.poll() is None, diagnostics.read_text(encoding="utf-8", errors="replace")
         assert time.monotonic() < deadline, f"Die Testmeldung {path.name} kam nicht an."
         time.sleep(0.02)
-    return json.loads(path.read_text(encoding="utf-8"))
+    return _read_mark(path, deadline)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Der aktive Todesfall prüft das Windows-Jobobjekt.")
@@ -264,6 +346,15 @@ def test_active_helper_ends_with_a_killed_parent(tmp_path: Path) -> None:
     Das äußere Jobobjekt bleibt bis nach der Zusicherung beim Test geöffnet:
     Es sichert ausschließlich den Abbau auch bei Start- und Prüfungsfehlern.
     Die Blockierfrist liegt weit jenseits aller Start-/Endefristen der Probe.
+
+    Zugesichert wird das eingeleitete Ende (``IsProcessDeleting``), nicht sein
+    Abschluss in einer Frist: Unter fremder Volllast war der Helfer in
+    ``BELOW_NORMAL`` bis zu 19,5 s nach dem Elternende noch da, in 21 von 23
+    Läufen über 9 s; in normaler Klasse unter einer Sekunde, auf ruhiger
+    Maschine in beiden nach Millisekunden. Eingeleitet war das Ende in jedem
+    Lauf, sobald der Elternprozess signalisiert war, 06.10.2026
+    (``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/elternende.py``).
+    Ohne inneres Jobobjekt bleibt das Merkmal aus.
     """
     kernel32 = _windows_api()
     script = tmp_path / "parent.py"
@@ -303,9 +394,17 @@ def test_active_helper_ends_with_a_killed_parent(tmp_path: Path) -> None:
 
             controlled_parent.stop()
             parent.wait(_STOP_SECONDS)
-            ended = helper.ended(_STOP_SECONDS)
-            _write_mark(tmp_path / "finished.json", {"helper_ended": int(ended)})
-            assert ended, (
+            # Das Jobobjekt schließt mit dem Griff, den das Elternende abräumt;
+            # die Frist begrenzt nur das Warten der Gegenprobe ohne Bindung.
+            deadline = time.monotonic() + _STOP_SECONDS
+            while not helper.ending() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            ending = helper.ending()
+            _write_mark(
+                tmp_path / "finished.json",
+                {"helper_ending": int(ending), "helper_ended": int(helper.ended())},
+            )
+            assert ending, (
                 "Der aktive Helfer überlebt das harte Elternende; das innere Jobobjekt fehlt."
             )
         finally:
@@ -316,7 +415,9 @@ def test_active_helper_ends_with_a_killed_parent(tmp_path: Path) -> None:
                 parent.wait(_STOP_SECONDS)
             finally:
                 if helper is None and (tmp_path / "helper.json").is_file():
-                    announced = json.loads((tmp_path / "helper.json").read_text(encoding="utf-8"))
+                    announced = _read_mark(
+                        tmp_path / "helper.json", time.monotonic() + _STOP_SECONDS
+                    )
                     helper = _HeldWindowsProcess(kernel32, announced["handle"])
                     controlled_parent = _HeldWindowsProcess(kernel32, announced["parent_handle"])
                 try:

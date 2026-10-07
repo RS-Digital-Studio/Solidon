@@ -857,6 +857,7 @@ def _exact_stairs_for_selection() -> tuple[SceneObject, Feature, Feature]:
 
 def test_native_push_uses_the_selected_carrier_even_when_the_centre_names_another_face() -> None:
     """Die Originaldreiecke bestimmen die gewählte Stufe bis zur wirklichen Formänderung."""
+    exact_kernel()
     import dataclasses
     import io
 
@@ -887,6 +888,7 @@ def test_native_push_rejects_an_unproven_carrier_without_selecting_by_position(
     selection: str,
 ) -> None:
     """Ein beschädigter Flächenbezug darf nicht durch eine Ortsuche scheinbar gültig werden."""
+    exact_kernel()
     import dataclasses
     import io
 

@@ -108,6 +108,20 @@ REASON_LABELS: Final = {
 }
 
 
+#: Rechte, die ein fremder Eintrag nicht tragen darf: lesen (``FILE_READ_DATA``,
+#: ``GENERIC_READ``, ``GENERIC_ALL``, ``MAXIMUM_ALLOWED``) oder die Datei an
+#: sich ziehen (``WRITE_DAC``, ``WRITE_OWNER``). Wer den Besitz nehmen kann,
+#: dem gilt danach auch „Eigentümerrechte“ (Review 06.10.2026, M1).
+_FOREIGN_FORBIDDEN: Final = (
+    0x00000001 | 0x00040000 | 0x00080000 | 0x02000000 | 0x10000000 | 0x80000000
+)
+
+#: Verweigernde ACE-Arten: Sie nehmen Rechte weg und dürfen übersprungen werden.
+#: Jede andere Art außer dem gewöhnlichen Erlauben (0) wird abgelehnt — auch
+#: eine, die erst eine künftige Windows-Fassung kennt.
+_DENYING_ACES: Final = frozenset({1, 6, 10, 12})
+
+
 def _owned_by_current_user(descriptor: int) -> bool:
     """Ob Eigentümer und Leserechte der geöffneten Datei privat sind."""
     return not _ownership_problem(descriptor)
@@ -128,6 +142,13 @@ def _ownership_problem(descriptor: int) -> str:
     der Administratoren als Besitzer an, ein gewöhnlicher mit sich selbst —
     beides ist der aktuelle Nutzer, und die Leserechte prüft die Liste
     danach ohnehin gegen genau diese Konten, SYSTEM und die Administratoren.
+
+    Dazu „Eigentümerrechte" (S-1-3-4): Der Eintrag gibt Rechte an den
+    jeweiligen Besitzer und an niemanden sonst, und der ist an dieser Stelle
+    schon als aktueller Nutzer belegt. Python legt ein Verzeichnis mit
+    ``mkdir(mode=0o700)`` genau so an (SYSTEM, Administratoren,
+    Eigentümerrechte), und auf dem Windows-Runner der CI trug die Tokendatei
+    den Eintrag auch nach ``icacls /inheritance:r`` noch (Taglauf 0.5.3).
     """
     if os.name != "nt":
         getuid = cast(Callable[[], int], vars(os)["getuid"])
@@ -297,11 +318,13 @@ def _ownership_problem(descriptor: int) -> str:
 
         system_data = well_known_sid(22)  # WinLocalSystemSid
         administrators_data = well_known_sid(26)  # WinBuiltinAdministratorsSid
-        if system_data is None or administrators_data is None:
+        owner_rights_data = well_known_sid(71)  # WinCreatorOwnerRightsSid
+        if system_data is None or administrators_data is None or owner_rights_data is None:
             return "CreateWellKnownSid"
         _system_buffer, system_sid = system_data
         _administrators_buffer, administrators_sid = administrators_data
-        trusted_sids = (token_user, token_owner, system_sid, administrators_sid)
+        _owner_rights_buffer, owner_rights_sid = owner_rights_data
+        trusted_sids = (token_user, token_owner, system_sid, administrators_sid, owner_rights_sid)
 
         acl = AclSizeInformation()
         if not advapi32.GetAclInformation(
@@ -317,18 +340,17 @@ def _ownership_problem(descriptor: int) -> str:
                 return f"GetAce {index}; {accounts}"
             header = ctypes.cast(pointer, ctypes.POINTER(AceHeader)).contents
             if header.kind != 0:  # Nur ein gewöhnlicher ACCESS_ALLOWED_ACE ist eindeutig.
-                if header.kind in {5, 9, 11}:
-                    return f"Eintrag {index} der Art {header.kind}; {accounts}"
-                continue
+                if header.kind in _DENYING_ACES:
+                    continue
+                return f"Eintrag {index} der Art {header.kind}; {accounts}"
             ace = ctypes.cast(pointer, ctypes.POINTER(AllowedAce)).contents
-            content_read = ace.mask & (0x00000001 | 0x80000000 | 0x10000000)
-            if not content_read:
+            if not ace.mask & _FOREIGN_FORBIDDEN:
                 continue
             sid = ctypes.c_void_p(pointer.value + AllowedAce.sid_start.offset)
             if not any(
                 advapi32.EqualSid(sid, ctypes.c_void_p(trusted)) for trusted in trusted_sids
             ):
-                return f"lesbar für {named(sid)}; {accounts}"
+                return f"offen für {named(sid)} (Rechte {ace.mask:#x}); {accounts}"
 
         return ""
     finally:
@@ -617,7 +639,7 @@ def read_token(path: Path) -> str:
                 raise OSError("Tokendatei wechselte beim Öffnen")
             problem = _ownership_problem(descriptor)
             if problem:
-                raise OSError(f"Tokendatei gehört nicht dem aktuellen Nutzer ({problem})")
+                raise OSError(f"Tokendatei ist nicht privat ({problem})")
             if os.name != "nt" and stat.S_IMODE(opened.st_mode) & 0o077:
                 raise OSError("Tokendatei ist für andere Nutzer zugänglich")
             raw = os.read(descriptor, MAX_TOKEN_FILE_BYTES + 1)
