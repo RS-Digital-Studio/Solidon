@@ -1063,11 +1063,13 @@ def test_choosing_a_custom_size_opens_the_flap_with_its_diameter(qt_app: QApplic
 def test_a_wide_bore_preselects_a_custom_thread_with_its_diameter_in_front(
     qt_app: QApplication,
 ) -> None:
-    """An einer 60-mm-Bohrung steht *Eigenes Maß* mit Ø 66,6 vorn (RM-532).
+    """An einer 61-mm-Bohrung steht *Eigenes Maß* mit Ø 67,6 vorn (RM-532).
 
-    *Druckbares Gewinde* endete bei M8; ein Rohr mit 60 mm Bohrung bekam kein
-    Gewinde. Jetzt wählt die Bohrung das eigene Maß, dessen Kernloch sie ist,
-    und der Nenndurchmesser steht vorn, wo man ihn sieht.
+    *Druckbares Gewinde* endete bei M8; ein weites Rohr bekam kein Gewinde.
+    Jetzt wählt die Bohrung das eigene Maß, dessen Kernloch sie ist, und der
+    Nenndurchmesser steht vorn, wo man ihn sieht. Ø 61 ist der M64 zu weit
+    (sie greift nach K-N6 bis 64 − 0,55 · 6 = 60,7; eine 60 wäre ihr Loch), das
+    eigene Maß ist 61 + 1,1 · 6 = 67,6 mit der Steigung 6 der M64.
     """
     from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
     from app.core.scene.placement import values_for
@@ -1078,7 +1080,7 @@ def test_a_wide_bore_preselects_a_custom_thread_with_its_diameter_in_front(
         id="hole_1",
         kind="hole",
         provenance="detected",
-        params={"diameter": 60.0, "depth": 20.0, "centre": (0.0, 0.0, 0.0), "axis": (0, 0, 1)},
+        params={"diameter": 61.0, "depth": 20.0, "centre": (0.0, 0.0, 0.0), "axis": (0, 0, 1)},
     )
     # Die Stelle selbst ist ohne Körper kein Wert des Dialogs; geprüft wird das Maß.
     values = {key: value for key, value in values_for(spec, hole).items() if key != "at_feature"}
@@ -1089,7 +1091,7 @@ def test_a_wide_bore_preselects_a_custom_thread_with_its_diameter_in_front(
     diameter = dialog._editors["diameter"]
     assert dialog._rows["diameter"] is not dialog._advanced_form, "das Maß steht vorn"
     assert dialog._rows["diameter"].isRowVisible(diameter)
-    assert dialog.values()["diameter"] == pytest.approx(66.6)
+    assert dialog.values()["diameter"] == pytest.approx(67.6)
 
 
 def test_the_pin_for_a_bore_offers_its_shape_behind_the_flap(qt_app: QApplication) -> None:
