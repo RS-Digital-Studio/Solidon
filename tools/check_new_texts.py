@@ -24,8 +24,12 @@ Aufruf im Hook oder zur gezielten statischen Entwicklungsprüfung::
     python tools/check_new_texts.py
 
 Rückgabe 1, wenn ein neuer Text in einem Katalog fehlt oder leer steht —
-dann gehört der Befund diesem Commit. Rückgabe 0 sonst, auch wenn andere
-Texte im gemeinsamen Arbeitsbaum noch unübersetzt sind.
+dann gehört der Befund diesem Commit — oder wenn der Index gar keinen
+Katalog trägt: Ohne Katalog fehlt nichts, und die Prüfung sähe aus wie
+bestanden. Rückgabe 2, wenn eine gestagte Datei sich nicht als Python lesen
+lässt — dann ist die Prüfung nicht auswertbar, und der Hook hält mit diesem
+Grund an. Rückgabe 0 sonst, auch wenn andere Texte im gemeinsamen
+Arbeitsbaum noch unübersetzt sind.
 """
 
 from __future__ import annotations
@@ -74,12 +78,28 @@ def _changed_files() -> list[tuple[str, str]]:
     return changed
 
 
+class UnreadableStageError(Exception):
+    """Die gestagte Fassung einer Datei lässt sich nicht als Python lesen."""
+
+    def __init__(self, path: str, problem: SyntaxError) -> None:
+        super().__init__(path, problem.lineno, problem.msg)
+        self.path = path
+        self.line = problem.lineno
+        self.reason = problem.msg
+
+
 def _texts_in(revision: str, path: str) -> set[str]:
     """Jeder Oberflächentext einer Fassung dieser Datei.
 
     ``revision`` ist, was ``git show`` versteht — ``""`` für den gestagten
     Stand (``:datei``), ``HEAD`` für den letzten Commit. Fehlt die Datei dort,
     ist die Antwort leer: Eine neue Datei hat keinen Vorzustand.
+
+    **Eine gestagte Fassung, die Python nicht liest, ist kein leerer Stand**
+    (:class:`UnreadableStageError`). ``bbd41ff2d`` kam so mit einer ``panels.py``
+    durch, deren Einrückung verschoben war: Die Datei galt als textlos, ihre
+    neuen Texte prüfte niemand, und am HEAD scheiterte jeder Import. Die
+    Fassung von ``HEAD`` bleibt nachsichtig — sie ist schon drin.
     """
     source = subprocess.run(
         ["git", "show", f"{revision}:{path}"],
@@ -93,7 +113,9 @@ def _texts_in(revision: str, path: str) -> set[str]:
         return set()
     try:
         tree = ast.parse(source.stdout)
-    except SyntaxError:
+    except SyntaxError as problem:
+        if revision == "":
+            raise UnreadableStageError(path, problem) from problem
         return set()
     found: set[str] = set()
     for node in ast.walk(tree):
@@ -168,8 +190,17 @@ def added_texts() -> list[str]:
     return sorted(found)
 
 
+class NoCatalogError(RuntimeError):
+    """Der Index trägt keinen Sprachkatalog — die Prüfung hätte nichts gefunden."""
+
+
 def missing(texts: list[str]) -> dict[str, list[str]]:
-    """Welche davon in den Katalogen des Index fehlen oder leer stehen."""
+    """Welche davon in den Katalogen des Index fehlen oder leer stehen.
+
+    Ein Index ohne Katalog ist kein bestandener Fall, sondern ein falscher
+    Ort (``NoCatalogError``): Ein leerer Treffer meldete dasselbe wie
+    „alles übersetzt" (``.claude/rules/tests.md``, „Zuerst zählen“).
+    """
     listing = subprocess.run(
         ["git", "ls-files", "--cached", "-z", "--", ":(glob)app/i18n/locales/*.json"],
         capture_output=True,
@@ -178,8 +209,14 @@ def missing(texts: list[str]) -> dict[str, list[str]]:
         cwd=str(ROOT),
         check=True,
     ).stdout
+    paths = sorted(name for name in listing.split("\0") if name)
+    if not paths:
+        raise NoCatalogError(
+            f"Im Index von {ROOT} liegt kein Katalog unter app/i18n/locales/. "
+            "Den Hook im Solidon-Repository ausführen oder die Kataloge vormerken."
+        )
     gaps: dict[str, list[str]] = {}
-    for path in sorted(name for name in listing.split("\0") if name):
+    for path in paths:
         source = subprocess.run(
             ["git", "show", f":{path}"],
             capture_output=True,
@@ -196,10 +233,22 @@ def missing(texts: list[str]) -> dict[str, list[str]]:
 
 
 def main() -> int:
-    texts = added_texts()
+    try:
+        texts = added_texts()
+    except UnreadableStageError as problem:
+        print(
+            f"{problem.path}: Die gestagte Fassung lässt sich nicht lesen "
+            f"(Zeile {problem.line}: {problem.reason}). So geht sie nicht in den Commit — "
+            "die Datei beheben und neu vormerken."
+        )
+        return 2
     if not texts:
         return 0
-    gaps = missing(texts)
+    try:
+        gaps = missing(texts)
+    except NoCatalogError as problem:
+        print(problem)
+        return 1
     if not gaps:
         return 0
     for language, gone in sorted(gaps.items()):

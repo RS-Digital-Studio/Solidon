@@ -41,7 +41,7 @@ from app.core.knowledge.parts.shapes import (
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.registry.params import ZERO_AUTOMATIC, ZERO_FROM_PROFILE, ZERO_NONE
+from app.core.registry.params import ZERO_AUTOMATIC, ZERO_FROM_PROFILE, ZERO_NONE, ZERO_TOP_EDGE
 from app.core.scene.placement import dominant_axis, faces_up
 from app.core.slice.analysis import cross_section
 from app.core.types import (
@@ -638,13 +638,15 @@ def _holes_of(part: Any) -> list[Any]:
     return [ShapelyPolygon(ring) for ring in getattr(part, "interiors", [])]
 
 
-def plane_of(source: SceneObject, name: str, stated: float) -> float:
+def plane_of(source: SceneObject, name: str, stated: float | None) -> float:
     """Die Höhe, auf der die Öffnung liegt: aus der gewählten Fläche, oder aus
     der Zahl.
 
     Eine Fläche schlägt die Zahl, denn sie ist die spezifischere von beiden —
-    die Zahl fällt auf die Oberkante des Körpers zurück, was eine Vermutung
-    ist, während eine Fläche das ist, was jemand angeklickt hat. Beide stehen
+    ohne Zahl gilt die Oberkante des Körpers, was eine Vermutung ist, während
+    eine Fläche das ist, was jemand angeklickt hat. Die Null ist eine Höhe
+    wie jede andere, das Bett (RM-526); bis Format 46 hieß sie „Oberkante“,
+    und die Migration leert sie (``migrations._empty_the_top_edge``). Beide stehen
     in der Datei — die Antwort hängt also nicht davon ab, was beim
     Wiederöffnen des Projekts gerade ausgewählt ist (§11).
 
@@ -656,7 +658,7 @@ def plane_of(source: SceneObject, name: str, stated: float) -> float:
     unter dieser Ebene die Wand ja trifft.
     """
     if not name:
-        return stated or float(source.mesh.bounds.maximum[2])
+        return float(source.mesh.bounds.maximum[2]) if stated is None else stated
 
     feature = source.features.get(name)
     if feature is None:
@@ -705,7 +707,7 @@ def reason_against(source: SceneObject, name: str) -> str | None:
     (``labels.BODY_FACTS_LIMIT``).
     """
     try:
-        z, direction = opening_frame(source, name, 0.0)
+        z, direction = opening_frame(source, name, None)
         mesh = as_mesh_data(source.mesh)
         if direction != _UP:
             mesh = transform.apply(mesh, upright_normal(direction))
@@ -719,14 +721,15 @@ def reason_against(source: SceneObject, name: str) -> str | None:
 _UP: Vec3 = (0.0, 0.0, 1.0)
 
 
-def opening_frame(source: SceneObject, name: str, stated: float) -> tuple[float, Vec3]:
+def opening_frame(source: SceneObject, name: str, stated: float | None) -> tuple[float, Vec3]:
     """Wo die Öffnung liegt und wohin sie zeigt (RM-087).
 
     Das Gegenstück zu :func:`plane_of` für einen Deckel, der nicht nur oben
     liegt: Ein Puppenhaus, vorn ausgehöhlt, bekommt seine Front als Deckel.
     Zurück kommt die Höhe der Öffnung **im aufgerichteten Raum** — dem, in dem
     die gewählte Fläche nach oben zeigt — und die Richtung selbst. Ohne
-    Fläche gilt, was immer galt: die Zahl oder die Oberkante, nach oben.
+    Fläche gilt, was immer galt: die Zahl oder, ohne Zahl, die Oberkante,
+    nach oben.
 
     Angenommen wird jede Fläche, die nach einer Achse zeigt und **außen**
     liegt. Die Decke eines Hohlraums zeigt nach unten und liegt innen; als
@@ -895,6 +898,43 @@ def _mesh_collar_collision(
     return highest
 
 
+def _saved_top_edge_marker() -> Any:
+    """Der Marker der Migration 46 → 47 an *Deckel erzeugen* und *Drehdeckel erzeugen*.
+
+    Bis Format 46 hieß die Höhe null „Oberkante“. Eine Zahl null leert die
+    Migration; ein **Ausdruck** wird erst bei der Auswertung zur Zahl, und ein
+    Schritt aus einer solchen Datei liest sie mit dem Marker wie damals
+    (:func:`stated_height`). Eine Änderung der Höhe rechnet wie heute.
+    """
+    return param(
+        title=_("Höhe der Öffnung aus einem älteren Projekt"),
+        default=False,
+        placement="advanced",
+        internal=True,
+        # Nur die Höhe selbst hebt ihn auf: Wer an einem alten Deckel die Stärke
+        # ändert, behält die Öffnung, wo sie war (Review RM-526, K8).
+        dropped_on_change=("z",),
+        doc=_(
+            "Liest eine Höhe, die null ergibt, als Oberkante, wie Projekte bis Format 46. "
+            "Eine neue Höhe rechnet wie heute."
+        ),
+    )
+
+
+def stated_height(params: LidParams | ScrewLidParams) -> float | None:
+    """Die Höhe der Öffnung, wie der Schritt sie meint — ``None`` heißt Oberkante.
+
+    Leer heißt Oberkante, jede Zahl ist eine Welthöhe (RM-526). Nur ein Schritt
+    mit ``legacy_zero_top`` liest eine Null noch als Oberkante: Sein Ausdruck
+    stammt aus einem Projekt bis Format 46 und ergab dort die Oberkante.
+    """
+    # Genau die Lesart von damals (``stated or`` Oberkante), wie die Migration
+    # sie für eine gespeicherte Zahl liest — keine zweite Regel mit Toleranz.
+    if params.legacy_zero_top and params.z is not None and not params.z:
+        return None
+    return params.z
+
+
 @op_params
 class LidParams(BaseParams):
     thickness: float = param(
@@ -920,7 +960,7 @@ class LidParams(BaseParams):
         kind="feature",
         default="",
         # **Kein ``required``, und das ist gemessen**: ``plane_of`` fällt
-        # bei leerem Namen auf die Zahl zurück (``return stated or`` die
+        # bei leerem Namen auf die Zahl zurück (ohne Zahl auf die
         # Oberkante), der Deckel entsteht also auch ohne Fläche. Am
         # 27.08.2026 stand hier einmal ``required=True`` — hergeleitet
         # daraus, dass die Datei ``ValidationError`` zu ``at_feature``
@@ -932,16 +972,19 @@ class LidParams(BaseParams):
             "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
         ),
     )
-    # **Ohne Mindestwert, und damit ohne Namen für die Null** (``zero_text``
-    # steht nur am Mindestwert null): Die Höhe ist eine Welthöhe, ein Körper
-    # darf unter dem Bett liegen, und Projekte bis 0.5.2 tragen negative
-    # Höhen. Die Null nennt der Satz des Feldes.
-    z: float = param(
+    # **Leer heißt Oberkante, und die Null ist eine Höhe** (RM-526): Die Höhe
+    # ist eine Welthöhe, ein Körper darf unter dem Bett liegen, und Projekte
+    # bis 0.5.2 tragen negative Höhen — ein Mindestwert null für den Namen
+    # „Oberkante“ hielt sie an (Durchsicht 0.5.3, Fund 9). Als ``optional``
+    # steht der Name am leeren Zustand, und jede Zahl bleibt eine Zahl.
+    z: float | None = param(
         title=_("Höhe der Öffnung"),
-        default=0.0,
+        default=None,
+        optional=True,
         unit="mm",
-        doc=_("Null nimmt die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
+        doc=_("Leer heißt: die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
         placement="advanced",
+        zero_text=ZERO_TOP_EDGE,
     )
     clearance: float = param(
         title=_("Spiel"),
@@ -1020,6 +1063,7 @@ class LidParams(BaseParams):
         placement="advanced",
         doc=NAME_DOC,
     )
+    legacy_zero_top: bool = _saved_top_edge_marker()
 
 
 @register_op(
@@ -1028,7 +1072,9 @@ class LidParams(BaseParams):
     # sind die schmale Seite in jeder Drehung (``_narrowest``), nicht die des
     # Hüllrechtecks, und am exakten Gehäuse entsteht der Deckel exakt (P2.8).
     # 4: gemeinsame Weitenmessung ohne GEOS-Rechteckrekonstruktion.
-    cache_version="5",
+    # 5: Platte und Kragen werden über ``transform.moved`` gehoben.
+    # 6: Die Null der Höhe ist das Bett, leer die Oberkante (RM-526).
+    cache_version="6",
     title=_("Deckel erzeugen"),
     category="parts",
     params=LidParams,
@@ -1063,7 +1109,7 @@ def create_lid(ctx: OpContext) -> OpResult:
     # der Deckel entsteht wie eh und je, und am Ende dreht dieselbe Matrix
     # ihn zurück vor die Öffnung. Eine zweite Bauweise für Seitendeckel wäre
     # eine zweite Stelle, an der der Kragen sein Spiel bekommt.
-    z, direction = opening_frame(source, params.at_feature, params.z)
+    z, direction = opening_frame(source, params.at_feature, stated_height(params))
     # Dieselbe Drehung wie beim Trennen (``upright_normal``): Für die Decke
     # die Einheit, sonst eine Drehung, deren Transponierte zurückführt.
     turn = upright_normal(direction)
@@ -1682,7 +1728,7 @@ class ScrewLidParams(BaseParams):
         kind="feature",
         default="",
         # **Kein ``required``, und das ist gemessen**: ``plane_of`` fällt
-        # bei leerem Namen auf die Zahl zurück (``return stated or`` die
+        # bei leerem Namen auf die Zahl zurück (ohne Zahl auf die
         # Oberkante), der Deckel entsteht also auch ohne Fläche. Am
         # 27.08.2026 stand hier einmal ``required=True`` — hergeleitet
         # daraus, dass die Datei ``ValidationError`` zu ``at_feature``
@@ -1694,13 +1740,15 @@ class ScrewLidParams(BaseParams):
             "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
         ),
     )
-    # Ohne Mindestwert wie ``LidParams.z``: eine Welthöhe, auch unter dem Bett.
-    z: float = param(
+    # Wie ``LidParams.z``: eine Welthöhe, auch unter dem Bett; leer heißt Oberkante.
+    z: float | None = param(
         title=_("Höhe der Öffnung"),
-        default=0.0,
+        default=None,
+        optional=True,
         unit="mm",
-        doc=_("Null nimmt die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
+        doc=_("Leer heißt: die Oberkante des Körpers. Eine gewählte Fläche geht vor."),
         placement="advanced",
+        zero_text=ZERO_TOP_EDGE,
     )
     clearance: float = param(
         title=_("Spiel"),
@@ -1712,6 +1760,7 @@ class ScrewLidParams(BaseParams):
         doc=_("Null heißt: der Wert aus dem Materialprofil."),
         zero_text=ZERO_FROM_PROFILE,
     )
+    legacy_zero_top: bool = _saved_top_edge_marker()
 
 
 @register_op(
@@ -1723,8 +1772,9 @@ class ScrewLidParams(BaseParams):
     # 4: gemeinsame Weitenmessung ohne GEOS-Rechteckrekonstruktion.
     # 5: Das Kappengewinde nennt seinen gebauten Durchmesser (RM-393).
     # 6: Hals und Kappe verwenden dieselben Winkelstationen des Netzes.
-    # 7: Gang und Rundkörper über Ø 46 so fein wie die Facettenregel (``turn_sections``).
-    cache_version="7",
+    # 7: Die Null der Höhe ist das Bett, leer die Oberkante (RM-526).
+    # 8: Gang und Rundkörper über Ø 46 so fein wie die Facettenregel (``turn_sections``).
+    cache_version="8",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,
@@ -1765,7 +1815,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
     # wächst immer nach oben, und zurück vor die Seitenöffnung dreht ihn die
     # Transponierte. Die Kappe steht am Ursprung und dreht nicht mit — sie ist
     # ein eigenes Teil, und wo sie liegt, entscheidet das Anordnen.
-    z, direction = opening_frame(source, params.at_feature, params.z)
+    z, direction = opening_frame(source, params.at_feature, stated_height(params))
     turn = upright_normal(direction)
     turned_back = turn.T
     cavities: list[Any]

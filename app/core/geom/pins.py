@@ -27,12 +27,14 @@ wurden — und das Passungspaar hält den Verweis fest, nicht den Wert (§14).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import numpy as np
 
+from app.core import units
 from app.core.errors import BooleanFailedError
 from app.core.geom import transform
 from app.core.geom.autosplit import sections_across, upright_normal
@@ -135,11 +137,11 @@ def feature_side(
     if not isinstance(centre, tuple | list) or len(centre) != 3:
         return None
     normal = np.asarray(plane.normal, dtype=float)
-    length = float(np.linalg.norm(normal))
+    length = math.hypot(float(normal[0]), float(normal[1]), float(normal[2]))
     if length <= EPS_GEOM:
         return None
     normal /= length
-    distance = float(np.dot(np.asarray(centre, dtype=float), normal)) - plane.position
+    distance = units.dot3(centre, normal) - plane.position
     extent = _connector_extent(feature, normal) if connector else 0.0
     if extent is None:
         return None
@@ -162,11 +164,11 @@ def _connector_extent(feature: Feature, plane_normal: np.ndarray) -> float | Non
         direction = np.asarray(axis, dtype=float)
     except KeyError, TypeError, ValueError:
         return None
-    axis_length = float(np.linalg.norm(direction))
+    axis_length = math.hypot(float(direction[0]), float(direction[1]), float(direction[2]))
     if axis_length <= EPS_GEOM or diameter < 0.0 or depth < 0.0:
         return None
     direction /= axis_length
-    along = min(abs(float(np.dot(direction, plane_normal))), 1.0)
+    along = min(abs(units.dot3(direction, plane_normal)), 1.0)
     across = float(np.sqrt(max(0.0, 1.0 - along * along)))
     return depth * along + diameter / 2.0 * across
 
@@ -424,13 +426,13 @@ def _choose_connector(
 ) -> ConnectorChoice:
     """Wählt die konkrete Form ausschließlich aus den Nahtmessdaten."""
     envelope = diameter + 2.0 * wall
-    required_area = len(points) * envelope**2
+    required_area = len(points) * envelope * envelope
     if len(points) < 2:
         spacing = 0.0
         required_spacing = 0.0
     else:
         spacing = min(
-            float(np.linalg.norm(np.asarray(first) - np.asarray(second)))
+            math.dist(first, second)
             for index, first in enumerate(points)
             for second in points[index + 1 :]
         )
@@ -461,7 +463,7 @@ def _unit(normal: Vec3) -> Vec3:
     """Die Richtung auf Länge eins. Alles hier rechnet mit Einheitsnormalen —
     die Ebenenlage ist sonst ein Vielfaches ihrer selbst."""
     vector = np.asarray(normal, dtype=float)
-    length = float(np.linalg.norm(vector))
+    length = math.hypot(float(vector[0]), float(vector[1]), float(vector[2]))
     if length <= EPS_GEOM:
         return (0.0, 0.0, 1.0)
     vector = vector / length
@@ -573,9 +575,22 @@ def _in_world(point: tuple[float, float], position: float, normal: Vec3) -> Vec3
     Vorzeichenwechseln, die für drei Achsen gleichzeitig stimmen muss, und
     für eine schiefe Richtung gäbe es sie ohnehin nicht.
     """
-    turned = np.array([point[0], point[1], position, 1.0])
-    back = np.linalg.inv(upright_normal(normal)) @ turned
+    back = transform.moved_points(
+        np.array([[point[0], point[1], position]]), _upright_back(normal)
+    )[0]
     return (float(back[0]), float(back[1]), float(back[2]))
+
+
+def _upright_back(normal: Vec3) -> np.ndarray:
+    """Die Umkehr von :func:`upright_normal` — die transponierte Drehung.
+
+    ``upright_normal`` ist eine reine Drehung; ihre Umkehr ist exakt die
+    Transponierte. ``np.linalg.inv`` ginge durch LAPACK und rundete je
+    Maschine anders (RM-187).
+    """
+    back = np.array(upright_normal(normal), dtype=np.float64)
+    back[:3, :3] = back[:3, :3].T.copy()
+    return back
 
 
 def add_pins(
@@ -819,8 +834,7 @@ def _along_normal(body: MeshData, normal: Vec3, position: Vec3, offset: float) -
     Sonderfälle für drei Achsen standen hier vorher und waren für eine schiefe
     Ebene nicht zu ergänzen.
     """
-    turn = np.linalg.inv(upright_normal(normal))
-    placed = transform.apply(body, turn)
+    placed = transform.apply(body, _upright_back(normal))
     direction = np.asarray(normal, dtype=float)
     target = np.asarray(position, dtype=float) + direction * offset
     return apply(placed, translation((float(target[0]), float(target[1]), float(target[2]))))

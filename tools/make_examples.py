@@ -296,13 +296,27 @@ def housing() -> Project:
             ),
         ],
     )
+    # Von unten durch den Boden: Die Mündung ist die Außenseite, die
+    # Zugentlastung wächst hinter der Wand (§24.1). Auf der Oberseite
+    # angesetzt hing der Klemmblock 5,25 mm unter dem Druckbett und über zwei
+    # Ränder hinaus. Mittig hält er Abstand zu Rand, Schraubenloch und
+    # Prüfstück, auch wenn die Tour die Wandstärke auf 10 dreht.
     history.apply(
         _("Kabel"),
         [
             OperationDraft(
                 op="insert_cable_gland",
                 inputs=("obj_1",),
-                params={"size": "cable-5", "wall": "=@wand", "x": -25.0, "y": 15.0, "z": "=@wand"},
+                params={
+                    "size": "cable-5",
+                    "wall": "=@wand",
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "nx": 0.0,
+                    "ny": 0.0,
+                    "nz": -1.0,
+                },
             )
         ],
     )

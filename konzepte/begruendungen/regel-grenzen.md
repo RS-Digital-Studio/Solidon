@@ -53,6 +53,14 @@ Drei Folgen für die Oberfläche:
   gestellt, und der Trennstrich hinter dem letzten direkten Block ist die ganze
   Antwort — die Zeilen dahinter tragen ihre Namen selbst.
 
+**Faltung (aus der Regel verschoben, 06.10.2026):** Die Rechnung liegt im Kern,
+damit `menu_path` dieselbe Antwort gibt wie die Leiste; `MENU_GROUPS` zählt von
+häufig nach selten. Die Überschrift einer direkten Kategorie setzt `addSection`
+(zählt nicht in der Zeilengrenze, `isSeparator()` bleibt wahr); bei einer
+einzigen Kategorie fiele „Bausteine → Bausteine“. Der nackte Trennstrich vor den
+gefalteten, weil eine Überschrift alles bis zum nächsten benennt. Wer eine
+Unterscheidung einführt, führt die Anordnungsfrage mit ein.
+
 ## Wo eine Operation steht
 
 Im Original stand in der Tabelle der Hauptwege bei Weg 2 „Menü *Erzeugen* /

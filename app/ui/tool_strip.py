@@ -209,7 +209,7 @@ class ToolStrip(QWidget):
         Bezahlt wurde das in der Höhe: Gemessen am 30.08.2026 über sechs
         Fensterbreiten von 600 bis 1920 war die Kartenhöhe **konstant** — aber
         je Werkzeug verschieden, von 90 Punkten bei *Explosion* bis 130 bei
-        *Trennen*. Der Unterschied ist genau die zweite Hinweiszeile. Ein
+        *Teilen*. Der Unterschied ist genau die zweite Hinweiszeile. Ein
         Panel, das beim Werkzeugwechsel um vierzig Punkte springt, verdeckt mal
         mehr und mal weniger vom Modell, und niemand weiß, warum.
 

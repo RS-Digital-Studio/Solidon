@@ -27,14 +27,19 @@ from typing import Final
 
 from app.branding import APP_NAME, APP_VERSION, ENVIRONMENT_PREFIX
 from app.core.log import (
+    CAUGHT_ATTACHMENT,
+    CRASH_ATTACHMENT,
+    LOG_ATTACHMENT,
+    REPORT_TEXT,
     crash_paths,
     exception_text,
-    fatal_records,
     get_logger,
+    held_by_a_running_process,
     log_path,
     own_crash_path,
     redact,
     redact_user_paths,
+    sorted_records,
 )
 from app.core.paths import ensure_dir, user_data_dir
 from app.i18n import _, get_language, tr
@@ -283,7 +288,7 @@ def write(report: ErrorReport, project: Path | None = None, directory: Path | No
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     target = _fresh_folder(directory or user_data_dir() / REPORT_DIRNAME, f"bericht-{stamp}")
 
-    (target / "bericht.txt").write_text(as_text(report), encoding="utf-8")
+    (target / REPORT_TEXT).write_text(as_text(report), encoding="utf-8")
 
     if report.include_log:
         _copy_log(target)
@@ -347,44 +352,88 @@ def crash_tail(directory: Path | None = None) -> bytes:
     """Begrenzt vorhandene Absturzstapel; ein leerer sauberer Lauf reist nicht mit.
 
     Auch keine Ausnahme, die der Prozess überlebt hat (:func:`fatal_records`):
-    Die Datei des laufenden Prozesses trägt keinen Absturz, und eine Datei mit
-    dem Vermerk eines geordneten Endes nur, was danach kam.
+    Die Datei eines laufenden Prozesses — dieses oder eines zweiten Fensters —
+    trägt keinen Absturz, und eine Datei mit dem Vermerk eines geordneten
+    Endes nur, was danach kam oder ein Faden schrieb, der da noch lief.
     """
-    remaining = LOG_TAIL_MAX_BYTES
-    sections: list[str] = []
+    return _tails(directory)[0]
+
+
+def caught_tail(directory: Path | None = None) -> bytes:
+    """Was Solidon abgefangen und überlebt hat — kein Absturz, aber ein Hinweis.
+
+    „Die Ansicht wurde schwarz“, ohne dass etwas abstürzte: Eine Ausnahme, die
+    der Hauptfaden oder ein bis zum Ende beendeter Faden überlebt hat, ist oft
+    der einzige Hinweis. Sie reist unter eigenem Namen mit
+    (:func:`diagnostic_attachments`), nicht als Absturzprotokoll und nicht gar
+    nicht. Ein Faden ohne Python-Zustand (Treiber) zählt als Absturz
+    (:func:`~app.core.log.sorted_records`).
+    """
+    return _tails(directory)[1]
+
+
+def _tails(directory: Path | None) -> tuple[bytes, bytes]:
+    """Absturz und Abgefangenes aller Absturzdateien, je begrenzt und redigiert.
+
+    Ein Durchgang je Datei: einmal gelesen, einmal nach der Sperre gefragt,
+    einmal eingeordnet. Zwei Durchgänge verloren den Eintrag eines Prozesses,
+    der zwischen ihnen endete, aus beiden Anhängen.
+    """
+    remaining = [LOG_TAIL_MAX_BYTES, LOG_TAIL_MAX_BYTES]
+    sections: tuple[list[str], list[str]] = ([], [])
     own = own_crash_path()
     for path in crash_paths(directory):
-        if remaining <= 0:
+        if max(remaining) <= 0:
             break
+        window = max(remaining)
         try:
             with path.open("rb") as stream:
                 size = stream.seek(0, 2)
                 if not size:
                     continue
-                stream.seek(max(0, size - remaining))
-                raw = stream.read(remaining)
+                stream.seek(max(0, size - window))
+                raw = stream.read(window)
         except FileNotFoundError:
             continue
-        if size > remaining:
+        cut = size > window
+        if cut:
             # Ein angeschnittener Wert könnte sein Kennwort-Präfix verloren
             # haben und wäre dann nicht mehr zuverlässig redigierbar.
             raw = raw.partition(b"\n")[2]
-        fatal = fatal_records(raw.decode("utf-8", errors="replace"), alive=path == own)
-        if not fatal:
-            continue
-        text = "\n".join(redact(line) for line in fatal.splitlines())
-        heading = f"--- {path.name} ---\n"
-        if size > remaining:
-            heading += str(_("Das Absturzprotokoll wurde auf die letzten Einträge gekürzt.")) + "\n"
-        prefix = heading.encode("utf-8")
-        budget = remaining - len(prefix)
-        if budget <= 0:
-            break
-        content = (text + "\n").encode("utf-8")
-        section = prefix + content[-budget:]
-        sections.append(section.decode("utf-8", errors="ignore"))
-        remaining -= len(section)
-    return "".join(sections).encode("utf-8")
+        alive = path == own or held_by_a_running_process(path)
+        fatal, caught = sorted_records(raw.decode("utf-8", errors="replace"), alive=alive, cut=cut)
+        picked = (
+            "".join(fatal) if any(part.strip() for part in fatal) else "",
+            "".join(caught),
+        )
+        for index, chosen in enumerate(picked):
+            if not chosen or remaining[index] <= 0:
+                continue
+            text = "\n".join(redact(line) for line in chosen.splitlines())
+            heading = f"--- {path.name} ---\n"
+            if cut:
+                heading += (
+                    str(_("Das Absturzprotokoll wurde auf die letzten Einträge gekürzt.")) + "\n"
+                )
+            content = (text + "\n").encode("utf-8")
+            budget = remaining[index] - len(heading.encode("utf-8"))
+            if not cut and len(content) > budget:
+                # Auch das Budget kürzt: Das sagt die Kopfzeile, und der Schnitt
+                # beginnt an einer ganzen Zeile.
+                heading += (
+                    str(_("Das Absturzprotokoll wurde auf die letzten Einträge gekürzt.")) + "\n"
+                )
+            prefix = heading.encode("utf-8")
+            budget = remaining[index] - len(prefix)
+            if budget <= 0:
+                remaining[index] = 0
+                continue
+            if len(content) > budget:
+                content = content[-budget:].partition(b"\n")[2]
+            section = prefix + content
+            sections[index].append(section.decode("utf-8", errors="ignore"))
+            remaining[index] -= len(section)
+    return "".join(sections[0]).encode("utf-8"), "".join(sections[1]).encode("utf-8")
 
 
 def diagnostic_attachments(
@@ -397,9 +446,13 @@ def diagnostic_attachments(
     es ist — geschwärzt wird, was hinausgeht.
     """
     ordinary = normal if normal is not None else log_tail()
-    crashes = crash_tail(directory)
+    crashes, caught = _tails(directory)
     return tuple(
         (name, redact_user_paths(data.decode("utf-8", errors="replace")).encode("utf-8"))
-        for name, data in (("protokoll.txt", ordinary), ("absturzprotokoll.txt", crashes))
+        for name, data in (
+            (LOG_ATTACHMENT, ordinary),
+            (CRASH_ATTACHMENT, crashes),
+            (CAUGHT_ATTACHMENT, caught),
+        )
         if data
     )

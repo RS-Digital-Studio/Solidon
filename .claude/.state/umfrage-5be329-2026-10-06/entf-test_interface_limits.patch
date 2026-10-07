@@ -1,0 +1,87 @@
+diff --git a/tests/test_interface_limits.py b/tests/test_interface_limits.py
+index e10d2cdda..3c17cfb41 100644
+--- a/tests/test_interface_limits.py
++++ b/tests/test_interface_limits.py
+@@ -2268,6 +2268,82 @@ def test_menu_history_and_sketch_take_their_keys_from_the_platform(
+         window.deleteLater()
+ 
+ 
++def test_delete_answers_in_the_selection_tab_and_says_why_when_it_cannot(
++    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Entf im Reiter *Auswahl* — und ein gesperrtes Entfernen nennt seinen Grund.
++
++    Fragebogen S-20261006-5be329: „die Entf taste löscht weder Merkmal noch
++    Körper“. Zwei Wege endeten im Schweigen: Der Fokus lag nach einem Klick
++    rechts im Reiter, und die Taste galt nur an Baum und Ansicht; oder die
++    Kette hielt an einem Schritt, und Qt führt ein gesperrtes Kürzel nicht
++    aus, ohne etwas zu sagen. Gedrückt wird die Taste wie vom Kunden, nicht
++    die Methode dahinter. Ein Textfeld im Reiter behält Entf, und ohne
++    Auswahl bleibt die Taste stumm — beim Messen gehört sie dem letzten Maß.
++    """
++    from PySide6.QtTest import QTest
++    from PySide6.QtWidgets import QLineEdit, QPushButton
++
++    from tests.ui_helpers import shown_window, with_a_body
++
++    windows = shown_window(qt_app)
++    window = next(windows)
++    try:
++        body = with_a_body(window)
++        window.activateWindow()
++        window.right.setCurrentWidget(window.feature_dock)
++        qt_app.processEvents()
++
++        def steps() -> list[str]:
++            return [entry.op for entry in window.session.project.document.ops]
++
++        before = steps()
++        button = next(
++            candidate
++            for candidate in window.feature_dock.findChildren(QPushButton)
++            if candidate.isVisibleTo(window.feature_dock)
++            and candidate.isEnabled()
++            and candidate.focusPolicy() != Qt.FocusPolicy.NoFocus
++        )
++        button.setFocus()
++        QTest.keyClick(button, Qt.Key.Key_Delete)
++        assert window.session.wait_for_idle()
++        assert steps() == [*before, "delete_object"], "der Fokus auf einem Knopf im Reiter"
++        window.undo_action.trigger()
++        assert window.session.wait_for_idle()
++        assert steps() == before
++
++        window.object_tree.select_object(body)
++        field = next(
++            candidate
++            for candidate in window.feature_dock.findChildren(QLineEdit)
++            if candidate.isVisibleTo(window.feature_dock) and not candidate.isReadOnly()
++        )
++        field.setText("ab")
++        field.setCursorPosition(0)
++        field.setFocus()
++        QTest.keyClick(field, Qt.Key.Key_Delete)
++        assert field.text() == "b", "ein Textfeld behält Entf"
++        assert steps() == before
++
++        monkeypatch.setattr(window, "_halt_reason", lambda: "Die Kette hält an.")
++        window._update_actions()
++        assert not window._op_actions["delete_object"].isEnabled()
++        window.announce("")
++        window.object_tree.tree.setFocus()
++        QTest.keyClick(window.object_tree.tree, Qt.Key.Key_Delete)
++        assert steps() == before
++        assert window.status_message.text() == "Objekt entfernen: Die Kette hält an."
++
++        window.announce("")
++        window.object_tree.select_object(None)
++        window.object_tree.tree.setFocus()
++        QTest.keyClick(window.object_tree.tree, Qt.Key.Key_Delete)
++        assert window.status_message.text() == "", "ohne Auswahl gibt es nichts zu sagen"
++    finally:
++        next(windows, None)
++
++
+ #: Zugeklappte Abschnitte, deren Titel schon ihr Inhalt ist, mit Grund.
+ #: Die Filamente der linken Spalte: Eine Zusatzzeile kostete die Spalte Höhe,
+ #: um die Objektbaum und Filamentliste ohnehin ringen (RM-489).

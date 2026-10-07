@@ -34,6 +34,11 @@ Produktsicherheitsakte mit ihrer Zweckgrenze, Version und Prüfung geführt.
   bleiben absichtlich alt.
 - Ändert sich ein **Baustein** im Maß, meldet das Öffnen es (§24.4). Ein
   Beispiel, das diese Meldung auslöst, ist ein veraltetes Beispiel.
+- **Ein Beispiel steht, wie es gedruckt wird**: auf dem Bett, ohne Befund
+  zur Lage, auch ohne Hinweis — sonst heißt die angebotene Abhilfe *Auf das
+  Bett setzen*, und die verschiebt den Körper statt des falsch gesetzten
+  Bausteins. Ein abtragender Baustein mit Zugabe hinter der Wand
+  (Kabeldurchführung) setzt seine Mündung auf die Außenseite.
 
 Die Touren dazu prüft `tests/test_tour.py`, die Projekte selbst
 `tests/test_examples.py`.

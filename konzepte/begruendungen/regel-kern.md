@@ -212,6 +212,22 @@ Ungeschnittenes in der Darstellung ihres Eingangs zurücklegen muss:
 > geschrieben; jede hatte nur eine Zusage nicht mitgenommen, die es anderswo
 > schon gab.
 
+## Auswertung
+
+**Ein Befund über mehrere Körper nennt sie alle.** Fund N1 bei der Behebung
+des Reviews zu `bbd41ff2d`: Zwei sich überschneidende Quader, *Überschneidungen
+prüfen*, den zweiten entfernt — „Zwei Objekte überschneiden sich.“ stand weiter
+am bleibenden Körper. `prepare.named_for` nannte den zweiten nur beim Namen,
+und `evaluate._without_discarded` sah nur `object_id`. Der Fügeweg nannte
+keinen von beiden, er spricht immer über seine zwei Eingänge. Seitdem trägt der
+Befund beide Kennungen (`Finding.object_ids`). Die Liste reist im Plattencache
+mit, nicht in der Projektdatei (wie `outline`: der Bericht wird beim Öffnen neu
+gerechnet), und `_without_repeats` vergleicht sie mit — zwei Paare mit gleich
+benannten Partnern sind zwei Aussagen, und fiele eine weg, nähme das Entfernen
+des einen Partners den letzten Satz über das andere Paar mit. Geändert haben
+sich damit die Befunde von *Überschneidungen prüfen*, *Fügeweg prüfen*, *Auf
+dem Bett anordnen* und *Druckoptimal ausrichten*; ihre `cache_version` stieg.
+
 ## Am Dokument wird nie vorbei geschrieben
 
 Warum `document.parameters[...] = ...` verboten ist: „Wer stattdessen

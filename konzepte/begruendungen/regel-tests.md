@@ -482,6 +482,46 @@ von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er 
 *manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort
 einer.
 
+**Ein Prozessende braucht Rechenzeit.** `test_active_helper_ends_with_a_killed_parent`
+wartete nach dem harten Elternende zehn Sekunden darauf, dass der rechnende
+Hilfsprozess fort ist, und fiel im Tor neben einer Agenten-Suite und weiteren
+Toren in einem von drei Läufen — unabhängig vom Stand. Die Sonde
+`konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/elternende.py` fuhr
+denselben Ablauf verschränkt mit einem Helfer, der während der Rechnung in
+normaler Klasse bleibt (06.10.2026, Maschine zu 100 % belegt): wie ausgeliefert
+(`BELOW_NORMAL`) war er nach 9,5 bis 18,8 s fort, 8 von 10 Läufen über der
+Frist; in normaler Klasse nach 0 bis 0,2 s. Mit zwei Schleifen auf seiner CPU
+dasselbe Bild, 9,5 bis 19,5 s gegen 0,1 bis 0,7 s, auch gebunden an `F0FF`.
+Zwei Läufe bei ebenso voller Maschine (Erstlauf, Ablage) waren in
+`BELOW_NORMAL` schon nach 0,07 und 0,73 s fort; wie lange der Abschluss dauert,
+hängt an der Art der Last. Auf ruhiger Maschine (0 bis 27 %) war er in beiden
+Klassen nach 1 bis 2 ms fort.
+Eingeleitet war das Ende in allen 65 gebundenen Läufen, sobald der
+Elternprozess signalisiert war (`IsProcessDeleting`); ohne inneres Jobobjekt
+blieb das Merkmal aus, und der Helfer lebte die ganzen 150 s der Beobachtung.
+Auf normale Klasse gehoben, schloss ein seit 1,5 s eingeleitetes Ende in 54 bis
+91 ms ab. Der Kern beendet einen Prozess über seine Fäden, und jeder braucht
+dafür eine Zeitscheibe — dieselbe Ursache wie RM-474. Ein Zeitfenster im Aufbau
+des Jobobjekts gab es nicht: Der Helfer wird gebunden, bevor er eine Rechnung
+bekommen kann. Die Zusage „er rechnet nach dem Absturz nicht weiter“ hängt am
+eingeleiteten Ende; wie schnell der Planer es abschließt, misst eine Uhr, die
+Last nicht verträgt. Der Test vorher und nachher, verschränkt im selben
+Fenster: alt 6 von 8 rot, jedes Mal an der Zehn-Sekunden-Zusicherung und
+dreimal dazu im Abbau (`TerminateProcess` 5, der Helfer auch zehn Sekunden
+später nicht fort); neu 8 von 8 grün (`elternende-test-alt-neu.txt`). Die
+Zusicherung ist schwächer als „fort“ und greift trotzdem: Ohne inneres
+Jobobjekt (`SOLIDON_TEST_KERNEL_LIFECYCLE_FAULT=no-binding`) wird der neue Test
+an derselben Stelle rot (`elternende-gegenprobe.txt`). Sie löst die Zusage
+„innerhalb der Abbaufrist signalisiert“ aus
+`konzepte/nachweise-release-0.5.1/reports/rm298-lifecycle-2026-10-02.md` ab.
+
+**Eine eben umbenannte Datei sperrt kurz.** Die erste Fassung der Sonde las
+eine Meldung gleich nach ihrem `Path.replace` einmal mit `PermissionError`
+(erste Zeile in `elternende-laeufe.jsonl`). `elternende_umbenennen.py` schreibt aus einem
+zweiten Prozess 3000 Meldungen auf diesem Weg und öffnet jede, sobald ihr Name
+erscheint: In drei von acht Läufen lehnte Windows 2 bis 30 Öffnungen mit einer
+Freigabeverletzung (32) ab, in fünf keine (`elternende-umbenennen.txt`).
+
 ### Wenn ein Lauf steht: py-spy
 
 Ein Testlauf, der bei 0,00 CPU-Sekunden über ein Intervall steht, sagt nicht,

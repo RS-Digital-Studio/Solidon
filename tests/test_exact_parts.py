@@ -51,6 +51,7 @@ def _built(name: str, exact: bool, **values: object) -> Any:
 
 def _sound(solid: Any, *, bodies: int = 1) -> Any:
     """Gültig, geschlossen, die erklärte Körperzahl — und kein Netz."""
+    exact_kernel()
     from OCP.BRepCheck import BRepCheck_Analyzer
 
     assert not isinstance(solid, MeshData)
@@ -1609,6 +1610,7 @@ def _band_area(width: float, depth: float, band: float) -> float:
 
 
 def _surface_kinds(solid: Any) -> dict[str, int]:
+    exact_kernel()
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere, GeomAbs_Torus
 

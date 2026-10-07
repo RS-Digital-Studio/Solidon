@@ -7201,6 +7201,32 @@ def test_a_part_offers_its_own_actions_not_those_of_a_face() -> None:
     assert removing.op is None, "es startet keine Operation, es nimmt den Schritt"
 
 
+@pytest.mark.parametrize("op", ["create_lid", "screw_lid"])
+def test_a_lid_offers_no_move_for_the_height_of_its_opening(op: str) -> None:
+    """Am Deckel ist ``z`` die Höhe der Öffnung, keine Lage (Review RM-526, B1).
+
+    Seit RM-526 ist sie leer, wenn sie Oberkante heißt. *Baustein verschieben*
+    bot sie als Feld an, mit dem Wert ``None``, und das Merkmalfenster warf beim
+    Klick auf Kragen oder Öffnung ``TypeError``. Verschoben wird ein Baustein in
+    der Ebene; ein Schema ohne ``x`` und ``y`` hat keine Lage. Jedes angebotene
+    Feld trägt einen Wert, den ein Zahlenfeld zeigen kann.
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import part_actions
+
+    load_operations()
+    spec = REGISTRY.get(op)
+    for params in ({}, {"z": None}, {"thickness": 2.4}):
+        actions = part_actions(SimpleNamespace(id=3, op=op, params=params), spec)
+        assert "Baustein verschieben" not in [str(action.title) for action in actions]
+        for action in actions:
+            for field in action.fields:
+                if field.kind in {"length", "angle", "count"}:
+                    assert field.value is not None, f"{op}.{field.name} ohne Wert"
+
+
 def test_only_a_collected_value_from_the_front_gets_a_way_of_its_own() -> None:
     """Genannt wird, was vorn stand — nicht jeder Sammelparameter.
 

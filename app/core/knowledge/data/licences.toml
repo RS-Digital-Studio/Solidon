@@ -50,8 +50,16 @@
 #   CuraEngine        AGPL-3.0  dito
 #   Ollama            MIT       extern, eigener Prozess — der lokale Chat (§27)
 #   ComfyUI           GPL-3.0   extern, eigener Prozess — Weg 3 (§27)
-#   TripoSG           MIT       Quelltext und Gewichte, in ComfyUI geladen
-#   BiRefNet          MIT       Freistell-Gewichte (Comfy-Org/BiRefNet)
+#   TripoSG           MIT laut Wurzel-LICENSE und Modellkarte, in ComfyUI
+#                               geladen; triposg_transformer.py trägt die Tencent
+#                               Hunyuan Community License, triposg/LICENSE die
+#                               FlashVDM Community License (beide ohne EU) —
+#                               Kette offen, RM-003
+#   BiRefNet          MIT       Freistell-Gewichte (Comfy-Org/BiRefNet, byte-
+#                               gleich mit ZhengPeng7/BiRefNet); Trainingsdaten
+#                               DIS5K nur nicht-kommerziell — offen, RM-003
+#   SDXL Base 1.0     CreativeML Open RAIL++-M, Bildmodell des Textwegs, auf
+#                               Wunsch eingerichtet; Nutzungsverbote Anhang A
 #   Qwen3-TTS         Apache-2.0, Quelltext und 1.7B-VoiceDesign-/Base-Gewichte
 #                               (github.com/QwenLM/Qwen3-TTS und
 #                               huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base).

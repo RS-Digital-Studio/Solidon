@@ -188,10 +188,10 @@ CONVERT_TO_EXACT = Action("mesh_to_exact", _("In Flächen und Kanten umwandeln")
 SPLIT_MODEL = Action("split_model", _("Modell teilen"), primary=True)
 #: Für einen Körper aus losen Teilen, der als Ganzes nirgends hinpasst: die
 #: Zerlegung vor den angehaltenen Schritt, dann derselbe Schritt noch einmal
-#: — dasselbe Muster wie ``REPAIR_AND_RETRY``, mit *In Einzelteile zerlegen*
+#: — dasselbe Muster wie ``REPAIR_AND_RETRY``, mit *In Einzelteile aufteilen*
 #: statt der Reparatur (``History.split_and_retry``).
 SPLIT_AND_RETRY = Action(
-    "split_and_retry", _("In Einzelteile zerlegen und erneut versuchen"), primary=True
+    "split_and_retry", _("In Einzelteile aufteilen und erneut versuchen"), primary=True
 )
 #: Für eine Zerlegung, deren Stückzahl nicht zu den Teilen passt: die Zahl auf
 #: die gemessene setzen, die Ausgänge danach neu vergeben und jeden späteren
@@ -224,7 +224,7 @@ REMESH_AND_RETRY = Action("remesh_and_retry", _("Kanten verfeinern und erneut ve
 #: das jeden Knick rundet (``History.mesh_and_retry``). Nicht vorn: Der Weg ist
 #: eine Einbahntür, Strg+Z nimmt ihn als Ganzes zurück (RM-436).
 MESH_AND_RETRY = Action("mesh_and_retry", _("Flächenbearbeitung beenden und erneut versuchen"))
-SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie trennen"), primary=True)
+SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie teilen"), primary=True)
 #: Wenn *Automatisch teilen* neben den gesperrten Sichtflächen keine Naht
 #: mehr findet (§22.3, RM-080): Die Sperren dieses Körpers aufheben — der
 #: Ausweg, der die Suche wieder öffnet. Vorn, weil der Kunde die Suche selbst
@@ -298,13 +298,13 @@ OPEN_IN_BROWSER = Action("open_in_browser", _("Seite im Browser öffnen"))
 #: gefangen: Die Operation läuft ja.
 REMOVE_SMALL_PARTS = Action("remove_small_parts", _("Kleine Teile entfernen"), primary=True)
 #: Ein Modell aus mehreren Teilen in seine Teile zerlegen — derselbe Weg, den
-#: *In Einzelteile zerlegen* in der Karte geht, nur am Befund, der es sagt.
+#: *In Einzelteile aufteilen* in der Karte geht, nur am Befund, der es sagt.
 #: „Das Modell besteht aus mehreren Teilen." bot bis zum 14.09.2026 nichts
 #: an, während die Nachbarzeile „sehr kleine Einzelteile" ihren Knopf trug
 #: (Bedienweg-Durchsicht). Ein Angebot, keine Ausführung: Ein Schild mit
 #: losen Buchstaben soll zusammenbleiben, und Regel 19 deckt den Klick —
 #: Strg+Z nimmt ihn zurück.
-SPLIT_BODIES = Action("split_bodies", _("In Einzelteile zerlegen"))
+SPLIT_BODIES = Action("split_bodies", _("In Einzelteile aufteilen"))
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
 CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Version sehen"), primary=True)
 #: Der Ausweg, wenn das Paket nicht kommt oder sich nicht starten lässt: der

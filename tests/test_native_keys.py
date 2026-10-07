@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import functools
 import inspect
+import os
 import re
+import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -275,7 +278,156 @@ def test_the_mac_writing_is_the_one_qt_uses_there(qt_app: object) -> None:
         ("Alt+7", "Alt+7"),
     ):
         assert native_keys(written, "darwin") == QKeySequence(portable).toString(native)
-    redo = QKeySequence(QKeySequence.StandardKey.Redo).toString(native)
-    assert native_keys("Strg+Y", "darwin") == redo
+    # *Wiederholen* hängt an Qts Plattformthema, und offscreen hat keines: Dort
+    # ist Redo Strg+Y, also ⌘Y, auf dem echten Mac ⇧⌘Z (RM-531). Gefragt wird
+    # deshalb die Cocoa-Plattform selbst, in einem eigenen Prozess.
+    script = (
+        "from PySide6.QtGui import QGuiApplication, QKeySequence\n"
+        "application = QGuiApplication([])\n"
+        "print(QKeySequence(QKeySequence.StandardKey.Redo).toString("
+        "QKeySequence.SequenceFormat.NativeText))\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", script],
+        env={**os.environ, "QT_QPA_PLATFORM": "cocoa", "PYTHONIOENCODING": "utf-8"},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert native_keys("Strg+Y", "darwin") == done.stdout.strip()
     assert native_keys("(Entf)", "darwin") == f"({QKeySequence('Backspace').toString(native)})"
     assert native_keys("(Pos1)", "darwin") == f"({QKeySequence('Home').toString(native)})"
+
+
+@pytest.mark.parametrize("platform", ["darwin", sys.platform], ids=["mac", "hier"])
+def test_return_opens_the_current_entry_exactly_once(qt_app: object, platform: str) -> None:
+    """RM-531: Am Mac meldet Qt Return in einer Liste nicht als Aktivierung.
+
+    Dort bearbeitet Return einen Eintrag, erst ⌘O öffnet ihn; im Startbildschirm
+    öffnete Return am Mac deshalb kein Projekt. ``return_opens`` meldet die
+    Aktivierung auf ``darwin`` selbst — und genau einmal, auch dort, wo Qt es
+    ohnehin tut (``hier``: die Plattform des Laufs). Gegenprobe: ohne
+    Eintrag öffnet nichts.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QListWidget
+
+    from app.ui.shortcut_schemes import return_opens
+
+    view = QListWidget()
+    try:
+        view.addItems(["a.p3d", "b.p3d"])
+        return_opens(view, platform)
+        opened: list[str] = []
+        view.itemActivated.connect(lambda item: opened.append(item.text()))
+
+        view.setCurrentRow(-1)
+        QTest.keyClick(view, Qt.Key.Key_Return)
+        assert opened == [], "ohne aktuellen Eintrag öffnet nichts"
+
+        view.setCurrentRow(1)
+        QTest.keyClick(view, Qt.Key.Key_Return)
+        QTest.keyClick(view, Qt.Key.Key_Enter, Qt.KeyboardModifier.KeypadModifier)
+        assert opened == ["b.p3d", "b.p3d"], "Return und Enter öffnen je einmal"
+    finally:
+        view.deleteLater()
+
+
+@pytest.mark.parametrize("where", ["start", "palette", "report"])
+def test_every_list_that_opens_on_activation_opens_on_return_at_the_mac(
+    qt_app: object, where: str
+) -> None:
+    """Der Anschluss zu ``return_opens``: Startfläche, Befehlspalette, Prüfbericht.
+
+    Der Test darüber hält den Filter an einer leeren Liste; ob die drei Listen,
+    die über ``itemActivated`` öffnen, ihn tragen, hielt keiner. Fiel die Zeile
+    in Palette oder Prüfbericht weg, blieb jeder Lauf grün, auch am Mac
+    (Review 06.10.2026, U2-N1). Hier hängt genau ein Filter an der echten
+    Liste; er wird auf den Mac gestellt und nimmt die Taste dann selbst, und
+    Return öffnet den aktuellen Eintrag genau einmal — auf jeder Plattform.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QListWidget, QWidget
+
+    from app.core.registry import PaletteEntry
+    from app.core.types import Finding
+    from app.ui.command_palette import CommandPalette
+    from app.ui.panels import ReportPanel
+    from app.ui.shortcut_schemes import ReturnOpens
+    from app.ui.start_screen import StartScreen
+
+    opened: list[object] = []
+    owner: QWidget
+    view: QListWidget
+    if where == "start":
+        screen = StartScreen()
+        screen.show_recent([Path("a.p3d"), Path("b.p3d")])
+        screen.openRequested.connect(opened.append)
+        owner, view = screen, screen.recent_list
+    elif where == "palette":
+        entry = PaletteEntry(name="return_sample", title="Würfel", category="create", doc="Würfel.")
+        palette = CommandPalette([entry])
+        palette.accepted.connect(lambda: opened.append(palette.chosen()))
+        owner, view = palette, palette.list
+    else:
+        panel = ReportPanel()
+        panel.add_findings(
+            [
+                Finding(
+                    code="arrange.out_of_build_volume",
+                    severity="warning",
+                    message="Ein Objekt steht über den Bauraum hinaus.",
+                    object_id="obj_1",
+                    values={"object": "Halter", "excess": "15,00 mm"},
+                )
+            ]
+        )
+        panel.findingActivated.connect(opened.append)
+        owner, view = panel, panel.list
+    try:
+        filters = [child for child in view.children() if isinstance(child, ReturnOpens)]
+        assert len(filters) == 1, f"{where}: {len(filters)} Return-Filter an der Liste"
+        filters[0]._platform = "darwin"
+        view.setCurrentRow(view.count() - 1)
+        QTest.keyClick(view, Qt.Key.Key_Return)
+        assert len(opened) == 1, f"{where}: Return öffnete {len(opened)}-mal"
+    finally:
+        owner.deleteLater()
+
+
+def test_a_list_that_opens_on_activation_carries_the_return_filter() -> None:
+    """Die nächste Liste bekommt den Filter mit, nicht erst nach einer Meldung vom Mac.
+
+    Wer in ``app/ui`` eine Ansicht an ``itemActivated`` hängt, öffnet über
+    Doppelklick und Return — am Mac aber nicht über Return, solange
+    ``return_opens`` fehlt (RM-531). Gelesen wird je Klasse und je Funktion auf
+    Modulebene: Jede Ansicht mit ``<ansicht>.itemActivated.connect`` hat dort
+    ein ``return_opens(<ansicht>,``. Je Datei hieße ``self.list`` in
+    ``panels.py`` dreierlei, und der Filter am Prüfbericht deckte die anderen
+    beiden (Review 06.10.2026, U2-N7).
+    """
+    import ast
+
+    root = Path(__file__).resolve().parents[1] / "app" / "ui"
+    connected = re.compile(r"([\w.]+)\.itemActivated\.connect\(")
+    missing: list[str] = []
+    for source in sorted(root.glob("*.py")):
+        text = source.read_text(encoding="utf-8")
+        # Nur wenige Dateien hängen etwas an ``itemActivated``; die übrigen
+        # zu zerlegen kostete Sekunden (Review 06.10.2026, U2-N8).
+        if ".itemActivated.connect(" not in text:
+            continue
+        lines = text.splitlines()
+        for node in ast.parse(text).body:
+            if not isinstance(node, ast.ClassDef | ast.FunctionDef):
+                continue
+            scope = "\n".join(lines[node.lineno - 1 : node.end_lineno])
+            for view in sorted(set(connected.findall(scope))):
+                if f"return_opens({view}," not in scope:
+                    missing.append(f"{source.name}: {node.name}.{view}")
+    assert not missing, f"itemActivated ohne return_opens: {missing}"

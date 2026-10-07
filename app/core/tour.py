@@ -642,9 +642,8 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         closing=_(
             # **Drei Wege, und der erste hat eine Bedingung.** Hier stand
-            # allein *Automatisch teilen*. Die vorbereitenden Operationen
-            # stehen rechts bei der Auswahl; dieser eigene Ablauf bleibt
-            # im Menü *Bearbeiten*.
+            # allein *Automatisch teilen*. Seit RM-507 steht es rechts bei
+            # der Auswahl unter *Vorbereiten*, neben den übrigen Wegen.
             #
             # Schwerer wog der Inhalt: *Automatisch teilen* zerschneidet ein
             # Teil, **das nicht auf das Bett passt** (so steht es an seinem
@@ -652,22 +651,22 @@ TOURS: Final[tuple[Tour, ...]] = (
             # sparen — wer ihrem Schlusssatz folgte, griff zu einer Funktion,
             # die seinen Fall gar nicht meint, und die beiden Wege, auf denen
             # er die Naht selbst legt, standen nirgends.
-            "Zu große Teile teilt Bearbeiten → Automatisch teilen. Eigene Nähte legen „Teilen“ "
-            "und „An gezeichneter Linie trennen“."
+            "Zu große Teile teilt „Automatisch teilen“ rechts bei der Auswahl. Eigene Nähte "
+            "legen „An Ebene teilen“ und das Werkzeug „Teilen“."
         ),
     ),
     Tour(
         example_id="zu-gross-automatisch-teilen",
         intro=_(
             "Eine Wandleiste von 60 cm ist zu lang für jedes übliche Bett. Automatisch teilen "
-            "hat sie in drei Stücke zerlegt."
+            "hat sie in drei Stücke geteilt."
         ),
         steps=(
             TourStep(
                 shows="history",
                 text=_(
-                    "Im Verlauf stehen zwei gewöhnliche Schritte „Teilen“. Weniger als drei "
-                    "Stücke gehen auf ein 220er Bett nicht."
+                    "Im Verlauf stehen zwei gewöhnliche Schritte „An Ebene teilen“. "
+                    "Weniger als drei Stücke gehen auf ein 220er Bett nicht."
                 ),
             ),
             TourStep(
@@ -679,8 +678,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             TourStep(
                 shows="history",
                 text=_(
-                    "Öffnen Sie den ersten „Teilen“-Schritt mit einem Doppelklick und ändern Sie "
-                    "die Position. Stifte und Passungen wandern mit."
+                    "Öffnen Sie den ersten Schritt „An Ebene teilen“ per Doppelklick "
+                    "und ändern Sie die Position. Stifte und Passungen wandern mit."
                 ),
                 done=_first_op_number_changed("split_pinned", "position", -100.0),
             ),
@@ -693,8 +692,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
         ),
         closing=_(
-            "Für Ihr eigenes Modell: Bearbeiten → Automatisch teilen. Ein spiegelgleiches Teil "
-            "wird in der Mitte geteilt."
+            "Für Ihr eigenes Modell: Körper wählen, rechts „Automatisch teilen“. "
+            "Ein spiegelgleiches Teil wird in der Mitte geteilt."
         ),
     ),
     Tour(

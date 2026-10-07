@@ -472,6 +472,24 @@ def test_the_commit_guard_takes_its_language_list_from_the_index(
     }
 
 
+def test_the_commit_guard_fails_without_any_catalog_in_the_index(
+    text_guard_repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RM-349 (E-N2): Ohne Katalog fehlt nichts — das ist kein bestandener Fall."""
+    from tools import check_new_texts
+
+    root = text_guard_repo
+    _text_guard_git(root, "rm", "-q", "--cached", "app/i18n/locales/en.json")
+    source = root / "app" / "message.py"
+    source.write_text(source.read_text(encoding="utf-8") + 'tr("Neuer Text")\n', encoding="utf-8")
+    _text_guard_git(root, "add", "app/message.py")
+
+    with pytest.raises(check_new_texts.NoCatalogError):
+        check_new_texts.missing(["Neuer Text"])
+    assert check_new_texts.main() == 1
+    assert "kein Katalog" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("new_text", [False, True])
 def test_the_commit_guard_compares_both_names_of_a_renamed_source(
     text_guard_repo: Path, new_text: bool
@@ -492,6 +510,31 @@ def test_the_commit_guard_compares_both_names_of_a_renamed_source(
 
     assert check_new_texts.added_texts() == (["Neuer Text"] if new_text else [])
     assert check_new_texts.main() == int(new_text)
+
+
+def test_the_commit_guard_stops_at_a_staged_file_it_cannot_read(
+    text_guard_repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Eine gestagte Fassung, die Python nicht liest, hält den Commit an.
+
+    ``bbd41ff2d`` ging mit einer ``panels.py`` durch, deren Einrückung
+    verschoben war: Der Wächter las die gestagte Fassung, ``ast.parse``
+    scheiterte, und die Datei galt als textlos — ihre sechs neuen Texte prüfte
+    niemand, und jeder Import der Datei scheiterte am HEAD. Der Kopf des Hooks
+    verspricht, dass eine nicht auswertbare Prüfung anhält.
+    """
+    from tools import check_new_texts
+
+    root = text_guard_repo
+    source = root / "app" / "message.py"
+    before = source.read_text(encoding="utf-8")
+    source.write_text(before + 'def f():\nreturn tr("Neuer Text")\n', encoding="utf-8")
+    _text_guard_git(root, "add", "app/message.py")
+    broken = len(before.splitlines()) + 2  # die Zeile ohne Einrückung unter ``def``
+
+    assert check_new_texts.main() == 2
+    said = capsys.readouterr().out
+    assert "app/message.py" in said and f"Zeile {broken}" in said, said
 
 
 def _commit_hook_with(
@@ -727,6 +770,18 @@ def test_the_commit_hook_keeps_non_ascii_and_space_paths_as_one_name(
     assert result.returncode == 1, result.stderr
 
 
+def test_the_commit_hook_stops_when_the_text_guard_cannot_read_a_staged_file(
+    tmp_path: Path,
+) -> None:
+    """Rückgabe 2 des Textwächters ist eine nicht auswertbare Prüfung, kein Kataloglückenbefund."""
+    result, _calls = _commit_hook_with(tmp_path, catalog_exit=2)
+
+    assert result.returncode == 1, result.stderr
+    assert "ABGEBROCHEN" in result.stderr, result.stderr
+    assert "Die Textprüfung konnte eine gestagte Datei nicht lesen." in result.stderr
+    assert "[neue Texte ohne Übersetzung]" not in result.stderr
+
+
 @pytest.mark.parametrize("git_exit, have_interpreter", [(128, True), (0, False)])
 def test_the_commit_hook_stops_if_its_prerequisites_are_unavailable(
     tmp_path: Path, git_exit: int, have_interpreter: bool
@@ -934,10 +989,14 @@ def test_delivery_matrix_resumes_only_a_matching_well_formed_run(
     root = Path(__file__).resolve().parents[1]
     model = tmp_path / "plate.stl"
     output = tmp_path / "matrix"
-    script = root / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "einheit.py"
+    script = root / "tools" / "matrix_unit.py"
+    import tools
+
+    # ``matrix_unit`` bindet ``tools`` an seinen Ordner; danach kommt der
+    # Suchpfad des Testprozesses zurück.
+    monkeypatch.setattr(tools, "__path__", tools.__path__)
     monkeypatch.setattr(sys, "argv", [str(script), str(root), str(model), str(output), "heim"])
     monkeypatch.setattr(sys, "path", list(sys.path))
-    sys.path.insert(0, str(script.parent))
     specification = importlib.util.spec_from_file_location("delivery_matrix_unit", script)
     assert specification is not None and specification.loader is not None
     module = importlib.util.module_from_spec(specification)
@@ -987,7 +1046,7 @@ def test_delivery_matrix_report_excludes_legacy_and_mismatched_results(
     import importlib.util
 
     root = Path(__file__).resolve().parents[1]
-    script = root / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "bericht.py"
+    script = root / "tools" / "matrix_report.py"
     folder = tmp_path / "matrix"
     nested = folder / "plate-a1b2c3d4"
     nested.mkdir(parents=True)
@@ -1093,9 +1152,9 @@ def test_delivery_matrix_seal_requires_each_expected_combo(
     import importlib.util
 
     root = Path(__file__).resolve().parents[1]
-    script = root / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "treiber.py"
+    script = root / "tools" / "matrix_driver.py"
     monkeypatch.setattr(sys, "argv", [str(script), str(root), str(tmp_path / "matrix"), "modelle"])
-    monkeypatch.setattr(sys, "path", [*sys.path, str(script.parent)])
+    monkeypatch.setattr(sys, "path", list(sys.path))
     specification = importlib.util.spec_from_file_location("delivery_matrix_driver", script)
     assert specification is not None and specification.loader is not None
     driver = importlib.util.module_from_spec(specification)
@@ -1133,8 +1192,8 @@ def test_delivery_matrix_fingerprints_cura_material_profiles(
     (root / "readme.xml").write_text("not a profile", encoding="utf-8")
 
     repo = Path(__file__).resolve().parents[1]
-    script = repo / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "treiber.py"
-    monkeypatch.syspath_prepend(str(script.parent))
+    script = repo / "tools" / "matrix_driver.py"
+    monkeypatch.setattr(sys, "path", list(sys.path))
     monkeypatch.setattr(sys, "argv", [str(script), str(repo), str(tmp_path / "out"), "modelle"])
     specification = importlib.util.spec_from_file_location("delivery_matrix_profile_files", script)
     assert specification is not None and specification.loader is not None
@@ -1153,11 +1212,11 @@ def test_delivery_matrix_requires_boolean_completion_and_binds_worker_count(
     import importlib.util
 
     root = Path(__file__).resolve().parents[1]
-    script = root / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "treiber.py"
+    script = root / "tools" / "matrix_driver.py"
     model = tmp_path / "plate.stl"
     model.write_bytes(b"model")
     output = tmp_path / "matrix"
-    monkeypatch.syspath_prepend(str(script.parent))
+    monkeypatch.setattr(sys, "path", list(sys.path))
     monkeypatch.setattr(sys, "argv", [str(script), str(root), str(output), "modelle"])
     specification = importlib.util.spec_from_file_location(
         "delivery_matrix_strict_completion", script
