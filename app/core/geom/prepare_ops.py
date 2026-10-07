@@ -19023,7 +19023,7 @@ class SplitBodiesParams(BaseParams):
         minimum=2,
         maximum=64,
         doc=_(
-            "In wie viele Objekte zerlegt wird. Wie viele Teile der Körper "
+            "In wie viele Objekte aufgeteilt wird. Wie viele Teile der Körper "
             "tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, "
             "nennt diese Operation die richtige."
         ),

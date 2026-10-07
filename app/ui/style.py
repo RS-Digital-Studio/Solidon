@@ -164,8 +164,11 @@ def set_role(widget: QLabel, role: str, text: str) -> None:
     # aus Katalogen und aus Fehlermeldungen, und ein ``<`` darin machte aus der
     # Zeile stillen Unsinn. Was hier gebaut wird, ist die einzige Stelle, an der
     # die Anwendung eine Beschriftung als Auszeichnungstext setzt.
+    # Und ein Zeilenende bleibt eines: Als Auszeichnungstext liefen die Zeilen
+    # einer gescheiterten pip-Ausgabe sonst zu einem Absatz zusammen, und unter
+    # Linux und macOS passte der Brei in die Karte, statt zu rollen (RM-339).
     widget.setTextFormat(Qt.TextFormat.RichText)
-    widget.setText(f"{painted}&nbsp;&nbsp;{html.escape(text)}")
+    widget.setText(f"{painted}&nbsp;&nbsp;{html.escape(text).replace(chr(10), '<br>')}")
     encoding = SEVERITY_ENCODING.get(role)
     spoken = tr(encoding.label_key) if encoding is not None else tr("Erledigt")
     widget.setAccessibleDescription(tr("{name}: {value}", name=spoken, value=text))

@@ -43720,7 +43720,11 @@ grün ohne Marke. Der Changelog-Punkt zum Abbruch während der Antwort ist für
 
 **Nachweis (06.10.2026):** Beide Marken sind entfernt. Der Anfragefaden liest und sendet
 an einem `llm._WatchedSocket`, der den Abbruch selbst bemerkt; ohne `xfail`-Marke grün auf
-macOS und Ubuntu je 20 von 20 (Lauf 37533806573) und Windows 40 von 40 am i9. Der
+macOS und Ubuntu je 20 von 20, Endstand von `llm.py` mit Senden (Lauf 37591775378), und
+Windows 40 von 40 am i9. Die eine rote Wiederholung auf macOS davor (Lauf 37587942773) war
+der Test: Kam ein Stück der Antwort erst nach dem Schließen an, sah die Gegenstelle einen
+Reset statt eines geordneten Endes, und der Test zählte nur dieses; die Stufe `late_body`
+stellt das fest her. Der
 HiDPI-Grifftest lief unter Xvfb 20 von 20 über beide Skalen (Lauf 37492243563). Commit
 „Abbrechen erreicht das lokale Modell auch auf dem Mac sofort“; der offene Rest von RM-104
 steht weiter im Register.

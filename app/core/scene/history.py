@@ -1038,7 +1038,8 @@ class History:
             raise ValidationError(
                 field="in",
                 detail=_(
-                    "Dieser Schritt verwendet kein vorhandenes Modell, das sich zerlegen ließe."
+                    "Dieser Schritt verwendet kein vorhandenes Modell, das sich in "
+                    "Einzelteile aufteilen ließe."
                 ),
                 constraint="no_split_target",
                 values={"op": stopped_at, "missing": [target]},

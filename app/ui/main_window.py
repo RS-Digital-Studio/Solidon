@@ -19303,6 +19303,59 @@ class MainWindow(QMainWindow):
                 self.object_tree.select_feature(object_id, name)
                 return
 
+    def _reselect_the_successor(self, result: EvaluationResult) -> None:
+        """Ein Merkmal, das der jüngste Schritt ersetzt hat, geht auf seinen Nachfolger über.
+
+        *Textur aufbringen* macht aus der gewählten Fläche ein Muster; die
+        Fläche gibt es danach nicht mehr, und der Baum hebt die Wahl auf
+        (RM-537). Verloren ist sie aber nicht, sondern umgezogen — wie das
+        Langloch aus der gewählten Bohrung (:meth:`_reselect_the_renamed`).
+        Ohne diese Wiederwahl stand nach dem Schritt nichts mehr gewählt, und
+        ein Klick auf das Muster fand keinen Körper, an dem er gilt.
+
+        Gewählt wird das erste Merkmal, das ein Schritt der jüngsten
+        Transaktion an diesem Körper selbst erzeugt hat (``generated``, nicht
+        die Flächen, die die Erkennung danach neu zuordnet) — nur, wenn dieser Schritt
+        das verlorene Merkmal in seinen Werten nennt. Nach einem Undo nennt
+        der jüngste Schritt es nicht, und die Wahl bleibt aufgehoben.
+        """
+        tree = self.object_tree
+        if not tree.lost_selection or tree.selected() is not None or tree.selected_features():
+            return
+        transactions = self.session.history.transactions
+        if not transactions:
+            return
+        newest = set(transactions[-1].ops)
+        steps = [entry for entry in self.session.project.document.ops if entry.id in newest]
+
+        def names(value: Any, feature: str) -> bool:
+            if isinstance(value, str):
+                return value == feature
+            if isinstance(value, list | tuple):
+                return any(names(item, feature) for item in value)
+            return False
+
+        for body, lost, _name in tree.lost_selection:
+            entry = result.scene.objects.get(body)
+            if entry is None:
+                continue
+            for step in steps:
+                if not any(names(value, lost) for value in step.params.values()):
+                    continue
+                successor = next(
+                    (
+                        name
+                        for name, feature in entry.features.items()
+                        if getattr(feature, "created_by", None) == step.id
+                        and feature.provenance == "generated"
+                    ),
+                    None,
+                )
+                if successor is not None:
+                    tree.select_object(body)
+                    tree.select_feature(body, successor)
+                    return
+
     def _reselect_the_part(self, result: EvaluationResult) -> None:
         """Ein Baustein, dessen Maße sich geändert haben, bleibt gewählt.
 
@@ -23615,6 +23668,7 @@ class MainWindow(QMainWindow):
         # Nach Baum **und** Ansicht: Beide stellen ihre Auswahl selbst wieder
         # her, und eine Nachwahl davor ginge im Aufbau der Ansicht verloren.
         self._reselect_the_renamed(result)
+        self._reselect_the_successor(result)
         self._choose_the_created(result)
         self._say_features_lost(result)
         # Und erst danach die Einträge — einmal, mit der Auswahl, die jetzt gilt.
@@ -27095,6 +27149,13 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt name
         super().showEvent(event)
+        # **Der Fokus beginnt in der Ansicht.** Ohne eigene Wahl gab Qt ihn beim
+        # Aktivieren dem ersten Element der Tabulatorkette, dem Griff der
+        # linken Karte; der trug dann im Ruhezustand einen Fokusrahmen in der
+        # Akzentfarbe (gemessen unter macOS, wo das Fenster aktiv wird). In der
+        # Ansicht wirken die Flugtasten (§2.9) sofort.
+        if self.focusWidget() is None:
+            self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
         self.spacemouse.start()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name

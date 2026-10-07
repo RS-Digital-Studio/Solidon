@@ -888,10 +888,19 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
     Handlung nicht mehr, und anders als bei einem Hinweis gibt es hier keinen
     zweiten Ort, an dem sie stünde.
 
-    **Gemessen wird relativ, nicht absolut.** Offscreen gibt es keine echte
-    Schrift; welche Zahl „passt" bedeutet, sagt deshalb dieselbe
-    ``fontMetrics``, mit der auch gezeichnet wird — der Test rechnet die
-    Prüfbreiten daraus aus, statt eine Bildpunktzahl zu behaupten.
+    **Gemessen wird relativ, nicht absolut.** Welche Zahl „passt" bedeutet,
+    sagt dieselbe ``fontMetrics``, mit der auch gezeichnet wird — der Test
+    rechnet die Prüfbreiten daraus aus, statt eine Bildpunktzahl zu behaupten.
+
+    **Der Umbruch wird am Knopf erzwungen, nicht über die Kartenbreite.** Die
+    Karte wird nie schmaler als ihr breitestes ungebrochenes Element
+    (*Passende Bausteine …*). Unter Windows offscreen ist die Ersatzschrift so
+    breit, dass der Titel dort trotzdem nicht passte; unter Linux und macOS
+    rechnet offscreen mit der echten Schrift, und dort passt er in die
+    schmalste Karte — ein Umbruch wäre falsch. Zugesichert wird deshalb auf
+    jeder Plattform dasselbe: An der schmalsten Karte ist keine Zeile
+    beschnitten, und auf einen Platz, der nur das längste Wort fasst, bricht
+    der Titel vollständig in zwei Zeilen um.
     """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
@@ -910,13 +919,22 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
     qt_app.processEvents()
     assert "\n" not in knopf.text(), f"wo der Platz reicht, bleibt es eine Zeile: {knopf.text()!r}"
 
-    # Zu schmal für den Titel, breit genug für sein längstes Wort: zwei Zeilen,
-    # und keine davon breiter als der Platz.
-    panel.resize(laengstes + beiwerk + 4 * NORMAL, 600)
+    # Die schmalste Karte: Keine Zeile ist breiter als ihr Knopf, ob er nun
+    # umbricht (Windows offscreen) oder der Titel ganz passt (echte Schrift).
+    panel.resize(1, 600)
     qt_app.processEvents()
+    for zeile in knopf.text().split("\n"):
+        assert metrics.horizontalAdvance(zeile) + beiwerk <= knopf.width(), (
+            f"an der schmalsten Karte ist {zeile!r} beschnitten ({knopf.width()} breit)"
+        )
+
+    # Zu schmal für den Titel, breit genug für sein längstes Wort: zwei Zeilen,
+    # und keine davon breiter als der Platz — viermal dieselbe Antwort.
+    raum = laengstes + beiwerk + 4 * NORMAL
+    panel._wrap_label(knopf, raum)
     gebrochen = knopf.text()
     for _ in range(4):
-        panel._wrap_labels()
+        panel._wrap_label(knopf, raum)
         assert knopf.text() == gebrochen
     assert "\n" in gebrochen, f"hier muss umgebrochen werden: {gebrochen!r}"
     assert gebrochen.replace("\n", " ") == titel, f"der Titel bleibt vollständig: {gebrochen!r}"
