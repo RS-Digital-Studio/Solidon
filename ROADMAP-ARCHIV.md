@@ -43213,6 +43213,17 @@ lesen.
   des ganzen Körpers. Die erste Fassung meldete aus dem Baum heraus: Die
   Wiederwahl nach *Zum Langloch ziehen* fand den Körper nicht mehr, und die
   Ansage überschrieb die Quittung eigener Handlungen (Durchsicht, B1/B2).
+  Der Verlaufsstand kommt aus `History.document_mark` (eine Quelle mit dem
+  Redo-Stapel) samt Projektgeneration der Sitzung; ein überholtes Ergebnis
+  (`result_current` falsch, nicht das Bild) sagt nichts an und verbraucht die
+  Marke nicht (zweite Durchsicht).
+- **Namenssperre, zweite Durchsicht:** Im frühen Ausgang ohne Vorgänger sperrt
+  das Ausweichen auch erzeugte und mitreisende Namen; sonst fiel der neue Name
+  der Wand auf `face_2` daneben und wurde beim Zusammenführen still
+  überschrieben. Eine abgeschnittene erzeugte Fläche (`cut_off`) braucht keine
+  eigene Sperre: Sie reist als erzeugtes Merkmal in die Zuordnung und endet
+  verwaist, und verwaiste Namen sperrt `apply_mapping` ohnehin; ein Test hält
+  diesen Weg fest.
 
 Nachweis: `tests/test_evaluation.py` (Stiftnachbau mit Fase und drei
 `push_face`, Lochplatte mit Bohren, Verschieben und Teilen am Ende, verbrauchte

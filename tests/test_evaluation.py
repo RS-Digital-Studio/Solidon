@@ -2039,6 +2039,159 @@ def test_a_later_step_on_a_used_up_face_stops_with_the_lost_reference() -> None:
     assert "gibt es an dem Körper nicht mehr" in str(halt.message)
 
 
+def test_the_new_name_for_a_used_up_one_spares_the_declared_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-537, zweite Durchsicht: Der Ausweichname fällt auf kein erzeugtes Merkmal.
+
+    Der frühe Ausgang ohne erkannte Vorgänger: Der Körper trug vor dem Schritt
+    nur erzeugte Flächen; ``face_1`` ist verbraucht, ``face_2`` bleibt. Die
+    Erkennung nennt eine neue Wand ``face_1``, die deshalb ausweichen muss —
+    und wich auf ``face_2`` aus, das erzeugte Merkmal daneben. Beim
+    Zusammenführen überschrieb ``face_2`` die Wand, und sie fehlte still.
+    """
+    import importlib
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Feature, Operation, SceneObject
+
+    box = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    box.apply_translation((0.0, 0.0, 5.0))
+    mesh = MeshData.of(box)
+
+    def face(name: str, normal: tuple[float, float, float], centre: Any, **more: Any) -> Feature:
+        return Feature(
+            id=name,
+            kind="face",
+            params={"normal": normal, "centre": centre, "area": 1600.0},
+            **{"provenance": "generated", **more},
+        )
+
+    previous = {
+        "face_1": face("face_1", (0.0, 0.0, 1.0), (0.0, 0.0, 10.0), face_indices=(0, 1)),
+        "face_2": face("face_2", (0.0, 0.0, -1.0), (0.0, 0.0, 0.0), face_indices=(2, 3)),
+    }
+    # Die Operation reicht beide weiter, ``face_1`` weit hinausgedrückt.
+    output = {
+        "face_1": face("face_1", (0.0, 0.0, 1.0), (0.0, 0.0, -50.0)),
+        "face_2": face("face_2", (0.0, 0.0, -1.0), (0.0, 0.0, 0.0)),
+    }
+    wall = face("face_1", (1.0, 0.0, 0.0), (20.0, 0.0, 5.0), provenance="detected")
+    wall = dataclasses.replace(wall, params={**wall.params, "area": 400.0}, face_indices=(4, 5))
+    floor = face("face_9", (0.0, 0.0, -1.0), (0.0, 0.0, 0.0), provenance="detected")
+    floor = dataclasses.replace(floor, face_indices=(2, 3))
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(
+        evaluation, "detect", lambda *_args, **_kwargs: {"face_1": wall, "face_9": floor}
+    )
+
+    result = _with_features(
+        SceneObject(id="obj_1", name="Kasten", mesh=mesh, features=output),
+        previous,
+        Operation(id=5, op="push_face", inputs=("obj_1",), outputs=("obj_1",)),
+        lambda _question, choices: choices[0],
+        [],
+    )
+
+    assert "face_1" not in result.features, "die verbrauchte Fläche ist fort"
+    assert result.features["face_2"].provenance == "generated", "Voraussetzung: sie bleibt"
+    walls = [
+        name
+        for name, feature in result.features.items()
+        if tuple(feature.params["normal"]) == (1.0, 0.0, 0.0)
+    ]
+    assert len(walls) == 1, f"die neue Wand fehlt: {sorted(result.features)}"
+
+
+def test_a_cut_off_face_does_not_lend_its_name_either(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RM-537, zweite Durchsicht: Auch eine abgeschnittene erzeugte Fläche behält ihren Namen.
+
+    Der Zwilling der verbrauchten Fläche (``cut_off``) braucht keine eigene
+    Sperre: Er fällt aus ``declared``, reist aber als erzeugtes Merkmal in die
+    Zuordnung weiter und endet dort verwaist — ``apply_mapping`` sperrt
+    verwaiste Namen. Dieser Test hält den Weg fest: Kasten 40 × 40 × 10 auf
+    5 mm abgeschnitten, die erzeugte Deckfläche ``face_1`` liegt darüber, und
+    die Erkennung nennt eine Seitenwand ``face_1``.
+    """
+    import importlib
+
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Feature, Operation, SceneObject
+
+    def box(height: float) -> MeshData:
+        made = trimesh.creation.box(extents=(40.0, 40.0, height))
+        made.apply_translation((0.0, 0.0, height / 2.0))
+        return MeshData.of(made)
+
+    before, after = box(10.0), box(5.0)
+    normals = np.asarray(before.raw.face_normals)
+    centres = np.asarray(before.raw.triangles_center)
+    top = tuple(int(i) for i in np.flatnonzero((normals[:, 2] > 0.99) & (centres[:, 2] > 9.9)))
+    assert top, "Voraussetzung: die Deckfläche hat Dreiecke"
+    lid = Feature(
+        id="face_1",
+        kind="face",
+        provenance="generated",
+        params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 10.0), "area": 1600.0},
+        face_indices=top,
+    )
+    wall = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"normal": (1.0, 0.0, 0.0), "centre": (20.0, 0.0, 2.5), "area": 200.0},
+        face_indices=(0, 1),
+    )
+    cap = dataclasses.replace(
+        wall,
+        id="face_7",
+        params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 5.0), "area": 1600.0},
+        face_indices=(2, 3),
+    )
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    cut: list[str] = []
+    real_cut = evaluation._cut_by_the_step
+
+    def watched(feature: Feature, source: Any, bounds: Any) -> bool:
+        found = real_cut(feature, source, bounds)
+        if found:
+            cut.append(feature.id)
+        return bool(found)
+
+    monkeypatch.setattr(evaluation, "_cut_by_the_step", watched)
+    monkeypatch.setattr(
+        evaluation, "detect", lambda *_args, **_kwargs: {"face_1": wall, "face_7": cap}
+    )
+
+    result = _with_features(
+        SceneObject(
+            id="obj_1",
+            name="Kasten",
+            mesh=after,
+            features={"face_1": dataclasses.replace(lid, face_indices=())},
+        ),
+        {"face_1": lid},
+        Operation(id=3, op="cut_away", inputs=("obj_1",), outputs=("obj_1",)),
+        lambda _question, choices: choices[0],
+        [],
+        source_mesh=before,
+        origin_mesh=before,
+    )
+
+    assert cut == ["face_1"], "Voraussetzung: der Schritt hat die Deckfläche abgeschnitten"
+    named = result.features.get("face_1")
+    assert named is None or tuple(named.params["normal"]) == (0.0, 0.0, 1.0), (
+        f"die Seitenwand trägt den Namen der Deckfläche: {named}"
+    )
+
+
 def test_a_used_up_face_does_not_lend_its_name_to_a_new_one() -> None:
     """RM-537, B3: Der Name einer verbrauchten Fläche geht an keine neue Fläche.
 

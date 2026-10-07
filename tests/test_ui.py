@@ -5378,6 +5378,7 @@ def test_undo_with_the_new_hole_chosen_keeps_its_receipt(window: MainWindow) -> 
     )
     window.object_tree.select_feature(object_id, made)
     QApplication.processEvents()
+    drilling = window.session.history.transactions[-1]
 
     window.action_undo()
     assert window.session.wait_for_idle(30_000)
@@ -5385,8 +5386,74 @@ def test_undo_with_the_new_hole_chosen_keeps_its_receipt(window: MainWindow) -> 
 
     assert made not in window.session.last_result.scene.objects[object_id].features
     assert window.object_tree.selected() is None, "nicht still der Körper"
-    assert _LOST not in window.status_message.text()
-    assert window.status_message.text(), "die Quittung des Undo steht"
+    assert window.status_message.text() == main_window_module._history_feedback(
+        drilling, undone=True
+    ), "die Quittung des Undo steht"
+
+
+def test_the_mark_of_an_action_has_one_source(window: MainWindow) -> None:
+    """RM-537, zweite Durchsicht: Woran eine Handlung zu erkennen ist, sagt der Verlauf.
+
+    Zahl und Kennung der letzten Transaktion leitet ``History.document_mark``
+    her, für den Redo-Stapel wie für das Fenster; die Datei erkennt das
+    Fenster an der Projektgeneration der Sitzung — eine Objektkennung kann
+    nach dem Abräumen wieder vergeben werden.
+    """
+    _a_chosen_hole(window)
+    generation = window.session.project_generation
+
+    assert window._history_mark() == (
+        generation,
+        *(
+            str(value) if index else value
+            for index, value in enumerate(window.session.history.document_mark())
+        ),
+    )
+
+    window.session.start_new(window.settings.printer, window.settings.material)
+    assert window.session.wait_for_idle(30_000)
+    assert window._history_mark()[0] == window.session.project_generation != generation
+
+
+def test_an_outdated_result_neither_says_a_loss_nor_spends_the_mark(window: MainWindow) -> None:
+    """RM-537, zweite Durchsicht: Ein Lauf, der genau beim Abbruch fertig wird, zählt nicht.
+
+    Er kommt noch an, mit ``result_current`` falsch. Verbrauchte er die
+    Marke des Verlaufs, gälte das aktuelle Ergebnis danach als „ohne eigene
+    Handlung“, und die Ansage überschriebe die Quittung; sagte er selbst an,
+    nennte er einen Verlust aus einem Stand, der nicht mehr gilt.
+    """
+    object_id, hole = _a_chosen_hole(window)
+    window.announce("Quittung")
+    result = window.session.last_result
+    entry = result.scene.objects[object_id]
+    without = dataclasses.replace(
+        result,
+        scene=dataclasses.replace(
+            result.scene,
+            objects={
+                **result.scene.objects,
+                object_id: dataclasses.replace(
+                    entry, features={k: v for k, v in entry.features.items() if k != hole}
+                ),
+            },
+        ),
+    )
+    assert window._history_shown == window._history_mark(), "Voraussetzung: keine Handlung"
+    window.session.result_current = False
+    try:
+        window._show_scene(without)
+        QApplication.processEvents()
+        assert window.status_message.text() == "Quittung", "ein überholter Lauf sagt nichts an"
+
+        # Wie nach einer Handlung, deren Ergebnis noch aussteht: Die Marke
+        # gehört dem aktuellen Ergebnis, nicht dem überholten.
+        window._history_shown = None
+        window._show_scene(without)
+        QApplication.processEvents()
+        assert window._history_shown is None, "der überholte Lauf verbraucht die Marke nicht"
+    finally:
+        window.session.result_current = True
 
 
 def test_a_double_click_on_a_feature_opens_what_changes_it(window: MainWindow) -> None:

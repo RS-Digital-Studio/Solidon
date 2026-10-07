@@ -3005,7 +3005,7 @@ class History:
         if transaction.changes is not None:
             restore(self.document, transaction.changes.before)
         self._undone.append(transaction)
-        self._undone_anchor = self._document_mark()
+        self._undone_anchor = self.document_mark()
         return transaction
 
     def redo(self) -> Transaction | None:
@@ -3020,7 +3020,7 @@ class History:
         self.document.transactions.append(transaction)
         if transaction.changes is not None:
             restore(self.document, transaction.changes.after)
-        self._undone_anchor = self._document_mark()
+        self._undone_anchor = self.document_mark()
         return transaction
 
     def withdraw(self, transaction_id: TransactionId) -> Transaction | None:
@@ -3039,9 +3039,14 @@ class History:
         self._forget_undone()
         return transaction
 
-    def _document_mark(self) -> tuple[int, TransactionId | None]:
-        """Woran sich eine fremde Handlung erkennen lässt: Zahl und Kennung der
-        letzten Transaktion im Dokument."""
+    def document_mark(self) -> tuple[int, TransactionId | None]:
+        """Woran sich eine Handlung erkennen lässt: Zahl und Kennung der letzten
+        Transaktion im Dokument.
+
+        Ein neuer Schritt, ein Undo und ein Redo ändern das, eine zweite
+        Auswertung desselben Stands nicht. Zwei Leser: der Redo-Stapel
+        (:meth:`_drop_stale_undone`) und das Fenster, das eine verlorene
+        Merkmalswahl nur ohne eigene Handlung ansagt (RM-537)."""
         transactions = self.document.transactions
         return (len(transactions), transactions[-1].id if transactions else None)
 
@@ -3056,7 +3061,7 @@ class History:
         05.09.2026, CORE-08). Hat sich das Dokument seit dem Undo bewegt, ist
         der Zweig weg — wie bei einer eigenen neuen Handlung auch.
         """
-        if self._undone and self._document_mark() != self._undone_anchor:
+        if self._undone and self.document_mark() != self._undone_anchor:
             self._forget_undone()
 
     def _forget_undone(self) -> None:

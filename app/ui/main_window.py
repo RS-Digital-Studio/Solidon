@@ -2663,7 +2663,7 @@ class MainWindow(QMainWindow):
         self._export_waiting: tuple[Path, ExportFormat, Any] | None = None
         """Ein Export, der auf das nächste aktuelle Ergebnis wartet — Ziel,
         Format und das Projekt, für das er gemeint war (RM-352)."""
-        self._history_shown: tuple[int, int, str | None, int] | None = None
+        self._history_shown: tuple[int, int, str | None] | None = None
         """Der Verlaufsstand beim letzten Bild (:meth:`_history_mark`) — ob eine
         verlorene Merkmalswahl Folge einer Handlung des Kunden ist."""
         self._halted = False
@@ -18071,21 +18071,19 @@ class MainWindow(QMainWindow):
                 return True
         return False
 
-    def _history_mark(self) -> tuple[int, int, str | None, int]:
+    def _history_mark(self) -> tuple[int, int, str | None]:
         """Woran sich eine Handlung des Kunden seit dem letzten Bild erkennen lässt.
 
-        Dokument, Zahl und Kennung der letzten Transaktion, Länge des
-        Redo-Stapels: Ein neuer Schritt, ein Undo, ein Redo und eine andere
-        Datei ändern das, eine zweite Auswertung desselben Stands nicht.
+        Die Projektgeneration der Sitzung (eine andere Datei) und der
+        Dokumentstand des Verlaufs (``History.document_mark``: ein Schritt,
+        ein Undo, ein Redo) — eine zweite Auswertung desselben Stands ändert
+        nichts davon.
         """
-        document = self.session.project.document
-        history = self.session.history
-        transactions = history.transactions
+        count, last = self.session.history.document_mark()
         return (
-            id(document),
-            len(transactions),
-            str(transactions[-1].id) if transactions else None,
-            len(history.undone),
+            self.session.project_generation,
+            count,
+            str(last) if last is not None else None,
         )
 
     def _say_features_lost(self, result: EvaluationResult) -> None:
@@ -18108,7 +18106,15 @@ class MainWindow(QMainWindow):
         Gesagt wird damit der Fall der Abnahme: Das Bild vor der Erkennung
         trug ein Merkmal, die Erkennung danach nicht. Als Quittung, damit es
         die Laufanzeige überlebt.
+
+        **Ein überholtes Ergebnis zählt nicht** (``result_current`` falsch,
+        und es ist nicht das Bild vor der Erkennung): Ein Lauf, der genau beim
+        Abbruch fertig wird, kommt noch an. Verbrauchte er die Marke, gälte das
+        aktuelle Ergebnis danach als „ohne eigene Handlung“, und die Ansage
+        überschriebe doch die Quittung.
         """
+        if not self.session.result_current and result is not self.session.picture:
+            return
         mark = self._history_mark()
         acted = mark != self._history_shown
         self._history_shown = mark
