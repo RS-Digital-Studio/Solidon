@@ -44,7 +44,7 @@ from app.core.errors import (
 )
 from app.core.log import get_logger
 from app.core.perceive.match_records import EDGE_DOMAIN, domain_of, recognition_answer_key
-from app.core.registry import REGISTRY, VARIABLE, Registry, needed_inputs
+from app.core.registry import REGISTRY, VARIABLE, OperationSpec, Registry, needed_inputs
 from app.core.registry.params import body_keys
 from app.core.scene import bundling
 from app.core.types import (
@@ -66,6 +66,7 @@ from app.core.types import (
     Suppression,
     Transaction,
     TransactionId,
+    step_numbers,
 )
 from app.i18n import TranslatableText, _
 
@@ -152,6 +153,10 @@ def discarded(operations: Sequence[Operation], registry: Registry = REGISTRY) ->
     Bohrung* gibt den Träger zurück, wie er kam, und ohne den Stift wirkt der
     Schritt nicht mehr.
 
+    **Ein Schritt über mehrere Körper gibt jeden für sich weiter** —
+    *Auf dem Bett anordnen*, Platte und Stift gemeinsam verschieben: Wer davon
+    wieder entfernt wird, lebt nicht im Rest fort (:func:`_feeding`).
+
     **Ob ein Körper weiterlebt, hängt an der Stelle im Stapel.** Ein Träger,
     aus dessen Bohrung ein Stift entstand, lebt bis dahin im Stift fort, auch
     wenn er danach entfernt wird; was ihn erst danach noch änderte, wirkt
@@ -189,7 +194,7 @@ def discarded(operations: Sequence[Operation], registry: Registry = REGISTRY) ->
             continue
         made = [name for name in entry.outputs if name not in handed_on]
         if any(name in alive for name in made):
-            alive.update(entry.inputs)
+            alive.update(_feeding(entry, spec, alive))
             continue
         if made:
             touched[entry.id] = [
@@ -221,6 +226,58 @@ def discarded(operations: Sequence[Operation], registry: Registry = REGISTRY) ->
         if rest:
             groups[head] = rest
     return Discarded(steps=steps, outputs=outputs, groups=groups)
+
+
+def step_state_word(operation: Operation, gone: Discarded | None = None) -> TranslatableText | None:
+    """Ob ein Schritt wirkt, als Wort: „aus“, „ruht“ (P7.3), „Ergebnis entfernt“ — oder nichts.
+
+    Ausgeschaltet geht vor, denn wer nicht rechnet, hat kein Ergebnis, das ein
+    späterer entfernen könnte. „Ergebnis entfernt“ trägt ein Schritt in
+    ``gone.steps`` (:func:`discarded`). Das Verlaufsfeld (``ui.panels.step_state``)
+    und der Steckbrief für Agent und Fehlerbericht (``perceive.digest``) lesen
+    das Wort hier, damit beide über einen Schritt dasselbe sagen.
+    """
+    if operation.suppressed is not None:
+        return _("aus") if operation.suppressed.chosen else _("ruht")
+    if gone is not None and operation.id in gone.steps:
+        return _("Ergebnis entfernt")
+    return None
+
+
+def shown_before(document: Document, marker: OpId | None) -> Document:
+    """Das Dokument, das die Oberfläche bei einer Einfügemarke zeigt: der Stand davor (P7.1).
+
+    Eine flache Kopie mit den Schritten vor ``marker`` und ohne Passungen —
+    Passungen gelten dem Endstand, und am Stand davor wäre ihr Merkmal oft noch
+    gar nicht da (§14). Ohne Marke das Dokument selbst. Die eine Regel für
+    Ansicht und Prüfbericht (``Session.displayed_document``) und den Verlauf,
+    der daran rechnet, was ein späterer Schritt wieder entfernt
+    (``ui.panels.discarded_as_shown``).
+    """
+    if marker is None:
+        return document
+    return dataclasses.replace(
+        document, ops=[entry for entry in document.ops if entry.id < marker], fits=[]
+    )
+
+
+def _feeding(
+    entry: Operation, spec: OperationSpec | None, alive: Collection[ObjectId]
+) -> list[ObjectId]:
+    """Die Eingänge eines wirkenden Schritts, die in das eingehen, was von ihm bleibt.
+
+    ``alive`` sagt, welche seiner Ausgänge weiterleben. Ein Schritt ohne neuen
+    Körper reicht jeden fortgesetzten für sich weiter: Ein solcher Eingang
+    lebt, solange sein gleichnamiger Ausgang lebt, ein verbrauchter
+    (*Vereinigen*), weil er im Bleibenden steckt. Wer Neues baut oder einen
+    Körper mit einem anderen formt (``OperationSpec.shapes_with_other_inputs``),
+    speist mit allen Eingängen, ebenso ein Schritt, den das Register nicht
+    kennt — im Zweifel lebt ein Körper, und sein Befund bleibt stehen.
+    """
+    kept = set(entry.outputs)
+    if spec is None or spec.shapes_with_other_inputs or not kept <= set(entry.inputs):
+        return list(entry.inputs)
+    return [name for name in entry.inputs if name not in kept or name in alive]
 
 
 def _structural_objects(operations: Sequence[Operation]) -> set[ObjectId]:
@@ -951,7 +1008,7 @@ class History:
         """Zerlegt einen Körper vor einem angehaltenen Schritt und plant neu.
 
         Dasselbe Muster wie :meth:`repair_and_retry`, mit *In Einzelteile
-        zerlegen* statt der Reparatur: Der vollständige Suffix ab
+        aufteilen* statt der Reparatur: Der vollständige Suffix ab
         ``stopped_at`` wird ersetzt, davor kommt ``split_bodies`` auf
         ``target`` mit der Stückzahl ``count``, und alte wie neue Fassung
         reisen in **einer** Transaktion (§15.5, Regel 16). Der Anlass ist das
@@ -1662,16 +1719,25 @@ class History:
         self._reseed()
         merged = {**entry.params, **params}
         # **Ein Altmarker gilt dem gespeicherten Schritt, nicht seiner Änderung**
-        # (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert, rechnet
-        # der Schritt wie heute. Wer alle Werte durchreicht, reicht den Marker
-        # unverändert mit; nur ein ausdrücklich anderer Markerwert bleibt stehen.
-        markers = [item.name for item in spec.params.spec() if item.dropped_on_change]
-        if markers and any(
-            merged.get(name) != entry.params.get(name) for name in params if name not in markers
-        ):
-            for name in markers:
-                if merged.get(name) == entry.params.get(name):
-                    merged.pop(name, None)
+        # (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert — oder
+        # einer der Werte, die der Marker nennt —, rechnet der Schritt wie heute.
+        # Wer alle Werte durchreicht, reicht den Marker unverändert mit; nur ein
+        # ausdrücklich anderer Markerwert bleibt stehen.
+        markers = [item for item in spec.params.spec() if item.dropped_on_change]
+        marker_names = {item.name for item in markers}
+        altered = {
+            name
+            for name in params
+            if name not in marker_names and merged.get(name) != entry.params.get(name)
+        }
+        for item in markers:
+            watched = (
+                altered
+                if item.dropped_on_change is True
+                else altered & set(item.dropped_on_change or ())
+            )
+            if watched and merged.get(item.name) == entry.params.get(item.name):
+                merged.pop(item.name, None)
         draft = OperationDraft(op=entry.op, inputs=entry.inputs, params=merged)
         outputs = self._outputs_for(spec, draft) if spec.produces_from else entry.outputs
         # **Dieselbe Zahl heißt nicht dieselben Körper.** Eine Auswahl aus
@@ -3387,10 +3453,7 @@ def step_position(operations: Sequence[Operation], op_id: OpId) -> int:
     sichtbare Schritt 3 die Kennung 9. Gelesen wird die Stelle; ohne Treffer
     bleibt die Kennung. ``ui.labels.step_number`` fragt hier.
     """
-    for position, entry in enumerate(operations, start=1):
-        if entry.id == op_id:
-            return position
-    return op_id
+    return step_numbers(operations).get(op_id, op_id)
 
 
 def step_titles(

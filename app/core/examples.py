@@ -132,7 +132,7 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         id="aushoehlen-und-teilen",
         title=_("Druckvorbereitung — aushöhlen, teilen, anordnen"),
         way="",
-        doc=_("Material sparen, mit Passstiften trennen und beide Hälften anordnen."),
+        doc=_("Material sparen, mit Passstiften teilen und beide Hälften anordnen."),
     ),
     Example(
         id="zu-gross-automatisch-teilen",

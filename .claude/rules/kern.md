@@ -74,11 +74,19 @@ Was zu Geometrie wird oder zwischen Lagen, Flächen oder Kandidaten
 entscheidet, rechnet ohne Wege, deren letzte Stelle an der Plattform hängt:
 
 - kein BLAS (`np.dot`, `@`, `inner`, `vdot`, `tensordot`, `np.linalg.norm`
-  ohne Achse), kein `np.einsum` (FMA auf ARM), kein LAPACK (`svd`, `eigh`,
-  `eig`, `lstsq`, `solve`, `inv`, `det`) — auch nicht für das Vorzeichen
-  eines Eigen- oder Singulärvektors;
+  ohne Achse, `trimesh`s `apply_transform` und `apply_scale`), kein
+  `np.einsum` (FMA auf ARM), kein LAPACK (`svd`, `eigh`, `eig`, `lstsq`,
+  `solve`, `inv`, `det`) — auch nicht für das Vorzeichen eines Eigen- oder
+  Singulärvektors; ein Kreis aus `Point.buffer` oder eine Drehung aus
+  `shapely.affinity.rotate` nimmt die Winkelfunktionen der Plattform, und das
+  Rauschen sieht beides nicht;
+- `trimesh`s `apply_translation` rechnet exakt, sieht für das Rauschen aber
+  wie ein Matrixprodukt aus — in Wegen unter dem Rauschtest `mesh.shift_body`;
 - keine Winkel- und Exponentialfunktion aus NumPy oder `math` (Winkel über
-  `units.exact_cos`/`exact_sin`), kein `x ** 2` (Plattform-`pow`) — `x * x`;
+  `units.exact_cos`/`exact_sin`, viele auf einmal über
+  `mesh.periodic_sin_cos`), keine Potenz `**` auf Gleitkommazahlen: Das `pow`
+  der Plattform rundet nicht immer korrekt, und das Rauschen sieht es nicht —
+  `x * x`, `math.sqrt`;
 - Zufall nur aus Rohbits (`Generator.random`, `integers`), nie `normal` oder
   andere Verteilungen über `exp`/`log`;
 - keine Summe, deren Folge an der Zahl der Arbeiter hängt: Schichten und
@@ -292,6 +300,11 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 `OpContext.scene` ist nur lesend (Regel 3). Zweimal auswerten ist identisch;
 eine geänderte Objektzahl hält die Auswertung an, statt still
 weiterzurechnen.
+
+**Ein Befund über mehrere Körper nennt sie alle** (`Finding.object_ids`;
+`prepare.named_for` setzt sie aus den Indizes, *Fügeweg prüfen* selbst): Die
+Auswertung streicht ihn, sobald ein späterer Schritt einen davon entfernt —
+ohne die Liste spräche er weiter über Entferntes.
 
 ## Am Dokument wird nie vorbei geschrieben
 

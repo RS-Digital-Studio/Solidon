@@ -348,8 +348,8 @@ Schieberegler unter der Ansicht schaltet zwischen den Platten um.
 
 ## Zu groß für das Bett (Auto Split)
 
-**Bearbeiten → Automatisch teilen** schneidet ein Objekt, bis jedes Stück auf
-die Platte passt. Die Trennebene wird gesucht, nicht geraten: über dieselbe
+**Automatisch teilen** (rechts am gewählten Körper, unter *Vorbereiten*) schneidet
+ein Objekt, bis jedes Stück auf die Platte passt. Die Trennebene wird gesucht, nicht geraten: über dieselbe
 Schichtanalyse wie die Orientierungssuche, und bewertet wird eine Kontur statt
 mehrerer dünner Brücken, ein prismatischer Verlauf und die Ausgewogenheit.
 

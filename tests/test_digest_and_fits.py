@@ -767,6 +767,40 @@ def test_the_stack_line_names_steps_that_are_off_or_resting(profile: Profile) ->
     assert "shell(thickness=2)," in history, "ein laufender Schritt bleibt ohne Vermerk"
 
 
+def test_the_stack_line_names_steps_whose_result_was_removed(profile: Profile) -> None:
+    """Ein Schritt, dessen Körper ein späterer wieder entfernt hat, trägt „Ergebnis entfernt“.
+
+    Review zu ``bbd41ff2d`` (K3): Das Verlaufsfeld zeigt es so, der Steckbrief für
+    Agent und Fehlerbericht vermerkte nur „aus“ und „ruht“ — der Agent las
+    Duplizieren und Verschieben einer entfernten Kopie als wirksam und suchte
+    die Kopie im Steckbrief. Beide lesen das Wort jetzt an derselben Stelle.
+    """
+    import re
+
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import new_project
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    for title, draft in (
+        ("Quader", OperationDraft(op="create_box", params={"width": 30.0, "height": 10.0})),
+        (
+            "Duplizieren",
+            OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 2}),
+        ),
+        ("Bewegen", OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 50.0})),
+        ("Entfernen", OperationDraft(op="delete_object", inputs=("obj_2",))),
+    ):
+        history.apply(title, [draft])
+
+    text = digest(plate_scene(profile), history.document)
+    line = next(line for line in text.splitlines() if line.startswith("Verlauf"))
+
+    assert re.search(r"op2 duplicate_object\([^)]*\) Ergebnis entfernt,", line), line
+    assert re.search(r"op3 translate_object\([^)]*\) Ergebnis entfernt,", line), line
+    assert re.search(r"op1 create_box\([^)]*\),", line), "der Quader wirkt weiter"
+    assert re.search(r"op4 delete_object\([^)]*\),", line), "das Entfernen wirkt"
+
+
 def test_the_digest_names_the_step_that_made_each_feature_of_an_example() -> None:
     """RM-529: Bauplan §23 zeigt ``created_by=op3``, und §21.2 macht die
     Provenienz zum Weg zu „dem Schritt, der es erzeugt hat“ — der Steckbrief
@@ -815,10 +849,14 @@ def test_the_plan_shows_a_real_digest() -> None:
     """Bauplan §23 zeigte bis RM-529 einen Steckbrief, den es nie gab
     (``Stack:``, ``wasserdicht``, ``Ops 3–6``) — und mit ``created_by=op3``
     eine Zeile, die der Code nicht schrieb. Jetzt ist das Beispiel ein
-    Ausschnitt einer echten Ausgabe: Jede Zeile steht in dieser Reihenfolge im
-    Steckbrief des Beispielprojekts, „…“ lässt Zeilen aus, „ · …“ am Ende den
-    Rest einer Zeile. Ändert sich das Format, wird das Beispiel nachgezogen.
+    Ausschnitt einer echten Ausgabe: Jede Zeile hat in dieser Reihenfolge die
+    Form einer Zeile aus dem Steckbrief des Beispielprojekts, „…“ lässt Zeilen
+    aus, „ · …“ am Ende den Rest einer Zeile. Verglichen wird die Form: Zahlen
+    zählen nicht, sie dürfen vom Beispiel abweichen. Ändert sich das Format,
+    wird das Beispiel nachgezogen.
     """
+    import re
+
     from app.core import examples
     from app.core.scene import evaluate
     from app.core.scene.project import ProjectSources, load
@@ -837,55 +875,130 @@ def test_the_plan_shows_a_real_digest() -> None:
     scene = evaluate(document, profile, sources=ProjectSources(project)).scene
     real = digest(scene, document, ("obj_1", "heatset_m4_bore_1")).splitlines()
 
+    # Verglichen wird das Format, nicht die Geometrie: Zwei Werte des
+    # Ausschnitts liegen auf einer Rundungsgrenze und kippen mit dem letzten
+    # Bit einer anderen Maschine (Review RM-529). Jede Zahl wird zu „#“.
+    def shape(text: str) -> str:
+        return re.sub(r"-?\d+(?:\.\d+)?", "#", text)
+
+    real = [shape(line) for line in real]
     at = 0
     for line in shown:
-        head = line.removesuffix(" · …")
+        head = shape(line.removesuffix(" · …"))
         found = next(
             (index for index in range(at, len(real)) if real[index].startswith(head)), None
         )
         assert found is not None, f"nicht im echten Steckbrief, oder nicht in dieser Folge: {line}"
-        if head == line:
-            assert real[found] == line, f"die Zeile geht anders weiter: {real[found]}"
+        if not line.endswith(" · …"):
+            assert real[found] == head, f"die Zeile geht anders weiter: {real[found]}"
         at = found + 1
 
 
-def test_the_step_is_named_by_the_number_the_history_shows(profile: Profile) -> None:
-    """Nach einem Einfügen weichen Kennung und sichtbare Nummer ab (RM-368):
-    Der vor Schritt 2 eingefügte trägt die Kennung 9 und steht als Schritt 2
-    im Verlauf. Der Agent spricht mit dem Nutzer über diesen Verlauf — hieße
-    die Bohrung im Steckbrief „op9“, suchte der Nutzer einen Schritt, den es
-    nicht gibt.
+def test_the_step_is_named_by_the_number_the_history_shows() -> None:
+    """Nach Löschen, Einfügen oder Verschieben weichen Kennung und sichtbare
+    Nummer ab (RM-368). Der Agent spricht mit dem Nutzer über den Verlauf, den
+    dieser sieht — hieße ein Schritt im Steckbrief nach seiner Kennung, suchte
+    der Nutzer einen, den es nicht gibt.
+
+    Am echten Verlauf des Halters: Der erste Schraubenschritt wird gelöscht,
+    die Kennungen 1, 3, 4 bleiben, sichtbar sind es Schritt 1 bis 3 — die
+    Stelle im Verlauf, hier aus der Liste selbst gezählt. Der gelöschte
+    Schritt steht in seiner Transaktion als „gelöscht“ wie im Verlaufsfeld,
+    nicht mehr als rohe Kennung (Review RM-529).
     """
-    scene = plate_scene(profile)
-    entry = scene.objects["obj_1"]
-    features = dict(entry.features)
-    features["hole_1"] = replace(features["hole_1"], created_by=9)
-    features["hole_2"] = replace(features["hole_2"], created_by=2)
-    scene.objects["obj_1"] = replace(entry, features=features, created_by=2)
-    document = Document(format_version=1, app_version="0.0.1")
-    document.ops.extend(
-        [
-            Operation(id=1, op="create_box", params={"width": 80.0}),
-            Operation(id=9, op="drill_hole", params={"diameter": 5.2}),
-            Operation(id=2, op="chamfer", params={"size": 1.0}),
-        ]
-    )
-    document.transactions.extend(
-        [
-            Transaction(id="t1", title="Platte", ops=(1, 2), origin=Origin(by="user")),
-            Transaction(id="t2", title="Bohrung", ops=(9,), origin=Origin(by="agent")),
-        ]
-    )
+    import re
 
+    from app.core import examples
+    from app.core.perceive.digest import _step_numbers
+    from app.core.scene import History, evaluate
+    from app.core.scene.project import ProjectSources, load
+
+    project = load(examples.directory() / "weg2-halter-konstruieren.p3d")
+    history = History(project.document)
+    first_hole = next(op for op in history.operations if op.op == "insert_screw_hole")
+    history.remove_operations([first_hole.id])
+    document = history.document
+    ids = [operation.id for operation in document.ops]
+    assert ids != list(range(1, len(ids) + 1)), f"Kennung und Nummer laufen auseinander: {ids}"
+    numbers = _step_numbers(document)
+    assert numbers == {op_id: position for position, op_id in enumerate(ids, start=1)}
+
+    profile = profiles.make_profile(
+        document.printer or "centauri-carbon-2", document.material or "petg"
+    )
+    scene = evaluate(document, profile, sources=ProjectSources(project)).scene
     lines = digest(scene, document).splitlines()
-    history = next(line for line in lines if line.startswith("Verlauf"))
+    history_line = next(line for line in lines if line.startswith("Verlauf"))
+    made = [
+        (feature_id, feature.created_by)
+        for entry in scene.objects.values()
+        for feature_id, feature in entry.features.items()
+        if feature.created_by is not None
+    ]
+    assert made, "der Halter trägt erzeugte Merkmale"
+    for feature_id, step in made:
+        line = next(line for line in lines if line.startswith(f"  {feature_id}  "))
+        assert f", created_by=op{numbers[step]}" in line, line
+    calls = re.findall(r"[(,] ?([^(),]+?)(?= \w+\()", history_line)
+    assert calls and all(re.fullmatch(r"op\d+", call) for call in calls), history_line
+    assert f"op{len(ids) + 1}" not in history_line, "keine Nummer über den Verlauf hinaus"
+    assert f"({first_hole.id}," not in history_line and f" {first_hole.id}," not in history_line
+    holes = next(part for part in history_line.split(" · ") if '"Schraubenlöcher"' in part)
+    assert holes.count("gelöscht") == 1 and holes.count(" insert_screw_hole(") == 1, holes
 
-    assert ", created_by=op2" in next(line for line in lines if line.startswith("  hole_1  "))
-    assert ", created_by=op3" in next(line for line in lines if line.startswith("  hole_2  "))
-    assert "last_op=op3" in next(line for line in lines if line.startswith("obj_1  "))
-    assert "op2 drill_hole(diameter=5.2)" in history
-    assert "op1 create_box(width=80), op3 chamfer(size=1)" in history
-    assert "op9" not in "\n".join(lines)
+
+def test_an_inserted_step_is_listed_once_under_its_current_number(profile: Profile) -> None:
+    """Review RM-529: Nach einem Einfügen standen die neu gefassten
+    Transaktionen als leere Zeile im Verlauf („t2 \"Bohrung rechts\" (Nutzer)“),
+    die das Verlaufsfeld gar nicht zeigt. Am echten Einfügen über den Verlauf:
+    Jeder lebende Schritt steht genau einmal da, unter seiner sichtbaren
+    Nummer, und die ersetzte Zeile fällt weg — auch in einem Projekt, das
+    vor Format 45 gespeichert wurde.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+    from app.core.scene.revision import commit, dependencies, revise
+
+    def drill(x: float) -> OperationDraft:
+        return OperationDraft(
+            op="drill_hole",
+            inputs=("obj_1",),
+            params={"diameter": 5.0, "x": x, "y": 0.0, "z": 10.0, "depth": 10.0},
+        )
+
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 80.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply("Bohrung rechts", [drill(20.0)])
+
+    def run(document: Document) -> EvaluationResult:
+        return evaluate(document, profile)
+
+    base = run(history.document)
+    plan = history.plan_insert(history.operations[1].id, "Bohrung links", [drill(-20.0)])
+    revision = revise(
+        history, plan, evaluate=run, baseline=base, context=dependencies(history.document, base)
+    )
+    commit(history, revision)
+    document = history.document
+    assert any(transaction.renumbered for transaction in document.transactions), "eingefügt"
+
+    scene = run(document).scene
+    # Bis Format 44 fehlte ``renumbered``; das Verlaufsfeld liest
+    # ``revision`` und blendet die Zeile auch dort aus (Review RM-529, 6.2).
+    before_45 = replace(
+        document,
+        transactions=[replace(entry, renumbered={}) for entry in document.transactions],
+    )
+    for stored in (document, before_45):
+        lines = digest(scene, stored).splitlines()
+        history_line = next(line for line in lines if line.startswith("Verlauf"))
+        for number in range(1, len(stored.ops) + 1):
+            assert history_line.count(f"op{number} ") == 1, (number, history_line)
+        assert '"Bohrung rechts"' not in history_line, history_line
+        assert "gelöscht" not in history_line, history_line
 
 
 def test_a_condensed_digest_folds_alike_features_of_one_step_only(profile: Profile) -> None:

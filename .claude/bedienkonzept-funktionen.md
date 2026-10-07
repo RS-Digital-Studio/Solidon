@@ -63,9 +63,10 @@ Ablauf nutzt es nicht.
 > nichts, solange niemand weiß, dass er sie hat.** Der Hinweis gehört in die
 > Rückmeldung des Skills, nicht nur in seinen Kopf.
 >
-> Der achte Skill, `liefern`, hat bewusst kein `argument-hint`: Er ist mit
-> `disable-model-invocation: true` markiert und beendet eine Arbeitseinheit
-> als Ganzes. (Nachgeprüft am 19.08.2026.)
+> Der achte Skill, `liefern`, beendet eine Arbeitseinheit als Ganzes. Bis zum
+> 06.10.2026 war er mit `disable-model-invocation: true` nur auf Ansage zu
+> rufen; seitdem ruft ihn die Sitzung nach grünem Tor und behobenem Review
+> selbst (Entscheidung Robert).
 
 ---
 

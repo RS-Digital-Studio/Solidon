@@ -9,7 +9,7 @@ gestartet, ein Bild durch den Erzeugen-Dialog geschickt, das Ergebnis in der
 Szene ausgelesen, das lokale Modell gegen die Werkzeuge gefahren. Wo eine
 erste Einschätzung falsch war, steht die Korrektur dabei.
 
-Verhältnis zu den anderen Papieren: `konzept-wettbewerb-2026-08.md` zieht das
+Verhältnis zu den anderen Papieren: `archiv/konzept-wettbewerb-2026-08.md` zieht das
 Feld auf und bewertet alle Bereiche; dieses geht in die drei Bereiche hinein,
 die dort nur eine Zeile bekommen haben, und trägt die Messwerte nach.
 
@@ -145,6 +145,9 @@ Baustein, keine Passung. Die Figur kommt an, sie ist nur nicht bearbeitbar.
 
 ## Teil 3 — Der Blocker unter dem Erzeugen: die Lizenzen
 
+> Was aus diesen Funden wurde und was heute gilt:
+> [Weg 3 — Lizenzkette](entscheidung-weg-3-lizenzkette.md).
+
 Aus einer eigenen Recherche zu den Modellen, die hinter dem Erzeugen stehen.
 **Zwei Funde betreffen den ausgelieferten Zustand unmittelbar.**
 
@@ -179,6 +182,15 @@ Zutun im nicht-kommerziellen Modell.
 | Hunyuan3D 2.0/2.1/Omni | Tencent Community | — | **nein** |
 | RMBG-2.0 | CC BY-NC 4.0 | **nein** | — |
 | BiRefNet / InSPyReNet (Freistellen) | MIT | ja | ja |
+
+**Nachtrag 06.10.2026 (RM-003):** Die Tabelle hielt nicht. Step1X-3D trägt in
+einer Datei, die jede Formerzeugung ausführt, einen Tencent-Lizenzkopf „Non-
+Commercial“; TripoSGs Transformer trägt den Kopf der Tencent Hunyuan Community
+License, die die EU ausnimmt; BiRefNet lernte aus DIS5K, das nur
+nicht-kommerziell ist, und InSPyReNets Prüfpunkte aus DUTS, HRSOD, UHRSD oder
+DIS5K; und TRELLIS.2 läuft in den ComfyUI-Kernknoten ohne `nvdiffrast` (TRELLIS
+v1 braucht es nur für `to_glb`). Belege und die Entscheidung für TRELLIS.2:
+[`nachweise-generatoren-2026-10/`](nachweise-generatoren-2026-10/README.md).
 
 **Vorschlag L1 — zwei Zeichenketten tauschen.** Im Graphen `RMBG-2.0` durch
 `BiRefNet` oder `INSPYRENET` ersetzen und die Erzeugerrolle auf **Step1X-3D**
@@ -355,7 +367,7 @@ Wir zeigen die Änderung nach dem Übernehmen.
   > (15.08.) bildschirmfüllend statt auf 1280 × 820.
 * **Der Musterdialog war zweisprachig, ohne es zu wollen.** „Art: raised",
   „Auflegen: flat" — behoben, samt der 24 weiteren Auswahlwerte im Register,
-  siehe `konzept-wettbewerb-2026-08.md`.
+  siehe `archiv/konzept-wettbewerb-2026-08.md`.
 
 ---
 
@@ -462,6 +474,8 @@ drin, abgesichert durch `test_the_shipped_graphs_name_no_non_commercial_model`),
 der Formkern nicht: Hunyuan3D bleibt, weil ein Wechsel eine andere
 ComfyUI-Knotensammlung verlangt. Stattdessen sagen Modulkopf, Handbuch und
 Website, dass die Lizenz für die EU nicht gilt und welche Modelle frei sind.
+Wie es mit dem Formkern weiterging:
+[Weg 3 — Lizenzkette](entscheidung-weg-3-lizenzkette.md).
 
 **Was der Zähler überholt hat:** acht Beispielkacheln → neun · sechs
 Werkzeuge in der Zeile → acht (sechs waren es nie) · 35 Handbuchseiten → 40 ·

@@ -182,10 +182,11 @@ def test_every_error_and_warning_has_a_way() -> None:
 #: (RM-374, Vorgabe Robert 02.10.2026). Sie tragen den Knopf, der genau diesen
 #: Schritt zum Ändern öffnet (``errors.CHANGE_*``, Kennung ``change_step``).
 #: Wer einen solchen Befund baut, trägt ihn hier ein — mit dem Feld, in das
-#: der Cursor gehört, oder ``None`` für den Schritt als Ganzes. Mehrere Felder
-#: stehen da, wo derselbe Befund an verschiedenen Merkmalsarten verschiedene
-#: Werte meint (Ring und Bohrung beim Drehen, Muster und Zapfen beim Ändern).
-MEINT_DEN_SCHRITT: dict[str, str | frozenset[str] | None] = {
+#: der Cursor gehört, oder ``None`` für den Schritt als Ganzes. Meint derselbe
+#: Befund an verschiedenen Merkmalsarten verschiedene Werte, steht das Feld je
+#: Stelle da, nach der Funktion, in der der Befund entsteht — eine Menge ließe
+#: „``pitch`` am Gewinde“ durch (Review RM-441).
+MEINT_DEN_SCHRITT: dict[str, str | dict[str, str] | None] = {
     "transform.fitted": "largest",
     "transform.without_effect": None,
     "lattice.filled": "cell",
@@ -193,14 +194,44 @@ MEINT_DEN_SCHRITT: dict[str, str | frozenset[str] | None] = {
     "hollow.done": "wall",
     "thread.thin_wall": "diameter",
     "parts.bore_too_wide": "size",
-    # RM-441: die sechs „hat nichts getan“-Befunde aus dem Review vom 02.10.2026.
+    # RM-441: die „hat nichts getan“-Befunde aus dem Review vom 02.10.2026.
     "mesh.already_below_target": "triangles",
     "move_feature.unchanged": "x",
     "duplicate_feature.unchanged": "x",
-    "rotate_feature.unchanged": frozenset({"angle", "axis"}),
-    "resize_feature.unchanged": frozenset({"diameter", "pitch"}),
+    "rotate_feature.unchanged": {"rotate_feature": "angle", "_rotate_torus": "axis"},
+    "resize_feature.unchanged": {
+        "resize_feature": "diameter",
+        "_resize_torus": "diameter",
+        "_resize_pattern": "pitch",
+        "_resize_thread": "diameter",
+        "_reshape_the_fillet": "diameter",
+    },
     "bore.resize_unchanged": "diameter",
+    "bore.already_through": "depth",
 }
+
+#: Die Operationen, deren Dialog der Knopf öffnet — das Feld muss es an jeder
+#: geben, sonst fände ``edit_operation`` es nicht und öffnete still ohne
+#: Cursor. Nicht hier: Befunde ohne Feld (``transform.without_effect``) und
+#: solche der Bausteine statt einer Operation (``parts.bore_too_wide``).
+OPERATION_OF: dict[str, tuple[str, ...]] = {
+    "transform.fitted": ("fit_to_size",),
+    "lattice.filled": ("lattice_fill",),
+    "displace.applied": ("displace_image",),
+    "hollow.done": ("hollow_object", "shell_exact"),
+    "thread.thin_wall": ("resize_feature",),
+    "mesh.already_below_target": ("decimate_mesh",),
+    "move_feature.unchanged": ("move_feature",),
+    "duplicate_feature.unchanged": ("duplicate_feature",),
+    "rotate_feature.unchanged": ("rotate_feature",),
+    "resize_feature.unchanged": ("resize_feature",),
+    "bore.resize_unchanged": ("resize_hole",),
+    "bore.already_through": ("resize_hole",),
+}
+
+#: Helfer, die einen solchen Befund bauen; das Feld ist ihr zweites Argument
+#: oder ``field=``.
+BEFUND_HELFER: dict[str, str] = {"_already_this_size": "resize_feature.unchanged"}
 
 
 def _suggestion_names(node: ast.expr) -> set[str]:
@@ -249,35 +280,74 @@ def test_a_finding_about_a_step_value_opens_that_step() -> None:
     root = Path(app.core.__file__).parent
     found: dict[str, int] = {}
     without: list[str] = []
+    seen: list[tuple[str, str | None, str]] = []  # Kennwort, Feld, Ort
+
+    def expected(code: str, function: str) -> str | None:
+        field = MEINT_DEN_SCHRITT[code]
+        if isinstance(field, dict):
+            return field.get(function, f"<keine Angabe für {function}>")
+        return field
+
     for path in sorted(root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+
+        def function_of(node: ast.AST, parents: dict[ast.AST, ast.AST] = parents) -> str:
+            while node in parents:
+                node = parents[node]
+                if isinstance(node, ast.FunctionDef):
+                    return node.name
+            return "<Modul>"
+
         for node in ast.walk(tree):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "Finding"
-            ):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
+            place = f"app/core/{path.relative_to(root).as_posix()}:{node.lineno}"
+            if node.func.id in BEFUND_HELFER:
+                code = BEFUND_HELFER[node.func.id]
+                found[code] = found.get(code, 0) + 1
+                given = {keyword.arg: keyword.value for keyword in node.keywords}
+                argument = node.args[1] if len(node.args) > 1 else given.get("field")
+                named = argument.value if isinstance(argument, ast.Constant) else "?"
+                field = expected(code, function_of(node))
+                if named != field:
+                    without.append(f"{place} {code}: Feld {named!r} statt {field!r}")
+                seen.append((code, named, place))
+                continue
+            if node.func.id != "Finding":
                 continue
             keywords = {keyword.arg: keyword.value for keyword in node.keywords}
-            place = f"app/core/{path.relative_to(root).as_posix()}:{node.lineno}"
             if _hidden_code(keywords.get("code")):
                 without.append(f"{place}: Kennwort zusammengesetzt — ausschreiben")
             for code in _codes(keywords.get("code")):
                 if code not in MEINT_DEN_SCHRITT:
                     continue
-                found[code] = found.get(code, 0) + 1
                 where = f"{place} {code}"
                 if not _suggestion_names(keywords.get("suggestions", ast.Tuple(elts=[]))) & changes:
                     without.append(f"{where}: ohne Knopf zum Ändern des Schritts")
-                field = MEINT_DEN_SCHRITT[code]
                 values = keywords.get("values")
                 named = None
                 if isinstance(values, ast.Dict):
                     for key, value in zip(values.keys, values.values, strict=True):
                         if isinstance(key, ast.Constant) and key.value == "field":
                             named = value.value if isinstance(value, ast.Constant) else "?"
-                allowed = field if isinstance(field, frozenset) else {field}
-                if named not in allowed:
-                    without.append(f"{where}: Feld {named!r} statt {sorted(map(str, allowed))}")
+                if function_of(node) in BEFUND_HELFER:
+                    continue  # der Helfer selbst; seine Aufrufe zählen oben
+                found[code] = found.get(code, 0) + 1
+                field = expected(code, function_of(node))
+                if named != field:
+                    without.append(f"{where}: Feld {named!r} statt {field!r}")
+                seen.append((code, named, place))
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    for code, named, place in seen:
+        if named is None:
+            continue
+        for operation in OPERATION_OF.get(code, ()):
+            fields = {entry.name for entry in REGISTRY.get(operation).params.spec()}
+            if named not in fields:
+                without.append(f"{place} {code}: {operation} hat kein Feld {named!r}")
     assert set(found) == set(MEINT_DEN_SCHRITT), f"Befund nicht gefunden: {found}"
     assert not without, "\n".join(without)

@@ -1,7 +1,8 @@
 # Eine Stelle für das gewählte Merkmal
 
 > **Stand:** umgesetzt, 11.09.2026 — alle sieben Pakete sind gefahren.
-> Die manuelle Abnahme am laufenden Fenster (§4) steht aus.
+> Die manuelle Abnahme am laufenden Fenster (§4) steht aus; sie steht in
+> [RM-213](../ROADMAP.md#rm-213).
 > **Anlass:** Robert am 11.09.2026, an einer gewählten Bohrung: „wenn ich das
 > langloch zieh, fehlen die Maße zu den kanten usw die wir bei bohrungen
 > sehen", „im dialog das im modell platzieren brauchen wir auch nicht",

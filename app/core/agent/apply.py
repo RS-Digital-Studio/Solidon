@@ -323,7 +323,7 @@ def undo_finding(sweep: Sequence[TransactionId]) -> Finding:
 
 def _title(proposal: Proposal) -> str:
     summary = proposal.summary()
-    return f"{tr('Vorschlag')}: {summary}" if summary else tr("Vorschlag")
+    return tr("Vorschlag: {summary}").format(summary=summary) if summary else tr("Vorschlag")
 
 
 def _identifier() -> str:

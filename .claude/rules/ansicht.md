@@ -34,7 +34,12 @@ Stufen: nichts, Körper, Merkmal oder Kante (`Viewport.selection_depth`).
   Zug (`kamera.md`).
 * **Rechts meint immer das Genaueste** (`_select_at(..., direct=True)`): Wer
   auf die störende Stelle zeigt, hängt an keiner Vorbedingung (§18.5). Die
-  Operationen von Weg 1 stehen im Auswahlfenster; das Menü führt keine aus.
+  Operationen von Weg 1 stehen im Auswahlfenster; das Menü trägt davon nur
+  *Entfernen* und *Vereinigen* (`grenzen.md`).
+* **Außer er trifft eine Mehrfachauswahl**: Liegt der Zeiger auf einem von
+  mehreren gewählten Körpern, bleibt die Auswahl, und das Menü gilt allen
+  (`_on_right_click`, Entscheidung Robert) — im Objektbaum ebenso, wenn die
+  Zeile schon markiert ist (`ObjectTree._on_context_menu`).
 * **Ein offener Operationsdialog schaltet die Stufen ab**
   (`set_direct_picking`) — dort ist ein Klick eine Antwort.
 * **Escape geht eine Stufe je Druck zurück**, in `MainWindow._escape` nach dem
@@ -65,7 +70,7 @@ beantwortet die Stufe für Merkmal und Kante.
 * **Eine neue Auswahlart fällt überall, wo eine andere entsteht** (`_drop_edge()`
   in `select`, `select_feature`, `_refresh_feature_selection`), **zählt in
   `selection_depth`** und **verschluckt keinen fremden Klick**
-  (`_means_a_feature()`: Messen, Trennen, Skelett, Formen gehen vor). Umschalt
+  (`_means_a_feature()`: Messen, Teilen, Skelett, Formen gehen vor). Umschalt
   und Strg meinen den Körper; eine Kante wird einzeln gewählt.
 * **Der Zeiger fragt `_edge_under`**, die Bedingungen von `_edge_click`; die
   Rolle bleibt `feature`.

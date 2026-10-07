@@ -188,9 +188,10 @@ def prepare(
     context = validate_request(repository, run_id, commit, version, release_id, signed_digest)
     verify_source_run(run_id, commit)
     sign_release.verify_installer_source(commit, context["installer_commit"])
-    listing = _api(repository, f"actions/runs/{run_id}/artifacts?per_page=100")
-    artifacts = listing.get("artifacts", [])
-    _require(listing.get("total_count") == len(artifacts), "Artefaktliste ist unvollständig")
+    artifacts = sign_release.paged_listing(
+        lambda suffix: _api(repository, suffix), f"actions/runs/{run_id}/artifacts", "artifacts"
+    )
+    _require(artifacts is not None, "Artefaktliste ist unvollständig")
     matches = [item for item in artifacts if item.get("name") == sign_release.ARTIFACT_NAME]
     _require(
         len(matches) == 1 and matches[0].get("expired") is False,

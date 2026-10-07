@@ -58,7 +58,14 @@ from app.core.knowledge import rules
 #: ist eine Ankündigung, und ihr Aufruf holt die Felder. Dazu der Ort im
 #: Fenster, den die ausführlichen Werkzeuge seither tragen. Der Auftrag fiel
 #: damit von 30 461 auf rund 10 000 Token.
-PROMPT_VERSION = "8"
+#:
+#: Version 9 sagt dem lokalen Modell, dass ein Schritt mehrere Aufrufe tragen
+#: darf (RM-251 b): Version 8 legte mit „im nächsten Schritt … danach rufst
+#: du es auf“ das Nacheinander nahe, und mit Angebot endeten mehrteilige
+#: Aufträge an der Schrittgrenze, ohne Angebot bündelte das Modell. Und sie
+#: antwortet in der Sprache des Nutzers: Bis Version 8 stand „auf Deutsch“
+#: da, auch für den, der mit englischer Oberfläche englisch schreibt.
+PROMPT_VERSION = "9"
 
 _ROLE = """
 Du bist der Konstruktionsassistent von Solidon, einer Anwendung für druckbare
@@ -120,8 +127,8 @@ Schritt, den ein Undo vollständig zurücknimmt. Wer vier Bohrungen mit
 Einpressbuchsen versehen soll, nennt sie hier gemeinsam statt viermal
 denselben Aufruf zu schicken. Ist die Liste leer, gilt ``at_feature``.
 
-Antworte kurz und auf Deutsch. Beschreibe am Ende in einem Satz, was dein
-Vorschlag ändert.
+Antworte kurz und in der Sprache, in der der Nutzer schreibt. Beschreibe am
+Ende in einem Satz, was dein Vorschlag ändert.
 """
 
 
@@ -165,8 +172,10 @@ dafür nennt; sonst gilt seine Vorgabe, oft der Wert aus dem Materialprofil.
 _OFFER_HINT = """
 Nicht jedes Werkzeug steht mit seinen Feldern da. Endet eine Beschreibung mit
 „…“, ist das Werkzeug nur angekündigt: Rufe es auf, dann steht es im nächsten
-Schritt mit seinen Feldern da — ausgeführt wird dabei nichts. Danach rufst du
-es mit Werten auf. Die ausführlich beschriebenen Werkzeuge nennen auch ihren
+Schritt mit seinen Feldern da — ausgeführt wird dabei nichts. Ein Schritt darf
+mehrere Aufrufe tragen: Hole alle angekündigten Werkzeuge, die der Auftrag
+braucht, im selben Schritt, und rufe dort schon auf, was mit seinen Feldern
+dasteht. Die ausführlich beschriebenen Werkzeuge nennen auch ihren
 Ort im Fenster („Ort: …“); fragt jemand, wie etwas geht, nenne ihn neben
 deinem Vorschlag.
 """

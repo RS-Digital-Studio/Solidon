@@ -47,7 +47,8 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
-from app.core.geom.transform import rotation, rotation_about, translation
+from app.core.geom.transform import along as lying_along
+from app.core.geom.transform import composed, rotation, rotation_about, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.knowledge.parts.shapes import Kernel, building
 from app.core.knowledge.profiles import for_object
@@ -70,7 +71,14 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM, MAX_FACET_SAG, dot3, format_length
+from app.core.units import (
+    DEGREE_UNIT,
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    dot3,
+    exact_acos_degrees,
+    format_length,
+)
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -1443,9 +1451,15 @@ def _rim_placement_suggestion(
     from app.core.units import format_length
 
     frame = frame_of(normal, origin)
-    basis = np.column_stack((frame.x_axis, frame.y_axis))
-    face_points = (triangles - np.asarray(origin)) @ basis
-    tool_points = (footprint - np.asarray(origin)) @ basis
+    # Elementweise statt ``@ basis``: Das ginge durch BLAS (RM-187).
+    face_offsets = np.asarray(triangles, dtype=np.float64) - np.asarray(origin)
+    tool_offsets = np.asarray(footprint, dtype=np.float64) - np.asarray(origin)
+    face_points = np.stack(
+        (lying_along(face_offsets, frame.x_axis), lying_along(face_offsets, frame.y_axis)), axis=-1
+    )
+    tool_points = np.stack(
+        (lying_along(tool_offsets, frame.x_axis), lying_along(tool_offsets, frame.y_axis)), axis=-1
+    )
     cancelled.raise_if_cancelled()
     area = union_all([Polygon(points) for points in face_points])
     outline = MultiPoint(tool_points).convex_hull
@@ -1461,7 +1475,10 @@ def _rim_placement_suggestion(
     # wäre hier wieder derselbe falsche Beleg wie bei der ursprünglichen Warnung.
     if not area.buffer(EPS_GEOM).covers(moved):
         return None
-    shift = basis @ np.asarray((du, dv))
+    shift = (
+        np.asarray(frame.x_axis, dtype=np.float64) * du
+        + np.asarray(frame.y_axis, dtype=np.float64) * dv
+    )
     return _(
         "Zusätzlicher Versatz in die Fläche: X {x}, Y {y}, Z {z}.",
         x=format_length(float(shift[0])),
@@ -2032,7 +2049,7 @@ def _lip_on_a_slant(
     rim = np.asarray(lip.rim, dtype=np.float64)
     points = rim[:, :1] * frame[:3, 0] + rim[:, 1:2] * frame[:3, 1] + mouth
     # Wie weit die Ebene der Fläche je Randpunkt entlang der Achse unter der Mündung liegt.
-    below = ((points - closest) @ facing) / along
+    below = lying_along(points - closest, facing) / along
     if float(below.max()) <= lip.height + EPS_GEOM:
         return None
     return Finding(
@@ -2045,7 +2062,7 @@ def _lip_on_a_slant(
         ),
         values={
             "part": spec.name,
-            "angle_deg": round(math.degrees(math.acos(min(1.0, along))), 1),
+            "angle_deg": round(exact_acos_degrees(along), 1),
         },
         # Regel 17: Die Richtung steht im Schritt.
         suggestions=(CORRECT_INPUT,),
@@ -2505,7 +2522,9 @@ def direction_of(feature: Feature) -> Vec3 | None:
     if raw is None:
         return None
     values = tuple(float(value) for value in raw)
-    length = sum(value * value for value in values) ** 0.5
+    # ``math.hypot`` rechnet CPython selbst; ``** 0.5`` ruft das ``pow`` der
+    # Plattform (RM-187).
+    length = math.hypot(*values)
     if length <= EPS_GEOM:
         return None
     return (values[0] / length, values[1] / length, values[2] / length)
@@ -2625,9 +2644,15 @@ def _roll_upright(direction: Vec3) -> Any:
     import numpy as np
 
     from app.core.geom.align import rotation_between
+    from app.core.geom.transform import turned as turned_by
+    from app.core.units import dot3, exact_atan2_degrees
 
+    # Längen über ``math.hypot``, Skalarprodukte über ``dot3``, der Winkel über
+    # ``exact_atan2_degrees`` (RM-187): ``np.linalg.norm``, ``np.dot``, ``@``
+    # und ``math.atan2`` runden die letzte Stelle je Maschine anders, und am
+    # Schlüsselloch drehte das Rauschen eines ULP den ganzen Baustein mit.
     normal = np.asarray(direction, dtype=float)
-    length = float(np.linalg.norm(normal))
+    length = math.hypot(float(normal[0]), float(normal[1]), float(normal[2]))
     if length < 1e-9:
         return np.eye(4)
     normal = normal / length
@@ -2637,10 +2662,11 @@ def _roll_upright(direction: Vec3) -> Any:
 
     # Was von der Welt-Senkrechten in der Flächenebene übrig bleibt.
     up = np.array([0.0, 0.0, 1.0])
-    up_in_face = up - float(np.dot(up, normal)) * normal
-    if float(np.linalg.norm(up_in_face)) < 1e-6:
+    up_in_face = up - dot3(up, normal) * normal
+    reach = math.hypot(float(up_in_face[0]), float(up_in_face[1]), float(up_in_face[2]))
+    if reach < 1e-6:
         return np.eye(4)
-    up_in_face = up_in_face / float(np.linalg.norm(up_in_face))
+    up_in_face = up_in_face / reach
 
     # Wo das +Y nach der kürzesten Drehung liegt, ebenfalls auf die Ebene
     # bezogen — nur der Anteil in der Ebene lässt sich durch Rollen bewegen.
@@ -2653,20 +2679,16 @@ def _roll_upright(direction: Vec3) -> Any:
     # machte damit die Bauweise **eines** Bausteins zur Regel für alle: Am
     # Schlüsselloch saß der Schraubensitz danach unten und der Kopfdurchlass
     # oben — aufgehängt wäre das Teil beim Loslassen von der Wand gefallen.
-    turned = rotation_between((0.0, 0.0, 1.0), unit)[:3, :3] @ np.array([0.0, -1.0, 0.0])
-    own = turned - float(np.dot(turned, normal)) * normal
-    if float(np.linalg.norm(own)) < 1e-6:
+    lying = turned_by(np.array([0.0, -1.0, 0.0]), rotation_between((0.0, 0.0, 1.0), unit))
+    own = lying - dot3(lying, normal) * normal
+    span = math.hypot(float(own[0]), float(own[1]), float(own[2]))
+    if span < 1e-6:
         return np.eye(4)
-    own = own / float(np.linalg.norm(own))
+    own = own / span
 
     # Der Winkel von ``own`` nach ``up_in_face``, um die Normale gemessen —
     # ``atan2`` gibt ihn mit Vorzeichen, ein ``arccos`` allein nicht.
-    degrees = math.degrees(
-        math.atan2(
-            float(np.dot(np.cross(own, up_in_face), normal)),
-            float(np.dot(own, up_in_face)),
-        )
-    )
+    degrees = exact_atan2_degrees(dot3(np.cross(own, up_in_face), normal), dot3(own, up_in_face))
     if abs(degrees) < 1e-9:
         return np.eye(4)
     # Dieselbe Drehung wie überall (``transform.rotation_about``, RM-187): Mit
@@ -2717,9 +2739,9 @@ def _matrix(
         # (§39). Ein aufsitzender Baustein bekommt das über ``sink``, ein
         # abtragender reicht sonst von selbst hinaus; nur dieser gespiegelte
         # endet genau an der Mündung und braucht den Überstand eigens.
-        matrix = translation((0.0, 0.0, BOOLEAN_OVERLAP)) @ mirror @ matrix
+        matrix = composed(translation((0.0, 0.0, BOOLEAN_OVERLAP)), mirror, matrix)
     if sink:
-        matrix = translation((0.0, 0.0, -sink)) @ matrix
+        matrix = composed(translation((0.0, 0.0, -sink)), matrix)
     if direction is not None:
         from app.core.geom.align import rotation_between
 
@@ -2731,28 +2753,28 @@ def _matrix(
             basis[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
             # Im Flächenrahmen zeigt +Y nach oben; die Bausteine hängen an -Y.
             local_angle = angle + (180.0 if keeps_up else 0.0)
-            matrix = basis @ rotation("z", local_angle) @ matrix
+            matrix = composed(basis, rotation("z", local_angle), matrix)
         else:
             if angle:
-                matrix = rotation("z", angle) @ matrix
-            matrix = rotation_between((0.0, 0.0, 1.0), direction) @ matrix
+                matrix = composed(rotation("z", angle), matrix)
+            matrix = composed(rotation_between((0.0, 0.0, 1.0), direction), matrix)
             if keeps_up:
-                matrix = _roll_upright(direction) @ matrix
+                matrix = composed(_roll_upright(direction), matrix)
     else:
         if axis != "z":
             # Den Baustein so umlegen, dass sein eigenes +Z entlang der
             # gewählten Achse zeigt.
-            matrix = (rotation("y", 90.0) if axis == "x" else rotation("x", -90.0)) @ matrix
+            matrix = composed(rotation("y", 90.0) if axis == "x" else rotation("x", -90.0), matrix)
         if angle:
-            matrix = rotation(axis, angle) @ matrix
-    matrix = (
+            matrix = composed(rotation(axis, angle), matrix)
+    matrix = composed(
         translation(
             (
                 float(_placement_value(params, "x", 0.0)) + anchor[0],
                 float(_placement_value(params, "y", 0.0)) + anchor[1],
                 float(_placement_value(params, "z", 0.0)) + anchor[2],
             )
-        )
-        @ matrix
+        ),
+        matrix,
     )
     return as_transform(matrix)

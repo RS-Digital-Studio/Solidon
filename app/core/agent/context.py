@@ -165,7 +165,7 @@ def world_text(
     text = digest(scene, document, selection, condensed=bool(condensed))
     if condensed is None and len(text) > CONDENSE_ABOVE_CHARS:
         text = digest(scene, document, selection, condensed=True)
-    parts = [f"{tr('Szene und Verlauf')}:", text]
+    parts = [tr("Szene und Verlauf:"), text]
     report = report_text(scene.report)
     if report:
         parts.append(report)
@@ -176,7 +176,7 @@ def report_text(report: Report) -> str:
     """Die Befunde, mit der Rückfallstufe, die sie erzeugt hat (§17.3, §26.1)."""
     if not report.findings:
         return ""
-    lines = [f"{tr('Prüfbericht')}:"]
+    lines = [tr("Prüfbericht:")]
     for finding in report.findings:
         marker = {"error": "!!", "warning": "!", "info": "-"}[finding.severity]
         values = ", ".join(f"{key}={value}" for key, value in finding.values.items())

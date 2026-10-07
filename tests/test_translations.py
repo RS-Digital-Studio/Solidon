@@ -603,13 +603,28 @@ def _fixed_translated_colons(tree: ast.AST) -> set[int]:
             and re.match(r"^\s*(?:</[^>]+>\s*)*:", node.value) is not None
         )
 
+    def ends_with_colon(node: ast.AST) -> bool:
+        while isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            node = node.right
+        if isinstance(node, ast.JoinedStr) and node.values:
+            node = node.values[-1]
+        return (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and re.search(r":\s*$", node.value) is not None
+        )
+
     offenders: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.JoinedStr) and translated(node):
             if any(starts_with_colon(part) for part in node.values):
                 offenders.add(node.lineno)
         elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-            if translated(node.left) and starts_with_colon(node.right):
+            # Auch davor: ``f"{x}: " + tr(…)`` — der Doppelpunkt steht vor dem
+            # übersetzten Teil (Review RM-285, ``analysis.py``).
+            if (translated(node.left) and starts_with_colon(node.right)) or (
+                translated(node.right) and ends_with_colon(node.left)
+            ):
                 offenders.add(node.lineno)
         elif (
             isinstance(node, ast.Call)
@@ -656,6 +671,11 @@ def _fixed_translated_colons(tree: ast.AST) -> set[int]:
         ('"{name}: {value}".format_map({"name": tr("Wert"), "value": value})', True),
         ('tr("Sicherheitsproblem melden") + f": <a>{address}</a>"', True),
         ('field.setPrefix(reference_name + ": ")', True),
+        ('f"{object_id}: " + tr("bessere Lage gefunden")', True),
+        ('"Wert: " + _("Text")', True),
+        ('tr("A") + f" {n}: " + tr("B")', True),
+        ('f"{host}:" + str(port)', False),
+        ('f"{object_id}: " + name', False),
         ('field.setPrefix(f"{reference_name}: ")', True),
         ('field.setPrefix(tr("{name}: {value}", name=reference_name, value=""))', False),
         ('tr("Wert: {value}", value=value)', False),
@@ -1406,9 +1426,10 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
     Gemessen in der Durchsicht 0.5.1: Das Werkzeug *Trennen* (eine gezogene
     Linie) und die Operation *Teilen* (eine eingetippte Ebene) hießen en, es,
     fr und pt gleich — „Split“, „Separar“, „Séparer“ —, it „Dividi“ gegen
-    „Dividere“, dasselbe Verb. Verglichen werden ganze Namen und bei
-    Einwortnamen der Wortstamm (:data:`GROUP_STEM`), wie bei den
-    Kataloggruppen. *Trennen* und *Abschneiden* vergleichen außerdem das
+    „Dividere“, dasselbe Verb. Seit RM-507 sagen alle Wege „teilen“: das
+    Werkzeug *Teilen*, die Operation *An Ebene teilen*. Verglichen werden ganze
+    Namen und bei Einwortnamen der Wortstamm (:data:`GROUP_STEM`), wie bei den
+    Kataloggruppen. *Teilen* und *Abschneiden* vergleichen außerdem das
     erste Verb: Eine Ergänzung wie „away“ macht daraus keine andere Aktion.
     """
     from app.core.bootstrap import load_operations
@@ -1418,7 +1439,7 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
     catalog = read_catalog(language)
     tools = _toolbar_names()
     titles = sorted({spec.title.msgid for spec in REGISTRY.all()})
-    assert "Trennen" in tools and len(tools) >= 5, f"Werkzeugzeile nicht gelesen: {tools}"
+    assert "Teilen" in tools and len(tools) >= 5, f"Werkzeugzeile nicht gelesen: {tools}"
     assert len(titles) > 100, f"nur {len(titles)} Operationstitel — dann prüft das nichts"
 
     def said(text: str) -> str:
@@ -1437,7 +1458,7 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
                 continue
             a, b = said(tool), said(title)
             one_word = " " not in a and " " not in b
-            separate_cutting_actions = (tool, title) == ("Trennen", "Abschneiden")
+            separate_cutting_actions = (tool, title) == ("Teilen", "Abschneiden")
             if a == b or (
                 (one_word or separate_cutting_actions)
                 and _first_word_stem(a) == _first_word_stem(b)
@@ -1705,6 +1726,27 @@ def non_model_surface_files() -> list[Path]:
     return sorted((PACKAGE_DIR / "cli").rglob("*.py")) + [
         PACKAGE_DIR / "core" / name for name in ("install.py", "log.py", "support.py")
     ]
+
+
+def test_model_texts_do_not_append_a_fixed_colon() -> None:
+    """RM-285, der Rest: Auch was das Sprachmodell liest, setzt seinen
+    Doppelpunkt im Katalog — Steckbrief, Werkzeugbeschreibungen („Ort: …“),
+    Werkzeugantworten. Im Französischen stand davor sonst kein Leerzeichen,
+    und ein Agententitel („Vorschlag: …“) landet als Transaktionstitel im
+    Verlauf des Kunden. Auf Deutsch bleibt jeder Text Zeichen für Zeichen,
+    was er war.
+    """
+    paths = [
+        *sorted((PACKAGE_DIR / "core" / "agent").glob("*.py")),
+        PACKAGE_DIR / "core" / "perceive" / "digest.py",
+    ]
+    assert len(paths) > 5, "die Agentenschicht muss Quellen haben"
+    offenders = [
+        f"{path.relative_to(PACKAGE_DIR)}:{line}"
+        for path in paths
+        for line in sorted(_fixed_translated_colons(ast.parse(path.read_text(encoding="utf-8"))))
+    ]
+    assert not offenders, "feste Doppelpunkte neben Übersetzungen:\n" + "\n".join(offenders)
 
 
 def test_non_model_surface_labels_do_not_append_a_fixed_colon() -> None:

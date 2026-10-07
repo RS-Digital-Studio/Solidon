@@ -35,6 +35,7 @@ from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import shortcut_for
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+EXAMPLES = Path(__file__).resolve().parents[1] / "app" / "examples"
 
 #: Menüs in der Leiste. Vor P14 waren es siebzehn; die Menügruppen haben
 #: daraus neun gemacht, und dabei bleibt es.
@@ -1417,6 +1418,9 @@ def test_the_palette_greys_out_what_the_menu_greys_out(window: MainWindow) -> No
     assert any("Rückgängig" in title for title in titles), (
         f"Rückgängig ist ohne Verlauf gesperrt, die Palette sieht es nicht: {sorted(titles)}"
     )
+    # *Automatisch teilen* steht seit RM-507 in keinem Menü mehr, nur noch in
+    # der Auswahlkarte — die Palette sperrt es trotzdem mit Grund.
+    assert "edit.auto_split" in blocked, f"Automatisch teilen ohne Sperre: {sorted(titles)}"
 
     # Und was geht, sagt nichts: ein Grund an einem offenen Eintrag wäre eine
     # Warnung ohne Anlass.
@@ -1695,6 +1699,36 @@ def _menu_titles_and_entries(menu: QMenu) -> list[str]:
         elif text:
             found.append(text)
     return found
+
+
+def test_no_menu_text_stands_for_two_actions(window: MainWindow) -> None:
+    """Kein Text steht in zwei Menüs mit verschiedener Wirkung (RM-507, A18).
+
+    Unter *Erzeugen* stand die Operation „Modell einfügen“ neben „Modell
+    einfügen …“ in *Datei*, zwei Wege unter einem Namen. Gleicher Text ist
+    erlaubt, wenn es dieselbe ``QAction`` ist (der Katalog, das Einfügen);
+    verglichen wird ohne ``&`` und Auslassungspunkte. *Automatisch teilen*
+    steht in keinem Menü mehr, sondern bei den Teilen-Wegen der Auswahlkarte.
+    """
+    owners: dict[str, set[int]] = {}
+
+    def walk(menu: QMenu) -> None:
+        for action in menu.actions():
+            below = action.menu()
+            if isinstance(below, QMenu):
+                walk(below)
+            elif not action.isSeparator() and action.text():
+                text = action.text().replace("&", "").replace("…", "").strip()
+                owners.setdefault(text, set()).add(id(action))
+
+    for entry in window.menuBar().actions():
+        if isinstance(menu := entry.menu(), QMenu):
+            walk(menu)
+    assert len(owners) > 40, "die Menüleiste ist kaum gefüllt — dann prüft das nichts"
+    doubled = sorted(text for text, actions in owners.items() if len(actions) > 1)
+    assert not doubled, f"ein Text, mehrere Aktionen: {doubled}"
+    assert "Automatisch teilen" not in owners
+    assert window.auto_split_action in window.selection_operations._window_actions.values()
 
 
 def test_every_menu_path_in_the_texts_leads_somewhere(window: MainWindow) -> None:
@@ -2044,9 +2078,26 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     verglichen = 0
     rechts = 0
     palette = 0
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
+
     for name, action in window._op_actions.items():
         spec = REGISTRY.get(name)
         genannt = blank(menu_path(spec))
+        if name in WINDOW_COMMAND_OPERATIONS:
+            # **Ihr Menüeintrag ist der Fensterbefehl** (RM-507): *Modell
+            # einfügen …* steht in *Datei* und *Erzeugen* als eine Aktion; der
+            # Weg nennt den Titel der Operation, das Menü trägt die
+            # Auslassungspunkte des Dialogs.
+            action = window._palette_actions[WINDOW_COMMAND_OPERATIONS[name]]
+            assert action in gebaut, f"{name}: kein Menüweg"
+            # Dieselbe Aktion in zwei Menüs: ``gebaut`` hält die zuletzt gebaute
+            # Stelle, und *Erzeugen* kommt nach *Datei*.
+            assert gebaut[action].removesuffix(" …") == genannt, (
+                f"{name}: nennt „{genannt}“, im Menü „{gebaut[action]}“"
+            )
+            assert name not in in_the_palette, f"{name}: zweite Palettenzeile neben dem Befehl"
+            verglichen += 1
+            continue
         if not in_the_menu_bar(spec.category):
             assert action not in gebaut, f"{name}: steht rechts und trotzdem in der Leiste"
             if spec.takes_whole_scene and name not in SCENE_ACTIONS_IN_THE_CARD:
@@ -2266,6 +2317,195 @@ def test_menu_history_and_sketch_take_their_keys_from_the_platform(
     finally:
         sketch.deleteLater()
         window.deleteLater()
+
+
+def test_delete_answers_in_the_selection_tab_and_says_why_when_it_cannot(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Entf im Reiter *Auswahl* — und ein gesperrtes Entfernen nennt seinen Grund.
+
+    Fragebogen S-20261006-5be329: „die Entf taste löscht weder Merkmal noch
+    Körper“. Zwei Wege endeten im Schweigen: Der Fokus lag nach einem Klick
+    rechts im Reiter, und die Taste galt nur an Baum und Ansicht; oder die
+    Kette hielt an einem Schritt, und Qt führt ein gesperrtes Kürzel nicht
+    aus, ohne etwas zu sagen. Gedrückt wird die Taste wie vom Kunden, nicht
+    die Methode dahinter. Ein Textfeld im Reiter behält Entf, und ohne
+    Auswahl bleibt die Taste stumm — beim Messen gehört sie dem letzten Maß.
+    """
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QLineEdit, QPushButton
+
+    from tests.ui_helpers import shown_window, with_a_body
+
+    windows = shown_window(qt_app)
+    window = next(windows)
+    try:
+        body = with_a_body(window)
+        window.activateWindow()
+        window.right.setCurrentWidget(window.feature_dock)
+        qt_app.processEvents()
+
+        def steps() -> list[str]:
+            return [entry.op for entry in window.session.project.document.ops]
+
+        before = steps()
+        button = next(
+            candidate
+            for candidate in window.feature_dock.findChildren(QPushButton)
+            if candidate.isVisibleTo(window.feature_dock)
+            and candidate.isEnabled()
+            and candidate.focusPolicy() != Qt.FocusPolicy.NoFocus
+        )
+        button.setFocus()
+        QTest.keyClick(button, Qt.Key.Key_Delete)
+        assert window.session.wait_for_idle()
+        assert steps() == [*before, "delete_object"], "der Fokus auf einem Knopf im Reiter"
+        window.undo_action.trigger()
+        assert window.session.wait_for_idle()
+        assert steps() == before
+
+        window.object_tree.select_object(body)
+        field = next(
+            candidate
+            for candidate in window.feature_dock.findChildren(QLineEdit)
+            if candidate.isVisibleTo(window.feature_dock) and not candidate.isReadOnly()
+        )
+        field.setText("ab")
+        field.setCursorPosition(0)
+        field.setFocus()
+        QTest.keyClick(field, Qt.Key.Key_Delete)
+        assert field.text() == "b", "ein Textfeld behält Entf"
+        assert steps() == before
+
+        monkeypatch.setattr(window, "_halt_reason", lambda: "Die Kette hält an.")
+        window._update_actions()
+        assert not window._op_actions["delete_object"].isEnabled()
+        window.announce("")
+        window.object_tree.tree.setFocus()
+        QTest.keyClick(window.object_tree.tree, Qt.Key.Key_Delete)
+        assert steps() == before
+        assert window.status_message.text() == "Objekt entfernen: Die Kette hält an."
+
+        # **Bei Halt auch im Reiter:** Ein Knopf dort sagt den Grund wie der
+        # Baum, ein Textfeld dort behält die Taste. Vor dem Halt entscheidet
+        # ``ShortcutOverride``; erst hier greift die Ausnahme im Zuhörer.
+        window.right.setCurrentWidget(window.feature_dock)
+        qt_app.processEvents()
+        window.announce("")
+        halted_button = next(
+            candidate
+            for candidate in window.feature_dock.findChildren(QPushButton)
+            if candidate.isVisibleTo(window.feature_dock)
+            and candidate.isEnabled()
+            and candidate.focusPolicy() != Qt.FocusPolicy.NoFocus
+        )
+        halted_button.setFocus()
+        QTest.keyClick(halted_button, Qt.Key.Key_Delete)
+        assert steps() == before
+        assert window.status_message.text() == "Objekt entfernen: Die Kette hält an.", (
+            "ein Knopf im Reiter sagt den Grund"
+        )
+        window.announce("")
+        halted_field = next(
+            candidate
+            for candidate in window.feature_dock.findChildren(QLineEdit)
+            if candidate.isVisibleTo(window.feature_dock) and not candidate.isReadOnly()
+        )
+        halted_field.setText("ab")
+        halted_field.setCursorPosition(0)
+        halted_field.setFocus()
+        QTest.keyClick(halted_field, Qt.Key.Key_Delete)
+        assert halted_field.text() == "b", "ein Textfeld behält Entf auch bei Halt"
+        assert window.status_message.text() == "", "und sagt nichts"
+        halted_field.clear()
+
+        # **Beim Messen gehört die Taste in der Ansicht dem letzten Maß** — der
+        # Zuhörer am Filter der Anwendung käme vor dem Filter der Ansicht und
+        # schluckte sie (am Mac ⌫, die Rücktaste der Messung). Mit dem Fokus im
+        # Baum kommt sie dort nie an, und dann sagt sie den Grund.
+        window._on_measure_mode("distance")
+        try:
+            assert window.viewport.measuring()
+            assert window._refuse_delete(window.viewport) is False, "in der Ansicht schweigt sie"
+            window.announce("")
+            window.object_tree.tree.setFocus()
+            QTest.keyClick(window.object_tree.tree, Qt.Key.Key_Delete)
+            assert window.status_message.text() == "Objekt entfernen: Die Kette hält an.", (
+                "im Baum sagt sie auch beim Messen den Grund"
+            )
+        finally:
+            window._on_measure_mode("off")
+        assert not window.viewport.measuring()
+        assert window._refuse_delete(window.viewport) is True, "Gegenprobe ohne Messen"
+
+        window.announce("")
+        window.object_tree.select_object(None)
+        window.object_tree.tree.setFocus()
+        QTest.keyClick(window.object_tree.tree, Qt.Key.Key_Delete)
+        assert window.status_message.text() == "", "ohne Auswahl gibt es nichts zu sagen"
+
+        # **Die Lizenzsperre** sagt ihren eigenen Satz, den des Menüeintrags.
+        from app.ui.dialogs import licence_lock_line
+        from tests.ui_helpers import expire_trial
+
+        window.object_tree.select_object(body)
+        monkeypatch.setattr(window, "_halt_reason", lambda: None)
+        expire_trial(monkeypatch)
+        window._update_actions()
+        removal = window._op_actions["delete_object"]
+        assert not removal.isEnabled()
+        window.announce("")
+        window.object_tree.tree.setFocus()
+        QTest.keyClick(window.object_tree.tree, Qt.Key.Key_Delete)
+        assert steps() == before
+        assert window.status_message.text() == f"Objekt entfernen: {removal.statusTip()}"
+        assert licence_lock_line() in window.status_message.text()
+    finally:
+        next(windows, None)
+
+
+def test_delete_at_a_part_feature_names_the_part_when_it_cannot(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Entf an einem Bausteinmerkmal bei Halt nennt *Baustein entfernen*, wie das Kontextmenü.
+
+    Ohne Halt nimmt Entf dort den Bausteinschritt (``_delete_the_chosen_feature``),
+    und das Kontextmenü heißt danach (``_removal_entry``). Die Ansage bei Halt
+    fragte den Zwilling der Operation und sagte „Merkmal entfernen“ — eine
+    Handlung, die die Taste an dieser Stelle gar nicht ausführt.
+    """
+    from PySide6.QtTest import QTest
+
+    from tests.ui_helpers import shown_window
+
+    windows = shown_window(qt_app)
+    window = next(windows)
+    try:
+        window.open_path(EXAMPLES / "gehaeuse-mit-bausteinen.p3d")
+        assert window.session.wait_for_idle(120_000)
+        qt_app.processEvents()
+        result = window.session.last_result
+        assert result is not None
+        found = next(
+            (object_id, feature_id)
+            for object_id, entry in result.scene.objects.items()
+            for feature_id, feature in entry.features.items()
+            if window.part_step_of(feature) is not None
+        )
+        window.object_tree.select_feature(*found)
+        qt_app.processEvents()
+        title, _sentence = window._removal_entry()
+        assert title == "Baustein entfernen", "der Fall braucht ein Merkmal aus einem Baustein"
+
+        monkeypatch.setattr(window, "_halt_reason", lambda: "Die Kette hält an.")
+        window._update_actions()
+        window.announce("")
+        window.activateWindow()
+        window.object_tree.tree.setFocus()
+        QTest.keyClick(window.object_tree.tree, Qt.Key.Key_Delete)
+        assert window.status_message.text() == "Baustein entfernen: Die Kette hält an."
+    finally:
+        next(windows, None)
 
 
 #: Zugeklappte Abschnitte, deren Titel schon ihr Inhalt ist, mit Grund.

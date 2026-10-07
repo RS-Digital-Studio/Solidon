@@ -1643,6 +1643,13 @@ class Finding:
     source: MetricSource = "internal"
     suggestions: tuple[Action, ...] = ()
     """Konkrete Auswege, wenn der Befund aus einer Ausnahme entstand (§2.7)."""
+    object_ids: tuple[ObjectId, ...] = ()
+    """Alle Körper, über die der Befund spricht, wenn es mehr als einer ist.
+
+    Ein Paar, das sich überschneidet, nennt beide; ``object_id`` bleibt der
+    eine, den ein Klick wählt. Die Auswertung streicht den Befund, sobald einer
+    davon wieder entfernt ist (``scene.evaluate._without_discarded``). Nicht in
+    der Projektdatei, wohl aber im Plattencache — wie ``outline``."""
 
     @property
     def converts_exact_body(self) -> bool:
@@ -1985,7 +1992,8 @@ class ParamSpec:
 
     Der Wert reist als ``null`` in der Projektdatei, fehlt im Werkzeugschema
     des Agenten als Pflichtfeld und steht im Dialog als leeres Feld mit einem
-    Sondertext am Mindestwert."""
+    Sondertext am Mindestwert — „wie gemessen“, oder was :attr:`zero_text`
+    nennt."""
     internal: bool = False
     """Ein Marker, den eine Migration setzt, und kein Feld für den Kunden.
 
@@ -1993,15 +2001,18 @@ class ParamSpec:
     weder im Dialog noch im Werkzeugschema des Agenten: ``measured_frame``
     hieß dort „Richtung aus einem älteren Projekt“ und stand unter jeder neuen
     Langlochbohrung, die ihn nie braucht (RM-332, N5)."""
-    dropped_on_change: bool = False
+    dropped_on_change: bool | tuple[str, ...] = False
     """Ein interner Marker, den eine bewusste Änderung des Schritts aufhebt.
 
     Die Migration setzt ihn, damit ein gespeicherter Schritt rechnet wie beim
     Speichern; wer den Schritt ändert, bekommt die heutige Rechnung, und
     ``History.change_params`` nimmt ihn heraus, sobald sich ein anderer Wert
-    ändert (``legacy_slot_tool``, Migration 45 → 46). ``measured_frame`` trägt
-    ihn nicht: Dort meint der Marker, wie ein Winkel gelesen wird, und gilt bei
-    jeder Länge weiter."""
+    ändert (``legacy_slot_tool``, Migration 45 → 46). Eine Liste von Feldern
+    statt ``True`` hebt ihn nur auf, wenn sich eines davon ändert: Der Deckel
+    liest eine alte Null nur so lange als Oberkante, wie die Höhe der Öffnung
+    selbst bleibt (``legacy_zero_top``, Migration 46 → 47). ``measured_frame``
+    trägt ihn nicht: Dort meint der Marker, wie ein Winkel gelesen wird, und
+    gilt bei jeder Länge weiter."""
     sketch_planes: tuple[str, ...] = ()
     """Auf welchen Ebenen die Zeichnung dieses Skizzenfelds liegen darf.
 
@@ -2020,7 +2031,13 @@ class ParamSpec:
     sagt die Null etwas anderes als null Millimeter, und im Feld stand
     „0,00 mm“ (RM-513). Der Dialog zeigt den Namen am Mindestwert
     (``setSpecialValueText``) — deshalb nur an Feldern mit Mindestwert 0;
-    ``tests/test_registry_consistency.py`` hält beides."""
+    ``tests/test_registry_consistency.py`` hält beides.
+
+    **An einem ``optional``-Feld heißt so der leere Zustand** (RM-526): Dort
+    steht der Sonderwert eine Stufe unter dem Mindestwert, und ohne eigenen
+    Namen hieße er „wie gemessen“. Die Höhe der Öffnung eines Deckels ist eine
+    Welthöhe, in der die Null eine Zahl ist wie jede andere; leer heißt dort
+    „Oberkante“."""
 
 
 @runtime_checkable
@@ -2568,6 +2585,38 @@ class Document:
     Stapel."""
     highest_object: int = 0
     """Der höchste je vergebene Objektindex (``obj_<n>``)."""
+
+
+def step_numbers(operations: Sequence[Operation]) -> dict[OpId, int]:
+    """Je Schrittkennung die Nummer, unter der der Verlauf ihn zeigt: seine Stelle, ab eins.
+
+    Kennungen bleiben nach Einfügen und Verschieben stabil und weichen dann
+    von der Reihenfolge ab (RM-368): Nach einem Einfügen vor Schritt 3 trägt
+    der sichtbare Schritt 3 die Kennung 9. Eine Quelle für den Kern
+    (``scene.history.step_position``), den Steckbrief des Agenten und das
+    Verlaufsfeld — bis zum Review von RM-529 zählten alle drei für sich.
+    """
+    return {operation.id: position for position, operation in enumerate(operations, start=1)}
+
+
+def replanned_steps(document: Document) -> frozenset[OpId]:
+    """Schritte, die ein Einfügen oder Verschieben neu gefasst hat (P7).
+
+    Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
+    Kennung an seiner neuen Stelle. Verlaufsfeld und Steckbrief blenden sie
+    deshalb aus, statt sie wie einen gelöschten Schritt zu nennen (§15.4 gilt
+    dem Löschen). Gelesen wird ``Transaction.revision``, das alte Projekte seit
+    Format 32 tragen — ``renumbered`` kam erst mit Format 45 (Review RM-529).
+    """
+    found: set[OpId] = set()
+    for transaction in document.transactions:
+        changes = transaction.changes
+        if transaction.revision not in ("insert", "move") or changes is None:
+            continue
+        found.update(
+            op_id for op_id, version in (changes.after.edited_ops or {}).items() if version is None
+        )
+    return frozenset(found)
 
 
 # --- Schichtanalyse (§22) ------------------------------------------------------

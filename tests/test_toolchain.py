@@ -946,10 +946,13 @@ def test_the_shared_exact_kernel_guard_keeps_its_import_errors_visible(
 def _ocp_imports_without_guard(source: str) -> list[int]:
     """Zeilen der ``OCP``-Importe, vor denen kein ``exact_kernel()`` steht.
 
-    Lexikalisch: ein Aufruf des Wächters (auch unter seinem Importnamen) auf
-    Modulebene oder in einer umschließenden Funktion, vor der Importzeile.
-    Ein Helfer, den nur geschützte Tests rufen, zählt nicht als geschützt —
-    der nächste Aufrufer weiß davon nichts.
+    Es zählt nur ein Aufruf, der den Import **dominiert**: eine eigene
+    Anweisung (``exact_kernel()`` oder ``edit = exact_kernel()``, auch unter
+    seinem Importnamen) vor dem Import im selben Block oder in einem Block, der
+    ihn umschließt, bis hinauf zum Modul. Ein Aufruf in einer inneren Funktion,
+    einem Lambda, einem anderen Zweig oder unter ``if False`` schützt nichts
+    (Review 06.10.2026, N6). Ein Helfer, den nur geschützte Tests rufen, zählt
+    nicht als geschützt — der nächste Aufrufer weiß davon nichts.
     """
     tree = ast.parse(source)
     names = {"exact_kernel"}
@@ -962,21 +965,32 @@ def _ocp_imports_without_guard(source: str) -> list[int]:
         for child in ast.iter_child_nodes(node):
             parents[child] = node
 
-    def guards_in(scope: ast.AST) -> list[int]:
-        return [
-            node.lineno
-            for node in ast.walk(scope)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id in names
-        ]
+    def guard(statement: ast.stmt) -> bool:
+        value = (
+            statement.value
+            if isinstance(statement, (ast.Expr, ast.Assign, ast.AnnAssign))
+            else None
+        )
+        return (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id in names
+        )
 
-    module_guards = [
-        line
-        for statement in tree.body
-        if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-        for line in guards_in(statement)
-    ]
+    def dominated(node: ast.AST) -> bool:
+        child, parent = node, parents.get(node)
+        while parent is not None:
+            for field in ("body", "orelse", "finalbody"):
+                block = getattr(parent, field, None)
+                if (
+                    isinstance(block, list)
+                    and child in block
+                    and any(guard(statement) for statement in block[: block.index(child)])
+                ):
+                    return True
+            child, parent = parent, parents.get(parent)
+        return False
+
     unguarded: list[int] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
@@ -985,18 +999,7 @@ def _ocp_imports_without_guard(source: str) -> list[int]:
             modules = [alias.name for alias in node.names]
         else:
             continue
-        if not any(module.split(".")[0] == "OCP" for module in modules):
-            continue
-        if any(line < node.lineno for line in module_guards):
-            continue
-        scope = parents.get(node)
-        while scope is not None and not isinstance(scope, ast.Module):
-            if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
-                line < node.lineno for line in guards_in(scope)
-            ):
-                break
-            scope = parents.get(scope)
-        else:
+        if any(module.split(".")[0] == "OCP" for module in modules) and not dominated(node):
             unguarded.append(node.lineno)
     return sorted(unguarded)
 
@@ -1045,18 +1048,24 @@ def test_no_test_skips_over_a_fixed_dependency() -> None:
 
 
 def _skipped_imports(source: str) -> list[tuple[int, str]]:
-    """Aufrufe ``importorskip("…")`` mit Zeile und Modul — Aufrufe, nicht Text."""
-    return [
-        (node.lineno, node.args[0].value)
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, (ast.Attribute, ast.Name))
-        and (node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id)
-        == "importorskip"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and isinstance(node.args[0].value, str)
-    ]
+    """Aufrufe ``importorskip("…")`` mit Zeile und Paket — Aufrufe, nicht Text.
+
+    Das Paket ist das erste Glied des Namens, auch aus ``modname=``:
+    ``importorskip("PySide6.QtWidgets")`` überspringt genauso über eine
+    kaputte Installation hinweg (Review 06.10.2026, N7).
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, (ast.Attribute, ast.Name)):
+            continue
+        called = node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id
+        if called != "importorskip":
+            continue
+        given = [*node.args[:1], *(word.value for word in node.keywords if word.arg == "modname")]
+        for argument in given:
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                found.append((node.lineno, argument.value.split(".")[0]))
+    return found
 
 
 def test_the_skip_check_reads_calls_and_not_prose() -> None:
@@ -1064,9 +1073,16 @@ def test_the_skip_check_reads_calls_and_not_prose() -> None:
     source = (
         'def f():\n    """Früher stand hier importorskip("OCP")."""\n'
         '    pytest.importorskip("PySide6")\n    importorskip("hid")\n'
+        '    pytest.importorskip("PySide6.QtWidgets")\n'
+        '    pytest.importorskip(modname="OCP.BRepTools")\n'
     )
 
-    assert _skipped_imports(source) == [(3, "PySide6"), (4, "hid")]
+    assert _skipped_imports(source) == [
+        (3, "PySide6"),
+        (4, "hid"),
+        (5, "PySide6"),
+        (6, "OCP"),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1082,8 +1098,25 @@ def test_the_skip_check_reads_calls_and_not_prose() -> None:
             [],
         ),
         ("def g():\n    exact_kernel()\ndef f():\n    import OCP\n", [4]),
+        ("def f():\n    g = lambda: exact_kernel()\n    import OCP\n", [3]),
+        ("def f():\n    def g():\n        exact_kernel()\n    import OCP\n", [4]),
+        ("def f(a):\n    if a:\n        exact_kernel()\n    else:\n        import OCP\n", [5]),
+        ("if False:\n    exact_kernel()\nimport OCP\n", [3]),
+        ("def f():\n    edit = exact_kernel()\n    for _ in ():\n        import OCP\n", []),
     ],
-    ids=["ohne", "davor", "danach", "modul", "alias-im-zweig", "fremde-funktion"],
+    ids=[
+        "ohne",
+        "davor",
+        "danach",
+        "modul",
+        "alias-im-zweig",
+        "fremde-funktion",
+        "lambda",
+        "innere-funktion",
+        "anderer-zweig",
+        "if-false",
+        "zuweisung-umschliessend",
+    ],
 )
 def test_the_ocp_guard_check_reads_order_and_scope(source: str, expected: list[int]) -> None:
     """Der Wächter oben, an Fällen mit bekanntem Ausgang."""

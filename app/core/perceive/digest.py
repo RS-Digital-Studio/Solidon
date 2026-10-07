@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Collection, Mapping
 from pathlib import PurePosixPath
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from app.core import units
 from app.core.perceive.actions import MEASURE_SOURCE_WORDS, measure_qualifier
@@ -28,9 +28,14 @@ from app.core.types import (
     Scene,
     SceneObject,
     measure_status,
+    replanned_steps,
+    step_numbers,
 )
 from app.core.units import EPS_GEOM, format_length, format_volume, round_display
 from app.i18n import TranslatableText, _, tr
+
+if TYPE_CHECKING:
+    from app.core.scene.history import Discarded
 
 #: Wie viele Zeichen ein Name aus einer fremden Datei im Steckbrief belegen
 #: darf.
@@ -148,11 +153,14 @@ def digest(
             f"{as_value(name)}={round_display(parameter.value):g} {as_value(parameter.unit)}"
             for name, parameter in scene.parameters.items()
         )
-        lines.append(f"{tr('Parameter')}: {values}")
+        lines.append(tr("Parameter: {values}").format(values=values))
 
     if selection is not None:
         object_id, feature_id = selection
-        lines.append(f"{tr('Auswahl')}: {object_id}" + (f" · {feature_id}" if feature_id else ""))
+        lines.append(
+            tr("Auswahl: {selection}").format(selection=object_id)
+            + (f" · {feature_id}" if feature_id else "")
+        )
         lines.extend(_selection_lines(scene, selection))
 
     if document is not None:
@@ -177,12 +185,10 @@ def _step_numbers(document: Document | None) -> dict[int, int]:
     **Die sichtbare Nummer, nicht die Kennung.** Nach einem Einfügen vor
     Schritt 3 trägt der sichtbare Schritt 3 die Kennung 9 (RM-368); der Agent
     spricht mit dem Nutzer über den Verlauf, den dieser vor sich hat, und kein
-    Werkzeug nimmt eine Kennung entgegen. Dieselbe Rechnung wie
-    ``scene.history.step_position``, einmal je Steckbrief statt je Zeile.
+    Werkzeug nimmt eine Kennung entgegen. Die Zählung ist ``types.step_numbers``,
+    dieselbe wie im Verlauf.
     """
-    if document is None:
-        return {}
-    return {operation.id: position for position, operation in enumerate(document.ops, start=1)}
+    return step_numbers(document.ops) if document is not None else {}
 
 
 def _step_name(op_id: int, steps: Mapping[int, int]) -> str:
@@ -306,7 +312,7 @@ def _fit_lines(document: Document, scene: Scene) -> list[str]:
             f"{as_value(fit.name)} {as_value(fit.a)} ↔ {as_value(fit.b)} "
             f"({as_value(fit.kind)}, {as_value(fit.tolerance)}){state}"
         )
-    return [f"{tr('Passungen')}: " + " · ".join(parts)]
+    return [tr("Passungen: {fits}").format(fits=" · ".join(parts))]
 
 
 def _print_settings_line(document: Document) -> list[str]:
@@ -324,9 +330,19 @@ def _print_settings_line(document: Document) -> list[str]:
     width = settings.layers.line_width
     # Titel und Stufe stehen im Projekt, also gerahmt beziehungsweise
     # abgeflacht (§32) — der Titel ist ein Name, die Stufe ein Schlüssel.
+    # Eine Zeile, ein Rahmen: Aus Einzelwörtern stand in den übrigen Sprachen
+    # „2 Walls“ großgeschrieben mitten im Satz (Review RM-285, N4).
     return [
-        f"{tr('Druckeinstellungen')}: {as_name(settings.title)} ({as_value(settings.quality)}), "
-        f"{walls} {tr('Wände')} × {width:g} mm = {settings.wall_thickness:g} mm {tr('Wand')}"
+        tr(
+            "Druckeinstellungen: {title} ({quality}), "
+            "{walls} Wände × {width} mm = {thickness} mm Wand"
+        ).format(
+            title=as_name(settings.title),
+            quality=as_value(settings.quality),
+            walls=walls,
+            width=f"{width:g}",
+            thickness=f"{settings.wall_thickness:g}",
+        )
     ]
 
 
@@ -345,7 +361,7 @@ def _source_lines(document: Document) -> list[str]:
         f"{source_id} {as_name(PurePosixPath(source.path).name)} ({as_value(source.kind)})"
         for source_id, source in document.sources.items()
     ]
-    return [f"{tr('Quellen')}: " + " · ".join(parts)]
+    return [tr("Quellen: {sources}").format(sources=" · ".join(parts))]
 
 
 def _scene_line(scene: Scene) -> str:
@@ -366,10 +382,17 @@ def _scene_line(scene: Scene) -> str:
         )
         state = f" ({calibration})"
     plates = _plate_count(scene)
-    spread = f", {plates} {tr('Platten')}" if plates > 1 else ""
-    return (
-        f"{tr('Szene')}: {len(scene.objects)} {tr('Objekte')}{spread}, "
-        f"{tr('Drucker')} {printer}, {tr('Material')} {material}{state}"
+    # Ganze Zeilen als Rahmen, sonst stünden „Plates, Printer …, Material …“
+    # großgeschrieben mitten im Satz (Review RM-285, N4).
+    if plates > 1:
+        return tr(
+            "Szene: {count} Objekte, {plates} Platten, "
+            "Drucker {printer}, Material {material}{state}"
+        ).format(
+            count=len(scene.objects), plates=plates, printer=printer, material=material, state=state
+        )
+    return tr("Szene: {count} Objekte, Drucker {printer}, Material {material}{state}").format(
+        count=len(scene.objects), printer=printer, material=material, state=state
     )
 
 
@@ -590,7 +613,7 @@ def _extent_line(entry: SceneObject) -> str:
         f"{name} {lower[index]:.1f} … {upper[index]:.1f}"
         for index, name in enumerate(("x", "y", "z"))
     )
-    return f"{tr('liegt')}: {spans} mm"
+    return tr("liegt: {spans} mm").format(spans=spans)
 
 
 def _solidity(entry: SceneObject) -> float | None:
@@ -1071,34 +1094,55 @@ def _stack_lines(document: Document, steps: Mapping[int, int]) -> list[str]:
     """
     if not document.transactions:
         return []
+    # Träge, wie jede Kante von ``perceive`` nach ``scene``
+    # (``tests/test_core_package_direction.py``).
+    from app.core.scene.history import discarded
+
     operations = {operation.id: operation for operation in document.ops}
+    gone = discarded(sorted(document.ops, key=lambda one: one.id))
+    # Was ein Einfügen oder Verschieben neu gefasst hat, steht unter der
+    # Transaktion des Umbaus mit seiner neuen Kennung; die alte Zeile blendet
+    # das Verlaufsfeld genauso aus (``types.replanned_steps``).
+    superseded = replanned_steps(document)
     parts = []
     for transaction in document.transactions:
+        if transaction.ops and all(entry in superseded for entry in transaction.ops):
+            continue
+        # Ein gelöschter Schritt steht noch in seiner Transaktion, rechnet aber
+        # nicht und hat keine Nummer im Verlauf: Er heißt „gelöscht“ wie im
+        # Verlaufsfeld. Bis zum Review von RM-529 stand hier seine rohe
+        # Kennung — „2“ neben „op2“, einem anderen Schritt. Die Löschung selbst
+        # bleibt mit ihrem Titel stehen: Der Agent kann sie zurücknehmen.
         calls = ", ".join(
             f"{_step_name(entry, steps)} "
             + _op_call(operations[entry])
-            + _resting_mark(operations[entry])
+            + _resting_mark(operations[entry], gone)
             if entry in operations
-            else str(entry)
+            else tr("gelöscht")
             for entry in transaction.ops
+            if entry in operations or entry not in superseded
         )
         by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
         # Der Titel einer Transaktion ist ein Name aus der Projektdatei wie
         # jeder andere — und einer, den der Agent selbst vorgeschlagen haben
         # kann (§32).
-        parts.append(f"{transaction.id} {as_name(transaction.title)} ({calls}, {by})")
-    return [f"{tr('Verlauf')}: " + " · ".join(parts)]
+        listed = f"{calls}, {by}" if calls else by
+        parts.append(f"{transaction.id} {as_name(transaction.title)} ({listed})")
+    return [tr("Verlauf: {transactions}").format(transactions=" · ".join(parts))]
 
 
-def _resting_mark(operation: Operation) -> str:
-    """„ aus" oder „ ruht" hinter einem Schritt, der nicht rechnet (P7.3).
+def _resting_mark(operation: Operation, gone: Discarded) -> str:
+    """„ aus", „ ruht" oder „ Ergebnis entfernt" hinter einem Schritt, der nicht wirkt (P7.3).
 
     Ohne Vermerk suchte der Agent das Ergebnis eines ausgeschalteten Schritts
-    im Steckbrief vergeblich — oder legte es ein zweites Mal an.
+    im Steckbrief vergeblich — oder legte es ein zweites Mal an —, ebenso das
+    eines Schritts, dessen Körper ein späterer wieder entfernt hat. Das Wort
+    ist das des Verlaufsfelds (``history.step_state_word``).
     """
-    if operation.suppressed is None:
-        return ""
-    return " " + (tr("aus") if operation.suppressed.chosen else tr("ruht"))
+    from app.core.scene.history import step_state_word
+
+    word = step_state_word(operation, gone)
+    return f" {word}" if word is not None else ""
 
 
 def _op_call(operation: Operation) -> str:
@@ -1157,10 +1201,15 @@ def new_feature_lines(before: Scene, after: Scene) -> list[str]:
         if object_id not in before.objects:
             # Derselbe Rahmen wie in ``_object_lines``: Der Name kommt aus der
             # Projektdatei oder aus einem Werkzeugaufruf des Modells (§32).
-            lines.append(f"{tr('Neues Objekt')}: {object_id} {as_name(entry.name)}")
+            lines.append(
+                tr("Neues Objekt: {object} {name}").format(
+                    object=object_id, name=as_name(entry.name)
+                )
+            )
         for feature_id, feature in fresh.items():
             lines.append(
-                f"{tr('Neues Merkmal')}: {_feature_line(feature_id, feature)} "
+                tr("Neues Merkmal: {feature}").format(feature=_feature_line(feature_id, feature))
+                + " "
                 f"({tr('auf')} {object_id})"
             )
     return lines

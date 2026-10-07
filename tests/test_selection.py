@@ -1467,6 +1467,36 @@ def test_a_right_click_goes_straight_to_the_deepest_target(window: MainWindow) -
     assert viewport._click_target(point, direct=True) == ("obj_1", "hole_1"), "rechts: sofort"
 
 
+def test_a_right_click_on_one_of_several_chosen_bodies_keeps_them_all(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rechts auf einen von mehreren gewählten Körpern meint alle (Entscheidung Robert).
+
+    Der Rechtsklick meint sonst das Genaueste unter dem Zeiger und hätte die
+    Gruppe gegen eine Fläche getauscht, bevor ihr Menü mit *Vereinigen*
+    aufging — in Cura, Orca und PrusaSlicer markiert man zwei Teile und führt
+    sie mit rechts zusammen (Fragebogen zu 0.5.3). Die Gegenprobe: Ist nur
+    ein Körper gewählt, wählt derselbe Klick wieder die Stelle.
+    """
+    view = Viewport()
+    view._selected, view._selected_more = "obj_1", ("obj_2",)
+    monkeypatch.setattr(view, "_aim_at", lambda x, y: (1.0, 2.0, 3.0))
+    monkeypatch.setattr(view, "_click_target", lambda point, **kwargs: ("obj_2", "face_3"))
+    picked: list[tuple[str, bool]] = []
+    view.objectPicked.connect(lambda body, add: picked.append((body, add)))
+    shown: list[tuple[int, int]] = []
+    view.contextMenuAt.connect(lambda x, y: shown.append((x, y)))
+
+    view._on_right_click(360, 300)
+    assert shown == [(360, 300)], "das Menü geht auf"
+    assert picked == [], "und keine neue Auswahl"
+    assert (view._selected, view._selected_more) == ("obj_1", ("obj_2",)), "die Gruppe bleibt"
+
+    view._selected_more = ()
+    view._on_right_click(360, 300)
+    assert picked, "allein gewählt meint der Rechtsklick wieder die Stelle"
+
+
 def test_a_right_click_leaves_the_selection_where_it_landed(window: MainWindow) -> None:
     """Und die Stufe geht dabei nicht verloren.
 

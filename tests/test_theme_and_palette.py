@@ -357,9 +357,9 @@ def test_the_surfaces_stand_apart(theme: str) -> None:
 
 @pytest.mark.parametrize("theme", list(THEMES))
 def test_the_accent_line_carries_on_its_own_window(theme: str) -> None:
-    """Die Kante des aktiven Reiters ist der einzige Ort, an dem der Akzent
-    einen *bleibenden* Zustand zeigt. Sie muss auf beiden Untergründen tragen —
-    der Bernstein selbst bringt gegen das helle Fenster nur 1,37.
+    """Die Akzentkante — Fokusring, aktives Werkzeug, laufender Tourschritt —
+    muss auf beiden Untergründen tragen; der Bernstein selbst bringt gegen das
+    helle Fenster nur 1,37.
     """
     colours = THEMES[theme]  # type: ignore[index]
     assert contrast_ratio(colours["accent_line"], colours["window"]) >= 3.0
@@ -406,6 +406,35 @@ def test_the_search_finds_by_title_name_and_documentation() -> None:
     assert matches(entry, "rename")
     assert matches(entry, "objekt umbenennen")
     assert not matches(entry, "bohrung")
+
+
+def test_the_card_finds_with_the_rounds_of_the_palette() -> None:
+    """Ein Kundenwort findet in der Karte der Handlungen, was es in der Palette findet.
+
+    Fragebogen zu 0.5.3: Ein Anfänger suchte *Vereinigen* als „verschmelzen“
+    und das Löschen als „löschen“. Die Suche der Karte verglich nur Titel und
+    Gruppe und fand keines davon, die Palette beides. Beide fragen jetzt
+    :func:`found_in_rounds`; hier die Rechnung, die Karte selbst in
+    ``tests/test_selection_operations.py``.
+    """
+    from app.core.bootstrap import load_operations
+    from app.ui.command_palette import found_in_rounds
+
+    load_operations()
+    entries = _palette_entries()
+
+    def found(query: str) -> set[str]:
+        return {str(entry.name) for entry in found_in_rounds(entries, query)[0]}
+
+    assert "union_objects" in found("verschmelzen"), "Kundenwort"
+    assert "union_objects" in found("zusammenfügen"), "Kundenwort mit Umlaut"
+    assert "delete_object" in found("löschen"), "Kundenwort ohne Titeltreffer"
+    assert "hollow_object" in found("aushoehlen"), "Faltung"
+    assert "drill_hole" in found("bohren"), "zweite Runde: der Wortstamm"
+    assert found_in_rounds(entries, "verschmelzen")[1] is False, "eine genaue Runde lockert nicht"
+    loose, loosened = found_in_rounds(entries, "loch bitte xyzzy")
+    assert loosened and loose, "dritte Runde: ein Wort von mehreren genügt, und sie sagt es"
+    assert found_in_rounds(entries, "xyzzy") == ([], False)
 
 
 def test_the_palette_lists_every_operation_but_the_merged_twins(qt_app: object) -> None:
@@ -957,6 +986,24 @@ def test_every_customer_word_belongs_to_a_row_of_the_palette() -> None:
         if not REGISTRY.has(name) and f'"{name}": (' not in fenster
     ]
     assert not fehlend, "diese Kundenwörter zeigen auf nichts: " + ", ".join(fehlend)
+
+
+def test_an_operation_shown_as_a_window_command_hands_over_its_words() -> None:
+    """Seit RM-507 zeigt die Palette *Modell einfügen* nur als Fensterbefehl
+    ``file.import``; die Operation ``load`` hat dort keine Zeile mehr. Ihre
+    Kundenwörter hingen nur an ihr, und „STL“ oder „Zoll“ fanden das Einlesen
+    nicht mehr (Nachprüfung N1)."""
+    from app.core.registry.search import SYNONYMS, customer_phrases
+    from app.core.registry.surfaces import PaletteEntry
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
+
+    assert WINDOW_COMMAND_OPERATIONS, "keine Operation als Fensterbefehl — der Test prüfte nichts"
+    for name, command in WINDOW_COMMAND_OPERATIONS.items():
+        assert SYNONYMS.get(name) == SYNONYMS.get(command), command
+        assert set(customer_phrases(name)) <= set(customer_phrases(command)), command
+    einlesen = PaletteEntry(name="file.import", title="Modell einfügen …", doc="", category="file")
+    for wort in ("stl", "zoll", "importieren"):
+        assert matches(einlesen, wort), wort
 
 
 # --- Der Körper steht auf der Platte, nicht in ihr (B35) ---------------------
