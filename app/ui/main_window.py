@@ -10914,9 +10914,11 @@ class MainWindow(QMainWindow):
         ``None`` heißt: Die Lage trägt kein Gegenstück. Zwei Stellen an
         demselben Körper sind keine Verbindung, sondern ein Loch neben einem
         Zapfen; der Kern weist das ohnehin ab, und hier ist es eine Auskunft
-        vor dem Klick statt einer Absage danach.
+        vor dem Klick statt einer Absage danach. Gezählt werden markierte
+        **Stellen** (``ObjectTree.selected_places``): Ein Gewinde mit seinen
+        Flanken unter sich ist eine.
         """
-        chosen = self.object_tree.selected_features()
+        chosen = self.object_tree.selected_places()
         if len(chosen) != 2:
             return None
         first, second = chosen

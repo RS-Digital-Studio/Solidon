@@ -556,9 +556,12 @@ def test_a_measured_thread_keeps_its_size_note_in_the_report(
         window.session.history.apply(
             "Bolzen", [OperationDraft(op="load_step", params={"source": "bolt"})]
         )
-        window.session.evaluate_now()
-        result = window.session.last_result
-        assert result is not None
+        result = window.session.evaluate_now()
+        # Der Baum kennt den Bolzen erst mit dem neuen Stand; ohne ihn fand die
+        # Auswahl nur die Fläche, und *Gegenstück* hielt modal mit „Markieren
+        # Sie an jedem der beiden Teile …“ an (Review P2: der Test hing).
+        window._on_scene(result)
+        qt_app.processEvents()
         bolt = next(name for name in result.scene.objects if name not in (first, second))
         threads = [
             name
@@ -570,6 +573,10 @@ def test_a_measured_thread_keeps_its_size_note_in_the_report(
             ((bolt, threads[0]), (second, _top_face(window, second)))
         )
         QApplication.processEvents()
+        assert len(window.object_tree.selected_features()) > 2, (
+            "das Gewinde bündelt seine Flanken — sonst prüft der Test die Stellen nicht"
+        )
+        assert len(window.object_tree.selected_places()) == 2, "zwei Stellen sind markiert"
 
         def no_dialog(self: object) -> int:
             raise AssertionError("am Gewinde gibt es nichts zu wählen — kein Dialog")
@@ -605,10 +612,9 @@ def test_the_pin_for_a_bore_is_offered_at_an_internal_thread_only(qt_app: QAppli
 
     Der Stift baut das passende Außengewinde in eine Gewindebohrung; an einem
     Bolzen gibt es keine Bohrung, in die er gehört (``actions.not_offered_at``).
-    **Erkannte Gewinde aus dem Korpus** (Review P2, G5): An einem gedruckten
-    Gewinde zeigt die Karte die Felder seines Bausteins statt der Handlungen
-    (``part_selected``), und der frühere Aufbau stellte den Bolzen neben die
-    Platte — beides prüfte die Karte nicht.
+    **Erkannte Gewinde aus dem Korpus** (Review P2, G5): Der frühere Aufbau
+    stellte den Bolzen neben die Platte; das gedruckte Gewinde prüft
+    ``test_a_printed_inner_thread_offers_only_the_pin_in_the_card``.
     """
     from tests.helpers import exact_kernel
 
@@ -637,6 +643,72 @@ def test_the_pin_for_a_bore_is_offered_at_an_internal_thread_only(qt_app: QAppli
                 release(window)
             window.deleteLater()
     assert offered == {True: True, False: False}
+
+
+def test_a_printed_inner_thread_offers_only_the_pin_in_the_card(qt_app: QApplication) -> None:
+    """Am gedruckten Innengewinde steht in der Karte genau *Stift für Bohrung* (RM-536).
+
+    An einem Merkmal eines Bausteins bedienen die Bausteinfelder den Schritt,
+    die Karte war deshalb ganz verborgen — auch der Stift, den der Kunde gerade
+    zu seinem selbst gedruckten Gewinde will (Entscheidung Robert, 07.10.2026).
+    Jetzt steht er dort allein; am gedruckten Außengewinde bleibt die Karte zu.
+    """
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        window.session.history.apply(
+            "Gewinde",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(first,),
+                    params={"size": "M6", "length": 8.0, "internal": True, "z": 10.0},
+                ),
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(second,),
+                    params={"size": "M6", "length": 8.0, "internal": False, "x": 60.0, "z": 10.0},
+                ),
+            ],
+        )
+        window.session.evaluate_now()
+        result = window.session.last_result
+        assert result is not None
+        assert not [entry for entry in result.scene.report.findings if entry.severity == "error"]
+
+        def thread_of(object_id: str) -> str:
+            [name] = [
+                name
+                for name, feature in result.scene.objects[object_id].features.items()
+                if feature.kind == "thread" and feature.provenance == "generated"
+            ]
+            return name
+
+        panel = window.selection_operations
+        window.object_tree.select_object(first)
+        window.object_tree.select_feature(first, thread_of(first))
+        QApplication.processEvents()
+        assert window._common_part_step(window.object_tree.selected_features()) is not None, (
+            "das Gewinde ist ein Bausteinmerkmal — sonst prüft der Test nichts"
+        )
+        assert not panel.isHidden(), "die Karte steht da"
+        assert panel.chosen_level() == "thread"
+        offered = {name for name in panel._buttons if panel._fits_the_level(name)}
+        assert offered == {"pin_for_bore"}
+        button = panel._buttons["pin_for_bore"]
+        assert "pin_for_bore" in panel._quick_shown or not button.isHidden()
+        assert button.isEnabled()
+        assert panel.catalog_button.isHidden(), "kein Katalog an einem Bausteinmerkmal"
+
+        window.object_tree.select_object(second)
+        window.object_tree.select_feature(second, thread_of(second))
+        QApplication.processEvents()
+        assert panel.isHidden(), "am Außengewinde gibt es keinen Stift, und die Karte bleibt zu"
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()
 
 
 def test_a_thread_too_short_for_the_pin_opens_the_thread_step_at_its_length(

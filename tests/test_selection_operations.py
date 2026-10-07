@@ -51,6 +51,29 @@ def test_part_selection_leaves_its_actions_to_the_part_fields(qt_app: QApplicati
     assert not panel.isHidden()
 
 
+def test_a_part_thread_keeps_only_the_pin_in_the_card(qt_app: QApplication) -> None:
+    """Am Innengewinde eines Bausteins steht genau *Stift für Bohrung* (RM-536, Robert 07.10.2026).
+
+    Am Außengewinde nimmt ``not_offered_at`` den Stift weg, und mit ihm bleibt
+    die Karte verborgen.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1), feature_kind="thread", part_selected=True)
+    assert not panel.isHidden()
+    assert {name for name in panel._buttons if panel._fits_the_level(name)} == {"pin_for_bore"}
+    panel.set_context(
+        1,
+        _availability(1),
+        feature_kind="thread",
+        part_selected=True,
+        left_out=frozenset({"pin_for_bore"}),
+    )
+    assert panel.isHidden()
+    panel.set_context(1, _availability(1), feature_kind="thread")
+    assert not panel.isHidden() and panel._only is None, "ohne Baustein gilt die Karte ganz"
+
+
 def test_the_panel_is_the_registry_without_the_parts_catalogue(qt_app: QApplication) -> None:
     """Die Oberfläche pflegt keine zweite Operationsliste.
 

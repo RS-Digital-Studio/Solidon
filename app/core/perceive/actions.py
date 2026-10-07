@@ -1143,6 +1143,14 @@ _ONLY_AT_A_COUNTERSINK: Final[frozenset[str]] = frozenset({"countersink_hole"})
 #: Was nur in einem Hohlraum etwas baut: der Stift, der in ihn passt (RM-536).
 _ONLY_IN_A_BORE: Final[frozenset[str]] = frozenset({"pin_for_bore"})
 
+#: Was die Karte an einem Merkmal eines **Bausteins** anbietet (Entscheidung
+#: Robert, 07.10.2026, RM-536). Dort bedienen die Bausteinfelder den
+#: erzeugenden Schritt, und allgemeine Handlungen bleiben weg; der Stift aber
+#: ergänzt das Gewinde, statt es zu ändern — das Gegenstück gehört gerade an
+#: ein selbst gedrucktes Innengewinde. Ob er am gewählten Merkmal steht, sagen
+#: weiter Art und :func:`not_offered_at`.
+OFFERED_AT_A_PART: Final[frozenset[str]] = frozenset({"pin_for_bore"})
+
 
 def narrows_the_mouth(feature: Feature) -> bool:
     """Ob dieser Kegel eine Verengung ist — die Erkennung trägt es als ``narrowing`` (R3)."""

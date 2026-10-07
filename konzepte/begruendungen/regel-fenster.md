@@ -579,6 +579,16 @@ keinen zweiten obenauf — der schnitt bis zum
 weitere Operation baut, die ein Merkmal aus ihrem eigenen früheren Schritt
 noch einmal anfasst, fragt zuerst `created_by`.
 
+**Warum Entf an einer Fläche den Körper nimmt:** Eine Fläche ist kein Ding,
+das man löscht, der Körper ist gemeint, und ein Teil, das Entf nicht löscht,
+ist eine Sackgasse.
+
+**Warum der Stift an einem Bausteinmerkmal in der Karte steht** (Entscheidung
+Robert, 07.10.2026, RM-536): Die Bausteinfelder bedienen den Schritt, und
+allgemeine Handlungen bleiben deshalb weg. Der Stift ändert das Gewinde nicht,
+er ergänzt es — und das Gegenstück zu einem selbst gedruckten Gewinde ist
+genau der Kundenwunsch hinter RM-536.
+
 ## Der Hauptknopf
 
 **Ein Hauptknopf entsteht über `style.make_primary()`, nie über

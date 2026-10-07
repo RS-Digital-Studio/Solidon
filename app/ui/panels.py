@@ -2995,6 +2995,25 @@ class ObjectTree(QWidget):
         # **und** ihr Dach markiert, meint sie einmal.
         return tuple(dict.fromkeys(found))
 
+    def selected_places(self) -> tuple[tuple[str, str], ...]:
+        """Je markierter Zeile ihr führendes Merkmal — eine Stelle, auch wo die Zeile bündelt.
+
+        :meth:`selected_features` zählt, was unter einer Zeile hängt, mit; für
+        die Frage „welche **Stellen** sind markiert“ ist ein Gewinde mit seinen
+        Flanken darunter aber eine. *Gegenstück* las die Bündelung als vier
+        Stellen und sagte an einem eingelesenen Bolzen „Markieren Sie an jedem
+        der beiden Teile die Stelle“, obwohl genau das geschehen war (Review
+        P2, Fenstertest zum gemessenen Gewinde).
+        """
+        found: list[tuple[str, str]] = []
+        for item in self.tree.selectedItems():
+            if item.parent() is None:
+                continue
+            refs = _feature_refs_under(item)
+            if refs:
+                found.append(refs[0])
+        return tuple(dict.fromkeys(found))
+
     def selected_faces(self) -> tuple[tuple[str, str], ...]:
         """Davon die Flächen — die einzigen, denen ein Filament gehören kann.
 

@@ -314,6 +314,40 @@ def test_an_inner_thread_gets_an_outer_thread_of_the_same_size(kind: str, profil
     assert thread.params["nominal"] == pytest.approx(6.0)
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_printed_blind_inner_thread_gets_its_pin(kind: str, profile: Profile) -> None:
+    """*Druckbares Gewinde* innen, frei gesetzt in den vollen Quader (z = 4 … 12), ohne Bohrung.
+
+    Der Weg, den die Karte am gedruckten Innengewinde jetzt anbietet (RM-536,
+    Entscheidung Robert 07.10.2026): Gewindestift M6 × 1, Kamm 6 − Spiel, unten
+    das halbe Spiel über dem Grund des Sacklochs, oben an der Mündung bündig.
+    """
+    carrier = _box(
+        kind,
+        profile,
+        OperationDraft(
+            op="insert_printed_thread",
+            inputs=("obj_1",),
+            params={"size": "M6", "length": 8.0, "internal": True, "z": 12.0},
+        ),
+    )
+    clearance = profile.material.clearance
+    gap = clearance / 2.0
+    name = _thread_of(carrier)
+    assert carrier.features[name].created_by is not None, "ein gedrucktes Gewinde"
+    result = run("pin_for_bore", carrier, profile, at_feature=name)
+    pin = result.outputs[1]
+    assert pin.kind == kind
+    mesh = as_mesh_data(pin.mesh)
+    assert mesh.raw.bounds[:, 2].tolist() == pytest.approx([4.0 + gap, 12.0], abs=1e-3)
+    radii = np.hypot(mesh.raw.vertices[:, 0], mesh.raw.vertices[:, 1])
+    assert float(radii.max()) == pytest.approx((6.0 - clearance) / 2.0, abs=2e-3)
+    helices = find_helices(mesh)
+    assert helices and helices[0].pitch == pytest.approx(1.0, abs=0.02)
+    _loose(pin, carrier, clearance)
+    assert _made(result).values["thread"] == "M6 × 1"
+
+
 def test_the_bolt_is_turned_into_the_grooves_it_finds(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:

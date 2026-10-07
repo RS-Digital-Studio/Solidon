@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
+from app.core.perceive.actions import OFFERED_AT_A_PART
 from app.core.registry import (
     CATEGORIES,
     MENU_GROUPS,
@@ -531,6 +532,9 @@ class SelectionOperationsPanel(QWidget):
         self._left_out: frozenset[str] = frozenset()
         """Was am gewählten Merkmal nicht angeboten wird, obwohl seine Art es
         trägt — am Kegel, der keine Senkung ist, *Senken* (R3)."""
+        self._only: frozenset[str] | None = None
+        """An einem Bausteinmerkmal die einzigen Handlungen der Karte
+        (:data:`~app.core.perceive.actions.OFFERED_AT_A_PART`), sonst ``None``."""
         self._window_actions: dict[str, QAction] = {}
         """Handlungen des Fensters ohne Registereintrag, je Name ihre Aktion
         (:meth:`add_window_action`). Freigabe und Grund kommen von der Aktion."""
@@ -1098,9 +1102,24 @@ class SelectionOperationsPanel(QWidget):
         """
         # Die Bausteinfelder darüber bedienen den erzeugenden Schritt. Seine
         # Einzelmerkmale sind hier kein Ziel für allgemeine Flächenoperationen.
-        self.setVisible(not part_selected)
-        if part_selected:
+        # **Was den Baustein ergänzt, bleibt** (RM-536, Entscheidung Robert
+        # 07.10.2026): An einem gedruckten Innengewinde steht *Stift für
+        # Bohrung* — das Gegenstück, nicht eine Änderung des Gewindes.
+        only = (
+            frozenset(
+                name
+                for name in OFFERED_AT_A_PART
+                if name in self._buttons
+                and name not in left_out
+                and feature_kind in self._at_which_kind.get(name, frozenset())
+            )
+            if part_selected and feature_kind
+            else frozenset()
+        )
+        self.setVisible(not part_selected or bool(only))
+        if part_selected and not only:
             return
+        self._only = only if part_selected else None
         self._nothing_chosen = selected <= 0
         if self._nothing_chosen:
             # **Ohne Auswahl bleibt der Weg zu den Bausteinen** (Befund
@@ -1129,7 +1148,9 @@ class SelectionOperationsPanel(QWidget):
         self.catalog_button.setText(
             tr("Passende Bausteine …") if self._catalog_kind else tr("Bausteine")
         )
-        self.catalog_button.setVisible(feature_kind in ("", "face") or bool(self._catalog_kind))
+        self.catalog_button.setVisible(
+            self._only is None and (feature_kind in ("", "face") or bool(self._catalog_kind))
+        )
         if not feature_kind:
             left_out = frozenset()
         if self._feature_kind != feature_kind or self._left_out != left_out:
@@ -1156,7 +1177,7 @@ class SelectionOperationsPanel(QWidget):
         quick = [
             name
             for name in quick_names(selected, feature_kind, left_out=left_out, features=features)
-            if self._buttons[name].isEnabled()
+            if self._buttons[name].isEnabled() and (self._only is None or name in self._only)
         ]
         if selected == 1 and not feature_kind and rebuild:
             # Wie die Registerknöpfe der Zeile: Steht er da, geht er auch.
@@ -1438,6 +1459,8 @@ class SelectionOperationsPanel(QWidget):
             if name in _shown_as_fields():
                 return False
             if name in self._left_out:
+                return False
+            if self._only is not None and name not in self._only:
                 return False
             return self._feature_kind in self._at_which_kind.get(name, frozenset())
         # Eine Handlung, die auch ohne Merkmal gilt (``also_on_body``), steht
