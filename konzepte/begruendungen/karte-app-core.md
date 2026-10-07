@@ -64,12 +64,23 @@ ohne im Fehlerpfad native Bibliotheken nachzuladen.
 
 Absturzdateien liegen unter den lokalen Protokollen. `paths.lock_file()` ist
 die gemeinsame Lebensdauersperre für Wiederherstellung und Absturzprotokoll:
-fünf beendete Läufe bleiben erhalten, lebende Prozesse bleiben unangetastet.
+fünf beendete Läufe mit Absturz und zwei mit nur Abgefangenem bleiben
+erhalten, lebende Prozesse bleiben unangetastet. Getrennt gezählt, weil ein
+Grafiktreiber, der in jedem Lauf eine überlebte Ausnahme wirft, sonst jeden
+Absturz verdrängte.
 Leere beendete Dateien werden entfernt und sind kein Absturznachweis. Die
 automatischen Berichte bleiben je Lauf auf fünf begrenzt; bewusst abgelegte
 Berichte werden nicht aufgeräumt. `report.diagnostic_attachments()` erzeugt
-einen begrenzten, unveränderlichen Schnappschuss aus normalem Protokoll und
-vorhandenen Absturzstapeln. Versand bleibt ausschließlich eine Nutzerhandlung.
+einen begrenzten, unveränderlichen Schnappschuss aus normalem Protokoll,
+vorhandenen Absturzstapeln und abgefangenen Ausnahmen (`abgefangen.txt`); die
+Dateinamen stehen einmal in `log.REPORT_FILES`, weil drei Listen
+auseinanderliefen und ein Anhang jeden Berichtsordner festhielt. Nach dem
+geordneten Ende gilt eine Ausnahme nur als überlebt, wenn der Vermerk ihren
+Faden nennt: den Faden des Endes oder einen, der da schon beendet war. Ein
+noch laufender Faden zählt als Absturz — lieber ein falscher als ein
+verlorener, denn ein sterbender Nebenfaden schreibt, während Windows den
+Prozess noch nicht beendet hat. Versand bleibt ausschließlich eine
+Nutzerhandlung.
 
 Die Programmsuche bietet dieselben Quellen in Einzahl und Mehrzahl:
 Windows-App-Paths, Flatpak-Exporte, Installationsordner, AppImages und den

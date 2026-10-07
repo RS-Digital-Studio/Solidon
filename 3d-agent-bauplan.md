@@ -204,6 +204,13 @@ darüber. Leere oder zugeklappte Bereiche geben ihren Platz frei.
   und Warnungen.
 - **F9 blendet die rechte Karte ein oder aus.** Ein Warnungszähler in der
   Statusleiste führt auch bei ausgeblendeter Karte zum Prüfbericht zurück.
+- **Die beiden Seitenkarten lassen sich verschieben** (Entscheidung Robert):
+  am Griff oben rechts, mit der Maus oder den Pfeiltasten. Sie rasten an
+  einem Fensterrand ein oder schweben frei über der Ansicht; ein Rand trägt
+  eine Karte. Doppelklick auf den Griff und *Ansicht → Karten an
+  ihren Platz* stellen die Anordnung oben wieder her. Die Lage merken die
+  Einstellungen; sie ist Darstellung und steht nicht im Verlauf. Eigene
+  Fenster werden die Karten nicht.
 - Keine Betriebsarten-Umschaltung zwischen „Bearbeiten“ und „Konstruieren“.
   Alle Werkzeuge arbeiten an derselben Szene.
 
@@ -1857,8 +1864,8 @@ Szene: 2 Objekte, Drucker centauri-carbon-2, Material petg (Startwert)
 Parameter: breite=70 mm · tiefe=50 mm · wand=8 mm
 Auswahl: obj_1 · heatset_m4_bore_1
   Hohlraum: heatset_m4_bore_1 → cone_1 — eine Kette; Versetzen, Drehen und Verdoppeln nehmen alle Abschnitte mit
-obj_1  "Gehäuseboden"  70.6 × 54.6 × 13.2 mm, 30.4 cm³, geschlossen, 59% massiv, last_op=op6
-  liegt: x -35.6 … 35.0 · y -25.0 … 29.6 · z -5.2 … 8.0 mm
+obj_1  "Gehäuseboden"  70.0 × 50.0 × 13.2 mm, 30.4 cm³, geschlossen, 66% massiv, auf Bett, last_op=op6
+  liegt: x -35.0 … 35.0 · y -25.0 … 25.0 · z 0.0 … 13.2 mm
   hole_1  Ø 3.40 mm (eingepasst), Achse +Z (eingepasst), Durchgang, bei (-25, -15, 2) (eingepasst), created_by=op2
   cone_1  Senkung 90°, Ø 5.00 mm, Achse +Z, bei (25, -15, 8), created_by=op3 — Maße eingepasst
   …
@@ -2189,7 +2196,7 @@ mehrdeutige Anfragen und misst, ob gefragt statt geraten wird.
 
 Diese Liste ist abschließend — was hier nicht steht, gibt es nicht. Die vier
 Werkzeuge ab `read_digest` kamen mit der Agent-Vertiefung dazu
-(`konzepte/konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
+(`konzepte/archiv/konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
 die lesenden rechnen auf der Arbeitskopie, die schreibenden reisen als Teil
 der einen Transaktion des Vorschlags (§26.5, Regel 16).
 
@@ -2440,7 +2447,7 @@ Regel bei der Auswertung (§17.1), damit ein Rezept dieselbe Operation ohne
 diese Rückholung benutzen kann.
 
 **Und die Nummern der Teile hängen an der Geometrie, nicht am Rauschen.**
-*In Einzelteile zerlegen* ordnet nach Volumen; zwei gleich große Teile
+*In Einzelteile aufteilen* ordnet nach Volumen; zwei gleich große Teile
 entscheiden über ihre Lage. Gerechnete Volumina schwanken in den letzten
 Stellen mit der Tessellierung, und ein Tausch der Nummern nähme jedem späteren
 Schritt sein Ziel — die Kennung eines Objekts ist der Anker für alles, was
@@ -3009,7 +3016,7 @@ Installer und Lizenzschlüssel; im Fließtext und in Docstrings heißt es kurz
 „Solidon". Die zentrale Quelle ist `app/branding.py`.
 
 Die Begründung und die verworfenen Namen stehen in
-`konzepte/namensentscheidung-solidon.md`. Eine Produktentscheidung ist kein
+`konzepte/archiv/namensentscheidung-solidon.md`. Eine Produktentscheidung ist kein
 Markenfreigabenachweis; der noch erforderliche rechtliche Abgleich bleibt in
 [RM-093](ROADMAP.md#rm-093). Bei einer künftigen Namensänderung sind Domain,
 Pakete, Supportadresse, Dateizuordnungen und Signierung gemeinsam abzugleichen;

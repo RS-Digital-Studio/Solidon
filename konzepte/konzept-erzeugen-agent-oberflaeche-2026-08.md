@@ -9,7 +9,7 @@ gestartet, ein Bild durch den Erzeugen-Dialog geschickt, das Ergebnis in der
 Szene ausgelesen, das lokale Modell gegen die Werkzeuge gefahren. Wo eine
 erste Einschätzung falsch war, steht die Korrektur dabei.
 
-Verhältnis zu den anderen Papieren: `konzept-wettbewerb-2026-08.md` zieht das
+Verhältnis zu den anderen Papieren: `archiv/konzept-wettbewerb-2026-08.md` zieht das
 Feld auf und bewertet alle Bereiche; dieses geht in die drei Bereiche hinein,
 die dort nur eine Zeile bekommen haben, und trägt die Messwerte nach.
 
@@ -144,6 +144,9 @@ Baustein, keine Passung. Die Figur kommt an, sie ist nur nicht bearbeitbar.
 ---
 
 ## Teil 3 — Der Blocker unter dem Erzeugen: die Lizenzen
+
+> Was aus diesen Funden wurde und was heute gilt:
+> [Weg 3 — Lizenzkette](entscheidung-weg-3-lizenzkette.md).
 
 Aus einer eigenen Recherche zu den Modellen, die hinter dem Erzeugen stehen.
 **Zwei Funde betreffen den ausgelieferten Zustand unmittelbar.**
@@ -355,7 +358,7 @@ Wir zeigen die Änderung nach dem Übernehmen.
   > (15.08.) bildschirmfüllend statt auf 1280 × 820.
 * **Der Musterdialog war zweisprachig, ohne es zu wollen.** „Art: raised",
   „Auflegen: flat" — behoben, samt der 24 weiteren Auswahlwerte im Register,
-  siehe `konzept-wettbewerb-2026-08.md`.
+  siehe `archiv/konzept-wettbewerb-2026-08.md`.
 
 ---
 
@@ -462,6 +465,8 @@ drin, abgesichert durch `test_the_shipped_graphs_name_no_non_commercial_model`),
 der Formkern nicht: Hunyuan3D bleibt, weil ein Wechsel eine andere
 ComfyUI-Knotensammlung verlangt. Stattdessen sagen Modulkopf, Handbuch und
 Website, dass die Lizenz für die EU nicht gilt und welche Modelle frei sind.
+Wie es mit dem Formkern weiterging:
+[Weg 3 — Lizenzkette](entscheidung-weg-3-lizenzkette.md).
 
 **Was der Zähler überholt hat:** acht Beispielkacheln → neun · sechs
 Werkzeuge in der Zeile → acht (sechs waren es nie) · 35 Handbuchseiten → 40 ·

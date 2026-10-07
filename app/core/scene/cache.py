@@ -198,7 +198,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: - 51 (RM-226, Nachtrag 04.10.2026): Die Tessellierung eines exakten Körpers
 #:   trägt keine Dreiecke ohne Fläche mehr. Ein gespeicherter Netzzwilling trüge
 #:   sie noch und läse nach der ersten Booleschen andere Merkmale als vorher.
-CACHE_FORMAT_VERSION: Final = 51
+#: - 52 (RM-187): Bausteine, Muster, Skizzenbögen, Teilen und die Schritte aus
+#:   ``prepare_ops`` rechnen ohne BLAS, LAPACK und die Winkelfunktionen der
+#:   Plattform. Gespeicherte Ergebnisse und Mustererkennungen trügen noch die
+#:   letzte Stelle der Maschine, auf der sie entstanden.
+CACHE_FORMAT_VERSION: Final = 52
 
 
 @dataclass(frozen=True, slots=True)
@@ -888,36 +892,43 @@ def _folder_bytes(folder: Path) -> int:
 
 
 def _finding_to_cache(finding: Finding) -> dict[str, Any]:
-    """Ein Befund für den Plattencache — samt Rand, den die Projektdatei nicht trägt.
+    """Ein Befund für den Plattencache — samt Rand und Paar, die die Projektdatei nicht trägt.
 
     ``Finding.outline`` (der Rand einer geschlossenen Öffnung für *Stelle
     zeigen*) steht nicht in :func:`finding_to_data`: Die Projektdatei behält
     ihr Format, der Bericht wird ohnehin neu ausgewertet. Der Cache aber gibt
     das Ergebnis eines Schritts zurück, als wäre er gerechnet worden — ohne
     den Rand hätte ein warmer Cache *Stelle zeigen* still zurückgestuft.
+    Ebenso ``Finding.object_ids``: Ohne sie spräche nach einem warmen Cache ein
+    entfernter Körper wieder aus dem Bericht.
     """
     data = finding_to_data(finding)
     if finding.outline:
         data["outline"] = [[list(first), list(second)] for first, second in finding.outline]
+    if finding.object_ids:
+        data["object_ids"] = list(finding.object_ids)
     return data
 
 
 def _cached_finding(data: dict[str, Any]) -> Finding:
-    """Die Umkehrung von :func:`_finding_to_cache`; ein Eintrag ohne Rand bleibt ohne."""
+    """Die Umkehrung von :func:`_finding_to_cache`; ein Eintrag ohne Rand oder Paar bleibt ohne."""
     finding = finding_from_data(data)
     outline = data.get("outline")
-    if not outline:
-        return finding
-    return replace(
-        finding,
-        outline=tuple(
-            (
-                (float(first[0]), float(first[1]), float(first[2])),
-                (float(second[0]), float(second[1]), float(second[2])),
-            )
-            for first, second in outline
-        ),
-    )
+    if outline:
+        finding = replace(
+            finding,
+            outline=tuple(
+                (
+                    (float(first[0]), float(first[1]), float(first[2])),
+                    (float(second[0]), float(second[1]), float(second[2])),
+                )
+                for first, second in outline
+            ),
+        )
+    bodies = data.get("object_ids")
+    if bodies:
+        finding = replace(finding, object_ids=tuple(str(name) for name in bodies))
+    return finding
 
 
 @dataclass(slots=True)

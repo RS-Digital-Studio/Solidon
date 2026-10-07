@@ -150,6 +150,38 @@ def test_the_removed_steps_stand_under_their_removal() -> None:
     )
 
 
+def test_with_a_marker_the_history_shows_what_holds_before_it() -> None:
+    """Steht die Einfügemarke vor der Löschung, faltet der Verlauf nichts darunter.
+
+    Review zu ``bbd41ff2d`` (R2, Lage E): Mit Marke zeigen Ansicht und
+    Prüfbericht den Stand davor (``Session.displayed_document``), also mit der
+    Kopie. Der Verlauf rechnete über das ganze Dokument, faltete Duplizieren und
+    Verschieben unter die Löschung hinter der Marke und schrieb „Schritt 6
+    entfernt das Ergebnis wieder“. Vor einem dieser Schritte gesetzt, stand die
+    Marke zwischen den eingerückten Zeilen, wo keine Stelle im Stapel liegt;
+    jetzt bleibt der Schritt an seiner Zeile. Steht die Marke hinter der
+    Löschung, gilt sie wieder.
+    """
+    from app.ui.panels import discarded_as_shown, removal_groups
+
+    history = _removed_copy()
+    ops = history.operations
+    removal = history.document.transactions[-1]
+    folded = {removal.id: (ops[3].id, ops[4].id)}
+
+    before = discarded_as_shown(history.document, ops[5].id)
+    assert removal_groups(history.document, before) == {}
+    assert step_state(history.document, ops[3].id, before) == "", "an der Marke gibt es die Kopie"
+    assert step_state(history.document, ops[4].id, before) == ""
+    at_the_copy = discarded_as_shown(history.document, ops[3].id)
+    assert removal_groups(history.document, at_the_copy) == {}, "die Marke vor dem Duplizieren"
+
+    assert removal_groups(history.document, discarded_as_shown(history.document)) == folded
+    history.apply("Bohrung", [_drill(0.0, 3)])
+    behind = discarded_as_shown(history.document, history.operations[-1].id)
+    assert removal_groups(history.document, behind) == folded, "die Marke hinter der Löschung"
+
+
 def test_the_history_folds_removed_steps_under_their_removal(qt_app: Any) -> None:
     """Die Löschung ist ein Oberpunkt mit der Zahl als Wort, die Schritte zugeklappt darunter.
 
@@ -165,7 +197,15 @@ def test_the_history_folds_removed_steps_under_their_removal(qt_app: Any) -> Non
     try:
         panel.show_document(history.document)
         head = _row_of(panel, ops[5].id)
-        assert head.text().startswith("▸") and head.text().endswith("(mit 2 Schritten)")
+        # Zugeklappt nennt die Zeile die Nummern, die sie verbirgt (RM-519):
+        # Sonst sprang die Zählung an ihr wie an einer Gruppe.
+        assert head.text().startswith("▸") and head.text().endswith("(mit 2 Schritten: 4–5)")
+        shown = " ".join(
+            item.text()
+            for index in range(panel.list.count())
+            if not (item := panel.list.item(index)).isHidden()
+        )
+        assert all(str(number) in shown for number in range(1, 7)), shown
         assert "Entfernt, was die 2 Schritte darunter ergeben." in head.toolTip()
         at = panel.list.row(head)
         for offset, step in enumerate((ops[3], ops[4]), start=1):
@@ -209,6 +249,37 @@ def test_a_drop_lands_before_the_next_step_below() -> None:
     assert drop_before(rows, 3) == 4
     assert drop_before(rows, 5) is None, "unter der letzten Zeile heißt: ans Ende"
     assert drop_before(rows, -1) == 1
+
+
+def test_a_drop_below_a_folded_removal_lands_before_the_next_step() -> None:
+    """Unter einer zugeklappten Löschung meint die untere Hälfte ihrer Zeile die nächste Stelle.
+
+    Review zu ``bbd41ff2d`` (K2): Ob die Zeile darunter unter einer Löschung
+    steht, wurde auch gefragt, wenn sie zugeklappt war — dort ließ sich nichts
+    ablegen, und kein Satz sagte warum, während die obere Hälfte der nächsten
+    Zeile dieselbe Stelle traf. Aufgeklappt liegt zwischen den Schritten unter
+    der Löschung weiter keine Stelle im Stapel.
+    """
+    from app.ui.panels import NOWHERE, HistoryRow, drop_target
+
+    folded = [
+        HistoryRow((4,), hidden=True, nested=True),
+        HistoryRow((5,), hidden=True, nested=True),
+    ]
+    rows = [
+        HistoryRow((3,), hidden=False, nested=False),
+        HistoryRow((6,), hidden=False, nested=False),
+        *folded,
+        HistoryRow((7,), hidden=False, nested=False),
+    ]
+    assert drop_target(rows, 2) == 7, "zugeklappt: vor den nächsten Schritt"
+    assert drop_target(rows, 1) == 6, "über der Löschung: vor sie"
+
+    opened = [*rows[:2], *(entry._replace(hidden=False) for entry in folded), rows[-1]]
+    assert drop_target(opened, 2) == NOWHERE, "aufgeklappt: zwischen Löschung und Schritten"
+    assert drop_target(opened, 3) == NOWHERE
+    assert drop_target(opened, 4) == 7
+    assert drop_target(opened, 5) is None, "unter der letzten Zeile heißt: ans Ende"
 
 
 def test_an_import_at_the_marker_does_not_land_on_a_kept_model(monkeypatch: Any) -> None:

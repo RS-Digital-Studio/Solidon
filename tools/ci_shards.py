@@ -1,7 +1,8 @@
 """Dieselbe vollständige Testmenge, auf mehrere CI-Runner verteilt.
 
     gh run download <lauf> --pattern "tests-*" --dir berichte
-    .venv\\Scripts\\python.exe tools/ci_shards.py core berichte/tests-core-ubuntu-*/junit.xml
+    .venv\\Scripts\\python.exe tools/ci_shards.py core \\
+        berichte/tests-core-windows-latest-*/junit.xml
     .venv\\Scripts\\python.exe tools/ci_shards.py windows berichte/tests-windows-*/tests__*.xml \\
         berichte/tests-contracts-windows-latest/tests__*.xml
 

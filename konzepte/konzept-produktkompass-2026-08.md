@@ -649,8 +649,8 @@ Dieses Dokument ersetzt keine fachliche Vertiefung:
 | Vier Wege, Fenster, Operationen, Offline-Grenze | Bauplan §2.2–2.6, §9, §22, §29 und §38 | gemeinsame Produktrichtung und Kundensprache |
 | Resin | [`konzept-resin-2026-08.md`](konzept-resin-2026-08.md) | bedingte Vertiefung folgt demselben Übergabe- und Vertrauensmuster |
 | 3D-Maus | [`konzept-3d-maus-2026-08.md`](konzept-3d-maus-2026-08.md) | bedingte Kameraeingabe bleibt von Dokumentänderungen getrennt |
-| Erste Nutzung | [`konzept-erstnutzer-2026-08.md`](konzept-erstnutzer-2026-08.md) | Druckziel und nächster Schritt tragen den Einstieg |
-| Fensterarchitektur | [`konzept-befehlsband-2026-08.md`](konzept-befehlsband-2026-08.md) | der abgelehnte Umbau wird nicht wieder eingeführt |
+| Erste Nutzung | [`konzept-erstnutzer-2026-08.md`](archiv/konzept-erstnutzer-2026-08.md) | Druckziel und nächster Schritt tragen den Einstieg |
+| Fensterarchitektur | [`konzept-befehlsband-2026-08.md`](archiv/konzept-befehlsband-2026-08.md) | der abgelehnte Umbau wird nicht wieder eingeführt |
 | Öffentliche Versprechen | Website und Bauplan §2.2, §25 und §38 | sichtbarer Produktvertrag statt zusätzlicher Funktionsliste |
 
 ## Anhang A — Recherche zu den genannten Anwendungen

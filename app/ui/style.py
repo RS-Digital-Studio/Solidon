@@ -27,6 +27,7 @@ einen einzelnen Fehler benennen kann.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Final, Literal, cast
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer, Signal
@@ -49,6 +50,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.log import get_logger
+from app.core.types import Action
 from app.ui import app_events
 from app.ui.theme import THEMES, Theme
 
@@ -782,7 +784,7 @@ def fit_height_after_show(dialog: QDialog) -> None:
     QTimer.singleShot(0, dialog, fit)
 
 
-def make_primary(button: QPushButton) -> QPushButton:
+def make_primary(button: QPushButton, *, leading: bool = True) -> QPushButton:
     """Macht einen Knopf zum Hauptknopf — und breit genug für seine eigene
     Beschriftung.
 
@@ -790,7 +792,7 @@ def make_primary(button: QPushButton) -> QPushButton:
     erst im Bild sieht: Das Stylesheet setzt für ``QPushButton:default`` ein
     ``font-weight: 600``, gezeichnet wird also halbfett. Qt rechnet die
     bevorzugte Breite aber aus der **normalen** Schrift des Widgets — bei
-    „Jetzt trennen" sind das 77 gegen 89 Bildpunkte. Wo ein Layout dem Knopf
+    „Jetzt teilen" sind das 77 gegen 89 Bildpunkte. Wo ein Layout dem Knopf
     genau seine bevorzugte Breite gibt, und in einer engen Leiste tut es das,
     stand auf dem Hauptknopf „etzt trenne".
 
@@ -798,13 +800,29 @@ def make_primary(button: QPushButton) -> QPushButton:
     Zeichnung bleibt, wie sie war, und die Breitenrechnung kennt sie jetzt.
     Fett bleibt dabei die zweite Kodierung neben der Akzentfarbe (Regel 18) —
     sie zu streichen wäre die andere Möglichkeit gewesen und die schlechtere.
+
+    ``leading=False`` nimmt beides wieder: Qt nimmt einem Knopf beim Wechsel
+    des Hauptknopfs nur den Default, und ein halbfetter Knopf ohne Akzent ist
+    eine Hervorhebung ohne Grund (RM-512).
     """
-    button.setDefault(True)
+    button.setDefault(leading)
     font = button.font()
-    font.setWeight(QFont.Weight.DemiBold)
+    font.setWeight(QFont.Weight.DemiBold if leading else QFont.Weight.Normal)
     button.setFont(font)
-    _keep_the_primary()
+    if leading:
+        _keep_the_primary()
     return button
+
+
+def leading_action(actions: Sequence[Action]) -> Action | None:
+    """Welche von mehreren angebotenen Handlungen führt: die erste mit
+    ``primary``, sonst die erste überhaupt.
+
+    Eine Quelle für Prüfbericht, Fehlerdialog, Hinweise und Druckrat (RM-512):
+    Vier Stellen mit zwei Regeln ließen den Fehlerdialog ohne empfohlene
+    Handlung Qt raten, und der geratene Default trug Akzent ohne Halbfett.
+    """
+    return next((action for action in actions if action.primary), next(iter(actions), None))
 
 
 #: Die Fokusgründe, mit denen die Tastatur einen Knopf erreicht: Tab und
@@ -959,11 +977,17 @@ def _keep_the_primary() -> None:
 
 
 def make_danger(button: QPushButton) -> QPushButton:
-    """Macht einen Knopf zum Verwerfen kenntlich — das Fehlerrot als Fläche.
+    """Macht einen Knopf kenntlich, der verwirft oder löscht — das Fehlerrot
+    als Fläche.
 
-    *Abbrechen* unter *Übernehmen* (Robert, 11.09.2026: „das abbrechen mit
-    rotem hintergrund"): Beide stehen übereinander, beide gleich breit, und
-    der eine wirft weg, was der andere ausführt. Die Farbe kommt aus der
+    **Genau an jedem Knopf mit ``DestructiveRole``** und nie zusammen mit
+    :func:`make_primary`: *Verwerfen* vor dem Schließen eines geänderten
+    Projekts, *Abgeschnittene Schritte verwerfen*, *Trotzdem schließen* bei
+    einer laufenden Erzeugung, *Löschen* im Verlauf. Gesperrt zeichnet er wie
+    jeder gesperrte Knopf. Ein
+    *Abbrechen* oder *Schließen* ist ein Ausgang und bleibt ein normaler
+    Knopf (Entscheidung Robert, 06.10.2026: RM-512 löst das rote Abbrechen
+    vom 11.09. ab). Wächter: ``test_style.py``. Die Farbe kommt aus der
     Rolle ``error`` der Palette, je Thema in der Fassung, die auf der
     Fensterfläche lesbar ist — das Wort auf dem Knopf ist die zweite
     Kodierung (Regel 18), die Schrift darauf rechnet :func:`readable_on`.
@@ -1004,9 +1028,12 @@ def no_primary(dialog: QWidget) -> None:
 
     Gedacht ist die Funktion für ein Fenster, das gar keine Handlung anbietet
     und nur einen Ausgang hat — dort wäre der Akzent auf „Schließen" eine
-    Empfehlung, den Dialog zu verlassen. Wer eine Handlung hat, nimmt
-    :func:`make_primary`; ein Fenster ohne akzentuierten Knopf lässt sonst
-    suchen.
+    Empfehlung, den Dialog zu verlassen —, und für eine Rückfrage vor
+    Verwerfen oder Löschen (RM-512): Dort lüde ein Akzent auf dem roten Knopf
+    zum Unwiederbringlichen ein, einer auf *Abbrechen* machte den Ausgang zum
+    Hauptknopf; den Fokus setzt der Aufrufer auf *Abbrechen*. Wer sonst eine
+    Handlung hat, nimmt :func:`make_primary`; ein Fenster ohne akzentuierten
+    Knopf lässt sonst suchen.
     """
     for button in dialog.findChildren(QPushButton):
         button.setAutoDefault(False)
@@ -1495,9 +1522,8 @@ QPushButton:default:pressed {{
     background: {highlight_pressed};
     border-color: {highlight_pressed};
 }}
-/* Ein Knopf, der verwirft (``make_danger``): das Fehlerrot der Palette als
-   Fläche, damit *Abbrechen* neben dem bernsteinfarbenen *Übernehmen* nicht
-   wie dessen Zwilling aussieht. Der Rahmen wechselt beim Überfahren wie am
+/* Ein Knopf, der unwiederbringlich verwirft (``make_danger``): das Fehlerrot
+   der Palette als Fläche. Der Rahmen wechselt beim Überfahren wie am
    Hauptknopf; gedrückt wird die Fläche dunkler über den Rahmen der Fläche. */
 QPushButton[danger="true"] {{
     background: {danger};
@@ -1506,6 +1532,14 @@ QPushButton[danger="true"] {{
 }}
 QPushButton[danger="true"]:hover {{ background: {danger}; border-color: {text}; }}
 QPushButton[danger="true"]:pressed {{ background: {danger}; border-color: {on_danger}; }}
+/* Gesperrt wie jeder Knopf: Die Regel darüber steht später als
+   ``QPushButton:disabled`` und gewann, und ein roter Knopf, der nichts tut,
+   sieht bedienbar aus (Freischaltdialog, *Schlüssel entfernen*). */
+QPushButton[danger="true"]:disabled {{
+    background: {window};
+    color: {disabled};
+    border-color: {line};
+}}
 /* Zwei Bildpunkte Rahmen statt einem, und der Innenabstand gibt den einen
    wieder her: sonst wandert die Beschriftung beim Durchtabben um einen Punkt,
    und ein Dialog zittert unter der Tabulatortaste. */
@@ -1794,7 +1828,8 @@ QTreeView::item:selected, QListView::item:selected, QTableView::item:selected {{
     background: {highlight};
     color: {on_highlight};
 }}
-/* Der Bericht wählt den ersten lösbaren Befund selbst vor. Diese dauerhafte
+/* Der Bericht wählt den ersten lösbaren Fehler oder die erste lösbare Warnung
+   selbst vor, nie einen Hinweis (RM-512). Diese dauerhafte
    Vorauswahl ist Orientierung, kein zweiter Handlungsaufruf neben dem
    akzentuierten Lösungsknopf: ruhige Fläche plus Akzentkante kodieren sie
    weiterhin doppelt, ohne im Ruhezustand eine zweite Signalfläche zu bilden. */
@@ -1834,17 +1869,20 @@ QTabBar::tab {{
     padding: {TIGHT}px {ROOMY}px;
 }}
 QTabBar::tab:hover {{ color: {text}; background: {hover}; }}
-/* Der aktive Reiter trägt eine Akzentkante — und zwar zusätzlich zu Fläche,
-   Farbe und Fettschrift, die er schon hatte (Regel 18 bleibt unberührt).
-   Vorher unterschied ihn vom stillen allein der Flächenwechsel, und der lag
-   bei 1,10 Kontrast: Ob Prüfbericht oder Chat gilt, war eine Frage des
-   zweiten Blicks. Das obere Padding gibt die drei Pixel wieder her, sonst
-   rutscht die Beschriftung nach unten. */
+/* Der aktive Reiter trägt eine Kante in der Schriftfarbe — zusätzlich zu
+   Fläche, Farbe und Fettschrift, die er schon hatte (Regel 18 bleibt
+   unberührt). Vorher unterschied ihn vom stillen allein der Flächenwechsel,
+   und der lag bei 1,10 Kontrast: Ob Prüfbericht oder Chat gilt, war eine
+   Frage des zweiten Blicks. Die Kante ist nicht bernsteinfarben: Ein Reiter
+   sagt „du bist hier", und im Ruhezustand des Fensters trägt genau ein
+   Element den Akzent, der Hauptknopf (RM-512, ``test_resting_state.py``).
+   Das obere Padding gibt die drei Pixel wieder her, sonst rutscht die
+   Beschriftung nach unten. */
 QTabBar::tab:selected {{
     color: {text};
     background: {base};
     border-color: {line};
-    border-top: 3px solid {accent_line};
+    border-top: 3px solid {text};
     border-bottom-color: {base};
     padding-top: {max(TIGHT - 2, 0)}px;
     font-weight: 600;
@@ -1856,8 +1894,8 @@ QTabBar::tab:selected {{
    ``:selected:focus`` und nicht ``:focus`` allein: Der Zustand gilt der Leiste,
    also träfe ``QTabBar::tab:focus`` alle Reiter zugleich — in einer QTabBar ist
    der aktuelle der fokussierte. Gestrichelt, weil der aktive Reiter schon
-   Akzentkante, Fläche und Fettschrift trägt; eine zweite durchgezogene Linie
-   wäre nicht zu unterscheiden. */
+   eine durchgezogene Kante, Fläche und Fettschrift trägt; eine zweite
+   durchgezogene Linie wäre nicht zu unterscheiden. */
 QTabBar::tab:selected:focus {{ border: 2px dashed {focus}; }}
 
 /* --- Rahmen, Trenner, Gruppen ------------------------------------------ */
