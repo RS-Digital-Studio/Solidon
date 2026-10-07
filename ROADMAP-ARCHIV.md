@@ -43360,7 +43360,7 @@ Bedingungszeile, mit gewählter Seite genau ihre Bedingungen; die Abnahme „hö
 damit im Bildzustand ohne Auswahl), `test_choosing_a_line_does_not_zoom_the_sketch_dialog`,
 `test_the_constraint_list_shows_only_what_hangs_on_the_selection`,
 `test_leaving_the_sketch_brings_back_the_selection_tab_it_hid`,
-`test_a_double_click_on_a_measure_card_opens_its_value`. Review (solidon3d-review) in zwei
+`test_a_double_click_on_a_measure_card_opens_its_value`. Review (solidon3d-review) in drei
 Durchgängen, Urteil „kann rein“. Am echten Fenster beim Release ansehen: Spule, Farbpunkt und
 Zählzeile in beiden Themen und auf HiDPI (RM-213); Handbuchseite, Abbildung `sketch-editor`,
 `main-window.png`, `sketch-mode.png` und `guide-draw-and-pull-4/-6` entstehen dann neu.
