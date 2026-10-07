@@ -707,10 +707,51 @@ SATZMUSTER: dict[str, re.Pattern[str]] = {
 }
 
 #: Wie viele Kundentexte je Muster heute noch treffen. Die Zahl sinkt mit jeder
-#: Überarbeitung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag.
-MUSTER_BESTAND: dict[str, int] = {"Fachwort": 28, "Nur-Formel": 9, "Semikolon": 121}
+#: Überarbeitung; sie zu erhöhen ist eine Entscheidung, kein Nachtrag. Mit
+#: Review P2 N5 stieg sie einmal, weil der Wächter seitdem jeden Katalogtext
+#: liest und nicht nur die nach Aufrufort eingeordneten.
+MUSTER_BESTAND: dict[str, int] = {"Fachwort": 119, "Nur-Formel": 11, "Semikolon": 387}
 
 MUSTER_DATEI = Path(__file__).resolve().parent / "data" / "text_patterns.json"
+
+#: Je Sprache, wie viele Übersetzungen ein Semikolon tragen, das ihre deutsche
+#: Quelle nicht hat. Die Zahl darf nur sinken (Review P2 N5).
+UEBERSETZT_BESTAND: dict[str, int] = {"en": 90, "es": 195, "fr": 98, "it": 62, "pt": 114}
+
+UEBERSETZT_DATEI = Path(__file__).resolve().parent / "data" / "translated_semicolons.json"
+
+
+def kundentexte() -> set[str]:
+    """Jeder deutsche Kundentext — die Schlüssel der Sprachkataloge.
+
+    Bis Review P2 N5 las der Musterwächter nur, was ``test_text_length`` nach
+    Aufrufort einordnet. Ein ``return _(…)`` außerhalb einer ``*empty*``-Funktion
+    und jeder Handbuchabsatz fielen dabei durch, und neue Semikolons standen
+    unbemerkt im Kundentext. Jeder Text über ``_()`` steht in jedem Katalog
+    (``test_translations``), die Schlüssel sind also die vollständige Menge.
+    """
+    from app.i18n.catalog import read_catalog
+
+    found: set[str] = set()
+    for language in available_languages():
+        if language != "de":
+            found |= set(read_catalog(language))
+    return found
+
+
+def uebersetzte_semikolons() -> dict[str, list[str]]:
+    """Je Sprache die Quelltexte ohne Semikolon, deren Übersetzung eines trägt, sortiert."""
+    from app.i18n.catalog import read_catalog
+
+    return {
+        language: sorted(
+            source
+            for source, text in read_catalog(language).items()
+            if ";" in text and ";" not in source
+        )
+        for language in available_languages()
+        if language != "de"
+    }
 
 
 def muster_funde(texte: set[str]) -> dict[str, list[str]]:
@@ -726,7 +767,7 @@ def muster_probleme(
 ) -> list[str]:
     """Was den Musterwächter rot macht — leer, wenn alles stimmt."""
     probleme: list[str] = []
-    for name in SATZMUSTER:
+    for name in funde:
         erlaubt = set(bestand.get(name, []))
         probleme += [f"{name} neu: {text}" for text in funde[name] if text not in erlaubt]
         probleme += [
@@ -745,14 +786,46 @@ def muster_probleme(
 def test_no_new_customer_text_uses_jargon_or_a_machine_pattern() -> None:
     """Kein neuer Kundentext mit Fachwort, Semikolon oder „Nur …:“ (RM-509, D13/D14).
 
-    Geprüft werden die Kundentexte, die ``test_text_length`` nach Aufrufort
-    einordnet. Was heute trifft, steht in ``tests/data/text_patterns.json``.
+    Geprüft wird jeder Katalogtext (:func:`kundentexte`), auch Handbuch und
+    Sätze ohne eingeordneten Aufrufort. Was heute trifft, steht in
+    ``tests/data/text_patterns.json``.
     """
     from tests.test_text_length import application_sources, customer_texts
 
-    texte = {entry.text for entry in customer_texts(application_sources())}
+    texte = kundentexte()
+    eingeordnet = {entry.text for entry in customer_texts(application_sources())}
+    assert eingeordnet and eingeordnet <= texte, "der Katalog fasst die eingeordneten Texte"
     bestand = json.loads(MUSTER_DATEI.read_text(encoding="utf-8"))
     probleme = muster_probleme(muster_funde(texte), bestand, MUSTER_BESTAND)
+    assert not probleme, "\n".join(probleme[:30])
+
+
+def test_the_pattern_guard_reads_the_manual_and_unplaced_returns() -> None:
+    """Handbuchabsätze und ein ``return _(…)`` ohne Art sind im Wächter (Review P2 N5).
+
+    Beide ordnet ``test_text_length`` keiner Art zu; ohne sie sah der Wächter
+    das Semikolon im Normteil-Absatz des Handbuchs und in „Zu weit für …“ nicht.
+    """
+    from tests.test_text_length import application_sources, customer_texts
+
+    eingeordnet = {entry.text for entry in customer_texts(application_sources())}
+    texte = kundentexte()
+    handbuch = next(text for text in texte if text.startswith("Woher die Maße kommen"))
+    zu_weit = next(text for text in texte if text.startswith("Für {size} ist die Bohrung zu weit"))
+    assert handbuch not in eingeordnet and zu_weit not in eingeordnet, "sonst prüft das nichts"
+
+
+def test_no_translation_adds_a_semicolon_its_source_does_not_have() -> None:
+    """Eine Übersetzung trägt kein Semikolon, wo die deutsche Quelle keines hat (Review P2 N5).
+
+    Der Senkkopfsatz verlor sein Semikolon in allen sechs Sprachen und bekam es
+    in fünf Übersetzungen zurück, ohne dass ein Test rot wurde. Was heute
+    trifft, steht je Sprache in ``tests/data/translated_semicolons.json``.
+    """
+    funde = uebersetzte_semikolons()
+    assert set(funde) == set(UEBERSETZT_BESTAND), "jede Übersetzung hat einen Bestand"
+    bestand = json.loads(UEBERSETZT_DATEI.read_text(encoding="utf-8"))
+    probleme = muster_probleme(funde, bestand, UEBERSETZT_BESTAND)
     assert not probleme, "\n".join(probleme[:30])
 
 

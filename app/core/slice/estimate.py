@@ -742,8 +742,8 @@ def time_comparison_blocked(
         return ""
     if "cura" in measured.slicer.casefold():
         return _(
-            "Die Leerfahrten von CuraEngine rechnet das Zeitmodell noch nicht nach; "
-            "die Druckzeit bleibt ungeprüft."
+            "Die Schichtanalyse kennt die Leerfahrten von CuraEngine noch nicht. "
+            "Die Druckzeit bleibt ungeprüft."
         )
     if all(
         entry.support_material_mm3 is not None and entry.support_material_mm3 <= EPS_GEOM
@@ -758,8 +758,8 @@ def time_comparison_blocked(
         return missing or _("Die wirksamen Druckeinstellungen dieser Ausgabe sind unbekannt.")
     if any(entry.tree_supports for entry in expected):
         return _(
-            "Die Bahnen von Baumstützen rechnet das Zeitmodell noch nicht nach; "
-            "die Druckzeit bleibt ungeprüft."
+            "Die Schichtanalyse kennt die Bahnen von Baumstützen noch nicht. "
+            "Die Druckzeit bleibt ungeprüft."
         )
     if measured.support_mm3 is None or "support" in measured.uncertain_material_roles:
         return _("Die Druckdatei weist die vollständige Stützmenge nicht eindeutig aus.")

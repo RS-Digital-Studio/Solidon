@@ -420,16 +420,18 @@ def screw_hole(raw: BaseParams) -> PartResult:
     made = _derived(result(union(*parts), *features), params.size, params.diameter)
     if params.countersink and screw.countersink_derived:
         # Review RM-532 Runde 2, N3: Über M24 führt keine Norm einen Senkkopf, M18
-        # und M22 nennt die Quelle der Tabelle nicht — die Senkung ist dort
+        # und M22 führt das Maßblatt der Tabelle nicht — die Senkung ist dort
         # gerechnet, und wer eine Schraube kauft, findet womöglich keine dazu.
+        # Der Satz sagt deshalb, was in allen drei Fällen belegt ist: Die
+        # Normteiltabelle führt keinen Senkkopf (Review P2 N5).
         named = params.size if params.size != CUSTOM_SIZE else f"Ø {format_length(screw.nominal)}"
         made.findings.append(
             Finding(
                 code="parts.countersink_derived",
                 severity="info",
                 message=_(
-                    "Für {size} ist kein Senkkopf genormt, die Senkung Ø {diameter} ist "
-                    "abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.",
+                    "Für {size} führt die Normteiltabelle keinen Senkkopf, die Senkung "
+                    "Ø {diameter} ist abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.",
                     size=named,
                     diameter=format_length(screw.countersink),
                 ),
@@ -765,8 +767,8 @@ def thread_advice(diameter: float) -> TranslatableText:
         wide = _too_wide_for(diameter)
         if wide is not None:
             return _(
-                "Zu weit für {size}; passend ist ein Innengewinde mit eigenem Maß Ø {diameter}, "
-                "Steigung {pitch}.",
+                "Für {size} ist die Bohrung zu weit, der Gang griffe nicht. Passend ist ein "
+                "Innengewinde mit eigenem Maß Ø {diameter}, Steigung {pitch}.",
                 diameter=format_length(nominal),
                 pitch=format_length(pitch),
                 size=wide,

@@ -143,7 +143,9 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   kürzer, ruhig ein unfertiger Gedanke oder umgangssprachlicher Einwurf, ein
   Absatz ungerundet. Gilt auch im Gespräch mit Robert. Semikolon, die Formel
   „Nur …:“ und Fachwörter der Datenhaltung hält `test_wording` mit
-  eingefrorenem Bestand (`tests/data/text_patterns.json`, RM-509).
+  eingefrorenem Bestand über jeden Katalogtext, Handbuch eingeschlossen
+  (`tests/data/text_patterns.json`, RM-509); ein Semikolon, das nur die
+  Übersetzung trägt, ebenso (`translated_semicolons.json`).
 - **Nach außen heißt es „Version“, nicht „Fassung“** (Entscheidung Robert) —
   ein zweites Wort lässt den Kunden einen Unterschied suchen. Intern (Commits,
   Roadmap, Konzepte, Regeln) darf „Fassung“ bleiben; sinngemäß für jedes zweite
