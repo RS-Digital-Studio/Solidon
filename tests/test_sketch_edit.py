@@ -719,7 +719,9 @@ def test_section_ends_within_the_kernels_own_tolerance_become_one_point() -> Non
     als beide Eckpunkttoleranzen zusammen — nicht mehr: Bei Toleranzen eines
     sauberen Körpers bleibt dieselbe Lücke stehen. Doppelte Kanten und
     Strecken ohne Länge entfallen."""
-    pytest.importorskip("OCP")
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
     from app.core.brep.section import SectionCurve, _joined
 
     loose = 1.5e-4

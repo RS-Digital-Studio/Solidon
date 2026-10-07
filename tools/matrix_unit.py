@@ -2,9 +2,13 @@
 
 Auftrag Robert, 27.09.2026: „Die neuen Einstellungen aus der neuen datei passen, so
 für jedes Modell, slicer und Drucker verifizieren mit der übergabe“. Kein Test,
-eine Messung. Ein Prozess je Modell; der Treiber (``treiber.py``) verteilt.
+eine Messung. Ein Prozess je Modell; der Treiber (``matrix_driver.py``) verteilt.
 
-Aufruf: python einheit.py <code-wurzel> <modell> <ausgabeordner> <kombis>
+Aufruf: python tools/matrix_unit.py <code-wurzel> <modell> <ausgabeordner> <kombis>
+
+Die Code-Wurzel darf ein anderer Stand sein als der, aus dem das Werkzeug
+kommt: ``app`` kommt aus ihr, die Geschwister ``matrix_config`` und
+``matrix_gcode`` aus dem Ordner dieser Datei.
 
 ``<kombis>`` ist ``slicer:drucker,slicer:drucker,…``, ``heim`` (je Slicer der
 Drucker, für den sein Hersteller ihn baut) oder ``alle`` (je Slicer jeder
@@ -36,7 +40,7 @@ dazu, auf welchem Weg ``advise.support_need`` Stützen verlangt.
 
 Gemessen je Platte: Ergebnis und Befunde, Zeit und Material, die Zeit ab der
 ersten Schicht gegen die Schichtanalyse (RM-465), was der G-Code tut
-(``gcode_lesen``), das Tempo der ersten Schicht je Bahnart, und in der
+(``matrix_gcode``), das Tempo der ersten Schicht je Bahnart, und in der
 Orca-Familie der ganze Konfigurationsblock gegen die aufgelöste Kette aus
 Maschine, Prozess und Filament des Herstellers. Wo Creality Print über die
 Konsole keine 3MF rechnet (RM-164), wird die Projektdatei gegen die Kette
@@ -60,15 +64,17 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-MATRIX = HERE.parent / "uebergabe-matrix-2026-09-27"
 ROOT = Path(sys.argv[1]).resolve()
 MODEL = Path(sys.argv[2]).resolve()
 OUT = Path(sys.argv[3]).resolve()
 SPEC = sys.argv[4] if len(sys.argv) > 4 else "heim"
-sys.path.insert(0, str(ROOT))
-sys.path.insert(1, str(MATRIX))
+# Die Geschwister kommen aus dem Baum dieses Werkzeugs, ``app`` aus der
+# Code-Wurzel: Erst ``tools`` laden, dann die Wurzel davorlegen —
+# danach findet jedes ``from tools import …`` das geladene Paket.
+sys.path.insert(0, str(HERE.parent))
+from tools.matrix_config import HOME, SLICERS  # noqa: E402
 
-from matrix_config import HOME, SLICERS  # noqa: E402
+sys.path.insert(0, str(ROOT))
 
 # Kerne: Der Treiber gibt sie vor, die Slicer als Kindprozesse erben sie.
 # Mit eigenen Signaturen: Ohne argtypes übergab ctypes das Pseudohandle als
@@ -90,8 +96,6 @@ assert Path(app.__file__).resolve().is_relative_to(ROOT), app.__file__
 from app.core.bootstrap import load_operations  # noqa: E402
 
 load_operations()
-
-import gcode_lesen  # noqa: E402
 
 from app.core.errors import AppError  # noqa: E402
 from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles  # noqa: E402
@@ -115,6 +119,7 @@ from app.ui.print_settings_dialog import (  # noqa: E402
     _PlateJob,
     _prepare_plate,
 )
+from tools import matrix_gcode  # noqa: E402
 
 MATERIAL = "pla"
 #: Weniger Stützbahn als das in Metern heißt im Lauf ``stuetzen_auto``: Der
@@ -292,7 +297,7 @@ def narrow_webs(objects: list[Any]) -> dict[str, Any]:
         z = float(tm.bounds[0][2]) + 0.1
         try:
             section = tm.section(plane_origin=(0, 0, z), plane_normal=(0, 0, 1))
-        except Exception:  # noqa: BLE001
+        except Exception:
             section = None
         if section is None:
             continue
@@ -523,7 +528,7 @@ def against_chain(
     printed_filament = first_entry(str(block.get("filament_settings_id", ""))).strip('"')
     foreign_filament = bool(filament) and filament not in printed_filament
     for key, (kind, value) in sorted(wanted.items()):
-        if key in gcode_lesen.TECHNICAL or key in slicer_profiles.DESCRIBING_KEYS:
+        if key in matrix_gcode.TECHNICAL or key in slicer_profiles.DESCRIBING_KEYS:
             continue
         if kind == "filament" and foreign_filament:
             continue
@@ -801,7 +806,7 @@ def plate_run(
             # im Nachlauf finden (zu lange Pfade, „No such file“).
             slicer_output=str((getattr(problem, "values", None) or {}).get("output", ""))[-1500:],
         )
-    except Exception as problem:  # noqa: BLE001 — eine Messung berichtet alles
+    except Exception as problem:
         row.update(
             ok=False,
             error=type(problem).__name__,
@@ -828,11 +833,11 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
             if not stripped:
                 continue
             if stripped.startswith(";"):
-                if gcode_lesen.LAYER_MARK.match(stripped):
+                if matrix_gcode.LAYER_MARK.match(stripped):
                     started = True
                     pending = True
                     continue
-                typed = gcode_lesen.TYPE_MARK.match(stripped)
+                typed = matrix_gcode.TYPE_MARK.match(stripped)
                 if typed:
                     kind = typed.group("type")
                 continue
@@ -844,7 +849,7 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
             if upper.startswith("M82"):
                 absolute = True
                 continue
-            match = gcode_lesen.COMMAND.match(upper)
+            match = matrix_gcode.COMMAND.match(upper)
             if match is None:
                 continue
             number = float(match.group("number"))
@@ -864,7 +869,7 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
             if number == 92.0:
                 found = {
                     m.group("name").upper(): m.group("value")
-                    for m in gcode_lesen.WORD.finditer(arguments)
+                    for m in matrix_gcode.WORD.finditer(arguments)
                 }
                 if "E" in found:
                     last_e = float(found["E"])
@@ -874,7 +879,7 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
             motion = int(number)
             words = {
                 m.group("name").upper(): float(m.group("value"))
-                for m in gcode_lesen.WORD.finditer(arguments)
+                for m in matrix_gcode.WORD.finditer(arguments)
             }
             if "F" in words:
                 feed = words["F"] / 60.0
@@ -885,7 +890,7 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
                 pushed = (words["E"] - last_e) if absolute else words["E"]
                 if absolute:
                     last_e = words["E"]
-            length, _extrema = gcode_lesen._move_geometry(
+            length, _extrema = matrix_gcode._move_geometry(
                 motion, (x, y), (nx, ny), words, centres_absolute=centres_absolute
             )
             moved = length > 0.0
@@ -896,7 +901,8 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
                     break
             if layer == 0 and moved and pushed > 0 and feed > 0:
                 samples.setdefault(
-                    gcode_lesen.kind_of(kind) if gcode_lesen.kind_of(kind) != "model" else kind, []
+                    matrix_gcode.kind_of(kind) if matrix_gcode.kind_of(kind) != "model" else kind,
+                    [],
                 ).append((length, feed))
             x, y = nx, ny
     speeds: dict[str, Any] = {}
@@ -923,7 +929,7 @@ def measured(row: dict[str, Any], bed: tuple[float, float]) -> dict[str, Any]:
     path = row.get("gcode")
     if not path or not Path(path).exists():
         return row
-    reading = gcode_lesen.read(Path(path), bed=bed)
+    reading = matrix_gcode.read(Path(path), bed=bed)
     summary = reading.summary()
     header = summary.pop("header", {})
     row.update(summary)
@@ -994,11 +1000,11 @@ def rim_fragments(row: dict[str, Any]) -> int:
         for line in handle:
             stripped = line.strip()
             if stripped.startswith(";"):
-                if gcode_lesen.LAYER_MARK.match(stripped):
+                if matrix_gcode.LAYER_MARK.match(stripped):
                     layer += 1
                     if layer > 1:
                         break
-                typed = gcode_lesen.TYPE_MARK.match(stripped)
+                typed = matrix_gcode.TYPE_MARK.match(stripped)
                 if typed:
                     kind = typed.group("type")
                     current = None
@@ -1008,12 +1014,12 @@ def rim_fragments(row: dict[str, Any]) -> int:
                 absolute = True
             elif code.startswith("M83"):
                 absolute = False
-            match = gcode_lesen.COMMAND.match(code)
+            match = matrix_gcode.COMMAND.match(code)
             if match is None:
                 continue
             words = {
                 m.group("name").upper(): float(m.group("value"))
-                for m in gcode_lesen.WORD.finditer(code[match.end() :])
+                for m in matrix_gcode.WORD.finditer(code[match.end() :])
             }
             number = float(match.group("number"))
             if number == 92.0:
@@ -1041,7 +1047,6 @@ def rim_fragments(row: dict[str, Any]) -> int:
     return sum(
         1 for run in runs if math.dist(run["start"], run["end"]) > 1.0 and run["length"] < 10.0
     )
-
 
 
 def flags_for(
@@ -1149,7 +1154,7 @@ def flags_for(
         minutes, before = row.get("print_minutes"), base.get("print_minutes")
         more_support = (row.get("support_m") or 0) > (base.get("support_m") or 0) + 0.5
         if minutes and before and minutes > 1.5 * before and not more_support:
-            found.append(f"Zeit ×{minutes / before:.1f} ohne zusätzliche Stütze")
+            found.append(f"Zeit ×{minutes / before:.1f} ohne zusätzliche Stütze")  # noqa: RUF001
     elif share > 0.15 and variant == "vorschlaege":
         found.append(f"Stütze in Schicht 1 ({share:.0%})")
     fast = max(
@@ -1215,7 +1220,7 @@ def picture(rows: list[tuple[str, dict[str, Any]]], target: Path, bed: tuple[flo
 
 
 def first_layer_segments(path: Path) -> dict[str, list[tuple[float, float, float, float]]]:
-    return gcode_lesen.first_layer_segments(path)
+    return matrix_gcode.first_layer_segments(path)
 
 
 # --- Ablauf -----------------------------------------------------------------------------------------
@@ -1324,7 +1329,7 @@ def main() -> int:
     started = time.perf_counter()
     try:
         objects, load_findings = load(MODEL)
-    except Exception as problem:  # noqa: BLE001
+    except Exception as problem:
         result.update(
             load_error=f"{type(problem).__name__}: {str(problem)[:400]}",
             trace=traceback.format_exc()[-1500:],
@@ -1369,7 +1374,7 @@ def main() -> int:
     if "narrow" not in result:
         try:
             result["narrow"] = narrow_webs(objects)
-        except Exception as problem:  # noqa: BLE001
+        except Exception as problem:
             result["narrow"] = {"error": f"{type(problem).__name__}: {problem}"}
     save()
     for slicer, printer in combos(SPEC):
@@ -1423,7 +1428,7 @@ def main() -> int:
                 ]
                 entry["support_ways"] = support_ways(measured_bodies)
                 taken = advise.apply(standard, shown) if shown else None
-            except Exception as problem:  # noqa: BLE001
+            except Exception as problem:
                 entry["advice_error"] = f"{type(problem).__name__}: {str(problem)[:300]}"
                 entry["advice_trace"] = traceback.format_exc()[-1200:]
                 taken = None
@@ -1459,7 +1464,7 @@ def main() -> int:
                     if row.get("gcode") and Path(row["gcode"]).exists() and wanted is not None:
                         written = Path(row.get("written") or "")
                         row["chain"] = against_chain(
-                            gcode_lesen.config_block(Path(row["gcode"])),
+                            matrix_gcode.config_block(Path(row["gcode"])),
                             wanted,
                             project_block(written)
                             if written.suffix == ".3mf" and written.exists()
@@ -1517,7 +1522,7 @@ def main() -> int:
                                 OUT / "bilder" / f"{safe}__{slicer}__{printer}__p{plate}.png",
                                 bed,
                             )
-                        except Exception as problem:  # noqa: BLE001
+                        except Exception as problem:
                             entry.setdefault("picture_errors", []).append(str(problem)[:200])
             # Vorschläge gegen den Standardlauf: welche Schlüssel sie ändern.
             for variant in ("vorschlaege", "stuetzen_auto"):
@@ -1529,15 +1534,15 @@ def main() -> int:
                         and Path(row["gcode"]).exists()
                         and Path(before["gcode"]).exists()
                     ):
-                        difference = gcode_lesen.config_difference(
-                            gcode_lesen.config_block(Path(before["gcode"])),
-                            gcode_lesen.config_block(Path(row["gcode"])),
+                        difference = matrix_gcode.config_difference(
+                            matrix_gcode.config_block(Path(before["gcode"])),
+                            matrix_gcode.config_block(Path(row["gcode"])),
                         )
                         row["changed_keys"] = {
                             k: [str(a)[:80], str(b)[:80]] for k, (a, b) in difference.items()
                         }
             entry["complete"] = True
-        except Exception as problem:  # noqa: BLE001
+        except Exception as problem:
             entry.update(
                 error=f"{type(problem).__name__}: {str(problem)[:400]}",
                 trace=traceback.format_exc()[-1500:],

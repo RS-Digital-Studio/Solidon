@@ -111,6 +111,7 @@ def exact_section_points(
     solid: Any, origin: tuple[float, float, float], normal: tuple[float, float, float]
 ) -> np.ndarray:
     """Liest native Schnittkurven ohne vorherige Tessellierung."""
+    exact_kernel()
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
     from OCP.gp import gp_Dir, gp_Pln, gp_Pnt

@@ -676,6 +676,7 @@ def _cone_solid(
     top_radius: float,
     height: float,
 ) -> Any:
+    _kernel()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone
     from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
 
@@ -922,6 +923,7 @@ def _pocketed_block(*, island: bool) -> SceneObject:
     Derselbe Aufbau wie in ``test_brep_voids.py``: Die Kugel ist eine
     Materialinsel im Einschluss — ein zweiter Körper im selben Verbund.
     """
+    _kernel()
     from OCP.BRep import BRep_Builder
     from OCP.BRepPrimAPI import (
         BRepPrimAPI_MakeBox,
@@ -1161,6 +1163,7 @@ def test_a_standalone_countersink_moved_over_the_edge_says_so_like_the_mesh(
 
 def _as_nurbs(entry: SceneObject) -> SceneObject:
     """Derselbe Körper mit jeder Fläche als NURBS, wie manche Programme STEP schreiben."""
+    _kernel()
     from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
 
     from app.core.brep.features import features_of

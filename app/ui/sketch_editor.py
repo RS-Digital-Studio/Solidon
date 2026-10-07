@@ -309,7 +309,7 @@ def _constraint_label(kind: ConstraintAction) -> str:
         "distance": tr("Abstand"),
         "radius": tr("Radius"),
         "diameter": tr("Durchmesser"),
-        "coincident": tr("Deckung"),
+        "coincident": tr("Verbunden"),
         "horizontal": tr("Waagerecht"),
         "vertical": tr("Senkrecht"),
         "parallel": tr("Parallel"),
@@ -472,6 +472,34 @@ def held_guides(sketch: Sketch) -> tuple[int, ...]:
         if constraint.kind == "fixed" and constraint.targets[0] in guides
     )
     return held if len(held) > 1 else ()
+
+
+def constraint_count_text(total: int, mine: int, *, selected: bool, clashing: bool) -> str:
+    """Die Zählzeile über der Bedingungsliste (RM-519).
+
+    Die Liste zeigt nur, was an der Auswahl hängt, und was sich widerspricht.
+    Wie viele es insgesamt sind, sagt diese Zeile — und ohne Auswahl, wie man
+    die einzelnen zu sehen bekommt. ``total`` zählt Zeilen: Die festen Punkte
+    der Hilfsgeometrie sind eine (:func:`held_guides`).
+    """
+    if total == 0:
+        return tr("Noch keine Bedingungen.")
+    if selected and clashing:
+        return tr(
+            "{mine} von {total} Bedingungen an der Auswahl. Die markierten widersprechen sich.",
+            mine=mine,
+            total=total,
+        )
+    if selected:
+        return tr("{mine} von {total} Bedingungen an der Auswahl", mine=mine, total=total)
+    if clashing:
+        return tr("{total} Bedingungen. Die markierten widersprechen sich.", total=total)
+    if total == 1:
+        return tr("Eine Bedingung. Wählen Sie eine Linie oder einen Punkt, um sie zu sehen.")
+    return tr(
+        "{total} Bedingungen. Wählen Sie eine Linie oder einen Punkt, um die zugehörigen zu sehen.",
+        total=total,
+    )
 
 
 def outline_phrase(outline: edit.FaceOutline) -> str:
@@ -6851,6 +6879,20 @@ class SketchPanel(QWidget):
         # übereinander — gemessen am Bild, nicht vermutet.
         self._side_title = QLabel(tr("Bedingungen"), self._side_box)
         side.addWidget(self._side_title)
+        # **Die Zählzeile sagt, wie viele es gibt — die Liste nur die der
+        # Auswahl** (RM-519): Ein Rechteck mit Kreis brachte dreizehn Zeilen
+        # „Deckung — Linie 1 Ende, Linie 2 Anfang“, und die eine, um die es
+        # ging, stand irgendwo darin (:meth:`_refresh_constraints`).
+        self.constraint_count = QLabel(self._side_box)
+        self.constraint_count.setWordWrap(True)
+        # Die Breite hängt nicht am Text: Im Skizzendialog steht die Spalte
+        # neben der Zeichenfläche, und eine Zeile, die mit der Auswahl breiter
+        # wird, ließe die Fläche bei jedem Klick neu einpassen.
+        self.constraint_count.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        style.set_level(self.constraint_count, "caption")
+        side.addWidget(self.constraint_count)
         side.addWidget(self.constraint_list, stretch=1)
 
         middle = QHBoxLayout()
@@ -6892,6 +6934,7 @@ class SketchPanel(QWidget):
         self.canvas.sketchChanged.connect(self._refresh_plane_role)
         self.canvas.planeRestored.connect(weak_slot(self, SketchPanel._plane_restored))
         self.canvas.selectionChanged.connect(self._refresh_buttons)
+        self.canvas.selectionChanged.connect(self._refresh_constraints)
         self.canvas.statusChanged.connect(weak_slot(self, SketchPanel._show_status, forward=True))
         # Der Doppelklick auf eine Maßkarte öffnet dasselbe Fenster wie der
         # auf die Zeile in der Bedingungsliste — ein Weg, zwei Griffe.
@@ -7800,10 +7843,21 @@ class SketchPanel(QWidget):
         conflict = getattr(self.canvas, "conflict_pair", None) or ()
         held = held_guides(self.canvas.sketch)
         self._rows.clear()
-        for index, entry in enumerate(self.canvas.sketch.constraints):
+        constraints = self.canvas.sketch.constraints
+        # **Nur, was an der Auswahl hängt — und was sich widerspricht**
+        # (RM-519). Ein Widerspruch steht immer da: Er hält die ganze Skizze
+        # an, und wer ihn lösen will, sucht ihn nicht erst über die Auswahl.
+        chosen = {target for _kind, targets in self.canvas.selection for target in targets}
+        held_points = {constraints[index].targets[0] for index in held}
+        shown_held = bool(held) and (
+            bool(chosen & held_points) or any(index in conflict for index in held)
+        )
+        for index, entry in enumerate(constraints):
             if index in held:
-                if index == held[0]:
+                if index == held[0] and shown_held:
                     self._add_held_row(held, conflict)
+                continue
+            if index not in conflict and not chosen.intersection(entry.targets):
                 continue
             self._rows.append((index,))
             label = _constraint_label(entry.kind)
@@ -7851,6 +7905,15 @@ class SketchPanel(QWidget):
                     + f"\n{_does_phrase(entry.kind)}.\n({numbers})"
                 )
             self.constraint_list.addItem(item)
+        total = len(constraints) - len(held) + (1 if held else 0)
+        mine = sum(
+            1
+            for row in self._rows
+            if any(chosen.intersection(constraints[index].targets) for index in row)
+        )
+        self.constraint_count.setText(
+            constraint_count_text(total, mine, selected=bool(chosen), clashing=bool(conflict))
+        )
 
     def _add_held_row(self, held: tuple[int, ...], conflict: Sequence[int]) -> None:
         """Eine Zeile für alle festen Punkte der Hilfsgeometrie (RM-188 P3.4).
@@ -7958,7 +8021,7 @@ class SketchPanel(QWidget):
                 tr("Die Zahl ersetzen, ohne die Bedingung neu zu legen — ein Schritt im Verlauf.")
             )
             change.triggered.connect(
-                lambda _checked=False, at=row: self.change_constraint_value(at)
+                lambda _checked=False, at=index: self.change_constraint_value(at)
             )
             menu.addSeparator()
         remove = menu.addAction(tr("Bedingung entfernen  (Entf)"))
@@ -7975,8 +8038,12 @@ class SketchPanel(QWidget):
         remove.triggered.connect(lambda _checked=False, at=index: self.canvas.remove_constraint(at))
         return menu
 
-    def change_constraint_value(self, row: int) -> None:
-        """Nach dem neuen Maß fragen und es setzen.
+    def change_constraint_value(self, index: int) -> None:
+        """Nach dem neuen Maß der Bedingung ``index`` fragen und es setzen.
+
+        **Die Bedingung, nicht die Zeile:** Die Liste zeigt nur, was an der
+        Auswahl hängt (RM-519), und die Maßkarte im Bild kennt gar keine
+        Zeile — sie meldet den Index (``measureEditRequested``).
 
         Ein Eingabedialog und keine Bestätigung: Regel 19 verbietet die Frage
         *vor* einer rücknehmbaren Handlung, nicht die Frage *nach* dem Wert,
@@ -7990,10 +8057,8 @@ class SketchPanel(QWidget):
         from PySide6.QtWidgets import QInputDialog
 
         constraints = self.canvas.sketch.constraints
-        indices = self.constraint_indices(row)
-        if len(indices) != 1 or not 0 <= indices[0] < len(constraints):
+        if not 0 <= index < len(constraints):
             return
-        index = indices[0]
         entry = constraints[index]
         if not entry.value:
             return
@@ -8023,7 +8088,9 @@ class SketchPanel(QWidget):
         Auf eine Bedingung ohne Wert tut er nichts: Dort gibt es keine Zahl,
         und ein leerer Dialog wäre die Sackgasse, die §2.1 ausschließt.
         """
-        self.change_constraint_value(self.constraint_list.row(item))
+        indices = self.constraint_indices(self.constraint_list.row(item))
+        if len(indices) == 1:
+            self.change_constraint_value(indices[0])
 
     def _constraint_menu(self, position: QPoint) -> None:
         """Rechtsklick in der Bedingungsliste — der sichtbare Weg hinaus."""

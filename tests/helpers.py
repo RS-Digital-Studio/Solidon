@@ -816,6 +816,7 @@ def two_cubes(offset: float) -> MeshData:
 
 def brep_bytes(shape: Any) -> bytes:
     """Die vollständige native Form samt Geometrie und vorhandener Triangulation."""
+    exact_kernel()
     from OCP.BRepTools import BRepTools
 
     stream = io.BytesIO()

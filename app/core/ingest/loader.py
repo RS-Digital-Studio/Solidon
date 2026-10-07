@@ -1435,7 +1435,7 @@ def _count_components(
 
     **Stecken die Teile ineinander, sagt der Satz es** (Befund A5 der
     Bedienweg-Durchsicht, 24.09.2026): Dann ist *Überschneidungen auflösen*
-    der erste Knopf und *In Einzelteile zerlegen* der zweite — zerlegt wären es
+    der erste Knopf und *In Einzelteile aufteilen* der zweite — zerlegt wären es
     zwei Teile am selben Ort. Gefragt wird nur am geschlossenen, einheitlich
     ausgerichteten Netz (``closed``), denn nur dort trägt das Auflösen
     (:func:`~app.core.geom.repair.parts_can_be_merged`).
