@@ -534,6 +534,14 @@ PATHS: Final[dict[str, str]] = {
     "view_bottom": (
         '<path d="M5 5h14v10H5z" /><path d="M12 21.5V17" /><path d="M9.5 19 12 16.5 14.5 19" />'
     ),
+    # Eine Filamentspule von der Seite: zwei Flansche, dazwischen die
+    # Wicklung. Der Kopf der Filamentspalte im Objektbaum (RM-519) — das Wort
+    # passte in keiner Sprache in die schmale Spalte und stand als „Fila“ da.
+    "spool": (
+        '<rect x="3.5" y="3" width="3.5" height="18" rx="1.5" />'
+        '<rect x="17" y="3" width="3.5" height="18" rx="1.5" />'
+        '<path d="M7 8h10M7 12h10M7 16h10" />'
+    ),
 }
 
 

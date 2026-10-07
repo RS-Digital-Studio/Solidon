@@ -21,8 +21,13 @@ def _load_module(
     monkeypatch: pytest.MonkeyPatch,
     arguments: list[str],
 ) -> ModuleType:
+    import tools
+
     monkeypatch.setattr(sys, "argv", [str(path), *arguments])
     monkeypatch.setattr(sys, "path", list(sys.path))
+    # ``matrix_unit`` bindet ``tools`` an seinen Ordner; danach kommt der
+    # Suchpfad des Testprozesses zurück.
+    monkeypatch.setattr(tools, "__path__", tools.__path__)
     specification = importlib.util.spec_from_file_location(name, path)
     assert specification is not None and specification.loader is not None
     module = importlib.util.module_from_spec(specification)
@@ -284,3 +289,67 @@ def test_counterclockwise_quarter_arc_uses_its_absolute_centre(
     assert reading.total["Outer wall"] == pytest.approx(5.0 * math.pi)
     assert reading.off_bed == {}
     assert len(segments) == 18
+
+
+@pytest.mark.parametrize("bound", [True, False], ids=["gebunden", "frei"])
+def test_the_matrix_keeps_its_own_siblings_when_another_root_comes_first(
+    tmp_path: Path, bound: bool
+) -> None:
+    """Review 06.10.2026, M2: ``tools`` ist ein Namensraumpaket.
+
+    Sein Suchpfad wird nach jeder Änderung von ``sys.path`` neu berechnet; legt
+    die Matrix eine andere Code-Wurzel davor, fand ``from tools import
+    matrix_gcode`` deren Fassung. ``matrix_config.own_package`` bindet ``tools``
+    an den Ordner der Matrix. Gegenprobe ``frei``: ohne Bindung lädt die
+    fremde Wurzel.
+    """
+    import subprocess
+
+    foreign = tmp_path / "fremd" / "tools"
+    foreign.mkdir(parents=True)
+    (foreign / "matrix_gcode.py").write_text("FREMD = True\n", encoding="utf-8")
+    script = (
+        "import sys\n"
+        f"sys.path.insert(0, {str(ROOT)!r})\n"
+        "from tools import matrix_config\n"
+        f"if {bound!r}:\n"
+        "    matrix_config.own_package()\n"
+        f"sys.path.insert(0, {str(foreign.parent)!r})\n"
+        "from tools import matrix_gcode\n"
+        "print(matrix_gcode.__file__)\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    loaded = Path(done.stdout.strip()).resolve().parent
+    assert loaded == (TOOLS.resolve() if bound else foreign.resolve())
+
+
+def test_the_unit_binds_its_package_before_it_loads_a_sibling() -> None:
+    """Nachprüfung 06.10.2026, F2: ``matrix_unit`` ruft ``own_package`` auf
+    Modulebene, bevor es ``matrix_gcode`` lädt — ohne den Aufruf fände der
+    Import nach der Code-Wurzel wieder deren Fassung."""
+    import ast
+
+    tree = ast.parse((TOOLS / "matrix_unit.py").read_text(encoding="utf-8"))
+    bound = [
+        statement.lineno
+        for statement in tree.body
+        if isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Call)
+        and ast.unparse(statement.value.func) == "matrix_config.own_package"
+    ]
+    sibling = [
+        statement.lineno
+        for statement in tree.body
+        if isinstance(statement, ast.ImportFrom)
+        and statement.module == "tools"
+        and any(alias.name == "matrix_gcode" for alias in statement.names)
+    ]
+    assert bound and sibling and bound[0] < sibling[0], (bound, sibling)

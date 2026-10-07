@@ -41,8 +41,9 @@ driftet ab — deshalb gibt es keine.
   Validierung und Projektdatei behalten sie für alte Schritte.
   `dropped_on_change` dazu heißt: Der Marker gilt dem gespeicherten Schritt,
   `History.change_params` nimmt ihn heraus, sobald sich ein anderer Wert
-  ändert (`legacy_slot_tool`, Migration 45 → 46); `measured_frame` trägt ihn
-  nicht, er meint die Lesart eines Winkels.
+  ändert (`legacy_slot_tool`, Migration 45 → 46), mit einer Feldliste nur bei
+  diesen Feldern (`legacy_zero_top` fällt nur mit `z`, 46 → 47);
+  `measured_frame` trägt ihn nicht, er meint die Lesart eines Winkels.
 - `documentation()` und `parameter_table()` behalten mit `technical=True`
   interne Schlüssel und Ausführungsverträge für technische Aufrufer. Das
   Handbuch verwendet `technical=False`: Kundentitel, Bedienort, Kürzel,

@@ -39,8 +39,10 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   JUnit-Berichten mit Herkunftsvermerk — keine Zahl von Hand.
 - **Betroffene Tests folgen auch impliziten Paketimporten.** Eine Änderung an
   `__init__.py` betrifft die Importeure seiner Untermodule; gelöschte Module
-  und Testhelfer behalten ihre Nutzer. Die Git-Auswahl liest NUL-getrennte
-  Pfade und beide Seiten einer Umbenennung (`tools/affected_tests.py`).
+  und Testhelfer behalten ihre Nutzer. Ein Test, der ein Werkzeug über den
+  Pfad lädt, hat keine Importkante; er wird gewählt, weil er den Dateinamen
+  nennt. Die Git-Auswahl liest NUL-getrennte Pfade und beide Seiten einer
+  Umbenennung (`tools/affected_tests.py`).
 - **Beim Verschieben und Zusammenlegen von Tests** bleiben Fallnamen,
   Parameter, Marker und aufgelöste Fixtures erhalten, Parameterwerte und
   Zusicherungen nachvollziehbar — Fallzahlen sind kein Deckungsnachweis.

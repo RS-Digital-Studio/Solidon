@@ -170,7 +170,7 @@ def _window(theme: Theme) -> str:
     canvas.wrapped(
         271,
         262,
-        str(_("Schnitt · Messen · Bewegen · Analyse · Schichten · Explosion · Trennen")),
+        str(_("Schnitt · Messen · Bewegen · Analyse · Schichten · Explosion · Teilen")),
         width=36,
         size=7,
         line_height=9,
@@ -765,7 +765,7 @@ def _sketch_editor(theme: Theme) -> str:
         (_("Waagerecht"), "(0, 1)"),
         (_("Rechtwinklig"), "(1, 2)"),
         (_("Abstand 40 mm"), "(0, 1)"),
-        (_("Deckung"), "(3, 4)"),
+        (_("Verbunden"), "(3, 4)"),
         (_("Tangential"), "(4, 5)"),
     )
     for index, (kind, targets) in enumerate(entries):

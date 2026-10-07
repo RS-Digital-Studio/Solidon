@@ -2970,6 +2970,32 @@ def test_a_part_shows_its_step_and_writes_back_into_it(qt_app: QApplication) -> 
         panel.deleteLater()
 
 
+@pytest.mark.parametrize("op", ["create_lid", "screw_lid"])
+def test_a_lid_step_opens_in_the_feature_panel(qt_app: QApplication, op: str) -> None:
+    """Ein Klick auf Kragen oder Öffnung eines Deckels zeigt seinen Schritt (Review RM-526, B1).
+
+    Mit der leeren Höhe der Öffnung warf ``show_part`` ``TypeError``: *Baustein
+    verschieben* bot ``z`` mit dem Wert ``None`` an. Ein Deckel hat keine Lage in
+    der Ebene, also keine Verschiebung; Maße ändern und Entfernen bleiben.
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.ui.panels import FeaturePanel
+
+    load_operations()
+    spec = REGISTRY.get(op)
+    panel = FeaturePanel()
+    try:
+        for params in ({}, {"z": None}):
+            panel.show_part(SimpleNamespace(id=4, op=op, params=params), spec)
+            titles = buttons(panel)
+            assert "Baustein verschieben" not in titles, titles
+            assert "Baustein entfernen" in titles, titles
+    finally:
+        panel.deleteLater()
+
+
 def test_a_count_is_a_whole_number_without_a_unit(qt_app: QApplication) -> None:
     """Die Haken eines Einhängers sind eine Anzahl — kein Maß in Millimetern.
 

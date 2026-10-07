@@ -23,10 +23,10 @@ Paketfreigabe. Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
 
 - Die Teilmatrix eines Jobs ist genau `0 … N−1` für das `N` in seinem Aufruf;
   wer Teile dazunimmt, ändert beides zusammen.
-- **Ein Release-Lauf trägt höchstens 100 Artefakte**:
-  `tools/windows_signed_installer.py` liest die Liste mit `per_page=100` und
-  hält fail-closed an, wenn sie unvollständig ist. Wer Teile oder Berichte
-  dazunimmt, zählt nach oder baut dort das Blättern.
+- **GitHub-Listen werden über alle Seiten gelesen** (`sign_release.paged_listing`,
+  je Seite 100): Artefakte im Installerlauf, Jobs bei der Freigabe eines rot
+  beendeten Hauptbaus. Geht die Zahl nicht auf oder ändert sie sich zwischen
+  den Seiten, hält der Lauf fail-closed an.
 - Alle CI-Jobs haben einheitlich zwei Stunden, einschließlich Paketbau,
   Signierfolge, Releaseaktenprüfung und Diagnose; ausdrücklich begrenzte
   Prüfschritte nutzen dieselbe Frist und verlängern die Jobfrist nicht. Die

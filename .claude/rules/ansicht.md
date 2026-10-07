@@ -65,7 +65,7 @@ beantwortet die Stufe für Merkmal und Kante.
 * **Eine neue Auswahlart fällt überall, wo eine andere entsteht** (`_drop_edge()`
   in `select`, `select_feature`, `_refresh_feature_selection`), **zählt in
   `selection_depth`** und **verschluckt keinen fremden Klick**
-  (`_means_a_feature()`: Messen, Trennen, Skelett, Formen gehen vor). Umschalt
+  (`_means_a_feature()`: Messen, Teilen, Skelett, Formen gehen vor). Umschalt
   und Strg meinen den Körper; eine Kante wird einzeln gewählt.
 * **Der Zeiger fragt `_edge_under`**, die Bedingungen von `_edge_click`; die
   Rolle bleibt `feature`.
