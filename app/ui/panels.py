@@ -1772,6 +1772,27 @@ def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | N
     return None
 
 
+def _place_refs_under(item: QTreeWidgetItem) -> list[tuple[str, str]]:
+    """Die Stellen dieser Zeile — sie selbst, wenn sie ein Merkmal trägt, sonst ihre Kinder.
+
+    Eine Zeile mit eigener Kennung ist eine Stelle, auch wenn Flanken oder
+    eine Senkung unter ihr hängen. Ein Dach trägt keine Kennung und bündelt
+    mehrere Stellen; es liefert die seiner Kinder, rekursiv, denn ein
+    Baustein-Dach kann wieder Bohrungen mit Senkung tragen.
+    """
+    object_id = item.data(0, Qt.ItemDataRole.UserRole)
+    feature_id = item.data(1, Qt.ItemDataRole.UserRole)
+    if object_id is not None and feature_id is not None:
+        return [(str(object_id), str(feature_id))]
+    found: list[tuple[str, str]] = []
+    for index in range(item.childCount()):
+        child = item.child(index)
+        if child is None:
+            continue
+        found.extend(_place_refs_under(child))
+    return found
+
+
 def _feature_refs_under(item: QTreeWidgetItem) -> list[tuple[str, str]]:
     """Diese Zeile und, was sie bündelt — als Paare aus Körper und Merkmal.
 
@@ -3004,14 +3025,15 @@ class ObjectTree(QWidget):
         Stellen und sagte an einem eingelesenen Bolzen „Markieren Sie an jedem
         der beiden Teile die Stelle“, obwohl genau das geschehen war (Review
         P2, Fenstertest zum gemessenen Gewinde).
+
+        Ein Dach dagegen ist keine Stelle: „Zapfen (4)“ sind vier, und nur das
+        erste zu nehmen hieße still raten (Regel 21) — :func:`_place_refs_under`.
         """
         found: list[tuple[str, str]] = []
         for item in self.tree.selectedItems():
             if item.parent() is None:
                 continue
-            refs = _feature_refs_under(item)
-            if refs:
-                found.append(refs[0])
+            found.extend(_place_refs_under(item))
         return tuple(dict.fromkeys(found))
 
     def selected_faces(self) -> tuple[tuple[str, str], ...]:
