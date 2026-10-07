@@ -50,7 +50,7 @@ from app.core.types import (
     SurfacePatch,
     Vec3,
 )
-from app.core.units import EPS_DISPLAY, EPS_GEOM, match_tolerance, positive_axis
+from app.core.units import EPS_DISPLAY, EPS_GEOM, exact_cos, match_tolerance, positive_axis
 
 _log = get_logger(__name__)
 
@@ -1856,7 +1856,9 @@ def _describe(
         angle = float(cone.SemiAngle())
         axis = cone.Axis().Direction()
         location = cone.Location()
-        along = wide_v * math.cos(angle)
+        # ``exact_cos`` statt ``math.cos`` (RM-187): Die Lage der Kegelmitte
+        # entscheidet über Ketten und Werkzeuge, auf jeder Maschine dieselbe.
+        along = wide_v * exact_cos(angle)
         turn = abs(adaptor.LastUParameter() - adaptor.FirstUParameter())
         if turn < least_turn:
             return None

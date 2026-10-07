@@ -128,7 +128,7 @@ weniger ist manchmal mehr". So sind sie gefallen und am selben Tag gebaut:
 | Z9 | Keine Kürzel für die Lochbilder. | — |
 
 Offen bleibt Z8 (am Fenster fahren) im Register unter
-[RM-183](../ROADMAP.md#rm-183).
+[RM-183](../../ROADMAP-ARCHIV.md#rm-183) — am 06.10.2026 abgeschlossen.
 
 ## §6 Nicht geprüft
 

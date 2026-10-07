@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -2410,7 +2411,8 @@ def removal_registry() -> Registry:
     *Stift* reicht seinen Träger unverändert durch wie ``pin_for_bore``;
     *Vereinigen* setzt seinen ersten Eingang fort wie ``union_objects`` und baut
     ihn dabei um — dieselbe Zahl Ein- und Ausgänge, der Unterschied steht allein
-    in ``leaves_inputs_unchanged``.
+    in ``leaves_inputs_unchanged``. *Beide bewegen* nimmt mehrere Körper und
+    gibt jeden unter seiner Kennung zurück wie ``arrange_bed``.
     """
     own = Registry()
     for name, consumes, produces, keeps, unchanged in (
@@ -2418,6 +2420,7 @@ def removal_registry() -> Registry:
         ("pin_beside", 1, 2, 1, True),
         ("lid_beside", 1, 2, 1, False),
         ("move_object", 1, 1, 0, False),
+        ("move_both", VARIABLE, VARIABLE, 0, False),
         ("split_object", 1, 2, 0, False),
         ("delete_object", 1, 0, 0, False),
     ):
@@ -2533,6 +2536,87 @@ def test_a_switched_off_removal_removes_nothing(removal_registry: Registry) -> N
     assert gone.outputs == {5: frozenset({"obj_3"})}
 
 
+def test_a_step_over_both_bodies_hands_each_on_by_itself(removal_registry: Registry) -> None:
+    """Ein Schritt über Halter und Stift holt den entfernten Stift nicht zurück.
+
+    *Auf dem Bett anordnen* oder Halter und Stift gemeinsam verschieben gibt
+    jeden Körper unter seiner Kennung weiter. Ein Eingang lebt danach, solange
+    sein gleichnamiger Ausgang lebt: Ist der Stift entfernt, wirkt sein Schritt
+    nicht mehr, der gemeinsame Schritt am bleibenden Halter weiter. Davor
+    erklärte der gemeinsame Schritt alle seine Eingänge für lebend, und der
+    Bericht sprach weiter über den Stift (Review zu ``bbd41ff2d``, F1).
+    """
+    from app.core.scene.history import discarded
+
+    chain = [
+        *_pin_chain()[:2],
+        Operation(id=3, op="move_both", inputs=("obj_1", "obj_2"), outputs=("obj_1", "obj_2")),
+        Operation(id=4, op="delete_object", inputs=("obj_2",)),
+    ]
+    gone = discarded(chain, removal_registry)
+
+    assert gone.steps == {2: 4}, "nur der Stift wirkt nicht mehr"
+    assert gone.groups == {4: (2,)}
+    assert gone.outputs[3] == frozenset({"obj_2"}), "was der Schritt über den Stift sagt, fällt"
+
+
+def test_a_part_cut_into_an_insert_lives_on_in_its_pocket(profile: Profile) -> None:
+    """Wer einen Körper mit einem anderen formt, lässt den anderen darin weiterleben.
+
+    Die Gegenprobe zu :func:`test_a_step_over_both_bodies_hands_each_on_by_itself`
+    an echten Operationen: *Gegenform einlassen* schneidet das Teil als Tasche
+    in den Einsatz und gibt beide unter ihrer Kennung zurück. Wird das Teil
+    danach entfernt — gedruckt wird der Einsatz —, trägt die Tasche seine Form
+    weiter, und der Schritt, der das Teil gebaut hat, wirkt
+    (``OperationSpec.shapes_with_other_inputs``).
+
+    Ausgewertet, nicht nur geplant (zweite Durchsicht, K-c): Der Einsatz muss
+    die Tasche wirklich tragen, vor und nach dem Entfernen des Teils. Schnitte
+    die Operation nichts, wäre dieser Test rot, statt über den Stapel allein
+    grün zu bleiben.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import evaluate
+    from app.core.scene.history import discarded
+    from app.core.scene.project import new_project
+
+    load_operations()
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    for title, size in (("Einsatz", (60.0, 40.0, 20.0)), ("Teil", (20.0, 10.0, 30.0))):
+        width, depth, height = size
+        history.apply(
+            title,
+            [
+                OperationDraft(
+                    op="create_box", params={"width": width, "depth": depth, "height": height}
+                )
+            ],
+        )
+    history.apply("Tasche", [OperationDraft(op="cut_counter_form", inputs=("obj_1", "obj_2"))])
+    cut = evaluate(history.document, profile)
+    assert cut.complete
+    full = 60.0 * 40.0 * 20.0
+    pocket = full - cut.scene.objects["obj_1"].mesh.volume
+    # Mindestens der Umriss des Teils, 20 mal 10 mm, einen Millimeter tief.
+    assert pocket > 20.0 * 10.0 * 1.0, f"im Einsatz steht keine Tasche ({pocket:.1f} mm³)"
+
+    history.apply("Teil entfernen", [OperationDraft(op="delete_object", inputs=("obj_2",))])
+    part = history.operations[1]
+    assert part.outputs == ("obj_2",), "die Kette steht, wie sie gemeint ist"
+    after = evaluate(history.document, profile)
+    assert after.complete and set(after.scene.objects) == {"obj_1"}
+    assert math.isclose(
+        after.scene.objects["obj_1"].mesh.volume,
+        cut.scene.objects["obj_1"].mesh.volume,
+        rel_tol=1e-9,
+    ), "die Tasche bleibt im Einsatz, wenn das Teil fort ist"
+
+    gone = discarded(history.document.ops)
+
+    assert part.id not in gone.steps, "die Tasche im Einsatz trägt die Form des Teils"
+    assert gone.groups == {}
+
+
 def _hand_on_cases(profile: Profile) -> dict[str, tuple[list[Any], dict[str, Any]]]:
     """Je markierter Operation ein gültiger Auftrag: Eingänge und Werte."""
     from app.core.knowledge.parts import shapes
@@ -2609,24 +2693,299 @@ def test_only_operations_that_hand_their_inputs_on_unchanged_say_so(profile: Pro
             assert handed_on.features == given.features, name
 
 
-def test_the_last_removal_of_a_family_is_where_its_steps_stand(removal_registry: Registry) -> None:
+#: Operationen, die einen Eingang unter seiner Kennung fortsetzen und Neues
+#: daneben legen, ihn dabei aber umbauen — und was sie an ihm ändern. Die
+#: übrigen dieser Bauart tragen ``leaves_inputs_unchanged``.
+REBUILDS_ITS_CARRIER: Final[dict[str, str]] = {
+    "create_lid": "trägt den Hohlraum als Merkmal ins Gehäuse ein, mit Scharnier die Augen",
+    "create_seal": "schneidet die Dichtnut in den Träger",
+    "inlay_text": "schneidet die Buchstaben aus dem Träger",
+    "screw_lid": "setzt den Gewindehals auf die Öffnung",
+    "split_bodies": "lässt dem Träger nur sein erstes Teil",
+}
+
+#: Operationen, die mehrere Körper unter ihrer Kennung zurückgeben, ohne einen
+#: mit einem anderen zu formen, und was sie mit jedem tun. ``history.discarded``
+#: reicht bei ihnen jeden für sich weiter; die übrigen dieser Bauart tragen
+#: ``shapes_with_other_inputs``.
+EACH_BODY_BY_ITSELF: Final[dict[str, str]] = {
+    "arrange_bed": "legt jeden Körper an seinen Platz auf dem Bett",
+    "check_collisions": "sieht nach und gibt alle unverändert zurück",
+    "check_join_path": "sieht nach und gibt beide unverändert zurück",
+    "orient_for_print": "dreht jeden Körper in seine Drucklage und legt ihn ab",
+    "place_group_on_bed": "setzt alle um denselben Weg auf das Bett",
+    "rotate_object": "dreht jeden Körper um denselben Punkt",
+    "translate_object": "verschiebt jeden Körper um denselben Weg",
+}
+
+#: Werte für den Lauf in :func:`test_a_step_over_several_bodies_says_whether_it_shapes_them`,
+#: wo die Vorgabe nichts bewegte.
+_EACH_BODY_VALUES: Final[dict[str, dict[str, Any]]] = {
+    "rotate_object": {"angle_z": 30.0},
+    "translate_object": {"dx": 5.0},
+}
+
+
+def _continued(spec: Any) -> tuple[frozenset[str], frozenset[str]]:
+    """Welche Eingänge ein Schritt dieser Operation fortsetzt und welche Ausgänge neu sind.
+
+    Gefragt wird der Stapel selbst (``History._outputs_for``), nicht eine
+    Nachbildung seiner Regeln: mit so vielen Eingängen, wie die Operation nimmt
+    — bei veränderlicher Zahl zwei —, und drei Ausgängen, wo eine Stückzahl im
+    Parameter steht. Die Eingänge stehen schon im Dokument, damit neue
+    Kennungen hinter ihnen beginnen.
+    """
+    count = 2 if spec.consumes == VARIABLE or spec.takes_whole_scene else spec.consumes
+    inputs = tuple(f"obj_{index}" for index in range(1, count + 1))
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[Operation(id=1, op="load", outputs=inputs)] if inputs else [],
+    )
+    params = {spec.produces_from: 3} if spec.produces_from and inputs else {}
+    outputs = History(document)._outputs_for(
+        spec, OperationDraft(op=spec.name, inputs=inputs, params=params)
+    )
+    return frozenset(outputs) & frozenset(inputs), frozenset(outputs) - frozenset(inputs)
+
+
+def _carrier_cases() -> dict[str, tuple[Any, dict[str, Any]]]:
+    """Je Eintrag aus :data:`REBUILDS_ITS_CARRIER` ein Träger am Netz und gültige Werte.
+
+    Dieselben Körper wie in den Paritätsfällen (``test_exact_body_parity.py``),
+    hier ohne den exakten Kern gebaut: ein oben offenes Gehäuse für den Deckel,
+    ein offenes Glas für den Drehdeckel, ein Würfel für die Dichtnut, eine
+    Platte für die Schrift und zwei getrennte Würfel zum Zerlegen.
+    """
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.sketch.shapes import circle
+    from app.core.types import SceneObject
+    from tests.helpers import two_cubes
+
+    def placed(body: Any, z: float) -> MeshData:
+        """Mittig in x und y, der Boden auf der Höhe ``z``."""
+        body.apply_translation((0.0, 0.0, z - float(body.bounds[0][2])))
+        return MeshData.of(body)
+
+    def box(width: float, depth: float, height: float, z: float = 0.0) -> MeshData:
+        return placed(trimesh.creation.box(extents=(width, depth, height)), z)
+
+    def cylinder(radius: float, height: float, z: float = 0.0) -> MeshData:
+        return placed(trimesh.creation.cylinder(radius=radius, height=height, sections=96), z)
+
+    def hollow(outer: MeshData, inner: MeshData) -> MeshData:
+        return boolean("difference", [outer, inner]).mesh
+
+    def carrier(mesh: MeshData) -> SceneObject:
+        return SceneObject(
+            id="obj_1", name="Träger", mesh=mesh, kind="mesh", features=dict(detect(mesh))
+        )
+
+    seal = {
+        "path_sketch": sketch_to_text(circle(10.0)),
+        "groove_width": 2.0,
+        "groove_depth": 2.0,
+        "gasket_width": 1.6,
+        "protrusion": 0.4,
+        "body_material": "petg",
+        "gasket_material": "tpu-95a",
+    }
+    return {
+        "create_lid": (
+            carrier(hollow(box(60.0, 40.0, 30.0), box(54.0, 34.0, 28.0, 3.0))),
+            {"thickness": 2.4, "collar": 4.0},
+        ),
+        "create_seal": (carrier(box(20.0, 20.0, 20.0, -10.0)), seal),
+        "inlay_text": (
+            carrier(box(20.0, 16.0, 10.0)),
+            {"text": "H", "size": 6.0, "depth": 0.8, "z": 10.0, "slot": 1},
+        ),
+        "screw_lid": (
+            carrier(hollow(cylinder(20.0, 40.0), cylinder(17.0, 40.0, 3.0))),
+            {"height": 8.0, "pitch": 3.0, "thickness": 2.4, "wall": 2.4},
+        ),
+        "split_bodies": (carrier(two_cubes(40.0)), {"count": 2, "keep_tiny": True}),
+    }
+
+
+def test_an_operation_that_adds_beside_what_it_keeps_says_whether_it_changes_it(
+    profile: Profile,
+) -> None:
+    """Wer einen Eingang fortsetzt und Neues daneben legt, steht markiert da oder mit Grund.
+
+    Den Kundenfehler S-20261006-2a0261 verursachte die Richtung, die
+    :func:`test_only_operations_that_hand_their_inputs_on_unchanged_say_so`
+    nicht sieht: *Stift für Bohrung* reichte den Träger unverändert durch und
+    war nicht markiert, und sein Schritt galt nach dem Entfernen des Stifts
+    weiter als wirksam. Jede Operation dieser Bauart trägt deshalb
+    ``leaves_inputs_unchanged`` oder steht mit dem, was sie am Träger ändert,
+    in :data:`REBUILDS_ITS_CARRIER` — beides ist eine Entscheidung, keine
+    Vorgabe. Die Liste belegt jeden Eintrag an einem Lauf (zweite Durchsicht,
+    K-a): Der fortgesetzte Träger trägt danach ein anderes Netz oder andere
+    Merkmale. Ein Eintrag, dessen Operation ihn doch lässt, wie er kam, brächte
+    den Kundenfehler still zurück.
+    """
+    import numpy as np
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Scene
+
+    load_operations()
+    adding = set()
+    for spec in REGISTRY.all():
+        kept, fresh = _continued(spec)
+        if kept and fresh:
+            adding.add(spec.name)
+    assert len(adding) >= len(REBUILDS_ITS_CARRIER), "die Erhebung findet die Bauart"
+    marked = {spec.name for spec in REGISTRY.all() if spec.leaves_inputs_unchanged}
+    assert marked <= adding, "markiert ist nur, was einen Eingang fortsetzt und Neues daneben legt"
+    assert adding - marked == set(REBUILDS_ITS_CARRIER), (
+        "jede neue Operation dieser Bauart braucht ihre Entscheidung"
+    )
+
+    def same_mesh(first: Any, second: Any) -> bool:
+        if first is second:
+            return True
+        one, other = as_mesh_data(first).raw, as_mesh_data(second).raw
+        return bool(
+            np.array_equal(one.vertices, other.vertices) and np.array_equal(one.faces, other.faces)
+        )
+
+    cases = _carrier_cases()
+    assert set(cases) == set(REBUILDS_ITS_CARRIER), "jeder Eintrag braucht hier seinen Beleg"
+    for name, (carrier, values) in cases.items():
+        spec = REGISTRY.get(name)
+        result = spec.fn(
+            OpContext(
+                Scene(objects={carrier.id: carrier}),
+                [carrier],
+                spec.params(**values),
+                profile,
+                "fine",
+                0,
+                lambda *_: None,
+                lambda *_: pytest.fail("unerwartete Frage"),
+                NeverCancelled(),
+            )
+        )
+        assert len(result.outputs) > 1, f"{name} legt etwas daneben"
+        rebuilt = result.outputs[0]
+        assert rebuilt.features != carrier.features or not same_mesh(rebuilt.mesh, carrier.mesh), (
+            f"{name} gibt seinen Träger zurück, wie er kam — dann gehört es markiert"
+        )
+
+
+def test_a_step_over_several_bodies_says_whether_it_shapes_them(profile: Profile) -> None:
+    """Wer mehrere Körper unter ihrer Kennung zurückgibt, sagt, ob er einen mit einem anderen formt.
+
+    ``history.discarded`` reicht bei so einem Schritt jeden Körper für sich
+    weiter: Ein später entfernter lebt nicht im Rest fort (Review zu
+    ``bbd41ff2d``, F1). Das stimmt nur, wo keiner die Form eines anderen
+    trägt; *Gegenform einlassen* tut das und trägt
+    ``shapes_with_other_inputs``. Jede Operation dieser Bauart ist markiert
+    oder steht in :data:`EACH_BODY_BY_ITSELF`, und dort belegt ein Lauf mit
+    zwei verschieden großen Körpern, dass jeder seine Form behält — sonst
+    fielen nach dem Entfernen des einen Befunde über Schritte, deren Form im
+    anderen weiterlebt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshData, as_mesh_data
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import Scene, SceneObject
+    from tests.helpers import cube
+
+    load_operations()
+    several = set()
+    for spec in REGISTRY.all():
+        kept, fresh = _continued(spec)
+        if len(kept) > 1 and not fresh:
+            several.add(spec.name)
+    assert len(several) >= len(EACH_BODY_BY_ITSELF), "die Erhebung findet die Bauart"
+    marked = {spec.name for spec in REGISTRY.all() if spec.shapes_with_other_inputs}
+    assert marked <= several, "das Kennzeichen gilt nur, wo mehrere Körper fortgesetzt werden"
+    assert several - marked == set(EACH_BODY_BY_ITSELF), (
+        "jede neue Operation dieser Bauart braucht ihre Entscheidung"
+    )
+
+    # Der kleine steckt oben im großen: So hätte eine Operation, die den einen
+    # mit dem anderen formt, hier etwas zu schneiden.
+    inputs = [
+        SceneObject(
+            id="obj_1", name="Platte", mesh=MeshData.of(cube(20.0, (0.0, 0.0, 10.0))), kind="mesh"
+        ),
+        SceneObject(
+            id="obj_2", name="Stift", mesh=MeshData.of(cube(10.0, (0.0, 0.0, 18.0))), kind="mesh"
+        ),
+    ]
+    for name in EACH_BODY_BY_ITSELF:
+        spec = REGISTRY.get(name)
+        result = spec.fn(
+            OpContext(
+                Scene(objects={entry.id: entry for entry in inputs}),
+                inputs,
+                spec.params(**_EACH_BODY_VALUES.get(name, {})),
+                profile,
+                "fine",
+                0,
+                lambda *_: None,
+                lambda *_: pytest.fail("unerwartete Frage"),
+                NeverCancelled(),
+            )
+        )
+        for given, out in zip(inputs, result.outputs, strict=True):
+            before, after = as_mesh_data(given.mesh), as_mesh_data(out.mesh)
+            assert after.triangle_count == before.triangle_count, f"{name} baut {given.id} um"
+            assert math.isclose(after.volume, before.volume, rel_tol=1e-9), name
+            assert math.isclose(after.area, before.area, rel_tol=1e-9), name
+
+
+def test_the_last_removal_of_a_family_is_where_its_steps_stand(
+    removal_registry: Registry, document: Document
+) -> None:
     """Eine bewegte Hälfte und ihr Entfernen gehören zur Familie des Stifts.
 
     Die erste Hälfte wird verschoben und entfernt, Schritte später die zweite:
-    Alles steht unter dem letzten Entfernen, auch das erste. Gezählt wird die
-    Stelle im Stapel, nicht die Kennung — nach einem Verschieben weichen beide
-    voneinander ab (RM-368).
+    Alles steht unter dem letzten Entfernen, auch das erste. Nachgestellt mit
+    einem echten Verschieben im Verlauf (``plan_move``), das die Folge ab der
+    ersten geänderten Stelle unter neuen Kennungen neu fasst: Danach weichen
+    Kennung und Stelle voneinander ab (RM-368), ihre Reihenfolge bleibt die
+    des Stapels — eine Kennung vor einer kleineren erzeugt kein Aufrufer.
     """
     from app.core.scene.history import discarded
 
-    chain = [
-        *_pin_chain()[:5],
-        Operation(id=9, op="move_object", inputs=("obj_3",), outputs=("obj_3",)),
-        Operation(id=6, op="delete_object", inputs=("obj_3",)),
-        Operation(id=7, op="move_object", inputs=("obj_1",), outputs=("obj_1",)),
-        Operation(id=8, op="delete_object", inputs=("obj_4",)),
-    ]
-    gone = discarded(chain, removal_registry)
+    history = History(document, removal_registry)
+    for op, inputs in (
+        ("make_object", ()),
+        ("pin_beside", ("obj_1",)),
+        ("move_object", ("obj_2",)),
+        ("split_object", ("obj_2",)),
+        ("move_object", ("obj_1",)),
+        ("move_object", ("obj_3",)),
+        ("delete_object", ("obj_3",)),
+        ("delete_object", ("obj_4",)),
+    ):
+        history.apply("Schritt", [OperationDraft(op=op, inputs=inputs)])
+    assert history.operations[3].outputs == ("obj_3", "obj_4"), "die Hälften heißen wie gedacht"
 
-    assert gone.groups == {8: (2, 3, 5, 9, 6)}
-    assert gone.steps == {2: 8, 3: 8, 5: 8, 9: 8}
+    # Das Verschieben des Halters wandert hinter das Entfernen der ersten Hälfte.
+    history.commit(history.plan_move([5], 8))
+    assert [(entry.id, entry.op) for entry in history.operations[4:]] == [
+        (9, "move_object"),
+        (10, "delete_object"),
+        (11, "move_object"),
+        (12, "delete_object"),
+    ], "neu gefasst ab der ersten geänderten Stelle, in Stapelfolge"
+
+    gone = discarded(history.document.ops, removal_registry)
+
+    assert gone.groups == {12: (2, 3, 4, 9, 10)}
+    assert gone.steps == {2: 12, 3: 12, 4: 12, 9: 12}, "der Halter und sein Verschieben wirken"

@@ -1049,7 +1049,113 @@ def test_ci_run_requires_the_exact_successful_manual_main_workflow(
         sign_release.verify_ci_run("123", sign_release.BUILD_WORKFLOW)
 
 
-_JOBS_QUERY = f"repos/{sign_release.REPOSITORY}/actions/runs/123/jobs?per_page=100"
+_JOBS_QUERY = f"repos/{sign_release.REPOSITORY}/actions/runs/123/jobs?per_page=100&page=1"
+
+
+def _pages(items: list[int], total: int | None = None) -> dict[str, dict[str, object]]:
+    """Antworten einer GitHub-Liste mit ``items``, je Seite höchstens 100 Einträge."""
+    total = len(items) if total is None else total
+    return {
+        f"x?per_page=100&page={page}": {
+            "total_count": total,
+            "items": items[(page - 1) * 100 : page * 100],
+        }
+        for page in range(1, len(items) // 100 + 2)
+    }
+
+
+@pytest.mark.parametrize("count", [0, 31, 100, 101, 250])
+def test_a_listing_is_read_over_all_its_pages(count: int) -> None:
+    """Ab 101 Einträgen fand die erste Seite allein das Signierarchiv nicht mehr."""
+    replies = _pages(list(range(count)))
+    asked: list[str] = []
+
+    def fetch(suffix: str) -> dict[str, object]:
+        asked.append(suffix)
+        return replies[suffix]
+
+    assert sign_release.paged_listing(fetch, "x", "items") == list(range(count))
+    assert len(asked) == max(1, -(-count // 100))
+
+
+@pytest.mark.parametrize(
+    "replies",
+    [
+        _pages(list(range(150)), total=151),
+        _pages(list(range(150)), total=149),
+        {"x?per_page=100&page=1": {"total_count": 3, "items": "abc"}},
+        {"x?per_page=100&page=1": {"items": [1]}},
+        {"x?per_page=100&page=1": ["kein Objekt"]},
+    ],
+    ids=["zu-wenig", "zu-viel", "keine-liste", "ohne-zahl", "kein-objekt"],
+)
+def test_an_incomplete_listing_is_not_taken_as_whole(replies: dict[str, object]) -> None:
+    """Was nicht aufgeht, ist unvollständig — der Aufrufer bricht mit Grund ab."""
+    assert sign_release.paged_listing(lambda suffix: replies[suffix], "x", "items") is None
+
+
+def test_a_listing_that_changes_between_pages_is_not_taken_as_whole() -> None:
+    """Wächst die Liste zwischen zwei Abfragen, ist sie nicht vollständig — auch
+    wenn die letzte Seite mit ihrer eigenen Zahl aufginge (Review 06.10.2026
+    der zweiten Lieferung, N1)."""
+    replies = {
+        "x?per_page=100&page=1": {"total_count": 150, "items": list(range(100))},
+        "x?per_page=100&page=2": {"total_count": 151, "items": list(range(99, 150))},
+    }
+
+    assert sign_release.paged_listing(lambda suffix: replies[suffix], "x", "items") is None
+
+
+def test_a_red_product_job_on_the_second_page_still_blocks_the_signature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein roter Pflichtjob hinter dem hundertsten Job zählt mit (Review 06.10.2026
+    der zweiten Lieferung, N2)."""
+    jobs = [
+        {
+            "run_id": 123,
+            "run_attempt": 1,
+            "name": f"Fensterdateien {index}",
+            "status": "completed",
+            "conclusion": "success",
+        }
+        for index in range(100)
+    ]
+    jobs.append({**jobs[0], "name": "Neueste Versionen", "conclusion": "failure"})
+    jobs.append({**jobs[0], "name": "Pakete (windows-latest)", "conclusion": "failure"})
+    pages = {
+        f"actions/runs/123/jobs?per_page=100&page={page}": {
+            "total_count": len(jobs),
+            "jobs": jobs[(page - 1) * 100 : page * 100],
+        }
+        for page in (1, 2)
+    }
+    monkeypatch.setattr(sign_release, "_github_metadata", lambda suffix: pages[suffix])
+
+    assert not sign_release._only_advisory_jobs_failed("123", {"run_attempt": 1})
+    jobs.pop()
+    pages = {
+        f"actions/runs/123/jobs?per_page=100&page={page}": {
+            "total_count": len(jobs),
+            "jobs": jobs[(page - 1) * 100 : page * 100],
+        }
+        for page in (1, 2)
+    }
+    assert sign_release._only_advisory_jobs_failed("123", {"run_attempt": 1}), (
+        "die Gegenprobe: allein der meldende Job rot"
+    )
+
+
+def test_an_endless_listing_stops_at_its_page_limit() -> None:
+    """Eine Liste, die nie aufgeht, liest nicht ohne Ende weiter."""
+    asked: list[str] = []
+
+    def fetch(suffix: str) -> dict[str, object]:
+        asked.append(suffix)
+        return {"total_count": 10**6, "items": list(range(100))}
+
+    assert sign_release.paged_listing(fetch, "x", "items") is None
+    assert len(asked) == sign_release.LISTING_PAGES
 
 
 def _jobs(*failed: str, attempt: int = 1) -> dict[str, object]:

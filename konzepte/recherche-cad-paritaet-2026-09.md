@@ -926,4 +926,4 @@ Nachbau ist in den ausgewerteten Quellen nicht belegt; das ist kein
 vollständiger Marktausschluss. Segmentierung plus Konvertierung in einen B-Rep ohne
 Verlauf (Fusion *Prismatic*, SolidWorks *Surface From Mesh*) ist Standard
 und seit dem 19.09. als P4.0 im Plan. Der Nachtrag dazu steht in
-[konzept-wettbewerb-2026-08.md](konzept-wettbewerb-2026-08.md).
+[konzept-wettbewerb-2026-08.md](archiv/konzept-wettbewerb-2026-08.md).

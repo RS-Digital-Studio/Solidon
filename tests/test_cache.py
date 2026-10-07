@@ -1662,6 +1662,41 @@ def test_the_disk_cache_keeps_the_rim_of_a_closed_opening(tmp_path: Path) -> Non
     assert again.findings[1].outline == ()
 
 
+def test_the_disk_cache_keeps_the_bodies_a_pair_finding_names(tmp_path: Path) -> None:
+    """``Finding.object_ids`` übersteht den Plattencache.
+
+    Sonst spräche nach einem warmen Cache wieder ein entfernter Körper aus dem
+    Bericht: Die Auswertung streicht einen Paarbefund über diese Liste (Fund
+    N1 zum Review von ``bbd41ff2d``). Wie der Rand oben steht sie nicht in der
+    Projektdatei; ein Befund ohne Liste bleibt ohne.
+    """
+    from app.core.scene.serialise import finding_to_data
+    from app.core.types import Finding
+
+    pair = Finding(
+        code="arrange.collision",
+        severity="warning",
+        message="Zwei Objekte überschneiden sich.",
+        object_id="obj_1",
+        object_ids=("obj_1", "obj_2"),
+    )
+    assert "object_ids" not in finding_to_data(pair), "die Projektdatei behält ihr Format"
+    cache = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    cache.put(
+        "key",
+        CachedResult(
+            objects=(make_object("obj_1"),),
+            findings=(pair, dataclasses.replace(pair, code="ohne", object_ids=())),
+        ),
+    )
+
+    again = cache.get("key")
+
+    assert again is not None
+    assert again.findings[0].object_ids == ("obj_1", "obj_2")
+    assert again.findings[1].object_ids == ()
+
+
 def test_the_cache_survives_several_threads_writing_at_once() -> None:
     """Drei Fäden legen hier ab: Auswertung, Agent und Vorschau.
 

@@ -151,10 +151,16 @@ def _sideways(dialog: QDialog, scroll: QScrollArea, natural: int) -> None:
     Englisch *Supports*), hat der Inhalt dessen Breite übrig und rollt um
     genau sie weniger quer — gemessen wird dann gegen diesen Rest, nicht
     gegen eine Zahl, die ein Balken mitbringt, der nicht dasteht.
+
+    **Höchstens, nicht genau:** Unter Linux und macOS staucht Qt den Inhalt
+    bis zu seiner Mindestbreite, bevor es quer rollt; auf 800 Punkten rollte
+    der Druckdialog dort gar nicht, wo die alte Gleichheit 68 Punkte
+    verlangte (RM-531). Gestauchte Felder sind kein Fehler, mehr Rollen als
+    der Rest schon.
     """
     bar = scroll.verticalScrollBar()
     spare = 0 if bar.isVisible() else bar.sizeHint().width()
-    assert scroll.horizontalScrollBar().maximum() == max(0, natural - spare - dialog.width())
+    assert scroll.horizontalScrollBar().maximum() <= max(0, natural - spare - dialog.width())
 
 
 @pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])

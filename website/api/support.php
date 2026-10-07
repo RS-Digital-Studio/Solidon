@@ -56,7 +56,8 @@ const MAX_GLOBAL_PER_HOUR = 3000;
 /** Im Zustand bleiben bei jedem Zugriff höchstens die letzten 60 Minuten. */
 const SUPPORT_RATE_RETENTION_SECONDS = 3600;
 
-/** Wie viele Anhänge angenommen werden. Der Client schickt drei. */
+/** Wie viele Anhänge angenommen werden. Der Client schickt bis zu fünf: Bild,
+ *  Sitzung und drei Protokolle (tests/test_support.py hält die Zahl). */
 const MAX_FILES = 6;
 
 /** Dateiname des flüchtigen, aber gegen lokale Manipulation geschützten Zählers. */

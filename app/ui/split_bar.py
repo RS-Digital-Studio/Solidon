@@ -2,7 +2,7 @@
 (Bauplan §25, §18.2).
 
 Der kürzeste Weg zu einem geteilten Teil, den es gibt: zweimal ins Bild
-klicken, einmal auf *Jetzt trennen*. Was dazwischen passiert, steht in dieser Leiste
+klicken, einmal auf *Jetzt teilen*. Was dazwischen passiert, steht in dieser Leiste
 — nicht als Feld, das man ausfüllt, sondern als Satz, der sagt, was der nächste
 Klick tut. Wer beim zweiten Klick war, sieht die Linie im Bild und darf sie
 verwerfen; wer beim ersten war, liest, dass ein zweiter fehlt.
@@ -55,11 +55,11 @@ def state_text(points: int) -> str:
     if points == 0:
         return tr("Auf das Teil klicken — dort fängt die Trennlinie an.")
     if points < POINTS_NEEDED:
-        return tr("Zweiten Punkt anklicken. Zwischen beiden wird getrennt.")
+        return tr("Zweiten Punkt anklicken. Zwischen beiden wird geteilt.")
     # Anführungszeichen, keine Sternchen: Die Leiste zeigt reinen Text, und ein
     # *Wort* zwischen Sternchen stand dort auch so im Bild — angesehen und
     # nachgebessert, nicht angenommen.
-    return tr("Die Linie steht. „Jetzt trennen“ schneidet das Teil dort durch.")
+    return tr("Die Linie steht. „Jetzt teilen“ schneidet das Teil dort durch.")
 
 
 class SplitBar(QWidget):
@@ -131,7 +131,7 @@ class SplitBar(QWidget):
         # Der Umschalter nennt das Werkzeug, der Knopf seine Handlung — sonst
         # stehen zwei gleich beschriftete Bedienelemente übereinander, und der
         # obere tut etwas anderes als der untere.
-        self.apply = QPushButton(tr("Jetzt trennen"), self)
+        self.apply = QPushButton(tr("Jetzt teilen"), self)
         make_primary(self.apply)
         self.apply.setEnabled(False)
         self.apply.clicked.connect(self.applyRequested)

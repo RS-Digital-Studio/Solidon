@@ -102,10 +102,10 @@ EXACT_KERNEL_MISSING_IN_CI = (
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Unter ``CI`` ist ein fehlender exakter Kern ein Fehler, kein Skip.
 
-    Zweiunddreißig Testdateien überspringen sich ohne OpenCASCADE —
-    ``tests.helpers.exact_kernel``, ``importorskip("OCP")``, ein
-    ``pytestmark`` —, und ``brep.kernel.available()`` fängt dabei jede
-    Ausnahme. Auf einem Entwicklerrechner ohne das Extra ist das richtig. In
+    Jede Testdatei des exakten Kerns überspringt sich ohne OpenCASCADE über
+    ``tests.helpers.exact_kernel`` (``test_toolchain.py`` hält, dass er vor
+    jedem ``OCP``-Import steht), und ``brep.kernel.available()`` fängt dabei
+    jede Ausnahme. Auf einem Entwicklerrechner ohne das Extra ist das richtig. In
     der CI war dasselbe Überspringen unsichtbar: ``build.yml`` installiert
     ``brep`` in jedem Lauf, und wäre das Rad für eine Plattform einmal nicht
     da oder der Import gerissen, hätte sich der zweite Kern still

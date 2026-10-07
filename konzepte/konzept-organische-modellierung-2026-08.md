@@ -1052,7 +1052,7 @@ muss, damit die Entscheidung nicht nur im Code steht:
 | **Website** — Weg 4, Vergleichstabelle aus §17 | Befund B3 des Meshy-Konzepts verlangt schon, die Kette für generierte Netze sichtbar zu machen; das hier ist dieselbe Sache für geformte | P16.10 |
 | **Handbuch** — Sculpting-Seiten, „wann nicht benutzen" (R3) | Befund B14 | P16.10 |
 | **Agenten-Regelsammlung** | Der Agent muss wissen, dass er nicht sculptet (K) und was er stattdessen anbietet | P16.10 |
-| **Befund B13 zurücknehmen** in `konzept-meshy-hyper3d-2026-08.md` | Ein überholter Befund, der stehen bleibt, wird beim nächsten Lesen für gültig gehalten | P16.1 |
+| **Befund B13 zurücknehmen** in `archiv/konzept-meshy-hyper3d-2026-08.md` | Ein überholter Befund, der stehen bleibt, wird beim nächsten Lesen für gültig gehalten | P16.1 |
 | **Nicht-planarer Schnitt neu bewerten** (B13 dort) | Er war abgelehnt mit der Begründung „Figurendrucker sind nicht unser Kunde". Diese Begründung ist entfallen — die *technische* Begründung (V-HACD-Näherung, §11.1) gilt weiter, die geneigte Ebene bleibt der offene Weg | nach P16 |
 
 Die letzte Zeile ist die interessanteste: Die Kundenkreis-Entscheidung macht

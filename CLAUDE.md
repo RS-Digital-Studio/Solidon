@@ -106,7 +106,8 @@ website/      öffentliche Seiten; erzeugt wird, was die tools/make_*.py nennen,
 changelog/    was im Update-Fenster steht, je Sprache eine Datei. Hier liegt
               bewusst keine CLAUDE.md: Test und make_download.py lesen jeden
               Dateinamen des Ordners als Sprache
-konzepte/     das Warum: Konzepte, Durchsichten, Nachweise, begruendungen/
+konzepte/     das Warum: Konzepte, Durchsichten, Nachweise, begruendungen/,
+              archiv/ für Erledigtes und Abgelöstes
 Signierung/   Übergabe der Windows-Signatur (README.md)
 .github/      CI-Workflows; .githooks/ pre-commit, commit-msg, post-commit
 .claude/      Regeln, Agenten, Skills, Hooks — was davon mitreist: .claude/README.md
