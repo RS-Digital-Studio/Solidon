@@ -435,6 +435,7 @@ def test_a_mixed_corner_takes_a_varying_radius_only_at_the_exact_kernel() -> Non
     Verlaufs dort (3 → 1,5 → 3 mm), geprüft am Abstand ``r·(√2 − 1)`` der
     Rundung von der scharfen Kante entlang der Winkelhalbierenden.
     """
+    exact_kernel()
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
     from OCP.gp import gp_Pnt
     from OCP.TopAbs import TopAbs_IN

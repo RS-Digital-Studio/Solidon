@@ -428,7 +428,7 @@ def screw_hole(raw: BaseParams) -> PartResult:
                 code="parts.countersink_derived",
                 severity="info",
                 message=_(
-                    "Für {size} kennt die Normteiltabelle keinen genormten Senkkopf; die Senkung "
+                    "Für {size} kennt die Normteiltabelle keinen genormten Senkkopf. Die Senkung "
                     "Ø {diameter} ist abgeleitet. Für einen Zylinderkopf „Senkkopf“ ausschalten.",
                     size=named,
                     diameter=format_length(screw.countersink),
@@ -738,10 +738,11 @@ def thread_advice(diameter: float) -> TranslatableText:
     )
 
 
-#: Wie viele Strahlen je Ring und an welchen Anteilen der Bohrungslänge die
-#: Restwand um ein Gewinde gemessen wird — dieselbe Dichte wie *Merkmal ändern*
-#: an einem Gewinde (``prepare_ops._thread_wall``).
-_WALL_RAYS: Final = 24
+#: Wie viele Strahlen je Messring die Wand um ein Gewinde messen — eine Zahl für
+#: die Bausteine und *Merkmal ändern* (``prepare_ops._thread_wall``): 24 Richtungen
+#: treffen die Seitenwände eines Quaders senkrecht. Dazu, an welchen Anteilen der
+#: Bohrungslänge hier gemessen wird.
+THREAD_WALL_RAYS: Final = 24
 _WALL_RINGS: Final = (0.15, 0.5, 0.85)
 
 
@@ -883,8 +884,8 @@ def _wall_around(
     radius = float(bore.params["diameter"]) / 2.0
     reach: float | None = None
     for origin in origins:
-        for index in range(_WALL_RAYS):
-            cosine, sine = circle_point(_WALL_RAYS, index)
+        for index in range(THREAD_WALL_RAYS):
+            cosine, sine = circle_point(THREAD_WALL_RAYS, index)
             way = across[0] * cosine + across[1] * sine
             distances, hit = ray_hits_along(triangles, origin, way)
             facing = (normals[hit] * way).sum(axis=1)

@@ -15621,10 +15621,9 @@ def _thread_checked(feature: Feature, diameter: float, pitch: float) -> tuple[fl
     return diameter, wanted_pitch
 
 
-#: Wie viele Strahlen je Messring und an welchen Stellen der Strecke die Wand
-#: um ein Gewinde gemessen wird: 24 Richtungen treffen die Seitenwände eines
-#: Quaders senkrecht, fünf Ringe die Mitte und beide Enden innerhalb der Gänge.
-_WALL_RAYS: Final = 24
+#: An welchen Stellen der Strecke die Wand um ein Gewinde gemessen wird: fünf
+#: Ringe die Mitte und beide Enden innerhalb der Gänge; die Strahlen je Ring
+#: zählt ``fasteners.THREAD_WALL_RAYS``.
 _WALL_RINGS: Final = (-0.4, -0.2, 0.0, 0.2, 0.4)
 
 
@@ -15646,6 +15645,7 @@ def _thread_wall(
     Tessellation weicht höchstens um ``MAX_FACET_SAG`` ab.
     """
     from app.core.knowledge.parts import shapes
+    from app.core.knowledge.parts.fasteners import THREAD_WALL_RAYS
     from app.core.sketch.planes import frame_of
 
     internal = bool(feature.params.get("internal", False))
@@ -15659,8 +15659,8 @@ def _thread_wall(
     reach: float | None = None
     for share in _WALL_RINGS:
         origin = centre + axis * (share * length)
-        for index in range(_WALL_RAYS):
-            cosine, sine = units.circle_point(_WALL_RAYS, index)
+        for index in range(THREAD_WALL_RAYS):
+            cosine, sine = units.circle_point(THREAD_WALL_RAYS, index)
             way = across[0] * cosine + across[1] * sine
             distances, hit = ray_hits_along(triangles, origin, way)
             facing = (normals[hit] * way).sum(axis=1)
