@@ -379,7 +379,7 @@ def test_older_entries_shrink_before_any_entry_gives_way() -> None:
         _grown(entry)._cache.cache["solidon_refined_units"] = ("Herkunft", b"belegt")
     raw_old = cast(Any, old.objects[0].mesh).raw
     adjacency = np.array(raw_old.face_adjacency)
-    cache = ResultCache(memory_budget=held_by(old) + held_by(new) - 1)
+    cache = ResultCache(memory_budget=held_by(old) + held_by(new) - 100_000)
     cache.put("a", old)
     cache.put("b", new)
     cache.trim()
@@ -395,6 +395,41 @@ def test_older_entries_shrink_before_any_entry_gives_way() -> None:
     assert shrunk.objects[0].features == old.objects[0].features
     assert cache.held_bytes <= cache.memory_budget
     np.testing.assert_array_equal(lean.face_adjacency, adjacency)
+
+
+def test_arrays_two_entries_share_count_once() -> None:
+    """Ein verschobenes Netz teilt seine Nachbarschaften mit dem Quellnetz — einmal gezählt.
+
+    ``transform._carry_cache`` gibt die Topologie weiter, statt sie neu zu
+    rechnen; je Eintrag gezählt, stünde sie zweimal in der Rechnung, und die
+    Grenze schrumpfte Einträge, die gar nichts mehr freigeben.
+    """
+    import numpy as np
+
+    from app.core.geom.transform import apply
+    from app.core.scene.cache import held_by
+
+    source = sphere_result("obj_1")
+    _grown(source)
+    shifted = np.eye(4)
+    shifted[0, 3] = 5.0
+    moved_mesh = apply(cast(Any, source.objects[0].mesh), shifted)
+    moved = CachedResult(objects=(SceneObject(id="obj_1", name="Kugel", mesh=moved_mesh),))
+    shared = [
+        name
+        for name, value in moved_mesh.raw._cache.cache.items()
+        if isinstance(value, np.ndarray)
+        and value is cast(Any, source.objects[0].mesh).raw._cache.cache.get(name)
+    ]
+    assert shared, "Voraussetzung: die Kopie teilt Felder mit dem Quellnetz"
+    separately = held_by(source) + held_by(moved)
+    cache = ResultCache(memory_budget=separately - 1)
+    cache.put("a", source)
+    cache.put("b", moved)
+    exact = sum(cache._exact([], set()).values())
+    assert exact < separately - 1
+    cache.trim()
+    assert cache.get("a") is source, "nothing to shrink when every array counts once"
 
 
 def test_the_meshes_of_the_scene_stay_as_they_are() -> None:
@@ -505,11 +540,12 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
     """Der Kundenweg, an dem es auffiel: dasselbe Modell, Schritt um Schritt verschoben.
 
     Am Spiderman hielt jedes Verschieben 230 MB mehr fest, ohne Verdrängung bis
-    zu zwanzig Millionen Dreiecken. Hier ein Körper mit 20 480 Dreiecken und
-    eine Grenze für gut drei volle Einträge: Der Cache hält sie nach jedem
-    Schritt, und weil ältere Einträge schrumpfen statt zu gehen, kommt jeder
-    Schritt weiter aus dem Speicher — eine Auswertung geht den ganzen Verlauf
-    durch, und ein verdrängter Schritt käme bei jeder von der Platte.
+    zu zwanzig Millionen Dreiecken. Hier ein Körper mit 20 480 Dreiecken, je
+    Schritt eine Schichtanalyse daran und eine Grenze für zwei volle Einträge:
+    Der Cache hält sie nach jedem Schritt, und weil ältere Einträge schrumpfen
+    statt zu gehen, kommt jeder Schritt weiter aus dem Speicher — eine
+    Auswertung geht den ganzen Verlauf durch, und ein verdrängter Schritt käme
+    bei jeder von der Platte.
     """
     import trimesh
 
@@ -532,15 +568,24 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
     probe = ResultCache()
     first = evaluate(project.document, profile, sources=sources, cache=probe)
     entry = max(probe._entries.values(), key=held_by)
-    budget = int(held_by(entry) * 3.2)
+    budget = int(held_by(entry) * 2.0)
     cache = ResultCache(memory_budget=budget)
     evaluate(project.document, profile, sources=sources, cache=cache)
     target = next(iter(first.scene.objects))
 
+    def reported(result: Any) -> None:
+        """Was der Prüfbericht am gezeigten Netz ablegt: eine Schichtanalyse je Netz."""
+        import numpy as np
+
+        for body in result.scene.objects.values():
+            raw = cast(Any, body.mesh).raw
+            raw._cache.verify()
+            raw._cache.cache["solidon_print_findings|probe"] = np.ones(400_000)
+
     def beyond(result: Any) -> int:
-        """Was der Cache über die Netze der Szene hinaus hält — die zählen nicht."""
-        scene = {id(body.mesh) for body in result.scene.objects.values()}
-        return sum(held_by(entry, scene) for entry in cache._entries.values())
+        """Was der Cache über die Netze der Szene hinaus hält, jedes Feld einmal."""
+        meshes = [body.mesh for body in result.scene.objects.values()]
+        return sum(cache._exact(meshes, {id(mesh) for mesh in meshes}).values())
 
     for _step in range(8):
         history.apply(
@@ -549,8 +594,7 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
         )
         result = evaluate(project.document, profile, sources=sources, cache=cache)
         assert beyond(result) <= budget, "the memory level keeps its bound after every step"
-        # Was Fenster, Karten und Prüfbericht am gezeigten Netz rechnen.
-        _grown(CachedResult(objects=tuple(result.scene.objects.values())))
+        reported(result)
     misses = cache.statistics.misses
     evaluate(project.document, profile, sources=sources, cache=cache)
     assert cache.statistics.misses == misses, "every step still comes from memory"
@@ -560,7 +604,7 @@ def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: P
         history.undo()
         result = evaluate(project.document, profile, sources=sources, cache=cache)
         assert beyond(result) <= budget, "undoing keeps the bound too"
-        _grown(CachedResult(objects=tuple(result.scene.objects.values())))
+        reported(result)
     assert cache.statistics.misses == misses, "undoing reads every step from memory"
     assert cache.statistics.evictions == 0, "older steps shrank instead of giving way"
 

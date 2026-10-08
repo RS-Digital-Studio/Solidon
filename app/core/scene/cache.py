@@ -26,7 +26,7 @@ import threading
 import zipfile
 import zlib
 from collections import OrderedDict
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -93,18 +93,20 @@ def default_memory_budget() -> int:
     return max(MEMORY_FLOOR, min(MEMORY_CEILING, installed // MEMORY_SHARE))
 
 
-def held_by(result: CachedResult, kept: Collection[int] = ()) -> int:
+def held_by(result: CachedResult, kept: Collection[int] = (), seen: set[int] | None = None) -> int:
     """Wie viele Bytes ein Eintrag gerade hält — Netze samt Cache, Merkmale.
 
     Gemessen wird nicht einmal für immer: Ein Netz im Cache ist dasselbe
     Objekt wie in der Szene, und was später an ihm gerechnet wird —
     Nachbarschaften, die Schichtanalyse des Prüfberichts —, hängt sich an ihn
     und wiegt mit. Netze, deren Nummer (``id``) in ``kept`` steht, hält die
-    Szene ohnehin; sie zählen hier nicht.
+    Szene ohnehin; sie zählen hier nicht. Felder, deren Nummer in ``seen``
+    steht, sind schon gezählt — ein bewegtes Netz teilt seine
+    Nachbarschaften mit seinem Quellnetz (``transform._carry_cache``).
     """
     from app.core.memory import held_bytes
 
-    seen: set[int] = set()
+    seen = set() if seen is None else seen
     total = 0
     for entry in result.objects:
         if id(entry.mesh) in kept:
@@ -519,11 +521,10 @@ class ResultCache:
         dessen Netz seine Nachbarschaften neu rechnet, am Spiderman 256 MB je
         Schritt zurück (08.10.2026).
         """
-        kept = {id(mesh) for mesh in keep}
         with self._lock:
-            self._trim(kept)
+            self._trim(list(keep))
 
-    def _trim(self, kept: set[int]) -> None:
+    def _trim(self, kept: Sequence[Mesh]) -> None:
         """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`."""
         # Die Bytes zuletzt, in zwei Stufen. **Erst schrumpfen, dann
         # verdrängen**: Eine Auswertung geht den Verlauf von vorn durch und
@@ -537,34 +538,48 @@ class ResultCache:
         # (``MeshData.lean``).
         # Der jüngste Eintrag bleibt immer ganz, auch über der Grenze — ohne
         # ihn rechnete der nächste Schritt alles noch einmal.
-        sizes = {key: self._unkept(key, entry, kept) for key, entry in self._entries.items()}
-        held = sum(sizes.values())
+        ids = {id(mesh) for mesh in kept}
+        held = sum(self._unkept(key, entry, ids) for key, entry in self._entries.items())
         if held <= self._memory_budget:
+            return
+        # Die Schätzung je Eintrag zählt geteilte Felder mehrfach; über der
+        # Grenze wird genau gezählt, jedes Feld einmal, beim jüngsten zuerst.
+        sizes = self._exact(kept, ids)
+        if sum(sizes.values()) <= self._memory_budget:
             return
         older = list(self._entries)[:-1]
         for key in older:
             entry = self._entries[key]
-            leaner = _leaner(entry, kept)
+            leaner = _leaner(entry, ids)
             if leaner is entry:
                 continue
             self._entries[key] = leaner
             self._held.pop(key, None)
-            size = self._unkept(key, leaner, kept)
-            held -= sizes[key] - size
-            sizes[key] = size
-            if held <= self._memory_budget:
+            sizes = self._exact(kept, ids)
+            if sum(sizes.values()) <= self._memory_budget:
                 return
         for key in older:
-            if held <= self._memory_budget:
-                return
             entry = self._entries[key]
-            if any(id(body.mesh) in kept for body in entry.objects):
+            if any(id(body.mesh) in ids for body in entry.objects):
                 continue
             del self._entries[key]
             self._held.pop(key, None)
-            held -= sizes[key]
             self._cost -= entry.cost
             self.statistics.evictions += 1
+            sizes = self._exact(kept, ids)
+            if sum(sizes.values()) <= self._memory_budget:
+                return
+
+    def _exact(self, kept: Sequence[Mesh], ids: set[int]) -> dict[str, int]:
+        """Die Bytes je Eintrag, jedes Feld einmal: erst die Szene, dann vom jüngsten an."""
+        seen: set[int] = set()
+        for mesh in kept:
+            measure = getattr(mesh, "held_bytes", None)
+            if callable(measure):
+                measure(seen)
+        return {
+            key: held_by(self._entries[key], ids, seen) for key in reversed(list(self._entries))
+        }
 
     def _unkept(self, key: str, entry: CachedResult, kept: set[int]) -> int:
         """Die Bytes eines Eintrags ohne die Netze der Szene; gemerkt, solange er nicht wächst."""
