@@ -32,6 +32,8 @@ from io import BytesIO
 from typing import Final
 from xml.etree import ElementTree as ET
 
+import numpy as np
+
 from app.branding import APP_NAME, APP_VERSION
 from app.core.errors import CANCEL, SPLIT_FILAMENT_FILES, InternalError, ValidationError
 from app.core.export import slicer_keys
@@ -665,36 +667,54 @@ def _write_geometry(
     geometry = ET.SubElement(parent, "mesh")
     geometry.text = mark
 
+    # **Über Python-Listen, nicht über NumPy-Zeilen** (RM-568): Je Ecke drei
+    # NumPy-Skalare zu lesen kostete am Meshy-Murmelbrett (1,95 Mio. Dreiecke)
+    # den größten Teil der 7,3 s des 3MF-Exports. Dieselben Zahlen, dieselbe
+    # Schreibweise: ``tolist`` gibt jeden float64 und jede Eckennummer
+    # unverändert als Python-Zahl.
     lines: list[str] = ["<vertices>"]
-    for point in mesh.raw.vertices:
-        lines.append(f'<vertex x="{point[0]:.17g}" y="{point[1]:.17g}" z="{point[2]:.17g}" />')
+    lines.extend(
+        f'<vertex x="{x:.17g}" y="{y:.17g}" z="{z:.17g}" />'
+        for x, y, z in np.asarray(mesh.raw.vertices).tolist()
+    )
     # Die Stützsperre als Bereich (PrusaSlicer): Ihre Dreiecke kommen nach
     # allen des Körpers, und die Prusa-Beilage nennt den Bereich.
     if blocker is not None:
-        for point in blocker.raw.vertices:
-            lines.append(f'<vertex x="{point[0]:.17g}" y="{point[1]:.17g}" z="{point[2]:.17g}" />')
+        lines.extend(
+            f'<vertex x="{x:.17g}" y="{y:.17g}" z="{z:.17g}" />'
+            for x, y, z in np.asarray(blocker.raw.vertices).tolist()
+        )
     lines.append("</vertices><triangles>")
 
-    assignment = mesh.slots or ((0,) * len(mesh.raw.faces))
-    for face, slot in zip(mesh.raw.faces, assignment, strict=True):
-        position = order.get(int(slot), 0)
-        painted = (
-            f' paint_color="{_paint_code(order[int(slot)])}"'
-            f' slic3rpe:mmu_segmentation="{_paint_code(order[int(slot)])}"'
-            if native
-            else ""
-        )
-        lines.append(
-            f'<triangle v1="{int(face[0])}" v2="{int(face[1])}" v3="{int(face[2])}"'
-            f' pid="{group_id}" p1="{position}"{painted} />'
-        )
+    # Der Schwanz eines Dreiecks hängt nur an seinem Slot: einmal je Slot
+    # gebaut statt je Dreieck.
+    tails: dict[int, str] = {}
+
+    def tail(slot: int) -> str:
+        known = tails.get(slot)
+        if known is None:
+            painted = (
+                f' paint_color="{_paint_code(order[slot])}"'
+                f' slic3rpe:mmu_segmentation="{_paint_code(order[slot])}"'
+                if native
+                else ""
+            )
+            known = tails[slot] = f' pid="{group_id}" p1="{order.get(slot, 0)}"{painted} />'
+        return known
+
+    faces = np.asarray(mesh.raw.faces).tolist()
+    assignment = mesh.slots or ((0,) * len(faces))
+    lines.extend(
+        f'<triangle v1="{a}" v2="{b}" v3="{c}"{tail(int(slot))}'
+        for (a, b, c), slot in zip(faces, assignment, strict=True)
+    )
     if blocker is not None:
         start = len(mesh.raw.vertices)
-        for face in blocker.raw.faces:
-            lines.append(
-                f'<triangle v1="{int(face[0]) + start}" v2="{int(face[1]) + start}"'
-                f' v3="{int(face[2]) + start}" pid="{group_id}" p1="0" />'
-            )
+        lines.extend(
+            f'<triangle v1="{a + start}" v2="{b + start}" v3="{c + start}"'
+            f' pid="{group_id}" p1="0" />'
+            for a, b, c in np.asarray(blocker.raw.faces).tolist()
+        )
     lines.append("</triangles>")
     return mark, "".join(lines).encode("utf-8")
 
