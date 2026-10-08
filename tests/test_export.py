@@ -5055,12 +5055,77 @@ def test_only_the_part_that_is_supported_gets_a_blocker(
         ]
 
 
+def test_the_blocker_finding_names_only_the_blocked_ceilings(profile: Profile) -> None:
+    """Der Sperrbefund nennt Ort und Fläche der gesperrten Decken. Nicht jede
+    Kanaldecke bekommt eine Sperre (``worth_support``), und mit Ort und Fläche
+    aller Kanaldecken zeigte er am Drachen bei 130 % auf eine Decke ohne Sperre,
+    die Fläche fast fünfmal zu groß (Review vom 08.10.2026). Hier ein Schlitz mit
+    Satteldach und Sperre — seine Decke zerfällt in Streifen von 16 bis 32 mm² —
+    neben vier kurzen Schlitzen ohne, deren flache Decken je ein Stück von
+    80 mm² sind: Das größte Kanalstück liegt ohne Sperre (Review 3)."""
+    import math
+
+    import numpy as np
+
+    from app.core.slice.analysis import model_support, piece_area
+
+    def block(length: float, centres: list[float], x: float) -> trimesh.Trimesh:
+        body = trimesh.creation.box(extents=(10.0 * len(centres) + 20.0, length, 20.0))
+        body.apply_translation((x, 0.0, 10.0))
+        for centre in centres:
+            cut = trimesh.creation.box(extents=(5.0, length + 10.0, 6.0))
+            cut.apply_translation((x + centre, 0.0, 7.0))
+            body = trimesh.boolean.difference([body, cut])
+        return body
+
+    def gabled(length: float, x: float) -> trimesh.Trimesh:
+        body = trimesh.creation.box(extents=(28.0, length, 20.0))
+        body.apply_translation((x, 0.0, 10.0))
+        rise = 4.0 * math.tan(math.radians(18.0))
+        cut = trimesh.convex.convex_hull(
+            [
+                (x + offset, y, z)
+                for y in (-length / 2.0 - 5.0, length / 2.0 + 5.0)
+                for offset, z in (
+                    (-4.0, 4.0),
+                    (4.0, 4.0),
+                    (-4.0, 10.0),
+                    (4.0, 10.0),
+                    (0.0, 10.0 + rise),
+                )
+            ]
+        )
+        return trimesh.boolean.difference([body, cut])
+
+    long_slot = gabled(60.0, -40.0)
+    short_slots = block(16.0, [-15.0, -5.0, 5.0, 15.0], 40.0)
+    mesh = MeshData.of(trimesh.util.concatenate([long_slot, short_slots]))
+    entry = scene_object(mesh=mesh)
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+
+    blocker, found = writer._support_blocker(entry, as_mesh_data(entry.mesh), settings, profile)
+
+    assert blocker is not None
+    model = model_support(
+        writer._body_analysis(entry, mesh, settings, profile, None, detail="support")
+    )
+    blocked = math.fsum(piece_area(outline) for outline, _low, _high in model.channel_columns)
+    assert model.channel_area > blocked + 50.0, "die kurzen Schlitze sind Kanal ohne Sperre"
+    assert model.channel_at is not None and model.channel_at[0] > 0.0, (
+        "das größte Kanalstück liegt in einem kurzen Schlitz"
+    )
+    (finding,) = found
+    assert finding.values["area_mm2"] == pytest.approx(blocked, abs=0.1)
+    assert finding.location is not None
+    assert np.isclose(finding.location[0], -40.0, atol=3.0), "der Ort liegt im langen Schlitz"
+
+
 def test_the_simplified_blocker_still_covers_the_whole_channel(profile: Profile) -> None:
     """Die Kanalscheiben werden vor dem Sperrkörper um
     ``writer.BLOCKER_SIMPLIFY`` vereinfacht — am Eiffelturm aus dem Korpus
-    404 464 statt 177 454 Dreiecke, 12,6 statt 1,4 s. Der Zuschlag
-    ``BLOCKER_MARGIN`` schiebt den Umriss danach nach außen; vom freien
-    Kanalraum darf deshalb nichts außerhalb der Sperre liegen."""
+    404 464 statt 177 454 Dreiecke, 12,6 statt 1,4 s. Ebenso weit schiebt der
+    Schreiber den Umriss danach hinaus; vom Kanalraum darf deshalb nichts
+    außerhalb der Sperre liegen."""
     import manifold3d
     import numpy as np
 
@@ -5092,7 +5157,9 @@ def test_the_simplified_blocker_still_covers_the_whole_channel(profile: Profile)
         support_volume=False,
     )
     exact = []
-    for bottom, top, region in channel_space(result, model_support(result)):
+    for bottom, top, region in channel_space(
+        result, model_support(result), settings.layers.line_width
+    ):
         rings = [
             ring
             for part in getattr(region, "geoms", [region])

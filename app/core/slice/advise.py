@@ -37,11 +37,14 @@ from app.core.errors import (
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
 from app.core.slice.analysis import (
+    OVERHANG_LAYER_WORTH_SUPPORT,
     OVERHANG_MARGIN,
     ModelSupport,
     _layer_shape,
+    channel_space,
     island_layers,
     largest_overhang_patch,
+    largest_sloped_patch,
     model_support,
     narrow_share,
     narrowest_measured,
@@ -51,6 +54,7 @@ from app.core.slice.analysis import (
     tapered_layers,
     thinnest_spot,
     total_overhang,
+    worth_support,
 )
 from app.core.types import (
     BoundingBox,
@@ -108,33 +112,6 @@ NARROW_WEB_SPEED: Final = 50.0
 #: neun Zehnteln der Höhe; ein Keil, der nur eine Schulter lang ist, hinterlässt
 #: ein paar Rillen, aber kein Band, für das man die Wandreihenfolge ändert.
 TAPERED_LAYERS_SHARE = 0.2
-
-#: Überhangfläche in mm², ab der Stützen mehr nützen als kosten. Darunter
-#: trägt die Schicht darunter genug, dass ein Absacken in der Wand verschwindet.
-OVERHANG_WORTH_SUPPORT = 150.0
-
-#: Und wie viel davon auf **einer** Schicht anfangen muss.
-#:
-#: Die Summe allein sprach ein Fehlurteil: ein Becher verteilt seine
-#: zweihundertvierzig Quadratmillimeter über dreihundertachtunddreißig
-#: Schichten, keine davon trägt mehr als knapp vier, und jede Wand fängt das in
-#: sich auf — er bekam trotzdem dieselbe Stützenwarnung wie ein Deckel, dessen
-#: Lochplatte mit achthundertfünfundvierzig auf einmal über einem Hohlraum
-#: beginnt.
-#:
-#: Hundert ist die Fläche, die eine Düse nicht mehr überspannt: ein Kreis von
-#: gut elf Millimetern, also das Doppelte dessen, was die Slicer als längste
-#: freie Brücke zulassen.
-OVERHANG_LAYER_WORTH_SUPPORT = 100.0
-
-#: Und wie viel je Schicht mindestens anfallen muss, damit die **Summe**
-#: überhaupt zählt.
-#:
-#: Ohne diese Untergrenze wäre der Becher wieder drin: dreihundertachtunddreißig
-#: Schichten mit weniger als vier Quadratmillimetern, die jede Wand in sich
-#: auffängt. Zehn Quadratmillimeter sind ein Quadrat von gut drei Millimetern —
-#: darunter ist ein Überhang eine Kante und kein Feld.
-OVERHANG_LAYER_MINIMUM = 10.0
 
 #: So viele Schichten mit Inseln machen aus Gitterstützen Baumstützen: viele
 #: verteilte Ansatzpunkte sind genau der Fall, für den Bäume gebaut wurden.
@@ -795,6 +772,25 @@ class SupportNeed:
     """Das größte zusammenhängende Überhangstück in mm², ohne Kanaldecken."""
 
 
+def _largest_field(
+    result: SliceResult,
+    total: float,
+    largest: float,
+    *,
+    without: frozenset[tuple[int, int]] = frozenset(),
+) -> float:
+    """Das größte Feld: das größte Stück, oder eine Decke in der Aufsicht
+    (:func:`largest_sloped_patch`, RM-570), wenn das Stück allein die Grenze
+    verfehlt und ein Feld sie tragen könnte. Nur dann gefragt — die Decken
+    des ganzen Körpers kosten am Drachen 8 s CPU. Ein Feld ist nie größer
+    als die Summe; bis :data:`OVERHANG_LAYER_WORTH_SUPPORT` trägt es deshalb
+    keinen der beiden Wege (Review 3: an der Summe von 150 gemessen, blieb ein
+    Feld von 134 mm² „keine Stützen“)."""
+    if worth_support(largest, total) or total <= OVERHANG_LAYER_WORTH_SUPPORT:
+        return largest
+    return max(largest, largest_sloped_patch(result, without=without))
+
+
 def support_need(result: SliceResult) -> SupportNeed:
     """Braucht dieser Schnitt Stützen? Die eine Antwort für den Vorschlag
     „Stützen nötig“ (:func:`_from_geometry`) und für *Druckoptimal ausrichten*
@@ -802,6 +798,8 @@ def support_need(result: SliceResult) -> SupportNeed:
     auseinander.
     """
     islands = island_layers(result)
+    total = total_overhang(result)
+    largest = _largest_field(result, total, largest_overhang_patch(result))
     # Kanaldecken zählen nicht: Sie tragen sich selbst, und eine Stütze darin
     # käme nicht mehr heraus (:func:`model_support`, die Waschschüssel vom
     # 25.09.2026). Ohne diese Ausnahme schaltete ein Wasserkanal die Stützen
@@ -815,13 +813,16 @@ def support_need(result: SliceResult) -> SupportNeed:
     # eine Antwort davon abhing (Weg a der Durchsicht 0.5.1).
     model = (
         model_support(result)
-        if _may_need_support(
-            result, islands, total_overhang(result), largest_overhang_patch(result)
-        )
+        if _may_need_support(result, islands, total, largest)
         else ModelSupport()
     )
     overhang = total_overhang(result, without=model.channels)
-    patch = largest_overhang_patch(result, without=model.channels)
+    patch = _largest_field(
+        result,
+        overhang,
+        largest_overhang_patch(result, without=model.channels),
+        without=model.channels,
+    )
     # Die Summe allein reicht nicht, und der Unterschied entscheidet: ein
     # Becher sammelte über dreihundertachtunddreißig Schichten
     # zweihundertvierzig Quadratmillimeter und bekam dieselbe Warnung wie ein
@@ -904,7 +905,8 @@ def _from_geometry(
     # **Und „auf dem Modell“ heißt außen und so viel, dass es selbst Stütze
     # bräuchte.** Eine Säule im Kanal zählt nicht (oben), und was außen auf
     # dem Modell aufsetzt, misst sich an denselben zwei Wegen wie der
-    # Stützbedarf selbst: An der Waschschüssel blieb neben der Kanaldecke ein
+    # Stützbedarf selbst, auch als Feld (``ModelSupport.open_field``, RM-570:
+    # das Kinn über der Brust): An der Waschschüssel blieb neben der Kanaldecke ein
     # Rest von 11 mm² an der Düsenmündung, und der allein verlangte, dass die
     # Stützen des ganzen Teils überall ansetzen — wieder im Kanal.
     #
@@ -931,8 +933,7 @@ def _from_geometry(
     )
     on_model = needs_support and (
         model.island_on_model
-        or model.open_patch > OVERHANG_LAYER_WORTH_SUPPORT
-        or (model.open_area > OVERHANG_WORTH_SUPPORT and model.open_patch > OVERHANG_LAYER_MINIMUM)
+        or worth_support(max(model.open_patch, model.open_field), model.open_area)
         or long_bridge_on_model
     )
     if needs_support and on_model and settings.support.placement == "build_plate":
@@ -961,8 +962,16 @@ def _from_geometry(
     # nicht in jedem Slicer: Orcas organische Bäume wuchsen trotzdem in den
     # Wasserkanal der Waschschüssel und führten ihre Stämme durch die Wand, und
     # wo „überall" nötig bleibt — eine Insel auf dem Modell —, füllt jeder
-    # Slicer den Kanal. Die Sperre in der Übergabe hält beides heraus.
-    if needs_support and model.channels and not settings.support.block_channels:
+    # Slicer den Kanal. Die Sperre in der Übergabe hält beides heraus — **wenn
+    # sie Raum sperrt** (:func:`channel_space`): Am Drachen (08.10.2026) blieben
+    # Kerben unter einem Millimeter Tiefe Kanaldecken, und der Vorschlag hätte
+    # eine Sperre angeboten, die nichts enthält.
+    if (
+        needs_support
+        and model.channels
+        and not settings.support.block_channels
+        and channel_space(result, model, settings.layers.line_width)
+    ):
         advice.append(
             _advice(
                 settings,
@@ -1529,8 +1538,7 @@ def _may_need_support(
     und lange Brücken außerhalb der Kanalschichten."""
     return (
         bool(islands)
-        or patch > OVERHANG_LAYER_WORTH_SUPPORT
-        or (overhang > OVERHANG_WORTH_SUPPORT and patch > OVERHANG_LAYER_MINIMUM)
+        or worth_support(patch, overhang)
         or any(
             layer.bridge_width > SPAN_INTERESTING
             for index, layer in enumerate(result.layers)

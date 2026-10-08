@@ -25,12 +25,13 @@ Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
 Auflagen werden daneben rechtzeitig bearbeitet. **Als Nächstes:** die Kundenblocker nach
 0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104; Ursache eingegrenzt,
-Signierschritt korrigiert, kommt mit dem nächsten Tag), Cura unter Linux (RM-521, gebaut,
-Abnahme beim Kunden mit dem nächsten Paket) — und die mit 0.5.3 fällige Antwort an den
-Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
-Verkaufskandidat bis 25.10., Start am 01.11.2026 um 10:00 Uhr (RM-061). Daneben bleiben die
-Mac-/Linux-Nachweise und die CRA-Betriebsvorbereitung offen — deren Frist ist am 11.09.2026
-**abgelaufen**, die Meldepflicht aus Art. 14 gilt seither (RM-091). Eine zurückgestellte
+am Kundengerät von Hand gegengeprobt, Signierschritt korrigiert, kommt mit dem nächsten Tag),
+Cura unter Linux (RM-521, gebaut, Abnahme beim Kunden mit dem nächsten Paket) — und die mit
+0.5.3 fällige Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis
+15.10. (RM-092), Verkaufskandidat bis 25.10., Start am 01.11.2026 um 10:00 Uhr (RM-061).
+Daneben bleiben die Mac-/Linux-Nachweise und die CRA-Betriebsvorbereitung offen — deren Frist
+ist am 11.09.2026 **abgelaufen**, die Meldepflicht aus Art. 14 gilt seither (RM-091).
+Eine zurückgestellte
 Produktentscheidung oder ein kostenpflichtiger Lauf wird durch diesen
 Abgleich nicht freigegeben.
 
@@ -46,7 +47,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-050 — Kopier- und Pufferkosten großer Szenen am Fenster messen](#rm-050) | Plattformen, Pakete und Grafik | VTK ausgebaut (`5a57e261`), matplotlib durch HarfBuzz ersetzt (`25d5536ee`); offen die kopierten Bytes und Pufferkosten je großer Szene am Fenster |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der 0.5.3-Pakete am echten Linux- und Mac-Bildschirm; der Release-Starttest belegt Fenster und 3D-Ansicht nur unter Xvfb und am ARM-Runner |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Aktualisieren und Deinstallieren prüft der Installer-Workflow ab dem nächsten Release (`tools/check_windows_update.py`, am Runner von 0.5.2 auf 0.5.3 grün); offen: der Lauf im Release ohne Ausnahme für den behobenen Registerrest, Flatpak auf echter Linux-Grafik, Offline-Start |
-| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); offen der Start beim Kunden, Gegenprobe dafür `solidon-gegenprobe.sh`. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
+| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); eine Gegenprobe von Hand (Nachtrag, ohne Skript) am Intel-Mac des Kunden spricht für die Ursache (08.10.: ohne die Berechtigung hing es, mit ihr startete es), offen der Doppelklick auf das signierte Paket mit dem nächsten Tag. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
@@ -61,6 +62,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31: organisch unter 2 s am Referenzrechner); der Drache braucht 6,9–9,0 s unter Last bei null Merkmalen; offen ein Hebel bis zum neuen Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
+| [RM-571 — Ein Sims im offenen Becher neben einem gesperrten Kanal verliert Stütze](#rm-571) | Geometrie, Erkennung und Druckvorbereitung | Ein Maß für „von oben erreichbar“ finden, das den offenen Becher vom Rohrbogen der Schüssel trennt |
+| [RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen](#rm-572) | Geometrie, Erkennung und Druckvorbereitung | Text für „viele kleine Überhänge zusammen“ und eine Feldfrage im Budget §31 |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
@@ -534,8 +537,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   widerlegt, war **falsch**: Am Runner greift dieser Schutz nicht (unten). Messweg:
   `hardened_probe.py` und `mac-hardened-diag.yml` im selben Ordner.
 
-  **Ursache eingegrenzt am 06.10.2026** — belegt an Quelltext und fremden Geräten, am Gerät des
-  Kunden offen. Seine Angaben zu 0.5.3 (zu Hause): MacBookPro16,1 (Intel), macOS 26.5 (25F71),
+  **Ursache eingegrenzt am 06.10.2026** — belegt an Quelltext und fremden Geräten. Am Gerät des
+  Kunden spricht seit dem 08.10. eine Probe von Hand dafür, dass der Start an
+  `allow-unsigned-executable-memory` hängt; Ort und Kreisen in libffi zeigt dort kein Stapel
+  (unten, „Am Kundengerät“). Seine Angaben zu 0.5.3 (zu Hause): MacBookPro16,1 (Intel),
+  macOS 26.5 (25F71),
   `codesign --verify --deep --strict` „valid on disk“ — die Installation ist heil. Der direkte
   Start schrieb kein Zeichen, Strg+C wirkte nicht, ein Protokoll gab es nicht. Der Stand schreibt
   sonst beim Aufbau des Hauptfensters `QWidget::setMinimumSize: (/QLabel) Negative sizes (0,-1)`
@@ -576,7 +582,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `ci/rm-104-signatur` (Lauf 37530876754): grün auf beiden Architekturen, samt
   Installer-Signatur und macOS-Releaseakte mit Start des notarisierten Pakets; die
   Notarisierung riss im ersten Versuch an einem Netzausfall des Runners ab und lief nach dem
-  Neustart der zwei Jobs durch. **Offen:** der Start auf dem Intel-Mac des Kunden.
+  Neustart der zwei Jobs durch. **Offen:** der Start des signierten und notarisierten Pakets mit
+  der Korrektur auf dem Intel-Mac des Kunden.
 
   **Gegenprobe am Kundengerät:** `solidon-gegenprobe.sh` signiert die installierte Kopie zweimal ad
   hoc mit `--options runtime` und `com.apple.security.cs.disable-library-validation` (ohne sie
@@ -592,6 +599,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Aussage gescheitert), der Nachtrag eine mit, aber ohne Wächter und Stapel — belastbar ist das
   Skript. Changelog: ja — notarisiert mit Hardened Runtime ohne Liste ist jedes Mac-Paket seit
   0.4.1, am Kundengerät belegt 0.5.1 bis 0.5.3.
+
+  **Am Kundengerät (08.10.2026):** Der Kunde fuhr den Nachtrag vom 06.10. von Hand auf seinem
+  MacBookPro16,1 mit macOS 26.5 an 0.5.3. Ad hoc mit `--options runtime` und
+  `disable-library-validation`, aber ohne `allow-unsigned-executable-memory` blieb Solidon hängen
+  wie das Developer-ID-Paket; mit der Berechtigung startete es. Die Signaturen der beiden Läufe
+  unterscheiden sich nur in dieser einen Berechtigung, genau der, die der korrigierte
+  Signierschritt setzt. Den Ablauf deckt das nicht ganz: Ob vor dem ersten Start noch ein
+  hängendes Solidon lief (Strg+C wirkte am 06.10. nicht) und wie lange „ohne“ beobachtet wurde,
+  sagt die Rückmeldung nicht (beides fängt das Skript ab), und ein Stapel fehlt. Dass „mit“
+  startete, zeigt nur, dass beim zweiten Start nichts Altes im Weg war. Das Skript entfällt
+  trotzdem: Den Ausschlag gibt der Doppelklick auf das notarisierte Paket mit der Korrektur;
+  hängt es dort, folgt `solidon-diagnose.sh`.
 
   Messwege im selben Ordner: `mac_online_check.py` und `mac-online-check.yml`
   (Zertifikatssperre), `mac-entitlement-check.yml` (Signierteil und Rücklesung),
@@ -854,6 +873,35 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
 
 ## Geometrie, Erkennung und Druckvorbereitung
+
+<a id="rm-571"></a>
+
+- [ ] **RM-571 — Ein Sims im offenen Becher neben einem gesperrten Kanal verliert Stütze.**
+  Die Kanalsperre spart im umschlossenen Raum nichts aus
+  ([RM-566](ROADMAP-ARCHIV.md#rm-566)): Eine Stütze dort holt niemand heraus. Umschlossen
+  heißt ein Loch im Schnitt, und das ist auch das Innere jedes oben offenen Gefäßes. Steht
+  darin neben einem gesperrten Kanal ein Überhang, der Stütze braucht, liegt er im Sperrraum
+  (Review 2 vom 08.10.2026: Becher Ø 68 mm mit Tunnelblock und einem Sims 14 × 14 mm, 65 %
+  seines Grundrisses). Enger gefasst kam der Wasserkanal der Waschschüssel nicht mehr frei:
+  „eng und umschlossen“ ließ einen Ast von 0,7 m hinein, „zur Hälfte überdacht“ nahm ihr fast
+  die ganze Sperre, weil ihr Kanal in einem oben offenen Hohlraum liegt. Gesucht ist ein Maß
+  für „von oben erreichbar“, das beide trennt; Sonden `cup_ledge.py` und
+  `sonde_raumarten.py` unter `.claude/.state/drache-2026-10-08/`. Abnahme: der Sims im
+  Becher außerhalb des Sperrraums, die Schüssel in vier Slicern weiter ohne Stütze im Kanal.
+
+<a id="rm-572"></a>
+
+- [ ] **RM-572 — Der Prüfbericht nennt keine Stelle, wo viele kleine Überhänge Stützen verlangen.**
+  Der Überhangbefund (`findings.overhang_findings`) meldet nur ein einzelnes Stück über
+  100 mm². Verlangt der Rat Stützen über die Summe vieler Streifen oder über eine schräge
+  Unterseite als Feld ([RM-570](ROADMAP-ARCHIV.md#rm-570)), schweigt der Bericht: Kinn 18°
+  und 9,5° (Review 3 vom 08.10.2026), ebenso der Drache (größtes Stück 23,7 mm², Summe
+  1 492 mm²). Der Kunde sieht „Stützen nötig“ ohne Ort und ohne den Weg „Stützbedarf zeigen“
+  (§22.3). Offen sind zwei Fragen: ein eigener Text für „viele kleine Überhänge zusammen“ in
+  allen Sprachen, und die Kosten — die Feldfrage über den ganzen Körper kostet am Drachen
+  8,2 s CPU, an Laptop-Riser, Spiderman und Kumiko 3,3 bis 4,8 s (gegen 42 bis 99 s Schnitt),
+  der Bericht darf sie nicht ungefragt stellen (§31). Abnahme: Kinn und Drache bekommen
+  einen Befund mit Ort, der Gitterbecher keinen, die Berichtszeit bleibt im Budget.
 
 <a id="rm-504"></a>
 

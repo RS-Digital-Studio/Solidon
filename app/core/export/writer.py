@@ -12,6 +12,7 @@ dateisystemtauglich gemacht, ohne unlesbar zu werden.
 
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -1868,15 +1869,11 @@ def _plate_wide_findings(
     return findings
 
 
-#: Um so viel greift die Stützsperre über den Grundriss einer Kanaldecke
-#: hinaus, in mm: eine Bahnbreite der 0,4er Düse, damit auch der Rand, den der
-#: Slicer mit seinem eigenen Winkel noch als Überhang liest, darunter liegt.
-#: Nach außen schadet der Zuschlag nicht — dort ist Wand.
-BLOCKER_MARGIN: Final = 0.5
-
 #: Um so viel darf der Umriss einer Kanalscheibe vereinfacht werden, bevor sie
-#: zum Sperrkörper wird, in mm — ein Fünfundzwanzigstel von
-#: :data:`BLOCKER_MARGIN`, der den Umriss danach ohnehin nach außen schiebt.
+#: zum Sperrkörper wird, in mm; ebenso weit schiebt der Schreiber ihn danach
+#: hinaus. Den Zuschlag einer Bahnbreite trägt die Scheibe schon
+#: (:func:`app.core.slice.analysis.channel_space`) — ein zweiter füllte die
+#: ausgesparten Säulen wieder.
 #: Die Scheiben sind Vereinigungen von Kreisen zu je 64 Ecken und von
 #: Schnittkonturen; unvereinfacht hatte die Sperre am Eiffelturm aus dem
 #: Korpus 404 464 Dreiecke und kostete 12,6 s, vereinfacht 177 454 und 1,4 s,
@@ -1930,7 +1927,7 @@ def _support_blocker(
     import manifold3d
     import shapely
 
-    from app.core.slice.analysis import channel_space, model_support
+    from app.core.slice.analysis import channel_space, model_support, piece_area
 
     # **Die Schichten des Prüfberichts, sonst ein eigener Schnitt**
     # (:func:`_body_analysis`, DRUCK-14): mit dem Raster und der Stützschwelle,
@@ -1944,7 +1941,7 @@ def _support_blocker(
     model = model_support(result)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    slabs = channel_space(result, model)
+    slabs = channel_space(result, model, settings.layers.line_width)
     if not slabs:
         return None, []
     if cancelled is not None:
@@ -1958,8 +1955,10 @@ def _support_blocker(
         for part in getattr(region, "geoms", [region]):
             rings.append(np.asarray(part.exterior.coords)[:-1])
             rings += [np.asarray(hole.coords)[:-1] for hole in part.interiors]
+        # Den Zuschlag trägt der Kanalraum schon (eine Bahnbreite, vor dem
+        # Aussparen); hinaus geht hier nur, was das Vereinfachen hereinrückte.
         section = manifold3d.CrossSection(rings, manifold3d.FillRule.EvenOdd).offset(
-            BLOCKER_MARGIN, manifold3d.JoinType.Miter
+            BLOCKER_SIMPLIFY, manifold3d.JoinType.Miter
         )
         prisms.append(
             manifold3d.Manifold.extrude(section, top - bottom).translate((0.0, 0.0, bottom))
@@ -1970,6 +1969,15 @@ def _support_blocker(
             np.asarray(solid.vert_properties)[:, :3], np.asarray(solid.tri_verts), process=False
         )
     )
+    # **Ort und Fläche der gesperrten Decken**, nicht aller Kanaldecken (Review
+    # vom 08.10.2026): Nicht jede Kanaldecke bekommt eine Sperre, und der Ort
+    # des größten Kanalstücks führte am Drachen bei 130 % an eine Decke ohne
+    # Sperre, die Fläche war fast fünfmal zu groß.
+    blocked = [
+        (piece_area(outline), outline, high) for outline, _low, high in model.channel_columns
+    ]
+    _area, widest, at = max(blocked, key=lambda column: column[0])
+    point = shapely.Polygon(widest.outline, widest.holes).representative_point()
     finding = Finding(
         code="export.support_blocker",
         severity="info",
@@ -1980,9 +1988,9 @@ def _support_blocker(
         ),
         values={
             "name": source_text(entry.name),
-            "area_mm2": round(model.channel_area, 1),
+            "area_mm2": round(math.fsum(area for area, _outline, _high in blocked), 1),
         },
-        location=model.channel_at,
+        location=(float(point.x), float(point.y), float(at)),
         object_id=entry.id,
     )
     return blocker, [finding]
