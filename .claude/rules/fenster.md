@@ -30,8 +30,7 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   Wiederherstellungsdaten gemeinsam ab.
 - Gespeicherte Gesten öffnen auf ihrem Eingang:
   `Session.scene_before_step_async` im Vorschauarbeiter, Antwort gebunden an
-  Dokumentidentität/Werkzeugnummer. Verfeinerung über `Session.insert_before`
-  im Revisionsarbeiter ersetzt Schrittkennung und Eingangsbindung.
+  Dokumentidentität/Werkzeugnummer.
 - Formen/Skelett haben denselben lokalen Undo-Weg für Menü und Strg+Z; leerer
   Editor nimmt keinen Dokument-Schritt zurück. Zeichnen hat eigene Kürzel
   und deaktiviert die globale Aktion.
@@ -462,8 +461,9 @@ ein Programmfehler, nicht Ihre Schuld“ (§33.1).
   seine Proben teilen `Stroke.gesture`, jede Geste ist eine Etappe
   (`Stroke.brush` 2, alte rechnen wie gespeichert). Zählung und lokales
   Rückgängig nehmen die Gruppe samt wartender Proben; Beenden lässt den Pinsel los.
-- Zu grobes Netz gleicht der Arbeiter an; *Fertig* legt Angleichen und Formen
-  in eine Transaktion, ein geöffneter Schritt fügt es davor ein.
+- Zu grobes Netz gleicht der Arbeiter an, auch am geöffneten Schritt; das
+  Dokument erst bei *Fertig* und nur mit neuen Zügen, in einer Transaktion
+  (geöffnet: `insert_before(…, changed=)`). Scheitert es, kein zweiter Versuch.
 - Skelett: n Knochen, n + 1 Klicks, Enter beendet die Kette, Ziehen am Gelenk
   beugt, *Fertig* ohne Dialog. Escape nimmt nur Unfertiges.
 - Die Gestenleiste trägt ihre `MapLegend`; ein Kartenwechsel entwertet Befund

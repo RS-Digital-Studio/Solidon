@@ -544,6 +544,34 @@ def restore(document: Document, state: DocumentState) -> None:
 ChangeFn = Callable[[Sequence["Operation"]], DocumentChange | None]
 
 
+def _merged_params(entry: Operation, spec: Any, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Die Werte eines geänderten Schritts — seine alten mit den neuen darüber.
+
+    **Ein Altmarker gilt dem gespeicherten Schritt, nicht seiner Änderung**
+    (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert — oder
+    einer der Werte, die der Marker nennt —, rechnet der Schritt wie heute.
+    Wer alle Werte durchreicht, reicht den Marker unverändert mit; nur ein
+    ausdrücklich anderer Markerwert bleibt stehen.
+    """
+    merged = {**entry.params, **params}
+    markers = [item for item in spec.params.spec() if item.dropped_on_change]
+    marker_names = {item.name for item in markers}
+    altered = {
+        name
+        for name in params
+        if name not in marker_names and merged.get(name) != entry.params.get(name)
+    }
+    for item in markers:
+        watched = (
+            altered
+            if item.dropped_on_change is True
+            else altered & set(item.dropped_on_change or ())
+        )
+        if watched and merged.get(item.name) == entry.params.get(item.name):
+            merged.pop(item.name, None)
+    return merged
+
+
 def change_for(
     document: Document,
     *,
@@ -1718,27 +1746,7 @@ class History:
         # Ausgabe bekommt neue Objekte, sobald die Zahl sich ändert. Also
         # dieselbe Ausrichtung wie vor jeder Transaktion (:meth:`_reseed`).
         self._reseed()
-        merged = {**entry.params, **params}
-        # **Ein Altmarker gilt dem gespeicherten Schritt, nicht seiner Änderung**
-        # (``ParamSpec.dropped_on_change``): Ändert sich ein anderer Wert — oder
-        # einer der Werte, die der Marker nennt —, rechnet der Schritt wie heute.
-        # Wer alle Werte durchreicht, reicht den Marker unverändert mit; nur ein
-        # ausdrücklich anderer Markerwert bleibt stehen.
-        markers = [item for item in spec.params.spec() if item.dropped_on_change]
-        marker_names = {item.name for item in markers}
-        altered = {
-            name
-            for name in params
-            if name not in marker_names and merged.get(name) != entry.params.get(name)
-        }
-        for item in markers:
-            watched = (
-                altered
-                if item.dropped_on_change is True
-                else altered & set(item.dropped_on_change or ())
-            )
-            if watched and merged.get(item.name) == entry.params.get(item.name):
-                merged.pop(item.name, None)
+        merged = _merged_params(entry, spec, params)
         draft = OperationDraft(op=entry.op, inputs=entry.inputs, params=merged)
         outputs = self._outputs_for(spec, draft) if spec.produces_from else entry.outputs
         # **Dieselbe Zahl heißt nicht dieselben Körper.** Eine Auswahl aus
@@ -2363,6 +2371,7 @@ class History:
         drafts: Sequence[OperationDraft],
         origin: Origin = USER_ORIGIN,
         changes: DocumentChange | ChangeFn | None = None,
+        changed: Mapping[OpId, Mapping[str, Any]] | None = None,
     ) -> RevisionPlan:
         """Neue Schritte **vor** ``before`` einfügen — geplant, nicht geschrieben (P7.1).
 
@@ -2379,6 +2388,11 @@ class History:
         Verbraucht ein neuer Schritt einen Körper, den ein späterer noch
         braucht, gibt es die Stelle nicht — das sagt die Absage, bevor
         irgendetwas gerechnet wird.
+
+        ``changed`` gibt einem späteren Schritt neue Werte, geprüft wie bei
+        :meth:`change_params` und in derselben Transaktion: Eine wieder
+        geöffnete Formsitzung legt so das Angleichen vor ihren Schritt und
+        ihre neuen Züge hinein — ein Strg+Z nimmt beides (Review F5).
         """
         activation.require(activation.CHANGE)
         if not drafts:
@@ -2406,8 +2420,20 @@ class History:
         subjects = tuple(entry.id for entry in planned)
         renumbered: dict[OpId, OpId] = {}
         for entry in suffix:
+            values = (changed or {}).get(entry.id)
+            edited = (
+                OperationDraft(
+                    op=entry.op,
+                    inputs=entry.inputs,
+                    params=_merged_params(entry, self._spec_of(entry), values),
+                    outputs=entry.outputs,
+                    seed=entry.seed,
+                )
+                if values is not None
+                else None
+            )
             try:
-                cloned = self._clone(entry, structural, renumbered)
+                cloned = self._clone(entry, structural, renumbered, edited)
             except ValidationError as problem:
                 if problem.constraint != "unknown_object":
                     raise

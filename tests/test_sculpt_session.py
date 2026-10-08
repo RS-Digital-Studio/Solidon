@@ -1958,10 +1958,12 @@ def test_loading_a_saved_gesture_cannot_replace_a_newer_tool(
     assert (window._sketch_panel is not None) == (new_tool == "sketch")
 
 
-def test_refining_a_reopened_sculpt_inserts_before_it_and_keeps_local_strokes(
-    window: MainWindow,
-) -> None:
-    """*Dreiecke jetzt angleichen* verfeinert den Eingang, nicht den später verschobenen Stand."""
+def _ops(window: MainWindow) -> list[str]:
+    return [entry.op for entry in window.session.project.document.ops]
+
+
+def _sculpted_then_moved(window: MainWindow) -> tuple[str, int]:
+    """Ein Formschritt mit einem Zug und ein Verschieben dahinter."""
     from app.core.scene.history import OperationDraft
 
     target = with_a_body(window)
@@ -1974,29 +1976,114 @@ def test_refining_a_reopened_sculpt_inserts_before_it_and_keeps_local_strokes(
         "Verschieben", [OperationDraft("translate_object", inputs=(target,), params={"x": 17.0})]
     )
     assert window.session.wait_for_idle()
+    return target, step
+
+
+def test_a_reopened_step_refines_for_the_brush_and_writes_it_once_on_finish(
+    window: MainWindow,
+) -> None:
+    """Review F5: Ein wieder geöffneter Schritt gleicht für einen kleineren
+    Pinsel selbsttätig an — im Arbeiter, wie eine neue Sitzung. Der Verlauf
+    bleibt bis *Fertig* unberührt; dann stehen Angleichen und die neuen Züge in
+    einer Transaktion vor dem späteren Verschieben, und ein Strg+Z nimmt beides."""
+    _target, step = _sculpted_then_moved(window)
+    before = _ops(window)
+    transactions = len(window.session.project.document.transactions)
     window.edit_operation(step)
     assert window.session.wait_for_idle()
     count = window._sculpt_source.triangle_count
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    assert "angeglichen" in window.sculpt_bar.warning.text()
+
+    window._begin_sculpt_gesture()
     window._on_sculpt((0.0, 20.0, 0.0))
-    window.sculpt_bar.radius.setValue(6.0)
-    window.refine_for_sculpt()
-    assert window.session.wait_for_idle()
-    assert window.wait_for_sculpt_preview()
-    assert window.sculpting()
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None
+    assert window._sculpt_refined.triangle_count > count
+    assert _ops(window) == before, "solange die Sitzung offen ist, ändert sich nichts"
     assert len(window._sculpt_strokes) == 2
-    assert window._sculpt_source.triangle_count > count
+
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(120_000)
     entries = window.session.project.document.ops
     assert [entry.op for entry in entries[-3:]] == [
         "remesh_uniform",
         "sculpt_strokes",
         "translate_object",
     ]
-    assert window._sculpt_step == entries[-2].id
-    assert window.session.inserting is None
-    window.finish_sculpt()
+    assert len(strokes_from_text(entries[-2].params["strokes"])) == 2
+    assert entries[-1].params["x"] == 17.0
+    assert len(window.session.project.document.transactions) == transactions + 1
+    window.session.undo()
+    assert window.session.wait_for_idle(60_000)
+    assert _ops(window) == before
+    assert len(strokes_from_text(window.session.project.document.ops[-2].params["strokes"])) == 1
+
+
+def test_a_reopened_refinement_without_a_kept_stroke_leaves_the_history_alone(
+    window: MainWindow,
+) -> None:
+    """Review F5: Wiederöffnen, ein Zug, der angleicht, Strg+Z in der Sitzung,
+    *Fertig* — der Verlauf ist der von vorher, ohne Angleichschritt."""
+    _target, step = _sculpted_then_moved(window)
+    before = [(entry.op, dict(entry.params)) for entry in window.session.project.document.ops]
+    window.edit_operation(step)
     assert window.session.wait_for_idle()
-    assert len(strokes_from_text(window.session.project.document.ops[-2].params["strokes"])) == 2
-    assert window.session.project.document.ops[-1].params["x"] == 17.0
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._begin_sculpt_gesture()
+    window._on_sculpt((0.0, 20.0, 0.0))
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+    assert window._sculpt_refined is not None, "Voraussetzung: der Zug hat angeglichen"
+    assert window.undo_sculpt_stroke()
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(60_000)
+    after = [(entry.op, dict(entry.params)) for entry in window.session.project.document.ops]
+    assert after == before
+
+
+def test_a_reopened_step_on_an_open_mesh_tries_once_and_says_why(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review F4: Ließ sich das Netz eines wieder geöffneten Schritts nicht
+    angleichen (offen), versuchte es jede Probe neu, und jede Absage war ein
+    Fehlerdialog. Jetzt versucht es der Arbeiter einmal, ohne Dialog, und die
+    Leiste sagt den Ausweg; geformt wird trotzdem."""
+    import app.core.geom.mesh_ops as mesh_ops
+
+    errors: list[Any] = []
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *a, **k: errors.append(error)
+    )
+    _target, step = _sculpted_then_moved(window)
+    before = _ops(window)
+    calls: list[float] = []
+
+    def refuses(mesh: Any, edge: float, deviation: float, **kwargs: Any) -> Any:
+        calls.append(edge)
+        raise mesh_ops._not_a_solid(mesh)
+
+    monkeypatch.setattr(mesh_ops, "uniform", refuses)
+    window.edit_operation(step)
+    assert window.session.wait_for_idle()
+    window.sculpt_bar.radius.set_value_mm(6.0)
+    window._begin_sculpt_gesture()
+    for index in range(6):
+        window._on_sculpt((0.0, 20.0, float(index)))
+        assert window.session.wait_for_idle()
+    window._end_sculpt_gesture()
+    assert window.wait_for_sculpt_preview(120_000)
+
+    assert len(calls) == 1
+    assert errors == []
+    assert "Erst reparieren" in window.sculpt_bar.warning.text()
+    assert _ops(window) == before
+    window.finish_sculpt()
+    assert window.session.wait_for_idle(60_000)
+    entries = window.session.project.document.ops
+    assert [entry.op for entry in entries] == before, "kein Angleichschritt"
+    assert len(strokes_from_text(entries[-2].params["strokes"])) == 7
 
 
 @pytest.mark.parametrize("kind", ["sculpt", "pose"])

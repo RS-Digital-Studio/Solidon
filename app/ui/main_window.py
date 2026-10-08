@@ -1094,6 +1094,13 @@ class _MapRequest:
     key: tuple[Any, ...]
 
 
+def _plane_of(preview: SculptPreview) -> tuple[float, float, float]:
+    """Die Spiegelmitte einer Vorschau als Punkt — für ``stroke_at``, damit ein
+    Zug ohne passende Vorschau um dieselbe Mitte spiegelt (Review G2)."""
+    middle = preview.plane
+    return (float(middle[0]), float(middle[1]), float(middle[2]))
+
+
 def _sculpt_preview_of(mesh: MeshData, params: dict[str, Any]) -> SculptPreview:
     """Die Vorschau einer Formsitzung an diesem Netz, mit der Spiegelmitte, die
     die Operation danach nimmt (:func:`app.core.geom.sculpt.mirror_plane`)."""
@@ -1107,6 +1114,14 @@ def _sculpt_preview_of(mesh: MeshData, params: dict[str, Any]) -> SculptPreview:
         front_only=bool(params.get("front_only", True)),
         mirror_once=bool(params.get("mirror_once", True)),
     )
+
+
+def _refinement_params(edge: float) -> dict[str, float]:
+    """Die Werte von *Dreiecke angleichen* für den Pinsel — eine Quelle für den
+    Arbeiter, der die Vorschau angleicht, und den Schritt, den *Fertig* schreibt
+    (Review G2): Die Vorgabe der Abweichung darf sich ändern, ohne dass die
+    Vorschau ein anderes Netz zeigt als der Verlauf rechnet."""
+    return {"edge": edge, "deviation": 0.0}
 
 
 #: Die feinste Kante, die *Dreiecke angleichen* annimmt — aus ihrem Schema,
@@ -1127,10 +1142,11 @@ class _SculptPreviewWorker(Worker):
     Schlange bis zu 32 Proben, 7,4 s für 0,64 s Eingabe. Jetzt nimmt ein Lauf,
     was bis zu seinem Start eingegangen ist, und das Bild kommt einmal.
 
-    ``refine`` ist ``(Eingang, Radius, feinste Kante)`` einer neuen Sitzung:
-    Ist das Netz für den Pinsel zu grob, gleicht der Lauf zuerst an (H2, H9)
-    und gibt das neue Netz mit; die Züge liegen im Raum und überleben das.
-    Scheitert das Angleichen (offenes Netz), meldet er die Kante ``-1``.
+    ``refine`` ist ``(Eingang, Radius, feinste Kante)`` der Sitzung, neu oder
+    wieder geöffnet: Ist das Netz für den Pinsel zu grob, gleicht der Lauf
+    zuerst an (H2, H9) und gibt das neue Netz mit; die Züge liegen im Raum und
+    überleben das. Scheitert das Angleichen (offenes Netz), meldet er die
+    Kante ``-1`` — ohne Dialog, einmal (Review F4).
     """
 
     done = Signal(int, object, object, float, object, float, int)
@@ -1169,8 +1185,11 @@ class _SculptPreviewWorker(Worker):
             source, radius, finest = self.refine
             refined_edge = refine_edge_for(base, radius, finest, self.edge)
             if refined_edge:
+                values = _refinement_params(refined_edge)
                 try:
-                    refined = uniform(source, refined_edge, 0.0, cancelled=self.cancel)
+                    refined = uniform(
+                        source, values["edge"], values["deviation"], cancelled=self.cancel
+                    )
                 except AppError:
                     # Ein offenes Netz lässt sich nicht angleichen. Geformt wird
                     # trotzdem, und die Leiste sagt, warum es kantig bleibt.
@@ -1191,7 +1210,13 @@ class _SculptPreviewWorker(Worker):
             if self.cancel.is_cancelled:
                 return
             stroke = stroke_at(
-                base, point, **values, before=shown, mirrored=self.plane, preview=preview
+                base,
+                point,
+                **values,
+                before=shown,
+                mirrored=self.plane,
+                preview=preview,
+                centre=_plane_of(preview),
             )
             self.strokes.append(stroke)
             shown.append(replace(stroke, symmetry=stroke.symmetry | self.plane))
@@ -3686,11 +3711,6 @@ class MainWindow(QMainWindow):
         self._gesture_scene: Any = None
         self._gesture_document = self.session.project.document
         self._gesture_open_number = 0
-        self._sculpt_refine_reopen: tuple[Any, int] | None = None
-        self._sculpt_refine_pending = False
-        self.session.revisionDone.connect(self._sculpt_refinement_inserted)
-        self.session.revisionCancelled.connect(self._sculpt_refinement_failed)
-        self.session.failed.connect(self._sculpt_refinement_failed)
         self._gesture_save_dialog: Any = None
         self._sculpt_params: dict[str, Any] = {}
         """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
@@ -7179,8 +7199,6 @@ class MainWindow(QMainWindow):
             or self._pose_report_target is not None
         ):
             return
-        self._sculpt_refine_reopen = None
-        self._sculpt_refine_pending = False
         self._cancel_sculpt_preview()
         self._sculpt_check.stop()
         self._sculpt_wall_number += 1
@@ -13599,84 +13617,17 @@ class MainWindow(QMainWindow):
     def _sculpt_refinement_draft(self, edge: float) -> OperationDraft:
         """*Dreiecke angleichen* am Körper der Sitzung auf diese Kantenlänge."""
         assert self._sculpt_target is not None
+        return self._refinement_draft_for(self._sculpt_target, edge)
+
+    @staticmethod
+    def _refinement_draft_for(target: str, edge: float) -> OperationDraft:
+        """*Dreiecke angleichen* an ``target`` mit den Werten der Vorschau."""
         return OperationDraft(
             op="remesh_uniform",
-            inputs=(self._sculpt_target,),
-            outputs=(self._sculpt_target,),
-            params={"edge": edge},
+            inputs=(target,),
+            outputs=(target,),
+            params=_refinement_params(edge),
         )
-
-    def refine_for_sculpt(self) -> None:
-        """Einen wieder geöffneten Formschritt auf einem zu groben Netz angleichen.
-
-        Eine neue Sitzung gleicht selbst an (:class:`_SculptPreviewWorker`) und
-        legt Angleichen und Formen beim *Fertig* in eine Transaktion. Ein
-        vorhandener Schritt braucht das Angleichen **vor** sich im Verlauf: Es
-        wird davor eingefügt (``Session.insert_before``), und die Sitzung läuft
-        auf dem neuen Eingang weiter. Ausgelöst vom ersten Zug, der es braucht —
-        den Knopf dafür gibt es seit RM-561 nicht mehr. Vorhandene Züge
-        überleben das: Sie stehen in Weltkoordinaten (§30.1).
-        """
-        target, step = self._sculpt_target, self._sculpt_step
-        if target is None or step is None or self._sculpt_refine_reopen is not None:
-            return
-        if self._sculpt_preview_worker is not None or self._sculpt_pending:
-            self._sculpt_refine_pending = True
-            return
-        mesh = self._sculpt_mesh(target)
-        edge = self._sculpt_refine_edge(mesh) if mesh is not None else 0.0
-        if not edge:
-            return
-        self._sculpt_refine_reopen = (self.session.project.document, step)
-        if not self.session.insert_before(
-            step, tr("Dreiecke angleichen"), [self._sculpt_refinement_draft(edge)]
-        ):
-            self._sculpt_refine_reopen = None
-
-    def _sculpt_refinement_inserted(self, revision: Any) -> None:
-        """Die weiterhin offenen Züge bekommen den verfeinerten Eingang ihres Schritts."""
-        pending, self._sculpt_refine_reopen = self._sculpt_refine_reopen, None
-        if pending is None or pending[0] is not self.session.project.document:
-            return
-        if self._sculpt_target is None or revision.plan.kind != "insert":
-            return
-        self._sculpt_step = revision.plan.new_id(pending[1])
-        self._sculpt_params = dict(self.session.history.operation(self._sculpt_step).params)
-        finish_pending = self._sculpt_finish_pending
-        self._cancel_sculpt_preview()
-        self._gesture_open_number += 1
-        number = self._gesture_open_number
-        target = self._sculpt_target
-        self._start_preview_progress()
-
-        def ready(scene: Any) -> None:
-            if number != self._gesture_open_number or target != self._sculpt_target:
-                return
-            self._finish_preview_progress()
-            body = scene.objects.get(target) if scene is not None else None
-            if body is None:
-                self.announce(
-                    tr(
-                        "Der Schritt lässt sich noch nicht öffnen. "
-                        "Prüfen Sie den vorherigen Schritt."
-                    )
-                )
-                return
-            self._gesture_scene = scene
-            self._sculpt_source = as_mesh_data(body.mesh)
-            self._sculpt_preview = None
-            self._sculpt_preview_base = None
-            self._sculpt_edge = None
-            self._show_sculpt_preview(self._sculpt_source)
-            self._gesture_analysis_changed()
-            if finish_pending:
-                self.finish_sculpt()
-
-        self.session.scene_before_step_async(self._sculpt_step, ready, explained=self.announce)
-
-    def _sculpt_refinement_failed(self, _error: Any = None) -> None:
-        """Ein abgewiesener Umbau lässt die Gesten stehen und erlaubt einen neuen Versuch."""
-        self._sculpt_refine_reopen = None
 
     def _begin_sculpt_gesture(self) -> None:
         """Ein Mauszug beginnt, auch wenn sein erster Punkt neben dem Körper liegt."""
@@ -13696,8 +13647,9 @@ class MainWindow(QMainWindow):
 
         Jede Geste ist eine Etappe (Pinselfassung 2, RM-560): Der Zug trägt
         die Kennung seines Mauszugs. Ist das Netz für den Pinsel zu grob, geht
-        der Zug in den Arbeiter, der zuerst angleicht; ein wieder geöffneter
-        Schritt fügt das Angleichen vor sich ein (:meth:`refine_for_sculpt`).
+        der Zug in den Arbeiter, der zuerst angleicht — auch an einem wieder
+        geöffneten Schritt; ins Dokument kommt das Angleichen erst mit *Fertig*
+        (:meth:`finish_sculpt`).
         """
         if self._sculpt_target is None:
             return
@@ -13712,9 +13664,7 @@ class MainWindow(QMainWindow):
             self._sculpt_gesture_number += 1
             gesture = self._sculpt_gesture_number
         refine = 0.0 if self._sculpt_refine_blocked else self._sculpt_refine_edge(mesh)
-        if refine and self._sculpt_step is not None:
-            self.refine_for_sculpt()
-        if self._sculpt_needs_worker(mesh) or (refine and self._sculpt_step is None):
+        if self._sculpt_needs_worker(mesh) or refine:
             self._sculpt_pending.append(
                 (tuple(float(v) for v in point), {**bar.values(), "gesture": gesture})
             )
@@ -13726,6 +13676,7 @@ class MainWindow(QMainWindow):
             self._cancel_sculpt_check()
             self._start_sculpt_preview(mesh)
             return
+        preview = self._sculpt_preview_for(mesh)
         self._sculpt_strokes.append(
             stroke_at(
                 mesh,
@@ -13743,7 +13694,8 @@ class MainWindow(QMainWindow):
                 # Leiste über alle Züge legt (RM-454).
                 before=self._sculpt_shown(),
                 mirrored=SYMMETRY_BITS.get(bar.plane(), 0),
-                preview=self._sculpt_preview_for(mesh),
+                preview=preview,
+                centre=_plane_of(preview),
             )
         )
         self.undo_action.setEnabled(True)
@@ -13753,8 +13705,10 @@ class MainWindow(QMainWindow):
     def _sculpt_order(self) -> _PreviewOrder:
         """Gesammelte Gesten und aktuelle Symmetrie bilden den gemeinsamen Auftrag.
 
-        Hat die Sitzung angeglichen, steht *Dreiecke angleichen* davor — in
-        derselben Transaktion: Ein Strg+Z nimmt beides (RM-561)."""
+        Hat eine neue Sitzung angeglichen, steht *Dreiecke angleichen* davor —
+        in derselben Transaktion: Ein Strg+Z nimmt beides (RM-561). Ein wieder
+        geöffneter Schritt ändert sich selbst; sein Angleichen fügt
+        :meth:`finish_sculpt` davor ein."""
         if self._sculpt_target is None:
             return _PreviewOrder()
         values = {
@@ -13868,14 +13822,14 @@ class MainWindow(QMainWindow):
     def _start_sculpt_preview(self, mesh: MeshData) -> None:
         """Züge bleiben in Reihenfolge; höchstens ein Arbeiter besitzt die Vorschau.
 
-        Er nimmt alle Proben, die bis zu seinem Start warten (H6). Eine neue
-        Sitzung gibt ihm ihren Eingang mit, damit er für den Pinsel angleichen
-        kann; ein wieder geöffneter Schritt gleicht über den Verlauf an."""
+        Er nimmt alle Proben, die bis zu seinem Start warten (H6). Die Sitzung
+        gibt ihm ihren Eingang mit, damit er für den Pinsel angleichen kann —
+        neu oder wieder geöffnet; das Dokument ändert sich dabei nicht."""
         if self._sculpt_preview_worker is not None or self._sculpt_target is None:
             return
         preview = self._sculpt_preview if self._sculpt_preview_base is mesh else None
         refine = None
-        if self._sculpt_step is None and not self._sculpt_refine_blocked:
+        if not self._sculpt_refine_blocked:
             source = self._sculpt_input(self._sculpt_target)
             if source is not None:
                 refine = (source, self.sculpt_bar.radius.value_mm(), _finest_edge())
@@ -13944,10 +13898,6 @@ class MainWindow(QMainWindow):
             return
         self._finish_preview_progress()
         self._gesture_analysis_changed()
-        if self._sculpt_refine_pending:
-            self._sculpt_refine_pending = False
-            self.refine_for_sculpt()
-            return
         if self._sculpt_finish_pending:
             self._sculpt_finish_pending = False
             self.finish_sculpt()
@@ -14013,7 +13963,6 @@ class MainWindow(QMainWindow):
         if self._sculpt_target is not None:
             self.undo_action.setEnabled(bool(self._sculpt_strokes or self._sculpt_pending))
         self._sculpt_finish_pending = False
-        self._sculpt_refine_pending = False
         self._finish_preview_progress()
 
     def _sculpt_shown(self) -> list[Stroke]:
@@ -14358,11 +14307,7 @@ class MainWindow(QMainWindow):
         strokes = self._sculpt_strokes
         if target is None:
             return
-        if (
-            self._sculpt_preview_worker is not None
-            or self._sculpt_pending
-            or self._sculpt_refine_reopen is not None
-        ):
+        if self._sculpt_preview_worker is not None or self._sculpt_pending:
             self._sculpt_finish_pending = True
             return
         unchanged = self._sculpt_step is not None and (
@@ -14380,6 +14325,7 @@ class MainWindow(QMainWindow):
             self.announce(tr("Der geformte Körper ist nicht mehr da — die Sitzung bleibt offen."))
             return
         order = self._sculpt_order()
+        refined_edge = self._sculpt_refined_edge if self._sculpt_refined is not None else 0.0
         # Ein frühes *Fertig* wartet auf das Bild mit der Konvertierung und
         # schließt dann — genau einmal; ein neuer Zug entwertet die Vorschau
         # samt dem wartenden Klick (:meth:`_apply_when_previewed`).
@@ -14415,8 +14361,21 @@ class MainWindow(QMainWindow):
         self.statusBar().clearMessage()
         self._update_actions()
         if order.change_op is not None:
-            if not unchanged:
-                self._commit_preview_order(order)
+            if unchanged:
+                # Auch ein Angleichen der Sitzung bleibt draußen: Ohne neuen Zug
+                # gibt es keinen Grund für einen Schritt (Review F5).
+                return
+            if refined_edge:
+                # Angleichen davor und die neuen Züge im Schritt — eine
+                # Transaktion, ein Strg+Z (Review F5).
+                self.session.insert_before(
+                    order.change_op,
+                    tr("Dreiecke angleichen"),
+                    [self._refinement_draft_for(target, refined_edge)],
+                    changed={order.change_op: dict(order.change_values or {})},
+                )
+                return
+            self._commit_preview_order(order)
             return
         if not strokes:
             # Eine Sitzung ohne Zug hinterlässt nichts. Ein leerer Schritt im

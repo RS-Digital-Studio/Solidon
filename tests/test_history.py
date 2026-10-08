@@ -2167,6 +2167,39 @@ def test_an_insert_carries_its_named_dimensions_in_the_same_transaction(
     assert "breite" not in history.document.parameters
 
 
+def test_an_insert_can_give_a_later_step_new_values_in_the_same_transaction(
+    history: History,
+) -> None:
+    """Review F5: Eine wieder geöffnete Formsitzung legt das Angleichen vor
+    ihren Schritt und ihre neuen Züge hinein — ein Strg+Z nimmt beides, und
+    ein ungültiger Wert hält das Einfügen an, bevor etwas geschrieben ist."""
+    _chain(history)
+    old = history.operations
+    scatter = old[3]
+    before = document_to_data(history.document)
+    with pytest.raises(ValidationError):
+        history.plan_insert(
+            old[2].id,
+            _("Umbenennen"),
+            [OperationDraft(op="rename_object", inputs=("obj_1",))],
+            changed={scatter.id: {**scatter.params, "unbekannt": 1}},
+        )
+    assert document_to_data(history.document) == before
+    plan = history.plan_insert(
+        old[2].id,
+        _("Umbenennen"),
+        [OperationDraft(op="rename_object", inputs=("obj_1",))],
+        changed={scatter.id: {**scatter.params, "count": 5}},
+    )
+    history.commit(plan)
+    ops = history.operations
+    assert [entry.op for entry in ops][-3:] == ["rename_object", "split_object", "scatter"]
+    assert ops[-1].params["count"] == 5
+    assert ops[-1].seed == scatter.seed
+    history.undo()
+    assert history.operations == old
+
+
 def test_moving_steps_keeps_their_values_and_undo_restores_the_order(history: History) -> None:
     """P7.2: Mehrere Schritte wandern gemeinsam und in ihrer Folge; Strg+Z stellt sie zurück."""
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
