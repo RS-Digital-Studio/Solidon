@@ -53,7 +53,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken](#rm-567) | Plattformen, Pakete und Grafik | Robert, 08.10.: erst Spitzen und Dauerbelegung je Hauptweg messen, dann senken; Ziel Rechner mit 8 und 16 GB |
 | [RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren Herstellerprofile](#rm-549) | Plattformen, Pakete und Grafik | Gefunden mit der Slicerauswahl (07.10.): ohne Vorwahl des Herstellerprofils lehnt die Orca-Familie den Auftrag ab; offen, ob der Druckdialog dann mit Grund und Weg endet |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
-| [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
+| [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z3 (Z2 eingelöst durch RM-559). Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
 | [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
@@ -97,9 +97,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-556 — Filamente aus der linken Spalte in die Kopfleiste](#rm-556) | Bedienung und Darstellung | Robert, 08.10.: Knopf oben, Klick zeigt die Filamente des Projekts und den Weg ins Filamentlager |
 | [RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet lange](#rm-557) | Bedienung und Darstellung | Robert, 08.10.: eine Farbänderung färbt sofort um, ohne die Geometrie neu zu rechnen |
 | [RM-558 — Nach dem Einsetzen eines Bausteins bleibt ein Maßfeld „Y … mm“ in der Ansicht stehen](#rm-558) | Bedienung und Darstellung | Robert, 08.10. (Bild): Feld verschwindet mit dem Einsetzen |
-| [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Robert, 08.10.: Start, Gegenecke in X/Y, Höhe in Z; ein Weg; Ablauf vorher mit bedienlogik |
+| [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Gebaut (Paket Z1, 08.10.): Werkzeug *Zeichnen*, Strg+Umschalt+E; offen die Abnahme am echten Fenster und die Nachzählung durch bedienlogik |
 | [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
-| [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Robert, 08.10.: je Werkzeug ein Weg, wenige Schritte, keine verschachtelten Modi; Klicks vorher und nachher zählen |
+| [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Zeichnen gebaut (Paket Z1, 08.10.): ein Weg vom Umriss zum Körper; offen Formen und Skelett (Paket Z2) und die Abnahme am echten Fenster |
 | [RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im Projekt](#rm-569) | Bedienung und Darstellung | Robert, 08.10.: Code legt es sofort im Lager an, das Projekt trägt Name, Material und Farbe an der Bindung; Zusammenspiel mit Strg+Z, Speichern und fremdem Rechner fehlt als Test |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge und Quelltexte durchgesehen und behoben (04.10., `871cc29e6`), Handbuch und Stempel mit 0.5.3 erzeugt; offen allein die Fensterabnahme der längeren Knopfnamen auf 1280 px (RM-213) |
@@ -1524,7 +1524,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   | P8.1–P8.5 Gruppen, Lagen, Maßblatt | offen | — |
   | P9.1–P9.4 Resin-Stufe 2 | offen | — |
   | Zeichnen Z0/Z1 | implementiert | `4406137f` |
-  | Zeichnen Z2–Z6 | offen | — |
+  | Zeichnen Z2 | eingelöst durch RM-559/RM-561 (Paket Z1) | — |
+  | Zeichnen Z3–Z6 | offen, neu zu ordnen | — |
 
   **Offen, mit dem nächsten Schritt** (Reihenfolge nach Konzept §13.10):
 
@@ -1616,7 +1617,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     Kundenweg; FDM-Verhalten, Slicer-Übergabe und Aushöhlen werden mitgeprüft.
     Kein eigener Slicer, keine Stützenerzeugung, keine Belichtungsprofile.
     Nächster Schritt: P9.1.
-  * **Zeichnen Z2–Z6** — Z2 Erstellen im Bild (Palette am Umriss statt Dialog,
+  * **Zeichnen Z2–Z6** — Z2 ist durch das Aufziehen eingelöst (RM-559, RM-561, Paket Z1):
+    Körper entstehen im Bild ohne Dialog, ein freier Umriss geht über *Fertig* in dieselbe
+    Höhenwahl; die Drehachse mit P6.5 bleibt offen. Z3 bis Z6 sind danach neu zu ordnen.
+    Ursprünglich: Z2 Erstellen im Bild (Palette am Umriss statt Dialog,
     Drehachse gemeinsam mit P6.5), Z3 Bemaßen und Fang, Z4 Auswählen, Verschieben
     und Drehen (Links-Ziehen zeichnet), Z5 Werkzeuge mit P6.6a (900-Punkte-Grenze
     der Leiste), Z6 Ansicht und Texte, danach die Handbuchseite „Zeichnen“ einmal
@@ -1629,7 +1633,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     [Bedienabnahme Zeichnen](konzepte/nachweise-release-0.5.0/reports/zeichnen-bedienung.md)
     §8, dazu die Berichte [zeichnenbau](konzepte/nachweise-release-0.5.0/reports/zeichnenbau.md)
     („Vorschlag Etappe 2“) und [p66](konzepte/nachweise-release-0.5.0/reports/p66.md) („Für den
-    Zeichnen-Umbau“). Nächster Schritt: Z2.
+    Zeichnen-Umbau“). Nächster Schritt: Z3 bis Z6 neu ordnen.
   * **P5.1–P5.3** — P5.1 stellt die Maßoperationen familienweise auf den
     Maßeditor im Bild um (Bohrung und Platzierung, dann Bewegen, Drehen und
     Skalieren, dann die übrigen Merkmals-, Form- und Bausteinmaße) und nimmt
@@ -4176,7 +4180,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-559"></a>
 
-- [ ] **RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als
+- [~] **RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als
   Ausschnitt.** Robert, 08.10.2026: Ein Quader entsteht mit drei Klicks in der Ansicht: der
   erste setzt den Anfang auf Bett oder Fläche, der zweite die Gegenecke in X und Y, der dritte
   die Höhe in Z. Auf einem Körper wird er angefügt oder ausgeschnitten. Einfach halten, ein
@@ -4185,6 +4189,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Gegenecke X/Y, Höhe Z), auf einem Körper wahlweise angefügt oder ausgeschnitten, seine Maße
   danach als Schrittwerte änderbar sind und Strg+Z ihn als einen Schritt nimmt. Dazu der Ablauf
   vorher mit `bedienlogik`, Klicks gezählt; Geometrietest; Fenstertest mit drei Klicks; Handbuch.
+  **Stand (Paket Z1, 08.10.2026):** gebaut nach dem freigegebenen Entwurf (Bauplan §30.1):
+  *Zeichnen* oben und Strg+Umschalt+E (Fusion E) öffnen das Aufziehen ohne Moduswechsel, die
+  Richtung des dritten Klicks wählt `sketch_extrude`, `sketch_join` oder `sketch_pocket` (an der
+  Gegenwand durchgehend), kein Dialog, Escape und Strg+Z je Klick, Doppelklick auf den Schritt
+  öffnet *Breite*, *Tiefe* und *Höhe* vorn. Geometrietests ohne Fenster
+  (`tests/test_drawn_body.py`), Fenstertests mit den Abnahmepunkten 1 bis 9
+  (`tests/test_draw_ui.py`, offscreen über die Klickmethoden), Handbuchseite *Zeichnen* in
+  sechs Sprachen. Offen: Fang, Drahtform, Hervorhebung und Tastatur am echten Fenster, die
+  Nachzählung durch `bedienlogik`, Handbuchbilder und Anleitung *Einen Körper aufziehen* beim
+  Release.
 
 <a id="rm-560"></a>
 
@@ -4201,6 +4215,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Weg zu jeder Aufgabe, wenige Schritte, keine verschachtelten Modi. **Abnahme:** `bedienlogik`
   zählt die Klicks je Hauptaufgabe vorher und nachher; kein zweiter Weg zur selben Sache;
   Fenstertests der neuen Abläufe; Handbuch.
+  **Stand Zeichnen (Paket Z1, 08.10.2026):** *Hochziehen*, *Abtragen*, *Mehr* und der Ziehgriff
+  der Querschau sind aus der Skizze genommen; *Fertig* führt jeden freien Umriss zurück in die
+  Ansicht, die Höhe entscheidet die Art (RM-559); *Freie Form …* öffnet den Editor mit der Linie.
+  Gemeinsame Regel der drei Werkzeuge in Bauplan §25. Offen: Formen und Skelett (Paket Z2), die
+  Nachzählung durch `bedienlogik` und die Abnahme am echten Fenster.
 
 <a id="rm-569"></a>
 
