@@ -2175,7 +2175,9 @@ RevisionKind = Literal["insert", "move", "suppress", "reactivate"]
 
 ``insert`` und ``move`` planen den Suffix ab der ersten geänderten Stelle mit
 neuen Kennungen neu — die Reihenfolge des Stapels **ist** die seiner Kennungen
-(§15). ``suppress`` und ``reactivate`` wechseln nur die Fassung der Schritte."""
+(§15). ``insert`` tragen auch die Wege „… und erneut versuchen“, die einen
+Schritt vor den angehaltenen setzen (RM-547). ``suppress`` und ``reactivate``
+wechseln nur die Fassung der Schritte."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2604,18 +2606,24 @@ def step_numbers(operations: Sequence[Operation]) -> dict[OpId, int]:
 
 
 def replanned_steps(document: Document) -> frozenset[OpId]:
-    """Schritte, die ein Einfügen oder Verschieben neu gefasst hat (P7).
+    """Schritte, die ein Einfügen, Verschieben oder erneuter Versuch neu gefasst hat (P7).
 
     Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
     Kennung an seiner neuen Stelle. Verlaufsfeld und Steckbrief blenden sie
     deshalb aus, statt sie wie einen gelöschten Schritt zu nennen (§15.4 gilt
     dem Löschen). Gelesen wird ``Transaction.revision``, das alte Projekte seit
     Format 32 tragen — ``renumbered`` kam erst mit Format 45 (Review RM-529).
+
+    **Und die Wege „… und erneut versuchen“** (RM-547): Sie schreiben seither
+    ``insert``. Ältere Dateien tragen bei ihnen keine Revision; erkannt werden
+    sie an ihrer Gestalt, denn nur sie entfernen Schritte und bringen zugleich
+    eigene mit — eine Löschung bringt keine (``ops`` leer).
     """
     found: set[OpId] = set()
     for transaction in document.transactions:
         changes = transaction.changes
-        if transaction.revision not in ("insert", "move") or changes is None:
+        retried = transaction.revision is None and bool(transaction.ops)
+        if changes is None or not (transaction.revision in ("insert", "move") or retried):
             continue
         found.update(
             op_id for op_id, version in (changes.after.edited_ops or {}).items() if version is None

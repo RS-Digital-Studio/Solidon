@@ -346,9 +346,11 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
 ### Projektdatei
 
 - **Revisionsherkunft**: `Transaction.renumbered` hält die belegte Zuordnung
-  alter zu neuer Schrittkennung bei Einfügen und Verschieben. Sichtbare Titel
-  folgen dieser Herkunft; Positionsnummern bleiben reine Anzeige. Alte Dateien
-  ohne Zuordnung werden nicht durch Parametergleichheit nachträglich verbunden.
+  alter zu neuer Schrittkennung bei Einfügen, Verschieben und den Wegen „… und
+  erneut versuchen“ (`revision="insert"`, RM-547). Sichtbare Titel folgen dieser
+  Herkunft; Positionsnummern bleiben reine Anzeige. Alte Dateien ohne Zuordnung
+  werden nicht durch Parametergleichheit verbunden; ihre erneuten Versuche
+  erkennt `types.replanned_steps` an der Gestalt.
 
 - **Spulen** (`PrintSettings`): Filamentidentität und lokale Kennung, nie
   Pfade, Namensvorlagen übersetzbar und vor dem Lesen geprüft; die Migration

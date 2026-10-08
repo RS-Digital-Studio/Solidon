@@ -1344,11 +1344,18 @@ class History:
             ),
         )
         self._forget_undone()
+        # **Neu gefasst wie beim Einfügen, nicht gelöscht** (RM-547): Der Zug
+        # setzt einen Schritt vor den Suffix und plant ihn unter neuen
+        # Kennungen neu — genau, was ``insert`` sagt. Mit der Zuordnung blenden
+        # Verlauf und Steckbrief die alten Zeilen aus, und eigene Titel folgen
+        # ihrem Schritt (``step_titles``); Dateien älterer Versionen lesen beides.
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
             title=title,
             ops=tuple(entry.id for entry in planned),
             changes=changes,
+            revision="insert",
+            renumbered=dict(replaced_ids),
         )
         self.document.ops.extend(planned)
         self.document.transactions.append(transaction)
