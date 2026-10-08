@@ -1116,6 +1116,66 @@ def test_the_key_dialog_remembers_the_model_without_a_key(
     llm.remember_ollama_model("")
 
 
+class _LockedKeychain:
+    """Ein Schlüsselbund, der da ist, aber nichts annimmt — gesperrt."""
+
+    def get_password(self, service: str, account: str) -> str | None:
+        return None
+
+    def set_password(self, service: str, account: str, key: str) -> None:
+        raise RuntimeError("Keyring is locked")
+
+
+@pytest.mark.parametrize("keychain", ["locked", "missing"])
+def test_a_key_the_keychain_refuses_stays_in_the_field_with_the_real_reason(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
+    keychain: str,
+) -> None:
+    """Speichern, das nicht geht, nennt den Grund und den Weg — und behält den Schlüssel.
+
+    Bis dahin stand bei jedem Fehlschlag „Auf diesem Rechner gibt es keinen
+    Schlüsselbund", auch über einem gesperrten; die Umgebungsvariable hatte
+    keinen Namen, und der Dialog verwarf den eingetippten Schlüssel (Regel 17,
+    Review der Zusatzfixes).
+    """
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.core.backends import keys
+    from app.ui import dialogs
+    from app.ui.dialogs import KeyDialog
+
+    if keychain == "locked":
+        monkeypatch.setattr(keys, "_keyring", _LockedKeychain)
+        said = "Der Schlüsselbund ist gesperrt oder nicht erreichbar."
+    else:
+        monkeypatch.setattr(keys, "_keyring", lambda: None)
+        monkeypatch.setattr(keys, "_keyring_installed", lambda: False)
+        said = "Auf diesem Rechner gibt es keinen Schlüsselbund."
+    boxes: list[object] = []
+    monkeypatch.setattr(
+        dialogs.QMessageBox, "information", lambda *args, **kwargs: boxes.append(args)
+    )
+    dialog = KeyDialog()
+    closed: list[int] = []
+    dialog.finished.connect(closed.append)
+    typed = "sk-ant-" + "x" * 40
+    dialog.field.setText(typed)
+    save = dialog.buttons.button(QDialogButtonBox.StandardButton.Save)
+    assert save is not None
+    save.click()
+
+    assert closed == [], "der Dialog bleibt offen"
+    assert dialog.field.text() == typed, "der eingetippte Schlüssel bleibt im Feld"
+    # Sichtbar steht davor das Warnzeichen der Rolle; der vorgelesene Name ist der Satz.
+    status = dialog.key_status.accessibleName()
+    assert status.startswith(said), status
+    assert said in dialog.key_status.text()
+    assert keys.ENVIRONMENT_VARIABLE in status, "der Weg über die Umgebung trägt ihren Namen"
+    assert boxes == [], "die Meldung steht im Dialog, kein zweites Fenster"
+
+
 def test_the_probe_says_what_a_useless_model_means(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

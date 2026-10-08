@@ -244,6 +244,68 @@ def test_the_keychain_is_used_when_there_is_one(monkeypatch: pytest.MonkeyPatch)
     assert keys.read("anthropic") is None
 
 
+class NoKeyringError(RuntimeError):
+    """Wie ``keyring.errors.NoKeyringError``: Es fand kein Backend."""
+
+
+class _RefusingKeychain:
+    """Ein Schlüsselbund, dessen ``set_password`` mit ``error`` scheitert."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def set_password(self, service: str, account: str, key: str) -> None:
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    ("keychain", "installed", "said"),
+    [
+        (None, False, "Auf diesem Rechner gibt es keinen Schlüsselbund."),
+        (None, True, "Der Schlüsselbund ist gesperrt oder nicht erreichbar."),
+        (
+            _RefusingKeychain(NoKeyringError("No recommended backend")),
+            True,
+            "Auf diesem Rechner gibt es keinen Schlüsselbund.",
+        ),
+        (
+            _RefusingKeychain(RuntimeError("Keyring is locked")),
+            True,
+            "Der Schlüsselbund ist gesperrt oder nicht erreichbar.",
+        ),
+    ],
+    ids=["ohne keyring", "Backend unbrauchbar", "kein Backend", "gesperrt"],
+)
+def test_a_refused_key_names_the_real_reason_and_the_variable(
+    monkeypatch: pytest.MonkeyPatch, keychain: object, installed: bool, said: str
+) -> None:
+    """Ein Schlüssel, der nicht in den Schlüsselbund kommt, sagt, warum — und wohin sonst.
+
+    Bis dahin kannte der Dialog nur „keinen Schlüsselbund", auch über einem
+    gesperrten, und die Umgebungsvariable hatte keinen Namen (Regel 17).
+    """
+    monkeypatch.setattr(keys, "_keyring", lambda: keychain)
+    monkeypatch.setattr(keys, "_keyring_installed", lambda: installed)
+
+    refusal = keys.store_refusal("anthropic", "sk-ant-" + "x" * 40)
+
+    assert refusal is not None
+    assert str(refusal).startswith(said), str(refusal)
+    assert keys.ENVIRONMENT_VARIABLE in str(refusal)
+    assert keys.store("anthropic", "sk-ant-" + "x" * 40) is False
+
+
+def test_a_key_that_cannot_be_one_says_so_and_not_keychain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein eingefügter Fehlertext ist kein fehlender Schlüsselbund — der Satz sagt, was es ist."""
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+
+    refusal = keys.store_refusal("anthropic", "Fehler\nNoch ein Knopf")
+
+    assert refusal == keys.unusable("Fehler\nNoch ein Knopf")
+
+
 # --- das gehostete Backend -------------------------------------------------------
 
 
