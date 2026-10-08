@@ -9731,7 +9731,9 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
     # Geometrietoleranz: Maschinengenauigkeit mal Systemgröße und Spaltennorm.
     rank_limit = np.finfo(float).eps * max(matrix.shape) * math.sqrt(len(points))
     for column in range(3):
-        norms = [math.hypot(*matrix[column:, index]) for index in range(column, 3)]
+        # Als Python-Zahlen entpackt: dieselben Werte, ohne je Eintrag ein
+        # NumPy-Skalar anzulegen (RM-568).
+        norms = [math.hypot(*matrix[column:, index].tolist()) for index in range(column, 3)]
         pivot = column + int(np.argmax(norms))
         length = norms[pivot - column]
         if length <= rank_limit:
@@ -9741,7 +9743,7 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
         direction = matrix[column:, column].copy()
         diagonal = -math.copysign(length, float(direction[0]))
         direction[0] -= diagonal
-        direction /= math.hypot(*direction)
+        direction /= math.hypot(*direction.tolist())
         for remaining in range(column + 1, 3):
             projection = 2.0 * math.fsum((direction * matrix[column:, remaining]).tolist())
             matrix[column:, remaining] -= projection * direction
