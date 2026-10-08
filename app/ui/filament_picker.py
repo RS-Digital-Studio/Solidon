@@ -57,7 +57,16 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QShowEvent
+from PySide6.QtGui import (
+    QColor,
+    QIcon,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -1983,16 +1992,7 @@ class FilamentPanel(QWidget):
     def _fill(self) -> None:
         """Die Zeilen neu schreiben; ohne Körper steht ein Satz statt einer leeren Liste."""
         self.list.clear()
-        for slot, name, colour, count, has_override in self._used:
-            shown_name = name
-            if slot is not None:
-                if slot.material_type and slot.material_type.casefold() not in name.casefold():
-                    shown_name = f"{name} · {slot.material_type}"
-                if slot.material:
-                    shown_name = f"{shown_name} · {slot.material}"
-            label = self._used_label(shown_name, count)
-            if has_override:
-                label = f"{label} · {tr('eigene Druckwerte')}"
+        for (slot, _name, colour, _count, _own), label in zip(self._used, self.rows(), strict=True):
             item = QListWidgetItem(swatch(colour), label)
             item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             if slot is not None:
@@ -2017,6 +2017,27 @@ class FilamentPanel(QWidget):
             )
         )
         self.updateGeometry()
+
+    def rows(self) -> tuple[str, ...]:
+        """Die Zeilen der Liste als Text — dieselben, die die Kopfzeile in der Kurzhilfe nennt.
+
+        Eine Quelle für beide (Review U2, Fund 3): Die Kurzhilfe las die
+        Projektvorgabe und sagte „Im Projekt: PLA“ über einen Körper, den die
+        Liste „Ohne Filament“ nennt.
+        """
+        rows = []
+        for slot, name, _colour, count, has_override in self._used:
+            shown_name = name
+            if slot is not None:
+                if slot.material_type and slot.material_type.casefold() not in name.casefold():
+                    shown_name = f"{name} · {slot.material_type}"
+                if slot.material:
+                    shown_name = f"{shown_name} · {slot.material}"
+            label = self._used_label(shown_name, count)
+            if has_override:
+                label = f"{label} · {tr('eigene Druckwerte')}"
+            rows.append(label)
+        return tuple(rows)
 
     @staticmethod
     def _used_label(name: str, count: int) -> str:
@@ -2072,9 +2093,26 @@ class FilamentPopup(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.panel)
+        self._anchor: QWidget | None = None
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        """Ein Druck auf den Knopf, der die Liste öffnete, schließt sie nur — wie ``QMenu``.
+
+        Qt schließt ein Popup beim Druck daneben und spielt den Druck dem
+        Widget darunter noch einmal zu; der Knopf öffnete die Liste damit
+        sofort wieder (Review U2, Fund 5).
+        """
+        anchor = self._anchor
+        if anchor is not None and anchor.isVisible():
+            where = anchor.mapFromGlobal(event.globalPosition().toPoint())
+            if anchor.rect().contains(where):
+                self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
+        super().mousePressEvent(event)
 
     def show_below(self, anchor: QWidget) -> None:
         """Unter dem Knopf, oder darüber, wenn unten der Platz fehlt — nie über den Schirmrand."""
+        self._anchor = anchor
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, False)
         screen = anchor.screen().availableGeometry()
         self.adjustSize()
         width = min(screen.width(), max(self.sizeHint().width(), POPUP_WIDTH))

@@ -554,3 +554,68 @@ def test_refresh_only_visits_each_whole_body_slot_array_once(
     picker.set_context([first, second])
     assert len(calls) == 2
     assert picker.clear_button.isEnabled()
+
+
+def test_a_wheel_notch_without_focus_assigns_nothing(picker: QuickFilamentPicker) -> None:
+    """Eine Radraste über dem Schnellwähler färbt nur, wenn er den Fokus hat.
+
+    Seit RM-557 ist jede Wahl am Wähler sofort eine Zuweisung mit eigenem
+    Verlaufsschritt. Wer die Karte *Auswahl* mit dem Rad rollte, färbte den
+    gewählten Körper je Raste um (Review U2, Fund 2). Entscheidung Robert,
+    16.09.2026: erst hineinklicken (``labels.wheel_needs_focus``).
+    """
+    from PySide6.QtCore import QPoint, QPointF
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QLineEdit, QStyleFactory, QVBoxLayout, QWidget
+
+    filaments.save(filaments.CatalogueFilament("PLA Rot", "#ff0000", "PLA"))
+    filaments.save(filaments.CatalogueFilament("PLA Blau", "#0000ff", "PLA"))
+    picker.set_context([_body("part", "Teil")])
+    # Fusion wie in der Anwendung (``theme.py``): Dort dreht das Rad ein
+    # Auswahlfeld überhaupt.
+    fusion = QStyleFactory.create("Fusion")
+    picker.picker.setStyle(fusion)
+    host = QWidget()
+    layout = QVBoxLayout(host)
+    other = QLineEdit(host)
+    layout.addWidget(other)
+    picker.setParent(host)
+    layout.addWidget(picker)
+    host.show()
+    host.activateWindow()
+    other.setFocus()
+    QApplication.processEvents()
+    chosen: list[object] = []
+    picker.spoolChosen.connect(chosen.append)
+
+    def notch() -> QWheelEvent:
+        field = picker.picker
+        local = QPointF(field.width() / 2, field.height() / 2)
+        return QWheelEvent(
+            local,
+            field.mapToGlobal(local.toPoint()).toPointF(),
+            QPoint(0, 0),
+            QPoint(0, -120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+
+    try:
+        assert not picker.picker.hasFocus()
+        QApplication.sendEvent(picker.picker, notch())
+        QApplication.processEvents()
+        assert chosen == [], "ohne Fokus weist eine Raste nichts zu"
+        assert picker.picker.currentIndex() == 0
+
+        picker.picker.setFocus()
+        QApplication.processEvents()
+        assert picker.picker.hasFocus()
+        QApplication.sendEvent(picker.picker, notch())
+        QApplication.processEvents()
+        assert len(chosen) == 1, "mit Fokus wählt die Raste wie gewohnt"
+    finally:
+        picker.setParent(None)
+        host.close()
+        host.deleteLater()

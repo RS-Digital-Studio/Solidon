@@ -26,6 +26,7 @@ from app.ui.filament_picker import (
     spool_slot,
     swatch,
 )
+from app.ui.labels import wheel_needs_focus
 from app.ui.leash import weak_slot
 from app.ui.style import TIGHT, set_level
 
@@ -59,6 +60,9 @@ class QuickFilamentPicker(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.picker.activated.connect(self._chosen)
+        # Jede Wahl ist sofort eine Zuweisung: Eine Raste beim Rollen der Karte
+        # darf keine sein (Robert, 16.09.2026, erst hineinklicken).
+        wheel_needs_focus(self.picker)
         layout.addWidget(self.picker)
         self.notice = ErrorNotice(self)
         self.notice.hide()

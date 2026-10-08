@@ -918,7 +918,7 @@ def test_a_filament_made_while_assigning_survives_save_undo_and_another_machine(
     from app.core.scene.history import OperationDraft
     from app.ui.filament_picker import NEW_FILAMENT, FilamentField, NewFilamentDialog
     from app.ui.session import Session
-    from tests.ui_helpers import wait_for_catalogue
+    from tests.ui_helpers import wait_for_catalogue, wait_until
 
     workshop = tmp_path / "werkstatt.json"
     monkeypatch.setattr(filaments, "catalogue_path", lambda: workshop)
@@ -957,11 +957,19 @@ def test_a_filament_made_while_assigning_survives_save_undo_and_another_machine(
         wait_for_catalogue(field)
         notice = dialog._filament_notice
         assert "gesperrt" in notice.text()
-        retry = next(
-            button
-            for button in notice.findChildren(QPushButton)
-            if button.text() == str(RETRY.label) and not button.isHidden()
-        )
+
+        def shown_retry() -> list[QPushButton]:
+            return [
+                button
+                for button in notice.findChildren(QPushButton)
+                if button.text() == str(RETRY.label) and button.isVisible()
+            ]
+
+        # Der Knopf kommt mit der nächsten Runde der Ereignisschleife
+        # (``QLayout`` zeigt neue Kinder verzögert); ``wait_for_catalogue``
+        # dreht sie nicht mehr, wenn der Arbeiter schon fertig war.
+        wait_until(qt_app, lambda: bool(shown_retry()))
+        retry = shown_retry()[0]
         assert filaments.catalogue() == ()
         assert dialog.values()["name"] != "Werkstattblau", "ohne Lagereintrag keine Wahl"
 

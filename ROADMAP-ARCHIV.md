@@ -9182,7 +9182,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-132 — Freiformerkennung liegt noch über dem Ein-Sekunden-Ziel | weiter offen → [RM-132](ROADMAP.md#rm-132) | tests/test_performance.py enthält inzwischen beide zusätzlichen Fälle; :556 nennt 1,41 s synthetisch und 1,52 s organisch. Die Korpuslücke ist geschlossen, das strengere Ziel bleibt laut Punkt ausdrücklich offen. |
 | RM-133 — `rotate_feature` ändert das Volumen, und niemand sagt es | weiter offen → [RM-133](#rm-133) | prepare_ops.py:1912ff meldet inzwischen verlorenen Durchgang über _throughness_lost. Die allgemeine Volumenänderung ist weiter eine Bedienentscheidung, kein bestätigter Geometriefehler. |
 | RM-134 — Testhilfen stehen zweimal | weiter offen → [RM-134](ROADMAP.md#rm-134) | tests/test_cone_fit_quality.py:15 und test_torus_fit_quality.py:15 führen _freeform_patch doppelt; test_analysis_ui.py:161 und test_selection.py:361 on_the_bore_wall mit unterschiedlicher Signatur. Die historische Zahl 21 Gruppen wird nicht ungeprüft fortgeschrieben. |
-| RM-135 — Die Filamentkarte fordert mehr, als sie zeigt | weiter offen → [RM-135](#rm-135) | app/ui/filament_picker.py:831ff _around_the_list bleibt die gemeinsame Berechnung. tests/test_filament_picker.py:534ff hat weiterhin die Mac-Unterhöhen-Ausnahme. 144/126 ist ein historischer Windows-Befund; beide Richtungen gemeinsam neu vermessen. |
+| RM-135 — Die Filamentkarte fordert mehr, als sie zeigt | gegenstandslos (RM-556) → [RM-135](#rm-135) | app/ui/filament_picker.py:831ff _around_the_list bleibt die gemeinsame Berechnung. tests/test_filament_picker.py:534ff hat weiterhin die Mac-Unterhöhen-Ausnahme. 144/126 ist ein historischer Windows-Befund; beide Richtungen gemeinsam neu vermessen. |
 | RM-136 — Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | weiter offen → [RM-136](#rm-136) | app/core/figures.py:92 beschreibt weiter vier Bereiche, :1118 trägt der Bildtext den alten Aufbau. 4a88f97a/cdb5cab1 aktualisieren echte Screenshots und Medien; 84a746e7 veröffentlicht 0.3.5. Der alte Auftrag 'vor Paketbau 0.3.5' und pauschal alte Screenshots sind erledigt; Schema bleibt offen. |
 | RM-137 — Live-Abnahme des Sitzungsendes | weiter offen → [RM-137](#rm-137) | Aktuelle ROADMAP.md wurde während der Durchsicht berechtigt weitergeführt: Desktop und Standalone-CLI sind getrennt geprüft. loggedIn=false stammt aus der separaten CLI und beweist keine fehlende Desktop-Anmeldung; Pyright ist bereits als Kind einer Desktop-Sitzung belegt. Nur Live-Abnahme des echten Sitzungsendes fehlt. |
 
@@ -24320,7 +24320,7 @@ bleibt, steht hier mit Kästchen.
   weiter 114 und 65 am Stück. Was offen bleibt, ist die Mine selbst:
   Zerstörung eines Qt-Objekts zur falschen Zeit, gleich durch wen — die
   andere Hälfte steht in „Fünf Fensterdateien reißen".
-- **Historischer Befund RM-112 (zusammengeführt; aktuelle Aufgabe [RM-135](#rm-135)):** **Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein.**
+- **Historischer Befund RM-112 (zusammengeführt, gegenstandslos mit RM-556; Abschluss [RM-135](#rm-135)):** **Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein.**
   `test_the_filament_card_shares_the_height_instead_of_taking_it` meldet auf
   macos-latest „eine knapp bemessene Karte muss sich auch klein machen":
   `sizeHint()` liegt nach `set_room(least_height())` über dem Boden, also
@@ -26177,7 +26177,7 @@ mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
       duplizieren* und *Objekt umbenennen* verschwinden an einer Fläche,
       statt bedienbar dazustehen. Vor P6, sonst zieht der Umbau die falschen
       Knöpfe in seinen neuen Ort mit.
-- **Historischer Befund RM-135 (weiter offen; aktuelle Aufgabe [RM-135](#rm-135)):** **Die Filamentkarte fordert mehr, als sie zeigt.** Beim Bau des
+- **Historischer Befund RM-135 (gegenstandslos mit RM-556; Abschluss [RM-135](#rm-135)):** **Die Filamentkarte fordert mehr, als sie zeigt.** Beim Bau des
       P4-Nachweises gemessen: Sie meldet als Wunsch 144 Bildpunkte, bekommt
       sie zugeteilt und setzt 126 um. Die Differenz rechnet
       `filament_picker._around_the_list` zu hoch — sie fordert damit Platz,
@@ -44267,9 +44267,10 @@ Changelog: ja — ein neues Filament steht sofort im Bild, auch an Bausteinen un
 Liste der Filamente, die das Projekt verwendet, und darunter den Weg ins Filamentlager.
 
 **Umsetzung:** `HeaderBar.filament_button` (*Filamente*, Spulensymbol, beschriftet) rechts neben
-den Druckeinstellungen; die Kurzhilfe nennt die Filamente des Projekts (`header.filament_names`,
-`show_filaments`). In der engen, zweizeiligen Kopfzeile trägt er nur sein Zeichen wie die
-Knöpfe der Werkzeugleiste, sonst fiel sie bei 640 px ins Überlaufmenü. Der Klick öffnet `filament_picker.FilamentPopup` (ein `Qt.Popup`, `show`
+den Druckeinstellungen; die Kurzhilfe nennt dieselben Zeilen wie die Liste (`FilamentPanel.rows`,
+`show_filaments`). Im Wunschmaß der Kopfzeile zählt nur sein Zeichen, das Wort steht nur bei
+Platz danach — die Suche behält bei 1366 px ihr Wort (Review U2); ein zweiter Klick schließt
+die Liste, der Rückweg zu den Druckeinstellungen steht nur nach dem Weg von dort. Der Klick öffnet `filament_picker.FilamentPopup` (ein `Qt.Popup`, `show`
 statt `exec`) mit `FilamentPanel`: je Filament eine Zeile mit Farbe, Name und Zahl der Körper,
 *Druckwerte …* für das gewählte Filament, *Filamentlager öffnen*; aus den Druckeinstellungen
 (*Filamente …*) kommt dieselbe Liste mit *Zurück zu Druckeinstellungen*. Das Regal — anlegen,

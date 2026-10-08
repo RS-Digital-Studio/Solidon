@@ -113,7 +113,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
-| `header.py` | Kopfzeile: Projektname, `printer_button_text`, Knopf *Filamente* (`filament_names` in der Kurzhilfe) |
+| `header.py` | Kopfzeile: Projektname, `printer_button_text`, Knopf *Filamente* (Kurzhilfe aus `FilamentPanel.rows`) |
 
 ### Brücke zum Kern
 

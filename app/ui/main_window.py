@@ -292,7 +292,7 @@ from app.ui.filament_picker import CatalogueWrites, FilamentPopup, colours_of, s
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.guide_targets import MissingTargetError, widget_for
-from app.ui.header import ALL_PLATES, HeaderBar, filament_names, header_stylesheet
+from app.ui.header import ALL_PLATES, HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
@@ -5304,7 +5304,7 @@ class MainWindow(QMainWindow):
         self.header = HeaderBar(toolbar)
         self.header.plateChanged.connect(self.viewport.set_plate)
         self.header.printerRequested.connect(self.action_print_settings)
-        self.header.filamentsRequested.connect(self._show_filament_list)
+        self.header.filamentsRequested.connect(self._toggle_filament_list)
         toolbar.addWidget(self.header)
 
     def _menu(self, title: str) -> QMenu:
@@ -8565,12 +8565,28 @@ class MainWindow(QMainWindow):
 
     def _focus_filaments(self) -> None:
         """Die Filamentliste samt Rückweg zu den Druckeinstellungen öffnen."""
-        self.filaments.return_to_print_button.show()
-        self._show_filament_list()
+        self._show_filament_list(back_to_print=True)
 
-    def _show_filament_list(self) -> None:
-        """*Filamente* in der Kopfzeile: die Filamente des Projekts und der Weg ins Lager."""
+    def _show_filament_list(self, *, back_to_print: bool = False) -> None:
+        """*Filamente* in der Kopfzeile: die Filamente des Projekts und der Weg ins Lager.
+
+        Den Rückweg zu den Druckeinstellungen trägt die Liste nur, wenn sie von
+        dort kam (Review U2, Fund 6).
+        """
+        self.filaments.return_to_print_button.setVisible(back_to_print)
         self.filament_popup.show_below(self.header.filament_button)
+
+    def _toggle_filament_list(self) -> None:
+        """Der Knopf *Filamente* öffnet die Liste, ein zweiter Klick schließt sie (Fund 5).
+
+        Am Fenster nimmt die Liste den Druck selbst und spielt ihn nicht nach
+        (``FilamentPopup.mousePressEvent``); kommt der Klick trotzdem an — wo
+        die Plattform ihn zustellt —, schließt er hier.
+        """
+        if self.filament_popup.isVisible():
+            self.filament_popup.hide()
+            return
+        self._show_filament_list()
 
     def _print_settings_from_filaments(self) -> None:
         self.filament_popup.hide()
@@ -8584,7 +8600,7 @@ class MainWindow(QMainWindow):
         """Liste und Kopfzeile nennen dieselben Filamente derselben Szene."""
         bodies = list(result.scene.objects.values())
         self.filaments.show_scene(bodies, settings)
-        self.header.show_filaments(filament_names(self.session.profile, bodies))
+        self.header.show_filaments(self.filaments.rows())
 
     def _offer_generator_nodes(self, dialog: GenerateDialog) -> None:
         """Die Knoten und das Modell einrichten, und danach neu nachsehen."""
@@ -27707,7 +27723,12 @@ class MainWindow(QMainWindow):
         if room <= 0:
             return
         self._measure_toolbar_afresh()
-        header = self.header.sizeHint().width()
+        # **So breit, wie die Leiste die Kopfzeile rechnet:** ``QWidgetItem``
+        # nimmt das Wunschmaß, mindestens aber das Mindestmaß. Ohne Projekt ist
+        # das Wunschmaß null, das Mindestmaß nicht — die Bedarfe, die beim
+        # Aufbau gemerkt werden, trugen sonst die Kopfzeile mit, und die Suche
+        # bekam ihr Wort bei 1366 px nie zurück (Review U2, Fund 4).
+        header = max(self.header.sizeHint().width(), self.header.minimumSizeHint().width())
         while self._toolbar_form < TOOLBAR_WORDS:
             need = self._toolbar_needs.get(self._toolbar_form + 1)
             if need is None or need + header + TOOLBAR_HYSTERESIS > room:

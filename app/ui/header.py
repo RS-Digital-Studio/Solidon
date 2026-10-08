@@ -413,7 +413,7 @@ class HeaderBar(QWidget):
         """
         preferred = super().sizeHint()
         has_project = any(label.full_text() for label in (self.title, self.bounds, self.printer))
-        readable = READABLE_HEADER_WIDTH + self._filament_width(compact=False)
+        readable = READABLE_HEADER_WIDTH + self._filament_width(words=False)
         width = max(self._compact_width(), readable) if has_project else 0
         return QSize(width, preferred.height())
 
@@ -423,28 +423,46 @@ class HeaderBar(QWidget):
         return QSize(self._compact_width(), minimum.height())
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        self._arrange(self._wide_width() > event.size().width())
+        width = event.size().width()
+        self._arrange(self._wide_width() > width)
+        self._fit_filament_words(width)
         super().resizeEvent(event)
 
-    def _filament_width(self, *, compact: bool) -> int:
-        """Der Knopf *Filamente* mit seinem Abstand — breit mit Wort, eng nur mit Zeichen.
+    def _filament_width(self, *, words: bool) -> int:
+        """Der Knopf *Filamente* mit seinem Abstand — mit Wort oder nur mit Zeichen.
 
-        Bei 640 Bildpunkten drückte das Wort die ganze Kopfzeile ins
-        Überlaufmenü. Wie an der Werkzeugleiste bleibt dann das Zeichen; Name
-        und Kurzhilfe stehen weiter am Knopf (`grenzen.md`).
+        **Im Wunschmaß zählt nur das Zeichen** (Review U2, Fund 4): Mit dem
+        Wort darin trug *Funktion suchen …* sein Wort erst ab 1415 px, und
+        1366 px ist die häufigste Laptopbreite. Die Suche geht vor
+        (`grenzen.md`); das Wort kommt, wo danach noch Platz ist
+        (:meth:`_fit_filament_words`). Name und Kurzhilfe stehen immer am Knopf.
         """
-        return (self._filament_sign if compact else self._filament_words) + TIGHT
+        return (self._filament_words if words else self._filament_sign) + TIGHT
+
+    def _fit_filament_words(self, width: int) -> None:
+        """Das Wort am Knopf nur einzeilig und nur mit Platz über dem Wunschmaß."""
+        extra = self._filament_width(words=True) - self._filament_width(words=False)
+        room = not self._compact and width >= max(
+            self._wide_width(words=True), self.sizeHint().width() + extra
+        )
+        wanted = (
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            if room
+            else Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        if self.filament_button.toolButtonStyle() != wanted:
+            self.filament_button.setToolButtonStyle(wanted)
 
     def _compact_width(self) -> int:
         """Breite der zweizeiligen Anordnung: Angaben oben, Filter unten."""
         top = (self.title, self.bounds, self.printer_control)
         top_width = sum(widget.minimumWidth() for widget in top) + TIGHT * (len(top) - 1)
-        top_width += self._filament_width(compact=True)
+        top_width += self._filament_width(words=False)
         plate_width = self.plates.minimumWidth() if not self.plates.isHidden() else 0
         return max(top_width, plate_width) + TIGHT * 2
 
-    def _wide_width(self) -> int:
-        """Mindestbreite, ab der alle Angaben in eine Zeile passen."""
+    def _wide_width(self, *, words: bool = False) -> int:
+        """Mindestbreite, ab der alle Angaben in eine Zeile passen — der Knopf mit Zeichen."""
         widgets: list[QWidget] = [self.title, self.bounds]
         if not self.plates.isHidden():
             widgets.extend((self.plates, self._divider))
@@ -453,7 +471,7 @@ class HeaderBar(QWidget):
         return (
             sum(widget.minimumWidth() for widget in widgets)
             + printer_action_width
-            + self._filament_width(compact=False)
+            + self._filament_width(words=words)
             + TIGHT * max(0, len(widgets) - 1)
             + TIGHT * 2
         )
@@ -521,7 +539,6 @@ class HeaderBar(QWidget):
             self._layout.addWidget(self._divider, 0, 4)
             self._layout.addWidget(self.printer_control, 0, 5)
             self._layout.addWidget(self.filament_button, 0, 6)
-            self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             for column, stretch in (
                 (0, 2),
                 (1, 3),
@@ -585,6 +602,7 @@ class HeaderBar(QWidget):
     def _reflow(self) -> None:
         """Zieht nach, wenn ein neuer Text sein semantisches Minimum ändert."""
         self._arrange(self._wide_width() > self.width())
+        self._fit_filament_words(self.width())
 
     @property
     def plate(self) -> int:
@@ -678,12 +696,17 @@ class HeaderBar(QWidget):
         self.printer.setText(printer_title(profile.printer))
         self._reflow()
 
-    def show_filaments(self, names: Sequence[str]) -> None:
-        """Welche Filamente das Projekt verwendet — in Kurzhilfe und Beschreibung des Knopfs."""
+    def show_filaments(self, rows: Sequence[str]) -> None:
+        """Die Zeilen der Liste hinter dem Knopf — in Kurzhilfe und Beschreibung.
+
+        Dieselben Zeilen, die die Liste zeigt (``FilamentPanel.rows``), je eine
+        Zeile: In der engen Kopfzeile trägt der Knopf nur sein Zeichen, dann ist
+        das seine einzige Auskunft.
+        """
         said = (
-            tr("Im Projekt: {filament}").format(filament=", ".join(names))
-            if names
-            else tr("Noch kein Filament zugewiesen")
+            tr("Im Projekt: {filament}").format(filament="\n".join(rows))
+            if rows
+            else tr("Noch kein Körper im Projekt")
         )
         hint = f"{said}\n{tr('Zeigt die Filamente des Projekts und den Weg ins Filamentlager.')}"
         self.filament_button.setToolTip(hint)

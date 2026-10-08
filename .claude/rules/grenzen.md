@@ -317,11 +317,11 @@ es kein Bild.
   Hinweis aus dem `statusTip` her — ein ungesetzter macht den Knopf nach dem
   Freischalten stumm; `_with_name` stellt am wortlosen Knopf den Namen voran
   (`wordless` am `QAction`), getrennt mit dem Zeichen, das der Satz nicht schon
-  führt (Gedankenstrich vor dem Zweck, Doppelpunkt vor einem Grund mit
-  Gedankenstrich).
+  führt.
 - **Die Kopfzeile geht vor:** Erst verlieren die sieben Knöpfe ihr Wort, dann
   die Suche *Funktion suchen …*, die als Lupe bleibt (`_fit_toolbar`, drei
-  Formen); gemerkt wird je Form, was sie ohne die Kopfzeile braucht.
+  Formen); gemerkt wird je Form, was sie ohne die Kopfzeile braucht. Die Suche
+  geht dem Wort an *Filamente* vor: Im Wunschmaß zählt sein Zeichen.
 - **Keiner der sieben Umschalter verschwindet:** `ToolStrip.set_tool_usable`
   graut ihn mit Grund (Explosion: „Dafür braucht es zwei Körper in der
   Szene.“), und `_update_actions` fragt ihn **nach** der Freigabe aller — eine
