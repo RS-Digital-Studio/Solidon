@@ -865,7 +865,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Spiderman, Murmelbrett und `chufang.3mf`. Der Ergebniscache hält höchstens RAM/8 (512 MB
   bis 4 GB), gezählt in Bytes samt trimesh-Cache und Schichtanalyse; ältere Einträge werden
   zuerst schlank (`MeshData.lean`), dann verdrängt (`scene/cache.py`, `core/memory.py`).
-  Spiderman, acht Schritte, 8 GB nachgestellt: 2,65 → 1,51 GB Arbeitssatz. `import app`
+  Spiderman, acht Schritte im Fenster, 8 GB nachgestellt: 2,65 → 1,75 GB Arbeitssatz, Spitze
+  4,05 → 3,10 GB. `import app`
   setzt einen BLAS-Faden: 1,5 GB Zusage weniger an 32 Kernen. Große Modelle: Murmelbrett mit
   Vollerkennung Spitze 3,5 GB Arbeitssatz, `chufang.3mf` (5,6 Mio.) 5,5 GB — unter 16 GB.
   **Offen:** der Renderer am echten Fenster (offscreen nicht messbar), die Schichtanalyse
