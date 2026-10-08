@@ -1272,8 +1272,11 @@ def _geometry_row_by_row(
     return "".join(lines)
 
 
+@pytest.mark.parametrize("block", [65_536, 7], ids=["ein-block", "viele-bloecke"])
 @pytest.mark.parametrize("native", [False, True], ids=["einfach", "nativ"])
-def test_the_geometry_text_is_byte_for_byte_the_row_by_row_text(native: bool) -> None:
+def test_the_geometry_text_is_byte_for_byte_the_row_by_row_text(
+    native: bool, block: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Über Listen geschrieben statt Zeile für Zeile — dieselben Bytes (RM-568).
 
     Am Murmelbrett (1,95 Mio. Dreiecke) kostete das Lesen der NumPy-Zeilen den
@@ -1288,6 +1291,8 @@ def test_the_geometry_text_is_byte_for_byte_the_row_by_row_text(native: bool) ->
     blocker = MeshData.of(trimesh.creation.box(extents=(1.0, 2.0, 0.3)))
     order = {0: 0, 1: 2, 2: 1}
     root = ET.Element("object")
+    # Blockweise gebaut (RM-567): Auch über Blockgrenzen dieselben Bytes.
+    monkeypatch.setattr(threemf, "_TEXT_BLOCK", block)
 
     mark, written = threemf._write_geometry(
         root, mesh, "7", order, native, number=3, blocker=blocker

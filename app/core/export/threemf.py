@@ -612,6 +612,9 @@ def _slots_for(mesh: MeshData, slots: Sequence[MaterialSlot] | None) -> list[Mat
 #: XML, und ein Körper namens ``[SOLIDON-MESH-2]`` ließ die Zählung mit
 #: einer nackten Ausnahme abbrechen. Auf das Ergebnis hat der Zufall keinen
 #: Einfluss — die Marke wird ersetzt und steht in keiner Datei.
+#: Wie viele Ecken oder Dreiecke :func:`_write_geometry` je Block als Text baut.
+_TEXT_BLOCK: Final = 65_536
+
 _GEOMETRY_MARK: Final = "[SOLIDON-MESH-{run}-{number}]"
 
 
@@ -671,20 +674,26 @@ def _write_geometry(
     # NumPy-Skalare zu lesen kostete am Meshy-Murmelbrett (1,95 Mio. Dreiecke)
     # den größten Teil der 7,3 s des 3MF-Exports. Dieselben Zahlen, dieselbe
     # Schreibweise: ``tolist`` gibt jeden float64 und jede Eckennummer
-    # unverändert als Python-Zahl.
-    lines: list[str] = ["<vertices>"]
-    lines.extend(
-        f'<vertex x="{x:.17g}" y="{y:.17g}" z="{z:.17g}" />'
-        for x, y, z in np.asarray(mesh.raw.vertices).tolist()
-    )
+    # unverändert als Python-Zahl. **Und blockweise** (RM-567): Als eine
+    # Liste aus Millionen Zeilen hielt der Text am Murmelbrett 850 MB über
+    # dem Ergebnis; je Block entsteht er, wird kodiert und losgelassen.
+    parts: list[bytes] = [b"<vertices>"]
+
+    def vertex_rows(points: np.ndarray) -> None:
+        for begin in range(0, len(points), _TEXT_BLOCK):
+            parts.append(
+                "".join(
+                    f'<vertex x="{x:.17g}" y="{y:.17g}" z="{z:.17g}" />'
+                    for x, y, z in points[begin : begin + _TEXT_BLOCK].tolist()
+                ).encode("utf-8")
+            )
+
+    vertex_rows(np.asarray(mesh.raw.vertices))
     # Die Stützsperre als Bereich (PrusaSlicer): Ihre Dreiecke kommen nach
     # allen des Körpers, und die Prusa-Beilage nennt den Bereich.
     if blocker is not None:
-        lines.extend(
-            f'<vertex x="{x:.17g}" y="{y:.17g}" z="{z:.17g}" />'
-            for x, y, z in np.asarray(blocker.raw.vertices).tolist()
-        )
-    lines.append("</vertices><triangles>")
+        vertex_rows(np.asarray(blocker.raw.vertices))
+    parts.append(b"</vertices><triangles>")
 
     # Der Schwanz eines Dreiecks hängt nur an seinem Slot: einmal je Slot
     # gebaut statt je Dreieck.
@@ -702,21 +711,30 @@ def _write_geometry(
             known = tails[slot] = f' pid="{group_id}" p1="{order.get(slot, 0)}"{painted} />'
         return known
 
-    faces = np.asarray(mesh.raw.faces).tolist()
+    faces = np.asarray(mesh.raw.faces)
     assignment = mesh.slots or ((0,) * len(faces))
-    lines.extend(
-        f'<triangle v1="{a}" v2="{b}" v3="{c}"{tail(int(slot))}'
-        for (a, b, c), slot in zip(faces, assignment, strict=True)
-    )
+    for begin in range(0, len(faces), _TEXT_BLOCK):
+        parts.append(
+            "".join(
+                f'<triangle v1="{a}" v2="{b}" v3="{c}"{tail(int(slot))}'
+                for (a, b, c), slot in zip(
+                    faces[begin : begin + _TEXT_BLOCK].tolist(),
+                    assignment[begin : begin + _TEXT_BLOCK],
+                    strict=True,
+                )
+            ).encode("utf-8")
+        )
     if blocker is not None:
         start = len(mesh.raw.vertices)
-        lines.extend(
-            f'<triangle v1="{a + start}" v2="{b + start}" v3="{c + start}"'
-            f' pid="{group_id}" p1="0" />'
-            for a, b, c in np.asarray(blocker.raw.faces).tolist()
+        parts.append(
+            "".join(
+                f'<triangle v1="{a + start}" v2="{b + start}" v3="{c + start}"'
+                f' pid="{group_id}" p1="0" />'
+                for a, b, c in np.asarray(blocker.raw.faces).tolist()
+            ).encode("utf-8")
         )
-    lines.append("</triangles>")
-    return mark, "".join(lines).encode("utf-8")
+    parts.append(b"</triangles>")
+    return mark, b"".join(parts)
 
 
 def _fill_in(document: bytes, blocks: Sequence[tuple[str, bytes]]) -> bytes:
