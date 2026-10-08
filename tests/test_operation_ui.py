@@ -157,7 +157,7 @@ def test_the_sketch_menu_starts_drawing(
 ) -> None:
     """RM-395/RM-559: Der Sammeleintrag führt wie die Palette direkt ins Aufziehen."""
     drawn: list[str] = []
-    monkeypatch.setattr(empty_window, "start_drawing", lambda: drawn.append("draw"))
+    monkeypatch.setattr(empty_window, "start_drawing", lambda **_how: drawn.append("draw"))
     monkeypatch.setattr(empty_window, "start_sketch", drawn.append)
     empty_window._variant_actions["sketch_extrude"].trigger()
     assert drawn == ["draw"]

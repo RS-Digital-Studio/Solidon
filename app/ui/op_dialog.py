@@ -3613,13 +3613,19 @@ class OperationDialog(QDialog):
             from app.core.errors import AppError
             from app.core.sketch.edit import stretched
             from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+            from app.core.sketch.shapes import held_point
             from app.ui.sketch_editor import SketchField
 
             field = self._editors.get(sketch_field)
             if not isinstance(field, SketchField):
                 return
             try:
-                result = stretched(sketch_from_text(text), factor, axis, self._parameter_values)
+                drawing = sketch_from_text(text)
+                # **Ein aufgezogener Körper wächst von seinem Ansatz weg**
+                # (RM-559, §30.1): Mit den Maßen vorn steht die erste Ecke
+                # bzw. die Mitte fest, nicht der Punkt am Ebenenursprung.
+                anchor = held_point(drawing) if self._front_fields else None
+                result = stretched(drawing, factor, axis, self._parameter_values, anchor)
             except AppError:
                 # Eine halbfertige Zeichnung ist im Dialog kein Fehlerfall —
                 # dieselbe Haltung wie in ``sketch_extent``.

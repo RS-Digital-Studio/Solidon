@@ -16,6 +16,7 @@ import math
 
 from app.core.errors import ValidationError, require_positive
 from app.core.types import Point2, Sketch, SketchConstraint, SketchElement
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 #: Die Grundformen, die jede Skizzen-Op anbietet — eine Quelle für alle Dialoge.
@@ -147,7 +148,7 @@ def simple_shape(sketch: Sketch) -> str | None:
         return "circle"
     if len(elements) != 4 or any(element.kind != "line" for element in elements):
         return None
-    tolerance = 1e-6
+    tolerance = EPS_GEOM
     for element in elements:
         (ax, ay), (bx, by) = element.points
         if not (math.isclose(ax, bx, abs_tol=tolerance) or math.isclose(ay, by, abs_tol=tolerance)):
@@ -167,6 +168,23 @@ def simple_shape(sketch: Sketch) -> str | None:
         if partners != 1:
             return None
     return "rectangle"
+
+
+def held_point(sketch: Sketch) -> Point2 | None:
+    """Der eine feste Punkt der Zeichnung — oder nichts, wenn es keinen oder mehrere gibt.
+
+    Um ihn wächst eine aufgezogene Form, wenn ihr Maß im Schrittdialog
+    wechselt: die erste Ecke des Rechtecks, die Mitte des Kreises
+    (:func:`rectangle_between`, :func:`circle_around`, Bauplan §30.1).
+    """
+    held = [constraint for constraint in sketch.constraints if constraint.kind == "fixed"]
+    if len(held) != 1 or len(held[0].targets) != 1:
+        return None
+    points = [point for element in sketch.elements for point in element.points]
+    index = held[0].targets[0]
+    if not 0 <= index < len(points):
+        return None
+    return points[index]
 
 
 def slot(length: float, width: float) -> Sketch:

@@ -88,10 +88,8 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Das Wertfeld der ersten Zeile unter „Parameter" — über die Reihenfolge,
         # weil ein benanntes Maß in jeder Sprache anders heißt
         "parameters.first",
-        # „Zeichnen" in der Werkzeugleiste, die Ebenenwahl im Zeichenmodus
-        # und „Fertig"
+        # „Zeichnen" in der Werkzeugleiste und „Fertig" im Zeichenmodus
         "toolbar.draw",
-        "sketch.plane",
         "sketch.done",
     }
 )

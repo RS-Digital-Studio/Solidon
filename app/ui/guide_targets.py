@@ -172,12 +172,6 @@ def _sketch_panel(window: MainWindow, name: str) -> Any:
     return panel
 
 
-def _sketch_plane(window: MainWindow) -> QWidget:
-    """Die Wahl der Zeichenebene im offenen Zeichenmodus."""
-    choice: QWidget = _sketch_panel(window, "sketch.plane").plane_choice
-    return choice
-
-
 def _sketch_done(window: MainWindow) -> QWidget:
     """*Fertig* im Zeichenmodus."""
     button: QWidget = window.sketch_finish_button
@@ -287,7 +281,6 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "transform.values": _transform_values,
     "parameters.first": _first_parameter,
     "toolbar.draw": _draw_button,
-    "sketch.plane": _sketch_plane,
     "sketch.done": _sketch_done,
 }
 

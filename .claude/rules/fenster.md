@@ -33,8 +33,8 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   Dokumentidentität/Werkzeugnummer. Verfeinerung über `Session.insert_before`
   im Revisionsarbeiter ersetzt Schrittkennung und Eingangsbindung.
 - Zeichnen, Formen, Skelett: Kürzel oben, Escape nimmt Unfertiges, Strg+Z
-  die letzte Geste, *Fertig* ohne Dialog (RM-561). Leerer Editor nimmt
-  keinen Schritt zurück.
+  die letzte Geste, *Fertig* ohne Dialog (RM-561, für Formen und Skelett
+  Ziel von Z2). Leerer Editor nimmt keinen Schritt zurück.
 - Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
   mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).

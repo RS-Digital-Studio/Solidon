@@ -39,6 +39,31 @@ alles machen") hat die Entscheidungen E1 bis E12 getroffen; die tragenden:
 * **Kreis nach innen ist eine Tasche, keine Bohrung:** eine Werkzeugfamilie,
   *Art* umschaltbar; wer eine Passung braucht, nimmt *Bohrung setzen*.
 
+Das Review des Pakets (Konsolidierung 08.10.) fand, wo der erste Stand diese
+Zusagen brach; die Gründe der Nachbesserung:
+
+* **Die *Art* am Schritt ersetzt *Mehr*.** Mit *Mehr* fiel der einzige Weg vom
+  freien Umriss zu Drehen, Führen, Überblenden und Lochfeld. Die Liste steht
+  jetzt im Schrittdialog, für alle Operationen der Zeichnungsfamilie;
+  `History.change_kind` ersetzt den Schritt in einer Transaktion und reicht
+  über `change_kernel`, damit Vorschau und Übernehmen keinen zweiten Weg
+  brauchen.
+* **Ein Umriss aus dem Editor ist Fertiges.** Escape nach *Fertig* warf eine
+  womöglich halbe Stunde Bedingungsarbeit weg, und das nächste Strg+Z nahm
+  einen fremden Schritt. Seither gilt die Entscheidung vom 23.09. auch hier:
+  verworfen heißt beiseitegelegt, Strg+Z holt ihn.
+* **Null bleibt null.** Ein Klick unter das Bett baute einen Körper an der
+  Untergrenze von 0,1 mm; die Regel des alten Ziehgriffs gilt sachlich weiter.
+* **Eine getippte Zahl erbt keine spätere Zeigerrichtung,** und eine gewählte
+  Tasche bleibt Tasche (Regel 21): Die Absicht des Kunden schlägt die zufällige
+  Lage der Maus.
+* **Überdeckung ist Volumen, nicht Hülle.** Ein Einsatz im Rahmen, ein Stift im
+  Ring liegen in der Hülle des anderen und berühren ihn nicht; ein falscher Satz
+  mit Handlungsangebot ist schlimmer als keiner.
+* **Ein Maß wächst vom Ansatz weg.** Die erste Ecke bzw. die Mitte ist der feste
+  Punkt der aufgezogenen Form; um den Ebenenursprung gestreckt wanderte ein
+  Durchgangsloch beim Umbemaßen.
+
 ## Was entsteht, steht am Zeiger
 
 Der Skizzeneditor (`app/ui/sketch_editor.py`) ist die zweite Ansicht, in der

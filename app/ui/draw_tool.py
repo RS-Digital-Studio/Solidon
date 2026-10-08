@@ -264,7 +264,7 @@ class Lift:
 
     Positiv nach außen, negativ nach innen. ``through`` heißt: bis zur
     Gegenwand, *durchgehend*. ``note`` ist ein Satz, wenn die Richtung nicht
-    geht (F-e) — dann bleibt die Höhe an der Untergrenze stehen.
+    geht (F-e) — dann ist die Höhe null, und der Klick legt nichts an.
     """
 
     height: float
@@ -284,13 +284,18 @@ def lifted(
     Gefangen auf das Raster, geklemmt in die Grenzen **des Schemas** der
     jeweiligen Operation (``outward`` für Hochziehen und Anfügen, ``inward``
     für die Tasche). Nach innen rastet die Gegenwand als *durchgehend* ein,
-    sobald der Zeiger sie auf einen halben Rasterschritt erreicht. Ohne Körper
-    gibt es kein Innen: Die Höhe bleibt an der Untergrenze, und der Satz sagt
-    es (F-e).
+    sobald der Zeiger sie auf einen halben Rasterschritt erreicht.
+
+    **Null bleibt null** (F-e): Ein Rohmaß unter einem halben Rasterschritt
+    ist keine Höhe, und ohne Körper gibt es kein Innen — dann ist die Höhe
+    null, der Satz sagt es, und der Klick baut keinen Splitter an der
+    Untergrenze.
     """
     if step > 0.0:
         reach = round(reach / step) * step
-    if reach >= 0.0 or not surface.cuts:
+    if abs(reach) <= EPS_GEOM:
+        return Lift(0.0)
+    if reach > 0.0 or not surface.cuts:
         least, most = outward
         if reach < 0.0:
             note = (
@@ -298,7 +303,7 @@ def lifted(
                 if surface.on_bed
                 else tr("Hier ist kein Körper zum Schneiden — nach außen ziehen.")
             )
-            return Lift(least, note=note)
+            return Lift(0.0, note=str(note))
         amount = max(reach, least)
         return Lift(min(amount, most) if most > least else amount)
     least, most = inward
@@ -385,13 +390,16 @@ class DrawDraft:
         self.second = point
         return ""
 
-    def type_size(self, first: float, second: float | None = None) -> str:
+    def type_size(
+        self, first: float, second: float | None = None, pointer: Point2 | None = None
+    ) -> str:
         """Getippte Maße statt Klick 2 — Breite und Tiefe oder das Kreismaß.
 
         Die Richtung kommt aus der Lage der Gegenecke, die der Zeiger zuletzt
         zeigte (``toward``); ohne Zeiger geht es nach rechts oben. Beim Kreis
         ist die Zahl, was das Feld zeigt — Durchmesser oder Radius
-        (``labels.circle_shown``).
+        (``labels.circle_shown``). Fehlt die Tiefe, gilt die am Zeiger
+        (``pointer``); erst ohne Zeiger wird es ein Quadrat.
         """
         if self.first is None:
             return ""
@@ -399,7 +407,8 @@ class DrawDraft:
         if self.shape == "circle":
             diameter = circle_stored(first)
             return self.place((self.first[0] + diameter / 2.0, self.first[1]))
-        depth = second if second is not None else first
+        shown = self.size_of(pointer) if pointer is not None else None
+        depth = second if second is not None else shown[1] if shown is not None else first
         return self.place((self.first[0] + toward[0] * first, self.first[1] + toward[1] * depth))
 
     def aim(self, point: Point2) -> None:
@@ -520,9 +529,8 @@ def cage(
 
     Zurück kommen Ober- und Unterkante samt Sprossen an den Umrissecken,
     getrennt in Kanten und Sprossen — die Ansicht strichelt beides, wenn nach
-    innen gezogen wird. Dieselbe Bauart wie ``viewport.pull_cage``, nur mit
-    eigener Unterkante: Nach innen beginnt die Form an der Oberkante des
-    Körpers (``cut_top``).
+    innen gezogen wird. ``base`` ist die eigene Unterkante: Nach innen beginnt
+    die Form an der Oberkante des Körpers (``cut_top``).
     """
 
     def along(point: Any, distance: float) -> tuple[float, float, float]:
@@ -617,8 +625,12 @@ def _size_labels(
     ]
 
 
-def sentence(draft: DrawDraft, *, free: bool = False) -> str:
-    """Was der nächste Klick tut, in einem Satz — je Phase einer."""
+def sentence(draft: DrawDraft, *, free: bool = False, inward: bool = False) -> str:
+    """Was der nächste Klick tut, in einem Satz — je Phase einer.
+
+    ``inward`` ist die gewählte Tasche (M4): Dann ist eine getippte Zahl die
+    Tiefe, und der Satz sagt es.
+    """
     phase = draft.phase
     if phase == 0:
         if free:
@@ -631,6 +643,8 @@ def sentence(draft: DrawDraft, *, free: bool = False) -> str:
             return str(tr("Rand klicken oder Durchmesser tippen."))
         return str(tr("Gegenecke klicken oder Breite tippen."))
     surface = draft.surface
+    if surface is not None and surface.cuts and inward:
+        return str(tr("Tiefe ziehen oder tippen."))
     if surface is not None and surface.cuts:
         return str(tr("Höhe ziehen oder tippen — nach innen schneidet."))
     return str(tr("Höhe ziehen oder tippen."))

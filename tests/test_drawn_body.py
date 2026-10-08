@@ -13,14 +13,21 @@ import math
 
 import pytest
 
+from app.core.errors import ValidationError
+from app.core.knowledge.profiles import Profile
 from app.core.registry import REGISTRY
+from app.core.scene import History, OperationDraft, evaluate
+from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.sketch import shapes
-from app.core.sketch.serialize import sketch_from_text
+from app.core.sketch.edit import scaled, stretched
+from app.core.sketch.planes import BASE_FRAMES
+from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import SceneObject, Sketch, SketchElement
 from app.core.units import is_close
 from app.ui.draw_tool import (
     DrawDraft,
+    DrawSurface,
     Lift,
     bed_surface,
     face_marks,
@@ -134,12 +141,82 @@ def test_a_mark_of_the_face_beats_the_grid() -> None:
     assert snapped((4.1, 0.2), 5.0, ((2.0, 0.3),), reach=0.5) == pytest.approx((5.0, 0.0))
 
 
-def test_downward_on_the_bed_stays_at_the_least_height_and_says_why() -> None:
-    """F-e: Unter das Bett geht nichts."""
+def test_downward_on_the_bed_stays_nothing_and_says_why() -> None:
+    """F-e: Unter das Bett geht nichts — null bleibt null, kein Splitter (M2)."""
     lift = lifted(-6.0, 1.0, bed_surface(), LIMITS, LIMITS)
-    assert lift.height == pytest.approx(0.1)
+    assert lift.height == 0.0
     assert lift.note
     assert not lift.through
+    draft = DrawDraft()
+    draft.begin(bed_surface(), (0.0, 0.0))
+    draft.place((40.0, 30.0))
+    assert draft.step(lift) is None, "ein Klick in die falsche Richtung legt keinen Körper an"
+
+
+def test_less_than_half_a_grid_step_is_no_height() -> None:
+    """Ein Rohmaß unter einem halben Rasterschritt ist keine Höhe (M2)."""
+    assert lifted(0.4, 1.0, bed_surface(), LIMITS, LIMITS) == Lift(0.0)
+    assert lifted(0.6, 1.0, bed_surface(), LIMITS, LIMITS) == Lift(1.0)
+
+
+def test_a_typed_width_takes_the_depth_from_the_pointer() -> None:
+    """G1: 40 Enter bei einem Zeiger auf 40 × 12 gibt 40 × 12, kein Quadrat."""
+    draft = DrawDraft()
+    draft.begin(bed_surface(), (0.0, 0.0))
+    draft.aim((40.0, 12.0))
+    assert draft.type_size(40.0, None, (40.0, 12.0)) == ""
+    assert draft.second == pytest.approx((40.0, 12.0))
+    alone = DrawDraft()
+    alone.begin(bed_surface(), (0.0, 0.0))
+    assert alone.type_size(40.0) == ""
+    assert alone.second == pytest.approx((40.0, 40.0)), "ohne Zeiger bleibt das Quadrat"
+
+
+def test_a_pocket_preview_starts_at_the_top_of_the_body() -> None:
+    """Unter einem Körper beginnt die Drahtform nach innen an seiner Oberkante (cut_top)."""
+    surface = DrawSurface(
+        plane="plane:xy",
+        frame=BASE_FRAMES["plane:xy"],
+        body="obj_1",
+        joins=True,
+        cut_top=20.0,
+        through_depth=20.0,
+    )
+    draft = DrawDraft()
+    draft.begin(surface, (0.0, 0.0))
+    draft.place((10.0, 10.0))
+    shown = picture(draft, None, Lift(-5.0))
+    heights = [point[2] for pair in shown.dashed for point in pair]
+    assert max(heights) == pytest.approx(20.0)
+    assert min(heights) == pytest.approx(15.0)
+
+
+# --- Ein Maß im Schrittdialog wächst vom Ansatz weg (M1) ---------------------------
+
+
+def test_a_drawn_rectangle_grows_from_its_first_corner() -> None:
+    """Erste Ecke oben rechts (30, 40), Breite 20 auf 25: Die Ecke bleibt stehen."""
+    sketch = shapes.rectangle_between((30.0, 40.0), (10.0, 10.0))
+    anchor = shapes.held_point(sketch)
+    assert anchor == pytest.approx((30.0, 40.0))
+    grown = stretched(sketch, 25.0 / 20.0, 0, None, anchor).sketch
+    points = [point for element in grown.elements for point in element.points]
+    assert any(math.dist(point, (30.0, 40.0)) < 1e-9 for point in points)
+    assert min(x for x, _y in points) == pytest.approx(5.0)
+    assert max(x for x, _y in points) == pytest.approx(30.0)
+
+
+def test_a_drawn_circle_grows_around_its_centre() -> None:
+    """Kreis Ø 20 um (50, 50) auf Ø 30: Die Mitte bleibt stehen (M1)."""
+    sketch = shapes.circle_around((50.0, 50.0), 20.0)
+    grown, _kept = scaled(sketch, 1.5, shapes.held_point(sketch))
+    centre, rim = grown.elements[0].points
+    assert centre == pytest.approx((50.0, 50.0))
+    assert 2.0 * math.dist(centre, rim) == pytest.approx(30.0)
+
+
+def test_a_sketch_without_one_fixed_point_has_none() -> None:
+    assert shapes.held_point(Sketch("plane:xy", ())) is None
 
 
 def test_inward_reaches_the_opposite_wall_as_through() -> None:
@@ -336,3 +413,88 @@ def test_the_wall_lies_as_deep_as_the_body_reaches() -> None:
 def test_the_three_operations_still_exist_in_the_register() -> None:
     for name in ("sketch_extrude", "sketch_join", "sketch_pocket"):
         assert REGISTRY.has(name)
+
+
+# --- Die Art wechselt am Schritt (H1, History.change_kind) ------------------------
+
+
+def _drawn_history() -> tuple[Project, History, int]:
+    """Ein Projekt mit einem aufgezogenen Rechteck 10 … 20 × 0 … 30, Höhe 5, auf dem Bett."""
+    exact_kernel()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    text = sketch_to_text(shapes.rectangle_between((10.0, 0.0), (20.0, 30.0)))
+    history.apply(
+        "Aufziehen",
+        [OperationDraft(op="sketch_extrude", params={"sketch": text, "height": 5.0})],
+    )
+    return project, history, project.document.ops[-1].id
+
+
+def _volumes(project: Project, profile: Profile) -> list[float]:
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [finding.message for finding in result.scene.report.findings]
+    return sorted(float(entry.mesh.volume) for entry in result.scene.objects.values())
+
+
+def test_a_drawn_block_turns_into_a_revolved_body_in_the_same_step(profile: Profile) -> None:
+    """Art Rotationskörper: derselbe Schritt, dieselbe Kennung, Volumen π·(R² − r²)·h."""
+    project, history, op_id = _drawn_history()
+    before = project.document.ops[-1]
+    text = before.params["sketch"]
+    # Über ``change_kernel``: Vorschau und Übernehmen des Dialogs gehen diesen Weg.
+    changed = history.change_kernel(op_id, "sketch_revolve", {"sketch": text})
+    assert changed.op == "sketch_revolve"
+    assert len(project.document.ops) == 1
+    assert changed.outputs == before.outputs, "der Körper behält seine Kennung"
+    (volume,) = _volumes(project, profile)
+    assert volume == pytest.approx(math.pi * (20.0**2 - 10.0**2) * 30.0, rel=1e-6)
+    history.undo()
+    assert project.document.ops[-1].op == "sketch_extrude"
+
+
+def test_a_drawing_on_the_bed_has_no_body_for_a_pocket() -> None:
+    project, history, op_id = _drawn_history()
+    assert history.kind_inputs(op_id, "sketch_revolve") == ()
+    assert history.kind_inputs(op_id, "sketch_pocket") is None
+    with pytest.raises(ValidationError):
+        history.change_kind(op_id, "sketch_pocket", {"sketch": "", "depth": 2.0})
+    assert project.document.ops[-1].op == "sketch_extrude", "abgelehnt heißt unverändert"
+
+
+def test_a_drawing_on_a_face_cuts_its_body_as_a_pocket(profile: Profile) -> None:
+    """Gezeichnet auf der Deckfläche eines Quaders: Die Tasche nimmt diesen Quader."""
+    exact_kernel()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_brep_box", params={"width": 40, "depth": 30, "height": 20})],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    ((body, entry),) = result.scene.objects.items()
+    top = next(
+        key
+        for key, feature in entry.features.items()
+        if feature.kind == "face" and feature.params["normal"][2] > 0.9
+    )
+    plane = f"feature:{body}:{top}"
+    text = sketch_to_text(shapes.rectangle_between((-5.0, -5.0), (5.0, 5.0), plane))
+    history.apply(
+        "Aufziehen",
+        [OperationDraft(op="sketch_extrude", params={"sketch": text, "height": 5.0})],
+    )
+    op_id = project.document.ops[-1].id
+    assert history.kind_inputs(op_id, "sketch_pocket") == (body,)
+    changed = history.change_kind(op_id, "sketch_pocket", {"sketch": text, "depth": 5.0})
+    assert changed.inputs == (body,) and changed.outputs == (body,)
+    (volume,) = _volumes(project, profile)
+    assert volume == pytest.approx(40.0 * 30.0 * 20.0 - 10.0 * 10.0 * 5.0, rel=1e-6)
+
+
+def test_only_drawings_change_their_kind() -> None:
+    project = new_project()
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={"width": 30.0})])
+    with pytest.raises(ValidationError):
+        history.change_kind(project.document.ops[0].id, "sketch_revolve", {})

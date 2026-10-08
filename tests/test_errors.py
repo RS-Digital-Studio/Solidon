@@ -499,7 +499,8 @@ _NOT_A_RANGE = frozenset(
         "no_shapes", "no_size", "no_sources", "no_split", "no_split_target", "no_triangles",
         "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",
         "not_a_project", "private_destination",
-        "left_handed", "not_a_twin", "not_movable", "not_outline", "not_step", "not_upright",
+        "left_handed", "not_a_twin", "not_a_drawing", "not_movable", "not_outline", "not_step",
+        "not_upright",
         "one_body", "multi_start", "not_a_thread", "needs_exact",
         # Ein Gewinde außerhalb dessen, was ein Bausteingewinde baut, und eine
         # Achse, die keine der drei ist: ein Merkmal und eine Größe außerhalb

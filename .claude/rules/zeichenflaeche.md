@@ -32,24 +32,46 @@ RM-561; Bauplan §30.1). Warum: `konzepte/begruendungen/regel-zeichenflaeche.md`
 * **Kein Dialog, ein Einmalwerkzeug:** Klick 3 legt den Schritt an, das
   Werkzeug schließt, der Körper wird gewählt. Überdeckung (F-g) und Zerfall
   (F-h) sagen es mit Knöpfen in der Statuszeile, nichts geschieht von selbst.
+  Eine Absage beim Anlegen lässt den Entwurf stehen.
+* **Überdeckung ist echtes Volumen:** Die Hüllquader filtern vor, die
+  Schnittmenge rechnet `_OverlapWorker` an Arbeiterkopien; der Satz kommt
+  erst mit ihr, eine Tasche wartet auf ihr neues Ergebnis (`_before_step`).
 * **Escape nimmt nur Unfertiges** (das offene Maßfeld, dann den Entwurf),
   **Strg+Z im Entwurf den letzten Klick** (`DrawDraft.back`), danach den
-  Schritt. Andere Handlungen sagen es im Tooltip (`_DRAWING_FIRST`).
+  Schritt; ohne Klick sagt es den Weg. Ein Umriss aus dem Editor ist kein
+  Unfertiges: Strg+Z führt in den Editor zurück, Escape, *Schließen* und ein
+  verschwundenes Ziel (F-k) legen ihn als verworfene Zeichnung ab
+  (`return_the_outline`). Ungesichert ist nur er, nicht ein Klick.
+* **Andere Handlungen warten** (`_quiet_command_allowed`,
+  `_drawing_refuses`) und sagen es im Tooltip (`_DRAWING_FIRST`); *Zeichnen*
+  steht gedrückt, ein zweiter Druck schließt.
 * **Aufgezogen heißt bemaßt** (`shapes.rectangle_between`, `circle_around`):
-  beide Maße als Bedingung, die erste Ecke fest — anders als im Editor.
+  beide Maße als Bedingung, die erste Ecke fest — anders als im Editor. Ein
+  Maß im Schrittdialog wächst um diesen Punkt (`shapes.held_point`).
+* **Die Art wechselt am Schritt** (`_kind_choice`, `History.change_kind`
+  über `change_kernel`): alle Arten der Zeichnungsfamilie, eine ohne Körper
+  gesperrt mit Grund. Ersetzt wird in einer Transaktion.
 * **Die Höhe** liest `axis_hit` an der Mitte des Umrisses; steht der Blick
   innerhalb `STEEP_DEGREES` auf der Normalen, folgt sie der senkrechten
   Mausbewegung. Gefangen auf das Raster, Grenzen aus dem Schema
-  (`operation_limits`). Getippt ist ein Betrag in der gezeigten Richtung.
+  (`operation_limits`). **Null bleibt null:** Unter einem halben
+  Rasterschritt und in eine Richtung ohne Körper (F-e) ist die Höhe null, der
+  Klick legt nichts an.
+* **Getippt ist ein Betrag in der Richtung, die beim Öffnen des Felds galt**;
+  danach ändert die Maus sie nicht mehr, ein Minus kehrt um. Eine gewählte
+  Tasche (`inward_first`) tippt die Tiefe. Fehlt die Tiefe des Rechtecks,
+  gilt die am Zeiger.
 * **Höhe und Tiefe unterscheiden sich ohne Farbe** (Regel 18): außen
   durchgezogen und *Höhe*, innen gestrichelt und *Tiefe* (`_dashes`).
 * **Ecken und Kantenmitten der Fläche schlagen das Raster** (`face_marks`),
-  in Bildpunkten (`MARK_REACH_PIXELS`).
+  in logischen Bildpunkten (`MARK_REACH_PIXELS` mal Geräteverhältnis).
 * **Ein Weg vom Umriss zum Körper** (RM-561): *Freie Form …* öffnet den
   Editor auf der Fläche mit der Linie in der Hand; *Fertig* bringt jeden
-  freien Umriss und den für Hochziehen, Anfügen oder Tasche zurück in die
-  Ansicht, es fehlt die Höhe (`_rise_from_the_sketch`). Andere Arten und ein
-  geänderter Schritt öffnen ihren Dialog.
+  geschlossenen freien Umriss und den für Hochziehen, Anfügen oder Tasche
+  zurück in die Ansicht, es fehlt die Höhe (`_rise_from_the_sketch`). Ein
+  offener bleibt im Editor mit Satz, eine Tasche ohne Ziel ebenso. Andere
+  Arten, ein geänderter Schritt und gegebene Werte (`finish_sketch(given=…)`)
+  öffnen ihren Dialog.
 
 ## Was entsteht, steht am Zeiger
 

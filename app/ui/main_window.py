@@ -2365,6 +2365,19 @@ def _face_side(normal: Any) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class _OutlineOrigin:
+    """Woher ein Umriss im Aufziehen kam: Art, Ebene und Körper des Editors (H2).
+
+    Mit ihm führt Strg+Z zurück in den Editor, und Escape legt den Umriss als
+    :class:`_DiscardedSketch` ab — der Text kommt vom Entwurf.
+    """
+
+    op_name: str
+    plane: str
+    body: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class _DiscardedSketch:
     """Eine verworfene Zeichnung — Editorzustand, kein Dokumentzustand.
 
@@ -5191,7 +5204,10 @@ class MainWindow(QMainWindow):
                 tr("Zeichnen"),
                 self.action_sketch_free,
                 None,
-                tr("Einen Körper mit drei Klicks aufziehen, anfügen oder ausschneiden."),
+                tr(
+                    "Einen Körper mit drei Klicks aufziehen, anfügen oder ausschneiden. "
+                    "Ein zweiter Druck schließt das Werkzeug."
+                ),
             ),
             # Und Weg 4 daneben. Beide lagen unter *Ändern → Netz* zwischen
             # Reparaturwerkzeugen, ohne Kürzel — die Hauptwege-Tabelle nennt
@@ -5216,6 +5232,9 @@ class MainWindow(QMainWindow):
             if symbol in ("import", "sculpt"):
                 toolbar.addSeparator()
             action = QAction(icon(symbol, toolbar), label, self)
+            if symbol == "category.sketch":
+                # Gedrückt, solange das Aufziehen offen ist (G10).
+                action.setCheckable(True)
             action.triggered.connect(slot)
             key = TOOLBAR_KEYS.get(symbol)
             if key:
@@ -5383,7 +5402,8 @@ class MainWindow(QMainWindow):
             # **Hochziehen, Anfügen und Tasche beginnen im Bild** (RM-559): drei
             # Klicks, die Richtung des dritten entscheidet die Art. Auch
             # *Erzeugen → Zeichnen …* und im Fusion-Schema E kommen hier an.
-            self.start_drawing()
+            # Eine gewählte Tasche bleibt Tasche: Getippt ist die Tiefe (M4).
+            self.start_drawing(inward=spec.name == POCKET_OP)
         elif _has_sketch_param(spec):
             self.start_sketch(spec.name)
         elif _has_armature_param(spec):
@@ -5731,17 +5751,24 @@ class MainWindow(QMainWindow):
         )
         # Einfügen, Erzeugen und Zeichnen legen Schritte an — hinter einem
         # Halt landeten sie im Nichts; der Grund steht am Knopf (`_say_why`).
+        # Und während des Aufziehens beginnt keine andere Handlung (§18.11, G2).
+        drawing_note = str(_DRAWING_FIRST) if self.drawing() else ""
         for action in (
             self.import_action,
             self.generate_action,
             self._toolbar_import,
         ):
-            action.setEnabled(not locked and halted is None)
-            self._say_why(action, halted or "")
+            action.setEnabled(not locked and halted is None and not drawing_note)
+            self._say_why(action, halted or drawing_note)
         # Das Aufziehen legt Skizzen-Schritte an, und die rechnen am exakten
         # Kern: ohne ihn grau, mit dem Satz der Skizzen-Operationen (F-j).
+        # Gedrückt, solange es offen ist — ein zweiter Druck schließt (G10).
         kernel_missing = _drawing_needs_the_kernel()
-        self._toolbar_sketch.setEnabled(not locked and halted is None and not kernel_missing)
+        self._toolbar_sketch.setEnabled(
+            self.drawing() or (not locked and halted is None and not kernel_missing)
+        )
+        with QSignalBlocker(self._toolbar_sketch):
+            self._toolbar_sketch.setChecked(self.drawing())
         self._say_why(self._toolbar_sketch, halted or kernel_missing)
         # Formen und Skelett gehen beide von einem gewählten Körper aus. Das
         # fing bisher erst die Sitzung selbst ab — eine Meldung nach dem Klick,
@@ -5765,7 +5792,7 @@ class MainWindow(QMainWindow):
         ):
             self._lock_hint(action, locked)
         for action in (self._toolbar_sculpt, self._toolbar_armature):
-            self._pick_hint(action, ready, locked, missing=halted or "")
+            self._pick_hint(action, ready, locked, missing=halted or drawing_note)
         # Der Knopf im Prüfbericht folgt dem Menüeintrag: dieselbe Sperre,
         # derselbe Grund (RM-508).
         self.report.follow_export(self.export_action.isEnabled(), self.export_action.toolTip())
@@ -7048,9 +7075,11 @@ class MainWindow(QMainWindow):
         if self._op_dialog is not None:
             self._gesture_save_dialog = self._op_dialog
         if self._has_unsaved_gestures():
-            self.announce(
-                tr("Übernehmen Sie zuerst die Bearbeitung und speichern Sie danach das Projekt.")
+            # Das Aufziehen hat kein *Übernehmen*; ihm fehlt die Höhe (G3).
+            first = tr(
+                "Übernehmen Sie zuerst die Bearbeitung und speichern Sie danach das Projekt."
             )
+            self.announce(str(_DRAWING_FIRST) if self.drawing() else first)
             return False
         return True
 
@@ -7059,6 +7088,7 @@ class MainWindow(QMainWindow):
         self._gesture_open_number += 1
         self._discarded_sketch = None
         if self._draw_flow is not None:
+            self._draw_flow.cancel_overlap()
             self._draw_flow.close()
         if not (
             self.sculpting()
@@ -7389,8 +7419,22 @@ class MainWindow(QMainWindow):
         self._store_settings()
         self.announce(tr("Gespeichert"))
 
+    def _drawing_refuses(self) -> bool:
+        """Während des Aufziehens beginnt keine andere Handlung; der Satz sagt es (§18.11, G2).
+
+        Für die Wege, die nicht über :meth:`_quiet_command_allowed` gehen:
+        Einfügen, Erzeugen, Teilen und Varianten öffnen zuerst einen eigenen
+        Dialog, und der stünde sonst neben einem halben Entwurf.
+        """
+        if not self.drawing():
+            return False
+        self.announce(str(_DRAWING_FIRST))
+        return True
+
     def action_import(self) -> None:
         """Eine oder mehrere Modelldateien in einem Auftrag einfügen."""
+        if self._drawing_refuses():
+            return
         names, _filter = QFileDialog.getOpenFileNames(
             self,
             tr("Modell öffnen")
@@ -7404,6 +7448,8 @@ class MainWindow(QMainWindow):
 
     def _gesture_allows_import(self) -> bool:
         """Import und Ablegen warten auf den Abschluss des sichtbaren Gesteneditors."""
+        if self._drawing_refuses():
+            return False
         if (
             self.sculpting()
             or self.setting_armature()
@@ -7679,6 +7725,8 @@ class MainWindow(QMainWindow):
         self._generate(Path(path))
 
     def _generate(self, image: Path | None) -> None:
+        if self._drawing_refuses():
+            return
         # **Gefragt wird vor dem Start, wie beim Import** (RM-361). Der Lauf
         # dauert Minuten, und erst danach sagte *Übernehmen* ab — an einer
         # Einfügemarke, hinter einem Halt, nach dem Testzeitraum. Der
@@ -8112,6 +8160,8 @@ class MainWindow(QMainWindow):
         Der Körper lässt sich benennen, damit auch der Fehlerdialog „Modell
         teilen" anbieten kann — er weiß, welches Teil nicht passte.
         """
+        if self._drawing_refuses():
+            return
         if self.session.split_running:
             # Erste Hälfte der Sperre (Gesamtreview I-10) — die zweite steht
             # in ``session.split_async``: Zwei Suchen zugleich gab es nie
@@ -8542,6 +8592,8 @@ class MainWindow(QMainWindow):
         was der Lauf zu sagen hatte (eine Gravur ohne Platz), kam nie im
         Prüfbericht an, obwohl der Haken im Dialog genau das zusagt.
         """
+        if self._drawing_refuses():
+            return
         dialog = VariantsDialog(self.session, self)
         dialog.exec()
         if dialog.findings:
@@ -12917,19 +12969,17 @@ class MainWindow(QMainWindow):
         # Ansicht, und der nächste Klick setzt die Höhe — Richtung entscheidet
         # die Art, kein Dialog. Was die Ansicht dafür braucht, wird hier
         # gelesen, solange Panel und Rahmen noch stehen.
-        rising = (
-            self._rising_surface(panel)
-            if keep and text and step is None and target in ("", PULL_OP, JOIN_OP, POCKET_OP)
-            else None
-        )
-        if (
-            keep
-            and text
-            and target
-            and step is None
-            and rising is None
-            and needed_inputs(REGISTRY.get(target))
-        ):
+        #
+        # ``given`` sind Antworten, die der Aufrufer schon hat — dann öffnet
+        # der Dialog mit ihnen, statt sie auf dem Höhenweg zu verlieren (M7).
+        rises = keep and text and step is None and not given and target in ("", *DRAWN_OPERATIONS)
+        if rises and not panel.canvas.outline:
+            # **Ein offener Umriss hat keine Höhe** (M5): Er bliebe bis zur
+            # Auswertung stehen und hielte dort die Kette an.
+            self.announce(tr("Erst einen geschlossenen Umriss zeichnen."))
+            return
+        rising = self._rising_surface(panel) if rises else None
+        if keep and text and target and step is None and needed_inputs(REGISTRY.get(target)):
             # **Ohne Ziel geht die Zeichnung nicht verloren.** Eine Tasche aus
             # dem Menü, begonnen ohne Auswahl, lief bis zum Dialog und endete
             # dort mit „braucht einen Körper" — der Modus war schon abgebaut,
@@ -12939,6 +12989,11 @@ class MainWindow(QMainWindow):
             if problem:
                 self.announce(problem)
                 return
+        origin = (
+            _OutlineOrigin(op_name=target or "", plane=panel.canvas.sketch.plane, body=body or "")
+            if rising is not None
+            else None
+        )
         if not keep:
             # **Verworfen heißt nicht vernichtet.** Escape war die teuerste
             # Taste des Programms: eine halbe Stunde Zeichnung, ein Tastendruck,
@@ -13032,8 +13087,8 @@ class MainWindow(QMainWindow):
         self._draw_shift = None
         if keep and not text:
             self.announce(tr("Die Zeichnung ist leer. Es wurde nichts übernommen."))
-        if keep and text and rising is not None:
-            self._rise_from_the_sketch(text, rising, shift)
+        if keep and text and rising is not None and origin is not None:
+            self._rise_from_the_sketch(text, rising, shift, origin)
             return
         if keep and text:
             # Die Operation nimmt ihre Eingänge aus dem Objektbaum; das Ziel des
@@ -13097,8 +13152,13 @@ class MainWindow(QMainWindow):
         text: str,
         surface: DrawSurface,
         shift: tuple[float, float, float] | None,
+        origin: _OutlineOrigin,
     ) -> None:
-        """Der Umriss steht in der Ansicht, die Höhe fehlt: Phase 3 des Aufziehens."""
+        """Der Umriss steht in der Ansicht, die Höhe fehlt: Phase 3 des Aufziehens.
+
+        Eine gewählte Tasche bleibt Tasche (M4): Getippt ist die Tiefe, die
+        Leiste sagt es, und die Maus darf weiter umkehren.
+        """
         from app.core.sketch.serialize import sketch_from_text
 
         if shift is None:
@@ -13106,7 +13166,13 @@ class MainWindow(QMainWindow):
         self.tools.close_tool()
         self.tools.setVisible(False)
         self.draw_bar.setVisible(True)
-        self.draw_flow().start_with_outline(sketch_from_text(text), surface, shift)
+        self.draw_flow().start_with_outline(
+            sketch_from_text(text),
+            surface,
+            shift,
+            inward=origin.op_name == POCKET_OP,
+            origin=origin,
+        )
         self._update_actions()
         self._show_invitation()
 
@@ -14339,7 +14405,8 @@ class MainWindow(QMainWindow):
         hinaus, den eine Maus ohne Tastatur hat.
         """
         if self.drawing():
-            self.draw_flow().close()
+            # Wie Escape: Ein Umriss aus dem Editor bleibt für Strg+Z (H2).
+            self.draw_flow().discard()
             return
         self.start_drawing()
 
@@ -14361,12 +14428,12 @@ class MainWindow(QMainWindow):
         """Ob gerade ein Körper aufgezogen wird."""
         return self._draw_flow is not None and self._draw_flow.active
 
-    def start_drawing(self, shape: str = "") -> None:
+    def start_drawing(self, shape: str = "", *, inward: bool = False) -> None:
         """Das Werkzeug *Zeichnen* öffnen — Ansicht, Projektion und Nachbarn bleiben.
 
         Gesperrt wie jede schreibende Handlung: ein Halt der Kette nennt seinen
         Schritt, ohne exakten Kern sagt der Satz der Skizzen-Operationen, was
-        fehlt (F-j).
+        fehlt (F-j). ``inward`` ist die gewählte Tasche (M4).
         """
         if not self._quiet_command_allowed() or self.drawing():
             return
@@ -14387,7 +14454,7 @@ class MainWindow(QMainWindow):
         self.tools.close_tool()
         self.tools.setVisible(False)
         self.draw_bar.setVisible(True)
-        self.draw_flow().start(shape)
+        self.draw_flow().start(shape, inward=inward)
         self._update_actions()
         self._show_invitation()
 
@@ -14400,6 +14467,37 @@ class MainWindow(QMainWindow):
 
     def drawing_changed(self) -> None:
         """Der Entwurf hat seine Phase gewechselt — Rückgängig folgt ihm."""
+        self._update_actions()
+
+    def return_the_outline(self, origin: _OutlineOrigin, text: str, *, now: bool) -> None:
+        """Ein Umriss aus dem Editor, der keine Höhe bekam, geht nicht verloren (H2).
+
+        ``now`` (Strg+Z im Aufziehen): zurück in den Editor, aus dem er kam.
+        Sonst (Escape, *Zeichnen* ein zweites Mal, F-k): beiseitegelegt wie eine
+        verworfene Zeichnung, und Strg+Z holt ihn von dort
+        (:meth:`restore_discarded_sketch`) — solange nichts anderes geschah.
+        """
+        from app.core.sketch.planes import is_feature_plane
+
+        result = self.session.last_result
+        body = origin.body if result is not None and origin.body in result.scene.objects else ""
+        plane = origin.plane
+        if not body and is_feature_plane(plane):
+            # Die Fläche gehört einem Körper, den es nicht mehr gibt (F-k):
+            # Der Umriss bleibt, gezeichnet wird auf der Grundebene weiter.
+            plane = ""
+        if now:
+            self.start_sketch(origin.op_name, text=text, plane=plane, body=body or None)
+            return
+        self._discarded_sketch = _DiscardedSketch(
+            op_name=origin.op_name,
+            text=text,
+            plane=plane,
+            steps=len(self.session.history.operations),
+            project=self.session.project,
+            body=body,
+        )
+        self.announce(tr("Zeichnung verworfen — Strg+Z holt sie zurück."))
         self._update_actions()
 
     def drawn_face_of_the_selection(self) -> DrawSurface | None:
@@ -19476,6 +19574,12 @@ class MainWindow(QMainWindow):
         if getattr(self, "_rebuild_dialog", None) is not None:
             self._say_the_change_comes_first()
             return False
+        if getattr(self, "_draw_flow", None) is not None and self.drawing():
+            # Eine andere Handlung beginnt erst nach dem dritten Klick oder
+            # Escape (§18.11): Einfügen, Erzeugen, Teilen und Varianten
+            # hielten sonst einen halben Entwurf neben sich offen (G2).
+            self.announce(str(_DRAWING_FIRST))
+            return False
         host = self._quiet_host
         if host is not None and host.begun and not host.committing:
             self._say_the_change_comes_first()
@@ -21164,7 +21268,18 @@ class MainWindow(QMainWindow):
                 return
             front = ("length",) if simple == "circle" else ("length", "width") if simple else ()
 
+        # **Die Art eines Zeichnungsschritts wechselt im Dialog** (§30.1, H1):
+        # Ein aufgezogener Quader wird gedreht, entlanggeführt oder als
+        # Lochfeld geschnitten, ohne neu zu zeichnen — dieselbe Liste *Art* wie
+        # beim Anlegen, und *Übernehmen* ersetzt den Schritt in einer
+        # Transaktion (``History.change_kind``).
+        variant = self._kind_choice(op_id, entry.op)
+        shown = {**entry.params, **(given or {})}
+        drawing_text = str(shown.get(_sketch_param(entry.op), "") or "") if variant else ""
+
         def chosen_spec() -> OperationSpec:
+            if variant is not None:
+                return REGISTRY.get(str(variant.currentData()))
             return spec
 
         def fitted(entered: Mapping[str, Any]) -> dict[str, Any]:
@@ -21196,7 +21311,8 @@ class MainWindow(QMainWindow):
                 if self.session.last_result is not None and chooses_a_centre(spec)
                 else ()
             ),
-            extra=None,
+            extra=variant,
+            extra_label=str(VARIANT_GROUPS[0].choice) if variant is not None else "",
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
             pick_image=DeferredSourcePicker(self._pick_image_source, self._cancel_source_read),
@@ -21237,6 +21353,18 @@ class MainWindow(QMainWindow):
 
         connect_sketch_editors()
         dialog.schemaChanged.connect(connect_sketch_editors)
+        if variant is not None:
+
+            def switch_kind() -> None:
+                """Die Zeichnung geht mit, auch wenn die neue Art ihr Feld anders nennt."""
+                picked = chosen_spec()
+                dialog.switch_variant(picked)
+                editor = dialog._editors.get(_sketch_param(picked.name))
+                if isinstance(editor, SketchField) and not editor.text().strip():
+                    editor.set_text(drawing_text)
+
+            variant.currentIndexChanged.connect(switch_kind)
+            variant.currentIndexChanged.connect(dialog.valuesChanged)
 
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
@@ -21262,15 +21390,21 @@ class MainWindow(QMainWindow):
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
+            picked = chosen_spec()
             params, changes = self._named_dimensions(
-                spec, fitted(dialog.values()), dialog.names_dimensions()
+                picked, fitted(dialog.values()), dialog.names_dimensions()
             )
             if spec.name == "create_container":
                 order = container_edit(params)
                 assert order.change_values is not None
                 params = dict(order.change_values)
                 changes = order.changes
-            changed = self.session.change_params(op_id, params, changes)
+            if picked.name != entry.op:
+                # Eine andere Art: derselbe Schritt, ersetzt in einer Transaktion.
+                self.session.change_kernel(op_id, picked.name, params)
+                changed = self.session.history.operation(op_id).op == picked.name
+            else:
+                changed = self.session.change_params(op_id, params, changes)
             if (
                 changed
                 and dialog.offers_naming()
@@ -21284,6 +21418,45 @@ class MainWindow(QMainWindow):
             # Nach dem Öffnen: ein Fokus in einem Fenster, das noch nicht
             # gezeigt wurde, ist keiner.
             dialog.focus_field(field)
+
+    def _kind_choice(self, op_id: int, op_name: str) -> QComboBox | None:
+        """Die Liste *Art* für einen Zeichnungsschritt — oder nichts für jede andere Operation.
+
+        Die Arten der Gruppe *Zeichnen …* und die übrigen Operationen der
+        Zeichnungsfamilie (*Lochfeld schneiden*): Was früher unter *Mehr* am
+        freien Umriss stand, steht jetzt am Schritt (RM-561, H1). Eine Art, die
+        einen Körper bräuchte und keinen hat, ist gesperrt und sagt warum
+        (Regel 18, ``History.kind_inputs``).
+        """
+        if REGISTRY.get(op_name).category != "sketch":
+            return None
+        group = VARIANT_GROUPS[0]
+        others = sorted(
+            (
+                candidate
+                for candidate in REGISTRY.all()
+                if candidate.category == "sketch"
+                and candidate.name not in group.members
+                and _has_sketch_param(candidate)
+            ),
+            key=lambda candidate: str(candidate.title),
+        )
+        kinds = (*group.members, *(candidate.name for candidate in others))
+        choice = QComboBox(self)
+        model = choice.model()
+        reason = str(tr("Diese Art braucht einen Körper. Zeichnen Sie dafür auf seiner Fläche."))
+        for name in kinds:
+            choice.addItem(str(REGISTRY.get(name).title), name)
+            if self.session.history.kind_inputs(op_id, name) is None and isinstance(
+                model, QStandardItemModel
+            ):
+                item = model.item(choice.count() - 1)
+                item.setEnabled(False)
+                item.setToolTip(reason)
+                item.setData(reason, Qt.ItemDataRole.AccessibleDescriptionRole)
+        choice.setToolTip(str(group.doc))
+        choice.setCurrentIndex(choice.findData(op_name))
+        return choice
 
     def _named_dimensions(
         self, spec: OperationSpec, params: Mapping[str, Any], wanted: bool

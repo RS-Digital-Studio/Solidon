@@ -26,6 +26,8 @@ class DrawBar(QWidget):
     """*Freie Form …*: Der nächste Klick öffnet den Skizzeneditor auf seiner Fläche."""
     recognitionRequested = Signal()
     """*Merkmale an dieser Stelle erkennen* an einer Stelle ohne erkannte Fläche (F-b)."""
+    closeRequested = Signal()
+    """*Schließen*: der sichtbare Ausgang neben Escape, für eine Maus ohne Tastatur (G10)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -69,6 +71,13 @@ class DrawBar(QWidget):
         self.recognise.setVisible(False)
         self.recognise.clicked.connect(self.recognitionRequested)
 
+        self.close_button = QPushButton(tr("Schließen"), self)
+        self.close_button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        leave = f"{tr('Das Werkzeug schließen, ohne einen Körper anzulegen.')} (Esc)"
+        self.close_button.setToolTip(leave)
+        self.close_button.setAccessibleDescription(leave)
+        self.close_button.clicked.connect(self.closeRequested)
+
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(TIGHT)
@@ -77,6 +86,7 @@ class DrawBar(QWidget):
         controls.addStretch(1)
         controls.addWidget(self.recognise)
         controls.addWidget(self.free)
+        controls.addWidget(self.close_button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)

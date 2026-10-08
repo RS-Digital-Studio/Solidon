@@ -487,12 +487,10 @@ geprüft.
   (`occluded_view_shift`, Regel in `kamera.md`).
 * **Fangmarke und unfertige Kurve haben eigene Actors**, die `show_sketch`
   zwischen zwei Gesten nicht abräumt; gleiche Topologie tauscht nur Punkte.
-  Maßkarten, Achsenbuchstaben und Ziehgriff-Beschriftungen sind
-  `pickable=False`.
-* **Schaft, Kreuz und *Abtragen* nur bei genau einem bearbeitbaren Körper**;
-  ohne ihn erzeugt ein Zug nach innen keine Operation.
+  Maßkarten, Achsenbuchstaben und die Wörter am Entwurf des Aufziehens
+  (`show_draw`) sind `pickable=False`.
 
-`sketch_grid`, `show_sketch_cursor`, `_sketch_hit`, `set_sketch_pull`,
+`sketch_grid`, `show_sketch_cursor`, `_sketch_hit`, `show_draw`,
 `MEASURE_GAP`, `view_on_plane` und `place_sketch_cards`
 regelt `zeichenflaeche.md`.
 

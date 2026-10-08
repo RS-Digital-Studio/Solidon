@@ -10,7 +10,9 @@ die Kamera, die linke Taste gehört dem Entwurf (``Viewport.set_placement_pointe
 dieselbe Vorfahrt wie bei der Platzierung). **Kein Dialog nach dem dritten
 Klick** (Regel 19): Er legt den Schritt an, das Werkzeug schließt, der Körper
 ist gewählt. Escape verwirft das Unfertige, Strg+Z im Entwurf nimmt den
-letzten Klick, danach den ganzen Schritt.
+letzten Klick, danach den ganzen Schritt. Ein Umriss aus dem Editor ist kein
+Unfertiges: Strg+Z führt ihn zurück in den Editor, Escape legt ihn wie eine
+verworfene Zeichnung beiseite, und Strg+Z holt ihn von dort (H2).
 """
 
 from __future__ import annotations
@@ -22,8 +24,10 @@ from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from app.core.registry import REGISTRY
+from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import OperationDraft
-from app.core.sketch.planes import axis_hit, ray_hit, to_plane
+from app.core.sketch.planes import axis_hit, feature_plane_parts, ray_hit, to_plane
+from app.core.sketch.serialize import sketch_to_text
 from app.core.types import ObjectId, PlaneFrame, Point2, Sketch
 from app.core.units import EPS_GEOM, to_mm
 from app.i18n import tr
@@ -47,7 +51,7 @@ from app.ui.draw_tool import (
     snapped,
 )
 from app.ui.labels import circle_word, display_unit, length, limit_sentence, read_number
-from app.ui.leash import stop_watching_the_dying
+from app.ui.leash import Worker, stop_watching_the_dying
 from app.ui.render.api import PointerEvent
 from app.ui.style import ROOMY, TIGHT
 
@@ -59,6 +63,12 @@ if TYPE_CHECKING:
 #: Mausereignis wäre das die teuerste Stelle der Bewegung, nach dieser Pause
 #: ist sie eine.
 HOVER_MS: Final = 40
+
+#: Wie weit der Treffer einer Bildstelle neben den Dreiecken einer Fläche liegen
+#: darf, als Anteil der Körperdiagonale. Der Punkt kommt aus dem Tiefenpuffer
+#: (``Viewport.placement_hit``), und dessen Auflösung ist ein Bruchteil der
+#: Szenengröße, keine feste Länge (F-b).
+FACE_GAP_SHARE: Final = 1e-3
 
 #: Ab welchem Winkel zwischen Blick und Normale die Höhe der senkrechten
 #: Mausbewegung folgt statt der Achse — dieselben zehn Grad, unter denen die
@@ -177,6 +187,45 @@ class DrawEntry(QFrame):
         return False
 
 
+class _OverlapWorker(Worker):
+    """Ob der neue Körper einen anderen mit Volumen überdeckt (F-g) — abseits des Hauptfadens.
+
+    Die Hüllquader sind nur der Vorfilter: Ein Quader im Loch eines Rahmens
+    liegt in dessen Hülle und berührt ihn nicht. Gerechnet wird die echte
+    Schnittmenge (``geom.measure.body_overlap``) an Arbeiterkopien
+    (``placement_flow.for_a_worker``), denn die trägen Merker der Netze sind
+    nicht threadsicher.
+    """
+
+    done = Signal(object)
+    """Die Kennung des ersten überdeckten Körpers — oder ``None``."""
+
+    def __init__(self, made: Any, others: list[tuple[ObjectId, Any]]) -> None:
+        super().__init__()
+        self._made = made
+        self._others = others
+        self.cancelled = CancelSignal()
+
+    def work(self) -> None:
+        from app.core.errors import OperationCancelled
+        from app.core.geom.measure import body_overlap
+
+        try:
+            for object_id, other in self._others:
+                try:
+                    volume = body_overlap(self._made, other, cancelled=self.cancelled)
+                except ValueError, RuntimeError:
+                    # Ein offener oder kaputter Körper hat kein Innen; eine
+                    # Überdeckung zu behaupten wäre geraten (Regel 21).
+                    continue
+                if volume > EPS_GEOM:
+                    self.done.emit(object_id)
+                    return
+        except OperationCancelled:
+            return
+        self.done.emit(None)
+
+
 class DrawFlow(QObject):
     """Der Ablauf des Aufziehens: Zeiger, Klicks, Felder, Schritt (RM-559)."""
 
@@ -203,8 +252,19 @@ class DrawFlow(QObject):
         self._steep_from: int | None = None
         self._unknown: tuple[str, Any, int, Any] | None = None
         """Die Stelle eines Netzes ohne erkannte Fläche (F-b), für die Erkennung dort."""
-        self._resume_at: tuple[ObjectId, tuple[float, float, float]] | None = None
+        self._resume_at: tuple[ObjectId, tuple[float, float, float], bool] | None = None
+        """Stelle, Punkt und *Freie Form …* für das Weiter nach der Erkennung (Abnahme 10)."""
         self._watching: tuple[tuple[ObjectId, ...], str, frozenset[ObjectId], str] | None = None
+        self.inward_first = False
+        """Die gewählte Tasche (M4): Getippt ist die Tiefe, bis der Zeiger eine Richtung zeigt."""
+        self._typed_inward: bool | None = None
+        """Die Richtung beim Öffnen des Höhenfelds — der Zeiger ändert sie nicht mehr (M3)."""
+        self.origin: Any = None
+        """Woher ein Umriss aus dem Editor kam — der Weg zurück für Strg+Z und Escape (H2)."""
+        self._overlap: _OverlapWorker | None = None
+        self._before_step: Any = None
+        """Das Ergebnis vor dem Schritt: Eine Tasche behält die Kennung ihres Körpers,
+        und an ihm ist noch nichts geschnitten (F-h)."""
         self.entry = DrawEntry(self.viewport)
         self.entry.committed.connect(self._commit_entry)
         self._hover_timer = QTimer(self)
@@ -214,6 +274,7 @@ class DrawFlow(QObject):
         self.bar.shapeChosen.connect(self.choose)
         self.bar.freeRequested.connect(self.arm_free)
         self.bar.recognitionRequested.connect(self._recognise_here)
+        self.bar.closeRequested.connect(self.discard)
         window.session.sceneChanged.connect(self._scene_changed)
         self._generation = window.session.project_generation
         """Zu welchem Projekt der Entwurf gehört — ein anderes kennt seine Fläche nicht."""
@@ -225,22 +286,40 @@ class DrawFlow(QObject):
     def active(self) -> bool:
         return self.draft is not None
 
-    def start(self, shape: str = "") -> None:
-        """Das Werkzeug öffnen — Phase 0, die gewählte Form bleibt vom letzten Mal."""
+    def start(self, shape: str = "", *, inward: bool = False) -> None:
+        """Das Werkzeug öffnen — Phase 0, die gewählte Form bleibt vom letzten Mal.
+
+        ``inward`` ist die gewählte Tasche (*Tasche schneiden* aus Menü oder
+        Palette): Eine getippte Zahl ist dann die Tiefe (M4, Regel 21).
+        """
         self.draft = DrawDraft(shape or "rectangle")
         self.free = False
         self._unknown = None
+        self.inward_first = inward
+        self.origin = None
         self._begin()
 
     def start_with_outline(
-        self, outline: Sketch, surface: DrawSurface, shift: tuple[float, float, float]
+        self,
+        outline: Sketch,
+        surface: DrawSurface,
+        shift: tuple[float, float, float],
+        *,
+        inward: bool = False,
+        origin: Any = None,
     ) -> None:
-        """Ein Umriss aus dem Skizzeneditor kommt zurück: Es fehlt nur die Höhe (RM-561)."""
+        """Ein Umriss aus dem Skizzeneditor kommt zurück: Es fehlt nur die Höhe (RM-561).
+
+        ``origin`` beschreibt den Editor, aus dem er kam — Strg+Z führt dorthin
+        zurück, Escape legt ihn als verworfene Zeichnung ab (H2).
+        """
         self.draft = DrawDraft()
         self.draft.with_outline(outline, surface)
         self.draft.shift = shift
         self.free = False
         self._unknown = None
+        self.inward_first = inward
+        self.origin = origin
         self._begin()
 
     def _begin(self) -> None:
@@ -250,6 +329,7 @@ class DrawFlow(QObject):
         self._hover = None
         self._hover_face = None
         self._steep_from = None
+        self._typed_inward = None
         self.viewport.set_placement_pointer(self.pointer)
         self.viewport.set_drawing(True)
         widget = getattr(self.viewport.renderer, "widget", None)
@@ -271,6 +351,9 @@ class DrawFlow(QObject):
         self._hover = None
         self._hover_face = None
         self._unknown = None
+        self._typed_inward = None
+        self.inward_first = False
+        self.origin = None
         self._hover_timer.stop()
         self.entry.close_entry()
         self.viewport.set_placement_pointer(None)
@@ -285,35 +368,64 @@ class DrawFlow(QObject):
         """Escape: erst das offene Feld, dann der Entwurf samt Werkzeug (E7)."""
         if self.draft is None:
             return False
-        if self.entry.isVisible():
+        if self.entry.isVisibleTo(self.viewport):
             self.entry.close_entry()
             self._refocus()
             return True
-        self.close()
+        self.discard()
         return True
 
+    def discard(self) -> None:
+        """Das Werkzeug schließen; ein Umriss aus dem Editor bleibt für Strg+Z (H2).
+
+        Escape nimmt nur Unfertiges (§25). Wer im Editor *Fertig* gedrückt hat,
+        hält Fertiges in der Hand — eine halbe Stunde Bedingungsarbeit wäre
+        sonst mit einem Tastendruck weg. Dieselbe Zusage wie *Verwerfen* im
+        Editor: „Zeichnung verworfen — Strg+Z holt sie zurück.“
+        """
+        draft = self.draft
+        if draft is None:
+            return
+        outline, origin = draft.outline, self.origin
+        self.close()
+        if outline is not None and origin is not None:
+            self.view.return_the_outline(origin, sketch_to_text(outline), now=False)
+
     def undo(self) -> bool:
-        """Strg+Z im Entwurf: den letzten Klick zurück. Falsch heißt: nichts zurückzunehmen."""
+        """Strg+Z im Entwurf: den letzten Klick zurück — nie einen Schritt im Verlauf.
+
+        Mit einem Umriss aus dem Editor geht es zurück in den Editor (H2); in
+        Phase 0 gibt es nichts zurückzunehmen, und der Satz sagt, wie es
+        weitergeht, statt still zu bleiben (G10). Falsch heißt: kein Entwurf.
+        """
         draft = self.draft
         if draft is None:
             return False
-        if self.entry.isVisible():
+        if self.entry.isVisibleTo(self.viewport):
             self.entry.close_entry()
+            self._refocus()
+            return True
+        if draft.outline is not None and self.origin is not None:
+            outline, origin = draft.outline, self.origin
+            self.close()
+            self.view.return_the_outline(origin, sketch_to_text(outline), now=True)
+            return True
         if not draft.back():
-            return False
+            self.view.announce(tr("Erst den Körper fertig aufziehen oder mit Escape abbrechen."))
+            return True
         self.lift = None
         self._steep_from = None
         self._refresh()
         return True
 
     def can_undo(self) -> bool:
-        draft = self.draft
-        return draft is not None and draft.outline is None and draft.phase > 0
+        """Solange das Werkzeug offen ist, gehört Strg+Z ihm — auch ohne Klick (G10)."""
+        return self.draft is not None
 
     def unsaved(self) -> bool:
-        """Ein gesetzter Klick oder ein Umriss aus dem Editor: Arbeit ohne Schritt."""
+        """Ein Umriss aus dem Editor ist Arbeit ohne Schritt; einzelne Klicks sind es nicht (G3)."""
         draft = self.draft
-        return draft is not None and (draft.outline is not None or draft.phase > 0)
+        return draft is not None and draft.outline is not None
 
     def choose(self, shape: str) -> None:
         """Rechteck oder Kreis — per Knopf oder Taste, solange die Grundfläche nicht steht."""
@@ -374,6 +486,10 @@ class DrawFlow(QObject):
             point = self._plane_point(x, y)
             if point is not None:
                 self.aim(point)
+            return
+        if self.entry.isVisibleTo(self.viewport):
+            # **Eine getippte Zahl ersetzt Zeiger samt Richtung** (M3): Was
+            # beim Öffnen des Felds galt, gilt, bis es übernommen ist.
             return
         raw = self._height_at(x, y)
         if raw is not None:
@@ -474,6 +590,11 @@ class DrawFlow(QObject):
         lift = self.lift
         if draft is None or lift is None:
             return False
+        if lift.note:
+            # **Null bleibt null** (F-e): Der Satz steht schon in der Leiste;
+            # der Klick sagt ihn noch einmal und baut keinen Splitter.
+            self.view.announce(lift.note)
+            return False
         step = draft.step(lift)
         if step is None:
             return False
@@ -484,13 +605,16 @@ class DrawFlow(QObject):
         applied = self.view.session.apply(
             spec.title, [OperationDraft(op=step.op, inputs=step.inputs, params=step.params)]
         )
-        if applied:
-            outputs = self._outputs_of_the_last_step()
-            self._watching = (outputs, step.op, before, name)
+        if not applied:
+            # Die Absage steht in der Statuszeile (``failed``); der Entwurf
+            # bleibt im Bild, damit ein zweiter Versuch nicht neu zeichnet.
+            return False
+        outputs = self._outputs_of_the_last_step()
+        self._watching = (outputs, step.op, before, name)
+        self._before_step = result
         self.close()
-        if applied:
-            self._scene_changed(self.view.session.last_result)
-        return applied
+        self._scene_changed(self.view.session.last_result)
+        return True
 
     def press_enter(self) -> None:
         """Die Eingabetaste ohne Feld: In Phase 0 beginnt der Entwurf in der Mitte (Abnahme 9)."""
@@ -498,7 +622,8 @@ class DrawFlow(QObject):
         if draft is None or draft.phase != 0:
             return
         surface = self.view.drawn_face_of_the_selection() or bed_surface()
-        self.take(("face", surface, (0.0, 0.0), (0.0, 0.0, 0.0)))
+        # Auf Platte 2 steht der Körper versetzt im Bild (G4).
+        self.take(("face", surface, (0.0, 0.0), self.viewport.view_offset_of(surface.body)))
 
     def type_first(self, text: str) -> bool:
         """Die erste Ziffer öffnet das Maßfeld am Zeiger (Muster E19)."""
@@ -512,7 +637,8 @@ class DrawFlow(QObject):
                 else [str(tr("Breite")), str(tr("Tiefe"))]
             )
         else:
-            inward = self.lift is not None and self.lift.height < 0.0
+            inward = self._direction()
+            self._typed_inward = inward
             titles = [str(tr("Tiefe") if inward else tr("Höhe"))]
         ratio = self.viewport._device_ratio()
         spot = self._last or (self.viewport.width() // 2, self.viewport.height() // 2)
@@ -534,7 +660,7 @@ class DrawFlow(QObject):
                 refusal = draft.type_size(float(values[0]))
             else:
                 second = values[1] if len(values) > 1 else None
-                refusal = draft.type_size(float(values[0]), second)
+                refusal = draft.type_size(float(values[0]), second, self.pointer_at)
             if refusal:
                 self.view.announce(refusal)
                 return False
@@ -546,7 +672,7 @@ class DrawFlow(QObject):
         if draft.phase != 2 or draft.surface is None:
             return False
         typed = float(values[0])
-        inward = self.lift is not None and self.lift.height < 0.0
+        inward = self._typed_inward if self._typed_inward is not None else self._direction()
         # **Ein Betrag in der gezeigten Richtung** (E8): Der Kunde tippt die
         # Zahl, die er liest; ein Minus kehrt die Richtung um.
         height = -typed if inward else typed
@@ -564,7 +690,16 @@ class DrawFlow(QObject):
                 return False
             self.lift = Lift(height)
         self.entry.close_entry()
+        self._typed_inward = None
         return self.settle()
+
+    def _direction(self) -> bool:
+        """Ob eine getippte Zahl nach innen zählt: was der Zeiger zeigt, sonst die gewählte Art."""
+        if self.lift is not None and abs(self.lift.height) > EPS_GEOM:
+            return self.lift.height < 0.0
+        draft = self.draft
+        surface = draft.surface if draft is not None else None
+        return self.inward_first and surface is not None and surface.cuts
 
     # --- Rückmeldung nach dem Schritt ------------------------------------------
 
@@ -591,29 +726,23 @@ class DrawFlow(QObject):
         if watching is None:
             return
         outputs, op, before, name = watching
-        if not outputs or not set(outputs) <= set(result.scene.objects):
+        if (
+            not outputs
+            or result is self._before_step
+            or not set(outputs) <= set(result.scene.objects)
+        ):
             return
         self._watching = None
+        self._before_step = None
         made = outputs[0]
         self.view.object_tree.select_object(made)
         entry = result.scene.objects[made]
-        if op == "sketch_extrude":
-            other = _overlapped(
+        if op == EXTRUDE_OP:
+            candidates = _overlapped(
                 entry, [result.scene.objects[key] for key in before if key in result.scene.objects]
             )
-            if other is not None:
-                label = str(other.name or other.id)
-                self.view.announce(tr("Der neue Körper überdeckt {name}.").format(name=label))
-                self.view.offer_after_drawing(
-                    [
-                        (
-                            str(REGISTRY.get("union_objects").title),
-                            "union_objects",
-                            (other.id, made),
-                        ),
-                        (str(tr("Davon abziehen")), "subtract_objects", (other.id, made)),
-                    ]
-                )
+            if candidates:
+                self._check_overlap(entry, candidates)
         elif op == POCKET_OP and (pieces := _pieces(entry)) > 1:
             label = str(entry.name or name or made)
             self.view.announce(
@@ -621,6 +750,65 @@ class DrawFlow(QObject):
             )
             split = REGISTRY.get("split_bodies")
             self.view.offer_after_drawing([(str(split.title), split.name, (made,))])
+
+    def _check_overlap(self, made: Any, candidates: list[Any]) -> None:
+        """F-g: die echte Schnittmenge im Arbeiter; der Satz kommt erst mit ihr."""
+        from app.ui.placement_flow import for_a_worker
+
+        self.cancel_overlap()
+        worker = _OverlapWorker(
+            for_a_worker(made.mesh),
+            [(other.id, for_a_worker(other.mesh)) for other in candidates],
+        )
+        names = {other.id: str(other.name or other.id) for other in candidates}
+        generation = self.view.session.project_generation
+        made_id = made.id
+
+        def arrived(found: Any) -> None:
+            if self._overlap is worker:
+                self._overlap = None
+            if found is None or worker.cancelled.is_cancelled:
+                return
+            result = self.view.session.last_result
+            if (
+                self.view.session.project_generation != generation
+                or result is None
+                or made_id not in result.scene.objects
+                or found not in result.scene.objects
+            ):
+                return
+            self.view.announce(
+                tr("Der neue Körper überdeckt {name}.").format(name=names.get(found, found))
+            )
+            self.view.offer_after_drawing(
+                [
+                    (str(REGISTRY.get("union_objects").title), "union_objects", (found, made_id)),
+                    (str(tr("Davon abziehen")), "subtract_objects", (found, made_id)),
+                ]
+            )
+
+        worker.done.connect(arrived)
+        worker.crashed.connect(lambda _detail: None)
+        self._overlap = worker
+        self.view._leash.start(worker)
+
+    def cancel_overlap(self) -> None:
+        """Eine laufende Überdeckungsprüfung gilt nicht mehr."""
+        worker = self._overlap
+        self._overlap = None
+        if worker is not None:
+            worker.cancelled.cancel()
+
+    def wait_for_overlap(self, timeout_ms: int = 30_000) -> bool:
+        """Für Prüfstände: warten, bis die Überdeckung entschieden und zugestellt ist."""
+        from PySide6.QtCore import QCoreApplication
+
+        worker = self._overlap
+        if worker is None:
+            return True
+        done = worker.wait(timeout_ms)
+        QCoreApplication.processEvents()
+        return bool(done)
 
     def _drop_a_lost_target(self, result: Any) -> None:
         """F-k: Verschwindet das Ziel während des Entwurfs, fällt der Entwurf mit Satz."""
@@ -630,7 +818,9 @@ class DrawFlow(QObject):
         if draft.surface.body in result.scene.objects:
             return
         if draft.outline is not None:
-            self.close()
+            # Der Umriss bleibt für Strg+Z, wie nach Escape (H2).
+            self.discard()
+            return
         else:
             draft.surface = None
             draft.first = None
@@ -647,7 +837,7 @@ class DrawFlow(QObject):
             return
         # Ein Versuch, und nur nach der Erkennung: Danach gilt die Stelle nicht mehr.
         self._resume_at = None
-        object_id, point = resume
+        object_id, point, free = resume
         entry = result.scene.objects.get(object_id)
         feature = _face_at(entry, point) if entry is not None else None
         if entry is None or feature is None:
@@ -657,13 +847,17 @@ class DrawFlow(QObject):
             return
         self.view.start_drawing()
         if self.draft is not None:
-            self.take(("face", surface, to_plane(surface.frame, point), (0.0, 0.0, 0.0)))
+            # *Freie Form …* gilt weiter, und Platte 2 steht versetzt (G4).
+            self.free = free
+            shift = self.viewport.view_offset_of(surface.body)
+            start = self._snap(to_plane(surface.frame, point), surface)
+            self.take(("face", surface, start, shift))
 
     def _recognise_here(self) -> None:
         unknown = self._unknown
         if unknown is None:
             return
-        self._resume_at = (unknown[0], unknown[1])
+        self._resume_at = (unknown[0], unknown[1], self.free)
         self.close()
         flow = self.view.local_features()
         flow.begin(unknown)
@@ -720,8 +914,32 @@ class DrawFlow(QObject):
             _kind, surface, point, shift = target
             self._hover = (surface, point, shift)
             if target[0] == "face":
-                self._hover_face = _face_patch(self.view.session.last_result, surface)
+                self._hover_face = self._face_patch(surface)
         self._show()
+
+    def _face_patch(self, surface: DrawSurface) -> tuple[Any, Any] | None:
+        """Füllung und Umriss der Fläche, die aufleuchtet — aus dem Anzeigenetz des Körpers.
+
+        Füllung **und** Umriss: Eine Tönung allein ist Farbe (Regel 18). Welche
+        Dreiecke gelten, fragt dieselbe Stelle wie die Merkmalsmarkierung
+        (``Viewport._face_indices``).
+        """
+        result = self.view.session.last_result
+        if result is None or surface.body is None:
+            return None
+        entry = result.scene.objects.get(surface.body)
+        if entry is None:
+            return None
+        _object, feature_id = feature_plane_parts(surface.plane)
+        chosen = self.viewport._face_indices(surface.body, feature_id)
+        raw = getattr(entry.mesh, "raw", None)
+        if raw is None or not chosen:
+            return None
+        import numpy as np
+
+        faces = np.asarray(raw.faces)[list(chosen)]
+        patch = (np.asarray(raw.vertices, dtype=float), faces)
+        return patch, face_outline(entry.mesh, chosen)
 
     def _plane_point(self, x: int, y: int) -> Point2 | None:
         draft = self.draft
@@ -793,7 +1011,7 @@ class DrawFlow(QObject):
         if draft is None:
             return
         self.bar.show_state(
-            sentence(draft, free=self.free),
+            sentence(draft, free=self.free, inward=self.inward_first),
             draft.shape,
             shaping=draft.phase < 2 and draft.outline is None,
             recognise=self._unknown is not None,
@@ -898,52 +1116,49 @@ def _centre_of(draft: DrawDraft) -> Point2 | None:
     return ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
 
 
-def _face_patch(result: Any, surface: DrawSurface) -> tuple[Any, Any] | None:
-    """Füllung und Umriss der Fläche, die aufleuchtet — aus dem Anzeigenetz des Körpers.
+def _face_at(entry: Any, point: tuple[float, float, float]) -> str | None:
+    """Die ebene Fläche, deren Dreiecke ``point`` tragen — die nächste, wenn mehrere es tun.
 
-    Füllung **und** Umriss: Eine Tönung allein ist Farbe (Regel 18).
+    Gefragt wird der Abstand zu den Dreiecken der Fläche, nicht zu ihrer
+    Ebene: Zwei gleich hohe Deckflächen teilen die Ebene, aber nur eine trägt
+    den Punkt (F-b, Abnahme 10).
     """
-    if result is None or surface.body is None:
-        return None
-    entry = result.scene.objects.get(surface.body)
-    if entry is None:
-        return None
-    feature_id = surface.plane.rsplit(":", 1)[-1]
-    feature = entry.features.get(feature_id)
     raw = getattr(entry.mesh, "raw", None)
-    if feature is None or raw is None or not feature.face_indices:
+    if raw is None:
         return None
+    from collections.abc import Callable
+
     import numpy as np
+    from trimesh.triangles import closest_point
+
+    nearest_of: Callable[[Any, Any], Any] = closest_point
 
     faces = np.asarray(raw.faces)
-    chosen = [index for index in feature.face_indices if 0 <= index < len(faces)]
-    if not chosen:
-        return None
-    patch = (np.asarray(raw.vertices, dtype=float), faces[chosen])
-    return patch, face_outline(entry.mesh, feature.face_indices)
-
-
-def _face_at(entry: Any, point: tuple[float, float, float]) -> str | None:
-    """Die ebene Fläche, deren Ebene durch ``point`` geht und deren Dreiecke ihn tragen."""
+    vertices = np.asarray(raw.vertices, dtype=float)
+    low, high = entry.mesh.bounds.minimum, entry.mesh.bounds.maximum
+    reach = max(EPS_GEOM, FACE_GAP_SHARE * math.dist(low, high))
     best: tuple[float, str] | None = None
     for key, feature in entry.features.items():
-        if feature.kind != "face":
+        if feature.kind != "face" or feature.params.get("normal") is None:
             continue
-        normal = feature.params.get("normal")
-        centre = feature.params.get("centre")
-        if normal is None or centre is None:
+        chosen = [index for index in feature.face_indices if 0 <= index < len(faces)]
+        if not chosen:
             continue
-        gap = abs(sum((p - c) * n for p, c, n in zip(point, centre, normal, strict=True)))
-        if best is None or gap < best[0]:
+        triangles = vertices[faces[chosen]]
+        nearest = nearest_of(triangles, np.repeat([point], len(chosen), axis=0))
+        gap = float(np.min(np.linalg.norm(nearest - np.asarray(point), axis=1)))
+        if gap <= reach and (best is None or gap < best[0]):
             best = (gap, key)
-    if best is None or best[0] > 0.5:
-        return None
-    return best[1]
+    return best[1] if best is not None else None
 
 
-def _overlapped(entry: Any, others: list[Any]) -> Any | None:
-    """Der erste andere Körper, dessen Hülle die des neuen mit Volumen schneidet (F-g)."""
+def _overlapped(entry: Any, others: list[Any]) -> list[Any]:
+    """Die anderen Körper, deren Hülle die des neuen mit Volumen schneidet — der Vorfilter (F-g).
+
+    Ob sie sich wirklich überdecken, entscheidet :class:`_OverlapWorker`.
+    """
     box = entry.mesh.bounds
+    found: list[Any] = []
     for other in others:
         if other.id == entry.id:
             continue
@@ -954,8 +1169,8 @@ def _overlapped(entry: Any, others: list[Any]) -> Any | None:
             for axis in range(3)
         ]
         if all(amount > EPS_GEOM for amount in overlap):
-            return other
-    return None
+            found.append(other)
+    return found
 
 
 def _pieces(entry: Any) -> int:
