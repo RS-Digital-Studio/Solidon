@@ -3247,7 +3247,8 @@ class ModelSupport:
     """
 
     open_patch: float = 0.0
-    """Die größte Fläche eines Stücks, die außerhalb eines Kanals auf dem Modell aufsetzt."""
+    """Die größte Fläche eines Stücks, die außerhalb eines Kanals auf dem Modell aufsetzt —
+    ohne Kanten, die sich selbst tragen (:func:`ledges`)."""
     open_area: float = 0.0
     """Wie viel außerhalb von Kanälen insgesamt auf dem Modell aufsetzt."""
     open_field: float = 0.0
@@ -3414,6 +3415,129 @@ _ANSWERS: list[
     tuple[tuple[LayerInfo, ...], float, frozenset[tuple[int, int]] | None, ModelSupport]
 ] = []
 _ANSWERS_LOCK = threading.Lock()
+
+
+#: Wie weit eine Decke in der Aufsicht über das Material ragen darf, an dem sie
+#: ansetzt, und sich noch selbst trägt, in Millimetern (:func:`ledges`).
+LEDGE_REACH: Final = 3.0
+
+#: Welcher Anteil einer Kante weiter als :data:`LEDGE_REACH` reichen darf —
+#: die Rundung der Puffer und das Vernetzungsrauschen (:func:`_carried`).
+LEDGE_SPILL: Final = 0.05
+
+
+def ledges(result: SliceResult) -> frozenset[tuple[int, int]]:
+    """Überhangstücke, deren Decke nicht weiter als :data:`LEDGE_REACH` über das
+    Material ragt, an dem sie ansetzt — Kanten, die sich selbst tragen.
+
+    Am Eiffelturm (08.10.2026, „一体无支撑“, ohne Stützen gedacht) verlangte
+    der Rat Stützen wegen der Ränder der Plattformen: oben ein Kranz, der in
+    drei Schichten 2,6 mm über den Schaft wächst, darunter Ränder unter 1 mm.
+    Der ElegooSlicer stellte dafür 831 m Baumstütze außen am Turm hoch. Gemessen
+    wird die ganze Decke (:class:`_Ceilings`), nicht das Stück: Die Streifen
+    einer schrägen Unterseite ragen je Schicht kaum über die vorige, ein Kinn
+    als Ganzes aber 18 mm über die Kehle. Wurzel ist die Schicht unter dem
+    untersten Stück. Inseln sind nie Kanten. Gemerkt wie die Kanalfrage.
+    """
+    with _ANSWERS_LOCK:
+        for layers, answer in _LEDGES:
+            if layers is result.layers:
+                return answer
+    answer = _ledges(result)
+    with _ANSWERS_LOCK:
+        _LEDGES.append((result.layers, answer))
+        del _LEDGES[:-_ANSWERS_KEPT]
+    return answer
+
+
+_LEDGES: list[tuple[tuple[LayerInfo, ...], frozenset[tuple[int, int]]]] = []
+
+
+def _ledges(result: SliceResult) -> frozenset[tuple[int, int]]:
+    """Die Kantenfrage selbst, ungemerkt (:func:`ledges`)."""
+    layers = result.layers
+    materials: dict[int, ShapelyPolygon] = {}
+
+    def material(index: int) -> ShapelyPolygon:
+        if index not in materials:
+            materials[index] = _material(layers[index])
+        return materials[index]
+
+    ceilings = _Ceilings(layers, material)
+    seen: set[tuple[int, int]] = set()
+    found: set[tuple[int, int]] = set()
+    for index, layer in enumerate(layers):
+        for number in range(len(layer.overhangs)):
+            name = (index, number)
+            if name in seen or ceilings.floats(name):
+                continue
+            group = ceilings.of(name)
+            seen |= group
+            low = min(member[0] for member in group)
+            if low < 1:
+                continue
+            field = unary_union([ceilings.shape(member) for member in sorted(group)])
+            if _carried(field, material(low - 1)):
+                found |= group
+    return frozenset(found)
+
+
+def ledge_space(
+    result: SliceResult, line_width: float
+) -> list[tuple[float, float, ShapelyPolygon]]:
+    """Wo die Stützsperre Kanten freihält, die sich selbst tragen (:func:`ledges`):
+    (unten, oben, Fläche) je :data:`CHANNEL_SLAB`.
+
+    Gesperrt wird die Überhangfläche der Kanten selbst, um eine Bahnbreite
+    hinaus — dort fragt der Slicer, ob er stützt; Stämme anderer Stützen laufen
+    durch eine Sperre hindurch. Jede Scheibe reicht eine Scheibenhöhe unter ihre
+    Kanten. Überhänge, die Stütze brauchen, bleiben frei: Ihre Fläche in dieser
+    und der Scheibe darunter wird ausgespart, ebenfalls um eine Bahnbreite.
+    """
+    edges = ledges(result)
+    if not edges:
+        return []
+    found: dict[int, list[ShapelyPolygon]] = {}
+    needed: dict[int, list[ShapelyPolygon]] = {}
+    for index, layer in enumerate(result.layers):
+        slab = math.floor(layer.z / CHANNEL_SLAB)
+        for number, piece in enumerate(layer.overhangs):
+            shape = ShapelyPolygon(piece.outline, piece.holes)
+            target = found if (index, number) in edges else needed
+            target.setdefault(slab, []).append(shape)
+    slabs: list[tuple[float, float, ShapelyPolygon]] = []
+    for slab, shapes in sorted(found.items()):
+        region = unary_union(shapes).buffer(line_width, join_style="mitre")
+        nearby = needed.get(slab, []) + needed.get(slab - 1, [])
+        if nearby:
+            region = region.difference(unary_union(nearby).buffer(line_width, join_style="mitre"))
+        if region.area <= EPS_GEOM:
+            continue
+        slabs.append(((slab - 1) * CHANNEL_SLAB, (slab + 1) * CHANNEL_SLAB, region))
+    return slabs
+
+
+def _carried(field: Any, root: ShapelyPolygon) -> bool:
+    """Liegt ``field`` ganz innerhalb von :data:`LEDGE_REACH` um ``root``?
+
+    Gefragt wird die Fläche, nicht der Rand: Eine flache Decke zwischen zwei
+    Wänden hat alle Ecken auf den Wänden und spannt in der Mitte trotzdem weit.
+    Was weiter liegt, darf :data:`LEDGE_SPILL` des Felds sein — am Kranz des
+    Eiffelturms 1,0 von 214 mm², an einer Fase von 52° über 5 mm 124 von 281.
+    Ein Saum entlang des Umfangs taugte nicht: Die Streifen einer Fase haben
+    zusammen zehn Meter Rand.
+    """
+    if field.is_empty:
+        return True
+    low_x, low_y, high_x, high_y = field.bounds
+    margin = 2.0 * LEDGE_REACH
+    near = shapely.clip_by_rect(
+        root, low_x - margin, low_y - margin, high_x + margin, high_y + margin
+    )
+    if near.is_empty:
+        return False
+    beyond = field.difference(near.buffer(LEDGE_REACH))
+    return bool(beyond.area <= LEDGE_SPILL * field.area)
 
 
 class _Ceilings:
@@ -3801,7 +3925,11 @@ def _model_support(
     channels &= reported
     landed = {owner: entry for owner, entry in landed.items() if owner in reported}
     islands &= reported
-    outside = [area for owner, (_low, area) in landed.items() if owner not in channels]
+    # Kanten tragen sich selbst (:func:`ledges`) und verlangen keine Stütze auf
+    # dem Modell — am Eiffelturm die Ränder der Plattformen.
+    edges = ledges(result)
+    bearing = {owner for owner in landed if owner not in channels and names[owner] not in edges}
+    outside = [area for owner, (_low, area) in landed.items() if owner in bearing]
     open_patch = max(outside, default=0.0)
     open_area = math.fsum(outside)
     island_on_model = bool(islands)
@@ -3812,9 +3940,7 @@ def _model_support(
     # gefragt nur, wo ein Feld die Antwort ändern kann.
     open_field = 0.0
     if not worth_support(open_patch, open_area) and open_area > OVERHANG_LAYER_WORTH_SUPPORT:
-        resting = {
-            names[owner]: area for owner, (_low, area) in landed.items() if owner not in channels
-        }
+        resting = {names[owner]: area for owner, (_low, area) in landed.items() if owner in bearing}
         seen: set[tuple[int, int]] = set()
         for name in sorted(resting):
             if name in seen:
@@ -3882,7 +4008,7 @@ def _model_support(
         channel_at=at,
         channel_columns=columns,
         island_on_model=island_on_model,
-        open_pieces=frozenset(names[owner] for owner in landed if owner not in channels),
+        open_pieces=frozenset(names[owner] for owner in sorted(bearing)),
         open_columns=tuple(
             (
                 layers[names[owner][0]].overhangs[names[owner][1]],

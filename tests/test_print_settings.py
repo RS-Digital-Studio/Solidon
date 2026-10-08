@@ -1248,13 +1248,16 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "shell.precise_outer_wall": "PrusaSlicer kompensiert die Bahnbreite immer, ohne Schalter.",
         "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
     },
     "orca": {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
         "support.block_channels": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
+        "support.spare_ledges": "reist als Stützsperre in der 3MF (``AS_GEOMETRY``).",
     },
     "cura": {
         "support.block_channels": "reist als eigenes Netz (``AS_GEOMETRY``).",
+        "support.spare_ledges": "reist als eigenes Netz (``AS_GEOMETRY``).",
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -6935,6 +6938,9 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "``test_threemf_assembly`` prüft den Bereich."
     ),
     ("support.block_channels", "orca"): "Wie bei PrusaSlicer — dieselbe Beilage.",
+    ("support.spare_ledges", "prusa"): "Wie die Kanalsperre — dieselbe Stützsperre in der 3MF.",
+    ("support.spare_ledges", "orca"): "Wie die Kanalsperre — dieselbe Stützsperre in der 3MF.",
+    ("support.spare_ledges", "cura"): "Wie die Kanalsperre — dasselbe ``anti_overhang_mesh``.",
     ("support.block_channels", "cura"): (
         "Reist als eigenes Netz mit ``anti_overhang_mesh`` neben den Teilen "
         "(``slicer_keys.takes_mesh_settings``); ``test_export`` prüft die Netzliste."

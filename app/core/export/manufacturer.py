@@ -1395,6 +1395,7 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "layer_height": "0.3",
     "max_fan_speed": "100",
     "min_fan_speed": "35",
+    "min_print_speed": "10",
     "perimeter_acceleration": "0",
     "perimeter_generator": "arachne",
     "perimeter_speed": "60",

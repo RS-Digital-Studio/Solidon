@@ -5102,6 +5102,7 @@ def test_the_blocker_finding_names_only_the_blocked_ceilings(profile: Profile) -
     mesh = MeshData.of(trimesh.util.concatenate([long_slot, short_slots]))
     entry = scene_object(mesh=mesh)
     settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    settings = print_settings.with_path(settings, "support.block_channels", True)
 
     blocker, found = writer._support_blocker(entry, as_mesh_data(entry.mesh), settings, profile)
 
@@ -5143,6 +5144,7 @@ def test_the_simplified_blocker_still_covers_the_whole_channel(profile: Profile)
     entry = scene_object(mesh=MeshData.of(trimesh.boolean.difference([block, chamber])))
     mesh = as_mesh_data(entry.mesh)
     settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    settings = print_settings.with_path(settings, "support.block_channels", True)
     blocker, _found = writer._support_blocker(entry, mesh, settings, profile)
     assert blocker is not None
 
@@ -5204,6 +5206,7 @@ def test_the_blocker_takes_the_reports_layers(
     entry = scene_object(mesh=MeshData.of(trimesh.boolean.difference([block, tunnel])))
     mesh = as_mesh_data(entry.mesh)
     settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "grid")
+    settings = print_settings.with_path(settings, "support.block_channels", True)
     fresh, _found = writer._support_blocker(entry, MeshData.of(mesh.raw.copy()), settings, profile)
     assert fresh is not None
 

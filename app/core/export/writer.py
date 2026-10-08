@@ -1927,7 +1927,13 @@ def _support_blocker(
     import manifold3d
     import shapely
 
-    from app.core.slice.analysis import channel_space, model_support, piece_area
+    from app.core.slice.analysis import (
+        channel_space,
+        ledge_space,
+        ledges,
+        model_support,
+        piece_area,
+    )
 
     # **Die Schichten des Prüfberichts, sonst ein eigener Schnitt**
     # (:func:`_body_analysis`, DRUCK-14): mit dem Raster und der Stützschwelle,
@@ -1941,7 +1947,10 @@ def _support_blocker(
     model = model_support(result)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    slabs = channel_space(result, model, settings.layers.line_width)
+    width = settings.layers.line_width
+    channel = channel_space(result, model, width) if settings.support.block_channels else []
+    edge = ledge_space(result, width) if settings.support.spare_ledges else []
+    slabs = channel + edge
     if not slabs:
         return None, []
     if cancelled is not None:
@@ -1973,27 +1982,58 @@ def _support_blocker(
     # vom 08.10.2026): Nicht jede Kanaldecke bekommt eine Sperre, und der Ort
     # des größten Kanalstücks führte am Drachen bei 130 % an eine Decke ohne
     # Sperre, die Fläche war fast fünfmal zu groß.
-    blocked = [
-        (piece_area(outline), outline, high) for outline, _low, high in model.channel_columns
-    ]
-    _area, widest, at = max(blocked, key=lambda column: column[0])
-    point = shapely.Polygon(widest.outline, widest.holes).representative_point()
-    finding = Finding(
-        code="export.support_blocker",
-        severity="info",
-        message=_(
-            "In „{name}“ hält die Kanalsperre Stützen aus schmalen Kanälen fern. Im Slicer "
-            "prüfen, ob die Decken dort ohne halten.",
-            name=source_text(entry.name),
-        ),
-        values={
-            "name": source_text(entry.name),
-            "area_mm2": round(math.fsum(area for area, _outline, _high in blocked), 1),
-        },
-        location=(float(point.x), float(point.y), float(at)),
-        object_id=entry.id,
-    )
-    return blocker, [finding]
+    findings: list[Finding] = []
+    if channel:
+        blocked = [
+            (piece_area(outline), outline, high) for outline, _low, high in model.channel_columns
+        ]
+        _area, widest, at = max(blocked, key=lambda column: column[0])
+        point = shapely.Polygon(widest.outline, widest.holes).representative_point()
+        findings.append(
+            Finding(
+                code="export.support_blocker",
+                severity="info",
+                message=_(
+                    "In „{name}“ hält die Kanalsperre Stützen aus schmalen Kanälen fern. Im "
+                    "Slicer prüfen, ob die Decken dort ohne halten.",
+                    name=source_text(entry.name),
+                ),
+                values={
+                    "name": source_text(entry.name),
+                    "area_mm2": round(math.fsum(area for area, _outline, _high in blocked), 1),
+                },
+                location=(float(point.x), float(point.y), float(at)),
+                object_id=entry.id,
+            )
+        )
+    if edge:
+        # Ort und Fläche der Kanten selbst, nicht der Sperrscheiben: Die tragen
+        # eine Bahnbreite Zuschlag und überlappen um eine Scheibe.
+        spared = [
+            (piece_area(result.layers[index].overhangs[number]), index, number)
+            for index, number in ledges(result)
+        ]
+        _area, index, number = max(spared)
+        piece = result.layers[index].overhangs[number]
+        point = shapely.Polygon(piece.outline, piece.holes).representative_point()
+        findings.append(
+            Finding(
+                code="export.ledge_blocker",
+                severity="info",
+                message=_(
+                    "In „{name}“ sperrt die Übergabe Stützen unter Kanten, die sich selbst "
+                    "tragen. Im Slicer prüfen, ob die Ränder ohne Stütze sauber werden.",
+                    name=source_text(entry.name),
+                ),
+                values={
+                    "name": source_text(entry.name),
+                    "area_mm2": round(math.fsum(area for area, _index, _number in spared), 1),
+                },
+                location=(float(point.x), float(point.y), float(result.layers[index].z)),
+                object_id=entry.id,
+            )
+        )
+    return blocker, findings
 
 
 def prepare_slicer_meshes(
@@ -2508,7 +2548,7 @@ def write_assembly(
             (entry.id, advice)
             for entry in chosen
             for advice in part_values[entry.id].applied
-            if advice.path != "support.block_channels"
+            if advice.path not in slicer_keys.AS_GEOMETRY
         ]
     )
     findings += _part_setting_findings(
@@ -2641,7 +2681,7 @@ def write_assembly(
             if (
                 own_settings is None
                 or own_settings.support.style == "none"
-                or not own_settings.support.block_channels
+                or not (own_settings.support.block_channels or own_settings.support.spare_ledges)
             ):
                 continue
             blockers[entry.id], noted = _support_blocker(
@@ -2851,7 +2891,11 @@ def _cura_blockers(
     blockers: dict[str, MeshData | None] = {}
     for entry in chosen:
         own = part_values[entry.id].effective
-        if own is None or own.support.style == "none" or not own.support.block_channels:
+        if (
+            own is None
+            or own.support.style == "none"
+            or not (own.support.block_channels or own.support.spare_ledges)
+        ):
             continue
         blockers[entry.id], noted = _support_blocker(
             entry, exported[entry.id], own, profile, cancelled

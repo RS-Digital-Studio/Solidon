@@ -39,6 +39,7 @@ from app.core.slice.analysis import (
     _material,
     _material_cross,
     largest_overhang_patch,
+    ledges,
     model_support,
     slice_body,
 )
@@ -398,7 +399,10 @@ def overhang_findings(object_id: ObjectId, result: SliceResult) -> list[Finding]
     # Stücken: Über alle sechzehntausend Stücke des Eiffelturms kostet die
     # Kanalfrage fünf Sekunden, über die wenigen großen ein Bruchteil davon.
     channels = model_support(result, only=frozenset(entry[1] for entry in candidates)).channels
-    kept = [entry for entry in candidates if entry[1] not in channels]
+    # Ebenso keine Kante, die sich selbst trägt (:func:`ledges`): Am Eiffelturm
+    # ist das größte freie Stück der Kranz der obersten Plattform, 2,6 mm breit.
+    quiet = channels | ledges(result)
+    kept = [entry for entry in candidates if entry[1] not in quiet]
     if not kept:
         return []
     area, _name, z, piece = max(kept, key=lambda entry: entry[0])

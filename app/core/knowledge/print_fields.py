@@ -434,6 +434,20 @@ FIELDS: tuple[Field, ...] = (
             "Drucker, damit die vorige Schicht fest wird."
         ),
     ),
+    Field(
+        "cooling.minimum_speed",
+        _("Mindesttempo beim Bremsen"),
+        "cooling",
+        unit="mm/s",
+        minimum=1.0,
+        maximum=100.0,
+        step=1.0,
+        decimals=0,
+        note=_(
+            "Langsamer wird der Drucker für die Mindestzeit nicht. Ist der Wert zu hoch, "
+            "bleiben kleine Spitzen zu kurz und werden weich."
+        ),
+    ),
     # --- Geschwindigkeit ---
     Field(
         "speed.outer_wall",
@@ -637,6 +651,16 @@ FIELDS: tuple[Field, ...] = (
         note=_(
             "Sperrt Stützen in schmalen Kanälen und Rohren. Dort kämen sie nicht mehr heraus, "
             "und die Decken tragen sich selbst."
+        ),
+    ),
+    Field(
+        "support.spare_ledges",
+        _("Kanten ohne Stütze"),
+        "support",
+        kind="bool",
+        note=_(
+            "Sperrt Stützen unter Kanten, die nur wenige Millimeter überstehen. Sie tragen "
+            "sich selbst, und jede Stütze dort hinterließe eine Narbe."
         ),
     ),
     # --- Haftung ---

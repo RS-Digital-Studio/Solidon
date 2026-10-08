@@ -45,6 +45,8 @@ from app.core.slice.analysis import (
     island_layers,
     largest_overhang_patch,
     largest_sloped_patch,
+    ledge_space,
+    ledges,
     model_support,
     narrow_share,
     narrowest_measured,
@@ -142,6 +144,16 @@ LINES_FOR_CLASSIC = 3.0
 #: Weniger, und der Turm kippt in sich zusammen; mehr, und die Düse kokelt auf
 #: der Stelle.
 THIN_LAYER_SECONDS = 15.0
+
+#: Mindesttempo in mm/s für Körper mit kleinen Spitzen. Damit erreicht eine
+#: Schicht von 8,4 mm² bei 0,42 mm Bahnbreite (20 mm Weg) Elegoos 4 s, am
+#: Drachen alles außer dem letzten Millimeter jeder Spitze; die Slicer lassen
+#: es zu (Orca und PrusaSlicer ab 1 mm/s).
+TIP_SPEED = 5.0
+
+#: So hoch müssen zu kurze Schichten zusammen sein, bevor gebremst wird — die
+#: oberste Schicht einer Kuppe ist immer klein.
+TIP_HEIGHT = 1.0
 
 #: Weiche Filamente stauchen im Antrieb, statt zu fördern. Darüber wird der
 #: Faden im Bowden zur Feder.
@@ -301,6 +313,7 @@ _BRAKING_PATHS: Final = frozenset(
         "speed.bridge",
         "speed.acceleration",
         "speed.outer_wall_acceleration",
+        "cooling.minimum_speed",
     }
 )
 
@@ -385,7 +398,10 @@ def _combined_value(path: str, values: Sequence[object]) -> object:
         return any(values)
     numbers = [value for value in values if isinstance(value, int | float)]
     if len(numbers) == len(values):
-        if path.startswith(("speed.", "layers.")) or path == "cooling.fan_speed":
+        if path.startswith(("speed.", "layers.")) or path in (
+            "cooling.fan_speed",
+            "cooling.minimum_speed",
+        ):
             return min(numbers)
         return max(numbers)
     return values[0]
@@ -811,17 +827,19 @@ def support_need(result: SliceResult) -> SupportNeed:
     # Stücken ohne Stütze auskommt, braucht sie nicht. Am Bohrmaschinenhalter
     # aus dem Korpus kostete sie 0,8 s von 2,5 s Vorschlagsrechnung, ohne dass
     # eine Antwort davon abhing (Weg a der Durchsicht 0.5.1).
-    model = (
-        model_support(result)
-        if _may_need_support(result, islands, total, largest)
-        else ModelSupport()
-    )
-    overhang = total_overhang(result, without=model.channels)
+    asked = _may_need_support(result, islands, total, largest)
+    model = model_support(result) if asked else ModelSupport()
+    # **Und keine Kante** (Eiffelturm, 08.10.2026, :func:`ledges`): Was nicht
+    # weiter als ``LEDGE_REACH`` über sein Material ragt, trägt sich selbst. Die
+    # Ränder der Plattformen verlangten sonst Stützen, und der ElegooSlicer
+    # stellte 831 m Baum außen am Turm hoch.
+    quiet = (model.channels | ledges(result)) if asked else frozenset()
+    overhang = total_overhang(result, without=quiet)
     patch = _largest_field(
         result,
         overhang,
-        largest_overhang_patch(result, without=model.channels),
-        without=model.channels,
+        largest_overhang_patch(result, without=quiet),
+        without=quiet,
     )
     # Die Summe allein reicht nicht, und der Unterschied entscheidet: ein
     # Becher sammelte über dreihundertachtunddreißig Schichten
@@ -847,7 +865,7 @@ def support_need(result: SliceResult) -> SupportNeed:
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
     return SupportNeed(
-        needed=_may_need_support(result, islands, overhang, patch, model.channel_layers),
+        needed=_may_need_support(result, islands, overhang, patch, _quiet_layers(result, quiet)),
         islands=islands,
         model=model,
         overhang=overhang,
@@ -869,32 +887,6 @@ def _from_geometry(
     islands, model, overhang = need.islands, need.model, need.overhang
     needs_support = need.needed
 
-    if needs_support and settings.support.style == "none":
-        # **Stützen an, die Art des Slicers** — außer das Modell verlangt eine
-        # (Entscheidung J, 27.09.2026). Hier stand ``grid``, und Elegoo wie
-        # Bambu, deren Standardprozess Bäume stützt, bekamen Gitter.
-        style = "tree" if len(islands) >= TREE_FROM_ISLANDS else "auto"
-        advice.append(
-            _advice(
-                settings,
-                path="support.style",
-                value=style,
-                reason=_("Ohne Stützen druckt dieses Teil in die Luft.")
-                if islands
-                else _("Die Überhänge sind zu groß, um sich selbst zu tragen."),
-                severity="warning",
-            )
-        )
-    elif not needs_support and settings.support.style != "none":
-        advice.append(
-            _advice(
-                settings,
-                path="support.style",
-                value="none",
-                reason=_("Nichts an diesem Teil braucht eine Stütze."),
-            )
-        )
-
     # **„Keine Insel“ heißt nicht „alles erreicht das Bett“.** Ein Tisch —
     # Bodenplatte 40 auf 40, darauf eine Säule 10 auf 10, darauf eine Platte
     # 40 auf 40 — hat keine Insel und 1 492 mm² Überhang auf einer Schicht,
@@ -903,7 +895,7 @@ def _from_geometry(
     # Geometrie und nicht ein Nebenbefund (:func:`model_support`).
     #
     # **Und „auf dem Modell“ heißt außen und so viel, dass es selbst Stütze
-    # bräuchte.** Eine Säule im Kanal zählt nicht (oben), und was außen auf
+    # bräuchte.** Eine Säule im Kanal zählt nicht (``support_need``), und was außen auf
     # dem Modell aufsetzt, misst sich an denselben zwei Wegen wie der
     # Stützbedarf selbst, auch als Feld (``ModelSupport.open_field``, RM-570:
     # das Kinn über der Brust): An der Waschschüssel blieb neben der Kanaldecke ein
@@ -936,6 +928,53 @@ def _from_geometry(
         or worth_support(max(model.open_patch, model.open_field), model.open_area)
         or long_bridge_on_model
     )
+    # **Wo Stützen auf dem Modell ansetzen, Bäume** (Drache, 08.10.2026): Ein
+    # Gitter setzt mit jeder Säule auf, und jede hinterlässt eine Narbe; ein Baum
+    # setzt mit wenigen Füßen auf. Am Drachen setzten die Gitter der Hersteller
+    # 212 bis 324 mm² auf dem Modell auf, Solidons Bäume 4 bis 66 mm²
+    # (``gcode_auflage.py``). Elegoo und Bambu stützen ohnehin mit Bäumen; „auto“
+    # heißt dort Baum, bei Orca, Prusa, Creality und Cura Gitter. **Nicht unter
+    # einer großen flachen Decke**: Dort hängt die Unterseite zwischen den
+    # Baumspitzen durch, und Orca wie Prusa raten zu Hybrid oder normaler Stütze
+    # (Recherche vom 08.10.2026). Flach heißt ein Stück über
+    # ``OVERHANG_LAYER_WORTH_SUPPORT`` auf einer Schicht; Schuppen, Kinn und
+    # Flügel einer Figur zerfallen in kleine Stücke.
+    branching = on_model and model.open_patch <= OVERHANG_LAYER_WORTH_SUPPORT
+    if needs_support and settings.support.style == "none":
+        # **Stützen an, die Art des Slicers** — außer das Modell verlangt eine
+        # (Entscheidung J, 27.09.2026). Hier stand ``grid``, und Elegoo wie
+        # Bambu, deren Standardprozess Bäume stützt, bekamen Gitter.
+        style = "tree" if len(islands) >= TREE_FROM_ISLANDS or branching else "auto"
+        advice.append(
+            _advice(
+                settings,
+                path="support.style",
+                value=style,
+                reason=_("Ohne Stützen druckt dieses Teil in die Luft.")
+                if islands
+                else _("Die Überhänge sind zu groß, um sich selbst zu tragen."),
+                severity="warning",
+            )
+        )
+    elif needs_support and branching and settings.support.style in ("auto", "grid"):
+        advice.append(
+            _advice(
+                settings,
+                path="support.style",
+                value="tree",
+                reason=_("Bäume hinterlassen auf dem Modell weniger Spuren."),
+            )
+        )
+    elif not needs_support and settings.support.style != "none":
+        advice.append(
+            _advice(
+                settings,
+                path="support.style",
+                value="none",
+                reason=_("Nichts an diesem Teil braucht eine Stütze."),
+            )
+        )
+
     if needs_support and on_model and settings.support.placement == "build_plate":
         advice.append(
             _advice(
@@ -978,6 +1017,23 @@ def _from_geometry(
                 path="support.block_channels",
                 value=True,
                 reason=_("Die Sperre hält Stützen aus den schmalen Kanälen."),
+            )
+        )
+    # **Und von Kanten fern, die sich selbst tragen** (Eiffelturm, 08.10.2026):
+    # Der Slicer stützt nach seinem Winkel jede flache Unterseite, auch die
+    # Ränder der Plattformen, und stellte dafür 831 m Baum außen am Turm hoch.
+    # Vorgeschlagen nur, wo Stützen an sind und die Sperre Fläche hat.
+    if (
+        needs_support
+        and not settings.support.spare_ledges
+        and ledge_space(result, settings.layers.line_width)
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="support.spare_ledges",
+                value=True,
+                reason=_("Diese Kanten tragen sich selbst, Stütze ließe Narben."),
             )
         )
 
@@ -1199,6 +1255,20 @@ def _from_geometry(
                 reason=_("Kleine Schichten oben kühlen sonst nicht ab."),
             )
         )
+    # **Und die Mindestzeit muss erreichbar sein** (Drache, 08.10.2026): Der
+    # Slicer bremst eine kurze Schicht nur bis zum Mindesttempo. Elegoo, Bambu
+    # und Creality nennen für PLA 20 mm/s, und die obersten 12 mm des Drachen
+    # druckten in jedem Slicer unter der eigenen Mindestzeit, die Spitzen in
+    # 0,1 bis 1,3 s je Schicht. Die Mindestzeit selbst bleibt beim Hersteller.
+    if _tips_stay_too_short(result, settings):
+        advice.append(
+            _advice(
+                settings,
+                path="cooling.minimum_speed",
+                value=TIP_SPEED,
+                reason=_("Kleine Spitzen kühlen nur langsamer gedruckt ab."),
+            )
+        )
     return advice
 
 
@@ -1390,6 +1460,7 @@ PART_PATHS: Final = frozenset(
         "support.style",
         "support.placement",
         "support.block_channels",
+        "support.spare_ledges",
         "adhesion.kind",
         "adhesion.brim_gap",
         "shell.precise_outer_wall",
@@ -1418,6 +1489,7 @@ SLICED_PATHS: Final = frozenset(
         "support.style",
         "support.placement",
         "support.block_channels",
+        "support.spare_ledges",
         "adhesion.kind",
         "adhesion.brim_gap",
         "shell.wall_generator",
@@ -1431,6 +1503,7 @@ SLICED_PATHS: Final = frozenset(
         "speed.first_layer",
         "speed.bridge",
         "cooling.minimum_layer_time",
+        "cooling.minimum_speed",
     }
 )
 
@@ -1525,6 +1598,17 @@ def for_part(
                 settings, profile, result, reason, narrower=False, flavour=flavour
             )
     return _merged(settings, advice)
+
+
+def _quiet_layers(result: SliceResult, quiet: frozenset[tuple[int, int]]) -> frozenset[int]:
+    """Schichten, deren Überhang ganz aus Kanal- und Kantenstücken besteht — ihre
+    Brücken tragen sich selbst oder verlangen keine Stütze."""
+    return frozenset(
+        index
+        for index, layer in enumerate(result.layers)
+        if layer.overhangs
+        and all((index, number) in quiet for number in range(len(layer.overhangs)))
+    )
 
 
 def _may_need_support(
@@ -1699,6 +1783,31 @@ def _has_thin_layers(result: SliceResult) -> bool:
         return False
     upper = result.layers[len(result.layers) // 2 :]
     return any(layer.area < THIN_LAYER_AREA for layer in upper)
+
+
+def _tips_stay_too_short(result: SliceResult, settings: PrintSettings) -> bool:
+    """Bleiben Schichten trotz Mindestzeit zu kurz, weil das Mindesttempo bremst?
+
+    Der Weg einer kleinen Schicht ist ihre Fläche durch die Bahnbreite — eine
+    Spitze ist ganz Bahn. Zu kurz heißt: Mit dem Mindesttempo braucht sie nicht
+    einmal die halbe Mindestzeit; gezählt wird erst ab :data:`TIP_HEIGHT` solcher
+    Schichten, sonst ist es nur die letzte Schicht einer Kuppe.
+    """
+    minimum_time = settings.cooling.minimum_layer_time
+    speed = settings.cooling.minimum_speed
+    width = settings.layers.line_width
+    if is_zero(minimum_time) or speed <= TIP_SPEED + EPS_GEOM or width <= EPS_GEOM:
+        return False
+    height = 0.0
+    below = 0.0
+    for layer in result.layers:
+        thickness = layer.z - below
+        below = layer.z
+        if layer.area <= EPS_GEOM:
+            continue
+        if layer.area / width / speed < minimum_time / 2.0:
+            height += thickness
+    return height >= TIP_HEIGHT - EPS_GEOM
 
 
 def warnings_for(

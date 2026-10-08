@@ -18,9 +18,10 @@ Schicht, was jeder Slicer selbst rechnet, bevor er G-Code schreibt:
   dünner Füllung, dünne Füllung mit ihrer Dichte. Die Bahnzahl folgt aus der
   mittleren Sehne ``π·A/U`` (Cauchy), jede Bahn ein Trapez zwischen zwei Ecken.
 - **Abbremsen**: Liegt die Schicht unter der Mindestschichtzeit, werden die
-  Bahnen über Weg/Tempo gebremst, nie unter das **Mindestdrucktempo** des
-  Herstellerprofils (:attr:`Motion.minimum_speed`) — gemessen am SuperSlicer-Pilz:
-  7,03 s Stielschicht trotz 15 s Vorgabe. Die Beschleunigung kommt danach,
+  Bahnen über Weg/Tempo gebremst, nie unter das **Mindestdrucktempo** der
+  Einstellungen (``cooling.minimum_speed``, gelesen aus dem Herstellerprofil wie
+  :attr:`Motion.minimum_speed`, nach einem übernommenen Vorschlag dessen Wert) —
+  gemessen am SuperSlicer-Pilz: 7,03 s Stielschicht trotz 15 s Vorgabe. Die Beschleunigung kommt danach,
   bei den gebremsten Tempi, wie in den Slicern selbst.
 - **Leerfahrt, Rückzug und Z-Hub** je Zugbeginn.
 - **Stützen**: die Säulen unter den Überhängen je Schicht
@@ -72,7 +73,10 @@ class Motion:
     nozzle: float
     """Düsendurchmesser — die Bahnbreite einer Brücke."""
     minimum_speed: float
-    """Tiefer bremst der Slicer für die Mindestschichtzeit nicht, in mm/s."""
+    """Tiefer bremst der Slicer für die Mindestschichtzeit nicht, in mm/s — so,
+    wie das Herstellerprofil es nennt. Ohne diesen Wert gibt es keine
+    :class:`Motion` (RM-465); gerechnet wird mit ``cooling.minimum_speed`` der
+    Einstellungen, die ihn aus demselben Profil lesen."""
     first_layer_wall_speed: float | None = None
     first_layer_infill_speed: float | None = None
     solid_infill_speed: float | None = None
@@ -786,6 +790,6 @@ def plate_seconds(
             together,
             roles_first,
             first_settings.cooling.minimum_layer_time,
-            motion.minimum_speed,
+            first_settings.cooling.minimum_speed,
         )
     return total

@@ -532,6 +532,43 @@ def test_a_minimum_layer_time_of_the_profile_stays() -> None:
     assert advised(0.0), "ohne Mindestzeit legt die Düse auf weiches Material"
 
 
+@pytest.mark.parametrize(
+    ("tip_layers", "area", "speed", "advised"),
+    [
+        pytest.param(20, 5.0, 20.0, True, id="spitze-bei-20-mm-s"),
+        pytest.param(20, 5.0, advise.TIP_SPEED, False, id="schon-langsam-genug"),
+        pytest.param(20, 400.0, 20.0, False, id="breite-schichten"),
+        pytest.param(3, 5.0, 20.0, False, id="nur-die-letzten-schichten"),
+    ],
+)
+def test_small_tips_get_a_slower_minimum_speed(
+    tip_layers: int, area: float, speed: float, advised: bool
+) -> None:
+    """Der Slicer bremst eine kurze Schicht nur bis zum Mindesttempo. Elegoo,
+    Bambu und Creality nennen für PLA 20 mm/s, und die obersten 12 mm des
+    Drachen (08.10.2026) druckten in jedem Slicer unter ihrer Mindestzeit, die
+    Spitzen in 0,1 bis 1,3 s je Schicht. Vorgeschlagen wird ein kleineres
+    Mindesttempo, nicht eine längere Mindestzeit: Die bleibt beim Hersteller.
+    Die letzten Schichten einer Kuppe allein lösen es nicht aus."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "cooling.minimum_layer_time", 4.0)
+    settings = print_settings.with_path(settings, "cooling.minimum_speed", speed)
+    body = result_with([0.0] * 40)
+    layers = tuple(
+        replace(layer, area=area) if index >= len(body.layers) - tip_layers else layer
+        for index, layer in enumerate(body.layers)
+    )
+
+    entries = advise.advise(settings, profile, replace(body, layers=layers))
+
+    chosen = [entry for entry in entries if entry.path == "cooling.minimum_speed"]
+    assert bool(chosen) is advised
+    if advised:
+        assert chosen[0].value == pytest.approx(advise.TIP_SPEED)
+        assert "cooling.minimum_layer_time" not in {entry.path for entry in entries}
+
+
 # --- eine Überhanglinie, nicht zwei ---------------------------------------------
 
 

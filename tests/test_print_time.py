@@ -57,7 +57,7 @@ def _settings(**changes: object) -> PrintSettings:
         ),
         shell=replace(settings.shell, wall_count=2, top_layers=0, bottom_layers=0),
         infill=replace(settings.infill, density=0.0),
-        cooling=replace(settings.cooling, minimum_layer_time=0.0),
+        cooling=replace(settings.cooling, minimum_layer_time=0.0, minimum_speed=1e-6),
         retraction=replace(settings.retraction, length=0.0, z_hop=0.0),
         filament=replace(settings.filament, max_flow=0.0),
     )
@@ -110,8 +110,12 @@ def test_a_layer_is_slowed_to_the_minimum_time_but_not_below_the_minimum_speed()
     layers = sum(1 for layer in result.layers if layer.area > 1e-6)
     loop = 4.0 * (4.0 - 0.5)
 
-    free = print_time.plate_seconds([(result, settings)], _motion(minimum_speed=1e-6))
-    floored = print_time.plate_seconds([(result, settings)], _motion(minimum_speed=10.0))
+    free = print_time.plate_seconds(
+        [(result, print_settings.with_path(settings, "cooling.minimum_speed", 1e-6))], _motion()
+    )
+    floored = print_time.plate_seconds(
+        [(result, print_settings.with_path(settings, "cooling.minimum_speed", 10.0))], _motion()
+    )
 
     assert free == pytest.approx(layers * 5.0, rel=CLOSE)
     assert floored == pytest.approx(layers * loop / 10.0, rel=CLOSE)

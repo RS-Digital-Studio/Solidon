@@ -28,6 +28,8 @@ from app.core.slice.analysis import (
     WIDTH_INTERESTING,
     channel_space,
     largest_sloped_patch,
+    ledge_space,
+    ledges,
     minimum_width,
     model_support,
     narrowest,
@@ -1327,6 +1329,27 @@ def test_only_what_rests_on_the_model_counts_as_its_field() -> None:
     assert placement == ["build_plate"], "die Stützen erreichen das Kinn vom Bett"
 
 
+def test_trees_where_small_overhangs_rest_on_the_model_not_under_a_flat_ceiling() -> None:
+    """Wo Stützen auf dem Modell ansetzen, hinterlässt ein Gitter mit jeder Säule
+    eine Narbe; ein Baum setzt mit wenigen Füßen auf (Drache, 08.10.2026: 212 bis
+    324 mm² Auflage der Herstellergitter, 4 bis 66 mm² mit Bäumen). Unter einer
+    großen flachen Decke hängt die Unterseite zwischen den Baumspitzen durch —
+    dort bleibt die Art des Herstellers (Recherche vom 08.10.2026)."""
+
+    def style(body: MeshData) -> object:
+        entries = advise.advise(print_settings.resolve(petg()), petg(), slice_body(body, 0.2))
+        return next((entry.value for entry in entries if entry.path == "support.style"), None)
+
+    chin_over_chest = on_bed(
+        brick(80.0, 60.0, 4.0, (0.0, 0.0, 2.0)),
+        brick(40.0, 10.0, 60.0, (0.0, 20.0, 34.0)),
+        brick(60.0, 30.0, 20.0, (0.0, 0.0, 14.0)),
+        chin(44.0),
+    )
+    assert style(chin_over_chest) == "tree", "das Kinn setzt in Streifen auf der Brust auf"
+    assert style(table()) == "auto", "die Tischplatte ist eine flache Decke"
+
+
 def test_a_cantilever_in_a_narrow_pocket_is_no_channel() -> None:
     """Am Drachen galten 738 Überhangstücke als Kanaldecken, die Sperre daraus war
     mit 259 000 mm³ größer als der Drache, und im ElegooSlicer druckten Kiefer,
@@ -1797,6 +1820,69 @@ def test_a_strip_at_a_channel_mouth_does_not_borrow_the_channel_for_its_field() 
     assert need.model.channels, "die Tunneldecke ist Kanal"
     assert need.overhang > OVERHANG_LAYER_WORTH_SUPPORT, "die Feldfrage wird gestellt"
     assert not need.needed, "Haube und Sims tragen sich selbst"
+
+
+def column_with_flange_and_arm(arm: float) -> MeshData:
+    """Eine Säule 30 auf 30 mm auf einer Grundplatte, auf 20 mm Höhe ringsum ein
+    Flansch von 2,5 mm (325 mm² Überhang an einem Stück), und knapp darüber an
+    einer Seite ein Arm von ``arm`` mm — die Ränder der Plattformen am
+    Eiffelturm und, wenn ``arm`` lang ist, ein Überhang, der Stütze braucht."""
+    parts = [
+        brick(60.0, 60.0, 2.0, (0.0, 0.0, 1.0)),
+        brick(30.0, 30.0, 40.0, (0.0, 0.0, 20.0)),
+        brick(35.0, 35.0, 1.0, (0.0, 0.0, 20.5)),
+    ]
+    if arm > 0.0:
+        parts.append(brick(arm, 10.0, 2.0, (15.0 + arm / 2.0, 0.0, 21.4)))
+    return on_bed(*parts)
+
+
+@pytest.mark.parametrize(("arm", "needed"), [(0.0, False), (15.0, True)])
+def test_a_ledge_of_a_few_millimetres_carries_itself(arm: float, needed: bool) -> None:
+    """Am Eiffelturm (08.10.2026, ohne Stützen gedacht) verlangte der Rat Stützen
+    wegen der Ränder der Plattformen, oben ein Kranz von 2,6 mm, und der
+    ElegooSlicer stellte 831 m Baum außen am Turm hoch. Was nicht weiter als
+    ``LEDGE_REACH`` über sein Material ragt, trägt sich selbst — auch als ein
+    Stück über 100 mm², und der Prüfbericht meldet es nicht. Ein Arm von 15 mm
+    trägt sich nicht."""
+    from app.core.slice import findings
+
+    result = slice_body(column_with_flange_and_arm(arm), 0.2)
+    flange = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        if 19.5 < layer.z < 20.5
+        for number, _piece in enumerate(layer.overhangs)
+    }
+    assert flange, "der Flansch hängt über"
+    assert max(piece_area(result.layers[i].overhangs[n]) for i, n in flange) > 100.0
+    assert flange <= ledges(result), "der Flansch ist eine Kante"
+    assert advise.support_need(result).needed is needed
+    if not needed:
+        assert not findings.overhang_findings("obj_1", result), "der Bericht meldet keine Kante"
+
+
+def test_the_ledge_blocker_covers_the_ledge_and_spares_the_arm() -> None:
+    """Die Sperre unter Kanten deckt deren Überhangfläche, nicht die des Arms
+    gleich daneben, der Stütze braucht — sonst nähme sie ihm, was er verlangt."""
+    result = slice_body(column_with_flange_and_arm(15.0), 0.2)
+    slabs = ledge_space(result, LINE)
+    flange = box(-17.5, -17.5, 17.5, 17.5).difference(box(-15.0, -15.0, 15.0, 15.0))
+    arm = box(17.5, -5.0, 30.0, 5.0)
+
+    assert slabs, "der Flansch bekommt eine Sperre"
+    at_flange = unary_union([region for low, high, region in slabs if low <= 20.0 <= high])
+    assert at_flange.intersection(flange).area > 0.8 * flange.area
+    near_arm = [region for low, high, region in slabs if low <= 20.6 <= high]
+    assert near_arm, "die Sperre des Flansches reicht in die Höhe des Arms"
+    for region in near_arm:
+        assert region.intersection(arm).area == pytest.approx(0.0, abs=1e-6)
+    entries = advise.advise(print_settings.resolve(petg()), petg(), result)
+    assert [entry.value for entry in entries if entry.path == "support.spare_ledges"] == [True]
+    lone = advise.advise(
+        print_settings.resolve(petg()), petg(), slice_body(column_with_flange_and_arm(0.0), 0.2)
+    )
+    assert "support.spare_ledges" not in {entry.path for entry in lone}, "ohne Stützen nichts"
 
 
 def slot(length: float) -> MeshData:
