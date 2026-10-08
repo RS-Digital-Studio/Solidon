@@ -2506,6 +2506,48 @@ def test_the_sign_at_a_handling_opens_the_manual_on_its_page(window: MainWindow)
     window._manual.close()
 
 
+@pytest.mark.parametrize(
+    ("operation", "ending"),
+    [
+        ("create_detent_disc", "accept"),
+        ("create_box", "accept"),
+        ("create_detent_disc", "cancel"),
+    ],
+    ids=["einsetzen", "uebernehmen", "abbrechen"],
+)
+def test_no_drag_number_stays_in_the_view_after_the_dialog(
+    window: MainWindow, operation: str, ending: str
+) -> None:
+    """RM-558: Nach dem Einsetzen der Rastdrehscheibe stand „Y 60,62 mm“ über der Ansicht.
+
+    Die Zahl ist die des Zugs am Griff der Vorschau (``DragValueBar``). Das
+    Loslassen räumte sie nicht ab, und weder *Einsetzen* noch *Übernehmen*
+    noch *Abbrechen* taten es danach. Abgebrochen wird hier mitten im Zug, ohne
+    Loslassen: Auch dann geht die Zahl mit dem Dialog.
+    """
+    import numpy as np
+
+    window.run_operation(REGISTRY.get(operation))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    viewport = window.viewport
+    drag = np.eye(4)
+    drag[:3, 3] = (0.0, 60.62, 0.0)
+    viewport._on_gizmo_interacted(drag)
+    assert not viewport.drag_bar.isHidden(), "premise: the drag shows its number"
+    assert viewport.drag_bar.label.text() == "Y"
+
+    if ending == "accept":
+        viewport._on_preview_released(drag)
+        assert viewport.drag_bar.isHidden(), "mit dem Loslassen geht die Zahl"
+        _accept_after_preview(window, dialog)
+        assert window.session.wait_for_idle(60_000)
+    else:
+        dialog.reject()
+        QApplication.processEvents()
+    assert viewport.drag_bar.isHidden(), "kein Maßfeld bleibt stehen"
+    assert viewport._drag_kind is None, "und keine getippte Zahl verschiebt danach etwas"
+
+
 def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
     """Nach dem ersten Start waren die sieben Beispiele unerreichbar.
 

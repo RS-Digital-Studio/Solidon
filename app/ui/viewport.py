@@ -14666,6 +14666,8 @@ class Viewport(QWidget):
             # sobald die Vorschau geht.
             self._detach_gizmo()
         elif war and not active:
+            # Ein Dialog, der mitten im Zug schließt, nimmt dessen Zahl mit.
+            self._end_preview_drag()
             self.set_gizmo(self._gizmo_wanted)
         if not active or self.renderer is None:
             return
@@ -14817,7 +14819,31 @@ class Viewport(QWidget):
         import numpy as np
 
         self.previewDragged.emit(np.asarray(matrix, dtype=float))
+        self._end_preview_drag()
         self.set_preview_gizmo(self._preview_gizmo_wanted)
+
+    def _end_preview_drag(self) -> None:
+        """Mit dem Zug an der Vorschau gehen seine Zahl und sein Zustand (RM-558).
+
+        Der Griff teilt :meth:`_on_gizmo_interacted` mit dem Körpergriff und
+        zeigt dieselbe Zahl („Y 60,62 mm“); das Loslassen räumte sie aber
+        nicht ab. Sie stand nach *Einsetzen*, *Übernehmen* und *Abbrechen*
+        weiter über der Ansicht, und eine dort getippte Zahl hätte mit der
+        Eingabetaste den gewählten Körper verschoben statt der Vorschau.
+        :meth:`_end_drag` ist nicht der Weg: Er hängt den Griff der Auswahl
+        an, den die Vorschau gerade abgenommen hat. Was kein Zug am Griff war
+        (ein wartender Langlochzug, der Ziehgriff der Skizze), bleibt stehen.
+        """
+        if self._drag_kind not in ("face", "turn", "move"):
+            return
+        self._drag_kind = "slot" if self._slot_target else None
+        self._drag_axis = None
+        self._drag_normal = None
+        self._drag_face = None
+        self._drop_ghost()
+        self._drop_turn_arc()
+        self._reset_shadow_offset()
+        self.drag_bar.dismiss()
 
     def _detach_gizmo(self) -> None:
         """Nimmt Griff, Beschriftung und Flächenscheibe aus dem Bild.
