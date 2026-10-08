@@ -30,6 +30,7 @@ und rechnen wie zuvor (:attr:`Stroke.brush`).
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import json
 import math
 from collections.abc import Callable, Sequence
@@ -38,7 +39,7 @@ from typing import Any, Final, cast, get_args
 
 import numpy as np
 
-from app.core.deferred import cKDTree, trimesh
+from app.core.deferred import cKDTree, csr_matrix, trimesh
 from app.core.errors import CANCEL, SHOW_LOCATION, TAKE_BACK_STROKE, ValidationError
 from app.core.geom.intersections import (
     box_groups,
@@ -346,6 +347,274 @@ def _neighbours(mesh: trimesh.Trimesh, count: int) -> tuple[np.ndarray, np.ndarr
     return total, np.maximum(seen, 1.0)
 
 
+#: Um welchen Anteil eine Kugelabfrage über ihren Radius hinaus fragt, bevor
+#: sie genau nachmisst — damit der Suchbaum und die eigene Rechnung an der
+#: Grenze dieselben Punkte meinen (Fassung 2).
+QUERY_SLACK: Final = 1e-9
+
+
+class _Lookup:
+    """Kugel- und Nächstenabfragen an Ecken, die sich seit dem Bau ihres
+    Suchbaums bewegt haben dürfen (F6, RM-560).
+
+    Ein Suchbaum über das ganze Netz je Geste neu wartete in einer Auswertung
+    mit hundert Gesten länger als alles andere. Der alte Baum bleibt also
+    stehen, solange sich keine Ecke um mehr als ``drift`` von dort entfernt
+    hat, wo er sie kennt (``base``): Eine Abfrage fragt um ``drift`` weiter
+    und misst dann an den heutigen Ecken genau nach. Das Ergebnis ist dasselbe
+    wie mit einem neuen Baum — dieselben Punkte, sortiert. ``shift`` ist der
+    Weg jeder Ecke seit dem Bau; ``None``, solange keine gewandert ist.
+    """
+
+    def __init__(
+        self,
+        points: np.ndarray,
+        tree: Any = None,
+        base: Any = None,
+        drift: float = 0.0,
+        shift: np.ndarray | None = None,
+    ):
+        self.data = points
+        if tree is None:
+            tree, base, drift, shift = cKDTree(points), points, 0.0, None
+        elif base is None:
+            base = points
+        self._tree = tree
+        self._base = base
+        self.drift = drift
+        self._shift = shift
+
+    def moved(
+        self, points: np.ndarray, changed: np.ndarray, limit: float, *, inplace: bool = False
+    ) -> _Lookup:
+        """Derselbe Baum für die neuen Ecken — oder ein neuer, wenn sie weiter
+        gewandert sind als ``limit``. ``inplace`` führt die Wege an Ort und
+        Stelle nach (:meth:`_Stage.following`)."""
+        if not len(changed):
+            return _Lookup(points, self._tree, self._base, self.drift, self._shift)
+        offset = points[changed] - self._base[changed]
+        way = np.sqrt(np.add.reduce(offset * offset, axis=1))
+        drift = max(self.drift, float(way.max()))
+        if drift > limit:
+            # Eine eigene Kopie als Grundlage: Die Kette führt ihre Ecken an Ort
+            # und Stelle nach, die Grundlage nicht.
+            # Ungeordnet gebaut: halb so teuer, und die Abfragen messen ohnehin nach.
+            base = points.copy()
+            tree = cKDTree(base, balanced_tree=False, compact_nodes=False)
+            return _Lookup(points, tree, base, 0.0)
+        if self._shift is None:
+            shift = np.zeros(len(points))
+        else:
+            shift = self._shift if inplace else self._shift.copy()
+        shift[changed] = way
+        return _Lookup(points, self._tree, self._base, drift, shift)
+
+    def ball(self, centre: np.ndarray, radius: float) -> tuple[np.ndarray, np.ndarray]:
+        """Die Ecken bis ``radius`` um ``centre``, genau gemessen und sortiert,
+        mit ihrem Abstand."""
+        reach = radius * (1.0 + QUERY_SLACK) + self.drift
+        near = np.asarray(self._tree.query_ball_point(centre, reach), dtype=np.int64)
+        near.sort()
+        offset = self.data[near] - centre
+        away = np.sqrt(np.add.reduce(offset * offset, axis=1))
+        inside = away <= radius
+        return near[inside], away[inside]
+
+    def balls(
+        self, centres: np.ndarray, radii: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[int]]:
+        """:meth:`ball` für viele Mitten in einem Aufruf — dieselben Ecken,
+        dieselben Abstände, ohne die Kosten eines Aufrufs je Mitte.
+
+        Hintereinander in einem Feld: Ecken, Abstände, die Nummer der Mitte und
+        wo die Treffer jeder Mitte beginnen und enden.
+        """
+        count = len(self.data)
+        # Ein Suchbaum über die Mitten gegen den über die Ecken: Die Paare
+        # kommen als ein Feld zurück statt als Liste je Mitte.
+        reach = float(radii.max()) * (1.0 + QUERY_SLACK) + self.drift
+        pairs = cKDTree(centres).sparse_distance_matrix(self._tree, reach, output_type="ndarray")
+        if self._shift is not None:
+            # Eine Ecke, die heute in der Kugel liegt, lag beim Bau höchstens
+            # ihren eigenen Weg weiter weg — nur die übrigen fallen hier heraus.
+            limit = radii[pairs["i"]] + self._shift[pairs["j"]]
+            pairs = pairs[pairs["v"] <= limit * (1.0 + QUERY_SLACK) + EPS_GEOM]
+        key = np.sort(np.asarray(pairs["i"], dtype=np.int64) * count + pairs["j"])
+        owner, near = np.divmod(key, count)
+        offset = self.data[near] - centres[owner]
+        away = np.sqrt(np.add.reduce(offset * offset, axis=1))
+        inside = away <= radii[owner]
+        near, away, owner = near[inside], away[inside], owner[inside]
+        bounds = np.searchsorted(owner, np.arange(len(centres) + 1))
+        return near, away, owner, bounds.tolist()
+
+    def query(self, places: Any) -> tuple[Any, Any]:
+        """Abstand und Nummer der nächsten Ecke, wie ``cKDTree.query``."""
+        many = np.asarray(places, dtype=float)
+        single = many.ndim == 1
+        rows = many.reshape(-1, 3)
+        found_away = np.empty(len(rows))
+        found_index = np.empty(len(rows), dtype=np.int64)
+        for row, place in enumerate(rows):
+            first, _index = self._tree.query(place)
+            near = np.asarray(
+                self._tree.query_ball_point(place, float(first) + 2.0 * self.drift + EPS_GEOM),
+                dtype=np.int64,
+            )
+            offset = self.data[near] - place
+            away = np.sqrt(np.add.reduce(offset * offset, axis=1))
+            best = int(np.argmin(away))
+            found_away[row], found_index[row] = away[best], near[best]
+        if single:
+            return float(found_away[0]), int(found_index[0])
+        return found_away, found_index
+
+
+class _Topology:
+    """Was über alle Etappen gleich bleibt: die Dreiecke und welche an einer
+    Ecke hängen — die Grundlage, um nur das Gebiet einer Etappe nachzurechnen
+    (F6).
+
+    Je Ecke stehen ihre Dreiecksecken (``3·Dreieck + Platz``) aufsteigend, so
+    wie eine stabile Sortierung sie ordnete; gebaut über eine dünne Matrix,
+    weil deren Zählsortierung ein Drittel einer Sortierung kostet.
+    """
+
+    def __init__(self, faces: np.ndarray, count: int) -> None:
+        self.faces = np.asarray(faces, dtype=np.int64)
+        self._corners = self.faces.ravel()
+        slots = np.arange(len(self._corners), dtype=np.int64)
+        table = csr_matrix(
+            (np.ones(len(slots), dtype=np.int8), (self._corners, slots)),
+            shape=(count, len(slots)),
+        )
+        self._slots = np.asarray(table.indices, dtype=np.int64)
+        self._starts = np.asarray(table.indptr, dtype=np.int64)
+
+    def _gather(self, vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Die Dreiecksecken von ``vertices`` und zu welcher Ecke der Liste sie gehören."""
+        low, high = self._starts[vertices], self._starts[vertices + 1]
+        lengths = high - low
+        total = int(lengths.sum())
+        owner = np.repeat(np.arange(len(vertices)), lengths)
+        within = np.arange(total) - np.repeat(np.cumsum(lengths) - lengths, lengths)
+        return self._slots[np.repeat(low, lengths) + within], owner
+
+    def around(self, vertices: np.ndarray) -> np.ndarray:
+        """Die Ecken der Dreiecke an ``vertices`` — mit Wiederholungen."""
+        slots, _owner = self._gather(vertices)
+        return np.asarray(self.faces[slots // 3].ravel())
+
+    def neighbour_sums(self, points: np.ndarray, vertices: np.ndarray) -> tuple[Any, Any]:
+        """Summe und Zahl der Nachbarn je Ecke aus ``vertices`` — bitgleich mit
+        den Zeilen von :func:`_neighbours`: Dessen gerichtete Kanten sind die
+        Dreiecksecken in derselben Folge, jede zur nächsten im Dreieck."""
+        slots, owner = self._gather(vertices)
+        place = slots % 3
+        targets = self._corners[slots - place + (place + 1) % 3]
+        total = np.zeros((len(vertices), 3), dtype=float)
+        seen = np.zeros(len(vertices), dtype=float)
+        np.add.at(total, owner, points[targets])
+        np.add.at(seen, owner, 1.0)
+        return total, np.maximum(seen, 1.0)
+
+    def vertex_normals(self, points: np.ndarray, vertices: np.ndarray) -> np.ndarray:
+        """Die flächengewichteten Normalen der Ecken ``vertices``.
+
+        Je Ecke die Summe der Kreuzprodukte ihrer Dreiecke, in fester Folge und
+        nur mit elementweisen Rechenschritten: für eine Ecke bitgleich, ob sie
+        allein, mit ihrer Nachbarschaft oder mit dem ganzen Netz gerechnet wird.
+        ``Trimesh.vertex_normals`` summiert über eine Matrixmultiplikation, deren
+        Reihenfolge der Rechenbibliothek gehört, und gewichtet mit den Winkeln;
+        die kosten hier mehr als die Hälfte und ändern die Richtung an einer
+        Ikosaederkugel um höchstens ein Achtelgrad. Entartete Dreiecke tragen nichts bei.
+        """
+        slots, owner = self._gather(vertices)
+        first = slots - slots % 3
+        corners = self._corners
+        start = points[corners[first]]
+        ab = points[corners[first + 1]] - start
+        ac = points[corners[first + 2]] - start
+        count = len(vertices)
+        sx = np.bincount(owner, weights=ab[:, 1] * ac[:, 2] - ab[:, 2] * ac[:, 1], minlength=count)
+        sy = np.bincount(owner, weights=ab[:, 2] * ac[:, 0] - ab[:, 0] * ac[:, 2], minlength=count)
+        sz = np.bincount(owner, weights=ab[:, 0] * ac[:, 1] - ab[:, 1] * ac[:, 0], minlength=count)
+        length = np.sqrt(sx * sx + sy * sy + sz * sz)
+        safe = np.where(length > 0.0, length, 1.0)
+        unit = np.empty((count, 3))
+        unit[:, 0], unit[:, 1], unit[:, 2] = sx / safe, sy / safe, sz / safe
+        return unit
+
+
+class _Normals:
+    """Eckennormalen der Fassung 2, gerechnet, wenn ein Zug nach ihnen fragt (F6).
+
+    Eine Auswertung rechnete am Anfang jeder Etappe die Normalen des ganzen
+    Netzes; gebraucht werden sie nur unter den Pinseln. Hier entsteht eine
+    Normale bei der ersten Frage (:meth:`_Topology.vertex_normals`), und eine
+    Folgeetappe vergisst nur die, deren Dreiecke sich bewegt haben.
+    """
+
+    def __init__(
+        self,
+        points: np.ndarray,
+        topology: _Topology,
+        values: np.ndarray | None = None,
+        known: np.ndarray | None = None,
+    ) -> None:
+        self.points = points
+        self.topology = topology
+        self.values = np.zeros(points.shape) if values is None else values
+        self.known = np.zeros(len(points), dtype=bool) if known is None else known
+
+    def __getitem__(self, rows: Any) -> np.ndarray:
+        index = np.asarray(rows, dtype=np.int64)
+        flat = index.reshape(-1)
+        missing = flat[~self.known[flat]]
+        if len(missing) > 1:
+            missing = np.unique(missing)
+        if len(missing):
+            self.values[missing] = self.topology.vertex_normals(self.points, missing)
+            self.known[missing] = True
+        found: np.ndarray = self.values[index]
+        return found
+
+    def following(self, points: np.ndarray, changed: np.ndarray, *, inplace: bool) -> _Normals:
+        """Die Normalen nach einer Etappe, die ``changed`` bewegt hat."""
+        values = self.values if inplace else self.values.copy()
+        known = self.known if inplace else self.known.copy()
+        if len(changed):
+            known[self.topology.around(changed)] = False
+        return _Normals(points, self.topology, values, known)
+
+
+def _ball_weights(lookup: Any, points: np.ndarray, centre: np.ndarray, radius: float) -> Any:
+    """:func:`_weights` für Fassung 2: genau gemessen und sortiert, damit ein
+    alter Suchbaum mit Nachmessen (:class:`_Lookup`) und ein neuer dieselben
+    Punkte in derselben Folge liefern."""
+    if not isinstance(lookup, _Lookup):
+        lookup = _Lookup(points, lookup, points, 0.0)
+    near, away = lookup.ball(centre, radius * FALLOFF)
+    return near, _level_weights(away, radius)
+
+
+def _level_weights(away: np.ndarray, radius: float) -> Any:
+    """Die Gewichte der Fassung 2 zu den Abständen einer Kugelabfrage."""
+    away = away / max(radius, 1e-9)
+    return _falloff(away) * (away <= FALLOFF)
+
+
+@dataclasses.dataclass(frozen=True)
+class _Compact:
+    """Die gesammelten Wege einer Etappe aus :meth:`_Stage.add_many`: nur die
+    gegriffenen Ecken, aufsteigend, statt zweier Felder über alle (F6)."""
+
+    rows: np.ndarray
+    way: np.ndarray
+    weight: np.ndarray
+    converging: bool
+
+
 class _Stage:
     """Eine Etappe im Aufbau: die Fläche an ihrem Anfang, ihr Suchbaum, ihre
     Normalen — und das Offsetfeld der Züge, die bisher zu ihr gehören.
@@ -370,14 +639,22 @@ class _Stage:
         mirror_once: bool,
         tree: Any = None,
     ) -> None:
-        self.body = body
+        self._body: trimesh.Trimesh | None = body
+        self.faces = np.asarray(body.faces)
         self.points = np.asarray(body.vertices, dtype=float)
-        self.normals = np.asarray(body.vertex_normals, dtype=float)
-        self.tree = cKDTree(self.points) if tree is None else tree
+        self._normals: np.ndarray | None = None
+        self._lazy: _Normals | None = None
+        self._tree: Any = tree
+        self.topology: _Topology | None = None
+        self.owned = False
+        """Ob die Felder dieser Etappe ihr selbst gehören (eine Folgeetappe in
+        :func:`apply_strokes`) — nur dann führt die nächste sie an Ort und Stelle nach."""
+        self.reached: list[np.ndarray] = []
+        """Die Ecken, die die Züge dieser Etappe gegriffen haben (Fassung 2)."""
         self.plane = plane
         self.front_only = front_only
         self.mirror_once = mirror_once
-        self.shift = np.zeros_like(self.points)
+        self.shift: np.ndarray | None = np.zeros_like(self.points)
         self.strokes: list[Stroke] = []
         self._neighbours: tuple[np.ndarray, np.ndarray] | None = None
         self._curvature: np.ndarray | None = None
@@ -388,12 +665,110 @@ class _Stage:
         self._push_weight: np.ndarray | None = None
         self._pull: np.ndarray | None = None
         self._pull_weight: np.ndarray | None = None
+        self._compact: _Compact | None = None
+
+    @property
+    def body(self) -> trimesh.Trimesh:
+        """Die Fläche am Anfang der Etappe — gebaut, wenn jemand sie als Netz braucht."""
+        if self._body is None:
+            self._body = trimesh.Trimesh(vertices=self.points, faces=self.faces, process=False)
+        return self._body
+
+    @property
+    def tree(self) -> Any:
+        """Der Suchbaum der Etappenfläche — gebaut, wenn ein Zug ihn braucht."""
+        if self._tree is None:
+            self._tree = cKDTree(self.points)
+        return self._tree
+
+    @tree.setter
+    def tree(self, value: Any) -> None:
+        self._tree = value
+
+    def _lookup(self) -> _Lookup:
+        """Der Suchbaum für Fassung 2 (:class:`_Lookup`). Ein neuer entsteht
+        ungeordnet — halb so teuer, und die Abfragen messen ohnehin nach."""
+        tree = self._tree
+        if isinstance(tree, _Lookup):
+            return tree
+        if tree is None:
+            tree = cKDTree(self.points, balanced_tree=False, compact_nodes=False)
+        lookup = _Lookup(self.points, tree, self.points, 0.0)
+        self._tree = lookup
+        return lookup
+
+    @property
+    def normals(self) -> np.ndarray:
+        """Die Normalen des ganzen Netzes wie ``Trimesh.vertex_normals`` —
+        Fassung 1 rechnet mit ihnen wie vor RM-560."""
+        if self._normals is None:
+            self._normals = np.asarray(self.body.vertex_normals, dtype=float)
+        return self._normals
+
+    def lazy_normals(self) -> _Normals:
+        """Die Normalen der Fassung 2, je Ecke bei der ersten Frage (:class:`_Normals`)."""
+        if self._lazy is None:
+            self._lazy = _Normals(self.points, self._topology())
+        return self._lazy
+
+    def normals_for(self, brush: int) -> Any:
+        """Die Normalen, mit denen ein Zug der Pinselfassung ``brush`` rechnet."""
+        return self.lazy_normals() if brush >= BRUSH else self.normals
 
     def neighbours(self) -> tuple[np.ndarray, np.ndarray]:
         """Summe und Zahl der Nachbarn je Eckpunkt (:func:`_neighbours`)."""
         if self._neighbours is None:
             self._neighbours = _neighbours(self.body, len(self.points))
         return self._neighbours
+
+    def _topology(self) -> _Topology:
+        if self.topology is None:
+            self.topology = _Topology(self.faces, len(self.points))
+        return self.topology
+
+    def following(self, *, inplace: bool = False) -> _Stage:
+        """Die nächste Etappe der Fassung 2, aus dieser nachgeführt (F6).
+
+        Ecken, Normalen und Suchbaum werden nur im Gebiet dieser Etappe neu —
+        dasselbe Ergebnis wie ein neuer Aufbau über das ganze Netz
+        (:class:`_Normals`, :class:`_Lookup`), zum Preis des Gebiets.
+        ``inplace`` schreibt in die Felder dieser Etappe statt in Kopien: für
+        eine Kette, die ihre Felder selbst besitzt und die alte Etappe nicht
+        mehr braucht (:func:`apply_strokes`).
+        """
+        if self._compact is not None:
+            reached = self._compact.rows
+        elif self.reached:
+            reached = np.unique(np.concatenate(self.reached))
+        else:
+            reached = np.zeros(0, dtype=np.int64)
+        fresh = self._positions_at(reached)
+        changed = reached[np.any(fresh != self.points[reached], axis=1)]
+        lookup = self._lookup()
+        points = self.points if inplace else self.points.copy()
+        points[reached] = fresh
+        topology = self._topology()
+        follower = _Stage.__new__(_Stage)
+        follower._body = None
+        follower.faces = self.faces
+        follower.points = points
+        follower._normals = None
+        follower._lazy = self.lazy_normals().following(points, changed, inplace=inplace)
+        reach = max((stroke.radius for stroke in self.strokes), default=1.0)
+        follower.tree = lookup.moved(points, changed, reach, inplace=inplace)
+        follower.topology = topology
+        follower.owned = False
+        follower.reached = []
+        follower.plane = self.plane
+        follower.front_only = self.front_only
+        follower.mirror_once = self.mirror_once
+        follower.shift = None
+        follower.strokes = []
+        follower._neighbours = None
+        follower._curvature = None
+        follower._push = follower._push_weight = follower._pull = follower._pull_weight = None
+        follower._compact = None
+        return follower
 
     def curvature(self) -> np.ndarray:
         """Krümmung als Abstand zum Nachbarschaftsmittel entlang der Normale:
@@ -425,13 +800,17 @@ class _Stage:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         self.strokes.append(stroke)
-        points, normals, shift = self.points, self.normals, self.shift
+        points, normals, shift = self.points, self.normals_for(stroke.brush), self.shift
         touched = False
         places = []
         copies = _mirrored(stroke, self.plane)
         share = _mirror_share(copies, stroke.radius) if self.mirror_once else 1.0
+        weigh: Callable[[Any, np.ndarray, np.ndarray, float], Any] = _weights
+        tree = self.tree if stroke.brush < BRUSH else self._lookup()
+        if stroke.brush >= BRUSH:
+            weigh = _ball_weights
         for centre, direction in copies:
-            near, weight = _weights(self.tree, points, centre, stroke.radius)
+            near, weight = weigh(tree, points, centre, stroke.radius)
             if not len(near):
                 continue
             touched = True
@@ -445,6 +824,8 @@ class _Stage:
             if missed is not None and not touched:
                 missed.append(stroke)
             return
+        # Fassung 1 steht nie in einer nachgeführten Etappe (:meth:`chains`).
+        assert shift is not None
         for centre, direction, near, weight in places:
             if not np.any(weight > 0.0):
                 continue
@@ -476,6 +857,122 @@ class _Stage:
         if missed is not None and not touched:
             missed.append(stroke)
 
+    def add_many(
+        self,
+        strokes: Sequence[Stroke],
+        missed: list[Stroke] | None = None,
+        cancelled: CancelToken | None = None,
+    ) -> bool:
+        """Alle Züge einer Etappe der Fassung 2 in einem Schritt (F6).
+
+        Dieselbe Rechnung wie :meth:`add` Zug für Zug, Element für Element und
+        in derselben Folge — nur ohne die Kosten eines Aufrufs je Probe: eine
+        Kugelabfrage für alle Mitten (:meth:`_Lookup.balls`), die Normalen
+        aller gegriffenen Ecken auf einmal, die Wege als ein Feld. Das geht,
+        weil eine Etappe auf ihrer Anfangsfläche rechnet und sich die unter
+        ihren Zügen nicht ändert; die Summe je Ecke läuft über
+        ``np.add.at`` in der Folge der Züge, wie sie :meth:`_add_level`
+        nacheinander bildet.
+
+        ``False``, wenn die Etappe nicht in Frage kommt — Fassung 1 oder
+        gemischte Werkzeuge; dann rechnet :meth:`add` Zug für Zug.
+        """
+        if not strokes or any(stroke.brush < BRUSH for stroke in strokes):
+            return False
+        tool = strokes[0].tool
+        if any(stroke.tool != tool for stroke in strokes):
+            return False
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        self.strokes.extend(strokes)
+        points = self.points
+        lookup = self._lookup()
+        copies = [_mirrored(stroke, self.plane) for stroke in strokes]
+        stroke_of = np.asarray(
+            [number for number, places in enumerate(copies) for _place in places], dtype=np.int64
+        )
+        centres = np.asarray([centre for places in copies for centre, _way in places], dtype=float)
+        directions = np.asarray([way for places in copies for _centre, way in places], dtype=float)
+        radius = np.asarray([stroke.radius for stroke in strokes], dtype=float)
+        top = float(LEVEL_RANGE[1])
+        level = np.asarray(
+            [min(max(float(stroke.strength), 0.0), top) / top for stroke in strokes], dtype=float
+        )
+        mirror = np.asarray(
+            [
+                _mirror_share(places, stroke.radius) if self.mirror_once else 1.0
+                for stroke, places in zip(strokes, copies, strict=True)
+            ],
+            dtype=float,
+        )
+        near, away, owner, _bounds = lookup.balls(centres, radius[stroke_of] * FALLOFF)
+        if missed is not None:
+            touched = np.bincount(stroke_of[owner], minlength=len(strokes))
+            missed.extend(stroke for stroke, hits in zip(strokes, touched, strict=True) if not hits)
+        entry = stroke_of[owner]
+        # :func:`_level_weights`, dann Zuwendung und Spiegelanteil wie in :meth:`add`.
+        scaled = away / np.maximum(radius, 1e-9)[entry]
+        weight = _falloff(scaled) * (scaled <= FALLOFF)
+        normals = self.lazy_normals()
+        if len(near) and (self.front_only or tool == "inflate"):
+            normals[np.unique(near)]
+        values = normals.values
+        if self.front_only:
+            seen, facing = values[near], directions[owner]
+            along = (
+                seen[:, 0] * facing[:, 0] + seen[:, 1] * facing[:, 1] + seen[:, 2] * facing[:, 2]
+            )
+            weight = weight * np.asarray(along > FACING_LIMIT, dtype=float)
+        if np.any(mirror != 1.0):
+            weight = weight * mirror[entry]
+        share = weight * level[entry]
+        # Eine Kopie ohne positiven Anteil trägt nichts bei (:meth:`_add_level`).
+        alive = np.bincount(owner, weights=share > 0.0, minlength=len(centres)) > 0.0
+        keep = alive[owner]
+        if not keep.all():
+            near, share, weight, owner = near[keep], share[keep], weight[keep], owner[keep]
+            entry = stroke_of[owner]
+        converging = tool in CONVERGENT_TOOLS
+        if not len(near):
+            self._compact = _Compact(
+                np.zeros(0, dtype=np.int64), np.zeros((0, 3)), np.zeros(0), converging
+            )
+            return True
+        reach = radius * ADD_SHARE
+        if tool == "draw":
+            way = directions[owner] * reach[entry][:, None]
+        elif tool == "carve":
+            way = -directions[owner] * reach[entry][:, None]
+        elif tool == "inflate":
+            way = values[near] * reach[entry][:, None]
+        elif tool == "smooth":
+            total, count = self._topology().neighbour_sums(points, near)
+            way = total / count[:, None] - points[near]
+        elif tool == "flatten":
+            # Die Ebene je Kopie bleibt eine eigene Rechnung: ihr Aufpunkt ist
+            # ein gewichtetes Mittel über genau deren Ecken.
+            way = np.empty((len(near), 3))
+            starts = np.searchsorted(owner, np.arange(len(centres) + 1))
+            for copy, (low, high) in enumerate(itertools.pairwise(starts.tolist())):
+                if low == high:
+                    continue
+                rows, direction = near[low:high], directions[copy]
+                anchor = np.average(points[rows], axis=0, weights=weight[low:high])
+                height = np.einsum("ij,j->i", points[rows] - anchor, direction)
+                way[low:high] = -direction * height[:, None]
+        else:
+            way = (centres[owner] - points[near]) * 0.5
+        # Je Ecke die Summe in der Folge der Züge, wie :meth:`_add_level` sie
+        # in einem Feld über alle Ecken bildet — dort ab Null, hier auch.
+        rows, inverse = np.unique(near, return_inverse=True)
+        moved = way * share[:, None]
+        summed = np.empty((len(rows), 3))
+        for axis in range(3):
+            summed[:, axis] = np.bincount(inverse, weights=moved[:, axis], minlength=len(rows))
+        weights = np.bincount(inverse, weights=share, minlength=len(rows))
+        self._compact = _Compact(rows, summed, weights, converging)
+        return True
+
     def _add_level(
         self, stroke: Stroke, places: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]
     ) -> None:
@@ -487,14 +984,16 @@ class _Stage:
         Ziel — beide mit ihrem Gewicht, damit :meth:`positions` die Summe
         sättigen oder deckeln kann.
         """
-        points, normals = self.points, self.normals
+        points, normals = self.points, self.lazy_normals()
         level = min(max(float(stroke.strength), 0.0), float(LEVEL_RANGE[1])) / LEVEL_RANGE[1]
         converging = stroke.tool in CONVERGENT_TOOLS
+        # ``np.zeros`` und nicht ``zeros_like``: Das Betriebssystem liefert
+        # genullte Seiten erst, wenn ein Zug sie berührt (F6).
         if converging and self._pull is None:
-            self._pull = np.zeros_like(points)
+            self._pull = np.zeros(points.shape)
             self._pull_weight = np.zeros(len(points))
         if not converging and self._push is None:
-            self._push = np.zeros_like(points)
+            self._push = np.zeros(points.shape)
             self._push_weight = np.zeros(len(points))
         reach = stroke.radius * ADD_SHARE
         for centre, direction, near, weight in places:
@@ -502,14 +1001,14 @@ class _Stage:
             if not np.any(share > 0.0):
                 continue
             if stroke.tool == "draw":
-                way = np.broadcast_to(direction * reach, (len(near), 3))
+                way = (direction * reach)[None, :]
             elif stroke.tool == "carve":
-                way = np.broadcast_to(-direction * reach, (len(near), 3))
+                way = (-direction * reach)[None, :]
             elif stroke.tool == "inflate":
                 way = normals[near] * reach
             elif stroke.tool == "smooth":
-                total, seen = self.neighbours()
-                way = total[near] / seen[near, None] - points[near]
+                total, seen = self._topology().neighbour_sums(points, near)
+                way = total / seen[:, None] - points[near]
             elif stroke.tool == "flatten":
                 anchor = np.average(points[near], axis=0, weights=weight)
                 height = np.einsum("ij,j->i", points[near] - anchor, direction)
@@ -519,6 +1018,7 @@ class _Stage:
                 # zwei Seiten einer Falte einander nie (H3: Stärke 3 ergab 216
                 # sich schneidende Dreieckspaare).
                 way = (centre - points[near]) * 0.5
+            self.reached.append(near)
             if converging:
                 assert self._pull is not None and self._pull_weight is not None
                 self._pull[near] += way * share[:, None]
@@ -538,22 +1038,57 @@ class _Stage:
         :data:`ADD_LIMIT` volle Proben —, zulaufend ``min(W, 1)``: nie über das
         Ziel hinaus.
         """
-        placed = self.points + self.shift
-        if self._push is not None and self._push_weight is not None:
-            weight = self._push_weight
+        return self._positions_at(slice(None))
+
+    def _positions_at(self, rows: Any) -> np.ndarray:
+        """:meth:`positions` für ausgewählte Ecken — dieselbe Rechnung je Zeile."""
+        placed = self.points[rows] + (0.0 if self.shift is None else self.shift[rows])
+        push, push_weight, pull, pull_weight = self._accumulated(rows)
+        if push is not None and push_weight is not None:
+            weight = push_weight
             safe = np.where(weight > 0.0, weight, 1.0)
             gain = np.where(weight > 0.0, -ADD_LIMIT * np.expm1(-weight / ADD_LIMIT) / safe, 0.0)
-            placed = placed + self._push * gain[:, None]
-        if self._pull is not None and self._pull_weight is not None:
-            weight = self._pull_weight
+            placed = placed + push * gain[:, None]
+        if pull is not None and pull_weight is not None:
+            weight = pull_weight
             safe = np.where(weight > 0.0, weight, 1.0)
             gain = np.where(weight > 0.0, np.minimum(weight, 1.0) / safe, 0.0)
-            placed = placed + self._pull * gain[:, None]
+            placed = placed + pull * gain[:, None]
         return np.asarray(placed, dtype=float)
+
+    def _accumulated(self, rows: Any) -> tuple[Any, Any, Any, Any]:
+        """Gesammelte Wege und Gewichte der Fassung 2 an ``rows`` — aus den
+        Feldern über alle Ecken oder aus der dichten Form von :meth:`add_many`,
+        dort mit Null für jede Ecke, die kein Zug gegriffen hat."""
+        compact = self._compact
+        if compact is None:
+            return (
+                None if self._push is None else self._push[rows],
+                None if self._push_weight is None else self._push_weight[rows],
+                None if self._pull is None else self._pull[rows],
+                None if self._pull_weight is None else self._pull_weight[rows],
+            )
+        wanted = np.arange(len(self.points))[rows] if isinstance(rows, slice) else rows
+        known = compact.rows
+        if len(known):
+            index = np.minimum(np.searchsorted(known, wanted), len(known) - 1)
+            hit = known[index] == wanted
+            way = np.where(hit[:, None], compact.way[index], 0.0)
+            weight = np.where(hit, compact.weight[index], 0.0)
+        else:
+            way, weight = np.zeros((len(wanted), 3)), np.zeros(len(wanted))
+        if compact.converging:
+            return None, None, way, weight
+        return way, weight, None, None
 
     def moved(self) -> trimesh.Trimesh:
         """Die Fläche nach den bisherigen Zügen dieser Etappe."""
-        return trimesh.Trimesh(vertices=self.positions(), faces=self.body.faces, process=False)
+        return trimesh.Trimesh(vertices=self.positions(), faces=self.faces, process=False)
+
+    def chains(self, stroke: Stroke) -> bool:
+        """Ob die Etappe, die ``stroke`` beginnt, aus dieser nachgeführt wird:
+        beide in Fassung 2."""
+        return bool(self.strokes) and self.strokes[-1].brush >= BRUSH and stroke.brush >= BRUSH
 
 
 #: Nach wie vielen Zügen die Auswertung ihren Fortschritt meldet — je Zug
@@ -729,7 +1264,7 @@ def stroke_at(
 
 
 def _brush_direction(
-    tree: Any, normals: np.ndarray, point: np.ndarray, radius: float, nearest: np.ndarray
+    tree: Any, normals: Any, point: np.ndarray, radius: float, nearest: np.ndarray
 ) -> np.ndarray:
     """Die Richtung eines Zugs der Fassung 2: das Mittel der Normalen unter dem Pinsel.
 
@@ -739,11 +1274,11 @@ def _brush_direction(
     die Normale der nächsten Ecke den Zug 45° schräg (H10); das Mittel zeigt,
     wohin die Fläche unter dem Pinsel im Ganzen schaut.
     """
-    near = np.asarray(tree.query_ball_point(point, radius * FALLOFF), dtype=np.int64)
+    lookup = tree if isinstance(tree, _Lookup) else _Lookup(np.asarray(tree.data), tree)
+    near, away = lookup.ball(point, radius * FALLOFF)
     if not len(near):
         return nearest
-    offset = tree.data[near] - point
-    away = np.sqrt(np.add.reduce(offset * offset, axis=1)) / max(radius, 1e-9)
+    away = away / max(radius, 1e-9)
     weight = _falloff(away) * _facing(normals[near], nearest)
     total = np.einsum("ij,i->j", normals[near], weight)
     length = float(np.sqrt((total * total).sum()))
@@ -865,17 +1400,34 @@ def apply_strokes(
     plane = mirror_centre(mesh) if centre is None else np.asarray(centre, dtype=float)
     body = mesh.raw
     done = 0
+    stage: _Stage | None = None
     for part in stages(strokes):
-        stage = _Stage(body, plane, front_only=front_only, mirror_once=mirror_once)
+        if stage is not None and stage.chains(part[0]):
+            # Fassung 2: nur das Gebiet der vorigen Etappe nachführen (F6). Ab
+            # der zweiten Folgeetappe gehören die Felder der Kette, und sie
+            # werden an Ort und Stelle nachgeführt.
+            owned = stage.owned
+            stage = stage.following(inplace=owned)
+            stage.owned = True
+        else:
+            if stage is not None:
+                body = stage.moved()
+            stage = _Stage(body, plane, front_only=front_only, mirror_once=mirror_once)
+        if stage.add_many(part, missed, cancelled):
+            reported = done // PROGRESS_STROKES
+            done += len(part)
+            if progress is not None and done // PROGRESS_STROKES > reported:
+                progress(done / len(strokes))
+            continue
         for stroke in part:
             stage.add(stroke, missed, cancelled)
             done += 1
             if progress is not None and done % PROGRESS_STROKES == 0:
                 progress(done / len(strokes))
-        body = stage.moved()
     if progress is not None:
         progress(1.0)
-    return mesh.replacing(body)
+    assert stage is not None
+    return mesh.replacing(stage.moved())
 
 
 #: Wie viele Etappenanfänge die Vorschau einer Formsitzung behält
@@ -924,6 +1476,12 @@ class SculptPreview:
         gebaut ist (:meth:`extend`)."""
         self._shown_tree: Any = None
         self._input_tree: Any = None
+        self._input_normals: _Normals | None = None
+        """Die Normalen der Fassung 2 am Eingangsnetz — der erste Zug fragt nur
+        die unter seinem Pinsel, nicht alle (F6)."""
+        self._next: tuple[_Stage, int, _Stage] | None = None
+        """Die nachgeführte Folgeetappe der laufenden — einmal gerechnet, wenn der
+        nächste Zug sie fragt, und von :meth:`extend` übernommen."""
 
     @property
     def shown(self) -> MeshData:
@@ -976,25 +1534,32 @@ class SculptPreview:
                 default=0,
             )
         )
+        finished: _Stage | None = None
         for number, begin in enumerate(begins):
             end = begins[number + 1] if number + 1 < len(begins) else len(strokes)
             if end <= start and begin < start:
                 continue
             if stage is None or begin != self._begin:
-                body, tree = self._start_of(begin, common)
-                stage = _Stage(
-                    body,
-                    self.plane,
-                    front_only=self.front_only,
-                    mirror_once=self.mirror_once,
-                    tree=tree,
-                )
+                if finished is not None and finished.chains(strokes[begin]):
+                    stage = self._following(finished)
+                else:
+                    body, tree = self._start_of(begin, common)
+                    stage = _Stage(
+                        body,
+                        self.plane,
+                        front_only=self.front_only,
+                        mirror_once=self.mirror_once,
+                        tree=tree,
+                    )
+                    if begin == 0 and self._input_normals is not None:
+                        stage._lazy = self._input_normals
+                        stage.topology = self._input_normals.topology
                 self._begin = begin
             for stroke in strokes[begin + len(stage.strokes) : end]:
                 stage.add(stroke)
             if end < len(strokes):
                 self._starts[end] = stage.positions()
-                stage = None
+                finished, stage = stage, None
         self._keep_few()
         self._stage = stage
         self.strokes = strokes
@@ -1019,14 +1584,23 @@ class SculptPreview:
         )
         return body, None
 
+    def _following(self, stage: _Stage) -> _Stage:
+        """Die Folgeetappe von ``stage`` — die gemerkte, wenn sie zu ihr gehört."""
+        known = self._next
+        if known is not None and known[0] is stage and known[1] == len(stage.strokes):
+            follower = known[2]
+            if not follower.strokes:
+                return follower
+        follower = stage.following()
+        self._next = (stage, len(stage.strokes), follower)
+        return follower
+
     def _keep_few(self) -> None:
         """Nur die jüngsten :data:`KEPT_STAGES` Anfänge — ältere rechnet sie nach."""
         for index in sorted(self._starts)[:-KEPT_STAGES]:
             del self._starts[index]
 
-    def surface_for(
-        self, stroke: Stroke, *, symmetry: int
-    ) -> tuple[MeshData, bool, Any, np.ndarray]:
+    def surface_for(self, stroke: Stroke, *, symmetry: int) -> tuple[MeshData, bool, Any, Any]:
         """:func:`_surface_for` für den nächsten Zug — mit Suchbaum und Normalen
         der Fläche, auf die er wirkt, aus der laufenden Etappe."""
         cut, radius = stroke.cut, stroke.radius
@@ -1034,18 +1608,32 @@ class SculptPreview:
         if not self.strokes or stage is None:
             if self._input_tree is None:
                 self._input_tree = cKDTree(np.asarray(self.mesh.raw.vertices, dtype=float))
+            if stroke.brush >= BRUSH:
+                if self._input_normals is None:
+                    raw = self.mesh.raw
+                    points = np.asarray(raw.vertices, dtype=float)
+                    topology = _Topology(np.asarray(raw.faces), len(points))
+                    self._input_normals = _Normals(points, topology)
+                return self.mesh, cut, self._input_tree, self._input_normals
             normals = np.asarray(self.mesh.raw.vertex_normals, dtype=float)
             return self.mesh, cut, self._input_tree, normals
         fresh = starts_stage(self.strokes[-1], stroke)
+        if fresh and stage.chains(stroke):
+            # Fassung 2: Die Fläche des nächsten Zugs ist die Folgeetappe, und
+            # die kostet ihr Gebiet statt Normalen und Suchbaum über das ganze
+            # gezeigte Netz (F6).
+            follower = self._following(stage)
+            return self.mesh.replacing(follower.body), cut, follower.tree, follower.lazy_normals()
         if not fresh:
             probe = replace(stroke, strength=0.0, symmetry=symmetry)
             places = np.asarray([place for place, _way in _mirrored(probe, self.plane)])
             away, _index = stage.tree.query(places)
+            normals = stage.normals_for(stroke.brush)
             if float(np.min(away)) <= radius * FALLOFF:
-                return self.mesh.replacing(stage.body), cut, stage.tree, stage.normals
+                return self.mesh.replacing(stage.body), cut, stage.tree, normals
             away, _index = self._shown_query().query(places)
             if float(np.min(away)) > radius * FALLOFF:
-                return self.mesh.replacing(stage.body), False, stage.tree, stage.normals
+                return self.mesh.replacing(stage.body), False, stage.tree, normals
             cut = True
         shown = self._shown_mesh()
         normals = np.asarray(shown.raw.vertex_normals, dtype=float)

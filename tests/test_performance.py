@@ -1225,6 +1225,66 @@ def test_replaying_a_thousand_strokes_stays_under_two_seconds() -> None:
     assert taken < 2.0
 
 
+def _thousand_samples(brush: int) -> tuple[MeshData, list[Any]]:
+    """Tausend Proben auf dem Referenznetz, wie die Formsitzung sie schreibt.
+
+    Pinselfassung 1 wie bis Format 48: jede Probe an einer zufälligen Ecke,
+    alle in einer Etappe. Fassung 2 (RM-560): hundert Gesten zu je zehn
+    Proben, eng um eine zufällige Ecke — jede Geste eine Etappe.
+    """
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    from app.core.geom.sculpt import BRUSH
+    from app.core.types import Stroke
+
+    mesh = medium_mesh()
+    points = np.asarray(mesh.raw.vertices, dtype=float)
+    normals = np.asarray(mesh.raw.vertex_normals, dtype=float)
+    radius = float(np.ptp(points, axis=0).max()) * 0.05
+    generator = np.random.default_rng(7)
+    if brush < BRUSH:
+        picked = generator.integers(0, len(points), 1000)
+        return mesh, [
+            Stroke(
+                point=tuple(points[index]),
+                normal=tuple(normals[index]),
+                radius=radius,
+                strength=0.2,
+            )
+            for index in picked
+        ]
+    tree = cKDTree(points)
+    strokes = []
+    for gesture, index in enumerate(generator.integers(0, len(points), 100), start=1):
+        for place in points[index] + generator.normal(scale=radius * 0.5, size=(10, 3)):
+            _away, near = tree.query(place)
+            strokes.append(
+                Stroke(
+                    point=tuple(points[near]),
+                    normal=tuple(normals[near]),
+                    radius=radius,
+                    strength=5.0,
+                    gesture=gesture,
+                    brush=BRUSH,
+                )
+            )
+    return mesh, strokes
+
+
+def _evaluate_fresh(mesh: MeshData, strokes: list[Any]) -> Any:
+    """Die Auswertung auf einem frischen Netz: ohne die Normalen, die ein
+    vorheriger Aufruf am selben ``Trimesh`` hinterlassen hat — die Operation
+    bekommt ihr Eingangsnetz ohne sie."""
+    import trimesh
+
+    from app.core.geom.sculpt import apply_strokes
+
+    raw = mesh.raw
+    body = trimesh.Trimesh(raw.vertices.copy(), raw.faces.copy(), process=False)
+    return apply_strokes(MeshData.of(body), strokes)
+
+
 def test_the_real_stroke_evaluation_meets_the_same_budget() -> None:
     """Dasselbe Budget, aber an der Operation statt am Gewichtsfeld.
 
@@ -1233,31 +1293,42 @@ def test_the_real_stroke_evaluation_meets_the_same_budget() -> None:
     jetzt gilt die Zahl für sie: mit Normalen, Nachbarschaft, Etappen und dem
     neu gebauten Netz am Ende. Ein Budget, das nur den Kern kennt, deckt nicht
     ab, was der Nutzer wartet.
+
+    Gemessen wird Pinselfassung 2, die die Formsitzung schreibt (F6, RM-560):
+    jede Geste eine Etappe. Dieselbe Marke maß bis dahin Fassung 1 an einem
+    Netz, dessen Normalen schon gerechnet waren — beides sah nicht, was der
+    Kunde wartet.
     """
-    import numpy as np
-
-    from app.core.geom.mesh import MeshData
-    from app.core.geom.sculpt import apply_strokes
-    from app.core.types import Stroke
-
-    mesh = medium_mesh()
-    points = np.asarray(mesh.raw.vertices, dtype=float)
-    normals = np.asarray(mesh.raw.vertex_normals, dtype=float)
-    radius = float(np.ptp(points, axis=0).max()) * 0.05
-    generator = np.random.default_rng(7)
-    picked = generator.integers(0, len(points), 1000)
-    strokes = [
-        Stroke(
-            point=tuple(points[index]),
-            normal=tuple(normals[index]),
-            radius=radius,
-            strength=0.2,
-        )
-        for index in picked
-    ]
-
-    taken = measure("sculpt_apply_1000", lambda: apply_strokes(MeshData.of(mesh.raw), strokes))
+    mesh, strokes = _thousand_samples(2)
+    taken = measure("sculpt_apply_1000_brush2", lambda: _evaluate_fresh(mesh, strokes))
     assert taken < 2.0
+
+
+def test_old_strokes_keep_the_same_budget() -> None:
+    """Fassung 1 bleibt im Budget: alte Projekte rechnen weiter wie gespeichert."""
+    mesh, strokes = _thousand_samples(1)
+    taken = measure("sculpt_apply_1000_brush1", lambda: _evaluate_fresh(mesh, strokes))
+    assert taken < 2.0
+
+
+def test_gestures_as_stages_cost_no_more_than_one_stage() -> None:
+    """F6 (RM-560): Fassung 2 macht jede Geste zu einer Etappe, und jede
+    Etappe baute Normalen und Suchbaum über das ganze Netz neu — hundert
+    Gesten am Referenznetz 39,6 s statt 0,6 s. Eine Etappe rechnet jetzt nur
+    ihr Gebiet und sammelt ihre Proben; dieselben tausend Proben brauchen in
+    Fassung 2 nicht länger als in Fassung 1 in einer einzigen Etappe.
+
+    Im Wechsel gemessen, je das schnellste von fünf: Fremdlast trifft beide.
+    """
+    old_mesh, old = _thousand_samples(1)
+    new_mesh, new = _thousand_samples(2)
+    best = {1: float("inf"), 2: float("inf")}
+    for _round in range(5):
+        for brush, mesh, strokes in ((1, old_mesh, old), (2, new_mesh, new)):
+            start = time.perf_counter()
+            _evaluate_fresh(mesh, strokes)
+            best[brush] = min(best[brush], time.perf_counter() - start)
+    assert best[2] <= best[1], best
 
 
 def test_the_pierce_check_stays_with_the_strokes() -> None:

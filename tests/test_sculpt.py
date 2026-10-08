@@ -2016,3 +2016,118 @@ def test_the_starting_radius_follows_the_body() -> None:
     band = 2.5**0.5 / 20.0
     assert all(1.0 / 400.0 / band <= share <= band for share in shares), shares
     assert max(shares) / min(shares) < max(fixed) / min(fixed), "Gegenprobe: 6 mm fest"
+
+
+# --- Etappen der Fassung 2 rechnen nur ihr Gebiet (F6, RM-560) ------------------------
+
+
+def _gestures(tool: str, symmetry: int, seed: int = 3) -> list[Stroke]:
+    """Dreißig Gesten zu je sechs Proben, eng beieinander, damit sie sich
+    überlagern; ``tool="mixed"`` wechselt das Werkzeug je Geste."""
+    generator = np.random.default_rng(seed)
+    strokes = []
+    for gesture in range(1, 31):
+        aim = np.array([0.3, 0.2, 1.0]) + generator.normal(scale=0.3, size=3)
+        aim /= np.linalg.norm(aim)
+        chosen = SCULPT_TOOLS[gesture % len(SCULPT_TOOLS)] if tool == "mixed" else tool
+        for _sample in range(6):
+            place = aim * 20.0 + generator.normal(scale=1.0, size=3)
+            place = place / np.linalg.norm(place) * 20.0
+            strokes.append(
+                Stroke(
+                    tuple(place),
+                    tuple(place / 20.0),
+                    3.0,
+                    float(generator.integers(1, 11)),
+                    tool=chosen,
+                    gesture=gesture,
+                    brush=2,
+                    symmetry=symmetry,
+                )
+            )
+    return strokes
+
+
+def _fresh_stages(mesh: MeshData, strokes: list[Stroke], plane: tuple[float, float, float]):
+    """Die Rechnung vor F6: jede Etappe auf einem neuen Netz mit eigenem
+    Suchbaum und allen Normalen, jeder Zug einzeln."""
+    from app.core.geom.sculpt import _Stage
+
+    body = mesh.raw
+    for part in stages(strokes):
+        stage = _Stage(body, np.asarray(plane), front_only=True, mirror_once=True)
+        for stroke in part:
+            stage.add(stroke)
+        body = stage.moved()
+    return np.asarray(body.vertices)
+
+
+@pytest.mark.parametrize("symmetry", [0, 1], ids=["plain", "mirrored"])
+@pytest.mark.parametrize("tool", [*SCULPT_TOOLS, "mixed"])
+def test_a_stage_that_only_follows_its_area_computes_the_same_mesh(tool: str, symmetry: int):
+    """F6: Die Auswertung führt Ecken, Normalen und Suchbaum nur im Gebiet der
+    vorigen Etappe nach und rechnet eine Etappe in einem Schritt. Das Netz ist
+    bitgleich mit der Rechnung, die jede Etappe neu aufbaut — und mit der
+    Vorschau, die Zug für Zug rechnet."""
+    from app.core.geom.sculpt import mirror_centre
+
+    mesh = ball(5)
+    middle = mirror_centre(mesh)
+    plane = (float(middle[0]), float(middle[1]), float(middle[2]))
+    strokes = _gestures(tool, symmetry)
+    evaluated = np.asarray(apply_strokes(mesh, strokes, centre=plane).raw.vertices)
+    assert np.abs(evaluated - np.asarray(mesh.raw.vertices)).max() > 0.01, (
+        "Gegenprobe: nichts geformt"
+    )
+    assert np.array_equal(evaluated, _fresh_stages(mesh, strokes, plane))
+    preview = SculptPreview(mesh, centre=plane)
+    for count in range(1, len(strokes) + 1):
+        preview.extend(strokes[:count])
+    assert np.array_equal(evaluated, np.asarray(preview.shown.raw.vertices))
+
+
+def test_local_normals_are_the_normals_of_the_whole_mesh() -> None:
+    """Eine Ecke bekommt dieselbe Normale, ob ihr Gebiet allein oder das ganze
+    Netz gerechnet wird; an einer Ikosaederkugel ist es bis auf ein
+    Achtelgrad die von ``Trimesh``."""
+    from app.core.geom.sculpt import _Topology
+
+    raw = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    points = np.asarray(raw.vertices, dtype=float)
+    points = points + np.random.default_rng(1).normal(scale=0.05, size=points.shape)
+    topology = _Topology(raw.faces, len(points))
+    whole = topology.vertex_normals(points, np.arange(len(points)))
+    some = np.sort(np.random.default_rng(2).choice(len(points), 500, replace=False))
+    assert np.array_equal(topology.vertex_normals(points, some), whole[some])
+    regular = np.asarray(raw.vertices, dtype=float)
+    ours = topology.vertex_normals(regular, np.arange(len(regular)))
+    cosine = np.einsum("ij,ij->i", ours, np.asarray(raw.vertex_normals))
+    assert np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))).max() < 0.25
+
+
+def test_an_old_search_tree_finds_what_a_new_one_finds() -> None:
+    """Der Suchbaum bleibt über Etappen stehen, solange die Ecken nicht weiter
+    gewandert sind als ein Radius; Kugelabfragen messen nach und liefern
+    dieselben Ecken, sortiert, wie ein neuer Baum — einzeln wie gesammelt."""
+    from app.core.geom.sculpt import _Lookup
+
+    raw = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    before = np.asarray(raw.vertices, dtype=float)
+    generator = np.random.default_rng(4)
+    moved = generator.choice(len(before), 2000, replace=False)
+    after = before.copy()
+    after[moved] += generator.normal(scale=0.8, size=(len(moved), 3))
+    old = _Lookup(before).moved(after, np.sort(moved), 5.0)
+    assert old.drift > 0.0, "Gegenprobe: der alte Baum muss nachmessen"
+    fresh = _Lookup(after)
+    centres = after[generator.integers(0, len(after), 40)]
+    radii = np.full(len(centres), 3.0)
+    near, away, owner, bounds = old.balls(centres, radii)
+    for number, centre in enumerate(centres):
+        expected, distance = fresh.ball(centre, 3.0)
+        found, measured = old.ball(centre, 3.0)
+        assert np.array_equal(found, expected) and np.array_equal(measured, distance)
+        low, high = bounds[number], bounds[number + 1]
+        assert np.array_equal(near[low:high], expected)
+        assert np.array_equal(away[low:high], distance)
+        assert np.all(owner[low:high] == number)
