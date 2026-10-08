@@ -6672,7 +6672,9 @@ class RotateFeatureParams(BaseParams):
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 10: „ohne Winkel“ öffnet den Schritt (RM-441).
-    cache_version="10",
+    # 11: eine Drehung, die das Merkmal auf sich selbst abbildet, ändert nichts
+    # und sagt es (RM-546).
+    cache_version="11",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -6727,6 +6729,13 @@ def rotate_feature(ctx: OpContext) -> OpResult:
                 )
             ],
         )
+    # **Eine Drehung, die die Form auf sich selbst legt, ist keine** (RM-546): Um
+    # ihre Achse gedreht rechneten Bohrung, Zapfen und Senkung an beiden Kernen
+    # Schließen und Neusetzen und sagten nichts. Der Ring fragt es selbst
+    # (:func:`_rotate_torus`), denn er liegt auch umgedreht wieder auf sich.
+    onto_itself = _turned_onto_itself(feature, params.axis, params.angle)
+    if onto_itself is not None:
+        return OpResult(outputs=[source], findings=[onto_itself])
 
     turned_axis = _turned(feature, params.axis, params.angle)
     # **Ein Langloch hat neben der Achse eine Richtung, und die dreht mit.**
@@ -7863,6 +7872,44 @@ def _turned_vector(vector: Any, axis: Axis, angle: float) -> Vec3:
     length = math.hypot(float(spun[0]), float(spun[1]), float(spun[2])) or 1.0
     spun = spun / length
     return (float(spun[0]), float(spun[1]), float(spun[2]))
+
+
+def _turned_onto_itself(feature: Feature, axis: Axis, angle: float) -> Finding | None:
+    """Der Befund, wenn diese Drehung das Merkmal auf sich selbst legt — sonst ``None``.
+
+    Bohrung, Zapfen und Kegel sind um ihre Achse rund: Um sie gedreht, liegt
+    die Achse mit demselben Vorzeichen wieder da, und mit ihr die ganze Form.
+    Ein Langloch trägt dazu seine Mittellinie (``direction``) und liegt erst
+    nach einer halben Umdrehung wieder auf sich. Eine volle Umdrehung legt
+    jedes Merkmal zurück. Gefragt wird an Achse und Mittellinie nach der
+    Drehung, mit derselben Schranke wie am Ring (:func:`_rotate_torus`, der das
+    für sich selbst fragt). Das Feld im Befund ist die Achse, wenn um die
+    eigene gedreht wurde, sonst der Winkel.
+    """
+    if feature.kind == "torus":
+        return None
+    before = _turned(feature, axis, 0.0)
+    if units.dot3(before, _turned(feature, axis, angle)) < 1.0 - EPS_GEOM:
+        return None
+    direction = feature.params.get("direction")
+    if direction is not None:
+        line = _turned_vector(direction, axis, 0.0)
+        if abs(units.dot3(line, _turned_vector(direction, axis, angle))) < 1.0 - EPS_GEOM:
+            return None
+    spin = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}[axis]
+    own_axis = abs(units.dot3(spin, before)) >= 1.0 - EPS_GEOM
+    return Finding(
+        code="rotate_feature.unchanged",
+        severity="info",
+        message=(
+            _("Um seine eigene Achse gedreht sieht dieses Merkmal aus wie vorher.")
+            if own_axis
+            else _("Nach dieser Drehung liegt das Merkmal wieder, wo es lag.")
+        ),
+        feature_ids=(feature.id,),
+        values={"field": "axis" if own_axis else "angle"},
+        suggestions=(CHANGE_THIS_STEP,),
+    )
 
 
 def _with_turned_direction(feature: Feature, axis: Axis, angle: float) -> Feature:

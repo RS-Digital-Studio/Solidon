@@ -2663,3 +2663,128 @@ def test_an_end_chamfer_moves_without_filling_the_bore_it_opens_into(profile: Pr
     after = _moved_by(entry, profile, lower, (0.2, 0.0, 0.0))
     gained = float(as_mesh_data(after.mesh).volume - as_mesh_data(entry.mesh).volume)
     assert abs(gained) < 1.0, gained
+
+
+# --- RM-546: Eine Drehung, die das Merkmal auf sich selbst abbildet, tut nichts und sagt es --
+
+
+def _plate_with(kernel: str, cut: Any) -> SceneObject:
+    """Platte 60 × 40 × 10 mit dem exakt gebauten ``cut`` — am Netz ihre Tessellierung."""
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Platte", mesh=cut, kind="brep", features=features_of(cut)
+        )
+    mesh = as_mesh_data(cut)
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+def _turning_case(kernel: str, case: str, profile: Profile) -> tuple[SceneObject, str]:
+    """Eine Platte mit genau einem Merkmal der Art ``case`` auf der Achse +Z durch den Ursprung."""
+    from app.core.geom.prepare import drill_outline
+    from app.core.sketch.planes import frame_of
+
+    edit = exact_kernel()
+    plate = edit.box(60.0, 40.0, 10.0)
+    if case == "hole":
+        body = edit.cut_bore(
+            plate, position=(0.0, 0.0, 5.0), direction=(0.0, 0.0, 1.0), diameter=5.0, depth=10.0
+        )
+    elif case == "pin":
+        body = edit.boolean("union", [plate, edit.moved(edit.cylinder(6.0, 8.0), (0.0, 0.0, 10.0))])
+    elif case == "cone":
+        outline = drill_outline(
+            diameter=6.0,
+            depth=12.0,
+            profile=profile,
+            compensate=False,
+            widening_diameter=12.0,
+            widening_depth=0.0,
+            transition_angle=90.0,
+        )
+        body = edit.bore_profile(plate, outline, frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0)))
+    else:
+        body = edit.slot_bore(
+            plate,
+            position=(0.0, 0.0, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=10.0,
+            length=20.0,
+            angle_deg=0.0,
+            overlap=0.0,
+        )
+    entry = _plate_with(kernel, body)
+    found = [name for name, feature in entry.features.items() if feature.kind == case]
+    assert len(found) == 1, (kernel, case, sorted((f.id, f.kind) for f in entry.features.values()))
+    axis = np.asarray(entry.features[found[0]].params["axis"], dtype=float)
+    assert abs(float(axis[2])) == pytest.approx(1.0, abs=1e-6), axis
+    return entry, found[0]
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("case", ["hole", "pin", "cone"])
+@pytest.mark.parametrize(("axis", "angle", "field"), [("z", 45.0, "axis"), ("x", 360.0, "angle")])
+def test_a_turn_onto_itself_changes_nothing_and_says_so(
+    profile: Profile, kernel: str, case: str, axis: str, angle: float, field: str
+) -> None:
+    """RM-546: Bohrung, Zapfen und Senkung um ihre eigene Achse gedreht — oder eine volle
+    Umdrehung um eine andere — liegen danach, wo sie lagen.
+
+    Am heutigen Stand rechneten beide Kerne den Schritt (schließen, neu setzen)
+    und sagten nichts; nur ``angle=0`` meldete ``rotate_feature.unchanged``.
+    Soll aus der Geometrie, nicht aus der Operation: Eine Drehung um die
+    Symmetrieachse einer runden Form und eine volle Umdrehung bilden die Form
+    auf sich selbst ab. Der Körper bleibt derselbe, der Befund nennt das Feld,
+    das der Kunde ändern muss — die Achse, bei der vollen Umdrehung den Winkel.
+    """
+    from app.core.errors import CHANGE_THIS_STEP
+    from tests.helpers import run_operation
+
+    load_operations()
+    entry, chosen = _turning_case(kernel, case, profile)
+    result = run_operation(
+        "rotate_feature", entry, profile, at_feature=chosen, axis=axis, angle=angle
+    )
+    assert result.outputs[0] is entry
+    told = [finding for finding in result.findings if finding.code == "rotate_feature.unchanged"]
+    assert len(told) == 1 and len(result.findings) == 1, [f.code for f in result.findings]
+    assert told[0].severity == "info"
+    assert told[0].values["field"] == field
+    assert told[0].suggestions == (CHANGE_THIS_STEP,)
+    assert told[0].feature_ids == (chosen,)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_slot_turned_about_its_own_axis_turns_and_a_half_turn_lies_on_itself(
+    profile: Profile, kernel: str
+) -> None:
+    """RM-546: Ein Langloch ist um seine Achse nicht rund — eine Vierteldrehung dreht es,
+    eine halbe bildet das Stadion auf sich selbst ab.
+
+    Soll: 20 mm längs x, um 90° um z gedreht, steht es längs y — an den
+    Enden (0, ±8,5) ist danach Luft, wo vorher Material war, und bei (±8,5, 0)
+    wieder Material. Um 180° gedreht bleibt der Körper derselbe, mit Befund.
+    """
+    from tests.helpers import run_operation
+
+    load_operations()
+    entry, chosen = _turning_case(kernel, "slot", profile)
+    half = run_operation("rotate_feature", entry, profile, at_feature=chosen, axis="z", angle=180.0)
+    assert half.outputs[0] is entry
+    assert [finding.code for finding in half.findings] == ["rotate_feature.unchanged"]
+    quarter = run_operation(
+        "rotate_feature", entry, profile, at_feature=chosen, axis="z", angle=90.0
+    )
+    assert quarter.outputs[0] is not entry
+    assert "rotate_feature.unchanged" not in [finding.code for finding in quarter.findings]
+    turned = as_mesh_data(quarter.outputs[0].mesh)
+    assert turned.is_watertight
+    across = [(0.0, 8.5, 5.0), (0.0, -8.5, 5.0)]
+    along = [(8.5, 0.0, 5.0), (-8.5, 0.0, 5.0)]
+    assert contains(as_mesh_data(entry.mesh), across).all()
+    assert not contains(as_mesh_data(entry.mesh), along).any()
+    assert not contains(turned, across).any()
+    assert contains(turned, along).all()

@@ -198,7 +198,13 @@ MEINT_DEN_SCHRITT: dict[str, str | dict[str, str] | None] = {
     "mesh.already_below_target": "triangles",
     "move_feature.unchanged": "x",
     "duplicate_feature.unchanged": "x",
-    "rotate_feature.unchanged": {"rotate_feature": "angle", "_rotate_torus": "axis"},
+    # RM-546: Um die eigene Achse gedreht meint der Befund die Achse, nach einer
+    # vollen Umdrehung den Winkel.
+    "rotate_feature.unchanged": {
+        "rotate_feature": "angle",
+        "_rotate_torus": "axis",
+        "_turned_onto_itself": frozenset({"axis", "angle"}),
+    },
     "resize_feature.unchanged": {
         "resize_feature": "diameter",
         "_resize_torus": "diameter",
