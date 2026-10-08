@@ -16,6 +16,7 @@ ein Punkt, ein Zug ist ein Winkel.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -496,6 +497,162 @@ def test_reopening_brings_bones_and_pose_back_and_bending_changes_the_same_step(
     written = pose_angles(str(window.session.history.operation(step).params["pose"]))
     assert written["arm"] == pytest.approx((0.0, 20.0, 0.0))
     assert "hand" in written
+
+
+def _bound_arm(window: MainWindow, angle: object) -> tuple[str, int]:
+    """Ein Körper mit Arm und Hand, die Hand gestellt mit ``angle`` um Y."""
+    from app.core.geom.pose import armature_to_text, pose_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Bone, Parameter
+
+    koerper = with_a_body(window)
+    window.session.add_parameter(Parameter(name="w", value=20.0, unit="°"))
+    assert window.session.wait_for_idle(30_000)
+    gesetzt = [
+        Bone(name="arm", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 10.0), parent=""),
+        Bone(name="hand", head=(0.0, 0.0, 10.0), tail=(0.0, 0.0, 20.0), parent="arm"),
+    ]
+    window.session.apply(
+        "Skelett",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=(koerper,),
+                params={
+                    "armature": armature_to_text(gesetzt),
+                    "pose": pose_text({"arm": [0.0, 0.0, 0.0], "hand": [0.0, angle, 0.0]}),
+                },
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(60_000)
+    return koerper, window.session.project.document.ops[-1].id
+
+
+def test_dragging_a_bound_angle_keeps_its_binding_and_says_where_to_change_it(
+    window: MainWindow,
+) -> None:
+    """Review F2 (Regel 21): Ein Zug am Gelenk schrieb drei Zahlen über einen
+    Winkel, der an einem Projektmaß hing — still, und Varianten über das Maß
+    bewegten den Knochen danach nicht mehr. Jetzt bleibt der Zug aus, die
+    Bindung steht, und der Satz nennt den Weg."""
+    said: list[str] = []
+    _koerper, step = _bound_arm(window, "=@w")
+    window.edit_operation(step)
+    assert window.session.wait_for_idle(30_000)
+    window.announce = lambda text, *args, **kwargs: said.append(str(text))  # type: ignore[method-assign]
+    joints = [ends for _posed, ends, _rest in window._armature_joints()]
+    window._on_joint_drag_started(joints.index("hand"))
+    assert window._armature_drag is None
+    assert window._armature_pose["hand"][1] == "=@w"
+    assert said and "=@w" in said[-1] and "Diesen Schritt ändern" in said[-1]
+    window._on_joint_drag_started(joints.index("arm"))
+    assert window._armature_drag is not None, "Gegenprobe: ein freier Winkel lässt sich ziehen"
+    window._on_joint_drag_cancelled()
+    window.finish_armature()
+    assert window.session.wait_for_idle(30_000)
+    written = pose_angles(str(window.session.history.operation(step).params["pose"]))
+    assert written["hand"][1] == "=@w"
+
+
+def test_an_unreadable_angle_rests_only_its_own_bone(window: MainWindow) -> None:
+    """Review G1: Ein einziger ungebundener Winkel stellte das ganze Skelett in
+    Ruhe. Jetzt steht nur sein Knochen in Ruhe, die anderen in ihrer Stellung,
+    und der Satz nennt ihn."""
+    from app.core.geom.pose import armature_to_text, pose_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Bone
+
+    said: list[str] = []
+    gesetzt = [
+        Bone(name="arm", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 10.0), parent=""),
+        Bone(name="bein", head=(5.0, 0.0, 0.0), tail=(5.0, 0.0, -10.0), parent=""),
+    ]
+    koerper = with_a_body(window)
+    window.session.apply(
+        "Skelett",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=(koerper,),
+                params={
+                    "armature": armature_to_text(gesetzt),
+                    "pose": pose_text({"arm": [0.0, 20.0, 0.0], "bein": [0.0, "=@fehlt", 0.0]}),
+                },
+            )
+        ],
+    )
+    window.session.wait_for_idle(60_000)
+    step = window.session.project.document.ops[-1].id
+    window.announce = lambda text, *args, **kwargs: said.append(str(text))  # type: ignore[method-assign]
+    window.start_armature(koerper, step=step)
+    assert window._armature_angles["arm"] == pytest.approx((0.0, 20.0, 0.0))
+    assert "bein" not in window._armature_angles
+    assert any("bein" in text for text in said)
+
+
+def test_a_new_chain_in_bent_skin_starts_where_the_skin_rests(window: MainWindow) -> None:
+    """Review G1: Der erste Klick einer neuen Kette in gebeugter Haut wurde als
+    Ruhepunkt genommen, wo das Bild ihn zeigte — der Knochen band dann Haut, die
+    in Ruhe woanders liegt. Über das getroffene Dreieck kommt er in die Ruhe,
+    und ein neuer Knochen zeigt die Haut mit seinen Gewichten."""
+    import numpy as np
+
+    _koerper, step = _bound_arm(window, 60.0)
+    window.edit_operation(step)
+    assert window.session.wait_for_idle(30_000)
+    shown = window._armature_shown
+    rest = window._sculpt_mesh(window._armature_target)
+    assert shown is not None and rest is not None and shown is not rest, "die Haut ist gebeugt"
+    bent = np.asarray(shown.raw.vertices)
+    still = np.asarray(rest.raw.vertices)
+    moved = np.flatnonzero(np.linalg.norm(bent - still, axis=1) > 2.0)
+    assert len(moved), "Voraussetzung: die Hand bewegt Haut"
+    corner = int(moved[0])
+    face = int(np.flatnonzero((np.asarray(shown.raw.faces) == corner).any(axis=1))[0])
+    corners = np.asarray(shown.raw.faces)[face]
+    clicked = bent[corners].mean(axis=0)
+    window._on_bone_point(tuple(float(v) for v in clicked))
+    head = np.asarray(window._armature_head)
+    resting = still[corners].mean(axis=0)
+    shown_place = clicked
+    assert np.linalg.norm(head - shown_place) > 1.0, "nicht dort, wo das Bild die Haut zeigt"
+    assert np.linalg.norm(head - resting) < np.linalg.norm(head - shown_place)
+    before = window._armature_shown
+    window._on_bone_point(tuple(float(v) for v in clicked + np.asarray((0.0, 3.0, 0.0))))
+    assert len(window._armature_bones) == 3
+    assert window.wait_for_armature_skin()
+    assert window._armature_shown is not before, "die Haut zeigt den neuen Knochen"
+
+
+def test_a_large_skin_is_bent_in_a_worker_and_clicks_use_what_is_shown(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review F3: Gewichte und gebeugte Haut rechnete jeder Klick im
+    Hauptfaden, an 327 680 Dreiecken 1,2 s. Ab der Sofortgrenze rechnet ein
+    Arbeiter; ein Klick trifft den gezeigten Körper und rechnet keine Haut."""
+    import app.core.geom.pose as pose
+    import app.ui.placement_flow as placement_flow
+
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 1)
+    built: list[int] = []
+    original = pose.Skin.__init__
+
+    def counted(self: Any, *args: Any, **kwargs: Any) -> None:
+        built.append(1)
+        original(self, *args, **kwargs)
+
+    monkeypatch.setattr(pose.Skin, "__init__", counted)
+    _koerper, step = _bound_arm(window, 60.0)
+    window.edit_operation(step)
+    assert window.session.wait_for_idle(30_000)
+    assert window._armature_skin_worker is not None, "die Haut rechnet im Arbeiter"
+    assert window.wait_for_armature_skin()
+    shown = window._armature_shown
+    assert shown is not None and shown is not window._sculpt_mesh(window._armature_target)
+    built.clear()
+    window._on_bone_point(tuple(float(v) for v in shown.raw.vertices[0]))
+    assert built == [], "der Klick rechnet keine Haut"
 
 
 def test_reopening_and_finishing_unchanged_adds_no_undo_step(window: MainWindow) -> None:

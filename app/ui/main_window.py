@@ -1234,6 +1234,52 @@ class _SculptPreviewWorker(Worker):
         super().release_finished_references()
 
 
+class _ArmatureSkinWorker(Worker):
+    """Haut und Stellung eines großen Körpers abseits des Oberflächen-Threads (Review F3).
+
+    Gewichte und Beugung kosteten an 327 680 Dreiecken 1,2 s je Klick im
+    Hauptfaden, an 1,3 Millionen 4,3 s. Ab ``AT_ONCE_BELOW`` rechnet dieser
+    Arbeiter; das Fenster zeigt so lange die letzte Stellung und nimmt nur die
+    Antwort der jüngsten Nummer. ``skin`` ist die schon gewichtete Haut, wenn
+    sich nur die Winkel geändert haben.
+    """
+
+    done = Signal(int, object, object)
+
+    def __init__(
+        self,
+        number: int,
+        mesh: MeshData,
+        bones: list[Any],
+        angles: dict[str, Vec3],
+        fixed_rest: bool,
+        skin: Any = None,
+    ) -> None:
+        super().__init__()
+        self.number = number
+        self.mesh = mesh
+        self.bones = list(bones)
+        self.angles = dict(angles)
+        self.fixed_rest = fixed_rest
+        self.skin = skin
+        self.cancel = CancelSignal()
+
+    def work(self) -> None:
+        from app.core.geom.pose import Skin
+
+        skin = self.skin or Skin(self.mesh, self.bones, fixed_rest=self.fixed_rest)
+        if self.cancel.is_cancelled:
+            return
+        posed = skin.posed(self.angles)
+        if not self.cancel.is_cancelled:
+            self.done.emit(self.number, skin, posed)
+
+    def release_finished_references(self) -> None:
+        """Haut und Netz gehören nach der Zustellung nur noch dem Fenster."""
+        del self.mesh, self.bones, self.angles, self.skin
+        super().release_finished_references()
+
+
 class _SculptWallWorker(Worker):
     """Die Wandprüfung der Formsitzung, abseits des Oberflächen-Threads
     (Entscheidung L, §2.8).
@@ -3697,6 +3743,10 @@ class MainWindow(QMainWindow):
         """Das Rückgängig des Werkzeugs: Klick, Knochen, Kettenende, Beugung."""
         self._armature_drag: _BendDrag | None = None
         self._armature_skin: Any = None
+        self._armature_shown: MeshData | None = None
+        """Der Körper, wie das Bild ihn gerade zeigt — ein Klick trifft ihn (Review F3, G1)."""
+        self._armature_skin_worker: _ArmatureSkinWorker | None = None
+        self._armature_skin_number = 0
         self._armature_ended: tuple[Vec3, float] | None = None
         """Wo und wann zuletzt eine Kette am Gelenk endete — der zweite Klick
         eines Doppelklicks öffnet sie nicht gleich wieder."""
@@ -7229,7 +7279,9 @@ class MainWindow(QMainWindow):
         self._armature_fresh = False
         self._armature_undo = []
         self._armature_drag = None
+        self._cancel_armature_skin()
         self._armature_skin = None
+        self._armature_shown = None
         self._armature_pose = {}
         self._armature_angles = {}
         self._pose_report_target = None
@@ -14435,12 +14487,14 @@ class MainWindow(QMainWindow):
 
         self._armature_pose = dict(pose_angles(str(self._armature_params.get("pose", ""))))
         self._armature_angles = self._armature_numbers()
+        unreadable = sorted(set(self._armature_pose) - set(self._armature_angles))
         self._armature_head = None
         self._armature_parent = ""
         self._armature_fresh = False
         self._armature_undo = []
         self._armature_drag = None
         self._armature_skin = None
+        self._armature_shown = None
         self._armature_ended = None
         self.viewport.set_boning(True)
         self.tools.close_tool()
@@ -14456,6 +14510,15 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             tr("Erster Klick ein Gelenk, jeder weitere ein Knochen — Escape beendet.")
         )
+        if unreadable:
+            # Nur dieser Knochen steht in Ruhe, die übrigen in ihrer Stellung
+            # (Review G1); was fehlt, sagt der Schrittdialog.
+            self.announce(
+                tr(
+                    "Der Winkel von {bones} ist nicht lesbar. Bis er geklärt ist, "
+                    "steht der Knochen in Ruhe."
+                ).format(bones=", ".join(unreadable))
+            )
 
     def _armature_of(self, target: str) -> tuple[int | None, list[Any]]:
         """Der letzte Skelettschritt dieses Körpers und seine Knochen.
@@ -14493,8 +14556,10 @@ class MainWindow(QMainWindow):
     def _armature_numbers(self) -> dict[str, Vec3]:
         """Die Winkel der Stellung als Zahlen — ein Projektparameter aufgelöst (§13).
 
-        Ein unlesbarer oder ungebundener Winkel ist hier null: Das Bild zeigt
-        dann die Ruhelage, und der Schrittdialog sagt, was fehlt."""
+        Ein unlesbarer oder ungebundener Winkel fehlt hier, und nur sein Knochen
+        steht in Ruhe (Review G1): Ein einziger ungebundener Winkel zeigte das
+        ganze Skelett in Ruhe, und ein Zug rechnete dann gegen Eltern, die die
+        Auswertung anders sah."""
         from app.core.geom.pose import pose_from_text, pose_text
 
         values = {
@@ -14503,7 +14568,12 @@ class MainWindow(QMainWindow):
         try:
             poses = pose_from_text(pose_text(self._armature_pose), values)
         except AppError:
-            return {}
+            poses = []
+            for name, entry in self._armature_pose.items():
+                try:
+                    poses.extend(pose_from_text(pose_text({name: entry}), values))
+                except AppError:
+                    continue
         return {pose.bone: pose.angles for pose in poses}
 
     def _armature_joints(self) -> list[tuple[Vec3, str, Vec3]]:
@@ -14565,7 +14635,7 @@ class MainWindow(QMainWindow):
             self._armature_parent = ""
             self._armature_fresh = True
         else:
-            tail = self._rest_point(place)
+            tail = place
             if math.dist(tail, self._armature_head) <= EPS_GEOM:
                 self.announce(tr("Zwei verschiedene Punkte klicken."))
                 return
@@ -14582,6 +14652,10 @@ class MainWindow(QMainWindow):
             self._armature_parent = name
             self._armature_fresh = False
             self._armature_skin = None
+            if self._armature_bent():
+                # Der neue Knochen ändert die Gewichte der gebeugten Haut: Das
+                # Bild zeigt, was *Fertig* rechnet (Review G1).
+                self._show_armature_skin()
         self._armature_changed()
 
     def _on_joint_picked(self, index: int) -> None:
@@ -14630,26 +14704,38 @@ class MainWindow(QMainWindow):
         self._show_bones()
 
     def _joint_inside(self, place: Vec3) -> Vec3:
-        """Der Klick auf die Haut wird ein Punkt auf der Achse darunter (RM-367, W4-7)."""
-        from app.core.geom.pose import inside_the_body
+        """Der Klick auf die Haut wird ein Punkt auf der Achse darunter (RM-367,
+        W4-7) — in Ruhelage, wo die Knochen stehen.
+
+        Gezeigt ist die gebeugte Haut. Ruhende und gebeugte Haut haben dieselben
+        Ecken; das getroffene Dreieck bringt den Klick und die Blickrichtung in
+        die Ruhe, und dort sucht :func:`inside_the_body` die Achse (Review G1).
+        Rückgerechnet über den Elternknochen fand eine neue Kette in gebeugter
+        Haut keinen. Gerechnet am gezeigten Körper, nicht an einer neu
+        gebeugten Haut je Klick (Review F3)."""
+        from app.core.geom.pose import inside_the_body, rest_of_click
 
         target = self._armature_target
-        mesh = self._armature_shown_mesh() if target else None
-        if mesh is None:
+        rest = self._sculpt_mesh(target) if target else None
+        if rest is None:
             return place
+        direction = self.viewport.ray_toward(place)
+        shown = self._armature_shown
+        if shown is not None and shown is not rest:
+            mapped = rest_of_click(rest, shown, place, direction)
+            if mapped is None:
+                return self._rest_point(place)
+            place, direction = mapped
         try:
-            return inside_the_body(mesh, place, self.viewport.ray_toward(place))
+            return inside_the_body(rest, place, direction)
         except AppError:
             return place
 
-    def _armature_shown_mesh(self) -> MeshData | None:
-        """Der Körper, wie das Bild ihn zeigt — in der Stellung, wenn es eine gibt."""
-        target = self._armature_target
-        mesh = self._sculpt_mesh(target) if target else None
-        if mesh is None or not self._armature_bones:
-            return mesh
-        posed: MeshData = self._armature_skin_of(mesh).posed(self._armature_angles)
-        return posed
+    def _armature_bent(self) -> bool:
+        """Ob die Stellung irgendeinen Knochen dreht."""
+        return any(
+            any(abs(value) > 1e-9 for value in turn) for turn in self._armature_angles.values()
+        )
 
     def _armature_skin_of(self, mesh: MeshData) -> Any:
         """Die Haut am Skelett — Gewichte einmal je Knochenstand (:class:`Skin`)."""
@@ -14680,14 +14766,89 @@ class MainWindow(QMainWindow):
         )
 
     def _show_armature_skin(self) -> None:
-        """Den Körper in der Stellung zeigen, die gerade gilt — eine Vorschau (Regel 2)."""
+        """Den Körper in der Stellung zeigen, die gerade gilt — eine Vorschau (Regel 2).
+
+        Ein großer Körper wird im Arbeiter gewichtet und gebeugt
+        (:class:`_ArmatureSkinWorker`, Review F3); bis seine Antwort kommt,
+        bleibt die letzte Stellung im Bild, und ein Klick trifft sie."""
         target = self._armature_target
         mesh = self._sculpt_mesh(target) if target else None
         if target is None or mesh is None:
             return
-        if self._armature_bones:
-            mesh = self._armature_skin_of(mesh).posed(self._armature_angles)
-        self.viewport.show_preview_mesh(target, mesh)
+        self._cancel_armature_skin()
+        if not self._armature_bones or not self._armature_bent():
+            self._armature_shown = mesh
+            self.viewport.show_preview_mesh(target, mesh)
+            return
+        if not self._sculpt_needs_worker(mesh):
+            posed: MeshData = self._armature_skin_of(mesh).posed(self._armature_angles)
+            self._armature_shown = posed
+            self.viewport.show_preview_mesh(target, posed)
+            return
+        skin = self._armature_skin
+        worker = _ArmatureSkinWorker(
+            self._armature_skin_number,
+            mesh,
+            self._armature_bones,
+            self._armature_angles,
+            bool(self._armature_params.get("fixed_rest", True)),
+            skin if skin is not None and skin.mesh is mesh else None,
+        )
+        self._armature_skin_worker = worker
+        worker.done.connect(
+            weak_slot(self, MainWindow._armature_skin_received, worker, forward=True)
+        )
+        worker.crashed.connect(
+            weak_slot(self, MainWindow._armature_skin_crashed, worker, forward=True)
+        )
+        worker.finished.connect(weak_slot(self, MainWindow._armature_skin_finished, worker))
+        self._start_preview_progress()
+        self._leash.start(worker)
+
+    def _armature_skin_received(
+        self, worker: _ArmatureSkinWorker, number: int, skin: Any, posed: Any
+    ) -> None:
+        """Nur die jüngste Haut der laufenden Sitzung kommt ins Bild."""
+        if worker is not self._armature_skin_worker or number != self._armature_skin_number:
+            return
+        self._armature_skin_worker = None
+        self._finish_preview_progress()
+        target = self._armature_target
+        if target is None:
+            return
+        self._armature_skin = skin
+        self._armature_shown = posed
+        self.viewport.show_preview_mesh(target, posed)
+
+    def _armature_skin_crashed(self, worker: Any, detail: str) -> None:
+        """Eine ausgefallene Haut lässt die letzte Stellung stehen und nennt den Ausweg."""
+        if worker is self._armature_skin_worker:
+            self._cancel_armature_skin()
+            self._on_error(InternalError(detail=detail))
+
+    def _armature_skin_finished(self, worker: Any) -> None:
+        if worker is self._armature_skin_worker:
+            self._armature_skin_worker = None
+            self._finish_preview_progress()
+        self._hold_until_done(worker)
+
+    def _cancel_armature_skin(self) -> None:
+        """Eine laufende Haut aufgeben — ihre Stellung gilt nicht mehr."""
+        self._armature_skin_number += 1
+        worker, self._armature_skin_worker = self._armature_skin_worker, None
+        if worker is not None:
+            worker.cancel.cancel()
+            self._retire(worker)
+            self._finish_preview_progress()
+
+    def wait_for_armature_skin(self, timeout_ms: int = 30_000) -> bool:
+        """Prüfstände warten auf die Haut im Arbeiter; die Oberfläche wartet nie."""
+        worker = self._armature_skin_worker
+        if worker is not None and worker.isRunning() and not worker.wait(timeout_ms):
+            return False
+        QApplication.sendPostedEvents()
+        QApplication.processEvents()
+        return True
 
     def _on_joint_drag_started(self, index: int) -> None:
         """Ziehen an einem Gelenk beginnt: gebeugt wird der Knochen, der dort endet."""
@@ -14699,9 +14860,25 @@ class MainWindow(QMainWindow):
         if not 0 <= index < len(joints) or not joints[index][1]:
             self.viewport.finish_bend()
             return
+        from app.core import expressions
         from app.core.geom.pose import posed_bones
 
         name = joints[index][1]
+        bound = [
+            value for value in self._armature_pose.get(name, ()) if expressions.is_expression(value)
+        ]
+        if bound:
+            # **Eine Bindung wird nicht still ersetzt** (Review F2, Regel 21):
+            # Gezogen hieße hier, den Ausdruck durch eine Zahl zu überschreiben,
+            # und Varianten über das Maß bewegten den Knochen nicht mehr.
+            self.viewport.finish_bend()
+            self.announce(
+                tr(
+                    "Der Winkel von {bone} hängt an {value}. Ändern Sie ihn unter "
+                    "„Diesen Schritt ändern“ oder am Projektmaß."
+                ).format(bone=name, value=bound[0])
+            )
+            return
         position = [bone.name for bone in self._armature_bones].index(name)
         head, tail = posed_bones(self._armature_bones, self._armature_angles)[position]
         self._armature_drag = _BendDrag(
@@ -14922,7 +15099,9 @@ class MainWindow(QMainWindow):
         self._armature_head = None
         self._armature_fresh = False
         self._armature_undo = []
+        self._cancel_armature_skin()
         self._armature_skin = None
+        self._armature_shown = None
         self._armature_pose = {}
         self._armature_angles = {}
         self.viewport.set_boning(False)
@@ -23226,6 +23405,12 @@ class MainWindow(QMainWindow):
             self._cancel_sculpt_preview()
             self.announce(
                 tr("Die Vorschau wurde abgebrochen. Die bisherigen Züge bleiben erhalten.")
+            )
+            return
+        if self._armature_skin_worker is not None:
+            self._cancel_armature_skin()
+            self.announce(
+                tr("Die Vorschau wurde abgebrochen. Skelett und Stellung bleiben erhalten.")
             )
             return
         approval = self._preview_approval

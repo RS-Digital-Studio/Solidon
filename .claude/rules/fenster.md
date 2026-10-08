@@ -461,10 +461,11 @@ ein Programmfehler, nicht Ihre Schuld“ (§33.1).
   seine Proben teilen `Stroke.gesture`, jede Geste ist eine Etappe
   (`Stroke.brush` 2, alte rechnen wie gespeichert). Zählung und lokales
   Rückgängig nehmen die Gruppe samt wartender Proben; Beenden lässt den Pinsel los.
-- Zu grobes Netz gleicht der Arbeiter an, auch am geöffneten Schritt; das
-  Dokument erst bei *Fertig* und nur mit neuen Zügen, in einer Transaktion
-  (geöffnet: `insert_before(…, changed=)`). Scheitert es, kein zweiter Versuch.
+- Zu grobes Netz gleicht der Arbeiter an, neu wie geöffnet; ins Dokument erst
+  mit *Fertig* und neuen Zügen, eine Transaktion (`insert_before(changed=)`).
+  Scheitert es, kein zweiter Versuch.
 - Skelett: n Knochen, n + 1 Klicks, Enter beendet die Kette, Ziehen am Gelenk
-  beugt, *Fertig* ohne Dialog. Escape nimmt nur Unfertiges.
+  beugt (gebundener Winkel: Satz statt Zug), *Fertig* ohne Dialog. Escape
+  nimmt nur Unfertiges.
 - Die Gestenleiste trägt ihre `MapLegend`; ein Kartenwechsel entwertet Befund
   und Wartehinweis.

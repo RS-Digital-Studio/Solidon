@@ -756,6 +756,79 @@ def test_angles_read_back_from_their_rotation(angles: tuple[float, float, float]
     assert _angles_of(_rotation(angles)) == pytest.approx(angles, abs=0.01)
 
 
+def test_a_fixed_rest_skin_computes_only_what_a_bone_holds() -> None:
+    """Review F3: Mit festem Rumpf hält ein Knochen nur seine Gegend. Gewichte
+    und Stellung rechnen nur dort und sind dieselben Zahlen wie über das ganze
+    Netz; dahinter bleibt jede Ecke bitgleich, wo sie war."""
+    import trimesh
+
+    from app.core.geom import transform
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.pose import REST_FAR, REST_NEAR, Skin, _bone_field, transforms, weights
+    from app.core.types import Bone
+
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=50.0))
+    bones = [
+        Bone(name="a", head=(30.0, 0.0, 0.0), tail=(40.0, 0.0, 0.0), parent=""),
+        Bone(name="b", head=(40.0, 0.0, 0.0), tail=(48.0, 0.0, 0.0), parent="a"),
+    ]
+    angles = {"a": (0.0, 20.0, 0.0), "b": (0.0, 0.0, 35.0)}
+    points = np.asarray(mesh.raw.vertices, dtype=float)
+    field, nearest = _bone_field(points, bones)
+    share = np.clip((REST_FAR - nearest) / (REST_FAR - REST_NEAR), 0.0, 1.0)
+    held = share * share * (3.0 - 2.0 * share)
+    total = field.sum(axis=1)
+    whole = field / np.where(total > 0.0, total, 1.0)[:, None] * held[:, None]
+    local = weights(mesh, bones, fixed_rest=True)
+    assert np.array_equal(local, whole)
+    assert 0 < np.count_nonzero(local.any(axis=1)) < len(points) // 4, "nur die Gegend"
+
+    matrices = transforms(bones, angles)
+    moved = np.zeros_like(points)
+    for index, bone in enumerate(bones):
+        moved += transform.moved_points(points, matrices[bone.name]) * whole[:, index][:, None]
+    moved += points * (1.0 - whole.sum(axis=1))[:, None]
+    posed = np.asarray(Skin(mesh, bones, fixed_rest=True).posed(angles).raw.vertices)
+    assert np.array_equal(posed, moved)
+
+
+def test_a_click_on_bent_skin_comes_back_to_rest() -> None:
+    """Review G1: Gebeugte und ruhende Haut haben dieselben Ecken. Ein Punkt
+    auf einem gebeugten Dreieck landet auf demselben Dreieck in Ruhe, und eine
+    Blickrichtung behält ihre Lage zu ihm."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.pose import _about, rest_of_click
+
+    rest = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=10.0))
+    turn = _about((0.0, 0.0, 1.0), 40.0)
+    still = np.asarray(rest.raw.vertices, dtype=float)
+    bent_points = np.stack([(turn * row[None, :]).sum(axis=1) for row in still])
+    bent_points = bent_points + np.asarray((5.0, 0.0, 0.0))
+    shown = MeshData.of(trimesh.Trimesh(bent_points, rest.raw.faces, process=False))
+    corners = np.asarray(rest.raw.faces)[17]
+    clicked = bent_points[corners].mean(axis=0)
+    looking = (turn * np.asarray((0.3, -1.0, 0.2))[None, :]).sum(axis=1)
+    found = rest_of_click(rest, shown, tuple(clicked), tuple(looking))
+    assert found is not None
+    place, direction = found
+    assert np.allclose(place, still[corners].mean(axis=0), atol=1e-9)
+    assert np.allclose(direction, (0.3, -1.0, 0.2), atol=1e-9)
+    assert rest_of_click(rest, shown, (100.0, 0.0, 0.0), (0.0, 0.0, 1.0)) is None
+
+
+def test_a_dragged_turn_is_written_unrounded() -> None:
+    """Review G3 (Regel 6): Ein Zug am Gelenk schreibt die Drehung, die er
+    gezogen hat — nicht auf Hundertstel gerundet. Aus den Winkeln entsteht
+    wieder genau diese Drehung; gerundet wich sie um bis zu 0,005° ab."""
+    from app.core.geom.pose import _about, _rotation, bent
+
+    turned = bent(two_bones(), {}, "upper", (1.0, 2.0, 0.5), 37.3)
+    assert any(abs(value * 100.0 - round(value * 100.0)) > 1e-6 for value in turned)
+    assert np.allclose(_rotation(turned), _about((1.0, 2.0, 0.5), 37.3), atol=1e-12)
+
+
 def test_dragging_a_joint_turns_its_bone_about_the_head_in_the_view() -> None:
     """Ziehen am Gelenk dreht den Knochen, der dort endet, um seinen Kopf und um
     die Blickachse; geschrieben werden seine drei Winkel. Mit gebeugtem Elternteil

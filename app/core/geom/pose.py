@@ -155,6 +155,30 @@ def _surface_normal_at(
     Gesucht wird das Dreieck, in dessen Ebene der Punkt liegt und dessen
     Fläche ihn enthält; elementweise gerechnet, dasselbe auf jeder Maschine.
     """
+    found = _carrying(vertices, faces, point)
+    if found is None:
+        return None
+    cross, unit, distance, touching, _v, _w = found
+    # Liegt der Klick auf einer Kante oder Ecke, tragen ihn mehrere Dreiecke;
+    # ihre Normalen gemittelt, nach Fläche gewichtet — sonst entschiede die
+    # Dreiecksnummer, und an einer Spitze zeigte die Normale quer.
+    mean = (cross[touching]).sum(axis=0)
+    size = float(np.sqrt((mean * mean).sum()))
+    if size <= units.EPS_GEOM:
+        return None
+    normal = mean / size
+    best = int(touching[0])
+    # Zurück kommt auch der Punkt in der Ebene des Dreiecks: Ein Klick auf
+    # eine gekrümmte Fläche liegt um den Sehnenfehler daneben.
+    return normal, point - distance[best] * unit[best], abs(float(distance[best]))
+
+
+def _carrying(
+    vertices: np.ndarray, faces: np.ndarray, point: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
+    """Die Dreiecke, die ``point`` tragen: Kreuzprodukte und Einheitsnormalen
+    aller Dreiecke, Abstände zu ihren Ebenen, die nächsten tragenden und die
+    baryzentrischen Anteile ``v``, ``w`` der zweiten und dritten Ecke."""
     a = vertices[faces[:, 0]]
     ab = vertices[faces[:, 1]] - a
     ac = vertices[faces[:, 2]] - a
@@ -191,18 +215,58 @@ def _surface_normal_at(
     candidates = np.flatnonzero(inside)
     closest = float(np.min(np.abs(distance[candidates])))
     touching = candidates[np.abs(distance[candidates]) <= closest + units.EPS_GEOM]
-    # Liegt der Klick auf einer Kante oder Ecke, tragen ihn mehrere Dreiecke;
-    # ihre Normalen gemittelt, nach Fläche gewichtet — sonst entschiede die
-    # Dreiecksnummer, und an einer Spitze zeigte die Normale quer.
-    mean = (cross[touching]).sum(axis=0)
-    size = float(np.sqrt((mean * mean).sum()))
-    if size <= units.EPS_GEOM:
+    return cross, unit, distance, touching, v, w
+
+
+def rest_of_click(
+    rest: MeshData, shown: MeshData, point: Vec3, direction: Vec3
+) -> tuple[Vec3, Vec3] | None:
+    """Ein Klick auf die gebeugte Haut, in die Ruhelage gebracht (Review G1).
+
+    Gebeugte und ruhende Haut haben dieselben Ecken: Das getroffene Dreieck
+    trägt den Punkt baryzentrisch hinüber, und die Blickrichtung behält ihre
+    Lage zu seinen Kanten und seiner Normale. ``None``, wenn der Punkt auf
+    keinem Dreieck der gezeigten Haut liegt.
+    """
+    faces = np.asarray(shown.raw.faces, dtype=np.int64)
+    bent = np.asarray(shown.raw.vertices, dtype=float)
+    still = np.asarray(rest.raw.vertices, dtype=float)
+    if not len(faces) or len(bent) != len(still):
         return None
-    normal = mean / size
+    found = _carrying(bent, faces, np.asarray(point, dtype=float))
+    if found is None:
+        return None
+    _cross, _unit, distance, touching, v, w = found
     best = int(touching[0])
-    # Zurück kommt auch der Punkt in der Ebene des Dreiecks: Ein Klick auf
-    # eine gekrümmte Fläche liegt um den Sehnenfehler daneben.
-    return normal, point - distance[best] * unit[best], abs(float(distance[best]))
+    if abs(float(distance[best])) > ON_THE_SKIN:
+        return None
+    corners = faces[best]
+    share = (1.0 - float(v[best]) - float(w[best]), float(v[best]), float(w[best]))
+    placed = sum(still[corner] * part for corner, part in zip(corners, share, strict=True))
+
+    def frame(points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        ab, ac = points[corners[1]] - points[corners[0]], points[corners[2]] - points[corners[0]]
+        normal = np.cross(ab, ac)
+        size = float(np.sqrt((normal * normal).sum()))
+        return ab, ac, normal / size if size > units.EPS_GEOM else normal
+
+    ab, ac, normal = frame(bent)
+    ray = np.asarray(direction, dtype=float)
+    across = float((ray * normal).sum())
+    flat = ray - across * normal
+    d00, d01, d11 = float((ab * ab).sum()), float((ab * ac).sum()), float((ac * ac).sum())
+    d20, d21 = float((flat * ab).sum()), float((flat * ac).sum())
+    denominator = d00 * d11 - d01 * d01
+    if abs(denominator) <= units.EPS_GEOM:
+        return None
+    alpha = (d11 * d20 - d01 * d21) / denominator
+    beta = (d00 * d21 - d01 * d20) / denominator
+    rest_ab, rest_ac, rest_normal = frame(still)
+    turned = alpha * rest_ab + beta * rest_ac + across * rest_normal
+    return (
+        (float(placed[0]), float(placed[1]), float(placed[2])),
+        (float(turned[0]), float(turned[1]), float(turned[2])),
+    )
 
 
 def _falloff(values: np.ndarray) -> np.ndarray:
@@ -254,25 +318,22 @@ def weights(mesh: MeshData, bones: Sequence[Bone], *, fixed_rest: bool = False) 
     points = np.asarray(mesh.raw.vertices, dtype=float)
     if not len(bones):
         return np.zeros((len(points), 0))
-
-    field = np.zeros((len(points), len(bones)))
-    nearest = np.full(len(points), np.inf)
-    for index, bone in enumerate(bones):
-        head = np.asarray(bone.head, dtype=float)
-        tail = np.asarray(bone.tail, dtype=float)
-        away = _closest_on_segment(points, head, tail)
-        span = tail - head
-        reach = max(math.hypot(float(span[0]), float(span[1]), float(span[2])) * REACH, 1e-9)
-        ratio = away / reach
-        nearest = np.minimum(nearest, ratio)
-        field[:, index] = _falloff(-FALLOFF * (ratio * ratio))
-
-    total = field.sum(axis=1)
     if fixed_rest:
+        # Nur die Ecken, die ein Knochen erreichen kann (F3): Jenseits von
+        # :data:`REST_FAR` Reichweiten hält kein Knochen etwas, und die Zeile ist
+        # null. Dieselbe Rechnung je Zeile, nur nicht für das ganze Netz.
+        rows = _within_reach(points, bones)
+        near, nearest = _bone_field(points[rows], bones)
         share = np.clip((REST_FAR - nearest) / (REST_FAR - REST_NEAR), 0.0, 1.0)
         held = share * share * (3.0 - 2.0 * share)
+        total = near.sum(axis=1)
         safe = np.where(total > 0.0, total, 1.0)
-        return np.asarray(field / safe[:, None] * held[:, None], dtype=float)
+        held_field = np.zeros((len(points), len(bones)))
+        held_field[rows] = near / safe[:, None] * held[:, None]
+        return held_field
+
+    field, _nearest = _bone_field(points, bones)
+    total = field.sum(axis=1)
     orphan = total < 1e-9
     if orphan.any():
         nearest = np.argmin(
@@ -292,6 +353,41 @@ def weights(mesh: MeshData, bones: Sequence[Bone], *, fixed_rest: bool = False) 
         field[np.where(orphan)[0], nearest] = 1.0
         total = field.sum(axis=1)
     return np.asarray(field / total[:, None], dtype=float)
+
+
+def _bone_field(points: np.ndarray, bones: Sequence[Bone]) -> tuple[np.ndarray, np.ndarray]:
+    """Je Ecke und Knochen das ungeteilte Gewicht, und je Ecke der Abstand zum
+    nächsten Knochen in Reichweiten — Zeile für Zeile, für jede Auswahl gleich."""
+    field = np.zeros((len(points), len(bones)))
+    nearest = np.full(len(points), np.inf)
+    for index, bone in enumerate(bones):
+        head = np.asarray(bone.head, dtype=float)
+        tail = np.asarray(bone.tail, dtype=float)
+        away = _closest_on_segment(points, head, tail)
+        ratio = away / _reach(bone)
+        nearest = np.minimum(nearest, ratio)
+        field[:, index] = _falloff(-FALLOFF * (ratio * ratio))
+    return field, nearest
+
+
+def _reach(bone: Bone) -> float:
+    """Die Reichweite eines Knochens: seine Länge mal :data:`REACH`."""
+    span = np.asarray(bone.tail, dtype=float) - np.asarray(bone.head, dtype=float)
+    return max(math.hypot(float(span[0]), float(span[1]), float(span[2])) * REACH, 1e-9)
+
+
+def _within_reach(points: np.ndarray, bones: Sequence[Bone]) -> np.ndarray:
+    """Die Ecken, die näher als :data:`REST_FAR` Reichweiten an einem Knochen
+    liegen könnten — ein Quader je Knochen, großzügig um ein Milliardstel."""
+    inside = np.zeros(len(points), dtype=bool)
+    for bone in bones:
+        head = np.asarray(bone.head, dtype=float)
+        tail = np.asarray(bone.tail, dtype=float)
+        margin = REST_FAR * _reach(bone) * (1.0 + 1e-9) + units.EPS_GEOM
+        low = np.minimum(head, tail) - margin
+        high = np.maximum(head, tail) + margin
+        inside |= np.all((points >= low) & (points <= high), axis=1)
+    return np.flatnonzero(inside)
 
 
 def _rotation(angles: Vec3) -> np.ndarray:
@@ -389,6 +485,8 @@ class Skin:
         self.fixed_rest = fixed_rest
         self.points = np.asarray(mesh.raw.vertices, dtype=float)
         self.field = weights(mesh, self.bones, fixed_rest=fixed_rest)
+        self.held = np.flatnonzero(self.field.any(axis=1))
+        """Die Ecken, die ein Knochen hält — mit festem Rumpf die einzigen, die sich bewegen."""
 
     def posed(self, angles: Mapping[str, Vec3]) -> MeshData:
         """Der Körper in dieser Stellung — ``angles`` je Knochenname drei Winkel."""
@@ -398,16 +496,23 @@ class Skin:
             return self.mesh
         matrices = transforms(self.bones, angles)
         points, field = self.points, self.field
-        moved = np.zeros_like(points)
+        # Mit festem Rumpf bewegt sich nur, was ein Knochen hält; der Rest
+        # bleibt, wo er ist, und wird nicht durch jede Knochenmatrix geschickt (F3).
+        rows = self.held if self.fixed_rest else slice(None)
+        start, part = points[rows], field[rows]
+        moved = np.zeros_like(start)
         for index, bone in enumerate(self.bones):
-            share = field[:, index]
+            share = part[:, index]
             if not share.any():
                 continue
             matrix = matrices.get(bone.name, np.eye(4))
             # Elementweise bewegt (``transform.moved_points``), nicht über BLAS.
-            moved += transform.moved_points(points, matrix) * share[:, None]
+            moved += transform.moved_points(start, matrix) * share[:, None]
         if self.fixed_rest:
-            moved += points * (1.0 - field.sum(axis=1))[:, None]
+            moved += start * (1.0 - part.sum(axis=1))[:, None]
+            whole = points.copy()
+            whole[rows] = moved
+            moved = whole
         built = trimesh.Trimesh(vertices=moved, faces=self.mesh.raw.faces, process=False)
         _log.info("posed %d vertices over %d bones", len(points), len(self.bones))
         return self.mesh.replacing(built)
@@ -493,9 +598,9 @@ def _about(axis: Vec3, degrees: float) -> np.ndarray:
 def _angles_of(matrix: np.ndarray) -> Vec3:
     """Die Winkel X, Y, Z in Grad, aus denen :func:`_rotation` diese Matrix baut.
 
-    Auf hundertstel Grad gerundet — eine Stellung, die der Kunde im Dialog
-    liest, soll keine vierzehn Nachkommastellen tragen. In der Sperrlage
-    (Y = ±90°) ist Z null, und X trägt die ganze Drehung.
+    Ungerundet (Regel 6, Review G3): Das Feld im Schrittdialog zeigt zwei
+    Stellen und behält den genauen Wert, solange niemand ihn ändert. In der
+    Sperrlage (Y = ±90°) ist Z null, und X trägt die ganze Drehung.
     """
     sine = min(1.0, max(-1.0, float(matrix[0, 2])))
     y = math.degrees(math.asin(sine))
@@ -505,7 +610,7 @@ def _angles_of(matrix: np.ndarray) -> Vec3:
     else:
         x = math.degrees(math.atan2(float(matrix[2, 1]), float(matrix[1, 1])))
         z = 0.0
-    return (round(x, 2) + 0.0, round(y, 2) + 0.0, round(z, 2) + 0.0)
+    return (x + 0.0, y + 0.0, z + 0.0)
 
 
 def _circular(chain: tuple[str, ...]) -> ValidationError:
