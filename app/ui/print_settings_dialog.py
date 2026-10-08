@@ -139,10 +139,10 @@ from app.ui.first_run import (
     PrinterComboBox,
     _PrinterSurvey,
     add_printer_choices,
+    keep_slicer_printer,
     known_printers,
     printers_on_offer,
     valid_printer_choice,
-    with_saved_nozzle,
 )
 from app.ui.header import filament_names
 from app.ui.labels import (
@@ -2319,6 +2319,158 @@ class _SlicerWorker(Worker):
             self.done.emit(())
 
 
+class SlicerPrinters:
+    """Welche Drucker der Druckdialog anbietet und was er dazu sagt — ohne
+    Fenster prüfbar.
+
+    Erst der Slicer, dann seine Drucker, wie im Erststart und in den
+    Einstellungen (:func:`app.ui.first_run.printers_on_offer`). Der Dialog
+    reicht jede Antwort der Erhebung (:class:`app.ui.first_run._PrinterSurvey`)
+    mit ihrem Absender herein; gilt inzwischen eine andere, fällt sie weg.
+    Ohne Slicer, ohne eigene Drucker des Slicers, nach einer gescheiterten
+    Erhebung und bis zur ersten Antwort steht jeder bekannte Drucker da.
+    """
+
+    def __init__(self) -> None:
+        self.survey: object | None = None
+        """Die laufende Erhebung; die Antwort einer früheren ändert nichts."""
+        self.surveyed: Path | None = None
+        """Der Slicer der laufenden Erhebung."""
+        self.source: Path | None = None
+        """Der Slicer, dessen Drucker die Liste bestimmen; ``None``: jeder bekannte."""
+        self.identifiers: tuple[str, ...] | None = None
+        """Was der Slicer zur Wahl stellt (:func:`app.ui.first_run.slicer_printer_ids`)."""
+        self.discovered: dict[str, PrinterProfile] = {}
+        """Die gelesenen Drucker des Slicers, noch nicht abgelegt — erst die
+        Wahl legt einen ab (:meth:`keep`)."""
+        self.unread: Path | None = None
+        """Ein Slicer, dessen Drucker sich nicht lesen ließen."""
+        self.refusal = ""
+        """Warum der zuletzt gewählte Drucker nicht abgelegt werden konnte."""
+
+    def begin(self, slicer: Path | None, survey: object | None) -> None:
+        """Eine neue Erhebung für ``slicer``; ohne Slicer gilt sofort jeder Drucker.
+
+        Die Liste des vorigen Slicers bleibt bedienbar, bis die Antwort kommt;
+        die Sätze über sie (:meth:`note`) gelten nicht mehr.
+        """
+        self.survey = survey
+        self.surveyed = slicer
+        self.unread = None
+        self.refusal = ""
+        if slicer is None:
+            self._take(None, None, {})
+
+    def found(self, survey: object, choices: PrinterChoices) -> bool:
+        """Die Antwort der Erhebung übernehmen — ``False``, wenn sie nicht mehr gilt."""
+        if survey is None or survey is not self.survey:
+            return False
+        self.survey = None
+        # Nennt der Slicer keinen eigenen Drucker (Resin-Slicer, unlesbarer
+        # Bestand), gibt es nichts, wonach sich filtern ließe — dann bleibt
+        # jeder bekannte Drucker wählbar, statt nur der allgemeine.
+        own = bool(choices.profiles)
+        self._take(
+            choices.executable if own else None,
+            choices.identifiers if own else None,
+            {profile.id: profile for profile in choices.profiles},
+        )
+        return True
+
+    def failed(self, survey: object) -> bool:
+        """Die Erhebung ist gescheitert: jeder bekannte Drucker, und :meth:`note`
+        sagt es — ``False``, wenn sie nicht mehr gilt."""
+        if survey is None or survey is not self.survey:
+            return False
+        self.survey = None
+        self._take(None, None, {})
+        self.unread = self.surveyed
+        return True
+
+    def _take(
+        self,
+        source: Path | None,
+        identifiers: tuple[str, ...] | None,
+        discovered: Mapping[str, PrinterProfile],
+    ) -> None:
+        self.source = source
+        self.identifiers = identifiers
+        self.discovered = dict(discovered)
+        self.unread = None
+
+    def offered(self, entries: Mapping[str, PrinterProfile]) -> dict[str, PrinterProfile]:
+        """Was in der Liste steht — aus ``entries``, allen bekannten Druckern."""
+        if self.identifiers is None:
+            return dict(entries)
+        return printers_on_offer(self.identifiers, self.discovered)
+
+    def keep(self, printer_id: str) -> bool:
+        """Einen gewählten Drucker des Slicers ablegen, bevor das Projekt mit
+        ihm rechnet (:func:`app.ui.first_run.keep_slicer_printer`).
+
+        Scheitert es, bleibt das Projekt beim alten, und :meth:`note` sagt
+        warum — unter dem Drucker, wo die Zustandszeile ihn nicht mit dem
+        nächsten Sperrgrund überschreibt (Regel 17).
+        """
+        try:
+            keep_slicer_printer(printer_id, self.discovered, self.source or "")
+        except AppError as problem:
+            _log.warning("slicer printer could not be saved: %s", problem)
+            self.refusal = str(
+                tr(
+                    "Der Drucker ließ sich nicht speichern. Prüfen Sie den freien "
+                    "Speicherplatz und die Schreibrechte, und wählen Sie ihn erneut."
+                )
+            )
+            return False
+        self.refusal = ""
+        return True
+
+    def note(self) -> str:
+        """Der Satz unter dem Drucker; leer, wenn es nichts zu sagen gibt."""
+        if self.refusal:
+            return self.refusal
+        if self.unread is not None:
+            return str(
+                tr(
+                    "Die Drucker von {slicer} ließen sich nicht lesen. Wählen Sie Ihren "
+                    "aus allen bekannten Druckern oder einen anderen Slicer.",
+                    slicer=_slicer_title(self.unread),
+                )
+            )
+        return ""
+
+    def hint(self) -> tuple[str, str]:
+        """Kurzhilfe der Liste und Platzhalter ihrer Suchzeile.
+
+        Die Liste folgt dem Slicer darüber, und nichts an ihr sagte das: Wer
+        einen Tabellendrucker suchte, den sein Slicer nicht führt, fand mit
+        der Suche nichts und musste raten. Beide nennen den Slicer, solange
+        seine Drucker die Liste bestimmen.
+        """
+        if self.source is None:
+            return (
+                str(
+                    tr(
+                        "Mit diesem Drucker rechnet das Projekt. Zur Wahl stehen alle "
+                        "bekannten Drucker."
+                    )
+                ),
+                str(tr("Drucker suchen …")),
+            )
+        slicer = _slicer_title(self.source)
+        return (
+            str(
+                tr(
+                    "Mit diesem Drucker rechnet das Projekt. Zur Wahl stehen die Drucker "
+                    "aus {slicer} und Ihre eigenen.",
+                    slicer=slicer,
+                )
+            ),
+            str(tr("Drucker aus {slicer} suchen …", slicer=slicer)),
+        )
+
+
 class PrintSettingsDialog(QDialog):
     """Alle Druckeinstellungen, die Vorschläge dazu, und der Weg zum G-Code."""
 
@@ -2459,14 +2611,9 @@ class PrintSettingsDialog(QDialog):
         self._cura_printer_pending = False
         self._cura_printer_id = ""
         self._cura_printer_candidate: PrinterProfile | None = None
-        self._printer_survey: _PrinterSurvey | None = None
-        self._discovered_printers: dict[str, PrinterProfile] = {}
-        """Die Drucker des gewählten Slicers, noch nicht gespeichert — dieselbe
-        Erhebung wie im Erststart und in den Einstellungen. Abgelegt wird einer
-        erst, wenn er gewählt wird (:meth:`_keep_slicer_printer`)."""
-        self._slicer_printer_ids: tuple[str, ...] | None = None
-        """Was der Slicer nennt, dazu die gespeicherten Drucker; ``None``, solange
-        keine Erhebung mit Druckern gilt — dann steht jeder bekannte zur Wahl."""
+        self._slicer_printers = SlicerPrinters()
+        """Die Drucker des gewählten Slicers — dieselbe Erhebung wie im
+        Erststart und in den Einstellungen (:meth:`_start_printer_survey`)."""
         self._profile_unmatched = False
         """Ob zum Drucker des Projekts kein Maschinenprofil passte — nur dann
         bietet der Dialog den Drucker an, auf den der Slicer eingestellt ist."""
@@ -2781,6 +2928,16 @@ class PrintSettingsDialog(QDialog):
         # (``profiles.scene_profile``), und die Liste stand auf ihrem ersten
         # Eintrag: ein Gerät, das nirgends galt. Die Drucker des Slicers kommen
         # mit seiner Erhebung dazu (:meth:`_start_printer_survey`).
+        self.printer_label = QLabel(tr("Drucker"), self)
+        self.printer_label.setBuddy(self.printer_choice)
+        # Was die Liste nicht führt oder nicht ablegen konnte, sagt eine Zeile
+        # direkt unter ihr (:meth:`_show_printer_note`), wie die Düse ihren
+        # Zustand unter der Düsenwahl.
+        self._printer_state_label = QLabel("", self)
+        self.printer_state = QLabel("", self)
+        self.printer_state.setWordWrap(True)
+        self.printer_state.setAccessibleName(tr("Druckerstatus"))
+        set_level(self.printer_state, "caption")
         self._fill_printer_choice()
         self.printer_choice.currentIndexChanged.connect(self._scene_profile_changed)
         self.printer_choice.activated.connect(self._printer_picked)
@@ -2919,8 +3076,6 @@ class PrintSettingsDialog(QDialog):
         quality_label = QLabel(tr("Qualität"), self)
         quality_label.setBuddy(self.quality)
         self.quality_label = quality_label
-        printer_label = QLabel(tr("Drucker"), self)
-        printer_label.setBuddy(self.printer_choice)
         # **Weder „Düse" noch „Düsendurchmesser".** Das erste hieß bis RM-514
         # auch die *Temperatur* („Düse 210 °C", heute „Düsentemperatur"), und
         # zwei gleich benannte Zeilen wären eine Verwechslung, die der
@@ -2957,7 +3112,8 @@ class PrintSettingsDialog(QDialog):
         slicer_field.addWidget(self.slicer_choice, 1)
         slicer_field.addWidget(self.slicer_single, 1)
         head.addRow(self.slicer_label, slicer_field)
-        head.addRow(printer_label, self.printer_choice)
+        head.addRow(self.printer_label, self.printer_choice)
+        head.addRow(self._printer_state_label, self.printer_state)
         # Der Drucker, auf den der Slicer eingestellt ist, wenn das Projekt
         # einen anderen trägt — ein Klick statt der Suche in der Liste
         # (:meth:`_offer_the_slicers_printer`). **Unter dem Drucker, den er
@@ -3402,7 +3558,9 @@ class PrintSettingsDialog(QDialog):
         )
         return True
 
-    def _saved_printer(self, entry: Any, *, inline_nozzle: bool = False) -> bool:
+    def _saved_printer(
+        self, entry: Any, *, inline_nozzle: bool = False, slicer: Path | None = None
+    ) -> bool:
         """Das geänderte Druckerprofil ablegen — oder sagen, warum es nicht ging.
 
         ``save_printer`` schreibt in das Nutzerprofil, und das kann scheitern:
@@ -3410,10 +3568,15 @@ class PrintSettingsDialog(QDialog):
         lief bis hierher aus dem Slot heraus, das Feld zeigte die neue Düse
         und der Drucker rechnete weiter mit der alten — ein Widerspruch ohne
         Satz (Regel 17). Beim Düsendurchmesser steht der Grund direkt an der
-        Düsenwahl; bei der Düsenzahl bleibt er in der Zustandszeile.
+        Düsenwahl; bei der Düsenzahl bleibt er in der Zustandszeile. Mit
+        ``slicer`` wird ein Drucker dieses Slicers abgelegt, samt Marke
+        (:func:`~app.ui.first_run.keep_slicer_printer`).
         """
         try:
-            profiles.save_printer(entry)
+            if slicer is None:
+                profiles.save_printer(entry)
+            else:
+                keep_slicer_printer(entry.id, {entry.id: entry}, slicer)
         except AppError as problem:
             _log.warning("printer profile could not be saved: %s", problem)
             message = tr(
@@ -3428,28 +3591,22 @@ class PrintSettingsDialog(QDialog):
     def _printer_entries(self) -> dict[str, PrinterProfile]:
         """Jeder Drucker, den dieser Dialog kennt: gespeichert, eingebaut, vom
         Slicer gelesen — und der, mit dem das Projekt gerade rechnet."""
-        entries = known_printers(self._discovered_printers)
+        entries = known_printers(self._slicer_printers.discovered)
         entries[self.session.profile.printer.id] = self.session.profile.printer
         return entries
 
     def _fill_printer_choice(self) -> None:
         """Erst der Slicer, dann seine Drucker — wie im Erststart und in den
-        Einstellungen (:func:`app.ui.first_run.printers_on_offer`).
+        Einstellungen (:meth:`SlicerPrinters.offered`).
 
-        Ohne Slicer, ohne eigene Drucker des Slicers oder bis seine Erhebung
-        antwortet stehen alle bekannten Drucker da. Der Drucker des Projekts
-        und der, den der Knopf
-        *{printer} übernehmen* anbietet, bleiben in jedem Fall in der Liste:
-        Der eine ist gewählt, den anderen wählt der Knopf.
+        Der Drucker des Projekts und der, den der Knopf *{printer} übernehmen*
+        anbietet, bleiben in jedem Fall in der Liste: Der eine ist gewählt, den
+        anderen wählt der Knopf.
         """
         current = self.session.profile.printer.id
         keep = {current, self._slicers_printer} - {""}
         entries = self._printer_entries()
-        offered = (
-            entries
-            if self._slicer_printer_ids is None
-            else printers_on_offer(self._slicer_printer_ids, self._discovered_printers)
-        )
+        offered = self._slicer_printers.offered(entries)
         listed = offered | {name: entries[name] for name in keep if name in entries}
         search = self.printer_choice.search_field.text()
         with QSignalBlocker(self.printer_choice):
@@ -3457,6 +3614,26 @@ class PrintSettingsDialog(QDialog):
             add_printer_choices(self.printer_choice, listed, keep=keep)
             select_data(self.printer_choice, current)
             self.printer_choice.search_field.setText(search)
+        self._show_printer_note()
+
+    def _show_printer_note(self) -> None:
+        """Kurzhilfe und Suchzeile nennen den Slicer, dessen Drucker die Liste
+        führt; der Satz darunter, warum ein Drucker fehlt oder nicht blieb.
+
+        Er steht unter dem Drucker, nicht in der Zustandszeile: Dort
+        überschrieb ihn der nächste Sperrgrund (:meth:`_show_slicer_state`),
+        und die Wahl sprang ohne Satz zurück.
+        """
+        tip, placeholder = self._slicer_printers.hint()
+        for widget in (self.printer_choice, self.printer_label):
+            widget.setToolTip(tip)
+            widget.setAccessibleDescription(tip)
+        self.printer_choice.search_field.setPlaceholderText(placeholder)
+        self.printer_choice.search_field.setAccessibleDescription(tip)
+        note = self._slicer_printers.note()
+        self.printer_state.setText(note)
+        self.printer_state.setVisible(bool(note))
+        self._printer_state_label.setVisible(bool(note))
 
     def _start_printer_survey(self) -> None:
         """Die Drucker des gewählten Slicers lesen, im Arbeiter wie im Erststart.
@@ -3468,64 +3645,36 @@ class PrintSettingsDialog(QDialog):
         ihn führt. Die Liste bleibt bedienbar, bis die Antwort kommt; die
         Wahl des Projekts überlebt das Neufüllen.
         """
-        self._printer_survey = None
         if self._slicer_path is None:
-            self._take_slicer_printers(None, {})
+            self._slicer_printers.begin(None, None)
+            self._fill_printer_choice()
             return
         worker = _PrinterSurvey(self._slicer_path)
         worker.done.connect(self._slicer_printers_found)
         worker.crashed.connect(self._slicer_printers_failed)
-        self._printer_survey = worker
+        self._slicer_printers.begin(self._slicer_path, worker)
+        self._show_printer_note()
         self._leash.start(worker)
-
-    def _take_slicer_printers(
-        self, identifiers: tuple[str, ...] | None, discovered: Mapping[str, PrinterProfile]
-    ) -> None:
-        if identifiers == self._slicer_printer_ids and discovered == self._discovered_printers:
-            return
-        self._slicer_printer_ids = identifiers
-        self._discovered_printers = dict(discovered)
-        self._fill_printer_choice()
 
     def _slicer_printers_found(self, found: object) -> None:
         """Die Drucker des Slicers sind da: Liste neu, und passte kein Profil,
         den Drucker anbieten, auf den der Slicer eingestellt ist."""
-        if self._settling or self.sender() is not self._printer_survey:
+        if self._settling:
             return
-        self._printer_survey = None
         assert isinstance(found, PrinterChoices)
-        # Nennt der Slicer keinen eigenen Drucker (Resin-Slicer, unlesbarer
-        # Bestand), gibt es nichts, wonach sich filtern ließe — dann bleibt
-        # jeder bekannte Drucker wählbar, statt nur der allgemeine.
-        self._take_slicer_printers(
-            found.identifiers if found.profiles else None,
-            {profile.id: profile for profile in found.profiles},
-        )
+        if not self._slicer_printers.found(self.sender(), found):
+            return
+        self._fill_printer_choice()
         if self._profile_unmatched:
             self._offer_the_slicers_printer(self._printer_of_the_slicer())
 
     def _slicer_printers_failed(self, detail: str) -> None:
-        """Ohne lesbare Drucker des Slicers bleibt jeder bekannte wählbar."""
-        if self._settling or self.sender() is not self._printer_survey:
+        """Ohne lesbare Drucker des Slicers bleibt jeder bekannte wählbar, und
+        der Satz unter dem Drucker sagt es."""
+        if self._settling or not self._slicer_printers.failed(self.sender()):
             return
         _log.warning("print dialog printer survey crashed: %s", detail)
-        self._printer_survey = None
-        self._take_slicer_printers(None, {})
-
-    def _keep_slicer_printer(self, printer_id: str) -> bool:
-        """Einen Drucker des Slicers ablegen, bevor das Projekt mit ihm rechnet.
-
-        Erst eine Wahl macht ihn zum Drucker dieses Rechners, wie das
-        Speichern in den Einstellungen; eine am Drucker gesetzte Düse bleibt
-        (:func:`app.ui.first_run.with_saved_nozzle`). Scheitert das Ablegen,
-        sagt :meth:`_saved_printer` warum, und das Projekt bleibt beim alten.
-        """
-        found = self._discovered_printers.get(printer_id)
-        if found is None:
-            return True
-        saved = profiles.printer_profiles().get(printer_id)
-        profile = with_saved_nozzle(found, saved)
-        return saved == profile or self._saved_printer(profile)
+        self._fill_printer_choice()
 
     def _scene_profile_changed(self) -> None:
         """Ein anderer Drucker heißt andere Vorgaben — und eine Neuauswertung.
@@ -3560,7 +3709,9 @@ class PrintSettingsDialog(QDialog):
             return
         document = self.session.project.document
         printer_id = str(self.printer_choice.currentData())
-        if not self._keep_slicer_printer(printer_id):
+        kept = self._slicer_printers.keep(printer_id)
+        self._show_printer_note()
+        if not kept:
             with QSignalBlocker(self.printer_choice):
                 select_data(self.printer_choice, self.session.profile.printer.id)
             self._show_slicer_state()
@@ -3602,7 +3753,7 @@ class PrintSettingsDialog(QDialog):
             self._offer_the_slicers_printer(self._cura_printer_id)
         self._show_slicer_state()
 
-    def _printer_picked(self, _index: int) -> None:
+    def _printer_picked(self, index: int) -> None:
         """Wer hier seinen Drucker wählt, druckt auch das nächste Projekt darauf.
 
         Neue Projekte beginnen mit dem Drucker aus den Einstellungen. Stand dort
@@ -3613,7 +3764,10 @@ class PrintSettingsDialog(QDialog):
         ändert die Vorgabe nicht.
         """
         chosen = str(self.printer_choice.currentData() or "")
-        if chosen and valid_printer_choice(self.printer_choice):
+        # Sprang die Wahl zurück, weil sich der Drucker nicht ablegen ließ
+        # (:meth:`SlicerPrinters.keep`), hat der Kunde den alten nicht gewählt.
+        picked = str(self.printer_choice.itemData(index) or "")
+        if chosen and chosen == picked and valid_printer_choice(self.printer_choice):
             self.ui_settings.printer = chosen
 
     def _refill_slicer_profiles(self) -> None:
@@ -5096,7 +5250,7 @@ class PrintSettingsDialog(QDialog):
         # dann die gelesenen: Den Kobra S1 kennt nur Anycubic Slicer Next.
         found = (
             slicer_profiles.printer_for(machine, profiles.printer_profiles())
-            or slicer_profiles.printer_for(machine, self._discovered_printers)
+            or slicer_profiles.printer_for(machine, self._slicer_printers.discovered)
             if machine
             else ""
         )
@@ -5148,7 +5302,9 @@ class PrintSettingsDialog(QDialog):
         """Den Drucker des Slicers wählen, als hätte der Kunde ihn oben gewählt."""
         candidate = self._cura_printer_candidate
         if candidate is not None and candidate.id == self._slicers_printer:
-            if not self._saved_printer(candidate):
+            # Mit der Marke seines Slicers, wie jede andere Wahl aus dessen Liste
+            # (Review P2 Rest, D1): Ohne sie stand er danach unter jedem Slicer.
+            if not self._saved_printer(candidate, slicer=self._slicer_path):
                 return
             self._cura_printer_candidate = None
             self._fill_printer_choice()
@@ -6677,11 +6833,11 @@ class PrintSettingsDialog(QDialog):
 
     def wait_for_printer_survey(self, timeout_ms: int = 30_000) -> bool:
         """Auf die Drucker des gewählten Slicers warten und sie zustellen."""
-        worker = self._printer_survey
-        if worker is not None and worker.isRunning():
+        worker = self._slicer_printers.survey
+        if isinstance(worker, _PrinterSurvey) and worker.isRunning():
             worker.wait(timeout_ms)
         QCoreApplication.processEvents()
-        return self._printer_survey is None
+        return self._slicer_printers.survey is None
 
     def _fill_slicer_choice(self) -> None:
         """Die Auswahl füllen — als Auswahl nur, wenn es etwas zu wählen gibt.

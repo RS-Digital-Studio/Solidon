@@ -184,14 +184,30 @@ def test_snap_arm_anchor_is_on_its_named_surface(thickness: float) -> None:
     assert centre[0, 1] == pytest.approx(-thickness / 2)
 
 
-@pytest.mark.parametrize("size,length", [("M3", 8.0), ("M6", 8.0), ("M8", 7.3)])
-def test_printed_thread_fits_its_actual_internal_tool(size, length):
+@pytest.mark.parametrize(
+    "size,length,diameter",
+    [
+        ("M3", 8.0, 0.0),
+        ("M6", 8.0, 0.0),
+        ("M8", 7.3, 0.0),
+        # Review RM-532 R1: eigene Maße über krumme Umlaufzahlen — vorher lag
+        # dort ein Span zwischen Kernsehne und Gangfuß (Ø 20 auf 2 mm 0,04 mm³,
+        # Ø 66,6 auf 20 mm 0,5 mm³).
+        ("M20", 12.0, 0.0),
+        ("custom_size", 2.0, 20.0),
+        ("custom_size", 7.0, 66.6),
+        ("custom_size", 20.0, 66.6),
+        ("custom_size", 2.0, 46.0),
+    ],
+)
+def test_printed_thread_fits_its_actual_internal_tool(size, length, diameter):
     from app.core.geom.boolean import boolean
-    from app.core.knowledge.parts.fasteners import _printed_thread
+    from app.core.knowledge.parts.fasteners import _printed_thread, thread_measure
     from app.core.knowledge.parts.shapes import moved
 
-    male = _printed_thread(size, length, False, 0.15).mesh
-    tool = moved(_printed_thread(size, length, True, 0.15).mesh, (0, 0, length))
+    nominal, pitch = thread_measure(size, diameter)
+    male = _printed_thread(nominal, pitch, length, False, 0.15).mesh
+    tool = moved(_printed_thread(nominal, pitch, length, True, 0.15).mesh, (0, 0, length))
     outside = boolean("difference", [male, tool], allow_empty=True)
     assert outside.mesh.volume < 1e-5
 

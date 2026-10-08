@@ -426,6 +426,75 @@ def test_exact_start_is_the_same_end_as_on_the_mesh() -> None:
     assert radius == pytest.approx(1.1, abs=1e-4)
 
 
+def test_a_mixed_corner_takes_a_varying_radius_only_at_the_exact_kernel() -> None:
+    """RM-230: Eine Ecke aus einer Innen- und zwei Außenkanten mit Radiusverlauf.
+
+    Das Netz sagt ab — sein örtlicher Ersatz der Ecke ist für ein Maß gebaut
+    (``edges._mixed_corner_region``). Der exakte Kern baut sie, und gebaut heißt
+    hier richtig: In der Mitte jeder Kante liegt die Rundung mit dem Radius des
+    Verlaufs dort (3 → 1,5 → 3 mm), geprüft am Abstand ``r·(√2 − 1)`` der
+    Rundung von der scharfen Kante entlang der Winkelhalbierenden.
+    """
+    exact_kernel()
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_IN
+    from shapely.geometry import Polygon
+
+    from app.core.geom.edges import edge_key
+
+    edit = exact_kernel()
+    law = RadiusLaw((0.0, 0.5, 1.0), (3.0, 1.5, 3.0))
+    # Die Mitten der drei Kanten an der Ecke (10, 10, 20): die senkrechte
+    # Innenkante und die zwei Außenkanten oben am Ausschnitt.
+    middles = ((10.0, 10.0, 10.0), (10.0, 15.0, 20.0), (15.0, 10.0, 20.0))
+
+    def at_corner(entries: Any) -> list[Any]:
+        return [
+            entry
+            for entry in entries
+            if any(math.dist(entry.middle, middle) < 1e-6 for middle in middles)
+        ]
+
+    profile = Polygon([(0, 0), (20, 0), (20, 10), (10, 10), (10, 20), (0, 20)])
+    mesh = MeshData(trimesh.creation.extrude_polygon(profile, 20.0))
+    with pytest.raises(GeometryError) as caught:
+        round_edges(
+            mesh, 3.0, "named", [edge_key(entry) for entry in at_corner(edges_of(mesh))], law=law
+        )
+    assert "Außen- und eine Innenkante" in str(caught.value.detail)
+
+    solid = edit.boolean(
+        "difference",
+        [
+            edit.moved(edit.box(20.0, 20.0, 20.0), (10.0, 10.0, 0.0)),
+            edit.moved(edit.box(10.0, 10.0, 22.0), (15.0, 15.0, -1.0)),
+        ],
+    )
+    chosen = at_corner(edit.edges_of(solid))
+    assert len(chosen) == 3, "Voraussetzung: die Innenkante und die zwei Außenkanten oben"
+    rounded = edit.fillet(solid, 3.0, "named", [edge_key(entry) for entry in chosen], law=law)
+    assert rounded.is_closed and rounded.solid_count == 1
+
+    reach = 1.5 * (math.sqrt(2.0) - 1.0)
+    # Je Kantenmitte: die scharfe Kante, die Richtung in die Rundung hinein und
+    # ob dort vorher Luft war (Innenkante: die Rundung füllt auf).
+    probes = (
+        ((10.0, 10.0, 10.0), (1.0, 1.0, 0.0), True),
+        ((10.0, 15.0, 20.0), (-1.0, 0.0, -1.0), False),
+        ((15.0, 10.0, 20.0), (0.0, -1.0, -1.0), False),
+    )
+    for edge, toward, filled in probes:
+        unit = np.asarray(toward) / np.linalg.norm(toward)
+        for step, beyond in ((reach - 0.02, False), (reach + 0.02, True)):
+            point = np.asarray(edge) + unit * step
+            inside = (
+                BRepClass3d_SolidClassifier(rounded.shape, gp_Pnt(*point), 1e-7).State()
+                == TopAbs_IN
+            )
+            assert inside is (filled is not beyond), (edge, step)
+
+
 def test_exact_refuses_what_the_mesh_refuses() -> None:
     edit = exact_kernel()
     solid = edit.box(WIDTH, DEPTH, HEIGHT)

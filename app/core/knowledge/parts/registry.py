@@ -24,7 +24,17 @@ from dataclasses import dataclass
 from typing import Any, Final, Protocol
 
 from app.core.errors import InternalError
-from app.core.types import BaseParams, HoleValues, PartFn, PartResult, Profile, Quality
+from app.core.types import (
+    BaseParams,
+    Feature,
+    Finding,
+    HoleValues,
+    PartFn,
+    PartResult,
+    Profile,
+    Quality,
+    Vec3,
+)
 from app.i18n import TranslatableText, _
 
 
@@ -44,6 +54,13 @@ class BuildWithProfile(Protocol):
 HoleAdvice = Callable[[float], "TranslatableText | str | None"]
 """Aus dem gemessenen Durchmesser einer Bohrung der Satz, den der Dialog dieses
 Bausteins darüber zeigt — ``None`` lässt den allgemeinen Satz stehen."""
+
+HoleCheck = Callable[
+    [BaseParams, Feature, Any, Profile | None, Vec3 | None, Vec3 | None], Sequence[Finding]
+]
+"""Was ein Baustein über die Bohrung sagt, in der er sitzt — aus seinen Werten, ihrem
+Merkmal, dem Träger vor dem Schnitt, dem Profil, der Mündung und der Richtung nach außen;
+leer, wo es nichts zu sagen gibt."""
 
 HostCut = Callable[[BaseParams], PartResult | None]
 """Optionales Werkzeug, das ein lösbares Teil am Träger vorbereitet.
@@ -264,6 +281,16 @@ class PartSpec:
     anderem. Dieselbe Frage wie :attr:`at_hole_values`, als Satz: Er nennt die
     Größe, die :attr:`at_hole_values` vorwählt, mit den Maßen der
     Normteiltabelle. ``None`` als Antwort lässt den allgemeinen Satz stehen.
+    """
+    at_hole_check: HoleCheck | None = None
+    """Was der Baustein nach dem Setzen über **seine** Bohrung sagt.
+
+    Neben ``parts.bore_too_wide`` (der Baustein erreicht die Wand nicht), das
+    für alle gilt, die Frage, die nur der Baustein beantworten kann: Ein
+    Gewinde soll die Bohrung als Kernloch behalten, eine Einpressbuchse soll
+    sie aufweiten. Das Gewinde sagt deshalb, wenn es aufbohrt
+    (``fasteners.thread_at_hole``) — eine feinere Steigung bei gleichem
+    Nenndurchmesser tat das still (Review RM-532, F3).
     """
     at_hole: bool = False
     """Wahr für einen Baustein, der in eine **vorhandene** Bohrung gesetzt wird.
@@ -667,6 +694,7 @@ def register_part(
     template: bool = False,
     at_hole_values: HoleValues | None = None,
     at_hole_advice: HoleAdvice | None = None,
+    at_hole_check: HoleCheck | None = None,
     at_face: bool = True,
     keeps_up: bool = False,
     lies_flat: bool = False,
@@ -719,6 +747,7 @@ def register_part(
                 template=template,
                 at_hole_values=at_hole_values,
                 at_hole_advice=at_hole_advice,
+                at_hole_check=at_hole_check,
                 bodies=bodies,
                 at_face=at_face,
                 keeps_up=keeps_up,
@@ -792,7 +821,13 @@ def register_part(
 #: hängt an einem Loch in der Mitte statt an zwei (``holders.py``, RM-443).
 #: Version 23: Herstellerbezogene Nutfedern mit verjüngtem Kopf; bisherige
 #: Profilgrößen bleiben für gespeicherte Konstruktionen maßgleich.
-LIBRARY_VERSION: Final = "23"
+#: Version 24: Das runde Ende einer Lasche über 42,8 mm Breite bekommt Sehnen
+#: nach ``MAX_FACET_SAG`` (``shapes.slot_segments``, 06.10.2026), und ein
+#: Netzgewinde läuft über ganze Umläufe und wird auf Länge geschnitten
+#: (``THREAD_MESH_WHOLE_TURNS`` an Gewinde, Schraube und Mutter): Die Maße
+#: bleiben, das Netz eines Gewindes mit krummer Umlaufzahl ändert sich.
+#: Schmalere Laschen und alle übrigen Bausteine bleiben maßgleich.
+LIBRARY_VERSION: Final = "24"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

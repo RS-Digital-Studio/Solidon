@@ -540,6 +540,10 @@ def is_a_cavity(feature: Feature) -> bool:
         return True
     if feature.kind == "pin":
         return False
+    # Ein Gewinde ist innen ein Hohlraum, außen ein Bolzen — es trägt die Frage
+    # selbst (``internal``), ``recess`` kennt es nicht (Review RM-532, F2).
+    if feature.kind == "thread":
+        return bool(feature.params.get("internal", False))
     return bool(feature.params.get("recess", False))
 
 

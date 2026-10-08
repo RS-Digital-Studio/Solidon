@@ -53,19 +53,19 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren Herstellerprofile](#rm-549) | Plattformen, Pakete und Grafik | Gefunden mit der Slicerauswahl (07.10.): ohne Vorwahl des Herstellerprofils lehnt die Orca-Familie den Auftrag ab; offen, ob der Druckdialog dann mit Grund und Weg endet |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
-| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Messung vor RM-281 C; mit Herstellerbündel neu messen, dann entscheidet Robert über Vorgaben |
+| [RM-191 — PrusaSlicer braucht für dieselbe Übergabe länger als die Orca-Familie](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände). Mit Herstellerbündel neu gemessen (06.10.): am MK4S ist PrusaSlicer schneller als Orca (218 gegen 345 min, Material gleich); langsamer bleibt PrusaSlicer ohne Bündel am CC2 (407 gegen 232 min, +20 % Material), weil Solidons Satz die Wandzahl nicht setzt (`perimeters = 3`, `extra_perimeters = 1`); nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und `extra_perimeters = 0` setzen, dann prusa:CC2 gegen elegoo:CC2 |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau (0.5.1) und bitgleiche Vektornorm im Löser gebaut; Kumiko-Schale 18,6–20,2 s unter Last, §31 (unter 5 s) nicht erreicht; offen: Aufbereitung großer Flecken und Fits beschleunigen, danach ruhige Vergleichsläufe |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31, Robert 06.10.: mechanisch unter 1 s, organisch unter 2 s am Referenzrechner); offen die Messung am neuen Ziel |
-| [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
+| [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); Marke `xfail(linux)` gefallen (acht Linux-Läufe in Folge grün, 06.10.); offen allein das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Ziel neu gefasst (Bauplan §31: organisch unter 2 s am Referenzrechner); der Drache braucht 6,9–9,0 s unter Last bei null Merkmalen; offen ein Hebel bis zum neuen Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Unabhängige Clipper-Säulen, gerichtete Verschachtelung und `ring_nesting` gebaut, Hohlkugel bitgleich in 1,2–1,4 s; Mitre-Öffnung über Clipper und Zertifikate gemessen und verworfen; 300 ms verfehlt; entschieden (Robert, 06.10.): das Ziel bleibt, ein weiterer Hebel wird gesucht |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, Außen-/Innen-Mischecke exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt, Netzschräge 2,3× langsamer — je Grenze bauen oder benennen |
+| [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
 | [RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still](#rm-545) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-413: Die Absage hängt an `kind == "hole"`; an der Senkung einer Kette, am Langloch und am gesenkten Baustein *Schraube* rechnen Versetzen, Entfernen, Kippen und Ändern weiter und verschmelzen oder beschneiden das Teil, exakt teils mit falschem Grund — die Frage an den Hohlraum hängen, auch an Kegeln ohne Kette |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitschätzung (ElegooSlicer −18 % an der Seitenablage, Stützmenge an gewölbten Flächen drei- bis zwölfmal unterschätzt, ihre Rechenzeit) |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); Zeitschätzung rechnet mit dem, was der Slicer aus dem Profil macht, Stützmenge aus den Säulen der Zeit (07.10., Seitenablage Orca-Familie −18 → −3 bis −12 %, Stützmenge Prusa/Cura 0,94 bis 1,14 der Druckdatei); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitreste: Creality Prints Mindestschichtzeit über Bogensehnen, Auto-Brim, Lückenfüllung, Curas Leerfahrt, Prusa-Stützen auf eigenen Schichthöhen, Baumstützen, Rechenzeit am Reiniger — bis Curas Leerfahrt und die Baumstützen gebaut sind, prüft die Zeitgegenprobe dort mit Grund nicht (`estimate.time_comparison_blocked`, Review P2 Rest Z1), danach die Sperren wieder lösen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt als `prepare_ops_mit_drehen_heute.patch` gegen den Stand vom 27.09. (`2e496575b`, `202d5133a`) bei und muss vor Gebrauch auf den heutigen `prepare_ops.py` übertragen werden |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | (b) Eigenkreuzung endet beim ersten Gegenbeleg (Besenhalter 18,4 → 14,6–15,1 s, Laptop 26–28,6 → 20,1–20,9 s unter Last, Paare bitgleich), (c) ohne zweite Vereinigung gebaut; offen: (a) beim Öffnen am Fenster zuordnen, (b) lastfrei messen und mit Ziel führen |
@@ -85,6 +85,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-540 — Ein angeschnittenes erzeugtes Merkmal behält sein volles Maß, und die Schnittwege ordnen es verschieden zu](#rm-540) | Geometrie, Erkennung und Druckvorbereitung | Zwilling seit der Ausdehnungsregel (06.10.); ein Kriterium für alle Schnittwege festlegen |
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
+| [RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht](#rm-552) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in der Nachprüfung von P2 (07.10.): Schraubenloch und Einpressbuchse sagen über Menü und Palette `chain_unreadable`, weil die Bausteinbohrung durch ihre Senkung läuft; die Karte bietet den Stift dort nicht mehr an. Offen: `bore_pin._following` liest eine überlappende Kette |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
@@ -143,10 +144,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Am ausgelieferten 0.5.3 gemessen: Start, Fokus und Eingabe gehen, Fcitx nur über IBus; Abhilfe gebaut (Fcitx in der Umgebung, nur `XMODIFIERS=@im=ibus` oder `QT_IM_MODULE=wayland` unter `xcb` → `ibus`; Fcitx außerhalb des Flatpak über das IBus-Portal), offen der Nachweis im nächsten Paket für Flatpak, AppImage und Archiv, auch für die zwei IBus-Fälle |
 | [RM-521 — Cura unter Linux slicen lassen (AppImage und Flatpak)](#rm-521) | Kundenrückmeldungen | Lader-Weg und Rückfall gebaut, am Runner mit Flatpak und AppImage, draußen und im Sandkasten belegt (Lauf 37528397381); offen: Abnahme beim Kunden mit dem nächsten Paket (Ubuntu 24.04, Solidon als Flatpak) |
 | [RM-522 — Dem Linux-Kunden mit Orca als Flatpak die Behebung melden](#rm-522) | Kundenrückmeldungen | Text für 0.5.3 liegt in Roberts Ablage bereit, Behebung am ausgelieferten Paket belegt (RM-064); Robert schickt, dann Versand eintragen |
-| [RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung](#rm-532) | Kundenrückmeldungen | Umgesetzt auf Zweig `gewinde-eigenes-mass` (`63d7a7826`), ruff, Format und mypy grün; offen Bereichsnachweis aller 49 Bausteine, volles Tor, Merge nach main, dann der Hash an die Sitzung „Stift für Bohrung“ |
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
+| [RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg](#rm-544) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): alle Gewindearten samt Einstellung der Auswahllisten; baut auf RM-532 (jedes Maß) und RM-536 (Stift für Bohrung) auf |
 | [RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen](#rm-562) | Kundenrückmeldungen | Kunden-E-Mail 07.10. und Robert 08.10.: Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter ohne Trägerkörper |
 | [RM-563 — Verrunden an mehreren Kanten zugleich wählen](#rm-563) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: Mehrfachauswahl von Kanten und Ecken fand der Kunde nicht; Bestand prüfen, Weg bauen oder zeigen |
 | [RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher nennen](#rm-564) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: qwen3:14b auf M3 nach 30 min bei Schritt 4 von 12, ComfyUI wollte weitere Dutzende GB; Systemanforderungen der Website (16 GB) abgleichen |
@@ -1284,6 +1284,13 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   die Marke `xfail(linux)` (fällt nach drei grünen Linux-Läufen in Folge) und das
   Beispielarchiv.
 
+  **Stand 06.10.2026 (Claude):** Die Marke `xfail(linux)` ist gefallen. In den acht
+  jüngsten grünen Läufen von „Bauen“ auf main (37404706101 bis 37495334264, Stände `f5b642e95`
+  bis `1b1547527`) lief `test_a_nonorthogonal_trihedral_corner_has_the_tangent_sphere` auf
+  ubuntu-24.04 jedes Mal grün durch (im JUnit-Bericht ohne `pytest.xfail`); die Werkzeuge rechnen
+  seit `9bc3d354e` plattformgleich. Beleg `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm166\`.
+  Offen allein das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde.
+
 <a id="rm-184"></a>
 
 - [~] **RM-184 — Dateiaudit vollständig umsetzen.** Grundlage sind 187 einzelne
@@ -1529,8 +1536,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     ein solches Hersteller-STEP beschaffen und in `tests/data/threads/` aufnehmen.
   * **P2.8** — die Erzeuger ohne Eingang rechnen weiter am Netz und sagen es
     (`shapes.mesh_only`): Organizer, Text, Zeichnung, zehn eigenständige
-    Bausteine und der Klemmensatz. Wartet auf Robert: den Mechanismus; empfohlen
-    ist ein beim Anlegen gesetzter Kernparameter.
+    Bausteine und der Klemmensatz. **Entschieden (Robert, 06.10.2026):** ein beim
+    Anlegen gesetzter Kernparameter — exakt, wo der Erzeuger es kann, ohne Kernwahl in
+    der Oberfläche; gespeicherte Schritte behalten per Migration das Netz. Nächster
+    Schritt: je Erzeuger den exakten Bau prüfen und den Parameter samt Migration bauen.
   * **Netz-Kugel nach Größe** — `create_sphere` erzeugt mit `segments=32`
     unabhängig vom Durchmesser 320 Facetten, bei 70 mm Durchmesser etwa
     0,3–0,4 mm Sehnenabweichung statt `units.MAX_FACET_SAG = 0,05 mm`
@@ -1679,6 +1688,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   sein Herstellerbündel und darüber nur die Abweichung, nicht mehr dieselben Solidon-Werte wie
   oben. Ob 1,19× heute noch gilt, ist ungemessen; zuerst mit dem Herstellerbündel neu messen,
   dann entscheidet Robert über Vorgaben.
+
+  **Neu gemessen (06.10.2026, Claude)** am Gewürzregal, eine Platte, Matrixwerkzeug mit
+  Herstellerbündel (`F:\solidon-review-reports\claude-2026-10-06\geometrie\rm191\befund.md`):
+  Am Prusa MK4S braucht PrusaSlicer mit Bündel 218,3 min und 131,5 g, OrcaSlicer mit seinem
+  MK4S-Profil 345,0 min und 132,8 g — Prusa ist dort schneller, bei gleicher Bahnlänge; der
+  Unterschied ist Tempo und Beschleunigung des Orca-Profils. Am Centauri Carbon 2 braucht
+  ElegooSlicer mit Bündel 231,9 min und 127,9 g, PrusaSlicer ohne CC2-Bündel mit Solidons Satz
+  407,2 min und 153,9 g. Ursache im G-Code: `perimeters = 3` und `extra_perimeters = 1` gegen
+  `wall_loops = 2` — die Innenwand ist mit 911 m doppelt so lang. Solidons Satz für einen
+  Drucker ohne Prusa-Bündel setzt die Wandzahl nicht, und PrusaSlicer nimmt seine eigene
+  Vorgabe. Nächster Schritt: im Prusa-Zweig für Drucker ohne Bündel Wandzahl und
+  `extra_perimeters = 0` aus der Familie des Druckers setzen, dann prusa:CC2 gegen elegoo:CC2
+  neu schneiden.
 
 <a id="rm-193"></a>
 
@@ -2026,6 +2048,59 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   wählbare Anfang gehört zu P5.1. Abnahme: je Grenze entweder gebaut oder mit
   Satz und Weg in der Oberfläche und im Handbuch benannt.
 
+  **Stand 06.10.2026 (Claude, nach Review):**
+  - **Anfang auf einem Ring:** benannt. Die Feldhilfe von *Anfang und Ende tauschen* sagt, dass
+    ein Ring an seinem linken Punkt beginnt und der Haken nur die Richtung kehrt; wählbar wird er
+    mit dem Maßeditor im Bild (P5.1).
+  - **Ecke aus Außen- und Innenkante:** am exakten Kern geprüft, er baut den Verlauf dort richtig
+    (`test_a_mixed_corner_takes_a_varying_radius_only_at_the_exact_kernel`, Abstand der Rundung
+    von der scharfen Kante auf ±0,02 mm). Am Netz bleibt die Absage mit Satz und Weg.
+  - **Zwischenstellen:** benannt. Die Feldhilfe sagt, dass sie feste Zahlen sind und sich nur
+    Anfangs- und Endradius an ein Projektmaß binden lassen.
+  - **Formschräge am Tray:** Ursache ist nicht die Menge der Wände (jeder der fünf Körper
+    scheitert einzeln), sondern die Rundung R 2 an jedem Wandfuß: OpenCASCADE rechnet sie neben
+    der gekippten Wand nicht nach (`Draft_FaceRecomputation`), das Netz behielt sie mit Knick oder
+    sagte je nach Winkel ab. Beide Kerne fragen jetzt vor der Rechnung nach einer Fläche, die ohne
+    Knick an eine Wand anschließt und schräg zur Entformungsrichtung liegt (exakt an neun Punkten
+    der Fläche, am Netz mit einer Neigung, die sich um mehr als die Knickschwelle ändert), und
+    sagen bei jedem Winkel `DRAFT_BESIDE_A_ROUND` mit dem Weg über die Wände ohne diese
+    Verrundung; *Formschräge anstellen* trägt den Vorbehalt. Fase, Querbohrung, eine ebene, flach
+    anstoßende Schräge und ein Kegelstück am Fuß einer gerundeten Ecke zählen nicht. Eine stehende
+    freie Fläche ohne Kante an der Wand (B-Spline-Ecke) ließ der exakte Kern still senkrecht; dort
+    sagt er jetzt `DRAFT_BESIDE_A_FREE_FACE`, der Netzzwilling mit seinem Ecksatz (Tests in
+    `test_draft_chosen_faces.py`, Sonden `rm230\probe_umbau.py`, `rm230\probe_runde3.py`).
+    Eine schon angestellte gerundete Ecke (Kegel um die Entformungsrichtung) stellt der exakte
+    Kern wieder an; der Winkel gilt absolut (Review P2 Rest, G2).
+  - **Offen — Fußrundung als Kette entfernen** (Review Einheit 2, Runde 2, F1): Der Weg einer
+    CAD-Konstruktion (Rundung weg, anstellen, neu runden) trägt nur am einfachen Quader. Am
+    exakten Tray meldete *Merkmal entfernen* an einer Fußrundung Erfolg und änderte nichts
+    (`BRepAlgoAPI_Defeaturing` löschte die Fläche in der Kette mit den Eckstücken nicht) —
+    jetzt sagt es ab (`IsDeleted` in `_unround`); am Netz sagt es ab oder findet die Rundung
+    nicht. Zu bauen: exakt alle Flächen der Kette samt Eckstücken in einem `Defeaturing`, am
+    Netz die Kette in `unround`; Abnahme an Quader, Tray (exakt und Zwilling) und
+    `1x1-bin.stl`. Dann nennt der Satz den Weg wieder.
+  - **Offen — Netzschräge 0,41 statt 0,18 s** am einfachen Quader: unter §31, aber unberührt.
+  - **Offen — Fase am Fuß, Kerne uneins** (älter als dieser Stand, Review Einheit 2, E2-5): Nur die
+    Vorderwand eines Quaders mit Fase 2 mm an allen Unterkanten — exakt sagt bei 0,5° bis 5°
+    `DRAFT_CUTS_THROUGH` mit „kleineren Winkel“, was nicht hilft; das Netz baut mit 1 bis 10 mm³
+    zu viel gegen den Querschnitt. Am 3-mm-Kasten mit Fase 1 mm bei 3° sagt das Netz ab
+    (Fehlbetrag 6,3 mm³), exakt baut genau 7 406,993 mm³. Alle Wände mit Fase 2 mm bei 0,5°:
+    Das Netz sagt `DRAFT_CUTS_THROUGH`, exakt baut genau 23 489,548 mm³. Prüfkörper in
+    `F:\solidon-review-reports\claude-2026-10-06\geometrie\review-einheit-2-3-sonden\` und
+    `review-einheit-2-runde-2-sonden\`.
+  - **Offen — B-Spline-Ecke, Kerne uneins im Satz** (Review P2 Rest, G4): An einer stehenden
+    freien Fläche ohne Kante an der Wand sagen beide Kerne ab, aber verschieden — exakt
+    `DRAFT_BESIDE_A_FREE_FACE` („Wände ohne solche Fläche wählen“), der Netzzwilling mit dem
+    Ecksatz aus `_moved_corners` und dem Rat zum Winkel; `operationen.md` verlangt denselben
+    Satz. Zu bauen: Der Netzzwilling erkennt die freie Fläche vor der Rechnung wie der exakte
+    Kern. Sonde `output\konsolidierung-2026-10-07\review-p2-rest-sonden\r2b_frei.txt`.
+  - **Offen — zweites Anstellen am Netz, Kerne uneins im Ergebnis** (Review P2 N8): Ein
+    R5-Quader, 3° angestellt, nimmt exakt ein zweites Anstellen absolut (3° → 2° genau
+    22 663,183 mm³); der Netzzwilling sagt bei 3° → 2° `DRAFT_CUTS_THROUGH` mit dem Rat zum
+    kleineren Winkel, obwohl er schon kleiner ist, und baut 3° → 5° nur auf die Facetten genau.
+    Festgehalten in `test_the_mesh_twin_still_refuses_a_smaller_second_draft`. Zu bauen: Der
+    Netzzwilling stellt eine schon angestellte gerundete Ecke wie der exakte Kern absolut an.
+
 <a id="rm-253"></a>
 
 - [~] **RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab.**
@@ -2346,9 +2421,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
     `b50d94d1d`); mit anderer Bahnbreite oder der Stufe „Fein“ stützten Analyse und
     Slicer sonst nach der Probe weiter.
 
-  **Offen:** die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitschätzung
-  (ElegooSlicer −18 % an der Seitenablage, Stützmenge an gewölbten Flächen drei- bis
-  zwölfmal unterschätzt, ihre Rechenzeit). Paket 3 (Mindestschichtzeit, Keilspitzen,
+  **Offen:** die Gesamtabnahme jedes Modell × jeder Slicer und die Reste der
+  Zeitschätzung (Teilstand 07.10. unten). Paket 3 (Mindestschichtzeit, Keilspitzen,
   Stützbedarf gegen das Urteil des Herstellers, Brückenregel, Inseln an Schrauben) ist am
   04.10. abgenommen (`a69a2d2d0`, Teilstand unten); die Reste der Slicer-Matrix führt
   [RM-312](#rm-312).
@@ -2401,6 +2475,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Seitenablage (Füllanker und senkrechte Schalen), Stützmenge an gewölbten Flächen drei- bis
   zwölfmal unterschätzt, Rechenzeit der Zeitschätzung. Belege unter
   `F:\solidon-review-reports\claude-2026-10-04\rm281-paket3\`.
+
+  **Teilstand 07.10.2026 (Zeitschätzung, Zweig `slice/rm-281-zeit`):** Die Zeitgegenprobe
+  rechnet mit dem, was der Slicer aus dem Profil macht: Bahnabstand nach `Flow::spacing`,
+  Breite je Rolle, Schalen bis zur Mindestdicke und senkrechte Schalen, Randverbindungen der
+  dünnen Füllung, schmale Vollfüllung als Schleife, ein Rückzug je Insel. Seitenablage ohne
+  Stützen gegen die Druckdatei: ElegooSlicer −17,9 → −11,7 %, OrcaSlicer −17,6 → −6,2 %,
+  Bambu Studio −12,9 → −3,0 %, PrusaSlicer −9,2 → +4,1 %, Creality Print −9,2 → +0,8 %,
+  CuraEngine −17,9 → −19,9 %. Die Stützmenge kommt aus denselben Säulen unter dem ganzen
+  Überstand (`print_time.support_material`): Druckdatei/Schätzung an der Waschschüssel 4,24 →
+  0,96, am Reiniger 13,10 → 0,97 (PrusaSlicer), geometrisches Mittel über 22 Läufe 2,69 → 1,32.
+  Rechenzeit der Gegenprobe mit Stützen unter Last: Schüssel 55–68 → 32–35 s CPU, Reiniger
+  46–49 → 37–40 s. Verschlechtert, weil vorher Fehler einander aufhoben: Pilz mit Stützen in
+  PrusaSlicer −0,5 → +13,4 %, Minigolf-Platte ElegooSlicer +0,2 → −13,5 %, Creality Print
+  −27 → −33 %. **Offen:** Creality Print rechnet die Mindestschichtzeit mit der Sehne seiner
+  Bögen (Zylinder −25 %, Kegel −29 %, Minigolf −33 %); Auto-Brim der Orca-Familie
+  (`Brim.cpp`, Seitenablage Elegoo 4,1 min); Lückenfüllung und ihre Anfahrten (Minigolf
+  Elegoo 1244 Rückzüge); Curas Leerfahrt mit Combing (Seitenablage −101 min) und seine
+  Vollfüllung am Kegelstumpf; PrusaSlicer-Stützen auf eigenen Schichthöhen ohne Abbremsen
+  (Pilz +13 %); Baumstützen (ElegooSlicer am Reiniger 8-mal mehr als geschätzt, Zeit dort
+  gesperrt); Rechenzeit am Reiniger (Clipper-Versatz an Netzen mit vielen Ecken). Bericht und
+  Tabellen unter `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm281-zeit\`.
 
 <a id="rm-259"></a>
 
@@ -3023,6 +3118,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   *Drehen* sperrt die Karte eine Lippentasche (`narrowing`) noch, während die Operation
   rechnet. **Abnahme:** Karte und Operation stellen je Handlung dieselbe Frage; ein Test über
   die Korpusnetze wie `test_the_card_offers_a_move_exactly_where_the_operation_moves`.
+
+<a id="rm-552"></a>
+
+- [ ] **RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht.**
+  Gefunden am 07.10.2026 in der Nachprüfung von P2 (Claude): Am Baustein *Schraubenloch* läuft
+  die Bohrung Ø 3,4 von z 2 bis 12 durch ihre Senkung (z 10,7 bis 12), an der *Einpressbuchse M4*
+  ebenso. `bore_pin._following` verlangt, dass ein Abschnitt am Ende des vorigen beginnt, und sagt
+  `chain_unreadable` („lässt sich hier nicht eindeutig lesen“) — über einen Hohlraum, den Solidon
+  selbst gebaut hat. Die Karte bietet den Stift an Bausteinmerkmalen nur noch am Innengewinde an
+  (`perceive.actions.OFFERED_AT_A_PART`); über Menü und Palette trifft die Absage jedes
+  Baustein-Schraubenloch weiter. **Fix:** Überlappende Kettenglieder auf ihren gemeinsamen
+  Abschnitt kürzen, statt abzusagen — die Bohrung endet, wo die Senkung beginnt; danach die Karte
+  an Bausteinbohrungen wieder öffnen, wenn der Stift dort baut. **Abnahme:** Test am Schraubenloch
+  und an der Einpressbuchse je Kern: Stift gebaut, Spiel rundum mindestens das eingestellte; die
+  Magnettasche sagt weiter `narrowing_mouth`.
 
 ## Bedienung und Darstellung
 
@@ -5019,59 +5129,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   (`test_the_portal_copy_of_a_launcher_is_remembered_as_the_launcher`). Robert
   schickt ihn; danach den Versand hier eintragen.
 
-<a id="rm-532"></a>
-
-- [~] **RM-532 — Gewinde in jedem Maß: Bereichsnachweis, Tor und Zusammenführung.**
-  Kundenvorschlag S-20261006-c66299 (0.5.3, ohne Rückadresse): Ein Innengewinde in einem Rohr mit
-  mindestens 60 mm Innendurchmesser ging nicht, *Druckbares Gewinde* endete bei M8. Robert:
-  „keine Beschränkungen“.
-
-  **Gebaut** auf dem Zweig `gewinde-eigenes-mass` (ein Commit `63d7a7826` auf `a2b7451b6`, 41
-  Dateien; dieselben Änderungen liegen ungestaged im Arbeitsbaum des Rechners, auf dem sie
-  entstanden):
-  - Baustein: Größe *Eigenes Maß* (`fasteners.CUSTOM_SIZE`), Nenndurchmesser 2 bis 1000 mm vorn,
-    Steigung hinten (null ist die Regelsteigung, `standards.regular_pitch` über die neue Tabelle
-    `pitches` M10 bis M64 nach der ISO-262-Auswahl); `thread_measure`, Absage `no_core` bei einer
-    Steigung ohne Kern.
-  - Bohrung: Ohne Tabellengröße wählt `custom_thread_for` das Maß, dessen Kernloch die Bohrung
-    ist (Ø 60 → Ø 66,6 mit Steigung 6, Ø 6,5 → Ø 7,6 × 1); der Satz über dem Dialog nennt es.
-  - Gegenstück: `counterpart.thread_values_for` ersetzt `thread_size_for` — Tabellengröße oder
-    eigenes Maß, Absage nur außerhalb der Grenzen (`beyond_threads`); ein geänderter Schritt
-    koppelt über das ganze Maß.
-  - Gemeinsame Grenzen `units.SMALLEST_THREAD`, `LARGEST_THREAD`, `COARSEST_PITCH`, auch für
-    *Schraube erstellen* (war Ø 100) und *Drehdeckel erzeugen* (war Ø 400).
-  - Netz: Sehnen je Umlauf nach der Facettenregel (`shapes.turn_segments`, bis Ø 46 unverändert
-    48), Drehdeckel ebenso (`lid.turn_sections`, `cache_version` 7).
-  - Texte in sechs Sprachen, zwei Handbuchabsätze, Website 61 → 76 hinterlegte Normmaße, Karten,
-    Regel `bausteine.md`, Begründungen. Tests: Rohrfall, Paar mit eigenem Maß an beiden Kernen,
-    Gegenstück Ø 66,6, Drehdeckel Ø 300, Tabellenprüfung, Sehnenregel. Sonde am echten Fenster:
-    An einer 60-mm-Bohrung steht *Eigenes Maß* mit Ø 66,60 mm vorbelegt, vier Felder vorn.
-
-  **Offen, in dieser Reihenfolge:**
-  1. Bereichsnachweis: Alle 49 Bausteine sind veraltet (gemeinsame Formen und Normteiltabelle
-     geändert). `tools/check_part_ranges.py` auf dem Zweig fahren und `part_ranges.toml`
-     committen; `printed_thread` hat jetzt 256 Ecken bis Ø 1000 und läuft am längsten. Während
-     des Laufs weder Bausteindateien noch `shapes`, `build` oder `standards` ändern, sonst ist er
-     wertlos.
-  2. Volles Entwicklungstor auf dem Zweig. Der letzte Lauf (auf `306ff7bf2`) hatte zehn rote
-     Tests; neun sind auf dem Zweig behoben (alte Signatur von `_printed_thread` im Test,
-     `beyond_threads` einsortiert, totes Wertlabel `nearest`, Eckenzahl 7306, Zeilenumbruch vor
-     §13.4, Website-Zahl, Steigungssatz zu lang), der zehnte ist der Bereichsnachweis. Seitdem
-     nicht neu gefahren.
-  3. Merge nach main (Kataloge bei Konflikt je Schlüssel vereinigen), dann der Sitzung „Stift
-     für Bohrung“ (Fragebogen S-20261006-5be329) den Hash nennen: Sie baut den Gewindebolzen
-     auf `thread_values_for`, `CUSTOM_SIZE` und `thread_measure` und wartet darauf.
-  4. Danach auf dem Rechner, auf dem es entstand, die ungestagten Gewindeänderungen nicht noch
-     einmal übernehmen; sie sind dann über main da.
-  5. Beim Release: Handbuch erzeugen (die Erzeugnisprüfung in `test_wording` meldet die zwei
-     geänderten Absätze), das Bild *Ein Gewinde in eine Bohrung* nur bei Änderung.
-  6. Entscheidung Robert: *Schraube*, *Gedruckte Mutter*, Schraubenloch, Mutternfalle und
-     Einpressbuchse bleiben an der Normteiltabelle M2 bis M8 (Kopf, Schlüsselweite, Scheibe).
-     Soll die Tabelle bis M64 wachsen, mit Herstellerdaten je Größe?
-
-  Abnahme: Bereichsnachweis passt zu allen 49 Bausteinen, Tor grün, auf main gemergt. Eine
-  Kundenantwort entfällt, der Vorschlag kam ohne Rückadresse.
-
 <a id="rm-072"></a>
 
 - [ ] **RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen.** Den Dental-Kunden
@@ -5141,28 +5198,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Körpern mit einem Strg+Z zurück, *Aushöhlen* an einer Fläche, eine Karte schweben lassen und
   zurücklegen, in beiden Themen.
 
-<a id="rm-536"></a>
+<a id="rm-544"></a>
 
-- [ ] **RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung
-  (Fragebogen S-20261006-5be329).** Kundenwunsch: „… wenn man ein Gewinde bei der Bohrung oder
-  Senkung hat, dass man dafür auch das passende Gegenstück mit der Funktion erzeugen könnte“.
-  Heute baut `pin_for_bore` (`geom/lid_hinge.py`) einen glatten Zylinder (Bohrung minus Spiel,
-  so lang wie die Bohrung). Soll: Eine Senkung an der Mündung (Kette über
-  `relations.cavity_chain_state_at`) gibt einen bündigen Senkkopf im Winkel der Senkung, eine
-  Ansenkung einen Zylinderkopf, ein Innengewinde auf derselben Achse ein Außengewinde derselben
-  Größe und Steigung mit Spiel — über `counterpart.thread_values_for` und den Gewindebaustein in
-  `fasteners.py` (Tabellenmaß, sonst `CUSTOM_SIZE`; dieselben Absagen für links-, mehrgängig und
-  kegelig). Ein neuer Parameter hinter der Klappe wählt „passend zur Bohrung“ (Vorgabe) oder
-  „glatter Stift“; bestehende Projekte behalten ihr Ergebnis über eine Migration (Format 46 → 47,
-  Muster `_keep_slot_tools_as_they_were`). `leaves_inputs_unchanged` bleibt wahr (`outputs[0]` ist
-  der unveränderte Träger, Zusage an `bbd41ff2d`); beide Kerne, `cache_version`, ein Befund nennt
-  das Gebaute, Texte in allen Katalogen. Einzelheiten: `auftrag-stift.md` im Zustandsordner von
-  RM-533. **Wartet auf** den Merge von RM-532 (Zweig `gewinde-eigenes-mass`) auf main — die
-  Schnittstelle (`thread_values_for`, `CUSTOM_SIZE`, `thread_measure`, `size_for_thread`,
-  `custom_thread_for`) ist zugesagt, gebaut wird erst darauf. **Abnahme:** Korpustests an
-  `plate_countersunk.stl`, `plate_countersunk_blind.stl` und einer Bohrung mit
-  `insert_printed_thread`, Sollwerte mit Herkunft, Gegenprobe; eine alte Projektdatei mit Stift
-  rechnet unverändert.
+- [ ] **RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg.** Anlass ist
+  derselbe Kundenvorschlag wie bei RM-532 (S-20261006-c66299, Innengewinde in einem Rohr); Rohre
+  tragen meist Whitworth-Rohrgewinde. Solidon kennt nur metrische Gewinde nach ISO 261/262 und
+  sagt bei links-, mehrgängigen und kegeligen ab. **Entschieden (Robert, 06.10.2026):** „alle“ —
+  neben metrisch in jedem Maß auch G (zylindrisches Rohrgewinde, ISO 228-1, 55°-Flanken, Gänge je
+  Zoll) sowie UNC und UNF (60°, Gänge je Zoll). **Umfang:** Tabelle der Nennmaße und Gänge je
+  Zoll mit Herkunft (`standards.toml`, Version erhöhen), das Flankenprofil als Parameter der
+  Gewindeform (55° gerundet / 60°), *Eigenes Maß* auch in Zoll (Gänge je Zoll statt Steigung),
+  dieselben Wege wie RM-532: Druckbares Gewinde, Bohrung mit Gewinde, Gegenstück
+  (`counterpart.thread_values_for`), *Schraube erstellen*, *Drehdeckel erzeugen*, Stift für
+  Bohrung (RM-536), Erkennung einer gemessenen Bohrung als Zoll- oder Rohrgewinde mit Rückfrage
+  bei Mehrdeutigkeit (Regel 21). **Einstellung (Robert, 06.10.2026):** In den Einstellungen
+  wählt der Kunde, welche Gewindearten in den Auswahllisten stehen (metrisch, G, UNC, UNF,
+  später die zweite Stufe), Vorgabe alle. Die Wahl ist Darstellung, kein Dokumentzustand: Ein
+  Schritt, der eine ausgeblendete Art trägt, zeigt und rechnet sie weiter, und die Erkennung
+  schlägt nur eingeblendete Arten vor. Zweite Stufe, weil „alle“ auch die heutigen Absagen meint:
+  kegelige Rohrgewinde (R nach ISO 7-1, NPT), Linksgewinde und mehrgängige Gewinde.
+  **Abnahme:** Paar G 1/2 innen und außen greift an beiden Kernen, Kernmaße gegen ISO 228-1,
+  UNC 1/4-20 gegen ASME B1.1; Bereichsnachweis, Tor, Texte in sechs Sprachen, Handbuchabsatz;
+  die zweite Stufe mit eigener Abnahme.
 
 <a id="rm-562"></a>
 

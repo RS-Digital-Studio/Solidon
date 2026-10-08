@@ -37,6 +37,8 @@ entfernt hat.
 | 2026-10-06 | [RM-441: Jeder Befund, der sagt, dass ein Schritt nichts getan hat, öffnet diesen Schritt (06.10.2026)](#rm-441-jeder-befund-der-sagt-dass-ein-schritt-nichts-getan-hat-öffnet-diesen-schritt-06102026) |
 | 2026-10-06 | [RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)](#rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026) |
 | 2026-10-07 | [RM-535: Karte, Operation und Griff fragen dieselbe Funktion, und das Material reist beim Versetzen, wie es ist (07.10.2026)](#rm-535-karte-operation-und-griff-fragen-dieselbe-funktion-und-das-material-reist-beim-versetzen-wie-es-ist-07102026) |
+| 2026-10-07 | [RM-536: Stift für Bohrung baut das passende Gegenstück (07.10.2026)](#rm-536-stift-für-bohrung-baut-das-passende-gegenstück-07102026) |
+| 2026-10-07 | [RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)](#rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
@@ -44129,3 +44131,77 @@ und der Test ist rot. Der Kundentest wartet seither auf die Arbeiter, bevor
 er greift (`b8d2d6264`). Beide Tests 20-mal hintereinander grün, unter Last
 von 28 rechnenden Prozessen auf 32 Kernen. Gefunden im Review 1 von
 Konsolidierungspaket 3 (G-11), behoben von Claude.
+## RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)
+
+<a id="rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026"></a>
+<a id="rm-532"></a>
+
+**RM-532 — Gewinde in jedem Maß und Normteile in allen Größen.** Kundenvorschlag
+S-20261006-c66299 (0.5.3, ohne Rückadresse): Ein Innengewinde in einem Rohr mit mindestens 60 mm
+Innendurchmesser ging nicht, *Druckbares Gewinde* endete bei M8. Robert: „keine Beschränkungen“,
+„die Gewinde usw sollten alle Größen unterstützen“.
+
+**Umsetzung** (Zweige `gewinde-eigenes-mass` und `normteile-alle-groessen`, Commits
+`63d7a7826`, `c82f9ca9e`, `3fd3c762c`): *Druckbares Gewinde*, Bohrung mit Gewinde, Gegenstück,
+*Schraube erstellen* und *Drehdeckel erzeugen* nehmen jeden Nenndurchmesser von 1,6 bis 1000 mm
+(*Eigenes Maß*, `fasteners.CUSTOM_SIZE`; Steigung null ist die Regelsteigung
+`standards.regular_pitch`, Untergrenze `units.FINEST_PITCH`, Kernanteil
+`units.THREAD_MIN_CORE_SHARE`). An einer Bohrung ohne Tabellengröße wählt `custom_thread_for` das
+Maß, dessen Kernloch sie ist (Ø 60 → Ø 66,6 × 6). Die Normteiltabelle (Version 13) führt
+Schrauben, Muttern und Scheiben von M1,6 bis M64, 27 Größen nach ISO 261/262, ISO 4762, ISO 4032,
+ISO 7089 und ISO 273, je Spalte mit Herkunft; Schraubenloch, Mutternfalle, Schraube, Mutter und
+Einpressbuchse nehmen *Eigenes Maß*, die Maße leitet `standards._along` aus den Nachbargrößen ab
+und der Befund `parts.derived_size` sagt es. Netz: ganze Umläufe und Kernecken als Vielfaches der
+Gangsehnen (`build._core_segments`, `shapes.turn_segments`), `LIBRARY_VERSION` 24 mit
+`THREAD_MESH_WHOLE_TURNS` und `LUG_END_FOLLOWS_ITS_ROUNDING`.
+
+**Zwei Durchsichten.** Runde 1 (F1–F3, R1–R6, K1–K7) im Commit `c82f9ca9e` behoben. Runde 2
+(`3fd3c762c`): Sollwerte nach dem Nachtrag M33/M39/M45/M52 (N1); der Restwand-Befund rät zu einem
+kleineren Nennmaß mit feinerer Steigung, sein Knopf öffnet `diameter` oder `size`, Restwand und
+Aufbohren gelten zugleich und die Wand wird längs der Gewindestrecke ab der Mündung gemessen
+(N2, K-N5, beide Codes in `MEINT_DEN_SCHRITT`); Senkköpfe nach DIN 7991 bis M24, darüber sowie
+für M18 und M22 gerechnet mit `countersink_derived` und Befund `parts.countersink_derived` (N3);
+ein Maß hinter der Klappe, das erst die Wahl vorn verlangt, öffnet sie (N4); kürzere Sätze über
+der Bohrung samt Wortprüfung (N5); Kopftiefe und Laschenbreite aus der größten Größe (N6); ein
+Außengewinde begrenzt eine Wand mit seinem Kern (N7); M1.6 Kernloch 1,25 nach DIN 336. Danach die
+Restfunde: Ein abgeleiteter Sechskant nimmt eine Schlüsselweite nach ISO 272 (K-N2), Ø 60 sagt,
+dass nur der Kopf abgeleitet ist (K-N3), der Satz „das ist M6 innerhalb der Messunsicherheit“
+steht über die Gewindepassung im Prüfbericht (K-N4), eine Tabellengröße an einer Bohrung
+verlangt die halbe Gangtiefe (`units.THREAD_MIN_GRIP_SHARE`, K-N6), und die Regel zur Herkunft
+der Normteiltabelle nennt Händler- und Nachschlageseiten mit Stichprobe (U-N3).
+
+**Nachweis:** Bereichsnachweis aller 49 Bausteine nach dem Merge in `stift-fuer-bohrung`
+(alle 49 bestanden, `printed_thread` 248 Ecken mit 8 erklärt ausgeschlossen, `screw_hole` 464, `wall_mount` 512); betroffene Tests je Schritt grün (Normteile 3713 bestanden ohne Fenster, Stift 1256),
+ruff und mypy grün. Der Fenstertest zu N4
+(`test_choosing_a_custom_size_opens_the_flap_with_its_diameter`) läuft beim Release. Beim Release
+meldet die Erzeugnisprüfung in `test_wording` die geänderten Handbuchabsätze. Changelog: ja —
+Gewinde in jedem Maß, Normteile von M1,6 bis M64.
+
+## RM-536: Stift für Bohrung baut das passende Gegenstück (07.10.2026)
+
+<a id="rm-536-stift-für-bohrung-baut-das-passende-gegenstück-07102026"></a>
+<a id="rm-536"></a>
+
+**RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung**
+(Fragebogen S-20261006-5be329). Kundenwunsch: „… wenn man ein Gewinde bei der Bohrung oder
+Senkung hat, dass man dafür auch das passende Gegenstück mit der Funktion erzeugen könnte“.
+Bis dahin baute `pin_for_bore` einen glatten Zylinder.
+
+**Umsetzung** (Zweig `stift-fuer-bohrung`, Commits `1a8c8ac7b`, `4a772355b`): Neue Form hinter
+der Klappe, Vorgabe „Passend zur Bohrung“ (`geom/bore_pin.py`, `geom/lid_hinge.py`). Eine
+Senkung an der Mündung gibt einen bündigen Senkkopf im Winkel der Senkung, eine Ansenkung einen
+Zylinderkopf, ein Innengewinde auf derselben Achse ein Außengewinde derselben Größe und Steigung
+aus dem Gewindebaustein (`counterpart.thread_values_for`, Tabellenmaß oder `CUSTOM_SIZE`);
+Senkung und Gewinde ergeben eine Senkkopfschraube. Der Stift hält überall das halbe Spiel
+senkrecht zur Wand, die Lage der Gänge wird am Träger gemessen. „Glatter Stift“ baut den
+Zylinder von vorher; Format 48 (`scene/migrations.py`) lässt bestehende Projekte ihn behalten.
+`leaves_inputs_unchanged` bleibt wahr. Der Befund `pin_for_bore.made` nennt den Träger in
+`object_ids` und fällt mit ihm, wenn ein späterer Schritt die Platte entfernt und den Stift
+behält (Review zu `bbd41ff2d`, R-a); `cache_version` 3.
+
+**Nachweis:** `tests/test_bore_pin.py` an `plate_countersunk.stl`, `plate_countersunk_blind.stl`, `plate_counterbored.stl` und
+einer Bohrung mit `insert_printed_thread`; `tests/data/projects/pin_for_bore_v46.p3d` rechnet
+unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothing_about_the_bore`
+mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
+Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
+Zylinderkopf und Gewinde passend zur Bohrung.

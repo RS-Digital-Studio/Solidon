@@ -74,9 +74,8 @@ Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
   `body_split` ist das eine Urteil über einen zerfallenden Körper.
 - **Wer mit `trimesh` an einer Ebene teilt und danach verschweißt**
   (`section._apply`, `faces._draft_tools`), legt vorher auf die Ebene, was
-  trimesh zu ihr zählt (`section.settled_on_plane`): Ecke und Schnittkopie
-  stünden sonst bis 1e-8 mm auseinander, und das Verschweißen über gerundete
-  Koordinaten verfehlte sie — der Körper bliebe offen.
+  trimesh zu ihr zählt (`section.settled_on_plane`), sonst bliebe der Körper
+  offen.
 - `kernel_jobs.slice_sections` liefert direkte Schichtschnitte als Ringfelder
   über `kernel_process.run`; Aufbau und Schnitt sind gemeinsam abbrechbar.
 - Eine Änderung am gemeinsamen Kern entwertet den Ergebnis-Cache
@@ -148,7 +147,8 @@ Ersatzweg prüft Geometrie, nie Metadaten)
 Flankenumriss) · `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
 GEOS-Rechteckecken, macOS/arm64) · `lid_hinge.py` (Deckelscharnier: Achse,
-Kragenraum, Augen; *Stift für Bohrung*) · `container_ops.py` (Behälter, Deckel,
+Kragenraum, Augen; *Stift für Bohrung*) · `bore_pin.py` (Kopf und
+Gewinde des passenden Stifts) · `container_ops.py` (Behälter, Deckel,
 Einsätze; Entwurf in `core/lid_flow.py`) · `counter_form_ops.py` (Taschen aus
 dem Schatten der Teile)
 

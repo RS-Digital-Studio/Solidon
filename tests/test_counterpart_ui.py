@@ -18,6 +18,8 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
+THREADS = Path(__file__).parent / "data" / "threads"
+
 
 def _two_plates(window: MainWindow) -> tuple[str, str]:
     """Zwei Platten nebeneinander, gerechnet — die Ausgangslage."""
@@ -520,3 +522,316 @@ def test_the_counterpart_labels_carry_no_colon(qt_app: QApplication) -> None:
         assert not [text for text in captions if text.rstrip().endswith(":")], captions
     finally:
         dialog.deleteLater()
+
+
+def test_a_measured_thread_keeps_its_size_note_in_the_report(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Satz über das Maß des Gegenstücks steht im Prüfbericht und bleibt dort.
+
+    Ein eingelesener Bolzen Ø 7 x 1 ist keine Normgröße; das Gegenstück nimmt
+    das gemessene Maß, und der Satz dazu stand nur in der Statuszeile (Review
+    RM-532 Runde 2, K-N4). Jetzt sagt ihn die Prüfung der Gewindepassung — nach
+    dem Klick und nach jeder weiteren Auswertung.
+    """
+    import hashlib
+
+    from app.core.brep.profiles import threaded_rod
+    from app.core.brep.step import write
+    from app.core.types import Source
+    from app.ui import counterpart_dialog as module
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        project = window.session.project
+        payload = write(threaded_rod(7.0, 1.0, 12.0))
+        project.sources["bolt"] = payload
+        project.document.sources["bolt"] = Source(
+            id="bolt",
+            kind="import",
+            path="sources/bolt.step",
+            sha256=hashlib.sha256(payload).hexdigest(),
+        )
+        window.session.history.apply(
+            "Bolzen", [OperationDraft(op="load_step", params={"source": "bolt"})]
+        )
+        result = window.session.evaluate_now()
+        # Der Baum kennt den Bolzen erst mit dem neuen Stand; ohne ihn fand die
+        # Auswahl nur die Fläche, und *Gegenstück* hielt modal mit „Markieren
+        # Sie an jedem der beiden Teile …“ an (Review P2: der Test hing).
+        window._on_scene(result)
+        qt_app.processEvents()
+        bolt = next(name for name in result.scene.objects if name not in (first, second))
+        threads = [
+            name
+            for name, feature in result.scene.objects[bolt].features.items()
+            if feature.kind == "thread"
+        ]
+        assert len(threads) == 1, "der eingelesene Bolzen trägt ein erkanntes Gewinde"
+        window.object_tree.select_features(
+            ((bolt, threads[0]), (second, _top_face(window, second)))
+        )
+        QApplication.processEvents()
+        assert len(window.object_tree.selected_features()) > 2, (
+            "das Gewinde bündelt seine Flanken — sonst prüft der Test die Stellen nicht"
+        )
+        assert len(window.object_tree.selected_places()) == 2, "zwei Stellen sind markiert"
+
+        def no_dialog(self: object) -> int:
+            raise AssertionError("am Gewinde gibt es nichts zu wählen — kein Dialog")
+
+        monkeypatch.setattr(module.CounterpartDialog, "exec", no_dialog)
+        window.action_counterpart()
+        assert window.session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        document = window.session.project.document
+        assert len(document.fits) == 1 and document.fits[0].kind == "thread"
+
+        def noted() -> list[str]:
+            return [
+                finding.object_id or ""
+                for finding in window.report._findings
+                if finding.code == "parts.counterpart_own_measure"
+            ]
+
+        assert noted() == [bolt], [finding.code for finding in window.report._findings]
+        window.session.evaluate_now()
+        assert window.session.wait_for_idle(60_000)
+        qt_app.processEvents()
+        assert noted() == [bolt], "der Satz übersteht die nächste Auswertung"
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()
+
+
+def test_the_pin_for_a_bore_is_offered_at_an_internal_thread_only(qt_app: QApplication) -> None:
+    """Am Innengewinde steht *Stift für Bohrung* in der Karte, am Außengewinde nicht (RM-536).
+
+    Der Stift baut das passende Außengewinde in eine Gewindebohrung; an einem
+    Bolzen gibt es keine Bohrung, in die er gehört (``actions.not_offered_at``).
+    **Erkannte Gewinde aus dem Korpus** (Review P2, G5): Der frühere Aufbau
+    stellte den Bolzen neben die Platte; das gedruckte Gewinde prüft
+    ``test_a_printed_inner_thread_offers_only_the_pin_in_the_card``.
+    """
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    offered: dict[bool, bool] = {}
+    for name, internal in (("m8_innen.step", True), ("m6_rechts.step", False)):
+        window = MainWindow(Session(), UiSettings())
+        try:
+            window.open_path(THREADS / name)
+            window.session.wait_for_idle()
+            result = window.session.evaluate_now()
+            object_id, entry = next(iter(result.scene.objects.items()))
+            [thread] = [key for key, feature in entry.features.items() if feature.kind == "thread"]
+            assert bool(entry.features[thread].params.get("internal")) is internal
+            window.object_tree.select_object(object_id)
+            window.object_tree.select_feature(object_id, thread)
+            QApplication.processEvents()
+            panel = window.selection_operations
+            assert not panel.isHidden(), "die Karte steht da, kein Baustein darüber"
+            assert panel.chosen_level() == "thread"
+            offered[internal] = panel._fits_the_level("pin_for_bore")
+        finally:
+            window.wait_for_workers()
+            release = getattr(type(window), "release", None)
+            if release is not None:
+                release(window)
+            window.deleteLater()
+    assert offered == {True: True, False: False}
+
+
+def test_a_printed_inner_thread_offers_only_the_pin_in_the_card(qt_app: QApplication) -> None:
+    """Am gedruckten Innengewinde steht in der Karte genau *Stift für Bohrung* (RM-536).
+
+    An einem Merkmal eines Bausteins bedienen die Bausteinfelder den Schritt,
+    die Karte war deshalb ganz verborgen — auch der Stift, den der Kunde gerade
+    zu seinem selbst gedruckten Gewinde will (Entscheidung Robert, 07.10.2026).
+    Jetzt steht er dort allein; am gedruckten Außengewinde bleibt die Karte zu.
+    """
+    window = MainWindow(Session(), UiSettings())
+    try:
+        first, second = _two_plates(window)
+        window.session.history.apply(
+            "Gewinde",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(first,),
+                    params={"size": "M6", "length": 8.0, "internal": True, "z": 10.0},
+                ),
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=(second,),
+                    params={"size": "M6", "length": 8.0, "internal": False, "x": 60.0, "z": 10.0},
+                ),
+            ],
+        )
+        window.session.evaluate_now()
+        result = window.session.last_result
+        assert result is not None
+        assert not [entry for entry in result.scene.report.findings if entry.severity == "error"]
+
+        def thread_of(object_id: str) -> str:
+            [name] = [
+                name
+                for name, feature in result.scene.objects[object_id].features.items()
+                if feature.kind == "thread" and feature.provenance == "generated"
+            ]
+            return name
+
+        panel = window.selection_operations
+        window.object_tree.select_object(first)
+        window.object_tree.select_feature(first, thread_of(first))
+        QApplication.processEvents()
+        assert window._common_part_step(window.object_tree.selected_features()) is not None, (
+            "das Gewinde ist ein Bausteinmerkmal — sonst prüft der Test nichts"
+        )
+        assert not panel.isHidden(), "die Karte steht da"
+        assert panel.chosen_level() == "thread"
+        offered = {name for name in panel._buttons if panel._fits_the_level(name)}
+        assert offered == {"pin_for_bore"}
+        button = panel._buttons["pin_for_bore"]
+        assert "pin_for_bore" in panel._quick_shown or not button.isHidden()
+        assert button.isEnabled()
+        assert panel.catalog_button.isHidden(), "kein Katalog an einem Bausteinmerkmal"
+
+        window.object_tree.select_object(second)
+        window.object_tree.select_feature(second, thread_of(second))
+        QApplication.processEvents()
+        assert panel.isHidden(), "am Außengewinde gibt es keinen Stift, und die Karte bleibt zu"
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()
+
+
+def _a_pin_on_a_short_thread(window: MainWindow) -> None:
+    """Ein gedrucktes M6 von 2 mm und darauf der Stift, der dafür zu wenig Gewinde hat."""
+    window.session.start_new("centauri-carbon-2", "petg")
+    window.session.history.apply(
+        "Quader mit Gewinde",
+        [
+            OperationDraft(op="create_box", params={"width": 30.0, "depth": 30.0, "height": 12.0}),
+            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 12.0}),
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"size": "M6", "length": 2.0, "internal": True, "at_feature": "hole_1"},
+            ),
+        ],
+    )
+    window.session.evaluate_now()
+    result = window.session.last_result
+    assert result is not None
+    [thread] = [
+        name
+        for name, feature in result.scene.objects["obj_1"].features.items()
+        if feature.kind == "thread" and feature.provenance == "generated"
+    ]
+    window.session.history.apply(
+        "Stift",
+        [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": thread})],
+    )
+    window.session.evaluate_now()
+
+
+def _length_has_the_cursor(window: MainWindow) -> None:
+    """Offen ist der Dialog des Gewindes, und der Cursor steht in *Länge*."""
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    dialog = window._op_dialog
+    assert dialog is not None, "der Dialog ging nicht auf"
+    try:
+        assert dialog.spec.name == "insert_printed_thread"
+        inner = dialog._editors["length"].findChild(QDoubleSpinBox)
+        assert inner is not None and inner.hasFocus()
+    finally:
+        dialog.reject()
+
+
+def test_a_thread_too_short_for_the_pin_opens_the_thread_step_at_its_length(
+    qt_app: QApplication,
+) -> None:
+    """*Gewindeschritt öffnen* am Stift öffnet das Gewinde, nicht den Stift (Review P2, M2).
+
+    Ein gedrucktes M6 von 2 mm lässt dem Stift weniger als die kürzeste
+    druckbare Gewindelänge; zu ändern ist das Gewinde. Geprüft an der ganzen
+    Kette: Befund, Knopf, Dialog des früheren Schritts, Cursor in *Länge*.
+    """
+    from app.ui.panels import as_error
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        _a_pin_on_a_short_thread(window)
+        result = window.session.last_result
+        assert result is not None
+        [finding] = [
+            entry for entry in result.scene.report.findings if entry.code.startswith("op.pin")
+        ]
+        assert "change_creating_step" in {action.id for action in finding.suggestions}
+
+        window.error_handlers()["change_creating_step"](as_error(finding))
+        QApplication.processEvents()
+        _length_has_the_cursor(window)
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()
+
+
+def test_the_pin_dialog_offers_to_open_the_thread_step(qt_app: QApplication) -> None:
+    """Im Dialog des Stifts steht *Gewindeschritt öffnen* an der Absage (Review P2 N6).
+
+    Wo der Kunde die Absage zuerst sieht, in der Vorschau des Dialogs, stand
+    der Satz ohne Knopf: Der Dialog zeigt nur Handlungen, die er selbst
+    einlöst. Der Knopf schließt ihn jetzt und öffnet das Gewinde an *Länge*.
+    """
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.errors import CHANGE_THREAD_STEP
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        _a_pin_on_a_short_thread(window)
+        pin_step = window.session.history.operations[-1].id
+        window.edit_operation(pin_step)
+        pin_dialog = window._op_dialog
+        assert pin_dialog is not None and pin_dialog.spec.name == "pin_for_bore"
+        # Übernehmen vor dem Bild fordert die Vorschau an und wartet auf sie
+        # (``preview_defer``); sie sagt ab, und nichts wird übernommen.
+        QTest.qWait(100)
+        assert window.session.wait_for_idle(60_000)
+        pin_dialog.accept()
+        label = str(CHANGE_THREAD_STEP.label)
+        button = None
+        for _round in range(100):
+            QTest.qWait(100)
+            assert window.session.wait_for_idle(60_000)
+            button = next(
+                (
+                    entry
+                    for entry in pin_dialog.findChildren(QPushButton)
+                    if entry.text() == label and entry.isVisible()
+                ),
+                None,
+            )
+            if button is not None:
+                break
+        assert button is not None, "die Absage im Dialog trägt keinen Knopf zum Gewinde"
+        button.click()
+        QApplication.processEvents()
+        assert window._op_dialog is not pin_dialog, "der Dialog des Stifts ging nicht zu"
+        _length_has_the_cursor(window)
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()

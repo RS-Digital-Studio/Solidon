@@ -1013,10 +1013,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "![](figure:part-cable-clip)\n\n"
             "**Druckbares Gewinde**: ein Innengewinde oder ein Gewindebolzen für ein "
             "gedrucktes Gegenstück, nicht für eine Metallschraube. Mit dem Haken bei "
-            "Innengewinde schneidet es auf einer Fläche sein Loch selbst. In eine vorhandene "
-            "Bohrung passt es, wenn sie zwischen Kernloch und Nennmaß liegt, siehe [Ein "
-            "Gewinde in eine Bohrung](manual:thread-a-hole). Ein Schraubenloch derselben "
-            "Größe ist dafür zu weit.\n\n"
+            "Innengewinde schneidet es auf einer Fläche sein Loch selbst. Neben den "
+            "M-Größen nimmt es unter *Eigenes Maß* jeden Durchmesser, etwa für ein Rohr. "
+            "In eine vorhandene Bohrung setzt es das Gewinde, das passt, siehe [Ein "
+            "Gewinde in eine Bohrung](manual:thread-a-hole).\n\n"
             "Dazu kommen Schraubenloch, Magnettasche, Kabeldurchführung, Rippe, "
             "Schlüsselloch, Kugellager einsetzen, Schraube, Gedruckte Mutter, "
             "Nutfeder, Wandhalter, Schnappverbindung, Passstift und Passbohrung, "
@@ -1844,9 +1844,17 @@ def profiles_text() -> str:
         str(
             _(
                 "Woher die Maße kommen, wenn ein Baustein ein Schraubenloch, eine "
-                "Mutternfalle oder ein Gewinde setzt. In eine Bohrung zwischen Kernloch und "
-                "Nennmaß passt ein druckbares Innengewinde dieser Größe. Nichts davon wird "
-                "geschätzt."
+                "Mutternfalle oder ein Gewinde setzt: aus der metrischen Reihe von M1.6 bis "
+                "M64. Ein druckbares Innengewinde einer Größe passt in eine Bohrung, die bis "
+                "zu einem Zehntel der Steigung enger sein darf als ihr Kernloch und dem Gang "
+                "noch die halbe Tiefe in der Wand lässt. Passt keine, nimmt das Gewinde ein "
+                "eigenes Maß, dessen Gänge mit voller Tiefe in der Wand der Bohrung liegen. "
+                "Liegt es knapp neben einer Normgröße, wird es diese und weitet die Bohrung um "
+                "den Rest auf. Auch Schraubenloch, Mutternfalle, Schraube "
+                "und Mutter nehmen unter *Eigenes Maß* jeden Durchmesser. Ihre Maße sind dann "
+                "aus den Normgrößen daneben abgeleitet und nicht genormt, und der Prüfbericht "
+                "sagt das. Eine Einpressbuchse, die hier fehlt, bekommt Bohrung und Länge aus "
+                "ihrem Datenblatt."
             )
         )
     )

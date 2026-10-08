@@ -115,6 +115,7 @@ from app.core.backends import llm
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
     CANCEL,
+    CHANGE_THREAD_STEP,
     CHOOSE,
     DECIMATE_AND_RETRY,
     REMESH_AND_RETRY,
@@ -10920,9 +10921,11 @@ class MainWindow(QMainWindow):
         ``None`` heißt: Die Lage trägt kein Gegenstück. Zwei Stellen an
         demselben Körper sind keine Verbindung, sondern ein Loch neben einem
         Zapfen; der Kern weist das ohnehin ab, und hier ist es eine Auskunft
-        vor dem Klick statt einer Absage danach.
+        vor dem Klick statt einer Absage danach. Gezählt werden markierte
+        **Stellen** (``ObjectTree.selected_places``): Ein Gewinde mit seinen
+        Flanken unter sich ist eine.
         """
-        chosen = self.object_tree.selected_features()
+        chosen = self.object_tree.selected_places()
         if len(chosen) != 2:
             return None
         first, second = chosen
@@ -22368,6 +22371,9 @@ class MainWindow(QMainWindow):
         schreiben ihn samt Vorbereitung als **eine** Transaktion und schließen
         den Dialog; Strg+Z nimmt beides zurück (Regel 16). Ohne die Zahl aus
         der Absage gibt es keinen Knopf: raten wäre keiner (Regel 21).
+        *Gewindeschritt öffnen* schließt den Dialog und öffnet den Schritt, den
+        der Kern in ``values["creating_step"]`` nennt — beim Stift sieht der
+        Kunde die Absage hier zuerst (Review P2 N6).
         """
         owner = approval.owner
         order = approval.order
@@ -22392,7 +22398,24 @@ class MainWindow(QMainWindow):
             handlers[REMESH_AND_RETRY.id] = lambda _error: self._prepared_from_dialog(
                 approval, "remesh_mesh", {"edge": remesh_to}, REMESH_AND_RETRY.label
             )
+        if CHANGE_THREAD_STEP.id in wanted and error.values.get("creating_step") is not None:
+            handlers[CHANGE_THREAD_STEP.id] = lambda refusal: self._creating_step_from_dialog(
+                approval, refusal
+            )
         return handlers
+
+    def _creating_step_from_dialog(self, approval: _PreviewApproval, error: AppError) -> None:
+        """*Gewindeschritt öffnen* aus dem Dialog: ihn schließen, den früheren Schritt öffnen.
+
+        Derselbe Weg wie im Prüfbericht (:meth:`_change_creating_step`); der
+        Dialog geht vorher zu, ohne zu übernehmen.
+        """
+        if not self._preview_is_current(approval):
+            return
+        reject = getattr(approval.owner, "reject", None)
+        if reject is not None:
+            reject()
+        self._change_creating_step(error)
 
     def _prepared_from_dialog(
         self,
@@ -24915,6 +24938,9 @@ class MainWindow(QMainWindow):
             # stand der Rat als Satz ohne Knopf.
             "sketch.pick_plane": self._correct_after_error,
             "resize_the_widening": self._resize_the_widening,
+            # Den früheren Schritt öffnen, der das Merkmal gesetzt hat — ein Stift an
+            # einem zu kurzen Gewinde braucht ein längeres Gewinde (Review P2, M2).
+            "change_creating_step": self._change_creating_step,
             "show_step_values": self._show_step_values,
             # **Die Absage beim Einlesen hatte nur „Abbrechen".** Eine
             # kaputte Datei lässt sich nicht korrigieren, und der Schritt,
@@ -25135,6 +25161,20 @@ class MainWindow(QMainWindow):
             # einen Millimeter, wächst die Senkung um denselben.
             given["diameter"] = round(outer - previous + diameter, 2)
         self.run_operation(REGISTRY.get("resize_feature"), given)
+
+    def _change_creating_step(self, error: AppError) -> None:
+        """*Gewindeschritt öffnen*: den Schritt, der das Merkmal des Fehlers erzeugt hat.
+
+        Die Absage steht an einem späteren Schritt, zu ändern ist der frühere —
+        welcher, nennt der Kern in ``values["creating_step"]``, das Feld in
+        ``values["field"]``. Derselbe Dialog wie *Eingabe korrigieren*, nur an
+        dem Schritt, in dem die Eingabe etwas ändert.
+        """
+        try:
+            step = int(str(error.values.get("creating_step", "")))
+        except ValueError:
+            return
+        self.edit_operation(step, str(error.values.get("field", "")))
 
     def _entry_of(self, error: AppError) -> Any:
         """Der Körper, den ein Fehler meint — oder nichts."""

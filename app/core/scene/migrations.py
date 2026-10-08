@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 47
+FORMAT_VERSION: Final = 48
 
 #: Unter diesem Schlüssel steht während der Kette, mit welcher Version die Datei
 #: gespeichert wurde — für einen Schritt, der davon abhängt, ob das Projekt mit
@@ -1337,6 +1337,18 @@ def _keep_slot_tools_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     saved = int(data.get(SAVED_FORMAT_KEY, _LAST_FORMAT_WITH_THE_OLD_SLOT_TOOL + 1))
     if saved > _LAST_FORMAT_WITH_THE_OLD_SLOT_TOOL:
         return data
+    for operation in _saved_operations(data):
+        if not isinstance(operation, dict) or operation.get("op") not in _SLOT_TOOL_OPERATIONS:
+            continue
+        params = operation.setdefault("params", {})
+        if isinstance(params, dict):
+            params.setdefault("legacy_slot_tool", True)
+    return data
+
+
+def _saved_operations(data: dict[str, Any]) -> list[Any]:
+    """Jeder gespeicherte Schritt: der Verlauf und die Fassungen ``before`` und
+    ``after`` jeder Änderung — was ein Strg+Z zurückholt, rechnet wie der Verlauf."""
     operations = list(data.get("ops", []))
     for transaction in data.get("transactions", []):
         changes = transaction.get("changes")
@@ -1346,12 +1358,31 @@ def _keep_slot_tools_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
             state = changes.get(side)
             if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
                 operations.extend(state["edited_ops"].values())
-    for operation in operations:
-        if not isinstance(operation, dict) or operation.get("op") not in _SLOT_TOOL_OPERATIONS:
+    return operations
+
+
+def _keep_bore_pins_plain(data: dict[str, Any]) -> dict[str, Any]:
+    """47 → 48: Ein *Stift für Bohrung* aus einer älteren Datei bleibt der glatte Zylinder.
+
+    Bis RM-536 baute die Operation an jeder Bohrung einen Zylinder, Bohrung
+    minus Spiel; seitdem gibt sie einer Senkung einen Senkkopf, einer
+    Ansenkung einen Zylinderkopf und einem Innengewinde ein Außengewinde
+    (``shape`` = ``to_the_bore``). Ein gespeicherter Stift rechnete nach dem
+    Update still eine andere Form. Jeder gespeicherte Schritt — auch in den
+    Fassungen einer Änderung — bekommt deshalb ``shape = plain_pin``, wo er
+    keine Form nennt; wer die neue will, wählt sie im Schritt. Festgehalten an
+    ``tests/data/projects/pin_for_bore_v46.p3d``, geschrieben vom Stand davor.
+
+    Der Schritt geht von 47 auf 48 (:data:`MIGRATIONS`) und deckt damit auch
+    Dateien aus 46; gelesen wird keine gespeicherte Version, denn das Feld gab
+    es vorher nicht.
+    """
+    for operation in _saved_operations(data):
+        if not isinstance(operation, dict) or operation.get("op") != "pin_for_bore":
             continue
         params = operation.setdefault("params", {})
         if isinstance(params, dict):
-            params.setdefault("legacy_slot_tool", True)
+            params.setdefault("shape", "plain_pin")
     return data
 
 
@@ -1449,6 +1480,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=44, to_version=45, apply=_allow_revision_lineage),
     Step(from_version=45, to_version=46, apply=_keep_slot_tools_as_they_were),
     Step(from_version=46, to_version=47, apply=_empty_the_top_edge),
+    Step(from_version=47, to_version=48, apply=_keep_bore_pins_plain),
 )
 
 

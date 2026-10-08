@@ -291,10 +291,9 @@ Ansichtsseite steht in `griffe.md`.
 - **Entf** nimmt an Dach oder Einzelmerkmal den Schritt des Bausteins
   (`MainWindow._delete_the_chosen_feature`), nie den Körper; ohne Baustein gilt
   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt
-  der Körper — mit Ansage und Strg+Z: Eine Fläche ist kein Ding, das man
-  löscht, der Körper ist gemeint, und ein Teil, das Entf nicht löscht, ist eine
-  Sackgasse (Regel 19). Ohne Merkmal nimmt Entf alle markierten Körper
-  (`on_bodies`). *Ausblenden* heißt am Merkmal *Körper ausblenden*.
+  der Körper — mit Ansage und Strg+Z (Regel 19). Ohne Merkmal nimmt Entf alle
+  markierten Körper (`on_bodies`). *Ausblenden* heißt am Merkmal *Körper
+  ausblenden*.
 - **Bei gewähltem Dach** fragt `_move_the_part` `_common_part_step`, und das
   Dach bekommt einen eigenen Griff (`_part_grip_anchor` →
   `Viewport.set_part_grip`; welches Merkmal ihn trägt, sagt das Fenster) statt
@@ -305,8 +304,7 @@ Ansichtsseite steht in `griffe.md`.
   (`_part_faces_of_selection`, `_filament_targets`), die Chips im Baum bleiben
   je Fläche.
 - **Was kein Zahlenfeld werden kann, bekommt seinen Weg:** Ein Sammelparameter
-  mit eigenem Editor (`perceive.actions.COLLECTED_KINDS`, dieselben Arten wie
-  in `operationen.md` unter „Sammelparameter“) steht in
+  mit eigenem Editor (`perceive.actions.COLLECTED_KINDS`) steht in
   `FeatureAction.elsewhere`, und ein Knopf öffnet den Dialog des Schritts. Ein
   neuer Sammelparameter trägt seine Art dort ein.
 - **Ein Langloch aus einem Schritt gehört dazu:** Hat `slot_hole` es gezogen,
@@ -314,6 +312,8 @@ Ansichtsseite steht in `griffe.md`.
   `_commit_slot_change`) und legt keinen zweiten obenauf. Wer eine Operation
   baut, die ein Merkmal aus ihrem früheren Schritt noch einmal anfasst, fragt
   zuerst `created_by`.
+- **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* am
+  Innengewinde, an keiner anderen Art), danach `not_offered_at`.
 
 ## Der Hauptknopf
 

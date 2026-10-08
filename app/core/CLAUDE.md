@@ -31,7 +31,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 | Datei | Rolle |
 |---|---|
 | `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile` — Signaturen stehen fest, bevor ein Modul entsteht. Die zwei Fragen, die an einem Merkmal nur einmal beantwortet werden: `is_a_cavity` und `thread_is_left_handed` (links heißt gesetzt, nativ gelesen oder an den Kanten gemessen; die Schätzung `fit` sperrt nicht) |
-| `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11); `is_close`/`is_zero` statt `==`; Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (`circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin`, über `decimal`); `format_length_bound` formatiert Schranken gerichtet (untere nach unten, obere nach oben) |
+| `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11); `is_close`/`is_zero` statt `==`; Winkelfunktionen, die auf jeder Maschine dieselbe Zahl geben (`circle_point`, `inscribed_ratio`, `exact_cos`/`exact_sin`, über `decimal`); `format_length_bound` formatiert Schranken gerichtet (untere nach unten, obere nach oben); die gemeinsamen Gewindegrenzen `SMALLEST_THREAD`, `LARGEST_THREAD`, `FINEST_PITCH`, `COARSEST_PITCH`, `THREAD_MIN_CORE_SHARE` |
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1); jede trägt mindestens eine `Action` |
 | `action_effects.py` | Was jede angebotene Handlung außer ihrem Zweck verändert (`SIDE_EFFECTS`, `side_effect`; Befundkarte des Produktkompasses, Abschnitt 4.3); jede `Action`-Kennung des Kerns steht dort (`tests/test_action_effects.py`) |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — kein `eval` |
@@ -108,9 +108,9 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
   `apply_counterpart` legt an, `attach_fit` liest die Namen aus der Szene und
   hängt die Passung an dieselbe Transaktion; ein Undo nimmt alles.
   **Ein Gewinde bringt seine Hälfte mit**: `thread_counterpart_draft` setzt am
-  anderen Teil das gegengleiche Bausteingewinde im **Tabellenmaß**
-  (`thread_size_for`, Grenze `THREAD_SIZE_REACH` — Ø 6,4 × 1,1 wird nicht still
-  M6, sondern nennt die nächste Größe), `apply_thread_counterpart` legt an,
+  anderen Teil das gegengleiche Bausteingewinde im **Tabellenmaß**, wo es
+  eines trifft, sonst im eigenen Maß (`thread_values_for`, Grenze
+  `standards.THREAD_SIZE_REACH` — Ø 6,4 × 1,1 wird nicht still M6), `apply_thread_counterpart` legt an,
   `attach_thread_fit` hängt die Gewindepassung an. `_made_feature` nimmt das
   **erzeugte** Merkmal, nicht das daneben erkannte zweite; der Schritt bleibt
   beim Nachtragen der letzte, ein geänderter Verlauf bekommt einen Befund.

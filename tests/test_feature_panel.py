@@ -591,6 +591,83 @@ def test_regrouping_keeps_the_selected_feature_current_and_visible(qt_app: QAppl
     tree.close()
 
 
+def test_a_roof_counts_as_the_places_beneath_it_not_its_first_child(
+    qt_app: QApplication,
+) -> None:
+    """Review P2 N1: Ein Dach „Zapfen (4)“ sind vier Stellen, nicht der erste Zapfen.
+
+    ``selected_places`` nahm je Zeile das führende Merkmal. Ein Dach trägt
+    keine Kennung, und so blieb von vier Zapfen nur ``pin_1`` — mit der Fläche
+    am zweiten Teil ein Paar, und *Gegenstück* baute still an einem Zapfen.
+    Eine Zeile mit eigener Kennung bleibt eine Stelle, auch mit Kindern.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.main_window import MainWindow
+    from app.ui.panels import ObjectTree, _place_refs_under
+
+    pins = {
+        f"pin_{index}": Feature(
+            id=f"pin_{index}",
+            kind="pin",
+            provenance="detected",
+            params={"diameter": 5.0, "depth": 8.0, "centre": (x, 0.0, 9.0)},
+        )
+        for index, x in enumerate((-30.0, -10.0, 10.0, 30.0), start=1)
+    }
+    face = Feature(
+        id="face_top",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 5.0), "area": 900.0},
+    )
+    first = SceneObject(id="obj_1", name="Platte", mesh=plate(), features=pins)
+    second = SceneObject(id="obj_2", name="Deckel", mesh=plate(), features={"face_top": face})
+    tree = ObjectTree()
+    tree.show_scene(EvaluationResult(Scene(objects={"obj_1": first, "obj_2": second})))
+    QApplication.processEvents()
+    role = Qt.ItemDataRole.UserRole
+    rows = [
+        tree.tree.topLevelItem(index).child(position)
+        for index in range(tree.tree.topLevelItemCount())
+        for position in range(tree.tree.topLevelItem(index).childCount())
+    ]
+    roofs = [row for row in rows if row.childCount() and row.data(1, role) is None]
+    target = next(row for row in rows if row.data(1, role) == "face_top")
+    assert len(roofs) == 1 and roofs[0].childCount() == 4, "die vier Zapfen stehen unter einem Dach"
+    tree.tree.clearSelection()
+    roofs[0].setSelected(True)
+    target.setSelected(True)
+    QApplication.processEvents()
+    assert tree.selected_places() == (
+        *(("obj_1", f"pin_{index}") for index in range(1, 5)),
+        ("obj_2", "face_top"),
+    )
+    stand_in: Any = SimpleNamespace(object_tree=tree)
+    assert MainWindow._counterpart_targets(stand_in) is None, (
+        "vier Zapfen und eine Fläche tragen kein Gegenstück"
+    )
+    tree.close()
+
+    def row(feature_id: str | None) -> QTreeWidgetItem:
+        made = QTreeWidgetItem(["", ""])
+        made.setData(0, role, "obj_1")
+        made.setData(1, role, feature_id)
+        return made
+
+    roof, bore, sink, other = row(None), row("hole_1"), row("sink_1"), row("hole_2")
+    bore.addChild(sink)
+    roof.addChild(bore)
+    roof.addChild(other)
+    assert _place_refs_under(bore) == [("obj_1", "hole_1")], "die Bohrung mit Senkung ist eine"
+    assert _place_refs_under(roof) == [("obj_1", "hole_1"), ("obj_1", "hole_2")]
+
+
 def test_a_chosen_feature_that_the_new_state_lacks_is_given_up_not_the_body(
     qt_app: QApplication,
 ) -> None:
