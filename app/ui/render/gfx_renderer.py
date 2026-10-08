@@ -667,20 +667,26 @@ def _buffer_bytes(item: GfxItem) -> int:
 
 
 def _rewrite_surface(geometry: Any, positions: np.ndarray) -> bool:
-    """Neue Ecken in die Puffer einer beleuchteten Fläche schreiben, Normalen
-    gleich mit — ``False``, wenn sie keine Dreiecke mit Normalenpuffer ist."""
+    """Neue Ecken in die Puffer einer beleuchteten Fläche geben, Normalen
+    gleich mit — ``False``, wenn sie keine Dreiecke mit Normalenpuffer ist.
+
+    Die Puffer bekommen eigene, neue Felder (``set_data``) und werden nicht
+    überschrieben: Das Feld eines Puffers gehört nicht immer ihm.
+    :meth:`GfxRenderer.add_surface` reicht vorbereitete Normalen ohne Kopie
+    hinein, und die Ansicht merkt sie sich für das nächste Bild desselben
+    Netzes. Ein Schreiben hinein gab dem unveränderten Körper nach einer
+    Formvorschau deren Beleuchtung (Review F1).
+    """
     normals = getattr(geometry, "normals", None)
     indices = getattr(geometry, "indices", None)
     current = geometry.positions
     if normals is None or indices is None or normals.nitems != current.nitems:
         return False
-    fresh = np.asarray(positions, dtype=np.float32)
-    if not np.isfinite(fresh).all():
+    fresh = np.array(positions, dtype=np.float32, order="C", copy=True)
+    if fresh.shape != np.shape(current.data) or not np.isfinite(fresh).all():
         return False
-    current.data[:] = fresh
-    current.update_full()
-    normals.data[:] = _normals(fresh, np.asarray(indices.data))
-    normals.update_full()
+    current.set_data(fresh)
+    normals.set_data(_normals(fresh, np.asarray(indices.data)))
     return True
 
 
