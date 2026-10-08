@@ -41,6 +41,8 @@ entfernt hat.
 | 2026-10-07 | [RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)](#rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
+| 2026-10-08 | [RM-562: Bausteine, die für sich ein Teil sind, entstehen ohne Auswahl als eigener Körper (08.10.2026)](#rm-562-bausteine-die-für-sich-ein-teil-sind-entstehen-ohne-auswahl-als-eigener-körper-08102026) |
+| 2026-10-08 | [RM-565: *Auswahl als Baustein speichern* nimmt den gewählten Körper (08.10.2026)](#rm-565-auswahl-als-baustein-speichern-nimmt-den-gewählten-körper-08102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
 | 2026-10-06 | [RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)](#rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026) |
@@ -44205,3 +44207,67 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-562: Bausteine, die für sich ein Teil sind, entstehen ohne Auswahl als eigener Körper (08.10.2026)
+
+<a id="rm-562-bausteine-die-für-sich-ein-teil-sind-entstehen-ohne-auswahl-als-eigener-körper-08102026"></a>
+<a id="rm-562"></a>
+
+**RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen.** Kunden-E-Mail
+vom 07.10.2026 und Robert, 08.10.2026: Kabelclip, Eckwinkel, Versteifungsrippe, Standfuß,
+Wandhalter und weitere ließen sich nur an einen gewählten Körper anfügen.
+
+**Umsetzung** (Zweig `paket/b-bausteine`, Commit `4fb961ff7`): Die Quelle ist
+`PartSpec.standalone` am Baustein. Neu eigenständig: Bolzenscharnier, Kabelclip, Passstift (nur der
+Stift), Standfuß (nur der gedruckte Fuß), Eckwinkel, Filmscharnier, Gedruckte Mutter, Schraube,
+Versteifungsrippe, Wandhalter — jeder erfüllt ohne Träger seine Aufgabe. Nicht eigenständig, mit
+Grund: Rastnase, Schnappverbindung, Schnappverbinder, Scharnierauge, Lasche mit Loch, Nutfeder,
+Lochwand-Einhänger (wirken nur am Träger), Druckbares Gewinde (der freie Gewindebolzen ist
+*Schraube erstellen*), alle abtragenden. Der Katalog nimmt den Erzeuger, solange keine Stelle gewählt
+ist, an die er gehört (`ops.catalog_operation`, eine Schraube an einer Fläche entsteht frei; ein gewählter Körper allein zählt nicht, weil jeder
+Erzeugerschritt seinen Körper wählt), und sagt das am Knopf. Das Register weist einen
+eigenständigen abtragenden Baustein ab und verlangt bei einer abtragenden Wahl genau die Vorgabe
+als aufgesetzte Form; der Erzeuger lässt diese Wahl weg (`build_params`). Ohne Träger steht der
+Körper auf der Ebene seines Ursprungs, die Schraube kopfüber (`_on_its_own_bed`, sonst hing der
+Schaft unter dem Bett und die Mutter schwebte um ihr Spiel); Netz und Merkmale rollen gleich
+(`keeps_up`), Erzeuger `cache_version` `guards:3`. Keine Maßänderung, `LIBRARY_VERSION` bleibt.
+Agent: zehn Werkzeuge mehr, Grundlast neu gezählt (8 822 Token bei 199 Werkzeugen, qwen3:14b).
+
+**Nachweis:** `tests/test_parts.py::test_every_standalone_part_makes_a_watertight_body_without_a_selection`
+über alle 32 eigenständigen (wasserdicht, erklärte Teilezahl, auf dem Bett; Gegenprobe ohne
+`_on_its_own_bed` rot an Kabelclip, Mutter, Schraube), `test_the_parts_customers_print_on_their_own_stand_alone`
+(am alten Stand rot), `test_a_standalone_creator_offers_only_the_form_that_is_a_body`,
+`test_a_part_that_only_cuts_cannot_stand_alone`, `test_the_catalogue_attaches_at_a_chosen_place_and_creates_without_one`;
+Fenstertest `tests/test_catalog_ui.py::test_a_standalone_part_becomes_its_own_body_and_attaches_only_at_a_chosen_face`
+(Gegenprobe: Rippe ohne `standalone` rot). Paritätstabelle mit Sollhöhen. Bereichsnachweis für die
+32 Bausteine der berührten Dateien neu gefahren (Bezugsprofil Spiel 0,2 mm, Übermaß −0,05 mm,
+Mindestwand 0,84 mm): alle bestanden, 49 von 49 passen. Handbuch „Die Bausteine“ in sechs
+Sprachen. Changelog: ja — Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter, Passstift,
+Scharniere, Schraube und Mutter entstehen ohne gewählte Fläche als eigenes Teil.
+
+## RM-565: *Auswahl als Baustein speichern* nimmt den gewählten Körper (08.10.2026)
+
+<a id="rm-565-auswahl-als-baustein-speichern-nimmt-den-gewählten-körper-08102026"></a>
+<a id="rm-565"></a>
+
+**RM-565 — *Auswahl als Baustein speichern* nimmt den gewählten Körper.** Robert, 07.10.2026:
+Körper wählen, Bausteinkatalog öffnen, *Speichern* — ohne Umweg über die Verlaufsschritte. Bis
+dahin nahm das Speichern eine Verlaufsauswahl oder den ganzen Verlauf; mit einem zweiten Körper
+im Projekt hieß das „Dieses Rezept ergibt nicht genau einen Körper“.
+
+**Umsetzung** (Zweig `paket/b-bausteine`, Commit `3005be535`): `recipe.steps_of`
+sucht rückwärts durch den Stapel jeden Schritt, der den Körper ausgibt, samt Eingängen und den
+Körpern, deren Merkmale er nennt — ein Werkzeug, das im Körper aufging, gehört dazu, ein Nachbar
+nicht. `MainWindow._save_as_part`: eine Verlaufsauswahl geht vor (sie ist gezielt, der Körper ist
+nach jedem Erzeugerschritt ohnehin gewählt), sonst der gewählte Körper, sonst der ganze Verlauf.
+Der Dialog zeigt nur die Merkmale dieses Körpers und nennt ihn in der Kopfzeile. Ein Rezept bleibt
+Daten (Regel 13), es reist wie bisher als Liste von Schritten.
+
+**Nachweis:** `tests/test_recipes.py::test_a_chosen_body_takes_exactly_the_steps_it_came_from`
+(Kern, Volumen gegen Analytik), Fenstertest
+`tests/test_recipe_dialog.py::test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself`:
+Körper wählen, Katalog, *Speichern*, Baustein an die Fläche des Nachbarn einsetzen — er wächst
+genau um das Volumen des gespeicherten Körpers. Gegenprobe ohne Körperauswahl rot mit „ergibt
+nicht genau einen Körper“. Handbuch „Eigene Bausteine“ und „Der Verlauf“ in sechs Sprachen.
+Changelog: ja — Einen gewählten Körper als eigenen Baustein speichern, ohne Schritte im Verlauf
+zu markieren.
