@@ -4900,7 +4900,6 @@ def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
     sie, bietet das Fenster ihren Schritt an und holt dessen Maße ins Bild. Ein
     erfundener Schritt, den der Verlauf nicht kennt, kam nie bis zur Maßgruppe.
     """
-    from app.ui.labels import LengthSpin
     from app.ui.op_dialog import ValueField
     from tests.render_fakes import RecordingRenderer
 
@@ -4935,11 +4934,13 @@ def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
         for editor in flow._measure_group.findChildren(ValueField)
         if editor._entry.name == "diameter"
     )
-    other = next(
+    # Auch die Tiefe trägt fx (RM-555); der Fokus geht in ihr Drehfeld.
+    depth = next(
         editor
-        for editor in flow._measure_group.findChildren(LengthSpin)
-        if editor.accessibleName().endswith("Tiefe")
+        for editor in flow._measure_group.findChildren(ValueField)
+        if editor._entry.name == "depth"
     )
+    other = depth.spin
     window.show()
     QApplication.processEvents()
     line = diameter.text
@@ -4964,7 +4965,7 @@ def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
 
     other.lineEdit().setFocus()
     line.setModified(False)
-    flow.dialog.take_placement({"depth": other.value_mm() + 0.5})
+    flow.dialog.take_placement({"depth": float(depth.value() or 0.0) + 0.5})
     QApplication.processEvents()
     assert line.text() == refused_text, (
         "ein Rückschreiben überschreibt den abgelehnten Ausdruck nicht"
@@ -10586,8 +10587,10 @@ def test_failed_operation_is_repaired_before_retry_without_a_loop(
     assert window.session.last_result.stopped_at == retry_ops[-1].id
 
     rows = [window.history_panel.list.item(row) for row in range(window.history_panel.list.count())]
-    old_row = next(item for item in rows if old_transaction.id in item.toolTip())
-    assert tr("gelöscht") in old_row.text() and old_row.font().strikeOut()
+    # Neu gefasst, nicht gelöscht (RM-547): Die alte Zeile weicht der neuen
+    # Fassung unter dem Umbau, und nichts heißt „gelöscht“.
+    assert not any(tr("gelöscht") in item.text() for item in rows), [i.text() for i in rows]
+    assert not any(item.toolTip().startswith(f"{old_transaction.id} ") for item in rows)
     assert any(str(errors.REPAIR_AND_RETRY.label) in item.text() for item in rows)
 
     choose(failed_code)
