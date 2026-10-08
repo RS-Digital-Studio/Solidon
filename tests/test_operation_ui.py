@@ -8254,6 +8254,12 @@ def test_an_accept_while_the_scene_evaluates_applies_when_it_is_done(
 
         dialog._accept_button.click()
         assert window.session.project.document.ops == [], "vor dem Ende wird nichts geschrieben"
+        # Die Zusage steht sichtbar vor dem Lauftext — als bloßer Hinweis lag
+        # sie in ``_hint``, den die Zeile neben einer Auswertung nie zeigt, und
+        # der Klick sah weiter verschluckt aus (Review der Zusatzfixes, F2).
+        assert window.status_message.text().startswith(_waiting_for_the_evaluation()), (
+            window.status_message.text()
+        )
         gate.set()
         assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
@@ -8262,6 +8268,219 @@ def test_an_accept_while_the_scene_evaluates_applies_when_it_is_done(
         assert [entry.op for entry in window.session.project.document.ops] == [_shown_box()]
         assert window._op_dialog is None, "der Dialog ist übernommen und zu"
         assert len(window.session.last_result.scene.objects) == 1
+        assert _waiting_for_the_evaluation() not in window.status_message.text()
+    finally:
+        gate.set()
+        window.close()
+        window.deleteLater()
+
+
+def _waiting_for_the_evaluation() -> str:
+    """Die Zusage eines Klicks, der auf das Ende der Auswertung wartet."""
+    return tr("Wird übernommen, sobald die Berechnung fertig ist.")
+
+
+def _hold_the_evaluation(
+    window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    gate: threading.Event,
+    *,
+    with_a_step: bool = False,
+    past_its_last_check: bool = False,
+) -> OperationDialog:
+    """Ein offener Quaderdialog über einer Auswertung, die erst ``gate`` weiterlässt.
+
+    ``with_a_step`` legt vorher Quader A an. ``past_its_last_check`` lässt den
+    Lauf nach dem Tor auch einen Abbruch überstehen — wie einer, der schon
+    hinter seiner letzten Abbruchprüfung war.
+    """
+    window._may_discard = lambda: True  # type: ignore[method-assign]
+    window._may_lose_the_generation = lambda: True  # type: ignore[method-assign]
+    window.session.start_new()
+    assert window.session.wait_for_idle(60_000)
+    if with_a_step:
+        assert window.session.apply(
+            "Quader A",
+            [
+                OperationDraft(
+                    op=_shown_box(),
+                    inputs=(),
+                    params={"width": 10.0, "depth": 10.0, "height": 10.0},
+                )
+            ],
+        )
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+    window.run_operation(REGISTRY.get(_shown_box()))
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        if past_its_last_check:
+            self.cancel_signal.reset()
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    window.session.evaluate_async()
+    assert window.session.busy, "die Lage, um die es geht: die Sitzung rechnet"
+    return dialog
+
+
+def _box_steps(window: MainWindow) -> list[str]:
+    return [entry.op for entry in window.session.project.document.ops]
+
+
+def test_a_value_typed_after_the_click_is_not_applied_and_the_click_says_so(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein wartender Klick gilt dem Stand, den der Kunde sah — nicht einem späteren Wert.
+
+    Gemerkt war nur der Eigentümer: Eine nach dem Klick getippte Breite wurde
+    ohne zweiten Klick und ohne ihre Vorschau geschrieben (Review der
+    Zusatzfixes, F1). Jetzt verwirft der Wert den Klick, und die Statuszeile
+    sagt es mit dem Weg.
+    """
+    window = MainWindow(Session(), UiSettings())
+    gate = threading.Event()
+    try:
+        dialog = _hold_the_evaluation(window, monkeypatch, gate)
+        dialog._accept_button.click()
+        dialog.take_value("width", 55.0)
+        QApplication.processEvents()
+        assert _waiting_for_the_evaluation() not in window.status_message.text(), (
+            "die Zusage gilt nicht mehr"
+        )
+        gate.set()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+
+        assert _box_steps(window) == [], "der neue Wert ist nicht übernommen"
+        assert window._op_dialog is dialog, "der Dialog bleibt offen, der Wert darin"
+        assert window.status_message.text() == tr(
+            "Nicht übernommen, weil sich die Werte geändert haben. "
+            "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+        )
+    finally:
+        gate.set()
+        window.close()
+        window.deleteLater()
+
+
+def test_undo_while_a_click_waits_keeps_the_earlier_step_and_its_redo(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Strg+Z während des Wartens nimmt A zurück — und B schreibt danach nicht.
+
+    Sonst schrieb der wartende Klick B auf den Stand ohne A, und weil ein
+    neuer Schritt den Redo-Stapel leert, war A verloren (Review der
+    Zusatzfixes, P7b). Ohne Auswertung hätte dieselbe Folge B zurückgenommen.
+    """
+    window = MainWindow(Session(), UiSettings())
+    gate = threading.Event()
+    try:
+        dialog = _hold_the_evaluation(window, monkeypatch, gate, with_a_step=True)
+        assert _box_steps(window) == [_shown_box()]
+        dialog._accept_button.click()
+        window.action_undo()
+        QApplication.processEvents()
+        gate.set()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+
+        assert _box_steps(window) == [], "A ist zurückgenommen, B nicht geschrieben"
+        assert window.session.history.can_redo, "A steht im Redo-Stapel"
+        assert window.status_message.text() == tr(
+            "Nicht übernommen, weil sich das Projekt geändert hat. "
+            "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+        )
+        window.action_redo()
+        assert window.session.wait_for_idle(60_000)
+        assert _box_steps(window) == [_shown_box()], "Strg+Y holt A zurück"
+    finally:
+        gate.set()
+        window.close()
+        window.deleteLater()
+
+
+def test_a_click_after_a_cancelled_evaluation_computes_it_and_applies(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach einer abgebrochenen Auswertung tut *Übernehmen* nicht still nichts.
+
+    Bricht der Kunde ab, während der Klick wartet, sagt der Satz, dass nichts
+    übernommen ist. Danach gab es keine Freigabe, bis eine Auswertung lief, und
+    kein Wert im Dialog stößt eine an: Jeder weitere Klick verfiel still,
+    hinaus führte nur *Abbrechen* (Review der Zusatzfixes, F3). Jetzt rechnet
+    der Klick neu an und übernimmt danach.
+    """
+    window = MainWindow(Session(), UiSettings())
+    gate = threading.Event()
+    try:
+        dialog = _hold_the_evaluation(window, monkeypatch, gate)
+        dialog._accept_button.click()
+        window.cancel_button.click()
+        gate.set()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+        assert _box_steps(window) == [], "abgebrochen ist nichts übernommen"
+        assert window._op_dialog is dialog
+        assert window.status_message.text() == tr(
+            "Abgebrochen und nicht übernommen. "
+            "Klicken Sie erneut, um weiterzurechnen und zu übernehmen."
+        )
+        assert not window.session.result_current, "die Lage: kein gültiges Ergebnis"
+
+        gate.clear()
+        dialog._accept_button.click()
+        assert window.session.busy, "der Klick rechnet die Auswertung neu an"
+        assert window.status_message.text().startswith(_waiting_for_the_evaluation())
+        gate.set()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+
+        assert _box_steps(window) == [_shown_box()], "danach ist der Quader übernommen"
+        assert window._op_dialog is None
+    finally:
+        gate.set()
+        window.close()
+        window.deleteLater()
+
+
+def test_closing_the_window_while_a_click_waits_writes_nothing(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach der Schließentscheidung schreibt kein wartender Klick mehr.
+
+    Endete die Auswertung trotz Abbruch regulär, schrieb der Klick B in den
+    schon geprüften Dokumentstand und stieß eine weitere Rechnung an, die das
+    Schließen aufhielt (Review der Zusatzfixes, F4).
+    """
+    window = MainWindow(Session(), UiSettings())
+    gate = threading.Event()
+    runs: list[bool] = []
+    try:
+        dialog = _hold_the_evaluation(
+            window, monkeypatch, gate, with_a_step=True, past_its_last_check=True
+        )
+        dialog._accept_button.click()
+        window.session.busyChanged.connect(runs.append)
+        window.close()
+        assert window._close_requested, "die Lage: das Schließen ist entschieden"
+        gate.set()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+
+        assert _box_steps(window) == [_shown_box()], "B ist nicht geschrieben"
+        assert True not in runs, "und keine weitere Rechnung angestoßen"
     finally:
         gate.set()
         window.close()

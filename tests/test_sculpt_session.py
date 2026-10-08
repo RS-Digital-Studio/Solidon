@@ -136,6 +136,61 @@ def test_an_early_finish_waits_for_the_conversion_preview_and_closes_once(
     assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
 
 
+def test_a_finish_waiting_for_the_evaluation_does_not_take_a_later_stroke(
+    window: MainWindow, exact_body: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Fertig* während einer Auswertung nimmt keinen Zug mit, der danach kam.
+
+    Der Knopf ist ein dauerhafter Eigentümer, und gemerkt war nur er (Review
+    der Zusatzfixes, F1): Stünde seine Freigabe bis zum Ende, schriebe *Fertig*
+    die Züge, die *dann* dastehen. Am Stand davor verfiel der Klick hier still —
+    das Ende der Auswertung räumt die Vorschau der Sitzung ab. Jetzt verwirft
+    der neue Zug ihn sofort mit Satz; geschrieben wird nichts, die Sitzung
+    bleibt offen. Das Bild gilt als gezeigt, damit ein durchgelassener Klick
+    nicht offscreen auf ewig wartet und so grün aussähe.
+    """
+    import threading
+
+    from app.i18n import tr
+
+    window.start_sculpt(exact_body)
+    before = len(window.session.project.document.ops)
+    window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.session.wait_for_idle(30_000)
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _result: True)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Sitzung rechnet"
+        window.sculpt_bar.done.click()
+        window._on_sculpt((-10.0, 10.0, 20.0))
+        gate.set()
+        assert window.session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(30_000)
+        approval = window._preview_approval
+        if approval is not None and approval.difference is not None:
+            window.viewport.differenceApplied.emit(approval.difference)
+        assert window.session.wait_for_idle(30_000)
+    finally:
+        gate.set()
+
+    assert window.sculpting(), "die Sitzung bleibt offen"
+    assert len(window.session.project.document.ops) == before, "nichts geschrieben"
+    assert window.status_message.text() == tr(
+        "Nicht übernommen, weil sich die Werte geändert haben. "
+        "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+    )
+
+
 def test_the_session_needs_something_to_sculpt(window: MainWindow) -> None:
     """Ohne Objekt kein Pinsel — und ein Satz dazu statt einer stillen
     Nichtreaktion."""

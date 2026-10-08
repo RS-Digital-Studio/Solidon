@@ -2036,16 +2036,16 @@ class KeyDialog(QDialog):
             # darüber ist eine eigene Einstellung und gilt schon.
             self.accept()
             return
-        if not keys.store(self.account, key):
-            QMessageBox.information(
-                self,
-                tr("Chat einrichten"),
-                tr(
-                    "Auf diesem Rechner gibt es keinen Schlüsselbund. "
-                    "Der Schlüssel kann über die Umgebungsvariable übergeben werden."
-                ),
-            )
-            self.reject()
+        refusal = keys.store_refusal(self.account, key)
+        if refusal is not None:
+            # **Der Dialog bleibt offen, der Schlüssel im Feld** (Regel 17):
+            # Der Satz nennt den Grund und den Weg — entsperren und erneut
+            # speichern oder die Umgebungsvariable. Bis dahin stand bei jedem
+            # Fehlschlag „Auf diesem Rechner gibt es keinen Schlüsselbund",
+            # ohne Variablennamen, und der Dialog verwarf die Eingabe.
+            self._key_status_error = str(refusal)
+            self._set_key_status(self._key_status_error, role="warning")
+            self.field.setFocus()
             return
         self.accept()
 
