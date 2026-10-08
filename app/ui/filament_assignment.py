@@ -46,6 +46,9 @@ class QuickFilamentPicker(QWidget):
         self._cancel_pending: Callable[[], None] | None = None
         self._blocked_reason: str | None = None
         self.preview_check: Callable[[], bool] | None = None
+        self.preview_defer: Callable[[], None] | None = None
+        """Ein Klick vor der Vorschau oder während einer Auswertung wartet auf
+        sie; das Hauptfenster entscheidet, worauf (wie am Merkmalfenster)."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(TIGHT)
@@ -131,9 +134,20 @@ class QuickFilamentPicker(QWidget):
         return current and self._blocked_reason is None
 
     def accept(self) -> None:
-        """Den Auftrag übernehmen; seine Aktualität prüft das Hauptfenster erneut."""
-        if self.can_accept() and self._apply_pending is not None:
+        """Den Auftrag übernehmen; seine Aktualität prüft das Hauptfenster erneut.
+
+        **Ein früher Klick verfällt nicht.** Steht die Vorschau noch aus oder
+        rechnet die Szene, ging er hier ohne ein Wort verloren, obwohl der
+        Knopf frei war — Warten ist keine Sperre. Er geht an
+        ``preview_defer``, und das Fenster übernimmt, sobald es darf.
+        """
+        if self._apply_pending is None or self._blocked_reason is not None:
+            return
+        if self.can_accept():
             self._apply_pending()
+            return
+        if self.preview_defer is not None:
+            self.preview_defer()
 
     def finish_preview(self) -> None:
         """Die Bedienstelle nach erfolgreicher Übernahme leeren."""
@@ -141,6 +155,7 @@ class QuickFilamentPicker(QWidget):
         self._cancel_pending = None
         self._blocked_reason = None
         self.preview_check = None
+        self.preview_defer = None
         self.preview_required = False
         self.apply_button.hide()
         self.cancel_button.hide()

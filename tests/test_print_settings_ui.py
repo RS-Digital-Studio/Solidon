@@ -805,8 +805,12 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         filaments=SimpleNamespace(show_scene=lambda *_args: None),
         _start_print_findings=lambda *_args: None,
         _click_after_evaluation=None,
+        _click_refusal=None,
     )
     window._check_waiting_click = lambda: MainWindow._check_waiting_click(window)
+    window._withdraw_click_refusal = lambda **kwargs: MainWindow._withdraw_click_refusal(
+        window, **kwargs
+    )
     window._update_header = lambda: MainWindow._update_header(window)
     window.effective_print_settings = lambda: MainWindow.effective_print_settings(window)
     window._update_facts = lambda: foundation_reads.append(window.effective_print_settings())

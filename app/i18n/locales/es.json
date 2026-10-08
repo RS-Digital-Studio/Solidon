@@ -1553,7 +1553,7 @@
   "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer dem Chat nutzbar.": "La clave se guarda en el llavero del sistema y no viaja con el archivo del proyecto. Sin clave, todo salvo el chat sigue siendo utilizable.",
   "Der Schlüsselbund des Betriebssystems hat die Geräteidentität nicht dauerhaft angenommen.": "El llavero del sistema operativo no guardó de forma permanente la identidad del dispositivo.",
   "Der Schlüsselbund des Betriebssystems ist gesperrt oder nicht erreichbar.": "El llavero del sistema operativo está bloqueado o no disponible.",
-  "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable {variable} ein.": "El llavero está bloqueado o no se puede acceder a él. Desbloquéelo y guarde de nuevo, o ponga la clave en la variable de entorno {variable}.",
+  "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable {variable} ein und starten Sie das Programm neu.": "El llavero está bloqueado o no se puede acceder a él. Desbloquéelo y guarde de nuevo, o ponga la clave en la variable de entorno {variable} y reinicie el programa.",
   "Der Schnitt durch diesen Körper ließ sich nicht bilden. Wählen Sie eine andere Ebene.": "No se pudo formar la sección a través de este cuerpo. Elija otro plano.",
   "Der Schnitt ergibt keine Kante, an der sich zeichnen ließe.": "El corte no produce ninguna arista contra la que dibujar.",
   "Der Schnitt hat kein zweites Teil ergeben.": "El corte no ha producido una segunda pieza.",

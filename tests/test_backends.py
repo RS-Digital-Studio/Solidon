@@ -282,7 +282,10 @@ def test_a_refused_key_names_the_real_reason_and_the_variable(
     """Ein Schlüssel, der nicht in den Schlüsselbund kommt, sagt, warum — und wohin sonst.
 
     Bis dahin kannte der Dialog nur „keinen Schlüsselbund", auch über einem
-    gesperrten, und die Umgebungsvariable hatte keinen Namen (Regel 17).
+    gesperrten, und die Umgebungsvariable hatte keinen Namen (Regel 17). Der
+    Ausweg über die Variable nennt in jeder Lage den Neustart: Solidon liest
+    die Umgebung des laufenden Prozesses (``keys.read``), und wer sie nur
+    setzt und erneut speichert, bekommt denselben Satz (Nachprüfung, Fund 4).
     """
     monkeypatch.setattr(keys, "_keyring", lambda: keychain)
     monkeypatch.setattr(keys, "_keyring_installed", lambda: installed)
@@ -292,6 +295,7 @@ def test_a_refused_key_names_the_real_reason_and_the_variable(
     assert refusal is not None
     assert str(refusal).startswith(said), str(refusal)
     assert keys.ENVIRONMENT_VARIABLE in str(refusal)
+    assert str(refusal).endswith("und starten Sie das Programm neu."), str(refusal)
     assert keys.store("anthropic", "sk-ant-" + "x" * 40) is False
 
 

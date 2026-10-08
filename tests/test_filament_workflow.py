@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 import trimesh
+from PySide6.QtWidgets import QApplication
 
 from app.core.errors import FileWriteError, OperationCancelled
 from app.core.export import handover, manufacturer
@@ -381,8 +382,27 @@ def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
             picker.picker.setCurrentIndex(row)
             picker.picker.activated.emit(row)
             assert not picker.can_accept() and not picker.apply_button.isHidden()
-            picker.apply_button.click()
-            assert window.session.project.document == before
+            if not cancel:
+                # **Vor dem Bild geklickt, läuft die Zuweisung, sobald es steht**
+                # (:meth:`MainWindow._apply_when_previewed`). Bis zur letzten
+                # Nachprüfung verfiel dieser Klick ohne ein Wort: Der Wähler
+                # ließ ihn nur bei fertiger Vorschau durch.
+                approval = window._preview_approval
+                assert approval is not None and approval.owner is picker
+                prepared = approval.order
+                picker.apply_button.click()
+                assert window.session.project.document == before, "vor dem Bild nichts"
+                assert window.session.wait_for_idle(30_000)
+                qt_app.processEvents()
+                assert window.session.wait_for_idle(30_000)
+                assert picker.apply_button.isHidden(), "die Zuweisung ist übernommen"
+                transaction = window.session.project.document.transactions[-1]
+                assert transaction.changes == prepared.changes
+                written = window.session.history.operations[-count:]
+                assert [(step.op, step.inputs, step.params) for step in written] == [
+                    (draft.op, draft.inputs, draft.params) for draft in prepared.drafts
+                ]
+                continue
             assert window.session.wait_for_idle(30_000)
             qt_app.processEvents()
             approval = window._preview_approval
@@ -395,21 +415,10 @@ def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
             assert "geraden Teilstücken" not in window.viewport._preview_note
             assert window.session.project.document == before
             assert picker.can_accept()
-            if cancel:
-                picker.cancel_button.click()
-                assert window.session.project.document == before
-                assert window._preview_approval is None
-                assert picker.apply_button.isHidden()
-                continue
-            prepared = approval.order
-            picker.apply_button.click()
-            assert window.session.wait_for_idle(30_000)
-            transaction = window.session.project.document.transactions[-1]
-            assert transaction.changes == prepared.changes
-            written = window.session.history.operations[-count:]
-            assert [(step.op, step.inputs, step.params) for step in written] == [
-                (draft.op, draft.inputs, draft.params) for draft in prepared.drafts
-            ]
+            picker.cancel_button.click()
+            assert window.session.project.document == before
+            assert window._preview_approval is None
+            assert picker.apply_button.isHidden()
         changed = window.session.last_result.scene.objects[identifier]
         assert changed.kind == "brep" and isinstance(changed.mesh, Solid)
         assert not any(
@@ -427,6 +436,140 @@ def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
         assert filaments.get(inventory.identifier).remaining_grams == pytest.approx(100.0)
         assert not filaments.bookings()
     finally:
+        window.quick_filament.cancel_preview()
+        window.release()
+
+
+def _staged_exact_spool(window, inventory):
+    """Ein exakter Quader, gewählt, mit vorbereiteter Spule am Schnellwähler."""
+    from app.core.scene.history import OperationDraft
+
+    assert window.session.apply(
+        "Quader",
+        [OperationDraft("create_brep_box", params={"width": 40.0, "depth": 30.0, "height": 20.0})],
+    )
+    assert window.session.wait_for_idle(30_000)
+    identifier = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(identifier)
+    QApplication.processEvents()
+    picker = window.quick_filament
+    picker.refresh()
+    row = picker.picker.findData(inventory.identifier)
+    assert row > 0
+    picker.picker.setCurrentIndex(row)
+    picker.picker.activated.emit(row)
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert not picker.apply_button.isHidden()
+    return picker
+
+
+def _hold_evaluations(monkeypatch, gate):
+    """Jede Auswertung wartet auf ``gate`` — die Lage „die Szene rechnet“."""
+    from app.ui.session import Session
+
+    evaluate = Session.run_evaluation
+
+    def held(self, *args, **kwargs):
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+
+
+def _settled(window):
+    """Bis Auswertung, Vorschau und der wartende Klick durch sind."""
+    for _ in range(3):
+        assert window.session.wait_for_idle(30_000)
+        QApplication.processEvents()
+    assert window.session.wait_for_idle(30_000)
+
+
+def test_a_quick_spool_clicked_while_the_scene_evaluates_is_assigned_after_it(
+    qt_app, inventory, monkeypatch
+):
+    """*Übernehmen* am Schnellwähler während einer Auswertung weist danach genau einmal zu.
+
+    Der Klick verfiel dort ohne ein Wort (Nachprüfung, Verdacht Maßgruppe, am
+    Schnellwähler nachgestellt): Der Wähler ließ ihn nur bei fertiger Vorschau
+    durch, und das Ende der Auswertung verwirft die vorbereitete Zuweisung
+    (``set_context``). Jetzt sagt die Statuszeile, dass er wartet, und er trägt
+    seinen Auftrag über das Ende hinaus (``MainWindow._carry_click``).
+    """
+    import threading
+
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    from app.i18n import tr
+    from app.ui.session import Session
+
+    window = main_window.MainWindow(Session(), UiSettings())
+    gate = threading.Event()
+    try:
+        picker = _staged_exact_spool(window, inventory)
+        before = len(window.session.project.document.transactions)
+        _hold_evaluations(monkeypatch, gate)
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Szene rechnet"
+        picker.apply_button.click()
+        waiting = window._click_after_evaluation
+        assert waiting is not None, "der Klick wartet"
+        assert window.status_message.text().startswith(
+            tr("Wird übernommen, sobald die Berechnung fertig ist.")
+        )
+        gate.set()
+        _settled(window)
+
+        transactions = window.session.project.document.transactions
+        assert len(transactions) == before + 1, "genau eine Zuweisung"
+        assert window.session.project.document.print_settings.spool_bindings
+        assert "übernommen" not in window.status_message.text(), window.status_message.text()
+    finally:
+        gate.set()
+        window.quick_filament.cancel_preview()
+        window.release()
+
+
+def test_cancelling_the_quick_spool_while_its_click_waits_drops_the_click(
+    qt_app, inventory, monkeypatch
+):
+    """*Abbrechen* am Schnellwähler nimmt den wartenden Klick mit — still.
+
+    Bis zur Nachprüfung (Fund 2) räumte Abbrechen nur die Freigabe ab; die
+    Statuszeile versprach weiter „Wird übernommen …“ und sagte am Ende „Nicht
+    übernommen …, klicken Sie erneut“ — eine Einladung, das eben Verworfene zu
+    übernehmen.
+    """
+    import threading
+
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    from app.ui.session import Session
+
+    window = main_window.MainWindow(Session(), UiSettings())
+    gate = threading.Event()
+    try:
+        picker = _staged_exact_spool(window, inventory)
+        before = len(window.session.project.document.transactions)
+        _hold_evaluations(monkeypatch, gate)
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Szene rechnet"
+        picker.apply_button.click()
+        assert window._click_after_evaluation is not None, "die Lage: der Klick wartet"
+        picker.cancel_button.click()
+        assert window._click_after_evaluation is None, "Abbrechen nimmt den Klick mit"
+        assert "Wird übernommen" not in window.status_message.text()
+        gate.set()
+        _settled(window)
+
+        assert len(window.session.project.document.transactions) == before, "nichts geschrieben"
+        settings = window.session.project.document.print_settings
+        assert settings is None or not settings.spool_bindings
+        assert "übernommen" not in window.status_message.text(), window.status_message.text()
+    finally:
+        gate.set()
         window.quick_filament.cancel_preview()
         window.release()
 
