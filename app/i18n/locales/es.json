@@ -2842,7 +2842,7 @@
   "Dieses Merkmal hat keine Achse. Wählen Sie eine Bohrung oder einen Zapfen, oder lassen Sie das Feld leer und geben die Achse von Hand an.": "Esta característica no tiene eje. Elija un taladro o una espiga, o deje el campo vacío e indique el eje a mano.",
   "Dieses Merkmal hat keine eigene Fläche zu färben.": "Esta característica no tiene cara propia que colorear.",
   "Dieses Merkmal ist an keinen Flächen des Körpers belegt, und ohne sie entsteht kein Werkzeug für seine Kopien. Erkennen Sie die Merkmale neu oder wählen Sie ein anderes.": "Esta característica no está respaldada por ninguna cara del cuerpo, y sin ellas no se puede crear una herramienta para sus copias. Reconozca de nuevo las características o elija otra.",
-  "Dieses Merkmal ist der ganze Körper. Verschieben Sie den Körper als Ganzes.": "Esta característica es el cuerpo entero. Mueva el cuerpo completo.",
+  "Dieses Merkmal ist der ganze Körper. Verschieben, drehen, skalieren oder entfernen Sie den Körper als Ganzes.": "Esta característica es el cuerpo entero. Traslade, gire, escale o quite el cuerpo completo.",
   "Dieses Merkmal ist ein Abschnitt eines größeren Hohlraums — einer Bohrung mit ihrer Senkung etwa. Sollen alle {count} Abschnitte zusammen entfernt werden?": "Esta característica es una sección de una cavidad mayor: un taladro con su avellanado, por ejemplo. ¿Quitar las {count} secciones juntas?",
   "Dieses Merkmal nach außen geben": "Exponer esta característica",
   "Dieses Merkmal nennt keine Achse. Wählen Sie ein erkanntes Merkmal mit gemessener Achse oder erkennen Sie die Merkmale neu.": "Esta característica no indica ningún eje. Seleccione una característica reconocida con eje medido o vuelva a reconocer las características.",

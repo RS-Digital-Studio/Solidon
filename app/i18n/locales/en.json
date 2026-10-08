@@ -2842,7 +2842,7 @@
   "Dieses Merkmal hat keine Achse. Wählen Sie eine Bohrung oder einen Zapfen, oder lassen Sie das Feld leer und geben die Achse von Hand an.": "This feature has no axis. Choose a hole or a peg, or leave the field empty and enter the axis by hand.",
   "Dieses Merkmal hat keine eigene Fläche zu färben.": "This feature has no face of its own to colour.",
   "Dieses Merkmal ist an keinen Flächen des Körpers belegt, und ohne sie entsteht kein Werkzeug für seine Kopien. Erkennen Sie die Merkmale neu oder wählen Sie ein anderes.": "This feature is not backed by any faces of the body, and without them no tool can be made for its copies. Recognise the features again or choose another one.",
-  "Dieses Merkmal ist der ganze Körper. Verschieben Sie den Körper als Ganzes.": "This feature is the whole body. Move the body as a whole.",
+  "Dieses Merkmal ist der ganze Körper. Verschieben, drehen, skalieren oder entfernen Sie den Körper als Ganzes.": "This feature is the whole body. Move, rotate, scale or remove the body as a whole.",
   "Dieses Merkmal ist ein Abschnitt eines größeren Hohlraums — einer Bohrung mit ihrer Senkung etwa. Sollen alle {count} Abschnitte zusammen entfernt werden?": "This feature is one section of a larger cavity — a hole with its countersink, for instance. Remove all {count} sections together?",
   "Dieses Merkmal nach außen geben": "Expose this feature",
   "Dieses Merkmal nennt keine Achse. Wählen Sie ein erkanntes Merkmal mit gemessener Achse oder erkennen Sie die Merkmale neu.": "This feature names no axis. Select a recognised feature with a measured axis, or recognise the features again.",

@@ -2587,6 +2587,132 @@ def test_the_card_offers_a_move_exactly_where_the_operation_moves(
     assert checked, name
 
 
+#: Die übrigen Zeilen der Karte (``perceive.actions.ACTION_ORDER``) — je Zeile die
+#: Operation, nach der ``actions_for(only=…)`` sie findet (RM-548).
+_OTHER_ROWS: Final = (
+    "resize_feature",
+    "slot_hole",
+    "rotate_feature",
+    "duplicate_feature",
+    "remove_feature",
+)
+
+
+def _changing(op: str, feature: Feature) -> dict[str, Any]:
+    """Werte, mit denen ``op`` etwas ändern würde — kein Leerlauf, der vor der Frage endet."""
+    centre = [float(value) for value in feature.params["centre"]]
+    width = float(feature.params.get("diameter", 0.0) or 4.0)
+    return {
+        "duplicate_feature": {"x": centre[0] + 20.0, "y": centre[1], "z": centre[2]},
+        "rotate_feature": {"axis": "x", "angle": 10.0},
+        "resize_feature": {"diameter": width + 1.0},
+        "resize_hole": {"diameter": width + 1.0},
+        "slot_hole": {"slot_length": 2.0 * width},
+    }.get(op, {})
+
+
+def _card_row(entry: SceneObject, chosen: str, op: str) -> Any:
+    """Die Zeile der Karte, in der ``op`` steht — wie das Merkmalfenster sie zeigt."""
+    from app.core.perceive.actions import actions_for
+
+    feature = entry.features[chosen]
+    (row,) = actions_for(feature, entry.features, mesh=as_mesh_data(entry.mesh), only=op)
+    return row
+
+
+@pytest.mark.parametrize("op", _OTHER_ROWS)
+@pytest.mark.parametrize(
+    "name",
+    [
+        "post_with_fillet.stl",
+        "pocket_with_pin.stl",
+        "dense_cylinder.stl",
+        "shallow_sphere_cap_uv.stl",
+        "cup_on_stem.stl",
+        "pin_with_end_chamfers.stl",
+        "plate_holes.stl",
+        "sphere_socket.stl",
+        "torus_ring.stl",
+    ],
+)
+def test_the_card_offers_each_handling_exactly_where_the_operation_computes(
+    profile: Profile, name: str, op: str
+) -> None:
+    """RM-548: Je Zeile der Karte stellen Karte und Operation dieselbe Frage.
+
+    Wie beim Versetzen (RM-535) über echte Netze, je Merkmal einer bewegbaren
+    Art: Wo die Karte die Zeile mit Feldern zeigt, rechnet die Operation mit
+    genau diesen Werten; wo sie grau steht, sagt die Operation denselben Satz.
+    Am Basisstand rechneten *Verdoppeln*, *Drehen*, *Bohrung ändern* und
+    *Entfernen* an der Tasche um einen Zapfen und *Verdoppeln* am Wulst, während
+    die Karte sie sperrte; am Zapfen und an der Kuppel, die der ganze Körper
+    sind, bot die Karte *Drehen*, *Ändern* und *Entfernen* an, und die Operation
+    endete mit „Von dem Körper bleibt nichts übrig“; am Ring, der der ganze
+    Körper ist, sagten beide Verschiedenes.
+    """
+    from app.core.errors import AppError
+    from app.core.perceive.actions import ACTION_ORDER
+    from app.core.registry import REGISTRY
+
+    entry = _corpus_object(name)
+    names = next(row for row in ACTION_ORDER if op in row)
+    checked = 0
+    for chosen, feature in entry.features.items():
+        if feature.kind not in prepare_ops.MOVABLE_KINDS:
+            continue
+        checked += 1
+        row = _card_row(entry, chosen, op)
+        if row.op is not None:
+            values = {
+                field.name: field.value * field.parameter_factor
+                if isinstance(field.value, float)
+                else field.value
+                for field in row.fields
+            }
+            try:
+                _raw(row.op, entry, profile, at_feature=chosen, **dict(row.fixed), **values)
+            except AppError as refused:
+                pytest.fail(f"{name} {chosen} {row.op}: Karte bietet an, Operation: {refused}")
+            continue
+        # Gefahren wird, was die Zeile an dieser Art meint — wie ``fitting`` der Karte.
+        operation = next(
+            (other for other in names if feature.kind in REGISTRY.get(other).applies_to), op
+        )
+        with pytest.raises(AppError) as caught:
+            _raw(operation, entry, profile, at_feature=chosen, **_changing(operation, feature))
+        assert str(caught.value.detail) == str(row.reason), (name, chosen, operation)
+        assert caught.value.suggestions, (name, chosen, operation)
+    assert checked, name
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("kind", ["hole", "cone"])
+def test_the_card_tilts_a_countersink_only_as_far_as_it_stays_one(
+    profile: Profile, kernel: str, kind: str
+) -> None:
+    """RM-548: *Merkmal drehen* an Senkung und gesenkter Bohrung begrüßt nicht mit einer Absage.
+
+    Die Karte belegte die Vorgabe des Registers vor, 90°, und die Operation
+    kippt eine Senkung nur unter 90° minus halbem Öffnungswinkel
+    (``_sink_must_close``) — an 22 Kegeln und Bohrungen von sieben
+    Kundenmodellen endete *Übernehmen* ohne Eingabe in der Absage. Soll für
+    eine 90°-Senkung aus der Rechnung: unter 45°, der größte ganze Winkel ist
+    44°, und mit den Werten der Karte rechnet die Operation.
+    """
+    from app.core.scene.project import ProjectSources
+    from tests.test_bore_mouth_resize import _countersunk_plate
+
+    project, _history = _countersunk_plate(kernel, 10.0)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    body = result.scene.objects["obj_1"]
+    chosen = next(name for name, feature in body.features.items() if feature.kind == kind)
+    row = _card_row(body, chosen, "rotate_feature")
+    assert row.op == "rotate_feature", row
+    values = {field.name: field.value for field in row.fields}
+    assert values["angle"] == pytest.approx(44.0)
+    _raw("rotate_feature", body, profile, at_feature=chosen, **values)
+
+
 def test_a_pin_moved_into_the_wall_of_its_pocket_stays(profile: Profile) -> None:
     """Zapfen Ø 5,44 in der Tasche Ø 6,12, 0,5 mm in die Wand (RM-535).
 

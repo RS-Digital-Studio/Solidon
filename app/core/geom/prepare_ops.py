@@ -153,6 +153,7 @@ from app.core.slice.orientation import (
     turned_like,
 )
 from app.core.types import (
+    Action,
     BaseParams,
     CancelToken,
     Feature,
@@ -3956,6 +3957,47 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
     )
 
 
+def _refuse_like_the_card(
+    op: str, source: SceneObject, feature: Feature, cancelled: CancelToken | None
+) -> None:
+    """Sagt mit dem Satz der Karte ab, wo die Karte diese Handlung grau zeigt.
+
+    **Karte und Operation fragen je Handlung dieselbe Funktion**
+    (``perceive.actions.action_refusal``; RM-535 fürs Versetzen, RM-548 für
+    Ändern, Drehen, Verdoppeln, Entfernen und das Langloch). Ohne sie rechnete
+    die Operation an der Tasche um einen Zapfen über die Luft, wo die Karte die
+    Zeile sperrte, und über Chat und Kommandozeile kam der Kunde an der Sperre
+    vorbei. Gefragt wird nach den Leerläufen einer Operation: Wer nichts ändert,
+    bekommt den Befund dazu, keine Absage.
+
+    **Was aus dem Lesen des Hohlraums kommt, liest die Operation selbst**
+    (:data:`_READ_BY_THE_OPERATION`): Am exakten Körper verbindet sie berührende
+    Platten, bevor sie die Kette liest (RM-386), und sagt danach mit derselben
+    Funktion und demselben Satz ab, wo das Lesen auch dann scheitert. Die Karte
+    liest den Körper, wie er ist.
+    """
+    from app.core.perceive.actions import action_refusal
+
+    refusal = action_refusal(
+        op, feature, source.features, as_mesh_data(source.mesh), cancelled=cancelled
+    )
+    if refusal is None or refusal in _READ_BY_THE_OPERATION:
+        return
+    # Die Wege wie bei der Absage aus dem Zylinder (:func:`filled_bore_refusal`).
+    ways: tuple[Action, ...] = ()
+    if refusal is OTHER_PART_IN_THE_BORE:
+        ways = (SPLIT_BODIES, CANCEL)
+    elif refusal is HOLE_IS_NOT_EMPTY:
+        ways = (CHANGE_SELECTION, CANCEL)
+    raise ValidationError(
+        field="at_feature",
+        detail=refusal,
+        values={"feature": feature.id, "kind": feature.kind},
+        constraint="not_movable",
+        suggestions=ways,
+    )
+
+
 def _refuse_another_part_in_the_bore(source: SceneObject, feature: Feature) -> None:
     """Sagt ab, wenn im Zylinder dieser Bohrung ein getrenntes Teil steht.
 
@@ -4896,18 +4938,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     feature = _movable_feature(source, params.at_feature, "move_feature")
     # **Dieselbe Frage wie Karte und Griff** (RM-535): Was die Karte grau
     # zeigt, sagt hier mit demselben Satz ab — und umgekehrt.
-    from app.core.perceive.actions import move_refusal
-
-    refusal = move_refusal(
-        feature, source.features, as_mesh_data(source.mesh), cancelled=ctx.cancelled
-    )
-    if refusal is not None:
-        raise ValidationError(
-            field="at_feature",
-            detail=refusal,
-            values={"feature": feature.id, "kind": feature.kind},
-            constraint="not_movable",
-        )
+    _refuse_like_the_card("move_feature", source, feature, ctx.cancelled)
     if math.hypot(*(params.nx, params.ny, params.nz)) > EPS_GEOM:
         return _place_oriented_feature(ctx, duplicate=False)
     from app.core.perceive.relations import cavity_chain_state_at
@@ -5235,7 +5266,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 12: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
     # 13: „dasselbe Merkmal“ öffnet den Schritt (RM-441).
     # 14: im Weg mit freier Richtung „nichts verdoppelt“ statt „nichts zu versetzen“.
-    cache_version="14",
+    # 15: sagt ab, wo die Karte die Zeile sperrt, mit ihrem Satz (RM-548).
+    cache_version="15",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -5285,6 +5317,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         # und ließe den Körper, wie er ist. Regel 19 — was zurücknehmbar ist,
         # bekommt keine Nachfrage, und was nichts tut, keine Ausnahme.
         return OpResult(outputs=[source], findings=[_already_in_place(feature.id, duplicate=True)])
+    _refuse_like_the_card("duplicate_feature", source, feature, ctx.cancelled)
 
     body = as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
@@ -6443,7 +6476,8 @@ class RemoveFeatureParams(BaseParams):
     # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
     # 17: ein getrenntes Teil in der Bohrung hält mit Weg an, statt still zu
     # verschmelzen (RM-413).
-    cache_version="17",
+    # 18: sagt ab, wo die Karte die Zeile sperrt, mit ihrem Satz (RM-548).
+    cache_version="18",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -6479,6 +6513,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
     if _is_a_fillet(source, params.at_feature):
         return _drop_the_fillet(ctx, source, params.at_feature)
     feature = _movable_feature(source, params.at_feature, "remove_feature")
+    _refuse_like_the_card("remove_feature", source, feature, ctx.cancelled)
     if feature.kind == "pattern":
         # Vor der Hohlraumkette: Ein Muster hat keine, und seine Mitte liegt
         # auf der Trägerebene, nicht in einem Hohlraum.
@@ -6674,7 +6709,8 @@ class RotateFeatureParams(BaseParams):
     # 10: „ohne Winkel“ öffnet den Schritt (RM-441).
     # 11: eine Drehung, die das Merkmal auf sich selbst abbildet, ändert nichts
     # und sagt es (RM-546).
-    cache_version="11",
+    # 12: sagt ab, wo die Karte die Zeile sperrt, mit ihrem Satz (RM-548).
+    cache_version="12",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -6736,6 +6772,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     onto_itself = _turned_onto_itself(feature, params.axis, params.angle)
     if onto_itself is not None:
         return OpResult(outputs=[source], findings=[onto_itself])
+    _refuse_like_the_card("rotate_feature", source, feature, ctx.cancelled)
 
     turned_axis = _turned(feature, params.axis, params.angle)
     # **Ein Langloch hat neben der Achse eine Richtung, und die dreht mit.**
@@ -7413,6 +7450,27 @@ def _sink_must_close(cone: Feature, tilt: float, angle: float) -> None:
     )
 
 
+def largest_sink_tilt(feature: Feature, chain: Sequence[Feature] | None) -> float | None:
+    """Wie weit sich dieses Merkmal kippen lässt, bevor seine Senkung als Rinne
+    über das Teil liefe (:func:`_sink_must_close`) — ``None`` ohne Senkung.
+
+    An einer Kette fragen die äußeren Kegel jeder Seite wie in
+    :func:`_sinks_must_close`, sonst der Kegel selbst, wenn er ein Hohlraum
+    ist. Die Karte belegt *Merkmal drehen* damit vor (RM-548).
+    """
+    if chain:
+        from app.core.perceive.relations import cavity_sides
+
+        cones = [side[-1] for side in cavity_sides(chain) if side[-1].kind == "cone"]
+    elif feature.kind == "cone" and is_a_cavity(feature):
+        cones = [feature]
+    else:
+        return None
+    halves = [float(cone.params.get("angle", 0.0)) / 2.0 for cone in cones]
+    widest = max((half for half in halves if half > EPS_DISPLAY), default=None)
+    return None if widest is None else 90.0 - widest
+
+
 def _sinks_must_close(chain: Sequence[Feature], tilt: float, angle: float) -> None:
     """:func:`_sink_must_close` an der äußeren Senkung jeder Seite einer Kette.
 
@@ -8087,7 +8145,8 @@ class ResizeFeatureParams(BaseParams):
     # 20: Das neue Gewinde kommt aus ``build.threaded`` mit den Sehnen der
     # Facettenregel (``shapes.turn_segments``), über ganze Umläufe und mit einem
     # Kern, der den Gang auch in der Sehnenmitte überdeckt (Review RM-532, R1/R4).
-    cache_version="20",
+    # 21: sagt ab, wo die Karte die Zeile sperrt, mit ihrem Satz (RM-548).
+    cache_version="21",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -8129,6 +8188,14 @@ def resize_feature(ctx: OpContext) -> OpResult:
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
     previous = float(feature.params.get("diameter", 0.0))
+    # Ring, Gewinde und Muster haben mehr als ein Maß und fragen ihren Leerlauf
+    # selbst; alle anderen ändern nur den Durchmesser.
+    if feature.kind not in ("torus", "thread", "pattern") and is_close(params.diameter, previous):
+        return OpResult(
+            outputs=[source],
+            findings=[_already_this_size(feature.id, "diameter")],
+        )
+    _refuse_like_the_card("resize_feature", source, feature, ctx.cancelled)
     _reject_oversized("diameter", params.diameter, source.mesh)
     if feature.kind == "torus":
         return _resize_torus(ctx, source, feature, centre, params.diameter, params.tube_diameter)
@@ -8143,12 +8210,6 @@ def resize_feature(ctx: OpContext) -> OpResult:
             params.cell_width,
             params.cell_depth,
             style=params.style,
-        )
-
-    if is_close(params.diameter, previous):
-        return OpResult(
-            outputs=[source],
-            findings=[_already_this_size(feature.id, "diameter")],
         )
 
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
@@ -8932,7 +8993,8 @@ OPEN_BODY_DETAIL: Final = _(
     # 16: exakt fragt die Kante am gefüllten Körper, wo gefüllt wurde (RM-411).
     # 17: „hat bereits diesen Durchmesser“ öffnet den Schritt (RM-441).
     # 18: „geht bereits ganz durch“ öffnet den Schritt an der Tiefe (Review RM-441).
-    cache_version="18",
+    # 19: sagt ab, wo die Karte die Zeile sperrt, mit ihrem Satz (RM-548).
+    cache_version="19",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -8993,6 +9055,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         return OpResult(
             outputs=[source], findings=[unchanged_bore(cut, with_depth=params.depth is not None)]
         )
+    _refuse_like_the_card("resize_hole", source, feature, ctx.cancelled)
     if params.entrance_mode == "follow" and not (same_diameter and not moved_hole):
         reading, read, united_first = _exact_entrance_context(ctx, feature)
         reader = reading.inputs[0]
@@ -9654,7 +9717,8 @@ SLOT_FEATURE_RENAMED: Final = _(
     #     (RM-411).
     # 18: gefragt werden nur Teile am Träger; ferne Teile kommen unverändert
     #     zurück (RM-413).
-    cache_version="18",
+    # 19: sagt ab, wo die Karte die Zeile sperrt, mit ihrem Satz (RM-548).
+    cache_version="19",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -9728,6 +9792,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             detail=narrowing_reason("slot_hole", state.chain) or NEEDS_A_PLAIN_BORE,
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
+    _refuse_like_the_card("slot_hole", source, feature, ctx.cancelled)
     if (
         feature.kind == "hole"
         and not hole_is_clear(body, feature)
@@ -13766,6 +13831,19 @@ CHAIN_NOT_READABLE: Final = _(
     "Dieser Hohlraum lässt sich an diesem Körper nicht als eine Bohrung lesen: Ein Rand "
     "ist nicht eben, oder eine Stufe wird nach außen enger. Ändern Sie den Schritt, aus "
     "dem er stammt."
+)
+
+#: Was die Karte aus dem Lesen des Hohlraums sagt und die Operation in ihrem
+#: eigenen Lauf noch einmal liest (:func:`_refuse_like_the_card`): Am exakten
+#: Körper verbindet sie berührende Platten, bevor sie liest (RM-386), und sagt
+#: danach mit denselben Funktionen ab, wo es dann noch scheitert.
+_READ_BY_THE_OPERATION: Final = (
+    NO_OWN_BODY,
+    CAVITY_TOPOLOGY_UNKNOWN,
+    NO_BODY_FROM_FACES,
+    NEEDS_A_PLAIN_BORE,
+    NOT_AT_THE_MOUTH,
+    CHAIN_NOT_READABLE,
 )
 
 

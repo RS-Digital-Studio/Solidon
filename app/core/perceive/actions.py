@@ -25,6 +25,7 @@ selbst.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Final
@@ -32,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Final
 from app.core.registry import REGISTRY
 from app.core.registry.surfaces import asked_fields, normal_fields_of
 from app.core.types import CancelToken, Feature, FeatureId, MeasureStatus, measure_status
-from app.core.units import DEGREE_UNIT
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -245,12 +246,21 @@ def torus_blocked(feature: Feature, mesh: MeshData | None) -> TranslatableText |
     return torus_refusal(mesh, feature)
 
 
-#: Warum *Merkmal verschieben* an einem Zapfen oder einer Kuppel absagt, die
-#: der ganze Körper sind (RM-535): Abgetragen bliebe nichts, woran das Merkmal
-#: wieder ansetzen könnte, und die Operation endete mit „Von dem Körper bleibt
-#: nichts übrig“ — nach 40 s am dichten Zylinder des Korpus.
+#: Warum *Merkmal verschieben*, *ändern*, *drehen* und *entfernen* an einem
+#: Zapfen oder einer Kuppel absagen, die der ganze Körper sind (RM-535,
+#: RM-548): Abgetragen bliebe nichts, woran das Merkmal wieder ansetzen könnte,
+#: und die Operation endete mit „Von dem Körper bleibt nichts übrig“ — nach
+#: 40 s am dichten Zylinder des Korpus. *Verdoppeln* setzt daneben und bleibt.
+#: Ein Satz für vier Zeilen, die ``_folded`` zusammenlegt, deshalb mit allen
+#: vier Wegen am Körper.
 FEATURE_SPANS_THE_BODY: Final = _(
-    "Dieses Merkmal ist der ganze Körper. Verschieben Sie den Körper als Ganzes."
+    "Dieses Merkmal ist der ganze Körper. Verschieben, drehen, skalieren oder entfernen "
+    "Sie den Körper als Ganzes."
+)
+
+#: Die Zeilen, die an einem Merkmal, das der ganze Körper ist, nichts übrig ließen.
+_NOTHING_LEFT_OF_THE_BODY: Final = frozenset(
+    {"move_feature", "resize_feature", "rotate_feature", "remove_feature"}
 )
 
 #: Warum *Merkmal verschieben* an einer Bohrung absagt, in der ein Zapfen steht
@@ -915,7 +925,15 @@ def actions_for(
         not_this_cone = cone_reason(feature, (fitting or known[0]).name)
         if fitting is not None and piece_blocked is not None:
             actions.append(FeatureAction(title=fitting.title, op=None, reason=piece_blocked))
-        elif fitting is not None and fitting.name == "move_feature" and moving_blocked:
+        elif fitting is not None and (
+            (fitting.name == "move_feature" and moving_blocked)
+            or (
+                moving_blocked is FEATURE_SPANS_THE_BODY
+                and fitting.name in _NOTHING_LEFT_OF_THE_BODY
+            )
+        ):
+            # Ein Zapfen oder eine Kuppel als ganzer Körper sperrt auch Ändern,
+            # Drehen und Entfernen (RM-548); die übrigen Sätze nur das Versetzen.
             actions.append(FeatureAction(title=fitting.title, op=None, reason=moving_blocked))
         elif not_this_cone is not None:
             actions.append(
@@ -986,6 +1004,8 @@ def actions_for(
                         replace(entry, value="follow") if entry.name == "entrance_mode" else entry
                         for entry in fields
                     )
+            if fitting.name == "rotate_feature":
+                fields = _tilt_within_the_sink(fields, feature, cavity)
             actions.append(
                 FeatureAction(
                     title=fitting.title,
@@ -1023,6 +1043,58 @@ def actions_for(
     return actions
 
 
+def _tilt_within_the_sink(
+    fields: tuple[ActionField, ...], feature: Feature, cavity: tuple[Feature, ...] | None
+) -> tuple[ActionField, ...]:
+    """Der Drehwinkel, unter dem eine Senkung eine bleibt — sonst die Vorgabe (RM-548).
+
+    Die Zeile *Merkmal drehen* trug an jeder Senkung und gesenkten Bohrung die
+    Vorgabe des Registers, 90°; die Operation kippt eine Senkung nur unter
+    ``90° minus halber Öffnungswinkel`` (``prepare_ops.largest_sink_tilt``) und
+    sagte ab. An 22 Kegeln und Bohrungen von sieben Kundenmodellen begrüßte das
+    Feld so mit einer Absage. Vorbelegt wird der größte ganze Winkel darunter.
+    """
+    from app.core.geom.prepare_ops import largest_sink_tilt
+
+    largest = largest_sink_tilt(feature, cavity)
+    if largest is None:
+        return fields
+    whole = float(math.ceil(largest - EPS_DISPLAY) - 1)
+    return tuple(
+        replace(entry, value=min(float(entry.value), whole))
+        if entry.name == "angle" and isinstance(entry.value, int | float)
+        else entry
+        for entry in fields
+    )
+
+
+def action_refusal(
+    op: str,
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None,
+    mesh: MeshData | None,
+    *,
+    cancelled: CancelToken | None = None,
+) -> TranslatableText | str | None:
+    """Warum die Handlung ``op`` an diesem Merkmal absagt — sonst ``None``.
+
+    **Die eine Frage für Karte und Operation, je Handlung** (RM-535 fürs
+    Versetzen, RM-548 für die übrigen Zeilen): Sie ist die Zeile von ``op``
+    aus :func:`actions_for`, also genau das, was die Karte zeigt. Die Karte
+    sperrte an der Tasche um einen Zapfen Verdoppeln, Drehen, Ändern und
+    Entfernen, und die Operationen rechneten über die Luft; am Zapfen, der der
+    ganze Körper ist, bot sie Drehen an, und die Operation endete ohne Rest.
+    Steht in der Zeile die Schwester (``resize_hole`` statt ``resize_feature``
+    an einer Bohrung), gilt der Satz, der auf sie verweist.
+    """
+    for row in actions_for(feature, features, mesh=mesh, cancelled=cancelled, only=op):
+        if row.op == op:
+            return None
+        if row.op is None:
+            return row.reason or reason_against(op, feature.kind)
+    return reason_against(op, feature.kind)
+
+
 def move_refusal(
     feature: Feature,
     features: Mapping[FeatureId, Feature] | None,
@@ -1032,18 +1104,10 @@ def move_refusal(
 ) -> TranslatableText | str | None:
     """Warum *Merkmal verschieben* an diesem Merkmal absagt — sonst ``None``.
 
-    **Die eine Frage für Karte, Operation und Griff** (RM-535): Sie ist die
-    Zeile *Merkmal verschieben* aus :func:`actions_for`, also genau das, was
-    die Karte zeigt. Die Karte bot an Wulst und Kehle X/Y/Z an, an denen
-    ``move_feature`` absagte, und sperrte die Tasche um einen Zapfen, in der
-    es rechnete; der Griff fragte nur die Art.
+    Die Frage, die auch der Griff stellt (``FeaturePanel.refuses``):
+    :func:`action_refusal` für ``move_feature``.
     """
-    for row in actions_for(feature, features, mesh=mesh, cancelled=cancelled, only="move_feature"):
-        if row.op == "move_feature":
-            return None
-        if row.op is None:
-            return row.reason or reason_against("move_feature", feature.kind)
-    return reason_against("move_feature", feature.kind)
+    return action_refusal("move_feature", feature, features, mesh, cancelled=cancelled)
 
 
 #: Operationen, die eine funktionale Gruppe als Ganzes ändern — und nur an
