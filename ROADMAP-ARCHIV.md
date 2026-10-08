@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-548: Karte und Operation stellen je Merkmalshandlung dieselbe Frage (08.10.2026)](#rm-548-karte-und-operation-stellen-je-merkmalshandlung-dieselbe-frage-08102026) |
 | 2026-10-08 | [RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)](#rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026) |
 | 2026-10-08 | [RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)](#rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
@@ -44269,4 +44270,43 @@ Normteiltabelle auf 1e-4, Boden um das halbe Spiel, `_loose` rundum) — am Basi
 (Gegenfall) und `tests/test_selection_operations.py::test_a_part_bore_offers_its_pin`. An den
 zwölf Beispielprojekten bauen sieben Bausteinbohrungen, die vorher absagten (Senkkopf 90°,
 Abstand 0,1247 mm gegen das halbe Spiel 0,125); alle übrigen Bohrungen unverändert.
+Umgesetzt von Claude.
+
+## RM-548: Karte und Operation stellen je Merkmalshandlung dieselbe Frage (08.10.2026)
+
+<a id="rm-548-karte-und-operation-stellen-je-merkmalshandlung-dieselbe-frage-08102026"></a>
+<a id="rm-548"></a>
+
+**RM-548 — Lippentasche: die Karte sperrt Verdoppeln und Drehen, die Operation rechnet.**
+Gefunden am 07.10.2026 beim Bau von RM-535 (Claude): Seit RM-535 fragen Karte, Operation und
+Griff beim *Versetzen* dieselbe Funktion (`actions.move_refusal`); bei *Verdoppeln* und
+*Drehen* sperrt die Karte eine Lippentasche (`narrowing`) noch, während die Operation
+rechnet. **Abnahme:** Karte und Operation stellen je Handlung dieselbe Frage; ein Test über
+die Korpusnetze wie `test_the_card_offers_a_move_exactly_where_the_operation_moves`.
+
+**Nachweis (08.10.2026, `1a6af98b8`, Paket G):** Die genannte Lippentasche war an den
+Korpus- und Bausteinfällen nicht mehr uneins (Magnettasche aus dem Baustein, gedrehte
+Scheibe mit Lippe, Lippe unter einer Kuppel: Karte und Operation sagten dasselbe). Die Sonde
+über Korpusnetze und je Zeile der Karte fand die Uneinigkeit dort, wo die Operation „über die
+Luft“ rechnete: an der Tasche um einen Zapfen (`pocket_with_pin.stl`) Verdoppeln, Drehen,
+Bohrung ändern und Entfernen, am Wulst (`post_with_fillet.stl`) und am Ring als ganzem Körper
+(`torus_ring.stl`) das Verdoppeln und am Ring ein anderer Satz; umgekehrt bot die Karte am
+Zapfen und an der Kuppel, die der ganze Körper sind (`dense_cylinder.stl`,
+`shallow_sphere_cap_uv.stl`), Drehen, Ändern und Entfernen an, und die Operation endete mit
+„Von dem Körper bleibt nichts übrig“. Jetzt fragt jede Merkmalshandlung nach ihren
+Leerläufen die Zeile der Karte (`actions.action_refusal`, `prepare_ops._refuse_like_the_card`;
+`move_refusal` ist ihre Fassung fürs Versetzen); was aus dem Lesen des Hohlraums kommt, liest
+die Operation in ihrem eigenen Lauf (berührende exakte Platten, RM-386). `FEATURE_SPANS_THE_BODY`
+sperrt Versetzen, Ändern, Drehen und Entfernen mit einem Satz für alle vier. Dabei gefunden und
+behoben: *Merkmal drehen* belegte an jeder Senkung 90° vor, die Operation kippt sie nur unter
+90° minus halbem Öffnungswinkel; vorbelegt wird jetzt der größte ganze Winkel darunter
+(`prepare_ops.largest_sink_tilt`). Tests in `tests/test_feature_moves_keep_shape.py`:
+`test_the_card_offers_each_handling_exactly_where_the_operation_computes` (neun Korpusnetze ×
+fünf Zeilen, 45 Fälle, am Basisstand 13 rot) und
+`test_the_card_tilts_a_countersink_only_as_far_as_it_stays_one` (je Kern an Bohrung und
+Senkung, am Basisstand 4 rot). An sieben Kundenmodellen aus `F:\3D Dateien` (Scraper mit
+Magneten, Minitopf, Wedge-Lock, Carcassonne-Gitter, Bohrerhalter, Pegboard-STEP, Side kit
+rest; bis zu 18 bewegbare Merkmale je Körper, alle sechs Zeilen) bleibt keine Uneinigkeit
+(vorher 27: 5 an Tasche, Wulst und Ring, 22 Senkungswinkel). Cache-Versionen der sieben
+Operationen erhöht.
 Umgesetzt von Claude.

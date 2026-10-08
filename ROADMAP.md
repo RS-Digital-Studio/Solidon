@@ -80,7 +80,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-496 — Reale Modelle laden im Prüfstand fast doppelt so lang wie in v0.5.1 — am echten Fenster nachmessen](#rm-496) | Geometrie, Erkennung und Druckvorbereitung | Versionsvergleich 02.10.: Verdacht gegenüber v0.5.1 (nachgeholte Importe 2,2 s, Erkennung 1,4 s); Startweg mit Vorwärmen messen |
 | [RM-525 — Anycubic Slicer Next über alle Drucker und den Modellkorpus verifizieren](#rm-525) | Geometrie, Erkennung und Druckvorbereitung | B1 bis B6 behoben und an 13 Fällen im Slicer belegt (05.10.), B7 im Matrixwerkzeug gebaut (06.10.); Minigolf-Platte als 3MF an allen 39 geschnitten, Waschschüssel an 19 von 39; offen: B8 (Kobra 3 Max V2 weicht im Standardlauf von der Herstellerkette ab), die übrigen 20 Drucker der Waschschüssel, der Plan `modelle` |
 | [RM-527 — An der Kanalmündung entscheidet die Sperre gegen eine verlangte Stütze](#rm-527) | Geometrie, Erkennung und Druckvorbereitung | Entschieden (Robert, 06.10.): Mündung frei halten; Korpus gemessen (205 Körper, keine neuen Kanalstücke, kein geänderter Stützbedarf, keine neue Sperre); offen die Abnahme in Anycubic, Elegoo und Orca |
-| [RM-548 — Lippentasche: die Karte sperrt Verdoppeln und Drehen, die Operation rechnet](#rm-548) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-535 (07.10.): dieselbe Uneinigkeit wie vorher beim Versetzen; Karte und Operation dieselbe Frage stellen lassen |
 | [RM-539 — Ein Baustein mit Trägeraufbau, auf der Innenseite gesetzt, baut nach außen ohne Befund](#rm-539) | Geometrie, Erkennung und Druckvorbereitung | Gefunden am Gehäuse-Beispiel (06.10.); offen der Befund beim Einsetzen und seine Handlung |
 | [RM-540 — Ein angeschnittenes erzeugtes Merkmal behält sein volles Maß, und die Schnittwege ordnen es verschieden zu](#rm-540) | Geometrie, Erkennung und Druckvorbereitung | Zwilling seit der Ausdehnungsregel (06.10.); ein Kriterium für alle Schnittwege festlegen |
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
@@ -3111,15 +3110,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Code und an RM-281 prüfen, was heute gilt; **dann** entscheidet Robert den Rest.
   **Abnahme:** je Frage eine datierte Entscheidung im Konzept und, wo sie Bau verlangt, die
   Umsetzung oder ein eigener Punkt.
-
-<a id="rm-548"></a>
-
-- [ ] **RM-548 — Lippentasche: die Karte sperrt Verdoppeln und Drehen, die Operation rechnet.**
-  Gefunden am 07.10.2026 beim Bau von RM-535 (Claude): Seit RM-535 fragen Karte, Operation und
-  Griff beim *Versetzen* dieselbe Funktion (`actions.move_refusal`); bei *Verdoppeln* und
-  *Drehen* sperrt die Karte eine Lippentasche (`narrowing`) noch, während die Operation
-  rechnet. **Abnahme:** Karte und Operation stellen je Handlung dieselbe Frage; ein Test über
-  die Korpusnetze wie `test_the_card_offers_a_move_exactly_where_the_operation_moves`.
 
 <a id="rm-568"></a>
 
