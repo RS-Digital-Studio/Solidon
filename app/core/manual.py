@@ -2150,6 +2150,19 @@ def models_text() -> str:
                 )
             ).format(n=decimal(OLLAMA_MIN_PARAMETERS, 0)),
             "",
+            # RM-564: Auf Apple Silicon ist der Arbeitsspeicher der Grafikspeicher.
+            str(
+                _(
+                    "Auf einem Mac mit Apple Silicon teilen sich Grafik und Prozessor den "
+                    "Arbeitsspeicher, und macOS überlässt der Grafik rund zwei Drittel "
+                    "davon. Ein Modell, das dort nicht hineinpasst, rechnet zum Teil auf "
+                    "dem Prozessor, und jede Anfrage dauert Minuten. *Bearbeiten → Chat "
+                    "einrichten* wählt deshalb auf dem Mac das Modell vor, das passt, sagt "
+                    "unter jedem anderen, ob es hier zu groß ist, und prüft vor dem Holen "
+                    "den freien Platz."
+                )
+            ),
+            "",
             f"## {_('Für das Erzeugen: drei Modelle')}",
             "",
             str(
@@ -2240,6 +2253,21 @@ def models_text() -> str:
                     "Dreiecke verringern."
                 )
             ),
+            "",
+            str(
+                _(
+                    "Gemessen auf einer NVIDIA RTX 4080 mit {memory} GB dauert der erste Auftrag "
+                    "aus einem Bild rund {image} Minuten, aus Text rund {text}, jeder weitere "
+                    "rund {warm} Sekunden."
+                )
+            ).format(
+                image=round(comfy_setup.FIRST_IMAGE_SECONDS / 60),
+                text=round(comfy_setup.FIRST_TEXT_SECONDS / 60),
+                warm=comfy_setup.WARM_SECONDS,
+                memory=comfy_setup.MEASURED_GRAPHICS_GB,
+            )
+            + " "
+            + str(_("Auf einem Mac ist das noch nicht gemessen.")),
             "",
             str(
                 _(

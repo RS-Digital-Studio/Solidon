@@ -143,6 +143,7 @@
       (<b>Apache-2.0</b>). Solidon3D richtet den Weg nur auf deinen Wunsch in
       deinem ComfyUI ein und lädt nichts ungefragt herunter; externe GLB- und
       STL-Dateien bleiben davon unabhängig vollständig nutzbar.</p>
+      <p class="sub">Zusammen laden die Modelle rund 8&nbsp;GB, für den Weg aus Text weitere 8&nbsp;GB, und Solidon3D nennt vor dem Herunterladen, wie viel auf deinem Laufwerk frei ist. Auf einer NVIDIA RTX 4080 mit 16&nbsp;GB dauert der erste Auftrag aus einem Bild rund 2 Minuten, aus Text rund 6, jeder weitere rund eine halbe Minute. Auf einem Mac ist der Weg noch nicht gemessen.</p>
 
       <h2>Lokaler Chat: welches Modell auf welche Karte</h2>
       <p class="sub">Kostenlos läuft der Chat über Ollama auf deinem eigenen Rechner. Das Modell muss ganz in den Grafikspeicher passen — sonst rechnet der Prozessor mit, und jede Antwort dauert ein Vielfaches. Diese vier Modelle wurden mit Solidons Werkzeugen geprüft. Die Tabelle zeigt Trefferquote, Rechenzeit und Grenzen:</p>
@@ -158,6 +159,7 @@
         </tbody>
       </table>
       <p class="footnote">Gemessen am 25.09.2026 auf einer NVIDIA RTX 4080 mit 16&nbsp;GB unter Ollama 0.34.3. Die Probe sind acht Anfragen, die je einen Werkzeugaufruf verlangen; bei einer absichtlich unklaren ist die Rückfrage die richtige Antwort. Die Suite sind 39 Aufträge wie im Alltag, vom Verschieben bis zum Halter mit Bausteinen; mit dem ganzen Werkzeugsatz im selben Fenster statt des Angebots traf qwen3:14b dort 14; mit einem Fenster von 40&nbsp;960 Token 24, aber in dreimal so langer Zeit und nicht mehr ganz auf der Karte. Einem lokalen Modell schickt Solidon3D je Anfrage die gemeinten Werkzeuge mit allen Feldern und alle übrigen in Kurzform — so ist der Auftrag ein Viertel so lang wie vorher. Nach einer Antwort bleibt das Modell drei Minuten geladen, damit die nächste Frage nicht auf den Start wartet. <b>Nicht empfohlen</b>, obwohl gemessen: gemma4:12b (Antworten ohne Ende), granite4.1:8b und llama3.1:8b (raten bei einer unklaren Anfrage, statt nachzufragen), mistral-nemo und qwen2.5-coder:14b (schreiben die Aufrufe als Text hin). Beim Einrichten zeigt Solidon3D, ob Ollama die Grafikkarte tatsächlich benutzt.</p>
+      <p class="sub"><b>Auf einem Mac mit Apple Silicon</b> teilen sich Grafik und Prozessor den Arbeitsspeicher, und macOS überlässt der Grafik rund zwei Drittel davon. Ganz über die Grafik läuft qwen3.5:9b deshalb ab 16&nbsp;GB Arbeitsspeicher, qwen3:14b und gpt-oss:20b ab 24&nbsp;GB, qwen3:30b-a3b ab 32&nbsp;GB. Ein zu großes Modell rechnet zum Teil auf dem Prozessor, und jede Anfrage dauert Minuten. Solidon3D schlägt beim Einrichten das Modell vor, das auf deinen Mac passt, und nennt Download und freien Platz, bevor etwas geladen wird. Wie schnell ein Mac antwortet, ist noch nicht gemessen.</p>
     </div>
   </section>
 

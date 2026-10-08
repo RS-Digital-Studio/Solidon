@@ -21,7 +21,9 @@ from __future__ import annotations
 import base64
 import http.client
 import json
+import os
 import socket
+import sys
 import threading
 import urllib.error
 import urllib.parse
@@ -29,9 +31,12 @@ import urllib.request
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, ClassVar, Final, Literal, Protocol
 
 from app.core.backends import keys
+from app.core.backends import machine as _machine
+from app.core.backends.machine import Machine
 from app.core.backends.resources import keep_warm, local_ai_slot
 from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS, is_local_address, opener_for
 from app.core.errors import (
@@ -56,7 +61,7 @@ from app.core.http import (
 from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger, redact_external, redact_url
 from app.core.types import CancelToken
-from app.i18n import TranslatableText, _
+from app.i18n import TranslatableText, _, format_decimal
 
 _log = get_logger(__name__)
 
@@ -1359,7 +1364,18 @@ def configured_ollama_model() -> str:
     """
     from app.core import discover
 
-    return discover.remembered(OLLAMA_MODEL_SETTING) or DEFAULT_OLLAMA_MODEL
+    return discover.remembered(OLLAMA_MODEL_SETTING) or default_ollama_model()
+
+
+def default_ollama_model() -> str:
+    """Die Vorgabe für diesen Rechner: auf Apple Silicon das beste Modell, das
+    ganz über die Grafik läuft (:func:`recommended_ollama_model`), sonst
+    :data:`DEFAULT_OLLAMA_MODEL`.
+
+    Auf einem MacBook mit 16 GB war die feste Vorgabe qwen3:14b zu groß, und
+    der Chat rechnete zur Hälfte auf dem Prozessor (RM-564).
+    """
+    return recommended_ollama_model() or DEFAULT_OLLAMA_MODEL
 
 
 def remember_ollama_model(model: str) -> None:
@@ -1994,6 +2010,133 @@ def known_model_note(name: str) -> TranslatableText | None:
     return suggestion[1] if suggestion is not None else None
 
 
+#: Wie viel Grafikspeicher ein empfohlenes Modell mit ``num_ctx`` 32 768
+#: belegt — dieselbe Messung wie die Sätze in :data:`OLLAMA_SUGGESTIONS`
+#: (Unterschied in ``nvidia-smi``, RTX 4080). qwen3:30b-a3b passte dort nicht
+#: ganz; Ollama nannte 19 GB (``ollama ps``, 08.2026). Auf Apple Silicon
+#: entscheidet dieselbe Zahl, ob das Modell ganz über Metal läuft
+#: (:func:`machine_fit`).
+OLLAMA_MEMORY_GB: Final = {
+    "qwen3.5:9b": 7.4,
+    "qwen3:14b": 13.6,
+    "gpt-oss:20b": 12.9,
+    "qwen3:30b-a3b": 19.0,
+}
+
+#: In welcher Reihenfolge ein Modell für einen Rechner vorgeschlagen wird, das
+#: beste zuerst: gemessen an den 39 Testaufträgen (22, 21 und 10 Treffer).
+#: qwen3:30b-a3b fehlt, weil es dort nicht gemessen ist.
+RECOMMENDATION_ORDER: Final = ("qwen3:14b", "qwen3.5:9b", "gpt-oss:20b")
+
+
+def recommended_ollama_model(machine: Machine | None = None) -> str | None:
+    """Das beste empfohlene Modell, das auf diesem Mac ganz über Metal läuft.
+
+    ``None`` heißt: Kein empfohlenes passt, der Chat braucht hier einen
+    Schlüssel. Anderswo als auf Apple Silicon ist es die Vorgabe — dort
+    entscheidet eine Karte, deren Speicher Solidon vorher nicht kennt.
+    """
+    found = machine or _machine.this_machine()
+    budget = found.graphics_gb
+    if budget is None:
+        return DEFAULT_OLLAMA_MODEL
+    return next((name for name in RECOMMENDATION_ORDER if OLLAMA_MEMORY_GB[name] <= budget), None)
+
+
+def machine_fit(model: str, machine: Machine | None = None) -> TranslatableText | None:
+    """Ob dieses Modell auf diesem Mac ganz über die Grafik läuft — als Satz.
+
+    ``None`` außerhalb von Apple Silicon und für ein Modell ohne Messung. Wer
+    ein zu großes Modell holt, erlebt sonst, was ein Kunde mit einem M3 und
+    qwen3:14b erlebte: nach 30 Minuten Schritt 4 von 12 (RM-564). Die Dauer
+    steht als Größenordnung da, weil sie auf einem Mac nicht gemessen ist —
+    gemessen ist, dass der Prozessor dabei mitrechnet.
+    """
+    found = machine or _machine.this_machine()
+    budget = found.graphics_gb
+    need = OLLAMA_MEMORY_GB.get(normalised_model_name(model))
+    if budget is None or found.memory_gb is None or need is None:
+        return None
+    graphics = format_decimal(budget, 1)
+    memory = format_decimal(found.memory_gb, 0)
+    if need <= budget:
+        return _(
+            "Auf diesem Mac passt es in den Speicher, den die Grafik nutzt (rund {graphics} "
+            "von {memory} GB).",
+            graphics=graphics,
+            memory=memory,
+        )
+    better = recommended_ollama_model(found)
+    if better is None:
+        return _(
+            "Für diesen Mac zu groß: Die Grafik nutzt hier rund {graphics} von {memory} GB, "
+            "der Rest rechnet auf dem Prozessor, und jede Anfrage dauert Minuten. Keines der "
+            "empfohlenen Modelle passt, für den Chat hilft hier ein Schlüssel für ein "
+            "gehostetes Modell.",
+            graphics=graphics,
+            memory=memory,
+        )
+    return _(
+        "Für diesen Mac zu groß: Die Grafik nutzt hier rund {graphics} von {memory} GB, der "
+        "Rest rechnet auf dem Prozessor, und jede Anfrage dauert Minuten. Passend ist {model}.",
+        graphics=graphics,
+        memory=memory,
+        model=better,
+    )
+
+
+#: Wie viel über dem Download frei bleiben muss — dieselbe Luft wie bei der
+#: Einrichtung von ComfyUI (``comfy_setup.HEADROOM_GIGABYTES``).
+PULL_HEADROOM_GB: Final = 1.5
+
+
+def ollama_models_folder() -> Path:
+    """Wo Ollama seine Modelle ablegt: ``OLLAMA_MODELS`` oder ``~/.ollama/models``.
+
+    Unter Linux legt der Systemdienst sie bei ``/usr/share/ollama`` ab; liegt
+    dort ein Modellordner, gilt er.
+    """
+    configured = os.environ.get("OLLAMA_MODELS", "").strip()
+    if configured:
+        return Path(configured)
+    service = Path("/usr/share/ollama/.ollama/models")
+    if sys.platform.startswith("linux") and service.is_dir():
+        return service
+    return Path.home() / ".ollama" / "models"
+
+
+def pull_space_problem(model: str, url: str | None = None) -> TranslatableText | None:
+    """Warum das Modell hier nicht hinpasst — ``None``, wenn es passt oder offen ist.
+
+    Gefragt wird **vor** dem Herunterladen, nur für ein lokales Ollama und nur
+    für ein Modell mit bekannter Größe: Ein Ollama auf einem anderen Rechner
+    legt seine Dateien dort ab, und ein unbekannter Name nennt seine Größe
+    erst beim Laden.
+    """
+    from app.core.backends.comfy_setup import free_gigabytes
+
+    if not is_local_address(ollama_endpoint(url or _configured_ollama_url())):
+        return None
+    suggestion = known_model_suggestion(model)
+    if suggestion is None:
+        return None
+    folder = ollama_models_folder()
+    try:
+        free = free_gigabytes(folder)
+    except OSError:
+        return None
+    needed = suggestion[0] + PULL_HEADROOM_GB
+    if free >= needed:
+        return None
+    return _(
+        "Auf dem Laufwerk von {folder} sind {free} GB frei, das Modell braucht rund {needed} GB. "
+        "Schaffen Sie dort Platz und holen Sie es dann.",
+        folder=str(folder),
+        free=format_decimal(free, 1),
+        needed=format_decimal(needed, 1),
+    )
+
+
 #: Ein Download von mehreren Gigabyte. Die Grenze ist großzügig, weil eine
 #: langsame Leitung sonst mitten im Modell aufgibt.
 PULL_TIMEOUT_SECONDS = 7200.0
@@ -2234,13 +2377,16 @@ def local_model_expectation(model: str | None = None) -> TranslatableText:
         if note is None
         else _("{model}, gemessen auf einer RTX 4080: {note}", model=name, note=note)
     )
+    # Auf Apple Silicon dazu, ob es hier ganz über die Grafik läuft (RM-564).
+    fit = machine_fit(name)
+    said: object = measured if fit is None else f"{measured!s} {fit!s}"
     return _(
         "{measured} Passt das Modell nicht ganz in den Grafikspeicher, rechnet der Prozessor mit "
         "7,8 Token je Sekunde beim Einlesen mit, und nach zehn Minuten ohne Antwort bricht "
         "Solidon ab. Für zügige Antworten braucht es eine geeignete Grafikkarte oder einen "
         "Schlüssel für ein gehostetes Modell, und welcher Weg hier rechnet, sagt „Werkzeuge "
         "prüfen“ unter „Bearbeiten → Chat einrichten“.",
-        measured=measured,
+        measured=said,
     )
 
 

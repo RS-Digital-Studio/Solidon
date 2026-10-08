@@ -6,18 +6,21 @@ from __future__ import annotations
 
 import http.server
 import json
+import math
 import socket
+import sys
 import threading
 import time
 from collections.abc import Callable
 from contextlib import suppress
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
 
 from app.core import keyring_backend
-from app.core.backends import keys, llm
+from app.core.backends import keys, llm, machine
 from app.core.backends.llm import (
     AnthropicBackend,
     BackendAnswerUnreadable,
@@ -32,6 +35,7 @@ from app.core.backends.llm import (
     parse_parameter_count,
     takes_temperature,
 )
+from app.core.backends.machine import Machine
 from app.core.errors import AppError, ExternalToolError, InternalError
 from tests.helpers import LoopbackServer
 from tests.scripted_backend import ScriptedBackend
@@ -1744,6 +1748,126 @@ def test_the_local_model_expectation_separates_gpu_and_cpu_measurements() -> Non
     assert str(llm.local_model_expectation()).startswith(llm.DEFAULT_OLLAMA_MODEL), (
         "ohne Angabe gilt das eingestellte Modell"
     )
+
+
+# --- Apple Silicon und wenig Speicher (RM-564) --------------------------------------
+
+
+def _mac(memory_gb: float) -> Machine:
+    return Machine(apple_silicon=True, memory_gb=memory_gb)
+
+
+def test_on_apple_silicon_the_graphics_get_a_share_of_the_memory() -> None:
+    """Zwei Drittel bis 36 GB, darüber drei Viertel — anderswo keine Zahl."""
+    assert math.isclose(_mac(16.0).graphics_gb or 0.0, 16.0 * 2 / 3)
+    assert math.isclose(_mac(8.0).graphics_gb or 0.0, 8.0 * 2 / 3)
+    assert math.isclose(_mac(64.0).graphics_gb or 0.0, 48.0)
+    assert Machine(apple_silicon=False, memory_gb=64.0).graphics_gb is None
+    assert Machine(apple_silicon=True, memory_gb=None).graphics_gb is None
+
+
+def test_a_mac_gets_the_best_model_that_runs_entirely_on_its_graphics() -> None:
+    """Auf einem M3 mit 16 GB lief qwen3:14b zur Hälfte auf dem Prozessor (RM-564).
+
+    Ein Kunde stand damit nach 30 Minuten bei Schritt 4 von 12. Vorgeschlagen
+    wird das beste gemessene Modell, das in den Grafikanteil passt; auf 8 GB
+    passt keines, und außerhalb von Apple Silicon bleibt die Vorgabe.
+    """
+    assert llm.recommended_ollama_model(_mac(16.0)) == "qwen3.5:9b"
+    assert llm.recommended_ollama_model(_mac(24.0)) == "qwen3:14b"
+    assert llm.recommended_ollama_model(_mac(8.0)) is None
+    assert llm.recommended_ollama_model(Machine()) == llm.DEFAULT_OLLAMA_MODEL
+    assert set(llm.RECOMMENDATION_ORDER) <= set(llm.OLLAMA_MEMORY_GB)
+    assert {name for name, _size, _note in llm.OLLAMA_SUGGESTIONS} == set(llm.OLLAMA_MEMORY_GB), (
+        "jedes empfohlene Modell nennt seinen Speicher"
+    )
+
+
+def test_the_chat_default_on_a_small_mac_is_the_model_that_fits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne eigene Wahl gilt auf einem Mac mit 16 GB das passende Modell."""
+    monkeypatch.setattr(machine, "this_machine", lambda: _mac(16.0))
+    llm.remember_ollama_model("")
+
+    assert llm.configured_ollama_model() == "qwen3.5:9b"
+
+    llm.remember_ollama_model("qwen3:14b")
+    try:
+        assert llm.configured_ollama_model() == "qwen3:14b", "eine eigene Wahl bleibt"
+    finally:
+        llm.remember_ollama_model("")
+
+
+def test_the_machine_sentence_says_whether_a_model_fits_this_mac() -> None:
+    """Vor dem Herunterladen, mit den Zahlen dieses Rechners und dem Ausweg."""
+    zu_gross = str(llm.machine_fit("qwen3:14b", _mac(16.0)))
+    assert "zu groß" in zu_gross and "10,7 von 16 GB" in zu_gross, zu_gross
+    assert "Prozessor" in zu_gross and "Minuten" in zu_gross
+    assert "qwen3.5:9b" in zu_gross, "der Satz nennt das passende Modell"
+
+    passt = str(llm.machine_fit("qwen3.5:9b", _mac(16.0)))
+    assert "passt" in passt and "zu groß" not in passt, passt
+
+    nichts = str(llm.machine_fit("qwen3.5:9b", _mac(8.0)))
+    assert "Schlüssel" in nichts and "gehostetes Modell" in nichts, nichts
+
+    assert llm.machine_fit("qwen3:14b", Machine(apple_silicon=False, memory_gb=16.0)) is None
+    assert llm.machine_fit("gibt-es-nicht:7b", _mac(16.0)) is None, "ohne Messung kein Urteil"
+    for text in (zu_gross, passt, nichts):
+        assert "{" not in text
+
+
+def test_the_chat_notice_on_a_mac_names_the_fit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Hinweis an der Chatleiste sagt es auch — für den, der den Dialog nie öffnet."""
+    monkeypatch.setattr(machine, "this_machine", lambda: _mac(16.0))
+
+    note = str(llm.local_model_expectation("qwen3:14b"))
+
+    assert "zu groß" in note and "qwen3.5:9b" in note, note
+
+
+def test_a_model_is_not_fetched_onto_a_full_disk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Download, der an voller Platte stirbt, sagt nicht warum — gefragt wird vorher."""
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 8.5)
+    local = "http://127.0.0.1:11434"
+
+    problem = llm.pull_space_problem("qwen3:14b", local)
+
+    assert problem is not None
+    text = str(problem)
+    assert "8,5 GB frei" in text and "10,8 GB" in text, text
+    assert str(llm.ollama_models_folder()) in text, "der Satz nennt den Ort"
+    assert llm.pull_space_problem("qwen3.5:9b", local) is None, "6,6 GB und Luft passen"
+    assert llm.pull_space_problem("gibt-es-nicht:7b", local) is None, "ohne Größe kein Urteil"
+    assert llm.pull_space_problem("qwen3:14b", "http://192.0.2.7:11434") is None, (
+        "ein Ollama auf einem anderen Rechner legt dort ab"
+    )
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 500.0)
+    assert llm.pull_space_problem("qwen3:14b", local) is None
+
+
+def test_ollama_keeps_its_models_where_its_variable_says(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("OLLAMA_MODELS", str(tmp_path))
+    assert llm.ollama_models_folder() == tmp_path
+    monkeypatch.delenv("OLLAMA_MODELS")
+    assert llm.ollama_models_folder().name == "models"
+
+
+def test_this_machine_reads_its_memory_without_a_helper_program() -> None:
+    """Der Arbeitsspeicher kommt vom System, ohne fremdes Programm (§32)."""
+    machine.detect.cache_clear()
+    try:
+        found = machine.detect()
+    finally:
+        machine.detect.cache_clear()
+    assert found.memory_gb is None or found.memory_gb > 1.0
+    if sys.platform != "darwin":
+        assert not found.apple_silicon
 
 
 # --- Die Adresse, die der Kunde einträgt (24.08.2026) ------------------------------

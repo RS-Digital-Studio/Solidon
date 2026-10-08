@@ -1822,6 +1822,47 @@ def test_the_setup_dialog_names_version_licences_and_sizes_before_loading(
         dialog.deleteLater()
 
 
+@pytest.mark.parametrize("apple", [False, True])
+def test_the_setup_dialog_names_space_and_duration_before_loading(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, apple: bool
+) -> None:
+    """Platz und Dauer stehen da, bevor ein Byte geladen wird (RM-564).
+
+    Ein Kunde mit MacBook las erst beim Laden, dass es Dutzende Gigabyte
+    werden. Die Zeile rechnet mit den gewählten Häkchen und dem freien Platz,
+    warnt, wenn er nicht reicht, nennt die gemessene Dauer — und auf einem
+    Mac, dass sie dort nicht gemessen ist.
+    """
+    from app.core.backends import comfy_setup, machine
+    from app.i18n import format_decimal
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path("C:/ComfyUI"))
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 12.0)
+    monkeypatch.setattr(
+        machine, "this_machine", lambda: machine.Machine(apple_silicon=apple, memory_gb=16.0)
+    )
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        both = comfy_setup.WEIGHT_GIGABYTES + comfy_setup.IMAGE_MODEL_GIGABYTES
+        said = dialog.needs.text()
+        assert f"rund {format_decimal(both, 1)} GB" in said, said
+        assert "nur 12,0 GB" in said and "Platz" in said, "zu wenig für beide"
+        assert "RTX 4080" in said and "Minuten" in said, "die gemessene Dauer"
+        assert ("nicht gemessen" in said) is apple, "auf dem Mac steht, dass es offen ist"
+
+        dialog.image_model.setChecked(False)
+        alone = dialog.needs.text()
+        assert f"rund {format_decimal(comfy_setup.WEIGHT_GIGABYTES, 1)} GB" in alone, alone
+        assert "frei sind 12,0 GB" in alone and "nur" not in alone, "eines passt"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 @pytest.mark.parametrize(("language", "words"), [("de", "rund 7,5 GB"), ("en", "about 7.5 GB")])
 def test_the_setup_dialog_says_which_old_folders_it_removes_before_it_does(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, language: str, words: str

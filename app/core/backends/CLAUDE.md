@@ -14,6 +14,7 @@ außer dem Chat benutzbar. Einzuhalten ist `.claude/rules/agentenschicht.md`
 | `llm.py` | Das Sprachmodell hinter dem Agenten — gehostet oder lokal (Ollama); `OLLAMA_CONTEXT_TOKENS`, `OLLAMA_ANSWER_TOKENS`, `prompt_was_cut`, `PROMPT_TOKENS`/`PROMPT_TOOL_COUNT` |
 | `mesh.py` | Mesh-Erzeugung für Weg 3, lokal oder gehostet (Säule B) |
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte (`local_ai_slot`, `keep_warm`) |
+| `machine.py` | Was dieser Rechner mitbringt: Apple Silicon und Arbeitsspeicher, ohne fremdes Programm (`this_machine`, `Machine.graphics_gb`) |
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Fassung prüfen (`check_version`), Modelldateien laden (`ModelFile`: Repo, Revision, Byte, SHA-256, Zielordner, Rolle) — TRELLIS.2 und BiRefNet für den Bildweg, auf Wunsch FLUX.2 [klein] 4B für den Textweg —, Reste der TripoSG-Einrichtung räumen (`remove_legacy`) |
 | `data/text_to_image.json`, `data/image_to_mesh.json` | Die ComfyUI-Abläufe: Bild aus Text und Netz aus Bild; der Weg aus Text fährt beide nacheinander (`mesh.WORKFLOW_STAGES`), nur aus eingebauten Knoten (ab ComfyUI 0.35); geprüft gegen `tests/data/comfyui/object_info.json`, erzeugt mit `tools/comfy_node_info.py` |
@@ -51,6 +52,14 @@ Messung ist die Agenten-Suite.
   Ein `shutdown` aus dem wartenden Thread weckte das `recv` unter macOS nicht
   sicher, und über Ungelesenem setzt er die Verbindung unter Windows zurück.
   Die Verbindung baut `_local_connection`; Tests setzen dort ihre Attrappe ein.
+- **Auf Apple Silicon ist der Arbeitsspeicher der Grafikspeicher** (RM-564):
+  `Machine.graphics_gb` rechnet den Anteil, den macOS der Grafik lässt;
+  `recommended_ollama_model` wählt das beste gemessene Modell, das ganz
+  hineinpasst (`OLLAMA_MEMORY_GB`, `RECOMMENDATION_ORDER`), und ist ohne
+  eigene Wahl die Vorgabe (`default_ollama_model`). `machine_fit` sagt es unter
+  jedem Modell und an der Chatleiste, `pull_space_problem` prüft vor dem Holen
+  den Platz bei `ollama_models_folder`. Gefragt wird nur über
+  `machine.this_machine()` — die Suite setzt dort einen neutralen Rechner ein.
 - **`PROMPT_TOKENS` und `PROMPT_TOOL_COUNT`** stehen in `llm.py` und gehören
   zu derselben gezählten Anfrage; gezählt wird mit
   `tools/measure_local_model.py --count-tokens` (ein Antworttoken, JSON mit
@@ -118,6 +127,10 @@ Revisionen, Byte und SHA-256 stehen an `comfy_setup.SHAPE_FILES`,
   (`generate.GENERATED_REPAIR`). Begründung im Docstring von `mesh.py`. Nach
   `DecimateMesh` füllt ein zweites `FillHoles` die kleinen Vierecklöcher, die
   das Ausdünnen offen lässt.
+- **Platz und Dauer stehen vor dem Laden da** (RM-564): Der
+  Einrichtungsdialog rechnet die gewählten Dateien gegen `free_gigabytes`
+  und nennt die gemessene Dauer (`FIRST_IMAGE_SECONDS`, `FIRST_TEXT_SECONDS`,
+  `WARM_SECONDS`, RTX 4080); auf Apple Silicon, dass sie dort nicht gemessen ist.
 
 ## Grenzen
 

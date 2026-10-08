@@ -192,6 +192,16 @@ BACKGROUND_MEGABYTES: Final = math.ceil(BACKGROUND.size / 1_000_000)
 #: den Grund mit keinem Wort.
 HEADROOM_GIGABYTES: Final = 1.5
 
+#: Wie lange ein Auftrag dauert, gemessen auf einer NVIDIA RTX 4080 mit 16 GB
+#: (RM-004, 07.10.2026): der erste aus einem Bild 125 s, der erste aus Text
+#: 350 s — dort malt FLUX.2 [klein] vorher das Bild —, jeder weitere 21 bis
+#: 26 s. Der Einrichtungsdialog nennt sie vorher (RM-564); auf einem Mac ist
+#: Weg 3 nicht gemessen, und der Satz sagt das, statt eine Zahl zu raten.
+FIRST_IMAGE_SECONDS: Final = 125
+FIRST_TEXT_SECONDS: Final = 350
+WARM_SECONDS: Final = 26
+MEASURED_GRAPHICS_GB: Final = 16
+
 #: Was Solidon bis Oktober 2026 selbst in ComfyUI anlegte (:func:`remove_legacy`).
 LEGACY_NODES: Final = "custom_nodes/ComfyUI-TripoSG-Solidon"
 LEGACY_WEIGHTS: Final = "models/triposg/TripoSG"

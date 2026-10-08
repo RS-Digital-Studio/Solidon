@@ -1730,7 +1730,8 @@ class KeyDialog(QDialog):
             self.model_field.addItem(name, name)
             seen.add(family)
         if not self.model_field.count():
-            self.model_field.addItem(llm.DEFAULT_OLLAMA_MODEL, llm.DEFAULT_OLLAMA_MODEL)
+            fallback = llm.default_ollama_model()
+            self.model_field.addItem(fallback, fallback)
         self._select_model(chosen)
         self._show_model_note()
 
@@ -1747,7 +1748,11 @@ class KeyDialog(QDialog):
         if suggestion is not None:
             gigabytes, note = suggestion
             size = f"{format_decimal(gigabytes, 1)} GB"
-            self.model_note.setText(f"{tr('Download: {size}', size=size)} — {note}")
+            # Auf Apple Silicon dazu, ob es hier ganz über die Grafik läuft —
+            # vor dem Herunterladen, nicht nach der ersten halben Stunde (RM-564).
+            fit = llm.machine_fit(name)
+            here = f" {fit}" if fit is not None else ""
+            self.model_note.setText(f"{tr('Download: {size}', size=size)} — {note}{here}")
             return
         self.model_note.setText(
             tr(
@@ -1782,7 +1787,7 @@ class KeyDialog(QDialog):
         typed = self.model_field.currentText().strip()
         if isinstance(data, str) and typed.startswith(f"{data} — "):
             return data
-        return typed.split(" — ")[0] or llm.DEFAULT_OLLAMA_MODEL
+        return typed.split(" — ")[0] or llm.default_ollama_model()
 
     def _pull_model(self) -> None:
         """Neun Gigabyte, mit Balken und Abbrechen statt eines Terminals."""
@@ -1790,6 +1795,12 @@ class KeyDialog(QDialog):
             self._pull.cancel()
             return
         model = self._chosen_model()
+        # **Der Platz zuerst** (RM-564): Ein Download, der an einer vollen
+        # Platte stirbt, hat bis dahin Gigabyte geladen und sagt nicht warum.
+        no_room = llm.pull_space_problem(model)
+        if no_room is not None:
+            set_role(self.probe_result, "warning", str(no_room))
+            return
         self.model_field.setEnabled(False)
         self.pull_progress.setRange(0, 0)
         self.pull_progress.setVisible(True)

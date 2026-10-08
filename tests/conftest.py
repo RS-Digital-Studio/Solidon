@@ -606,6 +606,12 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(discover, "unpatched_find_programs", discover.find_programs, raising=False)
     monkeypatch.setattr(discover, "find_programs", only_what_was_set_plural)
     discover.forget_cache()
+    # **Und nicht Prozessor und Speicher** (RM-564): Auf einem Mac mit 16 GB
+    # wäre die Vorgabe des Chats ein anderes Modell als auf dem Bauserver.
+    # Wer die Rechnerauskunft prüft, setzt seinen Rechner ausdrücklich.
+    from app.core.backends import machine
+
+    monkeypatch.setattr(machine, "this_machine", lambda: machine.Machine())
 
 
 #: Unter dieser Variable ist ein fehlender Slicer ein Fehler statt ein Skip —

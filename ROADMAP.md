@@ -151,7 +151,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg](#rm-544) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): alle Gewindearten samt Einstellung der Auswahllisten; baut auf RM-532 (jedes Maß) und RM-536 (Stift für Bohrung) auf |
 | [RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen](#rm-562) | Kundenrückmeldungen | Kunden-E-Mail 07.10. und Robert 08.10.: Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter ohne Trägerkörper |
 | [RM-563 — Verrunden an mehreren Kanten zugleich wählen](#rm-563) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: Mehrfachauswahl von Kanten und Ecken fand der Kunde nicht; Bestand prüfen, Weg bauen oder zeigen |
-| [RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher nennen](#rm-564) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: qwen3:14b auf M3 nach 30 min bei Schritt 4 von 12, ComfyUI wollte weitere Dutzende GB; Systemanforderungen der Website (16 GB) abgleichen |
+| [RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher nennen](#rm-564) | Kundenrückmeldungen | Gebaut (08.10.): Mac-Vorgabe nach Arbeitsspeicher, Satz je Modell, Platzprüfung vor dem Holen, ComfyUI nennt Platz und Dauer, Website in sechs Sprachen; offen die Messung auf einem M-Chip mit mindestens 16 GB |
 | [RM-565 — *Auswahl als Baustein speichern* nimmt den gewählten Körper](#rm-565) | Kundenrückmeldungen | Robert, 07.10.: Körper wählen, Bausteinkatalog öffnen, *Speichern* |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
@@ -5247,7 +5247,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
 
 <a id="rm-564"></a>
 
-- [ ] **RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher
+- [~] **RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher
   nennen.** Kunden-E-Mail vom 07.10.2026, MacBook mit M3 und 512 GB: qwen3:14b über Ollama
   stand nach 30 Minuten bei Schritt 4 von 12; ComfyUI verlangte für ein Winkeleisen aus einem
   Bild weitere Dutzende Gigabyte. **Soll:** Vor der Einrichtung nennt Solidon Platzbedarf und
@@ -5257,6 +5257,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   großen Läufer oder einem echten Mac — der GitHub-Läufer `macos-latest` hat 7 GB, qwen3:14b
   braucht rund 9 GB; ein kleineres Modell darf zusätzlich auf `macos-latest` gemessen werden.
   Der Einrichtungsdialog nennt die Größe vor dem Herunterladen; Website-Text gegen die Messung.
+
+  **Stand 08.10.2026 (Paket K, Claude), gebaut:** `backends/machine.py` erkennt Apple Silicon
+  und Arbeitsspeicher ohne fremdes Programm; auf dem Mac zählt der Anteil, den macOS der Grafik
+  lässt (zwei Drittel bis 36 GB, darüber drei Viertel). Ohne eigene Wahl ist das beste gemessene
+  Modell, das ganz hineinpasst, die Vorgabe (16 GB: qwen3.5:9b, ab 24 GB: qwen3:14b, 8 GB: keines,
+  der Satz nennt den Schlüssel). *Chat einrichten* sagt unter jedem Modell vor dem Holen, ob es
+  auf diesem Mac zu groß ist und welches passt, und prüft den freien Platz am Modellordner von
+  Ollama; die Chatleiste sagt es auch. *ComfyUI einrichten* rechnet die gewählten Modelle gegen
+  den freien Platz und nennt die gemessene Dauer (RTX 4080), auf dem Mac, dass sie dort nicht
+  gemessen ist. Systemvoraussetzungen und KI-Seite der Website in sechs Sprachen: Mac-Speicher je
+  Modell, Platz für Download und ComfyUI; „16 GB für die größeren“ stimmte für qwen3:30b-a3b
+  nicht. Handbuch *Welche Modelle Solidon benutzt* zieht nach. **Offen:** die Messung auf einem
+  M-Chip mit mindestens 16 GB — belegter Speicher über Metal, ob qwen3.5:9b ganz auf der Grafik
+  läuft, Antwortzeit —, danach `OLLAMA_MEMORY_GB`, Website und Handbuch gegen die Messung; dazu
+  Weg 3 auf dem Mac (int8 hat dort kein `torch._int_mm`, ComfyUI rechnet die Gewichte voll aus).
 
 <a id="rm-565"></a>
 
