@@ -200,7 +200,7 @@ sich in den Kopien. Originaldateien und Herstellerprofile bleiben unverändert.
   `writer._support_blocker` fragt zuerst die Schichten des Prüfberichts
   (`slice.findings.remembered_analysis`), sonst schneidet es einmal mit
   `detail="support"` und extrudiert die Kanalscheiben mit `manifold3d`
-  (`BLOCKER_SIMPLIFY`, `BLOCKER_MARGIN`); abbrechbar bis in den Schnitt
+  (`BLOCKER_SIMPLIFY`); abbrechbar bis in den Schnitt
   (`write_assembly(cancelled=)`, `_PlateJob.cancelled`).
 - **Cura bekommt je Teil ein Netz**: neben dem zusammengelegten STL je Teil
   und je Sperre ein STL und die Netzliste `<name>.meshes.json`

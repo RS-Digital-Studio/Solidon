@@ -189,6 +189,19 @@ bis 0,9 s.
   zweimal und nahm das Ergebnis still aus der Voxelstufe; `shared_volume`
   antwortete „nichts gemeinsam“.
 
+## Eine neue gemerkte Frage wird geteilt oder gebunden — ausdrücklich
+
+**`contains_xy` und `intersects_xy` bereiten eine Fläche selbst vor**
+(08.10.2026, RM-566). Ein Merker für die Schichtflächen der Kanalsperre gab
+dieselben Flächen allen Scheibenarbeitern, und jeder fragte sie mit
+`shapely.contains_xy`. Der Prozess stürzte nativ ab: Der Bechertest allein,
+sechsmal gepinnt, endete fünfmal mit 0xC0000005 oder 0xC0000409, mit einem
+Lock um das Bauen noch dreimal, einmal mit 0xC0000374 (Heap). Shapely 2.1
+bereitet eine übergebene Einzelfläche in `predicates.py` selbst vor; je Faden
+eine eigene Fläche lief sauber, eine geteilte stürzte ab, auch wenn der
+Hauptfaden sie vorher gefragt hatte (Review 3, `prepared_race2.py`). Ein Lock
+um das Bauen schützt das Fragen nicht.
+
 ## Über die Körpergrenze merkt sich nur, wer außer seiner Lesung nichts liest
 
 Der Merker über die Körpergrenze entstand mit RM-261. Warum die Boolesche

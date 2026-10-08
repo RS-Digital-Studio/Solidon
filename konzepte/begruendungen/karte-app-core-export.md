@@ -100,8 +100,9 @@ der 3MF, bei Cura als eigenes Netz (`_cura_meshes`, siehe unten).
 `writer._support_blocker` schneidet das Teil dafür einmal mit
 `detail="support"`, fragt `analysis.model_support` und `channel_space` und
 extrudiert die Kanalscheiben mit `manifold3d` — vorher um `BLOCKER_SIMPLIFY`
-vereinfacht, danach um `BLOCKER_MARGIN` aufgeweitet; der Befund
-`export.support_blocker` sagt, wo. Der Schritt ist abbrechbar:
+vereinfacht und ebenso weit wieder aufgeweitet; den Zuschlag einer Bahnbreite
+trägt der Kanalraum schon, vor dem Aussparen. Der Befund
+`export.support_blocker` sagt, wo und wie viel gesperrt ist. Der Schritt ist abbrechbar:
 `write_assembly(cancelled=)` reicht den Abbruch bis in den Schnitt, und der
 Druckdialog gibt ihn über `_PlateJob.cancelled` mit. Eine gespeicherte 3MF trägt sie nicht:
 Sie ist das Projekt des Kunden und keine Übergabe. Welche Schreibweise welche

@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-570: Eine schräge Unterseite ist ein Feld, und ein Kinn bekommt seine Stützen (08.10.2026)](#rm-570-eine-schräge-unterseite-ist-ein-feld-und-ein-kinn-bekommt-seine-stützen-08102026) |
+| 2026-10-08 | [RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)](#rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)](#ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026) |
@@ -43495,3 +43497,82 @@ Bauplan, Regeln und Code sind nachgezogen (`tools/docs_scan.py --frage 3` ohne t
 Linkprüfung vorher und nachher ohne neuen). Review mit Nachprüfung (06./07.10.2026). Dabei
 gefunden und eingetragen: die fünf offenen Entscheidungen der Erstkonfiguration als
 [RM-542](ROADMAP.md#rm-542).
+
+## RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)
+
+<a id="rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026"></a>
+<a id="rm-566"></a>
+
+**Befund (Druck Robert, 07.10.2026):** Der Drache aus `F:\3D Dateien\Drache.p3d` (2,9 Mio.
+Dreiecke) druckte am Centauri Carbon 2 aus dem ElegooSlicer mit übernommenen Vorschlägen
+Kiefer, Kinnstacheln und Flügelbögen in die Luft; Fadenknäuel an Kopf und Flügelansatz,
+Stützreste schwer zu entfernen. Ursache war der Vorschlag „Kanalsperre“: 738
+Überhangstücke galten als Kanaldecken, die Sperre im Umkreis von 15 mm war mit
+259 000 mm³ größer als der Drache. Die Stützwerte (Abstand, Kontaktlagen, Schwelle) waren
+Elegoos Vorgaben; Solidon hatte sie nicht verändert.
+
+**Behoben:** Eine Decke ist Kanal, wenn ihr Grundriss zwischen seinen Auflagen liegt,
+gehalten nur von Material neben ihrem geschlossenen Grundriss (`_Ceilings.closes`). Die
+Sperre bekommt nur eine Decke, die sonst Stütze bräuchte (`worth_support` am größten
+Stück, im Zweifel Stütze), und sie sperrt nur Raum, an den man nicht hinkommt — zu eng
+für den Kreis der Kanalfrage oder umschlossen. Ausgespart werden die Säulen der
+Überhänge, deren Decke ohne ihre Kanalstücke als Feld Stütze braucht, außer im
+umschlossenen Raum; Zuschlag eine Bahnbreite vor dem Aussparen;
+vorgeschlagen nur, wenn sie Raum sperrt. Aus drei Durchsichten dazu: Ort und Fläche des
+Sperrbefunds aus den gesperrten Säulen, eine Stelle für die Stützbedarfsregel, der
+Sperrraum gemerkt, die Bahnbreite statt einer festen Zahl, die Schätzung fragt den
+Sperrraum. Bekannte Grenze: [RM-571](ROADMAP.md#rm-571). Warum, mit allen verworfenen Wegen:
+`konzepte/begruendungen/regel-schichtanalyse.md`; Sonden und Messwege unter
+`.claude/.state/drache-2026-10-08/` (`STAND.md`).
+
+**Nachweis (08.10.2026):** Anteil der Überhangfläche außerhalb der Kanaldecken mit
+Stützbahn bis 1,2 mm darunter (`gcode_stuetzen.py`, `open_share`). Gesliced am Stand vor
+den Fixen aus Review 3; die ändern den Sperrraum um höchstens 52 mm³ (Drache im
+Cura-Raster, `sonde_kanalraum.py`).
+
+| Drache | ohne Sperre (Slicer selbst) | Stand 07.10. | Endstand |
+|---|---|---|---|
+| ElegooSlicer, CC2 | 97,7 % | 71,9 % | 97,7 % (keine Sperre) |
+| OrcaSlicer, Kobra 2 | 100 % | 47,4 % | 99,4 % (keine Sperre) |
+| PrusaSlicer, MK4S | 100 % | — | 99,8 % (keine Sperre) |
+| Cura, SV06 (Winkel 50°) | 100 % | — | 96,8 % (Hohlraum im Flügelknochen gesperrt) |
+| ElegooSlicer, 130 % | 98,7 % | — | 97,6 % (ebenso) |
+
+Bambu Studio (83,3 %) und Creality Print (84,6 %) stützen mit ihrem eigenen organischen
+Baum weniger; `support_style = default` lesen beide schon als organisch (Quelltext und
+Rundreise mit `organic`/`tree_organic`, gleiche Druckdatei). Die Waschschüssel in
+Drucklage: Stütze im Wasserkanal in ElegooSlicer, OrcaSlicer, PrusaSlicer und Cura je 0,0 m (ohne Sperre 12,8 m im ElegooSlicer, 50,7 m im
+PrusaSlicer); in Dateilage ohne Sperre 140,6 m im unteren Kanal des PrusaSlicers, mit der
+neuen Sperre 0,0 m (Review 2). Wie fest die Stütze sitzt, misst `gcode_auflage.py`: Solidons
+Baumvorschlag setzt am Drachen viel weniger auf dem Modell auf als die Gittervorgaben der
+Hersteller (Creality 324 → 4 mm², Kobra 2 212 → 54 mm², Prusa 220 → 66 mm²). Korpus am Endstand (242 Körper aus 126 Dateien, `korpus_vergleich.py` gegen den Stand
+vorher): 39 Körper verlieren die Sperre, 8 behalten sie kleiner, keiner bekommt eine neue,
+und kein anderer Vorschlag ändert sich; am
+Side Kit Rest bekommt der Slicer 24 m Stütze unter
+Überhängen zurück, die die alte Sperre zudeckte. Tor auf dem Endstand grün (Suite ohne Fenster und Renderer, ruff, Format, mypy); drei
+Durchsichten (`solidon3d-review`), die letzte mit Nachprüfung der Fixe: am Code kein offener Fund, jeder Fix mit einer Gegenprobe, die rot wird.
+
+## RM-570: Eine schräge Unterseite ist ein Feld, und ein Kinn bekommt seine Stützen (08.10.2026)
+
+<a id="rm-570-eine-schräge-unterseite-ist-ein-feld-und-ein-kinn-bekommt-seine-stützen-08102026"></a>
+<a id="rm-570"></a>
+
+**Befund (Review 1 zu RM-566):** Ein Kiefer mit 18° flacher Unterseite zerfällt im Schnitt in
+31 Streifen von höchstens 6,4 mm², zusammen 189 mm². Der Stützbedarf fragte das größte Stück
+(`largest_overhang_patch`) und unter `OVERHANG_LAYER_MINIMUM` sagte der Rat „keine
+Stützen“ — die Fehlerklasse des Drachendrucks.
+
+**Behoben:** Verfehlt das größte Stück die Grenze und liegt die Summe über 100 mm², zählt
+auch die größte Decke als Feld (`analysis.largest_sloped_patch` über `_field`): ihre
+Streifen in der Aufsicht vereinigt, ohne Kanalstücke, nur wo sie im Mittel breiter sind
+als `OVERHANG_MARGIN`. Dieselbe Feldfrage entscheidet den Stützort
+(`ModelSupport.open_field`: sonst „nur vom Bett“ am Kinn über der Brust) und welche
+Überhänge die Kanalsperre ausspart (RM-566). Wo viele kleine Überhänge Stützen
+verlangen, nennt der Prüfbericht noch keine Stelle: [RM-572](ROADMAP.md#rm-572).
+
+**Nachweis (08.10.2026):** `tests/test_advise.py::test_a_sloped_underside_is_one_field`
+(Kinn, Feld unter der Summe 150, Feld unter 100, Rauschen einer Wand),
+`tests/test_slice_findings.py::test_a_sloped_chin_over_the_chest_keeps_its_supports_everywhere`
+und `test_only_what_rests_on_the_model_counts_as_its_field`, alle ohne den Fix rot; der
+Gitterbecher bleibt ohne Stütze; im Korpus am Endstand ändert sich außer der Sperre kein
+Vorschlag (RM-566).

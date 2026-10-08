@@ -35,6 +35,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import profiles
 from app.core.slice import advise
 from app.core.slice.analysis import (
+    OVERHANG_LAYER_WORTH_SUPPORT,
     _material,
     _material_cross,
     largest_overhang_patch,
@@ -76,8 +77,8 @@ ORIENT_SEARCH_BODIES: Final = 8
 
 #: Unter dieser zusammenhängenden Fläche in mm² trägt sich ein Überhang
 #: selbst — dieselbe Zahl, mit der die Druckvorschläge Stützen verlangen
-#: (:data:`app.core.slice.advise.OVERHANG_LAYER_WORTH_SUPPORT`).
-OVERHANG_REPORTED_FROM: Final = advise.OVERHANG_LAYER_WORTH_SUPPORT
+#: (:data:`app.core.slice.analysis.OVERHANG_LAYER_WORTH_SUPPORT`).
+OVERHANG_REPORTED_FROM: Final = OVERHANG_LAYER_WORTH_SUPPORT
 
 #: Der Schlüssel, unter dem das Netz seine Analyse für den Bericht behält.
 _CACHE_KEY: Final = "solidon_print_findings"

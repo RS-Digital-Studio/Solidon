@@ -351,6 +351,125 @@ Räumen weiter als `CHANNEL_WIDTH` (Pool-Wasserfall, Kumiko-Organizer, die
 Waschschüssel in ihrer Dateilage bis 2,6 mm); nach *Druckoptimal ausrichten*
 behält die Waschschüssel jedes Kanalstück.
 
+**Eine Kanaldecke liegt zwischen ihren Auflagen, und gesperrt wird nur Raum,
+an den man nicht hinkommt (08.10.2026, RM-566).** Roberts Drache
+(`F:\3D Dateien\Drache.p3d`, 2,9 Mio. Dreiecke, 171 × 122 × 130 mm) druckte am
+Centauri Carbon 2 mit übernommenen Vorschlägen Kiefer, Kinnstacheln und
+Flügelbögen in die Luft. 738 Überhangstücke galten als Kanaldecken: Schuppen,
+Stacheln und Flügelansatz hängen in Räumen, die keinen Kreis von 30 mm fassen,
+und ihre Säulen setzen auf dem Modell auf. Die Sperre im Umkreis von 15 mm um
+jede Kanalsäule war mit 259 000 mm³ größer als der Drache (220 000 mm³). Im
+G-Code (Anteil der Überhangfläche außerhalb der Kanaldecken mit Stützbahn bis
+1,2 mm darunter, `.claude/.state/drache-2026-10-08/gcode_stuetzen.py`) stützte
+der ElegooSlicer 71,9 % statt 97,7 % ohne Sperre, der OrcaSlicer 47,4 % statt
+100 %. Kanaldecken zählt der Messwert nicht mit: Ihre Stütze soll fehlen, und
+mit ihnen sah jede Sperre wie ein Verlust aus, auch die richtige.
+
+Was nicht trug, in der Reihenfolge der Versuche: „Irgendein Stück spannt“
+(Bahnrichtung mit Halt an beiden Enden) — in den Zwickeln zwischen Schuppen
+spannt fast immer ein Splitter. „Jedes Stück der obersten Schicht spannt“ —
+der Wasserkanal der Waschschüssel ist ein gekrümmtes Band, und an seiner
+Mündung hängt oben ein Splitter an einer Wand. Eine Breitengrenze für
+einseitige Stücke — die Gewölbestreifen der Schüssel sind bis 4,8 mm breit, die
+Knochenspitze am Flügel 2,2 mm. „Zwei getrennte Auflagen oder der halbe Rand“
+— ein Eckregal an zwei angrenzenden Wänden schloss damit immer, ebenso eine
+Kragplatte mit einem Stift an ihrer Wurzel, und ein Krümel derselben Decke
+schloss die ganze. Halt am eigenen Material — unter dem Streifen k+1 einer
+schrägen Unterseite liegen die Streifen 1 bis k derselben Decke und dazwischen
+je ein Band der Überhangzugabe; ein Kiefer mit gewölbter Unterseite wurde Kanal
+(Review 1: bis 187 von 288 mm² gesperrt), eine Konsole mit 17° Unterseite über
+einem Graben ganz (Review 2). Die Größe als Bedingung für „Kanal“ — dann
+zählten die Schlitze eines Kotschiebers aus dem Korpus als Überhang, und der
+Rat verlangte Stützen, wo sich jede Schlitzdecke selbst trägt. Eine Grenze für
+die Spannweite (nirgends weiter als `CHANNEL_WIDTH / 2` von der Auflage) —
+sie änderte am Drachen nichts und machte das Gewölbe eines Halters aus dem
+Korpus, in der Aufsicht 40 mm breit, zur offenen Decke. Und eine Flächengrenze
+für die Sperre allein (Sperre nur für Decken, die ohne sich zu schließen Stütze
+bräuchten): Sie hielt den Drachen im ElegooSlicer frei, aber nicht im
+Cura-Raster (Winkel 50°: 40 gesperrte Säulen, 96,3 statt 100 %) und nicht bei
+130 % Größe (94,3 statt 98,7 %). Den Zuschlag schob der Schreiber erst nach dem
+Aussparen hinaus, wieder in die ausgesparten Säulen.
+
+Die Ursache am Drachen zeigt das Cura-Raster: In einer Falte der Flughaut, im
+Innern eines hohlen Flügelknochens, hängt eine echte Kanaldecke. Ihr Umkreis
+von 15 mm lief aus dem Knochen heraus in den offenen Raum unter dem Flügel, und
+dort liegen die Überhänge, die Stütze brauchen. Der Slicer liest sie mit seiner
+eigenen Regel; genau ausgespart hielt Solidons Grundriss ihre Stütze nicht.
+
+Seitdem gilt eine Decke als Kanal, wenn ihr Grundriss zwischen seinen Auflagen
+liegt — zu `CEILING_SPANNED` in der Hülle der gehaltenen Randstücke oder
+ringsum gehalten, und gehalten nur von Material neben ihrem geschlossenen
+Grundriss (`_Ceilings.closes`, entschieden nach Fläche); sie zählt dann nicht
+zum Stützbedarf, gleich wie klein. **Gesperrt wird nur Raum, an den man nicht
+hinkommt**: zu eng für den Kreis der Kanalfrage (`_narrow`) oder ringsum
+umschlossen, ein Loch der Fläche (`_enclosed`). Die Schüssel in Dateilage verliert so den Sperrraum
+unter halber Säulenhöhe (147 906 → 28 862 mm³); dort stellte ohne Sperre der
+PrusaSlicer 140,6 m Stütze hin, mit der kleineren Sperre keiner der beiden
+gemessenen Slicer — sie trug nur die Decke, und die ist gesperrt. Den Umkreis
+`CHANNEL_WIDTH / 2` bekommt eine Decke, die ohne sich zu schließen Stütze
+bräuchte (`worth_support`, gefragt am größten Stück); der Wasserkanal hat
+922 mm² (in Drucklage 176 mm², 86 mm² auf einmal), die größte Tasche am
+Drachen 96 mm². Stützbedarf und Aussparung fragen dieselbe Regel am Feld:
+Wo eine Decke über Stütze oder keine entscheidet, fällt der Zweifel auf
+Stütze. Als Feld gefragt, sperrte der Drache bei 130 % eine zweite Decke
+(149 mm² in 48 Streifen) und nahm fast doppelt so viel stützbedürftige Fläche
+unter die Sperre, 451 statt 236 mm² (Review 3). **Die übrigen Kanaldecken bekommen keine
+Sperre**, auch keine kleine: Mit Umkreis um jede Taschendecke stützte der
+ElegooSlicer den Drachen zu 87,8 %, mit zwei Bahnbreiten um ihren Grundriss
+noch zu 96,7 % statt 97,7 %. Was dafür offen bleibt, ist erreichbar — am
+Countercleaner aus dem Korpus 29 m Stütze in einer Kehle, die nach zwei
+Seiten offen ist, unter einer Decke, die sich selbst trägt.
+
+Ausgespart werden die Säulen der Überhänge, die selbst Stütze brauchen: Inseln
+und Stücke, deren Decke ohne ihre Kanalstücke als Feld (`_field`, die Streifen
+in der Aufsicht vereinigt) `worth_support` genügt — auch eine schräge
+Unterseite, die in Streifen unter 10 mm² zerfällt. Was Solidon für
+selbsttragend hält, darf unter die Sperre: Ein Stachel neben einer gesperrten
+Tasche (Feld 12 bis 24 mm²) verliert dort bis zu 81 % seiner Unterseite
+(Review 2 und 3). An der Mündung des Wasserkanals hängt ein offenes Stück von
+11 mm², das sich selbst trägt; ausgespart, holte der ElegooSlicer es mit einem
+Ast quer durch den Kanal (1,4 m). Mit ihren Kanalstücken gefragt, galt jedes
+offene Stück dort als stützbedürftig, und gehalten hat es nur die Ausnahme im
+umschlossenen Raum (Review 3). **Im umschlossenen Raum wird nichts ausgespart**: Eine Stütze dort
+holt niemand heraus; eine schräge Fläche im Rohrbogen des Wasserkanals, die
+selbst Stütze bräuchte, holte der ElegooSlicer sonst ebenso (1,6 m). Enger
+gefasst kam der Ast wieder: „eng und umschlossen“ 0,7 m, denn der Rohrbogen ist
+weit; „zur Hälfte überdacht“ nahm der Schüssel den Sperrraum fast ganz
+(169 209 → 9 468 mm³), denn ihr Kanal liegt in einem oben offenen Hohlraum.
+Die Grenze davon: Das Innere eines oben offenen Bechers ist in jedem Schnitt
+ein Loch, und ein Sims darin neben einem gesperrten Kanal verliert Stütze
+(Review 2: 65 %) — RM-571. Der
+Zuschlag einer Bahnbreite kommt vor dem Aussparen; ein Loch, in dem keine Bahn
+samt Abstand Platz hat, schließt sich (ein Krümel von 0,33 mm² im Kanal,
+ausgespart mit Zuschlag: 1,5 m Stütze im OrcaSlicer). Vorgeschlagen wird die
+Sperre nur, wenn sie Raum sperrt.
+
+Gemessen am Endstand: Im ElegooSlicer bekommt der Drache keine Sperre mehr und
+ist zu 97,7 % gestützt wie ohne Solidon. Im Cura-Raster und bei 130 % Größe
+sperrt Solidon den Hohlraum im Flügelknochen, den der Slicer ohne Sperre mit
+Stütze füllt, die nie mehr herauskommt, und stützt 96,8 statt 100 % bzw.
+97,6 statt 98,7 %. Die Waschschüssel in Drucklage druckt in ElegooSlicer,
+OrcaSlicer, PrusaSlicer und Cura wie vorher: keine Stütze im Wasserkanal (ohne
+Sperre 12,8 m im ElegooSlicer, 50,7 m im PrusaSlicer).
+
+**Eine schräge Unterseite ist ein Feld (08.10.2026, RM-570).** Ein Kinn mit
+18° flacher Unterseite zerfällt im Schnitt in 31 Streifen von höchstens
+6,4 mm², zusammen 189 mm². Gefragt war das größte Stück, und unter
+`OVERHANG_LAYER_MINIMUM` sagte der Rat „keine Stützen“ — in der Aufsicht ist es
+eine Fläche von 189 mm². Seitdem zählt, wenn das größte Stück die Grenze
+verfehlt und die Summe über 100 mm² liegt, auch die größte Decke als Feld
+(`largest_sloped_patch` über `_field`): ihre Streifen vereinigt, nicht
+summiert, ohne Kanalstücke, und nur, wo sie im Mittel breiter sind als
+`OVERHANG_MARGIN` — sonst ist es eine Wand, die sich auffängt. Erst ab einer
+Summe von 150 gefragt, blieb ein Feld von 134 mm² „keine Stützen“ (Review 3).
+**Auch der Stützort fragt das Feld** (`ModelSupport.open_field`, so viel, wie
+davon auf dem Modell aufsetzt): Sonst verlangte der Rat am Kinn über der Brust
+Stützen und zugleich „nur vom Bett“, und das Kinn druckte weiter in die Luft.
+Der Gitterbecher bleibt ohne Stütze, und im Korpus (242 Körper) ändert sich
+außer der Sperre kein Vorschlag. Die Feldfrage über den ganzen Körper kostet am Drachen 8,2 s CPU;
+der Prüfbericht stellt sie deshalb nicht, und wo viele kleine Überhänge
+Stützen verlangen, nennt er noch keine Stelle (RM-572).
+
 ## Das Maschinenprofil des Slicers
 
 `export/slicer_profiles.py` liest den Bestand des installierten Slicers. Vier
