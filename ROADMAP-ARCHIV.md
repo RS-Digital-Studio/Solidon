@@ -43,6 +43,7 @@ entfernt hat.
 | 2026-10-08 | [RM-555: Jedes Zahlenfeld eines Bausteinschritts trägt fx (08.10.2026)](#rm-555-jedes-zahlenfeld-eines-bausteinschritts-trägt-fx-08102026) |
 | 2026-10-08 | [RM-558: Die Zahl am Vorschaugriff geht mit dem Zug (08.10.2026)](#rm-558-die-zahl-am-vorschaugriff-geht-mit-dem-zug-08102026) |
 | 2026-10-08 | [RM-547: Ein erneuter Versuch fasst die Schritte neu, statt sie zu löschen (08.10.2026)](#rm-547-ein-erneuter-versuch-fasst-die-schritte-neu-statt-sie-zu-löschen-08102026) |
+| 2026-10-08 | [RM-573: Ein Tourschritt über einen Nachbarreiter rahmt ihn, statt die Tour zu verdecken (08.10.2026)](#rm-573-ein-tourschritt-über-einen-nachbarreiter-rahmt-ihn-statt-die-tour-zu-verdecken-08102026) |
 | 2026-10-07 | [RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)](#rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
@@ -44231,7 +44232,9 @@ eingeklappten Schrittzeile.
 `LayoutRequest` mit `tell_the_zone`), der aktuelle Schritt wird nach dem Legen ins Bild gerollt,
 `_clear_rows` nimmt alte Zeilen sofort aus dem Layout. Kein Tooltip mehr in der Karte: Schritt
 und Knopf tragen ihren Satz als zugängliche Beschreibung, ein Klick auf eine eingeklappte Zeile
-klappt sie auf. Regel `fenster.md` (Tour).
+klappt sie auf. Regel `fenster.md` (Tour). Nach dem Review (Commit `3dbf7fc6e`): Aufklappen auch mit
+Tabulator und Leertaste, kommende Schritte grau über das Stilblatt statt gesperrt (gesperrt nahmen
+sie keinen Klick an), und ein Schritt, der höher ist als der Ausschnitt, zeigt seinen Anfang.
 
 **Nachweis:** `test_overlay.py::test_the_longest_step_of_every_tour_fits_its_card_or_rolls`
 (sechs Sprachen, 1366 × 768 und 1920 × 1080, je Tour der längste Schritt; gerollt wird nur an der
@@ -44250,9 +44253,11 @@ Schritt ganz.
 08.10.2026, am i neben *Baustein verschieben*.
 
 **Umsetzung** (Commit `f44228d83`): `manual.help_for_action` ist die eine Quelle für das Ziel — mit
-Operation dieselbe Antwort wie F1 im Operationsdialog (Anleitung oder Referenzeintrag mit Anker),
-ohne Operation *Was Solidon im Modell erkennt* (gesperrte Zeile) oder *Der Verlauf* (*Baustein
-entfernen*). `FeaturePanel.manualRequested` → `MainWindow.action_manual`; der Tooltip bleibt.
+Operation dieselbe Antwort wie F1 im Operationsdialog (Anleitung oder Referenzeintrag mit Anker).
+Ein i steht nur an Zeilen mit Feldern, und die tragen eine Operation; eine unbekannte führt auf
+*Was Solidon im Modell erkennt* (nach dem Review, Commit `3dbf7fc6e`: die unerreichbaren Ziele ohne
+Operation sind gestrichen). `FeaturePanel.manualRequested` → `MainWindow.action_manual`; der
+Tooltip bleibt.
 Handbuch: *Das Fenster* nennt das i unter *Die Auswahl*, die Seite ohne ihre vier Semikolons
 (`text_patterns.json`, Bestand 382). Regel `fenster.md` (Merkmalfenster).
 
@@ -44276,7 +44281,11 @@ schon ein Ausdruck darin stand; X `=10-@breite/2` und Z `=@staerke` hatten einen
 **Umsetzung** (Commit `a17109f55`): `registry.params.accepts_expression` als eine Quelle (auch für die
 Werkzeugbeschreibung des Agenten); jedes Zahlenfeld eines Bausteinschritts und der Bohrung im
 ursprünglichen Schritt bekommt das `ValueField`, mit oder ohne Ausdruck. Regel `fenster.md`
-(Bausteinmerkmale).
+(Bausteinmerkmale). Nach dem Review (Commit `3dbf7fc6e`): Das Schema gehört der Handlung seines
+Schritts (`FeaturePanel._schemas_of`, Operation und Schrittkennung). Vorher galt das Bohrschema aus
+`offer_bore_step` fensterweit, und *Bohrung ändern*, *Zum Langloch ziehen*, *Verschieben* und
+*Verdoppeln* bauten gleichnamige Felder daraus — mit fremden Grenzen, und die Langlochbreite sprach
+unter der Radiuswahl als halber Wert. Das Texturschema ist ebenso gebunden.
 
 **Nachweis:** ohne Fenster
 `test_feature_panel.py::test_every_number_a_part_step_takes_offers_fx_with_or_without_an_expression`
@@ -44299,7 +44308,10 @@ nicht ab, *Einsetzen*, *Übernehmen* und *Abbrechen* auch nicht. Eine dort getip
 der Eingabetaste den gewählten Körper verschoben.
 
 **Umsetzung** (Commit `035d6247e`): `Viewport._end_preview_drag` beim Loslassen und in
-`set_preview_gizmo(False)`, wenn der Dialog mitten im Zug schließt. Regel `griffe.md`.
+`set_preview_gizmo(False)`, wenn der Dialog mitten im Zug schließt. Regel `griffe.md`. Nach dem
+Review (Commit `3dbf7fc6e`): Der Vorschauzug ist gekennzeichnet; eine getippte Zahl geht mit der
+Eingabetaste als Zug an die Vorschau (`previewDragged`), nie an die gewählten Körper, und beim
+Loslassen bleibt die Leiste stehen, solange getippt wird.
 
 **Nachweis:** `test_ui.py::test_no_drag_number_stays_in_the_view_after_the_dialog`
 (Einsetzen, Übernehmen, Abbrechen mitten im Zug), Gegenprobe am alten Stand rot. Changelog: ja —
@@ -44317,7 +44329,10 @@ Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln.
 **Umsetzung** (Commit `7a73c7db2`): `History._retried_after` schreibt `revision="insert"` mit der
 Zuordnung alt → neu (`renumbered`); das Format bleibt, ältere Versionen lesen beides. Eigene
 Titel folgen ihrem Schritt. Ältere Dateien ohne Revision erkennt `types.replanned_steps` an der
-Gestalt (Schritte mitgebracht und zugleich entfernt). Karte `app/core/scene/CLAUDE.md`.
+Gestalt (Schritte mitgebracht und zugleich entfernt). Karte `app/core/scene/CLAUDE.md`. Nach dem
+Review (Commit `3dbf7fc6e`): Hält die Kette nach dem Versuch wieder an, trägt die Zeile des Schritts
+unter dem Umbau das „!“ und den Satz dazu (§15.3); eine Gruppe behält den Satz neben ihrer
+Kurzhilfe.
 
 **Nachweis:** `test_history_revision_ui.py::test_a_retried_step_is_replanned_not_deleted_in_the_digest`
 (neu und als alte Datei) und Fenstertest
@@ -44325,3 +44340,29 @@ Gestalt (Schritte mitgebracht und zugleich entfernt). Karte `app/core/scene/CLAU
 nach *Reparieren* und *Zerlegen* vor der Bohrung keine Zeile „gelöscht“, jeder lebende Schritt
 einmal unter seiner Nummer; Gegenprobe am alten Stand rot. Changelog: ja — der Verlauf nennt nach
 „… und erneut versuchen“ nichts mehr gelöscht.
+
+## RM-573: Ein Tourschritt über einen Nachbarreiter rahmt ihn, statt die Tour zu verdecken (08.10.2026)
+
+<a id="rm-573-ein-tourschritt-über-einen-nachbarreiter-rahmt-ihn-statt-die-tour-zu-verdecken-08102026"></a>
+<a id="rm-573"></a>
+
+**RM-573 — Ein Tourschritt über den Prüfbericht holte dessen Reiter nach vorn und verdeckte
+die Tour.** Gefunden am 08.10.2026 beim Fenstertest zu RM-553 (Claude); entschieden von Robert:
+gleich bauen. `MainWindow._flash_area` holte jeden Reiter der rechten Karte nach vorn, und die
+Tour, die sich die Karte mit ihm teilt, verschwand samt dem Schritt, den der Kunde gerade las —
+in der Tour *Vorhandenes Modell anpassen* und den drei Schritten der Passungstour.
+
+**Umsetzung** (Commit `3dbf7fc6e`): Ein Schritt, dessen Ziel ein Reiter derselben Karte ist, holt
+ihn nicht mehr. `SignalTabBar.point_at` rahmt den Reiter gestrichelt in der Schriftfarbe (eine
+Form, nicht nur eine Farbe, Regel 18) und nennt den Hinweis in Tooltip und zugänglichem Namen.
+Der Schritt hängt den Satz an, worauf zu klicken ist („Klicken Sie dazu oben auf den Reiter
+„Prüfbericht““, je Sprache), aus `MainWindow._tour_tab_names` — für jede Tour mit solchen
+Schritten, ohne Schritttexte einzeln zu ändern. Öffnet der Kunde den Reiter, zieht die Tour
+weiter oder endet sie, geht der Rahmen. Das Handbuch beschrieb den alten Ablauf nicht. Regel
+`fenster.md` (Tour).
+
+**Nachweis:** Fenstertest
+`test_ui.py::test_a_tour_step_on_the_report_frames_its_tab_and_stays_in_view`: Die Tour bleibt
+vorn, der Reiter ist markiert und benannt, der Schritt nennt ihn; Öffnen des Reiters und Ende der
+Tour nehmen den Rahmen ab. Changelog: ja — die Tour bleibt stehen, wenn sie auf den Prüfbericht
+zeigt, und sagt, wo man klickt.
