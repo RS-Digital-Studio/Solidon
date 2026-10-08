@@ -147,7 +147,9 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 ### Rezepte und Dateien
 
 - **Rezept** (Regel 13, `bausteine.md`): `recipe.draft` ist der Gegenweg zu
-  `capture`, `Session.open_draft` merkt sich die Herkunft. Ein Ausschnitt trägt
+  `capture`, `Session.open_draft` merkt sich die Herkunft. `steps_of` schneidet
+  den Ausschnitt eines gewählten Körpers aus dem Stapel (Eingänge und genannte
+  Merkmalskörper rückwärts). Ein Ausschnitt trägt
   keine Auftragseinstellungen; Abhängigkeiten sammelt der Container transitiv,
   Namenskonflikte bekommen freie Namen, vorhandene Fassungen bleiben.
 - **Format v2**: flache `dependencies` (v1 migriert, Quelldaten bleiben);

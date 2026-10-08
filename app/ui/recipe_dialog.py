@@ -472,7 +472,7 @@ def place_label(feature: Feature) -> str:
 SCOPE_NUMBERS_SHOWN = 8
 
 
-def scope_text(op_ids: tuple[int, ...], total: int) -> str:
+def scope_text(op_ids: tuple[int, ...], total: int, bodies: tuple[str, ...] = ()) -> str:
     """Der Satz über dem Dialog: welche Schritte in den Baustein wandern.
 
     Reine Rechnung über zwei Zahlen und deshalb ohne Fenster prüfbar.
@@ -480,7 +480,8 @@ def scope_text(op_ids: tuple[int, ...], total: int) -> str:
     Drei Fälle, und der erste ist der häufige: Wer sein Teil gerade gebaut
     hat, wählt nichts aus und bekommt den ganzen Stapel. Das ist richtig so,
     steht aber trotzdem da — eine Vorgabe, die stillschweigend greift, ist
-    eine Vermutung des Kunden (§2.4).
+    eine Vermutung des Kunden (§2.4). Kamen die Schritte aus einem gewählten
+    Körper (RM-565), nennt der Satz ihn statt der Schrittnummern.
     """
     if not op_ids:
         return str(tr("Kein Schritt gewählt — der Baustein bliebe leer."))
@@ -489,6 +490,14 @@ def scope_text(op_ids: tuple[int, ...], total: int) -> str:
     # billig aussehen lässt, und übersetzt sind beide längst.
     count = len(op_ids)
     steps = tr("1 Schritt") if count == 1 else tr("{n} Schritte").format(n=count)
+    if len(bodies) == 1:
+        return str(
+            tr("Der Baustein bekommt den gewählten Körper „{name}“: {steps}.").format(
+                name=bodies[0], steps=steps
+            )
+        )
+    if bodies:
+        return str(tr("Der Baustein bekommt die gewählten Körper: {steps}.").format(steps=steps))
     if count >= total:
         return str(tr("Der Baustein bekommt den ganzen Verlauf: {steps}.").format(steps=steps))
     numbers = ", ".join(str(op_id) for op_id in op_ids[:SCOPE_NUMBERS_SHOWN])
@@ -527,6 +536,7 @@ class RecipeDialog(QDialog):
         profile: Profile,
         parent: QWidget | None = None,
         origin: Any = None,
+        bodies: tuple[str, ...] = (),
     ) -> None:
         super().__init__(parent)
         self._height = ContentHeight()
@@ -625,7 +635,7 @@ class RecipeDialog(QDialog):
         # der ganze Stapel. Jetzt gibt es beides, und welches von beidem gilt,
         # sah der Kunde nirgends: Eine Vorgabe, die stillschweigend greift, ist
         # eine Vermutung (§2.4). Der Satz nennt deshalb auch den Normalfall.
-        self.scope = QLabel(scope_text(op_ids, len(document.ops)), self)
+        self.scope = QLabel(scope_text(op_ids, len(document.ops), bodies), self)
         self.scope.setWordWrap(True)
         self.scope.setAccessibleName(tr("Umfang des Bausteins"))
 

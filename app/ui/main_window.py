@@ -165,6 +165,7 @@ from app.core.ingest.plan import imported_group_for_bed
 from app.core.knowledge import calibration, filaments, print_settings, profiles
 from app.core.knowledge.parts.ops import catalog_operation, creation_name, direction_of, part_of
 from app.core.knowledge.parts.ops import op_name as part_op_name
+from app.core.knowledge.parts.recipe import steps_of
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.perceive.actions import GROUP_OPS
@@ -10760,7 +10761,14 @@ class MainWindow(QMainWindow):
     def _save_as_part(self, catalog: PartCatalog) -> None:
         """Öffnet den Rezeptdialog über dem Katalog (Konzept §16, Schritt 4 und 5).
 
-        **Genommen wird, was im Verlauf gewählt ist — sonst der ganze Stapel.**
+        **Genommen wird, was im Verlauf gewählt ist — sonst der gewählte Körper,
+        sonst der ganze Stapel.** Robert, 07.10.2026 (RM-565): Körper wählen,
+        Katalog öffnen, *Speichern* — ohne Umweg über die Verlaufsschritte. Der
+        Körper bringt die Schritte mit, aus denen er hervorgeht
+        (``recipe.steps_of``), und nur seine Merkmale. Die Verlaufsauswahl geht
+        vor, weil jeder Erzeugerschritt seinen Körper wählt: Wer im Verlauf
+        gezielt Schritte markiert, hat das danach getan.
+
         Das Konzept spricht von einem Ausschnitt, und ``capture`` nimmt dafür
         ``op_ids``; bis der Verlauf eine Mehrfachauswahl bekam, wanderte
         mangels Auswahl immer alles mit. Das fehlt selten und dann deutlich:
@@ -10794,13 +10802,21 @@ class MainWindow(QMainWindow):
         # auch einen Körper.
         whole = tuple(op.id for op in document.ops)
         chosen = self.history_panel.selected_operations()
+        bodies = () if chosen else self.object_tree.selected_objects()
+        if bodies:
+            chosen = steps_of(document, bodies)
         dialog = RecipeDialog(
             document,
             dict(self.session.project.sources),
             chosen or whole,
-            self._result_features(),
+            self._result_features(bodies),
             self.session.profile,
             parent=catalog,
+            bodies=tuple(
+                str(result.scene.objects[body].name)
+                for body in bodies
+                if body in result.scene.objects
+            ),
             # **Kam dieses Dokument aus einem Baustein, sagt es der Dialog**
             # (E6): Er belegt Titel, Gruppe, Maße und Merkmale daraus vor, und
             # sein Knopf heißt dann „Baustein ersetzen". Ein gewöhnliches
@@ -10820,8 +10836,8 @@ class MainWindow(QMainWindow):
             dialog.release()
             dialog.deleteLater()
 
-    def _result_features(self) -> tuple[Feature, ...]:
-        """Jedes erkannte und erzeugte Merkmal des gerechneten Standes.
+    def _result_features(self, bodies: Sequence[ObjectId] = ()) -> tuple[Feature, ...]:
+        """Jedes erkannte und erzeugte Merkmal des gerechneten Standes — oder dieser Körper.
 
         Eigene Methode und keine Zeile im Aufruf darüber: **Szene und Körper
         führen ihre Inhalte als Wörterbücher.** Über sie zu iterieren gibt
@@ -10835,7 +10851,8 @@ class MainWindow(QMainWindow):
             return ()
         return tuple(
             feature
-            for scene_object in result.scene.objects.values()
+            for object_id, scene_object in result.scene.objects.items()
+            if not bodies or object_id in bodies
             for feature in scene_object.features.values()
         )
 

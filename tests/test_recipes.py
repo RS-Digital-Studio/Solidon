@@ -935,6 +935,65 @@ def test_capture_always_creates_an_own_recipe(profile: Profile) -> None:
     assert made.imported_origin is None
 
 
+def test_a_chosen_body_takes_exactly_the_steps_it_came_from(profile: Profile) -> None:
+    """RM-565: Körper wählen, *Speichern* — und der Baustein baut genau diesen Körper.
+
+    Bis dahin nahm das Speichern eine Verlaufsauswahl oder den ganzen Verlauf.
+    Bei zwei Körpern im Projekt ergab der ganze Verlauf zwei Körper, und das
+    Speichern wurde abgewiesen. Gesucht werden die Schritte, aus denen der
+    Körper hervorgeht, auch über ein Werkzeug, das in ihm aufging.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    document.parameters["w"] = Parameter(name="w", value=30.0)
+    history = History(document)
+
+    def box(width: object, x: float, *, depth: float = 20.0, height: float = 8.0) -> OperationDraft:
+        values = {"width": width, "depth": depth, "height": height, "anchor": "corner"}
+        # Das Werkzeug ragt über beide Seiten, keine Fläche liegt auf einer des Klotzes.
+        place = {"x": x, "y": -1.0, "z": -1.0} if depth > 20.0 else {"x": x}
+        return OperationDraft(op="create_box", params={**values, **place})
+
+    history.apply("Klotz", [box("@w", 0.0)])
+    history.apply("Werkzeug", [box(5.0, 5.0, depth=22.0, height=20.0)])
+    history.apply("Nachbar", [box(10.0, 100.0)])
+    (block,) = document.ops[0].outputs
+    (tool,) = document.ops[1].outputs
+    (neighbour,) = document.ops[2].outputs
+    history.apply("Abziehen", [OperationDraft(op="subtract_objects", inputs=(block, tool))])
+    history.apply(
+        "Schieben", [OperationDraft(op="translate_object", inputs=(neighbour,), params={"dx": 5.0})]
+    )
+    whole = evaluate(document, profile, sources=ProjectSources(project))
+    assert whole.complete and len(whole.scene.objects) == 2
+
+    steps = recipe.steps_of(document, (block,))
+    ids = [entry.id for entry in document.ops]
+    assert steps == (ids[0], ids[1], ids[3]), "der Nachbar und sein Schieben bleiben draußen"
+    assert recipe.steps_of(document, (neighbour,)) == (ids[2], ids[4])
+
+    chosen = whole.scene.objects[block]
+    made = recipe.capture(
+        document,
+        {},
+        name="klotz_mit_aussparung",
+        title="Klotz mit Aussparung",
+        group="structure",
+        op_ids=steps,
+        exposed=(
+            recipe.ExposedParam(name="w", title="Breite", default=30.0, minimum=20.0, maximum=60.0),
+        ),
+        features={"stelle": next(iter(chosen.features))},
+        profile=profile,
+    )
+    built = recipe.build(made, profile=profile)
+    assert as_mesh_data(built.mesh).volume == pytest.approx(as_mesh_data(chosen.mesh).volume)
+    assert as_mesh_data(built.mesh).volume == pytest.approx(30.0 * 20.0 * 8.0 - 5.0 * 20.0 * 8.0)
+
+
 # --- RM-147 E6: das Rezept als bearbeitbarer Entwurf ------------------------------
 
 

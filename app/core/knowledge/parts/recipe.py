@@ -56,7 +56,7 @@ import threading
 import time
 import unicodedata
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -80,6 +80,7 @@ from app.core.types import (
     Document,
     Feature,
     Finding,
+    ObjectId,
     PartResult,
     Profile,
     Quality,
@@ -1851,6 +1852,36 @@ def _catalog_source(recipe: Recipe) -> str:
 
 
 # --- Der Ausschnitt (die Naht zu E4) ---------------------------------------------
+
+
+def steps_of(document: Document, objects: Iterable[ObjectId]) -> tuple[int, ...]:
+    """Die Schritte, aus denen diese Körper hervorgehen — der Ausschnitt für ein Rezept (RM-565).
+
+    Wer einen Körper wählt und ihn als Baustein speichert, meint genau ihn,
+    nicht den Verlauf, in dem er mit anderen steht. Gesucht wird rückwärts
+    durch den Stapel (§12): jeder Schritt, der einen gesuchten Körper
+    ausgibt, und dann, was dieser Schritt brauchte — seine Eingänge und die
+    Körper, deren Merkmale er nennt (``orphans.references``). Ein Werkzeug,
+    das im Körper aufging, gehört so dazu; ein Nachbar, der nur daneben
+    entstand, nicht.
+
+    Gibt ein Schritt außer dem gewählten weitere Körper aus (ein Teilen), bleiben
+    sie im Ausschnitt: :func:`capture` sagt dann, dass er nicht genau einen
+    Körper ergibt, statt dass hier still ein Stück fehlt.
+    """
+    from app.core.scene.orphans import references
+
+    named: dict[int, set[ObjectId]] = {}
+    for reference in references(document):
+        if reference.kind != "fit":
+            named.setdefault(reference.op_id, set()).add(reference.ref.object_id)
+    wanted = set(objects)
+    taken: list[int] = []
+    for operation in sorted(document.ops, key=lambda entry: entry.id, reverse=True):
+        if wanted.intersection(operation.outputs):
+            taken.append(operation.id)
+            wanted.update(operation.inputs, named.get(operation.id, ()))
+    return tuple(sorted(taken))
 
 
 def capture(

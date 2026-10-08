@@ -1628,7 +1628,7 @@ def test_the_chosen_steps_reach_the_recipe(qt_app: QApplication, monkeypatch: An
     window = MainWindow(Session(), UiSettings())
     try:
         monkeypatch.setattr("app.ui.main_window.RecipeDialog", _Spy)
-        monkeypatch.setattr(window, "_result_features", lambda: ())
+        monkeypatch.setattr(window, "_result_features", lambda *_bodies: ())
         window.session.last_result = SimpleNamespace()  # type: ignore[assignment]
         window.session.project = replace(window.session.project, document=_history_document())
         window.history_panel.show_document(window.session.project.document)
@@ -1647,6 +1647,126 @@ def test_the_chosen_steps_reach_the_recipe(qt_app: QApplication, monkeypatch: An
         window.session._dirty = False
         window.close()
         window.deleteLater()
+
+
+def test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself(
+    qt_app: QApplication, monkeypatch: Any
+) -> None:
+    """RM-565: Körper wählen, Bausteinkatalog öffnen, *Speichern* — ohne den Verlauf.
+
+    Bis dahin nahm das Speichern eine Verlaufsauswahl oder den ganzen Verlauf;
+    mit einem zweiten Körper im Projekt ergab das zwei Körper, und der Baustein
+    wurde abgewiesen. Jetzt nimmt es die Schritte des gewählten Körpers samt
+    dem Werkzeug, das in ihm aufging, und nur seine Merkmale. Eingesetzt
+    bringt der neue Baustein genau diesen Körper wieder mit.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge.parts import recipe as recipes
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.scene import OperationDraft
+    from tests.helpers import clean_recipe_globals
+
+    title = "Klotz mit Aussparung"
+    name = _identifier(title)
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        session = window.session
+        assert session.add_parameter(Parameter(name="w", value=30.0, unit="mm"))
+        assert session.wait_for_idle(60_000)
+
+        def box(width: object, x: float, *, depth: float = 20.0, height: float = 8.0) -> Any:
+            values = {"width": width, "depth": depth, "height": height, "anchor": "corner"}
+            place = {"x": x, "y": -1.0, "z": -1.0} if depth > 20.0 else {"x": x}
+            return OperationDraft(op="create_box", params={**values, **place})
+
+        assert session.apply("Klotz", [box("@w", 0.0)])
+        assert session.apply("Werkzeug", [box(5.0, 5.0, depth=22.0, height=20.0)])
+        assert session.apply("Nachbar", [box(40.0, 100.0)])
+        assert session.wait_for_idle(60_000)
+        block, tool, neighbour = (entry.outputs[0] for entry in session.project.document.ops)
+        assert session.apply(
+            "Abziehen", [OperationDraft(op="subtract_objects", inputs=(block, tool))]
+        )
+        assert session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        result = session.last_result
+        assert result is not None and set(result.scene.objects) == {block, neighbour}
+        block_volume = as_mesh_data(result.scene.objects[block].mesh).volume
+        neighbour_volume = as_mesh_data(result.scene.objects[neighbour].mesh).volume
+        top = next(
+            feature_id
+            for feature_id, feature in result.scene.objects[neighbour].features.items()
+            if tuple(feature.params.get("normal") or ()) == pytest.approx((0.0, 0.0, 1.0))
+        )
+
+        window.object_tree.select_object(block)
+        assert window.history_panel.selected_operations() == ()
+        # Was der Dialog zeigt und wie er endet, wird hier gesammelt und erst
+        # nach dem Katalog geprüft: Eine Zusicherung in einem Qt-Slot verschluckt
+        # Qt, der Test liefe weiter.
+        seen: dict[str, Any] = {}
+
+        def store(dialog: RecipeDialog) -> int:
+            seen["scope"] = dialog.scope.text()
+            seen["features"] = {row.feature_id for row in dialog._features}
+            dialog.title.setText(title)
+            dialog._features[0].take.setChecked(True)
+            dialog._store()
+            for _ in range(600):
+                if dialog.result() or not dialog._checking:
+                    break
+                QApplication.processEvents()
+                qt_app.thread().msleep(50)
+            seen["stored"] = (dialog.result(), dialog.report.text())
+            return int(dialog.result())
+
+        monkeypatch.setattr(RecipeDialog, "exec", store)
+
+        def save_then_insert(catalog: PartCatalog) -> int:
+            seen["can_save"] = (catalog.save_part.isEnabled(), catalog.save_hint.text())
+            catalog.save_part.click()
+            # Eingesetzt wird an die Oberseite des Nachbarn.
+            window.object_tree.select_feature(neighbour, top)
+            found = [
+                item
+                for row in range(catalog.list.count())
+                if (item := catalog.list.item(row)) is not None
+                and item.data(Qt.ItemDataRole.UserRole) == name
+            ]
+            if not found:
+                return int(PartCatalog.DialogCode.Rejected)
+            catalog.list.setCurrentItem(found[0])
+            return int(PartCatalog.DialogCode.Accepted)
+
+        monkeypatch.setattr(PartCatalog, "exec", save_then_insert)
+        window.action_catalog()
+
+        assert seen["can_save"][0], seen["can_save"]
+        own = set(result.scene.objects[block].features)
+        assert seen["features"] and seen["features"] <= own, "nur seine Merkmale"
+        assert seen["stored"][0], seen["stored"]
+        assert str(result.scene.objects[block].name) in seen["scope"], seen["scope"]
+        assert PARTS.has(name), "der Baustein steht im Katalog"
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == f"insert_{name}"
+        dialog.accept()
+        assert session.wait_for_idle(60_000)
+        QApplication.processEvents()
+
+        after = session.last_result
+        assert after is not None and after.complete
+        grown = as_mesh_data(after.scene.objects[neighbour].mesh).volume - neighbour_volume
+        assert grown == pytest.approx(block_volume, rel=1e-2), "derselbe Körper, nicht mehr"
+    finally:
+        session._dirty = False
+        window.close()
+        window.deleteLater()
+        clean_recipe_globals(name)
+        (recipes.recipes_dir() / f"{name}.json").unlink(missing_ok=True)
 
 
 def test_the_dialog_says_what_it_takes(qt_app: QApplication) -> None:
