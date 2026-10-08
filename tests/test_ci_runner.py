@@ -213,7 +213,9 @@ def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_
         "@pytest.fixture\ndef require_graphics_adapter():\n"
         "    raise AssertionError('render fixture ran during collection')\n"
         "@pytest.fixture\ndef indirect_renderer(require_graphics_adapter):\n"
-        "    return require_graphics_adapter\n",
+        "    return require_graphics_adapter\n"
+        "@pytest.fixture\ndef native_window_platform():\n"
+        "    raise AssertionError('native probe ran during collection')\n",
         encoding="utf-8",
     )
     mixed = tmp_path / "test_ci_collection_mixed.py"
@@ -225,6 +227,7 @@ def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_
         "@pytest.mark.parametrize('value', [1, 2])\ndef test_window(indirect, value): pass\n"
         "@pytest.mark.windowed\ndef test_external(): pass\n"
         "@pytest.mark.windowed\n@pytest.mark.rendering\ndef test_window_and_renderer(): pass\n"
+        "def test_native_window(native_window_platform): pass\n"
         "@pytest.mark.rendered\ndef test_generated(indirect): pass\n"
         "@pytest.mark.performance\ndef test_budget(indirect): pass\n"
         "def test_plain(): pass\n",
@@ -234,7 +237,7 @@ def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_
         "import pytest\n@pytest.mark.rendered\ndef test_generated(qt_app): pass\n", encoding="utf-8"
     )
     assert list_windowed_tests.collect_ci_window_counts((tmp_path,), confcutdir=tmp_path) == {
-        mixed.resolve(): 7
+        mixed.resolve(): 8
     }
 
 

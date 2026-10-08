@@ -159,6 +159,38 @@ def require_graphics_adapter(graphics_adapter_problem: str | None) -> None:
         pytest.skip(f"pygfx: {graphics_adapter_problem}")
 
 
+@pytest.fixture
+def native_window_platform() -> str:
+    """Die echte Qt-Plattform für ein Fenster im Kindprozess, nach einer Vorprüfung je Prozess.
+
+    Wer ein Fenster auf der echten Plattform zeigt, fordert diese Fixture an:
+    Sie macht den Fall zum Fenstertest (``tools/list_windowed_tests.py``) und
+    überspringt ihn mit Grund, wo schon ein leeres Fenster hängt — in der CI
+    nur auf dem Intel-Mac (``tests/native_window_probe.py``).
+    """
+    from tests.native_window_probe import require_native_window
+
+    return require_native_window()
+
+
+def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
+    """Ein hängendes natives Fenster steht mit Grund am Ende des Laufs, auch ohne ``-rs``.
+
+    Unter GitHub zusätzlich als Anmerkung des Laufs, damit drei übersprungene
+    Fälle nicht in einer Zahl untergehen.
+    """
+    probe = sys.modules.get("tests.native_window_probe")
+    problems = probe.found_problems() if probe is not None else ()
+    if not problems:
+        return
+    terminalreporter.write_sep("-", "native Fenster übersprungen")
+    for problem in problems:
+        terminalreporter.write_line(problem)
+        if os.environ.get("GITHUB_ACTIONS"):
+            escaped = problem.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            terminalreporter.write_line(f"::warning title=Native Fenster übersprungen::{escaped}")
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Fenster- und Rendererfälle werden vor der Markerabwahl klassifiziert.

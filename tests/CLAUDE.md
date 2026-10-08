@@ -107,7 +107,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 
 | Datei | Rolle |
 |---|---|
-| `conftest.py` | Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`). Unter `CI` endet der Lauf in `pytest_sessionstart`, wenn der exakte Kern fehlt — lokal bleibt das ein Skip |
+| `conftest.py` | Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38) — je Prozess ein `solidon-tests-*`, beim Ende abgeräumt, Reste über einen Tag beim nächsten Start, Marker `windowed` für jeden `qt_app`- und `native_window_platform`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`). Unter `CI` endet der Lauf in `pytest_sessionstart`, wenn der exakte Kern fehlt — lokal bleibt das ein Skip |
 | `helpers.py` | Gemeinsame, nicht fenstergebundene Helfer unter öffentlichen Namen (`exact_kernel`, `FakeMesh`, `FakeCodec`, `make_object`, `ridged_shaft`, `the_torus`, `CountingToken`, `stop_after`, `two_cubes`, `NavigationLog`, `SOURCE`, `rectangle`, `blind_cylinder`, `bore_seed`, `STUD_CENTRES`, `cube` für 3MF und `cube_surface` für Renderer …) und die Fixture `project`; keine privaten Querimporte aus `test_*.py` und nie aus `conftest`, das pytest als Plugin lädt und bei einem zweiten Import noch einmal ausgeführt wird |
 | `ui_helpers.py` | Qt-gebundene gemeinsame Helfer der Fenstertests; die Fixtures `window` und `session`, je Test frisch und eingebunden mit `from tests.ui_helpers import window as window` (eine Datei mit vorbereiteter Sitzung überschreibt nur `session`); `shown_window` für ein gezeigtes Fenster ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur, `on_the_bore_wall` für einen Klick auf eine Bohrungswand, `wait_until` für zugestellte Qt-Ereignisse sowie `PlacementItem`, `PlacementViewport` und `scene_with_a_hole_and_a_fillet` für Platzierungsfälle |
 | `cura_fakes.py` | Nachgebaute Cura 5.13 (`cura_installation`), ihr AppDir, Flatpak-Starter und AppImage mit nachgestelltem Einhängen — für `test_cura_machine.py` und die Cura-Fälle des Druckdialogs |
@@ -115,6 +115,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien; ob die ausgelieferte Datei gegen den echten Schlüssel trägt, prüft `test_the_published_version_file_is_signed` |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
 | `php_probe.py` | Entscheidet für alle Endpunkttests über Skip oder Fehler und liefert die Befehlsbasis (`php_command()`, ohne OPcache: `WITHOUT_OPCACHE`) |
+| `native_window_probe.py` | Zeigt je Prozess einmal ein leeres natives Fenster vor und entscheidet für die Fixture `native_window_platform` über Lauf, Skip oder Fehler — überspringen darf in der CI nur der Intel-Mac; der Grund steht am Ende des Laufs |
 | `kernel_helper_probe.py` | Ein Hilfsprozess des Netzkerns, der je Rechnung mitschreibt, was sie zurückgestellt nachlädt; lädt oben nur die Standardbibliothek, denn `spawn` lädt das Modul des Startziels mit |
 | `agent_cases.py` · `scripted_backend.py` | Fälle der Agenten-Suite · Sprach- und Mesh-Modell mit vorgeschriebenen Antworten |
 

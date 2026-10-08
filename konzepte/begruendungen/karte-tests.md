@@ -188,6 +188,12 @@ von weiterhin zwei unabhängigen Bauten für den Determinismusvergleich.
 - Mit `--ci-shard I/N` fährt es nur den Teil der Sammlung, den
   `tools/ci_shards.py` diesem Kernjob zuteilt — ohne den Schalter ändert
   sich an der Auswahl nichts.
+- Die Fixture `native_window_platform` liefert Tests mit einem Fenster auf
+  der echten Plattform im Kindprozess deren Qt-Plattform, nachdem
+  `native_window_probe.py` je Prozess einmal ein leeres Fenster vorgezeigt
+  hat (Muster `php_probe.py`: lokal Skip, in der CI nur auf dem Intel-Mac
+  Skip, sonst rot). `pytest_terminal_summary` schreibt den Grund ans Ende
+  jedes Laufs, unter GitHub zusätzlich als Anmerkung.
 
 *HEAD-Fassung, früher unter „`helpers.py` — was mehr als eine Datei braucht“.*
 

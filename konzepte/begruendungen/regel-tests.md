@@ -54,6 +54,21 @@ Beim Release läuft jede Datei mit Fenstertests getrennt; Leistung folgt separat
 `/pruefen --release` beschreibt den
 vollständigen Umfang. Ein grüner Entwicklungslauf ist kein Release-Nachweis.
 
+**Native Fenster brauchen einen Läufer, der sie zeigt.** Auf
+`macos-26-intel` hingen die nativen Fenstertests der Renderer-Fabrik bis zu
+ihrer Frist. Die Sonden 37620161097, 37620864200 und 37629507477 grenzten es
+ein: `processEvents` kommt nach `activateWindow` nicht zurück, auch mit
+`present_method="bitmap"` und auch ganz ohne Renderer, mit nur einem
+`QLineEdit` im cocoa-Fenster — Windows, Linux und Apple Silicon brauchen für
+dieselbe Runde unter einer halben Sekunde. Dieselbe VM startet das gebaute
+Paket schon ohne Bildschirm (`build.yml`, „Anwendung im Paket starten“). Der
+Läufer wurde nicht getauscht (Koordinator, Konsolidierung 0.5.4); stattdessen
+zeigt `native_window_platform` je Prozess einmal genau dieses leere Fenster
+vor und überspringt bei einem Hänger mit Grund. Dass das außerhalb des
+Intel-Macs in der CI rot ist, hält `test_render_factory.py` fest: Ein Skip
+auf einer Plattform, auf der die Fälle bisher liefen, wäre ein still
+verlorener Nachweis.
+
 ## Was wo geprüft wird
 
 [Hinweis zur Verdichtung: Die Tabelle steht nicht mehr in der Regel. Die
