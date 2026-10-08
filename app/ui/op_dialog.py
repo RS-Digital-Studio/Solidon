@@ -2377,7 +2377,18 @@ class OperationDialog(QDialog):
         layout.addLayout(hidden_expression_row)
         self._advanced_summary: QLabel | None = None
         self._advanced_section: QWidget | None = None
-        if advanced.rowCount() or extra is not None:
+        # Nur verborgene Migrationsmarker hinten öffnen keine Klappe, hinter
+        # der nichts Sichtbares liegt (``fixed_rest`` am Stellungsdialog); ihre
+        # Zeilen hängen dann an einem verborgenen Träger.
+        shown_behind = any(
+            self._rows.get(entry.name) is advanced and not entry.internal
+            for entry in spec.params.spec()
+        )
+        if advanced.rowCount() and not shown_behind and extra is None:
+            holder = QWidget(self)
+            holder.setLayout(advanced)
+            holder.hide()
+        elif advanced.rowCount() or extra is not None:
             # **Dieselbe Klappe wie in jedem anderen Dialog** (``panels.collapsible``,
             # RM-513): flache Überschrift mit Linie, und zugeklappt nennt sie die
             # ersten Felder dahinter. Die eigene Bauart davor sagte nicht, was
