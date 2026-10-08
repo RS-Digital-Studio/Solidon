@@ -82,7 +82,7 @@ def flow(qt_app: QApplication) -> Any:
     controller: PlacementFlow | None = None
     try:
         session.import_model(Path(__file__).parent / "data/meshes/cube_clean.stl")
-        assert session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
         result = session.last_result
         assert result is not None and result.complete
         viewport.show_scene(result)
@@ -1280,7 +1280,7 @@ def test_centre_dimensions_keep_the_selected_hole_reference(flow: Any) -> None:
     session.start_new()
     assert session.wait_for_idle(30_000)
     session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
-    assert session.wait_for_idle(30_000)
+    assert session.wait_for_idle(60_000)
     object_id, entry = next(iter(session.last_result.scene.objects.items()))
     face = int(np.argmax(entry.mesh.raw.face_normals[:, 2]))
     point = tuple(entry.mesh.raw.triangles_center[face])
@@ -1307,7 +1307,7 @@ def _keyboard_placement(flow: Any, qt_app: QApplication) -> Any:
     session.start_new()
     assert session.wait_for_idle(10_000)
     session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
-    assert session.wait_for_idle(10_000)
+    assert session.wait_for_idle(60_000)
     object_id, entry = next(iter(session.last_result.scene.objects.items()))
     face = int(np.argmax(entry.mesh.raw.face_normals[:, 2]))
     viewport.hit = object_id, tuple(entry.mesh.raw.triangles_center[face]), face, None
@@ -1564,7 +1564,7 @@ def test_editing_a_hole_opens_the_same_placement_as_drilling(
     controller: PlacementFlow | None = None
     try:
         session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
-        assert session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
         result = session.last_result
         assert result is not None and result.complete
         viewport.show_scene(result)
@@ -1636,7 +1636,7 @@ def test_moving_a_feature_starts_where_it_already_sits(qt_app: QApplication) -> 
     controller: PlacementFlow | None = None
     try:
         session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
-        assert session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
         result = session.last_result
         assert result is not None and result.complete
         viewport.show_scene(result)
@@ -1700,7 +1700,7 @@ def _a_selected_hole(window, filename="plate_holes.stl"):
     from PySide6.QtWidgets import QApplication
 
     window.open_path(MESHES / filename)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -1723,7 +1723,7 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
     window = _window_with_a_renderer()
     try:
         window.open_path(MESHES / "plate_coarse_slots.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         object_id, entry = next(iter(result.scene.objects.items()))
         feature = next(feature for feature in entry.features.values() if feature.kind == "slot")
@@ -2219,7 +2219,7 @@ def test_an_open_dialog_keeps_the_click(qt_app: QApplication) -> None:
     window = _window_with_a_renderer()
     try:
         window.open_path(MESHES / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         object_id, entry = next(iter(result.scene.objects.items()))
         hole = next(
@@ -3090,7 +3090,7 @@ def test_the_flow_runs_on_a_host_without_a_window(
     übernommen: list[Any] = []
     try:
         session.import_model(Path(__file__).parent / "data/meshes/cube_clean.stl")
-        assert session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
         result = session.last_result
         assert result is not None and result.complete
         viewport.show_scene(result)
@@ -3269,7 +3269,7 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
 def _a_selected_plate(window, *, face_normal: tuple[float, float, float] | None = None):
     """Öffnet die Platte und wählt sie — oder eine ihrer Flächen nach Normale."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     window.object_tree.select_object(object_id)

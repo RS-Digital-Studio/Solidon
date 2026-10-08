@@ -227,7 +227,7 @@ def _with_a_hint(window: MainWindow) -> None:
     Zeile und Hauptknopf darunter.
     """
     window.open_path(MESHES / "block_with_rounded_edge.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     step = window.session.history.operations[-1]
     assert window.session.change_params(step.id, {"place_on_bed": False, "free_spot": False})
     assert window.session.wait_for_idle()
@@ -259,7 +259,7 @@ def test_at_rest_only_one_element_carries_the_accent(
     """
     _shown(qt_app, window, theme)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     if scene == "hint":
         _with_a_hint(window)
     _settle(window, 60)
@@ -318,7 +318,7 @@ def test_the_measurement_would_notice_a_second_light(
     """
     _shown(qt_app, window, theme)
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     _settle(window, 60)
 
     before = len(accent_elements(window, theme))

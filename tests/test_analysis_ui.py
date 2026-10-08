@@ -770,7 +770,7 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     """
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     yield window
     wait_for_map(window)
     window.wait_for_workers()
@@ -977,7 +977,7 @@ def test_without_a_selection_the_bar_says_what_is_missing(window: MainWindow) ->
     ein zweiter Körper dazu.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None and len(result.scene.objects) == 2
     window.object_tree.tree.clearSelection()
@@ -1677,7 +1677,7 @@ def without_gliding(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.usefixtures("without_gliding")
 @pytest.mark.parametrize("size", [(1280, 720), (1920, 1080)], ids=["1280", "1920"])
 def test_the_selection_column_fits_every_field_it_shows(
-    window: MainWindow, size: tuple[int, int]
+    qt_app: QApplication, size: tuple[int, int]
 ) -> None:
     """RM-488: Bohrung, Fläche und Kante liegen ganz im Ausschnitt, ohne waagrechten Balken.
 
@@ -1685,24 +1685,40 @@ def test_the_selection_column_fits_every_field_it_shows(
     Bohrungsdurchmesser / Senkung, Stufen und Verengung mitnehmen“ verlangte
     ihre längste Zeile als Mindestbreite, alles daneben endete ohne Pfeile am
     Rand, die „i“-Zeichen lagen rechts außerhalb, unten stand ein Rollbalken.
+
+    **In der Reihenfolge des Kunden**: Das Fenster steht, dann kommt die
+    Platte. Wuchs der Inhalt beim Wechsel von der Bohrung zur Fläche, reichte
+    der Rollbereich den neuen Wunsch nur eine Ebene weiter, und die Karte
+    stand einige Runden 22 Punkte zu schmal (``ColumnScroller``,
+    ``overlay.tell_the_zone``). Mit dem Fenster erst nach dem Öffnen gezeigt
+    kam die Breite zufällig rechtzeitig, rot nur auf langsamen Läufern.
     """
-    window.resize(*size)
-    window.show()
-    QApplication.processEvents()
-    entry = window.session.last_result.scene.objects["obj_1"]
-    hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
-    face = next(key for key, feature in entry.features.items() if feature.kind == "face")
-    for feature_id in (hole, face):
-        _choose_and_wait(window, feature_id)
-        assert window.feature_dock.isVisibleTo(window)
-        cut = _cut_off_in_the_column(window)
-        assert not cut, f"{feature_id}: ragt über die Spalte: {cut}"
-    window.feature_panel.show_edge("edge-1", "Senkrecht · 8 mm · x -40, y -25", parameter_values={})
-    window.feature_dock.reveal()
-    for _round in range(5):
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.resize(*size)
+        window.show()
+        window.open_path(MESHES / "plate_holes.stl")
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
-    cut = _cut_off_in_the_column(window)
-    assert not cut, f"Kante: ragt über die Spalte: {cut}"
+        entry = window.session.last_result.scene.objects["obj_1"]
+        hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
+        face = next(key for key, feature in entry.features.items() if feature.kind == "face")
+        for feature_id in (hole, face):
+            _choose_and_wait(window, feature_id)
+            assert window.feature_dock.isVisibleTo(window)
+            cut = _cut_off_in_the_column(window)
+            assert not cut, f"{feature_id}: ragt über die Spalte: {cut}"
+        window.feature_panel.show_edge(
+            "edge-1", "Senkrecht · 8 mm · x -40, y -25", parameter_values={}
+        )
+        window.feature_dock.reveal()
+        for _round in range(5):
+            QApplication.processEvents()
+        cut = _cut_off_in_the_column(window)
+        assert not cut, f"Kante: ragt über die Spalte: {cut}"
+    finally:
+        wait_for_map(window)
+        window.wait_for_workers()
 
 
 @pytest.mark.usefixtures("without_gliding")
@@ -1724,7 +1740,7 @@ def test_the_selection_column_fits_in_every_language(qt_app: QApplication, langu
         window.resize(1280, 720)
         window.show()
         window.open_path(MESHES / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         entry = window.session.last_result.scene.objects["obj_1"]
         hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
@@ -5538,7 +5554,7 @@ def test_a_finding_says_which_step_reported_it(window: MainWindow) -> None:
     from PySide6.QtCore import Qt
 
     window.session.import_model(MESHES / "broken_open.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
     report = window.report
     listed = [
@@ -6425,7 +6441,7 @@ def test_a_bore_with_its_countersink_shows_its_own_fields(window: MainWindow) ->
     # daneben. Gegriffen wird deshalb am Merkmal und nicht am ersten Eintrag
     # der Szene — beide Körper werden gebraucht, der zweite für die Gegenprobe.
     window.open_path(MESHES / "plate_countersunk.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(
         (kennung, eintrag)
@@ -6621,7 +6637,7 @@ def test_with_several_bodies_the_bar_says_what_it_needs(window: MainWindow) -> N
     """
     # Eines bringt das Fixture mit, das zweite kommt dazu.
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     assert len(result.scene.objects) == 2, "the point of this test is the ambiguity"
     window.object_tree.tree.clearSelection()
@@ -6662,7 +6678,7 @@ def test_the_history_shows_what_kind_of_step_each_line_is(qt_app: QApplication) 
 
     session = Session()
     session.open_project(Path(__file__).parent.parent / "app" / "examples" / "dose-mit-deckel.p3d")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     panel = HistoryPanel()
     try:
@@ -7818,7 +7834,7 @@ def test_an_island_reaches_the_report_with_place_and_actions(qt_app: QApplicatio
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(MESHES / "island_tower.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         _wait_for_print_findings(window)
 
         islands = [
@@ -7842,7 +7858,7 @@ def test_a_stale_result_does_not_add_its_findings(qt_app: QApplication) -> None:
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(MESHES / "island_tower.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         _wait_for_print_findings(window)
         shown = list(window.report._findings)
         stale = object()

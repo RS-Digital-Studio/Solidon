@@ -431,7 +431,7 @@ def test_the_window_hands_over_features_and_not_their_keys(qt_app: QApplication)
     window = MainWindow(Session(), UiSettings())
     try:
         window.session.import_model(MESHES / "cube_clean.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         window.session.evaluate_now()
 
         features = window._result_features()
@@ -462,7 +462,7 @@ def test_the_button_stays_locked_until_the_project_can_carry_a_part(qt_app: QApp
         assert reason, "§2.7: ein gesperrter Knopf ohne Grund ist eine Sackgasse"
 
         window.session.import_model(MESHES / "cube_clean.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         window.session.evaluate_now()
 
         can, reason = window._recipe_readiness()

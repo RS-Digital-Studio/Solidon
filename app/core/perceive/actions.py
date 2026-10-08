@@ -1046,6 +1046,29 @@ def move_refusal(
     return reason_against("move_feature", feature.kind)
 
 
+#: Operationen, die eine funktionale Gruppe als Ganzes ändern — und nur an
+#: einem Merkmal einer passenden Gruppe etwas rechnen (RM-184):
+#: :func:`chamber_action` und :func:`closure_action`.
+GROUP_OPS: Final = frozenset({"resize_chamber", "resize_closure"})
+
+
+def group_action_first(
+    actions: Sequence[FeatureAction], feature_id: FeatureId, anchor: FeatureId | None
+) -> tuple[FeatureAction, ...]:
+    """Am Anker einer Gruppe steht ihre Handlung vorn — sonst bleibt die Folge.
+
+    Der Anker ist die Zeile, unter der der Baum die Gruppe zeigt („Kammer 1“);
+    wer sie wählt, hat die Kammer gemeint, nicht ihren Boden. Seit
+    *Fläche versetzen* an jeder Fläche als erste Zeile steht (RM-535), klappte
+    dort ein Weg von 0 mm auf und *Kammer ändern* zu. An einer Wand bleibt die
+    Folge: Dort ist die Fläche gewählt, die Gruppe nur genannt.
+    """
+    if anchor is None or anchor != feature_id:
+        return tuple(actions)
+    leading = [action for action in actions if action.op in GROUP_OPS]
+    return (*leading, *(action for action in actions if action.op not in GROUP_OPS))
+
+
 #: Welche Maße *Kammer ändern* an welcher Bauart anbietet: Eine Nut, eine
 #: Ringkammer und ein offener Kanal haben keine Länge innen.
 _CHAMBER_FIELDS: Final[dict[str, tuple[str, ...]]] = {

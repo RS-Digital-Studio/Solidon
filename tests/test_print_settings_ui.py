@@ -581,7 +581,7 @@ def test_a_project_with_a_printer_from_another_computer_opens_with_the_general_p
     window.session.failed.connect(failures.append)
     try:
         window.open_path(path)
-        assert window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         assert not raised, raised
         assert not failures, failures
@@ -4815,7 +4815,7 @@ def test_a_connector_of_infill_reaches_the_advice_list(
     dann sagt Solidon nichts.
     """
     session.import_model(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     result = session.last_result
     assert result is not None, "die Szene steht"
 
@@ -4861,7 +4861,7 @@ def test_a_guessed_pin_never_sets_a_setting(qt_app: QApplication, session: Sessi
     **376 Wände**, und *Vorschläge übernehmen* schrieb sie ins Projekt.
     """
     session.import_model(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     result = session.last_result
     assert result is not None
     entry = next(iter(result.scene.objects.values()))

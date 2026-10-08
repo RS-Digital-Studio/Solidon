@@ -30,7 +30,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 def a_plate_with_a_face(window: MainWindow) -> tuple[str, str]:
     """Die Platte mit Bohrungen geöffnet, ihre erste Fläche gewählt."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     face = next(key for key, feature in entry.features.items() if feature.kind == "face")
@@ -88,7 +88,7 @@ def test_a_reopened_project_shows_its_protection(window: MainWindow, tmp_path: P
     window.session.save_project(tmp_path / "platte.p3d")
 
     window.session.open_project(tmp_path / "platte.p3d")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     QApplication.processEvents()
 

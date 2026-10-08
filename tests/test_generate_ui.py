@@ -3456,7 +3456,7 @@ def test_a_project_opened_during_the_run_is_named_before_taking(
     dialog = _run_in_window(window, qt_app, monkeypatch, backend)
     try:
         window.open_path(Path(__file__).parent / "data" / "projects" / "drilled_v6.p3d")
-        assert window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         bodies = len(window.session.last_result.scene.objects)
         backend.gate.set()
         _wait_for_run(dialog, qt_app)

@@ -229,6 +229,8 @@ Stellen halten das, beide sind nötig:
 - **Offen ist genau eine Handlung, die scharfe** (RM-510): `_arm` klappt auf
   (`_open_only`), ein Kopf macht scharf, Zugeklapptes nennt seine Werte. Ohne
   Auswahl schweigt es; die Anleitung entfällt nach dem ersten Merkmalklick.
+  Am Anker einer Gruppe („Kammer 1“ im Baum) führt ihre Handlung
+  (`actions.group_action_first`), sonst stünde *Fläche versetzen* mit 0 mm offen.
 - **Für alle heißt dasselbe Maß, nicht dieselbe Stelle:** „Auf alle N
   gleichartigen anwenden“ gibt jedem Mitglied seine eigene gemessene Mitte
   (`relations.params_for_members`); eine Verschiebung am gewählten Merkmal geht
@@ -249,8 +251,9 @@ Stellen halten das, beide sind nötig:
   **Voraussetzung**, nicht eine Handlung („trägt kein Maß, an dem sich Lage
   oder Größe ändern ließen“), und nennt den Weg, der bleibt.
 - **Die Spalte rollt nur senkrecht** (RM-488): `panels.ColumnScroller` nimmt
-  die Mindestbreite des Inhalts; Auswahlfelder baut `column_choice`, sonst
-  verlangt ihr längster Eintrag die Spalte.
+  die Mindestbreite des Inhalts und meldet sie mit `tell_the_zone` bis zur
+  Karte, sonst steht sie einige Runden zu schmal; Auswahlfelder baut
+  `column_choice`, sonst verlangt ihr längster Eintrag die Spalte.
 - **Ein Feld einer Merkmalsart steht nur an ihr** (`perceive.actions._carried_by`):
   die Steigung am Gewinde, nicht an der Bohrung.
 - **Eine Anzahl ist keine Länge** (`count`, `steps`, `holes`):

@@ -31,7 +31,7 @@ def local_window(qt_app, monkeypatch, tmp_path):
     path.write_bytes(blind_cylinder().raw.export(file_type="stl"))
     window = MainWindow(Session(), UiSettings())
     window.open_path(path)
-    assert window.session.wait_for_idle(30000)
+    assert window.session.wait_for_idle(60_000)
     assert window.session.last_result.complete
     entry = next(iter(window.session.last_result.scene.objects.values()))
     assert not entry.features

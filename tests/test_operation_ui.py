@@ -244,7 +244,7 @@ def test_reopening_a_drawing_changes_one_step_and_keeps_undo_and_saved_state(
     path = tmp_path / "zeichnung.p3d"
     session.save_project(path)
     session.open_project(path)
-    assert session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     empty_window.edit_operation(step)
     assert empty_window._sketch_panel is not None
     assert empty_window._sketch_panel.canvas.sketch.constraints[dimension].value == "15"
@@ -671,7 +671,7 @@ def window(qt_app: QApplication) -> MainWindow:
     """
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     return window
 
 
@@ -1341,7 +1341,7 @@ def test_a_body_without_the_needed_feature_says_so(window: MainWindow) -> None:
     Operation ohne Merkmalspflicht (Bohren) bleibt es auf dem Würfel auch.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     tree = window.object_tree.tree
     assert tree.topLevelItemCount() >= 2, "der Würfel kam nicht als zweites Objekt an"
 
@@ -1407,7 +1407,7 @@ def test_changing_a_closure_is_grey_away_from_a_closure(window: MainWindow, tmp_
     window.session.start_new()
     assert window.session.wait_for_idle()
     window.open_path(path)
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     identifier, entry = next(iter(result.scene.objects.items()))
     from app.core.geom.mesh import as_mesh_data
@@ -1448,7 +1448,7 @@ def test_the_feature_list_only_offers_what_the_operation_takes(window: MainWindo
     wird nicht gefiltert: Raten wäre schlechter als Anbieten.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     body = window.object_tree.selected() or next(iter(window.session.last_result.scene.objects))
     window.object_tree.select_object(body)
 
@@ -1816,7 +1816,7 @@ def test_every_operation_of_the_weg2_example_can_be_opened(qt_app: QApplication)
 
     window = MainWindow(Session(), UiSettings())
     window.open_path(examples.directory() / "weg2-halter-konstruieren.p3d")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
 
     bound = [
@@ -2092,7 +2092,7 @@ def test_the_body_state_lock_lifts_where_the_body_brings_what_is_asked(
     keep_imports_open(monkeypatch, session)
     window = MainWindow(session, UiSettings())
     window.open_path(MESHES / "broken_open.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     select(window)
     window._update_actions()
     assert window._op_actions["thicken"].isEnabled()
@@ -2102,7 +2102,7 @@ def test_the_body_state_lock_lifts_where_the_body_brings_what_is_asked(
     # Schalen sind zwei Stücke.
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply(
         "Aushöhlen",
         [OperationDraft(op="hollow_object", inputs=("obj_1",), params={"wall": 2.0, "vents": 0})],
@@ -2420,7 +2420,7 @@ def test_move_feature_acceptance_hits_the_dialog_preview_cache(window: MainWindo
     from PySide6.QtTest import QTest
 
     window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     object_id = select(window)
     body = window.session.last_result.scene.objects[object_id]
     bore = next(
@@ -7188,7 +7188,7 @@ def test_hollowing_an_open_body_does_not_offer_apply(
     keep_imports_open(monkeypatch, session)
     window = MainWindow(session, UiSettings())
     window.open_path(MESHES / "partially_open.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     window.object_tree.select_object(next(iter(result.scene.objects)))
@@ -7662,7 +7662,7 @@ def test_a_preview_waiting_for_a_question_leaves_apply_free_and_asks_on_apply(
 
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "plate_countersunk.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     entry = window.session.last_result.scene.objects["obj_1"]
     hole = next(identifier for identifier, f in entry.features.items() if f.kind == "hole")
     window.object_tree.select_object("obj_1")

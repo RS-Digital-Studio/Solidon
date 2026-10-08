@@ -167,6 +167,7 @@ from app.core.knowledge.parts.ops import creation_name, direction_of, part_of
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
+from app.core.perceive.actions import GROUP_OPS
 from app.core.perceive.digest import digest
 from app.core.perceive.maps import wall_thickness_map
 from app.core.registry import (
@@ -617,10 +618,6 @@ MAP_CACHE_KEPT: Final = 8
 #: er trägt die Passung ein, die die Operation allein nicht eintragen darf
 #: (§14, §15.1).
 LID_OPS: Final = frozenset({"create_lid", "screw_lid"})
-
-#: Operationen, die eine funktionale Gruppe als Ganzes ändern — und nur an
-#: einem Merkmal einer passenden Gruppe etwas rechnen (RM-184).
-GROUP_OPS: Final = frozenset({"resize_chamber", "resize_closure"})
 
 #: Ab welchem Kosinus der Ring des Griffs um die eigene Achse eines Bausteins
 #: dreht — ein Grad. Es ist kein Erkennungsmaß wie ``PARALLEL_FACE_COSINE``

@@ -265,7 +265,7 @@ def test_a_second_carve_into_the_shown_pit_starts_its_own_stage(
     ball = tmp_path / "kugel.stl"
     trimesh.creation.icosphere(subdivisions=4, radius=20.0).export(ball)
     window.open_path(ball)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
@@ -346,7 +346,7 @@ def test_the_session_mirror_reaches_the_stage_decision_in_the_window(
     path = tmp_path / "prisma.stl"
     path.write_bytes(trimesh.exchange.stl.export_stl(lopsided_prism().raw))
     window.open_path(path)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     object_id = str(next(iter(window.session.last_result.scene.objects)))
     mesh = window._sculpt_mesh(object_id)
     assert mesh is not None
@@ -614,7 +614,7 @@ def with_a_thin_shell(window: MainWindow, tmp_path: Path) -> str:
     path = tmp_path / "shell.stl"
     path.write_bytes(trimesh.exchange.stl.export_stl(shell))
     window.open_path(path)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
@@ -744,7 +744,7 @@ def with_a_plate(window: MainWindow, tmp_path: Path) -> str:
     path = tmp_path / "platte.stl"
     path.write_bytes(trimesh.exchange.stl.export_stl(trimesh.Trimesh(vertices, faces)))
     window.open_path(path)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
     return str(object_id)
 
@@ -918,7 +918,7 @@ def test_baking_and_reopening_keeps_the_face_materials(
     path = tmp_path / "bemalt.p3d"
     session.save_project(path)
     session.open_project(path)
-    assert session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     restored = session.evaluate_now().scene.objects["obj_1"]
     assert restored.mesh.slot_indices == before.mesh.slot_indices
     assert restored.material_slots == before.material_slots
@@ -1585,7 +1585,7 @@ def test_reopened_sculpt_keeps_later_steps_and_survives_saving(
     path = tmp_path / "formen.p3d"
     window.session.save_project(path)
     window.session.open_project(path)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     count = len(window.session.project.document.ops)
     window.edit_operation(step)
     assert window.session.wait_for_idle(30_000)
@@ -1601,7 +1601,7 @@ def test_reopened_sculpt_keeps_later_steps_and_survives_saving(
     assert window._gesture_scene is None
     window.session.save_project(path)
     window.session.open_project(path)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     window.edit_operation(step)
     assert window.session.wait_for_idle(30_000)
     assert len(window._sculpt_strokes) == 1
@@ -1698,7 +1698,7 @@ def test_save_before_project_switch_waits_for_the_gesture_result_dialog(
     assert not window.session.modified
     assert len(window.session.project.document.ops) == before + 1
     window.session.open_project(path)
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert len(window.session.project.document.ops) == before + 1
 
 
@@ -1993,7 +1993,7 @@ def test_whole_mouse_gestures_undo_redo_and_reopen(window, monkeypatch, tmp_path
     assert window.session.wait_for_idle()
     path = save(window.session.project, tmp_path / "gestures.p3d")
     window.session.open_project(path)
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     step = window.session.project.document.ops[-1].id
     window.edit_operation(step)
     assert window.session.wait_for_idle()

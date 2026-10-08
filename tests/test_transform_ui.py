@@ -238,7 +238,7 @@ def test_no_element_of_the_bar_is_squeezed(window: MainWindow) -> None:
     window.resize(1600, 900)
     window.show()
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
     window.tools.activate("transform")
     QApplication.processEvents()
@@ -299,7 +299,7 @@ def test_a_typed_value_becomes_a_step_in_the_history(window: MainWindow) -> None
     anwendet, wäre ein Feld ohne Wirkung.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     window.object_tree.select_object(next(iter(result.scene.objects)))
@@ -445,7 +445,7 @@ def test_leaving_a_field_applies_nothing(window: MainWindow) -> None:
     window.show()
     window.activateWindow()
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     window.object_tree.select_object(next(iter(result.scene.objects)))
@@ -528,7 +528,7 @@ def test_the_return_key_still_applies_the_value(window: MainWindow) -> None:
     window.show()
     window.activateWindow()
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     window.object_tree.select_object(next(iter(result.scene.objects)))
@@ -621,7 +621,7 @@ def test_one_body_typed_keeps_the_old_meaning(window: MainWindow) -> None:
     Projekt beim nächsten Dreh ein anderes Ergebnis als bisher.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     window.object_tree.select_object(next(iter(result.scene.objects)))
@@ -650,7 +650,7 @@ def test_turning_puts_the_part_back_on_the_bed(window: MainWindow) -> None:
     Zusage ist, dass die Unterseite danach auf null liegt.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     window.object_tree.select_object(next(iter(result.scene.objects)))
@@ -679,7 +679,7 @@ def test_the_turn_and_the_drop_are_one_undo(window: MainWindow) -> None:
     da halb zurückgenommen hat.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     window.object_tree.select_object(next(iter(result.scene.objects)))
@@ -712,7 +712,7 @@ def test_moving_never_drops_to_the_bed(window: MainWindow) -> None:
     Drehen und nicht zur Leiste.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     window.object_tree.select_object(next(iter(result.scene.objects)))

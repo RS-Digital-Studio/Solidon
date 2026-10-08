@@ -34,7 +34,7 @@ def with_a_cube(window: MainWindow) -> str:
     20. Wer auf eine Höhe zeigt, nimmt deshalb :func:`mid_of` und keine Zahl.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     return "obj_1"
 
 

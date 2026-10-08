@@ -29,7 +29,7 @@ def test_a_clicked_side_face_is_the_opening_of_the_hollowing_dialog(window: Main
     der leeren Liste heißt dort „Keine", nicht „Ganzer Körper".
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     side = next(
@@ -73,7 +73,7 @@ def test_a_chosen_face_offers_hollowing_in_the_card_and_becomes_the_opening(
     — oben offen, wie die Anleitung *Ein Gehäuse mit Deckel* es will.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     top = next(
@@ -110,7 +110,7 @@ def test_hollowing_at_the_clicked_side_ends_in_the_history_with_the_face(
     from app.core.slice.analysis import cross_section
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     side = next(
@@ -157,7 +157,7 @@ def test_a_guide_finds_hollowing_in_the_list_at_a_chosen_face(qt_app: QApplicati
     window = next(windows)
     try:
         window.open_path(MESHES / "cube_clean.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         object_id, entry = next(iter(result.scene.objects.items()))
         top = next(

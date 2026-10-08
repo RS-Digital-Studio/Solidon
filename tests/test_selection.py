@@ -247,7 +247,7 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     """
     window = MainWindow(Session(), UiSettings())
     window.open_path(PLATE)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     yield window
     window.wait_for_workers()
 
