@@ -516,6 +516,7 @@ def test_first_measure_edit_releases_split_but_passive_measures_do_not(
     view._drop_feature_preview = lambda: None
     view.end_quiet_placement = lambda **_kwargs: None
     view._measuring_to_release = False
+    view._click_after_evaluation = None
     view._release_measuring = lambda: MainWindow._release_measuring(view)
     view._place_measures = lambda *args, **kwargs: MainWindow._place_measures(view, *args, **kwargs)
     view.object_tree = SimpleNamespace(selected=lambda: "obj_1", selected_feature=lambda: "hole")
@@ -4535,6 +4536,249 @@ def _hole_fields_in_placement(window: MainWindow) -> tuple[str, str, Any, dict[s
     QTest.keyClick(next(iter(fields.values())).lineEdit(), Qt.Key.Key_End)
     QApplication.processEvents()
     return object_id, hole, flow, fields
+
+
+def _hold_the_evaluations(monkeypatch: pytest.MonkeyPatch, gate: threading.Event) -> None:
+    """Jede Auswertung wartet auf ``gate`` — die Lage „die Szene rechnet“."""
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+
+
+def _settle_the_click(window: MainWindow) -> None:
+    """Auswertung, Vorschau und ein wartender Klick laufen durch; das Bild gilt als gezeigt."""
+    for _ in range(3):
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        approval = window._preview_approval
+        if approval is not None and approval.difference is not None:
+            window.viewport.differenceApplied.emit(approval.difference)
+    assert window.session.wait_for_idle(60_000)
+    QApplication.processEvents()
+
+
+def _promised(window: MainWindow) -> bool:
+    return window.status_message.text().startswith(
+        tr("Wird übernommen, sobald die Berechnung fertig ist.")
+    )
+
+
+def _measured_diameter(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, float]:
+    """Die Maßgruppe einer Bohrung im Bild, mit einem neuen Durchmesser, Vorschau gezeigt."""
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _result: True)
+    _object_id, _hole, flow, fields = _hole_fields_in_placement(window)
+    diameter = fields["Durchmesser"]
+    wanted = diameter.value_mm() + 0.5
+    diameter.set_value_mm(wanted)
+    _settle_the_click(window)
+    host = window._quiet_host
+    assert host is not None and host.values()["diameter"] == pytest.approx(wanted)
+    return flow, wanted
+
+
+@pytest.mark.parametrize("then", ["nothing", "typed", "cancelled"])
+def test_the_measures_accept_while_the_scene_evaluates(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, then: str
+) -> None:
+    """*Übernehmen* in der Maßgruppe während einer Auswertung übernimmt danach.
+
+    Der Klick endete in ``PlacementFlow._accept_values`` ohne ein Wort, und
+    das Ende der Auswertung nahm die Maßgruppe samt Durchmesser mit
+    (Nachprüfung, Verdacht Maßgruppe). Jetzt sagt die Statuszeile, dass er
+    wartet, und er trägt seinen Auftrag über das Ende hinaus. Wie am Dialog
+    verwirft ein danach getippter Wert ihn mit Satz und *Abbrechen* ohne.
+    """
+    from app.ui.labels import LengthSpin
+
+    flow, wanted = _measured_diameter(window, monkeypatch)
+    before = len(window.session.project.document.ops)
+    gate = threading.Event()
+    _hold_the_evaluations(monkeypatch, gate)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Szene rechnet denselben Stand nach"
+        flow._measure_accept.click()
+        waiting = window._click_after_evaluation
+        assert waiting is not None, "der Klick wartet"
+        assert _promised(window), window.status_message.text()
+        if then == "typed":
+            diameter = next(
+                field
+                for field in flow._measure_group.findChildren(LengthSpin)
+                if field.accessibleName().endswith("Durchmesser")
+            )
+            diameter.set_value_mm(wanted + 0.5)
+            QApplication.processEvents()
+            assert window._click_after_evaluation is None, "der neue Wert verwirft den Klick"
+            assert window.status_message.text().startswith(
+                tr(
+                    "Nicht übernommen, weil sich die Werte geändert haben. "
+                    "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+                )
+            )
+        elif then == "cancelled":
+            flow._measure_cancel.click()
+            assert window._click_after_evaluation is None, "Abbrechen nimmt den Klick mit"
+            assert not _promised(window)
+        gate.set()
+        _settle_the_click(window)
+    finally:
+        gate.set()
+
+    ops = window.session.project.document.ops
+    status = window.status_message.text()
+    if then == "nothing":
+        assert len(ops) == before + 1, "genau ein Schritt"
+        assert ops[-1].op == "resize_hole"
+        assert ops[-1].params["diameter"] == pytest.approx(wanted)
+        assert "übernommen" not in status, status
+    else:
+        assert len(ops) == before, "nichts geschrieben"
+        if then == "cancelled":
+            assert "übernommen" not in status, status
+
+
+def test_a_carried_measures_click_still_waits_for_its_picture(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der getragene Klick der Maßgruppe übernimmt erst, wenn sein Bild steht.
+
+    Die Maßgruppe übernimmt nur ein gezeigtes Bild
+    (``QuietHost.requires_displayed_preview``); nach der Auswertung steht sie
+    nicht mehr, und das Merkmalfenster, das den Klick dann trägt, verlangt an
+    einem Netz keines. Ohne ``displayed`` schriebe er sofort.
+    """
+    _flow, wanted = _measured_diameter(window, monkeypatch)
+    host = window._quiet_host
+    approval = window._preview_approval
+    assert host is not None and approval is not None and approval.owner is host
+    order, values = approval.order, dict(host.values())
+    window.end_quiet_placement()
+    before = len(window.session.project.document.ops)
+
+    window._apply_carried_feature_order(order, values, True)
+    approval = window._preview_approval
+    assert approval is not None and approval.required is True
+    assert approval.pending_click is not None, "der Klick wartet auf das Bild"
+    assert len(window.session.project.document.ops) == before, "vor dem Bild nichts"
+    _settle_the_click(window)
+
+    ops = window.session.project.document.ops
+    assert len(ops) == before + 1
+    assert ops[-1].params["diameter"] == pytest.approx(wanted)
+
+
+@pytest.mark.parametrize("then", ["nothing", "typed", "cancelled"])
+def test_the_feature_panel_accept_while_the_scene_evaluates(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, then: str
+) -> None:
+    """*Übernehmen* im Merkmalfenster während einer Auswertung übernimmt danach.
+
+    Die Statuszeile versprach es, und am Ende stand „Nicht übernommen, weil
+    die Vorschau nicht mehr gilt …“: Der Neuaufbau nach der Auswertung zeigt
+    die Werte des Schritts, und der getippte Durchmesser war fort. Jetzt
+    trägt der Klick seinen Auftrag; *Abbrechen* nimmt ihn still mit
+    (Nachprüfung, Fund 2).
+    """
+    from app.ui.labels import LengthSpin
+
+    _flow, wanted = _measured_diameter(window, monkeypatch)
+    window.end_quiet_placement()
+    panel = window.feature_panel
+    resize = next(row for row in panel._shown_rows.values() if row.op == "resize_hole")
+    assert resize.toggle is not None
+    resize.toggle.click()
+    diameter = next(
+        field
+        for field in panel.findChildren(LengthSpin)
+        if field.isVisibleTo(panel)
+        and "Bohrung ändern" in field.accessibleName()
+        and "Durchmesser" in field.accessibleName()
+    )
+    diameter.set_value_mm(wanted)
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    _settle_the_click(window)
+    before = len(window.session.project.document.ops)
+    gate = threading.Event()
+    _hold_the_evaluations(monkeypatch, gate)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Szene rechnet denselben Stand nach"
+        panel._apply.click()
+        waiting = window._click_after_evaluation
+        assert waiting is not None, "der Klick wartet"
+        assert _promised(window), window.status_message.text()
+        if then == "typed":
+            diameter.set_value_mm(wanted + 0.5)
+            QApplication.processEvents()
+            assert window._click_after_evaluation is None, "der neue Wert verwirft den Klick"
+            assert window.status_message.text().startswith(
+                tr(
+                    "Nicht übernommen, weil sich die Werte geändert haben. "
+                    "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+                )
+            )
+        elif then == "cancelled":
+            panel.cancelRequested.emit()
+            assert window._click_after_evaluation is None, "Abbrechen nimmt den Klick mit"
+            assert not _promised(window)
+        gate.set()
+        _settle_the_click(window)
+    finally:
+        gate.set()
+
+    ops = window.session.project.document.ops
+    status = window.status_message.text()
+    if then != "typed":
+        assert "übernommen" not in status, status
+    if then == "nothing":
+        assert len(ops) == before + 1, "genau ein Schritt"
+        assert ops[-1].op == "resize_hole"
+        assert ops[-1].params["diameter"] == pytest.approx(wanted)
+    else:
+        assert len(ops) == before, "nichts geschrieben"
+
+
+def test_a_feature_click_during_a_change_is_not_carried_to_the_new_stand(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rechnet die Auswertung eine Änderung, trägt der Klick seinen Auftrag nicht.
+
+    Der Auftrag entstand am Stand davor; seine Kennungen meinen danach nicht
+    sicher dasselbe. Dann verfällt er am Ende mit Satz, statt einen fremden
+    Stand zu schreiben (``MainWindow._carry_click``).
+    """
+    _measured_diameter(window, monkeypatch)
+    window.end_quiet_placement()
+    panel = window.feature_panel
+    resize = next(row for row in panel._shown_rows.values() if row.op == "resize_hole")
+    assert resize.toggle is not None
+    resize.toggle.click()
+    gate = threading.Event()
+    _hold_the_evaluations(monkeypatch, gate)
+    try:
+        assert window.session.apply(
+            "Quader",
+            [OperationDraft(op="create_box", params={"width": 5.0, "depth": 5.0, "height": 5.0})],
+        )
+        assert window.session.busy, "die Lage: die Szene rechnet eine Änderung"
+        before = len(window.session.project.document.ops)
+        assert not window._result_belongs_to_the_document()
+        panel._apply.click()
+        waiting = window._click_after_evaluation
+        assert waiting is None or not waiting.carried, "nicht über die Änderung getragen"
+        gate.set()
+        _settle_the_click(window)
+    finally:
+        gate.set()
+
+    assert len(window.session.project.document.ops) == before, "nichts Fremdes geschrieben"
 
 
 def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -> None:

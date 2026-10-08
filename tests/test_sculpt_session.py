@@ -191,6 +191,63 @@ def test_a_finish_waiting_for_the_evaluation_does_not_take_a_later_stroke(
     )
 
 
+def test_a_finish_during_an_evaluation_closes_the_session_after_it(
+    window: MainWindow, exact_body: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Fertig* während einer Auswertung schließt danach — genau ein Schritt.
+
+    Die Statuszeile sagte „Wird übernommen, sobald die Berechnung fertig ist.“
+    und danach „Nicht übernommen …“: Das Ende der Auswertung räumt die
+    Vorschau der Sitzung ab, niemand band sie neu, und ein Klick ohne Freigabe
+    lief nie (Nachprüfung, Fund 3). Die Lage ist nicht selten: *Dreiecke jetzt
+    angleichen* stößt selbst eine Auswertung an. Jetzt baut *Fertig* seinen
+    Auftrag aus den Zügen neu, und der Vergleich mit dem gemerkten verwirft
+    weiter einen späteren Zug (Test darüber).
+    """
+    import threading
+
+    from app.i18n import tr
+
+    window.start_sculpt(exact_body)
+    before = len(window.session.project.document.ops)
+    window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.session.wait_for_idle(30_000)
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _result: True)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Sitzung rechnet"
+        window.sculpt_bar.done.click()
+        assert window._click_after_evaluation is not None, "der Klick wartet"
+        assert window.status_message.text().startswith(
+            tr("Wird übernommen, sobald die Berechnung fertig ist.")
+        )
+        gate.set()
+        for _ in range(3):
+            assert window.session.wait_for_idle(30_000)
+            QApplication.processEvents()
+            approval = window._preview_approval
+            if approval is not None and approval.difference is not None:
+                window.viewport.differenceApplied.emit(approval.difference)
+        assert window.session.wait_for_idle(30_000)
+    finally:
+        gate.set()
+
+    assert not window.sculpting(), "die Sitzung ist zu"
+    ops = window.session.project.document.ops
+    assert len(ops) == before + 1, "genau ein Schritt"
+    assert ops[-1].op == "sculpt_strokes"
+    assert "übernommen" not in window.status_message.text(), window.status_message.text()
+
+
 def test_the_session_needs_something_to_sculpt(window: MainWindow) -> None:
     """Ohne Objekt kein Pinsel — und ein Satz dazu statt einer stillen
     Nichtreaktion."""

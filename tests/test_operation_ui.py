@@ -2527,6 +2527,76 @@ def test_texture_panel_changes_existing_step_with_live_preview(
     window._op_dialog.reject()
 
 
+def test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_it(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Übernehmen* am Muster eines Schritts während einer Auswertung ändert ihn danach.
+
+    Der Neuaufbau nach der Auswertung bindet im Merkmalfenster die Werte des
+    Schritts, also einen anderen Auftrag als den gemerkten. Das ist keine
+    Eingabe des Kunden und darf den getragenen Klick nicht als „Werte
+    geändert“ verwerfen (``MainWindow._binds_for_the_waiting_click``).
+    """
+    from app.core.scene.placement import top_face
+    from app.ui.op_dialog import ValueField
+
+    object_id = select(window)
+    face = top_face(window.session.last_result.scene.objects[object_id].features)
+    assert face is not None
+    window._on_feature_picked(face.id)
+    window.run_operation(
+        REGISTRY.get("apply_texture"),
+        {"coverage": "whole_face", "pattern": "rib", "pitch": 5.0},
+    )
+    assert window.session.wait_for_idle()
+    assert window._op_dialog is not None
+    window._op_dialog.accept()
+    assert window.session.wait_for_idle()
+    operation = window.session.project.document.ops[-1]
+    count = len(window.session.project.document.ops)
+    body = window.session.last_result.scene.objects[object_id]
+    created = next(
+        feature
+        for feature in body.features.values()
+        if feature.created_by == operation.id and feature.kind == "pattern"
+    )
+    window._on_feature_picked(created.id)
+    panel = window.feature_panel
+    numeric = {
+        field._entry.name: field for row in panel._built for field in row.findChildren(ValueField)
+    }
+    monkeypatch.setattr(window, "_show_preview", lambda _difference: None)
+    numeric["depth"].spin.setValue(0.9)
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    assert window.session.wait_for_idle()
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Szene rechnet denselben Stand nach"
+        panel._apply.click()
+        assert window._click_after_evaluation is not None, "der Klick wartet"
+        gate.set()
+        for _ in range(3):
+            assert window.session.wait_for_idle(60_000)
+            QApplication.processEvents()
+    finally:
+        gate.set()
+
+    assert len(window.session.project.document.ops) == count, "kein neuer Schritt"
+    updated = window.session.project.document.ops[-1]
+    assert updated.id == operation.id
+    assert updated.params["depth"] == pytest.approx(0.9), "der Schritt ist geändert"
+    assert "übernommen" not in window.status_message.text(), window.status_message.text()
+
+
 def test_uncertain_body_texture_keeps_the_normal_face_panel(
     window: MainWindow,
 ) -> None:
@@ -8365,6 +8435,17 @@ def test_a_value_typed_after_the_click_is_not_applied_and_the_click_says_so(
             "Nicht übernommen, weil sich die Werte geändert haben. "
             "Klicken Sie erneut, um den neuen Stand zu übernehmen."
         )
+
+        # Der nächste Klick übernimmt — und der Satz von eben widerspräche ihm:
+        # Er stand nach dem Schritt weiter da, und wer ihm glaubte, legte den
+        # Quader doppelt an (Nachprüfung, Fund 1).
+        dialog._accept_button.click()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+        assert _box_steps(window) == [_shown_box()], "jetzt ist der Quader übernommen"
+        assert "Nicht übernommen" not in window.status_message.text(), window.status_message.text()
+        assert "Nicht übernommen" not in window._announcement
     finally:
         gate.set()
         window.close()
@@ -8441,6 +8522,9 @@ def test_a_click_after_a_cancelled_evaluation_computes_it_and_applies(
         dialog._accept_button.click()
         assert window.session.busy, "der Klick rechnet die Auswertung neu an"
         assert window.status_message.text().startswith(_waiting_for_the_evaluation())
+        assert "nicht übernommen" not in window._announcement, (
+            "der neue wartende Klick löst den Satz über den vorigen ab"
+        )
         gate.set()
         assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
@@ -8448,6 +8532,10 @@ def test_a_click_after_a_cancelled_evaluation_computes_it_and_applies(
 
         assert _box_steps(window) == [_shown_box()], "danach ist der Quader übernommen"
         assert window._op_dialog is None
+        # Der Abbruchsatz gehört zum ersten Klick; nach dem Schritt sagte er
+        # weiter „nicht übernommen“ (Nachprüfung, Fund 1).
+        assert "nicht übernommen" not in window.status_message.text(), window.status_message.text()
+        assert "nicht übernommen" not in window._announcement
     finally:
         gate.set()
         window.close()

@@ -4498,9 +4498,17 @@ class PlacementFlow(QObject):
             or not self._interpret_active_fields()
         ):
             return
+        # **Die Maßgruppe übernimmt auch während einer Auswertung.** Sie lebt
+        # nur, solange ihr Ergebnis zum Dokument gehört — eine Änderung beendet
+        # sie (:meth:`_document_changed`) —, also rechnet eine Auswertung hier
+        # denselben Stand nach. Bis dahin endete der Klick an dieser Stelle
+        # ohne ein Wort, und mit dem neuen Ergebnis ging die Maßgruppe samt
+        # Werten. Jetzt reicht der Träger ihn dem Fenster (``preview_defer``),
+        # das ihn mit seinem Auftrag nach der Auswertung übernimmt.
+        stale_allowed = isinstance(self.dialog, QuietHost) and self.dialog.preview_defer is not None
         if (
             not self.active
-            or not self.session.result_current
+            or (not self.session.result_current and not stale_allowed)
             or not self._display_ready()
             or (self._surface is None and not self._measure_without_surface)
         ):
