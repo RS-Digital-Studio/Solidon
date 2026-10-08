@@ -21,7 +21,11 @@ Drei Ausgänge, und nur einer davon ist still:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import threading
+from collections import OrderedDict
 from collections.abc import Callable, Collection, Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
@@ -239,15 +243,35 @@ def _candidate_costs(
         )
         if check is not None:
             check()
+        # **Die Kosten aller Paare dieser Zeilen in einem Aufruf** (RM-568):
+        # Je Zeile einzeln gerechnet, waren es am Eiffelturm 30 656 Aufrufe
+        # über eine Handvoll Spalten und 2,2 s je Zuordnung. Die Formel rechnet
+        # elementweise; welche Paare nebeneinanderstehen, ändert keine Zahl.
+        rows: list[int] = []
+        found: list[np.ndarray] = []
         for offset, nearby in enumerate(neighbours):
             row = start + offset
             indices = np.asarray(nearby, dtype=np.intp)
-            indices = indices[kinds[indices] == first[row].kind]
-            for block in range(0, len(indices), VECTOR_ROWS):
+            rows.append(row)
+            found.append(indices[kinds[indices] == first[row].kind])
+        sizes = np.fromiter((len(indices) for indices in found), dtype=np.intp, count=len(found))
+        if not sizes.sum():
+            continue
+        pair_rows = np.repeat(np.asarray(rows, dtype=np.intp), sizes)
+        pair_columns = np.concatenate(found)
+        signless = np.repeat(
+            np.fromiter(("axis" in first[row].params for row in rows), dtype=bool, count=len(rows)),
+            sizes,
+        )
+        costs = _vector_costs(one[pair_rows], two[pair_columns], signless)
+        ends = np.cumsum(sizes)
+        for row, indices, end, size in zip(rows, found, ends.tolist(), sizes.tolist(), strict=True):
+            values_of_row = costs[end - size : end]
+            for block in range(0, size, VECTOR_ROWS):
                 if check is not None:
                     check()
                 columns = indices[block : block + VECTOR_ROWS]
-                values = _vector_costs(one[row], two[columns], "axis" in first[row].params)
+                values = values_of_row[block : block + VECTOR_ROWS]
                 accepted = values <= MATCH_THRESHOLD
                 yield row, columns[accepted], values[accepted]
 
@@ -671,14 +695,118 @@ def match(
     before = old_centre if old_centre is not None else centre
     old_ids = list(old)
     new_ids = list(new)
-    assignment = _assignment(
-        [old[identifier] for identifier in old_ids],
-        [new[identifier] for identifier in new_ids],
-        before,
-        centre,
-        diagonal,
-        check_cancelled,
+    first = [old[identifier] for identifier in old_ids]
+    second = [new[identifier] for identifier in new_ids]
+    one = _vectors(first, before, diagonal, check_cancelled)
+    two = _vectors(second, centre, diagonal, check_cancelled)
+    key = _match_key(old_ids, first, one, new_ids, second, two)
+    ways = tuple(globals()[name] for name in _MATCH_WAYS)
+    with _MATCHES_LOCK:
+        known = _MATCHES.get(key)
+        if known is not None:
+            _MATCHES.move_to_end(key)
+    if known is not None and all(
+        held is current for held, current in zip(known[0], ways, strict=True)
+    ):
+        return _copied(known[1])
+    result = _matched(old_ids, first, new_ids, second, (before, centre, diagonal), check_cancelled)
+    with _MATCHES_LOCK:
+        _MATCHES[key] = (ways, _copied(result))
+        while len(_MATCHES) > MATCHES_KEPT:
+            _MATCHES.popitem(last=False)
+    return result
+
+
+#: Wie viele Zuordnungen :func:`match` sich merkt. Eine Auswertung geht den
+#: ganzen Verlauf durch und ordnet nach jedem Schritt neu zu, auch wenn er aus
+#: dem Cache kommt — am Eiffelturm 4,7 s je Schritt und je Auswertung, das
+#: dritte Verschieben kostete so 16 statt 6 s (08.10.2026, RM-568). Die
+#: Zuordnung hängt nur an Kennungen, Arten und Merkmalsvektoren; dieselben
+#: Eingänge geben dieselbe Antwort. Eine Antwort ist ein paar Wörterbücher
+#: aus Kennungen, und 256 decken einen langen Verlauf mit mehreren Körpern.
+MATCHES_KEPT: Final = 256
+_MATCHES: OrderedDict[bytes, tuple[tuple[Any, ...], MatchResult]] = OrderedDict()
+_MATCHES_LOCK = threading.Lock()
+
+
+def _match_key(
+    old_ids: list[FeatureId],
+    first: list[Feature],
+    one: np.ndarray,
+    new_ids: list[FeatureId],
+    second: list[Feature],
+    two: np.ndarray,
+) -> bytes:
+    """Alles, was die Zuordnung liest: Kennungen in ihrer Folge, Arten, Achsenart, Vektoren.
+
+    Dazu die Grenzen der Kostenformel. Die Rechenwege selbst (:data:`_MATCH_WAYS`)
+    vergleicht :func:`match` beim Nachschlagen: Ein Test, der eine Grenze
+    verstellt oder einen Rechenweg ersetzt, bekommt keine Antwort, die vorher
+    unter anderen Regeln entstand.
+    """
+    digest = hashlib.blake2b(digest_size=20)
+    rules = (
+        POSITION_TOLERANCE,
+        AXIS_TOLERANCE,
+        DIAMETER_TOLERANCE,
+        MATCH_THRESHOLD,
+        KIND_PENALTY,
     )
+    digest.update(repr(rules).encode("ascii"))
+    for ids, features, vectors in ((old_ids, first, one), (new_ids, second, two)):
+        digest.update(
+            json.dumps(
+                [
+                    [str(identifier), feature.kind, "axis" in feature.params]
+                    for identifier, feature in zip(ids, features, strict=True)
+                ]
+            ).encode("utf-8")
+        )
+        digest.update(np.ascontiguousarray(vectors, dtype=np.float64).tobytes())
+    return digest.digest()
+
+
+#: Die Rechenwege, an denen die Antwort von :func:`match` hängt.
+_MATCH_WAYS: Final = (
+    "_assignment",
+    "_open_claims",
+    "_cost_matrix",
+    "_candidate_costs",
+    "_vector_costs",
+    "linear_sum_assignment",
+    "cKDTree",
+)
+
+
+def forget_matches() -> None:
+    """Vergisst die gemerkten Zuordnungen — für Tests und Messungen."""
+    with _MATCHES_LOCK:
+        _MATCHES.clear()
+
+
+def _copied(result: MatchResult) -> MatchResult:
+    """Eine eigene Antwort je Aufrufer — ``mapping`` und ``ambiguous`` sind veränderlich."""
+    return MatchResult(
+        mapping=dict(result.mapping),
+        orphaned=result.orphaned,
+        ambiguous=dict(result.ambiguous),
+        fresh=result.fresh,
+    )
+
+
+def _matched(
+    old_ids: list[FeatureId],
+    first: list[Feature],
+    new_ids: list[FeatureId],
+    second: list[Feature],
+    frame: tuple[Vec3, Vec3, float],
+    check_cancelled: Callable[[], None] | None,
+) -> MatchResult:
+    """Der Rumpf von :func:`match` — die Antwort merkt sich :data:`_MATCHES`."""
+    before, centre, diagonal = frame
+    # Die Vektoren rechnet ``_assignment`` noch einmal selbst: Tests ersetzen
+    # es mit seiner bisherigen Unterschrift, und zweimal kostet es Millisekunden.
+    assignment = _assignment(first, second, before, centre, diagonal, check_cancelled)
     partners, claims = _open_claims(assignment, len(old_ids), len(new_ids), check_cancelled)
     result = MatchResult()
     taken: set[str] = set()

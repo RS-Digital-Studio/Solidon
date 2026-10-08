@@ -2860,3 +2860,168 @@ def test_one_plane_question_for_pieces_and_used_up_faces() -> None:
 
     assert [n for n, hit in zip(faces_now.names, plane, strict=True) if hit] == ["in", "far"]
     assert [n for n, hit in zip(faces_now.names, boxed, strict=True) if hit] == ["in"]
+
+
+def _candidates_row_by_row(first, second, one, two, tree, radius):  # type: ignore[no-untyped-def]
+    """``_candidate_costs`` vor RM-568: die Kosten je Zeile in einem eigenen Aufruf."""
+    from app.core.perceive.matching import MATCH_THRESHOLD, VECTOR_ROWS, _vector_costs
+
+    kinds = np.asarray([entry.kind for entry in second], dtype=object)
+    for start in range(0, len(first), VECTOR_ROWS):
+        neighbours = tree.query_ball_point(
+            one[start : start + VECTOR_ROWS, :3], radius, p=np.inf, return_sorted=True
+        )
+        for offset, nearby in enumerate(neighbours):
+            row = start + offset
+            indices = np.asarray(nearby, dtype=np.intp)
+            indices = indices[kinds[indices] == first[row].kind]
+            for block in range(0, len(indices), VECTOR_ROWS):
+                columns = indices[block : block + VECTOR_ROWS]
+                values = _vector_costs(one[row], two[columns], "axis" in first[row].params)
+                accepted = values <= MATCH_THRESHOLD
+                yield row, columns[accepted], values[accepted]
+
+
+def test_candidate_costs_in_one_call_per_block_are_the_row_by_row_costs() -> None:
+    """Alle Paare eines Zeilenblocks in einem Aufruf — dieselben Paare, Bit für Bit (RM-568).
+
+    Am Eiffelturm kostete die Zuordnung nach einem Verschieben 30 656
+    Kostenaufrufe; gebündelt ist es einer je Block. Gemischt: richtungslose
+    Achsen, Normalen, drei Arten, dichte Haufen über die Blockgrenze von 256
+    Zeilen und Zeilen ohne Nachbarn.
+    """
+    from app.core.deferred import cKDTree
+    from app.core.perceive.matching import _candidate_costs, _query_radius, _vectors
+
+    source = np.random.default_rng(81020262)
+    kinds = ("hole", "face", "sphere")
+
+    def made(count: int, name: str) -> list[Feature]:
+        found = []
+        for index in range(count):
+            kind = kinds[index % 3]
+            centre = tuple(float(value) for value in source.normal(scale=0.5, size=3))
+            direction = source.normal(size=3)
+            direction = tuple(float(value) for value in direction / np.linalg.norm(direction))
+            params: dict[str, object] = {"centre": centre}
+            if kind == "hole":
+                params |= {"axis": direction, "diameter": float(source.uniform(1.0, 9.0))}
+            elif kind == "face":
+                params |= {"normal": direction, "area": float(source.uniform(1.0, 90.0))}
+            else:
+                params |= {"diameter": float(source.uniform(1.0, 9.0))}
+            found.append(
+                Feature(id=f"{name}_{index}", kind=kind, provenance="detected", params=params)
+            )
+        return found
+
+    first, second = made(700, "alt"), made(650, "neu")
+    one = _vectors(first, (0.0, 0.0, 0.0), 40.0, None)
+    two = _vectors(second, (0.1, 0.0, 0.0), 40.0, None)
+    tree = cKDTree(two[:, :3])
+    radius = _query_radius() * 40.0
+    expected = list(_candidates_row_by_row(first, second, one, two, tree, radius))
+    found = list(_candidate_costs(first, second, one, two, tree, radius, None))
+    assert sum(len(columns) for _row, columns, _values in expected) > 1000, "Voraussetzung: dicht"
+    assert len(found) == len(expected)
+    for (row, columns, values), (row_now, columns_now, values_now) in zip(
+        expected, found, strict=True
+    ):
+        assert row == row_now
+        assert np.array_equal(columns, columns_now)
+        assert np.array_equal(values, values_now)
+
+
+def test_the_same_question_is_matched_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine Auswertung ordnet jeden Schritt neu zu, auch aus dem Cache — einmal reicht.
+
+    Am Eiffelturm kostete die Zuordnung 4,7 s je Schritt und Auswertung, und
+    das dritte Verschieben brauchte 16 statt 6 s (RM-568). Gemerkt wird an
+    allem, was sie liest; eine andere Lage, eine andere Grenze oder ein
+    anderer Rechenweg fragt neu, und jeder Aufrufer bekommt seine eigene
+    Antwort.
+    """
+    from app.core.perceive import matching
+
+    def bores(shift: float) -> dict[str, Feature]:
+        return {
+            f"hole_{index}": Feature(
+                id=f"hole_{index}",
+                kind="hole",
+                provenance="detected",
+                params={
+                    "centre": (index * 10.0 + shift, 0.0, 0.0),
+                    "axis": (0.0, 0.0, 1.0),
+                    "diameter": 5.0,
+                },
+            )
+            for index in range(6)
+        }
+
+    calls: list[int] = []
+    real = matching._assignment
+
+    def counted(*args: object) -> object:
+        calls.append(1)
+        return real(*args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(matching, "_assignment", counted)
+    matching.forget_matches()
+    first = matching.match(bores(0.0), bores(0.5), (0.0, 0.0, 0.0), 100.0)
+    first.mapping.clear()
+    again = matching.match(bores(0.0), bores(0.5), (0.0, 0.0, 0.0), 100.0)
+    assert len(calls) == 1, "the same question is answered from memory"
+    assert len(again.mapping) == 6, "each caller gets its own answer"
+    matching.match(bores(0.0), bores(0.7), (0.0, 0.0, 0.0), 100.0)
+    assert len(calls) == 2, "another place is another question"
+    monkeypatch.setattr(matching, "POSITION_TOLERANCE", 0.01)
+    matching.match(bores(0.0), bores(0.5), (0.0, 0.0, 0.0), 100.0)
+    assert len(calls) == 3, "another bound is another question"
+
+
+def test_a_long_history_matches_only_its_new_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nach dem vierten Verschieben wird einmal zugeordnet, nicht viermal (RM-568).
+
+    Eine Auswertung geht den ganzen Verlauf durch und ordnet nach jedem Schritt
+    zu, auch aus dem Cache; die Kosten wuchsen mit der Länge des Verlaufs — am
+    Eiffelturm 6,7, 11,5 und 16,5 s für drei Verschieben, mit dem Merker 5,2,
+    5,3 und 8,2 s bei denselben Merkmalen.
+    """
+    from app.core.knowledge import profiles
+    from app.core.perceive import matching
+    from app.core.scene import History, OperationDraft, ResultCache, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    cache = ResultCache()
+    sources = ProjectSources(project)
+    first = evaluate(project.document, profile, sources=sources, cache=cache)
+    target = next(iter(first.scene.objects))
+    calls: list[int] = []
+    real = matching._assignment
+
+    def counted(*args: object) -> object:
+        calls.append(1)
+        return real(*args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(matching, "_assignment", counted)
+    for _step in range(4):
+        history.apply(
+            "Verschieben",
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
+        )
+        calls.clear()
+        result = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert len(calls) <= 1, f"{len(calls)} matchings for one new step"
+    assert {feature.kind for feature in result.scene.objects[target].features.values()} == {
+        "face",
+        "hole",
+    }

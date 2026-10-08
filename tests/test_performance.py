@@ -2065,3 +2065,79 @@ def test_closing_notches_on_a_huge_patch_reads_the_rim_not_the_mesh() -> None:
     assert taken_one < 1.5 and taken < 1.5, (
         "eine Kandidatenmenge darf nicht wieder den ganzen Fleck kosten"
     )
+
+
+def test_the_self_intersection_search_on_a_closed_organic_surface() -> None:
+    """Ein geschlossenes, leicht verrauschtes Netz: fast alle Kandidaten sind Nachbarn.
+
+    Bis RM-568 ging jedes Paar mit gemeinsamer Ecke durch die genaue Prüfung —
+    an dieser Ikosphäre mit 327 680 Dreiecken 24 s CPU, am Spiderman 68 s.
+    Seit die Trennprüfung schräge Nachbarn vorab trennt (``_touching_apart``):
+    3,8 bis 4,8 s unter Fremdlast (08.10.2026). Die Schranke hält das Erreichte
+    mit Reserve für langsamere Rechner und liegt unter dem alten Stand.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.intersections import crossing_face_pairs
+
+    body = trimesh.creation.icosphere(subdivisions=7, radius=40.0)
+    body.vertices += np.random.default_rng(7).normal(scale=0.002, size=body.vertices.shape)
+    vertices, faces = np.asarray(body.vertices), np.asarray(body.faces)
+    found: list[Any] = []
+    taken = measure(
+        "self_intersection_closed_327k",
+        lambda: found.append(crossing_face_pairs(vertices, faces)),
+    )
+    assert len(found[0].first) == 0 and found[0].complete
+    assert taken < 12.0, "measured 4 to 6 s; the search before RM-568 took 24 to 30 s"
+
+
+def test_a_third_step_costs_what_the_first_did(profile: Profile) -> None:
+    """Die Zuordnung eines Schritts aus dem Cache wird nicht bei jeder Auswertung neu gerechnet.
+
+    Am Eiffelturm (4 878 Merkmale) kosteten drei Verschieben 6,7, 11,5 und
+    16,5 s: Jede Auswertung ordnete jeden früheren Schritt neu zu. Mit dem
+    Merker in ``matching.match`` 5,2, 5,3 und 8,2 s bei denselben Merkmalen
+    (RM-568). Hier eine Platte mit 64 verrundeten Taschen (326 Merkmale).
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    body = pocketed_plate(64)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate.stl", sha256=""
+    )
+    project.sources["src_1"] = body.to_stl()
+    history = History(project.document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    cache = ResultCache()
+    sources = ProjectSources(project)
+    first = evaluate(project.document, profile, sources=sources, cache=cache)
+    target = next(iter(first.scene.objects))
+    assert len(first.scene.objects[target].features) > 200, "Voraussetzung: viele Merkmale"
+    times = []
+    for _step in range(3):
+        history.apply(
+            _("Verschieben"),
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
+        )
+        started = time.perf_counter()
+        evaluate(project.document, profile, sources=sources, cache=cache)
+        times.append(time.perf_counter() - started)
+    history.apply(
+        _("Verschieben"),
+        [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 2.0})],
+    )
+    taken = measure(
+        "evaluate_fourth_move_326_features",
+        lambda: evaluate(project.document, profile, sources=sources, cache=cache),
+    )
+    # Gemessen am 08.10.2026: 0,20, 0,25, 0,34 und 0,43 s; vorher 0,30, 0,47,
+    # 0,57 und 0,83 s. Den Zuordnungsmerker selbst hält
+    # ``test_matching.test_a_long_history_matches_only_its_new_step``; hier die
+    # Größenordnung und die 25-%-Marke.
+    assert taken < 3.0 * times[0] + 0.2, (
+        f"the fourth step took {taken:.2f} s, the first {times[0]:.2f} s"
+    )
