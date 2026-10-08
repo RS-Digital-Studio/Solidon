@@ -25,7 +25,7 @@ import struct
 import threading
 import weakref
 from collections import Counter, OrderedDict
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
@@ -6674,38 +6674,84 @@ def _simplified_ring(outline: np.ndarray, tolerance: float) -> np.ndarray:
     count = len(outline)
     if count <= 3:
         return outline
-    before = np.roll(np.arange(count), 1)
-    after = np.roll(np.arange(count), -1)
-    kept = np.ones(count, dtype=bool)
+    # **Ein Haufen statt eines Durchgangs über alle Ecken je Schritt, und die
+    # Lücken in Python-Zahlen** (RM-568). Der erste Weg suchte je
+    # weggelassener Ecke das Minimum über den ganzen Ring und rechnete jede
+    # Lücke mit fünf NumPy-Aufrufen über eine Handvoll Punkte — am Eiffelturm
+    # 182 532 Lücken und 10,1 s der Erkennung. Dieselben Rechenschritte in
+    # derselben Reihenfolge (:func:`_gap_distance`), derselbe Gleichstand:
+    # kleinste Kosten, dann der lexikographisch kleinere Punkt, dann die
+    # kleinere Nummer.
+    xs: list[float] = outline[:, 0].tolist()
+    ys: list[float] = outline[:, 1].tolist()
+    before = [(index - 1) % count for index in range(count)]
+    after = [(index + 1) % count for index in range(count)]
+    kept = [True] * count
+    costs: list[float] = _segment_distances(
+        outline, outline[np.asarray(before)], outline[np.asarray(after)]
+    ).tolist()
+    version = [0] * count
+    heap = [(costs[index], xs[index], ys[index], index, 0) for index in range(count)]
+    heapq.heapify(heap)
 
     def gap_cost(corner: int) -> float:
         """Der größte Abstand der Ecken zwischen den Nachbarn von ``corner`` von deren Sehne."""
-        start, end = int(before[corner]), int(after[corner])
+        start, end = before[corner], after[corner]
         inside = (
-            np.arange(start + 1, end)
+            range(start + 1, end)
             if start < end
-            else np.r_[np.arange(start + 1, count), np.arange(0, end)]
+            else itertools.chain(range(start + 1, count), range(end))
         )
-        return float(_segment_distances(outline[inside], outline[start], outline[end]).max())
+        return _gap_distance(xs, ys, inside, start, end)
 
-    costs = _segment_distances(outline, outline[before], outline[after])
+    def update(corner: int) -> None:
+        costs[corner] = gap_cost(corner)
+        version[corner] += 1
+        heapq.heappush(heap, (costs[corner], xs[corner], ys[corner], corner, version[corner]))
+
     remaining = count
     while remaining > 3:
-        masked = np.where(kept, costs, np.inf)
-        lowest = float(masked.min())
+        lowest, _x, _y, corner, seen = heapq.heappop(heap)
+        while not kept[corner] or seen != version[corner]:
+            lowest, _x, _y, corner, seen = heapq.heappop(heap)
         if lowest > tolerance:
             break
-        # Bitgleich und nicht „nahe“: Gefragt ist, welche von exakt gleich
-        # teuren Ecken zuerst geht — kein Vergleich zweier Maße (Regel 6).
-        tied = np.flatnonzero(masked == lowest)
-        corner = int(tied[np.lexsort(outline[tied].T[::-1])[0]])
         kept[corner] = False
         remaining -= 1
-        start, end = int(before[corner]), int(after[corner])
+        start, end = before[corner], after[corner]
         after[start], before[end] = end, start
-        costs[start] = gap_cost(start)
-        costs[end] = gap_cost(end)
-    return np.asarray(outline[kept], dtype=float)
+        update(start)
+        update(end)
+    return np.asarray(outline[np.asarray(kept)], dtype=float)
+
+
+def _gap_distance(
+    xs: Sequence[float], ys: Sequence[float], inside: Iterable[int], start: int, end: int
+) -> float:
+    """Der größte Abstand der Punkte ``inside`` von der Strecke von ``start`` nach ``end``.
+
+    Rechenschritt für Rechenschritt :func:`_segment_distances` für eine
+    gemeinsame Strecke, in Python-Zahlen: Produkt und Summe über zwei
+    Spalten, dieselbe Untergrenze des Nenners, dieselbe Klammer auf null bis
+    eins, die Wurzel aus der Quadratsumme — bitgleich, und für eine Handvoll
+    Punkte ohne fünf NumPy-Aufrufe.
+    """
+    start_x, start_y = xs[start], ys[start]
+    along_x, along_y = xs[end] - start_x, ys[end] - start_y
+    squares = along_x * along_x + along_y * along_y
+    floor = EPS_GEOM * EPS_GEOM
+    denominator = max(floor, squares)
+    largest = -math.inf
+    for index in inside:
+        point_x, point_y = xs[index], ys[index]
+        share = ((point_x - start_x) * along_x + (point_y - start_y) * along_y) / denominator
+        share = min(max(share, 0.0), 1.0) if share == share else share
+        off_x = point_x - (start_x + share * along_x)
+        off_y = point_y - (start_y + share * along_y)
+        distance = math.sqrt(off_x * off_x + off_y * off_y)
+        if distance > largest:
+            largest = distance
+    return largest
 
 
 def _segment_distances(points: np.ndarray, starts: np.ndarray, ends: np.ndarray) -> np.ndarray:
@@ -11318,9 +11364,12 @@ def _tangential_cylinders(
             # Je Ring einmal entdoppelt: Ein Dreieck, das zwei Frontdreiecke
             # zugleich erreichen, stünde sonst zweimal in der nächsten Front,
             # und seine Nachfolger vervielfachten sich von Ring zu Ring.
+            # Erst sieben, dann entdoppeln: Die meisten Nachbarn einer Front
+            # sind schon gesehen, und das Sortieren über die kleine Rest-
+            # menge gibt dieselben Dreiecke in derselben Folge (RM-568).
             around = neighbours[front].ravel()
-            around = np.unique(around[around >= 0])
-            around = around[member[around] & ~claimed[around] & (seen[around] != floods)]
+            around = around[around >= 0]
+            around = np.unique(around[member[around] & ~claimed[around] & (seen[around] != floods)])
             seen[around] = floods
             if not len(around):
                 break

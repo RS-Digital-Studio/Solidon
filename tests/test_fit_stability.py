@@ -1170,3 +1170,66 @@ def test_a_shallow_cone_strip_is_found_wherever_it_lies(monkeypatch: pytest.Monk
         if fit is None or abs(fit.half_angle - 40.0) > 0.05:
             missed.append(name)
     assert missed == list(_PLACEMENTS), "ohne den Quadrikstart prüft der Test nichts"
+
+
+def _ring_reference(outline: np.ndarray, tolerance: float) -> np.ndarray:
+    """``_simplified_ring`` vor RM-568: je Schritt das Minimum über den Ring, Lücken in NumPy."""
+    count = len(outline)
+    if count <= 3:
+        return outline
+    before = np.roll(np.arange(count), 1)
+    after = np.roll(np.arange(count), -1)
+    kept = np.ones(count, dtype=bool)
+
+    def gap_cost(corner: int) -> float:
+        start, end = int(before[corner]), int(after[corner])
+        inside = (
+            np.arange(start + 1, end)
+            if start < end
+            else np.r_[np.arange(start + 1, count), np.arange(0, end)]
+        )
+        return float(
+            features_module._segment_distances(outline[inside], outline[start], outline[end]).max()
+        )
+
+    costs = features_module._segment_distances(outline, outline[before], outline[after])
+    remaining = count
+    while remaining > 3:
+        masked = np.where(kept, costs, np.inf)
+        lowest = float(masked.min())
+        if lowest > tolerance:
+            break
+        tied = np.flatnonzero(masked == lowest)
+        corner = int(tied[np.lexsort(outline[tied].T[::-1])[0]])
+        kept[corner] = False
+        remaining -= 1
+        start, end = int(before[corner]), int(after[corner])
+        after[start], before[end] = end, start
+        costs[start] = gap_cost(start)
+        costs[end] = gap_cost(end)
+    return np.asarray(outline[kept], dtype=float)
+
+
+def test_the_ring_simplification_keeps_every_corner_it_kept_before() -> None:
+    """Haufen und Python-Zahlen statt Minimum über den Ring — dieselben Ecken, Bit für Bit.
+
+    Am Eiffelturm kostete die alte Fassung 10,1 s der Erkennung (RM-568).
+    Geprüft an verrauschten Kreisen, an regelmäßigen Vielecken mit exakt
+    gleichen Kosten (Gleichstand über Lage und Nummer), an Ringen weit vom
+    Ursprung und bei Toleranzen von null bis über den Radius.
+    """
+    source = np.random.default_rng(81020261)
+    rings = []
+    for count in (4, 5, 7, 12, 40, 97, 300):
+        angles = np.sort(source.uniform(0.0, 2.0 * math.pi, count))
+        radius = 10.0 + source.normal(scale=0.003, size=count)
+        rings.append(np.column_stack((radius * np.cos(angles), radius * np.sin(angles))))
+        regular = np.linspace(0.0, 2.0 * math.pi, count, endpoint=False)
+        rings.append(np.column_stack((np.cos(regular), np.sin(regular))) * 3.0)
+        rings.append(rings[-2] + (1.0e5, -3.0e4))
+    for outline in rings:
+        for tolerance in (0.0, 1e-6, 1e-3, 0.01, 0.1, 1.0, 50.0):
+            expected = _ring_reference(outline.copy(), tolerance)
+            found = features_module._simplified_ring(outline.copy(), tolerance)
+            assert found.shape == expected.shape, (len(outline), tolerance)
+            assert np.array_equal(found, expected), (len(outline), tolerance)
