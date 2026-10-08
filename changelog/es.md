@@ -47,8 +47,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el diálogo de impresión se puede cambiar el slicer como en *Primeros pasos*, también con *Elegir programa …* para uno que Solidon no encuentra por sí mismo.
 - Una impresora de la lista de Solidon y la misma del slicer cuentan como un solo equipo. El diálogo elige el perfil con la boquilla correcta y el archivo lleva el código de inicio.
 - Solo se ofrecen los slicers con los que trabaja Solidon, además de slicers de resina como ChituBox y Lychee. Bambu Studio como AppImage ahora también cuenta.
-- El código de inicio y el volumen de impresión vienen solo de su impresora exacta, no de una pariente como la Kobra 2 Max para una Kobra 2.
-- El diálogo de impresión asigna los perfiles del slicer tres veces más rápido, al abrirse y tras cada cambio de slicer. Con ElegooSlicer 0,7 en vez de 2,5 segundos.
+- El código de inicio y el volumen de impresión vienen solo de su impresora, no de otro modelo de la misma serie.
+- El diálogo de impresión asigna los perfiles del slicer mucho más rápido, al abrirse y tras cada cambio de slicer.
 - El tiempo de impresión estimado se acerca más al del slicer, mucho más en piezas con soportes.
 - Si los soportes y el skirt caben en la cama, la comprobación lo mide ahora solo bajo los voladizos. Las piezas cerca del borde ya no reciben un aviso sin motivo.
 
