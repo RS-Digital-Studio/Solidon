@@ -65,6 +65,110 @@ def rectangle(length: float, width: float) -> Sketch:
     )
 
 
+def rectangle_between(first: Point2, second: Point2, plane: str = "plane:xy") -> Sketch:
+    """Ein achsparalleles Rechteck zwischen zwei Gegenecken, so wie es aufgezogen wurde (RM-559).
+
+    **Bemaßt, nicht frei**, anders als ein Rechteck im Skizzeneditor: Beim
+    Aufziehen in der Ansicht gibt es keine Bedingungsknöpfe, und ein Quader
+    ist für den Kunden ein Ding mit drei Maßen, die er danach im Schrittdialog
+    ändert. Beide Seiten stehen deshalb als Maß, und die **erste Ecke steht
+    fest** — dort hat er angesetzt, und ein geändertes Maß wächst von ihr weg.
+
+    Dieselbe Punktfolge wie :func:`rectangle`: unten (0, 1), rechts (2, 3),
+    oben (4, 5), links (6, 7), in den Koordinaten der Ebene ``plane``.
+    """
+    low_x, high_x = sorted((float(first[0]), float(second[0])))
+    low_y, high_y = sorted((float(first[1]), float(second[1])))
+    width, depth = high_x - low_x, high_y - low_y
+    require_positive("length", width)
+    require_positive("width", depth)
+    # Welcher der vier Eckpunkte die erste Ecke ist: unten links ist Punkt 0,
+    # unten rechts 1, oben rechts 3, oben links 5 — je der Anfang einer Seite
+    # oder ihr Ende, beide liegen nach den Deckungen an derselben Stelle.
+    left = float(first[0]) <= float(second[0])
+    bottom = float(first[1]) <= float(second[1])
+    anchor = {(True, True): 0, (False, True): 1, (False, False): 3, (True, False): 5}[
+        (left, bottom)
+    ]
+    return Sketch(
+        plane=plane,
+        elements=(
+            SketchElement("line", ((low_x, low_y), (high_x, low_y))),
+            SketchElement("line", ((high_x, low_y), (high_x, high_y))),
+            SketchElement("line", ((high_x, high_y), (low_x, high_y))),
+            SketchElement("line", ((low_x, high_y), (low_x, low_y))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("coincident", (3, 4)),
+            SketchConstraint("coincident", (5, 6)),
+            SketchConstraint("coincident", (7, 0)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("vertical", (2, 3)),
+            SketchConstraint("horizontal", (4, 5)),
+            SketchConstraint("vertical", (6, 7)),
+            SketchConstraint("distance", (0, 1), _number(width)),
+            SketchConstraint("distance", (2, 3), _number(depth)),
+            SketchConstraint("fixed", (anchor,)),
+        ),
+    )
+
+
+def circle_around(centre: Point2, diameter: float, plane: str = "plane:xy") -> Sketch:
+    """Ein Kreis um eine angeklickte Mitte, mit seinem Durchmesser als Maß (RM-559).
+
+    Die Mitte steht fest, der Durchmesser ist eine ``diameter``-Bedingung —
+    dieselbe, die der Skizzeneditor für einen getippten Kreis schreibt; der
+    Randpunkt liegt rechts der Mitte. Punkte: Mitte (0), Randpunkt (1).
+    """
+    require_positive("diameter", diameter)
+    x, y = float(centre[0]), float(centre[1])
+    return Sketch(
+        plane=plane,
+        elements=(SketchElement("circle", ((x, y), (x + diameter / 2.0, y))),),
+        constraints=(
+            SketchConstraint("diameter", (0, 1), _number(diameter)),
+            SketchConstraint("fixed", (0,)),
+        ),
+    )
+
+
+def simple_shape(sketch: Sketch) -> str | None:
+    """``"rectangle"`` oder ``"circle"``, wenn die Zeichnung genau eine dieser Formen ist.
+
+    Gefragt vom Schrittdialog (RM-559, E11): Ein aufgezogener Quader ist für
+    den Kunden drei Zahlen, und die bekommt er vorn — *Breite*, *Tiefe* und
+    *Höhe* statt eines Umrisses, den er erst im Editor öffnen müsste. Erkannt
+    wird an der Geometrie, nicht an der Herkunft: Ein im Editor gezeichnetes
+    achsparalleles Rechteck ist dieselbe Sache. Hilfsgeometrie zählt nicht.
+    """
+    elements = [element for element in sketch.elements if not element.construction]
+    if len(elements) == 1 and elements[0].kind == "circle":
+        return "circle"
+    if len(elements) != 4 or any(element.kind != "line" for element in elements):
+        return None
+    tolerance = 1e-6
+    for element in elements:
+        (ax, ay), (bx, by) = element.points
+        if not (math.isclose(ax, bx, abs_tol=tolerance) or math.isclose(ay, by, abs_tol=tolerance)):
+            return None
+        if math.isclose(ax, bx, abs_tol=tolerance) and math.isclose(ay, by, abs_tol=tolerance):
+            return None
+    # Geschlossen und nicht verzweigt: jeder Endpunkt trifft genau einen anderen.
+    ends = [point for element in elements for point in element.points]
+    for index, point in enumerate(ends):
+        partners = sum(
+            1
+            for other, candidate in enumerate(ends)
+            if other != index
+            and math.isclose(point[0], candidate[0], abs_tol=tolerance)
+            and math.isclose(point[1], candidate[1], abs_tol=tolerance)
+        )
+        if partners != 1:
+            return None
+    return "rectangle"
+
+
 def slot(length: float, width: float) -> Sketch:
     """Ein Langloch: Gesamtlänge in X, Breite in Y, halbrunde Enden.
 

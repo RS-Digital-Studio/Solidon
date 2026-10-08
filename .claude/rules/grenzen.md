@@ -99,7 +99,7 @@ bekommt:
 | Weg | Ort an der Oberfläche |
 |---|---|
 | Weg 1 — fremdes Modell anpassen | Auswahlfenster am Merkmal, Vorschlag im Prüfbericht, Werkzeugzeile (*Teilen*: zwei Klicks legen die Ebene, Verbinder vorgewählt) |
-| Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen“: erst skizzieren, die Erzeugungsart fragt der Dialog bei „Fertig“), Menü *Erzeugen*, Karte der Handlungen; Grundkörper tragen vorn *Maße als Parameter anlegen* (§13) |
+| Weg 2 — neu konstruieren | obere Werkzeugleiste („Zeichnen“: drei Klicks, die Richtung wählt die Art), Menü *Erzeugen*, Karte der Handlungen; Grundkörper tragen vorn *Maße als Parameter anlegen* (§13) |
 | Weg 3 — generieren | Chat, Generierungsdialog, Einladung der leeren Szene |
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — am gewählten oder einzigen Körper, sonst sagen sie es vorher) |
 | keiner der vier | Untermenü und Befehlspalette, sonst nichts |

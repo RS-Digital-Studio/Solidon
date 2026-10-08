@@ -286,6 +286,10 @@ from app.ui.dialogs import (
     show_details,
     show_error,
 )
+from app.ui.draw_bar import DrawBar
+from app.ui.draw_flow import DrawFlow
+from app.ui.draw_tool import DRAW_KEY, JOIN_OP, POCKET_OP, DrawSurface, face_surface
+from app.ui.draw_tool import EXTRUDE_OP as PULL_OP
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
 from app.ui.filament_picker import CatalogueWrites, FilamentPanel, colours_of, spool_slot
@@ -337,7 +341,7 @@ from app.ui.loading import (
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
-from app.ui.op_dialog import DeferredSourcePicker, OperationDialog
+from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, simple_shape_of
 from app.ui.overlay import (
     CARD_PADDING,
     SIDE_CARDS,
@@ -2196,27 +2200,28 @@ def _sketch_param(op_name: str) -> str:
     )
 
 
-#: Die Operation, in die der Ziehgriff der Querschau mündet (§30.1).
-#:
-#: Er zieht eine **Höhe** aus einem Umriss, und das ist genau das, was
-#: ``sketch_extrude`` tut — aus einer gezeichneten Fläche wird im Normalfall
-#: ein Körper, indem man sie aufzieht. Der Griff ist die kurze Hand für den
-#: häufigsten der fünf Wege, nicht ein sechster; unter *Mehr* steht er deshalb
-#: vorn und nicht nach Titel, wo „Entlang eines Bogens führen", der seltenste
-#: Fall, oben stünde (:meth:`MainWindow._fill_finish_menu`).
-PULL_OP = "sketch_extrude"
+#: Die Kürzel der Werkzeuge in der oberen Leiste, je Zeichen ihres Knopfs
+#: (RM-561: je Werkzeug eines, im Baum frei). Am Mac ⌘⇧ statt Strg+Umschalt.
+TOOLBAR_KEYS: dict[str, str] = {"category.sketch": DRAW_KEY}
 
-#: Wie der Höhenparameter dieser Operation heißt.
-PULL_FIELD = "height"
+#: Was eine andere Handlung sagt, solange ein Körper aufgezogen wird (§18.11).
+_DRAWING_FIRST = _("Erst den Körper fertig aufziehen oder mit Escape abbrechen.")
 
-#: Nach innen ziehen schneidet eine Tasche in den gewählten exakten Körper.
-POCKET_OP = "sketch_pocket"
-POCKET_FIELD = "depth"
 
-#: Nach außen an einem Zielkörper: der Umriss wächst an ihn an, statt ein
-#: zweiter Körper daneben zu werden (Bedienabnahme Zeichnen, E4). Dasselbe
-#: Höhenfeld wie :data:`PULL_OP` — beide teilen ihr Schema.
-JOIN_OP = "sketch_join"
+def _drawing_needs_the_kernel() -> str:
+    """Der Satz, warum das Aufziehen ohne exakten Kern nicht geht — leer, wenn er da ist."""
+    from app.core.registry.registry import exact_kernel_present
+
+    if exact_kernel_present():
+        return ""
+    from app.core.brep.kernel import BRepUnavailable
+
+    return str(BRepUnavailable().title)
+
+
+#: Die Skizzen-Operationen, die das Aufziehen anlegt — ihr Einstieg ist es auch:
+#: neuer Körper, an einen anfügen, aus einem schneiden (``draw_tool``).
+DRAWN_OPERATIONS: frozenset[str] = frozenset({PULL_OP, JOIN_OP, POCKET_OP})
 
 #: Wie viele Flächen des Zielkörpers das Ebenenfeld höchstens anbietet.
 #:
@@ -2225,34 +2230,6 @@ JOIN_OP = "sketch_join"
 #: sind es zwölf Einträge — gezählt standen dort 41 am Besenhalter und 234 an
 #: der Druckschale, weil jede ebene Fläche jedes Körpers kam (Befund B4).
 MOST_PLANE_FACES = 8
-
-
-def operation_limits(op_name: str, field: str) -> tuple[float, float]:
-    """Unter- und Obergrenze eines gezogenen Maßes — **aus dem Schema**.
-
-    Gefragt statt abgeschrieben, aus demselben Grund wie bei
-    :func:`_sketch_param`: Eine zweite Zahl in der Ansicht fiele erst auf, wenn
-    der Dialog einen Wert ablehnt, den der Griff gerade gezeigt hat. Fehlt eine
-    Grenze im Schema, kommt null zurück — die Ansicht klemmt dann nicht, und
-    das ist richtiger als eine erfundene Grenze.
-    """
-    for entry in REGISTRY.get(op_name).params.spec():
-        if entry.name == field:
-            return (float(entry.minimum or 0.0), float(entry.maximum or 0.0))
-    raise InternalError(
-        detail=f"{op_name!r} has no {field!r} parameter",
-        values={"op": op_name},
-    )
-
-
-def pull_limits() -> tuple[float, float]:
-    """Grenzen der Höhe für den Zug nach außen."""
-    return operation_limits(PULL_OP, PULL_FIELD)
-
-
-def pocket_limits() -> tuple[float, float]:
-    """Grenzen der Tiefe für den Zug nach innen."""
-    return operation_limits(POCKET_OP, POCKET_FIELD)
 
 
 #: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
@@ -2777,6 +2754,13 @@ class MainWindow(QMainWindow):
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
         verschwindet mit dem Verlassen der Funktion."""
         self._local_features: LocalRecognitionFlow | None = None
+        self._draw_flow: DrawFlow | None = None
+        """Das Werkzeug *Zeichnen* (RM-559) — angelegt beim ersten Gebrauch,
+        wenn Sitzung, Baum und Ansicht schon verbunden sind."""
+        self._draw_shift: tuple[float, float, float] | None = None
+        """Der Ansichtsversatz eines freien Umrisses aus dem Aufziehen — gesetzt,
+        solange der Skizzeneditor für *Freie Form …* offen ist; *Fertig* führt
+        dann zurück in die Ansicht (RM-561)."""
         self._plane_points_armed = False
         """Ob die nächsten Klicks Punkte einer Schnittebene sind (RM-400)."""
         self._hidden: frozenset[str] = frozenset()
@@ -3242,9 +3226,7 @@ class MainWindow(QMainWindow):
         self.viewport.sketchPointPicked.connect(self._on_sketch_point)
         self.viewport.sketchMenuAt.connect(self._on_sketch_menu)
         self.viewport.sketchPointHovered.connect(self._on_sketch_hover)
-        self.viewport.sketchPulled.connect(self._on_sketch_pulled)
         self.viewport.sketchPlaneChosen.connect(self._on_sketch_plane_chosen)
-        self.viewport.sketchPullBlocked.connect(self.announce)
         self.viewport.sketchViewChanged.connect(self._on_sketch_view_changed)
         self.viewport.faceDragged.connect(self._on_face_dragged)
         self.viewport.scaleDragged.connect(self._on_scale_dragged)
@@ -3664,46 +3646,6 @@ class MainWindow(QMainWindow):
         self._view_before_sketch: tuple[int, str | None, int] | None = None
         """Plattenindex, offenes Werkzeug und Explosion vor dem Zeichnen."""
 
-        # Die zwei häufigsten Folgen stehen **an der fertigen Kontur**. Wer
-        # Solidon ohne CAD-Vokabular benutzt, soll weder „Extrusion“ kennen
-        # noch erst über *Fertig* eine Liste durchsuchen. Der Dialog danach
-        # bleibt: Dort wird die genaue Höhe oder Tiefe eingetragen.
-        self.sketch_pull_button = QPushButton(tr("Hochziehen"), self.sketch_bar)
-        self.sketch_pull_button.setIcon(icon("sketch_pull", self.sketch_pull_button))
-        # *Hochziehen* heißt am Zielkörper anfügen, sonst ein neuer Körper
-        # (Befund E4) — entschieden beim Klick, dieselbe Frage wie Tooltip und
-        # Liste (:meth:`_pull_op`). Wer ausdrücklich das andere will, findet es
-        # unter *Mehr*.
-        self.sketch_pull_button.clicked.connect(
-            weak_slot(self, lambda view: view._finish_sketch_as(view._pull_op()))
-        )
-        self.sketch_cut_button = QPushButton(tr("Abtragen"), self.sketch_bar)
-        self.sketch_cut_button.setIcon(icon("sketch_cut", self.sketch_cut_button))
-        self.sketch_cut_button.clicked.connect(
-            weak_slot(self, lambda view: view._finish_sketch_as(POCKET_OP))
-        )
-        sketch_actions.addWidget(self.sketch_pull_button)
-        sketch_actions.addWidget(self.sketch_cut_button)
-
-        # **Die übrigen Arten stehen hinter einem eigenen Knopf, nicht unter
-        # Fertig** (Bedienabnahme Zeichnen, E2). Die Liste hing seit dem
-        # 16.09.2026 als Menü an *Fertig*, und derselbe Knopf trug zugleich
-        # ``clicked`` → Abschluss mit der Vorgabe. Welche der beiden
-        # Bedeutungen eine Geste traf, hing daran, wer das Loslassen bekam:
-        # Mit der echten Maus (gemessen über ``SendInput``) öffnete der Druck
-        # das Menü und das Loslassen ging an das Menü; mit der Eingabetaste,
-        # mit ``QTest`` oder über die Barrierefreiheit (``click()``) lief
-        # dagegen ``clicked`` — der Dialog der Vorgabe ging auf, das Menü nie.
-        # Die Abnahme hat genau das gesehen. Ein Knopf, eine Bedeutung.
-        more = QPushButton(tr("Mehr"), self.sketch_bar)
-        more.setToolTip(tr("Weitere Arten, aus der Zeichnung einen Körper zu machen."))
-        more.setAccessibleName(tr("Mehr"))
-        self.sketch_more_button = more
-        self._finish_menu = QMenu(more)
-        self._finish_menu.setToolTipsVisible(True)
-        self._finish_actions: dict[str, QAction] = {}
-        self._fill_finish_menu()
-        more.setMenu(self._finish_menu)
         done = QPushButton(tr("Fertig"), self.sketch_bar)
         make_primary(done)
         done.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=True)))
@@ -3711,11 +3653,17 @@ class MainWindow(QMainWindow):
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
         discard.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=False)))
         self.sketch_discard_button = discard
-        sketch_actions.addWidget(more)
         sketch_actions.addWidget(done)
         sketch_actions.addWidget(discard)
         sketch_layout.addLayout(sketch_actions)
         self.sketch_bar.setVisible(False)
+
+        # **Das Aufziehen hat seine eigene schmale Leiste** (RM-559): zwei
+        # Formen, ein Satz, *Freie Form …*. Sie steht, wo die Werkzeugzeile
+        # stand, solange das Werkzeug offen ist — kein Moduswechsel, nur die
+        # Leiste wechselt.
+        self.draw_bar = DrawBar(self)
+        self.draw_bar.setVisible(False)
 
         # Werkzeugzeile und Skizzenleiste schweben zusammen unten in der Mitte.
         # Zusammen, weil beide dasselbe meinen — was gerade in der Hand liegt —
@@ -3732,6 +3680,7 @@ class MainWindow(QMainWindow):
         Als Feld, weil ``start_sketch`` das Panel hineinstellt, statt es wie
         früher gegen die Ansicht zu tauschen (§30.1, P4)."""
         bottom_layout.addWidget(self.sketch_bar)
+        bottom_layout.addWidget(self.draw_bar)
         bottom_layout.addWidget(self.sculpt_bar)
         bottom_layout.addWidget(self.pose_bar)
         bottom_layout.addWidget(self.tools)
@@ -4296,6 +4245,17 @@ class MainWindow(QMainWindow):
         self.skip_recognition.setVisible(False)
         self.skip_recognition.clicked.connect(self._load_without_recognition)
         bar.addPermanentWidget(self.skip_recognition)
+        # **Nach dem Aufziehen ein Weg weiter, wenn er nötig ist** (RM-559,
+        # F-g/F-h): Vereinigen, Abziehen oder Zerlegen — je ein Schritt.
+        # Sichtbar nur mit ihrer Ansage, wie *Ordner zeigen*.
+        self._draw_offers: list[QToolButton] = []
+        for _number in range(2):
+            offer = QToolButton(self)
+            offer.setAutoRaise(True)
+            offer.setVisible(False)
+            offer.clicked.connect(self._take_the_draw_offer)
+            bar.addPermanentWidget(offer)
+            self._draw_offers.append(offer)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
         bar.addPermanentWidget(self.cancel_button)
@@ -5224,15 +5184,14 @@ class MainWindow(QMainWindow):
             ("import", tr("Modell einfügen"), self.action_import, self.import_action, ""),
             # Weg 2 aus §2.2 bekommt seinen vorgesehenen Platz: die
             # Hauptwege-Tabelle nennt für „neu konstruieren" ausdrücklich die
-            # Werkzeugzeile — belegt war er nie, und das Zeichnen lag drei
-            # Ebenen tief im Menü. Erst zeichnen, die Erzeugungsart kommt bei
-            # „Fertig".
+            # Werkzeugzeile. Ein Körper entsteht mit drei Klicks in der
+            # Ansicht (RM-559); der freie Umriss liegt in der Leiste dahinter.
             (
                 "category.sketch",
                 tr("Zeichnen"),
                 self.action_sketch_free,
                 None,
-                tr("Ein Profil zeichnen; was daraus wird, fragt der Dialog bei „Fertig“."),
+                tr("Einen Körper mit drei Klicks aufziehen, anfügen oder ausschneiden."),
             ),
             # Und Weg 4 daneben. Beide lagen unter *Ändern → Netz* zwischen
             # Reparaturwerkzeugen, ohne Kürzel — die Hauptwege-Tabelle nennt
@@ -5258,6 +5217,12 @@ class MainWindow(QMainWindow):
                 toolbar.addSeparator()
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
+            key = TOOLBAR_KEYS.get(symbol)
+            if key:
+                # Je Werkzeug ein Kürzel (RM-561); der Tooltip nennt es, also
+                # ist der Knopf selbst seine Quelle.
+                action.setShortcut(QKeySequence(key))
+                source = action
             # Ohne Beschriftung am Knopf ist der Tooltip die Stelle, an der
             # Name, Kürzel und Zweck gelesen werden; dieselbe Angabe gehört in
             # die Statusleiste (§2 C). Der ``statusTip`` ist zugleich das,
@@ -5407,8 +5372,18 @@ class MainWindow(QMainWindow):
         in einem Rohdialog: die Operation lief, veränderte nichts und
         hinterließ einen leeren Schritt im Verlauf.
         """
+        if self.drawing():
+            # Eine andere Handlung beginnt erst nach dem dritten Klick oder
+            # Escape (§18.11) — die Palette sagt es wie die Knöpfe.
+            self.announce(str(_DRAWING_FIRST))
+            return
         if spec.name == "detect_region":
             self.local_features().arm()
+        elif spec.name in DRAWN_OPERATIONS:
+            # **Hochziehen, Anfügen und Tasche beginnen im Bild** (RM-559): drei
+            # Klicks, die Richtung des dritten entscheidet die Art. Auch
+            # *Erzeugen → Zeichnen …* und im Fusion-Schema E kommen hier an.
+            self.start_drawing()
         elif _has_sketch_param(spec):
             self.start_sketch(spec.name)
         elif _has_armature_param(spec):
@@ -5581,7 +5556,7 @@ class MainWindow(QMainWindow):
         # Fusion-Schema auf Drehen und Fasen, und Qt lässt bei zwei aktiven
         # Kürzeln derselben Taste **keines** von beiden feuern. Fusion macht
         # es genauso: im Skizzenmodus gilt der Zeichensatz.
-        drawing = self._sketch_panel is not None
+        drawing = self._sketch_panel is not None or self.drawing()
         # **Und in einer Form- oder Skelettsitzung genauso.** Beide sammeln
         # Gesten für die eine Operation, die gerade entsteht — wer währenddessen
         # „Objekt entfernen" traf, malte danach stumm ins Leere, und *Fertig*
@@ -5645,7 +5620,13 @@ class MainWindow(QMainWindow):
             # aus Regel 19, die dieselbe Schleife bei den Operationen des
             # exakten Kerns seit je vermeidet.
             reason = (
-                None if locked or gesturing else self._reason_locked(spec, kinds, objects, chosen)
+                None
+                if locked
+                else str(_DRAWING_FIRST)
+                if self.drawing()
+                else None
+                if gesturing
+                else self._reason_locked(spec, kinds, objects, chosen)
             )
             action.setEnabled(not locked and not gesturing and reason is None)
             self._lock_hint(action, locked)
@@ -5692,6 +5673,7 @@ class MainWindow(QMainWindow):
                 self.setting_armature()
                 and bool(self._armature_bones or self._armature_head is not None)
             )
+            or (self._draw_flow is not None and self._draw_flow.can_undo())
         )
         self.redo_action.setEnabled(
             (self.session.history.can_redo and not gesturing)
@@ -5753,10 +5735,14 @@ class MainWindow(QMainWindow):
             self.import_action,
             self.generate_action,
             self._toolbar_import,
-            self._toolbar_sketch,
         ):
             action.setEnabled(not locked and halted is None)
             self._say_why(action, halted or "")
+        # Das Aufziehen legt Skizzen-Schritte an, und die rechnen am exakten
+        # Kern: ohne ihn grau, mit dem Satz der Skizzen-Operationen (F-j).
+        kernel_missing = _drawing_needs_the_kernel()
+        self._toolbar_sketch.setEnabled(not locked and halted is None and not kernel_missing)
+        self._say_why(self._toolbar_sketch, halted or kernel_missing)
         # Formen und Skelett gehen beide von einem gewählten Körper aus. Das
         # fing bisher erst die Sitzung selbst ab — eine Meldung nach dem Klick,
         # wo der Knopf sie vorher sagen kann (§2.6).
@@ -8451,15 +8437,29 @@ class MainWindow(QMainWindow):
         # nicht die Operation davor. Dieselbe Trennung wie beim
         # Skizzeneditor: Der Editor hat sein eigenes Rückgängig, der Verlauf
         # bekommt die Sitzung als eine Transaktion (Regel 16).
-        if self.restore_discarded_sketch() or self.undo_sculpt_stroke() or self.undo_bone():
+        if (
+            self.undo_drawing()
+            or self.restore_discarded_sketch()
+            or self.undo_sculpt_stroke()
+            or self.undo_bone()
+        ):
             return
-        if self.sculpting() or self.setting_armature() or self._sketch_panel is not None:
+        if (
+            self.sculpting()
+            or self.setting_armature()
+            or self._sketch_panel is not None
+            or self.drawing()
+        ):
             return
         if not self._quiet_command_allowed():
             return
         transaction = self.session.undo()
         if transaction is not None:
             self.announce(_history_feedback(transaction, undone=True))
+
+    def undo_drawing(self) -> bool:
+        """Strg+Z im Entwurf des Aufziehens: den letzten Klick zurück (E7)."""
+        return self._draw_flow is not None and self._draw_flow.undo()
 
     def action_redo(self) -> None:
         if self.sculpting():
@@ -11689,6 +11689,10 @@ class MainWindow(QMainWindow):
             # und was schon eingetragen ist, bleibt stehen.
             self.announce(tr("Punktwahl beendet. Die eingetragenen Punkte bleiben."))
             return
+        if self._draw_flow is not None and self._draw_flow.escape():
+            # Das Aufziehen nimmt nur Unfertiges: das offene Maßfeld, sonst den
+            # Entwurf samt Werkzeug (E7). Ein angelegter Schritt bleibt.
+            return
         if self.session.split_running:
             # Die lange Suche ist die oberste laufende Handlung. Erst sie
             # anhalten; die Auswahl darunter bleibt stehen und zeigt weiter,
@@ -11905,9 +11909,6 @@ class MainWindow(QMainWindow):
             panel.status,
             self.sketch_body_choice,
             self.sketch_neighbours_button,
-            self.sketch_pull_button,
-            self.sketch_cut_button,
-            self.sketch_more_button,
             self.sketch_finish_button,
             self.sketch_discard_button,
             panel.constraint_list,
@@ -11981,6 +11982,9 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed():
             return
+        if self.drawing():
+            self.announce(str(_DRAWING_FIRST))
+            return
         if (
             self._sketch_panel is not None
             or self._sculpt_target is not None
@@ -12024,8 +12028,8 @@ class MainWindow(QMainWindow):
         # Schritts, den er ändert (Z9). Beim Anlegen bleibt sie leer.
         self._sketch_step = step
         self._sketch_parameter = field_name
-        """Leer beim freien Zeichnen über den Werkzeugzeilen-Knopf — die
-        Erzeugungsart kommt dann bei „Fertig" (§2.2, Weg 2)."""
+        """Leer beim freien Umriss — *Fertig* führt dann zurück in die Ansicht,
+        und die Richtung der Höhe entscheidet die Art (RM-561)."""
         # **Der Schnitt (§30.1, P4): Die Ansicht bleibt stehen.** Früher stand
         # hier ein Tausch im Stapel, und daraus folgte alles, was Robert am
         # 24.08.2026 gemeldet hat — „am Viewport ändert sich nichts", und
@@ -12050,17 +12054,6 @@ class MainWindow(QMainWindow):
             panel.canvas.begin_drag_on_plane,
             panel.canvas.drag_on_plane,
             panel.canvas.end_drag_on_plane,
-        )
-        # **Der Ziehgriff der Querschau** (§30.1): Sobald Blick und
-        # Zeichenebene auseinandergehen, wird aus einem Zug am Umriss eine
-        # Höhe. Die Grenzen kommen aus dem Schema, damit die Zahl am Zeiger
-        # dieselbe ist, die der Dialog danach annimmt.
-        self.viewport.set_sketch_pull(
-            self._sketch_pull_offer,
-            pull_limits(),
-            pocket_limits(),
-            self._sketch_cut_available,
-            self._pocket_top_shift,
         )
         # **Die Bedingungen ziehen in die rechte Spalte, als eigener Reiter.**
         # Gemessen nahm die Leiste sonst 334 von 900 Bildpunkten — 37 Prozent
@@ -12506,10 +12499,6 @@ class MainWindow(QMainWindow):
         plane = sum(o * n for o, n in zip(frame.origin, frame.normal, strict=True))
         return min(along) - slack <= plane <= max(along) + slack
 
-    def _pull_op(self) -> str:
-        """Was *Hochziehen* hier bedeutet: anfügen am Zielkörper oder neu."""
-        return JOIN_OP if self._outline_meets_the_body() else PULL_OP
-
     def _top_face_plane(self) -> str:
         """Die oberste Fläche des Zielkörpers als Ebenenangabe — oder leer.
 
@@ -12668,64 +12657,6 @@ class MainWindow(QMainWindow):
             return ()
         return curves_of(SolvedSketch(elements, 0, 0.0), frame)
 
-    def _sketch_pull_offer(self) -> str:
-        """Ob am Umriss gerade eine Höhe gezogen werden darf (§30.1).
-
-        Robert am 27.08.2026: „schön wäre auch dass wenn ich in der skizze was
-        in der draufsicht zeichne und dann in die Seitenansicht oder
-        vorderansicht gehe sie nach oben ziehen kann." Genau dieser Zustand ist
-        die Bedingung — **die Querschau**, also Blick und Zeichenebene
-        nicht parallel (``SketchCanvas.planes_are_parallel``). In der Draufsicht
-        bliebe die Geste dem Zeichnen im Weg: Ein Druck auf eine Umrisskante
-        wäre dort mal ein Punkt, mal ein Zug.
-
-        **Hier stand „dort sieht man die Ebene von der Kante", und das galt
-        nur für die eingerasteten Ansichten.** Ein Ungleichheitsvergleich
-        trennt „von der Kante gesehen" nicht von „ein wenig gekippt": Sobald
-        die Kamera frei steht, meldet ``reflect_camera_view`` ``FREE_VIEW``,
-        und die Bedingung war erfüllt, während weiter von schräg oben
-        gezeichnet wurde. Der Ziehgriff ist dort zugleich am unbrauchbarsten —
-        seine Empfindlichkeit wächst mit ``1/sin`` des Kippwinkels, bei einem
-        Grad bedeuten zehn Pixel Mausbewegung rund siebzig Millimeter Höhe
-        (gemessen am 30.08.2026 über :func:`app.core.sketch.planes.axis_hit`).
-
-        **Geschlossen ist das nicht hier, sondern am Einrasten**
-        (:meth:`Viewport._settle_sketch_view`): Eine Kamera innerhalb von zehn
-        Grad um eine Hauptansicht rastet auf sie ein, und damit gibt es die
-        unbrauchbare Lage nach einem Mausdrehen nicht mehr. Zehn Grad decken
-        die rund sieben ab, unter denen ein Pixel mehr als einen Rasterschritt
-        bedeutet — deshalb steht hier **keine** zweite Schwelle daneben.
-
-        Drei Antworten, wie :meth:`Viewport.set_sketch_pull` sie erwartet.
-        Ein **Grund** statt einer leeren Zeichenkette kommt nur, wo die Geste
-        gemeint war und nicht ging — sonst stünde bei jedem Druck irgendwo im
-        Bild ein Satz über eine Handlung, die niemand versucht hat.
-        """
-        panel = self._sketch_panel
-        if panel is None:
-            return ""
-        if panel.canvas.planes_are_parallel(panel.canvas.view_plane, panel.canvas.sketch.plane):
-            return ""
-        if self._sketch_target and self._sketch_target not in (PULL_OP, JOIN_OP, POCKET_OP):
-            # Wer den Modus für *Grundform drehen* betreten hat, meint keine
-            # Höhe. Der Griff gehört zu ``sketch_extrude``; ihn dort anzubieten
-            # hieße, die gewählte Operation stillschweigend zu tauschen.
-            return str(
-                tr(
-                    "Der Ziehgriff zieht eine Höhe auf — bei {op} entscheidet das der Dialog."
-                ).format(op=str(REGISTRY.get(self._sketch_target).title))
-            )
-        if not panel.canvas.outline:
-            return str(tr("Zum Aufziehen fehlt der geschlossene Umriss."))
-        if self._sketch_target == POCKET_OP:
-            # Wer ausdrücklich „Abtragen" gewählt hat, bekommt ohne Zielkörper
-            # nicht ersatzweise den entgegengesetzten Aufbau angeboten. Eine
-            # verlorene Auswahl ändert die Absicht nicht stillschweigend.
-            problem = self._pocket_target_problem()
-            if problem:
-                return problem
-        return "ready"
-
     def _pocket_top_shift(self) -> float:
         """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt.
 
@@ -12779,149 +12710,6 @@ class MainWindow(QMainWindow):
         # dabei herauskommt, ist wieder ein Netz, und das ist die richtige
         # Antwort und nicht eine Absage.
         return ""
-
-    def _sketch_cut_available(self) -> bool:
-        """Ob Griff, Beschriftung und Operation dieselbe Tasche anbieten."""
-        return not self._pocket_target_problem()
-
-    def _fill_finish_menu(self) -> None:
-        """Die Skizzen-Operationen des Registers als Einträge unter *Mehr*.
-
-        Hochziehen, Anfügen und Tasche vorn — die häufigsten Folgen —, dann
-        der Rest nach Titel; eine neue Skizzen-Op taucht von selbst auf. Jeder
-        Eintrag trägt den ``doc``-Satz als Tooltip, denselben wie Menü und
-        Dialog; was gerade nicht geht, sagt :meth:`_update_sketch_actions`, und
-        was schon als Knopf daneben steht, blendet es aus.
-        """
-        section = next((entry for entry in menu_tree(REGISTRY) if entry.category == "sketch"), None)
-        specs = list(section.entries) if section else []
-        first = (PULL_OP, JOIN_OP, POCKET_OP)
-        specs.sort(
-            key=lambda spec: (
-                spec.name not in first,
-                first.index(spec.name) if spec.name in first else 0,
-                str(spec.title),
-            )
-        )
-        for spec in specs:
-            action = self._finish_menu.addAction(str(spec.title))
-            action.setToolTip(first_sentence(str(spec.doc)))
-            action.setStatusTip(first_sentence(str(spec.doc)))
-            action.triggered.connect(weak_slot(self, MainWindow._finish_sketch_as, spec.name))
-            self._finish_actions[spec.name] = action
-
-    def _update_sketch_actions(self) -> None:
-        """Hochziehen, Abtragen und die Liste unter *Mehr* folgen dem Zustand
-        der freien Kontur — und dem Zielkörper.
-
-        **Abtragen steht nur mit Ziel da** (Abschnitt 7.2): Ohne Zielkörper
-        gibt es nichts zu schneiden, und ein grauer Knopf mit dem Satz „einen
-        auswählen" verwiese auf Körper, die gerade ausgeblendet sind. Der Weg
-        dorthin ist das Feld *Ziel*.
-        """
-        panel = self._sketch_panel
-        free = panel is not None and not self._sketch_target
-        target = self._sketch_body
-        self.sketch_pull_button.setVisible(free)
-        self.sketch_cut_button.setVisible(free and target is not None)
-        self.sketch_more_button.setVisible(free)
-        if not free or panel is None:
-            return
-
-        closed = bool(panel.canvas.outline)
-        outline_problem = str(tr("Erst einen geschlossenen Umriss zeichnen."))
-        pull = self._pull_op() if closed else PULL_OP
-        name = self._sketch_body_label
-        self.sketch_pull_button.setEnabled(closed)
-        if not closed:
-            self.sketch_pull_button.setToolTip(outline_problem)
-        elif pull == JOIN_OP:
-            self.sketch_pull_button.setToolTip(
-                str(tr("Zieht den Umriss hoch und fügt ihn an {name} an.")).replace("{name}", name)
-            )
-        else:
-            self.sketch_pull_button.setToolTip(
-                str(tr("Macht aus dem Umriss einen neuen Körper. Danach die Höhe einstellen."))
-            )
-        pocket_problem = self._pocket_target_problem() if closed else outline_problem
-        self.sketch_cut_button.setEnabled(closed and not pocket_problem)
-        self.sketch_cut_button.setToolTip(
-            pocket_problem
-            or str(tr("Schneidet den Umriss aus {name}. Danach die Tiefe einstellen.")).replace(
-                "{name}", name
-            )
-        )
-        # Dieselbe Auskunft an jedem Eintrag der Liste: Ohne Umriss geht
-        # keine, ohne Körper keine, die einen braucht — und der Tooltip sagt
-        # es, statt nur grau zu werden (Regel 18). Was als Knopf daneben
-        # steht, steht nicht noch einmal in der Liste.
-        beside = {pull, POCKET_OP} if target is not None else {pull}
-        for op_name, action in self._finish_actions.items():
-            spec = REGISTRY.get(op_name)
-            if not closed:
-                problem = outline_problem
-            elif needed_inputs(spec):
-                problem = pocket_problem
-            else:
-                problem = ""
-            action.setVisible(op_name not in beside)
-            action.setEnabled(not problem)
-            action.setToolTip(problem or str(spec.doc))
-
-    def _finish_sketch_as(self, op_name: str) -> None:
-        """Die kurze Hand von der Kontur zur Operation — Hochziehen, Abtragen
-        und jeder Eintrag der Liste unter *Fertig*."""
-        panel = self._sketch_panel
-        if panel is None:
-            return
-        if not panel.canvas.outline:
-            self.announce(tr("Erst einen geschlossenen Umriss zeichnen."))
-            return
-        if needed_inputs(REGISTRY.get(op_name)):
-            problem = self._pocket_target_problem()
-            if problem:
-                self.announce(problem)
-                return
-        self._sketch_target = op_name
-        self.finish_sketch(keep=True)
-
-    def _on_sketch_pulled(self, height: float) -> None:
-        """Der Zug am Griff wird zur Operation — mit dem Dialog als Bestätigung.
-
-        Während des Zugs steht das Maß an der Drahtform (Viewport,
-        ``sketch_pull_measure``), so wie beim Zeichnen einer Linie. Loslassen
-        öffnet den Dialog mit der gezogenen Höhe, und dort bleiben alle Werte
-        änderbar — Robert, 02.09.2026: „bei Bestätigung sollen alle drei Werte
-        noch änderbar sein". Ein Höhenfeld in der Skizzenleiste stand hier
-        einen Vormittag lang und ging wieder: „unten im Feld wollen wir es
-        nicht".
-        """
-        self._apply_sketch_pull(height)
-
-    def _apply_sketch_pull(self, height: float) -> None:
-        """Außen wird Material aufgebaut, innen aus einem Körper entfernt.
-
-        Der Zug endet als **Operation** und nicht als Zustand (Regel 2): Der
-        Modus wird verlassen wie bei „Fertig", und ``sketch_extrude`` bekommt
-        die Zeichnung und die Höhe. Der Dialog geht dabei auf wie immer — wer
-        nachrechnen oder eine andere Zahl setzen will, tut es dort, und der
-        Verlauf trägt einen Schritt und nicht zwei.
-        """
-        if self._sketch_panel is None:
-            return
-        if height < 0.0:
-            problem = self._pocket_target_problem()
-            if problem:
-                self.viewport.cancel_sketch_pull()
-                self.announce(problem)
-                return
-            self._sketch_target = POCKET_OP
-            self.finish_sketch(keep=True, given={POCKET_FIELD: abs(float(height))})
-            return
-        # Nach außen am Zielkörper heißt anfügen (E4); sonst ein neuer Körper.
-        # Beide Schemata tragen dasselbe Höhenfeld.
-        self._sketch_target = self._pull_op()
-        self.finish_sketch(keep=True, given={PULL_FIELD: float(height)})
 
     def _on_sketch_hover(self, point: object) -> None:
         """Der Zeiger steht auf der Ebene — die Vorschau zieht nach."""
@@ -12985,37 +12773,8 @@ class MainWindow(QMainWindow):
             # der Draufsicht (XY)" steht im Feld darüber abgeschnitten, und
             # wie weit über dem Bett gezeichnet wird, soll man nicht raten.
             line = tr("Zeichenebene: {place}").format(place=place)
-        offer = self._sketch_pull_offer()
-        action = ""
-        if offer == "ready":
-            # **Der Gestensatz steht einmal, im Bild.** ``show_sketch_action``
-            # trägt ihn als Karte über die Zeichnung; hier stand er bis zum
-            # 16.09.2026 wörtlich noch einmal — zwei Sätze für eine Geste, und
-            # die Karte unten wuchs auf vier Zeilen (Robert: „das zeichen
-            # panel ein bisschen übersichtlicher gestalten").
-            # **Abtragen nur mit Zielkörper** (E9, Abschnitt 7): Ohne Ziel
-            # steht der Satz über das Kreuz nicht da — auch keiner, der
-            # erklärt, warum es fehlt; im leeren Projekt gibt es nichts zu
-            # schneiden, und bei einer neuen Zeichnung ist das Ziel die Wahl.
-            action = (
-                str(tr("Pfeil: Körper hochziehen · Kreuz: Tasche schneiden."))
-                if self._sketch_cut_available()
-                else str(tr("Pfeil: Körper hochziehen."))
-            )
-        elif offer:
-            # Der Grund, aus dem der Griff gerade nicht geht, steht dort, wo
-            # der Griff wäre: in der Karte im Bild.
-            action = offer
-        elif (
-            panel.canvas.outline
-            and panel.canvas.planes_are_parallel(panel.canvas.view_plane, drawing_plane)
-            and self._sketch_target in ("", PULL_OP, JOIN_OP, POCKET_OP)
-        ):
-            action = str(tr("Zum Ziehen mit der Maus: Vorder- oder Seitenansicht wählen."))
         self._sketch_hint.setText(line)
         self._sketch_hint.setVisible(bool(line))
-        self.viewport.show_sketch_action(action)
-        self._update_sketch_actions()
 
     def _sketch_frame(self) -> PlaneFrame | None:
         """Der Rahmen der Ebene, auf der gerade gezeichnet wird."""
@@ -13132,13 +12891,13 @@ class MainWindow(QMainWindow):
         self._update_sketch_hint()
 
     def finish_sketch(self, keep: bool = True, *, given: dict[str, Any] | None = None) -> None:
-        """Den Modus verlassen. Mit ``keep`` öffnet die Operation auf der
-        gezeichneten Skizze, sonst wird sie verworfen.
+        """Den Modus verlassen. Mit ``keep`` geht die Zeichnung weiter, sonst wird sie verworfen.
 
-        ``given`` sind Werte, die schon beantwortet sind, wenn der Dialog
-        aufgeht. Der Ziehgriff ist der eine Fall: Er hat die Höhe gezogen, und
-        sie im Dialog wieder auf die Vorgabe zu stellen hieße, die Geste
-        wegzuwerfen (:meth:`_on_sketch_pulled`).
+        Weiter heißt: Ein freier Umriss und einer für Hochziehen, Anfügen oder
+        Tasche kommt zurück in die Ansicht, und der nächste Klick setzt die
+        Höhe (RM-561, :meth:`_rise_from_the_sketch`). Eine andere Art — Drehen,
+        Führen, Überblenden — und ein geänderter Schritt öffnen ihren Dialog.
+        ``given`` sind Werte, die dort schon beantwortet sind.
         """
         panel = self._sketch_panel
         target = self._sketch_target
@@ -13148,7 +12907,24 @@ class MainWindow(QMainWindow):
             return
         text = panel.sketch_text()
         body = self._sketch_body
-        if keep and text and target and step is None and needed_inputs(REGISTRY.get(target)):
+        # **Aus jedem Umriss wird ein Körper auf einem Weg** (RM-561): Der freie
+        # Umriss und der für Hochziehen, Anfügen oder Tasche geht zurück in die
+        # Ansicht, und der nächste Klick setzt die Höhe — Richtung entscheidet
+        # die Art, kein Dialog. Was die Ansicht dafür braucht, wird hier
+        # gelesen, solange Panel und Rahmen noch stehen.
+        rising = (
+            self._rising_surface(panel)
+            if keep and text and step is None and target in ("", PULL_OP, JOIN_OP, POCKET_OP)
+            else None
+        )
+        if (
+            keep
+            and text
+            and target
+            and step is None
+            and rising is None
+            and needed_inputs(REGISTRY.get(target))
+        ):
             # **Ohne Ziel geht die Zeichnung nicht verloren.** Eine Tasche aus
             # dem Menü, begonnen ohne Auswahl, lief bis zum Dialog und endete
             # dort mit „braucht einen Körper" — der Modus war schon abgebaut,
@@ -13158,11 +12934,6 @@ class MainWindow(QMainWindow):
             if problem:
                 self.announce(problem)
                 return
-        # Nach dem Abbau kennt die Ansicht weder Kontur noch Zeichenrahmen.
-        # Die Vorwahl fällt deshalb hier: Ohne gewählte Art gilt der
-        # wahrscheinlichere Fall (Robert, 03.09.2026) — über dem Zielkörper eine
-        # Tasche, sonst ein neuer Körper.
-        on_body = bool(keep and text and not target and self._outline_meets_the_body())
         if not keep:
             # **Verworfen heißt nicht vernichtet.** Escape war die teuerste
             # Taste des Programms: eine halbe Stunde Zeichnung, ein Tastendruck,
@@ -13198,13 +12969,8 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketch_entry(None, None)
         self.viewport.set_sketch_stroke(None)
         self.viewport.set_sketch_edit(None, None, None, None)
-        # Aus demselben Grund wie die Zeile darüber: ``_sketch_pull_offer`` ist
-        # eine gebundene Methode dieses Fensters und liest das Panel, das
-        # gleich stirbt.
-        self.viewport.set_sketch_pull(None)
         self.viewport.show_sketch_planes(False)
         self.viewport.show_sketch_selection("")
-        self.viewport.show_sketch_action("")
         panel.canvas.reclaim_measure_field()
         panel.sketchChanged.disconnect(self._redraw_sketch)
         self.viewport.cameraMoved.disconnect(self._redraw_sketch)
@@ -13257,8 +13023,13 @@ class MainWindow(QMainWindow):
         self.statusBar().clearMessage()
         self._update_actions()
         self._show_invitation()
-        if keep and target and not text:
+        shift = self._draw_shift
+        self._draw_shift = None
+        if keep and not text:
             self.announce(tr("Die Zeichnung ist leer. Es wurde nichts übernommen."))
+        if keep and text and rising is not None:
+            self._rise_from_the_sketch(text, rising, shift)
+            return
         if keep and text:
             # Die Operation nimmt ihre Eingänge aus dem Objektbaum; das Ziel des
             # Zeichenmodus muss dort ankommen, sonst liefe sie ohne Eingang.
@@ -13284,12 +13055,55 @@ class MainWindow(QMainWindow):
                 else:
                     self.run_operation(REGISTRY.get(target), given=values)
             else:
-                # Ohne Wahl gilt der wahrscheinlichere Fall (Robert, 03.09.2026):
-                # auf leerer Fläche ein Körper, über dem Zielkörper eine Tasche.
-                name = POCKET_OP if on_body else PULL_OP
-                if on_body and body is not None and self.object_tree.selected_objects() != (body,):
-                    self.object_tree.select_object(body)
-                self.run_operation(REGISTRY.get(name), given={_sketch_param(name): text})
+                # Ohne auflösbare Ebene (ihre Fläche ist fort) gibt es keine Höhe
+                # im Bild; die Zeichnung geht dann nicht verloren, der Dialog öffnet.
+                self.run_operation(REGISTRY.get(PULL_OP), given={_sketch_param(PULL_OP): text})
+
+    def _rising_surface(self, panel: SketchPanel) -> DrawSurface | None:
+        """Worauf ein Umriss aus dem Editor in der Ansicht aufgezogen wird (RM-561).
+
+        Seine Ebene und sein Ziel: Auf einer Fläche fügt nach außen an, auf
+        einer Grundebene nur, wenn der Umriss den Zielkörper trifft — dieselbe
+        Frage, die *Hochziehen* im Editor stellte (:meth:`_outline_meets_the_body`).
+        Nach innen beginnt der Schnitt an der Oberkante des Ziels
+        (:meth:`_pocket_top_shift`), wie ``sketch_pocket`` ihn rechnet.
+        """
+        from app.core.sketch.planes import is_feature_plane
+        from app.ui.draw_tool import outline_surface
+
+        plane = panel.canvas.sketch.plane
+        frame = self._plane_frame(plane)
+        if frame is None:
+            return None
+        result = self.session.last_result
+        body = self._sketch_body
+        entry = result.scene.objects.get(body) if result is not None and body else None
+        on_face = is_feature_plane(plane)
+        return outline_surface(
+            plane,
+            frame,
+            entry,
+            joins=on_face or self._outline_meets_the_body(),
+            cut_top=0.0 if on_face else self._pocket_top_shift(),
+        )
+
+    def _rise_from_the_sketch(
+        self,
+        text: str,
+        surface: DrawSurface,
+        shift: tuple[float, float, float] | None,
+    ) -> None:
+        """Der Umriss steht in der Ansicht, die Höhe fehlt: Phase 3 des Aufziehens."""
+        from app.core.sketch.serialize import sketch_from_text
+
+        if shift is None:
+            shift = self.viewport.view_offset_of(surface.body)
+        self.tools.close_tool()
+        self.tools.setVisible(False)
+        self.draw_bar.setVisible(True)
+        self.draw_flow().start_with_outline(sketch_from_text(text), surface, shift)
+        self._update_actions()
+        self._show_invitation()
 
     # --- Formsitzung (§25, Konzept P16.6) ---------------------------------------
 
@@ -14514,9 +14328,126 @@ class MainWindow(QMainWindow):
         self.run_operation(REGISTRY.get("pose_armature"), given=gesetzt)
 
     def action_sketch_free(self) -> None:
-        """Der Zeichnen-Knopf der Werkzeugzeile: Skizzenmodus ohne
-        festgelegte Operation (§2.2, Weg 2)."""
-        self.start_sketch("")
+        """Der Zeichnen-Knopf der oberen Leiste: das Aufziehen (RM-559, §2.2 Weg 2).
+
+        Ein zweiter Druck schließt das Werkzeug wieder, wie Escape — der Weg
+        hinaus, den eine Maus ohne Tastatur hat.
+        """
+        if self.drawing():
+            self.draw_flow().close()
+            return
+        self.start_drawing()
+
+    # --- Körper aufziehen (RM-559) ----------------------------------------------
+
+    def draw_flow(self) -> DrawFlow:
+        """Der Ablauf des Aufziehens — beim ersten Gebrauch angelegt.
+
+        Erst dann, weil er sich an ``sceneChanged`` hängt und den neuen Körper
+        im Baum wählt: Sein Zuhörer muss **nach** :meth:`_on_scene` laufen,
+        das den Baum füllt.
+        """
+        if self._draw_flow is None:
+            self._draw_flow = DrawFlow(self)
+            self._draw_flow.closed.connect(self._drawing_closed)
+        return self._draw_flow
+
+    def drawing(self) -> bool:
+        """Ob gerade ein Körper aufgezogen wird."""
+        return self._draw_flow is not None and self._draw_flow.active
+
+    def start_drawing(self, shape: str = "") -> None:
+        """Das Werkzeug *Zeichnen* öffnen — Ansicht, Projektion und Nachbarn bleiben.
+
+        Gesperrt wie jede schreibende Handlung: ein Halt der Kette nennt seinen
+        Schritt, ohne exakten Kern sagt der Satz der Skizzen-Operationen, was
+        fehlt (F-j).
+        """
+        if not self._quiet_command_allowed() or self.drawing():
+            return
+        if self._sketch_panel is not None or self.sculpting() or self.setting_armature():
+            return
+        halted = self._halt_reason()
+        if halted is not None:
+            self.announce(halted)
+            return
+        reason = _drawing_needs_the_kernel()
+        if reason:
+            self.announce(reason)
+            return
+        if not self._begin_from_the_start_screen():
+            return
+        if self._quiet_host is not None:
+            self.end_quiet_placement()
+        self.tools.close_tool()
+        self.tools.setVisible(False)
+        self.draw_bar.setVisible(True)
+        self.draw_flow().start(shape)
+        self._update_actions()
+        self._show_invitation()
+
+    def _drawing_closed(self) -> None:
+        """Das Werkzeug ist zu: die Werkzeugzeile kommt zurück."""
+        self.draw_bar.setVisible(False)
+        self.tools.setVisible(True)
+        self._update_actions()
+        self._show_invitation()
+
+    def drawing_changed(self) -> None:
+        """Der Entwurf hat seine Phase gewechselt — Rückgängig folgt ihm."""
+        self._update_actions()
+
+    def drawn_face_of_the_selection(self) -> DrawSurface | None:
+        """Die gewählte ebene Fläche als Anfang für die Eingabetaste (Abnahme 9)."""
+        feature_id = self.object_tree.selected_feature()
+        object_id = self.object_tree.selected()
+        result = self.session.last_result
+        if feature_id is None or object_id is None or result is None:
+            return None
+        entry = result.scene.objects.get(object_id)
+        return face_surface(entry, feature_id) if entry is not None else None
+
+    def draw_freely(
+        self, surface: DrawSurface, start: tuple[float, float], shift: tuple[float, float, float]
+    ) -> None:
+        """*Freie Form …*: der Skizzeneditor auf der angeklickten Fläche, die Linie beginnt dort.
+
+        *Fertig* bringt den Umriss zurück in die Ansicht, und es fehlt nur die
+        Höhe (RM-561) — :meth:`finish_sketch` übergibt ihn an das Aufziehen.
+        """
+        self._draw_shift = shift
+        self.start_sketch("", plane=surface.plane, body=surface.body)
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        panel.start_line_at(start)
+
+    def offer_after_drawing(self, offers: list[tuple[str, str, tuple[str, ...]]]) -> None:
+        """Knöpfe neben der Ansage nach dem Aufziehen: Vereinigen, Abziehen, Zerlegen (F-g, F-h).
+
+        Jeder ist ein eigener rücknehmbarer Schritt; nichts geschieht von
+        selbst. Die nächste Ansage räumt sie ab (:meth:`announce`).
+        """
+        for button in self._draw_offers:
+            button.setVisible(False)
+        for button, (label, op_name, inputs) in zip(self._draw_offers, offers, strict=False):
+            button.setText(label)
+            button.setAccessibleName(label)
+            button.setProperty("operation", op_name)
+            button.setProperty("inputs", list(inputs))
+            button.setVisible(True)
+
+    def _take_the_draw_offer(self) -> None:
+        button = self.sender()
+        if not isinstance(button, QToolButton):
+            return
+        op_name = str(button.property("operation") or "")
+        inputs = tuple(str(entry) for entry in button.property("inputs") or ())
+        for offered in self._draw_offers:
+            offered.setVisible(False)
+        if not op_name or not REGISTRY.has(op_name):
+            return
+        self.session.apply(REGISTRY.get(op_name).title, [OperationDraft(op=op_name, inputs=inputs)])
 
     def action_sculpt_free(self) -> None:
         """Der Formen-Knopf der Werkzeugleiste (§2.2, Weg 4).
@@ -18020,8 +17951,8 @@ class MainWindow(QMainWindow):
 
         §2.6 verspricht dort den kürzesten Weg vom Sehen zum Tun; angeboten war
         nur „Baustein einsetzen …". Beide Zeilen beginnen den Zeichenmodus auf
-        dieser Fläche mit ihrem Körper als Ziel; die zweite legt die Art fest —
-        *Fertig* schneidet dann eine Tasche.
+        dieser Fläche mit ihrem Körper als Ziel. Nach *Fertig* entscheidet die
+        Richtung der Höhe, ob angefügt oder geschnitten wird (RM-561).
         """
         object_id = self.object_tree.selected()
         if object_id is None:
@@ -18061,10 +17992,9 @@ class MainWindow(QMainWindow):
         (``app.core.sketch.planes``), und der Objektbaum kennt den
         Skizzenmodus nicht.
 
-        **Ohne festgelegte Operation.** Was aus der Zeichnung wird, fragt der
-        Dialog bei „Fertig" (§2.2, Weg 2) — auf einer Deckfläche ist eine
-        Tasche so plausibel wie ein Aufbau, und die Entscheidung vorwegzunehmen
-        hieße, dem Nutzer eine von zwei gleich guten zu nehmen.
+        **Ohne festgelegte Operation.** Was aus der Zeichnung wird, entscheidet
+        die Richtung der Höhe nach *Fertig* (RM-561) — auf einer Deckfläche ist
+        eine Tasche so plausibel wie ein Aufbau.
         """
         object_id = self.object_tree.selected()
         plane = (
@@ -21214,13 +21144,20 @@ class MainWindow(QMainWindow):
         if entry.op == "pose_armature" and given is None and field != "pose":
             self.reopen_gesture(op_id)
             return
+        front: tuple[str, ...] = ()
         if given is None and _has_sketch_param(spec):
             sketch_fields = {item.name for item in spec.params.spec() if item.kind == "sketch"}
             drawing = field or _sketch_param(entry.op)
             text = str(entry.params.get(drawing, "") or "")
-            if drawing in sketch_fields and text.strip():
+            # **Ein aufgezogener Quader ist drei Zahlen** (RM-559, E11): Trägt die
+            # Zeichnung genau ein Rechteck oder einen Kreis, öffnet der Dialog
+            # mit den Maßen vorn statt des Zeichenmodus; *Umriss bearbeiten …*
+            # führt von dort in den Editor. Ein freier Umriss öffnet ihn direkt.
+            simple = simple_shape_of(text) if not field and entry.op in DRAWN_OPERATIONS else None
+            if drawing in sketch_fields and text.strip() and simple is None:
                 self.start_sketch(entry.op, text=text, step=op_id, field_name=drawing)
                 return
+            front = ("length",) if simple == "circle" else ("length", "width") if simple else ()
 
         def chosen_spec() -> OperationSpec:
             return spec
@@ -21237,6 +21174,7 @@ class MainWindow(QMainWindow):
             self,
             values={**entry.params, **(given or {})},
             promote_values=False,
+            front_fields=front,
             sources=self._source_names(),
             parameter_values=self._parameter_values(),
             # Dieselbe Verengung wie beim Anlegen: Wer einen Schritt im Verlauf
@@ -23653,6 +23591,7 @@ class MainWindow(QMainWindow):
         # Karte lag mitten über der Skizze und dem gezogenen Körper.
         covered = (
             self._sketch_panel is not None
+            or self.drawing()
             or self._op_dialog is not None
             or self._difference_standing
         )
@@ -24467,6 +24406,8 @@ class MainWindow(QMainWindow):
             self.reveal_export.setVisible(False)
         if hasattr(self, "skip_recognition"):
             self.skip_recognition.setVisible(False)
+        for offer in getattr(self, "_draw_offers", ()):
+            offer.setVisible(False)
         if self._active_progress_owner() is None:
             self.status_message.setText(text)
         else:
@@ -26531,17 +26472,6 @@ class MainWindow(QMainWindow):
         if settle_actions and not self._showing_scene:
             self._update_actions()
         self._update_transform_roles()
-        # „Abtragen“ hängt nicht nur am Umriss, sondern am gewählten exakten
-        # Körper. Wer dem Hinweis folgt und ihn im Objektbaum auswählt, muss
-        # den Knopf sofort benutzen können — ohne erst noch die Kamera oder
-        # die Skizze zu bewegen.
-        if self._sketch_panel is not None:
-            # Neben dem Knopf ändern sich auch Kreuz, Griffbeschriftung und
-            # Erklärung im Viewport. Ein gemeinsamer Neuaufbau hält alle vier
-            # Auskünfte im selben Zustand.
-            self._redraw_sketch()
-        else:
-            self._update_sketch_actions()
         result = self.session.last_result
         chosen = self.object_tree.selected_objects()
         entries = [result.scene.objects.get(entry) for entry in chosen] if result else []

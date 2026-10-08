@@ -88,11 +88,10 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Das Wertfeld der ersten Zeile unter „Parameter" — über die Reihenfolge,
         # weil ein benanntes Maß in jeder Sprache anders heißt
         "parameters.first",
-        # „Zeichnen" in der Werkzeugleiste, die Ebenenwahl im Zeichenmodus,
-        # „Hochziehen" an der fertigen Kontur und „Fertig"
+        # „Zeichnen" in der Werkzeugleiste, die Ebenenwahl im Zeichenmodus
+        # und „Fertig"
         "toolbar.draw",
         "sketch.plane",
-        "sketch.pull",
         "sketch.done",
     }
 )
@@ -686,36 +685,24 @@ GUIDES: Final[tuple[Guide, ...]] = (
     ),
     Guide(
         key="draw-and-pull",
-        title=_("Eine Form zeichnen und hochziehen"),
-        summary=_("Einen Umriss zeichnen und daraus ein eigenes Teil machen."),
+        title=_("Einen Körper aufziehen"),
+        summary=_("Mit drei Klicks ein eigenes Teil auf das Bett stellen."),
         steps=(
             step(_("Oben in der Werkzeugleiste: Klicken Sie auf *Zeichnen*."), "toolbar.draw"),
+            step(_("Klicken Sie auf das Bett. Dort beginnt das Rechteck."), "viewport"),
             step(
                 _(
-                    "Wählen Sie die Zeichenebene. Die Draufsicht (XY) liegt flach "
-                    "wie die Druckplatte."
+                    "Klicken Sie die Gegenecke. Oder tippen Sie die Maße: "
+                    "50, Tab, 30, Eingabetaste."
                 ),
-                "sketch.plane",
-            ),
-            step(
-                _("Klicken Sie auf das *Rechteck* und ziehen Sie es in der Ansicht auf."),
-                "sketch:rectangle",
-            ),
-            step(
-                _("Tippen Sie beim Ziehen die Maße ein, zum Beispiel 50 und 30 mm."),
                 "viewport",
             ),
-            step(_("Klicken Sie auf *Hochziehen*."), "sketch.pull"),
             step(
-                _("Tragen Sie die *Höhe* ein und klicken Sie auf *Grundform hochziehen*."),
-                "field:height",
-                "dialog.accept",
+                _("Ziehen Sie die Höhe nach oben und klicken Sie. Das Teil steht."),
+                "viewport",
             ),
             step(
-                _(
-                    "Das Teil steht. Gedruckt wird wie in "
-                    "[Ein Modell prüfen und drucken](manual:print-a-model)."
-                ),
+                _("Gedruckt wird wie in [Ein Modell prüfen und drucken](manual:print-a-model)."),
                 "viewport",
                 "report.slicer",
             ),

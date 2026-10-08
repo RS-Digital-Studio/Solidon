@@ -9593,7 +9593,7 @@ class FeaturePanel(QWidget):
             ),
             (
                 tr("Loch oder Aussparung zeichnen …"),
-                tr("Zeichnen Sie den Umriss; Fertig schneidet ihn aus diesem Körper."),
+                tr("Den Umriss zeichnen, nach Fertig die Tiefe in den Körper ziehen."),
                 True,
             ),
         ):

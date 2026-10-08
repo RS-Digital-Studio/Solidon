@@ -178,12 +178,6 @@ def _sketch_plane(window: MainWindow) -> QWidget:
     return choice
 
 
-def _sketch_pull(window: MainWindow) -> QWidget:
-    """*Hochziehen* an der fertigen Kontur."""
-    button: QWidget = window.sketch_pull_button
-    return button
-
-
 def _sketch_done(window: MainWindow) -> QWidget:
     """*Fertig* im Zeichenmodus."""
     button: QWidget = window.sketch_finish_button
@@ -294,7 +288,6 @@ _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "parameters.first": _first_parameter,
     "toolbar.draw": _draw_button,
     "sketch.plane": _sketch_plane,
-    "sketch.pull": _sketch_pull,
     "sketch.done": _sketch_done,
 }
 

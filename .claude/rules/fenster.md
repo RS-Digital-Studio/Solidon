@@ -32,9 +32,9 @@ Handlungen steht, sagt `grenzen.md`. Warum:
   `Session.scene_before_step_async` im Vorschauarbeiter, Antwort gebunden an
   Dokumentidentität/Werkzeugnummer. Verfeinerung über `Session.insert_before`
   im Revisionsarbeiter ersetzt Schrittkennung und Eingangsbindung.
-- Formen/Skelett haben denselben lokalen Undo-Weg für Menü und Strg+Z; leerer
-  Editor nimmt keinen Dokument-Schritt zurück. Zeichnen hat eigene Kürzel
-  und deaktiviert die globale Aktion.
+- Zeichnen, Formen, Skelett: Kürzel oben, Escape nimmt Unfertiges, Strg+Z
+  die letzte Geste, *Fertig* ohne Dialog (RM-561). Leerer Editor nimmt
+  keinen Schritt zurück.
 - Drei Zonen: links Baum/Parameter/Verlauf, Mitte Viewport, rechts eine Karte
   mit den Reitern Auswahl, Prüfbericht, Chat (F9 blendet sie aus). Keine
   Betriebsarten. Die Karte misst die vordere Seite (`CurrentPageTabs`).

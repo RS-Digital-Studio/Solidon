@@ -404,10 +404,8 @@ def frame_sketch(window: Any, app: QApplication) -> None:
     object_id, feature_id = topmost[0][2:]
     plane_key = f"feature:{object_id}:{feature_id}"
 
-    # Eine Tasche braucht einen gewählten Körper. Die alte Aufnahme öffnete
-    # zwar auf seiner Fläche, ließ den Objektbaum aber ohne Wirtskörper — der
-    # sichtbare Knopf *Abtragen* war deshalb gesperrt. Die Aufnahme soll den
-    # echten Einstieg zeigen, auch wenn das Ergebnis unten extrudiert wird.
+    # Gezeichnet wird für den gewählten Körper: Die Aufnahme zeigt den echten
+    # Einstieg auf seiner Fläche, auch wenn das Ergebnis unten extrudiert wird.
     window.object_tree.select_object(object_id)
     settle(app, 4)
 
