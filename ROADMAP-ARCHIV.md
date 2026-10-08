@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)](#rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026) |
 | 2026-10-08 | [RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)](#rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
@@ -44234,3 +44235,38 @@ sonst drehbar. `cache_version` 11. Tests in `tests/test_feature_moves_keep_shape
 `test_a_slot_turned_about_its_own_axis_turns_and_a_half_turn_lies_on_itself` (eine
 Vierteldrehung stellt das Langloch quer, Sollpunkte aus den Maßen) — am Basisstand 14 von 14
 rot. `test_finding_ways.py` führt das Feld je Stelle. Umgesetzt von Claude.
+
+## RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)
+
+<a id="rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026"></a>
+<a id="rm-552"></a>
+
+**RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht.**
+Gefunden am 07.10.2026 in der Nachprüfung von P2 (Claude): Am Baustein *Schraubenloch* läuft
+die Bohrung Ø 3,4 von z 2 bis 12 durch ihre Senkung (z 10,7 bis 12), an der *Einpressbuchse M4*
+ebenso. `bore_pin._following` verlangt, dass ein Abschnitt am Ende des vorigen beginnt, und sagt
+`chain_unreadable` („lässt sich hier nicht eindeutig lesen“) — über einen Hohlraum, den Solidon
+selbst gebaut hat. Die Karte bietet den Stift an Bausteinmerkmalen nur noch am Innengewinde an
+(`perceive.actions.OFFERED_AT_A_PART`); über Menü und Palette trifft die Absage jedes
+Baustein-Schraubenloch weiter. **Fix:** Überlappende Kettenglieder auf ihren gemeinsamen
+Abschnitt kürzen, statt abzusagen — die Bohrung endet, wo die Senkung beginnt; danach die Karte
+an Bausteinbohrungen wieder öffnen, wenn der Stift dort baut. **Abnahme:** Test am Schraubenloch
+und an der Einpressbuchse je Kern: Stift gebaut, Spiel rundum mindestens das eingestellte; die
+Magnettasche sagt weiter `narrowing_mouth`.
+
+**Nachweis (08.10.2026, `7cc96d546`, Paket G):** Zwei Ursachen. Die Bausteinbohrung läuft
+durch ihre Senkung bis zur Mündung, und `bore_pin._following` verlangte einen Anschluss am
+Ende; jetzt endet ein Glied, in das das nächste hineinbeginnt, an dessen Anfang, und
+`_chained` prüft, dass die Kette danach bis zum alten Ende reicht (Lücke, Glied mitten in der
+Bohrung oder davor bleiben unlesbar). Dazu nennt die Senkung eines Bausteins ihre Mitte und
+Höhe (`fasteners._countersink_feature`), die Erkennung den weiten Rand; `_cone_mouth` legt die
+Mündung für beide richtig, auch auf dem Weg vom Gewinde aus (`_walk`). Die Karte bietet den
+Stift an Bausteinbohrungen wieder an (`OFFERED_AT_A_PART` mit `hole`), `cache_version` 6.
+Tests: `tests/test_bore_pin.py::test_a_part_bore_that_runs_through_its_countersink_gets_its_pin`
+(Schraubenloch, Schraubenloch mit Kopftiefe, Einpressbuchse je Kern; Volumen gegen die
+Normteiltabelle auf 1e-4, Boden um das halbe Spiel, `_loose` rundum) — am Basisstand rot mit
+`chain_unreadable` —, `test_the_magnet_pocket_from_a_part_still_has_a_narrowing_mouth`
+(Gegenfall) und `tests/test_selection_operations.py::test_a_part_bore_offers_its_pin`. An den
+zwölf Beispielprojekten bauen sieben Bausteinbohrungen, die vorher absagten (Senkkopf 90°,
+Abstand 0,1247 mm gegen das halbe Spiel 0,125); alle übrigen Bohrungen unverändert.
+Umgesetzt von Claude.
