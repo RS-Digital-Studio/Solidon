@@ -196,15 +196,17 @@ jobs:
                     120467d2f61ff1ed4b085a4f062ee524041e12738a6ee32da5baf53a1a943d9c
                 fi ;;
               Linux/crealityprint)
-                appimage $gh/CrealityOfficial/CrealityPrint/releases/download/v7.2.1/CrealityPrint-V7.2.1.5476-x86_64-Release.AppImage \
-                  b28f66c25d0c6652ed6ae49d0766780f46a5b839b93ce1968e639823e1f6e2f3 ;;
+                # 7.3.0 kam in zwei Bauständen (6149, 6151); gemessen ist 6149,
+                # wie am Arbeitsplatz (SLICER_DEVIATION in tests/test_print_time.py).
+                appimage $gh/CrealityOfficial/CrealityPrint/releases/download/v7.3.0/CrealityPrint-V7.3.0.6149-x86_64-Release.AppImage \
+                  313f7fa86cf3b670180171fb36a45d794ad065519a1d162e172de9bbe41879e0 ;;
               macOS/crealityprint)
                 if [ "$arch" = arm64 ]; then
-                  dmg $gh/CrealityOfficial/CrealityPrint/releases/download/v7.2.1/CrealityPrint-7.2.1.5476-macx-arm64-Release.dmg \
-                    6fe5eb238a2d73e9bcb524d77d6fb84e32da4c5c957a150b97ffae614c2b0713
+                  dmg $gh/CrealityOfficial/CrealityPrint/releases/download/v7.3.0/CrealityPrint-7.3.0.6149-macx-arm64-Release.dmg \
+                    c22d752d1350e54cfb13b3c8310166af4e115991591a0e0a14daf43d8a427007
                 else
-                  dmg $gh/CrealityOfficial/CrealityPrint/releases/download/v7.2.1/CrealityPrint-7.2.1.5476-macx-x86_64-Release.dmg \
-                    5b89736e41bf1917708a4bb6ba7a62a6f3b3c77dc6f076f9e36386cbd85173ba
+                  dmg $gh/CrealityOfficial/CrealityPrint/releases/download/v7.3.0/CrealityPrint-7.3.0.6149-macx-x86_64-Release.dmg \
+                    3771b8efc8f669ebf6d427c928ef11fdeeec9fd6eb22317d62f99f9e79a3b402
                 fi ;;
               Linux/anycubicslicernext)
                 # Das Paket aus der apt-Quelle des Herstellers, als Datei mit

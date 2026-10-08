@@ -152,9 +152,7 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
                 isinstance(called, ast.Attribute)
                 and called.attr in _REAL_SEARCH
                 and not isolated
-                and inner.args
-                and isinstance(inner.args[0], ast.Constant)
-                and inner.args[0].value in _slicer_ids()
+                and _asks_for_a_slicer(inner)
             ):
                 found.append(f"{name}:{inner.lineno} {node.name}: {called.attr} ohne Isolation")
             if isinstance(called, ast.Attribute) and called.attr in _READS:
@@ -169,6 +167,19 @@ def _unmarked_machine_searches(source: str, name: str) -> list[str]:
     return found
 
 
+def _asks_for_a_slicer(call: ast.Call) -> bool:
+    """Sucht dieser Aufruf einen Slicer — über die Kennung oder die Namensliste?
+
+    Die Kennung allein reichte nicht: Mit ihr in einer Variablen und
+    ``tools.SLICERS`` als Namen sah der Wächter die Suche nicht.
+    """
+    first = call.args[0] if call.args else None
+    if isinstance(first, ast.Constant) and first.value in _slicer_ids():
+        return True
+    arguments = [*call.args, *(keyword.value for keyword in call.keywords)]
+    return any("SLICERS" in ast.unparse(argument) for argument in arguments)
+
+
 def _is_install_root(node: ast.AST) -> bool:
     return (
         isinstance(node, ast.Call)
@@ -181,7 +192,8 @@ def _is_install_root(node: ast.AST) -> bool:
 
 
 def test_the_guard_finds_each_way_past_the_fixture() -> None:
-    """Erst am bekannten Ausgang: der alte Cura-Helfer, die nackte Suche, der fehlende Marker."""
+    """Erst am bekannten Ausgang: der alte Cura-Helfer, die nackte Suche, die Suche
+    mit der Kennung in einer Variablen, der fehlende Marker."""
     source = textwrap.dedent(
         """
         def _installed_cura():
@@ -191,6 +203,9 @@ def test_the_guard_finds_each_way_past_the_fixture() -> None:
 
         def test_search():
             discover.unpatched_find_programs("slicer", SLICERS)
+
+        def _found(kind):
+            return discover.unpatched_find_programs(kind, tools.SLICERS)
 
         def test_isolated(isolated_search):
             discover.unpatched_find_programs("slicer", SLICERS)
@@ -215,6 +230,7 @@ def test_the_guard_finds_each_way_past_the_fixture() -> None:
     assert [entry.split(" ", 2)[1] for entry in found] == [
         "_installed_cura:",
         "test_search:",
+        "_found:",
         "test_unmarked:",
     ], found
 

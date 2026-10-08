@@ -43,7 +43,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Folgen Objektwerte den gemessenen Fähigkeiten des Zielprogramms und bleiben andere Teile unverändert? | `test_slicer_part_settings.py` — Rollen, Familiengrenzen, Cura-Erstschichtbreite und fehlende Herstellerketten |
 | Nimmt jeder unterstützte Slicer, echt installiert, Solidons Platte an und gibt eine gemessene Druckdatei zurück? Fragt ein Test die Maschine nur über `installed_slicer`? | `test_real_slicers.py` (`slicer`-Marker, vor dem Merge auf Linux und macOS) · `test_slicer_selection.py` — Auswahl für die Läufer und Wächter |
 | Bleibt Curas Lüfterkurve (unteres Ende, Schwelle) bei seiner Definition, in Dialog, Konsole, Spule und Fensterprofil? | `test_cura_fan_curve.py` |
-| Rechnet die Zeitgegenprobe aus der Schichtanalyse — Mindestschichtzeit bis zum Mindesttempo, Ecken, Beschleunigung, Herstellerwerte? | `test_print_time.py`, dort auch der Quader am installierten Slicer (übersprungen ohne ihn); der Startanteil aus `M73 P` in `test_gcode.py` |
+| Rechnet die Zeitgegenprobe aus der Schichtanalyse — Mindestschichtzeit bis zum Mindesttempo, Ecken, Beschleunigung, Herstellerwerte? | `test_print_time.py`, dort auch der Quader am installierten Slicer (`slicer`-Marker je Programm, übersprungen ohne ihn); der Startanteil aus `M73 P` in `test_gcode.py` |
 | Behalten innere Vollschichten, sichtbare Oberseite und Bügeln ihre Tempi in Cura? | `test_cura_skin_speeds.py` — Engine-Ebenen; `test_export.py` — importierbares Profil, mit und ohne obere Schichten |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
