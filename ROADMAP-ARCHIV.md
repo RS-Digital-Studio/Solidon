@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)](#rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026) |
+| 2026-10-08 | [RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)](#rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026) |
+| 2026-10-08 | [RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)](#rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026) |
 | 2026-10-08 | [RM-570: Eine schräge Unterseite ist ein Feld, und ein Kinn bekommt seine Stützen (08.10.2026)](#rm-570-eine-schräge-unterseite-ist-ein-feld-und-ein-kinn-bekommt-seine-stützen-08102026) |
 | 2026-10-08 | [RM-566: Der Drache bekommt seine Stützen, und die Kanalsperre sperrt nur Raum, an den man nicht hinkommt (08.10.2026)](#rm-566-der-drache-bekommt-seine-stützen-und-die-kanalsperre-sperrt-nur-raum-an-den-man-nicht-hinkommt-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
@@ -43880,6 +43883,131 @@ verlangen, nennt der Prüfbericht noch keine Stelle: [RM-572](ROADMAP.md#rm-572)
 und `test_only_what_rests_on_the_model_counts_as_its_field`, alle ohne den Fix rot; der
 Gitterbecher bleibt ohne Stütze; im Korpus am Endstand ändert sich außer der Sperre kein
 Vorschlag (RM-566).
+
+## RM-600: Ein Drucker, eingebaut und aus dem Slicer übernommen, ist ein Gerät (08.10.2026)
+
+<a id="rm-600-ein-drucker-eingebaut-und-aus-dem-slicer-übernommen-ist-ein-gerät-08102026"></a>
+<a id="rm-600"></a>
+
+**Befund (Roberts Drachendruck, übergeben von der Drachen-Sitzung):** Das Projekt trug den
+eingebauten `centauri-carbon-2`, Roberts Drucker ist der aus dem ElegooSlicer übernommene
+„Elegoo Centauri Carbon 2 0.4 nozzle“. `printer_for` gab bei gleichem Gerät den längeren
+Titel zurück, also den übernommenen, und jeder Vergleich mit dem Projektdrucker scheiterte.
+An einer Kopie seines Bestands nachgestellt: Die Maschinenliste des Druckdialogs zeigte die
+0,2er, 0,6er und 0,8er Maschine, nicht die 0,4er; gewählt war nichts, ein Prozess fehlte,
+das Filament fiel ohne Maschine auf „Elegoo PLA @0.2 nozzle“, und die Übergabe schrieb „no
+machine side handed over“. `tools/matrix_unit.py … elegoo:centauri-carbon-2` scheiterte
+seitdem an `slicer.machine_mismatch`. Robert: „es war der falsche Drucker ausgewählt und die
+falsche düse“.
+
+**Behoben:** `printer_for` und `chosen_printer` nehmen `prefer`: Der gemeinte Drucker
+gewinnt, wenn er dasselbe Gerät ist wie der Treffer (Name ohne Düse gleich) und dieser Name
+die Maschine meint. Übergabe (`machine_for`, `_fits_the_printer`) und Druckdialog
+(`_machines_worth_showing`, `_printer_of_the_slicer`, `_slicer_machine_for_project`) fragen
+mit dem Projektdrucker.
+
+**Review (hoch):** Mit `prefer` hätte der Zwilling eines Kobra 2 die Maschine des Kobra 2 Max
+bekommen — `_names_the_printer` ließ hinter dem Druckernamen jedes Wort zu. Dieselbe Lücke
+hatte der eingebaute Drucker schon auf main: „Anycubic Kobra 2“ meinte Kobra 2
+Max/Neo/Plus/Pro, „Elegoo Neptune 4“ den Neptune 4 Pro und Max (420 statt 225 mm Bett),
+„Creality K1“ den K1 SE und die CFS-C-Ausführungen, „Sovol SV06“ den SV06 Plus, „Prusa XL“
+den XL 5T; deren Maschine ging samt Startcode an den kleineren Drucker. Seitdem darf hinter
+dem Druckernamen nur die Düse folgen (`_NOZZLE_AFTER`); was ein Drucker in PrusaSlicers
+Bündel festhält („Original Prusa MK4S HF0.4 nozzle“, „… XL Input Shaper …“), meint er weiter
+(`names_the_printer_profile`) — ohne das lehnte das Tor 15 Prusa-Fälle ab —, und HF gilt
+als Düse. Gemessen über alle 3794 Maschinen von ElegooSlicer, OrcaSlicer, Bambu Studio,
+Creality Print, Anycubic Slicer Next und PrusaSlicer: 35, 35, 10, 22, 4 und 35 Zuordnungen
+fallen weg (141), jede zu einem anderen Gerät (dazu MK4S MMU3 und XL 2T/5T), keine wechselt zu einem
+anderen Drucker, neu zugeordnet sind nur PrusaSlicers „SV06“-Profile zum Sovol SV06, der
+genau dieses Bündelprofil festhält; Vorwahl (`match`) und
+`supports_printer` sind für alle 20 eingebauten Drucker an sechs Slicern unverändert (120
+Kombinationen), nachdem PrusaSlicers „MINI && MINI+“ in `_printer_name` gefaltet ist. Eine
+solche Maschine ist kein eigenes Profil: `_fits_the_printer` lehnt sie über
+`related_printer` ab.
+
+**Nachweis (08.10.2026):**
+`tests/test_slicer_profiles.py::test_the_project_printer_wins_against_its_adopted_twin`,
+`tests/test_print_settings.py::test_a_built_in_printer_gets_the_machine_side_of_its_adopted_twin`
+und `tests/test_print_settings_ui.py::test_an_adopted_twin_does_not_take_the_machines_of_the_project_printer`,
+die beiden letzten am Stand von main rot. Sonde mit Roberts Bestand: Maschine 0,4, Prozess
+„0.20mm Standard @Elegoo CC2 0.4 nozzle“, Filament „Elegoo PLA @ECC2“, die Maschinenseite
+geht mit; `matrix_unit` für den Centauri Carbon 2 grün, mit dem Code von main
+`slicer.machine_mismatch`. Zur Gerätegrenze `test_a_longer_device_is_not_the_shorter_one`
+(acht Verwandte), `test_prusa_names_its_mini_twice` und
+`test_a_related_device_is_not_handed_over_as_the_printers_own`; mit echtem Slicer
+`tests/test_real_slicers.py::test_an_adopted_twin_and_its_built_in_printer_share_the_machine`
+(ElegooSlicer) und `test_a_related_device_never_hands_its_machine_to_the_smaller_printer`
+(Anycubic Slicer Next, Kobra 2 gegen Kobra 2 Max). Changelog: ja.
+
+## RM-601: Die Slicerwahl im Druckdialog geht wie in Erste Schritte, und überall stehen nur unterstützte Slicer (08.10.2026)
+
+<a id="rm-601-die-slicerwahl-im-druckdialog-geht-wie-in-erste-schritte-und-überall-stehen-nur-unterstützte-slicer-08102026"></a>
+<a id="rm-601"></a>
+
+**Befund:** Robert: „den slicer kann ich in druckeinstellungen nicht auch noch in
+Druckeinstellungen tauschen, das soll wie in erste Schritte hier gehen“. Der Druckdialog
+zeigte während der Slicersuche (an Roberts Rechner mit sieben Slicern 1,5 s) und bei einem
+einzigen Slicer nur dessen Namen; ein Programm außerhalb der Suchorte ließ sich dort nicht
+wählen, und hatte es jemand in den Einstellungen gewählt, nahm ihm die Antwort der Suche den
+Platz. Dazu Robert: „erste schritte und druckdialog sollten auch nur die unterstützen slicer
+anzeigen“ — `find_programs` stellt den gemerkten Pfad ungeprüft vorn hin. Auf die Rückfrage,
+was mit Resin-Slicern geschieht: „Resin und die Slicer, Resinslicer kommen auch bald“.
+
+**Behoben:** Ein Auswahlfeld ab dem ersten bekannten Slicer, daneben „Programm wählen …“
+(`ask_slicer_program`, gemeinsam mit Erststart und Einstellungen, die den Knopf bis dahin
+„Benutzerdefiniert …“ nannten); ein selbst gewählter Slicer bleibt in der Liste und gewählt.
+`tools.is_supported_slicer` bejaht eine Familie, die Solidon übersetzt, oder einen
+Resin-Slicer aus `tools.RESIN_SLICERS` (ChituBox, Lychee, Photon Workshop, HALOT BOX,
+VoxelDance, PreForm, NovaMaker, Formware — am Namen erkannt, nicht gesucht). Jede Stelle, die
+den Slicer bestimmt, fragt `tools.slicer_programs()`/`slicer_program()`: Erststart,
+Einstellungen, Druckdialog, Menüexport, Grundlage und Filamentübernahme (Review: die drei
+letzten liefen am Filter vorbei). Die Programmwahl lehnt ein fremdes Programm mit *Einen
+anderen Slicer auswählen* ab und nennt die Slicer (`tools.SLICER_TITLES`); im Druckdialog
+öffnet dieselbe Handlung jetzt die Slicerwahl statt des Profilkastens. Der Druckdialog bietet
+kein „Später auswählen“. Ist ein fremdes Programm gemerkt, fragt `ExternalTool.path()` die
+zwischengespeicherte Suche ohne gemerkten Pfad (`find_program(..., remembered=False)`) statt
+jedes Mal alle Fassungen (zwei Sekunden, Review Runde 2). Auf Roberts Nachsatz „alle slicer
+bei linux und mac sollen dazu gehören“: `flavour_of` vergleicht auch ohne Trenner — Bambu Studios AppImage
+„Bambu_Studio_linux_….AppImage“ war bis dahin Familie `other` und rechnete nie. Bauplan §29
+nennt die Beschränkung.
+
+**Nachweis (08.10.2026):** `tests/test_print_settings.py::test_several_slicers_become_a_choice`
+(jetzt auch ein einzelner als Auswahl),
+`test_the_print_dialog_takes_a_slicer_the_search_does_not_find` (ohne den Erhalt des eigenen
+Slicers rot) und `test_the_print_dialog_offers_only_slicers_solidon_works_with`;
+`test_without_a_slicer_the_print_dialog_offers_the_program_choice` (ohne Zeilenabschluss
+rot); `tests/test_first_run_setup.py::test_only_slicers_solidon_works_with_are_offered` und
+`test_choosing_a_program_solidon_does_not_work_with_is_refused` (samt *Abbrechen*);
+`tests/test_discover.py::test_only_slicers_solidon_works_with_are_found` und
+`test_the_refusal_names_every_slicer_solidon_works_with`; mit echten Slicern
+`tests/test_real_slicers.py::test_every_installed_slicer_stays_on_offer` (sieben Programme,
+in der CI unter Linux und macOS). Sonde mit Roberts Bestand: Das Feld steht beim Öffnen mit
+ElegooSlicer da, der Wechsel auf Anycubic Slicer Next bietet Kobra S1 und S1 Max. Changelog:
+ja.
+
+## RM-602: Der Druckdialog ordnet die Profile in einem Lesedurchgang zu (08.10.2026)
+
+<a id="rm-602-der-druckdialog-ordnet-die-profile-in-einem-lesedurchgang-zu-08102026"></a>
+<a id="rm-602"></a>
+
+**Befund (beim Nachstellen von RM-600 gemessen):** Kommen im Druckdialog die Profile an, stand
+das Fenster an Roberts ElegooSlicer 2,4 bis 2,8 s. `_profiles_found` las 14 327-mal 1431
+Dateien („fdm_filament_common“ allein 1136-mal), baute 23 Ordnerindizes, bestimmte den
+Slicernamen samt Flatpak-Prüfung je Feld neu (932 Aufrufe, 0,27 s) und füllte die Prozesse
+zweimal — einmal über das Signal der Maschinenwahl, gleich danach mit dem passenden Profil.
+
+**Behoben:** `slicer_profiles.single_read()` hält Dokumente und Indizes einen Durchgang lang,
+threadlokal und danach verworfen; `_profiles_found` läuft darin, `binding` und
+`compatible_with` reichen ihn durch. Der Slicername steht einmal vor der Schleife,
+`_take_profiles` setzt die Maschine, ohne dass `_machine_chosen` die Prozesse vorab füllt.
+
+**Nachweis (08.10.2026):** gemessen mit Roberts Bestand (Kopie): 0,6 bis 0,8 s statt 2,4 bis
+2,8 s je Profilantwort, 1437 Lesungen statt 14 327; dieselbe Auswahl (Maschine, Prozess,
+Filament) vorher und nachher.
+`tests/test_slicer_profiles.py::test_a_single_read_reads_each_profile_once_and_forgets_it_after`
+(einmal gelesen, anderer Faden liest selbst, danach verworfen) und
+`tests/test_print_settings_ui.py::test_profiles_arrive_in_one_read_and_fill_the_processes_once`
+(ohne `_placing_machine` zwei Füllungen, rot). Changelog: ja.
 
 ## RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)
 

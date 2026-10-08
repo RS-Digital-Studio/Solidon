@@ -43,6 +43,11 @@ scrive in `website/version.json`.
 
 - Su Linux, Solidon crea ora il file di stampa anche con Cura come Flatpak o AppImage.
 - La finestra di stampa offre le stampanti dello slicer scelto, come *Primi passi* e *Impostazioni*. Una stampante ripresa così resta legata al suo slicer.
+- Nella finestra di stampa lo slicer si cambia come in *Primi passi*, anche con *Scegli programma …* per uno che Solidon non trova da solo.
+- Una stampante dell'elenco di Solidon e la stessa dello slicer contano come un solo apparecchio. La finestra sceglie il profilo con l'ugello giusto e il file porta il codice di avvio.
+- Vengono offerti solo gli slicer con cui Solidon lavora, più gli slicer per resina come ChituBox e Lychee. Ora vale anche Bambu Studio come AppImage.
+- Il codice di avvio e il volume di stampa vengono solo dalla tua stampante, non da una parente come la Kobra 2 Max per una Kobra 2.
+- La finestra di stampa assegna i profili dello slicer tre volte più in fretta, all'apertura e dopo ogni cambio di slicer. Con ElegooSlicer 0,7 invece di 2,5 secondi.
 - Il tempo di stampa stimato è più vicino a quello dello slicer, molto più vicino per i pezzi con supporti.
 - Se supporti e skirt stanno sul piano, il controllo lo misura ora solo sotto gli sbalzi. I pezzi vicini al bordo non ricevono più un avviso senza motivo.
 

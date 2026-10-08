@@ -5433,6 +5433,74 @@ def test_without_a_chosen_printer_the_slicers_own_selection_counts(tmp_path, mon
     )
 
 
+def test_a_built_in_printer_gets_the_machine_side_of_its_adopted_twin(
+    tmp_path, monkeypatch
+) -> None:
+    """Eingebauter Drucker im Projekt, derselbe Drucker aus dem Slicer übernommen (RM-600).
+
+    Roberts Drache trug ``centauri-carbon-2``, sein Drucker ist der aus dem
+    ElegooSlicer übernommene „Elegoo Centauri Carbon 2 0.4 nozzle". Seit der
+    abgelegt war, ordnete ``printer_for`` die Maschine des Slicers ihm zu und
+    nicht mehr dem Projektdrucker; die Übergabe schrieb „no machine side
+    handed over" ins Protokoll, und der Prüfbericht meldete einen Slicer auf
+    einem anderen Drucker. Beide Wege — die Wahl im Dialog und der Rückfall
+    auf den Slicer — müssen das Gerät wiedererkennen.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    machine = "Elegoo Centauri Carbon 2 0.4 nozzle"
+    file = tmp_path / f"{machine}.json"
+    file.write_text("{}", encoding="utf-8")
+    entry = slicer_profiles.SlicerProfile(file, machine, "machine")
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: machine)
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [entry])
+
+    built_in = profiles.make_profile("centauri-carbon-2", "pla")
+    assert handover.machine_for(
+        handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca"), built_in
+    ), "Gegenprobe: ohne übernommenen Zwilling geht die Maschinenseite mit"
+
+    profiles.save_printer(
+        replace(built_in.printer, id="slicer-orca-af8733f715e1dfb0606b", title=machine),
+        slicer="elegooslicer",
+    )
+    fallback = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    chosen = replace(fallback, machine_profile=machine)
+
+    assert handover.machine_for(fallback, built_in) == machine
+    assert handover.machine_for(chosen, built_in) == machine
+    assert handover.machine_missing(fallback, built_in) == []
+    assert handover.machine_missing(chosen, built_in) == []
+
+
+def test_a_related_device_is_not_handed_over_as_the_printers_own(monkeypatch) -> None:
+    """„Creality K1 SE" ist nicht der K1 — auch nicht als „eigenes Profil" (Review RM-600).
+
+    Seit hinter dem Drucker nur die Düse folgen darf, gehört die Maschine des
+    K1 SE keinem bekannten Drucker. ``_fits_the_printer`` nahm „nicht erkannt"
+    als Freigabe für ein selbst gebautes Profil und hätte sie jedem Projekt
+    gegeben. Ein eigenes Profil ohne Bezug zu einem bekannten Drucker geht
+    weiterhin durch.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "")
+    k1 = profiles.make_profile("creality-k1", "pla")
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    assert (
+        handover.machine_for(replace(setup, machine_profile="Creality K1 SE 0.4 nozzle"), k1) == ""
+    )
+    assert handover.machine_missing(replace(setup, machine_profile="Creality K1 SE 0.4 nozzle"), k1)
+    assert handover._fits_the_printer("Meine Werkstattmaschine", k1)
+    assert handover._fits_the_printer("Creality K1 Garage", k1), "ein eigenes Profil"
+    assert handover._fits_the_printer("Creality K1 (0.4 nozzle)", k1)
+
+
 def test_the_same_printer_with_another_nozzle_hands_over_the_fitting_variant(
     monkeypatch, tmp_path
 ) -> None:
@@ -7037,10 +7105,10 @@ def test_several_slicers_become_a_choice(
     statt einer Wahl (Robert: „auswahl bei mehreren slicern wäre auch
     sinnvoll").
 
-    Geprüft wird beides: dass drei zu einer Auswahl werden **und** dass einer
-    keine wird. Eine Zeile mit einem einzigen Eintrag ist eine Frage ohne
-    Antwortmöglichkeit (§2.4) — ohne die zweite Hälfte wäre der Test auch
-    grün, wenn das Feld immer erschiene.
+    Geprüft wird beides: dass drei zu einer Auswahl werden **und** dass auch
+    einer eine wird, mit „Programm wählen …" daneben wie in den Ersten
+    Schritten (Robert, 08.10.2026, RM-601). Bis dahin stand bei einem Slicer
+    nur sein Name, und tauschen ließ er sich im Druckdialog nicht.
     """
     from app.core import discover
     from app.ui.print_settings_dialog import PrintSettingsDialog
@@ -7077,11 +7145,153 @@ def test_several_slicers_become_a_choice(
     assert dialog.slicer_choice.isVisibleTo(dialog), "und der Slicer bleibt wählbar"
     assert dialog.slicer_label.isVisibleTo(dialog)
 
+    assert dialog.slicer_file.isVisibleTo(dialog)
+
     monkeypatch.setattr(discover, "find_programs", lambda *_args: drei[:1])
     einer = PrintSettingsDialog(Session(), UiSettings())
     assert einer.wait_for_slicers(), "die Slicersuche kam nicht zurück"
     assert einer.slicer_choice.count() == 1
-    assert not einer.slicer_choice.isVisibleTo(einer), "bei einem gibt es nichts zu wählen"
+    assert einer.slicer_choice.isVisibleTo(einer), "auch einer steht im Auswahlfeld"
+    assert einer.slicer_file.isVisibleTo(einer), "und daneben die zweite Antwort"
+
+
+def test_the_print_dialog_takes_a_slicer_the_search_does_not_find(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """„Programm wählen …" wie in den Ersten Schritten (RM-601).
+
+    Ein portabler Slicer liegt außerhalb der Suchorte. Im Druckdialog ließ er
+    sich bis zum 08.10.2026 nicht wählen; und hatte ihn jemand in den
+    Einstellungen gewählt, nahm die Antwort der Suche ihm den Platz, und der
+    erste Fund galt. Der gemerkte Slicer steht außerdem schon beim Öffnen im
+    Feld — nicht erst, wenn die Suche zurück ist.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core import discover
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    installed = tmp_path / "ElegooSlicer" / "elegoo-slicer.exe"
+    portable = tmp_path / "Werkzeug" / "OrcaSlicer" / "orca-slicer.exe"
+    for entry in (installed, portable):
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        entry.write_bytes(b"")
+    remembered = {"slicer": str(installed)}
+    monkeypatch.setattr(discover, "remembered_path", lambda tool: remembered.get(tool, ""))
+    monkeypatch.setattr(
+        discover, "remember_path", lambda tool, path: remembered.__setitem__(tool, path)
+    )
+    monkeypatch.setattr(discover, "find_program", lambda *_args: installed)
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: (installed,))
+
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.slicer_choice.isVisibleTo(dialog), "der gemerkte steht schon beim Öffnen da"
+    assert dialog.slicer_choice.currentText() == "ElegooSlicer"
+    assert dialog.wait_for_slicers()
+
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName", staticmethod(lambda *_args, **_kwargs: (str(portable), ""))
+    )
+    dialog.slicer_file.click()
+
+    assert dialog._slicer_path == portable
+    assert dialog.slicer_choice.currentText() == "OrcaSlicer"
+    assert dialog.slicer_choice.count() == 2
+    assert discover.same_program(remembered["slicer"], str(portable)), "die Wahl bleibt gemerkt"
+
+    dialog.recheck_slicer()
+    assert dialog.wait_for_slicers()
+    assert dialog._slicer_path == portable, "die Suche nimmt ihm den Platz nicht"
+    assert dialog.slicer_choice.currentText() == "OrcaSlicer"
+    dialog.release()
+
+    again = PrintSettingsDialog(Session(), UiSettings())
+    assert again.wait_for_slicers()
+    assert again._slicer_path == portable, "auch beim nächsten Öffnen"
+    again.release()
+
+
+def test_without_a_slicer_the_print_dialog_offers_the_program_choice(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne gefundenen Slicer bleibt „Programm wählen …“ — schmal und als Ziel der Absage.
+
+    Der Knopf zog sich ohne Auswahlfeld über die ganze Zeile, und *Einen
+    anderen Slicer auswählen* öffnete den Profilkasten (Review RM-601).
+    """
+    from PySide6.QtWidgets import QApplication, QFileDialog
+
+    from app.core import discover
+    from app.core.errors import AppError
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(discover, "remembered_path", lambda _tool: "")
+    monkeypatch.setattr(discover, "find_program", lambda *_args: None)
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: ())
+    asked: list[bool] = []
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *_args, **_kwargs: asked.append(True) or ("", "")),
+    )
+
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.wait_for_slicers()
+    dialog.resize(700, 600)
+    dialog.show()
+    QApplication.processEvents()
+    try:
+        assert not dialog.slicer_choice.isVisibleTo(dialog)
+        assert dialog.slicer_label.isVisibleTo(dialog)
+        assert dialog.slicer_file.isVisibleTo(dialog)
+        assert dialog.slicer_file.width() <= dialog.slicer_file.sizeHint().width() + 8, (
+            "der Knopf ist so breit wie seine Schrift, nicht wie die Zeile"
+        )
+        dialog._open_slicer_choice(AppError())
+        assert asked == [True], "die Absage führt zur Programmwahl"
+    finally:
+        dialog.release()
+
+
+def test_the_print_dialog_offers_only_slicers_solidon_works_with(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein gemerktes fremdes Programm steht nicht in der Slicerliste (Robert, 08.10.2026).
+
+    ``find_programs`` stellt den gemerkten Pfad vorn hin, gleich was er ist.
+    Der Druckdialog zeigte ihn und rechnete mit ihm, als wäre er ein Slicer.
+    """
+    from app.core import discover
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    installed = tmp_path / "ElegooSlicer" / "elegoo-slicer.exe"
+    foreign = tmp_path / "Werkzeug" / "notepad.exe"
+    for entry in (installed, foreign):
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        entry.write_bytes(b"")
+    monkeypatch.setattr(discover, "remembered_path", lambda _tool: str(foreign))
+    monkeypatch.setattr(
+        discover,
+        "find_program",
+        lambda *_args, remembered=True: foreign if remembered else installed,
+    )
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: (foreign, installed))
+
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog._slicer_path is None, "das fremde Programm gilt auch vorläufig nicht"
+    assert dialog.wait_for_slicers()
+    assert dialog._slicers == (installed,)
+    assert dialog._slicer_path == installed
+    assert [dialog.slicer_choice.itemText(i) for i in range(dialog.slicer_choice.count())] == [
+        "ElegooSlicer"
+    ]
+    dialog.release()
 
 
 def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
@@ -7214,7 +7424,7 @@ def test_a_matching_machine_leaves_the_slicing_run_quiet(
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Meine Maschine")
-    monkeypatch.setattr(slicer_profiles, "printer_for", lambda *_: "centauri-carbon-2")
+    monkeypatch.setattr(slicer_profiles, "printer_for", lambda *_, **__: "centauri-carbon-2")
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     model, setup = _slicer_writing(
         monkeypatch, tmp_path, _gcode_printing_at(-10.0, 10.0), flavour="orca"
@@ -7265,7 +7475,9 @@ def test_a_machine_profile_of_another_printer_is_not_handed_over(monkeypatch) ->
         "Elegoo Centauri Carbon 2 0.4 nozzle": "centauri-carbon-2",
         "Prusa MK4S 0.4 nozzle": "prusa-mk4s",
     }
-    monkeypatch.setattr(slicer_profiles, "printer_for", lambda name, _table: known.get(name, ""))
+    monkeypatch.setattr(
+        slicer_profiles, "printer_for", lambda name, _table, **_: known.get(name, "")
+    )
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "")
     setup = handover.SlicerSetup(
         executable=Path("elegoo-slicer.exe"),
@@ -7296,7 +7508,7 @@ def test_a_profile_solidon_cannot_place_stays_the_customers(monkeypatch) -> None
 
     from app.core.export import slicer_profiles
 
-    monkeypatch.setattr(slicer_profiles, "printer_for", lambda *_: "")
+    monkeypatch.setattr(slicer_profiles, "printer_for", lambda *_, **__: "")
     setup = handover.SlicerSetup(
         executable=Path("elegoo-slicer.exe"),
         flavour="orca",

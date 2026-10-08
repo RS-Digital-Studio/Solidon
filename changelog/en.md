@@ -43,6 +43,11 @@ it into `website/version.json`.
 
 - On Linux, Solidon now also creates the print file with Cura as a Flatpak or AppImage.
 - The print dialog offers the printers of the selected slicer, like *First steps* and *Settings*. A printer taken over this way stays with its slicer.
+- In the print dialog you can switch the slicer as in *First steps*, also via *Choose program …* for one that Solidon does not find by itself.
+- A printer from Solidon's list and the same one from the slicer count as one device. The print dialog picks the slicer profile with the right nozzle, and the print file carries the start code.
+- Only slicers Solidon works with are offered, plus resin slicers such as ChituBox and Lychee. Bambu Studio as an AppImage now counts too.
+- Start code and build volume come only from exactly your printer, not from a relative such as the Kobra 2 Max for a Kobra 2.
+- The print dialog matches the slicer's profiles three times as fast, when opening and after every slicer change. With ElegooSlicer 0.7 instead of 2.5 seconds.
 - The estimated print time is closer to the slicer's, much closer for parts with supports.
 - Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
 
