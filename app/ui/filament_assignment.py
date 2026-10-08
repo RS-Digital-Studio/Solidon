@@ -8,6 +8,7 @@ Strg+Z nimmt die Zuweisung zurück (Regel 19).
 from __future__ import annotations
 
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
+from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import QComboBox, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.core.errors import AppError
@@ -29,6 +30,55 @@ from app.ui.filament_picker import (
 from app.ui.labels import wheel_needs_focus
 from app.ui.leash import weak_slot
 from app.ui.style import TIGHT, set_level
+
+#: Tasten, mit denen ein geschlossener Wähler nur blättert.
+_BROWSING_KEYS = frozenset(
+    (
+        Qt.Key.Key_Up,
+        Qt.Key.Key_Down,
+        Qt.Key.Key_PageUp,
+        Qt.Key.Key_PageDown,
+        Qt.Key.Key_Home,
+        Qt.Key.Key_End,
+    )
+)
+
+
+class _SpoolChoice(QComboBox):
+    """Die Auswahlliste des Schnellwählers: Blättern ist noch keine Wahl.
+
+    Jede Wahl ist sofort eine Zuweisung mit eigenem Verlaufsschritt (RM-557).
+    Qt meldet am geschlossenen Feld jeden Pfeilschritt als Wahl — wer mit der
+    Tastatur zur dritten Spule wollte, legte zwei Schritte für die ersten an.
+    Geschlossen blättern die Pfeile deshalb nur, Enter weist zu; aus der
+    offenen Liste (Alt+Pfeil runter, F4, Leertaste) weisen Klick und Enter zu
+    wie gewohnt (Entscheidung Koordinator, Review U2; wie beim Rad nach
+    Roberts Entscheidung vom 16.09.2026).
+    """
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Name
+        modifiers = event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
+        browsing = event.key() in _BROWSING_KEYS and modifiers == Qt.KeyboardModifier.NoModifier
+        if browsing:
+            with QSignalBlocker(self):
+                super().keyPressEvent(event)
+            return
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            event.accept()
+            self.activated.emit(self.currentIndex())
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:  # noqa: N802 — Qt-Name
+        """Wer blättert und geht, hat nichts gewählt — das Feld zeigt wieder den Stand.
+
+        Sonst stünde eine nie zugewiesene Spule im Feld. Die offene Liste
+        nimmt den Fokus mit ``PopupFocusReason``; dann bleibt die Zeile.
+        """
+        if event.reason() != Qt.FocusReason.PopupFocusReason and self.currentIndex() > 0:
+            with QSignalBlocker(self):
+                self.setCurrentIndex(0)
+        super().focusOutEvent(event)
 
 
 class QuickFilamentPicker(QWidget):
@@ -53,7 +103,7 @@ class QuickFilamentPicker(QWidget):
         self.scope.setWordWrap(True)
         set_level(self.scope, "caption")
         layout.addWidget(self.scope)
-        self.picker = QComboBox(self)
+        self.picker = _SpoolChoice(self)
         self.picker.setAccessibleName(tr("Filament für die Auswahl"))
         self.picker.setMinimumContentsLength(12)
         self.picker.setSizeAdjustPolicy(

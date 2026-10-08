@@ -619,3 +619,56 @@ def test_a_wheel_notch_without_focus_assigns_nothing(picker: QuickFilamentPicker
         picker.setParent(None)
         host.close()
         host.deleteLater()
+
+
+def test_arrows_browse_the_closed_picker_and_enter_assigns(picker: QuickFilamentPicker) -> None:
+    """Am geschlossenen Wähler blättern Pfeile, erst Enter weist zu — ein Schritt, nicht drei.
+
+    Jede Wahl ist seit RM-557 sofort ein Verlaufsschritt, und Qt meldete jeden
+    Pfeilschritt als Wahl (Entscheidung Koordinator, Review U2). Ohne Maus
+    bleibt alles erreichbar: Pfeile und Enter am geschlossenen Feld, Alt+Pfeil
+    runter öffnet die Liste, Enter wählt dort.
+    """
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QComboBox
+
+    for name, colour in (("PLA Rot", "#ff0000"), ("PLA Blau", "#0000ff"), ("PLA Grün", "#00ff00")):
+        filaments.save(filaments.CatalogueFilament(name, colour, "PLA"))
+    picker.set_context([_body("part", "Teil")])
+    picker.show()
+    picker.activateWindow()
+    combo: QComboBox = picker.picker
+    combo.setFocus()
+    QApplication.processEvents()
+    chosen: list[object] = []
+    picker.spoolChosen.connect(chosen.append)
+
+    QTest.keyClick(combo, Qt.Key.Key_Down)
+    QTest.keyClick(combo, Qt.Key.Key_Down)
+    QApplication.processEvents()
+    assert chosen == [], "Pfeile ohne Enter weisen nichts zu"
+    assert combo.currentIndex() == 2, "die Pfeile blättern"
+    expected = combo.itemData(2)
+    QTest.keyClick(combo, Qt.Key.Key_Return)
+    QApplication.processEvents()
+    assert [entry.identifier for entry in chosen] == [expected], "Enter weist genau einmal zu"
+
+    chosen.clear()
+    picker.set_context([_body("part", "Teil")])
+    combo.setFocus()
+    QTest.keyClick(combo, Qt.Key.Key_Down)
+    picker.inventory_button.setFocus()
+    QApplication.processEvents()
+    assert chosen == [] and combo.currentIndex() == 0, "geblättert und gegangen: nichts gewählt"
+
+    chosen.clear()
+    picker.set_context([_body("part", "Teil")])
+    combo.setFocus()
+    QTest.keyClick(combo, Qt.Key.Key_Down, Qt.KeyboardModifier.AltModifier)
+    QApplication.processEvents()
+    view = combo.view()
+    assert view.isVisible(), "Alt+Pfeil runter öffnet die Liste ohne Maus"
+    QTest.keyClick(view, Qt.Key.Key_Down)
+    QTest.keyClick(view, Qt.Key.Key_Return)
+    QApplication.processEvents()
+    assert len(chosen) == 1, "Enter in der offenen Liste weist genau einmal zu"
