@@ -18,11 +18,16 @@ import os
 import sys
 from typing import Any, Final
 
-#: Ab wie vielen Elementen ein Behälter nur über eine Stichprobe gezählt wird.
-#: Eine Schichtanalyse hält ihre Konturen als Tupel aus Punkt-Tupeln —
-#: am Eiffelturm 1,4 Millionen Punkte; jeden einzeln zu zählen kostete bei
-#: jedem Ablegen im Cache eine Sekunde. Die Elemente eines solchen Behälters
-#: sind gleich gebaut, und die Stichprobe trifft ihre Größe auf wenige Prozent.
+#: Ab wie vielen Elementen ein Behälter nur über eine Stichprobe gezählt wird,
+#: und wie groß die Stichprobe ist. Eine Schichtanalyse hält ihre Konturen als
+#: Tupel aus Punkt-Tupeln — am Eiffelturm 1,4 Millionen Punkte; jeden einzeln
+#: zu zählen kostete bei jedem Ablegen im Cache eine Sekunde. Die Elemente
+#: eines so langen Behälters sind gleich gebaut, und die Stichprobe trifft
+#: ihre Größe auf wenige Prozent. **Ein Wörterbuch wird ganz gezählt**: Der
+#: Cache eines Netzes hält ein paar Dutzend verschiedene Felder, und eine
+#: Stichprobe über sie traf am Spiderman nur jedes zweite — 685 MB blieben
+#: ungezählt (08.10.2026).
+SAMPLE_FROM: Final = 64
 SAMPLE: Final = 32
 
 #: Wie tief verschachtelt gezählt wird — tiefer liegt in keinem Ergebnis
@@ -85,7 +90,7 @@ def held_bytes(value: object, seen: set[int] | None = None) -> int:
 
     NumPy-Felder zählen mit ihrem Puffer, ein geteilter Puffer nur einmal je
     ``seen``. Große Behälter zählen über eine gleichmäßige Stichprobe
-    (:data:`SAMPLE`), Shapely-Geometrien über ihre Koordinatenzahl. Was
+    (:data:`SAMPLE_FROM`), Shapely-Geometrien über ihre Koordinatenzahl. Was
     außerhalb von Python liegt und sich nicht zu erkennen gibt — ein nativer
     Suchbaum —, zählt mit seinem Objektkopf. Für eine Verdrängungsgrenze
     genau genug, für eine Abrechnung nicht.
@@ -114,8 +119,8 @@ def _held(value: object, seen: set[int], depth: int) -> int:
         # Erst kopieren, in einem Zug: Ein anderer Faden kann gerade etwas
         # hinzufügen (der Cache eines Netzes), und das Durchlaufen bräche ab.
         snapshot = dict(value)
-        return sys.getsizeof(value) + _sampled(
-            [item for pair in snapshot.items() for item in pair], seen, depth
+        return sys.getsizeof(value) + sum(
+            _held(item, seen, depth + 1) for pair in snapshot.items() for item in pair
         )
     if isinstance(value, (tuple, list, set, frozenset)):
         return sys.getsizeof(value) + _sampled(
@@ -134,9 +139,9 @@ def _held(value: object, seen: set[int], depth: int) -> int:
 
 
 def _sampled(items: tuple[object, ...] | list[object], seen: set[int], depth: int) -> int:
-    """Die Summe der Elemente — ab :data:`SAMPLE` hochgerechnet aus einer Stichprobe."""
+    """Die Summe der Elemente — ab :data:`SAMPLE_FROM` hochgerechnet aus einer Stichprobe."""
     count = len(items)
-    if count <= SAMPLE:
+    if count <= SAMPLE_FROM:
         return sum(_held(item, seen, depth + 1) for item in items)
     step = count / SAMPLE
     picked = sum(_held(items[int(index * step)], seen, depth + 1) for index in range(SAMPLE))

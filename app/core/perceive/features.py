@@ -7600,6 +7600,31 @@ def _memory_of(body: trimesh.Trimesh, lineage: _Lineage | None = None) -> _BodyM
     return memory
 
 
+def held_answers(body: trimesh.Trimesh) -> list[Any]:
+    """Was die Merker dieses Moduls für diesen Körper halten — zum Zählen, nicht zum Lesen.
+
+    Die gebundenen Antworten, die seiner Abstammung und die über die
+    Körpergrenze, die sie mithält. Sie gehen mit dem Körper (:func:`_forget_body`)
+    und wiegen deshalb mit dem, der ihn hält: Am Spiderman hielten acht
+    Schritte im Ergebniscache so über eine Milliarde Byte, die kein Feld des
+    Netzes zeigte (RM-567, 08.10.2026).
+    """
+    with _MEMORY_LOCK:
+        memory = _MEMORIES.get(id(body))
+        if memory is None or memory.ref() is not body:
+            return []
+        found: list[Any] = []
+        for name, key in (*memory.answers, *memory.lineage.answers):
+            answers = _SUPPORT_CACHE.get(name)
+            if answers is not None and key in answers:
+                found.append(answers[key])
+        for name, geometry_key in memory.lineage.geometric:
+            shared = _BY_GEOMETRY.get(name)
+            if shared is not None and geometry_key in shared:
+                found.append(shared[geometry_key])
+        return found
+
+
 def _forget_body(key: int, memory: _BodyMemory) -> None:
     """Der Abschied: Die Antworten eines gestorbenen Körpers gehen mit ihm.
 

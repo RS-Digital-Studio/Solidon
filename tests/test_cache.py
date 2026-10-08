@@ -528,6 +528,46 @@ def test_the_memory_level_takes_an_eighth_of_the_installed_memory(
     assert ResultCache().memory_budget == expected
 
 
+def test_every_array_of_a_mesh_cache_is_counted() -> None:
+    """Ein Wörterbuch wird ganz gezählt — eine Stichprobe über Schlüssel und Werte
+    in einer Reihe traf am Spiderman nur die Schlüssel, und 685 MB blieben
+    ungezählt. Lange gleichartige Folgen dürfen hochgerechnet werden."""
+    import numpy as np
+
+    from app.core.memory import held_bytes
+
+    cache = {f"feld_{index}": np.zeros(1000) for index in range(32)}
+    assert held_bytes(cache) >= 32 * 8000
+    points = tuple((float(index), float(index) + 0.5) for index in range(5000))
+    estimate = held_bytes(points)
+    import sys
+
+    exact = sys.getsizeof(points) + sum(
+        sys.getsizeof(point) + 2 * sys.getsizeof(1.5) for point in points
+    )
+    assert 0.9 * exact <= estimate <= 1.1 * exact
+
+
+def test_what_recognition_remembers_for_a_body_counts_with_it() -> None:
+    """Die Merker der Erkennung gehen mit dem Körper — wer ihn hält, hält sie mit.
+
+    Der Cache zählt sie deshalb zu dem Eintrag, dessen Netz sie trägt
+    (``perceive.features.held_answers``).
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect, forget_cache, held_answers
+    from app.core.scene.cache import _mesh_bytes
+
+    forget_cache()
+    body = trimesh.creation.cylinder(radius=8.0, height=20.0, sections=96)
+    mesh = MeshData.of(body)
+    detect(mesh)
+    assert held_answers(body), "Voraussetzung: die Erkennung hat sich etwas gemerkt"
+    assert _mesh_bytes(mesh, set()) > mesh.held_bytes(set())
+
+
 def test_the_installed_memory_is_read_from_the_system() -> None:
     from app.core.memory import physical_memory
 

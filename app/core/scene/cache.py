@@ -111,13 +111,28 @@ def held_by(result: CachedResult, kept: Collection[int] = (), seen: set[int] | N
     for entry in result.objects:
         if id(entry.mesh) in kept:
             continue
-        measure = getattr(entry.mesh, "held_bytes", None)
-        total += (
-            int(measure(seen))
-            if callable(measure)
-            else entry.mesh.triangle_count * FALLBACK_BYTES_PER_TRIANGLE
-        )
+        total += _mesh_bytes(entry.mesh, seen)
         total += held_bytes(entry.features, seen)
+    return total
+
+
+def _mesh_bytes(mesh: Mesh, seen: set[int]) -> int:
+    """Ein Netz samt dem, was die Erkennung für seinen Körper gemerkt hat.
+
+    Die Merker der Erkennung hängen am Körper und gehen mit ihm
+    (``perceive.features.held_answers``); wer das Netz hält, hält sie mit.
+    """
+    from app.core.memory import held_bytes
+
+    measure = getattr(mesh, "held_bytes", None)
+    if not callable(measure):
+        return mesh.triangle_count * FALLBACK_BYTES_PER_TRIANGLE
+    total = int(measure(seen))
+    raw = getattr(mesh, "raw", None)
+    if raw is not None:
+        from app.core.perceive.features import held_answers
+
+        total += held_bytes(held_answers(raw), seen)
     return total
 
 
@@ -574,9 +589,7 @@ class ResultCache:
         """Die Bytes je Eintrag, jedes Feld einmal: erst die Szene, dann vom jüngsten an."""
         seen: set[int] = set()
         for mesh in kept:
-            measure = getattr(mesh, "held_bytes", None)
-            if callable(measure):
-                measure(seen)
+            _mesh_bytes(mesh, seen)
         return {
             key: held_by(self._entries[key], ids, seen) for key in reversed(list(self._entries))
         }
