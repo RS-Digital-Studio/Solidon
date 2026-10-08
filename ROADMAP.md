@@ -50,6 +50,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
+| [RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken](#rm-567) | Plattformen, Pakete und Grafik | Robert, 08.10.: erst Spitzen und Dauerbelegung je Hauptweg messen, dann senken; Ziel Rechner mit 8 und 16 GB |
 | [RM-549 — Ein frisch installiertes Orca-AppImage unter Linux hat keine lesbaren Herstellerprofile](#rm-549) | Plattformen, Pakete und Grafik | Gefunden mit der Slicerauswahl (07.10.): ohne Vorwahl des Herstellerprofils lehnt die Orca-Familie den Auftrag ab; offen, ob der Druckdialog dann mit Grund und Weg endet |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | Profilkörper am Netz gebaut (05.10.), Besenhalter angenommen; offen der Korpuslauf über diesen Stand samt fünf Teilen über 600 s, die Fensterabnahme beim Release und die Wiederholung der berichtigten Zahlenanzeige am Fenster |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -86,6 +87,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-541 — Der Skizzenlöser landet auf dem Intel-Mac im anderen Zweig einer Winkelbedingung](#rm-541) | Geometrie, Erkennung und Druckvorbereitung | Gefunden mit RM-531 (06.10.): 135° statt 45° unter macOS Intel; offen die Rechnung in Verschiebungen und ihre Wirkung auf unterbestimmte Skizzen |
 | [RM-542 — Die fünf offenen Entscheidungen der Erstkonfiguration](#rm-542) | Geometrie, Erkennung und Druckvorbereitung | Gefunden beim Umräumen der Konzepte (RM-099, 06.10.): nur im Konzept geführt; offen der Abgleich mit RM-281 und Roberts Entscheidung |
 | [RM-552 — *Stift für Bohrung* liest die Kette an einer Bausteinbohrung mit Senkung nicht](#rm-552) | Geometrie, Erkennung und Druckvorbereitung | Gefunden in der Nachprüfung von P2 (07.10.): Schraubenloch und Einpressbuchse sagen über Menü und Palette `chain_unreadable`, weil die Bausteinbohrung durch ihre Senkung läuft; die Karte bietet den Stift dort nicht mehr an. Offen: `bore_pin._following` liest eine überlappende Kette |
+| [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Robert, 08.10.: Profil je Stufe an den Korpusmodellen, die teuersten Stellen zuerst; Budget §31 |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
@@ -98,6 +100,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Robert, 08.10.: Start, Gegenecke in X/Y, Höhe in Z; ein Weg; Ablauf vorher mit bedienlogik |
 | [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
 | [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Robert, 08.10.: je Werkzeug ein Weg, wenige Schritte, keine verschachtelten Modi; Klicks vorher und nachher zählen |
+| [RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im Projekt](#rm-569) | Bedienung und Darstellung | Robert, 08.10.: Code legt es sofort im Lager an, das Projekt trägt Name, Material und Farbe an der Bindung; Zusammenspiel mit Strg+Z, Speichern und fremdem Rechner fehlt als Test |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge und Quelltexte durchgesehen und behoben (04.10., `871cc29e6`), Handbuch und Stempel mit 0.5.3 erzeugt; offen allein die Fensterabnahme der längeren Knopfnamen auf 1280 px (RM-213) |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Gegenprobe liest Export- und Slicerdateien zurück, Nebenfolge je Handlung aus dem Kern, Folge je Befund, Kandidatenprüfung nennt nur Neues und Behobenes, NM 1–11 ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
@@ -841,6 +844,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   **Offen:** wie der Druckdialog bei einem nie geöffneten AppImage endet. **Abnahme:** am
   Runner ein frisch entpacktes Orca-AppImage ohne ersten Start: Der Dialog nennt den Grund
   und den Weg (das Programm einmal öffnen), oder Solidon liest die Profile aus dem Abbild.
+
+<a id="rm-567"></a>
+
+- [ ] **RM-567 — Weniger Arbeitsspeicher: messen, wo er bleibt, und den Bedarf senken.**
+  Robert, 08.10.2026: „analysieren, wie wir weniger Arbeitsspeicher verbrauchen“. Solidon soll
+  auf acht Jahre alter Hardware laufen, viele Kunden haben 8 oder 16 GB. **Vorgehen:** Spitzen-
+  und Dauerbelegung je Hauptweg (Bauplan §2.2) und an großen Korpusmodellen messen
+  (Netzkern, exakter Kern, Merkmalserkennung, Schichtanalyse, Vorschau, Verlaufscache, Renderer),
+  die größten Posten benennen, dann senken: doppelte Netzkopien, Caches ohne Grenze, Arbeiter,
+  die ihre Ergebnisse halten. **Abnahme:** Messbericht vorher und nachher mit Werkzeug und
+  Rechner; je Senkung ein Test, der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -3134,6 +3148,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   und an der Einpressbuchse je Kern: Stift gebaut, Spiel rundum mindestens das eingestellte; die
   Magnettasche sagt weiter `narrowing_mouth`.
 
+<a id="rm-568"></a>
+
+- [ ] **RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen.** Robert,
+  08.10.2026: „die Merkmalerkennung und alles andere noch schneller machen“. **Vorgehen:**
+  Profil je Stufe der Erkennung an den Korpusmodellen und an großen Kundendateien, dazu Import,
+  Auswertung nach einer Änderung, Schichtanalyse, Orientierungssuche und Export; die teuersten
+  Stellen zuerst, gemessen in CPU-Zeit ohne Fremdlast. **Abnahme:** Messbericht vorher und nachher
+  je Stufe; Leistungstests (`pytest -m performance`, Budget §31) mit neuen, engeren Zielwerten für
+  das Erreichte; Ergebnisse unverändert (Korpustests grün, gleiche Merkmale).
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -4173,6 +4197,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Weg zu jeder Aufgabe, wenige Schritte, keine verschachtelten Modi. **Abnahme:** `bedienlogik`
   zählt die Klicks je Hauptaufgabe vorher und nachher; kein zweiter Weg zur selben Sache;
   Fenstertests der neuen Abläufe; Handbuch.
+
+<a id="rm-569"></a>
+
+- [ ] **RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im
+  Projekt.** Robert, 08.10.2026: „werden Filamente auch gespeichert, wenn wir einem Körper ein
+  Filament zuweisen, das wir in dem Schritt auch erstellen?“ Nachgesehen: *Neues Filament …* in
+  der Auswahl (`filament_picker._make_one`) schreibt es über `filaments.save` sofort ins
+  Filamentlager und wählt es danach; das Projekt trägt Name, Material und Farbe an der
+  Spulenbindung (`SpoolBinding`). Ungeprüft ist das Zusammenspiel. **Abnahme:** Test über den
+  ganzen Weg — Filament beim Zuweisen anlegen, Projekt speichern, mit leerem Nutzerordner öffnen:
+  Name, Farbe und Material stehen da; Strg+Z nimmt die Zuweisung zurück, das Lager behält das
+  Filament; Speichern, bevor der Lagereintrag geschrieben ist, verliert nichts; ein
+  fehlgeschlagener Lagereintrag meldet sich mit Handlungsvorschlag.
 
 ## KI und Generatoren
 
