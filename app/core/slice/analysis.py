@@ -700,7 +700,7 @@ def _measure_all(
     ``on_plate`` ist das eine, womit das Auffächern vorsichtig sein muss: die
     erste Schicht mit Material liegt auf der Platte und braucht keine Stütze.
     Die erste nach einer **Lücke** braucht sehr wohl eine — sie beginnt in der
-    Luft, und genau das ist eine Insel (:func:`_islands`); ``on_plate`` gilt
+    Luft, und genau das ist eine Insel (:func:`_islands_many`); ``on_plate`` gilt
     deshalb nur der untersten Schicht des Körpers. Das wird hier entschieden,
     bevor irgendetwas beginnt.
 
@@ -1720,41 +1720,6 @@ def _repaired(shape: ShapelyPolygon) -> ShapelyPolygon:
     es lässt die entartete Naht fallen und behält das Material.
     """
     return shape if shape.is_valid else shape.buffer(0)
-
-
-def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyPolygon:
-    """Konturen ohne Verbindung nach unten — die brauchen Stützen,
-    immer (§22.2).
-
-    **Getragen wird, was eine Fläche gemeinsam hat.** Hier stand
-    ``intersects``, und das ist auch bei einer Berührung wahr — bei einer
-    Überlappung von exakt null. Zwei Konturen, die sich in einer Kante oder
-    einer Ecke treffen, galten damit als verbunden; der obere Teil liegt dann
-    auf einer Linie ohne Breite und fällt im Druck ab. Eine Lücke von einem
-    hundertstel Millimeter wurde dagegen richtig gemeldet — die Erkennung war
-    also genauer beim Getrennten als beim Berührenden.
-
-    Der Fall ist keiner aus dem Testkörper: Eine Sanduhr, eine Pyramide auf
-    der Spitze, zwei Kegel Spitze an Spitze — überall verjüngt sich der
-    Querschnitt auf einen Punkt, und darüber beginnt neues Material.
-
-    Die Grenze ist ``EPS_GEOM`` und keine eigene Zahl (Regel 7). Sie steht auf
-    der Fläche, nicht auf einer Länge: Zwei Konturen mit weniger als einem
-    Quadrat von EPS_GEOM Kantenlänge gemeinsam berühren sich, statt zu tragen.
-
-    **Die Schnittfläche wird nur gerechnet, wo die Antwort offen ist.** Sie
-    ist eine Überlagerung zweier fast gleicher Konturen, der teuerste Fall für
-    GEOS: An einer Hohlkugelschicht kostete sie 2,8 bis 7 ms, je Schicht, für
-    ein Ja, das niemand bezweifelte. Zwei billige Fragen entscheiden fast
-    immer vorher. Berühren sich die Teile gar nicht, schwebt das obere. Und
-    liegt ein Quadrat von zwei ``EPS_GEOM`` Kantenlänge um einen Punkt des
-    oberen Teils ganz im Inneren beider, teilen sie mindestens diese Fläche —
-    das Vierfache der Grenze. Beide Fragen stellt GEOS vektorisiert über alle
-    Teile einer Schicht, zusammen unter 0,1 ms.
-    """
-    if previous is None or previous.is_empty:
-        return shape
-    return _islands_many(np.asarray([shape], dtype=object), np.asarray([previous], dtype=object))[0]
 
 
 def _simplified(shape: ShapelyPolygon) -> ShapelyPolygon:
@@ -2867,7 +2832,37 @@ def _halved(
 
 
 def _islands_many(shapes: np.ndarray, previous: np.ndarray) -> list[ShapelyPolygon]:
-    """:func:`_islands` für ein Feld von Schichtpaaren; ``previous`` ist nie leer."""
+    """Konturen ohne Verbindung nach unten, je Schichtpaar eines Felds — die brauchen
+    Stützen, immer (§22.2). ``previous`` ist nie leer: Eine Schicht ohne
+    Vorgängerin liegt auf der Platte oder ganz in der Luft, und das entscheidet
+    der Aufrufer, bevor er hier fragt.
+
+    **Getragen wird, was eine Fläche gemeinsam hat.** Hier stand
+    ``intersects``, und das ist auch bei einer Berührung wahr — bei einer
+    Überlappung von exakt null. Zwei Konturen, die sich in einer Kante oder
+    einer Ecke treffen, galten damit als verbunden; der obere Teil liegt dann
+    auf einer Linie ohne Breite und fällt im Druck ab. Eine Lücke von einem
+    hundertstel Millimeter wurde dagegen richtig gemeldet — die Erkennung war
+    also genauer beim Getrennten als beim Berührenden.
+
+    Der Fall ist keiner aus dem Testkörper: Eine Sanduhr, eine Pyramide auf
+    der Spitze, zwei Kegel Spitze an Spitze — überall verjüngt sich der
+    Querschnitt auf einen Punkt, und darüber beginnt neues Material.
+
+    Die Grenze ist ``EPS_GEOM`` und keine eigene Zahl (Regel 7). Sie steht auf
+    der Fläche, nicht auf einer Länge: Zwei Konturen mit weniger als einem
+    Quadrat von EPS_GEOM Kantenlänge gemeinsam berühren sich, statt zu tragen.
+
+    **Die Schnittfläche wird nur gerechnet, wo die Antwort offen ist.** Sie
+    ist eine Überlagerung zweier fast gleicher Konturen, der teuerste Fall für
+    GEOS: An einer Hohlkugelschicht kostete sie 2,8 bis 7 ms, je Schicht, für
+    ein Ja, das niemand bezweifelte. Zwei billige Fragen entscheiden fast
+    immer vorher. Berühren sich die Teile gar nicht, schwebt das obere. Und
+    liegt ein Quadrat von zwei ``EPS_GEOM`` Kantenlänge um einen Punkt des
+    oberen Teils ganz im Inneren beider, teilen sie mindestens diese Fläche —
+    das Vierfache der Grenze. Beide Fragen stellt GEOS vektorisiert über alle
+    Teile einer Schicht, zusammen unter 0,1 ms.
+    """
     parts, owner = shapely.get_parts(shapes, return_index=True)
     result: list[ShapelyPolygon] = [ShapelyPolygon()] * len(shapes)
     if not len(parts):

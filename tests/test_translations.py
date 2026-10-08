@@ -110,6 +110,37 @@ def test_spanish_tours_name_the_visible_actions() -> None:
         set_language("de")
 
 
+@pytest.mark.parametrize(
+    ("language", "foreign"),
+    [("es", r"\b(?:elementos?|detalles?)\b"), ("pt", r"\b(?:elementos?|pormenor(?:es)?)\b")],
+)
+def test_a_feature_keeps_the_programs_word_in_spanish_and_portuguese(
+    language: str, foreign: str
+) -> None:
+    """Ein Merkmal heißt „característica“, im Programm wie im Handbuch (Einheitlichkeit).
+
+    Die Knöpfe sagten es längst, Handbuch und einige Meldungen sagten daneben
+    „detalle(s)“ beziehungsweise „elemento(s)“ — der Kunde suchte einen
+    Unterschied, den es nicht gibt (Handbuch-Wächter, Entscheidung zum
+    Fließtext). Ein anderes Wort ist nur dort richtig, wo die Quelle selbst
+    ein anderes nennt: *Element*, *Gegenstück*, *Detail*, *Einzelheit*.
+    """
+    catalog = read_catalog(language)
+    other_word = re.compile(r"element|gegenstück|detail|einzelheit", re.IGNORECASE)
+    drifted = [
+        f"{key[:70]!r} → {value[:90]!r}"
+        for key, value in catalog.items()
+        if re.search(r"merkmal", key, re.IGNORECASE)
+        and re.search(foreign, value, re.IGNORECASE)
+        and not other_word.search(key)
+    ]
+    assert not drifted, "\n".join(drifted)
+    named = [value for key, value in catalog.items() if re.search(r"merkmal", key, re.IGNORECASE)]
+    assert sum("característica" in value.casefold() for value in named) > 50, (
+        "Voraussetzung: das Programm nennt Merkmale „característica“"
+    )
+
+
 def test_french_range_check_warns_for_any_failed_corner() -> None:
     """Ein einziger gescheiterter Eckpunkt ist bereits ein Warnfall."""
     catalog = read_catalog("fr")
@@ -603,13 +634,28 @@ def _fixed_translated_colons(tree: ast.AST) -> set[int]:
             and re.match(r"^\s*(?:</[^>]+>\s*)*:", node.value) is not None
         )
 
+    def ends_with_colon(node: ast.AST) -> bool:
+        while isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            node = node.right
+        if isinstance(node, ast.JoinedStr) and node.values:
+            node = node.values[-1]
+        return (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and re.search(r":\s*$", node.value) is not None
+        )
+
     offenders: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.JoinedStr) and translated(node):
             if any(starts_with_colon(part) for part in node.values):
                 offenders.add(node.lineno)
         elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-            if translated(node.left) and starts_with_colon(node.right):
+            # Auch davor: ``f"{x}: " + tr(…)`` — der Doppelpunkt steht vor dem
+            # übersetzten Teil (Review RM-285, ``analysis.py``).
+            if (translated(node.left) and starts_with_colon(node.right)) or (
+                translated(node.right) and ends_with_colon(node.left)
+            ):
                 offenders.add(node.lineno)
         elif (
             isinstance(node, ast.Call)
@@ -656,6 +702,11 @@ def _fixed_translated_colons(tree: ast.AST) -> set[int]:
         ('"{name}: {value}".format_map({"name": tr("Wert"), "value": value})', True),
         ('tr("Sicherheitsproblem melden") + f": <a>{address}</a>"', True),
         ('field.setPrefix(reference_name + ": ")', True),
+        ('f"{object_id}: " + tr("bessere Lage gefunden")', True),
+        ('"Wert: " + _("Text")', True),
+        ('tr("A") + f" {n}: " + tr("B")', True),
+        ('f"{host}:" + str(port)', False),
+        ('f"{object_id}: " + name', False),
         ('field.setPrefix(f"{reference_name}: ")', True),
         ('field.setPrefix(tr("{name}: {value}", name=reference_name, value=""))', False),
         ('tr("Wert: {value}", value=value)', False),
@@ -1701,17 +1752,51 @@ def test_no_entry_mixes_two_apostrophes(language: str) -> None:
     assert not mixed, f"{language}: beide Apostrophe in einem Text:\n" + "\n".join(mixed)
 
 
-def non_model_surface_files() -> list[Path]:
-    """Kommandozeile und die drei eigenständigen Kundenmeldungswege im Kern."""
-    return sorted((PACKAGE_DIR / "cli").rglob("*.py")) + [
-        PACKAGE_DIR / "core" / name for name in ("install.py", "log.py", "support.py")
+def model_text_files() -> list[Path]:
+    """Was das Sprachmodell liest: die Agentenschicht und der Steckbrief."""
+    return [
+        *sorted((PACKAGE_DIR / "core" / "agent").glob("*.py")),
+        PACKAGE_DIR / "core" / "perceive" / "digest.py",
     ]
+
+
+def non_model_surface_files() -> list[Path]:
+    """Kommandozeile und der ganze Kern außer den Modelltexten.
+
+    Bis RM-285 las die Prüfung im Kern nur ``install.py``, ``log.py`` und
+    ``support.py``; der Einrichtungsdialog für ComfyUI setzte derweil feste
+    Doppelpunkte vor übersetzte Sätze. Was sonst ans Modell oder an den Kunden
+    geht (``registry/surfaces``, ``knowledge/rules``, ``perceive/actions``),
+    war ungeschützt.
+    """
+    model = set(model_text_files())
+    return sorted((PACKAGE_DIR / "cli").rglob("*.py")) + [
+        path for path in sorted((PACKAGE_DIR / "core").rglob("*.py")) if path not in model
+    ]
+
+
+def test_model_texts_do_not_append_a_fixed_colon() -> None:
+    """RM-285, der Rest: Auch was das Sprachmodell liest, setzt seinen
+    Doppelpunkt im Katalog — Steckbrief, Werkzeugbeschreibungen („Ort: …“),
+    Werkzeugantworten. Im Französischen stand davor sonst kein Leerzeichen,
+    und ein Agententitel („Vorschlag: …“) landet als Transaktionstitel im
+    Verlauf des Kunden. Auf Deutsch bleibt jeder Text Zeichen für Zeichen,
+    was er war.
+    """
+    paths = model_text_files()
+    assert len(paths) > 5, "die Agentenschicht muss Quellen haben"
+    offenders = [
+        f"{path.relative_to(PACKAGE_DIR)}:{line}"
+        for path in paths
+        for line in sorted(_fixed_translated_colons(ast.parse(path.read_text(encoding="utf-8"))))
+    ]
+    assert not offenders, "feste Doppelpunkte neben Übersetzungen:\n" + "\n".join(offenders)
 
 
 def test_non_model_surface_labels_do_not_append_a_fixed_colon() -> None:
     """Modellkontext und Bereichsnachweis gehören zu ihren getrennten Abnahmen."""
     paths = non_model_surface_files()
-    assert paths, "die Kundentextprüfung muss Quellen lesen"
+    assert len(paths) > 100, "die Kundentextprüfung muss den Kern lesen"
     offenders = [
         f"{path.relative_to(PACKAGE_DIR)}:{line}"
         for path in paths

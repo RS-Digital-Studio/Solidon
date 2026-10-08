@@ -677,6 +677,21 @@ def test_a_gathered_parameter_is_refused_over_the_wire() -> None:
         remote.check_call(name, {"objects": ["obj_1"], feld: "geraten"})
 
 
+@pytest.mark.parametrize("name", ["sculpt_strokes", "pose_armature"])
+def test_an_empty_brush_or_skeleton_call_is_refused_over_the_wire(name: str) -> None:
+    """RM-014, Review: Die Chat-Sitzung lehnt den leeren Aufruf von *Formen*
+    und *Stellung geben* ab — ohne Geste tun beide nichts. Die Leitung nahm
+    ihn an und legte einen leeren Schritt an, obwohl ihre Werkzeugliste
+    denselben Satz „setzt der Nutzer selbst“ trägt. Beide fragen jetzt
+    ``tools.refused_gathered``.
+    """
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call(name, {"objects": ["obj_1"]})
+    offered = {entry["name"] for entry in remote.remote_tools()}
+    assert offered, "die Liste wurde gebaut"
+    assert name not in offered, "gesperrt heißt auch: nicht angeboten"
+
+
 def test_the_tool_list_speaks_the_mcp_contract() -> None:
     """Gesamtreview 05.09.2026, CORE-04: Alle 110 Einträge trugen
     ``input_schema``, keiner das ``inputSchema``, das der Tool-Datentyp der

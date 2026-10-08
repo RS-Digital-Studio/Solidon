@@ -882,17 +882,29 @@ def test_screw_cap_accepts_the_entire_neck_without_intersection(profile, height,
     assert neck.bounds.maximum[2] == pytest.approx(60 + height, abs=1e-5)
 
 
-@pytest.mark.parametrize("diameter", [60.0, 100.0])
+@pytest.mark.parametrize("diameter", [60.0, 100.0, 300.0])
 @pytest.mark.parametrize("height,pitch", [(8.0, 3.0), (7.3, 2.0)])
 def test_wide_screw_caps_use_the_same_angular_stations_as_the_neck(
     profile, diameter, height, pitch
 ):
-    """Unterschiedlich lange Wendeln dürfen das Spiel nicht durch andere Sehnen aufbrauchen."""
+    """Unterschiedlich lange Wendeln dürfen das Spiel nicht durch andere Sehnen aufbrauchen.
+
+    Ø 300 liegt über der alten Grenze der Facettenregel: Gang und Rundkörper
+    bekommen dort mehr Sehnen (``lid.turn_sections``), Hals und Kappe dieselben.
+    """
+    from app.core.geom.lid import turn_sections
+    from app.core.units import MAX_FACET_SAG
+
     result = make_screw_lid(jar(radius=diameter / 2, wall=3), profile, height=height, pitch=pitch)
     neck, cap = (entry.mesh for entry in result.outputs)
     assembled = cap.raw.copy()
     assembled.apply_translation((0, 0, 60))
     assert shared_volume(neck.raw, assembled) < 1e-5
+    clearance = result.findings[0].values["clearance_mm"]
+    turn, sections = turn_sections(diameter, clearance)
+    radius = diameter / 2.0 + clearance
+    assert radius * (1.0 - np.cos(np.pi / turn)) <= MAX_FACET_SAG
+    assert sections % turn == 0 or turn % sections == 0, "Gang und Rundkörper teilen die Winkel"
 
 
 def test_a_turned_opening_is_measured_across_its_narrow_side(profile: Profile) -> None:

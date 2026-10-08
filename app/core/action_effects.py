@@ -144,7 +144,7 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
         "bekommen."
     ),
     "split_and_retry": _(
-        "Zerlegt den Körper vor dem Schritt in seine Teile und rechnet den Schritt neu."
+        "Teilt den Körper vor dem Schritt in seine Einzelteile auf und rechnet den Schritt neu."
     ),
     "release_protection": _(
         "Hebt die Sperre auf; Schnitte dürfen danach auch durch die geschützten Flächen gehen."
@@ -174,6 +174,7 @@ SIDE_EFFECTS: Final[Mapping[str, TranslatableText]] = {
     "recount_and_retry": _STEP_CHANGES,
     # Schritte
     "resize_the_widening": _("Ändert die Senkung im selben Verhältnis wie die Bohrung."),
+    "change_creating_step": WHEN_APPLIED,
     "reactivate_step": _("Schaltet den Schritt wieder ein; die Schritte danach rechnen neu."),
     "suppress_step": _("Schaltet den Schritt aus; was auf ihm aufbaut, ruht mit."),
     "suppress_along": _(

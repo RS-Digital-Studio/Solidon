@@ -79,6 +79,21 @@ Python-Zustand (Treiber) zählt als Absturz.
   dann auf ein Symbol. Eine neue Ausnahme braucht einen solchen Beleg.
 - `tests/test_packaging.py` hält die Schritte samt Gegenproben; ein neues
   Paketformat bekommt seinen Start, bevor es ausgeliefert wird.
+- **Das Windows-Setup wird bei jedem Release über die veröffentlichte Version
+  aktualisiert und deinstalliert** (`tools/check_windows_update.py`, Entscheidung
+  Robert): mit den Schaltern der Anwendung, danach Neustart und Starttest; eigene
+  Bausteine, Einstellungen, Profile und Filamentlager überstehen Update und
+  Deinstallation, das Programm hinterlässt nichts. Grund: Ein Kunde installiert
+  fast nie frisch, und ein Update, das seine Bausteine kostet, merkt erst er.
+  Ohne Versionssprung ist der Schritt rot, und nach jeder Installation muss jede
+  gesuchte Spur da sein — sonst prüft er ein Neuinstallieren oder ins Leere. Was
+  `[Registry]` im `.iss` schreibt, geht beim Deinstallieren wieder
+  (`uninsdelete…` oder ein eigener Elternschlüssel mit `uninsdeletekey`; Wächter in
+  `tests/test_windows_signed_installer.py`).
+- **Auf GitHubs Mac-Runnern ist SIP aus**, und weder der Schutz vor
+  ausführbarem Schreibspeicher noch die Bibliotheksprüfung der Hardened
+  Runtime greifen dort. Was nur daran scheitert, zeigt dort kein Start; eine
+  solche Zusage hält ein Test am Text des Signierschritts (RM-104).
 
 ## Die Version wird vor dem Bau erhöht, und nur über das Werkzeug
 
@@ -142,6 +157,13 @@ Signiergeheimnisse gehören nicht in den Baujob. Eine prüfsummengebundene
 Übergabe trennt Bauen, Freigeben und Signieren; auf Windows geht der Weg bis
 auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
 
+- **Die Mac-App läuft mit Hardened Runtime und genau einer Ausnahme**,
+  `com.apple.security.cs.allow-unsigned-executable-memory`, nur am
+  Hauptprogramm und mit einem Rezept für beide Architekturen: erst tief
+  signieren, dann das Bundle ohne `--deep` mit der Liste. Ohne sie kreist auf
+  Intel-Macs mit macOS 26 schon das `import ctypes` in PyInstallers Bootstrap
+  in Apples libffi. Der Signierschritt liest Schlüssel und Wert zurück,
+  `test_supply_chain.py` hält den Text (RM-104).
 - Neue Actions nur mit vollständiger 40-stelliger Commit-ID.
 - Downloads im Workflow nur von einer unveränderlichen Veröffentlichung und
   nach Prüfsummenprüfung.

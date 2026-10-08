@@ -17,6 +17,7 @@ from app.core.backends import llm
 from app.core.bootstrap import load_operations
 from app.core.http import ResponseTooLargeError
 from app.core.json_boundary import StrictJsonError
+from tests.helpers import LoopbackServer
 from tools import measure_local_model
 
 
@@ -81,7 +82,7 @@ def count_call(
     def forbidden(*args: object, **kwargs: object) -> Any:
         pytest.fail("der reine Zählweg darf keine Leistungsmessung auslösen")
 
-    server = http.server.HTTPServer(("127.0.0.1", 0), Answer)
+    server = LoopbackServer(("127.0.0.1", 0), Answer)
     serving = threading.Thread(
         target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
     )

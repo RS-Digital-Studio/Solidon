@@ -8,10 +8,12 @@ eine reine Kerndatei in die Fenstergruppe, während eine indirekt geerbte
 Fixture ohne den Namen unsichtbar blieb. Pytest kennt den vollständigen
 Fixture-Graphen bereits; dieses Werkzeug liest ihn nach der Sammlung aus.
 Fenster in eigenen Prozessen tragen ausdrücklich ``pytest.mark.windowed``,
-weil deren Aufbau nicht im Fixture-Graphen des aufrufenden Tests steht. Echte
-Grafik trägt ``pytest.mark.rendering`` oder fordert die zentrale Fixture
-``require_graphics_adapter`` an. Erzeugnisvergleiche bleiben davon getrennt:
-``rendered`` bezeichnet nur vorbereitete Handbuch- und Website-Bilder.
+weil deren Aufbau nicht im Fixture-Graphen des aufrufenden Tests steht; wer
+eines auf der echten Plattform zeigt, fordert ``native_window_platform`` an
+und ist damit markiert. Echte Grafik trägt ``pytest.mark.rendering`` oder
+fordert die zentrale Fixture ``require_graphics_adapter`` an.
+Erzeugnisvergleiche bleiben davon getrennt: ``rendered`` bezeichnet nur
+vorbereitete Handbuch- und Website-Bilder.
 
 **Getrennt wird je Test, nicht je Datei** (22.09.2026). Bis dahin zog ein
 einziger Fenstertest seine ganze Datei in die Fenstergruppe, und die lief nur
@@ -38,12 +40,15 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 _GRAPHICS_FIXTURES = frozenset({"graphics_adapter_problem", "require_graphics_adapter"})
+#: ``qt_app`` baut Fenster im Testprozess, ``native_window_platform`` zeigt
+#: eines auf der echten Plattform im Kindprozess (``tests/conftest.py``).
+_WINDOW_FIXTURES = frozenset({"qt_app", "native_window_platform"})
 
 
 def needs_a_window(item: pytest.Item) -> bool:
-    """Ob ein Test ein Fenster baut: über ``qt_app`` oder ausdrücklich markiert."""
+    """Ob ein Test ein Fenster baut: über eine Fensterfixture oder ausdrücklich markiert."""
     return (
-        "qt_app" in getattr(item, "fixturenames", ())
+        bool(_WINDOW_FIXTURES.intersection(getattr(item, "fixturenames", ())))
         or item.get_closest_marker("windowed") is not None
     )
 
@@ -62,7 +67,7 @@ def needs_release_isolation(item: pytest.Item) -> bool:
 
 
 def mark_windowed_items(items: list[pytest.Item]) -> None:
-    """Gibt jedem Test mit ``qt_app`` den Marker ``windowed``.
+    """Gibt jedem Test mit ``qt_app`` oder ``native_window_platform`` den Marker ``windowed``.
 
     Dann trennt ``-m`` genau wie der Fixture-Graph: ``not windowed`` für das
     reguläre Tor, ``windowed`` für die Fensterprozesse beim Release. Gerufen
@@ -87,6 +92,8 @@ class WindowedCollector:
         self.files: set[Path] = set()
         self.plain_files: set[Path] = set()
         self.window_counts: dict[Path, int] = {}
+        #: Je Datei die Programme ihrer Slicertests (``pytest.mark.slicer``).
+        self.slicer_programs: dict[Path, set[str]] = {}
         self.include_rendered = include_rendered
         self.collected_count = 0
 
@@ -98,6 +105,8 @@ class WindowedCollector:
         if not self.include_rendered and item.get_closest_marker("rendered") is not None:
             return
         path = Path(str(item.path)).resolve()
+        for marker in item.iter_markers("slicer"):
+            self.slicer_programs.setdefault(path, set()).update(str(arg) for arg in marker.args)
         if needs_release_isolation(item):
             self.files.add(path)
             self.window_counts[path] = self.window_counts.get(path, 0) + 1
@@ -177,6 +186,21 @@ def collect_ci_window_counts(
     """Zählt Fenster- und Rendererfälle ohne Leistung und Erzeugnisvergleiche."""
     collector = _collect(paths, confcutdir=confcutdir)
     return dict(sorted(collector.window_counts.items()))
+
+
+def collect_ci_selection(
+    paths: Sequence[Path], *, confcutdir: Path | None = None
+) -> tuple[tuple[Path, ...], dict[Path, tuple[str, ...]]]:
+    """Fensterdateien und je Datei die Slicer ihrer ``slicer``-Fälle, in einer Sammlung.
+
+    Für ``tools/ci_selection.py``: Eine Sammlung über die betroffenen Dateien
+    kostet mit der Oberfläche über eine Minute, zwei kosteten das Doppelte.
+    """
+    collector = _collect(paths, confcutdir=confcutdir)
+    programs = {
+        path: tuple(sorted(found)) for path, found in sorted(collector.slicer_programs.items())
+    }
+    return tuple(sorted(collector.files)), programs
 
 
 def _collect(

@@ -21,6 +21,7 @@ gehören.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any, Final
@@ -99,6 +100,51 @@ DRAFT_CUTS_THROUGH = _(
     "würde dünner als null. Stellen Sie einen kleineren Winkel ein, oder wählen Sie "
     "weniger Flächen."
 )
+
+#: Der Satz beider Kerne, wenn an einer angestellten Wand quer zur
+#: Entformungsrichtung eine Verrundung anschließt (RM-230). OpenCASCADE rechnet
+#: sie neben der gekippten Wand nicht nach (``Draft_FaceRecomputation``), und das
+#: Netz behielt sie mit Knick oder sagte je nach Winkel ab. Gefragt wird deshalb
+#: vor der Rechnung, an beiden Kernen gleich (:func:`_round_beside_the_walls`,
+#: ``brep.profiles._tangent_chain``). Ein kleinerer Winkel hilft dort nicht. Der
+#: Weg einer CAD-Konstruktion — Rundung weg, anstellen, neu runden — trägt hier
+#: noch nicht: Eine Fußrundung in einer Kette mit Eckstücken entfernt *Merkmal
+#: entfernen* nicht (RM-230). Der Satz nennt deshalb nur, was hilft.
+DRAFT_BESIDE_A_ROUND = _(
+    "An einer angestellten Wand liegt quer zur Entformungsrichtung eine Verrundung an, "
+    "etwa unten am Fuß. Neben ihr lässt sich die Schräge nicht anlegen. Wählen Sie nur "
+    "Wände ohne diese Verrundung."
+)
+
+#: Der Satz des exakten Kerns, wenn ohne Kante eine stehende Fläche anschließt,
+#: die sich nicht mit anstellen lässt — eine frei geformte Ecke (B-Spline) oder ein
+#: fast stehender Zylinder (Review RM-230, F3). ``BRepOffsetAPI_DraftAngle``
+#: ließ sie still senkrecht stehen, und die gekippten Wände schnitten sich in sie
+#: ein: An der Ecke gab es keine Schräge, genau dort klemmt das Teil. Am Netz
+#: sind solche Ecken Streifen; ihr Zwilling sagt an der B-Spline-Ecke ebenfalls
+#: ab, aber mit dem Ecksatz und dem Rat zum Winkel (``_moved_corners``) — die
+#: Kerne sind dort uneins im Satz (RM-230, „Kerne uneins“). Eine schon
+#: angestellte gerundete Ecke ist ein Kegel und geht mit
+#: (``profiles._tangent_chain``, Review P2 G2, G4).
+DRAFT_BESIDE_A_FREE_FACE = _(
+    "An einer angestellten Wand schließt ohne Kante eine gewölbte Fläche an, die sich "
+    "nicht mit anstellen lässt, etwa eine frei geformte Ecke. Wählen Sie nur Wände, an "
+    "die keine solche Fläche anschließt."
+)
+
+
+def leaning_band(along: np.ndarray) -> np.ndarray:
+    """Welche Flächen schräg zur Entformungsrichtung liegen, aus ``n · d`` je
+    Fläche — weder Wand noch Boden oder Decke, wie ein Streifen einer liegenden
+    Rundung. Die eine Stelle für das Band beider Kerne (:func:`leans_across`)."""
+    magnitude = np.abs(np.asarray(along, dtype=np.float64))
+    return (magnitude >= UPRIGHT_ENOUGH) & (magnitude <= 1.0 - UPRIGHT_ENOUGH)
+
+
+def leans_across(normal: units.Indexable3, pull: units.Indexable3) -> bool:
+    """Ob eine Fläche schräg zur Entformungsrichtung liegt (:func:`leaning_band`)."""
+    return bool(leaning_band(np.asarray([float(units.dot3(normal, pull))]))[0])
+
 
 #: Wie viele senkrechte Wände die Formschräge über die Merkmalserkennung
 #: hinaus ergänzt — gezählt werden die **ergänzten**, nicht die Summe.
@@ -394,15 +440,27 @@ def _triangles_of(mesh: MeshData, feature: Feature) -> list[int]:
     total = len(mesh.raw.faces)
     chosen = [int(index) for index in feature.face_indices if 0 <= int(index) < total]
     if not chosen or len(chosen) != len(feature.face_indices):
-        raise GeometryError(
-            detail=_(
-                "Diese Fläche gibt es an dem Körper nicht mehr — ein Schritt davor "
-                "hat ihn verändert. Wählen Sie sie neu."
-            ),
-            values={"faces": len(feature.face_indices)},
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+        raise gone_face_error({"faces": len(feature.face_indices)})
     return chosen
+
+
+def gone_face_error(values: Mapping[str, Any] | None = None) -> GeometryError:
+    """Der Satz, wenn eine gewählte Fläche nicht mehr am Körper ist (Regel 17).
+
+    Ein Schritt davor hat sie neu vernetzt, verbraucht oder abgeschnitten;
+    die Auswertung meldet ein Verbrauchen dort als Bezugsverlust (RM-537).
+    Gewählt war eine Fläche, also ist die Neuwahl der Weg — nicht „keine
+    gewählt". Eine Stelle für den Satz, ob die Dreiecke nicht mehr passen
+    (:func:`_triangles_of`) oder die Kennung fehlt (``face_ops``).
+    """
+    return GeometryError(
+        detail=_(
+            "Diese Fläche gibt es an dem Körper nicht mehr — ein Schritt davor "
+            "hat ihn verändert. Wählen Sie sie neu."
+        ),
+        values=dict(values or {}),
+        suggestions=(CHANGE_SELECTION, CANCEL),
+    )
 
 
 def _must_be_flat(mesh: MeshData, triangles: list[int], normal: np.ndarray) -> None:
@@ -434,24 +492,6 @@ def _border_edges(corners: np.ndarray) -> list[tuple[int, int]]:
             seen[key] = seen.get(key, 0) + 1
             order.setdefault(key, (first, second))
     return [order[key] for key, times in seen.items() if times == 1]
-
-
-def draft_vertical(
-    mesh: MeshData,
-    angle_deg: float,
-    *,
-    quality: Quality = "fine",
-    cancelled: CancelToken | None = None,
-) -> BooleanOutcome:
-    """Stellt alle senkrechten Flächen um den Winkel an — der Weg aller alten Schritte.
-
-    Neutral bleibt die Unterkante des Körpers: Dort behält der Körper sein
-    Maß, nach oben wird er schmaler. Wörtlich dieselbe Zusage wie im exakten
-    Kern (``brep.profiles.draft_vertical``), damit dieselbe Menüzeile an
-    beiden Körperarten dasselbe bedeutet. Gerechnet wird wie an gewählten
-    Flächen (:func:`draft_walls`).
-    """
-    return draft_walls(mesh, angle_deg, quality=quality, cancelled=cancelled)
 
 
 def draft_walls(
@@ -515,6 +555,12 @@ def draft_walls(
 
     body = _one_body(mesh).raw
     chosen, added = _tangent_walls(body, _without_repeats(body, chosen), pull)
+    if _round_beside_the_walls(body, chosen, pull):
+        raise GeometryError(
+            detail=DRAFT_BESIDE_A_ROUND,
+            suggestions=(CHANGE_SELECTION, CANCEL),
+            values={"angle_deg": round(angle_deg, 2)},
+        )
     heights = np.asarray(body.vertices, dtype=float) @ pull
     level = float(heights.min()) if neutral is None else float(neutral)
     sine = units.exact_sin_degrees(angle_deg)
@@ -681,6 +727,67 @@ def _without_repeats(
         if own:
             kept.append((own, normal))
     return kept
+
+
+def _round_beside_the_walls(
+    body: Any, walls: Sequence[tuple[list[int], np.ndarray]], pull: np.ndarray
+) -> bool:
+    """Ob an einer angestellten Wand eine Verrundung quer zur
+    Entformungsrichtung anschließt (RM-230).
+
+    Das Gegenstück zu ``brep.profiles._tangent_chain``, das dieselbe Frage
+    exakt stellt: eine Fläche, die nicht mitgestellt wird, **ohne Knick** an
+    eine Wand anschließt und schräg zur Entformungsrichtung liegt. Am Netz
+    heißt ohne Knick: über eine Kante unter der Knickschwelle des Bildes
+    (``SHARP_EDGE_ANGLE``) — und weil eine ebene Schräge, die flach an eine
+    Wand stößt, das auch tut, muss sich die Fläche dahinter krümmen: Über
+    solche Kanten erreicht man schräge Dreiecke, deren **Neigung** sich um mehr
+    als die Knickschwelle ändert. Ein Kegelstück um die Entformungsrichtung —
+    eine Schräge am Fuß einer gerundeten Ecke — krümmt sich nur um sie herum,
+    seine Neigung bleibt (die Facetten streuen um wenige Grad), und es zählt
+    nicht. Eine Fase oder eine Querbohrung schließt mit Knick an. Den ersten,
+    fast stehenden Streifen einer Rundung nimmt :func:`_tangent_walls` als Wand
+    mit; gefragt wird dann am zweiten. Ohne BLAS (``transform.along``): Die
+    Antwort entscheidet über Absage oder Ergebnis.
+    """
+    import trimesh
+
+    from app.core.geom import transform
+    from app.core.geom.measure import SHARP_EDGE_ANGLE
+
+    pairs = np.asarray(body.face_adjacency, dtype=np.int64)
+    if not len(pairs):
+        return False
+    owned = np.zeros(len(body.faces), dtype=bool)
+    for triangles, _normal in walls:
+        owned[triangles] = True
+    along = np.abs(transform.along(np.asarray(body.face_normals, dtype=float), pull))
+    leaning = leaning_band(along) & ~owned
+    smooth = np.asarray(body.face_adjacency_angles, dtype=float) < SHARP_EDGE_ANGLE
+    first, second = pairs[:, 0], pairs[:, 1]
+    touching = smooth & (owned[first] != owned[second])
+    seeds = np.where(owned[first], second, first)[touching]
+    seeds = seeds[leaning[seeds]]
+    if not len(seeds):
+        return False
+    joined = pairs[smooth & leaning[first] & leaning[second]]
+    for region in trimesh.graph.connected_components(
+        joined, nodes=np.flatnonzero(leaning), min_len=1
+    ):
+        members = np.asarray(region, dtype=np.int64)
+        if not np.isin(members, seeds).any():
+            continue
+        # Die Spanne der Neigung ohne Arkussinus (Review P2, G3; ``kern.md``):
+        # Mit a = größter, b = kleinster Anteil längs der Richtung ist
+        # asin(a) - asin(b) > S genau dann, wenn sin(asin(a) - asin(b)) =
+        # a·sqrt(1 - b²) - b·sqrt(1 - a²) über sin S liegt — beide Winkel liegen
+        # in [0, π/2], und ``math.sqrt`` rundet korrekt.
+        high = min(max(float(along[members].max()), 0.0), 1.0)
+        low = min(max(float(along[members].min()), 0.0), 1.0)
+        spread = high * math.sqrt(1.0 - low * low) - low * math.sqrt(1.0 - high * high)
+        if spread > units.exact_sin(SHARP_EDGE_ANGLE):
+            return True
+    return False
 
 
 def _checked_tools(
@@ -1040,11 +1147,6 @@ def _draft_tools(
             if tool.triangle_count and tool.volume > EPS_GEOM:
                 found.append((kind, number, tool))
     return found
-
-
-def _upright_faces(mesh: MeshData) -> list[tuple[list[int], np.ndarray]]:
-    """Die senkrechten Flächen des Netzes — :func:`_walls_along` nach oben."""
-    return _walls_along(mesh, np.array([0.0, 0.0, 1.0]))
 
 
 def _walls_along(mesh: MeshData, pull: np.ndarray) -> list[tuple[list[int], np.ndarray]]:

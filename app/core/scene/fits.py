@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Collection
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -418,6 +418,48 @@ def check(
 
 
 def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken) -> list[Finding]:
+    return [*_check_pair(scene, fit, profile, cancelled), *_standard_size_notes(scene, fit)]
+
+
+def _standard_size_notes(scene: Scene, fit: Fit) -> list[Finding]:
+    """Was die Wahl des Gegenstücks über ein gemessenes Gewinde sagt — im Bericht.
+
+    Ein gemessenes Ø 6,0 x 1,03 bekommt als Gegenstück ein M6 x 1, und der
+    Satz dazu (``counterpart.thread_size_note``) stand nur in der Statuszeile:
+    Wer sie verpasste, erfuhr nicht, dass die Normgröße statt des gemessenen
+    Maßes gebaut wurde (Review RM-532 Runde 2, K-N4). Hier gehört er zur
+    Passung, solange sie besteht — an der gemessenen Hälfte, wenn die andere
+    ein Bibliotheksgewinde ist (es trägt sein Nennmaß, ``nominal``).
+    """
+    if fit.kind != "thread":
+        return []
+    from app.core.counterpart import thread_size_note
+
+    notes: list[Finding] = []
+    for reference, partner in ((fit.a, fit.b), (fit.b, fit.a)):
+        measured, made = resolve(scene, reference), resolve(scene, partner)
+        if (
+            measured is None
+            or made is None
+            or measured.kind != "thread"
+            or made.kind != "thread"
+            or measured.provenance == "generated"
+            or _positive(made, "nominal") is None
+            or _pair_problem(fit.kind, measured, made) is not None
+        ):
+            continue
+        try:
+            note = thread_size_note(measured)
+        except AppError:
+            continue
+        if note is not None:
+            notes.append(
+                replace(note, object_id=reference.object_id, feature_ids=(reference.feature_id,))
+            )
+    return notes
+
+
+def _check_pair(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken) -> list[Finding]:
     first = resolve(scene, fit.a)
     second = resolve(scene, fit.b)
     if first is None or second is None:

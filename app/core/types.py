@@ -540,6 +540,10 @@ def is_a_cavity(feature: Feature) -> bool:
         return True
     if feature.kind == "pin":
         return False
+    # Ein Gewinde ist innen ein Hohlraum, außen ein Bolzen — es trägt die Frage
+    # selbst (``internal``), ``recess`` kennt es nicht (Review RM-532, F2).
+    if feature.kind == "thread":
+        return bool(feature.params.get("internal", False))
     return bool(feature.params.get("recess", False))
 
 
@@ -2599,6 +2603,38 @@ class Document:
     Stapel."""
     highest_object: int = 0
     """Der höchste je vergebene Objektindex (``obj_<n>``)."""
+
+
+def step_numbers(operations: Sequence[Operation]) -> dict[OpId, int]:
+    """Je Schrittkennung die Nummer, unter der der Verlauf ihn zeigt: seine Stelle, ab eins.
+
+    Kennungen bleiben nach Einfügen und Verschieben stabil und weichen dann
+    von der Reihenfolge ab (RM-368): Nach einem Einfügen vor Schritt 3 trägt
+    der sichtbare Schritt 3 die Kennung 9. Eine Quelle für den Kern
+    (``scene.history.step_position``), den Steckbrief des Agenten und das
+    Verlaufsfeld — bis zum Review von RM-529 zählten alle drei für sich.
+    """
+    return {operation.id: position for position, operation in enumerate(operations, start=1)}
+
+
+def replanned_steps(document: Document) -> frozenset[OpId]:
+    """Schritte, die ein Einfügen oder Verschieben neu gefasst hat (P7).
+
+    Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
+    Kennung an seiner neuen Stelle. Verlaufsfeld und Steckbrief blenden sie
+    deshalb aus, statt sie wie einen gelöschten Schritt zu nennen (§15.4 gilt
+    dem Löschen). Gelesen wird ``Transaction.revision``, das alte Projekte seit
+    Format 32 tragen — ``renumbered`` kam erst mit Format 45 (Review RM-529).
+    """
+    found: set[OpId] = set()
+    for transaction in document.transactions:
+        changes = transaction.changes
+        if transaction.revision not in ("insert", "move") or changes is None:
+            continue
+        found.update(
+            op_id for op_id, version in (changes.after.edited_ops or {}).items() if version is None
+        )
+    return frozenset(found)
 
 
 # --- Schichtanalyse (§22) ------------------------------------------------------

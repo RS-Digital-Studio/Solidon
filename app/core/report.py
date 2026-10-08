@@ -185,11 +185,22 @@ def _version_of(name: str) -> str:
 #: über die Sitzung, in der das passierte — kein Wort darüber, ob Qt auf
 #: Wayland oder über XWayland lief und welches Eingabemodul dabei aktiv war.
 #:
-#: Vier Variablen, die genau das beantworten, und keine davon kostet mehr als
+#: Variablen, die genau das beantworten, und keine davon kostet mehr als
 #: einen Blick ins Environment. Der Kern liest sie selbst statt Qt zu fragen —
 #: hier gibt es kein Qt (§8), und ``QT_QPA_PLATFORM`` sagt ohnehin, was der
-#: Nutzer erzwungen hat, während Qt nur meldet, was daraus wurde.
-SESSION_KEYS: Final = ("XDG_SESSION_TYPE", "QT_QPA_PLATFORM", "QT_IM_MODULE", "XCURSOR_SIZE")
+#: Nutzer erzwungen hat, während Qt nur meldet, was daraus wurde. Für die
+#: Eingabe zählen mit: Qt liest ``QT_IM_MODULES`` vor ``QT_IM_MODULE``,
+#: ``XMODIFIERS`` nennt unter KDE die Eingabemethode, und ``IBUS_USE_PORTAL``
+#: entscheidet, wie Qt IBus erreicht (RM-062).
+SESSION_KEYS: Final = (
+    "XDG_SESSION_TYPE",
+    "QT_QPA_PLATFORM",
+    "QT_IM_MODULE",
+    "QT_IM_MODULES",
+    "XMODIFIERS",
+    "IBUS_USE_PORTAL",
+    "XCURSOR_SIZE",
+)
 
 #: Seit dem 02.09.2026 setzt die Anwendung ``QT_QPA_PLATFORM`` unter Linux
 #: selbst auf ``xcb``, sobald ein X11-Display da ist (``app.ui.qt_platform``) —
@@ -202,6 +213,16 @@ QT_PLATFORM_BEFORE_VARIABLE: Final = f"{ENVIRONMENT_PREFIX}_QT_PLATFORM_BEFORE"
 #: aus wie keine.
 QT_PLATFORM_UNSET: Final = "-"
 
+#: Dasselbe für die Eingabe (RM-062): Nutzt jemand Fcitx und kennt das
+#: mitgelieferte Qt nur IBus, setzt die Anwendung ``ibus`` und, wo Fcitx5 als
+#: IBus-Portal antwortet, ``IBUS_USE_PORTAL`` (``app.ui.qt_platform``). Je
+#: gesetzter Variable reist der Vorwert in der hier genannten mit.
+INPUT_BEFORE_VARIABLES: Final = {
+    "QT_IM_MODULE": f"{ENVIRONMENT_PREFIX}_QT_IM_BEFORE",
+    "QT_IM_MODULES": f"{ENVIRONMENT_PREFIX}_QT_IM_MODULES_BEFORE",
+    "IBUS_USE_PORTAL": f"{ENVIRONMENT_PREFIX}_IBUS_PORTAL_BEFORE",
+}
+
 
 def _session() -> dict[str, str]:
     """Wie die Fenstersitzung eingerichtet ist — nur, was wirklich dasteht."""
@@ -211,12 +232,14 @@ def _session() -> dict[str, str]:
     if os.environ.get("WAYLAND_DISPLAY"):
         found.setdefault("xdg_session_type", "")
         found["xdg_session_type"] = found["xdg_session_type"] or "wayland (erkannt)"
-    before = os.environ.get(QT_PLATFORM_BEFORE_VARIABLE, "").strip()
-    if before and found.get("qt_qpa_platform"):
-        was = "nicht gesetzt" if before == QT_PLATFORM_UNSET else before
-        found["qt_qpa_platform"] = (
-            f"{found['qt_qpa_platform']} (von {APP_NAME} gesetzt, vorher {was})"
-        )
+    for key, variable in (
+        ("qt_qpa_platform", QT_PLATFORM_BEFORE_VARIABLE),
+        *((name.lower(), before) for name, before in INPUT_BEFORE_VARIABLES.items()),
+    ):
+        before = os.environ.get(variable, "").strip()
+        if before and found.get(key):
+            was = "nicht gesetzt" if before == QT_PLATFORM_UNSET else before
+            found[key] = f"{found[key]} (von {APP_NAME} gesetzt, vorher {was})"
     return {key: value for key, value in found.items() if value}
 
 

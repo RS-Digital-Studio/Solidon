@@ -232,7 +232,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   entscheidet.
 - **Formschräge** (`draft_faces`): gewählte oder alle ebenen Flächen in
   Entformungsrichtung plus `_tangent_chain`; ungültig heißt
-  `faces.DRAFT_CUTS_THROUGH`, nie `ShapeFix_Shape`. `outward_normal` gilt für
+  `faces.DRAFT_CUTS_THROUGH`, nie `ShapeFix_Shape`, neben liegender Rundung
+  `DRAFT_BESIDE_A_ROUND`, neben stehender freier Fläche `DRAFT_BESIDE_A_FREE_FACE`
+  (beide aus `_tangent_chain`). `outward_normal` gilt für
   Fase (`_faces_at_edge`) und Kette.
 
 ### Ein Loch lässt sich hier auch wieder schließen

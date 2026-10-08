@@ -122,6 +122,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    WrappedNote,
     expanded_width,
     fit_dialog_to_screen,
     fit_height_after_show,
@@ -1215,16 +1216,17 @@ class KeyDialog(QDialog):
         self._key_state = state
         key_status_text = f"{state} {tr('Wird nachgesehen …')}"
         self._key_status_error: str | None = None
-        self.key_status = QLabel(key_status_text, self)
+        self.key_status = WrappedNote(self)
+        self.key_status.setText(key_status_text)
         self.key_status.setWordWrap(True)
         self.key_status.setAccessibleName(key_status_text)
-        self.explanation = QLabel(
+        self.explanation = WrappedNote(self)
+        self.explanation.setText(
             tr(
                 "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist "
                 "nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer "
                 "dem Chat nutzbar."
-            ),
-            self,
+            )
         )
         self.explanation.setWordWrap(True)
 
@@ -1271,6 +1273,19 @@ class KeyDialog(QDialog):
         outer.addWidget(buttons)
         self._set_tab_order()
         wheel_needs_focus(self.model_field)
+
+        # **Nachgereichte Zeilen fordern ihre Höhe ein** (``WrappedNote``):
+        # Unter macOS gab das Formular einem gewachsenen Satz nur seine alte
+        # Höhe, und die letzte Zeile war abgeschnitten, ohne dass der Inhalt
+        # rollte. Wer wächst, stößt die Nachpassung des Fensters an.
+        for note in (
+            self.key_status,
+            self.explanation,
+            self.service_state,
+            self.model_note,
+            self.probe_result,
+        ):
+            note.grown.connect(weak_slot(self, lambda view: view._fit_key_content_soon()))
 
         self._look: _Look | None = None
         self.look()
@@ -1535,7 +1550,7 @@ class KeyDialog(QDialog):
 
         #: Läuft Ollama, ist es nur installiert, oder fehlt es? Ein Satz und
         #: der Knopf, der zu diesem Satz gehört.
-        self.service_state = QLabel(section)
+        self.service_state = WrappedNote(section)
         self.service_state.setWordWrap(True)
         self.service_button = QPushButton(tr("Ollama starten"), section)
         self.service_button.clicked.connect(self._start_ollama)
@@ -1549,7 +1564,7 @@ class KeyDialog(QDialog):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.model_field.setMinimumContentsLength(18)
-        self.model_note = QLabel(section)
+        self.model_note = WrappedNote(section)
         self.model_note.setWordWrap(True)
         self.model_field.currentIndexChanged.connect(self._show_model_note)
         self.model_field.editTextChanged.connect(self._show_model_note)
@@ -1564,7 +1579,7 @@ class KeyDialog(QDialog):
         self.pull_progress.setVisible(False)
         self.pull_progress.setTextVisible(False)
 
-        self.probe_result = QLabel("", section)
+        self.probe_result = WrappedNote(section)
         self.probe_result.setWordWrap(True)
 
         service_row = QHBoxLayout()
@@ -2021,16 +2036,16 @@ class KeyDialog(QDialog):
             # darüber ist eine eigene Einstellung und gilt schon.
             self.accept()
             return
-        if not keys.store(self.account, key):
-            QMessageBox.information(
-                self,
-                tr("Chat einrichten"),
-                tr(
-                    "Auf diesem Rechner gibt es keinen Schlüsselbund. "
-                    "Der Schlüssel kann über die Umgebungsvariable übergeben werden."
-                ),
-            )
-            self.reject()
+        refusal = keys.store_refusal(self.account, key)
+        if refusal is not None:
+            # **Der Dialog bleibt offen, der Schlüssel im Feld** (Regel 17):
+            # Der Satz nennt den Grund und den Weg — entsperren und erneut
+            # speichern oder die Umgebungsvariable. Bis dahin stand bei jedem
+            # Fehlschlag „Auf diesem Rechner gibt es keinen Schlüsselbund",
+            # ohne Variablennamen, und der Dialog verwarf die Eingabe.
+            self._key_status_error = str(refusal)
+            self._set_key_status(self._key_status_error, role="warning")
+            self.field.setFocus()
             return
         self.accept()
 

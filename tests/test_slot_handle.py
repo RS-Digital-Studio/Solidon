@@ -680,7 +680,10 @@ def test_cancelling_the_slot_measures_restores_the_panels_actual_values() -> Non
         _leave_the_measures=lambda: True,
         object_tree=SimpleNamespace(selected_feature=lambda: "slot_1"),
         _on_feature_selected=selected.append,
+        _click_after_evaluation=None,
+        feature_panel=SimpleNamespace(),
     )
+    state._drop_click_of = lambda owner: MainWindow._drop_click_of(state, owner)
     MainWindow._cancel_from_feature_panel(state)
     assert selected == ["slot_1"]
 

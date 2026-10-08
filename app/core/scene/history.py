@@ -66,6 +66,7 @@ from app.core.types import (
     Suppression,
     Transaction,
     TransactionId,
+    step_numbers,
 )
 from app.i18n import TranslatableText, _
 
@@ -1037,7 +1038,8 @@ class History:
             raise ValidationError(
                 field="in",
                 detail=_(
-                    "Dieser Schritt verwendet kein vorhandenes Modell, das sich zerlegen ließe."
+                    "Dieser Schritt verwendet kein vorhandenes Modell, das sich in "
+                    "Einzelteile aufteilen ließe."
                 ),
                 constraint="no_split_target",
                 values={"op": stopped_at, "missing": [target]},
@@ -3070,7 +3072,7 @@ class History:
         if transaction.changes is not None:
             restore(self.document, transaction.changes.before)
         self._undone.append(transaction)
-        self._undone_anchor = self._document_mark()
+        self._undone_anchor = self.document_mark()
         return transaction
 
     def redo(self) -> Transaction | None:
@@ -3085,7 +3087,7 @@ class History:
         self.document.transactions.append(transaction)
         if transaction.changes is not None:
             restore(self.document, transaction.changes.after)
-        self._undone_anchor = self._document_mark()
+        self._undone_anchor = self.document_mark()
         return transaction
 
     def withdraw(self, transaction_id: TransactionId) -> Transaction | None:
@@ -3104,9 +3106,14 @@ class History:
         self._forget_undone()
         return transaction
 
-    def _document_mark(self) -> tuple[int, TransactionId | None]:
-        """Woran sich eine fremde Handlung erkennen lässt: Zahl und Kennung der
-        letzten Transaktion im Dokument."""
+    def document_mark(self) -> tuple[int, TransactionId | None]:
+        """Woran sich eine Handlung erkennen lässt: Zahl und Kennung der letzten
+        Transaktion im Dokument.
+
+        Ein neuer Schritt, ein Undo und ein Redo ändern das, eine zweite
+        Auswertung desselben Stands nicht. Zwei Leser: der Redo-Stapel
+        (:meth:`_drop_stale_undone`) und das Fenster, das eine verlorene
+        Merkmalswahl nur ohne eigene Handlung ansagt (RM-537)."""
         transactions = self.document.transactions
         return (len(transactions), transactions[-1].id if transactions else None)
 
@@ -3121,7 +3128,7 @@ class History:
         05.09.2026, CORE-08). Hat sich das Dokument seit dem Undo bewegt, ist
         der Zweig weg — wie bei einer eigenen neuen Handlung auch.
         """
-        if self._undone and self._document_mark() != self._undone_anchor:
+        if self._undone and self.document_mark() != self._undone_anchor:
             self._forget_undone()
 
     def _forget_undone(self) -> None:
@@ -3452,10 +3459,7 @@ def step_position(operations: Sequence[Operation], op_id: OpId) -> int:
     sichtbare Schritt 3 die Kennung 9. Gelesen wird die Stelle; ohne Treffer
     bleibt die Kennung. ``ui.labels.step_number`` fragt hier.
     """
-    for position, entry in enumerate(operations, start=1):
-        if entry.id == op_id:
-            return position
-    return op_id
+    return step_numbers(operations).get(op_id, op_id)
 
 
 def step_titles(

@@ -4,9 +4,8 @@ description: >
   Schließt eine fertige, geprüfte Arbeitseinheit ab: eigene Pfade abgrenzen,
   mit deutscher Meldung committen und pushen — ein Commitauftrag schließt den
   Push ein. Ist die Gegenstelle weiter, wird per Merge zusammengeführt, nie per
-  Rebase. Nur auf Roberts Ansage.
+  Rebase. Nach grünem Tor und behobenem Review ohne Rückfrage.
 argument-hint: "[optional: Thema oder Pfade der Einheit; „nicht pushen“]"
-disable-model-invocation: true
 allowed-tools: Bash, Read, Write, Grep, Glob
 ---
 
@@ -14,7 +13,9 @@ allowed-tools: Bash, Read, Write, Grep, Glob
 
 ## Auftrag
 
-**Commit heißt Commit und Push.** Der Push gehört ohne Rückfrage dazu; nur ein
+**Commit heißt Commit und Push.** Grünes Tor und behobenes Review sind die
+Freigabe (Entscheidung Robert) — danach wird ohne Rückfrage geliefert, und der
+Push gehört ohne Rückfrage dazu; nur ein
 ausdrückliches „nicht pushen“ von Robert hält den Commit lokal — dann für genau
 diesen Aufruf `SOLIDON_KEIN_PUSH=1`. Holen und Zusammenführen gehören dazu,
 wenn der Push daran scheitert. Tag, Release und Force-Push sind eigene Aufträge.
@@ -23,6 +24,34 @@ Vorher ist das Entwicklungstor nach `/pruefen` grün. Ein grüner Nachweis über
 denselben Stand muss nicht wiederholt werden; was sich seither geändert hat,
 wird geprüft. Ein roter oder abgebrochener Lauf wird mit Ursache gemeldet und
 nicht committet.
+
+**Vor dem Commit steht ein Review** über genau den Stand, der hinausgeht
+(Entscheidung Robert: vor jedem Push nach main, immer, auch für Unterlagen
+und für Fixes aus einem früheren Review) — Agent `solidon3d-review` über den
+Prüfbaum (ein Worktree auf HEAD mit genau den eigenen Änderungen) oder, nach
+Schritt 5 unten, über den vorgemerkten Index (`git diff --cached`); ohne
+Angabe läse er im Hauptbaum alle fremden Änderungen mit. Jeder Fund wird
+behoben oder mit Beleg als kein Fehler festgehalten; ein Fix ändert den Stand,
+also danach die betroffenen Tests. Eine Nachprüfung als zweites Review gibt es
+nur, wenn das erste mehrere mittlere oder schwere Befunde hatte, und danach
+keine weitere Runde (Entscheidung Robert). Mehrere Punkte, die zusammen
+hinausgehen, teilen sich ein Review. Weil `post-commit` pusht, ist das Review
+vor dem Commit das Review vor dem Push.
+
+**Vor dem Merge nach main laufen die betroffenen Fenster- und Slicertests auf
+Linux und macOS** (Entscheidung Robert, `.claude/rules/tests.md`, CI-09):
+
+1. Die Einheit liegt auf einem eigenen Zweig, gepusht (Handstart braucht
+   einen Stand auf der Gegenstelle). Eine neue oder geänderte Oberfläche
+   bringt ihren Fenstertest mit, eine Änderung an Slicerübergabe, Profilen,
+   Druckerwahl, Druckzeit oder Slicererkennung ihren Test mit
+   `installed_slicer` und `@pytest.mark.slicer(<programm>)`.
+2. `.venv\Scripts\python.exe tools/ci_selection.py --diff origin/main...<zweig>`
+   nennt beide Listen und die zwei `gh workflow run …`-Befehle; mit
+   `--ref <zweig>` starten.
+3. Beide Läufe grün, bevor gemergt wird; ein roter wird behoben, nicht
+   übergangen. Meldet das Werkzeug keinen Fenster- und keinen Slicertest,
+   entfällt der Schritt. Die Laufnummern gehören in den Bericht.
 
 ## Die Einheit abgrenzen
 
@@ -88,5 +117,12 @@ laufenden Arbeitsrunde: nicht aufheben, melden.
 
 Die Kennung aus der Ausgabe von `git commit` verwenden, nicht ein später
 weitergewandertes `HEAD`, und `git show --stat <kennung>` gegen die Einheit
-halten. Melden: je Commit Kennung und Aussage, Prüfstand, Push-Ergebnis und
-was an eigenen und fremden Änderungen im Baum bleibt.
+halten. Melden: je Commit Kennung und Aussage, Prüfstand, Review,
+Push-Ergebnis und was an eigenen und fremden Änderungen im Baum bleibt.
+
+Danach die eigenen Worktrees und Prüfbäume abbauen, deren Stand auf main liegt
+und die nichts Ungesichertes tragen — belegt mit `git merge-base
+--is-ancestor <zweig> origin/main`, bei einem Prüfbaum ohne Zweig je Datei
+`git hash-object` gegen den Blob im Commit. Dann `git worktree remove`,
+`git worktree prune`, Zweige lokal und auf der Gegenstelle löschen; fremde
+nicht anfassen.

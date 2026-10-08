@@ -102,9 +102,10 @@ die Passung an dieselbe Transaktion.
 drei Paare setzen beide Hälften neu; ein eingelesener Bolzen oder ein
 gedrucktes Gewinde hat seine schon. `thread_counterpart_draft` macht aus dem
 vorhandenen Gewinde den einen Schritt — das gegengleiche Bausteingewinde am
-anderen Teil, im **Tabellenmaß** (`thread_size_for`, Grenze
-`THREAD_SIZE_REACH` gegen die Normteiltabelle; ein Gewinde Ø 6,4 mit
-Steigung 1,1 wird nicht still zu M6, sondern nennt die nächste Größe) —,
+anderen Teil, im **Tabellenmaß**, wo es eines trifft, sonst im eigenen Maß
+(`thread_values_for`, Grenze `THREAD_SIZE_REACH` gegen die Normteiltabelle;
+ein Gewinde Ø 6,4 mit Steigung 1,1 wird nicht still zu M6, sondern bekommt ein
+Gegenstück Ø 6,4 × 1,1; bis zum 06.10.2026 nannte es die nächste Größe) —,
 `apply_thread_counterpart` legt ihn an, `attach_thread_fit` hängt die
 Gewindepassung zwischen dem vorhandenen und dem neuen an dieselbe
 Transaktion. `_made_feature` nimmt dabei das **erzeugte** Merkmal des

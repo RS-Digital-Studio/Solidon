@@ -110,8 +110,18 @@ def analysis_text(
         )
     if kind == "orientation":
         return "\n".join([sliced, *_orientation(chosen, profile, cancelled)])
+    return unknown_analysis(kind)
+
+
+def unknown_analysis(kind: str) -> str:
+    """Die Antwort auf eine Analyse, die es nicht gibt — im Chat wie über MCP.
+
+    Bis zum Review von RM-285 sagte die Fernsteuerung einen eigenen Satz, der
+    die gefragte Art nicht nannte und die gültigen aufzählte, als gäbe es
+    *sie* nicht.
+    """
     known = ", ".join(ANALYSIS_KINDS)
-    return f"{tr('Diese Analyse gibt es nicht')}: {kind} ({known})"
+    return tr("Diese Analyse gibt es nicht: {kind} ({known})").format(kind=kind, known=known)
 
 
 def _too_large(entry: SceneObject) -> bool:
@@ -119,9 +129,10 @@ def _too_large(entry: SceneObject) -> bool:
 
 
 def _skipped(object_id: str) -> str:
-    return f"{object_id}: " + tr(
-        "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es."
-    )
+    return tr(
+        "{object}: übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster "
+        "kann es."
+    ).format(object=object_id)
 
 
 def _printability(chosen: dict[str, SceneObject], profile: Profile) -> list[str]:
@@ -152,7 +163,9 @@ def _printability(chosen: dict[str, SceneObject], profile: Profile) -> list[str]
         ]
         if islands:
             heights = ", ".join(f"{value:.1f}" for value in islands[:3])
-            facts.append(f"{len(islands)} {tr('Inseln (ab mm)')}: {heights}")
+            facts.append(
+                tr("{count} Inseln (ab mm): {heights}").format(count=len(islands), heights=heights)
+            )
         if spans > 0.0:
             facts.append(f"{tr('längste Brücke')} {format_length(spans)}")
         # Gegen die Mindestwand des Profils, nicht gegen zwei Düsen: Das war
@@ -253,24 +266,32 @@ def _orientation(
         if current is not None and best.support_volume >= current.support_volume * (
             1.0 - ORIENTATION_GAIN
         ):
-            lines.append(f"{object_id}: " + tr("die aktuelle Lage ist schon gut."))
+            lines.append(tr("{object}: die aktuelle Lage ist schon gut.").format(object=object_id))
             continue
         direction = ", ".join(f"{value:.2f}" for value in best.direction)
+        # Ganze Sätze als Rahmen, sonst stünde „(Direction (…), 12 Candidates)“
+        # großgeschrieben im Satz (Review RM-285, N4).
         if current is None:
             lines.append(
-                f"{object_id}: "
-                + tr(
-                    "Die aktuelle Lage passt nicht in den Druckbereich. "
-                    "Eine passende Lage wurde gefunden."
-                )
-                + f" ({tr('Richtung')} ({direction}), {found.tried} {tr('Kandidaten')})."
+                tr(
+                    "{object}: Die aktuelle Lage passt nicht in den Druckbereich. "
+                    "Eine passende Lage wurde gefunden. "
+                    "(Richtung ({direction}), {count} Kandidaten)."
+                ).format(object=object_id, direction=direction, count=found.tried)
             )
             continue
         lines.append(
-            f"{object_id}: {tr('bessere Lage gefunden')} — {tr('Stützvolumen')} "
-            f"{best.support_volume / 1000.0:.1f} cm³ {tr('statt')} "
-            f"{current.support_volume / 1000.0:.1f} cm³ "
-            f"({tr('Richtung')} ({direction}), {found.tried} {tr('Kandidaten')}). "
+            tr(
+                "{object}: bessere Lage gefunden — Stützvolumen {better} cm³ statt {current} cm³ "
+                "(Richtung ({direction}), {count} Kandidaten)."
+            ).format(
+                object=object_id,
+                better=f"{best.support_volume / 1000.0:.1f}",
+                current=f"{current.support_volume / 1000.0:.1f}",
+                direction=direction,
+                count=found.tried,
+            )
+            + " "
             + tr("Druckoptimal ausrichten sucht selbst und kann eine andere Lage wählen.")
         )
     return lines

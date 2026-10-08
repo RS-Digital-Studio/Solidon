@@ -1,0 +1,4 @@
+=== 23:26:45 rm529_256b6b130 (qwen3:14b, F:/ki-529, 65e3ec97b) GPU vorher: 15122 MiB, 21 %
+tail: cannot open '/f/3D Druck/.claude/.state/ki-2026-10-06/messung/suite_rm529_256b6b130.log' for reading: No such file or directory
+    Exit 1  
+=== 23:48:58 rm251b_014_285 (qwen3:14b, F:/ki-251, d25f12366) GPU vorher: 1146 MiB, 35 %

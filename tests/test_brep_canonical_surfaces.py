@@ -677,6 +677,42 @@ def test_nurbs_radial_edits_keep_the_selected_angular_wall(radius: float) -> Non
     ) == pytest.approx(12.5, abs=EPS_GEOM)
 
 
+@pytest.mark.parametrize(
+    ("location", "direction", "same"),
+    [
+        ((0.0, 0.0, 7.0), (0.0, 0.0, 1.0), True),
+        ((0.0, 0.0, -3.0), (0.0, 0.0, -1.0), True),
+        ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), False),
+        ((0.0, 0.0, 0.0), (0.0, 1.0, 1.0), False),
+    ],
+)
+def test_the_offset_wall_is_found_only_on_the_same_cylinder_axis(
+    location: tuple[float, float, float], direction: tuple[float, float, float], same: bool
+) -> None:
+    """Ein Zylinder mit dem Sollradius neben der Achse ist nicht die versetzte Wand (RM-413).
+
+    Der radiale Weg sucht in der Haut den Zylinder mit Sollradius auf derselben
+    Achse; die Gegenprobe „Achse immer gleich“ ließ alle Rundungsfälle grün.
+    Geprüft wird das Prädikat und nicht der Weg: Die Haut entsteht aus genau
+    einer Zylinderfläche (``MakeThickSolidBySimple``), und alle ihre Zylinder
+    sind koaxial. Ein Fall mit einem zweiten Zylinder auf anderer Achse lässt
+    sich über ``radial`` nicht bauen; die Frage schützt die Zuordnung, sobald
+    die Haut einmal aus mehr als dieser Fläche entsteht.
+    """
+    from OCP.gp import gp_Ax3, gp_Cylinder, gp_Dir, gp_Pnt
+
+    from app.core.brep.canonical import CylinderSurface
+
+    def wall(at: tuple[float, float, float], toward: tuple[float, float, float]) -> CylinderSurface:
+        cylinder = gp_Cylinder(gp_Ax3(gp_Pnt(*at), gp_Dir(*toward)), 12.0)
+        return CylinderSurface(cylinder, 0.0, 17.0, 2.0 * math.pi, True)
+
+    assert (
+        edit._same_cylinder_axis(wall((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)), wall(location, direction))
+        is same
+    )
+
+
 @pytest.mark.parametrize("operation", ["shell", "draft", "push", "unround", "reround", "radial"])
 def test_a_pre_cancelled_native_consumer_does_not_start_recognition(operation: str) -> None:
     """Jeder Einstieg reicht den Abbruch vor der neuen NURBS-Rechnung bis zur Fläche weiter."""
@@ -691,7 +727,7 @@ def test_a_pre_cancelled_native_consumer_does_not_start_recognition(operation: s
         if operation == "shell":
             profiles.shell_open_top(source, 1.0, cancelled=cancelled)
         elif operation == "draft":
-            profiles.draft_vertical(source, 3.0, cancelled=cancelled)
+            profiles.draft_faces(source, 3.0, cancelled=cancelled)
         elif operation == "push":
             profiles.push_faces(source, (0.0, 0.0, 1.0), 1.0, cancelled=cancelled)
         elif operation == "unround":

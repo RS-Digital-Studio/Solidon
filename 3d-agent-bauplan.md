@@ -1272,7 +1272,23 @@ ausgelassenen Bereinigungsschritt.
 
 Die erfolgreiche Stufe steht in der Op. Stufe 4 kostet Genauigkeit und wird im
 Prüfbericht ausgewiesen, nicht stillschweigend verwendet. In Entwurfsqualität
-(§31) endet die Kette nach Stufe 2, um Iterationen schnell zu halten.
+(§31) endet die Kette nach Stufe 2, um Iterationen schnell zu halten. Geht
+dort an einem Schritt nur die kurze Kette aus, rechnet derselbe Lauf diesen
+einen Schritt mit der vollen Kette, statt mit dem Urteil der kurzen
+anzuhalten — im Fensterlauf, im Verlaufsumbau und beim Agenten, damit sie über
+denselben Stand dasselbe sagen. Vorschauen bleiben beim Entwurf: Sie nehmen
+ein Urteil der vollen Kette, das schon vorliegt, rechnen sie aber nie selbst;
+kommt die kurze nicht durch, sagt die Vorschau das und sperrt *Übernehmen*
+nicht, denn Übernehmen rechnet den Schritt vollständig. Stufe 4 läuft im
+Hilfsprozess und bricht mit ihm ab (§15.6). Das Urteil der vollen Kette über
+den Schritt merkt sich die Sitzung im Speicher, auch wenn der Lauf danach
+anhält; auf die Platte geht es erst mit einem vollständigen Durchlauf (§15.6).
+Scheitert eine Stufe am Speicher, ist das kein Urteil über den Schritt.
+
+Vor Stufe 1 vereinigt die Kette Teile, die ineinanderstecken; gelingt das
+nicht, rechnet sie mit den Teilen weiter und meldet es
+(`boolean.parts_not_united`). Trifft der Schritt dabei eine Schale, die sich
+selbst kreuzt, hält sie vor jeder Stufe mit Befund und Handlungsvorschlag an.
 
 ### 17.3 Prüfbericht
 Alles aus §17.1 und §17.2 landet in einem Bericht je Objekt, sichtbar im
@@ -3340,7 +3356,7 @@ ihren Geltungsbereich mit der zweiten Stufe — Saugglocken, Abflussöffnungen
 und das Kriterium, das für Harz an die Stelle des Überhangwinkels tritt —,
 und jede solche Änderung wird nach dem Verfahren oben gemessen. Noch
 fehlende Verhaltensmessungen stehen in
-[RM-014](ROADMAP.md#rm-014) und [RM-016](ROADMAP.md#rm-016); die Messung der
+[RM-014](ROADMAP-ARCHIV.md#rm-014) und [RM-016](ROADMAP.md#rm-016); die Messung der
 kompakten Werkzeugschemata ist mit [RM-069](ROADMAP-ARCHIV.md#rm-069)
 abgeschlossen.
 

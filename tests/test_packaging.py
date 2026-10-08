@@ -1247,6 +1247,16 @@ def test_the_start_check_judges_crash_hang_black_view_and_leftovers() -> None:
     assert verdict(0, _start_report(), crash_text=caught.replace("0x56fc\n", "0x1a2b\n"))
     assert verdict(0, _start_report(), helpers_alive=[4711])
     assert verdict(0, _start_report(), tree_changed=["Contents/MacOS/neu.txt"])
+    # RM-062: Unter Linux muss das IBus-Eingabemodul im Paket liegen.
+    shipped = ["libcomposeplatforminputcontextplugin.so", "libibusplatforminputcontextplugin.so"]
+    assert verdict(0, _start_report(input_modules=shipped), linux=True) == []
+    assert any(
+        "IBus" in text for text in verdict(0, _start_report(input_modules=shipped[:1]), linux=True)
+    )
+    assert any("IBus" in text for text in verdict(0, _start_report(), linux=True)), (
+        "ein Bericht ohne Angabe ist kein Beleg"
+    )
+    assert verdict(0, _start_report(input_modules=[])) == [], "unter Windows und macOS nicht"
 
 
 def test_the_start_check_sees_what_the_application_writes_into_its_own_tree(
@@ -2328,8 +2338,8 @@ def test_the_windows_installer_registers_only_the_branded_part_extension() -> No
     assert "{#AppId}.part" in script
     assert (
         'Subkey: "Software\\Classes\\{#PartFileSuffix}";   ValueType: string; '
-        'ValueName: ""; ValueData: "{#AppId}.part";   Flags: uninsdeletevalue; '
-        "Tasks: associate"
+        'ValueName: ""; ValueData: "{#AppId}.part";   '
+        "Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate"
     ) in script
     assert (
         'Subkey: "Software\\Classes\\{#ProjectSuffix}";   ValueType: string; ValueName: ""'
@@ -3254,3 +3264,181 @@ def test_frozen_helper_end_budget_control_reproduces_the_old_deadline_failure(
     assert idle.joins[0] == pytest.approx(state.product_grace)
     assert idle.kills == 1 and idle.exitcode == -9
     assert problems == ["Ein untätiger Hilfsprozess endete beim Schließen nicht selbst."]
+
+
+# --- CI-09: die Auswahl vor dem Merge auf Linux und macOS -----------------------
+
+_WINDOW_SELECTION: Final = WORKFLOW.parent / "fenster-auswahl.yml"
+_SLICER_SELECTION: Final = WORKFLOW.parent / "slicer-auswahl.yml"
+
+
+def _matrix_of(job: str) -> list[str]:
+    line = next(line for line in job.splitlines() if line.strip().startswith("os: ["))
+    return [entry.strip() for entry in line.split("[", 1)[1].split("]", 1)[0].split(",")]
+
+
+def test_the_selections_before_a_merge_run_where_packages_run() -> None:
+    """Fenster auf jeder Paketplattform, Slicer auf jeder außer Windows (CI-09).
+
+    Windows deckt für Slicer das lokale Tor; Linux und macOS gibt es an keinem
+    Arbeitsplatz, und genau dort sah bisher niemand einen echten Slicer.
+    """
+    packaged = _matrix_of(job_block(WORKFLOW.read_text(encoding="utf-8"), "package"))
+    windows = _matrix_of(job_block(_WINDOW_SELECTION.read_text(encoding="utf-8"), "selection"))
+    slicers = _matrix_of(job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection"))
+
+    assert sorted(windows) == sorted(packaged)
+    assert sorted(slicers) == sorted(
+        runner for runner in packaged if not runner.startswith("windows")
+    )
+    assert any(runner.endswith("-intel") for runner in slicers)
+
+
+@pytest.mark.parametrize("path", [_WINDOW_SELECTION, _SLICER_SELECTION], ids=lambda p: p.name)
+def test_a_selection_starts_by_hand_and_runs_each_choice_in_its_own_process(path: Path) -> None:
+    """Handstart mit der Eingabe ``tests``; sie kommt über die Umgebung, nie in den Befehl."""
+    text = path.read_text(encoding="utf-8")
+    trigger = text.split("\non:\n", 1)[1].split("\n\n", 1)[0]
+
+    assert re.findall(r"(?m)^  (\w+):", trigger) == ["workflow_dispatch"], trigger
+    assert "SELECTION: ${{ inputs.tests }}" in text
+    assert "${{ inputs.tests }}" not in text.split("SELECTION: ${{ inputs.tests }}", 1)[1]
+    assert 'os.environ["SELECTION"].split(";")' in text
+    assert "subprocess.call(" in text and "for " in text
+
+
+def _window_selection_script() -> str:
+    """Das Python, das ``fenster-auswahl.yml`` je Läufer fährt — aus dem Workflow gelesen."""
+    job = job_block(_WINDOW_SELECTION.read_text(encoding="utf-8"), "selection")
+    script = step_script(step_block(job, "Ausgewählte Fenstertests"))
+    return script.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+
+
+def _run_window_share(tmp_path: Path, selection: str, shard: int) -> tuple[int, list[str]]:
+    """Einen Teil fahren, mit einem Pytest, der nur mitschreibt, was er fahren soll."""
+    script = tmp_path / "auswahl.py"
+    script.write_text(_window_selection_script(), encoding="utf-8")
+    calls = tmp_path / f"calls-{shard}.txt"
+    wrapper = (
+        "import subprocess, sys\n"
+        f"calls = open({str(calls)!r}, 'a', encoding='utf-8')\n"
+        "subprocess.call = lambda command: (calls.write(' '.join(command[4:]) + '\\n'), 0)[1]\n"
+        f"sys.argv = [{str(script)!r}]\n"
+        f"exec(compile(open({str(script)!r}, encoding='utf-8').read(), 'auswahl.py', 'exec'))\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", wrapper],
+        env=dict(os.environ, SELECTION=selection, SHARD=str(shard), SHARDS="3"),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    ran = calls.read_text(encoding="utf-8").splitlines() if calls.is_file() else []
+    return done.returncode, ran
+
+
+def test_the_window_selection_shares_its_choices_evenly_across_three_runners(
+    tmp_path: Path,
+) -> None:
+    """Je Plattform drei Läufer, und jede Auswahl läuft genau einmal (CI-09).
+
+    Die Fensterauswahl eines großen Zweigs lief je Plattform auf einem Läufer
+    hintereinander; die Matrix teilt sie jetzt in drei Teile, die höchstens
+    eine Auswahl auseinanderliegen. Gefahren wird das Skript aus dem Workflow.
+    """
+    text = _WINDOW_SELECTION.read_text(encoding="utf-8")
+    job = job_block(text, "selection")
+    shards = re.search(r"(?m)^\s+shard: \[([0-9, ]+)\]$", job)
+    assert shards is not None, "die Matrix teilt nicht"
+    numbers = [int(entry) for entry in shards.group(1).split(",")]
+    assert numbers == [0, 1, 2]
+    assert "SHARD: ${{ matrix.shard }}" in job and 'SHARDS: "3"' in job
+    assert "matrix.shard" in job.split("runs-on:", 1)[0], "der Name nennt den Teil"
+
+    choices = [f"tests/test_{index}.py" for index in range(7)]
+    shares = [_run_window_share(tmp_path, "; ".join(choices), shard) for shard in numbers]
+    assert all(code == 0 for code, _ran in shares), shares
+    ran = [part for _code, parts in shares for part in parts]
+    assert sorted(ran) == sorted(choices), "jede Auswahl genau einmal"
+    sizes = [len(parts) for _code, parts in shares]
+    assert max(sizes) - min(sizes) <= 1, sizes
+
+    alone, empty = tmp_path / "wenig", tmp_path / "leer"
+    alone.mkdir()
+    empty.mkdir()
+    assert _run_window_share(alone, "tests/test_a.py", 2) == (0, []), (
+        "ein Teil ohne Auswahl ist grün"
+    )
+    assert _run_window_share(empty, " ; ", 0)[0] != 0, "eine leere Eingabe ist rot"
+
+
+def test_a_slicer_selection_is_red_for_a_skip_a_missing_program_or_nothing() -> None:
+    """Ein übersprungener Slicertest belegt nichts; ein leerer Lauf auch nicht."""
+    from tests.conftest import REQUIRE_SLICERS
+
+    job = job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection")
+    script = step_script(step_block(job, "Ausgewählte Slicertests"))
+
+    assert f'{REQUIRE_SLICERS}: "1"' in job
+    assert "--junitxml={report}" in script
+    assert 'totals["tests"] == 0 or totals["skipped"]' in script
+    assert "code != 0" in script
+
+
+@pytest.mark.parametrize(
+    ("wanted", "accepted"),
+    [
+        ("orcaslicer cura", True),
+        ("cura\nBASH_ENV=/tmp/fremd", False),
+        ("cura; rm -rf /", False),
+        ("Cura", False),
+    ],
+)
+def test_a_programme_input_reaches_the_environment_only_as_names(
+    tmp_path: Path, wanted: str, accepted: bool
+) -> None:
+    """Die Eingabe ``programme`` ist Text, kein Teil des Skripts (Review 1 P3, G-5).
+
+    Sie ging ungeprüft nach ``$GITHUB_ENV``; ein Zeilenumbruch setzte damit
+    weitere Variablen für jeden folgenden Schritt. Gefahren wird der echte
+    Block mit bash, wie auf dem Läufer.
+    """
+    job = job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection")
+    script = step_script(step_block(job, "Programme der Auswahl"))
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    environment = tmp_path / "github_env"
+    environment.write_text("", encoding="utf-8")
+    done = subprocess.run(
+        [shell, "-c", script],
+        cwd=tmp_path,
+        env=dict(os.environ, WANTED=wanted, SELECTION="", GITHUB_ENV=environment.as_posix()),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    written = environment.read_text(encoding="utf-8")
+    if accepted:
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert written == f"PROGRAMS={wanted}\n"
+    else:
+        assert done.returncode != 0, done.stdout
+        assert "::error::" in done.stdout
+        assert written == "", "nichts erreicht die Umgebung der folgenden Schritte"
+
+
+def test_the_slicer_selection_prepares_qt_like_the_window_selection() -> None:
+    """Slicertests gehen durch den Druckdialog; dessen Systembibliotheken fehlen sonst."""
+
+    def packages(path: Path) -> set[str]:
+        job = job_block(path.read_text(encoding="utf-8"), "selection")
+        step = next(
+            block
+            for block in re.split(r"(?m)^      - ", job)
+            if block.startswith("name: Qt-Systembibliotheken")
+        )
+        return set(re.findall(r"\b(lib[\w.+-]+|xvfb|xauth|fontconfig|fonts-[\w-]+)\b", step))
+
+    missing = packages(_WINDOW_SELECTION) - packages(_SLICER_SELECTION)
+    assert not missing, f"in slicer-auswahl.yml fehlt: {sorted(missing)}"

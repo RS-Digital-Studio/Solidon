@@ -42,8 +42,10 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
     SUPPRESS_STEP,
+    USE_VOXEL_STAGE,
     AmbiguityError,
     AppError,
+    BooleanFailedError,
     InternalError,
     NativeReferenceLost,
     OperationCancelled,
@@ -102,6 +104,7 @@ from app.core.perceive.matching import (
     PlanarFaces,
     apply_mapping,
     declared_partners,
+    faces_in_plane,
     inherit_originators,
     match,
     moved_features,
@@ -148,6 +151,7 @@ from app.core.types import (
     OpContext,
     Operation,
     OpId,
+    OpResult,
     Parameter,
     ParameterName,
     Profile,
@@ -167,6 +171,7 @@ from app.core.units import (
     EPS_DISPLAY,
     EPS_GEOM,
     MAX_FACET_SAG,
+    dot3,
     is_close,
     match_tolerance,
 )
@@ -287,6 +292,12 @@ class EvaluationResult:
     ``progress`` und ``cancelled`` sie im Hintergrund nach — die Schritte
     selbst treffen dort den Cache, es rechnet nur die Erkennung. Leer heißt:
     Der Merker kannte alles, oder es gab nichts zu erkennen."""
+    short_chain_only: bool = False
+    """Ob der Lauf hielt, weil die Güte die Kette gekürzt hat und er die volle nicht rechnen durfte.
+
+    Das ist der Halt einer Vorschau (RM-534): Er sagt nichts über den Schritt,
+    nur über die schnelle Rechnung — *Übernehmen* rechnet ihn vollständig und
+    wird deshalb nicht gesperrt."""
     reads_quality: bool = True
     """Ob ein Schritt dieses Laufs nach der Güte gefragt hat (``ctx.quality``).
 
@@ -461,6 +472,7 @@ def evaluate(
     on_recognition_answer: RecognitionAnswered | None = None,
     check_status: Callable[[CheckState], None] | None = None,
     missing_basis: tuple[str, ...] = (),
+    full_chain_when_stuck: bool = False,
 ) -> EvaluationResult:
     """Rechnet die Szene, die das Dokument beschreibt.
 
@@ -478,6 +490,14 @@ def evaluate(
     auch bei Abbruch ohne Ergebnis. ``missing_basis`` nennt vom Aufrufer
     nicht bestätigte Grundlagen; etwa ein ersetztes Druckerprofil bestätigt
     keine Druckerwahl. Davon abhängige Prüfungen bleiben ``not_started``.
+
+    ``full_chain_when_stuck`` gilt Fensterlauf, Verlaufsumbau und Agent: Hält
+    ein Schritt im Entwurf nur an, weil die Güte die Kette gekürzt hat
+    (:func:`_only_the_short_chain`), rechnet derselbe Lauf ihn fein weiter,
+    also mit allen Stufen (RM-534, §17.2). Eine Vorschau rechnet das nie
+    selbst: Die Voxelstufe kostet an einem überdeckenden Werkzeug 20 s, und
+    das je Wert im Dialog. Sie nimmt, was die volle Kette schon geurteilt hat
+    (Ergebnis oder Halt im Cache), und hält sonst mit ``short_chain_only``.
     """
     checks = _EvaluationChecks(check_status, missing_basis, cancelled or NeverCancelled())
     checks.start()
@@ -496,6 +516,7 @@ def evaluate(
             detect_features=detect_features,
             on_recognition_answer=on_recognition_answer,
             checks=checks,
+            full_chain_when_stuck=full_chain_when_stuck,
         )
     except OperationCancelled:
         checks.finish("cancelled")
@@ -615,6 +636,7 @@ def _evaluate(
     detect_features: bool = True,
     on_recognition_answer: RecognitionAnswered | None = None,
     checks: _EvaluationChecks | None = None,
+    full_chain_when_stuck: bool = False,
 ) -> EvaluationResult:
     """Geometrie und Befunde auswerten; auch ein Halt erhält anschließend Verwendungsdaten."""
     if checks is None:
@@ -685,6 +707,7 @@ def _evaluate(
     # ``_without_stray_inputs`` und ``_without_absent_inputs``.
     ran: list[Operation] = []
     reads_quality = False
+    short_chain_only = False
     pending: list[tuple[str, CachedResult, bool]] = []
     #: Körper, deren Erkennung ``detect_features=False`` ausgelassen hat.
     recognition_left_out: set[ObjectId] = set()
@@ -964,6 +987,17 @@ def _evaluate(
             stopped_at = operation.id
             break
         cached = cache.get(key) if cache is not None else None
+        refused = cache.refusal(key) if cache is not None and cached is None else None
+        if refused is not None:
+            # Die volle Kette hat über diesen Schritt schon geurteilt (RM-534):
+            # derselbe Satz, ohne ihn noch einmal mit allen Stufen zu rechnen.
+            # Der Befund entsteht hier neu, mit der Kennung, die der Schritt
+            # heute trägt — Verschieben und Einfügen vergeben neue bei
+            # gleichem Schlüssel.
+            findings.append(_finding_from(refused, operation))
+            stopped_at = operation.id
+            reads_quality = True
+            break
 
         if cached is not None:
             # Unverändert weiterreichen: der Umbau hier warf ohne Not den
@@ -1025,9 +1059,28 @@ def _evaluate(
                 bound_edges=binding.selections,
             )
             kernel_process.take_notice()
+            full_chain = _FullChain(
+                allowed=quality == "draft" and full_chain_when_stuck,
+                quality=asked_quality,
+                ask=watched,
+                announce=partial(_announce_full_chain, progress, position / total, spec.title),
+            )
             try:
-                produced = spec.fn(context)
+                produced = full_chain.run(spec.fn, context)
             except AppError as error:
+                # **Ein Halt, der nach der Güte gefragt hat, ist kein feines
+                # Urteil** (RM-534): Ohne diese Zeile hielt die Sitzung einen
+                # Entwurfshalt für fein, und Druckdialog wie Export rechneten
+                # die volle Kette nie — obwohl der Satz im Bericht genau sie
+                # ankündigte.
+                reads_quality = reads_quality or asked_quality.read or full_chain.ran
+                if cache is not None and full_chain.judged(error) and not watched.used:
+                    cache.refuse(key, error.with_traceback(None))
+                short_chain_only = (
+                    not full_chain.ran
+                    and isinstance(error, BooleanFailedError)
+                    and _only_the_short_chain(error)
+                )
                 findings.append(_finding_from(error, operation))
                 stopped_at = operation.id
                 break
@@ -1056,6 +1109,8 @@ def _evaluate(
                     problem,
                     exc_info=problem,
                 )
+                # Auch dieser Halt fragte womöglich nach der Güte (RM-534).
+                reads_quality = reads_quality or asked_quality.read or full_chain.ran
                 wrapped = InternalError(
                     detail=f"{type(problem).__name__}: {problem}",
                     values={"operation": str(operation.op)},
@@ -1118,9 +1173,19 @@ def _evaluate(
                 transform=produced.transform,
                 continuations=tuple(tuple(entries) for entries in produced.feature_continuations),
                 answered=dict(produced.answered),
-                reads_quality=asked_quality.read,
+                reads_quality=asked_quality.read or full_chain.ran,
             )
-            reads_quality = reads_quality or asked_quality.read
+            reads_quality = reads_quality or asked_quality.read or full_chain.ran
+            if full_chain.ran and cache is not None and not watched.used:
+                # **Was die volle Kette gerettet hat, merkt sich die
+                # Speicherebene sofort** (RM-534) — auch wenn ein späterer
+                # Schritt anhält und dieser Lauf sonst nichts in den Cache
+                # legt. Das Ergebnis folgt allein aus seinem Schlüssel, ohne
+                # Frage; ohne diese Zeile rechnete jede Änderung hinter einem
+                # Halt den geretteten Schritt noch einmal mit allen Stufen. Auf
+                # die Platte geht es wie jedes Ergebnis erst mit einem
+                # vollständigen Lauf (§15.6).
+                cache.put(key, result, to_disk=False)
 
         if len(result.objects) != len(operation.outputs):
             findings.append(_object_count_finding(operation, len(result.objects)))
@@ -1316,6 +1381,7 @@ def _evaluate(
                     # einzigen Eingang aus ihm — auch die der zweiten Hälfte
                     # nach *Teilen* (RM-217).
                     origin_mesh=inputs[0].mesh if len(inputs) == 1 else None,
+                    origin_features=inputs[0].features if len(inputs) == 1 else None,
                     texture_sources=(
                         inputs[1:]
                         if operation.op in {"union_objects", "intersect_objects"}
@@ -1335,6 +1401,7 @@ def _evaluate(
                         for name in entry.feature_ids
                     ),
                     unrecognised=recognition_left_out,
+                    features_complete=spec.features_complete,
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -1657,7 +1724,87 @@ def _evaluate(
         fit_sights=fit_sights,
         recognition_left_out=frozenset(recognition_left_out & scene.objects.keys()),
         reads_quality=reads_quality,
+        short_chain_only=short_chain_only,
     )
+
+
+def _only_the_short_chain(error: BooleanFailedError) -> bool:
+    """Ob der Halt nur sagt, dass die kurze Kette ausging (§17.2).
+
+    Gekürzt haben muss die Güte, nicht der Aufrufer: Ein Schritt, der
+    ausdrücklich nur eine Stufe oder die Entwurfskette verlangt, bekommt mit
+    der vollen Güte nichts anderes (``BooleanFailedError.cut_short``). Und die
+    Ausnahme muss selbst *Voxelstufe erzwingen* anbieten — eine zweite
+    Entscheidung derselben Frage liefe auseinander.
+    """
+    return error.cut_short and any(action.id == USE_VOXEL_STAGE.id for action in error.suggestions)
+
+
+def _announce_full_chain(
+    progress: ProgressFn, fraction: float, step: TranslatableText | str
+) -> None:
+    """Sagt in der Fortschrittszeile, warum dieser Schritt jetzt länger dauert."""
+    progress(
+        fraction,
+        str(
+            _(
+                "{step}: Die schnelle Rechnung kam nicht weiter, die vollständige läuft …",
+                step=step,
+            )
+        ),
+    )
+
+
+@dataclass
+class _FullChain:
+    """Ein Schritt, an dem im Entwurf nur die kurze Kette ausging, rechnet weiter (RM-534).
+
+    Im Entwurf endet die Kette nach zwei Stufen (§17.2, §31). Blieb dort
+    nichts übrig, sagte der Bericht „… sagt erst die vollständige“, die
+    Kette hielt an, und der Kunde nahm *Reparieren und erneut versuchen* —
+    zweimal, am Kundenteil, wo die volle Kette den Fehler dann mit einem
+    hilfreicheren Satz bestätigte. Jetzt rechnet derselbe Lauf genau diesen
+    Schritt fein, also mit allen Stufen; die Schritte davor und danach
+    bleiben im Entwurf. Das ist deterministisch: Ob die kurze Kette ausgeht, hängt nur an
+    den Eingängen des Schritts, also auch, ob er fein rechnet.
+
+    Eine Frage, die der Schritt im ersten Durchgang gestellt hat, beantwortet
+    der zweite aus dem Gedächtnis (``_WatchedAsk.again``) — gefragt wird je
+    Lauf einmal.
+    """
+
+    allowed: bool
+    quality: _WatchedQuality
+    ask: _WatchedAsk
+    announce: Callable[[], None]
+    ran: bool = False
+    """Ob die volle Kette gerechnet hat — ihr Ergebnis und ihr Halt fragen nach der Güte."""
+
+    def run(self, fn: Callable[[OpContext], OpResult], context: OpContext) -> OpResult:
+        try:
+            return fn(context)
+        except BooleanFailedError as error:
+            if not self.allowed or not self.quality.read or not _only_the_short_chain(error):
+                raise
+        self.ran = True
+        self.announce()
+        self.ask.again()
+        return fn(dataclasses.replace(context, quality=cast(Quality, _WatchedQuality("fine"))))
+
+    def judged(self, error: AppError) -> bool:
+        """Ob ``error`` das Urteil der vollen Kette ist — und damit eines, das bleibt.
+
+        Nur das merkt sich der Cache (``ResultCache.refuse``): Ein verlorener
+        Hilfsprozess, eine ohne Wahl geschlossene Frage oder eine Stufe, der
+        der Speicher ausging, sagt nichts über den Schritt, und ihr Satz rät,
+        es noch einmal zu versuchen.
+        """
+        return (
+            self.ran
+            and isinstance(error, BooleanFailedError)
+            and "voxel" in tuple(error.attempted)
+            and not error.transient
+        )
 
 
 class _WatchedQuality(str):
@@ -1871,9 +2018,11 @@ PLACEMENT_STATE_CODES: Final = frozenset(
 #: wiederzuerkennen"). Die Reparatur ändert das Netz mit Absicht (Bedienweg C5,
 #: 24.09.2026); das Teilen verbraucht mit Absicht, was an der Schnittfläche lag
 #: (RM-217, KUNDE-11): Am vergrößerten Organizer standen nach *Modell teilen*
-#: zehn solche Hinweise, und auf keines der Merkmale zeigte etwas. Ein Verlust
-#: **mit** Verweis bleibt an jedem Schritt eine Warnung.
-QUIET_LOSSES: Final = frozenset({"repair", "split_pinned", "split_line"})
+#: zehn solche Hinweise, und auf keines der Merkmale zeigte etwas. Ebenso das
+#: Prüfstück: Es verbraucht mit Absicht alles außerhalb seines Fensters, und
+#: auf das Bett gelegt findet die Flächensuche seine Stücke nicht an den alten
+#: Dreiecken. Ein Verlust **mit** Verweis bleibt an jedem Schritt eine Warnung.
+QUIET_LOSSES: Final = frozenset({"repair", "split_pinned", "split_line", "test_piece"})
 
 #: Der Satz, mit dem ein Schnitt sagt, dass seine Stücke noch dort stehen, wo
 #: sie im ganzen Teil standen (``prepare_ops._halves_still_together``).
@@ -2473,6 +2622,96 @@ def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
     )
 
 
+def _cut_away_entirely(feature: Feature, bounds: BoundingBox) -> bool:
+    """Liegt dieses Merkmal mit seiner ganzen Ausdehnung außerhalb des Körpers?
+
+    Die Mitte allein sagt das nicht (anders als in der Waisenschleife, die nur
+    fragt, ob ein schon verlorenes Merkmal einen Hinweis wert ist):
+    ``lid_cavity`` sitzt im Schwerpunkt der Öffnung, ein Gewinde auf seiner
+    Achse, und ein Prüfstück an der Wand einer Dose trägt beide doch. Gemessen
+    wird ein Quader, der das Merkmal sicher umschließt — Länge oder Tiefe ganz
+    längs der Achse, denn nicht jede Art misst von ihrer Mitte, der halbe
+    Durchmesser quer dazu und beim Langloch seine Länge ganz entlang
+    ``direction``. Wo die Maße keine solche Grenze hergeben, etwa eine Fläche,
+    die nur ihren Inhalt kennt, bleibt das Merkmal; ein beschnittenes mit
+    Dreiecken entscheidet :func:`_cut_by_the_step`.
+    """
+    params = feature.params
+    centre = params.get("centre")
+    axis = params.get("axis")
+    slot = params.get("direction")
+    if not isinstance(centre, tuple | list) or len(centre) != 3:
+        return False
+    if not isinstance(axis, tuple | list) or len(axis) != 3:
+        return False
+    if slot is not None and (not isinstance(slot, tuple | list) or len(slot) != 3):
+        return False
+    try:
+        radius = float(params.get("diameter") or 0.0) / 2.0 or float(params.get("radius") or 0.0)
+        length = float(params.get("length") or 0.0)
+        along = max(length, float(params.get("depth") or 0.0))
+        direction = [float(value) for value in axis]
+        sideways = [float(value) for value in slot] if slot is not None else [0.0, 0.0, 0.0]
+        middle = [float(value) for value in centre]
+    except TypeError, ValueError:
+        return False
+    norm = math.sqrt(sum(value * value for value in direction))
+    span = math.sqrt(sum(value * value for value in sideways))
+    if radius <= 0.0 or along <= 0.0 or norm <= EPS_GEOM:
+        return False
+    if slot is not None and span <= EPS_GEOM:
+        return False
+    for index, (value, low, high) in enumerate(
+        zip(middle, bounds.minimum, bounds.maximum, strict=True)
+    ):
+        share = min(abs(direction[index]) / norm, 1.0)
+        reach = share * along + math.sqrt(max(0.0, 1.0 - share * share)) * radius
+        if slot is not None:
+            reach += min(abs(sideways[index]) / span, 1.0) * length
+        if value + reach < low - EPS_DISPLAY or value - reach > high + EPS_DISPLAY:
+            return True
+    return False
+
+
+def _cut_away_here(
+    feature: Feature,
+    before: Feature | None,
+    bounds: BoundingBox,
+    previous_bounds: BoundingBox | None,
+) -> bool:
+    """Hat **dieser** Schritt das Merkmal weggeschnitten?
+
+    Ganz außerhalb liegt es jetzt (:func:`_cut_away_entirely`), und vorher lag
+    es das noch nicht — gemessen an seinem Vorgänger und dem Körper vor dem
+    Schritt. Ein Baustein darf ein Merkmal neben dem Körper erklären (das
+    Gegenstück setzt eine Bohrung neben die Platte, und eine Passung hängt
+    daran); das hat kein späterer Schritt weggeschnitten, auch nicht *Material
+    ändern*. Ohne Vorgänger oder Körper davor hat der Schritt nichts
+    weggenommen, das man ihm zuschreiben könnte.
+    """
+    if before is None or previous_bounds is None:
+        return False
+    return _cut_away_entirely(feature, bounds) and not _cut_away_entirely(before, previous_bounds)
+
+
+def _needed_now(
+    name: FeatureId,
+    needed: Mapping[FeatureId, tuple[str, ...]] | None,
+    referenced: Collection[FeatureId],
+) -> bool:
+    """Braucht nach diesem Schritt noch jemand das Merkmal, das er weggeschnitten hat?
+
+    Die eine Antwort für jeden Weg, auf dem ein Schritt ein Merkmal abschneidet
+    (eine beschnittene Fläche ohne Stück, ein erklärtes oder ungeprüft
+    mitreisendes Merkmal außerhalb des Körpers, eine Waise draußen, eine
+    erzeugte Fläche, die der Schritt ganz verbraucht hat): Ein
+    Verweis eines früheren Schritts ist verbraucht (:func:`_needed_after`), und
+    über ihn nach einem gelungenen Schnitt zu warnen, hieße einen Fehler zu
+    melden, wo keiner ist. Ohne die Angabe gilt jeder Verweis im Dokument.
+    """
+    return name in needed if needed is not None else name in referenced
+
+
 def _divided_in_place(feature: Feature | None, faces_now: PlanarFaces, source: Mesh | None) -> bool:
     """Ob eine alte ebene Fläche nach dem Schritt geteilt oder beschnitten weiterbesteht.
 
@@ -2635,6 +2874,58 @@ def _divided_partners(
     )
 
 
+def _consumed_faces(
+    declared: Mapping[FeatureId, Feature],
+    blind: Collection[FeatureId],
+    before: Mapping[FeatureId, Feature],
+    detected: Mapping[FeatureId, Feature],
+    diagonal: float,
+) -> set[FeatureId]:
+    """Die erzeugten Flächen, die dieser Schritt ganz verbraucht hat (RM-537).
+
+    Verbraucht heißt dreierlei: Die Fläche hatte vor dem Schritt Dreiecke
+    (``before``), die Operation gibt sie ohne Dreiecke aus und die
+    vollständige Erkennung fand weder einen Partner (``blind``) noch irgendeine
+    Fläche in ihrer Ebene, gleich gerichtet. Ein Baustein erklärt seine Flächen
+    ohne Dreiecke, bevor die Erkennung sie findet — die hatten vorher keine und
+    bleiben. Andere Arten, auch erzeugte Bohrungen und Zapfen ohne Dreiecke,
+    fragt diese Stelle nicht.
+
+    Die Normale wird mit Grundrechenarten auf Länge eins gebracht
+    (``units.dot3``, RM-187): An der Antwort hängt, ob ein späterer Schritt
+    anhält, und an der Toleranzgrenze entschiede sonst der BLAS-Kern.
+    """
+    import numpy as np
+
+    candidates = [
+        feature
+        for name, feature in declared.items()
+        if name in blind
+        and feature.kind == "face"
+        and not feature.face_indices
+        and (older := before.get(name)) is not None
+        and older.face_indices
+        and isinstance(feature.params.get("normal"), tuple | list)
+        and isinstance(feature.params.get("centre"), tuple | list)
+    ]
+    if not candidates:
+        return set()
+    faces_now = planar_faces(detected)
+    tolerance = match_tolerance(diagonal)
+    consumed: set[FeatureId] = set()
+    for feature in candidates:
+        normal = [float(value) for value in feature.params["normal"]]
+        length = math.sqrt(dot3(normal, normal))
+        if length <= 0.0:
+            continue
+        unit = np.asarray([value / length for value in normal], dtype=float)
+        centre = np.asarray(feature.params["centre"], dtype=float)
+        if faces_now.names and bool(faces_in_plane(faces_now, unit, centre, tolerance).any()):
+            continue
+        consumed.add(feature.id)
+    return consumed
+
+
 def _shift_between(before: BoundingBox, now: BoundingBox) -> Transform | None:
     """Die reine Verschiebung zwischen zwei Hüllquadern — oder ``None``.
 
@@ -2666,6 +2957,55 @@ def _inherited_features(
         if (older := previous.get(name)) is not None
         and dataclasses.replace(feature, params=older.params) == older
         and digest(feature.params) == digest(older.params)
+    }
+
+
+def _proven_without_recognition(
+    features: Mapping[FeatureId, Feature],
+    previous: Mapping[FeatureId, Feature],
+    inherited: Collection[FeatureId],
+    *,
+    unchanged: bool,
+    moved: bool,
+) -> dict[FeatureId, Feature]:
+    """Was ein Körper ohne Erkennung tragen darf: nur, was belegt ist (RM-537).
+
+    Ein erkanntes Merkmal in der Ausgabe einer Operation ist ein Vorgänger
+    für die Zuordnung, kein Ergebnis — der Weg mit Erkennung veröffentlicht
+    nur, was ``detect`` am neuen Netz wiederfindet. Ohne Erkennung fiel das
+    weg: *Fläche versetzen* reicht am Netz jedes Merkmal mit geleerten
+    Dreiecken und alten Maßen weiter, und am Kundenstift standen zwei
+    Sackbohrungen im Bild, wo der Schritt längst eine durchgehende gebohrt
+    hatte; wer eine wählte, verlor sie mit der Erkennung danach.
+
+    Erzeugte Merkmale bleiben (die Operation sagt sie zu), ebenso alles auf
+    unveränderten Dreiecken und was eine Bewegung starr mitgenommen hat.
+    Heraus fällt ein erkanntes Merkmal, dessen Dreiecke die Operation geleert
+    hat, und eines, das sie unverändert über ein geändertes Netz gereicht hat.
+    **Und eine erzeugte Fläche, deren Dreiecke die Operation geleert hat:** Ob
+    der Schritt sie verbraucht hat, sagt erst die Erkennung
+    (:func:`_consumed_faces`); stünde sie im Bild, verschwände eine Wahl
+    darauf danach — am Kundenstift ``face_1`` und ``face_2``.
+    """
+    if unchanged:
+        return dict(features)
+
+    def emptied(name: FeatureId, feature: Feature) -> bool:
+        older = previous.get(name)
+        return not feature.face_indices and older is not None and bool(older.face_indices)
+
+    return {
+        name: feature
+        for name, feature in features.items()
+        if (
+            feature.provenance == "generated"
+            and not (feature.kind == "face" and emptied(name, feature))
+        )
+        or (
+            feature.provenance != "generated"
+            and not emptied(name, feature)
+            and not (not moved and name in inherited)
+        )
     }
 
 
@@ -3906,6 +4246,8 @@ def _with_features(
     announced_gone: Collection[FeatureId] = frozenset(),
     advance: Callable[[float], None] | None = None,
     unrecognised: set[ObjectId] | None = None,
+    origin_features: Mapping[FeatureId, Feature] | None = None,
+    features_complete: bool = False,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -3929,7 +4271,10 @@ def _with_features(
     das die Dreiecke der alten Merkmale zeigen, und fehlt ``source_mesh`` nur
     deshalb, weil ein einziger Eingang mehrere Ausgaben hat (*Teilen*), steht es
     trotzdem da: Ob eine alte Fläche nur geteilt ist, misst
-    :func:`_divided_in_place` an ihr. ``detect_features=False`` lässt
+    :func:`_divided_in_place` an ihr. ``origin_features`` sind die Merkmale
+    dieses einzigen Eingangs; ohne Erkennung misst eine neue Ausgabe ohne
+    eigenen Vorgänger an ihnen, was sie belegt weiterträgt
+    (:func:`_proven_without_recognition`). ``detect_features=False`` lässt
     die Erkennung aus, wo kein späterer Schritt und keine Passung ein Merkmal
     dieses Körpers braucht (siehe :func:`evaluate`).
 
@@ -3979,6 +4324,9 @@ def _with_features(
     ``unrecognised`` nimmt den Körper auf, dessen Erkennung ``detect_features=False``
     ausgelassen hat — wo sie gerechnet oder gefragt hätte. Ein zweiter Lauf mit
     Erkennung holt sie nach (:attr:`EvaluationResult.recognition_left_out`).
+
+    ``features_complete`` kommt aus dem Register (``OperationSpec``): Die
+    Ausgabe trägt ihre Merkmale vollständig, nichts Erzeugtes wird nachgetragen.
     """
     watch = cancelled or NeverCancelled()
     if unrecognised is not None:
@@ -4452,15 +4800,28 @@ def _with_features(
             # Dreiecken 1,1 der 2,2 Sekunden (gemessen am 22.09.2026) und
             # war beim Übernehmen ohnehin ein Merker-Treffer für genau ein
             # Netz — das letzte. Was der Merker kennt, kommt trotzdem;
-            # sonst bleibt der Körper bei dem, was die Operation ausgab, ohne
-            # Zuordnung und ohne Waisenbefund, wie bei ``perceive.too_many``.
+            # sonst bleibt der Körper bei dem, was die Operation ausgab und
+            # belegt (:func:`_proven_without_recognition`), ohne Zuordnung und
+            # ohne Waisenbefund, wie bei ``perceive.too_many``.
             remembered_features = known_detection(mesh)
             if remembered_features is None:
                 if unrecognised is not None:
                     unrecognised.add(entry.id)
+                # Eine neue Ausgabe ohne eigenen Vorgänger (die Hälften nach
+                # *Teilen*) misst sich am einzigen Eingang (``origin_features``):
+                # Sonst trugen beide Hälften im Bild die Merkmale der ganzen
+                # Platte mit deren Dreiecken und Maßen.
+                basis = previous or origin_features or {}
+                shown = _proven_without_recognition(
+                    output_features,
+                    basis,
+                    inherited if previous else _inherited_features(output_features, basis),
+                    unchanged=unchanged or (not previous and _same_triangles(origin_mesh, mesh)),
+                    moved=feature_movement is not None,
+                )
                 return (
-                    dataclasses.replace(entry, features=output_features)
-                    if feature_movement is not None
+                    dataclasses.replace(entry, features=shown)
+                    if feature_movement is not None or len(shown) != len(entry.features)
                     else entry
                 )
             detected = remembered_features
@@ -4697,6 +5058,9 @@ def _with_features(
     # erkennen. Mitgereiste Zellflächen dürfen daneben nicht wieder auftauchen.
     detected = without_pattern_cells(detected)
 
+    # Ob ``detected`` jede Fläche des Netzes kennt — nur dann sagt „kein
+    # Partner", dass eine Fläche fort ist (:func:`_consumed_faces`).
+    complete = not local_only and len(detected) <= FEATURE_LIMIT_COUNT
     if len(detected) > FEATURE_LIMIT_COUNT:
         findings.append(
             Finding(
@@ -4739,6 +5103,12 @@ def _with_features(
     # Gefragt wird über dieselbe Zuordnung, die auch sonst zuordnet: Wer keinen
     # Partner findet, ist ``orphaned``. Mehrdeutig zählt als gefunden — zwei
     # Kandidaten sind ein Kandidat zu viel, nicht keiner.
+    consumed: set[FeatureId] = set()
+    #
+    # ``gone_here`` sammelt, was der Schritt weggeschnitten hat — erklärte
+    # Merkmale hier, ungeprüft mitreisende unten (``dropped``); es kommt nicht
+    # über ``carried`` zurück, und sein Name bleibt vergeben.
+    gone_here: set[FeatureId] = set()
     if declared:
         watch.raise_if_cancelled()
         if say is not None:
@@ -4771,17 +5141,49 @@ def _with_features(
                 mesh.bounds,
             )
         }
+        # **Und was dieser Schritt ohne Partner ganz aus dem Körper geschnitten
+        # hat, ebenso** (:func:`_cut_away_here`) — auch ein Merkmal, das die
+        # Erkennung nie sieht: Das Prüfstück aus dem Gehäuse-Beispiel trug die
+        # Einführfase einer Buchse 40 mm neben sich.
+        cut_off |= {
+            name
+            for name in seen.orphaned
+            if _cut_away_here(
+                declared[name], features_before.get(name), mesh.bounds, previous_bounds
+            )
+        }
+        gone_here |= cut_off
         if cut_off:
             findings.extend(
                 _lost_reference_finding(name, True, needed, entry, operation)
                 for name in sorted(cut_off)
-                if name in referenced
+                if _needed_now(name, needed, referenced)
             )
             declared = {name: feature for name, feature in declared.items() if name not in cut_off}
             seen = dataclasses.replace(
                 seen, orphaned=tuple(name for name in seen.orphaned if name not in cut_off)
             )
         blind = set(seen.orphaned)
+        # **Eine erzeugte Fläche, die der Schritt ganz verbraucht hat, fällt
+        # weg** (RM-537): Am Kundenstift drückte der letzte Versatz die
+        # Bodenfläche durch, und ``face_1``/``face_2`` standen weiter ohne
+        # Dreiecke im Baum. Wer sie danach noch nennt, bekommt den Bezugsverlust.
+        consumed = (
+            _consumed_faces(declared, blind, previous, detected, mesh.bounds.diagonal)
+            if complete
+            else set()
+        )
+        if consumed:
+            findings.extend(
+                _lost_reference_finding(name, True, needed, entry, operation)
+                for name in sorted(consumed)
+                if _needed_now(name, needed, referenced)
+            )
+            declared = {name: feature for name, feature in declared.items() if name not in consumed}
+            seen = dataclasses.replace(
+                seen, orphaned=tuple(name for name in seen.orphaned if name not in consumed)
+            )
+            blind -= consumed
         # Randöffnungen sind geometrisch erkennbare Langlöcher. Fehlt ihre
         # Wand, darf ein mitgetragener Eintrag nicht zur ungeprüften Zusage
         # eines Bausteins werden. Der Vorgänger läuft unten durch die normale
@@ -4864,6 +5266,24 @@ def _with_features(
             if feature.provenance == "detected"
         },
     }
+    # **Gibt die Operation ihre Merkmale vollständig aus, vergleicht die
+    # Zuordnung nur diese** (``OperationSpec.features_complete``). Das Übrige
+    # hat sie weggenommen, und an seiner alten Stelle träfe es zufällig ein
+    # neues: Am abgelegten Prüfstück hieß die Schnittfläche wie die Bettfläche
+    # des Turms, weil beide bei z = 0 liegen.
+    withdrawn: set[FeatureId] = set()
+    if features_complete:
+        withdrawn = set(previous) - set(output_features)
+        findings.extend(
+            _lost_reference_finding(
+                name, previous[name].provenance == "generated", needed, entry, operation
+            )
+            for name in sorted(withdrawn)
+            if _needed_now(name, needed, referenced)
+        )
+        # Und in der Lage der Ausgabe: Was ``declared`` hier selbst streicht,
+        # käme sonst über ``carried`` an der alten Stelle zurück.
+        previous = {name: output_features[name] for name in previous if name in output_features}
 
     # **Ein erzeugtes Merkmal, das die Operation nicht selbst wieder ausgibt,
     # wird mitgenommen — nicht vergessen.** Hier stand bis zum 22.08.2026, dass
@@ -4878,7 +5298,11 @@ def _with_features(
     carried = {
         name: feature
         for name, feature in previous.items()
-        if getattr(feature, "provenance", "detected") == "generated" and name not in declared
+        if getattr(feature, "provenance", "detected") == "generated"
+        and name not in declared
+        # Verbraucht und weggeschnitten ist schon oben entschieden und gemeldet.
+        and name not in consumed
+        and name not in gone_here
     }
     # Mitnehmen heißt nicht glauben. Wo die Erkennung die Art des Merkmals
     # sieht, wird es wie ein erkanntes zugeordnet und fällt heraus, wenn es
@@ -4900,6 +5324,23 @@ def _with_features(
     # es entsteht in einem Baustein, ``detect`` kennt die Art nicht, und geprüft
     # verlöre es jede Operation.
     unchecked = {name: f for name, f in carried.items() if name not in checked}
+    # **Ungeprüft heißt nicht: auch weggeschnitten.** Was dieser Schritt ganz
+    # aus dem Körper geschnitten hat (:func:`_cut_away_here`), fällt weg wie ein
+    # Merkmal ohne Partner oben: *Abschneiden* gibt nur die Merkmale seiner
+    # Seite aus, und die Fase einer Buchse auf der anderen kam hier zurück.
+    dropped = {
+        name
+        for name, f in unchecked.items()
+        if _cut_away_here(f, features_before.get(name), mesh.bounds, previous_bounds)
+    }
+    if dropped:
+        findings.extend(
+            _lost_reference_finding(name, True, needed, entry, operation)
+            for name in sorted(dropped)
+            if _needed_now(name, needed, referenced)
+        )
+        unchecked = {name: f for name, f in unchecked.items() if name not in dropped}
+        gone_here |= dropped
 
     previous = {
         name: feature
@@ -4955,6 +5396,18 @@ def _with_features(
         }
 
     if not previous:
+        if consumed or gone_here or withdrawn:
+            # Dieselbe Sperre wie unten bei ``apply_mapping``: Ohne erkannte
+            # Vorgänger übernähme ein neues Merkmal sonst ungeprüft den Namen
+            # des verbrauchten, weggeschnittenen oder weggenommenen Merkmals.
+            # Gesperrt ist auch, was daneben eingehängt wird — sonst fiele der
+            # Ausweichname auf ein erzeugtes oder mitreisendes Merkmal und würde
+            # beim Zusammenführen still überschrieben.
+            detected = apply_mapping(
+                detected,
+                MatchResult(fresh=tuple(detected)),
+                reserved={*unchecked, *declared, *consumed, *gone_here, *withdrawn},
+            )
         return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
 
     centre = mesh.bounds.centre
@@ -5039,8 +5492,11 @@ def _with_features(
         # es wurde weggeschnitten, und zwar von jemandem, der genau das wollte.
         # Ein Prüfstück schneidet 22 mm aus einem 70er Gehäuse: acht Merkmale
         # bleiben draußen, und acht Warnungen darüber sind acht Warnungen über
-        # eine gelungene Operation.
-        if _outside(old_feature, mesh.bounds, False):
+        # eine gelungene Operation. Braucht es danach noch jemand, gilt die
+        # Warnung unten — wie an jedem Weg, der etwas abschneidet (``_needed_now``).
+        if _outside(old_feature, mesh.bounds, False) and not _needed_now(
+            old_id, needed, referenced
+        ):
             continue
 
         # Ein verschwundener Defekt ist kein Verlust, sondern das Ziel. Eine
@@ -5208,8 +5664,18 @@ def _with_features(
     # nicht an ein neues Merkmal (RM-222): Eine geänderte Bohrung reist unter
     # ihrem Namen in ``declared`` weiter, und eine neu gebohrte bekam diesen
     # Namen als ersten freien — und wurde beim Zusammenführen überschrieben.
+    # **Und der Name einer verbrauchten Fläche ist gesperrt wie der einer
+    # verwaisten** (RM-537): Sonst hieß eine im selben Schritt neu erkannte
+    # Taschenwand wie die durchgedrückte Deckfläche, und ein späterer Schritt
+    # auf diese versetzte still die Wand.
     mapped = apply_mapping(
-        detected, matched, previous=previous, reserved={*rigid_orphans, *unchecked, *declared}
+        detected,
+        matched,
+        previous=previous,
+        # Was die Operation weggenommen, verbraucht oder weggeschnitten hat,
+        # bleibt vergeben: Ein neues Merkmal unter einem alten Namen träfe jeden
+        # späteren Bezug darauf still.
+        reserved={*rigid_orphans, *unchecked, *declared, *consumed, *gone_here, *withdrawn},
     )
     # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.
     # ``apply_mapping`` trägt den *Namen* weiter, die Provenienz steckt aber im
@@ -5290,11 +5756,21 @@ class _WatchedAsk:
     die zu fragen anfängt, ohne es aufzuschreiben.
     """
 
-    __slots__ = ("_ask", "used")
+    __slots__ = ("_ask", "_given", "_replay", "used")
 
     def __init__(self, ask: AskFn) -> None:
         self._ask = ask
+        self._given: dict[tuple[str, tuple[str, ...]], str] = {}
+        self._replay = False
         self.used = False
+
+    def again(self) -> None:
+        """Derselbe Schritt rechnet noch einmal: Was er schon gefragt hat, kommt aus dem Gedächtnis.
+
+        Für die volle Kette nach der kurzen (``_FullChain``, RM-534). Ohne das
+        stand dieselbe Frage im selben Lauf zweimal am Bildschirm.
+        """
+        self._replay = True
 
     def optional(self, question: str, choices: list[str]) -> str:
         """Eine optionale Vollerkennung darf geschlossen werden; der Import läuft weiter.
@@ -5309,8 +5785,11 @@ class _WatchedAsk:
 
     def __call__(self, question: str, choices: list[str]) -> str:
         self.used = True
+        asked_as = (question, tuple(choices))
+        if self._replay and asked_as in self._given:
+            return self._given[asked_as]
         try:
-            return self._ask(question, choices)
+            answer = self._ask(question, choices)
         except QuestionDeclined:
             # **Ohne Wahl geschlossen heißt: dieser Schritt wartet** — nicht
             # „die Rechnung ist abgebrochen". Jede Frage eines Schritts geht
@@ -5320,6 +5799,8 @@ class _WatchedAsk:
             raise AmbiguityError(
                 QUESTION_LEFT_OPEN, suggestions=(CORRECT_INPUT, SHOW_HISTORY)
             ) from None
+        self._given[asked_as] = answer
+        return answer
 
 
 #: Der Befund, wenn eine Frage eines Schritts ohne Wahl geschlossen wurde

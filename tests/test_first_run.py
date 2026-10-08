@@ -852,7 +852,12 @@ def test_a_report_describes_the_window_session_where_there_is_one(
     # Auch der Merker der eigenen Plattformwahl: Stünde er aus einem früheren
     # Aufruf von ``prefer_x11_for_the_viewport`` noch da, läse sich das „xcb“
     # unten als Wahl der Anwendung.
-    for key in (*reports.SESSION_KEYS, "WAYLAND_DISPLAY", reports.QT_PLATFORM_BEFORE_VARIABLE):
+    for key in (
+        *reports.SESSION_KEYS,
+        "WAYLAND_DISPLAY",
+        reports.QT_PLATFORM_BEFORE_VARIABLE,
+        *reports.INPUT_BEFORE_VARIABLES.values(),
+    ):
         monkeypatch.delenv(key, raising=False)
     assert not any(key.lower() in reports.environment() for key in reports.SESSION_KEYS), (
         "wo nichts gesetzt ist, steht auch nichts"
@@ -2540,7 +2545,7 @@ def test_the_rebuilt_window_shows_the_work_it_kept(qt_app: object) -> None:
     window = MainWindow(Session(), settings)
     try:
         window.open_path(meshes / "cube_clean.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         assert window.session.last_result is not None, "ohne Auswertung prüft der Test nichts"
 
         settings.language = "it"

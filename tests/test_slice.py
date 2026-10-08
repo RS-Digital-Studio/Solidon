@@ -702,9 +702,15 @@ def test_a_contour_touching_only_at_a_corner_is_an_island() -> None:
     """
     from shapely.geometry import box as shapely_box
 
-    from app.core.slice.analysis import _islands
+    from app.core.slice.analysis import _islands_many
 
     below = shapely_box(0.0, 0.0, 10.0, 10.0)
+
+    def _islands(shape: Any, previous: Any) -> Any:
+        """Eine Schicht über ihrer Vorgängerin, wie die Analyse sie im Block stellt."""
+        return _islands_many(
+            np.asarray([shape], dtype=object), np.asarray([previous], dtype=object)
+        )[0]
 
     edge = _islands(shapely_box(10.0, 0.0, 20.0, 10.0), below)
     corner = _islands(shapely_box(10.0, 10.0, 20.0, 20.0), below)

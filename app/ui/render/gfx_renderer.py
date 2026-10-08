@@ -82,8 +82,11 @@ HEADLIGHT_GAIN = 2.0
 AMBIENT_INTENSITY = 0.0
 
 #: Breite, schwache Reflexion macht auch schwarzes Filament räumlich lesbar.
-#: Diese Darstellung ändert weder die gespeicherte Farbe noch den Export.
-SURFACE_SPECULAR = 0.4
+#: Diese Darstellung ändert weder die gespeicherte Farbe noch den Export. Bei
+#: 0,4 lagen die drei Flächen eines schwarzen Würfels nur 10 bis 11 Stufen
+#: auseinander, je nach Grafikadapter genau an der Lesbarkeitsgrenze; 0,5 gibt
+#: 12 (``test_black_lit_surfaces_still_show_their_shape``).
+SURFACE_SPECULAR = 0.5
 SURFACE_SHININESS = 6.0
 
 #: Der Lichtsatz, den VTKs ``vtkLightKit`` aufstellt und den PyVista dem
@@ -497,13 +500,6 @@ class GfxItem(Item):
             float(high[2]),
         )
 
-    def set_pickable(self, pickable: bool) -> None:
-        self.restyled = self.restyled or bool(pickable) != self._pickable
-        self._pickable = bool(pickable)
-        for obj in self.objects:
-            obj.material.pick_write = self._pickable and getattr(obj, "_solidon_pickable", True)
-        self._changed()
-
     def pickable(self) -> bool:
         return self._pickable
 
@@ -841,7 +837,6 @@ class GfxLabels(GfxItem, LabelsItem):
                 ),
             )
             field._solidon_coloured = False
-            field._solidon_pickable = False
         label = gfx.Text(
             text=text,
             font_size=float(style.font_size),
@@ -957,8 +952,7 @@ class GfxRenderer(Renderer):
         import pygfx as gfx
 
         self._gfx = gfx
-        self._listeners: dict[int, Callable[[PointerEvent], None]] = {}
-        self._next_token = 1
+        self._listeners: list[Callable[[PointerEvent], None]] = []
         self._items: dict[int, GfxItem] = {}
         self._pick_objects: dict[int, Any] = {}
         self._scene_revision = 0
@@ -1136,7 +1130,7 @@ class GfxRenderer(Renderer):
         event.accept()
 
     def _emit(self, event: PointerEvent) -> None:
-        for listener in list(self._listeners.values()):
+        for listener in list(self._listeners):
             listener(event)
 
     @staticmethod
@@ -1404,7 +1398,6 @@ class GfxRenderer(Renderer):
             )
             edges._solidon_coloured = False
             edges._solidon_mesh = True
-            edges._solidon_pickable = False
             edges._solidon_force_opaque = style.force_opaque
             root.add(edges)
             objects.append(edges)
@@ -2484,14 +2477,8 @@ class GfxRenderer(Renderer):
         button = _button_of(event.button()) if kind in ("press", "release") else None
         self._pointer(kind, event, button)
 
-    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> int:
-        token = self._next_token
-        self._next_token += 1
-        self._listeners[token] = listener
-        return token
-
-    def remove_pointer_listener(self, token: int) -> None:
-        self._listeners.pop(token, None)
+    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> None:
+        self._listeners.append(listener)
 
     def close(self) -> None:
         self._listeners.clear()

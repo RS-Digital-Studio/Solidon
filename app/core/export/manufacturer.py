@@ -469,16 +469,23 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
 #: Vorgaben; OrcaSlicer braucht zusätzlich die am Kobra-2-Prozess gemessenen
 #: Rückfälle für nicht unterstützte Prozentwerte. Anycubics eigene Ketten
 #: nennen alle Schlüssel; die Vorgaben gelten Prozessen ohne Herstellerbasis.
+#: Für die Zeitgegenprobe (RM-281, 06.10.2026) dazu, was die Ketten offen
+#: lassen und der Konfigurationsblock der Seitenablage zeigt: innere Brücke
+#: 150 % (ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2), ganze senkrechte Schalen
+#: (OrcaSlicer, Bambu Studio 02.08.02.61).
 PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     "elegooslicer": {
         "brim_type": "auto_brim",
+        "internal_bridge_speed": "150%",
         "precise_outer_wall": "1",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
     },
     "orcaslicer": {
         "brim_type": "auto_brim",
+        "ensure_vertical_shell_thickness": "ensure_all",
         "initial_layer_speed": "30",
+        "internal_bridge_speed": "150%",
         "precise_outer_wall": "1",
         "support_object_xy_distance": "0.35",
         "wall_generator": "arachne",
@@ -486,6 +493,7 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     },
     "bambustudio": {
         "brim_type": "auto_brim",
+        "ensure_vertical_shell_thickness": "enabled",
         "precise_outer_wall": "0",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
@@ -849,7 +857,25 @@ def orca_motion(
         retraction_speed=retraction,
         deretraction_speed=_amount(machine.get("deretraction_speed")) or retraction,
         **_orca_support_motion(process, default, nozzle),
+        outer_wall_width=_amount(process.get("outer_wall_line_width"), nozzle),
+        inner_wall_width=_amount(process.get("inner_wall_line_width"), nozzle),
+        sparse_width=_amount(process.get("sparse_infill_line_width"), nozzle),
+        solid_width=_amount(process.get("internal_solid_infill_line_width"), nozzle),
+        top_width=_amount(process.get("top_surface_line_width"), nozzle),
+        flow_spacing=True,
+        top_shell_thickness=_amount(process.get("top_shell_thickness")),
+        bottom_shell_thickness=_amount(process.get("bottom_shell_thickness")),
+        vertical_shells=_text(process.get("ensure_vertical_shell_thickness")) in _WHOLE_SHELLS,
+        minimum_sparse_area=_amount(process.get("minimum_sparse_infill_area")),
+        narrow_solid_loops=_text(process.get("detect_narrow_internal_solid_infill")) != "0",
+        sparse_pattern=_text(process.get("sparse_infill_pattern")),
     )
+
+
+#: Wann ein Slicer die Schalendicke auch an schrägen Wänden hält: Orca
+#: ``ensure_all`` (``discover_vertical_shells`` nur dann), Bambu Studio und
+#: PrusaSlicer ``enabled``, ältere Fassungen als Schalter.
+_WHOLE_SHELLS: Final = frozenset({"ensure_all", "enabled", "1", "true"})
 
 
 #: Was OrcaSlicer 2.4.2 für ``support_interface_speed`` fährt, wenn der Prozess
@@ -949,6 +975,20 @@ def prusa_motion(values: Mapping[str, Any], nozzle: float) -> Motion | None:
         or _amount(values.get("deretract_speed"))
         or retraction,
         **_prusa_support_motion(values, nozzle),
+        outer_wall_width=_amount(values.get("external_perimeter_extrusion_width"), nozzle),
+        inner_wall_width=_amount(values.get("perimeter_extrusion_width"), nozzle),
+        sparse_width=_amount(values.get("infill_extrusion_width"), nozzle),
+        solid_width=_amount(values.get("solid_infill_extrusion_width"), nozzle),
+        top_width=_amount(values.get("top_infill_extrusion_width"), nozzle),
+        flow_spacing=True,
+        top_shell_thickness=_amount(values.get("top_solid_min_thickness")),
+        bottom_shell_thickness=_amount(values.get("bottom_solid_min_thickness")),
+        vertical_shells=_text(values.get("ensure_vertical_shell_thickness")) in _WHOLE_SHELLS,
+        minimum_sparse_area=_amount(values.get("solid_infill_below_area")),
+        # Gemessen an PrusaSlicer 2.9.6, Kegelstumpf 30° (06.10.2026): schmale
+        # Vollfüllung als Schleifen mit wechselnder Breite, wie bei Orca.
+        narrow_solid_loops=True,
+        sparse_pattern=_text(values.get("fill_pattern")),
     )
 
 
@@ -1370,6 +1410,9 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "chamber_temperature": "0",
     "default_acceleration": "0",
     "disable_fan_first_layers": "3",
+    # Nicht aus ``--save``, sondern aus dem Konfigurationsblock der Seitenablage
+    # am MK4S (2.9.6, 06.10.2026): Das Bündel nennt den Schlüssel nicht.
+    "ensure_vertical_shell_thickness": "enabled",
     "external_perimeter_acceleration": "0",
     "external_perimeter_extrusion_width": "0",
     "external_perimeter_speed": "50%",

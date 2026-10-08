@@ -135,8 +135,15 @@ def measure_explanation(status: MeasureStatus) -> TranslatableText:
 #: „Merkmal ändern" ist dort die richtige Beschriftung, „Bohrung ändern" nicht.
 #: Überschneiden können sie sich nicht — ``resize_hole`` gilt für ``hole``,
 #: ``resize_feature`` für alles andere.
+#:
+#: **Die Fläche wandert in derselben Zeile wie jedes Merkmal** (RM-535, Robert
+#: 06.10.2026: „alles einheitlich, Bohrung Vorbild für alle Funktionen“). An
+#: ihr heißt die Zeile *Fläche versetzen* und trägt den Weg als Feld; ein Zug
+#: am Flächengriff schreibt dorthin, und erst *Übernehmen* legt den Schritt
+#: an — wie der Zug an der Bohrung. Überschneiden können sich die beiden
+#: nicht: ``push_face`` gilt nur der Fläche, ``move_feature`` nie.
 ACTION_ORDER: Final[tuple[tuple[str, ...], ...]] = (
-    ("move_feature",),
+    ("move_feature", "push_face"),
     ("resize_feature", "resize_hole"),
     # **Die Länge steht neben der Größe, nicht hinter dem Entfernen** (Robert,
     # 10.09.2026: „langloch merkmale hat noch in der auswahl keine
@@ -221,12 +228,118 @@ TORUS_IS_THE_WHOLE_BODY: Final = _(
 )
 
 
-def torus_is_the_body(feature: Feature, mesh: MeshData | None) -> TranslatableText | None:
-    """Der Satz, wenn die Ringfläche jedes Dreieck des Körpers beansprucht — sonst ``None``."""
+def torus_blocked(feature: Feature, mesh: MeshData | None) -> TranslatableText | None:
+    """Warum an diesem Ring keine Handlung geht — sonst ``None``.
+
+    Erst die billige Frage, ob die Ringfläche jedes Dreieck des Körpers
+    beansprucht; dann dieselbe, an der die Operation absagt
+    (``prepare_ops.torus_refusal``, RM-535), damit keine Zeile Felder zeigt,
+    die beim Übernehmen nichts tun.
+    """
     if feature.kind != "torus" or mesh is None or not feature.face_indices:
         return None
     if len(set(feature.face_indices)) >= mesh.triangle_count:
         return TORUS_IS_THE_WHOLE_BODY
+    from app.core.geom.prepare_ops import torus_refusal
+
+    return torus_refusal(mesh, feature)
+
+
+#: Warum *Merkmal verschieben* an einem Zapfen oder einer Kuppel absagt, die
+#: der ganze Körper sind (RM-535): Abgetragen bliebe nichts, woran das Merkmal
+#: wieder ansetzen könnte, und die Operation endete mit „Von dem Körper bleibt
+#: nichts übrig“ — nach 40 s am dichten Zylinder des Korpus.
+FEATURE_SPANS_THE_BODY: Final = _(
+    "Dieses Merkmal ist der ganze Körper. Verschieben Sie den Körper als Ganzes."
+)
+
+#: Warum *Merkmal verschieben* an einer Bohrung absagt, in der ein Zapfen steht
+#: (RM-535, Entscheidung Robert (d)): Versetzt würde nur die Luft um ihn, und
+#: der Zapfen stünde danach in der Wand — am Kundenmodell erkannte Solidon nach
+#: 0,5 mm zwei Sackbohrungen weniger.
+HOLE_HOLDS_A_PIN: Final = _(
+    "In dieser Bohrung steht ein Zapfen, in den sie beim Versetzen schneiden würde. "
+    "Verschieben Sie den Zapfen allein oder den ganzen Körper."
+)
+
+
+def _pin_inside(feature: Feature, features: Mapping[FeatureId, Feature]) -> bool:
+    """Ob in dieser Bohrung ein Zapfen auf derselben Achse steht (RM-535)."""
+    import numpy as np
+
+    radius = float(feature.params.get("diameter", 0.0)) / 2.0
+    depth = float(feature.params.get("depth", 0.0))
+    if feature.kind != "hole" or radius <= 0.0 or depth <= 0.0:
+        return False
+    centre = np.asarray(feature.params["centre"], dtype=float)
+    axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    axis /= max(float(np.linalg.norm(axis)), 1e-12)
+    for other in features.values():
+        if other.kind != "pin" or other.params.get("centre") is None:
+            continue
+        own = np.asarray(other.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+        own /= max(float(np.linalg.norm(own)), 1e-12)
+        offset = np.asarray(other.params["centre"], dtype=float) - centre
+        along = float(offset @ axis)
+        radial = float(np.linalg.norm(offset - along * axis))
+        reach = float(other.params.get("depth", 0.0)) / 2.0
+        if (
+            abs(float(own @ axis)) > 0.99
+            and radial + float(other.params.get("diameter", 0.0)) / 2.0 < radius
+            and abs(along) < depth / 2.0 + reach
+        ):
+            return True
+    return False
+
+
+def spans_the_body(feature: Feature, mesh: MeshData | None) -> bool:
+    """Ob ein Zapfen oder eine Kuppel der ganze Körper ist — kein Punkt des
+    Netzes liegt außerhalb ihres Zylinders beziehungsweise ihrer Kugel."""
+    if (
+        mesh is None
+        or feature.kind not in ("pin", "sphere")
+        or feature.params.get("centre") is None
+    ):
+        return False
+    from app.core.types import is_a_cavity
+
+    if is_a_cavity(feature):
+        return False
+    import numpy as np
+
+    from app.core.geom.prepare import FEATURE_OVERLAP
+
+    radius = float(feature.params.get("diameter", 0.0)) / 2.0
+    if radius <= 0.0:
+        return False
+    slack = radius * 0.01 + FEATURE_OVERLAP
+    relative = np.asarray(mesh.raw.vertices, dtype=float) - np.asarray(
+        feature.params["centre"], dtype=float
+    )
+    if feature.kind == "sphere":
+        return float(np.linalg.norm(relative, axis=1).max()) <= radius + slack
+    axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    axis /= max(float(np.linalg.norm(axis)), 1e-12)
+    along = relative @ axis
+    radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+    half = float(feature.params.get("depth", 0.0)) / 2.0 + slack
+    return float(radial.max()) <= radius + slack and float(np.abs(along).max()) <= half
+
+
+def move_blocked(
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None,
+    mesh: MeshData | None,
+) -> TranslatableText | None:
+    """Was nur *Merkmal verschieben* an diesem Merkmal absagen lässt — sonst ``None``.
+
+    Steht in :func:`actions_for` vor den übrigen Gründen der Zeile; Karte,
+    Operation und Griff lesen es über :func:`move_refusal`.
+    """
+    if spans_the_body(feature, mesh):
+        return FEATURE_SPANS_THE_BODY
+    if features is not None and _pin_inside(feature, features):
+        return HOLE_HOLDS_A_PIN
     return None
 
 
@@ -249,11 +362,13 @@ def torus_is_the_body(feature: Feature, mesh: MeshData | None) -> TranslatableTe
 #: von fünfen (Durchsicht auf Roberts Bitte, „auch alle anderen mal gründlich
 #: kontrollieren").
 NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
+    # Seit RM-535 steht *Fläche versetzen* als Zeile darüber; der Satz sagte
+    # bis dahin „einzeln lässt sich an ihr nichts ändern“ und stand damit
+    # unter einer Zeile, die genau das tut.
     "face": _(
-        "Eine Fläche gehört zur Oberfläche des Körpers; einzeln lässt sich an ihr "
-        "nichts ändern. Was an ihr ansetzt, setzt am Körper an: „Fläche versetzen“ "
-        "zieht sie hinein oder heraus, und Bohren, Beschriften und jeder Baustein "
-        "brauchen sie als Unterlage."
+        "Eine Fläche ist Oberfläche des Körpers und hat kein eigenes Maß. Sie "
+        "wandert als Ganzes über „Fläche versetzen“. Bohren, Beschriften und "
+        "Bausteine setzen auf ihr an."
     ),
     "curved_face": _(
         "Eine gerundete Seite gehört zur Oberfläche des Körpers. Bohren sowie "
@@ -280,7 +395,7 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
     # einzeln etwas ändern ließe". Seit P2.6 tragen Wulst und Kehle alle fünf
     # Handlungen in beiden Kernen (``prepare_ops._move_torus`` und
     # Geschwister); was bleibt, ist der Ring, der der ganze Körper ist
-    # (:func:`torus_is_the_body`), und das Langloch (``NOT_APPLICABLE_HERE``).
+    # (:func:`torus_blocked`), und das Langloch (``NOT_APPLICABLE_HERE``).
     # **Das Langloch stand hier bis zum 11.09.2026** — „die Handlungen hier
     # rechnen mit einem Durchmesser und träfen seine Flanken nicht". Sie tun es
     # nicht mehr: Sein Werkzeugkörper wird aufgezogen wie beim Schneiden, und
@@ -532,6 +647,13 @@ _SHIFTED_BY: Final[dict[tuple[str, str], str]] = {
     ("slot_hole", "slot_length"): "diameter",
 }
 
+#: Felder, die bei null beginnen statt bei ihrer Schemavorgabe — ein Weg, den
+#: es noch nicht gibt (RM-535). *Fläche versetzen* trägt im Register 2 mm als
+#: Vorgabe für den Dialog; im Merkmalfenster stünde damit ein Weg da, den
+#: niemand gezogen hat, und ein *Übernehmen* ohne Hinsehen versetzte still.
+#: Gemessen ist dabei nichts (``measurement`` bleibt leer).
+_STARTS_AT_ZERO: Final[frozenset[tuple[str, str]]] = frozenset({("push_face", "distance")})
+
 
 def _slot_value(spec: Any, feature: Feature) -> float | None:
     """Länge und Richtung eines **erkannten** Langlochs — sonst ``None``.
@@ -569,6 +691,8 @@ def _slot_value(spec: Any, feature: Feature) -> float | None:
 
 def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
     """Der heutige Wert dieses Parameters am Merkmal — sonst seine Vorgabe."""
+    if (op, spec.name) in _STARTS_AT_ZERO:
+        return 0.0
     slotted = _slot_value(spec, feature)
     if slotted is not None:
         return slotted
@@ -598,8 +722,13 @@ def _action_field(entry: Any, feature: Feature, op: str) -> ActionField:
     radius = entry.name == "diameter" and feature.kind == "fillet"
     factor = 2.0 if radius else 1.0
     source = feature_value_source(entry.name, feature)
-    derived = (op, entry.name) in _SHIFTED_BY and not (
-        feature.kind == "slot" and entry.name == "slot_length" and not feature.params.get("open")
+    derived = (op, entry.name) in _STARTS_AT_ZERO or (
+        (op, entry.name) in _SHIFTED_BY
+        and not (
+            feature.kind == "slot"
+            and entry.name == "slot_length"
+            and not feature.params.get("open")
+        )
     )
     label = entry.title
     if radius:
@@ -695,8 +824,12 @@ def actions_for(
     touches_other: bool = False,
     reason: FeatureGroupReason | None = None,
     cancelled: CancelToken | None = None,
+    only: str | None = None,
 ) -> list[FeatureAction]:
     """Was sich an diesem Merkmal tun lässt — und was nicht, mit Grund.
+
+    ``only`` beschränkt die Antwort auf die Zeile dieser Operation, ohne
+    Kammer und Verschluss — so fragt :func:`move_refusal`.
 
     Gilt eine Handlung, trägt sie den Registernamen und ihre Felder samt
     heutigem Wert. Gilt sie nicht, steht sie **trotzdem** in der Liste, mit
@@ -718,7 +851,7 @@ def actions_for(
         cancelled.raise_if_cancelled()
     actions: list[FeatureAction] = []
     edge_blocked = fillet_blocked(feature, features, mesh)
-    piece_blocked = cone_piece_blocked(feature) or torus_is_the_body(feature, mesh)
+    piece_blocked = cone_piece_blocked(feature) or torus_blocked(feature, mesh)
     # **Die Kette einmal gefragt, für alle Zeilen.** Was der Aufrufer mitbringt,
     # gilt; sonst fragt das Netz — und dieselbe Antwort speist die Sperre am
     # geteilten Hohlraum (*Zum Langloch ziehen*) und die am Merkmal ohne
@@ -736,17 +869,41 @@ def actions_for(
         touches_other, reason = state.touches_other, state.reason
         cavity = state.chain if state.chain is not None else ()
     own_body_blocked = no_own_body(feature, cavity, touches_other, mesh, reason=reason)
-    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, hole_has_separate_contents
+    from app.core.geom.prepare_ops import (
+        FILLED_BORE_REASONS,
+        HOLE_IS_NOT_EMPTY,
+        OTHER_PART_IN_THE_BORE,
+        hole_has_separate_contents,
+        only_a_rim_inside,
+    )
 
+    rows = [row for row in ACTION_ORDER if only is None or only in row]
     # Ein Langloch schneidet fremde Teile nur innerhalb seiner Bohrungstiefe.
     # Die übrigen Handlungen behalten die Absage für Material im Hohlraum.
     separate_contents = (
-        own_body_blocked is HOLE_IS_NOT_EMPTY
+        own_body_blocked is OTHER_PART_IN_THE_BORE
         and mesh is not None
+        and any("slot_hole" in row for row in rows)
         and hole_has_separate_contents(mesh, feature, cancelled=cancelled)
     )
+    # **Eine Haltelippe ist kein Inhalt** — für *Merkmal verschieben*, das die
+    # Tasche samt Lippe über ihre Luft versetzt (``prepare_ops._tool_for``,
+    # BOHRUNG-13). Die Karte sperrte sie, die Operation rechnete (RM-535).
+    rim_only = (
+        own_body_blocked is HOLE_IS_NOT_EMPTY
+        and mesh is not None
+        and any("move_feature" in row for row in rows)
+        and only_a_rim_inside(mesh, feature)
+    )
+    moving_blocked = move_blocked(feature, features, mesh)
+    # **Ein getrenntes Teil ist kein Zapfen der Bohrung**: Für ein loses Teil
+    # darin gilt der Satz mit dem Weg über die Einzelteile (RM-413), wie ihn
+    # die Operation sagt (``prepare_ops._refuse_another_part_in_the_bore``);
+    # der Zapfensatz gilt einem Zapfen desselben Teils (RM-535).
+    if moving_blocked is HOLE_HOLDS_A_PIN and own_body_blocked is OTHER_PART_IN_THE_BORE:
+        moving_blocked = None
 
-    for candidates in ACTION_ORDER:
+    for candidates in rows:
         known = [spec for spec in map(_spec_or_none, candidates) if spec is not None]
         if not known:
             # Eine Zeile, deren Operationen es (noch) nicht gibt, ist kein Fehler
@@ -758,6 +915,8 @@ def actions_for(
         not_this_cone = cone_reason(feature, (fitting or known[0]).name)
         if fitting is not None and piece_blocked is not None:
             actions.append(FeatureAction(title=fitting.title, op=None, reason=piece_blocked))
+        elif fitting is not None and fitting.name == "move_feature" and moving_blocked:
+            actions.append(FeatureAction(title=fitting.title, op=None, reason=moving_blocked))
         elif not_this_cone is not None:
             actions.append(
                 FeatureAction(title=(fitting or known[0]).title, op=None, reason=not_this_cone)
@@ -765,8 +924,9 @@ def actions_for(
         elif (
             fitting is not None
             and own_body_blocked is not None
-            and (fitting.name in _NEED_AN_OWN_BODY or own_body_blocked is HOLE_IS_NOT_EMPTY)
+            and (fitting.name in _NEED_AN_OWN_BODY or own_body_blocked in FILLED_BORE_REASONS)
             and not (fitting.name == "slot_hole" and separate_contents)
+            and not (fitting.name == "move_feature" and rim_only)
         ):
             actions.append(FeatureAction(title=fitting.title, op=None, reason=own_body_blocked))
         elif fitting is not None and edge_blocked is not None and fitting.name in _EDGE_OPS:
@@ -852,6 +1012,8 @@ def actions_for(
                     title=known[0].title, op=None, reason=_no_way(known[0].name, feature.kind)
                 )
             )
+    if only is not None:
+        return actions
     chamber = chamber_action(feature, features, mesh, cancelled=cancelled)
     if chamber is not None:
         actions.append(chamber)
@@ -859,6 +1021,52 @@ def actions_for(
     if closure is not None:
         actions.append(closure)
     return actions
+
+
+def move_refusal(
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None,
+    mesh: MeshData | None,
+    *,
+    cancelled: CancelToken | None = None,
+) -> TranslatableText | str | None:
+    """Warum *Merkmal verschieben* an diesem Merkmal absagt — sonst ``None``.
+
+    **Die eine Frage für Karte, Operation und Griff** (RM-535): Sie ist die
+    Zeile *Merkmal verschieben* aus :func:`actions_for`, also genau das, was
+    die Karte zeigt. Die Karte bot an Wulst und Kehle X/Y/Z an, an denen
+    ``move_feature`` absagte, und sperrte die Tasche um einen Zapfen, in der
+    es rechnete; der Griff fragte nur die Art.
+    """
+    for row in actions_for(feature, features, mesh=mesh, cancelled=cancelled, only="move_feature"):
+        if row.op == "move_feature":
+            return None
+        if row.op is None:
+            return row.reason or reason_against("move_feature", feature.kind)
+    return reason_against("move_feature", feature.kind)
+
+
+#: Operationen, die eine funktionale Gruppe als Ganzes ändern — und nur an
+#: einem Merkmal einer passenden Gruppe etwas rechnen (RM-184):
+#: :func:`chamber_action` und :func:`closure_action`.
+GROUP_OPS: Final = frozenset({"resize_chamber", "resize_closure"})
+
+
+def group_action_first(
+    actions: Sequence[FeatureAction], feature_id: FeatureId, anchor: FeatureId | None
+) -> tuple[FeatureAction, ...]:
+    """Am Anker einer Gruppe steht ihre Handlung vorn — sonst bleibt die Folge.
+
+    Der Anker ist die Zeile, unter der der Baum die Gruppe zeigt („Kammer 1“);
+    wer sie wählt, hat die Kammer gemeint, nicht ihren Boden. Seit
+    *Fläche versetzen* an jeder Fläche als erste Zeile steht (RM-535), klappte
+    dort ein Weg von 0 mm auf und *Kammer ändern* zu. An einer Wand bleibt die
+    Folge: Dort ist die Fläche gewählt, die Gruppe nur genannt.
+    """
+    if anchor is None or anchor != feature_id:
+        return tuple(actions)
+    leading = [action for action in actions if action.op in GROUP_OPS]
+    return (*leading, *(action for action in actions if action.op not in GROUP_OPS))
 
 
 #: Welche Maße *Kammer ändern* an welcher Bauart anbietet: Eine Nut, eine
@@ -1045,16 +1253,17 @@ def no_own_body(
       (``prepare_ops.hole_is_clear``, ``HOLE_IS_NOT_EMPTY``): Ihr Werkzeug
       wäre ein voller Zylinder, der die Speichen mitnimmt (Uhrenteil 06,
       minus 49 Prozent Volumen). Hier steht jede Zeile grau, nicht nur die
-      Körperhandlungen.
+      Körperhandlungen. Gehört das Material einem anderen Teil, sagt es
+      ``OTHER_PART_IN_THE_BORE`` (``prepare_ops.filled_bore_reason``).
     """
     if feature.kind == "hole" and mesh is not None and feature.face_indices:
         # **Vor der Kette gefragt**, denn ``_tool_for`` fragt es an jeder
         # Bohrung: Eine Radinnenwand mit Speichen, an deren Mündung eine Fase
         # erkannt wurde, ist eine Kette — und trotzdem keine Bohrung.
-        from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, hole_is_clear
+        from app.core.geom.prepare_ops import filled_bore_reason, hole_is_clear
 
         if not hole_is_clear(mesh, feature):
-            return HOLE_IS_NOT_EMPTY
+            return filled_bore_reason(mesh, feature)
     if feature.kind not in ("hole", "cone", "sphere") or cavity:
         return None
     if touches_other and feature.kind != "sphere":
@@ -1135,6 +1344,20 @@ TAPER_IS_MATERIAL: Final = _(
 #: Trichter in das Material, das sie ist.
 _ONLY_AT_A_COUNTERSINK: Final[frozenset[str]] = frozenset({"countersink_hole"})
 
+#: Was nur in einem Hohlraum etwas baut: der Stift, der in ihn passt (RM-536).
+_ONLY_IN_A_BORE: Final[frozenset[str]] = frozenset({"pin_for_bore"})
+
+#: Was die Karte an einem Merkmal eines **Bausteins** anbietet (Entscheidung
+#: Robert, 07.10.2026, RM-536). Dort bedienen die Bausteinfelder den
+#: erzeugenden Schritt, und allgemeine Handlungen bleiben weg; der Stift aber
+#: ergänzt das Gewinde, statt es zu ändern — das Gegenstück gehört gerade an
+#: ein selbst gedrucktes Innengewinde. Je Handlung steht hier die Art, an der
+#: sie bleibt — nur ``thread``, nicht jede Bohrung des Bausteins: Am
+#: Schraubenloch führte der Knopf in eine Absage über die Senkung, die Solidon
+#: selbst gebaut hat (Review P2 N2, RM-552). Das Außengewinde nimmt danach
+#: :func:`not_offered_at` weg.
+OFFERED_AT_A_PART: Final[Mapping[str, frozenset[str]]] = {"pin_for_bore": frozenset({"thread"})}
+
 
 def narrows_the_mouth(feature: Feature) -> bool:
     """Ob dieser Kegel eine Verengung ist — die Erkennung trägt es als ``narrowing`` (R3)."""
@@ -1149,7 +1372,12 @@ def not_offered_at(feature: Feature) -> frozenset[str]:
     Senkung etwas tut (:data:`_ONLY_AT_A_COUNTERSINK`). Die Karte rechts liest
     diese Menge (``ui.selection_operations``) — oben in der Schnellzeile wie
     in der Liste darunter.
+
+    An einem **Außengewinde** fällt *Stift für Bohrung* weg (RM-536): Der Stift
+    gehört in ein Innengewinde, ``applies_to`` kennt nur die Art ``thread``.
     """
+    if feature.kind == "thread":
+        return frozenset() if feature.params.get("internal") else _ONLY_IN_A_BORE
     if feature.kind != "cone" or feature.params.get("partial"):
         return frozenset()
     if narrows_the_mouth(feature) or not feature.params.get("recess"):
@@ -1414,6 +1642,19 @@ def _no_way(op: str, kind: str) -> TranslatableText:
     if other is not None:
         return _("Dafür ist „{title}“ da.", title=other.title)
     here = NOT_APPLICABLE_HERE.get((kind, op))
+    # Der Satz der Schwester derselben Zeile, wenn diese Operation keinen
+    # eigenen hat: *Fläche versetzen* an einem Gewinde sagt, was *Merkmal
+    # verschieben* dort sagt (RM-535).
+    for row in ACTION_ORDER if here is None and kind not in NOT_APPLICABLE else ():
+        if op in row:
+            here = next(
+                (
+                    NOT_APPLICABLE_HERE[(kind, name)]
+                    for name in row
+                    if (kind, name) in NOT_APPLICABLE_HERE
+                ),
+                None,
+            )
     return here if here is not None else NOT_APPLICABLE.get(kind, _UNKNOWN_KIND)
 
 

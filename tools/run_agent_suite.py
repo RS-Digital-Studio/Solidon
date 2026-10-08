@@ -137,7 +137,16 @@ class Outcome:
         # wie der Kunde zur ersten Wahl griff, fiel damit durch, und eines, das
         # die zweite nahm, bestand — am 26.09.2026 verschob das den Vergleich
         # zweier Stände um vier Fälle. Gezählt wird deshalb je Handlung.
-        return _acts(self.case.expects_ops) <= _acts(self.operations)
+        #
+        # **Und eine zweite Handlung, die dasselbe leistet, ebenso**
+        # (``Case.also_good``). Bei „noch eine Bohrung wie hole_1 daneben“ griff
+        # qwen3:14b am 07.10.2026 in vier von fünf Läufen zu *Merkmal
+        # verdoppeln* und setzte die Bohrung richtig daneben; gezählt wurde das
+        # als Fehler, und der Fall kippte zwischen zwei Ständen hin und her.
+        done = _acts(self.operations)
+        return any(
+            _acts(expected) <= done for expected in (self.case.expects_ops, *self.case.also_good)
+        )
 
 
 def _acts(names: tuple[str, ...]) -> Counter[str]:

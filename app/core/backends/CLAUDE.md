@@ -15,9 +15,8 @@ außer dem Chat benutzbar. Einzuhalten ist `.claude/rules/agentenschicht.md`
 | `mesh.py` | Mesh-Erzeugung für Weg 3, lokal oder gehostet (Säule B) |
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte (`local_ai_slot`, `keep_warm`) |
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
-| `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Knoten, TripoSG-Quelltext, Pakete, Gewichte — und auf Wunsch das Bildmodell für den Weg aus Text (`fetch_image_model`, feste Revision, Prüfsumme, eigenes Häkchen im Dialog) |
-| `data/text_to_mesh.json`, `data/image_to_mesh.json` | Die ComfyUI-Abläufe der beiden Wege |
-| `data/comfyui/` | Die Knoten dazu (TripoSG; Lizenzkette offen, RM-003) — fremder Code mit eigener Karte |
+| `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36): Fassung prüfen (`check_version`), Modelldateien laden (`ModelFile`: Repo, Revision, Byte, SHA-256, Zielordner, Rolle) — TRELLIS.2 und BiRefNet für den Bildweg, auf Wunsch FLUX.2 [klein] 4B für den Textweg —, Reste der TripoSG-Einrichtung räumen (`remove_legacy`) |
+| `data/text_to_image.json`, `data/image_to_mesh.json` | Die ComfyUI-Abläufe: Bild aus Text und Netz aus Bild; der Weg aus Text fährt beide nacheinander (`mesh.WORKFLOW_STAGES`), nur aus eingebauten Knoten (ab ComfyUI 0.35); geprüft gegen `tests/data/comfyui/object_info.json`, erzeugt mit `tools/comfy_node_info.py` |
 
 `comfy_setup.py` und `data/` liegen im Kern, weil `tools/` im gebauten Paket
 **nicht mitreist** — was der Nutzer aus der laufenden Anwendung heraus
@@ -43,9 +42,15 @@ Messung ist die Agenten-Suite.
   `agentenschicht.md`.
 - **Der abbrechbare HTTP-Transport** hält den verbundenen Socket bis zum Ende
   des Request-Threads; ein Abbruch erreicht so auch bei HTTP/1.0 und
-  `Connection: close` den Antwortkörper, Antwort und Verbindung schließt der
-  Request-Thread, bevor der Aufrufer zurückkehrt. Entsteht die Verbindung erst
-  während eines Abbruchs, verhindert die erneute Tokenprüfung das POST.
+  `Connection: close` den Antwortkörper. Antwort und Verbindung schließt der
+  Request-Thread selbst; der Aufrufer wartet nach einem Abbruch höchstens
+  `CANCEL_JOIN_SECONDS` auf ihn und protokolliert, wenn er nicht endet.
+  Entsteht die Verbindung erst während eines Abbruchs, verhindert die erneute
+  Tokenprüfung das POST. Über HTTP liest und sendet der Request-Thread an einem
+  `_WatchedSocket`, der den Abbruch selbst bemerkt (`CANCEL_WATCH_SECONDS`):
+  Ein `shutdown` aus dem wartenden Thread weckte das `recv` unter macOS nicht
+  sicher, und über Ungelesenem setzt er die Verbindung unter Windows zurück.
+  Die Verbindung baut `_local_connection`; Tests setzen dort ihre Attrappe ein.
 - **`PROMPT_TOKENS` und `PROMPT_TOOL_COUNT`** stehen in `llm.py` und gehören
   zu derselben gezählten Anfrage; gezählt wird mit
   `tools/measure_local_model.py --count-tokens` (ein Antworttoken, JSON mit
@@ -76,21 +81,43 @@ Messung ist die Agenten-Suite.
   [ComfyUIs server.py](https://github.com/Comfy-Org/ComfyUI/blob/master/server.py),
   `_cancel_job_by_id` und `interrupt_if_running`.
 
-## Gewichte werden vor der Freigabe geprüft
+## Die Modelle und ihre Dateien
 
-- TripoSG-Download und Bestandsübernahme nehmen denselben Prüfer im Python von
-  ComfyUI: fester Modellstand, alle Größen, je LFS-Datei der gelieferte
-  SHA-256 gestreamt — beim Download nach dem Kopieren, vor dem Austausch des
-  alten Bestands; ohne LFS-Hash bleibt die Größenprüfung.
-- Die Abschlussmarke (Format 2) hält Größen, Hashes und Änderungszeiten;
-  `weights_present` prüft sie offline, ohne 7,5 GB neu zu lesen. Eine alte
-  Marke oder eine geänderte Gewichtsdatei verlangt die Einrichtungsprüfung
-  erneut. Keine Signatur: Wer Datei und Marke gemeinsam ändert, fällt nicht
-  auf.
-- ANTLR wird im ComfyUI-Python ohne verdeckte Bauabhängigkeit gebaut: erst
-  `setuptools.build_meta` und `bdist_wheel` prüfen, nur wenn der Import fehlt
-  den festen Setuptools-Wheel mit SHA-256 nachziehen; Abbruch und andere
-  Fehler starten keine Installation.
+| Rolle | Modell (Lizenz) | Datei | Ordner |
+|---|---|---|---|
+| `shape` | TRELLIS.2-4B, Microsoft (MIT) | `trellis_2_int8_convrot.safetensors` | `models/diffusion_models` |
+| `shape_vae` | TRELLIS.2-Form-VAE (MIT) | `trellis_2_shape_vae_bf16.safetensors` | `models/vae` |
+| `image_encoder` | DINOv3 ViT-L/16, Meta (DINOv3 License) | `dino_v3_vit_l.safetensors` | `models/clip_vision` |
+| `background` | BiRefNet (MIT) | `birefnet.safetensors` | `models/background_removal` |
+| `image` | FLUX.2 [klein] 4B, Black Forest Labs (Apache-2.0) | `flux-2-klein-4b-fp8.safetensors` | `models/diffusion_models` |
+| `text_encoder` | Qwen3-4B (Apache-2.0) | `qwen_3_4b_fp4_flux2.safetensors` | `models/text_encoders` |
+| `image_vae` | FLUX.2-VAE | `flux2-vae.safetensors` | `models/vae` |
+
+Revisionen, Byte und SHA-256 stehen an `comfy_setup.SHAPE_FILES`,
+`BACKGROUND` und `IMAGE_MODEL_FILES`; Belege und Kanzleifragen in
+`konzepte/nachweise-generatoren-2026-10/`.
+
+- **Die Rolle entscheidet, nicht der Dateiname** (`mesh.role_candidates`):
+  Auflösung beim Erzeugen, `missing_models`, die Auswahl im Dialog und
+  `comfy_setup.file_present` fragen dieselbe Funktion. Rollen im geteilten
+  Ordner (`diffusion_models`, `vae`, …) sind `strict` — eine Datei, die kein
+  Muster trifft, füllt sie nicht aus.
+- **Jede Datei mit fester Revision und SHA-256**: `_FETCH_FILE` lädt im Python
+  von ComfyUI in den Zwischenordner, prüft die Summe gestreamt und wechselt
+  erst die geprüfte Datei am Ziel ein. Eine Datei unter unserem Namen zählt
+  nur in voller Größe.
+- **Die Fassung zuerst**: `check_version` liest `comfyui_version.py` (nie
+  ausgeführt) und hält vor jedem Download an, wenn sie unter
+  `mesh.MINIMUM_COMFYUI` liegt. Ohne Versionsdatei (ComfyUI Desktop) nennt
+  der laufende Server fehlende Knoten (`missing_nodes`, `Readiness.NO_NODES`).
+- **`RemeshMesh` im Modus `udf`, beide Verwurfschalter aus**, davor
+  `FillHoles`: Das Rohnetz von TRELLIS.2 hat keinen einheitlichen
+  Umlaufsinn, `udf` legt um jede Fläche eine nach innen gewendete zweite
+  Hülle. An einer dünnen Wand sind beide zusammen die Wand; die Innenhülle
+  eines vollen Körpers nimmt Solidons Reparatur mit `repair(inner_shells=True)`
+  (`generate.GENERATED_REPAIR`). Begründung im Docstring von `mesh.py`. Nach
+  `DecimateMesh` füllt ein zweites `FillHoles` die kleinen Vierecklöcher, die
+  das Ausdünnen offen lässt.
 
 ## Grenzen
 

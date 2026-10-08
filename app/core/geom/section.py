@@ -505,10 +505,3 @@ def _corner_distances(body: trimesh.Trimesh, normal: np.ndarray, origin: np.ndar
         [(x, y, z) for x in (low[0], high[0]) for y in (low[1], high[1]) for z in (low[2], high[2])]
     )
     return transform.along(corners - origin, normal)
-
-
-def section_volume(mesh: MeshData, plane: SectionPlane) -> float:
-    """Das Volumen nach dem Schnitt — der ehrliche Test für eine geschlossene
-    Schnittfläche.
-    """
-    return float(cut(mesh, plane).mesh.volume)

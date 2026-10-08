@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import tomllib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -22,6 +23,7 @@ from typing import Any, Final
 
 from app.core.errors import ValidationError
 from app.core.log import get_logger
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -56,6 +58,10 @@ class Screw:
     Durchgangsloch einer M5 und keine Bohrung „zwischen zwei Größen". Die
     Zuordnung eines exakten Maßes bleibt bei ``clearance`` (mittlere Reihe).
     """
+    countersink_derived: bool = False
+    """Ob ``countersink`` gerechnet statt genormt ist: Für diese Größe nennt keine
+    Quelle einen Senkkopf (über M24, M18, M22, ein eigenes Maß über M24). Das
+    Schraubenloch sagt es am Ergebnis (Review RM-532 Runde 2, N3)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +184,11 @@ class Tables:
     tubes: dict[str, Tube]
     boards: dict[str, Board]
     pipes: dict[str, Pipe]
+    headless: tuple[float, ...] = ()
+    """ISO-Nennmaße ohne Zylinderschraube nach DIN 912 (M60): Abgeleitet treffen
+    Steigung, Löcher, Mutter und Scheibe dort die Normwerte, nur der Kopf nicht."""
+    wrenches: tuple[float, ...] = ()
+    """Schlüsselweiten nach ISO 272, aufsteigend — die Reihe für :func:`wrench_size`."""
 
 
 def load(path: Path | None = None) -> Tables:
@@ -210,6 +221,16 @@ def load(path: Path | None = None) -> Tables:
         boards=_index(Board, data.get("boards", ()), "boards", source),
         # Nach dem Außendurchmesser, damit die Auswahl der Rohrschelle aufsteigt.
         pipes=_index(Pipe, data.get("pipes", ()), "pipes", source, "outer"),
+        headless=tuple(
+            _finite_positive(value, "headless", str(value), "nominal", source)
+            for value in data.get("headless", ())
+        ),
+        wrenches=tuple(
+            sorted(
+                _finite_positive(value, "wrenches", str(value), "width", source)
+                for value in data.get("wrenches", ())
+            )
+        ),
     )
     _validate(tables, source)
     if path is None:
@@ -339,15 +360,28 @@ def _validate(tables: Tables, source: Path) -> None:
         if measures["head"] < measures["nominal"] or measures["countersink"] < measures["head"]:
             raise _invalid("screws", screw.size, "head_diameters", source)
 
+    # Die Regelsteigung fällt mit wachsendem Durchmesser nie — sonst bekäme ein
+    # größeres Gewinde mit eigenem Maß einen feineren Gang als ein kleineres
+    # (:func:`regular_pitch`).
+    for smaller, larger in pairwise(tables.screws.values()):
+        if larger.pitch < smaller.pitch:
+            raise _invalid("screws", larger.size, "pitch_rises", source)
+
+    # Mutter und Scheibe gehören zu einer Schraube der Tabelle: Von deren
+    # Nennmaß aus leitet :func:`derived_nut` ein eigenes Maß ab.
     for nut in tables.nuts.values():
         _finite_positive(nut.width, "nuts", nut.size, "width", source)
         _finite_positive(nut.height, "nuts", nut.size, "height", source)
+        if nut.size not in tables.screws:
+            raise _invalid("nuts", nut.size, "known_screw", source)
 
     for washer in tables.washers.values():
         inner = _finite_positive(washer.inner, "washers", washer.size, "inner", source)
         outer = _finite_positive(washer.outer, "washers", washer.size, "outer", source)
         _finite_positive(washer.thickness, "washers", washer.size, "thickness", source)
         _ordered((inner, outer), "washers", washer.size, "inner_outer", source)
+        if washer.size not in tables.screws:
+            raise _invalid("washers", washer.size, "known_screw", source)
 
     for insert in tables.inserts.values():
         hole = _finite_positive(insert.hole, "inserts", insert.size, "hole", source)
@@ -447,6 +481,163 @@ def screw(size: str) -> Screw:
     """Eine Schraubengröße, oder ein klarer Fehler, der nennt, was bekannt ist."""
     found: Screw = _lookup(load().screws, size, "screw")
     return found
+
+
+def regular_pitch(diameter: float) -> float:
+    """Die Regelsteigung zu einem Nenndurchmesser, auch zwischen und über den Tabellengrößen.
+
+    Die Steigung der größten Schraube der Tabelle, die der Durchmesser
+    erreicht; unter der kleinsten die der kleinsten. Ein Gewinde mit eigenem
+    Maß Ø 66 bekommt so die 6 mm der M64, eines mit Ø 9 die 1,25 mm der M8 —
+    dieselbe Reihe, nach der ein Normgewinde gebaut ist.
+    """
+    steps = list(load().screws.values())
+    # Ein gemessenes M64 mit 63,9999999 ist ein M64 (Regel 6).
+    reached = [entry.pitch for entry in steps if entry.nominal <= diameter + EPS_GEOM]
+    return reached[-1] if reached else steps[0].pitch
+
+
+def tabulated_size(diameter: float) -> str | None:
+    """Die Schraubengröße der Tabelle mit genau diesem Nenndurchmesser, sonst ``None``."""
+    for entry in load().screws.values():
+        if abs(entry.nominal - diameter) <= EPS_GEOM:
+            return entry.size
+    return None
+
+
+#: Wie nah Durchmesser und Steigung an einem Tabellenmaß liegen müssen, um es zu
+#: meinen — beides deutlich unter dem halben Abstand zweier Nachbargrößen der
+#: Tabelle (M2 → M2.5: 0,5 im Durchmesser, 0,05 in der Steigung), damit kein Maß
+#: zwei Größen trifft; ``tests/test_thread_counterpart.py`` hält das gegen die
+#: Tabelle. Keine Fertigungstoleranz, sondern eine Erkennungsgrenze wie
+#: ``units.match_tolerance``. Eine Quelle für das Gegenstück eines Gewindes
+#: (``counterpart._matched_thread``) und die Vorwahl an einer Bohrung
+#: (``fasteners.size_for_thread``, Review P2 M1): Beide runden dasselbe Maß auf
+#: dieselbe Größe.
+THREAD_SIZE_REACH: Final = (0.2, 0.02)
+
+
+def thread_size_near(diameter: float, pitch: float) -> str | None:
+    """Die Tabellengröße, die ein Gewinde dieses Maßes meint — sonst ``None``.
+
+    Getroffen ist sie, wenn Durchmesser und Steigung innerhalb von
+    :data:`THREAD_SIZE_REACH` liegen.
+    """
+    for entry in load().screws.values():
+        if (
+            abs(entry.nominal - diameter) <= THREAD_SIZE_REACH[0]
+            and abs(entry.pitch - pitch) <= THREAD_SIZE_REACH[1]
+        ):
+            return entry.size
+    return None
+
+
+def headless_size(diameter: float) -> bool:
+    """Ob ein eigenes Maß ein ISO-Nennmaß ohne genormten Zylinderkopf ist (``headless``)."""
+    return any(abs(value - diameter) <= EPS_GEOM for value in load().headless)
+
+
+def _along(rows: Sequence[tuple[float, tuple[float, ...]]], diameter: float) -> tuple[float, ...]:
+    """Die Maße einer Reihe bei einem Durchmesser zwischen oder jenseits ihrer Größen.
+
+    **Die eine Ableitungsregel für ein eigenes Maß.** Zwischen zwei
+    Normgrößen liegen die Maße auf der Geraden zwischen ihnen — Ø 11 bekommt
+    das Durchgangsloch auf halbem Weg von M10 (11) zu M12 (13,5). Jenseits der
+    Reihe gelten die Verhältnisse der Randgröße: Über M64 bleibt jedes Maß im
+    selben Verhältnis zum Durchmesser wie bei M64, unter der kleinsten wie bei
+    ihr. Ein Normmaß ist das nicht; wer es zeigt, nennt es abgeleitet.
+    """
+    if diameter <= rows[0][0]:
+        nominal, values = rows[0]
+        return tuple(value * diameter / nominal for value in values)
+    for (low, below), (high, above) in pairwise(rows):
+        if diameter <= high:
+            share = (diameter - low) / (high - low)
+            return tuple(a + (b - a) * share for a, b in zip(below, above, strict=True))
+    nominal, values = rows[-1]
+    return tuple(value * diameter / nominal for value in values)
+
+
+def derived_screw(diameter: float) -> Screw:
+    """Eine Schraube mit eigenem Nenndurchmesser — die Maße aus der Tabelle abgeleitet.
+
+    Trifft der Durchmesser eine Tabellengröße, ist es diese mit ihren
+    Normmaßen. Sonst gilt :func:`_along` für Löcher und Kopf; die Steigung ist
+    die Regelsteigung (:func:`regular_pitch`) und das Kernloch wie bei den
+    großen Tabellengrößen d - P. ``size`` bleibt leer: Eine Normgröße ist es
+    nicht.
+    """
+    named = tabulated_size(diameter)
+    if named is not None:
+        return screw(named)
+    fields = ("clearance", "head", "head_height", "countersink", "hex")
+    series = ("clearance_fine", "clearance_coarse")
+    rows = [
+        (
+            entry.nominal,
+            tuple(float(getattr(entry, field)) for field in fields)
+            + tuple(float(getattr(entry, field) or entry.clearance) for field in series),
+        )
+        for entry in load().screws.values()
+    ]
+    values = dict(zip((*fields, *series), _along(rows, diameter), strict=True))
+    pitch = regular_pitch(diameter)
+    # Zwischen zwei genormten Senkköpfen ist die Senkung abgeleitet wie jedes
+    # andere Maß (das sagt ``parts.derived_size``); über dem größten gibt es
+    # keinen Senkkopf mehr, den eine Schraube haben könnte.
+    normed = [entry.nominal for entry in load().screws.values() if not entry.countersink_derived]
+    return Screw(
+        size="",
+        nominal=diameter,
+        tap=diameter - pitch,
+        pitch=pitch,
+        countersink_derived=diameter > max(normed),
+        **values,
+    )
+
+
+def derived_nut(diameter: float) -> Nut:
+    """Die Sechskantmutter zu einem eigenen Nenndurchmesser — wie :func:`derived_screw`."""
+    tables = load()
+    named = tabulated_size(diameter)
+    if named is not None and named in tables.nuts:
+        return tables.nuts[named]
+    rows = sorted(
+        (tables.screws[entry.size].nominal, (entry.width, entry.height))
+        for entry in tables.nuts.values()
+    )
+    width, height = _along(rows, diameter)
+    return Nut(size="", width=wrench_size(width), height=height)
+
+
+def wrench_size(width: float) -> float:
+    """Die Schlüsselweite der Tabelle, die einem gerechneten Maß am nächsten liegt.
+
+    Ein eigenes Maß leitet seine Schlüsselweite zwischen zwei Größen ab — Ø 9
+    bekäme 14,5 mm, Ø 13 19,5 mm, und dafür gibt es keinen Schlüssel (Review
+    RM-532 Runde 2, K-N2). Innerhalb der Reihe nach ISO 272 (``wrenches``)
+    nimmt das Maß die nächste Weite, bei Gleichstand die größere. Jenseits der
+    Reihe bleibt es gerechnet — dort ist ohnehin nichts genormt, und der Befund
+    ``parts.derived_size`` sagt es.
+    """
+    widths = load().wrenches
+    if not widths or width < widths[0] - EPS_GEOM or width > widths[-1] + EPS_GEOM:
+        return width
+    return min(widths, key=lambda entry: (abs(entry - width), -entry))
+
+
+def derived_washer(diameter: float) -> Washer:
+    """Die Unterlegscheibe zu einem eigenen Nenndurchmesser — wie :func:`derived_screw`."""
+    tables = load()
+    named = tabulated_size(diameter)
+    if named is not None and named in tables.washers:
+        return tables.washers[named]
+    rows = sorted(
+        (tables.screws[entry.size].nominal, (entry.inner, entry.outer, entry.thickness))
+        for entry in tables.washers.values()
+    )
+    inner, outer, thickness = _along(rows, diameter)
+    return Washer(size="", inner=inner, outer=outer, thickness=thickness)
 
 
 def nut(size: str) -> Nut:

@@ -36,7 +36,7 @@ from xml.etree import ElementTree as ET
 
 from app.core import build_area, discover
 from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
-from app.core.export import prusa_conditions
+from app.core.export import cura_linux, prusa_conditions
 from app.core.export.slicer_keys import (
     CURA_JERK_LINKS,
     SlicerFlavour,
@@ -189,9 +189,20 @@ def install_root(executable: Path) -> Path | None:
     ``share/<Programm>/profiles``, Cura als ausgepacktes AppImage unter
     ``cura/share/cura``. Ein Slicer aus dem Paketverwalter der Distribution legt
     genauso nach FHS ab (``/usr/share/PrusaSlicer/profiles``).
+
+    **Eine Cura als AppImage trägt ihn im Abbild**, das nur eingehängt lesbar
+    ist; gelesen wird eine Kopie im Nutzer-Cache (:func:`cura_linux.appimage_resources`).
+    Im Fensterfaden (:func:`cura_linux.never_wait_in`) heißt ``None`` dort „noch
+    nicht kopiert“, nicht „kein Bestand“.
     """
     mark = discover.program_mark(executable.name)
+    if mark == "cura" and cura_linux.is_appimage(executable):
+        return cura_linux.appimage_resources(executable)
     app = discover.flatpak_app(executable)
+    if mark == "cura" and app:
+        # Curas AppDir bestimmt eine Stelle, für Bestand und Lader zugleich.
+        appdir = cura_linux.flatpak_appdir(app)
+        return appdir[0] / "share" / "cura" if appdir is not None else None
     files = discover.flatpak_files(app) if app else None
     if files is not None:
         try:
@@ -725,7 +736,7 @@ def cura_active_machine(executable: Path) -> CuraActiveMachine | None:
     installed = install_root(executable)
     if not base or installed is None:
         return None
-    resources = _cura_resources(installed)
+    resources = cura_resources(installed)
     for folder in _cura_user_roots(executable, Path(base)):
         machine = _cura_active_id(folder)
         if not machine:
@@ -892,7 +903,7 @@ def _cura_loaded_materials(
         return ()
     installed = install_root(executable)
     files = _cura_material_files(
-        *((_cura_resources(installed) / "materials",) if installed is not None else ()),
+        *((cura_resources(installed) / "materials",) if installed is not None else ()),
         root / "materials",
     )
     result: list[SlicerFilament] = []
@@ -939,7 +950,7 @@ def cura_setting_version(executable: Path) -> int | None:
     installed = install_root(executable)
     if installed is None:
         return None
-    definition = _cura_resources(installed) / "definitions" / "fdmprinter.def.json"
+    definition = cura_resources(installed) / "definitions" / "fdmprinter.def.json"
     try:
         loaded = json.loads(definition.read_text(encoding="utf-8"))
         version = loaded["metadata"]["setting_version"]
@@ -970,7 +981,7 @@ def cura_quality_types(
     installed = install_root(executable)
     if installed is None:
         return {}
-    resources = _cura_resources(installed)
+    resources = cura_resources(installed)
     definition = cura_quality_definition(executable, machine)
     found: dict[str, float] = {}
     specific: list[tuple[str, str, str]] = []
@@ -1050,7 +1061,7 @@ def cura_quality_definition(executable: Path, machine: Path | None) -> str:
     installed = install_root(executable)
     if machine is None or installed is None:
         return "fdmprinter"
-    own = _cura_quality_definition(machine, _cura_resources(installed) / "definitions")
+    own = _cura_quality_definition(machine, cura_resources(installed) / "definitions")
     return own or "fdmprinter"
 
 
@@ -1355,7 +1366,7 @@ def _cura_machine_instances(
     definitions: dict[str, Path] = {}
     installed_containers: dict[str, Path] = {}
     for root in roots:
-        resources = _cura_resources(root)
+        resources = cura_resources(root)
         for kind in ("definitions", "extruders"):
             definitions.update(
                 {
@@ -2147,7 +2158,7 @@ def _cura_profiles(executable: Path, wanted: frozenset[ProfileKind]) -> list[Sli
         for folder, (kind, pattern) in _CURA_DIRS.items():
             if kind not in wanted:
                 continue
-            for path in sorted((_cura_resources(root) / folder).rglob(pattern)):
+            for path in sorted((cura_resources(root) / folder).rglob(pattern)):
                 count += 1
                 if count > MAX_FILES:
                     _log.warning("stopped after %d Cura profile files below %s", MAX_FILES, root)
@@ -2221,7 +2232,7 @@ def _cura_user_roots(executable: Path, config: Path, *, platform: str | None = N
     return found
 
 
-def _cura_resources(root: Path) -> Path:
+def cura_resources(root: Path) -> Path:
     """Wo Curas Bestand unter der Installationswurzel liegt.
 
     :func:`install_root` endet bei Cura auf ``share/cura``, die Ordner selbst
@@ -2423,7 +2434,7 @@ def _cura_definition_values(
     """Definitionsdaten und bekannte Jerk-Beziehungen; fremde Ausdrücke bleiben unbekannt."""
     indexes = {} if indexes is None else indexes
     index: dict[str, Path] = {}
-    for folder in [*(_cura_resources(root) / "definitions" for root in roots), path.parent]:
+    for folder in [*(cura_resources(root) / "definitions" for root in roots), path.parent]:
         index_key: tuple[Path, ProfileKind | None] = (folder, "machine")
         if index_key not in indexes:
             indexes[index_key] = {

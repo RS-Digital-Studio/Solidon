@@ -38,7 +38,7 @@ from app.core.geom.mesh import MeshData, ray_hits, ray_hits_batch
 from app.core.geom.orient import orient_for_print, print_transform
 from app.core.geom.prepare import countersink, drill, open_sides, plug
 from app.core.geom.primitive_ops import top_face_of
-from app.core.geom.repair import fill_holes, open_edge_count, repair
+from app.core.geom.repair import open_edge_count, repair
 from app.core.knowledge.parts.shapes import box as shape_box
 from app.core.knowledge.parts.shapes import cylinder as shape_cylinder
 from app.core.perceive.features import detect
@@ -316,22 +316,35 @@ def half_open() -> MeshData:
     return MeshData.of(body)
 
 
-def test_filling_holes_reports_filling_and_not_watertightness() -> None:
-    """``fill_holes`` meldete „ist jetzt dicht" und hieß „hat gefüllt".
+def test_filling_holes_reports_filling_and_not_watertightness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das Löcherschließen meldete „ist jetzt dicht" und hieß „hat gefüllt".
 
-    Der Unterschied bleibt, auch wenn der Ringfüller seit dem 22.09.2026 beide
-    Löcher dieses Körpers schließt: Gemessen wird an den offenen Kanten, nicht
-    an der Dichtheit. Ein Körper, dessen Ringe sich nicht verketten lassen,
-    wird gefüllt und bleibt offen — dafür steht der Rückgabewert.
+    Der Ringfüller schließt seit dem 22.09.2026 beide Löcher dieses Körpers;
+    einen Teilerfolg gibt es an Rändern, die sich selbst berühren oder auf
+    verzweigten Kanten liegen. ``fill_only_small_holes`` stellt ihn nach: Ein
+    Ring wird gefüllt, der andere bleibt. Die Reparatur sagt beides —
+    ``repair.holes_filled`` mit den offenen Kanten davor und danach,
+    ``repair.still_open`` mit dem Rest —, und das Netz ist nicht dicht.
+    Gerechnet wird der Schritt, wie die Reparatur ihn fährt, ohne die übrigen.
     """
+    from tests.helpers import fill_only_small_holes
+
+    fill_only_small_holes(monkeypatch)
     mesh = half_open()
     before = open_edge_count(mesh)
 
-    filled, changed = fill_holes(mesh)
+    result = repair(mesh, weld=False, degenerate=False, normals=False)
+    after = open_edge_count(result.mesh)
 
-    assert changed is True, "gefüllt wurde"
-    assert open_edge_count(filled) < before
-    assert open_edge_count(filled) == 0, "und hier reichte es bis zum geschlossenen Körper"
+    assert result.changed is True, "gefüllt wurde"
+    said = next(entry for entry in result.findings if entry.code == "repair.holes_filled")
+    assert said.values["before"] == before and said.values["after"] == after
+    assert 0 < after < before, "ein Ring geschlossen, einer offen"
+    rest = next(entry for entry in result.findings if entry.code == "repair.still_open")
+    assert rest.values["open_edges"] == after
+    assert not result.mesh.raw.is_watertight, "gefüllt heißt nicht dicht"
 
 
 def test_repair_names_the_success_and_the_wide_hole(profile: Profile) -> None:

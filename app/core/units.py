@@ -60,6 +60,37 @@ EPS_SETTING: Final[float] = 1e-6
 #: und genau davor steht die Zusage, dass beide dieselbe Kante gleich nennen.
 MAX_FACET_SAG: Final[float] = 0.05
 
+#: Wie groß ein erzeugtes Gewinde werden darf, im Nenndurchmesser und in der
+#: Steigung — eine Grenze für *Druckbares Gewinde* mit eigenem Maß, *Schraube
+#: erstellen* und *Drehdeckel erzeugen* zugleich. Bis zum 06.10.2026 hatte jede
+#: ihre eigene (M8, Ø 100, Ø 400), und ein Kunde fand für das Innengewinde in
+#: seinem Rohr mit 60 mm keinen Weg. Ein Meter ist größer als jeder Bauraum;
+#: die Grenze sagt nur, dass ein Feld eine hat. Unten begrenzt die kleinste
+#: Schraube der Tabelle, M1.6 — dieselben Grenzen tragen Schraube, Mutter und
+#: Schraubenloch mit eigenem Maß.
+SMALLEST_THREAD: Final[float] = 1.6
+LARGEST_THREAD: Final[float] = 1000.0
+COARSEST_PITCH: Final[float] = 20.0
+#: Die feinste Steigung, die ein erzeugtes Gewinde annimmt — die von *Schraube
+#: erstellen* seit je. Darunter wächst ein Gewinde ins Unendliche: Ø 20 x 0,01
+#: über 200 mm hätte am Netz über elf Millionen Dreiecke, und der Bau eines
+#: Bausteins nimmt keinen Abbruch entgegen. *Drehdeckel erzeugen* beginnt bei
+#: 1 mm, weil ein Schraubdeckel feiner nicht greift (``lid.ScrewLidParams``).
+FINEST_PITCH: Final[float] = 0.25
+#: Welcher Anteil des Außendurchmessers einem Bolzen als Kern bleiben muss. Die
+#: Prüfung fragte zuerst nur, ob überhaupt ein Kern übrig bleibt; herausgekommen
+#: ist ein Faden von 0,16 mm, wo jemand zwei Millimeter bestellt hatte. Ein
+#: Bolzen, dessen Kern unter einem Drittel liegt, ist keiner mehr — für
+#: *Schraube erstellen* (``brep.profiles``) wie für jedes Bausteingewinde.
+THREAD_MIN_CORE_SHARE: Final[float] = 0.33
+#: Welchen Anteil seiner Gangtiefe ein Innengewinde in einer vorhandenen Bohrung
+#: mindestens fassen muss, damit eine Tabellengröße sie meint. Zwischen Nennmaß
+#: und Kernloch wählte die Bohrung die größte Größe, deren Nennmaß sie nicht
+#: übersteigt — bei Ø 23,9 die M24, deren gedruckter Bolzen dort gar nicht mehr
+#: greift. Unter der halben Gangtiefe nimmt die Bohrung das eigene Maß, dessen
+#: Kernloch sie ist, mit voller Gangtiefe (Review RM-532 Runde 2, K-N6).
+THREAD_MIN_GRIP_SHARE: Final[float] = 0.5
+
 #: Wie viele Körper eine eingelesene Baugruppe höchstens trägt — dieselbe Zahl
 #: wie ``scene.project.MAX_PROJECT_OBJECTS``: Jeder Körper wird ein Objekt im
 #: Stapel, und mehr ließe sich nie speichern. 3MF (``ingest.threemf``) und STEP

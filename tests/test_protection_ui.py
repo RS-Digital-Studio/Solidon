@@ -21,23 +21,16 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.split import SplitPlan
 from app.core.types import Finding
 from app.ui.main_window import MainWindow
-from app.ui.session import Session
-from app.ui.settings import UiSettings
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    # Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test
-    # auf die Arbeiter jedes offenen Fensters.
-    return MainWindow(Session(), UiSettings())
 
 
 def a_plate_with_a_face(window: MainWindow) -> tuple[str, str]:
     """Die Platte mit Bohrungen geöffnet, ihre erste Fläche gewählt."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     face = next(key for key, feature in entry.features.items() if feature.kind == "face")
@@ -95,7 +88,7 @@ def test_a_reopened_project_shows_its_protection(window: MainWindow, tmp_path: P
     window.session.save_project(tmp_path / "platte.p3d")
 
     window.session.open_project(tmp_path / "platte.p3d")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     QApplication.processEvents()
 
@@ -132,7 +125,7 @@ def test_the_search_receives_the_protected_points(
     monkeypatch.setattr(session_module, "plan_split", record)
 
     window.action_auto_split(object_id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert len(seen) == 1, "die Suche lief genau einmal"
     assert len(seen[0]) == 1, "eine gesperrte Fläche, eine Wolke"
@@ -173,7 +166,7 @@ def test_releasing_the_protection_from_the_report_splits_again(
     error = AppError(str(finding.message), object_id=finding.object_id)
 
     window.error_handlers()["release_protection"](error)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window.session.project.document.protected == {}
     assert window.viewport.protected_features(object_id) == ()

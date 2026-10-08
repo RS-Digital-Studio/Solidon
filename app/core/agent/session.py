@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 from app.core import activation, expressions
 from app.core.agent import checks
-from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
+from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.context import CONDENSE_ABOVE_CHARS, build_messages
 from app.core.agent.offer import ToolOffer
 from app.core.agent.prompt import PROMPT_VERSION
@@ -49,7 +49,9 @@ from app.core.agent.tools import (
     SET_PRINT_TARGET,
     STANDARD_KINDS,
     UNDO_TRANSACTION,
+    gathered_refusal,
     is_untrusted_recipe_source,
+    refused_gathered,
     tool_schemas,
     untrusted_recipe_text,
 )
@@ -64,7 +66,8 @@ from app.core.errors import PROGRAMMING_ERRORS, AppError, InternalError, UserErr
 from app.core.knowledge import rules
 from app.core.log import get_logger
 from app.core.perceive.digest import digest, new_feature_lines
-from app.core.registry import GATHERED_KINDS, REGISTRY, Registry, validate
+from app.core.registry import REGISTRY, Registry, validate
+from app.core.scene.cache import ResultCache
 from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.fits import numbered_name
 from app.core.scene.history import History, OperationDraft
@@ -116,6 +119,18 @@ def steps_for(backend: object) -> int:
 #: §26.5 waren damit nicht fahrbar — der Vorschlag hielt mit ``tokens`` an und
 #: zeigte einen halben Zug.
 MAX_TOKENS = 120_000
+#: Das Zugbudget für ein Modell auf dem eigenen Rechner: je Schritt so viel
+#: wie gehostet, für :data:`MAX_STEPS_LOCAL` Schritte. Lokal liest jeder
+#: Schritt die ganze Anfrage neu (kein Zwischenspeicher, 11 000 bis 14 000
+#: Token); mit 120 000 endeten neun von 39 Suitefällen nach 8 bis 11
+#: Schritten am Budget, und die 12 Schritte aus RM-251 waren nicht erreichbar.
+MAX_TOKENS_LOCAL = MAX_TOKENS * MAX_STEPS_LOCAL // MAX_STEPS
+
+
+def tokens_for(backend: object) -> int:
+    """Wie viele gewichtete Token ein Zug mit diesem Modell höchstens verbraucht (§26.5)."""
+    return MAX_TOKENS_LOCAL if isinstance(backend, OllamaBackend) else MAX_TOKENS
+
 
 AskFn = Callable[[str, list[str]], str]
 
@@ -143,28 +158,6 @@ def _refuse(question: str, options: list[str]) -> str:
     übersetzt sofort und friert die Sprache dieses Augenblicks ein.
     """
     raise AppError(_("Für diese Rückfrage ist niemand da."), detail=question)
-
-
-def _gathered_refusal(kind: str) -> str:
-    """Warum ein gesammelter Parameter abgelehnt wird — je Art ein eigener Satz.
-
-    Ein gemeinsamer Satz taugt hier nicht: Wohin der Nutzer geschickt wird, ist
-    bei jeder der drei Arten eine andere Stelle — Grundformen, Pinsel,
-    Skeletteditor. Eine Ablehnung ohne diesen Zusatz erzeugt einen zweiten
-    Versuch, keinen besseren.
-
-    **Beim Skelett sind es beide Felder**, `armature` *und* `pose`. Der
-    naheliegende Satz „die Winkel kannst du danach angeben" stand hier schon
-    und war falsch: Die Stellung trägt dieselbe Art und ist damit genauso
-    gesperrt. Sie ist auch kein Zahlenfeld, sondern drei Winkel je Knochen in
-    einem Text — geraten von einem Modell, das das Skelett nicht sieht, ergäbe
-    er eine Haltung zu Knochen, die es nicht gibt.
-    """
-    if kind == "strokes":
-        return tr("Pinselstriche setzt der Nutzer selbst — beschreibe ihm, wo er ansetzen soll.")
-    if kind == "armature":
-        return tr("Skelett und Stellung setzt der Nutzer selbst — im Skeletteditor und im Dialog.")
-    return tr("Skizzen zeichnet der Nutzer selbst — benutze die Grundformen und Maße.")
 
 
 def _truncation_finding(had_calls: bool) -> Finding:
@@ -346,7 +339,9 @@ def _unknown_objects(wanted: tuple[str, ...], scene: Scene) -> str:
     if not missing:
         return ""
     known = ", ".join(scene.objects) or tr("keine")
-    return f"{tr('Diese Objekte gibt es nicht')}: {', '.join(missing)}. {tr('Vorhanden')}: {known}"
+    return tr("Diese Objekte gibt es nicht: {missing}. Vorhanden: {known}").format(
+        missing=", ".join(missing), known=known
+    )
 
 
 @dataclass(slots=True)
@@ -363,7 +358,8 @@ class AgentSession:
     temperature: float = 0.0
     max_steps: int = 0
     """Null heißt: nach dem Modell (:func:`steps_for`)."""
-    max_tokens: int = MAX_TOKENS
+    max_tokens: int = 0
+    """Null heißt: nach dem Modell (:func:`tokens_for`)."""
     selection: tuple[ObjectId, str] | None = None
     cancelled: CancelToken | None = None
     """§15.6: ein Zug dauert zehn bis sechzig Sekunden, und so lange muss er
@@ -371,6 +367,11 @@ class AgentSession:
     einer Antwort des Modells gibt es keine Stelle dafür."""
     progress: ProgressFn | None = None
     """Meldet je Schritt, was gerade läuft — siehe :data:`ProgressFn`."""
+    cache: ResultCache = field(default_factory=ResultCache)
+    """Die Ergebnisse, die der Zug zwischen seinen Prüfungen wiederverwendet —
+    im Fenster der Sitzungscache. Ohne ihn rechnete jede Prüfung nach einem
+    Schritt den ganzen Stapel neu, einen von der vollen Kette geretteten
+    Schritt eingeschlossen (RM-534)."""
     views: tuple[tuple[str, bytes], ...] = ()
     """Gerenderte Ansichten der Szene (§23), beschriftete PNG-Bilder. Sie
     erreichen nur ein Backend mit ``supports_images`` — der Textpfad bleibt
@@ -383,6 +384,8 @@ class AgentSession:
     def __post_init__(self) -> None:
         if self.max_steps <= 0:
             self.max_steps = steps_for(self.backend)
+        if self.max_tokens <= 0:
+            self.max_tokens = tokens_for(self.backend)
 
     def propose(self, request: str) -> Proposal:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
@@ -515,8 +518,12 @@ class AgentSession:
             messages.append(
                 Message(role="assistant", content=reply.text, tool_calls=reply.tool_calls)
             )
+            # Die Kurzformen dieses Schritts, festgehalten vor dem ersten
+            # Aufruf: Was das Modell in diesem Schritt ohne Felder sah, bleibt
+            # für alle seine Aufrufe eine Kurzform (``ToolOffer.stubs``).
+            stubs = self.offer.stubs() if self.offer is not None else frozenset()
             for call in reply.tool_calls:
-                if self.offer is not None and self.offer.is_stub(call.name):
+                if self.offer is not None and call.name in stubs:
                     # Eine Kurzform ausgeführt wäre geraten: Das Modell kennt
                     # ihre Felder nicht (Regel 21). Der Aufruf holt sie; er ist
                     # kein Operationsaufruf und zählt deshalb nicht mit.
@@ -620,7 +627,7 @@ class AgentSession:
             # Ausdrücklich abgelehnte Werte — ``_names_from`` und die
             # Werkzeuge selbst sagen, was falsch war. Nur die.
             proposal.invalid_calls += 1
-            return f"{tr('Ungültige Werte')}: {error}", scene
+            return tr("Ungültige Werte: {error}").format(error=error), scene
         except PROGRAMMING_ERRORS as error:
             # Ein Fehler in unserem Code darf dem Modell nie wie sein eigener
             # Aufruffehler erscheinen (kern.md): Es korrigierte dann Werte, die
@@ -712,7 +719,7 @@ class AgentSession:
         proposal.questions.append(question)
         answer = self.ask(text, options)
         question.answer = answer
-        return f"{tr('Antwort')}: {answer}"
+        return tr("Antwort: {answer}").format(answer=answer)
 
     def _undo(self, arguments: dict[str, Any], proposal: Proposal, working: Document) -> str:
         """Eine Transaktion zum Zurücknehmen vormerken — mit dem, was mitgeht.
@@ -738,12 +745,14 @@ class AgentSession:
         sweep = sweep_for(working, wanted)
         if not sweep:
             proposal.invalid_calls += 1
-            return f"{tr('Diese Transaktion gibt es nicht')}: {wanted}"
+            return tr("Diese Transaktion gibt es nicht: {transaction}").format(transaction=wanted)
         if proposal.undo_of is not None:
             proposal.invalid_calls += 1
             return (
-                f"{tr('Dieser Vorschlag nimmt schon eine Transaktion zurück')}: "
-                f"{proposal.undo_of}. "
+                tr("Dieser Vorschlag nimmt schon eine Transaktion zurück: {transaction}.").format(
+                    transaction=proposal.undo_of
+                )
+                + " "
                 + tr(
                     "Ein Vorschlag nimmt genau eine zurück — für eine weitere "
                     "gehört ein eigener Zug her."
@@ -763,15 +772,16 @@ class AgentSession:
         proposal.findings.append(undo_finding(sweep))
         if len(sweep) > 1:
             return (
-                f"{tr('Zum Zurücknehmen vorgemerkt')}: {wanted}. "
+                tr("Zum Zurücknehmen vorgemerkt: {transaction}.").format(transaction=wanted)
+                + " "
                 + tr(
                     "Sie liegt nicht zuoberst — der Verlauf kennt keine "
-                    "Verzweigungen, also gehen alle jüngeren mit zurück"
-                )
-                + f": {', '.join(sweep)}. "
+                    "Verzweigungen, also gehen alle jüngeren mit zurück: {transactions}."
+                ).format(transactions=", ".join(sweep))
+                + " "
                 + tr("Sage das in deiner Antwort, bevor der Nutzer entscheidet.")
             )
-        return f"{tr('Zum Zurücknehmen vorgemerkt')}: {wanted}"
+        return tr("Zum Zurücknehmen vorgemerkt: {transaction}").format(transaction=wanted)
 
     def _parameter(
         self, name: str, arguments: dict[str, Any], proposal: Proposal, working: Document
@@ -783,7 +793,7 @@ class AgentSession:
         existing = working.parameters.get(key)
         if name == SET_PARAMETER and existing is None:
             proposal.invalid_calls += 1
-            return f"{tr('Diesen Parameter gibt es nicht')}: {key}"
+            return tr("Diesen Parameter gibt es nicht: {name}").format(name=key)
 
         # Diese Werkzeuge sind keine Register-Ops, ``validate`` sieht sie also
         # nie: was hier ungeprüft durchginge, wäre entweder ein ValueError im
@@ -831,9 +841,10 @@ class AgentSession:
         # Der Steckbrief liest die ausgewertete Szene, und die entsteht erst
         # mit der nächsten Operation — ohne den Zusatz meldete genau die
         # Prüfschleife „setzen, nachsehen" einen Misserfolg.
-        return f"{tr('Parameter gesetzt')}: {key} = {parameter.value:g} {parameter.unit} — " + tr(
-            "im Steckbrief sichtbar ab der nächsten Operation."
+        set_text = tr("Parameter gesetzt: {name} = {value} {unit}").format(
+            name=key, value=f"{parameter.value:g}", unit=parameter.unit
         )
+        return f"{set_text} — " + tr("im Steckbrief sichtbar ab der nächsten Operation.")
 
     def _analysis(
         self, arguments: dict[str, Any], proposal: Proposal, working: Document, scene: Scene
@@ -842,7 +853,7 @@ class AgentSession:
         kind = str(arguments.get("kind", ""))
         if kind not in ANALYSIS_KINDS:
             proposal.invalid_calls += 1
-            return f"{tr('Diese Analyse gibt es nicht')}: {kind} ({', '.join(ANALYSIS_KINDS)})"
+            return unknown_analysis(kind)
         wanted = tuple(_names_from(arguments, OBJECTS_FIELD))
         unknown = _unknown_objects(wanted, scene)
         if unknown:
@@ -882,9 +893,10 @@ class AgentSession:
         working.material = wanted_material
         self.profile = profiles.make_profile(wanted_printer, wanted_material)
         proposal.print_target = (wanted_printer, wanted_material)
-        return f"{tr('Druckziel geändert')}: {wanted_printer} / {wanted_material} — " + tr(
-            "gilt mit der Übernahme des Vorschlags."
+        changed = tr("Druckziel geändert: {printer} / {material}").format(
+            printer=wanted_printer, material=wanted_material
         )
+        return f"{changed} — " + tr("gilt mit der Übernahme des Vorschlags.")
 
     def _standard(self, arguments: dict[str, Any], proposal: Proposal) -> str:
         """§24.2 als Werkzeug: nachschlagen statt raten.
@@ -897,7 +909,7 @@ class AgentSession:
         kind = str(arguments.get("kind", ""))
         if kind not in STANDARD_KINDS:
             proposal.invalid_calls += 1
-            return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({', '.join(STANDARD_KINDS)})"
+            return standard_text(kind, "")
         proposal.readings.append(READ_STANDARD)
         return standard_text(kind, str(arguments.get("size", "")).strip())
 
@@ -909,7 +921,9 @@ class AgentSession:
             return str(error)
         proposal.fits.append(fit)
         working.fits.append(fit)
-        return f"{tr('Passung angelegt')}: {fit.name} ({fit.kind}, {fit.tolerance})"
+        return tr("Passung angelegt: {name} ({kind}, {tolerance})").format(
+            name=fit.name, kind=fit.kind, tolerance=fit.tolerance
+        )
 
     def _operation(
         self,
@@ -926,7 +940,7 @@ class AgentSession:
             spec = self.registry.get(call.name)
         except AppError:
             proposal.invalid_calls += 1
-            return f"{tr('Dieses Werkzeug gibt es nicht')}: {call.name}", scene
+            return tr("Dieses Werkzeug gibt es nicht: {tool}").format(tool=call.name), scene
 
         arguments = dict(call.arguments)
         # Das Strukturfeld steht neben dem Parameterschema. Vor jeder
@@ -936,7 +950,7 @@ class AgentSession:
             objects = _names_from(arguments, OBJECTS_FIELD)
         except ValueError as error:
             proposal.invalid_calls += 1
-            return f"{tr('Ungültige Werte')}: {error}", scene
+            return tr("Ungültige Werte: {error}").format(error=error), scene
         arguments.pop(OBJECTS_FIELD, None)
         inputs = tuple(objects)
         if spec.takes_whole_scene and not inputs:
@@ -944,30 +958,26 @@ class AgentSession:
             # zu lassen wäre eine Gelegenheit, eines zu vergessen — und die
             # Szene kennt sie.
             inputs = tuple(scene.objects)
-        gathered = next(
-            (
-                entry
-                for entry in spec.params.spec()
-                if entry.kind in GATHERED_KINDS and arguments.get(entry.name)
-            ),
-            None,
-        )
+        gathered = refused_gathered(spec, arguments)
         if gathered is not None:
             # §26, Leitprinzip 5: Was aus Gesten entsteht, entsteht beim
             # Nutzer — nie als rohe Koordinatenliste aus dem Modell. Das
             # Schema bietet diese Parameter nicht an, und hier werden sie auch
             # abgelehnt, wenn ein Modell sie rät. Die Ablehnung nennt den Weg,
             # der offen bleibt: sonst versucht es dieselbe Operation noch
-            # dreimal mit anderen Zahlen.
+            # dreimal mit anderen Zahlen. Ohne Pinselzüge oder Skelett tut die
+            # Operation nichts, und kein Feld des Schemas kann sie setzen —
+            # deshalb ist dort auch der leere Aufruf abgelehnt; sonst stünde
+            # ein Schritt im Vorschlag, der nichts bewirkt (RM-014).
             proposal.invalid_calls += 1
-            return _gathered_refusal(gathered.kind), scene
+            return gathered_refusal(gathered.kind), scene
         try:
             # Abnahme P4: schemagültig, bevor überhaupt gerechnet wird.
             values = expressions.resolve(working.parameters)
             validate(spec.params, expressions.resolve_params(arguments, values))
         except AppError as error:
             proposal.invalid_calls += 1
-            return f"{tr('Ungültige Werte')}: {_error_text(error)}", scene
+            return tr("Ungültige Werte: {error}").format(error=_error_text(error)), scene
 
         before = scene
         draft = OperationDraft(op=spec.name, inputs=inputs, params=arguments)
@@ -990,7 +1000,9 @@ class AgentSession:
             # nichts angewandt wurde.
             if isinstance(error, UserError):
                 proposal.invalid_calls += 1
-            return f"{tr('Nicht anwendbar')}: {_error_text(error)}", scene
+            return tr("Das lässt sich hier nicht anwenden: {error}").format(
+                error=_error_text(error)
+            ), scene
 
         # Die Kennungen, die die Arbeitskopie vergeben hat, reisen im Entwurf
         # mit: Der nächste Schritt des Modells nennt genau sie, und die
@@ -1012,7 +1024,9 @@ class AgentSession:
             # Teil des Vorschlags. Die Arbeitskopie geht dorthin zurück, wo sie
             # war.
             history.undo()
-            return f"{tr('Die Kette hält an')}: {checks.as_lines(findings)}", before
+            return tr("Die Kette hält an: {findings}").format(
+                findings=checks.as_lines(findings)
+            ), before
 
         proposal.drafts.extend(drafts)
 
@@ -1021,7 +1035,8 @@ class AgentSession:
         # gerade gesetzt hat, und der nächste Schritt zeigt ins Leere.
         created = new_feature_lines(before, result.scene)
         return (
-            f"{tr('Ausgeführt')}: {spec.name}. {checks.as_lines(findings)}\n"
+            tr("Ausgeführt: {operation}.").format(operation=spec.name)
+            + f" {checks.as_lines(findings)}\n"
             + ("\n".join(created) + "\n" if created else "")
             + f"{_objects_text(result.scene)}",
             result.scene,
@@ -1091,6 +1106,9 @@ class AgentSession:
             registry=self.registry,
             sources=self.sources,
             ask=lambda question, options: self.ask(question, list(options)),
+            cache=self.cache,
+            # Der Agent prüft jeden Schritt wie das Fenster danach (RM-534).
+            full_chain_when_stuck=True,
         )
 
     def _origin(self, active: rules.RuleSet) -> Origin:
@@ -1147,9 +1165,11 @@ def parse_number(value: Any) -> float:
     try:
         number = float(value)
     except TypeError, ValueError:
-        raise ValueError(f"{tr('Dieser Wert ist keine Zahl')}: {value!r}") from None
+        raise ValueError(
+            tr("Dieser Wert ist keine Zahl: {value}").format(value=repr(value))
+        ) from None
     if not isfinite(number):
-        raise ValueError(f"{tr('Dieser Wert ist keine endliche Zahl')}: {number}")
+        raise ValueError(tr("Dieser Wert ist keine endliche Zahl: {value}").format(value=number))
     return number
 
 
@@ -1185,7 +1205,9 @@ def build_fit(arguments: dict[str, Any], existing: Sequence[Fit]) -> Fit:
     kind = str(arguments.get("kind", "clearance"))
     if kind not in FIT_KINDS:
         known = ", ".join(FIT_KINDS)
-        raise ValueError(f"{tr('Diese Passungsart gibt es nicht')}: {kind} ({known})")
+        raise ValueError(
+            tr("Diese Passungsart gibt es nicht: {kind} ({known})").format(kind=kind, known=known)
+        )
     return Fit(
         name=wanted or numbered_name(existing, "fit"),
         a=first,
@@ -1224,9 +1246,14 @@ def standard_text(kind: str, size: str) -> str:
     except ValidationError as problem:
         known = str(problem.values.get("known", ", ".join(standards.TABLES)))
         if problem.field == "kind":
-            return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({known})"
+            return tr("Diese Tabelle gibt es nicht: {kind} ({known})").format(
+                kind=kind, known=known
+            )
         wanted = str(problem.values.get("size", size))
-        return f"{tr('Diese Größe steht nicht in der Normteiltabelle')}: {wanted}. {known}"
+        return (
+            tr("Diese Größe steht nicht in der Normteiltabelle: {size}.").format(size=wanted)
+            + f" {known}"
+        )
     facts = ", ".join(
         f"{key}={value:g} mm" if isinstance(value, float) else f"{key}={value}"
         for key, value in asdict(entry).items()

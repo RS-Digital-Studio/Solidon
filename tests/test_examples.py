@@ -704,7 +704,7 @@ def test_no_feature_sits_outside_the_body_it_belongs_to(
     der Oberfläche sitzen und dort einen halben Millimeter danebenliegen, ohne
     dass etwas falsch wäre.
     """
-    project, result = evaluated(example.id)
+    _project, result = evaluated(example.id)
 
     daneben: list[str] = []
     for object_id, entry in result.scene.objects.items():
@@ -718,13 +718,10 @@ def test_no_feature_sits_outside_the_body_it_belongs_to(
             # eigenen Test, nicht in eine erweiterte Erwartung hier.
             if feature.provenance != "generated":
                 continue
-            # Und was der Kunde absichtlich weggeschnitten hat, ist nicht
-            # zurückgeblieben, sondern weg: `test_piece` schneidet 22 mm aus
-            # einem 70er Gehäuse, und die Merkmale des Originals liegen danach
-            # außerhalb. Der Kern sagt dazu an anderer Stelle denselben Satz
-            # („was außerhalb des neuen Körpers liegt, wurde weggeschnitten").
-            if any(entry.op == "test_piece" for entry in project.document.ops):
-                continue
+            # Ein Prüfstück ist keine Ausnahme mehr: Was es weggeschnitten
+            # hat, nimmt die Auswertung heraus (`tests/test_cut_features.py`).
+            # Bis dahin stand hier ein Überspringen, und das Prüfstück des
+            # Gehäuses trug die Fase einer Buchse 40 mm neben sich.
             centre = feature.params.get("centre")
             if not isinstance(centre, list | tuple) or len(centre) != 3:
                 continue

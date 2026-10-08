@@ -181,6 +181,22 @@ def plate_countersunk_blind() -> None:
     write(trimesh.boolean.difference([plate, drill, sink]), "plate_countersunk_blind.stl")
 
 
+def plate_counterbored() -> None:
+    """Eine Platte mit **einer Stufenbohrung** — der Sitz einer Zylinderkopfschraube M5.
+
+    Durchgang Ø 5,5 mm (mittel nach ISO 273), Ansenkung Ø 10 mm, 5 mm tief, in
+    einer 10 mm dicken Platte. An ihr misst *Stift für Bohrung* den
+    Zylinderkopf (RM-536): Kopf Ø 10 minus Spiel, um das halbe Spiel über der
+    Ringstufe, oben bündig.
+    """
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    drill = trimesh.creation.cylinder(radius=2.75, height=40.0, sections=48)
+    # Von z = 0 bis über die Deckfläche bei z = 5: die Stufe liegt 5 mm tief.
+    seat = trimesh.creation.cylinder(radius=5.0, height=10.0, sections=48)
+    seat.apply_translation((0.0, 0.0, 5.0))
+    write(trimesh.boolean.difference([plate, drill, seat]), "plate_counterbored.stl")
+
+
 def sphere_socket() -> None:
     """Ein Block mit einer eingefrästen Kalotte — die Kugel als **Pfanne**.
 
@@ -277,6 +293,63 @@ def torus_ring() -> None:
         ),
         "torus_ring.stl",
     )
+
+
+def pocket_with_pin() -> None:
+    """Ein Block mit Ringnut von unten: Tasche Ø 6,12, darin ein Zapfen Ø 5,44
+    — die Maße der Kundentasche aus RM-535.
+
+    Der Zapfen hängt oben am Block, die Nut ist unten offen. Versetzt um
+    0,5 mm in die Taschenwand nahm die Operation ihn ganz weg (−178 mm³), und
+    die Tasche selbst ließ sich versetzen und schnitt dabei in ihn.
+    """
+    block = trimesh.creation.box(extents=(20.0, 20.0, 12.0))
+    block.apply_translation((0.0, 0.0, 6.0))
+    outer = trimesh.creation.cylinder(radius=3.06, height=8.68, sections=48)
+    outer.apply_translation((0.0, 0.0, 3.34))
+    core = trimesh.creation.cylinder(radius=2.72, height=10.0, sections=48)
+    core.apply_translation((0.0, 0.0, 3.0))
+    groove = trimesh.boolean.difference([outer, core])
+    write(trimesh.boolean.difference([block, groove]), "pocket_with_pin.stl")
+
+
+def cup_on_stem() -> None:
+    """Ein Becher Ø 30 auf einem schmaleren Fuß, innen Ø 28 mit Deckelfalz
+    Ø 29,2 — nachgebaut nach dem Minitopf aus RM-535.
+
+    Erkannt wird die Außenwand als Zapfen. Versetzt füllte die Operation den
+    Becher aus seinen Flächen und schnitt den Innenraum aus Kennzahlen wieder
+    hinein; der Falz fehlte danach, und jedes Versetzen trug gleich viel auf.
+    """
+    profile = [
+        (0.0, 0.0),
+        (8.0, 0.0),
+        (8.0, 6.0),
+        (15.0, 6.0),
+        (15.0, 24.0),
+        (14.6, 24.0),
+        (14.6, 22.6),
+        (14.0, 22.6),
+        (14.0, 7.0),
+        (0.0, 7.0),
+    ]
+    write(trimesh.creation.revolve(profile, sections=64), "cup_on_stem.stl")
+
+
+def pin_with_end_chamfers() -> None:
+    """Ein Stift Ø 33,8 × 40 mit Fasen 5 mm an beiden Enden und einem
+    Sackloch Ø 23,8 von unten, das in der unteren Fase mündet — der Stift
+    der Kundensitzung aus RM-535.
+
+    Ohne das Sackloch unter den Merkmalen füllte das Versetzen der unteren
+    Fase dessen Mündung (+2 218 mm³ beim Kunden).
+    """
+    outer = trimesh.creation.revolve(
+        [(0, 0), (11.9, 0), (16.9, 5), (16.9, 35), (11.9, 40), (0, 40)], sections=48
+    )
+    bore = trimesh.creation.cylinder(radius=11.9, height=24.1, sections=48)
+    bore.apply_translation((0.0, 0.0, 10.05))
+    write(trimesh.boolean.difference([outer, bore]), "pin_with_end_chamfers.stl")
 
 
 def post_with_fillet() -> None:
@@ -825,12 +898,16 @@ if __name__ == "__main__":
     plate_holes_twin()
     plate_countersunk()
     plate_countersunk_blind()
+    plate_counterbored()
     sphere_socket()
     shallow_sphere_caps()
     indeterminate_sphere_cap()
     ambiguous_sphere_ribbon()
     near_sphere_ellipsoid()
     torus_ring()
+    pocket_with_pin()
+    cup_on_stem()
+    pin_with_end_chamfers()
     post_with_fillet()
     block_with_rounded_edge()
     plate_chamfer_and_taper()

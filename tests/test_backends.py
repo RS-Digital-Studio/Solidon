@@ -7,15 +7,16 @@ from __future__ import annotations
 import http.server
 import json
 import socket
-import sys
 import threading
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
 
+from app.core import keyring_backend
 from app.core.backends import keys, llm
 from app.core.backends.llm import (
     AnthropicBackend,
@@ -32,7 +33,11 @@ from app.core.backends.llm import (
     takes_temperature,
 )
 from app.core.errors import AppError, ExternalToolError, InternalError
+from tests.helpers import LoopbackServer
 from tests.scripted_backend import ScriptedBackend
+
+#: Der echte Schlüsselbundzugang; ``no_stored_key`` ersetzt ihn in jedem Test.
+_KEYCHAIN = keys._keyring
 
 
 class Recorder:
@@ -77,6 +82,119 @@ def _opened_by(fake: object) -> Callable[[str], SimpleNamespace]:
     den echten Weg messen und nicht einen daneben.
     """
     return lambda url: SimpleNamespace(open=fake)
+
+
+def test_the_first_backend_search_does_not_hold_its_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die erste Backend-Suche von ``keyring`` hält ihre Rahmen fest.
+
+    Unter Linux und macOS gemessen: ``get_all_keyring`` bleibt mit seiner
+    ganzen Rahmenkette am Leben, und über ``f_back`` der Aufrufer — der
+    Chat-Dialog, der als erster nach dem Schlüssel fragte, lebte bis zum
+    Prozessende. Die Attrappe hält ihren Rahmen ebenso fest; der Aufrufer
+    muss trotzdem freigegeben werden.
+    """
+    import gc
+    import sys
+    import weakref
+
+    kept: list[object] = []
+
+    def get_keyring() -> None:
+        kept.append(sys._getframe())
+
+    monkeypatch.setitem(sys.modules, "keyring", SimpleNamespace(get_keyring=get_keyring))
+    monkeypatch.setattr(keyring_backend, "_backend_found", False)
+
+    class Caller:
+        def ask(self) -> object:
+            return keyring_backend.find_backend_once(sys.modules["keyring"])
+
+    caller = Caller()
+    caller.ask()
+    watch = weakref.ref(caller)
+    del caller
+    gc.collect()
+    assert kept, "die Suche lief"
+    assert watch() is None, "die Suche hielt ihren Aufrufer fest"
+    assert keyring_backend._backend_found
+
+
+class _UnusableBackend:
+    """``keyring`` mit einem eingestellten Backend, das hier nicht geht.
+
+    So wirft keyring 25.7 ``load_keyring``, wenn ``PYTHON_KEYRING_BACKEND``
+    ein Secret-Service-Backend nennt und SecretStorage fehlt.
+    """
+
+    def __init__(self) -> None:
+        self.searches = 0
+        self.broken = True
+
+    def get_keyring(self) -> None:
+        self.searches += 1
+        if self.broken:
+            raise RuntimeError("SecretStorage required")
+
+
+def test_a_failed_backend_search_reaches_its_caller_not_the_crash_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Fehler der Suche fliegt beim Aufrufer, nicht als unbehandelter Fadenfehler.
+
+    ``threading.excepthook`` ist in der Anwendung ``log._unhandled_thread``, und
+    der schreibt einen Absturzbericht wie bei einem Programmfehler. Beim
+    Aufrufer ist derselbe Fehler ein behandelter Fall. Und weil kein Backend
+    gefunden wurde, sucht der nächste Aufruf noch einmal — wieder im Faden.
+    """
+    hooked: list[object] = []
+    monkeypatch.setattr(threading, "excepthook", hooked.append)
+    monkeypatch.setattr(keyring_backend, "_backend_found", False)
+    backend = _UnusableBackend()
+    threads: list[str] = []
+    real_search = backend.get_keyring
+
+    def search() -> None:
+        threads.append(threading.current_thread().name)
+        real_search()
+
+    monkeypatch.setattr(backend, "get_keyring", search)
+
+    with pytest.raises(RuntimeError, match="SecretStorage required"):
+        keyring_backend.find_backend_once(backend)
+
+    assert hooked == [], "der Fehler ging als unbehandelter Fadenfehler hinaus"
+    assert not keyring_backend._backend_found, "ein Fehlschlag gilt nicht als gefunden"
+
+    backend.broken = False
+    keyring_backend.find_backend_once(backend)
+    keyring_backend.find_backend_once(backend)
+    assert backend.searches == 2, "nach dem Fehlschlag sucht es einmal neu, danach nicht mehr"
+    assert threads == ["keyring-backend", "keyring-backend"], "beide Suchen im eigenen Faden"
+    assert keyring_backend._backend_found
+
+
+def test_an_unusable_keychain_backend_leaves_the_environment_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Geht das eingestellte Backend nicht, liest ``keys`` weiter aus der Umgebung.
+
+    Vor der Suche im eigenen Faden fiel derselbe Fehler erst in
+    ``get_password`` und damit in den Fang von ``read``; jetzt fällt er in der
+    Suche, und ``keys`` behandelt ihn dort genauso.
+    """
+    import sys
+
+    monkeypatch.setitem(sys.modules, "keyring", _UnusableBackend())
+    monkeypatch.setattr(keyring_backend, "_backend_found", False)
+    monkeypatch.setattr(keys, "_keyring", _KEYCHAIN)
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+
+    assert keys.read("anthropic") == "geheim"
+    assert keys.source("anthropic") == "environment"
+    assert keys.store("anthropic", "sk-ant-" + "x" * 40) is False
+    assert keys.forget("anthropic") is False
 
 
 def test_without_a_key_there_is_no_agent(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -124,6 +242,72 @@ def test_the_keychain_is_used_when_there_is_one(monkeypatch: pytest.MonkeyPatch)
     assert keys.source("anthropic") == "keychain"
     assert keys.forget("anthropic")
     assert keys.read("anthropic") is None
+
+
+class NoKeyringError(RuntimeError):
+    """Wie ``keyring.errors.NoKeyringError``: Es fand kein Backend."""
+
+
+class _RefusingKeychain:
+    """Ein Schlüsselbund, dessen ``set_password`` mit ``error`` scheitert."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def set_password(self, service: str, account: str, key: str) -> None:
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    ("keychain", "installed", "said"),
+    [
+        (None, False, "Auf diesem Rechner gibt es keinen Schlüsselbund."),
+        (None, True, "Der Schlüsselbund ist gesperrt oder nicht erreichbar."),
+        (
+            _RefusingKeychain(NoKeyringError("No recommended backend")),
+            True,
+            "Auf diesem Rechner gibt es keinen Schlüsselbund.",
+        ),
+        (
+            _RefusingKeychain(RuntimeError("Keyring is locked")),
+            True,
+            "Der Schlüsselbund ist gesperrt oder nicht erreichbar.",
+        ),
+    ],
+    ids=["ohne keyring", "Backend unbrauchbar", "kein Backend", "gesperrt"],
+)
+def test_a_refused_key_names_the_real_reason_and_the_variable(
+    monkeypatch: pytest.MonkeyPatch, keychain: object, installed: bool, said: str
+) -> None:
+    """Ein Schlüssel, der nicht in den Schlüsselbund kommt, sagt, warum — und wohin sonst.
+
+    Bis dahin kannte der Dialog nur „keinen Schlüsselbund", auch über einem
+    gesperrten, und die Umgebungsvariable hatte keinen Namen (Regel 17). Der
+    Ausweg über die Variable nennt in jeder Lage den Neustart: Solidon liest
+    die Umgebung des laufenden Prozesses (``keys.read``), und wer sie nur
+    setzt und erneut speichert, bekommt denselben Satz (Nachprüfung, Fund 4).
+    """
+    monkeypatch.setattr(keys, "_keyring", lambda: keychain)
+    monkeypatch.setattr(keys, "_keyring_installed", lambda: installed)
+
+    refusal = keys.store_refusal("anthropic", "sk-ant-" + "x" * 40)
+
+    assert refusal is not None
+    assert str(refusal).startswith(said), str(refusal)
+    assert keys.ENVIRONMENT_VARIABLE in str(refusal)
+    assert str(refusal).endswith("und starten Sie das Programm neu."), str(refusal)
+    assert keys.store("anthropic", "sk-ant-" + "x" * 40) is False
+
+
+def test_a_key_that_cannot_be_one_says_so_and_not_keychain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein eingefügter Fehlertext ist kein fehlender Schlüsselbund — der Satz sagt, was es ist."""
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+
+    refusal = keys.store_refusal("anthropic", "Fehler\nNoch ein Knopf")
+
+    assert refusal == keys.unusable("Fehler\nNoch ein Knopf")
 
 
 # --- das gehostete Backend -------------------------------------------------------
@@ -537,42 +721,32 @@ def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:
     assert transport.calls == []
 
 
-#: **Auf macOS kommt der Abbruch nicht sicher in einer Sekunde an.** Der Weg
-#: schließt den Socket aus dem wartenden Thread (``shutdown`` und ``detach``);
-#: Linux und Windows beenden damit das ``recv`` des Anfrage-Threads sofort. Auf
-#: dem macOS-Runner war das in drei Tag-Läufen von v0.4.1 (13.09.2026) in drei,
-#: zwei und dann einer Stufe rot — jede der vier einmal, auch die mit
-#: Verbindungsende. Sporadisch also, in jeder Stufe, und gemessen nur in der
-#: CI; ohne Mac daneben wäre ein Umbau geraten (Regel 21).
-#: Die Marke ist deshalb **nicht** streng — ein grüner Lauf ist dort kein
-#: Nachweis und ein roter kein neuer Fund. Was zählt, steht bei RM-104.
-_MAC_KEEPS_READING = pytest.mark.xfail(
-    sys.platform == "darwin",
-    strict=False,
-    raises=AssertionError,
-    reason="macOS: der Abbruch weckt das blockierte recv nicht sicher in einer Sekunde (RM-104)",
-)
-
-
 @pytest.mark.parametrize(
-    "stage",
-    (
-        pytest.param("before_headers", marks=_MAC_KEEPS_READING),
-        pytest.param("http10", marks=_MAC_KEEPS_READING),
-        pytest.param("connection_close", marks=_MAC_KEEPS_READING),
-        pytest.param("keep_alive", marks=_MAC_KEEPS_READING),
-    ),
+    "stage", ("before_headers", "http10", "connection_close", "keep_alive", "late_body")
 )
 def test_a_blocking_local_ollama_request_can_be_cancelled(
     monkeypatch: pytest.MonkeyPatch, stage: str
 ) -> None:
-    """Abbruch beendet auch nach den Headern den Request-Thread und seinen Socket."""
+    """Abbruch beendet auch nach den Headern den Request-Thread und seinen Socket.
+
+    Auf macOS war das bis RM-104 sporadisch rot, in jeder der vier Stufen: Der
+    wartende Faden weckte das blockierte ``recv`` mit ``shutdown``, und das
+    kam dort nicht sicher an. Seitdem bemerkt der Lesefaden den Abbruch selbst
+    (:func:`test_a_cancelled_read_ends_without_anyone_waking_it`).
+
+    Schickt die Gegenstelle noch etwas, nachdem der Aufrufer geschlossen hat,
+    sieht sie das Ende als Reset statt als geordnetes Ende — auch das ist der
+    Abbruch. Auf macOS lag es am Zufall der Fadenfolge, ob das Stück der Antwort
+    vor oder nach dem Schließen ankam; ``late_body`` stellt die zweite Folge
+    fest her.
+    """
     from app.core.errors import OperationCancelled
     from app.core.scene.cancel import CancelSignal
 
     started = threading.Event()
     disconnected = threading.Event()
     release_response = threading.Event()
+    client_gone = threading.Event()
     read_limited = llm.read_limited
 
     def read_response(response: Any, **kwargs: Any) -> bytes:
@@ -596,12 +770,21 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
                 if stage == "connection_close":
                     self.send_header("Connection", "close")
                 self.end_headers()
-                self.wfile.write(b"{")
-                self.wfile.flush()
+                if stage != "late_body":
+                    self.wfile.write(b"{")
+                    self.wfile.flush()
             self.connection.settimeout(2.0)
             try:
+                if stage == "late_body":
+                    client_gone.wait(3.0)
+                    self.wfile.write(b"{")
+                    self.wfile.flush()
                 if not self.connection.recv(1):
                     disconnected.set()
+            except ConnectionError:
+                # Auch ein Reset ist das Ende der Leitung: Kommt Antwort nach dem
+                # Schließen an, beantwortet der Kern des Aufrufers sie mit RST.
+                disconnected.set()
             except TimeoutError:
                 pass
             release_response.wait(3.0)
@@ -616,7 +799,7 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
         def log_message(self, _format: str, *_args: object) -> None:
             pass
 
-    server = http.server.HTTPServer(("127.0.0.1", 0), Blocking)
+    server = LoopbackServer(("127.0.0.1", 0), Blocking)
     serving = threading.Thread(target=server.serve_forever, daemon=True)
     serving.start()
     token = CancelSignal()
@@ -643,6 +826,7 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
         assert len(requests) == 1
         token.cancel()
         worker.join(1.0)
+        client_gone.set()
 
         assert not worker.is_alive(), "der lokale HTTP-Aufruf läuft trotz Abbruch weiter"
         assert len(errors) == 1 and isinstance(errors[0], OperationCancelled)
@@ -657,6 +841,168 @@ def test_a_blocking_local_ollama_request_can_be_cancelled(
         worker.join(2.0)
         for request in requests:
             request.join(2.0)
+
+
+def test_a_cancelled_read_ends_without_anyone_waking_it() -> None:
+    """Der Lesefaden bemerkt den Abbruch selbst, ohne dass ein anderer ihn weckt (RM-104).
+
+    Auf macOS weckte ``shutdown`` aus einem zweiten Faden das blockierte
+    ``recv`` nicht sicher: Am Runner kam der Abbruch in vier von fünf Läufen
+    nicht an, und der sechste wartete bis zur Jobfrist. Hier weckt niemand —
+    weder ``shutdown`` noch Schließen —, und die Gegenseite schweigt; das
+    Lesen muss trotzdem innerhalb weniger Prüfscheiben enden. Gegenprobe:
+    Ohne Abbruch steht es bis zu seiner Socket-Frist.
+    """
+    from app.core.scene.cancel import CancelSignal
+
+    for cancel, limit in ((True, 0.05), (False, 0.3)):
+        left, right = socket.socketpair()
+        token = CancelSignal()
+        watched = llm._WatchedSocket(left, token)
+        watched.settimeout(limit if not cancel else 30.0)
+        outcome: list[BaseException] = []
+
+        def read(watched: socket.socket = watched, outcome: list[BaseException] = outcome) -> None:
+            try:
+                watched.recv(1)
+            except OSError as error:
+                outcome.append(error)
+
+        reader = threading.Thread(target=read)
+        started = time.monotonic()
+        reader.start()
+        try:
+            if cancel:
+                time.sleep(limit)
+                token.cancel()
+            reader.join(5.0)
+            elapsed = time.monotonic() - started
+            assert not reader.is_alive(), "das Lesen steht trotz Abbruch"
+            expected = ConnectionAbortedError if cancel else TimeoutError
+            assert len(outcome) == 1 and isinstance(outcome[0], expected), outcome
+            assert elapsed < 2.0, f"{elapsed:.2f} s bis zum Ende"
+            if not cancel:
+                # Die Gegenprobe zählt nur, wenn das Lesen wirklich bis zur Frist stand.
+                assert elapsed >= limit * 0.9, f"{elapsed:.2f} s statt der Frist {limit} s"
+        finally:
+            watched.close()
+            right.close()
+
+
+def test_a_cancelled_read_still_returns_what_already_arrived() -> None:
+    """Angekommenes wird vor dem Abbruch gelesen, erst das nächste Lesen bricht ab (RM-104).
+
+    Ein ``shutdown`` über ungelesenen Daten setzt die Verbindung unter Windows
+    zurück; die Gegenstelle sähe dann einen Abbruch der Leitung statt des
+    Abbruchs der Anfrage. Deshalb fragt der Lesefaden erst, ob Daten da sind.
+    """
+    from app.core.scene.cancel import CancelSignal
+
+    left, right = socket.socketpair()
+    token = CancelSignal()
+    watched = llm._WatchedSocket(left, token)
+    watched.settimeout(5.0)
+    try:
+        right.sendall(b"x")
+        token.cancel()
+        assert watched.recv(1) == b"x"
+        with pytest.raises(ConnectionAbortedError):
+            watched.recv(1)
+    finally:
+        watched.close()
+        right.close()
+
+
+def test_a_cancelled_send_stops_before_it_writes() -> None:
+    """Auch das Senden fragt den Abbruch — eine Gegenstelle, die nicht liest, hält ihn nicht auf.
+
+    Vorher weckte der wartende Faden ein stehendes ``sendall`` mit ``shutdown``;
+    der überwachte Socket wird von außen nicht mehr geweckt und muss den
+    Abbruch selbst sehen. Beim Senden liegt nichts Ungelesenes an, also gilt
+    er dort sofort, und die Gegenstelle bekommt kein Byte.
+    """
+    from app.core.scene.cancel import CancelSignal
+
+    left, right = socket.socketpair()
+    token = CancelSignal()
+    watched = llm._WatchedSocket(left, token)
+    watched.settimeout(5.0)
+    right.settimeout(1.0)
+    try:
+        token.cancel()
+        with pytest.raises(ConnectionAbortedError):
+            watched.sendall(b"POST /api/chat HTTP/1.1\r\n\r\n")
+        assert right.recv(64) == b"", "die Gegenstelle bekam Daten trotz Abbruch"
+    finally:
+        watched.close()
+        right.close()
+
+
+def test_a_request_thread_that_does_not_end_does_not_hold_the_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nach dem Abbruch wartet der Aufrufer höchstens ``CANCEL_JOIN_SECONDS`` und sagt es.
+
+    Ein Anfragefaden, der nicht endet, hielte sonst die Oberfläche fest; das
+    alte unbegrenzte Warten tat genau das. Der Satz im Protokoll ist der
+    einzige Hinweis darauf, dass ein Faden zurückblieb.
+    """
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    stuck = threading.Event()
+    release = threading.Event()
+    left, right = socket.socketpair()
+    warnings: list[str] = []
+
+    class Stuck:
+        sock: socket.socket | None = None
+
+        def connect(self) -> None:
+            self.sock = left
+
+        def request(self, *_args: object, **_kwargs: object) -> None:
+            stuck.set()
+            release.wait(10.0)
+
+        def close(self) -> None:
+            pass
+
+    class Recorder:
+        def warning(self, message: str, *values: object) -> None:
+            warnings.append(message % values)
+
+    monkeypatch.setattr(llm, "_local_connection", lambda *_args: Stuck())
+    monkeypatch.setattr(llm, "CANCEL_JOIN_SECONDS", 0.3)
+    monkeypatch.setattr(llm, "_log", Recorder())
+    token = CancelSignal()
+    errors: list[BaseException] = []
+    elapsed: list[float] = []
+
+    def ask() -> None:
+        started = time.monotonic()
+        try:
+            llm.post_json_local_cancelable("http://127.0.0.1:11434/api/chat", {}, {}, token)
+        except BaseException as error:
+            errors.append(error)
+        elapsed.append(time.monotonic() - started)
+
+    caller = threading.Thread(target=ask)
+    try:
+        caller.start()
+        assert stuck.wait(2.0)
+        token.cancel()
+        caller.join(3.0)
+        assert not caller.is_alive(), "der Aufrufer wartet trotz Frist weiter"
+        assert len(errors) == 1 and isinstance(errors[0], OperationCancelled)
+        assert warnings and "endete nicht" in warnings[0], warnings
+        assert 0.3 <= elapsed[0] < 2.0, f"{elapsed[0]:.2f} s"
+    finally:
+        release.set()
+        caller.join(2.0)
+        right.close()
+        with suppress(OSError):
+            left.close()
 
 
 def test_a_connection_completed_after_cancellation_sends_no_request(
@@ -677,9 +1023,17 @@ def test_a_connection_completed_after_cancellation_sends_no_request(
         connecting.set()
         release_connect.wait(3.0)
         connection.sock = socket.socket()
+
+    watch = llm._WatchedConnection.connect
+
+    def connect_and_remember(connection: Any) -> None:
+        # Gemerkt wird der überwachte Socket: Den rohen leert ``detach()``
+        # schon beim Einsetzen, und seine Prüfung wäre immer wahr.
+        watch(connection)
         sockets.append(connection.sock)
 
     monkeypatch.setattr(llm.http.client.HTTPConnection, "connect", connect)
+    monkeypatch.setattr(llm._WatchedConnection, "connect", connect_and_remember)
     monkeypatch.setattr(
         llm.http.client.HTTPConnection,
         "request",
@@ -748,7 +1102,7 @@ def test_cancelable_http_closes_its_response_on_success_and_error(
         def log_message(self, _format: str, *_args: object) -> None:
             pass
 
-    server = http.server.HTTPServer(("127.0.0.1", 0), Answer)
+    server = LoopbackServer(("127.0.0.1", 0), Answer)
     serving = threading.Thread(target=server.serve_forever, daemon=True)
     serving.start()
     try:

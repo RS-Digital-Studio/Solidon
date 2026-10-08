@@ -33,6 +33,8 @@ from app.ui.selection_operations import OPEN_UP_TO, SelectionOperationsPanel
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import shortcut_for
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 EXAMPLES = Path(__file__).resolve().parents[1] / "app" / "examples"
@@ -78,11 +80,6 @@ def _the_whole_catalogue() -> None:
     derselbe Aufruf, den auch die Kommandozeile macht.
     """
     load_operations()
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    return MainWindow(Session(), UiSettings())
 
 
 def test_the_menu_bar_stays_readable(window: MainWindow) -> None:
@@ -326,6 +323,53 @@ def test_the_lead_above_the_first_field_stays_short_in_every_language() -> None:
     finally:
         set_language(before)
     assert not over, f"zu viele Wörter über dem ersten Feld: {over}"
+
+
+def test_the_bore_sentence_of_a_part_stays_short_in_every_language() -> None:
+    """Der Satz über eine angeklickte Bohrung hält dieselbe Grenze (Review RM-532 Runde 2, N5).
+
+    Über dem Dialog eines Bausteins, der aus der Bohrung seine Größe nimmt,
+    steht neben der Einleitung „Bohrungsmaß: …“ und sein eigener Satz
+    (``PartSpec.at_hole_advice``). Die Fassungen mit eigenem Maß hatten allein
+    25 bis 30 Wörter, und gezählt hat sie niemand. Gezählt wird jeder Zweig —
+    Normgröße, eigenes Maß, keine Größe — mit dem Maß aus der Konstruktion und
+    mit dem eingepassten, dessen Satz „Einschätzung anhand dieses Maßes“ trägt.
+    """
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene.placement import bore_advice
+    from app.core.types import MeasureStatus
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import available_languages, install_language
+
+    statuses = (
+        MeasureStatus("exact", source="native", available=True),
+        MeasureStatus("estimated", source="fit", available=True),
+    )
+    # Je Zweig eine Bohrung: unter dem kleinsten Gewinde, Normgrößen, zwischen
+    # zwei Größen, über der Tabelle und über dem größten Gewinde.
+    bores = (1.0, 3.4, 5.2, 6.6, 7.5, 21.0, 40.0, 70.0, 120.0, 1200.0)
+    parts = [
+        spec for spec in REGISTRY.all() if (part := part_of(spec.name)) and part.at_hole_advice
+    ]
+    assert len(parts) >= 4, [spec.name for spec in parts]
+    before = get_language()
+    over: list[str] = []
+    try:
+        for language in available_languages():
+            install_language(language)
+            set_language(language)
+            limit = MAX_LEAD_WORDS if language == "de" else MAX_LEAD_WORDS_TRANSLATED
+            for spec in parts:
+                for status in statuses:
+                    for diameter in bores:
+                        said, _choices = bore_advice(
+                            diameter, ask=False, spec=spec, status=status, measured="5,20 mm"
+                        )
+                        if _words(said) > limit:
+                            over.append(f"{language} {spec.name} {diameter}: {said}")
+    finally:
+        set_language(before)
+    assert not over, "zu viele Wörter im Bohrungssatz:\n" + "\n".join(over)
 
 
 def test_the_lead_is_the_first_sentence_and_names_the_limit_briefly() -> None:
@@ -1172,7 +1216,7 @@ def test_the_tool_strip_greys_out_on_an_empty_scene(window: MainWindow) -> None:
     nach etwas, das gar nicht fehlt.
     """
     window.session.start_new()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._update_actions()
 
     buttons = [
@@ -1202,7 +1246,7 @@ def test_the_tool_strip_comes_back_with_a_body(window: MainWindow) -> None:
     einer zu wenig — ein grauer Knopf mit Grund, kein Fehler.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._update_actions()
 
     buttons = [
@@ -1560,7 +1604,7 @@ def test_workspace_menus_remain_available_without_selection(qt_app: QApplication
         assert any(action.isEnabled() and not action.isSeparator() for action in create.actions())
 
         window.session.import_model(Path("tests/data/meshes/plate_holes.stl"))
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         qt_app.processEvents()
         result = window.session.last_result
         assert result is not None and result.stopped_at is None

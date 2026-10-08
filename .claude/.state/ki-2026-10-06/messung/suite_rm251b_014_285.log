@@ -1,0 +1,50 @@
+qwen3:14b — 39 Fälle, Baum F:/ki-251, Fenster 32768
+ok move                     44.7s  translate_object
+ok rotate                   24.8s  rotate_object
+ok on_bed                   35.5s  place_on_bed, place_on_bed
+ok scale                    19.4s  scale_object
+ok repair                   26.5s  repair
+ok orient                   68.5s  orient_for_print, place_on_bed  [1 ungültig]
+ok split                    34.9s  split_pinned
+ok drill                   232.3s  drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, insert_dowel, drill_hole, drill_hole  [1 ungültig]
+-- drill_on_feature        255.3s  keine Operation  [gefragt]
+ok duplicate                92.2s  duplicate_object, translate_object
+ok parameter                23.5s  keine Operation
+ok question                  7.7s  keine Operation
+-- printable                76.1s  compensate_first_layer  [1 ungültig]
+ok how_long                 17.3s  keine Operation
+ok core_hole                32.4s  keine Operation
+ok switch_material          28.5s  keine Operation
+-- where_menu              103.4s  resize_hole  [gefragt]  [2 ungültig]
+ok where_hollow             13.0s  keine Operation
+ok which_hole              144.2s  drill_hole  [gefragt]  [1 ungültig]
+ok how_much_thinner        179.5s  resize_hole  [gefragt]  [2 ungültig]
+ok join_what               127.8s  insert_printed_screw  [gefragt]  [1 ungültig]
+-- bracket                 164.8s  keine Operation  [gefragt]  [2 ungültig]
+ok magnet_lid              182.7s  create_box, insert_magnet_pocket, insert_magnet_pocket, resize_hole, resize_hole  [gefragt]  [2 ungültig]
+-- wall_holder             145.1s  keine Operation  [gefragt]
+ok cable_exit              107.3s  create_brep_box, insert_cable_gland  [gefragt]  [2 ungültig]
+-- threaded_stud           101.0s  create_brep_cylinder, thread_exact, delete_object  [2 ungültig]
+evaluation stopped at op 2: op.insert_nut_trap.AppError: Er wird an eine Fläche oder eine Bohrung gesetzt, und ohne sie weiß er weder wohin noch in welche Richtung. Es ist auch keine Position eingetragen — so säße er im Nullpunkt des Objekts, halb darin und halb darunter.
+ok nut_plate                98.1s  create_brep_box, insert_nut_trap  [1 ungültig]
+-- spacer                  249.5s  keine Operation
+evaluation stopped at op 2: op.create_lid.ValidationError: Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.
+ok hinge                   190.8s  create_brep_box, drill_hole, insert_living_hinge  [5 ungültig]
+-- snap_box                134.4s  keine Operation  [gefragt]
+evaluation stopped at op 2: op.insert_keyhole.ValidationError: Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante bleibt.
+evaluation stopped at op 3: op.insert_keyhole.ValidationError: Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante bleibt.
+ok keyhole_back            157.6s  create_brep_box, insert_keyhole  [gefragt]  [2 ungültig]
+ok stiffen                  74.9s  create_brep_box, insert_rib  [2 ungültig]
+ok dowels                   70.6s  create_brep_box, create_brep_box, insert_dowel, insert_dowel  [1 ungültig]
+evaluation stopped at op 2: op.insert_heatset_m4.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+evaluation stopped at op 3: op.insert_heatset_m4.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+evaluation stopped at op 8: op.insert_heatset_m4.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+-- inserts                 188.2s  create_brep_box, drill_hole, drill_hole, drill_hole, drill_hole  [gefragt]  [2 ungültig]
+ok parameterise             42.6s  keine Operation
+-- free_shape              143.3s  keine Operation  [gefragt]
+ok hex_base                150.5s  sketch_extrude, sketch_extrude, sketch_extrude, sketch_extrude  [1 ungültig]
+-- pocket_plate            348.1s  create_brep_box, sketch_pocket  [10 ungültig]
+evaluation stopped at op 2: op.chamfer_edges.GeometryError: Die Breite ist für diese Kanten zu groß. Wählen Sie eine kleinere Breite oder weniger Kanten.
+ok handrail_bend           139.4s  sketch_sweep, compensate_first_layer, chamfer_edges  [2 ungültig]
+
+gut 28/39; gefragt 3/3; schemagültig 183/226; Baustein 7/13; Parameter 2/3; Zeit 71.3 min

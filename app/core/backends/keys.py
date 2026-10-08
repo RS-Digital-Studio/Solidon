@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.branding import ENVIRONMENT_PREFIX
+from app.core.keyring_backend import find_backend_once
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -31,6 +32,14 @@ def _keyring() -> Any | None:
     try:
         import keyring
     except Exception:  # pragma: no cover - hängt an der Installation
+        return None
+    try:
+        find_backend_once(keyring)
+    except Exception as error:
+        # Das eingestellte Backend ist hier nicht nutzbar: derselbe Fall wie
+        # ein gesperrter Schlüsselbund in `read` — kein Schlüssel von dort,
+        # kein Absturz.
+        _log.warning("keychain unreachable: %s", error)
         return None
     return keyring
 
@@ -97,19 +106,65 @@ def unusable(key: str) -> TranslatableText | None:
 def store(account: str, key: str) -> bool:
     """Legt einen Schlüssel in den Schlüsselbund. False, wenn es keinen gibt,
     in den er passte — oder wenn der Schlüssel keiner sein kann
-    (:func:`unusable`).
+    (:func:`unusable`). Warum, sagt :func:`store_refusal`.
+    """
+    return store_refusal(account, key) is None
+
+
+def _no_keychain() -> TranslatableText:
+    """Auf diesem Rechner gibt es keinen Schlüsselbund — der Weg über die Umgebung."""
+    return _(
+        "Auf diesem Rechner gibt es keinen Schlüsselbund. Tragen Sie den Schlüssel "
+        "in die Umgebungsvariable {variable} ein und starten Sie das Programm neu.",
+        variable=ENVIRONMENT_VARIABLE,
+    )
+
+
+def _keychain_unreachable() -> TranslatableText:
+    """Es gibt einen Schlüsselbund, aber er nimmt nichts an — gesperrt oder nicht erreichbar."""
+    return _(
+        "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und "
+        "speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable "
+        "{variable} ein und starten Sie das Programm neu.",
+        variable=ENVIRONMENT_VARIABLE,
+    )
+
+
+def _keyring_installed() -> bool:
+    """Ob ``keyring`` überhaupt da ist — ohne den Schlüsselbund zu fragen."""
+    from importlib.util import find_spec
+
+    try:
+        return find_spec("keyring") is not None
+    except ValueError:  # schon geladen, aber ohne Modulbeschreibung
+        return True
+
+
+def store_refusal(account: str, key: str) -> TranslatableText | None:
+    """Legt einen Schlüssel in den Schlüsselbund — ``None``, wenn er drin ist,
+    sonst der tatsächliche Grund mit dem Weg, der bleibt (Regel 17).
+
+    Drei Gründe, drei Sätze: Der Schlüssel kann keiner sein (:func:`unusable`);
+    es gibt keinen Schlüsselbund (``keyring`` fehlt, oder es fand kein Backend
+    — ``NoKeyringError``); es gibt einen, aber er ist gesperrt oder nicht
+    erreichbar. Bis dahin hieß jeder Fehlschlag „Auf diesem Rechner gibt es
+    keinen Schlüsselbund", auch über einem gesperrten, und die Variable
+    stand nirgends.
 
     **Der Wert wird beschnitten, bevor er hineingeht.** Ein an der
     Zwischenablage hängengebliebenes Leerzeichen ist der häufigste Grund für
     einen Schlüssel, der „nicht geht", und niemand sieht es ihm an.
     """
     key = key.strip()
-    if unusable(key) is not None:
+    refusal = unusable(key)
+    if refusal is not None:
         _log.warning("refused a key for %s: it cannot be a key", account)
-        return False
+        return refusal
     keychain = _keyring()
     if keychain is None:
-        return False
+        # Ist ``keyring`` da, scheiterte seine Backend-Suche (:func:`_keyring`
+        # hat es protokolliert): Das eingestellte Backend geht hier nicht.
+        return _keychain_unreachable() if _keyring_installed() else _no_keychain()
     try:
         keychain.set_password(SERVICE, account, key)
     except Exception as error:  # pragma: no cover - gesperrter Schlüsselbund
@@ -118,7 +173,11 @@ def store(account: str, key: str) -> bool:
         # Absturz. Die Ausnahme flog sonst aus dem Qt-Slot des
         # Einstellungsdialogs, der nur den Rückgabewert behandelt.
         _log.warning("keychain refused the key: %s", error)
-        return False
+        # Beim Namen gefragt: Wer ``keyring`` hier ersetzt, hat dessen
+        # Fehlerklassen nicht, und ohne Backend wirft es genau diese.
+        if any(kind.__name__ == "NoKeyringError" for kind in type(error).__mro__):
+            return _no_keychain()
+        return _keychain_unreachable()
     _log.info("key for %s stored in the keychain", account)
     # Ein neuer Schlüssel ist ein neuer Versuch: Was die Gegenseite vorhin
     # abgelehnt hat, war ein anderer Schlüssel. Der Import steht im Aufruf,
@@ -126,7 +185,7 @@ def store(account: str, key: str) -> bool:
     from app.core.backends import llm
 
     llm.accept_again(account)
-    return True
+    return None
 
 
 def forget(account: str) -> bool:

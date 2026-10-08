@@ -28,7 +28,7 @@ def test_a_remote_call_is_one_transaction_the_window_can_undo(window: MainWindow
     assert len(document.transactions) == 1
 
     window.action_undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.session.project.document.ops == []
 
 
@@ -77,6 +77,33 @@ def test_a_remote_orientation_analysis_is_the_chat_answer_computed_off_the_windo
     assert answer == chat, "Chat und MCP sagen dasselbe"
     assert answer.startswith("Herkunft") or "Schichtanalyse" in answer.splitlines()[0]
     assert len(window.session.project.document.transactions) == before, "lesend, kein Schritt"
+
+
+def test_remote_and_chat_answer_alike_for_unknown_kinds_and_set_values(
+    window: MainWindow,
+) -> None:
+    """Review RM-285 (N2): Die Fernsteuerung sagte eigene Sätze.
+
+    „Diese Analyse gibt es nicht: layers, estimate, …“ nannte die gefragte Art
+    nicht und listete die gültigen, als gäbe es *sie* nicht; „Parameter
+    gesetzt“ kam ohne Einheit. Jetzt antworten Chat und MCP aus einer Quelle.
+    """
+    from app.core.agent.analysis import unknown_analysis
+    from app.core.agent.session import standard_text
+
+    window.run_remote("create_box", {"width": 30.0, "depth": 10.0, "height": 40.0})
+
+    analysis = window.run_remote("read_analysis", {"kind": "wobble"})
+    assert analysis == unknown_analysis("wobble")
+    assert "wobble" in analysis
+
+    table = window.run_remote("read_standard", {"kind": "rivet", "size": "M3"})
+    assert table == standard_text("rivet", "M3")
+    assert "rivet" in table
+
+    window.run_remote("add_parameter", {"name": "breite", "value": 30.0, "unit": "mm"})
+    answer = window.run_remote("set_parameter", {"name": "breite", "value": 42.5})
+    assert answer == "Parameter gesetzt: breite = 42.5 mm"
 
 
 def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:
@@ -234,9 +261,9 @@ def test_a_remote_undo_takes_the_transaction_it_was_asked_for(window: MainWindow
     """
     session = window.session
     session.apply("Erster", [OperationDraft(op="create_box", inputs=(), params={})])
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     session.apply("Zweiter", [OperationDraft(op="create_box", inputs=(), params={})])
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     known = [entry.id for entry in session.project.document.transactions]
     assert len(known) == 2, "zwei Transaktionen, sonst prüft der Test nichts"

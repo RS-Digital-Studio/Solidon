@@ -8,20 +8,26 @@ mehr als eine Datei liest, steht hier — öffentlich benannt und ohne
 Testfunktion daneben, damit pytest die Datei nicht als Test sammelt.
 
 Hier liegt nur, was **keinen** Fensteraufbau braucht: Ein Helfer, der Qt
-zieht, gehört nicht in eine Datei, die auch Kerntests importieren.
+zieht, gehört nicht in eine Datei, die auch Kerntests importieren; der steht
+in ``tests/ui_helpers.py``.
 
-**Noch nicht hier:** ``test_cache.FakeCodec`` in der gesperrten Datei
-``test_native_references`` und ``test_slot_features.a_foreign_slot``.
+Eine Fixture, die mehrere Dateien teilen (``project``), steht hier einmal und
+wird mit ``from tests.helpers import project as project`` eingebunden: pytest
+findet sie im Namensraum der Testdatei, und der doppelte Name sagt ruff, dass
+der Import weitergereicht und nicht vergessen ist.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import http.server
 import io
+import json
 import math
 import os
 import shutil
+import socketserver
 import struct
 import subprocess
 import time
@@ -47,6 +53,7 @@ from app.core.types import (
     Document,
     Feature,
     Finding,
+    Mesh,
     Operation,
     OpResult,
     Parameter,
@@ -272,6 +279,38 @@ class FakeMesh:
         return self.slots
 
 
+class FakeCodec:
+    """Steht für die Geometrieschicht, die den echten später liefert.
+
+    Schreibt nur die Kennzahlen eines :class:`FakeMesh` und liest sie als
+    solches zurück: Die Tests des Plattencaches prüfen Ablage, Budget und
+    Wiederherstellung, nicht das Netzformat.
+    """
+
+    suffix = ".json"
+
+    def stores(self, mesh: Mesh) -> bool:
+        return True
+
+    def dumps(self, mesh: Mesh) -> bytes:
+        source = mesh  # type: ignore[assignment]
+        return json.dumps(
+            {
+                "triangles": source.triangle_count,
+                "vertices": source.vertex_count,
+                "size": list(source.bounds.size),
+            }
+        ).encode("utf-8")
+
+    def loads(self, data: bytes) -> Mesh:
+        values = json.loads(data)
+        return FakeMesh(  # type: ignore[return-value]
+            triangles=values["triangles"],
+            vertices=values["vertices"],
+            size=tuple(values["size"]),
+        )
+
+
 def make_object(object_id: str = "obj_1", name: str = "Teil", **kwargs: object) -> SceneObject:
     """Ein Szenenobjekt auf einem :class:`FakeMesh` mit den genannten Kennzahlen."""
     return SceneObject(id=object_id, name=name, mesh=FakeMesh(**kwargs))  # type: ignore[arg-type]
@@ -371,6 +410,16 @@ def plate_project() -> Project:
         "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
     )
     return made
+
+
+@pytest.fixture
+def project() -> Project:
+    """Ein Projekt mit einer Platte auf dem Stapel — der Startpunkt von Weg 1.
+
+    Je Test frisch gebaut (:func:`plate_project`), eingebunden mit
+    ``from tests.helpers import project as project``.
+    """
+    return plate_project()
 
 
 def rounded_pattern_carrier(*, tilted: bool = False) -> SceneObject:
@@ -533,9 +582,9 @@ def fill_only_small_holes(monkeypatch: pytest.MonkeyPatch) -> None:
     zeigen*, kein Reparaturring) geprüft bleibt.
 
     Ersetzt wird ``_filled_rounds``, die Runden des Ringfüllers: Seit
-    ``2b83f72a5`` ruft die Reparatur sie direkt und nicht mehr über
-    ``_filled_with_count``; der alte Schalter griff danach ins Leere, und die
-    Reparatur schloss alles. ``fill_holes`` geht weiter über denselben Weg.
+    ``2b83f72a5`` ruft die Reparatur sie direkt und nicht mehr über eine
+    Zwischenfunktion; der alte Schalter griff danach ins Leere, und die
+    Reparatur schloss alles.
     """
     import trimesh
 
@@ -1310,6 +1359,31 @@ def plate_with_a_chamfered_slot() -> MeshData:
     return boolean("difference", [body, MeshData.of(chamfer)]).mesh
 
 
+def a_foreign_slot(diameter: float, travel: float) -> MeshData:
+    """Ein Langloch, wie es ein eingelesenes Netz hat — ohne Solidon-Operation.
+
+    ``drill`` lässt seit dem 11.09.2026 kein so knappes Langloch mehr zu
+    (:func:`app.core.geom.prepare.shortest_slot`); wer den Streifen darunter
+    prüfen will, muss schneiden wie ein fremdes Programm: Quader minus
+    aufgezogenes Stadion (RM-155).
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.geom.prepare import slot_profile
+    from app.core.geom.sketch_solid import extrude_profile
+    from app.core.types import PlaneFrame
+
+    plate_body = MeshData.of(trimesh.creation.box(extents=(160.0, 120.0, 12.0)))
+    outline = slot_profile(radius=diameter / 2.0, travel=travel, angle_deg=0.0)
+    frame = PlaneFrame(
+        origin=(0.0, 0.0, -10.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 1.0, 0.0),
+        normal=(0.0, 0.0, 1.0),
+    )
+    tool = extrude_profile(outline, 20.0, frame)
+    return boolean("difference", [plate_body, MeshData.of(tool)]).mesh
+
+
 def countersunk_plate(profile: Profile) -> SceneObject:
     """Exakte Platte mit durchgehender Bohrung Ø 6 und Senkung Ø 12."""
     edit = exact_kernel()
@@ -1891,3 +1965,77 @@ def pbr_glb() -> bytes:
     body.visual = trimesh.visual.TextureVisuals(uv=uv, material=material)
     value = trimesh.Scene({"Farbig": body}).export(file_type="glb")
     return value if isinstance(value, bytes) else value.encode("utf-8")
+
+
+class LoopbackServer(http.server.HTTPServer):
+    """Ein Testserver auf der Rückschleife, ohne Namensauflösung beim Binden.
+
+    ``HTTPServer.server_bind`` fragt ``socket.getfqdn`` nach dem Namen der
+    Adresse. Am macOS-Runner dauerte diese Rückwärtsauflösung 35 s, auf
+    Ubuntu 2 ms (RM-104); den Namen liest kein Test.
+    """
+
+    def server_bind(self) -> None:
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
+
+
+# --- Der erste Start eines Slicers der Orca-Familie als AppImage ------------------
+
+#: Wo die Orca-Familie ihre Konfiguration ablegt, unter ``slicer_profiles.config_base``.
+#: Creality Print 7 legt unter seinem Anwendungsschlüssel und der Version ab.
+ORCA_CONFIG_FOLDERS = {
+    "orcaslicer": "OrcaSlicer",
+    "bambustudio": "BambuStudio",
+    "elegooslicer": "ElegooSlicer",
+    "crealityprint": "Creality/Creality Print/7.2",
+}
+
+
+def first_start(executable: Path) -> Path | None:
+    """Was der erste Start eines AppImage der Orca-Familie beim Kunden hinterlässt.
+
+    Ein solches AppImage trägt seinen Herstellerbestand nur im Abbild, das zur
+    Laufzeit eingehängt ist; lesbar wird er erst, wenn der Slicer einmal lief
+    und die Bündel nach ``<Konfiguration>/<Programm>/system/`` kopiert hat,
+    neben ``user/default/``. Genau das legt diese Funktion an, aus dem
+    ausgepackten Abbild — ohne Bilder und Bettmodelle, die Solidon nicht
+    liest. Gibt den angelegten ``system``-Ordner zurück, sonst ``None``.
+    """
+    from app.core import discover
+    from app.core.export import slicer_profiles
+
+    folder = ORCA_CONFIG_FOLDERS.get(discover.program_mark(executable.name))
+    base = slicer_profiles.config_base(executable)
+    if folder is None or not base or executable.suffix.lower() != ".appimage":
+        return None
+    system = Path(base) / folder / "system"
+    if system.is_dir():
+        return system
+    unpacked = Path(base) / ".erststart"
+    unpacked.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [str(executable), "--appimage-extract"],
+        cwd=unpacked,
+        capture_output=True,
+        timeout=600,
+        check=True,
+    )
+    profiles = next(
+        (
+            candidate
+            for candidate in sorted((unpacked / "squashfs-root").rglob("profiles"))
+            if candidate.is_dir() and any(candidate.glob("*.json"))
+        ),
+        None,
+    )
+    if profiles is None:
+        return None
+    (Path(base) / folder / "user" / "default").mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        profiles, system, ignore=shutil.ignore_patterns("*.stl", "*.png", "*.svg", "*.jpg")
+    )
+    shutil.rmtree(unpacked, ignore_errors=True)
+    return system

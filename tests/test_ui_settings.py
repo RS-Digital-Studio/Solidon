@@ -345,7 +345,7 @@ def test_settings_keep_imported_printers_local_until_the_selected_one_is_saved(
     paths: list[str] = []
     monkeypatch.setattr(module.discover, "remembered_path", lambda _key: "")
     monkeypatch.setattr(module.discover, "remember_path", lambda _key, value: paths.append(value))
-    monkeypatch.setattr(profiles, "save_printer", lambda profile: saved.append(profile))
+    monkeypatch.setattr(profiles, "save_printer", lambda profile, **_values: saved.append(profile))
     monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit((path,)))
     monkeypatch.setattr(
         module._PrinterSurvey,

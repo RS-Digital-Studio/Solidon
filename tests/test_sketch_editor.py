@@ -1317,7 +1317,7 @@ def test_the_drawing_keys_win_while_drawing(qt_app: QApplication) -> None:
         )
 
         window.finish_sketch(keep=False)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         assert window._sketch_panel is None
     finally:
         window.deleteLater()
@@ -2948,6 +2948,8 @@ def test_the_sketch_area_fits_a_laptop_screen(qt_app: QApplication) -> None:
     Gemessen **mit Thema**: Ohne fehlt die Polsterung, die ein Kunde sieht,
     und der Nachbartest war daran zwei Runden lang grün, ohne etwas zu messen.
     """
+    from PySide6.QtWidgets import QStyle, QStyleOption
+
     from app.ui.style import stylesheet
 
     davor = qt_app.styleSheet()
@@ -2959,9 +2961,22 @@ def test_the_sketch_area_fits_a_laptop_screen(qt_app: QApplication) -> None:
 
         zeile = panel._tools_row.minimumSize().width()
 
-        assert bereich <= 900, f"der Skizzenbereich verlangt {bereich} Bildpunkte Breite"
-        assert zeile <= 900, f"die Werkzeugzeile verlangt {zeile} Bildpunkte Breite"
-        assert bedingungen <= 900, f"die Bedingungszeile verlangt {bedingungen} Bildpunkte"
+        # **Die Grenze gilt in Punkten des Stils.** Qt rechnet Stilmaße unter
+        # macOS gegen 72 dpi, offscreen meldet aber 96: Dort wird jedes
+        # Symbol um ein Drittel größer als auf einem echten Mac (21 statt 16,
+        # die Zeile kam so auf 977 Punkte). Gemessen wird deshalb gegen
+        # die Symbolgröße des Stils, die auf jedem echten Bildschirm 16 ist.
+        # Mit Stiloption: Erst deren Schrift trägt die dpi, gegen die Qt
+        # rechnet; ohne sie meldet der Stil auch unter macOS 16.
+        option = QStyleOption()
+        option.initFrom(panel)
+        massstab = (
+            panel.style().pixelMetric(QStyle.PixelMetric.PM_ButtonIconSize, option, panel) / 16
+        )
+        grenze = 900 * max(1.0, massstab)
+        assert bereich <= grenze, f"der Skizzenbereich verlangt {bereich} Bildpunkte Breite"
+        assert zeile <= grenze, f"die Werkzeugzeile verlangt {zeile} Bildpunkte Breite"
+        assert bedingungen <= grenze, f"die Bedingungszeile verlangt {bedingungen} Bildpunkte"
         assert not panel.canvas.measure_field.isVisibleTo(panel.canvas), (
             "solange nichts gezeichnet ist, hat das Maßfeld nichts zu zeigen"
         )
@@ -6166,7 +6181,7 @@ def test_an_imported_mesh_is_a_target_for_cutting(qt_app: QApplication) -> None:
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         entry = next(iter(result.scene.objects.values()))
         assert entry.kind == "mesh", "eine eingelesene Datei ist ein Netz — darum ging es"
@@ -6218,7 +6233,7 @@ def test_pulling_down_on_an_imported_mesh_starts_the_pocket(qt_app: QApplication
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         entry = next(iter(result.scene.objects.values()))
 
@@ -6608,7 +6623,7 @@ def test_a_sketch_step_can_be_redrawn_in_space(qt_app: QApplication) -> None:
         window.session.apply(
             "Grundform", [OperationDraft(op="create_box", inputs=[], params={"width": 40.0})]
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         body = next(iter(window.session.evaluate_now().scene.objects))
         window.object_tree.select_object(body)
         window.session.apply(
@@ -6621,7 +6636,7 @@ def test_a_sketch_step_can_be_redrawn_in_space(qt_app: QApplication) -> None:
                 )
             ],
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
 
         step = window.session.history.operations[-1].id
@@ -6651,7 +6666,7 @@ def test_a_sketch_step_can_be_redrawn_in_space(qt_app: QApplication) -> None:
 
         window._sketch_panel.canvas.add_element("line", ((0.0, 0.0), (5.0, 0.0)))
         window.finish_sketch(keep=True)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
 
         assert len(window.session.history.operations) == before, (
@@ -6720,7 +6735,7 @@ def test_reopening_a_sketch_step_still_finds_its_field(qt_app: QApplication) -> 
         window.session.apply(
             "Grundform", [OperationDraft(op="create_box", inputs=[], params={"width": 40.0})]
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         body = next(iter(window.session.evaluate_now().scene.objects))
         window.object_tree.select_object(body)
         window.session.apply(
@@ -6733,7 +6748,7 @@ def test_reopening_a_sketch_step_still_finds_its_field(qt_app: QApplication) -> 
                 )
             ],
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
 
         step = window.session.history.operations[-1].id
@@ -8719,7 +8734,12 @@ def _run_with_drawings(
     dialog._editors["sketch"].edit_button.click()
     second.edit_button.click()
     dialog.accept()
-    assert window.session.wait_for_idle()  # type: ignore[attr-defined]
+    assert window.session.wait_for_idle(60_000)  # type: ignore[attr-defined]
+    # Sonst liest der Test das Ergebnis vor dem Schritt — „vollständig, ohne
+    # Körper“ —, und das Rot nennt eine leere Szene statt des Klicks.
+    assert window._op_dialog is None, (  # type: ignore[attr-defined]
+        f"Übernehmen hat nicht übernommen: {window.status_message.text()}"  # type: ignore[attr-defined]
+    )
     return dialog, window.session.last_result  # type: ignore[attr-defined]
 
 
@@ -8910,7 +8930,7 @@ def test_the_window_hands_the_objects_to_the_face_outline(qt_app: QApplication) 
     window._may_discard = lambda: True  # type: ignore[method-assign]
     try:
         window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
-        assert window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.last_result
         assert result is not None
         (object_id,) = result.scene.objects

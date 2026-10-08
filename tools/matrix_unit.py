@@ -114,7 +114,11 @@ from app.core.scene.project import (  # noqa: E402
     next_source_id,
 )
 from app.core.slice import advise  # noqa: E402
-from app.core.slice.estimate import plates_findings, time_comparison_blocked  # noqa: E402
+from app.core.slice.estimate import (  # noqa: E402
+    plates_findings,
+    support_floor,
+    time_comparison_blocked,
+)
 from app.core.slice.gcode import DEVIATION_LIMIT as TIME_DEVIATION  # noqa: E402
 from app.core.types import Source  # noqa: E402
 from app.ui.print_settings_dialog import (  # noqa: E402
@@ -127,10 +131,6 @@ from tools import matrix_gcode  # noqa: E402
 assert Path(matrix_gcode.__file__).resolve().parent == HERE, matrix_gcode.__file__
 
 MATERIAL = "pla"
-#: Weniger Stützbahn als das in Metern heißt im Lauf ``stuetzen_auto``: Der
-#: Slicer stützt nichts Nennenswertes (ein halber Meter ist ein Stützfleck von
-#: rund einem Quadratzentimeter über wenige Schichten).
-SUPPORT_WORTH_METRES = 0.5
 SLICE_TIMEOUT = float(os.environ.get("GESAMT_ZEITLIMIT", str(45 * 60)))
 FILAMENT_GROUPS = ("temperature", "cooling", "retraction", "filament")
 
@@ -786,6 +786,9 @@ def plate_run(
             if run.comparison is not None
             else None,
             support_gcode_mm3=metrics.support_mm3,
+            # Unter diesem Volumen heißt es „keine Stütze“ — dieselbe Grenze wie
+            # ``gcode.support_missing`` im Hauptfenster (RM-525, B7).
+            support_floor_mm3=round(support_floor(profile), 3),
             filament_g=metrics.filament_grams,
             slice_findings=sorted(
                 {f"{f.severity}:{f.code}" for f in findings if f.severity != "info"}
@@ -1054,6 +1057,35 @@ def rim_fragments(row: dict[str, Any]) -> int:
     )
 
 
+def _without_support(row: dict[str, Any]) -> bool | None:
+    """Ob ein Lauf keine Stütze trägt — am Volumen gegen ``estimate.support_floor``
+    wie ``gcode.support_missing`` im Hauptfenster (RM-525, B7).
+
+    Die Grenze ist ein Strang im Düsenquerschnitt, so lang wie die kürzeste
+    gestützte Brücke: 1,9 mm³ an einer 0,4er Düse, 7,5 mm³ an einer 0,8er. Die
+    frühere Grenze von 0,5 m war düsenblind und markierte an 0,6er und 0,8er
+    Düsen Läufe mit 0,39 bis 0,45 m, also 68 bis 128 mm³ Stütze (B7).
+
+    ``None``, wo das Volumen fehlt (unsichere Stützrolle, keine Typmarken,
+    ``gcode.GcodeMetrics.support_mm3``) oder die Grenze (ältere Ergebnisdatei):
+    Dann schweigt auch das Hauptfenster, und eine Grenze in Metern wäre wieder
+    düsenblind.
+    """
+    volume, floor = row.get("support_gcode_mm3"), row.get("support_floor_mm3")
+    if volume is None or floor is None:
+        return None
+    return float(volume) < float(floor)
+
+
+def _support_amount(row: dict[str, Any]) -> str:
+    """Volumen gegen Grenze und Bahnlänge, wie die Marke sie zeigt."""
+    return (
+        f"{float(row.get('support_gcode_mm3') or 0.0):.2f} mm³ unter "
+        f"{float(row.get('support_floor_mm3') or 0.0):.2f} mm³; "
+        f"{float(row.get('support_m') or 0.0):.2f} m"
+    )
+
+
 def flags_for(
     variant: str,
     row: dict[str, Any],
@@ -1072,13 +1104,8 @@ def flags_for(
     einer Brücke über dem Modell, in vier von sieben Slicern null Stützbahn.
     """
     found: list[str] = []
-    if (
-        variant == "vorschlaege"
-        and support_accepted
-        and row.get("ok")
-        and (row.get("support_m") or 0.0) < SUPPORT_WORTH_METRES
-    ):
-        found.append(f"Stützvorschlag ohne Stütze ({row.get('support_m') or 0.0:.2f} m)")
+    if variant == "vorschlaege" and support_accepted and row.get("ok") and _without_support(row):
+        found.append(f"Stützvorschlag ohne Stütze ({_support_amount(row)})")
     # Die Zeitgegenprobe des Hauptfensters (``_compare_totals``) warnt ab
     # derselben Grenze wie ``gcode.compare``; hier für jede Platte, damit die
     # Gesamtabnahme zählt, wo der Kunde „Druckzeit weicht ab“ liest (RM-465).
@@ -1133,15 +1160,21 @@ def flags_for(
     if orient_failed:
         found.append("Ausrichtung gescheitert, ungedreht weitergerechnet")
     share = row.get("first_layer_support_share", 0)
-    if variant == "stuetzen_auto" and (row.get("support_m") or 0.0) < SUPPORT_WORTH_METRES:
+    if variant == "stuetzen_auto" and _without_support(row):
         # Solidon verlangt Stützen, der Slicer findet mit seiner eigenen Schwelle
         # nichts zu stützen — das Urteil des Herstellers widerspricht (Paket 3).
-        found.append(f"Slicer stützt nicht ({row.get('support_m') or 0.0:.2f} m)")
+        found.append(f"Slicer stützt nicht ({_support_amount(row)})")
     if base is not None and base.get("ok"):
         # Stütze in Schicht 1 ist bedeutsam, wo der Slicer selbst nicht stützt
         # (RM-312: 138 von 138 markierten Vorschlagsläufen stützte auch
         # ``stuetzen_auto``; Stützsäulen stehen auf dem Bett).
-        slicer_supports = auto is not None and auto.get("ok") and (auto.get("support_m") or 0) > 0
+        # Dieselbe Frage wie „Slicer stützt nicht“ und mit derselben Grenze;
+        # ohne Volumen oder nach einem gescheiterten Lauf ist das Urteil des
+        # Slicers unbekannt, und gegen ein unbekanntes Urteil wird nichts
+        # markiert.
+        slicer_supports = auto is not None and (
+            not auto.get("ok") or _without_support(auto) is not True
+        )
         if (
             variant == "vorschlaege"
             and share > 0.15
@@ -1157,6 +1190,8 @@ def flags_for(
         if torn:
             found.append(f"Rand zerrissen ({torn} offene Stücke unter 10 mm)")
         minutes, before = row.get("print_minutes"), base.get("print_minutes")
+        # Hier zählt die Bahnlänge und nicht das Volumen: Gefragt ist, ob
+        # zusätzliche Stützwege die längere Zeit erklären.
         more_support = (row.get("support_m") or 0) > (base.get("support_m") or 0) + 0.5
         if minutes and before and minutes > 1.5 * before and not more_support:
             found.append(f"Zeit ×{minutes / before:.1f} ohne zusätzliche Stütze")  # noqa: RUF001

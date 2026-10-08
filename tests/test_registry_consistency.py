@@ -1023,6 +1023,7 @@ _ZAHLWORT: Final[dict[str, int]] = {
     "zweiundsiebzig": 72,
     "hundertsiebenundsiebzig": 177,
     "dreiundsiebzig": 73,
+    "vierundsiebzig": 74,
     "hundertachtundsiebzig": 178,
     "sechsundneunzig": 96,
     "siebenundneunzig": 97,
@@ -1324,3 +1325,25 @@ def test_every_way_to_split_says_teilen() -> None:
         if re.search(r"trenn|zerleg", title, re.IGNORECASE) or "teil" not in title.casefold()
     }
     assert not wrong, f"Teilen-Wege mit anderem Verb: {wrong}"
+
+    # Und die Sätze, die den Weg nennen: Neben dem Knopf *In Einzelteile
+    # aufteilen* stand zweimal „Zerlegen Sie den Körper in Einzelteile“
+    # (Review RM-413, Integration 2). Ein Adjektiv wie „getrennt“ ist kein Weg.
+    from app.i18n.catalog import read_catalog
+
+    asking = [
+        source
+        for source in read_catalog("en")
+        if re.search(r"\b(?:zerlegen|trennen)\s+Sie\b[^.]*Einzelteil", source, re.IGNORECASE)
+    ]
+    assert not asking, f"Sätze mit anderem Verb für das Teilen: {asking}"
+    # „zerlegen“ meint in einem Kundensatz immer das Teilen, auch ohne „Sie“:
+    # Wirkung des Knopfs, Feldhilfe, Fehler und Handbuch sagten es noch so
+    # (Review 1 des Konsolidierungspakets 1). Jede Form zählt, auch „zerlegbar“
+    # und „zerlegend“; nur das Hauptwort „Zerlegung“ ist kein Verb.
+    split_up = [
+        source
+        for source in read_catalog("en")
+        if re.search(r"\bzerleg(?!ung)\w*", source, re.IGNORECASE)
+    ]
+    assert not split_up, f"Sätze mit „zerlegen“ statt „aufteilen“ oder „teilen“: {split_up}"

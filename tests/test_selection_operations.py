@@ -51,6 +51,45 @@ def test_part_selection_leaves_its_actions_to_the_part_fields(qt_app: QApplicati
     assert not panel.isHidden()
 
 
+def test_a_part_thread_keeps_only_the_pin_in_the_card(qt_app: QApplication) -> None:
+    """Am Innengewinde eines Bausteins steht genau *Stift für Bohrung* (RM-536, Robert 07.10.2026).
+
+    Am Außengewinde nimmt ``not_offered_at`` den Stift weg, und mit ihm bleibt
+    die Karte verborgen.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1), feature_kind="thread", part_selected=True)
+    assert not panel.isHidden()
+    assert {name for name in panel._buttons if panel._fits_the_level(name)} == {"pin_for_bore"}
+    panel.set_context(
+        1,
+        _availability(1),
+        feature_kind="thread",
+        part_selected=True,
+        left_out=frozenset({"pin_for_bore"}),
+    )
+    assert panel.isHidden()
+    panel.set_context(1, _availability(1), feature_kind="thread")
+    assert not panel.isHidden() and panel._only is None, "ohne Baustein gilt die Karte ganz"
+
+
+def test_a_part_bore_offers_no_pin(qt_app: QApplication) -> None:
+    """An einer Bausteinbohrung bleibt die Karte zu (Review P2 N2, RM-552).
+
+    ``applies_to`` des Stifts nennt ``hole``, und so stand er an jedem
+    Schraubenloch allein in der Karte — und sagte dort ab, weil die Bohrung
+    durch die Senkung läuft. Ohne Baustein bleibt er an der Bohrung.
+    """
+    load_operations()
+    assert "hole" in REGISTRY.get("pin_for_bore").applies_to, "sonst prüft das nichts"
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1), feature_kind="hole", part_selected=True)
+    assert panel.isHidden()
+    panel.set_context(1, _availability(1), feature_kind="hole")
+    assert not panel.isHidden() and panel._fits_the_level("pin_for_bore")
+
+
 def test_the_panel_is_the_registry_without_the_parts_catalogue(qt_app: QApplication) -> None:
     """Die Oberfläche pflegt keine zweite Operationsliste.
 
@@ -115,7 +154,8 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
         (1, ""): QUICK_BODY,
         (2, ""): QUICK_BODIES,
         (5, ""): QUICK_BODIES,
-        (1, "face"): QUICK_FEATURES["face"],
+        # *Fläche versetzen* steht seit RM-535 als Zeile mit dem Weg darüber.
+        (1, "face"): ("drill_hole", "sketch_pocket"),
         (1, "hole"): ("countersink_hole", "plug_hole", "pattern_feature"),
         (1, "cone"): ("countersink_hole", "pattern_feature"),
         (1, "slot"): ("pattern_feature",),
@@ -306,6 +346,40 @@ def test_the_search_finds_customer_words_and_names_what_another_choice_needs(
     panel.set_context(2, _availability(2))
     panel.search.setText("verschmelzen")
     assert panel._nothing.isHidden(), "bei zwei Körpern ist *Vereinigen* oben ein Treffer"
+
+
+def test_a_locked_window_action_is_named_without_its_menu_ellipsis(
+    qt_app: QApplication,
+) -> None:
+    """Der Satz zu einer gesperrten Fensterhandlung nennt ihren Namen, nicht die Menüzeile.
+
+    *Automatisch teilen* hat keinen Registereintrag; Titel und Grund kommen
+    von der Aktion des Fensters (:meth:`SelectionOperationsPanel.add_window_action`).
+    Ihre Beschriftung trägt die Auslassung des Menüs — vor dem Doppelpunkt
+    stand sie als „Automatisch teilen …: …“ im Satz.
+    """
+    from PySide6.QtGui import QAction
+
+    from app.i18n import tr
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    action = QAction(tr("Automatisch teilen …"), panel)
+    reason = "Das Teil passt schon auf das Bett."
+    action.setToolTip(reason)
+    action.setEnabled(False)
+    assert panel.add_window_action("auto_split", "prepare", action)
+    # Alles andere gesperrt und ohne Grund: Getroffen wird die Handlung über
+    # ihre Gruppe, und nur sie hat einen Satz.
+    panel.set_context(1, lambda name: (False, ""))
+
+    panel.search.setText(tr("Vorbereiten"))
+    assert panel._buttons["auto_split"].isHidden(), "gesperrt steht der Knopf nicht da"
+    assert not panel._nothing.isHidden()
+    assert panel._nothing.text() == tr(
+        "{name}: {value}", name=tr("Automatisch teilen …").removesuffix(" …"), value=reason
+    )
+    assert "…" not in panel._nothing.text()
 
 
 def test_selection_changes_update_in_place_and_explain_disabled_actions(
@@ -849,10 +923,19 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
     Handlung nicht mehr, und anders als bei einem Hinweis gibt es hier keinen
     zweiten Ort, an dem sie stünde.
 
-    **Gemessen wird relativ, nicht absolut.** Offscreen gibt es keine echte
-    Schrift; welche Zahl „passt" bedeutet, sagt deshalb dieselbe
-    ``fontMetrics``, mit der auch gezeichnet wird — der Test rechnet die
-    Prüfbreiten daraus aus, statt eine Bildpunktzahl zu behaupten.
+    **Gemessen wird relativ, nicht absolut.** Welche Zahl „passt" bedeutet,
+    sagt dieselbe ``fontMetrics``, mit der auch gezeichnet wird — der Test
+    rechnet die Prüfbreiten daraus aus, statt eine Bildpunktzahl zu behaupten.
+
+    **Der Umbruch wird am Knopf erzwungen, nicht über die Kartenbreite.** Die
+    Karte wird nie schmaler als ihr breitestes ungebrochenes Element
+    (*Passende Bausteine …*). Unter Windows offscreen ist die Ersatzschrift so
+    breit, dass der Titel dort trotzdem nicht passte; unter Linux und macOS
+    rechnet offscreen mit der echten Schrift, und dort passt er in die
+    schmalste Karte — ein Umbruch wäre falsch. Zugesichert wird deshalb auf
+    jeder Plattform dasselbe: An der schmalsten Karte ist keine Zeile
+    beschnitten, und auf einen Platz, der nur das längste Wort fasst, bricht
+    der Titel vollständig in zwei Zeilen um.
     """
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
@@ -871,13 +954,22 @@ def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) ->
     qt_app.processEvents()
     assert "\n" not in knopf.text(), f"wo der Platz reicht, bleibt es eine Zeile: {knopf.text()!r}"
 
-    # Zu schmal für den Titel, breit genug für sein längstes Wort: zwei Zeilen,
-    # und keine davon breiter als der Platz.
-    panel.resize(laengstes + beiwerk + 4 * NORMAL, 600)
+    # Die schmalste Karte: Keine Zeile ist breiter als ihr Knopf, ob er nun
+    # umbricht (Windows offscreen) oder der Titel ganz passt (echte Schrift).
+    panel.resize(1, 600)
     qt_app.processEvents()
+    for zeile in knopf.text().split("\n"):
+        assert metrics.horizontalAdvance(zeile) + beiwerk <= knopf.width(), (
+            f"an der schmalsten Karte ist {zeile!r} beschnitten ({knopf.width()} breit)"
+        )
+
+    # Zu schmal für den Titel, breit genug für sein längstes Wort: zwei Zeilen,
+    # und keine davon breiter als der Platz — viermal dieselbe Antwort.
+    raum = laengstes + beiwerk + 4 * NORMAL
+    panel._wrap_label(knopf, raum)
     gebrochen = knopf.text()
     for _ in range(4):
-        panel._wrap_labels()
+        panel._wrap_label(knopf, raum)
         assert knopf.text() == gebrochen
     assert "\n" in gebrochen, f"hier muss umgebrochen werden: {gebrochen!r}"
     assert gebrochen.replace("\n", " ") == titel, f"der Titel bleibt vollständig: {gebrochen!r}"

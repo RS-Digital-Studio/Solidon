@@ -1,0 +1,46 @@
+qwen3:14b — 39 Fälle, Baum F:/ki-head, Fenster 32768
+ok move                     26.8s  translate_object
+ok rotate                   26.6s  rotate_object
+ok on_bed                   22.5s  place_on_bed
+ok scale                    20.7s  scale_object
+ok repair                   61.3s  translate_object, repair  [1 ungültig]
+ok orient                   56.1s  orient_for_print, place_on_bed  [1 ungültig]
+ok split                    25.0s  split_pinned
+evaluation stopped at op 3: op.resize_hole.ValidationError: Dieses Merkmal gibt es an diesem Objekt nicht.
+ok drill                   257.0s  drill_hole, drill_hole, drill_hole, drill_hole, drill_hole  [3 ungültig]
+ok drill_on_feature        346.8s  drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole  [gefragt]
+ok duplicate                49.5s  duplicate_object, translate_object
+ok parameter                29.9s  keine Operation
+ok question                  8.3s  keine Operation
+evaluation stopped at op 3: op.detect_region.ValidationError: Die gewählte Stelle liegt nicht mehr auf dieser Fläche. Wählen Sie sie erneut.
+-- printable               171.1s  compensate_first_layer  [4 ungültig]
+ok how_long                 17.9s  keine Operation
+ok core_hole                47.7s  keine Operation
+ok switch_material          16.9s  keine Operation
+-- where_menu               72.3s  resize_hole  [gefragt]  [1 ungültig]
+evaluation stopped at op 2: op.shell_exact.NeedsSolidError: Der Körper besteht aus festen Dreiecken. Dieses Werkzeug braucht echte Flächen und Kanten: „In Flächen und Kanten umwandeln“ macht sie aus dem Netz, eine ältere Grundform bekommt sie im Verlauf über „Mit echten Flächen und Kanten rechnen“.
+-- where_hollow            110.5s  mesh_to_exact, shell_exact  [5 ungültig]
+-- which_hole              193.6s  keine Operation
+ok how_much_thinner        156.9s  keine Operation  [gefragt]
+ok join_what                74.4s  keine Operation  [gefragt]  [1 ungültig]
+-- bracket                 153.7s  create_brep_box, insert_screw_hole  [4 ungültig]
+-- magnet_lid              163.0s  keine Operation  [gefragt]
+ok wall_holder              88.9s  create_brep_box, insert_wall_mount  [2 ungültig]
+-- cable_exit              229.3s  create_brep_box, drill_hole, create_brep_box, create_brep_box  [5 ungültig]
+evaluation stopped at op 2: op.insert_printed_thread.AppError: Er wird an eine Fläche oder eine Bohrung gesetzt, und ohne sie weiß er weder wohin noch in welche Richtung. Es ist auch keine Position eingetragen — so säße er im Nullpunkt des Objekts, halb darin und halb darunter.
+ok threaded_stud           102.7s  create_brep_cylinder, insert_printed_thread  [1 ungültig]
+ok nut_plate                64.7s  create_brep_box, insert_nut_trap
+-- spacer                  267.0s  create_brep_tube, drill_hole  [7 ungültig]
+ok hinge                   258.8s  create_brep_box, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge  [3 ungültig]
+-- snap_box                162.2s  keine Operation  [gefragt]
+ok keyhole_back            136.3s  create_brep_box, insert_keyhole  [gefragt]  [1 ungültig]
+-- stiffen                 250.1s  create_brep_box  [9 ungültig]
+-- dowels                  203.0s  create_brep_box, create_brep_box, drill_hole, drill_hole  [gefragt]  [10 ungültig]
+-- inserts                 215.5s  Das Sprachmodell hat nicht geantwortet.: {"error":"an error was encountered while running the model: CUDA error: out of 
+ok parameterise            104.9s  create_brep_box  [1 ungültig]
+-- free_shape              165.8s  keine Operation  [gefragt]
+ok hex_base                 52.9s  sketch_extrude  [1 ungültig]
+-- pocket_plate             66.9s  create_brep_box, sketch_pocket  [1 ungültig]
+ok handrail_bend            39.5s  sketch_sweep
+
+gut 25/39; gefragt 2/3; schemagültig 143/204; Baustein 6/13; Parameter 2/3; Zeit 75.3 min

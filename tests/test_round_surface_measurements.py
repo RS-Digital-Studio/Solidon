@@ -12,7 +12,7 @@ import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect, fit_cone, fit_sphere, fit_torus
 from app.core.units import EPS_GEOM
-from tests.helpers import round_surface, stop_after
+from tests.helpers import a_foreign_slot, round_surface, stop_after
 
 
 def _subdivided(body: trimesh.Trimesh, manner: str) -> trimesh.Trimesh:
@@ -270,7 +270,6 @@ def test_a_slot_names_the_actual_source_of_its_width(
     diameter: float, travel: float, source: str
 ) -> None:
     """Flankenabstand und Stadionfit bleiben trotz gleicher Merkmalsart unterscheidbar."""
-    from tests.test_slot_features import a_foreign_slot
 
     found = [
         feature
