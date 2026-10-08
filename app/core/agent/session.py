@@ -1000,7 +1000,9 @@ class AgentSession:
             # nichts angewandt wurde.
             if isinstance(error, UserError):
                 proposal.invalid_calls += 1
-            return tr("Das lässt sich hier nicht anwenden: {error}").format(error=_error_text(error)), scene
+            return tr("Das lässt sich hier nicht anwenden: {error}").format(
+                error=_error_text(error)
+            ), scene
 
         # Die Kennungen, die die Arbeitskopie vergeben hat, reisen im Entwurf
         # mit: Der nächste Schritt des Modells nennt genau sie, und die
