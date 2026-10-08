@@ -1188,6 +1188,42 @@ def bore_plate(
     return SceneObject("plate", "Platte", mesh, features=detect(mesh))
 
 
+def countersunk_project(kind: str, sink: float) -> tuple[Project, History]:
+    """Platte 40 × 40 × 10, Bohrung Ø 5,2 ganz durch, oben gesenkt auf ``sink`` —
+    über die Operationen des Kunden, am Netz oder am exakten Körper."""
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    box = "create_brep_box" if kind == "brep" else "create_box"
+    history.apply(
+        "Quader",
+        [OperationDraft(op=box, params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        "Bohren",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.2, "x": 0.0, "y": 0.0, "z": 10.0, "axis": "z", "depth": 0.0},
+            )
+        ],
+    )
+    history.apply(
+        "Senken",
+        [
+            OperationDraft(
+                op="countersink_hole",
+                inputs=("obj_1",),
+                params={"diameter": sink, "x": 0.0, "y": 0.0, "z": 10.0, "axis": "z"},
+            )
+        ],
+    )
+    return project, history
+
+
 def blind_bore(kernel: str) -> SceneObject:
     """Platte mit Sackloch Ø 6 und 6 mm Tiefe, Boden bei z = 4."""
     return bore_plate(kernel, [(0, 4), (3, 4), (3, 10), (0, 10), (0, 4)])

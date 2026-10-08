@@ -2700,9 +2700,9 @@ def test_the_card_tilts_a_countersink_only_as_far_as_it_stays_one(
     44°, und mit den Werten der Karte rechnet die Operation.
     """
     from app.core.scene.project import ProjectSources
-    from tests.test_bore_mouth_resize import _countersunk_plate
+    from tests.helpers import countersunk_project
 
-    project, _history = _countersunk_plate(kernel, 10.0)
+    project, _history = countersunk_project(kernel, 10.0)
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     body = result.scene.objects["obj_1"]
     chosen = next(name for name, feature in body.features.items() if feature.kind == kind)
