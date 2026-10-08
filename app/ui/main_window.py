@@ -869,8 +869,8 @@ class _SelectionPage(QWidget):
     **Zwei Lagen, in denen eine Auswahl den Reiter nicht holt** (Durchsicht
     0.5.3): eine Auswahl, die der Prüfbericht trifft (:meth:`held` — wer dort
     einen Befund anklickt, liest den Bericht weiter), und eine laufende Tour,
-    die vorn steht — sie holt ihre Reiter selbst (``_flash_area``), wie sie
-    auch dem Bericht nicht weicht (``_focus_report``).
+    die vorn steht — sie zeigt selbst auf ihre Reiter (``_flash_area`` rahmt
+    sie, RM-573), wie sie auch dem Bericht nicht weicht (``_focus_report``).
     """
 
     closed = Signal()

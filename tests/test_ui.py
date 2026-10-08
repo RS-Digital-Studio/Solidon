@@ -2562,6 +2562,64 @@ def test_no_drag_number_stays_in_the_view_after_the_dialog(
     assert viewport._drag_kind is None, "und keine getippte Zahl verschiebt danach etwas"
 
 
+@pytest.mark.parametrize("released", [False, True], ids=["esc-im-zug", "esc-nach-loslassen"])
+def test_escape_in_a_preview_drag_puts_the_preview_back(
+    qt_app: QApplication, released: bool
+) -> None:
+    """Review U1, Nachprüfung, Fund 1: Esc im Vorschauzug lässt die Vorschau nicht versetzt stehen.
+
+    Der Griff setzt die Matrix der Vorschau schon im Zug. Nach Esc stand sie um
+    den verworfenen Weg versetzt, und der neue Griff rechnete ab dort: Ein
+    zweiter Zug um 3 mm meldete 15. Gezogen wird über den Rückruf, den der Griff
+    der Vorschau wirklich trägt — so prüft der Test auch, dass er der
+    Vorschauzug ist und nicht der Körperzug.
+    """
+    import numpy as np
+    from PySide6.QtTest import QTest
+
+    from app.ui.render.api import SurfaceStyle
+    from app.ui.viewport import Viewport
+    from tests.render_fakes import RecordingRenderer
+
+    viewport = Viewport()
+    renderer = RecordingRenderer(size=(800, 600))
+    viewport.renderer = renderer
+    actor = renderer.add_surface(
+        np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0], [0.0, 0.0, 10.0]]),
+        np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]),
+        name="added:box",
+        style=SurfaceStyle(colour=(0.5, 0.5, 0.5)),
+    )
+    viewport._difference_actors = [actor]
+    try:
+        viewport.set_preview_gizmo(True)
+        gizmo = viewport._preview_gizmo
+        assert gizmo is not None
+        shift = np.eye(4)
+        shift[1, 3] = 12.0
+        moved = shift @ gizmo._cached
+        corrected = gizmo._interact(moved) if gizmo._interact is not None else None
+        assert viewport._preview_dragging, "der Griff der Vorschau meldet einen Vorschauzug"
+        actor.set_matrix(moved if corrected is None else corrected)
+        if released:
+            viewport.drag_bar.value.setFocus()
+            viewport.drag_bar.value.selectAll()
+            QTest.keyClicks(viewport.drag_bar.value, "5")
+            viewport._on_preview_released(actor.matrix())
+        QTest.keyClick(viewport.drag_bar.value, Qt.Key.Key_Escape)
+
+        assert np.allclose(actor.matrix(), np.eye(4)), "die Vorschau steht wieder am Anfang"
+        again = viewport._preview_gizmo
+        assert again is not None
+        second = np.eye(4)
+        second[1, 3] = 3.0
+        assert (second @ again._cached)[1, 3] == pytest.approx(3.0), "kein verworfener Weg"
+        assert viewport.drag_bar.isHidden()
+    finally:
+        viewport.set_preview_gizmo(False)
+        viewport.deleteLater()
+
+
 @pytest.mark.parametrize("released", [False, True], ids=["enter-im-zug", "erst-loslassen"])
 def test_a_number_typed_during_a_preview_drag_moves_the_preview(
     window: MainWindow, released: bool
@@ -14123,47 +14181,57 @@ def test_a_tour_step_on_the_report_frames_its_tab_and_stays_in_view(window: Main
     """RM-573, Entscheidung Robert: Ein Tourschritt über den Prüfbericht holt dessen Reiter nicht.
 
     Der Bericht teilt sich die Karte mit der Tour; nach vorn geholt verdeckte er
-    sie samt dem Schritt, den der Kunde gerade liest. Jetzt bleibt die Tour
-    vorn, der Reiter trägt einen gestrichelten Rahmen und einen Satz für Maus
-    und Bildschirmleser, und der Schritt sagt, worauf zu klicken ist. Öffnet der
-    Kunde den Reiter, ist der Hinweis erledigt; zeigt der nächste Schritt woanders
-    hin, geht er auch.
+    sie samt dem Schritt, den der Kunde gerade liest. Geprüft über den Weg, den
+    das Öffnen eines Beispiels geht (``_offer_tour``), an der Passungstour mit
+    drei Berichtsschritten nacheinander:
+
+    * Die Tour bleibt vorn, der Reiter trägt den Rahmen.
+    * Vor dem Schritt steht ein eigener Satz, welcher Reiter zu öffnen ist —
+      angehängt bezog sich „dazu“ auf die Handlung davor (Nachprüfung, Fund 3).
+    * Zahl und „ungelesen“ bleiben im Namen des Reiters, der Tour-Satz kommt
+      dazu (Nachprüfung, Fund 2).
+    * Öffnet der Kunde den Bericht und schaltet danach weiter, steht der Rahmen
+      im nächsten Berichtsschritt wieder (Nachprüfung, Fund 4).
     """
     from app.core import examples
     from app.core.tour import tour_for
 
-    example = next(entry for entry in examples.EXAMPLES if entry.id == "weg1-halterung-anpassen")
-    tour = tour_for(example.id)
+    example_id = "passung-nach-materialwechsel"
+    tour = tour_for(example_id)
     assert tour is not None
-    on_report = [index for index, step in enumerate(tour.steps) if step.shows == "report"]
-    assert on_report, "premise: the tour has a step about the report"
-    window.right.setTabVisible(window.right.indexOf(window.tour), True)
-    window.right.setCurrentWidget(window.tour)
-    window.tour.set_tab_names(window._tour_tab_names())
-    window.tour.start(example, tour)
+    assert [step.shows for step in tour.steps[:3]] == ["report"] * 3, (
+        "premise: drei Berichtsschritte"
+    )
     report = window.right.indexOf(window.report)
 
-    window.tour._current = on_report[0]
-    window.tour._update_marks()
+    window._offer_tour(examples.directory() / f"{example_id}.p3d")
     QApplication.processEvents()
+    # Eine ungesehene Warnung am Bericht, wie die Passungstour sie zeigt.
+    window.right_tabs.show_counts(report, 0, 1)
+    window.right_tabs.signal(report, error=False, warning=True)
     assert window.right.currentWidget() is window.tour, "die Tour bleibt sichtbar"
+    assert window.tour.current_index == 0
     assert window.right_tabs.pointed() == report, "der Reiter ist markiert"
     assert window.right_tabs.pointed_frame() is not None
-    assert tr("Die Tour zeigt hierher. Ein Klick öffnet den Reiter.") in (
-        window.right_tabs.tabToolTip(report)
+    tip = window.right_tabs.tabToolTip(report)
+    assert tr("Die Tour zeigt hierher. Ein Klick öffnet den Reiter.") in tip
+    spoken = window.right_tabs.accessibleTabName(report)
+    assert tr("ungelesen") in spoken and "1" in spoken, spoken
+    assert spoken.endswith(str(tr("{tab}, die Tour zeigt hierher", tab="")).strip(", ")), spoken
+
+    second = window.tour._rows[1][1].full_text()
+    tab = window.right.tabText(report)
+    assert second.index(tab) < second.index(str(tour.steps[1].text)), (
+        "der Reiter steht vor der Handlung des Schritts"
     )
-    assert "Tour" in window.right_tabs.accessibleTabName(report)
-    step_text = window.tour._rows[on_report[0]][1].full_text()
-    assert window.right.tabText(report) in step_text, "der Schritt nennt den Reiter"
 
     window.right.setCurrentIndex(report)
     assert window.right_tabs.pointed() == -1, "geöffnet ist der Hinweis erledigt"
-
     window.right.setCurrentWidget(window.tour)
-    window.tour._current = on_report[0]
-    window.tour._pointed_at = None
-    window.tour._update_marks()
-    assert window.right_tabs.pointed() == report
+    window.tour.advance()
+    assert window.tour.current_index == 1
+    assert window.right_tabs.pointed() == report, "der nächste Berichtsschritt rahmt wieder"
+
     window.tour.stop()
     assert window.right_tabs.pointed() == -1, "mit der Tour geht der Hinweis"
 

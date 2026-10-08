@@ -13,6 +13,8 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 
+import pytest
+
 from app.core import examples
 from app.core.knowledge import profiles
 from app.core.scene import OperationDraft, evaluate
@@ -850,3 +852,47 @@ def test_a_restarted_tour_points_at_its_first_place_again(qt_app: object) -> Non
 
     panel.deleteLater()
     session.release()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_an_upcoming_step_is_readable_and_says_so(qt_app: object, theme: str) -> None:
+    """Nachprüfung U1, Fund 6: Kommende Schritte sind lesbar grau und nennen ihren Zustand.
+
+    Seit sie nicht mehr gesperrt sind, nehmen sie Fokus und Klick an und sind
+    lesbarer Inhalt: Das Grau braucht 4,5 : 1 gegen die Karte, und der Marker
+    sagt dem Bildschirmleser, dass der Schritt noch kommt — vorher meldete er
+    „nicht verfügbar“, ohne Namen gar nichts.
+    """
+    from PySide6.QtGui import QPalette
+    from PySide6.QtWidgets import QApplication
+
+    from app.i18n import tr
+    from app.ui.session import Session
+    from app.ui.theme import THEMES, apply_theme, contrast_ratio
+    from app.ui.tour import TourPanel
+
+    application = QApplication.instance()
+    assert isinstance(application, QApplication)
+    apply_theme(application, theme)  # type: ignore[arg-type]
+    project, history = _opened("weg1-halterung-anpassen")
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for("weg1-halterung-anpassen")
+    assert tour is not None
+    panel = TourPanel(session)
+    try:
+        panel.show()
+        panel.start(examples.EXAMPLES[0], tour)
+        QApplication.processEvents()
+        marker, text = panel._rows[3]
+        assert panel._row_hosts[3].property("tourState") == "upcoming"
+        assert marker.accessibleName() == tr("Kommt noch")
+        shown = text.palette().color(QPalette.ColorRole.WindowText).name()
+        card = THEMES[theme]["window"]
+        assert contrast_ratio(shown, card) >= 4.5, (shown, card, contrast_ratio(shown, card))
+    finally:
+        panel.close()
+        panel.deleteLater()
+        session.release()
+        apply_theme(application, "dark")  # type: ignore[arg-type]

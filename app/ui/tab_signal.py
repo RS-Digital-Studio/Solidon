@@ -175,25 +175,24 @@ class SignalTabBar(QTabBar):
             return
         words = self._words.get(index, "")
         name = self.tabText(index)
-        if index == self._pointed:
-            # Die Tour zeigt hierher: in Worten für Maus und Bildschirmleser,
-            # der gestrichelte Rahmen sagt es dem Auge (Regel 18).
-            pointed = tr("Die Tour zeigt hierher. Ein Klick öffnet den Reiter.")
-            self.setTabToolTip(index, f"{words}\n{pointed}" if words else pointed)
-            self.setAccessibleTabName(index, tr("{tab}, die Tour zeigt hierher", tab=name))
-            return
         if not words:
-            self.setTabToolTip(index, "")
-            self.setAccessibleTabName(index, name)
-            return
-        if self.unseen(index):
-            self.setTabToolTip(index, tr("{counts}, ungelesen", counts=words))
-            self.setAccessibleTabName(
-                index, tr("{tab}, {counts}, ungelesen", tab=name, counts=words)
-            )
-            return
-        self.setTabToolTip(index, words)
-        self.setAccessibleTabName(index, tr("{tab}, {counts}", tab=name, counts=words))
+            tip, spoken = "", str(name)
+        elif self.unseen(index):
+            tip = str(tr("{counts}, ungelesen", counts=words))
+            spoken = str(tr("{tab}, {counts}, ungelesen", tab=name, counts=words))
+        else:
+            tip = str(words)
+            spoken = str(tr("{tab}, {counts}", tab=name, counts=words))
+        if index == self._pointed:
+            # Die Tour zeigt hierher — **angehängt**, nicht an die Stelle der
+            # Zahlen: Wer nicht sieht, hört sonst weder die Meldungen noch, dass
+            # sie ungelesen sind (Review U1, Nachprüfung, Fund 2). Der
+            # gestrichelte Rahmen sagt es dem Auge (Regel 18).
+            pointed = str(tr("Die Tour zeigt hierher. Ein Klick öffnet den Reiter."))
+            tip = f"{tip}\n{pointed}" if tip else pointed
+            spoken = str(tr("{tab}, die Tour zeigt hierher", tab=spoken))
+        self.setTabToolTip(index, tip)
+        self.setAccessibleTabName(index, spoken)
 
     # --- Blinken ---------------------------------------------------------------
 

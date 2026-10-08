@@ -1737,7 +1737,7 @@ QFrame#tourStepRow[tourState="skipped"] {{
 /* Eine eingeklappte Zeile nimmt den Fokus (Leertaste klappt auf); der Rahmen
    steht immer und wechselt nur die Farbe, damit der Text nicht springt. */
 QLabel#tourStepText {{ border: 2px solid transparent; }}
-QFrame#tourStepRow[tourState="upcoming"] QLabel#tourStepText {{ color: {disabled}; }}
+QFrame#tourStepRow[tourState="upcoming"] QLabel#tourStepText {{ color: {muted}; }}
 QLabel#tourStepText:focus {{ border: 2px dashed {focus}; }}
 
 /* Der Unterstützen-Dialog zeigt als ruhige Karte, wofür das Geld ist: je

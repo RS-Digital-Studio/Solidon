@@ -165,6 +165,8 @@ class TourPanel(QWidget):
         self._pointed_at: str | None = None
         """Worauf zuletzt gezeigt wurde. Ein Rahmen, der bei jeder
         Neuberechnung aufblinkt, ist ein Flackern und kein Hinweis."""
+        self._pointed_step: tuple[int, str | None] | None = None
+        """Schritt und Ziel der letzten Meldung — gemeldet wird je Schritt."""
         self._tab_names: dict[str, str] = {}
         """Welche Ziele Reiter derselben Karte sind, mit dem Namen am Reiter.
 
@@ -286,6 +288,7 @@ class TourPanel(QWidget):
         self._clear_rows()
         self._tour = tour
         self._pointed_at = None
+        self._pointed_step = None
         self._document = self._session.project.document
         self._example = example
         self._current = 0
@@ -318,8 +321,14 @@ class TourPanel(QWidget):
             line = f"{index + 1}. {step.text}"
             tab = self._tab_names.get(step.shows or "")
             if tab:
+                # **Vor** dem Schritt und ohne Rückbezug: Angehängt las sich
+                # „… vergrößern Sie das Spiel … Klicken Sie dazu …“, als
+                # geschähe die Handlung im Bericht (Nachprüfung U1, Fund 3).
                 line = tr(
-                    "{step} Klicken Sie dazu oben auf den Reiter „{tab}“.", step=line, tab=tab
+                    "{number}. Öffnen Sie oben den Reiter „{tab}“. {text}",
+                    number=index + 1,
+                    tab=tab,
+                    text=step.text,
                 )
             text = StepLabel(line, host)
             text.setObjectName("tourStepText")
@@ -366,6 +375,7 @@ class TourPanel(QWidget):
         # beim Verlauf, und ein gemerktes „history" aus der abgebrochenen
         # hätte ihren ersten Hinweis verschluckt.
         self._pointed_at = None
+        self._pointed_step = None
         self._completed.clear()
         self._skipped.clear()
         self._unfolded.clear()
@@ -518,7 +528,9 @@ class TourPanel(QWidget):
                 state = "current"
             else:
                 marker.clear()
-                marker.setAccessibleName("")
+                # Ohne Namen meldete der Bildschirmleser keinen Zustand, seit
+                # kommende Zeilen nicht mehr gesperrt sind (Nachprüfung U1, Fund 6).
+                marker.setAccessibleName(tr("Kommt noch"))
                 state = "upcoming"
             host.setProperty("tourState", state)
             style = host.style()
@@ -605,8 +617,11 @@ class TourPanel(QWidget):
         Satz zum ersten Mal liest, sucht. Gemeldet wird nur der Name — wo der
         Bereich liegt und wie er aufleuchtet, weiß das Fenster.
 
-        Gemeldet wird auch nur bei einem Wechsel: ein Rahmen, der bei jeder
-        Neuberechnung aufblinkt, ist ein Flackern und kein Hinweis.
+        Gemeldet wird je Schritt, nicht bei jeder Neuberechnung: ein Rahmen,
+        der dabei aufblinkt, ist ein Flackern und kein Hinweis. Je Schritt und
+        nicht je Ziel, denn ein Reiter, den der Kunde nach dem ersten von drei
+        Berichtsschritten geöffnet hat, braucht beim zweiten seinen Rahmen
+        wieder (Nachprüfung U1, Fund 4).
         """
         tour = self._tour
         target = (
@@ -614,8 +629,9 @@ class TourPanel(QWidget):
             if tour is None or self._current >= len(tour.steps)
             else tour.steps[self._current].shows
         )
-        if target == self._pointed_at:
+        if (self._current, target) == self._pointed_step:
             return
+        self._pointed_step = (self._current, target)
         before, self._pointed_at = self._pointed_at, target
         if target is not None:
             self.pointsAt.emit(target)

@@ -2086,8 +2086,13 @@ def test_the_longest_step_of_every_tour_fits_its_card_or_rolls(
         set_language(language)
         for tour in TOURS:
             example = next(entry for entry in examples.EXAMPLES if entry.id == tour.example_id)
-            longest = max(range(len(tour.steps)), key=lambda at: len(str(tour.steps[at].text)))
+            # Wie beim Öffnen eines Beispiels: mit dem Satz zum Reiter vor einem
+            # Berichtsschritt, und gemessen wird der längste Text, wie er dasteht.
+            tour_panel.set_tab_names(window._tour_tab_names())
             tour_panel.start(example, tour)
+            longest = max(
+                range(len(tour.steps)), key=lambda at: len(tour_panel._rows[at][1].full_text())
+            )
             window.right.setCurrentWidget(tour_panel)
             for _ in range(8):
                 qt_app.processEvents()
