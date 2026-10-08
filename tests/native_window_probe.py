@@ -111,13 +111,25 @@ def _probe(qt_platform: str) -> str | None:
     return None
 
 
-def require_native_window() -> str:
-    """Die Qt-Plattform für ein natives Fenster im Kindprozess — oder Skip oder Fehler mit Grund."""
+def require_native_platform() -> str:
+    """Die native Qt-Plattform für einen Kindprozess — ohne X11-Display Skip, in der CI rot.
+
+    Die eine Stelle, die beides beantwortet; auch für Fälle, die nur echte
+    Schriftmetrik brauchen und kein Fenster zeigen (die Vorprüfung dann nicht).
+    Die CI-Läufer unter Linux fahren mit Xvfb; fehlt dort ``DISPLAY``, liefen
+    die Fälle nicht mehr, und ein Skip verdeckte es.
+    """
     qt_platform = native_platform()
     if qt_platform == "xcb" and not os.environ.get("DISPLAY"):
         if os.environ.get("CI"):
-            pytest.fail("Der native Linux-Fenstertest braucht DISPLAY, zum Beispiel durch Xvfb.")
+            pytest.fail("Der native Linux-Fensterweg braucht DISPLAY, zum Beispiel durch Xvfb.")
         pytest.skip("kein X11-Display für den nativen Qt-Fensterweg")
+    return qt_platform
+
+
+def require_native_window() -> str:
+    """Die Qt-Plattform für ein natives Fenster im Kindprozess — oder Skip oder Fehler mit Grund."""
+    qt_platform = require_native_platform()
     problem = window_problem(qt_platform)
     if problem is None:
         return qt_platform
