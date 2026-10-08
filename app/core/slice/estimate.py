@@ -323,7 +323,7 @@ def plate_comparison(
     erlauben dagegen keine gemeinsame Stützmenge. Modelllagen bleiben prüfbar.
     """
     from app.core.knowledge import profiles
-    from app.core.slice.analysis import model_support
+    from app.core.slice.analysis import channel_space, model_support
     from app.core.slice.findings import analysed
 
     if cancelled is not None:
@@ -486,7 +486,8 @@ def plate_comparison(
         else None
     )
     blocked = any(
-        settings.support.block_channels and bool(model_support(result).channels)
+        settings.support.block_channels
+        and bool(channel_space(result, model_support(result), settings.layers.line_width))
         for result, settings in supported_groups
     )
     from app.core.slice.print_time import uses_tree_supports
@@ -536,7 +537,10 @@ def plate_comparison(
                     or supported.channels
                     or supported.island_on_model
                 )
-            ) or (settings.support.block_channels and supported.channels):
+            ) or (
+                settings.support.block_channels
+                and bool(channel_space(result, supported, settings.layers.line_width))
+            ):
                 return PlateComparison(
                     plate,
                     None,

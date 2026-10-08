@@ -83,8 +83,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   nicht, hält die Beratung mit einem Vorschlag zu Schichthöhe, Bahnbreite oder
   gemessenem Profilwert an — eine leere Liste wäre keine Entwarnung.
 - **„Viel auf einmal“ heißt an einem Stück** (`largest_overhang_patch`), nicht
-  je Schicht — kleine Stegunterseiten tragen sich selbst. Ein Ergebnis ohne
-  Stücke gilt schichtweise als eines; lange Stege fängt die Brückenregel.
+  je Schicht — kleine Stegunterseiten tragen sich selbst; eine schräge
+  Unterseite zählt als Feld ihrer Decke (`largest_sloped_patch`). Ein Ergebnis
+  ohne Stücke gilt schichtweise als eines; lange Stege fängt die Brückenregel.
 - **Den Stützwinkel sagt, womit der Slicer stützt** (Konzept Herstellerprofil,
   Entscheidung L): gemessen auf dem Raster der Probe, sonst die Schwelle des
   gewählten Herstellerprozesses, sonst `overhang_limit` aus `printers.toml`,
@@ -96,24 +97,23 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
 - **Ein Überhangwinkel wird an der Normalen mit dem Sinus verglichen**
   (z < −sin(Grenze)) und an einem Winkel ungleich 45 geprüft (`test_orient.py`).
 - **Eine Decke im Kanal verlangt keine Stütze auf dem Modell**
-  (`analysis.model_support`): Fasst der freie Raum unmittelbar **unter** ihr
-  keinen Kreis von `CHANNEL_WIDTH` um das Stück, schließt sie sich als Brücke
-  oder Gewölbe und fällt aus dem Stützbedarf. Gefragt wird die Decke als
-  Ganzes (`_Ceilings`): Liegt sie meist außerhalb eines Kanals, ist keines
-  ihrer Stücke Kanal. Außen auf dem Modell zählt nur
-  ein Stück über `OVERHANG_LAYER_WORTH_SUPPORT` oder die Summe über
-  `OVERHANG_WORTH_SUPPORT`; wer die Grenze anfasst, fährt die Waschschüssel
-  im Slicer.
+  (`analysis.model_support`): Fasst der Raum **unter** ihr keinen Kreis von
+  `CHANNEL_WIDTH` und liegt ihr Grundriss zwischen seinen Auflagen, gehalten
+  nur von Material daneben (`_Ceilings.closes`), schließt sie sich selbst.
+  Gefragt wird die ganze Decke (Flächenmehrheit). Außen auf dem Modell zählt
+  `worth_support`, auch als `open_field`. Wer das anfasst, misst Schüssel und
+  Drache.
 - **Eine Insel ist nie eine Kanaldecke**: Auf dem Modell heißt es „überall“,
   gleich wie klein (`ModelSupport.island_on_model`), ebenso für eine lange
   Brücke, die selbst dort hängt (`open_bridge_width`); über dem Bett bleibt
   „nur vom Bett“.
-- **`support.block_channels`**, weil „nur vom Bett“ nicht in jedem Slicer den
-  Kanal freihält: eine Stützsperre aus `analysis.channel_space` — freie Fläche
-  um die Kanalsäulen **innerhalb der konvexen Hülle** der Schicht, jede Scheibe
-  eine Scheibenhöhe in die Decke, weil der Slicer an der Überhangfläche
-  fragt, ohne die Säulen der Stücke auf dem Modell (`open_columns`). Je
-  Familie: `dateiformat.md`, „Was welcher Slicer bekommt“.
+- **`support.block_channels`**, weil „nur vom Bett“ Kanäle nicht freihält:
+  `analysis.channel_space` sperrt um Decken, die sonst Stütze bräuchten
+  (`worth_support` je Stück, im Zweifel Stütze), nur unerreichbaren Raum (eng
+  oder umschlossen), eine Bahnbreite Zuschlag **vor** dem Aussparen der Säulen
+  der Überhänge, deren Decke ohne Kanalstücke als Feld Stütze braucht
+  (`_field`), außer im umschlossenen Raum (RM-571). Ohne gesperrten Raum kein
+  Vorschlag. Familien: `dateiformat.md`.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur

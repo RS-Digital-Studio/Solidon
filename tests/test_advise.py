@@ -19,7 +19,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import print_settings, profiles, rules
 from app.core.slice import advise
-from app.core.slice.analysis import WIDTH_INTERESTING, slice_body
+from app.core.slice.analysis import OVERHANG_LAYER_WORTH_SUPPORT, WIDTH_INTERESTING, slice_body
 from app.core.types import (
     LayerInfo,
     Polygon,
@@ -678,14 +678,30 @@ def _pieces(count: int, side: float) -> tuple[Polygon, ...]:
 
 
 def _overhang_layers(pieces: tuple[Polygon, ...], layers: int = 20) -> SliceResult:
-    """Ein Körper, dessen Schichten alle dieselben Überhangstücke tragen."""
+    """Ein Körper, dessen Schichten alle dieselben Überhangstücke tragen.
+
+    Das Material jeder Schicht ist ein Steg, an dem die Stücke hängen, wie im
+    Schnitt: Ein Stück liegt neben dem Material der Schicht darunter. Weit davon
+    entfernt hingen alle Stücke für die Decken (``analysis._Ceilings``)
+    aneinander, und der Stapel sah aus wie eine schräge Fläche (RM-570).
+    """
     from shapely.geometry import Polygon as ShapelyPolygon
+    from shapely.ops import unary_union
 
     area = sum(ShapelyPolygon(piece.outline).area for piece in pieces)
+    low_x, low_y, high_x, _high_y = unary_union(
+        [ShapelyPolygon(piece.outline) for piece in pieces]
+    ).bounds
+    web = (
+        (low_x - 1.0, low_y - 1.0),
+        (high_x + 1.0, low_y - 1.0),
+        (high_x + 1.0, low_y),
+        (low_x - 1.0, low_y),
+    )
     stack = tuple(
         LayerInfo(
             z=float(index) * 0.2,
-            contours=(Polygon(outline=SQUARE),),
+            contours=(Polygon(outline=web),),
             area=5000.0,
             overhang_area=area,
             islands=(),
@@ -695,6 +711,67 @@ def _overhang_layers(pieces: tuple[Polygon, ...], layers: int = 20) -> SliceResu
         for index in range(layers)
     )
     return SliceResult(layers=stack, support_volume=0.0, first_layer_area=5000.0, source="internal")
+
+
+def _slope(width: float, length: float, count: int) -> SliceResult:
+    """Eine schräge Unterseite aus ``count`` Streifen, je Schicht einer:
+    ``width`` breit, ``length`` lang, jeder neben dem Material der Schicht
+    darunter, das bis zum vorigen Streifen reicht."""
+    stack = tuple(
+        LayerInfo(
+            z=float(index) * 0.2,
+            contours=(
+                Polygon(
+                    outline=(
+                        (-10.0, 0.0),
+                        ((index + 1) * width, 0.0),
+                        ((index + 1) * width, length),
+                        (-10.0, length),
+                    )
+                ),
+            ),
+            area=10.0 * length,
+            overhang_area=width * length,
+            islands=(),
+            min_width=5.0,
+            overhangs=(
+                Polygon(
+                    outline=(
+                        (index * width, 0.0),
+                        ((index + 1) * width, 0.0),
+                        ((index + 1) * width, length),
+                        (index * width, length),
+                    )
+                ),
+            ),
+        )
+        for index in range(count)
+    )
+    return SliceResult(layers=stack, support_volume=0.0, first_layer_area=500.0, source="internal")
+
+
+@pytest.mark.parametrize(
+    ("width", "length", "count", "needed"),
+    [
+        pytest.param(0.4, 16.0, 30, True, id="kinn"),
+        pytest.param(0.4, 16.0, 22, True, id="kinn-unter-der-summe"),
+        pytest.param(0.4, 16.0, 16, False, id="feld-unter-hundert"),
+        pytest.param(0.03, 100.0, 100, False, id="rauschen-einer-wand"),
+    ],
+)
+def test_a_sloped_underside_is_one_field(
+    width: float, length: float, count: int, needed: bool
+) -> None:
+    """Eine schräge Unterseite zerfällt im Schnitt in Streifen unter 10 mm², und
+    der Rat sagte „keine Stützen“ — an einem Kinn mit 18° flacher Unterseite
+    (Review vom 08.10.2026, 31 Streifen bis 6,4 mm², zusammen 189 mm²). In der
+    Aufsicht ist sie ein Feld (``analysis.largest_sloped_patch``, RM-570).
+    Ein Feld über 100 mm² trägt allein, auch wenn die Summe unter 150 bleibt
+    (Review 3: 22 Streifen, Feld 134 mm²). Streifen schmaler als das
+    Vernetzungsrauschen bleiben eine Wand, die sich selbst auffängt."""
+    need = advise.support_need(_slope(width, length, count))
+
+    assert need.needed is needed
 
 
 def test_a_lattice_of_small_self_supporting_pieces_gets_no_supports() -> None:
@@ -708,7 +785,7 @@ def test_a_lattice_of_small_self_supporting_pieces_gets_no_supports() -> None:
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
     lattice = _overhang_layers(_pieces(56, sqrt(5.0)))
-    assert lattice.layers[0].overhang_area > advise.OVERHANG_LAYER_WORTH_SUPPORT
+    assert lattice.layers[0].overhang_area > OVERHANG_LAYER_WORTH_SUPPORT
 
     entries = advise.advise(settings, profile, lattice)
 

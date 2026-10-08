@@ -542,6 +542,37 @@ def test_the_plate_comparison_knows_when_support_is_wanted_and_blocked():
     assert alone.support_floor_mm3 is None, "die Tunneldecke allein verlangt keine Stütze"
 
 
+def test_a_blocker_without_space_does_not_block_the_comparison():
+    """Eine Kanaldecke, unter der kein Raum zu sperren ist, ergibt keinen
+    Sperrkörper — der Zeitvergleich bleibt offen, auch mit übernommener Sperre.
+    Gefragt war hier bis zum Review vom 08.10.2026 nur, ob es Kanalstücke gibt:
+    ein Schlitz von 0,6 mm Höhe neben einer Kragplatte hielt den Vergleich an."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.slice.estimate import plate_comparison
+    from app.core.types import SceneObject
+
+    block = trimesh.creation.box(extents=(30.0, 40.0, 20.0))
+    block.apply_translation((0.0, 0.0, 10.0))
+    cut = trimesh.creation.box(extents=(5.0, 50.0, 0.6))
+    cut.apply_translation((0.0, 0.0, 6.3))
+    arm = trimesh.creation.box(extents=(20.0, 40.0, 4.0))
+    arm.apply_translation((25.0, 0.0, 18.0))
+    body = MeshData.of(trimesh.boolean.union([trimesh.boolean.difference([block, cut]), arm]))
+    profile = profiles.make_profile()
+    plain = print_settings.resolve(profile)
+    blocking = dataclasses.replace(
+        plain, support=dataclasses.replace(plain.support, style="normal", block_channels=True)
+    )
+    part = (SceneObject(id="slot", name="Schlitz", mesh=body), body, blocking)
+
+    compared = plate_comparison(0, [part], profile, keep_arrangement=True, separate_objects=False)
+
+    assert not compared.channels_blocked
+    assert compared.support_material_mm3 is not None, "die Stützmenge bleibt bekannt"
+
+
 def test_plate_findings_preserve_selected_plate_order_and_reject_partial_mapping():
     """Platte 4 vor Platte 2, ohne Summieren oder stilles Abschneiden."""
     from app.core.slice.estimate import PlateComparison, plates_findings
