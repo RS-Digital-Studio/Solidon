@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-563: Verrunden an mehreren Kanten zugleich wählen (08.10.2026)](#rm-563-verrunden-an-mehreren-kanten-zugleich-wählen-08102026) |
 | 2026-10-08 | [RM-545: Ein getrenntes Teil in Senkung, Langloch oder Schraube verschmilzt nicht mehr still (08.10.2026)](#rm-545-ein-getrenntes-teil-in-senkung-langloch-oder-schraube-verschmilzt-nicht-mehr-still-08102026) |
 | 2026-10-08 | [RM-548: Karte und Operation stellen je Merkmalshandlung dieselbe Frage (08.10.2026)](#rm-548-karte-und-operation-stellen-je-merkmalshandlung-dieselbe-frage-08102026) |
 | 2026-10-08 | [RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)](#rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026) |
@@ -44370,3 +44371,41 @@ fest und prüft jetzt den Stopfen mit dem zweiten Körper neben der Platte. Am L
 Merkmale ab, deren Versetzen um 1 mm vorher still 20 bis 142 Teile oder bis −634 mm³
 hinterließ, dazu einer mit −90,9 mm³ bei gleicher Teilezahl; 26 sagten schon vorher mit
 anderem Grund ab. Cache-Versionen der sechs Handlungen erhöht. Umgesetzt von Claude.
+
+## RM-563: Verrunden an mehreren Kanten zugleich wählen (08.10.2026)
+
+<a id="rm-563-verrunden-an-mehreren-kanten-zugleich-wählen-08102026"></a>
+<a id="rm-563"></a>
+
+**RM-563 — Verrunden an mehreren Kanten zugleich wählen.** Kunden-E-Mail vom
+07.10.2026: Der Kunde fand keine Mehrfachauswahl von Kanten und Ecken für *Verrunden*.
+Zuerst prüfen, was es gibt; fehlt der Weg, wird er gebaut, gibt es ihn, wird er sichtbar.
+**Abnahme:** Strg- oder Umschalt-Klick wählt mehrere Kanten, *Verrunden* nimmt alle als einen
+Schritt, am Netz wie am exakten Körper; Handbuch nennt den Weg; Fenstertest.
+
+**Nachweis (08.10.2026, `6cebc6cc7`, Paket G):** Bestand vorher: Mehrere Kanten gab es nur
+über die Kantenliste auf der Rückseite des Dialogs und die Gruppen („alle senkrechten“);
+der Kantenklick im Bild verweigerte das Dazunehmen ausdrücklich, Kantenketten wählt die
+Ansicht keine (der exakte Kern rundet eine Tangentenkette von sich aus mit). Jetzt nimmt an
+einer gewählten Kante Strg- oder Umschalt-Klick weitere desselben Körpers dazu oder heraus
+(`Viewport.add_edge`, `select_edges`, `highlighted_edges`); die zuletzt geklickte führt,
+alle stehen als eine Linie mit einer Kette je Kante im Bild, ein Fehlklick mit Taste wirft
+die Sammlung nicht weg, rechts auf eine der gewählten gilt das Menü allen, die letzte heraus
+führt zurück auf den Körper. Eine Ecke sind ihre Kanten: drei an einer Ecke rechnen dicht
+an beiden Kernen. Das Merkmalfenster nennt „2 Kanten“ und den Weg („Weitere Kanten dazu mit
+Umschalt oder Strg und Klick.“, am Mac ⌘, `labels.adding_key`), behält eingetragene Werte
+beim Dazunehmen, und jede Handlung nimmt alle Schlüssel als einen Schritt; Kontextmenü und
+Menüeintrag belegen den Dialog mit denselben Kanten vor (`_edges_from_view`) statt der
+Vorgabegruppe, die Liste beschriftet sie auch am Netz. Am Kern ändert sich nichts:
+`edges="named"` mit mehreren Schlüsseln rechnet wie die Gruppe (vier obere einzeln und die
+Gruppe *oben*, zwölf einzeln und *alle*: gleiches Volumen an beiden Kernen). Tests:
+`test_ctrl_or_shift_click_takes_more_edges_of_the_chosen_body` (Ansicht) und
+`test_edges_taken_with_ctrl_click_round_in_one_step` (Fenster, Netz und exakt: Radius vor
+der zweiten Kante behalten, ein Schritt mit beiden Schlüsseln, entfernt
+2·(1 − π/4)·r²·40 mm, am Netz der Sehnenzug, Strg+Z); am alten Stand beide rot, neun
+Gegenproben je rot. Echte Modelle (ein Schritt mit drei
+getrennten Kanten gegen drei einzelne Verrundungen, r = 0,8 mm): Wedge-Lock, 1x1-bin,
+desk-organizer (Netz) und carpet-corner-clip (exakt) gleich bis 7·10⁻⁸ mm³, dicht, ein Teil;
+am build_tray (exakt) liegen zwei der drei Kanten auf einer Tangentenkette, die schon jede
+allein ganz rundet — der Schritt nimmt 10,2873 + 10,4578 mm³, wie Kette und dritte Kante.
+Umgesetzt von Claude.
