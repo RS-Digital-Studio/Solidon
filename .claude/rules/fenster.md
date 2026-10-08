@@ -456,14 +456,15 @@ ein Programmfehler, nicht Ihre Schuld“ (§33.1).
   verwirft späte Antworten.
 
 
-### Formsitzung: Mauszüge und Analyse
+### Formen und Skelett: Gesten
 
-- Ein Pinselzug reicht vom Drücken bis zum Loslassen, auch außerhalb des
-  Modells. Seine räumlichen Proben teilen die optionale `Stroke.gesture`-Kennung
-  im vorhandenen Strichparameter. Kennung null hält alte Einzelzüge lesbar;
-  die Zusatzkennung verändert deren Geometrie nicht.
-- Zählung, lokales Rückgängig und Wiederholen verwenden diese Gruppe, einschließlich
-  noch wartender Arbeiterproben. Eine neue Geste leert lokales Wiederholen;
-  Beenden des Editors beendet auch einen noch gehaltenen Pinsel im Navigator.
-- Die sichtbare Gestenleiste trägt ihre eigene `MapLegend` mit Skala und Herkunft.
-  Ein Kartenwechsel entwertet alte Befunde und Wartehinweise zusammen.
+- Ein Pinselzug reicht vom Drücken bis zum Loslassen, auch neben dem Modell;
+  seine Proben teilen `Stroke.gesture`, jede Geste ist eine Etappe
+  (`Stroke.brush` 2, alte rechnen wie gespeichert). Zählung und lokales
+  Rückgängig nehmen die Gruppe samt wartender Proben; Beenden lässt den Pinsel los.
+- Zu grobes Netz gleicht der Arbeiter an; *Fertig* legt Angleichen und Formen
+  in eine Transaktion, ein geöffneter Schritt fügt es davor ein.
+- Skelett: n Knochen, n + 1 Klicks, Enter beendet die Kette, Ziehen am Gelenk
+  beugt, *Fertig* ohne Dialog. Escape nimmt nur Unfertiges.
+- Die Gestenleiste trägt ihre `MapLegend`; ein Kartenwechsel entwertet Befund
+  und Wartehinweis.

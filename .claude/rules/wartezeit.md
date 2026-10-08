@@ -20,9 +20,9 @@ paths:
 # Regeln für Wartezeit und Nebenläufigkeit
 
 **Große Formsitzungen halten die inkrementelle Vorschau im Arbeiter.** Ab
-der gemeinsamen Sofortgrenze `placement_flow.AT_ONCE_BELOW` besitzt genau
-ein `_SculptPreviewWorker` die `SculptPreview`; Folgeklicks warten geordnet,
-während die letzte gültige Fläche sichtbar bleibt. Neues Werkzeug,
+`placement_flow.AT_ONCE_BELOW` oder zum Angleichen besitzt genau ein
+`_SculptPreviewWorker` die `SculptPreview` und nimmt alle wartenden Proben auf
+einmal; die letzte gültige Fläche bleibt sichtbar. Neues Werkzeug,
 Symmetrie, Abbruch und Projektwechsel entwerten die Antwort über Nummer und
 Arbeiteridentität. Die Wand-/Überhangprüfung liest eine Kopie der bereits
 gezeigten Fläche und rechnet keine Gesten erneut. Prüfstände warten über
