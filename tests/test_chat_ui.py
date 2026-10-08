@@ -644,6 +644,74 @@ def test_converting_proposal_waits_for_current_render_and_applies_once(
         assert session.last_result.scene.objects[target].kind == "brep"
 
 
+def test_a_click_waiting_for_the_evaluation_never_takes_the_next_proposal(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Klick auf Vorschlag 1 während einer Auswertung übernimmt nie Vorschlag 2.
+
+    Der Chat-Knopf ist ein dauerhafter Eigentümer. Gemerkt war nur er, und
+    ``_on_proposal_accepted`` übernahm nach der Auswertung, was *dann* anstand
+    (Review der Zusatzfixes, F1; Regel 16). Jetzt verwirft der neue Vorschlag
+    den Klick, und die Statuszeile sagt es.
+    """
+    _needs_the_exact_kernel()
+    import threading
+
+    from app.core.agent.proposal import Proposal
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Parameter
+    from app.i18n import tr
+
+    session = window.session
+    target = "obj_2"
+    assert session.apply(
+        "Exakter Körper", [OperationDraft(op="create_brep_box", params={}, outputs=(target,))]
+    )
+    assert session.wait_for_idle(30_000)
+
+    def converting(width: float) -> ProposalPreview:
+        proposal = Proposal(request="Als Dreiecksmodell bearbeiten")
+        proposal.parameters["test_width"] = Parameter(name="test_width", value=width, unit="mm")
+        proposal.drafts.append(OperationDraft(op="brep_to_mesh", inputs=(target,), params={}))
+        scene, difference = session._preview_of(proposal)
+        assert difference is not None
+        proposal.findings.extend(difference.findings)
+        return ProposalPreview(proposal=proposal, scene=scene, difference=difference)
+
+    first, second = converting(12.0), converting(20.0)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    window._on_proposal(first)
+    assert session.wait_for_idle(30_000)
+    before = len(session.project.document.ops)
+
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    try:
+        session.evaluate_async()
+        assert session.busy, "die Lage: die Sitzung rechnet"
+        window.chat.accept_button.click()
+        window._on_proposal(second)
+        gate.set()
+        assert session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        assert session.wait_for_idle(30_000)
+    finally:
+        gate.set()
+
+    assert len(session.project.document.ops) == before, "weder Vorschlag 1 noch 2 geschrieben"
+    assert "test_width" not in session.project.document.parameters
+    assert window._proposal is second, "Vorschlag 2 steht zur Entscheidung"
+    assert window.status_message.text() == tr(
+        "Nicht übernommen, weil ein neuer Vorschlag da ist. Prüfen Sie ihn, bevor Sie übernehmen."
+    )
+
+
 @pytest.mark.parametrize("finish", ["discard", "new_project"])
 def test_converting_proposal_invalidates_document_change_and_discard(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, finish: str

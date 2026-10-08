@@ -289,6 +289,13 @@ wird genau gerechnet.
   hält sie nur, wo das Bild Pflicht ist oder noch nicht feststeht; sonst
   entscheidet RM-493 (`_preview_can_apply`). Warum und Nachweise:
   `konzepte/begruendungen/regel-wartezeit.md`.
+* **Ein Klick während oder nach abgebrochener Auswertung wartet auf ihr Ende**
+  (`MainWindow._click_after`): Die Zusage steht vor dem Lauftext, ein Abbruch
+  rechnet beim nächsten Klick neu an. Gemerkt werden Eigentümer, Auftrag und
+  `History.document_mark`, nicht der Dokumentinhalt — den ergänzt die
+  Auswertung selbst. Wert, Strg+Z, Vorschlag oder Zug verwerfen ihn mit Satz.
+  Ein Eigentümer, dessen Klick nicht durch `_preview_can_apply` geht, verwirft
+  ihn selbst (Chat, Formsitzung).
 * **Gehört eine Handlung vor das Übernehmen, sperrt das Band den Knopf**
   (`block_apply`, bei `repair_and_retry`, `split_and_retry`,
   `recount_and_retry`) — sonst endet sie als angehaltener Schritt (Regel 19).
