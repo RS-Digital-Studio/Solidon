@@ -310,6 +310,11 @@ class DrawFlow(QObject):
         draft = self.draft
         return draft is not None and draft.outline is None and draft.phase > 0
 
+    def unsaved(self) -> bool:
+        """Ein gesetzter Klick oder ein Umriss aus dem Editor: Arbeit ohne Schritt."""
+        draft = self.draft
+        return draft is not None and (draft.outline is not None or draft.phase > 0)
+
     def choose(self, shape: str) -> None:
         """Rechteck oder Kreis — per Knopf oder Taste, solange die Grundfläche nicht steht."""
         if self.draft is not None and self.draft.choose(shape):

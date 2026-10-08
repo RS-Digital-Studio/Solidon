@@ -7003,6 +7003,9 @@ class MainWindow(QMainWindow):
         """Lokale Entwürfe sind Arbeit, auch solange noch keine Operation existiert."""
         if self._gesture_save_dialog is not None and self._gesture_save_dialog is self._op_dialog:
             return True
+        if self._draw_flow is not None and self._draw_flow.unsaved():
+            # Dem Umriss fehlt die Höhe, und die rät das Speichern nicht (Regel 21).
+            return True
         if self._sculpt_target is not None:
             original = strokes_from_text(str(self._sculpt_params.get("strokes", "")))
             return (
@@ -7055,6 +7058,8 @@ class MainWindow(QMainWindow):
         """Einen verlassenen Entwurf vollständig vom folgenden Projekt lösen."""
         self._gesture_open_number += 1
         self._discarded_sketch = None
+        if self._draw_flow is not None:
+            self._draw_flow.close()
         if not (
             self.sculpting()
             or self.setting_armature()

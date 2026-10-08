@@ -155,11 +155,12 @@ def test_a_preview_refusal_stays_in_the_dialog_without_a_local_action(
 def test_the_sketch_menu_starts_drawing(
     empty_window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RM-395: Der Sammeleintrag führt wie die Palette direkt in die Zeichnung."""
+    """RM-395/RM-559: Der Sammeleintrag führt wie die Palette direkt ins Aufziehen."""
     drawn: list[str] = []
+    monkeypatch.setattr(empty_window, "start_drawing", lambda: drawn.append("draw"))
     monkeypatch.setattr(empty_window, "start_sketch", drawn.append)
     empty_window._variant_actions["sketch_extrude"].trigger()
-    assert drawn == ["sketch_extrude"]
+    assert drawn == ["draw"]
     assert empty_window._op_dialog is None
 
 

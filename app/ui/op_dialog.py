@@ -3721,7 +3721,10 @@ class OperationDialog(QDialog):
                     titles = simple_titles.get(simple or "", drawn_titles)
                     if name == "width" and simple == "circle":
                         # Der Kreis hat keine zweite Zahl: Die senkrechte
-                        # Ausdehnung ist derselbe Durchmesser.
+                        # Ausdehnung ist derselbe Durchmesser. Der Wert zieht
+                        # trotzdem mit, nur die Zeile steht nicht da.
+                        with QSignalBlocker(editor):
+                            editor.set_value(extent[axis_of[name]])
                         if name not in hidden:
                             hidden.add(name)
                             self._rows[name].setRowVisible(editor, False)
