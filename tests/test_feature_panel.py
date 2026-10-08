@@ -3241,13 +3241,21 @@ def test_a_count_is_a_whole_number_without_a_unit(qt_app: QApplication) -> None:
     panel.stepChangeRequested.connect(lambda op_id, params: changed.append((op_id, params)))
     try:
         panel.show_part(step, spec)
+        # Ein Bausteinfeld trägt fx (RM-555): Die Zahl steht im Drehfeld des
+        # ``ValueField``, das den Namen der Handlung führt.
+        from app.ui.op_dialog import ValueField
+
         counts = [
-            editor
-            for editor in panel.findChildren(BoundedSpin)
+            editor.spin
+            for editor in panel.findChildren(ValueField)
             if editor.accessibleName().startswith("Maße ändern — ")
+            and editor.property("featureField") in ("count", "steps")
         ]
-        assert len(counts) == 2, [editor.accessibleName() for editor in counts]
+        assert len(counts) == 2, [
+            editor.accessibleName() for editor in panel.findChildren(ValueField)
+        ]
         for editor in counts:
+            assert isinstance(editor, BoundedSpin)
             assert editor.suffix() == "", "eine Anzahl trägt keine Einheit"
             assert editor.decimals() == 0, "eine Anzahl bleibt ganzzahlig"
         counts[0].setValue(4)
@@ -3828,6 +3836,100 @@ def test_every_handling_carries_its_explanation_behind_one_sign(qt_app: QApplica
         assert titel.accessibleDescription() == dot.toolTip(), (
             "der Bildschirmleser bekommt den Satz an der Überschrift"
         )
+
+
+def test_every_number_a_part_step_takes_offers_fx_with_or_without_an_expression() -> None:
+    """RM-555: An *Baustein verschieben* trug Y kein fx, X und Z schon.
+
+    Ursache am Feld: :func:`app.ui.panels._expression_entry` gab einem
+    Bausteinfeld das Ausdrucksfeld nur, wenn schon ein Ausdruck darin stand —
+    im Beispiel *Halter konstruieren* X ``=10-@breite/2`` und Z ``=@staerke``,
+    Y die Vorgabe 0. Jetzt entscheidet, ob das Feld einen Ausdruck annimmt
+    (:func:`~app.core.registry.params.accepts_expression`). Geprüft über die
+    Felder jedes Bausteins, je ohne und mit einem Ausdruck in der Lage.
+    """
+    from app.core.perceive.actions import part_actions
+    from app.core.registry.params import accepts_expression
+    from app.core.types import Operation
+    from app.ui.panels import _expression_entry
+
+    load_operations()
+    lost: list[str] = []
+    moving = 0
+    for spec in REGISTRY.all():
+        if spec.category != "parts":
+            continue
+        schema = {entry.name: entry for entry in spec.params.spec()}
+        bound = {"x": "=@breite/2"} if "x" in schema else {}
+        for given in ({}, bound):
+            for action in part_actions(Operation(id=1, op=spec.name, params=given), spec):
+                names = {str(field.name) for field in action.fields}
+                if {"x", "y"} <= names:
+                    moving += 1
+                for field in action.fields:
+                    entry = schema[str(field.name)]
+                    wanted = accepts_expression(entry) and str(field.kind) not in ("bool", "choice")
+                    offered = _expression_entry(field, {}, schema) is not None
+                    if offered != wanted:
+                        lost.append(f"{spec.name}.{field.name} ({action.title}): fx {offered}")
+    assert moving > 20, "ohne Bausteine mit Lage prüft dieser Test nichts"
+    assert not lost, "\n".join(lost)
+
+
+def test_y_takes_an_expression_through_fx_and_the_part_follows(qt_app: QApplication) -> None:
+    """RM-555: Y bekommt an *Baustein verschieben* per fx einen Ausdruck, und er rechnet.
+
+    Am Schraubenloch des Beispiels *Halter konstruieren*: Y steht auf der
+    Vorgabe 0 ohne Ausdruck. Nach fx und ``=@staerke`` geht genau dieser Wert
+    an den Schritt, und die Auswertung legt das Loch um die Stärke versetzt.
+    """
+    from app.core import examples
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+    from app.core.scene.history import History
+    from app.core.scene.project import load
+    from app.ui.op_dialog import ValueField
+
+    load_operations()
+    document = load(examples.directory() / "weg2-halter-konstruieren.p3d").document
+    operation = next(entry for entry in document.ops if entry.op == "insert_screw_hole")
+    assert "y" not in operation.params, "premise: Y stands on its default"
+    values = {name: entry.value for name, entry in document.parameters.items()}
+    panel = FeaturePanel()
+    panel.show_part(operation, REGISTRY.get(operation.op), parameter_values=values)
+    row = next(row for row in panel._shown_rows.values() if {"x", "y", "z"} <= set(row.widgets))
+    panel._arm(row.key)
+    for name in ("x", "y", "z"):
+        editor = row.widgets[name]
+        assert isinstance(editor, ValueField) and editor.toggle.isVisibleTo(panel), name
+    y = row.widgets["y"]
+    assert isinstance(y, ValueField)
+    assert not y.toggle.isChecked(), "Y trägt noch keinen Ausdruck"
+    y.toggle.setChecked(True)
+    y.text.setText("=@staerke")
+    asked: list[tuple[int, dict[str, Any]]] = []
+    panel.stepChangeRequested.connect(lambda step, params: asked.append((step, dict(params))))
+    panel._arm(row.key)
+    panel._run_armed()
+    assert asked, "Übernehmen schreibt in den Schritt"
+    step, params = asked[-1]
+    assert step == operation.id and params["y"] == "=@staerke"
+    panel.deleteLater()
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    history = History(document)
+    history.change_params(step, {**operation.params, **params})
+    after = evaluate(history.document, profile).scene
+    bores = [
+        feature
+        for entry in after.objects.values()
+        for feature in entry.features.values()
+        if feature.kind == "hole"
+    ]
+    assert any(
+        feature.params["centre"][1] == pytest.approx(document.parameters["staerke"].value)
+        for feature in bores
+    ), [feature.params["centre"] for feature in bores]
 
 
 def test_a_click_on_the_sign_opens_the_manual_where_the_handling_is_explained(

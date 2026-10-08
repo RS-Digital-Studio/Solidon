@@ -7089,6 +7089,40 @@ def test_every_bool_row_in_the_register_is_a_row_checkbox(qt_app: QApplication) 
     assert not plain, plain
 
 
+def test_every_position_field_of_every_operation_offers_fx(qt_app: QApplication) -> None:
+    """RM-555: X, Y und Z tragen im Dialog jeder Operation dasselbe Ausdrucksfeld.
+
+    Im Merkmalfenster stand an *Baustein verschieben* fx nur an den Achsen, die
+    schon einen Ausdruck trugen. Der Dialog ist die Vorlage dafür; hier steht
+    fest, dass er keine Achse auslässt (die Gegenseite im Merkmalfenster:
+    ``test_feature_panel.py``).
+    """
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+    from app.ui.op_dialog import ValueField
+
+    plain: list[str] = []
+    checked = 0
+    for spec in REGISTRY.all():
+        axes = [
+            entry.name
+            for entry in spec.params.spec()
+            if entry.name in PART_PLACEMENT_PARAMS and entry.kind in ("float", "int")
+        ]
+        if not axes:
+            continue
+        dialog = OperationDialog(spec, {})
+        try:
+            for name in axes:
+                editor = dialog._editors.get(name)
+                checked += 1
+                if not isinstance(editor, ValueField) or editor.toggle.text() != "fx":
+                    plain.append(f"{spec.name}.{name}")
+        finally:
+            dialog.deleteLater()
+    assert checked > 100, "ohne Lagefelder prüft dieser Test nichts"
+    assert not plain, plain
+
+
 def test_aligning_without_a_target_invites_instead_of_teaching_syntax(
     window: MainWindow, qt_app: QApplication
 ) -> None:

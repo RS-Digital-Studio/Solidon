@@ -291,9 +291,9 @@ Ansichtsseite steht in `griffe.md`.
   *Achse* — jede andere Achse bekommt einen Satz mit dem Weg.
 - **Eine gebundene Lage folgt dem Griff:** Der Zug wandert als Versatz in den
   Ausdruck (`expressions.shifted`: `=@staerke + 5`), eine Achse ohne Zug bleibt
-  unangetastet; abgelehnt wird nur eine Drehung an einem gebundenen Wert. Eine
-  Achse mit Ausdruck bekommt im Merkmalfenster das `ValueField` des
-  Operationsdialogs (`FeaturePanel._part_fields`, §13).
+  unangetastet; abgelehnt wird nur eine Drehung an einem gebundenen Wert. Jedes
+  Zahlenfeld des Schritts trägt im Merkmalfenster fx, mit oder ohne Ausdruck
+  (`_expression_entry`, §13, RM-555).
 - **Entf** nimmt an Dach oder Einzelmerkmal den Schritt des Bausteins
   (`MainWindow._delete_the_chosen_feature`), nie den Körper; ohne Baustein gilt
   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt

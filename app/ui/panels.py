@@ -8036,10 +8036,9 @@ def feature_field(
 ) -> QWidget:
     """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht.
 
-    **Ein gebundener Wert bekommt das Ausdrucksfeld des Dialogs.** Die
-    Textur nimmt es für jedes ihrer Zahlenfelder; ein Baustein nur dort,
-    wo wirklich ein Ausdruck steht — sonst sähe die häufige Lage anders
-    aus als bisher, ohne dass jemand einen Parameter im Spiel hätte.
+    **Was einen Ausdruck annimmt, bekommt das Ausdrucksfeld des Dialogs**
+    (:func:`_expression_entry`): jedes Zahlenfeld einer Textur und eines
+    Bausteinschritts, mit oder ohne Ausdruck darin.
     """
     entry = _expression_entry(field, expression_fields, part_fields)
     if entry is not None:
@@ -8079,12 +8078,21 @@ def feature_field(
 def _expression_entry(
     field: Any, expression_fields: Mapping[str, Any], part_fields: Mapping[str, Any]
 ) -> Any:
-    """Der Schemaeintrag, aus dem ein gebundener Wert sein Ausdrucksfeld bekommt — oder nichts."""
-    from app.core.expressions import is_expression
+    """Der Schemaeintrag, aus dem ein Zahlenfeld sein Ausdrucksfeld bekommt — oder nichts.
+
+    **fx steht an jedem Feld, das einen Ausdruck annimmt, ob es schon einen
+    trägt oder nicht** (RM-555). Ein Baustein bekam es nur, wo schon ein
+    Ausdruck stand: An *Baustein verschieben* trugen X und Z fx, Y mit
+    0,00 mm hatte keinen Weg zu einem Ausdruck.
+    """
+    from app.core.registry.params import accepts_expression
 
     entry = expression_fields.get(field.name)
-    if entry is None and is_expression(field.value):
-        entry = part_fields.get(field.name)
+    if entry is not None:
+        return entry
+    entry = part_fields.get(field.name)
+    if entry is None or str(field.kind) in ("bool", "choice") or not accepts_expression(entry):
+        return None
     return entry
 
 
