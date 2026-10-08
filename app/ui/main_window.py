@@ -254,7 +254,7 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
-from app.i18n import TranslatableText, _, format_decimal, key_platform, tr
+from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui import app_events, first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
@@ -301,6 +301,7 @@ from app.ui.labels import (
     BoundedLengthSpin,
     BoundedSpin,
     LengthSpin,
+    adding_key,
     body_facts,
     body_requirement,
     circle_measure,
@@ -2318,10 +2319,7 @@ def _needs_objects(count: int) -> str:
     """
     if count <= 1:
         return tr("Wählen Sie zuerst ein Objekt im Objektbaum.")
-    # Am Mac nimmt ⌘ und Klick dazu, nicht Control: „Strg“ ist für Qt dort die
-    # Befehlstaste (``app.i18n.keys``). ``native_keys`` wandelt nur Kürzel mit
-    # „+“, „Strg und Klick“ bliebe stehen — die Taste kommt als Wert.
-    key = "⌘" if key_platform() == "darwin" else tr("Strg", context="Taste")
+    key = adding_key()
     if count == 2:
         return tr(
             "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder {key}"
@@ -17670,8 +17668,18 @@ class MainWindow(QMainWindow):
 
         Bis hierher gab es die Kantenwahl nur als Liste im Dialog: Der
         Renderer pickte Flächen und Merkmale, keine Kanten.
+
+        **Mehrere Kanten sind eine Wahl** (RM-563): Strg- oder Umschalt-Klick
+        sammelt sie in der Ansicht (:meth:`Viewport.highlighted_edges`), und
+        jede Handlung im Fenster nimmt alle als einen Schritt. Ging mit Taste
+        die letzte heraus, steht die Auswahl wieder auf dem Körper, wie nach
+        Escape.
         """
-        title = self.viewport.edge_title(object_id, key)
+        keys = self.viewport.highlighted_edges()
+        if not keys:
+            self.object_tree.select_object(object_id)
+            return
+        title = self.viewport.edge_title(object_id, keys[-1])
         if not title:
             # **Die Kante gibt es nicht mehr** — und dann bleibt sie auch
             # nicht hervorgehoben stehen. Ein leeres Fenster über einer
@@ -17702,18 +17710,24 @@ class MainWindow(QMainWindow):
         # nichts, und dann kostet die Kantenwahl keinen Umweg.
         if self.object_tree.selected_features():
             self.object_tree.select_object(object_id)
-            self.viewport.select_edge(object_id, key)
+            self.viewport.select_edges(object_id, keys)
         self._feature_shown = None
         # Die Statuszeile nennt die Kante, denn im Bild trägt sie nur Farbe
         # und Strichstärke — für einen Bildschirmleser wäre sie sonst allein
         # an der Fensterüberschrift zu erkennen (Regel 18).
-        self.measurements.setText(title)
+        heading = said = title
+        if len(keys) > 1:
+            heading = tr("{count} Kanten", count=len(keys))
+            said = tr("{count} Kanten, zuletzt {edge}", count=len(keys), edge=title)
+        self.measurements.setText(said)
         # Zugemacht heißt „bei diesem Merkmal nicht", nicht „in dieser
         # Sitzung nie wieder" — dieselbe Zeile wie bei der Merkmalsauswahl.
         # Ohne sie leuchtete die Kante, und die beiden Handlungen dazu waren
         # über keinen Weg mehr erreichbar.
         self.feature_dock.forget_dismissal()
-        self.feature_panel.show_edge(key, title, parameter_values=self._parameter_values())
+        self.feature_panel.show_edge(
+            " ".join(keys), heading, parameter_values=self._parameter_values()
+        )
         self.feature_dock.reveal()
         self._start_feature_preview()
         # **Und die Karte rechts erfährt davon** — dieselbe Zeile wie bei der
@@ -17928,17 +17942,17 @@ class MainWindow(QMainWindow):
         Merkmalspanel (:func:`~app.core.perceive.actions.edge_actions`): Welche
         Operation an einer Kante ansetzt, ist eine Aussage über Geometrie und
         keine über die Oberfläche. Zwei Listen liefen auseinander, und dann
-        stünde im Menü eine Handlung, die das Panel nicht kennt.
+        stünde im Menü eine Handlung, die das Panel nicht kennt. Sind mehrere
+        Kanten gewählt, gilt jeder Eintrag allen (RM-563).
         """
         from app.core.perceive.actions import edge_actions
 
-        chosen = self.viewport.highlighted_edge()
-        if chosen is None:
+        keys = self.viewport.highlighted_edges()
+        if not keys:
             return None
-        _object_id, key = chosen
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
-        for action in edge_actions(key):
+        for action in edge_actions(" ".join(keys)):
             if action.op is None:
                 continue
             entry = menu.addAction(str(action.title))
@@ -20483,6 +20497,7 @@ class MainWindow(QMainWindow):
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
+        values.update(self._edges_from_view(spec, chosen[0] if chosen else None))
         # **Zwei gewählte Teile einer Passung** (RM-184): Das Prüfstück sitzt
         # dort, wo sie sich am nächsten kommen — die Oberseite des ersten
         # träfe beim Deckel die Öffnung und beim Zapfen nur ihn.
@@ -23126,10 +23141,10 @@ class MainWindow(QMainWindow):
         Operation selbst ist an einem Netz ohnehin gesperrt
         (``requires_kind="brep"``), und dort steht der Grund.
 
-        **Bis auf die Kante, die im Bild gewählt ist**: Sie steht auch an einem
-        Netz mit ihrer Beschriftung da. *Abschneiden* durch eine Kante nimmt
-        sie an beiden Kernen (RM-400), und ohne sie stünde im Dialog ihr
-        Schlüssel statt Lage und Länge.
+        **Bis auf die Kanten, die im Bild gewählt sind**: Sie stehen auch an
+        einem Netz mit ihrer Beschriftung da. *Abschneiden* durch eine Kante
+        nimmt sie an beiden Kernen (RM-400), *Verrunden* mehrere (RM-563), und
+        ohne sie stünde im Dialog ihr Schlüssel statt Lage und Länge.
         """
         from app.core.brep import edit as brep_edit
         from app.core.brep.kernel import Solid, available
@@ -23142,9 +23157,9 @@ class MainWindow(QMainWindow):
         highlighted = self.viewport.highlighted_edge()
         picked: dict[str, str] = {}
         if highlighted is not None and highlighted[0] == chosen:
-            title = self.viewport.edge_title(chosen, highlighted[1])
-            if title:
-                picked[highlighted[1]] = title
+            for key in self.viewport.highlighted_edges():
+                if title := self.viewport.edge_title(chosen, key):
+                    picked[key] = title
         if not available():
             return picked
         # **Der exakte Körper steht in ``mesh``**, und das ist keine Feinheit:
@@ -23156,6 +23171,32 @@ class MainWindow(QMainWindow):
         if not isinstance(body, Solid):
             return picked
         return {brep_edit.edge_key(edge): edge_label(edge) for edge in brep_edit.edges_of(body)}
+
+    def _edges_from_view(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
+        """Die im Bild gewählten Kanten als Vorgabe jedes Kantenfelds (RM-563).
+
+        Wer Kanten anklickt und *Verrunden* aus Menü oder Befehlspalette holt,
+        meint diese Kanten und nicht die Vorgabegruppe des Dialogs — sonst
+        rundete ein Klick auf OK alle senkrechten. Belegt wird bei den
+        Handlungen einer Kante (``EDGE_OPERATIONS``) jedes Feld der Art
+        ``edges`` und die Wahl, von der es abhängt (``edges="named"``);
+        *Abschneiden* durch eine Kante legt :meth:`_plane_through` fest.
+        """
+        from app.core.perceive.actions import EDGE_OPERATIONS
+
+        highlighted = self.viewport.highlighted_edge()
+        if highlighted is None or highlighted[0] != selected:
+            return {}
+        if spec.name not in {name for name, _measure in EDGE_OPERATIONS}:
+            return {}
+        values: dict[str, Any] = {}
+        for entry in spec.params.spec():
+            if entry.kind != "edges":
+                continue
+            values[entry.name] = " ".join(self.viewport.highlighted_edges())
+            if entry.depends_on is not None:
+                values[entry.depends_on[0]] = entry.depends_on[1][0]
+        return values
 
     def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
         """Der Abstand beim Anordnen kennt Druckbetthaftung und Stützen

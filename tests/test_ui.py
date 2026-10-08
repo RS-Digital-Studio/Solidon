@@ -20619,6 +20619,181 @@ def test_a_clicked_edge_reaches_the_selection_window(
     )
 
 
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_edges_taken_with_ctrl_click_round_in_one_step(window: MainWindow, kind: str) -> None:
+    """Zwei Kanten mit Strg-Klick, *Verrunden* im Merkmalfenster — ein Schritt (RM-563).
+
+    Der Kundenweg Ende zu Ende, am Netz wie am exakten Körper: Körper wählen,
+    eine obere Kante anklicken, die gegenüberliegende mit Strg dazu. Das
+    Fenster nennt beide und den Weg zu weiteren, Kontextmenü und Menüeintrag
+    belegen den Dialog mit beiden vor, und *Verrunden* übernimmt **einen**
+    Schritt mit beiden Schlüsseln. Der Sollwert ist Lehrbuchgeometrie: zwei
+    Zwickel ``(1 − π/4)·r²`` über die Kantenlänge, am Netz der Sehnenzug mit
+    der Feinheit der Zusage (``polygon_share``). Strg+Z nimmt ihn ganz zurück.
+    """
+    import math
+
+    from PySide6.QtWidgets import QLabel
+
+    from app.core.geom.edges import edge_key, edges_in_kernel
+    from app.ui.render.api import Pick
+    from tests.helpers import exact_kernel
+    from tests.render_fakes import RecordingRenderer
+    from tests.test_variable_fillet import polygon_share
+
+    if kind == "brep":
+        exact_kernel()
+    renderer = RecordingRenderer(size=(900, 600))
+    window.viewport.renderer = renderer
+    creator = "create_brep_box" if kind == "brep" else "create_box"
+    assert window.session.apply(
+        "Quader",
+        [OperationDraft(op=creator, params={"width": 40.0, "depth": 30.0, "height": 20.0})],
+    )
+    assert window.session.wait_for_idle(60_000)
+    result = window.session.last_result
+    assert result is not None
+    object_id, body = next(iter(result.scene.objects.items()))
+    steps = len(window.session.project.document.ops)
+    before = float(body.mesh.volume)
+    top = float(body.mesh.bounds.maximum[2])
+    _kernel, entries = edges_in_kernel(body.mesh, kind)
+    lang_oben = sorted(
+        (
+            entry
+            for entry in entries
+            if abs(entry.middle[2] - top) < 1e-6 and abs(entry.direction[0]) > 0.9
+        ),
+        key=lambda entry: entry.middle[1],
+    )
+    assert len(lang_oben) == 2, "die zwei langen oberen Kanten"
+    keys = tuple(edge_key(entry) for entry in lang_oben)
+    offset = window.viewport._shown_offset(body, result)
+
+    def klick(entry: Any, *, add: bool = False) -> None:
+        point = tuple(float(entry.middle[axis]) + float(offset[axis]) for axis in range(3))
+        x, y, _depth = renderer.world_to_display(point)
+        renderer.picks[(round(x), round(y))] = Pick(point, window.viewport._actors[object_id], 0)
+        window.viewport._on_left_click(round(x), round(y), add=add)
+        QApplication.processEvents()
+
+    spec = REGISTRY.get("fillet_edges")
+    feld = next(entry for entry in spec.params.spec() if entry.name == "radius")
+
+    def radius() -> Any:
+        # Nur das sichtbare Feld: Das Fenster baut sich je Kantenwahl neu und
+        # hält Zeilen zur Wiederverwendung zurück.
+        return next(
+            widget
+            for widget in window.feature_panel.findChildren(QWidget)
+            if widget.accessibleName() == f"{spec.title} — {feld.title}"
+            and widget.isVisibleTo(window.feature_panel)
+        )
+
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    klick(lang_oben[0])
+    radius().set_value(3.0)
+    QApplication.processEvents()
+    klick(lang_oben[1], add=True)
+
+    assert window.viewport.highlighted_edges() == keys, "beide Kanten, in Klickfolge"
+    assert radius().value() == pytest.approx(3.0), (
+        "der eingegebene Radius bleibt, wenn eine Kante dazukommt"
+    )
+    assert window.object_tree.selected() == object_id, "der Körper bleibt gewählt"
+    texte = [label.text() for label in window.feature_panel.findChildren(QLabel)]
+    assert "2 Kanten" in texte, "das Fenster nennt die Zahl"
+    assert "Weitere Kanten dazu mit Umschalt oder Strg und Klick." in texte, (
+        "und den Weg zu weiteren"
+    )
+    assert window.measurements.text().startswith("2 Kanten, zuletzt "), (
+        "die Statuszeile sagt es ohne Bild (Regel 18)"
+    )
+
+    def vorbelegt() -> dict[str, Any]:
+        dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+        werte = dialog.values()
+        liste = dialog._editors["edge_keys"].list
+        angehakt = [
+            liste.item(row).text()
+            for row in range(liste.count())
+            if liste.item(row).checkState() == Qt.CheckState.Checked
+        ]
+        dialog.reject()
+        QApplication.processEvents()
+        assert len(angehakt) == 2 and not set(angehakt) & set(keys), (
+            "beide angehakt, beschriftet mit Lage und Länge statt Kennung"
+        )
+        return werte
+
+    menue = window._edge_menu()
+    assert menue is not None
+    eintrag = next(
+        action
+        for action in menue.actions()
+        if action.text() == str(REGISTRY.get("fillet_edges").title)
+    )
+    eintrag.trigger()
+    werte = vorbelegt()
+    assert werte["edges"] == "named" and werte["edge_keys"].split() == list(keys), (
+        "das Kontextmenü meint alle gewählten Kanten"
+    )
+    window.run_operation(REGISTRY.get("fillet_edges"))
+    werte = vorbelegt()
+    assert werte["edges"] == "named" and werte["edge_keys"].split() == list(keys), (
+        "der Menüeintrag belegt die gewählten Kanten vor statt der Gruppe"
+    )
+    assert window.viewport.highlighted_edges() == keys, "ein abgebrochener Dialog lässt sie stehen"
+
+    assert radius().value() == pytest.approx(3.0), "auch nach den zwei Dialogen"
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    assert window.session.wait_for_idle(60_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    window.feature_panel._apply.click()
+    assert window.session.wait_for_idle(60_000)
+
+    ops = window.session.project.document.ops
+    assert len(ops) == steps + 1, "ein Schritt für beide Kanten"
+    assert ops[-1].op == "fillet_edges" and ops[-1].params["edges"] == "named"
+    assert sorted(ops[-1].params["edge_keys"].split()) == sorted(keys)
+    nach = window.session.last_result
+    assert nach is not None and nach.complete
+    share = (1.0 - math.pi / 4.0) if kind == "brep" else polygon_share(3.0)
+    entfernt = 2.0 * share * 3.0**2 * 40.0
+    assert before - float(nach.scene.objects[object_id].mesh.volume) == pytest.approx(
+        entfernt, rel=2e-3 if kind == "mesh" else 1e-5
+    ), "zwei Zwickel über je 40 mm"
+
+    window.session.undo()
+    assert window.session.wait_for_idle(60_000)
+    assert len(window.session.project.document.ops) == steps
+    zurueck = window.session.last_result
+    assert zurueck is not None
+    assert float(zurueck.scene.objects[object_id].mesh.volume) == pytest.approx(before, abs=1e-9)
+
+    # Mit Taste die letzte Kante heraus: Die Auswahl steht wieder auf dem
+    # Körper, wie nach Escape, und das Fenster zeigt keine Kante mehr.
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    klick(lang_oben[0])
+    assert window.viewport.highlighted_edges() == keys[:1]
+    klick(lang_oben[0], add=True)
+    assert window.viewport.highlighted_edges() == ()
+    assert window.object_tree.selected() == object_id
+    assert window.viewport.selection_depth() == 1
+    sichtbar = [
+        label.text()
+        for label in window.feature_panel.findChildren(QLabel)
+        if label.isVisibleTo(window.feature_panel)
+    ]
+    assert "Weitere Kanten dazu mit Umschalt oder Strg und Klick." not in sichtbar, (
+        "das Fenster meint keine Kante mehr"
+    )
+
+
 def test_the_age_of_a_backup_follows_the_application_language(tmp_path: Path) -> None:
     """Das Datum einer alten Sicherung wandert mit der Sprache.
 

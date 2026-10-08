@@ -2380,6 +2380,94 @@ def test_a_clicked_edge_never_eats_a_measuring_or_adding_click(qt_app: QApplicat
     assert dazu and dazu[-1][1] is True, "und der Baum erfährt vom Dazunehmen"
 
 
+def test_ctrl_or_shift_click_takes_more_edges_of_the_chosen_body(qt_app: QApplication) -> None:
+    """An einer gewählten Kante nimmt Strg- oder Umschalt-Klick weitere dazu (RM-563).
+
+    Der Kunde fand keinen Weg, mehrere Kanten für *Verrunden* zu wählen: Der
+    Kantenklick verweigerte das Dazunehmen ausdrücklich, übrig blieben die
+    Gruppen im Dialog. Jetzt gilt an der Kante, was am Merkmal gilt:
+
+    * Mit Taste kommt eine Kante desselben Körpers dazu, die zuletzt
+      geklickte führt (Fasenmarken und Titel gehören ihr), und alle stehen
+      als eine Linie mit mehreren Ketten im Bild.
+    * Mit Taste auf eine gewählte nimmt sie wieder heraus — die letzte auch,
+      dann steht die Auswahl wieder auf dem Körper.
+    * Ein Fehlklick mit Taste neben jede Kante wirft die Sammlung nicht weg.
+    * Rechts auf eine der gewählten bleibt die Gruppe stehen, wie bei
+      mehreren Körpern; ohne Taste links gilt wieder genau eine.
+    """
+    from app.core.brep import edit as brep_edit
+
+    exact_kernel()
+    view = Viewport()
+    renderer = _DepthRenderer()
+    view.renderer = renderer
+    solid, links = _exact_block(view)
+
+    def oben(x: float, y: float) -> str:
+        return brep_edit.edge_key(
+            next(
+                info
+                for info in brep_edit.edges_of(solid)
+                if info.flat
+                and abs(info.middle[0] - x) < 0.01
+                and abs(info.middle[1] - y) < 0.01
+                and info.middle[2] > 10.0
+            )
+        )
+
+    rechts, vorn = oben(20.0, 0.0), oben(0.0, 15.0)
+    koerper = view._actors["block"]
+    # Die Projektion der Attrappe: x_bild = 2·x + 400, y_bild = 300 - 2·y.
+    renderer.picks[(360, 300)] = Pick((-20.0, 0.0, 20.0), koerper, 0)
+    renderer.picks[(440, 300)] = Pick((20.0, 0.0, 20.0), koerper, 0)
+    renderer.picks[(400, 270)] = Pick((0.0, 15.0, 20.0), koerper, 0)
+    renderer.picks[(400, 300)] = Pick((0.0, 0.0, 20.0), koerper, 0)
+    gemeldet: list[tuple[str, str]] = []
+    view.edgePicked.connect(lambda body, key: gemeldet.append((body, key)))
+    view._selected = "block"
+
+    view._on_left_click(360, 300)
+    view._on_left_click(440, 300, add=True)
+    assert view.highlighted_edge() == ("block", rechts), (
+        "Strg- oder Umschalt-Klick an einer gewählten Kante nimmt die nächste dazu"
+    )
+    view._on_left_click(400, 270, add=True)
+    assert view.highlighted_edges() == (links, rechts, vorn), "alle drei, in Klickfolge"
+    assert view.highlighted_edge() == ("block", vorn), "die zuletzt geklickte führt"
+    assert gemeldet == [("block", links), ("block", rechts), ("block", vorn)]
+    assert view.selection_depth() == 2 and view.highlighted_object() is None
+    linie = renderer.entries("edge:block")[-1]
+    assert linie["polylines"] == [2, 2, 2] and linie["keep_in_front"], (
+        "drei Ketten in einer Linie vor dem Material"
+    )
+
+    view._on_left_click(440, 300, add=True)
+    assert view.highlighted_edges() == (links, vorn), "mit Taste auf eine gewählte nimmt sie heraus"
+
+    view._on_left_click(400, 300, add=True)
+    assert view.highlighted_edges() == (links, vorn), "ein Fehlklick mit Taste wirft nichts weg"
+
+    menues: list[tuple[int, int]] = []
+    view.contextMenuAt.connect(lambda x, y: menues.append((x, y)))
+    view._on_right_click(360, 300)
+    assert menues == [(360, 300)]
+    assert view.highlighted_edges() == (links, vorn), "rechts auf eine der gewählten meint alle"
+
+    view._on_left_click(440, 300)
+    assert view.highlighted_edges() == (rechts,), "ohne Taste gilt wieder genau eine"
+
+    view._on_left_click(440, 300, add=True)
+    assert view.highlighted_edges() == () and view.highlighted_edge() is None
+    assert view.selection_depth() == 1, "die letzte herausgenommen: zurück auf den Körper"
+    assert gemeldet[-1] == ("block", rechts), "und das Fenster erfährt es"
+
+    # Jeder andere Auswahlweg räumt alle, nicht nur die führende.
+    view.select_edges("block", (links, vorn))
+    view.select_feature(None)
+    assert view.highlighted_edges() == ()
+
+
 def test_the_pointer_over_an_edge_promises_what_the_click_does(qt_app: QApplication) -> None:
     """Der Zeiger stellt dieselbe Frage wie der Klick — auch an einer Kante.
 

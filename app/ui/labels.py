@@ -266,6 +266,17 @@ def circle_word() -> str:
     return str(tr("Radius") if _CIRCLE_MEASURE == "radius" else tr("Durchmesser"))
 
 
+def adding_key() -> str:
+    """Die Taste, die mit einem Klick zur Auswahl dazunimmt — neben Umschalt.
+
+    Am Mac ⌘ und nicht Control: „Strg“ ist für Qt dort die Befehlstaste
+    (``app.i18n.keys``), und ``native_keys`` wandelt nur Kürzel mit „+“ —
+    „Strg und Klick“ bliebe stehen. Die Sätze nehmen die Taste deshalb als
+    Wert (``{key}``).
+    """
+    return "⌘" if i18n.key_platform() == "darwin" else tr("Strg", context="Taste")
+
+
 class TrackSlider(QSlider):
     """Ein Regler, der dorthin springt, wohin man klickt.
 

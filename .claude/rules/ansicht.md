@@ -37,7 +37,7 @@ Stufen: nichts, Körper, Merkmal oder Kante (`Viewport.selection_depth`).
   Operationen von Weg 1 stehen im Auswahlfenster; das Menü trägt davon nur
   *Entfernen* und *Vereinigen* (`grenzen.md`).
 * **Außer er trifft eine Mehrfachauswahl**: Liegt der Zeiger auf einem von
-  mehreren gewählten Körpern, bleibt die Auswahl, und das Menü gilt allen
+  mehreren gewählten Körpern oder Kanten, bleibt sie, und das Menü gilt allen
   (`_on_right_click`, Entscheidung Robert) — im Objektbaum ebenso, wenn die
   Zeile schon markiert ist (`ObjectTree._on_context_menu`).
 * **Ein offener Operationsdialog schaltet die Stufen ab**
@@ -71,7 +71,8 @@ beantwortet die Stufe für Merkmal und Kante.
   in `select`, `select_feature`, `_refresh_feature_selection`), **zählt in
   `selection_depth`** und **verschluckt keinen fremden Klick**
   (`_means_a_feature()`: Messen, Teilen, Skelett, Formen gehen vor). Umschalt
-  und Strg meinen den Körper; eine Kante wird einzeln gewählt.
+  und Strg nehmen an einer gewählten Kante weitere dazu (`add_edge`), sonst
+  den Körper.
 * **Der Zeiger fragt `_edge_under`**, die Bedingungen von `_edge_click`; die
   Rolle bleibt `feature`.
 * **Rechts ohne Vorbedingung** (`_edge_click(direct=…)`); der Körper wird
@@ -132,8 +133,7 @@ Hüllnetz.
 
 Der Vergleich der Vorschau (`HoldToCompare`) hängt an der Anwendung und
 nimmt die Taste nur, wo der Fokus kein Bedienelement trifft, das sie selbst
-braucht (`answers_space`: Text, Haken, Knopf, Auswahlliste, Liste) — sonst
-schaltete während jeder Vorschau in keinem Fenster ein Haken (RM-448).
+braucht (`answers_space`: Text, Haken, Knopf, Auswahlliste, Liste).
 
 ## Messen
 

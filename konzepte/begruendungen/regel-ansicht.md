@@ -104,8 +104,19 @@ beim ersten Anlauf offen und kamen aus dem Review, keines aus der Suite:
   vor `_on_picked` und damit vor dem Abzweig für Messen, Trennen, Skelett und
   Formen — der Messklick verschwand **stumm**, obwohl der Messweg für genau
   diesen Fall einen Satz führt. Gefragt wird `_means_a_feature()`, also
-  dieselbe Rangfolge wie beim Zeiger. Dasselbe gilt für Umschalt und Strg: Wer
-  dazunimmt, meint den Körper; eine Kante wird einzeln gewählt.
+  dieselbe Rangfolge wie beim Zeiger. Dasselbe gilt für Umschalt und Strg,
+  solange keine Kante gewählt ist: Wer dazunimmt, meint Körper oder Merkmal.
+* **An einer gewählten Kante nehmen Umschalt und Strg weitere Kanten desselben
+  Körpers dazu** (RM-563). Der Kunde fand keinen Weg, mehrere Kanten zu
+  verrunden: Der Kantenklick verweigerte das Dazunehmen ausdrücklich, und die
+  Gruppen im Dialog („alle senkrechten“) trafen selten genau seine. Die
+  zuletzt geklickte führt (Fasenmarken, Titel), ein Fehlklick mit Taste wirft
+  die Sammlung nicht weg, und rechts auf eine der gewählten bleibt die Gruppe,
+  wie bei mehreren Körpern. Menü und Befehlspalette belegen den Dialog mit
+  denselben Kanten vor, sonst rundete OK still die Vorgabegruppe. Und das
+  Merkmalfenster behält beim Dazunehmen, was schon eingetragen ist
+  (`FeaturePanel.show_edge`): Wer zuerst den Radius tippt und dann die nächste
+  Kante holt, meint ihn weiter.
 
 **Ein Vorfilter misst gegen den Hüllquader der Kante, nicht gegen ihre
 Stützpunkte.** Der erste Anlauf tat das zweite und warf zwölf von zwölf
@@ -308,6 +319,12 @@ plus den äußersten in sechs Achsenrichtungen sind es 20 ms; an der Korpusplatt
 liefern beide dasselbe, zwölf Flächen und 32 000 mm³. Gerechnet wird über
 **Halbräume**, nicht über ein Hüllnetz — ein Strahl gegen 8202 Hülldreiecke
 wäre wieder das, was die Stichprobe gerade vermeidet.
+
+## Die Leertaste gehört dem, der sie braucht
+
+**Ohne `answers_space` schaltete während jeder Vorschau in keinem Fenster ein
+Haken** (RM-448): Der Vergleich der Vorschau nahm die Taste überall, auch
+dort, wo der Fokus auf einem Haken oder Knopf lag.
 
 ## Messen
 
