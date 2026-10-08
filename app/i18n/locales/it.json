@@ -1553,7 +1553,7 @@
   "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer dem Chat nutzbar.": "La chiave viene custodita nel portachiavi di sistema e non viaggia con il file di progetto. Senza chiave tutto resta utilizzabile tranne la chat.",
   "Der Schlüsselbund des Betriebssystems hat die Geräteidentität nicht dauerhaft angenommen.": "Il portachiavi del sistema operativo non ha memorizzato in modo permanente l'identità del dispositivo.",
   "Der Schlüsselbund des Betriebssystems ist gesperrt oder nicht erreichbar.": "Il portachiavi del sistema operativo è bloccato o non raggiungibile.",
-  "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable {variable} ein.": "Il portachiavi è bloccato o non raggiungibile. Sbloccalo e salva di nuovo, oppure inserisci la chiave nella variabile d'ambiente {variable}.",
+  "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable {variable} ein und starten Sie das Programm neu.": "Il portachiavi è bloccato o non raggiungibile. Sbloccalo e salva di nuovo, oppure inserisci la chiave nella variabile d'ambiente {variable} e riavvia il programma.",
   "Der Schnitt durch diesen Körper ließ sich nicht bilden. Wählen Sie eine andere Ebene.": "Non è stato possibile ricavare la sezione di questo corpo. Scegli un altro piano.",
   "Der Schnitt ergibt keine Kante, an der sich zeichnen ließe.": "La sezione non dà alcuno spigolo contro cui disegnare.",
   "Der Schnitt hat kein zweites Teil ergeben.": "Il taglio non ha prodotto un secondo pezzo.",

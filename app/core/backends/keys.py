@@ -125,7 +125,7 @@ def _keychain_unreachable() -> TranslatableText:
     return _(
         "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und "
         "speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable "
-        "{variable} ein.",
+        "{variable} ein und starten Sie das Programm neu.",
         variable=ENVIRONMENT_VARIABLE,
     )
 

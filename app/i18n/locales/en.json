@@ -1553,7 +1553,7 @@
   "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer dem Chat nutzbar.": "The key is stored in the system keychain and does not travel with the project file. Without a key everything except the chat stays usable.",
   "Der Schlüsselbund des Betriebssystems hat die Geräteidentität nicht dauerhaft angenommen.": "The operating system keychain did not persist the device identity.",
   "Der Schlüsselbund des Betriebssystems ist gesperrt oder nicht erreichbar.": "The operating system keychain is locked or unavailable.",
-  "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable {variable} ein.": "The keychain is locked or unreachable. Unlock it and save again, or put the key in the environment variable {variable}.",
+  "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable {variable} ein und starten Sie das Programm neu.": "The keychain is locked or unreachable. Unlock it and save again, or put the key in the environment variable {variable} and restart the program.",
   "Der Schnitt durch diesen Körper ließ sich nicht bilden. Wählen Sie eine andere Ebene.": "The section through this body could not be formed. Choose another plane.",
   "Der Schnitt ergibt keine Kante, an der sich zeichnen ließe.": "The section yields no edge to draw against.",
   "Der Schnitt hat kein zweites Teil ergeben.": "The cut produced no second part.",

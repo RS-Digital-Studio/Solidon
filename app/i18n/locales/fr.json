@@ -1553,7 +1553,7 @@
   "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer dem Chat nutzbar.": "La clé est rangée dans le trousseau du système et ne voyage pas avec le fichier de projet. Sans clé, tout reste utilisable sauf le chat.",
   "Der Schlüsselbund des Betriebssystems hat die Geräteidentität nicht dauerhaft angenommen.": "Le trousseau du système d'exploitation n'a pas enregistré durablement l'identité de l'appareil.",
   "Der Schlüsselbund des Betriebssystems ist gesperrt oder nicht erreichbar.": "Le trousseau du système d'exploitation est verrouillé ou inaccessible.",
-  "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable {variable} ein.": "Le trousseau de clés est verrouillé ou inaccessible. Déverrouillez-le et enregistrez de nouveau, ou placez la clé dans la variable d'environnement {variable}.",
+  "Der Schlüsselbund ist gesperrt oder nicht erreichbar. Entsperren Sie ihn und speichern Sie erneut, oder tragen Sie den Schlüssel in die Umgebungsvariable {variable} ein und starten Sie das Programm neu.": "Le trousseau de clés est verrouillé ou inaccessible. Déverrouillez-le et enregistrez de nouveau, ou placez la clé dans la variable d'environnement {variable} et redémarrez le programme.",
   "Der Schnitt durch diesen Körper ließ sich nicht bilden. Wählen Sie eine andere Ebene.": "La coupe à travers ce corps n'a pas pu être formée. Choisissez un autre plan.",
   "Der Schnitt ergibt keine Kante, an der sich zeichnen ließe.": "La coupe ne donne aucune arête contre laquelle dessiner.",
   "Der Schnitt hat kein zweites Teil ergeben.": "La coupe n'a pas produit de seconde pièce.",
