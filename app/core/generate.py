@@ -27,6 +27,8 @@ from typing import Final
 from app.core import activation
 from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
 from app.core.errors import AppError
+from app.core.geom.mesh import MeshData, edge_table
+from app.core.geom.repair import branching_edge_count, separate_touching_sheets
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import Project, checksum, embedded_source_path, next_source_id
@@ -124,6 +126,41 @@ GENERATED_TRIANGLE_LIMIT: Final = 1_000_000
 #: dass eine erzeugte Figur ihre Falten behält. Als Anteil und nicht als eigene
 #: Zahl: Wer die Grenze verschiebt, verschiebt den Abstand mit.
 GENERATED_TRIANGLE_TARGET: Final = GENERATED_TRIANGLE_LIMIT * 3 // 4
+
+#: Ab welchem Anteil von Kanten, an denen nach dem Trennen berührender Stücke
+#: noch mehr als zwei Flächen hängen, ein erzeugtes Rohnetz als zerfallen gilt
+#: (RM-550).
+#:
+#: Ein heiles Netz von TRELLIS.2 über ComfyUIs ``RemeshMesh`` (``udf``) hat
+#: höchstens ein paar Dutzend solcher Kanten, dort, wo sich zwei Stücke an
+#: einer Linie berühren — gemessen 0 bis 0,036 % —, und die Reparatur trennt
+#: sie alle (``repair.separate_touching_sheets``). Manche Startwerte zerfallen
+#: dagegen schon im Generator: 0,63 bis 3,4 % der Kanten, oft Hunderte Teile,
+#: keine davon trennbar, und kein Lauf endete geschlossen. Die Grenze liegt mit
+#: Abstand zwischen beiden. Ein Anteil und keine Zahl, weil ein feineres Netz
+#: mehr Kanten hat; gezählt wird erst nach dem Trennen, weil ein kleines Netz
+#: mit einer einzigen Berührkante sonst schon über dem Anteil läge.
+TANGLED_EDGE_SHARE: Final = 0.002
+
+
+def fell_apart(mesh: Mesh) -> bool:
+    """Ob ein erzeugtes Rohnetz schon im Generator zerfallen ist.
+
+    Gefragt wird vor dem Übernehmen, denn der Ausweg ist ein neuer Versuch und
+    keine Reparatur. Gezählt wird am Netz, wie es aus dem Generator kommt; ein
+    heiles Netz liegt schon vor dem Trennen unter der Grenze und kostet eine
+    Kantenzählung, die sich das Netz merkt. Der Dialog fragt im Arbeiter. Ein
+    Netz ohne Dreiecke zum Zählen — eine Attrappe mit Kennzahlen — gilt als
+    heil.
+    """
+    if not isinstance(mesh, MeshData):
+        return False
+    edges = len(edge_table(mesh.raw).counts)
+    limit = TANGLED_EDGE_SHARE * edges
+    if not edges or branching_edge_count(mesh) < limit:
+        return False
+    separated, _count = separate_touching_sheets(mesh)
+    return branching_edge_count(separated) >= limit
 
 
 @dataclass(frozen=True, slots=True)

@@ -283,6 +283,9 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   über Ohren (`_loop_triangles`), zuletzt als Fächer — **nie eine Fläche auf
   eine Kante, die schon zwei trägt**; Slot und Farbe vom Rand, eine Fläche
   ohne Dicke bleibt offen (`_flat_fills`).
+- Berührkanten trennt `separate_touching_sheets`, die übrigen mit der
+  anderen Paarung; kleine Falten glättet `smooth_folds` nur mit
+  *Überschneidungen auflösen* und nur ganz (RM-550).
 - Die Schnittsuche läuft einmal je Netz (`crossings_of`); ihr Budget zählt
   genaue Paarprüfungen, am offenen Netz und über `MAP_LIMIT_TRIANGLES` nur der
   Sockel. Vereinigt werden nur verschiedene Schalen und Überlagerungen
@@ -296,8 +299,6 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   positive Hohlrauminseln bleiben eigene Familien. Aufrufer belegen
   Dichtheit/Kontaktfreiheit; `None` gibt nichts frei. `material_part_count`
   zählt erst nach Vorbeleg.
-  Beide optionalen Abbruchtoken reichen durch `_Shells` bis Gitterzertifikat
-  und Kreuzungssuche; die Standardschnittstellen bleiben erhalten.
 
 **Anordnen und Ausrichten**:
 

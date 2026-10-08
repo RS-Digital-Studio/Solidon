@@ -52,7 +52,7 @@ from app.core.errors import (
     InternalError,
     OperationCancelled,
 )
-from app.core.generate import working_volume
+from app.core.generate import fell_apart, working_volume
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
@@ -235,6 +235,10 @@ class _Worker(Worker):
         except AppError as problem:
             self.failed.emit(problem)
             return
+        # Hier fragen, nicht in der Liste: Am Netz von 200 000 Dreiecken kostet
+        # die Kantenzählung eine Fünftelsekunde, und das Netz merkt sie sich
+        # (:func:`app.core.generate.fell_apart`, RM-550).
+        fell_apart(result.mesh)
         self.done.emit(result)
 
     def _progress(self, fraction: float, text: str) -> None:
@@ -535,6 +539,7 @@ class GenerateDialog(QDialog):
         self.taken.setWordWrap(True)
         self.taken.setVisible(False)
         self.attempts.currentRowChanged.connect(self._show_what_is_taken)
+        self.attempts.currentRowChanged.connect(self._say_about_the_chosen)
         # Wohin *Übernehmen* das Modell legt, wenn das nicht mehr das Projekt
         # vom Start ist — gesetzt vom Fenster (:meth:`set_destination`).
         self.destination = QLabel(self)
@@ -1186,7 +1191,13 @@ class GenerateDialog(QDialog):
         self.attempts.clear()
         for index, entry in enumerate(self.tries, start=1):
             mesh = entry.mesh
-            closed = tr("geschlossen") if mesh.is_watertight else tr("offen")
+            closed = (
+                tr("zerfallen")
+                if fell_apart(mesh)
+                else tr("geschlossen")
+                if mesh.is_watertight
+                else tr("offen")
+            )
             origin = self._origin_at(index - 1)
             item = QListWidgetItem(
                 f"{index}. {mesh.triangle_count} {tr('Dreiecke', context='Anzahl')} · "
@@ -1215,14 +1226,38 @@ class GenerateDialog(QDialog):
         # Bildschirm das Wachsen begrenzt hat.
         self._grow_explicit_soon()
         QTimer.singleShot(0, self, self._show_the_tries_in_view)
-        self.state.setText(
-            tr(
-                "Ein weiterer Versuch kann eine andere Form ergeben. Prüfen Sie das "
-                "Ergebnis vor dem Übernehmen."
-            )
-        )
+        self._say_about_the_chosen()
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Übernehmen"))
         self._show_what_is_taken()
+
+    def _say_about_the_chosen(self) -> None:
+        """Was zum gewählten Versuch zu sagen ist — bei einem zerfallenen der Ausweg.
+
+        **Ein zerfallenes Rohnetz repariert keine Kette** (RM-550): Manche
+        Startwerte liefern ein Knäuel aus Hunderten Teilen, und übernommen
+        stand danach ein offener Körper mit „1206 offene Stellen“ im Bericht.
+        Hilfe ist ein anderer Startwert (Regel 17), und den gibt „Noch ein
+        Versuch“.
+        """
+        row = self.attempts.currentRow()
+        if self._busy or not self.tries or not 0 <= row < len(self.tries):
+            # Während eines Wurfs gehört die Zeile seinem Fortschritt.
+            return
+        if not fell_apart(self.tries[row].mesh):
+            self.state.setText(
+                tr(
+                    "Ein weiterer Versuch kann eine andere Form ergeben. Prüfen Sie das "
+                    "Ergebnis vor dem Übernehmen."
+                )
+            )
+            return
+        self.state.setText(
+            tr(
+                "Versuch {number} ist schon beim Erzeugen zerfallen, daraus wird kein "
+                "geschlossener Körper. „Noch ein Versuch“ erzeugt das Modell neu und anders.",
+                number=row + 1,
+            )
+        )
 
     def _origin_of_the_run(self, result: GeneratedMesh) -> _Origin:
         """Woraus das gerade gelieferte Ergebnis entstand."""

@@ -541,6 +541,58 @@ def _generated(size: tuple[float, float, float]) -> GeneratedMesh:
     )
 
 
+def test_a_try_that_fell_apart_says_so_and_names_the_way_to_another(
+    qt_app: QApplication,
+) -> None:
+    """Ein Rohnetz, das schon im Generator zerfällt, repariert keine Kette (RM-550).
+
+    TRELLIS.2 lieferte mit Startwert 8 ein Knäuel aus 690 Teilen; übernommen
+    stand ein offener Körper mit Hunderten offener Stellen im Bericht. Die
+    Zeile sagt deshalb „zerfallen“ statt „offen“, und die Zustandszeile nennt
+    den Ausweg — „Noch ein Versuch“. Wählt der Kunde einen heilen Versuch,
+    gilt wieder der gewöhnliche Satz. Geprüft am Ausschnitt des echten Netzes.
+    """
+    from app.core.geom.mesh import read_mesh
+
+    def generated(name: str, seed: int) -> GeneratedMesh:
+        payload = (MESHES / name).read_bytes()
+        return GeneratedMesh(
+            mesh=read_mesh(payload, ".glb"),
+            payload=payload,
+            suffix=".glb",
+            backend="test",
+            seed=seed,
+        )
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.tries = [
+            generated("generated_touching.glb", 11),
+            generated("generated_fell_apart.glb", 8),
+        ]
+        dialog._show_tries()
+
+        zeile = dialog.attempts.item(1)
+        assert zeile is not None
+        assert "zerfallen" in zeile.text(), zeile.text()
+        assert "offen" not in zeile.text(), "zerfallen ist mehr als offen"
+        satz = dialog.state.text()
+        assert "Versuch 2" in satz and "zerfallen" in satz, satz
+        assert "„Noch ein Versuch“" in satz and "neu" in satz, "der Ausweg steht im Satz"
+        assert dialog.again.isVisibleTo(dialog), "und sein Knopf steht darunter"
+
+        dialog.attempts.setCurrentRow(0)
+        assert "zerfallen" not in dialog.state.text(), "ein heiler Versuch trägt den alten Satz"
+        assert "Prüfen Sie das Ergebnis" in dialog.state.text()
+        heil = dialog.attempts.item(0)
+        assert heil is not None and "zerfallen" not in heil.text()
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
 def _settle(qt_app: QApplication) -> None:
     """Zwei Zeitgeber mit null Millisekunden hintereinander: erst pinnt der
     Satz seine Höhe, dann folgt das Fenster — mit Reserve."""

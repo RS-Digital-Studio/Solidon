@@ -1901,6 +1901,8 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
             "repair.self_intersections_unresolved",
             "repair.self_intersections_skipped",
             "repair.self_crossing",
+            # Geglättete Falten: danach kreuzt nichts mehr (RM-550).
+            "repair.folds_smoothed",
         }
     ),
     "repair.self_intersections_incomplete": frozenset({"repair.self_intersections"}),

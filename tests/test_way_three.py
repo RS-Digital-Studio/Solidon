@@ -747,3 +747,34 @@ def test_a_generated_model_goes_to_the_next_plate_when_the_first_is_full(
     assert body.plate == 1
     assert fits_on_bed(body.mesh, profile.printer)
     assert body.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0), abs=1e-6)
+
+
+# --- Zerfallene Rohnetze (RM-550) ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("generated_fell_apart.glb", True),
+        ("generated_touching.glb", False),
+        ("cubes_touching_edge.glb", False),
+    ],
+)
+def test_a_raw_mesh_that_fell_apart_in_the_generator_is_recognised(
+    name: str, expected: bool
+) -> None:
+    """Ein Rohnetz, das schon im Generator zerfällt, repariert keine Kette (RM-550).
+
+    Gemessen an echten Läufen von TRELLIS.2: Ein zerfallenes Netz hat
+    Tausende Kanten mit mehr als zwei Flächen, und keine lässt sich trennen;
+    jeder dieser Läufe endete offen. Ein heiles hat ein paar Dutzend, dort, wo
+    sich zwei Stücke berühren, und die Reparatur trennt sie. Ein kleines Netz
+    mit einer einzigen Berührkante liegt über dem Anteil und ist trotzdem
+    heil — deshalb zählt erst, was nach dem Trennen bleibt.
+    """
+    from app.core.generate import fell_apart
+    from app.core.geom.mesh import read_mesh
+
+    mesh = read_mesh((Path(__file__).parent / "data" / "meshes" / name).read_bytes(), ".glb")
+
+    assert fell_apart(mesh) is expected

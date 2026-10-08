@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-550: Erzeugte Körper aus Weg 3 schließen, Falten werden geglättet, und ein zerfallener Versuch sagt es vor dem Übernehmen (08.10.2026)](#rm-550-erzeugte-körper-aus-weg-3-schließen-falten-werden-geglättet-und-ein-zerfallener-versuch-sagt-es-vor-dem-übernehmen-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
 | 2026-10-07 | [RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)](#rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026) |
@@ -44205,3 +44206,72 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+
+## RM-550: Erzeugte Körper aus Weg 3 schließen, Falten werden geglättet, und ein zerfallener Versuch sagt es vor dem Übernehmen (08.10.2026)
+
+<a id="rm-550-erzeugte-körper-aus-weg-3-schließen-falten-werden-geglättet-und-ein-zerfallener-versuch-sagt-es-vor-dem-übernehmen-08102026"></a>
+<a id="rm-550"></a>
+
+**RM-550 — Erzeugte Körper aus Weg 3 bleiben nach der Reparatur offen.** Gefunden am
+  07.10.2026 beim ersten echten Lauf der TRELLIS.2-Kette ([RM-004](ROADMAP.md#rm-004), Claude). Von
+  neun Läufen endete einer geschlossen; die übrigen melden `repair.still_open` („2 offene
+  Stellen ließen sich nicht sicher schließen“). Gemessen an den Rohnetzen: (a) `DecimateMesh`
+  ließ rund zwanzig Vierecklöcher je Netz offen — behoben mit einem zweiten `FillHoles` nach dem
+  Ausdünnen, danach hat das Rohnetz des Bildwegs keine offene Kante mehr, Solidon meldet trotzdem
+  offen; die Ursache liegt also zwischen Einlesen, *Auf Maß bringen* und *Reparieren*. (b) Der
+  Textweg liefert bei gleichem Bild und Startwert eine dünne Schale (2,3 statt 25,7 cm³), die
+  Vase ein Netz mit negativem Volumen und zwei langen offenen Rändern; beim Bildweg kam ähnliches an
+  zwei von sechs Läufen vor (Startwerte 8 und 9, lange offene Ränder, bis 388 Teile). Zu prüfen: das Bild des Textwegs als PNG durch den
+  Bildablauf schicken, `RemeshMesh` mit `sdf` gegen `udf`. (c) 700 000 Dreiecke kosten die
+  Auswertung bis 445 s; `target_face_count` gegen Druckbedarf abwägen. Rohnetze und Berichte:
+  `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **Abnahme:** an mindestens fünf
+  Startwerten je Weg ein geschlossener Körper ohne Warnung, Test für die Stelle in Solidon, die
+  ein geschlossenes Rohnetz offen meldet. Bauplan §6, §17, §27.
+
+  **Stand 07.10.2026 abends (Claude), Ursachen behoben:** (a) Die Reparatur strich an Kanten
+  mit vier Flächen — zwei Stücke, die sich berühren, rund zwanzig je Netz — Flächen und ließ
+  Schlitze ohne Fläche zurück; `repair.separate_touching_sheets` verdoppelt solche Kanten
+  (Korpus `cubes_touching_edge.glb`, Test vorher rot). (b) Der Textweg fährt zwei Aufträge,
+  Bild und danach den Bildablauf (`mesh.WORKFLOW_STAGES`): Bei gleichem Bild und Startwert ist
+  das Netz jetzt dasselbe wie aus dem Bild (25,72 cm³ beide). (c) Der Bildablauf dünnt auf
+  200 000 Dreiecke aus (Referenzgröße aus §31); die Auswertung dauert 15–60 s statt bis 445 s.
+  (d) `RemeshMesh` behält beide UDF-Hüllen: An einer dünnen Wand sind sie die Wand — Vase und
+  Becher kamen vorher als offene Haut, jetzt geschlossen (9,3 und 8,9 cm³); die Innenhülle eines
+  vollen Körpers nimmt `repair(inner_shells=True)`. Gemessen an sieben Läufen (Rakete Bild
+  Startwert 7 bis 10, Vase, Becher, Haken aus Text): **fünf geschlossen**, davon zwei ohne jeden
+  Befund und drei mit der Warnung „Die Oberfläche kreuzt sich selbst“ — die Kreuzungspaare
+  liegen alle an Stellen, an denen sich zwei Stücke berühren. Offen bleiben die Startwerte 8
+  und 9 desselben Bilds: Deren Rohnetz zerfällt schon in ComfyUI (bis 389 Teile, Ränder über
+  2 000 Kanten). **Offen:** (1) die Warnung an berührenden Stücken — entweder dort keine
+  Kreuzung melden oder die Berührung beim Reparieren auflösen; (2) zerfallene Rohnetze
+  erkennen und dem Kunden einen anderen Startwert anbieten statt eines offenen Körpers.
+  Messordner `output/konsolidierung-2026-10-07/messung-ki/weg3-neu`, `weg3-udf2`, `weg3-udf3`.
+
+  **Abschluss 08.10.2026 (Paket K, Claude).** (1) Die Warnung „kreuzt sich selbst“ kam nicht nur
+  von berührenden Stücken: Die Paare sind Falten, 2 bis 24 Dreieckspaare unter einem Millimeter,
+  meist mit gemeinsamer Ecke, auch weit weg von jeder Berührkante. `repair.smooth_folds` rückt die
+  Ecken in die Mitte ihrer Nachbarn und füllt sonst die Stelle neu, übernommen nur bei vollem
+  Erfolg (`repair.folds_smoothed`, nur mit *Überschneidungen auflösen*). (2) Startwert 8 des
+  Bildwegs blieb nicht wegen des Generators offen: Die geometrisch bessere Paarung trennte 70 von
+  71 Berührkanten, die letzte trennt erst die andere (`separate_touching_sheets`, zweiter
+  Durchgang); dabei wurde die Eckensuche sortiert (zerfallenes Netz 107 s statt 1,7 s bis 5,9 s).
+  `repair` Cache 6, `load` 8. (3) Zerfallene Rohnetze erkennt `generate.fell_apart` am Anteil der
+  Kanten mit mehr als zwei Flächen, die das Trennen nicht auflöst (heil 0 bis 0,036 %, zerfallen
+  0,63 bis 3,4 %, Grenze 0,2 %); der Erzeugungsdialog schreibt „zerfallen“ in die Zeile und nennt
+  *Noch ein Versuch* (Regel 17), das Handbuch sagt es. Tests: `test_repair.py` (gefaltete Kugel,
+  Ausschnitt `generated_other_pairing.glb`), `test_way_three.py` (`generated_fell_apart.glb`,
+  `generated_touching.glb`, `cubes_touching_edge.glb`), `test_generate_ui.py`; Gegenproben am
+  Stand `3d900b428` rot.
+
+  **Echter Weg 3, Windows, RTX 4080, ComfyUI 0.37.0** (Rakete, Text „a small toy rocket with three
+  fins“ Startwert 7 bis 15, Bild aus dem FLUX-Bild von Startwert 7 mit Startwert 7 bis 14; Bericht,
+  Rohnetze und Protokolle `output/konsolidierung-2026-10-07/messung-ki/weg3-paket-k`): Bildweg 7
+  von 8, Textweg 7 von 9 geschlossen ohne jede Warnung; die übrigen drei (Bild 9, Text 8 und 10)
+  sind zerfallen und werden vor dem Übernehmen gemeldet. Derselbe Endstand mit `main` (`df4f04e63`):
+  Bild 8 offen, „kreuzt sich selbst“ an Bild 7 und 13 und Text 7, 12, 13 und 15. Erzeugen kalt
+  260 bis 290 s, warm 37 bis 67 s; Auswertung 38 bis 160 s, ein zerfallenes Netz bis 315 s.
+  **Neu gefunden, an den Koordinator gemeldet:** Fünf der geschlossenen Körper (Bild 11 und 12,
+  Text 11, 14 und 15) sind eine Haut von rund 0,3 mm um einen Hohlraum, 2,1 bis 2,8 cm³ statt 20
+  bis 37 cm³ — der Generator lässt die Oberfläche offen, `RemeshMesh` (`udf`) macht daraus ein
+  dünnes Band, und kein Befund nennt es.

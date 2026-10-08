@@ -4064,6 +4064,89 @@ def test_two_bodies_touching_along_an_edge_are_separated_not_cut_open() -> None:
     assert "repair.still_open" not in codes and "repair.branching_resolved" not in codes
 
 
+def test_a_touching_edge_the_better_pairing_cannot_split_takes_the_other() -> None:
+    """Die letzte Berührkante eines echten TRELLIS.2-Netzes (RM-550, Startwert 8).
+
+    Die geometrisch bessere Paarung trennte 70 von 71 Kanten; bei der letzten
+    hingen die Fächer beider Paare um die Ecken zusammen, keine Ecke teilte
+    sich, und das Streichen danach schnitt ein Viereck auf, das kein Füller
+    schließt — der Körper blieb mit „Eine offene Stelle“ offen. Die andere
+    Paarung trennt sie, ohne einen Rand zu öffnen.
+    """
+    from app.core.geom.repair import separate_touching_sheets
+
+    cut = read_mesh((MESHES / "generated_other_pairing.glb").read_bytes(), ".glb")
+    before = branching_edge_count(cut)
+    assert before == 9, "der Ausschnitt: neun Berührkanten"
+
+    separated, count = separate_touching_sheets(cut)
+
+    assert count == before, "alle neun getrennt, auch die letzte"
+    assert branching_edge_count(separated) == 0
+    assert open_edge_count(separated) == open_edge_count(cut), "kein neuer Rand"
+    assert separated.triangle_count == cut.triangle_count, "keine Fläche fällt weg"
+
+
+def _folded_ball() -> MeshData:
+    """Eine Kugel, an der eine Ecke über ihre Nachbarn geklappt ist.
+
+    So sehen die Falten der TRELLIS.2-Netze aus (RM-550): eine Ecke, deren
+    Dreiecke über die Nachbarfläche hinausstehen und sie durchstoßen — ein
+    paar Paare, die sich eine Ecke teilen, an einem sonst einwandfreien
+    Körper. Die Ecke rückt zweieinhalb Kantenlängen zur Seite und ein Fünftel
+    nach innen; so entstehen sechs schneidende Paare.
+    """
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    corner = ball.vertices[0]
+    edge = float(np.linalg.norm(ball.vertices[ball.vertex_neighbors[0]] - corner, axis=1).mean())
+    outward = corner / np.linalg.norm(corner)
+    aside = np.cross(outward, [0.0, 0.0, 1.0])
+    aside /= np.linalg.norm(aside)
+    moved = ball.vertices.copy()
+    moved[0] = corner + aside * 2.5 * edge - outward * 0.2 * edge
+    return MeshData.of(trimesh.Trimesh(moved, ball.faces, process=False))
+
+
+def test_a_small_fold_is_closed_anew_instead_of_reported_as_crossing() -> None:
+    """Eine Falte wird neu geschlossen, statt „kreuzt sich selbst“ zu melden (RM-550).
+
+    Drei von fünf geschlossenen TRELLIS.2-Körpern trugen nach der Reparatur
+    die Warnung „Die Oberfläche kreuzt sich selbst“ — wegen 2 bis 24
+    Dreieckspaaren unter einem Millimeter. Die Vereinigung löst eine
+    Eigenkreuzung nicht; die Dreiecke um die Falte zu entfernen und das Loch
+    neu zu füllen schon, ohne das Volumen zu bewegen.
+    """
+    from app.core.geom.repair import crossings_of
+
+    folded = _folded_ball()
+    crossing = crossings_of(folded)
+    assert folded.is_watertight and 0 < len(crossing.first) <= 8, "der Fall: eine kleine Falte"
+
+    healed = repair(folded, self_intersections=True)
+
+    codes = {finding.code for finding in healed.findings}
+    assert "repair.folds_smoothed" in codes, codes
+    assert "repair.self_crossing" not in codes, "die Warnung entfällt"
+    assert healed.mesh.is_watertight and healed.mesh.raw.is_winding_consistent
+    assert not len(crossings_of(healed.mesh).first), "nichts kreuzt mehr"
+    assert math.isclose(healed.mesh.volume, folded.volume, rel_tol=1e-3)
+
+
+def test_a_fold_stays_reported_when_only_asked_to_look() -> None:
+    """Ohne *Überschneidungen auflösen* ändert die Reparatur an der Falte nichts.
+
+    Das Neufüllen hängt am Schalter, der auch die Vereinigung erlaubt; die
+    automatische Aufbereitung beim Einlesen schaut nur hin.
+    """
+    folded = _folded_ball()
+
+    looked = repair(folded, self_intersections=False, inspect_intersections=True)
+
+    codes = {finding.code for finding in looked.findings}
+    assert "repair.self_crossing" in codes and "repair.folds_smoothed" not in codes, codes
+    assert looked.mesh.triangle_count == folded.triangle_count
+
+
 def test_the_load_step_separates_touching_sheets_under_a_new_cache_version(
     profile: Profile,
 ) -> None:

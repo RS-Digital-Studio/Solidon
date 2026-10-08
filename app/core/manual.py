@@ -2248,6 +2248,16 @@ def models_text() -> str:
                     "Satz von ComfyUI im Dialog, samt dem Schritt, in dem es riss."
                 )
             ),
+            "",
+            # RM-550: Ein zerfallenes Rohnetz hilft nur ein neuer Versuch.
+            str(
+                _(
+                    "Manche Versuche zerfallen schon beim Erzeugen, daraus macht keine "
+                    "Reparatur einen geschlossenen Körper. Der Dialog "
+                    "sagt das in der Zeile des Versuchs, und *Noch ein Versuch* erzeugt das "
+                    "Modell neu und anders."
+                )
+            ),
         ]
     )
     return "\n".join(lines).rstrip() + "\n"

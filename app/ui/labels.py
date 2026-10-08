@@ -1539,6 +1539,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "pair": _("Gegenstückpaar"),
     "plane": _("Ebene"),
     "play": _("Spiel"),
+    # ``geom.repair``: geglättete Falten, gezählt je Stelle (RM-550).
+    "places": _("Stellen"),
     "points": _("Punkte"),
     "press": _("Pressmaß"),
     "previous": _("Bisher"),

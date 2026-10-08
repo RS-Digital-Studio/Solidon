@@ -1591,6 +1591,23 @@ die Ausrichtung von 26 112 Trägerecken braucht 0,12 statt 0,2 s.
 
 ### Reparatur
 
+*Aus der Karte verschoben (RM-550, Budget):* Beide optionalen Abbruchtoken
+von `material_part_families` und `material_part_count` reichen durch `_Shells`
+bis Gitterzertifikat und Kreuzungssuche; die Standardschnittstellen bleiben
+erhalten.
+
+**Berührkanten und Falten (RM-550).** An einem TRELLIS.2-Netz (Startwert 8)
+trennte die geometrisch bessere Paarung 70 von 71 Kanten mit vier Flächen; an
+der letzten hingen die Fächer beider Paare um die Ecken zusammen, keine Ecke
+teilte sich, und das Streichen danach schnitt ein Viereck auf, das kein Füller
+schließt. Ein zweiter Durchgang nimmt für die übrigen Kanten die andere
+Paarung. Falten — 2 bis 24 Dreieckspaare unter einem Millimeter, meist mit
+gemeinsamer Ecke — löst keine Vereinigung; `smooth_folds` rückt die Ecken in
+die Mitte ihrer Nachbarn (an Startwert 13 nach drei Runden kreuzungsfrei) und
+füllt sonst die Stelle neu. Übernommen wird nur, was danach geschlossen,
+gleich ausgerichtet, gleich viele Teile, fast gleiches Volumen und frei von
+Kreuzungen ist; geprüft wird nur an den Stellen (`_crosses_near`).
+
 *Früher im Kopf der Karte.*
 
 `repair()` übernimmt die Dreiecksbereinigung nur, wenn das Netz danach nicht
