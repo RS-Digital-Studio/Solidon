@@ -7722,6 +7722,7 @@ class MainWindow(QMainWindow):
         # *Übernehmen* geht über das Fenster: Sagt die Sitzung ab, bleibt der
         # Dialog mit seinen Versuchen offen (:meth:`_take_generated`).
         dialog.take = partial(self._take_generated, dialog)
+        dialog.minimum_wall = lambda: self.session.profile.minimum_wall_thickness
         # Regel 17: „Es läuft kein Generator" bot nichts an. Von hier führt der
         # Weg in die Liste der zusätzlichen Programme, und danach sieht der
         # Dialog noch einmal nach — wer ComfyUI gerade gestartet hat, soll
@@ -25479,6 +25480,7 @@ class MainWindow(QMainWindow):
             # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
             # stehen die Transaktionen, die eine Annahme mitnähme (H-1).
             "show_history": lambda _error: self._flash_area("history"),
+            "generate_again": lambda _error: self._generate(None),
             # **Ein Rat, den nur der Kunde ausführen kann, ist ein halber.**
             # „Die Teilung läuft schon" schlägt vor, sie abzubrechen, und die
             # Handlung gibt es (``Session.cancel_split`` hält an *und*

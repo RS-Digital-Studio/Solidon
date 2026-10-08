@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-577: Ein erzeugter Körper, der nur eine dünne Haut um einen Hohlraum ist, wird erkannt und gemeldet (08.10.2026)](#rm-577-ein-erzeugter-körper-der-nur-eine-dünne-haut-um-einen-hohlraum-ist-wird-erkannt-und-gemeldet-08102026) |
+| 2026-10-08 | [RM-564: Vor dem Herunterladen nennt Solidon die Voraussetzungen eines Modells und ob dieser Rechner sie erfüllt (08.10.2026)](#rm-564-vor-dem-herunterladen-nennt-solidon-die-voraussetzungen-eines-modells-und-ob-dieser-rechner-sie-erfüllt-08102026) |
 | 2026-10-08 | [RM-550: Erzeugte Körper aus Weg 3 schließen, Falten werden geglättet, und ein zerfallener Versuch sagt es vor dem Übernehmen (08.10.2026)](#rm-550-erzeugte-körper-aus-weg-3-schließen-falten-werden-geglättet-und-ein-zerfallener-versuch-sagt-es-vor-dem-übernehmen-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
@@ -44255,7 +44257,7 @@ Zylinderkopf und Gewinde passend zur Bohrung.
   Erfolg (`repair.folds_smoothed`, nur mit *Überschneidungen auflösen*). (2) Startwert 8 des
   Bildwegs blieb nicht wegen des Generators offen: Die geometrisch bessere Paarung trennte 70 von
   71 Berührkanten, die letzte trennt erst die andere (`separate_touching_sheets`, zweiter
-  Durchgang); dabei wurde die Eckensuche sortiert (zerfallenes Netz 107 s statt 1,7 s bis 5,9 s).
+  Durchgang); dabei wurde die Eckensuche sortiert (an zerfallenen Netzen 1,7 bis 5,9 s statt 55 bis 192 s).
   `repair` Cache 6, `load` 8. (3) Zerfallene Rohnetze erkennt `generate.fell_apart` am Anteil der
   Kanten mit mehr als zwei Flächen, die das Trennen nicht auflöst (heil 0 bis 0,036 %, zerfallen
   0,63 bis 3,4 %, Grenze 0,2 %); der Erzeugungsdialog schreibt „zerfallen“ in die Zeile und nennt
@@ -44271,7 +44273,87 @@ Zylinderkopf und Gewinde passend zur Bohrung.
   sind zerfallen und werden vor dem Übernehmen gemeldet. Derselbe Endstand mit `main` (`df4f04e63`):
   Bild 8 offen, „kreuzt sich selbst“ an Bild 7 und 13 und Text 7, 12, 13 und 15. Erzeugen kalt
   260 bis 290 s, warm 37 bis 67 s; Auswertung 38 bis 160 s, ein zerfallenes Netz bis 315 s.
-  **Neu gefunden, an den Koordinator gemeldet:** Fünf der geschlossenen Körper (Bild 11 und 12,
-  Text 11, 14 und 15) sind eine Haut von rund 0,3 mm um einen Hohlraum, 2,1 bis 2,8 cm³ statt 20
-  bis 37 cm³ — der Generator lässt die Oberfläche offen, `RemeshMesh` (`udf`) macht daraus ein
-  dünnes Band, und kein Befund nennt es.
+  **Dem Wortlaut nach erfüllt, in der Sache mit [RM-577](#rm-577):** Fünf der geschlossenen Körper
+  (Bild 11 und 12, Text 11, 14 und 15) sind eine Haut von rund 0,3 mm um einen Hohlraum, 2,1 bis
+  2,8 cm³ statt 20 bis 37 cm³ — der Generator lässt die Oberfläche offen, `RemeshMesh` (`udf`)
+  macht daraus ein dünnes Band. Volle Körper ohne Warnung sind es auf dem Bildweg 5 von 8, auf
+  dem Textweg 4 von 9; die Häute meldet seit RM-577 der Dialog und der Prüfbericht.
+
+  **Review K (08.10.2026), behoben:** Das Urteil „zerfallen“ rechnet einmal im Arbeiter und merkt
+  sich das Netz (`_remembered`), vorher je Zeilenwahl 2 bis 6 s im Hauptthread (H1). Die
+  Faltenglättung rückt nur Ecken, die am anderen Dreieck liegen, je höchstens um die längste
+  Kante ihres Fächers, füllt erst bei Bedarf neu (G2); Tests mit Zapfenfalte, Neufüllen und gegen
+  die unverformte Kugel, rot ohne Volumenwache (M6). Endstand mit dem Review-Stand:
+  `messung-ki/weg3-paket-k/endstand-review.log`.
+
+
+## RM-577: Ein erzeugter Körper, der nur eine dünne Haut um einen Hohlraum ist, wird erkannt und gemeldet (08.10.2026)
+
+<a id="rm-577-ein-erzeugter-körper-der-nur-eine-dünne-haut-um-einen-hohlraum-ist-wird-erkannt-und-gemeldet-08102026"></a>
+<a id="rm-577"></a>
+
+**RM-577 — Ein erzeugter Körper, der nur eine dünne Haut um einen Hohlraum ist, wird erkannt und
+  gemeldet.** Gefunden am 08.10.2026 bei der Messung zu [RM-550](#rm-550) (Paket K): Fünf von 17
+  TRELLIS.2-Läufen endeten geschlossen und ohne Befund, aber als Haut von 0,26 bis 0,30 mm um
+  einen Hohlraum (2,1 bis 2,8 cm³ statt 20 bis 37 cm³). Vorgabe Koordinator/Robert: am Endstand
+  die mittlere Wanddicke 2·V/A gegen die kleinste druckbare Wand des Profils, Befund mit
+  Handlungsvorschlag, und der Erzeugungsdialog sagt es je Versuch.
+
+  **Erledigt 08.10.2026 (Paket K, Claude).** Endstandsprüfung `scene.thin_skins` nur an Körpern
+  aus erzeugten Quellen (`evaluate.check_thin_skins`, Grenze `analysis_limits`, Regel 7), Befund
+  `scene.thin_skin` mit *Neu erzeugen* (`errors.GENERATE_AGAIN`, öffnet *Modell erzeugen*). Im
+  Dialog misst `generate.skin_thickness` die dickste große Schale des Rohnetzes im Arbeiter
+  (heil 2,1 bis 7,7 mm, Haut 0,26 bis 0,30 mm) und schreibt „nur eine Haut“ in die Zeile, mit
+  *Noch ein Versuch*. Korpus `generated_skin.npz` (Text, Startwert 14). Am echten Endstand
+  meldet der Prüfbericht alle fünf Häute (`endstand-review.log`).
+
+
+## RM-564: Vor dem Herunterladen nennt Solidon die Voraussetzungen eines Modells und ob dieser Rechner sie erfüllt (08.10.2026)
+
+<a id="rm-564-vor-dem-herunterladen-nennt-solidon-die-voraussetzungen-eines-modells-und-ob-dieser-rechner-sie-erfüllt-08102026"></a>
+<a id="rm-564"></a>
+
+**RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher
+  nennen.** Kunden-E-Mail vom 07.10.2026, MacBook mit M3 und 512 GB: qwen3:14b über Ollama
+  stand nach 30 Minuten bei Schritt 4 von 12; ComfyUI verlangte für ein Winkeleisen aus einem
+  Bild weitere Dutzende Gigabyte. **Soll:** Vor der Einrichtung nennt Solidon Platzbedarf und
+  erwartete Dauer für diesen Rechner und schlägt auf Apple Silicon ein passendes Modell vor;
+  die Systemanforderungen der Website (16 GB) stimmen mit den echten Modellen überein.
+  **Abnahme (geändert, Entscheidung Robert 08.10.2026: keine Mac-Messung, „bevor geladen wird,
+  Voraussetzungen nennen, ansonsten so lassen“):** *Chat einrichten* und *ComfyUI einrichten*
+  nennen vor jedem Herunterladen die Voraussetzungen — Grafikspeicher bzw. auf dem Mac den Anteil
+  des gemeinsamen Speichers, Platz auf dem Datenträger, ob eine Grafikkarte nötig ist — und ob
+  dieser Rechner sie erfüllt, mit Handlungsvorschlag (kleineres Modell, eigener Schlüssel); die
+  Angaben aus einer Quelle; Mac-Werte als gerechnet bzw. „auf einem Mac nicht gemessen“
+  gekennzeichnet; Website und Handbuch gleich.
+
+  **Stand 08.10.2026 (Paket K, Claude), gebaut:** `backends/machine.py` erkennt Apple Silicon
+  und Arbeitsspeicher ohne fremdes Programm; auf dem Mac zählt der Anteil, den macOS der Grafik
+  lässt (zwei Drittel bis 36 GB, darüber drei Viertel). Ohne eigene Wahl ist das beste gemessene
+  Modell, das ganz hineinpasst, die Vorgabe (16 GB: qwen3.5:9b, ab 24 GB: qwen3:14b, 8 GB: keines,
+  der Satz nennt den Schlüssel). *Chat einrichten* sagt unter jedem Modell vor dem Holen, ob es
+  auf diesem Mac zu groß ist und welches passt, und prüft den freien Platz am Modellordner von
+  Ollama; die Chatleiste sagt es auch. *ComfyUI einrichten* rechnet die gewählten Modelle gegen
+  den freien Platz und nennt die gemessene Dauer (RTX 4080), auf dem Mac, dass sie dort nicht
+  gemessen ist. Systemvoraussetzungen und KI-Seite der Website in sechs Sprachen: Mac-Speicher je
+  Modell, Platz für Download und ComfyUI; „16 GB für die größeren“ stimmte für qwen3:30b-a3b
+  nicht. Handbuch *Welche Modelle Solidon benutzt* zieht nach. **Offen:** die Messung auf einem
+  M-Chip mit mindestens 16 GB — belegter Speicher über Metal, ob qwen3.5:9b ganz auf der Grafik
+  läuft, Antwortzeit —, danach `OLLAMA_MEMORY_GB`, Website und Handbuch gegen die Messung; dazu
+  Weg 3 auf dem Mac (int8 hat dort kein `torch._int_mm`, ComfyUI rechnet die Gewichte voll aus).
+
+  **Abschluss 08.10.2026 (Paket K, Claude), nach Roberts Entscheidung.** Die freigegebene Messung
+  auf `macos-latest-xlarge` (M2, 14 GB) startete nicht — GitHub verlangt dafür ein Ausgabenlimit
+  über null oder eine gültige Zahlung im Konto; `macos-latest` taugt nicht (7 GB, Ollama fand
+  keine GPU, qwen3:1.7b schrieb 0,9 Token/s). Daraufhin entschied Robert: keine Mac-Messung.
+  Gebaut: `backends/needs.py` ist die eine Quelle für die Voraussetzungen (`chat_needs`,
+  `graphics_verdict`, `chat_disk_need`, `generator_needs`, `duration_text`); `machine.py` erkennt
+  dazu eine NVIDIA-Karte über `nvidia-smi` (§32, im Arbeiter). Review K behoben: Vorgabe auf einem
+  8-GB-Mac das kleinste Modell statt des größten (M3), ein entferntes Ollama wird nicht nach
+  diesem Rechner beurteilt (M4), die Platzprüfung zieht Geladenes ab, findet den Ordner wie Ollama
+  (`OLLAMA_MODELS`, systemd-Unit) oder sagt „unbekannt“ und warnt beim ersten Klick, statt zu
+  sperren (M5), Mac-Werte „sollte“/„gerechnet“ (M2), Dauer aus der Messung des heutigen Ablaufs
+  (M1: erster Auftrag nach dem Start Bild 209 bis 258 s, Text 270 bis 315 s, jeder weitere 35 bis
+  160 s), Luft und Dauersatz aus einer Quelle (G1), Chatleiste auf dem Mac ohne PC-Rat (G3),
+  Website mit freiem Platz statt Download (G4). Tests in `test_backends.py`, `test_chat_ui.py`,
+  `test_generate_ui.py`.

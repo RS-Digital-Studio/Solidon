@@ -1769,9 +1769,9 @@ def test_on_a_small_mac_the_dialog_picks_the_fitting_model_and_says_why(
 ) -> None:
     """MacBook M3 mit 16 GB: qwen3:14b stand nach 30 Minuten bei Schritt 4 von 12 (RM-564).
 
-    Ohne eigene Wahl steht das Modell vorn, das ganz über die Grafik läuft,
-    und unter dem zu großen steht vor dem Herunterladen, warum es hier
-    Minuten dauert und welches passt.
+    Ohne eigene Wahl steht das Modell vorn, das nach der Rechnung ganz über die
+    Grafik laufen sollte, und unter jedem stehen vor dem Herunterladen seine
+    Voraussetzungen, ob dieser Mac sie erfüllt und welches sonst passt.
     """
     from app.core.backends import keys, llm, machine
     from app.ui.dialogs import KeyDialog
@@ -1783,34 +1783,43 @@ def test_on_a_small_mac_the_dialog_picks_the_fitting_model_and_says_why(
     llm.remember_ollama_model("")
     dialog = KeyDialog()
 
-    assert dialog._chosen_model() == "qwen3.5:9b", "vorgewählt ist, was passt"
-    assert "passt" in dialog.model_note.text()
+    assert dialog._chosen_model() == "qwen3.5:9b", "vorgewählt ist, was passen sollte"
+    note = dialog.model_note.text()
+    assert "Braucht" in note and "sollte" in note and "nicht nachgemessen" in note, note
 
     dialog.model_field.setCurrentIndex(dialog.model_field.findData("qwen3:14b"))
     note = dialog.model_note.text()
     assert "Download: 9,3 GB" in note, "die Größe steht vor dem Herunterladen"
-    assert "zu groß" in note and "qwen3.5:9b" in note, note
+    assert "voraussichtlich zu groß" in note and "qwen3.5:9b" in note, note
 
 
-def test_a_model_that_does_not_fit_on_the_disk_is_not_fetched(
+def test_a_model_that_may_not_fit_on_the_disk_is_fetched_on_the_second_click(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Der Platz wird vor dem Holen geprüft; der Satz nennt Ort und Zahlen."""
-    from app.core.backends import comfy_setup, keys
+    """Der Platz wird vor dem Holen geprüft und genannt; der zweite Klick holt
+    trotzdem — die Rechnung kann irren (Review K, M5)."""
+    from app.core.backends import comfy_setup, keys, needs
     from app.ui.dialogs import KeyDialog
 
     monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.setattr(needs, "ollama_models_folder", lambda: Path.home())
     monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 2.0)
-    started: list[object] = []
-    monkeypatch.setattr("app.ui.dialogs._PullWorker", lambda *args: started.append(args))
     dialog = KeyDialog()
+    started: list[object] = []
+    monkeypatch.setattr(dialog._leash, "start", started.append)
     dialog.model_field.setCurrentIndex(dialog.model_field.findData("qwen3:14b"))
 
     dialog._pull_model()
 
-    assert not started, "kein Download auf eine volle Platte"
+    assert not started, "der erste Klick warnt nur"
     assert "2,0 GB frei" in dialog.probe_result.text(), dialog.probe_result.text()
     assert dialog.model_field.isEnabled(), "die Auswahl bleibt bedienbar"
+
+    dialog._pull_model()
+
+    assert len(started) == 1, "der zweite Klick holt"
+    if dialog._pull is not None:
+        dialog._pull.cancel()
 
 
 def test_an_installed_alias_keeps_its_known_explanation(

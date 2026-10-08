@@ -2081,7 +2081,7 @@ def models_text() -> str:
     eine Messung, ändert sich diese Seite mit — sonst stünde hier eine
     Empfehlung, die niemand mehr gibt.
     """
-    from app.core.backends import comfy_setup
+    from app.core.backends import comfy_setup, needs
     from app.core.backends.llm import (
         DEFAULT_OLLAMA_MODEL,
         OLLAMA_MIN_PARAMETERS,
@@ -2153,13 +2153,12 @@ def models_text() -> str:
             # RM-564: Auf Apple Silicon ist der Arbeitsspeicher der Grafikspeicher.
             str(
                 _(
-                    "Auf einem Mac mit Apple Silicon teilen sich Grafik und Prozessor den "
-                    "Arbeitsspeicher, und macOS überlässt der Grafik rund zwei Drittel "
-                    "davon. Ein Modell, das dort nicht hineinpasst, rechnet zum Teil auf "
-                    "dem Prozessor, und jede Anfrage dauert Minuten. *Bearbeiten → Chat "
-                    "einrichten* wählt deshalb auf dem Mac das Modell vor, das passt, sagt "
-                    "unter jedem anderen, ob es hier zu groß ist, und prüft vor dem Holen "
-                    "den freien Platz."
+                    "Vor dem Holen nennt *Bearbeiten → Chat einrichten* unter jedem Modell, was "
+                    "es braucht — Grafikspeicher, auf einem Mac mit Apple Silicon den Anteil des "
+                    "gemeinsamen Speichers, den macOS der Grafik lässt, und freien Platz —, und "
+                    "ob dieser Rechner das hat. Fehlt etwas, nennt der Satz ein kleineres Modell "
+                    "oder den eigenen Schlüssel. Für den Mac ist das aus der Messung auf einer "
+                    "RTX 4080 gerechnet und auf einem Mac nicht nachgemessen."
                 )
             ),
             "",
@@ -2254,20 +2253,7 @@ def models_text() -> str:
                 )
             ),
             "",
-            str(
-                _(
-                    "Gemessen auf einer NVIDIA RTX 4080 mit {memory} GB dauert der erste Auftrag "
-                    "aus einem Bild rund {image} Minuten, aus Text rund {text}, jeder weitere "
-                    "rund {warm} Sekunden."
-                )
-            ).format(
-                image=round(comfy_setup.FIRST_IMAGE_SECONDS / 60),
-                text=round(comfy_setup.FIRST_TEXT_SECONDS / 60),
-                warm=comfy_setup.WARM_SECONDS,
-                memory=comfy_setup.MEASURED_GRAPHICS_GB,
-            )
-            + " "
-            + str(_("Auf einem Mac ist das noch nicht gemessen.")),
+            needs.duration_text(mac_note=True),
             "",
             str(
                 _(

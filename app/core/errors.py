@@ -147,6 +147,9 @@ RESIZE_THE_WIDENING = Action("resize_the_widening", _("Senkung mitziehen"), prim
 #: Gewinde braucht ein längeres Gewinde (Review P2 Bausteine, M2).
 CHANGE_THREAD_STEP = Action("change_creating_step", _("Gewindeschritt öffnen"), primary=True)
 SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
+#: Ein neuer Versuch in Weg 3 (RM-577): öffnet *Modell erzeugen*, das
+#: vorhandene Modell bleibt, bis der Kunde es selbst entfernt.
+GENERATE_AGAIN = Action("generate_again", _("Neu erzeugen"), primary=True)
 #: Die Handlungen am Verlauf selbst (P7). Einschalten nimmt mit, was der
 #: Schritt braucht; der Schritt steht in ``values["reactivate"]`` beziehungsweise
 #: in ``op_id``. Rücknehmbar, also ohne Nachfrage (Regel 19).

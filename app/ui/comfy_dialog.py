@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.backends import comfy_setup, machine, mesh
+from app.core.backends import comfy_setup, machine, mesh, needs
 from app.core.errors import InternalError
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
@@ -137,6 +137,9 @@ def _probe_folder(generation: int, entered: str, results: Queue[_FolderProbeResu
             free: float | None = comfy_setup.free_gigabytes(found / "models")
         except OSError:
             free = None
+        # Den Rechner hier erheben (``nvidia-smi`` ist ein Prozess), nicht im
+        # Hauptthread (RM-564).
+        machine.this_machine()
     except comfy_setup.SetupFailed as problem:
         results.put(_FolderProbeResult(generation, entered, reason=str(problem)))
     except Exception as problem:
@@ -375,53 +378,21 @@ class ComfySetupDialog(QDialog):
         self._show_needs()
 
     def _show_needs(self, *_args: object) -> None:
-        """Wie viel die gewählten Modelle brauchen, was frei ist und wie lange ein Auftrag dauert.
+        """Was die gewählten Modelle brauchen, ob dieser Rechner es hat, und wie lange
+        ein Auftrag dauert — vor *Einrichten* (RM-564, ``needs.generator_needs``).
 
-        Die Dauer ist die gemessene der RTX 4080 (``comfy_setup.FIRST_*``);
-        auf Apple Silicon steht dazu, dass Weg 3 dort nicht gemessen ist.
+        Erst nach der Ordnerprüfung: Sie hat im Faden Platz und Rechner erhoben,
+        hier wird nur gelesen.
         """
-        needed = (
-            comfy_setup.WEIGHT_GIGABYTES
-            if self.weights.isEnabled() and self.weights.isChecked()
-            else 0.0
-        ) + (
-            comfy_setup.IMAGE_MODEL_GIGABYTES
-            if self.image_model.isEnabled() and self.image_model.isChecked()
-            else 0.0
+        if not self._probe_succeeded:
+            self.needs.setText("")
+            return
+        said, short = needs.generator_needs(
+            self.weights.isEnabled() and self.weights.isChecked(),
+            self.image_model.isEnabled() and self.image_model.isChecked(),
+            self._free_gigabytes,
         )
-        lines: list[str] = []
-        role = "info"
-        free = self._free_gigabytes
-        if needed and free is not None:
-            if free < needed + comfy_setup.HEADROOM_GIGABYTES:
-                role = "warning"
-                lines.append(
-                    tr(
-                        "Zusammen rund {needed} GB, frei sind nur {free} GB. Schaffen Sie "
-                        "vorher Platz auf diesem Laufwerk."
-                    ).format(needed=format_decimal(needed, 1), free=format_decimal(free, 1))
-                )
-            else:
-                lines.append(
-                    tr("Zusammen rund {needed} GB, frei sind {free} GB.").format(
-                        needed=format_decimal(needed, 1), free=format_decimal(free, 1)
-                    )
-                )
-        lines.append(
-            tr(
-                "Gemessen auf einer NVIDIA RTX 4080 mit {memory} GB dauert der erste Auftrag aus "
-                "einem Bild rund {image} Minuten, aus Text rund {text}, jeder weitere rund "
-                "{warm} Sekunden."
-            ).format(
-                image=round(comfy_setup.FIRST_IMAGE_SECONDS / 60),
-                text=round(comfy_setup.FIRST_TEXT_SECONDS / 60),
-                warm=comfy_setup.WARM_SECONDS,
-                memory=comfy_setup.MEASURED_GRAPHICS_GB,
-            )
-        )
-        if machine.this_machine().apple_silicon:
-            lines.append(tr("Auf einem Mac ist das noch nicht gemessen."))
-        set_role(self.needs, role, " ".join(lines))
+        set_role(self.needs, "warning" if short else "info", said)
 
     def _set_start_enabled(self, enabled: bool, reason: str | None = None) -> None:
         """Eine laufende Ordnerprüfung auf allen Kanälen am Knopf erklären."""

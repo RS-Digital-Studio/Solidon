@@ -54,6 +54,9 @@ _ENVIRONMENT_NAMES: Final = (
     "APPDATA",
     "LOCALAPPDATA",
     "PROGRAMDATA",
+    # Der Programmordner: ``nvidia-smi`` findet ohne ihn seine NVML nicht und
+    # antwortet „Failed to initialize NVML“ (RM-564).
+    "PROGRAMFILES",
     "LANG",
     "LC_ALL",
     "LC_CTYPE",

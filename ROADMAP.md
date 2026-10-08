@@ -114,7 +114,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Alle 575 Matrixzeilen eingeordnet, neun Übergabefehler behoben, Auto-Brim mit fester Breite und Warnung, Stützfuß und Skirt am Bettrand aus dem Profil (04.10.), Brim und Skirt um die erste Schicht statt um die Aufsicht (05.10.); Stützfuß unter den Überhängen statt unter der ganzen Aufsicht (06.10.); offen: der Gesamtlauf jedes Modell × jeder Slicer (mit RM-281) und die Fensterabnahme beim Release; die Druckdauer am K1 ist ohne Gerät nicht messbar |
 | [RM-502 — Dialog-Durchsicht vom 29.09.: spätere Korrekturen abnehmen und verbliebene Hinweisorte klären](#rm-502) | Bedienung und Darstellung | Ziffernweg und Rückweg „Unbekannt“ in sechs Sprachen über den Spulendialog belegt, Speicherfehler und kleines Spulenfenster durch bestehende Fälle; offen allein die Fensterabnahme auf allen Plattformen beim Release (RM-213) |
 | [RM-003 — Lizenzkette der Generatoren klären und TripoSG ersetzen](#rm-003) | KI und Generatoren | Weg 3 auf TRELLIS.2-4B und FLUX.2 [klein] 4B umgebaut, alte Einrichtung wird mit Ansage entfernt (Robert, 07.10.); offen die Kanzleifragen (DINOv3-Lizenz, Trainingsdaten, Apache-Hinweise), bis dahin nennt die Startseite den Prüfvorbehalt |
-| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung (fünf davon nur eine Haut, neuer Fund), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
+| [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Windows mit TRELLIS.2 gefahren (07./08.10.): Text- und Bildweg bis zum Export; nach RM-550 sind 14 von 17 Läufen geschlossen und ohne Warnung, fünf davon nur eine Haut (seit RM-577 gemeldet), drei zerfallene meldet der Dialog vor dem Übernehmen; offen Linux und macOS |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) 12 Schritte, (b) gebündelte Aufrufe und das lokale Zugbudget gebaut, Quote gehalten (27–28 von 39, 07.10.); offen: zehn mehrteilige Fälle enden weiter am Limit, nur jetzt an den 12 Schritten |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal nach RM-513 ohne Verschlechterung (06.10.); gehostet freigegeben (Robert, 06.10.), wartet auf einen hinterlegten Anthropic-Schlüssel — misst dann auch Prompt-Version 9 (RM-251 (b), Sprachzeile, RM-014) |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -151,7 +151,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg](#rm-544) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): alle Gewindearten samt Einstellung der Auswahllisten; baut auf RM-532 (jedes Maß) und RM-536 (Stift für Bohrung) auf |
 | [RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen](#rm-562) | Kundenrückmeldungen | Kunden-E-Mail 07.10. und Robert 08.10.: Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter ohne Trägerkörper |
 | [RM-563 — Verrunden an mehreren Kanten zugleich wählen](#rm-563) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: Mehrfachauswahl von Kanten und Ecken fand der Kunde nicht; Bestand prüfen, Weg bauen oder zeigen |
-| [RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher nennen](#rm-564) | Kundenrückmeldungen | Gebaut (08.10.): Mac-Vorgabe nach Arbeitsspeicher, Satz je Modell, Platzprüfung vor dem Holen, ComfyUI nennt Platz und Dauer, Website in sechs Sprachen; offen die Messung auf einem M-Chip mit mindestens 16 GB |
 | [RM-565 — *Auswahl als Baustein speichern* nimmt den gewählten Körper](#rm-565) | Kundenrückmeldungen | Robert, 07.10.: Körper wählen, Bausteinkatalog öffnen, *Speichern* |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
@@ -4297,7 +4296,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   [RM-550](ROADMAP-ARCHIV.md#rm-550). Bericht, Rohnetze und Exporte (nicht versioniert):
   `output/konsolidierung-2026-10-07/messung-ki/weg3*`. **08.10.2026 (Paket K):** 17 weitere Läufe
   (Rakete, Text Startwert 7 bis 15, Bild 7 bis 14) mit dem Stand von RM-550: 14 geschlossen ohne
-  Warnung, fünf davon nur eine Haut von 0,3 mm (an den Koordinator gemeldet); die drei übrigen
+  Warnung, fünf davon nur eine Haut von 0,3 mm ([RM-577](ROADMAP-ARCHIV.md#rm-577)); die drei übrigen
   zerfallen schon im Generator und werden vor dem Übernehmen gemeldet.
   **Offen:** dieselben Läufe unter Linux und macOS.
 
@@ -5244,42 +5243,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Zuerst prüfen, was es gibt; fehlt der Weg, wird er gebaut, gibt es ihn, wird er sichtbar.
   **Abnahme:** Strg- oder Umschalt-Klick wählt mehrere Kanten, *Verrunden* nimmt alle als einen
   Schritt, am Netz wie am exakten Körper; Handbuch nennt den Weg; Fenstertest.
-
-<a id="rm-564"></a>
-
-- [~] **RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher
-  nennen.** Kunden-E-Mail vom 07.10.2026, MacBook mit M3 und 512 GB: qwen3:14b über Ollama
-  stand nach 30 Minuten bei Schritt 4 von 12; ComfyUI verlangte für ein Winkeleisen aus einem
-  Bild weitere Dutzende Gigabyte. **Soll:** Vor der Einrichtung nennt Solidon Platzbedarf und
-  erwartete Dauer für diesen Rechner und schlägt auf Apple Silicon ein passendes Modell vor;
-  die Systemanforderungen der Website (16 GB) stimmen mit den echten Modellen überein.
-  **Abnahme:** Messung des Chat-Modells auf einem M-Chip mit mindestens 16 GB, auf einem
-  großen Läufer oder einem echten Mac — der GitHub-Läufer `macos-latest` hat 7 GB, qwen3:14b
-  braucht rund 9 GB; ein kleineres Modell darf zusätzlich auf `macos-latest` gemessen werden.
-  Der Einrichtungsdialog nennt die Größe vor dem Herunterladen; Website-Text gegen die Messung.
-
-  **Stand 08.10.2026 (Paket K, Claude), gebaut:** `backends/machine.py` erkennt Apple Silicon
-  und Arbeitsspeicher ohne fremdes Programm; auf dem Mac zählt der Anteil, den macOS der Grafik
-  lässt (zwei Drittel bis 36 GB, darüber drei Viertel). Ohne eigene Wahl ist das beste gemessene
-  Modell, das ganz hineinpasst, die Vorgabe (16 GB: qwen3.5:9b, ab 24 GB: qwen3:14b, 8 GB: keines,
-  der Satz nennt den Schlüssel). *Chat einrichten* sagt unter jedem Modell vor dem Holen, ob es
-  auf diesem Mac zu groß ist und welches passt, und prüft den freien Platz am Modellordner von
-  Ollama; die Chatleiste sagt es auch. *ComfyUI einrichten* rechnet die gewählten Modelle gegen
-  den freien Platz und nennt die gemessene Dauer (RTX 4080), auf dem Mac, dass sie dort nicht
-  gemessen ist. Systemvoraussetzungen und KI-Seite der Website in sechs Sprachen: Mac-Speicher je
-  Modell, Platz für Download und ComfyUI; „16 GB für die größeren“ stimmte für qwen3:30b-a3b
-  nicht. Handbuch *Welche Modelle Solidon benutzt* zieht nach. **Offen:** die Messung auf einem
-  M-Chip mit mindestens 16 GB — belegter Speicher über Metal, ob qwen3.5:9b ganz auf der Grafik
-  läuft, Antwortzeit —, danach `OLLAMA_MEMORY_GB`, Website und Handbuch gegen die Messung; dazu
-  Weg 3 auf dem Mac (int8 hat dort kein `torch._int_mm`, ComfyUI rechnet die Gewichte voll aus).
-  Der Standardläufer `macos-latest` taugt dafür nicht (7 GB, Ollama findet keine GPU, qwen3:1.7b
-  schreibt 0,9 Token/s). Die von Robert freigegebene Messung auf `macos-latest-xlarge` (M2,
-  14 GB laut GitHub, also eine untere Grenze für 16 GB) startete am 08.10.2026 nicht: GitHub
-  verlangt dafür ein Ausgabenlimit über null oder eine gültige Zahlung im Konto
-  (*Billing & plans*). Nach der Freischaltung einmal fahren: Ollama über Homebrew, qwen3.5:9b
-  und qwen3:14b mit `num_ctx` 32 768, `tools/measure_local_model.py --runs 3`,
-  `tools/run_agent_suite.py --backend ollama --only bracket`, dazu `api/ps` (Belegung, Anteil
-  auf der Grafik) und Metals `recommendedMaxWorkingSetSize` gegen `Machine.graphics_gb`.
 
 <a id="rm-565"></a>
 

@@ -20,14 +20,16 @@ wenn sie etwas weggenommen hat, das gemeint war (§11.1).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Final
+from typing import Final, cast
 
 from app.core import activation
 from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
+from app.core.deferred import trimesh
 from app.core.errors import AppError
-from app.core.geom.mesh import MeshData, edge_table
+from app.core.geom.mesh import MeshData, edge_table, face_components, signed_volume
 from app.core.geom.repair import branching_edge_count, separate_touching_sheets
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
@@ -148,19 +150,76 @@ def fell_apart(mesh: Mesh) -> bool:
 
     Gefragt wird vor dem Übernehmen, denn der Ausweg ist ein neuer Versuch und
     keine Reparatur. Gezählt wird am Netz, wie es aus dem Generator kommt; ein
-    heiles Netz liegt schon vor dem Trennen unter der Grenze und kostet eine
-    Kantenzählung, die sich das Netz merkt. Der Dialog fragt im Arbeiter. Ein
-    Netz ohne Dreiecke zum Zählen — eine Attrappe mit Kennzahlen — gilt als
-    heil.
+    heiles Netz liegt schon vor dem Trennen unter der Grenze. An einem
+    zerfallenen kostet das Trennen Sekunden (2 bis 6 s gemessen), deshalb
+    **merkt sich das Netz die Antwort** (:func:`_remembered`), und der Dialog
+    fragt zuerst im Arbeiter (Review K, H1). Ein Netz ohne Dreiecke zum Zählen
+    — eine Attrappe mit Kennzahlen — gilt als heil.
     """
     if not isinstance(mesh, MeshData):
         return False
-    edges = len(edge_table(mesh.raw).counts)
-    limit = TANGLED_EDGE_SHARE * edges
-    if not edges or branching_edge_count(mesh) < limit:
-        return False
-    separated, _count = separate_touching_sheets(mesh)
-    return branching_edge_count(separated) >= limit
+
+    def judge() -> bool:
+        edges = len(edge_table(mesh.raw).counts)
+        limit = TANGLED_EDGE_SHARE * edges
+        if not edges or branching_edge_count(mesh) < limit:
+            return False
+        separated, _count = separate_touching_sheets(mesh)
+        return branching_edge_count(separated) >= limit
+
+    return bool(_remembered(mesh, "solidon_fell_apart", judge))
+
+
+#: Welcher Anteil der Oberfläche eine Schale haben muss, damit ihre Dicke zählt
+#: (:func:`skin_thickness`) — darunter sind es Krümel.
+SKIN_SHELL_SHARE: Final = 0.1
+
+
+def skin_thickness(mesh: Mesh) -> float | None:
+    """Die mittlere Dicke der dicksten großen Schale, auf Arbeitsgröße gerechnet (RM-577).
+
+    Je Schale mit positivem Volumen und mindestens :data:`SKIN_SHELL_SHARE`
+    der Fläche ``2·V/A`` in Millimetern bei :data:`WORKING_SIZE_MM` — für eine
+    dünne Wand ist das ihre Dicke. Ein heiles Rohnetz von TRELLIS.2 (Außen- und
+    Innenhülle getrennt) hat eine Außenhülle von 2,1 bis 7,7 mm, eine Haut um
+    einen Hohlraum, bei der beide Hüllen zusammenhängen, 0,26 bis 0,30 mm
+    (Messung 08.10.2026). ``None`` ohne Netz oder ohne eine solche Schale.
+    Die Zahl merkt sich das Netz.
+    """
+    if not isinstance(mesh, MeshData) or not mesh.triangle_count:
+        return None
+
+    def measure() -> float:
+        raw = mesh.raw
+        longest = float(max(raw.extents))
+        total = float(raw.area)
+        if longest <= EPS_GEOM or total <= 0.0:
+            return -1.0
+        best = -1.0
+        for faces in face_components(raw):
+            shell = cast("trimesh.Trimesh", raw.submesh([faces], append=True, repair=False))
+            area = float(shell.area)
+            volume = signed_volume(shell)
+            if area >= SKIN_SHELL_SHARE * total and volume > 0.0:
+                best = max(best, 2.0 * volume / area * WORKING_SIZE_MM / longest)
+        return best
+
+    found = float(_remembered(mesh, "solidon_skin_thickness", measure))
+    return None if found < 0.0 else found
+
+
+def _remembered(mesh: MeshData, key: str, compute: Callable[[], float | bool]) -> float | bool:
+    """Eine Antwort über ein Rohnetz, einmal gerechnet und im Cache des Netzes
+    abgelegt, der mit dessen Geometrie verfällt (wie ``MeshData.component_count``)."""
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is not None:
+        cache.verify()
+        if key in cache:
+            return cast("float | bool", cache[key])
+    value = compute()
+    if cache is not None:
+        cache[key] = value
+    return value
 
 
 @dataclass(frozen=True, slots=True)

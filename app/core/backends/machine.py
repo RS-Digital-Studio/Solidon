@@ -7,10 +7,11 @@ Prozessor, und eine Antwort dauert Minuten statt Sekunden. Gemeldet von einem
 Kunden mit MacBook M3: qwen3:14b stand nach 30 Minuten bei Schritt 4 von 12.
 Der Satz dazu gehört vor das Herunterladen, nicht in die Fehlersuche danach.
 
-Gefragt wird nur, was der Rechner ohne fremdes Programm sagt: Prozessorart und
-Arbeitsspeicher. Eine Grafikkarte unter Windows oder Linux misst Solidon erst
-mit dem geladenen Modell (``llm.ollama_speed``) — vorher wäre jede Zahl
-geraten.
+Gefragt wird, was der Rechner selbst sagt: Prozessorart und Arbeitsspeicher
+über das System, eine NVIDIA-Karte über ``nvidia-smi``, das ihr Treiber
+mitbringt (§32: fester Arbeitsordner, Zeit- und Ausgabegrenze). Eine andere
+Karte nennt Solidon nicht; ob sie rechnet, misst ``llm.ollama_speed`` mit dem
+geladenen Modell — vorher wäre jede Zahl geraten.
 """
 
 from __future__ import annotations
@@ -18,12 +19,15 @@ from __future__ import annotations
 import ctypes
 import os
 import platform
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from functools import cache
 from typing import Final
 
 from app.core.log import get_logger
+from app.core.process import run_limited, trusted_cwd
 
 _log = get_logger(__name__)
 
@@ -36,6 +40,12 @@ APPLE_GRAPHICS_SHARE_SMALL: Final = 2.0 / 3.0
 APPLE_GRAPHICS_SHARE_LARGE: Final = 3.0 / 4.0
 APPLE_SHARE_LIMIT_GB: Final = 36.0
 
+#: Was eine Grafikkarte unter Windows für Desktop und Fenster belegt, bevor ein
+#: Modell lädt — gemessen 1,3 GB auf der RTX 4080 (Durchsicht 0.5.1,
+#: ``llm.OLLAMA_SUGGESTIONS``). Ein Modell mit 7,4 GB passt deshalb nicht ganz
+#: auf eine 8-GB-Karte, wohl aber auf eine mit 10 GB.
+CARD_RESERVE_GB: Final = 1.3
+
 
 @dataclass(frozen=True, slots=True)
 class Machine:
@@ -43,14 +53,20 @@ class Machine:
 
     apple_silicon: bool = False
     memory_gb: float | None = None
+    card_name: str = ""
+    """Die NVIDIA-Karte, wie ``nvidia-smi`` sie nennt — leer, wenn keine erkannt ist."""
+    card_gb: float | None = None
+    """Ihr Grafikspeicher in GB."""
 
     @property
     def graphics_gb(self) -> float | None:
-        """Was die Grafik auf Apple Silicon belegen darf — ``None`` anderswo.
+        """Was ein Modell auf der Grafik belegen darf — ``None``, wenn unbekannt.
 
-        Unter Windows und Linux entscheidet eine eigene Karte, deren Speicher
-        Solidon ohne Herstellerwerkzeug nicht kennt.
+        Auf Apple Silicon der Anteil, den macOS der Grafik lässt; mit einer
+        erkannten Karte ihr Speicher abzüglich :data:`CARD_RESERVE_GB`.
         """
+        if self.card_gb is not None and not self.apple_silicon:
+            return max(0.0, self.card_gb - CARD_RESERVE_GB)
         if not self.apple_silicon or self.memory_gb is None:
             return None
         share = (
@@ -121,13 +137,51 @@ def this_machine() -> Machine:
     return detect()
 
 
+def _nvidia_card() -> tuple[str, float] | None:
+    """Name und Speicher der ersten NVIDIA-Karte — ``None`` ohne Treiber oder Antwort."""
+    program = shutil.which("nvidia-smi")
+    if program is None:
+        return None
+    try:
+        answer = run_limited(
+            [program, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            cwd=trusted_cwd(),
+            timeout=5.0,
+            output_limit=16 * 1024,
+        )
+    except (OSError, subprocess.SubprocessError) as problem:
+        _log.info("nvidia-smi did not answer: %s", problem)
+        return None
+    lines = answer.stdout.decode("utf-8", errors="replace").strip().splitlines()
+    if answer.returncode != 0 or not lines:
+        return None
+    name, _comma, mebibytes = lines[0].rpartition(",")
+    try:
+        gigabytes = float(mebibytes.strip()) / 1024.0
+    except ValueError:
+        return None
+    printable = "".join(letter for letter in name.strip() if letter.isprintable())
+    return printable[:60], gigabytes
+
+
 @cache
 def detect() -> Machine:
-    """Dieser Rechner, einmal je Prozess erhoben."""
+    """Dieser Rechner, einmal je Prozess erhoben — mit ``nvidia-smi`` einmal
+    ein Prozess, deshalb im Arbeiter fragen (Einrichtungsdialoge)."""
     memory = _memory_bytes()
+    apple = _is_apple_silicon()
+    card = None if apple else _nvidia_card()
     found = Machine(
-        apple_silicon=_is_apple_silicon(),
+        apple_silicon=apple,
         memory_gb=memory / 2**30 if memory else None,
+        card_name=card[0] if card else "",
+        card_gb=card[1] if card else None,
     )
-    _log.info("machine: apple_silicon=%s memory_gb=%s", found.apple_silicon, found.memory_gb)
+    _log.info(
+        "machine: apple_silicon=%s memory_gb=%s card=%s %s",
+        found.apple_silicon,
+        found.memory_gb,
+        found.card_name,
+        found.card_gb,
+    )
     return found

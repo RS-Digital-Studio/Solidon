@@ -4107,18 +4107,20 @@ def _folded_ball() -> MeshData:
     return MeshData.of(trimesh.Trimesh(moved, ball.faces, process=False))
 
 
-def test_a_small_fold_is_closed_anew_instead_of_reported_as_crossing() -> None:
-    """Eine Falte wird neu geschlossen, statt „kreuzt sich selbst“ zu melden (RM-550).
+def test_a_small_fold_is_smoothed_instead_of_reported_as_crossing() -> None:
+    """Eine Falte wird geglättet, statt „kreuzt sich selbst“ zu melden (RM-550).
 
     Drei von fünf geschlossenen TRELLIS.2-Körpern trugen nach der Reparatur
     die Warnung „Die Oberfläche kreuzt sich selbst“ — wegen 2 bis 24
     Dreieckspaaren unter einem Millimeter. Die Vereinigung löst eine
-    Eigenkreuzung nicht; die Dreiecke um die Falte zu entfernen und das Loch
-    neu zu füllen schon, ohne das Volumen zu bewegen.
+    Eigenkreuzung nicht; die Ecken der Falte in die Mitte ihrer Nachbarn zu
+    rücken schon. Verglichen wird mit der **unverformten** Kugel und den
+    unberührten Ecken, nicht mit dem gefalteten Eingang (Review K, M6).
     """
     from app.core.geom.repair import crossings_of
 
     folded = _folded_ball()
+    whole = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
     crossing = crossings_of(folded)
     assert folded.is_watertight and 0 < len(crossing.first) <= 8, "der Fall: eine kleine Falte"
 
@@ -4129,7 +4131,76 @@ def test_a_small_fold_is_closed_anew_instead_of_reported_as_crossing() -> None:
     assert "repair.self_crossing" not in codes, "die Warnung entfällt"
     assert healed.mesh.is_watertight and healed.mesh.raw.is_winding_consistent
     assert not len(crossings_of(healed.mesh).first), "nichts kreuzt mehr"
-    assert math.isclose(healed.mesh.volume, folded.volume, rel_tol=1e-3)
+    assert abs(healed.mesh.volume - whole.volume) < 6e-4 * whole.volume, "die Kugel bleibt"
+    moved = np.linalg.norm(
+        np.asarray(healed.mesh.raw.vertices) - np.asarray(folded.raw.vertices), axis=1
+    )
+    shifted = np.asarray(folded.raw.vertices)[moved > 1e-9]
+    assert 0 < len(shifted) <= 12, "nur die Ecken der Falte rücken"
+    spot = whole.vertices[0]
+    assert float(np.linalg.norm(shifted - spot, axis=1).max()) < 12.0, "und nur an der Falte"
+
+
+def test_a_fold_the_shift_cannot_smooth_is_filled_anew(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Trägt das Verschieben nicht, fallen die Dreiecke der Falte, und das Loch
+    wird neu gefüllt (``_refilled``, Review K, M6)."""
+    from app.core.geom import repair as repairing
+
+    monkeypatch.setattr(repairing, "_relaxed", lambda *_args, **_kwargs: None)
+    folded = _folded_ball()
+    whole = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+
+    healed = repair(folded, self_intersections=True)
+
+    assert "repair.folds_smoothed" in {finding.code for finding in healed.findings}
+    assert healed.mesh.triangle_count != folded.triangle_count, "neu gefüllt, nicht verschoben"
+    assert healed.mesh.is_watertight and not len(repairing.crossings_of(healed.mesh).first)
+    assert abs(healed.mesh.volume - whole.volume) < 1e-3 * whole.volume
+
+
+def _folded_pin_on_a_block() -> MeshData:
+    """Ein Zapfen Ø4 × 6 auf einem Block 60 × 60 × 20, eine Zapfenecke umgeklappt.
+
+    Aus der Sonde des Reviews (Review K, M6): Die Kreuzungspaare teilen sich
+    keine Ecke, und das große Deckdreieck des Blocks schneidet das kleine des
+    Zapfens. Eine Glättung, die hier Ecken rückt, verformt den Block.
+    """
+    import manifold3d
+
+    top = 20.0
+    pin = manifold3d.Manifold.cylinder(6.0, 2.0, 2.0, 8).translate((30.0, 30.0, top))
+    body = (manifold3d.Manifold.cube((60.0, 60.0, top)) + pin).to_mesh()
+    whole = trimesh.Trimesh(
+        np.asarray(body.vert_properties)[:, :3], np.asarray(body.tri_verts), process=False
+    )
+    points = whole.vertices.copy()
+    corner = int(np.flatnonzero(np.isclose(points[:, 2], top + 6.0))[0])
+    edge = float(
+        np.linalg.norm(points[whole.vertex_neighbors[corner]] - points[corner], axis=1).mean()
+    )
+    radial = points[corner] - np.array([30.0, 30.0, top + 6.0])
+    radial[2] = 0.0
+    radial /= np.linalg.norm(radial)
+    points[corner] += np.cross(radial, [0.0, 0.0, 1.0]) * 1.5 * edge - [0.0, 0.0, 0.2 * edge]
+    return MeshData.of(trimesh.Trimesh(points, whole.faces, process=False))
+
+
+def test_a_crossing_that_would_reshape_the_body_stays_a_warning() -> None:
+    """Am Zapfen auf dem Block glättet die Reparatur nicht — die Warnung bleibt, das
+    Netz bleibt, wie es war (Review K, M6).
+
+    Ohne Volumenwache rückte eine Ecke 7,7 mm und der Körper wuchs um 2 %;
+    *Überschneidungen auflösen* verspricht „Was nicht sicher geht, bleibt
+    unverändert“.
+    """
+    folded = _folded_pin_on_a_block()
+
+    looked = repair(folded, self_intersections=True)
+
+    codes = {finding.code for finding in looked.findings}
+    assert "repair.self_crossing" in codes and "repair.folds_smoothed" not in codes, codes
+    assert looked.mesh.vertex_count == folded.vertex_count
+    assert np.array_equal(np.asarray(looked.mesh.raw.vertices), np.asarray(folded.raw.vertices))
 
 
 def test_a_fold_stays_reported_when_only_asked_to_look() -> None:

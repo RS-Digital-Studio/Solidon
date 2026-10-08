@@ -593,6 +593,112 @@ def test_a_try_that_fell_apart_says_so_and_names_the_way_to_another(
     qt_app.processEvents()
 
 
+def test_the_list_reads_what_the_worker_already_judged(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Urteil über einen zerfallenen Versuch kostet Sekunden — im Arbeiter, einmal
+    je Versuch, nie im Hauptthread (Review K, H1).
+
+    Vorher rechnete die Liste es bei jedem Neuaufbau und jeder Zeilenwahl neu:
+    drei Aufrufe nach jedem Wurf, je 2 bis 6 s an einem echten Rohnetz.
+    """
+    from app.core import generate
+    from app.ui.generate_dialog import _Worker
+
+    calls: list[object] = []
+    real = generate.separate_touching_sheets
+
+    def counted(mesh: object) -> object:
+        calls.append(mesh)
+        return real(mesh)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(generate, "separate_touching_sheets", counted)
+    backend = ScriptedMeshBackend(
+        fallback=(MESHES / "generated_fell_apart.glb").read_bytes(), suffix=".glb"
+    )
+    results: list[GeneratedMesh] = []
+    worker = _Worker(backend, "Rakete", None, 8)
+    worker.done.connect(results.append)
+    worker.work()
+    assert len(results) == 1 and len(calls) == 1, "der Arbeiter urteilt einmal"
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.tries = [_generated((1.0, 2.0, 0.5)), results[0]]
+        dialog._show_tries()
+        dialog.attempts.setCurrentRow(0)
+        dialog.attempts.setCurrentRow(1)
+        dialog._show_tries()
+
+        assert len(calls) == 1, "die Liste liest nur"
+        assert "zerfallen" in dialog.state.text()
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def _skin() -> GeneratedMesh:
+    """Die Haut aus der Messung vom 08.10.2026 (Text, Startwert 14), als Rohnetz."""
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    stored = np.load(MESHES / "generated_skin.npz")
+    raw = trimesh.Trimesh(
+        stored["vertices"].astype(float), stored["faces"].astype(np.int64), process=False
+    )
+    return GeneratedMesh(mesh=MeshData.of(raw), payload=b"", suffix=".glb", backend="test", seed=14)
+
+
+def test_a_try_that_is_only_a_skin_says_so_before_it_is_taken(qt_app: QApplication) -> None:
+    """Fünf von 17 TRELLIS.2-Läufen waren eine Haut von 0,3 mm um einen Hohlraum,
+    geschlossen und ohne Befund (RM-577). Der Dialog sagt es je Versuch, gemessen
+    gegen die dünnste Wand des Druckers, und nennt den neuen Versuch."""
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.tries = [_skin()]
+        dialog._show_tries()
+        assert "Haut" not in dialog.attempts.item(0).text(), "ohne Profil kein Urteil"
+
+        dialog.minimum_wall = lambda: 0.8
+        dialog._show_tries()
+
+        zeile = dialog.attempts.item(0)
+        assert zeile is not None and "nur eine Haut" in zeile.text(), zeile.text()
+        satz = dialog.state.text()
+        assert "0,3 mm" in satz and "0,8 mm" in satz and "„Noch ein Versuch“" in satz, satz
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_choosing_an_older_try_keeps_the_failure_message(qt_app: QApplication) -> None:
+    """Nach einem gescheiterten Wurf gehört die Zeile seiner Meldung — ein Klick auf
+    einen älteren Versuch löschte sie (Review K, G8)."""
+    from app.core.backends.mesh import GenerationFailed
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.tries = [_generated((1.0, 2.0, 0.5)), _generated((1.0, 1.0, 1.0))]
+        dialog._show_tries()
+        dialog._say_failure(GenerationFailed(detail="ComfyUI hat abgebrochen."))
+        said = dialog.state.text()
+
+        dialog.attempts.setCurrentRow(0)
+
+        assert dialog.state.text() == said, "die Meldung bleibt"
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
 def _settle(qt_app: QApplication) -> None:
     """Zwei Zeitgeber mit null Millisekunden hintereinander: erst pinnt der
     Satz seine Höhe, dann folgt das Fenster — mit Reserve."""
@@ -1826,12 +1932,13 @@ def test_the_setup_dialog_names_version_licences_and_sizes_before_loading(
 def test_the_setup_dialog_names_space_and_duration_before_loading(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, apple: bool
 ) -> None:
-    """Platz und Dauer stehen da, bevor ein Byte geladen wird (RM-564).
+    """Voraussetzungen, ob dieser Rechner sie erfüllt, und die Dauer stehen da,
+    bevor ein Byte geladen wird (RM-564, Entscheidung Robert 08.10.2026).
 
     Ein Kunde mit MacBook las erst beim Laden, dass es Dutzende Gigabyte
     werden. Die Zeile rechnet mit den gewählten Häkchen und dem freien Platz,
-    warnt, wenn er nicht reicht, nennt die gemessene Dauer — und auf einem
-    Mac, dass sie dort nicht gemessen ist.
+    warnt, wenn er nicht reicht, nennt Karte und gemessene Dauer — und auf
+    einem Mac, dass beides dort gerechnet bzw. nicht gemessen ist.
     """
     from app.core.backends import comfy_setup, machine
     from app.i18n import format_decimal
@@ -1841,23 +1948,29 @@ def test_the_setup_dialog_names_space_and_duration_before_loading(
     monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
     monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: False)
     monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 12.0)
-    monkeypatch.setattr(
-        machine, "this_machine", lambda: machine.Machine(apple_silicon=apple, memory_gb=16.0)
+    found = (
+        machine.Machine(apple_silicon=True, memory_gb=16.0)
+        if apple
+        else machine.Machine(memory_gb=32.0, card_name="RTX 4080", card_gb=16.0)
     )
+    monkeypatch.setattr(machine, "this_machine", lambda: found)
     dialog = ComfySetupDialog()
     try:
         _wait_for_comfy_probe(dialog, qt_app)
-        both = comfy_setup.WEIGHT_GIGABYTES + comfy_setup.IMAGE_MODEL_GIGABYTES
+        headroom = comfy_setup.HEADROOM_GIGABYTES
+        both = comfy_setup.WEIGHT_GIGABYTES + comfy_setup.IMAGE_MODEL_GIGABYTES + headroom
         said = dialog.needs.text()
-        assert f"rund {format_decimal(both, 1)} GB" in said, said
-        assert "nur 12,0 GB" in said and "Platz" in said, "zu wenig für beide"
-        assert "RTX 4080" in said and "Minuten" in said, "die gemessene Dauer"
+        assert "Voraussetzung: eine Grafikkarte" in said, said
+        assert f"{format_decimal(both, 1)} GB freier Platz" in said, said
+        assert "nur 12,0 GB" in said and "nur das Modell für den Weg aus Bild" in said
+        assert "RTX 4080" in said and "Minuten" in said, "Karte und gemessene Dauer"
         assert ("nicht gemessen" in said) is apple, "auf dem Mac steht, dass es offen ist"
 
         dialog.image_model.setChecked(False)
         alone = dialog.needs.text()
-        assert f"rund {format_decimal(comfy_setup.WEIGHT_GIGABYTES, 1)} GB" in alone, alone
-        assert "frei sind 12,0 GB" in alone and "nur" not in alone, "eines passt"
+        single = comfy_setup.WEIGHT_GIGABYTES + headroom
+        assert f"{format_decimal(single, 1)} GB freier Platz" in alone, alone
+        assert "Frei sind 12,0 GB, das reicht." in alone, "eines passt"
     finally:
         dialog.release()
         dialog.deleteLater()

@@ -4608,10 +4608,15 @@ def smooth_folds(
     sagte „Die Oberfläche kreuzt sich selbst" an einem Körper, der sonst
     einwandfrei war.
 
-    Die Ecken der Falte sind je Paar die gemeinsame, ohne eine gemeinsame alle
-    sechs. Zuerst rücken sie in die Mitte ihrer Nachbarn, bis zu
-    :data:`FOLD_ROUNDS`-mal — das Netz behält jede Fläche. Trägt das nicht,
-    fallen die Dreiecke um sie, und der Ringfüller schließt die Löcher neu.
+    Die Ecken der Falte sind je Paar die gemeinsamen — am Ort verglichen, denn
+    eine getrennte Berührkante hat zwei Ecken an derselben Stelle. Teilt ein
+    Paar keine Ecke, zählen nur die Ecken, die am anderen Dreieck liegen
+    (:func:`_close_corners`): Mit allen sechs rückten an einem Zapfen auf
+    einem Block Blockecken 30 mm von der Falte entfernt (Review K, M6).
+    Zuerst rücken die Ecken in die Mitte ihrer Nachbarn, bis zu
+    :data:`FOLD_ROUNDS`-mal und je Ecke höchstens um die längste Kante ihres
+    Fächers — das Netz behält jede Fläche. Trägt das nicht, fallen die
+    Dreiecke um sie, und der Ringfüller schließt die Löcher neu.
     **Übernommen wird nur ein voller Erfolg:** geschlossen, einheitlich
     ausgerichtet, dieselbe Teilezahl, keine Kreuzung mehr und das Volumen fast
     unverändert. Sonst bleibt der Eingang, und die Warnung steht wie bisher.
@@ -4622,18 +4627,27 @@ def smooth_folds(
     if not _has_volume(mesh):
         return None
     faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    points = np.asarray(mesh.raw.vertices, dtype=np.float64)
     first = faces[np.asarray(crossings.first, dtype=np.int64)]
     second = faces[np.asarray(crossings.second, dtype=np.int64)]
     corners: set[int] = set()
     for one, other in zip(first.tolist(), second.tolist(), strict=True):
-        shared = set(one) & set(other)
-        corners |= shared or set(one) | set(other)
+        near = np.linalg.norm(points[one][:, None] - points[other][None], axis=2) <= EPS_GEOM
+        if near.any():
+            corners |= {one[i] for i in np.flatnonzero(near.any(axis=1)).tolist()}
+            corners |= {other[i] for i in np.flatnonzero(near.any(axis=0)).tolist()}
+            continue
+        corners |= _close_corners(points, one, other) | _close_corners(points, other, one)
     around = np.isin(faces, np.fromiter(corners, dtype=np.int64)).any(axis=1)
     regions = _fold_regions(mesh, faces[around])
-    for candidate in (
-        _relaxed(mesh, sorted(corners), regions, cancelled),
-        _refilled(mesh, around, cancelled),
-    ):
+    attempts: tuple[Callable[[], MeshData | None], ...] = (
+        lambda: _relaxed(mesh, sorted(corners), regions, cancelled),
+        lambda: _refilled(mesh, around, cancelled),
+    )
+    for attempt in attempts:
+        # Erst bei Bedarf: Trägt das Verschieben, kostet das Neufüllen nichts
+        # (Review K, G2).
+        candidate = attempt()
         if candidate is None or not _has_volume(candidate):
             continue
         if candidate.component_count != mesh.component_count:
@@ -4648,6 +4662,25 @@ def smooth_folds(
     return None
 
 
+def _close_corners(points: np.ndarray, own: Sequence[int], other: Sequence[int]) -> set[int]:
+    """Die Ecken von ``own``, die am Dreieck ``other`` liegen.
+
+    „Am“ heißt: näher an seiner Mitte als zwei Kantenlängen des kleineren der
+    beiden Dreiecke. Eine Falte ohne gemeinsame Ecke — ein Dreieck, über zwei
+    Nachbarn hinweg geklappt — rückt so ihre eigenen Ecken; ein großes
+    Dreieck, das ein kleines nur schneidet, bewegt seine weit entfernten Ecken
+    nicht (Zapfen auf einem Block: Blockecken 30 mm weg, Review K, M6).
+    """
+
+    def longest(face: Sequence[int]) -> float:
+        corners = points[list(face)]
+        return float(np.linalg.norm(corners - np.roll(corners, 1, axis=0), axis=1).max())
+
+    reach = 2.0 * min(longest(own), longest(other))
+    centre = points[list(other)].mean(axis=0)
+    return {corner for corner in own if float(np.linalg.norm(points[corner] - centre)) <= reach}
+
+
 #: Wie oft die Ecken einer Falte höchstens in die Mitte ihrer Nachbarn rücken.
 #: An TRELLIS.2, Startwert 13, kreuzte nach einer Runde noch die Hälfte, nach
 #: drei nichts mehr; jede Runde fragt nur die Stellen selbst nach.
@@ -4660,12 +4693,26 @@ def _relaxed(
     regions: Sequence[tuple[np.ndarray, np.ndarray]],
     cancelled: CancelToken | None,
 ) -> MeshData | None:
-    """Die Ecken einer Falte in die Mitte ihrer Nachbarn, bis nichts mehr kreuzt."""
-    points = np.asarray(mesh.raw.vertices, dtype=np.float64).copy()
+    """Die Ecken einer Falte in die Mitte ihrer Nachbarn, bis nichts mehr kreuzt.
+
+    Je Ecke höchstens um die längste Kante ihres Fächers vom Ausgangsort —
+    weiter weg ist es keine Falte mehr, sondern eine andere Form.
+    """
+    start = np.asarray(mesh.raw.vertices, dtype=np.float64)
+    points = start.copy()
     neighbours = mesh.raw.vertex_neighbors
+    reach = {
+        corner: float(np.linalg.norm(start[neighbours[corner]] - start[corner], axis=1).max())
+        for corner in corners
+        if len(neighbours[corner])
+    }
     for _round in range(FOLD_ROUNDS):
         for corner in corners:
+            if corner not in reach:
+                return None
             points[corner] = points[neighbours[corner]].mean(axis=0)
+            if float(np.linalg.norm(points[corner] - start[corner])) > reach[corner]:
+                return None
         moved = trimesh.Trimesh(vertices=points.copy(), faces=mesh.raw.faces, process=False)
         _carried_colours(mesh.raw, moved, np.arange(len(mesh.raw.faces), dtype=np.int64))
         candidate = MeshData.of(moved, slots=mesh.slots)
