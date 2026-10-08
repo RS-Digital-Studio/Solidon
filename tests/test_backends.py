@@ -36,6 +36,9 @@ from app.core.errors import AppError, ExternalToolError, InternalError
 from tests.helpers import LoopbackServer
 from tests.scripted_backend import ScriptedBackend
 
+#: Der echte Schlüsselbundzugang; ``no_stored_key`` ersetzt ihn in jedem Test.
+_KEYCHAIN = keys._keyring
+
 
 class Recorder:
     """Ein Transport, der aus einem Skript antwortet statt aus einem Netz."""
@@ -116,6 +119,82 @@ def test_the_first_backend_search_does_not_hold_its_caller(
     assert kept, "die Suche lief"
     assert watch() is None, "die Suche hielt ihren Aufrufer fest"
     assert keyring_backend._backend_found
+
+
+class _UnusableBackend:
+    """``keyring`` mit einem eingestellten Backend, das hier nicht geht.
+
+    So wirft keyring 25.7 ``load_keyring``, wenn ``PYTHON_KEYRING_BACKEND``
+    ein Secret-Service-Backend nennt und SecretStorage fehlt.
+    """
+
+    def __init__(self) -> None:
+        self.searches = 0
+        self.broken = True
+
+    def get_keyring(self) -> None:
+        self.searches += 1
+        if self.broken:
+            raise RuntimeError("SecretStorage required")
+
+
+def test_a_failed_backend_search_reaches_its_caller_not_the_crash_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Fehler der Suche fliegt beim Aufrufer, nicht als unbehandelter Fadenfehler.
+
+    ``threading.excepthook`` ist in der Anwendung ``log._unhandled_thread``, und
+    der schreibt einen Absturzbericht wie bei einem Programmfehler. Beim
+    Aufrufer ist derselbe Fehler ein behandelter Fall. Und weil kein Backend
+    gefunden wurde, sucht der nächste Aufruf noch einmal — wieder im Faden.
+    """
+    hooked: list[object] = []
+    monkeypatch.setattr(threading, "excepthook", hooked.append)
+    monkeypatch.setattr(keyring_backend, "_backend_found", False)
+    backend = _UnusableBackend()
+    threads: list[str] = []
+    real_search = backend.get_keyring
+
+    def search() -> None:
+        threads.append(threading.current_thread().name)
+        real_search()
+
+    monkeypatch.setattr(backend, "get_keyring", search)
+
+    with pytest.raises(RuntimeError, match="SecretStorage required"):
+        keyring_backend.find_backend_once(backend)
+
+    assert hooked == [], "der Fehler ging als unbehandelter Fadenfehler hinaus"
+    assert not keyring_backend._backend_found, "ein Fehlschlag gilt nicht als gefunden"
+
+    backend.broken = False
+    keyring_backend.find_backend_once(backend)
+    keyring_backend.find_backend_once(backend)
+    assert backend.searches == 2, "nach dem Fehlschlag sucht es einmal neu, danach nicht mehr"
+    assert threads == ["keyring-backend", "keyring-backend"], "beide Suchen im eigenen Faden"
+    assert keyring_backend._backend_found
+
+
+def test_an_unusable_keychain_backend_leaves_the_environment_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Geht das eingestellte Backend nicht, liest ``keys`` weiter aus der Umgebung.
+
+    Vor der Suche im eigenen Faden fiel derselbe Fehler erst in
+    ``get_password`` und damit in den Fang von ``read``; jetzt fällt er in der
+    Suche, und ``keys`` behandelt ihn dort genauso.
+    """
+    import sys
+
+    monkeypatch.setitem(sys.modules, "keyring", _UnusableBackend())
+    monkeypatch.setattr(keyring_backend, "_backend_found", False)
+    monkeypatch.setattr(keys, "_keyring", _KEYCHAIN)
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+
+    assert keys.read("anthropic") == "geheim"
+    assert keys.source("anthropic") == "environment"
+    assert keys.store("anthropic", "sk-ant-" + "x" * 40) is False
+    assert keys.forget("anthropic") is False
 
 
 def test_without_a_key_there_is_no_agent(monkeypatch: pytest.MonkeyPatch) -> None:
