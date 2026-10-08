@@ -5660,7 +5660,7 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
         assert dialog.nozzle.value_mm() == pytest.approx(candidate.nozzle_diameter)
         assert dialog.adopt_printer.isHidden()
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         dialog.deleteLater()
 
 
@@ -5726,7 +5726,7 @@ def test_the_print_dialog_offers_the_printers_of_its_slicer(
         assert settings.printer == kobra.id
         assert dialog.printer_choice.currentData() == kobra.id
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         dialog.release()
         dialog.deleteLater()
         discover.remember_path("slicer", "")
@@ -5826,7 +5826,7 @@ def test_the_print_dialog_says_whose_printers_it_lists_and_what_went_wrong(
         )
         assert dialog.printer_choice.search_field.placeholderText() == "Drucker suchen …"
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         dialog.release()
         dialog.deleteLater()
         discover.remember_path("slicer", "")
@@ -6138,7 +6138,7 @@ def test_the_slot_assignment_outlives_a_printer_change(
             0.45
         ), "und der Druckerwechsel wirkt weiterhin"
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
 
 
 def test_changing_only_the_project_printer_keeps_every_filament_choice(
@@ -6168,7 +6168,7 @@ def test_changing_only_the_project_printer_keeps_every_filament_choice(
         assert dialog.settings.slot_profiles == ("PETG Schwarz", "PLA Weiß")
         assert dialog.settings.slot_overrides == (override,)
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
 
 
 def _select_quality(dialog: PrintSettingsDialog, quality: str) -> None:
@@ -6219,7 +6219,7 @@ def test_a_different_printer_keeps_what_the_customer_set(
         # Arbeiter, der den Test überlebt, nimmt beim Abbau den Prozess mit —
         # der Lauf riss danach in ``_no_worker_outlives_its_window``, mit
         # „passed" davor und Exit 139 dahinter (siehe ``Session.wait_for_idle``).
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
 
 
 def _select_printer(dialog: PrintSettingsDialog, printer_id: str) -> None:

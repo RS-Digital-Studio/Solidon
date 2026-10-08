@@ -35,7 +35,6 @@ import time
 import tomllib
 from collections import Counter
 from dataclasses import dataclass
-from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final
 
@@ -892,104 +891,78 @@ def test_no_test_file_defines_a_function_twice() -> None:
     assert not found, "doppelt definiert, die erste Fassung läuft nie:\n" + "\n".join(found)
 
 
-#: Was in den Fenstertests eine Datei öffnet und danach eine Auswertung anstößt.
-_OPENING_CALLS: Final = frozenset(
-    {
-        "open_path",
-        "open_project",
-        "import_model",
-        "import_model_async",
-        "import_payload",
-        "import_payload_async",
-    }
-)
-
-#: Die Frist nach dem Öffnen, die auch der langsamste Läufer schafft (macOS Intel).
-_OPENED_WITHIN_MS: Final = 60_000
+def _is_wait_for_idle(node: ast.AST) -> bool:
+    """Ein Aufruf ``….wait_for_idle(…)``, gleich auf welchem Empfänger."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "wait_for_idle"
+    )
 
 
-def _waits_after_opening(source: str) -> tuple[int, list[tuple[int, str]]]:
-    """Wie oft auf ein Öffnen direkt ``wait_for_idle`` folgt — und wo es ungeprüft oder zu kurz ist.
+def _unchecked_waits(source: str) -> tuple[int, list[tuple[int, str]]]:
+    """Wie viele ``wait_for_idle`` eine Datei aufruft — und welche als bloße Anweisung stehen.
 
-    Geprüft heißt ``assert …wait_for_idle(<Zahl>)`` mit mindestens
-    :data:`_OPENED_WITHIN_MS`; eine Frist, die kein Literal ist, zählt als zu kurz.
+    Eine bloße Anweisung übergeht das Ergebnis. Jede andere Form nutzt es:
+    ``assert …``, ``assert not …`` bei einer absichtlich zu kurzen Frist, eine
+    Zuweisung.
     """
-
-    def called(node: ast.AST | None) -> str:
-        if not isinstance(node, ast.Call):
-            return ""
-        function = node.func
-        if isinstance(function, ast.Attribute):
-            return function.attr
-        return function.id if isinstance(function, ast.Name) else ""
-
     seen = 0
-    wrong: list[tuple[int, str]] = []
+    bare: list[tuple[int, str]] = []
     for node in ast.walk(ast.parse(source)):
-        for field in ("body", "orelse", "finalbody"):
-            body = getattr(node, field, None)
-            if not isinstance(body, list):
-                continue
-            for before, statement in pairwise(body):
-                opened = None if isinstance(before, ast.Assert) else getattr(before, "value", None)
-                if called(opened) not in _OPENING_CALLS:
-                    continue
-                checked = isinstance(statement, ast.Assert)
-                wait = statement.test if checked else getattr(statement, "value", None)
-                if called(wait) != "wait_for_idle":
-                    continue
-                seen += 1
-                assert isinstance(wait, ast.Call)
-                given = wait.args[0] if wait.args else None
-                given = given or next((entry.value for entry in wait.keywords), None)
-                long_enough = (
-                    isinstance(given, ast.Constant)
-                    and isinstance(given.value, int)
-                    and given.value >= _OPENED_WITHIN_MS
-                )
-                if not (checked and long_enough):
-                    wrong.append((statement.lineno, ast.unparse(statement)))
-    return seen, wrong
+        seen += _is_wait_for_idle(node)
+        if isinstance(node, ast.Expr) and _is_wait_for_idle(node.value):
+            bare.append((node.lineno, ast.unparse(node)))
+    return seen, sorted(bare)
 
 
-def test_a_test_that_waits_after_opening_a_file_asserts_the_idle_within_a_minute() -> None:
-    """Nach dem Öffnen einer Datei sichert ein Test zu, dass der Leerlauf eintrat.
+def test_every_wait_for_idle_in_the_tests_checks_that_it_ended() -> None:
+    """Ein Test, der auf den Leerlauf wartet, sichert zu, dass er eintrat.
 
     ``Session.wait_for_idle`` meldet mit ``False``, dass die Frist mit einem
-    noch rechnenden Arbeiter endete. Ungeprüft und mit den vorgegebenen zehn
-    Sekunden lief der Test auf dem langsamsten Läufer (macOS Intel) weiter,
-    während die Auswertung von ``plate_holes.stl`` noch rechnete: Ihr Ergebnis
-    baute den Prüfbericht danach neu, und der Zugriff auf einen eben
-    eingespielten Befund traf ein gelöschtes ``QListWidgetItem``
-    (``test_a_report_click_keeps_its_mark_across_the_async_map``). Zugesichert
-    wird deshalb ``assert …wait_for_idle(60_000)`` direkt nach jedem Öffnen.
+    noch rechnenden Arbeiter endete. Ungeprüft lief der Test auf dem langsamen
+    Intel-Läufer (macOS) auf halbem Stand weiter: Nach dem Öffnen von
+    ``plate_holes.stl`` baute die späte Auswertung den Prüfbericht neu, und der
+    Zugriff auf einen eben eingespielten Befund traf ein gelöschtes
+    ``QListWidgetItem`` (``test_a_report_click_keeps_its_mark_across_the_async_map``).
+    Dasselbe gilt nach jedem Übernehmen, Zurücknehmen oder Klick, der rechnet —
+    deshalb steht jedes Warten als ``assert ….wait_for_idle(60_000)``, auch im
+    Aufräumen: Ein Arbeiter, der das Testende überlebt, trifft den nächsten Test.
     """
-    sources = sorted((_ROOT / "tests").glob("*.py"))
+    sources = sorted((_ROOT / "tests").rglob("*.py"))
     assert sources, "keine Testdateien gefunden — der Wächter prüft nichts"
     counterprobe = (
-        "def test_x(window):\n"
-        "    window.open_path(path)\n"
+        "def test_x(window, session):\n"
         "    window.session.wait_for_idle()\n"
-        "    session.import_model(path)\n"
-        "    assert session.wait_for_idle(30_000)\n"
-        "    window.open_path(path)\n"
-        "    assert window.session.wait_for_idle(60_000)\n"
+        "    session.wait_for_idle(120_000)\n"
+        "    assert session.wait_for_idle(60_000)\n"
+        "    assert not session.wait_for_idle(50)\n"
+        "    idle = session.wait_for_idle(60_000)\n"
+        "    try:\n"
+        "        pass\n"
+        "    finally:\n"
+        "        window.session.wait_for_idle(30_000)\n"
     )
-    assert _waits_after_opening(counterprobe) == (
-        3,
-        [(3, "window.session.wait_for_idle()"), (5, "assert session.wait_for_idle(30000)")],
-    ), "die Gegenprobe muss das ungeprüfte und das zu kurze Warten finden"
+    assert _unchecked_waits(counterprobe) == (
+        6,
+        [
+            (2, "window.session.wait_for_idle()"),
+            (3, "session.wait_for_idle(120000)"),
+            (10, "window.session.wait_for_idle(30000)"),
+        ],
+    ), "die Gegenprobe muss jedes ungeprüfte Warten finden, auch im Aufräumen"
 
     seen = 0
     found: list[str] = []
     for path in sources:
-        count, wrong = _waits_after_opening(path.read_text(encoding="utf-8"))
+        count, bare = _unchecked_waits(path.read_text(encoding="utf-8"))
         seen += count
-        found += [f"{path.relative_to(_ROOT).as_posix()}:{line}: {text}" for line, text in wrong]
+        found += [f"{path.relative_to(_ROOT).as_posix()}:{line}: {text}" for line, text in bare]
 
-    assert seen > 100, f"nur {seen} Stellen mit Öffnen und Warten gefunden — sucht der Wächter?"
+    assert seen > 1000, f"nur {seen} Warte-Aufrufe gefunden — sucht der Wächter?"
     assert not found, (
-        "nach dem Öffnen ungeprüft oder kürzer als eine Minute gewartet:\n" + "\n".join(found)
+        f"{len(found)} Warte-Aufrufe ohne Prüfung, ihr Ergebnis gehört in ein "
+        "assert ….wait_for_idle(60_000):\n" + "\n".join(found)
     )
 
 

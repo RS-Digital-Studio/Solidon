@@ -112,7 +112,7 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     # das gefangen: V1 zurückgedreht blieb der Test grün, weil er eine Lage
     # prüfte, in der der Fehler gar nicht entstehen konnte.
     view.object_tree.select_object(next(iter(result.scene.objects)))
-    view.session.wait_for_idle()
+    assert view.session.wait_for_idle(60_000)
     yield view
     view.wait_for_workers()
 

@@ -309,7 +309,7 @@ def test_a_typed_value_becomes_a_step_in_the_history(window: MainWindow) -> None
     # Der Weg der Oberfläche seit dem Wegfall des Knopfes: die Eingabetaste im
     # Feld wendet an, und zwar alle drei Achsen in **einem** Schritt.
     QTest.keyClick(window.transform_bar.dz.lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     ops = [entry.op for entry in window.session.project.document.ops]
     assert len(ops) > before, "der Klick hat keinen Schritt erzeugt"
@@ -473,7 +473,7 @@ def test_leaving_a_field_applies_nothing(window: MainWindow) -> None:
     # bewirken.
     window.transform_bar.dy.setFocus()
     QApplication.processEvents()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     ops = [entry.op for entry in window.session.project.document.ops]
     assert len(ops) == vorher, (
@@ -498,7 +498,7 @@ def test_leaving_a_field_applies_nothing(window: MainWindow) -> None:
     feld.lineEdit().selectAll()
     QTest.keyClicks(feld.lineEdit(), "5")
     QTest.keyClick(feld.lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     gehoben = min(
         as_mesh_data(entry.mesh).bounds.minimum[2]
         for entry in window.session.evaluate_now().scene.objects.values()
@@ -508,7 +508,7 @@ def test_leaving_a_field_applies_nothing(window: MainWindow) -> None:
     )
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     zurueck = min(
         as_mesh_data(entry.mesh).bounds.minimum[2]
         for entry in window.session.evaluate_now().scene.objects.values()
@@ -547,7 +547,7 @@ def test_the_return_key_still_applies_the_value(window: MainWindow) -> None:
     feld.lineEdit().selectAll()
     QTest.keyClicks(feld.lineEdit(), "5")
     QTest.keyClick(feld, Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     ops = [entry.op for entry in window.session.project.document.ops]
     assert ops[vorher:] == ["translate_object"], (
@@ -574,9 +574,9 @@ def test_a_typed_angle_turns_the_group_around_one_common_point(
 
     box = {"width": 10.0, "depth": 10.0, "height": 10.0}
     window.session.apply("Kasten", [OperationDraft(op="create_box", inputs=(), params=box)])
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply("Kasten", [OperationDraft(op="create_box", inputs=(), params=box)])
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
 
@@ -586,7 +586,7 @@ def test_a_typed_angle_turns_the_group_around_one_common_point(
         "Danebenstellen",
         [OperationDraft(op="translate_object", inputs=(ids[1],), params={"dx": 50.0})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
 
     for row in range(window.object_tree.tree.topLevelItemCount()):
@@ -599,7 +599,7 @@ def test_a_typed_angle_turns_the_group_around_one_common_point(
     window.transform_bar.role_buttons["rotate"].click()
     window.transform_bar.angle_value.setValue(90.0)
     QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     turns = [one for one in window.session.project.document.ops if one.op == "rotate_object"]
     assert turns, "der Klick hat keinen Drehschritt erzeugt"
@@ -629,7 +629,7 @@ def test_one_body_typed_keeps_the_old_meaning(window: MainWindow) -> None:
     window.transform_bar.role_buttons["rotate"].click()
     window.transform_bar.angle_value.setValue(90.0)
     QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     turns = [one for one in window.session.project.document.ops if one.op == "rotate_object"]
     assert turns, "der Klick hat keinen Drehschritt erzeugt"
@@ -660,7 +660,7 @@ def test_turning_puts_the_part_back_on_the_bed(window: MainWindow) -> None:
     window.transform_bar.axis.setCurrentIndex(0)  # um X, damit es kippt
     window.transform_bar.angle_value.setValue(45.0)
     QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     scene = window.session.evaluate_now().scene
     unterkante = min(as_mesh_data(entry.mesh).bounds.minimum[2] for entry in scene.objects.values())
@@ -690,13 +690,13 @@ def test_the_turn_and_the_drop_are_one_undo(window: MainWindow) -> None:
     window.transform_bar.axis.setCurrentIndex(0)
     window.transform_bar.angle_value.setValue(45.0)
     QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     ops = [entry.op for entry in window.session.project.document.ops]
     assert ops[-2:] == ["rotate_object", "place_on_bed"], f"Verlauf endet auf {ops[-3:]}"
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     danach = len(window.session.project.document.ops)
     assert danach == vorher, (
         f"ein Undo hat {vorher + 2 - danach} von zwei Schritten zurückgenommen — "
@@ -722,7 +722,7 @@ def test_moving_never_drops_to_the_bed(window: MainWindow) -> None:
     before_z = next(iter(result.scene.objects.values())).mesh.raw.bounds[0, 2]
     window.transform_bar.dz.set_value_mm(10.0)
     QTest.keyClick(window.transform_bar.dz.lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     ops = [entry.op for entry in window.session.project.document.ops]
     assert ops[-1] == "translate_object", f"die Eingabe hat keine Verschiebung angelegt: {ops}"
@@ -1060,7 +1060,7 @@ def test_absolute_position_bar_prefills_and_positions_the_selected_group(window)
         "Versetzt", [OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": 50})]
     )
     window.session.evaluate_async()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.object_tree.select_objects(("obj_1", "obj_2"))
     bar = window.transform_bar
     bar.move_mode.setCurrentIndex(1)
@@ -1071,13 +1071,13 @@ def test_absolute_position_bar_prefills_and_positions_the_selected_group(window)
     bar.dz.set_value_mm(0)
     before = len(window.session.history.transactions)
     QTest.keyClick(bar.dx.lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert reference_point(list(result.scene.objects.values())) == pytest.approx((0, 0, 0))
     assert len(window.session.history.transactions) == before + 1
     assert window.session.history.operations[-1].params["mode"] == "absolute"
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert reference_point(list(window.session.last_result.scene.objects.values()))[
         0
     ] == pytest.approx(25)
@@ -1093,13 +1093,13 @@ def test_absolute_grip_keeps_its_reference_after_switching_tool_role(window, rol
 
     window.session.history.apply("Körper", [OperationDraft(op="create_box")])
     window.session.evaluate_async()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.object_tree.select_objects(("obj_1",))
     window.transform_bar.move_mode.setCurrentIndex(1)
     window.transform_bar.role_buttons[role].click()
     monkeypatch.setattr(window.viewport, "dropped_on_plate", lambda *_: (12.0, 1))
     window._on_transform_dragged(SimpleNamespace(moves=True, turns=False, offset=(300, 2, 3)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     step = window.session.history.operations[-1]
     assert step.op == "translate_object"
     assert step.params["mode"] == "absolute"
@@ -1120,7 +1120,7 @@ def test_absolute_rotation_bar_prefills_then_records_target_angles(window):
         [OperationDraft(op="rotate_object", inputs=("obj_1",), params={"axis": "z", "angle": 35})],
     )
     window.session.evaluate_async()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.object_tree.select_objects(("obj_1",))
     bar = window.transform_bar
     bar.role_buttons["rotate"].click()
@@ -1130,13 +1130,13 @@ def test_absolute_rotation_bar_prefills_then_records_target_angles(window):
         spin.setValue(0)
     before = len(window.session.history.transactions)
     QTest.keyClick(bar.target_angles[2].lineEdit(), Qt.Key.Key_Return)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert len(window.session.history.transactions) == before + 1
     assert orientation_angles(window.session.last_result.scene.objects["obj_1"]) == pytest.approx(
         (0, 0, 0)
     )
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert orientation_angles(window.session.last_result.scene.objects["obj_1"]) == pytest.approx(
         (0, 0, 35)
     )

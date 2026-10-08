@@ -368,7 +368,7 @@ def _thin_walled_tube(window: MainWindow) -> None:
         "Zylinder",
         [OperationDraft(op="create_cylinder", params={"diameter": 20.0, "height": 20.0})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply(
         "Bohren",
         [
@@ -377,7 +377,7 @@ def _thin_walled_tube(window: MainWindow) -> None:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
 
 def test_the_export_asks_before_it_writes(
@@ -1380,7 +1380,7 @@ def test_export_as_3mf_carries_every_plate(
                 )
             ],
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     window.session.apply(
@@ -1391,7 +1391,7 @@ def test_export_as_3mf_carries_every_plate(
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     scene = window.session.last_result
     assert scene is not None

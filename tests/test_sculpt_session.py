@@ -1041,7 +1041,7 @@ def test_the_history_offers_baking_only_for_a_live_session(window: MainWindow) -
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     document = window.session.project.document
     sculpt = next(entry for entry in document.ops if entry.op == "sculpt_strokes")
@@ -1063,14 +1063,14 @@ def test_baking_writes_the_state_into_the_project(window: MainWindow) -> None:
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     sculpt = next(
         entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
     )
     before = len(window.session.project.document.sources)
 
     assert window.session.bake_strokes(sculpt.id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert len(window.session.project.document.sources) == before + 1
     frozen = next(
@@ -1086,12 +1086,12 @@ def test_a_baked_session_is_not_offered_again(window: MainWindow) -> None:
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     sculpt = next(
         entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
     )
     window.session.bake_strokes(sculpt.id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     window.history_panel.show_document(window.session.project.document)
 
@@ -1117,7 +1117,7 @@ def test_baking_asks_nothing_because_undo_takes_it_back(
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     sculpt = next(
         entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
     )
@@ -1128,14 +1128,14 @@ def test_baking_asks_nothing_because_undo_takes_it_back(
     monkeypatch.setattr(QMessageBox, "exec", no_box)
 
     window.bake_sculpt(sculpt.id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     baked = next(entry for entry in window.session.project.document.ops if entry.id == sculpt.id)
     assert baked.params["baked"]
     assert "Strg+Z" in window.status_message.text()
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     live = next(entry for entry in window.session.project.document.ops if entry.id == sculpt.id)
     assert not live.params.get("baked"), "undo gives the session its strokes back"
@@ -1347,7 +1347,7 @@ def test_baking_freezes_the_state_right_after_the_sculpt_step(window: MainWindow
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     sculpt = next(
         entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
     )
@@ -1355,13 +1355,13 @@ def test_baking_freezes_the_state_right_after_the_sculpt_step(window: MainWindow
         "Verschieben",
         [OperationDraft(op="translate_object", inputs=(object_id,), params={"dx": 10.0})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     before = result.scene.objects[object_id].mesh.bounds
 
     assert window.session.bake_strokes(sculpt.id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     result = window.session.last_result
     assert result is not None
@@ -1497,7 +1497,7 @@ def test_a_new_sculpt_session_does_not_inherit_the_last_note(window: MainWindow)
     window.start_sculpt(object_id)
     window.sculpt_bar.analysis.show_note("12 Stellen dünner als 0,84 mm")
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.start_sculpt(object_id)
     assert window.sculpt_bar.analysis.note.text() == ""
 

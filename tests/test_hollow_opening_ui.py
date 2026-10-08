@@ -129,7 +129,7 @@ def test_hollowing_at_the_clicked_side_ends_in_the_history_with_the_face(
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     after = window.session.evaluate_now()
 
     step = window.session.project.document.ops[-1]

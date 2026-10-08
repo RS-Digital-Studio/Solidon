@@ -125,7 +125,7 @@ def test_the_search_receives_the_protected_points(
     monkeypatch.setattr(session_module, "plan_split", record)
 
     window.action_auto_split(object_id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert len(seen) == 1, "die Suche lief genau einmal"
     assert len(seen[0]) == 1, "eine gesperrte Fläche, eine Wolke"
@@ -166,7 +166,7 @@ def test_releasing_the_protection_from_the_report_splits_again(
     error = AppError(str(finding.message), object_id=finding.object_id)
 
     window.error_handlers()["release_protection"](error)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window.session.project.document.protected == {}
     assert window.viewport.protected_features(object_id) == ()

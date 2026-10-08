@@ -1847,11 +1847,11 @@ def test_an_operation_can_be_given_other_numbers(window: MainWindow) -> None:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     op_id = window.session.project.document.ops[-1].id
 
     window.session.change_params(op_id, {"x": 10.0})
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window.session.history.operation(op_id).params["x"] == pytest.approx(10.0)
     assert window.session.history.operation(op_id).params["diameter"] == pytest.approx(5.0)
@@ -1889,7 +1889,7 @@ def test_every_operation_of_the_history_can_be_opened(window: MainWindow) -> Non
             OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 4.0}),
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
 
     rows = window.history_panel.list
@@ -2107,7 +2107,7 @@ def test_the_body_state_lock_lifts_where_the_body_brings_what_is_asked(
         "Aushöhlen",
         [OperationDraft(op="hollow_object", inputs=("obj_1",), params={"wall": 2.0, "vents": 0})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     select(window)
     window._update_actions()
     assert window._op_actions["lattice_fill"].isEnabled()
@@ -7678,7 +7678,7 @@ def test_a_preview_waiting_for_a_question_leaves_apply_free_and_asks_on_apply(
     dialog.valuesChanged.emit()
     for _ in range(40):
         QTest.qWait(50)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         if tr("Eine Rückfrage steht an — sie kommt beim Übernehmen.") in (
             window.viewport.banner.note.text()

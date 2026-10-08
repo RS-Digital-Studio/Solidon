@@ -117,7 +117,7 @@ def wait_for_export(window: MainWindow) -> None:
     keinen Arbeiter, und die Datei fehlte.
     """
     for _ in range(2):
-        window.session.wait_for_idle(30_000)
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         worker = window._export_worker
         if worker is not None:

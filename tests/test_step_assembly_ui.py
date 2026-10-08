@@ -139,7 +139,7 @@ def test_the_session_waits_for_the_choice_and_takes_only_that(
     assert len(plan.choices) == 4
     assert not session.history.operations
     session.finish_step_import(source_id, generation, ["1.2", "1.4"])
-    assert session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     (operation,) = session.history.operations
     assert body_keys(operation.params["bodies"]) == ("1.2", "1.4")
     assert len(operation.outputs) == 2
@@ -169,5 +169,5 @@ def test_a_file_with_one_body_asks_nothing(qt_app: QApplication) -> None:
     session.import_payload_async("inch.step", _payload("inch"))
 
     assert not requests
-    assert session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     assert len(session.history.operations) == 1

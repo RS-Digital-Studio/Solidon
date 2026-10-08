@@ -322,7 +322,7 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
             )
         ],
     )
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     result = session.last_result
     assert result is not None
@@ -330,7 +330,7 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
 
     # Derselbe Stapel, ein anderer Parameterwert: Der Koerper muss folgen.
     session.change_parameter("neigung", 45.0)
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     result = session.last_result
     assert result is not None
@@ -502,7 +502,7 @@ def test_reopening_the_editor_brings_the_bones_back(window: MainWindow) -> None:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     window.start_armature(koerper)
     assert window.session.wait_for_idle()
@@ -554,7 +554,7 @@ def test_an_unreadable_armature_does_not_block_the_editor(window: MainWindow) ->
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     window.start_armature(koerper)
 

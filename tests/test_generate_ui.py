@@ -798,7 +798,7 @@ def test_the_session_puts_a_generated_body_on_the_stack(
     result = generator.text_to_mesh("eine kleine Figur", seed=3)
 
     object_id = session.add_generated(result)
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     # Vier Schritte, und die Reihenfolge ist keine Geschmacksfrage: was ein
     # Bildmodell liefert, ist auf einen Einheitswürfel normiert und misst als

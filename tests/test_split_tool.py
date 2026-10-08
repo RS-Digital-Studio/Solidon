@@ -389,7 +389,7 @@ def test_a_changed_document_drops_the_line(window: MainWindow) -> None:
     assert window.split_bar.apply.isEnabled()
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window._split_points == []
     assert not window.split_bar.apply.isEnabled()
@@ -406,7 +406,7 @@ def test_drawing_a_line_and_pressing_split_makes_two_parts(window: MainWindow) -
     window.viewport.splitPointRequested.emit((-10.0, 0.0, mid_of(window)))
     window.viewport.splitPointRequested.emit((10.0, 0.0, mid_of(window)))
     window.split_bar.applyRequested.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     document = window.session.project.document
     assert [entry.op for entry in document.ops] == ["load", "split_line"]
@@ -431,7 +431,7 @@ def test_the_seam_becomes_a_fit_pair(window: MainWindow) -> None:
     window.viewport.splitPointRequested.emit((-10.0, 0.0, mid_of(window)))
     window.viewport.splitPointRequested.emit((10.0, 0.0, mid_of(window)))
     window.split_bar.applyRequested.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     fits = window.session.project.document.fits
     assert len(fits) == window.split_bar.count.value()
@@ -446,7 +446,7 @@ def test_without_the_checkbox_it_only_cuts(window: MainWindow) -> None:
     window.viewport.splitPointRequested.emit((-10.0, 0.0, 2.0))
     window.viewport.splitPointRequested.emit((10.0, 0.0, 2.0))
     window.split_bar.applyRequested.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window.session.project.document.ops[-1].params["pins"] == 0
     assert window.session.project.document.fits == []
@@ -492,7 +492,7 @@ def test_the_registered_split_operation_also_reveals_its_connectors(
         REGISTRY.get("split_pinned"),
         given={"axis": "y", "position": 0.0, "pins": 2},
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window.session.project.document.ops[-1].op == "split_pinned"
     assert window.tools.active() == "explode"
@@ -506,10 +506,10 @@ def test_one_undo_takes_the_whole_split_back(window: MainWindow) -> None:
     window.viewport.splitPointRequested.emit((-10.0, 0.0, 2.0))
     window.viewport.splitPointRequested.emit((10.0, 0.0, 2.0))
     window.split_bar.applyRequested.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
@@ -532,7 +532,7 @@ def test_the_stored_plane_does_not_depend_on_the_camera(
     # und die Operation müssen trotzdem dieselbe Ebene meinen.
     monkeypatch.setattr(window.viewport, "view_direction", lambda: (1.0, 0.0, 0.0))
     window.split_bar.applyRequested.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     params = window.session.project.document.ops[-1].params
     assert params["normal_x"] == pytest.approx(expected.normal[0])
