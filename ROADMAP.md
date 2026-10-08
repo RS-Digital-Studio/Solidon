@@ -5272,6 +5272,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   M-Chip mit mindestens 16 GB — belegter Speicher über Metal, ob qwen3.5:9b ganz auf der Grafik
   läuft, Antwortzeit —, danach `OLLAMA_MEMORY_GB`, Website und Handbuch gegen die Messung; dazu
   Weg 3 auf dem Mac (int8 hat dort kein `torch._int_mm`, ComfyUI rechnet die Gewichte voll aus).
+  Der Standardläufer `macos-latest` taugt dafür nicht (7 GB, Ollama findet keine GPU, qwen3:1.7b
+  schreibt 0,9 Token/s). Die von Robert freigegebene Messung auf `macos-latest-xlarge` (M2,
+  14 GB laut GitHub, also eine untere Grenze für 16 GB) startete am 08.10.2026 nicht: GitHub
+  verlangt dafür ein Ausgabenlimit über null oder eine gültige Zahlung im Konto
+  (*Billing & plans*). Nach der Freischaltung einmal fahren: Ollama über Homebrew, qwen3.5:9b
+  und qwen3:14b mit `num_ctx` 32 768, `tools/measure_local_model.py --runs 3`,
+  `tools/run_agent_suite.py --backend ollama --only bracket`, dazu `api/ps` (Belegung, Anteil
+  auf der Grafik) und Metals `recommendedMaxWorkingSetSize` gegen `Machine.graphics_gb`.
 
 <a id="rm-565"></a>
 
