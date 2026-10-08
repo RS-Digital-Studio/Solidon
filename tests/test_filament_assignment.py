@@ -51,46 +51,27 @@ def test_no_selection_keeps_inventory_reachable(picker: QuickFilamentPicker) -> 
     assert picker.clear_button.isHidden()
 
 
-def test_pending_assignment_keeps_choice_and_cancel_available(picker: QuickFilamentPicker) -> None:
-    """Nur die sichtbare Vorschau darf übernommen werden; Abbrechen bleibt offen."""
+def test_a_chosen_spool_is_reported_at_once_without_a_confirmation(
+    picker: QuickFilamentPicker,
+) -> None:
+    """Die Wahl ist die Zuweisung — kein *Übernehmen*, kein *Abbrechen* (RM-557).
+
+    Ein Filament ändert keine Geometrie; was es tut, nimmt Strg+Z zurück
+    (Regel 19). Am exakten Körper stand bis RM-557 ein Übernehmen dazwischen,
+    und bis dahin zeigte die Ansicht die alte Farbe.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    spool = filaments.save(filaments.CatalogueFilament("PLA Rot", "#ff0000", "PLA"))
     picker.set_context([_body("part", "Teil")])
-    accepted: list[bool] = []
-    cancelled: list[bool] = []
-    picker.stage_preview(lambda: accepted.append(True), lambda: cancelled.append(True))
-    reason = "Die aktuelle Vorschau abwarten und das Ergebnis prüfen."
-    picker.block_apply(reason)
-    assert picker.picker.isEnabled() and picker.cancel_button.isEnabled()
-    assert not picker.apply_button.isHidden() and not picker.can_accept()
-    assert picker.apply_button.toolTip() == reason
-    assert picker.apply_button.accessibleDescription() == reason
-    picker.apply_button.click()
-    picker.accept()
-    assert not accepted
-    picker.block_apply(None)
-    picker.preview_check = lambda: False
-    picker.apply_button.click()
-    assert not accepted
-    picker.preview_check = None
-    picker.apply_button.click()
-    assert accepted == [True]
-    picker.cancel_button.click()
-    assert cancelled == [True]
-    assert picker.apply_button.isHidden() and picker.cancel_button.isHidden()
-    picker.accept()
-    assert accepted == [True]
-
-
-def test_context_change_discards_pending_filament_assignment(picker: QuickFilamentPicker) -> None:
-    """Ein fremder Körper darf die vorbereitete Spulenwahl nicht erben."""
-    original = _body("first", "Erster")
-    picker.set_context([original])
-    cancelled: list[bool] = []
-    picker.stage_preview(lambda: pytest.fail("stale assignment"), lambda: cancelled.append(True))
-    picker.set_context([original])
-    assert not cancelled and not picker.apply_button.isHidden()
-    picker.set_context([_body("second", "Zweiter")])
-    assert cancelled == [True] and picker.apply_button.isHidden()
-    picker.accept()
+    chosen: list[object] = []
+    picker.spoolChosen.connect(chosen.append)
+    row = picker.picker.findData(spool.identifier)
+    picker.picker.setCurrentIndex(row)
+    picker.picker.activated.emit(row)
+    assert [entry.identifier for entry in chosen] == [spool.identifier]
+    texts = {button.text() for button in picker.findChildren(QPushButton)}
+    assert not texts & {"Übernehmen", "Abbrechen"}, texts
 
 
 def test_inventory_error_is_visible_and_repaired_file_refreshes_choices(

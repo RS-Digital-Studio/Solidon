@@ -2518,8 +2518,8 @@ class _WaitingClick:
     carried: bool = False
     """Der Rückruf übernimmt genau ``order`` und läuft auch ohne Freigabe
     (:meth:`MainWindow._carry_click`). Für Eigentümer, die das Ende der
-    Auswertung neu aufbaut — Merkmalfenster, Maßgruppe, Filamentwahl —: Ihre
-    Felder zeigen danach den Schritt und nicht mehr, was der Kunde sah."""
+    Auswertung neu aufbaut — Merkmalfenster, Maßgruppe —: Ihre Felder zeigen
+    danach den Schritt und nicht mehr, was der Kunde sah."""
     source: weakref.ref[Any] | None = None
     """Der Träger, dessen Werte der Klick trägt, wenn er nicht der Eigentümer
     ist (die Maßgruppe des Merkmalfensters): Seine Wertänderung verwirft den
@@ -3832,9 +3832,6 @@ class MainWindow(QMainWindow):
         self.quick_filament.spoolChosen.connect(self._assign_inventory_spool)
         self.quick_filament.clearRequested.connect(self._clear_selected_filament)
         self.quick_filament.inventoryRequested.connect(self.action_inventory)
-        # *Abbrechen* ist eine Entscheidung; ein Auswahlwechsel oder das Ende
-        # der Auswertung räumt die Zuweisung nur ab (:meth:`_drop_click_of`).
-        self.quick_filament.cancel_button.clicked.connect(self._quick_filament_cancelled)
         # Zugeklappt unter der Liste, die Kopfzeile nennt die Zuweisung (RM-510).
         self.quick_filament.described.connect(self.selection_operations.describe_print)
         self.selection_operations.add_print_widget(self.quick_filament)
@@ -8961,59 +8958,6 @@ class MainWindow(QMainWindow):
             return
         current = self._current_inventory_spool(entry)
         if current is None:
-            return
-        if any(result.scene.objects[draft.inputs[0]].kind == "brep" for draft in drafts):
-            owner = self.quick_filament
-            order = _PreviewOrder(
-                drafts=tuple(drafts), changes=self._spool_change(current, prepare=True)
-            )
-            window_ref = weakref.ref(self)
-
-            def cancel() -> None:
-                window = window_ref()
-                if window is None:
-                    return
-                approval = window._preview_approval
-                if approval is not None and approval.owner is window.quick_filament:
-                    window._clear_preview()
-
-            def accept() -> None:
-                window = window_ref()
-                if window is None:
-                    return
-                picker = window.quick_filament
-                # Während einer Auswertung: Ihr Ende verwirft die vorbereitete
-                # Zuweisung (``set_context``), der Klick trägt sie deshalb
-                # selbst hinüber (:meth:`_carry_click`).
-                if window._carry_click(picker, order, accept):
-                    return
-                # Vor dem Bild geklickt: Die Zuweisung läuft, sobald die
-                # Vorschau steht (:meth:`_apply_when_previewed`).
-                if not window._preview_can_apply(picker, order, then=accept):
-                    return
-                if window._current_inventory_spool(current) is None:
-                    picker.cancel_preview()
-                    return
-                picker.finish_preview()
-                window._clear_preview()
-                # Die Projektkennung entsteht erst beim Schreiben. Die
-                # Vorschau einschließlich Abbrechen verändert das Dokument nie.
-                window._inventory_settings()
-                window.session.apply(
-                    _("Filament zuweisen"), list(order.drafts), changes=order.changes
-                )
-
-            def current_preview() -> bool:
-                window = window_ref()
-                return window is not None and window._preview_can_apply(
-                    window.quick_filament, order
-                )
-
-            owner.stage_preview(accept, cancel)
-            owner.preview_check = current_preview
-            owner.preview_defer = accept
-            approval = self._set_preview_order(owner, order)
-            self._request_order_preview(approval)
             return
         self.session.apply(_("Filament zuweisen"), drafts, changes=self._spool_change(current))
 
@@ -24745,8 +24689,7 @@ class MainWindow(QMainWindow):
 
         Für Eigentümer, die das Ende der Auswertung neu aufbaut: Das
         Merkmalfenster zeigt danach die Werte des Schritts, die Maßgruppe geht
-        mit dem alten Ergebnis, die Filamentwahl verwirft ihre vorbereitete
-        Zuweisung. Ein Klick, der dort auf eine neue Freigabe wartete, löste
+        mit dem alten Ergebnis. Ein Klick, der dort auf eine neue Freigabe wartete, löste
         seine Zusage nie ein (Nachprüfung, Fund 3 und Verdacht Maßgruppe).
         ``then`` übernimmt deshalb genau ``order``, auch ohne Freigabe.
 
@@ -24818,10 +24761,6 @@ class MainWindow(QMainWindow):
         waiting = self._click_after_evaluation
         if waiting is not None and waiting.owner() is owner:
             self._drop_waiting_click()
-
-    def _quick_filament_cancelled(self) -> None:
-        """*Abbrechen* an der Filamentwahl: Ein wartendes Übernehmen fällt mit."""
-        self._drop_click_of(self.quick_filament)
 
     def _apply_carried_feature_order(
         self, order: _PreviewOrder, params: dict[str, Any], displayed: bool = False

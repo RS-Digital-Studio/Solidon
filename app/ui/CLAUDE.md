@@ -273,8 +273,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   nur an cachegleiche Rechnung (`Session.preview_is_the_evaluation`); läuft
   oder fehlt die Auswertung, an ihr Ende (`_WaitingClick`). Wert-/Dokumentwechsel
   entwertet jede Bindung, wartende mit Satz.
-  `block_apply` sperrt bei Problemen, nicht beim Warten. Dialog, Panel,
-  `QuietHost`, Filamentwahl prüfen über `preview_check`/`preview_defer`.
+  `block_apply` sperrt bei Problemen, nicht beim Warten. Dialog, Panel und
+  `QuietHost` prüfen über `preview_check`/`preview_defer`.
 - **Panel und Bild:** `QuietHost`: `feature_field`/`feature_field_values`.
   `set_measuring` übergibt Abschluss an die Maßgruppe; Panelzwillinge aus
   (`_blocks`, `LEADS_INTO_THE_VIEW`, `_in_the_view`); Fußknöpfe bleiben beim

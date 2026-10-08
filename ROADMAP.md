@@ -95,7 +95,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-554 — Das i an einer Kartengruppe zeigt nur einen Tooltip statt der Handbuchseite](#rm-554) | Bedienung und Darstellung | Robert, 08.10.: Klick öffnet die passende Handbuchseite, der Tooltip bleibt |
 | [RM-555 — *Baustein verschieben*: Position Y hat keinen fx-Knopf, X und Z haben einen](#rm-555) | Bedienung und Darstellung | Robert, 08.10.: Ursache am Feld klären, jedes Zahlenfeld mit Ausdruck zeigt fx gleich |
 | [RM-556 — Filamente aus der linken Spalte in die Kopfleiste](#rm-556) | Bedienung und Darstellung | Robert, 08.10.: Knopf oben, Klick zeigt die Filamente des Projekts und den Weg ins Filamentlager |
-| [RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet lange](#rm-557) | Bedienung und Darstellung | Robert, 08.10.: eine Farbänderung färbt sofort um, ohne die Geometrie neu zu rechnen |
 | [RM-558 — Nach dem Einsetzen eines Bausteins bleibt ein Maßfeld „Y … mm“ in der Ansicht stehen](#rm-558) | Bedienung und Darstellung | Robert, 08.10. (Bild): Feld verschwindet mit dem Einsetzen |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Robert, 08.10.: Start, Gegenecke in X/Y, Höhe in Z; ein Weg; Ablauf vorher mit bedienlogik |
 | [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
@@ -4155,16 +4154,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Filamentlager. **Abnahme:** linke Spalte ohne Filamente, Knopf in der Kopfleiste innerhalb
   der Oberflächengrenzen (`test_interface_limits`), Fenstertest für Liste und Wechsel ins
   Lager, Handbuch und Abbildungen nachgezogen.
-
-<a id="rm-557"></a>
-
-- [ ] **RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon
-  rechnet lange.** Robert, 08.10.2026: Der Wechsel lädt spürbar, und danach zeigt die Ansicht
-  noch die alte Farbe. Es ändert sich nur die Farbe. **Soll:** Die Ansicht färbt sofort um;
-  die Geometrie wird nicht neu gerechnet. Ist die Zuordnung ein Schritt im Dokument (Regel 2),
-  trifft die Auswertung ihren Zwischenspeicher, und die Farbe steht trotzdem sofort.
-  **Abnahme:** Test zählt beim Farbwechsel null neue Netzberechnungen; Fenstertest: neue Farbe
-  im ersten Bild nach dem Wechsel; Strg+Z stellt die alte Farbe wieder her.
 
 <a id="rm-558"></a>
 

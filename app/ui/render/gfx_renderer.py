@@ -397,22 +397,28 @@ class GfxItem(Item):
     def colour(self) -> Colour:
         return self._colour
 
-    def set_face_colours_visible(self, visible: bool) -> None:
-        """Zwischen Dreiecksfarben und der einen Körperfarbe umschalten.
+    def set_face_tint(self, tint: Colour | None, share: float = 0.0) -> None:
+        """Mischt den Ton in den Farbpuffer je Dreieck; ``color_mode`` bleibt ``"face"``.
 
-        pygfx entscheidet das über ``material.color_mode``: ``"face"`` liest
-        ``geometry.colors`` je Dreieck, ``"uniform"`` nur ``material.color``.
         **Nicht ``"auto"``:** Das multipliziert die Körperfarbe mit
         ``geometry.colors``, gelesen je Ecke — ein Puffer je Dreieck lag dann
-        über den Eckennummern. Nur Körper, die beim Anlegen Zellfarben
-        bekamen, tragen die Marke — bei allen anderen tut der Aufruf nichts,
-        und das ist auch richtig so: Sie hätten keine Dreiecksfarben, zu denen
-        sie zurückkehren könnten.
+        über den Eckennummern. Gemischt wird aus den Farben vom Anlegen
+        (``_solidon_face_colours``); nur Körper mit Zellfarben tragen sie.
         """
+        wanted = (tint, float(share)) if tint is not None and share > 0.0 else None
         for obj in self._coloured():
-            if not getattr(obj, "_solidon_face_colours", False):
+            base = getattr(obj, "_solidon_face_colours", None)
+            if base is None or getattr(obj, "_solidon_face_tint", None) == wanted:
                 continue
-            obj.material.color_mode = "face" if visible else "uniform"
+            shown = base
+            if wanted is not None:
+                shown = base.copy()
+                shown[:, :3] = (
+                    base[:, :3] * (1.0 - wanted[1]) + np.asarray(rgb(wanted[0])) * (wanted[1])
+                )
+            obj.geometry.colors.data[:] = shown
+            obj.geometry.colors.update_full()
+            obj._solidon_face_tint = wanted
             self.restyled = True
         self._changed()
 
@@ -1328,9 +1334,9 @@ class GfxRenderer(Renderer):
             material.color_mode = "face"
         mesh = gfx.Mesh(geometry, material)
         mesh._solidon_mesh = True
-        # Wer Dreiecksfarben hat, merkt es sich: Nur dann darf
-        # ``set_face_colours_visible`` den Modus überhaupt anfassen.
-        mesh._solidon_face_colours = cell_colours is not None
+        # Wer Dreiecksfarben hat, behält sie ungetönt: daraus mischt
+        # ``set_face_tint`` den Ton der Auswahl und nimmt ihn wieder zurück.
+        mesh._solidon_face_colours = fields["colors"].copy() if cell_colours is not None else None
         mesh._solidon_positions = np.asarray(vertices, dtype=float).reshape(-1, 3)
         mesh._solidon_force_opaque = style.force_opaque
         if style.ambient is not None and style.lighting:

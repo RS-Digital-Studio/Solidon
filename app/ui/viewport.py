@@ -2102,18 +2102,83 @@ def source_colours(mesh: Any, face_count: int) -> Any | None:
     return np.clip(np.rint(colours * 255.0), 0.0, 255.0).astype(np.uint8)
 
 
-def shows_face_colours(
-    object_id: ObjectId, highlighted: Sequence[ObjectId], map_owner: ObjectId | None
-) -> bool:
-    """Ob ein Körper seine Farben je Dreieck zeigt oder die eine Farbe.
+def slot_cell_colours(
+    mesh: Any, entry: Any, face_count: int, body_colour: str
+) -> CellColours | None:
+    """Die Zellfarben eines Körpers — aus seinen Materialslots oder aus der
+    Datei, aus der er kam; ``None`` heißt Körperfarbe.
 
-    Gewählt gilt die Auswahlfarbe, sonst sähe man die Auswahl an einem Teil
-    mit Filament nicht. **Eine Analysekarte besitzt die Farbe ihres Körpers
-    trotzdem** (§19.1) — dieselbe Ausnahme, die die Auswahlfarbe schon
-    beachtete; ohne sie verschwand die Karte am gewählten Körper, und in der
-    Formsitzung ist er immer gewählt.
+    Ein Slot ohne eigene Farbe bekommt eine aus der Ersatzpalette
+    (``theme.slot_colour``): Der Pinsel legt Slots mit ``colour=None`` an,
+    und mit der Körperfarbe an dieser Stelle war das Bemalen im Bild
+    folgenlos — zwei Striche in zwei Slots sahen aus wie keiner. Ein
+    einziger unbenannter Slot ohne Farbe bleibt die Vorgabe. Eine
+    ausdrücklich gesetzte Farbe gilt auch bei nur einem Slot.
     """
-    return object_id == map_owner or object_id not in highlighted
+    slots = getattr(entry, "material_slots", None)
+    # **Ein exakter Körper trägt seine Slots an der Vernetzung**, nicht an
+    # sich selbst (RM-557): ``Solid`` hat kein ``slots``, und gelesen als
+    # leer blieb jeder zugewiesene Baustein im Bild grau.
+    indices = getattr(getattr(mesh, "mesh", mesh), "slots", ())
+    import numpy as np
+
+    if not slots or len(indices) != face_count:
+        colours = source_colours(mesh, face_count)
+        if colours is None:
+            return None
+        return CellColours(np.asarray(colours, dtype=float) / 255.0)
+
+    known = {slot.index: slot for slot in slots}
+    highest = max(known)
+    table: list[str] = []
+    for index in range(highest + 1):
+        slot = known.get(index)
+        colour = slot.colour if slot is not None else None
+        if colour is not None:
+            table.append(hex_of(colour))
+            continue
+        table.append(slot_colour(index) or body_colour)
+    # **Gefragt wird der Slot mit dem Index null, nicht der zuerst
+    # deklarierte.** Die Tabelle ist über den Slot**index** aufgebaut;
+    # ``slots[0]`` stand hier und ist etwas anderes. Bei zweimal
+    # vergebenem Index gewinnt in ``known`` der letzte und in dieser
+    # Prüfung der erste — dann fiele eine gesetzte Farbe auf die
+    # Körperfarbe zurück. ``get`` und nicht ``[0]``, und ein fehlender
+    # Slot zählt als „keine Farbe": genau die Behandlung, die die Schleife
+    # darüber ihm gibt.
+    first = known.get(0)
+    if len(table) < 2 and (first is None or first.colour is None):
+        return None
+    return CellColours(
+        np.asarray(indices, dtype=np.int32),
+        colormap=tuple(table),
+        limits=(0.0, float(highest)),
+        categorical=True,
+    )
+
+
+#: Wie stark die Auswahlfarbe über den Filamentfarben eines gewählten Körpers
+#: liegt (RM-557): genug, dass die Auswahl zu sehen ist, wenig genug, dass ein
+#: neues Filament gleich im ersten Bild erkennbar bleibt.
+SELECTION_TINT_SHARE = 0.35
+
+
+def face_tint(
+    object_id: ObjectId, highlighted: Sequence[ObjectId], map_owner: ObjectId | None
+) -> str | None:
+    """Der Ton über den Farben je Dreieck eines Körpers — ``None`` heißt keiner.
+
+    Gewählt liegt die Auswahlfarbe darüber, sonst sähe man die Auswahl an
+    einem Teil mit Filament nicht. **Nur als Ton** (RM-557): Deckend stand sie,
+    solange der Körper gewählt war — und gewählt ist er, während man ihm am
+    Schnellwähler ein Filament gibt; der Wechsel zeigte sich erst nach dem
+    Abwählen. **Eine Analysekarte bleibt ungetönt** (§19.1), sonst
+    verschwände sie am gewählten Körper, und in der Formsitzung ist er immer
+    gewählt.
+    """
+    if object_id == map_owner or object_id not in highlighted:
+        return None
+    return SELECTED_COLOUR
 
 
 MeasureMode = Literal["off", "distance", "thickness", "angle"]
@@ -4473,6 +4538,11 @@ class _Same:
 MESH_MEMO_KEPT: Final = 2
 
 
+def _triangles_of(mesh: Any) -> Any:
+    """Die Dreiecke eines Netzes oder exakten Körpers — gleich, welche Slots sie tragen."""
+    return getattr(mesh, "raw", mesh)
+
+
 class _MeshMemo:
     """Je Körper die Antworten zu den zuletzt gezeigten Netzen — nach Identität.
 
@@ -4487,7 +4557,10 @@ class _MeshMemo:
     kein Wachstum über die Sitzung.
 
     Verglichen wird mit ``is``: Ein Hash über Millionen Dreiecke wäre nicht
-    billiger als die Rechnung, die der Merker spart.
+    billiger als die Rechnung, die der Merker spart. **Verglichen werden die
+    Dreiecke** (``raw``), nicht die Hülle darum (RM-557): Ein Filamentwechsel
+    baut ein neues Netz um dieselben Dreiecke, und Kanten, Hüllen und Normalen
+    hängen nicht an der Farbe.
     """
 
     __slots__ = ("_entries",)
@@ -4496,20 +4569,23 @@ class _MeshMemo:
         self._entries: dict[ObjectId, list[tuple[Any, Any]]] = {}
 
     def has(self, object_id: ObjectId, mesh: Any) -> bool:
-        """Ob zu genau diesem Netz eine Antwort steht."""
-        return any(known is mesh for known, _value in self._entries.get(object_id, ()))
+        """Ob zu genau diesen Dreiecken eine Antwort steht."""
+        shape = _triangles_of(mesh)
+        return any(known is shape for known, _value in self._entries.get(object_id, ()))
 
     def get(self, object_id: ObjectId, mesh: Any) -> Any:
-        """Die Antwort zu genau diesem Netz, sonst ``None``."""
+        """Die Antwort zu genau diesen Dreiecken, sonst ``None``."""
+        shape = _triangles_of(mesh)
         for known, value in self._entries.get(object_id, ()):
-            if known is mesh:
+            if known is shape:
                 return value
         return None
 
     def remember(self, object_id: ObjectId, mesh: Any, value: Any) -> None:
-        """Die Antwort zu diesem Netz merken; die älteste des Körpers weicht."""
-        kept = [entry for entry in self._entries.get(object_id, ()) if entry[0] is not mesh]
-        self._entries[object_id] = [(mesh, value), *kept][:MESH_MEMO_KEPT]
+        """Die Antwort zu diesen Dreiecken merken; die älteste des Körpers weicht."""
+        shape = _triangles_of(mesh)
+        kept = [entry for entry in self._entries.get(object_id, ()) if entry[0] is not shape]
+        self._entries[object_id] = [(shape, value), *kept][:MESH_MEMO_KEPT]
 
     def keep_only(self, object_ids: Collection[ObjectId]) -> None:
         """Was einem Körper gehört, den es nicht mehr gibt, fällt weg."""
@@ -8200,53 +8276,8 @@ class Viewport(QWidget):
             self.differenceApplied.emit(self._difference)
 
     def _slot_colours(self, mesh: Any, entry: Any, face_count: int) -> CellColours | None:
-        """Die Zellfarben eines Körpers — aus seinen Materialslots oder aus der
-        Datei, aus der er kam; ``None`` heißt Körperfarbe.
-
-        Ein Slot ohne eigene Farbe bekommt eine aus der Ersatzpalette
-        (``theme.slot_colour``): Der Pinsel legt Slots mit ``colour=None`` an,
-        und mit der Körperfarbe an dieser Stelle war das Bemalen im Bild
-        folgenlos — zwei Striche in zwei Slots sahen aus wie keiner. Ein
-        einziger unbenannter Slot ohne Farbe bleibt die Vorgabe. Eine
-        ausdrücklich gesetzte Farbe gilt auch bei nur einem Slot.
-        """
-        slots = getattr(entry, "material_slots", None)
-        indices = getattr(mesh, "slots", ())
-        import numpy as np
-
-        if not slots or len(indices) != face_count:
-            colours = source_colours(mesh, face_count)
-            if colours is None:
-                return None
-            return CellColours(np.asarray(colours, dtype=float) / 255.0)
-
-        known = {slot.index: slot for slot in slots}
-        highest = max(known)
-        table: list[str] = []
-        for index in range(highest + 1):
-            slot = known.get(index)
-            colour = slot.colour if slot is not None else None
-            if colour is not None:
-                table.append(hex_of(colour))
-                continue
-            table.append(slot_colour(index) or self._object_colour)
-        # **Gefragt wird der Slot mit dem Index null, nicht der zuerst
-        # deklarierte.** Die Tabelle ist über den Slot**index** aufgebaut;
-        # ``slots[0]`` stand hier und ist etwas anderes. Bei zweimal
-        # vergebenem Index gewinnt in ``known`` der letzte und in dieser
-        # Prüfung der erste — dann fiele eine gesetzte Farbe auf die
-        # Körperfarbe zurück. ``get`` und nicht ``[0]``, und ein fehlender
-        # Slot zählt als „keine Farbe": genau die Behandlung, die die Schleife
-        # darüber ihm gibt.
-        first = known.get(0)
-        if len(table) < 2 and (first is None or first.colour is None):
-            return None
-        return CellColours(
-            np.asarray(indices, dtype=np.int32),
-            colormap=tuple(table),
-            limits=(0.0, float(highest)),
-            categorical=True,
-        )
+        """Die Zellfarben eines Körpers in diesem Thema (:func:`slot_cell_colours`)."""
+        return slot_cell_colours(mesh, entry, face_count, self._object_colour)
 
     def _feature_edges_for(
         self, object_id: ObjectId, vertices: Any, faces: Any, source: Any
@@ -8952,13 +8983,11 @@ class Viewport(QWidget):
         }
         self._shown_colours = wanted
         # **Ein Körper mit Filament trägt Farben je Dreieck, und die schlagen
-        # jede Körperfarbe.** Ohne diese Umschaltung schriebe die Blende unten
-        # in eine Farbe, die pygfx gar nicht liest: Im Objektbaum markiert, im
-        # Bild grau wie alle anderen (Befund Robert, 08.09.2026). Für die
-        # Dauer der Auswahl gilt deshalb die eine Farbe, danach wieder der
-        # Werkstoff je Dreieck.
+        # jede Körperfarbe**: Die Blende unten schreibt in eine Farbe, die
+        # pygfx dort nicht liest. Die Auswahl liegt deshalb als Ton über dem
+        # Werkstoff (:func:`face_tint`).
         for identifier, actor in self._actors.items():
-            actor.set_face_colours_visible(shows_face_colours(identifier, highlighted, map_owner))
+            actor.set_face_tint(face_tint(identifier, highlighted, map_owner), SELECTION_TINT_SHARE)
         if not changed:
             return
         # Die neue Blende löst die ganze laufende Animation ab. Deren noch

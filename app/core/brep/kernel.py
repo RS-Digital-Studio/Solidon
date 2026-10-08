@@ -781,16 +781,52 @@ class Solid:
                 face_slots[face] = int(low[face])
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        result = replace(self, face_slots=tuple(face_slots))
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        # Die Kopie besitzt andere native Flächen. Die schon angezeigten Dreiecke
-        # behalten ihre Reihenfolge; nur ihr belegter Weg zur Topologie ändert sich.
+        return self._recoloured(tuple(face_slots), replace(mesh, slots=slots))
+
+    def _recoloured(self, face_slots: tuple[int, ...], mesh: MeshData) -> Solid:
+        """Derselbe Körper mit anderen Filamenten — dieselbe Form, dieselben Merker.
+
+        **Keine Kopie der Form** (RM-557). ``replace`` hätte sie über
+        ``__post_init__`` kopiert, und mit der Kopie begann jeder Merker kalt:
+        Fläche und Volumen am Lochbrett aus STEP 2,5 s nach jeder Zuweisung,
+        die Schichtanalyse des Prüfberichts ganz von vorn. Beide Körper
+        besitzen ihre Form nur lesend (§30), die Flächennummern bleiben
+        dieselben, und das Netz teilt seine Dreiecke samt ``trimesh``-Merkern —
+        nur die Slots sind neu.
+        """
+        result = object.__new__(Solid)
+        object.__setattr__(result, "shape", self.shape)
+        object.__setattr__(result, "deflection", self.deflection)
+        object.__setattr__(result, "face_slots", face_slots)
+        object.__setattr__(result, "converted_from", self.converted_from)
+        object.__setattr__(result, "_copied_faces", tuple(range(len(self._copied_faces))))
+        object.__setattr__(result, "_copied_edges", tuple(range(len(self._copied_edges))))
+        known = {key: value for key, value in self._cache.items() if key != "mesh"}
+        known["mesh"] = mesh
+        object.__setattr__(result, "_cache", known)
+        return result
+
+    def detached(self) -> Solid:
+        """Eine eigene Kopie für einen Arbeiter: eigene Form und Merker, dieselben Dreiecke.
+
+        Ein Platzierungsarbeiter rechnet daran (``surface_object_for_worker``),
+        damit er die trägen Merker des gezeigten Körpers nicht aus einem
+        zweiten Faden füllt. Die Dreiecke stehen in derselben Folge wie im
+        Bild, samt ihren Slots; nur ihr belegter Weg zur Topologie folgt der
+        Kopie. Bis RM-557 lieferte diese Kopie ``with_triangle_slots`` nebenbei.
+        """
+        import numpy as np
+
+        mesh = self.mesh
+        source = np.asarray(mesh.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
+        if len(source) != mesh.triangle_count:
+            raise InternalError(detail="the tessellation has no complete native face mapping")
+        result = replace(self)
         raw = mesh.raw.copy()
         raw.face_attributes[_FACE_ATTRIBUTE] = np.asarray(result._copied_faces, dtype=np.int64)[
             source
         ]
-        result._cache["mesh"] = replace(mesh, raw=raw, slots=slots)
+        result._cache["mesh"] = replace(mesh, raw=raw)
         return result
 
     def complete_faces_of_triangles(self, indices: Sequence[int]) -> tuple[int, ...]:

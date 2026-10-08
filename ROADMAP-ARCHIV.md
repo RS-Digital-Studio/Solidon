@@ -573,6 +573,7 @@ entfernt hat.
 | 2026-09-07 | [Ein Ort für die Auswahl (07.09.2026)](#ein-ort-für-die-auswahl-07092026) |
 | 2026-09-07 | [Die Durchsicht des 07.09.2026](#die-durchsicht-des-07092026) |
 | 2026-09-08 | [Zwei Werkzeuge, zwei Wahrheiten (08.09.2026)](#zwei-werkzeuge-zwei-wahrheiten-08092026) |
+| 2026-10-08 | [RM-557: Ein Filamentwechsel färbt sofort um und rechnet nichts neu (08.10.2026)](#rm-557-ein-filamentwechsel-färbt-sofort-um-und-rechnet-nichts-neu-08102026) |
 
 ---
 
@@ -44205,3 +44206,50 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-557: Ein Filamentwechsel färbt sofort um und rechnet nichts neu (08.10.2026)
+
+<a id="rm-557-ein-filamentwechsel-färbt-sofort-um-und-rechnet-nichts-neu-08102026"></a>
+<a id="rm-557"></a>
+
+**RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet
+lange.** Robert, 08.10.2026: Der Wechsel lädt spürbar, danach zeigt die Ansicht noch die alte
+Farbe.
+
+**Ursache, am echten Fenster gemessen** (Sonde liest die Bildpunkte der Körpermitte aus dem
+Renderer, zweiter Schirm): Drei Ursachen, die zusammen das Bild ergaben. (1) Ein exakter Körper
+(Baustein, STEP) zeigte sein Filament nie: `Viewport._slot_colours` las `mesh.slots`, und
+`Solid` trägt die Slots an seiner Vernetzung — nach dem Abwählen grau (104, 110, 117) statt rot.
+(2) Gewählt deckte die Auswahlfarbe jedes Filament zu (`set_face_colours_visible(False)`), und
+gewählt ist der Körper, während man ihm am Schnellwähler ein Filament gibt — Netzkörper zeigten
+die neue Farbe erst nach dem Abwählen. (3) Am exakten Körper ging die Wahl durch eine Vorschau
+mit *Übernehmen*, und `Solid.with_triangle_slots` kopierte die Form über `replace`; mit der Kopie
+begannen alle Merker kalt. Am Lochbrett aus STEP (6194 Dreiecke, 96 Merkmale): Wahl bis zur
+Vorschau 2,0–3,9 s mit drei Auswertungen, *Übernehmen* weitere 2,8–2,9 s — davon 2,5 s exakte
+Fläche und Volumen in `_warm_metrics` und die ganze Schichtanalyse des Prüfberichts.
+
+**Behebung:** `Solid._recoloured` baut den Körper mit neuen Slots um dieselbe Form, mit
+denselben Merkern und denselben Dreiecken (keine Formkopie, `trimesh`-Cache samt Schichtanalyse
+bleibt). Die Ansicht liest die Slots über die Vernetzung (`slot_cell_colours`, ohne Fenster
+prüfbar) und merkt Kanten, Hüllen und Normalen an den Dreiecken statt an der Netzhülle
+(`_MeshMemo`). Die Auswahl liegt als Ton über den Filamentfarben (`face_tint`,
+`SELECTION_TINT_SHARE` = 0,35, Renderer `Item.set_face_tint` statt `set_face_colours_visible`);
+eine Analysekarte bleibt ungetönt. Der Schnellwähler weist an jedem Körper sofort zu, ohne
+Vorschau und *Übernehmen* — ein Filament ändert weder Geometrie noch Rechenkern, Strg+Z nimmt es
+zurück (Regel 19). Platzierungsarbeiter bekommen ihre eigene Kopie jetzt ausdrücklich
+über `Solid.detached` (bis dahin nebenbei aus `with_triangle_slots`).
+
+**Nachweis:** `tests/test_paint.py::test_a_new_filament_computes_no_geometry_again` zählt
+Vernetzung, Formkopie, exakte Masse und Schichtanalyse nach der Zuweisung — null, an Netz und
+exaktem Körper, ganzer Körper und Fläche (Gegenprobe am alten Stand: `copy_shape` 1,
+`properties` 2, `slice_body` 1). `tests/test_viewport_decisions.py`:
+`test_an_exact_body_shows_the_filament_it_was_given` (Gegenprobe rot),
+`test_a_new_filament_keeps_what_the_view_prepared_for_the_triangles`, `face_tint`.
+Fenstertests: `tests/test_filament_workflow.py::test_a_quick_spool_colours_the_body_at_once_and_undo_takes_it_back`
+(jedes Bild nach der Wahl trägt das neue Filament, Strg+Z keines mehr, beide Kerne, Körper und
+Fläche), `test_render_gfx_regressions.py::test_a_tint_over_face_colours_keeps_each_face_its_own_colour`.
+Am echten Fenster nachher: neue Farbe 0,08–0,16 s nach der Wahl, gewählt getönt (Rot 142, 75,
+55; Blau 88, 75, 126), abgewählt rein (143, 27, 27 / 27, 27, 143), exakter Körper ebenso; am
+Lochbrett 0,2 s und eine Auswertung statt rund 7 s und vier.
+
+Changelog: ja — ein neues Filament steht sofort im Bild, auch an Bausteinen und STEP-Teilen.

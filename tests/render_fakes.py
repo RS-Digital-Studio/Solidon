@@ -46,9 +46,9 @@ class RecordingItem(Item):
         self._matrix = np.eye(4)
         self.pickable = True
         self.line_width: float | None = None
-        #: Ob die Dreiecksfarben gelten — der echte Renderer schaltet dafür
-        #: ``material.color_mode``, hier wird es nur gemerkt.
-        self.face_colours_visible = True
+        #: Der Ton über den Dreiecksfarben, mit Anteil — der echte Renderer
+        #: mischt ihn in den Farbpuffer, hier wird er nur gemerkt.
+        self.face_tint: tuple[Colour, float] | None = None
         #: Platz in den Puffern, wenn das Element mit ``capacity`` entstand —
         #: dann darf ``update_points`` weniger Punkte bringen (Vertrag).
         self.capacity: int | None = None
@@ -74,8 +74,8 @@ class RecordingItem(Item):
     def colour(self) -> Colour:
         return self._colour
 
-    def set_face_colours_visible(self, visible: bool) -> None:
-        self.face_colours_visible = bool(visible)
+    def set_face_tint(self, tint: Colour | None, share: float = 0.0) -> None:
+        self.face_tint = (tint, float(share)) if tint is not None and share > 0.0 else None
 
     def set_position(self, position: Vec3) -> None:
         self._position = (float(position[0]), float(position[1]), float(position[2]))
