@@ -885,7 +885,15 @@ def actions_for(
         OTHER_PART_IN_THE_BORE,
         hole_has_separate_contents,
         only_a_rim_inside,
+        separate_part_reason,
     )
+
+    # **Ein getrenntes Teil fragt den Hohlraum, nicht die Art** (RM-545): an
+    # Senkung, Langloch und Hohlkegel wie an der Bohrung, und am Stift oder
+    # Schraubenkopf, der selbst in einer fremden Bohrung steckt — mit dem Satz,
+    # mit dem die Operation absagt (``prepare_ops.separate_part_reason``).
+    if mesh is not None and (apart := separate_part_reason(mesh, feature, features)) is not None:
+        own_body_blocked = apart
 
     rows = [row for row in ACTION_ORDER if only is None or only in row]
     # Ein Langloch schneidet fremde Teile nur innerhalb seiner Bohrungstiefe.

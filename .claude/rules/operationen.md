@@ -285,9 +285,9 @@ eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
 - **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt neu
   und seitlich auf der gesetzten Achse bis zur Facettengrenze.
 - **Eine Bohrung, in deren Zylinder Material steht, ist keine** (`hole_is_clear`
-  über jede Oberfläche, `HOLE_IS_NOT_EMPTY`, fremde Teile
-  `OTHER_PART_IN_THE_BORE`); ob man hindurchsieht, sagt die ganze Mündung. Nur
-  `slot_hole` schneidet ein freies Teil mit (`_near_the_carrier`).
+  über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
+  ganze Mündung. Getrennte Teile fragt `separate_part_reason` an jedem
+  Hohlraum und in fremder Bohrung; nur `slot_hole` schneidet ein freies mit.
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
   Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
@@ -493,8 +493,8 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
   bewegt, nimmt `apply` (Vermerk `note_movement`), wer nur teilt, meldet die
   Herkunft (`note_refinement`); übertragen wird unter Beleg, nie auf Zusage. Ein
   einzeln bewegter Körper meldet seine Matrix in `OpResult.transform`; bei
-  mehreren Körpern reist sie je Netz über `note_movement`. Alle Verbraucher
-  teilen den einmal gemessenen `moved_twin`-Beleg für Netzpaar und Matrix.
+  mehreren Körpern reist sie je Netz über `note_movement` (Beleg `moved_twin`,
+  `perceive/CLAUDE.md`).
 - **Die Live-Vorschau erkennt nur, was jemand braucht**
   (`detect_features=False`); ihre Szene ist nie Dokumentstand, Merkmale liest
   der Agent über den genauen Weg.

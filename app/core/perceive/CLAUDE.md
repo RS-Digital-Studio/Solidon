@@ -184,7 +184,9 @@ hält beide Wege zusammen.
   versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`).
 - **Grau mit dem Satz der Operation**: geteilter Hohlraum
   (`_shares_its_cavity`; ohne Netz keine Sperre), kein eigener Körper
-  (`no_own_body`), Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
+  (`no_own_body`), ein getrenntes Teil im Hohlraum jeder Art oder das Merkmal
+  selbst in fremder Bohrung (`prepare_ops.separate_part_reason`, jede Zeile),
+  Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
   Kette mit Verengung (`narrowing_reason`), Kegel einer Kette bei *Merkmal
   ändern* (`_countersink_unsized` → `countersink_resize_refusal`), Verrundung
   ohne zwei Ebenen (`fillet_blocked` — liest die Ebenen aus `planar_mask`

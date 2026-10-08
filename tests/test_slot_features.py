@@ -4163,18 +4163,20 @@ def test_touching_plates_are_united_although_the_body_has_more_parts_than_the_im
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
-def test_widening_a_slot_with_a_second_body_in_it_is_no_split(
-    profile: Profile, kernel: str
-) -> None:
+def test_widening_a_slot_beside_a_second_body_is_no_split(profile: Profile, kernel: str) -> None:
     """Derselbe Stopfen beim Ändern eines Langlochs (*Bohrung ändern*, ``resize_hole``).
 
     Ein Langloch geht vor dem Neuschnitt immer zu (RM-156); am Netz stand danach
     derselbe falsche Zerfall wie beim Zug (gemessen 30.09.2026: zwei Teile vor
-    und nach dem Ändern auf Ø 7, dazu ``bore.splits_the_body``).
+    und nach dem Ändern auf Ø 7, dazu ``bore.splits_the_body``). Gemessen wurde
+    das mit dem Stift im Langloch; dort sagt *Bohrung ändern* seit RM-545 ab
+    (``test_a_separate_part_in_a_countersink_slot_or_screw_says_so_at_every_row``),
+    denn der Stift wurde dabei auf 97,6 mm³ abgeschnitten oder verschmolz. Der
+    Stopfen bleibt geprüft mit dem zweiten Körper neben der Platte.
     """
     exact_kernel()
-    entry = _plate_with_a_second_body(kernel, inside=True, slot=True)
-    assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Stift"
+    entry = _plate_with_a_second_body(kernel, inside=False, slot=True)
+    assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Klotz"
 
     output, findings = run_op_with_findings(
         "resize_hole", entry, profile, at_feature=_bore_in(entry, "slot"), diameter=7.0
@@ -5064,3 +5066,225 @@ def test_no_row_at_a_slot_offers_a_migration_marker_as_a_field() -> None:
     assert set(rows) >= set(SAVED_SLOT_TOOL_OPERATIONS) - {"pattern_feature"}, rows
     for operation, fields in rows.items():
         assert not fields & {"legacy_slot_tool", "measured_frame"}, (operation, fields)
+
+
+# --- RM-545: Über Senkung, Langloch und Schraube fragt der Hohlraum, nicht die Art --------
+
+
+def _countersunk_plate_with_a_pin(kernel: str) -> SceneObject:
+    """Platte 40 × 20 × 10, Bohrung Ø 6 durch, Senkung 90° auf Ø 10, Stift Ø 5 als eigener Körper.
+
+    Der Aufbau aus dem Review der RM-413-Einheit (Fund H1): Kette ``hole`` +
+    ``cone``, der Stift steht in beiden und ragt 5 mm heraus.
+    """
+    exact_kernel()
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.cut_bore(
+        edit.box(40.0, 20.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+    )
+    sink = edit._oriented_cone((0.0, 0.0, 10.2), (0.0, 0.0, -1.0), 5.2, 0.0, 5.2)
+    plate = edit.boolean("difference", [plate, sink])
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, edit.cylinder(5.0, 15.0).shape)
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+def _screwed_plate(kernel: str, profile: Profile) -> SceneObject:
+    """Platte 40 × 40 × 10 mit Durchgangsbohrung Ø 6 und dem Baustein *Schraube* M6 gesenkt.
+
+    Die Schraube ist ein lösbares Teil (``separate_from_host``) im selben
+    Objekt; danach ist die Bohrung nicht mehr erkannt, und beide Kegel —
+    Senkung der Platte und Kopf der Schraube — stehen in keiner Kette.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    if kernel == "brep":
+        exact_kernel()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    box = "create_brep_box" if kernel == "brep" else "create_box"
+    history.apply(
+        "Platte",
+        [OperationDraft(op=box, params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "depth": 0.0, "compensate": False},
+            )
+        ],
+    )
+    history.apply(
+        "Schraube",
+        [
+            OperationDraft(
+                op="insert_printed_screw",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "size": "M6", "length": 12.0, "countersunk": True},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+    return result.scene.objects["obj_1"]
+
+
+def _parts_of(entry: SceneObject) -> list[float]:
+    """Die Teile des Körpers, nach Volumen."""
+    pieces = as_mesh_data(entry.mesh).raw.split(only_watertight=False)
+    return sorted(round(abs(float(piece.volume)), 1) for piece in pieces)
+
+
+def _values_for(op: str, feature: Any) -> dict[str, object]:
+    """Werte, mit denen die Zeile rechnen würde: Wege ab der Mitte, Maße darüber."""
+    centre = [float(value) for value in feature.params["centre"]]
+    if op == "move_feature":
+        return {"x": centre[0] + 1.5, "y": centre[1], "z": centre[2]}
+    if op == "duplicate_feature":
+        return {"x": centre[0] + 12.0, "y": centre[1], "z": centre[2]}
+    if op == "resize_feature":
+        return {"diameter": float(feature.params["diameter"]) + 1.0}
+    if op == "resize_hole":
+        return {"diameter": 7.0}
+    if op == "rotate_feature":
+        return {"axis": "x", "angle": 10.0}
+    return {}
+
+
+def _separate_case(case: str, kernel: str, profile: Profile) -> tuple[SceneObject, str]:
+    """Körper und gewähltes Merkmal je Fall aus RM-545."""
+    if case.startswith("senkung"):
+        entry = _countersunk_plate_with_a_pin(kernel)
+        kind = "cone" if case == "senkung" else "pin"
+    elif case.startswith("langloch"):
+        entry = _plate_with_a_second_body(kernel, inside=True, slot=True)
+        kind = "slot" if case == "langloch" else "pin"
+    else:
+        entry = _screwed_plate(kernel, profile)
+        if case == "schraube-senkung":
+            return entry, "printed_screw_countersink_1"
+        heads = [
+            name
+            for name, feature in entry.features.items()
+            if feature.kind == "cone" and feature.provenance == "detected"
+        ]
+        assert len(heads) == 1, sorted((f.id, f.kind) for f in entry.features.values())
+        return entry, heads[0]
+    chosen = [name for name, feature in entry.features.items() if feature.kind == kind]
+    assert len(chosen) == 1, (case, sorted((f.id, f.kind) for f in entry.features.values()))
+    return entry, chosen[0]
+
+
+#: Je Fall die Zeilen, die das Menü dort anbot.
+_ROWS_OFFERED: dict[str, tuple[str, ...]] = {
+    "senkung": (
+        "move_feature",
+        "resize_feature",
+        "rotate_feature",
+        "duplicate_feature",
+        "remove_feature",
+    ),
+    "langloch": (
+        "move_feature",
+        "resize_hole",
+        "rotate_feature",
+        "duplicate_feature",
+        "remove_feature",
+    ),
+}
+
+_SEPARATE_CASES = [
+    (case, kernel, op)
+    for case, rows in (
+        # Die Senkung einer Kette, deren Bohrung den Stift trägt (Fund H1).
+        ("senkung", _ROWS_OFFERED["senkung"]),
+        # Das Langloch mit dem Stift; *Zum Langloch ziehen* bleibt frei (unten).
+        ("langloch", _ROWS_OFFERED["langloch"]),
+        # Der Baustein Schraube: die Senkung der Platte und der Kopf der Schraube.
+        ("schraube-senkung", _ROWS_OFFERED["senkung"]),
+        ("schraube-kopf", _ROWS_OFFERED["senkung"]),
+        # Der Stift selbst, der in der Bohrung eines anderen Teils steckt.
+        ("senkung-stift", _ROWS_OFFERED["senkung"]),
+        ("langloch-stift", _ROWS_OFFERED["senkung"]),
+    )
+    for kernel in ("mesh", "brep")
+    for op in rows
+]
+
+
+@pytest.mark.parametrize(("case", "kernel", "op"), _SEPARATE_CASES)
+def test_a_separate_part_in_a_countersink_slot_or_screw_says_so_at_every_row(
+    profile: Profile, case: str, kernel: str, op: str
+) -> None:
+    """RM-545: Die Absage aus RM-413 hing an ``kind == "hole"``.
+
+    Über die Senkung einer Kette, das Langloch und den Baustein *Schraube*
+    verschmolzen Versetzen, Entfernen, Kippen und Ändern das getrennte Teil
+    still mit der Platte oder schnitten es ab — am Netz wie exakt, dort teils
+    mit dem falschen Grund „lässt sich nicht als eine Bohrung lesen“; der
+    Stift selbst verschmolz beim Drehen. Soll: An jedem Glied eines Hohlraums
+    mit einem getrennten Teil darin steht jede Zeile grau mit
+    ``OTHER_PART_IN_THE_BORE``, an einem Teil, das in der Bohrung eines anderen
+    steckt, mit ``PART_IN_ANOTHER_BORE`` — und die Operation sagt denselben Satz
+    mit *In Einzelteile aufteilen*.
+    """
+    from app.core.geom.prepare_ops import OTHER_PART_IN_THE_BORE, PART_IN_ANOTHER_BORE
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry, chosen = _separate_case(case, kernel, profile)
+    feature = entry.features[chosen]
+    expected = PART_IN_ANOTHER_BORE if case.endswith(("stift", "kopf")) else OTHER_PART_IN_THE_BORE
+    (row,) = actions_for(feature, entry.features, mesh=as_mesh_data(entry.mesh), only=op)
+    assert row.op is None and row.reason is expected, (case, chosen, row)
+    with pytest.raises(ValidationError) as caught:
+        run_op(op, entry, profile, at_feature=chosen, **_values_for(op, feature))
+    assert caught.value.detail is expected
+    assert [action.id for action in caught.value.suggestions] == ["split_bodies", "cancel"]
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_the_slot_with_a_separate_pin_still_pulls_and_keeps_the_pin(
+    profile: Profile, kernel: str
+) -> None:
+    """RM-545, Gegenfall: *Zum Langloch ziehen* bleibt am Langloch mit freiem Stift frei.
+
+    Der Zug schneidet nur zwischen den Mündungen und lässt den Stift Ø 5 × 15,
+    der darin steht, unberührt: zwei Teile, der Stift mit seinem Volumen.
+    """
+    from app.core.perceive.actions import actions_for
+
+    load_operations()
+    entry, chosen = _separate_case("langloch", kernel, profile)
+    (row,) = actions_for(
+        entry.features[chosen], entry.features, mesh=as_mesh_data(entry.mesh), only="slot_hole"
+    )
+    assert row.op == "slot_hole", row
+    before = _parts_of(entry)
+    output = run_op("slot_hole", entry, profile, at_feature=chosen, slot_length=16.0)
+    after = _parts_of(output)
+    assert len(after) == 2, after
+    assert after[0] == pytest.approx(before[0], abs=0.2), (before, after)
