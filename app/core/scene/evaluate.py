@@ -1709,6 +1709,10 @@ def _evaluate(
     if cache is not None and stopped_at is None:
         for key, result, to_disk in pending:
             cache.put(key, result, to_disk=to_disk)
+        # Auch ohne neuen Eintrag: Ein Lauf aus lauter Treffern — Zurücknehmen —
+        # lässt die Netze älterer Stände wachsen (RM-567). Die Netze der
+        # fertigen Szene bleiben, wie sie sind.
+        cache.trim(keep=[body.mesh for body in scene.objects.values()])
     progress(1.0, "")
     return EvaluationResult(
         scene=scene,

@@ -7351,8 +7351,9 @@ _SUPPORT_CACHE: dict[str, OrderedDict[tuple[int, bytes, Any, int], Any]] = {}
 #: hätte den Merker umsonst gehabt (gemessen am 21.09.2026: 218 Streifen-
 #: fragen an der Lochplatte verdrängten die Facettenantwort zwischen ihren
 #: zwei Lesern). Die Grenzen gelten über alle Körper, damit auch viele
-#: lebende Körper — der Ergebniscache hält bis zu zwanzig Millionen Dreiecke
-#: — zusammen nicht mehr als acht Lesungen halten.
+#: lebende Körper — der Ergebniscache hält bis zu einem Achtel des
+#: Arbeitsspeichers (``scene.cache.MEMORY_SHARE``) — zusammen nicht mehr als
+#: acht Lesungen halten.
 SUPPORT_CACHE_LIMIT = 8
 CACHE_LIMIT_PER_QUESTION = 4096
 

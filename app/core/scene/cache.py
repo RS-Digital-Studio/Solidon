@@ -1,7 +1,8 @@
 """Der Ergebnis-Cache über dem Operations-Hash (Bauplan §15, §38).
 
-Zwei Ebenen. Im Speicher ein LRU-Ablage, begrenzt über die Dreieckszahl —
-denn die ist es, die den Rechner wirklich füllt. Auf der Platte dieselben
+Zwei Ebenen. Im Speicher eine LRU-Ablage, begrenzt über die Bytes, die ihre
+Netze samt deren Cache halten, und über die Dreieckszahl (RM-567,
+:data:`MEMORY_SHARE`). Auf der Platte dieselben
 Ergebnisse unter demselben Hash, damit das Wiederöffnen eines Projekts nicht
 den ganzen Stapel neu rechnet (§31: unter einer Sekunde aus dem
 Platten-Cache).
@@ -25,6 +26,7 @@ import threading
 import zipfile
 import zlib
 from collections import OrderedDict
+from collections.abc import Collection, Iterable
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -60,6 +62,94 @@ _log = get_logger(__name__)
 #: Grobe Obergrenze im Speicher. Eine Million Dreiecke ist das
 #: Viewport-Ziel (§31).
 DEFAULT_TRIANGLE_BUDGET: Final = 20_000_000
+
+#: **Die Grenze, die wirklich hält, zählt Bytes** (RM-567). Die Dreiecke
+#: darüber sagen nicht, was ein Eintrag hält: ein Netz mit allem, was
+#: ``trimesh``, die Erkennung und der Prüfbericht an ihm merken, 157 bis 644
+#: Byte je Dreieck und eine Schichtanalyse von 108 MB dazu (Laptop-Riser,
+#: 08.10.2026). Zwanzig Millionen Dreiecke waren damit drei bis dreizehn
+#: Gigabyte; im Fenster hielt jedes Verschieben am Spiderman (886 000
+#: Dreiecke) 230 MB mehr fest, ohne dass je etwas verdrängt wurde. Die
+#: Speicherebene hält deshalb höchstens ein Achtel des eingebauten
+#: Arbeitsspeichers — auf 8 GB ein Gigabyte, auf 16 GB zwei —, mindestens
+#: :data:`MEMORY_FLOOR`, höchstens :data:`MEMORY_CEILING`. Was sie verdrängt,
+#: liegt weiter auf der Platte und kommt von dort zurück.
+MEMORY_SHARE: Final = 8
+MEMORY_FLOOR: Final = 512 * 1024 * 1024
+MEMORY_CEILING: Final = 4 * 1024 * 1024 * 1024
+#: Wovon die Grenze ausgeht, wenn der Rechner seinen Speicher nicht nennt.
+ASSUMED_MEMORY: Final = 8 * 1024 * 1024 * 1024
+#: Was ein Körper je Dreieck hält, der seinen Speicher nicht selbst nennt —
+#: ein exakter Körper oder ein Prüfnetz der Tests: Ecken und Dreiecke, ohne
+#: Cache.
+FALLBACK_BYTES_PER_TRIANGLE: Final = 36
+
+
+def default_memory_budget() -> int:
+    """Wie viel die Speicherebene auf diesem Rechner höchstens hält, in Bytes."""
+    from app.core.memory import physical_memory
+
+    installed = physical_memory() or ASSUMED_MEMORY
+    return max(MEMORY_FLOOR, min(MEMORY_CEILING, installed // MEMORY_SHARE))
+
+
+def held_by(result: CachedResult, kept: Collection[int] = ()) -> int:
+    """Wie viele Bytes ein Eintrag gerade hält — Netze samt Cache, Merkmale.
+
+    Gemessen wird nicht einmal für immer: Ein Netz im Cache ist dasselbe
+    Objekt wie in der Szene, und was später an ihm gerechnet wird —
+    Nachbarschaften, die Schichtanalyse des Prüfberichts —, hängt sich an ihn
+    und wiegt mit. Netze, deren Nummer (``id``) in ``kept`` steht, hält die
+    Szene ohnehin; sie zählen hier nicht.
+    """
+    from app.core.memory import held_bytes
+
+    seen: set[int] = set()
+    total = 0
+    for entry in result.objects:
+        if id(entry.mesh) in kept:
+            continue
+        measure = getattr(entry.mesh, "held_bytes", None)
+        total += (
+            int(measure(seen))
+            if callable(measure)
+            else entry.mesh.triangle_count * FALLBACK_BYTES_PER_TRIANGLE
+        )
+        total += held_bytes(entry.features, seen)
+    return total
+
+
+def _held_signature(result: CachedResult) -> tuple[tuple[int, int, int], ...]:
+    """Woran zu sehen ist, ob ein Eintrag seit der letzten Messung gewachsen ist.
+
+    Je Körper sein Netz und die Zahl der Einträge in dessen Cache. Gewachsen
+    ist er nur, wenn dort etwas dazukam; neu zu messen kostet am Riser 5 ms
+    und mit Schichtanalyse 40 ms — je Ablegen über alle Einträge zu viel.
+    """
+    signature = []
+    for entry in result.objects:
+        raw = getattr(entry.mesh, "raw", None)
+        cache = getattr(getattr(raw, "_cache", None), "cache", None)
+        signature.append(
+            (id(entry.mesh), len(cache) if isinstance(cache, dict) else 0, len(entry.features))
+        )
+    return tuple(signature)
+
+
+def _leaner(result: CachedResult, kept: Collection[int]) -> CachedResult:
+    """Der Eintrag mit schlanken Netzen (``MeshData.lean``) außer denen der Szene."""
+    objects = []
+    changed = False
+    for body in result.objects:
+        lean = getattr(body.mesh, "lean", None)
+        if id(body.mesh) in kept or not callable(lean):
+            objects.append(body)
+            continue
+        mesh = lean()
+        changed |= mesh is not body.mesh
+        objects.append(body if mesh is body.mesh else replace(body, mesh=mesh))
+    return replace(result, objects=tuple(objects)) if changed else result
+
 
 #: Obergrenze des Platten-Caches; die ältesten Einträge gehen zuerst.
 DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
@@ -289,10 +379,15 @@ class ResultCache:
         self,
         triangle_budget: int = DEFAULT_TRIANGLE_BUDGET,
         disk: DiskCache | None = None,
+        memory_budget: int | None = None,
     ) -> None:
         self._entries: OrderedDict[str, CachedResult] = OrderedDict()
         self._cost = 0
         self._budget = triangle_budget
+        self._memory_budget = default_memory_budget() if memory_budget is None else memory_budget
+        self._held: dict[str, tuple[tuple[tuple[int, int, int], ...], int]] = {}
+        """Je Schlüssel die zuletzt gemessenen Bytes und woran die Messung hing
+        (:func:`_held_signature`)."""
         self._disk = disk
         self._refusals: OrderedDict[str, AppError] = OrderedDict()
         """Das Urteil der vollen Kette über Schritte, an denen sie gescheitert ist (RM-534).
@@ -404,12 +499,95 @@ class ResultCache:
         """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`."""
         if key in self._entries:
             self._cost -= self._entries.pop(key).cost
+            self._held.pop(key, None)
         self._entries[key] = result
         self._cost += result.cost
         while self._cost > self._budget and len(self._entries) > 1:
-            _, dropped = self._entries.popitem(last=False)
+            dropped_key, dropped = self._entries.popitem(last=False)
+            self._held.pop(dropped_key, None)
             self._cost -= dropped.cost
             self.statistics.evictions += 1
+
+    def trim(self, keep: Iterable[Mesh] = ()) -> None:
+        """Hält die Bytegrenze der Speicherebene (RM-567).
+
+        Gerufen von der Auswertung am Ende jedes vollständigen Laufs, mit den
+        Netzen ihrer fertigen Szene in ``keep``: Die hält die Szene ohnehin,
+        sie zählen nicht und bleiben, wie sie sind. Am Ende und nicht beim
+        Ablegen, weil ein Netz wächst, nachdem es abgelegt wurde —
+        Zurücknehmen legt nichts ab und wertet doch einen älteren Stand aus,
+        dessen Netz seine Nachbarschaften neu rechnet, am Spiderman 256 MB je
+        Schritt zurück (08.10.2026).
+        """
+        kept = {id(mesh) for mesh in keep}
+        with self._lock:
+            self._trim(kept)
+
+    def _trim(self, kept: set[int]) -> None:
+        """Nur mit gehaltenem Schloss aufrufen — siehe :attr:`_lock`."""
+        # Die Bytes zuletzt, in zwei Stufen. **Erst schrumpfen, dann
+        # verdrängen**: Eine Auswertung geht den Verlauf von vorn durch und
+        # fragt jeden Schritt hier ab. Wer die ältesten Einträge verdrängt,
+        # holt sie bei der nächsten Auswertung von der Platte und verdrängt
+        # dabei die nächsten — am Spiderman mit acht Schritten las jede
+        # Auswertung acht Netze von der Platte, 15 statt 2 s (08.10.2026). Was
+        # ein älterer Eintrag wirklich braucht, sind Ecken, Dreiecke und
+        # Merkmale; Kantentabellen, Nachbarschaften und Schichtanalyse
+        # rechnet ein neues Netz aus denselben Feldern, wenn jemand fragt
+        # (``MeshData.lean``).
+        # Der jüngste Eintrag bleibt immer ganz, auch über der Grenze — ohne
+        # ihn rechnete der nächste Schritt alles noch einmal.
+        sizes = {key: self._unkept(key, entry, kept) for key, entry in self._entries.items()}
+        held = sum(sizes.values())
+        if held <= self._memory_budget:
+            return
+        older = list(self._entries)[:-1]
+        for key in older:
+            entry = self._entries[key]
+            leaner = _leaner(entry, kept)
+            if leaner is entry:
+                continue
+            self._entries[key] = leaner
+            self._held.pop(key, None)
+            size = self._unkept(key, leaner, kept)
+            held -= sizes[key] - size
+            sizes[key] = size
+            if held <= self._memory_budget:
+                return
+        for key in older:
+            if held <= self._memory_budget:
+                return
+            entry = self._entries[key]
+            if any(id(body.mesh) in kept for body in entry.objects):
+                continue
+            del self._entries[key]
+            self._held.pop(key, None)
+            held -= sizes[key]
+            self._cost -= entry.cost
+            self.statistics.evictions += 1
+
+    def _unkept(self, key: str, entry: CachedResult, kept: set[int]) -> int:
+        """Die Bytes eines Eintrags ohne die Netze der Szene; gemerkt, solange er nicht wächst."""
+        if any(id(body.mesh) in kept for body in entry.objects):
+            return held_by(entry, kept)
+        signature = _held_signature(entry)
+        known = self._held.get(key)
+        if known is None or known[0] != signature:
+            known = (signature, held_by(entry))
+            self._held[key] = known
+        return known[1]
+
+    def _held_bytes(self) -> int:
+        """Die Bytes aller Einträge; neu gemessen wird nur, was gewachsen ist."""
+        total = 0
+        for key, entry in self._entries.items():
+            signature = _held_signature(entry)
+            known = self._held.get(key)
+            if known is None or known[0] != signature:
+                known = (signature, held_by(entry))
+                self._held[key] = known
+            total += known[1]
+        return total
 
     def clear(self) -> None:
         """Leert die **Speicher**ebene. Die Platte bleibt, und das ist der Sinn.
@@ -434,6 +612,7 @@ class ResultCache:
         """
         with self._lock:
             self._entries.clear()
+            self._held.clear()
             self._refusals.clear()
             self._cost = 0
 
@@ -441,6 +620,17 @@ class ResultCache:
     def cost(self) -> int:
         with self._lock:
             return self._cost
+
+    @property
+    def held_bytes(self) -> int:
+        """Wie viele Bytes die Speicherebene gerade hält (RM-567)."""
+        with self._lock:
+            return self._held_bytes()
+
+    @property
+    def memory_budget(self) -> int:
+        """Wie viele Bytes sie höchstens hält; den jüngsten Eintrag behält sie immer."""
+        return self._memory_budget
 
     def __len__(self) -> int:
         with self._lock:

@@ -1944,6 +1944,9 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
         def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
             self.written.append(to_disk)
 
+        def trim(self, keep: object = ()) -> None:
+            return None
+
     load_operations()
     meshes = Path(__file__).parent / "data" / "meshes"
     profile = make_profile("centauri-carbon-2", "petg")

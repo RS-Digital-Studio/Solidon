@@ -140,6 +140,71 @@ class MeshData:
     def slot_indices(self) -> tuple[int, ...]:
         return self.slots
 
+    def held_bytes(self, seen: set[int] | None = None) -> int:
+        """Was dieses Netz im Arbeitsspeicher hält, in Bytes (RM-567).
+
+        Ecken und Dreiecke, dazu alles, was ``trimesh``, die Erkennung und
+        der Prüfbericht in seinem Cache gemerkt haben — Kantentabellen,
+        Nachbarschaften, eine Schichtanalyse — und die belegte
+        Innengeometrie. Am Laptop-Riser 36 Byte je Dreieck für die
+        Grunddaten und 608 für den Cache nach dem Laden (08.10.2026). Gelesen
+        wird am rohen Speicher von ``trimesh``, ohne dessen Prüfsumme: Die
+        Frage darf nichts rechnen. ``seen`` zählt geteilte Felder einmal.
+        """
+        from app.core.memory import held_bytes
+
+        known = set() if seen is None else seen
+        raw = self.raw
+        total = held_bytes(self.slots, known)
+        for holder in (raw, getattr(raw, "visual", None)):
+            store = getattr(getattr(holder, "_data", None), "data", None)
+            cache = getattr(getattr(holder, "_cache", None), "cache", None)
+            total += held_bytes(store, known) + held_bytes(cache, known)
+        if self.cavity is not None:
+            total += self.cavity.held_bytes(known)
+        return total
+
+    def lean(self) -> MeshData:
+        """Dieselben Ecken und Dreiecke ohne das, was sich aus ihnen neu rechnen lässt (RM-567).
+
+        Für ältere Einträge des Ergebniscaches: Eine Auswertung liest von ihnen
+        das Ergebnis, nicht Kantentabellen, Nachbarschaften oder die
+        Schichtanalyse — die hielten am Spiderman zwei Drittel des Eintrags.
+
+        **Ein neues Netz, kein geleertes.** Dasselbe Netz kann in diesem
+        Augenblick ein anderer Faden lesen — Vorschau, Karte, Prüfbericht —,
+        und ``trimesh`` wie die Erkennung fragen erst, ob ein Wert im Cache
+        steht, und lesen ihn danach; dazwischen entfernt, käme ``None``. Die
+        Felder teilt das neue Netz mit dem alten, den Speicher des Abgeleiteten
+        gibt erst frei, wer das alte zuletzt loslässt. Was nicht aus der
+        Geometrie folgt — der Ursprung je Dreieck, der Beleg einer starren
+        Bewegung —, reist mit, ebenso Normalen, die eine Datei mitgebracht
+        haben kann, und die Farben. Ein Netz mit Textur bleibt, wie es ist.
+        """
+        raw = self.raw
+        visual = getattr(raw, "visual", None)
+        kind = getattr(visual, "kind", None)
+        if kind not in (None, "face", "vertex") or not hasattr(raw, "_cache"):
+            return self
+        # Eine Kopie des Caches in einem Zug: Ein anderer Faden kann gerade
+        # etwas hinzufügen, und über das Wörterbuch selbst zu laufen, bräche
+        # dann mit „dictionary changed size during iteration“ ab.
+        known = dict(raw._cache.cache)
+        if not any(_releasable(key) for key in known) and (
+            self.cavity is None or self.cavity.lean() is self.cavity
+        ):
+            return self
+        fresh = trimesh.Trimesh(
+            vertices=raw.vertices, faces=raw.faces, process=False, validate=False
+        )
+        if kind is not None and visual is not None:
+            fresh.visual = visual.copy()
+        carried = {key: value for key, value in known.items() if not _releasable(key)}
+        fresh._cache.verify()
+        fresh._cache.update(carried)
+        cavity = self.cavity.lean() if self.cavity is not None else None
+        return MeshData(raw=fresh, slots=self.slots, cavity=cavity, cavity_open=self.cavity_open)
+
     # --- Aufbau -----------------------------------------------------------------
 
     @classmethod
@@ -893,6 +958,58 @@ class EdgeTable:
 
 #: Wo :func:`edge_table` die Zählung im Cache des Netzes ablegt.
 _EDGE_TABLE_KEY: Final = "solidon_edge_table"
+
+#: Was :meth:`MeshData.lean` nicht mitnimmt: was
+#: ``trimesh`` aus Ecken und Dreiecken ableitet und groß ist, und Solidons
+#: eigene Ableitungen — Kantentabelle, Nachbarindex, Eckenfächer und -rang,
+#: Normalen, Komponenten, Fleckennachbarschaft — samt der Schichtanalyse des
+#: Prüfberichts (``slice.findings``, Schlüssel mit diesem Anfang). Nicht
+#: darin: ``face_normals`` und ``vertex_normals``, die eine Datei mitbringen
+#: kann, und alles, was ein Netz über seine Herkunft trägt.
+RELEASABLE: Final = frozenset(
+    {
+        "triangles",
+        "triangles_cross",
+        "triangles_center",
+        "area_faces",
+        "face_angles",
+        "edges",
+        "edges_face",
+        "edges_sorted",
+        "edges_unique",
+        "edges_unique_idx",
+        "edges_unique_inverse",
+        "edges_unique_length",
+        "face_adjacency",
+        "face_adjacency_edges",
+        "face_adjacency_unshared",
+        "face_adjacency_angles",
+        "face_adjacency_projections",
+        "face_adjacency_span",
+        "face_adjacency_radius",
+        "face_adjacency_convex",
+        "facets",
+        "facets_area",
+        "facets_normal",
+        "facets_origin",
+        "facets_boundary",
+        "vertex_faces",
+        "vertex_neighbors",
+        "vertex_degree",
+        _EDGE_TABLE_KEY,
+        "solidon_neighbour_index",
+        "solidon_vertex_rank",
+        "solidon_vertex_faces",
+        "solidon_stable_normals",
+        "solidon_face_components",
+        "solidon_patch_adjacency",
+    }
+)
+_RELEASABLE_PREFIXES: Final = ("solidon_print_findings|",)
+
+
+def _releasable(key: object) -> bool:
+    return isinstance(key, str) and (key in RELEASABLE or key.startswith(_RELEASABLE_PREFIXES))
 
 
 def edge_table(body: trimesh.Trimesh) -> EdgeTable:

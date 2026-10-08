@@ -12,7 +12,7 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -306,6 +306,263 @@ def test_reading_an_entry_keeps_it_alive() -> None:
     cache.put("c", result(100, "obj_3"))
     assert cache.get("a") is not None
     assert cache.get("b") is None
+
+
+# --- Die Bytegrenze der Speicherebene (RM-567) ---------------------------------
+
+
+def sphere_result(object_id: str, subdivisions: int = 4) -> CachedResult:
+    """Ein echtes Netz, damit gezählt wird, was trimesh an ihm merkt."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    body = trimesh.creation.icosphere(subdivisions=subdivisions, radius=10.0)
+    return CachedResult(objects=(SceneObject(id=object_id, name="Kugel", mesh=MeshData.of(body)),))
+
+
+def _grown(result: CachedResult) -> Any:
+    """Das rohe Netz eines Eintrags, nachdem Nachbarschaften an ihm gerechnet wurden."""
+    raw = cast(Any, result.objects[0].mesh).raw
+    _ = raw.face_adjacency, raw.edges_unique, raw.triangles_center, raw.edges_sorted
+    return raw
+
+
+def test_the_memory_level_counts_what_its_meshes_hold() -> None:
+    """Zwei Netze über der Bytegrenze: das ältere geht, auch weit unter der Dreiecksgrenze."""
+    from app.core.scene.cache import held_by
+
+    first, second = sphere_result("obj_1"), sphere_result("obj_2")
+    one = held_by(first)
+    assert one > 5_120 * 36, "an icosphere of 5 120 triangles holds at least its arrays"
+    cache = ResultCache(memory_budget=int(one * 1.5))
+    cache.put("a", first)
+    cache.put("b", second)
+    cache.trim()
+    assert cache.get("a") is None
+    assert cache.get("b") is second
+    assert cache.held_bytes <= cache.memory_budget
+    assert cache.cost == second.cost
+
+
+def test_a_mesh_that_grows_after_it_was_stored_counts_with_its_growth() -> None:
+    """Was später an einem gespeicherten Netz gerechnet wird, wiegt mit.
+
+    Das Netz im Cache ist dasselbe Objekt wie in der Szene; Kantentabellen,
+    Nachbarschaften und die Schichtanalyse des Prüfberichts hängen sich danach
+    an. Gemessen beim Ablegen allein, sah die Grenze am Spiderman ein Drittel
+    dessen, was wirklich lag.
+    """
+    small = sphere_result("obj_1")
+    cache = ResultCache(memory_budget=10**9)
+    cache.put("a", small)
+    before = cache.held_bytes
+    _grown(small)
+    assert cache.held_bytes > before * 2, "the derived arrays are counted after they appear"
+
+
+def test_older_entries_shrink_before_any_entry_gives_way() -> None:
+    """Über der Grenze bekommen ältere Einträge ein schlankes Netz — keiner geht.
+
+    Schlank heißt: dieselben Felder, ohne Abgeleitetes, in einem neuen Netz.
+    Das alte bleibt unberührt — ein anderer Faden kann es gerade lesen —, und
+    was nicht aus der Geometrie folgt, hier der Ursprung je Dreieck, reist mit.
+    Der jüngste Eintrag bleibt ganz, und das Abgeleitete kommt auf Nachfrage
+    gleich zurück.
+    """
+    import numpy as np
+
+    from app.core.scene.cache import held_by
+
+    old, new = sphere_result("obj_1"), sphere_result("obj_2")
+    for entry in (old, new):
+        _grown(entry)._cache.cache["solidon_refined_units"] = ("Herkunft", b"belegt")
+    raw_old = cast(Any, old.objects[0].mesh).raw
+    adjacency = np.array(raw_old.face_adjacency)
+    cache = ResultCache(memory_budget=held_by(old) + held_by(new) - 1)
+    cache.put("a", old)
+    cache.put("b", new)
+    cache.trim()
+
+    shrunk, whole = cache.get("a"), cache.get("b")
+    assert shrunk is not None and whole is new, "nothing gave way, the newest stayed"
+    lean = cast(Any, shrunk.objects[0].mesh).raw
+    assert lean is not raw_old
+    assert "face_adjacency" in raw_old._cache.cache, "the old mesh itself is untouched"
+    assert "face_adjacency" not in lean._cache.cache, "the cache now holds the lean one"
+    assert lean._cache.cache["solidon_refined_units"] == ("Herkunft", b"belegt")
+    assert np.shares_memory(lean.vertices, raw_old.vertices), "the arrays are shared, not copied"
+    assert shrunk.objects[0].features == old.objects[0].features
+    assert cache.held_bytes <= cache.memory_budget
+    np.testing.assert_array_equal(lean.face_adjacency, adjacency)
+
+
+def test_the_meshes_of_the_scene_stay_as_they_are() -> None:
+    """Was die fertige Szene zeigt, hält sie ohnehin: nicht gezählt, nicht ersetzt."""
+    old, new = sphere_result("obj_1"), sphere_result("obj_2")
+    _grown(old)
+    _grown(new)
+    cache = ResultCache(memory_budget=1)
+    cache.put("a", old)
+    cache.put("b", new)
+    cache.trim(keep=[old.objects[0].mesh])
+    assert cache.get("a") is old, "a mesh of the scene keeps its entry and its arrays"
+    assert cache.held_bytes > 1
+
+
+def test_a_lean_mesh_keeps_its_colours_and_a_textured_one_stays() -> None:
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    body = trimesh.creation.icosphere(subdivisions=2)
+    body.visual.face_colors = np.tile([10, 200, 30, 255], (len(body.faces), 1))
+    _ = body.face_adjacency
+    mesh = MeshData(raw=body, slots=tuple(0 for _ in body.faces))
+    lean = mesh.lean()
+    assert lean is not mesh and lean.slots == mesh.slots
+    np.testing.assert_array_equal(lean.raw.visual.face_colors, body.visual.face_colors)
+    assert lean.lean() is lean, "nothing left to let go"
+    textured = trimesh.creation.box()
+    textured.visual = trimesh.visual.TextureVisuals(uv=np.zeros((len(textured.vertices), 2)))
+    assert MeshData.of(textured).lean().raw is textured
+
+
+def test_a_run_from_the_cache_alone_keeps_the_bound(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zurücknehmen legt nichts ab — und doch wächst der Stand, der wieder vorn ist.
+
+    Am Spiderman rechnete jeder Schritt zurück 256 MB Nachbarschaften neu, und
+    ohne Ablegen hielt niemand die Grenze: 2,7 statt 1 GB nach acht Schritten
+    (08.10.2026). Die Auswertung ruft ``trim`` am Ende jedes vollständigen
+    Laufs, auch aus lauter Treffern, mit den Netzen ihrer Szene.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 5.0})],
+    )
+    trimmed: list[set[int]] = []
+    session_cache = ResultCache()
+    evaluate(project.document, profile, cache=session_cache)
+    monkeypatch.setattr(
+        session_cache, "trim", lambda keep=(): trimmed.append({id(mesh) for mesh in keep})
+    )
+    hits = session_cache.statistics.hits
+    result = evaluate(project.document, profile, cache=session_cache)
+    assert session_cache.statistics.hits > hits, "Voraussetzung: ein Lauf aus lauter Treffern"
+    assert trimmed == [{id(body.mesh) for body in result.scene.objects.values()}]
+
+
+def test_the_newest_entry_stays_even_when_it_alone_is_over_the_budget() -> None:
+    """Ohne den jüngsten Eintrag rechnete der nächste Schritt den ganzen Verlauf noch einmal."""
+    cache = ResultCache(memory_budget=1)
+    cache.put("a", sphere_result("obj_1"))
+    cache.put("b", sphere_result("obj_2"))
+    cache.trim()
+    assert len(cache) == 1
+    assert cache.get("b") is not None
+
+
+@pytest.mark.parametrize(
+    ("installed", "expected"),
+    [
+        (8 * 2**30, 2**30),
+        (16 * 2**30, 2 * 2**30),
+        (2 * 2**30, 512 * 2**20),
+        (64 * 2**30, 4 * 2**30),
+        (None, 2**30),
+    ],
+)
+def test_the_memory_level_takes_an_eighth_of_the_installed_memory(
+    monkeypatch: pytest.MonkeyPatch, installed: int | None, expected: int
+) -> None:
+    """Auf 8 GB ein Gigabyte, auf 16 zwei; nie unter 512 MB, nie über 4 GB."""
+    from app.core import memory
+    from app.core.scene.cache import default_memory_budget
+
+    monkeypatch.setattr(memory, "physical_memory", lambda: installed)
+    assert default_memory_budget() == expected
+    assert ResultCache().memory_budget == expected
+
+
+def test_the_installed_memory_is_read_from_the_system() -> None:
+    from app.core.memory import physical_memory
+
+    installed = physical_memory()
+    assert installed is not None
+    assert 2**30 <= installed <= 2**44
+
+
+def test_a_long_history_on_a_large_body_stays_inside_the_memory_level(profile: Profile) -> None:
+    """Der Kundenweg, an dem es auffiel: dasselbe Modell, Schritt um Schritt verschoben.
+
+    Am Spiderman hielt jedes Verschieben 230 MB mehr fest, ohne Verdrängung bis
+    zu zwanzig Millionen Dreiecken. Hier ein Körper mit 20 480 Dreiecken und
+    eine Grenze für gut drei volle Einträge: Der Cache hält sie nach jedem
+    Schritt, und weil ältere Einträge schrumpfen statt zu gehen, kommt jeder
+    Schritt weiter aus dem Speicher — eine Auswertung geht den ganzen Verlauf
+    durch, und ein verdrängter Schritt käme bei jeder von der Platte.
+    """
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import held_by
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    body = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ball.stl", sha256=""
+    )
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(body)
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    probe = ResultCache()
+    first = evaluate(project.document, profile, sources=sources, cache=probe)
+    entry = max(probe._entries.values(), key=held_by)
+    budget = int(held_by(entry) * 3.2)
+    cache = ResultCache(memory_budget=budget)
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    target = next(iter(first.scene.objects))
+
+    def beyond(result: Any) -> int:
+        """Was der Cache über die Netze der Szene hinaus hält — die zählen nicht."""
+        scene = {id(body.mesh) for body in result.scene.objects.values()}
+        return sum(held_by(entry, scene) for entry in cache._entries.values())
+
+    for _step in range(8):
+        history.apply(
+            "Verschieben",
+            [OperationDraft(op="translate_object", inputs=(target,), params={"dx": 1.0})],
+        )
+        result = evaluate(project.document, profile, sources=sources, cache=cache)
+        assert beyond(result) <= budget, "the memory level keeps its bound after every step"
+        # Was Fenster, Karten und Prüfbericht am gezeigten Netz rechnen.
+        _grown(CachedResult(objects=tuple(result.scene.objects.values())))
+    misses = cache.statistics.misses
+    evaluate(project.document, profile, sources=sources, cache=cache)
+    assert cache.statistics.misses == misses, "every step still comes from memory"
+    # Zurücknehmen legt nichts ab, und doch wächst der Stand, der wieder vorn
+    # ist; die Auswertung hält die Grenze am Ende jedes Laufs (``trim``).
+    for _step in range(8):
+        history.undo()
+        result = evaluate(project.document, profile, sources=sources, cache=cache)
+        assert beyond(result) <= budget, "undoing keeps the bound too"
+        _grown(CachedResult(objects=tuple(result.scene.objects.values())))
+    assert cache.statistics.misses == misses, "undoing reads every step from memory"
+    assert cache.statistics.evictions == 0, "older steps shrank instead of giving way"
 
 
 def test_secondary_material_calibration_and_role_are_part_of_the_hash(profile: Profile) -> None:
