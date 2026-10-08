@@ -11,7 +11,6 @@ import math
 from dataclasses import replace
 from pathlib import Path
 
-import numpy as np
 import pytest
 import trimesh
 
@@ -1077,27 +1076,15 @@ def test_a_large_part_with_long_narrow_webs_gets_a_slow_first_layer() -> None:
     assert not advice
 
 
-def _plate_on_a_sloped_foot(angle: float) -> MeshData:
-    """Eine Platte 60 mm im Quadrat, deren untere 4 mm ringsum unter ``angle``
-    gegen die Senkrechte nach außen laufen — die Bodenkante des Bahnteils
-    ``Gövde59`` aus dem Minigolf-Satz (``F:\\3D Dateien``, 27.09.2026):
-    2 mm Bodenplatte mit gut 50 Grad Fase, darüber 45 bis 50 Grad nach außen
-    geneigte Wände, zusammen 320 mm² Überhang über 45 Grad in Stücken bis
-    25 mm², darüber nichts."""
-    reach = 4.0 * math.tan(math.radians(angle))
-    foot = [(x, y, 0.0) for x in (-30.0, 30.0) for y in (-30.0, 30.0)]
-    wide = 30.0 + reach
-    top = [(x, y, z) for x in (-wide, wide) for y in (-wide, wide) for z in (4.0, 10.0)]
-    return MeshData.of(trimesh.convex.convex_hull(np.array(foot + top)))
-
-
 def test_a_sloped_foot_the_printer_carries_gets_no_supports() -> None:
     """Der Minigolf-Satz am Centauri Carbon 2 (Robert, 27.09.2026): Die
     Startregel verlangte für 52 Grad Stützen, der Slicer baute einen
     treppenförmigen Stützfuß, der Brim zerfiel. Elegoo stützt ab 60 Grad —
     mit derselben Grenze bleibt der Vorschlag weg. Die Gegenprobe ist der
     allgemeine Drucker: Dort gilt 45, und dort bleibt er."""
-    body = _plate_on_a_sloped_foot(52.0)
+    from tests.helpers import plate_on_a_sloped_foot
+
+    body = plate_on_a_sloped_foot(52.0)
 
     def support_advised(printer: str) -> bool:
         profile = profiles.make_profile(printer, "pla")

@@ -5055,6 +5055,163 @@ def test_only_the_part_that_is_supported_gets_a_blocker(
         ]
 
 
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_the_ledge_blocker_travels_alone_in_every_family(
+    tmp_path: Path, profile: Profile, flavour: SlicerFlavour
+) -> None:
+    """„Ränder ohne Stütze“ allein, ohne Kanalsperre, reist als dieselbe Stützsperre
+    wie die Kanäle — Teil der Orca-Familie, Bereich bei PrusaSlicer, eigenes Netz
+    bei Cura — und nennt sich in einem eigenen Befund (RM-582). Den Weg hielt bis
+    zur Durchsicht vom 08.10.2026 kein Test: Ohne den Schalter im Tor blieb die
+    Suite grün."""
+    entry = replace(scene_object("obj_1", "Flansch"), mesh=_flange_with_arm())
+    settings = print_settings.resolve(profile, "standard")
+    settings = print_settings.with_accepted(settings, "support.style", "auto")
+    settings = print_settings.with_accepted(settings, "support.spare_ledges", True)
+
+    written, findings = write_assembly(
+        [entry], tmp_path, project_name="t", profile=profile, settings=settings, flavour=flavour
+    )
+
+    codes = [finding.code for finding in findings]
+    assert "export.ledge_blocker" in codes
+    assert "export.support_blocker" not in codes, "ohne Kanalsperre kein Kanalbefund"
+    said = [
+        finding.values["setting"] for finding in findings if finding.code == "export.part_setting"
+    ]
+    assert "support.spare_ledges" not in said, "die Sperre nennt sich selbst"
+    if flavour == "orca":
+        assert _orca_parts(written) == [("2", "normal_part"), ("2", "support_blocker")]
+    elif flavour == "prusa":
+        assert [kind for kind, _first, _last in _blocker_ranges(written)] == [
+            "ModelPart",
+            "SupportBlocker",
+        ]
+    else:
+        meshes = [(mesh.path.name, dict(mesh.settings)) for mesh in handover.cura_meshes(written)]
+        assert ("t-blocker-1.stl", {"anti_overhang_mesh": "true"}) in meshes
+
+
+def _flange_with_arm() -> MeshData:
+    """Eine Säule 30 auf 30 mm mit einem Flansch von 2,5 mm auf 20 mm Höhe, ein
+    Rand, und knapp darüber einem Arm von 15 mm, der Stütze braucht."""
+    column = trimesh.creation.box(extents=(30.0, 30.0, 40.0))
+    column.apply_translation((0.0, 0.0, 20.0))
+    flange = trimesh.creation.box(extents=(35.0, 35.0, 1.0))
+    flange.apply_translation((0.0, 0.0, 20.5))
+    arm = trimesh.creation.box(extents=(15.0, 10.0, 2.0))
+    arm.apply_translation((22.5, 0.0, 21.4))
+    return MeshData.of(trimesh.boolean.union([column, flange, arm]))
+
+
+def test_the_ledge_finding_counts_a_ledge_only_at_the_height_of_its_slab(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei gleiche Flansche übereinander: Spart die Sperre den oberen aus, deckt
+    ihn die Scheibe des unteren in der Aufsicht trotzdem. Gezählt wird ein Rand
+    nur von einer Scheibe seiner Höhe (zweites Review vom 08.10.2026). Als
+    Attrappe fehlt die Scheibe des oberen Flansches, wie bei einem Arm daneben."""
+    import math
+
+    from app.core.slice import analysis
+
+    column = trimesh.creation.box(extents=(30.0, 30.0, 40.0))
+    column.apply_translation((0.0, 0.0, 20.0))
+    flanges = []
+    for height in (20.5, 30.5):
+        flange = trimesh.creation.box(extents=(35.0, 35.0, 1.0))
+        flange.apply_translation((0.0, 0.0, height))
+        flanges.append(flange)
+    body = MeshData.of(trimesh.boolean.union([column, *flanges]))
+    entry = replace(scene_object("obj_1", "Flansche"), mesh=body)
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "auto")
+    settings = print_settings.with_path(settings, "support.spare_ledges", True)
+    result = writer._body_analysis(entry, body, settings, profile, None, detail="support")
+    real = analysis.ledges(result)
+    lower = [
+        slab for slab in analysis.ledge_space(result, settings.layers.line_width) if slab[1] < 25.0
+    ]
+    below = {(index, number) for index, number in real if result.layers[index].z < 25.0}
+    assert lower and below and real - below, "beide Flansche sind Ränder"
+    monkeypatch.setattr(analysis, "ledge_space", lambda *_args: lower)
+
+    _blocker, found = writer._support_blocker(entry, body, settings, profile, result=result)
+
+    [said] = [finding for finding in found if finding.code == "export.ledge_blocker"]
+    area = math.fsum(analysis.piece_area(result.layers[i].overhangs[n]) for i, n in below)
+    assert said.values["area_mm2"] == pytest.approx(round(area, 1)), "nur der untere Flansch"
+
+
+def test_a_part_that_spares_its_ledges_keeps_its_own_support_count(profile: Profile) -> None:
+    """Zwei Teile auf einer Platte, nur das zweite mit „Ränder ohne Stütze“: Ihr
+    Stützvertrag ist nicht gleich, und die Gegenprobe rechnet nicht mit den Werten
+    des ersten (``same_support``, zweites Review vom 08.10.2026). Sonst wüsste sie
+    nichts von der Sperre und erwartete Stütze, die der Slicer nicht druckt."""
+    import dataclasses
+
+    from app.core.slice.estimate import plate_comparison
+
+    plain = print_settings.resolve(profile)
+    supported = dataclasses.replace(
+        plain, support=dataclasses.replace(plain.support, style="normal")
+    )
+    sparing = dataclasses.replace(
+        supported, support=dataclasses.replace(supported.support, spare_ledges=True)
+    )
+    cube = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cube.apply_translation((-40.0, 0.0, 5.0))
+    flanged = apply(_flange_with_arm(), translation((20.0, 0.0, 0.0)))
+    parts = [
+        (scene_object("obj_1", "Würfel"), MeshData.of(cube), supported),
+        (scene_object("obj_2", "Flansch"), flanged, sparing),
+    ]
+
+    compared = plate_comparison(0, parts, profile, keep_arrangement=True, separate_objects=False)
+
+    assert compared.ledges_blocked, "die Sperre des zweiten Teils zählt"
+    assert compared.support_material_mm3 is None
+
+
+def test_the_ledge_finding_names_only_the_spared_ledges(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Randbefund nennt Ort und Fläche der Ränder, die die Sperre deckt — wie
+    der Kanalbefund nur die gesperrten Decken. Einen Rand neben einem Überhang,
+    der Stütze braucht, spart die Sperre aus; mit allen Rändern wären Ort und
+    Fläche falsch (Review vom 08.10.2026). Als Attrappe zählt hier der Arm zu den
+    Rändern, die Sperrscheiben bleiben die echten, und die sparen ihn aus."""
+    import math
+
+    import shapely
+
+    from app.core.slice import analysis
+
+    body = _flange_with_arm()
+    entry = replace(scene_object("obj_1", "Flansch"), mesh=body)
+    settings = print_settings.with_path(print_settings.resolve(profile), "support.style", "auto")
+    settings = print_settings.with_path(settings, "support.spare_ledges", True)
+    result = writer._body_analysis(entry, body, settings, profile, None, detail="support")
+    real = analysis.ledges(result)
+    slabs = analysis.ledge_space(result, settings.layers.line_width)
+    arm = {
+        (index, number)
+        for index, layer in enumerate(result.layers)
+        for number, piece in enumerate(layer.overhangs)
+        if shapely.Polygon(piece.outline, piece.holes).representative_point().x > 18.0
+    }
+    assert real and slabs, "der Flansch ist ein Rand und wird gesperrt"
+    assert arm and not arm & real, "der Arm braucht Stütze"
+    monkeypatch.setattr(analysis, "ledges", lambda *_args, **_kwargs: real | arm)
+    monkeypatch.setattr(analysis, "ledge_space", lambda *_args: slabs)
+
+    _blocker, found = writer._support_blocker(entry, body, settings, profile, result=result)
+
+    [said] = [finding for finding in found if finding.code == "export.ledge_blocker"]
+    flange = math.fsum(analysis.piece_area(result.layers[i].overhangs[n]) for i, n in real)
+    assert said.values["area_mm2"] == pytest.approx(round(flange, 1)), "nur der Flansch"
+    assert said.location is not None and said.location[0] < 18.0, "der Ort liegt am Flansch"
+
+
 def test_the_blocker_finding_names_only_the_blocked_ceilings(profile: Profile) -> None:
     """Der Sperrbefund nennt Ort und Fläche der gesperrten Decken. Nicht jede
     Kanaldecke bekommt eine Sperre (``worth_support``), und mit Ort und Fläche

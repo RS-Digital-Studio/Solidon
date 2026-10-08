@@ -68,7 +68,7 @@ def _settings(**changes: object) -> PrintSettings:
 
 
 def _motion(**changes: object) -> print_time.Motion:
-    return replace(print_time.Motion(nozzle=0.4, minimum_speed=1e-6), **changes)  # type: ignore[arg-type]
+    return replace(print_time.Motion(nozzle=0.4), **changes)  # type: ignore[arg-type]
 
 
 def _box(width: float, depth: float, height: float, at: float = 0.0) -> SliceResult:
@@ -261,7 +261,6 @@ def test_orca_motion_reads_the_manufacturer_chain_with_its_shares() -> None:
     )
 
     assert motion is not None
-    assert motion.minimum_speed == 20.0
     assert (motion.first_layer_wall_speed, motion.first_layer_infill_speed) == (50.0, 105.0)
     assert motion.solid_infill_speed == 250.0
     assert motion.internal_bridge_speed == pytest.approx(75.0)  # 150 % von 50
@@ -306,7 +305,6 @@ def test_prusa_motion_uses_jerk_and_only_limits_the_profile_hands_to_its_estimat
     used = manufacturer.prusa_motion({**values, "machine_limits_usage": "emit_to_gcode"}, 0.4)
 
     assert unused is not None and used is not None
-    assert unused.minimum_speed == 15.0
     assert unused.first_layer_infill_speed == pytest.approx(10.0)
     assert unused.solid_infill_speed == pytest.approx(80.0)
     assert unused.internal_bridge_speed == pytest.approx(37.5)

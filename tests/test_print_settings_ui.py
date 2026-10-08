@@ -2196,6 +2196,7 @@ def test_disabled_support_and_bed_adhesion_hide_their_detail_rows(
         "support.density",
         "support.interface_layers",
         "support.block_channels",
+        "support.spare_ledges",
     )
     support = dialog._editors["support.style"]
     assert isinstance(support, QComboBox)

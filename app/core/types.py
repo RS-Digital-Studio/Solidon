@@ -1315,9 +1315,9 @@ class SupportSettings:
     Standardeinstellungen, nichts auf dieses Modell Zugeschnittenes
     (Entscheidung Robert, 26.09.2026)."""
     spare_ledges: bool = False
-    """Keine Stütze unter Kanten, die sich selbst tragen (``analysis.ledges``).
+    """Keine Stütze unter Rändern, die sich selbst tragen (``analysis.ledges``).
 
-    Die Übergabe sperrt dafür die Überhangflächen dieser Kanten
+    Die Übergabe sperrt dafür die Überhangflächen dieser Ränder
     (``analysis.ledge_space``). Der Slicer stützt nach seinem Winkel jede flache
     Unterseite, auch einen Rand von einem Millimeter; am Eiffelturm stellte der
     ElegooSlicer dafür 831 m Baum außen am Turm hoch (08.10.2026). Aus bis zu
@@ -2690,6 +2690,11 @@ class SliceResult:
     support_volume: float
     first_layer_area: float
     source: MetricSource = "internal"
+    bridge_from: float | None = None
+    """Ab welcher Breite eine freie Fläche als Brücke zählt, in mm — zwei Bahnen,
+    mit denen geschnitten wurde. Auch ein Schnitt ohne Brückenweiten
+    (``detail="support"``) trägt sie, denn die Randfrage braucht sie dort, wo die
+    Übergabe ihre Sperre baut. ``None`` bei einem Ergebnis aus Kennzahlen."""
 
 
 # --- Skizzen (§30.1) -----------------------------------------------------------

@@ -219,14 +219,14 @@ def body_findings(
     found = island_findings(entry.id, result, bottom)
     if profile.printer.is_resin:
         return found
-    found += overhang_findings(entry.id, result)
+    found += overhang_findings(entry.id, result, cancelled=cancelled)
     found += [_placed(finding, entry.id) for finding in advise.located_warnings(result, profile)]
     # Eine Lage, die nach der Regel der Druckvorschläge keine Stütze braucht,
     # spart durch eine andere keine — dieselbe Frage wie ``orientation.stays``.
     if (
         search
         and result.support_volume >= ORIENT_WORTH_SUPPORT
-        and advise.support_need(result).needed
+        and advise.support_need(result, cancelled=cancelled).needed
     ):
         found += orientation_findings(entry.id, mesh, profile, cancelled=cancelled)
     return found
@@ -365,7 +365,9 @@ def _column_under(
     return volume + float(pending.area()) * max(result.layers[0].z - bottom, 0.0)
 
 
-def overhang_findings(object_id: ObjectId, result: SliceResult) -> list[Finding]:
+def overhang_findings(
+    object_id: ObjectId, result: SliceResult, *, cancelled: CancelToken | None = None
+) -> list[Finding]:
     """Die größte frei hängende Fläche, wenn sie sich nicht selbst trägt.
 
     Gefragt wird das Stück, nicht die Schichtsumme (siehe
@@ -398,10 +400,13 @@ def overhang_findings(object_id: ObjectId, result: SliceResult) -> list[Finding]
     # Gefragt wird erst hier, wo ein Befund ansteht, und nur nach diesen
     # Stücken: Über alle sechzehntausend Stücke des Eiffelturms kostet die
     # Kanalfrage fünf Sekunden, über die wenigen großen ein Bruchteil davon.
-    channels = model_support(result, only=frozenset(entry[1] for entry in candidates)).channels
-    # Ebenso keine Kante, die sich selbst trägt (:func:`ledges`): Am Eiffelturm
-    # ist das größte freie Stück der Kranz der obersten Plattform, 2,6 mm breit.
-    quiet = channels | ledges(result)
+    # Ebenso kein Rand, der sich selbst trägt (:func:`ledges`), mit derselben
+    # Einschränkung: Am Eiffelturm ist das größte freie Stück der Kranz der
+    # obersten Plattform, 2,6 mm breit. Beide Fragen mit Abbruch; die
+    # Kanalfrage stellt dieselbe enge Randfrage noch einmal, sie ist billig.
+    asked = frozenset(entry[1] for entry in candidates)
+    edges = ledges(result, asked, cancelled=cancelled)
+    quiet = model_support(result, only=asked, cancelled=cancelled).channels | edges
     kept = [entry for entry in candidates if entry[1] not in quiet]
     if not kept:
         return []

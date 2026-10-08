@@ -607,7 +607,7 @@ def test_file_export_without_program_only_promises_shared_object_capabilities(
 
 
 # Die unabhängigen Messungen aus RM-317 und RM-318 umfassen 17 dieser Pfade;
-# ``support.spare_ledges`` belegt der Eiffelturm (RM-582: ElegooSlicer 831 → 219 m
+# ``support.spare_ledges`` belegt der Eiffelturm (RM-582: ElegooSlicer 869 → 216 m
 # Stütze, dieselbe Stützsperre wie die Kanäle). Die
 # Menge wird absichtlich nicht aus PART_PATHS oder den Schlüsseltabellen
 # gebaut: ein neuer Pfad braucht einen eigenen Wirkungsnachweis.

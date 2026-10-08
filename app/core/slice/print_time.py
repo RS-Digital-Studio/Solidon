@@ -25,10 +25,12 @@ Schicht, was jeder Slicer selbst rechnet, bevor er G-Code schreibt:
   schmale Vollfüllung läuft als Schleife (:func:`_narrow`).
 - **Abbremsen**: Liegt die Schicht unter der Mindestschichtzeit, werden die
   Bahnen über Weg/Tempo gebremst, nie unter das **Mindestdrucktempo** der
-  Einstellungen (``cooling.minimum_speed``, gelesen aus dem Herstellerprofil wie
-  :attr:`Motion.minimum_speed`, nach einem übernommenen Vorschlag dessen Wert) —
-  gemessen am SuperSlicer-Pilz: 7,03 s Stielschicht trotz 15 s Vorgabe. Die Beschleunigung kommt danach,
-  bei den gebremsten Tempi, wie in den Slicern selbst.
+  Einstellungen (``cooling.minimum_speed``: bei Prusa und der Orca-Familie aus dem
+  Herstellerprofil, bei Cura Solidons Wert, den die Übergabe schreibt; nach einem
+  übernommenen Vorschlag dessen Wert) —
+  gemessen am SuperSlicer-Pilz: 7,03 s Stielschicht trotz 15 s Vorgabe. Die
+  Beschleunigung kommt danach, bei den gebremsten Tempi, wie in den Slicern
+  selbst.
 - **Leerfahrt, Rückzug und Z-Hub** je Zugbeginn: je Insel einmal für ihre
   Wände, je Fläche und Stützstück einmal. Auch ein schräger Hub („Auto Lift“)
   kostet wie zwei senkrechte, weil die Z-Achse die Leerfahrt bremst (Minigolf
@@ -87,16 +89,13 @@ class Motion:
     Gelesen aus dem Herstellerprofil des gewählten Slicers
     (:func:`app.core.export.manufacturer.base_settings`, :attr:`Foundation.motion`)
     oder aus der Cura-Druckerdefinition. ``None`` heißt: nicht belegt — dann
-    gilt der nächstliegende Wert aus den Druckeinstellungen.
+    gilt der nächstliegende Wert aus den Druckeinstellungen. Es gibt sie nur,
+    wo das Profil ein Mindestdrucktempo nennt (RM-465); gerechnet wird mit
+    ``cooling.minimum_speed`` der Einstellungen.
     """
 
     nozzle: float
     """Düsendurchmesser — die Bahnbreite einer Brücke."""
-    minimum_speed: float
-    """Tiefer bremst der Slicer für die Mindestschichtzeit nicht, in mm/s — so,
-    wie das Herstellerprofil es nennt. Ohne diesen Wert gibt es keine
-    :class:`Motion` (RM-465); gerechnet wird mit ``cooling.minimum_speed`` der
-    Einstellungen, die ihn aus demselben Profil lesen."""
     first_layer_wall_speed: float | None = None
     first_layer_infill_speed: float | None = None
     solid_infill_speed: float | None = None

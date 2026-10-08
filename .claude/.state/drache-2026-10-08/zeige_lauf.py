@@ -12,5 +12,6 @@ for path in sys.argv[1:]:
         print(
             f"{run:18s} {parts[-4]:28s} {parts[-3]:14s} Anteil {row['supported_share']:.3f}  "
             f"ohne Kanal {row.get('open_share', float('nan')):.3f}  "
+            f"ohne Rand {row.get('needed_share', float('nan')):.3f}  "
             f"Stütze {row['support_m']:7.1f} m  Inseln {row['islands_supported']}"
         )

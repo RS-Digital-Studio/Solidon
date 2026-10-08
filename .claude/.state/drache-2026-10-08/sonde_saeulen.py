@@ -20,8 +20,13 @@ from app.core.slice.analysis import model_support, piece_area, slice_body  # noq
 raw = trimesh.load(sys.argv[2], process=False)
 raw.apply_translation((0.0, 0.0, -raw.bounds[0][2]))
 result = slice_body(
-    MeshData.of(raw), 0.2, first_layer_height=0.2, overhang_angle=float(sys.argv[3]),
-    bridge_from=0.84, detail="support", support_volume=False,
+    MeshData.of(raw),
+    0.2,
+    first_layer_height=0.2,
+    overhang_angle=float(sys.argv[3]),
+    bridge_from=0.84,
+    detail="support",
+    support_volume=False,
 )
 model = model_support(result)
 for outline, low, high in sorted(model.channel_columns, key=lambda column: column[2]):

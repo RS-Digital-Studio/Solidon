@@ -445,7 +445,7 @@ FIELDS: tuple[Field, ...] = (
         decimals=0,
         note=_(
             "Langsamer wird der Drucker für die Mindestzeit nicht. Ist der Wert zu hoch, "
-            "bleiben kleine Spitzen zu kurz und werden weich."
+            "sind kleine Spitzen zu schnell fertig und werden weich."
         ),
     ),
     # --- Geschwindigkeit ---
@@ -655,11 +655,11 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "support.spare_ledges",
-        _("Kanten ohne Stütze"),
+        _("Ränder ohne Stütze"),
         "support",
         kind="bool",
         note=_(
-            "Sperrt Stützen unter Kanten, die nur wenige Millimeter überstehen. Sie tragen "
+            "Sperrt Stützen unter Rändern, die nur wenige Millimeter überstehen. Sie tragen "
             "sich selbst, und jede Stütze dort hinterließe eine Narbe."
         ),
     ),
