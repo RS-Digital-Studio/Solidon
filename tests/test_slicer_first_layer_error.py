@@ -314,7 +314,9 @@ def test_other_families_do_not_borrow_a_prusa_diagnosis(tmp_path, monkeypatch, f
             paths=(), written={}, findings=[], origin_at_centre=False, machine_shift=None
         ),
     )
-    monkeypatch.setattr(handover, "_command", lambda *args, **kwargs: [])
+    # Ein Aufruf, wie ihn ``_command`` baut: Die Cura-Vorbereitung sucht darin
+    # ``slice`` (RM-521), ein leerer wäre ein Aufruf, den es nicht gibt.
+    monkeypatch.setattr(handover, "_command", lambda *args, **kwargs: ["slicer", "slice"])
     monkeypatch.setattr(handover, "_orca_cli_tower_position", lambda config, *args: config)
     monkeypatch.setattr(handover, "_readback_materials", lambda *args: ({}, {}))
     error = refusal(

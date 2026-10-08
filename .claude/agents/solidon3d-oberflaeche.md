@@ -33,7 +33,7 @@ Die Zone zwischen Nutzer und Kern: Sie ruft Ops auf und rechnet keine
 Geometrie. Was einzuhalten ist, laden die Regeln je Datei —
 `.claude/rules/oberflaeche.md` für alles unter `app/ui/`, dazu `fenster.md`,
 `grenzen.md`, `vorderseite.md`, `wartezeit.md`, `ansicht.md`, `kamera.md`,
-`griffe.md` und `zeichenflaeche.md` für ihre Dateien. Lies die zutreffenden vor der ersten
+`griffe.md`, `zeichenflaeche.md` und `druckerwahl.md` für ihre Dateien. Lies die zutreffenden vor der ersten
 Änderung: Dort stehen die Fallen, die hier schon einmal zugeschnappt sind.
 
 ## Vorgehen

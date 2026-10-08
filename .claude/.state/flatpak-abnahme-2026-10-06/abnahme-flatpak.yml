@@ -1,0 +1,112 @@
+# Wegwerfzweig (RM-064): Das ausgelieferte Solidon-Flatpak 0.5.3 findet Orca als
+# Flatpak samt Herstellerdruckern und eigenem Drucker, slict damit und öffnet
+# Orcas Fenster. Wird nach der Auswertung mit dem Zweig gelöscht.
+name: Abnahme Flatpak 0.5.3
+
+on:
+  push:
+    branches: [diagnose/flatpak-053]
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      PROBE_OUT: ${{ github.workspace }}/probe-out
+      APP_ID: de.rsdigital.solidon3d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+
+      - name: Systempakete
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak xvfb xauth dbus dbus-x11 procps
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - name: Ausgeliefertes Solidon-Flatpak 0.5.3
+        run: |
+          curl -fsSL --retry 3 -o /tmp/solidon.flatpak https://solidon3d.de/dl/Solidon3D-0.5.3-x86_64.flatpak
+          echo "997319c8994028718ad216a75ddb058f8bd6aab09276f7070dedb982becdb185  /tmp/solidon.flatpak" | sha256sum --check --strict
+          flatpak install --user -y --noninteractive /tmp/solidon.flatpak
+          flatpak info --user "$APP_ID"
+          flatpak info --user --show-permissions "$APP_ID"
+
+      - name: Orca als Flatpak
+        run: |
+          flatpak install --user -y --noninteractive flathub com.orcaslicer.OrcaSlicer
+          flatpak info --user com.orcaslicer.OrcaSlicer | head -12
+
+      - name: Quelltext von 0.5.3 und Python für den Sandkasten
+        run: |
+          git worktree add --detach "$HOME/rel" v0.5.3
+          git -C "$HOME/rel" log --oneline -1
+          cp .github/probe_slicers.py "$HOME/rel/"
+          python -m pip install uv
+          python -m uv python install --install-dir "$HOME/uvpy" 3.14.8
+          PY=$(ls -d "$HOME"/uvpy/cpython-3.14.8-*/bin/python3.14 | head -1)
+          "$PY" -m venv "$HOME/sbx"
+          "$HOME/sbx/bin/python" -m pip install -q -c "$HOME/rel/constraints.txt" -e "$HOME/rel[geom]"
+          "$HOME/sbx/bin/python" -c "import app; print(app.__file__)"
+
+      - name: Eigenen Orca-Drucker anlegen
+        working-directory: /home/runner/rel
+        run: "$HOME/sbx/bin/python probe_slicers.py seed"
+
+      - name: Orca direkt auf dem Runner (Kontrolle)
+        continue-on-error: true
+        run: |
+          python3 -c "import trimesh" 2>/dev/null || pip install -q trimesh
+          mkdir -p "$HOME/kontrolle" && python3 -c "import trimesh; trimesh.creation.box((20,20,20)).export('$HOME/kontrolle/wuerfel.stl')"
+          dbus-run-session -- xvfb-run -a sh -c '
+            flatpak run --user com.orcaslicer.OrcaSlicer "$HOME/kontrolle/wuerfel.stl" > "$HOME/orca-direkt.log" 2>&1 &
+            for i in $(seq 1 30); do sleep 1; flatpak ps | grep -q com.orcaslicer.OrcaSlicer && echo "t=$i läuft" || echo "t=$i läuft nicht"; done
+            flatpak kill com.orcaslicer.OrcaSlicer 2>/dev/null; true'
+          echo "== Ausgabe Orca direkt"; tail -40 "$HOME/orca-direkt.log"
+
+      - name: Im Sandkasten Orcas Fenster öffnen, mit Befehl und Ausgabe
+        working-directory: /home/runner/rel
+        run: |
+          cat > open_probe.py <<'PY'
+          import subprocess, sys, time, trimesh
+          from pathlib import Path
+          real = subprocess.Popen
+          class Logged(real):
+              def __init__(self, args, *rest, **options):
+                  print("Popen:", args, {k: v for k, v in options.items() if k not in ("stdin",)}, flush=True)
+                  super().__init__(args, *rest, **options)
+          subprocess.Popen = Logged
+          from app.core import discover, tools
+          from app.core.export import handover
+          discover.forget_cache()
+          found = [exe for exe in discover.find_programs("slicer", tools.SLICERS)
+                   if discover.flatpak_app(exe) == "com.orcaslicer.OrcaSlicer"]
+          print("gefunden:", found, "im Flatpak:", discover.in_flatpak(), flush=True)
+          model = Path.home() / "oeffnen" / "wuerfel.stl"
+          model.parent.mkdir(exist_ok=True)
+          trimesh.creation.box((20.0, 20.0, 20.0)).export(model)
+          handover.open_in_slicer(model, handover.detect(found[0]))
+          print("open_in_slicer zurück", flush=True)
+          for i in range(30):
+              time.sleep(1)
+              state = subprocess.run(["flatpak-spawn", "--host", "flatpak", "ps"], capture_output=True, text=True).stdout
+              print(f"t={i+1}", "Orca läuft" if "com.orcaslicer.OrcaSlicer" in state else "Orca läuft nicht", flush=True)
+          PY
+          echo "== erst D-Bus, dann Xvfb (wie bisher): DISPLAY des Hilfsdienstes"
+          dbus-run-session -- xvfb-run -a sh -c 'flatpak run --user --command=sh "$APP_ID" -c "flatpak-spawn --host env | grep -E \"^(DISPLAY|WAYLAND)\" || echo kein DISPLAY"'
+          echo "== erst Xvfb, dann D-Bus (wie auf einem Desktop): DISPLAY des Hilfsdienstes"
+          xvfb-run -a dbus-run-session -- sh -c 'flatpak run --user --command=sh "$APP_ID" -c "flatpak-spawn --host env | grep -E \"^(DISPLAY|WAYLAND)\" || echo kein DISPLAY"'
+          echo "== Öffnen mit DISPLAY beim Hilfsdienst"
+          xvfb-run -a dbus-run-session -- flatpak run --user --command="$HOME/sbx/bin/python" "$APP_ID" open_probe.py
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: abnahme-flatpak-053
+          path: probe-out/
+          if-no-files-found: warn

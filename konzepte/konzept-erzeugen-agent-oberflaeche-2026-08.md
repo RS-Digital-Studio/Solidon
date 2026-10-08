@@ -183,6 +183,15 @@ Zutun im nicht-kommerziellen Modell.
 | RMBG-2.0 | CC BY-NC 4.0 | **nein** | — |
 | BiRefNet / InSPyReNet (Freistellen) | MIT | ja | ja |
 
+**Nachtrag 06.10.2026 (RM-003):** Die Tabelle hielt nicht. Step1X-3D trägt in
+einer Datei, die jede Formerzeugung ausführt, einen Tencent-Lizenzkopf „Non-
+Commercial“; TripoSGs Transformer trägt den Kopf der Tencent Hunyuan Community
+License, die die EU ausnimmt; BiRefNet lernte aus DIS5K, das nur
+nicht-kommerziell ist, und InSPyReNets Prüfpunkte aus DUTS, HRSOD, UHRSD oder
+DIS5K; und TRELLIS.2 läuft in den ComfyUI-Kernknoten ohne `nvdiffrast` (TRELLIS
+v1 braucht es nur für `to_glb`). Belege und die Entscheidung für TRELLIS.2:
+[`nachweise-generatoren-2026-10/`](nachweise-generatoren-2026-10/README.md).
+
 **Vorschlag L1 — zwei Zeichenketten tauschen.** Im Graphen `RMBG-2.0` durch
 `BiRefNet` oder `INSPYRENET` ersetzen und die Erzeugerrolle auf **Step1X-3D**
 oder **TripoSG** umstellen. Genau dafür ist `MODEL_ROLES` in `backends/mesh.py`

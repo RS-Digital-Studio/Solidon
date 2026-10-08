@@ -891,6 +891,81 @@ def test_no_test_file_defines_a_function_twice() -> None:
     assert not found, "doppelt definiert, die erste Fassung läuft nie:\n" + "\n".join(found)
 
 
+def _is_wait_for_idle(node: ast.AST) -> bool:
+    """Ein Aufruf ``….wait_for_idle(…)``, gleich auf welchem Empfänger."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "wait_for_idle"
+    )
+
+
+def _unchecked_waits(source: str) -> tuple[int, list[tuple[int, str]]]:
+    """Wie viele ``wait_for_idle`` eine Datei aufruft — und welche als bloße Anweisung stehen.
+
+    Eine bloße Anweisung übergeht das Ergebnis. Jede andere Form nutzt es:
+    ``assert …``, ``assert not …`` bei einer absichtlich zu kurzen Frist, eine
+    Zuweisung.
+    """
+    seen = 0
+    bare: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        seen += _is_wait_for_idle(node)
+        if isinstance(node, ast.Expr) and _is_wait_for_idle(node.value):
+            bare.append((node.lineno, ast.unparse(node)))
+    return seen, sorted(bare)
+
+
+def test_every_wait_for_idle_in_the_tests_checks_that_it_ended() -> None:
+    """Ein Test, der auf den Leerlauf wartet, sichert zu, dass er eintrat.
+
+    ``Session.wait_for_idle`` meldet mit ``False``, dass die Frist mit einem
+    noch rechnenden Arbeiter endete. Ungeprüft lief der Test auf dem langsamen
+    Intel-Läufer (macOS) auf halbem Stand weiter: Nach dem Öffnen von
+    ``plate_holes.stl`` baute die späte Auswertung den Prüfbericht neu, und der
+    Zugriff auf einen eben eingespielten Befund traf ein gelöschtes
+    ``QListWidgetItem`` (``test_a_report_click_keeps_its_mark_across_the_async_map``).
+    Dasselbe gilt nach jedem Übernehmen, Zurücknehmen oder Klick, der rechnet —
+    deshalb steht jedes Warten als ``assert ….wait_for_idle(60_000)``, auch im
+    Aufräumen: Ein Arbeiter, der das Testende überlebt, trifft den nächsten Test.
+    """
+    sources = sorted((_ROOT / "tests").rglob("*.py"))
+    assert sources, "keine Testdateien gefunden — der Wächter prüft nichts"
+    counterprobe = (
+        "def test_x(window, session):\n"
+        "    window.session.wait_for_idle()\n"
+        "    session.wait_for_idle(120_000)\n"
+        "    assert session.wait_for_idle(60_000)\n"
+        "    assert not session.wait_for_idle(50)\n"
+        "    idle = session.wait_for_idle(60_000)\n"
+        "    try:\n"
+        "        pass\n"
+        "    finally:\n"
+        "        window.session.wait_for_idle(30_000)\n"
+    )
+    assert _unchecked_waits(counterprobe) == (
+        6,
+        [
+            (2, "window.session.wait_for_idle()"),
+            (3, "session.wait_for_idle(120000)"),
+            (10, "window.session.wait_for_idle(30000)"),
+        ],
+    ), "die Gegenprobe muss jedes ungeprüfte Warten finden, auch im Aufräumen"
+
+    seen = 0
+    found: list[str] = []
+    for path in sources:
+        count, bare = _unchecked_waits(path.read_text(encoding="utf-8"))
+        seen += count
+        found += [f"{path.relative_to(_ROOT).as_posix()}:{line}: {text}" for line, text in bare]
+
+    assert seen > 1000, f"nur {seen} Warte-Aufrufe gefunden — sucht der Wächter?"
+    assert not found, (
+        f"{len(found)} Warte-Aufrufe ohne Prüfung, ihr Ergebnis gehört in ein "
+        "assert ….wait_for_idle(60_000):\n" + "\n".join(found)
+    )
+
+
 def test_the_shared_exact_kernel_guard_does_not_skip_its_own_import(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

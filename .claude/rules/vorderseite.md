@@ -96,7 +96,11 @@ Feld verschwindet samt Beschriftung, kommt mit seinem Wert zurück und wird
 nicht gesperrt — die Sperre gehört dem Kettenhalt (`_settle_lock`). Ein
 Zahlenfeld mit benannter Null geht beim Verschwinden auf seine Null und kommt
 mit seinem Wert zurück: Was nicht dasteht, zählt nicht (*Aushöhlen* mit „Oben
-öffnen“ verliert seine Entlüftung und bleibt am exakten Körper exakt).
+öffnen“ verliert seine Entlüftung und bleibt am exakten Körper exakt). Die
+Rückseite klappt nur auf, wenn *Eigenes Maß* ein Maß dahinter holt, dessen
+Vorgabe sonst still eine andere Größe baute; ein abgewähltes Langloch holt
+Zeilen zurück und lässt sie zu
+(`test_a_choice_that_brings_back_fields_elsewhere_leaves_the_flap_closed`).
 
 - **Agent und Mensch bekommen verschiedene Anreden, nicht verschiedene
   Inhalte:** „Gilt bei Art = circular“ im Handbuch, `kind` für den Agenten

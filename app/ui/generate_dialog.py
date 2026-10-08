@@ -74,6 +74,10 @@ from app.ui.style import (
 
 _log = get_logger(__name__)
 
+#: Die Modellrollen, die nur der Weg aus Text braucht (``text_to_image.json``).
+#: Fehlt allein eine davon, ist der Bildweg bereit, und der Satz sagt das.
+TEXT_ROLES: Final = frozenset({"image", "text_encoder", "image_vae"})
+
 #: Was sich als Ausgangsbild hineinziehen lässt. Die Endungen stehen für sich,
 #: getrennt von der Beschriftung: der Dateidialog zeigt einen übersetzten Text,
 #: das Erkennen einer abgelegten Datei darf davon nicht abhängen.
@@ -279,7 +283,7 @@ def _look(backend: MeshBackend, workflow: str = "image_to_mesh") -> mesh.Readine
 
     **Gefragt wird für den Weg, der wirklich läuft.** Der Textweg spricht
     andere Knoten an und braucht ein Modell mehr: Text wird erst zu einem Bild,
-    und dafür steht ein SDXL-Modell im Ablauf. Geprüft wurde bis hierhin immer
+    und dafür steht ein Bildmodell im Ablauf. Geprüft wurde bis hierhin immer
     der Bildweg, auch wenn der Textweg lief — wer kein Bildmodell hatte, las
     „Bereit" und erfuhr es beim Abschicken.
     """
@@ -333,8 +337,8 @@ class GenerateDialog(QDialog):
     holt — das entscheidet das Fenster.
     """
     nodesRequested = Signal()
-    """ComfyUI läuft, kennt aber die Knoten nicht — der Weg dorthin ist ein
-    anderer als der zur Liste der Programme."""
+    """ComfyUI läuft, ihm fehlen aber Modelldateien — der Weg dorthin ist die
+    Einrichtung, nicht die Liste der Programme."""
     runStarted = Signal()
     """Ein Wurf läuft an — das Fenster übernimmt Fortschritt und *Abbrechen*.
 
@@ -369,6 +373,8 @@ class GenerateDialog(QDialog):
         self._image_name = ""
         self._readiness: mesh.Readiness | None = None
         """Die letzte Antwort — ``None`` heißt, dass gerade nachgesehen wird."""
+        self._missing_roles: frozenset[str] = frozenset()
+        """Die Modellrollen ohne passende Datei, aus derselben Antwort."""
         self._readiness_worker: _ReadinessWorker | None = None
         self._readiness_pending = False
         """Der Ablauf wechselte, während die vorige Frage noch lief."""
@@ -536,8 +542,8 @@ class GenerateDialog(QDialog):
         self.destination.setVisible(False)
 
         # Der Weg zu dem, was fehlt — siehe :meth:`_update_state`. Welcher
-        # von beiden, entscheidet die Lage: Wo nichts läuft, hilft die Liste
-        # der Programme; wo die Knoten fehlen, hilft die Einrichtung.
+        # von beiden, entscheidet die Lage: Wo nichts läuft oder ComfyUI zu alt
+        # ist, hilft die Liste der Programme; wo Modelle fehlen, die Einrichtung.
         self.setup = QPushButton(tr("Zusätzliche Programme …"), self)
         self.setup.setVisible(False)
         self.setup.clicked.connect(self._ask_for_setup)
@@ -712,7 +718,9 @@ class GenerateDialog(QDialog):
             return
         assert isinstance(found, mesh.Readiness)
         self._readiness = found
-        self._fill_models(choices if isinstance(choices, dict) else {})
+        offered = choices if isinstance(choices, dict) else {}
+        self._missing_roles = frozenset(role for role, files in offered.items() if not files)
+        self._fill_models(offered)
         self._update_state()
 
     def _fill_models(self, choices: dict[str, tuple[str, ...]]) -> None:
@@ -800,11 +808,13 @@ class GenerateDialog(QDialog):
     def _ask_for_setup(self) -> None:
         """Der Knopf führt dorthin, wo die Lage zu beheben ist.
 
-        Ein fehlendes Bildmodell ist seit dem 21.09.2026 dieselbe Handlung wie
-        fehlende Knoten: die Einrichtung, die es holt — nicht die Liste der
-        Programme, in der ComfyUI längst als installiert steht.
+        Ein fehlendes Modell holt die Einrichtung — nicht die Liste der
+        Programme, in der ComfyUI längst als installiert steht. **Fehlende
+        Knoten dagegen kann Solidon nicht nachlegen** (seit TRELLIS.2 sind alle
+        eingebaut): Dann ist ComfyUI zu alt, und der Weg zum neueren führt über
+        die Liste der Programme.
         """
-        if self._readiness in (mesh.Readiness.NO_NODES, mesh.Readiness.NO_MODEL):
+        if self._readiness is mesh.Readiness.NO_MODEL:
             self.nodesRequested.emit()
         else:
             self.setupRequested.emit()
@@ -851,13 +861,17 @@ class GenerateDialog(QDialog):
         elif self._readiness is mesh.Readiness.NO_NODES:
             self.state.setText(
                 tr(
-                    "Das Zusatzprogramm läuft, ihm fehlen aber noch Solidons Bausteine "
-                    "für diesen Ablauf. Solidon legt sie hinein — danach ComfyUI einmal "
-                    "neu starten."
-                )
+                    "Das Zusatzprogramm läuft, ist aber zu alt für diesen Weg. Ab "
+                    "Version {version} bringt ComfyUI alles mit — bitte aktualisieren "
+                    "und neu starten."
+                ).format(version=mesh.MINIMUM_COMFYUI_TEXT)
             )
-            self.setup.setText(tr("Knoten und Modell einrichten …"))
-        elif self._readiness is mesh.Readiness.NO_MODEL:
+            self.setup.setText(tr("Zusätzliche Programme …"))
+        elif (
+            self._readiness is mesh.Readiness.NO_MODEL
+            and self._missing_roles
+            and self._missing_roles <= TEXT_ROLES
+        ):
             # **Der Satz nannte Datei und Ordner, und der Kunde sollte sie
             # selbst besorgen.** Seit dem 21.09.2026 holt die Einrichtung das
             # Bildmodell, also steht hier der Knopf dorthin und die Größe, die
@@ -870,6 +884,16 @@ class GenerateDialog(QDialog):
                 ).format(size=format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1))
             )
             self.setup.setText(tr("Bildmodell einrichten …"))
+        elif self._readiness is mesh.Readiness.NO_MODEL:
+            # Dem Bildweg fehlt sein Modell — und damit beiden Wegen.
+            self.state.setText(
+                tr(
+                    "Dem Zusatzprogramm fehlt noch das Modell, das aus einem Bild "
+                    "einen Körper macht, rund {size} GB. Solidon lädt es in der "
+                    "Einrichtung."
+                ).format(size=format_decimal(comfy_setup.WEIGHT_GIGABYTES, 1))
+            )
+            self.setup.setText(tr("Modell einrichten …"))
         elif self._readiness is mesh.Readiness.UNKNOWN:
             self.state.setText(
                 tr(
@@ -898,7 +922,7 @@ class GenerateDialog(QDialog):
         self._lock_make(ready)
 
     def _choose_image(self) -> None:
-        name, _filter = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", image_filter())
+        name = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", image_filter())[0]
         if not name:
             return
         self.set_image(Path(name))
@@ -956,7 +980,7 @@ class GenerateDialog(QDialog):
         self.prompt.setToolTip(resting)
         self.prompt.setAccessibleDescription(resting)
         # **Der Weg hat gewechselt, also gilt die alte Antwort nicht mehr.** Mit
-        # Bild braucht es kein SDXL-Modell; ohne schon. Wer eines wählt, soll
+        # Bild braucht es kein Bildmodell; ohne schon. Wer eines wählt, soll
         # nicht weiter lesen, dass etwas fehlt, was er gerade umgangen hat.
         self.recheck()
         self._show_what_is_taken()

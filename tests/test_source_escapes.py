@@ -119,7 +119,13 @@ def _markdown() -> list[Path]:
         text=True,
         check=True,
     ).stdout.splitlines()
-    found = {ROOT / name for name in listed if not set(Path(name).parts) & _NOT_OURS}
+    # ``-c`` nennt auch versionierte Dateien, die im Arbeitsbaum schon gelöscht
+    # sind; gelesen wird, was da ist.
+    found = {
+        ROOT / name
+        for name in listed
+        if not set(Path(name).parts) & _NOT_OURS and (ROOT / name).is_file()
+    }
     found |= set((ROOT / ".claude" / "memory").glob("*.md"))
     # Eine leere Menge wäre ein grüner Lauf ohne Prüfung.
     assert len(found) > 100, f"nur {len(found)} Markdown-Dateien gefunden"

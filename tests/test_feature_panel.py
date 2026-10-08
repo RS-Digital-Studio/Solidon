@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.bootstrap import load_operations
-from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.perceive import actions, features
 from app.core.perceive.actions import EDGE_OPERATIONS, EDGE_VARIANTS, actions_for
 from app.core.registry import REGISTRY, validate
@@ -589,6 +589,185 @@ def test_regrouping_keeps_the_selected_feature_current_and_visible(qt_app: QAppl
         "die Tastatur setzt an der wiederhergestellten Zeile an"
     )
     tree.close()
+
+
+def test_a_roof_counts_as_the_places_beneath_it_not_its_first_child(
+    qt_app: QApplication,
+) -> None:
+    """Review P2 N1: Ein Dach „Zapfen (4)“ sind vier Stellen, nicht der erste Zapfen.
+
+    ``selected_places`` nahm je Zeile das führende Merkmal. Ein Dach trägt
+    keine Kennung, und so blieb von vier Zapfen nur ``pin_1`` — mit der Fläche
+    am zweiten Teil ein Paar, und *Gegenstück* baute still an einem Zapfen.
+    Eine Zeile mit eigener Kennung bleibt eine Stelle, auch mit Kindern.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.main_window import MainWindow
+    from app.ui.panels import ObjectTree, _place_refs_under
+
+    pins = {
+        f"pin_{index}": Feature(
+            id=f"pin_{index}",
+            kind="pin",
+            provenance="detected",
+            params={"diameter": 5.0, "depth": 8.0, "centre": (x, 0.0, 9.0)},
+        )
+        for index, x in enumerate((-30.0, -10.0, 10.0, 30.0), start=1)
+    }
+    face = Feature(
+        id="face_top",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 5.0), "area": 900.0},
+    )
+    first = SceneObject(id="obj_1", name="Platte", mesh=plate(), features=pins)
+    second = SceneObject(id="obj_2", name="Deckel", mesh=plate(), features={"face_top": face})
+    tree = ObjectTree()
+    tree.show_scene(EvaluationResult(Scene(objects={"obj_1": first, "obj_2": second})))
+    QApplication.processEvents()
+    role = Qt.ItemDataRole.UserRole
+    rows = [
+        tree.tree.topLevelItem(index).child(position)
+        for index in range(tree.tree.topLevelItemCount())
+        for position in range(tree.tree.topLevelItem(index).childCount())
+    ]
+    roofs = [row for row in rows if row.childCount() and row.data(1, role) is None]
+    target = next(row for row in rows if row.data(1, role) == "face_top")
+    assert len(roofs) == 1 and roofs[0].childCount() == 4, "die vier Zapfen stehen unter einem Dach"
+    tree.tree.clearSelection()
+    roofs[0].setSelected(True)
+    target.setSelected(True)
+    QApplication.processEvents()
+    assert tree.selected_places() == (
+        *(("obj_1", f"pin_{index}") for index in range(1, 5)),
+        ("obj_2", "face_top"),
+    )
+    stand_in: Any = SimpleNamespace(object_tree=tree)
+    assert MainWindow._counterpart_targets(stand_in) is None, (
+        "vier Zapfen und eine Fläche tragen kein Gegenstück"
+    )
+    tree.close()
+
+    def row(feature_id: str | None) -> QTreeWidgetItem:
+        made = QTreeWidgetItem(["", ""])
+        made.setData(0, role, "obj_1")
+        made.setData(1, role, feature_id)
+        return made
+
+    roof, bore, sink, other = row(None), row("hole_1"), row("sink_1"), row("hole_2")
+    bore.addChild(sink)
+    roof.addChild(bore)
+    roof.addChild(other)
+    assert _place_refs_under(bore) == [("obj_1", "hole_1")], "die Bohrung mit Senkung ist eine"
+    assert _place_refs_under(roof) == [("obj_1", "hole_1"), ("obj_1", "hole_2")]
+
+
+def test_a_chosen_feature_that_the_new_state_lacks_is_given_up_not_the_body(
+    qt_app: QApplication,
+) -> None:
+    """RM-537: Verschwindet die gewählte Bohrung, ist nichts gewählt — nicht der Körper.
+
+    Am Kundenstift standen vor der Erkennung zwei Sackbohrungen im Baum, danach
+    eine durchgehende. Wer eine Sackbohrung gewählt hatte, bekam still den
+    Stift gewählt, und Entf entfernte den ganzen Körper. Jetzt hebt der Baum
+    die Wahl auf und hält das Merkmal mit dem Text seiner Zeile fest
+    (``lost_selection``); ob es gesagt wird, entscheidet das Fenster.
+    """
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.labels import feature_name
+    from app.ui.panels import ObjectTree
+
+    blind = Feature(
+        id="hole_10",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 23.8, "depth": 22.1, "through": False},
+    )
+    through = Feature(
+        id="hole_12",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 23.8, "depth": 50.0, "through": True},
+    )
+    entry = SceneObject(id="obj_3", name="Stift", mesh=plate(), features={"hole_10": blind})
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(Scene(objects={entry.id: entry})))
+        tree.select_feature(entry.id, "hole_10")
+        assert tree.selected_feature() == "hole_10", "Voraussetzung"
+
+        tree.show_scene(
+            EvaluationResult(
+                Scene(objects={entry.id: replace(entry, features={"hole_12": through})})
+            )
+        )
+
+        assert tree.selected() is None, "der Körper ist nicht still gewählt"
+        assert tree.selected_feature() is None
+        assert tree.lost_selection == ((entry.id, "hole_10", feature_name("hole_10", blind)),), (
+            tree.lost_selection
+        )
+
+        tree.select_feature(entry.id, "hole_12")
+        tree.show_scene(
+            EvaluationResult(
+                Scene(objects={entry.id: replace(entry, features={"hole_12": through})})
+            )
+        )
+        assert tree.selected_feature() == "hole_12", "was bleibt, bleibt gewählt"
+        assert tree.lost_selection == ()
+    finally:
+        tree.close()
+
+
+def test_a_lost_choice_is_named_as_its_row_was(qt_app: QApplication) -> None:
+    """RM-537, N4: Verloren heißt ein Merkmal so, wie seine Zeile im Baum hieß.
+
+    Ein Baustein mit einer einzigen Zeile gibt ihr seinen Titel — die
+    eingesetzte Magnettasche heißt im Baum wie der Baustein und nicht
+    „Sackbohrung 1“. Die Ansage nannte den Merkmalsnamen, also etwas, das so
+    nie im Baum stand.
+    """
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Document, Operation, Scene, SceneObject
+    from app.ui.labels import feature_name
+    from app.ui.panels import ObjectTree
+
+    load_operations()
+    step = Operation(id=7, op="create_lid", inputs=("obj_3",), outputs=("obj_3", "obj_4"))
+    document = Document(format_version=1, app_version="test", ops=[step])
+    pocket = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="generated",
+        params={"diameter": 8.0, "depth": 3.0, "through": False},
+        created_by=7,
+    )
+    entry = SceneObject(id="obj_3", name="Halter", mesh=plate(), features={"hole_1": pocket})
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(Scene(objects={entry.id: entry})), document)
+        tree.select_feature(entry.id, "hole_1")
+        row = tree.tree.selectedItems()[0].text(0)
+        assert row == str(REGISTRY.get("create_lid").title), (
+            "Voraussetzung: die Zeile trägt den Titel"
+        )
+        assert row != feature_name("hole_1", pocket), "Voraussetzung: sonst prüft das nichts"
+
+        tree.show_scene(
+            EvaluationResult(Scene(objects={entry.id: replace(entry, features={})})), document
+        )
+
+        assert tree.lost_selection == ((entry.id, "hole_1", row),), tree.lost_selection
+    finally:
+        tree.close()
 
 
 def test_choosing_another_feature_reports_it_once_without_an_empty_step(
@@ -1509,7 +1688,6 @@ def test_the_radius_panel_edits_a_detected_rounding_without_changing_its_neighbo
     """Anklicken und unverändert übernehmen bewahrt das Teil; ein neuer Radius wirkt lokal."""
     from app.core.brep import edit
     from app.core.brep.features import features_of
-    from app.core.geom.mesh import as_mesh_data
     from app.core.types import SceneObject
     from tests.test_mesh_edges import run
 
@@ -1896,8 +2074,14 @@ def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
     assert "gemeinsam verschoben" in text
 
 
-def test_a_handling_that_does_not_apply_is_hidden(qt_app: QApplication) -> None:
-    """Unpassende Handlungen belegen im Merkmalpanel keinen Platz."""
+def test_a_handling_that_does_not_apply_stands_with_its_reason(qt_app: QApplication) -> None:
+    """Was nicht geht, steht als eine Zeile mit seinem Grund (RM-535).
+
+    Seit dem 15.09.2026 fielen Absagen weg; am Kundenmodell hatten danach 174
+    von 190 Merkmalen keine Zeile zum Versetzen und keinen Satz, warum (Robert
+    06.10.2026: „alles einheitlich, Bohrung Vorbild für alle Funktionen“).
+    Gleich begründete Absagen liegen in **einer** Zeile, angeklickt wird nichts.
+    """
     loop = Feature(
         id="edge_loop_1",
         kind="edge_loop",
@@ -1905,25 +2089,23 @@ def test_a_handling_that_does_not_apply_is_hidden(qt_app: QApplication) -> None:
         params={"centre": (0.0, 0.0, 0.0), "open_edges": 4},
     )
     ungültig = [action for action in actions_for(loop) if action.op is None]
-    assert ungültig, "ohne abgelehnte Handlungen prüft dieser Test nichts"
+    assert len(ungültig) > 1, "ohne mehrere Absagen prüft dieser Test das Zusammenlegen nicht"
     assert all(str(action.reason).strip() for action in ungültig), "jede nennt ihren Grund"
 
     panel = FeaturePanel()
     panel.show_feature("edge_loop_1", loop)
 
     assert not buttons(panel), "keine Handlung ist anklickbar"
-    reasons = [
-        label for row in panel._built for label in row.findChildren(QLabel) if "—" in label.text()
-    ]
-    assert not reasons
-    texte = " ".join(
+    zeilen = [
         label.text()
         for row in panel._built
-        for label in row.findChildren(QWidget)
-        if hasattr(label, "text")
-    )
-    for action in ungültig:
-        assert str(action.reason) not in texte
+        for label in row.findChildren(QLabel)
+        if "—" in label.text()
+    ]
+    for grund in dict.fromkeys(str(action.reason) for action in ungültig):
+        mit_grund = [zeile for zeile in zeilen if zeile.endswith(grund)]
+        assert len(mit_grund) == 1, (grund, zeilen)
+    assert str(ungültig[0].title) in " ".join(zeilen)
 
 
 def test_an_opening_where_nothing_applies_says_why_once(
@@ -1957,7 +2139,8 @@ def test_an_opening_where_nothing_applies_says_why_once(
         for label in panel.findChildren(QLabel)
         if str(HOLE_IS_NOT_EMPTY) in label.text()
     ]
-    assert said == [str(HOLE_IS_NOT_EMPTY)], said
+    # Eine Zeile, alle Titel davor (RM-535: Absagen stehen als Zeile).
+    assert len(said) == 1 and said[0].endswith(str(HOLE_IS_NOT_EMPTY)), said
 
 
 def test_a_changed_number_is_reported_before_it_is_done(qt_app: QApplication) -> None:
@@ -2028,7 +2211,9 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
     from app.i18n import tr
 
     identifier, feature = a_face()
-    assert all(action.op is None for action in actions_for(feature)), "sonst prüft das nichts"
+    # Seit RM-535 gilt an der Fläche genau eine Zeile: *Fläche versetzen*.
+    offered = {action.op for action in actions_for(feature)} - {None}
+    assert offered == {"push_face"}, "sonst prüft das nichts"
 
     panel = FeaturePanel()
     panel.show_feature(identifier, feature)
@@ -2042,6 +2227,33 @@ def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -
         assert knopf.isEnabled() and not knopf.isHidden()
         knopf.click()
         assert gerufen[-1] == (identifier, cut), text
+
+
+def test_a_face_moves_by_a_distance_from_its_own_row(qt_app: QApplication) -> None:
+    """*Fläche versetzen* steht als Zeile mit dem Weg, wie *Merkmal verschieben*
+    an der Bohrung (RM-535, Robert 06.10.2026: „alles einheitlich“).
+
+    Der Weg beginnt bei 0 und nicht bei der Vorgabe des Dialogs (2 mm): Ein
+    *Übernehmen* ohne Hinsehen versetzte sonst still. Übernommen wird mit der
+    Fläche unter ``face`` — dem Namen, unter dem die Operation sie führt.
+    """
+    from app.i18n import tr
+
+    identifier, feature = a_face()
+    panel = FeaturePanel()
+    angefordert: list[tuple[str, dict[str, object]]] = []
+    panel.operationRequested.connect(lambda op, werte: angefordert.append((op, werte)))
+    panel.show_feature(identifier, feature)
+
+    titel = str(tr("Fläche versetzen"))
+    assert titel in buttons(panel)
+    zeile = next(row for row in panel._shown_rows.values() if row.op == "push_face")
+    weg = zeile.widgets["distance"]
+    assert weg.value_mm() == pytest.approx(0.0)
+    assert panel.take_values("push_face", {"distance": -1.5})
+    assert weg.value_mm() == pytest.approx(-1.5)
+    press(panel, titel)
+    assert angefordert == [("push_face", {"face": identifier, "distance": pytest.approx(-1.5)})]
 
 
 def test_a_face_offers_the_seam_protection_toggle(qt_app: QApplication) -> None:
@@ -2570,9 +2782,14 @@ def test_a_partly_reused_panel_matches_a_fresh_one_and_tabs_like_the_eye(
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QLineEdit
 
+    from tests.helpers import ridged_shaft
+
     load_operations()
-    mesh = read_mesh((MESHES / "post_with_fillet.stl").read_bytes(), ".stl")
-    found = features.detect(mesh)
+    # Der Schaft mit freistehendem Wulst: Der Wulst an ``post_with_fillet``
+    # lässt sich nicht vom Körper trennen, dort sagt seit RM-535 jede Zeile ab.
+    shaft = ridged_shaft("mesh", recess=False)
+    mesh = as_mesh_data(shaft.mesh)
+    found = shaft.features
     pin_id = next(key for key, value in found.items() if value.kind == "pin")
     torus_id = next(key for key, value in found.items() if value.kind == "torus")
     panel = FeaturePanel()
@@ -4454,6 +4671,36 @@ def test_a_wall_says_which_chamber_it_belongs_to_and_offers_to_change_it(
     assert offered["depth"] == pytest.approx(18.0, abs=1e-6)
     assert sorted((offered["width"], offered["length"])) == pytest.approx([26.0, 36.0], abs=1e-6)
     panel.close()
+
+
+def test_the_chamber_row_leads_with_changing_the_chamber_and_a_wall_with_its_own_face() -> None:
+    """Wer im Baum „Kammer 1“ wählt, bekommt *Kammer ändern* als erste Zeile.
+
+    Der Baum zeigt die Kammer unter ihrem Anker, dem Boden; die erste Zeile
+    des Merkmalfensters wird scharf und klappt auf (``FeaturePanel._arm``).
+    Seit *Fläche versetzen* an jeder Fläche vorn steht (RM-535), stand dort
+    ein Weg von 0 mm offen und die Kammer zugeklappt darunter — der
+    Fensterweg der Einzeldateiabnahme änderte den Boden statt der Kammer.
+    An einer Wand bleibt die Fläche vorn: Gewählt ist sie, nicht die Gruppe.
+    """
+    from app.core.perceive.groups import functional_groups
+    from app.ui.panels import feature_answers
+    from tests.helpers import walled_bin
+
+    load_operations()
+    mesh = walled_bin()
+    found = features.detect(mesh)
+    chamber = next(group for group in functional_groups(found, mesh) if group.kind == "chamber")
+    wall = next(member for member, role in chamber.roles if role == "wall")
+
+    at_the_anchor = feature_answers(chamber.anchor, found[chamber.anchor], found, mesh)
+    offered = [action.op for action in at_the_anchor.actions if action.op]
+    assert offered[0] == "resize_chamber", offered
+    assert "push_face" in offered, "Voraussetzung: Der Boden trägt auch Fläche versetzen"
+
+    at_a_wall = feature_answers(wall, found[wall], found, mesh)
+    offered = [action.op for action in at_a_wall.actions if action.op]
+    assert offered[0] == "push_face" and "resize_chamber" in offered, offered
 
 
 def test_a_lug_offers_to_change_the_closure_by_its_play(qt_app: QApplication) -> None:

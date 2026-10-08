@@ -27,6 +27,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests.render_fakes import RecordingItem, RecordingRenderer
+from tests.ui_helpers import on_the_bore_wall
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -769,7 +770,7 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     """
     window = MainWindow(Session(), UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     yield window
     wait_for_map(window)
     window.wait_for_workers()
@@ -779,28 +780,6 @@ def select_plate(window: MainWindow) -> None:
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
-
-
-def on_the_bore_wall(window: MainWindow, feature_id: str) -> tuple[float, float, float]:
-    """Eine Stelle auf der Wand dieser Bohrung — also eine, die ein Klick
-    wirklich trifft.
-
-    Drei Tests dieser Datei zeigten bis zum 22.08.2026 auf den **Mittelpunkt**
-    einer Bohrung. Der liegt auf ihrer Achse, mitten im Leeren, und dort ist
-    keine Oberfläche: Ein ``vtkCellPicker`` kann diesen Punkt nicht
-    zurückgeben. Grün waren sie, weil ``_feature_at`` damals das Merkmal mit
-    dem nächsten Mittelpunkt nahm — sie prüften also gegen die Rechenweise und
-    nicht gegen einen Klick. Seit die Reichweite an den Dreiecken des Merkmals
-    hängt (§18.5), zeigen sie dorthin, wo gezeigt wird.
-
-    Die eigentliche Auswahltiefe steht in ``tests/test_selection.py``; hier
-    bleiben die drei Aussagen, um die es diesen Tests ging.
-    """
-    entry = window.session.last_result.scene.objects["obj_1"]
-    feature = entry.features[feature_id]
-    centre = feature.params["centre"]
-    radius = float(feature.params["diameter"]) * 0.5
-    return (float(centre[0]) + radius, float(centre[1]), 2.0)
 
 
 def wait_for_map(window: MainWindow) -> None:
@@ -998,7 +977,7 @@ def test_without_a_selection_the_bar_says_what_is_missing(window: MainWindow) ->
     ein zweiter Körper dazu.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None and len(result.scene.objects) == 2
     window.object_tree.tree.clearSelection()
@@ -1385,6 +1364,12 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
             object_id="obj_1",
             feature_ids=("hole_1",),
         )
+        # Erst die Schichtbefunde abwarten: Kommen sie nach dem Griff nach der
+        # Zeile, baut ``add_findings`` die Liste neu, und die gehaltene Zeile
+        # ist gelöscht — ein Rennen des Tests, kein Fehler des Fensters
+        # (RM-543, belegt im Test danach).
+        window.wait_for_workers()
+        QApplication.processEvents()
         window.report.add_findings([finding])
         window.resize(1040, 760)
         window.show()
@@ -1438,6 +1423,85 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
         viewport._finding_timer.stop()
         viewport._hide_finding_mark(render=False)
         if owned_renderer is not None:
+            viewport.renderer = None
+
+
+def test_a_report_rebuild_takes_the_held_row_and_the_click_still_reaches_its_map(
+    window: MainWindow,
+) -> None:
+    """RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster.
+
+    Nachkommende Befunde (``add_findings``, etwa die Schichtanalyse) bauen die
+    Liste neu (``_rebuild`` leert sie). Eine Zeile, die jemand vorher gegriffen
+    hat, ist danach ein gelöschtes C++-Objekt, und der nächste Zugriff wirft
+    genau den Fehler aus RM-543 — ``visualItemRect(item)`` im Test, wenn die
+    Befunde zwischen Griff und Klick kamen. Die Oberfläche selbst liest die
+    Zeile nur im Druck (``ReportList.mousePressEvent``) und reicht danach den
+    Befund weiter: Ein Neuaufbau **zwischen Klick und fertiger Karte** lässt
+    Karte und Marke stehen.
+    """
+    from PySide6.QtTest import QTest
+    from shiboken6 import isValid
+
+    def row_of(wanted: Finding) -> Any:
+        return next(
+            window.report.list.item(row)
+            for row in range(window.report.list.count())
+            if window.report.list.item(row).data(Qt.ItemDataRole.UserRole) is wanted
+        )
+
+    viewport = window.viewport
+    owned = viewport.renderer is None
+    if owned:
+        viewport.renderer = RecordingRenderer()
+        viewport.show_scene(window.session.last_result)
+    try:
+        select_plate(window)
+        window.wait_for_workers()
+        QApplication.processEvents()
+        finding = Finding(
+            code="fit.violated",
+            severity="warning",
+            message="Diese Passung ist zu eng.",
+            object_id="obj_1",
+            feature_ids=("hole_1",),
+        )
+        window.report.add_findings([finding])
+        window.resize(1040, 760)
+        window.show()
+        QApplication.processEvents()
+
+        held = row_of(finding)
+        later = [
+            Finding(code="slice.late", severity="info", message="Nachgereicht.", object_id="obj_1")
+        ]
+        window.report.add_findings(later)
+        assert not isValid(held), "der Neuaufbau löscht die gegriffene Zeile"
+        with pytest.raises(RuntimeError, match="already deleted"):
+            window.report.list.visualItemRect(held)
+
+        row = row_of(finding)
+        window.report.list.scrollToItem(row)
+        QApplication.processEvents()
+        QTest.mouseClick(
+            window.report.list.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=window.report.list.visualItemRect(row).center(),
+        )
+        window.report.add_findings(
+            [Finding(code="slice.later", severity="info", message="Noch eins.", object_id="obj_1")]
+        )
+        assert not isValid(row), "Voraussetzung: der Neuaufbau kam zwischen Klick und Karte"
+        wait_for_map(window)
+
+        assert viewport.analysis_map is not None and viewport.analysis_map.kind == "fits"
+        assert viewport._finding_mark is not None, "die Marke steht nach der Karte"
+        assert len(viewport._finding_actors) == 2
+    finally:
+        window.hide()
+        viewport._finding_timer.stop()
+        viewport._hide_finding_mark(render=False)
+        if owned:
             viewport.renderer = None
 
 
@@ -1613,7 +1677,7 @@ def without_gliding(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.usefixtures("without_gliding")
 @pytest.mark.parametrize("size", [(1280, 720), (1920, 1080)], ids=["1280", "1920"])
 def test_the_selection_column_fits_every_field_it_shows(
-    window: MainWindow, size: tuple[int, int]
+    qt_app: QApplication, size: tuple[int, int]
 ) -> None:
     """RM-488: Bohrung, Fläche und Kante liegen ganz im Ausschnitt, ohne waagrechten Balken.
 
@@ -1621,24 +1685,40 @@ def test_the_selection_column_fits_every_field_it_shows(
     Bohrungsdurchmesser / Senkung, Stufen und Verengung mitnehmen“ verlangte
     ihre längste Zeile als Mindestbreite, alles daneben endete ohne Pfeile am
     Rand, die „i“-Zeichen lagen rechts außerhalb, unten stand ein Rollbalken.
+
+    **In der Reihenfolge des Kunden**: Das Fenster steht, dann kommt die
+    Platte. Wuchs der Inhalt beim Wechsel von der Bohrung zur Fläche, reichte
+    der Rollbereich den neuen Wunsch nur eine Ebene weiter, und die Karte
+    stand einige Runden 22 Punkte zu schmal (``ColumnScroller``,
+    ``overlay.tell_the_zone``). Mit dem Fenster erst nach dem Öffnen gezeigt
+    kam die Breite zufällig rechtzeitig, rot nur auf langsamen Läufern.
     """
-    window.resize(*size)
-    window.show()
-    QApplication.processEvents()
-    entry = window.session.last_result.scene.objects["obj_1"]
-    hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
-    face = next(key for key, feature in entry.features.items() if feature.kind == "face")
-    for feature_id in (hole, face):
-        _choose_and_wait(window, feature_id)
-        assert window.feature_dock.isVisibleTo(window)
-        cut = _cut_off_in_the_column(window)
-        assert not cut, f"{feature_id}: ragt über die Spalte: {cut}"
-    window.feature_panel.show_edge("edge-1", "Senkrecht · 8 mm · x -40, y -25", parameter_values={})
-    window.feature_dock.reveal()
-    for _round in range(5):
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.resize(*size)
+        window.show()
+        window.open_path(MESHES / "plate_holes.stl")
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
-    cut = _cut_off_in_the_column(window)
-    assert not cut, f"Kante: ragt über die Spalte: {cut}"
+        entry = window.session.last_result.scene.objects["obj_1"]
+        hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
+        face = next(key for key, feature in entry.features.items() if feature.kind == "face")
+        for feature_id in (hole, face):
+            _choose_and_wait(window, feature_id)
+            assert window.feature_dock.isVisibleTo(window)
+            cut = _cut_off_in_the_column(window)
+            assert not cut, f"{feature_id}: ragt über die Spalte: {cut}"
+        window.feature_panel.show_edge(
+            "edge-1", "Senkrecht · 8 mm · x -40, y -25", parameter_values={}
+        )
+        window.feature_dock.reveal()
+        for _round in range(5):
+            QApplication.processEvents()
+        cut = _cut_off_in_the_column(window)
+        assert not cut, f"Kante: ragt über die Spalte: {cut}"
+    finally:
+        wait_for_map(window)
+        window.wait_for_workers()
 
 
 @pytest.mark.usefixtures("without_gliding")
@@ -1660,7 +1740,7 @@ def test_the_selection_column_fits_in_every_language(qt_app: QApplication, langu
         window.resize(1280, 720)
         window.show()
         window.open_path(MESHES / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         entry = window.session.last_result.scene.objects["obj_1"]
         hole = next(key for key, feature in entry.features.items() if feature.kind == "hole")
@@ -2056,7 +2136,7 @@ def _insert_a_thread(window: MainWindow) -> str:
     )
     picker.setCurrentIndex(index)
     dialog.accept()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     result = window.session.last_result
     assert result is not None
@@ -2158,7 +2238,7 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
         QApplication.processEvents()
     assert dialog.can_accept(), dialog.toolTip()
     dialog.accept()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     document = window.session.project.document
     assert [entry.id for entry in document.ops] == steps_before, (
         "derselbe Schritt, ersetzt — kein zweiter im Stapel, keiner weg"
@@ -2697,7 +2777,7 @@ def test_a_part_that_fits_gets_told_so(window: MainWindow) -> None:
     Startbestückung.
     """
     window.action_auto_split("obj_1")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.wait_for_workers()
 
     assert "passt bereits" in window.status_message.text()
@@ -4390,7 +4470,7 @@ def test_the_shadow_keeps_its_length_whatever_the_view() -> None:
     assert max(lengths) - min(lengths) < 1e-9
 
 
-def test_the_shadow_hull_holds_the_corners_and_drops_the_rest(qt_app: QApplication) -> None:
+def test_the_shadow_hull_holds_the_corners_and_drops_the_rest() -> None:
     """Die Hülle wird einmal je Körper gerechnet, der Umriss je Ansicht.
 
     Vorher lief eine Triangulierung über **jeden** Punkt des Anzeigenetzes, und
@@ -4402,25 +4482,21 @@ def test_the_shadow_hull_holds_the_corners_and_drops_the_rest(qt_app: QApplicati
     import numpy as np
     import trimesh
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import shadow_hull_of, shadow_outline_of
 
-    viewport = Viewport()
-    try:
-        box = trimesh.creation.box(extents=(20.0, 20.0, 30.0)).subdivide().subdivide().subdivide()
-        body = np.asarray(box.vertices, dtype=float) + np.array([10.0, 10.0, 15.0])
-        hull = viewport._shadow_hull_of(body)
-        assert len(hull) == 8, "ein Quader hat acht Ecken, wie fein er auch vernetzt ist"
-        assert len(hull) < len(body) / 10
+    box = trimesh.creation.box(extents=(20.0, 20.0, 30.0)).subdivide().subdivide().subdivide()
+    body = np.asarray(box.vertices, dtype=float) + np.array([10.0, 10.0, 15.0])
+    hull = shadow_hull_of(body)
+    assert len(hull) == 8, "ein Quader hat acht Ecken, wie fein er auch vernetzt ist"
+    assert len(hull) < len(body) / 10
 
-        outline = viewport._shadow_outline_of(hull, (0.5, 0.0))
-        assert outline is not None and len(outline) > 0
-        assert np.allclose(outline[:, 2], 0.05), "der Schatten liegt auf der Platte"
-        # 30 mm hoch, halber Versatz je Millimeter: der Umriss reicht 15 mm
-        # weiter als der Körper.
-        assert outline[:, 0].max() == pytest.approx(35.0)
-        assert outline[:, 1].max() == pytest.approx(20.0)
-    finally:
-        viewport.deleteLater()
+    outline = shadow_outline_of(hull, (0.5, 0.0))
+    assert outline is not None and len(outline) > 0
+    assert np.allclose(outline[:, 2], 0.05), "der Schatten liegt auf der Platte"
+    # 30 mm hoch, halber Versatz je Millimeter: der Umriss reicht 15 mm
+    # weiter als der Körper.
+    assert outline[:, 0].max() == pytest.approx(35.0)
+    assert outline[:, 1].max() == pytest.approx(20.0)
 
 
 def test_thinning_a_dense_body_keeps_its_corners() -> None:
@@ -4458,7 +4534,7 @@ def test_a_small_body_is_not_thinned_at_all() -> None:
     assert _thinned_for_hull(points) is points
 
 
-def test_a_body_too_thin_for_a_hull_still_gets_one(qt_app: QApplication) -> None:
+def test_a_body_too_thin_for_a_hull_still_gets_one() -> None:
     """Ein ebener Körper hat keine räumliche Hülle — er wirft trotzdem.
 
     Qhull gibt bei entarteten Punktwolken auf. Sein Fehler darf nicht der
@@ -4466,16 +4542,12 @@ def test_a_body_too_thin_for_a_hull_still_gets_one(qt_app: QApplication) -> None
     """
     import numpy as np
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import shadow_hull_of, shadow_outline_of
 
-    viewport = Viewport()
-    try:
-        flat = np.array([[0.0, 0.0, 5.0], [10.0, 0.0, 5.0], [10.0, 10.0, 5.0], [0.0, 10.0, 5.0]])
-        hull = viewport._shadow_hull_of(flat)
-        assert hull is not None and len(hull) == 4
-        assert viewport._shadow_outline_of(hull, (0.5, 0.5)) is not None
-    finally:
-        viewport.deleteLater()
+    flat = np.array([[0.0, 0.0, 5.0], [10.0, 0.0, 5.0], [10.0, 10.0, 5.0], [0.0, 10.0, 5.0]])
+    hull = shadow_hull_of(flat)
+    assert hull is not None and len(hull) == 4
+    assert shadow_outline_of(hull, (0.5, 0.5)) is not None
 
 
 def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplication) -> None:
@@ -4489,7 +4561,7 @@ def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplicati
     """
     import numpy as np
 
-    from app.ui.viewport import Viewport, outline_of
+    from app.ui.viewport import Viewport, outline_of, shadow_catchers, shadow_outline_of
 
     viewport = Viewport()
     try:
@@ -4502,13 +4574,13 @@ def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplicati
         viewport._shadow_ground["plate"] = (0.0, 12.0, outline_of(plate))
         viewport._shadow_ground["tower"] = (12.0, 52.0, outline_of(tower))
 
-        catchers = viewport._shadow_catchers("tower")
+        catchers = shadow_catchers("tower", viewport._shadow_ground, viewport._shadow_bed("tower"))
         assert [ground for ground, _window in catchers] == [0.0, 12.0], (
             "die Grundplatte fängt, die Druckplatte fängt daneben"
         )
 
         ground, window = catchers[1]
-        outline = viewport._shadow_outline_of(tower, (0.5, 0.0), ground, window)
+        outline = shadow_outline_of(tower, (0.5, 0.0), ground, window)
         assert outline is not None
         assert np.allclose(outline[:, 2], 12.05), "er liegt auf der Grundplatte"
         # 40 mm über ihr, halber Versatz je Millimeter: 20 mm weiter als der
@@ -4522,7 +4594,7 @@ def test_a_body_on_the_plate_has_only_the_plate_below_it(qt_app: QApplication) -
     """Ein Körper daneben ist kein Boden, solange er nicht darunter liegt."""
     import numpy as np
 
-    from app.ui.viewport import Viewport, outline_of
+    from app.ui.viewport import Viewport, outline_of, shadow_catchers
 
     viewport = Viewport()
     try:
@@ -4531,7 +4603,8 @@ def test_a_body_on_the_plate_has_only_the_plate_below_it(qt_app: QApplication) -
         )
         viewport._shadow_ground["neighbour"] = (0.0, 30.0, outline_of(neighbour))
         viewport._shadow_ground["mine"] = (0.0, 20.0, outline_of(neighbour + 100.0))
-        assert [ground for ground, _window in viewport._shadow_catchers("mine")] == [0.0]
+        found = shadow_catchers("mine", viewport._shadow_ground, viewport._shadow_bed("mine"))
+        assert [ground for ground, _window in found] == [0.0]
     finally:
         viewport.deleteLater()
 
@@ -4545,19 +4618,20 @@ def test_the_shadow_is_cut_at_the_edge_of_the_plate(qt_app: QApplication) -> Non
     """
     import numpy as np
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import Viewport, shadow_catchers, shadow_outline_of
 
     viewport = Viewport()
     try:
         viewport._bed_extent = (100.0, 100.0)
         body = np.array([[x, y, z] for x in (40.0, 80.0) for y in (0.0, 10.0) for z in (0.0, 20.0)])
-        ground, window = viewport._shadow_catchers("body")[0]
-        outline = viewport._shadow_outline_of(body, (0.5, 0.0), ground, window)
+        found = shadow_catchers("body", viewport._shadow_ground, viewport._shadow_bed("body"))
+        ground, window = found[0]
+        outline = shadow_outline_of(body, (0.5, 0.0), ground, window)
         assert outline is not None
         assert outline[:, 0].max() == pytest.approx(50.0), "an der Kante ist Schluss"
 
         far = body + np.array([200.0, 0.0, 0.0])
-        assert viewport._shadow_outline_of(far, (0.5, 0.0), ground, window) is None, (
+        assert shadow_outline_of(far, (0.5, 0.0), ground, window) is None, (
             "was ganz daneben fällt, wirft gar keinen Schatten"
         )
     finally:
@@ -4567,11 +4641,12 @@ def test_the_shadow_is_cut_at_the_edge_of_the_plate(qt_app: QApplication) -> Non
 def test_without_a_build_volume_nothing_is_cut(qt_app: QApplication) -> None:
     """Ohne gezeigten Bauraum gibt es keine Kante, an der zu schneiden wäre."""
 
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import Viewport, shadow_catchers
 
     viewport = Viewport()
     try:
-        assert viewport._shadow_catchers("body") == [(0.0, None)]
+        found = shadow_catchers("body", viewport._shadow_ground, viewport._shadow_bed("body"))
+        assert found == [(0.0, None)]
     finally:
         viewport.deleteLater()
 
@@ -5000,12 +5075,12 @@ def test_a_bundle_over_many_bodies_selects_all_of_them_on_click(
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply(
         "Zerlegen",
         [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 10})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     assert result.stopped_at is None and len(result.scene.objects) == 10
@@ -5479,7 +5554,7 @@ def test_a_finding_says_which_step_reported_it(window: MainWindow) -> None:
     from PySide6.QtCore import Qt
 
     window.session.import_model(MESHES / "broken_open.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
     report = window.report
     listed = [
@@ -5872,7 +5947,7 @@ def _a_keyhole_on_the_plate(window: MainWindow) -> tuple[str, int]:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -5923,7 +5998,7 @@ def test_a_drag_at_a_part_feature_moves_the_whole_part(window: MainWindow) -> No
     # Ansicht es nach dem Loslassen tut (``featureMoved``).
     pocket = before["keyhole_pocket_1"]
     window.viewport.featureMoved.emit("keyhole_pocket_1", (pocket[0] + 5.0, pocket[1], pocket[2]))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
 
@@ -5937,7 +6012,7 @@ def test_a_drag_at_a_part_feature_moves_the_whole_part(window: MainWindow) -> No
     assert window.feature_panel.shown_part_step() == step, "der Baustein bleibt gewählt"
 
     window.viewport.featureTurned.emit("keyhole_pocket_1", "z", 30.0)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     turned = next(entry for entry in window.session.project.document.ops if entry.id == step)
@@ -5948,7 +6023,7 @@ def test_a_drag_at_a_part_feature_moves_the_whole_part(window: MainWindow) -> No
 
     # Und die Bewegen-Leiste geht denselben Weg — ein getippter Versatz.
     window._on_transform_dragged(TransformSteps(offset=(0.0, -2.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     typed = next(entry for entry in window.session.project.document.ops if entry.id == step)
@@ -6008,7 +6083,7 @@ def test_a_part_on_a_wall_turns_about_the_wall_and_declines_the_rest(window: Mai
         "Schraubenloch",
         [OperationDraft(op="insert_screw_hole", inputs=(object_id,), params={"at_feature": wall})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -6026,7 +6101,7 @@ def test_a_part_on_a_wall_turns_about_the_wall_and_declines_the_rest(window: Mai
         QApplication.processEvents()
 
     window.viewport.featureTurned.emit(bore, "y", 30.0)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     turned = next(entry for entry in window.session.project.document.ops if entry.id == step.id)
@@ -6036,7 +6111,7 @@ def test_a_part_on_a_wall_turns_about_the_wall_and_declines_the_rest(window: Mai
     assert turned.params["at_feature"] == wall, "der Sitz bleibt"
 
     window.viewport.featureTurned.emit(bore, "z", 30.0)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     same = next(entry for entry in window.session.project.document.ops if entry.id == step.id)
@@ -6131,7 +6206,7 @@ def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> Non
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -6171,11 +6246,11 @@ def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> Non
     window._on_feature_values_changed("slot_hole", turned_values)
     window._feature_preview.stop()
     window._preview_feature_change()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     window._apply_from_feature_panel("slot_hole", turned_values)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
 
@@ -6199,7 +6274,7 @@ def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> Non
 
     # Und der Zug an den Langlochknöpfen geht denselben Weg.
     window._on_slot_dragged(slot_id, 22.0, 45.0)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     assert len(window.session.project.document.ops) == steps
@@ -6232,7 +6307,7 @@ def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWin
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = int(window.session.project.document.ops[-1].id)
@@ -6262,11 +6337,11 @@ def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWin
     window._on_feature_values_changed("insert_snap_connector", {"kind": "bore"})
     window._feature_preview.stop()
     window._preview_feature_change()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     window._change_part_step(step, {"kind": "bore"})
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
 
@@ -6366,7 +6441,7 @@ def test_a_bore_with_its_countersink_shows_its_own_fields(window: MainWindow) ->
     # daneben. Gegriffen wird deshalb am Merkmal und nicht am ersten Eintrag
     # der Szene — beide Körper werden gebraucht, der zweite für die Gegenprobe.
     window.open_path(MESHES / "plate_countersunk.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(
         (kennung, eintrag)
@@ -6537,13 +6612,13 @@ def test_the_layer_tool_takes_the_only_body_there_is(window: MainWindow) -> None
     # Das Fixture öffnet ``plate_holes.stl`` bereits — genau die Lage nach dem
     # Öffnen einer Datei, um die es hier geht. Ein zweites Laden machte daraus
     # zwei Körper und prüfte den anderen Fall.
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     window.object_tree.tree.clearSelection()
     assert window.object_tree.selected() is None, "nothing is selected on purpose"
 
     window.layer_bar.set_active(True)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     # ``isHidden`` und nicht ``isVisible``: Ein Fenster, das nie gezeigt wurde,
     # meldet jedes Kind als unsichtbar — geprüft wird, was *gesetzt* wurde.
@@ -6562,13 +6637,13 @@ def test_with_several_bodies_the_bar_says_what_it_needs(window: MainWindow) -> N
     """
     # Eines bringt das Fixture mit, das zweite kommt dazu.
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     assert len(result.scene.objects) == 2, "the point of this test is the ambiguity"
     window.object_tree.tree.clearSelection()
 
     window.layer_bar.set_active(True)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert not window.layer_bar.note.isHidden(), "two bodies: the bar has to ask"
     assert "Teil" in window.layer_bar.note.text(), (
@@ -6603,7 +6678,7 @@ def test_the_history_shows_what_kind_of_step_each_line_is(qt_app: QApplication) 
 
     session = Session()
     session.open_project(Path(__file__).parent.parent / "app" / "examples" / "dose-mit-deckel.p3d")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     panel = HistoryPanel()
     try:
@@ -7472,7 +7547,7 @@ def _a_rib_on_the_plate(window: MainWindow) -> tuple[str, int]:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -7514,7 +7589,7 @@ def test_a_face_of_a_part_carries_the_grip_of_the_part(window: MainWindow) -> No
     steps_before = len(window.session.project.document.ops)
     centre = tuple(float(value) for value in chosen.params["centre"])
     window._on_feature_moved(faces[0], (centre[0], centre[1] - 2.0, centre[2]))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     moved = next(entry for entry in window.session.project.document.ops if entry.id == step)
@@ -7541,7 +7616,7 @@ def test_a_bound_axis_takes_the_drag_into_its_expression(window: MainWindow) -> 
     assert result is not None
     object_id = next(iter(result.scene.objects))
     assert window.session.add_parameter(Parameter(name="hoehe", value=8.0, unit="mm"))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply(
         "Schlüsselloch",
         [
@@ -7552,7 +7627,7 @@ def test_a_bound_axis_takes_the_drag_into_its_expression(window: MainWindow) -> 
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -7568,7 +7643,7 @@ def test_a_bound_axis_takes_the_drag_into_its_expression(window: MainWindow) -> 
             QApplication.processEvents()
         x, y, z = centres[hole]
         window._on_feature_moved(hole, (x + dx, y, z + dz))
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         for _ in range(40):
             QApplication.processEvents()
         return next(entry for entry in window.session.project.document.ops if entry.id == step.id)
@@ -7646,7 +7721,7 @@ def test_the_body_grip_with_the_part_roof_chosen_moves_the_part(window: MainWind
     steps_before = len(window.session.project.document.ops)
 
     window._on_transform_dragged(TransformSteps(offset=(0.0, -2.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     moved = next(entry for entry in window.session.project.document.ops if entry.id == step)
@@ -7759,7 +7834,7 @@ def test_an_island_reaches_the_report_with_place_and_actions(qt_app: QApplicatio
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(MESHES / "island_tower.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         _wait_for_print_findings(window)
 
         islands = [
@@ -7783,7 +7858,7 @@ def test_a_stale_result_does_not_add_its_findings(qt_app: QApplication) -> None:
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(MESHES / "island_tower.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         _wait_for_print_findings(window)
         shown = list(window.report._findings)
         stale = object()
@@ -8041,7 +8116,7 @@ def test_the_defect_map_offers_the_repair_and_says_when_there_is_nothing(
     steps = len(window.session.project.document.ops)
 
     button.click()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     ops = window.session.project.document.ops
     assert len(ops) == steps + 1

@@ -39,10 +39,11 @@ from app.ui.ai_disclosure import (
 )
 from app.ui.dialogs import KeyDialog
 from app.ui.main_window import MainWindow
-from app.ui.session import Session
 from app.ui.settings import UiSettings, load_settings, save_settings
 from app.ui.settings_dialog import SettingsDialog
 from tests.scripted_backend import ScriptedBackend
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 
 class ProviderSpy(ScriptedBackend):
@@ -64,11 +65,6 @@ def _no_real_settings_write(monkeypatch: pytest.MonkeyPatch) -> None:
         "app.ui.ai_disclosure.save_settings",
         lambda _settings: Path("settings.json"),
     )
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    return MainWindow(Session(), UiSettings())
 
 
 def _target(backend: str, url: str | None = None) -> AiDisclosureTarget:

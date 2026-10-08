@@ -128,6 +128,22 @@ jobs:
           python tools/check_frozen_start.py --executable (Join-Path $target 'Solidon3D.exe')
           if ($LASTEXITCODE -ne 0) { throw "Der Starttest der installierten Anwendung ist rot; kein Installer zur Signatur." }
 
+      - name: Über die veröffentlichte Version aktualisieren und deinstallieren
+        # RM-055: Der Kunde hat die veröffentlichte Version (website/version.json,
+        # geholt nach Größe und Prüfsumme) und bekommt das neue Setup als Update —
+        # mit den Schaltern, mit denen die Anwendung ihr Update startet. Eigene
+        # Bausteine, Einstellungen, Profile und Filamentlager überstehen Update und
+        # Deinstallation; Programmordner, Eintrag unter Apps, Startmenü und
+        # Dateizuordnung verschwinden (tools/check_windows_update.py).
+        timeout-minutes: 45
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/windows-installer-output" -Filter 'Solidon3D-Setup-*.exe' -File)
+          if ($setup.Count -ne 1) { throw "Nicht genau eine Setup-Datei in der Ausgabe." }
+          python tools/check_windows_update.py --setup $setup[0].FullName --work (Join-Path $env:RUNNER_TEMP 'windows-update')
+          if ($LASTEXITCODE -ne 0) { throw "Update oder Deinstallation des Setups sind rot; kein Installer zur Signatur." }
+
       - name: Installer ausschließlich zur lokalen Setupsignatur übergeben
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

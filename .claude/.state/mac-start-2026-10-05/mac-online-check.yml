@@ -1,0 +1,38 @@
+# Wegwerfzweig: Hält das Developer-ID-Paket 0.5.3 an Apples Online-Prüfungen
+# fest, wenn eine Firewall sie stumm verwirft? (RM-104, mac_online_check.py).
+# Zum Fahren auf den Zweig diag/mac-online-pruefung nach .github/workflows/
+# kopieren und pushen; den Zweig nach der Auswertung löschen.
+name: Mac-Start bei gesperrter Zertifikatsprüfung
+
+on:
+  push:
+    branches: [diag/mac-online-pruefung]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ${{ matrix.arch }} — ${{ matrix.order }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-26-intel, arch: x86_64, order: "gesperrt,offen,adhoc-gesperrt" }
+          - { os: macos-26-intel, arch: x86_64, order: "offen,gesperrt" }
+          - { os: macos-latest, arch: arm64, order: "gesperrt,offen,adhoc-gesperrt" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Messen
+        run: python3 .claude/.state/mac-start-2026-10-05/mac_online_check.py ${{ matrix.arch }} "${{ matrix.order }}"
+      - name: Sichern
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mac-online-${{ matrix.arch }}-${{ strategy.job-index }}
+          path: diag-out/
+          retention-days: 7

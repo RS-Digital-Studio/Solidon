@@ -16,6 +16,7 @@ wirklich ist — und beide Kerne antworten dasselbe.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Sequence
 from itertools import pairwise
@@ -2503,3 +2504,162 @@ def test_every_section_of_a_countersunk_bore_closes_touching_plates_as_one_body(
     codes = [finding.code for finding in result.findings]
     assert codes.count("boolean.parts_united") == 1, codes
     assert not [finding for finding in result.findings if finding.severity == "warning"], codes
+
+
+# --- RM-535: Karte und Operation fragen dieselbe Funktion, und das Material reist, wie es ist --
+
+
+def _corpus_object(name: str) -> SceneObject:
+    """Ein Netz aus dem Korpus mit seinen erkannten Merkmalen."""
+    from app.core.geom.mesh import read_mesh
+    from app.core.perceive.features import detect
+
+    load_operations()
+    mesh = read_mesh((MESHES / name).read_bytes(), ".stl")
+    return SceneObject(id="obj_1", name=name, mesh=mesh, features=detect(mesh))
+
+
+def _moved_by(
+    entry: SceneObject, profile: Profile, chosen: str, travel: tuple[float, float, float]
+) -> SceneObject:
+    centre = [float(value) for value in entry.features[chosen].params["centre"]]
+    result = _raw(
+        "move_feature",
+        entry,
+        profile,
+        at_feature=chosen,
+        x=centre[0] + travel[0],
+        y=centre[1] + travel[1],
+        z=centre[2] + travel[2],
+    )
+    return result.outputs[0]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        # Der Wulst am Fuß: Die Karte bot X/Y/Z an, die Operation sagte ab.
+        "post_with_fillet.stl",
+        # Die Tasche um einen Zapfen: Die Karte sperrte, die Operation rechnete.
+        "pocket_with_pin.stl",
+        # Zapfen und Kuppel, die der ganze Körper sind: Die Karte bot an, die
+        # Operation endete mit „Von dem Körper bleibt nichts übrig“.
+        "dense_cylinder.stl",
+        "shallow_sphere_cap_uv.stl",
+        "cup_on_stem.stl",
+        "pin_with_end_chamfers.stl",
+        "plate_holes.stl",
+        "sphere_socket.stl",
+    ],
+)
+def test_the_card_offers_a_move_exactly_where_the_operation_moves(
+    profile: Profile, name: str
+) -> None:
+    """RM-535: Karte, Operation und Griff fragen ``actions.move_refusal``.
+
+    Über echte Netze, je Merkmal einer versetzbaren Art: Wo die Karte die
+    Zeile *Merkmal verschieben* mit Feldern zeigt, rechnet die Operation; wo
+    sie absagt, sagt die Operation dasselbe.
+    """
+    from app.core.perceive.actions import actions_for, move_refusal
+
+    entry = _corpus_object(name)
+    mesh = as_mesh_data(entry.mesh)
+    checked = 0
+    for chosen, feature in entry.features.items():
+        if feature.kind not in prepare_ops.MOVABLE_KINDS:
+            continue
+        checked += 1
+        refusal = move_refusal(feature, entry.features, mesh)
+        row = next(
+            row
+            for row in actions_for(feature, entry.features, mesh=mesh)
+            if row.op == "move_feature" or (row.op is None and refusal is not None)
+        )
+        assert (row.op == "move_feature") == (refusal is None), (chosen, row)
+        try:
+            _moved_by(entry, profile, chosen, (0.3, 0.2, 0.0))
+        except ValidationError as refused:
+            assert refusal is not None, f"{name} {chosen}: Karte bietet an, Operation sagt ab"
+            assert str(refused.detail) == str(refusal), chosen
+        else:
+            assert refusal is None, f"{name} {chosen}: Karte sperrt, Operation rechnet"
+    assert checked, name
+
+
+def test_a_pin_moved_into_the_wall_of_its_pocket_stays(profile: Profile) -> None:
+    """Zapfen Ø 5,44 in der Tasche Ø 6,12, 0,5 mm in die Wand (RM-535).
+
+    Die Tasche um ihn schnitt den versetzten Zapfen ganz weg: −178 mm³ am
+    Korpus, −189 mm³ am Kundenmodell. Soll: Er steht an der neuen Stelle und
+    verschmilzt nur mit dem Stück Wand, in das er reicht — genau das
+    Linsenstück, das über den Spalt von 0,34 mm hinausragt: die Fläche des
+    versetzten Zapfens außerhalb der Tasche mal seiner Höhe, aus den Maßen
+    des Korpus gerechnet (rund 3,84 mm³). Die Schranke ±5 % trägt die
+    Facetten der 48 Segmente; vorher stand hier ``< 6,0`` ohne Herkunft
+    (Review 1 P3, G-3).
+    """
+    entry = _corpus_object("pocket_with_pin.stl")
+    pin = next(name for name, feature in entry.features.items() if feature.kind == "pin")
+    pocket = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    centre = np.asarray(entry.features[pin].params["centre"], dtype=float)
+    travel = 0.5
+    after = _moved_by(entry, profile, pin, (travel, 0.0, 0.0))
+    lost = float(as_mesh_data(entry.mesh).volume - as_mesh_data(after.mesh).volume)
+    r = float(entry.features[pin].params["diameter"]) / 2.0
+    big = float(entry.features[pocket].params["diameter"]) / 2.0
+    # Schnittfläche zweier Kreise mit Radius r und R im Abstand d.
+    shared = (
+        r * r * math.acos((travel**2 + r * r - big * big) / (2.0 * travel * r))
+        + big * big * math.acos((travel**2 + big * big - r * r) / (2.0 * travel * big))
+        - 0.5
+        * math.sqrt(
+            (-travel + r + big) * (travel + r - big) * (travel - r + big) * (travel + r + big)
+        )
+    )
+    lens = (math.pi * r * r - shared) * float(entry.features[pin].params["depth"])
+    assert lens == pytest.approx(3.84, abs=0.01), "Voraussetzung: die Maße des Korpus"
+    assert lost == pytest.approx(lens, rel=0.05), (lost, lens)
+    probes = [centre + np.array((0.5 + 2.5, 0.0, 0.0)), centre + np.array((0.5 - 2.5, 0.0, -2.0))]
+    assert contains(as_mesh_data(after.mesh), probes).all(), "der Zapfen steht an der neuen Stelle"
+
+
+@pytest.mark.parametrize("travel", [(0.2, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.5, 0.0)])
+def test_a_cup_moved_on_its_stem_keeps_its_volume(
+    profile: Profile, travel: tuple[float, float, float]
+) -> None:
+    """Der Becher auf dem Fuß, als Zapfen erkannt (Minitopf, RM-535).
+
+    Gefüllt aus seinen Flächen und der Innenraum aus Kennzahlen zurück: Der
+    Deckelfalz fehlte, −529,6 mm³ am Korpus (+240,65 mm³ am Minitopf), gleich
+    wie weit. Starr versetzt bleibt das Volumen.
+    """
+    entry = _corpus_object("cup_on_stem.stl")
+    cup = max(
+        (name for name, feature in entry.features.items() if feature.kind == "pin"),
+        key=lambda name: float(entry.features[name].params["diameter"]),
+    )
+    after = _moved_by(entry, profile, cup, travel)
+    assert as_mesh_data(after.mesh).is_watertight
+    assert float(as_mesh_data(after.mesh).volume) == pytest.approx(
+        float(as_mesh_data(entry.mesh).volume), abs=0.05
+    )
+
+
+def test_an_end_chamfer_moves_without_filling_the_bore_it_opens_into(profile: Profile) -> None:
+    """Die Endfase am Stift, in der das Sackloch mündet (RM-535, Kunde +2 218 mm³).
+
+    Ohne das Sackloch unter den Merkmalen — wie in der Kundensitzung, in der
+    die Erkennung es zeitweise anders las (RM-537) — füllte der volle Körper
+    aus den Flächen dessen Mündung: π · 11,9² · 5 = 2 224 mm³.
+    """
+    entry = _corpus_object("pin_with_end_chamfers.stl")
+    lower = min(
+        (name for name, feature in entry.features.items() if feature.kind == "cone"),
+        key=lambda name: float(entry.features[name].params["centre"][2]),
+    )
+    blind = {name: f for name, f in entry.features.items() if f.kind != "hole"}
+    entry = dataclasses.replace(entry, features=blind)
+    after = _moved_by(entry, profile, lower, (0.2, 0.0, 0.0))
+    gained = float(as_mesh_data(after.mesh).volume - as_mesh_data(entry.mesh).volume)
+    assert abs(gained) < 1.0, gained

@@ -442,7 +442,9 @@ ein Loch, und ein Sims darin neben einem gesperrten Kanal verliert Stütze
 Zuschlag einer Bahnbreite kommt vor dem Aussparen; ein Loch, in dem keine Bahn
 samt Abstand Platz hat, schließt sich (ein Krümel von 0,33 mm² im Kanal,
 ausgespart mit Zuschlag: 1,5 m Stütze im OrcaSlicer). Vorgeschlagen wird die
-Sperre nur, wenn sie Raum sperrt.
+Sperre nur, wenn sie Raum sperrt. Gesperrt wird nur, wo eine Bahn samt
+Abstand Platz hat (`channel_space`); Hülle und Scheibenhöhe begründet der
+Abschnitt zu `support.block_channels` weiter oben.
 
 Gemessen am Endstand: Im ElegooSlicer bekommt der Drache keine Sperre mehr und
 ist zu 97,7 % gestützt wie ohne Solidon. Im Cura-Raster und bei 130 % Größe
@@ -662,6 +664,53 @@ In Metern hätte eine 0,8er Düse angeschlagen, die dieselbe Stütze mit einem
 Bruchteil der Bahn legt. Gefragt wird nur, wo `advise.support_need` Stützen
 verlangt — ein Tunnel ohne weiteren Überhang bekommt mit Stützen und Sperre zu
 Recht keine. Ein Profil ohne Brückenstützen bleibt ungeprüft wie die Zeit.
+
+**Was der Slicer aus dem Profil macht (RM-281, Zeitschätzung, 06.10.2026).**
+An der Seitenablage lag die Zeitgegenprobe in ElegooSlicer, OrcaSlicer und
+CuraEngine 18 % unter der Druckdatei. Eine Nachrechnung der Druckdatei je
+Bahnart (Ruck-Planer wie `GCodeProcessor`, −4 bis +2 % zur Druckdatei) und
+rechenbare Körper (Quader, Zylinder, Kegelstumpf, Kegel) in sechs Slicern
+zeigten die Ursachen: Nachbarbahnen liegen `Breite − Höhe · (1 − π/4)`
+auseinander (`Flow::spacing`), jede Rolle hat ihre eigene Bahnbreite, die
+Schalenzahl wächst bis zur Mindestdicke (Kobra 2: 6 statt 3 Bodenschichten),
+`ensure_vertical_shell_thickness` füllt an schrägen Wänden voll, wo einer
+Schalenschicht die Füllfläche fehlt, die dünne Füllung verbindet ihre Enden am
+Rand (Zickzack 40 %, Gitter 33 %, Kreuzschraffur 30 % ihres Umfangs), und
+schmale Vollfüllung läuft als Schleife statt in kurzen Bahnen. Zwischen den
+Schleifen einer Insel zieht der Slicer nicht zurück; ein schräger Hub („Auto
+Lift“) spart dagegen nichts, die Z-Achse bremst die Leerfahrt (0,24 bis 0,26 s
+je Anfahrt). ElegooSlicer und OrcaSlicer fahren die innere Brücke mit 150 %,
+auch wo die Kette sie nicht nennt. Nachher an der Seitenablage: ElegooSlicer
+−12 %, OrcaSlicer −6 %, Bambu Studio −3 %, PrusaSlicer +4 %, Creality Print
++1 %; Messreihe im Bericht
+`F:\solidon-review-reports\claude-2026-10-06\geometrie\rm281-zeit\`.
+
+**Stützmenge aus den Säulen der Zeit.** Orca und Prusa weiten einen
+erkannten Überhang auf den ganzen Überstand über die Schicht darunter
+(`detect_overhangs`: „Offset the support regions back to a full overhang“).
+Solidons Rauminhalt stützte je Schicht nur den Teil jenseits der
+Überhangweite; an gewölbten Flächen blieb davon ein Splitter, an der
+Klingenspitze des Arbeitsplattenreinigers fast nichts (13-mal zu wenig in
+PrusaSlicer). Mit vollem Überstand, Schließen und den Randverbindungen des
+Musters (60 % des Säulenumfangs) liegt die Menge in PrusaSlicer und CuraEngine
+an Pilz, Seitenablage, Wedge-Lock, Reiniger und Schüssel bei 0,94 bis 1,14 der
+Druckdatei.
+Bäume folgen keinem Umfang; dort bleibt die Grenze `SUPPORT_TIME_AGREEMENT`.
+
+**Wo die Zeitgegenprobe schweigt** (Review P2 Rest, Z1): An 46 Läufen sank
+die mittlere Abweichung mit RM-281 von 13,5 auf 10,9 %, aber die neuen
+Vergleiche brachten Fehlalarme über 15 % dort, wo das Zeitmodell den Slicer
+nicht kennt — CuraEngine (Leerfahrt mit Combing; vier der zwölf
+Zeitwarnungen, 13,2 → 15,9 %) und Baumstützen (Waschschüssel in ElegooSlicer
+und Bambu Studio −18,8 und −18,5 %). Der Kunde las „weichen deutlich ab“ mit
+*Druckeinstellungen öffnen*. Bis RM-281 beides baut, sagt
+`time_comparison_blocked` den Grund.
+
+**Die Fassung gehört zur Messung** (Review P2 Rest, Z2): `SLICER_DEVIATION`
+ist die gemessene Abweichung desselben Codes, ein Änderungswächter. Eine
+andere Slicerfassung auf einem der drei Rechner hätte das Tor rot gemacht,
+ohne dass sich Code änderte; deshalb trägt jede Zeile ihre Fassung, und eine
+andere wird übersprungen statt rot.
 
 ## Was die Analyse liefert
 

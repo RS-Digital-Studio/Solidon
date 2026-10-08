@@ -30,7 +30,7 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 | `recognition_time.py` | Zeitspanne der Vollerkennung aus einer Rechenprobe je Prozess — nur Anzeige, keine Uhr in `detect` (§15.1) |
 | `surfaces.py` | Teilträger (`SurfacePatch`): `valid_patch`, `planar_patch`, `clipped_patches`, `reindexed_patches` |
 | `actions.py` | Was der Kunde an einem Merkmal tun kann und was nicht (unten) |
-| `digest.py` | Steckbrief für den Agenten (§23); `_selection_lines` fragt denselben Weg wie das Panel; Schritte heißen nach ihrer sichtbaren Nummer (`_step_numbers`): `created_by=op3` am erzeugten Merkmal, `last_op` am Objekt, dieselbe Nummer vor jedem Aufruf im Verlauf; dahinter „aus“, „ruht“ oder „Ergebnis entfernt“ mit dem Wort des Verlaufsfelds (`scene.history.step_state_word`, träge geladen) |
+| `digest.py` | Steckbrief für den Agenten (Format: §23); `_selection_lines` fragt denselben Weg wie das Panel, Schrittnummern `types.step_numbers`, hinter einem Schritt „aus“, „ruht“ oder „Ergebnis entfernt“ mit dem Wort des Verlaufsfelds (`scene.history.step_state_word`, träge geladen) |
 | `maps.py` | Analysekarten (§18.4, unten) |
 
 `__init__.py` trägt nur den Paketdocstring.
@@ -172,13 +172,20 @@ hält beide Wege zusammen.
 - **Was nicht gilt, steht trotzdem da** (`op=None` mit Satz), und **jedes Feld
   trägt seinen gemessenen Wert** — eine andere Vorgabe wäre eine stille
   Änderung. `ActionField.measurement` ist der Ausgangswert.
+- **Versetzen fragt eine Funktion**: `move_refusal` ist die Zeile *Merkmal
+  verschieben* (`actions_for(only=)`); `move_feature` und der Griff
+  (`FeaturePanel.refuses`) lesen sie. Nur dort sagt `move_blocked` zusätzlich
+  ab (Zapfen oder Kuppel als ganzer Körper, Zapfen desselben Teils in der
+  Bohrung; ein getrenntes Teil dort nennt `OTHER_PART_IN_THE_BORE`), und eine
+  Haltelippe (`only_a_rim_inside`) sperrt nicht. An der Fläche steht in dieser
+  Zeile *Fläche versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`).
 - **Grau mit dem Satz der Operation**: geteilter Hohlraum
   (`_shares_its_cavity`; ohne Netz keine Sperre), kein eigener Körper
   (`no_own_body`), Verengung (`cone_reason`, `not_offered_at`), Bohrung einer
   Kette mit Verengung (`narrowing_reason`), Kegel einer Kette bei *Merkmal
   ändern* (`_countersink_unsized` → `countersink_resize_refusal`), Verrundung
-  ohne zwei Ebenen (`fillet_blocked` — liest die Ebenen frisch aus
-  `detect_faces` wie `edges._around`, nicht die `face`-Einträge des Baums).
+  ohne zwei Ebenen (`fillet_blocked` — liest die Ebenen aus `planar_mask`
+  wie `edges._around`, nicht die `face`-Einträge des Baums).
 - `bore_action` bietet die ursprünglichen Schrittwerte an und ändert über
   `step` den vorhandenen Schritt; eine Transformation wird nicht
   zurückgerechnet. Eine ermittelte Kette geht als `cavity` an `actions_for()`

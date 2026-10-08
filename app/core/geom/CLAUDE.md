@@ -74,9 +74,8 @@ Dreiecksfolge/Koordinaten bleiben beim Kern. Regel/Messfall:
   `body_split` ist das eine Urteil über einen zerfallenden Körper.
 - **Wer mit `trimesh` an einer Ebene teilt und danach verschweißt**
   (`section._apply`, `faces._draft_tools`), legt vorher auf die Ebene, was
-  trimesh zu ihr zählt (`section.settled_on_plane`): Ecke und Schnittkopie
-  stünden sonst bis 1e-8 mm auseinander, und das Verschweißen über gerundete
-  Koordinaten verfehlte sie — der Körper bliebe offen.
+  trimesh zu ihr zählt (`section.settled_on_plane`), sonst bliebe der Körper
+  offen.
 - `kernel_jobs.slice_sections` liefert direkte Schichtschnitte als Ringfelder
   über `kernel_process.run`; Aufbau und Schnitt sind gemeinsam abbrechbar.
 - Eine Änderung am gemeinsamen Kern entwertet den Ergebnis-Cache
@@ -106,8 +105,8 @@ neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
 der Aufrufer)
 
-**Hilfsprozess** — `kernel_jobs.py`: GIL-Aufrufe (`manifold3d`, `csgraph`)
-mit reinen Feldern; `JOBS` Einstieg, `serve` Helfer, `pack`/`copied` geteilter
+**Hilfsprozess** — `kernel_jobs.py`: GIL-Aufrufe (`manifold3d`, `csgraph`,
+die Voxelstufe `voxel`) mit reinen Feldern; `JOBS` Einstieg, `serve` Helfer, `pack`/`copied` geteilter
 Speicher. `_opened`: nur ENOMEM und Windows 8/14/1450/1455 werden
 `MemoryError`; ENOSPC bleibt Transfer-`OSError` und pausiert den Helfer.
 `kernel_process.py`: bitgleiches `run`, Vorrat, Abbruch/Tod/Rückfall,
@@ -148,7 +147,8 @@ Ersatzweg prüft Geometrie, nie Metadaten)
 Flankenumriss) · `hollow.py` (Aushöhlen mit Entlüftungen) · `lid.py`
 (`screw_lid`, `exact_opening`, `collar_hits_wall`; `_short_side` ohne
 GEOS-Rechteckecken, macOS/arm64) · `lid_hinge.py` (Deckelscharnier: Achse,
-Kragenraum, Augen; *Stift für Bohrung*) · `container_ops.py` (Behälter, Deckel,
+Kragenraum, Augen; *Stift für Bohrung*) · `bore_pin.py` (Kopf und
+Gewinde des passenden Stifts) · `container_ops.py` (Behälter, Deckel,
 Einsätze; Entwurf in `core/lid_flow.py`) · `counter_form_ops.py` (Taschen aus
 dem Schatten der Teile)
 
@@ -233,8 +233,8 @@ Rundung, Radius aus `measured_radius`)
   Träger ab; Nachbarn bleiben getrennt, Stifte werden nur im bisherigen
   Bohrungshohlraum gekürzt. Verbindender Versatz/Verkleinerung verlangt vorher
   Zerlegung. `hole_has_separate_contents` gibt ausschließlich diesen Zug frei:
-  eigener Träger innen frei, Kontaktprüfung am ganzen Träger. Angeschlossene
-  Naben/Speichen bleiben gesperrt, auch neben anderen Körpern (RM-320).
+  eigener Träger innen frei, Kontaktprüfung am Träger und seinen Nachbarn
+  (`_near_the_carrier`). Angeschlossene Naben/Speichen bleiben gesperrt (RM-320).
   Menü und Ausführung teilen den abbrechbaren Beleg; nur fertige Belege werden
   gemerkt. `repair.material_part_families` ordnet negative Innenhäute positiven
   Materialkörpern zu; negative Wurzel, gleiche Eltern-/Kindvorzeichen oder
@@ -266,18 +266,18 @@ erzeugt, wird vor den Verbindern abgesagt (`check_cut_contact`): Schnittfläche
 und Modellwand treffen sich längs einer Linie. `CutContactError` zeigt zum
 Verschieben auf das Lagefeld. `split_at_plane` prüft beide Hälften, `cut_away`
 nur die behaltene. War der Eingang schon offen, bleibt seine eigene
-Reparaturdiagnose bestehen. Auto Split lässt Kontaktkandidaten bei Konturzahl
-und Vorauswahl aus und nennt den Grund, falls keine verwendbare Lage bleibt.
+Reparaturdiagnose bestehen. Auto Split lässt Kontaktkandidaten aus und nennt
+den Grund, falls keine verwendbare Lage bleibt.
 Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 
 **Reparatur** (`repair.py`):
 
 - `repair()` übernimmt eine Bereinigung nur, wenn offene plus verzweigte
-  Kanten nicht zunehmen (`_tears_it_further`). Verschweißt wird überall mit
-  `weld`: Suppe zuerst auf `EPS_GEOM` (`_read_soup`), dann nur an Rändern
-  (`_joined_at_the_rims`), je Flächenblatt (`_sheets`, `_pseudo_angle`), nie
-  zum Schlechteren (`_damage`). `remove_small_components` misst Fläche,
-  `remove_hollow_shells` Volumen.
+  Kanten nicht zunehmen (`_tears_it_further`). `weld` verschweißt die Suppe
+  auf `EPS_GEOM` (`_read_soup`), dann an Rändern (`_joined_at_the_rims`), je
+  Flächenblatt (`_sheets`, `_pseudo_angle`), nie schlechter (`_damage`).
+  Entfernt wird nach Fläche (`remove_small_components`), Volumen
+  (`remove_hollow_shells`), auf Wunsch Einschluss (`remove_inner_shells`).
 - Gefüllt wird als Band (`_band_between`, `_wall_between_rims`), Fläche mit
   Löchern (`_bridged_holes`), glatteste Triangulierung (`_smoothest_fill`),
   über Ohren (`_loop_triangles`), zuletzt als Fächer — **nie eine Fläche auf
@@ -290,12 +290,12 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   Vereinigung. Die Lochfüllung des Imports schaltet diese Diagnose nicht zu.
 - Außen gilt je Verschachtelungsbaum (`turn_shells_outward`), Vorzeichen nur
   aus `mesh.signed_volume`/`_shell_volumes`. `_Shells.inside` verlangt ganzes
-  Umschließen; Schalen im Material werden gemeldet. `has_nested_parts` und
-  `parts_inside_parts` teilen die Materialtiefe, unklare Strahlen ergeben
-  `None`. `material_part_families` verlangt auch an negativen Häuten eindeutig
-  alternierende Elternketten mit positiver Wurzel; positive Hohlrauminseln
-  bleiben eigene Familien. Aufrufer belegen Dichtheit/Kontaktfreiheit;
-  `None` gibt nichts frei. `material_part_count` zählt erst nach Vorbeleg.
+  Umschließen; Schalen im Material werden gemeldet. `parts_inside_parts`
+  zählt nur belegte Materialtiefe. `material_part_families` verlangt auch an
+  negativen Häuten eindeutig alternierende Elternketten mit positiver Wurzel;
+  positive Hohlrauminseln bleiben eigene Familien. Aufrufer belegen
+  Dichtheit/Kontaktfreiheit; `None` gibt nichts frei. `material_part_count`
+  zählt erst nach Vorbeleg.
   Beide optionalen Abbruchtoken reichen durch `_Shells` bis Gitterzertifikat
   und Kreuzungssuche; die Standardschnittstellen bleiben erhalten.
 

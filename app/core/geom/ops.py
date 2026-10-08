@@ -972,11 +972,28 @@ class RepairParams(BaseParams):
         placement="advanced",
         doc=_("Richtet aus, wo außen ist. Ohne das erscheinen Flächen dunkel oder verschwinden."),
     )
+    #: **Vorgabe aus** — ein modelliertes Teil darf einen Hohlraum tragen. An
+    #: hat es die Reparaturkette eines erzeugten Modells (Weg 3,
+    #: ``generate.GENERATED_REPAIR``): Dort ist eine Hülle im Inneren die
+    #: zweite Seite eines Abstandsfelds und keine Absicht. Ältere Schritte
+    #: ohne den Wert rechnen wie bisher.
+    inner_shells: bool = param(
+        title=_("Hüllen im Inneren entfernen"),
+        default=False,
+        placement="advanced",
+        depends_on=("normals", (True,)),
+        doc=_(
+            "Entfernt Hohlräume und Teile, die ganz in einem anderen liegen. "
+            "Für erzeugte Modelle, bei denen innen nichts gewollt ist."
+        ),
+    )
 
 
 @register_op(
     name="repair",
-    cache_version="3",
+    # 4: Hüllen im Inneren auf Wunsch entfernen (RM-003).
+    # 5: zwei Stücke, die sich an einer Kante berühren, bekommen je ihre Kante (RM-550).
+    cache_version="5",
     title=_("Reparieren"),
     category="repair",
     params=RepairParams,
@@ -1011,6 +1028,7 @@ def repair_object(ctx: OpContext) -> OpResult:
         small_components=params.small_components,
         self_intersections=params.self_intersections,
         inspect_intersections=True,
+        inner_shells=params.inner_shells,
         cancelled=ctx.cancelled,
         progress=ctx.progress,
     )

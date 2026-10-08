@@ -1589,6 +1589,7 @@ def test_a_cancelled_recognition_offers_to_load_without_it():
                 recognition_interrupted=lambda value=interrupted: value, picture=None
             ),
             skip_recognition=Mock(),
+            _click_after_evaluation=None,
         )
         MainWindow._on_evaluation_cancelled(window)
         if interrupted:
@@ -1602,6 +1603,7 @@ def test_a_cancelled_recognition_offers_to_load_without_it():
         announce=Mock(),
         session=SimpleNamespace(recognition_interrupted=lambda: False, picture=object()),
         skip_recognition=Mock(),
+        _click_after_evaluation=None,
     )
     MainWindow._on_evaluation_cancelled(window)
     window.announce.assert_called_once_with(

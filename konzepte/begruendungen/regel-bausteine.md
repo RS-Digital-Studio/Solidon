@@ -106,6 +106,13 @@ eines Kegels zeigt den Mittelwert; die erste Messung tat das und meldete
 Warum jedes Längenmaß beide Grenzen trägt: „der Überhangfächer lief so bis
 zum 22.09.2026 nie mit breiten oder langen Stufen."
 
+Warum ein Feld ohne Wirkung keine Ecken zählt: Mit dem eigenen Maß hätte das
+Schraubenloch 1536 Ecken gehabt, 400 davon verschieden — der Nenndurchmesser
+verdoppelte jede Tabellengröße, für die er gar nicht gilt. Der volle Nachweis
+des Gewindes brauchte so 2870 s, weil jede der acht Größen die Ecken Ø 1000 ×
+200 mm wiederholte (je rund 34 s, 190 000 Dreiecke); über `MAX_CORNERS` hätte
+keine Größenreihe bis M64 gepasst (06.10.2026, RM-532).
+
 ## Ein Gewindepaar wird als Paar geprüft
 
 > Bis zum 22.09.2026 begann der Netzgang genau am unteren Ende, und an der
@@ -113,6 +120,27 @@ zum 22.09.2026 nie mit breiten oder langen Stufen."
 > 0,2 mm Spiel 2,3 mm³ Überdeckung, während beide Teile jeden Einzeltest
 > bestanden. Der exakte Zwilling hatte den Vorlauf von einem Umlauf schon;
 > `build.threaded` baut ihn seitdem auch am Netz.
+
+Warum ein Gewinde nicht an der Tabelle endet: Bis zum 06.10.2026 kannte der
+Baustein nur M2 bis M8, *Schraube erstellen* reichte bis Ø 100 und der
+Drehdeckel bis Ø 400 — drei Grenzen für dieselbe Frage. Ein Kunde fand für das
+Innengewinde in seinem Rohr mit 60 mm keinen Weg (Vorgang
+S-20261006-c66299); Robert: „keine Beschränkungen". Mit dem größeren Maß kam
+die Sehnenzahl: Feste achtundvierzig je Umlauf wichen bei Ø 500 um 0,53 mm
+von der Rundung ab, mehr als das Spiel eines Paars.
+
+Warum der Netzkern in der Sehnenmitte überdeckt: Mit der Tabelle bis M64
+überdeckten sich gedruckte Schraube und Mutter ab M12, gleich an welcher
+Stelle (M20 0,27 mm³, M42 10 mm³). Die Splitter lagen in der Sehnenmitte am
+Kammradius der Mutter, und sie begannen bei 0,011 mm Sehnentiefe — genau der
+Überdeckung von Kern und Gang. Doppelte Sehnen oder ein Kern, der auch in der
+Sehnenmitte überdeckt, ließen sie verschwinden; gewählt ist der Kern, weil er
+keine Dreiecke kostet und bis M8 nichts ändert.
+
+Warum eine Schraube nicht an der Tabelle endet: Robert, 06.10.2026: „die
+Gewinde usw sollten alle Größen unterstützen" und „nicht mehr begrenzen".
+Die Tabelle trägt die ISO-Reihe M1.6 bis M64; dazwischen und darüber ist
+ein Maß abgeleitet und sagt es, statt eine Normgröße vorzutäuschen.
 
 ## Was eine Richtung hat, wird an ihr gemessen
 
@@ -162,3 +190,14 @@ Vermutung, und eine Passung darauf geht still ins Leere." Warum die Tabelle
 der Paare gegen die Bibliothek geprüft wird: „die erste Fassung der Tabelle
 war geraten, und `printed_screw` kennt kein `diameter`, sondern `size` und
 `play`."
+
+## Herkunft der Normteiltabelle
+
+Die Werte von M1,6 bis M64 stammen von Händler- und Nachschlageseiten
+(PreciFast, Aspen Fasteners, fasten.it, schraube-mutter.de, wermac,
+mechcodex, engineeringhardware, Wikipedia), nicht von Herstellerblättern —
+für große Größen zeigt kaum ein Hersteller seine Maßtabelle frei. Der Zweck
+der Regel aus §24.2 ist, keine Normtabelle abzuschreiben; Zahlen sind frei.
+Deshalb zählen solche Seiten, wenn eine Stichprobe sie gegen eine zweite
+Quelle hält; die zweite Durchsicht von RM-532 hat das für jede Spalte getan
+und eine Abweichung gefunden (M1.6 Kernloch 1,3 statt 1,25 nach DIN 336).

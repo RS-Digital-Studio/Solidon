@@ -279,7 +279,7 @@ def test_visible_report_flow_cleans_up_and_ignores_late_results(qt_app, monkeypa
     workers = []
     try:
         window.open_path(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         qt_app.processEvents()
         source = next(iter(session.last_result.scene.objects))
         window.object_tree.select_object(source)
@@ -458,7 +458,7 @@ def test_visible_report_path_uses_the_same_checked_body_and_one_undo(
     window = MainWindow(session, UiSettings())
     try:
         window.open_path(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         qt_app.processEvents()
         source = next(iter(session.last_result.scene.objects))
         window.object_tree.select_object(source)
@@ -495,7 +495,7 @@ def test_visible_report_path_uses_the_same_checked_body_and_one_undo(
             dialog.accept()
         else:
             dialog.reject()
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         qt_app.processEvents()
         if not take:
             assert document_to_data(session.project.document) == before
@@ -510,12 +510,12 @@ def test_visible_report_path_uses_the_same_checked_body_and_one_undo(
         )
         assert disk.complete and application.result.id in disk.scene.objects
         session.undo()
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         undone = document_to_data(session.project.document)
         for key in before.keys() - {"numbering", "parts_version"}:
             assert undone[key] == before[key], key
         session.redo()
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         assert application.result.id in session.last_result.scene.objects
     finally:
         session._dirty = False

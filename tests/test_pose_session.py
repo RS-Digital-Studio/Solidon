@@ -15,21 +15,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from PySide6.QtWidgets import QApplication
 
 from app.core.geom.pose import armature_from_text
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
-from app.ui.settings import UiSettings
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 from tests.ui_helpers import with_a_body
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    return MainWindow(Session(), UiSettings())
 
 
 def bone(
@@ -311,7 +306,7 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
 
     session = Session()
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     session.add_parameter(Parameter(name="neigung", value=10.0, unit="°"))
     session.apply(
@@ -327,7 +322,7 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
             )
         ],
     )
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     result = session.last_result
     assert result is not None
@@ -335,7 +330,7 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
 
     # Derselbe Stapel, ein anderer Parameterwert: Der Koerper muss folgen.
     session.change_parameter("neigung", 45.0)
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     result = session.last_result
     assert result is not None
@@ -507,7 +502,7 @@ def test_reopening_the_editor_brings_the_bones_back(window: MainWindow) -> None:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     window.start_armature(koerper)
     assert window.session.wait_for_idle()
@@ -559,7 +554,7 @@ def test_an_unreadable_armature_does_not_block_the_editor(window: MainWindow) ->
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     window.start_armature(koerper)
 

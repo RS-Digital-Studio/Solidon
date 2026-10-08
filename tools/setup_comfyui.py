@@ -12,7 +12,7 @@ paketiert wird. Diese Kommandozeile bleibt für den Entwicklungsbaum und tut
 unverändert dasselbe:
 
     python tools/setup_comfyui.py
-    python tools/setup_comfyui.py --comfyui "D:/ComfyUI" --skip-weights
+    python tools/setup_comfyui.py --comfyui "D:/ComfyUI" --image-model
 
 Was sie **nicht** tut: ComfyUI installieren. Das ist ein fremdes Programm mit
 eigenem Installationsweg.
@@ -41,7 +41,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--comfyui", help="Pfad zur ComfyUI-Installation")
     parser.add_argument(
-        "--skip-weights", action="store_true", help="Die 7,5 GB Gewichte nicht laden"
+        "--skip-weights", action="store_true", help="Das Modell für den Weg aus Bild nicht laden"
+    )
+    parser.add_argument(
+        "--image-model", action="store_true", help="Auch das Bildmodell für den Weg aus Text laden"
     )
     args = parser.parse_args()
 
@@ -49,20 +52,20 @@ def main() -> int:
         result = comfy_setup.setup(
             args.comfyui,
             weights=not args.skip_weights,
+            image_model=args.image_model,
             progress=lambda step: print(f"  {step} ..."),
         )
     except comfy_setup.SetupFailed as problem:
         print(f"\nAbgebrochen: {problem}", file=sys.stderr)
         return 1
 
-    print(f"\nComfyUI: {result.comfyui}\nKnoten:  {result.nodes}")
-    if not result.weights:
-        print("Gewichte: nicht geladen")
-    print(
-        "\nFertig. ComfyUI neu starten, dann in Solidon: Datei → Modell erzeugen.\n"
-        "Für den Weg über Text wird zusätzlich ein SDXL-Modell unter "
-        "models/checkpoints gebraucht."
-    )
+    print(f"\nComfyUI: {result.comfyui}")
+    print("Weg aus Bild:", "bereit" if result.weights else "Modell fehlt")
+    print("Weg aus Text:", "bereit" if result.image_model else "Bildmodell fehlt (--image-model)")
+    if not result.done:
+        print(result.reason)
+        return 1
+    print("\nFertig. In Solidon: Datei → Modell erzeugen.")
     return 0
 
 

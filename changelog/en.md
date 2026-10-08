@@ -15,6 +15,62 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.5.4
+
+### Operation and system
+
+- Solidon now starts on Intel Macs with macOS 26. Version 0.5.3 hung there at startup.
+- On the Mac, *Cancel* stops a running answer from the local model at once.
+- On the Mac, Return opens the selected entry on the start screen, in *Search functions* and in the report.
+- On Linux, input through Fcitx5 and IBus now reaches the text field in the Flatpak and the AppImage too.
+- Uninstalling on Windows removes all of Solidon's file association entries.
+- Del also works while the *Selection* tab has focus, and it removes several marked bodies in one step. When the key does nothing, the status bar gives the reason.
+- Right-clicking bodies offers *Remove object* and, for several, *Unite*. *Hollow out* is also available on a selected face, which becomes the opening.
+- The left and right panels can be moved by their handle, docked to an edge or left floating. *View → Panels back to their place* puts them back.
+- While Solidon recalculates, the report says *Recalculating …* and shows the previous lines as the earlier state. Until now, old errors looked as if they still applied.
+- If the quick calculation fails at a step, Solidon calculates it thoroughly in the same run instead of stopping.
+- A finding that says a step had no effect opens that step at the matching field.
+- Once you remove a body, the report no longer talks about it, and the history shows which steps leave nothing behind.
+- A selected hole no longer falls back silently to its body after recalculation. Until now, Del could then remove the whole body.
+- Every function has the same name everywhere. The *Split* tool offers *Split at a plane*, *Split along a drawn line* and *Split into separate parts*.
+- On the selected body, *Split automatically …* now sits under *Prepare*.
+- In the resting window only *Parts* is highlighted in colour. Red is kept for buttons that discard or delete, and confirmations open with the focus on *Cancel*.
+- In sketch mode the *Selection* tab is hidden. The list of constraints shows those of the selected points and lines, plus any conflict.
+- In the parameter card, a dimension shows “Not used” only where that is true. The button says how many fixed numbers can be bound to dimensions.
+- The error report attaches a crash log only when Solidon actually crashed.
+
+### Printing and slicer handover
+
+- On Linux, Solidon now also creates the print file with Cura as a Flatpak or AppImage.
+- The print dialog offers the printers of the selected slicer, like *First steps* and *Settings*. A printer taken over this way stays with its slicer.
+- The estimated print time is closer to the slicer's, much closer for parts with supports.
+- Whether supports and skirt fit on the bed is now measured only under the overhangs. Parts near the edge no longer get a needless warning.
+
+### Threads, holes and standard parts
+
+- Threads now come in any diameter up to 1000 mm, whether with *Printable thread*, in a hole, with *Create screw* or *Create screw lid*.
+- Screws, nuts and washers are available to ISO from M1.6 to M64. For other sizes, *Custom size* derives the dimensions from the neighbouring sizes and says so.
+- With *To fit the hole*, *Pin for hole* builds the counterpart: a flush countersunk head for a countersink, an external thread of the same size and pitch for an internal thread.
+- On a printed internal thread, the selection offers *Pin for hole* directly.
+- If a separate part such as a pin sits in a hole, the actions on the hole say so and offer *Split into separate parts*. Until now the pin was silently merged with the plate.
+
+### Editing and sketching
+
+- With *Move feature*, the feature's material travels along as it is and the old spot is filled cleanly. Where that is not possible, the selection says so straight away.
+- On beads and grooves, the selection offers only what the operation can actually do.
+- If a fillet sits next to a wall, *Apply draft angle* says before calculating that it is in the way and names *Remove feature* as the way out.
+- When you cut away part of a body, chamfers, threads and nut pockets of parts that lay inside it go too.
+- In *Create lid* and *Create screw lid*, an empty field for the opening height means “Top edge”, and 0 is the height of the bed. Older projects keep their opening.
+- An angle constraint in a small sketch no longer flips the lines over.
+
+### Generating with AI
+
+- The generate dialog works locally with TRELLIS.2 and FLUX.2 [klein] instead of TripoSG and SDXL. Text first becomes an image, and the image becomes the model.
+- Before downloading, the setup names the licences and sizes of the models. It removes Solidon's old TripoSG setup and says beforehand which folders those are and how large.
+- Thin walls, for example on a vase, arrive closed and with thickness.
+- The assistant replies in the language you write in.
+- With a local model the assistant has as much room as with a hosted one and handles tasks of up to twelve steps.
+
 ## 0.5.3
 
 ### Operation and system

@@ -118,7 +118,7 @@ def quick_survey(monkeypatch: pytest.MonkeyPatch) -> None:
 def window(qt_app: QApplication) -> MainWindow:
     made = MainWindow(Session(), UiSettings())
     made.open_path(MESHES / "plate_holes.stl")
-    made.session.wait_for_idle()
+    assert made.session.wait_for_idle(60_000)
     return made
 
 
@@ -262,7 +262,7 @@ def test_a_proposal_waits_for_a_decision(window: MainWindow) -> None:
 
     window.chat.input.setPlainText("Schieb die Platte 5 mm")
     window.chat._send()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     qt_app_process(window)
 
     assert window._proposal is not None
@@ -291,7 +291,7 @@ def test_accepting_makes_it_one_transaction(window: MainWindow) -> None:
     window.chat._send()
     qt_app_process(window)
     window.chat.accepted.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     document = window.session.project.document
     assert len(document.transactions) == transactions_before + 1
@@ -331,7 +331,7 @@ def test_a_reversible_proposal_is_applied_without_asking(window: MainWindow) -> 
         if len(window.session.project.document.transactions) > transactions_before:
             break
         time.sleep(0.01)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     document = window.session.project.document
     assert len(document.transactions) == transactions_before + 1
@@ -342,7 +342,7 @@ def test_a_reversible_proposal_is_applied_without_asking(window: MainWindow) -> 
     assert "Übernommen" in window.chat.summary.text()
 
     window.chat.undoRequested.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert len(window.session.project.document.transactions) == transactions_before
 
 
@@ -431,7 +431,7 @@ def test_a_released_window_with_a_waiting_proposal_lets_go(
     session = Session()
     window = MainWindow(session, UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
-    assert session.wait_for_idle(30_000)
+    assert session.wait_for_idle(60_000)
     waiting = Proposal(request="x")
     waiting.stopped = "refused"
     window._on_proposal(ProposalPreview(proposal=waiting))
@@ -644,6 +644,74 @@ def test_converting_proposal_waits_for_current_render_and_applies_once(
         assert session.last_result.scene.objects[target].kind == "brep"
 
 
+def test_a_click_waiting_for_the_evaluation_never_takes_the_next_proposal(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Klick auf Vorschlag 1 während einer Auswertung übernimmt nie Vorschlag 2.
+
+    Der Chat-Knopf ist ein dauerhafter Eigentümer. Gemerkt war nur er, und
+    ``_on_proposal_accepted`` übernahm nach der Auswertung, was *dann* anstand
+    (Review der Zusatzfixes, F1; Regel 16). Jetzt verwirft der neue Vorschlag
+    den Klick, und die Statuszeile sagt es.
+    """
+    _needs_the_exact_kernel()
+    import threading
+
+    from app.core.agent.proposal import Proposal
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Parameter
+    from app.i18n import tr
+
+    session = window.session
+    target = "obj_2"
+    assert session.apply(
+        "Exakter Körper", [OperationDraft(op="create_brep_box", params={}, outputs=(target,))]
+    )
+    assert session.wait_for_idle(30_000)
+
+    def converting(width: float) -> ProposalPreview:
+        proposal = Proposal(request="Als Dreiecksmodell bearbeiten")
+        proposal.parameters["test_width"] = Parameter(name="test_width", value=width, unit="mm")
+        proposal.drafts.append(OperationDraft(op="brep_to_mesh", inputs=(target,), params={}))
+        scene, difference = session._preview_of(proposal)
+        assert difference is not None
+        proposal.findings.extend(difference.findings)
+        return ProposalPreview(proposal=proposal, scene=scene, difference=difference)
+
+    first, second = converting(12.0), converting(20.0)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    window._on_proposal(first)
+    assert session.wait_for_idle(30_000)
+    before = len(session.project.document.ops)
+
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    try:
+        session.evaluate_async()
+        assert session.busy, "die Lage: die Sitzung rechnet"
+        window.chat.accept_button.click()
+        window._on_proposal(second)
+        gate.set()
+        assert session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        assert session.wait_for_idle(30_000)
+    finally:
+        gate.set()
+
+    assert len(session.project.document.ops) == before, "weder Vorschlag 1 noch 2 geschrieben"
+    assert "test_width" not in session.project.document.parameters
+    assert window._proposal is second, "Vorschlag 2 steht zur Entscheidung"
+    assert window.status_message.text() == tr(
+        "Nicht übernommen, weil ein neuer Vorschlag da ist. Prüfen Sie ihn, bevor Sie übernehmen."
+    )
+
+
 @pytest.mark.parametrize("finish", ["discard", "new_project"])
 def test_converting_proposal_invalidates_document_change_and_discard(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, finish: str
@@ -726,7 +794,7 @@ def test_an_answer_only_turn_needs_no_decision(window: MainWindow) -> None:
         if len(document.chat) >= 2:
             break
         time.sleep(0.01)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert len(document.chat) == 2
     assert document.chat[-1].transaction_id is None
@@ -1046,6 +1114,66 @@ def test_the_key_dialog_remembers_the_model_without_a_key(
 
     assert llm.configured_ollama_model() == "qwen3:14b"
     llm.remember_ollama_model("")
+
+
+class _LockedKeychain:
+    """Ein Schlüsselbund, der da ist, aber nichts annimmt — gesperrt."""
+
+    def get_password(self, service: str, account: str) -> str | None:
+        return None
+
+    def set_password(self, service: str, account: str, key: str) -> None:
+        raise RuntimeError("Keyring is locked")
+
+
+@pytest.mark.parametrize("keychain", ["locked", "missing"])
+def test_a_key_the_keychain_refuses_stays_in_the_field_with_the_real_reason(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
+    keychain: str,
+) -> None:
+    """Speichern, das nicht geht, nennt den Grund und den Weg — und behält den Schlüssel.
+
+    Bis dahin stand bei jedem Fehlschlag „Auf diesem Rechner gibt es keinen
+    Schlüsselbund", auch über einem gesperrten; die Umgebungsvariable hatte
+    keinen Namen, und der Dialog verwarf den eingetippten Schlüssel (Regel 17,
+    Review der Zusatzfixes).
+    """
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.core.backends import keys
+    from app.ui import dialogs
+    from app.ui.dialogs import KeyDialog
+
+    if keychain == "locked":
+        monkeypatch.setattr(keys, "_keyring", _LockedKeychain)
+        said = "Der Schlüsselbund ist gesperrt oder nicht erreichbar."
+    else:
+        monkeypatch.setattr(keys, "_keyring", lambda: None)
+        monkeypatch.setattr(keys, "_keyring_installed", lambda: False)
+        said = "Auf diesem Rechner gibt es keinen Schlüsselbund."
+    boxes: list[object] = []
+    monkeypatch.setattr(
+        dialogs.QMessageBox, "information", lambda *args, **kwargs: boxes.append(args)
+    )
+    dialog = KeyDialog()
+    closed: list[int] = []
+    dialog.finished.connect(closed.append)
+    typed = "sk-ant-" + "x" * 40
+    dialog.field.setText(typed)
+    save = dialog.buttons.button(QDialogButtonBox.StandardButton.Save)
+    assert save is not None
+    save.click()
+
+    assert closed == [], "der Dialog bleibt offen"
+    assert dialog.field.text() == typed, "der eingetippte Schlüssel bleibt im Feld"
+    # Sichtbar steht davor das Warnzeichen der Rolle; der vorgelesene Name ist der Satz.
+    status = dialog.key_status.accessibleName()
+    assert status.startswith(said), status
+    assert said in dialog.key_status.text()
+    assert keys.ENVIRONMENT_VARIABLE in status, "der Weg über die Umgebung trägt ihren Namen"
+    assert boxes == [], "die Meldung steht im Dialog, kein zweites Fenster"
 
 
 def test_the_probe_says_what_a_useless_model_means(

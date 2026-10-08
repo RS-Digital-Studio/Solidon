@@ -87,7 +87,7 @@ from shiboken6 import isValid
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
-from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
+from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import Deferred as RemoteDeferred
 from app.core.agent.session import (
     MAX_STEPS,
@@ -109,13 +109,13 @@ from app.core.agent.tools import (
     READ_STANDARD,
     SET_PARAMETER,
     SET_PRINT_TARGET,
-    STANDARD_KINDS,
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
     CANCEL,
+    CHANGE_THREAD_STEP,
     CHOOSE,
     DECIMATE_AND_RETRY,
     REMESH_AND_RETRY,
@@ -167,6 +167,7 @@ from app.core.knowledge.parts.ops import creation_name, direction_of, part_of
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
+from app.core.perceive.actions import GROUP_OPS
 from app.core.perceive.digest import digest
 from app.core.perceive.maps import wall_thickness_map
 from app.core.registry import (
@@ -387,7 +388,7 @@ from app.ui.render.api import PointerEvent
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
-from app.ui.session import AskRequest, Session, TriangleCounts
+from app.ui.session import SHORT_CHAIN_PREVIEW, AskRequest, Session, TriangleCounts
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog, searchable_options
 from app.ui.shortcut_schemes import (
@@ -617,10 +618,6 @@ MAP_CACHE_KEPT: Final = 8
 #: er trägt die Passung ein, die die Operation allein nicht eintragen darf
 #: (§14, §15.1).
 LID_OPS: Final = frozenset({"create_lid", "screw_lid"})
-
-#: Operationen, die eine funktionale Gruppe als Ganzes ändern — und nur an
-#: einem Merkmal einer passenden Gruppe etwas rechnen (RM-184).
-GROUP_OPS: Final = frozenset({"resize_chamber", "resize_closure"})
 
 #: Ab welchem Kosinus der Ring des Griffs um die eigene Achse eines Bausteins
 #: dreht — ein Grad. Es ist kein Erkennungsmaß wie ``PARALLEL_FACE_COSINE``
@@ -998,6 +995,11 @@ class _FeatureAnswersWorker(Worker):
     (``placement_flow.for_a_worker``, ``on_the_copy``): Die trägen trimesh-
     Merker sind nicht threadsicher, und dieselbe Kopie nimmt danach der
     Platzierungsfluss — was hier warm wird, bleibt es dort.
+
+    Der Abbruch gilt, solange gerechnet wird. Eine fertige Antwort geht auch
+    hinaus, wenn ein neuer Klick den Arbeiter inzwischen abgelöst hat: Sie ist
+    vollständig, und der Klick zurück auf ihr Merkmal braucht sie
+    (``MainWindow._answers_arrived``).
     """
 
     done = Signal(object)
@@ -1016,7 +1018,6 @@ class _FeatureAnswersWorker(Worker):
         try:
             self.cancelled.raise_if_cancelled()
             answers = self._compute()
-            self.cancelled.raise_if_cancelled()
         except OperationCancelled:
             return
         self.done.emit(answers)
@@ -2465,6 +2466,11 @@ class _PreviewApproval:
     questioned: bool = False
     """Die Vorschau hielt an einer Rückfrage: Ein Bild gibt es erst nach der
     Antwort, und *Übernehmen* stellt sie (RM-389)."""
+    passed_on: bool = False
+    """Die schnelle Rechnung kam nicht durch: Ein Bild gibt es ohne die volle
+    Kette nicht, und die rechnet *Übernehmen* (RM-534, §17.2). Wie bei
+    :attr:`questioned` kehrt die Bildpflicht für diesen Auftrag nicht zurück —
+    sonst wartete der Klick auf ein Bild, das nie kommt."""
     computing: bool = False
     """Die angeforderte Vorschau rechnet noch — bis ihre Antwort da ist."""
     reviewing: bool = False
@@ -2473,6 +2479,54 @@ class _PreviewApproval:
     """Die Vorschau rechnet, was die Auswertung nach dem Übernehmen rechnete
     (``Session.preview_is_the_evaluation``): Ein Klick wartet auf sie, auch
     wo kein Bild Pflicht ist (RM-493)."""
+
+
+@dataclass(slots=True)
+class _WaitingClick:
+    """Ein Übernehmen-Klick, der auf das Ende einer Auswertung wartet, und der
+    Stand, den der Kunde beim Klicken sah (:meth:`MainWindow._click_after`).
+
+    **Felder statt Identität:** Während der Auswertung legt jedes
+    ``sceneChanged`` eine neue Freigabe an. Verglichen wird deshalb, was den
+    Schritt ausmacht — Eigentümer, Auftrag, Dokument und dessen Platz im
+    Verlauf —, nicht, ob es noch dieselbe Freigabe ist.
+
+    **Der Verlauf über** ``History.document_mark``, **nicht über den ganzen
+    Dokumentinhalt:** Das Ende der Auswertung schreibt Rückfallstufen,
+    Antworten und Zuordnungen in den Stapel (``Session._on_finished``). Das
+    ist kein anderer Stand, und ein Vergleich darüber ließe jeden Klick an
+    seiner eigenen Auswertung verfallen. Neuer Schritt, Strg+Z und Strg+Y
+    ändern die Marke.
+
+    **Die Auswahl steckt im Auftrag:** Wo sie bestimmt, was geschrieben wird
+    (Merkmalfenster, Schnellfilament, Formsitzung), steht das Ziel in den
+    Entwürfen. Eine Auswahl, die das Ende der Auswertung selbst setzt — der
+    Baum stellt seine Zeilen wieder her, ein neu erzeugter Körper wird
+    gewählt —, ändert nichts am Geschriebenen und darf den Klick nicht
+    schlucken.
+    """
+
+    owner: weakref.ref[Any]
+    """Schwach: Ein geschlossener Dialog lebt nicht bis zum Leerlauf weiter."""
+    click: Callable[[], object]
+    order: _PreviewOrder
+    document: Any
+    mark: tuple[int, Any]
+    inserting: Any
+    lost: bool = False
+    """Beim Ausführen verfallen — weitere Fragen desselben Klicks gehen nicht durch."""
+    carried: bool = False
+    """Der Rückruf übernimmt genau ``order`` und läuft auch ohne Freigabe
+    (:meth:`MainWindow._carry_click`). Für Eigentümer, die das Ende der
+    Auswertung neu aufbaut — Merkmalfenster, Maßgruppe, Filamentwahl —: Ihre
+    Felder zeigen danach den Schritt und nicht mehr, was der Kunde sah."""
+    source: weakref.ref[Any] | None = None
+    """Der Träger, dessen Werte der Klick trägt, wenn er nicht der Eigentümer
+    ist (die Maßgruppe des Merkmalfensters): Seine Wertänderung verwirft den
+    Klick wie die des Eigentümers."""
+    result: Any = None
+    """Das Ergebnis, das beim Klick zu sehen war. Was danach neu gebunden
+    wird, kommt vom Neuaufbau am Ende der Auswertung und nicht vom Kunden."""
 
 
 def _candidate_token(entry: tuple[str, str] | EdgeTarget) -> str:
@@ -2750,6 +2804,9 @@ class MainWindow(QMainWindow):
         self._export_waiting: tuple[Path, ExportFormat, Any] | None = None
         """Ein Export, der auf das nächste aktuelle Ergebnis wartet — Ziel,
         Format und das Projekt, für das er gemeint war (RM-352)."""
+        self._history_shown: tuple[int, int, str | None] | None = None
+        """Der Verlaufsstand beim letzten Bild (:meth:`_history_mark`) — ob eine
+        verlorene Merkmalswahl Folge einer Handlung des Kunden ist."""
         self._halted = False
         """Ob die stehende Meldung von einer angehaltenen Kette stammt.
 
@@ -3011,6 +3068,21 @@ class MainWindow(QMainWindow):
         """Ob die Statuszeile gerade die zwei Flächen einer Fase nennt
         (:meth:`_follow_chamfer_sides`) — nur dann gibt es sie wegzunehmen."""
         self._preview_approval: _PreviewApproval | None = None
+        self._click_after_evaluation: _WaitingClick | None = None
+        """Ein Übernehmen-Klick, der auf das Ende einer Auswertung wartet
+        (:meth:`_click_after`, :meth:`_run_click_after_evaluation`)."""
+        self._click_replay: _WaitingClick | None = None
+        """Der gemerkte Klick, solange er gerade läuft — dann prüft
+        :meth:`_preview_can_apply` ihn gegen den heutigen Stand."""
+        self._dropped_click_said = ""
+        """Der Satz zu einem Klick, den eine Dokumentänderung verworfen hat
+        (:meth:`_check_waiting_click`)."""
+        self._click_refusal: tuple[str, Any, tuple[int, Any]] | None = None
+        """Der zuletzt gesagte Satz über einen nicht übernommenen Klick, mit
+        Dokument und Verlaufsmarke von damals (:meth:`_say_click_refusal`)."""
+        self._result_stand: tuple[Any, Any, tuple[int, Any], Any] | None = None
+        """Das letzte gültige Ergebnis mit Dokument und Verlaufsmarke, aus denen
+        es gerechnet ist (:meth:`_result_belongs_to_the_document`)."""
         self._preview_revision = 0
         self._preview_block_reason: str | None = None
         self._preview_prefix: tuple[int, int, int, Any] | None = None
@@ -3129,6 +3201,8 @@ class MainWindow(QMainWindow):
         left_layout.addStretch(1)
 
         self.viewport = Viewport(self)
+        # Der Griff fragt die Karte, ob *Merkmal verschieben* hier gilt (RM-535).
+        self.viewport.move_refused = partial(self.feature_panel.refuses, "move_feature")
         self.viewport.differenceApplied.connect(self._preview_rendered)
         self.viewport.differenceFailed.connect(self._preview_render_failed)
         self.viewport.sceneApplied.connect(self._preview_base_ready)
@@ -3526,6 +3600,10 @@ class MainWindow(QMainWindow):
         """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
         läuft."""
         self._sculpt_check = QTimer(self)
+        """Die Wandstärkenprüfung läuft **nach** der Geste, nicht in ihr
+        (Entscheidung L). Bei jedem Zug zu rechnen hieße, den Pinsel um eine
+        Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
+        nächsten Zug wieder ändert."""
         self._usage = UsageClock(self)
         """Die Uhr des Feedbackbogens (§37.2).
 
@@ -3561,10 +3639,6 @@ class MainWindow(QMainWindow):
         """Die Nummer der jüngsten Wandprüfung. Eine Antwort mit einer
         anderen gehört zu einem Stand, den es nicht mehr gibt — ein Zug
         danach, ein Rückgängig oder das Ende der Sitzung."""
-        """Die Wandstärkenprüfung läuft **nach** der Geste, nicht in ihr
-        (Entscheidung L). Bei jedem Zug zu rechnen hieße, den Pinsel um eine
-        Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
-        nächsten Zug wieder ändert."""
         self._sculpt_strokes: list[Stroke] = []
         self._sculpt_gesture: int | None = None
         self._sculpt_gesture_number = 0
@@ -3758,6 +3832,9 @@ class MainWindow(QMainWindow):
         self.quick_filament.spoolChosen.connect(self._assign_inventory_spool)
         self.quick_filament.clearRequested.connect(self._clear_selected_filament)
         self.quick_filament.inventoryRequested.connect(self.action_inventory)
+        # *Abbrechen* ist eine Entscheidung; ein Auswahlwechsel oder das Ende
+        # der Auswertung räumt die Zuweisung nur ab (:meth:`_drop_click_of`).
+        self.quick_filament.cancel_button.clicked.connect(self._quick_filament_cancelled)
         # Zugeklappt unter der Liste, die Kopfzeile nennt die Zuweisung (RM-510).
         self.quick_filament.described.connect(self.selection_operations.describe_print)
         self.selection_operations.add_print_widget(self.quick_filament)
@@ -4299,6 +4376,19 @@ class MainWindow(QMainWindow):
             self.status_message.setText(self._announcement)
             return
         status = self._progress_states[status_owner]
+        if status_owner == "evaluation" and self._click_after_evaluation is not None:
+            # **Die Zusage steht vor dem Lauftext, vom Klick an** (§2.8). Als
+            # Hinweis lag sie nur in ``_hint``, und den zeigt die Zeile allein
+            # neben Erzeugung und Agent: Der Klick sah weiter verschluckt aus.
+            running = status.text if (status.immediate or self._waiting) else ""
+            self.status_message.setText(
+                "  ·  ".join(
+                    part
+                    for part in (tr("Wird übernommen, sobald die Berechnung fertig ist."), running)
+                    if part
+                )
+            )
+            return
         if status_owner in _WORKED_ALONGSIDE:
             spoken = self._hint or (self._announcement if self._spoken.isActive() else "")
             if spoken:
@@ -8892,6 +8982,11 @@ class MainWindow(QMainWindow):
                 if window is None:
                     return
                 picker = window.quick_filament
+                # Während einer Auswertung: Ihr Ende verwirft die vorbereitete
+                # Zuweisung (``set_context``), der Klick trägt sie deshalb
+                # selbst hinüber (:meth:`_carry_click`).
+                if window._carry_click(picker, order, accept):
+                    return
                 # Vor dem Bild geklickt: Die Zuweisung läuft, sobald die
                 # Vorschau steht (:meth:`_apply_when_previewed`).
                 if not window._preview_can_apply(picker, order, then=accept):
@@ -8916,6 +9011,7 @@ class MainWindow(QMainWindow):
 
             owner.stage_preview(accept, cancel)
             owner.preview_check = current_preview
+            owner.preview_defer = accept
             approval = self._set_preview_order(owner, order)
             self._request_order_preview(approval)
             return
@@ -10907,9 +11003,11 @@ class MainWindow(QMainWindow):
         ``None`` heißt: Die Lage trägt kein Gegenstück. Zwei Stellen an
         demselben Körper sind keine Verbindung, sondern ein Loch neben einem
         Zapfen; der Kern weist das ohnehin ab, und hier ist es eine Auskunft
-        vor dem Klick statt einer Absage danach.
+        vor dem Klick statt einer Absage danach. Gezählt werden markierte
+        **Stellen** (``ObjectTree.selected_places``): Ein Gewinde mit seinen
+        Flanken unter sich ist eine.
         """
-        chosen = self.object_tree.selected_features()
+        chosen = self.object_tree.selected_places()
         if len(chosen) != 2:
             return None
         first, second = chosen
@@ -11654,7 +11752,10 @@ class MainWindow(QMainWindow):
         gemerkte Posten samt Zeitgeber, Rechnung und Bild
         (:meth:`_drop_feature_preview`), und die Felder zeigen wieder, was der
         Schritt trägt — derselbe Aufbau wie beim Anklicken des Merkmals.
+        Ein Übernehmen, das auf die Auswertung wartet, fällt mit
+        (:meth:`_drop_click_of`).
         """
+        self._drop_click_of(self.feature_panel)
         if self._leave_the_measures():
             self._on_feature_selected(self.object_tree.selected_feature())
             return
@@ -11676,8 +11777,10 @@ class MainWindow(QMainWindow):
         ein vorgeschlagenes Versetzen), und nichts ist mehr gewählt. Escape tut
         seit dem 25.09.2026 dasselbe (Robert: „wie abbrechen zurücknehmen und
         abwählen"; :meth:`_escape`, ``PlacementFlow.step_back``). Gerufen nach
-        ``finished``: Die Maßgruppe ist dann schon abgeräumt.
+        ``finished``: Die Maßgruppe ist dann schon abgeräumt. Ein Übernehmen,
+        das auf die Auswertung wartet, fällt mit (:meth:`_drop_click_of`).
         """
+        self._drop_click_of(self.feature_panel)
         self._leave_the_measures()
         self.object_tree.select_object(None)
 
@@ -11697,6 +11800,7 @@ class MainWindow(QMainWindow):
         running = self._quiet_placement is not None and self._quiet_placement.active
         if not (waiting or running):
             return False
+        self._drop_click_of(self.feature_panel)
         if self.viewport.slot_drag_waits():
             self.viewport.cancel_slot_drag()
         self.viewport.drop_move_proposal()
@@ -13503,6 +13607,7 @@ class MainWindow(QMainWindow):
             )
             self.undo_action.setEnabled(True)
             self._sculpt_finish_pending = False
+            self._drop_sculpt_click()
             bar.cut.setChecked(False)
             self._sculpt_wall_number += 1
             self._sculpt_check.stop()
@@ -13572,6 +13677,21 @@ class MainWindow(QMainWindow):
                 self._show_sculpt_preview(mesh)
                 self._gesture_analysis_changed()
 
+    def _drop_sculpt_click(self) -> None:
+        """Ein neuer, zurückgenommener oder gespiegelter Zug entwertet einen
+        *Fertig*- oder *Angleichen*-Klick, der auf die Auswertung wartet.
+
+        Ohne das nähme der Klick den Zug mit, der nach ihm kam: Am großen Netz
+        rechnet die Zugvorschau im Arbeiter, und *Fertig* wartet dann auf sie
+        (``_sculpt_finish_pending``), ohne den Auftrag noch einmal zu vergleichen.
+        """
+        waiting = self._click_after_evaluation
+        if waiting is None:
+            return
+        owner = waiting.owner()
+        if owner is self.sculpt_bar.done or owner is self.sculpt_bar.refine:
+            self._drop_waiting_click(self._not_applied("values"))
+
     def _show_sculpt_preview(self, mesh: MeshData) -> None:
         """Was der Zug bewirkt, sofort — und was er kostet, daneben.
 
@@ -13583,6 +13703,7 @@ class MainWindow(QMainWindow):
         ändert sich dabei nicht — er ändert sich bei „Fertig", in einer
         Transaktion.
         """
+        self._drop_sculpt_click()
         strokes = self._sculpt_strokes
         self.sculpt_bar.show_count(stroke_count(strokes), len(stages(strokes)))
         self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
@@ -15253,25 +15374,33 @@ class MainWindow(QMainWindow):
         return True
 
     def _on_face_dragged(self, feature_id: str, distance: float) -> None:
-        """Ein Zug am Flächengriff wird eine Operation (§18.11, Regel 2).
+        """Ein Zug am Flächengriff schlägt einen Weg vor — die Zeile rechts nimmt ihn.
 
-        Der Viewport hat das Signal seit dem Gizmo an der Fläche gesendet, und
-        niemand hörte zu: der Griff ließ sich ziehen, das Modell blieb, wie es
-        war. Ein Signal ohne Empfänger fällt in keinem Review auf und in keinem
-        Test, der nur den Sender prüft.
+        **Wie der Zug an der Bohrung** (RM-535, Robert 06.10.2026: „alles
+        einheitlich, Bohrung Vorbild für alle Funktionen“): Der Weg geht in das
+        Feld *Weg* von *Fläche versetzen*, die Vorschau zeigt ihn, und erst
+        *Übernehmen* legt den Schritt an (Regel 2). Bis dahin war der Zug
+        selbst der Schritt; am Kundenmodell standen drei *Fläche versetzen* mit
+        Wegen wie minus 22,11372262396192 mm im Verlauf, ohne dass je eine Zahl zu
+        sehen war.
 
-        Ein Zug, eine Transaktion — dieselbe Zusage wie beim Verschieben des
-        ganzen Körpers, nur dass hier die Fläche wandert und die Nachbarwände
-        mitwachsen.
+        Steht die Zeile nicht im Fenster — eine Fläche aus einem Baustein, ein
+        Fenster ohne Merkmal —, bleibt es beim Schritt aus dem Zug: Ein Zug
+        ohne Ort, an dem er landet, ginge sonst verloren.
 
-        **Gesendet wird die Fläche und nicht mehr ihre Normale** (10.09.2026).
-        Der Schritt trug ``nx/ny/nz``, und die Operation bewegte damit jede
+        **Gesendet wird die Fläche und nicht ihre Normale** (10.09.2026). Der
+        Schritt trug ``nx/ny/nz``, und die Operation bewegte damit jede
         Fläche, die dorthin zeigt: An einer Treppe wanderten beide Stufen
         zugleich, 24000,0 mm³ statt 21000,0, während der Kunde eine einzelne
-        angefasst hatte. Der Viewport wusste die ganze Zeit, welche es ist.
+        angefasst hatte.
         """
         selected = self.object_tree.selected()
         if selected is None:
+            return
+        if self.object_tree.selected_feature() == feature_id and self.feature_panel.take_values(
+            "push_face", {"distance": float(distance)}
+        ):
+            self.feature_panel.preview_armed()
             return
         self.session.apply(
             REGISTRY.get("push_face").title,
@@ -17107,6 +17236,12 @@ class MainWindow(QMainWindow):
         Übernommen-Leiste mit dem Weg zurück — ein Klick, derselbe Effekt
         wie vorher zwei.
         """
+        waiting = self._click_after_evaluation
+        if waiting is not None and waiting.owner() is self.chat.accept_button:
+            # Der Klick galt dem Vorschlag davor. Nimmt der neue keinen
+            # Vorschauweg (kein exakter Körper), käme er an keinem Vergleich
+            # vorbei und übernähme den neuen.
+            self._drop_waiting_click(self._not_applied("proposal"))
         if self._proposal is not None:
             self._clear_proposal()
         if preview.proposal.findings:
@@ -17291,6 +17426,10 @@ class MainWindow(QMainWindow):
         self._clear_proposal()
 
     def _clear_proposal(self) -> None:
+        waiting = self._click_after_evaluation
+        if waiting is not None and waiting.owner() is self.chat.accept_button:
+            # Verworfen oder ersetzt: Dem Klick fehlt sein Vorschlag.
+            self._drop_waiting_click()
         self._proposal = None
         changed = getattr(self, "_proposal_changed", None)
         if changed is not None:
@@ -18105,6 +18244,9 @@ class MainWindow(QMainWindow):
             alone=result is not None and len(result.scene.objects) == 1,
             protected=feature_id in self.session.protected_features(entry.id),
         )
+        # Erst jetzt steht fest, ob die Karte das Versetzen anbietet — der Griff
+        # fragt sie (RM-535) und war womöglich schon vorher gebaut.
+        self.viewport.refresh_gizmo()
         if textures:
             self.feature_panel.offer_texture_steps(
                 textures, self._parameter_values(), document=self.session.project.document
@@ -18401,6 +18543,81 @@ class MainWindow(QMainWindow):
             if chain is not None and any(link.id == other.id for link in chain):
                 return True
         return False
+
+    def _history_mark(self) -> tuple[int, int, str | None]:
+        """Woran sich eine Handlung des Kunden seit dem letzten Bild erkennen lässt.
+
+        Die Projektgeneration der Sitzung (eine andere Datei) und der
+        Dokumentstand des Verlaufs (``History.document_mark``: ein Schritt,
+        ein Undo, ein Redo) — eine zweite Auswertung desselben Stands ändert
+        nichts davon.
+        """
+        count, last = self.session.history.document_mark()
+        return (
+            self.session.project_generation,
+            count,
+            str(last) if last is not None else None,
+        )
+
+    def _say_features_lost(self, result: EvaluationResult) -> None:
+        """Eine Merkmalswahl, die der neue Stand nicht mehr trägt, ist aufgehoben (RM-537).
+
+        Sie fiel still auf den Körper zurück, und Entf entfernte danach den
+        ganzen Körper statt der Bohrung, die der Kunde gewählt hatte. Der Baum
+        hebt die Wahl auf (``ObjectTree.lost_selection``); gesagt wird es hier,
+        **nach** den Wiederwahlen des Fensters, und nur, wo der Verlust nicht
+        die Folge der eigenen Handlung ist:
+
+        * Hat eine Wiederwahl gegriffen (das Langloch, das eben aus der
+          gewählten Bohrung wurde, ein Baustein, ein neuer Körper), ist nichts
+          verloren.
+        * Hat der Kunde seit dem letzten Bild etwas getan — einen Schritt, ein
+          Undo, ein Redo —, steht dort die Quittung dieser Handlung mit ihrem
+          Rückweg (Regel 19), und die bleibt stehen.
+        * Fehlt der Körper selbst, ist kein Merkmal verloren gegangen.
+
+        Gesagt wird damit der Fall der Abnahme: Das Bild vor der Erkennung
+        trug ein Merkmal, die Erkennung danach nicht. Als Quittung, damit es
+        die Laufanzeige überlebt.
+
+        **Ein überholtes Ergebnis zählt nicht** (``result_current`` falsch,
+        und es ist nicht das Bild vor der Erkennung): Ein Lauf, der genau beim
+        Abbruch fertig wird, kommt noch an. Verbrauchte er die Marke, gälte das
+        aktuelle Ergebnis danach als „ohne eigene Handlung“, und die Ansage
+        überschriebe doch die Quittung.
+        """
+        if not self.session.result_current and result is not self.session.picture:
+            return
+        mark = self._history_mark()
+        acted = mark != self._history_shown
+        self._history_shown = mark
+        names = [
+            name
+            for body, _feature, name in self.object_tree.lost_selection
+            if body in result.scene.objects
+        ]
+        if (
+            not names
+            or acted
+            or self.object_tree.selected() is not None
+            or self.object_tree.selected_features()
+        ):
+            return
+        if len(names) == 1:
+            self.announce(
+                tr(
+                    "„{feature}“ gibt es nach der Neuberechnung nicht mehr, die Auswahl ist "
+                    "aufgehoben.",
+                    feature=names[0],
+                )
+            )
+        else:
+            self.announce(
+                tr(
+                    "{count} gewählte Merkmale gibt es nach der Neuberechnung nicht mehr.",
+                    count=len(names),
+                )
+            )
 
     def _on_features_selected(self, chosen: list[Any]) -> None:
         """Der letzte Empfänger einer Auswahlrunde — danach steht fest, ob gemessen wird."""
@@ -18719,6 +18936,26 @@ class MainWindow(QMainWindow):
         if entered is None:
             return True
         order = self._prepare_feature_order(*entered)
+        # Ein wartender Langlochzug wird nicht getragen: Ihn übernimmt die
+        # Ansicht (:meth:`_apply_placed_feature`), nicht dieser Auftrag.
+        if (
+            defer
+            and order is not None
+            and not self.slot_drag_takes_the_accept(*entered)
+            and self._carry_click(
+                self.feature_panel,
+                order,
+                weak_slot(
+                    self,
+                    MainWindow._apply_carried_feature_order,
+                    order,
+                    dict(entered[1]),
+                    self._quiet_host is not None,
+                ),
+                source=self._quiet_host,
+            )
+        ):
+            return False
         return order is not None and self._preview_can_apply(
             self._quiet_host or self.feature_panel,
             order,
@@ -19193,7 +19430,12 @@ class MainWindow(QMainWindow):
         self._reselect_the_part(result)
         if not wanted or near is None or self.object_tree.selected_feature() is not None:
             return
-        object_id = self.object_tree.selected()
+        # Der Baum hebt eine verlorene Merkmalswahl auf, statt still den
+        # Körper zu wählen (RM-537); welcher Körper es war, hält er fest.
+        object_id = self.object_tree.selected() or next(
+            (body for body, feature, _name in self.object_tree.lost_selection if feature == wanted),
+            None,
+        )
         if object_id is None:
             return
         entry = result.scene.objects.get(object_id)
@@ -19212,6 +19454,59 @@ class MainWindow(QMainWindow):
                     self._measures_to_resume = name
                 self.object_tree.select_feature(object_id, name)
                 return
+
+    def _reselect_the_successor(self, result: EvaluationResult) -> None:
+        """Ein Merkmal, das der jüngste Schritt ersetzt hat, geht auf seinen Nachfolger über.
+
+        *Textur aufbringen* macht aus der gewählten Fläche ein Muster; die
+        Fläche gibt es danach nicht mehr, und der Baum hebt die Wahl auf
+        (RM-537). Verloren ist sie aber nicht, sondern umgezogen — wie das
+        Langloch aus der gewählten Bohrung (:meth:`_reselect_the_renamed`).
+        Ohne diese Wiederwahl stand nach dem Schritt nichts mehr gewählt, und
+        ein Klick auf das Muster fand keinen Körper, an dem er gilt.
+
+        Gewählt wird das erste Merkmal, das ein Schritt der jüngsten
+        Transaktion an diesem Körper selbst erzeugt hat (``generated``, nicht
+        die Flächen, die die Erkennung danach neu zuordnet) — nur, wenn dieser Schritt
+        das verlorene Merkmal in seinen Werten nennt. Nach einem Undo nennt
+        der jüngste Schritt es nicht, und die Wahl bleibt aufgehoben.
+        """
+        tree = self.object_tree
+        if not tree.lost_selection or tree.selected() is not None or tree.selected_features():
+            return
+        transactions = self.session.history.transactions
+        if not transactions:
+            return
+        newest = set(transactions[-1].ops)
+        steps = [entry for entry in self.session.project.document.ops if entry.id in newest]
+
+        def names(value: Any, feature: str) -> bool:
+            if isinstance(value, str):
+                return value == feature
+            if isinstance(value, list | tuple):
+                return any(names(item, feature) for item in value)
+            return False
+
+        for body, lost, _name in tree.lost_selection:
+            entry = result.scene.objects.get(body)
+            if entry is None:
+                continue
+            for step in steps:
+                if not any(names(value, lost) for value in step.params.values()):
+                    continue
+                successor = next(
+                    (
+                        name
+                        for name, feature in entry.features.items()
+                        if getattr(feature, "created_by", None) == step.id
+                        and feature.provenance == "generated"
+                    ),
+                    None,
+                )
+                if successor is not None:
+                    tree.select_object(body)
+                    tree.select_feature(body, successor)
+                    return
 
     def _reselect_the_part(self, result: EvaluationResult) -> None:
         """Ein Baustein, dessen Maße sich geändert haben, bleibt gewählt.
@@ -19485,7 +19780,9 @@ class MainWindow(QMainWindow):
                 if (editor := reference()) is not None and isValid(editor)
             }
 
-        def prepare(name: str, values: Mapping[str, Any]) -> _PreviewOrder | None:
+        def prepare(
+            name: str, values: Mapping[str, Any], *, during_evaluation: bool = False
+        ) -> _PreviewOrder | None:
             window = window_ref()
             host = host_ref()
             if (
@@ -19495,7 +19792,7 @@ class MainWindow(QMainWindow):
                 or name != op
                 or window.session.project.document is not document
                 or window.session.last_result is not result
-                or not window.session.result_current
+                or not (window.session.result_current or during_evaluation)
             ):
                 return None
             if step is not None:
@@ -19545,6 +19842,26 @@ class MainWindow(QMainWindow):
             if host is None:
                 return False
             order = prepare(op, host.values())
+            if defer and window is not None and order is None:
+                # Während einer Auswertung gilt das Ergebnis der Maßgruppe
+                # nicht als aktuell, sie rechnet aber denselben Stand nach
+                # (``PlacementFlow._accept_values``). Der Klick trägt seinen
+                # Auftrag über ihr Ende hinaus (:meth:`_carry_click`).
+                held = prepare(op, host.values(), during_evaluation=True)
+                if held is not None and not window.slot_drag_takes_the_accept(op, host.values()):
+                    window._carry_click(
+                        window.feature_panel,
+                        held,
+                        weak_slot(
+                            window,
+                            MainWindow._apply_carried_feature_order,
+                            held,
+                            dict(host.values()),
+                            True,
+                        ),
+                        source=host,
+                    )
+                return False
             return (
                 window is not None
                 and order is not None
@@ -19572,6 +19889,13 @@ class MainWindow(QMainWindow):
             if host is None:
                 return
             order = prepare(op, host.values())
+            if window is not None and order is None and window._click_after_evaluation is not None:
+                # Während einer Auswertung bindet die Maßgruppe nichts; ein
+                # Wert nach dem Klick verwirft ihn trotzdem — er galt dem
+                # Stand davor (:meth:`_carry_click`).
+                held = prepare(op, host.values(), during_evaluation=True)
+                if held is not None:
+                    window._check_waiting_order(host, held)
             if window is None or order is None:
                 return
             if op == "slot_hole" and host.begun:
@@ -20632,21 +20956,16 @@ class MainWindow(QMainWindow):
             wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
             return digest(result.scene, self.session.project.document, only=wanted or None)
         if name == READ_STANDARD:
-            kind = str(values.get("kind", ""))
-            if kind not in STANDARD_KINDS:
-                return tr("Diese Tabelle gibt es nicht: {kinds}").format(
-                    kinds=", ".join(STANDARD_KINDS)
-                )
-            return standard_text(kind, str(values.get("size", "")).strip())
+            # Eine unbekannte Tabelle beantwortet ``standard_text`` mit demselben
+            # Satz wie im Chat (Review RM-285).
+            return standard_text(str(values.get("kind", "")), str(values.get("size", "")).strip())
         if name == READ_ANALYSIS:
             result = self.session.last_result
             if result is None:
                 return tr("Es ist nichts geöffnet.")
             kind = str(values.get("kind", ""))
             if kind not in ANALYSIS_KINDS:
-                return tr("Diese Analyse gibt es nicht: {kinds}").format(
-                    kinds=", ".join(ANALYSIS_KINDS)
-                )
+                return unknown_analysis(kind)
             # **Gerechnet wird im Faden des Fernaufrufs, nicht hier** (RM-144).
             # Dieser Weg läuft im Qt-Hauptthread, und die Orientierungssuche
             # kostet Sekunden — gemessen 5,3 s an der kleinen Referenzplatte;
@@ -20820,7 +21139,10 @@ class MainWindow(QMainWindow):
             if beyond is not None:
                 return str(beyond)
             return tr("Der Wert wurde nicht gesetzt — den Grund zeigt das Fenster.")
-        return tr("Parameter gesetzt: {name} = {value}", name=name, value=number)
+        # Derselbe Satz wie im Chat, mit Einheit (Review RM-285).
+        return tr("Parameter gesetzt: {name} = {value} {unit}").format(
+            name=name, value=f"{number:g}", unit=existing.unit
+        )
 
     def _draw_sketch_in_space(
         self, op_id: int, op_name: str, dialog: QDialog, text: str, *, field_name: str = ""
@@ -21401,6 +21723,7 @@ class MainWindow(QMainWindow):
                 getattr(owner, "requires_displayed_preview", False)
                 and previous.required is False
                 and not previous.questioned
+                and not previous.passed_on
             ):
                 previous.required = True
                 self._refresh_preview_block()
@@ -21439,7 +21762,19 @@ class MainWindow(QMainWindow):
         self._preview_block_reason = None
         self._preview_reason = ""
         self._refresh_preview_block()
+        self._check_waiting_order(owner, approval.order)
         return approval
+
+    def _check_waiting_order(self, owner: Any, order: _PreviewOrder) -> None:
+        """Ein neuer Wert, eine neue Spule, ein neuer Vorschlag desselben
+        Eigentümers: Der wartende Klick galt dem alten Auftrag und fällt mit Satz."""
+        waiting = self._click_after_evaluation
+        if (
+            waiting is not None
+            and order != waiting.order
+            and self._binds_for_the_waiting_click(owner, waiting)
+        ):
+            self._drop_waiting_click(self._not_applied("values"))
 
     def _offer_feature_cancel(self) -> None:
         """*Abbrechen* im Merkmalfenster steht, solange dort eine Änderung wartet.
@@ -21504,7 +21839,24 @@ class MainWindow(QMainWindow):
         wartenden Klick kennt (``preview_defer``).
         """
         approval = self._set_preview_order(owner, order)
+        replay = self._click_replay
+        if replay is not None:
+            # Der gemerkte Klick läuft (:meth:`_run_click_after_evaluation`)
+            # und gilt nur dem Stand, den der Kunde beim Klicken sah. Gefragt
+            # wird hier, wo der Eigentümer seinen Auftrag aus dem heutigen
+            # Stand gebaut hat — Formsitzung, Chat und Merkmalfenster bauen ihn
+            # erst beim Klick, nicht beim Merken.
+            if replay.lost:
+                return False
+            reason = self._click_lost(replay, approval)
+            if reason is not None:
+                replay.lost = True
+                if reason:
+                    self._say_click_refusal(reason)
+                return False
         if not self._preview_is_current(approval):
+            if then is not None and replay is None and self._evaluation_stands_between():
+                self._click_after(approval, then)
             return False
         # **Die Druckfolgenprüfung hält nur einen Klick, der auf ein Bild
         # wartet.** Ohne Bildpflicht entscheidet allein RM-493 unten: Warten
@@ -21679,6 +22031,17 @@ class MainWindow(QMainWindow):
         def explained(reason: str) -> None:
             """Eine fachliche Absage kann ein nachgereichtes leeres Bild nicht aufheben."""
             told.append(reason)
+            if reason == str(SHORT_CHAIN_PREVIEW):
+                # **Die schnelle Rechnung kam nicht durch — das ist keine
+                # Absage** (RM-534, §17.2): Ein Bild gibt es ohne die volle
+                # Kette nicht, und die rechnet *Übernehmen*. Das Band sagt es;
+                # gewartet wird auf kein Bild, gesperrt wird nichts — auch
+                # nicht beim nächsten ``_set_preview_order`` desselben Auftrags.
+                approval.passed_on = True
+                approval.required = False
+                self._preview_explained(reason)
+                self._refresh_preview_block()
+                return
             if approval.required is not False:
                 approval.problem = reason
             self._preview_explained(reason)
@@ -21693,7 +22056,7 @@ class MainWindow(QMainWindow):
             approval.reviewing = False
             self._finish_preview_progress()
             if difference is None:
-                if not approval.questioned:
+                if not approval.questioned and not approval.passed_on:
                     failed(None)
                 else:
                     self._show_preview(None)
@@ -21895,6 +22258,17 @@ class MainWindow(QMainWindow):
         self._preview_block_reason = None
         self._finish_preview_progress()
         self._offer_feature_cancel()
+        waiting = self._click_after_evaluation
+        if waiting is not None and self._owner_closed(waiting.owner()):
+            # Ein geschlossener Dialog übernimmt nichts mehr, und er lebt nicht
+            # über diesen Klick bis zum Leerlauf weiter. **Nur dann:** Das Ende
+            # der Auswertung räumt die Vorschau eines offenen Dialogs selbst ab
+            # (der Baum meldet seine wiederhergestellte Auswahl,
+            # ``_drop_feature_preview``), und der Dialog bindet denselben
+            # Auftrag gleich neu — ein Verfall hier schluckte genau den Klick,
+            # für den das Warten gebaut ist. Ob der Stand noch gilt, prüft
+            # :meth:`_run_click_after_evaluation`.
+            self._drop_waiting_click()
         if approval is not None:
             block = getattr(approval.owner, "block_apply", None)
             if block is not None:
@@ -22201,6 +22575,9 @@ class MainWindow(QMainWindow):
         schreiben ihn samt Vorbereitung als **eine** Transaktion und schließen
         den Dialog; Strg+Z nimmt beides zurück (Regel 16). Ohne die Zahl aus
         der Absage gibt es keinen Knopf: raten wäre keiner (Regel 21).
+        *Gewindeschritt öffnen* schließt den Dialog und öffnet den Schritt, den
+        der Kern in ``values["creating_step"]`` nennt — beim Stift sieht der
+        Kunde die Absage hier zuerst (Review P2 N6).
         """
         owner = approval.owner
         order = approval.order
@@ -22225,7 +22602,24 @@ class MainWindow(QMainWindow):
             handlers[REMESH_AND_RETRY.id] = lambda _error: self._prepared_from_dialog(
                 approval, "remesh_mesh", {"edge": remesh_to}, REMESH_AND_RETRY.label
             )
+        if CHANGE_THREAD_STEP.id in wanted and error.values.get("creating_step") is not None:
+            handlers[CHANGE_THREAD_STEP.id] = lambda refusal: self._creating_step_from_dialog(
+                approval, refusal
+            )
         return handlers
+
+    def _creating_step_from_dialog(self, approval: _PreviewApproval, error: AppError) -> None:
+        """*Gewindeschritt öffnen* aus dem Dialog: ihn schließen, den früheren Schritt öffnen.
+
+        Derselbe Weg wie im Prüfbericht (:meth:`_change_creating_step`); der
+        Dialog geht vorher zu, ohne zu übernehmen.
+        """
+        if not self._preview_is_current(approval):
+            return
+        reject = getattr(approval.owner, "reject", None)
+        if reject is not None:
+            reject()
+        self._change_creating_step(error)
 
     def _prepared_from_dialog(
         self,
@@ -23182,6 +23576,13 @@ class MainWindow(QMainWindow):
         Ergebnis gewinnt, keines geht verloren, und keine Liste wird zweimal
         gleichzeitig angefasst.
         """
+        if self.session.result_current and result is self.session.last_result:
+            self._result_stand = (
+                result,
+                self.session.project.document,
+                self.session.history.document_mark(),
+                self.session.inserting,
+            )
         if self._showing_scene:
             self._pending_scene = result
             return
@@ -23461,6 +23862,7 @@ class MainWindow(QMainWindow):
         # ``_update_actions`` — mit dem Grund am Knopf statt ohne Knopf.
         self.explode_bar.show_for(len(result.scene.objects))
         self.report.show_result(result, self.session.project.document)
+        self._follow_the_run_in_the_report()
         if self._pose_report_target is not None:
             if self._pose_report_target in result.scene.objects:
                 self._gesture_analysis_changed()
@@ -23505,7 +23907,9 @@ class MainWindow(QMainWindow):
         # Nach Baum **und** Ansicht: Beide stellen ihre Auswahl selbst wieder
         # her, und eine Nachwahl davor ginge im Aufbau der Ansicht verloren.
         self._reselect_the_renamed(result)
+        self._reselect_the_successor(result)
         self._choose_the_created(result)
+        self._say_features_lost(result)
         # Und erst danach die Einträge — einmal, mit der Auswahl, die jetzt gilt.
         self._update_actions()
         if result.stopped_at is not None:
@@ -23633,6 +24037,14 @@ class MainWindow(QMainWindow):
         show_error(error, self)
 
     def _on_project(self) -> None:
+        # Zuerst, bevor das Abräumen unten die Vorschau nimmt: Ein Strg+Z
+        # während des Wartens trifft den Schritt davor, und der wartende Klick
+        # schriebe danach auf einen Stand, den der Kunde nie sah — samt
+        # geleertem Redo-Stapel (:meth:`_click_after`).
+        self._check_waiting_click()
+        # Hat ein späterer Klick den Schritt geschrieben, gilt „Nicht
+        # übernommen …“ nicht mehr (:meth:`_say_click_refusal`).
+        self._withdraw_click_refusal(unless_unchanged=True)
         if self._tour_project is not self.session.project:
             self._tour_project = self.session.project
             self._remove_tour()
@@ -23652,6 +24064,9 @@ class MainWindow(QMainWindow):
         if self._announcement_document is not self.session.project.document:
             self._announcement_document = self.session.project.document
             self.announce("")
+        # Eine Änderung während der Erkennung meldet kein ``busyChanged``; das
+        # Bild davor gehört ab hier zum vorigen Stand.
+        self._follow_the_run_in_the_report()
         # Eine gezeichnete Trennlinie liegt auf einem Körper, den es nach einer
         # Änderung am Dokument so nicht mehr geben muss — ein neues Projekt,
         # ein Undo, eine Operation von woanders. Sie stehen zu lassen hieße,
@@ -23764,14 +24179,14 @@ class MainWindow(QMainWindow):
 
     def _update_review_status(self) -> None:
         """Bindet Prüfzustände an denselben Dokumentstand wie den Bericht."""
+        from app.ui.print_contract import NOT_CURRENT_REASON
+
         target = self.session.review_target()
         reasons = list(target.missing)
-        if self.session.busy:
-            reasons.append(tr("Die Bewertung läuft; der vorige Stand bleibt sichtbar."))
-        elif not self.session.result_current:
-            reasons.append(
-                tr("Für den aktuellen Stand liegt noch keine abgeschlossene Bewertung vor.")
-            )
+        # Dass gerechnet wird, sagt der Bericht selbst, sobald es dauert
+        # (``ReportPanel.set_running``) — eine Quelle für den Satz (RM-534).
+        if not self.session.result_current:
+            reasons.append(str(NOT_CURRENT_REASON))
         states = tuple(self.session.check_states.values())
         if not states and self.session.result_current and self.session.last_result is not None:
             states = self.session.last_result.check_states
@@ -24168,6 +24583,13 @@ class MainWindow(QMainWindow):
 
     def _on_busy(self, busy: bool) -> None:
         self._update_review_status()
+        self._follow_the_run_in_the_report()
+        if busy and self._halted:
+            # **Die Haltansage weicht dem Fortschritt** (RM-534): Sie galt dem
+            # Stand, der gerade neu gerechnet wird. Hält die Kette wieder an,
+            # sagt das Ergebnis es neu.
+            self._halted = False
+            self.announce("")
         if busy:
             self._run_timing.begin()
         else:
@@ -24197,8 +24619,26 @@ class MainWindow(QMainWindow):
         self._show_invitation()
         if not busy:
             self._resume_preview_after_idle()
+            self._run_click_after_evaluation()
             self._resume_map_after_idle()
             self._export_when_current()
+
+    def _follow_the_run_in_the_report(self) -> None:
+        """Der Bericht sagt, wenn seine Zeilen zum vorigen Stand gehören (RM-534).
+
+        Das ist so, solange gerechnet wird und das Gezeigte nicht zum
+        Dokument gehört. Ein Bild vor der Erkennung gehört dazu (KUNDE-14):
+        Seine Zeilen sind die des neuen Stands, nur noch nicht vollständig —
+        das sagt der Prüfumfang. Nach einer Änderung währenddessen gehört es
+        nicht mehr dazu. Endet der Lauf ohne Ergebnis, abgebrochen oder
+        gescheitert, sagt der Bericht, dass er zum letzten vollständigen
+        Stand gehört.
+        """
+        session = self.session
+        shown = session.picture is not None and session.picture_current
+        unsettled = not session.result_current and not shown
+        self.report.set_running(session.busy and unsettled)
+        self.report.set_stale(not session.busy and unsettled and session.last_result is not None)
 
     def _resume_map_after_idle(self) -> None:
         """Die gewählte Analysekarte kommt nach der Rechnung wieder.
@@ -24249,6 +24689,366 @@ class MainWindow(QMainWindow):
             return
         self._request_order_preview(approval)
 
+    def _evaluation_stands_between(self) -> bool:
+        """Ob vor jeder Freigabe erst eine Auswertung fertig werden muss.
+
+        Sie rechnet, oder ihr Ergebnis gilt nicht mehr — abgebrochen oder
+        gescheitert. In beiden Lagen ist der Übernehmen-Knopf frei, und eine
+        Freigabe gibt es nicht (:meth:`_preview_is_current`).
+        """
+        return self.session.busy or not self.session.result_current
+
+    def _click_after(self, approval: _PreviewApproval, then: Callable[[], object]) -> None:
+        """Einen Übernehmen-Klick an das Ende der Auswertung hängen (§2.8).
+
+        **Er verfällt nicht still.** Solange die Sitzung rechnet, gilt keine
+        Freigabe; der Knopf war trotzdem frei, und der Klick tat nichts — ohne
+        Satz, der Dialog blieb offen (Fensterauswahl macOS, Rohrbogen-Test).
+        Nach einer abgebrochenen Auswertung tat er dasselbe für immer, bis
+        *Abbrechen* hinausführte: Kein Wert im Dialog stößt eine Auswertung
+        an. Ruht die Sitzung über einem veralteten Ergebnis, rechnet der Klick
+        sie deshalb selbst neu an.
+
+        **Er übernimmt nur, was der Kunde sah.** Gemerkt wird der Stand
+        (:class:`_WaitingClick`); was ihn ändert — ein getippter Wert, Strg+Z,
+        ein neuer Vorschlag, ein neuer Zug —, verwirft den Klick sofort und
+        sagt es, und vor dem Ausführen wird noch einmal verglichen
+        (:meth:`_run_click_after_evaluation`). Bis dahin steht die Zusage in der
+        Statuszeile vor dem Lauftext (:meth:`_render_progress_state`).
+        """
+        if self._close_requested:
+            return
+        # Ein neuer wartender Klick löst den Satz über den vorigen ab.
+        self._withdraw_click_refusal()
+        self._click_after_evaluation = _WaitingClick(
+            owner=weakref.ref(approval.owner),
+            click=then,
+            order=approval.order,
+            document=approval.document,
+            mark=self.session.history.document_mark(),
+            inserting=self.session.inserting,
+            result=self.session.last_result,
+        )
+        if not self.session.busy:
+            self.session.evaluate_async()
+        self._render_progress_state()
+
+    def _carry_click(
+        self,
+        owner: Any,
+        order: _PreviewOrder,
+        then: Callable[[], object],
+        *,
+        source: Any = None,
+    ) -> bool:
+        """Einen Klick merken, der seinen Auftrag selbst übernimmt (``_WaitingClick.carried``).
+
+        Für Eigentümer, die das Ende der Auswertung neu aufbaut: Das
+        Merkmalfenster zeigt danach die Werte des Schritts, die Maßgruppe geht
+        mit dem alten Ergebnis, die Filamentwahl verwirft ihre vorbereitete
+        Zuweisung. Ein Klick, der dort auf eine neue Freigabe wartete, löste
+        seine Zusage nie ein (Nachprüfung, Fund 3 und Verdacht Maßgruppe).
+        ``then`` übernimmt deshalb genau ``order``, auch ohne Freigabe.
+
+        **Nur, wenn das gezeigte Ergebnis zum heutigen Dokument gehört**
+        (:meth:`_result_belongs_to_the_document`): Dann rechnet die laufende
+        Auswertung denselben Stand nach, und die Kennungen im Auftrag meinen
+        danach dasselbe. Rechnet sie eine Änderung, entstand der Auftrag am
+        Stand davor; dann geht der Klick den gewöhnlichen Weg und verfällt am
+        Ende mit Satz. ``source`` ist der Träger, dessen Werte der Klick trägt
+        (die Maßgruppe), wenn er nicht der Eigentümer ist.
+
+        Gibt ``True`` zurück, wenn der Klick jetzt wartet.
+        """
+        if (
+            self._close_requested
+            or not self._evaluation_stands_between()
+            or not self._result_belongs_to_the_document()
+        ):
+            return False
+        approval = self._set_preview_order(source if source is not None else owner, order)
+        self._click_after(approval, then)
+        waiting = self._click_after_evaluation
+        if waiting is not None:
+            self._click_after_evaluation = replace(
+                waiting,
+                owner=weakref.ref(owner),
+                carried=True,
+                source=weakref.ref(source) if source is not None else None,
+            )
+        return True
+
+    def _result_belongs_to_the_document(self) -> bool:
+        """Ob das gezeigte Ergebnis aus dem heutigen Dokumentstand gerechnet ist.
+
+        Gemerkt wird es bei jedem gültigen Ergebnis (:meth:`_on_scene`).
+        Während einer Auswertung ist ``result_current`` immer falsch; ob sie
+        denselben Stand nachrechnet oder eine Änderung, sagt erst der
+        Vergleich mit Dokument, Verlaufsmarke und Einfügemarke von damals.
+        """
+        stand = self._result_stand
+        return (
+            stand is not None
+            and stand[0] is self.session.last_result
+            and stand[1] is self.session.project.document
+            and stand[2] == self.session.history.document_mark()
+            and stand[3] == self.session.inserting
+        )
+
+    def _binds_for_the_waiting_click(self, owner: Any, waiting: _WaitingClick) -> bool:
+        """Ob ``owner`` den Eigentümer des wartenden Klicks neu bindet — durch den Kunden.
+
+        Der Eigentümer selbst oder der Träger, dessen Werte der Klick trägt.
+        Bei einem getragenen Klick zählt nur, was am Stand des Klicks
+        geschieht: Nach einem neuen Ergebnis bindet der Neuaufbau die Werte
+        des Schritts, und das ist keine Eingabe des Kunden.
+        """
+        if waiting.carried and self.session.last_result is not waiting.result:
+            return False
+        source = waiting.source() if waiting.source is not None else None
+        return owner is waiting.owner() or (source is not None and owner is source)
+
+    def _drop_click_of(self, owner: Any) -> None:
+        """*Abbrechen* an ``owner``: Sein wartender Klick fällt still.
+
+        Abbrechen ist eine Entscheidung wie das Schließen eines Dialogs
+        (:meth:`_owner_closed`); ein Satz danach spräche über eine Änderung, die
+        der Kunde gerade verworfen hat (Nachprüfung, Fund 2).
+        """
+        waiting = self._click_after_evaluation
+        if waiting is not None and waiting.owner() is owner:
+            self._drop_waiting_click()
+
+    def _quick_filament_cancelled(self) -> None:
+        """*Abbrechen* an der Filamentwahl: Ein wartendes Übernehmen fällt mit."""
+        self._drop_click_of(self.quick_filament)
+
+    def _apply_carried_feature_order(
+        self, order: _PreviewOrder, params: dict[str, Any], displayed: bool = False
+    ) -> None:
+        """Den getragenen Klick des Merkmalfensters oder der Maßgruppe übernehmen.
+
+        Er übernimmt ``order``, nicht was das Fenster nach dem Neuaufbau
+        zeigt, und geht denselben Weg wie das Übernehmen dort: Freigabe, bei
+        Bildpflicht das Bild abwarten, dann ein Schritt
+        (:meth:`_apply_placed_feature`). ``displayed``: Der Klick kam aus der
+        Maßgruppe, und die übernimmt nur ein gezeigtes Bild
+        (``QuietHost.requires_displayed_preview``) — das gilt auch hier, wo
+        die Maßgruppe nicht mehr steht.
+        """
+        if displayed:
+            approval = self._set_preview_order(self.feature_panel, order)
+            if approval.required is False:
+                approval.required = True
+                self._refresh_preview_block()
+        if not self._preview_can_apply(
+            self.feature_panel,
+            order,
+            then=weak_slot(self, MainWindow._apply_carried_feature_order, order, params, displayed),
+        ):
+            return
+        remembered = (self._feature_to_keep, self._resume_near, self._measures_to_resume)
+        self._remember_feature_edit(params, historical=order.change_op is not None)
+        if not self._commit_preview_order(order):
+            self._feature_to_keep, self._resume_near, self._measures_to_resume = remembered
+
+    @staticmethod
+    def _not_applied(cause: str) -> str:
+        """Warum ein wartender Klick nicht übernommen hat — und was jetzt geht."""
+        return {
+            "values": tr(
+                "Nicht übernommen, weil sich die Werte geändert haben. "
+                "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+            ),
+            "project": tr(
+                "Nicht übernommen, weil sich das Projekt geändert hat. "
+                "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+            ),
+            "preview": tr(
+                "Nicht übernommen, weil die Vorschau nicht mehr gilt. "
+                "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+            ),
+            "proposal": tr(
+                "Nicht übernommen, weil ein neuer Vorschlag da ist. "
+                "Prüfen Sie ihn, bevor Sie übernehmen."
+            ),
+            "unfinished": tr(
+                "Nicht übernommen, weil die Berechnung zu keinem Ergebnis kam. "
+                "Klicken Sie erneut für einen neuen Versuch."
+            ),
+        }[cause]
+
+    def _owner_closed(self, owner: Any) -> bool:
+        """Ob der Eigentümer eines Klicks fort ist — dann verfällt der Klick ohne Satz.
+
+        Wer einen Dialog schließt, hat entschieden; ein Satz danach spräche
+        über ein Fenster, das nicht mehr da ist.
+        """
+        if owner is None or (isinstance(owner, QObject) and not isValid(owner)):
+            return True
+        return isinstance(owner, QDialog) and not owner.isVisible()
+
+    def _click_lost(
+        self, waiting: _WaitingClick, approval: _PreviewApproval | None = None
+    ) -> str | None:
+        """Warum der gemerkte Klick nicht mehr gilt: ``None``, wenn er gilt.
+
+        Ein leerer Satz heißt: verfallen, ohne etwas zu sagen
+        (:meth:`_owner_closed`). Mit ``approval`` läuft der Klick gerade, und
+        verglichen wird auch der Auftrag, den der Eigentümer aus dem heutigen
+        Stand gebaut hat; ein Dialog ist dann schon verborgen, denn sein
+        ``accept`` fragt nach dem Schließen noch einmal (``finished``).
+        """
+        owner = waiting.owner()
+        if owner is None or (approval is None and self._owner_closed(owner)):
+            return ""
+        if (
+            self.session.project.document is not waiting.document
+            or self.session.history.document_mark() != waiting.mark
+            or self.session.inserting != waiting.inserting
+        ):
+            return self._not_applied("project")
+        if approval is None:
+            return None
+        if approval.owner is not owner:
+            return self._not_applied("preview")
+        if approval.order != waiting.order:
+            return self._not_applied("values")
+        return None
+
+    def _drop_waiting_click(self, reason: str = "") -> None:
+        """Den gemerkten Klick verwerfen — mit Satz, wenn es einen gibt."""
+        if self._click_after_evaluation is None:
+            return
+        self._click_after_evaluation = None
+        self._render_progress_state()
+        if reason:
+            self._say_click_refusal(reason)
+
+    def _say_click_refusal(self, text: str) -> None:
+        """Sagen, dass ein Klick nicht übernommen hat — und den Stand dazu merken.
+
+        Der Satz geht in ``_announcement`` und steht damit nach jedem Lauf
+        wieder da. Hat danach ein Klick den Schritt doch geschrieben, widerspräche
+        er genau dieser Handlung, und wer ihm glaubt, legt den Schritt doppelt an
+        (§2.8). Gemerkt werden deshalb Dokument und Verlaufsmarke; was sie
+        weiterbringt, nimmt den Satz zurück (:meth:`_withdraw_click_refusal`).
+        """
+        self.announce(text)
+        self._click_refusal = (
+            text,
+            self.session.project.document,
+            self.session.history.document_mark(),
+        )
+
+    def _withdraw_click_refusal(self, *, unless_unchanged: bool = False) -> None:
+        """Den Satz über einen nicht übernommenen Klick zurücknehmen, wenn er noch steht.
+
+        ``unless_unchanged``: nur, wenn Dokument oder Verlaufsmarke inzwischen
+        weiter sind — ein neuer Schritt, Strg+Z, ein anderes Projekt. Eine
+        andere Ansage, die ihn schon abgelöst hat, bleibt stehen.
+        """
+        refusal = self._click_refusal
+        if refusal is None:
+            return
+        text, document, mark = refusal
+        if (
+            unless_unchanged
+            and self.session.project.document is document
+            and self.session.history.document_mark() == mark
+        ):
+            return
+        self._click_refusal = None
+        if self._announcement == text:
+            self.announce("")
+
+    def _check_waiting_click(self) -> None:
+        """Nach einer Änderung am Dokument: Gilt der gemerkte Klick noch?
+
+        Der Satz kommt eine Ereignisrunde später: Die Handlung, die das
+        Dokument geändert hat — Strg+Z, ein Schritt aus dem Verlauf —, quittiert
+        sich erst nach ``projectChanged`` und hätte ihn sofort überschrieben.
+        Dass der Klick nichts übernommen hat, ist die überraschendere Auskunft.
+        """
+        waiting = self._click_after_evaluation
+        if waiting is None:
+            return
+        reason = self._click_lost(waiting)
+        if reason is None:
+            return
+        self._drop_waiting_click()
+        if reason:
+            self._dropped_click_said = reason
+            QTimer.singleShot(0, self, self._say_dropped_click)
+
+    def _say_dropped_click(self) -> None:
+        """Den Satz zu einem verworfenen Klick nach der Quittung der Handlung sagen."""
+        said, self._dropped_click_said = self._dropped_click_said, ""
+        if said and not self._close_requested:
+            self._say_click_refusal(said)
+
+    def _run_click_after_evaluation(self) -> None:
+        """Den während der Auswertung gemerkten Übernehmen-Klick jetzt stellen.
+
+        Er läuft über denselben Weg wie ein neuer Klick: Steht die Freigabe,
+        wird übernommen; rechnet die Vorschau noch, bindet er sich an sie
+        (:meth:`_preview_can_apply`). Dort wird der Auftrag, den der Eigentümer
+        jetzt baut, mit dem gemerkten verglichen (``_click_replay``).
+
+        Er verfällt mit Satz, wenn die Auswertung kein Ergebnis brachte, die
+        Freigabe einem anderen oder keinem mehr gehört oder sich der Stand
+        geändert hat; ohne Satz, wenn sein Fenster zu ist oder der Kunde dort
+        *Abbrechen* gewählt hat (:meth:`_drop_click_of`).
+
+        **Ohne Freigabe läuft er in zwei Fällen:** Ein getragener Klick
+        übernimmt seinen gemerkten Auftrag selbst (:meth:`_carry_click`). Und
+        die offene Formsitzung bindet ihre Freigabe nach der Auswertung nicht
+        neu, baut ihren Auftrag beim Klick aber aus den Zügen; der Vergleich
+        über ``_click_replay`` verwirft dort weiter einen späteren Zug
+        (Nachprüfung, Fund 3). Sonst übernähme ein Rückruf, der nichts neu
+        baut, was nicht mehr gilt.
+
+        Nach der Schließentscheidung läuft er nie: Er schriebe in einen bereits
+        geprüften Dokumentstand und stieße eine weitere Rechnung an
+        (``closeEvent``).
+        """
+        waiting = self._click_after_evaluation
+        if waiting is None or self.session.busy:
+            return
+        self._click_after_evaluation = None
+        self._render_progress_state()
+        if self._close_requested:
+            return
+        if not self.session.result_current:
+            self._say_click_refusal(self._not_applied("unfinished"))
+            return
+        reason = self._click_lost(waiting)
+        if reason is not None:
+            if reason:
+                self._say_click_refusal(reason)
+            return
+        if waiting.carried:
+            waiting.click()
+            return
+        approval = self._preview_approval
+        if (
+            approval is None or approval.owner is not waiting.owner()
+        ) and not self._sculpt_click_stands(waiting):
+            self._say_click_refusal(self._not_applied("preview"))
+            return
+        self._click_replay = waiting
+        try:
+            waiting.click()
+        finally:
+            self._click_replay = None
+
+    def _sculpt_click_stands(self, waiting: _WaitingClick) -> bool:
+        """Ob der Klick *Fertig* oder *Angleichen* der noch offenen Formsitzung ist."""
+        owner = waiting.owner()
+        return self._sculpt_target is not None and (
+            owner is self.sculpt_bar.done or owner is self.sculpt_bar.refine
+        )
+
     def _update_waiting_state(self) -> None:
         """Führt die gestufte Warteanzeige für den gewählten Besitzer nach."""
 
@@ -24282,8 +25082,20 @@ class MainWindow(QMainWindow):
         ``_on_busy`` schreibt die Ansage zurück, und ein Satz, der beim
         nächsten Ereignis verschwindet, war für den, der gerade woanders
         hinsah, nie da.
+
+        Wartete ein Übernehmen-Klick auf diese Auswertung, sagt der Satz, dass
+        nichts übernommen ist; ein neuer Klick rechnet weiter (:meth:`_click_after`).
         """
-        if self.session.picture is not None:
+        if self._click_after_evaluation is not None:
+            self._click_after_evaluation = None
+            self._render_progress_state()
+            self._say_click_refusal(
+                tr(
+                    "Abgebrochen und nicht übernommen. "
+                    "Klicken Sie erneut, um weiterzurechnen und zu übernehmen."
+                )
+            )
+        elif self.session.picture is not None:
             # Das Bild vor der Erkennung ist kein vollständig gerechneter
             # Stand: Die Geometrie stimmt, die Merkmale fehlen (KUNDE-14).
             self.announce(
@@ -24718,6 +25530,9 @@ class MainWindow(QMainWindow):
             # stand der Rat als Satz ohne Knopf.
             "sketch.pick_plane": self._correct_after_error,
             "resize_the_widening": self._resize_the_widening,
+            # Den früheren Schritt öffnen, der das Merkmal gesetzt hat — ein Stift an
+            # einem zu kurzen Gewinde braucht ein längeres Gewinde (Review P2, M2).
+            "change_creating_step": self._change_creating_step,
             "show_step_values": self._show_step_values,
             # **Die Absage beim Einlesen hatte nur „Abbrechen".** Eine
             # kaputte Datei lässt sich nicht korrigieren, und der Schritt,
@@ -24938,6 +25753,20 @@ class MainWindow(QMainWindow):
             # einen Millimeter, wächst die Senkung um denselben.
             given["diameter"] = round(outer - previous + diameter, 2)
         self.run_operation(REGISTRY.get("resize_feature"), given)
+
+    def _change_creating_step(self, error: AppError) -> None:
+        """*Gewindeschritt öffnen*: den Schritt, der das Merkmal des Fehlers erzeugt hat.
+
+        Die Absage steht an einem späteren Schritt, zu ändern ist der frühere —
+        welcher, nennt der Kern in ``values["creating_step"]``, das Feld in
+        ``values["field"]``. Derselbe Dialog wie *Eingabe korrigieren*, nur an
+        dem Schritt, in dem die Eingabe etwas ändert.
+        """
+        try:
+            step = int(str(error.values.get("creating_step", "")))
+        except ValueError:
+            return
+        self.edit_operation(step, str(error.values.get("field", "")))
 
     def _entry_of(self, error: AppError) -> Any:
         """Der Körper, den ein Fehler meint — oder nichts."""
@@ -26835,6 +27664,8 @@ class MainWindow(QMainWindow):
         ausdrücklich gekappt, bevor Qt die Widgets zerstört.
         """
         self._close_requested = True
+        # Ein wartender Klick hält seinen Rückruf, und der sein Fenster.
+        self._click_after_evaluation = None
         self._cancel_sculpt_preview()
         if self._rebuild_dialog is not None:
             self._rebuild_dialog.reject()
@@ -26967,6 +27798,13 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt name
         super().showEvent(event)
+        # **Der Fokus beginnt in der Ansicht.** Ohne eigene Wahl gab Qt ihn beim
+        # Aktivieren dem ersten Element der Tabulatorkette, dem Griff der
+        # linken Karte; der trug dann im Ruhezustand einen Fokusrahmen in der
+        # Akzentfarbe (gemessen unter macOS, wo das Fenster aktiv wird). In der
+        # Ansicht wirken die Flugtasten (§2.9) sofort.
+        if self.focusWidget() is None:
+            self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
         self.spacemouse.start()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
@@ -26979,6 +27817,9 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self._close_requested = True
+        # Ein Übernehmen-Klick, der auf die Auswertung wartet, schriebe sonst
+        # nach dieser Entscheidung (:meth:`_run_click_after_evaluation`).
+        self._click_after_evaluation = None
         # Ab hier ist das Schließen entschieden. Solange noch ein Arbeiter
         # ausläuft, dürfte eine neue Eingabe den bereits geprüften
         # Dokumentstand verändern und ohne zweite Verwerfentscheidung

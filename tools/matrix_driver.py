@@ -52,7 +52,11 @@ RUN_IDENTITY: dict[str, object] | None = None
 MASKS = ["FF0000", "FF000000", "F000"]
 
 PRINTER_PLAN = [
-    Path(r"F:\3D Druck\output\review\minigolf-2026-09-27\druckauftrag\solidon-0936.3mf"),
+    # Die Druckplatte der Matrix: acht Teile aus Roberts Minigolf-Projekt ``x.p3d``
+    # als eine 3MF-Baugruppe, neben ihrer Quelle im Korpus und nicht im
+    # örtlichen ``output/``, wo die frühere ``solidon-0936.3mf`` verloren ging
+    # (RM-525). Neu gebaut wird sie mit ``platte_bauen.py`` daneben.
+    CORPUS / "Mini+Golf+All+Set-P1S_stls" / "minigolf-platte.3mf",
     CORPUS / "Wedge-Lock (Set).stl",
     CORPUS / "HydroBowl+–+Smart+Fruit+&+Veggie+Washer (1)" / "washing bowl v1.stl",  # noqa: RUF001
 ]

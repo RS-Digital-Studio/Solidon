@@ -11,7 +11,7 @@ keine Geometrie, sie ruft Ops auf (Regel 1, 2). Weitere Regeln laden mit ihren
 Dateien: `fenster.md` (Fenster, Dialoge, Rückfragen, Verlauf, Prüfbericht,
 Merkmalfenster), `grenzen.md` (Grenzen, was wo steht, Dialogvorderseite,
 Zwillinge, Kürzel), `ansicht.md`, `griffe.md`, `kamera.md`, `wartezeit.md`,
-`zeichenflaeche.md`, `uebersetzung.md`. Warum:
+`zeichenflaeche.md`, `uebersetzung.md`, `druckerwahl.md`. Warum:
 `konzepte/begruendungen/regel-oberflaeche.md`.
 
 **Die Grenzen gelten für jeden**, auch wo `grenzen.md` nicht lädt: neun Menüs,
@@ -142,8 +142,9 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   Gedankenstriche im Übermaß; der zusammenfassende Schlusssatz. Dagegen:
   kürzer, ruhig ein unfertiger Gedanke oder umgangssprachlicher Einwurf, ein
   Absatz ungerundet. Gilt auch im Gespräch mit Robert. Semikolon, die Formel
-  „Nur …:“ und Fachwörter der Datenhaltung hält `test_wording` mit
-  eingefrorenem Bestand (`tests/data/text_patterns.json`, RM-509).
+  „Nur …:“ und Fachwörter der Datenhaltung hält `test_wording` über jeden
+  Katalogtext samt Übersetzung mit eingefrorenem Bestand
+  (`tests/data/text_patterns.json`, `translated_semicolons.json`, RM-509).
 - **Nach außen heißt es „Version“, nicht „Fassung“** (Entscheidung Robert) —
   ein zweites Wort lässt den Kunden einen Unterschied suchen. Intern (Commits,
   Roadmap, Konzepte, Regeln) darf „Fassung“ bleiben; sinngemäß für jedes zweite
@@ -153,10 +154,8 @@ Oberfläche, Handbuch, Website, Changelog, Update-Fenster, Mails. Übersetzen:
   er bemerkt („die Setup-Datei ist 23 Megabyte größer“), eine Zusage, die er
   prüfen kann. Keine Zählung behobener eigener Fehler, kein Umfang unserer
   Arbeit („31 von 37 Dialogen geprüft“), keine Zahl der Stellen, an denen eine
-  Zusage neu eingelöst wurde: Der Kunde liest daraus, was bis gestern fehlte,
-  und die Zahl veraltet mit dem nächsten Fund — das Verhalten zu beschreiben
-  ist der bessere Satz. In `ROADMAP.md`, Commits und Karten bleibt die
-  Fehlerzählung richtig.
+  Zusage neu eingelöst wurde — das Verhalten zu beschreiben ist der bessere
+  Satz. In `ROADMAP.md`, Commits und Karten bleibt die Fehlerzählung richtig.
 - **Gewonnene Druckzeit als Anteil** (Entscheidung Robert): „rund 40 Prozent
   kürzer“ — „rund“, wenn an einem Modell gemessen —, nicht die Stunden eines
   fremden Modells. Rechenzeiten bleiben in Sekunden.
@@ -271,6 +270,11 @@ eine neue Freigabe. Nur eine ausdrücklich gemeldete Rückfrage darf ohne Ergebn
 zum Übernehmen weitergehen; eine erfolgreiche Rechnung mit ausgelassenem Bild
 liefert eine leere `SceneDifference`, kein `None`.
 
+## Der Prüfbericht nennt den vorigen Stand
+
+Rechnet es über 200 ms, steht das Alte als „Voriger Stand:“ mit gesperrten
+Handlungen da (`ReportPanel.set_running`, RM-534).
+
 ## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
 
 **Wo Felder stehen, tragen sie ihren Namen — und „wo“ heißt jede Stelle**, nicht
@@ -336,17 +340,22 @@ Parameter mit Vorgabe — PySide reicht `checked` hinein.
 
 Ruhe- und Fokusrahmen jedes Eingabefelds sind gleich breit (zwei Punkte); der
 Fokus wechselt auf `accent_line` und wird gestrichelt (`style.py`), denn Regel
-18 verlangt die zweite Kodierung. Grund: Qt rechnet die Höhe des
-Aufklappmenüs aus dem Innenrechteck der Combobox, ein breiterer Fokusrahmen
-schneidet einen halben Eintrag ab. `:on`, `outline` und ein Rahmen in den
-`margin` sind gemessen untauglich. `tests/test_style.py`:
+18 verlangt die zweite Kodierung; ein breiterer Fokusrahmen schnitte im
+Aufklappmenü einen halben Eintrag ab (Herleitung: Begründung).
+`tests/test_style.py`:
 `test_an_open_combo_box_shows_every_entry_it_has` (am Fenster, mit Fokus, samt
 Gegenprobe) und `test_the_focus_ring_never_changes_the_size_of_a_field`.
 
 **Der Ruherahmen behält die volle Linienfarbe** — er ist die einzige Kante des
 Feldes, gedämpft fiel er unter WCAG 1.4.11.
 `test_a_field_keeps_the_edge_that_is_its_only_one` prüft gegen die Linienfarbe
-des Themas; was die leistet, ist eine Frage an das Thema.
+des Themas.
+
+## Eine Auswahl fällt nie still auf etwas Größeres
+
+Fehlt ein gewähltes Merkmal im neuen Stand, hebt `ObjectTree.show_scene` die
+Wahl auf (`lost_selection`), und `MainWindow._say_features_lost` sagt es nach
+den Wiederwahlen, nur ohne eigene Handlung seit dem letzten aktuellen Bild.
 
 ## Barrierefreiheit
 
@@ -403,8 +412,7 @@ auch Funktionen ohne Widget; ein übergebenes Argument hat Vorrang.
 
 Oberflächentests laufen offscreen (`tests/conftest.py`); eine neue Ansicht ohne
 Test in `tests/test_ui.py` oder einer spezielleren Datei ist unfertig. Ein
-Widget im Test braucht `qt_app` (`tests.md`) — ohne endet der Lauf je nach
-Reihenfolge mit 0xC0000409 ohne ein Wort.
+Widget im Test braucht `qt_app` (`tests.md`; Warum: Begründung).
 
 **Ein modaler Dialog auf einem Startweg hält die ganze Suite an** —
 `QDialog.exec()` wartet offscreen auf einen Klick, den es nie gibt, und die

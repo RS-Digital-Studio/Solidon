@@ -17,9 +17,21 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 ## Entwicklung und Release
 
 - **Je Schritt die betroffenen Tests, vor dem Commit das Entwicklungstor,
-  Fenster, Renderer und Leistung ausschließlich beim Release** — auch nicht als gezielte
+  Fenster, Renderer und Leistung lokal ausschließlich beim Release** — auch nicht als gezielte
   Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.
+- **Vor dem Merge nach main und vor dem Release laufen die betroffenen Fenster-
+  und Slicertests auf Linux und macOS** (Entscheidung Robert; CI-09):
+  `tools/ci_selection.py` nennt sie zum Diff, `fenster-auswahl.yml` und
+  `slicer-auswahl.yml` fahren sie per Handstart auf dem Zweig, beide grün vor
+  dem Merge. Nur das Betroffene — macOS-Minuten kosten das Zehnfache.
+  Unterlagen und Kataloge lösen der Kosten wegen nichts aus, außer Markdown, das
+  die Anwendung liest.
+- **Neues bringt seinen Test für diese Auswahl mit** (Entscheidung Robert): eine
+  neue oder geänderte Oberfläche ihren Fenstertest; eine Änderung an
+  Slicerübergabe, Profilen, Druckerwahl, Druckzeit oder Slicererkennung ihren
+  Slicertest mit echtem Programm. Sonst wählt die Auswahl nichts, und Linux
+  und macOS sehen die Änderung erst beim Kunden.
 - **Wer ein Widget baut, fordert `qt_app` an.** Getrennt wird je Test, nicht je
   Datei, über den Marker `windowed`, den `tests/conftest.py` jedem `qt_app`-Test
   gibt (wer ein Fenster im Unterprozess öffnet, setzt ihn selbst). Ohne die
@@ -30,7 +42,14 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   Die Geräteabfrage läuft erst in der Fixture, nie beim Modulimport oder in der
   Sammlung. Reine Rechenfälle bleiben im Entwicklungstor, auch in gemischten
   Dateien.
-- **CI-Aufteilung** nach dem Vertrag CI-01 bis CI-08 (`AGENTS.md`; Wächter
+- **Wer im Kindprozess ein Fenster auf der echten Plattform zeigt, fordert
+  `native_window_platform` an** und startet mit deren Plattform. Die Fixture
+  macht ihn zum Fenstertest und zeigt je Prozess einmal ein leeres Fenster
+  vor (`tests/native_window_probe.py`); hängt es, überspringt sich der Fall
+  mit Grund am Ende des Laufs. In der CI darf das nur der Intel-Mac, dessen
+  Läufer-VM schon daran in `processEvents` hängt — überall sonst ist es rot,
+  weil ein Skip dort verdeckte, dass die Fälle nicht mehr laufen.
+- **CI-Aufteilung** nach dem Vertrag CI-01 bis CI-09 (`AGENTS.md`; Wächter
   `test_packaging.py` für Jobs, Plattformen, Releasegrenze und Berichte,
   `test_ci_runner.py` für vollständige Partitionen und echte
   Prozessausgänge). `--ci-shard I/N` teilt die Kernsuite je Datei nach der
@@ -136,6 +155,10 @@ QApplication.instance().setStyleSheet(before)   # ins finally
 - `rendering` für Tests mit echter Adapterabfrage, Rendereraufbau, Zeichnen,
   GPU-Picks oder Bildrücklesen. Entwicklungstor und normale CI wählen sie ab;
   die Releasegruppe (CI-Gruppe `windowed`) fährt sie einmal mit.
+- `slicer("<programm>")` für Tests mit echtem, installiertem Slicer; das Programm
+  liefert nur die Fixture `installed_slicer` (`test_slicer_selection.py` hält
+  das). Fehlt es, überspringt sich der Fall; in `slicer-auswahl.yml`
+  (`SOLIDON_REQUIRE_SLICERS`) ist das rot, denn ein Skip belegt nichts.
 - `rendered` für Tests, deren Grün an einem **Erzeugerlauf** hängt (Handbuch,
   Referenz, Abbildungsstempel). CI und reguläres Tor fahren sie nicht
   (Entscheidung Robert): Eine neue Operation macht sie rot, und was dann fehlt,
@@ -159,6 +182,11 @@ zu halten fängt keinen Fehler, der beide gleich trifft.
 
 Ein Test beschreibt, **was** er sicherstellt und **warum** — der Name allein
 reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
+
+- **Jedes `wait_for_idle` steht als `assert ….wait_for_idle(60_000)`**, nie als
+  bloße Anweisung, auch im Aufräumen: Ein ungeprüftes Warten ließ auf dem
+  langsamen Intel-Läufer Tests auf halbem Stand weiterlaufen. Der Wächter steht
+  in `test_toolchain.py`.
 
 ## Den Lauf messen, nicht einen Filter darüber
 

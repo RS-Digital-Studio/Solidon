@@ -8,7 +8,11 @@ deshalb ein OIDC-Token anfordern oder ``signtool`` aufrufen.
 
 from __future__ import annotations
 
+import plistlib
 import re
+import shlex
+import textwrap
+from itertools import pairwise
 from pathlib import Path
 
 from tests.workflow_helpers import job_block
@@ -167,6 +171,95 @@ def test_macos_checks_archive_paths_and_symlinks_before_key_import() -> None:
     )
 
 
+def _code(script: str) -> str:
+    """Der Schritt ohne Kommentarzeilen, Fortsetzungen verbunden.
+
+    Ein Kommentar sichert nichts zu — eine auskommentierte Rücklesung zählt nicht.
+    """
+    lines = [line for line in script.splitlines() if not line.lstrip().startswith("#")]
+    return re.sub(r"\\\n\s*", " ", "\n".join(lines))
+
+
+def _commands(code: str, program: str) -> list[tuple[int, list[str]]]:
+    """Die Aufrufe eines Programms als Wörter, mit ihrer Position im Code."""
+    found: list[tuple[int, list[str]]] = []
+    offset = 0
+    for line in code.splitlines(keepends=True):
+        words = shlex.split(line.strip(), comments=True) if line.strip() else []
+        if words and words[0] == program:
+            found.append((offset, words))
+        offset += len(line)
+    return found
+
+
+def _has_option(words: list[str], name: str) -> bool:
+    return name in words or any(word.startswith(f"{name}=") for word in words)
+
+
+def _runs_hardened(words: list[str]) -> bool:
+    """``--options runtime``, ``-o runtime`` oder ``--options=runtime,…`` — alles dasselbe."""
+    flags = [following for word, following in pairwise(words) if word in ("--options", "-o")] + [
+        word.split("=", 1)[1] for word in words if word.startswith(("--options=", "-o="))
+    ]
+    return any("runtime" in value.split(",") for value in flags)
+
+
+def test_the_macos_app_may_map_executable_memory_for_libffi() -> None:
+    """Ohne die Berechtigung hält das Intel-Paket schon beim Bootstrap an (RM-104).
+
+    CPythons ``_ctypes`` legt beim Laden eine libffi-Closure an, und PyInstallers
+    Bootstrap lädt es vor allem anderen. Apples libffi für x86_64 braucht dafür
+    ausführbaren Schreibspeicher, den die Hardened Runtime ohne
+    ``allow-unsigned-executable-memory`` verweigert; danach kreist libffi auf
+    macOS 26 endlos. Kein Mac-Runner zeigt das, deshalb hält der Text des
+    Signierschritts die Regel: tief signieren, dann nur das Hauptprogramm mit
+    der Liste, und die Rücklesung bricht ab, wenn Schlüssel oder Wert fehlen.
+    """
+    step = _step(
+        _job("macos-app-sign"), "App mit Developer-ID signieren und Schlüssel wieder sperren"
+    )
+    key = "com.apple.security.cs.allow-unsigned-executable-memory"
+    code = _code(step)
+    signing = [(at, words) for at, words in _commands(code, "codesign") if "--force" in words]
+    outer = [(at, words) for at, words in signing if _has_option(words, "--entitlements")]
+    deep = [(at, words) for at, words in signing if "--deep" in words]
+
+    listed = re.search(r"<<'PLIST'\n(.*?\n)\s*PLIST\n", code, re.DOTALL)
+    assert listed, "die Berechtigungsliste entsteht im Schritt selbst (kein Repositorycode)"
+    assert plistlib.loads(textwrap.dedent(listed.group(1)).encode()) == {key: True}, (
+        "die Liste trägt genau diese eine Ausnahme, eingeschaltet"
+    )
+    assert len(outer) == 1, "genau ein Signierlauf trägt die Berechtigungsliste"
+    assert "--deep" not in outer[0][1], (
+        "die Berechtigung gehört an das Hauptprogramm, nicht mit --deep an jede Bibliothek"
+    )
+    assert deep and all(_runs_hardened(words) for _, words in deep + outer), (
+        "erst tief mit Hardened Runtime signieren, dann das Bundle — beide mit --options runtime"
+    )
+    assert max(at for at, _ in signing) == outer[0][0], (
+        "der Lauf mit Berechtigung kommt zuletzt — sonst überschreibt ein späterer "
+        "Lauf das Hauptprogramm wieder ohne sie"
+    )
+
+    # Die Rücklesung: eine Variable aus ``codesign -d --entitlements``, dann ein
+    # ``case``, dessen Treffer-Zweig durchlässt und dessen ``*)``-Zweig abbricht.
+    readback = re.search(
+        r"\b(\w+)=\$\(\s*codesign\b[^\n]*?\s-d\s[^\n]*--entitlements[^\n]*\n", code
+    )
+    assert readback and readback.start() > outer[0][0], "die signierte App wird zurückgelesen"
+    case = re.search(
+        rf'case\s+"\${readback.group(1)}"\s+in\n(.*?)\n\s*esac', code[readback.end() :], re.DOTALL
+    )
+    assert case, "die Rücklesung entscheidet über das Gelesene"
+    branches = [branch.strip() for branch in case.group(1).split(";;") if branch.strip()]
+    granted = [b for b in branches if f"<key>{key}</key><true/>" in b.split(")", 1)[0]]
+    otherwise = [b for b in branches if b.startswith("*)")]
+    assert len(granted) == 1 and "exit" not in granted[0].split(")", 1)[1], (
+        "Schlüssel mit Wert true lässt durch"
+    )
+    assert len(otherwise) == 1 and "exit 1" in otherwise[0], "alles andere bricht ab"
+
+
 def test_windows_is_built_here_and_signed_nowhere_in_the_workflow() -> None:
     """Kein signtool, kein Azure, kein Schlüsselimport für Windows — nur die Übergabe."""
     workflow = _workflow()
@@ -248,3 +341,34 @@ def test_the_linux_gate_checks_the_appimage_content_with_its_runtime() -> None:
     assert "--release-check --artifact-kind appimage" in job
     assert '--write-evidence --sbom "$appimage_sbom"' in job
     assert job.count("--release-check") == 2
+
+
+def test_every_slicer_of_the_selection_is_a_fixed_version_with_its_checksum() -> None:
+    """Slicer werden aufgerufen, nie mitgeliefert — und nie in beweglicher Fassung geholt.
+
+    Je Programm aus ``tests/test_real_slicers.py`` ein Rezept für Linux und
+    macOS; jede Datei mit HTTPS-Adresse ohne ``latest`` und SHA-256, das
+    Flatpak auf einem Commit, nichts aus einer Paketquelle ohne Prüfsumme.
+    """
+    from tests.test_real_slicers import PROGRAMS
+
+    text = (WORKFLOWS / "slicer-auswahl.yml").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^\s*gh=https://github\.com$", text)
+    recipes = text.split('case "$RUNNER_OS/$program" in', 1)[1].split("esac", 1)[0]
+    recipes = recipes.replace("$gh/", "https://github.com/")
+    calls = re.findall(r"(?m)^\s*(?:appimage|dmg|fetch) (\S+) \\\n\s*([0-9a-f]{64})\b", recipes)
+    downloads = re.findall(r"(?m)^\s*(?:appimage|dmg|fetch) ", recipes)
+
+    assert len(calls) == len(downloads) >= 2 * len(PROGRAMS)
+    assert all(url.startswith("https://") and "latest" not in url for url, _sha in calls)
+    for program in PROGRAMS:
+        for system in ("Linux", "macOS"):
+            assert f"{system}/{program})" in recipes, f"kein Rezept für {program} auf {system}"
+    commits = re.findall(r"--commit=([0-9a-f]{64})\b", recipes)
+    assert commits and all(
+        f'test "$(flatpak info --show-commit {app})" = {commit}' in recipes
+        for app, commit in zip(
+            re.findall(r"--commit=[0-9a-f]{64} (\S+)", recipes), commits, strict=True
+        )
+    )
+    assert not re.search(r"\bbrew\b|apt-get install -y (?!\"\$RUNNER_TEMP/)", recipes)

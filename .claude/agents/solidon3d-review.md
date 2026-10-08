@@ -43,7 +43,9 @@ gelesen, keine Stichprobe nach Risiko. Jeder Fund braucht Code-Evidenz.
 ## Umfang
 
 Ohne Angabe `git diff HEAD` samt unversionierter Dateien, mit Angabe die Datei
-oder das Modul ganz. Dazu die Tests des Gebiets — sie sagen, was zugesagt
+oder das Modul ganz; vor einem Commit genau der Stand, der hinausgeht — ein
+Prüfbaum (`git -C <baum> diff HEAD` samt seiner unversionierten Dateien) oder
+der vorgemerkte Index (`git diff --cached`). Dazu die Tests des Gebiets — sie sagen, was zugesagt
 ist —, Karte und Regeln der berührten Verzeichnisse und der Bauplan-Paragraph,
 auf den sich die Änderung beruft. Andere Sitzungen arbeiten im selben Baum:
 Trenne fremde Änderungen vom Prüfling, bevor du urteilst.

@@ -20,7 +20,7 @@ from app.core.scene.cache import CACHE_FORMAT_VERSION, CachedResult, DiskCache, 
 from app.core.scene.hashing import digest, object_hash, operation_hash, profile_key
 from app.core.types import Mesh, Operation, Profile, SceneObject
 from app.i18n import TranslatableText
-from tests.helpers import FakeMesh, make_object
+from tests.helpers import FakeCodec, FakeMesh, make_object
 
 
 @pytest.mark.parametrize("op,source", [("create_box", "facets"), ("create_brep_box", "native")])
@@ -106,33 +106,6 @@ def test_real_measure_sources_survive_project_reopen_cache_and_undo(
     history.redo()
     assert measured(project, cache, 2400.0) == changed
     assert original.params["area"] == pytest.approx(600.0)
-
-
-class FakeCodec:
-    """Steht für die Geometrieschicht, die den echten später liefert."""
-
-    suffix = ".json"
-
-    def stores(self, mesh: Mesh) -> bool:
-        return True
-
-    def dumps(self, mesh: Mesh) -> bytes:
-        source = mesh  # type: ignore[assignment]
-        return json.dumps(
-            {
-                "triangles": source.triangle_count,
-                "vertices": source.vertex_count,
-                "size": list(source.bounds.size),
-            }
-        ).encode("utf-8")
-
-    def loads(self, data: bytes) -> Mesh:
-        values = json.loads(data)
-        return FakeMesh(  # type: ignore[return-value]
-            triangles=values["triangles"],
-            vertices=values["vertices"],
-            size=tuple(values["size"]),
-        )
 
 
 def result(triangles: int = 100, object_id: str = "obj_1") -> CachedResult:

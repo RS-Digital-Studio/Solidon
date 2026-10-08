@@ -229,6 +229,8 @@ Stellen halten das, beide sind nötig:
 - **Offen ist genau eine Handlung, die scharfe** (RM-510): `_arm` klappt auf
   (`_open_only`), ein Kopf macht scharf, Zugeklapptes nennt seine Werte. Ohne
   Auswahl schweigt es; die Anleitung entfällt nach dem ersten Merkmalklick.
+  Am Anker einer Gruppe („Kammer 1“ im Baum) führt ihre Handlung
+  (`actions.group_action_first`), sonst stünde *Fläche versetzen* mit 0 mm offen.
 - **Für alle heißt dasselbe Maß, nicht dieselbe Stelle:** „Auf alle N
   gleichartigen anwenden“ gibt jedem Mitglied seine eigene gemessene Mitte
   (`relations.params_for_members`); eine Verschiebung am gewählten Merkmal geht
@@ -240,14 +242,18 @@ Stellen halten das, beide sind nötig:
   `clear()`, mit dem `show_feature` beginnt). Weggelassen wird die Wiederholung,
   nicht die Auskunft — ab der zweiten Handlung trägt der Haken sie in Tooltip,
   Statuszeile und zugänglicher Beschreibung.
+- **Eine Absage steht als Zeile mit ihrem Grund** (RM-535): `_show_feature_rows`
+  lässt keine aus. *Merkmal verschieben* führt an Zapfen, Senkung, Kugel und Ring
+  ins Bild wie *Bohrung ändern* (`MEASURED_WHILE_MOVED`).
 - **Ein zusammengelegter Grund spricht für alle, unter denen er steht:**
   `_folded` macht aus gleich begründeten Absagen eine Zeile („Verschieben,
   Ändern, Drehen, Verdoppeln und Entfernen — <Satz>“); der Satz verneint die
   **Voraussetzung**, nicht eine Handlung („trägt kein Maß, an dem sich Lage
   oder Größe ändern ließen“), und nennt den Weg, der bleibt.
 - **Die Spalte rollt nur senkrecht** (RM-488): `panels.ColumnScroller` nimmt
-  die Mindestbreite des Inhalts; Auswahlfelder baut `column_choice`, sonst
-  verlangt ihr längster Eintrag die Spalte.
+  die Mindestbreite des Inhalts und meldet sie mit `tell_the_zone` bis zur
+  Karte, sonst steht sie einige Runden zu schmal; Auswahlfelder baut
+  `column_choice`, sonst verlangt ihr längster Eintrag die Spalte.
 - **Ein Feld einer Merkmalsart steht nur an ihr** (`perceive.actions._carried_by`):
   die Steigung am Gewinde, nicht an der Bohrung.
 - **Eine Anzahl ist keine Länge** (`count`, `steps`, `holes`):
@@ -288,10 +294,9 @@ Ansichtsseite steht in `griffe.md`.
 - **Entf** nimmt an Dach oder Einzelmerkmal den Schritt des Bausteins
   (`MainWindow._delete_the_chosen_feature`), nie den Körper; ohne Baustein gilt
   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt
-  der Körper — mit Ansage und Strg+Z: Eine Fläche ist kein Ding, das man
-  löscht, der Körper ist gemeint, und ein Teil, das Entf nicht löscht, ist eine
-  Sackgasse (Regel 19). Ohne Merkmal nimmt Entf alle markierten Körper
-  (`on_bodies`). *Ausblenden* heißt am Merkmal *Körper ausblenden*.
+  der Körper — mit Ansage und Strg+Z (Regel 19). Ohne Merkmal nimmt Entf alle
+  markierten Körper (`on_bodies`). *Ausblenden* heißt am Merkmal *Körper
+  ausblenden*.
 - **Bei gewähltem Dach** fragt `_move_the_part` `_common_part_step`, und das
   Dach bekommt einen eigenen Griff (`_part_grip_anchor` →
   `Viewport.set_part_grip`; welches Merkmal ihn trägt, sagt das Fenster) statt
@@ -302,8 +307,7 @@ Ansichtsseite steht in `griffe.md`.
   (`_part_faces_of_selection`, `_filament_targets`), die Chips im Baum bleiben
   je Fläche.
 - **Was kein Zahlenfeld werden kann, bekommt seinen Weg:** Ein Sammelparameter
-  mit eigenem Editor (`perceive.actions.COLLECTED_KINDS`, dieselben Arten wie
-  in `operationen.md` unter „Sammelparameter“) steht in
+  mit eigenem Editor (`perceive.actions.COLLECTED_KINDS`) steht in
   `FeatureAction.elsewhere`, und ein Knopf öffnet den Dialog des Schritts. Ein
   neuer Sammelparameter trägt seine Art dort ein.
 - **Ein Langloch aus einem Schritt gehört dazu:** Hat `slot_hole` es gezogen,
@@ -311,6 +315,8 @@ Ansichtsseite steht in `griffe.md`.
   `_commit_slot_change`) und legt keinen zweiten obenauf. Wer eine Operation
   baut, die ein Merkmal aus ihrem früheren Schritt noch einmal anfasst, fragt
   zuerst `created_by`.
+- **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* am
+  Innengewinde, an keiner anderen Art), danach `not_offered_at`.
 
 ## Der Hauptknopf
 
@@ -387,24 +393,7 @@ macht ihn die Knopfleiste zum Hauptknopf.
 **Was eine Angabe bestimmt, steht vor ihr** (Entscheidung Robert): was eine
 Liste füllt, eine Vorgabe setzt oder sperrt, davor; ein Schalter bei dem, was
 er schaltet; ein Zustandssatz bei seinem Gegenstand.
-Druckeinstellungen: Slicer, Drucker, Düse, Platte, Filamente, Qualität,
-Profile des Slicers, Grundlage, Werte; *Werte mitgeben* bei der Übergabe
-(`test_the_print_dialog_asks_in_the_order_its_answers_depend_on`). Register:
-`tests/test_dependency_order.py`. Vorn davon nur Fülldichte und Stützen;
-Zustand und Mitgabe über den Knöpfen, außerhalb des Rollbereichs.
-
-**Slicer vor Drucker, überall** (Entscheidung Robert): Erststart, Einstellungen
-und Druckdialog lesen die Drucker über dieselbe Erhebung, bieten dieselbe Liste
-(`printers_on_offer`), beides jederzeit wechselbar. Der Slicer steht unter
-„Anwendung“ vor den Druckervorgaben. Ein neues Profil bleibt im Entwurf, bis
-gespeichert oder im Druckdialog gewählt (`_keep_slicer_printer`), auch beim
-Sprachwechsel, ebenso der Programmpfad. Ohne eigene Drucker des Slicers bietet
-der Druckdialog alle bekannten. Im Erstlauf gelten Sprache, Slicerpfad und
-gespeicherte Drucker sofort. Verspätete Antworten früherer Auswahl ändern
-nichts. Je Modell eine Zeile ohne Düse (Entscheidung Robert,
-`add_printer_choices`); die Düse wählt der Druckdialog, Speichern behält sie
-(`with_saved_nozzle`). Die Suchzeile filtert live, erst eine ausdrückliche
-Auswahl übernimmt, Escape schließt nur die Liste.
+Für Druckerwahl und Druckdialog gilt `druckerwahl.md`.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 

@@ -251,7 +251,7 @@ def test_export_suggests_the_complete_print_format_first(
     from PySide6.QtWidgets import QFileDialog
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     asked: list[tuple[str, str]] = []
 
     def remember(_parent: object, _title: str, name: str, filters: str) -> tuple[str, str]:
@@ -277,7 +277,7 @@ def test_export_writes_the_selected_format(
     from PySide6.QtWidgets import QFileDialog
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     target = tmp_path / "wuerfel.stl"
     monkeypatch.setattr(
@@ -368,7 +368,7 @@ def _thin_walled_tube(window: MainWindow) -> None:
         "Zylinder",
         [OperationDraft(op="create_cylinder", params={"diameter": 20.0, "height": 20.0})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply(
         "Bohren",
         [
@@ -377,7 +377,7 @@ def _thin_walled_tube(window: MainWindow) -> None:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
 
 def test_the_export_asks_before_it_writes(
@@ -440,7 +440,7 @@ def test_a_clean_export_asks_nothing(
     from PySide6.QtWidgets import QFileDialog
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     target = tmp_path / "wuerfel.3mf"
     monkeypatch.setattr(
         QFileDialog,
@@ -471,7 +471,7 @@ def test_changing_only_the_export_filter_changes_format_and_suffix(
     from PySide6.QtWidgets import QFileDialog
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     proposed: list[str] = []
 
     def choose(_parent: object, _title: str, name: str, _filters: str) -> tuple[str, str]:
@@ -519,9 +519,9 @@ def test_export_as_3mf_writes_one_assembly(
     from app.core.knowledge import print_settings
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.set_print_settings(print_settings.resolve(window.session.profile))
 
     target = tmp_path / "baugruppe.3mf"
@@ -605,7 +605,7 @@ def test_a_single_body_3mf_carries_the_settings_too(
     from PySide6.QtWidgets import QFileDialog
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     target = tmp_path / "einzel.3mf"
     monkeypatch.setattr(
@@ -649,7 +649,7 @@ def test_the_export_leaves_the_window_usable(
     from app.ui import main_window as module
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     real_write = module.write_plan
 
@@ -708,7 +708,7 @@ def test_cancel_export_preflight_never_starts_a_file(
     monkeypatch.setattr(main_window_module._ExportWorker, "_assembly", writing)
     monkeypatch.setattr(main_window_module, "show_error", lambda *args: failures.append(args))
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     window._start_export(tmp_path / f"abgebrochen.{export_format}", export_format)
     worker = window._export_worker
     assert worker is not None
@@ -745,7 +745,7 @@ def test_a_queued_export_report_is_discarded_after_cancel(
     monkeypatch.setattr(main_window_module, "confirm_export", lambda *args: offered.append(args))
     monkeypatch.setattr(main_window_module, "show_error", lambda *args: offered.append(args))
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     target = tmp_path / "abgebrochen.stl"
     window._start_export(target, "stl")
     worker = window._export_worker
@@ -781,7 +781,7 @@ def test_the_export_check_brings_the_report_forward_before_it_asks(
     )
     monkeypatch.setattr(main_window_module, "confirm_export", asked)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     # Gezeigt: ``_focus_report`` holt nichts in eine Spalte, die niemand sieht.
     window.show()
     window._show_start_screen(False)
@@ -812,7 +812,7 @@ def test_ending_the_window_cancels_the_export_preflight(
     monkeypatch.setattr(main_window_module, "show_error", lambda *args: dialogs.append(args))
     monkeypatch.setattr(window, "_may_discard", lambda: True)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     target = tmp_path / "beendet.stl"
     window._start_export(target, "stl")
     worker = window._export_worker
@@ -868,7 +868,7 @@ def test_late_export_signals_do_not_touch_a_deleted_window(
     monkeypatch.setattr(main_window_module, "show_error", lambda *args: failures.append(args))
     monkeypatch.setattr(sys, "excepthook", lambda *args: failures.append(args))
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     assert window.viewport.wait_for_workers(10_000)
     target = tmp_path / "auslaufend.stl"
     window._start_export(target, "stl")
@@ -912,7 +912,7 @@ def test_export_confirmation_may_deliver_finished_but_cannot_revive_a_released_w
 
     monkeypatch.setattr(main_window_module, "confirm_export", confirming)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     target = tmp_path / "bestaetigt.stl"
     window._start_export(target, "stl")
     wait_for_export(window)
@@ -944,7 +944,7 @@ def test_a_retried_export_keeps_its_worker_when_the_previous_thread_finishes(
     monkeypatch.setattr(main_window_module, "check_before_export", checking)
     monkeypatch.setattr(main_window_module, "show_error", retrying)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     target = tmp_path / "wiederholt.stl"
     window._start_export(target, "stl")
     first = window._export_worker
@@ -978,7 +978,7 @@ def test_export_closes_cancellation_before_the_first_file_of_a_batch(
     monkeypatch.setattr(main_window_module, "check_before_export", lambda *args, **kwargs: [])
     monkeypatch.setattr(main_window_module, "write_plan", writing)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     assert window.session.apply(
         "Zweiter Körper", [OperationDraft(op="create_box", params={"x": 60.0})]
     )
@@ -1017,7 +1017,7 @@ def test_a_failed_export_reports_in_the_main_thread(
     from app.ui import main_window as module
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     def refuse(*args: Any, **kwargs: Any) -> Any:
         raise errors.UserError(
@@ -1057,7 +1057,7 @@ def test_a_failed_save_offers_both_ways_out(
     from app.ui.dialogs import offered_actions
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     target = tmp_path / "belegt.p3d"
     attempts: list[Path] = []
@@ -1095,7 +1095,7 @@ def test_a_failed_save_can_choose_another_place(
     from app.ui import main_window as module
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     def refuse(session: Any, path: Path) -> Path:
         raise errors.FileWriteError(target=str(path), detail="Kein Platz.")
@@ -1143,7 +1143,7 @@ def test_a_failed_export_can_be_repeated_without_choosing_the_file_again(
     from app.ui.dialogs import offered_actions
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     target = tmp_path / "belegt.stl"
     assert "retry" not in window.error_handlers(), "ohne Fehlschlag gibt es nichts zu wiederholen"
@@ -1193,7 +1193,7 @@ def test_the_print_settings_open_before_the_layer_analysis(
     from app.ui import main_window as module
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
@@ -1380,7 +1380,7 @@ def test_export_as_3mf_carries_every_plate(
                 )
             ],
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     window.session.apply(
@@ -1391,7 +1391,7 @@ def test_export_as_3mf_carries_every_plate(
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     scene = window.session.last_result
     assert scene is not None
@@ -1434,9 +1434,9 @@ def test_export_as_3mf_carries_the_print_settings(
     from PySide6.QtWidgets import QFileDialog
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     target = tmp_path / "auftrag.3mf"
     monkeypatch.setattr(
@@ -1489,7 +1489,7 @@ def test_the_format_of_the_last_export_comes_back(
     (3MF), stellte bei jedem Export beides neu ein.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
 
     _asked_dialog(monkeypatch, (str(tmp_path / "wuerfel.stl"), "STL (*.stl)"))
     window.action_export()
@@ -1546,7 +1546,7 @@ def test_two_projects_keep_their_own_choice(
     """
     stl_projekt = tmp_path / "dienstleister.p3d"
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     _asked_dialog(monkeypatch, (str(tmp_path / "teil.stl"), "STL (*.stl)"))
     window.action_export()
     wait_for_export(window)
@@ -1555,20 +1555,20 @@ def test_two_projects_keep_their_own_choice(
     drei_mf = tmp_path / "gehaeuse.p3d"
     window.session.start_new()
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     _asked_dialog(monkeypatch, (str(tmp_path / "teil.3mf"), "3MF (*.3mf)"))
     window.action_export()
     wait_for_export(window)
     window.session.save_project(drei_mf)
 
     window.open_path(stl_projekt)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     asked = _asked_dialog(monkeypatch, ("", ""))
     window.action_export()
     assert asked[0][0].endswith(".stl"), f"das eine Projekt bleibt bei STL: {asked[0][0]}"
 
     window.open_path(drei_mf)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     asked = _asked_dialog(monkeypatch, ("", ""))
     window.action_export()
     assert asked[0][0].endswith(".3mf"), f"das andere bei 3MF: {asked[0][0]}"
@@ -1585,9 +1585,9 @@ def test_the_naming_scheme_is_offered_and_kept(
     mehreren Dateien **ist** der Name das Muster.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.import_model(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.set_export_choice("stl")
     export_anyway(monkeypatch)
 
@@ -1614,9 +1614,9 @@ def test_a_plain_name_does_not_become_a_scheme(
     die Vorgabe.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.import_model(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.set_export_choice("stl", "{index}_{object}")
     export_anyway(monkeypatch)
 
@@ -1643,7 +1643,7 @@ def test_the_export_folder_stays_with_the_machine(
     folder = tmp_path / "ausgabe"
     folder.mkdir()
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     _asked_dialog(monkeypatch, (str(folder / "wuerfel.stl"), "STL (*.stl)"))
     window.action_export()

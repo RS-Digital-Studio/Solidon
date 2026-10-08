@@ -369,7 +369,7 @@
       <div class="stats">
         <div><b>178</b><span>operations in the download version</span></div>
         <div><b>49</b><span>tested building blocks</span></div>
-        <div><b>61</b><span>standard part sizes</span></div>
+        <div><b>124</b><span>standard part sizes</span></div>
         <div><b>20</b><span>printer profiles included</span></div>
         <div><b>12</b><span>example projects included</span></div>
         <div><b>0</b><span>accounts, cloud, telemetry</span></div>
@@ -485,7 +485,7 @@
           </div>
           <span class="tag">Way 3 — Generated model</span>
           <h3>Prepare a GLB or STL</h3>
-          <p>Drop in a file from any generator you choose: Solidon3D repairs the mesh, sizes it, checks it against printer and material, and splits or pins it when needed. On request, Solidon3D also sets up a model of its own, TripoSG for the shape and SDXL for the image behind it, and downloads nothing without asking. The complete licence and provenance chain of the weights is still under review.</p>
+          <p>Drop in a file from any generator you choose: Solidon3D repairs the mesh, sizes it, checks it against printer and material, and splits or pins it when needed. On request, Solidon3D also sets up the models for it, TRELLIS.2 by Microsoft for the shape and FLUX.2 [klein] for the image behind it, and downloads nothing without asking. The complete licence and provenance chain of the weights of TRELLIS.2, FLUX.2 [klein] and the BiRefNet background remover is still under review.</p>
           <a class="way-more" href="/en/ai-models.html">From generator to printable part</a>
         </div>
         <div class="way">
@@ -796,8 +796,8 @@
         10 GB), 16 GB for
         the larger ones</td></tr>
         <tr><td>Generated model (optional)</td><td>an external GLB
-        or STL file, or Solidon3D sets up TripoSG and the SDXL image
-        model on request</td></tr>
+        or STL file, or Solidon3D sets up TRELLIS.2 and the FLUX.2 [klein]
+        image model in ComfyUI 0.35 or later on request</td></tr>
         <tr><td>Other (optional)</td><td>a slicer — it is found or
         configured, and it is not required</td></tr>
       </table>

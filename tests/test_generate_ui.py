@@ -798,7 +798,7 @@ def test_the_session_puts_a_generated_body_on_the_stack(
     result = generator.text_to_mesh("eine kleine Figur", seed=3)
 
     object_id = session.add_generated(result)
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     # Vier Schritte, und die Reihenfolge ist keine Geschmacksfrage: was ein
     # Bildmodell liefert, ist auf einen Einheitswürfel normiert und misst als
@@ -1086,6 +1086,7 @@ def test_comfy_folder_poll_does_not_replace_the_debounce_delay(
         _remember_model_choices=lambda: None,
         _set_start_enabled=lambda _enabled: None,
         _set_model_options=lambda _weights, _image: None,
+        _show_legacy=lambda _folders, _size: None,
     )
     monkeypatch.setattr(comfy_dialog, "set_role", lambda *_args: None)
 
@@ -1155,7 +1156,7 @@ def test_slow_and_outdated_comfy_folder_probes_do_not_freeze_or_change_the_dialo
     def setup(folder: str | Path | None, **_kwargs: object) -> comfy_setup.Result:
         setup_paths.append(str(folder))
         setup_started.set()
-        return comfy_setup.Result(comfyui=Path(folder or slow), nodes=Path("nodes"), weights=True)
+        return comfy_setup.Result(comfyui=Path(folder or slow), weights=True)
 
     monkeypatch.setattr(comfy_setup, "setup", setup)
     dialog = ComfySetupDialog(image_model=True)
@@ -1558,15 +1559,19 @@ def test_the_dialog_names_the_middle_state_before_the_run(
 
     assert dialog.readiness is mesh.Readiness.NO_NODES
     assert not dialog.available, "bereit ist es damit nicht"
-    assert "fehlen aber noch Solidons Bausteine" in dialog.state.text()
+    # Seit TRELLIS.2 sind alle Knoten eingebaut: Fehlt einer, ist ComfyUI zu
+    # alt, und der Satz nennt die Version, ab der es geht (Regel 17).
+    assert "zu alt" in dialog.state.text()
+    assert mesh.MINIMUM_COMFYUI_TEXT in dialog.state.text()
     assert not dialog.setup.isHidden(), "und der Weg dorthin steht daneben"
-    assert "einrichten" in dialog.setup.text()
+    assert "Programme" in dialog.setup.text()
 
 
 def test_the_button_leads_where_the_state_says(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Zwei Lagen, zwei Ziele: die Liste der Programme oder die Einrichtung."""
+    """Zwei Ziele: die Liste der Programme, wo ComfyUI fehlt oder zu alt ist, die
+    Einrichtung, wo ein Modell fehlt — Knoten kann Solidon nicht nachlegen."""
     from app.core.backends import mesh
 
     class Lage:
@@ -1581,7 +1586,8 @@ def test_the_button_leads_where_the_state_says(
 
     for state, expected in (
         (mesh.Readiness.ABSENT, "programs"),
-        (mesh.Readiness.NO_NODES, "nodes"),
+        (mesh.Readiness.NO_NODES, "programs"),
+        (mesh.Readiness.NO_MODEL, "nodes"),
     ):
         dialog = GenerateDialog(backend=Lage(state))
         wait_for_readiness(dialog, qt_app)
@@ -1699,10 +1705,11 @@ def test_an_unexpected_generator_error_offers_a_working_report_action(
 def test_the_setup_dialog_says_how_long_a_step_has_been_running(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Einer der Schritte lädt 7,5 GB.
+    """Einer der Schritte lädt mehrere Gigabyte.
 
-    Die Zeit beginnt je Schritt neu: „Gewichte laden — rund 7,5 GB (240 s)"
-    sagt mehr als eine Gesamtzeit, denn nur dieser eine Schritt dauert.
+    Die Zeit beginnt je Schritt neu: „Modell für den Weg aus Bild laden — rund
+    8,0 GB (240 s)" sagt mehr als eine Gesamtzeit, denn nur dieser eine Schritt
+    dauert.
     """
     from app.core.backends import comfy_setup
     from app.ui.comfy_dialog import ComfySetupDialog
@@ -1712,13 +1719,175 @@ def test_the_setup_dialog_says_how_long_a_step_has_been_running(
     dialog = ComfySetupDialog()
     try:
         _wait_for_comfy_probe(dialog, qt_app)
-        dialog._note_step("Gewichte laden — rund 7,5 GB, das dauert")
+        dialog._note_step("Modell für den Weg aus Bild laden — rund 8,0 GB, das dauert")
 
-        assert "Gewichte laden" in dialog.state.text()
+        assert "Modell für den Weg aus Bild laden" in dialog.state.text()
         assert "(0 s)" in dialog.state.text(), "und wie lange er schon läuft"
 
         dialog._idle()
         assert not dialog._tick.isActive(), "danach zählt nichts mehr"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_setup_dialog_names_version_licences_and_sizes_before_loading(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vor dem ersten Download steht da, was geladen wird und unter welcher Lizenz.
+
+    RM-003: Die Modelle stammen aus drei Lizenzen (MIT, Metas DINOv3-Lizenz,
+    Apache-2.0); wer sie lädt, liest das im Dialog, nicht erst im Handbuch. Die
+    Mindestfassung von ComfyUI steht daneben, weil die Knoten seit TRELLIS.2 aus
+    ComfyUI selbst kommen, und jede Größe kommt aus den Modelldateien — kein
+    Satz nennt mehr TripoSG oder SDXL.
+    """
+    from PySide6.QtWidgets import QCheckBox, QLabel
+
+    from app.core.backends import comfy_setup, mesh
+    from app.i18n import format_decimal
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path("C:/ComfyUI"))
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: False)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        texts = [label.text() for label in dialog.findChildren(QLabel)]
+        intro = next((text for text in texts if "DINOv3" in text), "")
+
+        assert mesh.MINIMUM_COMFYUI_TEXT in intro, "ab welcher Fassung ComfyUI reicht"
+        for licence in ("MIT", "TRELLIS.2", "BiRefNet", "DINOv3", "Apache-2.0", "FLUX.2 [klein]"):
+            assert licence in intro, licence
+        assert format_decimal(comfy_setup.WEIGHT_GIGABYTES, 1) in dialog.weights.text()
+        assert format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1) in dialog.image_model.text()
+        assert dialog.weights.isEnabled() and dialog.image_model.isEnabled()
+        said = " ".join(texts + [box.text() for box in dialog.findChildren(QCheckBox)])
+        assert "TripoSG" not in said and "SDXL" not in said
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize(("language", "words"), [("de", "rund 7,5 GB"), ("en", "about 7.5 GB")])
+def test_the_setup_dialog_says_which_old_folders_it_removes_before_it_does(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, language: str, words: str
+) -> None:
+    """Entscheidung Robert (07.10.2026): Die Einrichtung räumt Solidons alte
+    TripoSG-Einrichtung weg — und sagt vorher, welche Ordner und wie viel.
+
+    Der Hinweis steht nur da, wo es die alte Einrichtung gibt; ein ComfyUI
+    ohne sie bekommt keinen Satz über etwas, das nicht da ist.
+    """
+    from app.core.backends import comfy_setup
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    old = tmp_path / "alt"
+    nodes = old / comfy_setup.LEGACY_NODES
+    nodes.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    weights = old / comfy_setup.LEGACY_WEIGHTS
+    weights.mkdir(parents=True)
+    (weights / comfy_setup.LEGACY_MARKER).write_text("{}", encoding="utf-8")
+    clean = tmp_path / "neu"
+    (clean / "custom_nodes").mkdir(parents=True)
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path(given or old))
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "legacy_gigabytes", lambda found: 7.5 if found else 0.0)
+    install_language(language)
+    set_language(language)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        said = dialog.legacy.text()
+        assert not dialog.legacy.isHidden(), "vor dem Einrichten steht da, was geht"
+        assert comfy_setup.LEGACY_NODES in said and comfy_setup.LEGACY_WEIGHTS in said
+        assert words in said, "und wie viel Platz das macht"
+        assert dialog.start_button.isEnabled(), "angesagt, nicht gesperrt"
+
+        dialog.folder.setText(str(clean))
+        dialog._refresh_folder_state()
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert dialog.legacy.isHidden(), "ohne alte Einrichtung kein Satz darüber"
+    finally:
+        set_language("de")
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_setup_dialog_promises_only_what_the_removal_keeps(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Die genannten Ordner gehen ganz; versprochen wird nur, dass andere bleiben (G-6).
+
+    Der Satz „Was Sie selbst dorthin gelegt haben, bleibt“ stimmte nicht:
+    ``remove_legacy`` löscht einen erkannten Ordner samt allem darin.
+    """
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    old = tmp_path / "alt"
+    nodes = old / comfy_setup.LEGACY_NODES
+    nodes.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path(given or old))
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: False)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        said = dialog.legacy.text()
+        assert "Andere Ordner bleiben unberührt." in said, said
+        assert "selbst dorthin gelegt" not in said
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("done", [True, False])
+def test_the_setup_dialog_names_an_old_folder_that_stayed_and_the_way_out(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, done: bool
+) -> None:
+    """Blieb von der alten Einrichtung etwas stehen, meldet der Dialog keinen Erfolg (G-6).
+
+    Ein laufendes ComfyUI hält den alten Knoten offen und lädt den
+    TripoSG-Quelltext weiter. Bis dahin las der Kunde „Eingerichtet“ und
+    erfuhr nichts davon; jetzt nennt die Zeile den Ordner und den Ausweg —
+    auch nach einem Abbruch.
+    """
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: tmp_path)
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: True)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda folder: True)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        dialog._finished(
+            comfy_setup.Result(
+                comfyui=tmp_path,
+                weights=True,
+                image_model=True,
+                reason="" if done else "Abgebrochen.",
+                legacy_left=(comfy_setup.LEGACY_NODES,),
+            )
+        )
+        said = dialog.state.text()
+        assert comfy_setup.LEGACY_NODES in said, said
+        assert "ComfyUI beenden und Einrichten erneut starten" in said, said
+        assert dialog.state.property("role") == "warning"
+        assert "Eingerichtet. ComfyUI einmal neu starten" not in said
+
+        dialog._finished(comfy_setup.Result(comfyui=tmp_path, weights=True, image_model=True))
+        assert dialog.state.property("role") == "ok", "ohne Rest der gewohnte Satz"
     finally:
         dialog.release()
         dialog.deleteLater()
@@ -1729,7 +1898,7 @@ def test_the_dialog_asks_for_the_way_it_would_actually_run(qt_app: QApplication)
 
     Derselbe Dialog fährt beide Wege: Mit gewähltem Bild ``image_to_mesh``,
     ohne ``text_to_mesh``. Gefragt wurde immer der Bildweg — wer aus Text
-    erzeugen wollte und kein SDXL-Modell hatte, las „Bereit" und erfuhr es beim
+    erzeugen wollte und kein Bildmodell hatte, las „Bereit" und erfuhr es beim
     Abschicken.
     """
     from app.ui.generate_dialog import GenerateDialog
@@ -1747,7 +1916,7 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
 
     Ein Bild zu wählen umgeht das fehlende Bildmodell vollständig, und genau das
     steht dort: Aus Text wird erst ein Bild, und dafür braucht ComfyUI ein
-    SDXL-Modell.
+    Bildmodell.
     """
     from app.core.backends import mesh
     from app.ui.generate_dialog import GenerateDialog
@@ -1755,6 +1924,7 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
     dialog = GenerateDialog(backend=ScriptedMeshBackend())
     wait_for_readiness(dialog, qt_app)
     dialog._readiness = mesh.Readiness.NO_MODEL
+    dialog._missing_roles = frozenset({"image", "text_encoder"})
     dialog._update_state()
 
     gesagt = dialog.state.text()
@@ -1776,6 +1946,33 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
     dialog.setupRequested.connect(lambda: wege.append("setup"))
     dialog._ask_for_setup()
     assert wege == ["nodes"], "das Bildmodell holt die Einrichtung, nicht die Programmliste"
+
+
+def test_a_missing_shape_model_is_not_called_the_image_model(qt_app: QApplication) -> None:
+    """Fehlt TRELLIS.2, fehlt beiden Wegen etwas — und das ist nicht das Bildmodell.
+
+    Der Satz nannte bei jeder fehlenden Rolle das Bildmodell des Textwegs und
+    schickte zum Ausweg „ein Bild wählen“, der hier nichts hilft. Er nennt
+    jetzt das Modell, das fehlt, und seine Größe; der Knopf führt in dieselbe
+    Einrichtung.
+    """
+    from app.core.backends import comfy_setup, mesh
+    from app.ui.generate_dialog import GenerateDialog
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    wait_for_readiness(dialog, qt_app)
+    dialog._readiness = mesh.Readiness.NO_MODEL
+    dialog._missing_roles = frozenset({"shape", "image"})
+    dialog._update_state()
+
+    gesagt = dialog.state.text()
+    assert "Bild zu wählen" not in gesagt
+    assert f"{comfy_setup.WEIGHT_GIGABYTES:g}".replace(".", ",") in gesagt, "die Größe"
+    wege: list[str] = []
+    dialog.nodesRequested.connect(lambda: wege.append("nodes"))
+    dialog.setupRequested.connect(lambda: wege.append("setup"))
+    dialog._ask_for_setup()
+    assert wege == ["nodes"]
 
 
 class WaitingBackend:
@@ -1975,7 +2172,7 @@ def test_the_dialog_shows_what_comfyui_said(qt_app: QApplication) -> None:
             raise mesh.GenerationFailed(
                 title=_("Der Generator hat den Auftrag abgebrochen."),
                 detail=_("ComfyUI hat die Erzeugung mit einem Fehler beendet."),
-                values={"node": "TripoSGSampler", "reason": grund},
+                values={"node": "Trellis2ShapeStage", "reason": grund},
             )
 
     dialog = GenerateDialog(backend=Bricht())
@@ -1989,7 +2186,7 @@ def test_the_dialog_shows_what_comfyui_said(qt_app: QApplication) -> None:
 
     gesagt = dialog.state.text()
     assert grund in gesagt, "der Grund, mit dem jemand zum Support geht"
-    assert "TripoSGSampler" in gesagt, "und der Schritt, in dem es riss"
+    assert "Trellis2ShapeStage" in gesagt, "und der Schritt, in dem es riss"
     assert dialog.progress.isHidden(), "kein Balken über einem Lauf, den es nicht gibt"
     dialog.release()
 
@@ -2033,7 +2230,7 @@ def test_a_role_with_a_real_choice_gets_a_field(qt_app: QApplication) -> None:
         backend=MitAuswahl(
             {
                 "image": ("a_sdxl.safetensors", "b_sdxl.safetensors"),
-                "shape": ("nur_triposg.safetensors",),
+                "shape": ("nur_trellis.safetensors",),
                 "shape_vae": ("eins.safetensors", "zwei.safetensors"),
             }
         )
@@ -3259,7 +3456,7 @@ def test_a_project_opened_during_the_run_is_named_before_taking(
     dialog = _run_in_window(window, qt_app, monkeypatch, backend)
     try:
         window.open_path(Path(__file__).parent / "data" / "projects" / "drilled_v6.p3d")
-        assert window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         bodies = len(window.session.last_result.scene.objects)
         backend.gate.set()
         _wait_for_run(dialog, qt_app)

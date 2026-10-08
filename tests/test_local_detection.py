@@ -732,7 +732,7 @@ def test_a_face_without_a_length_measure_keeps_its_own_search_extent() -> None:
 
 def test_local_floor_role_uses_the_far_original_rim() -> None:
     """Der Innenboden bleibt innen, auch wenn der belegende Rand 85 mm höher liegt."""
-    from app.core.perceive.features import detect_faces
+    from app.core.perceive.features import detect
     from app.core.perceive.local import detect_local
 
     raw = blind_cylinder().raw.copy()
@@ -743,8 +743,8 @@ def test_local_floor_role_uses_the_far_original_rim() -> None:
     assert mesh.raw.is_watertight and mesh.raw.is_winding_consistent
     original = next(
         feature
-        for feature in detect_faces(mesh)
-        if feature.params["centre"][2] == pytest.approx(15)
+        for feature in detect(mesh).values()
+        if feature.kind == "face" and feature.params["centre"][2] == pytest.approx(15)
     )
     assert original.params["inner"] is True
     found = detect_local(mesh, (0, 0, 15), normal=(0, 0, 1), radius=8)

@@ -1,0 +1,90 @@
+# Wegwerfzweig (RM-038, RM-062): Mailentwurf über das Portal und Eingabe über
+# Fcitx im ausgelieferten Solidon-Flatpak 0.5.3. Wird nach der Auswertung mit
+# dem Zweig gelöscht.
+name: Abnahme Mail und Eingabe 0.5.3
+
+on:
+  push:
+    branches: [diagnose/flatpak-eingabe]
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      APP_ID: de.rsdigital.solidon3d
+      OUT: ${{ github.workspace }}/aus
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+
+      - name: Systempakete
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak xvfb xauth dbus dbus-x11 \
+            xdg-desktop-portal xdg-desktop-portal-gtk xdg-utils desktop-file-utils \
+            fcitx5 fcitx5-frontend-qt6 fcitx5-frontend-gtk3 fcitx5-config-qt dbus-user-session \
+            xdotool imagemagick x11-utils
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          mkdir -p "$OUT"
+
+      - name: Ausgeliefertes Solidon-Flatpak 0.5.3
+        run: |
+          curl -fsSL --retry 3 -o /tmp/solidon.flatpak https://solidon3d.de/dl/Solidon3D-0.5.3-x86_64.flatpak
+          echo "997319c8994028718ad216a75ddb058f8bd6aab09276f7070dedb982becdb185  /tmp/solidon.flatpak" | sha256sum --check --strict
+          flatpak install --user -y --noninteractive /tmp/solidon.flatpak
+          flatpak info --user --show-permissions "$APP_ID"
+          echo "== Fcitx im Paket"
+          files=$(flatpak info --user --show-location "$APP_ID")/files
+          find "$files" -iname "*fcitx*" | head -20
+
+      - name: RM-062 Eingabemodule im Paket
+        run: |
+          files=$(flatpak info --user --show-location "$APP_ID")/files
+          find "$files" -path "*platforminputcontexts*" | head -20
+          find "$files" -iname "*ibus*" | head -10
+
+      - name: RM-062 Eingabe in ein Textfeld je Eingabemodul
+        run: |
+          cat > "$HOME/eingabe.sh" <<'SH'
+          variante="$1"; modul="$2"
+          fcitx5 -d --replace
+          sleep 3
+          if [ -n "$modul" ]; then envs="--env=QT_IM_MODULE=$modul --env=XMODIFIERS=@im=fcitx"; else envs="--unset-env=QT_IM_MODULE"; fi
+          flatpak run --user $envs --env=QT_DEBUG_PLUGINS=1 "$APP_ID" > "$OUT/solidon-$variante.log" 2>&1 &
+          sleep 45
+          win=$(xdotool search --name "Solidon" | head -1)
+          [ -n "$win" ] && xdotool windowactivate --sync "$win"
+          import -window root "$OUT/vorher-$variante.png"
+          # „Später einstellen“ im Willkommensdialog (1280×820-Fenster bei 0,0)
+          xdotool mousemove 879 506 click 1
+          sleep 3
+          xdotool key --clearmodifiers ctrl+shift+p
+          sleep 3
+          xdotool type --delay 150 "Würfel ß äöü"
+          sleep 2
+          import -window root "$OUT/eingabe-$variante.png"
+          dbus-send --session --print-reply --dest=org.fcitx.Fcitx5 /controller org.fcitx.Fcitx.Controller1.DebugInfo > "$OUT/fcitx-$variante.txt" 2>&1
+          grep -i -E "solidon|program|frontend|ic " "$OUT/fcitx-$variante.txt" | head -20
+          flatpak kill "$APP_ID" || true
+          fcitx5-remote -e 2>/dev/null; pkill fcitx5 || true
+          sleep 2
+          grep -i -E "inputcontext|fcitx|ibus" "$OUT/solidon-$variante.log" | grep -v "^Fontconfig" | head -15
+          SH
+          for v in "fcitx fcitx" "ibus ibus" "ohne "; do
+            set -- $v
+            echo "======== Variante $1"
+            dbus-run-session -- xvfb-run -a --server-args="-screen 0 1600x1000x24" sh "$HOME/eingabe.sh" "$1" "$2"
+          done
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: abnahme-eingabe-053
+          path: aus/
+          if-no-files-found: warn

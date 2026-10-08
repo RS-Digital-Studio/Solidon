@@ -133,7 +133,11 @@ from app.core.export.writer import PART_SETTING_CODES
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
-from app.core.perceive.actions import measure_explanation, measure_qualifier
+from app.core.perceive.actions import (
+    group_action_first,
+    measure_explanation,
+    measure_qualifier,
+)
 from app.core.perceive.groups import FunctionalGroup
 from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.relations import FeatureActionGroup
@@ -165,6 +169,8 @@ from app.core.types import (
     SceneObject,
     Transaction,
     measure_status,
+    replanned_steps,
+    step_numbers,
 )
 from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
@@ -202,6 +208,7 @@ from app.ui.labels import (
     wheel_needs_focus,
 )
 from app.ui.leash import Worker, WorkerLeash, weak_slot
+from app.ui.loading import DELAY_MS
 from app.ui.overlay import (
     LEFT_WIDTH,
     ContentScroller,
@@ -223,7 +230,7 @@ from app.ui.style import (
     set_level,
 )
 from app.ui.tab_signal import count_phrases
-from app.ui.theme import UNDONE_COLOUR
+from app.ui.theme import THEMES, UNDONE_COLOUR, current_theme
 
 _log = get_logger(__name__)
 
@@ -1736,6 +1743,19 @@ def _part_group(created_by: int | None, document: Document | None) -> tuple[str,
     return (str(found[1].title), int(found[0].id)) if found is not None else None
 
 
+def _carries(result: EvaluationResult, object_id: str, feature_id: str) -> bool:
+    """Ob der Körper im Ergebnis dieses Merkmal noch trägt."""
+    entry = result.scene.objects.get(object_id)
+    return entry is not None and feature_id in entry.features
+
+
+def _feature_name_in(result: EvaluationResult | None, object_id: str, feature_id: str) -> str:
+    """Der Name des Merkmals, wenn seine Zeile nicht verzeichnet ist (``ObjectTree._labels``)."""
+    entry = result.scene.objects.get(object_id) if result is not None else None
+    feature = entry.features.get(feature_id) if entry is not None else None
+    return feature_name(feature_id, feature) if feature is not None else feature_id
+
+
 def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | None:
     """Die Zeile dieses Merkmals — über alle Ebenen unter ``item``.
 
@@ -1755,6 +1775,27 @@ def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | N
         if deeper is not None:
             return deeper
     return None
+
+
+def _place_refs_under(item: QTreeWidgetItem) -> list[tuple[str, str]]:
+    """Die Stellen dieser Zeile — sie selbst, wenn sie ein Merkmal trägt, sonst ihre Kinder.
+
+    Eine Zeile mit eigener Kennung ist eine Stelle, auch wenn Flanken oder
+    eine Senkung unter ihr hängen. Ein Dach trägt keine Kennung und bündelt
+    mehrere Stellen; es liefert die seiner Kinder, rekursiv, denn ein
+    Baustein-Dach kann wieder Bohrungen mit Senkung tragen.
+    """
+    object_id = item.data(0, Qt.ItemDataRole.UserRole)
+    feature_id = item.data(1, Qt.ItemDataRole.UserRole)
+    if object_id is not None and feature_id is not None:
+        return [(str(object_id), str(feature_id))]
+    found: list[tuple[str, str]] = []
+    for index in range(item.childCount()):
+        child = item.child(index)
+        if child is None:
+            continue
+        found.extend(_place_refs_under(child))
+    return found
 
 
 def _feature_refs_under(item: QTreeWidgetItem) -> list[tuple[str, str]]:
@@ -2089,6 +2130,22 @@ class ObjectTree(QWidget):
         """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
         neu zeichnen kann — beim Ausblenden ändert sich nur die Anzeige."""
         self._document: Document | None = None
+        self._labels: dict[tuple[str, str], str] = {}
+        """Der Text jeder Merkmalszeile, wie er im Baum stand — Körper und Merkmal.
+
+        Eine Senkkette heißt „Bohrung 3 mit Senkung", ein Anker wie seine
+        Gruppe, ein Baustein mit einer Zeile wie der Baustein. Wer ein
+        verlorenes Merkmal ansagt, nennt diesen Text und keinen zweiten."""
+        self.lost_selection: tuple[tuple[str, str, str], ...] = ()
+        """Gewählte Merkmale, die der zuletzt gezeigte Stand nicht mehr trägt —
+        Körper, Merkmal und der Text ihrer Zeile.
+
+        Sie fielen still auf ihren Körper zurück (RM-537), und Entf entfernte
+        danach den ganzen Körper. Der Baum hebt die Wahl auf und hält hier
+        fest, was verloren ging; ob das gesagt wird, entscheidet das Fenster
+        erst nach seinen Wiederwahlen (``MainWindow._say_features_lost``) —
+        ein Langloch, das eben aus der gewählten Bohrung wurde, ist keine
+        verlorene Wahl."""
         self._theme: DrawingTheme = "dark"
         """Für welches Thema die Vorschaubilder gezeichnet werden."""
         self._previews: dict[str, QIcon] = {}
@@ -2325,6 +2382,10 @@ class ObjectTree(QWidget):
         selected = self.selected_objects()
         selected_feature = self.selected_feature()
         selected_features = self.selected_features()
+        previous = self._result
+        seen_labels = self._labels
+        self._labels = {}
+        self.lost_selection = ()
         self._result = result
         self._document = document
         # **Das Leeren ist keine Auswahl.** ``clear()`` meldete „nichts
@@ -2676,6 +2737,9 @@ class ObjectTree(QWidget):
                     only.setExpanded(True)
                     continue
                 group.setExpanded(True)
+            self._labels.update(
+                ((object_id, feature_id), child.text(0)) for feature_id, child in made.items()
+            )
             self.tree.addTopLevelItem(item)
             item.setExpanded(object_id in selected)
         self.tree.resizeColumnToContents(0)
@@ -2685,10 +2749,31 @@ class ObjectTree(QWidget):
         # ``selected_feature`` hieß danach „keines“, und die Maßgruppe nach
         # *Übernehmen* hing an keinem Merkmal. Aufgelöst wird nur, was keine
         # einzelne Merkmalszeile war — ein Dach oder eine Mehrfachwahl.
-        if selected_feature is None and len(selected_features) > 1:
+        wanted = (
+            list(selected_features)
+            if selected_feature is None and len(selected_features) > 1
+            else [(selected[0], selected_feature)]
+            if selected_feature is not None and len(selected) == 1
+            else []
+        )
+        lost = [reference for reference in wanted if not _carries(result, *reference)]
+        if len(wanted) > 1:
             self.select_features(selected_features)
+        elif lost:
+            # **Nie still zum Körper** (RM-537): Gewählt war ein Merkmal, und
+            # nach der Entf-Taste wäre sonst der ganze Körper fort.
+            self._restore((), None)
+            self._on_selection()
         else:
             self._restore(selected, selected_feature)
+        self.lost_selection = tuple(
+            (
+                body,
+                feature,
+                seen_labels.get((body, feature)) or _feature_name_in(previous, body, feature),
+            )
+            for body, feature in lost
+        )
         self._fit()
         # Erst steht der Baum, dann kommen die Bilder nach. Andersherum wartet
         # der Nutzer auf eine Liste, die längst fertig gerechnet ist.
@@ -2934,6 +3019,26 @@ class ObjectTree(QWidget):
             found.extend(_feature_refs_under(item))
         # Ohne Wiederholung und in der Reihenfolge des Baums: Wer eine Bohrung
         # **und** ihr Dach markiert, meint sie einmal.
+        return tuple(dict.fromkeys(found))
+
+    def selected_places(self) -> tuple[tuple[str, str], ...]:
+        """Je markierter Zeile ihr führendes Merkmal — eine Stelle, auch wo die Zeile bündelt.
+
+        :meth:`selected_features` zählt, was unter einer Zeile hängt, mit; für
+        die Frage „welche **Stellen** sind markiert“ ist ein Gewinde mit seinen
+        Flanken darunter aber eine. *Gegenstück* las die Bündelung als vier
+        Stellen und sagte an einem eingelesenen Bolzen „Markieren Sie an jedem
+        der beiden Teile die Stelle“, obwohl genau das geschehen war (Review
+        P2, Fenstertest zum gemessenen Gewinde).
+
+        Ein Dach dagegen ist keine Stelle: „Zapfen (4)“ sind vier, und nur das
+        erste zu nehmen hieße still raten (Regel 21) — :func:`_place_refs_under`.
+        """
+        found: list[tuple[str, str]] = []
+        for item in self.tree.selectedItems():
+            if item.parent() is None:
+                continue
+            found.extend(_place_refs_under(item))
         return tuple(dict.fromkeys(found))
 
     def selected_faces(self) -> tuple[tuple[str, str], ...]:
@@ -4440,24 +4545,6 @@ def history_step_titles(document: Document) -> dict[int, str]:
     return {op_id: str(title) for op_id, title in step_titles(document).items()}
 
 
-def replanned_steps(document: Document) -> frozenset[int]:
-    """Schritte, die ein Einfügen oder Verschieben neu gefasst hat (P7).
-
-    Ihre alten Zeilen sind nicht gelöscht: Derselbe Schritt steht unter neuer
-    Kennung an seiner neuen Stelle. Der Verlauf blendet sie deshalb aus, statt
-    sie wie ein gelöschter Schritt durchzustreichen (§15.4 gilt dem Löschen).
-    """
-    found: set[int] = set()
-    for transaction in document.transactions:
-        changes = transaction.changes
-        if transaction.revision not in ("insert", "move") or changes is None:
-            continue
-        found.update(
-            op_id for op_id, version in (changes.after.edited_ops or {}).items() if version is None
-        )
-    return frozenset(found)
-
-
 def step_state(document: Document, op_id: int, gone: Discarded | None = None) -> str:
     """Ob ein Schritt wirkt — leer, „aus", „ruht" (P7.3) oder „Ergebnis entfernt".
 
@@ -5071,7 +5158,7 @@ class HistoryPanel(QWidget):
         nested = {op_id for members in removed_under.values() for op_id in members}
         self.stop_insert_action.setEnabled(inserting is not None)
         titles = history_step_titles(document)
-        self._positions = {entry.id: index for index, entry in enumerate(document.ops, start=1)}
+        self._positions = step_numbers(document.ops)
         replanned = replanned_steps(document)
         deleted: set[int] = set()
         for transaction in document.transactions:
@@ -5163,13 +5250,17 @@ class HistoryPanel(QWidget):
             # ein Wort aus dem Code, und das Ausrufezeichen davor erklärte sie
             # nicht (22.09.2026). Die Kennung bleibt vorn: Mit ihr nennt die
             # Übernommen-Leiste des Chats denselben Schritt.
+            # Die Nummern aus ``self._positions``, einmal je Neuaufbau gezählt —
+            # je Zeile neu gezählt kostete der Verlauf bei 2000 Schritten
+            # 189 ms mehr (Review RM-529).
+            positions = self._positions
             steps = (
-                tr("Schritt {number}").format(number=step_number(document, transaction.ops[0]))
+                tr("Schritt {number}").format(
+                    number=positions.get(transaction.ops[0], transaction.ops[0])
+                )
                 if len(transaction.ops) == 1
                 else tr("Schritte {numbers}").format(
-                    numbers=", ".join(
-                        str(step_number(document, entry)) for entry in transaction.ops
-                    )
+                    numbers=", ".join(str(positions.get(entry, entry)) for entry in transaction.ops)
                 )
                 if transaction.ops
                 # **Eine Änderung am Projekt vertritt keinen Schritt** — dort
@@ -6119,6 +6210,27 @@ class ReportPanel(QWidget):
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self._alert_counts = (0, 0)
         """Dieselben getrennt, Fehler zuerst — siehe :meth:`alert_counts`."""
+        self._running = False
+        """Ob die Zeilen gerade als voriger Stand dastehen, weil neu gerechnet wird.
+
+        Der Bericht kannte keinen Zustand „rechnet“ (RM-534): Beim Radius
+        2,0 → 1,0 stand „Der Radius ist für diese Kanten zu groß“ 3,7 s mit
+        voller Schwere da, darüber „Übergabe nicht empfohlen“, während die
+        Rechnung, die ihn widerrief, lief. Gesetzt wird er erst nach
+        :data:`DELAY_MS` (§2.8) — ein Lauf aus dem Cache bleibt ruhig."""
+        self._stale = False
+        """Siehe :meth:`set_stale`."""
+        self._previous_keys: frozenset[tuple[Any, ...]] = frozenset()
+        """Die Befunde, die beim Beginn des Laufzustands dastanden (:func:`_identity`).
+
+        Was währenddessen dazukommt — die Sätze eines Teilungsplans über
+        ``add_findings`` —, gehört zum neuen Stand und steht ohne Vorsatz da.
+        Über die Identität und nicht an der Zeile: ``add_findings`` baut die
+        Liste neu."""
+        self._running_delay = QTimer(self)
+        self._running_delay.setSingleShot(True)
+        self._running_delay.setInterval(DELAY_MS)
+        self._running_delay.timeout.connect(self._running_for_a_while)
         self._list_follows: bool | None = None
         """Für welchen Zustand die Befundliste zuletzt von selbst auf- oder
         zugeklappt wurde: offen mit Fehlern oder Warnungen, zu mit Hinweisen
@@ -6470,7 +6582,8 @@ class ReportPanel(QWidget):
 
         consequence = finding_consequence(finding)
         self.finding_consequence.setText(consequence)
-        self.finding_consequence.setVisible(bool(consequence))
+        # Die Folge eines Befunds vom vorigen Stand ist keine (RM-534).
+        self.finding_consequence.setVisible(bool(consequence) and not self._previous(item))
         self.finding_details.setPlainText(item.toolTip().replace(" · ", "\n"))
 
     def _show_offers(self) -> None:
@@ -6558,6 +6671,13 @@ class ReportPanel(QWidget):
                     self.offer_effect.show()
             if action is primary:
                 make_primary(button)
+            if self._previous(items[0]):
+                # Der Befund gehört zum vorigen Stand (RM-534); eine Handlung
+                # daran träfe ein Teil, das es gleich nicht mehr gibt.
+                button.setEnabled(False)
+                button.setToolTip(
+                    tr("Erst nach der Berechnung — der Befund gehört zum vorigen Stand.")
+                )
             # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene
             # Methoden des Fensters, und ein Lambda, das es fängt, schließt
             # den Ring Panel → Knopf → Handler → Fenster — gemessen hielten
@@ -6610,15 +6730,51 @@ class ReportPanel(QWidget):
         changed = False
         for row in range(self.list.count()):
             item = self.list.item(row)
-            lines = item.data(_LINE_ROLE)
-            if not lines:
+            if not item.data(_LINE_ROLE):
                 continue
-            wanted = lines[1] if item.isSelected() else lines[0]
+            wanted = self._row_text(item)
             if item.text() != wanted:
                 item.setText(wanted)
                 changed = True
         if changed:
             self._grew()
+
+    def _row_text(self, item: QListWidgetItem) -> str:
+        """Der Satz einer Zeile: gewählt ganz, sonst der erste, im Lauf als voriger Stand.
+
+        **Der vorige Stand sagt es in Worten** (RM-534): gedämpft allein wäre
+        eine Bedeutung über die Farbe (Regel 18), und ein Fehler, den die
+        laufende Rechnung vielleicht widerruft, liest sich sonst als gültig.
+        """
+        short, whole = item.data(_LINE_ROLE)
+        line = whole if item.isSelected() else short
+        return tr("Voriger Stand: {line}", line=line) if self._previous(item) else line
+
+    def _previous(self, item: QListWidgetItem) -> bool:
+        """Ob die Zeile gerade als voriger Stand dasteht (RM-534, :attr:`_previous_keys`)."""
+        return self._running and (
+            _identity(item.data(Qt.ItemDataRole.UserRole)) in self._previous_keys
+        )
+
+    def _paint_row(self, item: QListWidgetItem) -> None:
+        """Eine Zeile als aktueller oder voriger Stand, an Ort und Stelle (RM-534).
+
+        **Nie neu gebaut:** Wer eine Zeile hält — ein offenes Kontextmenü
+        (``_on_menu``) —, hielte nach einem ``_rebuild`` ein gelöschtes Objekt,
+        und die gewählte Handlung endete in einem Absturz.
+        """
+        finding: Finding = item.data(Qt.ItemDataRole.UserRole)
+        if item.data(_LINE_ROLE):
+            item.setText(self._row_text(item))
+        if self._previous(item):
+            # Gedämpft, aber lesbar: Die Sperrfarbe stand hell bei 3,1 : 1 —
+            # unter der Grenze, die dieser Bericht selbst nennt (§2.9).
+            tone = QColor(THEMES[current_theme()]["muted"])
+            item.setForeground(tone)
+        else:
+            tone = QColor(item.data(_TONE_ROLE))
+            item.setData(Qt.ItemDataRole.ForegroundRole, None)
+        item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
 
     def follow_export(self, allowed: bool, tip: str) -> None:
         """*Exportieren …* folgt dem Menüeintrag: dieselbe Sperre, derselbe Grund."""
@@ -6829,6 +6985,11 @@ class ReportPanel(QWidget):
         # ist geschlossen und damit fort." Beides stimmt, das eine kommt vom
         # Einlesen, das andere von der Reparatur — und das stand nirgends.
         self._document = document
+        # Ein Ergebnis ist kein voriger Stand mehr; rechnet es weiter, sagt
+        # das Fenster es neu (:meth:`set_running`).
+        self._running_delay.stop()
+        self._running = False
+        self._stale = False
         self._stopped_at = result.stopped_at if result is not None else None
         self._live_objects = dict(result.scene.objects) if result is not None else {}
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
@@ -7266,6 +7427,8 @@ class ReportPanel(QWidget):
         # nur hier und nicht in der sichtbaren Nicht-CAD-Zeile.
         item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, detail_text)
         self.list.addItem(item)
+        if self._running:
+            self._paint_row(item)
 
     def _count_up(self) -> None:
         """Die Zeile über der Liste aus der Liste selbst zählen.
@@ -7309,21 +7472,32 @@ class ReportPanel(QWidget):
             return
         from app.ui.print_contract import handoff_state
 
-        status = handoff_state(self._findings, self._review_missing)
+        status = handoff_state(self._findings, self._review_missing, running=self._running)
         severity = (
             "error"
             if counts["error"]
             else ("warning" if self._review_missing or counts["warning"] else "info")
         )
         symbol = f"severity-{severity}" if severity != "info" else "done"
+        if self._running:
+            symbol = "running"
         self.review_symbol.setPixmap(icon(symbol, self).pixmap(TARGET_SIZE // 2))
         self.review_symbol.setAccessibleName(status)
         self.summary.setText(status)
         self._fit_head()
         # **Unvollständig sagt, warum** (Durchsicht B17): der erste Grund unter
         # dem Kopf, alle im Prüfumfang. Steht ein Fehler da, sagt der Status
-        # schon mehr als die fehlende Prüfung.
+        # schon mehr als die fehlende Prüfung — außer er gehört zum vorigen
+        # Stand: Dann sagt die Zeile, dass gerechnet wird (RM-534).
         reason = self._review_missing[0] if self._review_missing and not counts["error"] else ""
+        if self._running:
+            reason = tr("Die Bewertung läuft; der vorige Stand bleibt sichtbar.")
+        elif self._stale and counts["error"]:
+            # Abgebrochen oder gescheitert: Der Fehler gehört zum letzten
+            # vollständigen Stand, und das sagt die Zeile auch neben ihm.
+            from app.ui.print_contract import NOT_CURRENT_REASON
+
+            reason = str(NOT_CURRENT_REASON)
         self.review_reason.setText(reason)
         self.review_reason.setVisible(bool(reason))
 
@@ -7333,6 +7507,61 @@ class ReportPanel(QWidget):
         self._review_missing = tuple(missing)
         self.review_scope.setText("\n".join(dict.fromkeys((*basis.splitlines(), *missing))))
         self._count_up()
+
+    def set_running(self, running: bool) -> None:
+        """Ob gerade neu gerechnet wird und die Zeilen zum vorigen Stand gehören (RM-534).
+
+        Rechnet es länger als :data:`DELAY_MS`, sagt der Kopf „Wird neu
+        berechnet …“ mit Uhr statt Fehlersymbol; die Zeilen bleiben sichtbar
+        (§15.3), mit dem Vorsatz „Voriger Stand:“ als zweiter Kodierung neben
+        der gedämpften Farbe (Regel 18), ihre Handlungen gesperrt. Die Zahlen
+        bleiben, wie sie waren — die Reitermarke zählt keinen alten Fehler
+        als neuen. Das Fenster ruft es bei jedem Wechsel; ein neues Ergebnis
+        (:meth:`show_result`) beendet den Zustand ohnehin.
+        """
+        if running:
+            if not self._running and not self._running_delay.isActive():
+                self._running_delay.start()
+            return
+        self._running_delay.stop()
+        self._show_running(False)
+
+    def set_stale(self, stale: bool) -> None:
+        """Ob der Bericht nach Abbruch oder Fehler zum letzten vollständigen Stand gehört.
+
+        Dann steht „Für den aktuellen Stand liegt noch keine abgeschlossene
+        Bewertung vor.“ auch unter einem Fehler — sonst las sich der alte
+        Bericht nach dem Abbruch wieder als gültig (RM-534).
+        """
+        if stale != self._stale:
+            self._stale = stale
+            self._count_up()
+
+    def running(self) -> bool:
+        """Ob die Zeilen gerade als voriger Stand dastehen — siehe :meth:`set_running`."""
+        return self._running
+
+    def _running_for_a_while(self) -> None:
+        self._show_running(True)
+
+    def _show_running(self, running: bool) -> None:
+        if running == self._running:
+            return
+        self._running = running
+        self._previous_keys = (
+            frozenset(
+                _identity(self.list.item(row).data(Qt.ItemDataRole.UserRole))
+                for row in range(self.list.count())
+            )
+            if running
+            else frozenset()
+        )
+        for row in range(self.list.count()):
+            self._paint_row(self.list.item(row))
+        self._count_up()
+        # Die Knöpfe hängen an der Wahl; ohne Wechsel baut sie niemand neu.
+        self._show_offers()
+        self._grew()
 
     def _toggle_review_scope(self, _shown: bool) -> None:
         """Auf- und Zuklappen besorgt :func:`collapsible`; die Karte misst neu."""
@@ -7500,7 +7729,10 @@ class ReportPanel(QWidget):
         menu = QMenu(self)
         chosen: dict[Any, Any] = {}
         for action in offered:
-            chosen[menu.addAction(str(action.label))] = action
+            entry = menu.addAction(str(action.label))
+            # Dieselbe Sperre wie an den Knöpfen darunter (RM-534).
+            entry.setEnabled(not self._previous(item))
+            chosen[entry] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
         # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
         picked = cast(QAction | None, menu.exec(self.list.viewport().mapToGlobal(position)))
@@ -7509,7 +7741,9 @@ class ReportPanel(QWidget):
         # wird. Wie im Objektbaum gehört das Menü diesem Klick.
         action_id = chosen[picked].id if picked is not None else None
         menu.deleteLater()
-        if action_id is None:
+        # Während das Menü offen war, kann ein Ergebnis die Zeile ersetzt oder
+        # ein Lauf sie zum vorigen Stand gemacht haben.
+        if action_id is None or not isValid(item) or self._previous(item):
             return
         if action_id == PLACE_ON_BED.id and group:
             self._run_bound_bed_action(bed_error, document)
@@ -7773,6 +8007,15 @@ def _group_reason_texts() -> dict[str, str]:
 #: sie hier ein — und nimmt ihr damit den unmittelbaren Klick.
 LEADS_INTO_THE_VIEW: Final[frozenset[str]] = frozenset({"slot_hole", "resize_hole"})
 
+#: An welchen Merkmalsarten *Merkmal verschieben* ins Bild führt wie *Bohrung
+#: ändern* an der Bohrung: Ein Klick bringt die Maße zu Kanten und Mitten in
+#: die Szene, der Griff schlägt vor, *Übernehmen* rechnet (RM-535, Robert
+#: 06.10.2026: „alles einheitlich, Bohrung Vorbild für alle Funktionen“; das
+#: nimmt die Entscheidung vom 10.09.2026 zurück, dass Verschieben auf Klick
+#: rechnet). Die Bohrung selbst und das Langloch haben ihre Maße schon über
+#: :data:`LEADS_INTO_THE_VIEW`; ein Einschluss hat keine Mündung zum Anfassen.
+MEASURED_WHILE_MOVED: Final[frozenset[str]] = frozenset({"pin", "cone", "sphere", "torus"})
+
 #: Unter welchem Namen ein Merkmalsfeld sagt, welchen Parameter es trägt —
 #: rechts im Merkmalfenster wie in der Maßgruppe im Bild, damit der Fokus von
 #: einem zum anderen wandern kann (``MainWindow._hand_the_measures_over``).
@@ -7926,14 +8169,34 @@ def _explain_source(editor: QWidget, field: Any) -> None:
         inner.setAccessibleDescription(hint)
 
 
+def feature_reference(op: str | None) -> str:
+    """Unter welchem Parameter diese Operation ihr Merkmal führt.
+
+    ``at_feature`` bei den Merkmalshandlungen; eine Operation ohne ihn nennt
+    es in ihrem einzigen Merkmalsparameter — *Fläche versetzen* in ``face``,
+    seit sie als Zeile im Merkmalfenster steht (RM-535).
+    """
+    from app.core.registry import REGISTRY
+
+    if op is None or not REGISTRY.has(op):
+        return "at_feature"
+    names = [entry.name for entry in REGISTRY.get(op).params.spec() if entry.kind == "feature"]
+    return "at_feature" if "at_feature" in names or len(names) != 1 else str(names[0])
+
+
 def feature_field_values(
     fields: Sequence[Any],
     widgets: Mapping[str, QWidget],
     fixed: Sequence[tuple[str, Any]] = (),
     *,
     feature_id: str | None = None,
+    op: str | None = None,
 ) -> dict[str, Any]:
     """Was in den Feldern dieser Handlung steht, in der Einheit des Kerns.
+
+    Das gezeigte Merkmal steht unter dem Namen, unter dem ``op`` es führt
+    (:func:`feature_reference`): ``at_feature``, an *Fläche versetzen*
+    ``face`` (RM-535).
 
     ``fixed`` sind die Werte, die die Handlung mitbringt und die niemand
     eingibt — an einer angeklickten Kante die Auswahl ``named`` und ihr
@@ -7947,7 +8210,7 @@ def feature_field_values(
     if feature_id is not None:
         # ``at_feature`` ist kein Feld: Welches Merkmal gemeint ist, steht
         # in der Auswahl, und eine Frage danach hätte ihre Antwort schon.
-        params["at_feature"] = feature_id
+        params[feature_reference(op)] = feature_id
     params.update(dict(fixed))
     for field in fields:
         widget = widgets.get(str(field.name))
@@ -8161,9 +8424,10 @@ def feature_answers(
         unit = group_of(feature_id, functional)
         if unit is not None:
             unit_name = numbered_titles(functional)[unit.key]
-    if cancelled is not None:
-        cancelled.raise_if_cancelled()
-    return _FeatureAnswers(cavity, tuple(actions), groups, unit, unit_name)
+    # Am Anker der Gruppe führt ihre Handlung — die erste Zeile wird scharf
+    # und klappt auf (:meth:`FeaturePanel._arm`).
+    ordered = group_action_first(actions, feature_id, unit.anchor if unit is not None else None)
+    return _FeatureAnswers(cavity, ordered, groups, unit, unit_name)
 
 
 #: Der Merker des Merkmalfensters: der Körper (schwach), die Merkmalsliste,
@@ -8460,9 +8724,10 @@ def _focus_stops(row: QWidget) -> list[QWidget]:
     ]
 
 
-def _leads_into_the_view(op: str) -> bool:
+def _leads_into_the_view(op: str, kind: str | None = None) -> bool:
     """Ob dieser Knopf ins Bild führt, statt sofort auszuführen."""
-    return op in LEADS_INTO_THE_VIEW and _places_on_a_surface(op)
+    measured = op == "move_feature" and kind in MEASURED_WHILE_MOVED
+    return (op in LEADS_INTO_THE_VIEW or measured) and _places_on_a_surface(op)
 
 
 def _explained(action: Any) -> str:
@@ -8572,9 +8837,13 @@ class ColumnScroller(QScrollArea):
     @override
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         # ``setWidget`` trägt den Rollbereich als Filter am Inhalt ein; ein neu
-        # gelegter Inhalt kann eine neue Mindestbreite haben.
+        # gelegter Inhalt kann eine neue Mindestbreite haben. **Bis zur Zone**
+        # (:func:`overlay.tell_the_zone`): Qt reicht den Wunsch je Runde eine
+        # Ebene weiter, über Seite, Stapel, Reiter und Karte. An einer
+        # gewählten Fläche stand die Karte so einige Runden 22 Punkte zu
+        # schmal, und *Loch oder Aussparung zeichnen …* lief unter den Rand.
         if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
-            self.updateGeometry()
+            tell_the_zone(self)
         return super().eventFilter(watched, event)
 
 
@@ -8604,8 +8873,12 @@ class FeaturePanel(QWidget):
     Ein Panel, das ``kind == "hole"`` fragte, führte dieselbe Tabelle ein
     zweites Mal und wüsste beim nächsten neuen Merkmal die Hälfte.
 
-    Nicht anwendbare Handlungen werden ausgeblendet. Eine vorübergehend
-    gesperrte Eingabe behält dagegen ihre Werte und die sichtbare Rückmeldung.
+    **Was nicht geht, steht als Zeile mit seinem Grund** (RM-535, Robert
+    06.10.2026: „alles einheitlich, Bohrung Vorbild für alle Funktionen“).
+    Gleich begründete Absagen legt :func:`_folded` zu einer Zeile zusammen;
+    eine Lücke ließe den Kunden raten, ob die Handlung fehlt oder vergessen
+    wurde (Regel 17). Eine vorübergehend gesperrte Eingabe behält ihre Werte
+    und die sichtbare Rückmeldung.
     """
 
     #: Registername und Parameter — dieselbe Form, die der Operationsdialog
@@ -8813,6 +9086,8 @@ class FeaturePanel(QWidget):
         self._built: list[QWidget] = []
         self._serial = 0
         self._feature_id: str | None = None
+        self._feature_kind: str | None = None
+        self._answered: str | None = None
         self._part_operation: int | None = None
         self._groups: dict[str, FeatureActionGroup] = {}
         self._into_view: Callable[[], None] | None = None
@@ -8929,6 +9204,8 @@ class FeaturePanel(QWidget):
             widget.deleteLater()
         self._built.clear()
         self._feature_id = None
+        self._feature_kind = None
+        self._answered = None
         self._part_operation = None
         self._groups = {}
         self._said_notes.clear()
@@ -9175,6 +9452,7 @@ class FeaturePanel(QWidget):
         cavity = answers.cavity
         self.clear(rebuilding=True)
         self._feature_id = feature_id
+        self._feature_kind = feature.kind
         _set_shown(self._empty, False)
 
         # **Die Herkunft nur, wenn sie warnt** (RM-510): „gemessen“ hinter jedem
@@ -9263,29 +9541,18 @@ class FeaturePanel(QWidget):
 
         actions = answers.actions
         self._groups = dict(answers.groups)
-        # Unpassende Aktionen belegen keine Zeile. Der Kern behält ihre
-        # Gründe für andere Aufrufer; das Panel zeigt die verfügbaren Wege.
+        # **Eine Absage steht als Zeile mit ihrem Grund** (RM-535): „Verschieben,
+        # Drehen und Verdoppeln — eine Verrundung gehört zu ihrer Kante.“ Seit
+        # dem 15.09.2026 fielen sie weg, und am Kundenmodell hatten 174 von 190
+        # Merkmalen keine Zeile zum Versetzen und keinen Satz, warum.
         for action in _folded(actions):
-            if action.op is None and getattr(action, "step", None) is None:
-                continue
             line = self._separate()
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
-            self._blocks[next(reversed(self._runs))] = (line, row)
-
-        # **Eine Öffnung, an der nichts geht, sagt warum** (Durchsicht 0.5.1).
-        # Am Laptop-Ständer lehnt der Kern an 13 von 28 Bohrungen jede
-        # Handlung mit demselben Satz ab („In dieser Bohrung steht Material
-        # …“); das Fenster zeigte Name, Maß und *Baustein einsetzen …*, und
-        # der Kunde wartete auf Maße im Bild, die nie kamen. An einer Bohrung
-        # ist der Grund eine Auskunft; an Kante und Fläche bleibt es bei der
-        # Regel oben, dort sagt der Katalog darunter, was geht.
-        if feature.kind in ("hole", "slot", "cone") and not any(
-            action.op is not None or getattr(action, "step", None) is not None for action in actions
-        ):
-            for reason in dict.fromkeys(str(action.reason) for action in actions if action.reason):
-                self.show_note(reason)
+            if action.op is not None or getattr(action, "step", None) is not None:
+                self._blocks[next(reversed(self._runs))] = (line, row)
+        self._answered = feature_id
 
         if feature.kind == "face":
             self._build_sketch_entries(feature_id)
@@ -10074,7 +10341,7 @@ class FeaturePanel(QWidget):
             take=partial(self._take_row, row),
             in_view=(
                 partial(self._row_in_view, row)
-                if step is None and _leads_into_the_view(op_name)
+                if step is None and _leads_into_the_view(op_name, self._feature_kind)
                 else None
             ),
             op=op_name,
@@ -10466,7 +10733,7 @@ class FeaturePanel(QWidget):
 
     def _row_values(self, row: _ActionRow) -> dict[str, Any]:
         """Was in den Feldern dieser Zeile steht — mit dem gezeigten Merkmal."""
-        return self._values(row.entries, row.widgets, row.fixed)
+        return self._values(row.entries, row.widgets, row.fixed, op=row.op)
 
     def _run_row(self, row: _ActionRow, _checked: bool = False) -> None:
         """Führt die Handlung dieser Zeile aus — mit ihren heutigen Feldern.
@@ -10838,6 +11105,20 @@ class FeaturePanel(QWidget):
         self._settle_apply_block()
         if changed and entry.op != NO_OPERATION and not self._active_field_refusal():
             self.handlingArmed.emit(entry.op, entry.values())
+
+    def refuses(self, op: str, feature_id: str) -> bool:
+        """Ob das Fenster an diesem Merkmal eine Zeile dieser Operation **ohne**
+        Handlung zeigt — die Antwort des Kerns (``actions.move_refusal``), nicht
+        geraten.
+
+        Für den Griff im Bild (RM-535): Er hing an jedem Merkmal einer
+        versetzbaren Art, und an einem gesperrten endete sein Zug mit „Die neue
+        Stelle steht rechts unter Auswahl.“ — dort stand nichts. ``False``,
+        solange die Antwort für dieses Merkmal noch aussteht.
+        """
+        if self._answered != feature_id:
+            return False
+        return not any(entry.op == op for entry in self._runs.values())
 
     def take_values(self, op: str, values: Mapping[str, Any], *, arm: bool = True) -> bool:
         """Vorgeschlagene Zahlen in die Felder dieser Handlung — und sie scharf.
@@ -11299,6 +11580,15 @@ class FeaturePanel(QWidget):
 
     def _group_changed(self, _checked: bool) -> None:
         """Ein geänderter Umfang braucht dieselbe Vorschau wie geänderte Maße."""
+        self.preview_armed()
+
+    def preview_armed(self) -> None:
+        """Die Vorschau der scharfen Handlung mit ihren heutigen Feldern bestellen.
+
+        Für Zahlen, die nicht getippt wurden: ein geänderter Umfang, ein Zug
+        am Flächengriff (RM-535), der den Weg über :meth:`take_values` ohne
+        Meldung einträgt.
+        """
         entry = self._runs.get(self._armed or "")
         if entry is not None and entry.op != NO_OPERATION:
             self.valuesChanged.emit(entry.op, entry.values())
@@ -11454,9 +11744,10 @@ class FeaturePanel(QWidget):
         fields: Sequence[Any],
         widgets: Mapping[str, QWidget],
         fixed: Sequence[tuple[str, Any]] = (),
+        op: str | None = None,
     ) -> dict[str, Any]:
         """Panelwerte mit dem dort angezeigten Merkmal lesen."""
-        return feature_field_values(fields, widgets, fixed, feature_id=self._feature_id)
+        return feature_field_values(fields, widgets, fixed, feature_id=self._feature_id, op=op)
 
     def _emit(
         self,
@@ -11471,7 +11762,7 @@ class FeaturePanel(QWidget):
         Ist der Haken gesetzt, gilt sie allen gleichartigen Merkmalen des
         Körpers, und das Fenster macht daraus **eine** Transaktion.
         """
-        params = self._values(fields, widgets, fixed)
+        params = self._values(fields, widgets, fixed, op=op)
         if every is not None and every.isChecked() and self._feature_id is not None:
             targets = self.preview_targets(op)
             if not targets:

@@ -635,10 +635,10 @@ def test_history_preview_reconstructs_each_transaction_without_mutating_document
 
     session = Session()
     session.add_parameter(Parameter(name="width", value=20.0, unit="mm"))
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     session.history.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@width"})])
     session.change_parameter("width", 35.0)
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     session.history.apply("Zweiter Körper", [OperationDraft(op="create_sphere")])
     original = copy.deepcopy(session.project.document)
     for count in range(1, len(original.transactions) + 1):

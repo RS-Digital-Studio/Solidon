@@ -107,7 +107,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | Datei | Zweck |
 |---|---|
 | `app.py` | Einstieg (§38): lokaler Absturzschutz vor Qt nur in `main()`, idempotent; Rendereradapter früh abfragen |
-| `qt_platform.py` | welche Qt-Plattform die 3D-Ansicht braucht — entschieden vor der `QGuiApplication`, ohne Qt-Import |
+| `qt_platform.py` | Qt-Plattform der 3D-Ansicht und Eingabemodul — vor der `QGuiApplication`, ohne Qt-Import |
 | `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
@@ -138,7 +138,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 
 | Datei | Zweck |
 |---|---|
-| `placement_flow.py` | Flächenplatzierung (§18.5): `_settle` setzt, `_begin_depth` steuert Tiefe, Escape ruft `step_back`. `PlacementHost` verbindet Dialog/`QuietHost`, `Session.placement_async` Fläche/Werkzeug, `_Dimensions` die Maße. Mündung zuerst, `0`=Durchgang. Langloch: Flächennormale beim Setzen, positive Merkmalachse beim Ziehen/Ändern, Gegenmündung rechtshändig. Alt-`measured_frame`: `operationen.md`. |
+| `placement_flow.py` | Flächenplatzierung (§18.5): `_settle` setzt, `_begin_depth` steuert Tiefe, Escape ruft `step_back`. `PlacementHost` verbindet Dialog/`QuietHost`, `Session.placement_async` Fläche/Werkzeug, `_Dimensions` die Maße. Mündung zuerst, `0`=Durchgang. Alt-`measured_frame`: `operationen.md`. |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |
@@ -188,7 +188,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | Datei | Zweck |
 |---|---|
 | `print_findings_flow.py` | die Befunde der Schichtanalyse nach jeder Auswertung im Arbeiter (§2.8, §22); ein neuer Stand löst den laufenden ab |
-| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Düsenvariante nach Profilidentität, Modell und Hersteller; Cura-Übernahme nur für eine aktive Maschine und erst nach Klick; Fehlerhandlungen öffnen die Druckerwahl; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
+| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Slicer vor Drucker, Erhebung aus `first_run` (`_PrinterSurvey`, `printers_on_offer`, `SlicerPrinters`); Düsenvariante nach Profilidentität, Modell und Hersteller; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
 **Druckfelder und Kennung:** `manufacturer.base_settings`, Feldherkunft und
@@ -237,11 +237,11 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 
 | Datei | Zweck |
 |---|---|
-| `style.py` | Formsprache/Typografie/Raster; `make_primary`, `rule`; `ContentHeight` nach Auslöser/Nutzermaß; `DialogScrollArea`, `expanded_width`, Bildschirmfit, Aufmachmaß, Pfeil/Haken |
+| `style.py` | Formsprache/Typografie/Raster; `make_primary`, `rule`; `ContentHeight` nach Auslöser/Nutzermaß; `select_data`; `DialogScrollArea`, `expanded_width`, Bildschirmfit, Aufmachmaß, Pfeil/Haken |
 | `theme.py` | hell und dunkel (§19.3) |
 | `window_chrome.py` | Windows malt die Titelleiste mit Anwendungsfarben; idempotenter Ereigniswächter |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
-| `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18) |
+| `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18); `svg_pixmap` rastert scharf auf HiDPI |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
 | `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht |
 | `labels.py` | Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
@@ -270,10 +270,11 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 
 - **Freigabe im Hauptfenster:** früher Klick bindet an das erwartete Bild
   (`_PreviewApproval.pending_click`, `_apply_when_previewed`); ohne Bildpflicht
-  nur an cachegleiche Rechnung (`Session.preview_is_the_evaluation`). Zahl-,
-  Dokument-/Projektwechsel entwertet beides. `block_apply(reason)` sperrt bei
-  Problemen, nicht beim Warten. Dialog/Panel/`QuietHost` teilen `preview_check`
-  und `preview_defer`, keine eigene Vorschauverwaltung.
+  nur an cachegleiche Rechnung (`Session.preview_is_the_evaluation`); läuft
+  oder fehlt die Auswertung, an ihr Ende (`_WaitingClick`). Wert-/Dokumentwechsel
+  entwertet jede Bindung, wartende mit Satz.
+  `block_apply` sperrt bei Problemen, nicht beim Warten. Dialog, Panel,
+  `QuietHost`, Filamentwahl prüfen über `preview_check`/`preview_defer`.
 - **Panel und Bild:** `QuietHost`: `feature_field`/`feature_field_values`.
   `set_measuring` übergibt Abschluss an die Maßgruppe; Panelzwillinge aus
   (`_blocks`, `LEADS_INTO_THE_VIEW`, `_in_the_view`); Fußknöpfe bleiben beim

@@ -227,7 +227,7 @@ def _with_a_hint(window: MainWindow) -> None:
     Zeile und Hauptknopf darunter.
     """
     window.open_path(MESHES / "block_with_rounded_edge.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     step = window.session.history.operations[-1]
     assert window.session.change_params(step.id, {"place_on_bed": False, "free_spot": False})
     assert window.session.wait_for_idle()
@@ -259,7 +259,7 @@ def test_at_rest_only_one_element_carries_the_accent(
     """
     _shown(qt_app, window, theme)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     if scene == "hint":
         _with_a_hint(window)
     _settle(window, 60)
@@ -318,7 +318,7 @@ def test_the_measurement_would_notice_a_second_light(
     """
     _shown(qt_app, window, theme)
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     _settle(window, 60)
 
     before = len(accent_elements(window, theme))
@@ -352,3 +352,28 @@ def test_the_measurement_would_notice_a_second_light(
         f"die Messung hat eine absichtlich eingefärbte Linie nicht bemerkt "
         f"({before} vorher, {lined} nachher) — Kartenränder gingen ihr wieder durch"
     )
+
+
+def test_the_focus_starts_in_the_view(qt_app: QApplication) -> None:
+    """Nach dem Zeigen steht der Fokus in der Ansicht, nicht am Griff der linken Karte.
+
+    Ohne eigene Wahl gibt Qt ihn beim Aktivieren dem ersten Element der
+    Tabulatorkette, dem ``CardGrip``; der trägt dann im Ruhezustand einen
+    Rahmen in der Akzentfarbe, und die Flugtasten (§2.9) wirken erst nach
+    einem Klick in die Ansicht. Die Akzentmessung oben sieht das nur, wo das
+    Fenster beim Zeigen aktiv wird und der Rahmen gemalt ist (macOS); der
+    Fokus selbst landet auf jeder Plattform am Griff.
+    """
+    from tests.ui_helpers import shown_window
+
+    windows = shown_window(qt_app)
+    window = next(windows)
+    try:
+        qt_app.processEvents()
+        focused = window.focusWidget()
+        assert focused is window.viewport, (
+            f"der Fokus steht bei {type(focused).__name__}"
+            f"({focused.objectName() if focused is not None else ''}), nicht in der Ansicht"
+        )
+    finally:
+        next(windows, None)

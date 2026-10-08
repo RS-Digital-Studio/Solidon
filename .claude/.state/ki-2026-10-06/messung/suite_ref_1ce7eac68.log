@@ -1,0 +1,53 @@
+qwen3:14b — 39 Fälle, Baum F:/ki-ref, Fenster 32768
+ok move                     42.7s  translate_object
+ok rotate                   31.9s  rotate_object
+ok on_bed                   24.0s  place_on_bed
+ok scale                    26.2s  scale_object
+ok repair                   57.4s  repair
+ok orient                   33.7s  orient_for_print
+evaluation stopped at op 2: op.split_pinned.ValidationError: Diese Ebene teilt das Objekt nicht.
+ok split                    42.5s  split_pinned
+ok drill                    94.9s  drill_hole  [2 ungültig]
+ok drill_on_feature        194.5s  duplicate_feature, drill_hole, duplicate_feature  [gefragt]
+ok duplicate                49.8s  duplicate_object, translate_object
+ok parameter                35.9s  keine Operation
+ok question                 10.1s  keine Operation
+-- printable                52.0s  translate_object
+ok how_long                 18.9s  keine Operation
+-- core_hole                49.4s  insert_printed_thread  [1 ungültig]
+ok switch_material          31.9s  keine Operation
+-- where_menu              160.2s  keine Operation  [gefragt]
+-- where_hollow             39.6s  hollow_object  [1 ungültig]
+ok which_hole              129.3s  keine Operation  [gefragt]
+-- how_much_thinner        264.2s  fit_to_size, scale_object, scale_object, scale_object, scale_object, scale_object, scale_object, scale_object  [1 ungültig]
+ok join_what               142.3s  keine Operation  [gefragt]
+-- bracket                 335.0s  create_brep_box, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole  [5 ungültig]
+evaluation stopped at op 5: op.create_lid.ValidationError: Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.
+evaluation stopped at op 6: op.create_lid.ValidationError: Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.
+-- magnet_lid              207.4s  create_brep_box, create_brep_box, create_brep_box, create_brep_box, create_brep_box, create_brep_box  [13 ungültig]
+-- wall_holder              53.8s  keine Operation  [gefragt]
+ok cable_exit              135.9s  create_brep_box, insert_cable_gland  [gefragt]  [2 ungültig]
+-- threaded_stud           209.5s  create_brep_cylinder, thread_exact, union_objects, create_brep_cylinder  [4 ungültig]
+ok nut_plate               144.1s  create_brep_box, insert_nut_trap  [gefragt]  [2 ungültig]
+-- spacer                  222.5s  create_brep_tube  [15 ungültig]
+ok hinge                   135.5s  create_brep_box, insert_living_hinge  [gefragt]  [2 ungültig]
+-- snap_box                150.7s  keine Operation  [gefragt]
+evaluation stopped at op 2: op.insert_keyhole.ValidationError: Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante bleibt.
+ok keyhole_back             87.6s  create_brep_box, insert_keyhole  [1 ungültig]
+-- stiffen                 146.2s  create_brep_box  [gefragt]  [4 ungültig]
+evaluation stopped at op 3: op.insert_dowel.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+evaluation stopped at op 4: op.insert_dowel.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+evaluation stopped at op 5: op.insert_dowel.AppError: Der Name muss eines der Merkmale sein, die dieses Objekt trägt — sie stehen unten als bekannte Namen.
+-- dowels                  207.3s  create_brep_box, create_brep_box  [gefragt]  [7 ungültig]
+evaluation stopped at op 2: op.detect_region.ValidationError: Die gewählte Stelle liegt nicht mehr auf dieser Fläche. Wählen Sie sie erneut.
+evaluation stopped at op 3: op.detect_region.ValidationError: Die gewählte Stelle liegt nicht mehr auf dieser Fläche. Wählen Sie sie erneut.
+evaluation stopped at op 4: op.detect_region.ValidationError: Die gewählte Stelle liegt nicht mehr auf dieser Fläche. Wählen Sie sie erneut.
+evaluation stopped at op 5: op.detect_region.ValidationError: Die gewählte Stelle liegt nicht mehr auf dieser Fläche. Wählen Sie sie erneut.
+-- inserts                 296.2s  create_brep_box  [8 ungültig]
+ok parameterise             39.5s  keine Operation
+-- free_shape              132.8s  keine Operation  [gefragt]
+ok hex_base                119.8s  sketch_extrude, fit_to_size
+-- pocket_plate             58.4s  create_brep_box, sketch_pocket
+-- handrail_bend            39.9s  create_brep_torus
+
+gut 22/39; gefragt 2/3; schemagültig 174/242; Baustein 4/13; Parameter 2/3; Zeit 70.9 min

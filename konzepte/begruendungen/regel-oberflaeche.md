@@ -184,6 +184,13 @@ sie überall und für Codex gelten. Anlässe und Wortlaut:
   geblieben“ zu „der Befund zeigt auf seinen Körper und trägt seine Handlung,
   und wo keine steht, ist er ein reiner Hinweis“ — die nützlichere Aussage. Die
   entscheidende Frage: Ist die Zahl an etwas gemessen, das dem Kunden gehört?
+  Eine Zählung eigener Fehler sagt dem Kunden, was bis gestern fehlte, und
+  veraltet mit dem nächsten Fund.
+- **Musterwächter über jeden Katalogtext:** Bis Review P2 N5 las `test_wording`
+  nur die Texte, die `test_text_length` nach Aufrufort einordnet. Ein
+  `return _(…)` außerhalb einer `*empty*`-Funktion und jeder Handbuchabsatz
+  fielen durch, Übersetzungen las er gar nicht, und fünf Übersetzungen des
+  Senkkopfsatzes bekamen ihr gestrichenes Semikolon zurück.
 - **Druckzeit:** Robert, 26.09.2026, zu „Eine Schüssel am Centauri Carbon 2
   braucht 18 statt 31 Stunden“ — „40 Prozent kürzer finde ich aber besser als
   die zeit“. Stunden gehören zu einem Modell, das der Leser nicht kennt; ein
@@ -479,6 +486,25 @@ Linienfarbe des Themas und nicht gegen 3,0 — was diese Farbe leistet, ist eine
 Frage an das Thema (im hellen bringt sie seit je nur 2,43), dass der Rahmen sie
 nicht unterschreitet, eine an das Stylesheet.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
+
+## Eine Auswahl fällt nie still auf etwas Größeres
+
+Fiel eine Merkmalswahl beim neuen Stand still auf den Körper zurück, entfernte
+Entf danach den ganzen Körper statt der Bohrung (RM-537). Deshalb hebt
+`ObjectTree.show_scene` die Wahl auf und hält sie samt Zeilentext in
+`lost_selection` fest. `MainWindow._say_features_lost` spricht erst nach den
+Wiederwahlen, weil die den Körper aus `lost_selection` lesen, und nur ohne
+eigene Handlung seit dem letzten aktuellen Bild — sonst überschriebe es deren
+Quittung mit Rückweg (Regel 19).
+
+## Der Prüfbericht sagt, wenn er zum vorigen Stand gehört
+
+Rechnet es über 200 ms und gehört das Gezeigte nicht zum Dokument, sagt der
+Kopf „Wird neu berechnet …“; was beim Beginn dastand, trägt „Voriger Stand:“
+in `muted`, ohne Folgezeile, Handlungen gesperrt (`ReportPanel.set_running`,
+Anschluss `MainWindow._follow_the_run_in_the_report`). Endet der Lauf ohne
+Ergebnis, steht der Grund auch unter einem Fehler (`set_stale`). Sonst liest
+der Kunde einen widerrufenen Fehler als gültig (RM-534).
 
 ## Barrierefreiheit
 

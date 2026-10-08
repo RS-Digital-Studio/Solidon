@@ -65,7 +65,7 @@ wäre beim nächsten Zuwachs des exakten Kerns unvollständig.
 Nicht die Bauart, sondern der Zustand — `"open"` (nicht wasserdicht),
 `"parts"` (mehr als ein Stück), `"cavity"` (ein Hohlraum, als `void` erkannt
 oder von *Aushöhlen* eingetragen). Drei Operationen tragen es: *Offene Fläche
-schließen*, *In Einzelteile zerlegen*, *Gitter füllen*. Gemessen am
+schließen*, *In Einzelteile aufteilen*, *Gitter füllen*. Gemessen am
 13.09.2026 über alle Dialoge: Ohne die Angabe öffneten sie an einem sauberen
 Quader einen Dialog, dessen Vorschau nur „Keine Vorschau: …" sagen konnte.
 `labels.body_requirement` liest die Angabe und sagt am Eintrag **denselben
@@ -416,6 +416,41 @@ Satz — nicht ein Ergebnis mit stillschweigend niedrigerer Wand, und nicht ein
 exakter Körper, den `ShapeFix` formal heilt. Tangential anschließende Flächen
 sind notwendige Übergänge und gehen mit (Befund `draft.tangent_faces`, wo der
 Kunde Flächen gewählt hat).
+
+**Neben einer liegenden Rundung gibt es keine Schräge, und gefragt wird vorher**
+(RM-230, 06.10.2026). Am Tray `build_tray_v3.step` tragen alle Wände unten eine
+Rundung R 2; OpenCASCADE meldet an der ersten Wand `Draft_FaceRecomputation`,
+weil es die Rundung neben der gekippten Wand nicht nachrechnet. Am Netz scheiterte
+die Ecke, wo Fuß- und Eckrundung zusammenlaufen, und am einfachen Quader baute es
+bei 1° und 2° mit der alten Rundung samt Knick (22 921 statt 22 909 mm³ über den
+Weg aus dem Satz), bei 0,5°, 3° und 5° sagte es ab. Beide Kerne sagten „kleineren
+Winkel oder weniger Flächen“ — beides half nicht, und „in Gruppen rechnen“ (der
+erste Gedanke im Register) auch nicht: Jeder der fünf Körper scheitert für sich.
+Der Weg einer CAD-Konstruktion — erst anstellen, dann runden — trägt in Solidon
+noch nicht: *Merkmal entfernen* nimmt eine Fußrundung, die mit Eckstücken in
+einer Kette liegt, nicht weg (am exakten Tray meldete es Erfolg und änderte
+nichts, jetzt sagt es ab, `IsDeleted` in `_unround`). Der Satz nennt deshalb nur
+die Wände ohne diese Verrundung (RM-230).
+
+Die erste Fassung fragte erst nach dem Scheitern und nach jeder schrägen
+Nachbarfläche; dann hieß auch eine Fase oder eine Querbohrung „Rundung“, und der
+Rat zum Winkel, der dort hilft, fiel weg (Review Einheit 2). Gefragt wird jetzt
+an beiden Kernen vor der Rechnung, und nach der eigentlichen Ursache: eine Fläche,
+die nicht mitgestellt wird, ohne Knick an eine Wand anschließt und schräg zur
+Entformungsrichtung liegt. Exakt sammelt `_tangent_chain` sie mit: Normalen an der
+Kantenmitte, Schräglage an neun Punkten der Fläche (eine Vollrundung aus einer
+Fläche liegt in ihrer Mitte waagerecht). Eine tangentiale Fläche, die steht und
+sich nicht anstellen lässt — eine B-Spline-Ecke, ein fast stehender Zylinder —,
+ließ `BRepOffsetAPI_DraftAngle` still senkrecht, und die gekippten Wände schnitten
+sich in sie ein; dort sagt der exakte Kern jetzt `DRAFT_BESIDE_A_FREE_FACE`. Am
+Netz heißt ohne Knick: unter der Knickschwelle des Bildes; weil eine ebene
+Schräge, die mit 15° an eine Wand stößt, das auch tut, muss sich die Neigung
+dahinter um mehr als die Knickschwelle ändern — ein Kegelstück am Fuß einer
+gerundeten Ecke krümmt sich nur um die Entformungsrichtung und zählt nicht.
+Eine Fase am Fuß aller Wände eines Quaders schneiden beide Kerne
+mit, mit dem Volumen des analytischen Querschnitts
+(`test_a_wall_on_a_chamfered_foot_is_drafted_on_both_kernels`); an nur einer Wand
+oder am dünnen Kasten sagen die Kerne noch Verschiedenes (RM-230).
 
 ## Boolesches geht durch die Rückfallkette
 
@@ -1297,6 +1332,26 @@ mit 360 000 Dreiecken kostete jede Antwort 90 ms, weil die Endebenen dafür
 eine Kopie des Netzes verschweißen — der Bohrungsklick 258 → 83 ms
 (22.09.2026). Der Merker stirbt mit dem Körper.
 
+**Gehört das Material einem anderen Teil, sagt es ein eigener Satz**
+(`OTHER_PART_IN_THE_BORE`, RM-413/RM-253, 06.10.2026). Das Menü stellte die
+Zeilen schon grau, die Operationen rechneten aber: Am Netz galt ein Stift Ø 5
+in einer Bohrung Ø 6 als Haltelippe (`_only_a_rim_inside`), der exakte Weg
+fragte gar nicht, und *Versetzen*, *Verschließen*, *Entfernen* und *Kippen*
+füllten die alte Stelle und verschmolzen den Stift still mit der Platte
+(ein Körper statt zwei; *Bohrung ändern* schnitt ihn ab oder ließ einen losen
+Ring stehen). Am Laptop-Ständer trug `hole_3` seinen Mantel auf zwei Platten
+mit einem Zapfen darin; *Versetzen* verschmolz die Platten, der Zapfen
+verschwand im Stopfen, 531 mm³ ohne Befund. Eigen sind deshalb alle Teile, die
+den Mantel tragen (`_own_part_bore_clear`), und `_movable_feature` sowie
+*Bohrung ändern* sagen ab, mit *In Einzelteile aufteilen* als Weg. „Sie ist eine
+Wand, keine Bohrung“ war dort auch als Satz falsch. Allein *Zum Langloch
+ziehen* schneidet ein belegt freies Teil darin mit; die Kontakt- und
+Materialfrage dafür gilt dem Träger und den Teilen, deren Hüllquader seinen
+berühren (`_near_the_carrier`) — zwei Würfel, die sich weit daneben
+berühren, sperrten vorher den Zug (Review `e3dff1907`, F10). Wer über eine
+Kette fremder Teile am Träger hängt, berührt ihn mit dem letzten Glied und
+sperrt weiter.
+
 **Und was für eine runde Bohrung an ihrer Mitte gefragt wird, wird an einem
 Langloch an beiden Enden gefragt** (`prepare.slot_ends`). Die Mitte steckt tief
 im Material, während ein Ende schon über die Kante ragt; wer nur sie fragt,
@@ -1517,6 +1572,19 @@ Regel 7 im Gewand einer Fertigungszugabe. Sie untergrub die Kalibrierung
 (§28.3) — wer sein Material misst und 0,15 mm einträgt, bekam trotzdem 0,55 mm
 je Seite. **Dass etwas nicht klemmt, ist die Aufgabe des Gleitspiels aus dem
 Profil**; dafür ist es da, und dafür wird es gemessen.
+
+*Stift für Bohrung* mit Senkkopf (RM-536) zeigt, warum die Hälfte senkrecht zur
+Wand gilt und nicht im Halbmesser: Eine Mündung „Senkung minus Spiel“ mit dem
+Winkel der Senkung ließe an einer 90°-Flanke nur `Spiel/2 · cos 45°` Luft, an
+`plate_countersunk.stl` mit PETG 0,088 statt 0,125 mm. Die Flanke rückt deshalb
+um `Spiel/2` senkrecht zu sich ein, die Mündung wird um `Spiel · √2` enger. Das
+Gewinde darin stand nach dem Bau zunächst auf seinem Absatz: An der Achse ist
+unter einem gedruckten M6 in Ø 5,2 Luft, der Kamm des Bolzens saß aber auf dem
+Ring, an dem die Gänge der Bohrung enden — Abstand null, ohne gemeinsames
+Volumen. Seither fragt das Ende des Gewindes die Weite dahinter
+(`bore_pin.room_beyond`). Die Lage der Gänge wird an den Ecken des Trägers
+gemessen (`bore_pin.thread_turn`): Ein um 100° gedrehter Träger ließ den
+ungedrehten Bolzen über 1 mm³ in seinen Gängen stehen.
 
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 
@@ -1981,8 +2049,8 @@ waren es fünf, vier davon in `tests/test_agent_suite.py`.
   liefert einen unveränderlichen `PlacementTool` mit lokalem Körper und
   ausgewähltem Merkmalsversatz. `surface_values(..., prepared_tool=...)`
   berechnet daraus neue Koordinaten ohne weiteren Körperbau; dieser Kontext
-  gehört zu genau den gewählten Eingaben. `placement_tool()` bleibt der
-  kompatible reine Mesh-Zugriff. Mündung oder Basis liegt bei null. Nur der
+  gehört zu genau den gewählten Eingaben; wer nur den Körper braucht, liest
+  `prepare_tool(...).mesh`. Mündung oder Basis liegt bei null. Nur der
   temporäre Anzeigeaktor erhält den `frame_of()`-Rahmen am Treffer. Winkel,
   Einsenkung und Schnittspiegelung stecken bereits im Werkzeug. Bausteine
   deklarieren ihre Richtungsfelder über `normal_fields()`, damit gleichnamige
@@ -2266,3 +2334,27 @@ Hinweis auf die andere — ein Zug in neuer Richtung dreht das Langloch
 **Langloch ohne Zugabe:** `slot_hole` schneidet ohne `FEATURE_OVERLAP`
 (`overlap=0.0`), damit beide Wege — Ziehen und Ändern — und beide Kerne
 dasselbe Langloch schneiden.
+
+## Versetzen: Kette, Material, eine Frage (RM-535)
+
+**Ganze Kette:** Versetzen, Drehen und Verdoppeln nehmen die ganze Hohlraumkette
+mit — Entscheidung Robert; nur *Zum Langloch ziehen* sagt an einer geteilten
+Kette ab.
+
+**Material, wie es ist:** Der volle Körper aus den Flächen füllte, was im
+Merkmal hohl ist, und die Hohlräume aus Kennzahlen gaben es nur grob zurück.
+Am Minitopf (Zapfen Ø 30 um eine Tasche Ø 28 mit Deckelfalz) stand nach jedem
+Versetzen +240,65 mm³, gleich wie weit; der nachgebaute Becher im Korpus
+(`cup_on_stem.stl`) verlor 529,6 mm³. Eine Tasche, die den Zapfen umschließt,
+schnitt ihn ab 0,5 mm ganz weg (Kundenmodell minus 189 mm³, Korpus
+`pocket_with_pin.stl` minus 178 mm³). Ein Sackloch, das von unten in einen
+Stift reicht, ging bis zu dessen anderem Ende (minus 5 722 mm³), und eine
+Endfase füllte die Mündung eines nicht erkannten Sacklochs (+2 218 mm³ beim
+Kunden). Das Material an der alten Stelle zu schneiden und zu verschieben ist
+die Antwort der Bohrung, die ihre Luft versetzt (`_air_of_the_bore`).
+
+**Eine Frage:** Die Karte bot an Wulst und Kehle X/Y/Z an, an denen die
+Operation absagte, und sperrte die Tasche um einen Zapfen, in der sie rechnete;
+der Griff fragte nur die Art. `actions.move_refusal` ist die Zeile der Karte,
+und Operation und Griff lesen sie. Robert (d): Die Tasche um einen Zapfen sagt
+ab, statt beide gemeinsam zu versetzen.

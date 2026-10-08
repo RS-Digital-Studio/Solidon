@@ -564,7 +564,7 @@ def test_modification_uses_private_input_topology(
     elif operation == "shell":
         changed = profiles.shell_open_top(solid, 1.0)
     elif operation == "draft":
-        changed = profiles.draft_vertical(solid, 3.0)
+        changed, _added = profiles.draft_faces(solid, 3.0)
     elif operation == "sew":
         changed = profiles._sewn(solid)
     else:

@@ -139,10 +139,16 @@ def test_activation_privacy_names_both_abuse_counters_without_claiming_plain_ip_
 def _count(table: str) -> int:
     """Zählt die Maßeinträge einer Normteil- oder Druckertabelle.
 
-    ``version`` ist eine Angabe über die Tabelle, kein Eintrag in ihr.
+    ``version`` ist eine Angabe über die Tabelle, kein Eintrag in ihr, und
+    ebenso die Zahlenreihen daneben (``headless``, ``wrenches``): Sie beschreiben
+    die Ableitung eigener Maße, kein Normteil.
     """
     loaded = tomllib.loads((DATA / table).read_text(encoding="utf-8"))
-    return sum(len(v) for k, v in loaded.items() if k != "version" and isinstance(v, list))
+    return sum(
+        len(v)
+        for k, v in loaded.items()
+        if k != "version" and isinstance(v, list) and all(isinstance(e, dict) for e in v)
+    )
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -2907,3 +2913,38 @@ def test_llms_txt_names_the_licences_of_the_start_page() -> None:
         # `make_seo._plain` fasst jeden Leerraum zu einem Leerzeichen zusammen,
         # auch das geschützte zwischen Zahl und Währung.
         assert " ".join(html.unescape(price).split()) in summary, f"llms.txt nennt {price} nicht"
+
+
+#: Woran der Prüfvorbehalt zur Herkunft der Gewichte je Startseite zu erkennen ist.
+_PROVENANCE_RESERVATION = {
+    "index.html": "Herkunftskette der Gewichte",
+    "en/index.html": "provenance chain of the weights",
+    "es/index.html": "procedencia de los pesos",
+    "fr/index.html": "provenance des poids",
+    "it/index.html": "provenienza dei pesi",
+    "pt/index.html": "proveniência dos pesos",
+}
+
+
+@pytest.mark.parametrize("page", sorted(_PROVENANCE_RESERVATION))
+def test_the_start_page_keeps_the_provenance_reservation_while_rm003_is_open(page: str) -> None:
+    """Solange RM-003 die Kanzleifragen offen führt, sagt die Startseite es (G-13).
+
+    Beim Umbau auf TRELLIS.2 fiel der Satz „Die vollständige Lizenz- und
+    Herkunftskette der Gewichte wird noch geprüft.“ auf allen sechs
+    Startseiten weg, während RM-003 DINOv3, die Trainingsdaten des
+    Freistellers und die Apache-Hinweise offen führt — öffentlich klang die
+    Kette geklärt. Er steht wieder da, an die neue Kette angepasst
+    (Entscheidung vorsichtig, bis Robert anders entscheidet). Schließt RM-003,
+    ist dieser Test der Ort, an dem der Satz mit der Antwort der Kanzlei fällt.
+    """
+    # Offen ist, was im Register von ROADMAP.md steht; Erledigtes zieht ins Archiv.
+    if "| [RM-003 — " not in (WEBSITE.parent / "ROADMAP.md").read_text(encoding="utf-8"):
+        pytest.skip("RM-003 ist geschlossen — der Satz folgt der Antwort der Kanzlei")
+    text = re.sub(r"\s+", " ", (WEBSITE / page).read_text(encoding="utf-8"))
+    sentence = next(
+        (part for part in text.split(". ") if _PROVENANCE_RESERVATION[page] in part), ""
+    )
+    assert sentence, f"{page}: der Prüfvorbehalt fehlt, RM-003 ist offen"
+    for name in ("TRELLIS.2", "FLUX.2 [klein]", "BiRefNet"):
+        assert name in sentence, f"{page}: der Vorbehalt nennt {name} nicht: {sentence!r}"

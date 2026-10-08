@@ -40,6 +40,62 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.5.4
+
+### Bedienung und System
+
+- Auf Intel-Macs mit macOS 26 startet Solidon jetzt. Version 0.5.3 blieb dort beim Start hängen.
+- Am Mac bricht *Abbrechen* eine laufende Antwort des lokalen Modells sofort ab.
+- Am Mac öffnet Return den gewählten Eintrag im Startbildschirm, in *Funktion suchen* und im Prüfbericht.
+- Unter Linux kommen Eingaben über Fcitx5 und IBus jetzt auch im Flatpak und im AppImage im Textfeld an.
+- Die Deinstallation unter Windows lässt keine Einträge der Dateizuordnung in der Registrierung zurück.
+- Entf wirkt auch, wenn der Reiter *Auswahl* den Fokus hat, und entfernt mehrere markierte Körper in einem Schritt. Tut die Taste nichts, nennt die Statuszeile den Grund.
+- Der Rechtsklick an Körpern bietet *Objekt entfernen* und bei mehreren *Vereinigen*. *Aushöhlen* steht auch an einer gewählten Fläche, sie wird die Öffnung.
+- Die Karten links und rechts lassen sich am Griff verschieben, an den Rand legen oder schweben lassen. *Ansicht → Karten an ihren Platz* legt sie zurück.
+- Während neu gerechnet wird, sagt der Prüfbericht *Wird neu berechnet …* und zeigt die bisherigen Zeilen als vorigen Stand. Bisher sahen alte Fehler dabei aus, als gälten sie noch.
+- Scheitert die schnelle Rechnung an einem Schritt, rechnet Solidon ihn im selben Lauf gründlich nach, statt anzuhalten.
+- Sagt ein Befund, dass ein Schritt nichts bewirkt hat, öffnet er diesen Schritt mit dem passenden Feld.
+- Entfernen Sie einen Körper, spricht der Prüfbericht nicht mehr über ihn, und der Verlauf zeigt, welche Schritte danach nichts mehr hinterlassen.
+- Eine gewählte Bohrung fällt nach dem Neurechnen nicht mehr still auf ihren Körper zurück. Bisher konnte Entf danach den ganzen Körper entfernen.
+- Jede Funktion heißt überall gleich. Das Werkzeug *Teilen* bietet *An Ebene teilen*, *An gezeichneter Linie teilen* und *In Einzelteile aufteilen*.
+- Am gewählten Körper steht *Automatisch teilen …* jetzt unter *Vorbereiten*.
+- Im ruhenden Fenster ist nur *Bausteine* farbig hervorgehoben. Rot tragen nur Knöpfe, die etwas verwerfen oder löschen, und Rückfragen öffnen mit dem Fokus auf *Abbrechen*.
+- Im Zeichenmodus ist der Reiter *Auswahl* ausgeblendet. Die Liste der Bedingungen zeigt die der gewählten Punkte und Linien und jeden Widerspruch.
+- In der Parameterkarte steht unter einem Maß nur noch „Nicht verwendet“, wo das zutrifft. Wie viele feste Zahlen sich an Maße binden lassen, sagt der Knopf.
+- Der Fehlerbericht hängt ein Absturzprotokoll nur noch an, wenn Solidon wirklich abgestürzt ist.
+
+### Drucken und Übergabe an den Slicer
+
+- Unter Linux erzeugt Solidon die Druckdatei jetzt auch mit Cura als Flatpak oder AppImage.
+- Der Druckdialog bietet die Drucker des gewählten Slicers an, wie *Erste Schritte* und *Einstellungen*. Ein so übernommener Drucker bleibt bei seinem Slicer.
+- Die geschätzte Druckzeit liegt näher an der des Slicers, bei Teilen mit Stützen deutlich näher.
+- Ob Stützen und Skirt auf dem Bett Platz haben, misst die Prüfung nur noch unter den Überhängen. Teile nahe am Rand bekommen keine grundlose Warnung mehr.
+
+### Gewinde, Bohrungen und Normteile
+
+- Gewinde gibt es jetzt in jedem Durchmesser bis 1000 mm, ob mit *Druckbares Gewinde*, in einer Bohrung, mit *Schraube erstellen* oder *Drehdeckel erzeugen*.
+- Schrauben, Muttern und Scheiben gibt es nach ISO von M1,6 bis M64. Für andere Größen leitet *Eigenes Maß* die Maße aus den Nachbargrößen ab und sagt das.
+- Mit *Passend zur Bohrung* baut *Stift für Bohrung* das Gegenstück: in eine Senkung einen bündigen Senkkopf, in ein Innengewinde ein Außengewinde gleicher Größe und Steigung.
+- An einem gedruckten Innengewinde bietet die Auswahl *Stift für Bohrung* direkt an.
+- Liegt in einer Bohrung ein getrenntes Teil wie ein Stift, sagen die Handlungen an der Bohrung das und bieten *In Einzelteile aufteilen* an. Bisher verschmolz der Stift still mit der Platte.
+
+### Bearbeiten und Zeichnen
+
+- Verschieben Sie ein Merkmal, reist sein Material mit, wie es ist, und die alte Stelle wird sauber gefüllt. Wo das nicht geht, sagt es die Auswahl gleich.
+- An Wulst und Kehle bietet die Auswahl nur noch an, was die Operation auch ausführt.
+- Liegt neben einer Wand eine Verrundung, sagt *Formschräge anstellen* vor der Rechnung, dass sie im Weg ist, und nennt *Merkmal entfernen* als Ausweg.
+- Schneiden Sie einen Teil des Körpers weg, verschwinden auch Fasen, Gewinde und Mutterntaschen von Bausteinen, die darin lagen.
+- In *Deckel erzeugen* und *Drehdeckel erzeugen* heißt ein leeres Feld für die Höhe der Öffnung „Oberkante“, und 0 ist die Höhe des Betts. Ältere Projekte behalten ihre Öffnung.
+- Eine Winkelbedingung in einer kleinen Skizze wirft die Linien nicht mehr um.
+
+### Erzeugen mit KI
+
+- Der Erzeugen-Dialog rechnet lokal mit TRELLIS.2 und FLUX.2 [klein] statt mit TripoSG und SDXL. Aus Text entsteht zuerst ein Bild und daraus das Modell.
+- Die Einrichtung nennt vor dem Laden Lizenzen und Größen der Modelle. Sie entfernt Solidons alte TripoSG-Einrichtung und sagt vorher, welche Ordner das sind und wie groß.
+- Dünne Wände, etwa an einer Vase, kommen geschlossen und mit Dicke an.
+- Der Assistent antwortet in der Sprache, in der Sie schreiben.
+- Mit lokalem Modell hat der Assistent so viel Raum wie mit einem gehosteten und schafft Aufträge mit bis zu zwölf Schritten.
+
 ## 0.5.3
 
 ### Bedienung und System

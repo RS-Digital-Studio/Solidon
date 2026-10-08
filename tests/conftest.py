@@ -85,7 +85,7 @@ from app.core.activation import store as activation_store
 from app.core.knowledge import profiles
 from app.core.perceive import features, local
 from app.core.types import Document, Profile
-from tests.helpers import FakeMesh
+from tests.helpers import FakeMesh, first_start
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
@@ -157,6 +157,38 @@ def require_graphics_adapter(graphics_adapter_problem: str | None) -> None:
     """Überspringt echte Grafikprüfungen lokal ohne Adapter, mit sichtbarem Grund."""
     if graphics_adapter_problem is not None:
         pytest.skip(f"pygfx: {graphics_adapter_problem}")
+
+
+@pytest.fixture
+def native_window_platform() -> str:
+    """Die echte Qt-Plattform für ein Fenster im Kindprozess, nach einer Vorprüfung je Prozess.
+
+    Wer ein Fenster auf der echten Plattform zeigt, fordert diese Fixture an:
+    Sie macht den Fall zum Fenstertest (``tools/list_windowed_tests.py``) und
+    überspringt ihn mit Grund, wo schon ein leeres Fenster hängt — in der CI
+    nur auf dem Intel-Mac (``tests/native_window_probe.py``).
+    """
+    from tests.native_window_probe import require_native_window
+
+    return require_native_window()
+
+
+def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
+    """Ein hängendes natives Fenster steht mit Grund am Ende des Laufs, auch ohne ``-rs``.
+
+    Unter GitHub zusätzlich als Anmerkung des Laufs, damit drei übersprungene
+    Fälle nicht in einer Zahl untergehen.
+    """
+    probe = sys.modules.get("tests.native_window_probe")
+    problems = probe.found_problems() if probe is not None else ()
+    if not problems:
+        return
+    terminalreporter.write_sep("-", "native Fenster übersprungen")
+    for problem in problems:
+        terminalreporter.write_line(problem)
+        if os.environ.get("GITHUB_ACTIONS"):
+            escaped = problem.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            terminalreporter.write_line(f"::warning title=Native Fenster übersprungen::{escaped}")
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -549,15 +581,10 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     """
 
     def only_what_was_set(tool_id: str, names: object) -> object:
-        # ``remembered_path`` wie die echte Suche (``_remembered_program``):
-        # ``remember_path`` legt unter ``slicer:path`` ab, und ``remembered``
-        # las nur den alten Schlüssel — ein so gemerkter Slicer kam aus der
-        # Suche nicht zurück, und der Dialog vergaß ihn wieder.
-        chosen = discover.remembered_path(tool_id)
-        from pathlib import Path
-
-        path = Path(chosen) if chosen else None
-        return path if path is not None and path.is_file() else None
+        # Der gemerkte Pfad, **wie die echte Suche ihn annimmt**: Schlüssel,
+        # Mac-Bündel als Ordner, Host-Pfad im Flatpak. Eine eigene Lesart hier
+        # las erst nur den alten Schlüssel und nahm dann nur eine Datei an.
+        return discover._remembered_program(tool_id)
 
     # Das Original bleibt unter eigenem Namen erreichbar, für die wenigen
     # Tests, die **genau es** prüfen wollen (`test_discover.py`). Ohne diese
@@ -579,6 +606,59 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(discover, "unpatched_find_programs", discover.find_programs, raising=False)
     monkeypatch.setattr(discover, "find_programs", only_what_was_set_plural)
     discover.forget_cache()
+
+
+#: Unter dieser Variable ist ein fehlender Slicer ein Fehler statt ein Skip —
+#: gesetzt von ``.github/workflows/slicer-auswahl.yml``, wo jeder gewählte
+#: Slicertest sein Programm installiert vorfinden muss.
+REQUIRE_SLICERS = "SOLIDON_REQUIRE_SLICERS"
+
+
+@pytest.fixture
+def installed_slicer(request: pytest.FixtureRequest) -> Path:
+    """Der echte, auf dieser Maschine installierte Slicer, den der Marker nennt.
+
+    Die einzige Stelle, an der ein Test die Maschine nach einem Slicer fragen
+    darf (``test_slicer_selection.py`` hält das): ``@pytest.mark.slicer("cura")``
+    nennt das Programm in der Schreibweise von :func:`discover.program_mark`,
+    die Fixture sucht es wie die Anwendung (``discover.find_programs`` ohne die
+    Attrappe aus ``_machine_stays_out_of_it``). Über den Marker wählt
+    ``tools/ci_selection.py`` den Test für die Slicerauswahl auf Linux und
+    macOS, und der Workflow installiert genau die genannten Programme.
+
+    Ein AppImage der Orca-Familie bekommt dabei, was sein erster Start
+    hinterlässt (``tests.helpers.first_start``) — ohne ihn sieht Solidon dort
+    keinen Herstellerdrucker, und der Kunde hat ihn hinter sich.
+
+    Fehlt das Programm, überspringt sich der Test — außer unter
+    :data:`REQUIRE_SLICERS`: Dort ist ein übersprungener Slicertest kein
+    Nachweis, sondern ein fehlender.
+    """
+    from app.core import tools
+
+    marker = request.node.get_closest_marker("slicer")
+    if marker is None or len(marker.args) != 1:
+        pytest.fail(
+            "installed_slicer braucht genau einen Marker @pytest.mark.slicer(<programm>)",
+            pytrace=False,
+        )
+    wanted = str(marker.args[0])
+    discover.forget_cache()
+    found = [
+        program
+        for program in discover.unpatched_find_programs("slicer", tools.SLICERS)
+        if discover.program_mark(program.name) == wanted
+    ]
+    if found:
+        program = Path(found[0])
+        # Ein AppImage der Orca-Familie zeigt seinen Herstellerbestand erst
+        # nach dem ersten Start; der Kunde hat ihn hinter sich.
+        first_start(program)
+        return program
+    message = f"{wanted} ist auf dieser Maschine nicht installiert"
+    if os.environ.get(REQUIRE_SLICERS):
+        pytest.fail(f"{message}, und {REQUIRE_SLICERS} verlangt es", pytrace=False)
+    pytest.skip(message)
 
 
 @pytest.fixture(autouse=True)

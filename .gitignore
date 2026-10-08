@@ -159,6 +159,9 @@ tools/.window-bench-profile/
 # (Gesamtdurchsicht 11.09.2026: 76 Dateien, 6,0 MB, davon zwei Logs mit 2,6
 # und 3,2 MB, ungedeckt vor einem `git add -A`).
 /.claude/.state/release-*/
+# Die Modelltexte der KI-Messung (je 3 MB) bleiben örtlich; die Suiteprotokolle
+# daneben sind der Abnahmebeleg von RM-529 und eingecheckt.
+/.claude/.state/ki-2026-10-06/messung/modelltexte_*
 
 # Was beim Konstruieren im Wurzelverzeichnis liegen bleibt. Druckprojekte
 # gehören nach `3D Drucker/` mit seinem eigenen Repository, Exporte nirgendwo

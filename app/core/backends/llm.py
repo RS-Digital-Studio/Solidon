@@ -93,6 +93,104 @@ LOCAL_TIMEOUT_SECONDS = 600.0
 MAX_RESPONSE_BYTES: Final = 8 * 1024 * 1024
 MAX_ERROR_BYTES: Final = 64 * 1024
 
+#: Wie oft ein lokaler Aufruf beim Lesen und Senden nach dem Abbruch sieht, in Sekunden.
+CANCEL_WATCH_SECONDS: Final = 0.05
+
+#: Wie lange ein Abbruch höchstens auf den Anfragefaden wartet, in Sekunden. Der
+#: Faden bemerkt den Abbruch selbst nach :data:`CANCEL_WATCH_SECONDS`; die Frist
+#: fängt nur ab, was nie eintreten soll, damit die Oberfläche nicht daran hängt.
+CANCEL_JOIN_SECONDS: Final = 2.0
+
+
+class _WatchedSocket(socket.socket):
+    """Ein Socket, dessen Lesen und Senden den Abbruch selbst bemerken (RM-104).
+
+    Bis zum 06.10.2026 weckte ein zweiter Faden das blockierte ``recv`` mit
+    ``shutdown`` und dem Schließen des Deskriptors. Linux und Windows wachen
+    davon auf, macOS nicht sicher: Am Runner hatten vier von fünf Läufen einen
+    Abbruch, der nicht ankam, und der sechste wartete bis zur Jobfrist — die
+    Oberfläche hätte dort gehangen. Hier wartet der Anfragefaden selbst in
+    Scheiben von :data:`CANCEL_WATCH_SECONDS` darauf, lesen oder senden zu
+    können, und fragt dazwischen den Abbruch; eine gesetzte Socket-Frist gilt
+    weiter wie bei einem gewöhnlichen Socket. Gesendet wird in Stücken, damit
+    auch eine Gegenstelle, die nicht mehr liest, den Abbruch nicht aufhält.
+    """
+
+    def __init__(self, plain: socket.socket, cancelled: CancelToken) -> None:
+        super().__init__(plain.family, plain.type, plain.proto, fileno=plain.detach())
+        self._cancelled = cancelled
+
+    def _wait_until_ready(self, events: int) -> None:
+        import selectors
+        from time import monotonic
+
+        limit = self.gettimeout()
+        deadline = None if limit is None else monotonic() + limit
+        # ``selectors`` statt ``select.select``: Das nimmt unter Linux und macOS
+        # keinen Deskriptor ab 1024 an, und ein Prozess mit angehobenem Limit
+        # bekäme dann einen ``ValueError`` statt einer Antwort.
+        with selectors.DefaultSelector() as watch:
+            watch.register(self, events)
+            while True:
+                # Beim Lesen geht Bereites vor dem Abbruch: Was schon angekommen
+                # ist, wird zuerst gelesen. Ein ``shutdown`` über Ungelesenem
+                # setzt die Verbindung unter Windows zurück (RST statt eines
+                # geordneten Endes), und die Gegenstelle sähe einen Abbruch der
+                # Leitung statt des Abbruchs der Anfrage. Beim Senden liegt
+                # nichts Ungelesenes an; dort gilt der Abbruch sofort.
+                if events & selectors.EVENT_READ and watch.select(0.0):
+                    return
+                if self._cancelled.is_cancelled:
+                    with suppress(OSError):
+                        self.shutdown(socket.SHUT_RDWR)
+                    raise ConnectionAbortedError("the request was cancelled")
+                wait = (
+                    CANCEL_WATCH_SECONDS
+                    if deadline is None
+                    else min(CANCEL_WATCH_SECONDS, deadline - monotonic())
+                )
+                if wait <= 0.0:
+                    raise TimeoutError("timed out")
+                if watch.select(wait):
+                    return
+
+    def recv_into(self, buffer: Any, nbytes: int = 0, flags: int = 0) -> int:
+        import selectors
+
+        self._wait_until_ready(selectors.EVENT_READ)
+        return super().recv_into(buffer, nbytes, flags)
+
+    def recv(self, bufsize: int, flags: int = 0) -> bytes:
+        import selectors
+
+        self._wait_until_ready(selectors.EVENT_READ)
+        return super().recv(bufsize, flags)
+
+    def sendall(self, data: Any, flags: int = 0) -> None:
+        import selectors
+
+        pending = memoryview(data).cast("B")
+        while pending:
+            self._wait_until_ready(selectors.EVENT_WRITE)
+            sent = super().send(pending, flags)
+            pending = pending[sent:]
+
+
+class _WatchedConnection(http.client.HTTPConnection):
+    """Eine HTTP-Verbindung auf einem :class:`_WatchedSocket`."""
+
+    def __init__(self, host: str, port: int | None, *, timeout: float, cancelled: CancelToken):
+        super().__init__(host, port, timeout=timeout)
+        self._cancelled = cancelled
+
+    def connect(self) -> None:
+        super().connect()
+        plain = self.sock
+        if isinstance(plain, socket.socket) and not isinstance(plain, _WatchedSocket):
+            watched = _WatchedSocket(plain, self._cancelled)
+            watched.settimeout(self.timeout)
+            self.sock = watched
+
 
 @dataclass(frozen=True, slots=True)
 class ToolCall:
@@ -393,13 +491,33 @@ def post_json_local(url: str, headers: dict[str, str], payload: dict[str, Any]) 
     return post_json(url, headers, payload, timeout=LOCAL_TIMEOUT_SECONDS)
 
 
+def _local_connection(
+    parts: urllib.parse.SplitResult, cancelled: CancelToken
+) -> http.client.HTTPConnection:
+    """Die Verbindung zum lokalen Modell: über HTTP überwacht, über HTTPS gewöhnlich.
+
+    Über HTTPS bleibt es beim gewöhnlichen Socket: Die TLS-Schicht liest am
+    eigenen Objekt, und ein lokales Ollama spricht ohnehin HTTP. Eine Quelle
+    für Code und Tests — eine Attrappe für ``http.client.HTTPConnection``
+    griffe am überwachten Weg nicht mehr.
+    """
+    host = str(parts.hostname)
+    if parts.scheme == "https":
+        return http.client.HTTPSConnection(host, parts.port, timeout=LOCAL_TIMEOUT_SECONDS)
+    return _WatchedConnection(host, parts.port, timeout=LOCAL_TIMEOUT_SECONDS, cancelled=cancelled)
+
+
 def post_json_local_cancelable(
     url: str,
     headers: dict[str, str],
     payload: dict[str, Any],
     cancelled: CancelToken,
 ) -> dict[str, Any]:
-    """Lokales JSON-POST, dessen Verbindung ein Nutzerabbruch wirklich schließt."""
+    """Lokales JSON-POST, das ein Nutzerabbruch beendet.
+
+    Die Verbindung schließt der Anfragefaden selbst; der Aufrufer wartet nach
+    einem Abbruch höchstens :data:`CANCEL_JOIN_SECONDS` auf ihn.
+    """
     cancelled.raise_if_cancelled()
     parts = urllib.parse.urlsplit(url)
     if not is_local_address(url) or parts.scheme not in {"http", "https"}:
@@ -409,14 +527,7 @@ def post_json_local_cancelable(
     if not parts.hostname:
         raise BackendUnavailable(detail=_("Die Adresse enthält keinen Rechnernamen."))
 
-    connection_type = (
-        http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
-    )
-    connection = connection_type(
-        parts.hostname,
-        parts.port,
-        timeout=LOCAL_TIMEOUT_SECONDS,
-    )
+    connection = _local_connection(parts, cancelled)
     finished = threading.Event()
     body = json.dumps(payload).encode("utf-8")
     target = urllib.parse.urlunsplit(("", "", parts.path or "/", parts.query, ""))
@@ -469,6 +580,13 @@ def post_json_local_cancelable(
             errors.append(error)
         finally:
             connection.close()
+            # Bei HTTP/1.0 und ``Connection: close`` hält nur noch die Antwort
+            # den Socket, nicht die Verbindung; bemerkt dieser Faden den Abbruch
+            # vor dem wartenden, schlösse ihn sonst niemand, und die Gegenstelle
+            # sähe kein Ende.
+            if isinstance(active_socket, _WatchedSocket):
+                with suppress(OSError):
+                    active_socket.close()
             finished.set()
 
     worker = threading.Thread(target=request, name="ollama-request", daemon=True)
@@ -477,7 +595,12 @@ def post_json_local_cancelable(
         if not cancelled.is_cancelled:
             continue
         sock = active_socket or connection.sock
-        if sock is not None:
+        # Ein überwachter Socket bleibt dem Anfragefaden: Er bemerkt den
+        # Abbruch selbst, liest Angekommenes zu Ende und beendet die Leitung
+        # geordnet; ein ``shutdown`` von hier träfe womöglich Ungelesenes
+        # (:meth:`_WatchedSocket._wait_until_ready`). Nur der gewöhnliche
+        # Socket der HTTPS-Verbindung wird von außen geweckt.
+        if sock is not None and not isinstance(sock, _WatchedSocket):
             with suppress(OSError):
                 sock.shutdown(socket.SHUT_RDWR)
             # makefile() hält den Descriptor trotz socket.close() offen.
@@ -488,10 +611,20 @@ def post_json_local_cancelable(
                 descriptor = sock.detach()
                 if descriptor >= 0:
                     socket.close(descriptor)
-            # Der Request-Thread schließt Antwort und Verbindung selbst.
-            # Vorzeitiges close() könnte während request() den Socket leeren
-            # und damit eine automatische zweite Verbindung auslösen.
-            worker.join()
+        if sock is not None:
+            # Antwort und Verbindung schließt der Anfragefaden selbst: Ein
+            # ``connection.close()`` von hier könnte während ``request()`` den
+            # Socket leeren und eine automatische zweite Verbindung auslösen.
+            # Gewartet wird mit Frist, denn ein Faden, der nicht endet, hielte
+            # sonst die Oberfläche fest. Ohne Socket steht der Faden noch im
+            # Verbindungsaufbau und bricht danach selbst ab
+            # (``raise_if_cancelled`` nach ``connect``).
+            worker.join(CANCEL_JOIN_SECONDS)
+            if worker.is_alive():
+                _log.warning(
+                    "Der lokale Modellaufruf endete nicht in %s s nach dem Abbruch.",
+                    CANCEL_JOIN_SECONDS,
+                )
         raise OperationCancelled
 
     cancelled.raise_if_cancelled()
@@ -2357,7 +2490,12 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Mit *Verschluss ändern* (RM-184, Spiel und Drehweg) derselbe Aufruf:
 #: **8 453 Token bei 189 Werkzeugen**, 25,8 % des Fensters; SHA-256
 #: ``bb36dc9645bc5e70ab4f401b5172ce70c1db4e60904b63617f0995a1391625b2``.
-PROMPT_TOKENS: Final = 8453
+#: Mit Prompt-Version 9 (RM-251 (b): mehrere Aufrufe je Schritt, Antwort in
+#: der Sprache des Nutzers; RM-014: Gestenwerkzeuge nennen den Weg zum Nutzer)
+#: ohne neue Operation derselbe Aufruf: **8 511 Token bei 189 Werkzeugen**,
+#: 26,0 % des Fensters; SHA-256
+#: ``4d29895bd0d4dc34a8829d920a3deb3590385e051c21926147b7e931d564f67c``.
+PROMPT_TOKENS: Final = 8511
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird

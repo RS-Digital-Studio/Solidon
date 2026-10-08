@@ -164,8 +164,17 @@ def print_target(document: Document, result: EvaluationResult | None) -> PrintTa
     return PrintTarget(title, tuple(details), tuple(dict.fromkeys(missing)), tuple(names))
 
 
-def handoff_state(findings: Iterable[Finding], incomplete: Iterable[str]) -> str:
-    """Schwere Befunde bleiben vorrangig; leere Befunde ersetzen keinen Prüfabschluss."""
+def handoff_state(
+    findings: Iterable[Finding], incomplete: Iterable[str], *, running: bool = False
+) -> str:
+    """Schwere Befunde bleiben vorrangig; leere Befunde ersetzen keinen Prüfabschluss.
+
+    **Ein Lauf geht allem vor** (RM-534): Die Befunde gehören dann zum vorigen
+    Stand. „Übergabe nicht empfohlen“ stand 3,7 s über einem Fehler, den die
+    laufende Rechnung gerade widerrief — der Kunde las ihn als gültig.
+    """
+    if running:
+        return tr("Wird neu berechnet …")
     severities = {finding.severity for finding in findings}
     if "error" in severities:
         return tr("Übergabe nicht empfohlen")
@@ -395,6 +404,13 @@ def review_difference(
 
 #: Wie viele Zeilen neue und behobene Befunde zusammen höchstens belegen (RM-516).
 _SHOWN_LINES: Final = 3
+
+#: Der Grund unter dem Kopf, solange der gezeigte Bericht nicht zum Dokument
+#: gehört — vom Fenster in den Prüfumfang gelegt, vom Bericht auch neben einem
+#: Fehler gezeigt, wenn die Rechnung abbrach oder scheiterte (RM-534).
+NOT_CURRENT_REASON: Final = _(
+    "Für den aktuellen Stand liegt noch keine abgeschlossene Bewertung vor."
+)
 
 
 def _identity(finding: Finding) -> tuple[str, str | None, str]:

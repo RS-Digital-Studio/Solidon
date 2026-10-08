@@ -3,6 +3,7 @@ description: "Die LLM-Schicht — ein Vorschlag ist eine Transaktion, die drei V
 paths:
   - "app/core/agent/**/*.py"
   - "app/core/backends/**/*.py"
+  - "app/core/perceive/digest.py"
 ---
 
 # Regeln für die Agentenschicht und die Backends
@@ -47,18 +48,19 @@ Der Agent sieht den Steckbrief (Projektparameter, **aktuelle Auswahl**,
 Passungen samt Verletzt-Zustand, Druckeinstellungszeile, Quellen, Erzeuger je
 Merkmal, Verlauf mit den gesetzten Werten), den Prüfbericht samt verwendeter
 Rückfallstufen, die gültigen Chatbeiträge und die Regelsammlung in ihrer
-Version — nicht den rohen
-Verlauf; ein gedeckelter sagt, wie viele ältere Beiträge fehlen. Jedes
-Op-Ergebnis nennt die **neuen Merkmale mit IDs**; `read_digest` liest den
-Steckbrief der Arbeitskopie mitten im Zug neu, `read_standard` schlägt die
-Normteiltabelle nach (§26.2 führt die abschließende Werkzeugliste). Die
-Werkzeugbeschreibungen tragen den Menüort („Menü: …"); daran hängt §2.6, der
-Chat als Suchfeld.
+Version — nicht den rohen Verlauf; ein gedeckelter sagt, wie viele ältere
+Beiträge fehlen. Jedes Op-Ergebnis nennt die **neuen Merkmale mit IDs**;
+`read_digest` liest den Steckbrief der Arbeitskopie mitten im Zug neu,
+`read_standard` schlägt die Normteiltabelle nach (§26.2 führt die
+abschließende Werkzeugliste). Die Werkzeugbeschreibungen tragen den Ort im
+Fenster („Ort: …“); daran hängt §2.6, der Chat als Suchfeld.
 
 - **Ein Schritt heißt im Steckbrief nach seiner sichtbaren Nummer** (`op3`,
-  wie der Verlauf sie zeigt), nie nach seiner Kennung — der Agent spricht mit
-  dem Nutzer über den Verlauf, den dieser vor sich hat; Bauplan §23 ist ein
-  echter Ausschnitt und wird nachgezogen, wenn sich das Format ändert.
+  `types.step_numbers` wie Verlauf und Fenster), nie nach seiner Kennung — der
+  Agent spricht mit dem Nutzer über den Verlauf, den dieser vor sich hat. Eine
+  beim Umbau ganz neu gefasste Transaktion fehlt dort wie im Fenster. Bauplan
+  §23 ist ein echter Ausschnitt und wird nachgezogen, wenn sich das Format
+  ändert.
 - Die Sitzung meldet Fortschritt je Schritt über einen Rückruf (`progress`,
   wie `ask` — kein Qt im Kern); Vorschläge zeigen Schritte, Token und
   Rückfragen in der Entscheidungszeile, eine erreichte Grenze ausgeschrieben.
@@ -72,7 +74,12 @@ Chat als Suchfeld.
 - Gerenderte Ansichten (§23) liefert die Oberfläche (`app/ui/snapshots.py`) als
   beschriftete PNG, nur an ein Backend mit `supports_images`. Skizzen entstehen
   über die Grundform-Parameter der Skizzen-Ops (§30.1); die rohe Punktliste
-  bleibt zweifach gesperrt und zählt als ungültiger Aufruf.
+  bleibt zweifach gesperrt und zählt als ungültiger Aufruf. **Pinselzüge und
+  Skelett setzt nur der Nutzer** (`tools.USER_ONLY_KINDS`, RM-014): Ihre zwei
+  Werkzeuge sagen es in der Beschreibung, und auch ihr leerer Aufruf wird
+  abgelehnt, im Chat wie über MCP (`tools.refused_gathered`) — sonst stünde
+  ein Schritt im Vorschlag, der nichts tut. Eine Regel in der Sammlung dafür
+  kostete jede Anfrage Platz.
 - **Eindeutig umkehrbare Vorschläge laufen automatisch** (§26.5, Regel 19):
   vier Bedingungen in `agent_apply.auto_acceptable`, die Leiste wird zur
   Übernommen-Leiste mit Rückgängig-Knopf, `auto_accept_reversible` (Vorgabe:

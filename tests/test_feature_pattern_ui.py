@@ -10,29 +10,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-from PySide6.QtWidgets import QApplication
-
 from app.core.registry import REGISTRY
 from app.ui.main_window import MainWindow
 from app.ui.op_dialog import FeatureSetField, OperationDialog
-from app.ui.session import Session
-from app.ui.settings import UiSettings
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    # Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test
-    # auf die Arbeiter jedes offenen Fensters.
-    return MainWindow(Session(), UiSettings())
 
 
 def _plate_with_holes(window: MainWindow) -> tuple[str, str, int]:
     """Die Lochplatte aus dem Korpus, eine ihrer vier Bohrungen und ihre Anzahl."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = sorted(
@@ -89,14 +79,14 @@ def test_a_pattern_is_one_step_and_one_undo(window: MainWindow) -> None:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     after = window.session.evaluate_now()
     assert len(window.session.project.document.ops) == before + 1
     holes = [f for f in after.scene.objects[object_id].features.values() if f.kind == "hole"]
     assert len(holes) == count + 1
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     back = window.session.evaluate_now()
     holes = [f for f in back.scene.objects[object_id].features.values() if f.kind == "hole"]
     assert len(holes) == count

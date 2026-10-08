@@ -367,7 +367,7 @@
       <div class="stats">
         <div><b>178</b><span>operações na versão para transferência</span></div>
         <div><b>49</b><span>blocos verificados</span></div>
-        <div><b>61</b><span>medidas de peças normalizadas</span></div>
+        <div><b>124</b><span>medidas de peças normalizadas</span></div>
         <div><b>20</b><span>perfis de impressora de fábrica</span></div>
         <div><b>12</b><span>projetos de exemplo incluídos</span></div>
         <div><b>0</b><span>contas, nuvem, telemetria</span></div>
@@ -484,7 +484,7 @@
           </div>
           <span class="tag">Caminho 3 — Modelo gerado</span>
           <h3>Preparar um GLB ou STL</h3>
-          <p>Arraste um ficheiro do gerador que escolher: o Solidon3D repara a malha, ajusta o tamanho, verifica-a face à impressora e ao material e, se necessário, divide-a ou acrescenta pinos. A pedido, o Solidon3D também configura um modelo próprio, o TripoSG para a forma e o SDXL para a imagem por trás, e não descarrega nada sem perguntar. A cadeia completa de licenças e proveniência dos pesos ainda está a ser revista.</p>
+          <p>Arraste um ficheiro do gerador que escolher: o Solidon3D repara a malha, ajusta o tamanho, verifica-a face à impressora e ao material e, se necessário, divide-a ou acrescenta pinos. A pedido, o Solidon3D também configura os modelos necessários, o TRELLIS.2 da Microsoft para a forma e o FLUX.2 [klein] para a imagem por trás, e não descarrega nada sem perguntar. A cadeia completa de licenças e proveniência dos pesos do TRELLIS.2, do FLUX.2 [klein] e do recortador de fundo BiRefNet ainda está a ser revista.</p>
           <a class="way-more" href="/pt/ai-models.html">Do gerador à peça imprimível</a>
         </div>
         <div class="way">
@@ -795,8 +795,9 @@
         recomendados — a partir de uma placa gráfica com 8 GB de memória
         (memória e velocidade dependem do modelo e do computador), 16 GB para os maiores</td></tr>
         <tr><td>Modelo gerado (opcional)</td><td>um ficheiro GLB ou
-        STL externo, ou o Solidon3D configura o TripoSG e o modelo de
-        imagem SDXL a pedido</td></tr>
+        STL externo, ou o Solidon3D configura o TRELLIS.2 e o modelo de
+        imagem FLUX.2 [klein] no ComfyUI a partir da versão 0.35 a
+        pedido</td></tr>
         <tr><td>Outros (opcional)</td><td>um slicer — é encontrado ou
         indicado, e não é obrigatório</td></tr>
       </table>

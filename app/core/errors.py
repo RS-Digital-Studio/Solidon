@@ -140,6 +140,12 @@ REPAIR_MESH = Action("repair_mesh", _("Netz reparieren"), primary=True)
 #: wäre keine** — der Kunde müsste den Faktor selbst ausrechnen. Die
 #: Handlung nennt deshalb das Ergebnis und nicht die Arbeit.
 RESIZE_THE_WIDENING = Action("resize_the_widening", _("Senkung mitziehen"), primary=True)
+#: Den **früheren** Schritt öffnen, der das Merkmal erzeugt hat, an dem ein
+#: späterer scheitert — welcher, steht in ``values["creating_step"]``, das Feld
+#: in ``values["field"]``. *Eingabe korrigieren* öffnete den angehaltenen
+#: Schritt, und dort hilft keine Eingabe: Ein Stift an einem 2 mm kurzen
+#: Gewinde braucht ein längeres Gewinde (Review P2 Bausteine, M2).
+CHANGE_THREAD_STEP = Action("change_creating_step", _("Gewindeschritt öffnen"), primary=True)
 SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
 #: Die Handlungen am Verlauf selbst (P7). Einschalten nimmt mit, was der
 #: Schritt braucht; der Schritt steht in ``values["reactivate"]`` beziehungsweise
@@ -459,6 +465,8 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         "torus_tube",
         # Die Gangtiefe einer Steigung muss unter dem Radius bleiben (P2.6).
         "thread_pitch",
+        # Eine Steigung unter ``units.FINEST_PITCH`` baut kein Gewinde (RM-532).
+        "finest_pitch",
         # Ein geändertes Gewinde muss in seiner Wand bleiben (RM-184).
         "thread_wall",
         # Ein Deckelscharnier muss auf seine Seite passen und unter den Rand
@@ -711,6 +719,8 @@ class BooleanFailedError(GeometryError):
         *,
         attempted: tuple[SolverStage, ...] = (),
         seed: int | None = None,
+        cut_short: bool = False,
+        transient: bool = False,
         **kwargs: Any,
     ) -> None:
         # **„Auf allen Stufen" war beim Arbeiten im Fenster nie wahr.** Dort
@@ -738,6 +748,10 @@ class BooleanFailedError(GeometryError):
         )
         self.attempted = attempted
         self.seed = seed
+        self.cut_short = cut_short
+        """Ob die Güte die Kette gekürzt hat und nicht der Aufrufer (RM-534)."""
+        self.transient = transient
+        """Ob eine Stufe am Speicher scheiterte — dann urteilt die Kette nicht über den Schritt."""
 
 
 class OutOfBuildVolume(GeometryError):

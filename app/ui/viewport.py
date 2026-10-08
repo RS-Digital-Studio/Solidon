@@ -2561,12 +2561,23 @@ def shadow_catchers(
 ) -> list[tuple[float, Any]]:
     """Die Flächen, die den Schatten eines Körpers auffangen (§18.6).
 
-    Immer die Platte (``bed`` ist ihr Umriss, ``None`` heißt unbeschnitten),
-    und dazu jeder Körper, dessen Oberkante nicht höher liegt als die
-    Unterkante dieses hier — ``grounds`` trägt je Körper Unter-, Oberkante
-    und Umriss von oben. Die Begründung steht an
-    :meth:`Viewport._shadow_catchers`; hier steht die Rechnung, damit ein
-    Arbeiter sie stellen kann.
+    Immer die Platte, und dazu jeder Körper, dessen Oberkante nicht höher
+    liegt als die Unterkante dieses hier. Ohne das fiel jeder Schatten auf
+    die Platte, auch der eines Turms auf einer zwölf Millimeter hohen
+    Grundplatte: er tauchte erst neben ihr auf, als Fleck ohne Verbindung
+    zu dem, was ihn wirft.
+
+    Beides zusammen ist kein Widerspruch. Licht, das an der Grundplatte
+    vorbeigeht, trifft die Druckplatte — und weil das Stück auf der
+    Druckplatte am Umriss der Grundplatte geschnitten wird, verdeckt diese
+    genau den Teil, der sonst doppelt läge.
+
+    ``grounds`` trägt je Körper Unter-, Oberkante und Umriss von oben,
+    ``bed`` den Umriss der Platte (:meth:`Viewport._shadow_bed`). Zurück kommt
+    je Fläche ihre Höhe und ihr Umriss von oben; ``None`` als Umriss heißt
+    „unbeschnitten" und tritt nur auf, wenn kein Bauraum gezeigt wurde — dann
+    gibt es keine Kante, an der zu schneiden wäre. Eine freie Funktion, damit
+    ein Arbeiter sie stellen kann.
     """
     catchers: list[tuple[float, Any]] = [(0.0, bed)]
     mine = grounds.get(object_id)
@@ -2588,8 +2599,33 @@ def shadow_outline_of(
     window: Any = None,
     base: tuple[Any, float] | None = None,
 ) -> Any:
-    """Der Umriss eines Schattens auf der Fläche ``ground`` — die Rechnung hinter
-    :meth:`Viewport._shadow_outline_of`, frei von der Ansicht."""
+    """Der Umriss eines Schattens auf der Fläche ``ground`` — als Ecken
+    eines konvexen Vielecks, ``(n, 3)``, oder nichts; frei von der Ansicht,
+    damit ein Arbeiter ihn rechnet.
+
+    Die Hülle wird schräg projiziert (:func:`shadow_points`), ihr Umriss
+    von oben genommen (:func:`outline_of`) und am Umriss der Fläche
+    geschnitten, auf die er fällt (:func:`clip_polygon`) — außerhalb lag
+    er auf blankem Hintergrund und behauptete Boden, wo keiner ist. Ein
+    einziges Vieleck statt einer Triangulierung: Die Punkte liegen bereits
+    in der Reihenfolge des Randes, ``shapes.polygon`` fächert sie auf.
+
+    ``base`` ist derselbe Umriss auf der **eigenen** Unterkante des
+    Stücks, samt ihrer Höhe — gerechnet in :func:`shadow_soups` für alle
+    Stücke in einem Gang. Liegt die Auffangfläche darunter — und das tut
+    sie bei jeder außer bei der Platte unter einem versenkten Körper —,
+    verschiebt sich der Umriss nur, statt neu gerechnet zu werden:
+    ``shadow_points`` versetzt jeden Punkt um ``(z - ground)`` mal der
+    waagerechten Lichtrichtung, und liegt kein Punkt unter der Fläche,
+    fällt das ``ground`` als gemeinsamer Summand heraus. Für zehn
+    Auffangflächen wird die Hülle damit einmal gerechnet statt zehnmal —
+    gemessen an ``1-24+scale+polebarn.3mf``: 3541 Hüllen je Kamerageste,
+    eine je Körper und Stück wären 118. Die Klammer in ``shadow_points``
+    (``maximum(..., 0)``) ist der Grund für „tiefer": Ein Punkt unter der
+    Fläche wirft nach dieser Regel keinen Schatten nach vorn, und dann ist
+    die Projektion nicht mehr linear. Auf der eigenen Unterkante greift
+    sie nie.
+    """
     import numpy as np
 
     if hull_points is None or len(hull_points) < 3:
@@ -3091,12 +3127,15 @@ def placed_feature_kinds() -> frozenset[str]:
     Zuwachs die Hälfte.
     """
     from app.core.registry import REGISTRY
-    from app.ui.panels import LEADS_INTO_THE_VIEW
+    from app.ui.panels import LEADS_INTO_THE_VIEW, MEASURED_WHILE_MOVED
 
     kinds: set[str] = set()
     for name in LEADS_INTO_THE_VIEW:
         if REGISTRY.has(name):
             kinds.update(REGISTRY.get(name).applies_to or ())
+    # *Merkmal verschieben* führt an diesen Arten ins Bild (RM-535).
+    if REGISTRY.has("move_feature"):
+        kinds.update(MEASURED_WHILE_MOVED & set(REGISTRY.get("move_feature").applies_to or ()))
     return frozenset(kinds)
 
 
@@ -5054,13 +5093,12 @@ class Viewport(QWidget):
     """Ein Zug am Skalierwürfel — trägt den Faktor (§18.11). Das Fenster
     macht daraus die Operation; die Ansicht ändert nie selbst Geometrie."""
     featurePicked = Signal(str, bool)
-    """Ein Klick hat ein Merkmal getroffen.
+    """Ein Klick hat ein Merkmal getroffen — trägt seine Kennung (§18.5).
 
     Das zweite Feld ist dasselbe wie bei :attr:`objectPicked`: ob
     dazugenommen werden soll. Es steht auch hier am Signal, weil die
     Auswahlmenge im Objektbaum liegt und nicht in der Ansicht.
     """
-    """Ein in der Ansicht angeklicktes Merkmal — trägt seine ID (§18.5)."""
     edgePicked = Signal(str, str)
     """Ein Klick hat eine bearbeitbare Kante getroffen — Körper und Schlüssel.
 
@@ -5081,7 +5119,8 @@ class Viewport(QWidget):
     derselbe Weg wie ein Klick auf den Haken, mit derselben Vorschau.
     """
     objectPicked = Signal(str, bool)
-    """Ein Klick hat einen Körper getroffen — leer heißt: daneben.
+    """Ein Klick hat einen Körper getroffen — trägt seine Kennung. Leer heißt:
+    daneben geklickt, die Auswahl fällt weg.
 
     Das zweite Feld sagt, ob dazugenommen werden soll (Umschalt oder Strg,
     Konzept „Ein Ort für die Auswahl", G). Es steht am Signal und nicht in
@@ -5089,8 +5128,6 @@ class Viewport(QWidget):
     Ansicht weiß, welche Taste lag, der Objektbaum weiß, was schon gewählt
     ist, und nur zusammen ergeben sie die neue Auswahl.
     """
-    """Ein angeklickter Körper — trägt seine Kennung. Leer heißt: daneben
-    geklickt, die Auswahl fällt weg."""
     contextMenuAt = Signal(int, int)
     """Ein Rechtsklick, der nichts gedreht hat — trägt die Stelle in
     Gerätepixeln, gezählt wie Qt (von oben links). Das Fenster zeigt dort das
@@ -5178,7 +5215,6 @@ class Viewport(QWidget):
         self._navigator: Navigator | None = None
         """Die Kameraführung (§2.9); sie bekommt jede Zeigergeste, die kein
         Griff nimmt (:meth:`_on_pointer`)."""
-        self._pointer_token: int | None = None
         self._actors: dict[ObjectId, Item] = {}
         self._placement_pointer: Callable[[PointerEvent], bool] | None = None
         self._placement_resume: Callable[[PointerEvent], bool] | None = None
@@ -5388,10 +5424,6 @@ class Viewport(QWidget):
         überhaupt etwas bedeutet. Die Ansicht kennt davon nichts, sie kennt die
         Geste (siehe :meth:`set_sketch_pull`)."""
         self._sketch_cut_available: Callable[[], bool] | None = None
-        self._sketch_cut_top: Callable[[], float] | None = None
-        """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt —
-        dort beginnt die Tasche, also auch ihre Drahtform. Vom Fenster, das den
-        Körper kennt; null, wenn die Ebene selbst die Oberkante ist."""
         """Ob der Zug nach innen gerade ein echtes Ziel hat.
 
         Die Tasche braucht einen ausgewählten, bearbeitbaren Körper. Das weiß
@@ -5399,6 +5431,10 @@ class Viewport(QWidget):
         Richtungsprüfung gemeinsam, damit nichts Sichtbares mehr verspricht
         als die spätere Operation halten kann.
         """
+        self._sketch_cut_top: Callable[[], float] | None = None
+        """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt —
+        dort beginnt die Tasche, also auch ihre Drahtform. Vom Fenster, das den
+        Körper kennt; null, wenn die Ebene selbst die Oberkante ist."""
         self._pull_limits: tuple[float, float] = (0.0, 0.0)
         """Die Grenzen der Höhe, aus dem Schema von ``sketch_extrude``.
 
@@ -5699,6 +5735,9 @@ class Viewport(QWidget):
         bausteine nicht über den viewport verschieben?"). Welches Merkmal es
         ist, sagt das Fenster: Nur es kennt den gemeinsamen Schritt
         (:meth:`set_part_grip`)."""
+        self.move_refused: Callable[[FeatureId], bool] | None = None
+        """Ob die Karte rechts *Merkmal verschieben* an diesem Merkmal absagt —
+        gesetzt vom Fenster (``FeaturePanel.refuses``, RM-535)."""
         self._direct_picking = False
         """Ob ein Klick ohne Zwischenstufe das tiefste Ziel meint.
 
@@ -6075,7 +6114,7 @@ class Viewport(QWidget):
             if found is not None:
                 found._on_pointer(event)
 
-        self._pointer_token = renderer.add_pointer_listener(on_pointer)
+        renderer.add_pointer_listener(on_pointer)
 
     def release_renderer(self) -> None:
         """Den Renderer schließen, solange sein Grafikkontext noch lebt.
@@ -6092,7 +6131,6 @@ class Viewport(QWidget):
             return
         self.renderer = None
         self._navigator = None
-        self._pointer_token = None
         try:
             renderer.close()
         except Exception as problem:  # pragma: no cover - hängt am nativen Treiber
@@ -7151,69 +7189,11 @@ class Viewport(QWidget):
         """Die Schattenhüllen eines Körpers (:func:`shadow_hulls_of`)."""
         return shadow_hulls_of(points, getattr(mesh, "raw", None))
 
-    def _shadow_hull_of(self, points: Any) -> Any:
-        """Die Schattenhülle eines Stücks (:func:`shadow_hull_of`)."""
-        return shadow_hull_of(points)
-
-    def _shadow_catchers(self, object_id: ObjectId) -> list[tuple[float, Any]]:
-        """Die Flächen, die den Schatten dieses Körpers auffangen (§18.6).
-
-        Immer die Platte, und dazu jeder Körper, dessen Oberkante nicht höher
-        liegt als die Unterkante dieses hier. Ohne das fiel jeder Schatten auf
-        die Platte, auch der eines Turms auf einer zwölf Millimeter hohen
-        Grundplatte: er tauchte erst neben ihr auf, als Fleck ohne Verbindung
-        zu dem, was ihn wirft.
-
-        Beides zusammen ist kein Widerspruch. Licht, das an der Grundplatte
-        vorbeigeht, trifft die Druckplatte — und weil das Stück auf der
-        Druckplatte am Umriss der Grundplatte geschnitten wird, verdeckt diese
-        genau den Teil, der sonst doppelt läge.
-
-        Zurück kommt je Fläche ihre Höhe und ihr Umriss von oben; ``None`` als
-        Umriss heißt „unbeschnitten" und tritt nur auf, wenn kein Bauraum
-        gezeigt wurde — dann gibt es keine Kante, an der zu schneiden wäre.
-        """
-        return shadow_catchers(
-            object_id,
-            self._shadow_ground,
-            self._bed_outline_for(object_id) if self._bed_extent is not None else None,
-        )
-
-    def _shadow_outline_of(
-        self,
-        hull_points: Any,
-        direction: tuple[float, float],
-        ground: float = 0.0,
-        window: Any = None,
-        base: tuple[Any, float] | None = None,
-    ) -> Any:
-        """Der Umriss eines Schattens auf der Fläche ``ground`` — als Ecken
-        eines konvexen Vielecks, ``(n, 3)``, oder nichts.
-
-        Die Hülle wird schräg projiziert (:func:`shadow_points`), ihr Umriss
-        von oben genommen (:func:`outline_of`) und am Umriss der Fläche
-        geschnitten, auf die er fällt (:func:`clip_polygon`) — außerhalb lag
-        er auf blankem Hintergrund und behauptete Boden, wo keiner ist. Ein
-        einziges Vieleck statt einer Triangulierung: Die Punkte liegen bereits
-        in der Reihenfolge des Randes, ``shapes.polygon`` fächert sie auf.
-
-        ``base`` ist derselbe Umriss auf der **eigenen** Unterkante des
-        Stücks, samt ihrer Höhe — gerechnet in :meth:`_place_shadows` für alle
-        Stücke in einem Gang. Liegt die Auffangfläche darunter — und das tut
-        sie bei jeder außer bei der Platte unter einem versenkten Körper —,
-        verschiebt sich der Umriss nur, statt neu gerechnet zu werden:
-        ``shadow_points`` versetzt jeden Punkt um ``(z - ground)`` mal der
-        waagerechten Lichtrichtung, und liegt kein Punkt unter der Fläche,
-        fällt das ``ground`` als gemeinsamer Summand heraus. Für zehn
-        Auffangflächen wird die Hülle damit einmal gerechnet statt zehnmal —
-        gemessen an ``1-24+scale+polebarn.3mf``: 3541 Hüllen je Kamerageste,
-        eine je Körper und Stück wären 118. Die Klammer in ``shadow_points``
-        (``maximum(..., 0)``) ist der Grund für „tiefer": Ein Punkt unter der
-        Fläche wirft nach dieser Regel keinen Schatten nach vorn, und dann ist
-        die Projektion nicht mehr linear. Auf der eigenen Unterkante greift
-        sie nie.
-        """
-        return shadow_outline_of(hull_points, direction, ground, window, base)
+    def _shadow_bed(self, object_id: ObjectId) -> Any:
+        """Der Umriss der Platte, an dem der Schatten dieses Körpers endet —
+        ``None`` ohne gezeigten Bauraum: Dann gibt es keine Kante, an der zu
+        schneiden wäre (:func:`shadow_catchers`)."""
+        return self._bed_outline_for(object_id) if self._bed_extent is not None else None
 
     # --- scene ------------------------------------------------------------------
 
@@ -8409,10 +8389,7 @@ class Viewport(QWidget):
             object_id: [hull for hull in found if hull is not None]
             for object_id, found in self._shadow_hulls.items()
         }
-        beds = {
-            object_id: self._bed_outline_for(object_id) if self._bed_extent is not None else None
-            for object_id in hulls
-        }
+        beds = {object_id: self._shadow_bed(object_id) for object_id in hulls}
         size = sum(len(hull) for found in hulls.values() for hull in found)
         if size <= SHADOW_PROJECTION_ABOVE:
             self._show_shadow_soups(
@@ -14203,7 +14180,17 @@ class Viewport(QWidget):
         # keine Operation tragen (:attr:`moves_as_a_part`), und ebenso an
         # seiner Fläche: Die ist kein Press/Pull-Ziel (:meth:`gizmo_target`),
         # sondern der Baustein selbst.
-        if feature.kind in movable_feature_kinds() or self.moves_as_a_part(feature):
+        if self.moves_as_a_part(feature):
+            return feature
+        # **Und nur, wo das Merkmal sich versetzen lässt** (RM-535): dieselbe
+        # Antwort wie die Zeile rechts (``actions.move_refusal`` über
+        # :attr:`move_refused`). Nach der Art allein hing der Griff an der
+        # Tasche um einen Zapfen und an einem abgetrennten Ring, und sein Zug
+        # endete mit „Die neue Stelle steht rechts unter Auswahl.“ — dort
+        # stand nichts.
+        if feature.kind in movable_feature_kinds() and not (
+            self.move_refused is not None and self.move_refused(marked)
+        ):
             return feature
         return None
 
@@ -14360,6 +14347,11 @@ class Viewport(QWidget):
             return
         self._feature_gizmo_blocked = blocked
         self._knobs_stay = stay
+        self.set_gizmo(self._gizmo_wanted)
+
+    def refresh_gizmo(self) -> None:
+        """Den Griff neu setzen, wie er gewünscht ist — nach einer neuen Antwort
+        der Karte (:attr:`move_refused`)."""
         self.set_gizmo(self._gizmo_wanted)
 
     def set_transform_reference(self, point: Vec3 | None) -> None:

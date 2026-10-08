@@ -27,6 +27,12 @@ SLICER_ORDER = ["elegoo", "bambu", "creality", "orca", "prusa", "superslicer", "
 FOREIGN = ("wie Hersteller", "nur im Fenster")
 
 
+def _mm3(value: Any) -> str:
+    """Ein Volumen für die Tabelle; ein fehlender Wert (ältere Ergebnisdatei oder
+    unsichere Stützrolle) ist „—“ und nicht null."""
+    return "—" if value is None else f"{float(value):.2f}"
+
+
 def _advice_flag(entry: dict[str, Any]) -> str | None:
     """Macht einen Fehler der Vorschlagsberechnung im Bericht sichtbar."""
     advice_error = entry.get("advice_error")
@@ -430,16 +436,23 @@ def main() -> int:
     lines += [
         "## Stützbedarf gegen das Urteil des Slicers",
         "",
-        "| Modell | Slicer/Drucker | Stütze m | Solidons Weg |",
-        "|---|---|---|---|",
+        "| Modell | Slicer/Drucker | Stütze mm³ | Grenze mm³ | Stütze m | Solidons Weg |",
+        "|---|---|---|---|---|---|",
     ]
-    agreeing = disagreeing = 0
+    agreeing = disagreeing = unknown = 0
     for result in results:
         for entry in result.get("combos", []):
             for run in entry.get("variants", {}).get("stuetzen_auto", []):
                 if not run.get("ok"):
                     continue
-                if not any(f.startswith("Slicer stützt nicht") for f in run.get("flags", [])):
+                flagged = any(f.startswith("Slicer stützt nicht") for f in run.get("flags", []))
+                if not flagged and run.get("support_gcode_mm3") is None:
+                    # Ohne Volumen schweigt die Marke wie das Hauptfenster; das
+                    # ist kein „stützt“, sondern ein unbekanntes Urteil. Eine
+                    # gespeicherte Marke gilt auch in älteren Dateien ohne Grenze.
+                    unknown += 1
+                    continue
+                if not flagged:
                     agreeing += 1
                     continue
                 disagreeing += 1
@@ -450,11 +463,14 @@ def main() -> int:
                 ]
                 lines.append(
                     f"| {Path(result.get('model', '?')).name} | {entry['slicer']}/{entry['printer']} "
+                    f"| {_mm3(run.get('support_gcode_mm3'))} "
+                    f"| {_mm3(run.get('support_floor_mm3'))} "
                     f"| {run.get('support_m') or 0.0:.2f} | {'; '.join(ways)[:200]} |"
                 )
     lines += [
         "",
-        f"Der Slicer stützt, wo Solidon Stützen verlangt: {agreeing}; er stützt nicht: {disagreeing}.",
+        f"Der Slicer stützt, wo Solidon Stützen verlangt: {agreeing}; er stützt nicht: "
+        f"{disagreeing}; Stützmenge unbekannt: {unknown}.",
         "",
     ]
     # Übernommene Vorschläge, die Stützen einschalten und trotzdem keine

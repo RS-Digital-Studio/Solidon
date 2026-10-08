@@ -17,7 +17,6 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 import pytest
-from packaging.requirements import Requirement
 
 from app.core.backends.mesh import (
     WORKFLOW_DIR,
@@ -35,17 +34,28 @@ def stl(name: str = "cube_clean.stl") -> bytes:
 
 
 #: Was ein Rechner mit dieser Ausstattung zur Auswahl stellt, samt der Fallen:
-#: unter den Checkpoints liegt neben den Bildmodellen auch ein Formkern aus
-#: einer früheren Installation, und neben dem gemeinten TripoSG steht die
-#: Kritzel-Version, die für ein Lichtbild das falsche Modell wäre. Beide
-#: stehen mit Absicht vor der richtigen Antwort.
+#: Unter ``diffusion_models`` liegen Formkern, Bildmodell und fremde Modelle
+#: nebeneinander, dazu die 9B-Fassung (nicht-kommerzielle Lizenz) und das nicht
+#: destillierte Basismodell von FLUX.2 [klein]; unter ``vae`` die Textur-VAE von
+#: TRELLIS.2 und eine fremde. Die Fallen stehen mit Absicht vor der richtigen
+#: Antwort.
 OFFERED: dict[str, list[str]] = {
-    "CheckpointLoaderSimple.ckpt_name": [
-        "hunyuan_3d_v2.1.safetensors",
-        "Juggernaut-X-v10.safetensors",
-        "animagine-xl-4.0-opt.safetensors",
+    "UNETLoader.unet_name": [
+        "flux-2-klein-9b-fp8.safetensors",
+        "flux-2-klein-base-4b.safetensors",
+        "pixal3d_int8_convrot.safetensors",
+        "wan2.2_t2v_14B.safetensors",
+        "trellis_2_int8_convrot.safetensors",
+        "flux-2-klein-4b-fp8.safetensors",
     ],
-    "TripoSGLoader.model": ["TripoSG-scribble", "TripoSG"],
+    "VAELoader.vae_name": [
+        "ae.safetensors",
+        "trellis_2_texture_vae_bf16.safetensors",
+        "flux2-vae.safetensors",
+        "trellis_2_shape_vae_bf16.safetensors",
+    ],
+    "CLIPLoader.clip_name": ["umt5_xxl_fp8.safetensors", "qwen_3_4b_fp4_flux2.safetensors"],
+    "CLIPVisionLoader.clip_name": ["clip_vision_h.safetensors", "dino_v3_vit_l.safetensors"],
     # Freistellen: ComfyUI kann es seit 0.33 selbst, und beide Gewichte sind
     # BiRefNet unter MIT. ``lucida`` steht hinter ``birefnet``, damit die
     # Rangfolge etwas zu entscheiden hat.
@@ -89,8 +99,16 @@ class Comfy:
             asked = sum(1 for entry in self.requests if "/history/" in entry)
             if asked < self.ready_after:
                 return b"{}"
+            # Netz und Bild: Der Weg aus Text holt zuerst das Bild, dann das Netz.
             return json.dumps(
-                {"job-1": {"outputs": {"4": {"meshes": [{"filename": "out.stl"}]}}}}
+                {
+                    "job-1": {
+                        "outputs": {
+                            "4": {"meshes": [{"filename": "out.stl"}]},
+                            "13": {"images": [{"filename": "bild.png", "type": "output"}]},
+                        }
+                    }
+                }
             ).encode("utf-8")
         if url.endswith("/upload/image"):
             return b'{"name": "uploaded.png"}'
@@ -149,6 +167,42 @@ def test_a_prompt_goes_through_the_shipped_workflow() -> None:
     assert result.payload == stl(), "the file is kept as it came (§16.1)"
 
 
+def test_the_text_way_runs_the_stages_its_check_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prüfung und Lauf lesen dieselben Stufen (Review 1 P3, G-7).
+
+    ``_read_graph`` fragte die Knoten aus ``WORKFLOW_STAGES``, der Lauf fuhr
+    fest ``text_to_image`` und dann den Bildweg — ein umbenannter oder
+    getauschter Bildgraph wäre geprüft und nicht gefahren worden. Der Test
+    tauscht die erste Stufe gegen einen Graphen mit eigener Kennung.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    stages = mesh_module.WORKFLOW_STAGES
+    assert stages["text_to_mesh"][1:] == stages["image_to_mesh"], (
+        "der Weg aus Text endet im Weg aus Bild"
+    )
+    for name in ("text_to_image", "image_to_mesh"):
+        shutil.copy(WORKFLOW_DIR / f"{name}.json", tmp_path / f"{name}.json")
+    swapped = json.loads((WORKFLOW_DIR / "text_to_image.json").read_text(encoding="utf-8"))
+    for node in swapped.values():
+        node.setdefault("_meta", {})["title"] = "getauschte Stufe"
+    (tmp_path / "anderes_bild.json").write_text(json.dumps(swapped), encoding="utf-8")
+    monkeypatch.setitem(stages, "text_to_mesh", ("anderes_bild", *stages["image_to_mesh"]))
+    server = Comfy()
+    generator = ComfyBackend(transport=server, poll_seconds=0.0, workflows=tmp_path)
+
+    generator.text_to_mesh("ein Halter", seed=3)
+
+    assert len(server.graphs) == 2
+    first = server.graphs[0]
+    assert all(node.get("_meta", {}).get("title") == "getauschte Stufe" for node in first.values())
+    assert set(generator._graph_nodes("text_to_mesh")) >= {
+        str(node["class_type"]) for graph in server.graphs for node in graph.values()
+    }, "was läuft, hat die Prüfung gefragt"
+
+
 def test_the_placeholders_arrive_with_their_type() -> None:
     """ComfyUI prüft den Typ jedes Eingangs — ein Startwert als Text wird
     abgelehnt.
@@ -161,15 +215,20 @@ def test_the_placeholders_arrive_with_their_type() -> None:
 
     backend(server).text_to_mesh("ein Halter", seed=17)
 
-    graph = server.graphs[0]
+    # Der Weg aus Text sind zwei Aufträge: Bild, dann Netz (RM-550).
+    assert len(server.graphs) == 2
+    nodes = [node for graph in server.graphs for node in graph.values()]
     texts = [
-        node["inputs"]["text"]
-        for node in graph.values()
-        if isinstance(node["inputs"].get("text"), str)
+        node["inputs"]["text"] for node in nodes if isinstance(node["inputs"].get("text"), str)
     ]
     assert any("ein Halter" in entry for entry in texts), "der Prompt steht im Graphen"
 
-    seeds = [node["inputs"]["seed"] for node in graph.values() if "seed" in node["inputs"]]
+    seeds = [
+        node["inputs"][key]
+        for node in nodes
+        for key in ("seed", "noise_seed")
+        if key in node["inputs"]
+    ]
     assert seeds, "irgendwo wird ein Startwert gesetzt"
     assert all(entry == 17 for entry in seeds), 'a number, not the string "17"'
     assert all(isinstance(entry, int) for entry in seeds)
@@ -192,7 +251,7 @@ def test_a_picture_is_uploaded_before_the_job() -> None:
 def test_the_job_is_polled_until_it_is_done() -> None:
     server = Comfy(ready_after=3)
 
-    backend(server).text_to_mesh("ein Halter")
+    backend(server).image_to_mesh(b"png")
 
     assert sum(1 for entry in server.requests if "/history/" in entry) == 3
 
@@ -288,7 +347,7 @@ def test_an_output_that_is_a_bare_path_is_found_too() -> None:
             return super().__call__(url, body, headers)
 
     server = Preview()
-    result = backend(server).text_to_mesh("ein Halter")
+    result = backend(server).image_to_mesh(b"png")
 
     assert result.mesh.triangle_count == 12
     holt = [entry for entry in server.requests if "/view?" in entry][-1]
@@ -316,7 +375,7 @@ def test_a_missing_workflow_is_a_clear_error(tmp_path: Path) -> None:
     assert "workflow" in str(problem.value.detail).lower()
 
 
-@pytest.mark.parametrize("name", ["text_to_mesh", "image_to_mesh"])
+@pytest.mark.parametrize("name", ["text_to_image", "image_to_mesh"])
 def test_the_shipped_workflows_are_valid_graphs(name: str) -> None:
     graph = json.loads((WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
 
@@ -328,53 +387,96 @@ def test_the_models_come_from_the_machine_it_runs_on() -> None:
     """Ein Graph mit fest eingetragenen Dateinamen läuft nur auf einem Rechner.
 
     Der mitgelieferte nennt deshalb Rollen, und was sie ausfüllt, entscheidet
-    sich gegen den laufenden Server.
+    sich gegen den laufenden Server — im geteilten Ordner nach Muster, nicht
+    nach Reihenfolge.
     """
     server = Comfy()
 
     backend(server).text_to_mesh("ein Halter")
 
-    graph = server.graphs[0]
-    chosen = {
-        node["class_type"]: node["inputs"]
+    chosen = [
+        (node["class_type"], value)
+        for graph in server.graphs
         for node in graph.values()
-        if node["class_type"] in ("CheckpointLoaderSimple", "TripoSGLoader")
-    }
-    assert chosen["TripoSGLoader"]["model"] == "TripoSG", (
-        "nicht die Kritzel-Version, die davor in der Liste steht"
+        for field, value in node["inputs"].items()
+        if field in ("unet_name", "vae_name", "clip_name")
+    ]
+    assert ("UNETLoader", "trellis_2_int8_convrot.safetensors") in chosen
+    assert ("UNETLoader", "flux-2-klein-4b-fp8.safetensors") in chosen, (
+        "nicht die 9B-Fassung, nicht das Basismodell, nicht Pixal3D"
     )
-    assert chosen["CheckpointLoaderSimple"]["ckpt_name"] == "Juggernaut-X-v10.safetensors", (
-        "nicht der Formkern, der unter denselben Checkpoints liegt"
-    )
-    assert not any("{model:" in json.dumps(node) for node in graph.values())
+    assert ("VAELoader", "trellis_2_shape_vae_bf16.safetensors") in chosen, "nicht die Textur-VAE"
+    assert ("VAELoader", "flux2-vae.safetensors") in chosen, "nicht die fremde VAE"
+    assert ("CLIPLoader", "qwen_3_4b_fp4_flux2.safetensors") in chosen
+    assert ("CLIPVisionLoader", "dino_v3_vit_l.safetensors") in chosen
+    assert not any("{model:" in json.dumps(graph) for graph in server.graphs)
 
 
 def test_an_unknown_model_is_better_than_none() -> None:
-    """Wer ein Bildmodell hat, das wir nicht kennen, soll trotzdem erzeugen
-    können — geraten wird hier nichts, es gibt schlicht nur eines.
+    """Im eigenen Ordner kann jede Datei die Aufgabe — dort ist eine besser als keine.
+
+    Das gilt nur fürs Freistellen: ``background_removal`` hält nichts anderes,
+    und wer ein Freistellmodell hat, das wir nicht kennen, soll trotzdem
+    erzeugen können.
     """
 
     class Exotic(Comfy):
         def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
-            if "/object_info/CheckpointLoaderSimple" in url:
+            if "/object_info/LoadBackgroundRemovalModel" in url:
                 return json.dumps(
                     {
-                        "CheckpointLoaderSimple": {
-                            "input": {"required": {"ckpt_name": [["eigenbau_v3.safetensors"], {}]}}
+                        "LoadBackgroundRemovalModel": {
+                            "input": {
+                                "required": {"bg_removal_name": [["eigenbau_v3.safetensors"], {}]}
+                            }
                         }
                     }
                 ).encode()
             return super().__call__(url, body, headers)
 
     server = Exotic()
-    backend(server).text_to_mesh("ein Halter")
+    backend(server).image_to_mesh(b"\x89PNG fake")
 
     names = [
-        node["inputs"]["ckpt_name"]
+        node["inputs"]["bg_removal_name"]
         for node in server.graphs[0].values()
-        if node["class_type"] == "CheckpointLoaderSimple"
+        if node["class_type"] == "LoadBackgroundRemovalModel"
     ]
     assert names == ["eigenbau_v3.safetensors"]
+
+
+def test_a_foreign_file_in_a_shared_folder_is_not_the_model() -> None:
+    """**Im geteilten Ordner ist „irgendeine Datei“ die falsche** (``ModelRole.strict``).
+
+    Unter ``diffusion_models`` liegen Formkern und Bildmodell neben den
+    Modellen anderer Abläufe. Nähme der Bildweg die erste Datei, scheiterte der
+    Auftrag mitten im Lauf an einem Videomodell — und die Bereitschaft hätte
+    „bereit“ gesagt. Was kein Muster trifft, fehlt.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    class Foreign(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if "/object_info/UNETLoader" in url:
+                return json.dumps(
+                    {
+                        "UNETLoader": {
+                            "input": {"required": {"unet_name": [["wan2.2_t2v.safetensors"], {}]}}
+                        }
+                    }
+                ).encode()
+            return super().__call__(url, body, headers)
+
+    server = Foreign()
+    generator = backend(server)
+
+    assert "shape" in generator.missing_models("image_to_mesh")
+    with pytest.raises(GenerationFailed) as problem:
+        generator.image_to_mesh(b"\x89PNG fake")
+    assert "Modelldatei" in str(problem.value.detail)
+    assert problem.value.values.get("role") == "shape"
+    assert not any(url.endswith("/prompt") for url in server.requests), "nichts abgeschickt"
+    assert mesh_module.role_candidates("shape", ["wan2.2_t2v.safetensors"]) == []
 
 
 def test_a_missing_model_names_the_role_not_the_setting() -> None:
@@ -404,7 +506,7 @@ def test_the_machine_is_asked_once_per_input_not_once_per_node() -> None:
     steht, dass keine zweimal gefragt wird.
     """
     server = Comfy()
-    graph = json.loads((WORKFLOW_DIR / "text_to_mesh.json").read_text(encoding="utf-8"))
+    graph = json.loads((WORKFLOW_DIR / "image_to_mesh.json").read_text(encoding="utf-8"))
     rollen = {
         f"{node['class_type']}.{field}"
         for node in graph.values()
@@ -412,7 +514,7 @@ def test_the_machine_is_asked_once_per_input_not_once_per_node() -> None:
         if isinstance(value, str) and value.startswith("{model:")
     }
 
-    backend(server).text_to_mesh("ein Halter")
+    backend(server).image_to_mesh(b"png")
 
     asked = [entry for entry in server.requests if "/object_info/" in entry]
     assert len(asked) == len(set(asked)) == len(rollen)
@@ -437,24 +539,22 @@ def test_the_scripted_backend_answers_what_it_was_given() -> None:
 # --- ComfyUI einrichten (§27, §36) ------------------------------------------------
 
 
-def test_the_nodes_travel_with_the_application() -> None:
-    """Sie lagen unter ``tools/`` — und dorthin kommt ein Kunde nicht.
+def test_no_node_of_our_own_travels_with_the_application() -> None:
+    """Seit TRELLIS.2 ist jeder Knoten der Abläufe ein eingebauter (RM-003).
 
-    Die Anwendung wies auf „«python tools/setup_comfyui.py»" hin; im gebauten
-    Paket gibt es weder das Skript noch die Knoten daneben, denn ``tools/``
-    reist nicht mit. Jetzt liegen sie bei den Workflows, die sie ansprechen —
-    und der Eintrag der Spec für ``app/core/backends/data`` deckt beide.
+    Hier lag ``ComfyUI-TripoSG-Solidon``, ein eigener Knoten samt Abruf eines
+    fremden Quelltexts, von dem ein Teil unter einer Tencent-Lizenz ohne EU
+    steht. Geprüft wird beides: Es liegt kein Knoten mehr bei den Daten, und
+    jede Knotenart der Abläufe stammt laut ComfyUIs eigener Beschreibung aus
+    seinem Kern (``nodes`` oder ``comfy_extras``), nicht aus ``custom_nodes``.
     """
-    from app.core.backends import comfy_setup
-
-    assert comfy_setup.NODE_SOURCE.is_dir(), "die Knoten fehlen in dieser Installation"
-    for name in ("nodes.py", "__init__.py"):
-        assert (comfy_setup.NODE_SOURCE / name).is_file(), name
-    # Neben den Workflows, nicht irgendwo: Was der Ablauf anspricht und was ihn
-    # ausführt, gehört in denselben Datenordner.
-    from app.core.backends import mesh as mesh_module
-
-    assert comfy_setup.NODE_SOURCE.is_relative_to(mesh_module.WORKFLOW_DIR)
+    assert not (WORKFLOW_DIR / "comfyui").exists(), "kein eigener Knoten bei den Daten"
+    described_nodes = _core_nodes()["nodes"]
+    for name in ("image_to_mesh", "text_to_image"):
+        graph = json.loads((WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
+        for kind in {str(node["class_type"]) for node in graph.values()}:
+            module = described_nodes[kind]["python_module"]
+            assert module == "nodes" or module.startswith("comfy_extras."), (name, kind, module)
 
 
 def test_no_text_the_user_reads_points_at_a_script_the_customer_lacks() -> None:
@@ -484,19 +584,183 @@ def test_no_text_the_user_reads_points_at_a_script_the_customer_lacks() -> None:
                     assert "setup_comfyui" not in argument.value, path.name
 
 
-def test_setting_up_copies_the_nodes_and_says_each_step(tmp_path: Path) -> None:
-    """Vier Schritte, und jeder meldet sich — „das dauert" ist keine Auskunft."""
-    from app.core.backends import comfy_setup
-
+def _comfyui_folder(tmp_path: Path, version: str | None = "0.37.0") -> Path:
+    """Ein ComfyUI-Ordner, wie die Einrichtung ihn findet — mit oder ohne Versionsdatei."""
     comfyui = tmp_path / "ComfyUI"
     (comfyui / "custom_nodes").mkdir(parents=True)
+    if version is not None:
+        (comfyui / "comfyui_version.py").write_text(
+            "# This file is automatically generated by the build process when version is\n"
+            "# updated in pyproject.toml.\n"
+            f'__version__ = "{version}"\n',
+            encoding="utf-8",
+        )
+    return comfyui
+
+
+def test_a_comfyui_that_is_too_old_stops_before_any_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**Ein zu altes ComfyUI kennt die Knoten nicht — und das sagt die Einrichtung vorher.**
+
+    TRELLIS.2 kam mit v0.34.0 in den Kern, Solidon rechnet ab v0.35.0. Acht
+    Gigabyte zu laden und erst beim Erzeugen „unbekannter Knoten“ zu lesen,
+    wäre eine halbe Stunde zu spät. Der Satz nennt beide Fassungen und den Weg
+    (Regel 17); geladen wird nichts.
+    """
+    from app.core.backends import comfy_setup
+
+    comfyui = _comfyui_folder(tmp_path, "0.33.2")
+    started: list[object] = []
+    monkeypatch.setattr(comfy_setup, "_run", lambda *a, **k: started.append(a))
+    monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *a, **k: started.append(a))
+
+    with pytest.raises(comfy_setup.SetupFailed) as raised:
+        comfy_setup.setup(comfyui, weights=True, image_model=True)
+
+    gesagt = str(raised.value)
+    assert "0.33.2" in gesagt, "die gefundene Fassung"
+    assert "0.35.0" in gesagt, "die nötige Fassung"
+    assert "aktualisieren" in gesagt, "und der Weg"
+    assert not started, "kein Prozess, kein Download"
+
+
+@pytest.mark.parametrize("version", [None, "0.35.0", "0.39.0", "1.0.0"])
+def test_a_new_enough_or_unknown_comfyui_is_not_stopped(
+    tmp_path: Path, version: str | None
+) -> None:
+    """Ab 0.35.0 geht es weiter — und ohne Versionsdatei auch.
+
+    ComfyUI Desktop hält seinen Programmcode getrennt von dem Ordner, in dem
+    Modelle und ``custom_nodes`` liegen; dort steht keine Versionsdatei.
+    „Unbekannt“ ist nicht „zu alt“ — dann fragt die Bereitschaft den laufenden
+    Server nach seinen Knoten.
+    """
+    from app.core.backends import comfy_setup
+
+    comfyui = _comfyui_folder(tmp_path, version)
+
+    comfy_setup.check_version(comfyui)
+    result = comfy_setup.setup(comfyui, weights=False, image_model=False)
+    assert result.done
+
+
+def test_the_version_is_read_and_never_executed(tmp_path: Path) -> None:
+    """Die Versionsdatei gehört einem fremden Programm — gelesen, nicht ausgeführt (Regel 11)."""
+    from app.core.backends import comfy_setup
+
+    comfyui = tmp_path
+    (comfyui / "comfyui_version.py").write_text(
+        'raise SystemExit("ausgeführt")\n__version__ = "0.36.1"\n', encoding="utf-8"
+    )
+    assert comfy_setup.comfyui_version(comfyui) == (0, 36, 1)
+    (comfyui / "comfyui_version.py").write_text("kaputt", encoding="utf-8")
+    assert comfy_setup.comfyui_version(comfyui) is None
+
+
+def test_the_legacy_triposg_setup_is_removed_and_nothing_else(tmp_path: Path) -> None:
+    """Was Solidon für TripoSG selbst angelegt hat, geht — am eigenen Zeichen erkannt.
+
+    Der Knotenordner lädt sonst bei jedem Start von ComfyUI den TripoSG-Quelltext
+    (RM-003), und die 7,5 GB Gewichte liest kein Ablauf mehr. Gewichte ohne
+    unsere Marke und fremde Knoten bleiben.
+    """
+    from app.core.backends import comfy_setup
+
+    comfyui = _comfyui_folder(tmp_path)
+    nodes = comfyui / comfy_setup.LEGACY_NODES
+    nodes.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    (nodes / "triposg").mkdir()
+    weights = comfyui / comfy_setup.LEGACY_WEIGHTS
+    weights.mkdir(parents=True)
+    (weights / comfy_setup.LEGACY_MARKER).write_text("{}", encoding="utf-8")
+    (weights / "model_index.json").write_text("{}", encoding="utf-8")
+    leftover = weights.with_name(weights.name + ".previous-abc")
+    leftover.mkdir()
+    foreign = comfyui / "custom_nodes" / "ComfyUI-Fremd"
+    foreign.mkdir()
+    (foreign / "nodes.py").write_text("# fremd", encoding="utf-8")
     seen: list[str] = []
 
-    target = comfy_setup.copy_nodes(comfyui, progress=lambda step: seen.append(str(step)))
+    assert comfy_setup.remove_legacy(comfyui, lambda step: seen.append(str(step))) == ()
 
-    assert (target / "nodes.py").is_file()
-    assert target.name == comfy_setup.NODE_NAME
-    assert seen, "der Schritt meldet sich"
+    assert not nodes.exists() and not weights.exists() and not leftover.exists()
+    assert foreign.is_dir(), "ein fremder Knoten bleibt"
+    assert seen, "der Schritt sagt, was er tut"
+    again: list[str] = []
+    assert comfy_setup.remove_legacy(comfyui, lambda step: again.append(str(step))) == ()
+    assert not again, "beim zweiten Mal ist nichts zu tun"
+
+    # Ohne unsere Marke bleiben Gewichte, die jemand selbst dorthin gelegt hat.
+    (weights / "model_index.json").parent.mkdir(parents=True)
+    (weights / "model_index.json").write_text("{}", encoding="utf-8")
+    assert comfy_setup.remove_legacy(comfyui) == ()
+    assert (weights / "model_index.json").is_file()
+
+
+def test_a_legacy_folder_that_stays_is_named_in_the_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hält ComfyUI eine Datei des alten Knotens offen, sagt das Ergebnis es (Review 1 P3, G-6).
+
+    Bis dahin stand nur eine Warnung im Protokoll, der Dialog meldete
+    „Eingerichtet“, und ComfyUI lud den TripoSG-Quelltext weiter. Die
+    Sperre ist nachgestellt: Ein laufendes ComfyUI hält ``nodes.py`` unter
+    Windows offen, und das Löschen endet mit „Zugriff verweigert“.
+    """
+    from app.core.backends import comfy_setup
+
+    comfyui = _comfyui_folder(tmp_path)
+    nodes = comfyui / comfy_setup.LEGACY_NODES
+    nodes.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    weights = comfyui / comfy_setup.LEGACY_WEIGHTS
+    weights.mkdir(parents=True)
+    (weights / comfy_setup.LEGACY_MARKER).write_text("{}", encoding="utf-8")
+    real = shutil.rmtree
+
+    def locked(path: Path, *args: object, **kwargs: object) -> None:
+        if Path(path) == nodes:
+            raise PermissionError(13, "Zugriff verweigert", str(nodes / "nodes.py"))
+        real(path, *args, **kwargs)
+
+    monkeypatch.setattr(comfy_setup.shutil, "rmtree", locked)
+
+    assert comfy_setup.remove_legacy(comfyui) == (nodes,)
+    assert nodes.is_dir() and not weights.exists(), "was ging, ging"
+
+    result = comfy_setup.setup(comfyui, weights=False, image_model=False)
+    assert result.legacy_left == (comfy_setup.LEGACY_NODES,)
+    assert result.done, "die Modelle sind davon nicht berührt"
+
+
+def test_the_legacy_node_goes_with_the_read_only_files_of_its_clone(tmp_path: Path) -> None:
+    """Git legt Objektdateien schreibgeschützt an; der alte Knoten trägt einen Klon.
+
+    An der echten Einrichtung dieser Maschine verweigerte Windows sie mit
+    „Zugriff verweigert“, und der Ordner blieb samt ``nodes.py`` stehen —
+    ComfyUI hätte den TripoSG-Quelltext weiter geladen.
+    """
+    import stat
+
+    from app.core.backends import comfy_setup
+
+    comfyui = _comfyui_folder(tmp_path)
+    nodes = comfyui / comfy_setup.LEGACY_NODES
+    objects = nodes / "_clone" / ".git" / "objects" / "01"
+    objects.mkdir(parents=True)
+    for name in ("nodes.py", "__init__.py"):
+        (nodes / name).write_text("# alt", encoding="utf-8")
+    packed = objects / "4ade418c1415c6a21b2cf6a958b6757058282f"
+    packed.write_bytes(b"x")
+    packed.chmod(stat.S_IREAD)
+
+    assert comfy_setup.remove_legacy(comfyui) == ()
+
+    assert not nodes.exists()
 
 
 def test_a_folder_without_custom_nodes_is_not_comfyui(tmp_path: Path) -> None:
@@ -521,92 +785,27 @@ def test_the_folder_above_comfyui_is_accepted_too(tmp_path: Path) -> None:
 def test_a_cancelled_setup_keeps_what_it_has(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein halb kopierter Knotenordner wäre schlimmer als ein langer Lauf.
-
-    Abgebrochen wird zwischen den Schritten, und der Satz dazu sagt, dass ein
-    neuer Lauf fortsetzt — sonst fängt jemand von vorn an.
+    """Abgebrochen wird zwischen und in den Schritten, und der Satz dazu sagt,
+    dass ein neuer Lauf fortsetzt — sonst fängt jemand von vorn an.
     """
     from app.core.backends import comfy_setup
 
-    comfyui = tmp_path / "ComfyUI"
-    (comfyui / "custom_nodes").mkdir(parents=True)
+    comfyui = _comfyui_folder(tmp_path)
     monkeypatch.setattr(comfy_setup, "find_python", lambda _folder: Path("python"))
+    started: list[object] = []
+    monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *a, **k: started.append(a))
 
     result = comfy_setup.setup(comfyui, cancelled=lambda: True)
 
     assert not result.done
     assert "setzt fort" in str(result.reason)
-    assert (result.nodes / "nodes.py").is_file(), "der getane Schritt bleibt getan"
-
-
-def test_triposg_source_uses_and_verifies_the_fixed_commit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Der Installationsstand darf nicht davon abhängen, wann jemand einrichtet.
-
-    Ein flacher Klon von ``HEAD`` war zwar klein, holte aber bei jedem Lauf
-    potenziell anderen Quelltext. Der feste Commit muss deshalb schon im Fetch
-    stehen, ausgecheckt werden und als tatsächlicher ``HEAD`` geprüft werden.
-    LICENSE und NOTICE reisen weiterhin neben den Knoten mit.
-    """
-    from app.core.backends import comfy_setup
-
-    target = tmp_path / "ComfyUI" / "custom_nodes" / comfy_setup.NODE_NAME
-    target.mkdir(parents=True)
-    scratch = target / "_clone"
-    commands: list[list[str]] = []
-
-    monkeypatch.setattr(comfy_setup.discover, "find_program", lambda *_args: Path("git"))
-
-    def run(
-        command: list[str],
-        _what: object,
-        _progress: object,
-        _cancelled: object = None,
-    ) -> None:
-        commands.append(command)
-        if command[1] == "init":
-            scratch.mkdir()
-        if "checkout" in command:
-            (scratch / "triposg").mkdir()
-            (scratch / "LICENSE").write_text("MIT", encoding="utf-8")
-            (scratch / "NOTICE").write_text("Hinweise", encoding="utf-8")
-
-    monkeypatch.setattr(comfy_setup, "_run", run)
-
-    comfy_setup.fetch_triposg(target)
-
-    commit = comfy_setup.TRIPOSG_COMMIT
-    assert [
-        "git",
-        "-C",
-        str(scratch),
-        "fetch",
-        "--depth",
-        "1",
-        comfy_setup.TRIPOSG_REPO,
-        commit,
-    ] in commands
-    assert ["git", "-C", str(scratch), "checkout", "--detach", commit] in commands
-    assert [
-        command[6:]
-        for command in commands
-        if command[3:6] == ["merge-base", "--is-ancestor", commit]
-    ] == [["HEAD"]]
-    assert [
-        command[6:]
-        for command in commands
-        if command[3:6] == ["merge-base", "--is-ancestor", "HEAD"]
-    ] == [[commit]]
-    assert (target / "triposg").is_dir()
-    assert (target / "LICENSE-TripoSG").read_text(encoding="utf-8") == "MIT"
-    assert (target / "NOTICE-TripoSG").read_text(encoding="utf-8") == "Hinweise"
+    assert not started, "nach dem Abbruch beginnt kein Download"
 
 
 # --- läuft es, und kennt es die Knoten? (§27) -------------------------------------
 
 
-def _object_info(known: bool, node: str = "TripoSGImageToMesh") -> bytes:
+def _object_info(known: bool, node: str = "Trellis2Conditioning") -> bytes:
     """Was ComfyUI auf ``/object_info/<knoten>`` antwortet.
 
     Ein ComfyUI ohne diesen Knoten antwortet mit einem **leeren Objekt** und
@@ -656,33 +855,52 @@ def test_a_comfy_that_knows_every_node_of_the_workflow_is_ready(
     assert backend.missing_nodes() == ()
 
 
-def test_our_own_nodes_alone_are_not_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_some_nodes_alone_are_not_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
     """**„Bereit" stand da, und der Auftrag scheiterte trotzdem.**
 
-    Geprüft wurde nur der Knoten aus unserer eigenen Sammlung. Der lag nach der
-    Einrichtung vor, also stand „Bereit" da — und abgeschickt scheiterte der
-    Auftrag an einem *anderen* Knoten, den derselbe Ablauf anspricht. Gemessen
-    an einem frischen ComfyUI Desktop: unsere vier Knoten geladen, `RMBG`
-    fehlte, und die Anwendung behauptete Bereitschaft.
-
-    Und der fehlende Name gehört in die Auskunft: „ein Knoten fehlt" schickt
-    niemanden weiter (Regel 17).
+    Geprüft wurde einmal nur ein Knoten des Ablaufs; abgeschickt scheiterte
+    der Auftrag an einem *anderen*. Heute ist der Fall ein ComfyUI vor 0.34:
+    Freistellen und Sampler kennt es, TRELLIS.2 nicht. Und der fehlende Name
+    gehört in die Auskunft: „ein Knoten fehlt" schickt niemanden weiter
+    (Regel 17).
     """
     from app.core.backends import mesh as mesh_module
 
     nodes = mesh_module.ComfyBackend()._graph_nodes()
-    eigene = {kind for kind in nodes if kind.startswith(mesh_module.OWN_NODE_PREFIX)}
-    fremde = set(nodes) - eigene
-    assert eigene and fremde, "der Ablauf spricht eigene und fremde Knoten an"
+    neue = {kind for kind in nodes if "Trellis" in kind}
+    alte = set(nodes) - neue
+    assert neue and alte, "der Ablauf spricht alte und neue Knoten an"
 
     # ``with_models=False``: Dieser Test prüft die Knotenfrage. Ein Server, der
     # die Modelle mitbeantwortet, würde damit auch die Knoten bejahen, für die
     # er eine Auswahlliste führt.
-    backend = ComfyBackend(transport=_answers_for(eigene, with_models=False))
+    backend = ComfyBackend(transport=_answers_for(alte, with_models=False))
     monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: True)
 
     assert backend.readiness() is mesh_module.Readiness.NO_NODES
-    assert set(backend.missing_nodes()) == fremde
+    assert set(backend.missing_nodes()) == neue
+
+
+def test_a_missing_node_says_that_comfyui_is_too_old() -> None:
+    """Fehlt ein Knoten, kann Solidon ihn nicht nachlegen — der Weg ist ein neueres ComfyUI.
+
+    Der Satz sagte „Die Knotensammlung fehlt — einrichten unter Zusätzliche
+    Programme“. Seit alle Knoten eingebaut sind, wäre das ein Weg ins Leere.
+    Die nötige Fassung steht in den Werten, der Satz trägt keine Zahl (§33.1).
+    """
+    from app.core.backends import mesh as mesh_module
+    from app.core.errors import INSTALL_MISSING
+
+    generator = ComfyBackend(transport=lambda url, data, headers: b"{}")
+
+    with pytest.raises(GenerationFailed) as raised:
+        generator._offered("Trellis2Conditioning", "clip_vision_model")
+
+    assert "älter" in str(raised.value.detail)
+    assert "aktualisieren" in str(raised.value.detail)
+    assert raised.value.values["node"] == "Trellis2Conditioning"
+    assert raised.value.values["needed"] == mesh_module.MINIMUM_COMFYUI_TEXT
+    assert INSTALL_MISSING in raised.value.suggestions
 
 
 def test_a_comfy_without_our_nodes_says_so_before_the_run(
@@ -731,12 +949,10 @@ def test_the_node_comes_from_the_workflow_and_not_from_a_list() -> None:
 
     Eine zweite Liste im Code wäre am Tag nach dem nächsten Generator falsch.
     """
-    from app.core.backends import mesh as mesh_module
-
     nodes = ComfyBackend()._graph_nodes()
 
     assert nodes, "der Ablauf nennt seine Knoten selbst"
-    assert any(kind.startswith(mesh_module.OWN_NODE_PREFIX) for kind in nodes)
+    assert "Trellis2Conditioning" in nodes
     graph = json.loads((WORKFLOW_DIR / "image_to_mesh.json").read_text(encoding="utf-8"))
     assert set(nodes) == {str(entry.get("class_type")) for entry in graph.values()}
 
@@ -747,8 +963,8 @@ def test_a_step_can_be_cancelled_while_it_runs(
     """**Abbrechen wirkte beim längsten Schritt nicht.**
 
     ``subprocess.run`` blockiert bis zum Ende, und die Abbruchprüfung lag
-    *zwischen* den Schritten — einer davon lädt 7,5 GB. Wer abbrach, wartete
-    eine halbe Stunde auf einen Download, den er nicht mehr wollte.
+    *zwischen* den Schritten — einer davon lädt mehrere Gigabyte. Wer abbrach,
+    wartete eine halbe Stunde auf einen Download, den er nicht mehr wollte.
     """
     from app.core.backends import comfy_setup
 
@@ -778,8 +994,8 @@ def test_a_step_can_be_cancelled_while_it_runs(
 
     with pytest.raises(comfy_setup.Cancelled):
         comfy_setup._run(
-            ["git", "clone"],
-            "TripoSG holen",
+            ["python", "-c", "laden"],
+            "Modell laden",
             lambda step: gesehen.append(str(step)),
             cancelled=lambda: next(abfragen, True),
         )
@@ -792,25 +1008,23 @@ def test_a_cancelled_setup_says_that_a_new_run_continues(
 ) -> None:
     """Und der Satz dazu ist keine Höflichkeit: Es stimmt.
 
-    ``huggingface_hub`` lässt teilweise geladene Dateien liegen und setzt beim
-    nächsten Lauf fort; die Knoten sind idempotent kopiert.
+    ``huggingface_hub`` lässt teilweise geladene Dateien im Zwischenordner
+    liegen und setzt beim nächsten Lauf fort.
     """
     from app.core.backends import comfy_setup
 
-    comfyui = tmp_path / "ComfyUI"
-    (comfyui / "custom_nodes").mkdir(parents=True)
+    comfyui = _comfyui_folder(tmp_path)
     monkeypatch.setattr(comfy_setup, "find_python", lambda _folder: Path("python"))
 
     def bricht_ab(*_args: object, **_kwargs: object) -> None:
-        raise comfy_setup.Cancelled("Gewichte laden")
+        raise comfy_setup.Cancelled("Modell laden")
 
-    monkeypatch.setattr(comfy_setup, "fetch_triposg", bricht_ab)
+    monkeypatch.setattr(comfy_setup, "fetch_background", bricht_ab)
 
     result = comfy_setup.setup(comfyui, cancelled=lambda: False)
 
     assert not result.done
     assert "setzt fort" in str(result.reason)
-    assert (result.nodes / "nodes.py").is_file(), "der getane Schritt bleibt getan"
 
 
 def test_comfyui_desktop_is_found_where_it_says_it_is(
@@ -877,145 +1091,27 @@ def test_the_desktop_record_lives_where_the_platform_puts_it() -> None:
     assert comfy_setup._config_home().is_absolute()
 
 
-def test_the_package_list_carries_what_a_fresh_comfyui_lacks() -> None:
-    """**Sie nannte drei Pakete, und es fehlten sechs.**
-
-    Gemessen war sie an einer Installation, in der andere Knoten das übrige
-    längst mitgebracht hatten. Auf einem frischen ComfyUI Desktop fehlten
-    ``trimesh``, ``diffusers``, ``scikit-image``, ``lazy_loader``, ``omegaconf``
-    und die Laufzeit von ``antlr4`` — und die Einrichtung meldete „fertig".
-
-    Die Version an ``antlr4`` ist keine Übervorsicht: ``omegaconf`` liest damit
-    einen vorkompilierten Automaten, und die 4.13 serialisiert ihn anders.
-    """
-    from app.core.backends import comfy_setup
-
-    assert comfy_setup.PACKAGES == (
-        "jaxtyping==0.3.7; python_version < '3.11'",
-        "jaxtyping==0.3.11; python_version >= '3.11'",
-        "typeguard==4.6.0",
-        "fast-simplification==0.2.0",
-        "trimesh==5.0.0",
-        "diffusers==0.40.0",
-        "scikit-image==0.25.2; python_version < '3.11'",
-        "scikit-image==0.26.0; python_version >= '3.11'",
-        "lazy_loader==0.5",
-        "omegaconf==2.3.1",
-        "antlr4-python3-runtime==4.9.3",
-        "setuptools==83.0.0",
-    )
-
-
-@pytest.mark.parametrize(
-    ("python_version", "jaxtyping", "scikit_image"),
-    [
-        ("3.10", "==0.3.7", "==0.25.2"),
-        ("3.11", "==0.3.11", "==0.26.0"),
-        ("3.14", "==0.3.11", "==0.26.0"),
-    ],
-)
-def test_fixed_packages_cover_every_supported_comfy_python(
-    python_version: str,
-    jaxtyping: str,
-    scikit_image: str,
-) -> None:
-    """ComfyUI unterstützt 3.10; neuere Wheels dürfen diesen Weg nicht sperren."""
-    from app.core.backends import comfy_setup
-
-    selected: dict[str, list[str]] = {}
-    for raw in comfy_setup.BINARY_PACKAGES:
-        requirement = Requirement(raw)
-        if requirement.marker is None or requirement.marker.evaluate(
-            {"python_version": python_version}
-        ):
-            selected.setdefault(requirement.name, []).append(str(requirement.specifier))
-
-    assert selected["jaxtyping"] == [jaxtyping]
-    assert selected["scikit-image"] == [scikit_image]
-
-
-@pytest.mark.parametrize("missing_backend", [False, True])
-def test_package_installation_allows_only_fixed_artifacts(
-    monkeypatch: pytest.MonkeyPatch, missing_backend: bool
-) -> None:
-    """Wheels sind Pflicht; das einzige Quellpaket trägt eine Prüfsumme."""
-    from app.core.backends import comfy_setup
-
-    commands: list[list[str]] = []
-
-    def remember(command, _what, _progress, _cancelled=None) -> str:
-        commands.append(command)
-        return "missing" if missing_backend else "ready"
-
-    monkeypatch.setattr(comfy_setup, "_run", remember)
-
-    comfy_setup.install_packages(Path("python"))
-
-    assert commands.pop(0) == ["python", "-s", "-c", comfy_setup._CHECK_BUILD_BACKEND]
-    if missing_backend:
-        bootstrap = commands.pop(0)
-        assert bootstrap[-1] == comfy_setup.SETUPTOOLS_SOURCE
-        assert "#sha256=" in bootstrap[-1]
-        assert {"--no-deps", "--only-binary=:all:", "--require-hashes"} <= set(bootstrap)
-    assert len(commands) == 2
-    assert "--no-deps" in commands[0]
-    assert "--only-binary=:all:" in commands[0]
-    assert commands[0][-len(comfy_setup.BINARY_PACKAGES) :] == list(comfy_setup.BINARY_PACKAGES)
-    assert "--no-deps" in commands[1]
-    assert "--only-binary=:all:" not in commands[1]
-    assert "--require-hashes" in commands[1]
-    assert "--no-build-isolation" in commands[1]
-    assert commands[1][-1] == (
-        "antlr4-python3-runtime @ "
-        "https://files.pythonhosted.org/packages/3e/38/"
-        "7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/"
-        "antlr4-python3-runtime-4.9.3.tar.gz"
-        "#sha256=f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b"
-    )
-
-
-@pytest.mark.parametrize("failure", ["cancelled", "process_error"])
-def test_build_backend_probe_failure_does_not_start_any_package_installation(
-    monkeypatch: pytest.MonkeyPatch, failure: str
-) -> None:
-    from app.core.backends import comfy_setup
-
-    commands: list[list[str]] = []
-    exception = comfy_setup.Cancelled if failure == "cancelled" else comfy_setup.SetupFailed
-
-    def fail(command, *_args, **_kwargs):
-        commands.append(command)
-        raise exception("probe stopped")
-
-    monkeypatch.setattr(comfy_setup, "_run", fail)
-    with pytest.raises(exception):
-        comfy_setup.install_packages(Path("python"))
-    assert len(commands) == 1
-    assert "pip" not in commands[0]
-
-
-def test_setting_up_looks_whether_the_nodes_load(
+def test_setting_up_checks_the_version_first_and_fetches_the_small_part_first(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """**„Fertig" war eine Behauptung, und sie war auf frischen Rechnern falsch.**
+    """Erst die Fassung, dann das Kleine, dann das Große.
 
-    Die Einrichtung kopierte, klonte, flickte und installierte — ob am Ende
-    etwas lief, erfuhr der Kunde erst beim Erzeugen. Der Schritt kostet zwei
-    Sekunden und steht **vor** den Gewichten: Ein fehlendes Paket nach zwei
-    Sekunden zu melden ist mehr wert als nach einer halben Stunde Download.
+    Die Fassung zu lesen kostet nichts und gehört vor jeden Download
+    (``kern.md``, „Einrichten heißt nicht laufen“). Das Freistellmodell vor
+    TRELLIS.2: Wer abbricht, hat dann wenigstens den Teil, der schnell ging.
     """
     from app.core.backends import comfy_setup
 
-    comfyui = tmp_path / "ComfyUI"
-    (comfyui / "custom_nodes").mkdir(parents=True)
+    comfyui = _comfyui_folder(tmp_path)
     reihenfolge: list[str] = []
+    real_check = comfy_setup.check_version
+
+    def check(folder: Path) -> None:
+        reihenfolge.append("fassung")
+        real_check(folder)
+
+    monkeypatch.setattr(comfy_setup, "check_version", check)
     monkeypatch.setattr(comfy_setup, "find_python", lambda _folder: Path("python"))
-    monkeypatch.setattr(comfy_setup, "fetch_triposg", lambda *a, **k: None)
-    monkeypatch.setattr(comfy_setup, "patch_sources", lambda *a, **k: None)
-    monkeypatch.setattr(
-        comfy_setup, "install_packages", lambda *a, **k: reihenfolge.append("pakete")
-    )
-    monkeypatch.setattr(comfy_setup, "nodes_load", lambda *a, **k: reihenfolge.append("nachsehen"))
     monkeypatch.setattr(
         comfy_setup, "fetch_background", lambda *a, **k: reihenfolge.append("freistellen")
     )
@@ -1025,88 +1121,42 @@ def test_setting_up_looks_whether_the_nodes_load(
 
     comfy_setup.setup(comfyui)
 
-    # Das Kleine vor dem Großen: 445 MB vor 7,5 GB. Wer abbricht, hat dann
-    # wenigstens den Teil, der schnell ging.
-    assert reihenfolge == ["pakete", "nachsehen", "freistellen", "gewichte"]
-
-
-def test_nodes_that_do_not_load_say_what_helps(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Regel 17: Der Satz nennt die Ursache und den nächsten Schritt.
-
-    Was der Ladefehler selbst sagt („No module named 'trimesh'"), sagt genauer,
-    was fehlt, als jeder Satz, den wir vorher erraten könnten — also reist er
-    mit.
-    """
-    from app.core.backends import comfy_setup
-
-    def scheitert(*_args: object, **_kwargs: object) -> None:
-        raise comfy_setup.SetupFailed("No module named 'trimesh'")
-
-    monkeypatch.setattr(comfy_setup, "_run", scheitert)
-
-    with pytest.raises(comfy_setup.SetupFailed) as raised:
-        comfy_setup.nodes_load(tmp_path, Path("python"), tmp_path / "nodes")
-
-    gesagt = str(raised.value)
-    assert "No module named 'trimesh'" in gesagt, "die Ursache reist mit"
-    assert "zweiter Lauf" in gesagt, "und der nächste Schritt steht dabei"
+    assert reihenfolge == ["fassung", "freistellen", "gewichte"]
 
 
 def test_the_weights_are_downloaded_through_a_short_folder() -> None:
     """**MAX_PATH ist 260, und der Pfad war 261 Zeichen lang.**
 
-    ``huggingface_hub`` legt seine halbfertigen Dateien unter dem Ziel ab, und
-    ihre Namen sind rund 163 Zeichen lang. Zusammen mit dem Installationspfad
-    von ComfyUI Desktop (98) waren das gemessene 261 — ein Zeichen über der
-    Grenze, und der Kunde bekam mitten im 7,5-GB-Download einen
-    ``FileNotFoundError`` mit einem Pfad, den kein Mensch liest.
-
-    Geprüft wird der Programmtext und nicht ein Lauf: Der Lauf lädt 7,5 GB.
-
-    **Eine dritte Zusicherung stand hier und ist am 22.08.2026 gefallen.** Sie
-    rechnete ``len(tempfile.gettempdir()) + len("/solidon-triposg") + 163 <
-    260`` — also die Pfadlänge **dieser** Maschine. Das ist keine Aussage über
-    den Code und keine über den Kunden: Wer ``TEMP`` umbiegt, macht sie rot,
-    ohne dass sich an der Anwendung etwas geändert hätte, und genau das ist an
-    jenem Tag zweimal passiert, als eine Sitzung ihre Protokolle in einen
-    eigenen Ordner schrieb. Ein Test, der die Umgebung seines Läufers misst
-    statt sein Thema, kostet jede Sitzung Zeit und schützt niemanden.
-
-    **Was sie prüfen wollte, ist trotzdem richtig und gehört woanders hin:**
-    Windows bricht bei 260 Zeichen ab, und ein Kunde mit einem tiefen
-    ``TEMP``-Pfad bekäme mitten im 7,5-GB-Ladevorgang einen
-    ``FileNotFoundError``. Das ist eine Aussage über den **Kunden** und muss
-    deshalb im Programm stehen, nicht im Test: ``comfy_setup`` gehört dazu
-    gebracht, die Länge vor dem Laden zu prüfen und mit einem
-    Handlungsvorschlag anzuhalten (§2.7, §33.1) — „Ihr Zwischenordner ist zu
-    tief; setzen Sie TEMP auf einen kürzeren Pfad." Ein Test darauf prüft dann
-    das Verhalten und nicht den Rechner, auf dem er läuft.
-
-    **Und seit dem 25.08.2026 kommt der Ordner nicht mehr aus ``tempfile``.**
-    Ein fester Name im gemeinsamen Temp ist unter Linux von jedem anderen Konto
-    vorbelegbar; er liegt jetzt im Nutzer-Cache und wird als Argument
-    hereingereicht — das Programm läuft in ComfyUIs Python und kennt unseren
-    Kern nicht.
+    ``huggingface_hub`` legt seine halbfertigen Dateien unter dem Ziel ab;
+    zusammen mit dem Installationspfad von ComfyUI Desktop riss das die Grenze
+    um ein Zeichen. Geladen wird deshalb in einen kurzen Zwischenordner im
+    Nutzer-Cache — nicht im gemeinsamen Temp, wo ein fester Name unter Linux
+    von jedem anderen Konto vorbelegbar ist — und erst die geprüfte Datei
+    wandert ans Ziel. Geprüft wird der Programmtext und nicht ein Lauf: Der
+    Lauf lädt Gigabyte.
     """
     from app.core.backends import comfy_setup
     from app.core.paths import user_cache_dir
 
-    programm = comfy_setup._FETCH_WEIGHTS
-    assert "tempfile" not in programm, "der Zwischenordner kommt nicht mehr aus dem Temp"
-    assert "sys.argv[3]" in programm, "sondern von außen, aus app.core.paths"
+    programm = comfy_setup._FETCH_FILE
+    assert "tempfile" not in programm, "der Zwischenordner kommt nicht aus dem Temp"
+    assert "sys.argv[4]" in programm, "sondern von außen, aus app.core.paths"
     assert "shutil.move" in programm, "und danach an seinen Platz gebracht"
 
-    ordner = comfy_setup.scratch_dir("dl-triposg")
+    ordner = comfy_setup.scratch_dir("dl-shape")
     assert user_cache_dir() in ordner.parents, "er liegt im Nutzer-Cache"
     assert ordner.is_dir(), "und er ist angelegt, bevor jemand hineinlädt"
 
 
-def test_triposg_weights_use_and_verify_the_fixed_revision(
+def test_the_trellis_files_use_their_fixed_revision_and_hash(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Auch die 7,5 GB müssen bei jedem Einrichten denselben Stand ergeben."""
+    """Jede Datei mit festem Modellstand und Prüfsumme — bei jedem Einrichten derselbe Stand.
+
+    Ein Modellstand ist ein Commit, keine Gruppe: Wer nach ``main`` lädt,
+    bekommt nächste Woche eine andere Datei unter demselben Namen. Und jede
+    Datei landet in dem Ordner, in dem ComfyUIs Lader sie suchen.
+    """
     from app.core.backends import comfy_setup
 
     monkeypatch.setattr(comfy_setup, "scratch_dir", lambda name: tmp_path / name)
@@ -1117,83 +1167,72 @@ def test_triposg_weights_use_and_verify_the_fixed_revision(
         "_run_repeatedly",
         lambda command, *_args, **_kwargs: commands.append(command),
     )
+    comfyui = tmp_path / "ComfyUI"
 
-    comfy_setup.fetch_weights(tmp_path / "ComfyUI", Path("python"))
+    comfy_setup.fetch_weights(comfyui, Path("python"))
 
-    assert len(commands) == 1
-    command = commands[0]
-    assert command[-1] == comfy_setup.WEIGHTS_REVISION
-    program = comfy_setup._FETCH_WEIGHTS
-
-    calls: list[tuple[str, str, str]] = []
-
-    def download(repo: str, *, revision: str, local_dir: str, max_workers: int) -> str:
-        assert max_workers == 8
-        calls.append(("laden", repo, revision))
-        _write_test_weights(Path(local_dir))
-        return local_dir
-
-    class Api:
-        def model_info(self, repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
-            calls.append(("prüfen", repo, revision))
-            assert files_metadata
-            return _test_weights_info(revision)
-
-    monkeypatch.setitem(
-        sys.modules,
-        "huggingface_hub",
-        SimpleNamespace(HfApi=Api, snapshot_download=download),
-    )
-    monkeypatch.setattr(sys, "argv", ["-c", *command[4:]])
-
-    exec(program, {})
-
-    expected = (comfy_setup.WEIGHTS_REPO, comfy_setup.WEIGHTS_REVISION)
-    assert calls == [("laden", *expected), ("prüfen", *expected)]
-    assert (tmp_path / "ComfyUI" / "models" / "triposg" / "TripoSG").is_dir()
-
-
-def test_triposg_weights_reject_a_different_resolved_revision(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Der Revisionsparameter allein genügt nicht; sein Ergebnis wird geprüft."""
-    from app.core.backends import comfy_setup
-
-    target = tmp_path / "target"
-    scratch = tmp_path / "scratch"
-
-    def download(_repo: str, **kwargs: object) -> str:
-        local_dir = Path(str(kwargs["local_dir"]))
-        (local_dir / "model_index.json").write_text("{}", encoding="utf-8")
-        return str(local_dir)
-
-    class Api:
-        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
-            assert revision == comfy_setup.WEIGHTS_REVISION
-            return SimpleNamespace(sha="0" * 40)
-
-    monkeypatch.setitem(
-        sys.modules,
-        "huggingface_hub",
-        SimpleNamespace(HfApi=Api, snapshot_download=download),
-    )
-    monkeypatch.setattr(
-        sys,
-        "argv",
+    assert [command[3] for command in commands] == [comfy_setup._FETCH_FILE] * 3
+    assert [command[4:7] for command in commands] == [
         [
-            "-c",
-            str(target),
-            comfy_setup.WEIGHTS_REPO,
-            str(scratch),
-            comfy_setup.WEIGHTS_REVISION,
+            str(comfyui / "models" / "diffusion_models"),
+            "Comfy-Org/TRELLIS.2",
+            "diffusion_models/trellis_2_int8_convrot.safetensors",
         ],
-    )
+        [
+            str(comfyui / "models" / "vae"),
+            "Comfy-Org/TRELLIS.2",
+            "vae/trellis_2_shape_vae_bf16.safetensors",
+        ],
+        [
+            str(comfyui / "models" / "clip_vision"),
+            "Comfy-Org/TRELLIS.2",
+            "clip_vision/dino_v3_vit_l.safetensors",
+        ],
+    ]
+    assert [command[-2:] for command in commands] == [
+        [
+            "430a9d09b2416687018c8fe8edced2ad4858a439",
+            "d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31",
+        ],
+        [
+            "430a9d09b2416687018c8fe8edced2ad4858a439",
+            "de0cb4949a76c59ee5c091a995a69bcc8c51d5aeda939f0c641a50d2a72341f4",
+        ],
+        [
+            "430a9d09b2416687018c8fe8edced2ad4858a439",
+            "5cb785e458de7c460579082418af81f5c62380c181599344bdc60898c63468ee",
+        ],
+    ]
 
-    with pytest.raises(RuntimeError, match="Modellstand"):
-        exec(comfy_setup._FETCH_WEIGHTS, {})
 
-    assert scratch.is_dir(), "der falsche Stand wird nicht an den Zielort verschoben"
-    assert not target.exists()
+def test_every_model_file_names_a_fixed_state_a_hash_and_a_role() -> None:
+    """Kein Eintrag ohne Commit, Prüfsumme und Rolle — und jede Rolle steht im Ablauf.
+
+    Die Rolle verbindet die Datei mit dem Platzhalter im Ablauf: Liegt sie
+    nicht unter einer Rolle, die ein Ablauf benutzt, lädt die Einrichtung
+    etwas, das nie gelesen wird.
+    """
+    import re
+
+    from app.core.backends import comfy_setup
+    from app.core.backends.mesh import MODEL_ROLES, role_candidates
+
+    used: set[str] = set()
+    for name in ("image_to_mesh", "text_to_image"):
+        used |= set(
+            re.findall(r"\{model:([a-z_]+)\}", (WORKFLOW_DIR / f"{name}.json").read_text("utf-8"))
+        )
+    files = (*comfy_setup.SHAPE_FILES, comfy_setup.BACKGROUND, *comfy_setup.IMAGE_MODEL_FILES)
+    for entry in files:
+        assert re.fullmatch(r"[0-9a-f]{40}", entry.revision), entry
+        assert re.fullmatch(r"[0-9a-f]{64}", entry.sha256), entry
+        assert entry.size > 100_000_000, entry
+        assert entry.folder.startswith("models/"), entry
+        assert entry.role in MODEL_ROLES and entry.role in used, entry
+        assert role_candidates(entry.role, [entry.name]) == [entry.name], (
+            f"die Rolle {entry.role} nähme die eigene Datei {entry.name} nicht"
+        )
+    assert {entry.role for entry in files} == used, "jede Rolle der Abläufe wird geladen"
 
 
 def test_background_weights_use_a_fixed_revision_and_verify_the_file(
@@ -1203,6 +1242,7 @@ def test_background_weights_use_a_fixed_revision_and_verify_the_file(
     from app.core.backends import comfy_setup
 
     monkeypatch.setattr(comfy_setup, "scratch_dir", lambda name: tmp_path / name)
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 500.0)
     commands: list[list[str]] = []
     monkeypatch.setattr(
         comfy_setup,
@@ -1248,13 +1288,22 @@ def test_background_weights_use_a_fixed_revision_and_verify_the_file(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["-c", str(target), "repo", "weights.bin", str(scratch), "revision", expected],
+        [
+            "-c",
+            str(target),
+            "repo",
+            "split_files/vae/weights.bin",
+            str(scratch),
+            "revision",
+            expected,
+        ],
     )
 
     exec(comfy_setup._FETCH_FILE, {})
 
-    assert calls == [("repo", "weights.bin", "revision")]
-    assert (target / "weights.bin").read_bytes() == payload
+    assert calls == [("repo", "split_files/vae/weights.bin", "revision")]
+    assert (target / "weights.bin").read_bytes() == payload, "am Ziel ohne den Repo-Pfad"
+    assert not scratch.exists(), "der Zwischenordner ist geräumt"
 
 
 def test_background_weights_with_a_wrong_hash_never_reach_the_target(
@@ -1343,20 +1392,14 @@ def test_a_broken_download_is_resumed_and_not_thrown_away() -> None:
 
     Der Ordner hieß ``mkdtemp``, also jedes Mal anders, und ein ``finally``
     räumte ihn auf — zusammen war „setzt beim nächsten Lauf fort" eine Lüge.
-    Gemessen an drei Abbrüchen hintereinander auf einer wackeligen Leitung
-    (``WinError 10054``, dann 2 GB weit, dann ``WinError 10038``); bei 7,5 GB
-    ist das der Normalfall und nicht das Pech.
-
-    Geprüft wird der Programmtext: Ein Lauf lädt 7,5 GB.
-
-    Der feste Name steht seit dem 25.08.2026 nicht mehr im Programmtext,
-    sondern in :func:`comfy_setup.scratch_dir` — dieselbe Zusage, eine Stelle
-    weiter oben: Zweimal gefragt, zweimal derselbe Ordner.
+    Gemessen an drei Abbrüchen hintereinander auf einer wackeligen Leitung.
+    Der feste Name steht in :func:`comfy_setup.scratch_dir`: Zweimal gefragt,
+    zweimal derselbe Ordner.
     """
     from app.core.backends import comfy_setup
 
-    programm = comfy_setup._FETCH_WEIGHTS
-    assert comfy_setup.scratch_dir("dl-triposg") == comfy_setup.scratch_dir("dl-triposg"), (
+    programm = comfy_setup._FETCH_FILE
+    assert comfy_setup.scratch_dir("dl-shape") == comfy_setup.scratch_dir("dl-shape"), (
         "der Ordner trägt einen festen Namen"
     )
     assert "mkdtemp" not in programm, "sonst liegt das Halbgeladene beim nächsten Mal woanders"
@@ -1379,8 +1422,7 @@ def test_a_retry_needs_a_new_process_and_not_a_new_loop(
     """
     from app.core.backends import comfy_setup
 
-    for programm in (comfy_setup._FETCH_WEIGHTS, comfy_setup._FETCH_FILE):
-        assert "range(" not in programm, "die Wiederholung gehört nicht ins Kind"
+    assert "range(" not in comfy_setup._FETCH_FILE, "die Wiederholung gehört nicht ins Kind"
 
     laeufe: list[int] = []
 
@@ -1452,7 +1494,7 @@ def test_the_config_home_is_named_for_every_platform() -> None:
             os.environ["XDG_CONFIG_HOME"] = davor
 
 
-@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_mesh"])
+@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_image"])
 def test_no_shipped_workflow_needs_a_gpl_node(name: str) -> None:
     """**Regel 15 hing an einer Datendatei, und niemand hatte hingesehen.**
 
@@ -1470,11 +1512,12 @@ def test_no_shipped_workflow_needs_a_gpl_node(name: str) -> None:
     kinds = {str(entry.get("class_type")) for entry in graph.values()}
 
     assert "RMBG" not in kinds, "GPL-3.0 (Regel 15)"
-    assert "RemoveBackground" in kinds, "freigestellt wird mit ComfyUIs eigenem Knoten"
-    assert "LoadBackgroundRemovalModel" in kinds
+    if name == "image_to_mesh":
+        assert "RemoveBackground" in kinds, "freigestellt wird mit ComfyUIs eigenem Knoten"
+        assert "LoadBackgroundRemovalModel" in kinds
 
 
-@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_mesh"])
+@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_image"])
 def test_every_node_of_a_workflow_gets_its_inputs(name: str) -> None:
     """Jeder Verweis zeigt auf einen Knoten, der da ist, und auf einen Ausgang.
 
@@ -1491,6 +1534,227 @@ def test_every_node_of_a_workflow_gets_its_inputs(name: str) -> None:
             quelle, ausgang = value
             assert str(quelle) in graph, f"{name}.{key}.{field} zeigt auf {quelle}"
             assert isinstance(ausgang, int), f"{name}.{key}.{field}"
+
+
+#: Was ComfyUI selbst über die Knoten der Abläufe sagt — erzeugt mit
+#: ``tools/comfy_node_info.py`` aus einer echten Installation, nicht getippt.
+CORE_NODES = Path(__file__).parent / "data" / "comfyui" / "object_info.json"
+
+#: Platzhalter, die ``mesh._filled`` vor dem Senden durch einen Wert ersetzt.
+_VALUE_PLACEHOLDERS = {"{seed}": "INT", "{image}": "COMBO"}
+
+_DYNAMIC_COMBO = "COMFY_DYNAMICCOMBO_V3"
+
+
+def _core_nodes() -> dict:
+    return json.loads(CORE_NODES.read_text(encoding="utf-8"))
+
+
+def _value_breaks(where: str, spec: list, value: object) -> list[str]:
+    """Was an einem festen Wert gegen seine Beschreibung verstößt."""
+    from app.core.backends.mesh import _MODEL_PLACEHOLDER, MODEL_ROLES
+
+    kind = spec[0]
+    options = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+    choices = (
+        kind if isinstance(kind, list) else options.get("options") if kind == "COMBO" else None
+    )
+    if isinstance(value, str):
+        role = _MODEL_PLACEHOLDER.match(value)
+        if role is not None:
+            if choices is None:
+                return [f"{where}: Modellrolle an einem Eingang ohne Auswahl"]
+            return [] if role.group(1) in MODEL_ROLES else [f"{where}: unbekannte Rolle {value}"]
+        if value in _VALUE_PLACEHOLDERS:
+            expected = _VALUE_PLACEHOLDERS[value]
+            matches = choices is not None if expected == "COMBO" else kind == expected
+            return [] if matches else [f"{where}: {value} an einem Eingang vom Typ {kind}"]
+    if choices is not None:
+        return [] if value in choices else [f"{where}: {value!r} steht nicht in der Auswahl"]
+    if kind == "INT":
+        if not isinstance(value, int) or isinstance(value, bool):
+            return [f"{where}: {value!r} ist keine ganze Zahl"]
+    elif kind == "FLOAT":
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            return [f"{where}: {value!r} ist keine Zahl"]
+    elif kind == "BOOLEAN":
+        return [] if isinstance(value, bool) else [f"{where}: {value!r} ist kein Wahrheitswert"]
+    elif kind in ("STRING", "COLOR"):
+        return [] if isinstance(value, str) else [f"{where}: {value!r} ist kein Text"]
+    else:
+        return [f"{where}: ein Wert an einem Eingang vom Typ {kind}, der eine Verbindung will"]
+    low, high = options.get("min"), options.get("max")
+    if (low is not None and value < low) or (high is not None and value > high):
+        return [f"{where}: {value!r} liegt außerhalb von {low}…{high}"]
+    return []
+
+
+def _expected_inputs(definition: dict, given: dict) -> tuple[dict[str, list], list[str]]:
+    """Jeder Eingang, den ComfyUI für diesen Knoten mit diesen Werten erwartet.
+
+    Pflicht und optional zählen gleich: Über die HTTP-API muss jeder gesetzt
+    sein, denn mancher Knoten liest einen optionalen ungeprüft. Eine
+    dynamische Auswahl (``DynamicCombo``) bringt die Eingänge der gewählten
+    Option mit, unter ``<auswahl>.<eingang>`` — so baut ComfyUI sie zusammen
+    (``comfy_api/latest/_io.py``, ``finalize_prefix``).
+    """
+    expected: dict[str, list] = {}
+    breaks: list[str] = []
+    for group in ("required", "optional"):
+        for name, spec in (definition.get(group) or {}).items():
+            if spec[0] != _DYNAMIC_COMBO:
+                expected[name] = spec
+                continue
+            keys = [option["key"] for option in spec[1]["options"]]
+            chosen = given.get(name)
+            if chosen not in keys:
+                breaks.append(f"{name}: {chosen!r} ist keine Option von {keys}")
+                continue
+            expected[name] = ["COMBO", {"options": keys}]
+            option = next(option for option in spec[1]["options"] if option["key"] == chosen)
+            for inner_group in ("required", "optional"):
+                for inner, inner_spec in (option["inputs"].get(inner_group) or {}).items():
+                    expected[f"{name}.{inner}"] = inner_spec
+    return expected, breaks
+
+
+def _contract_breaks(graph: dict, nodes: dict) -> list[str]:
+    """Was dieser Ablauf gegen die Knotenbeschreibungen von ComfyUI verletzt."""
+    breaks: list[str] = []
+    for key, node in graph.items():
+        kind = str(node.get("class_type"))
+        where = f"{key}:{kind}"
+        if kind not in nodes:
+            breaks.append(f"{where}: kein eingebauter Knoten")
+            continue
+        given = node.get("inputs") or {}
+        expected, dynamic = _expected_inputs(nodes[kind]["input"], given)
+        breaks += [f"{where}.{entry}" for entry in dynamic]
+        breaks += [f"{where}.{name}: fehlt" for name in expected if name not in given]
+        breaks += [
+            f"{where}.{name}: kennt der Knoten nicht" for name in given if name not in expected
+        ]
+        for name, value in given.items():
+            spec = expected.get(name)
+            if spec is None:
+                continue
+            if isinstance(value, list):
+                source, slot = value
+                source_kind = str(graph.get(str(source), {}).get("class_type"))
+                outputs = nodes.get(source_kind, {}).get("output", [])
+                if not isinstance(slot, int) or slot >= len(outputs):
+                    breaks.append(f"{where}.{name}: Ausgang {slot} von {source_kind} gibt es nicht")
+                    continue
+                offered = set(str(outputs[slot]).split(","))
+                accepted = set(str(spec[0]).split(",")) if isinstance(spec[0], str) else set()
+                if not offered & accepted and "*" not in offered | accepted:
+                    breaks.append(f"{where}.{name}: {sorted(offered)} passt nicht zu {spec[0]}")
+                continue
+            breaks += _value_breaks(f"{where}.{name}", spec, value)
+    if not any(
+        nodes.get(str(node.get("class_type")), {}).get("output_node") for node in graph.values()
+    ):
+        breaks.append("kein Ausgabeknoten — ComfyUI führte nichts aus")
+    return breaks
+
+
+def test_the_node_descriptions_come_from_a_comfyui_new_enough() -> None:
+    """Geprüft wird gegen eine Fassung, die Solidon voraussetzt — nicht gegen eine ältere."""
+    from app.core.backends.mesh import MINIMUM_COMFYUI
+
+    found = tuple(int(part) for part in _core_nodes()["comfyui"].split("."))
+    assert found >= MINIMUM_COMFYUI
+
+
+@pytest.mark.parametrize("name", ["image_to_mesh", "text_to_image"])
+def test_every_input_of_every_core_node_is_set_as_comfyui_describes_it(name: str) -> None:
+    """**Jeder Eingang jedes Knotens, gegen ComfyUIs eigene Beschreibung.**
+
+    Der Ablauf ist eine Datendatei, die ComfyUI erst beim Abschicken prüft —
+    und dann steht ein Fremdtext im Dialog. Über die HTTP-API muss jeder
+    Eingang gesetzt sein, auch ein optionaler, und kein unbekannter darf
+    dabei sein; jede Verbindung führt vom passenden Ausgangstyp, jeder feste
+    Wert steht in seiner Auswahl und seinen Grenzen. Die Beschreibungen sind
+    die von ComfyUI selbst (``/object_info``), nicht eine Liste in diesem Test.
+    """
+    graph = json.loads((WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
+
+    assert _contract_breaks(graph, _core_nodes()["nodes"]) == []
+
+
+@pytest.mark.parametrize(
+    ("change", "expected"),
+    [
+        ("drop", "fehlt"),
+        ("extra", "kennt der Knoten nicht"),
+        ("choice", "nicht in der Auswahl"),
+        ("range", "außerhalb"),
+        ("link", "passt nicht"),
+        ("dynamic", "keine Option"),
+    ],
+)
+def test_the_contract_check_catches_what_it_promises(change: str, expected: str) -> None:
+    """Die Gegenprobe: Jede Art von Bruch, die die Prüfung zusagt, findet sie."""
+    graph = json.loads((WORKFLOW_DIR / "image_to_mesh.json").read_text(encoding="utf-8"))
+    by_kind = {node["class_type"]: node for node in graph.values()}
+    if change == "drop":
+        del by_kind["RemeshMesh"]["inputs"]["sign_mode.drop_inverted_components"]
+    elif change == "extra":
+        by_kind["LoadImage"]["inputs"]["upload"] = "image"
+    elif change == "choice":
+        by_kind["VaeDecodeStructureTrellis2"]["inputs"]["resolution"] = "48"
+    elif change == "range":
+        by_kind["Trellis2UpsampleStage"]["inputs"]["target_resolution"] = 512
+    elif change == "link":
+        by_kind["Trellis2Conditioning"]["inputs"]["image"] = by_kind["RemoveBackground"]["inputs"][
+            "bg_removal_model"
+        ]
+    elif change == "dynamic":
+        by_kind["RemeshMesh"]["inputs"]["sign_mode"] = "fast"
+
+    breaks = _contract_breaks(graph, _core_nodes()["nodes"])
+
+    assert any(expected in entry for entry in breaks), breaks
+
+
+@pytest.mark.parametrize("name", ["image_to_mesh"])
+def test_the_remesh_keeps_the_inner_hull_and_the_cascade_fits_sixteen_gigabytes(
+    name: str,
+) -> None:
+    """Die zwei Abweichungen von ComfyUIs Vorlage, festgehalten.
+
+    ``RemeshMesh`` im Modus ``udf`` legt um jede geschlossene Fläche eine
+    zweite, nach innen gewendete Hülle („the UDF inner shell“, sein eigener
+    Tooltip); ``sdf`` taugt nicht, weil das Rohnetz von TRELLIS.2 keinen
+    einheitlichen Umlaufsinn hat. Also ``udf``, aber **ohne** die Schalter, die
+    die Innenhülle wegnehmen: An einer dünnen Wand ist sie die zweite Seite,
+    und mit ihnen kamen Vase und Becher am 07.10.2026 als offene Haut (RM-550);
+    die Innenhülle eines vollen Körpers nimmt Solidons Reparatur. Davor
+    ``FillHoles``, damit Außen- und Innenhülle nicht durch ein Loch
+    zusammenlaufen. Und die Kaskade endet bei 1024 statt
+    1536 Voxeln — 1536 trägt nach den Angaben Dritter erst ab 24 GB.
+    """
+    graph = json.loads((WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
+    by_kind = {node["class_type"]: (key, node) for key, node in graph.items()}
+
+    _key, remesh = by_kind["RemeshMesh"]
+    assert remesh["inputs"]["sign_mode"] == "udf"
+    assert remesh["inputs"]["sign_mode.drop_inverted_components"] is False
+    assert remesh["inputs"]["sign_mode.drop_enclosed_components"] is False
+    from app.core.generate import GENERATED_REPAIR
+
+    assert GENERATED_REPAIR["inner_shells"], "die Innenhülle eines vollen Körpers fällt in Solidon"
+    fills = {key for key, node in graph.items() if node["class_type"] == "FillHoles"}
+    assert remesh["inputs"]["mesh"][0] in fills, "erst Löcher schließen, dann neu vernetzen"
+    _key, upsample = by_kind["Trellis2UpsampleStage"]
+    assert upsample["inputs"]["target_resolution"] == 1024
+    _key, save = by_kind["SaveGLB"]
+    assert save["inputs"]["filename_prefix"].startswith("solidon/")
+    # Und nach dem Ausdünnen noch einmal: ``DecimateMesh`` ließ an echten
+    # Läufen rund zwanzig Vierecklöcher je Netz offen (07.10.2026, RM-550).
+    last_fill = graph[save["inputs"]["mesh"][0]]
+    assert last_fill["class_type"] == "FillHoles"
+    assert graph[last_fill["inputs"]["mesh"][0]]["class_type"] == "DecimateMesh"
 
 
 def _history(job: str, *, error: str = "", node: str = "") -> bytes:
@@ -1611,64 +1875,6 @@ def test_a_queue_that_does_not_know_the_job_lets_the_clock_win(
     assert "Zeitlimit" in str(raised.value)
 
 
-def test_the_device_fixes_never_comment_out_the_rest_of_a_line() -> None:
-    """**Der Flicken hat die Datei zerbrochen, und das war lehrreich.**
-
-    Der erste Versuch hängte „# von Solidon" an die Zeile mit ``torch.zeros``,
-    und die ging weiter: ``dtype`` und ``requires_grad`` standen dahinter und
-    waren damit wegkommentiert, die Klammer blieb offen. ComfyUI meldete „'('
-    was never closed", und die ganze Knotensammlung fiel aus.
-
-    Gefangen hat es `nodes_load` — der Beleg dafür, dass dieser Schritt
-    hingehört. Und hier steht die Regel, die daraus folgt: Ein Kommentar am
-    Zeilenende ist nur dort erlaubt, wo die Zeile auch endet.
-    """
-    from app.core.backends import comfy_setup
-
-    for wanted, fixed in comfy_setup._DEVICE_FIXES:
-        if "#" not in fixed:
-            continue
-        vorher, _, _rest = fixed.partition("#")
-        assert vorher.rstrip().endswith((")", ":", "None")), (
-            f"„{fixed[:60]}…“ trägt einen Kommentar mitten in einer Zeile, die weitergeht"
-        )
-        assert not wanted.rstrip().endswith(","), (
-            f"„{wanted[:60]}…“ endet mit einem Komma — die Zeile geht weiter, "
-            "ein Kommentar dahinter verschluckt den Rest"
-        )
-
-
-def test_the_device_fixes_are_applied_and_stay_applied(tmp_path: Path) -> None:
-    """Zweimal geflickt ist einmal geflickt, und die Prüfung sucht die Wirkung.
-
-    Wer den Marker sucht, den er selbst geschrieben hat, flickt eine von Hand
-    geänderte Datei ein zweites Mal und macht aus ihr Bruch.
-    """
-    from app.core.backends import comfy_setup
-
-    quelle = tmp_path / "inference_utils.py"
-    quelle.write_text(
-        "import torch\n"
-        "def f(edge_coords, grid_size):\n"
-        "    expanded_tensor = torch.zeros(grid_size, grid_size, grid_size, "
-        "device='cuda', dtype=torch.float16, requires_grad=False)\n"
-        "    torch.cuda.empty_cache()\n"
-        "    return expanded_tensor\n",
-        encoding="utf-8",
-    )
-
-    assert comfy_setup._fix_devices(quelle) is True
-    danach = quelle.read_text(encoding="utf-8")
-    assert "device='cuda'" not in danach
-    assert "is_available()" in danach
-    # Und die Datei ist danach noch Python.
-    import ast
-
-    ast.parse(danach)
-
-    assert comfy_setup._fix_devices(quelle) is False, "beim zweiten Mal bleibt sie, wie sie ist"
-
-
 @pytest.mark.parametrize(
     ("form", "beschrieben"),
     [
@@ -1682,12 +1888,12 @@ def test_the_device_fixes_are_applied_and_stay_applied(tmp_path: Path) -> None:
 def test_both_shapes_of_a_choice_list_are_read(form: str, beschrieben: dict) -> None:
     """**Zwei Formen, und beide kommen aus demselben Server.**
 
-    Klassisch steht die Auswahlliste als erstes Element (``[["TripoSG"], {…}]``)
-    — ein Typname wie ``"INT"`` steht an derselben Stelle und ist keine. Die
-    neuen eingebauten Knoten schreiben statt der Liste ``"COMBO"`` und legen
-    die Namen daneben.
+    Klassisch steht die Auswahlliste als erstes Element
+    (``[["a.safetensors"], {…}]``) — ein Typname wie ``"INT"`` steht an
+    derselben Stelle und ist keine. Die neuen eingebauten Knoten schreiben
+    statt der Liste ``"COMBO"`` und legen die Namen daneben.
 
-    Gemessen an einem ComfyUI 0.33: ``TripoSGLoader`` klassisch,
+    Gemessen an einem ComfyUI 0.33: ``UNETLoader`` klassisch,
     ``LoadBackgroundRemovalModel`` neu. Wer nur die alte Form liest, hält jede
     neue Auswahl für leer und meldet „es fehlt die Modelldatei", obwohl sie
     daliegt — genau das ist passiert, und jeder künftige eingebaute Knoten wird
@@ -1724,10 +1930,10 @@ def test_the_text_way_is_checked_against_its_own_workflow(
 ) -> None:
     """**Der Textweg wurde am Bildweg gemessen.**
 
-    Er spricht andere Knoten an und braucht ein Modell mehr: TripoSG kennt
-    keinen Texteingang, Text wird erst zu einem Bild, und dafür steht ein
-    SDXL-Modell im Ablauf. Geprüft wurde immer ``image_to_mesh`` — wer kein
-    Bildmodell hatte, las „Bereit" und erfuhr es beim Abschicken.
+    Er spricht andere Knoten an und braucht ein Modell mehr: TRELLIS.2 kennt
+    keinen Texteingang, Text wird erst mit FLUX.2 zu einem Bild. Geprüft wurde
+    immer ``image_to_mesh`` — wer kein Bildmodell hatte, las „Bereit" und
+    erfuhr es beim Abschicken.
     """
     from app.core.backends import mesh as mesh_module
 
@@ -1752,11 +1958,11 @@ def test_the_text_way_is_checked_against_its_own_workflow(
 def test_a_missing_model_is_its_own_state_and_not_a_missing_node(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """**Ein fehlendes Modell ist keine fehlende Knotensammlung.**
+    """**Ein fehlendes Modell ist kein zu altes ComfyUI.**
 
     Beides führte zu „Erzeugen" und dann zu einem Fehler, aber die Handlungen
-    sind verschieden: Knoten legt Solidon selbst hinein, ein SDXL-Modell ist
-    ComfyUIs eigene Sache. Vier Lagen statt drei, und jede zieht einen anderen
+    sind verschieden: Modelle lädt Solidons Einrichtung, ein neueres ComfyUI
+    holt der Kunde selbst. Vier Lagen statt drei, und jede zieht einen anderen
     Satz nach sich.
     """
     from app.core.backends import mesh as mesh_module
@@ -1767,7 +1973,7 @@ def test_a_missing_model_is_its_own_state_and_not_a_missing_node(
     monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: True)
 
     assert backend.readiness("text_to_mesh") is mesh_module.Readiness.NO_MODEL
-    assert "image" in backend.missing_models("text_to_mesh")
+    assert {"image", "shape"} <= set(backend.missing_models("text_to_mesh"))
 
 
 def test_a_ready_comfy_says_nothing_about_missing_models() -> None:
@@ -1781,10 +1987,20 @@ def test_a_ready_comfy_says_nothing_about_missing_models() -> None:
 # --- Platz vor dem Download -------------------------------------------------------
 
 
+def _shape_gigabytes() -> float:
+    """Was der Bildweg an Platz verlangt: seine Dateien und die Luft dazu."""
+    from app.core.backends import comfy_setup
+
+    return (
+        sum(entry.size for entry in comfy_setup.SHAPE_FILES) / 1_000_000_000
+        + comfy_setup.HEADROOM_GIGABYTES
+    )
+
+
 def test_the_weights_are_not_fetched_onto_a_full_disk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein 7,5-GB-Download stirbt an einer vollen Platte, und die Meldung lügt.
+    """Ein großer Download stirbt an einer vollen Platte, und die Meldung lügt.
 
     Am 23.08.2026 lief er dreimal an und starb dreimal nach Minuten, weil ``C:``
     voll war. Was huggingface dabei meldet, nennt den Grund mit keinem Wort:
@@ -1792,12 +2008,8 @@ def test_the_weights_are_not_fetched_onto_a_full_disk(
         RuntimeError: File reconstruction error: Internal Writer Error:
         Background writer channel closed
 
-    Wer das liest, sucht am Netz. Gefunden wurde es nur, weil der Abbruch
-    **dreimal an derselben Stelle** kam.
-
-    Geprüft wird deshalb **vorher**: Ein Problem nach zwei Sekunden zu melden ist
-    mehr wert als nach zwanzig Minuten — dieselbe Begründung, aus der
-    ``nodes_load`` vor dem Download steht und nicht danach.
+    Geprüft wird deshalb **vorher**: Ein Problem nach zwei Sekunden zu melden
+    ist mehr wert als nach zwanzig Minuten.
     """
     from app.core.backends import comfy_setup
 
@@ -1808,7 +2020,8 @@ def test_the_weights_are_not_fetched_onto_a_full_disk(
 
     gesagt = str(fehler.value)
     assert "2.5" in gesagt or "2,5" in gesagt, f"nennt den freien Platz nicht: {gesagt}"
-    assert "9" in gesagt, f"nennt nicht, wie viel gebraucht wird: {gesagt}"
+    needed = f"{_shape_gigabytes():.1f}".replace(".", ",")
+    assert needed in gesagt, f"nennt nicht, wie viel gebraucht wird: {gesagt}"
 
 
 def test_enough_room_lets_the_download_start(
@@ -1826,7 +2039,9 @@ def test_enough_room_lets_the_download_start(
 
     comfy_setup.fetch_weights(tmp_path, Path("python"))
 
-    assert gerufen == ["los"], "die Prüfung hat den Download aufgehalten, obwohl Platz war"
+    assert gerufen == ["los"] * len(comfy_setup.SHAPE_FILES), (
+        "die Prüfung hat den Download aufgehalten, obwohl Platz war"
+    )
 
 
 def test_a_half_finished_download_is_not_blocked_by_the_space_check(
@@ -1836,26 +2051,17 @@ def test_a_half_finished_download_is_not_blocked_by_the_space_check(
 
     ``_run_repeatedly`` setzt einen abgebrochenen Download dort fort, wo er
     stand: Nur was fehlt, wird noch geholt. Eine Platzprüfung, die den bereits
-    belegten Platz ignoriert, blockiert **ausgerechnet den zweiten Anlauf** —
-    bei 5 von 7,5 GB geladen fehlen 2,5, verlangt würden 9.
-
-    Der Fall ist im Review vom 23.08.2026 aufgefallen, nachdem die Prüfung
-    schon eingebaut war.
-
-    **Und die Bruchstücke liegen im Zwischenordner**, nicht am Ziel: Seit dem
-    ``scratch_dir``-Umbau lädt ``huggingface_hub`` dorthin, und erst der
-    gelungene Lauf verschiebt. Bis zum 26.08.2026 legte dieser Test sie unter
-    ``models/triposg`` ab — geprüft wurde damit eine Wiederaufnahme an einem
-    Ort, an dem keine stattfindet.
+    belegten Platz ignoriert, blockiert **ausgerechnet den zweiten Anlauf**.
+    Die Bruchstücke liegen im Zwischenordner, nicht am Ziel.
     """
     from app.core.backends import comfy_setup
 
-    needed = comfy_setup.NEEDED_GIGABYTES
-    scratch = comfy_setup.scratch_dir("dl-triposg")
+    needed = _shape_gigabytes()
+    scratch = comfy_setup.scratch_dir("dl-shape")
 
-    # 6 MB statt der echten 5 GB: Der Test soll die **Rechnung** pruefen, nicht
-    # die Platte fuellen. Die freie Menge liegt darum knapp unter der Schwelle,
-    # sodass erst der Zuschlag sie ueberschreitet.
+    # 6 MB statt der echten Gigabyte: Der Test soll die **Rechnung** prüfen,
+    # nicht die Platte füllen. Die freie Menge liegt darum knapp unter der
+    # Schwelle, sodass erst der Zuschlag sie überschreitet.
     (scratch / "halb.safetensors").write_bytes(b"x" * 6_000_000)
 
     monkeypatch.setattr(
@@ -1868,7 +2074,7 @@ def test_a_half_finished_download_is_not_blocked_by_the_space_check(
 
     comfy_setup.fetch_weights(tmp_path, Path("python"))
 
-    assert gerufen == ["los"], "die Prüfung hat den zweiten Anlauf blockiert"
+    assert gerufen, "die Prüfung hat den zweiten Anlauf blockiert"
 
 
 def test_the_space_is_measured_where_the_download_lands(
@@ -1876,19 +2082,17 @@ def test_the_space_is_measured_where_the_download_lands(
 ) -> None:
     """Gemessen wurde der falsche Datenträger — und zwar seit dem Umbau.
 
-    Geprüft wurde am ComfyUI-Ordner, geladen wird seit dem ``scratch_dir``-Umbau
-    in den Nutzer-Cache (unter Windows ``%LOCALAPPDATA%``). Roberts Aufbau ist
-    genau der Fall, den das trifft: ComfyUI liegt auf ``D:`` mit viel Platz, ``C:``
-    ist knapp — die Prüfung meldete grün, und der Download starb zwanzig Minuten
-    später an der vollen Platte. Der Fehlertext, der dabei herauskam, nennt den
-    Grund mit keinem Wort; genau dagegen war die Prüfung gebaut.
+    Geladen wird in den Nutzer-Cache (unter Windows ``%LOCALAPPDATA%``). Roberts
+    Aufbau ist genau der Fall: ComfyUI liegt auf ``D:`` mit viel Platz, ``C:``
+    ist knapp — die Prüfung meldete grün, und der Download starb zwanzig
+    Minuten später an der vollen Platte.
 
     Und die Absage nennt den Ort (Regel 17): „auf dem Datenträger ist zu wenig
     Platz" schickt niemanden weiter, der zwei Datenträger hat.
     """
     from app.core.backends import comfy_setup
 
-    scratch = comfy_setup.scratch_dir("dl-triposg")
+    scratch = comfy_setup.scratch_dir("dl-shape")
     monkeypatch.setattr(
         comfy_setup, "free_gigabytes", lambda where: 2.5 if where == scratch else 500.0
     )
@@ -1915,8 +2119,8 @@ def test_the_target_volume_is_checked_as_well(
     """
     from app.core.backends import comfy_setup
 
-    scratch = comfy_setup.scratch_dir("dl-triposg")
-    ziel = tmp_path / "models" / "triposg" / "TripoSG"
+    scratch = comfy_setup.scratch_dir("dl-shape")
+    ziel = tmp_path / "models"
     monkeypatch.setattr(
         comfy_setup, "free_gigabytes", lambda where: 500.0 if where == scratch else 1.0
     )
@@ -1931,57 +2135,65 @@ def test_the_target_volume_is_checked_as_well(
     assert str(ziel) in gesagt, f"nennt den Ort nicht, an dem der Platz fehlt: {gesagt}"
 
 
-def test_the_sizes_in_the_progress_text_match_the_constants() -> None:
-    """Was der Fortschritt nennt, muss die Konstante sagen — sonst driftet es.
+def test_the_sizes_come_from_the_files_and_not_from_the_keyboard() -> None:
+    """Was Dialog, Handbuch und Fortschritt an Größe nennen, rechnet sich aus den Dateien.
 
-    ``BACKGROUND_MEGABYTES`` (445) und ``WEIGHT_GIGABYTES`` (7,5) tragen die
-    Größen der beiden Downloads, und ihre Kommentare sagen, sie stünden im
-    Fortschrittstext. Sie standen dort auch — nur **von Hand getippt**, nicht aus
-    der Konstante. Bis zum 24.08.2026 las die beiden Konstanten niemand.
-
-    Der Beleg, dass das driftet, stand daneben: Der Kommentar über
-    ``BACKGROUND_MEGABYTES`` sprach von „444 MB", die Konstante von 445 und der
-    Text von 445. Ein Megabyte ist harmlos; die Bauform ist es nicht — wer die
-    Modellgröße nachzieht, ändert eine der beiden Stellen.
-
-    **Der Text bleibt, wie er ist, und die Konstante wird zur Zusicherung.**
-    Die Zahl in die Message-ID hineinzuformatieren wäre der andere Weg —
-    ``NEEDED_GIGABYTES`` macht es zwei Dutzend Zeilen weiter genau so
-    (``.format(needed=…)``) und ist damit das Vorbild. Hier kostet er fünf
-    Übersetzungen für zwei Sätze, und die kann diese Sitzung nicht liefern; ein
-    Test kostet nichts und fängt dasselbe.
+    Bis zum 24.08.2026 standen die Größen von Hand im Fortschrittstext, und
+    eine Konstante daneben las niemand — der Kommentar sprach von 444 MB, die
+    Konstante von 445. Jetzt setzt der Text die Zahl aus der Konstante ein,
+    und die Konstante ist die Summe der Dateien. Keine Zeichenkette, die durch
+    ``_()`` geht, trägt mehr eine getippte Größe.
     """
+    import ast
+    import math
     import re
 
     from app.core.backends import comfy_setup
 
-    quelle = Path(comfy_setup.__file__).read_text(encoding="utf-8")
+    shape = sum(entry.size for entry in (*comfy_setup.SHAPE_FILES, comfy_setup.BACKGROUND))
+    image = sum(entry.size for entry in comfy_setup.IMAGE_MODEL_FILES)
+    assert round(shape / 1e9, 1) == comfy_setup.WEIGHT_GIGABYTES
+    assert round(image / 1e9, 1) == comfy_setup.IMAGE_MODEL_GIGABYTES
+    assert math.ceil(comfy_setup.BACKGROUND.size / 1e6) == comfy_setup.BACKGROUND_MEGABYTES
 
-    # Die deutsche Quelle schreibt Dezimalkommas: „7,5 GB". Seit dem
-    # 21.09.2026 gibt es zwei Downloads in Gigabyte — die Gewichte und das
-    # Bildmodell —, und jeder Text muss eine der beiden Konstanten nennen.
-    erwartet_gb = {
-        f"{comfy_setup.WEIGHT_GIGABYTES:g}".replace(".", ","),
-        f"{comfy_setup.IMAGE_MODEL_GIGABYTES:g}".replace(".", ","),
-    }
-    erwartet_mb = f"{comfy_setup.BACKGROUND_MEGABYTES:g}"
+    from app.core import manual
 
-    gb_texte = re.findall(r'_\("([^"]*\bGB\b[^"]*)"\)', quelle)
-    mb_texte = re.findall(r'_\("([^"]*\bMB\b[^"]*)"\)', quelle)
+    # **Und das Handbuch** (Review 1 P3, G-9): Es nannte „rund 8 GB“, „rund
+    # 8,3 GB“, „acht Gigabyte“ und für Ollama „sieben bis neunzehn
+    # Gigabyte“ — getippt, während die Konstanten sie ausrechnen.
+    spelled = (
+        r"\b(?:ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|\w+zehn|zwanzig)"
+        r"\s+[GM]igabyte"
+    )
+    for module in (comfy_setup, manual):
+        tree = ast.parse(Path(module.__file__ or "").read_text(encoding="utf-8"))
+        texts = [
+            node.args[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ]
+        sized = [text for text in texts if re.search(r"\b[GM]B\b", text)]
+        assert sized, f"kein Text mit Größe in {module.__name__} — der Test prüfte nichts"
+        for text in texts:
+            assert not re.search(r"\d\s*[GM]B\b", text), f"getippte Größe in {text!r}"
+            assert not re.search(spelled, text, re.IGNORECASE), f"getippte Größe in {text!r}"
 
-    assert gb_texte, "kein Fortschrittstext mit GB gefunden — der Test prüfte nichts"
-    assert mb_texte, "kein Fortschrittstext mit MB gefunden — der Test prüfte nichts"
+    from app.i18n import format_decimal
 
-    for text in gb_texte:
-        zahlen = re.findall(r"\d+(?:,\d+)?(?=\s*GB)", text)
-        assert erwartet_gb & set(zahlen), (
-            f"{text!r} nennt {zahlen}, die Konstanten sagen {sorted(erwartet_gb)}"
-        )
-    for text in mb_texte:
-        zahlen = re.findall(r"\d+(?:,\d+)?(?=\s*MB)", text)
-        assert erwartet_mb in zahlen, (
-            f"{text!r} nennt {zahlen}, BACKGROUND_MEGABYTES sagt {erwartet_mb}"
-        )
+    extras = next(page for page in manual.pages() if page.key == "extras")
+    written = str(extras.body)
+    assert f"rund {format_decimal(comfy_setup.WEIGHT_GIGABYTES)} GB" in written
+    assert f"rund {format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES)} GB" in written
+    assert "{" not in written, "jeder Platzhalter ist gefüllt"
+    image_paragraph = manual.models_text()
+    assert f"rund {format_decimal(comfy_setup.IMAGE_MODEL_GIGABYTES)} GB für einen Weg" in (
+        image_paragraph
+    )
 
 
 # --- Eine Adresse aus Nutzerhand (24.08.2026) -------------------------------------
@@ -2338,23 +2550,6 @@ def test_a_talking_child_process_still_gets_its_output_read() -> None:
     assert "so nicht" in str(gefangen.value)
 
 
-def test_the_node_check_can_be_cancelled_too(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Der einzige ``_run``-Aufruf ohne Abbruchmerker — und er lädt Torch."""
-    from app.core.backends import comfy_setup
-
-    gesehen: list[object] = []
-
-    def merken(command, what, progress, cancelled=None) -> None:
-        gesehen.append(cancelled)
-
-    monkeypatch.setattr(comfy_setup, "_run", merken)
-    merker = lambda: False  # noqa: E731 - eine Marke, keine Funktion mit Namen
-
-    comfy_setup.nodes_load(Path("comfy"), Path("python"), Path("nodes"), cancelled=merker)
-
-    assert gesehen == [merker]
-
-
 def test_a_dropped_connection_is_not_a_program_fault(monkeypatch: pytest.MonkeyPatch) -> None:
     """ComfyUI legt mitten in der Antwort auf — und Solidon sagt, was hilft.
 
@@ -2390,11 +2585,9 @@ def test_a_dropped_connection_is_not_a_program_fault(monkeypatch: pytest.MonkeyP
 def test_a_chosen_model_beats_every_pattern(monkeypatch: pytest.MonkeyPatch) -> None:
     """**Die Rollenauflösung rät gut und rät trotzdem.**
 
-    ``prefer`` trifft das Übliche: Wer ein Juggernaut liegen hat, will es vor
-    dem Basismodell. Aber wer drei Feintunings nebeneinander hat, hat sie aus
-    einem Grund, und keiner davon steht in einem Muster — das eine zeichnet
-    Produktfotos, das andere Comicfiguren. Genau wie beim Sprachmodell gehört
-    die Wahl dem Kunden.
+    ``prefer`` trifft das Übliche. Aber wer die fp8- und die bf16-Fassung
+    nebeneinander hat, hat sie aus einem Grund, und der steht in keinem
+    Muster. Genau wie beim Sprachmodell gehört die Wahl dem Kunden.
     """
     from app.core.backends import mesh as mesh_module
 
@@ -2405,21 +2598,21 @@ def test_a_chosen_model_beats_every_pattern(monkeypatch: pytest.MonkeyPatch) -> 
 
     backend = mesh_module.ComfyBackend()
     angeboten = {
-        "CheckpointLoaderSimple.ckpt_name": [
-            "sd_xl_base_1.0.safetensors",
-            "juggernautXL_v9.safetensors",
-            "comicDiffusionXL.safetensors",
+        "UNETLoader.unet_name": [
+            "flux-2-klein-9b.safetensors",
+            "flux-2-klein-4b-fp8.safetensors",
+            "flux-2-klein-4b.safetensors",
         ]
     }
 
-    # Ohne Wahl gewinnt das Muster: ``juggernaut`` steht in ``prefer`` vorn.
-    ohne = backend._pick("image", "CheckpointLoaderSimple", "ckpt_name", dict(angeboten))
-    assert ohne == "juggernautXL_v9.safetensors"
+    # Ohne Wahl gewinnt das Muster — die 9B-Fassung ist ausgeschlossen.
+    ohne = backend._pick("image", "UNETLoader", "unet_name", dict(angeboten))
+    assert ohne == "flux-2-klein-4b-fp8.safetensors"
 
     # Mit Wahl gewinnt der Kunde — auch gegen die eigene Rangfolge.
-    gemerkt["image"] = "comicDiffusionXL.safetensors"
-    mit = backend._pick("image", "CheckpointLoaderSimple", "ckpt_name", dict(angeboten))
-    assert mit == "comicDiffusionXL.safetensors"
+    gemerkt["image"] = "flux-2-klein-4b.safetensors"
+    mit = backend._pick("image", "UNETLoader", "unet_name", dict(angeboten))
+    assert mit == "flux-2-klein-4b.safetensors"
 
 
 def test_a_chosen_model_that_is_gone_falls_back_quietly(
@@ -2436,11 +2629,11 @@ def test_a_chosen_model_that_is_gone_falls_back_quietly(
     monkeypatch.setattr(mesh_module, "configured_model", lambda role: "gibtsnichtmehr.safetensors")
 
     backend = mesh_module.ComfyBackend()
-    angeboten = {"CheckpointLoaderSimple.ckpt_name": ["sd_xl_base_1.0.safetensors"]}
+    angeboten = {"UNETLoader.unet_name": ["flux-2-klein-4b-fp8.safetensors"]}
 
     assert (
-        backend._pick("image", "CheckpointLoaderSimple", "ckpt_name", angeboten)
-        == "sd_xl_base_1.0.safetensors"
+        backend._pick("image", "UNETLoader", "unet_name", angeboten)
+        == "flux-2-klein-4b-fp8.safetensors"
     )
 
 
@@ -2456,36 +2649,39 @@ def test_the_choices_come_from_the_same_walk_as_the_missing_ones(
     from app.core.backends import mesh as mesh_module
 
     backend = mesh_module.ComfyBackend()
-    monkeypatch.setattr(
-        mesh_module.ComfyBackend,
-        "_offered",
-        lambda self, kind, field: (
-            ["eins.safetensors", "zwei.safetensors"]
-            if kind == "CheckpointLoaderSimple"
-            else ["nur_eins.safetensors"]
-        ),
-    )
+    alles = [name for names in OFFERED.values() for name in names]
+    monkeypatch.setattr(mesh_module.ComfyBackend, "_offered", lambda self, kind, field: alles)
 
     choices = backend.model_choices("text_to_mesh")
 
-    assert "image" in choices, "der Textweg nennt die Bildrolle"
-    assert choices["image"] == ("eins.safetensors", "zwei.safetensors")
-    # Rollen mit nur einer Datei kommen mit — „nur eine" ist nicht „keine".
+    assert set(choices) == {
+        "image",
+        "text_encoder",
+        "image_vae",
+        "shape",
+        "shape_vae",
+        "image_encoder",
+        "background",
+    }
+    assert choices["image"] == ("flux-2-klein-4b-fp8.safetensors",), (
+        "nur, was die Rolle ausfüllt — keine 9B-Fassung, kein Formkern"
+    )
     assert all(files for files in choices.values())
-    assert set(choices) >= {"image", "shape", "background"}
+    assert backend.missing_models("text_to_mesh") == ()
 
 
 def test_every_role_that_can_be_chosen_has_a_name() -> None:
     """Ein Auswahlfeld ohne Namen fragt nach einem Schlüssel (Regel 20).
 
-    ``shape_vae`` trägt bewusst keinen: Die Rolle gehört zu einem Ablauf, den
-    Solidon nicht mitliefert, und ein Feld dafür wäre eine Frage nach etwas,
-    das niemand hat.
+    Zur Wahl stehen die drei Aufgaben, die ein Kunde versteht: Bild aus Text,
+    Körper aus Bild, Freistellen. Textkodierer, VAEs und Bildkodierer gehören
+    fest zu ihrem Modell und tragen bewusst keinen Namen — ein Feld dafür wäre
+    eine Frage, die niemand beantworten kann.
     """
     from app.core.backends import mesh as mesh_module
 
     benutzt: set[str] = set()
-    for name in ("image_to_mesh", "text_to_mesh"):
+    for name in ("image_to_mesh", "text_to_image"):
         graph = json.loads((mesh_module.WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
         for node in graph.values():
             for value in (node.get("inputs") or {}).values():
@@ -2494,9 +2690,8 @@ def test_every_role_that_can_be_chosen_has_a_name() -> None:
                     if found is not None:
                         benutzt.add(found.group(1))
 
-    for role in benutzt:
-        spec = mesh_module.MODEL_ROLES[role]
-        assert str(spec.title), f"die Rolle {role} steht in einem Ablauf und braucht einen Namen"
+    named = {role for role in benutzt if str(mesh_module.MODEL_ROLES[role].title)}
+    assert named == {"image", "shape", "background"}
 
 
 def test_the_reachability_probe_takes_the_port_from_the_scheme(
@@ -2530,371 +2725,6 @@ def test_the_reachability_probe_takes_the_port_from_the_scheme(
     assert asked == [("rechner", 443), ("rechner", 80), ("rechner", 8188)]
 
 
-def _write_test_weights(root: Path) -> None:
-    """Ein kleiner vollständiger Download mit einer getrennten Gewichtsdatei."""
-    (root / "model_index.json").write_text("{}", encoding="utf-8")
-    (root / "transformer").mkdir(exist_ok=True)
-    (root / "transformer/model.safetensors").write_bytes(b"weights")
-
-
-def _test_weights_info(revision: str) -> SimpleNamespace:
-    import hashlib
-
-    return SimpleNamespace(
-        sha=revision,
-        siblings=[
-            SimpleNamespace(rfilename="model_index.json", size=2, lfs=None),
-            SimpleNamespace(
-                rfilename="transformer/model.safetensors",
-                size=7,
-                lfs=SimpleNamespace(sha256=hashlib.sha256(b"weights").hexdigest()),
-            ),
-        ],
-    )
-
-
-@pytest.mark.parametrize("download", [False, True], ids=["adopt", "download"])
-def test_corrupt_weights_of_the_expected_size_never_receive_a_completion_marker(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, download: bool
-) -> None:
-    from app.core.backends import comfy_setup
-
-    target = tmp_path / "models/triposg/TripoSG"
-    target.mkdir(parents=True)
-    scratch = tmp_path / "scratch"
-    root = scratch if download else target
-    root.mkdir(exist_ok=True)
-    _write_test_weights(root)
-    (root / "transformer/model.safetensors").write_bytes(b"corrupt")
-
-    class Api:
-        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
-            return _test_weights_info(revision)
-
-    monkeypatch.setitem(
-        sys.modules,
-        "huggingface_hub",
-        SimpleNamespace(HfApi=Api, snapshot_download=lambda *a, **k: str(scratch)),
-    )
-    args = [str(target), comfy_setup.WEIGHTS_REPO]
-    if download:
-        args.append(str(scratch))
-    args.append(comfy_setup.WEIGHTS_REVISION)
-    monkeypatch.setattr(sys, "argv", ["-c", *args])
-    with pytest.raises(RuntimeError, match="Prüfsumme"):
-        exec(comfy_setup._FETCH_WEIGHTS if download else comfy_setup._ADOPT_WEIGHTS, {})
-    assert not (target / ".solidon-complete.json").exists()
-    assert not comfy_setup.weights_present(tmp_path)
-
-
-def test_weights_are_verified_after_copying_before_replacing_the_previous_installation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import shutil
-
-    from app.core.backends import comfy_setup
-
-    target = tmp_path / "target"
-    target.mkdir()
-    (target / "previous").write_bytes(b"previous-complete-installation")
-    scratch = tmp_path / "scratch"
-    scratch.mkdir()
-    _write_test_weights(scratch)
-    original_move = shutil.move
-
-    def corrupt_copy(source: str, destination: str) -> str:
-        result = original_move(source, destination)
-        (Path(destination) / "transformer/model.safetensors").write_bytes(b"corrupt")
-        return result
-
-    info = _test_weights_info(comfy_setup.WEIGHTS_REVISION)
-    api = SimpleNamespace(model_info=lambda *a, **k: info)
-    monkeypatch.setitem(
-        sys.modules,
-        "huggingface_hub",
-        SimpleNamespace(HfApi=lambda: api, snapshot_download=lambda *a, **k: str(scratch)),
-    )
-    monkeypatch.setattr(shutil, "move", corrupt_copy)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["-c", str(target), comfy_setup.WEIGHTS_REPO, str(scratch), comfy_setup.WEIGHTS_REVISION],
-    )
-    with pytest.raises(RuntimeError, match="Prüfsumme"):
-        exec(comfy_setup._FETCH_WEIGHTS, {})
-    assert (target / "previous").read_bytes() == b"previous-complete-installation"
-    assert not (target.with_name("target.part") / ".solidon-complete.json").exists()
-
-
-def test_incomplete_legacy_weights_do_not_count_as_ready(tmp_path: Path) -> None:
-    from app.core.backends import comfy_setup
-
-    root = tmp_path / "models/triposg/TripoSG"
-    root.mkdir(parents=True)
-    (root / "model_index.json").write_text("{}", encoding="utf-8")
-    assert not comfy_setup.weights_present(tmp_path)
-    _write_test_weights(root)
-    marker = {
-        "revision": comfy_setup.WEIGHTS_REVISION,
-        "files": {"model_index.json": 2, "transformer/model.safetensors": 7},
-    }
-    (root / ".solidon-complete.json").write_text(json.dumps(marker), encoding="utf-8")
-    assert not comfy_setup.weights_present(tmp_path), "an old size-only marker needs verification"
-    (root / "transformer/model.safetensors").write_bytes(b"half")
-    assert not comfy_setup.weights_present(tmp_path)
-
-
-def test_complete_legacy_weights_are_adopted_without_a_download(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Ein vor der Abschlussmarke geladener, vollständiger Bestand bekommt die Marke —
-    statt 7,5 GB neu zu laden (Nachprüfung CORE-24, 06.09.2026)."""
-    from app.core.backends import comfy_setup
-
-    root = tmp_path / "models/triposg/TripoSG"
-    root.mkdir(parents=True)
-    _write_test_weights(root)
-    assert not comfy_setup.weights_present(tmp_path), "ohne Marke gilt nichts als fertig"
-
-    class Api:
-        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
-            assert files_metadata
-            return _test_weights_info(revision)
-
-    monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(HfApi=Api))
-    monkeypatch.setattr(
-        sys, "argv", ["-c", str(root), comfy_setup.WEIGHTS_REPO, comfy_setup.WEIGHTS_REVISION]
-    )
-    exec(comfy_setup._ADOPT_WEIGHTS, {})
-    assert comfy_setup.weights_present(tmp_path)
-    marker = json.loads((root / ".solidon-complete.json").read_text(encoding="utf-8"))
-    expected = _test_weights_info(comfy_setup.WEIGHTS_REVISION).siblings[1].lfs.sha256
-    assert marker["sha256"] == {"transformer/model.safetensors": expected}
-
-    # Auch gleich große spätere Änderungen verlangen die vollständige Prüfung neu.
-    import os
-
-    weights = root / "transformer/model.safetensors"
-    previous = weights.stat()
-    weights.write_bytes(b"changed")
-    os.utime(weights, ns=(previous.st_atime_ns, previous.st_mtime_ns + 1_000_000))
-    assert not comfy_setup.weights_present(tmp_path)
-
-    # Eine halbe Datei bekommt keine Marke — dann lädt der gewöhnliche Weg.
-    (root / ".solidon-complete.json").unlink()
-    (root / "transformer/model.safetensors").write_bytes(b"half")
-    with pytest.raises(RuntimeError):
-        exec(comfy_setup._ADOPT_WEIGHTS, {})
-    assert not (root / ".solidon-complete.json").exists()
-
-
-def test_weight_files_without_lfs_metadata_keep_the_size_check(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from app.core.backends import comfy_setup
-
-    root = tmp_path / "models/triposg/TripoSG"
-    root.mkdir(parents=True)
-    _write_test_weights(root)
-    info = _test_weights_info(comfy_setup.WEIGHTS_REVISION)
-    info.siblings[1].lfs = None
-    api = SimpleNamespace(model_info=lambda *a, **k: info)
-    monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(HfApi=lambda: api))
-    monkeypatch.setattr(
-        sys, "argv", ["-c", str(root), comfy_setup.WEIGHTS_REPO, comfy_setup.WEIGHTS_REVISION]
-    )
-    exec(comfy_setup._ADOPT_WEIGHTS, {})
-    assert comfy_setup.weights_present(tmp_path)
-    marker = json.loads((root / ".solidon-complete.json").read_text(encoding="utf-8"))
-    assert marker["sha256"] == {}
-    (root / "transformer/model.safetensors").write_bytes(b"half")
-    assert not comfy_setup.weights_present(tmp_path)
-
-
-@pytest.mark.parametrize("cancelled", [False, True], ids=("incomplete", "cancelled"))
-def test_rejected_legacy_weights_reach_download_unless_cancelled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cancelled: bool
-) -> None:
-    """Ein halber Altbestand lädt weiter; ein Nutzerabbruch startet keinen Download."""
-    from app.core.backends import comfy_setup
-
-    root = tmp_path / "models/triposg/TripoSG"
-    root.mkdir(parents=True)
-    (root / "model_index.json").write_text("{}", encoding="utf-8")
-    checks: list[list[str]] = []
-    downloads: list[list[str]] = []
-
-    def reject(command: list[str], *_args: object, **_kwargs: object) -> None:
-        checks.append(command)
-        if cancelled:
-            raise comfy_setup.Cancelled()
-        raise comfy_setup.SetupFailed("Die Modelldatei fehlt oder ist unvollständig.")
-
-    monkeypatch.setattr(comfy_setup, "_run", reject)
-    monkeypatch.setattr(comfy_setup, "scratch_dir", lambda _name: tmp_path / "scratch")
-    monkeypatch.setattr(comfy_setup, "_space_or_stop", lambda _where: None)
-    monkeypatch.setattr(
-        comfy_setup, "_run_repeatedly", lambda command, *a, **k: downloads.append(command)
-    )
-
-    if cancelled:
-        with pytest.raises(comfy_setup.Cancelled):
-            comfy_setup.fetch_weights(tmp_path, Path(sys.executable))
-    else:
-        comfy_setup.fetch_weights(tmp_path, Path(sys.executable))
-
-    assert len(checks) == 1 and comfy_setup._ADOPT_WEIGHTS in checks[0]
-    assert len(downloads) == (0 if cancelled else 1)
-    if downloads:
-        assert comfy_setup._FETCH_WEIGHTS in downloads[0]
-        assert str(root) in downloads[0]
-
-
-def test_fetch_weights_adopts_a_legacy_installation_and_clears_replacement_leftovers(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Der Einstieg räumt ``.previous-*`` eines abgebrochenen Austauschs und lädt
-    nicht, wenn der vorhandene Bestand die Prüfung besteht."""
-    from app.core.backends import comfy_setup
-
-    root = tmp_path / "models/triposg/TripoSG"
-    root.mkdir(parents=True)
-    _write_test_weights(root)
-    leftover = root.with_name(root.name + ".previous-abc123")
-    leftover.mkdir()
-    (leftover / "model_index.json").write_text("{}", encoding="utf-8")
-
-    downloads: list[list[str]] = []
-    checks: list[list[str]] = []
-
-    def fake_run(command: list[str], *_args: object, **_kwargs: object) -> None:
-        checks.append(command)
-        # Nur die Metadaten sind eine Attrappe; das echte Programm prüft die Datei.
-        api = SimpleNamespace(model_info=lambda *a, **k: _test_weights_info(command[-1]))
-        monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(HfApi=lambda: api))
-        monkeypatch.setattr(sys, "argv", ["-c", *command[4:]])
-        exec(command[3], {})
-
-    monkeypatch.setattr(comfy_setup, "_run", fake_run)
-    monkeypatch.setattr(
-        comfy_setup, "_run_repeatedly", lambda command, *a, **k: downloads.append(command)
-    )
-    monkeypatch.setattr(comfy_setup, "_space_or_stop", lambda _where: None)
-
-    comfy_setup.fetch_weights(tmp_path, Path(sys.executable))
-
-    assert not leftover.exists(), "der liegen gebliebene alte Bestand ist geräumt"
-    assert checks and comfy_setup._ADOPT_WEIGHTS in checks[0], "der Bestand wurde geprüft"
-    assert downloads == [], "ein vollständiger Bestand wird nicht neu geladen"
-    assert comfy_setup.weights_present(tmp_path)
-
-
-def test_the_weights_are_staged_beside_the_target_and_swapped_in_whole(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Gesamtreview 05.09.2026, CORE-24: Über die Grenze eines Datenträgers
-    kopiert ``shutil.move`` Datei für Datei — direkt ins Ziel lag
-    ``model_index.json`` da, bevor die Gewichte ankamen, und ein Abbruch
-    dazwischen sah beim nächsten Einrichten wie ein vollständiges Modell
-    aus. Kopiert wird daneben, eingewechselt in einem Schritt."""
-    import shutil
-
-    from app.core.backends import comfy_setup
-
-    target = tmp_path / "models" / "TripoSG"
-    scratch = tmp_path / "scratch"
-
-    def download(_repo: str, **kwargs: object) -> str:
-        local_dir = Path(str(kwargs["local_dir"]))
-        local_dir.mkdir(parents=True, exist_ok=True)
-        _write_test_weights(local_dir)
-        return str(local_dir)
-
-    class Api:
-        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
-            assert files_metadata
-            return _test_weights_info(revision)
-
-    moves: list[Path] = []
-    real_move = shutil.move
-
-    def watched_move(source: str, destination: str) -> str:
-        moves.append(Path(destination))
-        return real_move(source, destination)
-
-    monkeypatch.setattr(shutil, "move", watched_move)
-    monkeypatch.setitem(
-        sys.modules,
-        "huggingface_hub",
-        SimpleNamespace(HfApi=Api, snapshot_download=download),
-    )
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["-c", str(target), comfy_setup.WEIGHTS_REPO, str(scratch), comfy_setup.WEIGHTS_REVISION],
-    )
-
-    exec(comfy_setup._FETCH_WEIGHTS, {})
-
-    assert moves, "ohne Verschieben prüft dieser Test nichts"
-    assert target not in moves, "nie Datei für Datei ins Ziel"
-    assert all(path.parent == target.parent and path != target for path in moves)
-    assert (target / "model_index.json").is_file()
-    assert not list(target.parent.glob("*.part")), "die Zwischenstufe ist eingewechselt"
-
-
-@pytest.mark.parametrize("failure", ["truncated", "publish", "none"])
-def test_weight_replacement_preserves_the_previous_installation_on_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
-) -> None:
-    """Nach Abbruch bleibt der alte Bestand, nach Erfolg gilt nur der vollständige neue."""
-    import os
-
-    from app.core.backends import comfy_setup
-
-    target = tmp_path / "models/triposg/TripoSG"
-    target.mkdir(parents=True)
-    (target / "model_index.json").write_text("alt", encoding="utf-8")
-    scratch = tmp_path / "scratch"
-
-    def download(_repo: str, **kwargs: object) -> str:
-        local_dir = Path(str(kwargs["local_dir"]))
-        _write_test_weights(local_dir)
-        if failure == "truncated":
-            (local_dir / "transformer/model.safetensors").write_bytes(b"half")
-        return str(local_dir)
-
-    class Api:
-        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
-            return _test_weights_info(revision)
-
-    original_replace = os.replace
-
-    def replace(source: str, destination: str) -> None:
-        if failure == "publish" and Path(source).name.endswith(".part"):
-            raise OSError("Datenträger getrennt")
-        original_replace(source, destination)
-
-    monkeypatch.setattr(os, "replace", replace)
-    monkeypatch.setitem(
-        sys.modules, "huggingface_hub", SimpleNamespace(HfApi=Api, snapshot_download=download)
-    )
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["-c", str(target), comfy_setup.WEIGHTS_REPO, str(scratch), comfy_setup.WEIGHTS_REVISION],
-    )
-    if failure == "none":
-        exec(comfy_setup._FETCH_WEIGHTS, {})
-        assert comfy_setup.weights_present(tmp_path)
-        assert not list(target.parent.glob("*.previous-*"))
-    else:
-        with pytest.raises((OSError, RuntimeError)):
-            exec(comfy_setup._FETCH_WEIGHTS, {})
-        assert (target / "model_index.json").read_text(encoding="utf-8") == "alt"
-        assert not comfy_setup.weights_present(tmp_path)
-
-
 def test_the_image_model_is_fetched_with_a_fixed_revision_and_hash(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2903,9 +2733,9 @@ def test_the_image_model_is_fetched_with_a_fixed_revision_and_hash(
 
     Robert tippte einen Satz, und der Dialog verlangte ein Bild — das Modell
     sollte der Kunde selbst besorgen. Jetzt geht es denselben Weg wie das
-    Freistell-Modell: eine Datei, fester Stand, gestreamte Prüfsumme, Tausch am
-    Ziel erst nach der Prüfung — nach ``models/checkpoints``, wo ComfyUI seine
-    Bildmodelle sucht.
+    Freistellmodell: je Datei fester Stand, gestreamte Prüfsumme, Tausch am
+    Ziel erst nach der Prüfung — FLUX.2 [klein] 4B nach ``diffusion_models``,
+    Qwen3-4B nach ``text_encoders``, die VAE nach ``vae``.
     """
     from app.core.backends import comfy_setup
 
@@ -2921,21 +2751,71 @@ def test_the_image_model_is_fetched_with_a_fixed_revision_and_hash(
 
     comfy_setup.fetch_image_model(comfyui, Path("python"))
 
-    command = commands[0]
-    assert command[3] == comfy_setup._FETCH_FILE, "derselbe Weg wie das Freistell-Modell"
-    assert command[4] == str(comfyui / "models" / "checkpoints")
-    assert command[5:7] == [comfy_setup.IMAGE_MODEL_REPO, comfy_setup.IMAGE_MODEL_FILE]
-    assert command[-2:] == [
-        "462165984030d82259a11f4367a4eed129e94a7b",
-        "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b",
+    assert [command[3] for command in commands] == [comfy_setup._FETCH_FILE] * 3
+    assert [command[4:7] for command in commands] == [
+        [
+            str(comfyui / "models" / "diffusion_models"),
+            "black-forest-labs/FLUX.2-klein-4b-fp8",
+            "flux-2-klein-4b-fp8.safetensors",
+        ],
+        [
+            str(comfyui / "models" / "text_encoders"),
+            "Comfy-Org/vae-text-encorder-for-flux-klein-4b",
+            "split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors",
+        ],
+        [
+            str(comfyui / "models" / "vae"),
+            "Comfy-Org/vae-text-encorder-for-flux-klein-4b",
+            "split_files/vae/flux2-vae.safetensors",
+        ],
+    ]
+    assert [command[-2:] for command in commands] == [
+        [
+            "5b4408e59397a4a37ccb46afe426d8ed86379441",
+            "97ed34fe0567e436200f2faee3939b88f2b5d99f8af2a4dc16532c4245c0ccb6",
+        ],
+        [
+            "5f526678002e43af5551dadb73ce2e8c91b43afe",
+            "3eab03a77adb0ee5304a4e677d5c10ac22f9049c1d7c894adca4f8bb39206ca8",
+        ],
+        [
+            "5f526678002e43af5551dadb73ce2e8c91b43afe",
+            "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3",
+        ],
     ]
 
-    # Und nur, wenn keines da ist — ein Juggernaut zählt wie das Basismodell.
-    (comfyui / "models" / "checkpoints").mkdir(parents=True, exist_ok=True)
-    (comfyui / "models" / "checkpoints" / "juggernautXL.safetensors").write_bytes(b"x")
+    # Und nur, was fehlt — eine bf16-Fassung zählt wie die fp8-Fassung, ein
+    # Rest unter dem richtigen Namen nicht.
+    models = comfyui / "models"
+    for folder, name in (
+        ("diffusion_models", "flux-2-klein-4b.safetensors"),
+        ("text_encoders", "qwen_3_4b.safetensors"),
+        ("vae", "flux2-vae.safetensors"),
+    ):
+        (models / folder).mkdir(parents=True, exist_ok=True)
+        (models / folder / name).write_bytes(b"x")
+    assert not comfy_setup.image_model_present(comfyui), "der Rest unter dem Namen zählt nicht"
+    (models / "vae" / "flux2-vae.safetensors").unlink()
+    (models / "vae" / "flux2_vae_bf16.safetensors").write_bytes(b"x")
     assert comfy_setup.image_model_present(comfyui)
+    commands.clear()
     comfy_setup.fetch_image_model(comfyui, Path("python"))
-    assert len(commands) == 1, "ein vorhandenes Bildmodell wird nicht noch einmal geladen"
+    assert commands == [], "ein vorhandenes Bildmodell wird nicht noch einmal geladen"
+
+
+def test_a_file_of_ours_counts_only_in_full_size(tmp_path: Path) -> None:
+    """Ein abgebrochener Austausch darf nie wie ein fertiges Modell aussehen."""
+    import dataclasses
+
+    from app.core.backends import comfy_setup
+
+    entry = dataclasses.replace(comfy_setup.SHAPE_FILES[0], size=8)
+    target = entry.target(tmp_path)
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"halb")
+    assert not comfy_setup.file_present(tmp_path, entry)
+    target.write_bytes(b"komplett")
+    assert comfy_setup.file_present(tmp_path, entry)
 
 
 def test_the_image_model_checks_both_disks_before_it_downloads(
@@ -2948,25 +2828,22 @@ def test_the_image_model_checks_both_disks_before_it_downloads(
     monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 1.0)
 
-    with pytest.raises(comfy_setup.SetupFailed, match="models/checkpoints"):
+    with pytest.raises(comfy_setup.SetupFailed, match="models/diffusion_models"):
         comfy_setup.fetch_image_model(tmp_path / "ComfyUI", Path("python"))
 
 
 def test_the_setup_fetches_the_image_model_only_when_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Sieben Gigabyte für einen Weg, den ein Foto umgeht — nur auf Wunsch.
+    """Acht Gigabyte für einen Weg, den ein Foto umgeht — nur auf Wunsch.
 
     Und erst nach den Gewichten: Wer abbricht, hat den Bildweg vollständig.
     """
     from app.core.backends import comfy_setup
 
-    comfyui = tmp_path / "ComfyUI"
-    (comfyui / "custom_nodes").mkdir(parents=True)
+    comfyui = _comfyui_folder(tmp_path)
     monkeypatch.setattr(comfy_setup, "find_python", lambda _folder: Path("python"))
     steps: list[str] = []
-    for name in ("fetch_triposg", "patch_sources", "install_packages", "nodes_load"):
-        monkeypatch.setattr(comfy_setup, name, lambda *_a, _n=name, **_k: steps.append(_n))
     monkeypatch.setattr(
         comfy_setup, "fetch_background", lambda *_a, **_k: steps.append("background")
     )
@@ -2975,29 +2852,30 @@ def test_the_setup_fetches_the_image_model_only_when_asked(
         comfy_setup, "fetch_image_model", lambda *_a, **_k: steps.append("image_model")
     )
     monkeypatch.setattr(comfy_setup, "weights_present", lambda _c: True)
+    there = {"image": False}
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda _c: there["image"])
 
     result = comfy_setup.setup(comfyui, weights=True)
     assert "image_model" not in steps, "ohne Wunsch bleibt das Bildmodell liegen"
     assert result.done and not result.image_model
 
     steps.clear()
-    (comfyui / "models" / "checkpoints").mkdir(parents=True)
-    (comfyui / "models" / "checkpoints" / "sd_xl_base_1.0.safetensors").write_bytes(b"x")
+    there["image"] = True
     result = comfy_setup.setup(comfyui, weights=True, image_model=True)
-    assert steps[-3:] == ["background", "weights", "image_model"], "zuletzt, nach den Gewichten"
+    assert steps == ["background", "weights", "image_model"], "zuletzt, nach den Gewichten"
     assert result.done and result.image_model
 
     steps.clear()
     result = comfy_setup.setup(comfyui, weights=False, image_model=True)
-    assert steps[-1] == "image_model", (
+    assert steps == ["image_model"], (
         "liegen die Gewichte schon, holt der Wunsch das Bildmodell trotzdem (RM-343)"
     )
-    assert "weights" not in steps and "background" not in steps
     assert result.done and result.image_model
 
     steps.clear()
     result = comfy_setup.setup(comfyui, weights=False, image_model=False)
-    assert steps[-1] == "nodes_load", "ohne Wunsch nur die Knoten"
+    assert steps == [], "ohne Wunsch wird nichts geladen"
+    assert result.done
 
 
 @pytest.mark.parametrize("path", ["/prompt", "/history/", "/upload/image"])
@@ -3047,4 +2925,4 @@ def test_an_output_entry_of_the_wrong_shape_is_skipped_not_fatal() -> None:
 
     comfy = ComfyBackend(url="http://127.0.0.1:8188", transport=answer, poll_seconds=0.0)
 
-    assert comfy.text_to_mesh("ein Halter").mesh.triangle_count > 0
+    assert comfy.image_to_mesh(b"png").mesh.triangle_count > 0

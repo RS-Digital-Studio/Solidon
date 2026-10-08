@@ -19,23 +19,16 @@ from tests.helpers import exact_kernel
 
 exact_kernel()
 
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QFileDialog
 
 from app.core.errors import CONVERT_TO_EXACT
 from app.core.registry import REGISTRY
 from app.core.scene.history import OperationDraft
 from app.ui.main_window import MainWindow
-from app.ui.session import Session
-from app.ui.settings import UiSettings
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    # Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test
-    # auf die Arbeiter jedes offenen Fensters.
-    return MainWindow(Session(), UiSettings())
 
 
 def _asked(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:

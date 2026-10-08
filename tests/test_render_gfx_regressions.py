@@ -774,14 +774,29 @@ def test_changing_label_set_keeps_pixels_style_dots_and_pickability(renderer: Gf
     labels.set_visible(False)
     assert np.array_equal(reused_image, renderer.screenshot())
     renderer.remove(reference)
-    labels.set_visible(True)
-    labels.set_pickable(False)
-    labels.update_labels(np.array([[0, 0, 0], [15, 0, 0]]), ["A", "D"])
-    assert not any(obj.material.pick_write for obj in labels.objects)
+    labels.update_labels(np.empty((0, 3)), [])
+    # Nicht anklickbar ist ein Stil beim Anlegen, wie die Ansicht ihn setzt —
+    # und er hält über einen Textwechsel, der Felder wiederverwendet.
+    silent = renderer.add_labels(
+        np.array([[-10, 0, 0], [10, 0, 0]]),
+        ["A", "B"],
+        name="silent",
+        style=LabelStyle(
+            font_size=14,
+            background="#0000ff",
+            show_points=True,
+            point_colour="#ff0000",
+            point_size=12,
+            pickable=False,
+        ),
+    )
+    silent.update_labels(np.array([[0, 0, 0], [15, 0, 0]]), ["A", "D"])
+    assert silent.objects and not any(obj.material.pick_write for obj in silent.objects)
     x, y, _ = renderer.world_to_display((0, 0, 0))
     assert renderer.pick_item(x, y) is None
-    labels.update_labels(np.empty((0, 3)), [])
-    assert labels.dots is None and not renderer._items and not renderer._pick_objects
+    silent.update_labels(np.empty((0, 3)), [])
+    assert labels.dots is None and silent.dots is None
+    assert not renderer._items and not renderer._pick_objects
     assert renderer.screenshot().max() == 0
 
 

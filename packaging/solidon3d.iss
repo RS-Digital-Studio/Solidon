@@ -141,20 +141,32 @@ Name: "associate"; Description: "{cm:FileAssociationTask}"
 ; HKA ist HKLM bei einer Installation für alle und HKCU bei einer fürs eigene
 ; Profil — dieselbe Wahl, die der Nutzer oben schon getroffen hat.
 [Registry]
-Root: HKA; Subkey: "Software\Classes\{#ProjectSuffix}\OpenWithProgids";   ValueType: string; ValueName: "{#AppId}.project"; ValueData: "";   Flags: uninsdeletevalue; Tasks: associate
+; Ein geteilter Schlüssel wie die Projektendung verliert beim Deinstallieren den
+; eigenen Wert; ``uninsdeletekeyifempty`` nimmt danach den Schlüssel, wenn
+; nichts mehr darin steht (RM-055). Die Deinstallation geht ihr Protokoll
+; rückwärts durch: Ein Unterschlüssel steht deshalb hinter seinem
+; Elternschlüssel, sonst wäre der Elternschlüssel bei der Prüfung nicht leer.
+; Das Flag nimmt nur den Schlüssel seiner Zeile: Die Projektendung, unter der
+; das Setup keinen Wert setzt, braucht deshalb eine eigene Zeile.
+Root: HKA; Subkey: "Software\Classes\{#ProjectSuffix}";   Flags: uninsdeletekeyifempty; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#ProjectSuffix}\OpenWithProgids";   ValueType: string; ValueName: "{#AppId}.project"; ValueData: "";   Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.project";   ValueType: string; ValueName: ""; ValueData: "{cm:ProjectFileType}";   Flags: uninsdeletekey; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.project\DefaultIcon";   ValueType: string; ValueName: ""; ValueData: "{app}\{#AppName}.exe,0"; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.project\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Tasks: associate
-Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}\OpenWithProgids";   ValueType: string; ValueName: "{#AppId}.part"; ValueData: "";   Flags: uninsdeletevalue; Tasks: associate
-Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}";   ValueType: string; ValueName: ""; ValueData: "{#AppId}.part";   Flags: uninsdeletevalue; Tasks: associate
-Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}";   ValueType: string; ValueName: "Content Type"; ValueData: "{#PartFileMimeType}";   Flags: uninsdeletevalue; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}";   ValueType: string; ValueName: ""; ValueData: "{#AppId}.part";   Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}";   ValueType: string; ValueName: "Content Type"; ValueData: "{#PartFileMimeType}";   Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}\OpenWithProgids";   ValueType: string; ValueName: "{#AppId}.part"; ValueData: "";   Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.part";   ValueType: string; ValueName: ""; ValueData: "{cm:PartFileType}";   Flags: uninsdeletekey; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.part\DefaultIcon";   ValueType: string; ValueName: ""; ValueData: "{app}\{#AppName}.exe,0"; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.part\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Tasks: associate
 ; Damit die Anwendung auch im Dialog „Öffnen mit" steht, wenn die Zuordnung
-; abgewählt wurde oder ein anderes Programm sie später übernimmt.
+; abgewählt wurde oder ein anderes Programm sie später übernimmt. Der Schlüssel
+; unter ``Applications`` gehört ganz dieser Anwendung und geht beim
+; Deinstallieren als Ganzes: ``uninsdeletekey`` an ``…\shell\open\command``
+; allein ließ ``shell\open`` und ``SupportedTypes`` stehen (RM-055).
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe";   Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Flags: uninsdeletekey
-Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#ProjectSuffix}"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#ProjectSuffix}"; ValueData: "";   Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#PartFileSuffix}"; ValueData: "";   Flags: uninsdeletevalue
 
 ; **Ein Update ersetzt den Laufzeitbaum, statt ihn zu überschreiben.** [Files]

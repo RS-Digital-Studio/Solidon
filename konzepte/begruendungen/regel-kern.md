@@ -352,6 +352,10 @@ Die Überschrift hieß „Und die vierte: Wir sind selbst einer".
 > Beleg, dass jemand nachgedacht hat — und genau deshalb prüft die Stelle
 > niemand ein zweites Mal. Siehe `.claude/memory/benannte-falle-schuetzt-nicht.md`.
 
+Zu Curas eigenem Lader unter Linux (RM-521): Der Pfad aus `AppRun.env` geht
+vollständig mit, LIBC-Pfad zuerst, weil ein gekürzter die `libstdc++` des
+Rechners nachzieht und mit ihr eine zu neue glibc.
+
 ### Was auf einer Plattform gilt, ist keine Zusage
 
 > Dieselbe Durchsicht hat fünf Stellen gefunden, an denen Linux oder macOS
@@ -362,6 +366,11 @@ Die Überschrift hieß „Und die vierte: Wir sind selbst einer".
 
 > Am 27.08.2026 war ein Commit auf drei Windows-Maschinen rot und auf dem
 > Bauserver grün.
+
+Warum die Plattform ein Parameter ist und kein `sys.platform` im Rumpf: Ein
+Zweig, den nur ein Mac sieht, wird nirgends geprüft, und `mypy` meldet
+`sys.platform`-Ketten auf den anderen Maschinen als `unreachable`, was die
+Linux-CI nie sieht.
 
 Zur Prüfung mit `mypy --platform …`: „das kostet drei Läufe und fängt genau
 den Fall, den ein grüner CI-Lauf nicht zurückholt." Und `ComfyBackend.readiness`
@@ -405,6 +414,11 @@ den Fall, den ein grüner CI-Lauf nicht zurückholt." Und `ComfyBackend.readines
 >   Warteschlange des fremden Programms steht, wird gewartet; eine harte
 >   Obergrenze fängt nur den Fall, dass die Schlange lügt.
 
+Seit TRELLIS.2 (RM-003) bringt ComfyUI die Knoten selbst mit, und die
+billige Prüfung ist die Fassung (`comfy_setup.check_version`): Ein zu altes
+ComfyUI wird vor dem ersten Download genannt, statt nach acht Gigabyte am
+fehlenden Knoten zu scheitern.
+
 ## Die Lizenz kann in einer Datendatei stecken
 
 > Regel 15 sagt „keine GPL-Abhängigkeit", und die Lizenzprüfung liest
@@ -417,3 +431,29 @@ den Fall, den ein grüner CI-Lauf nicht zurückholt." Und `ComfyBackend.readines
 > Und die erste Frage ist, ob das Zielprogramm es **selbst** kann: ComfyUI
 > kann freistellen, seit 0.33, mit Gewichten unter MIT. Damit fiel neben der
 > Lizenz auch ein Installationsschritt weg.
+
+## Wo die kurze Kette nur ausgeht (RM-534)
+
+Die Regel in voller Länge, mit dem Warum:
+
+**Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
+eine Vorschau nie** (RM-534, §17.2): Hält ein Schritt mit einem
+`BooleanFailedError`, dessen Kette die Güte gekürzt hat (`cut_short`, nicht
+eine verlangte Stufenfolge) und der *Voxelstufe erzwingen* anbietet, und hat
+er nach der Güte gefragt, rechnet `evaluate` ihn mit `full_chain_when_stuck`
+im selben Lauf mit der vollen Kette (`_FullChain`). Gesetzt wird es nur in
+`Session.run_evaluation`, `_RevisionWorker` und `AgentSession` — die
+Voxelstufe kostet an einem überdeckenden Werkzeug Sekunden, in einer Vorschau
+je Wert. Eine Vorschau nimmt ein Urteil der vollen Kette aus dem Cache und
+hält sonst mit `short_chain_only`; das Band sagt `SHORT_CHAIN_PREVIEW`, und
+*Übernehmen* bleibt frei. Eine Frage des ersten Durchgangs beantwortet der
+zweite aus dem Gedächtnis (`_WatchedAsk.again`). Ohne Frage merkt sich die
+Speicherebene sofort das gerettete Ergebnis und das Urteil der vollen Kette
+(`ResultCache.refuse`: nur ein `BooleanFailedError` mit gelaufener
+Voxelstufe und ohne `transient` — Speichermangel ist kein Urteil —, als
+Ausnahme; der Befund entsteht am Treffer mit der heutigen Kennung), auch wenn
+ein späterer Schritt anhält; auf die Platte geht nur ein vollständiger
+Durchlauf (§15.6). Der Agent rechnet mit dem Sitzungscache
+(`AgentSession.cache`). Ein Halt nimmt mit, ob der Schritt nach der Güte
+fragte (`reads_quality`); sonst gilt ein Entwurfshalt als fein, und Export wie
+Slicer rechnen nie nach.

@@ -136,7 +136,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   Konkurrenz um einen Verweis hält vorher an, Netzgruppen benennen keine native
   Topologie um. Jede Ausgabe wird samt Zuordnung und Hash vorbereitet, bevor
   Eingänge verbraucht werden; Cache und Fertigmeldung erst nach der letzten
-  Abschlussprüfung.
+  Abschlussprüfung, außer dem Urteil der vollen Kette (`_FullChain`, `kern.md`).
 - **Die Frage vor der Vollerkennung** (Regel in `kern.md`):
   `_full_recognition_allowed`, `_ask_once_for_large_bodies`,
   `_recognition_choice`, `_skipped_recognition` (`perceive.too_large`),
@@ -152,7 +152,8 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   sie diese Fläche sind (`matching.planar_source`, `pieces_in_place`); nach
   einer Bewegung wird nicht gesucht;
   eine beschnittene erzeugte Fläche ohne Stück fällt heraus
-  (`perceive.generated_lost`).
+  (`perceive.generated_lost`), ebenso ein erzeugtes Merkmal, das dieser
+  Schritt ganz aus dem Körper schnitt (`_cut_away_here`, `gone_here`).
 - **Die Zuordnungsfrage** (`_answer_matches`) fragt Verwiesenes zuerst, auch
   ohne Nachfolger, Abbrechen beginnt die Gruppe neu; verwiesen heißt am Netz
   **nach** dem Schritt (`_needed_after`) — den eigenen Verweis löst der Schritt
@@ -174,7 +175,6 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   (`_without_undone_placements`), der Plattenrat mit ihnen.
   `_without_repeats` erhält unterschiedliche Merkmalziele, Orte und Konturen;
   identische Befunddaten bleiben zuletzt, in der bisherigen Berichtsfolge.
-  Das ist Datenidentität ohne geometrische Näherung oder Rundung.
   Rohe Operationsbefunde bleiben unverändert,
   auch beim erneuten Abschluss aus dem Cache.
   `_without_outdated` zählt Material nur für `bore.splits_the_body` sowie
@@ -189,8 +189,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   dem Abschluss werden Bericht und Cache freigegeben. Der Bericht übernimmt
   Ersatzbefunde auch bei unveränderter Zeilenzahl.
   `_finding_from` übernimmt `location` und `outline` aus einer Ausnahme als
-  räumliche Felder und lässt sie aus den Anzeigewerten heraus. So führt
-  `as_error` beim Rückweg zu den tatsächlichen Punkten statt zu deren Text.
+  räumliche Felder und lässt sie aus den Anzeigewerten heraus.
 - **Darstellungswechsel** melden sich erst nach vollständig vorbereiteten
   Ausgaben; unveränderte Eingangskennungen belegen Nachfolger (ein neuer Deckel
   ist kein Verlust seines Trägers); ganz vernetzt bekommt jedes verbrauchte
@@ -234,9 +233,7 @@ Merkmalen. Der Empfänger ordnet Callbackmeldungen der Auftragsrevision zu.
   Prozesswert zu lesen gibt, nimmt `False` heraus. Der volle `profile_key`
   bleibt bytegleich — er benennt auch Filamentbuchungen.
 - **Merkmale reisen durch beide Ebenen** (`cache.feature_to_data`): Maßquellen
-  (fehlende bleiben unbekannt; `bore_advice` trennt Beleg, Schätzung und
-  Vorgabe, auch im eigenen Bausteinsatz; `at_hole_advice` erhält weiter nur
-  den Durchmesser) und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter
+  und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter
   Name ohne Beleg behält keinen Formnachweis). **Nicht geprüft wird die
   Dreieckszahl**: Der Cache trägt die **rohe** Ausgabe; erst `_with_features`
   bindet — vorbereitete Objekte zu cachen ist verworfen. `_warm_figures` fasst

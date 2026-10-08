@@ -9,6 +9,7 @@ from PySide6.QtTest import QTest
 from app.core.scene import EvaluationResult
 from app.core.types import Finding, Report, Scene
 from app.ui.panels import ReportPanel
+from app.ui.theme import THEMES, current_theme
 from tests.helpers import make_object
 
 
@@ -1205,4 +1206,207 @@ def test_the_least_height_reads_only_the_rows_it_keeps(qt_app, monkeypatch):
         assert least == expected + 2 * listing.frameWidth()
     finally:
         panel.close()
+        panel.deleteLater()
+
+
+def test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors(qt_app):
+    """RM-534: Während der Rechnung steht kein alter Fehler als gültig da.
+
+    Kunde (0.5.3): „manchmal wird im Prüfbericht auch Fehler angezeigt und kurz
+    darauf ist die Berechnung erst fertig“. Gemessen: Beim Radius 2,0 → 1,0
+    stand „Der Radius ist für diese Kanten zu groß“ 3,7 s mit voller Schwere
+    da, darüber „Übergabe nicht empfohlen“. Jetzt sagt der Kopf nach 0,2 s,
+    dass gerechnet wird; die Zeile bleibt als voriger Stand lesbar, in Worten
+    und nicht nur gedämpft (Regel 18), ihre Handlung gesperrt, und die Zahl am
+    Reiter ändert sich nicht — ein alter Fehler blinkt nicht als neuer.
+    """
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from app.ui.loading import DELAY_MS
+
+    ran = []
+
+    class Host(QWidget):
+        def error_handlers(self):
+            return {"arrange_on_bed": lambda error: ran.append(error)}
+
+    host = Host()
+    layout = QVBoxLayout(host)
+    panel = ReportPanel(host)
+    layout.addWidget(panel)
+    stale = Finding(
+        "arrange.collision",
+        "error",
+        "Zwei Körper überschneiden sich.",
+        object_id="a",
+        location=(0.0, 0.0, 1.0),
+    )
+    alerts: list[int] = []
+    try:
+        panel.show_result(
+            EvaluationResult(
+                Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((stale,)))
+            )
+        )
+        panel.set_review_context("Geometrieprüfung: ganze Szene", ())
+        host.resize(420, 700)
+        host.show()
+        panel.list.setCurrentRow(0)
+        qt_app.processEvents()
+        panel.alertsChanged.connect(alerts.append)
+        assert panel.summary.text() == "Übergabe nicht empfohlen", "Voraussetzung"
+        assert panel.finding_consequence.isVisible(), "Voraussetzung: der Fehler hat eine Folge"
+
+        held = panel.list.item(0)
+        from app.ui import panels as panels_module
+
+        drawn: list[str] = []
+        real_icon = panels_module.icon
+
+        def noting(name: str, *args: object, **kwargs: object) -> object:
+            drawn.append(name)
+            return real_icon(name, *args, **kwargs)
+
+        panels_module.icon = noting
+        panel.set_running(True)
+        qt_app.processEvents()
+        assert panel.summary.text() == "Übergabe nicht empfohlen", "unter 0,2 s bleibt es ruhig"
+        QTest.qWait(DELAY_MS + 150)
+        panels_module.icon = real_icon
+        assert "running" in drawn, "der Kopf zeigt die Uhr, nicht das Fehlersymbol"
+
+        assert panel.running()
+        assert panel.summary.text() == "Wird neu berechnet …"
+        assert panel.review_reason.text() == (
+            "Die Bewertung läuft; der vorige Stand bleibt sichtbar."
+        ), "der Grund weicht dem Fehler nicht mehr"
+        assert panel.list.count() == 1, "die Zeile bleibt sichtbar (§15.3)"
+        # An Ort und Stelle, nicht neu gebaut: Ein offenes Kontextmenü hält
+        # seine Zeile über den Wechsel hinweg.
+        assert panel.list.item(0) is held
+        assert held.text().startswith("Voriger Stand: "), held.text()
+        assert panel.list.currentRow() == 0, "die Wahl des Kunden bleibt"
+        buttons = [
+            widget
+            for index in range(panel._offer_row.count())
+            if isinstance(widget := panel._offer_row.itemAt(index).widget(), QPushButton)
+        ]
+        assert buttons, "die Handlung steht weiter da"
+        assert not any(button.isEnabled() for button in buttons), "aber gesperrt"
+        assert "vorigen Stand" in buttons[0].toolTip()
+        assert alerts == [], "die Reitermarke zählt den alten Fehler nicht neu"
+        assert not panel.finding_consequence.isVisible(), (
+            "die Folge eines Befunds vom vorigen Stand steht nicht als gültig da"
+        )
+        muted = THEMES[current_theme()]["muted"]
+        assert held.foreground().color().name() == muted, "gedämpft, aber lesbar (§2.9)"
+
+        # Was während des Laufs dazukommt — der Satz eines Teilungsplans —,
+        # gehört zum neuen Stand; die Liste wird dabei neu gebaut.
+        panel.add_findings([Finding("split.plan", "info", "Die Hälften liegen bereit.")])
+        rows = [panel.list.item(row).text() for row in range(panel.list.count())]
+        assert "Die Hälften liegen bereit." in rows, rows
+        assert any(text.startswith("Voriger Stand: ") for text in rows), (
+            "der alte Fehler wurde mit dem Neubau wieder gültig"
+        )
+
+        fresh = Finding("a.note", "info", "Ausgehöhlt.", object_id="a")
+        panel.show_result(
+            EvaluationResult(
+                Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((fresh,)))
+            )
+        )
+        qt_app.processEvents()
+        assert not panel.running(), "ein Ergebnis ist kein voriger Stand"
+        assert not panel.list.item(0).text().startswith("Voriger Stand"), panel.list.item(0).text()
+        assert panel.summary.text() != "Wird neu berechnet …"
+
+        panel.set_running(True)
+        panel.set_running(False)
+        QTest.qWait(DELAY_MS + 150)
+        assert not panel.running(), "ein kurzer Lauf hinterlässt nichts"
+
+        held = panel.list.item(0)
+        panel.set_running(True)
+        QTest.qWait(DELAY_MS + 150)
+        panel.set_running(False)
+        assert panel.list.item(0) is held
+        assert not held.text().startswith("Voriger Stand"), held.text()
+    finally:
+        host.close()
+        host.deleteLater()
+
+
+def test_a_menu_opened_before_the_run_does_nothing_after_it(qt_app, monkeypatch):
+    """RM-534: Beginnt der Laufzustand, während das Kontextmenü offen ist, wirkt die Wahl nicht.
+
+    Die Einträge waren beim Öffnen frei; gewählt wurde nach Beginn des Laufs,
+    und die Handlung traf den Befund des vorigen Stands.
+    """
+    from PySide6.QtWidgets import QMenu, QVBoxLayout, QWidget
+
+    from app.ui import panels
+
+    ran: list[object] = []
+
+    class Host(QWidget):
+        def error_handlers(self):
+            return {"arrange_on_bed": lambda error: ran.append(error)}
+
+    host = Host()
+    QVBoxLayout(host).addWidget(panel := ReportPanel(host))
+    stale = Finding("arrange.collision", "error", "Zwei Körper überschneiden sich.", object_id="a")
+    try:
+        panel.show_result(
+            EvaluationResult(
+                Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((stale,)))
+            )
+        )
+        host.show()
+        qt_app.processEvents()
+        item = panel.list.item(0)
+        place = panel.list.visualItemRect(item).center()
+        opened: list[bool] = []
+
+        class RunStartsWhileOpen(QMenu):
+            """Ein Menü, während dessen der Lauf beginnt (``QMenu.exec`` hält offscreen an)."""
+
+            def exec(self, *_args: object) -> object:
+                opened.append(all(action.isEnabled() for action in self.actions()))
+                panel._show_running(True)
+                return self.actions()[0]
+
+        monkeypatch.setattr(panels, "QMenu", RunStartsWhileOpen)
+        panel._on_menu(place)
+
+        assert opened == [True], "Voraussetzung: beim Öffnen war der Eintrag frei"
+        assert ran == [], "die Handlung traf den Befund des vorigen Stands"
+    finally:
+        host.close()
+        host.deleteLater()
+
+
+def test_a_report_after_a_cancelled_run_says_it_is_not_current(qt_app):
+    """RM-534: Nach Abbruch oder Fehler steht der alte Bericht nicht wieder als gültig da.
+
+    Der Grund unter dem Kopf wich bisher jedem Fehler; nach dem Abbruch las
+    sich ein Fehler des letzten vollständigen Stands wie einer des Dokuments.
+    """
+    from app.ui.print_contract import NOT_CURRENT_REASON
+
+    panel = ReportPanel()
+    old = Finding("arrange.collision", "error", "Zwei Körper überschneiden sich.", object_id="a")
+    try:
+        panel.show_result(
+            EvaluationResult(Scene(objects={"a": make_object("a", "Rumpf")}, report=Report((old,))))
+        )
+        panel.set_review_context("Geometrieprüfung: ganze Szene", ())
+        assert panel.review_reason.text() == "", "Voraussetzung: ein gültiger Fehler sagt genug"
+
+        panel.set_stale(True)
+
+        assert panel.review_reason.text() == str(NOT_CURRENT_REASON)
+        panel.set_stale(False)
+        assert panel.review_reason.text() == ""
+    finally:
         panel.deleteLater()

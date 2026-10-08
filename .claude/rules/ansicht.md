@@ -212,16 +212,16 @@ Rückkehrziel (`action_projection`).
 * **Er folgt der Kamera, weil das Frontlicht es tut** (`shadow_direction`);
   `_redraw_shadows` zieht nach am Zugende (`on_end`), je Schritt der 3D-Maus und
   je Kameravorgabe — nie an einem Renderer-Ereignis.
-* **Er fällt auf die Fläche, auf der sein Körper steht** (`_shadow_catchers`:
+* **Er fällt auf die Fläche, auf der sein Körper steht** (`shadow_catchers`:
   Platte und jeder Körper, dessen Oberkante nicht über seiner Unterkante liegt),
   geschnitten an deren Umriss (`clip_polygon`) und an der Platte **des Körpers**
-  (`_bed_outline_for`, Kante aus `_bed_extent`; ohne gezeigten Bauraum wird
-  nicht geschnitten).
+  (`_shadow_bed` über `_bed_outline_for`, Kante aus `_bed_extent`; ohne
+  gezeigten Bauraum wird nicht geschnitten).
 * **Gerechnet je Körper, nicht je Auffangfläche**: der Umriss je Stück einmal auf
   seiner Unterkante (ebene Hülle über GEOS, als `base` an
   `shadow_outline_of`), dann nur verschoben — `ground` fällt in
   `shadow_points` als Summand heraus, die Klammer `maximum(…, 0)` greift dort
-  nie. Die konvexe Hülle je Körper einmal (`_shadow_hull_of`), über
+  nie. Die konvexe Hülle je Körper einmal (`shadow_hull_of`), über
   `SHADOW_HULL_POINTS` als Stichprobe plus Extrempunkte in vierzehn Richtungen.
 * **Ein Aktor je Körper**, fester Kapazität, nur neue Punkte
   (`_show_shadow_soups`), gemerkt in `_shadow_owners`; **jeder Zug zieht den
@@ -236,8 +236,7 @@ Licht und Deckkraft wirken auf hellem und dunklem Grund verschieden; eine Zahl
 stimmt nur für ein Thema. `HEADLIGHT`: Nur das Frontlicht (von fünf,
 `LIGHT_KIT`) trifft die zugewandten Wände; auf dem dunkleren Körper des hellen
 Themas hilft nur mehr Licht (0,45 statt 0,25). `SHADOW_OPACITY`: im hellen
-Thema 0,03, so laut wie im dunklen (Entscheidung Robert). Ambient- und
-Glanzanteil sind gemessen verworfen. **Falle:** Liest die Zeichenstelle die Konstante statt des gemerkten
+Thema 0,03, so laut wie im dunklen (Entscheidung Robert). **Falle:** Liest die Zeichenstelle die Konstante statt des gemerkten
 Werts, ist das Paar wirkungslos, und ein Methodentest bleibt grün —
 `test_viewport_decisions.py` hält je Paar Richtung, Setzen in `set_theme` und
 Lesen beim Zeichnen.
@@ -510,6 +509,9 @@ regelt `zeichenflaeche.md`.
   `unavailable_hint()` nennt, was fehlt (mit `DISPLAY` die Bibliothek, ohne
   Xwayland). Wer die Plattform vor dem Aufbau liest oder setzt, auch ein
   Werkzeug in `tools/`, geht über diese Funktion.
+* **Das Eingabemodul muss im mitgelieferten Qt liegen** (RM-062): Bei Fcitx
+  oder wenn nur `XMODIFIERS` IBus nennt, setzt `prefer_an_input_method_qt_has`
+  vorher `ibus`; dessen Modul verlangt der Paketstart unter Linux.
 
 ## Was nur das Bild zeigt
 

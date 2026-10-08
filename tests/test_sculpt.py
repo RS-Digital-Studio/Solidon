@@ -24,9 +24,10 @@ import trimesh
 
 from app.core.errors import ValidationError
 from app.core.geom.intersections import crossing_face_pairs
-from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.geom.mesh_ops import uniform
 from app.core.geom.sculpt import (
+    SculptPreview,
     apply_strokes,
     stages,
     stroke_at,
@@ -1496,6 +1497,132 @@ def test_a_stroke_beside_the_mirror_plane_stays_mirror_equal(body: str, tool: st
     on_plane = points[:, 0] == 0.0
     assert on_plane.sum() > 4, "Voraussetzung: Ecken auf der Ebene"
     assert np.abs(shift[on_plane, 0]).max() < 1e-9, "Ecken auf der Ebene bleiben darauf"
+
+
+#: Der Zug aus Befund S01 (Review ``48106c57a``, RM-425): an der Kugel R 20 mit
+#: 1 280 Dreiecken, so wie ``stroke_at`` ihn an der Eckpunktnormale setzte —
+#: schräg zur Spiegelebene X, 5,3 mm daneben, mit einem Pinsel, der über sie
+#: hinausreicht.
+S01_STROKE = Stroke(
+    point=(5.32809402269135, 0.0, 19.277225269352453),
+    normal=(0.2679932314359806, -2.2264954261106484e-18, 0.9634207948266951),
+    radius=16.0,
+    strength=1.0,
+    tool="draw",
+    symmetry=1,
+)
+
+
+def _mirror_error(base: MeshData, shaped: MeshData, axis: int, middle: float) -> float:
+    """Wie weit das Ergebnis vom eigenen Spiegelbild abweicht, je Eckpunkt."""
+    points = np.asarray(base.raw.vertices, dtype=float)
+    shift = np.asarray(shaped.raw.vertices, dtype=float) - points
+    flip = np.ones(3)
+    flip[axis] = -1.0
+    return float(np.abs(shift - shift[_mirror_partner(points, axis, middle)] * flip).max())
+
+
+def test_the_slanted_s01_stroke_stays_mirror_equal(profile: Profile) -> None:
+    """S01: Der schräge Zug ließ 0,341 mm Spiegelabweichung und schob die Ebene
+    um 0,171 mm zur Seite, weil bei gleich starken Kopien die erste gewann
+    (``_strongest_copy``, entfallen mit RM-428). Geprüft am Kern, über die
+    registrierte Operation wie im Befund und an der Vorschau der Sitzung —
+    auch nach Zurücknehmen und Wiederholen des Zugs."""
+    base = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=20.0))
+    assert base.triangle_count == 1280, "Voraussetzung: der Körper aus dem Befund"
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=base)
+    session = SculptPreview(base)
+    first = session.show([S01_STROKE])
+    assert session.show([]) is base, "zurückgenommen"
+    again = session.show([S01_STROKE])
+    operation = apply_strokes(base, [S01_STROKE])
+    assert np.array_equal(np.asarray(first.raw.vertices), np.asarray(again.raw.vertices))
+    assert np.array_equal(np.asarray(again.raw.vertices), np.asarray(operation.raw.vertices))
+
+    for shaped in (
+        operation,
+        run(entry, profile, strokes=strokes_to_text([S01_STROKE]), symmetry="x").outputs[0].mesh,
+        again,
+    ):
+        points = np.asarray(base.raw.vertices, dtype=float)
+        moved = np.asarray(as_mesh_data(shaped).raw.vertices, dtype=float) - points
+        assert np.abs(moved).max() > 0.5, "der Zug wirkt"
+        assert _mirror_error(base, as_mesh_data(shaped), 0, 0.0) < 1e-9, "spiegelgleich"
+        on_plane = np.abs(points[:, 0]) < 1e-12
+        assert on_plane.sum() > 4, "Voraussetzung: Ecken auf der Ebene"
+        assert np.abs(moved[on_plane, 0]).max() < 1e-9, "die Ebene bleibt, wo sie ist"
+
+
+@pytest.mark.parametrize("tool", ["draw", "pinch"])
+@pytest.mark.parametrize("shifted", [False, True], ids=["middle", "shifted"])
+@pytest.mark.parametrize("body", ["ball", "plate", "hollow"])
+@pytest.mark.parametrize(("axis", "bit"), [(0, 1), (1, 2), (2, 4)])
+def test_a_slanted_stroke_beside_any_mirror_plane_stays_mirror_equal(
+    axis: int, bit: int, body: str, shifted: bool, tool: str
+) -> None:
+    """RM-425: S01 an drei Körpern, an jeder Achse und mit einer Spiegelmitte
+    abseits des Nullpunkts — der Zug liegt neben der Ebene, seine Richtung
+    steht schräg zu ihr, der Pinsel reicht über sie hinaus."""
+    base = {"ball": ball(), "plate": mirror_plate(), "hollow": hollow_ball()}[body]
+    if shifted:
+        moved_body = base.raw.copy()
+        moved_body.apply_translation((7.0, -3.0, 5.0))
+        base = MeshData.of(moved_body)
+    points = np.asarray(base.raw.vertices, dtype=float)
+    middle = (points.min(axis=0) + points.max(axis=0)) / 2.0
+    # Quer zur Spiegelachse eine Seite, auf der der Zug sitzt: an der Platte die
+    # Oberseite, wo sie quer liegt, sonst die Seitenfläche bei +x oder +y.
+    across = 2 if body != "plate" or axis != 2 else 0
+    if across == axis:
+        across = (axis + 1) % 3
+    normal = np.zeros(3)
+    normal[across] = 0.9634207948266951
+    normal[axis] = 0.2679932314359806
+    if body == "plate":
+        point = middle.copy()
+        point[across] = points[:, across].max()
+        point[axis] += 1.0
+    else:
+        point = middle + normal * 20.0
+    stroke = Stroke(
+        point=tuple(float(value) for value in point),  # type: ignore[arg-type]
+        normal=tuple(float(value) for value in normal),  # type: ignore[arg-type]
+        radius=8.0,
+        strength=1.0,
+        tool=tool,  # type: ignore[arg-type]
+        symmetry=bit,
+    )
+
+    shaped = apply_strokes(base, [stroke])
+
+    shift = np.asarray(shaped.raw.vertices, dtype=float) - points
+    assert np.abs(shift).max() > 1e-3, "der Zug wirkt"
+    assert _mirror_error(base, shaped, axis, float(middle[axis])) < 1e-9, "spiegelgleich"
+    on_plane = np.abs(points[:, axis] - middle[axis]) < 1e-12
+    assert on_plane.sum() > 4, "Voraussetzung: Ecken auf der Ebene"
+    assert np.abs(shift[on_plane, axis]).max() < 1e-9, "Ecken auf der Ebene bleiben darauf"
+
+
+def test_an_old_stroke_near_the_mirror_plane_keeps_acting_twice(profile: Profile) -> None:
+    """Ein gespeicherter Schritt von vor RM-378 (``mirror_once`` aus) wirkt an
+    der Ebene weiter doppelt — der S01-Zug hebt die Kugel um 1,226 mm, bitgleich
+    mit der Probe am Stand ``48106c57a``, und bleibt spiegelgleich. Ein neuer
+    Schritt hebt sie um die Höhe eines Zugs (gemessen 1,049 mm)."""
+    base = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=20.0))
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=base)
+    text = strokes_to_text([S01_STROKE])
+
+    old = as_mesh_data(
+        run(entry, profile, strokes=text, symmetry="x", mirror_once=False).outputs[0].mesh
+    )
+    new = as_mesh_data(run(entry, profile, strokes=text, symmetry="x").outputs[0].mesh)
+
+    before = np.asarray(base.raw.vertices, dtype=float)
+    lift_old = float(np.linalg.norm(np.asarray(old.raw.vertices) - before, axis=1).max())
+    lift_new = float(np.linalg.norm(np.asarray(new.raw.vertices) - before, axis=1).max())
+    assert lift_old == pytest.approx(1.2264798851468122, abs=1e-9)
+    assert 0.9 <= lift_new <= 1.1 < lift_old
+    assert _mirror_error(base, old, 0, 0.0) < 1e-9
 
 
 def _top_row(base: MeshData, shaped: MeshData) -> tuple[np.ndarray, np.ndarray]:

@@ -1,6 +1,6 @@
 # Kürzere CI-Läufe bei unverändertem Prüfvertrag
 
-Stand: 24.09.2026, Nachweis in §7 vom 06.10.2026. Von Robert beauftragt: erst dieses Konzept, danach die
+Stand: 24.09.2026, Nachweis in §7 vom 06.10.2026, CI-09 vom 07.10.2026. Von Robert beauftragt: erst dieses Konzept, danach die
 vollständige Umsetzung. Der laufende Umsetzungs- und Abnahmestand gehört in
 `ROADMAP.md`; dieses Dokument beschreibt Entscheidungen und Nachweise.
 
@@ -49,6 +49,7 @@ Kernjob frühestens fertig ist, gleich wie viele Worker er hat.
 | CI-06 | Berichte nennen Auswahl, echte Prozessausgänge, Testzahlen und Zeiten; auch bei Fehlern werden vorhandene Berichte hochgeladen. | Berichtstests und `always()`-Artefaktschritte |
 | CI-07 | Gemeinsame Vorbereitung verändert keine Eingabe eines anderen Tests. Determinismus vergleicht weiterhin zwei unabhängig gebaute Ergebnisse. | Kopien für veränderliche Daten, unveränderte Zusicherungen und gezielte Gegenproben |
 | CI-08 | Laufzeitgewinn wird nur für einen abgeschlossenen vergleichbaren Lauf behauptet. Lokales Entwicklungstor und Release-Abnahme bleiben getrennt. | Nachweis mit Commit, Plattform, Befehl, Exit und Berichtspfad |
+| CI-09 | Vor dem Merge nach main und vor dem Release laufen die von der Änderung betroffenen Fenstertests auf Windows, Linux, Apple Silicon und Intel-Mac und die betroffenen Slicertests mit echten, fest versionierten und per Prüfsumme belegten Slicern auf Linux, Apple Silicon und Intel-Mac (Entscheidung Robert, 07.10.2026). Die Auswahl folgt dem Importgraphen; Unterlagen, `konzepte/` und Sprachkataloge lösen der Kosten wegen nichts aus, außer dem Markdown, das die Anwendung selbst liest (`READ_BY_THE_APPLICATION`). Die Fensterauswahl teilt ihre Auswahlen je Plattform gleichmäßig auf drei Läufer (Matrix `shard` 0–2, Auswahl i auf Teil i mod 3). Eine leere Auswahl, ein fehlendes Programm oder ein übersprungener Slicertest ist rot. | `tools/ci_selection.py` mit `tests/test_slicer_selection.py`; `fenster-auswahl.yml` und `slicer-auswahl.yml` mit ihren Verträgen in `tests/test_packaging.py` und `tests/test_supply_chain.py` |
 
 Änderungen an diesen Zusagen benötigen eine bewusste Fortschreibung dieses
 Konzepts und der zuständigen Regeldatei. Tests dürfen nicht gestrichen,
@@ -103,6 +104,25 @@ Fensterprozesses steht zugleich im CI-Protokoll, je Datei als einklappbare
 Gruppe, eine rote Datei als Anmerkung am Lauf, die Übersicht im
 Schrittbericht: Ein Bericht, der nur als Artefakt existiert, fehlt genau
 dann, wenn der Job an seiner Frist endet.
+
+Vor dem Merge nach main (CI-09) bestimmt `tools/ci_selection.py` aus dem
+Diff des Zweigs gegen main die betroffenen Testdateien über denselben
+Importgraphen wie `tools/affected_tests.py`, ohne Unterlagen und Kataloge
+(außer dem Markdown, das die Anwendung liest),
+und gibt zwei Semikolonlisten aus: je Datei die Fenster- und Rendererfälle
+(`--window-group windowed`) für `fenster-auswahl.yml` und die Fälle mit
+Marker `slicer` (`-m slicer`) für `slicer-auswahl.yml`. Beide Workflows
+starten nur von Hand auf dem Zweig und fahren je Auswahl einen Prozess; die
+Fensterauswahl verteilt die Auswahlen je Plattform auf drei Läufer, die
+höchstens eine Auswahl auseinanderliegen, und ein Teil ohne Auswahl ist grün. Der
+Slicerworkflow installiert nur die Programme, die die gewählten Fälle über
+`pytest.mark.slicer(<programm>)` verlangen — AppImages und ein
+Herstellerpaket unter Linux, PrusaSlicer als Flatpak auf festem Commit, DMGs
+unter macOS —, jedes mit fester Version und SHA-256; sie werden aufgerufen,
+nie mitgeliefert (Regel 15). `SOLIDON_REQUIRE_SLICERS` macht ein fehlendes
+Programm zum Fehler, und der JUnit-Bericht jeder Auswahl muss Fälle und
+keinen übersprungenen enthalten. Windows deckt das lokale Tor, das dieselben
+Fälle fährt, wenn der Slicer installiert ist.
 
 Der Versionswächter ohne Constraints läuft nur bei öffentlichen `v*`-Tag-Pushes
 oder beim ausdrücklichen Handstart mit `check_latest` im öffentlichen

@@ -1,0 +1,632 @@
+{
+ "model": "qwen3:14b",
+ "root": "F:/ki-529",
+ "window": 32768,
+ "results": [
+  {
+   "id": "move",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Die Platte wurde um 10 mm nach rechts verschoben. Die neue Position liegt jetzt von x -30,0 bis 50,0 mm, y bleibt -25,0 bis 25,0 mm, z bleibt -4,0 bis 4,0 mm. Der Elefantenfuß von 4,0 mm in der z-Richtung bleibt unverändert.",
+   "seconds": 54.0,
+   "requests": [
+    {
+     "seconds": 24.29,
+     "in": 11048,
+     "out": 459,
+     "load_s": 0.03,
+     "prompt_s": 3.37,
+     "tools": 189
+    },
+    {
+     "seconds": 22.56,
+     "in": 11138,
+     "out": 499,
+     "load_s": 0.02,
+     "prompt_s": 0.06,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15092, 96",
+   "stopped": ""
+  },
+  {
+   "id": "rotate",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "rotate_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Die Rotation um 90 Grad um die Z-Achse wurde erfolgreich durchgeführt, und das Objekt ist nun innerhalb des Druckbereichs.",
+   "seconds": 57.9,
+   "requests": [
+    {
+     "seconds": 32.47,
+     "in": 10578,
+     "out": 667,
+     "load_s": 0.01,
+     "prompt_s": 3.11,
+     "tools": 189
+    },
+    {
+     "seconds": 24.89,
+     "in": 10670,
+     "out": 491,
+     "load_s": 0.85,
+     "prompt_s": 0.06,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15084, 45",
+   "stopped": ""
+  },
+  {
+   "id": "on_bed",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "place_on_bed"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Teil ist jetzt korrekt auf dem Druckbett positioniert, und die Bohrungen sind mit dem Nenndurchmesser von 5,20 mm eingepasst. Keine weitere Aktion erforderlich, da die Bohrungen bereits gemäß Materialprofil toleriert sind und das Objekt druckbereit ist.",
+   "seconds": 49.7,
+   "requests": [
+    {
+     "seconds": 22.82,
+     "in": 10145,
+     "out": 420,
+     "load_s": 0.03,
+     "prompt_s": 2.43,
+     "tools": 189
+    },
+    {
+     "seconds": 26.17,
+     "in": 10222,
+     "out": 561,
+     "load_s": 0.03,
+     "prompt_s": 0.05,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15156, 96",
+   "stopped": ""
+  },
+  {
+   "id": "scale",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "scale_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Objekt wurde um 20 % skaliert, jetzt 96 × 60 × 9,6 mm.",
+   "seconds": 33.3,
+   "requests": [
+    {
+     "seconds": 20.81,
+     "in": 9711,
+     "out": 470,
+     "load_s": 0.02,
+     "prompt_s": 2.26,
+     "tools": 189
+    },
+    {
+     "seconds": 11.4,
+     "in": 9796,
+     "out": 180,
+     "load_s": 0.02,
+     "prompt_s": 0.05,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15072, 47",
+   "stopped": ""
+  },
+  {
+   "id": "repair",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "repair"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Modell wurde repariert, und die Prüfung zeigte keine offenen Stellen mehr. Die Bohrungen sind Teil des Designs und nicht als Fehler zu betrachten.",
+   "seconds": 61.2,
+   "requests": [
+    {
+     "seconds": 20.2,
+     "in": 10069,
+     "out": 473,
+     "load_s": 0.15,
+     "prompt_s": 2.36,
+     "tools": 189
+    },
+    {
+     "seconds": 39.52,
+     "in": 10148,
+     "out": 398,
+     "load_s": 1.19,
+     "prompt_s": 0.05,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15330, 96",
+   "stopped": ""
+  },
+  {
+   "id": "orient",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "orient_for_print",
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "Der Teil ist jetzt optimal ausgerichtet und auf dem Druckbett positioniert, um den Stützbedarf zu minimieren.",
+   "seconds": 101.2,
+   "requests": [
+    {
+     "seconds": 17.32,
+     "in": 9807,
+     "out": 215,
+     "load_s": 0.02,
+     "prompt_s": 2.23,
+     "tools": 189
+    },
+    {
+     "seconds": 18.63,
+     "in": 9887,
+     "out": 415,
+     "load_s": 0.03,
+     "prompt_s": 0.05,
+     "tools": 189
+    },
+    {
+     "seconds": 36.61,
+     "in": 10306,
+     "out": 529,
+     "load_s": 0.16,
+     "prompt_s": 0.97,
+     "tools": 189
+    },
+    {
+     "seconds": 27.41,
+     "in": 10392,
+     "out": 636,
+     "load_s": 0.01,
+     "prompt_s": 0.06,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15085, 9",
+   "stopped": ""
+  },
+  {
+   "id": "split",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "split_pinned"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 1,
+   "steps": 3,
+   "error": "",
+   "answer": "Das Teil wurde erfolgreich an der halben Höhe geteilt. Es sind jetzt zwei Objekte, obj_2 und obj_3, vorhanden. Gibt es etwas weiteres, das Sie mit diesen Objekten tun möchten?",
+   "seconds": 100.3,
+   "requests": [
+    {
+     "seconds": 28.71,
+     "in": 9425,
+     "out": 577,
+     "load_s": 0.04,
+     "prompt_s": 2.07,
+     "tools": 189
+    },
+    {
+     "seconds": 39.31,
+     "in": 9509,
+     "out": 239,
+     "load_s": 0.09,
+     "prompt_s": 0.06,
+     "tools": 189
+    },
+    {
+     "seconds": 31.67,
+     "in": 10685,
+     "out": 290,
+     "load_s": 0.02,
+     "prompt_s": 0.52,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15098, 14",
+   "stopped": ""
+  },
+  {
+   "id": "drill",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole"
+   ],
+   "parameters": 0,
+   "calls": 9,
+   "invalid": 1,
+   "steps": 9,
+   "error": "",
+   "answer": "",
+   "seconds": 457.9,
+   "requests": [
+    {
+     "seconds": 53.45,
+     "in": 11536,
+     "out": 1654,
+     "load_s": 0.08,
+     "prompt_s": 3.66,
+     "tools": 189
+    },
+    {
+     "seconds": 51.84,
+     "in": 11747,
+     "out": 842,
+     "load_s": 0.24,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 33.53,
+     "in": 11877,
+     "out": 865,
+     "load_s": 0.02,
+     "prompt_s": 0.09,
+     "tools": 189
+    },
+    {
+     "seconds": 28.96,
+     "in": 12038,
+     "out": 554,
+     "load_s": 0.02,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 61.28,
+     "in": 12203,
+     "out": 1249,
+     "load_s": 0.06,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 52.83,
+     "in": 12372,
+     "out": 1498,
+     "load_s": 0.01,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 42.51,
+     "in": 12541,
+     "out": 1363,
+     "load_s": 0.02,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 52.08,
+     "in": 12714,
+     "out": 1443,
+     "load_s": 0.38,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 74.07,
+     "in": 12887,
+     "out": 1880,
+     "load_s": 20.77,
+     "prompt_s": 5.1,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15087, 15",
+   "stopped": "tokens"
+  },
+  {
+   "id": "drill_on_feature",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "duplicate_feature"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 1,
+   "steps": 3,
+   "error": "",
+   "answer": "Die Bohrung wurde erfolgreich neben hole_1 am Objekt obj_1 hinzugefügt. Es wurde eine neue Bohrung mit den gleichen Eigenschaften wie hole_1 erstellt. \n\nWenn Sie weitere Anpassungen oder zusätzliche Bohrungen benötigen, können Sie dies gerne mitteilen.",
+   "seconds": 101.6,
+   "requests": [
+    {
+     "seconds": 60.36,
+     "in": 11286,
+     "out": 2209,
+     "load_s": 0.02,
+     "prompt_s": 3.57,
+     "tools": 189
+    },
+    {
+     "seconds": 30.53,
+     "in": 11377,
+     "out": 1184,
+     "load_s": 0.06,
+     "prompt_s": 0.13,
+     "tools": 189
+    },
+    {
+     "seconds": 9.99,
+     "in": 11472,
+     "out": 320,
+     "load_s": 0.03,
+     "prompt_s": 0.13,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15103, 13",
+   "stopped": ""
+  },
+  {
+   "id": "duplicate",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 0,
+   "error": "Das Sprachmodell hat nicht geantwortet.: {\"error\":\"an error was encountered while running the model: CUDA error: out of ",
+   "answer": "",
+   "seconds": 91.0,
+   "requests": [],
+   "lookups": 0,
+   "gpu": "15132, 14",
+   "stopped": ""
+  },
+  {
+   "id": "parameter",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": true,
+   "ops": [],
+   "parameters": 1,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Die Plattenbreite ist nun als Projektparameter `plate_width` mit einem Wert von 80 mm definiert. Änderungen an diesem Parameter werden die Breite der Platte automatisch anpassen.",
+   "seconds": 45.5,
+   "requests": [
+    {
+     "seconds": 35.89,
+     "in": 9196,
+     "out": 628,
+     "load_s": 14.9,
+     "prompt_s": 3.59,
+     "tools": 189
+    },
+    {
+     "seconds": 9.19,
+     "in": 9279,
+     "out": 193,
+     "load_s": 2.4,
+     "prompt_s": 0.14,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "1142, 35",
+   "stopped": ""
+  },
+  {
+   "id": "question",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Die Platte ist 8,0 mm dick. \n\nDies ergibt sich direkt aus den angegebenen Abmessungen von obj_1 (80,0 × 50,0 × 8,0 mm), wobei die dritte Zahl die Höhe (und damit die Dicke) angibt.",
+   "seconds": 8.8,
+   "requests": [
+    {
+     "seconds": 8.48,
+     "in": 9189,
+     "out": 254,
+     "load_s": 0.02,
+     "prompt_s": 0.09,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15108, 13",
+   "stopped": ""
+  },
+  {
+   "id": "printable",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "place_on_bed"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "Das Teil lässt sich gut drucken: Keine Überhangflächen, keine Stützen nötig, und die erste Schicht ist vollflächig (3915 mm²) für gute Haftung.",
+   "seconds": 49.0,
+   "requests": [
+    {
+     "seconds": 17.37,
+     "in": 10488,
+     "out": 491,
+     "load_s": 0.02,
+     "prompt_s": 2.76,
+     "tools": 189
+    },
+    {
+     "seconds": 11.07,
+     "in": 10590,
+     "out": 308,
+     "load_s": 0.02,
+     "prompt_s": 1.51,
+     "tools": 189
+    },
+    {
+     "seconds": 7.44,
+     "in": 10667,
+     "out": 198,
+     "load_s": 0.02,
+     "prompt_s": 0.06,
+     "tools": 189
+    },
+    {
+     "seconds": 12.41,
+     "in": 10770,
+     "out": 350,
+     "load_s": 1.27,
+     "prompt_s": 0.17,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15112, 13",
+   "stopped": ""
+  },
+  {
+   "id": "how_long",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der Druck des Objekts dauert ungefähr 32 Minuten und benötigt etwa 18 g Material (14,4 cm³). Dieses Schätzung berücksichtigt keine Stützen oder Haftungshilfen, die je nach Orientierung hinzugefügt werden könnten.",
+   "seconds": 22.8,
+   "requests": [
+    {
+     "seconds": 14.02,
+     "in": 9720,
+     "out": 139,
+     "load_s": 0.04,
+     "prompt_s": 1.53,
+     "tools": 189
+    },
+    {
+     "seconds": 8.46,
+     "in": 9824,
+     "out": 265,
+     "load_s": 0.02,
+     "prompt_s": 0.13,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "",
+   "stopped": ""
+  }
+ ]
+}
