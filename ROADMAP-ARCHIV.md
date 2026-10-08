@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)](#rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026) |
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
 | 2026-10-07 | [RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)](#rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026) |
@@ -44205,3 +44206,31 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)
+
+<a id="rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026"></a>
+<a id="rm-546"></a>
+
+**RM-546 — *Merkmal drehen* um die eigene Achse einer runden Bohrung tut nichts und sagt es
+nicht.** Gefunden am 06.10.2026 beim Review von RM-441 (Claude): Eine Durchgangsbohrung Ø 5
+mit Achse +Z, um `axis="z"` um 45° gedreht, liefert denselben Körper und keinen Befund; nur
+`angle=0` meldet `rotate_feature.unchanged`. Das widerspricht „Eine Operation, die nichts
+bewirkt hat, sagt das“ (`.claude/rules/operationen.md`), und das Modell erfährt nicht, dass der
+Schritt wirkungslos war. **Fix:** Bildet die Drehung das Werkzeug auf sich selbst ab
+(Drehachse gleich Merkmalsachse durch die Mitte, rotationssymmetrische Art), denselben Befund
+mit *Diesen Schritt ändern* am Feld `axis` geben; `cache_version` erhöhen. **Abnahme:** Test an
+Bohrung, Zapfen und Senkung je Kern; ein Langloch bleibt drehbar. Bauplan §2.7.
+
+**Nachweis (08.10.2026, `8601cf9e5`, Paket G):** `prepare_ops._turned_onto_itself` fragt
+nach dem Winkel null die gedrehte Achse: Liegt sie mit demselben Vorzeichen wieder auf der
+alten (Schranke `1 − EPS_GEOM` wie am Ring in `_rotate_torus`) und beim Langloch die
+Mittellinie parallel, kommt der Eingang unverändert zurück, mit `rotate_feature.unchanged` und
+*Diesen Schritt ändern* am Feld `axis` (um die eigene Achse) oder `angle` (volle Umdrehung um
+eine andere). Ein Langloch liegt erst nach einer halben Umdrehung wieder auf sich und bleibt
+sonst drehbar. `cache_version` 11. Tests in `tests/test_feature_moves_keep_shape.py`:
+`test_a_turn_onto_itself_changes_nothing_and_says_so` (Bohrung, Zapfen, Senkung je Kern, um z
+45° und um x 360°, 12 Fälle) und
+`test_a_slot_turned_about_its_own_axis_turns_and_a_half_turn_lies_on_itself` (eine
+Vierteldrehung stellt das Langloch quer, Sollpunkte aus den Maßen) — am Basisstand 14 von 14
+rot. `test_finding_ways.py` führt das Feld je Stelle. Umgesetzt von Claude.
