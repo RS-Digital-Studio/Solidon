@@ -3830,6 +3830,45 @@ def test_every_handling_carries_its_explanation_behind_one_sign(qt_app: QApplica
         )
 
 
+def test_a_click_on_the_sign_opens_the_manual_where_the_handling_is_explained(
+    qt_app: QApplication,
+) -> None:
+    """RM-554: Das i schlägt das Handbuch auf, der Tooltip bleibt beim Darüberfahren.
+
+    Robert, 08.10.2026: Am i neben *Baustein verschieben* erschien beim Klick
+    nur der Tooltip. Jetzt meldet der Klick Seite und Stelle aus
+    :func:`app.core.manual.help_for_action`, dieselbe Quelle wie F1 im
+    Operationsdialog; das Fenster schlägt dort auf.
+    """
+    from PySide6.QtWidgets import QToolButton
+
+    from app.core import manual
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    available = features.detect(mesh)
+    panel.show_feature(identifier, feature, features=available, mesh=mesh)
+    asked: list[tuple[str, str]] = []
+    panel.manualRequested.connect(lambda page, spot: asked.append((page, spot)))
+
+    keys = {page.key for page in manual.pages()}
+    rows = [row for row in panel._built if fields(row)]
+    assert rows, "ohne Handlungen mit Feldern prüft dieser Test nichts"
+    for row in rows:
+        dot = next(
+            widget for widget in row.findChildren(QToolButton) if widget.objectName() == "infoDot"
+        )
+        assert dot.toolTip(), "der Tooltip bleibt"
+        asked.clear()
+        dot.click()
+        assert len(asked) == 1, "ein Klick, ein Aufschlagen"
+        page, spot = asked[0]
+        assert page in keys, f"{page} gibt es im Handbuch nicht"
+        if spot:
+            assert spot[1:] in dict(manual.reference_anchors(page))
+
+
 def test_the_wheel_over_an_unfocused_field_rolls_the_panel_and_not_the_value(
     qt_app: QApplication,
 ) -> None:

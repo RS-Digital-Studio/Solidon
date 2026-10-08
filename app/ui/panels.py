@@ -87,7 +87,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.core import expressions
+from app.core import expressions, manual
 from app.core.action_effects import effect_worth_showing, side_effect
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
@@ -8021,6 +8021,10 @@ MEASURED_WHILE_MOVED: Final[frozenset[str]] = frozenset({"pin", "cone", "sphere"
 #: einem zum anderen wandern kann (``MainWindow._hand_the_measures_over``).
 FIELD_PROPERTY: Final = "featureField"
 
+#: Seite und Stelle im Handbuch, die das i einer Handlung aufschlägt (RM-554).
+MANUAL_PAGE_PROPERTY: Final = "manualPage"
+MANUAL_SPOT_PROPERTY: Final = "manualSpot"
+
 
 def feature_field(
     field: Any,
@@ -8940,6 +8944,8 @@ class FeaturePanel(QWidget):
     stehen; ein Schlüsselloch ohne seinen Schlitz ist ein Loch."""
     fitRequested = Signal(str, object)
     stepEditRequested = Signal(int)
+    manualRequested = Signal(str, str)
+    """Das Handbuch auf Seite und Stelle, die eine Handlung erklären — das i (RM-554)."""
     stepSelectionChanged = Signal()
     sketchRequested = Signal(str, bool)
     """Auf dieser Fläche zeichnen — ``True`` heißt: um auszuschneiden (Befund
@@ -10572,6 +10578,13 @@ class FeaturePanel(QWidget):
             # Sichtbar bleibt es, wenn gleich ein Text kommt: aus- und wieder
             # einblenden wäre zwei Wechsel im sichtbaren Fenster für nichts.
             _set_shown(row.dot, bool(_explained(action)))
+            page, spot = manual.help_for_action(
+                getattr(action, "op", None),
+                removes_a_step=getattr(action, "op", None) is None
+                and getattr(action, "step", None) is not None,
+            )
+            row.dot.setProperty(MANUAL_PAGE_PROPERTY, page)
+            row.dot.setProperty(MANUAL_SPOT_PROPERTY, spot)
             # **Jede Handlung hat eine Erklärung.** Drei Quellen in dieser
             # Reihenfolge: der Satz zur Lage (``note``, „Bohrung und Senkung
             # gehen gemeinsam"), der Grund der Handlung, und zuletzt der
@@ -10854,8 +10867,17 @@ class FeaturePanel(QWidget):
         dot.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         dot.setCursor(Qt.CursorShape.WhatsThisCursor)
         dot.setVisible(False)
+        # **Der Klick schlägt das Handbuch auf** (RM-554, Robert 08.10.2026):
+        # Vorher zeigte er nur noch einmal den Tooltip. Welche Seite, setzt
+        # :meth:`_fill_row` je Handlung, auch an einer wiederverwendeten Zeile.
+        dot.clicked.connect(weak_slot(self, FeaturePanel._open_manual_at, dot))
         row.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
         return dot
+
+    def _open_manual_at(self, dot: QToolButton) -> None:
+        page = dot.property(MANUAL_PAGE_PROPERTY)
+        if page:
+            self.manualRequested.emit(str(page), str(dot.property(MANUAL_SPOT_PROPERTY) or ""))
 
     def _extend_explanation(self, box: QWidget, text: str) -> None:
         """Nimmt einen weiteren Absatz hinter dasselbe Info-Zeichen.

@@ -255,6 +255,8 @@ Stellen halten das, beide sind nötig:
   die Mindestbreite des Inhalts und meldet sie mit `tell_the_zone` bis zur
   Karte, sonst steht sie einige Runden zu schmal; Auswahlfelder baut
   `column_choice`, sonst verlangt ihr längster Eintrag die Spalte.
+- **Das i einer Handlung** zeigt beim Darüberfahren ihren Satz, der Klick
+  öffnet `manual.help_for_action` (RM-554).
 - **Ein Feld einer Merkmalsart steht nur an ihr** (`perceive.actions._carried_by`):
   die Steigung am Gewinde, nicht an der Bohrung.
 - **Eine Anzahl ist keine Länge** (`count`, `steps`, `holes`):

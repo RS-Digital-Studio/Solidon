@@ -2488,6 +2488,24 @@ def test_the_start_screen_opens_the_manual(window: MainWindow) -> None:
     assert window._manual.isVisible()
 
 
+def test_the_sign_at_a_handling_opens_the_manual_on_its_page(window: MainWindow) -> None:
+    """RM-554: Das i an *Baustein verschieben* schlägt das Handbuch dort auf, wo der Baustein steht.
+
+    Das Merkmalfenster meldet Seite und Stelle; das Fenster öffnet das
+    Handbuch wie F1 im Operationsdialog.
+    """
+    from app.core import manual
+
+    page, spot = manual.help_for_action("insert_screw_hole")
+    window.feature_panel.manualRequested.emit(page, spot)
+
+    assert window._manual is not None
+    assert window._manual.isVisible()
+    shown = window._manual.current_page()
+    assert shown is not None and shown.key == page
+    window._manual.close()
+
+
 def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
     """Nach dem ersten Start waren die sieben Beispiele unerreichbar.
 

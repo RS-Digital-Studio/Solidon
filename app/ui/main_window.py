@@ -3179,6 +3179,7 @@ class MainWindow(QMainWindow):
         self.feature_panel.stepEditRequested.connect(self._edit_panel_step)
         self.feature_panel.stepSelectionChanged.connect(self._drop_feature_preview)
         self.feature_panel.stepRemoveRequested.connect(self._remove_part_step)
+        self.feature_panel.manualRequested.connect(self.action_manual)
         # **Die eine Kundengeste der Trennen-Serie** (T8, RM-080): „Diese
         # Fläche soll schön bleiben." Kein Operationsweg — die Sperre steht im
         # Dokument und wirkt in der Suche, nicht im Verlauf.

@@ -380,7 +380,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Unter dem Modell die Werkzeugzeile:** *Schnitt*, *Messen*, *Bewegen*, "
             "*Analyse*, *Schichten*, *Explosion* und *Teilen*, der Reihe nach auf Alt+1 "
             "bis Alt+7. Nur *Bewegen* und *Teilen* ändern das Modell, jeweils als "
-            "Schritt im Verlauf; die anderen sehen nur hin.\n\n"
+            "Schritt im Verlauf. Die anderen sehen nur hin.\n\n"
             "**Links** stehen Objekte, Parameter, Verlauf und Filamente, jeder Abschnitt "
             "einklappbar. Unter jedem Körper im Objektbaum steht, was die Erkennung darin "
             "gefunden hat.\n\n"
@@ -396,7 +396,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "hinein.\n\n"
             "**Wer es anders gewohnt ist, stellt um.** Die Einstellungen bieten vier "
             "weitere Belegungen nach Cura, Bambu Studio, Orca und PrusaSlicer, CAD und "
-            "Blender; dort wählt die linke Taste wieder aus, und die Tastatur fliegt "
+            "Blender. Dort wählt die linke Taste wieder aus, und die Tastatur fliegt "
             "nicht. Eine 3D-Maus (SpaceMouse) fährt dieselbe Kamera: Schieben verschiebt "
             "das Teil, Drehen dreht es, Ziehen holt es näher, eine Gerätetaste passt "
             "alles ein. Geschwindigkeit und Richtung stehen in den Einstellungen, sobald "
@@ -404,7 +404,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "reagiert](manual:spacemouse-access).\n\n"
             "**Rechts daneben drei Reiter:** *Auswahl*, *Prüfbericht* und *Chat*. Beim "
             "Zeichnen kommt einer für die Bedingungen dazu, in der Tour einer für ihre "
-            "Schritte. F9 blendet den ganzen Bereich aus; dann hat das Modell den Platz, "
+            "Schritte. F9 blendet den ganzen Bereich aus. Dann hat das Modell den Platz, "
             "und die Statusleiste zählt die offenen Befunde. Beide Karten lassen sich "
             "am Griff oben rechts verschieben, mit der Maus oder den Pfeiltasten. Ein "
             "Doppelklick auf den Griff oder *Ansicht → Karten an ihren Platz* legt sie "
@@ -417,13 +417,15 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Alle weiteren stehen in Gruppen "
             "darunter, und ein Suchfeld findet jede. Ohne Auswahl stehen dort die "
             "Handlungen für alle Körper, etwa *Druckoptimal ausrichten*. Der Knopf "
-            "*Bausteine* öffnet den Katalog. Was der Reiter an einem Merkmal zeigt, "
+            "*Bausteine* öffnet den Katalog. Das i neben einer Handlung sagt beim "
+            "Darüberfahren, was sie tut. Ein Klick darauf öffnet ihre Stelle im Handbuch. "
+            "Was der Reiter an einem Merkmal zeigt, "
             "steht in [Was Solidon im Modell erkennt](manual:features).\n\n"
             "**Der Prüfbericht** springt bei einer neuen Meldung nicht nach vorn. Sein "
             "Reiter zählt Fehler (X) und Warnungen (!) und blinkt einige Sekunden, rot "
             "bei einem Fehler, gelb bei einer Warnung. Getönt bleibt er, bis Sie den "
             "Bericht angesehen haben. Gleiche Meldungen stehen in einer Zeile, ihre Zahl "
-            "in Klammern davor; ein Klick wählt alle betroffenen Teile, und eine Handlung "
+            "in Klammern davor. Ein Klick wählt alle betroffenen Teile, und eine Handlung "
             "fragt, für welche davon sie gelten soll.\n\n"
             "**Ein Menü für die Auswahl gibt es nicht.** Die Menüleiste behält, was ohne "
             "Auswahl geht. Tastenkürzel gelten weiter, und die Befehlspalette findet jede "
@@ -2498,6 +2500,27 @@ def help_for(operation: str, registry: Registry | None = None) -> tuple[str, str
             return guide.key, ""
     spec = (registry or REGISTRY).get(operation)
     return reference_key(spec.category), f"#{operation_anchor(spec.name)}"
+
+
+#: Wo das Handbuch eine Handlung ohne Operation erklärt: eine gesperrte Zeile
+#: des Merkmalfensters bei den Merkmalen, das Entfernen eines Schritts beim
+#: Verlauf.
+FEATURES_PAGE: Final = "features"
+HISTORY_PAGE: Final = "history"
+
+
+def help_for_action(
+    operation: str | None, *, removes_a_step: bool = False, registry: Registry | None = None
+) -> tuple[str, str]:
+    """Seite und Stelle hinter dem i einer Handlung im Merkmalfenster (RM-554).
+
+    Mit Operation dieselbe Antwort wie F1 im Operationsdialog
+    (:func:`help_for`). Ohne steht die Zeile gesperrt mit ihrem Grund da oder
+    nimmt einen Schritt heraus; dafür gibt es eine Themenseite.
+    """
+    if operation and (registry or REGISTRY).has(operation):
+        return help_for(operation, registry)
+    return (HISTORY_PAGE if removes_a_step else FEATURES_PAGE), ""
 
 
 def titled(page: Page, text: str) -> str:
