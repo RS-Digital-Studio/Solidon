@@ -88,6 +88,15 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
+| [RM-553 — Die Karte der Tour ist zu niedrig, Schritttexte werden abgeschnitten](#rm-553) | Bedienung und Darstellung | Robert, 08.10.: Karte bei voller Fensterhöhe zu klein, der nächste Schritt hängt als Sprechblase über der Ansicht; Höhe aus dem Inhalt rechnen |
+| [RM-554 — Das i an einer Kartengruppe zeigt nur einen Tooltip statt der Handbuchseite](#rm-554) | Bedienung und Darstellung | Robert, 08.10.: Klick öffnet die passende Handbuchseite, der Tooltip bleibt |
+| [RM-555 — *Baustein verschieben*: Position Y hat keinen fx-Knopf, X und Z haben einen](#rm-555) | Bedienung und Darstellung | Robert, 08.10.: Ursache am Feld klären, jedes Zahlenfeld mit Ausdruck zeigt fx gleich |
+| [RM-556 — Filamente aus der linken Spalte in die Kopfleiste](#rm-556) | Bedienung und Darstellung | Robert, 08.10.: Knopf oben, Klick zeigt die Filamente des Projekts und den Weg ins Filamentlager |
+| [RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet lange](#rm-557) | Bedienung und Darstellung | Robert, 08.10.: eine Farbänderung färbt sofort um, ohne die Geometrie neu zu rechnen |
+| [RM-558 — Nach dem Einsetzen eines Bausteins bleibt ein Maßfeld „Y … mm“ in der Ansicht stehen](#rm-558) | Bedienung und Darstellung | Robert, 08.10. (Bild): Feld verschwindet mit dem Einsetzen |
+| [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Robert, 08.10.: Start, Gegenecke in X/Y, Höhe in Z; ein Weg; Ablauf vorher mit bedienlogik |
+| [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
+| [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Robert, 08.10.: je Werkzeug ein Weg, wenige Schritte, keine verschachtelten Modi; Klicks vorher und nachher zählen |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge und Quelltexte durchgesehen und behoben (04.10., `871cc29e6`), Handbuch und Stempel mit 0.5.3 erzeugt; offen allein die Fensterabnahme der längeren Knopfnamen auf 1280 px (RM-213) |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Gegenprobe liest Export- und Slicerdateien zurück, Nebenfolge je Handlung aus dem Kern, Folge je Befund, Kandidatenprüfung nennt nur Neues und Behobenes, NM 1–11 ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
@@ -138,6 +147,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-533 — Entf tut an der Auswahl still nichts](#rm-533) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`): Entf im Reiter *Auswahl*, Felder behalten die Taste, bei Halt oder Sperre der Grund mit dem Titel aus `_removal_entry`; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-538 — Rechtsklick mit Entfernen und Vereinigen, Entf an mehreren Körpern, Aushöhlen an der Fläche, verschiebbare Karten](#rm-538) | Kundenrückmeldungen | Auf main mit `377069520` (Merge `f4960774a`), drei Durchsichten; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung](#rm-536) | Kundenrückmeldungen | Kundenwunsch, Auftrag ausgearbeitet; gebaut wird nach dem Merge von RM-532 auf main |
+| [RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen](#rm-562) | Kundenrückmeldungen | Kunden-E-Mail 07.10. und Robert 08.10.: Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter ohne Trägerkörper |
+| [RM-563 — Verrunden an mehreren Kanten zugleich wählen](#rm-563) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: Mehrfachauswahl von Kanten und Ecken fand der Kunde nicht; Bestand prüfen, Weg bauen oder zeigen |
+| [RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher nennen](#rm-564) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: qwen3:14b auf M3 nach 30 min bei Schritt 4 von 12, ComfyUI wollte weitere Dutzende GB; Systemanforderungen der Website (16 GB) abgleichen |
+| [RM-565 — *Auswahl als Baustein speichern* nimmt den gewählten Körper](#rm-565) | Kundenrückmeldungen | Robert, 07.10.: Körper wählen, Bausteinkatalog öffnen, *Speichern* |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -3971,6 +3984,86 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `split_and_retry` und eine Reparatur davor: keine Zeile „gelöscht“, jeder lebende Schritt
   einmal unter seiner sichtbaren Nummer, im Fenster wie im Steckbrief. Bauplan §15.4.
 
+<a id="rm-553"></a>
+
+- [ ] **RM-553 — Die Karte der Tour ist zu niedrig, Schritttexte werden abgeschnitten.** Robert,
+  08.10.2026, Bildschirmfoto bei 2000 × 816: Die Tour-Karte rechts oben ist nur wenige Zeilen
+  hoch, Schritt 2 steht abgeschnitten darunter, und der Hinweis zum nächsten Schritt hängt als
+  Sprechblase quer über der Ansicht und überdeckt den Kartentext. **Abnahme:** Fenstertest mit
+  dem längsten Schritttext jeder Tour in allen sechs Sprachen bei 1366 × 768 und 1920 × 1080:
+  jeder Schritt ganz lesbar oder rollbar, die Sprechblase überdeckt keinen Kartentext.
+
+<a id="rm-554"></a>
+
+- [ ] **RM-554 — Das i an einer Kartengruppe zeigt nur einen Tooltip statt der
+  Handbuchseite.** Robert, 08.10.2026: Am i neben *Baustein verschieben* erscheint beim
+  Klick nur der Tooltip („Durchgangsloch zum Verschrauben …“). **Soll:** Ein Klick öffnet das
+  Handbuch auf der Seite, die diese Gruppe erklärt; der Tooltip bleibt beim Darüberfahren.
+  **Abnahme:** Wächter, dass jedes i auf eine vorhandene Handbuchseite zeigt; Fenstertest
+  Klick → Handbuch auf dieser Seite.
+
+<a id="rm-555"></a>
+
+- [ ] **RM-555 — *Baustein verschieben*: Position Y hat keinen fx-Knopf, X und Z haben
+  einen.** Robert, 08.10.2026, Bildschirmfoto: X trägt `=10-@breite/2`, Z `=-@staerke`, beide
+  mit fx; Y steht auf 0,00 mm ohne fx und ohne Weg zu einem Ausdruck. **Soll:** Jedes
+  Zahlenfeld, das einen Ausdruck annimmt, zeigt fx gleich, ob es schon einen trägt oder nicht.
+  **Abnahme:** Ursache am Feld belegt; Wächter über die Positionsfelder aller Bausteine und
+  Operationen; Fenstertest: Y bekommt per fx einen Ausdruck und rechnet ihn.
+
+<a id="rm-556"></a>
+
+- [ ] **RM-556 — Filamente aus der linken Spalte in die Kopfleiste.** Robert, 08.10.2026: Die
+  Gruppe *Filamente* unten links wandert als Knopf in die obere Leiste. Ein Klick öffnet eine
+  kleine Liste der Filamente, die das Projekt verwendet, und darunter den Weg ins
+  Filamentlager. **Abnahme:** linke Spalte ohne Filamente, Knopf in der Kopfleiste innerhalb
+  der Oberflächengrenzen (`test_interface_limits`), Fenstertest für Liste und Wechsel ins
+  Lager, Handbuch und Abbildungen nachgezogen.
+
+<a id="rm-557"></a>
+
+- [ ] **RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon
+  rechnet lange.** Robert, 08.10.2026: Der Wechsel lädt spürbar, und danach zeigt die Ansicht
+  noch die alte Farbe. Es ändert sich nur die Farbe. **Soll:** Die Ansicht färbt sofort um;
+  die Geometrie wird nicht neu gerechnet. Ist die Zuordnung ein Schritt im Dokument (Regel 2),
+  trifft die Auswertung ihren Zwischenspeicher, und die Farbe steht trotzdem sofort.
+  **Abnahme:** Test zählt beim Farbwechsel null neue Netzberechnungen; Fenstertest: neue Farbe
+  im ersten Bild nach dem Wechsel; Strg+Z stellt die alte Farbe wieder her.
+
+<a id="rm-558"></a>
+
+- [ ] **RM-558 — Nach dem Einsetzen eines Bausteins bleibt ein Maßfeld „Y … mm“ in der Ansicht
+  stehen.** Robert, 08.10.2026, Bildschirmfoto: Nach dem Einsetzen der Rastdrehscheibe steht
+  über der Ansicht weiter das Eingabefeld „Y 60,62 mm“. **Abnahme:** Nach Einsetzen,
+  Übernehmen und Abbrechen steht kein Maßfeld mehr; Fenstertest an einem Baustein mit
+  Platzierung.
+
+<a id="rm-559"></a>
+
+- [ ] **RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als
+  Ausschnitt.** Robert, 08.10.2026: Ein Quader entsteht mit drei Klicks in der Ansicht: der
+  erste setzt den Anfang auf Bett oder Fläche, der zweite die Gegenecke in X und Y, der dritte
+  die Höhe in Z. Auf einem Körper wird er angefügt oder ausgeschnitten. Einfach halten, ein
+  Weg, keine Modi. Das Ergebnis ist ein Schritt mit Maßen, die sich danach ändern lassen
+  (Regel 2). **Abnahme:** Ablauf vorher mit `bedienlogik`, Klicks gezählt; Geometrietest;
+  Fenstertest mit drei Klicks; Strg+Z nimmt ihn als einen Schritt zurück; Handbuch.
+
+<a id="rm-560"></a>
+
+- [ ] **RM-560 — *Formen* arbeitet schwach.** Robert, 08.10.2026: „Formen ist ziemlich
+  schlecht von der Funktion.“ Erst am echten Fenster messen, was nicht trägt (Wirkung der
+  Pinsel, Ansprechen, Tempo, Ergebnis am Netz), dann überarbeiten. **Abnahme:** Befundliste
+  mit Messwerten; vorher und nachher am echten Fenster an einem Korpusmodell; Tests der
+  geänderten Pinsel.
+
+<a id="rm-561"></a>
+
+- [ ] **RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient.** Robert,
+  08.10.2026: „keine komplizierten Bedienungen, nicht mehrere Wege“. **Soll:** Je Werkzeug ein
+  Weg zu jeder Aufgabe, wenige Schritte, keine verschachtelten Modi. **Abnahme:** `bedienlogik`
+  zählt die Klicks je Hauptaufgabe vorher und nachher; kein zweiter Weg zur selben Sache;
+  Fenstertests der neuen Abläufe; Handbuch.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -5070,3 +5163,39 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `plate_countersunk.stl`, `plate_countersunk_blind.stl` und einer Bohrung mit
   `insert_printed_thread`, Sollwerte mit Herkunft, Gegenprobe; eine alte Projektdatei mit Stift
   rechnet unverändert.
+
+<a id="rm-562"></a>
+
+- [ ] **RM-562 — Bausteine, die für sich ein Teil sind, als eigenen Körper einsetzen.**
+  Kunden-E-Mail vom 07.10.2026 und Robert, 08.10.2026: Kabelclip, Eckwinkel, Versteifungsrippe,
+  Standfuß, Wandhalter und weitere sind eigenständige Teile, lassen sich aber nur an einen
+  gewählten Körper anfügen. **Soll:** Jeder Baustein, der allein ein Körper sein kann, wird
+  ohne Auswahl als neues Objekt eingesetzt; welche das sind, sagt der Baustein selbst.
+  **Abnahme:** Liste je Baustein mit Begründung; Test: jeder eigenständige setzt ohne Auswahl
+  ein wasserdichtes Objekt; Fenstertest im Bausteinkatalog; Handbuch.
+
+<a id="rm-563"></a>
+
+- [ ] **RM-563 — Verrunden an mehreren Kanten zugleich wählen.** Kunden-E-Mail vom
+  07.10.2026: Der Kunde fand keine Mehrfachauswahl von Kanten und Ecken für *Verrunden*.
+  Zuerst prüfen, was es gibt; fehlt der Weg, wird er gebaut, gibt es ihn, wird er sichtbar.
+  **Abnahme:** Strg- oder Umschalt-Klick wählt mehrere Kanten, *Verrunden* nimmt alle als einen
+  Schritt, am Netz wie am exakten Körper; Handbuch nennt den Weg; Fenstertest.
+
+<a id="rm-564"></a>
+
+- [ ] **RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher
+  nennen.** Kunden-E-Mail vom 07.10.2026, MacBook mit M3 und 512 GB: qwen3:14b über Ollama
+  stand nach 30 Minuten bei Schritt 4 von 12; ComfyUI verlangte für ein Winkeleisen aus einem
+  Bild weitere Dutzende Gigabyte. **Soll:** Vor der Einrichtung nennt Solidon Platzbedarf und
+  erwartete Dauer für diesen Rechner und schlägt auf Apple Silicon ein passendes Modell vor;
+  die Systemanforderungen der Website (16 GB) stimmen mit den echten Modellen überein.
+  **Abnahme:** Messung des Chat-Modells auf einem M-Chip (Runner `macos-latest`); der
+  Einrichtungsdialog nennt die Größe vor dem Herunterladen; Website-Text gegen die Messung.
+
+<a id="rm-565"></a>
+
+- [ ] **RM-565 — *Auswahl als Baustein speichern* nimmt den gewählten Körper.** Robert,
+  07.10.2026: Körper wählen, Bausteinkatalog öffnen, *Speichern* — ohne Umweg über die
+  Verlaufsschritte. **Abnahme:** Fenstertest; der gespeicherte Baustein setzt denselben Körper
+  wieder ein; Handbuch „Eigene Bausteine“ nachgezogen.
