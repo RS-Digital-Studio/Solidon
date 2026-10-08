@@ -17,6 +17,7 @@ eine Quote, kein Bestanden.
 from __future__ import annotations
 
 import argparse
+import statistics
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -34,6 +35,7 @@ from app.core.backends.llm import (
 )
 from app.core.bootstrap import load_operations
 from app.core.knowledge import profiles
+from app.core.knowledge.parts.ops import part_of
 from app.core.registry import menu_twins
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, ProjectSources, new_project
@@ -277,9 +279,28 @@ def main() -> int:
     ]
     print(f"{backend.id}:{backend.model} — {len(cases)} Anfragen\n")
 
+    # **Der erste Schritt je Fall ist ``TURN_TOKENS``** (``backends/llm.py``): Am
+    # Ollama-Transport mitgezählt, was jede Antwort ohnehin als
+    # ``prompt_eval_count`` mitbringt; ein gehostetes Modell zählt hier nicht.
+    counted: list[int] = []
+    transport = getattr(backend, "transport", None)
+    if transport is not None:
+
+        def counting(*args: object, **kwargs: object) -> object:
+            answer = transport(*args, **kwargs)
+            if isinstance(answer, dict) and answer.get("prompt_eval_count"):
+                counted.append(int(answer["prompt_eval_count"]))
+            return answer
+
+        backend.transport = counting  # type: ignore[attr-defined]
+    firsts: list[int] = []
+
     outcomes = []
     for case in cases:
+        counted.clear()
         outcome = run_case(case, backend)
+        if counted:
+            firsts.append(counted[0])
         outcomes.append(outcome)
         marker = "ok " if outcome.good else "-- "
         detail = outcome.error or ", ".join(outcome.operations) or "keine Operation"
@@ -313,8 +334,10 @@ def main() -> int:
     # wurden die Hauptmaße zu Parametern?
     building = [entry for entry in outcomes if entry.case.expects_part]
     if building:
+        # Ein eigenständiger Baustein entsteht über ``create_…`` (RM-562); er ist
+        # genauso ein Baustein wie das Einsetzen an einer Fläche.
         used_parts = sum(
-            1 for entry in building if any(name.startswith("insert_") for name in entry.operations)
+            1 for entry in building if any(part_of(name) is not None for name in entry.operations)
         )
         print(f"Baustein statt eigener Geometrie: {used_parts}/{len(building)}")
     wanted_parameters = [entry for entry in outcomes if entry.case.expects_parameter]
@@ -328,6 +351,11 @@ def main() -> int:
     if lookups:
         print(f"Felder nachgefordert (keine Werkzeugaufrufe): {lookups}")
     print(f"Schritte im Mittel: {sum(e.steps for e in outcomes) / max(len(outcomes), 1):.1f}")
+    if firsts:
+        print(
+            f"erster Schritt (TURN_TOKENS): Median {statistics.median(firsts):.0f} Token, "
+            f"höchstens {max(firsts)}, {len(firsts)} Fälle"
+        )
     return 0 if good == len(outcomes) else 1
 
 

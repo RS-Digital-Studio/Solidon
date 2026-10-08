@@ -2518,7 +2518,11 @@ PROMPT_TOKENS: Final = 8886
 #: Suite (qwen3:14b, Endstand ``2c34c2a7``, 39 Fälle): Median des ersten
 #: Schritts 9 061, höchstens 10 886 (Durchsicht 0.5.1). Mit der Grundlast
 #: geschätzt, sagte der Prozessorhinweis rund ein Viertel zu wenig Minuten.
-TURN_TOKENS: Final = 9061
+#: Am 08.10.2026 mit 201 Werkzeugen (Review zu RM-562, Zweig
+#: ``paket/b-bausteine``) derselbe Lauf, jetzt mit eigener Ausgabe von
+#: ``tools/run_agent_suite.py --backend ollama --model qwen3:14b``: Median
+#: 11 126, höchstens 12 009, 39 Fälle, Ollama 0.35.1.
+TURN_TOKENS: Final = 11126
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
