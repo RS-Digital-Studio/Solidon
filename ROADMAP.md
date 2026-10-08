@@ -152,6 +152,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-544 — Zoll- und Rohrgewinde: G/BSP, UNC und UNF in jedem Gewindeweg](#rm-544) | Kundenrückmeldungen | Entschieden (Robert, 06.10.): alle Gewindearten samt Einstellung der Auswahllisten; baut auf RM-532 (jedes Maß) und RM-536 (Stift für Bohrung) auf |
 | [RM-563 — Verrunden an mehreren Kanten zugleich wählen](#rm-563) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: Mehrfachauswahl von Kanten und Ecken fand der Kunde nicht; Bestand prüfen, Weg bauen oder zeigen |
 | [RM-564 — KI auf Apple Silicon und mit wenig Speicher: Dauer und Platzbedarf vorher nennen](#rm-564) | Kundenrückmeldungen | Kunden-E-Mail 07.10.: qwen3:14b auf M3 nach 30 min bei Schritt 4 von 12, ComfyUI wollte weitere Dutzende GB; Systemanforderungen der Website (16 GB) abgleichen |
+| [RM-574 — Eigene Bausteine als eigener Körper einsetzen (Rezept-Erzeuger mit Namensschutz)](#rm-574) | Kundenrückmeldungen | Aus dem Review zu RM-565: ein gespeichertes Rezept lässt sich nur an einen Körper setzen, in einem leeren Projekt gar nicht |
+| [RM-578 — Mitgelieferte Bausteine bekommen alle Normgrößen: die 512er-Grenze des Bereichstests gilt nur für eigene Bausteine](#rm-578) | Kundenrückmeldungen | Entscheidung Robert, 08.10.: Grenze des Nachweises nach Rechenzeit, Rohrschelle, Wandhalter, Profilklemmen und Halter mit allen Größen der Tabelle |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
 
 ## Filamentlager
@@ -5280,3 +5282,32 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   großen Läufer oder einem echten Mac — der GitHub-Läufer `macos-latest` hat 7 GB, qwen3:14b
   braucht rund 9 GB; ein kleineres Modell darf zusätzlich auf `macos-latest` gemessen werden.
   Der Einrichtungsdialog nennt die Größe vor dem Herunterladen; Website-Text gegen die Messung.
+
+<a id="rm-574"></a>
+
+- [ ] **RM-574 — Eigene Bausteine als eigener Körper einsetzen (Rezept-Erzeuger mit
+  Namensschutz).** Review zu RM-565, 08.10.2026: Ein gespeichertes Rezept ist genau ein Körper,
+  wird aber nur eingesetzt (`insert_<name>`); in einem leeren Projekt lässt es sich gar nicht
+  setzen, mit einem einzigen Körper hängt es an diesem. **Soll:** Ein Rezept bekommt wie die
+  eigenständigen Bausteine einen Erzeuger (`create_<name>`), und der Katalog setzt es ohne
+  passende Stelle als eigenen Körper. Berührt das Rezeptregister an rund zehn Stellen
+  (Ersetzen, Entfernen samt Quarantäne, Beilagen, Umbenennung im Entwurf, `available_name`,
+  `part_file`) und braucht einen Namensschutz gegen `create_box` und Verwandte.
+  **Abnahme:** Ein Rezept entsteht im leeren Projekt als eigener Körper; ein Rezeptname, dessen
+  Erzeugername schon vergeben ist, wird beim Speichern abgewiesen; Ersetzen, Entfernen und
+  Weitergeben tragen den Erzeuger mit; Fenstertest im Katalog.
+
+<a id="rm-578"></a>
+
+- [ ] **RM-578 — Mitgelieferte Bausteine bekommen alle Normgrößen: die 512er-Grenze des
+  Bereichstests gilt nur für eigene Bausteine.** Entscheidung Robert, 08.10.2026: „wenn wir mehr
+  liefern können, wollen wir das“. **Soll:** `range_check.MAX_CORNERS` = 512 bleibt die Grenze
+  für eigene Bausteine des Kunden (der Dialog nennt vor dem Prüfen die geschätzte Dauer); für
+  die mitgelieferte Bibliothek richtet sich die Grenze nach der Rechenzeit des Nachweises
+  (`tools/check_part_ranges.py --jobs`), die volle Prüfung ohne Stichprobe bleibt (§24.3).
+  Danach Rohrschelle (Klemmschrauben ab M3 bis zur Tabelle von Mutter und Scheibe, mindestens
+  M8), Wandhalter (bis M64, soweit sinnvoll), Profilklemmen (über M33), Halter und jede Stelle,
+  deren Kommentar sich auf `MAX_CORNERS` beruft. Wo eine große Größe nicht trägt, sagt es der
+  Befund mit Vorschlag. **Abnahme:** Bereichsnachweis mit `--jobs 6`, Laufzeit im Bericht;
+  `LIBRARY_VERSION` und `PartChange`, wo sich Maße ändern; Handbuch, Website-Zusagen „zur
+  gewählten Normgröße“, Register und Archiv.

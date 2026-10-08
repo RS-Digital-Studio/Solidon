@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Container, Iterable, Mapping
+from collections.abc import Container, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final, cast, overload
 
 from app.core.errors import (
@@ -267,21 +267,61 @@ def creation_name(part: str) -> str:
     return f"create_{part}" if spec.standalone else op_name(part)
 
 
-def catalog_operation(part: str, *, at: str | None) -> str:
+#: Welche Merkmalsart als welche Stelle zählt. Eine gerundete Seite trägt einen
+#: Flächenbaustein, wie das Handbuch es verspricht (Review M3); der Einsetzweg
+#: nimmt jedes Merkmal mit Mitte und Richtung.
+_PLACES: Final = {"face": "face", "curved_face": "face", "hole": "hole"}
+
+
+def catalog_operation(part: str, *, at: Sequence[str] = ()) -> str:
     """Was der Katalog für diesen Baustein ausführt (RM-562).
 
-    ``at`` ist die Art des gewählten Merkmals (``face``, ``hole`` …) oder
-    ``None``. Ein eigenständiger Baustein setzt sich an eine gewählte Stelle,
-    an die er gehört (``_applies_to``); sonst entsteht er als eigener Körper,
-    eine Schraube an einer Fläche also frei. **Ein gewählter Körper allein
-    zählt nicht als Stelle**: Jeder Erzeugerschritt wählt seinen neuen Körper,
-    und der zweite Kabelclip hinge sonst am ersten. Die übrigen Bausteine
-    werden immer eingesetzt.
+    ``at`` sind die Arten der gewählten Merkmale (``face``, ``hole`` …), eine
+    je markierter Zeile. Ein eigenständiger Baustein setzt sich an, wenn
+    **jede** gewählte Stelle zu ihm passt (:func:`fitting_places`) — vier
+    markierte Seitenflächen ergeben vier Rippen in einem Schritt (Review M2);
+    sonst entsteht er als eigener Körper, eine Schraube an einer Fläche also
+    frei. **Ein gewählter Körper allein zählt nicht als Stelle**: Jeder
+    Erzeugerschritt wählt seinen neuen Körper, und der zweite Kabelclip hinge
+    sonst am ersten. Die übrigen Bausteine werden immer eingesetzt.
     """
     spec = PARTS.get(part)
-    if not spec.standalone or (at is not None and at in _applies_to(spec)):
+    fits = fitting_places(part)
+    if not spec.standalone or (at and all(_PLACES.get(kind) in fits for kind in at)):
         return op_name(part)
     return creation_name(part)
+
+
+def fitting_places(part: str) -> tuple[str, ...]:
+    """Die Arten von Stellen, an die dieser Baustein gehört — ``face``, ``hole``."""
+    return tuple(_applies_to(PARTS.get(part)))
+
+
+def free_spot_for(part: str, objects: Sequence[SceneObject], profile: Profile) -> dict[str, float]:
+    """Wohin ein eigenständiger Baustein aus dem Katalog kommt, wenn schon Körper stehen.
+
+    Ohne Lage entsteht ein Erzeuger im Ursprung — dort, wo meist der erste
+    Grundkörper steht, und eine Rippe lag dann ganz in ihm (Review M1). Die
+    Stelle sucht dieselbe Regel wie beim Laden eines weiteren Modells
+    (``prepare.first_free_spot``), für den Umriss mit den Vorgaben; gibt der
+    Baustein ohne Zeichnung keinen Umriss her, gilt ein kleiner Platzhalter.
+    Zurück kommen die Ortsfelder des Erzeugers, leer ohne vorhandene Körper.
+    """
+    from app.core.geom.prepare import first_free_spot
+    from app.core.types import BoundingBox
+
+    if not objects:
+        return {}
+    spec = PARTS.get(part)
+    if any(entry.required for entry in spec.params.spec()):
+        footprint = BoundingBox(minimum=(-5.0, -5.0, 0.0), maximum=(5.0, 5.0, 10.0))
+    else:
+        footprint = placement_tools(spec, {}, profile, standalone=True)[0].bounds
+    shift, _plate, _crowded = first_free_spot(
+        footprint, profile, [(entry.mesh.bounds, entry.plate) for entry in objects]
+    )
+    fields = placement_fields(build_params(spec, standalone=True))
+    return {fields["x"]: float(shift[0]), fields["y"]: float(shift[1])}
 
 
 def part_of(operation: str) -> PartSpec | None:
@@ -343,6 +383,24 @@ def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams
     for name, annotation, declaration in (*_PLACEMENT, *_SURFACE_BINDING):
         if standalone and name == "at_feature":
             continue
+        if standalone and name == "at_features":
+            # Ein Erzeuger setzt an kein Merkmal. Das Feld bleibt, damit ein
+            # gespeicherter Schritt mit einer Liste darin weiter lädt, steht aber
+            # weder im Dialog noch beim Agenten und fällt bei der nächsten
+            # Änderung weg (Review B, Feld ohne Wirkung).
+            declaration = param(
+                title=_("An mehreren Merkmalen"),
+                kind="features",
+                default=(),
+                placement="advanced",
+                internal=True,
+                dropped_on_change=True,
+                doc=_(
+                    "Mehrere erkannte Merkmale auf einmal. Der Baustein wird an jedes "
+                    "davon gesetzt — ein Schritt im Verlauf, ein Strg+Z. Leer heißt: "
+                    "es gilt das einzelne Merkmal darüber."
+                ),
+            )
         name = names.get(name, name)
         namespace["__annotations__"][name] = annotation
         # Dataclass setzt Field.name beim Aufbau. Geteilte Deklarationen
@@ -562,7 +620,7 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
     schema = build_params(spec, standalone=True)
     # exact:1 — eine Vorlage entsteht exakt, wo der Kern da ist (RM-443); ein
     # Ergebnis von davor wäre ein Netz.
-    # guards:3 — ohne Träger steht er auf dem Bett und rollt wie seine Merkmale (RM-562).
+    # guards:3 — ohne Träger steht er auf dem Bett, ein Mündungsbaustein kopfüber (RM-562).
     version = f"{_result_version(spec)}:guards:3" + (":exact:1" if _creates_exactly(spec) else "")
 
     @register_op(
@@ -591,23 +649,17 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
         direction = _free_direction(ctx.params)
         turned, sink = _on_its_own_bed(spec, ctx.params, produced.mesh, direction)
         solid = _solid_of(produced.mesh) if exact else None
+        # **Das Netz rollt hier ohne ``keeps_up``, die Merkmale mit** — so rechnete
+        # der Erzeuger schon immer. Der einzige eigenständige Baustein mit
+        # ``keeps_up`` ist die Rohrschelle, und sie ist unter der halben Drehung
+        # symmetrisch; rollte das Netz mit, tauschten ihre erkannten Flächen in
+        # alten Projekten die Kennung, und ein Schritt an ``face_1`` träfe die
+        # Gegenseite (Review G1, Entscheidung des Koordinators).
+        # ``test_every_creator_keeps_its_old_placement`` hält beides fest.
         placed: Mesh = (
-            _place_solid(
-                solid,
-                ctx.params,
-                sink=sink,
-                direction=turned,
-                keeps_up=spec.keeps_up,
-                cancelled=ctx.cancelled,
-            )
+            _place_solid(solid, ctx.params, sink=sink, direction=turned, cancelled=ctx.cancelled)
             if solid is not None
-            else _place(
-                as_mesh_data(produced.mesh),
-                ctx.params,
-                sink=sink,
-                direction=turned,
-                keeps_up=spec.keeps_up,
-            )
+            else _place(as_mesh_data(produced.mesh), ctx.params, sink=sink, direction=turned)
         )
         features = _placed_features(
             produced, spec, ctx.params, (0.0, 0.0, 0.0), sink, turned, spec.keeps_up, False
@@ -1684,6 +1736,7 @@ EXACT_PARTS: Final = frozenset(
         "printed_thread",
         "printed_screw",
         "printed_nut",
+        "threaded_rod",
         # Mechanik
         "barrel_hinge",
         "bayonet",

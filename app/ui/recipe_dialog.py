@@ -26,7 +26,7 @@ Schritten spürbar lange (§2.8).
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from itertools import pairwise
 from typing import Any
 
@@ -52,7 +52,7 @@ from app.core.errors import AppError, FileWriteError, InternalError
 from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
-from app.core.types import Document, Feature, Profile, measure_status
+from app.core.types import Document, Feature, ObjectId, Profile, measure_status
 from app.i18n import tr
 from app.ui.dialogs import problem_text
 from app.ui.labels import (
@@ -510,6 +510,33 @@ def scope_text(op_ids: tuple[int, ...], total: int, bodies: tuple[str, ...] = ()
     )
 
 
+def slice_problem(
+    document: Document,
+    op_ids: tuple[int, ...],
+    chosen: Mapping[ObjectId, str],
+    names: Mapping[ObjectId, str],
+) -> str:
+    """Der Satz, wenn der Ausschnitt nicht genau einen Körper ergibt — sonst leer.
+
+    Genannt wird jeder weitere Körper mit dem Schritt, aus dem er kommt; ist
+    ein Körper gewählt, sind es die anderen. Ohne Fenster prüfbar.
+    """
+    bodies = recipes.slice_bodies(document, op_ids)
+    if len(bodies) <= 1:
+        return ""
+    others = [name for name in bodies if name not in chosen] or list(bodies)[1:]
+    listed = ", ".join(
+        str(tr("„{name}“ aus Schritt {step}").format(name=names.get(name, name), step=bodies[name]))
+        for name in others
+    )
+    return str(
+        tr(
+            "Mit im Ausschnitt: {others}. Ein Baustein ist genau ein Körper. Vereinen Sie die "
+            "Körper oder wählen Sie die Schritte im Verlauf."
+        ).format(others=listed)
+    )
+
+
 class RecipeDialog(QDialog):
     """Fragt, was aus dem Ausschnitt ein Baustein macht — und legt ihn an.
 
@@ -536,7 +563,8 @@ class RecipeDialog(QDialog):
         profile: Profile,
         parent: QWidget | None = None,
         origin: Any = None,
-        bodies: tuple[str, ...] = (),
+        bodies: Mapping[ObjectId, str] | None = None,
+        names: Mapping[ObjectId, str] | None = None,
     ) -> None:
         super().__init__(parent)
         self._height = ContentHeight()
@@ -635,7 +663,16 @@ class RecipeDialog(QDialog):
         # der ganze Stapel. Jetzt gibt es beides, und welches von beidem gilt,
         # sah der Kunde nirgends: Eine Vorgabe, die stillschweigend greift, ist
         # eine Vermutung (§2.4). Der Satz nennt deshalb auch den Normalfall.
-        self.scope = QLabel(scope_text(op_ids, len(document.ops), bodies), self)
+        chosen = dict(bodies or {})
+        # **Mehr als ein Körper wird vor dem Ausfüllen gesagt** (Review H1): Die
+        # lebenden Ausgänge des Ausschnitts stehen ohne Rechnung fest, und ein
+        # Baustein ist genau einer. Vorher kam die Absage nach dem Ausfüllen,
+        # unter einer Kopfzeile, die „den gewählten Körper“ versprach.
+        self._slice_problem = slice_problem(document, op_ids, chosen, names or {})
+        shown = scope_text(op_ids, len(document.ops), tuple(chosen.values()))
+        self.scope = QLabel(
+            f"{shown} {self._slice_problem}" if self._slice_problem else shown, self
+        )
         self.scope.setWordWrap(True)
         self.scope.setAccessibleName(tr("Umfang des Bausteins"))
 
@@ -980,6 +1017,7 @@ class RecipeDialog(QDialog):
         taken = bool(title) and taken_name(_identifier(title))
         self._save.setEnabled(
             bool(title)
+            and not self._slice_problem
             and named
             and adjustable
             and ordered
@@ -1037,6 +1075,8 @@ class RecipeDialog(QDialog):
         """
         if self._checking:
             return str(tr("Der Baustein wird gerade geprüft — einen Augenblick."))
+        if self._slice_problem:
+            return self._slice_problem
         if not self.title.text().strip():
             return str(tr("Der Baustein braucht einen Namen."))
         if not adjustable:

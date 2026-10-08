@@ -120,9 +120,14 @@ abträgt — Letzteres weist das Register ab. **Eine gewählte Stelle, an die er
 gehört, setzt an, ein gewählter Körper nicht** (`ops.catalog_operation`): Jeder Erzeuger wählt
 seinen Körper, und der zweite Clip hinge sonst am ersten. Ohne Träger gibt es
 nur die aufgesetzte Form; eine abtragende Wahl muss genau ihre Vorgabe als
-aufgesetzte Form übrig lassen, und kein Feld darf an ihr hängen. Der Körper
-steht auf der Ebene seines Ursprungs, ein Mündungsbaustein kopfüber
-(`_on_its_own_bed`). `test_every_standalone_part_makes_a_watertight_body_without_a_selection`
+aufgesetzte Form übrig lassen, und kein Feld darf an ihr hängen. Seine
+Unterseite liegt auf der Ebene seines Ursprungs (`_on_its_own_bed`); **nur
+ohne Richtung und mit Achse Z ist das das Bett**, und ein Mündungsbaustein
+steht dann kopfüber. Mit Achse X oder einer Richtung dreht diese Ebene mit,
+wie bei jedem Erzeuger zuvor; aufs Bett bringt ihn *Auf das Bett setzen*. Ein alter Erzeugerschritt rechnet gleich, samt Flächenkennungen
+(`test_every_creator_keeps_its_old_placement`). Aus dem Katalog kommt er auf
+eine freie Stelle der Platte (`ops.free_spot_for`).
+`test_every_standalone_part_makes_a_watertight_body_without_a_selection`
 prüft jeden.
 
 ## Was vereinigt wird, kann nur weiter werden

@@ -163,7 +163,13 @@ from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.knowledge import calibration, filaments, print_settings, profiles
-from app.core.knowledge.parts.ops import catalog_operation, creation_name, direction_of, part_of
+from app.core.knowledge.parts.ops import (
+    catalog_operation,
+    creation_name,
+    direction_of,
+    free_spot_for,
+    part_of,
+)
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.knowledge.parts.recipe import steps_of
 from app.core.log import get_logger
@@ -3032,6 +3038,9 @@ class MainWindow(QMainWindow):
         self.object_tree.set_theme(self.settings.theme)
         self.parameters = ParameterPanel(self)
         self.history_panel = HistoryPanel(self)
+        self._steps_chosen_last = False
+        """Ob die Markierung im Verlauf jünger ist als die Körperwahl im Baum (Review G7)."""
+        self.history_panel.list.itemSelectionChanged.connect(self._history_selection_changed)
         self.history_panel.operationActivated.connect(self.edit_operation)
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
@@ -10073,9 +10082,8 @@ class MainWindow(QMainWindow):
         # stehen frei (``standalone``). Sie sperrt nicht — der Weg über eine
         # eingetragene Position bleibt —, aber sie sagt es vorher statt als
         # Fehler danach (Robert, 29.08.2026).
-        catalog.set_feature_chosen(
-            self.object_tree.selected_feature() is not None, self.selected_feature_kind()
-        )
+        kinds = self._selected_place_kinds()
+        catalog.set_feature_chosen(bool(kinds), kinds)
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
         catalog.shareRequested.connect(lambda: self._share_part(catalog))
         catalog.adoptRequested.connect(lambda: self._adopt_part(catalog))
@@ -10098,13 +10106,21 @@ class MainWindow(QMainWindow):
                 return
             name = catalog.chosen()
             if name:
-                spec = REGISTRY.get(catalog_operation(name, at=self.selected_feature_kind()))
+                spec = REGISTRY.get(catalog_operation(name, at=self._selected_place_kinds()))
                 lone = self._lone_body()
                 if spec.consumes and not self.object_tree.selected_objects() and lone:
                     # Genau ein Körper ist keine Frage (RM-356): Der Katalog
                     # hat den Baustein für ihn freigegeben, also gilt er ihm.
                     self.object_tree.select_object(lone)
-                self.run_operation(spec)
+                # Ein eigener Körper kommt auf eine freie Stelle der Platte, nicht
+                # in den Grundkörper im Ursprung (Review M1).
+                result = self.session.last_result
+                spot = (
+                    free_spot_for(name, tuple(result.scene.objects.values()), self.session.profile)
+                    if not spec.consumes and result is not None
+                    else {}
+                )
+                self.run_operation(spec, spot or None)
         finally:
             # Die sechs Lambdas aus :meth:`_make_catalog` fangen das Fenster,
             # und der Katalog ist sein Kind: Ohne Freigeben hält jede Öffnung
@@ -10801,10 +10817,16 @@ class MainWindow(QMainWindow):
         # und der Bereichstest war trotzdem grün, denn drei Schritte ergeben
         # auch einen Körper.
         whole = tuple(op.id for op in document.ops)
-        chosen = self.history_panel.selected_operations()
-        bodies = () if chosen else self.object_tree.selected_objects()
+        # Die Markierung im Verlauf gilt, wenn sie die jüngere Wahl ist (Review G7):
+        # Ein Klick auf einen Befund markiert seinen Schritt, und ein danach im
+        # Baum gewählter Körper ist dann gemeint.
+        marked = self.history_panel.selected_operations()
+        tree = self.object_tree.selected_objects()
+        chosen = marked if marked and (self._steps_chosen_last or not tree) else ()
+        bodies = () if chosen else tree
         if bodies:
-            chosen = steps_of(document, bodies)
+            chosen = steps_of(document, bodies, self.session.step_needs())
+        names = {key: str(entry.name) for key, entry in result.scene.objects.items()}
         dialog = RecipeDialog(
             document,
             dict(self.session.project.sources),
@@ -10812,11 +10834,8 @@ class MainWindow(QMainWindow):
             self._result_features(bodies),
             self.session.profile,
             parent=catalog,
-            bodies=tuple(
-                str(result.scene.objects[body].name)
-                for body in bodies
-                if body in result.scene.objects
-            ),
+            bodies={body: names.get(body, body) for body in bodies},
+            names=names,
             # **Kam dieses Dokument aus einem Baustein, sagt es der Dialog**
             # (E6): Er belegt Titel, Gruppe, Maße und Merkmale daraus vor, und
             # sein Knopf heißt dann „Baustein ersetzen". Ein gewöhnliches
@@ -10835,6 +10854,10 @@ class MainWindow(QMainWindow):
         finally:
             dialog.release()
             dialog.deleteLater()
+
+    def _history_selection_changed(self) -> None:
+        """Markierte Schritte sind die jüngere Wahl, bis wieder ein Körper gewählt wird."""
+        self._steps_chosen_last = bool(self.history_panel.selected_operations())
 
     def _result_features(self, bodies: Sequence[ObjectId] = ()) -> tuple[Feature, ...]:
         """Jedes erkannte und erzeugte Merkmal des gerechneten Standes — oder dieser Körper.
@@ -11574,6 +11597,27 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(selected)
         feature = entry.features.get(feature_id) if entry else None
         return feature.kind if feature is not None else None
+
+    def _selected_place_kinds(self) -> tuple[str, ...]:
+        """Die Arten der gewählten Stellen — eine je markierter Zeile (Review M2).
+
+        Eine Zeile gibt ihre eine Art (:meth:`selected_feature_kind`), auch wenn
+        sie eine Senkung mit ihrer Bohrung bündelt. Mehrere Zeilen geben je
+        Merkmal die Art: Vier markierte Seitenflächen sind vier Stellen.
+        """
+        single = self.selected_feature_kind()
+        if single is not None:
+            return (single,)
+        result = self.session.last_result
+        if result is None:
+            return ()
+        kinds: list[str] = []
+        for object_id, feature_id in self.object_tree.selected_features():
+            entry = result.scene.objects.get(object_id)
+            feature = entry.features.get(feature_id) if entry is not None else None
+            if feature is not None:
+                kinds.append(feature.kind)
+        return tuple(kinds)
 
     def selection_label(self) -> str:
         """Wie die Auswahl heißt — ``Halter`` oder ``Halter · Oberseite``.
@@ -23383,7 +23427,9 @@ class MainWindow(QMainWindow):
         if entry is None:
             return {}
         feature_sets = [
-            parameter for parameter in spec.params.spec() if parameter.kind == "features"
+            parameter
+            for parameter in spec.params.spec()
+            if parameter.kind == "features" and not parameter.internal
         ]
         # **Eine Liste schlägt das Einzelfeld erst, wenn sie führt oder wirklich
         # mehrere Zeilen gewählt sind** (09.09.2026). Seit die Bausteine
@@ -26492,6 +26538,8 @@ class MainWindow(QMainWindow):
         dem Merkmalsempfänger, der als zweiter kommt und die Auswahl dann
         vollständig kennt.
         """
+        if object_id is not None:
+            self._steps_chosen_last = False
         self._on_selection(object_id, settle_actions=False)
 
     def _on_selection(

@@ -921,6 +921,8 @@ PART_CASES = {
     "printed_nut": ({"size": "M5"}, "greater", 4.7),
     "printed_screw": ({"size": "M5", "length": 12.0, "countersunk": False}, "greater", 5.0 + 12.0),
     "printed_thread": ({"size": "M6", "length": 8.0, "internal": False}, "greater", None),
+    # Der Bolzen steht so hoch, wie er lang ist (Gewindebolzen, Robert 08.10.2026).
+    "threaded_rod": ({"size": "M6", "length": 20.0, "thread_length": 6.0}, "greater", 20.0),
     "profile_clamp_liner": (
         {"counter_sketch": _circle(16.0), "depth": 20.0, "liner_thickness": 2.0, "half": "lower"},
         "greater",
@@ -1002,6 +1004,7 @@ STANDALONE = (
     "room_pane",
     "room_wall",
     "seal_gasket",
+    "threaded_rod",
     "wall_ladder",
     "wall_mount",
 )

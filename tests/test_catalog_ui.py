@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
+import numpy as np
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialogButtonBox, QListView, QListWidgetItem
@@ -478,7 +479,7 @@ def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication)
             "ein frei stehender Prüfkörper braucht keine Stelle — die Sperre gilt je Baustein"
         )
 
-        catalog.set_feature_chosen(True, "hole")
+        catalog.set_feature_chosen(True, ("hole",))
         for name in ("screw_hole", "printed_screw"):
             assert waehle(name)
             assert not catalog.insert_hint.isVisibleTo(catalog), (
@@ -1557,6 +1558,19 @@ def test_a_standalone_part_becomes_its_own_body_and_attaches_only_at_a_chosen_fa
         assert as_mesh_data(result.scene.objects[box].mesh).volume == pytest.approx(volume)
         (rib,) = window.session.project.document.ops[-1].outputs
         assert as_mesh_data(result.scene.objects[rib].mesh).is_watertight
+        # **Neben dem Quader, nicht in ihm** (Review M1): Ohne Lage stand die
+        # Rippe im Ursprung, ganz im Quader — zwei Körper, von denen man einen
+        # nicht sah und die der Slicer verschmolz.
+        low_a, high_a = (
+            np.asarray(v) for v in as_mesh_data(result.scene.objects[box].mesh).raw.bounds
+        )
+        low_b, high_b = (
+            np.asarray(v) for v in as_mesh_data(result.scene.objects[rib].mesh).raw.bounds
+        )
+        assert np.any(high_a[:2] <= low_b[:2]) or np.any(high_b[:2] <= low_a[:2]), (
+            "die Hüllen trennen sich"
+        )
+        assert float(low_b[2]) == pytest.approx(0.0, abs=1e-6), "auf der Platte"
 
         top = next(
             name
@@ -1571,8 +1585,51 @@ def test_a_standalone_part_becomes_its_own_body_and_attaches_only_at_a_chosen_fa
         dialog = window._op_dialog
         assert dialog is not None and dialog.spec.name == "insert_rib"
         dialog.reject()
+
+        # Review M2: Zwei markierte Flächen sind zwei Stellen — eingesetzt an
+        # beiden in einem Schritt, nicht frei im Ursprung.
+        side = next(
+            name
+            for name, feature in result.scene.objects[box].features.items()
+            if tuple(feature.params.get("normal") or ()) == pytest.approx((1.0, 0.0, 0.0))
+        )
+        window.object_tree.select_features([(box, top), (box, side)])
+        assert window.object_tree.selected_feature() is None, "zwei Zeilen, keine eine"
+        hints.clear()
+        window.action_catalog()
+        assert hints == [""], hints
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "insert_rib"
+        assert set(dialog.values()["at_features"]) == {top, side}
+        dialog.reject()
     finally:
         window.close()
+
+
+def test_a_standalone_part_names_the_place_that_fits_and_the_form_it_keeps(
+    qt_app: QApplication,
+) -> None:
+    """Review M3 und der Passstift: Der Satz sagt, warum der Baustein frei entsteht.
+
+    Eine Schraube an einer Fläche entsteht frei, weil sie an eine Bohrung
+    gehört — der Satz nennt die passende Art statt „Wählen Sie eine Stelle“,
+    obwohl eine gewählt ist. Und frei entsteht der Passstift nur als Stift.
+    """
+    catalog = PartCatalog()
+    try:
+        catalog.set_can_insert(True, "")
+        catalog.set_feature_chosen(True, ("face",))
+        _choose(catalog, "printed_screw")
+        text = catalog.insert_hint.text()
+        assert "Bohrung" in text and "eigener Körper" in text, text
+        catalog.set_feature_chosen(True, ("curved_face",))
+        _choose(catalog, "rib")
+        assert not catalog.insert_hint.isVisibleTo(catalog), "die gerundete Seite passt"
+        catalog.set_feature_chosen(False)
+        _choose(catalog, "dowel")
+        assert "„Stift“" in catalog.insert_hint.text(), catalog.insert_hint.text()
+    finally:
+        catalog.release()
 
 
 def test_the_empty_scene_offers_a_first_body_in_the_catalogue(

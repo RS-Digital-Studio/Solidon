@@ -970,10 +970,11 @@ def test_a_chosen_body_takes_exactly_the_steps_it_came_from(profile: Profile) ->
     whole = evaluate(document, profile, sources=ProjectSources(project))
     assert whole.complete and len(whole.scene.objects) == 2
 
-    steps = recipe.steps_of(document, (block,))
+    needs = _needs(document, whole)
+    steps = recipe.steps_of(document, (block,), needs)
     ids = [entry.id for entry in document.ops]
     assert steps == (ids[0], ids[1], ids[3]), "der Nachbar und sein Schieben bleiben draußen"
-    assert recipe.steps_of(document, (neighbour,)) == (ids[2], ids[4])
+    assert recipe.steps_of(document, (neighbour,), needs) == (ids[2], ids[4])
 
     chosen = whole.scene.objects[block]
     made = recipe.capture(
@@ -992,6 +993,107 @@ def test_a_chosen_body_takes_exactly_the_steps_it_came_from(profile: Profile) ->
     built = recipe.build(made, profile=profile)
     assert as_mesh_data(built.mesh).volume == pytest.approx(as_mesh_data(chosen.mesh).volume)
     assert as_mesh_data(built.mesh).volume == pytest.approx(30.0 * 20.0 * 8.0 - 5.0 * 20.0 * 8.0)
+
+
+def _needs(document: Document, result: object) -> tuple:
+    """Die Kanten der Folge, wie der Verlauf sie führt (``revision.step_needs``)."""
+    from app.core.scene.revision import dependencies, step_needs
+
+    return step_needs(document, dependencies(document, result))  # type: ignore[arg-type]
+
+
+def _two_boxes_and(step: str, profile: Profile) -> tuple:
+    """Zwei Quader A und B, danach ``step``; gibt Projekt, Auswertung und Kennungen zurück."""
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    document.parameters["w"] = Parameter(name="w", value=12.0)
+    history = History(document)
+    for name, width, x in (("A", "@w", 0.0), ("B", 10.0, 40.0)):
+        values = {"width": width, "depth": 10.0, "height": 10.0, "anchor": "corner", "x": x}
+        history.apply(name, [OperationDraft(op="create_box", params=values)])
+    (first,), (second,) = document.ops[0].outputs, document.ops[1].outputs
+    if step == "duplicate_object":
+        draft = OperationDraft(op=step, inputs=(first,), params={"count": 2})
+    elif step == "align_to_feature":
+        before = evaluate(document, profile, sources=ProjectSources(project))
+
+        def facing(body: str, normal: tuple) -> str:
+            return next(
+                name
+                for name, feature in before.scene.objects[body].features.items()
+                if tuple(feature.params.get("normal") or ()) == pytest.approx(normal)
+            )
+
+        target = f"{second}:{facing(second, (0.0, 0.0, 1.0))}"
+        draft = OperationDraft(
+            op=step,
+            inputs=(first,),
+            params={"feature": facing(first, (0.0, 0.0, -1.0)), "target": target},
+        )
+    else:
+        draft = OperationDraft(op=step, inputs=(first, second))
+    history.apply(step, [draft])
+    result = evaluate(document, profile, sources=ProjectSources(project))
+    assert result.complete
+    return document, result, first, second
+
+
+@pytest.mark.parametrize(
+    "step", ["arrange_bed", "check_collisions", "orient_for_print", "duplicate_object"]
+)
+def test_a_chosen_body_saves_after_a_step_over_the_whole_scene(step: str, profile: Profile) -> None:
+    """Review H1: Anordnen, Prüfen, Ausrichten und Duplizieren holten den Nachbarn mit.
+
+    Ein Ganzszenen-Schritt nimmt alle Körper als Eingang; der Ausschnitt des
+    gewählten trug damit den zweiten, und ``capture`` wies ihn ab — Roberts
+    Befund in jedem Mehrkörperprojekt, das schon angeordnet war. Er folgt jetzt
+    nur dem gewählten Körper, ein Bericht und das Durchreichen beim Duplizieren
+    zählen gar nicht.
+    """
+    document, result, first, _second = _two_boxes_and(step, profile)
+    steps = recipe.steps_of(document, (first,), _needs(document, result))
+    assert list(recipe.slice_bodies(document, steps)) == [first]
+    made = recipe.capture(
+        document,
+        {},
+        name=f"klotz_nach_{step}",
+        title="Klotz",
+        group="structure",
+        op_ids=steps,
+        exposed=(
+            recipe.ExposedParam(name="w", title="Breite", default=12.0, minimum=8.0, maximum=20.0),
+        ),
+        features={"stelle": next(iter(result.scene.objects[first].features))},
+        profile=profile,
+    )
+    built = recipe.build(made, profile=profile)
+    expected = as_mesh_data(result.scene.objects[first].mesh).volume
+    assert as_mesh_data(built.mesh).volume == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("step", ["duplicate_object", "align_to_feature"])
+def test_a_slice_that_brings_a_second_body_says_so_before_saving(
+    step: str, profile: Profile
+) -> None:
+    """Die Kopie trägt ihr Original mit, ein Bezug auf eine Fläche von B den Körper B.
+
+    Beides ist richtig — ohne sie ist der Körper nicht derselbe —, und ein
+    Baustein ist trotzdem genau ein Körper. ``slice_bodies`` nennt deshalb vor
+    dem Ausfüllen, welcher Körper aus welchem Schritt mitkommt.
+    """
+    document, result, first, second = _two_boxes_and(step, profile)
+    if step == "duplicate_object":
+        chosen = next(name for name in document.ops[-1].outputs if name != first)
+        foreign = first
+    else:
+        chosen, foreign = first, second
+    steps = recipe.steps_of(document, (chosen,), _needs(document, result))
+    bodies = recipe.slice_bodies(document, steps)
+    assert set(bodies) == {chosen, foreign}
+    assert bodies[foreign] in steps
 
 
 # --- RM-147 E6: das Rezept als bearbeitbarer Entwurf ------------------------------

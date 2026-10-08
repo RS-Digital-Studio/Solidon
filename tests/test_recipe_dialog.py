@@ -1629,7 +1629,7 @@ def test_the_chosen_steps_reach_the_recipe(qt_app: QApplication, monkeypatch: An
     try:
         monkeypatch.setattr("app.ui.main_window.RecipeDialog", _Spy)
         monkeypatch.setattr(window, "_result_features", lambda *_bodies: ())
-        window.session.last_result = SimpleNamespace()  # type: ignore[assignment]
+        window.session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={}))  # type: ignore[assignment]
         window.session.project = replace(window.session.project, document=_history_document())
         window.history_panel.show_document(window.session.project.document)
         # Der Katalog wird nur als Elternteil gereicht und bekommt ``refresh``
@@ -1659,6 +1659,12 @@ def test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself(
     wurde abgewiesen. Jetzt nimmt es die Schritte des gewählten Körpers samt
     dem Werkzeug, das in ihm aufging, und nur seine Merkmale. Eingesetzt
     bringt der neue Baustein genau diesen Körper wieder mit.
+
+    Review: *Auf dem Bett anordnen* über alle Körper holte den Nachbarn mit
+    (H1); die Merkmale des Nachbarn hatten dieselben Kennungen wie die des
+    Klotzes, und die Prüfung „nur seine Merkmale“ hielt auch ungefiltert (M4,
+    deshalb ein Zylinder und die Zeilenzahl); und eine alte Markierung im
+    Verlauf schlug den danach gewählten Körper (G7).
     """
     from PySide6.QtCore import Qt
 
@@ -1686,15 +1692,20 @@ def test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself(
         assert session.apply("Klotz", [box("@w", 0.0)])
         assert session.apply("Werkzeug", [box(5.0, 5.0, depth=22.0, height=20.0)])
         assert session.apply("Nachbar", [box(40.0, 100.0)])
+        assert session.apply("Rolle", [OperationDraft(op="create_cylinder", params={"x": 200.0})])
         assert session.wait_for_idle(60_000)
-        block, tool, neighbour = (entry.outputs[0] for entry in session.project.document.ops)
+        ops = session.project.document.ops
+        block, tool, neighbour, roll = (entry.outputs[0] for entry in ops)
         assert session.apply(
             "Abziehen", [OperationDraft(op="subtract_objects", inputs=(block, tool))]
+        )
+        assert session.apply(
+            "Anordnen", [OperationDraft(op="arrange_bed", inputs=(block, neighbour, roll))]
         )
         assert session.wait_for_idle(60_000)
         QApplication.processEvents()
         result = session.last_result
-        assert result is not None and set(result.scene.objects) == {block, neighbour}
+        assert result is not None and set(result.scene.objects) == {block, neighbour, roll}
         block_volume = as_mesh_data(result.scene.objects[block].mesh).volume
         neighbour_volume = as_mesh_data(result.scene.objects[neighbour].mesh).volume
         top = next(
@@ -1703,8 +1714,11 @@ def test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself(
             if tuple(feature.params.get("normal") or ()) == pytest.approx((0.0, 0.0, 1.0))
         )
 
+        # Eine Markierung von früher, etwa vom Klick auf einen Befund (G7) …
+        assert window.history_panel.point_at(ops[2].id)
+        assert window.history_panel.selected_operations() == (ops[2].id,)
+        # … und danach der Körper im Baum: gemeint ist der Körper.
         window.object_tree.select_object(block)
-        assert window.history_panel.selected_operations() == ()
         # Was der Dialog zeigt und wie er endet, wird hier gesammelt und erst
         # nach dem Katalog geprüft: Eine Zusicherung in einem Qt-Slot verschluckt
         # Qt, der Test liefe weiter.
@@ -1712,7 +1726,7 @@ def test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself(
 
         def store(dialog: RecipeDialog) -> int:
             seen["scope"] = dialog.scope.text()
-            seen["features"] = {row.feature_id for row in dialog._features}
+            seen["features"] = [row.feature_id for row in dialog._features]
             dialog.title.setText(title)
             dialog._features[0].take.setChecked(True)
             dialog._store()
@@ -1747,7 +1761,10 @@ def test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself(
 
         assert seen["can_save"][0], seen["can_save"]
         own = set(result.scene.objects[block].features)
-        assert seen["features"] and seen["features"] <= own, "nur seine Merkmale"
+        foreign = set(result.scene.objects[roll].features) - own
+        assert foreign, "der Zylinder hat Merkmale, die der Klotz nicht hat"
+        assert len(seen["features"]) == len(own), "je Merkmal des Klotzes eine Zeile, nicht mehr"
+        assert set(seen["features"]) == own and not foreign & set(seen["features"])
         assert seen["stored"][0], seen["stored"]
         assert str(result.scene.objects[block].name) in seen["scope"], seen["scope"]
         assert PARTS.has(name), "der Baustein steht im Katalog"
@@ -1767,6 +1784,49 @@ def test_a_chosen_body_is_saved_from_the_catalogue_and_comes_back_as_itself(
         window.deleteLater()
         clean_recipe_globals(name)
         (recipes.recipes_dir() / f"{name}.json").unlink(missing_ok=True)
+
+
+def test_a_slice_with_a_second_body_says_so_and_locks_before_filling_in(
+    qt_app: QApplication,
+) -> None:
+    """Review H1: Die Kopfzeile versprach „den gewählten Körper“, die Absage kam danach.
+
+    Gewählt ist die Kopie aus *Objekt duplizieren*; ohne ihr Original ist sie
+    nicht zu bauen, und das Original käme als zweiter Körper mit. Der Dialog
+    sagt das oben, mit Körper und Schritt, und sperrt *Baustein anlegen* mit
+    demselben Satz, bevor jemand ein Feld ausfüllt.
+    """
+    from app.core.knowledge.parts import recipe as recipes
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.revision import dependencies, step_needs
+
+    document = new_project().document
+    document.parameters["w"] = Parameter(name="w", value=10.0, unit="mm", title="Breite")
+    history = History(document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={"width": "@w"})])
+    (original,) = document.ops[0].outputs
+    history.apply(
+        "Kopie", [OperationDraft(op="duplicate_object", inputs=(original,), params={"count": 2})]
+    )
+    copy = next(name for name in document.ops[-1].outputs if name != original)
+    needs = step_needs(document, dependencies(document, None))
+    steps = recipes.steps_of(document, (copy,), needs)
+    assert steps == (document.ops[0].id, document.ops[1].id)
+    names = {original: "Quader", copy: "Quader 2"}
+    dialog = RecipeDialog(
+        document, {}, steps, (_feature("hole_1"),), None, bodies={copy: "Quader 2"}, names=names
+    )  # type: ignore[arg-type]
+    try:
+        dialog.title.setText("Kopie")
+        dialog._features[0].take.setChecked(True)
+        text = dialog.scope.text()
+        assert "„Quader 2“" in text, "der gewählte Körper steht oben"
+        assert f"„Quader“ aus Schritt {document.ops[1].id}" in text, "und der, der mitkäme"
+        assert not dialog._save.isEnabled()
+        assert "„Quader“" in dialog._save.toolTip(), "der Knopf sagt denselben Grund"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
 
 
 def test_the_dialog_says_what_it_takes(qt_app: QApplication) -> None:

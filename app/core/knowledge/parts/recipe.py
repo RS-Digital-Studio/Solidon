@@ -48,6 +48,7 @@ import dataclasses
 import errno
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -81,6 +82,7 @@ from app.core.types import (
     Feature,
     Finding,
     ObjectId,
+    Operation,
     PartResult,
     Profile,
     Quality,
@@ -88,6 +90,7 @@ from app.core.types import (
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:  # nur für den Typ — der Import selbst schlösse den Kreis
+    from app.core.scene.history import StepNeed
     from app.core.scene.project import Project
 
 _log = get_logger(__name__)
@@ -1854,34 +1857,126 @@ def _catalog_source(recipe: Recipe) -> str:
 # --- Der Ausschnitt (die Naht zu E4) ---------------------------------------------
 
 
-def steps_of(document: Document, objects: Iterable[ObjectId]) -> tuple[int, ...]:
+def steps_of(
+    document: Document,
+    objects: Iterable[ObjectId],
+    needs: Iterable[StepNeed],
+    registry: Registry | None = None,
+) -> tuple[int, ...]:
     """Die Schritte, aus denen diese Körper hervorgehen — der Ausschnitt für ein Rezept (RM-565).
 
     Wer einen Körper wählt und ihn als Baustein speichert, meint genau ihn,
-    nicht den Verlauf, in dem er mit anderen steht. Gesucht wird rückwärts
-    durch den Stapel (§12): jeder Schritt, der einen gesuchten Körper
-    ausgibt, und dann, was dieser Schritt brauchte — seine Eingänge und die
-    Körper, deren Merkmale er nennt (``orphans.references``). Ein Werkzeug,
-    das im Körper aufging, gehört so dazu; ein Nachbar, der nur daneben
-    entstand, nicht.
+    nicht den Verlauf, in dem er mit anderen steht. Gesucht wird rückwärts:
+    jeder Schritt, der einen gesuchten Körper ausgibt **und ihn verändert**,
+    und dann, was dieser Schritt brauchte.
 
-    Gibt ein Schritt außer dem gewählten weitere Körper aus (ein Teilen), bleiben
-    sie im Ausschnitt: :func:`capture` sagt dann, dass er nicht genau einen
-    Körper ergibt, statt dass hier still ein Stück fehlt.
+    **Was er brauchte, weiß der Verlauf schon** — ``needs`` sind die Kanten aus
+    ``scene.revision.step_needs`` über ``dependencies``: ein Körper, den ein
+    früherer Schritt frisch anlegt, oder ein Merkmal, das in einem früheren
+    entsteht. Dieselbe Auskunft tragen Umsortieren, Ausschalten und die
+    gezeigte Folge; hier wird sie nur rückwärts gelesen statt ein drittes Mal
+    hergeleitet. Je Kante zählt der Körper, wie er **vor** dem brauchenden
+    Schritt stand.
+
+    Zwei Arten von Schritten verändern den gesuchten Körper nicht und ziehen
+    deshalb nichts nach: ein Bericht (``unchanged_effect == "report"``,
+    *Überschneidungen prüfen*) und ein Schritt, der ihn nur durchreicht
+    (``leaves_inputs_unchanged``, das Original beim *Duplizieren*). Ein
+    Schritt über die ganze Szene (*Anordnen*, *Ausrichten*) gehört dazu, folgt
+    aber nur dem gesuchten Körper; :func:`capture` verengt ihn auf das, was im
+    Ausschnitt lebt. Ergibt der Ausschnitt trotzdem mehrere Körper (eine Kopie,
+    ein Merkmal eines anderen Körpers), sagt es :func:`slice_bodies` vorher.
     """
-    from app.core.scene.orphans import references
+    from app.core.registry import REGISTRY
 
-    named: dict[int, set[ObjectId]] = {}
-    for reference in references(document):
-        if reference.kind != "fit":
-            named.setdefault(reference.op_id, set()).add(reference.ref.object_id)
-    wanted = set(objects)
-    taken: list[int] = []
-    for operation in sorted(document.ops, key=lambda entry: entry.id, reverse=True):
-        if wanted.intersection(operation.outputs):
-            taken.append(operation.id)
-            wanted.update(operation.inputs, named.get(operation.id, ()))
+    source = registry or REGISTRY
+    edges: dict[int, list[StepNeed]] = {}
+    for need in needs:
+        edges.setdefault(need.step, []).append(need)
+    operations = sorted(document.ops, key=lambda entry: entry.id)
+    by_id = {entry.id: entry for entry in operations}
+    taken: set[int] = set()
+    pending: list[tuple[ObjectId, float]] = [(name, math.inf) for name in objects]
+    visited: set[tuple[ObjectId, float]] = set()
+    while pending:
+        body, before = pending.pop()
+        if (body, before) in visited:
+            continue
+        visited.add((body, before))
+        for operation in reversed(operations):
+            if operation.id >= before or operation.id in taken:
+                continue
+            if body not in operation.outputs or not _changes(operation, body, source):
+                continue
+            taken.add(operation.id)
+            whole = source.has(operation.op) and source.get(operation.op).takes_whole_scene
+            for need in edges.get(operation.id, ()):
+                if need.object_id:
+                    if not whole or need.object_id == body:
+                        pending.append((need.object_id, float(operation.id)))
+                elif need.on in by_id:
+                    # Ein ausgeschalteter Schritt nennt nur den Schritt, der sein
+                    # Merkmal anlegt; dessen Ausgänge stehen für den Körper.
+                    pending.extend((name, need.on + 1.0) for name in by_id[need.on].outputs)
     return tuple(sorted(taken))
+
+
+def _changes(operation: Operation, body: ObjectId, registry: Registry) -> bool:
+    """Ob dieser Schritt den Körper verändert, statt ihn nur zu prüfen oder durchzureichen."""
+    if not registry.has(operation.op):
+        return True
+    spec = registry.get(operation.op)
+    if spec.unchanged_effect == "report":
+        return False
+    return not (spec.leaves_inputs_unchanged and body in operation.inputs)
+
+
+def _narrowed(operations: Iterable[Operation], registry: Registry | None = None) -> list[Operation]:
+    """Die Schritte eines Ausschnitts, Ganzszenen-Schritte auf die Körper darin verengt.
+
+    *Anordnen* und *Ausrichten* tragen alle Körper ihres Projekts als Ein- und
+    Ausgang; im Ausschnitt fehlen die übrigen, und ihr Schritt nähme Körper,
+    die es dort nicht gibt. Ein Schritt ohne einen Körper des Ausschnitts
+    fällt weg.
+    """
+    from app.core.registry import REGISTRY
+
+    source = registry or REGISTRY
+    living: set[ObjectId] = set()
+    kept: list[Operation] = []
+    for entry in operations:
+        whole = source.has(entry.op) and source.get(entry.op).takes_whole_scene
+        if whole and entry.outputs == entry.inputs:
+            inside = tuple(name for name in entry.inputs if name in living)
+            if not inside:
+                continue
+            entry = dataclasses.replace(entry, inputs=inside, outputs=inside)
+        living.difference_update(set(entry.inputs) - set(entry.outputs))
+        living.update(entry.outputs)
+        kept.append(entry)
+    return kept
+
+
+def slice_bodies(
+    document: Document, op_ids: Iterable[int], registry: Registry | None = None
+) -> dict[ObjectId, int]:
+    """Welche Körper ein Ausschnitt am Ende hat, und welcher Schritt jeden zuletzt ausgab.
+
+    Ohne Rechnung, aus Ein- und Ausgängen des verengten Ausschnitts — so kann
+    der Dialog vor dem Ausfüllen sagen, dass ein Baustein nicht genau ein
+    Körper würde, statt dass :func:`capture` es danach abweist.
+    """
+    wanted = set(op_ids)
+    living: dict[ObjectId, int] = {}
+    for entry in _narrowed(
+        (entry for entry in sorted(document.ops, key=lambda op: op.id) if entry.id in wanted),
+        registry,
+    ):
+        for name in set(entry.inputs) - set(entry.outputs):
+            living.pop(name, None)
+        for name in entry.outputs:
+            living[name] = entry.id
+    return living
 
 
 def capture(
@@ -1971,7 +2066,7 @@ def capture(
             suggestions=(CORRECT_INPUT, CANCEL),
         )
     wanted = set(op_ids)
-    ops = [entry for entry in document.ops if entry.id in wanted]
+    ops = _narrowed(entry for entry in document.ops if entry.id in wanted)
     if not ops:
         raise ValidationError(
             field="op_ids",

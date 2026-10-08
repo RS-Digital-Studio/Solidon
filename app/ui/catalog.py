@@ -43,9 +43,16 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.knowledge.parts import GROUPS, PARTS
-from app.core.knowledge.parts.ops import catalog_operation, op_name
+from app.core.knowledge.parts.ops import (
+    catalog_operation,
+    cuts_by_parameter,
+    fitting_places,
+    op_name,
+)
 from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
+from app.core.registry.registry import FEATURE_TITLES
+from app.core.registry.surfaces import choice_label
 from app.i18n import tr
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES
@@ -462,7 +469,7 @@ class PartCatalog(QDialog):
         self._way: str | None = None
         self._insert_allowed = True
         self._insert_reason = ""
-        self._chosen_kind: str | None = None
+        self._chosen_kinds: tuple[str, ...] = ()
         self._feature_chosen = True
         """Ob im Objektbaum eine Fläche oder Bohrung gewählt ist.
 
@@ -728,11 +735,12 @@ class PartCatalog(QDialog):
         self._way = key
         self.reject()
 
-    def set_feature_chosen(self, chosen: bool, kind: str | None = None) -> None:
+    def set_feature_chosen(self, chosen: bool, kinds: Sequence[str] = ()) -> None:
         """Ob eine Fläche oder Bohrung gewählt ist — die zweite Bedingung.
 
-        ``kind`` ist ihre Art; an ihr entscheidet ``catalog_operation``, ob ein
-        eigenständiger Baustein dort ansetzt oder frei entsteht.
+        ``kinds`` sind die Arten der gewählten Stellen; an ihnen entscheidet
+        ``catalog_operation``, ob ein eigenständiger Baustein dort ansetzt oder
+        frei entsteht.
 
         Sie gilt **je Baustein** und nicht für den ganzen Katalog: Ein Teil der
         Bausteine wird an eine Stelle gesetzt, der Rest steht frei
@@ -750,7 +758,7 @@ class PartCatalog(QDialog):
         Körper, hier die fehlende Stelle daran).
         """
         self._feature_chosen = chosen
-        self._chosen_kind = kind if chosen else None
+        self._chosen_kinds = tuple(kinds) if chosen else ()
         self._show_detail()
 
     def _insert_state(self, spec: PartSpec | None) -> tuple[bool, str]:
@@ -764,15 +772,12 @@ class PartCatalog(QDialog):
             # Ohne passende Stelle entsteht er als eigener Körper (RM-562,
             # ``catalog_operation``). Wo es einen Körper gäbe, an den er passt,
             # sagt der Satz das vorher, statt ihn still daneben zu legen.
-            creates = catalog_operation(spec.name, at=self._chosen_kind) != op_name(spec.name)
+            creates = catalog_operation(spec.name, at=self._chosen_kinds) != op_name(spec.name)
             # Ohne Auskunft über die Art bleibt es beim Katalog wie zuvor.
-            told = not self._feature_chosen or self._chosen_kind is not None
-            if creates and told and (spec.at_face or spec.at_hole) and self._insert_allowed:
-                return True, tr(
-                    "Ohne passende Stelle entsteht er als eigener Körper. Wählen Sie im "
-                    "Objektbaum die Stelle, an der er ansetzen soll."
-                )
-            return True, ""
+            told = not self._feature_chosen or bool(self._chosen_kinds)
+            if not (creates and told and (spec.at_face or spec.at_hole) and self._insert_allowed):
+                return True, ""
+            return True, standalone_note(spec, chosen=bool(self._chosen_kinds))
         if not self._insert_allowed:
             return False, self._insert_reason
         if spec is None:
@@ -1313,6 +1318,38 @@ def _range_warning(spec: PartSpec) -> str:
     if spec.range_passed is False:
         return tr("an den Grenzen kam kein brauchbarer Körper heraus")
     return tr("der Bereichstest ist für diesen Baustein nie gelaufen")
+
+
+def standalone_note(spec: PartSpec, *, chosen: bool) -> str:
+    """Der Satz über *Einsetzen*, wenn ein eigenständiger Baustein frei entsteht.
+
+    Ist eine Stelle gewählt, die nicht passt, nennt er die passende Art —
+    eine Schraube setzt an einer Bohrung an, an einer Fläche entsteht sie frei
+    (Review M3). Lässt der Erzeuger eine abtragende Wahl weg, sagt er, welche
+    Form bleibt: Der *Passstift und Passbohrung* entsteht frei nur als Stift.
+    """
+    if chosen:
+        fits = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in fitting_places(spec.name))
+        text = str(
+            tr("Passende Stelle: {fits}. An der gewählten entsteht er als eigener Körper.").format(
+                fits=fits
+            )
+        )
+    else:
+        text = str(
+            tr(
+                "Ohne passende Stelle entsteht er als eigener Körper. Wählen Sie im "
+                "Objektbaum die Stelle, an der er ansetzen soll."
+            )
+        )
+    cutting = cuts_by_parameter(spec.params)
+    if cutting is not None:
+        kept = next(entry.default for entry in spec.params.spec() if entry.name == cutting[0])
+        form = str(tr("Als eigener Körper entsteht nur die Form „{form}“.")).format(
+            form=choice_label(str(kept))
+        )
+        text = f"{text} {form}"
+    return text
 
 
 def detail(spec: PartSpec | None) -> str:

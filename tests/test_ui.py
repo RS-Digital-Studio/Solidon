@@ -18436,7 +18436,7 @@ def test_saving_a_part_takes_the_whole_stack_by_id_not_by_position(window: MainW
 
     class Attrappe:
         def __init__(
-            self, _doc, _payloads, op_ids, _features, _profile, parent=None, origin=None, bodies=()
+            self, _doc, _payloads, op_ids, _features, _profile, parent=None, origin=None, **_rest
         ):
             captured["op_ids"] = tuple(op_ids)
             captured["origin"] = origin

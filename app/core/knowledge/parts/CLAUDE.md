@@ -148,8 +148,10 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 
 - **Rezept** (Regel 13, `bausteine.md`): `recipe.draft` ist der Gegenweg zu
   `capture`, `Session.open_draft` merkt sich die Herkunft. `steps_of` schneidet
-  den Ausschnitt eines gewählten Körpers aus dem Stapel (Eingänge und genannte
-  Merkmalskörper rückwärts). Ein Ausschnitt trägt
+  den Ausschnitt eines gewählten Körpers aus dem Stapel, rückwärts über die
+  Kanten aus `revision.step_needs`; Berichte und durchgereichte Körper zählen
+  nicht, Ganzszenen-Schritte verengt `_narrowed`, und `slice_bodies` nennt die
+  Körper eines Ausschnitts ohne Rechnung. Ein Ausschnitt trägt
   keine Auftragseinstellungen; Abhängigkeiten sammelt der Container transitiv,
   Namenskonflikte bekommen freie Namen, vorhandene Fassungen bleiben.
 - **Format v2**: flache `dependencies` (v1 migriert, Quelldaten bleiben);
@@ -224,7 +226,8 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   (`creation_name()`), `insert_<name>` bleibt lesbar; Erzeuger übernehmen die
   freie Normale und sinken ohne Träger nicht ein. Der Katalog nimmt den
   Erzeuger, solange keine Stelle gewählt ist, an die er gehört
-  (`catalog_operation`); `build_params(standalone=True)` lässt die abtragende
+  (`catalog_operation` über `fitting_places`, eine gerundete Seite zählt als
+  Fläche), und legt ihn auf eine freie Stelle (`free_spot_for`); `build_params(standalone=True)` lässt die abtragende
   Wahl weg, `_on_its_own_bed` stellt den Körper auf die Ebene seines
   Ursprungs (Mündungsbausteine kopfüber). **`template`** (nur mit
   `standalone`) lässt den Erzeuger *Maße als Parameter anlegen* anbieten wie
