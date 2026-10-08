@@ -315,8 +315,8 @@ Ansichtsseite steht in `griffe.md`.
   `_commit_slot_change`) und legt keinen zweiten obenauf. Wer eine Operation
   baut, die ein Merkmal aus ihrem früheren Schritt noch einmal anfasst, fragt
   zuerst `created_by`.
-- **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* am
-  Innengewinde, an keiner anderen Art), danach `not_offered_at`.
+- **Karte:** nur `perceive.actions.OFFERED_AT_A_PART` (*Stift für Bohrung* an
+  Innengewinde und Bohrung), danach `not_offered_at`.
 
 ## Der Hauptknopf
 

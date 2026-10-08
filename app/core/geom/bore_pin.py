@@ -322,19 +322,35 @@ def _hole_section(
     return Section(middle - half, middle + half, radius, radius, feature.id)
 
 
+def _cone_mouth(feature: Feature, origin: NDArray[np.float64], axis: NDArray[np.float64]) -> float:
+    """Wo der weite Rand eines Kegels auf der Achse liegt, die nach außen zeigt.
+
+    Die Erkennung legt die Mitte eines Kegels auf seinen weiten Rand; ein
+    Baustein nennt die Mitte seiner Senkung und ihre Höhe
+    (``fasteners._countersink_feature``, „Mündung oder Mitte, je nach
+    Erzeuger“ in ``perceive.matching.near_its_declaration``). Der weite Rand
+    liegt dann die halbe Höhe weiter außen (RM-552).
+    """
+    mouth = _along(feature.params["centre"], origin, axis)
+    depth = feature.params.get("depth")
+    if isinstance(depth, int | float) and not isinstance(depth, bool) and depth > EPS_GEOM:
+        mouth += float(depth) / 2.0
+    return mouth
+
+
 def _cone_section(
     feature: Feature, inner: float, origin: NDArray[np.float64], axis: NDArray[np.float64]
 ) -> Section | None:
     """Eine Senkung, die sich vom Halbmesser ``inner`` bis zu ihrer Mündung weitet.
 
-    Der Kegel nennt seine Mündung (``centre`` auf der Deckfläche, ``diameter``)
-    und den vollen Öffnungswinkel; das innere Ende folgt aus dem Halbmesser,
-    auf dem er sitzt. ``None``, wo er sich nicht nach außen weitet.
+    Der Kegel nennt seine Mündung (:func:`_cone_mouth`, ``diameter``) und den
+    vollen Öffnungswinkel; das innere Ende folgt aus dem Halbmesser, auf dem er
+    sitzt. ``None``, wo er sich nicht nach außen weitet.
     """
     angle = float(feature.params.get("angle", 0.0))
     if feature.params.get("narrowing") or not EPS_GEOM < angle < 180.0 - EPS_GEOM:
         return None
-    mouth = _along(feature.params["centre"], origin, axis)
+    mouth = _cone_mouth(feature, origin, axis)
     outer = float(feature.params["diameter"]) / 2.0
     if outer <= inner + EPS_GEOM:
         return None
@@ -357,6 +373,7 @@ def _chained(
     seinem eigenen Winkel von seiner Mündung aus.
     """
     sections: list[Section] = []
+    reach = -math.inf
     for member in chain:
         if not _coaxial(member, origin, axis, radius):
             raise _unreadable(value)
@@ -370,21 +387,39 @@ def _chained(
         else:
             raise _unreadable(value)
         section = replace(section, misfit=_misfit(member, section, origin, axis))
+        reach = max(reach, section.end)
         if sections:
-            section = _following(sections[-1], section, value)
+            sections[-1], section = _following(sections[-1], section, value)
         sections.append(section)
+    # Ein gekürztes Glied reichte weiter als die Kette: Dann läge ein Stück von
+    # ihm in keinem Abschnitt, und der Stift wüsste nichts von ihm.
+    if sections[-1].end < reach - SECTION_REACH:
+        raise _unreadable(value)
     return sections
 
 
-def _following(previous: Section, section: Section, value: str) -> Section:
-    """``section``, an das Ende von ``previous`` gesetzt — mit Stufe, wo es weiter wird."""
+def _following(previous: Section, section: Section, value: str) -> tuple[Section, Section]:
+    """``section``, an das Ende von ``previous`` gesetzt — mit Stufe, wo es weiter wird.
+
+    **Läuft ``previous`` in ``section`` hinein, endet es dort, wo ``section``
+    beginnt** (RM-552): Eine Bausteinbohrung reicht durch ihre Senkung bis zur
+    Mündung (Schraubenloch Ø 3,4 auf z 2 bis 12, Senkung ab z 10,7, mit
+    Kopftiefe darüber noch die Kopfaussparung), und was die Bohrung dort
+    beschreibt, liegt in den weiteren Gliedern. Gekürzt wird nur, wo
+    ``section`` innerhalb von ``previous`` beginnt; dass die Kette danach bis
+    zum alten Ende reicht, fragt :func:`_chained`. Eine Lücke oder ein Glied,
+    das vor ``previous`` beginnt, bleiben unlesbar. Zurück kommen beide
+    Abschnitte.
+    """
+    if previous.start + SECTION_REACH < section.start < previous.end - SECTION_REACH:
+        previous = _ending_at(previous, section.start)
     if abs(section.start - previous.end) > SECTION_REACH or section.end <= previous.end:
         raise _unreadable(value)
     inner = section.outer - (section.end - previous.end) * math.tan(section.half_angle)
     if inner < previous.outer - SECTION_REACH:
         raise _narrowing(value)
     shoulder = inner > previous.outer + SECTION_REACH
-    return Section(
+    return previous, Section(
         previous.end,
         section.end,
         inner,
@@ -393,6 +428,13 @@ def _following(previous: Section, section: Section, value: str) -> Section:
         shoulder,
         misfit=section.misfit,
     )
+
+
+def _ending_at(section: Section, end: float) -> Section:
+    """Derselbe Abschnitt, bei ``end`` gekürzt — ein Kegel mit dem Halbmesser dort."""
+    length = section.end - section.start
+    share = (end - section.start) / length if length > EPS_GEOM else 1.0
+    return replace(section, end=end, outer=section.inner + (section.outer - section.inner) * share)
 
 
 def cavity_of(
@@ -579,7 +621,7 @@ def _walk(
             if candidate.kind == "hole":
                 section = _hole_section(candidate, origin, axis)
             else:
-                mouth = _along(candidate.params["centre"], origin, axis)
+                mouth = _cone_mouth(candidate, origin, axis)
                 angle = float(candidate.params.get("angle", 0.0))
                 if candidate.params.get("narrowing") or not EPS_GEOM < angle < 180.0 - EPS_GEOM:
                     continue

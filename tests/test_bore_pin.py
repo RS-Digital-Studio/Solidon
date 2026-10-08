@@ -400,6 +400,98 @@ def test_a_countersunk_thread_gets_a_countersunk_screw(profile: Profile) -> None
     assert "Senkkopf 90°" in str(made.message) and "M6 × 1" in str(made.message)
 
 
+# --- Bausteinbohrungen (RM-552) ----------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("part", ["screw_hole", "screw_hole_head_room", "heatset_m4"])
+def test_a_part_bore_that_runs_through_its_countersink_gets_its_pin(
+    kind: str, part: str, profile: Profile
+) -> None:
+    """RM-552: Die Bausteinbohrung läuft durch ihre Senkung — der Stift baut trotzdem.
+
+    Am Schraubenloch reicht die Bohrung Ø 3,4 bis zur Mündung z 12, die Senkung
+    beginnt bei z 10,7; an der Einpressbuchse ebenso durch die Einführfase.
+    ``bore_pin._following`` verlangte, dass ein Abschnitt am Ende des vorigen
+    beginnt, und sagte über einen Hohlraum, den Solidon selbst gebaut hat,
+    „lässt sich hier nicht eindeutig lesen“. Die Senkung des Bausteins nennt
+    dazu ihre Mitte und Höhe statt ihres weiten Rands.
+
+    Sollwerte aus der Normteiltabelle und den Bausteinmaßen: M3 durch Ø 3,4,
+    Senkung 90° auf Ø 6, Tiefe 10 im Quader 12 hoch (Boden z 2), mit Kopftiefe
+    2 die Senkung 2 mm tiefer und darüber die Kopfaussparung Ø 6 bis zur
+    Mündung; Einpressbuchse M3 Loch Ø 4, Länge 5,7 plus Zusatztiefe 0,5 (Boden
+    z 5,8), Einführfase 0,5 mm unter 45° (``fasteners.INSERT_LEAD_IN``). Der
+    Stift hält überall das halbe Spiel, an der Flanke senkrecht zu ihr, und
+    steht vor dem Boden um dasselbe ab.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.fasteners import INSERT_LEAD_IN
+
+    room = 2.0 if part == "screw_hole_head_room" else 0.0
+    if part.startswith("screw_hole"):
+        screw = standards.screw("M3")
+        bore, sink = screw.clearance / 2.0, screw.countersink / 2.0
+        floor = 12.0 - 10.0
+        op, name = "insert_screw_hole", "screw_hole_bore_1"
+        params: dict[str, Any] = {"size": "M3", "depth": 10.0, "head_room": room}
+    else:
+        insert = standards.insert("M3")
+        bore, sink = insert.hole / 2.0, insert.hole / 2.0 + INSERT_LEAD_IN
+        floor = 12.0 - (insert.length + 0.5)
+        op, name = "insert_heatset_m4", "heatset_m4_bore_1"
+        params = {"size": "M3", "extra_depth": 0.5, "lead_in": True}
+    carrier = _box(
+        kind, profile, OperationDraft(op=op, inputs=("obj_1",), params={"z": 12.0, **params})
+    )
+    clearance = profile.material.clearance
+    gap = clearance / 2.0
+    result = run("pin_for_bore", carrier, profile, at_feature=name)
+    kept, pin = result.outputs
+    assert kept is carrier
+    assert pin.kind == kind
+    shaft = bore - gap
+    rim = 12.0 - room
+    corner = rim - (sink - bore) + gap * (math.sqrt(2.0) - 1.0)
+    expected = _cylinder(floor + gap, corner, shaft)
+    if room:
+        upper = rim + gap * (math.sqrt(2.0) - 1.0)
+        expected += _frustum(corner, upper, shaft, sink - gap)
+        expected += _cylinder(upper, 12.0, sink - gap)
+    else:
+        top = sink - gap * math.sqrt(2.0)
+        expected += _frustum(corner, 12.0, shaft, top)
+    volume = float(pin.mesh.volume if kind == "brep" else as_mesh_data(pin.mesh).volume)
+    assert volume == pytest.approx((1.0 if kind == "brep" else POLYGON) * expected, rel=1e-4)
+    bounds = as_mesh_data(pin.mesh).raw.bounds
+    assert bounds[:, 2].tolist() == pytest.approx([floor + gap, 12.0], abs=1e-3)
+    _loose(pin, carrier, clearance)
+    made = _made(result)
+    if room:
+        # Der weiteste Abschnitt ist die Kopfaussparung: ein Zylinderkopf darüber.
+        assert made.values["head_diameter_mm"] == pytest.approx(2.0 * (sink - gap), abs=1e-3)
+    else:
+        assert made.values["countersink_angle_deg"] == pytest.approx(90.0, abs=0.5)
+        assert made.values["head_diameter_mm"] == pytest.approx(2.0 * top, abs=1e-3)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_the_magnet_pocket_from_a_part_still_has_a_narrowing_mouth(
+    kind: str, profile: Profile
+) -> None:
+    """RM-552, Gegenfall: Die Lippe der Magnettasche ist enger als die Tasche — der Stift
+    passender Form käme nicht hinein, auch wenn überlappende Glieder jetzt gekürzt werden."""
+    carrier = _box(
+        kind,
+        profile,
+        OperationDraft(op="insert_magnet_pocket", inputs=("obj_1",), params={"z": 12.0}),
+    )
+    with pytest.raises(ValidationError) as caught:
+        run("pin_for_bore", carrier, profile, at_feature="magnet_pocket_pocket_1")
+    assert caught.value.constraint == "narrowing_mouth"
+    assert caught.value.suggestions
+
+
 # --- Absagen ------------------------------------------------------------------------
 
 

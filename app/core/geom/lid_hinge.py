@@ -531,7 +531,9 @@ def _along(body: shapes.Form, axis: Vec3, centre: Vec3) -> shapes.Form:
     # bekommt die kürzeste druckbare Länge oder eine eigene Absage (Review P2, G1, M2).
     # 5: Ein Kettenglied neben der Achse nimmt seinen Abschnitt um den Versatz
     # enger, das halbe Spiel bleibt rundum (Review P2 N7).
-    cache_version="5",
+    # 6: Eine Bausteinbohrung, die durch ihre Senkung läuft, endet für den Stift
+    # dort, wo die Senkung beginnt, und deren Mündung liegt am weiten Rand (RM-552).
+    cache_version="6",
     doc=_(
         "Baut einen losen Stift, der in diese Bohrung passt, samt Senkkopf, Zylinderkopf oder "
         "Gewinde. Er ist um das Spiel aus dem Materialprofil kleiner. Am Klappdeckel mit Stift "
