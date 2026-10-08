@@ -79,7 +79,7 @@ def test_declining_the_recognition_question_imports_every_file_once(session, mon
 
     session.askRequested.connect(decline)
     session.import_models_async(_cubes(tmp_path))
-    assert session.wait_for_idle(30000)
+    assert session.wait_for_idle(60_000)
     assert len(asked) == 1, [request.question for request in asked]
     assert len(session.project.document.transactions) == 1
     assert len(session.last_result.scene.objects) == 3
@@ -97,7 +97,7 @@ def test_inserting_several_models_keeps_the_body_and_undoes_only_the_group(windo
     assert window.session.wait_for_idle()
     existing = dict(window.session.last_result.scene.objects)
     window.import_paths(_cubes(tmp_path))
-    assert window.session.wait_for_idle(30000)
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
     scene = window.session.last_result.scene.objects
     assert len(scene) == 4

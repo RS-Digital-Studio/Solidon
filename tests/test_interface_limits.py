@@ -1216,7 +1216,7 @@ def test_the_tool_strip_greys_out_on_an_empty_scene(window: MainWindow) -> None:
     nach etwas, das gar nicht fehlt.
     """
     window.session.start_new()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._update_actions()
 
     buttons = [

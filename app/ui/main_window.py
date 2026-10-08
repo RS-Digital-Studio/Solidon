@@ -3020,6 +3020,9 @@ class MainWindow(QMainWindow):
         """Ob die Statuszeile gerade die zwei Flächen einer Fase nennt
         (:meth:`_follow_chamfer_sides`) — nur dann gibt es sie wegzunehmen."""
         self._preview_approval: _PreviewApproval | None = None
+        self._click_after_evaluation: tuple[Any, Callable[[], object]] | None = None
+        """Ein Übernehmen-Klick, der während einer Auswertung kam, mit seinem
+        Eigentümer (:meth:`_run_click_after_evaluation`)."""
         self._preview_revision = 0
         self._preview_block_reason: str | None = None
         self._preview_prefix: tuple[int, int, int, Any] | None = None
@@ -21661,6 +21664,14 @@ class MainWindow(QMainWindow):
         """
         approval = self._set_preview_order(owner, order)
         if not self._preview_is_current(approval):
+            if then is not None and self.session.busy:
+                # **Auch ein Klick während einer Auswertung verfällt nicht.**
+                # Solange sie rechnet, gilt keine Freigabe; der Knopf ist
+                # trotzdem frei, und der Klick tat nichts — ohne Satz, der
+                # Dialog blieb offen (Fensterauswahl macOS, Rohrbogen-Test).
+                # Er wartet jetzt auf ihr Ende und fragt dann neu.
+                self._click_after_evaluation = (owner, then)
+                self.announce(tr("Wird übernommen, sobald die Vorschau steht."), receipt=False)
             return False
         # **Die Druckfolgenprüfung hält nur einen Klick, der auf ein Bild
         # wartet.** Ohne Bildpflicht entscheidet allein RM-493 unten: Warten
@@ -24397,6 +24408,7 @@ class MainWindow(QMainWindow):
         self._show_invitation()
         if not busy:
             self._resume_preview_after_idle()
+            self._run_click_after_evaluation()
             self._resume_map_after_idle()
             self._export_when_current()
 
@@ -24465,6 +24477,27 @@ class MainWindow(QMainWindow):
                 self._show_pending_proposal()
             return
         self._request_order_preview(approval)
+
+    def _run_click_after_evaluation(self) -> None:
+        """Den während der Auswertung gekommenen Übernehmen-Klick jetzt stellen.
+
+        Er läuft über denselben Weg wie ein neuer Klick: Steht die Freigabe,
+        wird übernommen; rechnet die Vorschau noch, bindet er sich an sie
+        (:meth:`_preview_can_apply`). Gilt die Freigabe inzwischen einem
+        anderen Eigentümer — der Dialog ist zu, ein anderes Werkzeug offen —,
+        verfällt er.
+        """
+        waiting, self._click_after_evaluation = self._click_after_evaluation, None
+        if waiting is None:
+            return
+        if self.session.busy:
+            self._click_after_evaluation = waiting
+            return
+        owner, click = waiting
+        approval = self._preview_approval
+        if approval is None or approval.owner is not owner:
+            return
+        click()
 
     def _update_waiting_state(self) -> None:
         """Führt die gestufte Warteanzeige für den gewählten Besitzer nach."""

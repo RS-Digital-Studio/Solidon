@@ -853,8 +853,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   und Dauerbelegung je Hauptweg (Bauplan §2.2) und an großen Korpusmodellen messen
   (Netzkern, exakter Kern, Merkmalserkennung, Schichtanalyse, Vorschau, Verlaufscache, Renderer),
   die größten Posten benennen, dann senken: doppelte Netzkopien, Caches ohne Grenze, Arbeiter,
-  die ihre Ergebnisse halten. **Abnahme:** Messbericht vorher und nachher mit Werkzeug und
-  Rechner; je Senkung ein Test, der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
+  die ihre Ergebnisse halten. **Abnahme:** Ziel ist, dass die Hauptwege auf einem Rechner mit
+  8 GB ohne Auslagern laufen, große Korpusmodelle mit 16 GB; die konkreten Grenzwerte setzt der
+  Messbericht. Messbericht vorher und nachher mit Werkzeug und Rechner; je Senkung ein Test,
+  der die Grenze hält; kein Rückschritt im Leistungsbudget (§31).
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -4179,16 +4181,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   erste setzt den Anfang auf Bett oder Fläche, der zweite die Gegenecke in X und Y, der dritte
   die Höhe in Z. Auf einem Körper wird er angefügt oder ausgeschnitten. Einfach halten, ein
   Weg, keine Modi. Das Ergebnis ist ein Schritt mit Maßen, die sich danach ändern lassen
-  (Regel 2). **Abnahme:** Ablauf vorher mit `bedienlogik`, Klicks gezählt; Geometrietest;
-  Fenstertest mit drei Klicks; Strg+Z nimmt ihn als einen Schritt zurück; Handbuch.
+  (Regel 2). **Abnahme:** Erfüllt, wenn ein Quader mit genau drei Klicks entsteht (Anfang,
+  Gegenecke X/Y, Höhe Z), auf einem Körper wahlweise angefügt oder ausgeschnitten, seine Maße
+  danach als Schrittwerte änderbar sind und Strg+Z ihn als einen Schritt nimmt. Dazu der Ablauf
+  vorher mit `bedienlogik`, Klicks gezählt; Geometrietest; Fenstertest mit drei Klicks; Handbuch.
 
 <a id="rm-560"></a>
 
 - [ ] **RM-560 — *Formen* arbeitet schwach.** Robert, 08.10.2026: „Formen ist ziemlich
   schlecht von der Funktion.“ Erst am echten Fenster messen, was nicht trägt (Wirkung der
-  Pinsel, Ansprechen, Tempo, Ergebnis am Netz), dann überarbeiten. **Abnahme:** Befundliste
-  mit Messwerten; vorher und nachher am echten Fenster an einem Korpusmodell; Tests der
-  geänderten Pinsel.
+  Pinsel, Ansprechen, Tempo, Ergebnis am Netz), dann überarbeiten. **Abnahme:** Erfüllt, wenn
+  jeder Befund der Befundliste behoben ist, je Befund ein Test oder Messwert vorher und nachher
+  (am echten Fenster an einem Korpusmodell), und Robert es am echten Fenster abgenommen hat.
 
 <a id="rm-561"></a>
 
@@ -5284,8 +5288,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Bild weitere Dutzende Gigabyte. **Soll:** Vor der Einrichtung nennt Solidon Platzbedarf und
   erwartete Dauer für diesen Rechner und schlägt auf Apple Silicon ein passendes Modell vor;
   die Systemanforderungen der Website (16 GB) stimmen mit den echten Modellen überein.
-  **Abnahme:** Messung des Chat-Modells auf einem M-Chip (Runner `macos-latest`); der
-  Einrichtungsdialog nennt die Größe vor dem Herunterladen; Website-Text gegen die Messung.
+  **Abnahme:** Messung des Chat-Modells auf einem M-Chip mit mindestens 16 GB, auf einem
+  großen Läufer oder einem echten Mac — der GitHub-Läufer `macos-latest` hat 7 GB, qwen3:14b
+  braucht rund 9 GB; ein kleineres Modell darf zusätzlich auf `macos-latest` gemessen werden.
+  Der Einrichtungsdialog nennt die Größe vor dem Herunterladen; Website-Text gegen die Messung.
 
 <a id="rm-565"></a>
 

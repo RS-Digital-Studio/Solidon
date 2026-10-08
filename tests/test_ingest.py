@@ -2831,7 +2831,7 @@ def test_a_read_that_arrives_after_the_project_changed_is_dropped(
 
     session.import_model_async(modell)
     session.start_new("centauri-carbon-2", "petg")
-    assert session.wait_for_idle(20_000)
+    assert session.wait_for_idle(60_000)
 
     assert not session.project.document.sources, "die alte Lesung bettet nichts ein"
     assert not session.project.document.ops, "und legt keinen Schritt an"

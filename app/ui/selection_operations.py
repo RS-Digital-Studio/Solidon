@@ -1287,8 +1287,11 @@ class SelectionOperationsPanel(QWidget):
 
         # Der Titel steht am Knopf: Eine Fensterhandlung (*Automatisch teilen*,
         # :meth:`add_window_action`) hat keinen Registereintrag in ``_entries``.
+        # Ihr Knopf trägt die Menübeschriftung mit Auslassung („…“, öffnet
+        # einen Dialog); im Satz ist sie ein Name, und vor dem Doppelpunkt
+        # stünde sie falsch.
         def title(entry: str) -> str:
-            return str(self._buttons[entry].property("operationTitle"))
+            return str(self._buttons[entry].property("operationTitle")).removesuffix(" …")
 
         name = min(locked, key=lambda entry: sort_key(title(entry)))
         return tr("{name}: {value}", name=title(name), value=self._states[name][1])

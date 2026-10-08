@@ -279,7 +279,7 @@ def test_free_body_drag_resolves_feature_selection_before_its_preview(window: Ma
     assert len(window.session.project.document.ops) == count
     assert np.allclose(window.session.last_result.scene.objects["obj_1"].mesh.raw.bounds, before)
     view.finish_body_drag()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert str(window.session.project.document.ops[-1].op) == "translate_object"
     assert len(window.session.project.document.ops) == count + 1
@@ -1633,7 +1633,7 @@ def two_bodies(window: MainWindow) -> tuple[str, str]:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     # **Der zweite Körper steht daneben, und das ist der Punkt.**
     # ``create_box`` legt ihn um den Ursprung an, genau wie die Platte — beide
     # Mittelpunkte lägen dann auf der Z-Achse, und eine Drehung um Z um ihre
@@ -1646,7 +1646,7 @@ def two_bodies(window: MainWindow) -> tuple[str, str]:
         "Danebenstellen",
         [OperationDraft(op="translate_object", inputs=(letzter,), params={"dx": 50.0})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     tree = window.object_tree.tree
     assert tree.topLevelItemCount() >= 2, "der zweite Körper fehlt — dann prüft das nichts"
@@ -1699,7 +1699,7 @@ def test_a_drag_moves_every_selected_body(window: MainWindow) -> None:
     before = (centre_of(window, first), centre_of(window, second))
 
     window._on_transform_dragged(TransformSteps(offset=(5.0, 0.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     after = (centre_of(window, first), centre_of(window, second))
     moved = [round(after[i][0] - before[i][0], 3) for i in (0, 1)]
@@ -1730,9 +1730,9 @@ def test_two_drags_in_a_row_are_one_step_in_the_history(window: MainWindow) -> N
     anfang = centre_of(window, body)
 
     window._on_transform_dragged(TransformSteps(offset=(5.0, 0.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_transform_dragged(TransformSteps(offset=(5.0, 0.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     schritte = [one.title for one in window.session.project.document.transactions]
     assert len(schritte) == vorher + 1, (
@@ -1744,7 +1744,7 @@ def test_two_drags_in_a_row_are_one_step_in_the_history(window: MainWindow) -> N
     )
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     zurueck = centre_of(window, body)
     assert zurueck[0] == pytest.approx(anfang[0], abs=1e-6), (
@@ -1776,10 +1776,10 @@ def test_a_drag_over_the_edge_and_back_ends_where_the_steps_end(window: MainWind
     vorher = len(window.session.project.document.transactions)
 
     window._on_transform_dragged(TransformSteps(offset=(400.0, 0.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     zurueckgeschoben = centre_of(window, body)
     window._on_transform_dragged(TransformSteps(offset=(-50.0, 0.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     ende = centre_of(window, body)
     assert ende[0] == pytest.approx(zurueckgeschoben[0] - 50.0, abs=1e-6), (
@@ -1807,7 +1807,7 @@ def test_a_drag_onto_the_other_bed_moves_the_body_to_that_plate(window: MainWind
         "Auf Platte 2",
         [OperationDraft(op="translate_object", inputs=(second,), params={"plate": 2})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.session.last_result.scene.objects[second].plate == 1
     window.object_tree.select_object(second)
     anfang = centre_of(window, second)
@@ -1816,7 +1816,7 @@ def test_a_drag_onto_the_other_bed_moves_the_body_to_that_plate(window: MainWind
 
     # Eine Bettbreite samt Lücke nach links und noch 20 mm dazu.
     window._on_transform_dragged(TransformSteps(offset=(-(extent[0] + PLATE_GAP) - 20.0, 0.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     result = window.session.last_result
     assert result.scene.objects[second].plate == 0, "der Körper muss auf Platte 1 liegen"
@@ -1854,7 +1854,7 @@ def test_turning_several_bodies_turns_them_as_a_group(window: MainWindow) -> Non
     abstand_vorher = math.dist(vorher[0], vorher[1])
 
     window._on_transform_dragged(TransformSteps(axis="z", angle=90.0))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     nachher = (centre_of(window, first), centre_of(window, second))
     abstand_nachher = math.dist(nachher[0], nachher[1])
@@ -1886,7 +1886,7 @@ def test_one_body_still_turns_around_itself(window: MainWindow) -> None:
 
     vorher = centre_of(window, "obj_1")
     window._on_transform_dragged(TransformSteps(axis="z", angle=90.0))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert centre_of(window, "obj_1") == pytest.approx(vorher, abs=1e-6), (
         "ein einzelner Körper dreht um sich selbst, sein Mittelpunkt bleibt stehen"
@@ -2611,7 +2611,7 @@ def test_the_handle_of_a_chosen_face_pushes_that_face(window: MainWindow) -> Non
         if len(window.session.project.document.ops) > vorher:
             break
         time.sleep(0.02)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     letzter = window.session.project.document.ops[-1]
     assert letzter.op == "push_face", f"der Verlauf trägt {letzter.op}"
     assert letzter.params.get("face") == face_id, (
@@ -2676,7 +2676,7 @@ def test_a_right_click_on_an_edge_opens_the_edge_menu(
             "Quader",
             [OperationDraft(op="create_brep_box", inputs=(), params={})],
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.last_result
         (object_id,) = list(result.scene.objects)
         entry = result.scene.objects[object_id]

@@ -1436,7 +1436,7 @@ def test_the_workers_of_the_window_use_the_helper(
         assert kernel_process.statistics()["helper:refine_conforming"] == 1
     finally:
         session.cancel_preview()
-        session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
 
 
 # --- Der Pooldeckel gilt auch während Start und Ende (RM-298) -----------------------------

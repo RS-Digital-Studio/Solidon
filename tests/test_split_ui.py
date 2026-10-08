@@ -32,7 +32,7 @@ def loaded(session: Session, name: str) -> None:
         "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
     )
     session.evaluate_async()
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
 
 def test_the_bar_says_when_there_is_something_to_pull_apart(
@@ -115,7 +115,7 @@ def test_the_session_splits_an_oversized_part(qt_app: QApplication) -> None:
     loaded(session, "oversized.stl")
 
     applied = session.auto_split("obj_1")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     assert len(applied.object_ids) == 2
     assert len(applied.fits) == 2
@@ -184,12 +184,12 @@ def test_auto_split_continues_after_an_existing_drawn_seam(qt_app: QApplication)
         [OperationDraft(op="create_box", params={"width": 600.0, "depth": 60.0, "height": 40.0})],
     )
     session.evaluate_async()
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     first = session.split_along("obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), pins=2)
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     second = session.auto_split(first.object_ids[0])
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     assert [fit.a.feature_id for fit in second.fits] == ["pin_3", "pin_4"]
     assert [fit.b.feature_id for fit in second.fits] == ["bore_3", "bore_4"]
@@ -215,7 +215,7 @@ def test_the_result_of_the_split_stays_readable(qt_app: QApplication) -> None:
     QApplication.processEvents()
 
     window._split_done(window.session.auto_split("obj_1"))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     # Genau der Schlag, der die Meldung bisher löschte: das Ende des Laufs.
     window._on_busy(False)
     window._on_split_busy(False)
@@ -257,7 +257,7 @@ def test_the_explosion_never_reaches_the_geometry(qt_app: QApplication) -> None:
     session = Session()
     loaded(session, "oversized.stl")
     session.auto_split("obj_1")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     result = session.last_result
     assert result is not None
     before = {
@@ -329,12 +329,12 @@ def test_a_symmetric_split_explains_itself_and_offers_the_next_step(qt_app: QApp
         "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
     )
     session.evaluate_async()
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     QApplication.processEvents()
 
     applied = session.auto_split("obj_1")
     window._split_done(applied)
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     window._on_scene(session.last_result)
     QApplication.processEvents()
 
@@ -351,7 +351,7 @@ def test_a_symmetric_split_explains_itself_and_offers_the_next_step(qt_app: QApp
     assert "Auf dem Bett anordnen" in buttons, list(buttons)
     before = len(session.project.document.ops)
     buttons["Auf dem Bett anordnen"].click()
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     assert len(session.project.document.ops) == before + 1
     assert session.project.document.ops[-1].op == "arrange_bed"
     window.deleteLater()

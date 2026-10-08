@@ -28,7 +28,7 @@ def test_a_remote_call_is_one_transaction_the_window_can_undo(window: MainWindow
     assert len(document.transactions) == 1
 
     window.action_undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.session.project.document.ops == []
 
 
@@ -261,9 +261,9 @@ def test_a_remote_undo_takes_the_transaction_it_was_asked_for(window: MainWindow
     """
     session = window.session
     session.apply("Erster", [OperationDraft(op="create_box", inputs=(), params={})])
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     session.apply("Zweiter", [OperationDraft(op="create_box", inputs=(), params={})])
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     known = [entry.id for entry in session.project.document.transactions]
     assert len(known) == 2, "zwei Transaktionen, sonst prüft der Test nichts"

@@ -2136,7 +2136,7 @@ def _insert_a_thread(window: MainWindow) -> str:
     )
     picker.setCurrentIndex(index)
     dialog.accept()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     result = window.session.last_result
     assert result is not None
@@ -2238,7 +2238,7 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
         QApplication.processEvents()
     assert dialog.can_accept(), dialog.toolTip()
     dialog.accept()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     document = window.session.project.document
     assert [entry.id for entry in document.ops] == steps_before, (
         "derselbe Schritt, ersetzt — kein zweiter im Stapel, keiner weg"
@@ -2777,7 +2777,7 @@ def test_a_part_that_fits_gets_told_so(window: MainWindow) -> None:
     Startbestückung.
     """
     window.action_auto_split("obj_1")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.wait_for_workers()
 
     assert "passt bereits" in window.status_message.text()
@@ -5075,12 +5075,12 @@ def test_a_bundle_over_many_bodies_selects_all_of_them_on_click(
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply(
         "Zerlegen",
         [OperationDraft(op="split_bodies", inputs=("obj_1",), params={"count": 10})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     assert result.stopped_at is None and len(result.scene.objects) == 10
@@ -5947,7 +5947,7 @@ def _a_keyhole_on_the_plate(window: MainWindow) -> tuple[str, int]:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -5998,7 +5998,7 @@ def test_a_drag_at_a_part_feature_moves_the_whole_part(window: MainWindow) -> No
     # Ansicht es nach dem Loslassen tut (``featureMoved``).
     pocket = before["keyhole_pocket_1"]
     window.viewport.featureMoved.emit("keyhole_pocket_1", (pocket[0] + 5.0, pocket[1], pocket[2]))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
 
@@ -6012,7 +6012,7 @@ def test_a_drag_at_a_part_feature_moves_the_whole_part(window: MainWindow) -> No
     assert window.feature_panel.shown_part_step() == step, "der Baustein bleibt gewählt"
 
     window.viewport.featureTurned.emit("keyhole_pocket_1", "z", 30.0)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     turned = next(entry for entry in window.session.project.document.ops if entry.id == step)
@@ -6023,7 +6023,7 @@ def test_a_drag_at_a_part_feature_moves_the_whole_part(window: MainWindow) -> No
 
     # Und die Bewegen-Leiste geht denselben Weg — ein getippter Versatz.
     window._on_transform_dragged(TransformSteps(offset=(0.0, -2.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     typed = next(entry for entry in window.session.project.document.ops if entry.id == step)
@@ -6083,7 +6083,7 @@ def test_a_part_on_a_wall_turns_about_the_wall_and_declines_the_rest(window: Mai
         "Schraubenloch",
         [OperationDraft(op="insert_screw_hole", inputs=(object_id,), params={"at_feature": wall})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -6101,7 +6101,7 @@ def test_a_part_on_a_wall_turns_about_the_wall_and_declines_the_rest(window: Mai
         QApplication.processEvents()
 
     window.viewport.featureTurned.emit(bore, "y", 30.0)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     turned = next(entry for entry in window.session.project.document.ops if entry.id == step.id)
@@ -6111,7 +6111,7 @@ def test_a_part_on_a_wall_turns_about_the_wall_and_declines_the_rest(window: Mai
     assert turned.params["at_feature"] == wall, "der Sitz bleibt"
 
     window.viewport.featureTurned.emit(bore, "z", 30.0)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     same = next(entry for entry in window.session.project.document.ops if entry.id == step.id)
@@ -6206,7 +6206,7 @@ def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> Non
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -6246,11 +6246,11 @@ def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> Non
     window._on_feature_values_changed("slot_hole", turned_values)
     window._feature_preview.stop()
     window._preview_feature_change()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     window._apply_from_feature_panel("slot_hole", turned_values)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
 
@@ -6274,7 +6274,7 @@ def test_turning_a_slot_from_a_step_changes_that_step(window: MainWindow) -> Non
 
     # Und der Zug an den Langlochknöpfen geht denselben Weg.
     window._on_slot_dragged(slot_id, 22.0, 45.0)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     assert len(window.session.project.document.ops) == steps
@@ -6307,7 +6307,7 @@ def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWin
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = int(window.session.project.document.ops[-1].id)
@@ -6337,11 +6337,11 @@ def test_a_part_stays_chosen_when_its_measures_swap_its_features(window: MainWin
     window._on_feature_values_changed("insert_snap_connector", {"kind": "bore"})
     window._feature_preview.stop()
     window._preview_feature_change()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     window._change_part_step(step, {"kind": "bore"})
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
 
@@ -6612,13 +6612,13 @@ def test_the_layer_tool_takes_the_only_body_there_is(window: MainWindow) -> None
     # Das Fixture öffnet ``plate_holes.stl`` bereits — genau die Lage nach dem
     # Öffnen einer Datei, um die es hier geht. Ein zweites Laden machte daraus
     # zwei Körper und prüfte den anderen Fall.
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     window.object_tree.tree.clearSelection()
     assert window.object_tree.selected() is None, "nothing is selected on purpose"
 
     window.layer_bar.set_active(True)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     # ``isHidden`` und nicht ``isVisible``: Ein Fenster, das nie gezeigt wurde,
     # meldet jedes Kind als unsichtbar — geprüft wird, was *gesetzt* wurde.
@@ -6643,7 +6643,7 @@ def test_with_several_bodies_the_bar_says_what_it_needs(window: MainWindow) -> N
     window.object_tree.tree.clearSelection()
 
     window.layer_bar.set_active(True)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert not window.layer_bar.note.isHidden(), "two bodies: the bar has to ask"
     assert "Teil" in window.layer_bar.note.text(), (
@@ -7547,7 +7547,7 @@ def _a_rib_on_the_plate(window: MainWindow) -> tuple[str, int]:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -7589,7 +7589,7 @@ def test_a_face_of_a_part_carries_the_grip_of_the_part(window: MainWindow) -> No
     steps_before = len(window.session.project.document.ops)
     centre = tuple(float(value) for value in chosen.params["centre"])
     window._on_feature_moved(faces[0], (centre[0], centre[1] - 2.0, centre[2]))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     moved = next(entry for entry in window.session.project.document.ops if entry.id == step)
@@ -7616,7 +7616,7 @@ def test_a_bound_axis_takes_the_drag_into_its_expression(window: MainWindow) -> 
     assert result is not None
     object_id = next(iter(result.scene.objects))
     assert window.session.add_parameter(Parameter(name="hoehe", value=8.0, unit="mm"))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply(
         "Schlüsselloch",
         [
@@ -7627,7 +7627,7 @@ def test_a_bound_axis_takes_the_drag_into_its_expression(window: MainWindow) -> 
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     step = window.session.project.document.ops[-1]
@@ -7643,7 +7643,7 @@ def test_a_bound_axis_takes_the_drag_into_its_expression(window: MainWindow) -> 
             QApplication.processEvents()
         x, y, z = centres[hole]
         window._on_feature_moved(hole, (x + dx, y, z + dz))
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         for _ in range(40):
             QApplication.processEvents()
         return next(entry for entry in window.session.project.document.ops if entry.id == step.id)
@@ -7721,7 +7721,7 @@ def test_the_body_grip_with_the_part_roof_chosen_moves_the_part(window: MainWind
     steps_before = len(window.session.project.document.ops)
 
     window._on_transform_dragged(TransformSteps(offset=(0.0, -2.0, 0.0)))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     moved = next(entry for entry in window.session.project.document.ops if entry.id == step)
@@ -8116,7 +8116,7 @@ def test_the_defect_map_offers_the_repair_and_says_when_there_is_nothing(
     steps = len(window.session.project.document.ops)
 
     button.click()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     ops = window.session.project.document.ops
     assert len(ops) == steps + 1

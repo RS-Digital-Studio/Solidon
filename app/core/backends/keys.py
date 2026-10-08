@@ -33,7 +33,14 @@ def _keyring() -> Any | None:
         import keyring
     except Exception:  # pragma: no cover - hängt an der Installation
         return None
-    find_backend_once(keyring)
+    try:
+        find_backend_once(keyring)
+    except Exception as error:
+        # Das eingestellte Backend ist hier nicht nutzbar: derselbe Fall wie
+        # ein gesperrter Schlüsselbund in `read` — kein Schlüssel von dort,
+        # kein Absturz.
+        _log.warning("keychain unreachable: %s", error)
+        return None
     return keyring
 
 

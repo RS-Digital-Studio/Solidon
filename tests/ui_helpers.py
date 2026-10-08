@@ -117,7 +117,7 @@ def wait_for_export(window: MainWindow) -> None:
     keinen Arbeiter, und die Datei fehlte.
     """
     for _ in range(2):
-        window.session.wait_for_idle(30_000)
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         worker = window._export_worker
         if worker is not None:
@@ -148,8 +148,14 @@ def expire_trial(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def wait_until(app: QApplication, condition: Callable[[], bool]) -> None:
-    """Stellt Qt-Ereignisse zu, bis eine Bedingung erfüllt ist oder abläuft."""
-    deadline = time.monotonic() + 10
+    """Stellt Qt-Ereignisse zu, bis eine Bedingung erfüllt ist oder abläuft.
+
+    **Eine Minute, wie ``assert ….wait_for_idle(60_000)``:** Mit zehn Sekunden
+    lief die Verlaufsvorschau von ``dose-mit-deckel.p3d`` auf dem Intel-Mac-
+    Läufer in die Frist (Fensterauswahl 37743748780). Die Frist kostet nur,
+    wenn die Bedingung ausbleibt.
+    """
+    deadline = time.monotonic() + 60
     while not condition() and time.monotonic() < deadline:
         app.processEvents()
         # QTest.qWait hält hier den GIL; der kalte SciPy-Import im Arbeiter

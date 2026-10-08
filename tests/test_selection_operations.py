@@ -348,6 +348,40 @@ def test_the_search_finds_customer_words_and_names_what_another_choice_needs(
     assert panel._nothing.isHidden(), "bei zwei Körpern ist *Vereinigen* oben ein Treffer"
 
 
+def test_a_locked_window_action_is_named_without_its_menu_ellipsis(
+    qt_app: QApplication,
+) -> None:
+    """Der Satz zu einer gesperrten Fensterhandlung nennt ihren Namen, nicht die Menüzeile.
+
+    *Automatisch teilen* hat keinen Registereintrag; Titel und Grund kommen
+    von der Aktion des Fensters (:meth:`SelectionOperationsPanel.add_window_action`).
+    Ihre Beschriftung trägt die Auslassung des Menüs — vor dem Doppelpunkt
+    stand sie als „Automatisch teilen …: …“ im Satz.
+    """
+    from PySide6.QtGui import QAction
+
+    from app.i18n import tr
+
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    action = QAction(tr("Automatisch teilen …"), panel)
+    reason = "Das Teil passt schon auf das Bett."
+    action.setToolTip(reason)
+    action.setEnabled(False)
+    assert panel.add_window_action("auto_split", "prepare", action)
+    # Alles andere gesperrt und ohne Grund: Getroffen wird die Handlung über
+    # ihre Gruppe, und nur sie hat einen Satz.
+    panel.set_context(1, lambda name: (False, ""))
+
+    panel.search.setText(tr("Vorbereiten"))
+    assert panel._buttons["auto_split"].isHidden(), "gesperrt steht der Knopf nicht da"
+    assert not panel._nothing.isHidden()
+    assert panel._nothing.text() == tr(
+        "{name}: {value}", name=tr("Automatisch teilen …").removesuffix(" …"), value=reason
+    )
+    assert "…" not in panel._nothing.text()
+
+
 def test_selection_changes_update_in_place_and_explain_disabled_actions(
     qt_app: QApplication,
 ) -> None:

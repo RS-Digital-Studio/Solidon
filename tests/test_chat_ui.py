@@ -262,7 +262,7 @@ def test_a_proposal_waits_for_a_decision(window: MainWindow) -> None:
 
     window.chat.input.setPlainText("Schieb die Platte 5 mm")
     window.chat._send()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     qt_app_process(window)
 
     assert window._proposal is not None
@@ -291,7 +291,7 @@ def test_accepting_makes_it_one_transaction(window: MainWindow) -> None:
     window.chat._send()
     qt_app_process(window)
     window.chat.accepted.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     document = window.session.project.document
     assert len(document.transactions) == transactions_before + 1
@@ -331,7 +331,7 @@ def test_a_reversible_proposal_is_applied_without_asking(window: MainWindow) -> 
         if len(window.session.project.document.transactions) > transactions_before:
             break
         time.sleep(0.01)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     document = window.session.project.document
     assert len(document.transactions) == transactions_before + 1
@@ -342,7 +342,7 @@ def test_a_reversible_proposal_is_applied_without_asking(window: MainWindow) -> 
     assert "Übernommen" in window.chat.summary.text()
 
     window.chat.undoRequested.emit()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert len(window.session.project.document.transactions) == transactions_before
 
 
@@ -726,7 +726,7 @@ def test_an_answer_only_turn_needs_no_decision(window: MainWindow) -> None:
         if len(document.chat) >= 2:
             break
         time.sleep(0.01)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert len(document.chat) == 2
     assert document.chat[-1].transaction_id is None

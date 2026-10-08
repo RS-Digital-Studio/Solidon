@@ -1317,7 +1317,7 @@ def test_the_drawing_keys_win_while_drawing(qt_app: QApplication) -> None:
         )
 
         window.finish_sketch(keep=False)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         assert window._sketch_panel is None
     finally:
         window.deleteLater()
@@ -6623,7 +6623,7 @@ def test_a_sketch_step_can_be_redrawn_in_space(qt_app: QApplication) -> None:
         window.session.apply(
             "Grundform", [OperationDraft(op="create_box", inputs=[], params={"width": 40.0})]
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         body = next(iter(window.session.evaluate_now().scene.objects))
         window.object_tree.select_object(body)
         window.session.apply(
@@ -6636,7 +6636,7 @@ def test_a_sketch_step_can_be_redrawn_in_space(qt_app: QApplication) -> None:
                 )
             ],
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
 
         step = window.session.history.operations[-1].id
@@ -6666,7 +6666,7 @@ def test_a_sketch_step_can_be_redrawn_in_space(qt_app: QApplication) -> None:
 
         window._sketch_panel.canvas.add_element("line", ((0.0, 0.0), (5.0, 0.0)))
         window.finish_sketch(keep=True)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
 
         assert len(window.session.history.operations) == before, (
@@ -6735,7 +6735,7 @@ def test_reopening_a_sketch_step_still_finds_its_field(qt_app: QApplication) -> 
         window.session.apply(
             "Grundform", [OperationDraft(op="create_box", inputs=[], params={"width": 40.0})]
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         body = next(iter(window.session.evaluate_now().scene.objects))
         window.object_tree.select_object(body)
         window.session.apply(
@@ -6748,7 +6748,7 @@ def test_reopening_a_sketch_step_still_finds_its_field(qt_app: QApplication) -> 
                 )
             ],
         )
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
 
         step = window.session.history.operations[-1].id
@@ -8734,7 +8734,12 @@ def _run_with_drawings(
     dialog._editors["sketch"].edit_button.click()
     second.edit_button.click()
     dialog.accept()
-    assert window.session.wait_for_idle()  # type: ignore[attr-defined]
+    assert window.session.wait_for_idle(60_000)  # type: ignore[attr-defined]
+    # Sonst liest der Test das Ergebnis vor dem Schritt — „vollständig, ohne
+    # Körper“ —, und das Rot nennt eine leere Szene statt des Klicks.
+    assert window._op_dialog is None, (  # type: ignore[attr-defined]
+        f"Übernehmen hat nicht übernommen: {window.status_message.text()}"  # type: ignore[attr-defined]
+    )
     return dialog, window.session.last_result  # type: ignore[attr-defined]
 
 

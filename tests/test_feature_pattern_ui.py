@@ -79,14 +79,14 @@ def test_a_pattern_is_one_step_and_one_undo(window: MainWindow) -> None:
             )
         ],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     after = window.session.evaluate_now()
     assert len(window.session.project.document.ops) == before + 1
     holes = [f for f in after.scene.objects[object_id].features.values() if f.kind == "hole"]
     assert len(holes) == count + 1
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     back = window.session.evaluate_now()
     holes = [f for f in back.scene.objects[object_id].features.values() if f.kind == "hole"]
     assert len(holes) == count

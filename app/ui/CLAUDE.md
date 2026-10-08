@@ -270,7 +270,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 
 - **Freigabe im Hauptfenster:** früher Klick bindet an das erwartete Bild
   (`_PreviewApproval.pending_click`, `_apply_when_previewed`); ohne Bildpflicht
-  nur an cachegleiche Rechnung (`Session.preview_is_the_evaluation`). Zahl-,
+  nur an cachegleiche Rechnung (`Session.preview_is_the_evaluation`); während
+  einer Auswertung an deren Ende (`_click_after_evaluation`). Zahl-,
   Dokument-/Projektwechsel entwertet beides. `block_apply(reason)` sperrt bei
   Problemen, nicht beim Warten. Dialog/Panel/`QuietHost` teilen `preview_check`
   und `preview_defer`, keine eigene Vorschauverwaltung.

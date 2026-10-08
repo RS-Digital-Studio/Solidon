@@ -983,7 +983,7 @@ SLICER_DEVIATION: dict[str, tuple[str, float, str]] = {
     "cura": ("sovol-sv06", -13.2, "5.13.0"),
     "orcaslicer": ("anycubic-kobra-2", -9.2, "2.4.2"),
     "bambustudio": ("bambu-p1s", 0.1, "02.08.02.61"),
-    "crealityprint": ("creality-k1", -0.5, "7.3"),
+    "crealityprint": ("creality-k1", -0.5, "7.3.0.6149"),
 }
 
 #: Wie viele Prozentpunkte ein Lauf von der Messung abweichen darf: eine
@@ -1013,6 +1013,9 @@ def test_a_version_matches_digit_group_by_digit_group() -> None:
     assert _same_version("PrusaSlicer-2.9.6+win64 on 2026-10-07", "2.9.6")
     assert _same_version("CrealityPrint 7.2.0.4012", "7.2")
     assert not _same_version("CrealityPrint 7.20.1", "7.2")
+    # 7.3.0 kam in zwei Bauständen; gemessen ist einer, der andere trifft nicht.
+    assert _same_version("Creality_Print V7.3.0.6149", "7.3.0.6149")
+    assert not _same_version("Creality_Print V7.3.0.6151", "7.3.0.6149")
     assert not _same_version("OrcaSlicer 2.4.3", "2.4.2")
     assert not _same_version("", "2.4.2")
 
