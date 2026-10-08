@@ -309,10 +309,33 @@ class MeshData:
         return cls(raw=mesh, slots=slots, cavity=cavity, cavity_open=opened)
 
     def to_stl(self) -> bytes:
-        """Binäres STL, für den Export und die Übergabe an einen Slicer (§29)."""
-        result: bytes = trimesh.exchange.stl.export_stl(self.raw)
-        return result
+        """Binäres STL, für den Export und die Übergabe an einen Slicer (§29).
 
+        Byte für Byte, was ``trimesh.exchange.stl.export_stl`` schreibt — Kopf,
+        Normalen und Ecken als float32 —, aber blockweise in einen Puffer
+        (RM-567): trimesh baute das gepackte Feld und kopierte es danach
+        zweimal; hier wird es einmal in den Puffer geschrieben.
+        """
+        from trimesh.exchange import stl
+
+        faces = np.asarray(self.raw.faces)
+        vertices = np.asarray(self.raw.vertices)
+        header = np.zeros(1, dtype=stl._stl_dtype_header)
+        header["face_count"] = len(faces)
+        size = header.nbytes + len(faces) * stl._stl_dtype.itemsize
+        buffer = bytearray(size)
+        buffer[: header.nbytes] = header.tobytes()
+        packed = np.frombuffer(buffer, dtype=stl._stl_dtype, offset=header.nbytes)
+        if len(faces):
+            packed["normals"] = self.raw.face_normals
+            for begin in range(0, len(faces), _STL_BLOCK):
+                end = begin + _STL_BLOCK
+                packed["vertices"][begin:end] = vertices[faces[begin:end]]
+        return bytes(buffer)
+
+
+#: Wie viele Dreiecke :meth:`MeshData.to_stl` je Block in den Puffer schreibt.
+_STL_BLOCK: Final = 262_144
 
 _STORAGE_SUGGESTIONS = (CANCEL,)
 """Ein eingebetteter Netzstand, dem nicht zu trauen ist, hat genau einen Weg:
@@ -2636,9 +2659,11 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
         # ``Trimesh`` herauskommt — mehrere Körper in einer Datei verschweißt
         # er wie zuvor ``force="mesh"``, gemessen an einer GLB mit zwei
         # Quadern: beide Wege 24 Dreiecke.
-        loaded = trimesh.load_mesh(
-            io.BytesIO(payload), file_type=normalised.lstrip("."), process=False
-        )
+        loaded = _stl_body(payload) if normalised == ".stl" else None
+        if loaded is None:
+            loaded = trimesh.load_mesh(
+                io.BytesIO(payload), file_type=normalised.lstrip("."), process=False
+            )
     except PROGRAMMING_ERRORS:
         raise
     except Exception as problem:  # trimesh wirft eine breite Palette an Parserfehlern
@@ -2659,6 +2684,30 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             values={"suffix": suffix},
         )
     return MeshData.of(loaded)
+
+
+def _stl_body(payload: bytes) -> trimesh.Trimesh | None:
+    """Eine STL direkt aus ihrem Leser, ohne den Umweg über eine Szene (RM-567).
+
+    ``trimesh.load_mesh`` baut eine Szene, zieht ihr Netz heraus und kopiert
+    es; Szene und Original bleiben als Ring liegen, den erst die
+    Speicherbereinigung abräumt — am Spiderman 254 MB, am Murmelbrett 650 MB,
+    und im Fenster räumt sie nur der Hauptfaden nach seinen Schwellen ab
+    (``ui.leash.collect_in_main_thread``). Dieselben Ecken, Dreiecke und
+    Dreiecksattribute, ohne die Normalen aus der Datei — die Kopie dort
+    verwarf sie ebenfalls; geprüft an 65 STL aus Korpus und ``F:\\3D Dateien``.
+    Eine ASCII-STL mit mehreren Körpern ist eine Szene; für sie ``None``.
+    """
+    loaded = trimesh.exchange.stl.load_stl(io.BytesIO(payload))
+    if not isinstance(loaded, dict) or "geometry" in loaded:
+        return None
+    return trimesh.Trimesh(
+        vertices=loaded["vertices"],
+        faces=loaded["faces"],
+        face_attributes=loaded.get("face_attributes"),
+        metadata=loaded.get("metadata"),
+        process=False,
+    )
 
 
 def _check_embedded_gltf(payload: bytes) -> None:
