@@ -29,7 +29,11 @@ def speeds(values: dict) -> str:
 SUPPORT_KEYS = (
     ("support_type", "support_style", "support_material_style", "support_structure"),
     ("support_top_z_distance", "support_material_contact_distance", "support_top_distance"),
-    ("support_bottom_z_distance", "support_material_bottom_contact_distance", "support_bottom_distance"),
+    (
+        "support_bottom_z_distance",
+        "support_material_bottom_contact_distance",
+        "support_bottom_distance",
+    ),
     ("support_interface_top_layers", "support_material_interface_layers", "support_roof_height"),
     ("support_object_xy_distance", "support_material_xy_spacing", "support_xy_distance"),
 )

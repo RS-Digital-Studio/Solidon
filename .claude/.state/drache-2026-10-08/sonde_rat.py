@@ -29,7 +29,7 @@ from app.core.export import writer  # noqa: E402
 from app.core.geom.mesh import MeshData  # noqa: E402
 from app.core.knowledge import print_settings, profiles  # noqa: E402
 from app.core.slice import advise  # noqa: E402
-from app.core.slice.analysis import island_layers, model_support, piece_area  # noqa: E402
+from app.core.slice.analysis import island_layers, piece_area  # noqa: E402
 from app.core.types import SceneObject  # noqa: E402
 
 assert Path(app.__file__).resolve().is_relative_to(ROOT), app.__file__

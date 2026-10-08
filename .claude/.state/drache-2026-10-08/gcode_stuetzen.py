@@ -111,12 +111,20 @@ def main() -> int:
     from app.core.slice.analysis import model_support
 
     channels = model_support(result).channels
+    try:
+        from app.core.slice.analysis import ledges
+
+        edges = ledges(result)
+    except ImportError:
+        edges = frozenset()
     pieces = []
     for index, layer in enumerate(result.layers):
         for number, piece in enumerate(layer.overhangs):
             shape = ShapelyPolygon(piece.outline, piece.holes)
             if shape.area >= 0.5:
-                pieces.append((float(layer.z), shape, (index, number) in channels))
+                pieces.append(
+                    (float(layer.z), shape, (index, number) in channels, (index, number) in edges)
+                )
     islands = []
     for layer in result.layers:
         for piece in layer.islands:
@@ -191,12 +199,16 @@ def main() -> int:
         bands: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0])
         total = held = 0.0
         open_total = open_held = 0.0
+        needed_total = needed_held = 0.0
         loose: list[list[float]] = []
-        for z, shape, channel in pieces:
+        for z, shape, channel, edge in pieces:
             ok = supported(z, shape)
             if not channel:
                 open_total += shape.area
                 open_held += shape.area if ok else 0.0
+            if not channel and not edge:
+                needed_total += shape.area
+                needed_held += shape.area if ok else 0.0
             band = int(z // 10) * 10
             bands[band][0] += shape.area
             total += shape.area
@@ -218,6 +230,8 @@ def main() -> int:
             "overhang_mm2": round(total, 1),
             "supported_share": round(held / total, 3) if total else math.nan,
             "open_share": round(open_held / open_total, 3) if open_total else math.nan,
+            "needed_share": round(needed_held / needed_total, 3) if needed_total else math.nan,
+            "ledge_mm2": round(open_total - needed_total, 1),
             "channel_mm2": round(total - open_total, 1),
             "bands": {
                 band: [round(value[0], 1), round(value[1] / value[0], 2) if value[0] else None]
