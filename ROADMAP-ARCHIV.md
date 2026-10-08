@@ -38,6 +38,11 @@ entfernt hat.
 | 2026-10-06 | [RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)](#rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026) |
 | 2026-10-07 | [RM-535: Karte, Operation und Griff fragen dieselbe Funktion, und das Material reist beim Versetzen, wie es ist (07.10.2026)](#rm-535-karte-operation-und-griff-fragen-dieselbe-funktion-und-das-material-reist-beim-versetzen-wie-es-ist-07102026) |
 | 2026-10-07 | [RM-536: Stift für Bohrung baut das passende Gegenstück (07.10.2026)](#rm-536-stift-für-bohrung-baut-das-passende-gegenstück-07102026) |
+| 2026-10-08 | [RM-553: Die Tour-Karte misst ihre Schritte und trägt keine Sprechblase (08.10.2026)](#rm-553-die-tour-karte-misst-ihre-schritte-und-trägt-keine-sprechblase-08102026) |
+| 2026-10-08 | [RM-554: Das i an einer Handlung schlägt das Handbuch auf (08.10.2026)](#rm-554-das-i-an-einer-handlung-schlägt-das-handbuch-auf-08102026) |
+| 2026-10-08 | [RM-555: Jedes Zahlenfeld eines Bausteinschritts trägt fx (08.10.2026)](#rm-555-jedes-zahlenfeld-eines-bausteinschritts-trägt-fx-08102026) |
+| 2026-10-08 | [RM-558: Die Zahl am Vorschaugriff geht mit dem Zug (08.10.2026)](#rm-558-die-zahl-am-vorschaugriff-geht-mit-dem-zug-08102026) |
+| 2026-10-08 | [RM-547: Ein erneuter Versuch fasst die Schritte neu, statt sie zu löschen (08.10.2026)](#rm-547-ein-erneuter-versuch-fasst-die-schritte-neu-statt-sie-zu-löschen-08102026) |
 | 2026-10-07 | [RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)](#rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
 | 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
@@ -44205,3 +44210,118 @@ unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothin
 mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
 Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
 Zylinderkopf und Gewinde passend zur Bohrung.
+
+## RM-553: Die Tour-Karte misst ihre Schritte und trägt keine Sprechblase (08.10.2026)
+
+<a id="rm-553-die-tour-karte-misst-ihre-schritte-und-trägt-keine-sprechblase-08102026"></a>
+<a id="rm-553"></a>
+
+**RM-553 — Die Karte der Tour war zu niedrig, Schritttexte wurden abgeschnitten.** Robert,
+08.10.2026, Bildschirmfoto bei 2000 × 816: Karte nur wenige Zeilen hoch, Schritt 2 abgeschnitten,
+der Hinweis zum nächsten Schritt als Sprechblase quer über Ansicht und Kartentext.
+
+**Ursache:** Die Schritte standen in einem nackten `QScrollArea`, der sich den Wunsch seines
+Inhalts beim Einsetzen merkt, als die Liste leer war; die Karte wuchs nur über die Nachrechnung
+in `overlay.natural_height`, und beim *Weiter* meldete kein Umbau sich bis zur Zone (Sonde
+offscreen: nach *Weiter* 230 Punkte Karte für 300 Punkte Inhalt, Schritt 2 mit Balken). Die
+Sprechblase war der einzeilige Tooltip am Knopf *Weiter*/*Schritt überspringen* und an jeder
+eingeklappten Schrittzeile.
+
+**Umsetzung** (Commit `01a66741b`): `tour._StepScroller` (`ContentScroller`, meldet jeden
+`LayoutRequest` mit `tell_the_zone`), der aktuelle Schritt wird nach dem Legen ins Bild gerollt,
+`_clear_rows` nimmt alte Zeilen sofort aus dem Layout. Kein Tooltip mehr in der Karte: Schritt
+und Knopf tragen ihren Satz als zugängliche Beschreibung, ein Klick auf eine eingeklappte Zeile
+klappt sie auf. Regel `fenster.md` (Tour).
+
+**Nachweis:** `test_overlay.py::test_the_longest_step_of_every_tour_fits_its_card_or_rolls`
+(sechs Sprachen, 1366 × 768 und 1920 × 1080, je Tour der längste Schritt; gerollt wird nur an der
+Unterkante der Kartenfläche; kein Widget der Karte mit Tooltip), Gegenprobe am alten Stand rot.
+Am echten Fenster (Windows, zweiter Schirm) geprüft: bei 2000 × 816 nach *Weiter* und nach dem
+Aufklappen eines Schritts so hoch wie ihr Inhalt, bei 1366 × 768 auf Französisch der längste
+Schritt ganz. Changelog: ja — die Tour-Karte zeigt jeden
+Schritt ganz.
+
+## RM-554: Das i an einer Handlung schlägt das Handbuch auf (08.10.2026)
+
+<a id="rm-554-das-i-an-einer-handlung-schlägt-das-handbuch-auf-08102026"></a>
+<a id="rm-554"></a>
+
+**RM-554 — Das i an einer Kartengruppe zeigte beim Klick nur den Tooltip.** Robert,
+08.10.2026, am i neben *Baustein verschieben*.
+
+**Umsetzung** (Commit `f44228d83`): `manual.help_for_action` ist die eine Quelle für das Ziel — mit
+Operation dieselbe Antwort wie F1 im Operationsdialog (Anleitung oder Referenzeintrag mit Anker),
+ohne Operation *Was Solidon im Modell erkennt* (gesperrte Zeile) oder *Der Verlauf* (*Baustein
+entfernen*). `FeaturePanel.manualRequested` → `MainWindow.action_manual`; der Tooltip bleibt.
+Handbuch: *Das Fenster* nennt das i unter *Die Auswahl*, die Seite ohne ihre vier Semikolons
+(`text_patterns.json`, Bestand 382). Regel `fenster.md` (Merkmalfenster).
+
+**Nachweis:** `test_manual.py::test_every_sign_in_the_feature_panel_opens_a_page_that_exists`
+(jede Operation des Registers und beide Fälle ohne), Fenstertests
+`test_feature_panel.py::test_a_click_on_the_sign_opens_the_manual_where_the_handling_is_explained`
+und `test_ui.py::test_the_sign_at_a_handling_opens_the_manual_on_its_page`. Changelog: ja — das i
+öffnet die passende Stelle im Handbuch.
+
+## RM-555: Jedes Zahlenfeld eines Bausteinschritts trägt fx (08.10.2026)
+
+<a id="rm-555-jedes-zahlenfeld-eines-bausteinschritts-trägt-fx-08102026"></a>
+<a id="rm-555"></a>
+
+**RM-555 — *Baustein verschieben*: Position Y hatte keinen fx-Knopf, X und Z hatten einen.**
+Robert, 08.10.2026, Bildschirmfoto am Schraubenloch des Beispiels *Halter konstruieren*.
+
+**Ursache am Feld:** `panels._expression_entry` gab einem Bausteinfeld das `ValueField` nur, wenn
+schon ein Ausdruck darin stand; X `=10-@breite/2` und Z `=@staerke` hatten einen, Y die Vorgabe 0.
+
+**Umsetzung** (Commit `a17109f55`): `registry.params.accepts_expression` als eine Quelle (auch für die
+Werkzeugbeschreibung des Agenten); jedes Zahlenfeld eines Bausteinschritts und der Bohrung im
+ursprünglichen Schritt bekommt das `ValueField`, mit oder ohne Ausdruck. Regel `fenster.md`
+(Bausteinmerkmale).
+
+**Nachweis:** ohne Fenster
+`test_feature_panel.py::test_every_number_a_part_step_takes_offers_fx_with_or_without_an_expression`
+(jeder Baustein), Fenstertests
+`test_feature_panel.py::test_y_takes_an_expression_through_fx_and_the_part_follows` (Y = `=@staerke`
+rechnet, Loch bei Y 6) und `test_operation_ui.py::test_every_position_field_of_every_operation_offers_fx`;
+Gegenprobe am alten Stand rot. Changelog: ja — fx an jedem Maß eines Bausteins.
+
+## RM-558: Die Zahl am Vorschaugriff geht mit dem Zug (08.10.2026)
+
+<a id="rm-558-die-zahl-am-vorschaugriff-geht-mit-dem-zug-08102026"></a>
+<a id="rm-558"></a>
+
+**RM-558 — Nach dem Einsetzen eines Bausteins blieb „Y 60,62 mm“ über der Ansicht.** Robert,
+08.10.2026, Bildschirmfoto an der Rastdrehscheibe.
+
+**Ursache:** Das Feld ist die `DragValueBar`. Der Griff an der Vorschau eines Erzeugers teilt
+`_on_gizmo_interacted` mit dem Körpergriff; `_on_preview_released` räumte Zahl und Zugzustand
+nicht ab, *Einsetzen*, *Übernehmen* und *Abbrechen* auch nicht. Eine dort getippte Zahl hätte mit
+der Eingabetaste den gewählten Körper verschoben.
+
+**Umsetzung** (Commit `035d6247e`): `Viewport._end_preview_drag` beim Loslassen und in
+`set_preview_gizmo(False)`, wenn der Dialog mitten im Zug schließt. Regel `griffe.md`.
+
+**Nachweis:** `test_ui.py::test_no_drag_number_stays_in_the_view_after_the_dialog`
+(Einsetzen, Übernehmen, Abbrechen mitten im Zug), Gegenprobe am alten Stand rot. Changelog: ja —
+nach dem Einsetzen bleibt keine Zahl über der Ansicht stehen.
+
+## RM-547: Ein erneuter Versuch fasst die Schritte neu, statt sie zu löschen (08.10.2026)
+
+<a id="rm-547-ein-erneuter-versuch-fasst-die-schritte-neu-statt-sie-zu-löschen-08102026"></a>
+<a id="rm-547"></a>
+
+**RM-547 — Nach „Reparieren und erneut versuchen“ hieß ein weiterrechnender Schritt
+„gelöscht“.** Gefunden am 06.10.2026 beim Review von RM-529. Entschieden (Claude,
+Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln.
+
+**Umsetzung** (Commit `7a73c7db2`): `History._retried_after` schreibt `revision="insert"` mit der
+Zuordnung alt → neu (`renumbered`); das Format bleibt, ältere Versionen lesen beides. Eigene
+Titel folgen ihrem Schritt. Ältere Dateien ohne Revision erkennt `types.replanned_steps` an der
+Gestalt (Schritte mitgebracht und zugleich entfernt). Karte `app/core/scene/CLAUDE.md`.
+
+**Nachweis:** `test_history_revision_ui.py::test_a_retried_step_is_replanned_not_deleted_in_the_digest`
+(neu und als alte Datei) und Fenstertest
+`test_history_revision_ui.py::test_the_history_shows_each_retried_step_once_and_none_deleted`:
+nach *Reparieren* und *Zerlegen* vor der Bohrung keine Zeile „gelöscht“, jeder lebende Schritt
+einmal unter seiner Nummer; Gegenprobe am alten Stand rot. Changelog: ja — der Verlauf nennt nach
+„… und erneut versuchen“ nichts mehr gelöscht.

@@ -90,13 +90,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-568 — Merkmalerkennung und die übrigen langen Wege schneller machen](#rm-568) | Geometrie, Erkennung und Druckvorbereitung | Robert, 08.10.: Profil je Stufe an den Korpusmodellen, die teuersten Stellen zuerst; Budget §31 |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt „gelöscht“](#rm-547) | Bedienung und Darstellung | Entschieden (Claude, Produktabwägung): wie ein beim Umbau neu gefasster Schritt behandeln, in Verlauf und Steckbrief |
-| [RM-553 — Die Karte der Tour ist zu niedrig, Schritttexte werden abgeschnitten](#rm-553) | Bedienung und Darstellung | Robert, 08.10.: Karte bei voller Fensterhöhe zu klein, der nächste Schritt hängt als Sprechblase über der Ansicht; Höhe aus dem Inhalt rechnen |
-| [RM-554 — Das i an einer Kartengruppe zeigt nur einen Tooltip statt der Handbuchseite](#rm-554) | Bedienung und Darstellung | Robert, 08.10.: Klick öffnet die passende Handbuchseite, der Tooltip bleibt |
-| [RM-555 — *Baustein verschieben*: Position Y hat keinen fx-Knopf, X und Z haben einen](#rm-555) | Bedienung und Darstellung | Robert, 08.10.: Ursache am Feld klären, jedes Zahlenfeld mit Ausdruck zeigt fx gleich |
 | [RM-556 — Filamente aus der linken Spalte in die Kopfleiste](#rm-556) | Bedienung und Darstellung | Robert, 08.10.: Knopf oben, Klick zeigt die Filamente des Projekts und den Weg ins Filamentlager |
 | [RM-557 — Nach einem Filamentwechsel bleibt der Körper in der alten Farbe, und Solidon rechnet lange](#rm-557) | Bedienung und Darstellung | Robert, 08.10.: eine Farbänderung färbt sofort um, ohne die Geometrie neu zu rechnen |
-| [RM-558 — Nach dem Einsetzen eines Bausteins bleibt ein Maßfeld „Y … mm“ in der Ansicht stehen](#rm-558) | Bedienung und Darstellung | Robert, 08.10. (Bild): Feld verschwindet mit dem Einsetzen |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Robert, 08.10.: Start, Gegenecke in X/Y, Höhe in Z; ein Weg; Ablauf vorher mit bedienlogik |
 | [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
 | [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Robert, 08.10.: je Werkzeug ein Weg, wenige Schritte, keine verschachtelten Modi; Klicks vorher und nachher zählen |
@@ -4107,46 +4102,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Fensterabnahme beim Release (RM-213): Kaufdatum „05092026“ tippen und *Unbekannt*, Spulenfenster
   auf halber Höhe, *Werte mitgeben* mit schreibgeschütztem Nutzerordner. Changelog: nein.
 
-<a id="rm-547"></a>
-
-- [ ] **RM-547 — Nach „Reparieren und erneut versuchen“ heißt ein weiterrechnender Schritt
-  „gelöscht“.** Gefunden am 06.10.2026 beim Review von RM-529 (Claude): Setzen
-  `History.split_and_retry`, *Reparieren* oder *Verringern und erneut versuchen* einen Schritt
-  davor, plant der Verlauf den Rest unter neuen Kennungen neu; Verlaufsfeld und Steckbrief
-  nennen die alten Schritte dann „gelöscht“, obwohl sie weiterrechnen. `types.replanned_steps`
-  kennt nur Einfügen und Verschieben (`Transaction.revision`). **Entschieden (Claude,
-  Produktabwägung):** Ein Schritt, der unter neuer Kennung weiterrechnet, ist nicht gelöscht —
-  er wird wie ein beim Umbau neu gefasster ausgeblendet. **Abnahme:** Test über
-  `split_and_retry` und eine Reparatur davor: keine Zeile „gelöscht“, jeder lebende Schritt
-  einmal unter seiner sichtbaren Nummer, im Fenster wie im Steckbrief. Bauplan §15.4.
-
-<a id="rm-553"></a>
-
-- [ ] **RM-553 — Die Karte der Tour ist zu niedrig, Schritttexte werden abgeschnitten.** Robert,
-  08.10.2026, Bildschirmfoto bei 2000 × 816: Die Tour-Karte rechts oben ist nur wenige Zeilen
-  hoch, Schritt 2 steht abgeschnitten darunter, und der Hinweis zum nächsten Schritt hängt als
-  Sprechblase quer über der Ansicht und überdeckt den Kartentext. **Abnahme:** Fenstertest mit
-  dem längsten Schritttext jeder Tour in allen sechs Sprachen bei 1366 × 768 und 1920 × 1080:
-  jeder Schritt ganz lesbar oder rollbar, die Sprechblase überdeckt keinen Kartentext.
-
-<a id="rm-554"></a>
-
-- [ ] **RM-554 — Das i an einer Kartengruppe zeigt nur einen Tooltip statt der
-  Handbuchseite.** Robert, 08.10.2026: Am i neben *Baustein verschieben* erscheint beim
-  Klick nur der Tooltip („Durchgangsloch zum Verschrauben …“). **Soll:** Ein Klick öffnet das
-  Handbuch auf der Seite, die diese Gruppe erklärt; der Tooltip bleibt beim Darüberfahren.
-  **Abnahme:** Wächter, dass jedes i auf eine vorhandene Handbuchseite zeigt; Fenstertest
-  Klick → Handbuch auf dieser Seite.
-
-<a id="rm-555"></a>
-
-- [ ] **RM-555 — *Baustein verschieben*: Position Y hat keinen fx-Knopf, X und Z haben
-  einen.** Robert, 08.10.2026, Bildschirmfoto: X trägt `=10-@breite/2`, Z `=-@staerke`, beide
-  mit fx; Y steht auf 0,00 mm ohne fx und ohne Weg zu einem Ausdruck. **Soll:** Jedes
-  Zahlenfeld, das einen Ausdruck annimmt, zeigt fx gleich, ob es schon einen trägt oder nicht.
-  **Abnahme:** Ursache am Feld belegt; Wächter über die Positionsfelder aller Bausteine und
-  Operationen; Fenstertest: Y bekommt per fx einen Ausdruck und rechnet ihn.
-
 <a id="rm-556"></a>
 
 - [ ] **RM-556 — Filamente aus der linken Spalte in die Kopfleiste.** Robert, 08.10.2026: Die
@@ -4165,14 +4120,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   trifft die Auswertung ihren Zwischenspeicher, und die Farbe steht trotzdem sofort.
   **Abnahme:** Test zählt beim Farbwechsel null neue Netzberechnungen; Fenstertest: neue Farbe
   im ersten Bild nach dem Wechsel; Strg+Z stellt die alte Farbe wieder her.
-
-<a id="rm-558"></a>
-
-- [ ] **RM-558 — Nach dem Einsetzen eines Bausteins bleibt ein Maßfeld „Y … mm“ in der Ansicht
-  stehen.** Robert, 08.10.2026, Bildschirmfoto: Nach dem Einsetzen der Rastdrehscheibe steht
-  über der Ansicht weiter das Eingabefeld „Y 60,62 mm“. **Abnahme:** Nach Einsetzen,
-  Übernehmen und Abbrechen steht kein Maßfeld mehr; Fenstertest an einem Baustein mit
-  Platzierung.
 
 <a id="rm-559"></a>
 
