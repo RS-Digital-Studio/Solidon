@@ -98,7 +98,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Robert, 08.10.: Start, Gegenecke in X/Y, Höhe in Z; ein Weg; Ablauf vorher mit bedienlogik |
 | [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
 | [RM-561 — *Zeichnen*, *Formen* und *Skelett* sind zu kompliziert bedient](#rm-561) | Bedienung und Darstellung | Robert, 08.10.: je Werkzeug ein Weg, wenige Schritte, keine verschachtelten Modi; Klicks vorher und nachher zählen |
-| [RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im Projekt](#rm-569) | Bedienung und Darstellung | Robert, 08.10.: Code legt es sofort im Lager an, das Projekt trägt Name, Material und Farbe an der Bindung; Zusammenspiel mit Strg+Z, Speichern und fremdem Rechner fehlt als Test |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge und Quelltexte durchgesehen und behoben (04.10., `871cc29e6`), Handbuch und Stempel mit 0.5.3 erzeugt; offen allein die Fensterabnahme der längeren Knopfnamen auf 1280 px (RM-213) |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Gegenprobe liest Export- und Slicerdateien zurück, Nebenfolge je Handlung aus dem Kern, Folge je Befund, Kandidatenprüfung nennt nur Neues und Behobenes, NM 1–11 ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
@@ -4169,19 +4168,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Weg zu jeder Aufgabe, wenige Schritte, keine verschachtelten Modi. **Abnahme:** `bedienlogik`
   zählt die Klicks je Hauptaufgabe vorher und nachher; kein zweiter Weg zur selben Sache;
   Fenstertests der neuen Abläufe; Handbuch.
-
-<a id="rm-569"></a>
-
-- [ ] **RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im
-  Projekt.** Robert, 08.10.2026: „werden Filamente auch gespeichert, wenn wir einem Körper ein
-  Filament zuweisen, das wir in dem Schritt auch erstellen?“ Nachgesehen: *Neues Filament …* in
-  der Auswahl (`filament_picker._make_one`) schreibt es über `filaments.save` sofort ins
-  Filamentlager und wählt es danach; das Projekt trägt Name, Material und Farbe an der
-  Spulenbindung (`SpoolBinding`). Ungeprüft ist das Zusammenspiel. **Abnahme:** Test über den
-  ganzen Weg — Filament beim Zuweisen anlegen, Projekt speichern, mit leerem Nutzerordner öffnen:
-  Name, Farbe und Material stehen da; Strg+Z nimmt die Zuweisung zurück, das Lager behält das
-  Filament; Speichern, bevor der Lagereintrag geschrieben ist, verliert nichts; ein
-  fehlgeschlagener Lagereintrag meldet sich mit Handlungsvorschlag.
 
 ## KI und Generatoren
 

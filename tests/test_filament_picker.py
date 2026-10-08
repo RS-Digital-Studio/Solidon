@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QApplication
 from app.core.knowledge import filaments
 from app.core.types import MaterialSlot
 from app.ui.filament_picker import NEW_FILAMENT, FilamentField, NewFilamentDialog, hex_of
+from tests.ui_helpers import wait_for_catalogue
 
 
 def _assigned_body(slots: list[MaterialSlot], used: tuple[int, ...]):
@@ -737,18 +738,6 @@ def test_the_print_values_button_names_the_exact_filament(
     assert seen == [slot]
 
 
-def _wait_for_catalogue(widget) -> None:
-    """Der Fachabschluss muss im Widget ankommen, nicht nur auf der Platte."""
-    from time import monotonic
-
-    from PySide6.QtTest import QTest
-
-    deadline = monotonic() + 5
-    while not widget.wait_for_workers(0) and monotonic() < deadline:
-        QTest.qWait(10)
-    assert widget.wait_for_workers(0)
-
-
 def test_catalogue_writes_leave_qt_free_until_the_atomic_result_arrives(
     qt_app: QApplication, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -795,7 +784,7 @@ def test_catalogue_writes_leave_qt_free_until_the_atomic_result_arrives(
         assert not selected
     finally:
         released.set()
-        _wait_for_catalogue(field)
+        wait_for_catalogue(field)
     assert {entry.name for entry in filaments.catalogue(include_archived=True)} == {"Alt", "Neu"}
     assert field.isEnabled()
     assert len(selected) == 1 and selected[0].name == "Neu"
@@ -831,7 +820,7 @@ def test_a_failed_catalogue_write_keeps_the_old_selection_and_can_be_retried(
 
     def choose():
         owner._make_one(owner.findData(NEW_FILAMENT))
-        _wait_for_catalogue(owner)
+        wait_for_catalogue(owner)
 
     monkeypatch.setattr(filaments, "save", save)
     monkeypatch.setattr(NewFilamentDialog, "exec", confirm)
@@ -1016,7 +1005,7 @@ def test_catalogue_error_retries_the_confirmed_spool_without_a_second_entry_dial
     notice = owner._filament_notice
     writer._make_one(writer.findData(NEW_FILAMENT))
     try:
-        _wait_for_catalogue(writer)
+        wait_for_catalogue(writer)
         assert "gesperrt" in notice.text()
         retry = next(
             button
@@ -1025,7 +1014,7 @@ def test_catalogue_error_retries_the_confirmed_spool_without_a_second_entry_dial
         )
         broken = False
         retry.click()
-        _wait_for_catalogue(writer)
+        wait_for_catalogue(writer)
         assert len(writes) == 2 and writes[0] is writes[1]
         assert confirmations == [True]
         assert [entry.name for entry in filaments.catalogue()] == ["Bestätigte Spule"]

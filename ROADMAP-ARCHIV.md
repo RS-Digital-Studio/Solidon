@@ -576,6 +576,7 @@ entfernt hat.
 | 2026-10-08 | [RM-557: Ein Filamentwechsel färbt sofort um und rechnet nichts neu (08.10.2026)](#rm-557-ein-filamentwechsel-färbt-sofort-um-und-rechnet-nichts-neu-08102026) |
 | 2026-10-08 | [RM-556: Die Filamente stehen hinter einem Knopf in der Kopfzeile (08.10.2026)](#rm-556-die-filamente-stehen-hinter-einem-knopf-in-der-kopfzeile-08102026) |
 | 2026-10-08 | [RM-135: Die Filamentkarte der linken Spalte gibt es nicht mehr (08.10.2026)](#rm-135-die-filamentkarte-der-linken-spalte-gibt-es-nicht-mehr-08102026) |
+| 2026-10-08 | [RM-569: Ein beim Zuweisen angelegtes Filament bleibt im Lager und im Projekt (08.10.2026)](#rm-569-ein-beim-zuweisen-angelegtes-filament-bleibt-im-lager-und-im-projekt-08102026) |
 
 ---
 
@@ -44295,3 +44296,26 @@ linken Spalte, sondern hinter *Filamente* in der Kopfzeile; sie bemisst sich sel
 (höchstens zwölf Zeilen, dann rollt sie) und nimmt an der Raumteilung nicht mehr teil. Die
 Regressionen der Kartenhöhe sind mit ihr entfallen. Gegenstandslos, nicht erledigt.
 Bisheriger Befund: [Ein Ort für die Auswahl](#ein-ort-für-die-auswahl-07092026).
+
+## RM-569: Ein beim Zuweisen angelegtes Filament bleibt im Lager und im Projekt (08.10.2026)
+
+<a id="rm-569-ein-beim-zuweisen-angelegtes-filament-bleibt-im-lager-und-im-projekt-08102026"></a>
+<a id="rm-569"></a>
+
+**RM-569 — Ein beim Zuweisen neu angelegtes Filament bleibt gespeichert, im Lager und im
+Projekt.** Robert, 08.10.2026: „werden Filamente auch gespeichert, wenn wir einem Körper ein
+Filament zuweisen, das wir in dem Schritt auch erstellen?“ Ja — und jetzt belegt über den
+ganzen Weg.
+
+**Nachweis:** Fenstertest
+`tests/test_filament_workflow.py::test_a_filament_made_while_assigning_survives_save_undo_and_another_machine`
+am echten Operationsdialog *Filament zuweisen* (`run_operation`, `_open_operation_dialog`):
+*Neues Filament …*, der erste Lagereintrag scheitert an der gesperrten Datei
+(`PermissionError` → `FileWriteError`) und meldet sich im Dialog mit *Erneut versuchen*, ohne
+Spule keine Wahl; der zweite Versuch hängt, während das Projekt gespeichert wird — der Dialog
+bleibt offen, die Wahl kommt nach dem Schreiben an; zuweisen, speichern; ein Rechner mit leerem
+Lager öffnet die Datei und kennt Name, Farbe (#2e86c1) und Material am Slot und an der
+Spulenbindung, ohne etwas in sein Lager zu legen; Strg+Z nimmt Zuweisung und Bindung, das Lager
+behält die Spule. Gegenproben: Spulenbindung ohne Namen (`with_spool`) und ein Dialog, der bei
+jeder Projektmeldung schließt, machen den Test rot. Am Code war nichts zu beheben.
+Changelog: nein.

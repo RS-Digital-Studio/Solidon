@@ -893,3 +893,140 @@ def test_clearing_a_face_keeps_profiles_with_their_filaments_and_undo(qt_app, mo
     assert session.wait_for_idle()
     assert assigned() == {"Rot": "Rot Standard", "Blau": "Blau Schnell"}
     assert session.project.document.print_settings.slot_profile_bindings == before
+
+
+def test_a_filament_made_while_assigning_survives_save_undo_and_another_machine(
+    qt_app, tmp_path, monkeypatch
+):
+    """RM-569: *Neues Filament …* beim Zuweisen — der ganze Weg, nicht nur das Feld.
+
+    Robert, 08.10.2026: „werden Filamente auch gespeichert, wenn wir einem
+    Körper ein Filament zuweisen, das wir in dem Schritt auch erstellen?“
+    Gefahren wird der Weg des Kunden: anlegen, während der Lagereintrag noch
+    geschrieben wird das Projekt speichern, ein abgelehnter Lagereintrag sagt,
+    was jetzt hilft, der zweite Versuch gelingt, zuweisen, speichern. Danach
+    öffnet ein Rechner mit leerem Lager das Projekt und kennt Name, Farbe und
+    Material — über den Schritt und die Spulenbindung. Strg+Z nimmt die
+    Zuweisung, das Lager behält die Spule.
+    """
+    import threading
+
+    from PySide6.QtWidgets import QDialog, QPushButton
+
+    from app.core.errors import RETRY
+    from app.core.registry import REGISTRY
+    from app.core.scene.history import OperationDraft
+    from app.ui.filament_picker import NEW_FILAMENT, FilamentField, NewFilamentDialog
+    from app.ui.session import Session
+    from tests.ui_helpers import wait_for_catalogue
+
+    workshop = tmp_path / "werkstatt.json"
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: workshop)
+    made = filaments.CatalogueFilament("Werkstattblau", "#2e86c1", "PETG")
+    monkeypatch.setattr(NewFilamentDialog, "exec", lambda _dialog: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(NewFilamentDialog, "entry", lambda _dialog: made)
+
+    window = main_window.MainWindow(Session(), UiSettings())
+    session = window.session
+    try:
+        assert session.apply("Körper", [OperationDraft("create_box")])
+        _settled(window)
+        identifier = next(iter(session.last_result.scene.objects))
+        window.object_tree.select_object(identifier)
+        dialogs = []
+        opening = window._open_operation_dialog
+
+        def opened(dialog, run):
+            dialogs.append((dialog, run))
+            opening(dialog, run)
+
+        monkeypatch.setattr(window, "_open_operation_dialog", opened)
+        window.run_operation(REGISTRY.get("assign_slot"), on_bodies=[identifier])
+        dialog, run = dialogs[0]
+        field = dialog.findChild(FilamentField)
+        assert field is not None
+
+        # Der erste Lagereintrag scheitert an der Datei — und sagt, was hilft.
+        writing = filaments._write
+
+        def locked(_state):
+            raise PermissionError("Die Datei ist von einem anderen Programm gesperrt.")
+
+        monkeypatch.setattr(filaments, "_write", locked)
+        field._make_one(field.findData(NEW_FILAMENT))
+        wait_for_catalogue(field)
+        notice = dialog._filament_notice
+        assert "gesperrt" in notice.text()
+        retry = next(
+            button
+            for button in notice.findChildren(QPushButton)
+            if button.text() == str(RETRY.label) and not button.isHidden()
+        )
+        assert filaments.catalogue() == ()
+        assert dialog.values()["name"] != "Werkstattblau", "ohne Lagereintrag keine Wahl"
+
+        # Der zweite Versuch hängt, und genau dann wird das Projekt gespeichert.
+        gate = threading.Event()
+
+        def slow(state):
+            gate.wait(15)
+            writing(state)
+
+        monkeypatch.setattr(filaments, "_write", slow)
+        retry.click()
+        assert field.pending, "der Lagereintrag wird geschrieben"
+        project = tmp_path / "projekt.p3d"
+        window._save_to(project)
+        assert project.exists()
+        gate.set()
+        wait_for_catalogue(field)
+        monkeypatch.setattr(filaments, "_write", writing)
+        assert [entry.name for entry in filaments.catalogue()] == ["Werkstattblau"]
+        assert window._op_dialog is dialog and dialog.isVisible(), (
+            "das Speichern hat den offenen Dialog nicht geschlossen"
+        )
+        assert dialog.values()["name"] == "Werkstattblau", "die neue Spule ist gewählt"
+        assert not field.pending
+
+        run()
+        dialog.reject()
+        _settled(window)
+        body = session.last_result.scene.objects[identifier]
+        assert [(str(slot.name), slot.material_type) for slot in body.material_slots] == [
+            ("Werkstattblau", "PETG")
+        ]
+        window._save_to(project)
+
+        # Ein anderer Rechner: leeres Lager, dieselbe Datei.
+        monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "fremd.json")
+        elsewhere = Session()
+        try:
+            elsewhere.open_project(project)
+            result = elsewhere.evaluate_now()
+            opened = result.scene.objects[identifier]
+            slot = opened.material_slots[0]
+            assert (str(slot.name), slot.material_type) == ("Werkstattblau", "PETG")
+            assert slot.colour is not None
+            assert "#" + "".join(f"{round(part * 255):02x}" for part in slot.colour) == "#2e86c1"
+            binding = elsewhere.project.document.print_settings.spool_bindings[0]
+            assert (str(binding.name), binding.colour, binding.material_type) == (
+                "Werkstattblau",
+                slot.colour,
+                "PETG",
+            )
+            assert filaments.catalogue() == (), "Öffnen legt nichts ins fremde Lager"
+        finally:
+            elsewhere.release()
+        monkeypatch.setattr(filaments, "catalogue_path", lambda: workshop)
+
+        window.undo_action.trigger()
+        _settled(window)
+        assert not session.last_result.scene.objects[identifier].material_slots
+        settings = session.project.document.print_settings
+        assert settings is None or not settings.spool_bindings
+        assert [entry.name for entry in filaments.catalogue()] == ["Werkstattblau"], (
+            "das Lager behält die Spule"
+        )
+    finally:
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        window.release()
