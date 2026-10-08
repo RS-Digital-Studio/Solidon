@@ -24738,10 +24738,17 @@ class MainWindow(QMainWindow):
         jetzt baut, mit dem gemerkten verglichen (``_click_replay``).
 
         Er verfällt mit Satz, wenn die Auswertung kein Ergebnis brachte, die
-        Freigabe einem anderen gehört oder sich der Stand geändert hat; ohne
-        Satz, wenn sein Fenster zu ist. Nach der Schließentscheidung läuft er
-        nie: Er schriebe in einen bereits geprüften Dokumentstand und stieße
-        eine weitere Rechnung an (``closeEvent``).
+        Freigabe einem anderen oder keinem mehr gehört oder sich der Stand
+        geändert hat; ohne Satz, wenn sein Fenster zu ist. **Ohne Freigabe
+        läuft er nie**, auch wenn sein Eigentümer noch offen ist: Abbrechen am
+        Merkmalfenster oder an der Filamentwahl räumt nur die Freigabe ab, und
+        der Rückruf übernähme sonst, was der Kunde verworfen hat. Wer seine
+        Freigabe nach der Auswertung nicht neu bindet (Formsitzung), bekommt
+        deshalb den Satz und einen neuen Klick statt des Schritts.
+
+        Nach der Schließentscheidung läuft er nie: Er schriebe in einen bereits
+        geprüften Dokumentstand und stieße eine weitere Rechnung an
+        (``closeEvent``).
         """
         waiting = self._click_after_evaluation
         if waiting is None or self.session.busy:
