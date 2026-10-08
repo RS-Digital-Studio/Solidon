@@ -8216,3 +8216,53 @@ def test_rotation_centre_with_a_long_body_name_stays_reachable_on_a_small_screen
         dialog.close()
         dialog.deleteLater()
         set_language(previous)
+
+
+def test_an_accept_while_the_scene_evaluates_applies_when_it_is_done(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Übernehmen* während einer Auswertung verfällt nicht, es läuft nach ihr.
+
+    Solange die Sitzung rechnet, gilt keine Vorschaufreigabe
+    (``_preview_is_current``); der Knopf ist trotzdem frei. Der Klick tat
+    nichts: Kein Schritt, kein Satz, der Dialog blieb offen. Gesehen in der
+    Fensterauswahl auf macOS ARM, wo der Rohrbogen-Test im Sketch-Editor
+    zufällig in eine solche Auswertung klickte und ein leeres Ergebnis las.
+    """
+    window = MainWindow(Session(), UiSettings())
+    window._may_discard = lambda: True  # type: ignore[method-assign]
+    gate = threading.Event()
+    try:
+        window.session.start_new()
+        assert window.session.wait_for_idle(60_000)
+        window.run_operation(REGISTRY.get(_shown_box()))
+        dialog = window._op_dialog
+        assert dialog is not None
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+
+        evaluate = Session.run_evaluation
+
+        def held(self: Session, *args: object, **kwargs: object) -> object:
+            gate.wait(10)
+            return evaluate(self, *args, **kwargs)
+
+        monkeypatch.setattr(Session, "run_evaluation", held)
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage, um die es geht: die Sitzung rechnet"
+        assert dialog._accept_button.isEnabled(), "der Knopf ist frei, also klickt der Kunde"
+
+        dialog._accept_button.click()
+        assert window.session.project.document.ops == [], "vor dem Ende wird nichts geschrieben"
+        gate.set()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(60_000)
+
+        assert [entry.op for entry in window.session.project.document.ops] == [_shown_box()]
+        assert window._op_dialog is None, "der Dialog ist übernommen und zu"
+        assert len(window.session.last_result.scene.objects) == 1
+    finally:
+        gate.set()
+        window.close()
+        window.deleteLater()

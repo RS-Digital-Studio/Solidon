@@ -8734,7 +8734,12 @@ def _run_with_drawings(
     dialog._editors["sketch"].edit_button.click()
     second.edit_button.click()
     dialog.accept()
-    assert window.session.wait_for_idle()  # type: ignore[attr-defined]
+    assert window.session.wait_for_idle(60_000)  # type: ignore[attr-defined]
+    # Sonst liest der Test das Ergebnis vor dem Schritt — „vollständig, ohne
+    # Körper“ —, und das Rot nennt eine leere Szene statt des Klicks.
+    assert window._op_dialog is None, (  # type: ignore[attr-defined]
+        f"Übernehmen hat nicht übernommen: {window.status_message.text()}"  # type: ignore[attr-defined]
+    )
     return dialog, window.session.last_result  # type: ignore[attr-defined]
 
 
