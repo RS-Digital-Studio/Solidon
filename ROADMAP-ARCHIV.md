@@ -44311,7 +44311,9 @@ der Eingabetaste den gewählten Körper verschoben.
 `set_preview_gizmo(False)`, wenn der Dialog mitten im Zug schließt. Regel `griffe.md`. Nach dem
 Review (Commit `3dbf7fc6e`): Der Vorschauzug ist gekennzeichnet; eine getippte Zahl geht mit der
 Eingabetaste als Zug an die Vorschau (`previewDragged`), nie an die gewählten Körper, und beim
-Loslassen bleibt die Leiste stehen, solange getippt wird.
+Loslassen bleibt die Leiste stehen, solange getippt wird. Esc und Enter stellen die Vorschau vorher an ihre
+Ausgangslage zurück; der neue Griff rechnet keinen verworfenen Weg mit (Nachprüfung, Commit
+`dd4289b08`).
 
 **Nachweis:** `test_ui.py::test_no_drag_number_stays_in_the_view_after_the_dialog`
 (Einsetzen, Übernehmen, Abbrechen mitten im Zug), Gegenprobe am alten Stand rot. Changelog: ja —
@@ -44350,16 +44352,20 @@ einmal unter seiner Nummer; Gegenprobe am alten Stand rot. Changelog: ja — der
 die Tour.** Gefunden am 08.10.2026 beim Fenstertest zu RM-553 (Claude); entschieden von Robert:
 gleich bauen. `MainWindow._flash_area` holte jeden Reiter der rechten Karte nach vorn, und die
 Tour, die sich die Karte mit ihm teilt, verschwand samt dem Schritt, den der Kunde gerade las —
-in der Tour *Vorhandenes Modell anpassen* und den drei Schritten der Passungstour.
+in sechs Schritten aus vier Touren (*Vorhandenes Modell anpassen*, *Modell aus Text oder Bild
+vorbereiten*, *Alles zusammen — Dose mit Deckel* und dreimal *Wenn eine Passung nicht mehr
+passt*).
 
 **Umsetzung** (Commit `3dbf7fc6e`): Ein Schritt, dessen Ziel ein Reiter derselben Karte ist, holt
 ihn nicht mehr. `SignalTabBar.point_at` rahmt den Reiter gestrichelt in der Schriftfarbe (eine
-Form, nicht nur eine Farbe, Regel 18) und nennt den Hinweis in Tooltip und zugänglichem Namen.
-Der Schritt hängt den Satz an, worauf zu klicken ist („Klicken Sie dazu oben auf den Reiter
-„Prüfbericht““, je Sprache), aus `MainWindow._tour_tab_names` — für jede Tour mit solchen
-Schritten, ohne Schritttexte einzeln zu ändern. Öffnet der Kunde den Reiter, zieht die Tour
-weiter oder endet sie, geht der Rahmen. Das Handbuch beschrieb den alten Ablauf nicht. Regel
-`fenster.md` (Tour).
+Form, nicht nur eine Farbe, Regel 18) und hängt den Hinweis in Tooltip und zugänglichem Namen
+an Zahl und „ungelesen“ an. Vor dem Schritt steht ein eigener Satz, worauf zu klicken ist
+(„Öffnen Sie oben den Reiter „Prüfbericht“.“, je Sprache), aus `MainWindow._tour_tab_names` —
+für jede Tour mit solchen Schritten, ohne Schritttexte einzeln zu ändern. Gemeldet wird je
+Schritt, so steht der Rahmen auch im zweiten von drei Berichtsschritten wieder. Öffnet der Kunde
+den Reiter, zieht die Tour weiter oder endet sie, geht der Rahmen. Das Handbuch beschrieb den
+alten Ablauf nicht. Regel `fenster.md` (Tour). Satz vor dem Schritt, angehängter Hinweis und
+Meldung je Schritt kamen mit der Nachprüfung (Commit `dd4289b08`).
 
 **Nachweis:** Fenstertest
 `test_ui.py::test_a_tour_step_on_the_report_frames_its_tab_and_stays_in_view`: Die Tour bleibt
