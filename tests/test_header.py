@@ -98,8 +98,11 @@ def test_empty_measurements_leave_their_room_to_the_printer(qt_app: QApplication
         + 24
     )
     # Titel und Drucker teilen 2 : 3 — breit genug für den Drucker, wenn die
-    # leere Spalte nichts nimmt, zu schmal, wenn sie drei Teile behält.
-    header.resize(needed * 5 // 3 + 24, header.sizeHint().height())
+    # leere Spalte nichts nimmt, zu schmal, wenn sie drei Teile behält. Der
+    # Knopf *Filamente* steht fest daneben (RM-556).
+    header.resize(
+        needed * 5 // 3 + 24 + header._filament_width(compact=False), header.sizeHint().height()
+    )
     header.show()
     QApplication.processEvents()
 
@@ -565,3 +568,58 @@ def _with_object(session: Session, name: str) -> None:
 
     scene = Scene(objects={"obj_1": make_object(name=name)})
     session.last_result = EvaluationResult(scene=scene)
+
+
+def test_the_filaments_open_from_the_header_and_lead_into_the_inventory(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """RM-556: *Filamente* steht in der Kopfzeile, nicht mehr unten links.
+
+    Robert, 08.10.2026: Ein Klick öffnet eine kleine Liste der Filamente, die
+    das Projekt verwendet, und darunter den Weg ins Filamentlager. Die linke
+    Spalte trägt nur noch Objekte, Parameter und Verlauf.
+    """
+    from PySide6.QtWidgets import QAbstractButton
+
+    from app.i18n import tr
+    from app.ui.filament_assignment import QuickFilamentPicker
+
+    headings = {
+        button.text()
+        for button in window.findChildren(QAbstractButton)
+        if button.objectName() == "sectionHeading"
+    }
+    assert tr("Filamente") not in headings, f"links steht keine Filamentgruppe mehr: {headings}"
+    assert tr("Verlauf") in headings, "die Klappen werden gefunden"
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    body = SceneObject(
+        id="obj_1",
+        name="Teil",
+        mesh=MeshData.of(trimesh.creation.box(), slots=(1,) * 12),
+        material_slots=[MaterialSlot(index=1, name="PETG Rot", colour=(0.8, 0.1, 0.1))],
+    )
+    result = EvaluationResult(scene=Scene(objects={"obj_1": body}))
+    window._show_project_filaments(result, window.effective_print_settings())
+    button = window.header.filament_button
+    assert button.text() == tr("Filamente") and button.isVisibleTo(window.toolbar)
+    assert "PETG Rot" in button.toolTip(), "die Kurzhilfe nennt die Filamente"
+
+    button.click()
+    qt_app.processEvents()
+    popup = window.filament_popup
+    assert popup.isVisible(), "der Knopf öffnet die Liste"
+    rows = [popup.panel.list.item(row).text() for row in range(popup.panel.list.count())]
+    assert rows == ["PETG Rot — 1 Körper"], rows
+    assert not popup.panel.inventory_button.isHidden(), "darunter der Weg ins Lager"
+    assert not popup.findChildren(QuickFilamentPicker), "zugewiesen wird rechts, nicht hier"
+
+    popup.panel.inventory_button.click()
+    qt_app.processEvents()
+    assert not popup.isVisible(), "die Liste geht mit dem Wechsel ins Lager"
+    assert window.stack.currentWidget() is window._inventory_view
+    window._inventory_view.backRequested.emit()

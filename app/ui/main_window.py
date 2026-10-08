@@ -288,11 +288,11 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.filament_picker import CatalogueWrites, FilamentPanel, colours_of, spool_slot
+from app.ui.filament_picker import CatalogueWrites, FilamentPopup, colours_of, spool_slot
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.guide_targets import MissingTargetError, widget_for
-from app.ui.header import ALL_PLATES, HeaderBar, header_stylesheet
+from app.ui.header import ALL_PLATES, HeaderBar, filament_names, header_stylesheet
 from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
@@ -3039,11 +3039,13 @@ class MainWindow(QMainWindow):
         self.session.bakeCancelled.connect(self._on_revision_cancelled)
         self.history_panel.kernelSwitchRequested.connect(self.switch_kernel)
         self.history_panel.drawingReuseRequested.connect(self.reuse_drawing)
-        self.filaments = FilamentPanel(self)
+        # Die Filamente des Projekts stehen hinter *Filamente* in der Kopfzeile
+        # (RM-556); jede Handlung darin schließt die Liste vorher.
+        self.filament_popup = FilamentPopup(self)
+        self.filaments = self.filament_popup.panel
         self.filaments.overrideRequested.connect(self._edit_filament_settings)
-        self.filaments.printSettingsRequested.connect(self.action_print_settings)
-        self.filaments.inventoryRequested.connect(self.action_inventory)
-        self.filaments.catalogueChanged.connect(self._refresh_inventory)
+        self.filaments.printSettingsRequested.connect(self._print_settings_from_filaments)
+        self.filaments.inventoryRequested.connect(self._inventory_from_filaments)
 
         # Ohne Streckfaktoren: die Karte ist so hoch wie ihr Inhalt, nicht so
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
@@ -3194,10 +3196,6 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree))
         left_layout.addWidget(collapsible(tr("Parameter"), self.parameters))
         left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel))
-        # Zugeklappt: Die drei darüber beantworten Fragen, die beim Bauen
-        # jeden Schritt begleiten; welche Spulen im Regal liegen, fragt man
-        # einmal am Anfang und einmal vor dem Drucken (§2.4).
-        left_layout.addWidget(collapsible(tr("Filamente"), self.filaments, open_now=False))
         left_layout.addStretch(1)
 
         self.viewport = Viewport(self)
@@ -5306,6 +5304,7 @@ class MainWindow(QMainWindow):
         self.header = HeaderBar(toolbar)
         self.header.plateChanged.connect(self.viewport.set_plate)
         self.header.printerRequested.connect(self.action_print_settings)
+        self.header.filamentsRequested.connect(self._show_filament_list)
         toolbar.addWidget(self.header)
 
     def _menu(self, title: str) -> QMenu:
@@ -8555,11 +8554,7 @@ class MainWindow(QMainWindow):
         dialog.recheck_slicer()
 
     def _show_filaments(self, dialog: PrintSettingsDialog) -> None:
-        """Aus den Druckeinstellungen zum Filamentwähler in der linken Spalte.
-
-        Der Abschnitt ist einklappbar und im Regelfall zu; ein Aufleuchten
-        allein zeigte auf eine Kopfzeile, unter der nichts steht — dieselbe
-        Zusage wie beim Tourschritt (:meth:`_flash_area`).
+        """Aus den Druckeinstellungen zur Liste unter *Filamente* in der Kopfzeile.
 
         Die Änderungen bleiben beim regulären Dialogabschluss erhalten. Erst
         nach dem Abschluss ist die Hauptansicht wieder bedienbar; der sichtbare
@@ -8569,12 +8564,27 @@ class MainWindow(QMainWindow):
         dialog.accept()
 
     def _focus_filaments(self) -> None:
-        """Die freigegebene Filamentkarte samt Rückweg in den Vordergrund holen."""
+        """Die Filamentliste samt Rückweg zu den Druckeinstellungen öffnen."""
         self.filaments.return_to_print_button.show()
-        open_section(self.filaments)
-        self.filaments.list.setFocus()
-        self.filaments.setStyleSheet(f"border: 2px solid {_flash_colour(self.filaments)};")
-        QTimer.singleShot(FLASH_MS, self, lambda: self.filaments.setStyleSheet(""))
+        self._show_filament_list()
+
+    def _show_filament_list(self) -> None:
+        """*Filamente* in der Kopfzeile: die Filamente des Projekts und der Weg ins Lager."""
+        self.filament_popup.show_below(self.header.filament_button)
+
+    def _print_settings_from_filaments(self) -> None:
+        self.filament_popup.hide()
+        self.action_print_settings()
+
+    def _inventory_from_filaments(self) -> None:
+        self.filament_popup.hide()
+        self.action_inventory()
+
+    def _show_project_filaments(self, result: EvaluationResult, settings: PrintSettings) -> None:
+        """Liste und Kopfzeile nennen dieselben Filamente derselben Szene."""
+        bodies = list(result.scene.objects.values())
+        self.filaments.show_scene(bodies, settings)
+        self.header.show_filaments(filament_names(self.session.profile, bodies))
 
     def _offer_generator_nodes(self, dialog: GenerateDialog) -> None:
         """Die Knoten und das Modell einrichten, und danach neu nachsehen."""
@@ -8747,7 +8757,6 @@ class MainWindow(QMainWindow):
 
     def _refresh_inventory(self) -> None:
         """Lageranzeigen erneuern; eingebettete Projektfilamente bleiben Schnappschüsse."""
-        self.filaments.refresh_catalogue()
         self.start_screen.refresh_inventory()
         self.quick_filament.refresh()
         if self._inventory_view is not None:
@@ -9041,6 +9050,7 @@ class MainWindow(QMainWindow):
         """
         if not isinstance(slot, MaterialSlot):
             return
+        self.filament_popup.hide()
         # Vorbelegt mit dem, was gedruckt wird (Review Stufe A+B, R3): Die
         # Spule übersteuert die Werte des Herstellerfilaments, nicht einen
         # gespeicherten Stand davon.
@@ -9058,7 +9068,7 @@ class MainWindow(QMainWindow):
             self.session.set_print_settings(updated)
             result = self.session.last_result
             if result is not None:
-                self.filaments.show_scene(list(result.scene.objects.values()), updated)
+                self._show_project_filaments(result, updated)
         finally:
             # Das Hauptfenster ist Qt-Eigentümer. Ohne die Freigabe bliebe
             # jeder geschlossene Dialog samt seinen neunzehn Feldern bis zum
@@ -23793,8 +23803,7 @@ class MainWindow(QMainWindow):
         self._seen_objects = bool(result.scene.objects)
         self._sketch_body_missing(result)
         self.object_tree.show_scene(result, self.session.project.document)
-        effective_settings = self.effective_print_settings()
-        self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)
+        self._show_project_filaments(result, self.effective_print_settings())
         plates = [entry.plate for entry in picture.scene.objects.values()]
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
@@ -24279,7 +24288,7 @@ class MainWindow(QMainWindow):
             # Prüfbericht und Analyse auf die Grenze, mit der der Slicer stützt.
             self.session.evaluate_async()
             return
-        self.filaments.show_scene(list(result.scene.objects.values()), settings)
+        self._show_project_filaments(result, settings)
         self._update_facts()
         if result is not self.session.picture:
             self._start_print_findings(result, settings)
@@ -26774,7 +26783,7 @@ class MainWindow(QMainWindow):
             self.settings.first_run_done = True
         # Das bestehende Filamentpanel liest den Katalog neu, ohne dafür
         # ein geöffnetes Projekt auszuwerten oder seine Zuordnungen zu ändern.
-        self.filaments.refresh_catalogue()
+        self._refresh_inventory()
         self._store_settings()
         if inventory_requested and answer == first_run.FirstRunDialog.DialogCode.Accepted:
             self.action_inventory()

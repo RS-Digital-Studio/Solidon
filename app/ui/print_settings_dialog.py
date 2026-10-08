@@ -3050,7 +3050,7 @@ class PrintSettingsDialog(QDialog):
         # jetzt möglich ist, statt nur zu berichten).
         self.material_link = QPushButton(tr("Filamente …"), self)
         self.material_link.setToolTip(
-            tr("Öffnet links den Abschnitt „Filamente“ — dort wird die Spule gewählt.")
+            tr("Zeigt die Filamente des Projekts und den Weg ins Filamentlager.")
         )
         self.material_link.setAccessibleDescription(self.material_link.toolTip())
         self.material_link.clicked.connect(self.filamentsRequested)

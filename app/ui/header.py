@@ -155,9 +155,10 @@ ALL_PLATES = -1
 MAXIMUM_TAIL_CHARACTERS = 10
 
 #: Leseraum der Projektangaben, sobald ein Projekt offen ist. Auf dem echten
-#: Windows-Pfad reichen 660 Pixel für Name, Außenmaß, Druckerknopf und eine
-#: klare Filamentanzahl; wird es enger, kürzt die Hauptwerkzeugleiste ihre
-#: Wörter und lässt der Projektauskunft den Raum.
+#: Windows-Pfad reichen 660 Pixel für Name, Außenmaß und Druckerknopf; der
+#: Knopf *Filamente* kommt dazu (:meth:`HeaderBar._filament_width`). Wird es
+#: enger, kürzt die Hauptwerkzeugleiste ihre Wörter und lässt der
+#: Projektauskunft den Raum.
 READABLE_HEADER_WIDTH = 660
 
 
@@ -318,6 +319,7 @@ class HeaderBar(QWidget):
 
     plateChanged = Signal(int)
     printerRequested = Signal()
+    filamentsRequested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -363,13 +365,28 @@ class HeaderBar(QWidget):
         printer_layout.addWidget(self.printer, 1)
         printer_layout.addWidget(self.printer_button)
         self.printer_control.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        # **Das Filament steht hier nicht mehr.** Es hing an der Projektvorgabe
-        # und nicht an dem, was die Körper tragen — bei einem Projekt, dessen
-        # einziger Körper „Ohne Filament" führte, sagte die Kopfzeile „PETG“.
-        # Und selbst richtig gerechnet ist eine einzelne Angabe hier falsch,
-        # sobald mehrere Körper verschiedene Filamente tragen: „2 Filamente"
-        # beantwortet keine Frage (Robert, 07.09.2026). Wo welches Filament
-        # sitzt, sagt der Filamentbereich links; er zählt die Körper dazu.
+        # **Kein Filament als Angabe, ein Knopf zur Liste** (RM-556). Eine
+        # einzelne Angabe war hier falsch, sobald mehrere Körper verschiedene
+        # Filamente tragen: „2 Filamente" beantwortet keine Frage (Robert,
+        # 07.09.2026). Der Knopf öffnet die Filamente des Projekts samt der
+        # Zahl ihrer Körper und darunter den Weg ins Lager; die Namen stehen
+        # in seiner Kurzhilfe (:meth:`show_filaments`).
+        self.filament_button = QToolButton(self)
+        self.filament_button.setText(tr("Filamente"))
+        self.filament_button.setIcon(icon("spool", self.filament_button))
+        self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.filament_button.setAutoRaise(True)
+        self.filament_button.setAccessibleName(tr("Filamente"))
+        self.filament_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.filament_button.clicked.connect(self.filamentsRequested)
+        # Gemessen in beiden Formen, einmal: Eng trägt der Knopf nur sein
+        # Zeichen wie die Knöpfe der Werkzeugleiste, und die Entscheidung über
+        # die Form braucht die Breite der anderen (:meth:`_filament_width`).
+        self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self._filament_sign = self.filament_button.sizeHint().width()
+        self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._filament_words = self.filament_button.sizeHint().width()
+        self.show_filaments(())
         self._divider = divider(self)
         self._layout = QGridLayout(self)
         self._layout.setContentsMargins(TIGHT, 0, TIGHT, 0)
@@ -396,7 +413,8 @@ class HeaderBar(QWidget):
         """
         preferred = super().sizeHint()
         has_project = any(label.full_text() for label in (self.title, self.bounds, self.printer))
-        width = max(self._compact_width(), READABLE_HEADER_WIDTH) if has_project else 0
+        readable = READABLE_HEADER_WIDTH + self._filament_width(compact=False)
+        width = max(self._compact_width(), readable) if has_project else 0
         return QSize(width, preferred.height())
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
@@ -408,10 +426,20 @@ class HeaderBar(QWidget):
         self._arrange(self._wide_width() > event.size().width())
         super().resizeEvent(event)
 
+    def _filament_width(self, *, compact: bool) -> int:
+        """Der Knopf *Filamente* mit seinem Abstand — breit mit Wort, eng nur mit Zeichen.
+
+        Bei 640 Bildpunkten drückte das Wort die ganze Kopfzeile ins
+        Überlaufmenü. Wie an der Werkzeugleiste bleibt dann das Zeichen; Name
+        und Kurzhilfe stehen weiter am Knopf (`grenzen.md`).
+        """
+        return (self._filament_sign if compact else self._filament_words) + TIGHT
+
     def _compact_width(self) -> int:
         """Breite der zweizeiligen Anordnung: Angaben oben, Filter unten."""
         top = (self.title, self.bounds, self.printer_control)
         top_width = sum(widget.minimumWidth() for widget in top) + TIGHT * (len(top) - 1)
+        top_width += self._filament_width(compact=True)
         plate_width = self.plates.minimumWidth() if not self.plates.isHidden() else 0
         return max(top_width, plate_width) + TIGHT * 2
 
@@ -425,6 +453,7 @@ class HeaderBar(QWidget):
         return (
             sum(widget.minimumWidth() for widget in widgets)
             + printer_action_width
+            + self._filament_width(compact=False)
             + TIGHT * max(0, len(widgets) - 1)
             + TIGHT * 2
         )
@@ -456,6 +485,7 @@ class HeaderBar(QWidget):
             self.plates,
             self._divider,
             self.printer_control,
+            self.filament_button,
         )
         for widget in widgets:
             self._layout.removeWidget(widget)
@@ -478,7 +508,9 @@ class HeaderBar(QWidget):
             self._layout.addWidget(self.title, 0, 0)
             self._layout.addWidget(self.bounds, 0, 1)
             self._layout.addWidget(self.printer_control, 0, 2)
-            self._layout.addWidget(self.plates, 1, 0, 1, 3)
+            self._layout.addWidget(self.filament_button, 0, 3)
+            self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            self._layout.addWidget(self.plates, 1, 0, 1, 4)
             for column, stretch in enumerate((2, 3, 3)):
                 self._layout.setColumnStretch(column, stretch)
             self._divider.hide()
@@ -488,6 +520,8 @@ class HeaderBar(QWidget):
             self._layout.addWidget(self.plates, 0, 3)
             self._layout.addWidget(self._divider, 0, 4)
             self._layout.addWidget(self.printer_control, 0, 5)
+            self._layout.addWidget(self.filament_button, 0, 6)
+            self.filament_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             for column, stretch in (
                 (0, 2),
                 (1, 3),
@@ -643,6 +677,17 @@ class HeaderBar(QWidget):
         del result
         self.printer.setText(printer_title(profile.printer))
         self._reflow()
+
+    def show_filaments(self, names: Sequence[str]) -> None:
+        """Welche Filamente das Projekt verwendet — in Kurzhilfe und Beschreibung des Knopfs."""
+        said = (
+            tr("Im Projekt: {filament}").format(filament=", ".join(names))
+            if names
+            else tr("Noch kein Filament zugewiesen")
+        )
+        hint = f"{said}\n{tr('Zeigt die Filamente des Projekts und den Weg ins Filamentlager.')}"
+        self.filament_button.setToolTip(hint)
+        self.filament_button.setAccessibleDescription(hint)
 
     def state(self) -> tuple[str, str, str]:
         """Die vollständige Auskunft — unabhängig von der sichtbaren Kürzung."""

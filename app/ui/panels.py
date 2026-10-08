@@ -3640,9 +3640,7 @@ class ParameterPanel(QWidget):
         # ein Deckel die untersten Zeilen nicht versteckt, sondern
         # unerreichbar gemacht — genau der Fehler, den ``extra_height``
         # beschreibt. Und *Parameter anlegen …* bleibt darunter stehen: Er ist
-        # der einzige Weg zu einem neuen Maß und darf nicht wegrollen, aus
-        # demselben Grund, aus dem die Filamentkarte ihre Knöpfe außerhalb
-        # ihrer Liste führt.
+        # der einzige Weg zu einem neuen Maß und darf nicht wegrollen.
         # Die Mindestbreite aller Zeilen muss bis zur Karte reisen. Ein bloß
         # versteckter Querbalken lässt Qt beim Tab-Fokus die Maßnamen wegrollen.
         self._scroll = ColumnScroller(self)
@@ -3716,10 +3714,9 @@ class ParameterPanel(QWidget):
 
         Aus den Wunschhöhen gerechnet und nicht aus den gelegten — dieselbe
         Bedingung, unter der die ganze Verteilung stillsteht
-        (``OverlayHost._share_room``). Wortgleich mit
-        ``FilamentPanel._around_the_list`` ist das nicht: Dort stehen ein
-        Hinweis und drei Knöpfe, hier einer — zwei, solange der Bindeknopf
-        dasteht; ein verborgener Knopf bekommt auch keinen Abstand.
+        (``OverlayHost._share_room``). Hier steht ein Knopf — zwei, solange
+        der Bindeknopf dasteht; ein verborgener Knopf bekommt auch keinen
+        Abstand.
         """
         margins = self._outer.contentsMargins()
         shown = [
@@ -3754,7 +3751,7 @@ class ParameterPanel(QWidget):
         Drei Zeilen, wie bei den Nachbarn — aber **nie höher als der Wunsch**:
         Eine Karte ohne Parameter zeigt einen umbrochenen Satz, und Platz für
         drei Zeilen wäre Platz, den sie niemandem zeigen kann, während die
-        Nachbarn ihn brauchen (dieselbe Feinheit wie bei der Filamentkarte).
+        Nachbarn ihn brauchen.
         """
         rows = LEAST_PARAMETER_ROWS * (self.add_button.sizeHint().height() + TIGHT)
         return min(self._around_the_rows() + rows, self.wanted_height())

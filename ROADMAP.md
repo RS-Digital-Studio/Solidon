@@ -94,7 +94,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-553 — Die Karte der Tour ist zu niedrig, Schritttexte werden abgeschnitten](#rm-553) | Bedienung und Darstellung | Robert, 08.10.: Karte bei voller Fensterhöhe zu klein, der nächste Schritt hängt als Sprechblase über der Ansicht; Höhe aus dem Inhalt rechnen |
 | [RM-554 — Das i an einer Kartengruppe zeigt nur einen Tooltip statt der Handbuchseite](#rm-554) | Bedienung und Darstellung | Robert, 08.10.: Klick öffnet die passende Handbuchseite, der Tooltip bleibt |
 | [RM-555 — *Baustein verschieben*: Position Y hat keinen fx-Knopf, X und Z haben einen](#rm-555) | Bedienung und Darstellung | Robert, 08.10.: Ursache am Feld klären, jedes Zahlenfeld mit Ausdruck zeigt fx gleich |
-| [RM-556 — Filamente aus der linken Spalte in die Kopfleiste](#rm-556) | Bedienung und Darstellung | Robert, 08.10.: Knopf oben, Klick zeigt die Filamente des Projekts und den Weg ins Filamentlager |
 | [RM-558 — Nach dem Einsetzen eines Bausteins bleibt ein Maßfeld „Y … mm“ in der Ansicht stehen](#rm-558) | Bedienung und Darstellung | Robert, 08.10. (Bild): Feld verschwindet mit dem Einsetzen |
 | [RM-559 — Körper in der Szene mit drei Klicks aufziehen, als Körper oder als Ausschnitt](#rm-559) | Bedienung und Darstellung | Robert, 08.10.: Start, Gegenecke in X/Y, Höhe in Z; ein Weg; Ablauf vorher mit bedienlogik |
 | [RM-560 — *Formen* arbeitet schwach](#rm-560) | Bedienung und Darstellung | Robert, 08.10.: erst messen, was nicht trägt, dann überarbeiten |
@@ -103,7 +102,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Nummernplatzierung gebaut und in den Bildanleitungen von 0.5.3 erzeugt (`ee9a572f3`); offen allein die Feldabnahme nach §11 mit einem Kunden ohne CAD |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Kataloge und Quelltexte durchgesehen und behoben (04.10., `871cc29e6`), Handbuch und Stempel mit 0.5.3 erzeugt; offen allein die Fensterabnahme der längeren Knopfnamen auf 1280 px (RM-213) |
 | [RM-090 — Gemeinsamen Vertrag für die fünf Produkterlebnisse umsetzen](#rm-090) | Bedienung und Darstellung | Gegenprobe liest Export- und Slicerdateien zurück, Nebenfolge je Handlung aus dem Kern, Folge je Befund, Kandidatenprüfung nennt nur Neues und Behobenes, NM 1–11 ohne Fenster belegt; offen allein die Fensterabnahme beim Release (RM-213) |
-| [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
 | [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Probe über den echten Startweg beim nächsten Release (RM-213); D3D12 als Backend ist eine eigene Entscheidung |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Am echten Fenster prüfen, ob sich die Geste flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten, die Fensterproben der Fensterwache und von C14. Vorbedingungen für 0.5.3 erfüllt (Taglauf 37409338027 mit allen Fensterdateien grün, Bereichsnachweis `534d69b79`), beim nächsten Release erneut; dazu die vier Handwege der Merkmalbedienung (§4) |
@@ -3515,16 +3513,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   ja, der vorhandene Beleg-Punkt ist neu gefasst, ein Punkt zur Folge je Befund kommt dazu (alles
   neu seit v0.5.1).
 
-<a id="rm-135"></a>
-
-- [~] **RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen.** Qt berechnet Hinweis,
-  sichtbare Knöpfe und Abstände bei der tatsächlichen Breite; leere Listen erzwingen keine
-  überzähligen Mindestzeilen. Acht Regressionen und die native Windows-Abnahme mit knappen/freien
-  Höhen, langen Hinweisen, großer Schrift und voller Liste sind grün. Nachbarkarten behalten ihren
-  Raum; der Mac-xfail ist entfernt. Offen bleibt der plattformübergreifende Prüflauf auf macOS.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#ein-ort-für-die-auswahl-07092026).
-
 <a id="rm-213"></a>
 
 - [~] **RM-213 — Fensterabnahme und die Kundenwege am echten Fenster.**
@@ -4145,15 +4133,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Zahlenfeld, das einen Ausdruck annimmt, zeigt fx gleich, ob es schon einen trägt oder nicht.
   **Abnahme:** Ursache am Feld belegt; Wächter über die Positionsfelder aller Bausteine und
   Operationen; Fenstertest: Y bekommt per fx einen Ausdruck und rechnet ihn.
-
-<a id="rm-556"></a>
-
-- [ ] **RM-556 — Filamente aus der linken Spalte in die Kopfleiste.** Robert, 08.10.2026: Die
-  Gruppe *Filamente* unten links wandert als Knopf in die obere Leiste. Ein Klick öffnet eine
-  kleine Liste der Filamente, die das Projekt verwendet, und darunter den Weg ins
-  Filamentlager. **Abnahme:** linke Spalte ohne Filamente, Knopf in der Kopfleiste innerhalb
-  der Oberflächengrenzen (`test_interface_limits`), Fenstertest für Liste und Wechsel ins
-  Lager, Handbuch und Abbildungen nachgezogen.
 
 <a id="rm-558"></a>
 

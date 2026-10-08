@@ -803,6 +803,7 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         _fit_toolbar=lambda: None,
         _update_actions=lambda: None,
         filaments=SimpleNamespace(show_scene=lambda *_args: None),
+        _show_project_filaments=lambda *_args: None,
         _start_print_findings=lambda *_args: None,
         _click_after_evaluation=None,
         _click_refusal=None,

@@ -574,6 +574,8 @@ entfernt hat.
 | 2026-09-07 | [Die Durchsicht des 07.09.2026](#die-durchsicht-des-07092026) |
 | 2026-09-08 | [Zwei Werkzeuge, zwei Wahrheiten (08.09.2026)](#zwei-werkzeuge-zwei-wahrheiten-08092026) |
 | 2026-10-08 | [RM-557: Ein Filamentwechsel färbt sofort um und rechnet nichts neu (08.10.2026)](#rm-557-ein-filamentwechsel-färbt-sofort-um-und-rechnet-nichts-neu-08102026) |
+| 2026-10-08 | [RM-556: Die Filamente stehen hinter einem Knopf in der Kopfzeile (08.10.2026)](#rm-556-die-filamente-stehen-hinter-einem-knopf-in-der-kopfzeile-08102026) |
+| 2026-10-08 | [RM-135: Die Filamentkarte der linken Spalte gibt es nicht mehr (08.10.2026)](#rm-135-die-filamentkarte-der-linken-spalte-gibt-es-nicht-mehr-08102026) |
 
 ---
 
@@ -9156,7 +9158,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-109 — Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 — der Preis der Rippenerkennung, und ein Teil davon ist sparbar | weiter offen → [RM-109](#rm-109) | app/core/slice/analysis.py:1153 ruft _survives_opening bei der Vorprüfung weiter auf. Die alte 4,3-s-Marke gehörte zu einer falschen Analyse; 7,0 s bleibt ein historischer Messwert, keine neue Leistungsaussage. |
 | RM-110 — Zwei Zwillinge lesen den Pfad eines offenen Handles | weiter offen → [RM-110](#rm-110) | app/core/scene/project.py:365 und app/core/updates.py:967 führen weiterhin zwei Implementierungen. Der Mac-F_GETPATH-Fehler ist bereits behoben; offen ist nur die gemeinsame Pflege. |
 | RM-111 — Der Sammellauf zwischen zwei Tests gilt nur noch für zwei Dateien | zusammengeführt → [RM-107](ROADMAP.md#rm-107) | tests/conftest.py:185–244 führt _DIALOG_MODULES und den eingeschränkten Sammellauf weiterhin. Derselbe verbliebene Diagnoseauftrag wie RM107. |
-| RM-112 — Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | zusammengeführt → [RM-135](ROADMAP.md#rm-135) | tests/test_filament_picker.py:534–538 markiert die Mac-Unterhöhe weiterhin xfail. RM135 betrifft denselben _around_the_list-Vertrag in der anderen Richtung. |
+| RM-112 — Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | zusammengeführt → [RM-135](#rm-135) | tests/test_filament_picker.py:534–538 markiert die Mac-Unterhöhe weiterhin xfail. RM135 betrifft denselben _around_the_list-Vertrag in der anderen Richtung. |
 | RM-113 — Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | weiter offen → [RM-113](#rm-113) | tests/test_licence_admin.py:45ff überspringt in CI weiterhin bei 'gehört nicht dem aktuellen Nutzer'. Aus der Vermutung Administratorengruppe folgt keine Erlaubnis, sie ungeprüft als Eigentümer anzuerkennen. |
 | RM-114 — Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen | weiter offen → [RM-114](#rm-114) | tests/test_subdivision.py:480–485 probiert 40000/20000/30000/60000/15000 und überspringt, wenn keine Variante öffnet. Ein aktuelles dortiges Messfenster fehlt. |
 | RM-115 — Die Releaseakte meldet, sie blockiert nicht | weiter offen → [RM-115](#rm-115-abschluss-050) | .github/workflows/build.yml hat --write-evidence und --release-check bereits, aber die Warnungsbehandlung besteht. Behebung älterer ELF-/Bibliotheksbefunde ersetzt keinen grünen vollständigen Artefaktnachweis. |
@@ -9179,7 +9181,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-132 — Freiformerkennung liegt noch über dem Ein-Sekunden-Ziel | weiter offen → [RM-132](ROADMAP.md#rm-132) | tests/test_performance.py enthält inzwischen beide zusätzlichen Fälle; :556 nennt 1,41 s synthetisch und 1,52 s organisch. Die Korpuslücke ist geschlossen, das strengere Ziel bleibt laut Punkt ausdrücklich offen. |
 | RM-133 — `rotate_feature` ändert das Volumen, und niemand sagt es | weiter offen → [RM-133](#rm-133) | prepare_ops.py:1912ff meldet inzwischen verlorenen Durchgang über _throughness_lost. Die allgemeine Volumenänderung ist weiter eine Bedienentscheidung, kein bestätigter Geometriefehler. |
 | RM-134 — Testhilfen stehen zweimal | weiter offen → [RM-134](ROADMAP.md#rm-134) | tests/test_cone_fit_quality.py:15 und test_torus_fit_quality.py:15 führen _freeform_patch doppelt; test_analysis_ui.py:161 und test_selection.py:361 on_the_bore_wall mit unterschiedlicher Signatur. Die historische Zahl 21 Gruppen wird nicht ungeprüft fortgeschrieben. |
-| RM-135 — Die Filamentkarte fordert mehr, als sie zeigt | weiter offen → [RM-135](ROADMAP.md#rm-135) | app/ui/filament_picker.py:831ff _around_the_list bleibt die gemeinsame Berechnung. tests/test_filament_picker.py:534ff hat weiterhin die Mac-Unterhöhen-Ausnahme. 144/126 ist ein historischer Windows-Befund; beide Richtungen gemeinsam neu vermessen. |
+| RM-135 — Die Filamentkarte fordert mehr, als sie zeigt | weiter offen → [RM-135](#rm-135) | app/ui/filament_picker.py:831ff _around_the_list bleibt die gemeinsame Berechnung. tests/test_filament_picker.py:534ff hat weiterhin die Mac-Unterhöhen-Ausnahme. 144/126 ist ein historischer Windows-Befund; beide Richtungen gemeinsam neu vermessen. |
 | RM-136 — Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | weiter offen → [RM-136](#rm-136) | app/core/figures.py:92 beschreibt weiter vier Bereiche, :1118 trägt der Bildtext den alten Aufbau. 4a88f97a/cdb5cab1 aktualisieren echte Screenshots und Medien; 84a746e7 veröffentlicht 0.3.5. Der alte Auftrag 'vor Paketbau 0.3.5' und pauschal alte Screenshots sind erledigt; Schema bleibt offen. |
 | RM-137 — Live-Abnahme des Sitzungsendes | weiter offen → [RM-137](#rm-137) | Aktuelle ROADMAP.md wurde während der Durchsicht berechtigt weitergeführt: Desktop und Standalone-CLI sind getrennt geprüft. loggedIn=false stammt aus der separaten CLI und beweist keine fehlende Desktop-Anmeldung; Pyright ist bereits als Kind einer Desktop-Sitzung belegt. Nur Live-Abnahme des echten Sitzungsendes fehlt. |
 
@@ -24317,7 +24319,7 @@ bleibt, steht hier mit Kästchen.
   weiter 114 und 65 am Stück. Was offen bleibt, ist die Mine selbst:
   Zerstörung eines Qt-Objekts zur falschen Zeit, gleich durch wen — die
   andere Hälfte steht in „Fünf Fensterdateien reißen".
-- **Historischer Befund RM-112 (zusammengeführt; aktuelle Aufgabe [RM-135](ROADMAP.md#rm-135)):** **Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein.**
+- **Historischer Befund RM-112 (zusammengeführt; aktuelle Aufgabe [RM-135](#rm-135)):** **Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein.**
   `test_the_filament_card_shares_the_height_instead_of_taking_it` meldet auf
   macos-latest „eine knapp bemessene Karte muss sich auch klein machen":
   `sizeHint()` liegt nach `set_room(least_height())` über dem Boden, also
@@ -26174,7 +26176,7 @@ mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
       duplizieren* und *Objekt umbenennen* verschwinden an einer Fläche,
       statt bedienbar dazustehen. Vor P6, sonst zieht der Umbau die falschen
       Knöpfe in seinen neuen Ort mit.
-- **Historischer Befund RM-135 (weiter offen; aktuelle Aufgabe [RM-135](ROADMAP.md#rm-135)):** **Die Filamentkarte fordert mehr, als sie zeigt.** Beim Bau des
+- **Historischer Befund RM-135 (weiter offen; aktuelle Aufgabe [RM-135](#rm-135)):** **Die Filamentkarte fordert mehr, als sie zeigt.** Beim Bau des
       P4-Nachweises gemessen: Sie meldet als Wunsch 144 Bildpunkte, bekommt
       sie zugeteilt und setzt 126 um. Die Differenz rechnet
       `filament_picker._around_the_list` zu hoch — sie fordert damit Platz,
@@ -44253,3 +44255,43 @@ Am echten Fenster nachher: neue Farbe 0,08–0,16 s nach der Wahl, gewählt get�
 Lochbrett 0,2 s und eine Auswertung statt rund 7 s und vier.
 
 Changelog: ja — ein neues Filament steht sofort im Bild, auch an Bausteinen und STEP-Teilen.
+
+## RM-556: Die Filamente stehen hinter einem Knopf in der Kopfzeile (08.10.2026)
+
+<a id="rm-556-die-filamente-stehen-hinter-einem-knopf-in-der-kopfzeile-08102026"></a>
+<a id="rm-556"></a>
+
+**RM-556 — Filamente aus der linken Spalte in die Kopfleiste.** Robert, 08.10.2026: Die Gruppe
+*Filamente* unten links wandert als Knopf in die obere Leiste; ein Klick öffnet eine kleine
+Liste der Filamente, die das Projekt verwendet, und darunter den Weg ins Filamentlager.
+
+**Umsetzung:** `HeaderBar.filament_button` (*Filamente*, Spulensymbol, beschriftet) rechts neben
+den Druckeinstellungen; die Kurzhilfe nennt die Filamente des Projekts (`header.filament_names`,
+`show_filaments`). In der engen, zweizeiligen Kopfzeile trägt er nur sein Zeichen wie die
+Knöpfe der Werkzeugleiste, sonst fiel sie bei 640 px ins Überlaufmenü. Der Klick öffnet `filament_picker.FilamentPopup` (ein `Qt.Popup`, `show`
+statt `exec`) mit `FilamentPanel`: je Filament eine Zeile mit Farbe, Name und Zahl der Körper,
+*Druckwerte …* für das gewählte Filament, *Filamentlager öffnen*; aus den Druckeinstellungen
+(*Filamente …*) kommt dieselbe Liste mit *Zurück zu Druckeinstellungen*. Das Regal — anlegen,
+ändern, archivieren, Sicherung zurückholen — steht nur noch im Filamentlager; die linke Spalte
+trägt Objekte, Parameter und Verlauf. Die Raumteilung der Filamentkarte in der Spalte entfällt
+mit ihr (RM-135 gegenstandslos). Handbuch (*Das Fenster*, Filamentlager) in allen sechs Sprachen.
+
+**Nachweis:** Fenstertest
+`test_header.py::test_the_filaments_open_from_the_header_and_lead_into_the_inventory` (keine
+Filamentgruppe links, Knopf in der Leiste, Liste mit den Projektfilamenten, Wechsel ins Lager
+schließt sie), `test_operation_ui.py::test_the_settings_dialog_leads_to_the_filament_list`,
+die Liste in `test_filament_picker.py` ohne Regal. Oberflächengrenzen
+(`test_interface_limits.py`) grün. Abbildungen erzeugt der Koordinator beim Release.
+Changelog: ja — *Filamente* steht oben in der Kopfzeile und führt ins Filamentlager.
+
+## RM-135: Die Filamentkarte der linken Spalte gibt es nicht mehr (08.10.2026)
+
+<a id="rm-135-die-filamentkarte-der-linken-spalte-gibt-es-nicht-mehr-08102026"></a>
+<a id="rm-135"></a>
+
+**RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen.** Offen war allein der
+macOS-Prüflauf der Raumteilung. Mit RM-556 steht die Filamentliste nicht mehr als Karte in der
+linken Spalte, sondern hinter *Filamente* in der Kopfzeile; sie bemisst sich selbst
+(höchstens zwölf Zeilen, dann rollt sie) und nimmt an der Raumteilung nicht mehr teil. Die
+Regressionen der Kartenhöhe sind mit ihr entfallen. Gegenstandslos, nicht erledigt.
+Bisheriger Befund: [Ein Ort für die Auswahl](#ein-ort-für-die-auswahl-07092026).

@@ -113,7 +113,7 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
-| `header.py` | Kopfzeile: Projektname, `printer_button_text`, die belegten Filamente (`mesh.slot_indices`) |
+| `header.py` | Kopfzeile: Projektname, `printer_button_text`, Knopf *Filamente* (`filament_names` in der Kurzhilfe) |
 
 ### Brücke zum Kern
 
@@ -202,7 +202,7 @@ stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis bleibt scroll
 | Datei | Zweck |
 |---|---|
 | `filament_inventory.py` | das lokale Lager ohne Renderer (`InventoryView`): Spulen, Bestand, Archiv, Rücknahme mit Rückweg (`restore_booking`) |
-| `filament_picker.py` | Filamentwähler (Name, Typ, Farbe statt 0–7), gemeinsamer Spulendialog und Slicerfilamente (`_SlicerFilamentSearch` im Arbeiter); Schreiben über `CatalogueWrites`; `swatch` = Farbpunkt |
+| `filament_picker.py` | Filamentwähler (Name, Typ, Farbe statt 0–7), gemeinsamer Spulendialog, Slicerfilamente (`_SlicerFilamentSearch`), `FilamentPopup` hinter *Filamente*; `CatalogueWrites`; `swatch` |
 | `filament_assignment.py` | Schnellauswahl an der Auswahl (`QuickFilamentPicker`, `spoolChosen`), ohne eigene Operation |
 | `filament_usage.py` | Buchungsangebote nach der Ausgabe (§20) |
 
