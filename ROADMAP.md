@@ -64,7 +64,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Code und Tor mit `d907d6036` in v0.5.2; offen allein die Fensterabnahme beim Release (RM-213) |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Grenzen 1 bis 3 gebaut oder benannt (06.10.: Mischecke exakt geprüft, Ring-Anfang und Zwischenstellen in den Feldhilfen); Tray: beide Kerne nennen die Fußrundung vor der Rechnung, aber der Weg über *Merkmal entfernen* trägt dort nicht; offen: Fußrundung als Kette entfernen, Netzschräge 2,3× langsamer, Fase am Fuß, B-Spline-Ecke und zweites Anstellen am Netz mit Kernen uneins |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | 14 von 28 Bohrungen tragen ein fremdes Teil und sagen das jetzt mit Weg, statt es still zu verschmelzen (RM-413, 06.10.); offen an den freien `hole_1`/`hole_2`/`hole_4`: Verdoppeln ohne Wirkung, −127 mm³ bzw. +1,4–1,9 mm³ beim Versetzen und Kippen — gegen einen Sollwert ohne Boolesche an der kaputten Schale messen |
-| [RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still](#rm-545) | Geometrie, Erkennung und Druckvorbereitung | Gefunden im Review von RM-413: Die Absage hängt an `kind == "hole"`; an der Senkung einer Kette, am Langloch und am gesenkten Baustein *Schraube* rechnen Versetzen, Entfernen, Kippen und Ändern weiter und verschmelzen oder beschneiden das Teil, exakt teils mit falschem Grund — die Frage an den Hohlraum hängen, auch an Kegeln ohne Kette |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | Paket 3 und Reste D abgenommen, Stützvorschlag für Brücken über dem Modell und Absturz der Schichtanalyse behoben, Matrixwerkzeug auf Dialogcode umgestellt (04.10.); Zeitschätzung rechnet mit dem, was der Slicer aus dem Profil macht, Stützmenge aus den Säulen der Zeit (07.10., Seitenablage Orca-Familie −18 → −3 bis −12 %, Stützmenge Prusa/Cura 0,94 bis 1,14 der Druckdatei); offen die Gesamtabnahme jedes Modell × jeder Slicer und die Zeitreste: Creality Prints Mindestschichtzeit über Bogensehnen, Auto-Brim, Lückenfüllung, Curas Leerfahrt, Prusa-Stützen auf eigenen Schichthöhen, Baumstützen, Rechenzeit am Reiniger — bis Curas Leerfahrt und die Baumstützen gebaut sind, prüft die Zeitgegenprobe dort mit Grund nicht (`estimate.time_comparison_blocked`, Review P2 Rest Z1), danach die Sperren wieder lösen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
@@ -2217,39 +2216,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   zu. Ob das richtig ist, sagt erst ein Sollwert ohne Boolesche gegen die kaputte Schale (je Teil
   Volumen und Dicke entlang der Achse). Sonden `m2_laptop_bohrungen.py`, `m3_hole3.py` unter
   `F:\solidon-review-reports\claude-2026-10-06\geometrie\rm253\`.
-
-<a id="rm-545"></a>
-
-- [ ] **RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still.**
-  Gefunden im Review der RM-413-Einheit (06.10.2026, Fund H1, ergänzt im Nachreview):
-  `F:\solidon-review-reports\claude-2026-10-06\geometrie\review-einheit-1.md` und
-  `review-einheit-1-runde-2.md`. Die Absage aus RM-413 (`_refuse_another_part_in_the_bore`,
-  `perceive.actions.no_own_body`) fragt nur `kind == "hole"`; über die anderen Glieder bleibt
-  derselbe Fehler erreichbar, am Basisstand wie heute. Je Zeile, die das Menü anbietet:
-  - **Senkbohrung mit Stift** (Bohrung Ø 6, Senkung 90° Ø 10, Stift Ø 5), an `cone_1`: Am Netz
-    ergeben Versetzen und Entfernen ein Teil statt zwei; Ändern (Ø 11) und Drehen (10°) schneiden
-    den Stift von 293,4 auf 97,4 mm³ ab, Befund nur `bore.over_the_edge`. Exakt sagen dieselben
-    vier Zeilen mit `CHAIN_NOT_READABLE` ab — falscher Grund, und die Kerne sagen Verschiedenes.
-    Verdoppeln rechnet an beiden Kernen richtig.
-  - **Langloch mit Stift** (`_plate_with_a_second_body(slot=True, inside=True)`), keine Zeile
-    grau: Versetzen, Entfernen und Kippen ergeben an beiden Kernen ein Teil; *Bohrung ändern*
-    (Ø 7) schneidet den Stift am Netz auf 97,6 mm³ ab und verschmilzt ihn exakt, beides ohne
-    Befund. Verdoppeln rechnet am Netz richtig und sagt exakt mit „bliebe offen“ ab.
-  - **Baustein *Schraube*** (`insert_printed_screw`, M6, gesenkt, `separate_from_host`, Netz):
-    An der Senkung verschmelzen Versetzen, Entfernen und Kippen die Schraube mit der Platte,
-    Ändern schneidet sie von 462,3 auf 260,5 mm³. Am Kopf `cone_1` schneiden Versetzen und
-    Entfernen den Kopf ab (261,6 mm³), Ändern und Kippen verschmelzen, Verdoppeln bleibt ohne
-    Wirkung und ohne Befund. Beide Kegel stehen in keiner Kette; die Bohrung ist nach dem
-    Einsetzen nicht mehr erkannt.
-  Weg: die Frage an den Hohlraum hängen statt an die Merkmalsart — ein Glied einer Kette fragt
-  die Bohrung mit (`cavity_chain_state_at`), ein Kegel ohne Kette seinen eigenen Hohlraum, für
-  `slot` eine Stadionfassung von `hole_is_clear` und `_own_part_bore_clear`; Menü und Operation
-  mit demselben Satz. Abnahme: An diesen Gliedern sagt jede Zeile, die das Menü heute anbietet,
-  an beiden Kernen mit `OTHER_PART_IN_THE_BORE` und `split_bodies, cancel` ab und steht im Menü
-  mit demselben Satz grau, oder sie rechnet mit unverändertem Teil (Teilezahl, Volumen des
-  Teils), an beiden Kernen gleich; je Fall und Zeile ein Test, am heutigen Stand rot. *Zum
-  Langloch ziehen* am freien Stift bleibt frei. Sonden: `review-einheit-1-sonden\` und
-  `review-einheit-1-runde-2-sonden\test_probe_rm545_zeilen.py`.
 
 <a id="rm-247"></a>
 

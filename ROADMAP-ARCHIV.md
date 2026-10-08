@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-08 | [RM-545: Ein getrenntes Teil in Senkung, Langloch oder Schraube verschmilzt nicht mehr still (08.10.2026)](#rm-545-ein-getrenntes-teil-in-senkung-langloch-oder-schraube-verschmilzt-nicht-mehr-still-08102026) |
 | 2026-10-08 | [RM-548: Karte und Operation stellen je Merkmalshandlung dieselbe Frage (08.10.2026)](#rm-548-karte-und-operation-stellen-je-merkmalshandlung-dieselbe-frage-08102026) |
 | 2026-10-08 | [RM-552: Stift für Bohrung baut an Schraubenloch und Einpressbuchse (08.10.2026)](#rm-552-stift-für-bohrung-baut-an-schraubenloch-und-einpressbuchse-08102026) |
 | 2026-10-08 | [RM-546: Merkmal drehen sagt, wenn die Drehung das Merkmal auf sich selbst legt (08.10.2026)](#rm-546-merkmal-drehen-sagt-wenn-die-drehung-das-merkmal-auf-sich-selbst-legt-08102026) |
@@ -44310,3 +44311,62 @@ rest; bis zu 18 bewegbare Merkmale je Körper, alle sechs Zeilen) bleibt keine U
 (vorher 27: 5 an Tasche, Wulst und Ring, 22 Senkungswinkel). Cache-Versionen der sieben
 Operationen erhöht.
 Umgesetzt von Claude.
+
+## RM-545: Ein getrenntes Teil in Senkung, Langloch oder Schraube verschmilzt nicht mehr still (08.10.2026)
+
+<a id="rm-545-ein-getrenntes-teil-in-senkung-langloch-oder-schraube-verschmilzt-nicht-mehr-still-08102026"></a>
+<a id="rm-545"></a>
+
+**RM-545 — Über Senkung, Langloch und Baustein Schraube verschmilzt ein getrenntes Teil still.**
+Gefunden im Review der RM-413-Einheit (06.10.2026, Fund H1, ergänzt im Nachreview):
+`F:\solidon-review-reports\claude-2026-10-06\geometrie\review-einheit-1.md` und
+`review-einheit-1-runde-2.md`. Die Absage aus RM-413 (`_refuse_another_part_in_the_bore`,
+`perceive.actions.no_own_body`) fragt nur `kind == "hole"`; über die anderen Glieder bleibt
+derselbe Fehler erreichbar, am Basisstand wie heute. Je Zeile, die das Menü anbietet:
+- **Senkbohrung mit Stift** (Bohrung Ø 6, Senkung 90° Ø 10, Stift Ø 5), an `cone_1`: Am Netz
+  ergeben Versetzen und Entfernen ein Teil statt zwei; Ändern (Ø 11) und Drehen (10°) schneiden
+  den Stift von 293,4 auf 97,4 mm³ ab, Befund nur `bore.over_the_edge`. Exakt sagen dieselben
+  vier Zeilen mit `CHAIN_NOT_READABLE` ab — falscher Grund, und die Kerne sagen Verschiedenes.
+  Verdoppeln rechnet an beiden Kernen richtig.
+- **Langloch mit Stift** (`_plate_with_a_second_body(slot=True, inside=True)`), keine Zeile
+  grau: Versetzen, Entfernen und Kippen ergeben an beiden Kernen ein Teil; *Bohrung ändern*
+  (Ø 7) schneidet den Stift am Netz auf 97,6 mm³ ab und verschmilzt ihn exakt, beides ohne
+  Befund. Verdoppeln rechnet am Netz richtig und sagt exakt mit „bliebe offen“ ab.
+- **Baustein *Schraube*** (`insert_printed_screw`, M6, gesenkt, `separate_from_host`, Netz):
+  An der Senkung verschmelzen Versetzen, Entfernen und Kippen die Schraube mit der Platte,
+  Ändern schneidet sie von 462,3 auf 260,5 mm³. Am Kopf `cone_1` schneiden Versetzen und
+  Entfernen den Kopf ab (261,6 mm³), Ändern und Kippen verschmelzen, Verdoppeln bleibt ohne
+  Wirkung und ohne Befund. Beide Kegel stehen in keiner Kette; die Bohrung ist nach dem
+  Einsetzen nicht mehr erkannt.
+Weg: die Frage an den Hohlraum hängen statt an die Merkmalsart — ein Glied einer Kette fragt
+die Bohrung mit (`cavity_chain_state_at`), ein Kegel ohne Kette seinen eigenen Hohlraum, für
+`slot` eine Stadionfassung von `hole_is_clear` und `_own_part_bore_clear`; Menü und Operation
+mit demselben Satz. Abnahme: An diesen Gliedern sagt jede Zeile, die das Menü heute anbietet,
+an beiden Kernen mit `OTHER_PART_IN_THE_BORE` und `split_bodies, cancel` ab und steht im Menü
+mit demselben Satz grau, oder sie rechnet mit unverändertem Teil (Teilezahl, Volumen des
+Teils), an beiden Kernen gleich; je Fall und Zeile ein Test, am heutigen Stand rot. *Zum
+Langloch ziehen* am freien Stift bleibt frei. Sonden: `review-einheit-1-sonden\` und
+`review-einheit-1-runde-2-sonden\test_probe_rm545_zeilen.py`.
+
+**Nachweis (08.10.2026, `ec790e827`, Paket G):** `prepare_ops.separate_part_reason` fragt den
+Hohlraum statt der Art: jedes Glied einer Kette (die Senkung fragt ihre Bohrung mit,
+`cavity_chain_state_at`), das Langloch über sein Stadion um die Mittellinie und eine Senkung
+ohne Kette über den Halbmesser ihrer Wand auf jeder Höhe (`hole_is_clear` misst alle drei,
+`_inside_and_radial`) sagen `OTHER_PART_IN_THE_BORE`; ein Stift oder Schraubenkopf, der selbst
+in der Bohrung eines anderen Teils steckt, sagt den neuen Satz `PART_IN_ANOTHER_BORE` — beide
+mit `split_bodies, cancel`. Karte (`actions_for`, jede Zeile grau) und Operation
+(`_refuse_another_part_in_the_bore` in `_movable_feature` und `resize_hole`) lesen dieselbe
+Funktion; *Zum Langloch ziehen* bleibt am Langloch mit freiem Stift frei
+(`hole_has_separate_contents` nimmt das Langloch). Abweichung von der Abnahme, mit Grund: Am
+Schraubenkopf und am Stift selbst wäre „In dieser Bohrung liegt ein getrenntes Teil“ falsch,
+deshalb der eigene Satz. Tests in `tests/test_slot_features.py`:
+`test_a_separate_part_in_a_countersink_slot_or_screw_says_so_at_every_row` (Senkung,
+Langloch, Senkung und Kopf der Schraube, Stift in Senkbohrung und Langloch, je Kern und Zeile,
+60 Fälle; im Basis-Worktree 60 rot, weil die Karte die Zeilen anbot) und
+`test_the_slot_with_a_separate_pin_still_pulls_and_keeps_the_pin` (Gegenfall, 2 Fälle);
+`test_widening_a_slot_with_a_second_body_in_it_is_no_split` hielt das Abschneiden des Stifts
+fest und prüft jetzt den Stopfen mit dem zweiten Körper neben der Platte. Am Laptop-Ständer
+(`F:\3D Dateien\parametric-laptop-riser.stl`, 22 Teile, 217 Merkmale gefahren) sagen 21
+Merkmale ab, deren Versetzen um 1 mm vorher still 20 bis 142 Teile oder bis −634 mm³
+hinterließ, dazu einer mit −90,9 mm³ bei gleicher Teilezahl; 26 sagten schon vorher mit
+anderem Grund ab. Cache-Versionen der sechs Handlungen erhöht. Umgesetzt von Claude.
