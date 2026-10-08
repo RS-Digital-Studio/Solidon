@@ -62,7 +62,7 @@ import tempfile
 import urllib.request
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 from typing import Final
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -760,13 +760,73 @@ def flatpak_title(program: Path | str) -> str:
     Der Dateistamm einer Kennung ist ihr Anfang (``com.prusa3d.PrusaSlicer`` →
     ``com.prusa3d``), und so hießen Slicer-Flatpaks in Listen und Meldungen. Das
     letzte Glied ist der Programmname; klein geschrieben (``com.ultimaker.cura``)
-    bekommt es seinen großen Anfangsbuchstaben. Eine Stelle für die Übergabe
-    (``SlicerSetup.name``) und die Oberfläche (``labels.slicer_title``).
+    bekommt es seinen großen Anfangsbuchstaben. Den Namen für Listen und
+    Meldungen gibt :func:`slicer_title`, mit dem Packungsnamen („Bambu Studio“).
     """
     app = flatpak_app(program)
     if not app:
         return ""
     name = app.rsplit(".", 1)[-1]
+    return name if name != name.lower() else name.capitalize()
+
+
+#: Ordnernamen, die nichts über das Programm sagen — dort gilt der Dateiname.
+_GENERIC_FOLDERS: Final = frozenset({"", "bin", "sbin", "usr", "local", "macos", "contents"})
+
+#: Programme, deren Paket oder Ordner den Namen ohne Leerzeichen trägt — auf
+#: der Packung steht er mit. Der Mac-Kunde las „AnycubicSlicerNext“.
+_BOX_NAMES: Final = {
+    "anycubicslicernext": "Anycubic Slicer Next",
+    "bambustudio": "Bambu Studio",
+    "crealityprint": "Creality Print",
+}
+
+
+def slicer_title(program: PurePath) -> str:
+    """Ein Name, den ein Mensch wiedererkennt — nicht der Dateiname.
+
+    „elegoo-slicer.exe" und „prusa-slicer-console.exe" sind Dateinamen; was
+    auf der Packung steht, ist „ElegooSlicer" und „PrusaSlicer". Der
+    Installationsordner trägt genau das, bei Cura sogar die Version
+    („UltiMaker Cura 5.13.0"), was bei zwei installierten Fassungen der
+    Unterschied ist. Auf dem Mac ist es das Programmpaket (``PrusaSlicer.app``);
+    liegt ein Programm in einem allgemeinen Ordner (``/usr/bin``), bleibt der
+    Dateiname. Ein Flatpak heißt nach seinem Programm (:func:`flatpak_title`).
+    Ein AppImage liegt in einem beliebigen Ordner (``~/Downloads``) und trägt
+    Version und Plattform im Namen; es heißt nach dem Programm, das sein Name
+    nennt (:func:`program_mark`), ein unbekanntes nach seinem Dateinamen.
+
+    **Eine Stelle für Listen und Meldungen:** Druckdialog, Erststart und
+    Einstellungen (``labels.slicer_title``) und die Übergabe
+    (``SlicerSetup.name``). Die Übergabe nannte den Dateistamm — „{slicer}
+    kennt {printer} nicht“ mit „AnycubicSlicerNext“ unter einem Dialog, der
+    „Anycubic Slicer Next“ schrieb.
+    """
+    flatpak = flatpak_title(str(program))
+    if flatpak:
+        name = flatpak
+    elif program.suffix.lower() == ".appimage":
+        name = _appimage_title(program)
+    else:
+        name = next(
+            (parent.stem for parent in program.parents if parent.suffix.lower() == ".app"),
+            program.stem
+            if program.parent.name.lower() in _GENERIC_FOLDERS
+            else program.parent.name,
+        )
+    return _BOX_NAMES.get(name.casefold(), name)
+
+
+def _appimage_title(program: PurePath) -> str:
+    """Das Programm, das der Name eines AppImage nennt, in der Schreibweise aus
+    :data:`app.core.tools.SLICERS` — ohne bekanntes Programm der Dateiname."""
+    from app.core.tools import SLICERS
+
+    mark = program_mark(program.name)
+    spellings = [name for name in SLICERS if plain_name(name) == mark]
+    if not spellings:
+        return program.stem
+    name = next((spelling for spelling in spellings if spelling != spelling.lower()), spellings[0])
     return name if name != name.lower() else name.capitalize()
 
 

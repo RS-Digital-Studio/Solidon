@@ -33,10 +33,14 @@ entfernt hat.
 |---|---|
 | 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
 | 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
+| 2026-10-07 | [RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)](#rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026) |
 | 2026-10-06 | [RM-441: Jeder Befund, der sagt, dass ein Schritt nichts getan hat, öffnet diesen Schritt (06.10.2026)](#rm-441-jeder-befund-der-sagt-dass-ein-schritt-nichts-getan-hat-öffnet-diesen-schritt-06102026) |
 | 2026-10-06 | [RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)](#rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026) |
 | 2026-10-07 | [RM-535: Karte, Operation und Griff fragen dieselbe Funktion, und das Material reist beim Versetzen, wie es ist (07.10.2026)](#rm-535-karte-operation-und-griff-fragen-dieselbe-funktion-und-das-material-reist-beim-versetzen-wie-es-ist-07102026) |
+| 2026-10-07 | [RM-536: Stift für Bohrung baut das passende Gegenstück (07.10.2026)](#rm-536-stift-für-bohrung-baut-das-passende-gegenstück-07102026) |
+| 2026-10-07 | [RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)](#rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
+| 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
 | 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
 | 2026-10-06 | [RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)](#rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026) |
@@ -9053,7 +9057,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-011 — Auf einem fremden Rechner installieren | weiter offen → [RM-011](ROADMAP.md#rm-011) | ROADMAP.md:2381–2383 hat weiterhin keinen zugeordneten Feldlaufbeleg. CI-Paketierung und einzelne Kundenmeldungen ersetzen keinen vollständigen, versionierten Erstinstallationsweg. Mit dem P8-Mac-Feldlauf koordinieren, aber der allgemeine Kunden-Erststart ist eine eigene Abnahme. |
 | RM-012 — Offen: den helikalen Gang so bauen, dass er überall schließt | zusammengeführt → [RM-104](ROADMAP.md#rm-104) | Der referenzierte test_a_sound_thread_still_goes_through samt Linux-/Darwin-xfail existiert seit 684c439a nicht mehr. Aktuell tests/test_sketch_ops.py:714–740. Die alten MakePipeShell-Versuche sind historische Diagnose und begründen allein keinen heutigen Architekturumbau. |
 | RM-013 — Offen: dieser eine Test | zusammengeführt → [RM-104](ROADMAP.md#rm-104) | tests/test_chat_ui.py:425 hat keine Skip-Markierung und führt weiterhin zwei run_remote-Aufrufe aus. 8fcc9edc entfernte den VTK-Renderer, build.yml:226–246 führt Fensterdateien wieder aus. Alte Aussage, dieser Test werde auf Linux übersprungen, trifft nicht mehr zu; mangels eigenem Linux-Lauf keine Behoben-Behauptung. |
-| RM-014 — P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung | weiter offen → [RM-014](ROADMAP.md#rm-014) | app/core/agent/session.py:123 und 793 verwendet _gathered_refusal und GATHERED_KINDS; app/core/knowledge/data/rules.toml enthält weiterhin keine zusätzliche Formenregel. ROADMAP.md:2977–3020 grenzt genau diese Entscheidung als einzigen Rest ab. Historische Sprachanzahlen (Website zwei, Handbuch fünf) sind überholt. |
+| RM-014 — P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung | weiter offen → [RM-014](#rm-014) | app/core/agent/session.py:123 und 793 verwendet _gathered_refusal und GATHERED_KINDS; app/core/knowledge/data/rules.toml enthält weiterhin keine zusätzliche Formenregel. ROADMAP.md:2977–3020 grenzt genau diese Entscheidung als einzigen Rest ab. Historische Sprachanzahlen (Website zwei, Handbuch fünf) sind überholt. |
 | RM-015 — Er tritt auch in einer einzelnen Datei auf, und die Rate schwankt stark | zusammengeführt → [RM-021](ROADMAP.md#rm-021) | ROADMAP.md:3288–3310 erklärt selbst, dass Code, Stelle und ursprüngliche Protokolle fehlen und 27 verwertbare spätere Läufe nicht abrissen. Python und Renderer wurden inzwischen ersetzt. Der Eintrag liefert keine eigenständig abnehmbare aktuelle Aufgabe. |
 | RM-016 — Gegen Sonnet 5 ist die Suite nicht gefahren | weiter offen → [RM-016](ROADMAP.md#rm-016) | app/core/backends/llm.py:604–628 führt claude-sonnet-5 als Vorgabe und den fehlenden Suite-Lauf ausdrücklich; Thinking-Blöcke werden weiterhin nicht zurückgegeben. REFUSAL_STOPS:133, Reply.refused:226–227 und app/core/agent/session.py:406 behandeln refusal inzwischen. Der entsprechende alte Nebenpunkt ist erledigt. Kein kostenpflichtiger Modelllauf gestartet. |
 | RM-017 — Stegdicke und Kammertiefe sind an keinem echten Profil gemessen | weiter offen → [RM-017](#rm-017) | app/core/knowledge/data/standards.toml:396–420 führt weiterhin gebräuchliche Katalogwerte lip/depth 1,8/4,3 bzw. 2,0/5,5 sowie Herstellerspannen. Kein zugeordneter physischer Messbeleg gefunden. |
@@ -12145,7 +12149,7 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       dem Code oder aus der Tastatur des Nutzers stammt. Genau diese
       Unterscheidung ist das Feld — die Migration von 6 hält fest, warum ein
       nachträglicher Abgleich mit dem Katalog der falsche Weg wäre.
-- **Historischer Befund RM-014 (weiter offen; aktuelle Aufgabe [RM-014](ROADMAP.md#rm-014)):** **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Die
+- **Historischer Befund RM-014 (weiter offen; aktuelle Aufgabe [RM-014](#rm-014)):** **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Die
       Sperre steht; offen ist nur noch, ob eine Regel dazukommt.
 
       **Handbuch:** ein Kapitel *Formen* mit dem Abschnitt, den `AGENTS.md`
@@ -44068,3 +44072,136 @@ Kugel und Ring ins Bild (c, `MEASURED_WHILE_MOVED`). Abnahmetest über Korpusnet
 Wulst (`post_with_fillet.stl`) und Sackbohrung mit Zapfen, dazu am ganzen Zapfen und an der
 ganzen Kuppel; Fenstertests für Flächenzug, Griff und Maße im Bild. Am echten Fenster
 abzunehmen bleibt die Maßgruppe an Zapfen, Senkung, Kugel und Ring (Release).
+
+## RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)
+
+<a id="rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026"></a>
+<a id="rm-014"></a>
+
+**RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden.** Entscheiden, ob
+  zusätzlich zur bestehenden Sperre für geratene Skizzen, Pinselzüge und Skelettdaten eine
+  erklärende Agentenregel gebraucht wird. Abnahme: Entscheidung dokumentiert; bei einer
+  Regeländerung Sammlungsversion sowie vergleichbare Agenten-Suite-Läufe davor und danach. Weg 4,
+  Beispiel, Handbuch und Website sind bereits umgesetzt.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#p16--organische-modellierung).
+
+**Abschluss:** Entschieden (Claude, Produktabwägung, 07.10.2026): keine zusätzliche Regel in
+der Sammlung, weil die Sperre schon im Code steht und eine Regel sie nur wiederholte. Stattdessen
+tragen `sculpt_strokes` und `pose_armature` in ihrer Beschreibung den Satz, dass der Nutzer die
+Gesten selbst setzt und der Agent ihm beschreibt, wo er ansetzen soll (`tools.USER_ONLY_KINDS`);
+auch der leere Aufruf wird abgelehnt — in der Sitzung und über MCP mit derselben Prüfung
+(`tools.refused_gathered`), und MCP bietet die beiden gar nicht erst an. Jede gesammelte Art
+(Skizze, Pinsel, Skelett, Kanten, Punkte) nennt in der Ablehnung ihren eigenen Weg
+(`tools.gathered_refusal`), ein Test hält das für jede Art. Regelsammlung unverändert, daher
+keine Sammlungsversion. Agenten-Suite lokal mit Prompt-Version 9 nicht schlechter (28 gegen 27
+von 39, siehe [RM-251](ROADMAP.md#rm-251)); kein Referenzfall ruft die beiden Werkzeuge. Die
+gehostete Abnahme der geänderten Beschreibungen steht in [RM-016](ROADMAP.md#rm-016).
+Umgesetzt von Claude.
+
+## RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)
+
+<a id="rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026"></a>
+<a id="rm-543"></a>
+
+**RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile.**
+  `tests/test_analysis_ui.py::test_a_report_click_keeps_its_mark_across_the_async_map` fährt
+  den Klick von der Berichtszeile bis zur fertigen Analysekarte mit echtem `QTimer`. Am
+  07.10.2026 war er lokal zweimal rot, an `d25f12366` und am Zweig von RM-134, einzeln wie im
+  Dateilauf, mit `RuntimeError: Internal C++ object (QListWidgetItem) already deleted`; am
+  selben Morgen lief er einzeln grün und im CI-Lauf 37560540258 auf allen vier Plattformen.
+  Ob der Test eine Zeile hält, die der Bericht beim Neuaufbau verwirft, oder ob die Oberfläche
+  nach dem Neuaufbau eine alte Zeile anfasst, ist offen. **Abnahme:** Ursache benannt; liegt sie
+  in der Oberfläche, ein Test, der den Neuaufbau zwischen Klick und Karte erzwingt; der Test
+  zwanzigmal hintereinander grün, auch unter Last.
+
+**Erledigt (07.10.2026).** Die Ursache lag im Test. Nachkommende Befunde —
+die Schichtanalyse über `ReportPanel.add_findings` — bauen die Liste neu
+(`_rebuild` leert sie), und der Test hielt die Zeile über `scrollToItem` und
+`processEvents` bis `visualItemRect(item)`: Kamen die Befunde dazwischen, warf
+genau dieser Zugriff `RuntimeError: Internal C++ object (QListWidgetItem)
+already deleted`. Die Oberfläche liest die Zeile nur im Druck
+(`ReportList.mousePressEvent`) und reicht danach den Befund weiter.
+Belegt in `tests/test_analysis_ui.py::test_a_report_rebuild_takes_the_held_row_and_the_click_still_reaches_its_map`:
+Ein Neuaufbau zwischen Griff und Klick löscht die gehaltene Zeile mit genau
+diesem Fehler; ein Neuaufbau zwischen Klick und fertiger Karte lässt Karte,
+Marke und beide Aktoren stehen. Gegenprobe: Liest die Oberfläche die Zeile
+nach dem Druck noch einmal (verzögertes `leftPressed`), bleibt die Karte aus
+und der Test ist rot. Der Kundentest wartet seither auf die Arbeiter, bevor
+er greift (`b8d2d6264`). Beide Tests 20-mal hintereinander grün, unter Last
+von 28 rechnenden Prozessen auf 32 Kernen. Gefunden im Review 1 von
+Konsolidierungspaket 3 (G-11), behoben von Claude.
+## RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)
+
+<a id="rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026"></a>
+<a id="rm-532"></a>
+
+**RM-532 — Gewinde in jedem Maß und Normteile in allen Größen.** Kundenvorschlag
+S-20261006-c66299 (0.5.3, ohne Rückadresse): Ein Innengewinde in einem Rohr mit mindestens 60 mm
+Innendurchmesser ging nicht, *Druckbares Gewinde* endete bei M8. Robert: „keine Beschränkungen“,
+„die Gewinde usw sollten alle Größen unterstützen“.
+
+**Umsetzung** (Zweige `gewinde-eigenes-mass` und `normteile-alle-groessen`, Commits
+`63d7a7826`, `c82f9ca9e`, `3fd3c762c`): *Druckbares Gewinde*, Bohrung mit Gewinde, Gegenstück,
+*Schraube erstellen* und *Drehdeckel erzeugen* nehmen jeden Nenndurchmesser von 1,6 bis 1000 mm
+(*Eigenes Maß*, `fasteners.CUSTOM_SIZE`; Steigung null ist die Regelsteigung
+`standards.regular_pitch`, Untergrenze `units.FINEST_PITCH`, Kernanteil
+`units.THREAD_MIN_CORE_SHARE`). An einer Bohrung ohne Tabellengröße wählt `custom_thread_for` das
+Maß, dessen Kernloch sie ist (Ø 60 → Ø 66,6 × 6). Die Normteiltabelle (Version 13) führt
+Schrauben, Muttern und Scheiben von M1,6 bis M64, 27 Größen nach ISO 261/262, ISO 4762, ISO 4032,
+ISO 7089 und ISO 273, je Spalte mit Herkunft; Schraubenloch, Mutternfalle, Schraube, Mutter und
+Einpressbuchse nehmen *Eigenes Maß*, die Maße leitet `standards._along` aus den Nachbargrößen ab
+und der Befund `parts.derived_size` sagt es. Netz: ganze Umläufe und Kernecken als Vielfaches der
+Gangsehnen (`build._core_segments`, `shapes.turn_segments`), `LIBRARY_VERSION` 24 mit
+`THREAD_MESH_WHOLE_TURNS` und `LUG_END_FOLLOWS_ITS_ROUNDING`.
+
+**Zwei Durchsichten.** Runde 1 (F1–F3, R1–R6, K1–K7) im Commit `c82f9ca9e` behoben. Runde 2
+(`3fd3c762c`): Sollwerte nach dem Nachtrag M33/M39/M45/M52 (N1); der Restwand-Befund rät zu einem
+kleineren Nennmaß mit feinerer Steigung, sein Knopf öffnet `diameter` oder `size`, Restwand und
+Aufbohren gelten zugleich und die Wand wird längs der Gewindestrecke ab der Mündung gemessen
+(N2, K-N5, beide Codes in `MEINT_DEN_SCHRITT`); Senkköpfe nach DIN 7991 bis M24, darüber sowie
+für M18 und M22 gerechnet mit `countersink_derived` und Befund `parts.countersink_derived` (N3);
+ein Maß hinter der Klappe, das erst die Wahl vorn verlangt, öffnet sie (N4); kürzere Sätze über
+der Bohrung samt Wortprüfung (N5); Kopftiefe und Laschenbreite aus der größten Größe (N6); ein
+Außengewinde begrenzt eine Wand mit seinem Kern (N7); M1.6 Kernloch 1,25 nach DIN 336. Danach die
+Restfunde: Ein abgeleiteter Sechskant nimmt eine Schlüsselweite nach ISO 272 (K-N2), Ø 60 sagt,
+dass nur der Kopf abgeleitet ist (K-N3), der Satz „das ist M6 innerhalb der Messunsicherheit“
+steht über die Gewindepassung im Prüfbericht (K-N4), eine Tabellengröße an einer Bohrung
+verlangt die halbe Gangtiefe (`units.THREAD_MIN_GRIP_SHARE`, K-N6), und die Regel zur Herkunft
+der Normteiltabelle nennt Händler- und Nachschlageseiten mit Stichprobe (U-N3).
+
+**Nachweis:** Bereichsnachweis aller 49 Bausteine nach dem Merge in `stift-fuer-bohrung`
+(alle 49 bestanden, `printed_thread` 248 Ecken mit 8 erklärt ausgeschlossen, `screw_hole` 464, `wall_mount` 512); betroffene Tests je Schritt grün (Normteile 3713 bestanden ohne Fenster, Stift 1256),
+ruff und mypy grün. Der Fenstertest zu N4
+(`test_choosing_a_custom_size_opens_the_flap_with_its_diameter`) läuft beim Release. Beim Release
+meldet die Erzeugnisprüfung in `test_wording` die geänderten Handbuchabsätze. Changelog: ja —
+Gewinde in jedem Maß, Normteile von M1,6 bis M64.
+
+## RM-536: Stift für Bohrung baut das passende Gegenstück (07.10.2026)
+
+<a id="rm-536-stift-für-bohrung-baut-das-passende-gegenstück-07102026"></a>
+<a id="rm-536"></a>
+
+**RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung**
+(Fragebogen S-20261006-5be329). Kundenwunsch: „… wenn man ein Gewinde bei der Bohrung oder
+Senkung hat, dass man dafür auch das passende Gegenstück mit der Funktion erzeugen könnte“.
+Bis dahin baute `pin_for_bore` einen glatten Zylinder.
+
+**Umsetzung** (Zweig `stift-fuer-bohrung`, Commits `1a8c8ac7b`, `4a772355b`): Neue Form hinter
+der Klappe, Vorgabe „Passend zur Bohrung“ (`geom/bore_pin.py`, `geom/lid_hinge.py`). Eine
+Senkung an der Mündung gibt einen bündigen Senkkopf im Winkel der Senkung, eine Ansenkung einen
+Zylinderkopf, ein Innengewinde auf derselben Achse ein Außengewinde derselben Größe und Steigung
+aus dem Gewindebaustein (`counterpart.thread_values_for`, Tabellenmaß oder `CUSTOM_SIZE`);
+Senkung und Gewinde ergeben eine Senkkopfschraube. Der Stift hält überall das halbe Spiel
+senkrecht zur Wand, die Lage der Gänge wird am Träger gemessen. „Glatter Stift“ baut den
+Zylinder von vorher; Format 48 (`scene/migrations.py`) lässt bestehende Projekte ihn behalten.
+`leaves_inputs_unchanged` bleibt wahr. Der Befund `pin_for_bore.made` nennt den Träger in
+`object_ids` und fällt mit ihm, wenn ein späterer Schritt die Platte entfernt und den Stift
+behält (Review zu `bbd41ff2d`, R-a); `cache_version` 3.
+
+**Nachweis:** `tests/test_bore_pin.py` an `plate_countersunk.stl`, `plate_countersunk_blind.stl`, `plate_counterbored.stl` und
+einer Bohrung mit `insert_printed_thread`; `tests/data/projects/pin_for_bore_v46.p3d` rechnet
+unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothing_about_the_bore`
+mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
+Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
+Zylinderkopf und Gewinde passend zur Bohrung.

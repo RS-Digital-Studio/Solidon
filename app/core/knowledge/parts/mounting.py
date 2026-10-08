@@ -73,6 +73,15 @@ WALL_MOUNT_KEEPS_HOLE_WALLS = PartChange(
 _MAGNETS = standards.magnet_sizes()
 _SCREWS = standards.screw_sizes()
 
+#: Die Schrauben des Wandhalters: M2 bis M27. Der Bereichstest fährt fünf
+#: zweiwertige Felder je Größe, 32 Ecken, und ``range_check.MAX_CORNERS`` lässt
+#: sechzehn Größen zu. Die Tabelle reicht seit dem 06.10.2026 bis M64; der
+#: Wandhalter beginnt wie bisher bei M2 (eine M1.6 trägt an keiner Wand) und
+#: endet an der sechzehnten Größe. Mehr hieße ein Feld weniger im Test.
+_WALL_SCREWS: Final = tuple(
+    size for size in _SCREWS if 2.0 <= standards.screw(size).nominal <= 27.0
+)
+
 
 SLOT_RUNS_DOWNWARD = PartChange(
     version="5",
@@ -398,7 +407,7 @@ class WallMountParams(BaseParams):
     size: str = param(
         title=_("Schraube"),
         default="M4",
-        choices=_SCREWS,
+        choices=_WALL_SCREWS,
         doc=_("Wofür die Löcher sind. Es sind Durchgangslöcher aus der Normteiltabelle."),
         placement="advanced",
     )
@@ -497,13 +506,32 @@ LUG_ADDED = PartChange(
     "Bohrung (RM-398).",
 )
 
-#: Die Schrauben der Lasche: M3 bis M8 aus der Normteiltabelle (Vorgabe Robert,
-#: RM-398), soweit die Tabelle eine Unterlegscheibe dazu führt — aus deren
-#: Außenmaß folgen Breite und Länge, wo keine eingetragen sind.
+#: Die Schrauben der Lasche: ab M3 jede Größe der Normteiltabelle (Vorgabe
+#: Robert, RM-398; seit dem 06.10.2026 bis M64), soweit die Tabelle eine
+#: Unterlegscheibe dazu führt — aus deren Außenmaß folgen Breite und Länge, wo
+#: keine eingetragen sind.
 _LUG_SCREWS: Final = tuple(
     size
     for size in _SCREWS
     if standards.screw(size).nominal >= 3.0 and size in standards.washer_sizes()
+)
+
+#: Die breiteste Lasche trägt die größte Scheibe (M64: 115 mm). Eine feste 100
+#: ließ ein eingetragenes Maß die eigene Vorgabe der großen Größen nicht
+#: erreichen (Review RM-532 Runde 2, N6).
+_WIDEST_LUG: Final = max(standards.washer(size).outer for size in _LUG_SCREWS)
+
+LUG_END_FOLLOWS_ITS_ROUNDING = PartChange(
+    version="24",
+    date="2026-10-06",
+    reason=(
+        "Das runde Ende hatte immer 48 Ecken; ab 42,8 mm Breite lagen seine Sehnen mehr "
+        "als MAX_FACET_SAG innen, bei der Lasche für M64 0,13 mm (RM-532)."
+    ),
+    effect=_(
+        "Laschen über 42,8 mm Breite haben ein feiner gerundetes Ende und werden bis zu "
+        "0,1 mm länger."
+    ),
 )
 
 LUG_TOO_NARROW = _(
@@ -529,7 +557,7 @@ class LugParams(BaseParams):
         default=0.0,
         unit="mm",
         minimum=0.0,
-        maximum=100.0,
+        maximum=_WIDEST_LUG,
         doc=_(
             "Quer zur Lasche gemessen. Null heißt: so breit wie die Unterlegscheibe der Schraube."
         ),
@@ -607,7 +635,7 @@ def _lug_reason(params: LugParams) -> TranslatableText | None:
         "Für Lasten, die die Lasche biegen, denn sie bricht am Ansatz. Dann eine "
         "Versteifungsrippe oder einen Eckwinkel dazusetzen."
     ),
-    changes=[LUG_ADDED],
+    changes=[LUG_ADDED, LUG_END_FOLLOWS_ITS_ROUNDING],
     feasible=lambda raw: _lug_reason(cast(LugParams, raw)),
 )
 def lug(raw: BaseParams) -> PartResult:

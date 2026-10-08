@@ -18,6 +18,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Deutsche Stämme in Bezeichnern? Alle Kataloge vollständig? | `test_language_rules.py` (ein AST je Datei für alle Sprachregeln) · `test_translations.py` (einmal extrahiert für alle Kataloge) |
 | Nennt ein Satz mit Kürzel auf dem Mac die Mac-Taste, und bleibt jeder Text unter Windows und Linux gleich? | `test_native_keys.py` — Plattform als Argument, der Abgleich mit Qt nur auf dem Mac |
 | Hält jeder Kundentext die Längengrenze seines Ortes? | `test_text_length.py` — Art nach Aufrufort, Bestand in `data/text_lengths/` nur schrumpfend; Statustipps nur an Menüaktionen; Fachwörter und Satzmuster: `test_wording.py` |
+| Nennt das Handbuch Knöpfe, Felder, Menüs, Reiter und Tasten so, wie das Programm sie zeigt und belegt? | `test_manual_controls.py` — Namen und Felder ohne Fenster; Wege der Bildanleitungen, Tasten und Reiter am gebauten Fenster (Release) |
 | Ist jede Op vollständig registriert? | `test_registry_consistency.py` |
 | Werden Normteilmaße vor dem Sortieren geprüft und bleiben gültige Größen stabil geordnet? | `test_standards.py` |
 | Zweimal ausgewertet = identisch? | `test_evaluation.py` |
@@ -42,7 +43,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Folgen Objektwerte den gemessenen Fähigkeiten des Zielprogramms und bleiben andere Teile unverändert? | `test_slicer_part_settings.py` — Rollen, Familiengrenzen, Cura-Erstschichtbreite und fehlende Herstellerketten |
 | Nimmt jeder unterstützte Slicer, echt installiert, Solidons Platte an und gibt eine gemessene Druckdatei zurück? Fragt ein Test die Maschine nur über `installed_slicer`? | `test_real_slicers.py` (`slicer`-Marker, vor dem Merge auf Linux und macOS) · `test_slicer_selection.py` — Auswahl für die Läufer und Wächter |
 | Bleibt Curas Lüfterkurve (unteres Ende, Schwelle) bei seiner Definition, in Dialog, Konsole, Spule und Fensterprofil? | `test_cura_fan_curve.py` |
-| Rechnet die Zeitgegenprobe aus der Schichtanalyse — Mindestschichtzeit bis zum Mindesttempo, Ecken, Beschleunigung, Herstellerwerte? | `test_print_time.py`; der Startanteil aus `M73 P` in `test_gcode.py` |
+| Rechnet die Zeitgegenprobe aus der Schichtanalyse — Mindestschichtzeit bis zum Mindesttempo, Ecken, Beschleunigung, Herstellerwerte? | `test_print_time.py`, dort auch der Quader am installierten Slicer (übersprungen ohne ihn); der Startanteil aus `M73 P` in `test_gcode.py` |
 | Behalten innere Vollschichten, sichtbare Oberseite und Bügeln ihre Tempi in Cura? | `test_cura_skin_speeds.py` — Engine-Ebenen; `test_export.py` — importierbares Profil, mit und ohne obere Schichten |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
@@ -69,6 +70,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Bleibt der exakte Körper bei Merkmalshandlungen exakt — Volumen, Kennungen, STEP-Umlauf? | `test_exact_feature_ops.py` |
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
 | Bekommt ein Gewinde sein Gegenstück am anderen Teil, im Tabellenmaß und als ein Schritt? | `test_thread_counterpart.py`; das Fenster ohne Dialog in `test_counterpart_ui.py` |
+| Baut *Stift für Bohrung* das Gegenstück zu Senkung, Ansenkung und Gewinde — Kopf, Gewinde, Abstand, beide Kerne, Absagen, alte Projektdatei? | `test_bore_pin.py` |
 | Abläufe aus dem Dateiaudit (RM-184): Fügeweg gedreht und kombiniert (Bajonett der Quelle) · Prüfausschnitt einer Passung · Schrift auf Bogen, um eine Rundung und als bündige Einlage · Gegenformeinsatz, beide Kerne | `test_join_motion.py` · `test_fit_test_piece.py` · `test_label_layout.py` · `test_counter_form.py` |
 | Entstehen Grundkörper ohne Kernwahl-Haken im richtigen Kern, und wechselt der Verlauf einen Schritt? | `test_kernel_switch.py` |
 | Baut jeder mitgelieferte Baustein am exakten Träger exakt? Merkmalszusagen und Determinismus? Randprüfung abbrechbar? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) · `test_parts_review_regressions.py` |

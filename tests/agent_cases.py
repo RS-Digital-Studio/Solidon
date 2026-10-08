@@ -26,6 +26,10 @@ class Case:
     """Deliberately unclear — a good answer asks instead of guessing (§26.2)."""
     expects_ops: tuple[str, ...] = ()
     """Operationen, die eine gute Antwort benutzt. Leer heißt: es braucht keine."""
+    also_good: tuple[tuple[str, ...], ...] = ()
+    """Weitere Op-Listen, die die Bitte genauso erfüllen. „Noch eine Bohrung wie
+    hole_1 daneben“ ist eine neue Bohrung oder *Merkmal verdoppeln* — beide
+    legen dieselbe Bohrung daneben. Gezählt wie ``expects_ops``, je Handlung."""
     expects_parameter: bool = False
     expects_answer_only: bool = False
     """Eine Frage zum Modell, keine Änderung daran."""
@@ -95,6 +99,7 @@ CASES: tuple[Case, ...] = (
         id="drill_on_feature",
         request="Setz noch eine Bohrung wie hole_1 daneben.",
         expects_ops=("drill_hole",),
+        also_good=(("duplicate_feature",),),
         selection=("obj_1", "hole_1"),
     ),
     Case(

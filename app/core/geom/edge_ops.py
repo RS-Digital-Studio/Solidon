@@ -83,7 +83,8 @@ FILLET_MODES: tuple[str, ...] = ("constant_radius", "variable_radius")
 _STATIONS_HOW = _(
     "Weitere Radien entlang der Kante, je als „Stelle:Radius“ mit der Stelle in Prozent "
     "der Länge vom Anfang — etwa „50:4“ für 4 mm in der Mitte, mehrere durch "
-    "Leerzeichen getrennt."
+    "Leerzeichen getrennt. Binden lassen sich nur Anfangs- und Endradius an ein "
+    "Projektmaß, Zwischenstellen sind feste Zahlen."
 )
 
 #: Dieselbe Auswahl bei Verrundung und Fase — deshalb steht der Satz einmal hier.
@@ -169,8 +170,8 @@ class FilletParams(BaseParams):
         default="constant_radius",
         choices=FILLET_MODES,
         doc=_(
-            "Ein Radius über die ganze Kante, oder ein Radius, der sich vom Anfang zum "
-            "Ende und über Zwischenstellen ändert — etwa für einen Griff."
+            "Ein Radius für die ganze Kante oder ein Verlauf, etwa für einen Griff. Am Netz "
+            "geht der Verlauf nicht über Ecken aus Außen- und Innenkante."
         ),
         placement="advanced",
     )
@@ -199,8 +200,8 @@ class FilletParams(BaseParams):
         default=False,
         placement="advanced",
         doc=_(
-            "Ohne Haken beginnt der Verlauf am linken Ende der Kante, bei gleicher Lage "
-            "am vorderen, dann am unteren. Mit Haken beginnt er am anderen Ende."
+            "Ohne Haken beginnt der Verlauf links, bei gleicher Lage vorn, dann unten, ein "
+            "Ring immer an seinem linken Punkt. Mit Haken läuft er andersherum."
         ),
         depends_on=("mode", ("variable_radius",)),
     )

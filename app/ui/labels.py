@@ -12,7 +12,6 @@ import re
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
-from pathlib import Path
 from typing import Any, Final, Literal, cast
 
 from PySide6.QtCore import QDate, QDateTime, QEvent, QLocale, QObject, QSize, Qt, Signal
@@ -1454,6 +1453,15 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "hinge_front": _("Die Achse liegt an der vorderen Seite der Öffnung."),
     "hinge_left": _("Die Achse liegt an der linken Seite der Öffnung."),
     "hinge_right": _("Die Achse liegt an der rechten Seite der Öffnung."),
+    "custom_size": _(
+        "Durchmesser und Steigung frei, etwa für ein Rohr. Ohne Steigung gilt die übliche zum "
+        "Durchmesser."
+    ),
+    "to_the_bore": _(
+        "Mit Senkkopf in einer Senkung, Zylinderkopf in einer Ansenkung und Außengewinde in "
+        "einem Innengewinde."
+    ),
+    "plain_pin": _("Ein Zylinder, um das Spiel dünner als die Bohrung, ohne Kopf und Gewinde."),
 }
 
 
@@ -1511,6 +1519,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "font": _("Schrift"),
     "grip": _("Verengung"),
     "head_room": _("Kopftiefe"),
+    # Was *Stift für Bohrung* gebaut hat (RM-536).
+    "head_diameter": _("Kopfdurchmesser"),
+    "countersink_angle": _("Senkwinkel"),
+    "thread": _("Gewinde"),
     "angle": _("Winkel"),
     "intersection": _("Durchdringung"),
     "last_angle": _("Letzter Winkel"),
@@ -1592,6 +1604,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "core": _("Kern"),
     "count": _("Anzahl"),
     "counted": _("Verarbeitet"),
+    # ``fasteners.screw_hole``: der Durchmesser einer gerechneten Senkung.
+    "countersink": _("Senkung"),
     "cut": _("Schnitt"),
     # ``slicer.profile_value_replaced``: was statt eines abgelehnten Herstellerwerts hinausgeht.
     "default": _("Vorgabe"),
@@ -1670,6 +1684,8 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "findings": _("Befunde"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
+    # ``fasteners.thread_at_hole``: der Nenndurchmesser, mit dem die Bohrung Kernloch bleibt.
+    "fitting": _("Passender Nenndurchmesser"),
     "floor": _("Boden"),
     "flow_limit": _("Höchster Volumenstrom"),
     "format": _("Format"),
@@ -1750,8 +1766,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "name": _("Name"),
     "neck": _("Hals"),
     "needed": _("Nötig"),
-    # ``counterpart``: die nächste Tabellengröße zu einem Gewinde ohne Norm.
-    "nearest": _("Nächste Größe"),
     "node": _("Knoten"),
     "nominal": _("Nennmaß"),
     "nozzle": _("Düse"),
@@ -1897,6 +1911,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # der Schritt, an dem ein anderer hängt, und der Schritt, der wieder
     # rechnen soll — alle drei als Schrittnummer.
     "also": _("Ausschalten"),
+    # Der frühere Schritt, der das Merkmal gesetzt hat, an dem ein späterer
+    # scheitert (``errors.CHANGE_THREAD_STEP``, Review P2 Bausteine, M2).
+    "creating_step": _("Erzeugender Schritt"),
     "number": _("Schritt"),
     "other": _("Anderer Schritt"),
     "reactivate": _("Einschalten"),
@@ -3100,43 +3117,10 @@ class DateField(QWidget):
         self.clear_button.setEnabled(bool(self.text()))
 
 
-#: Ordnernamen, die nichts über das Programm sagen — dort gilt der Dateiname.
-_GENERIC_FOLDERS: Final = frozenset({"", "bin", "sbin", "usr", "local", "macos", "contents"})
-
-#: Programme, deren Paket oder Ordner den Namen ohne Leerzeichen trägt — auf
-#: der Packung steht er mit. Der Mac-Kunde las „AnycubicSlicerNext“.
-_BOX_NAMES: Final = {
-    "anycubicslicernext": "Anycubic Slicer Next",
-    "bambustudio": "Bambu Studio",
-    "crealityprint": "Creality Print",
-}
-
-
-def slicer_title(path: Path) -> str:
-    """Ein Name, den ein Mensch wiedererkennt — nicht der Dateiname.
-
-    „elegoo-slicer.exe" und „prusa-slicer-console.exe" sind Dateinamen; was
-    auf der Packung steht, ist „ElegooSlicer" und „PrusaSlicer". Der
-    Installationsordner trägt genau das, bei Cura sogar die Version
-    („UltiMaker Cura 5.13.0"), was bei zwei installierten Fassungen der
-    Unterschied ist. Auf dem Mac ist es das Programmpaket (``PrusaSlicer.app``);
-    liegt ein Programm in einem allgemeinen Ordner (``/usr/bin``), bleibt der
-    Dateiname.
-
-    **Eine Stelle für den Druckdialog und die Erstinbetriebnahme** — die
-    nannte dieselben Programme mit Dateinamen (Durchsicht 0.5.1, KUNDE-02).
-    Ein Flatpak heißt nach seinem Programm, wie in den Meldungen der Übergabe
-    (``discover.flatpak_title``); sein Starter liegt in ``bin``, seine
-    Portalkopie in einem Ordner mit Nummer.
-    """
-    flatpak = discover.flatpak_title(path)
-    if flatpak:
-        return flatpak
-    name = next(
-        (parent.stem for parent in path.parents if parent.suffix.lower() == ".app"),
-        path.stem if path.parent.name.lower() in _GENERIC_FOLDERS else path.parent.name,
-    )
-    return _BOX_NAMES.get(name.casefold(), name)
+#: Ein Slicer, wie ihn Druckdialog, Erststart und Einstellungen nennen — die
+#: Regel steht im Kern, weil die Meldungen der Übergabe ihn genauso nennen
+#: (``SlicerSetup.name``).
+slicer_title: Final = discover.slicer_title
 
 
 def printer_title(printer: PrinterProfile) -> str:

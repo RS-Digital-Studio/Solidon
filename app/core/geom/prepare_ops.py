@@ -8037,7 +8037,10 @@ class ResizeFeatureParams(BaseParams):
     # 18: Ein geändertes Gewinde verliert das Nennmaß eines gedruckten — es ist
     # gebaut, wie es dasteht, ohne Spiel daneben.
     # 19: „hat dieses Maß schon“ öffnet den Schritt (RM-441).
-    cache_version="19",
+    # 20: Das neue Gewinde kommt aus ``build.threaded`` mit den Sehnen der
+    # Facettenregel (``shapes.turn_segments``), über ganze Umläufe und mit einem
+    # Kern, der den Gang auch in der Sehnenmitte überdeckt (Review RM-532, R1/R4).
+    cache_version="20",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -15834,10 +15837,9 @@ def _thread_checked(feature: Feature, diameter: float, pitch: float) -> tuple[fl
     return diameter, wanted_pitch
 
 
-#: Wie viele Strahlen je Messring und an welchen Stellen der Strecke die Wand
-#: um ein Gewinde gemessen wird: 24 Richtungen treffen die Seitenwände eines
-#: Quaders senkrecht, fünf Ringe die Mitte und beide Enden innerhalb der Gänge.
-_WALL_RAYS: Final = 24
+#: An welchen Stellen der Strecke die Wand um ein Gewinde gemessen wird: fünf
+#: Ringe die Mitte und beide Enden innerhalb der Gänge; die Strahlen je Ring
+#: zählt ``fasteners.THREAD_WALL_RAYS``.
 _WALL_RINGS: Final = (-0.4, -0.2, 0.0, 0.2, 0.4)
 
 
@@ -15859,6 +15861,7 @@ def _thread_wall(
     Tessellation weicht höchstens um ``MAX_FACET_SAG`` ab.
     """
     from app.core.knowledge.parts import shapes
+    from app.core.knowledge.parts.fasteners import THREAD_WALL_RAYS
     from app.core.sketch.planes import frame_of
 
     internal = bool(feature.params.get("internal", False))
@@ -15872,8 +15875,8 @@ def _thread_wall(
     reach: float | None = None
     for share in _WALL_RINGS:
         origin = centre + axis * (share * length)
-        for index in range(_WALL_RAYS):
-            cosine, sine = units.circle_point(_WALL_RAYS, index)
+        for index in range(THREAD_WALL_RAYS):
+            cosine, sine = units.circle_point(THREAD_WALL_RAYS, index)
             way = across[0] * cosine + across[1] * sine
             distances, hit = ray_hits_along(triangles, origin, way)
             facing = (normals[hit] * way).sum(axis=1)
@@ -17763,12 +17766,16 @@ def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> 
 
 @op_params
 class CountersinkParams(BaseParams):
+    # Bis zum Senkkopf des größten Gewindes, das die Anwendung baut: höchstens
+    # 2·d, über M24 abgeleitet (Normteiltabelle, ``countersink_derived``: M56
+    # 91 mm, M64 104 mm). Mit 100 mm endete das Feld unter dem Kopf der M64 —
+    # an deren Bohrung trüge der Dialog mehr ein, als das Feld annähme.
     diameter: float = param(
         title=_("Kopfdurchmesser"),
         default=8.4,
         unit="mm",
         minimum=0.5,
-        maximum=100.0,
+        maximum=2.0 * units.LARGEST_THREAD,
         doc=_(
             "Durchmesser des Schraubenkopfes, nicht der Bohrung darunter. Eine "
             "angeklickte Bohrung trägt den Kopf der passenden Schraube ein — "

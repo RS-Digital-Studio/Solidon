@@ -2163,12 +2163,29 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
         palette_entries,
         variant_members,
     )
+    from app.ui.main_window import WINDOW_COMMAND_OPERATIONS
 
-    labels = {action.text() for action in all_menu_actions(window)}
+    entries = all_menu_actions(window)
+    labels = {action.text() for action in entries}
     offered = {entry.name for entry in palette_entries()}
     gruppen = {str(group.title) for group in VARIANT_GROUPS}
 
     for spec in REGISTRY.all():
+        if spec.name in WINDOW_COMMAND_OPERATIONS:
+            # **Fünfter Fall, RM-507: der Fensterbefehl.** Unter der Kategorie
+            # hängt dieselbe ``QAction`` wie in *Datei* („Modell einfügen …“
+            # öffnet den Dateidialog), nicht ein zweiter, fast gleich
+            # benannter Eintrag. Die Operation behält ihre Aktion am Fenster;
+            # dass die Palette den Befehl anbietet, prüft
+            # ``test_theme_and_palette``.
+            command = window.import_action
+            assert WINDOW_COMMAND_OPERATIONS[spec.name] == "file.import", spec.name
+            assert sum(entry is command for entry in entries) >= 2, (
+                f"{spec.name}: der Fensterbefehl steht in Datei und unter seiner Kategorie"
+            )
+            assert str(spec.title) not in labels, f"{spec.name} steht zweimal im Menü"
+            assert spec.name in window._op_actions, f"{spec.name}: ohne Aktion keine Freigabe"
+            continue
         if spec.name in MENU_TWINS:
             # Beide Zwillinge tragen absichtlich denselben verständlichen
             # Titel. Am Text lässt sich deshalb nicht erkennen, ob Qt zwei
@@ -5153,6 +5170,17 @@ def test_the_apply_button_stays_in_sight_however_low_the_window_is(window: MainW
     # erfunden wäre.
     for _ in range(3):
         QApplication.processEvents()
+    # **Niedriger, bis die Zeilen nicht mehr passen.** Mit echter Schrift
+    # (Linux, macOS) sind die Zeilen schmaler und niedriger als mit der
+    # Ersatzschrift von Windows offscreen; bei 700 Punkten passten sie dort
+    # ganz ins Sichtfeld (364 in 419), und der Test prüfte nichts. Gesucht
+    # wird deshalb die Fensterhöhe, bei der der Fund entsteht.
+    for hoehe in (600, 520, 460):
+        if panel.height() > roller.viewport().height():
+            break
+        window.resize(1600, hoehe)
+        for _ in range(3):
+            QApplication.processEvents()
     # **Die Voraussetzung des Funds, und sie ist schärfer als „der Inhalt
     # rollt".** Gerollt wird immer, sobald die Handlungsliste darunter steht;
     # der Knopf verschwindet erst, wenn die **Zeilen des Merkmals** allein
@@ -6466,6 +6494,47 @@ def test_a_refused_preview_offers_in_the_dialog_what_the_dialog_carries_out() ->
         owner=owner, order=SimpleNamespace(change_op=None, drafts=(), changes=None)
     )
     assert set(MainWindow._refusal_handlers(view, nothing_to_prepare, refusal)) == {"use_reachable"}
+
+
+def test_a_refused_pin_preview_opens_the_thread_step_from_the_dialog() -> None:
+    """*Gewindeschritt öffnen* löst der Dialog selbst ein (Review P2 N6).
+
+    Die Vorschau zeigt nur Handlungen mit örtlichem Handler; ohne ihn stand die
+    Absage des Stifts im Dialog ohne Knopf. Der Knopf schließt den Dialog und
+    öffnet den Schritt aus ``values["creating_step"]`` — ohne Schritt keiner.
+    """
+    from types import SimpleNamespace
+
+    from app.core.errors import CANCEL, CHANGE_THREAD_STEP, ValidationError
+
+    rejected: list[bool] = []
+    opened: list[tuple[object, object]] = []
+    view = SimpleNamespace(
+        _preview_is_current=lambda approval: True,
+        _change_creating_step=lambda error: opened.append(
+            (error.values["creating_step"], error.values["field"])
+        ),
+    )
+    view._creating_step_from_dialog = lambda approval, error: MainWindow._creating_step_from_dialog(
+        view, approval, error
+    )
+    approval = SimpleNamespace(
+        owner=SimpleNamespace(reject=lambda: rejected.append(True)),
+        order=SimpleNamespace(change_op=None, drafts=(), changes=None),
+    )
+    refusal = ValidationError(
+        field="length",
+        detail="zu kurz",
+        values={"creating_step": 3},
+        constraint="thread_too_short",
+        suggestions=(CHANGE_THREAD_STEP, CANCEL),
+    )
+    handlers = MainWindow._refusal_handlers(view, approval, refusal)
+    assert set(handlers) == {"change_creating_step"}
+    handlers["change_creating_step"](refusal)
+    assert rejected == [True] and opened == [(3, "length")]
+    bare = ValidationError(field="length", detail="zu kurz", suggestions=refusal.suggestions)
+    assert MainWindow._refusal_handlers(view, approval, bare) == {}, "ohne Schritt kein Knopf"
 
 
 def test_a_step_prepared_from_the_dialog_is_one_move() -> None:
@@ -8530,9 +8599,26 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow, the
     }
     zuteilung: dict[str, list[int]] = {name: [] for name in karten}
     knapp = geteilt = voll = False
+
+    def stand() -> list[tuple[int | None, int, int]]:
+        return [
+            (karte._room, karte.least_height(), karte.wanted_height()) for karte in karten.values()
+        ]
+
     for height in (600, 900, 1100, 1400):
         window.resize(1024, height)
-        QTest.qWait(20)
+        # **Gemessen wird der gesetzte Stand, nicht eine feste Frist.** Die
+        # Vorschaubilder des Baums kommen nach (``_render_pending``) und heben
+        # seinen Boden; auf einem langsamen Mac-Läufer stand nach 20 ms noch die
+        # Zuteilung von davor (110 gegen den neuen Boden 188). Gewartet wird,
+        # bis zwei Runden hintereinander dasselbe zeigen und nichts vorgemerkt ist.
+        vorher = None
+        for _runde in range(100):
+            QTest.qWait(20)
+            jetzt = stand()
+            if jetzt == vorher and window.overlay._pending is None:
+                break
+            vorher = jetzt
         host = window.overlay
         budget = host.height() - 2 * MARGIN - host._bottom_room() - extra_height(host.left)
         boeden = sum(karte.least_height() for karte in karten.values())
@@ -9612,9 +9698,13 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
 
     ``ReportPanel._preselect`` wählt jetzt den obersten Befund vor, der eine
     Handlung anbietet — Rechtsklick, Knopfzeile, Vorauswahl sind drei Schritte
-    **einer** Bewegung, und §2.7 ist am Ende von ihr eingelöst. Was dieser Test
-    darunter prüft — welcher Befund welchen Knopf bekommt und welcher keinen —
-    ist davon unberührt und die eigentliche Zusage.
+    **einer** Bewegung, und §2.7 ist am Ende von ihr eingelöst. Vorgewählt
+    werden seit RM-512 nur Fehler und Warnungen; „unter der Platte“ ist ein
+    Hinweis, weil ein Klick genügt (``prepare._severity_for``), und bleibt
+    deshalb ungewählt — die Vorauswahl selbst prüft
+    ``test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks``. Was
+    dieser Test darunter prüft — welcher Befund welchen Knopf bekommt und
+    welcher keinen — ist davon unberührt und die eigentliche Zusage.
     """
     from PySide6.QtWidgets import QPushButton
 
@@ -9647,9 +9737,9 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
             return []
         return [b.text() for b in row.findChildren(QPushButton) if not b.isHidden()]
 
-    assert offered() == [str(errors.PLACE_ON_BED.label)], (
-        "die Vorauswahl zeigt die Handlung, bevor jemand klickt"
-    )
+    first = report.list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert (first.code, first.severity) == ("arrange.below_bed", "info")
+    assert offered() == [], "ein Hinweis wird nicht vorgewählt (RM-512)"
 
     def choose(code: str) -> None:
         for row in range(report.list.count()):
@@ -18352,6 +18442,190 @@ def test_the_window_goes_the_full_chain_where_the_short_one_ends(
     assert changed.solvers[drill].strategy == "jittered"
 
 
+@pytest.mark.parametrize(
+    ("name", "kind", "op", "field", "step"),
+    [
+        ("plate_holes.stl", "hole", "resize_hole", "Durchmesser", 1.0),
+        ("pocket_with_pin.stl", "pin", "move_feature", "X", 0.3),
+    ],
+)
+def test_the_feature_card_applies_what_the_short_chain_could_not_preview(
+    window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    kind: str,
+    op: str,
+    field: str,
+    step: float,
+) -> None:
+    """RM-534 an der Merkmalkarte: Nach „Übernehmen rechnet den Schritt vollständig“ übernimmt es.
+
+    Die Maßgruppe der Karte verlangt ein gezeigtes Bild
+    (``requires_displayed_preview``). Kam die schnelle Rechnung nicht durch,
+    stellte jede Freigabefrage die Bildpflicht für denselben Auftrag zurück
+    (``_set_preview_order``): Ein Bild kam nie, der Klick hing an der
+    Vorschau, und der Verlauf blieb, wie er war (Review 1 P3, H-1). Dasselbe
+    galt für *Merkmal verschieben* an einem Zapfen, das seit RM-535 über
+    dieselbe Maßgruppe läuft und Boolesche Schritte rechnet.
+    """
+    import trimesh
+    from PySide6.QtTest import QTest
+
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+    from app.core.registry import REGISTRY
+    from app.ui.labels import LengthSpin
+    from tests.render_fakes import RecordingRenderer
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.open_path(MESHES / name)
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    chosen = next(key for key, feature in entry.features.items() if feature.kind == kind)
+    real = boolean_module._run_stage
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, chosen)
+    if op == "resize_hole":
+        window.feature_panel._in_view.click()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
+    host = window._quiet_host
+    flow = window._quiet_placement
+    try:
+        assert host is not None and flow is not None, "die Karte trägt die Maßgruppe"
+        assert flow.spec_of().name == op and flow._measure_group is not None
+        assert host.requires_displayed_preview, "Voraussetzung: die Karte verlangt ein Bild"
+        title = tr(str(REGISTRY.get(op).title))
+        fields = {
+            spin.accessibleName().rsplit(" — ", 1)[-1]: spin
+            for spin in flow._measure_group.findChildren(LengthSpin)
+            if title in spin.accessibleName()
+        }
+        before = len(window.session.project.document.ops)
+        # Die Geste vor dem Tippen beginnt den Entwurf (``_hole_fields_in_placement``).
+        QTest.keyClick(fields[field].lineEdit(), Qt.Key.Key_End)
+        fields[field].set_value_mm(fields[field].value_mm() + step)
+        QApplication.processEvents()
+        band = ""
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+            band = window.viewport.banner.note.text()
+            approval = window._preview_approval
+            if "vollständig" in band and approval is not None and not approval.computing:
+                break
+            time.sleep(0.01)
+        assert "Übernehmen rechnet den Schritt vollständig" in band, band
+        assert host.can_accept(), "die Freigabefrage stellt die Bildpflicht nicht zurück"
+        assert host.can_accept(), "auch nicht beim zweiten Mal"
+        flow._measure_accept.click()
+        assert window.session.wait_for_idle(30_000)
+        ops = window.session.project.document.ops
+        assert len(ops) == before + 1, "Übernehmen legt den Schritt an"
+        assert ops[-1].op == op and ops[-1].params["at_feature"] == chosen
+        last = window.session.last_result
+        assert last.stopped_at is None, [str(entry.message) for entry in last.scene.report.findings]
+        assert last.solvers[ops[-1].id].strategy not in boolean_module.DRAFT_CHAIN, (
+            "der Fensterlauf rettet ihn mit der vollen Kette"
+        )
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+
+
+def test_the_agent_finds_in_the_session_cache_what_the_window_run_rescued(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534, Anschluss: Die Sitzung gibt dem Agenten ihren Cache (``run_proposal``).
+
+    Der Fensterlauf rettet die Bohrung mit der vollen Kette. Ein Agentenzug
+    danach prüft denselben Stand und findet ihn im Sitzungscache — mit einem
+    eigenen Cache rechnete er die volle Kette in jedem Zug noch einmal
+    (Review 1 P3, G-1; der Kerntest in ``test_evaluation.py`` nutzt den
+    Vorgabecache der ``AgentSession`` und sieht das nicht).
+    """
+    import trimesh
+
+    from app.core.agent.session import AgentSession
+    from app.core.backends.llm import Reply, ToolCall
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+    from tests.scripted_backend import ScriptedBackend
+
+    real = boolean_module._run_stage
+    called: list[str] = []
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        called.append(name)
+        if name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    assert session.wait_for_idle(30_000)
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    session.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 10.0, "depth": 0.0},
+            )
+        ],
+    )
+    assert session.wait_for_idle(30_000)
+    drill = session.project.document.ops[-1].id
+    assert session.last_result.solvers[drill].strategy == "jittered", (
+        "Voraussetzung: der Fensterlauf rettet die Bohrung mit der vollen Kette"
+    )
+    called.clear()
+    backend = ScriptedBackend(
+        answers=[
+            Reply(tool_calls=(ToolCall(id="1", name="create_box", arguments={}),)),
+            Reply(text="Ein zweiter Quader steht daneben."),
+        ]
+    )
+    # Gezählt wird der Zug selbst. Die Vorschau danach prüft den Druck und
+    # rechnet deshalb fein (``review_print``) — mit voller Kette ohnehin.
+    real_evaluate = AgentSession._evaluate
+    checked: list[Any] = []
+    in_the_turn: list[str] = []
+
+    def evaluate(agent: AgentSession, document: Any) -> Any:
+        start = len(called)
+        result = real_evaluate(agent, document)
+        checked.append(result)
+        in_the_turn.extend(called[start:])
+        return result
+
+    monkeypatch.setattr(AgentSession, "_evaluate", evaluate)
+
+    preview = session.run_proposal("Stell einen zweiten Quader daneben.", backend)
+
+    assert preview.proposal.stopped != "halted", [
+        str(finding.message) for finding in preview.proposal.findings
+    ]
+    assert [draft.op for draft in preview.proposal.drafts] == ["create_box"]
+    assert checked, "Voraussetzung: der Zug prüft seinen Stand"
+    assert all(result.solvers[drill].strategy == "jittered" for result in checked), (
+        "jede Prüfung trägt die gerettete Bohrung"
+    )
+    assert set(in_the_turn) <= set(boolean_module.DRAFT_CHAIN), (
+        f"der Zug rechnete die gerettete Bohrung neu, statt sie im Sitzungscache zu finden: "
+        f"{in_the_turn}"
+    )
+
+
 def test_the_report_follows_a_change_during_recognition_and_a_cancelled_run(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -18805,7 +19079,10 @@ def test_the_header_gives_its_information_room_in_every_supported_width(
     beispiele = sorted((Path(__file__).parent.parent / "app" / "examples").glob("*.p3d"))
     assert beispiele, "ohne Beispielprojekt misst dieser Test die leere Lage"
     window.session.open_project(beispiele[0])
-    window.session.wait_for_idle()
+    # Mit Rückgabe und Reserve: Auf dem Intel-Mac-Läufer braucht das Beispiel
+    # knapp zehn Sekunden, die Vorgabefrist von ``wait_for_idle``. Lief sie
+    # ab, gab es noch kein Ergebnis und damit kein Außenmaß.
+    assert window.session.wait_for_idle(60_000), "das Beispiel wird fertig ausgewertet"
     window._on_project()
     window.set_display_unit("in")
     window.header.title.setText("Ein sehr langes Beispielprojekt für den schmalen Bildschirm*")

@@ -1,32 +1,38 @@
 """ComfyUI für Solidon einrichten (Bauplan §27, §36).
 
-Solidon rechnet die Mesh-Erzeugung nicht selbst, sondern schickt einen Workflow
-an ein lokales ComfyUI. Damit dieser Workflow läuft, muss auf der anderen Seite
-dreierlei vorhanden sein: die Knoten, die er anspricht, das Modell, das sie
-laden, und die Pakete, an denen beides hängt. Das von Hand zusammenzusuchen ist
-der Punkt, an dem die meisten aufgeben — also nimmt es dieses Modul ab.
+Solidon rechnet die Mesh-Erzeugung nicht selbst, sondern schickt einen Ablauf
+an ein lokales ComfyUI. Die Knoten dieses Ablaufs bringt ComfyUI selbst mit —
+TRELLIS.2, Freistellen, Netznachbearbeitung und FLUX.2 sind eingebaute Knoten
+(ab :data:`app.core.backends.mesh.MINIMUM_COMFYUI`). Was fehlt, sind die Modelldateien. Sie von Hand
+zusammenzusuchen ist der Punkt, an dem die meisten aufgeben — also nimmt es
+dieses Modul ab: jede Datei mit festem Modellstand, Größe und SHA-256.
 
-**Warum es hier steht und nicht in ``tools/``.** Dort stand es, und die
-Anwendung wies auf es hin: „Einzurichten ist sie mit «python
-tools/setup_comfyui.py»." Für den Kunden war das eine Sackgasse mit
-Wegbeschreibung — ``tools/`` reist nicht im Paket mit, es gibt diese Datei auf
-seinem Rechner nicht. Die Logik gehört also dorthin, wo sie beides erreicht:
-in den Kern, den die Oberfläche aufrufen kann und der paketiert wird. Die
-Kommandozeile in ``tools/setup_comfyui.py`` ist jetzt ein dünner Aufrufer
-darauf und tut unverändert dasselbe.
+**Warum es hier steht und nicht in ``tools/``.** ``tools/`` reist nicht im
+Paket mit; was der Kunde aus der laufenden Anwendung heraus einrichten soll,
+muss im Kern stehen. ``tools/setup_comfyui.py`` ist ein dünner Aufrufer.
 
-**Was es nicht tut: ComfyUI installieren.** Das ist ein fremdes Programm mit
-eigenem Installationsweg; hier wird nur eingerichtet, was Solidon braucht.
-Und es startet ComfyUI nicht — der Ordner bringt sein eigenes Python mit, und
-eine Anwendung, die den Startbefehl errät, startet irgendwann das Falsche.
+**Was es nicht tut: ComfyUI installieren, aktualisieren oder starten.** Das
+ist ein fremdes Programm mit eigenem Installationsweg; ein zu altes nennt die
+Einrichtung mit Version und Weg (:func:`check_version`), und ein laufendes,
+dem Knoten fehlen, nennt :meth:`app.core.backends.mesh.ComfyBackend.missing_nodes`.
+
+**Bis Oktober 2026 stand hier TripoSG** mit eigenem Knoten, Quelltextabruf,
+Quellpatches und Paketnachzügen. Ein Teil des TripoSG-Quelltexts steht unter
+einer Tencent-Lizenz, deren Gebiet die EU ausnimmt (RM-003); seit TRELLIS.2
+ein Kernmodell von ComfyUI ist, braucht Weg 3 nichts davon. Was Solidon damals
+selbst angelegt hat, räumt :func:`remove_legacy` weg.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
+import math
 import os
 import queue
+import re
 import shutil
+import stat
 import subprocess
 import sys
 import threading
@@ -34,183 +40,178 @@ import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import IO, Final
 
 from app.core import discover
+from app.core.backends.mesh import MINIMUM_COMFYUI, role_candidates
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _, format_decimal
 
 _log = get_logger(__name__)
 
-#: Die Knoten reisen als Daten mit — neben den Workflows, die sie ansprechen.
-#: In der Spec deckt der Eintrag für ``app/core/backends/data`` beide ab.
-NODE_SOURCE: Final = Path(__file__).parent / "data" / "comfyui" / "ComfyUI-TripoSG-Solidon"
-NODE_NAME: Final = "ComfyUI-TripoSG-Solidon"
 
-TRIPOSG_REPO: Final = "https://github.com/VAST-AI-Research/TripoSG.git"
-TRIPOSG_COMMIT: Final = "fc5c40990181e2a756c4e0b1c2f4d6b5202faf8c"
-WEIGHTS_REPO: Final = "VAST-AI/TripoSG"
-WEIGHTS_REVISION: Final = "2c1c516d22d58db486a058d98d31bb6177344e06"
+@dataclass(frozen=True, slots=True)
+class ModelFile:
+    """Eine Modelldatei, wie Solidon sie lädt: woher, welcher Stand, wohin, welche Prüfsumme.
 
-#: Das Freistell-Modell, ohne das der Bildweg nicht läuft: TripoSG will ein
-#: freigestelltes Objekt, kein Lichtbild mit Zimmer dahinter.
-#:
-#: **Hier stand ein GPL-Knoten, und das war ein Regelverstoß.** Der Ablauf
-#: sprach ``RMBG`` aus ``ComfyUI-RMBG`` an — GPL-3.0, und Regel 15 lässt keine
-#: GPL-Abhängigkeit zu. Aufgefallen ist es erst, als der Weg zum ersten Mal
-#: wirklich gefahren wurde: Der Knoten fehlte, und beim Nachsehen, woher er
-#: kommt, stand die Lizenz in seiner ersten Zeile.
-#:
-#: ComfyUI kann es seit 0.33 selbst — ``LoadBackgroundRemovalModel`` und
-#: ``RemoveBackground``, beide eingebaut. Damit fällt nicht nur die Lizenzfrage
-#: weg, sondern auch ein Installationsschritt: Es fehlt nur noch die
-#: Gewichtsdatei. Ein älteres ComfyUI kennt die Knoten nicht, und dann sagt
-#: :meth:`ComfyBackend.missing_nodes` ihre Namen — das ist der richtige Weg
-#: dafür und keine zweite Version des Ablaufs.
-BACKGROUND_REPO: Final = "Comfy-Org/BiRefNet"
-BACKGROUND_FILE: Final = "background_removal/birefnet.safetensors"
-BACKGROUND_REVISION: Final = "5a1bd8ae750548f8cd42e3c8afa854fd3eba0fb1"
-BACKGROUND_SHA256: Final = "9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154"
+    ``role`` ist die Modellrolle aus :data:`app.core.backends.mesh.MODEL_ROLES`,
+    die diese Datei im Ablauf ausfüllt. Liegt im Zielordner schon eine andere
+    Datei, die die Rolle ausfüllt — eine bf16-Fassung statt der int8, ein
+    selbst geholtes Freistellmodell —, wird nichts geladen: Welche Datei läuft,
+    entscheidet die Rollenauflösung, nicht der Dateiname hier.
+    """
+
+    repo: str
+    revision: str
+    path: str
+    """Der Pfad im Repositorium; der Dateiname am Ziel ist sein letzter Teil."""
+    size: int
+    """Byte, abgelesen über die Hugging-Face-API (``?blobs=true``)."""
+    sha256: str
+    folder: str
+    """Der Zielordner, von ComfyUIs Ordner aus gerechnet."""
+    role: str
+
+    @property
+    def name(self) -> str:
+        return PurePosixPath(self.path).name
+
+    def target(self, comfyui: Path) -> Path:
+        return comfyui / self.folder / self.name
+
+
+#: TRELLIS.2-4B (Microsoft, MIT) in der Packung von Comfy-Org: der Formkern als
+#: int8 (5,25 GB statt 10,3 GB bf16), die Form-VAE und der Bildkodierer DINOv3
+#: ViT-L/16 (Metas DINOv3-Lizenz). Die Textur-VAE fehlt mit Absicht: Solidon
+#: braucht die Form, keine Farbe. Stand 23.09.2026.
+SHAPE_REPO: Final = "Comfy-Org/TRELLIS.2"
+SHAPE_REVISION: Final = "430a9d09b2416687018c8fe8edced2ad4858a439"
+SHAPE_FILES: Final = (
+    ModelFile(
+        repo=SHAPE_REPO,
+        revision=SHAPE_REVISION,
+        path="diffusion_models/trellis_2_int8_convrot.safetensors",
+        size=5_253_048_192,
+        sha256="d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31",
+        folder="models/diffusion_models",
+        role="shape",
+    ),
+    ModelFile(
+        repo=SHAPE_REPO,
+        revision=SHAPE_REVISION,
+        path="vae/trellis_2_shape_vae_bf16.safetensors",
+        size=1_095_844_024,
+        sha256="de0cb4949a76c59ee5c091a995a69bcc8c51d5aeda939f0c641a50d2a72341f4",
+        folder="models/vae",
+        role="shape_vae",
+    ),
+    ModelFile(
+        repo=SHAPE_REPO,
+        revision=SHAPE_REVISION,
+        path="clip_vision/dino_v3_vit_l.safetensors",
+        size=1_212_559_776,
+        sha256="5cb785e458de7c460579082418af81f5c62380c181599344bdc60898c63468ee",
+        folder="models/clip_vision",
+        role="image_encoder",
+    ),
+)
+
+#: Das Freistellmodell, ohne das der Bildweg nicht läuft: TRELLIS.2 will ein
+#: freigestelltes Objekt, kein Foto mit Zimmer dahinter. BiRefNet (MIT) über
+#: ComfyUIs eigene Knoten ``LoadBackgroundRemovalModel`` und
+#: ``RemoveBackground`` — hier stand einmal ein GPL-Knoten, und Regel 15 lässt
+#: keine GPL-Abhängigkeit zu.
+BACKGROUND: Final = ModelFile(
+    repo="Comfy-Org/BiRefNet",
+    revision="5a1bd8ae750548f8cd42e3c8afa854fd3eba0fb1",
+    path="background_removal/birefnet.safetensors",
+    size=444_473_596,
+    sha256="9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154",
+    folder="models/background_removal",
+    role="background",
+)
 
 #: Das Bildmodell für den **Textweg** — auf Wunsch geholt, nicht ungefragt.
 #:
-#: Aus Text wird erst ein Bild, und dafür braucht ComfyUI ein SDXL-Modell
-#: unter ``models/checkpoints``. Wer nur Bilder mitbringt, braucht es nie —
-#: sieben Gigabyte für einen Weg, den ein vorhandenes Foto umgeht, gehören
-#: nicht in jede Installation. Bis zum 21.09.2026 holte Solidon es deshalb
-#: **gar nicht**: Der Erzeugungsdialog nannte Datei und Ordner, und der Kunde
-#: sollte sie selbst besorgen. Robert tippte einen Satz und las, dass ein
-#: Bild verlangt wird — „comfyUI wollten wir auch ohne Bild". Seither steht
-#: das Bildmodell als eigenes Häkchen in der Einrichtung (:func:`setup`,
-#: ``image_model``), mit Revision und Prüfsumme wie die zwei anderen.
-#:
-#: Genannt wird das Basismodell und kein Feintuning: Es ist das, was die
-#: Rollenauflösung in :data:`app.core.backends.mesh.MODEL_ROLES` über ``sd_xl``
-#: sicher trifft, es ist die Referenz, und seine Lizenz
-#: (CreativeML Open RAIL++-M) kennt kein ausgenommenes Gebiet — anders als
-#: Hunyuan, dessen Lizenz die EU ausnimmt. Ihre Nutzungsverbote (Anhang A) und
-#: die Modellkarte, die nur Forschung nennt, gehören zur offenen Kanzleifrage
-#: (RM-003), ebenso der Hunyuan-Anteil im TripoSG-Quelltext. Wer ein anderes
-#: bevorzugt, legt es daneben: ``juggernaut`` und ``dreamshaper`` stehen in der
-#: Rangfolge davor und gewinnen dann.
-IMAGE_MODEL_REPO: Final = "stabilityai/stable-diffusion-xl-base-1.0"
-IMAGE_MODEL_FILE: Final = "sd_xl_base_1.0.safetensors"
-IMAGE_MODEL_GIGABYTES: Final = 6.9
-#: Der Modellstand, an dem Datei und Prüfsumme hängen — abgelesen am
-#: 21.09.2026 über die Hugging-Face-API (``?blobs=true``): der Commit des
-#: Repositoriums und der SHA-256 der LFS-Datei, 6 938 078 334 Byte.
-IMAGE_MODEL_REVISION: Final = "462165984030d82259a11f4367a4eed129e94a7b"
-IMAGE_MODEL_SHA256: Final = "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b"
-#: Was für das Bildmodell frei sein muss — dieselbe Rechnung wie bei
-#: :data:`NEEDED_GIGABYTES`: die Datei und Luft für das Zwischenlager.
-IMAGE_MODEL_NEEDED_GIGABYTES: Final = 8.5
-
-#: Wohin es gehört, von ComfyUIs Ordner aus gerechnet. Als Konstante, weil
-#: derselbe Pfad in drei Sätzen steht — Dialog, Handbuch, Fehlermeldung.
-IMAGE_MODEL_FOLDER: Final = "models/checkpoints"
-
-#: Wie groß die Freistell-Gewichte sind — 444 MB gegen 7,5 GB, also nennt der
-#: Schritt sie zusammen und nicht getrennt.
-#:
-#: **Die Zahl steht auch im Fortschrittstext, und zwar dort von Hand.** Diese
-#: Konstante las bis zum 24.08.2026 niemand; sie und ``WEIGHT_GIGABYTES`` waren
-#: zwei stille Zweitschriften. Der Text bleibt, wie er ist — die Zahl in die
-#: Message-ID hineinzuformatieren (wie ``NEEDED_GIGABYTES`` es weiter unten
-#: richtig macht) kostet fünf Übersetzungen für zwei Sätze. Stattdessen hält
-#: `tests/test_mesh_backend.py::test_the_sizes_in_the_progress_text_match_the_constants`
-#: beide Stellen zusammen: Wer die Größe hier nachzieht und den Text vergisst,
-#: bekommt einen roten Lauf.
-BACKGROUND_MEGABYTES: Final = 445
-
-#: Was auf der Platte frei sein muss, bevor der große Download beginnt.
-#:
-#: 7,5 GB Gewichte, dazu Luft für das, was ``huggingface_hub`` beim Entpacken
-#: zwischenlagert. Geprüft wird **vorher** und nicht im Fehlerfall, und das ist
-#: der Punkt: Am 23.08.2026 lief der Download dreimal an und starb dreimal nach
-#: Minuten, weil ``C:`` voll war. Die Meldung, die dabei herauskam, nennt den
-#: Grund mit keinem Wort:
-#:
-#:     RuntimeError: File reconstruction error: Internal Writer Error:
-#:     Background writer channel closed
-#:
-#: Wer sie liest, sucht am Netz. Gefunden wurde es nur, weil der Abbruch
-#: **dreimal an derselben Stelle** kam.
-NEEDED_GIGABYTES: Final = 9.0
-
-#: Woran der TripoSG-Quelltext hängt und was eine ComfyUI-Installation nicht
-#: ohnehin mitbringt. ``fast_simplification`` steht hier statt ``pymeshlab``:
-#: dasselbe Können, aber MIT statt GPL (Regel 15).
-#:
-#: **Die Liste war zu kurz, und das fiel nicht auf.** Sie nannte drei Pakete,
-#: gemessen an einer Installation, in der andere Knoten das übrige längst
-#: mitgebracht hatten. Auf einem frischen ComfyUI Desktop fehlten sechs
-#: weitere, und die Einrichtung meldete trotzdem „fertig" — der Fehler kam
-#: erst beim Erzeugen, als ComfyUI den Knoten zu laden versuchte. Gefunden
-#: wurden sie einzeln, indem der Knoten geladen wurde, bis er lud; genau das
-#: prüft :func:`nodes_load` seither am Ende jeder Einrichtung.
-#:
-#: ``antlr4-python3-runtime`` trägt eine Version, und die ist kein
-#: Übervorsicht: ``omegaconf`` liest damit einen vorkompilierten Automaten,
-#: und die 4.13 serialisiert ihn anders — „Could not deserialize ATN with
-#: version 3 (expected 4)" ist der Satz, den es sonst sagt.
-#:
-#: **Die Lizenzen stehen in der Freigabeliste**, nicht in diesem Kommentar:
-#: ``knowledge/data/licences.toml`` führt jedes dieser Pakete samt Lizenz, und
-#: ``tests/test_licences.py`` hält die beiden Listen zusammen. Hier stand
-#: einmal „alle Lizenzen sind geprüft" — genau so eine Behauptung war der
-#: GPL-Knoten ``RMBG``: wahr gemeint, von keinem Test gehalten (Regel 22).
-ANTLR_PACKAGE: Final = "antlr4-python3-runtime==4.9.3"
-SETUPTOOLS_PACKAGE: Final = "setuptools==83.0.0"
-SETUPTOOLS_SOURCE: Final = (
-    "setuptools @ https://files.pythonhosted.org/packages/5d/40/"
-    "e1e72872c6354b306daef1703549e8e83b4d43cfea356311bf722a043752/"
-    "setuptools-83.0.0-py3-none-any.whl"
-    "#sha256=29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+#: Aus Text wird erst ein Bild, und dafür braucht ComfyUI ein Bildmodell. Wer
+#: nur Bilder mitbringt, braucht es nie, deshalb ein eigenes Häkchen in der
+#: Einrichtung (:func:`setup`, ``image_model``). FLUX.2 [klein] 4B (Black Forest
+#: Labs, Apache-2.0) mit dem Textkodierer Qwen3-4B (Apache-2.0): die fp8-Fassung
+#: direkt vom Hersteller, Textkodierer und VAE aus der Packung von Comfy-Org.
+#: **Nur die 4B-Fassung** — die 9B-Fassung und FLUX.2 [dev] stehen unter einer
+#: nicht-kommerziellen Lizenz; die Rolle ``image`` schließt sie aus.
+IMAGE_MODEL_FILES: Final = (
+    ModelFile(
+        repo="black-forest-labs/FLUX.2-klein-4b-fp8",
+        revision="5b4408e59397a4a37ccb46afe426d8ed86379441",
+        path="flux-2-klein-4b-fp8.safetensors",
+        size=4_070_624_520,
+        sha256="97ed34fe0567e436200f2faee3939b88f2b5d99f8af2a4dc16532c4245c0ccb6",
+        folder="models/diffusion_models",
+        role="image",
+    ),
+    ModelFile(
+        repo="Comfy-Org/vae-text-encorder-for-flux-klein-4b",
+        revision="5f526678002e43af5551dadb73ce2e8c91b43afe",
+        path="split_files/text_encoders/qwen_3_4b_fp4_flux2.safetensors",
+        size=3_848_213_998,
+        sha256="3eab03a77adb0ee5304a4e677d5c10ac22f9049c1d7c894adca4f8bb39206ca8",
+        folder="models/text_encoders",
+        role="text_encoder",
+    ),
+    ModelFile(
+        repo="Comfy-Org/vae-text-encorder-for-flux-klein-4b",
+        revision="5f526678002e43af5551dadb73ce2e8c91b43afe",
+        path="split_files/vae/flux2-vae.safetensors",
+        size=336_211_292,
+        sha256="868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3",
+        folder="models/vae",
+        role="image_vae",
+    ),
 )
-ANTLR_SOURCE: Final = (
-    "antlr4-python3-runtime @ "
-    "https://files.pythonhosted.org/packages/3e/38/"
-    "7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/"
-    "antlr4-python3-runtime-4.9.3.tar.gz"
-    "#sha256=f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b"
-)
-BINARY_PACKAGES: Final = (
-    "jaxtyping==0.3.7; python_version < '3.11'",
-    "jaxtyping==0.3.11; python_version >= '3.11'",
-    "typeguard==4.6.0",
-    "fast-simplification==0.2.0",
-    "trimesh==5.0.0",
-    "diffusers==0.40.0",
-    "scikit-image==0.25.2; python_version < '3.11'",
-    "scikit-image==0.26.0; python_version >= '3.11'",
-    "lazy_loader==0.5",
-    "omegaconf==2.3.1",
-)
-PACKAGES: Final = (*BINARY_PACKAGES, ANTLR_PACKAGE, SETUPTOOLS_PACKAGE)
+
+
+def _gigabytes(files: tuple[ModelFile, ...]) -> float:
+    return round(sum(entry.size for entry in files) / 1_000_000_000, 1)
+
+
+#: Wie groß das Modell für den Bildweg ist, Freistellen eingeschlossen — als
+#: Zahl aus den Dateien, nicht getippt: Sie steht in Dialog, Handbuch und
+#: Fortschritt, und eine Zweitschrift daneben veraltet beim nächsten Stand.
+WEIGHT_GIGABYTES: Final = _gigabytes((*SHAPE_FILES, BACKGROUND))
+SHAPE_GIGABYTES: Final = _gigabytes(SHAPE_FILES)
+IMAGE_MODEL_GIGABYTES: Final = _gigabytes(IMAGE_MODEL_FILES)
+BACKGROUND_MEGABYTES: Final = math.ceil(BACKGROUND.size / 1_000_000)
+
+#: Was über den Dateien frei bleiben muss — Luft für das, was
+#: ``huggingface_hub`` beim Laden zwischenlagert.
+#:
+#: Geprüft wird **vorher** und nicht im Fehlerfall: Ein Download, der an einer
+#: vollen Platte stirbt, meldet „Background writer channel closed" und nennt
+#: den Grund mit keinem Wort.
+HEADROOM_GIGABYTES: Final = 1.5
+
+#: Was Solidon bis Oktober 2026 selbst in ComfyUI anlegte (:func:`remove_legacy`).
+LEGACY_NODES: Final = "custom_nodes/ComfyUI-TripoSG-Solidon"
+LEGACY_WEIGHTS: Final = "models/triposg/TripoSG"
+LEGACY_MARKER: Final = ".solidon-complete.json"
+LEGACY_SCRATCH: Final = "dl-triposg"
 
 
 #: Wo ComfyUI erfahrungsgemäß liegt, wenn niemand etwas anderes sagt.
 #:
 #: Die tragbare Version entpackt der Nutzer selbst, also steht sie dort, wohin
-#: er sie gelegt hat — geraten wird an den drei Stellen, an denen sie
+#: er sie gelegt hat — geraten wird an den Stellen, an denen sie
 #: erfahrungsgemäß landet. **ComfyUI Desktop** dagegen wählt selbst, und die
-#: Wahl steht in seiner eigenen Aufstellung: :func:`_from_desktop` liest sie
-#: und schlägt deshalb auch dann an, wenn der Nutzer beim Installieren einen
-#: anderen Ort angegeben hat.
+#: Wahl steht in seiner eigenen Aufstellung: :func:`_from_desktop` liest sie.
 def guesses_for(platform: str) -> tuple[Path, ...]:
     """Wo ComfyUI auf dieser Plattform erfahrungsgemäß liegt.
 
     Eine Funktion und keine Liste mit ``if sys.platform``, aus demselben Grund
     wie :func:`app.core.discover.parts_for`: Die Zuordnung ist damit von
-    **jeder** Maschine aus prüfbar. Eine Liste, deren Linux-Pfade nur unter
-    Linux zu sehen sind, wird nirgends geprüft.
-
-    Die drei Laufwerkspfade waren bis zum 27.08.2026 die ganze Liste — auf
-    Linux und macOS ist ``Path("F:/AI/...")`` ein *relativer* Pfad namens
-    „F:", also blieben dort zwei Rateorte übrig. ``~/comfy/ComfyUI`` fehlte
-    dabei ganz, und das ist der Ort, an den ``comfy-cli`` von sich aus
-    installiert.
+    **jeder** Maschine aus prüfbar. ``~/comfy/ComfyUI`` ist der Ort, an den
+    ``comfy-cli`` von sich aus installiert.
     """
     home = Path.home()
     common = (home / "comfy" / "ComfyUI", home / "ComfyUI", home / "Documents" / "ComfyUI")
@@ -230,16 +231,11 @@ GUESSES: Final = guesses_for(sys.platform)
 
 #: Wo ComfyUI Desktop notiert, was es wohin installiert hat. Ein Eintrag je
 #: Installation, und ``installPath`` ist der Ordner **über** dem eigentlichen
-#: ComfyUI — dieselbe Verschachtelung, die :func:`find_comfyui` beim Nutzer
-#: ohnehin annimmt.
+#: ComfyUI.
 DESKTOP_RECORD: Final = "Comfy Desktop/installations.json"
 
-#: Ein Schritt darf lange dauern — die Gewichte sind 7,5 GB.
+#: Ein Schritt darf lange dauern — die größte Datei sind 5,3 GB.
 STEP_TIMEOUT_SECONDS: Final = 3600.0
-
-#: Wie groß die Gewichte sind. Steht im Fortschrittstext, weil „das dauert"
-#: ohne Zahl niemandem sagt, ob er Kaffee holen kann.
-WEIGHT_GIGABYTES: Final = 7.5
 
 ProgressFn = Callable[[TranslatableText | str], None]
 CancelledFn = Callable[[], bool]
@@ -249,20 +245,15 @@ def scratch_dir(name: str) -> Path:
     """Ein Zwischenordner für einen Download — im Nutzer-Cache, nicht im Temp.
 
     **Ein fester Name im gemeinsamen Temp gehört nicht uns.** Unter Linux ist
-    ``/tmp`` für alle Konten schreibbar; wer ``/tmp/solidon-triposg`` vorher
-    anlegt und behält, bestimmt, was hier nach 7,5 GB Download nach ``models``
-    verschoben wird. Der Nutzer-Cache gehört dem Nutzer — dieselbe Wurzel, in
-    die auch die Arbeitsordner eingesperrter Programme gehen
-    (:func:`app.core.discover.workspace_for`).
+    ``/tmp`` für alle Konten schreibbar; wer den Ordner vorher anlegt, bestimmt,
+    was nach dem Download nach ``models`` verschoben wird. Der Nutzer-Cache
+    gehört dem Nutzer.
 
     Der Name bleibt **fest**, und das ist Absicht: Ein abgebrochener Download
-    soll beim nächsten Lauf fortsetzen, und das kann er nur, wenn seine
-    Bruchstücke da liegen, wo er sie sucht (:data:`_FETCH_WEIGHTS`).
-
-    Kurz muss er außerdem sein — Windows deckelt einen Pfad bei 260 Zeichen,
-    und ``huggingface_hub`` hängt bis zu 163 davon selbst an. Der Cache misst
-    gemessen 55 Zeichen gegen 45 bei ``tempfile``; die zehn sind bezahlbar,
-    ein sprechender Ordnername wären es nicht.
+    setzt beim nächsten Lauf fort, und das kann er nur, wenn seine Bruchstücke
+    da liegen, wo er sie sucht. Kurz muss er außerdem sein — Windows deckelt
+    einen Pfad bei 260 Zeichen, und ``huggingface_hub`` hängt einen Teil davon
+    selbst an.
     """
     from app.core.paths import ensure_dir, user_cache_dir
 
@@ -296,10 +287,14 @@ class Result:
     """Was eingerichtet wurde, und was gegebenenfalls noch fehlt."""
 
     comfyui: Path
-    nodes: Path
     weights: bool
+    """Liegt alles für den Bildweg — Formmodell, Bildkodierer, Freistellen?"""
     image_model: bool = False
+    """Liegt das Bildmodell für den Weg aus Text?"""
     reason: TranslatableText | str = ""
+    legacy_left: tuple[str, ...] = ()
+    """Was von Solidons alter TripoSG-Einrichtung stehen blieb, relativ zu
+    ComfyUI (:func:`remove_legacy`) — der Dialog nennt es samt Ausweg."""
 
     @property
     def done(self) -> bool:
@@ -310,10 +305,9 @@ def _config_home(platform: str = sys.platform) -> Path:
     """Der Ort, an dem Electron-Anwendungen ihre Einstellungen ablegen.
 
     Die Plattform ist ein **Parameter** und kein ``sys.platform`` mitten im
-    Code, und das aus zwei Gründen: So ist die Zuordnung von jeder Maschine aus
-    prüfbar, auch von der, die gerade die andere Plattform nicht ist — und
-    mypy hält die beiden anderen Zweige sonst für unerreichbar und meldet
-    genau das. Dieselbe Bauart wie ``discover.parts_for``.
+    Code: So ist die Zuordnung von jeder Maschine aus prüfbar, und mypy hält
+    die anderen Zweige nicht für unerreichbar. Dieselbe Bauart wie
+    ``discover.parts_for``.
     """
     if platform == "win32":
         appdata = os.environ.get("APPDATA")
@@ -331,17 +325,11 @@ def _desktop_record() -> Path:
 def _from_desktop() -> list[Path]:
     """Was ComfyUI Desktop installiert hat, laut eigener Aufstellung.
 
-    **Der Weg, den ein Kunde am ehesten geht, war der einzige, den wir nicht
-    kannten.** ``comfy.org`` bietet die Desktop-Anwendung als Erstes an; sie
-    legt ihr ComfyUI sechs Ebenen tief unter ``AppData/Local/Comfy-Desktop/``
-    ab, und keine der geratenen Stellen trifft das. Wer sie installiert hatte,
-    las bei uns „an den üblichen Stellen nicht gefunden" — und wir hatten die
-    Antwort vor uns liegen: Die Anwendung schreibt ihren Installationsordner in
-    eine eigene Datei, samt dem Ort, den der Nutzer im Installer gewählt hat.
-
-    Gelesen wird tolerant. Diese Datei gehört jemand anderem, ihr Aufbau ist
-    nirgends zugesagt, und eine Anwendung, die daran scheitert, wäre schlechter
-    als eine, die einfach weiter rät.
+    ComfyUI Desktop legt sein ComfyUI tief unter ``AppData/Local`` ab, und
+    keine geratene Stelle trifft das; es schreibt den Ort aber in eine eigene
+    Datei, samt dem Ort, den der Nutzer im Installer gewählt hat. Gelesen wird
+    tolerant: Die Datei gehört jemand anderem, ihr Aufbau ist nirgends
+    zugesagt, und daran zu scheitern wäre schlechter als weiter zu raten.
     """
     record = _desktop_record()
     try:
@@ -362,7 +350,7 @@ def _from_desktop() -> list[Path]:
 
 
 def find_comfyui(given: str | Path | None = None) -> Path:
-    """Der Ordner, in dem ``main.py`` und ``custom_nodes`` liegen."""
+    """Der Ordner, in dem ``models`` und ``custom_nodes`` liegen."""
     if given:
         path = Path(given)
         # Ein Nutzer zeigt genauso oft auf den Ordner darüber wie auf den
@@ -380,9 +368,7 @@ def find_comfyui(given: str | Path | None = None) -> Path:
             )
         )
 
-    # Die Desktop-Version steht vorn, weil sie nicht geraten ist: Sie hat es
-    # selbst aufgeschrieben. Und dieselbe Verschachtelung wie beim Nutzer —
-    # ``installPath`` nennt den Ordner darüber.
+    # Die Desktop-Version steht vorn, weil sie nicht geraten ist.
     for listed in _from_desktop():
         for candidate in (listed / "ComfyUI", listed):
             if (candidate / "custom_nodes").is_dir():
@@ -401,14 +387,69 @@ def find_comfyui(given: str | Path | None = None) -> Path:
     )
 
 
+_VERSION: Final = re.compile(r"""__version__\s*=\s*["'](\d+)\.(\d+)\.(\d+)""")
+
+
+def comfyui_version(comfyui: Path) -> tuple[int, int, int] | None:
+    """Die Fassung dieses ComfyUI aus ``comfyui_version.py``, sonst ``None``.
+
+    **Gelesen, nicht ausgeführt** — die Datei gehört einem fremden Programm
+    (Regel 11). ``None`` heißt „unbekannt“, nicht „zu alt“: ComfyUI Desktop
+    hält seinen Programmcode getrennt von dem Ordner, in dem Modelle und
+    ``custom_nodes`` liegen, und dort steht keine Versionsdatei. Dann sagt es
+    der laufende Server, welche Knoten ihm fehlen
+    (:meth:`app.core.backends.mesh.ComfyBackend.missing_nodes`).
+    """
+    try:
+        text = (comfyui / "comfyui_version.py").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    found = _VERSION.search(text)
+    if found is None:
+        return None
+    major, minor, patch = (int(part) for part in found.groups())
+    return major, minor, patch
+
+
+def _dotted(version: tuple[int, ...]) -> str:
+    return ".".join(str(part) for part in version)
+
+
+def check_version(comfyui: Path) -> None:
+    """Hält an, wenn dieses ComfyUI die Knoten des Ablaufs noch nicht kennt.
+
+    **Die billige Prüfung zuerst** (``kern.md``, „Einrichten heißt nicht
+    laufen“): Eine Datei lesen kostet nichts, und ein zu altes ComfyUI nach
+    acht Gigabyte Download zu melden, wäre eine halbe Stunde zu spät.
+    """
+    found = comfyui_version(comfyui)
+    if found is None:
+        _log.info("comfyui version unknown in %s, checked at run time", comfyui)
+        return
+    if found >= MINIMUM_COMFYUI:
+        return
+    raise SetupFailed(
+        str(
+            _(
+                "Dieses ComfyUI hat die Version {found}. Die Knoten für den Weg "
+                "zum 3D-Modell bringt ComfyUI ab Version {needed} selbst mit. "
+                "ComfyUI aktualisieren — bei der tragbaren Fassung mit "
+                "„update_comfyui.bat“ im Ordner „update“, bei ComfyUI Desktop "
+                "über dessen Menü —, danach die Einrichtung erneut starten.",
+                found=_dotted(found),
+                needed=_dotted(MINIMUM_COMFYUI),
+            )
+        )
+    )
+
+
 def find_python(comfyui: Path) -> Path:
     """Der Interpreter, mit dem ComfyUI selbst läuft.
 
-    Nicht der, mit dem Solidon läuft: Eine tragbare Installation bringt ihr
-    eigenes Python mit, und ein Paket im falschen kommt dort nie an, wo es
-    gebraucht wird. Im gebauten Paket gibt es unser Python ohnehin nicht als
-    Interpreter — dann bleibt nur der von ComfyUI, und ohne ihn hält die
-    Einrichtung an, statt in die Leere zu installieren.
+    Geladen wird mit ``huggingface_hub``, und das bringt ComfyUI mit — Solidon
+    nicht. Im gebauten Paket gibt es unser Python ohnehin nicht als
+    Interpreter; ohne den von ComfyUI hält die Einrichtung an, statt ins Leere
+    zu laden.
     """
     portable = comfyui.parent / "python_embeded" / "python.exe"
     if portable.is_file():
@@ -422,9 +463,9 @@ def find_python(comfyui: Path) -> Path:
         raise SetupFailed(
             str(
                 _(
-                    "In diesem ComfyUI ist kein eigenes Python zu finden. Die "
-                    "Pakete für TripoSG müssen in die Umgebung, mit der ComfyUI "
-                    "läuft — welche das ist, weiß Solidon hier nicht."
+                    "In diesem ComfyUI ist kein eigenes Python zu finden, und mit ihm lädt "
+                    "Solidon die Modelle. Wer die Modelldateien selbst in ComfyUIs Ordner "
+                    "models legt, braucht diesen Schritt nicht: Solidon findet sie dort."
                 )
             )
         )
@@ -433,8 +474,7 @@ def find_python(comfyui: Path) -> Path:
 
 
 #: Wie oft nachgesehen wird, ob abgebrochen wurde oder die Frist steht — auch
-#: wenn der Kindprozess gerade nichts sagt. Kurz genug, dass ein Klick auf
-#: *Abbrechen* sofort wirkt, lang genug, dass die Schleife nichts kostet.
+#: wenn der Kindprozess gerade nichts sagt.
 WATCH_SECONDS: Final = 0.2
 
 
@@ -442,12 +482,7 @@ def _pump(stream: IO[str], sink: queue.Queue[str | None]) -> None:
     """Liest den Kindprozess leer und legt jede Zeile in die Warteschlange.
 
     In einem eigenen Faden, weil das Lesen blockiert und ein schweigender
-    Prozess beliebig lange schweigt. ``None`` heißt „der Strom ist zu Ende" —
-    das ist das Signal, auf das :func:`_run` seine Schleife verlässt.
-
-    Der Faden ist ein Daemon und hält beim Beenden nichts auf: Wird der Prozess
-    getötet, endet der Strom von selbst; endet er nicht, geht der Faden mit dem
-    Programm.
+    Prozess beliebig lange schweigt. ``None`` heißt „der Strom ist zu Ende“.
     """
     try:
         for raw in stream:
@@ -464,43 +499,22 @@ def _run(
 ) -> str:
     """Einen Schritt laufen lassen und seine letzten Ausgabezeilen zurückgeben.
 
-    **``subprocess.run`` machte „Abbrechen" beim längsten Schritt wirkungslos.**
-    Es blockiert bis zum Ende des Prozesses; die Abbruchprüfung lag *zwischen*
-    den Schritten, und einer davon lädt 7,5 GB. Wer abbrach, wartete eine halbe
-    Stunde auf einen Download, den er nicht mehr wollte — und der Satz daneben
-    („der laufende Schritt läuft aus") war wahr und keine Hilfe.
-
-    Gelesen wird zeilenweise, und zwischen den Zeilen wird gefragt. Ein Abbruch
-    beendet den Kindprozess: ``huggingface_hub`` lässt teilweise geladene
-    Dateien liegen und setzt beim nächsten Lauf fort, also kostet er nichts als
-    die Zeit, die schon vergangen ist.
-
-    **„Zwischen den Zeilen" reichte nicht, denn manche Schritte schweigen.**
-    ``for raw in process.stdout`` blockiert, bis eine Zeile kommt — kommt keine,
-    kam auch die Abbruchprüfung nicht dran, und die Frist genauso wenig. Ein
-    Kindprozess, der ohne Ausgabe hängt (ein Klon, der auf eine Anmeldung
-    wartet, ein Download hinter einer toten Verbindung), fror damit die
-    Einrichtung ein: *Abbrechen* wirkte nicht, und die Stunde aus
-    :data:`STEP_TIMEOUT_SECONDS` verstrich nie, weil niemand auf die Uhr sah.
-
-    Deshalb liest ein eigener Faden (:func:`_pump`), und diese Schleife wartet
-    mit Zeitscheibe: Alle :data:`WATCH_SECONDS` wird gefragt, ob abgebrochen
-    wurde und ob die Frist steht — mit Ausgabe oder ohne.
+    Gelesen wird über einen eigenen Faden (:func:`_pump`), und diese Schleife
+    wartet mit Zeitscheibe: Alle :data:`WATCH_SECONDS` wird gefragt, ob
+    abgebrochen wurde und ob die Frist steht — mit Ausgabe oder ohne. Ein
+    Abbruch beendet den Kindprozess; ``huggingface_hub`` lässt teilweise
+    geladene Dateien liegen und setzt beim nächsten Lauf fort.
     """
     if cancelled is not None and cancelled():
         raise Cancelled(str(what))
     progress(what)
     _log.info("comfy setup: %s", command[0])
-    # **Nur der Schluss wird behalten**, denn nur er wird gebraucht: Die
-    # Fehlermeldung unten zeigt die letzten sechs Zeilen. Ein Download von
-    # 7,5 GB schreibt Zehntausende Fortschrittszeilen, und sie alle zu sammeln
-    # kostete Speicher für etwas, das niemand liest.
+    # Nur der Schluss wird behalten: Die Fehlermeldung zeigt die letzten
+    # sechs Zeilen, und ein Download schreibt Zehntausende.
     lines: deque[str] = deque(maxlen=6)
     deadline = time.monotonic() + STEP_TIMEOUT_SECONDS
     # **Die Einrichtung läuft auf dem Rechner, nicht im Sandkasten.** ComfyUI
-    # liegt dort, ``git`` liegt dort, und das Python, mit dem installiert wird,
-    # auch. Ohne ``on_host`` endet die Einrichtung in einem Flatpak an „git
-    # fehlt" — auf einem Rechner, auf dem git installiert ist.
+    # und sein Python liegen dort.
     launched = discover.on_host(list(command))
     try:
         with subprocess.Popen(
@@ -534,10 +548,12 @@ def _run(
                     raise Cancelled(str(what))
                 if time.monotonic() > deadline:
                     process.kill()
-                    raise SetupFailed(f"{what}: " + str(_("Der Schritt hat zu lange gebraucht.")))
+                    raise SetupFailed(
+                        str(_("{step}: Der Schritt hat zu lange gebraucht.", step=what))
+                    )
             code = process.wait()
     except (OSError, subprocess.SubprocessError) as problem:
-        raise SetupFailed(f"{what}: {problem}") from problem
+        raise SetupFailed(f"{what}\n{problem}") from problem
     if code:
         raise SetupFailed(str(what) + chr(10) + chr(10).join(lines))
     return "\n".join(lines)
@@ -558,17 +574,11 @@ def _run_repeatedly(
 ) -> None:
     """Einen Download mehrmals versuchen — jedes Mal in einem **neuen Prozess**.
 
-    **Die Schleife stand zuerst im Programm selbst, und dort konnte sie nichts
-    bewirken.** ``huggingface_hub`` hält einen globalen HTTP-Client; sobald ein
-    Fehler ihn schließt, antwortet jeder weitere Versuch im selben Prozess mit
-    „Cannot send a request, as the client has been closed" — der zweite Anlauf
-    scheiterte also schneller als der erste und aus einem anderen Grund.
-    Gemessen an drei Abbrüchen auf einer wackeligen Leitung; bei 7,5 GB ist das
-    der Normalfall und nicht das Pech.
-
-    Ein neuer Prozess hat einen neuen Client. Und weil das Halbgeladene in
-    einem Ordner mit festem Namen liegt, kostet der neue Anlauf nur, was noch
-    fehlt.
+    ``huggingface_hub`` hält einen globalen HTTP-Client; sobald ein Fehler ihn
+    schließt, antwortet jeder weitere Versuch im selben Prozess mit „Cannot
+    send a request, as the client has been closed". Ein neuer Prozess hat einen
+    neuen Client, und weil das Halbgeladene in einem Ordner mit festem Namen
+    liegt, kostet der neue Anlauf nur, was noch fehlt.
     """
     for attempt in range(DOWNLOAD_TRIES):
         try:
@@ -582,603 +592,10 @@ def _run_repeatedly(
             time.sleep(RETRY_SECONDS)
 
 
-def copy_nodes(comfyui: Path, progress: ProgressFn = _silent) -> Path:
-    """Die Solidon-Knoten in ``custom_nodes`` legen."""
-    if not NODE_SOURCE.is_dir():
-        raise SetupFailed(str(_("Die Knoten fehlen in dieser Installation von Solidon.")))
-    progress(_("Knoten hinlegen"))
-    target = comfyui / "custom_nodes" / NODE_NAME
-    target.mkdir(parents=True, exist_ok=True)
-    for name in ("nodes.py", "__init__.py"):
-        shutil.copy2(NODE_SOURCE / name, target / name)
-    _log.info("nodes copied to %s", target)
-    return target
-
-
-def fetch_triposg(
-    target: Path, progress: ProgressFn = _silent, cancelled: CancelledFn | None = None
-) -> None:
-    """Den festgelegten TripoSG-Quelltext neben die Knoten holen.
-
-    ``git clone --branch`` nimmt keinen nackten Commit an. Deshalb wird das
-    leere Ziel initialisiert und genau der eine Commit flach geholt. Die beiden
-    Gegenprüfungen beweisen danach, dass ``HEAD`` und der Pin derselbe Commit
-    sind: Jeder muss Vorfahr des anderen sein.
-    """
-    if (target / "triposg").is_dir():
-        return
-    # Gefragt wird über ``discover``, nicht über ``shutil.which``: Im Flatpak
-    # liegt git auf dem Rechner, und ``which`` sieht nur den Sandkasten. Die
-    # Meldung darunter schickte den Kunden sonst zu einer Installation, die er
-    # längst hat.
-    if discover.find_program("git", ("git",)) is None:
-        raise SetupFailed(
-            str(
-                _(
-                    "Für den TripoSG-Quelltext wird git gebraucht. Entweder git "
-                    "installieren, oder das Verzeichnis „triposg“ von Hand neben "
-                    "die Knoten legen — woher, steht in der Doku."
-                )
-            )
-        )
-    scratch = target / "_clone"
-    step = _("TripoSG holen")
-    progress(step)
-    commands = (
-        ["git", "init", str(scratch)],
-        [
-            "git",
-            "-C",
-            str(scratch),
-            "fetch",
-            "--depth",
-            "1",
-            TRIPOSG_REPO,
-            TRIPOSG_COMMIT,
-        ],
-        ["git", "-C", str(scratch), "checkout", "--detach", TRIPOSG_COMMIT],
-        [
-            "git",
-            "-C",
-            str(scratch),
-            "merge-base",
-            "--is-ancestor",
-            TRIPOSG_COMMIT,
-            "HEAD",
-        ],
-        [
-            "git",
-            "-C",
-            str(scratch),
-            "merge-base",
-            "--is-ancestor",
-            "HEAD",
-            TRIPOSG_COMMIT,
-        ],
-    )
-    for command in commands:
-        _run(command, step, _silent, cancelled)
-    shutil.move(str(scratch / "triposg"), str(target / "triposg"))
-    for extra in ("LICENSE", "NOTICE"):
-        if (scratch / extra).is_file():
-            shutil.copy2(scratch / extra, target / f"{extra}-TripoSG")
-    shutil.rmtree(scratch, ignore_errors=True)
-
-
-#: Die Stellen, an denen der TripoSG-Quelltext eine NVIDIA-Karte voraussetzt,
-#: obwohl er keine bräuchte. Jede ist mechanisch: Was dort steht, meint „das
-#: Gerät, auf dem gerechnet wird", und schreibt „cuda".
-#:
-#: **Gefunden, weil der Bildweg auf einer Intel-Arc-Grafik abbrach**: „Torch
-#: not compiled with CUDA enabled", gemeldet von ``TripoSGImageToMesh``. Unser
-#: eigener Knoten fragt ComfyUI nach dem Gerät (``get_torch_device``) und ist
-#: damit richtig; der geholte Quelltext fragt nicht.
-#:
-#: Ob TripoSG auf einer solchen Karte danach wirklich **rechnet**, ist eine
-#: andere Frage als ob es startet — der Flicken nimmt ihm nur die Annahme.
-_DEVICE_FIXES: Final = (
-    # **Kein Kommentar am Zeilenende.** Der erste Versuch hängte „# von
-    # Solidon" an, und die Zeile ging weiter: ``dtype`` und ``requires_grad``
-    # standen dahinter und waren damit wegkommentiert, die Klammer blieb offen.
-    # ComfyUI meldete „'(' was never closed", und die ganze Sammlung fiel aus.
-    # Gefangen hat es :func:`nodes_load` — der Beleg dafür, dass der Schritt
-    # hingehört.
-    (
-        "device='cuda', dtype=torch.float16",
-        "device=edge_coords.device, dtype=torch.float16",
-    ),
-    (
-        'with torch.autocast(device_type="cuda", dtype=torch.float32):',
-        "with torch.autocast(device_type=queries.device.type, dtype=torch.float32):",
-    ),
-    # ``empty_cache`` steht viermal darin und wirft ohne CUDA. Der Aufruf ist
-    # eine Aufräumbitte und nie notwendig — also wird er zu einer, die fragt.
-    (
-        "torch.cuda.empty_cache()",
-        "torch.cuda.empty_cache() if torch.cuda.is_available() else None  # von Solidon",
-    ),
-)
-
-
-def _fix_devices(path: Path) -> bool:
-    """Die CUDA-Annahmen in einer Datei richten. Liefert, ob etwas geschah.
-
-    Jede Ersetzung prüft **die Wirkung** und nicht den eigenen Kommentar: Wer
-    den Marker sucht, den er selbst geschrieben hat, flickt eine von Hand
-    geänderte Datei ein zweites Mal. Und keine ist Pflicht — der Quelltext
-    kommt aus einem fremden Repositorium und darf sich ändern, ohne dass die
-    Einrichtung deshalb anhält.
-    """
-    text = original = path.read_text(encoding="utf-8")
-    for wanted, fixed in _DEVICE_FIXES:
-        if fixed in text or wanted not in text:
-            continue
-        text = text.replace(wanted, fixed)
-    if text == original:
-        return False
-    path.write_text(text, encoding="utf-8")
-    return True
-
-
-def patch_sources(target: Path, progress: ProgressFn = _silent) -> None:
-    """Die Stellen richten, an denen der Quelltext hier nicht durchläuft.
-
-    Alle sind angesagt und werden vor dem Schreiben geprüft: Wer den Ordner
-    später neu holt, bekommt sie erneut, und wer sie schon hat, bekommt sie
-    nicht zweimal.
-    """
-    progress(_("Stellen im Quelltext richten"))
-    utils = target / "triposg" / "inference_utils.py"
-    text = utils.read_text(encoding="utf-8")
-    # Geprüft wird die Wirkung, nicht der eigene Kommentar: Wer den Marker
-    # sucht, den er selbst geschrieben hat, patcht eine von Hand geänderte
-    # Datei ein zweites Mal und macht aus ihr Bruch.
-    if "try:\n    from diso import DiffDMC" not in text:
-        alternative = "from diso import DiffDMC\n"
-        if alternative not in text:
-            raise SetupFailed(f"{utils.name}: " + str(_("Der erwartete Import steht nicht darin.")))
-        text = text.replace(
-            alternative,
-            "# Von Solidon angepasst: diso ist eine CUDA-Erweiterung ohne\n"
-            "# Windows-Wheel und wird nur im Flash-Decoder-Pfad gebraucht.\n"
-            "try:\n"
-            "    from diso import DiffDMC\n"
-            "except ImportError:  # von Solidon\n"
-            "    DiffDMC = None\n",
-            1,
-        )
-        utils.write_text(text, encoding="utf-8")
-
-    vae = target / "triposg" / "models" / "autoencoders" / "autoencoder_kl_triposg.py"
-    text = vae.read_text(encoding="utf-8")
-    if "self.embedder(queries).to(" not in text:
-        alternative = "            queries = self.embedder(queries)\n"
-        if alternative not in text:
-            raise SetupFailed(f"{vae.name}: " + str(_("Der erwartete Aufruf steht nicht darin.")))
-        text = text.replace(
-            alternative,
-            "            # von Solidon: Typ zurückholen — der Fourier-Embedder\n"
-            "            # gibt float32 zurück, die nächste Linearschicht trägt\n"
-            "            # halbe Gewichte und bricht sonst ab.\n"
-            "            queries = self.embedder(queries).to(dtype=z.dtype)\n",
-            1,
-        )
-        vae.write_text(text, encoding="utf-8")
-
-    for path in (utils, vae):
-        if _fix_devices(path):
-            _log.info("device assumptions fixed in %s", path.name)
-
-
-def install_packages(
-    python: Path, progress: ProgressFn = _silent, cancelled: CancelledFn | None = None
-) -> None:
-    """Die fehlenden Pakete nachziehen, ohne die Installation umzubauen.
-
-    ``--no-deps`` ist hier kein Geiz, sondern Notwehr: Die Anforderungsliste
-    von TripoSG nennt ``numpy==1.22.3``, und wer das durchlässt, hat danach ein
-    ComfyUI, das nicht mehr startet. Für die binären Pakete lässt
-    ``--only-binary=:all:`` ausschließlich Wheels zu. ComfyUI unterstützt
-    auch Python 3.10; zwei Pakete tragen deshalb je eine festgeschriebene
-    Fassung für 3.10 und eine für neuere Interpreter. ANTLR 4.9.3 gibt es nur
-    als Quellpaket; dessen unveränderliche PyPI-Adresse und SHA-256 sind
-    deshalb festgeschrieben. Der Bau darf keine weiteren Pakete verdeckt
-    nachladen; ein fehlendes Build-Backend wird vorher gezielt ergänzt.
-    """
-    _ensure_antlr_build_backend(python, progress, cancelled)
-    _run(
-        [
-            str(python),
-            "-s",
-            "-m",
-            "pip",
-            "install",
-            "--no-deps",
-            "--only-binary=:all:",
-            *BINARY_PACKAGES,
-        ],
-        _("Pakete für TripoSG nachziehen"),
-        progress,
-        cancelled,
-    )
-    _run(
-        [
-            str(python),
-            "-s",
-            "-m",
-            "pip",
-            "install",
-            "--no-deps",
-            "--no-build-isolation",
-            "--require-hashes",
-            ANTLR_SOURCE,
-        ],
-        _("ANTLR-Laufzeit für TripoSG nachziehen"),
-        progress,
-        cancelled,
-    )
-
-
-def _ensure_antlr_build_backend(
-    python: Path, progress: ProgressFn, cancelled: CancelledFn | None
-) -> None:
-    """Ein vorhandener Baukasten bleibt; nur ein fehlender Import wird nachgezogen."""
-    step = _("ANTLR-Laufzeit für TripoSG nachziehen")
-    result = _run([str(python), "-s", "-c", _CHECK_BUILD_BACKEND], step, progress, cancelled)
-    if result.rsplit("\n", 1)[-1] == "missing":
-        _run(
-            [
-                str(python),
-                "-s",
-                "-m",
-                "pip",
-                "install",
-                "--no-deps",
-                "--only-binary=:all:",
-                "--require-hashes",
-                SETUPTOOLS_SOURCE,
-            ],
-            step,
-            progress,
-            cancelled,
-        )
-
-
-_CHECK_BUILD_BACKEND = """
-try:
-    import setuptools.build_meta
-    from setuptools.command.bdist_wheel import bdist_wheel
-except ImportError:
-    print("missing", flush=True)
-else:
-    print("ready", flush=True)
-"""
-
-
-def weights_present(comfyui: Path) -> bool:
-    """Prüft Abschlussmarke und Dateistand; Hashbildung geschieht bei der Einrichtung."""
-    root = comfyui / "models" / "triposg" / "TripoSG"
-    marker = root / ".solidon-complete.json"
-    try:
-        if marker.stat().st_size > 64 * 1024:
-            return False
-        stored = json.loads(marker.read_text(encoding="utf-8"))
-        if (
-            not isinstance(stored, dict)
-            or stored.get("revision") != WEIGHTS_REVISION
-            or stored.get("format") != 2
-        ):
-            return False
-        files = stored.get("files")
-        if not isinstance(files, dict) or "model_index.json" not in files:
-            return False
-        if not any(name.endswith((".safetensors", ".bin")) for name in files):
-            return False
-        hashes = stored.get("sha256")
-        mtimes = stored.get("mtimes_ns")
-        if not isinstance(hashes, dict) or not isinstance(mtimes, dict):
-            return False
-        if set(hashes) != set(mtimes) or not set(hashes) <= set(files):
-            return False
-        for name, digest in hashes.items():
-            if (
-                not isinstance(digest, str)
-                or len(digest) != 64
-                or any(character not in "0123456789abcdef" for character in digest)
-                or not isinstance(mtimes[name], int)
-                or isinstance(mtimes[name], bool)
-            ):
-                return False
-        for name, size in files.items():
-            relative = Path(name)
-            if (
-                relative.is_absolute()
-                or ".." in relative.parts
-                or ":" in name
-                or not isinstance(size, int)
-                or isinstance(size, bool)
-                or size < 0
-                or not (root / relative).resolve().is_relative_to(root.resolve())
-                or not (root / relative).is_file()
-                or (root / relative).stat().st_size != size
-                or (name in mtimes and (root / relative).stat().st_mtime_ns != mtimes[name])
-            ):
-                return False
-        return True
-    except OSError, ValueError, TypeError:
-        return False
-
-
-#: Derselbe Prüfer läuft bei Download und Bestandsübernahme im fremden Python.
-#: Die Abschlussmarke hält die geprüften LFS-Hashes und Änderungszeiten; alte
-#: Größenmarken werden einmalig nachgeprüft, nicht still als geprüft übernommen.
-_VERIFY_WEIGHTS = """
-def verify_weights(root, info):
-    import hashlib
-    files = {entry.rfilename: entry.size for entry in info.siblings}
-    if "model_index.json" not in files or not any(
-        name.endswith((".safetensors", ".bin")) for name in files
-    ):
-        raise RuntimeError(
-            "Der Modellbestand ist unvollständig. Starten Sie die Einrichtung erneut."
-        )
-    hashes, mtimes = {}, {}
-    for entry in info.siblings:
-        name, size = entry.rfilename, entry.size
-        path = root / name
-        if (
-            not path.resolve().is_relative_to(root.resolve())
-            or ":" in name or ".." in Path(name).parts
-            or not isinstance(size, int) or isinstance(size, bool) or size < 0
-            or not path.is_file() or path.stat().st_size != size
-        ):
-            raise RuntimeError(
-                f"Die Modelldatei {name} fehlt oder ist unvollständig. "
-                "Starten Sie die Einrichtung erneut."
-            )
-        expected = getattr(getattr(entry, "lfs", None), "sha256", None)
-        if expected is None:
-            continue
-        if (
-            not isinstance(expected, str) or len(expected) != 64
-            or any(letter not in "0123456789abcdef" for letter in expected)
-        ):
-            raise RuntimeError(f"Die Prüfsumme für {name} ist ungültig.")
-        print(f"SHA-256: {name}", flush=True)
-        before = path.stat()
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            while block := stream.read(1024 * 1024):
-                digest.update(block)
-        after = path.stat()
-        if digest.hexdigest() != expected or (
-            before.st_size, before.st_mtime_ns
-        ) != (after.st_size, after.st_mtime_ns):
-            raise RuntimeError(
-                f"Die Prüfsumme der Modelldatei {name} stimmt nicht. "
-                "Starten Sie die Einrichtung erneut."
-            )
-        hashes[name], mtimes[name] = expected, after.st_mtime_ns
-    return {"format": 2, "files": files, "sha256": hashes, "mtimes_ns": mtimes}
-"""
-
-
-#: Das Programm, das die Gewichte holt. Es steht hier als Text, weil es im
-#: Python **von ComfyUI** laufen muss und nicht in unserem (siehe
-#: :func:`find_python`) — und weil der Umweg über einen kurzen Ordner eine
-#: Begründung braucht, die in keinen Einzeiler passt.
-#:
-#: **Der Umweg ist Windows.** ``huggingface_hub`` legt seine halbfertigen
-#: Dateien unter ``<Ziel>/.cache/huggingface/download/<Ordner>/`` ab, und deren
-#: Namen sind rund 130 Zeichen lang — Prüfsumme, Etag, Endung. Zusammen mit dem
-#: Installationspfad von ComfyUI Desktop, das sein ComfyUI sechs Ebenen tief
-#: unter ``AppData\Local`` ablegt, waren das gemessene 261 Zeichen. ``MAX_PATH``
-#: ist 260. **Ein Zeichen**, und der Kunde bekam mitten im 7,5-GB-Download
-#: einen ``FileNotFoundError`` mit einem Pfad, den kein Mensch liest.
-#:
-#: Zwei Auswege wurden verworfen und einer gewählt. ``LongPathsEnabled`` in der
-#: Registrierung ist eine Systemeinstellung und gehört keiner Anwendung; das
-#: Präfix ``\\?\`` half gemessen nicht (derselbe ``FileNotFoundError``).
-#: Bleibt der Umweg über einen wirklich kurzen Ordner — und „kurz" heißt hier
-#: gemessen: HFs Anhang war 163 Zeichen, das Ziel 98, zusammen die 261.
-#: ``tempfile`` liefert rund 45, also 208 und mit Abstand unter der Grenze. Ein
-#: Ordner *neben* dem Ziel wäre nur vier Zeichen kürzer gewesen als ``TripoSG``
-#: selbst und hätte beim nächsten tieferen Installationspfad wieder gerissen.
-#:
-#: Der Preis steht dazu: Liegt der Temp-Ordner auf einem anderen Laufwerk als
-#: ComfyUI, ist das Verschieben ein Kopieren von 7,5 GB. Deshalb sagt der
-#: Schritt es an, statt still zu stehen — das ``print`` unten läuft in
-#: **ComfyUIs** Python, und :func:`_run` liest dessen Ausgabe Zeile für Zeile
-#: in ``progress``. Es ist der Fortschritt, keine Ausgabe aus dem Kern.
-#:
-#: **Der Ordner liegt im Nutzer-Cache, nicht im gemeinsamen Temp.** Er lag
-#: dort, unter festem Namen — und ein fester Name im gemeinsamen Temp ist unter
-#: Linux von jedem anderen Konto vorbelegbar: Wer ``/tmp/solidon-triposg``
-#: anlegt und behält, entscheidet, was hier 7,5 GB später nach ``models``
-#: verschoben wird. Der Pfad kommt deshalb von :func:`app.core.paths.user_cache_dir`
-#: und wird als Argument übergeben — dieses Programm läuft in **ComfyUIs**
-#: Python und hat unseren Kern nicht auf dem Suchpfad.
-#:
-#: Der Ordner bleibt damit kurz genug: gemessen 55 Zeichen für den Cache statt
-#: 45 für ``tempfile``, und die Grenze liegt bei 260 (siehe oben).
-#:
-#: **Der Ordner trägt einen festen Namen, und das ist der Punkt.** Er hieß
-#: zuerst ``mkdtemp``, also jedes Mal anders, und ein ``finally`` räumte ihn
-#: auf. Beides zusammen machte die Zusage im Docstring von :func:`setup` zur
-#: Lüge: „setzt beim nächsten Lauf fort" — fortgesetzt wurde nichts, das
-#: Halbgeladene war gelöscht und lag beim nächsten Versuch woanders. Gemessen
-#: an drei Abbrüchen hintereinander auf einer wackeligen Leitung (``WinError
-#: 10054``, dann 2 GB weit, dann ``WinError 10038``); bei 7,5 GB ist das der
-#: Normalfall und nicht das Pech. Aufgeräumt wird jetzt nur, was gelungen ist.
-#:
-#: Und wiederholt wird von hier aus, drei Anläufe: ``huggingface_hub`` setzt je
-#: Datei fort, also kostet ein neuer Anlauf nur das, was noch fehlt. Ein
-#: Abbruch von außen kommt durch — ``_run`` beendet den Prozess, und eine
-#: Schleife im Kind hält das nicht auf.
-_FETCH_WEIGHTS = (
-    _VERIFY_WEIGHTS
-    + """
-import json, os, shutil, sys, uuid
-from pathlib import Path
-from huggingface_hub import HfApi, snapshot_download
-
-target = Path(sys.argv[1])
-repo = sys.argv[2]
-scratch = Path(sys.argv[3])
-revision = sys.argv[4]
-scratch.mkdir(parents=True, exist_ok=True)
-snapshot_download(repo, revision=revision, local_dir=str(scratch), max_workers=8)
-info = HfApi().model_info(repo, revision=revision, files_metadata=True)
-resolved = info.sha
-if resolved != revision:
-    raise RuntimeError(
-        f"Der geladene Modellstand ist {resolved} statt {revision}. "
-        "Löschen Sie den Zwischenordner und starten Sie die Einrichtung erneut."
-    )
-shutil.rmtree(scratch / ".cache", ignore_errors=True)
-print("Verschieben", flush=True)
-target.parent.mkdir(parents=True, exist_ok=True)
-# Über die Grenze eines Datenträgers kopiert shutil.move Datei für Datei.
-# Direkt ins Ziel kopiert lag model_index.json schon da, bevor die Gewichte
-# ankamen — ein Abbruch dazwischen sah beim nächsten Einrichten wie ein
-# vollständiges Modell aus (CORE-24). Daneben kopieren, dann umbenennen:
-# innerhalb eines Datenträgers ist das ein Schritt, der ganz oder gar
-# nicht geschieht.
-staging = target.with_name(target.name + ".part")
-if staging.exists():
-    shutil.rmtree(staging, ignore_errors=True)
-shutil.move(str(scratch), str(staging))
-# Erst der vollständig kopierte und geprüfte Bestand trägt die Abschlussmarke.
-verified = verify_weights(staging, info)
-verified["revision"] = revision
-(staging / ".solidon-complete.json").write_text(json.dumps(verified), encoding="utf-8")
-backup = target.with_name(target.name + ".previous-" + uuid.uuid4().hex)
-if target.exists():
-    os.replace(str(target), str(backup))
-try:
-    os.replace(str(staging), str(target))
-except OSError:
-    if backup.exists():
-        os.replace(str(backup), str(target))
-    raise
-if backup.exists():
-    shutil.rmtree(backup)
-"""
-)
-
-
-#: Einen Bestand, der vor der Abschlussmarke geladen wurde, prüfen statt
-#: 7,5 GB neu zu holen: Die Marke schrieb bis zum 06.09.2026 nur der neue
-#: Kopierweg, und jede ältere Installation galt damit als unvollständig
-#: (Gesamtreview CORE-24, Nachprüfung). Gefragt wird die Dateiliste des
-#: Modellstands (wenige KB), verglichen wird Datei für Datei mit Größe und
-#: bei LFS mit SHA-256; nur
-#: ein vollständiger Bestand bekommt die Marke. Fehlt eine Datei, endet das
-#: Programm mit einem Satz, und der gewöhnliche Download läuft.
-_ADOPT_WEIGHTS = (
-    _VERIFY_WEIGHTS
-    + """
-import json, sys
-from pathlib import Path
-from huggingface_hub import HfApi
-
-target = Path(sys.argv[1])
-repo = sys.argv[2]
-revision = sys.argv[3]
-info = HfApi().model_info(repo, revision=revision, files_metadata=True)
-if info.sha != revision:
-    raise SystemExit(f"Der Modellstand ist {info.sha} statt {revision}.")
-verified = verify_weights(target, info)
-verified["revision"] = revision
-marker = target / ".solidon-complete.json"
-staged_marker = marker.with_suffix(".tmp")
-staged_marker.write_text(json.dumps(verified), encoding="utf-8")
-staged_marker.replace(marker)
-print("Vorhandene Gewichte übernommen", flush=True)
-"""
-)
-
-
-def _discard_replaced_weights(target: Path) -> None:
-    """Räumt liegen gebliebene ``.previous-*``-Ordner eines abgebrochenen Austauschs.
-
-    ``_FETCH_WEIGHTS`` stellt den alten Bestand daneben, bevor es den neuen
-    einwechselt, und löscht ihn erst danach. Stirbt der Prozess dazwischen,
-    liegen 7,5 GB ohne Aufgabe herum — ``.part`` räumt der nächste Lauf, also
-    räumt er auch das.
-    """
-    for leftover in target.parent.glob(target.name + ".previous-*"):
-        if leftover.is_dir():
-            shutil.rmtree(leftover, ignore_errors=True)
-
-
-def adopt_weights(
-    comfyui: Path,
-    python: Path,
-    progress: ProgressFn = _silent,
-    cancelled: CancelledFn | None = None,
-) -> bool:
-    """Einen Bestand ohne Abschlussmarke prüfen und, wenn er vollständig ist, übernehmen."""
-    target = comfyui / "models" / "triposg" / "TripoSG"
-    if not (target / "model_index.json").is_file():
-        return False
-    try:
-        _run(
-            [str(python), "-s", "-c", _ADOPT_WEIGHTS, str(target), WEIGHTS_REPO, WEIGHTS_REVISION],
-            _("Vorhandene Gewichte prüfen"),
-            progress,
-            cancelled,
-        )
-    except SetupFailed as problem:
-        _log.info("vorhandene TripoSG-Gewichte nicht übernommen: %s", problem)
-        return False
-    return weights_present(comfyui)
-
-
-def background_present(comfyui: Path) -> bool:
-    """Liegt ein Freistell-Modell da? Welches, entscheidet die Rolle.
-
-    Gefragt wird nach dem Ordner und nicht nach unserer Datei: Wer ``lucida``
-    installiert hat, hat eines — und die Rollenauflösung in
-    :data:`app.core.backends.mesh.MODEL_ROLES` nimmt es dann auch.
-    """
-    folder = comfyui / "models" / "background_removal"
-    return any(folder.glob("*.safetensors")) if folder.is_dir() else False
-
-
-def fetch_background(
-    comfyui: Path,
-    python: Path,
-    progress: ProgressFn = _silent,
-    cancelled: CancelledFn | None = None,
-) -> None:
-    """Das Freistell-Modell holen — 445 MB, und nur wenn keines da ist."""
-    if background_present(comfyui):
-        return
-    target = comfyui / "models" / "background_removal"
-    target.mkdir(parents=True, exist_ok=True)
-    _run_repeatedly(
-        [
-            str(python),
-            "-s",
-            "-c",
-            _FETCH_FILE,
-            str(target),
-            BACKGROUND_REPO,
-            BACKGROUND_FILE,
-            str(scratch_dir("dl-bg")),
-            BACKGROUND_REVISION,
-            BACKGROUND_SHA256,
-        ],
-        _("Modell fürs Freistellen laden — 445 MB"),
-        progress,
-        cancelled,
-    )
-
-
-#: Eine einzelne Datei holen, statt eines ganzen Repositoriums. Derselbe Grund
-#: für den kurzen Ordner wie bei :data:`_FETCH_WEIGHTS`, und dieselbe
-#: Wiederholung: Die Leitung entscheidet, nicht die Dateigröße.
+#: Eine einzelne Datei holen, im Python von ComfyUI. Fester Modellstand,
+#: gestreamte Prüfsumme, und **erst die geprüfte Datei** wird am Ziel
+#: eingewechselt — daneben kopiert und umbenannt, damit ein Abbruch nie eine
+#: halbe Datei unter dem richtigen Namen hinterlässt.
 _FETCH_FILE = """
 import hashlib, shutil, sys
 from pathlib import Path
@@ -1189,6 +606,7 @@ scratch = Path(sys.argv[4])
 revision, expected = sys.argv[5], sys.argv[6]
 scratch.mkdir(parents=True, exist_ok=True)
 got = Path(hf_hub_download(repo, name, revision=revision, local_dir=str(scratch)))
+print(f"SHA-256: {got.name}", flush=True)
 digest = hashlib.sha256()
 with got.open("rb") as stream:
     while block := stream.read(1024 * 1024):
@@ -1230,8 +648,8 @@ def _gigabytes_in(folder: Path) -> float:
     """Was in diesem Ordner schon liegt — für die Rechnung, wie viel noch fehlt.
 
     Ein abgebrochener Download lässt seine Bruchstücke stehen, und der nächste
-    Anlauf holt nur den Rest (:func:`_run_repeatedly`). Eine Platzprüfung, die
-    das ignoriert, verweigert ausgerechnet die Wiederaufnahme.
+    Anlauf holt nur den Rest. Eine Platzprüfung, die das ignoriert, verweigert
+    ausgerechnet die Wiederaufnahme.
     """
     if not folder.exists():
         return 0.0
@@ -1239,31 +657,17 @@ def _gigabytes_in(folder: Path) -> float:
     return total / 1_000_000_000
 
 
-def _space_or_stop(
-    where: Path, needed: float = NEEDED_GIGABYTES, destination: str = "models/triposg"
-) -> None:
-    """Hält an, wenn der Datenträger dieses Ordners die Gewichte nicht fasst.
+def _space_or_stop(where: Path, needed: float, destination: str) -> None:
+    """Hält an, wenn der Datenträger dieses Ordners die Dateien nicht fasst.
 
-    **Was schon liegt, zählt mit.** Ein abgebrochener Download hinterlässt seine
-    Bruchstücke im Zwischenordner, und ``_run_repeatedly`` setzt genau dort fort
-    — nur was fehlt, wird noch geholt. Ohne diesen Zuschlag verweigerte die
-    Prüfung ausgerechnet den zweiten Anlauf, obwohl er weniger braucht als der
-    erste: Bei 5 von 7,5 GB geladen fehlen 2,5, und verlangt worden wären 9. Am
-    Ziel gilt dasselbe aus einem anderen Grund — es wird vor dem Verschieben
-    geräumt, sein Inhalt wird also frei.
-
-    **Die Meldung nennt den Ordner** (Regel 17). „Auf dem Datenträger ist zu
-    wenig Platz" ist für einen Rechner mit zwei Platten keine Auskunft, sondern
-    eine Suchaufgabe — und die beiden Orte liegen hier regelmäßig auf
-    verschiedenen Datenträgern.
+    **Was schon liegt, zählt mit** (:func:`_gigabytes_in`). **Die Meldung nennt
+    den Ordner** (Regel 17): Zwischenordner und ``models`` liegen regelmäßig
+    auf verschiedenen Datenträgern, und „zu wenig Platz" ohne Ort ist eine
+    Suchaufgabe.
     """
     free = free_gigabytes(where) + _gigabytes_in(where)
     if free >= needed:
         return
-    # Beide Zahlen lokalisiert und mit einer Nachkommastelle: ``{needed:.0f}``
-    # machte aus 8,5 eine „8" — und stand neben 8,3 GB frei, die nicht
-    # reichten (Review Rest #4); ``{free:.1f}`` schrieb „12.3" ins deutsche
-    # Fenster (Review Fenster #13).
     raise SetupFailed(
         str(
             _(
@@ -1281,58 +685,109 @@ def _space_or_stop(
     )
 
 
-def image_model_present(comfyui: Path) -> bool:
-    """Liegt ein Bildmodell da? Welches, entscheidet die Rolle.
-
-    Dieselbe Frage wie bei :func:`background_present`, und aus demselben Grund
-    an den Ordner gestellt und nicht an unsere Datei: Wer ein Juggernaut oder
-    Dreamshaper hat, hat eines — die Rollenauflösung in
-    :data:`app.core.backends.mesh.MODEL_ROLES` nimmt es dann auch. Beide
-    Endungen, die ComfyUI als Checkpoint anbietet.
-    """
-    folder = comfyui / IMAGE_MODEL_FOLDER
+def _listed(folder: Path) -> list[str]:
+    """Die Modelldateien eines Ordners, wie ComfyUI sie anbieten würde."""
     if not folder.is_dir():
+        return []
+    return sorted(
+        entry.relative_to(folder).as_posix()
+        for entry in folder.rglob("*")
+        if entry.is_file() and entry.suffix.lower() in (".safetensors", ".ckpt", ".pt", ".pth")
+    )
+
+
+def file_present(comfyui: Path, entry: ModelFile) -> bool:
+    """Liegt diese Datei — oder eine andere, die ihre Rolle ausfüllt?
+
+    Unsere Datei zählt nur mit ihrer vollen Größe: Ein Rest unter dem
+    richtigen Namen ist keine Datei. Eine fremde zählt, wenn die
+    Rollenauflösung sie nehmen würde — dieselbe Frage, die der Ablauf beim
+    Erzeugen stellt (:func:`app.core.backends.mesh.role_candidates`).
+    """
+    target = entry.target(comfyui)
+    try:
+        if target.is_file() and target.stat().st_size == entry.size:
+            return True
+    except OSError:
         return False
-    return any(folder.glob("*.safetensors")) or any(folder.glob("*.ckpt"))
+    others = [name for name in _listed(comfyui / entry.folder) if name != entry.name]
+    return bool(role_candidates(entry.role, others))
 
 
-def fetch_image_model(
+def background_present(comfyui: Path) -> bool:
+    """Liegt ein Freistellmodell da? Welches, entscheidet die Rolle."""
+    return file_present(comfyui, BACKGROUND)
+
+
+def weights_present(comfyui: Path) -> bool:
+    """Liegt alles für den Bildweg: Formkern, Form-VAE, Bildkodierer, Freistellen?"""
+    return background_present(comfyui) and all(
+        file_present(comfyui, entry) for entry in SHAPE_FILES
+    )
+
+
+def image_model_present(comfyui: Path) -> bool:
+    """Liegt das Bildmodell für den Weg aus Text — alle drei Teile?"""
+    return all(file_present(comfyui, entry) for entry in IMAGE_MODEL_FILES)
+
+
+def _fetch_files(
+    comfyui: Path,
+    python: Path,
+    files: tuple[ModelFile, ...],
+    scratch_name: str,
+    what: TranslatableText,
+    progress: ProgressFn,
+    cancelled: CancelledFn | None,
+) -> None:
+    """Die fehlenden Dateien dieser Gruppe holen, eine nach der anderen.
+
+    **Geprüft wird der Platz vorher, an beiden Orten** — im Zwischenordner und
+    unter ``models``; ``shutil.move`` verschiebt innerhalb eines Datenträgers
+    und **kopiert** über seine Grenze hinweg.
+    """
+    missing = tuple(entry for entry in files if not file_present(comfyui, entry))
+    if not missing:
+        return
+    needed = sum(entry.size for entry in missing) / 1_000_000_000 + HEADROOM_GIGABYTES
+    scratch = scratch_dir(scratch_name)
+    _space_or_stop(scratch, needed, missing[0].folder)
+    _space_or_stop(comfyui / "models", needed, missing[0].folder)
+    for entry in missing:
+        target = comfyui / entry.folder
+        target.mkdir(parents=True, exist_ok=True)
+        _run_repeatedly(
+            [
+                str(python),
+                "-s",
+                "-c",
+                _FETCH_FILE,
+                str(target),
+                entry.repo,
+                entry.path,
+                str(scratch),
+                entry.revision,
+                entry.sha256,
+            ],
+            what,
+            progress,
+            cancelled,
+        )
+
+
+def fetch_background(
     comfyui: Path,
     python: Path,
     progress: ProgressFn = _silent,
     cancelled: CancelledFn | None = None,
 ) -> None:
-    """Das Bildmodell für den Textweg holen — rund 6,9 GB, und nur wenn keines da ist.
-
-    Derselbe Weg wie beim Freistell-Modell (:data:`_FETCH_FILE`): eine Datei,
-    feste Revision, gestreamte Prüfsumme, Tausch am Ziel erst nach der
-    Prüfung. Und dieselbe Platzprüfung wie bei den Gewichten, an beiden Orten
-    — Zwischenordner und Ziel liegen regelmäßig auf verschiedenen Datenträgern.
-    """
-    if image_model_present(comfyui):
-        return
-    target = comfyui / IMAGE_MODEL_FOLDER
-    scratch = scratch_dir("dl-image")
-    _space_or_stop(scratch, IMAGE_MODEL_NEEDED_GIGABYTES, IMAGE_MODEL_FOLDER)
-    _space_or_stop(target, IMAGE_MODEL_NEEDED_GIGABYTES, IMAGE_MODEL_FOLDER)
-    target.mkdir(parents=True, exist_ok=True)
-    _run_repeatedly(
-        [
-            str(python),
-            "-s",
-            "-c",
-            _FETCH_FILE,
-            str(target),
-            IMAGE_MODEL_REPO,
-            IMAGE_MODEL_FILE,
-            str(scratch),
-            IMAGE_MODEL_REVISION,
-            IMAGE_MODEL_SHA256,
-        ],
-        _(
-            "Bildmodell für den Weg aus Text laden — rund {size} GB, das dauert",
-            size=format_decimal(IMAGE_MODEL_GIGABYTES, 1),
-        ),
+    """Das Freistellmodell holen — und nur, wenn keines da ist."""
+    _fetch_files(
+        comfyui,
+        python,
+        (BACKGROUND,),
+        "dl-bg",
+        _("Modell fürs Freistellen laden — {size} MB", size=BACKGROUND_MEGABYTES),
         progress,
         cancelled,
     )
@@ -1344,125 +799,119 @@ def fetch_weights(
     progress: ProgressFn = _silent,
     cancelled: CancelledFn | None = None,
 ) -> None:
-    """Die Gewichte holen — rund 7,5 GB, und nur wenn sie fehlen.
-
-    **Geprüft wird der Platz vorher** (:data:`NEEDED_GIGABYTES`). Ein Download,
-    der nach zwanzig Minuten an einer vollen Platte stirbt, kostet die zwanzig
-    Minuten **und** die Suche danach — die Meldung des fremden Programms nennt
-    den Grund nicht.
-
-    **Und geprüft werden beide Orte.** Geladen wird in den Nutzer-Cache, liegen
-    bleibt es unter ``models/triposg`` — das kann derselbe Datenträger sein und
-    muss es nicht: ComfyUI auf ``D:`` mit viel Platz und ein knappes ``C:`` ist
-    der Normalfall, nicht der Sonderfall. Vom 25.08.2026 bis zum 26.08.2026 fragte
-    die Prüfung nur den ComfyUI-Datenträger und meldete grün, während der
-    Download auf dem anderen starb. Beide braucht es auch dann, wenn der Platz
-    da ist: ``shutil.move`` verschiebt innerhalb eines Datenträgers und
-    **kopiert** über seine Grenze hinweg.
-    """
-    if weights_present(comfyui):
-        return
-    target = comfyui / "models" / "triposg" / "TripoSG"
-    _discard_replaced_weights(target)
-    if adopt_weights(comfyui, python, progress, cancelled):
-        return
-    scratch = scratch_dir("dl-triposg")
-    _space_or_stop(scratch)
-    _space_or_stop(target)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    _run_repeatedly(
-        [
-            str(python),
-            "-s",
-            "-c",
-            _FETCH_WEIGHTS,
-            str(target),
-            WEIGHTS_REPO,
-            str(scratch),
-            WEIGHTS_REVISION,
-        ],
-        _("Gewichte laden — rund 7,5 GB, das dauert"),
+    """TRELLIS.2 holen: Formkern, Form-VAE und Bildkodierer — nur, was fehlt."""
+    _fetch_files(
+        comfyui,
+        python,
+        SHAPE_FILES,
+        "dl-shape",
+        _(
+            "Modell für den Weg aus Bild laden — rund {size} GB, das dauert",
+            size=format_decimal(WEIGHT_GIGABYTES, 1),
+        ),
         progress,
         cancelled,
     )
 
 
-#: Das Programm, das prüft, ob die Knoten wirklich laden. Es läuft im Python
-#: von ComfyUI, denn nur dort steht, was ComfyUI hat — unser eigenes wüsste
-#: darüber nichts.
-#:
-#: Geladen wird über den Dateipfad und nicht als Modul: Der Ordner heißt
-#: ``ComfyUI-TripoSG-Solidon``, und Bindestriche sind in einem Modulnamen nicht
-#: erlaubt. ``folder_paths`` liegt in ComfyUIs Wurzel, also muss die auf dem
-#: Suchpfad stehen; ``argv`` wird gesetzt, weil ComfyUI beim Import seine
-#: Startargumente liest und ohne sie über unsere stolpert.
-_LOAD_NODES = """
-import importlib.util, sys
-from pathlib import Path
-
-root, nodes = Path(sys.argv[1]), Path(sys.argv[2])
-sys.argv = ["main.py"]
-sys.path.insert(0, str(root))
-spec = importlib.util.spec_from_file_location(
-    "solidon_nodes", nodes / "__init__.py", submodule_search_locations=[str(nodes)]
-)
-module = importlib.util.module_from_spec(spec)
-sys.modules["solidon_nodes"] = module
-spec.loader.exec_module(module)
-names = sorted(getattr(module, "NODE_CLASS_MAPPINGS", {}))
-if not names:
-    raise SystemExit("Die Sammlung meldet keine Knoten.")
-print("Knoten:", ", ".join(names))
-"""
-
-
-def nodes_load(
+def fetch_image_model(
     comfyui: Path,
     python: Path,
-    nodes: Path,
     progress: ProgressFn = _silent,
     cancelled: CancelledFn | None = None,
 ) -> None:
-    """Nachsehen, ob ComfyUI die Knoten laden **kann**. Wirft, wenn nicht.
+    """Das Bildmodell für den Textweg holen — nur, was fehlt."""
+    _fetch_files(
+        comfyui,
+        python,
+        IMAGE_MODEL_FILES,
+        "dl-image",
+        _(
+            "Bildmodell für den Weg aus Text laden — rund {size} GB, das dauert",
+            size=format_decimal(IMAGE_MODEL_GIGABYTES, 1),
+        ),
+        progress,
+        cancelled,
+    )
 
-    **Die Einrichtung sagte „fertig", ohne es zu wissen.** Sie kopierte, klonte,
-    flickte und installierte — und ob am Ende etwas lief, erfuhr der Kunde erst,
-    wenn er ein Bild hineinlegte und *Erzeugen* drückte: Dann stand in ComfyUIs
-    Protokoll „No module named 'trimesh'", und im Dialog stand, der Knoten sei
-    unbekannt. Auf einem frischen ComfyUI Desktop war das der Normalfall, nicht
-    der Ausnahmefall — sechs Pakete fehlten.
 
-    Der Schritt kostet zwei Sekunden und ist der einzige, der die Frage stellt,
-    die den Kunden angeht: Läuft es. Was er findet, reist mit — die Meldung des
-    Ladefehlers sagt genauer, was fehlt, als jeder Satz, den wir vorher
-    erraten könnten.
+def _writable_again(function: Callable[[str], object], path: str, _problem: BaseException) -> None:
+    """Hebt den Schreibschutz auf und versucht es noch einmal (``shutil.rmtree``).
 
-    **Zwei Sekunden sind nicht null.** Dies war der einzige ``_run``-Aufruf
-    ohne Abbruchmerker; hängt der Import in ComfyUIs Umgebung — er lädt Torch
-    —, wartete *Abbrechen* auf einen Schritt, der ihn gar nicht bemerkt hätte.
+    Git legt seine Objektdateien schreibgeschützt an, und unter Windows
+    verweigert ``rmtree`` sie dann mit „Zugriff verweigert“. Der alte
+    TripoSG-Knoten trägt einen Klon (``_clone/.git``): An der echten Einrichtung
+    blieb der Ordner samt ``nodes.py`` stehen, und ComfyUI lud ihn weiter.
     """
-    try:
-        _run(
-            [str(python), "-s", "-c", _LOAD_NODES, str(comfyui), str(nodes)],
-            _("Nachsehen, ob die Knoten laden"),
-            progress,
-            cancelled,
-        )
-    except SetupFailed as problem:
-        raise SetupFailed(
-            str(
-                _(
-                    "Die Knoten liegen an ihrem Platz, ComfyUI kann sie aber nicht "
-                    "laden. Meist fehlt ein Paket in ComfyUIs eigener Umgebung — "
-                    "was genau, steht darunter. Ein zweiter Lauf der Einrichtung "
-                    "zieht es nach; bleibt es dabei, gehört die Zeile in eine "
-                    "Rückmeldung an den Support."
-                )
-            )
-            + chr(10)
-            + chr(10)
-            + str(problem)
-        ) from problem
+    Path(path).chmod(stat.S_IWRITE)
+    function(path)
+
+
+def legacy_leftovers(comfyui: Path) -> tuple[Path, ...]:
+    """Was :func:`remove_legacy` entfernen wird — dieselbe Liste für Dialog und Löschung.
+
+    Der Einrichtungsdialog nennt diese Ordner samt Größe, bevor er etwas
+    anfasst (Entscheidung Robert, 07.10.2026): Gelöscht wird nur, was vorher
+    dastand.
+    """
+    nodes = comfyui / LEGACY_NODES
+    weights = comfyui / LEGACY_WEIGHTS
+    doomed: list[Path] = []
+    if (nodes / "nodes.py").is_file() and (nodes / "__init__.py").is_file():
+        doomed.append(nodes)
+    if (weights / LEGACY_MARKER).is_file():
+        doomed.append(weights)
+    doomed.extend(
+        leftover
+        for leftover in sorted(weights.parent.glob(weights.name + ".*"))
+        if leftover.is_dir() and (leftover.name.endswith(".part") or ".previous-" in leftover.name)
+    )
+    return tuple(doomed)
+
+
+def legacy_gigabytes(leftovers: tuple[Path, ...]) -> float:
+    """Wie viel Platz das Entfernen der alten Einrichtung frei macht, in GB."""
+    return sum(_gigabytes_in(folder) for folder in leftovers)
+
+
+def remove_legacy(comfyui: Path, progress: ProgressFn = _silent) -> tuple[Path, ...]:
+    """Räumt weg, was Solidon für TripoSG selbst angelegt hat. Liefert, was stehen blieb.
+
+    **Nur das Eigene, und nur am eigenen Zeichen erkannt.** Der Knotenordner
+    trägt Solidons Namen und unsere zwei Dateien; ohne ihn lädt ComfyUI beim
+    Start keinen TripoSG-Quelltext mehr (RM-003). Die Gewichte gehen nur, wenn
+    unsere Abschlussmarke darin liegt — rund 7,5 GB, die kein Ablauf von
+    Solidon mehr liest. Ein erkannter Ordner geht ganz, samt allem, was darin
+    liegt; andere Ordner bleiben unberührt. So sagt es auch der Dialog vorher.
+
+    Ein Fehler beim Löschen hält die Einrichtung nicht an: Der neue Weg braucht
+    die alten Dateien nicht, und ein gesperrter Ordner ist kein Grund, keine
+    Modelle zu laden. **Verschwiegen wird er nicht** (Review 1 P3, G-6): Hält
+    ein laufendes ComfyUI eine Datei offen, bleibt der Knotenordner stehen,
+    und ComfyUI lädt den TripoSG-Quelltext weiter. Die Ordner, die stehen
+    blieben, gehen zurück an :class:`Result` und von dort in den Dialog.
+    """
+    weights = comfyui / LEGACY_WEIGHTS
+    doomed = legacy_leftovers(comfyui)
+    if not doomed:
+        return ()
+    progress(_("Alte TripoSG-Einrichtung von Solidon entfernen"))
+    left: list[Path] = []
+    for folder in doomed:
+        try:
+            shutil.rmtree(folder, onexc=_writable_again)
+            _log.info("removed legacy %s", folder)
+        except OSError as problem:
+            _log.warning("legacy %s stays: %s", folder, problem)
+            left.append(folder)
+    with_triposg = weights.parent
+    if with_triposg.is_dir() and not any(with_triposg.iterdir()):
+        with contextlib.suppress(OSError):
+            with_triposg.rmdir()
+    from app.core.paths import user_cache_dir
+
+    shutil.rmtree(user_cache_dir() / LEGACY_SCRATCH, ignore_errors=True)
+    return tuple(left)
 
 
 def setup(
@@ -1475,76 +924,60 @@ def setup(
 ) -> Result:
     """Alle Schritte, in dieser Reihenfolge. Wirft :class:`SetupFailed`.
 
-    ``image_model`` holt zusätzlich das Bildmodell für den Weg aus Text — als
-    eigener Wunsch, denn es braucht nur dieser Weg, und es sind sieben
-    Gigabyte. Es hängt nicht an ``weights``: Der Dialog schaltet die Gewichte
-    ab, sobald sie schon liegen, und genau dann fehlt meist nur noch das
-    Bildmodell (RM-343). Ohne beides richtet der Lauf nur die Knoten ein.
+    ``weights`` holt das Modell für den Bildweg (TRELLIS.2 und Freistellen),
+    ``image_model`` zusätzlich das Bildmodell für den Weg aus Text — als
+    eigener Wunsch, denn es braucht nur dieser Weg. Es hängt nicht an
+    ``weights``: Der Dialog schaltet die Gewichte ab, sobald sie schon liegen,
+    und genau dann fehlt meist nur noch das Bildmodell (RM-343).
 
-    Abgebrochen wird **auch mitten in einem Schritt** — der Download der
-    Gewichte dauert eine halbe Stunde, und ein Abbrechen, das erst danach
-    wirkt, ist keines. Was dabei halb geladen ist, bleibt liegen:
-    ``huggingface_hub`` setzt beim nächsten Lauf fort, und die Knoten sind
-    idempotent kopiert.
+    Abgebrochen wird **auch mitten in einem Schritt** — ein Download dauert
+    Minuten, und ein Abbrechen, das erst danach wirkt, ist keines. Was halb
+    geladen ist, bleibt liegen, und ein neuer Lauf setzt fort.
     """
     found = find_comfyui(comfyui)
-    python = find_python(found)
+    check_version(found)
     progress(_("ComfyUI gefunden"))
-
-    target = copy_nodes(found, progress)
+    left = tuple(path.relative_to(found).as_posix() for path in remove_legacy(found, progress))
+    if not weights and not image_model:
+        return Result(
+            comfyui=found,
+            weights=weights_present(found),
+            image_model=image_model_present(found),
+            legacy_left=left,
+        )
+    python = find_python(found)
     try:
-        if cancelled is not None and cancelled():
-            return _stopped(found, target)
-        fetch_triposg(target, progress, cancelled)
-        if cancelled is not None and cancelled():
-            return _stopped(found, target)
-        patch_sources(target, progress)
-        install_packages(python, progress, cancelled)
-        # **Erst prüfen, dann „fertig" sagen** — und vor den Gewichten, denn
-        # ein fehlendes Paket zu melden ist nach zwei Sekunden mehr wert als
-        # nach einer halben Stunde Download.
-        nodes_load(found, python, target, progress, cancelled)
-        if not weights and not image_model:
-            return Result(
-                comfyui=found,
-                nodes=target,
-                weights=weights_present(found),
-                image_model=image_model_present(found),
-            )
         if weights:
             if cancelled is not None and cancelled():
-                return _stopped(found, target)
-            # Das Kleine zuerst: 445 MB gegen 7,5 GB. Wer abbricht, hat dann
-            # wenigstens den Teil, der schnell ging.
+                return _stopped(found, left)
+            # Das Kleine zuerst: Wer abbricht, hat dann wenigstens den Teil,
+            # der schnell ging.
             fetch_background(found, python, progress, cancelled)
             if cancelled is not None and cancelled():
-                return _stopped(found, target)
+                return _stopped(found, left)
             fetch_weights(found, python, progress, cancelled)
         if image_model:
             if cancelled is not None and cancelled():
-                return _stopped(found, target)
+                return _stopped(found, left)
             # Zuletzt, weil es der einzige Posten ist, den nur ein Weg braucht:
             # Wer hier abbricht, hat den Bildweg vollständig.
             fetch_image_model(found, python, progress, cancelled)
     except Cancelled:
-        # **Der Abbruch mitten im Schritt**, nicht nur zwischen zweien: Der
-        # Download der Gewichte dauert eine halbe Stunde, und ein Abbrechen,
-        # das erst danach wirkt, ist keines.
-        return _stopped(found, target)
+        return _stopped(found, left)
     _log.info("comfy setup finished in %s", found)
     return Result(
         comfyui=found,
-        nodes=target,
-        weights=weights or weights_present(found),
+        weights=weights_present(found),
         image_model=image_model_present(found),
+        legacy_left=left,
     )
 
 
-def _stopped(comfyui: Path, nodes: Path) -> Result:
+def _stopped(comfyui: Path, legacy_left: tuple[str, ...] = ()) -> Result:
     return Result(
         comfyui=comfyui,
-        nodes=nodes,
         weights=weights_present(comfyui),
         image_model=image_model_present(comfyui),
         reason=_("Abgebrochen. Was schon da ist, bleibt — ein neuer Lauf setzt fort."),
+        legacy_left=legacy_left,
     )

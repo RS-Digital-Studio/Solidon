@@ -42,6 +42,11 @@ Ausgabeformat, Normteilmaße aus der Tabelle, Vorschaubild gerendert von
 - **Das eingetragene Maß ist das Maß**: Eine Befestigung richtet sich nach der
   Breite (zwei Schlüssellöcher oder eines mittig, `holders._keyholes`), statt
   den Halter über sein Maß hinaus zu verbreitern.
+- **Die Grenze eines Bausteins, den eine Operation intern baut, ist nie ihr
+  Satz**: Sie prüft sie vorher und sagt mit eigenem Satz, was hilft — der Stift
+  an einem zu kurzen Gewinde nimmt die kürzeste druckbare Länge oder öffnet den
+  Gewindeschritt (`lid_hinge._printable_thread`, `change_creating_step`); die
+  rohe Grenze nannte ein Feld, dessen eigene Grenze passte.
 
 ## Ein Baustein in einer Bohrung misst sich an ihrer Wand
 
@@ -160,6 +165,15 @@ Abdruck des gefahrenen Stands (`parts/range_proof.py`).
   Eine Vorlage mit vielen Formen wird ein Baustein je Form mit gemeinsamem
   Unterbau (`holders.py`: vier Halter, je 256 oder 512 Ecken), keine
   Formwahl, die das Produkt sprengt.
+- **Ein Feld ohne Wirkung zählt keine Ecken**: Wo die Bedingung eines Feldes
+  (`depends_on`) in einer Ecke nicht erfüllt ist, steht es dort auf seiner
+  Vorgabe (`range_check.corners`). Das setzt voraus, dass der Baustein den
+  Wert dann wirklich verwirft; wer ein verstecktes Feld trotzdem liest, bricht
+  den Vertrag und den Nachweis zugleich.
+- **Eine Größenreihe passt in den Bereichstest oder wird begrenzt, mit
+  Grund**: Wandhalter (M2–M27), Klemmschale (M3–M33), Rohrschelle (M3–M6)
+  und Stangenverbinder (M3–M5) nehmen so viele Normgrößen, wie 512 Ecken oder
+  ihre Wand tragen; die Befestigungsbausteine nehmen alle und ein eigenes Maß.
 - **Ein Maß ohne Obergrenze ist ein Bereich ohne Rand**: Ohne `maximum` fährt
   der Test nur die Untergrenze. Jedes Längenmaß eines Bausteins trägt beide
   Grenzen; ausgenommen Winkel und Versatz der Trennebene an den Profilklemmen —
@@ -173,6 +187,41 @@ Gänge beginnen am unteren Ende bei Winkel null — über den ganzen Weg, vom
 Eintritt an der Spitze bis unter den Kopf
 (`test_a_printed_screw_turns_through_its_printed_nut`). `build.threaded` baut
 den Vorlauf von einem Umlauf an beiden Kernen.
+
+**Ein Gewinde endet nicht an der Tabelle.** Passt keine Größe, nimmt es ein
+eigenes Maß (`fasteners.CUSTOM_SIZE`), dessen Kernloch die Bohrung ist — der
+Gangfuß des Druckprofils, kein ISO-Kernloch, und der Satz über dem Dialog sagt
+das. Jeder Gewindeweg — Baustein, *Schraube erstellen*, *Drehdeckel
+erzeugen*, Gegenstück — teilt die Grenzen `units.SMALLEST_THREAD`,
+`LARGEST_THREAD`, `FINEST_PITCH` und `COARSEST_PITCH` sowie den Kernanteil
+`THREAD_MIN_CORE_SHARE` (Bausteine über `fasteners.thread_problem`);
+benannte Ausnahmen sind der Drehdeckel (Steigung ab 1 mm, Hals null heißt
+automatisch). `test_every_thread_path_shares_the_same_limits` hält das. Am
+Netz kommen die Sehnen je Umlauf aus
+`shapes.turn_segments` (Drehdeckel: `lid.turn_sections`); eine eigene Zahl
+dafür ist ein Zwilling. Der Netzkern überdeckt den Gang auch in der
+Sehnenmitte um `BOOLEAN_OVERLAP` (`build._core_segments`), und der Gang läuft
+über ganze Umläufe, bevor der Schnittzylinder kürzt; sonst bleiben ab M12
+Splitter im Gang, und Schraube und Mutter überdecken sich. Wo ein Bau ablehnt,
+erklärt der Baustein es über `feasible` aus derselben Regel
+(`fasteners.thread_problem`). Ein Innengewinde in einer Bohrung sagt, wenn es
+sie aufbohrt (`PartSpec.at_hole_check`, `parts.bore_widened`), und misst die
+Wand nach außen selbst, mit Strahlen am Träger vor dem Schnitt längs seiner
+Strecke ab der Mündung (`parts.thread_thin_wall`) — an einem Rohr ist die
+Außenwand kein Merkmal, und die Prüfung am Endstand sähe sie nicht. Beide
+Befunde können zugleich gelten, und ihr Knopf öffnet das Feld, das das Maß
+trägt. Am Endstand misst die Auswertung die Wand wie um jede Bohrung
+(`relations._measured` liest `length`, `is_a_cavity` liest `internal`; ein
+Außengewinde zählt mit seinem Kern, nicht mit der Spitze des Gangs).
+
+**Eine Schraube endet auch nicht an der Tabelle.** Schraubenloch,
+Mutternfalle, Schraube und Mutter nehmen `CUSTOM_SIZE` mit Nenndurchmesser;
+Löcher, Kopf, Mutter und Scheibe leitet `standards.derived_screw`/
+`derived_nut`/`derived_washer` aus der Reihe ab (zwischen zwei Größen linear,
+jenseits im Verhältnis der Randgröße), und der Befund `parts.derived_size`
+nennt das Ergebnis abgeleitet. Eine Einpressbuchse mit eigenem Maß nimmt
+Bohrung und Länge aus dem Datenblatt des Kunden; ihr Außendurchmesser
+steht nicht da, weil nur das Loch gebaut wird.
 
 ## Was eine Richtung hat, wird an ihr gemessen
 
@@ -278,7 +327,25 @@ Schritt:
 
 Zahlen sind frei verwendbar, Normtexte und Normtabellen nicht: Werte aus frei
 zugänglichen Herstellerangaben zusammentragen, keine Normblätter abschreiben,
-die Herkunft im Kommentar nennen.
+die Herkunft je Spalte im Kommentar nennen (§24.2). Händler- und
+Nachschlageseiten, die diese Werte frei zeigen, zählen dazu, wenn eine
+Stichprobe sie gegen eine zweite Quelle hält (`test_table_values_match_their_published_source`);
+eine abgeschriebene Normtabelle bleibt draußen. Jede Zeile der metrischen Reihe rechnet
+`tests/test_standards.py` gegen eine zweite Herleitung nach (Verhältnisse der
+Normen, Scheibenbohrung gleich feinem Durchgangsloch), und der Stand einer
+früheren Tabellenversion steht dort fest: Ein bestehender Wert ändert sich nur
+mit `LIBRARY_VERSION` und `PartChange`. Mutter und Scheibe gehören zu einer
+Schraube der Tabelle (`known_screw`), weil das eigene Maß von ihrem Nennmaß
+aus ableitet. Nennt keine Quelle einen Wert (Senkkopf über M24, M18, M22),
+steht er nach derselben Ableitungsregel gerechnet und gekennzeichnet in der
+Zeile (`countersink_derived`), und der Baustein sagt es am Ergebnis — eine
+Regel wie 2·d statt des Normwerts sieht der Kunde nicht. Ein abgeleiteter
+Sechskant nimmt die nächste Schlüsselweite der Reihe `wrenches` (ISO 272),
+sonst gäbe es keinen Schlüssel dafür; `headless` nennt Nennmaße, an denen nur
+der Kopf abgeleitet ist (M60). Ein eigenes Gewindemaß innerhalb von
+`THREAD_SIZE_REACH` neben einer Tabellengröße ist diese — eine Grenze für
+Vorwahl und Gegenstück (`standards.thread_size_near`), sonst stünde „kein
+Normgewinde“ über einer Normgröße.
 
 ## Regelsammlung
 

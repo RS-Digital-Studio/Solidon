@@ -2592,15 +2592,34 @@ def test_a_pin_moved_into_the_wall_of_its_pocket_stays(profile: Profile) -> None
 
     Die Tasche um ihn schnitt den versetzten Zapfen ganz weg: −178 mm³ am
     Korpus, −189 mm³ am Kundenmodell. Soll: Er steht an der neuen Stelle und
-    verschmilzt nur mit dem Stück Wand, in das er reicht — weniger als das
-    Linsenstück, das über den Spalt von 0,34 mm hinausragt.
+    verschmilzt nur mit dem Stück Wand, in das er reicht — genau das
+    Linsenstück, das über den Spalt von 0,34 mm hinausragt: die Fläche des
+    versetzten Zapfens außerhalb der Tasche mal seiner Höhe, aus den Maßen
+    des Korpus gerechnet (rund 3,84 mm³). Die Schranke ±5 % trägt die
+    Facetten der 48 Segmente; vorher stand hier ``< 6,0`` ohne Herkunft
+    (Review 1 P3, G-3).
     """
     entry = _corpus_object("pocket_with_pin.stl")
     pin = next(name for name, feature in entry.features.items() if feature.kind == "pin")
+    pocket = next(name for name, feature in entry.features.items() if feature.kind == "hole")
     centre = np.asarray(entry.features[pin].params["centre"], dtype=float)
-    after = _moved_by(entry, profile, pin, (0.5, 0.0, 0.0))
+    travel = 0.5
+    after = _moved_by(entry, profile, pin, (travel, 0.0, 0.0))
     lost = float(as_mesh_data(entry.mesh).volume - as_mesh_data(after.mesh).volume)
-    assert 0.0 < lost < 6.0, lost
+    r = float(entry.features[pin].params["diameter"]) / 2.0
+    big = float(entry.features[pocket].params["diameter"]) / 2.0
+    # Schnittfläche zweier Kreise mit Radius r und R im Abstand d.
+    shared = (
+        r * r * math.acos((travel**2 + r * r - big * big) / (2.0 * travel * r))
+        + big * big * math.acos((travel**2 + big * big - r * r) / (2.0 * travel * big))
+        - 0.5
+        * math.sqrt(
+            (-travel + r + big) * (travel + r - big) * (travel - r + big) * (travel + r + big)
+        )
+    )
+    lens = (math.pi * r * r - shared) * float(entry.features[pin].params["depth"])
+    assert lens == pytest.approx(3.84, abs=0.01), "Voraussetzung: die Maße des Korpus"
+    assert lost == pytest.approx(lens, rel=0.05), (lost, lens)
     probes = [centre + np.array((0.5 + 2.5, 0.0, 0.0)), centre + np.array((0.5 - 2.5, 0.0, -2.0))]
     assert contains(as_mesh_data(after.mesh), probes).all(), "der Zapfen steht an der neuen Stelle"
 

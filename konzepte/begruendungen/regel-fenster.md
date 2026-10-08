@@ -579,6 +579,16 @@ keinen zweiten obenauf — der schnitt bis zum
 weitere Operation baut, die ein Merkmal aus ihrem eigenen früheren Schritt
 noch einmal anfasst, fragt zuerst `created_by`.
 
+**Warum Entf an einer Fläche den Körper nimmt:** Eine Fläche ist kein Ding,
+das man löscht, der Körper ist gemeint, und ein Teil, das Entf nicht löscht,
+ist eine Sackgasse.
+
+**Warum der Stift an einem Bausteinmerkmal in der Karte steht** (Entscheidung
+Robert, 07.10.2026, RM-536): Die Bausteinfelder bedienen den Schritt, und
+allgemeine Handlungen bleiben deshalb weg. Der Stift ändert das Gewinde nicht,
+er ergänzt es — und das Gegenstück zu einem selbst gedruckten Gewinde ist
+genau der Kundenwunsch hinter RM-536.
+
 ## Der Hauptknopf
 
 **Ein Hauptknopf entsteht über `style.make_primary()`, nie über
@@ -704,6 +714,30 @@ Tabelle und die gespeicherten Drucker, nicht seinen Kobra S1 (`karte-app-ui.md`)
 Liest die Erhebung keinen eigenen Drucker des Slicers, filtert der Druckdialog
 nicht, sonst bliebe dem Projekt nur der allgemeine Drucker; Erststart und
 Einstellungen filtern dort weiter und sagen es in ihrer Zustandszeile.
+
+Ein im Druckdialog gewählter Drucker eines Slicers wurde ein eigener Drucker,
+und eigene Drucker standen unter jedem Slicer: Wer drei Drucker aus Anycubic
+Slicer Next ausprobierte, sah sie danach auch unter ElegooSlicer. Seitdem trägt
+ein abgelegter Drucker sein Programm (`discover.program_mark`, Schlüssel
+`slicer` in der eigenen `printers.toml`, nicht im Profil und nie im Projekt).
+Ein Drucker, der vor der Marke abgelegt wurde, bleibt unter jedem Slicer —
+welchem er gehörte, weiß niemand mehr, und verschwinden darf er nicht; wird er
+unter seinem Slicer erneut gewählt, bekommt er die Marke nachgetragen.
+
+Scheiterte das Ablegen, stand der Grund in der Zustandszeile, und
+`_show_slicer_state` überschrieb ihn mit dem nächsten Sperrgrund, etwa einer
+Profillücke; die Wahl sprang ohne Satz zurück. Eine gescheiterte Erhebung
+zeigte still alle Drucker. Beides steht deshalb unter der Druckerwahl, wo
+nichts anderes hinschreibt. Kurzhilfe und Platzhalter der Suche nennen den
+Slicer, weil die Liste oben einem Slicer folgt, der darüber gewählt ist, und
+wer einen Tabellendrucker suchte, den sein Slicer nicht führt, sonst raten
+musste.
+
+Eine gescheiterte Erhebung zeigt im Druckdialog wie ein Slicer ohne eigene
+Drucker alle bekannten. Die Suchzeile der Druckerliste (`PrinterComboBox`)
+filtert live; erst eine ausdrückliche Auswahl übernimmt, Escape schließt nur
+die Liste. Dass die Liste je Modell eine Zeile ohne Düse zeigt, hat Robert
+entschieden.
 
 ## `setParent(None)` macht ein Kind zum Fenster
 

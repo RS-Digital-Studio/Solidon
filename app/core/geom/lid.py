@@ -31,7 +31,13 @@ from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest, shared_volu
 from app.core.geom.lid_hinge import HINGE_SIDES, HINGES
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.build import face
-from app.core.knowledge.parts.shapes import RIDGE_SHARE, mesh_only, moved, thread_body
+from app.core.knowledge.parts.shapes import (
+    RIDGE_SHARE,
+    mesh_only,
+    moved,
+    thread_body,
+    turn_segments,
+)
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
@@ -52,7 +58,7 @@ from app.core.types import (
     Vec3,
     vec3_or_none,
 )
-from app.core.units import EPS_GEOM
+from app.core.units import COARSEST_PITCH, EPS_GEOM, LARGEST_THREAD
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -1593,6 +1599,23 @@ SKIRT_RELIEF = 0.6
 NECK_SECTIONS = 96
 
 
+def turn_sections(major: float, clearance: float) -> tuple[int, int]:
+    """Sehnen je Umlauf für den Gang und für die Rundkörper — dieselben an Hals und Kappe.
+
+    Der Gang folgt ``shapes.turn_segments`` am äußersten Radius; gerechnet wird
+    mit dem ganzen Spiel, damit der Grund der Kappennut sicher darunter liegt. Die
+    Rundkörper behalten mindestens ``NECK_SECTIONS`` und liegen auf den Winkeln
+    des Gangs: achtundvierzig treffen jede zweite Ecke des 96-Ecks, darüber
+    sind beide gleich. Bis zum 06.10.2026 hatte der Gang immer achtundvierzig;
+    seit der Hals bis Ø 1000 reicht (``units.LARGEST_THREAD``), wären das dort
+    1,07 mm Abweichung gewesen (r 500,2 · (1 - cos π/48)). Achtundvierzig bleiben,
+    solange Halbmesser und Spiel zusammen unter 23,35 mm liegen — bei 0,2 mm
+    Spiel bis Ø 46,3, bei 0,4 mm bis Ø 45,9.
+    """
+    turn = turn_segments(major / 2.0 + clearance)
+    return turn, max(NECK_SECTIONS, turn)
+
+
 def neck_diameters(outline_width: float, cavities: list[Any]) -> tuple[float, float]:
     """Außen- und Bohrungsdurchmesser eines Halses, der zu dieser Öffnung passt.
 
@@ -1619,14 +1642,16 @@ def _pipe(
     z: float,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    *,
+    sections: int = NECK_SECTIONS,
 ) -> MeshData:
     """Ein Materialring, stehend auf ``z``, ganz durchgehend offen."""
-    shell = lathe.cylinder(radius=outer / 2.0, height=height, sections=NECK_SECTIONS)
+    shell = lathe.cylinder(radius=outer / 2.0, height=height, sections=sections)
     transform.moved(shell, transform.translation((0.0, 0.0, z + height / 2.0)))
     if inner <= EPS_GEOM:
         return MeshData.of(shell)
     bore = lathe.cylinder(
-        radius=inner / 2.0, height=height + 2.0 * BOOLEAN_OVERLAP, sections=NECK_SECTIONS
+        radius=inner / 2.0, height=height + 2.0 * BOOLEAN_OVERLAP, sections=sections
     )
     transform.moved(bore, transform.translation((0.0, 0.0, z + height / 2.0)))
     # Dieselbe Stufe wie die vier anderen Booleschen des Drehdeckels: fest auf
@@ -1656,12 +1681,15 @@ class ScrewLidParams(BaseParams):
         maximum=100.0,
         doc=_("Wie hoch der Gewindehals wird. Zwei Umdrehungen halten, drei sitzen fest."),
     )
+    # **Die benannte Ausnahme von ``units.FINEST_PITCH``**: Ein Schraubdeckel
+    # greift feiner als 1 mm nicht mehr sicher, und die Kappe soll mit der Hand
+    # aufgehen. Die übrigen Gewindewege beginnen bei 0,25.
     pitch: float = param(
         title=_("Steigung"),
         default=DEFAULT_PITCH,
         unit="mm",
         minimum=1.0,
-        maximum=10.0,
+        maximum=COARSEST_PITCH,
         doc=_("Abstand benachbarter Gewindegänge entlang der Achse."),
     )
     thickness: float = param(
@@ -1690,7 +1718,7 @@ class ScrewLidParams(BaseParams):
         default=0.0,
         unit="mm",
         minimum=0.0,
-        maximum=400.0,
+        maximum=LARGEST_THREAD,
         placement="advanced",
         doc=_("Null nimmt die schmalere Seite der Öffnung."),
         zero_text=ZERO_AUTOMATIC,
@@ -1745,7 +1773,8 @@ class ScrewLidParams(BaseParams):
     # 5: Das Kappengewinde nennt seinen gebauten Durchmesser (RM-393).
     # 6: Hals und Kappe verwenden dieselben Winkelstationen des Netzes.
     # 7: Die Null der Höhe ist das Bett, leer die Oberkante (RM-526).
-    cache_version="7",
+    # 8: Gang und Rundkörper über Ø 46 so fein wie die Facettenregel (``turn_sections``).
+    cache_version="8",
     title=_("Drehdeckel erzeugen"),
     category="parts",
     params=ScrewLidParams,
@@ -1764,9 +1793,11 @@ def screw_lid(ctx: OpContext) -> OpResult:
 
     Zwei Paare im Modellkorpus sind genau das und nichts anderes:
     ``gewuerzbehaelter_body`` neben ``deckel_dreh``, und ``kartuschen_kaefig``
-    neben ``kartuschen_deckel``. Die Bausteinbibliothek hat ein Gewinde, aber
-    nur in den metrischen Schraubengrößen M2 bis M8 — ein Glashals von vierzig
-    Millimetern mit grober Steigung lag ganz außerhalb ihrer Reichweite.
+    neben ``kartuschen_deckel``. Als der Drehdeckel entstand, hatte die
+    Bausteinbibliothek ein Gewinde nur in den Schraubengrößen M2 bis M8, und ein
+    Glashals von vierzig Millimetern lag außerhalb ihrer Reichweite. Seit dem
+    06.10.2026 baut sie jedes Maß; der Drehdeckel bleibt, weil er Hals und
+    Kappe aus einer Öffnung zusammen setzt.
 
     Beide Hälften kommen aus einer Operation, weil sie eine Entscheidung
     sind. Ein Hals mit der einen Steigung und ein Deckel mit einer anderen
@@ -1847,13 +1878,22 @@ def screw_lid(ctx: OpContext) -> OpResult:
         # Der Kern trägt den Gang, ist also zwei Gangtiefen schmaler als das
         # Gewinde breit: auf einen Hals mit vollem Durchmesser vereinigt säße
         # der Gang im Material und änderte gar nichts.
+        stations, sections = turn_sections(major, clearance)
         neck = _pipe(
-            core + 2.0 * BOOLEAN_OVERLAP, bore, params.height, z, ctx.quality, ctx.cancelled
+            core + 2.0 * BOOLEAN_OVERLAP,
+            bore,
+            params.height,
+            z,
+            ctx.quality,
+            ctx.cancelled,
+            sections=sections,
         )
         bounded = boolean(
             "intersection",
             [
-                mesh_only(thread_body(major, params.pitch, _thread_tool_height(params))),
+                mesh_only(
+                    thread_body(major, params.pitch, _thread_tool_height(params), segments=stations)
+                ),
                 _pipe(major * 2.0, 0.0, params.height, 0.0),
             ],
             quality=ctx.quality,
@@ -1993,10 +2033,9 @@ def _screw_cap(
     Das offene Ende steht auf Z = 0 — so druckt er ohne jede Stütze.
     """
     skirt, inside, outer = _cap_sizes(major, params, clearance)
+    stations, sections = turn_sections(major, clearance)
 
-    body = lathe.cylinder(
-        radius=outer / 2.0, height=skirt + params.thickness, sections=NECK_SECTIONS
-    )
+    body = lathe.cylinder(radius=outer / 2.0, height=skirt + params.thickness, sections=sections)
     transform.moved(body, transform.translation((0.0, 0.0, (skirt + params.thickness) / 2.0)))
 
     # Die zwei Formen, mit denen ein Gewindeloch geschnitten wird: die Bohrung
@@ -2005,7 +2044,7 @@ def _screw_cap(
     hollow = lathe.cylinder(
         radius=inside / 2.0 + BOOLEAN_OVERLAP,
         height=skirt + BOOLEAN_OVERLAP,
-        sections=NECK_SECTIONS,
+        sections=sections,
     )
     transform.moved(
         hollow, transform.translation((0.0, 0.0, (skirt + BOOLEAN_OVERLAP) / 2.0 - BOOLEAN_OVERLAP))
@@ -2014,7 +2053,9 @@ def _screw_cap(
     # beschnitten. Eine kürzer aufgebaute Wendel ließe den letzten Nutumlauf
     # weg, obwohl das passende Außengewinde dort noch Material trägt.
     groove = mesh_only(
-        thread_body(inside, params.pitch, _thread_tool_height(params), internal=True)
+        thread_body(
+            inside, params.pitch, _thread_tool_height(params), segments=stations, internal=True
+        )
     )
 
     cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality, cancelled=cancelled)

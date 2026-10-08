@@ -258,7 +258,7 @@ FEATURE_SPANS_THE_BODY: Final = _(
 #: der Zapfen stünde danach in der Wand — am Kundenmodell erkannte Solidon nach
 #: 0,5 mm zwei Sackbohrungen weniger.
 HOLE_HOLDS_A_PIN: Final = _(
-    "In dieser Bohrung steht ein Zapfen; versetzt schnitte sie in ihn hinein. "
+    "In dieser Bohrung steht ein Zapfen, in den sie beim Versetzen schneiden würde. "
     "Verschieben Sie den Zapfen allein oder den ganzen Körper."
 )
 
@@ -896,6 +896,12 @@ def actions_for(
         and only_a_rim_inside(mesh, feature)
     )
     moving_blocked = move_blocked(feature, features, mesh)
+    # **Ein getrenntes Teil ist kein Zapfen der Bohrung**: Für ein loses Teil
+    # darin gilt der Satz mit dem Weg über die Einzelteile (RM-413), wie ihn
+    # die Operation sagt (``prepare_ops._refuse_another_part_in_the_bore``);
+    # der Zapfensatz gilt einem Zapfen desselben Teils (RM-535).
+    if moving_blocked is HOLE_HOLDS_A_PIN and own_body_blocked is OTHER_PART_IN_THE_BORE:
+        moving_blocked = None
 
     for candidates in rows:
         known = [spec for spec in map(_spec_or_none, candidates) if spec is not None]
@@ -1315,6 +1321,20 @@ TAPER_IS_MATERIAL: Final = _(
 #: Trichter in das Material, das sie ist.
 _ONLY_AT_A_COUNTERSINK: Final[frozenset[str]] = frozenset({"countersink_hole"})
 
+#: Was nur in einem Hohlraum etwas baut: der Stift, der in ihn passt (RM-536).
+_ONLY_IN_A_BORE: Final[frozenset[str]] = frozenset({"pin_for_bore"})
+
+#: Was die Karte an einem Merkmal eines **Bausteins** anbietet (Entscheidung
+#: Robert, 07.10.2026, RM-536). Dort bedienen die Bausteinfelder den
+#: erzeugenden Schritt, und allgemeine Handlungen bleiben weg; der Stift aber
+#: ergänzt das Gewinde, statt es zu ändern — das Gegenstück gehört gerade an
+#: ein selbst gedrucktes Innengewinde. Je Handlung steht hier die Art, an der
+#: sie bleibt — nur ``thread``, nicht jede Bohrung des Bausteins: Am
+#: Schraubenloch führte der Knopf in eine Absage über die Senkung, die Solidon
+#: selbst gebaut hat (Review P2 N2, RM-552). Das Außengewinde nimmt danach
+#: :func:`not_offered_at` weg.
+OFFERED_AT_A_PART: Final[Mapping[str, frozenset[str]]] = {"pin_for_bore": frozenset({"thread"})}
+
 
 def narrows_the_mouth(feature: Feature) -> bool:
     """Ob dieser Kegel eine Verengung ist — die Erkennung trägt es als ``narrowing`` (R3)."""
@@ -1329,7 +1349,12 @@ def not_offered_at(feature: Feature) -> frozenset[str]:
     Senkung etwas tut (:data:`_ONLY_AT_A_COUNTERSINK`). Die Karte rechts liest
     diese Menge (``ui.selection_operations``) — oben in der Schnellzeile wie
     in der Liste darunter.
+
+    An einem **Außengewinde** fällt *Stift für Bohrung* weg (RM-536): Der Stift
+    gehört in ein Innengewinde, ``applies_to`` kennt nur die Art ``thread``.
     """
+    if feature.kind == "thread":
+        return frozenset() if feature.params.get("internal") else _ONLY_IN_A_BORE
     if feature.kind != "cone" or feature.params.get("partial"):
         return frozenset()
     if narrows_the_mouth(feature) or not feature.params.get("recess"):

@@ -1036,6 +1036,110 @@ def test_the_confirm_button_names_the_operation(qt_app: QApplication) -> None:
     assert ok.text().replace("&", "") == str(spec.title)
 
 
+def test_choosing_a_custom_size_opens_the_flap_with_its_diameter(qt_app: QApplication) -> None:
+    """*Eigenes Maß* zeigt den Nenndurchmesser, der hinter der Klappe steht (Review RM-532, N4).
+
+    Vorn ist kein Platz für ein viertes Feld, und zugeklappt baute die Vorgabe
+    20 still eine M20. Die Wahl vorn öffnet jetzt die Klappe; ohne sie bleibt
+    sie zu, wie beim Öffnen des Dialogs.
+    """
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+
+    spec = REGISTRY.get("insert_screw_hole")
+    diameter = next(entry for entry in spec.params.spec() if entry.name == "diameter")
+    assert diameter.placement == "advanced", "sonst beweist dieser Test nichts"
+
+    dialog = OperationDialog(spec, [], None)
+    assert not dialog.advanced.isChecked()
+    size = dialog._editors["size"]
+    assert isinstance(size, QComboBox)
+    size.setCurrentIndex(size.findData("M8"))
+    assert not dialog.advanced.isChecked(), "eine Normgröße verlangt nichts dahinter"
+    size.setCurrentIndex(size.findData(CUSTOM_SIZE))
+    assert dialog.advanced.isChecked()
+    assert dialog._advanced_form.isRowVisible(dialog._editors["diameter"])
+
+
+def test_a_choice_that_brings_back_fields_elsewhere_leaves_the_flap_closed(
+    qt_app: QApplication,
+) -> None:
+    """Nur *Eigenes Maß* klappt die Rückseite auf, nicht jedes zurückkehrende Feld (Review P2, G2).
+
+    *Bohrung setzen*: Langloch an und wieder aus holt *Tiefe der Aufweitung* und
+    den Übergangswinkel hinter der Klappe zurück. Ihre Vorgaben bauen dasselbe
+    wie vorher; aufgeklappt stand nach dem Abwählen eine Rückseite voller
+    unveränderter Werte da. Die Zeilen kommen zurück, die Klappe bleibt zu.
+    """
+    from PySide6.QtWidgets import QCheckBox
+
+    spec = REGISTRY.get("drill_hole")
+    depth = next(entry for entry in spec.params.spec() if entry.name == "widening_depth")
+    assert depth.placement == "advanced" and depth.depends_on == ("slotted", (False,))
+
+    dialog = OperationDialog(spec, [], None)
+    assert not dialog.advanced.isChecked()
+    slotted = dialog._editors["slotted"]
+    toggle = slotted if isinstance(slotted, QCheckBox) else slotted.findChild(QCheckBox)
+    assert toggle is not None
+    toggle.setChecked(True)
+    assert not dialog._advanced_form.isRowVisible(dialog._editors["widening_depth"])
+    toggle.setChecked(False)
+    assert dialog._advanced_form.isRowVisible(dialog._editors["widening_depth"])
+    assert not dialog.advanced.isChecked(), "die Rückseite bleibt zu"
+
+
+def test_a_wide_bore_preselects_a_custom_thread_with_its_diameter_in_front(
+    qt_app: QApplication,
+) -> None:
+    """An einer 61-mm-Bohrung steht *Eigenes Maß* mit Ø 67,6 vorn (RM-532).
+
+    *Druckbares Gewinde* endete bei M8; ein weites Rohr bekam kein Gewinde.
+    Jetzt wählt die Bohrung das eigene Maß, dessen Kernloch sie ist, und der
+    Nenndurchmesser steht vorn, wo man ihn sieht. Ø 61 ist der M64 zu weit
+    (sie greift nach K-N6 bis 64 − 0,55 · 6 = 60,7; eine 60 wäre ihr Loch), das
+    eigene Maß ist 61 + 1,1 · 6 = 67,6 mit der Steigung 6 der M64.
+    """
+    from app.core.knowledge.parts.fasteners import CUSTOM_SIZE
+    from app.core.scene.placement import values_for
+    from app.core.types import Feature
+
+    spec = REGISTRY.get("insert_printed_thread")
+    hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 61.0, "depth": 20.0, "centre": (0.0, 0.0, 0.0), "axis": (0, 0, 1)},
+    )
+    # Die Stelle selbst ist ohne Körper kein Wert des Dialogs; geprüft wird das Maß.
+    values = {key: value for key, value in values_for(spec, hole).items() if key != "at_feature"}
+    dialog = OperationDialog(spec, [], None, values=values)
+    size = dialog._editors["size"]
+    assert isinstance(size, QComboBox)
+    assert size.currentData() == CUSTOM_SIZE
+    diameter = dialog._editors["diameter"]
+    assert dialog._rows["diameter"] is not dialog._advanced_form, "das Maß steht vorn"
+    assert dialog._rows["diameter"].isRowVisible(diameter)
+    assert dialog.values()["diameter"] == pytest.approx(67.6)
+
+
+def test_the_pin_for_a_bore_offers_its_shape_behind_the_flap(qt_app: QApplication) -> None:
+    """*Stift für Bohrung* wählt hinter der Klappe „Passend zur Bohrung“ oder „Glatter Stift“.
+
+    Vorgabe ist das passende Gegenstück (RM-536); der glatte Stift von vorher
+    bleibt wählbar.
+    """
+    from app.core.geom import bore_pin
+
+    spec = REGISTRY.get("pin_for_bore")
+    dialog = OperationDialog(spec, [], None)
+    shape = dialog._editors["shape"]
+    assert isinstance(shape, QComboBox)
+    assert dialog._rows["shape"] is dialog._advanced_form
+    assert shape.currentData() == bore_pin.TO_THE_BORE
+    assert [shape.itemData(index) for index in range(shape.count())] == list(bore_pin.PIN_SHAPES)
+    assert all(shape.itemText(index).strip() for index in range(shape.count()))
+
+
 def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplication) -> None:
     """Ein gerade entschiedener Wert gehört dorthin, wo er zu sehen ist."""
     spec = REGISTRY.get("drill_hole")
@@ -2385,6 +2489,10 @@ def test_texture_panel_changes_existing_step_with_live_preview(
     assert created.face_indices
     names, owners = cell_owner_table(body.features, body.mesh.triangle_count)
     assert np.all(owners[np.asarray(created.face_indices)] == names.index(created.id))
+    # Die gewählte Fläche gibt es nicht mehr; die Wahl geht auf ihr Muster
+    # über, statt aufgehoben zu werden (RM-537, ``_reselect_the_successor``).
+    assert window.object_tree.selected() == object_id
+    assert window.object_tree.selected_feature() == created.id
     window._on_feature_picked(created.id)
     panel = window.feature_panel
     assert panel.shown_part_step() == operation.id

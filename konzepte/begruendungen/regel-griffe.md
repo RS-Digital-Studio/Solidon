@@ -90,11 +90,8 @@ ist keiner: Beide Ausnahmen sind genau die Fälle, in denen ein frischer Griff
 **dasselbe** ergäbe — im Zug hat sich die Matrix seit dem Greifen nicht
 geändert (der Zug rechnet ja gegen sie), und bei (b) steht das Ziel unbewegt.
 Was die Regel verbietet, ist ein Griff, der einen **vergangenen** Zug noch
-in sich trägt; den gibt es hier nicht. Der Fluss der Platzierung zeichnet je
-Kamerageste neu und hängte den Griff dabei jedes Mal ab und wieder an — sechs
-Renderer-Objekte für nichts (5,7 ms von 22 je `redraw`), und ein Griff im Zug
-verlor den Zug (aus dem Zug wurde ein Kameraschwenk). `grip.pressing` und
-`Gizmo.fits` heilen beides. Und die Attrappen der Suite (`tests/render_fakes.py`)
+in sich trägt; den gibt es hier nicht. Was die Ausnahmen sparen, steht im
+Punkt zu `Gizmo.fits` oben. Und die Attrappen der Suite (`tests/render_fakes.py`)
 erben vom Vertrag, und der ist abstrakt: Eine Methode, die es dort nicht gibt,
 gibt es auch in der Attrappe nicht. Das ist die Lehre aus dem `Off()`, das es
 an PyVistas Widget nie gab — der `AttributeError` verschwand in Qts

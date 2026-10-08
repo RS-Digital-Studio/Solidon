@@ -28,9 +28,11 @@ Zustand und Mitgabe über den Knöpfen, außerhalb des Rollbereichs.
 und Druckdialog lesen die Drucker über dieselbe Erhebung, bieten dieselbe Liste
 (`printers_on_offer`), beides jederzeit wechselbar. Der Slicer steht unter
 „Anwendung“ vor den Druckervorgaben. Ein neues Profil bleibt im Entwurf, bis
-gespeichert oder im Druckdialog gewählt (`_keep_slicer_printer`), auch beim
-Sprachwechsel, ebenso der Programmpfad. Ohne eigene Drucker des Slicers bietet
-der Druckdialog alle bekannten. Im Erstlauf gelten Sprache, Slicerpfad und
+gespeichert oder im Druckdialog gewählt (`keep_slicer_printer`), auch beim
+Sprachwechsel, ebenso der Programmpfad; danach steht es nur unter seinem
+Slicer, eigene ohne Marke unter jedem. Ohne eigene Drucker des Slicers bietet
+der Druckdialog alle bekannten; Gründe stehen unter der Druckerwahl, Kurzhilfe
+und Suche nennen den Slicer (`SlicerPrinters`). Im Erstlauf gelten Sprache, Slicerpfad und
 gespeicherte Drucker sofort. Verspätete Antworten früherer Auswahl ändern
 nichts. Je Modell eine Zeile ohne Düse (Entscheidung Robert,
 `add_printer_choices`); die Düse wählt der Druckdialog, Speichern behält sie

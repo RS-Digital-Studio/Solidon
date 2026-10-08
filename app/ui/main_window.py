@@ -87,7 +87,7 @@ from shiboken6 import isValid
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
-from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
+from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import Deferred as RemoteDeferred
 from app.core.agent.session import (
     MAX_STEPS,
@@ -109,13 +109,13 @@ from app.core.agent.tools import (
     READ_STANDARD,
     SET_PARAMETER,
     SET_PRINT_TARGET,
-    STANDARD_KINDS,
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
     CANCEL,
+    CHANGE_THREAD_STEP,
     CHOOSE,
     DECIMATE_AND_RETRY,
     REMESH_AND_RETRY,
@@ -2469,6 +2469,11 @@ class _PreviewApproval:
     questioned: bool = False
     """Die Vorschau hielt an einer Rückfrage: Ein Bild gibt es erst nach der
     Antwort, und *Übernehmen* stellt sie (RM-389)."""
+    passed_on: bool = False
+    """Die schnelle Rechnung kam nicht durch: Ein Bild gibt es ohne die volle
+    Kette nicht, und die rechnet *Übernehmen* (RM-534, §17.2). Wie bei
+    :attr:`questioned` kehrt die Bildpflicht für diesen Auftrag nicht zurück —
+    sonst wartete der Klick auf ein Bild, das nie kommt."""
     computing: bool = False
     """Die angeforderte Vorschau rechnet noch — bis ihre Antwort da ist."""
     reviewing: bool = False
@@ -3535,6 +3540,10 @@ class MainWindow(QMainWindow):
         """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
         läuft."""
         self._sculpt_check = QTimer(self)
+        """Die Wandstärkenprüfung läuft **nach** der Geste, nicht in ihr
+        (Entscheidung L). Bei jedem Zug zu rechnen hieße, den Pinsel um eine
+        Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
+        nächsten Zug wieder ändert."""
         self._usage = UsageClock(self)
         """Die Uhr des Feedbackbogens (§37.2).
 
@@ -3570,10 +3579,6 @@ class MainWindow(QMainWindow):
         """Die Nummer der jüngsten Wandprüfung. Eine Antwort mit einer
         anderen gehört zu einem Stand, den es nicht mehr gibt — ein Zug
         danach, ein Rückgängig oder das Ende der Sitzung."""
-        """Die Wandstärkenprüfung läuft **nach** der Geste, nicht in ihr
-        (Entscheidung L). Bei jedem Zug zu rechnen hieße, den Pinsel um eine
-        Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
-        nächsten Zug wieder ändert."""
         self._sculpt_strokes: list[Stroke] = []
         self._sculpt_gesture: int | None = None
         self._sculpt_gesture_number = 0
@@ -10916,9 +10921,11 @@ class MainWindow(QMainWindow):
         ``None`` heißt: Die Lage trägt kein Gegenstück. Zwei Stellen an
         demselben Körper sind keine Verbindung, sondern ein Loch neben einem
         Zapfen; der Kern weist das ohnehin ab, und hier ist es eine Auskunft
-        vor dem Klick statt einer Absage danach.
+        vor dem Klick statt einer Absage danach. Gezählt werden markierte
+        **Stellen** (``ObjectTree.selected_places``): Ein Gewinde mit seinen
+        Flanken unter sich ist eine.
         """
-        chosen = self.object_tree.selected_features()
+        chosen = self.object_tree.selected_places()
         if len(chosen) != 2:
             return None
         first, second = chosen
@@ -19313,6 +19320,59 @@ class MainWindow(QMainWindow):
                 self.object_tree.select_feature(object_id, name)
                 return
 
+    def _reselect_the_successor(self, result: EvaluationResult) -> None:
+        """Ein Merkmal, das der jüngste Schritt ersetzt hat, geht auf seinen Nachfolger über.
+
+        *Textur aufbringen* macht aus der gewählten Fläche ein Muster; die
+        Fläche gibt es danach nicht mehr, und der Baum hebt die Wahl auf
+        (RM-537). Verloren ist sie aber nicht, sondern umgezogen — wie das
+        Langloch aus der gewählten Bohrung (:meth:`_reselect_the_renamed`).
+        Ohne diese Wiederwahl stand nach dem Schritt nichts mehr gewählt, und
+        ein Klick auf das Muster fand keinen Körper, an dem er gilt.
+
+        Gewählt wird das erste Merkmal, das ein Schritt der jüngsten
+        Transaktion an diesem Körper selbst erzeugt hat (``generated``, nicht
+        die Flächen, die die Erkennung danach neu zuordnet) — nur, wenn dieser Schritt
+        das verlorene Merkmal in seinen Werten nennt. Nach einem Undo nennt
+        der jüngste Schritt es nicht, und die Wahl bleibt aufgehoben.
+        """
+        tree = self.object_tree
+        if not tree.lost_selection or tree.selected() is not None or tree.selected_features():
+            return
+        transactions = self.session.history.transactions
+        if not transactions:
+            return
+        newest = set(transactions[-1].ops)
+        steps = [entry for entry in self.session.project.document.ops if entry.id in newest]
+
+        def names(value: Any, feature: str) -> bool:
+            if isinstance(value, str):
+                return value == feature
+            if isinstance(value, list | tuple):
+                return any(names(item, feature) for item in value)
+            return False
+
+        for body, lost, _name in tree.lost_selection:
+            entry = result.scene.objects.get(body)
+            if entry is None:
+                continue
+            for step in steps:
+                if not any(names(value, lost) for value in step.params.values()):
+                    continue
+                successor = next(
+                    (
+                        name
+                        for name, feature in entry.features.items()
+                        if getattr(feature, "created_by", None) == step.id
+                        and feature.provenance == "generated"
+                    ),
+                    None,
+                )
+                if successor is not None:
+                    tree.select_object(body)
+                    tree.select_feature(body, successor)
+                    return
+
     def _reselect_the_part(self, result: EvaluationResult) -> None:
         """Ein Baustein, dessen Maße sich geändert haben, bleibt gewählt.
 
@@ -20732,21 +20792,16 @@ class MainWindow(QMainWindow):
             wanted = tuple(str(entry) for entry in values.get(OBJECTS_FIELD, ()) or ())
             return digest(result.scene, self.session.project.document, only=wanted or None)
         if name == READ_STANDARD:
-            kind = str(values.get("kind", ""))
-            if kind not in STANDARD_KINDS:
-                return tr("Diese Tabelle gibt es nicht: {kinds}").format(
-                    kinds=", ".join(STANDARD_KINDS)
-                )
-            return standard_text(kind, str(values.get("size", "")).strip())
+            # Eine unbekannte Tabelle beantwortet ``standard_text`` mit demselben
+            # Satz wie im Chat (Review RM-285).
+            return standard_text(str(values.get("kind", "")), str(values.get("size", "")).strip())
         if name == READ_ANALYSIS:
             result = self.session.last_result
             if result is None:
                 return tr("Es ist nichts geöffnet.")
             kind = str(values.get("kind", ""))
             if kind not in ANALYSIS_KINDS:
-                return tr("Diese Analyse gibt es nicht: {kinds}").format(
-                    kinds=", ".join(ANALYSIS_KINDS)
-                )
+                return unknown_analysis(kind)
             # **Gerechnet wird im Faden des Fernaufrufs, nicht hier** (RM-144).
             # Dieser Weg läuft im Qt-Hauptthread, und die Orientierungssuche
             # kostet Sekunden — gemessen 5,3 s an der kleinen Referenzplatte;
@@ -20920,7 +20975,10 @@ class MainWindow(QMainWindow):
             if beyond is not None:
                 return str(beyond)
             return tr("Der Wert wurde nicht gesetzt — den Grund zeigt das Fenster.")
-        return tr("Parameter gesetzt: {name} = {value}", name=name, value=number)
+        # Derselbe Satz wie im Chat, mit Einheit (Review RM-285).
+        return tr("Parameter gesetzt: {name} = {value} {unit}").format(
+            name=name, value=f"{number:g}", unit=existing.unit
+        )
 
     def _draw_sketch_in_space(
         self, op_id: int, op_name: str, dialog: QDialog, text: str, *, field_name: str = ""
@@ -21501,6 +21559,7 @@ class MainWindow(QMainWindow):
                 getattr(owner, "requires_displayed_preview", False)
                 and previous.required is False
                 and not previous.questioned
+                and not previous.passed_on
             ):
                 previous.required = True
                 self._refresh_preview_block()
@@ -21746,8 +21805,6 @@ class MainWindow(QMainWindow):
             click()
 
         told: list[str] = []
-        passed_on: list[bool] = []
-        """Gesetzt, wenn nur die schnelle Rechnung nicht durchkam (:func:`explained`)."""
 
         def pictured(difference: Any) -> None:
             """Das erste Bild gibt weder Auftrag noch wartenden Übernehmen-Klick frei."""
@@ -21785,8 +21842,9 @@ class MainWindow(QMainWindow):
                 # **Die schnelle Rechnung kam nicht durch — das ist keine
                 # Absage** (RM-534, §17.2): Ein Bild gibt es ohne die volle
                 # Kette nicht, und die rechnet *Übernehmen*. Das Band sagt es;
-                # gewartet wird auf kein Bild, gesperrt wird nichts.
-                passed_on.append(True)
+                # gewartet wird auf kein Bild, gesperrt wird nichts — auch
+                # nicht beim nächsten ``_set_preview_order`` desselben Auftrags.
+                approval.passed_on = True
                 approval.required = False
                 self._preview_explained(reason)
                 self._refresh_preview_block()
@@ -21805,7 +21863,7 @@ class MainWindow(QMainWindow):
             approval.reviewing = False
             self._finish_preview_progress()
             if difference is None:
-                if not approval.questioned and not passed_on:
+                if not approval.questioned and not approval.passed_on:
                     failed(None)
                 else:
                     self._show_preview(None)
@@ -22313,6 +22371,9 @@ class MainWindow(QMainWindow):
         schreiben ihn samt Vorbereitung als **eine** Transaktion und schließen
         den Dialog; Strg+Z nimmt beides zurück (Regel 16). Ohne die Zahl aus
         der Absage gibt es keinen Knopf: raten wäre keiner (Regel 21).
+        *Gewindeschritt öffnen* schließt den Dialog und öffnet den Schritt, den
+        der Kern in ``values["creating_step"]`` nennt — beim Stift sieht der
+        Kunde die Absage hier zuerst (Review P2 N6).
         """
         owner = approval.owner
         order = approval.order
@@ -22337,7 +22398,24 @@ class MainWindow(QMainWindow):
             handlers[REMESH_AND_RETRY.id] = lambda _error: self._prepared_from_dialog(
                 approval, "remesh_mesh", {"edge": remesh_to}, REMESH_AND_RETRY.label
             )
+        if CHANGE_THREAD_STEP.id in wanted and error.values.get("creating_step") is not None:
+            handlers[CHANGE_THREAD_STEP.id] = lambda refusal: self._creating_step_from_dialog(
+                approval, refusal
+            )
         return handlers
+
+    def _creating_step_from_dialog(self, approval: _PreviewApproval, error: AppError) -> None:
+        """*Gewindeschritt öffnen* aus dem Dialog: ihn schließen, den früheren Schritt öffnen.
+
+        Derselbe Weg wie im Prüfbericht (:meth:`_change_creating_step`); der
+        Dialog geht vorher zu, ohne zu übernehmen.
+        """
+        if not self._preview_is_current(approval):
+            return
+        reject = getattr(approval.owner, "reject", None)
+        if reject is not None:
+            reject()
+        self._change_creating_step(error)
 
     def _prepared_from_dialog(
         self,
@@ -23618,6 +23696,7 @@ class MainWindow(QMainWindow):
         # Nach Baum **und** Ansicht: Beide stellen ihre Auswahl selbst wieder
         # her, und eine Nachwahl davor ginge im Aufbau der Ansicht verloren.
         self._reselect_the_renamed(result)
+        self._reselect_the_successor(result)
         self._choose_the_created(result)
         self._say_features_lost(result)
         # Und erst danach die Einträge — einmal, mit der Auswahl, die jetzt gilt.
@@ -24859,6 +24938,9 @@ class MainWindow(QMainWindow):
             # stand der Rat als Satz ohne Knopf.
             "sketch.pick_plane": self._correct_after_error,
             "resize_the_widening": self._resize_the_widening,
+            # Den früheren Schritt öffnen, der das Merkmal gesetzt hat — ein Stift an
+            # einem zu kurzen Gewinde braucht ein längeres Gewinde (Review P2, M2).
+            "change_creating_step": self._change_creating_step,
             "show_step_values": self._show_step_values,
             # **Die Absage beim Einlesen hatte nur „Abbrechen".** Eine
             # kaputte Datei lässt sich nicht korrigieren, und der Schritt,
@@ -25079,6 +25161,20 @@ class MainWindow(QMainWindow):
             # einen Millimeter, wächst die Senkung um denselben.
             given["diameter"] = round(outer - previous + diameter, 2)
         self.run_operation(REGISTRY.get("resize_feature"), given)
+
+    def _change_creating_step(self, error: AppError) -> None:
+        """*Gewindeschritt öffnen*: den Schritt, der das Merkmal des Fehlers erzeugt hat.
+
+        Die Absage steht an einem späteren Schritt, zu ändern ist der frühere —
+        welcher, nennt der Kern in ``values["creating_step"]``, das Feld in
+        ``values["field"]``. Derselbe Dialog wie *Eingabe korrigieren*, nur an
+        dem Schritt, in dem die Eingabe etwas ändert.
+        """
+        try:
+            step = int(str(error.values.get("creating_step", "")))
+        except ValueError:
+            return
+        self.edit_operation(step, str(error.values.get("field", "")))
 
     def _entry_of(self, error: AppError) -> Any:
         """Der Körper, den ein Fehler meint — oder nichts."""
@@ -27108,6 +27204,13 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt name
         super().showEvent(event)
+        # **Der Fokus beginnt in der Ansicht.** Ohne eigene Wahl gab Qt ihn beim
+        # Aktivieren dem ersten Element der Tabulatorkette, dem Griff der
+        # linken Karte; der trug dann im Ruhezustand einen Fokusrahmen in der
+        # Akzentfarbe (gemessen unter macOS, wo das Fenster aktiv wird). In der
+        # Ansicht wirken die Flugtasten (§2.9) sofort.
+        if self.focusWidget() is None:
+            self.viewport.setFocus(Qt.FocusReason.OtherFocusReason)
         self.spacemouse.start()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name

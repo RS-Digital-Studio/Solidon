@@ -829,6 +829,27 @@ def _in_a_wider_bore(spec: PartSpec, bore: Feature, built: Mesh) -> Finding | No
     )
 
 
+def _bore_check(
+    spec: PartSpec,
+    params: Any,
+    bore: Feature,
+    host: Any,
+    profile: Profile | None,
+    mouth: Vec3,
+    outward: Vec3,
+) -> list[Finding]:
+    """Was der Baustein selbst über die Bohrung sagt, in der er sitzt (``at_hole_check``).
+
+    ``host`` ist der Träger vor dem Schnitt, ``mouth`` die Mündung und
+    ``outward`` die Richtung aus ihr heraus (:func:`_mouth_frame`). Alles, was der
+    Baustein sagt, kommt in den Bericht — Restwand und Aufbohren können
+    zugleich gelten.
+    """
+    if spec.at_hole_check is None:
+        return []
+    return list(spec.at_hole_check(params, bore, host, profile, mouth, outward))
+
+
 #: Ab welchem Anteil der Senkrechten eine Fläche als waagerecht gilt.
 #: cos(30°) — darunter laufen genug Schichten längs der Biegung, dass
 #: die dünne Stelle eines Filmscharniers reißt.
@@ -1209,7 +1230,14 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
         if nothing is None and subtractive:
             nothing = _cuts_no_layer(body, mesh, built, spec, ctx.profile)
         if bore is not None:
-            nothing = _in_a_wider_bore(spec, bore, built) or nothing
+            wider = _in_a_wider_bore(spec, bore, built)
+            said = (
+                []
+                if wider is not None
+                else _bore_check(spec, part_params, bore, body, ctx.profile, mouth, outward)
+            )
+            nothing = wider or (None if said else nothing)
+            findings = [*findings, *said]
 
     features = _merged_features(
         source,
@@ -1821,7 +1849,14 @@ def _insert_at_exact(
         if nothing is None and subtractive:
             nothing = _cuts_no_layer(body, mesh, built, spec, ctx.profile)
         if bore is not None:
-            nothing = _in_a_wider_bore(spec, bore, built) or nothing
+            wider = _in_a_wider_bore(spec, bore, built)
+            said = (
+                []
+                if wider is not None
+                else _bore_check(spec, part_params, bore, body, ctx.profile, mouth, outward)
+            )
+            nothing = wider or (None if said else nothing)
+            findings = [*findings, *said]
     _exact_result_checked(mesh)
     features = _merged_features(
         source,

@@ -294,15 +294,6 @@ eigenen Filter zu hängen — Regel in `wartezeit.md`) ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
 über hidapi, auf dem Mac der Treiberweg über das 3Dconnexion-Framework des
 Kunden, die Abbildung als reine Funktion — Regel in `ansicht.md`).
-Ein gefundenes, aber nicht zugängliches Gerät zählt als gesehen. Der Leser
-unterscheidet die Zugriffssperre von einer leeren oder gescheiterten Suche;
-der Controller meldet sie einmal je Sitzung und sucht weiter. Das Fenster
-zeigt dazu einen Hilfezugang in der Statusleiste. Die kopierte Linux-Regel
-begrenzt `uaccess` auf die erkannte USB-Hersteller-/Produktkennung; weder
-globale Schreibrechte noch eine automatische Berechtigungsänderung gehören dazu.
-**`camera_step` hat drei Aufrufer, nicht einen:** die Kappe, das Kippen mit
-dem gedrückten Rad und die Flugtasten. Wer dort an einer Achse dreht, dreht
-an allen dreien
 
 *Früher unter „Die Karte › Ansicht“.*
 
@@ -661,18 +652,6 @@ Die Maßtinte — Linien, Pfeilspitzen, Zuordnungsmarken — liegt im Renderer
 (`_Dimensions`, oben unter RM-198); ein Qt-Widget mit Maske über der
 pygfx-Renderfläche gibt es seit dem 21.09.2026 nicht mehr, und ein
 vollflächiges `WA_NoSystemBackground`-Widget darüber bleibt ausgeschlossen.
-Die Zahlenfelder sind Qt-Fenster und liegen von sich aus über dem Bild —
-deckend, ohne Maske; `occupied` hält beim Verteilen die **Felder** von
-Setzpunkt, Griff, Körper und voneinander fern, die Tinte darunter spart
-nichts aus. Die gefüllte Werkzeugvorschau zeigt ihre Oberfläche ohne
-innere Dreieckskanten.
-Resize eigener Maßfelder ist ein Layoutergebnis und startet keinen weiteren
-Aufbau; nur Viewport und Rendererwidget verändern die verfügbare Fläche.
-
-*Früher unter „Die Karte › Ansicht“.*
-
-Ein vollflächiges `WA_NoSystemBackground`-Widget über der pygfx-Renderfläche
-bleibt ausgeschlossen (die Maßtinte liegt im Renderer, oben unter RM-198).
 Die Zahlenfelder sind Qt-Fenster und liegen von sich aus über dem Bild —
 deckend, ohne Maske; `occupied` hält beim Verteilen die **Felder** von
 Setzpunkt, Griff, Körper und voneinander fern, die Tinte darunter spart
@@ -1343,7 +1322,7 @@ ungebrochene Titel steht als `operationTitle` am Knopf, weil `text()` sich
 |---|---|
 | `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen. `block_apply(reason)` sperrt *Übernehmen* von außen mit Grund — für das Band, dessen Grund eine Handlung trägt. `offer_naming=True` hängt vorn den Haken *Maße als Parameter anlegen* an, `names_dimensions()` liest ihn; die Parameter legt das Fenster an (`_named_dimensions`, §13). Die Stückzahl (`produces_from`) ist ein `CountField`: fx wie jedes Zahlenfeld, zur ganzen Zahl aufgelöst, bevor sie den Stapel erreicht (die Kennungen vergibt er vorher). `aim_again` führt nach Escape aus der Platzierung zurück in Stufe 1 (RM-205) |
 | `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung über PayPal oder GoFundMe (`DonationDialog`: Satz von Robert, drei Punkte „wofür" mit Symbol, zwei gleichwertige Anbieterknöpfe ohne Akzent, die Grenze als eine `caption`-Zeile, *Ohne Geld helfen* mit Link-Kopie und `feedback_wanted` für den vorhandenen Rückmeldedialog; `AboutDialog.support_wanted` für den Verweis). Eine Adresse im Browser öffnet `open_link`: ohne Browser liegt sie danach in der Zwischenablage und steht im Satz — `QDesktopServices.openUrl` direkt ruft niemand, der den Rückgabewert nicht liest |
-| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei. Vor *Slicen* und *Im Slicer öffnen* fragt `dialogs.confirm_handover`, wenn der Prüfbericht Fehler der gewählten Platten trägt (`_may_hand_over`) |
+| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29). An einem Resin-Drucker zeigt er nur, was gilt (`_reduce_for_resin`, `_fit_to_technology` nach einem Druckerwechsel): Drucker, Material, Platten, Programm und *Im Slicer öffnen* als Hauptknopf — Stufe, Wände, Füllung, Vorschläge, Düse, Slicen und Druckdatei sind verborgen, `settings_for_export` gibt keine Werte mit. Ein Programm ohne Familie (`other`) sperrt Slicen mit Grund und lässt Öffnen frei. Den Drucker, auf den Cura eingestellt ist, bietet er nur für eine aktive Maschine an und übernimmt ihn erst nach Klick. Seine Fehlerhandlungen öffnen die Druckerwahl. Vor *Slicen* und *Im Slicer öffnen* fragt `dialogs.confirm_handover`, wenn der Prüfbericht Fehler der gewählten Platten trägt (`_may_hand_over`) |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
 
@@ -1923,7 +1902,7 @@ Teil, im Maß des vorhandenen — ein Dialog wäre eine Frage ohne
 Antwortmöglichkeit. `MainWindow._thread_among` erkennt die Lage,
 `Session.create_thread_counterpart` legt Schritt und Gewindepassung an
 (`core/counterpart.thread_counterpart_draft`), und die Absagen des Kerns —
-kein Tabellenmaß, linksgängig, dasselbe Teil — kommen als Fehlerdialog.
+ein Maß außerhalb der Bausteingewinde, linksgängig, dasselbe Teil — kommen als Fehlerdialog.
 
 `Session.create_counterpart` übernimmt beide Hälften und hängt nach der
 Auswertung die Passung an dieselbe Transaktion. Erst danach läuft die

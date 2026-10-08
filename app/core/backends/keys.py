@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.branding import ENVIRONMENT_PREFIX
+from app.core.keyring_backend import find_backend_once
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -32,6 +33,7 @@ def _keyring() -> Any | None:
         import keyring
     except Exception:  # pragma: no cover - hängt an der Installation
         return None
+    find_backend_once(keyring)
     return keyring
 
 

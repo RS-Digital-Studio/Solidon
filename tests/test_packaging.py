@@ -3307,6 +3307,71 @@ def test_a_selection_starts_by_hand_and_runs_each_choice_in_its_own_process(path
     assert "subprocess.call(" in text and "for " in text
 
 
+def _window_selection_script() -> str:
+    """Das Python, das ``fenster-auswahl.yml`` je Läufer fährt — aus dem Workflow gelesen."""
+    job = job_block(_WINDOW_SELECTION.read_text(encoding="utf-8"), "selection")
+    script = step_script(step_block(job, "Ausgewählte Fenstertests"))
+    return script.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+
+
+def _run_window_share(tmp_path: Path, selection: str, shard: int) -> tuple[int, list[str]]:
+    """Einen Teil fahren, mit einem Pytest, der nur mitschreibt, was er fahren soll."""
+    script = tmp_path / "auswahl.py"
+    script.write_text(_window_selection_script(), encoding="utf-8")
+    calls = tmp_path / f"calls-{shard}.txt"
+    wrapper = (
+        "import subprocess, sys\n"
+        f"calls = open({str(calls)!r}, 'a', encoding='utf-8')\n"
+        "subprocess.call = lambda command: (calls.write(' '.join(command[4:]) + '\\n'), 0)[1]\n"
+        f"sys.argv = [{str(script)!r}]\n"
+        f"exec(compile(open({str(script)!r}, encoding='utf-8').read(), 'auswahl.py', 'exec'))\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", wrapper],
+        env=dict(os.environ, SELECTION=selection, SHARD=str(shard), SHARDS="3"),
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    ran = calls.read_text(encoding="utf-8").splitlines() if calls.is_file() else []
+    return done.returncode, ran
+
+
+def test_the_window_selection_shares_its_choices_evenly_across_three_runners(
+    tmp_path: Path,
+) -> None:
+    """Je Plattform drei Läufer, und jede Auswahl läuft genau einmal (CI-09).
+
+    Die Fensterauswahl eines großen Zweigs lief je Plattform auf einem Läufer
+    hintereinander; die Matrix teilt sie jetzt in drei Teile, die höchstens
+    eine Auswahl auseinanderliegen. Gefahren wird das Skript aus dem Workflow.
+    """
+    text = _WINDOW_SELECTION.read_text(encoding="utf-8")
+    job = job_block(text, "selection")
+    shards = re.search(r"(?m)^\s+shard: \[([0-9, ]+)\]$", job)
+    assert shards is not None, "die Matrix teilt nicht"
+    numbers = [int(entry) for entry in shards.group(1).split(",")]
+    assert numbers == [0, 1, 2]
+    assert "SHARD: ${{ matrix.shard }}" in job and 'SHARDS: "3"' in job
+    assert "matrix.shard" in job.split("runs-on:", 1)[0], "der Name nennt den Teil"
+
+    choices = [f"tests/test_{index}.py" for index in range(7)]
+    shares = [_run_window_share(tmp_path, "; ".join(choices), shard) for shard in numbers]
+    assert all(code == 0 for code, _ran in shares), shares
+    ran = [part for _code, parts in shares for part in parts]
+    assert sorted(ran) == sorted(choices), "jede Auswahl genau einmal"
+    sizes = [len(parts) for _code, parts in shares]
+    assert max(sizes) - min(sizes) <= 1, sizes
+
+    alone, empty = tmp_path / "wenig", tmp_path / "leer"
+    alone.mkdir()
+    empty.mkdir()
+    assert _run_window_share(alone, "tests/test_a.py", 2) == (0, []), (
+        "ein Teil ohne Auswahl ist grün"
+    )
+    assert _run_window_share(empty, " ; ", 0)[0] != 0, "eine leere Eingabe ist rot"
+
+
 def test_a_slicer_selection_is_red_for_a_skip_a_missing_program_or_nothing() -> None:
     """Ein übersprungener Slicertest belegt nichts; ein leerer Lauf auch nicht."""
     from tests.conftest import REQUIRE_SLICERS
@@ -3318,6 +3383,49 @@ def test_a_slicer_selection_is_red_for_a_skip_a_missing_program_or_nothing() -> 
     assert "--junitxml={report}" in script
     assert 'totals["tests"] == 0 or totals["skipped"]' in script
     assert "code != 0" in script
+
+
+@pytest.mark.parametrize(
+    ("wanted", "accepted"),
+    [
+        ("orcaslicer cura", True),
+        ("cura\nBASH_ENV=/tmp/fremd", False),
+        ("cura; rm -rf /", False),
+        ("Cura", False),
+    ],
+)
+def test_a_programme_input_reaches_the_environment_only_as_names(
+    tmp_path: Path, wanted: str, accepted: bool
+) -> None:
+    """Die Eingabe ``programme`` ist Text, kein Teil des Skripts (Review 1 P3, G-5).
+
+    Sie ging ungeprüft nach ``$GITHUB_ENV``; ein Zeilenumbruch setzte damit
+    weitere Variablen für jeden folgenden Schritt. Gefahren wird der echte
+    Block mit bash, wie auf dem Läufer.
+    """
+    job = job_block(_SLICER_SELECTION.read_text(encoding="utf-8"), "selection")
+    script = step_script(step_block(job, "Programme der Auswahl"))
+    shell = _workflow_shell()
+    if shell is None:
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
+    environment = tmp_path / "github_env"
+    environment.write_text("", encoding="utf-8")
+    done = subprocess.run(
+        [shell, "-c", script],
+        cwd=tmp_path,
+        env=dict(os.environ, WANTED=wanted, SELECTION="", GITHUB_ENV=environment.as_posix()),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    written = environment.read_text(encoding="utf-8")
+    if accepted:
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert written == f"PROGRAMS={wanted}\n"
+    else:
+        assert done.returncode != 0, done.stdout
+        assert "::error::" in done.stdout
+        assert written == "", "nichts erreicht die Umgebung der folgenden Schritte"
 
 
 def test_the_slicer_selection_prepares_qt_like_the_window_selection() -> None:

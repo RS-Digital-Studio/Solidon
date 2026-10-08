@@ -187,11 +187,15 @@ def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
     assert "Baustein aus Datei hinzufügen …" in exchange
 
     generating = pages["generating"]
-    assert "TripoSG" in generating and "ComfyUI" in generating
+    assert "TRELLIS.2" in generating and "ComfyUI" in generating
+    assert "TripoSG" not in generating
+    for licence in ("MIT", "DINOv3-Lizenz", "Apache-2.0"):
+        assert licence in generating, f"die Lizenz {licence} fehlt"
     assert "Reparaturkette läuft ohne Nachfrage" in generating
 
     extras = pages["extras"]
-    assert "Knoten und Modell einrichten" in extras
+    assert "Modelle einrichten" in extras
+    assert "Version" in extras and "0.35" in extras
     assert "ComfyUI einmal neu starten" in extras
     assert "drei Minuten auf der Grafikkarte" not in extras
 
@@ -2458,8 +2462,9 @@ def test_the_model_page_names_the_models_solidon_currently_offers() -> None:
 
     for name, _gigabytes, _note in OLLAMA_SUGGESTIONS:
         assert name in seite, f"das Sprachmodell {name} fehlt"
-    for model in ("TripoSG", "BiRefNet", "SDXL"):
+    for model in ("TRELLIS.2", "DINOv3", "BiRefNet", "FLUX.2 [klein] 4B", "Qwen3-4B"):
         assert model in seite, f"das Erzeugungsmodell {model} fehlt"
+    assert "TripoSG" not in seite and "SDXL" not in seite
     assert "Hugging Face" in seite
     assert "Hunyuan3D" not in seite
 
@@ -2481,7 +2486,8 @@ def test_every_manual_language_describes_the_released_generator_chain(language: 
         set_language("de")
 
     for text in (source, published):
-        assert "TripoSG" in text, f"{language}: TripoSG fehlt"
+        assert "TRELLIS.2" in text, f"{language}: TRELLIS.2 fehlt"
+        assert "TripoSG" not in text, f"{language}: TripoSG steht noch da"
         assert "ComfyUI" in text, f"{language}: ComfyUI fehlt"
         assert "Hunyuan3D" not in text, f"{language}: ungeprüfte Alternative veröffentlicht"
 

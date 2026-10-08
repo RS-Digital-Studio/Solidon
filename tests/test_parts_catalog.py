@@ -321,7 +321,10 @@ def test_an_old_project_with_a_printed_screw_is_told_about_the_seat_play(tmp_pat
     import json
     import zipfile
 
-    from app.core.knowledge.parts.fasteners import SEPARATE_PARTS_KEEP_THEIR_PLAY
+    from app.core.knowledge.parts.fasteners import (
+        SEPARATE_PARTS_KEEP_THEIR_PLAY,
+        THREAD_MESH_WHOLE_TURNS,
+    )
     from app.core.scene.project import PROJECT_ENTRY
 
     project = new_project("centauri-carbon-2", "petg")
@@ -372,8 +375,10 @@ def test_an_old_project_with_a_printed_screw_is_told_about_the_seat_play(tmp_pat
         for finding in findings
         if finding.code == "parts.change" and finding.message.values
     ]
+    # Seit Stand 24 kommt die Vernetzung über ganze Umläufe dazu (Review RM-532, R1).
     assert lines == [
-        {"parts": "Gedruckte Mutter, Schraube", "change": SEPARATE_PARTS_KEEP_THEIR_PLAY.effect}
+        {"parts": "Gedruckte Mutter, Schraube", "change": SEPARATE_PARTS_KEEP_THEIR_PLAY.effect},
+        {"parts": "Gedruckte Mutter, Schraube", "change": THREAD_MESH_WHOLE_TURNS.effect},
     ]
 
 

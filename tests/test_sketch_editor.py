@@ -2948,6 +2948,8 @@ def test_the_sketch_area_fits_a_laptop_screen(qt_app: QApplication) -> None:
     Gemessen **mit Thema**: Ohne fehlt die Polsterung, die ein Kunde sieht,
     und der Nachbartest war daran zwei Runden lang grün, ohne etwas zu messen.
     """
+    from PySide6.QtWidgets import QStyle, QStyleOption
+
     from app.ui.style import stylesheet
 
     davor = qt_app.styleSheet()
@@ -2959,9 +2961,22 @@ def test_the_sketch_area_fits_a_laptop_screen(qt_app: QApplication) -> None:
 
         zeile = panel._tools_row.minimumSize().width()
 
-        assert bereich <= 900, f"der Skizzenbereich verlangt {bereich} Bildpunkte Breite"
-        assert zeile <= 900, f"die Werkzeugzeile verlangt {zeile} Bildpunkte Breite"
-        assert bedingungen <= 900, f"die Bedingungszeile verlangt {bedingungen} Bildpunkte"
+        # **Die Grenze gilt in Punkten des Stils.** Qt rechnet Stilmaße unter
+        # macOS gegen 72 dpi, offscreen meldet aber 96: Dort wird jedes
+        # Symbol um ein Drittel größer als auf einem echten Mac (21 statt 16,
+        # die Zeile kam so auf 977 Punkte). Gemessen wird deshalb gegen
+        # die Symbolgröße des Stils, die auf jedem echten Bildschirm 16 ist.
+        # Mit Stiloption: Erst deren Schrift trägt die dpi, gegen die Qt
+        # rechnet; ohne sie meldet der Stil auch unter macOS 16.
+        option = QStyleOption()
+        option.initFrom(panel)
+        massstab = (
+            panel.style().pixelMetric(QStyle.PixelMetric.PM_ButtonIconSize, option, panel) / 16
+        )
+        grenze = 900 * max(1.0, massstab)
+        assert bereich <= grenze, f"der Skizzenbereich verlangt {bereich} Bildpunkte Breite"
+        assert zeile <= grenze, f"die Werkzeugzeile verlangt {zeile} Bildpunkte Breite"
+        assert bedingungen <= grenze, f"die Bedingungszeile verlangt {bedingungen} Bildpunkte"
         assert not panel.canvas.measure_field.isVisibleTo(panel.canvas), (
             "solange nichts gezeichnet ist, hat das Maßfeld nichts zu zeigen"
         )

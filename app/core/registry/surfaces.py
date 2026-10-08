@@ -40,6 +40,7 @@ from app.core.registry.registry import (
     variant_members,
 )
 from app.core.types import ParamSpec
+from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, _, format_decimal, sort_key
 
 #: Wie eine Seite heißt, in die eine Richtung zeigt — je Achse positiv, negativ.
@@ -336,6 +337,12 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "hinge_front": _("Vorn"),
     "hinge_left": _("Links"),
     "hinge_right": _("Rechts"),
+    # Die Gewindegröße ohne Tabelle: Durchmesser und Steigung stehen in eigenen
+    # Feldern (``fasteners.CUSTOM_SIZE``).
+    "custom_size": _("Eigenes Maß"),
+    # Die Form von *Stift für Bohrung* (RM-536).
+    "to_the_bore": _("Passend zur Bohrung"),
+    "plain_pin": _("Glatter Stift"),
 }
 
 
@@ -378,6 +385,19 @@ def choice_label(value: str, *, format_measure: Callable[[float, bool], str] | N
         # eigenen Tabellenschlüssel. Dort ersetzt die lesbare Länge das
         # technische S, bei den gemeinsamen Schlüsseln bleibt M4 einfach M4.
         if insert.size != insert.thread:
+            # Zwei Buchsen mit Gewinde und Länge gleich (Ruthex M3S und die
+            # M3x5x4 mit 5 statt 4,6 mm außen) unterscheidet erst ihr
+            # Außendurchmesser; ohne ihn stünde zweimal „M3 · 4,00 mm“ zur Wahl.
+            twins = [
+                other
+                for other in standards.load().inserts.values()
+                if other.thread == insert.thread
+                and other.size != insert.size
+                and abs(other.length - insert.length) <= EPS_GEOM
+            ]
+            if twins:
+                outer = measure(insert.outer, False)
+                return f"{insert.thread} · Ø {outer} × {measure(insert.length, True)}"  # noqa: RUF001
             return f"{insert.thread} · {measure(insert.length, True)}"
         return value
     try:

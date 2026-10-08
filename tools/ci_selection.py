@@ -14,12 +14,16 @@ ganze Suite — macOS-Minuten kosten das Zehnfache.
 Die betroffenen Testdateien kommen aus demselben Importgraphen wie
 ``affected_tests.py``. Zwei Dinge sind anders:
 
-1. **Unterlagen zählen nicht.** Markdown außerhalb von ``changelog/``,
-   ``konzepte/`` und die Sprachkataloge ändern weder ein Fenster noch eine
-   Übergabe; was sie prüfen muss (``test_translations.py``,
-   ``test_directory_docs.py``), läuft ohne Fenster im Tor. Über den Ordnerweg
-   zöge ein Katalog sonst jeden Test eines Moduls nach sich, das
-   ``locales/`` liest.
+1. **Unterlagen zählen nicht — der Kosten wegen.** Markdown außerhalb von
+   ``changelog/``, ``konzepte/`` und die Sprachkataloge lösen keine Auswahl
+   aus. Über den Ordnerweg zöge ein Katalog sonst jeden Test eines Moduls
+   nach sich, das ``locales/`` liest, und damit fast die ganze
+   Fenstergruppe auf macOS. Folgenlos ist das nicht: Die Sprachfälle der
+   Fenstertests messen Textlängen und Umbruch, und die prüft für einen
+   geänderten Katalog erst das Releasetor auf allen Plattformen; ohne
+   Fenster laufen ``test_translations.py`` und ``test_text_length.py`` im
+   Tor. **Ausgenommen sind die Markdown-Dateien, die die Anwendung selbst
+   liest** (:data:`READ_BY_THE_APPLICATION`) — sie zeigt ein Fenster.
 2. **Ausgegeben wird je Datei eine Auswahl**, im Eingabeformat der Workflows:
    Semikolon zwischen den Auswahlen, je Auswahl ein Prozess. Fenster laufen
    über die Fenstergruppe des Laufplugins, Slicertests über ``-m slicer``.
@@ -55,16 +59,28 @@ WINDOW_ARGUMENTS = ("-p", "tools.list_windowed_tests", "--window-group", "window
 SLICER_ARGUMENTS = ("-m", "slicer")
 
 
-def is_documentation(relative: str) -> bool:
-    """Ändert diese Datei nichts, was ein Fenster- oder Slicertest prüft?
+#: Markdown, das die Anwendung zur Laufzeit liest und in einem Fenster zeigt:
+#: die Datenschutzauskunft (``ui/ai_disclosure.py``) und die Lizenzbeilage
+#: (``core/knowledge/licences.py``). ``tests/test_slicer_selection.py`` hält
+#: die Liste an den Dateinamen im Code.
+READ_BY_THE_APPLICATION: frozenset[str] = frozenset({"DATENSCHUTZ.md", "THIRD-PARTY-NOTICES.md"})
 
-    Der Changelog ist keine Unterlage: Das Update-Fenster zeigt ihn.
+
+def is_documentation(relative: str) -> bool:
+    """Gilt diese Datei für die Auswahl als Unterlage, die keinen Lauf auslöst?
+
+    Ausgeschlossen wird der Kosten wegen, nicht weil kein Fenster sie zeigte
+    (Modulkopf, Punkt 1). Der Changelog ist keine Unterlage: Das
+    Update-Fenster zeigt ihn — ebenso die Dateien aus
+    :data:`READ_BY_THE_APPLICATION`.
     """
     path = PurePosixPath(relative)
     if path.parts[:1] == ("konzepte",):
         return True
     if path.parent == PurePosixPath("app/i18n/locales") and path.suffix == ".json":
         return True
+    if relative in READ_BY_THE_APPLICATION:
+        return False
     return path.suffix == ".md" and path.parts[:1] != ("changelog",)
 
 

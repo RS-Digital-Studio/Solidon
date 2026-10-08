@@ -578,16 +578,49 @@ def printer_profiles() -> Mapping[str, PrinterProfile]:
     return _printers
 
 
-def user_printer_profiles() -> Mapping[str, PrinterProfile]:
-    """Die selbst angelegten Drucker bleiben unabhängig vom Slicer auswählbar."""
+#: Unter diesem Schlüssel steht in der eigenen ``printers.toml``, aus welchem
+#: Slicer ein Drucker übernommen wurde (``discover.program_mark``). Er gehört
+#: diesem Rechner, nicht dem Drucker: :class:`PrinterProfile` trägt ihn nicht,
+#: und mit einem Projekt reist er nicht.
+_SLICER_MARK: Final = "slicer"
+
+
+def _own_printer_table() -> dict[str, dict[str, Any]]:
     path = user_profiles_dir() / "printers.toml"
-    identifiers = _read_table(path) if path.is_file() else {}
+    return _read_table(path) if path.is_file() else {}
+
+
+def user_printer_profiles(slicer: str | None = None) -> Mapping[str, PrinterProfile]:
+    """Die eigenen Drucker — mit ``slicer`` nur die, die unter diesem Slicer stehen.
+
+    Erst der Slicer, dann seine Drucker (Entscheidung Robert): Ein aus einem
+    Slicer übernommener Drucker trägt dessen Marke und steht nur unter ihm.
+    Selbst angelegte bleiben unabhängig vom Slicer auswählbar, ebenso jeder,
+    der vor der Marke gespeichert wurde — welchem Slicer er gehörte, weiß
+    niemand mehr, und verschwinden darf er nicht.
+    """
+    table = _own_printer_table()
     known = printer_profiles()
-    return {identifier: known[identifier] for identifier in identifiers if identifier in known}
+    return {
+        identifier: known[identifier]
+        for identifier, entry in table.items()
+        if identifier in known
+        and (slicer is None or str(entry.get(_SLICER_MARK, "")) in ("", slicer))
+    }
 
 
-def save_printer(profile: PrinterProfile) -> PrinterProfile:
-    """Speichert einen eigenen Drucker atomar und erhält andere Nutzerprofile."""
+def printer_slicer(identifier: str) -> str:
+    """Aus welchem Slicer ein eigener Drucker übernommen wurde; leer, wenn aus keinem."""
+    return str(_own_printer_table().get(identifier, {}).get(_SLICER_MARK, ""))
+
+
+def save_printer(profile: PrinterProfile, *, slicer: str | None = None) -> PrinterProfile:
+    """Speichert einen eigenen Drucker atomar und erhält andere Nutzerprofile.
+
+    ``slicer`` ist die Marke des Slicers, aus dem der Drucker kommt
+    (:func:`user_printer_profiles`); ohne Angabe bleibt die gespeicherte —
+    eine Düsenwahl macht aus einem übernommenen keinen selbst angelegten.
+    """
     if not profile.id.strip() or not profile.title.strip():
         raise ValidationError(
             field="printer.title", detail=_("Geben Sie Ihrem Drucker einen Namen.")
@@ -606,6 +639,9 @@ def save_printer(profile: PrinterProfile) -> PrinterProfile:
     values = {
         key: value for key, value in asdict(profile).items() if key != "id" and value is not None
     }
+    mark = str(table.get(profile.id, {}).get(_SLICER_MARK, "")) if slicer is None else slicer
+    if mark:
+        values[_SLICER_MARK] = mark
     table[profile.id] = values
     lines: list[str] = []
     for identifier, entry in sorted(table.items()):

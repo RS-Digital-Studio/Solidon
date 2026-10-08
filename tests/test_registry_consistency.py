@@ -1023,6 +1023,7 @@ _ZAHLWORT: Final[dict[str, int]] = {
     "zweiundsiebzig": 72,
     "hundertsiebenundsiebzig": 177,
     "dreiundsiebzig": 73,
+    "vierundsiebzig": 74,
     "hundertachtundsiebzig": 178,
     "sechsundneunzig": 96,
     "siebenundneunzig": 97,
@@ -1338,10 +1339,11 @@ def test_every_way_to_split_says_teilen() -> None:
     assert not asking, f"Sätze mit anderem Verb für das Teilen: {asking}"
     # „zerlegen“ meint in einem Kundensatz immer das Teilen, auch ohne „Sie“:
     # Wirkung des Knopfs, Feldhilfe, Fehler und Handbuch sagten es noch so
-    # (Review 1 des Konsolidierungspakets 1). Das Hauptwort „Zerlegung“ ist kein Verb.
+    # (Review 1 des Konsolidierungspakets 1). Jede Form zählt, auch „zerlegbar“
+    # und „zerlegend“; nur das Hauptwort „Zerlegung“ ist kein Verb.
     split_up = [
         source
         for source in read_catalog("en")
-        if re.search(r"\bzerleg(?:e|en|st|t|te|ten|tem|ter|tes)?\b", source, re.IGNORECASE)
+        if re.search(r"\bzerleg(?!ung)\w*", source, re.IGNORECASE)
     ]
     assert not split_up, f"Sätze mit „zerlegen“ statt „aufteilen“ oder „teilen“: {split_up}"

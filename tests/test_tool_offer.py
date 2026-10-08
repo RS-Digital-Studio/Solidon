@@ -331,6 +331,50 @@ def test_a_stub_call_fetches_the_fields_and_executes_nothing(profile: Profile) -
     assert proposal.invalid_calls == 0
 
 
+def test_a_stub_stays_a_stub_for_every_call_of_its_step(profile: Profile) -> None:
+    """Review RM-251 b: Der Prompt (Version 9) lädt ein, mehrere Aufrufe in
+    einen Schritt zu legen. Rief das Modell dieselbe Kurzform darin zweimal —
+    einmal leer, einmal mit Werten —, machte der erste Aufruf sie ausführlich,
+    und der zweite rechnete mit Feldern, die das Modell nie gesehen hatte.
+    Ebenso ein Baustein hinter ``find_part`` im selben Schritt. Beide bleiben
+    bis zum nächsten Schritt Kurzformen.
+    """
+    project: Project = plate_project()
+    backend = _LocalScripted(
+        answers=[
+            Reply(
+                tool_calls=(
+                    ToolCall(id="1", name="rotate_object", arguments={}),
+                    ToolCall(
+                        id="2",
+                        name="rotate_object",
+                        arguments={"objects": ["obj_1"], "angle": 90.0},
+                    ),
+                    ToolCall(id="3", name="find_part", arguments={"description": "Magnettasche"}),
+                    ToolCall(
+                        id="4",
+                        name="insert_magnet_pocket",
+                        arguments={"objects": ["obj_1"], "x": 0.0, "y": 0.0},
+                    ),
+                )
+            ),
+            Reply(text="Erst die Felder."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+    proposal = agent.propose("Mach bitte etwas damit.")
+
+    assert proposal.drafts == [], "im Schritt der Kurzform rechnet keiner ihrer Aufrufe"
+    assert proposal.lookups == 3, "zweimal Drehen und der Baustein holen nur Felder"
+    assert _described(backend.tools_seen[1], "rotate_object")
+    assert _described(backend.tools_seen[1], "insert_magnet_pocket")
+
+
 def test_a_found_part_stands_with_its_fields_in_the_next_step(profile: Profile) -> None:
     project: Project = plate_project()
     backend = _LocalScripted(

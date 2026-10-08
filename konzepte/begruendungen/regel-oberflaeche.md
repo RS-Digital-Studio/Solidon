@@ -184,6 +184,13 @@ sie überall und für Codex gelten. Anlässe und Wortlaut:
   geblieben“ zu „der Befund zeigt auf seinen Körper und trägt seine Handlung,
   und wo keine steht, ist er ein reiner Hinweis“ — die nützlichere Aussage. Die
   entscheidende Frage: Ist die Zahl an etwas gemessen, das dem Kunden gehört?
+  Eine Zählung eigener Fehler sagt dem Kunden, was bis gestern fehlte, und
+  veraltet mit dem nächsten Fund.
+- **Musterwächter über jeden Katalogtext:** Bis Review P2 N5 las `test_wording`
+  nur die Texte, die `test_text_length` nach Aufrufort einordnet. Ein
+  `return _(…)` außerhalb einer `*empty*`-Funktion und jeder Handbuchabsatz
+  fielen durch, Übersetzungen las er gar nicht, und fünf Übersetzungen des
+  Senkkopfsatzes bekamen ihr gestrichenes Semikolon zurück.
 - **Druckzeit:** Robert, 26.09.2026, zu „Eine Schüssel am Centauri Carbon 2
   braucht 18 statt 31 Stunden“ — „40 Prozent kürzer finde ich aber besser als
   die zeit“. Stunden gehören zu einem Modell, das der Leser nicht kennt; ein
@@ -489,10 +496,6 @@ Entf danach den ganzen Körper statt der Bohrung (RM-537). Deshalb hebt
 Wiederwahlen, weil die den Körper aus `lost_selection` lesen, und nur ohne
 eigene Handlung seit dem letzten aktuellen Bild — sonst überschriebe es deren
 Quittung mit Rückweg (Regel 19).
-
-Wann gesprochen wird: erst nach den Wiederwahlen, weil die den Körper aus
-`lost_selection` lesen, und nur ohne eigene Handlung seit dem letzten aktuellen
-Bild — sonst überschriebe es deren Quittung mit Rückweg (Regel 19).
 
 ## Der Prüfbericht sagt, wenn er zum vorigen Stand gehört
 

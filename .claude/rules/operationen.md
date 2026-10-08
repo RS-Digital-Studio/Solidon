@@ -102,9 +102,9 @@ Stehen in `kanten.md`.
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
 Liegt ein Werkzeug der Formschräge nicht ganz im Material (oder ganz davor),
-sagen beide Kerne mit demselben Satz ab — keine still niedrigere Wand, kein von
-`ShapeFix` formal geheilter Körper. Tangentiale Nachbarflächen gehen mit
-(`draft.tangent_faces`).
+sagen beide Kerne denselben Satz, nie `ShapeFix`. Tangentiale Nachbarflächen
+gehen mit (`draft.tangent_faces`); liegt eine schräg, sagen beide vorher
+`DRAFT_BESIDE_A_ROUND`.
 
 ## Boolesches geht durch die Rückfallkette
 
@@ -229,20 +229,19 @@ neuen schneiden — kein Unterschied zwischen den Kernen (Entscheidung Robert).
   Grundrechenarten; exakt `edit._continued_cap`, an derselben Nachbarschaft
   gemessen); der Klick ins Bild nimmt dasselbe Paar.
 - **Eine exakte Differenz gilt erst mit dichtem Zwilling** (`CUT_OVERLAPS`,
-  sonst `CUT_DID_NOT_HOLD`; Ketten, Bohrung, Langloch): OpenCASCADE scheitert
-  lagenabhängig still. Exakte Kopien werden nach Lage und Maß zugeordnet, dann
-  benannt; der äußere Zylinder einer Kette ist beim Wiederfinden entlang der
-  Achse frei; unlesbar heißt `CHAIN_NOT_READABLE`.
+  sonst `CUT_DID_NOT_HOLD`; Ketten, Bohrung, Langloch). Exakte Kopien werden
+  nach Lage und Maß zugeordnet und benannt; der äußere Zylinder einer Kette
+  ist beim Wiederfinden axial frei; unlesbar heißt `CHAIN_NOT_READABLE`.
 - **Langloch und Lippentasche reisen aus ihren Flächen** (gedreht, skaliert
   oder ohne zwei ebene Ränder aus Kennzahlen); nur ein Rand im Zylinder
   (`only_a_rim_inside`): erklärte Hülle minus Körper; Nabe, Zapfen:
   `HOLE_IS_NOT_EMPTY`. Die Lippe ändert ihr Profil, nie gekippt
   (`narrowing_reason`); Ungesehenes wird nicht nachgemessen.
 - **Starr versetzt reist das Material, wie es ist** (`carried_from`): Werkzeug ∩
-  Körper; Durchlaufendes bleibt an der alten Stelle, Umschließendes und
-  Innenliegendes wird nicht geschnitten (`_carried_cavities`).
+  Körper; Durchlaufendes bleibt am alten Ort, Umschließendes und
+  Innenliegendes bleibt ungeschnitten (`_carried_cavities`).
 - **Zwei Werkzeuge stoßen am Netz nie nur in einer Ebene aneinander** — das
-  hintere reicht ins vordere; geprüft an Flächen dieser Ebene, nicht am Volumen.
+  hintere reicht ins vordere; geprüft an Flächen dieser Ebene.
 - **Eine Senkung auf ihrer Bohrung ändert ihr Maß über dieselben Profile**
   (Absage an einer Stelle: `countersink_resize_refusal`).
 - **Versetzen und Verdoppeln fragen die Nachbarwand**, beim Verdoppeln samt
@@ -323,12 +322,15 @@ wieder ausgeschnitten wird exakt das Merkmal, ohne Zugabe.
 
 `trimesh.creation.cylinder` ist eingeschrieben. Wiederhergestellt wird mit dem
 gemessenen Konturmaß und dem Wandmantel (`_tool_for`, `_placing_tool`); nur der
-Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`.
+Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Falle:
+`FEATURE_OVERLAP` verdeckt den Vieleckverlust.
+
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,
-`hole_diameter - pin_diameter`); wer radial einzieht, nimmt die Hälfte. Keine
-Konstante als Fertigungszugabe (Regel 7).
+`hole_diameter - pin_diameter`); wer einzieht, nimmt die Hälfte, im Hohlraum
+senkrecht zur Wand (`geom.bore_pin`). Keine Konstante als Fertigungszugabe
+(Regel 7).
 
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 

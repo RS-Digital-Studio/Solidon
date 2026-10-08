@@ -5093,13 +5093,12 @@ class Viewport(QWidget):
     """Ein Zug am Skalierwürfel — trägt den Faktor (§18.11). Das Fenster
     macht daraus die Operation; die Ansicht ändert nie selbst Geometrie."""
     featurePicked = Signal(str, bool)
-    """Ein Klick hat ein Merkmal getroffen.
+    """Ein Klick hat ein Merkmal getroffen — trägt seine Kennung (§18.5).
 
     Das zweite Feld ist dasselbe wie bei :attr:`objectPicked`: ob
     dazugenommen werden soll. Es steht auch hier am Signal, weil die
     Auswahlmenge im Objektbaum liegt und nicht in der Ansicht.
     """
-    """Ein in der Ansicht angeklicktes Merkmal — trägt seine ID (§18.5)."""
     edgePicked = Signal(str, str)
     """Ein Klick hat eine bearbeitbare Kante getroffen — Körper und Schlüssel.
 
@@ -5120,7 +5119,8 @@ class Viewport(QWidget):
     derselbe Weg wie ein Klick auf den Haken, mit derselben Vorschau.
     """
     objectPicked = Signal(str, bool)
-    """Ein Klick hat einen Körper getroffen — leer heißt: daneben.
+    """Ein Klick hat einen Körper getroffen — trägt seine Kennung. Leer heißt:
+    daneben geklickt, die Auswahl fällt weg.
 
     Das zweite Feld sagt, ob dazugenommen werden soll (Umschalt oder Strg,
     Konzept „Ein Ort für die Auswahl", G). Es steht am Signal und nicht in
@@ -5128,8 +5128,6 @@ class Viewport(QWidget):
     Ansicht weiß, welche Taste lag, der Objektbaum weiß, was schon gewählt
     ist, und nur zusammen ergeben sie die neue Auswahl.
     """
-    """Ein angeklickter Körper — trägt seine Kennung. Leer heißt: daneben
-    geklickt, die Auswahl fällt weg."""
     contextMenuAt = Signal(int, int)
     """Ein Rechtsklick, der nichts gedreht hat — trägt die Stelle in
     Gerätepixeln, gezählt wie Qt (von oben links). Das Fenster zeigt dort das
@@ -5426,10 +5424,6 @@ class Viewport(QWidget):
         überhaupt etwas bedeutet. Die Ansicht kennt davon nichts, sie kennt die
         Geste (siehe :meth:`set_sketch_pull`)."""
         self._sketch_cut_available: Callable[[], bool] | None = None
-        self._sketch_cut_top: Callable[[], float] | None = None
-        """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt —
-        dort beginnt die Tasche, also auch ihre Drahtform. Vom Fenster, das den
-        Körper kennt; null, wenn die Ebene selbst die Oberkante ist."""
         """Ob der Zug nach innen gerade ein echtes Ziel hat.
 
         Die Tasche braucht einen ausgewählten, bearbeitbaren Körper. Das weiß
@@ -5437,6 +5431,10 @@ class Viewport(QWidget):
         Richtungsprüfung gemeinsam, damit nichts Sichtbares mehr verspricht
         als die spätere Operation halten kann.
         """
+        self._sketch_cut_top: Callable[[], float] | None = None
+        """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt —
+        dort beginnt die Tasche, also auch ihre Drahtform. Vom Fenster, das den
+        Körper kennt; null, wenn die Ebene selbst die Oberkante ist."""
         self._pull_limits: tuple[float, float] = (0.0, 0.0)
         """Die Grenzen der Höhe, aus dem Schema von ``sketch_extrude``.
 
@@ -5728,9 +5726,6 @@ class Viewport(QWidget):
         self._selected_features: tuple[FeatureId, ...] = ()
         self._selected_feature_refs: tuple[tuple[ObjectId, FeatureId], ...] = ()
         self._part_grip: FeatureId | None = None
-        self.move_refused: Callable[[FeatureId], bool] | None = None
-        """Ob die Karte rechts *Merkmal verschieben* an diesem Merkmal absagt —
-        gesetzt vom Fenster (``FeaturePanel.refuses``, RM-535)."""
         """An welchem Merkmal der Griff hängt, wenn ein **Baustein** gewählt ist.
 
         Sein Dach im Objektbaum wählt alle seine Merkmale zugleich; „das
@@ -5740,6 +5735,9 @@ class Viewport(QWidget):
         bausteine nicht über den viewport verschieben?"). Welches Merkmal es
         ist, sagt das Fenster: Nur es kennt den gemeinsamen Schritt
         (:meth:`set_part_grip`)."""
+        self.move_refused: Callable[[FeatureId], bool] | None = None
+        """Ob die Karte rechts *Merkmal verschieben* an diesem Merkmal absagt —
+        gesetzt vom Fenster (``FeaturePanel.refuses``, RM-535)."""
         self._direct_picking = False
         """Ob ein Klick ohne Zwischenstufe das tiefste Ziel meint.
 

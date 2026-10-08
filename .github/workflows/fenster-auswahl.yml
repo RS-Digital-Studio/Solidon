@@ -15,6 +15,10 @@
 # nacheinander, und irgendwann reißt eine Grenze ohne Zeile
 # (tools/run_suite_isolated.py).
 #
+# Je Plattform teilen sich drei Läufer die Auswahlen (`shard`): Auswahl i
+# fährt Teil i mod 3, so dass die Teile höchstens eine Auswahl auseinander
+# liegen. Ein Teil ohne Auswahl ist grün; eine leere Eingabe ist rot.
+#
 # Die Schritte vor dem Testlauf sind die von `window-contracts` in build.yml;
 # wer dort etwas ändert, zieht es hier nach.
 
@@ -34,18 +38,21 @@ concurrency:
 
 jobs:
   selection:
-    name: Fensterauswahl (${{ matrix.os }})
+    name: Fensterauswahl (${{ matrix.os }}, Teil ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-24.04, macos-latest, macos-26-intel]
+        shard: [0, 1, 2]
     env:
       QT_QPA_PLATFORM: offscreen
       # Über die Umgebung, nie in den Befehl eingesetzt: Eine Eingabe ist Text,
       # kein Teil des Skripts.
       SELECTION: ${{ inputs.tests }}
+      SHARD: ${{ matrix.shard }}
+      SHARDS: "3"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,8 +97,11 @@ jobs:
           parts = [part.strip() for part in os.environ["SELECTION"].split(";") if part.strip()]
           if not parts:
               sys.exit("Keine Auswahl angegeben.")
+          shard, shards = int(os.environ["SHARD"]), int(os.environ["SHARDS"])
+          mine = parts[shard::shards]
+          print(f"Teil {shard} von {shards}: {len(mine)} von {len(parts)} Auswahlen", flush=True)
           failed = []
-          for part in parts:
+          for part in mine:
               print(f"::group::{part}", flush=True)
               code = subprocess.call([sys.executable, "-m", "pytest", "-q", *shlex.split(part)])
               print("::endgroup::", flush=True)
@@ -100,7 +110,7 @@ jobs:
                   failed.append(f"{part} (Exit {code})")
           if failed:
               sys.exit("Rot: " + "; ".join(failed))
-          print(f"Grün: {len(parts)} Auswahlen")
+          print(f"Grün: {len(mine)} Auswahlen")
           PY
           if [ "$RUNNER_OS" = "Linux" ]; then
             xvfb-run -a --server-args="-screen 0 1920x1080x24" python "$RUNNER_TEMP/auswahl.py"

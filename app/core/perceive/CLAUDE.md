@@ -175,7 +175,8 @@ hält beide Wege zusammen.
 - **Versetzen fragt eine Funktion**: `move_refusal` ist die Zeile *Merkmal
   verschieben* (`actions_for(only=)`); `move_feature` und der Griff
   (`FeaturePanel.refuses`) lesen sie. Nur dort sagt `move_blocked` zusätzlich
-  ab (Zapfen oder Kuppel als ganzer Körper, Zapfen in der Bohrung), und eine
+  ab (Zapfen oder Kuppel als ganzer Körper, Zapfen desselben Teils in der
+  Bohrung; ein getrenntes Teil dort nennt `OTHER_PART_IN_THE_BORE`), und eine
   Haltelippe (`only_a_rim_inside`) sperrt nicht. An der Fläche steht in dieser
   Zeile *Fläche versetzen*, der Weg beginnt bei 0 (`_STARTS_AT_ZERO`).
 - **Grau mit dem Satz der Operation**: geteilter Hohlraum

@@ -476,6 +476,15 @@ def test_undoing_a_changed_step_says_the_change_not_the_step() -> None:
         ),
         ("/usr/bin/AnycubicSlicerNext", "Anycubic Slicer Next"),
         ("/Applications/BambuStudio.app/Contents/MacOS/BambuStudio", "Bambu Studio"),
+        ("/var/lib/flatpak/exports/bin/com.bambulab.BambuStudio", "Bambu Studio"),
+        ("/home/kunde/Applications/BambuStudio_ubuntu-24.04_PR-8017.AppImage", "Bambu Studio"),
+        (
+            "/home/kunde/Downloads/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.3.1.AppImage",
+            "OrcaSlicer",
+        ),
+        ("/home/kunde/.local/bin/AnycubicSlicerNext-1.3.7.AppImage", "Anycubic Slicer Next"),
+        ("/opt/UltiMaker-Cura-5.8.0-linux-X64.AppImage", "Cura"),
+        ("/home/kunde/Downloads/Unbekannt-1.0.AppImage", "Unbekannt-1.0"),
     ],
 )
 def test_a_slicer_is_named_as_on_its_box(path: str, name: str) -> None:
@@ -485,13 +494,31 @@ def test_a_slicer_is_named_as_on_its_box(path: str, name: str) -> None:
     Druckdialog „ElegooSlicer“ und „UltiMaker Cura 5.13.0“ schrieb. Ein Flatpak
     hieß „com.prusa3d“, seine Portalkopie wie ihr Ordner im Portal; beide
     nennen das Programm wie die Übergabe (``discover.flatpak_title``).
+
+    Der Packungsname gilt auch für Flatpak und AppImage: Aus
+    ``com.bambulab.BambuStudio`` wurde „BambuStudio“, und ein AppImage hieß
+    nach seinem Ordner — „Applications ist auf … eingestellt.“ Ein AppImage
+    heißt nach dem Programm, das sein Dateiname nennt
+    (``discover.program_mark``); ein unbekanntes nach seinem Dateinamen.
     """
     from pathlib import PurePosixPath, PureWindowsPath
 
     from app.ui.labels import slicer_title
 
     pure = PureWindowsPath(path) if "\\" in path else PurePosixPath(path)
-    assert slicer_title(pure) == name  # type: ignore[arg-type]
+    assert slicer_title(pure) == name
+
+
+def test_lists_and_messages_name_a_slicer_from_one_place() -> None:
+    """Die Namensregel steht einmal im Kern; Listen und Meldungen der Übergabe
+    lesen sie dort (``SlicerSetup.name``). Die Oberfläche hatte eine eigene,
+    und die Übergabe schrieb „{slicer} kennt {printer} nicht“ mit dem
+    Dateistamm „AnycubicSlicerNext“ unter dem Dialog, der „Anycubic Slicer
+    Next“ schrieb."""
+    from app.core import discover
+    from app.ui import labels
+
+    assert labels.slicer_title is discover.slicer_title
 
 
 def test_the_first_run_names_slicers_like_the_print_dialog() -> None:

@@ -236,6 +236,11 @@ class DraftParams(BaseParams):
         "Entformungsrichtung — zum Entformen, oder damit ein Stapelbehälter sich "
         "stapeln lässt."
     ),
+    # RM-230: Schließt eine liegende Rundung ohne Knick an eine Wand an, sagen
+    # beide Kerne vor der Rechnung ab (``faces.DRAFT_BESIDE_A_ROUND``).
+    caveat=_(
+        "Wenn an den Wänden unten oder oben Rundungen liegen. Dann nur Wände ohne Rundung wählen."
+    ),
 )
 def draft_faces(ctx: OpContext) -> OpResult:
     params = cast(DraftParams, ctx.params)

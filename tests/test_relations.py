@@ -665,3 +665,35 @@ def test_a_border_through_one_corner_twice_is_two_borders() -> None:
     whole = _face_boundary_rings(body, np.arange(len(body.faces), dtype=np.int64))
     assert whole is not None and len(whole) == 2
     assert sorted(len(ring) for ring in whole) == [48, 48]
+
+
+def test_a_hollow_threaded_bolt_measures_its_wall_at_the_core() -> None:
+    """Ein Außengewinde begrenzt die Wand eines hohlen Bolzens an seinem Kern.
+
+    ``diameter`` ist am Außengewinde die Spitze des Gangs. Die Prüfung nahm
+    sie als Außenwand, und eine Bohrung Ø 8 in einem Bolzen M12 × 1,75 hatte
+    so 2 mm Wand — unter dem Gang sind es 1,04 (Review RM-532 Runde 2, N7).
+    Ein Innengewinde bleibt beim Grund seiner Nut.
+    """
+    from app.core.knowledge.parts.shapes import RIDGE_SHARE
+    from app.core.types import Feature
+
+    def feature(identifier: str, kind: str, **params: object) -> Feature:
+        return Feature(
+            id=identifier,
+            kind=kind,
+            provenance="generated",
+            params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), **params},
+        )
+
+    bore = feature("hole_1", "hole", diameter=8.0, depth=20.0)
+    bolt = feature("thread_1", "thread", diameter=12.0, pitch=1.75, internal=False, length=20.0)
+    found = sleeve_at(bore, {"hole_1": bore, "thread_1": bolt})
+    assert found is not None
+    assert found.thickness == pytest.approx((12.0 - 2.0 * RIDGE_SHARE * 1.75 - 8.0) / 2.0)
+
+    nut = feature("thread_2", "thread", diameter=12.2, pitch=1.75, internal=True, length=20.0)
+    outer = feature("pin_1", "pin", diameter=20.0, depth=20.0)
+    found = sleeve_at(nut, {"thread_2": nut, "pin_1": outer})
+    assert found is not None
+    assert found.thickness == pytest.approx((20.0 - 12.2) / 2.0)
