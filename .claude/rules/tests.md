@@ -42,6 +42,13 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   Die Geräteabfrage läuft erst in der Fixture, nie beim Modulimport oder in der
   Sammlung. Reine Rechenfälle bleiben im Entwicklungstor, auch in gemischten
   Dateien.
+- **Wer im Kindprozess ein Fenster auf der echten Plattform zeigt, fordert
+  `native_window_platform` an** und startet mit deren Plattform. Die Fixture
+  macht ihn zum Fenstertest und zeigt je Prozess einmal ein leeres Fenster
+  vor (`tests/native_window_probe.py`); hängt es, überspringt sich der Fall
+  mit Grund am Ende des Laufs. In der CI darf das nur der Intel-Mac, dessen
+  Läufer-VM schon daran in `processEvents` hängt — überall sonst ist es rot,
+  weil ein Skip dort verdeckte, dass die Fälle nicht mehr laufen.
 - **CI-Aufteilung** nach dem Vertrag CI-01 bis CI-09 (`AGENTS.md`; Wächter
   `test_packaging.py` für Jobs, Plattformen, Releasegrenze und Berichte,
   `test_ci_runner.py` für vollständige Partitionen und echte
