@@ -2095,9 +2095,9 @@ def test_the_longest_step_of_every_tour_fits_its_card_or_rolls(
             # stand im Wachsen danach, nicht im ersten Bild.
             tour_panel._current = longest
             tour_panel._update_marks()
-            # Ein Schritt über den Prüfbericht holt dessen Reiter nach vorn;
-            # gemessen wird die Tour.
-            window.right.setCurrentWidget(tour_panel)
+            # Ein Schritt über den Prüfbericht holt dessen Reiter nicht mehr nach
+            # vorn (RM-573); die Tour bleibt, gemessen wird sie.
+            assert window.right.currentWidget() is tour_panel
             for _ in range(8):
                 qt_app.processEvents()
             where = f"{language}, {tour.example_id}, Schritt {longest + 1}"

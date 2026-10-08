@@ -2346,7 +2346,9 @@ def test_whole_face_texture_preview_matches_apply_and_edit(
     assert face is not None
     window._on_feature_picked(face.id)
     seen = []
-    monkeypatch.setattr(window, "_show_preview", seen.append)
+    monkeypatch.setattr(
+        window, "_show_preview", lambda difference, **_kwargs: seen.append(difference)
+    )
     # Erzwingt die Reduktionsschwelle am kleinen Korpus: Ganzfläche muss
     # trotzdem ohne vorgelagerte Änderung ihrer Flächendreiecke rechnen.
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
@@ -2501,7 +2503,9 @@ def test_texture_panel_changes_existing_step_with_live_preview(
     }
     assert set(numeric) == {"pitch", "depth", "angle"}
     seen = []
-    monkeypatch.setattr(window, "_show_preview", seen.append)
+    monkeypatch.setattr(
+        window, "_show_preview", lambda difference, **_kwargs: seen.append(difference)
+    )
     numeric["depth"].spin.setValue(0.9)
     window._feature_preview.stop()
     window._preview_feature_change()

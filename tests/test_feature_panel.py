@@ -3849,7 +3849,6 @@ def test_every_number_a_part_step_takes_offers_fx_with_or_without_an_expression(
     Felder jedes Bausteins, je ohne und mit einem Ausdruck in der Lage.
     """
     from app.core.perceive.actions import part_actions
-    from app.core.registry.params import accepts_expression
     from app.core.types import Operation
     from app.ui.panels import _expression_entry
 
@@ -3868,12 +3867,103 @@ def test_every_number_a_part_step_takes_offers_fx_with_or_without_an_expression(
                     moving += 1
                 for field in action.fields:
                     entry = schema[str(field.name)]
-                    wanted = accepts_expression(entry) and str(field.kind) not in ("bool", "choice")
+                    # Der Sollwert aus dem Schema selbst, nicht aus der Formel des
+                    # Codes (Review U1, Fund 8): eine Zahl ohne feste Auswahl.
+                    wanted = entry.kind in {"float", "int"} and not entry.choices
                     offered = _expression_entry(field, {}, schema) is not None
                     if offered != wanted:
                         lost.append(f"{spec.name}.{field.name} ({action.title}): fx {offered}")
     assert moving > 20, "ohne Bausteine mit Lage prüft dieser Test nichts"
     assert not lost, "\n".join(lost)
+
+
+def test_the_bore_schema_stays_with_its_step_and_off_the_neighbouring_handlings(
+    qt_app: QApplication,
+) -> None:
+    """Review U1, Fund 1: Das Schema der gebohrten Bohrung gehört nur ihrem Schritt.
+
+    ``offer_bore_step`` legt das Schema von *Bohrung setzen* ab. Galt es für das
+    ganze Fenster, bauten *Bohrung ändern*, *Zum Langloch ziehen*, *Merkmal
+    verschieben* und *verdoppeln* ihre gleichnamigen Felder aus ihm: fremde
+    Grenzen, fx, und die Langlochbreite sprach unter der Radiuswahl als halber
+    Wert. Die Gegenrichtung: Die Zeile des Bohrschritts behält ihr fx.
+    """
+    from types import SimpleNamespace
+
+    from app.ui import labels
+    from app.ui.op_dialog import ValueField
+
+    load_operations()
+    identifier, feature = a_hole()
+    mesh = plate()
+    panel = FeaturePanel()
+    labels.set_circle_measure("radius")
+    try:
+        panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
+        drill = SimpleNamespace(
+            id=7,
+            op="drill_hole",
+            params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 4.0, "depth": 4.0},
+        )
+        panel.offer_bore_step(drill, REGISTRY.get("drill_hole"), {})
+        neighbours = ("slot_hole", "resize_hole", "move_feature", "duplicate_feature")
+        checked = 0
+        for op in neighbours:
+            built = panel.measure_fields(op, None, feature=feature)
+            if built is None:
+                continue
+            checked += 1
+            _action, _group, editors = built
+            foreign = sorted(
+                name for name, editor in editors.items() if isinstance(editor, ValueField)
+            )
+            assert not foreign, f"{op}: Felder aus dem Bohrschema {foreign}"
+        assert checked >= 3, "an der Bohrung prüft dieser Test die Nachbarn nicht"
+
+        slot = panel.measure_fields("slot_hole", None, feature=feature)
+        assert slot is not None
+        width = slot[2]["diameter"]
+        assert isinstance(width, LengthSpin)
+        assert width.value_mm() == pytest.approx(float(feature.params["diameter"]), abs=0.01), (
+            "die Breite steht ganz da, nicht als Radius"
+        )
+
+        own = panel.measure_fields("drill_hole", None, feature=feature)
+        assert own is not None
+        assert isinstance(own[2]["depth"], ValueField), "der Bohrschritt behält sein fx"
+    finally:
+        labels.set_circle_measure("diameter")
+        panel.deleteLater()
+
+
+def test_the_texture_schema_stays_with_its_step(qt_app: QApplication) -> None:
+    """Der Zwilling von Fund 1: Das Texturschema gilt nur den Handlungen der Textur.
+
+    Eine Maßgruppe, die nach ``show_texture`` für eine andere Handlung entsteht,
+    baute ein gleichnamiges Feld (``depth``) aus dem Texturschema.
+    """
+    from types import SimpleNamespace
+
+    from app.core.perceive.actions import ActionField, FeatureAction
+    from app.ui.op_dialog import ValueField
+
+    load_operations()
+    step = SimpleNamespace(id=8, op="apply_texture", params={"depth": 0.6})
+    panel = FeaturePanel()
+    try:
+        panel.show_texture([step])
+        textured = [
+            field._entry.name for row in panel._built for field in row.findChildren(ValueField)
+        ]
+        assert "depth" in textured, "die Textur selbst behält ihr fx"
+        depth = ActionField(name="depth", label="Tiefe", unit="mm", value=1.0, kind="length")
+        foreign = FeatureAction("Fläche versetzen", "offset_face", fields=(depth,))
+        panel._runs["foreign"] = SimpleNamespace(op="offset_face", action=foreign)
+        built = panel.measure_fields("offset_face", None)
+        assert built is not None
+        assert isinstance(built[2]["depth"], LengthSpin), "kein Feld aus dem Texturschema"
+    finally:
+        panel.deleteLater()
 
 
 def test_y_takes_an_expression_through_fx_and_the_part_follows(qt_app: QApplication) -> None:

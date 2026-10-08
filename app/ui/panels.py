@@ -5197,7 +5197,9 @@ class HistoryPanel(QWidget):
                 # neuer Kennung beim Umbau, der ihn eingereiht hat.
                 continue
             if transaction.revision in ("insert", "move"):
-                self._add_revision_rows(transaction, document, titles, replanned, needs, nested)
+                self._add_revision_rows(
+                    transaction, document, titles, replanned, needs, nested, stopped_at
+                )
                 continue
             # Neu gefasste Schritte stehen beim Umbau, nicht hier (P7) — eine
             # Auswahl dieser Zeile nennt sie nicht mit.
@@ -5315,11 +5317,16 @@ class HistoryPanel(QWidget):
                 expanded = transaction.id in self._open_groups
                 item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")
                 item.setData(GROUP_ROLE, transaction.id)
-                item.setToolTip(
-                    tr("{count} Schritte — anklicken zum Auf- und Zuklappen.").format(
-                        count=len(transaction.ops)
-                    )
+                group_tip = tr("{count} Schritte — anklicken zum Auf- und Zuklappen.").format(
+                    count=len(transaction.ops)
                 )
+                # Der Satz zum Halt bleibt dabei stehen (§15.3); ohne ihn trug
+                # die Gruppe nur das „!“ und keine Auskunft dazu.
+                if halted:
+                    group_tip += "\n" + tr(
+                        "Hier hält die Kette an — der Grund steht im Prüfbericht."
+                    )
+                item.setToolTip(group_tip)
             removed = removed_under.get(transaction.id, ())
             if removed:
                 # **Die Löschung trägt, was mit ihr wegfällt** (Entscheidung
@@ -5413,6 +5420,7 @@ class HistoryPanel(QWidget):
         replanned: Collection[int],
         needs: Sequence[StepNeed],
         nested: Collection[int] = (),
+        stopped_at: int | None = None,
     ) -> None:
         """Ein Einfügen oder Verschieben: eine Protokollzeile, darunter die Schritte (P7).
 
@@ -5421,6 +5429,10 @@ class HistoryPanel(QWidget):
         der ersten geänderten Stelle, in genau der Reihenfolge, in der sie
         rechnen. Die Protokollzeile trägt den Titel des Umbaus und nimmt mit
         Strg+Z alles zurück; sie selbst öffnet nichts.
+
+        Hält die Kette an einem dieser Schritte an, trägt seine Zeile das „! “
+        und den Satz dazu wie jede andere (§15.3) — gerade nach „… und erneut
+        versuchen“ sucht der Kunde diese Stelle (Review U1, Fund 2).
         """
         by = f"  ({tr('Agent')})" if transaction.origin.by == "agent" else ""
         header = QListWidgetItem(f"{transaction.title}{by}")
@@ -5445,7 +5457,8 @@ class HistoryPanel(QWidget):
                 row.setData(OPS_ROLE, ())
                 self.list.addItem(row)
                 continue
-            row = QListWidgetItem(f"{position}  {titles.get(op_id, '')}")
+            halted = op_id == stopped_at
+            row = QListWidgetItem(f"{'! ' if halted else ''}{position}  {titles.get(op_id, '')}")
             symbol = _op_icon_name(
                 next((entry.op for entry in document.ops if entry.id == op_id), "")
             )
@@ -5453,11 +5466,12 @@ class HistoryPanel(QWidget):
                 row.setIcon(icon(symbol, self.list))
             row.setData(Qt.ItemDataRole.UserRole, op_id)
             row.setData(OPS_ROLE, (op_id,))
-            row.setToolTip(
-                tr("Position {position} · Schrittkennung {identifier}").format(
-                    position=position, identifier=op_id
-                )
+            tip = tr("Position {position} · Schrittkennung {identifier}").format(
+                position=position, identifier=op_id
             )
+            if halted:
+                tip += "\n" + tr("Hier hält die Kette an — der Grund steht im Prüfbericht.")
+            row.setToolTip(tip)
             self._mark_state(row, document, op_id, needs)
             self.list.addItem(row)
 
@@ -9150,6 +9164,15 @@ class FeaturePanel(QWidget):
         """Je Handlungsschlüssel ihr Strich und ihre Zeile — was weggeht, solange
         ihre Maße im Bild stehen (:meth:`set_measuring`, RM-199)."""
         self._texture_fields: dict[str, Any] = {}
+        self._texture_owner: tuple[str, int | None] | None = None
+        """Operation und Schritt, deren Handlungen ``_texture_fields`` gilt.
+
+        **Das Schema gehört einer Handlung, nicht dem Fenster** (Review U1,
+        Fund 1): Eine Maßgruppe, die später für eine andere Handlung entsteht,
+        bekäme sonst die Grenzen und Kreismaße eines fremden Schemas."""
+        self._part_owner: tuple[str, int | None] | None = None
+        """Operation und Schritt, deren Handlungen ``_part_fields`` gilt — der
+        Baustein oder die Bohrung im ursprünglichen Schritt, nie ihre Nachbarn."""
         self._part_fields: dict[str, Any] = {}
         """Das Parameterschema des gezeigten Bausteins — für gebundene Werte.
 
@@ -9231,7 +9254,9 @@ class FeaturePanel(QWidget):
         self._keyed.clear()
         self._blocks.clear()
         self._texture_fields.clear()
+        self._texture_owner = None
         self._part_fields.clear()
+        self._part_owner = None
         self._parameter_values.clear()
         self._armed = None
         self._explanations.clear()
@@ -9699,6 +9724,7 @@ class FeaturePanel(QWidget):
         # Das Schema des Bausteins, damit ein gebundener Wert sein
         # Ausdrucksfeld bekommt (:meth:`_build_field`).
         self._part_fields = {entry.name: entry for entry in spec.params.spec()}
+        self._part_owner = (str(spec.name), int(operation.id))
         self._parameter_values = dict(parameter_values or {})
         _set_shown(self._empty, False)
 
@@ -9723,6 +9749,7 @@ class FeaturePanel(QWidget):
         from app.core.perceive.actions import bore_action
 
         self._part_fields = {entry.name: entry for entry in spec.params.spec()}
+        self._part_owner = (str(spec.name), int(operation.id))
         self._parameter_values = dict(parameter_values)
         line = self._separate()
         row = self._build_action(bore_action(operation, spec))
@@ -9820,6 +9847,7 @@ class FeaturePanel(QWidget):
         self._texture_fields = {
             entry.name: entry for entry in spec.params.spec() if entry.kind in {"float", "int"}
         }
+        self._texture_owner = (str(spec.name), int(operation.id))
         for action in texture_actions(operation, spec):
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
@@ -9890,11 +9918,13 @@ class FeaturePanel(QWidget):
                     for entry in REGISTRY.get(str(action.op)).params.spec()
                     if entry.kind == "float"
                 }
+                self._texture_owner = (str(action.op), getattr(action, "step", None))
                 row = self._build_action(action)
                 self._rows.insertWidget(self._rows.count() - 1, row)
                 self._built.append(row)
         finally:
             self._texture_fields = {}
+            self._texture_owner = None
             self._drop_spare_rows()
         self._settle_apply()
 
@@ -10412,7 +10442,7 @@ class FeaturePanel(QWidget):
             return None
         fields: list[tuple[Any, ...]] = []
         for field in action.fields:
-            if _expression_entry(field, self._texture_fields, self._part_fields) is not None:
+            if _expression_entry(field, *self._schemas_of(action)) is not None:
                 return None
             choices = tuple((value, str(text)) for value, text in field.choices or ())
             fields.append((str(field.name), str(field.kind), choices))
@@ -10500,7 +10530,7 @@ class FeaturePanel(QWidget):
             waiting: list[QLabel] = []
             for field in action.fields:
                 name = str(field.name)
-                editor = self._build_field(field, box)
+                editor = self._build_field(field, box, action)
                 row.widgets[name] = editor
                 row.inner[name] = tuple(editor.findChildren(QLineEdit))
                 label = QLabel(str(field.label), box)
@@ -10586,11 +10616,7 @@ class FeaturePanel(QWidget):
             # Sichtbar bleibt es, wenn gleich ein Text kommt: aus- und wieder
             # einblenden wäre zwei Wechsel im sichtbaren Fenster für nichts.
             _set_shown(row.dot, bool(_explained(action)))
-            page, spot = manual.help_for_action(
-                getattr(action, "op", None),
-                removes_a_step=getattr(action, "op", None) is None
-                and getattr(action, "step", None) is not None,
-            )
+            page, spot = manual.help_for_action(getattr(action, "op", None))
             row.dot.setProperty(MANUAL_PAGE_PROPERTY, page)
             row.dot.setProperty(MANUAL_SPOT_PROPERTY, spot)
             # **Jede Handlung hat eine Erklärung.** Drei Quellen in dieser
@@ -11334,7 +11360,7 @@ class FeaturePanel(QWidget):
             more_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         for field in action.fields:
             target = more_form if more_form is not None and str(field.name) in coordinates else form
-            editor = self._build_field(field, box)
+            editor = self._build_field(field, box, action)
             label = QLabel(str(field.label), box)
             label.setWordWrap(True)
             label.setBuddy(editor)
@@ -11759,13 +11785,29 @@ class FeaturePanel(QWidget):
         widget.setProperty("handlingKey", key)
         self._keyed.append(widget)
 
-    def _build_field(self, field: Any, parent: QWidget) -> QWidget:
+    def _schemas_of(self, action: Any) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        """Die Schemata, die dieser Handlung gehören: Textur oder Kante, Baustein oder Bohrung.
+
+        Nur die Handlung desselben Schritts bekommt sie (Operation **und**
+        Schrittkennung). An einer gebohrten Bohrung tragen *Bohrung ändern*,
+        *Zum Langloch ziehen* oder *Merkmal verschieben* sonst gleichnamige
+        Felder aus dem Bohrschema — fremde Grenzen, und die Langlochbreite
+        sprach unter der Radiuswahl als halber Wert (Review U1, Fund 1).
+        """
+        own = (str(getattr(action, "op", None)), getattr(action, "step", None))
+        return (
+            self._texture_fields if own == self._texture_owner else {},
+            self._part_fields if own == self._part_owner else {},
+        )
+
+    def _build_field(self, field: Any, parent: QWidget, action: Any) -> QWidget:
         """Panel und Maßgruppe verwenden dieselben Felder und Ausdruckswerte."""
+        expression_fields, part_fields = self._schemas_of(action)
         return feature_field(
             field,
             parent,
-            expression_fields=self._texture_fields,
-            part_fields=self._part_fields,
+            expression_fields=expression_fields,
+            part_fields=part_fields,
             parameter_values=self._parameter_values,
         )
 

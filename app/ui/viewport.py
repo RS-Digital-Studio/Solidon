@@ -5494,6 +5494,12 @@ class Viewport(QWidget):
         self._gizmo: Gizmo | None = None
         self._preview_gizmo: Gizmo | None = None
         self._preview_gizmo_wanted = False
+        self._preview_dragging = False
+        """Ob der laufende Zug am Griff der Vorschau hängt und nicht am Körper.
+
+        Beide teilen :meth:`_on_gizmo_interacted` und die Zahl dazu; eine getippte
+        Zahl gehört dann der Vorschau (``previewDragged``), nie dem gewählten
+        Körper (Review U1, Fund 3)."""
         self._placement_grip: Gizmo | None = None
         self._placement_grip_item: Item | None = None
         """Der Griff am Werkzeugkörper einer Platzierung, und woran er hängt.
@@ -14680,7 +14686,7 @@ class Viewport(QWidget):
             scale=self._gizmo_scale_for(actor),
             line_radius=GIZMO_LINE_RADIUS,
             release_callback=self._on_preview_released,
-            interact_callback=self._on_gizmo_interacted,
+            interact_callback=self._on_preview_interacted,
         )
 
     def grip_placement(self, item: Item | None, *, rotation: bool = True) -> None:
@@ -14818,9 +14824,45 @@ class Viewport(QWidget):
         """
         import numpy as np
 
+        if self.drag_bar.typing:
+            # Der Zug gehört der Tastatur (§18.11), wie am Körpergriff: Das
+            # Loslassen wendet nichts an, die Eingabetaste tut es. Der Griff
+            # wird frisch gebaut, die Zahl bleibt stehen.
+            self.set_preview_gizmo(self._preview_gizmo_wanted)
+            return
         self.previewDragged.emit(np.asarray(matrix, dtype=float))
         self._end_preview_drag()
         self.set_preview_gizmo(self._preview_gizmo_wanted)
+
+    def _on_preview_interacted(self, matrix: Any) -> Any:
+        """Ein Zwischenstand am Griff der Vorschau — gekennzeichnet, sonst wie am Körper."""
+        self._preview_dragging = True
+        return self._on_gizmo_interacted(matrix)
+
+    def _apply_typed_to_the_preview(self, kind: str, value: float) -> None:
+        """Die getippte Zahl als Zug an die Vorschau, ohne Rasterfang (§18.11).
+
+        Dieselbe Matrix, die der Griff beim Loslassen schickte: verschoben
+        entlang der Achse des Zugs, gedreht um seine Achse durch den Ursprung
+        des Griffs, an einer Fläche entlang ihrer Richtung.
+        """
+        import numpy as np
+
+        matrix = np.eye(4)
+        if kind == "move" and self._drag_axis is not None:
+            matrix[("x", "y", "z").index(self._drag_axis), 3] = float(value)
+        elif kind == "face" and self._drag_normal is not None:
+            matrix[:3, 3] = np.asarray(self._drag_normal, dtype=float) * float(value)
+        elif kind == "turn" and self._drag_axis is not None and self._preview_gizmo is not None:
+            direction = self._preview_gizmo.axes[("x", "y", "z").index(self._drag_axis)]
+            matrix = rotation_about(
+                (float(direction[0]), float(direction[1]), float(direction[2])),
+                self._preview_gizmo.origin,
+                float(value),
+            )
+        else:
+            return
+        self.previewDragged.emit(matrix)
 
     def _end_preview_drag(self) -> None:
         """Mit dem Zug an der Vorschau gehen seine Zahl und sein Zustand (RM-558).
@@ -14834,6 +14876,7 @@ class Viewport(QWidget):
         an, den die Vorschau gerade abgenommen hat. Was kein Zug am Griff war
         (ein wartender Langlochzug, der Ziehgriff der Skizze), bleibt stehen.
         """
+        self._preview_dragging = False
         if self._drag_kind not in ("face", "turn", "move"):
             return
         self._drag_kind = "slot" if self._slot_target else None
@@ -16290,6 +16333,15 @@ class Viewport(QWidget):
         if value is None or kind is None or unusable:
             self.drag_bar.value.selectAll()
             return
+        if self._preview_dragging and kind in ("face", "turn", "move"):
+            # **Die Zahl gehört der Vorschau, nicht dem gewählten Körper**
+            # (Review U1, Fund 3): Hier lief sie über ``transformDragged`` an
+            # die Auswahl. Danach wird der Griff frisch gebaut; der alte meldet
+            # kein Loslassen mehr, das den Zug ein zweites Mal anwendete.
+            self._apply_typed_to_the_preview(kind, float(value))
+            self._end_preview_drag()
+            self.set_preview_gizmo(self._preview_gizmo_wanted)
+            return
         if kind == "face" and self._drag_face is not None:
             if abs(value) > EPS_DISPLAY:
                 self.faceDragged.emit(self._drag_face, float(value))
@@ -16438,7 +16490,12 @@ class Viewport(QWidget):
             return True
         if key == Qt.Key.Key_Escape:
             # Esc verwirft den Zug: nichts angewandt, das Bild zurück zur Szene.
-            self._end_drag()
+            # Am Griff der Vorschau gibt es keinen Körpergriff zurückzuholen.
+            if self._preview_dragging:
+                self._end_preview_drag()
+                self.set_preview_gizmo(self._preview_gizmo_wanted)
+            else:
+                self._end_drag()
             return True
         if watched is self.drag_bar.value:
             return False

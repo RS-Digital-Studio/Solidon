@@ -510,17 +510,75 @@ def test_only_the_current_tour_step_is_expanded(qt_app: object) -> None:
     assert panel._rows[1][1].wordWrap()
     assert panel._rows[1][1].accessibleDescription() == ""
 
-    # Ein Klick klappt einen anderen Schritt auf und wieder zu, der aktuelle bleibt offen.
-    panel._rows[3][1].clicked.emit()
-    assert panel._rows[3][1].wordWrap()
+    # Ein Klick klappt einen anderen Schritt auf und wieder zu, der aktuelle bleibt offen
+    # — über den Mausweg, nicht am Signal vorbei (Review U1, Fund 5).
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    fourth = panel._rows[3][1]
+    QTest.mouseClick(fourth, Qt.MouseButton.LeftButton)
+    assert fourth.wordWrap()
     assert panel._rows[1][1].wordWrap()
-    panel._rows[3][1].clicked.emit()
-    assert not panel._rows[3][1].wordWrap()
-    panel._rows[1][1].clicked.emit()
+    QTest.mouseClick(fourth, Qt.MouseButton.LeftButton)
+    assert not fourth.wordWrap()
+    QTest.mouseClick(fourth, Qt.MouseButton.RightButton)
+    assert not fourth.wordWrap(), "die rechte Taste klappt nicht auf"
+    QTest.mouseClick(panel._rows[1][1], Qt.MouseButton.LeftButton)
     assert panel._rows[1][1].wordWrap(), "der aktuelle Schritt klappt nicht zu"
+
+    # Und mit der Tastatur: Die eingeklappte Zeile nimmt den Tabulatorfokus, die
+    # Leertaste klappt auf, die Eingabetaste wieder zu.
+    assert fourth.focusPolicy() == Qt.FocusPolicy.TabFocus
+    assert panel._rows[1][1].focusPolicy() == Qt.FocusPolicy.NoFocus
+    QTest.keyClick(fourth, Qt.Key.Key_Space)
+    assert fourth.wordWrap()
+    QTest.keyClick(fourth, Qt.Key.Key_Return)
+    assert not fourth.wordWrap()
 
     panel.deleteLater()
     session.release()
+
+
+def test_a_step_taller_than_the_card_shows_its_beginning(qt_app: object) -> None:
+    """Review U1, Fund 4: Ist der aktuelle Schritt höher als der Ausschnitt, steht sein Anfang.
+
+    ``ensureWidgetVisible`` mittet ein zu hohes Widget, und Nummer und erste
+    Zeilen standen über dem Rand.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.session import Session
+    from app.ui.tour import TourPanel
+
+    example = next(entry for entry in examples.EXAMPLES if entry.id == "weg2-halter-konstruieren")
+    project, history = _opened(example.id)
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for(example.id)
+    assert tour is not None
+    longest = max(range(len(tour.steps)), key=lambda at: len(str(tour.steps[at].text)))
+    panel = TourPanel(session)
+    try:
+        panel.resize(220, 240)
+        panel.show()
+        panel.start(example, tour)
+        panel._current = longest
+        panel._update_marks()
+        for _ in range(6):
+            QApplication.processEvents()
+        host = panel._row_hosts[longest]
+        viewport = panel._scroll.viewport()
+        assert host.height() > viewport.height(), (
+            f"premise: der Schritt ({host.height()}) ist höher als der Ausschnitt "
+            f"({viewport.height()})"
+        )
+        assert host.mapTo(viewport, QPoint(0, 0)).y() == 0, "der Anfang des Schritts steht oben"
+    finally:
+        panel.close()
+        panel.deleteLater()
+        session.release()
 
 
 def test_the_last_step_of_a_tour_leads_to_the_next_example() -> None:

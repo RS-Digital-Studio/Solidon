@@ -647,22 +647,20 @@ def test_f1_on_every_other_operation_finds_its_entry_in_the_reference() -> None:
 def test_every_sign_in_the_feature_panel_opens_a_page_that_exists() -> None:
     """RM-554: Jedes i im Merkmalfenster zeigt auf eine vorhandene Handbuchseite.
 
-    Mit Operation dieselbe Antwort wie F1 (:func:`manual.help_for`), ohne
-    eine Themenseite: die Merkmale für eine gesperrte Zeile, der Verlauf für
-    *Baustein entfernen*. Geprüft über jede Operation im Register und beide
-    Fälle ohne — mehr Eingänge hat :func:`manual.help_for_action` nicht.
+    Ein i steht nur an Zeilen mit Feldern, und die tragen eine Operation; das
+    Ziel ist dasselbe wie F1 (:func:`manual.help_for`). Geprüft über jede
+    Operation im Register; eine unbekannte führt auf die Seite über die
+    Merkmale.
     """
     keys = {page.key for page in manual.pages()}
     lost = []
-    for operation in (*(spec.name for spec in REGISTRY.all()), None, "unknown_operation"):
-        for removes_a_step in (False, True):
-            key, spot = manual.help_for_action(operation, removes_a_step=removes_a_step)
-            if key not in keys or (spot and spot[1:] not in dict(manual.reference_anchors(key))):
-                lost.append(f"{operation} → {key}{spot}")
+    for operation in (*(spec.name for spec in REGISTRY.all()), "unknown_operation"):
+        key, spot = manual.help_for_action(operation)
+        if key not in keys or (spot and spot[1:] not in dict(manual.reference_anchors(key))):
+            lost.append(f"{operation} → {key}{spot}")
     assert not lost, "\n".join(lost)
     assert manual.help_for_action("insert_nut_trap") == manual.help_for("insert_nut_trap")
-    assert manual.help_for_action(None) == (manual.FEATURES_PAGE, "")
-    assert manual.help_for_action(None, removes_a_step=True) == (manual.HISTORY_PAGE, "")
+    assert manual.help_for_action("unknown_operation") == ("features", "")
 
 
 @pytest.mark.parametrize("language", available_languages())

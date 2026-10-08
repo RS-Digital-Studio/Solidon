@@ -17,10 +17,11 @@ Zwei Grundsätze:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QMouseEvent, QPixmap
+from PySide6.QtGui import QFont, QKeyEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -79,12 +80,28 @@ class StepLabel(QLabel):
         super().resizeEvent(event)
         self._show()
 
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        # Den Druck annehmen: Ein ``QLabel`` reicht ihn sonst an die Eltern
+        # weiter, und das Loslassen kommt nicht sicher bei ihm an.
+        if event.button() == Qt.MouseButton.LeftButton:
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
         super().mouseReleaseEvent(event)
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
             event.position().toPoint()
         ):
             self.clicked.emit()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Name
+        """Leertaste und Eingabetaste klappen auf wie der Klick (Review U1, Fund 5)."""
+        if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.clicked.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _show(self) -> None:
         if self.wordWrap():
@@ -108,9 +125,15 @@ class _StepScroller(ContentScroller):
     nächsten fremden Anlass.
     """
 
+    contentResized = Signal()
+    """Die Schritte haben ihre neue Höhe — erst jetzt stimmt die Lage einer Zeile."""
+
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
-        if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
-            tell_the_zone(self)
+        if watched is self.widget():
+            if event.type() == QEvent.Type.LayoutRequest:
+                tell_the_zone(self)
+            elif event.type() == QEvent.Type.Resize:
+                self.contentResized.emit()
         return super().eventFilter(watched, event)
 
 
@@ -122,7 +145,8 @@ class TourPanel(QWidget):
     pointsAt = Signal(str)
     """Wovon der aktuelle Schritt spricht — „history", „parameters", „report",
     „tree", „toolbar", „tools" oder „viewport". Das Fenster lässt den Bereich
-    kurz aufleuchten."""
+    kurz aufleuchten; einen Reiter derselben Karte rahmt es, ohne ihn nach
+    vorn zu holen. Leer heißt: Der Schritt zeigt auf nichts mehr."""
     followRequested = Signal(str)
     """Das nächste Beispiel, wenn die Tour zu Ende ist und jemand weitermachen
     will — trägt seine Kennung."""
@@ -141,6 +165,13 @@ class TourPanel(QWidget):
         self._pointed_at: str | None = None
         """Worauf zuletzt gezeigt wurde. Ein Rahmen, der bei jeder
         Neuberechnung aufblinkt, ist ein Flackern und kein Hinweis."""
+        self._tab_names: dict[str, str] = {}
+        """Welche Ziele Reiter derselben Karte sind, mit dem Namen am Reiter.
+
+        Die Tour holt einen solchen Reiter nicht nach vorn, sie verschwände
+        sonst unter ihm (RM-573); der Schritt sagt stattdessen, worauf zu
+        klicken ist. Das Fenster kennt die Reiter und setzt sie
+        (:meth:`set_tab_names`)."""
         self._already: set[int] = set()
         """Schritte, deren Erkennung schon beim Start zutraf. Sie zählen nicht
         als getan — der Nutzer hat sie nicht getan."""
@@ -189,6 +220,8 @@ class TourPanel(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(steps_host)
         self._scroll = scroll
+        # Nach dem Legen steht die Zeile erst an ihrem Platz; dann noch einmal ins Bild.
+        scroll.contentResized.connect(self._show_row)
 
         self.closing = QLabel("", self)
         self.closing.setWordWrap(True)
@@ -282,7 +315,14 @@ class TourPanel(QWidget):
             marker = QLabel("", host)
             marker.setFixedWidth(self.fontMetrics().height() + 4)
             marker.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-            text = StepLabel(f"{index + 1}. {step.text}", host)
+            line = f"{index + 1}. {step.text}"
+            tab = self._tab_names.get(step.shows or "")
+            if tab:
+                line = tr(
+                    "{step} Klicken Sie dazu oben auf den Reiter „{tab}“.", step=line, tab=tab
+                )
+            text = StepLabel(line, host)
+            text.setObjectName("tourStepText")
             text.setWordWrap(True)
             text.clicked.connect(weak_slot(self, TourPanel._toggle, index))
             row = QHBoxLayout(host)
@@ -438,7 +478,10 @@ class TourPanel(QWidget):
             body = QFont(text.font())
             body.setBold(index == self._current)
             text.setFont(body)
-            text.setEnabled(index <= self._current)
+            # Kommende Schritte sind grau über das Stilblatt (``tourState``),
+            # nicht gesperrt: Eine gesperrte Zeile nähme weder Klick noch
+            # Tastatur an und ließe sich nie aufklappen (Review U1, Fund 5).
+            text.setEnabled(True)
             # **Nur der Auftrag, der jetzt zählt, steht vollständig da.** Alle
             # kommenden Absätze zugleich zu zeigen machte aus der Führung eine
             # graue Textwand. Eine Zeile verrät weiterhin, was folgt; beim
@@ -455,6 +498,8 @@ class TourPanel(QWidget):
             text.setCursor(
                 Qt.CursorShape.ArrowCursor if is_current else Qt.CursorShape.PointingHandCursor
             )
+            # Mit der Tabulatortaste erreichbar ist, was ein Klick aufklappt.
+            text.setFocusPolicy(Qt.FocusPolicy.NoFocus if is_current else Qt.FocusPolicy.TabFocus)
             host = self._row_hosts[index]
             if index in self._skipped:
                 marker.clear()
@@ -478,8 +523,11 @@ class TourPanel(QWidget):
             host.setProperty("tourState", state)
             style = host.style()
             if style is not None:
-                style.unpolish(host)
-                style.polish(host)
+                # Die Schrift folgt dem Zustand der Zeile — die Zeile selbst neu
+                # polieren genügt dafür nicht.
+                for widget in (host, text):
+                    style.unpolish(widget)
+                    style.polish(widget)
         self._point_at_current()
         # Rollt die Liste, steht der aktuelle Schritt im Bild — erst nach dem
         # Legen, vorher kennt der Rollbereich seine neue Höhe nicht.
@@ -516,8 +564,20 @@ class TourPanel(QWidget):
         self._in_view = index
 
     def _show_row(self) -> None:
-        if 0 <= self._in_view < len(self._row_hosts):
-            self._scroll.ensureWidgetVisible(self._row_hosts[self._in_view], 0, 0)
+        """Den Schritt ins Bild holen — einen zu hohen mit seinem Anfang.
+
+        ``ensureWidgetVisible`` mittet ein Widget, das höher ist als der
+        Ausschnitt; Nummer und erste Zeilen standen dann über dem Rand
+        (Review U1, Fund 4).
+        """
+        if not 0 <= self._in_view < len(self._row_hosts):
+            return
+        host = self._row_hosts[self._in_view]
+        viewport = self._scroll.viewport()
+        if viewport is not None and host.height() > viewport.height():
+            self._scroll.verticalScrollBar().setValue(host.y())
+        else:
+            self._scroll.ensureWidgetVisible(host, 0, 0)
 
     def _next_example(self) -> Example | None:
         """Das Beispiel nach diesem, in der Reihenfolge des Startbildschirms.
@@ -549,15 +609,23 @@ class TourPanel(QWidget):
         Neuberechnung aufblinkt, ist ein Flackern und kein Hinweis.
         """
         tour = self._tour
-        if tour is None or self._current >= len(tour.steps):
-            self._pointed_at = None
-            return
-        target = tour.steps[self._current].shows
+        target = (
+            None
+            if tour is None or self._current >= len(tour.steps)
+            else tour.steps[self._current].shows
+        )
         if target == self._pointed_at:
             return
-        self._pointed_at = target
+        before, self._pointed_at = self._pointed_at, target
         if target is not None:
             self.pointsAt.emit(target)
+        elif before is not None:
+            # Ein leeres Ziel: Das Fenster nimmt den Hinweis am Reiter ab (RM-573).
+            self.pointsAt.emit("")
+
+    def set_tab_names(self, names: Mapping[str, str]) -> None:
+        """Die Ziele, die Reiter derselben Karte sind, und ihr Name — vor :meth:`start`."""
+        self._tab_names = dict(names)
 
     def _clear_rows(self) -> None:
         # Das Panel-Layout vergisst ein zerstörtes Widget von selbst — mehr

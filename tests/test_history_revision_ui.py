@@ -1157,3 +1157,30 @@ def test_the_history_shows_each_retried_step_once_and_none_deleted(
             assert shown[0].text().strip().lstrip("▸▾ ").startswith(f"{number}  "), texts
     finally:
         panel.deleteLater()
+
+
+@pytest.mark.parametrize("as_old_file", [False, True], ids=["neu", "alte-datei"])
+def test_a_halt_after_a_retry_marks_the_retried_step(qt_app: Any, as_old_file: bool) -> None:
+    """Review U1, Fund 2: Hält die Kette nach „… und erneut versuchen“ wieder an, steht das „!“.
+
+    Bauplan §15.3: Die betroffene Operation ist im Verlauf markiert. Der Umbau
+    hat seine eigenen Zeilen (``_add_revision_rows``), und die kannten den Halt
+    nicht — gerade nach einem Rettungsversuch sucht der Kunde diese Stelle.
+    """
+    from app.i18n import tr
+    from app.ui.panels import GROUP_ROLE, HistoryPanel
+
+    history = _retried_twice(as_old_file=as_old_file)
+    drill = next(entry.id for entry in history.operations if entry.op == "drill_hole")
+    panel = HistoryPanel()
+    try:
+        panel.show_document(history.document, stopped_at=drill)
+        rows = [panel.list.item(index) for index in range(panel.list.count())]
+        marked = [row for row in rows if "! " in row.text()]
+        assert len(marked) == 1, [row.text() for row in rows]
+        sentence = str(tr("Hier hält die Kette an — der Grund steht im Prüfbericht."))
+        assert sentence in marked[0].toolTip()
+        if not as_old_file:
+            assert marked[0].data(GROUP_ROLE) is None, "die Zeile des Schritts selbst"
+    finally:
+        panel.deleteLater()

@@ -396,7 +396,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "hinein.\n\n"
             "**Wer es anders gewohnt ist, stellt um.** Die Einstellungen bieten vier "
             "weitere Belegungen nach Cura, Bambu Studio, Orca und PrusaSlicer, CAD und "
-            "Blender. Dort wählt die linke Taste wieder aus, und die Tastatur fliegt "
+            "Blender. Bei ihnen wählt die linke Taste wieder aus, und die Tastatur fliegt "
             "nicht. Eine 3D-Maus (SpaceMouse) fährt dieselbe Kamera: Schieben verschiebt "
             "das Teil, Drehen dreht es, Ziehen holt es näher, eine Gerätetaste passt "
             "alles ein. Geschwindigkeit und Richtung stehen in den Einstellungen, sobald "
@@ -418,15 +418,16 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "darunter, und ein Suchfeld findet jede. Ohne Auswahl stehen dort die "
             "Handlungen für alle Körper, etwa *Druckoptimal ausrichten*. Der Knopf "
             "*Bausteine* öffnet den Katalog. Das i neben einer Handlung sagt beim "
-            "Darüberfahren, was sie tut. Ein Klick darauf öffnet ihre Stelle im Handbuch. "
+            "Darüberfahren, was sie tut. Ein Klick darauf schlägt das Handbuch dort auf, "
+            "wo sie erklärt ist. "
             "Was der Reiter an einem Merkmal zeigt, "
             "steht in [Was Solidon im Modell erkennt](manual:features).\n\n"
             "**Der Prüfbericht** springt bei einer neuen Meldung nicht nach vorn. Sein "
             "Reiter zählt Fehler (X) und Warnungen (!) und blinkt einige Sekunden, rot "
             "bei einem Fehler, gelb bei einer Warnung. Getönt bleibt er, bis Sie den "
             "Bericht angesehen haben. Gleiche Meldungen stehen in einer Zeile, ihre Zahl "
-            "in Klammern davor. Ein Klick wählt alle betroffenen Teile, und eine Handlung "
-            "fragt, für welche davon sie gelten soll.\n\n"
+            "in Klammern davor. Ein Klick auf die Zeile wählt alle betroffenen Teile, "
+            "und eine Handlung fragt, für welche davon sie gelten soll.\n\n"
             "**Ein Menü für die Auswahl gibt es nicht.** Die Menüleiste behält, was ohne "
             "Auswahl geht. Tastenkürzel gelten weiter, und die Befehlspalette findet jede "
             "Handlung über ihren Namen, mit dem Kürzel daneben.\n\n"
@@ -2502,25 +2503,21 @@ def help_for(operation: str, registry: Registry | None = None) -> tuple[str, str
     return reference_key(spec.category), f"#{operation_anchor(spec.name)}"
 
 
-#: Wo das Handbuch eine Handlung ohne Operation erklärt: eine gesperrte Zeile
-#: des Merkmalfensters bei den Merkmalen, das Entfernen eines Schritts beim
-#: Verlauf.
+#: Die Seite über das Merkmalfenster — für eine Handlung, deren Operation dieses
+#: Register nicht kennt.
 FEATURES_PAGE: Final = "features"
-HISTORY_PAGE: Final = "history"
 
 
-def help_for_action(
-    operation: str | None, *, removes_a_step: bool = False, registry: Registry | None = None
-) -> tuple[str, str]:
+def help_for_action(operation: str | None, registry: Registry | None = None) -> tuple[str, str]:
     """Seite und Stelle hinter dem i einer Handlung im Merkmalfenster (RM-554).
 
-    Mit Operation dieselbe Antwort wie F1 im Operationsdialog
-    (:func:`help_for`). Ohne steht die Zeile gesperrt mit ihrem Grund da oder
-    nimmt einen Schritt heraus; dafür gibt es eine Themenseite.
+    Dieselbe Antwort wie F1 im Operationsdialog (:func:`help_for`). Ein i steht
+    nur an Zeilen mit Feldern, und die tragen immer eine Operation; kennt das
+    Register sie nicht, bleibt die Seite über das Merkmalfenster.
     """
     if operation and (registry or REGISTRY).has(operation):
         return help_for(operation, registry)
-    return (HISTORY_PAGE if removes_a_step else FEATURES_PAGE), ""
+    return FEATURES_PAGE, ""
 
 
 def titled(page: Page, text: str) -> str:

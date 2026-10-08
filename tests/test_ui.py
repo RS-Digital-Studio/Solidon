@@ -2491,13 +2491,27 @@ def test_the_start_screen_opens_the_manual(window: MainWindow) -> None:
 def test_the_sign_at_a_handling_opens_the_manual_on_its_page(window: MainWindow) -> None:
     """RM-554: Das i an *Baustein verschieben* schlägt das Handbuch dort auf, wo der Baustein steht.
 
-    Das Merkmalfenster meldet Seite und Stelle; das Fenster öffnet das
-    Handbuch wie F1 im Operationsdialog.
+    Durch das Merkmalfenster: das Schraubenloch als Baustein zeigen und das i an
+    *Baustein verschieben* anklicken. Das Schraubenloch lehrt die Anleitung, die
+    es in ``teaches`` führt; deren Seite schlägt das Fenster auf.
     """
-    from app.core import manual
+    from types import SimpleNamespace
 
-    page, spot = manual.help_for_action("insert_screw_hole")
-    window.feature_panel.manualRequested.emit(page, spot)
+    from PySide6.QtWidgets import QToolButton
+
+    from app.core import guides
+
+    page = next(guide.key for guide in guides.GUIDES if "insert_screw_hole" in guide.teaches)
+    step = SimpleNamespace(id=4, op="insert_screw_hole", params={"x": 10.0, "z": 6.0})
+    panel = window.feature_panel
+    panel.show_part(step, REGISTRY.get("insert_screw_hole"))
+    row = next(row for row in panel._shown_rows.values() if {"x", "y", "z"} <= set(row.widgets))
+    assert row.title is not None and row.title.text() == tr("Baustein verschieben")
+    dot = next(
+        widget for widget in row.box.findChildren(QToolButton) if widget.objectName() == "infoDot"
+    )
+    assert dot.toolTip(), "der Tooltip bleibt"
+    dot.click()
 
     assert window._manual is not None
     assert window._manual.isVisible()
@@ -2532,7 +2546,7 @@ def test_no_drag_number_stays_in_the_view_after_the_dialog(
     viewport = window.viewport
     drag = np.eye(4)
     drag[:3, 3] = (0.0, 60.62, 0.0)
-    viewport._on_gizmo_interacted(drag)
+    viewport._on_preview_interacted(drag)
     assert not viewport.drag_bar.isHidden(), "premise: the drag shows its number"
     assert viewport.drag_bar.label.text() == "Y"
 
@@ -2546,6 +2560,49 @@ def test_no_drag_number_stays_in_the_view_after_the_dialog(
         QApplication.processEvents()
     assert viewport.drag_bar.isHidden(), "kein Maßfeld bleibt stehen"
     assert viewport._drag_kind is None, "und keine getippte Zahl verschiebt danach etwas"
+
+
+@pytest.mark.parametrize("released", [False, True], ids=["enter-im-zug", "erst-loslassen"])
+def test_a_number_typed_during_a_preview_drag_moves_the_preview(
+    window: MainWindow, released: bool
+) -> None:
+    """Review U1, Fund 3: Die getippte Zahl gehört der Vorschau, nicht dem gewählten Körper.
+
+    Am Griff der Vorschau von *Quader anlegen* 12 mm in Y ziehen und „5“ tippen.
+    Mit der Eingabetaste noch im Zug ging die Zahl über ``transformDragged`` an
+    die Auswahl; wer erst losließ, verlor sie still, und die Vorschau bekam die
+    gezogenen 12. Jetzt kommt die 5 als Zug an die Vorschau, in beiden Folgen.
+    """
+    import numpy as np
+    from PySide6.QtTest import QTest
+
+    window.run_operation(REGISTRY.get("create_box"))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    viewport = window.viewport
+    to_bodies: list[object] = []
+    to_preview: list[np.ndarray] = []
+    viewport.transformDragged.connect(to_bodies.append)
+    viewport.previewDragged.connect(lambda matrix: to_preview.append(np.asarray(matrix)))
+    drag = np.eye(4)
+    drag[:3, 3] = (0.0, 12.0, 0.0)
+    viewport._on_preview_interacted(drag)
+    viewport.drag_bar.value.setFocus()
+    viewport.drag_bar.value.selectAll()
+    QTest.keyClicks(viewport.drag_bar.value, "5")
+    assert viewport.drag_bar.typing, "premise: the keyboard has taken the drag"
+    if released:
+        viewport._on_preview_released(drag)
+        assert not viewport.drag_bar.isHidden(), "die getippte Zahl bleibt stehen"
+        assert not to_preview, "das Loslassen wendet die gezogenen 12 nicht an"
+    QTest.keyClick(viewport.drag_bar.value, Qt.Key.Key_Return)
+    QApplication.processEvents()
+
+    assert not to_bodies, "kein Versatz an die gewählten Körper"
+    assert len(to_preview) == 1
+    assert to_preview[0][:3, 3] == pytest.approx((0.0, 5.0, 0.0))
+    assert dialog.values()["y"] == pytest.approx(5.0)
+    assert viewport.drag_bar.isHidden() and viewport._drag_kind is None
+    dialog.reject()
 
 
 def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
@@ -3875,7 +3932,7 @@ def test_a_changed_number_previews_before_it_changes_anything(window: MainWindow
     assert len(window.session.project.document.ops) == vorher, "und ändert nichts"
 
     gezeigt: list[object] = []
-    window._show_preview = lambda difference: gezeigt.append(difference)  # type: ignore[method-assign]
+    window._show_preview = lambda difference, **_kwargs: gezeigt.append(difference)  # type: ignore[method-assign]
     window._feature_preview.stop()
     window._preview_feature_change()
     assert window.session.wait_for_idle(60_000)
@@ -14060,6 +14117,55 @@ def test_opening_an_example_starts_its_tour(window: MainWindow, session: Session
     assert not _tour_tab_visible(window)
     assert session.wait_for_idle(120_000)
     assert not session.busy, "kein Arbeiter überlebt den Test"
+
+
+def test_a_tour_step_on_the_report_frames_its_tab_and_stays_in_view(window: MainWindow) -> None:
+    """RM-573, Entscheidung Robert: Ein Tourschritt über den Prüfbericht holt dessen Reiter nicht.
+
+    Der Bericht teilt sich die Karte mit der Tour; nach vorn geholt verdeckte er
+    sie samt dem Schritt, den der Kunde gerade liest. Jetzt bleibt die Tour
+    vorn, der Reiter trägt einen gestrichelten Rahmen und einen Satz für Maus
+    und Bildschirmleser, und der Schritt sagt, worauf zu klicken ist. Öffnet der
+    Kunde den Reiter, ist der Hinweis erledigt; zeigt der nächste Schritt woanders
+    hin, geht er auch.
+    """
+    from app.core import examples
+    from app.core.tour import tour_for
+
+    example = next(entry for entry in examples.EXAMPLES if entry.id == "weg1-halterung-anpassen")
+    tour = tour_for(example.id)
+    assert tour is not None
+    on_report = [index for index, step in enumerate(tour.steps) if step.shows == "report"]
+    assert on_report, "premise: the tour has a step about the report"
+    window.right.setTabVisible(window.right.indexOf(window.tour), True)
+    window.right.setCurrentWidget(window.tour)
+    window.tour.set_tab_names(window._tour_tab_names())
+    window.tour.start(example, tour)
+    report = window.right.indexOf(window.report)
+
+    window.tour._current = on_report[0]
+    window.tour._update_marks()
+    QApplication.processEvents()
+    assert window.right.currentWidget() is window.tour, "die Tour bleibt sichtbar"
+    assert window.right_tabs.pointed() == report, "der Reiter ist markiert"
+    assert window.right_tabs.pointed_frame() is not None
+    assert tr("Die Tour zeigt hierher. Ein Klick öffnet den Reiter.") in (
+        window.right_tabs.tabToolTip(report)
+    )
+    assert "Tour" in window.right_tabs.accessibleTabName(report)
+    step_text = window.tour._rows[on_report[0]][1].full_text()
+    assert window.right.tabText(report) in step_text, "der Schritt nennt den Reiter"
+
+    window.right.setCurrentIndex(report)
+    assert window.right_tabs.pointed() == -1, "geöffnet ist der Hinweis erledigt"
+
+    window.right.setCurrentWidget(window.tour)
+    window.tour._current = on_report[0]
+    window.tour._pointed_at = None
+    window.tour._update_marks()
+    assert window.right_tabs.pointed() == report
+    window.tour.stop()
+    assert window.right_tabs.pointed() == -1, "mit der Tour geht der Hinweis"
 
 
 def test_a_plain_project_carries_no_tour(

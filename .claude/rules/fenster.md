@@ -81,12 +81,13 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Eine Geste baut das Fenster einmal: `_on_tree_selection` überlässt Menübau
   dem Merkmalsignal; `_fields_this_round` merkt Merkmal und `FeaturePanel.serial`
   derselben Runde. Bei neuen Signalen die teuren Aufrufe zählen.
-- Tour ist ein Angebot: rechter Reiter für Beispielprojekte (`ui/tour.py`,
-  Schritte `core/tour.py`), Erkennung über `projectChanged`, Weiter auch ohne.
-  Warnung und Vorwahl der Startansicht lassen sie stehen, ein Projektwechsel
-  räumt sie ab; Erkennungswerte passen zu `make_examples.py` (`test_tour.py`).
-  Die Schritte melden ihre Höhe bis zur Zone (`ContentScroller`), ohne Tooltip;
-  ein Klick klappt einen auf (RM-553).
+- Tour ist ein Angebot: rechter Reiter für Beispiele (`ui/tour.py`, Schritte
+  `core/tour.py`), Erkennung über `projectChanged`, Weiter auch ohne. Warnung
+  und Vorwahl der Startansicht lassen sie stehen, ein Projektwechsel räumt sie
+  ab; Erkennungswerte passen zu `make_examples.py`. Schritte messen ihre Höhe
+  (`ContentScroller`), ohne Tooltip, aufklappbar per Klick und Taste (RM-553);
+  einen Reiter derselben Karte rahmt die Tour (`point_at`), statt ihn zu holen
+  (RM-573).
 
 ## Rückfragen
 
@@ -293,7 +294,8 @@ Ansichtsseite steht in `griffe.md`.
   Ausdruck (`expressions.shifted`: `=@staerke + 5`), eine Achse ohne Zug bleibt
   unangetastet; abgelehnt wird nur eine Drehung an einem gebundenen Wert. Jedes
   Zahlenfeld des Schritts trägt im Merkmalfenster fx, mit oder ohne Ausdruck
-  (`_expression_entry`, §13, RM-555).
+  (`_expression_entry`, §13, RM-555) — nur in den Handlungen dieses Schritts
+  (`_schemas_of`), nie in gleichnamigen Feldern der Nachbarn.
 - **Entf** nimmt an Dach oder Einzelmerkmal den Schritt des Bausteins
   (`MainWindow._delete_the_chosen_feature`), nie den Körper; ohne Baustein gilt
   `remove_feature`; greift auch das nicht (Fläche, Gewinde, Verrundung), fällt
