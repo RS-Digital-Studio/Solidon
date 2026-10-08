@@ -16,6 +16,7 @@ from typing import Any, ClassVar
 
 import pytest
 
+from app.core import keyring_backend
 from app.core.backends import keys, llm
 from app.core.backends.llm import (
     AnthropicBackend,
@@ -101,11 +102,11 @@ def test_the_first_backend_search_does_not_hold_its_caller(
         kept.append(sys._getframe())
 
     monkeypatch.setitem(sys.modules, "keyring", SimpleNamespace(get_keyring=get_keyring))
-    monkeypatch.setattr(keys, "_backend_found", False)
+    monkeypatch.setattr(keyring_backend, "_backend_found", False)
 
     class Caller:
         def ask(self) -> object:
-            return keys.find_backend_once(sys.modules["keyring"])
+            return keyring_backend.find_backend_once(sys.modules["keyring"])
 
     caller = Caller()
     caller.ask()
@@ -114,7 +115,7 @@ def test_the_first_backend_search_does_not_hold_its_caller(
     gc.collect()
     assert kept, "die Suche lief"
     assert watch() is None, "die Suche hielt ihren Aufrufer fest"
-    assert keys._backend_found
+    assert keyring_backend._backend_found
 
 
 def test_without_a_key_there_is_no_agent(monkeypatch: pytest.MonkeyPatch) -> None:

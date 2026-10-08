@@ -66,6 +66,7 @@ laden für jede Datei hier; diese Karte sagt, **was wo liegt**. Das Warum:
 | `discover.py` · `tools.py` · `install.py` | Installierte Programme außerhalb des PATH finden · externe Programme · Fehlendes aus der Anwendung nachinstallieren (§36); `workspace_for(ascii_only=True)` liefert unter Windows bei Bedarf einen geprüften 8.3-Alias oder einen privaten Ordner im Windows-Temp |
 | `process.py` · `http.py` · `json_boundary.py` | Sichere Grenze für externe Prozesse (§32; `run_limited` beendet einen Prozess, der nach seinem gemeldeten Ergebnis nicht endet: `finished`, `linger`; `bind_helper` bindet die Hilfsprozesse des Netzkerns an diesen Prozess) · für kleine HTTP-Transporte (`apply_header_deadline`) · für JSON aus fremden Vertrauensräumen |
 | `network.py` | CA-Satz für macOS und Pakete ohne nutzbaren Vertrauensspeicher (Flatpak) |
+| `keyring_backend.py` | Backend-Suche des System-Schlüsselbunds, einmal je Prozess im eigenen Faden; geteilt von `backends.keys` und `activation.device`, damit keins das andere importiert |
 
 - **Absturz**: `faulthandler` hält einen eigenen rohen Deskriptor bis zum
   Prozessende. Haupt- und Nebenfadenfehler nehmen mit der CLI denselben
