@@ -67,8 +67,6 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
   für Kreis-/Spiegelmuster, Spiegeln und Fügeweg gemeinsam an. `reference_point` löst
   Körper-/Merkmalbezüge vor Vorschau und Übernahme in gespeicherte cx/cy/cz auf.
   Vorhandene Koordinaten und Ausdrücke bleiben beim Wiederöffnen unverändert.
-- **Startansicht** — Die Vorwahl ersetzt kein Projekt und erhält dessen Tour.
-  Erst ein wirklicher Projektwechsel beendet die alte Tour.
 - **Import** — `import_model_async` → `_ReadWorker`, Plan im Arbeiter →
   `pictureChanged` (das Modell vor seiner Erkennung), `importConfirmed`,
   `importRejected`, `importFailed`; STEP-Baugruppen über
@@ -92,11 +90,8 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
 
 ## Die Regeln dieses Gebiets
 
-Maßgeblich sind die `paths:` in `.claude/rules/`: `oberflaeche` und
-`zwillinge` allgemein; `fenster` für Dialoge/Karten, `grenzen` für Menü/Felder,
-`ansicht` für Viewport/Picks/Rendering, `griffe` für Gesten, `kamera` für
-Navigation, `wartezeit` für Arbeiter/Abbau, `zeichenflaeche` für den Skizzeneditor.
-Die konkrete Dateizuordnung steht ausschließlich dort.
+Maßgeblich sind die `paths:` in `.claude/rules/`; welche Regel welches Thema
+trägt, sagt der Kopf von `oberflaeche.md`.
 
 ## Module
 

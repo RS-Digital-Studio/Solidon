@@ -81,11 +81,12 @@ Handlungen steht, sagt `grenzen.md`. Warum:
 - Eine Geste baut das Fenster einmal: `_on_tree_selection` überlässt Menübau
   dem Merkmalsignal; `_fields_this_round` merkt Merkmal und `FeaturePanel.serial`
   derselben Runde. Bei neuen Signalen die teuren Aufrufe zählen.
-- Tour ist ein Angebot: zusätzlicher rechter Reiter für Beispielprojekte
-  (`ui/tour.py`, Schritte `core/tour.py`), Erkennung über `projectChanged`,
-  Weiter auch ohne Erkennung. Warnung lässt aktive Tour stehen, Projektwechsel
-  räumt sie ab. Erkennungswerte müssen zu `make_examples.py` passen
-  (`test_tour.py`).
+- Tour ist ein Angebot: rechter Reiter für Beispielprojekte (`ui/tour.py`,
+  Schritte `core/tour.py`), Erkennung über `projectChanged`, Weiter auch ohne.
+  Warnung und Vorwahl der Startansicht lassen sie stehen, ein Projektwechsel
+  räumt sie ab; Erkennungswerte passen zu `make_examples.py` (`test_tour.py`).
+  Die Schritte melden ihre Höhe bis zur Zone (`ContentScroller`), ohne Tooltip;
+  ein Klick klappt einen auf (RM-553).
 
 ## Rückfragen
 

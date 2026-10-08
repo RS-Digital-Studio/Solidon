@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -37,6 +37,8 @@ from app.core.tour import Tour
 from app.core.types import Document
 from app.i18n import tr
 from app.ui.icons import icon
+from app.ui.leash import weak_slot
+from app.ui.overlay import ContentScroller, tell_the_zone
 from app.ui.session import Session
 from app.ui.style import NORMAL, TIGHT, make_primary, set_level
 
@@ -50,10 +52,12 @@ class StepLabel(QLabel):
     also auch nach jeder Änderung der Spaltenbreite.
 
     Welche der beiden Formen gilt, entscheidet nicht dieses Widget, sondern
-    :meth:`TourPanel._update_marks`. Dort stehen heute alle Schritte auf
-    Umbruch — die Kürzung machte vier von fünf unlesbar, während unter ihnen
-    Platz frei war. Sie bleibt, weil eine schmale Spalte sie wieder braucht.
+    :meth:`TourPanel._update_marks`: Der aktuelle Schritt und jeder
+    aufgeklappte bricht um, die übrigen enden mit Auslassung.
     """
+
+    clicked = Signal()
+    """Ein Klick auf die Zeile; eine eingeklappte klappt damit auf (RM-553)."""
 
     def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
@@ -75,6 +79,13 @@ class StepLabel(QLabel):
         super().resizeEvent(event)
         self._show()
 
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        super().mouseReleaseEvent(event)
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
+            event.position().toPoint()
+        ):
+            self.clicked.emit()
+
     def _show(self) -> None:
         if self.wordWrap():
             super().setText(self._full)
@@ -82,6 +93,25 @@ class StepLabel(QLabel):
         super().setText(
             self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, self.width())
         )
+
+
+class _StepScroller(ContentScroller):
+    """Die Schritte wünschen ihre ganze Höhe, und jeder Umbau sagt es bis zur Karte.
+
+    Ein nackter ``QScrollArea`` merkt sich den Wunsch seines Inhalts beim
+    Einsetzen, und da war die Liste leer: Die Tour-Karte stand bei 2000 x 816
+    auf wenigen Zeilen, der aufgeklappte Schritt rollte neben freiem Platz
+    (RM-553). Hier fragt der Rollbereich bei jedem Mal den Inhalt
+    (:class:`~app.ui.overlay.ContentScroller`), und ein neu gelegter Inhalt —
+    ein Schritt klappt auf, einer zu — meldet sich über
+    :func:`~app.ui.overlay.tell_the_zone`, sonst wüchse die Karte erst mit dem
+    nächsten fremden Anlass.
+    """
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
+        if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
+            tell_the_zone(self)
+        return super().eventFilter(watched, event)
 
 
 class TourPanel(QWidget):
@@ -118,6 +148,10 @@ class TourPanel(QWidget):
         """Gelesene oder vom Dokument bestätigte Schritte."""
         self._skipped: set[int] = set()
         """Handlungsschritte, die der Nutzer bewusst ausgelassen hat."""
+        self._unfolded: set[int] = set()
+        """Eingeklappte Schritte, die der Nutzer mit einem Klick aufgeklappt hat."""
+        self._in_view = 0
+        """Der Schritt, den der Rollbereich nach dem Legen ins Bild holt."""
         self._rows: list[tuple[QLabel, StepLabel]] = []
         self._row_hosts: list[QWidget] = []
         """Ein Trägerwidget je Schrittzeile. Aufgeräumt wird über genau ein
@@ -149,18 +183,22 @@ class TourPanel(QWidget):
         self._steps_layout.setSpacing(NORMAL)
         self._steps_layout.addStretch(1)
 
-        scroll = QScrollArea(self)
+        scroll = _StepScroller(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(steps_host)
+        self._scroll = scroll
 
         self.closing = QLabel("", self)
         self.closing.setWordWrap(True)
         self.closing.setVisible(False)
 
         self.next_button = QPushButton(tr("Weiter"), self)
-        self.next_button.setToolTip(
+        # Als Beschreibung, nicht als Tooltip (RM-553): Über dem Knopf lief die
+        # Sprechblase als eine Zeile quer über Ansicht und Kartentext, genau dort,
+        # wohin der Zeiger zum Weiterlesen ohnehin geht.
+        self.next_button.setAccessibleDescription(
             tr("Schaltet zum nächsten Schritt — auch, wenn der aktuelle nicht gemacht wurde.")
         )
         self.next_button.clicked.connect(self.advance)
@@ -220,6 +258,7 @@ class TourPanel(QWidget):
         self._current = 0
         self._completed.clear()
         self._skipped.clear()
+        self._unfolded.clear()
         # Was beim Öffnen schon zutrifft, hat der Nutzer nicht getan. Ein
         # Schritt, dessen Erkennung von Anfang an wahr ist — „im Prüfbericht
         # steht, was die Reparatur gefunden hat" —, würde die Tour sonst
@@ -245,6 +284,7 @@ class TourPanel(QWidget):
             marker.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
             text = StepLabel(f"{index + 1}. {step.text}", host)
             text.setWordWrap(True)
+            text.clicked.connect(weak_slot(self, TourPanel._toggle, index))
             row = QHBoxLayout(host)
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(TIGHT)
@@ -288,6 +328,7 @@ class TourPanel(QWidget):
         self._pointed_at = None
         self._completed.clear()
         self._skipped.clear()
+        self._unfolded.clear()
         self._clear_rows()
 
     # --- Erkennung --------------------------------------------------------------
@@ -401,11 +442,19 @@ class TourPanel(QWidget):
             # **Nur der Auftrag, der jetzt zählt, steht vollständig da.** Alle
             # kommenden Absätze zugleich zu zeigen machte aus der Führung eine
             # graue Textwand. Eine Zeile verrät weiterhin, was folgt; beim
-            # Erreichen klappt der Schritt vollständig auf. Der Hinweis hält
-            # den ganzen Text auch vorher für Maus und Hilfstechnik bereit.
+            # Erreichen klappt der Schritt vollständig auf, vorher und danach
+            # mit einem Klick auf die Zeile. **Kein Tooltip dafür** (RM-553):
+            # Die Sprechblase lief als eine lange Zeile quer über die Ansicht
+            # und verdeckte den Text der Karte. Die Hilfstechnik liest den
+            # ganzen Satz aus der Beschreibung.
             is_current = index == self._current
-            text.set_wrapped(is_current)
-            text.setToolTip("" if is_current else text.full_text())
+            unfolded = is_current or index in self._unfolded
+            text.set_wrapped(unfolded)
+            text.setToolTip("")
+            text.setAccessibleDescription("" if unfolded else text.full_text())
+            text.setCursor(
+                Qt.CursorShape.ArrowCursor if is_current else Qt.CursorShape.PointingHandCursor
+            )
             host = self._row_hosts[index]
             if index in self._skipped:
                 marker.clear()
@@ -432,6 +481,10 @@ class TourPanel(QWidget):
                 style.unpolish(host)
                 style.polish(host)
         self._point_at_current()
+        # Rollt die Liste, steht der aktuelle Schritt im Bild — erst nach dem
+        # Legen, vorher kennt der Rollbereich seine neue Höhe nicht.
+        self._in_view = self._current
+        QTimer.singleShot(0, self, self._show_row)
 
         finished = self._current >= len(tour.steps)
         self.closing.setVisible(finished)
@@ -453,6 +506,18 @@ class TourPanel(QWidget):
             if finished
             else f"{tr('Schritt')} {self._current + 1} / {len(tour.steps)}"
         )
+
+    def _toggle(self, index: int) -> None:
+        """Klappt einen anderen als den aktuellen Schritt auf oder wieder zu."""
+        if self._tour is None or index == self._current:
+            return
+        self._unfolded ^= {index}
+        self._update_marks()
+        self._in_view = index
+
+    def _show_row(self) -> None:
+        if 0 <= self._in_view < len(self._row_hosts):
+            self._scroll.ensureWidgetVisible(self._row_hosts[self._in_view], 0, 0)
 
     def _next_example(self) -> Example | None:
         """Das Beispiel nach diesem, in der Reihenfolge des Startbildschirms.
@@ -498,7 +563,11 @@ class TourPanel(QWidget):
         # Das Panel-Layout vergisst ein zerstörtes Widget von selbst — mehr
         # als das eine ``deleteLater`` je Zeile wäre schon wieder ein zweiter
         # Besitzer.
+        # Aus dem Layout aber sofort: Bis zum Löschen läge die alte Liste sonst
+        # noch einen Durchlauf über der neuen und zählte zu ihrer Höhe.
         for host in self._row_hosts:
+            host.hide()
+            self._steps_layout.removeWidget(host)
             host.deleteLater()
         self._row_hosts.clear()
         self._rows.clear()

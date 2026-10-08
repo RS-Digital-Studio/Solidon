@@ -499,13 +499,25 @@ def test_only_the_current_tour_step_is_expanded(qt_app: object) -> None:
 
     assert panel._rows[0][1].wordWrap()
     assert all(not text.wordWrap() for _marker, text in panel._rows[1:])
-    assert panel._rows[1][1].toolTip() == panel._rows[1][1].full_text()
+    # Keine Sprechblase (RM-553): Sie lief quer über Ansicht und Kartentext.
+    # Die Hilfstechnik liest den ganzen Satz aus der Beschreibung.
+    assert all(not text.toolTip() for _marker, text in panel._rows)
+    assert panel._rows[1][1].accessibleDescription() == panel._rows[1][1].full_text()
 
     panel.advance()
 
     assert not panel._rows[0][1].wordWrap()
     assert panel._rows[1][1].wordWrap()
-    assert panel._rows[1][1].toolTip() == ""
+    assert panel._rows[1][1].accessibleDescription() == ""
+
+    # Ein Klick klappt einen anderen Schritt auf und wieder zu, der aktuelle bleibt offen.
+    panel._rows[3][1].clicked.emit()
+    assert panel._rows[3][1].wordWrap()
+    assert panel._rows[1][1].wordWrap()
+    panel._rows[3][1].clicked.emit()
+    assert not panel._rows[3][1].wordWrap()
+    panel._rows[1][1].clicked.emit()
+    assert panel._rows[1][1].wordWrap(), "der aktuelle Schritt klappt nicht zu"
 
     panel.deleteLater()
     session.release()
