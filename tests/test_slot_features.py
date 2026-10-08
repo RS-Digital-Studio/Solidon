@@ -5186,6 +5186,8 @@ def _separate_case(case: str, kernel: str, profile: Profile) -> tuple[SceneObjec
         entry = _screwed_plate(kernel, profile)
         if case == "schraube-senkung":
             return entry, "printed_screw_countersink_1"
+        if case == "schraube-gewinde":
+            return entry, "printed_screw_thread_1"
         heads = [
             name
             for name, feature in entry.features.items()
@@ -5229,6 +5231,8 @@ _SEPARATE_CASES = [
         # Der Stift selbst, der in der Bohrung eines anderen Teils steckt.
         ("senkung-stift", _ROWS_OFFERED["senkung"]),
         ("langloch-stift", _ROWS_OFFERED["senkung"]),
+        # Das Gewinde der Schraube: Ø + 0,5 verschmolz sie mit der Platte.
+        ("schraube-gewinde", ("resize_feature", "remove_feature")),
     )
     for kernel in ("mesh", "brep")
     for op in rows
@@ -5257,7 +5261,11 @@ def test_a_separate_part_in_a_countersink_slot_or_screw_says_so_at_every_row(
     load_operations()
     entry, chosen = _separate_case(case, kernel, profile)
     feature = entry.features[chosen]
-    expected = PART_IN_ANOTHER_BORE if case.endswith(("stift", "kopf")) else OTHER_PART_IN_THE_BORE
+    expected = (
+        PART_IN_ANOTHER_BORE
+        if case.endswith(("stift", "kopf", "gewinde"))
+        else OTHER_PART_IN_THE_BORE
+    )
     (row,) = actions_for(feature, entry.features, mesh=as_mesh_data(entry.mesh), only=op)
     assert row.op is None and row.reason is expected, (case, chosen, row)
     with pytest.raises(ValidationError) as caught:

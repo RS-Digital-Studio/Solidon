@@ -4187,8 +4187,9 @@ FILLED_BORE_REASONS: Final = (HOLE_IS_NOT_EMPTY, OTHER_PART_IN_THE_BORE, PART_IN
 #: Hohlraum ist (Senkung). :func:`hole_is_clear` misst jeden in seiner Form.
 _HOLDS_A_PART: Final = frozenset({"hole", "slot", "cone"})
 
-#: Was als Material in einer fremden Bohrung stecken kann.
-_STICKS_IN_A_BORE: Final = frozenset({"pin", "cone", "sphere", "torus"})
+#: Was als Material in einer fremden Bohrung stecken kann — auch das Gewinde
+#: der Baustein-Schraube: Ø + 0,5 verschmolz sie mit der Platte.
+_STICKS_IN_A_BORE: Final = frozenset({"pin", "cone", "sphere", "torus", "thread"})
 
 #: Wie weit innerhalb des gemessenen Radius :func:`hole_is_clear` nach
 #: Dreiecksmitten sucht — die eigene Wand liegt auf dem Radius, ein Steg,
