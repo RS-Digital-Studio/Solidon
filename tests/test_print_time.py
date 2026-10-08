@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 import trimesh
@@ -968,12 +969,14 @@ def test_what_the_chain_leaves_open_comes_from_the_measured_program_defaults() -
 
 #: Wie weit Solidons Druckzeit am Quader (40, 40, 20 mm) von der Druckdatei des
 #: Slicers abliegt, in Prozent — gemessen am Druckdialogweg mit dem
-#: Herstellerprofil ohne Stützen (RM-281, 07.10.2026; Creality Print an 7.3
-#: nachgemessen). Programm → (Drucker, Abweichung, gemessene Fassung). Die
-#: Fassung steht hier, weil eine andere die Zeit verschiebt, ohne dass sich
-#: Code ändert: Weicht die installierte ab,
+#: Herstellerprofil ohne Stützen (RM-281, 07.10.2026 unter Windows; Creality
+#: Print an 7.3.0.6149 nachgemessen). Programm → (Drucker, Abweichung,
+#: gemessene Fassung). Die Fassung steht hier, weil eine andere die Zeit
+#: verschiebt, ohne dass sich Code ändert: Weicht die installierte ab,
 #: überspringt der Test mit beiden Fassungen statt rot zu werden, und das
 #: Nachmessen ist ein Release-Schritt (``schichtanalyse.md``, Review P2 Rest, Z2).
+#: Die Slicerauswahl auf Linux und macOS installiert genau diese Fassungen
+#: (``slicer-auswahl.yml``); dort ist ein Überspringen rot.
 SLICER_DEVIATION: dict[str, tuple[str, float, str]] = {
     "elegooslicer": ("centauri-carbon-2", -5.7, "1.5.3.5"),
     "prusaslicer": ("prusa-mk4s", 1.4, "2.9.6"),
@@ -1014,16 +1017,33 @@ def test_a_version_matches_digit_group_by_digit_group() -> None:
     assert not _same_version("", "2.4.2")
 
 
-def _installed_slicer(program: str) -> object | None:
-    from app.core import discover, tools
-    from app.core.export import slicer_keys
+def test_the_slicer_selection_installs_the_measured_versions() -> None:
+    """``slicer-auswahl.yml`` lädt je Programm die Fassung aus :data:`SLICER_DEVIATION`.
 
-    # Die Suite fragt die Maschine sonst nicht (``_machine_stays_out_of_it``);
-    # dieser Test braucht genau den installierten Slicer.
-    for path in discover.unpatched_find_programs("slicer", tools.SLICERS):  # type: ignore[attr-defined]
-        if slicer_keys.program_of(path) == program:
-            return path
-    return None
+    Sonst überspringt der Quadertest auf Linux und macOS jeden Fall, und dort
+    ist ein Überspringen rot: Die Läufer installierten Creality Print 7.2.1,
+    gemessen war 7.3. Gelesen werden die Adressen, die ein Rezept lädt; ein
+    Flatpak ist über seine Commit-Kennung festgelegt und nennt keine Fassung,
+    die Mac-Abbilder desselben Programms schon.
+    """
+    import re
+
+    workflow = (
+        Path(__file__).resolve().parent.parent / ".github" / "workflows" / "slicer-auswahl.yml"
+    ).read_text(encoding="utf-8")
+    for program, (_printer, _deviation, version) in SLICER_DEVIATION.items():
+        recipes = re.findall(
+            rf"^\s*(?:Linux|macOS)/{program}\)(.*?);;", workflow, re.MULTILINE | re.DOTALL
+        )
+        assert len(recipes) == 2, f"{program}: je ein Rezept für Linux und macOS"
+        addresses = re.findall(r"\b(?:appimage|dmg|fetch)\s+(\S+)", " ".join(recipes))
+        assert addresses, program
+        wanted = rf"(?<![\d.]){re.escape(version)}(?!\d)"
+        # Der Dateiname, nicht der Releaseordner: Der nennt nur die Hauptfassung.
+        stale = [
+            address for address in addresses if not re.search(wanted, address.rsplit("/", 1)[-1])
+        ]
+        assert not stale, f"{program}: gemessen an {version}, geladen wird {stale}"
 
 
 def _setup_like_the_dialog(exe: object, profile: object) -> object:
@@ -1051,26 +1071,29 @@ def _setup_like_the_dialog(exe: object, profile: object) -> object:
     return staged if staged is not None else setup
 
 
-@pytest.mark.parametrize("program", sorted(SLICER_DEVIATION))
+@pytest.mark.parametrize(
+    "program",
+    [
+        pytest.param(program, marks=pytest.mark.slicer(program))
+        for program in sorted(SLICER_DEVIATION)
+    ],
+)
 def test_the_estimate_of_a_box_stays_where_the_installed_slicer_was_measured(
-    program: str, tmp_path
+    program: str, installed_slicer: Path, tmp_path: Path
 ) -> None:
     """Am echten Slicer: Quader 40 × 40 × 20 (``cube_clean`` aus dem Korpus,
     gestreckt) auf dem Weg des Druckdialogs, Druckzeit ab der ersten Schicht
     aus der Druckdatei gegen Solidons Schätzung. Die Abweichung bleibt
-    innerhalb von :data:`SLICER_SPREAD` Punkten um die Messung; übersprungen
-    wird ohne installierten Slicer und bei einer anderen Fassung als der
-    gemessenen — so läuft der Test auch auf Linux und macOS, wo der Slicer
-    liegt, und ein Rechner mit anderer Fassung wird nicht rot."""
-    from pathlib import Path
-
+    innerhalb von :data:`SLICER_SPREAD` Punkten um die Messung. Den Slicer
+    sucht ``installed_slicer`` nach dem Marker des Falls, damit die
+    Slicerauswahl ihn auf Linux und macOS findet; übersprungen wird ohne
+    installierten Slicer und bei einer anderen Fassung als der gemessenen, so
+    wird ein Arbeitsplatz mit anderer Fassung nicht rot."""
     from app.core.export import handover, manufacturer
     from app.core.types import SceneObject
     from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
 
-    exe = _installed_slicer(program)
-    if exe is None:
-        pytest.skip(f"{program} ist hier nicht installiert")
+    exe = installed_slicer
     printer, measured, version = SLICER_DEVIATION[program]
     profile = profiles.make_profile(printer, "pla")
     setup = _setup_like_the_dialog(exe, profile)
