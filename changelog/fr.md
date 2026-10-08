@@ -16,6 +16,62 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.5.4
+
+### Utilisation et système
+
+- Solidon démarre désormais sur les Mac Intel sous macOS 26. La version 0.5.3 y restait bloquée au démarrage.
+- Sur Mac, *Annuler* interrompt aussitôt une réponse en cours du modèle local.
+- Sur Mac, Retour ouvre l'entrée sélectionnée sur l'écran d'accueil, dans *Rechercher une fonction* et dans le rapport de contrôle.
+- Sous Linux, la saisie par Fcitx5 et IBus arrive désormais dans le champ de texte, aussi dans le Flatpak et l'AppImage.
+- La désinstallation sous Windows ne laisse plus d'entrées d'association de fichiers dans le registre.
+- Suppr agit aussi quand l'onglet *Sélection* a le focus, et retire plusieurs corps marqués en une seule étape. Si la touche ne fait rien, la barre d'état en donne la raison.
+- Le clic droit sur les corps propose *Retirer l'objet* et, pour plusieurs, *Réunir*. *Évidement* figure aussi sur une face sélectionnée, qui devient l'ouverture.
+- Les panneaux de gauche et de droite se déplacent par leur poignée, s'ancrent à un bord ou flottent librement. *Vue → Panneaux à leur place* les remet en place.
+- Pendant un nouveau calcul, le rapport de contrôle indique *Nouveau calcul en cours …* et garde les lignes précédentes comme état antérieur. Avant, d'anciennes erreurs semblaient encore valables.
+- Si le calcul rapide échoue à une étape, Solidon la recalcule à fond dans la même passe au lieu de s'arrêter.
+- Un constat indiquant qu'une étape n'a rien changé ouvre cette étape sur le champ concerné.
+- Une fois un corps retiré, le rapport n'en parle plus, et l'historique montre quelles étapes ne laissent plus rien.
+- Un perçage sélectionné ne retombe plus en silence sur son corps après un nouveau calcul. Avant, Suppr pouvait alors retirer tout le corps.
+- Chaque fonction porte le même nom partout. L'outil *Diviser* propose *Diviser selon un plan*, *Diviser le long d'une ligne tracée* et *Diviser en pièces distinctes*.
+- Sur le corps sélectionné, *Diviser automatiquement …* se trouve désormais sous *Préparer*.
+- Dans la fenêtre au repos, seul *Blocs* ressort en couleur. Le rouge est réservé aux boutons qui rejettent ou suppriment, et les questions s'ouvrent avec le focus sur *Annuler*.
+- En mode dessin, l'onglet *Sélection* est masqué. La liste des contraintes montre celles des points et lignes sélectionnés, ainsi que chaque conflit.
+- Dans la carte des paramètres, une cote n'affiche « Non utilisé » que si c'est le cas. Le bouton indique combien de nombres fixes peuvent être liés à des cotes.
+- Le rapport d'erreur ne joint un journal de plantage que si Solidon a vraiment planté.
+
+### Imprimer et transmettre au slicer
+
+- Sous Linux, Solidon crée désormais aussi le fichier d'impression avec Cura en Flatpak ou en AppImage.
+- La boîte de dialogue d'impression propose les imprimantes du slicer choisi, comme *Premiers pas* et *Réglages*. Une imprimante reprise ainsi reste liée à son slicer.
+- La durée d'impression estimée est plus proche de celle du slicer, nettement plus pour les pièces avec supports.
+- La place des supports et du skirt sur le plateau se mesure désormais sous les seuls surplombs. Les pièces près du bord ne reçoivent plus d'avertissement injustifié.
+
+### Filetages, perçages et pièces normalisées
+
+- Les filetages acceptent désormais tout diamètre jusqu'à 1000 mm, avec *Filetage imprimable*, dans un perçage, avec *Créer une vis* ou *Créer un couvercle vissé*.
+- Vis, écrous et rondelles existent selon ISO de M1,6 à M64. Pour d'autres tailles, *Taille personnalisée* déduit les cotes des tailles voisines et le signale.
+- Avec *Ajustée au perçage*, *Goupille pour perçage* construit la contrepartie : une tête fraisée affleurante pour une fraisure, un filetage extérieur de même taille et même pas pour un intérieur.
+- Sur un filetage intérieur imprimé, la sélection propose directement *Goupille pour perçage*.
+- Si une pièce séparée, comme une goupille, occupe un perçage, ses actions le signalent et proposent *Diviser en pièces distinctes*. Avant, la goupille fusionnait sans bruit avec la plaque.
+
+### Modifier et esquisser
+
+- Avec *Déplacer la caractéristique*, sa matière suit telle quelle et l'ancien emplacement est comblé proprement. Là où c'est impossible, la sélection le dit d'emblée.
+- Sur un bourrelet ou une gorge, la sélection ne propose plus que ce que l'opération sait faire.
+- Si un congé borde une paroi, *Appliquer une dépouille* indique avant le calcul qu'il gêne et propose *Supprimer la caractéristique* comme issue.
+- Quand vous découpez une partie d'un corps, les chanfreins, filetages et logements d'écrou des blocs qui s'y trouvaient disparaissent aussi.
+- Dans *Créer un couvercle* et *Créer un couvercle vissé*, une hauteur d'ouverture vide signifie « Arête supérieure », et 0 est la hauteur du plateau. Les anciens projets gardent leur ouverture.
+- Une contrainte d'angle dans une petite esquisse ne renverse plus les lignes.
+
+### Générer avec l'IA
+
+- La boîte de dialogue de génération calcule en local avec TRELLIS.2 et FLUX.2 [klein] au lieu de TripoSG et SDXL. Un texte devient d'abord une image, puis l'image devient le modèle.
+- Avant le téléchargement, l'installation indique les licences et tailles des modèles. Elle retire l'ancienne installation TripoSG de Solidon et dit d'abord quels dossiers et quelle taille.
+- Les parois minces, par exemple d'un vase, arrivent fermées et avec une épaisseur.
+- L'assistant répond dans la langue dans laquelle vous écrivez.
+- Avec un modèle local, l'assistant dispose d'autant de place qu'avec un modèle hébergé et mène des tâches jusqu'à douze étapes.
+
 ## 0.5.3
 
 ### Utilisation et système

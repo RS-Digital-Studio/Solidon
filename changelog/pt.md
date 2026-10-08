@@ -15,6 +15,62 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.5.4
+
+### Utilização e sistema
+
+- O Solidon arranca agora nos Mac Intel com macOS 26. A versão 0.5.3 ficava aí bloqueada no arranque.
+- No Mac, *Cancelar* interrompe de imediato uma resposta em curso do modelo local.
+- No Mac, Return abre a entrada selecionada no ecrã inicial, em *Pesquisar função* e no relatório de verificação.
+- No Linux, a escrita com Fcitx5 e IBus chega agora ao campo de texto também no Flatpak e no AppImage.
+- A desinstalação no Windows não deixa no registo entradas da associação de ficheiros.
+- Delete também funciona quando o separador *Seleção* tem o foco, e remove vários corpos marcados num só passo. Se a tecla não fizer nada, a barra de estado diz porquê.
+- O clique direito nos corpos oferece *Remover objeto* e, com vários, *Unir*. *Esvaziar* está também numa face selecionada, que passa a ser a abertura.
+- Os painéis da esquerda e da direita movem-se pela pega, encaixam num rebordo ou ficam a flutuar. *Vista → Painéis para o seu lugar* repõe-nos.
+- Enquanto recalcula, o relatório de verificação diz *A recalcular …* e mostra as linhas anteriores como estado anterior. Até agora, os erros antigos pareciam continuar válidos.
+- Se o cálculo rápido falhar num passo, o Solidon calcula-o a fundo na mesma execução em vez de parar.
+- Uma constatação que diz que um passo não teve efeito abre esse passo no campo certo.
+- Depois de remover um corpo, o relatório deixa de falar dele, e o histórico mostra que passos já não deixam nada.
+- Um furo selecionado já não volta em silêncio ao seu corpo depois de recalcular. Até agora, o Delete podia então remover o corpo inteiro.
+- Cada função tem o mesmo nome em todo o lado. A ferramenta *Dividir* oferece *Dividir por um plano*, *Dividir ao longo de uma linha desenhada* e *Dividir em peças soltas*.
+- No corpo selecionado, *Dividir automaticamente …* está agora em *Preparar*.
+- Na janela em repouso só *Blocos* se destaca a cor. O vermelho fica para os botões que descartam ou apagam, e as perguntas abrem com o foco em *Cancelar*.
+- No modo de desenho, o separador *Seleção* fica oculto. A lista de restrições mostra as dos pontos e linhas selecionados, mais qualquer conflito.
+- No cartão de parâmetros, uma medida só mostra «Não utilizado» quando é o caso. O botão diz quantos números fixos se podem associar a medidas.
+- O relatório de erro só anexa um registo de falha quando o Solidon falhou mesmo.
+
+### Imprimir e entregar ao slicer
+
+- No Linux, o Solidon cria agora o ficheiro de impressão também com o Cura em Flatpak ou AppImage.
+- O diálogo de impressão oferece as impressoras do slicer escolhido, como *Primeiros passos* e *Definições*. Uma impressora assim adotada fica ligada ao seu slicer.
+- O tempo de impressão estimado está mais perto do do slicer, muito mais perto em peças com suportes.
+- Se suportes e skirt cabem na mesa, a verificação mede-o agora só sob as saliências. As peças junto ao rebordo já não recebem um aviso sem razão.
+
+### Roscas, furos e peças normalizadas
+
+- As roscas aceitam agora qualquer diâmetro até 1000 mm, com *Rosca imprimível*, num furo, com *Criar parafuso* ou *Criar tampa de rosca*.
+- Parafusos, porcas e anilhas existem segundo ISO de M1,6 a M64. Para outros tamanhos, *Medida própria* deriva as medidas dos tamanhos vizinhos e indica-o.
+- Com *Ajustado ao furo*, *Pino para furo* constrói a contrapeça: uma cabeça escareada à face para um escareamento, uma rosca externa do mesmo tamanho e passo para uma interna.
+- Numa rosca interna impressa, a seleção oferece diretamente *Pino para furo*.
+- Se num furo estiver uma peça separada, como um pino, as ações no furo dizem-no e oferecem *Dividir em peças soltas*. Até agora, o pino fundia-se em silêncio com a placa.
+
+### Editar e esboçar
+
+- Com *Mover característica*, o material da característica vai tal como está e o lugar antigo fica bem preenchido. Onde não for possível, a seleção di-lo logo.
+- Em cordões e gargantas, a seleção só oferece o que a operação consegue fazer.
+- Se houver um arredondamento junto a uma parede, *Aplicar o ângulo de saída* diz antes do cálculo que está a atrapalhar e indica *Remover característica* como saída.
+- Ao cortar uma parte de um corpo, desaparecem também chanfros, roscas e alojamentos de porcas dos blocos que lá estavam.
+- Em *Criar tampa* e *Criar tampa de rosca*, um campo vazio para a altura da abertura significa «Aresta superior», e 0 é a altura da mesa. Os projetos antigos mantêm a sua abertura.
+- Uma restrição de ângulo num esboço pequeno já não vira as linhas.
+
+### Gerar com IA
+
+- O diálogo de geração calcula localmente com TRELLIS.2 e FLUX.2 [klein] em vez de TripoSG e SDXL. Um texto passa primeiro a imagem, e a imagem a modelo.
+- Antes de descarregar, a configuração indica as licenças e tamanhos dos modelos. Remove a antiga configuração TripoSG do Solidon e diz antes que pastas são e quanto ocupam.
+- As paredes finas, por exemplo de um vaso, chegam fechadas e com espessura.
+- O assistente responde na língua em que escreve.
+- Com um modelo local, o assistente tem tanto espaço como com um alojado e cumpre tarefas até doze passos.
+
 ## 0.5.3
 
 ### Utilização e sistema
