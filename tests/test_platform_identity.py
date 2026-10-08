@@ -1251,6 +1251,49 @@ def _tangential_rounds() -> str:
     return hashlib.sha256(repr(decisions).encode()).hexdigest()[:16]
 
 
+def _used_up_faces() -> str:
+    """Ob eine erzeugte Fläche verbraucht ist — an der Toleranzgrenze (RM-537, M1).
+
+    Eine erkannte Fläche liegt knapp vor, auf und knapp hinter dem Abstand, bis
+    zu dem sie noch „in der Ebene“ zählt — in Schritten von einem ULP; daran
+    hängt, ob ein späterer Schritt anhält. Die schräge Normale (1, 1, 1) hat
+    keine exakte Länge, ihre Einheitsnormale entscheidet also mit: Mit
+    ``np.linalg.norm`` fiel eine der Entscheidungen unter dem Rauschen anders.
+    """
+    from app.core.scene.evaluate import _consumed_faces
+    from app.core.types import Feature
+    from app.core.units import match_tolerance
+
+    diagonal = 100.0
+    tolerance = match_tolerance(diagonal)
+    normal = (1.0, 1.0, 1.0)
+    length = math.sqrt(3.0)
+    unit = tuple(value / length for value in normal)
+    gone = Feature(
+        id="face_1",
+        kind="face",
+        provenance="generated",
+        params={"normal": normal, "centre": (0.0, 0.0, 0.0)},
+    )
+    before = {"face_1": dataclasses.replace(gone, face_indices=(0, 1))}
+    decisions = []
+    for step in range(-64, 65):
+        offset = tolerance * (1.0 + step * 2.0**-52)
+        found = Feature(
+            id="face_9",
+            kind="face",
+            provenance="detected",
+            params={"normal": unit, "centre": tuple(offset * value for value in unit)},
+            face_indices=(2, 3),
+        )
+        consumed = _consumed_faces(
+            {"face_1": gone}, {"face_1"}, before, {"face_9": found}, diagonal
+        )
+        decisions.append(bool(consumed))
+    assert any(decisions) and not all(decisions), "die Probe muss an der Grenze liegen"
+    return hashlib.sha256(repr(decisions).encode()).hexdigest()[:16]
+
+
 def _thread_ridge() -> str:
     """Der Gang eines druckbaren Gewindes, außen und als Loch (RM-187).
 
@@ -1576,6 +1619,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "tangential_rounds": _tangential_rounds,
     "traced_outline": _traced_outline,
     "thicken": _thickened_skin,
+    "used_up_faces": _used_up_faces,
     "thread_ridge": _thread_ridge,
     "wrapped_texture": _wrapped_texture,
     "support_columns": _support_columns,

@@ -99,12 +99,16 @@ ist selbst die Ansage (§2.6) — Griff ja, Würfel nein.
   am Baustein alles. Ein Pfeil oder Ring, dessen Zug beim Loslassen verfällt,
   ist schlimmer als keiner.
 
-* **An einer Fläche geht der Zug bis in den Verlauf**: `gizmo_feature` (wo),
-  `gizmo_target` (was), `_face_seat` (Mitte und Normale), `faceDragged` meldet die
-  **Kennung**, das Fenster macht `push_face` mit `face=<Kennung>` — mit der
-  Richtung bewegte die Operation jede gleich gerichtete Fläche. `nx/ny/nz` nur
-  noch für gespeicherte Schritte (`test_the_handle_of_a_chosen_face_pushes_that_face`
-  fährt die Kette am Stück).
+* **An einer gewählten Fläche schlägt der Zug einen Weg vor** (RM-535):
+  `faceDragged` meldet die **Kennung**, das Fenster schreibt den Weg in
+  *Fläche versetzen* (`take_values`, `preview_armed`), erst *Übernehmen* legt
+  `push_face` mit `face=<Kennung>` an — wie der Zug an der Bohrung. Ohne diese
+  Zeile (Fläche nicht gewählt) wird der Zug sofort der Schritt. Mit der
+  Richtung bewegte die Operation jede gleich gerichtete Fläche; `nx/ny/nz` nur
+  für gespeicherte Schritte.
+* **Ein Merkmal trägt den Griff nur, wo die Karte das Versetzen anbietet**
+  (`Viewport.move_refused` → `FeaturePanel.refuses`, nach dem Aufbau
+  `refresh_gizmo`); an einer gesperrten Tasche endete der Zug sonst ohne Ort.
 * **Eine Fläche aus einem Baustein**: `gizmo_target` antwortet nichts, der Zug
   meldet `featureMoved` in den Schritt des Bausteins, nie als Vorschlag
   (`proposing`) — Regel in `fenster.md`, „Ein Merkmal aus einem Baustein meint
@@ -236,6 +240,9 @@ und stellt die gemessenen Werte wieder her (`_drag_kind` bleibt `"slot"`).
   Länge, Richtung und Breite; geänderte Breite und Mitte gehen mit, der
   Flächenbezug beginnt an der Zielmitte. Ist eine Tiefenänderung offen, bleibt
   deren Editor zuständig, und der Langlochzug wird mit Hinweis verworfen.
+* **Ein Langloch nimmt beim Setzen die Flächennormale**, beim Ziehen und Ändern
+  die positive Merkmalachse; die Gegenmündung liegt rechtshändig
+  (`placement_flow.py`).
 * **Ein Feldwert überlebt den Neuaufbau seines Griffs**: Länge, Richtung und
   Breite werden vor dem Aufbau an das Merkmal gebunden; Panel und Maßgruppe
   teilen denselben vollständigen Auftrag, kein Griffsignal verliert die Breite.

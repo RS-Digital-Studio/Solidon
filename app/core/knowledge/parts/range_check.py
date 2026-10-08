@@ -58,9 +58,109 @@ def _collect_on_main_thread() -> None:
         gc.collect()
 
 
+@dataclass(frozen=True, slots=True)
+class _Field:
+    """Ein Feld des Bereichs: seine Randwerte, und wovon abhängt, ob sie zählen."""
+
+    name: str
+    values: list[Any]
+    rest: Any
+    """Der Wert in einer Ecke, in der das Feld nicht wirkt — seine Vorgabe."""
+    wanted: tuple[str | bool, ...]
+    """Bei welchen Werten seines Steuerfelds es wirkt (``ParamSpec.depends_on``)."""
+
+
+def _matches(value: Any, wanted: tuple[str | bool, ...]) -> bool:
+    """Ob ein Steuerwert das abhängige Feld wirksam macht — ``bool`` nie gleich ``int``."""
+    return any(
+        value is choice
+        if isinstance(choice, bool)
+        else (value == choice and not isinstance(value, bool))
+        for choice in wanted
+    )
+
+
+def _forest(params: type[BaseParams]) -> tuple[list[_Field], dict[str, list[_Field]], list[str]]:
+    """Die Felder als Wald: Wurzeln ohne Bedingung, darunter, was von ihnen abhängt.
+
+    Ein Feld hängt an höchstens einem Steuerfeld (``depends_on``). Wo das
+    Steuerfeld fehlt oder die Kette einen Kreis schließt — ein fehlerhaftes
+    Schema, das die Registerprüfung meldet —, zählt das Feld wie ohne
+    Bedingung: lieber eine Ecke zu viel als eine zu wenig.
+    """
+    entries = {entry.name: entry for entry in params.spec()}
+    fields = {}
+    for name, values in _corner_values(params):
+        entry = entries[name]
+        rest = entry.default if entry.default in values or entry.kind in ("float", "int") else None
+        fields[name] = _Field(
+            name=name,
+            values=values,
+            rest=values[0] if rest is None else rest,
+            wanted=entry.depends_on[1] if entry.depends_on is not None else (),
+        )
+    parent = {
+        name: entries[name].depends_on[0]  # type: ignore[index]
+        for name in fields
+        if entries[name].depends_on is not None and entries[name].depends_on[0] in fields  # type: ignore[index]
+    }
+    reached: set[str] = set()
+    pending = [name for name in fields if name not in parent]
+    while pending:
+        name = pending.pop()
+        reached.add(name)
+        pending.extend(child for child, above in parent.items() if above == name)
+    for name in [name for name in parent if name not in reached]:
+        del parent[name]
+    children: dict[str, list[_Field]] = {name: [] for name in fields}
+    for name in fields:
+        if name in parent:
+            children[parent[name]].append(fields[name])
+    roots = [name for name in fields if name not in parent]
+    return [fields[name] for name in roots], children, list(fields)
+
+
+def _count(field: _Field, children: dict[str, list[_Field]]) -> int:
+    """Wie viele Ecken ein Feld samt allem, was an ihm hängt, beiträgt."""
+    return sum(
+        math.prod(
+            _count(child, children) if _matches(value, child.wanted) else 1
+            for child in children[field.name]
+        )
+        for value in field.values
+    )
+
+
+def _at_rest(field: _Field, children: dict[str, list[_Field]]) -> dict[str, Any]:
+    """Ein Feld ohne Wirkung und alles, was an ihm hängt, auf seiner Vorgabe."""
+    values = {field.name: field.rest}
+    for child in children[field.name]:
+        values.update(_at_rest(child, children))
+    return values
+
+
+def _expand(field: _Field, children: dict[str, list[_Field]]) -> list[dict[str, Any]]:
+    """Die Ecken eines Feldes samt allem, was an ihm hängt."""
+    expanded: list[dict[str, Any]] = []
+    for value in field.values:
+        below = [
+            _expand(child, children)
+            if _matches(value, child.wanted)
+            else [_at_rest(child, children)]
+            for child in children[field.name]
+        ]
+        for combination in itertools.product(*below):
+            merged = {field.name: value}
+            for part in combination:
+                merged.update(part)
+            expanded.append(merged)
+    return expanded
+
+
 def corner_count(params: type[BaseParams]) -> int:
     """Zählt den ganzen Bereich, ohne eine einzige Kombination anzulegen."""
-    return math.prod(len(values) for _name, values in _corner_values(params))
+    roots, children, _order = _forest(params)
+    return math.prod(_count(root, children) for root in roots)
 
 
 def require_range_size(count: int) -> None:
@@ -91,15 +191,27 @@ def corners(params: type[BaseParams]) -> list[dict[str, Any]]:
     2.114 Grenzkombinationen hat. Gemessen am 31.08.2026 brauchen ihre reinen
     Builds 73,2 Sekunden. Das ist ein sichtbarer, abbrechbarer Arbeitslauf und
     kein Grund, die zugesagte Menge still zu verkürzen.
+
+    **Ein Feld ohne Wirkung vervielfacht nichts.** Wo seine Bedingung
+    (``ParamSpec.depends_on``) in einer Ecke nicht erfüllt ist, verwirft der
+    Baustein seinen Wert (``oberflaeche.md``: „Ein Feld ohne Wirkung steht nicht
+    da"); es steht dort auf seiner Vorgabe, statt dieselbe Ecke an seinen
+    Grenzen noch einmal zu bauen. Bis zum 06.10.2026 tat es das: Der
+    Nenndurchmesser eines eigenen Maßes verdoppelte jede Tabellengröße, und ein
+    Schraubenloch mit 23 Normgrößen und eigenem Maß hätte 1536 Ecken gezählt,
+    von denen 400 verschieden sind.
     """
-    lists = _corner_values(params)
-    require_range_size(math.prod(len(values) for _name, values in lists))
-    if not lists:
+    roots, children, order = _forest(params)
+    require_range_size(math.prod(_count(root, children) for root in roots))
+    if not roots:
         return [{}]
-    return [
-        dict(zip((name for name, _values in lists), combination, strict=True))
-        for combination in itertools.product(*(values for _name, values in lists))
-    ]
+    plan: list[dict[str, Any]] = []
+    for combination in itertools.product(*(_expand(root, children) for root in roots)):
+        merged: dict[str, Any] = {}
+        for part in combination:
+            merged.update(part)
+        plan.append({name: merged[name] for name in order})
+    return plan
 
 
 DEFAULT_WALL_REQUIREMENT: Final = WallRequirement()

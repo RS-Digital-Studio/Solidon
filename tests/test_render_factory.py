@@ -13,6 +13,7 @@ import pytest
 
 from app.ui.render import factory
 from app.ui.render.gfx_renderer import GfxRenderer
+from tests import native_window_probe as probe
 
 
 @pytest.mark.rendering
@@ -171,15 +172,9 @@ def test_the_factory_builds_pygfx_without_a_window(require_graphics_adapter: Non
         view.close()
 
 
-@pytest.mark.windowed
 @pytest.mark.usefixtures("require_graphics_adapter")
-def test_native_qt_canvas_draws_and_releases_its_renderer() -> None:
+def test_native_qt_canvas_draws_and_releases_its_renderer(native_window_platform: str) -> None:
     """Ein eigener Prozess prüft den echten Qt-Fensterweg neben den Offscreen-Verträgen."""
-    platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
-    if platform == "xcb" and not os.environ.get("DISPLAY"):
-        if os.environ.get("CI"):
-            pytest.fail("Der native Linux-Fenstertest braucht DISPLAY, zum Beispiel durch Xvfb.")
-        pytest.skip("kein X11-Display für den nativen Qt-Fensterweg")
     script = """
 import gc
 import math
@@ -225,7 +220,7 @@ print("bild geprüft", flush=True)
 # Die echten Qt-Radereignisse müssen bis zur Kamera reichen, auch unterhalb
 # einer Raste. Beide Projektionen behalten dabei den Weltpunkt am Zeiger.
 navigator = Navigator(view, "solidon", NavigationLog().callbacks())
-token = view.add_pointer_listener(navigator.handle)
+view.add_pointer_listener(navigator.handle)
 pointer = QPointF(75, 45)
 ratio = view.widget.devicePixelRatioF()
 x, y = round(pointer.x() * ratio), round(pointer.y() * ratio)
@@ -254,7 +249,7 @@ for parallel in (False, True):
             assert math.dist(anchor, current) < 1e-8
         view.set_camera_pose(pose)
         view.set_parallel_scale(scale)
-view.remove_pointer_listener(token)
+# Der Zuhörer bleibt angemeldet wie in der Ansicht; ``close`` meldet ihn ab.
 del navigator
 print("feine und normale Radbewegungen geprüft", flush=True)
 text_field.setFocus()
@@ -284,7 +279,7 @@ print("native canvas drawn and released")
         done = subprocess.run(
             [sys.executable, "-c", script],
             cwd=Path(__file__).resolve().parents[1],
-            env={**os.environ, "QT_QPA_PLATFORM": platform},
+            env={**os.environ, "QT_QPA_PLATFORM": native_window_platform},
             capture_output=True,
             text=True,
             timeout=90,
@@ -309,34 +304,18 @@ print("native canvas drawn and released")
     assert "native canvas drawn and released" in done.stdout
 
 
-#: **Unter Xvfb reißt der Kindprozess sporadisch** (Tag-Läufe von v0.4.1,
-#: 13.09.2026: erst bei 200 Prozent, im nächsten Lauf bei beiden grün, im
-#: übernächsten bei 100 Prozent — Geräteverhältnis gemeldet, dann Exit -11).
-#: Ob das der Softwarerenderer des Runners ist oder die Anwendung, sagt nur
-#: ein Linux mit Bildschirm; bis dahin steht der Fall bei RM-104, und die
-#: Marke ist nicht streng: Sie hält den Bau nicht auf und verschweigt den
-#: Fall nicht.
-_XVFB_TEARS = pytest.mark.xfail(
-    sys.platform.startswith("linux"),
-    strict=False,
-    raises=AssertionError,
-    reason="Linux/Xvfb: der Renderer-Kindprozess reißt sporadisch (RM-104)",
-)
-
-
-@pytest.mark.windowed
 @pytest.mark.usefixtures("require_graphics_adapter")
-@pytest.mark.parametrize(
-    "scale",
-    [pytest.param(1, marks=_XVFB_TEARS), pytest.param(2, marks=_XVFB_TEARS)],
-)
-def test_native_item_pick_slack_stays_constant_on_hidpi_screens(scale: int) -> None:
-    """Drei logische Pixel neben einem Griff bleiben bei 100 und 200 Prozent greifbar."""
-    platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
-    if platform == "xcb" and not os.environ.get("DISPLAY"):
-        if os.environ.get("CI"):
-            pytest.fail("Der native Linux-Fenstertest braucht DISPLAY, zum Beispiel durch Xvfb.")
-        pytest.skip("kein X11-Display für den nativen Qt-Fensterweg")
+@pytest.mark.parametrize("scale", [1, 2])
+def test_native_item_pick_slack_stays_constant_on_hidpi_screens(
+    scale: int, native_window_platform: str
+) -> None:
+    """Drei logische Pixel neben einem Griff bleiben bei 100 und 200 Prozent greifbar.
+
+    Unter Xvfb riss der Kindprozess in den Tag-Läufen von v0.4.1 (13.09.2026)
+    sporadisch mit Exit -11; der Fall trug bis zum 06.10.2026 eine nicht
+    strenge xfail-Marke (RM-104). Zwanzig Läufe in Folge unter Xvfb mit
+    lavapipe waren beide Maßstäbe grün (Lauf 37492243563), die Marke ist weg.
+    """
     script = """
 import math
 import os
@@ -382,7 +361,7 @@ finally:
         cwd=Path(__file__).resolve().parents[1],
         env={
             **os.environ,
-            "QT_QPA_PLATFORM": platform,
+            "QT_QPA_PLATFORM": native_window_platform,
             "QT_SCREEN_SCALE_FACTORS": "1",
             "QT_SCALE_FACTOR": str(scale),
         },
@@ -392,6 +371,87 @@ finally:
     )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "Traceback" not in done.stderr, done.stderr
+
+
+def _native_window_outcome() -> str:
+    """Wie ``require_native_window`` endet, als Wert: Ein Skip, der aus einem
+    Wächter entkommt, überspränge sonst den Wächter selbst."""
+    try:
+        return f"läuft auf {probe.require_native_window()}"
+    except pytest.skip.Exception as skipped:
+        return f"Skip: {skipped.msg}"
+    except pytest.fail.Exception as failed:
+        return f"rot: {failed.msg}"
+
+
+def test_a_hanging_native_window_is_a_skip_only_on_the_intel_mac_of_the_ci(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Intel-Mac-Läufer hängt schon an einem leeren Fenster — nur er darf überspringen.
+
+    Auf Windows, Linux und Apple Silicon laufen die nativen Fenstertests in
+    der CI. Hinge dort dasselbe leere Fenster, verdeckte ein Skip, dass sie
+    es nicht mehr tun; deshalb ist der Befund dort rot. Außerhalb der CI ist
+    er ein Skip mit Grund wie ein fehlendes Display. Gefragt wird einmal je
+    Prozess, und der Grund bleibt für die Schlusszeile des Laufs stehen.
+    """
+    asked: list[str] = []
+
+    def hanging(qt_platform: str) -> str:
+        asked.append(qt_platform)
+        return f"ein leeres {qt_platform}-Fenster hing"
+
+    def on(system: str, machine: str) -> str:
+        monkeypatch.setattr(sys, "platform", system)
+        monkeypatch.setattr("platform.machine", lambda: machine)
+        return _native_window_outcome()
+
+    monkeypatch.setattr(probe, "_ANSWERS", {})
+    monkeypatch.setattr(probe, "_probe", hanging)
+    monkeypatch.setenv("DISPLAY", ":99")
+    monkeypatch.setenv("CI", "true")
+    for system, machine in (("win32", "AMD64"), ("linux", "x86_64"), ("darwin", "arm64")):
+        outcome = on(system, machine)
+        assert outcome.startswith("rot: ein leeres "), (system, machine, outcome)
+        assert "nur der Intel-Mac-Läufer" in outcome, outcome
+    assert on("darwin", "x86_64") == "Skip: ein leeres cocoa-Fenster hing"
+    monkeypatch.delenv("CI")
+    assert on("win32", "AMD64") == "Skip: ein leeres windows-Fenster hing"
+    assert asked == ["windows", "xcb", "cocoa"], "je Plattform und Prozess genau eine Vorprüfung"
+    assert set(probe.found_problems()) == {
+        f"ein leeres {name}-Fenster hing" for name in ("windows", "xcb", "cocoa")
+    }
+
+    monkeypatch.setattr(probe, "_ANSWERS", {})
+    monkeypatch.setattr(probe, "_probe", lambda _qt_platform: None)
+    monkeypatch.setenv("CI", "true")
+    for system, machine in (("win32", "AMD64"), ("darwin", "x86_64")):
+        assert on(system, machine).startswith("läuft auf "), "ohne Befund läuft der Fall"
+    assert probe.found_problems() == ()
+
+
+def test_the_native_window_probe_says_where_the_window_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nach der Frist nennt der Grund die letzte Stufe; ein Absturz ist kein Hängen.
+
+    Statt eines Fensters steht ein Prozess, der sich wie das hängende
+    meldet und dann schläft — so prüft der Fall die Frist ohne Bildschirm.
+    """
+    monkeypatch.setattr(probe, "PROBE_SECONDS", 4.0)
+    monkeypatch.setattr(
+        probe,
+        "_PROBE",
+        "import time\nprint('gezeigt', flush=True)\nprint('aktiviert', flush=True)\n"
+        "time.sleep(60)\n",
+    )
+    reason = probe._probe("cocoa")
+    assert reason is not None
+    assert reason.startswith("dieser Läufer zeigt kein natives Fenster: ein leeres cocoa-Fenster")
+    assert "hing in processEvents" in reason, reason
+
+    monkeypatch.setattr(probe, "_PROBE", "raise SystemExit(3)\n")
+    assert probe._probe("cocoa") is None, "ein Absturz zeigt der Fall selbst, kein Skip"
 
 
 def test_the_viewport_asks_the_factory_before_it_builds(monkeypatch: pytest.MonkeyPatch) -> None:

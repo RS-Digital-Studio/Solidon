@@ -181,6 +181,19 @@ def _job_cases() -> list[tuple[str, Callable[[], tuple[dict[str, np.ndarray], di
         edges = np.asarray(_adjacency_by_place(body.raw), dtype=np.int64).reshape(-1, 2)
         return {"edges": edges}, {"count": body.triangle_count}
 
+    def voxel() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        body = plate()
+        low = np.asarray(body.bounds.minimum, dtype=np.float64) - 2.0
+        high = np.asarray(body.bounds.maximum, dtype=np.float64) + 2.0
+        pitch = max(float(np.max(high - low)) / 40.0, 0.5)
+        shape = [int(np.ceil(value)) for value in (high - low) / pitch + 1]
+        return {**mesh_input(body, "0"), **mesh_input(_cylinder_through(body), "1"), "low": low}, {
+            "bodies": 2,
+            "kind": "difference",
+            "pitch": pitch,
+            **{f"shape{axis}": shape[axis] for axis in range(3)},
+        }
+
     def sections() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
         body = plate()
         return {**mesh_input(body), "heights": np.array([0.1, 0.5, 1.0])}, {
@@ -201,6 +214,7 @@ def _job_cases() -> list[tuple[str, Callable[[], tuple[dict[str, np.ndarray], di
         ("simplify_closed", closed),
         ("min_gap", gap),
         ("component_labels", labels),
+        ("voxel", voxel),
     ]
 
 
@@ -601,6 +615,40 @@ def test_cancelling_a_real_kernel_call_in_the_helper(offloaded: None) -> None:
     assert outcome == {"cancelled": True}, "die Bisektion lief noch, als abgebrochen wurde"
     helper.join(10.0)
     assert not helper.is_alive()
+
+
+def test_the_voxel_stage_reaches_the_helper_with_its_cancel_signal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-534: Die Voxelstufe rechnet über ``kernel_process`` und nimmt den Abbruch mit.
+
+    Im Prozess hielt sie den Interpreter Sekunden an und ließ sich nicht
+    abbrechen — am überdeckenden Werkzeug 20 s, und ein neuer Lauf wartete so
+    lange. Über den Hilfsprozess beendet ein Abbruch sie
+    (:func:`test_cancelling_a_real_kernel_call_in_the_helper`); hier wird
+    belegt, dass die Stufe dorthin geht: mit ihrem Abbruchzeichen und mit der
+    Zellenzahl als Gewicht, damit ein großes Raster ausgelagert wird.
+    """
+    from app.core.geom import boolean as boolean_module
+
+    asked: list[tuple[str, Any, int]] = []
+    real = kernel_process.run
+
+    def noting(job: str, arrays: Any, values: Any, *, weight: int, cancelled: Any = None) -> Any:
+        asked.append((job, cancelled, weight))
+        return real(job, arrays, values, weight=weight, cancelled=cancelled)
+
+    monkeypatch.setattr(kernel_process, "run", noting)
+    body = welded("plate_holes.stl")
+    signal = CancelSignal()
+
+    result = boolean_module._run_stage(
+        "difference", [body, _cylinder_through(body)], "voxel", None, signal
+    )
+
+    assert result is not None and result.triangle_count > 0
+    assert [(job, cancelled) for job, cancelled, _weight in asked] == [("voxel", signal)]
+    assert asked[0][2] > kernel_process.OFFLOAD_ABOVE, "ein Raster dieser Größe geht hinaus"
 
 
 # --- Was nicht hinein- oder herauskommt (Durchsicht RM-212, B2) ---------------------------
@@ -1388,7 +1436,7 @@ def test_the_workers_of_the_window_use_the_helper(
         assert kernel_process.statistics()["helper:refine_conforming"] == 1
     finally:
         session.cancel_preview()
-        session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
 
 
 # --- Der Pooldeckel gilt auch während Start und Ende (RM-298) -----------------------------

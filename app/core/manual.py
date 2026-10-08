@@ -29,7 +29,7 @@ from typing import Final, Literal
 from app.core import guides
 from app.core.registry import documentation
 from app.core.registry.registry import CATEGORIES, REGISTRY, Registry
-from app.i18n import TranslatableText, _
+from app.i18n import Figure, TranslatableText, _
 
 #: Die fünf Teile des Handbuchs (Konzept Handbuch §4). Gegliedert wird nach
 #: dem, was der Kunde vorhat, nicht nach den Bereichen des Programms: Wer
@@ -689,10 +689,11 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Werkzeugleiste.** *Zeichnen* schwenkt die Ansicht senkrecht auf die "
             "Zeichenebene, gezeichnet wird im Modell. Was daraus wird, entscheiden "
             "Sie am Ende. Escape kommt wieder "
-            "heraus.\n\n![](figure:sketch-mode)\n\n**Zuerst die Ebene.** *XY* liegt "
-            "flach wie das Druckbett, *XZ* und *YZ* stehen, und die ebenen Flächen "
+            "heraus.\n\n![](figure:sketch-mode)\n\n**Zuerst die Ebene.** *Draufsicht "
+            "(XY)* liegt flach wie das Druckbett, *Vorderansicht (XZ)* und "
+            "*Seitenansicht (YZ)* stehen, und die ebenen Flächen "
             "vorhandener Körper stehen mit in der Liste. Der Satz daneben sagt, "
-            "wie die Druckschichten zur Zeichnung liegen: auf *XY* parallel, auf "
+            "wie die Druckschichten zur Zeichnung liegen: auf der Draufsicht parallel, auf "
             "den stehenden Ebenen quer, und eine waagerechte Linie wird dort "
             "später eine Fuge. Schneller geht es mit einem Rechtsklick auf eine "
             "Fläche, im Bild oder im Objektbaum: *Auf dieser Fläche zeichnen*. "
@@ -1012,10 +1013,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "![](figure:part-cable-clip)\n\n"
             "**Druckbares Gewinde**: ein Innengewinde oder ein Gewindebolzen für ein "
             "gedrucktes Gegenstück, nicht für eine Metallschraube. Mit dem Haken bei "
-            "Innengewinde schneidet es auf einer Fläche sein Loch selbst. In eine vorhandene "
-            "Bohrung passt es, wenn sie zwischen Kernloch und Nennmaß liegt, siehe [Ein "
-            "Gewinde in eine Bohrung](manual:thread-a-hole). Ein Schraubenloch derselben "
-            "Größe ist dafür zu weit.\n\n"
+            "Innengewinde schneidet es auf einer Fläche sein Loch selbst. Neben den "
+            "M-Größen nimmt es unter *Eigenes Maß* jeden Durchmesser, etwa für ein Rohr. "
+            "In eine vorhandene Bohrung setzt es das Gewinde, das passt, siehe [Ein "
+            "Gewinde in eine Bohrung](manual:thread-a-hole).\n\n"
             "Dazu kommen Schraubenloch, Magnettasche, Kabeldurchführung, Rippe, "
             "Schlüsselloch, Kugellager einsetzen, Schraube, Gedruckte Mutter, "
             "Nutfeder, Wandhalter, Schnappverbindung, Passstift und Passbohrung, "
@@ -1219,7 +1220,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "die erste Platte, auf der es Platz hat; erst wenn keine reicht, "
             "beginnt eine neue. Was nicht passt, wird gemeldet, nicht weggelassen. "
             "Besteht ein Körper aus losen Teilen, etwa ein Schriftzug, bietet der "
-            "Prüfbericht an, ihn zu zerlegen und auszurichten: ein Klick, und die "
+            "Prüfbericht an, ihn in Einzelteile aufzuteilen und auszurichten: "
+            "ein Klick, und die "
             "Buchstaben liegen auf den Platten.\n\n**Zu groß für das Bett?** Dann "
             "wird geteilt, siehe [Wenn das Teil nicht auf das Bett "
             "passt](manual:splitting).\n\n**Was schräg nach außen wächst, braucht "
@@ -1356,19 +1358,22 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "[Zusätzliche Programme einrichten](manual:extras).\n\n**Was "
             "zurückkommt, ist eine Oberfläche, keine Konstruktion**, ohne "
             "Bohrungen und Passungen und oft nicht geschlossen. Bohrungen und "
-            "Passungen entstehen danach als eigene Schritte.\n\n**Der mitgelieferte "
-            "Ablauf setzt auf TripoSG.** Quelltext und Modellkarte nennen die "
-            "MIT-Lizenz, ein Teil des Quelltexts steht aber unter Lizenzen von "
-            "Tencent, die die Europäische Union ausnehmen. Das wird gerade geklärt. "
-            "Andere Modelle haben eigene Bedingungen, die für die eingesetzte "
-            "Version zu prüfen sind.\n\n**Das "
+            "Passungen entstehen danach als eigene Schritte.\n\n**Die Modelle und "
+            "ihre Lizenzen.** Den Körper macht TRELLIS.2 von Microsoft (MIT-Lizenz). "
+            "Es liest das Bild mit DINOv3 von Meta, das unter Metas DINOv3-Lizenz "
+            "steht: weltweit und gewerblich nutzbar, mit Nutzungsbedingungen, unter "
+            "anderem nicht für Waffen. Freigestellt wird mit BiRefNet (MIT). Für den "
+            "Weg aus Text malt FLUX.2 [klein] 4B von Black Forest Labs vorher ein Bild "
+            "(Apache-2.0). Solidon liefert keines davon mit, die Einrichtung lädt sie "
+            "in Ihr ComfyUI.\n\n**Das "
             "Erzeugte liegt im Projekt wie eine hineingezogene Datei**, denn "
             "dieselbe Anfrage liefert nach einem Modellwechsel etwas anderes. "
             "Darüber stehen gewöhnliche Schritte wie *Reparieren*. Anfrage und "
             "Startwert bleiben dabei; derselbe Startwert liefert dasselbe "
             "Ergebnis, soweit das Modell es zulässt.\n\n**Die Reparaturkette läuft "
             "ohne Nachfrage**: Löcher schließen, doppelte Punkte zusammenführen, "
-            "Außenseiten angleichen. Laden, Größe, Reparatur und Aufsetzen bilden "
+            "Außenseiten angleichen, Hüllen im Inneren entfernen, damit der Körper "
+            "innen voll ist. Laden, Größe, Reparatur und Aufsetzen bilden "
             "einen Schritt: Ein Strg+Z nimmt das ganze erzeugte Modell zurück, im "
             "Verlauf bleibt jeder Teil einzeln änderbar."
         ),
@@ -1408,7 +1413,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "1. **Läuft es?** Der Dialog sagt es, und ein Knopf startet es. Läuft es auf einem "
             "anderen Rechner, gehört seine Adresse in die Liste der zusätzlichen Programme.\n"
             "2. **Ein Modell holen.** Die Auswahl nennt die installierten und die bewährten. "
-            "*Modell holen* lädt sieben bis neunzehn Gigabyte; ein abgebrochener Download setzt "
+            "*Modell holen* lädt {least} bis {most} GB; ein abgebrochener Download setzt "
             "später fort.\n"
             "3. **Werkzeuge prüfen.** Ob ein Modell Werkzeuge wirklich aufruft, zeigt nur eine "
             "Probe mit einem echten Zug. Antwortet der Chat, führt aber nichts aus, hilft ein "
@@ -1430,18 +1435,19 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "\n"
             "## ComfyUI für das Erzeugen aus Text oder Bild\n"
             "\n"
-            "ComfyUI braucht die Knoten, die der Ablauf anspricht, und das Modell dazu. Beides "
-            "legt Solidon hinein, über *Knoten und Modell einrichten …* in der Zeile von "
-            "ComfyUI oder direkt aus *Datei → Modell erzeugen*, wenn dort ComfyUI ohne Knoten "
-            "läuft. Die **Desktop-Version** von comfy.org findet Solidon selbst, für die "
-            "tragbare geben Sie notfalls den Ordner mit `custom_nodes` und `main.py` an.\n"
+            "Die Knoten für diesen Weg bringt ComfyUI ab Version 0.35 selbst mit, die Modelle "
+            "lädt Solidon dazu: über *Modelle einrichten …* in der Zeile von ComfyUI oder "
+            "direkt aus *Datei → Modell erzeugen*, wenn dort ein Modell fehlt. Die "
+            "**Desktop-Version** von comfy.org findet Solidon selbst, für die tragbare geben "
+            "Sie notfalls den Ordner mit `custom_nodes` und `main.py` an.\n"
             "\n"
-            "Die Einrichtung holt den festgelegten TripoSG-Quelltext, zieht fehlende Pakete "
-            "nach und **prüft, ob ComfyUI die Knoten laden kann**. Auf Wunsch folgen das Modell "
-            "mit rund 7,5 GB und für den Weg aus Text das Bildmodell mit rund 6,9 GB. Ein "
-            "abgebrochener Lauf setzt fort, wo er stand. **Danach ComfyUI einmal neu starten**, "
-            "sonst bleibt *Modell erzeugen* ausgegraut. Während einer Erzeugung zeigt Solidon "
-            "die verstrichene Zeit; bricht etwas ab, steht der Satz von ComfyUI im Dialog."
+            "Die Einrichtung **prüft zuerst die Version von ComfyUI**; ist sie zu alt, sagt "
+            "sie es, bevor etwas geladen wird. Auf Wunsch folgen das Modell für den Weg aus "
+            "Bild mit rund {shape} GB und für den Weg aus Text das Bildmodell mit rund "
+            "{image} GB, jede Datei in einem festen Stand und mit Prüfsumme. Ein abgebrochener "
+            "Lauf setzt fort, wo er stand. **Danach ComfyUI einmal neu starten.** Während "
+            "einer Erzeugung zeigt Solidon die verstrichene Zeit; bricht etwas ab, steht der "
+            "Satz von ComfyUI im Dialog."
         ),
     ),
     Page(
@@ -1506,7 +1512,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Die Buchstaben stehen im Objektbaum wie andere Merkmale**, gerade Seiten "
             "als Flächen, gerundete als *Gerundete Seite*. Beide nehmen ein eigenes "
             "Filament an: anklicken, rechts *Filament auf eine Fläche*. Ein Schriftzug "
-            "behält sein Filament auch, wenn er für das Bett in Buchstaben zerlegt wird.\n\n"
+            "behält sein Filament auch, wenn er für das Bett in Buchstaben aufgeteilt wird.\n\n"
             "**Die Schrift bleibt änderbar.** Ein Doppelklick auf den Schritt im Verlauf "
             "öffnet Text, Größe, Schrift und Tiefe wieder; ein Tippfehler wird "
             "berichtigt, nicht neu gesetzt."
@@ -1838,9 +1844,17 @@ def profiles_text() -> str:
         str(
             _(
                 "Woher die Maße kommen, wenn ein Baustein ein Schraubenloch, eine "
-                "Mutternfalle oder ein Gewinde setzt. In eine Bohrung zwischen Kernloch und "
-                "Nennmaß passt ein druckbares Innengewinde dieser Größe. Nichts davon wird "
-                "geschätzt."
+                "Mutternfalle oder ein Gewinde setzt: aus der metrischen Reihe von M1.6 bis "
+                "M64. Ein druckbares Innengewinde einer Größe passt in eine Bohrung, die bis "
+                "zu einem Zehntel der Steigung enger sein darf als ihr Kernloch und dem Gang "
+                "noch die halbe Tiefe in der Wand lässt. Passt keine, nimmt das Gewinde ein "
+                "eigenes Maß, dessen Gänge mit voller Tiefe in der Wand der Bohrung liegen. "
+                "Liegt es knapp neben einer Normgröße, wird es diese und weitet die Bohrung um "
+                "den Rest auf. Auch Schraubenloch, Mutternfalle, Schraube "
+                "und Mutter nehmen unter *Eigenes Maß* jeden Durchmesser. Ihre Maße sind dann "
+                "aus den Normgrößen daneben abgeleitet und nicht genormt, und der Prüfbericht "
+                "sagt das. Eine Einpressbuchse, die hier fehlt, bekommt Bohrung und Länge aus "
+                "ihrem Datenblatt."
             )
         )
     )
@@ -2058,7 +2072,7 @@ def models_text() -> str:
     **Die Auskunft gab es, verteilt auf vier Stellen.** Die Modellauswahl im
     Chat-Dialog nannte Größe und Trefferquote, das Handbuch nannte eines davon
     im Fließtext, der Erzeugungsdialog nannte für den Textweg gar keines („ein
-    SDXL-Modell“ — welches, stand nirgends), und was Solidon selbst einrichtet,
+    Bildmodell“ — welches, stand nirgends), und was Solidon selbst einrichtet,
     stand in den Konstanten von ``comfy_setup``. Wer wissen wollte, was er
     braucht, bevor er anfängt, fand vier Teilantworten.
 
@@ -2140,30 +2154,40 @@ def models_text() -> str:
             "",
             str(
                 _(
-                    "Laufen in ComfyUI, nebeneinander, und alle drei richtet "
-                    "Solidon ein — in der Liste der zusätzlichen Programme steht in "
-                    "der Zeile von ComfyUI *Knoten und Modell einrichten …*. Das "
-                    "dritte braucht nur der Weg aus Text; es ist deshalb ein "
-                    "eigenes Häkchen."
+                    "Laufen in ComfyUI, nacheinander, und alle drei richtet Solidon "
+                    "ein — in der Liste der zusätzlichen Programme steht in der Zeile "
+                    "von ComfyUI *Modelle einrichten …*. Das dritte braucht nur der "
+                    "Weg aus Text; es ist deshalb ein eigenes Häkchen."
                 )
             ),
             "",
-            f"| {_('Wofür')} | {_('Modell')} | {_('Größe')} | {_('Woher')} |",
-            "|---|---|---|---|",
-            "| {wofuer} | TripoSG | {groesse} | {woher} |".format(
+            f"| {_('Wofür')} | {_('Modell')} | {_('Lizenz')} | {_('Größe')} | {_('Woher')} |",
+            "|---|---|---|---|---|",
+            "| {wofuer} | TRELLIS.2-4B, DINOv3 | MIT, {dino} | {groesse} | {woher} |".format(
                 wofuer=_("Aus einem Bild einen Körper"),
-                groesse=f"{decimal(comfy_setup.WEIGHT_GIGABYTES, 1)} GB",
+                dino=_("DINOv3-Lizenz von Meta"),
+                groesse=f"{decimal(comfy_setup.SHAPE_GIGABYTES, 1)} GB",
                 woher=_("richtet Solidon ein"),
             ),
-            "| {wofuer} | BiRefNet | {groesse} | {woher} |".format(
+            "| {wofuer} | BiRefNet | MIT | {groesse} | {woher} |".format(
                 wofuer=_("Das Objekt freistellen"),
                 groesse=f"{comfy_setup.BACKGROUND_MEGABYTES} MB",
                 woher=_("richtet Solidon ein"),
             ),
-            "| {wofuer} | SDXL | {groesse} | {woher} |".format(
+            "| {wofuer} | FLUX.2 [klein] 4B, Qwen3-4B | Apache-2.0 | {groesse} | {woher} |".format(
                 wofuer=_("Aus Text erst ein Bild"),
                 groesse=f"{decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1)} GB",
                 woher=_("richtet Solidon ein, auf Wunsch"),
+            ),
+            "",
+            str(
+                _(
+                    "TRELLIS.2 von Microsoft steht unter der MIT-Lizenz. Es liest das "
+                    "Bild mit DINOv3 von Meta, und dafür gilt Metas DINOv3-Lizenz: "
+                    "weltweit und gewerblich nutzbar, mit Nutzungsbedingungen, unter "
+                    "anderem nicht für Waffen und nicht gegen Handelsbeschränkungen. "
+                    "Wer TRELLIS.2 benutzt, nimmt diese Bedingungen an."
+                )
             ),
             "",
             f"### {_('Das Bildmodell')}",
@@ -2171,38 +2195,36 @@ def models_text() -> str:
             str(
                 _(
                     "Nur für den Weg aus Text. Wer ein Foto oder eine Zeichnung "
-                    "mitbringt, braucht es nie — und sieben Gigabyte für einen Weg, "
+                    "mitbringt, braucht es nie — und rund {size} GB für einen Weg, "
                     "den ein vorhandenes Bild umgeht, lädt Solidon niemandem "
                     "ungefragt herunter. Deshalb ist es in der Einrichtung ein "
                     "eigenes Häkchen; fehlt es beim Erzeugen, führt der Knopf "
-                    "*Bildmodell einrichten …* direkt dorthin."
+                    "*Bildmodell einrichten …* direkt dorthin.",
+                    size=Figure(f"{comfy_setup.IMAGE_MODEL_GIGABYTES:g}"),
                 )
             ),
             "",
             str(
                 _(
-                    "Geholt wird **{file}** aus dem Verzeichnis *{source}* auf "
-                    "Hugging Face, in einem festen Stand und mit Prüfsumme, nach "
-                    "*{folder}* im Ordner von ComfyUI. Wer es lieber selbst "
-                    "hinlegt, legt es dorthin; danach ComfyUI einmal neu starten, "
-                    "und *Modell erzeugen* nimmt auch einen Satz statt eines "
-                    "Bildes an. Seine Lizenz ist die CreativeML Open RAIL++-M von "
-                    "Stability AI; was sie an Nutzung ausschließt, steht in ihrem "
-                    "Anhang und gilt dem, der das Modell benutzt."
+                    "Geholt werden **{file}** aus dem Verzeichnis *{source}* auf "
+                    "Hugging Face, dazu der Textkodierer und die VAE, jede Datei in "
+                    "einem festen Stand und mit Prüfsumme, in die passenden Ordner "
+                    "unter *models* im Ordner von ComfyUI. Wer sie lieber selbst "
+                    "hinlegt, legt sie dorthin. FLUX.2 [klein] 4B und Qwen3-4B stehen "
+                    "unter der Lizenz Apache-2.0."
                 )
             ).format(
-                file=comfy_setup.IMAGE_MODEL_FILE,
-                source=comfy_setup.IMAGE_MODEL_REPO,
-                folder=comfy_setup.IMAGE_MODEL_FOLDER,
+                file=comfy_setup.IMAGE_MODEL_FILES[0].name,
+                source=comfy_setup.IMAGE_MODEL_FILES[0].repo,
             ),
             "",
             str(
                 _(
-                    "Ein anderes SDXL-Modell geht auch: Solidon nimmt, was im Ordner "
-                    "liegt, und bevorzugt dabei *juggernaut* und *dreamshaper* vor "
-                    "dem Basismodell. Nicht genommen werden Modelle mit *refiner*, "
-                    "*inpaint* oder *turbo* im Namen — sie lösen eine andere "
-                    "Aufgabe."
+                    "Der Ablauf ist auf die schnelle Fassung von FLUX.2 [klein] 4B "
+                    "eingestellt. Die 9B-Fassung und das Basismodell nimmt Solidon "
+                    "nicht, auch wenn sie im Ordner liegen: Die 9B-Fassung darf "
+                    "nicht gewerblich genutzt werden, das Basismodell braucht andere "
+                    "Einstellungen."
                 )
             ),
             "",
@@ -2210,13 +2232,12 @@ def models_text() -> str:
             "",
             str(
                 _(
-                    "Gemessen auf einer RTX 4080: aus einem **Bild** rund fünfzehn "
-                    "Sekunden, aus **Text** rund zweieinhalb Minuten. Der "
-                    "Unterschied ist das Bildmodell — es lädt erst sieben Gigabyte "
-                    "in den Grafikspeicher und rechnet dann ein Bild, bevor "
-                    "überhaupt ein Körper entsteht. Danach kommt in beiden Fällen "
-                    "dieselbe Kette: auf Arbeitsgröße bringen, reparieren, und bei "
-                    "sehr feinen Netzen die Dreiecke verringern."
+                    "Das hängt vor allem an der Grafikkarte. Aus **Text** dauert es "
+                    "länger als aus einem **Bild**: Vorher lädt das Bildmodell in den "
+                    "Grafikspeicher und rechnet ein Bild, danach erst das Modell für "
+                    "den Körper. Dann kommt in beiden Fällen dieselbe Kette: auf "
+                    "Arbeitsgröße bringen, reparieren, und bei sehr feinen Netzen die "
+                    "Dreiecke verringern."
                 )
             ),
             "",
@@ -2396,13 +2417,46 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
         page.key: page
         for page in (
             _where_to_start_page(),
-            *(_with_its_guides(page) for page in INTRODUCTION),
+            *(_with_its_guides(_with_download_sizes(page)) for page in INTRODUCTION),
             _spacemouse_page(),
             *(guide_page(guide) for guide in guides.GUIDES),
         )
     }
     arranged = tuple(replace(written[key], part=part) for part, keys in OUTLINE for key in keys)
     return (*arranged, *knowledge_pages(), *generated)
+
+
+#: Seiten, deren Text Downloadgrößen nennt — als Platzhalter, gefüllt in
+#: :func:`_with_download_sizes`.
+SIZED_PAGES: Final = frozenset({"extras"})
+
+
+def _with_download_sizes(page: Page) -> Page:
+    """Die Größen der Downloads kommen aus den Konstanten, nicht aus dem Satz.
+
+    ``comfy_setup`` rechnet sie aus den Dateien, ``llm.OLLAMA_SUGGESTIONS``
+    nennt die bewährten Modelle samt Größe; getippt veralteten sie beim
+    nächsten Stand (Review 1 P3, G-9). Gefüllt wird erst hier, weil beide
+    Module zu laden eine Drittelsekunde kostet — beim Import des Handbuchs
+    für jede Seite, die sie nicht braucht.
+    """
+    if page.key not in SIZED_PAGES or not isinstance(page.body, TranslatableText):
+        return page
+    import math
+
+    from app.core.backends import comfy_setup
+    from app.core.backends.llm import OLLAMA_SUGGESTIONS
+
+    pulled = [gigabytes for _name, gigabytes, _note in OLLAMA_SUGGESTIONS]
+    # Platzhalter des Seitentexts, keine Befundwerte: Kein Tooltip zeigt sie
+    # einzeln (``labels.value_label`` gilt ihnen nicht).
+    sizes = {
+        "least": math.ceil(min(pulled)),
+        "most": math.ceil(max(pulled)),
+        "shape": Figure(f"{comfy_setup.WEIGHT_GIGABYTES:g}"),
+        "image": Figure(f"{comfy_setup.IMAGE_MODEL_GIGABYTES:g}"),
+    }
+    return replace(page, body=replace(page.body, values=sizes))
 
 
 def _with_its_guides(page: Page) -> Page:

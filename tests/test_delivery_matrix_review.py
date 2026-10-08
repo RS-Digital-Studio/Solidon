@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
 import math
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -353,3 +355,241 @@ def test_the_unit_binds_its_package_before_it_loads_a_sibling() -> None:
         and any(alias.name == "matrix_gcode" for alias in statement.names)
     ]
     assert bound and sibling and bound[0] < sibling[0], (bound, sibling)
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        ("; CONFIG_BLOCK_START", "; CONFIG_BLOCK_END"),
+        ("; CONFIG_BLOCK_START = begin", "; CONFIG_BLOCK_END = end"),
+        ("; prusaslicer_config = begin", "; prusaslicer_config = end"),
+    ],
+)
+def test_the_config_block_is_read_in_every_slicer_spelling(
+    start: str, end: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Anycubic Slicer Next schreibt „; CONFIG_BLOCK_START = begin“ (RM-525, B7).
+
+    Der Leser kannte nur die Schreibweise der übrigen Orca-Familie und las aus
+    jeder Anycubic-Druckdatei einen leeren Block — jede Kettenprüfung war blind.
+    """
+    gcode = TOOLS / "matrix_gcode.py"
+    reader = _load_module(gcode, "delivery_matrix_gcode_block", monkeypatch, [])
+    path = tmp_path / "plate.gcode"
+    path.write_text(
+        f"G1 X1\n{start}\n; nozzle_temperature = 210\n; layer_height = 0.2\n{end}\n; after = 1\n",
+        encoding="utf-8",
+    )
+
+    assert reader.config_block(path) == {"nozzle_temperature": "210", "layer_height": "0.2"}
+
+
+def _matrix_unit_for_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    return _load_module(
+        TOOLS / "matrix_unit.py",
+        "delivery_matrix_unit_floor",
+        monkeypatch,
+        [str(ROOT), str(tmp_path / "plate.stl"), str(tmp_path / "out"), "heim"],
+    )
+
+
+def _support_floor_at(nozzle: float) -> float:
+    from app.core.knowledge import profiles
+    from app.core.slice.estimate import support_floor
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    printer = dataclasses.replace(profile.printer, nozzle_diameter=nozzle)
+    return support_floor(dataclasses.replace(profile, printer=printer))
+
+
+@pytest.mark.parametrize(
+    ("variant", "mark"),
+    [("vorschlaege", "Stützvorschlag ohne Stütze"), ("stuetzen_auto", "Slicer stützt nicht")],
+)
+@pytest.mark.parametrize(
+    ("nozzle", "metres", "volume", "flagged"),
+    [
+        (0.4, 0.3, 0.5, True),
+        (0.4, 0.3, 4.0, False),
+        (0.8, 0.3, 4.0, True),
+        (0.25, 0.3, 1.0, False),
+        # Die B7-Zeilen vom 05.10.2026 (``anycubic-matrix/auswertung.md``, Frage 4):
+        # Kobra 3 Max 0.6 und V2 0.6 mit 0,43 m und 68,2 mm³, eine 0,8er Düse mit
+        # 0,45 m und 128,3 mm³ — die alte Grenze von 0,5 m markierte sie.
+        (0.6, 0.43, 68.2, False),
+        (0.8, 0.45, 128.3, False),
+        # Ohne Volumen schweigt das Hauptfenster, und die Matrix auch.
+        (0.8, 0.0, None, False),
+    ],
+)
+def test_supports_without_support_count_volume_not_metres(
+    variant: str,
+    mark: str,
+    nozzle: float,
+    metres: float,
+    volume: float | None,
+    flagged: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Beide Stützmarken messen wie das Hauptfenster (RM-525, B7).
+
+    Dieselbe Grenze wie ``gcode.support_missing``: ein Strang im Düsenquerschnitt
+    so lang wie die kürzeste gestützte Brücke (``estimate.support_floor``) —
+    1,9 mm³ an einer 0,4er Düse, 7,5 mm³ an einer 0,8er, 0,7 mm³ an einer
+    0,25er. Die alte Grenze von 0,5 m war düsenblind und markierte an 0,6er und
+    0,8er Düsen Läufe mit 68 bis 128 mm³ Stütze.
+    """
+    unit = _matrix_unit_for_flags(tmp_path, monkeypatch)
+    row = {
+        "ok": True,
+        "support_m": metres,
+        "support_gcode_mm3": volume,
+        "support_floor_mm3": _support_floor_at(nozzle),
+    }
+
+    flags = unit.flags_for(variant, row, None, {}, support_accepted=True)
+
+    assert any(flag.startswith(mark) for flag in flags) is flagged
+
+
+@pytest.mark.parametrize(
+    ("auto_ok", "volume", "flagged"),
+    [(True, 0.5, True), (True, 128.3, False), (True, None, False), (False, 0.5, False)],
+)
+def test_first_layer_support_against_the_slicer_uses_the_same_limit(
+    auto_ok: bool,
+    volume: float | None,
+    flagged: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """„Gegen das Urteil des Slicers“ fragt dieselbe Grenze wie „Slicer stützt nicht“.
+
+    Vorher genügte jede Stützbahn über null Metern als „der Slicer stützt“, und
+    beide Marken einer Zeile konnten sich widersprechen. Ohne Volumen oder nach
+    einem gescheiterten Lauf ``stuetzen_auto`` ist das Urteil des Slicers
+    unbekannt, und dagegen wird nichts markiert.
+    """
+    unit = _matrix_unit_for_flags(tmp_path, monkeypatch)
+    floor = _support_floor_at(0.8)
+    row = {"ok": True, "first_layer_support_share": 0.4, "support_m": 1.0}
+    base = {"ok": True, "first_layer_support_share": 0.0}
+    auto = {
+        "ok": auto_ok,
+        "support_m": 0.43,
+        "support_gcode_mm3": volume,
+        "support_floor_mm3": floor,
+    }
+
+    flags = unit.flags_for("vorschlaege", row, base, {}, auto=auto)
+
+    assert any("gegen das Urteil des Slicers" in flag for flag in flags) is flagged
+
+
+@pytest.mark.parametrize("nozzle", [0.4, 0.8])
+def test_every_plate_row_carries_the_support_limit_of_its_nozzle(
+    nozzle: float, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``plate_run`` schreibt die Stützgrenze der Düse in jede Zeile (RM-525, B7).
+
+    Ohne sie schweigen alle drei Stützmarken (``_without_support`` gibt ``None``),
+    und eine feste Grenze der 0,4er Düse fiele in den Markentests nicht auf.
+    Vorbereitung und Slicer sind Attrappen; gefragt wird nur die Grenze.
+    """
+    from types import SimpleNamespace
+
+    from app.core.knowledge import profiles
+    from app.core.slice.estimate import support_floor
+
+    unit = _matrix_unit_for_flags(tmp_path, monkeypatch)
+
+    def prepared(job: Any, plate: int) -> Any:
+        return SimpleNamespace(
+            keep_arrangement=False,
+            model=tmp_path / "p.3mf",
+            findings=[],
+            slots=(),
+            model_height=10.0,
+            meshes=(),
+            used_tools=(0,),
+            comparison=None,
+        )
+
+    def sliced(*args: Any, **kwargs: Any) -> Any:
+        metrics = SimpleNamespace(
+            print_seconds=600.0, printing_seconds=540.0, support_mm3=3.0, filament_grams=2.0
+        )
+        return SimpleNamespace(findings=[], gcode_path=tmp_path / "p.gcode", metrics=metrics)
+
+    monkeypatch.setattr(unit, "_prepare_plate", prepared)
+    monkeypatch.setattr(unit.handover, "slice_model", sliced)
+    base = profiles.make_profile("centauri-carbon-2", "pla")
+    profile = dataclasses.replace(
+        base, printer=dataclasses.replace(base.printer, nozzle_diameter=nozzle)
+    )
+
+    row = unit.plate_run([], 0, (0,), None, profile, SimpleNamespace(flavour="orca"), tmp_path, "p")
+
+    assert row["support_floor_mm3"] == pytest.approx(round(support_floor(profile), 3))
+
+
+def test_the_report_counts_an_unknown_support_amount_on_its_own(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ohne Volumen ist das Urteil des Slicers unbekannt, nicht „stützt“ (RM-525, B7).
+
+    Der Bericht zählte eine Zeile ohne Volumen als „Der Slicer stützt“ und zeigte
+    fehlende Werte älterer Ergebnisdateien als Grenze 0,0 mm³.
+    """
+    script = TOOLS / "matrix_report.py"
+    report = _load_module(script, "delivery_matrix_report_unknown", monkeypatch, [])
+    floor = 1.885
+
+    def combo(printer: str, run: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "slicer": "anycubic",
+            "printer": printer,
+            "complete": True,
+            "variants": {
+                "standard": [{"ok": True, "flags": []}],
+                "stuetzen_auto": [{"ok": True, **run}],
+            },
+        }
+
+    combos = [
+        combo("stuetzt", {"support_m": 2.0, "support_gcode_mm3": 50.0, "support_floor_mm3": floor}),
+        combo(
+            "stuetzt-nicht",
+            {
+                "support_m": 0.01,
+                "support_gcode_mm3": 0.5,
+                "support_floor_mm3": floor,
+                "flags": ["Slicer stützt nicht (0.50 mm³ unter 1.89 mm³; 0.01 m)"],
+            },
+        ),
+        combo("unbekannt", {"support_m": 0.0, "support_gcode_mm3": None}),
+        # Eine ältere Datei: Volumen und Marke gespeichert, die Grenze fehlt.
+        combo(
+            "alt",
+            {
+                "support_m": 0.4,
+                "support_gcode_mm3": 68.2,
+                "flags": ["Slicer stützt nicht (0.40 m)"],
+            },
+        ),
+    ]
+    folder = tmp_path / "results"
+    folder.mkdir()
+    (folder / "result.json").write_text(
+        json.dumps({"model": "plate.stl", "done": True, "combos": combos}), encoding="utf-8"
+    )
+    monkeypatch.setattr(sys, "argv", [str(script), str(folder)])
+
+    assert report.main() == 0
+
+    output = capsys.readouterr().out
+    assert "verlangt: 1; er stützt nicht: 2; Stützmenge unbekannt: 1." in output
+    assert "| plate.stl | anycubic/alt | 68.20 | — | 0.40 |" in output
+    assert "| plate.stl | anycubic/stuetzt-nicht | 0.50 | 1.89 | 0.01 |" in output
+    assert report._mm3(None) == "—"

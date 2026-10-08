@@ -90,11 +90,8 @@ ist keiner: Beide Ausnahmen sind genau die Fälle, in denen ein frischer Griff
 **dasselbe** ergäbe — im Zug hat sich die Matrix seit dem Greifen nicht
 geändert (der Zug rechnet ja gegen sie), und bei (b) steht das Ziel unbewegt.
 Was die Regel verbietet, ist ein Griff, der einen **vergangenen** Zug noch
-in sich trägt; den gibt es hier nicht. Der Fluss der Platzierung zeichnet je
-Kamerageste neu und hängte den Griff dabei jedes Mal ab und wieder an — sechs
-Renderer-Objekte für nichts (5,7 ms von 22 je `redraw`), und ein Griff im Zug
-verlor den Zug (aus dem Zug wurde ein Kameraschwenk). `grip.pressing` und
-`Gizmo.fits` heilen beides. Und die Attrappen der Suite (`tests/render_fakes.py`)
+in sich trägt; den gibt es hier nicht. Was die Ausnahmen sparen, steht im
+Punkt zu `Gizmo.fits` oben. Und die Attrappen der Suite (`tests/render_fakes.py`)
 erben vom Vertrag, und der ist abstrakt: Eine Methode, die es dort nicht gibt,
 gibt es auch in der Attrappe nicht. Das ist die Lehre aus dem `Off()`, das es
 an PyVistas Widget nie gab — der `AttributeError` verschwand in Qts
@@ -583,3 +580,14 @@ Gesichert durch `tests/test_selection.py::test_nothing_on_the_gizmo_leaves_ascii
 und zwar mit genau diesen vier französischen Namen als Eingabe. Ein Absatz
 hier wird gelesen, wenn jemand ihn sucht; der Test wird rot, wenn jemand es
 wieder tut.
+
+## Der Flächenzug schlägt vor, der Griff fragt die Karte (RM-535)
+
+Der Zug am Flächengriff war bis zum 06.10.2026 sofort ein Schritt. Im Verlauf
+des Kunden standen drei *Fläche versetzen* mit ungerundeten Wegen
+(minus 22,11372262396192 mm und andere), ohne dass je eine Zahl zu sehen war;
+an der Bohrung schlägt derselbe Zug nur vor, und *Übernehmen* rechnet. Robert
+(a): wie an der Bohrung. Der Griff hing nach der Art an jedem Merkmal; an der
+Tasche um einen Zapfen endete sein Zug mit „Die neue Stelle steht rechts unter
+Auswahl.“, und dort stand nichts. Er fragt jetzt dieselbe Antwort wie die
+Karte (`FeaturePanel.refuses`, im Kern `actions.move_refusal`).

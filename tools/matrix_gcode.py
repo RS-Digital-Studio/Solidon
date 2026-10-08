@@ -502,17 +502,22 @@ def read(path: Path, *, bed: tuple[float, float] | None = None, keep_layers: int
 def config_block(path: Path) -> dict[str, str]:
     """Der Konfigurationsblock einer Druckdatei — jeder Schlüssel, mit dem sie
     gerechnet wurde. Orca-Familie zwischen ``CONFIG_BLOCK_START`` und
-    ``CONFIG_BLOCK_END``, PrusaSlicer zwischen ``prusaslicer_config = begin``
-    und ``end``; CuraEngine schreibt keinen."""
+    ``CONFIG_BLOCK_END`` — Anycubic Slicer Next hängt ``= begin`` und ``= end``
+    an (RM-525, B7) —, PrusaSlicer zwischen ``prusaslicer_config = begin`` und
+    ``end``; CuraEngine schreibt keinen."""
     found: dict[str, str] = {}
     inside = False
     with path.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             stripped = line.strip()
-            if stripped in ("; CONFIG_BLOCK_START", "; prusaslicer_config = begin"):
+            if stripped.startswith("; CONFIG_BLOCK_START") or stripped == (
+                "; prusaslicer_config = begin"
+            ):
                 inside = True
                 continue
-            if stripped in ("; CONFIG_BLOCK_END", "; prusaslicer_config = end"):
+            if stripped.startswith("; CONFIG_BLOCK_END") or stripped == (
+                "; prusaslicer_config = end"
+            ):
                 inside = False
                 continue
             if inside and stripped.startswith("; ") and " = " in stripped:

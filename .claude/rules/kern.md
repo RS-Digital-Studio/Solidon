@@ -183,7 +183,8 @@ ihn ruft, hält das Fenster an (RM-212).
   ausgelasteten Kernen (RM-380). `test_a_job_gives_the_same_bytes_in_the_helper_as_here`
   misst es je Rechnung im Hilfsprozess.
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
-  Verfeinerung die erwartete des Ergebnisses.
+  Verfeinerung die erwartete des Ergebnisses, bei der Voxelstufe
+  (`kernel_jobs.voxel`) die Zellzahl des Rasters.
 - **Ein voller Datenträger pausiert, er schaltet nicht ab** (RM-436): ENOSPC
   beim Transfer rechnet für `FULL_DISK_PAUSE_SECONDS` im Prozess, danach nimmt
   die nächste große Rechnung den Hilfsprozess wieder. Jede Rechnung, die deshalb
@@ -300,6 +301,17 @@ Testzugang geht ins echte Netz und fällt in einem fremden Test auf.
 `OpContext.scene` ist nur lesend (Regel 3). Zweimal auswerten ist identisch;
 eine geänderte Objektzahl hält die Auswertung an, statt still
 weiterzurechnen.
+
+**Wo die kurze Kette nur ausgeht, rechnen Fenster, Umbau und Agent weiter;
+eine Vorschau nie** (RM-534, §17.2): Ein Halt mit `BooleanFailedError` aus
+gekürzter Kette (`cut_short`) an einem Schritt, der nach der Güte fragte,
+rechnet mit `full_chain_when_stuck` im selben Lauf voll (`_FullChain`) —
+gesetzt nur in `Session.run_evaluation`, `_RevisionWorker` und
+`AgentSession`. Eine Vorschau nimmt ein vorliegendes Urteil aus dem Cache,
+hält sonst mit `short_chain_only`, *Übernehmen* bleibt frei.
+`ResultCache.refuse` merkt nur ein Urteil mit gelaufener Voxelstufe und ohne
+`transient`; auf die Platte geht nur ein vollständiger Durchlauf (§15.6). Ein
+Halt nimmt `reads_quality` mit, sonst gälte ein Entwurfshalt als fein.
 
 **Ein Befund über mehrere Körper nennt sie alle** (`Finding.object_ids`;
 `prepare.named_for` setzt sie aus den Indizes, *Fügeweg prüfen* selbst): Die
@@ -434,14 +446,29 @@ lesen, weil das Manifest die Installationsordner, die Exporte und
 `~/.var/app/<Kennung>:ro` je Eintrag in `tools.SLICER_FLATPAKS` freigibt —
 ein Slicer, der neu auf Flathub erscheint, kommt dort dazu.
 
+**Cura rechnet unter Linux nur über seinen eigenen Lader** (RM-521,
+`export/cura_linux.py`): Flatpak und AppImage tragen dasselbe AppDir aus
+appimage-builder, CuraEngine nennt seinen Lader relativ. Gestartet wird
+`runtime/compat/<Lader>` mit dem **vollständigen** Pfad aus `AppRun.env`
+(LIBC-Pfad zuerst). Das Cura-Flatpak gibt nur `home` und Wechselmedien frei, der
+Arbeitsordner kommt als `--filesystem` dazu. Ein AppImage bleibt für den Lauf
+eingehängt und wird beim Verlassen des Blocks beendet, auch nach Fehler und
+Abbruch; aus Solidons Flatpak legt `TMPDIR=exchange_dir()` den Einhängepunkt
+dorthin, wo beide ihn sehen, und `flatpak-spawn --watch-bus` hängt auch aus,
+wenn der Aufrufer ohne Signal stirbt. Draußen deckt das nur `setpriv
+--pdeathsig` ab, wo es da ist; ohne `setpriv` bleibt die Einhängung nach einem
+harten Ende von Solidon stehen. Die Druckerkopie einer AppImage-Cura legt ein
+Arbeiter an, der Fensterfaden wartet nie darauf (`never_wait_in`). Kann
+Solidon nicht rechnen, gibt es nur Curas Fenster (`WINDOW_ONLY`, ohne
+behauptete Ursache) — nie den Starter als Rechenweg, der öffnet nur das
+Fenster und schreibt nichts.
+
 ### Was auf einer Plattform gilt, ist keine Zusage
 
 **Eine Plattformkette ist eine Funktion mit der Plattform als Parameter**,
 kein `sys.platform` im Rumpf (`parts_for`, `guesses_for`, `config_home`,
-`cursors.system_size`): Ein Zweig, den nur ein Mac sieht, wird nirgends
-geprüft, und `mypy` meldet `sys.platform`-Ketten auf den anderen Maschinen
-als `unreachable`, was die Linux-CI nie sieht. Prüfen mit
-`mypy --platform linux|darwin|win32`.
+`cursors.system_size`); geprüft mit `mypy --platform linux|darwin|win32`
+(Grund in `konzepte/begruendungen/regel-kern.md`).
 
 Braucht ein Programm mehr als Installation, ist das eine Eigenschaft der
 Sache: `Requirement.follow_up` benennt den zweiten Schritt, und
@@ -452,11 +479,13 @@ Sache: `Requirement.follow_up` benennt den zweiten Schritt, und
 
 Ein Einrichtungsschritt, der Fertigsein behauptet, ist schlechter als keiner.
 
-- **Am Ende nachsehen, die billige Prüfung zuerst**: `comfy_setup.nodes_load`
-  lädt die Knoten im Python von ComfyUI — zwei Sekunden, vor dem
-  7,5-GB-Download.
+- **Die billige Prüfung zuerst**: `comfy_setup.check_version` liest die
+  Fassung von ComfyUI vor dem ersten Download; ein zu altes nennt Version und
+  Weg.
 - **Den ganzen Ablauf prüfen**, nicht einen Knoten daraus; `missing_nodes`
-  nennt die Namen (Regel 17).
+  nennt die Namen (Regel 17). Ein mitgelieferter Ablauf wird gegen ComfyUIs
+  eigene Knotenbeschreibung geprüft (`tests/data/comfyui/object_info.json`,
+  erzeugt mit `tools/comfy_node_info.py`), nicht gegen eine Liste im Test.
 - **Eine Paketliste gegen eine Installation prüfen, die nichts hat.**
 - **Ein fremdes Programm notiert, wo es liegt** (ComfyUI Desktop, auch einen
   selbst gewählten Ordner): diese Datei tolerant lesen, raten zuletzt.

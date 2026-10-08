@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 import pytest
 import trimesh
-from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtCore import QCoreApplication, QPoint, QRect, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -73,11 +73,7 @@ from app.ui.print_settings_dialog import (
 )
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-
-
-@pytest.fixture
-def session(qt_app: QApplication) -> Session:
-    return Session()
+from tests.ui_helpers import session as session
 
 
 @pytest.mark.parametrize("which", ["printer_choice", "machine_choice"])
@@ -585,7 +581,7 @@ def test_a_project_with_a_printer_from_another_computer_opens_with_the_general_p
     window.session.failed.connect(failures.append)
     try:
         window.open_path(path)
-        assert window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         assert not raised, raised
         assert not failures, failures
@@ -786,6 +782,7 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         _foundation_cache=None,
         _map_request=None,
         _announcement_document=document,
+        _follow_the_run_in_the_report=lambda: None,
         _split_points=(),
         _quiet_host=None,
         _drop_feature_preview=lambda: None,
@@ -807,6 +804,12 @@ def test_plate_job_adds_its_identity_without_replacing_project_process_values(
         _update_actions=lambda: None,
         filaments=SimpleNamespace(show_scene=lambda *_args: None),
         _start_print_findings=lambda *_args: None,
+        _click_after_evaluation=None,
+        _click_refusal=None,
+    )
+    window._check_waiting_click = lambda: MainWindow._check_waiting_click(window)
+    window._withdraw_click_refusal = lambda **kwargs: MainWindow._withdraw_click_refusal(
+        window, **kwargs
     )
     window._update_header = lambda: MainWindow._update_header(window)
     window.effective_print_settings = lambda: MainWindow.effective_print_settings(window)
@@ -2473,6 +2476,159 @@ def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
 
     assert dialog.slice_button.isEnabled(), "Testzeitraum plus Slicer heißt frei"
     assert not dialog.slice_button.toolTip()
+
+
+def test_a_cura_without_its_loader_only_offers_its_window(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-521: Findet Solidon den Lader einer Flatpak- oder AppImage-Cura nicht,
+    sperrt der Dialog *Slicen* mit dem Satz aus dem Kern, und der Öffnen-Knopf
+    bleibt der Weg. Die Lizenz ist frei, damit kein anderer Grund davor steht."""
+    from app.core.activation import store
+    from app.core.export import cura_linux
+
+    monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=5))
+    monkeypatch.setattr(handover, "console_refusal", lambda _found: cura_linux.WINDOW_ONLY)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    dialog._slicer_path = Path("UltiMaker-Cura-5.13.0-linux-X64.AppImage")
+    dialog._show_slicer_state()
+
+    reason = str(cura_linux.WINDOW_ONLY)
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == reason
+    assert dialog.slice_button.accessibleDescription() == reason
+    assert dialog.open_button.isEnabled(), "Curas Fenster bleibt der Weg"
+    assert reason not in dialog.open_button.toolTip()
+
+
+def _cura_appimage_dialog(
+    session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **appimage: Any
+) -> tuple[PrintSettingsDialog, list[Path]]:
+    """Ein Druckdialog mit einer AppImage-Cura, deren Kopie noch aussteht, im
+    Betrieb der Anwendung: Der Fensterfaden wartet nie (``build_application``)."""
+    from app.core.activation import store
+    from app.core.export import cura_linux
+    from tests.cura_fakes import appimage_cura
+
+    monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=5))
+    mounts: list[Path] = []
+    found, _point = appimage_cura(tmp_path, monkeypatch, mounts, **appimage)
+    monkeypatch.setattr(cura_linux, "_never_waits", None)
+    cura_linux.never_wait_in(threading.current_thread())
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    dialog._slicer_path = found
+    return dialog, mounts
+
+
+def _until_mounted(mounts: list[Path]) -> None:
+    deadline = time.monotonic() + 10.0
+    while not mounts and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert mounts, "der Cura-Arbeiter hat nicht eingehängt"
+
+
+def test_the_dialog_rebases_without_waiting_and_again_after_curas_copy(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """RM-521: Während der Cura-Arbeiter die Druckerkopie einer AppImage-Cura
+    anlegt, gründet der Dialog ohne zu warten (Fensterfaden); danach gründet er
+    mit Curas Bestand neu."""
+    from app.core.export import manufacturer, slicer_profiles
+
+    seen: list[tuple[float, bool]] = []
+    original = manufacturer.base_settings
+
+    def spy(profile: Any, quality: Any, setup: Any) -> Any:
+        started = time.monotonic()
+        result = original(profile, quality, setup)
+        root = slicer_profiles.install_root(setup.executable) if setup is not None else None
+        seen.append((time.monotonic() - started, root is not None))
+        return result
+
+    monkeypatch.setattr(manufacturer, "base_settings", spy)
+    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=3.0)
+    dialog._start_profile_search()
+    _until_mounted(mounts)
+    started = time.monotonic()
+    dialog._foundation_key = None
+    dialog._rebase()
+    during = time.monotonic() - started
+
+    assert dialog.wait_for_cura_printer(60_000)
+    QCoreApplication.processEvents()
+    dialog.release()
+
+    assert during < 1.0, "der Fensterfaden wartet nicht auf die Kopie"
+    assert seen and seen[-1][1], "nach dem Arbeiter gründet der Dialog mit Curas Bestand"
+
+
+def test_a_dialog_closed_during_curas_copy_gets_no_rebase(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Schließen wartet nicht auf den kopierenden Arbeiter, und sein spätes
+    Ergebnis gründet den geschlossenen Dialog nicht mehr neu."""
+    from app.ui import leash
+
+    calls: list[str] = []
+    original = PrintSettingsDialog._rebase
+
+    def counted(self: PrintSettingsDialog, *args: object) -> None:
+        calls.append("rebase")
+        original(self, *args)
+
+    monkeypatch.setattr(PrintSettingsDialog, "_rebase", counted)
+    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0)
+    dialog._start_profile_search()
+    _until_mounted(mounts)
+    started = time.monotonic()
+    dialog.reject()
+    closing = time.monotonic() - started
+    before = len(calls)
+    leash.wait_for_all(60_000)
+    for _round in range(5):
+        QCoreApplication.processEvents()
+    dialog.release()
+
+    assert closing < 1.0
+    assert len(calls) == before
+
+
+@pytest.mark.parametrize("loader", [True, False])
+def test_slicing_waits_with_a_reason_until_curas_copy_tells(
+    qt_app: QApplication,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    loader: bool,
+) -> None:
+    """Ob eine AppImage-Cura rechnen kann, weiß erst ihre Kopie. Bis dahin steht
+    „Curas Drucker werden gelesen …“ an *Slicen* (kein Knopf auf eine
+    Vermutung), danach frei oder der Sperrsatz."""
+    from app.core.export import cura_linux
+
+    reading = str(tr("Curas Drucker werden gelesen …"))
+    dialog, mounts = _cura_appimage_dialog(session, monkeypatch, tmp_path, delay=2.0, loader=loader)
+    dialog._start_profile_search()
+    _until_mounted(mounts)
+    dialog._show_slicer_state()
+
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == reading
+    assert dialog.open_button.isEnabled()
+
+    assert dialog.wait_for_cura_printer(60_000)
+    QCoreApplication.processEvents()
+    dialog._show_slicer_state()
+    after = dialog.slice_button.toolTip()
+    dialog.release()
+
+    assert after != reading
+    if not loader:
+        assert after == str(cura_linux.WINDOW_ONLY)
 
 
 def test_slicing_greys_out_until_the_profiles_are_chosen(
@@ -4665,7 +4821,7 @@ def test_a_connector_of_infill_reaches_the_advice_list(
     dann sagt Solidon nichts.
     """
     session.import_model(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     result = session.last_result
     assert result is not None, "die Szene steht"
 
@@ -4711,7 +4867,7 @@ def test_a_guessed_pin_never_sets_a_setting(qt_app: QApplication, session: Sessi
     **376 Wände**, und *Vorschläge übernehmen* schrieb sie ins Projekt.
     """
     session.import_model(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     result = session.last_result
     assert result is not None
     entry = next(iter(result.scene.objects.values()))
@@ -5479,10 +5635,28 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
         assert dialog.adopt_printer.text() == f"{title} übernehmen"
         assert dialog.adopt_printer.accessibleDescription() == dialog.adopt_printer.toolTip()
 
+        from app.core import discover
+
+        # Jede Ablage zählt, nicht nur der Stand danach: Die Wahl, die der
+        # Übernahme folgt, schreibt die Marke ein zweites Mal und verdeckte eine
+        # erste Ablage ohne sie (Review P2 N10).
+        saves: list[tuple[str, str | None]] = []
+        save = profiles.save_printer
+
+        def recorded(profile: PrinterProfile, *, slicer: str | None = None) -> PrinterProfile:
+            saves.append((profile.id, slicer))
+            return save(profile, slicer=slicer)
+
+        monkeypatch.setattr(profiles, "save_printer", recorded)
         dialog.adopt_printer.click()
 
         assert candidate.id in profiles.printer_profiles(), "erst der Klick speichert das Profil"
         assert profiles.printer(candidate.id) == candidate
+        mark = discover.program_mark("Cura.exe")
+        assert mark, "sonst prüft die Marke nichts"
+        assert profiles.printer_slicer(candidate.id) == mark
+        mine = [slicer for identifier, slicer in saves if identifier == candidate.id]
+        assert mine and mine[0] == mark, f"die Übernahme legt ohne Marke ab: {mine}"
         assert session.profile.printer.id == candidate.id
         assert settings.printer == candidate.id
         assert session.project.document.material == "petg"
@@ -5492,7 +5666,7 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
         assert dialog.nozzle.value_mm() == pytest.approx(candidate.nozzle_diameter)
         assert dialog.adopt_printer.isHidden()
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         dialog.deleteLater()
 
 
@@ -5558,7 +5732,107 @@ def test_the_print_dialog_offers_the_printers_of_its_slicer(
         assert settings.printer == kobra.id
         assert dialog.printer_choice.currentData() == kobra.id
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
+        dialog.release()
+        dialog.deleteLater()
+        discover.remember_path("slicer", "")
+
+
+def test_the_print_dialog_says_whose_printers_it_lists_and_what_went_wrong(
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Die Druckerliste folgt dem Slicer darüber: Kurzhilfe und Suchzeile nennen
+    ihn. Scheitert das Ablegen des gewählten Druckers, springt die Wahl zurück,
+    die Vorgabe für neue Projekte bleibt, und der Grund steht unter dem Drucker
+    — in der Zustandszeile überschrieb ihn der nächste Sperrgrund (Regel 17).
+    Eine gescheiterte Erhebung zeigt alle Drucker und sagt es; vorher still.
+    """
+    from app.core import discover
+    from app.core.errors import FileWriteError
+    from app.core.export import slicer_profiles
+    from app.core.types import PrinterProfile
+
+    original_profiles_dir = profiles.user_profiles_dir
+
+    def restore_profile_cache() -> None:
+        profiles.user_profiles_dir = original_profiles_dir
+        profiles.reload()
+
+    request.addfinalizer(restore_profile_cache)
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path / "profiles")
+    profiles.reload()
+    kobra = PrinterProfile(
+        id="slicer-kobra-s1",
+        title="Anycubic Kobra S1 0.4 nozzle",
+        build_volume=(250.0, 250.0, 250.0),
+        vendor="Anycubic",
+    )
+    monkeypatch.setattr(slicer_profiles, "discover_printers", lambda *_args: (kobra,))
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_args: "")
+    executable = tmp_path / "AnycubicSlicerNext" / "AnycubicSlicerNext.exe"
+    executable.parent.mkdir()
+    executable.write_text("", encoding="utf-8")
+    discover.remember_path("slicer", str(executable))
+    session = Session()
+    settings = UiSettings()
+    dialog = PrintSettingsDialog(session, settings)
+    try:
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+        assert dialog.wait_for_printer_survey(), "die Drucker des Slicers kamen nicht"
+        tip = (
+            "Mit diesem Drucker rechnet das Projekt. Zur Wahl stehen die Drucker aus "
+            "Anycubic Slicer Next und Ihre eigenen."
+        )
+        assert dialog.printer_choice.toolTip() == tip
+        assert dialog.printer_choice.accessibleDescription() == tip
+        assert dialog.printer_label.toolTip() == tip
+        assert dialog.printer_choice.search_field.placeholderText() == (
+            "Drucker aus Anycubic Slicer Next suchen …"
+        )
+        assert dialog.printer_state.isHidden(), "ohne Grund keine Zeile"
+
+        before = session.profile.printer.id
+        default = settings.printer
+
+        def full_disk(_profile: PrinterProfile, **_values: object) -> PrinterProfile:
+            raise FileWriteError(detail="kein Platz")
+
+        monkeypatch.setattr(profiles, "save_printer", full_disk)
+        index = dialog.printer_choice.findData(kobra.id)
+        dialog.printer_choice.setCurrentIndex(index)
+        dialog.printer_choice.activated.emit(index)
+
+        assert session.profile.printer.id == before
+        assert dialog.printer_choice.currentData() == before, "die Wahl springt zurück"
+        assert settings.printer == default, "der nicht abgelegte Drucker wird keine Vorgabe"
+        assert not dialog.printer_state.isHidden()
+        assert dialog.printer_state.text() == (
+            "Der Drucker ließ sich nicht speichern. Prüfen Sie den freien Speicherplatz "
+            "und die Schreibrechte, und wählen Sie ihn erneut."
+        )
+        dialog._show_slicer_state()
+        assert "wählen Sie ihn erneut" in dialog.printer_state.text(), (
+            "die Zustandszeile überschreibt den Grund nicht"
+        )
+
+        def unreadable(*_args: object) -> tuple[PrinterProfile, ...]:
+            raise RuntimeError("Bestand kaputt")
+
+        monkeypatch.setattr(slicer_profiles, "discover_printers", unreadable)
+        dialog._start_printer_survey()
+        assert dialog.wait_for_printer_survey(), "die gescheiterte Erhebung kam nicht zurück"
+
+        assert dialog.printer_choice.findData("centauri-carbon-2") >= 0, "alle bekannten"
+        assert dialog.printer_state.text() == (
+            "Die Drucker von Anycubic Slicer Next ließen sich nicht lesen. Wählen Sie Ihren "
+            "aus allen bekannten Druckern oder einen anderen Slicer."
+        )
+        assert dialog.printer_choice.search_field.placeholderText() == "Drucker suchen …"
+    finally:
+        assert session.wait_for_idle(60_000)
         dialog.release()
         dialog.deleteLater()
         discover.remember_path("slicer", "")
@@ -5870,7 +6144,7 @@ def test_the_slot_assignment_outlives_a_printer_change(
             0.45
         ), "und der Druckerwechsel wirkt weiterhin"
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
 
 
 def test_changing_only_the_project_printer_keeps_every_filament_choice(
@@ -5900,7 +6174,7 @@ def test_changing_only_the_project_printer_keeps_every_filament_choice(
         assert dialog.settings.slot_profiles == ("PETG Schwarz", "PLA Weiß")
         assert dialog.settings.slot_overrides == (override,)
     finally:
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
 
 
 def _select_quality(dialog: PrintSettingsDialog, quality: str) -> None:
@@ -5951,7 +6225,7 @@ def test_a_different_printer_keeps_what_the_customer_set(
         # Arbeiter, der den Test überlebt, nimmt beim Abbau den Prozess mit —
         # der Lauf riss danach in ``_no_worker_outlives_its_window``, mit
         # „passed" davor und Exit 139 dahinter (siehe ``Session.wait_for_idle``).
-        session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
 
 
 def _select_printer(dialog: PrintSettingsDialog, printer_id: str) -> None:
@@ -8322,14 +8596,14 @@ def test_the_machine_list_follows_the_printer_of_the_project(qt_app: QApplicatio
         printer_model="Elegoo Centauri Carbon 2",
         nozzle=0.4,
     )
-    from app.ui.print_settings_dialog import _select_data
+    from app.ui.style import select_data
 
     dialog = PrintSettingsDialog(session, settings)
     dialog._profiles_found([weit, meiner])
 
     assert dialog.machine_choice.count() == 2, "der allgemeine Drucker sieht alles"
 
-    _select_data(dialog.printer_choice, "centauri-carbon-2")
+    select_data(dialog.printer_choice, "centauri-carbon-2")
     dialog._scene_profile_changed()
 
     assert session.profile.printer.id == "centauri-carbon-2", "die Vorbedingung des Tests"

@@ -102,9 +102,9 @@ Stehen in `kanten.md`.
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
 Liegt ein Werkzeug der Formschräge nicht ganz im Material (oder ganz davor),
-sagen beide Kerne mit demselben Satz ab — keine still niedrigere Wand, kein von
-`ShapeFix` formal geheilter Körper. Tangentiale Nachbarflächen gehen mit
-(`draft.tangent_faces`).
+sagen beide Kerne denselben Satz, nie `ShapeFix`. Tangentiale Nachbarflächen
+gehen mit (`draft.tangent_faces`); liegt eine schräg, sagen beide vorher
+`DRAFT_BESIDE_A_ROUND`.
 
 ## Boolesches geht durch die Rückfallkette
 
@@ -190,8 +190,7 @@ Gruppenweg `cavity_topology_unavailable`), und wer den Zustand liest, liest ihn
 mit. Geteilt steht einmal (`relations.cavity_is_shared`). Was einen geteilten
 Hohlraum nicht nehmen kann, sagt ab statt still ein Stück zu bearbeiten — nur
 noch *Zum Langloch ziehen* (`NEEDS_A_PLAIN_BORE`, derselbe Satz im
-Merkmalfenster); Versetzen, Drehen und Verdoppeln nehmen die ganze Kette mit
-(Entscheidung Robert).
+Merkmalfenster); Versetzen, Drehen und Verdoppeln nehmen die ganze Kette mit.
 
 ## Gekippt wird bis zur alten Randebene
 
@@ -230,19 +229,19 @@ neuen schneiden — kein Unterschied zwischen den Kernen (Entscheidung Robert).
   Grundrechenarten; exakt `edit._continued_cap`, an derselben Nachbarschaft
   gemessen); der Klick ins Bild nimmt dasselbe Paar.
 - **Eine exakte Differenz gilt erst mit dichtem Zwilling** (`CUT_OVERLAPS`,
-  sonst `CUT_DID_NOT_HOLD`; Ketten, Bohrung, Langloch): OpenCASCADE scheitert
-  lagenabhängig still. Exakte Kopien werden nach Lage und Maß zugeordnet, dann
-  benannt; der äußere Zylinder einer Kette ist beim Wiederfinden entlang der
-  Achse frei; unlesbar heißt `CHAIN_NOT_READABLE`.
-- **Langloch und Lippentasche reisen ganz aus ihren Flächen** (gedreht, skaliert
-  oder ohne zwei ebene Ränder aus Kennzahlen). Steht im Zylinder nur ein Rand —
-  nicht „Merkmal ohne Dreiecke" —, ist das Werkzeug die Hülle der erklärten Maße
-  minus Körper; Nabe oder Zapfen bleiben `HOLE_IS_NOT_EMPTY`. Die Lippe
-  (`narrowing`) ändert sich über ihr eigenes Profil und wird nie gekippt
-  (`perceive.actions.narrowing_reason`), solange die Erkennung keine gekippte
-  Lippe liest; was sie nicht sieht, wird nicht nachgemessen.
+  sonst `CUT_DID_NOT_HOLD`; Ketten, Bohrung, Langloch). Exakte Kopien werden
+  nach Lage und Maß zugeordnet und benannt; der äußere Zylinder einer Kette
+  ist beim Wiederfinden axial frei; unlesbar heißt `CHAIN_NOT_READABLE`.
+- **Langloch und Lippentasche reisen aus ihren Flächen** (gedreht, skaliert
+  oder ohne zwei ebene Ränder aus Kennzahlen); nur ein Rand im Zylinder
+  (`only_a_rim_inside`): erklärte Hülle minus Körper; Nabe, Zapfen:
+  `HOLE_IS_NOT_EMPTY`. Die Lippe ändert ihr Profil, nie gekippt
+  (`narrowing_reason`); Ungesehenes wird nicht nachgemessen.
+- **Starr versetzt reist das Material, wie es ist** (`carried_from`): Werkzeug ∩
+  Körper; Durchlaufendes bleibt am alten Ort, Umschließendes und
+  Innenliegendes bleibt ungeschnitten (`_carried_cavities`).
 - **Zwei Werkzeuge stoßen am Netz nie nur in einer Ebene aneinander** — das
-  hintere reicht ins vordere; geprüft an Flächen dieser Ebene, nicht am Volumen.
+  hintere reicht ins vordere; geprüft an Flächen dieser Ebene.
 - **Eine Senkung auf ihrer Bohrung ändert ihr Maß über dieselben Profile**
   (Absage an einer Stelle: `countersink_resize_refusal`).
 - **Versetzen und Verdoppeln fragen die Nachbarwand**, beim Verdoppeln samt
@@ -286,8 +285,9 @@ eine dünner gewordene unter der Mindestwand meldet `thread.thin_wall`.
 - **Eine Kopie, die es nicht gibt**, an beiden Kernen: wiedergefunden heißt neu
   und seitlich auf der gesetzten Achse bis zur Facettengrenze.
 - **Eine Bohrung, in deren Zylinder Material steht, ist keine** (`hole_is_clear`
-  über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
-  ganze Mündung, nicht die Achse.
+  über jede Oberfläche, `HOLE_IS_NOT_EMPTY`, fremde Teile
+  `OTHER_PART_IN_THE_BORE`); ob man hindurchsieht, sagt die ganze Mündung. Nur
+  `slot_hole` schneidet ein freies Teil mit (`_near_the_carrier`).
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
   (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt, über die
   Schnittlänge; den Zerfall gegen den Körper davor, `_split_counted_from`):
@@ -322,13 +322,15 @@ wieder ausgeschnitten wird exakt das Merkmal, ohne Zugabe.
 
 `trimesh.creation.cylinder` ist eingeschrieben. Wiederhergestellt wird mit dem
 gemessenen Konturmaß und dem Wandmantel (`_tool_for`, `_placing_tool`); nur der
-Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Stolperfalle:
-`FEATURE_OVERLAP` deckt den Vieleckverlust zu — ohne sie fehlt die Deckung.
+Stopfen, der umschreiben muss, bekommt `units.inscribed_ratio`. Falle:
+`FEATURE_OVERLAP` verdeckt den Vieleckverlust.
+
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` gelten im Durchmesser (`diameter + play`,
-`hole_diameter - pin_diameter`); wer radial einzieht, nimmt die Hälfte. Keine
-Konstante als Fertigungszugabe (Regel 7).
+`hole_diameter - pin_diameter`); wer einzieht, nimmt die Hälfte, im Hohlraum
+senkrecht zur Wand (`geom.bore_pin`). Keine Konstante als Fertigungszugabe
+(Regel 7).
 
 ## Ein Langloch in neuer Richtung ist ein gedrehtes Langloch
 

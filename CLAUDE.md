@@ -44,8 +44,7 @@ setzen `PYTHONUTF8=1` für ihre Unterprozesse.
 .venv\Scripts\python.exe tools/affected_tests.py --run                     # alle Änderungen gegen HEAD
 ```
 
-Ohne Dateiliste nimmt es alle Änderungen gegenüber HEAD — gestaged,
-ungestaged und neu, auch fremde.
+Ohne Dateiliste zählt jede Änderung gegen HEAD, auch fremde.
 Meldet es „das ist die Suite" (`i18n`, `types.py`, `errors.py`, `log.py`),
 gleich das Tor fahren.
 
@@ -58,7 +57,7 @@ bash .claude/scripts/suite-getrennt.sh
 .venv\Scripts\python.exe -m mypy
 ```
 
-**Fenster-, Renderer- und Leistungsprüfungen nur beim Release** (`AGENTS.md`,
+**Fenster-, Renderer- und Leistungsprüfungen lokal nur beim Release** (`AGENTS.md`,
 „Arbeitsweise“). `pytest -q` am Stück kommt nicht durch (nativer Abriss im
 Fensterteil); das Tor trennt Fenster und Renderer ab:
 
@@ -165,10 +164,13 @@ Feldliste steht deshalb als Tabelle, nicht als Codeblock.
 Kleine Schritte, Test zuerst bei Geometrie, kein Revert, nie stillschweigend
 raten — das steht in `AGENTS.md`. Dazu:
 
-- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald das Tor
-  grün ist — in logischen Einheiten, nur die eigenen Pfade, mit
-  `Co-Authored-By`. Zusammengeführt wird per Merge. `/liefern` bündelt das,
-  wenn Robert es ansagt.
+- **Nach jedem abgeschlossenen Punkt committen und pushen**, sobald Tor und
+  Review grün sind — in logischen Einheiten, nur die eigenen Pfade, mit
+  `Co-Authored-By`, ohne Rückfrage, per Merge (Entscheidung Robert).
+- **Vor jedem Push nach main ein Review** (`solidon3d-review`, Entscheidung
+  Robert), auch für Unterlagen und Review-Fixes, Nachprüfung nur bei mehreren
+  mittleren oder schweren Befunden; danach eigene Worktrees und Zweige abbauen
+  (`/liefern`).
 - **`.githooks/post-commit` pusht** jeden Commit, weil auf drei Maschinen
   gearbeitet wird. Er holt und rebasiert nicht — ist die Gegenstelle weiter,
   scheitert er und sagt es. `SOLIDON_KEIN_PUSH=1` hält einen Commit lokal,

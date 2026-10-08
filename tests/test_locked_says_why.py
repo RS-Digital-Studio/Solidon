@@ -67,6 +67,7 @@ from app.ui.sketch_editor import ExpressionDialog, PointDialog, SketchEditorDial
 from app.ui.support_dialog import SupportDialog
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -308,18 +309,6 @@ def session(qt_app: QApplication) -> Session:
     return made
 
 
-@pytest.fixture
-def window(qt_app: QApplication, session: Session) -> MainWindow:
-    """Das Hauptfenster für die Menüprüfungen.
-
-    Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test auf
-    die Arbeiter jedes offenen Fensters — dieselbe Bauart wie in
-    ``test_ui.py``, damit zwei Aufbauten desselben Fensters nicht
-    auseinanderlaufen.
-    """
-    return MainWindow(session, UiSettings())
-
-
 def _silent_buttons(dialog: QDialog) -> list[str]:
     """Sichtbare gesperrte Knöpfe mit mindestens einem stummen Rückmeldekanal."""
     return [
@@ -521,7 +510,7 @@ def _with_a_selected_body(window: MainWindow) -> None:
     Operationen überhaupt erst freigegeben werden."""
     if not window.session.project.document.ops:
         window.open_path(MESHES / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window.object_tree.select_object(next(iter(result.scene.objects)))
 

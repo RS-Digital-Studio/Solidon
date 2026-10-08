@@ -284,10 +284,34 @@ class TransformBar(QWidget):
                 self._set_role_style(icon_only)
         elif self._roomy_width and self.width() >= self._roomy_width:
             self._set_role_style(wordy)
+            # Der gemerkte Wert kann veraltet sein: Was sich in der verborgenen
+            # Leiste geändert hat (Einheit, Feldsatz), macht die Wörter breiter,
+            # und die Karte bekam beim Öffnen die alte Breite — mit echter
+            # Schrift 745 statt 793 Punkte, die Felder gequetscht bis zum
+            # nächsten Takt. Mit den Wörtern gleich neu messen und melden —
+            # bis hinauf zur Karte, deren Breite die Überlagerung setzt: Qt
+            # verwirft dort die gemerkte Wunschbreite sonst erst Takte später.
+            self._roomy_width = self.sizeHint().width()
+            widget: QWidget | None = self
+            while widget is not None and not widget.isWindow():
+                widget.updateGeometry()
+                widget = widget.parentWidget()
 
     def _set_role_style(self, style: Qt.ToolButtonStyle) -> None:
         for button in self.role_buttons.values():
             button.setToolButtonStyle(style)
+        # Qt verwirft den gemerkten Platzbedarf nur im obersten Layout; die
+        # Rollen stehen in einem inneren, und ``sizeHint`` lieferte bis zum
+        # nächsten Takt die Breite des alten Stils.
+        pending = [self.layout()]
+        while pending:
+            layout = pending.pop()
+            if layout is None:
+                continue
+            layout.invalidate()
+            for index in range(layout.count()):
+                item = layout.itemAt(index)
+                pending.append(item.layout() if item is not None else None)
 
     def roles_show_words(self) -> bool:
         """Ob die Rollen gerade ihr Wort tragen — für Tests und Bilder."""

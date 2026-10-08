@@ -31,7 +31,6 @@ from app.core.perceive.features import (
     detect,
     detect_cones,
     detect_edge_loops,
-    detect_faces,
     detect_holes,
     detect_pins,
     detect_spheres,
@@ -535,8 +534,13 @@ def test_a_real_pin_is_kept() -> None:
 # --- faces ----------------------------------------------------------------------
 
 
+def faces_of(mesh: MeshData) -> list[Feature]:
+    """Die ebenen Flächen, wie die Erkennung sie liefert (:func:`detect`), in ihrer Reihenfolge."""
+    return [feature for feature in detect(mesh).values() if feature.kind == "face"]
+
+
 def test_the_six_faces_of_a_cube_are_found() -> None:
-    faces = detect_faces(cube_mesh())
+    faces = faces_of(cube_mesh())
 
     assert len(faces) == 6
     for face in faces:
@@ -544,7 +548,7 @@ def test_the_six_faces_of_a_cube_are_found() -> None:
 
 
 def test_the_largest_face_comes_first() -> None:
-    faces = detect_faces(plate())
+    faces = faces_of(plate())
 
     assert faces[0].id == "face_1"
     assert faces[0].params["area"] > faces[-1].params["area"]
@@ -571,11 +575,11 @@ def test_faces_of_the_same_size_are_numbered_the_same_way_every_time() -> None:
 
     first = {
         face.id: tuple(round(value, 2) for value in face.params["centre"])
-        for face in detect_faces(MeshData.of(box))
+        for face in faces_of(MeshData.of(box))
     }
     second = {
         face.id: tuple(round(value, 2) for value in face.params["centre"])
-        for face in detect_faces(MeshData.of(turned))
+        for face in faces_of(MeshData.of(turned))
     }
 
     assert len(first) == 6
@@ -599,15 +603,15 @@ def test_turning_a_part_does_not_renumber_its_faces() -> None:
         )
     )
 
-    before = {face.id: face.face_indices for face in detect_faces(flat)}
-    after = {face.id: face.face_indices for face in detect_faces(tilted)}
+    before = {face.id: face.face_indices for face in faces_of(flat)}
+    after = {face.id: face.face_indices for face in faces_of(tilted)}
 
     assert before, "ohne erkannte Flächen prüft der Vergleich nichts"
     assert before == after, "dieselben Dreiecke tragen dieselbe Nummer"
 
 
 def test_a_face_knows_where_it_looks() -> None:
-    top = max(detect_faces(cube_mesh()), key=lambda face: face.params["centre"][2])
+    top = max(faces_of(cube_mesh()), key=lambda face: face.params["centre"][2])
     assert top.params["normal"][2] == pytest.approx(1.0, abs=1e-6)
 
 
@@ -748,7 +752,7 @@ def test_an_unwelded_edge_loop_keeps_its_number_when_the_body_turns() -> None:
     lässt sie sich überhaupt verletzen.
 
     Das Zusammenführen nummeriert die Ecken um, und es ordnet sie dabei **nach
-    Koordinaten**. Genau davor warnt ``detect_faces``: Eine Ordnung nach
+    Koordinaten**. Genau davor warnt ``_largest_first``: Eine Ordnung nach
     Koordinaten überlebt keine Drehung. Die Erkennung rechnet deshalb zwar über
     die zusammengeführte Topologie, sortiert aber über die **Original**-Nummern
     der Ecken, die sich weder beim Drehen noch beim Umsortieren ändern.
@@ -846,8 +850,8 @@ def test_many_open_places_come_as_one_summary() -> None:
 def test_an_edge_loop_keeps_its_number_when_the_body_turns() -> None:
     """Zwei gleich große Schleifen behalten ihre Nummer, wenn das Teil sich dreht.
 
-    An den IDs hängen Ops und Passungen (§21.2), und ``detect_faces`` sagt
-    neunzig Zeilen weiter oben ausdrücklich, warum: Eine Nummerierung nach
+    An den IDs hängen Ops und Passungen (§21.2), und ``_largest_first`` sagt
+    ausdrücklich, warum: Eine Nummerierung nach
     Koordinaten überlebt keine Drehung. ``detect_edge_loops`` tat trotzdem
     genau das — bei gleicher Kantenzahl entschied der gerundete Mittelpunkt.
 
@@ -945,7 +949,7 @@ def test_a_scratch_is_not_a_bore() -> None:
 
 def test_the_faces_of_a_real_part_survive_the_limit() -> None:
     """Die Grenze darf nur das treffen, was sie treffen soll."""
-    faces = detect_faces(plate())
+    faces = faces_of(plate())
 
     assert len(faces) == 6, "eine Platte hat sechs Seiten, und alle sind Flächen"
 
@@ -975,7 +979,7 @@ def test_a_face_keeps_its_centre_when_it_gets_a_hole() -> None:
     ).mesh
 
     def top_of(mesh: MeshData) -> tuple[float, ...]:
-        top = max(detect_faces(mesh), key=lambda face: face.params["centre"][2])
+        top = max(faces_of(mesh), key=lambda face: face.params["centre"][2])
         return tuple(top.params["centre"])
 
     before, after = top_of(plain), top_of(drilled)
@@ -1067,7 +1071,7 @@ def test_a_coarse_prism_keeps_its_sides() -> None:
 
     prism = MeshData.of(trimesh.creation.cylinder(radius=25.0, height=20.0, sections=8))
 
-    faces = detect_faces(prism)
+    faces = faces_of(prism)
 
     assert len(faces) == 10, "acht Seiten, Deckel und Boden"
 
@@ -1816,9 +1820,8 @@ def test_a_changed_mesh_is_examined_again() -> None:
     assert heights_after != heights_before, "das verschobene Netz bekam die alte Antwort"
 
 
-# ``_face_candidates`` statt ``detect_faces``: Die Erkennung baut ihre Flächen
-# seit RM-207 in zwei Schritten (erst alle, billig; nach dem Musterfalten die
-# übrigen fertig), und ``detect_faces`` ist der Weg für Aufrufer von außen.
+# ``_face_candidates``: Die Erkennung baut ihre Flächen seit RM-207 in zwei
+# Schritten — erst alle, billig; nach dem Musterfalten die übrigen fertig.
 @pytest.mark.parametrize(
     "phase", ["fit_cylinder", "fit_cone", "_face_candidates", "_shapes_on_a_freeform"]
 )
@@ -2937,7 +2940,7 @@ def test_a_reader_in_one_thread_keeps_its_key_while_a_writer_evicts_in_another(
 ) -> None:
     """``get`` und ``move_to_end`` sind zwei Schritte — dazwischen darf niemand verdrängen.
 
-    Das Merkmalfenster fragt ``fillet_blocked`` → ``detect_faces`` im
+    Das Merkmalfenster fragt ``fillet_blocked`` → ``planar_mask`` im
     Hauptfaden, während der Arbeiter dieselbe Frage für die nächste Auswertung
     stellt. Ohne Schloss verdrängte der Schreiber den Schlüssel zwischen den
     zwei Schritten des Lesers, und der bekam einen ``KeyError`` (Review
@@ -5940,6 +5943,53 @@ def test_a_hole_with_material_inside_is_a_wall_and_every_row_says_so() -> None:
     clean = boolean("difference", [MeshData.of(plate), MeshData.of(bore)]).mesh
     hole = next(feature for feature in detect(clean).values() if feature.kind == "hole")
     assert hole_is_clear(clean, hole)
+
+
+@pytest.mark.parametrize("op", ["remove_feature", "plug_hole"])
+def test_removing_or_plugging_a_wall_with_material_inside_says_so(
+    profile: Profile, op: str
+) -> None:
+    """Entfernen und Verschließen sagen an der Topfwand mit Zapfen ab, über die Operation.
+
+    Beide füllen die alte Stelle über ``_closed_at``, und dort fragt
+    ``_checked_bore_air``, ob im Zylinder Material steht. Ohne die Frage füllte
+    der Pfropfen den Topf samt Zapfen ganz: 9 922 → 22 965 mm³, ohne Absage
+    (Review Einheit 1, 06.10.2026). Der Test oben ruft ``_tool_for`` direkt
+    und hält diesen Anschluss nicht.
+    """
+    from app.core.errors import ValidationError
+    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    load_operations()
+    mesh = _cup_with_a_boss_inside()
+    found = detect(mesh)
+    wall = max(
+        (feature for feature in found.values() if feature.kind == "hole"),
+        key=lambda feature: float(feature.params["diameter"]),
+    )
+    entry = SceneObject(id="obj_1", name="Topf", mesh=mesh, features=found)
+    spec = REGISTRY.get(op)
+
+    with pytest.raises(ValidationError) as problem:
+        spec.fn(
+            OpContext(
+                scene=Scene(objects={entry.id: entry}),
+                inputs=[entry],
+                params=spec.params(at_feature=wall.id),
+                profile=profile,
+                quality="fine",
+                seed=7,
+                progress=lambda *_: None,
+                ask=lambda _question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+
+    assert problem.value.detail is HOLE_IS_NOT_EMPTY
+    assert [action.id for action in problem.value.suggestions] == ["change_selection", "cancel"]
 
 
 def test_a_pocket_over_a_small_hole_in_its_floor_is_not_through() -> None:

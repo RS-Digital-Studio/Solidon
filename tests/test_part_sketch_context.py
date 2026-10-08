@@ -121,7 +121,7 @@ def test_surface_placement_passes_the_sketch_context(
     tool = placement.prepare_tool(operation, values, profile, parameters=context)
     assert tool.mesh.bounds.size == pytest.approx((30, 12, 4))
     context["outer"] = 80.0
-    changed = placement.placement_tool(operation, values, profile, parameters=context)
+    changed = placement.prepare_tool(operation, values, profile, parameters=context).mesh
     assert changed.bounds.size == pytest.approx((40, 12, 4))
     assert values["outline"] == drawing
 

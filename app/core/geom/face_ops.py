@@ -26,7 +26,13 @@ from __future__ import annotations
 import dataclasses
 from typing import cast
 
-from app.core.geom.faces import draft_walls, push_face, pushed_features, tangent_faces_finding
+from app.core.geom.faces import (
+    draft_walls,
+    gone_face_error,
+    push_face,
+    pushed_features,
+    tangent_faces_finding,
+)
 from app.core.geom.mesh import as_mesh_data
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
@@ -230,6 +236,11 @@ class DraftParams(BaseParams):
         "Entformungsrichtung — zum Entformen, oder damit ein Stapelbehälter sich "
         "stapeln lässt."
     ),
+    # RM-230: Schließt eine liegende Rundung ohne Knick an eine Wand an, sagen
+    # beide Kerne vor der Rechnung ab (``faces.DRAFT_BESIDE_A_ROUND``).
+    caveat=_(
+        "Wenn an den Wänden unten oder oben Rundungen liegen. Dann nur Wände ohne Rundung wählen."
+    ),
 )
 def draft_faces(ctx: OpContext) -> OpResult:
     params = cast(DraftParams, ctx.params)
@@ -300,7 +311,7 @@ def _drafted_face(source: SceneObject, name: str) -> Feature:
     """Ein gewähltes Flächenmerkmal — oder der Satz, warum es keines ist."""
     feature = source.features.get(name)
     if feature is None:
-        raise _no_face()
+        raise gone_face_error() if name else _no_face()
     return feature
 
 
@@ -329,7 +340,9 @@ def _chosen_face(source: SceneObject, name: str) -> Feature | None:
     if not name:
         return None
     feature = source.features.get(name)
-    if feature is None or feature.kind != "face":
+    if feature is None:
+        raise gone_face_error()
+    if feature.kind != "face":
         raise _no_face()
     return feature
 

@@ -20,17 +20,11 @@ from PySide6.QtWidgets import QApplication
 from app.core.geom.sculpt import strokes_from_text
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
-from app.ui.settings import UiSettings
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 from tests.ui_helpers import with_a_body
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-@pytest.fixture
-def window(qt_app: QApplication) -> MainWindow:
-    """Ein Fenster ohne Körper — jeder Test entscheidet selbst, ob er einen
-    braucht."""
-    return MainWindow(Session(), UiSettings())
 
 
 # --- hinein und heraus ----------------------------------------------------------
@@ -140,6 +134,118 @@ def test_an_early_finish_waits_for_the_conversion_preview_and_closes_once(
     assert len(window.session.project.document.ops) == before + 1
     assert window.session.project.document.ops[-1].op == "sculpt_strokes"
     assert window.session.last_result.scene.objects[exact_body].kind == "mesh"
+
+
+def test_a_finish_waiting_for_the_evaluation_does_not_take_a_later_stroke(
+    window: MainWindow, exact_body: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Fertig* während einer Auswertung nimmt keinen Zug mit, der danach kam.
+
+    Der Knopf ist ein dauerhafter Eigentümer, und gemerkt war nur er (Review
+    der Zusatzfixes, F1): Stünde seine Freigabe bis zum Ende, schriebe *Fertig*
+    die Züge, die *dann* dastehen. Am Stand davor verfiel der Klick hier still —
+    das Ende der Auswertung räumt die Vorschau der Sitzung ab. Jetzt verwirft
+    der neue Zug ihn sofort mit Satz; geschrieben wird nichts, die Sitzung
+    bleibt offen. Das Bild gilt als gezeigt, damit ein durchgelassener Klick
+    nicht offscreen auf ewig wartet und so grün aussähe.
+    """
+    import threading
+
+    from app.i18n import tr
+
+    window.start_sculpt(exact_body)
+    before = len(window.session.project.document.ops)
+    window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.session.wait_for_idle(30_000)
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _result: True)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Sitzung rechnet"
+        window.sculpt_bar.done.click()
+        window._on_sculpt((-10.0, 10.0, 20.0))
+        gate.set()
+        assert window.session.wait_for_idle(30_000)
+        QApplication.processEvents()
+        assert window.session.wait_for_idle(30_000)
+        approval = window._preview_approval
+        if approval is not None and approval.difference is not None:
+            window.viewport.differenceApplied.emit(approval.difference)
+        assert window.session.wait_for_idle(30_000)
+    finally:
+        gate.set()
+
+    assert window.sculpting(), "die Sitzung bleibt offen"
+    assert len(window.session.project.document.ops) == before, "nichts geschrieben"
+    assert window.status_message.text() == tr(
+        "Nicht übernommen, weil sich die Werte geändert haben. "
+        "Klicken Sie erneut, um den neuen Stand zu übernehmen."
+    )
+
+
+def test_a_finish_during_an_evaluation_closes_the_session_after_it(
+    window: MainWindow, exact_body: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Fertig* während einer Auswertung schließt danach — genau ein Schritt.
+
+    Die Statuszeile sagte „Wird übernommen, sobald die Berechnung fertig ist.“
+    und danach „Nicht übernommen …“: Das Ende der Auswertung räumt die
+    Vorschau der Sitzung ab, niemand band sie neu, und ein Klick ohne Freigabe
+    lief nie (Nachprüfung, Fund 3). Die Lage ist nicht selten: *Dreiecke jetzt
+    angleichen* stößt selbst eine Auswertung an. Jetzt baut *Fertig* seinen
+    Auftrag aus den Zügen neu, und der Vergleich mit dem gemerkten verwirft
+    weiter einen späteren Zug (Test darüber).
+    """
+    import threading
+
+    from app.i18n import tr
+
+    window.start_sculpt(exact_body)
+    before = len(window.session.project.document.ops)
+    window._on_sculpt((10.0, 10.0, 20.0))
+    assert window.session.wait_for_idle(30_000)
+    gate = threading.Event()
+    evaluate = Session.run_evaluation
+
+    def held(self: Session, *args: object, **kwargs: object) -> object:
+        gate.wait(15)
+        return evaluate(self, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "run_evaluation", held)
+    monkeypatch.setattr(window.viewport, "is_difference_applied", lambda _difference: True)
+    monkeypatch.setattr(window.viewport, "is_scene_applied", lambda _result: True)
+    try:
+        window.session.evaluate_async()
+        assert window.session.busy, "die Lage: die Sitzung rechnet"
+        window.sculpt_bar.done.click()
+        assert window._click_after_evaluation is not None, "der Klick wartet"
+        assert window.status_message.text().startswith(
+            tr("Wird übernommen, sobald die Berechnung fertig ist.")
+        )
+        gate.set()
+        for _ in range(3):
+            assert window.session.wait_for_idle(30_000)
+            QApplication.processEvents()
+            approval = window._preview_approval
+            if approval is not None and approval.difference is not None:
+                window.viewport.differenceApplied.emit(approval.difference)
+        assert window.session.wait_for_idle(30_000)
+    finally:
+        gate.set()
+
+    assert not window.sculpting(), "die Sitzung ist zu"
+    ops = window.session.project.document.ops
+    assert len(ops) == before + 1, "genau ein Schritt"
+    assert ops[-1].op == "sculpt_strokes"
+    assert "übernommen" not in window.status_message.text(), window.status_message.text()
 
 
 def test_the_session_needs_something_to_sculpt(window: MainWindow) -> None:
@@ -271,7 +377,7 @@ def test_a_second_carve_into_the_shown_pit_starts_its_own_stage(
     ball = tmp_path / "kugel.stl"
     trimesh.creation.icosphere(subdivisions=4, radius=20.0).export(ball)
     window.open_path(ball)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
@@ -352,7 +458,7 @@ def test_the_session_mirror_reaches_the_stage_decision_in_the_window(
     path = tmp_path / "prisma.stl"
     path.write_bytes(trimesh.exchange.stl.export_stl(lopsided_prism().raw))
     window.open_path(path)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     object_id = str(next(iter(window.session.last_result.scene.objects)))
     mesh = window._sculpt_mesh(object_id)
     assert mesh is not None
@@ -620,7 +726,7 @@ def with_a_thin_shell(window: MainWindow, tmp_path: Path) -> str:
     path = tmp_path / "shell.stl"
     path.write_bytes(trimesh.exchange.stl.export_stl(shell))
     window.open_path(path)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
@@ -750,7 +856,7 @@ def with_a_plate(window: MainWindow, tmp_path: Path) -> str:
     path = tmp_path / "platte.stl"
     path.write_bytes(trimesh.exchange.stl.export_stl(trimesh.Trimesh(vertices, faces)))
     window.open_path(path)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
     return str(object_id)
 
@@ -924,7 +1030,7 @@ def test_baking_and_reopening_keeps_the_face_materials(
     path = tmp_path / "bemalt.p3d"
     session.save_project(path)
     session.open_project(path)
-    assert session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     restored = session.evaluate_now().scene.objects["obj_1"]
     assert restored.mesh.slot_indices == before.mesh.slot_indices
     assert restored.material_slots == before.material_slots
@@ -1047,7 +1153,7 @@ def test_the_history_offers_baking_only_for_a_live_session(window: MainWindow) -
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     document = window.session.project.document
     sculpt = next(entry for entry in document.ops if entry.op == "sculpt_strokes")
@@ -1069,14 +1175,14 @@ def test_baking_writes_the_state_into_the_project(window: MainWindow) -> None:
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     sculpt = next(
         entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
     )
     before = len(window.session.project.document.sources)
 
     assert window.session.bake_strokes(sculpt.id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert len(window.session.project.document.sources) == before + 1
     frozen = next(
@@ -1092,12 +1198,12 @@ def test_a_baked_session_is_not_offered_again(window: MainWindow) -> None:
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     sculpt = next(
         entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
     )
     window.session.bake_strokes(sculpt.id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     window.history_panel.show_document(window.session.project.document)
 
@@ -1123,7 +1229,7 @@ def test_baking_asks_nothing_because_undo_takes_it_back(
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     sculpt = next(
         entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
     )
@@ -1134,14 +1240,14 @@ def test_baking_asks_nothing_because_undo_takes_it_back(
     monkeypatch.setattr(QMessageBox, "exec", no_box)
 
     window.bake_sculpt(sculpt.id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     baked = next(entry for entry in window.session.project.document.ops if entry.id == sculpt.id)
     assert baked.params["baked"]
     assert "Strg+Z" in window.status_message.text()
 
     window.session.undo()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     live = next(entry for entry in window.session.project.document.ops if entry.id == sculpt.id)
     assert not live.params.get("baked"), "undo gives the session its strokes back"
@@ -1353,7 +1459,7 @@ def test_baking_freezes_the_state_right_after_the_sculpt_step(window: MainWindow
     window.start_sculpt(object_id)
     window._on_sculpt((0.0, 0.0, 82.0))
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     sculpt = next(
         entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
     )
@@ -1361,13 +1467,13 @@ def test_baking_freezes_the_state_right_after_the_sculpt_step(window: MainWindow
         "Verschieben",
         [OperationDraft(op="translate_object", inputs=(object_id,), params={"dx": 10.0})],
     )
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     before = result.scene.objects[object_id].mesh.bounds
 
     assert window.session.bake_strokes(sculpt.id)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     result = window.session.last_result
     assert result is not None
@@ -1503,7 +1609,7 @@ def test_a_new_sculpt_session_does_not_inherit_the_last_note(window: MainWindow)
     window.start_sculpt(object_id)
     window.sculpt_bar.analysis.show_note("12 Stellen dünner als 0,84 mm")
     window.finish_sculpt()
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.start_sculpt(object_id)
     assert window.sculpt_bar.analysis.note.text() == ""
 
@@ -1591,7 +1697,7 @@ def test_reopened_sculpt_keeps_later_steps_and_survives_saving(
     path = tmp_path / "formen.p3d"
     window.session.save_project(path)
     window.session.open_project(path)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     count = len(window.session.project.document.ops)
     window.edit_operation(step)
     assert window.session.wait_for_idle(30_000)
@@ -1607,7 +1713,7 @@ def test_reopened_sculpt_keeps_later_steps_and_survives_saving(
     assert window._gesture_scene is None
     window.session.save_project(path)
     window.session.open_project(path)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     window.edit_operation(step)
     assert window.session.wait_for_idle(30_000)
     assert len(window._sculpt_strokes) == 1
@@ -1704,7 +1810,7 @@ def test_save_before_project_switch_waits_for_the_gesture_result_dialog(
     assert not window.session.modified
     assert len(window.session.project.document.ops) == before + 1
     window.session.open_project(path)
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert len(window.session.project.document.ops) == before + 1
 
 
@@ -1999,7 +2105,7 @@ def test_whole_mouse_gestures_undo_redo_and_reopen(window, monkeypatch, tmp_path
     assert window.session.wait_for_idle()
     path = save(window.session.project, tmp_path / "gestures.p3d")
     window.session.open_project(path)
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     step = window.session.project.document.ops[-1].id
     window.edit_operation(step)
     assert window.session.wait_for_idle()

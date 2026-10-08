@@ -62,11 +62,9 @@ G-Code zurück.
 **Der Bauraum wird an den Bahnen nachgemessen** (`gcode.analyze(...).extent`,
 `handover.off_the_bed`), denn CuraEngine prüft ihn nicht. `G2`/`G3` zählen
 mit; die Stelle wird über alle Bewegungen nachgeführt. Geprüft wird in
-Maschinenkoordinaten, Ursprung wie die Maschine, getrennt von der Verschiebung
-der Eingabe (CuraEngine verschiebt selbst, Prusa- und Orca-Projekte enthalten
-sie); eine Bettkontur in der Druckdatei geht dem Druckerprofil vor. Gemeldet,
-nicht gesperrt (§29) — unter einer Bahnbreite gar nicht, die Bahn liegt
-ohnehin halb neben der gemessenen Mitte.
+Maschinenkoordinaten, getrennt von der Verschiebung der Eingabe; eine
+Bettkontur in der Druckdatei geht dem Druckerprofil vor. Gemeldet, nicht
+gesperrt (§29), unter einer Bahnbreite gar nicht.
 
 ## Vorschlag oder Befund
 
@@ -217,13 +215,17 @@ Element).
 `slice/estimate.py` antwortet in Mikrosekunden für die Anzeige: Schale als
 Differenz zweier Körper (`3V/A`), nie Fläche mal Dicke; geprüft an kompakten
 **und** dünnwandigen Körpern (`tests/test_estimate.py`). **Die Zeitgegenprobe
-rechnet aus der Schichtanalyse** (`slice/print_time.py`): Mindestschichtzeit,
-belegtes Mindesttempo und Beschleunigung aus dem Herstellerprofil (`Motion`;
+rechnet aus der Schichtanalyse** mit dem Herstellerprofil (`Motion`;
 ohne Mindesttempo keine Zeit), verglichen ab der ersten Schicht
-(`GcodeMetrics.printing_seconds`). Beide tragen `source="internal"`.
-**Stützen zählen außerhalb der Mindestschichtzeit**; stützt der Slicer ganz
-anders oder das Profil keine Brücken, bleibt die Zeit offen
-(`estimate.time_comparison_blocked`). Stützen ein, im G-Code unter
+(`GcodeMetrics.printing_seconds`). Beide tragen `source="internal"`. Jede
+Änderung an der Zeit bringt einen Test am echten Slicer mit
+(`test_print_time.py`); nur die Druckdatei belegt sie. Er nennt je Slicer
+die gemessene Fassung (`SLICER_DEVIATION`), überspringt andere und wird
+**beim Release** nachgemessen. **Stützen zählen außerhalb der
+Mindestschichtzeit**; stützt der Slicer ganz anders, mit Bäumen, ist es
+CuraEngine oder stützt das Profil keine Brücken, bleibt die Zeit offen
+(`estimate.time_comparison_blocked`); Stützmenge und -zeit teilen die Säulen
+(`print_time.support_material`). Stützen ein, im G-Code unter
 `estimate.support_floor`: `gcode.support_missing`, wo `advise.support_need`
 Stützen verlangt.
 

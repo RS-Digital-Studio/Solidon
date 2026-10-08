@@ -28,7 +28,7 @@ import tempfile
 import time
 import zipfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -58,7 +58,7 @@ from app.core.errors import (
     OperationCancelled,
     ValidationError,
 )
-from app.core.export import manufacturer, slicer_keys, slicer_profiles, threemf
+from app.core.export import cura_linux, manufacturer, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_filament_profiles,
@@ -286,9 +286,9 @@ class SlicerSetup:
 
     @property
     def name(self) -> str:
-        """Wie Meldungen den Slicer nennen: der Dateistamm, ein Flatpak nach
-        seinem Programm (:func:`discover.flatpak_title`) statt „com.prusa3d“."""
-        return discover.flatpak_title(self.executable) or self.executable.stem
+        """Wie Meldungen den Slicer nennen — wie die Listen darüber
+        (:func:`discover.slicer_title`), nicht beim Dateistamm."""
+        return discover.slicer_title(self.executable)
 
 
 def _profile_roots(setup: SlicerSetup) -> tuple[Path, ...]:
@@ -778,6 +778,18 @@ def only_opens(setup: SlicerSetup) -> bool:
     """Bekommt dieses Programm die Datei nur ins Fenster — ohne Profil,
     Konfiguration und Konsolenlauf?"""
     return setup.flavour == "other"
+
+
+def console_refusal(executable: Path) -> TranslatableText | None:
+    """Warum Solidon mit diesem Slicer nicht selbst rechnet, obwohl es seine
+    Familie kennt — oder ``None``.
+
+    Eine Cura als Flatpak oder AppImage ohne ihren Lader bekommt die Datei nur
+    ins Fenster (RM-521); der Druckdialog sperrt *Slicen* mit diesem Satz.
+    """
+    if slicer_keys.flavour_of(executable.name) == "cura" and cura_linux.engine_missing(executable):
+        return cura_linux.WINDOW_ONLY
+    return None
 
 
 def _refuse_untranslated(setup: SlicerSetup) -> None:
@@ -4560,11 +4572,12 @@ def _cli_program(setup: SlicerSetup) -> list[str]:
     Vordergrund auf und behalten ihren Starter samt dessen Umgebung
     (``LC_NUMERIC=C``). Gemessen am Runner mit den Flathub-Paketen (RM-064).
 
-    **Cura bleibt beim Starter**, der nur das Fenster öffnet: Sein Paket ist ein
-    AppImage aus appimage-builder, und CuraEngine nennt seinen Lader relativ
-    (``lib64/ld-linux-x86-64.so.2``); er liegt unter ``runtime/compat`` und
-    startet nur mit Curas eigenem Bibliothekspfad. Ein Aufruf mit
-    ``--command`` scheiterte am Runner mit „required file not found“.
+    **Cura bleibt hier beim Starter**, der nur das Fenster öffnet: Sein Paket ist
+    ein AppImage aus appimage-builder, und CuraEngine nennt seinen Lader relativ
+    (``lib64/ld-linux-x86-64.so.2``). Ein Aufruf mit ``--command`` auf
+    CuraEngine scheiterte am Runner mit „required file not found“; gerechnet
+    wird über den Lader, den :func:`cura_linux.engine` für die Dauer des Laufs
+    bereitstellt.
     """
     app = discover.flatpak_app(setup.executable)
     inner = _FLATPAK_CLI.get(setup.flavour, ())
@@ -4588,6 +4601,7 @@ def _command(
     keep_arrangement: bool = False,
     *,
     findings: list[Finding] | None = None,
+    program: Sequence[str] | None = None,
 ) -> list[str]:
     """Die Kommandozeile dieses Slicers. Eine Liste, nie eine Zeichenkette —
     ein Dateiname mit Leerzeichen ist sonst zwei Argumente.
@@ -4596,8 +4610,11 @@ def _command(
     Platte an, und das ist ihre Aufgabe. Eines nach dem anderen zu slicen
     ergäbe ebenso viele Druckdateien, von denen jede so tut, als sei sie der
     ganze Auftrag.
+
+    ``program`` ersetzt :func:`_cli_program`, wenn der Lauf das Programm selbst
+    bereitstellt — CuraEngine über Curas Lader (:func:`cura_linux.engine`).
     """
-    binary, *inside = _cli_program(setup)
+    binary, *inside = program or _cli_program(setup)
     files = [str(entry) for entry in models]
 
     if setup.flavour == "prusa":
@@ -4796,14 +4813,27 @@ def _cura_extruder_base(executable: Path) -> str:
 
 
 def _cura_definition(executable: Path, filename: str) -> str:
-    for folder in (
+    """Eine Definition dieser Cura: neben dem Programm, sonst unter ihrem Bestand.
+
+    Der Flatpak-Starter und das AppImage haben nichts neben sich; ihre
+    Definitionen liegen im ``/app`` des Pakets oder in der Kopie aus dem Abbild
+    (:func:`slicer_profiles.install_root`).
+    """
+    folders = [
         executable.parent / "share" / "cura" / "resources" / "definitions",
         executable.parent / "resources" / "definitions",
-    ):
+    ]
+    for folder in folders:
         found = folder / filename
         if found.is_file():
             return str(found)
-    return ""
+    if not cura_linux.needs_loader(executable):
+        return ""
+    root = slicer_profiles.install_root(executable)
+    if root is None:
+        return ""
+    stocked = slicer_profiles.cura_resources(root) / "definitions" / filename
+    return str(stocked) if stocked.is_file() else ""
 
 
 def _cura_printer_definition(executable: Path, printer: PrinterProfile) -> str:
@@ -6257,6 +6287,11 @@ def _prepare_cura_cli(
     Die Definitionen bleiben vollständig: Nur ihre Dateiverweise ändern sich.
     Curas Suchreihenfolge gilt dabei weiter, einschließlich der Verzeichnisse,
     die beim Laden einer Definition hinzukommen. Originale bleiben unberührt.
+
+    Alles vor ``slice`` ist das Programm und bleibt, wie es ist — unter Linux
+    auch Curas Lader samt Bibliothekspfad (:func:`cura_linux.engine`). Weil
+    danach jeder Dateipfad im Arbeitsordner liegt, braucht ein Cura-Flatpak
+    keine übersetzten ``/app``-Pfade, nur die Freigabe dieses Ordners.
     """
     roots = [
         Path(entry)
@@ -6327,8 +6362,8 @@ def _prepare_cura_cli(
         active.remove(source)
         return name
 
-    staged = [*command[:2], "-d", str(definitions)]
-    index = 2
+    index = command.index("slice") + 1
+    staged = [*command[:index], "-d", str(definitions)]
     mesh_count = 0
     try:
         definitions.mkdir()
@@ -6490,20 +6525,36 @@ def slice_model(
         # **Bambu Studio endet manchmal nicht** nach seiner ``result.json``:
         # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
         # Ob die Datei dieses Laufs da ist, fragt :func:`_result_written`.
-        command = _command(
-            setup, cli_models, config, target, wanted_arrangement, findings=limited_settings
-        )
-        if setup.flavour == "cura":
-            command = _prepare_cura_cli(command, workspace, cancelled)
-        outputs_before = _output_files(target)
-        completed = _run_slicer(
-            command,
-            workspace,
-            timeout,
-            setup,
-            cancelled,
-            finished=_result_written(target) if setup.flavour == "orca" else None,
-        )
+        with ExitStack() as engine_scope:
+            # Cura unter Linux rechnet über seinen eigenen Lader; ein AppImage
+            # bleibt dafür bis zum Ende des Laufs eingehängt (RM-521).
+            program = (
+                engine_scope.enter_context(
+                    cura_linux.engine(setup.executable, workspace, setup.name, cancelled)
+                )
+                if setup.flavour == "cura"
+                else None
+            )
+            command = _command(
+                setup,
+                cli_models,
+                config,
+                target,
+                wanted_arrangement,
+                findings=limited_settings,
+                program=program,
+            )
+            if setup.flavour == "cura":
+                command = _prepare_cura_cli(command, workspace, cancelled)
+            outputs_before = _output_files(target)
+            completed = _run_slicer(
+                command,
+                workspace,
+                timeout,
+                setup,
+                cancelled,
+                finished=_result_written(target) if setup.flavour == "orca" else None,
+            )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         # Nur die Dateien dieses Versuchs zählen. Auch die selbst benennende

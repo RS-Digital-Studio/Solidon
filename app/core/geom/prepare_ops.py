@@ -2440,18 +2440,15 @@ def _closed_at(
                     merge_face_contacts=True,
                 )
             )
-    if (
+    if feature.kind == "hole" and not (
         cavity
         and separate_contents
         and hole_has_separate_contents(mesh, feature, cancelled=cancelled)
     ):
-        # Nur der Langlochzug darf fremde Körper innerhalb der Bohrung schneiden.
-        # Sein Stopfen wird unten wie jede Bohrung an den eigenen Rändern gekappt.
-        tool = _feature_solid(feature, centre)
-    else:
-        tool = _tool_for(
-            mesh, feature, centre, alone=alone, quality=quality, seed=seed, cancelled=cancelled
-        )
+        # Den Stopfen einer Bohrung bauen unten Kennzahlen und Ränder; vom
+        # Werkzeug bliebe nur die Absage, wenn Material im Zylinder steht. Nur
+        # der Langlochzug darf getrennte Körper in der Bohrung schneiden.
+        _checked_bore_air(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
     # **Wo die Bohrung wirklich endet, sagen ihre Randringe** (22.09.2026). Ein
     # Stopfen aus Kennzahlen hat Deckel quer zu seiner Achse; eine schräge
     # Bohrung mündet aber in den Plattenflächen, und die Achsspanne ihrer Wand
@@ -2462,35 +2459,16 @@ def _closed_at(
     # den Flächen, aus denen die Bohrung kommt — und darf dafür zuerst länger
     # gebaut werden, denn geschnitten wird danach.
     planes = _rim_planes(mesh, feature) if cavity else ()
-    if planes and feature.kind == "slot":
-        tool = _feature_solid(_longer(feature), centre)
     # **Und für den Zapfen gilt dasselbe wie für die Bohrung**, nur andersherum:
     # Beim Abtragen muss das Werkzeug das Vieleck des Zapfens umschreiben,
     # sonst bleiben zwischen seinen Facetten und denen des Werkzeugs Splitter
     # stehen. Gemessen an der Nabe eines Uhrenrads (Ø 11,3, 48 Segmente, gegen
     # 64 des Werkzeugs; 15.09.2026): 48 Reste von 0,003 mm³, einer je Facette.
     if feature.kind in ("hole", "pin"):
-        # Der Innenkreis des Stopfens muss alle ursprünglichen Eckpunkte
-        # einschließen, auch wenn deren Tessellierung eine andere Teilung hat.
-        radius = _bore_number(feature, "diameter") / 2.0
-        if feature.face_indices:
-            points = np.asarray(mesh.raw.triangles)[list(feature.face_indices)].reshape(-1, 3)
-            axis = np.asarray(_bore_vector(feature, "axis"))
-            axis /= math.hypot(*axis)
-            relative = points - centre
-            radius = max(
-                radius,
-                float(
-                    np.linalg.norm(
-                        relative - np.outer(transform.along(relative, axis), axis), axis=1
-                    ).max()
-                ),
-            )
-        diameter = 2.0 * radius / units.inscribed_ratio(FEATURE_SECTIONS)
         tool = _feature_solid(
             _longer(feature) if planes else feature,
             centre,
-            oversize=diameter - _bore_number(feature, "diameter") + FEATURE_OVERLAP,
+            oversize=_enclosing_oversize(mesh, feature, centre),
         )
         # **Ein Zapfen geht mit seinen eigenen Flächen** (22.09.2026). Der
         # Zylinder aus Kennzahlen trug die Zugabe aus §39 an beiden Enden und
@@ -2503,6 +2481,12 @@ def _closed_at(
         own = _pin_body(mesh, feature) if feature.kind == "pin" else None
         if own is not None:
             tool = _past_the_mouths(mesh, own)
+    elif planes and feature.kind == "slot":
+        tool = _feature_solid(_longer(feature), centre)
+    else:
+        tool = _tool_for(
+            mesh, feature, centre, alone=alone, quality=quality, seed=seed, cancelled=cancelled
+        )
     clipped = _cut_at_the_rims(tool, planes) if planes else None
     if clipped is not None:
         tool = clipped
@@ -2544,6 +2528,33 @@ def _closed_at(
         merge_face_contacts=cavity,
     )
     return _without_scars(outcome) if cavity else outcome
+
+
+def _enclosing_oversize(mesh: MeshData, feature: Feature, centre: Vec3) -> float:
+    """Die Zugabe, mit der ein Zylinder aus Kennzahlen alle Eckpunkte einer
+    Bohrung oder eines Zapfens umschreibt, dazu die aus §39.
+
+    Der Innenkreis des Werkzeugs muss alle ursprünglichen Eckpunkte
+    einschließen, auch wenn deren Tessellierung eine andere Teilung hat —
+    beim Abtragen (:func:`_closed_at`) wie beim Mitnehmen des Materials
+    (:func:`_placing_tool`), sonst reisen die Facettenreste nicht mit.
+    """
+    radius = _bore_number(feature, "diameter") / 2.0
+    if feature.face_indices:
+        points = np.asarray(mesh.raw.triangles)[list(feature.face_indices)].reshape(-1, 3)
+        axis = np.asarray(_bore_vector(feature, "axis"))
+        axis /= math.hypot(*axis)
+        relative = points - np.asarray(centre, dtype=float)
+        radius = max(
+            radius,
+            float(
+                np.linalg.norm(
+                    relative - np.outer(transform.along(relative, axis), axis), axis=1
+                ).max()
+            ),
+        )
+    diameter = 2.0 * radius / units.inscribed_ratio(FEATURE_SECTIONS)
+    return diameter - _bore_number(feature, "diameter") + FEATURE_OVERLAP
 
 
 def _rim_planes(mesh: Mesh, feature: Feature) -> tuple[SectionPlane, ...]:
@@ -2690,28 +2701,7 @@ def _tool_for(
     den **heutigen** Grund nennt und nicht den von gestern — siehe
     :data:`NO_OWN_BODY`.
     """
-    air: MeshData | None = None
-    if feature.kind == "hole" and not hole_is_clear(mesh, feature):
-        # Im Zylinder steht Material: eine Radinnenwand mit Speichen oder ein
-        # Topf mit Zapfen, kein Bohrungsmantel. Ob die Flächen einen Körper
-        # hergeben, ist dann gleich — der Pfropfen schlösse den Zapfen ein,
-        # und der Zylinder an der neuen Stelle nähme die Speichen mit. Gefragt
-        # wird vor dem Flächenkörper, der hier umsonst gebaut würde.
-        #
-        # **Außer, wo es nur ein Rand an der Wand ist** (Durchsicht 0.5.1,
-        # BOHRUNG-13): Die Haltelippe einer Magnettasche verengt die Mündung
-        # von Ø 8,25 auf 7,95 und zählte als Material im Zylinder. Dort ist das
-        # Werkzeug die Luft der Tasche selbst (:func:`_air_of_the_bore`), samt
-        # Lippe — gleich, ob die Erkennung dem Merkmal Flächen zuordnet.
-        air = _air_of_the_bore(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
-        if air is None:
-            raise ValidationError(
-                field="at_feature",
-                detail=HOLE_IS_NOT_EMPTY,
-                values={"feature": feature.id, "kind": feature.kind},
-                constraint="not_movable",
-                suggestions=(CHANGE_SELECTION, CANCEL),
-            )
+    air = _checked_bore_air(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
     # Beim Versetzen zählt der vorhandene Sehnenzug, nicht der Radius durch
     # die Dreiecksmitten. Sonst schrumpft eine fremd tessellierte Bohrung.
     # Und der Körper aus den Flächen endet bündig in den Oberflächen — als
@@ -2799,18 +2789,49 @@ def _tool_for(
     return MeshData.of(body)
 
 
+def _checked_bore_air(
+    mesh: MeshData,
+    feature: Feature,
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> MeshData | None:
+    """Die Luft einer Tasche, in deren Zylinder nur ein Rand steht; ``None`` für
+    eine freie Bohrung und jedes andere Merkmal.
+
+    Steht im Zylinder Material — eine Radinnenwand mit Speichen oder ein Topf
+    mit Zapfen, kein Bohrungsmantel —, sagt die Frage ab
+    (:func:`filled_bore_refusal`): Ein Pfropfen schlösse den Zapfen ein, und
+    der Zylinder an der neuen Stelle nähme die Speichen mit. Gefragt wird vor
+    jedem Flächenkörper, der sonst umsonst gebaut würde.
+
+    **Außer, wo es nur ein Rand an der Wand ist** (Durchsicht 0.5.1,
+    BOHRUNG-13): Die Haltelippe einer Magnettasche verengt die Mündung von
+    Ø 8,25 auf 7,95 und zählte als Material im Zylinder. Dort ist das Werkzeug
+    die Luft der Tasche selbst (:func:`_air_of_the_bore`), samt Lippe — gleich,
+    ob die Erkennung dem Merkmal Flächen zuordnet.
+    """
+    if feature.kind != "hole" or hole_is_clear(mesh, feature):
+        return None
+    air = _air_of_the_bore(mesh, feature, quality=quality, seed=seed, cancelled=cancelled)
+    if air is None:
+        raise filled_bore_refusal(mesh, feature)
+    return air
+
+
 def _bore_air_frame(
     mesh: MeshData, feature: Feature
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], float, float] | None:
     """Mündung, Richtung zur Luft, Radius und Tiefe einer Tasche, in deren
-    Zylinder nur ein Rand steht (:func:`_only_a_rim_inside`) — ``None`` für
+    Zylinder nur ein Rand steht (:func:`only_a_rim_inside`) — ``None`` für
     alles andere.
 
     Die Maße sind die, die das Merkmal erklärt; wo die Luft liegt, sagt der
     Körper (:func:`_toward_the_air`). Eine Durchgangsbohrung hat zwei
     Mündungen und keine eine Seite, an der die Hülle enden könnte.
     """
-    if feature.kind != "hole" or not _only_a_rim_inside(mesh, feature):
+    if feature.kind != "hole" or not only_a_rim_inside(mesh, feature):
         return None
     radius = float(feature.params.get("diameter", 0.0)) / 2.0
     depth = float(feature.params.get("depth", 0.0))
@@ -2990,6 +3011,7 @@ def _placing_tool(
     scale: float = 1.0,
     axis: Vec3 | None = None,
     alone: bool = True,
+    carried_from: Vec3 | None = None,
 ) -> MeshData:
     """Das Werkzeug, das ein Merkmal an seiner (neuen) Stelle setzt.
 
@@ -2998,11 +3020,36 @@ def _placing_tool(
     Hohlräume, die durch es laufen (:func:`_without_cavities`). Beides gilt
     nur dem **Setzen**; das Abtragen an der alten Stelle geht über
     :func:`_closed_at`.
+
+    **Starr versetzt reist das Material, wie es ist** (``carried_from``, die
+    alte Mitte; RM-535). Das Werkzeug an der alten Stelle wird mit dem Körper
+    geschnitten und verschoben — wie an der Bohrung die Luft
+    (:func:`_air_of_the_bore`). Der volle Körper aus den Flächen füllte, was
+    im Zapfen hohl ist, und die Hohlräume aus Kennzahlen gaben es nur grob
+    zurück: Der Topf eines Minitopfs (Zapfen Ø 30 um eine Tasche Ø 28 mit
+    Deckelfalz) trug nach jedem Versetzen +240,65 mm³, gleich wie weit.
     """
+    carried = carried_from is not None and not cavity
+    material_tool: MeshData | None = None
+    if carried and feature.kind == "pin":
+        # **Genau das, was das Abtragen nimmt** (:func:`_closed_at`): aus den
+        # Flächen samt Zugabe, wo Luft ist, sonst umschrieben aus Kennzahlen.
+        # Der gesetzte Körper allein läge innen an den Facetten (Minitopf:
+        # 10 mm³) und ohne Sockel unter einem überstehenden Becher (4 mm³ vom
+        # Fuß) — beides blieb beim Versetzen zurück.
+        origin = carried_from if carried_from is not None else centre
+        own = _pin_body(body, feature)
+        material_tool = (
+            _past_the_mouths(body, own)
+            if own is not None
+            else _feature_solid(
+                feature, origin, oversize=_enclosing_oversize(body, feature, origin)
+            )
+        )
     tool = _tool_for(
         body,
         feature,
-        centre,
+        carried_from if carried_from is not None and carried else centre,
         scale=scale,
         axis=axis,
         alone=alone,
@@ -3014,6 +3061,61 @@ def _placing_tool(
     )
     if cavity:
         return tool
+    keep: frozenset[str] = frozenset()
+    probe: MeshData | None = None
+    if carried_from is not None and carried:
+        from app.core.geom.mesh import surface_index
+
+        solid = tool
+        if material_tool is not None:
+            solid = boolean(
+                "union",
+                [tool, material_tool],
+                quality=ctx.quality,
+                seed=ctx.seed,
+                cancelled=ctx.cancelled,
+            ).mesh
+        travel = np.asarray(centre, dtype=float) - np.asarray(carried_from, dtype=float)
+        keep = _carried_cavities(solid, source.features, feature.id)
+        # Was durch das Merkmal hindurch weiterläuft (die Bohrung durch Dom
+        # und Platte), bleibt an der alten Stelle und wird danach dort wieder
+        # geschnitten; seine Luft reist deshalb nicht mit, sonst stünden zwei
+        # Bohrungen nebeneinander (Endfase am Stift, minus 23 mm³ bei 0,2 mm).
+        index = surface_index(solid.raw) if solid.raw.is_watertight else None
+        through = [
+            cutter
+            for identifier, other in source.features.items()
+            if index is not None
+            and identifier != feature.id
+            and identifier not in keep
+            and other.kind in ("hole", "slot")
+            and (cutter := _cavity_cutter(solid, index, other, own_span=True)) is not None
+        ]
+        carrier = body
+        if through:
+            carrier = boolean(
+                "union",
+                [body, *through],
+                quality=ctx.quality,
+                seed=ctx.seed,
+                cancelled=ctx.cancelled,
+            ).mesh
+        material = boolean(
+            "intersection",
+            [solid, carrier],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+            allow_empty=True,
+        ).mesh
+        if len(material.raw.faces) and material.volume > EPS_GEOM:
+            tool = material
+        moved = tool.raw.copy()
+        shift_body(moved, travel)
+        tool = MeshData.of(moved)
+        sounding = solid.raw.copy()
+        shift_body(sounding, travel)
+        probe = MeshData.of(sounding)
     return _without_cavities(
         tool,
         source.features,
@@ -3021,7 +3123,60 @@ def _placing_tool(
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        keep=keep,
+        probe=probe,
     )
+
+
+def _carried_cavities(tool: MeshData, features: Mapping[str, Feature], skip: str) -> frozenset[str]:
+    """Die Hohlräume, die beim starren Versetzen mit dem Material reisen oder
+    es umschließen — ``tool`` ist der volle Körper des Merkmals **an der alten
+    Stelle** (RM-535).
+
+    Ein Hohlraum, dessen Achse innen ganz im Werkzeug liegt, gehört zum
+    Merkmal (der Topf im Zapfen, das Schraubloch im Dom) und reist mit dem
+    Material. Einer, dessen Zylinder das Werkzeug umschließt, ist die Tasche,
+    in der der Zapfen steht, und bleibt; geschnitten nahm er den versetzten
+    Zapfen ab 0,5 mm ganz weg (minus 189 mm³, Kundenmodell). Was darüber hinaus
+    in den Körper läuft, bleibt bei :func:`_without_cavities`.
+    """
+    from app.core.geom.mesh import on_surface, surface_index
+
+    if not tool.raw.is_watertight:
+        return frozenset()
+    vertices = np.asarray(tool.raw.vertices, dtype=float)
+    index: Any = None
+    kept: set[str] = set()
+    for identifier, other in features.items():
+        if identifier == skip or other.kind not in ("hole", "slot"):
+            continue
+        centre = other.params.get("centre")
+        direction = other.params.get("axis")
+        if not isinstance(centre, list | tuple) or not isinstance(direction, list | tuple):
+            continue
+        axis = np.asarray(direction, dtype=float)
+        length = float(math.hypot(*axis))
+        if length <= EPS_GEOM:
+            continue
+        axis /= length
+        middle = np.asarray(centre, dtype=float)
+        relative = vertices - middle
+        along = transform.along(relative, axis)
+        radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+        depth = float(other.params.get("depth", 0.0))
+        low, high = -depth / 2.0, depth / 2.0
+        around = float(other.params.get("diameter", 0.0)) / 2.0 >= float(radial.max())
+        if around and float(along.min()) < high and float(along.max()) > low:
+            kept.add(identifier)
+            continue
+        reach = depth or float(other.params.get("diameter", 0.0))
+        samples = middle + np.linspace(-0.5, 0.5, _CAVITY_AXIS_SAMPLES)[1:-1, None] * reach * axis
+        index = index if index is not None else surface_index(tool.raw)
+        closest, _distances, faces = on_surface(tool.raw, samples, index=index)
+        signed = row_dots(samples - closest, stable_normals(tool.raw)[0][faces])
+        if bool(np.all(signed < -EPS_GEOM)):
+            kept.add(identifier)
+    return frozenset(kept)
 
 
 def _rooted(
@@ -3111,6 +3266,8 @@ def _without_cavities(
     quality: Quality,
     seed: int | None,
     cancelled: CancelToken | None,
+    keep: frozenset[str] = frozenset(),
+    probe: MeshData | None = None,
 ) -> MeshData:
     """Die Hohlräume, die durch ein konvexes Werkzeug laufen, bleiben offen.
 
@@ -3121,8 +3278,14 @@ def _without_cavities(
     Langloch, dessen Achse das Werkzeug trifft, wird deshalb aus dem Werkzeug
     herausgeschnitten, bevor es vereinigt wird — mit seinem gemessenen Maß
     (``oversize=0``), damit kein zweites, um die Zugabe weiteres Loch entsteht.
+
+    ``keep`` nennt die Hohlräume, die beim starren Versetzen mit dem Material
+    reisen oder es umschließen (:func:`_carried_cavities`) — sie werden nicht
+    geschnitten. ``probe`` ist dann der volle Merkmalskörper an der neuen
+    Stelle: Ob ein Hohlraum durchläuft, sagt er und nicht das mitgenommene
+    Material, in dem die Achse eines Hohlraums in der Luft liegt.
     """
-    from app.core.geom.mesh import on_surface, surface_index
+    from app.core.geom.mesh import surface_index
 
     if not tool.raw.is_watertight:
         return tool
@@ -3130,54 +3293,85 @@ def _without_cavities(
     # neu erst nach einem Schnitt ins Werkzeug (RM-260).
     index: Any = None
     for identifier, other in features.items():
-        if identifier == skip or other.kind not in ("hole", "slot"):
+        if identifier == skip or identifier in keep or other.kind not in ("hole", "slot"):
             continue
-        centre = other.params.get("centre")
-        direction = other.params.get("axis")
-        if not isinstance(centre, list | tuple) or not isinstance(direction, list | tuple):
+        asked = tool if probe is None else probe
+        if index is None:
+            index = surface_index(asked.raw)
+        cutter = _cavity_cutter(asked, index, other, own_span=probe is not None)
+        if cutter is None:
             continue
-        axis = np.asarray(direction, dtype=float)
-        length = float(math.hypot(*axis))
-        if length <= EPS_GEOM:
-            continue
-        axis /= length
-        middle = np.asarray(centre, dtype=float)
-        reach = float(other.params.get("depth", 0.0) or other.params.get("diameter", 0.0))
-        samples = middle + np.linspace(-0.5, 0.5, _CAVITY_AXIS_SAMPLES)[:, None] * reach * axis
-        # Innen heißt: der nächste Punkt der Werkzeughaut liegt in Richtung
-        # ihrer Normale — derselbe Weg wie in :func:`_feature_mount`, ohne
-        # einen Strahlenschnitt, der eine weitere Abhängigkeit bräuchte.
-        index = index if index is not None else surface_index(tool.raw)
-        closest, _distances, faces = on_surface(tool.raw, samples, index=index)
-        signed = row_dots(samples - closest, stable_normals(tool.raw)[0][faces])
-        if not bool(np.any(signed < -EPS_GEOM)):
-            continue
-        # **Durch das Werkzeug, nicht um es herum.** Ein Zapfen, der in einer
-        # großen Bohrung steht (Hemmungsrad 06: Zapfen Ø 9 in der Bohrung
-        # Ø 22), hat deren Achse ebenfalls in sich — die Bohrung läuft aber
-        # nicht durch ihn, sie umschließt ihn, und der Schneider nähme das
-        # ganze Werkzeug mit: „Von dem Körper bleibt nichts übrig."
-        relative = np.asarray(tool.raw.vertices, dtype=float) - middle
-        along = transform.along(relative, axis)
-        radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
-        if float(other.params.get("diameter", 0.0)) / 2.0 >= float(radial.max()):
-            continue
-        # Der Schneider reicht über das ganze Werkzeug entlang der Achse — nicht
-        # nur über die gemessene Tiefe des Hohlraums: Ein Kegel, der größer
-        # wird, wird auch höher, und ein Schneider von gestern ließe oben eine
-        # Haut stehen (gemessen 0,05 mm, und die Bohrung war ein Sackloch).
-        low, high = float(along.min()), float(along.max())
-        mid = middle + axis * (low + high) / 2.0
-        cutter = _feature_solid(
-            dataclasses.replace(other, params={**other.params, "depth": high - low}),
-            (float(mid[0]), float(mid[1]), float(mid[2])),
-            oversize=0.0,
-        )
         tool = boolean(
             "difference", [tool, cutter], quality=quality, seed=seed, cancelled=cancelled
         ).mesh
-        index = None
+        if probe is None:
+            index = None
     return tool
+
+
+def _cavity_cutter(
+    tool: MeshData, index: Any, other: Feature, *, own_span: bool = False
+) -> MeshData | None:
+    """Der Schneider für einen Hohlraum, der durch ``tool`` läuft — ``None``,
+    wo seine Achse das Werkzeug nicht trifft oder er es umschließt
+    (:func:`_without_cavities`).
+
+    ``own_span`` hält ihn in der Spanne des Hohlraums, wo dieser im Werkzeug
+    endet — beim starren Versetzen ändert sich die Höhe nicht, und ein
+    Sackloch, das von unten in einen Stift reicht, ging sonst durch ihn
+    hindurch (minus 5 722 mm³ am Stift mit Endfasen, RM-535).
+    """
+    from app.core.geom.mesh import on_surface
+
+    centre = other.params.get("centre")
+    direction = other.params.get("axis")
+    if not isinstance(centre, list | tuple) or not isinstance(direction, list | tuple):
+        return None
+    axis = np.asarray(direction, dtype=float)
+    length = float(math.hypot(*axis))
+    if length <= EPS_GEOM:
+        return None
+    axis /= length
+    middle = np.asarray(centre, dtype=float)
+    reach = float(other.params.get("depth", 0.0) or other.params.get("diameter", 0.0))
+    samples = middle + np.linspace(-0.5, 0.5, _CAVITY_AXIS_SAMPLES)[:, None] * reach * axis
+    # Innen heißt: der nächste Punkt der Werkzeughaut liegt in Richtung
+    # ihrer Normale — derselbe Weg wie in :func:`_feature_mount`, ohne
+    # einen Strahlenschnitt, der eine weitere Abhängigkeit bräuchte.
+    closest, _distances, faces = on_surface(tool.raw, samples, index=index)
+    signed = row_dots(samples - closest, stable_normals(tool.raw)[0][faces])
+    if not bool(np.any(signed < -EPS_GEOM)):
+        return None
+    # **Durch das Werkzeug, nicht um es herum.** Ein Zapfen, der in einer
+    # großen Bohrung steht (Hemmungsrad 06: Zapfen Ø 9 in der Bohrung
+    # Ø 22), hat deren Achse ebenfalls in sich — die Bohrung läuft aber
+    # nicht durch ihn, sie umschließt ihn, und der Schneider nähme das
+    # ganze Werkzeug mit: „Von dem Körper bleibt nichts übrig."
+    relative = np.asarray(tool.raw.vertices, dtype=float) - middle
+    along = transform.along(relative, axis)
+    radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+    if float(other.params.get("diameter", 0.0)) / 2.0 >= float(radial.max()):
+        return None
+    # Der Schneider reicht über das ganze Werkzeug entlang der Achse — nicht
+    # nur über die gemessene Tiefe des Hohlraums: Ein Kegel, der größer
+    # wird, wird auch höher, und ein Schneider von gestern ließe oben eine
+    # Haut stehen (gemessen 0,05 mm, und die Bohrung war ein Sackloch).
+    low, high = float(along.min()), float(along.max())
+    if own_span:
+        depth = float(other.params.get("depth", 0.0))
+        if depth > EPS_GEOM:
+            if -depth / 2.0 > low + FEATURE_OVERLAP:
+                low = -depth / 2.0
+            if depth / 2.0 < high - FEATURE_OVERLAP:
+                high = depth / 2.0
+        if high - low <= EPS_GEOM:
+            return None
+    mid = middle + axis * (low + high) / 2.0
+    return _feature_solid(
+        dataclasses.replace(other, params={**other.params, "depth": high - low}),
+        (float(mid[0]), float(mid[1]), float(mid[2])),
+        oversize=0.0,
+    )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -3423,19 +3617,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
         target, old_centre, atol=EPS_GEOM, rtol=0.0
     ):
         return OpResult(
-            outputs=[source],
-            findings=[
-                Finding(
-                    # Ausgeschrieben statt ``f"{operation}…"``: Den Knopf zum
-                    # Schritt prüft ``test_finding_ways`` am Kennwort.
-                    code="duplicate_feature.unchanged" if duplicate else "move_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal liegt schon dort — nichts zu versetzen."),
-                    feature_ids=(feature.id,),
-                    values={"field": "x"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            outputs=[source], findings=[_already_in_place(feature.id, duplicate=duplicate)]
         )
     if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS and len(geometry.related) <= 1:
         return _exact_place_oriented_cavity(
@@ -3764,6 +3946,7 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
         # entlang +Z (gemessen 29.09.2026, Regel 21).
         if feature.kind in EXACT_CAVITY_KINDS:
             _bore_vector(feature, "axis")
+        _refuse_another_part_in_the_bore(source, feature)
         return feature
     raise ValidationError(
         field="at_feature",
@@ -3771,6 +3954,32 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
         values={"feature": name, "kind": feature.kind, "op": op},
         constraint="not_movable",
     )
+
+
+def _refuse_another_part_in_the_bore(source: SceneObject, feature: Feature) -> None:
+    """Sagt ab, wenn im Zylinder dieser Bohrung ein getrenntes Teil steht.
+
+    Verschließen, Versetzen, Entfernen, Kippen und Ändern füllen die alte
+    Stelle oder schneiden durch sie — und verschmolzen dabei still den Stift,
+    der darin stand, mit dem Träger oder schnitten ihn ab: Am Netz galt ein
+    Stift Ø 5 in einer Bohrung Ø 6 als Haltelippe (:func:`_only_a_rim_inside`),
+    der exakte Weg fragte gar nicht (RM-413, gemessen 06.10.2026: nach
+    *Merkmal versetzen* ein Körper statt zwei). Das Menü sagt es seit jeher
+    (``perceive.actions.no_own_body``); hier sagt es die Operation auch.
+
+    *Verdoppeln* lässt die alte Stelle stehen und sagt trotzdem ab: Das Menü
+    stellt die Zeile seit jeher grau, und am Netz baute die Lippenregel die
+    Kopie aus der Luft um den Stift — ein Ring mit Kern (Review Einheit 1,
+    N1). Allein *Zum Langloch ziehen* schneidet ein freies Teil darin mit
+    (:func:`hole_has_separate_contents`) und fragt das selbst.
+    """
+    if feature.kind != "hole" or not feature.face_indices:
+        return
+    body = as_mesh_data(source.mesh)
+    if hole_is_clear(body, feature):
+        return
+    if filled_bore_reason(body, feature) is OTHER_PART_IN_THE_BORE:
+        raise filled_bore_refusal(body, feature)
 
 
 #: Wenn die Flächen eines beweglichen Merkmals es nicht als eigenen Körper
@@ -3899,6 +4108,19 @@ HOLE_IS_NOT_EMPTY: Final = _(
     "Bearbeiten Sie ihre Flächen einzeln."
 )
 
+#: Warum eine Bohrung nicht bearbeitbar ist, in deren Zylinder nur Material
+#: **eines anderen Teils** steht (Review ``e3dff1907``, F10): Ihr eigenes Teil
+#: ist dort frei, und „sie ist eine Wand“ wäre falsch. Steht das Teil frei
+#: darin, schneidet es allein *Zum Langloch ziehen*; jede andere Handlung
+#: braucht die Bohrung an ihrem eigenen Teil (:func:`filled_bore_reason`).
+OTHER_PART_IN_THE_BORE: Final = _(
+    "In dieser Bohrung liegt ein getrenntes Teil. Teilen Sie den Körper in "
+    "Einzelteile auf, dann lässt sich die Bohrung ohne das Teil bearbeiten."
+)
+
+#: Die beiden Sätze für eine Bohrung, in deren Zylinder Material steht.
+FILLED_BORE_REASONS: Final = (HOLE_IS_NOT_EMPTY, OTHER_PART_IN_THE_BORE)
+
 #: Wie weit innerhalb des gemessenen Radius :func:`hole_is_clear` nach
 #: Dreiecksmitten sucht — die eigene Wand liegt auf dem Radius, ein Steg,
 #: eine Nabe oder ein Zapfen deutlich darunter.
@@ -3956,6 +4178,77 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
 def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: float) -> bool:
     """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecksmitten."""
     return not len(_inside_the_bore(mesh, feature, radius, depth))
+
+
+def filled_bore_reason(mesh: MeshData, feature: Feature) -> TranslatableText:
+    """Warum diese Bohrung, in deren Zylinder Material steht, keine ist.
+
+    :data:`OTHER_PART_IN_THE_BORE`, wenn ihr eigenes Teil dort frei ist und
+    das Material zu einem anderen gehört — sonst :data:`HOLE_IS_NOT_EMPTY`.
+    Gemerkt je Körper und Bohrung wie :func:`hole_is_clear`.
+    """
+    from app.core.perceive.features import remembered
+
+    if not feature.face_indices:
+        return HOLE_IS_NOT_EMPTY
+    own_part_clear: bool = remembered(
+        "own_part_bore_clear",
+        mesh.raw,
+        feature.face_indices,
+        lambda: _own_part_bore_clear(mesh, feature),
+        extra=(
+            tuple(feature.params["centre"]),
+            tuple(feature.params.get("axis", (0.0, 0.0, 1.0))),
+            float(feature.params.get("diameter", 0.0)),
+            float(feature.params.get("depth", 0.0)),
+        ),
+    )
+    return OTHER_PART_IN_THE_BORE if own_part_clear else HOLE_IS_NOT_EMPTY
+
+
+def _own_part_bore_clear(mesh: MeshData, feature: Feature) -> bool:
+    """Ob der Zylinder dieser Bohrung an ihren eigenen Teilen allein leer ist.
+
+    Eigen sind die Teile, die ihren Mantel tragen — eines, oder mehrere, wenn
+    die Bohrung durch aufeinanderliegende Teile geht (am Laptop-Ständer
+    ``hole_3`` durch zwei Platten mit einem Zapfen darin).
+    """
+    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    if int(chosen.min()) < 0 or int(chosen.max()) >= mesh.triangle_count:
+        return False
+    groups = face_components(mesh.raw)
+    if len(groups) < 2:
+        return False
+    carrying = [group for group in groups if np.isin(chosen, group).any()]
+    if len(carrying) == len(groups):
+        return False
+    own = np.sort(np.concatenate(carrying))
+    part = trimesh.Trimesh(
+        vertices=np.asarray(mesh.raw.vertices),
+        faces=np.asarray(mesh.raw.faces)[own],
+        process=False,
+    )
+    own_feature = dataclasses.replace(
+        feature, face_indices=tuple(int(value) for value in np.searchsorted(own, chosen))
+    )
+    return hole_is_clear(MeshData.of(part), own_feature)
+
+
+def filled_bore_refusal(mesh: MeshData, feature: Feature) -> ValidationError:
+    """Die Absage an einer Bohrung, in deren Zylinder Material steht — mit dem
+    Weg, der zum Grund passt (:func:`filled_bore_reason`)."""
+    reason = filled_bore_reason(mesh, feature)
+    return ValidationError(
+        field="at_feature",
+        detail=reason,
+        values={"feature": feature.id, "kind": feature.kind},
+        constraint="not_movable",
+        suggestions=(
+            (SPLIT_BODIES, CANCEL)
+            if reason is OTHER_PART_IN_THE_BORE
+            else (CHANGE_SELECTION, CANCEL)
+        ),
+    )
 
 
 def hole_has_separate_contents(
@@ -4018,14 +4311,15 @@ def _hole_has_separate_contents_read(
         return False
     groups = face_components(mesh.raw)
     check_cancelled()
-    if len(groups) < 2:
+    near_groups = _near_the_carrier(mesh.raw, groups, chosen)
+    if near_groups is None or len(near_groups) < 2:
         return False
     welded = _welded(mesh)
     check_cancelled()
     faces = np.asarray(welded.faces)
     vertices = np.asarray(welded.vertices)
     host_found = False
-    for group in groups:
+    for group in near_groups:
         check_cancelled()
         indices = np.sort(group)
         part = trimesh.Trimesh(vertices=vertices, faces=faces[indices], process=False)
@@ -4044,11 +4338,21 @@ def _hole_has_separate_contents_read(
     if not host_found:
         return False
     check_cancelled()
+    if len(near_groups) == len(groups):
+        body, own = mesh.raw, chosen
+    else:
+        near = np.sort(np.concatenate(near_groups))
+        body = trimesh.Trimesh(
+            vertices=np.asarray(mesh.raw.vertices),
+            faces=np.asarray(mesh.raw.faces)[near],
+            process=False,
+        )
+        own = np.searchsorted(near, chosen)
     try:
-        # Ohne eigene Teileliste: Die Antwort bleibt am Netz, und die Boolesche
-        # Vorprüfung von *Zum Langloch ziehen* liest sie dort (RM-381).
+        # Ohne eigene Teileliste: Am ganzen Netz bleibt die Antwort dort, und die
+        # Boolesche Vorprüfung von *Zum Langloch ziehen* liest sie (RM-381).
         contact = parts_that_cross(
-            mesh.raw,
+            body,
             cancelled=cancelled,
             max_pairs=None,
             include_face_contacts=True,
@@ -4065,23 +4369,58 @@ def _hole_has_separate_contents_read(
     # Auch ohne Oberflächenschnitt kann ein Körper in fremdem Material liegen.
     # Nur entschiedene Materialfamilien tragen die Ausnahme; Innenhäute gehören
     # zu ihrem Träger und werden bei dessen Bohrung mitgeprüft.
-    families = material_part_families(mesh.raw, cancelled=cancelled)
+    families = material_part_families(body, cancelled=cancelled)
     check_cancelled()
     if families is None or len(families) < 2:
         return False
     for family in families:
         check_cancelled()
         indices = np.sort(family)
-        if np.isin(chosen, indices).all():
-            part = trimesh.Trimesh(vertices=vertices, faces=faces[indices], process=False)
+        if np.isin(own, indices).all():
+            part = trimesh.Trimesh(
+                vertices=np.asarray(body.vertices),
+                faces=np.asarray(body.faces)[indices],
+                process=False,
+            )
             own_feature = dataclasses.replace(
                 feature,
-                face_indices=tuple(int(value) for value in np.searchsorted(indices, chosen)),
+                face_indices=tuple(int(value) for value in np.searchsorted(indices, own)),
             )
             clear = hole_is_clear(MeshData.of(part), own_feature)
             check_cancelled()
             return clear
     return False
+
+
+def _near_the_carrier(
+    raw: trimesh.Trimesh, groups: Sequence[NDArray[np.int64]], chosen: NDArray[np.int64]
+) -> list[NDArray[np.int64]] | None:
+    """Der Träger und jedes Teil, das ihn berühren oder in seiner Bohrung stehen
+    kann — ``None``, wenn kein Teil alle gewählten Dreiecke trägt.
+
+    Wie Inhalt und Träger zusammenhängen, fragen Kontaktsuche und
+    Materialfamilien; zwei Teile, die sich weit daneben berühren, sagen
+    darüber nichts (Review ``e3dff1907``, F10: ein freier Stift galt als Wand,
+    weil sich zwei Würfel außerhalb der Platte berührten). Wessen Hüllquader
+    den des Trägers nicht berührt, kann weder an ihn stoßen noch in seiner
+    Bohrung stehen, noch in seinem Material stecken. Hängt der Inhalt über
+    eine Kette fremder Teile am Träger, berührt das letzte Glied den Träger
+    und gehört dazu — die Kontaktsuche sperrt dann wie bisher.
+    """
+    carrier = next(
+        (number for number, group in enumerate(groups) if np.isin(chosen, group).all()), None
+    )
+    if carrier is None:
+        return None
+    vertices, faces = np.asarray(raw.vertices), np.asarray(raw.faces)
+    corners = [vertices[np.unique(faces[group])] for group in groups]
+    low, high = corners[carrier].min(axis=0), corners[carrier].max(axis=0)
+    return [
+        np.asarray(group, dtype=np.int64)
+        for points, group in zip(corners, groups, strict=True)
+        if bool(np.all(points.min(axis=0) <= high + EPS_GEOM))
+        and bool(np.all(points.max(axis=0) >= low - EPS_GEOM))
+    ]
 
 
 def _slot_has_multiple_bodies(mesh: MeshData, cancelled: CancelToken) -> bool:
@@ -4114,6 +4453,8 @@ def _slot_in_separate_carrier(
     Ein Stopfen darf getrennte Teile nicht verbinden. Die unveränderte
     Eingabe belegt deshalb zuerst geschlossene, kontaktfreie Materialteile
     samt Innenhäuten. Berührende Körper bleiben beim gemeinsamen Pfad.
+    Gefragt werden der Träger und die Teile in seiner Nähe
+    (:func:`_near_the_carrier`); was weit daneben liegt, geht unverändert mit.
     """
     from app.core.geom.repair import (
         CROSSING_SEARCH_INCOMPLETE_DETAIL,
@@ -4127,11 +4468,26 @@ def _slot_in_separate_carrier(
     if not _slot_has_multiple_bodies(body, ctx.cancelled):
         return None
     raw = _welded(body)
-    if not raw.is_watertight or not raw.is_winding_consistent:
+    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    if chosen.size == 0:
+        return None
+    groups = face_components(raw)
+    near_groups = _near_the_carrier(raw, groups, chosen)
+    if near_groups is None:
+        return None
+    near = None if len(near_groups) == len(groups) else np.sort(np.concatenate(near_groups))
+    nearby = (
+        raw
+        if near is None
+        else trimesh.Trimesh(
+            vertices=np.asarray(raw.vertices), faces=np.asarray(raw.faces)[near], process=False
+        )
+    )
+    if not nearby.is_watertight or not nearby.is_winding_consistent:
         return None
     try:
         contact = parts_that_cross(
-            raw,
+            nearby,
             cancelled=ctx.cancelled,
             max_pairs=None,
             include_face_contacts=True,
@@ -4143,12 +4499,18 @@ def _slot_in_separate_carrier(
         return None
     if contact is not None:
         return None
-    families = material_part_families(raw, cancelled=ctx.cancelled)
-    if families is None or len(families) < 2:
+    families = material_part_families(nearby, cancelled=ctx.cancelled)
+    if families is None:
         return None
-    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    far = -1
+    if near is not None:
+        families = [near[np.sort(family)] for family in families]
+        far = len(families)
+        families.append(np.setdiff1d(np.arange(len(raw.faces), dtype=np.int64), near))
+    if len(families) < 2:
+        return None
     owners = [index for index, family in enumerate(families) if np.isin(chosen, family).all()]
-    if chosen.size == 0 or len(owners) != 1:
+    if len(owners) != 1:
         return None
     has_contents = feature.kind == "hole" and hole_has_separate_contents(
         body, feature, cancelled=ctx.cancelled
@@ -4180,7 +4542,7 @@ def _slot_in_separate_carrier(
                 constraint="separate_bore_contents",
                 detail=_(
                     "In dieser Bohrung liegt ein getrenntes Teil. Die neue Öffnung muss die "
-                    "alte vollständig umfassen. Zerlegen Sie den Körper in Einzelteile, "
+                    "alte vollständig umfassen. Teilen Sie den Körper in Einzelteile auf, "
                     "um nur die Bohrung zu verschieben oder schmaler zu machen."
                 ),
                 suggestions=(SPLIT_BODIES, CORRECT_INPUT, CANCEL),
@@ -4247,10 +4609,12 @@ def _slot_in_separate_carrier(
                 return tuple(int(value) for value in np.searchsorted(indices, faces))
 
             slots = tuple(body.slots[int(face)] for face in indices) if body.slots else ()
+            # Was weit daneben liegt, geht ohne Verschweißung so mit, wie es kam.
+            origin = body.raw if index == far else raw
             mesh_part = MeshData.of(
                 trimesh.Trimesh(
-                    vertices=np.asarray(raw.vertices),
-                    faces=np.asarray(raw.faces)[indices],
+                    vertices=np.asarray(origin.vertices),
+                    faces=np.asarray(origin.faces)[indices],
                     process=False,
                 ),
                 slots,
@@ -4300,9 +4664,19 @@ def _slot_in_separate_carrier(
         else:
             tool_mesh = _body_from_faces(body, feature.face_indices, allowed_rings=(2,))
             if tool_mesh is None:
-                raise GeometryError(detail=HOLE_IS_NOT_EMPTY, suggestions=(SPLIT_BODIES, CANCEL))
+                # Mündungen in einer gekrümmten Fläche — eine Querbohrung durch
+                # eine Welle — schließen sich nicht an zwei ebenen Ringen. Dann
+                # wie am exakten Kern der Zylinder aus den Kennzahlen; vorher
+                # sagte der Zug hier „sie ist eine Wand“, während das Menü das
+                # getrennte Teil nannte (Review Einheit 1, Runde 2).
+                tool_mesh = _bore_tool_mesh(
+                    _bore_vector(feature, "centre"),
+                    _bore_vector(feature, "axis"),
+                    _bore_number(feature, "diameter"),
+                    _bore_number(feature, "depth"),
+                )
             for index, part in enumerate(parts):
-                if index != carrier:
+                if index not in (carrier, far):
                     cut_part = boolean(
                         "difference",
                         [as_mesh_data(part), tool_mesh],
@@ -4381,7 +4755,7 @@ def _inside_the_bore(
     return np.asarray(radial[inside], dtype=np.float64)
 
 
-def _only_a_rim_inside(mesh: MeshData, feature: Feature) -> bool:
+def only_a_rim_inside(mesh: MeshData, feature: Feature) -> bool:
     """Ob das Material im Zylinder einer Bohrung nur ein Rand an ihrer Wand ist —
     eine Haltelippe, eine Verengung an der Mündung — und kein Inhalt.
 
@@ -4402,7 +4776,7 @@ def _only_a_rim_inside(mesh: MeshData, feature: Feature) -> bool:
 
 
 #: Wie weit ein Rand im Zylinder einer Bohrung zur Achse hin reichen darf, damit
-#: er Rand bleibt (:func:`_only_a_rim_inside`) — als Anteil des Radius. Die
+#: er Rand bleibt (:func:`only_a_rim_inside`) — als Anteil des Radius. Die
 #: Lippe einer Magnettasche 8x3 liegt bei 0,973 r, die Nabe eines Rades und der
 #: Zapfen eines Topfes weit darunter.
 _RIM_ONLY: Final = 0.25
@@ -4476,7 +4850,10 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 11: exakt fragt auch ein einzelner Hohlraum die Säule im Schlauch (RM-411).
     # 12: am Netz trägt die Wand den Kragen einer schrägen Mündung (RM-226).
     # 13: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
-    cache_version="14",
+    # 14: „liegt schon dort“ öffnet den Schritt (RM-441).
+    # 15: starr versetzt reist das Material, wie es ist; Karte und Operation
+    # fragen dieselbe Funktion (RM-535).
+    cache_version="15",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4515,10 +4892,24 @@ def move_feature(ctx: OpContext) -> OpResult:
     von Hand ausmacht.
     """
     params = cast(MoveFeatureParams, ctx.params)
-    if math.hypot(*(params.nx, params.ny, params.nz)) > EPS_GEOM:
-        return _place_oriented_feature(ctx, duplicate=False)
     source = ctx.inputs[0]
     feature = _movable_feature(source, params.at_feature, "move_feature")
+    # **Dieselbe Frage wie Karte und Griff** (RM-535): Was die Karte grau
+    # zeigt, sagt hier mit demselben Satz ab — und umgekehrt.
+    from app.core.perceive.actions import move_refusal
+
+    refusal = move_refusal(
+        feature, source.features, as_mesh_data(source.mesh), cancelled=ctx.cancelled
+    )
+    if refusal is not None:
+        raise ValidationError(
+            field="at_feature",
+            detail=refusal,
+            values={"feature": feature.id, "kind": feature.kind},
+            constraint="not_movable",
+        )
+    if math.hypot(*(params.nx, params.ny, params.nz)) > EPS_GEOM:
+        return _place_oriented_feature(ctx, duplicate=False)
     from app.core.perceive.relations import cavity_chain_state_at
 
     # **Erst in eine Liste, dann drei Werte einzeln.** Ein Generatorausdruck über
@@ -4528,19 +4919,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     target: Vec3 = (params.x, params.y, params.z)
 
     if all(is_close(a, b) for a, b in zip(centre, target, strict=True)):
-        return OpResult(
-            outputs=[source],
-            findings=[
-                Finding(
-                    code="move_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal liegt schon dort — nichts zu versetzen."),
-                    feature_ids=(feature.id,),
-                    values={"field": "x"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
-        )
+        return OpResult(outputs=[source], findings=[_already_in_place(feature.id, duplicate=False)])
 
     body = as_mesh_data(source.mesh)
     state = cavity_chain_state_at(feature, source.features, body)
@@ -4670,7 +5049,7 @@ def move_feature(ctx: OpContext) -> OpResult:
             whole=True,
         )
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
-        cutting = _placing_tool(ctx, body, source, feature, target, cavity)
+        cutting = _placing_tool(ctx, body, source, feature, target, cavity, carried_from=centre)
         placed = boolean(
             "difference" if cavity else "union",
             [closed.mesh, cutting],
@@ -4854,7 +5233,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 10: eine Senkung unter einer Haut ist nicht „über die Kante“ (RM-226).
     # 11: am Netz findet eine Kopie nicht ihre Vorlage wieder (RM-226).
     # 12: exakt findet sich eine Senkung über ihre Spitze wieder (RM-226).
-    cache_version="13",
+    # 13: „dasselbe Merkmal“ öffnet den Schritt (RM-441).
+    # 14: im Weg mit freier Richtung „nichts verdoppelt“ statt „nichts zu versetzen“.
+    cache_version="14",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -4903,22 +5284,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         # Kein Fehler, sondern ein Hinweis: Die Boolesche liefe auf sich selbst
         # und ließe den Körper, wie er ist. Regel 19 — was zurücknehmbar ist,
         # bekommt keine Nachfrage, und was nichts tut, keine Ausnahme.
-        return OpResult(
-            outputs=[source],
-            findings=[
-                Finding(
-                    code="duplicate_feature.unchanged",
-                    severity="info",
-                    message=_(
-                        "Ein zweites Merkmal an derselben Stelle ist dasselbe Merkmal — "
-                        "nichts verdoppelt."
-                    ),
-                    feature_ids=(feature.id,),
-                    values={"field": "x"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
-        )
+        return OpResult(outputs=[source], findings=[_already_in_place(feature.id, duplicate=True)])
 
     body = as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
@@ -6075,7 +6441,9 @@ class RemoveFeatureParams(BaseParams):
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 16: Mantel und Musterstopfen teilen achsparallele Facetten samt ihrer
     # Ecken, und der Stopfen endet in der Stirnfläche (RM-404).
-    cache_version="16",
+    # 17: ein getrenntes Teil in der Bohrung hält mit Weg an, statt still zu
+    # verschmelzen (RM-413).
+    cache_version="17",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -6303,6 +6671,7 @@ class RotateFeatureParams(BaseParams):
     # 7: beim Schließen einer Bohrung werden flächig berührende Körper verbunden (RM-319).
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
+    # 10: „ohne Winkel“ öffnet den Schritt (RM-441).
     cache_version="10",
     title=_("Merkmal drehen"),
     category="holes",
@@ -7667,7 +8036,11 @@ class ResizeFeatureParams(BaseParams):
     # Durchbruch, Befund ``thread.thin_wall`` unter der Mindestwand (RM-184).
     # 18: Ein geändertes Gewinde verliert das Nennmaß eines gedruckten — es ist
     # gebaut, wie es dasteht, ohne Spiel daneben.
-    cache_version="19",
+    # 19: „hat dieses Maß schon“ öffnet den Schritt (RM-441).
+    # 20: Das neue Gewinde kommt aus ``build.threaded`` mit den Sehnen der
+    # Facettenregel (``shapes.turn_segments``), über ganze Umläufe und mit einem
+    # Kern, der den Gang auch in der Sehnenmitte überdeckt (Review RM-532, R1/R4).
+    cache_version="20",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -7728,16 +8101,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
     if is_close(params.diameter, previous):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(feature.id,),
-                    values={"field": "diameter"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(feature.id, "diameter")],
         )
 
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
@@ -8218,6 +8582,9 @@ def _depth_wish(
                 severity="info",
                 message=_("Die Bohrung geht bereits ganz durch."),
                 feature_ids=(feature.id,),
+                # Gemeint ist die Tiefe dieses Schritts (Review RM-441).
+                values={"field": "depth"},
+                suggestions=(CHANGE_THIS_STEP,),
             )
         return None
     if through:
@@ -8415,7 +8782,9 @@ def _with_new_depth(feature: Feature, plan: _DepthPlan) -> Feature:
 
 
 def _bore_tool_mesh(centre: Vec3, axis: Vec3, diameter: float, depth: float) -> MeshData:
-    """Der Zylinder einer Bohrung als Netz — für die Nachbarprüfung am exakten Körper."""
+    """Der Zylinder einer Bohrung als Netz — für die Nachbarprüfung am exakten Körper
+    und als Schneidwerkzeug des Langlochzugs am Netz, wo sich die Bohrungswand nicht
+    schließen lässt (:func:`_slot_in_separate_carrier`); eine Änderung gilt beiden."""
     body = lathe.cylinder(radius=diameter / 2.0, height=depth, sections=BORE_SECTIONS)
     transform.moved(body, transform.rotation_between([0.0, 0.0, 1.0], list(axis)))
     shift_body(body, np.asarray(centre, dtype=float))
@@ -8514,7 +8883,9 @@ OPEN_BODY_DETAIL: Final = _(
     # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
     # 16: exakt fragt die Kante am gefüllten Körper, wo gefüllt wurde (RM-411).
-    cache_version="17",
+    # 17: „hat bereits diesen Durchmesser“ öffnet den Schritt (RM-441).
+    # 18: „geht bereits ganz durch“ öffnet den Schritt an der Tiefe (Review RM-441).
+    cache_version="18",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -8538,6 +8909,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     params = cast(ResizeHoleParams, ctx.params)
     source = ctx.inputs[0]
     feature = _chosen_bore(source, params.at_feature, op="resize_hole")
+    _refuse_another_part_in_the_bore(source, feature)
     # **Auch das Ändern führt eine Stelle** (Robert, 10.09.2026: „auch beim
     # ändern einer bohrung"). Damit bekommt *Bohrung ändern* dieselbe
     # Flächenplatzierung wie *Bohrung setzen*: Die Maße zu Kanten und Mitten
@@ -9233,7 +9605,9 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 17: exakt fragt die Kante am gefüllten Körper über die Schnittlänge, und ein
     #     Zug ohne Schließen zählt die alte Öffnung für die Kantenfrage als Material
     #     (RM-411).
-    cache_version="17",
+    # 18: gefragt werden nur Teile am Träger; ferne Teile kommen unverändert
+    #     zurück (RM-413).
+    cache_version="18",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -9312,13 +9686,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         and not hole_is_clear(body, feature)
         and not hole_has_separate_contents(body, feature, cancelled=ctx.cancelled)
     ):
-        raise ValidationError(
-            field="at_feature",
-            detail=HOLE_IS_NOT_EMPTY,
-            values={"feature": feature.id, "kind": feature.kind},
-            constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
-        )
+        raise filled_bore_refusal(body, feature)
     # **Die Stelle kommt aus den Feldern, wo welche stehen** (Robert,
     # 10.09.2026: „einfach wie wenn ich eine bohrung setze"). Damit ist *Zum
     # Langloch ziehen* dieselbe Bedienung wie *Bohrung setzen*: Die
@@ -12028,6 +12396,46 @@ def _mesh_bore_span(mesh: MeshData, feature: Feature, axis: Vec3) -> tuple[float
     along = vertices[:, 0] * unit[0] + vertices[:, 1] * unit[1] + vertices[:, 2] * unit[2]
     lower, upper = float(along.min()), float(along.max())
     return (lower, upper) if math.isfinite(upper - lower) and upper - lower > EPS_GEOM else None
+
+
+def _already_in_place(feature_id: str, *, duplicate: bool) -> Finding:
+    """*Merkmal versetzen* oder *verdoppeln* an die Stelle, an der es schon sitzt.
+
+    Der Weg entlang der Achse und der mit freier Richtung bauten den Befund je
+    für sich, und nach dem Verdoppeln stand dort einmal der Satz übers
+    Versetzen (Review RM-441). Der Knopf öffnet den Schritt an der Lage.
+    """
+    return Finding(
+        # Ausgeschrieben statt ``f"{operation}…"``: Den Knopf zum Schritt
+        # prüft ``test_finding_ways`` am Kennwort.
+        code="duplicate_feature.unchanged" if duplicate else "move_feature.unchanged",
+        severity="info",
+        message=(
+            _("Ein zweites Merkmal an derselben Stelle ist dasselbe Merkmal — nichts verdoppelt.")
+            if duplicate
+            else _("Das Merkmal liegt schon dort — nichts zu versetzen.")
+        ),
+        feature_ids=(feature_id,),
+        values={"field": "x"},
+        suggestions=(CHANGE_THIS_STEP,),
+    )
+
+
+def _already_this_size(feature_id: str, field: str) -> Finding:
+    """*Merkmal ändern* auf das Maß, das das Merkmal schon hat — an jeder Merkmalsart.
+
+    Bis zum Review von RM-441 stand der Befund fünfmal wortgleich da, je Art
+    (Bohrung und Zapfen, Ring, Muster, Gewinde, Rundung) ein Zweig; nur das
+    Feld, das der Knopf öffnet, wechselt.
+    """
+    return Finding(
+        code="resize_feature.unchanged",
+        severity="info",
+        message=_("Das Merkmal hat dieses Maß schon."),
+        feature_ids=(feature_id,),
+        values={"field": field},
+        suggestions=(CHANGE_THIS_STEP,),
+    )
 
 
 def _expected_bore(feature: Feature, diameter: float) -> Feature:
@@ -14814,6 +15222,23 @@ def _torus_rims(
     return patch, rim, ring_edges, loops
 
 
+def torus_refusal(mesh: MeshData, feature: Feature) -> TranslatableText | None:
+    """Der Satz, mit dem die Ringhandlungen an diesem Netz absagen — sonst ``None``.
+
+    **Dieselbe Frage wie beim Rechnen** (:func:`_torus_rims`, RM-535): Die
+    Karte fragte nur, ob der Ring der ganze Körper ist, und bot an Wulst und
+    Kehle X/Y/Z an; *Übernehmen* endete dann an allen vier geprüften Ringen
+    mit „lässt sich nicht vom Körper trennen“.
+    """
+    if feature.kind != "torus":
+        return None
+    try:
+        _torus_rims(mesh, feature)
+    except ValidationError as refusal:
+        return cast(TranslatableText, refusal.detail)
+    return None
+
+
 def _torus_ring_mesh(
     centre: Vec3, axis: Vec3, ring_diameter: float, tube_diameter: float
 ) -> MeshData:
@@ -15203,16 +15628,7 @@ def _resize_torus(
     ):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(feature.id,),
-                    values={"field": "diameter"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(feature.id, "diameter")],
         )
     cavity = is_a_cavity(feature)
     changed = dataclasses.replace(
@@ -15421,10 +15837,9 @@ def _thread_checked(feature: Feature, diameter: float, pitch: float) -> tuple[fl
     return diameter, wanted_pitch
 
 
-#: Wie viele Strahlen je Messring und an welchen Stellen der Strecke die Wand
-#: um ein Gewinde gemessen wird: 24 Richtungen treffen die Seitenwände eines
-#: Quaders senkrecht, fünf Ringe die Mitte und beide Enden innerhalb der Gänge.
-_WALL_RAYS: Final = 24
+#: An welchen Stellen der Strecke die Wand um ein Gewinde gemessen wird: fünf
+#: Ringe die Mitte und beide Enden innerhalb der Gänge; die Strahlen je Ring
+#: zählt ``fasteners.THREAD_WALL_RAYS``.
 _WALL_RINGS: Final = (-0.4, -0.2, 0.0, 0.2, 0.4)
 
 
@@ -15446,6 +15861,7 @@ def _thread_wall(
     Tessellation weicht höchstens um ``MAX_FACET_SAG`` ab.
     """
     from app.core.knowledge.parts import shapes
+    from app.core.knowledge.parts.fasteners import THREAD_WALL_RAYS
     from app.core.sketch.planes import frame_of
 
     internal = bool(feature.params.get("internal", False))
@@ -15459,8 +15875,8 @@ def _thread_wall(
     reach: float | None = None
     for share in _WALL_RINGS:
         origin = centre + axis * (share * length)
-        for index in range(_WALL_RAYS):
-            cosine, sine = units.circle_point(_WALL_RAYS, index)
+        for index in range(THREAD_WALL_RAYS):
+            cosine, sine = units.circle_point(THREAD_WALL_RAYS, index)
             way = across[0] * cosine + across[1] * sine
             distances, hit = ray_hits_along(triangles, origin, way)
             facing = (normals[hit] * way).sum(axis=1)
@@ -16427,16 +16843,7 @@ def _resize_pattern(
     ):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(feature.id,),
-                    values={"field": "pitch"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(feature.id, "pitch")],
         )
     _reject_oversized("pitch", new_pitch, source.mesh, kind="length")
     # Voronoi und Rauschen kennen keine Zellbreite — ihre Zellen sind so groß,
@@ -16671,16 +17078,7 @@ def _resize_thread(
     ):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(feature.id,),
-                    values={"field": "diameter"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(feature.id, "diameter")],
         )
     walls = _thread_wall(source, feature, diameter, pitch, ctx.profile)
     centre, axis, low, high, start, stop = _thread_span(
@@ -17368,12 +17766,16 @@ def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> 
 
 @op_params
 class CountersinkParams(BaseParams):
+    # Bis zum Senkkopf des größten Gewindes, das die Anwendung baut: höchstens
+    # 2·d, über M24 abgeleitet (Normteiltabelle, ``countersink_derived``: M56
+    # 91 mm, M64 104 mm). Mit 100 mm endete das Feld unter dem Kopf der M64 —
+    # an deren Bohrung trüge der Dialog mehr ein, als das Feld annähme.
     diameter: float = param(
         title=_("Kopfdurchmesser"),
         default=8.4,
         unit="mm",
         minimum=0.5,
-        maximum=100.0,
+        maximum=2.0 * units.LARGEST_THREAD,
         doc=_(
             "Durchmesser des Schraubenkopfes, nicht der Bohrung darunter. Eine "
             "angeklickte Bohrung trägt den Kopf der passenden Schraube ein — "
@@ -17529,7 +17931,9 @@ class PlugParams(BaseParams):
     # 4: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 5: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 6: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
-    cache_version="6",
+    # 7: ein getrenntes Teil in der Bohrung hält mit Weg an, statt still zu
+    # verschmelzen (RM-413).
+    cache_version="7",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
@@ -18446,7 +18850,11 @@ class TestPieceParams(BaseParams):
     # statt in der Sprache der Rechnung im Ergebnis-Cache zu stehen.
     # 3 (RM-184): Das Fenster wird plattformgleich verschoben; ein Stück aus
     # einem Schritt davor könnte die letzte Stelle einer anderen Maschine tragen.
-    cache_version="3",
+    # 4: Das Stück gibt die Merkmale des Teils aus, mit ihm bewegt.
+    cache_version="4",
+    # Und nur die: Was es nicht ausgibt, hat das Fenster weggenommen
+    # (``_features_of_the_piece``); nachgetragen stünde es über dem Bett.
+    features_complete=True,
     title=_("Prüfstück erzeugen"),
     category="prepare",
     params=TestPieceParams,
@@ -18506,6 +18914,11 @@ def test_piece(ctx: OpContext) -> OpResult:
     # ginge durch ein Matrixprodukt, und das Fenster trüge die letzte Stelle
     # der Maschine (``tests/test_platform_identity.py``, ``fit_pieces``).
     transform.moved(window, translation(centre))
+    half = params.size / 2.0
+    window_box: tuple[Vec3, Vec3] = (
+        (centre[0] - half, centre[1] - half, centre[2] - half),
+        (centre[0] + half, centre[1] + half, centre[2] + half),
+    )
     pieces: list[MeshData] = []
     solvers: list[SolverInfo | None] = []
     findings: list[Finding] = []
@@ -18537,11 +18950,12 @@ def test_piece(ctx: OpContext) -> OpResult:
 
     for index in range(1, len(pieces)):
         findings.extend(_fit_in_the_piece(pieces[0], pieces[index], params.size, ctx))
+    cut = pieces
     if params.on_bed:
         pieces = _side_by_side([place_on_bed(piece) for piece in pieces])
 
     outputs: list[SceneObject] = []
-    for entry, mesh, piece in zip(ctx.inputs, meshes, pieces, strict=True):
+    for entry, mesh, before, piece in zip(ctx.inputs, meshes, cut, pieces, strict=True):
         share = abs(piece.volume) / max(abs(mesh.volume), EPS_GEOM)
         # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort. Mehrere
         # Stücke tragen den Namen ihres Teils, sonst hießen sie gleich.
@@ -18550,7 +18964,14 @@ def test_piece(ctx: OpContext) -> OpResult:
             if len(pieces) == 1
             else _("Prüfstück {name}", name=entry.name)
         )
-        outputs.append(dataclasses.replace(entry, mesh=piece, name=name, features={}))
+        outputs.append(
+            dataclasses.replace(
+                entry,
+                mesh=piece,
+                name=name,
+                features=_features_of_the_piece(entry, mesh, window_box, before, piece),
+            )
+        )
         findings.append(
             Finding(
                 code="prepare.test_piece",
@@ -18664,6 +19085,65 @@ def _fit_in_the_piece(
     ]
 
 
+def _features_of_the_piece(
+    entry: SceneObject,
+    mesh: MeshData,
+    window: tuple[Vec3, Vec3],
+    cut: MeshData,
+    placed: MeshData,
+) -> dict[FeatureId, Feature]:
+    """Die Merkmale des Teils, mit dem Stück bewegt.
+
+    Das Stück trägt sie dort, wo sie im Teil lagen, bis *Auf das Bett setzen*
+    es absenkt und weitere Stücke danebenrückt. Ohne diese Bewegung blieben
+    sie über dem Bett stehen: Am Turm verlor die Bohrung einer Buchse ihren
+    Namen, und ihre Fase stand 50 mm über dem Stück. Was außerhalb des
+    Fensters lag, nimmt die Auswertung heraus, an derselben Stelle wie bei
+    jedem Schnitt (``evaluate._with_features``, weggeschnitten).
+
+    **Eine Fläche, die das Fenster teilt, reist nur ohne Bewegung mit.** Ihr
+    Stück findet die Auswertung an ihren alten Dreiecken
+    (``evaluate._divided_partners``), und nach einer Bewegung liegen die
+    woanders: Am abgelegten Stück stand ``face_top`` sonst mit der alten Mitte
+    und 380 statt 52 mm². Bewegt gibt das Stück deshalb nur die ebenen Flächen
+    aus, deren Dreiecke ganz im Fenster liegen; die geteilte heißt neu.
+    """
+    shift = tuple(
+        float(placed.bounds.minimum[axis]) - float(cut.bounds.minimum[axis]) for axis in range(3)
+    )
+    features: Mapping[FeatureId, Feature] = entry.features
+    if not all(is_zero(value) for value in shift):
+        from app.core.perceive.matching import transformed_features
+
+        features = transformed_features(
+            {
+                name: feature
+                for name, feature in features.items()
+                if not (feature.kind == "face" and feature.face_indices)
+                or _inside_the_window(mesh, feature.face_indices, window)
+            },
+            as_transform(translation((shift[0], shift[1], shift[2]))),
+        ).candidates
+    return _without_old_triangles(features)
+
+
+def _inside_the_window(mesh: MeshData, faces: Sequence[int], window: tuple[Vec3, Vec3]) -> bool:
+    """Liegen alle Ecken dieser Dreiecke im Fenster (auf die Anzeigestelle)?
+
+    Nummern, die nicht in dieses Netz zeigen, belegen nichts: dann nein.
+    """
+    triangles = np.asarray(mesh.raw.faces)
+    picked = np.asarray(faces, dtype=np.int64)
+    if not len(picked) or picked.min() < 0 or picked.max() >= len(triangles):
+        return False
+    corners = np.asarray(mesh.raw.vertices)[triangles[picked]]
+    low, high = window
+    return bool(
+        np.all(corners.min(axis=(0, 1)) >= np.asarray(low) - EPS_DISPLAY)
+        and np.all(corners.max(axis=(0, 1)) <= np.asarray(high) + EPS_DISPLAY)
+    )
+
+
 def _side_by_side(pieces: list[MeshData]) -> list[MeshData]:
     """Mehrere Stücke nebeneinander entlang X, im Abstand des Anordnens.
 
@@ -18759,7 +19239,7 @@ class SplitBodiesParams(BaseParams):
         minimum=2,
         maximum=64,
         doc=_(
-            "In wie viele Objekte zerlegt wird. Wie viele Teile der Körper "
+            "In wie viele Objekte aufgeteilt wird. Wie viele Teile der Körper "
             "tatsächlich hat, sagt der Prüfbericht; passt die Zahl nicht, "
             "nennt diese Operation die richtige."
         ),
@@ -21090,16 +21570,7 @@ def _reshape_the_fillet(
     if is_close(radius, float(source.features[name].params["radius"])):
         return OpResult(
             outputs=[source],
-            findings=[
-                Finding(
-                    code="resize_feature.unchanged",
-                    severity="info",
-                    message=_("Das Merkmal hat dieses Maß schon."),
-                    feature_ids=(name,),
-                    values={"field": "diameter"},
-                    suggestions=(CHANGE_THIS_STEP,),
-                )
-            ],
+            findings=[_already_this_size(name, "diameter")],
         )
     if source.features[name].params.get("tangent", False):
         from app.core.perceive.actions import WALL_BLENDS_INTO_ITS_NEIGHBOURS

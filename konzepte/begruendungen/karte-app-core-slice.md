@@ -107,8 +107,9 @@ Robert „Vorschläge beim Slicen dauern ewig"). Drei Stellen, drei Antworten:
   jede Frage (Überhang, Inseln, Breitensuche) als **einen** vektorisierten
   GEOS-Aufruf über den Block. Einzeln gestellt warteten die kleinen Aufrufe
   auf den Interpreter-Lock, und sechs Arbeiter waren kaum schneller als
-  einer. Die Einzelfunktionen (`_islands`, `minimum_width`,
-  `_opening_loss`, `_survives_opening`) sind Blöcke aus einem Element.
+  einer. Die Einzelfunktionen (`minimum_width`, `_opening_loss`,
+  `_survives_opening`) sind Blöcke aus einem Element; Inseln fragt nur
+  `_islands_many`.
 - **Den Vorgänger nur einmal vorbereiten.** `_islands_many` baut den
   GEOS-Index der Vorgängerschichten vor ihren wiederholten räumlichen
   Prädikaten auf; tausende Konturen teilen denselben Index. Die Konturen,

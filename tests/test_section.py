@@ -13,7 +13,7 @@ import pytest
 import trimesh
 
 from app.core.geom.mesh import read_mesh
-from app.core.geom.section import SectionPlane, cut, section_volume
+from app.core.geom.section import SectionPlane, cut
 from app.core.ingest.loader import normalise
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -44,13 +44,13 @@ def test_every_axis_cuts_the_same_way(axis: str) -> None:
 
 def test_moving_the_plane_moves_the_cut() -> None:
     body = solid()
-    assert section_volume(body, SectionPlane.along("z", 5.0)) == pytest.approx(6000.0, rel=1e-6)
-    assert section_volume(body, SectionPlane.along("z", -5.0)) == pytest.approx(2000.0, rel=1e-6)
+    assert cut(body, SectionPlane.along("z", 5.0)).mesh.volume == pytest.approx(6000.0, rel=1e-6)
+    assert cut(body, SectionPlane.along("z", -5.0)).mesh.volume == pytest.approx(2000.0, rel=1e-6)
 
 
 def test_a_plane_outside_the_body_changes_nothing() -> None:
     body = solid()
-    assert section_volume(body, SectionPlane.along("z", 50.0)) == pytest.approx(8000.0, rel=1e-6)
+    assert cut(body, SectionPlane.along("z", 50.0)).mesh.volume == pytest.approx(8000.0, rel=1e-6)
 
 
 def test_a_plane_beyond_the_body_leaves_nothing() -> None:
@@ -89,7 +89,7 @@ def test_two_planes_leave_a_slice() -> None:
 def test_a_free_plane_works_like_an_axis_plane() -> None:
     body = solid()
     free = SectionPlane(normal=(0.0, 0.0, 2.0), position=0.0)
-    assert section_volume(body, free) == pytest.approx(4000.0, rel=1e-6)
+    assert cut(body, free).mesh.volume == pytest.approx(4000.0, rel=1e-6)
 
 
 def test_a_plate_with_holes_is_capped_around_the_holes() -> None:

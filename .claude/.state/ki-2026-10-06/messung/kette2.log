@@ -1,0 +1,5 @@
+=== 19:47:57 rm529_256b6b130 (qwen3:14b, F:/ki-529, 65e3ec97b) GPU vorher: 1493 MiB, 48 %
+    Exit 1  -- bracket                 139.9s  create_brep_box, insert_screw_hole  [4 ungültig]
+=== 20:18:34 rm251b_014 (qwen3:14b, F:/ki-251, 256b6b130) GPU vorher: 2143 MiB, 100 %
+    Exit 1  qwen3:14b — 39 Fälle, Baum F:/ki-251, Fenster 32768
+=== 20:18:44 Kette fertig

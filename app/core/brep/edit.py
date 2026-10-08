@@ -1026,7 +1026,7 @@ def fillet(
         _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
         return _built(working, builder, "fillet", radius, len(chosen), cancelled=cancelled)
     _fits_the_wall(working, radius, chosen, "fillet", cancelled=cancelled)
-    return _build_constant_fillet(working, chosen, radius, cancelled=cancelled)
+    return _build_constant_fillet(working, chosen, radius, cancelled=cancelled)[0]
 
 
 #: Bis zu wie vielen Konturen die letzte Stufe der Gruppensuche jede einmal
@@ -1573,15 +1573,19 @@ def _build_constant_fillet(
     radius: float,
     *,
     cancelled: CancelToken | None = None,
-) -> Solid:
-    """Baut und prüft eine konstante Rundung auf einer frischen nativen Form."""
+) -> tuple[Solid, Any]:
+    """Baut und prüft eine konstante Rundung auf einer frischen nativen Form.
+
+    Der Builder kommt mit: Seine Historie belegt, welche Flächen die Rundung
+    erzeugt hat (:func:`_generated_triangles`).
+    """
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
     builder = BRepFilletAPI_MakeFillet(solid.shape)
     for entry in chosen:
         _check(cancelled)
         builder.Add(radius, entry.edge)
-    return _built(solid, builder, "fillet", radius, len(chosen), cancelled=cancelled)
+    return _built(solid, builder, "fillet", radius, len(chosen), cancelled=cancelled), builder
 
 
 def _laid_along(builder: Any, chosen: Sequence[EdgeInfo], law: RadiusLaw) -> None:
@@ -3792,7 +3796,11 @@ def _unround(
     builder.Build()
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    if not builder.IsDone():
+    # **Fertig heißt nicht entfernt** (Review RM-230, F1): Am Tray meldet
+    # OpenCASCADE eine Fußrundung, die in einer Kette mit Eckstücken liegt,
+    # als gebaut, löscht aber nichts — der Körper kam unverändert und ohne
+    # Befund zurück. Gefragt wird deshalb auch, ob die Fläche weg ist.
+    if not builder.IsDone() or not builder.IsDeleted(face):
         raise GeometryError(
             detail=_(
                 "Diese Rundung lässt sich nicht wegnehmen — die Nachbarflächen "
@@ -4035,13 +4043,7 @@ def _reround(
         working = replace(sharp)
         chosen = _edges_at(working, [working._copied_edges[index] for index in checked])
         _fits_the_wall(working, wanted, chosen, "fillet", cancelled=cancelled)
-        from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
-
-        builder = BRepFilletAPI_MakeFillet(working.shape)
-        for entry in chosen:
-            _check(cancelled)
-            builder.Add(wanted, entry.edge)
-        result = _built(working, builder, "fillet", wanted, len(chosen), cancelled=cancelled)
+        result, builder = _build_constant_fillet(working, chosen, wanted, cancelled=cancelled)
         triangles = _generated_triangles(result, builder, chosen[0].edge, cancelled=cancelled)
     else:
         result = fillet(sharp, wanted, selected_edges=(edge,), cancelled=cancelled)

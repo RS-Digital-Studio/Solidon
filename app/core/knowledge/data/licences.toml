@@ -50,16 +50,28 @@
 #   CuraEngine        AGPL-3.0  dito
 #   Ollama            MIT       extern, eigener Prozess — der lokale Chat (§27)
 #   ComfyUI           GPL-3.0   extern, eigener Prozess — Weg 3 (§27)
-#   TripoSG           MIT laut Wurzel-LICENSE und Modellkarte, in ComfyUI
-#                               geladen; triposg_transformer.py trägt die Tencent
-#                               Hunyuan Community License, triposg/LICENSE die
-#                               FlashVDM Community License (beide ohne EU) —
-#                               Kette offen, RM-003
+#   TRELLIS.2-4B      MIT (Microsoft), Formkern und Form-VAE für Weg 3,
+#                               eingebaute Knoten in ComfyUI ab 0.34; Solidon
+#                               lädt die Packung Comfy-Org/TRELLIS.2 @ 430a9d09
+#                               (``comfy_setup.SHAPE_FILES``) in ComfyUI, nie ins
+#                               Paket
+#   DINOv3 ViT-L/16   DINOv3 License (Meta), Bildkodierer von TRELLIS.2:
+#                               weltweit und gewerblich, mit Nutzungsbedingungen
+#                               (Handelskontrolle, keine Waffen, §1.b), Meta darf
+#                               ändern (§8). Geladen aus Comfy-Org/TRELLIS.2, dort
+#                               als MIT geführt und ohne Lizenzkopie; Belege und
+#                               Kanzleifragen: konzepte/nachweise-generatoren-2026-10/
 #   BiRefNet          MIT       Freistell-Gewichte (Comfy-Org/BiRefNet, byte-
-#                               gleich mit ZhengPeng7/BiRefNet); Trainingsdaten
-#                               DIS5K nur nicht-kommerziell — offen, RM-003
-#   SDXL Base 1.0     CreativeML Open RAIL++-M, Bildmodell des Textwegs, auf
-#                               Wunsch eingerichtet; Nutzungsverbote Anhang A
+#                               gleich mit ZhengPeng7/BiRefNet); die Trainings-
+#                               daten DIS5K sind nur nicht-kommerziell
+#                               freigegeben (konzepte/nachweise-generatoren-2026-10/)
+#   FLUX.2 [klein] 4B Apache-2.0 (Black Forest Labs), Bildmodell des Textwegs,
+#                               auf Wunsch eingerichtet (``comfy_setup.
+#                               IMAGE_MODEL_FILES``); dazu Textkodierer Qwen3-4B
+#                               (Apache-2.0) und die FLUX.2-VAE aus der Packung
+#                               von Comfy-Org. Die 9B-Fassung und FLUX.2 [dev]
+#                               sind nicht-kommerziell, die Rolle ``image``
+#                               schließt sie aus
 #   Qwen3-TTS         Apache-2.0, Quelltext und 1.7B-VoiceDesign-/Base-Gewichte
 #                               (github.com/QwenLM/Qwen3-TTS und
 #                               huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base).
@@ -102,42 +114,14 @@
 #                               eine gesonderte Einwilligung der Sprecherin in
 #                               die Nachahmung ihrer Stimme oder deren Werbung
 #                               belegen sie nicht.
-#   SDXL Base 1.0     CreativeML Open RAIL++-M
-#                               Bildmodell für den Textweg zu Weg 3
-#                               (``comfy_setup.fetch_image_model``,
-#                               ``sd_xl_base_1.0.safetensors``); Gewichte
-#                               beim Kunden, nie im Paket — die Lizenz
-#                               erlaubt den lokalen Gebrauch, verbietet
-#                               bestimmte Verwendungen der Ausgaben, und
-#                               das entscheidet der Kunde am eigenen Bild
 #
-# TripoSG ist der Grund, warum Weg 3 überhaupt geht: Die naheliegende
-# Alternative war lizenzrechtlich in Europa nicht nutzbar. Die Knoten unter
-# ``app/core/backends/data/comfyui/`` sind eigener Code und liegen im
-# Repository, damit sie mitversioniert sind und ins Paket kommen; Quelltext,
-# Gewichte und Pakete holt ``app/core/backends/comfy_setup.py``.
-#
-# **Und was Solidon in eine fremde Umgebung installiert, steht auch hier.** Die
-# Einrichtung von Weg 3 zieht Pakete in ComfyUIs eigenes Python nach
-# (``comfy_setup.PACKAGES``). Sie sind keine Abhängigkeit dieser Anwendung —
-# nichts davon wird hier importiert, und die Prüfung unten sieht sie nicht —,
-# aber Solidon legt sie auf den Rechner eines Kunden, und damit gehören sie in
-# die Aktenlage. ``tests/test_licences.py`` hält die Liste gegen diese Datei:
-#
-#   jaxtyping                 MIT         Typprüfung im TripoSG-Quelltext
-#   typeguard                 MIT         dito
-#   fast-simplification       MIT         Dezimieren, statt pymeshlab (GPL)
-#   trimesh                   MIT         Netze im Knoten
-#   diffusers                 Apache-2.0  die Pipeline von TripoSG
-#   scikit-image              BSD-3       Marching Cubes im Rückfallpfad
-#   lazy_loader               BSD-3       Abhängigkeit von scikit-image
-#   omegaconf                 BSD-3       Konfiguration im TripoSG-Quelltext
-#   antlr4-python3-runtime    BSD-3       Abhängigkeit von omegaconf, Version 4.9.3
-#   setuptools                MIT         Bau-Backend für ANTLR, nur wenn ComfyUI
-#                                         keines hat; Version 83.0.0
-#
-# Der Grund für die Version steht in ``comfy_setup.PACKAGES``: Die 4.13
-# serialisiert den Automaten anders, den ``omegaconf`` liest.
+# Bis Oktober 2026 lief Weg 3 über TripoSG mit eigenem Knoten und Paketen,
+# die Solidon in ComfyUIs Python nachzog. Ein Teil des TripoSG-Quelltexts
+# steht unter Tencent- und FlashVDM-Lizenzen, deren Gebiet die EU,
+# Großbritannien und Südkorea ausnimmt (RM-003); seitdem richtet Solidon
+# keinen Knoten und kein Paket mehr in ComfyUI ein, nur Modelldateien mit
+# fester Revision und SHA-256 (``app/core/backends/comfy_setup.py``). Was
+# die alte Einrichtung angelegt hat, räumt ``comfy_setup.remove_legacy``.
 
 [policy]
 # SPDX-Lizenzkennungen, die als einzelner Zweig in Ordnung sind. Die Prüfung
@@ -275,13 +259,3 @@ jeepney = { licence = "MIT" }
 cryptography = { licence = "Apache-2.0 OR BSD-3-Clause" }
 cffi = { licence = "MIT" }
 pycparser = { licence = "BSD-3-Clause" }
-# Wird gezielt in die fremde ComfyUI-Python-Umgebung installiert. Diese
-# direkten Komponenten brauchen denselben expliziten Freigabeeintrag wie die
-# eigenen direkten Abhängigkeiten; ihre transitive Auflösung gehört dagegen
-# zur Zielumgebung von ComfyUI und nicht in Solidons Wheel-Baum.
-jaxtyping = { licence = "MIT", note = "direkt durch comfy_setup installiert" }
-typeguard = { licence = "MIT", note = "direkt durch comfy_setup installiert" }
-diffusers = { licence = "Apache-2.0", note = "direkt durch comfy_setup installiert" }
-omegaconf = { licence = "BSD-3-Clause", note = "direkt durch comfy_setup installiert" }
-antlr4-python3-runtime = { licence = "BSD-3-Clause", note = "direkt durch comfy_setup in Version 4.9.3 installiert" }
-setuptools = { licence = "MIT", note = "nur bei fehlendem ANTLR-Build-Backend in ComfyUI installiert; 83.0.0, LICENSE im SHA-256-gebundenen Wheel; https://pypi.org/project/setuptools/83.0.0/" }

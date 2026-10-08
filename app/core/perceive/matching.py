@@ -1706,8 +1706,6 @@ def pieces_in_place(
     der Antwort hängt, welches Stück welchen Namen trägt.
     """
 
-    from app.core.perceive.features import PARALLEL_FACE_COSINE
-
     if not faces_now.names:
         return ()
     old = planar_source(feature, source)
@@ -1715,8 +1713,33 @@ def pieces_in_place(
         return ()
     low = old.corners.min(axis=0) - old.tolerance
     high = old.corners.max(axis=0) + old.tolerance
-    facing = (faces_now.normals * old.direction).sum(axis=1) >= PARALLEL_FACE_COSINE
-    apart = np.abs(((faces_now.centres - old.middle) * old.direction).sum(axis=1))
-    inside = ((faces_now.centres >= low) & (faces_now.centres <= high)).all(axis=1)
-    chosen = facing & (apart <= old.tolerance) & inside
+    chosen = faces_in_plane(faces_now, old.direction, old.middle, old.tolerance, box=(low, high))
     return tuple(faces_now.names[index] for index in np.flatnonzero(chosen))
+
+
+def faces_in_plane(
+    faces_now: PlanarFaces,
+    direction: Any,
+    middle: Any,
+    tolerance: float,
+    *,
+    box: tuple[Any, Any] | None = None,
+) -> Any:
+    """Welche erkannten Flächen in einer Ebene liegen, gleich gerichtet — als Maske.
+
+    ``direction`` ist die Normale der Ebene als Einheitsvektor, ``middle`` ein
+    Punkt in ihr. Mit ``box`` (untere und obere Ecke) zählt nur, wessen Mitte
+    darin liegt. Eine Rechnung für zwei Fragen: welche Stücke eine alte Fläche
+    hat (:func:`pieces_in_place`) und ob von einer erzeugten noch etwas da ist
+    (``scene.evaluate._consumed_faces``). Grundrechenarten und Summen über eine
+    Achse (RM-187): An der Antwort hängt ein Name.
+    """
+    from app.core.perceive.features import PARALLEL_FACE_COSINE
+
+    facing = (faces_now.normals * direction).sum(axis=1) >= PARALLEL_FACE_COSINE
+    apart = np.abs(((faces_now.centres - middle) * direction).sum(axis=1))
+    chosen = facing & (apart <= tolerance)
+    if box is not None:
+        low, high = box
+        chosen &= ((faces_now.centres >= low) & (faces_now.centres <= high)).all(axis=1)
+    return chosen

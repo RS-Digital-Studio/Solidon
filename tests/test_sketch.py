@@ -407,6 +407,49 @@ def test_an_angle_reads_its_degrees_from_a_project_parameter() -> None:
     assert math.isclose(turn_between(*solved.elements[:2]), 30.0, abs_tol=1e-6)
 
 
+def test_an_angle_turns_two_free_lines_to_the_nearest_solution() -> None:
+    """Ein Winkel zwischen zwei freien Linien dreht sie, er wirft sie nicht um.
+
+    Das Residuum hat die Periode 180 Grad, und gemeint ist die Lösung, die der
+    Zeichnung am nächsten liegt (``_angle_equation``). Der Löser hielt das
+    nicht: Bei einer einzigen Bedingung zeigen Gradient und Gauß-Newton-Schritt
+    in dieselbe Richtung, der Zweierraum von TRF mit ``lsmr`` entartet, und der
+    erste Schritt lief bis an den Rand des Vertrauensbereichs — mit einem
+    Anteil aus dem Rundungsrauschen. 48 von 717 Fällen landeten auf der
+    anderen Lösung, Punkte wanderten bis 173 mm; auf dem Intel-Mac kippte so
+    die erste Linie im Skizzentest um (Fensterauswahl, Lauf 37597388208).
+    """
+    for start in range(5, 90, 6):
+        for target in (30, 45, 60, 100):
+            first = SketchElement("line", ((0.0, 0.0), (10.0, 0.0)))
+            angle = math.radians(start)
+            second = SketchElement(
+                "line", ((0.0, 0.0), (8.5 * math.cos(angle), 8.5 * math.sin(angle)))
+            )
+            sketch = Sketch(
+                plane="plane:xy",
+                elements=(first, second),
+                constraints=(SketchConstraint("angle", (0, 1, 2, 3), str(target)),),
+            )
+            solved = solve_sketch(sketch)
+            nearest = target if abs(start - target) <= abs(start - (target - 180)) else target - 180
+            assert math.isclose(turn_between(*solved.elements), nearest, abs_tol=1e-4), (
+                start,
+                target,
+                turn_between(*solved.elements),
+            )
+            moved = max(
+                math.dist(before, after)
+                for old, new in zip(sketch.elements, solved.elements, strict=True)
+                for before, after in zip(old.points, new.points, strict=True)
+            )
+            # Drehen heißt: kein Punkt wandert weiter, als beide Linien
+            # zusammen lang sind. Der alte Schritt kam hier auf 21,7 mm.
+            assert moved <= 10.0 + 8.5, (
+                f"von {start}° nach {target}° wandert ein Punkt {moved:.1f} mm"
+            )
+
+
 def test_an_angle_outside_the_half_turn_is_refused() -> None:
     """Null und 180 Grad sind ``parallel``, und darüber wiederholt sich alles.
 

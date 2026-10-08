@@ -1157,8 +1157,42 @@ jobs:
             '"Developer ID Application:'*) ;;
             *) echo "Im Schlüsselbund liegt $name — erwartet wird ein Developer-ID-Application-Zertifikat."; exit 1 ;;
           esac
+          # **Hardened Runtime mit genau einer Ausnahme: ausführbarer
+          # Schreibspeicher, und nur für das Hauptprogramm.** CPythons `_ctypes`
+          # legt schon beim Laden eine libffi-Closure an (`_ctypes_mod_exec`),
+          # jeder ctypes- und cffi-Rückruf wieder; geladen wird es schon in
+          # PyInstallers Bootstrap. Apples libffi holt dafür auf x86_64
+          # anonymen Speicher mit PROT_EXEC; ohne diese Berechtigung verweigert
+          # ihn die Hardened Runtime, und der Ausweichweg über Temp-Dateien
+          # kreist auf macOS 26 endlos. So hing das Intel-Paket auf den Macs
+          # eines Kunden vor dem ersten Fenster, ad hoc signiert lief es
+          # (RM-104). ARM nimmt Apples Trampolintabelle; ein Rezept für beide
+          # Architekturen ist trotzdem einfacher zu prüfen als zwei. Die Runner
+          # zeigen den Fehler nicht. `allow-jit` hülfe nicht, libffi fordert
+          # kein MAP_JIT an. Die Bibliotheken erben nichts — `--deep` mit
+          # `--entitlements` hängte die Liste an jede Datei, deshalb zwei Läufe.
+          entitlements="$RUNNER_TEMP/solidon-app.entitlements"
+          cat > "$entitlements" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+          plutil -lint "$entitlements"
           codesign --force --deep --options runtime --timestamp --keychain "$keychain" --sign "$identity" "$ARTIFACT_APP"
+          codesign --force --options runtime --timestamp --entitlements "$entitlements" --keychain "$keychain" --sign "$identity" "$ARTIFACT_APP"
           codesign --verify --deep --strict --verbose=2 "$ARTIFACT_APP"
+          # Zurückgelesen, nicht vorausgesetzt — Schlüssel und Wert: Ohne die
+          # Berechtigung am Hauptprogramm hängt das Intel-Paket auf macOS 26.
+          granted=$(codesign -d --entitlements - --xml "$ARTIFACT_APP" 2>/dev/null | tr -d '[:space:]') || granted=""
+          case "$granted" in
+            *'<key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>'*) ;;
+            *) echo "Die signierte App trägt die Berechtigung für ausführbaren Speicher nicht (RM-104)."; exit 1 ;;
+          esac
 
       - name: Signierte App bei Apple notarisieren
         if: env.MACOS_SIGNING_MODE == 'notarized'

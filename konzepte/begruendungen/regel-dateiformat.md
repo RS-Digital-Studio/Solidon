@@ -42,6 +42,14 @@ Minuten lang, nur in Entwicklungsständen, und wird trotzdem markiert. Am Beispi
 rechnen nach der Migration alle elf Körper bis auf die vierte Nachkommastelle wie
 beim Schreiben (`test_v40_slot_tools_keep_the_geometry_they_were_saved_with`).
 
+**Eine neue Vorgabe gilt neuen Schritten** (Format 48, RM-536). *Stift für
+Bohrung* bekam die Form `shape` mit der Vorgabe „Passend zur Bohrung“; ein
+gespeicherter Stift in einer Senkbohrung hätte nach dem Update einen Senkkopf
+und reichte durch die ganze Platte (`pin_for_bore_v46.p3d`: 107,46 statt
+209,79 mm³). Hier war die alte Rechnung kein Fehler, sondern die einzige Form;
+die Migration setzt an jedem gespeicherten Schritt ohne Form `plain_pin`, eine
+genannte bleibt. Keine Versionsfrage, denn das Feld gab es vorher nicht.
+
 ## Was nicht in die Datei gehört
 
 Zu den mitreisenden Druckern und Materialien: Passungen aus *Teilen* und

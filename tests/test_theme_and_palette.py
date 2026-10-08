@@ -1095,9 +1095,11 @@ def test_the_native_palette_keeps_its_second_line_below_the_title() -> None:
     import subprocess
     import sys
 
-    platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
-    if platform == "xcb" and not os.environ.get("DISPLAY"):
-        pytest.skip("kein X11-Display für die nativen Schriftmetriken")
+    from tests.native_window_probe import require_native_platform
+
+    # Gezeigt wird kein Fenster, gebraucht wird nur die Schriftmetrik der
+    # echten Plattform — die Vorprüfung entfällt, die DISPLAY-Regel gilt.
+    platform = require_native_platform()
     script = """
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QImage, QPainter

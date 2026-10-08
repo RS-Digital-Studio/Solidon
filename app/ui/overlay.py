@@ -2040,7 +2040,7 @@ class CardGrip(QToolButton):
     verschieben und rasten an den Rändern ein; ein eigenes Fenster werden sie
     nicht — dort fehlten Strg+Z, Entf und die Palette, und ein Kind über der
     Grafikfläche, das umzieht, macht seine Vorfahren nativ (Soll-Ablauf in
-    ``.claude/.state/fragebogen-5c132b/karten-soll-ablauf.md``).
+    ``konzepte/konzept-verschiebbare-karten-2026-10.md``).
 
     **Ziehen zeigt einen Umriss am Zeiger**, erst das Loslassen legt die Karte
     hin (:meth:`OverlayHost._show_outline`); Escape oder ein verlorener Fokus

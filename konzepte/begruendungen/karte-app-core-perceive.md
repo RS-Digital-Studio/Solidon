@@ -1744,8 +1744,8 @@ genügte ein Skalarprodukt der Achsen ungleich null.
   an jeder Bohrung, auch an einer mit Fase am Mund. Alle Sätze sind die der
   Operation; die Kette wird je `actions_for` einmal gefragt und speist auch
   die Sperre an *Zum Langloch ziehen*. Und `fillet_blocked` liest dieselbe
-  Flächenmenge wie `edges._around`: die Ebenen frisch aus `detect_faces`,
-  nicht die `face`-Einträge des Baums — ein Langloch verschluckt die, und an
+  Flächenmenge wie `edges._around`: die Ebenen aus `planar_mask`, einmal je
+  Körper gemerkt, nicht die `face`-Einträge des Baums — ein Langloch verschluckt die, und an
   einer Freiform gibt es keine.
 
 - **Die runden Wände werden zusammen gefragt** (`tangent_walls`): ein Gang

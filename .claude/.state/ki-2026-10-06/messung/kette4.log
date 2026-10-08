@@ -1,0 +1,5 @@
+=== 03:14:19 rm529_256b6b130 (qwen3:14b, F:/ki-529, 65e3ec97b) GPU vorher: 1123 MiB, 27 %
+    Exit 0  gut 27/39; gefragt 3/3; schemagültig 149/215; Baustein 7/13; Parameter 2/3; Zeit 69.9 min
+=== 04:26:20 rm251b_014_285 (qwen3:14b, F:/ki-251, d25f12366) GPU vorher: 1109 MiB, 29 %
+    Exit 0  gut 28/39; gefragt 3/3; schemagültig 183/226; Baustein 7/13; Parameter 2/3; Zeit 71.3 min
+=== 05:38:06 Kette fertig

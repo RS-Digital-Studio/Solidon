@@ -31,8 +31,22 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-06 | [RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)](#rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026) |
+| 2026-10-06 | [RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)](#rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026) |
+| 2026-10-07 | [RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)](#rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026) |
+| 2026-10-06 | [RM-441: Jeder Befund, der sagt, dass ein Schritt nichts getan hat, öffnet diesen Schritt (06.10.2026)](#rm-441-jeder-befund-der-sagt-dass-ein-schritt-nichts-getan-hat-öffnet-diesen-schritt-06102026) |
+| 2026-10-06 | [RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)](#rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026) |
+| 2026-10-07 | [RM-535: Karte, Operation und Griff fragen dieselbe Funktion, und das Material reist beim Versetzen, wie es ist (07.10.2026)](#rm-535-karte-operation-und-griff-fragen-dieselbe-funktion-und-das-material-reist-beim-versetzen-wie-es-ist-07102026) |
+| 2026-10-07 | [RM-536: Stift für Bohrung baut das passende Gegenstück (07.10.2026)](#rm-536-stift-für-bohrung-baut-das-passende-gegenstück-07102026) |
+| 2026-10-07 | [RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)](#rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026) |
 | 2026-10-07 | [RM-099: Erledigte und abgelöste Konzepte liegen in konzepte/archiv/ (07.10.2026)](#rm-099-erledigte-und-abgelöste-konzepte-liegen-in-konzeptearchiv-07102026) |
+| 2026-10-07 | [RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)](#rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026) |
 | 2026-10-06 | [RM-114: Die Zielreihe der Hohlkugel ist auf drei Plattformen gleich (06.10.2026)](#rm-114-die-zielreihe-der-hohlkugel-ist-auf-drei-plattformen-gleich-06102026) |
+| 2026-10-06 | [RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)](#rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026) |
+| 2026-10-06 | [RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)](#rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026) |
+| 2026-10-06 | [RM-064: Das ausgelieferte Flatpak findet Orca als Flatpak, slict und öffnet es (06.10.2026)](#rm-064-das-ausgelieferte-flatpak-findet-orca-als-flatpak-slict-und-öffnet-es-06102026) |
+| 2026-10-06 | [RM-413: Ein fremdes Teil in einer Bohrung wird nicht mehr still verschmolzen (06.10.2026)](#rm-413-ein-fremdes-teil-in-einer-bohrung-wird-nicht-mehr-still-verschmolzen-06102026) |
+| 2026-10-06 | [RM-385: Bauplan §17.2 nennt den Halt vor der Rückfallkette (06.10.2026)](#rm-385-bauplan-172-nennt-den-halt-vor-der-rückfallkette-06102026) |
 | 2026-10-06 | [CI-Testlaufzeiten: Der Zeitgewinn der Aufteilung ist belegt, die Kerntabelle kommt aus der CI (06.10.2026)](#ci-testlaufzeiten-der-zeitgewinn-der-aufteilung-ist-belegt-die-kerntabelle-kommt-aus-der-ci-06102026) |
 | 2026-10-06 | [RM-519: Linke Karten und Zeichenmodus zeigen nur, was gerade gilt (06.10.2026)](#rm-519-linke-karten-und-zeichenmodus-zeigen-nur-was-gerade-gilt-06102026) |
 | 2026-10-06 | [RM-512: Im Ruhezustand leuchtet nur Bausteine, und Rot trägt nur das Verwerfen (06.10.2026)](#rm-512-im-ruhezustand-leuchtet-nur-bausteine-und-rot-trägt-nur-das-verwerfen-06102026) |
@@ -41,6 +55,7 @@ entfernt hat.
 | 2026-10-06 | [RM-530: Das Matrixwerkzeug liegt in tools/, kein Test liest den Zustandsordner (06.10.2026)](#rm-530-das-matrixwerkzeug-liegt-in-tools-kein-test-liest-den-zustandsordner-06102026) |
 | 2026-10-06 | [RM-349: Textwächter, OCP-Importe und zwei Regelsätze stehen auf dem Stand (06.10.2026)](#rm-349-textwächter-ocp-importe-und-zwei-regelsätze-stehen-auf-dem-stand-06102026) |
 | 2026-10-06 | [RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)](#rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026) |
+| 2026-10-06 | [RM-534: Der Prüfbericht sagt, wenn er neu rechnet, und die volle Kette entscheidet selbst (06.10.2026)](#rm-534-der-prüfbericht-sagt-wenn-er-neu-rechnet-und-die-volle-kette-entscheidet-selbst-06102026) |
 | 2026-10-06 | [RM-020: Die Druckprojekte brauchen keine eigene Sicherung (06.10.2026)](#rm-020-die-druckprojekte-brauchen-keine-eigene-sicherung-06102026) |
 | 2026-10-06 | [RM-183: Der Zeichenmodus ist abgenommen, die Rampe der 3D-Maus führt RM-070 (06.10.2026)](#rm-183-der-zeichenmodus-ist-abgenommen-die-rampe-der-3d-maus-führt-rm-070-06102026) |
 | 2026-10-06 | [RM-387: Sprachwächter und englische Passungszeichnung stehen auf dem Stand (06.10.2026)](#rm-387-sprachwächter-und-englische-passungszeichnung-stehen-auf-dem-stand-06102026) |
@@ -9042,7 +9057,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-011 — Auf einem fremden Rechner installieren | weiter offen → [RM-011](ROADMAP.md#rm-011) | ROADMAP.md:2381–2383 hat weiterhin keinen zugeordneten Feldlaufbeleg. CI-Paketierung und einzelne Kundenmeldungen ersetzen keinen vollständigen, versionierten Erstinstallationsweg. Mit dem P8-Mac-Feldlauf koordinieren, aber der allgemeine Kunden-Erststart ist eine eigene Abnahme. |
 | RM-012 — Offen: den helikalen Gang so bauen, dass er überall schließt | zusammengeführt → [RM-104](ROADMAP.md#rm-104) | Der referenzierte test_a_sound_thread_still_goes_through samt Linux-/Darwin-xfail existiert seit 684c439a nicht mehr. Aktuell tests/test_sketch_ops.py:714–740. Die alten MakePipeShell-Versuche sind historische Diagnose und begründen allein keinen heutigen Architekturumbau. |
 | RM-013 — Offen: dieser eine Test | zusammengeführt → [RM-104](ROADMAP.md#rm-104) | tests/test_chat_ui.py:425 hat keine Skip-Markierung und führt weiterhin zwei run_remote-Aufrufe aus. 8fcc9edc entfernte den VTK-Renderer, build.yml:226–246 führt Fensterdateien wieder aus. Alte Aussage, dieser Test werde auf Linux übersprungen, trifft nicht mehr zu; mangels eigenem Linux-Lauf keine Behoben-Behauptung. |
-| RM-014 — P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung | weiter offen → [RM-014](ROADMAP.md#rm-014) | app/core/agent/session.py:123 und 793 verwendet _gathered_refusal und GATHERED_KINDS; app/core/knowledge/data/rules.toml enthält weiterhin keine zusätzliche Formenregel. ROADMAP.md:2977–3020 grenzt genau diese Entscheidung als einzigen Rest ab. Historische Sprachanzahlen (Website zwei, Handbuch fünf) sind überholt. |
+| RM-014 — P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung | weiter offen → [RM-014](#rm-014) | app/core/agent/session.py:123 und 793 verwendet _gathered_refusal und GATHERED_KINDS; app/core/knowledge/data/rules.toml enthält weiterhin keine zusätzliche Formenregel. ROADMAP.md:2977–3020 grenzt genau diese Entscheidung als einzigen Rest ab. Historische Sprachanzahlen (Website zwei, Handbuch fünf) sind überholt. |
 | RM-015 — Er tritt auch in einer einzelnen Datei auf, und die Rate schwankt stark | zusammengeführt → [RM-021](ROADMAP.md#rm-021) | ROADMAP.md:3288–3310 erklärt selbst, dass Code, Stelle und ursprüngliche Protokolle fehlen und 27 verwertbare spätere Läufe nicht abrissen. Python und Renderer wurden inzwischen ersetzt. Der Eintrag liefert keine eigenständig abnehmbare aktuelle Aufgabe. |
 | RM-016 — Gegen Sonnet 5 ist die Suite nicht gefahren | weiter offen → [RM-016](ROADMAP.md#rm-016) | app/core/backends/llm.py:604–628 führt claude-sonnet-5 als Vorgabe und den fehlenden Suite-Lauf ausdrücklich; Thinking-Blöcke werden weiterhin nicht zurückgegeben. REFUSAL_STOPS:133, Reply.refused:226–227 und app/core/agent/session.py:406 behandeln refusal inzwischen. Der entsprechende alte Nebenpunkt ist erledigt. Kein kostenpflichtiger Modelllauf gestartet. |
 | RM-017 — Stegdicke und Kammertiefe sind an keinem echten Profil gemessen | weiter offen → [RM-017](#rm-017) | app/core/knowledge/data/standards.toml:396–420 führt weiterhin gebräuchliche Katalogwerte lip/depth 1,8/4,3 bzw. 2,0/5,5 sowie Herstellerspannen. Kein zugeordneter physischer Messbeleg gefunden. |
@@ -9066,9 +9081,9 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-035 — Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | weiter offen → [RM-035](ROADMAP.md#rm-035) | Verkaufsweg noch nicht gebaut/vertraglich festgelegt; kein Nachweis eines freigegebenen Bestellablaufs. Pauschale historische Aussage über die Wirkung eines EULA-Häkchens nicht als Rechtsrat fortschreiben. |
 | RM-036 — Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | weiter offen → [RM-036](ROADMAP.md#rm-036) | MoR-Anbieter und Vertrag laut Verkaufsplanung noch offen; kein konkreter Vertrag als geprüft belegt. Pauschale Aussagen über jeden Merchant of Record ersetzen. |
 | RM-037 — Die Eingabefelder unter Wayland nehmen keine Tastatur an | zusammengeführt → [RM-062](ROADMAP.md#rm-062) | Gleicher Kundenpfad wie RM-062 und RM-063; Register fordert weiter Feldnachweis, keine bestätigte Ursachenbehebung gefunden. |
-| RM-038 — Der Mailweg liefert prozentkodierten Text | weiter offen → [RM-038](ROADMAP.md#rm-038) | app/ui/support_dialog.py:807-844 direkter D-Bus-Portalaufruf, Klartext statt QUrl; Kundenfeldlauf nicht belegt. |
+| RM-038 — Der Mailweg liefert prozentkodierten Text | erledigt 06.10.2026 → [RM-038](ROADMAP-ARCHIV.md#rm-038) | app/ui/support_dialog.py:807-844 direkter D-Bus-Portalaufruf, Klartext statt QUrl; am ausgelieferten Flatpak 0.5.3 belegt (Lauf 37506242154, Runner genügt — Entscheidung Robert). |
 | RM-039 — Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht | weiter offen → [RM-039](#rm-039) | app/core/geom/prepare.py:944-957: split.uncapped ohne suggestions und ohne Ursache; app/core/geom/autosplit.py:1028 referenziert denselben Vertrag. |
-| RM-040 — Der erste Kundenbericht aus 0.3.4 nennt keine Ursache | weiter offen → [RM-040](ROADMAP.md#rm-040) | 96da8fd0, app/core/scene/evaluate.py; vorhandener Bericht aus 0.3.4 nennt die Ursache noch nicht. Kein neuer Ursachenbeleg gefunden. |
+| RM-040 — Der erste Kundenbericht aus 0.3.4 nennt keine Ursache | erledigt 06.10.2026 → [RM-040](ROADMAP-ARCHIV.md#rm-040) | 96da8fd0, app/core/scene/evaluate.py; abgenommen (Robert, 06.10.2026): Bericht S-20261006-5be329 aus 0.5.3 trug Ausnahme und Stapel, Ursache behoben in c3e68671e. |
 | RM-041 — Die Gitterfüllung kennt bei einem eingelesenen, entlüfteten Hohlkörper keinen Innenraum mehr | weiter offen → [RM-041](#rm-041) | app/core/geom/lattice.py:338-347,408: _cavity_mesh und no_cavity; Abnahmebericht G5 hält die Absage bewusst fest. |
 | RM-042 — Die Merkmalserkennung läuft bis eine Million Dreiecke | weiter offen → [RM-042](#rm-042) | app/core/scene/evaluate.py:94,1079; output/review/abnahme-2026-09-06/befunde-agenten.md K5. Neuere Teilmessung vom 07.09.2026: mechanisch203.776 Dreiecke0,791s; Freiform200k1,483s; keine1M-Messung. Die §31-Grenze ist weiterhin200k. |
 | RM-043 — Die Kopfzeilenfrist der HTTP-Antworten gilt nur für `open_public_url` | erledigt | app/core/http.py:327-370; tests/test_http_security.py:817 prüft initiale Zeilen über open_public_url; Abnahmebericht K15 bleibt offen. |
@@ -9092,7 +9107,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-061 — Am 15.10.2026 die Verkaufsbereitschaft prüfen | weiter offen → [RM-061](ROADMAP.md#rm-061) | Beschluss 28.08.2026, app/branding.py Zeitgrenzen und Verkaufsplanung; kein heutiger Releaseauftrag. Die Planung bleibt offen. |
 | RM-062 — Ob die Eingabemethode im Flatpak jetzt erreichbar ist | weiter offen → [RM-062](ROADMAP.md#rm-062) | RM-037/063 doppeln diesen Feldnachweis; packaging Berechtigungen, app/ui/qt_platform.py; native Wayland-Grenze RM-052. |
 | RM-063 — Ob der Start auf Wayland jetzt ohne Umwege geht | zusammengeführt → [RM-062](ROADMAP.md#rm-062) | Gleicher Linux-Kundenbericht und gleiche Umgebungsdiagnostik wie RM-037/RM-062. |
-| RM-064 — Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | weiter offen → [RM-064](ROADMAP.md#rm-064) | ca18e5a8,8c38d193; app/core/discover.py und Austauschordnerweg; bisher Einzelprüfungen, kein gesamter Feldweg belegt. |
+| RM-064 — Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | erledigt 06.10.2026 → [RM-064](ROADMAP-ARCHIV.md#rm-064) | ca18e5a8,8c38d193; app/core/discover.py und Austauschordnerweg; bisher Einzelprüfungen, kein gesamter Feldweg belegt. |
 | RM-065 — CA-Zertifikate auf macOS — Rückfall gebaut, Paketbestätigung offen | weiter offen → [RM-065](#rm-065) | app/core/network.py, packaging/solidon3d.spec und Tests; historischer 0.3.4-Paketbefund ist keine aktuelle Mac-Laufabnahme. |
 | RM-066 — Ab der nächsten Version kommen AppImage und Flatpak auf die Download-Seite | erledigt | git log 84a746e7; website/version.json und tools/make_download.py DELIVERED. |
 | RM-067 — `rtree` liegt auf Entwicklungsmaschinen als Überrest und macht vier Tests rot | überholt oder begründet entfallen | Lokal importlib.util.find_spec(rtree)=None; pyproject.toml ohne rtree; app/core/knowledge/licences.py:318-343 runtime_packages läuft deklarierte Abhängigkeiten ab; tests/test_licences.py:41 prüft diese Menge statt aller installierten Pakete. Fremde Maschinen wurden nicht als bereinigt behauptet. |
@@ -12134,7 +12149,7 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       dem Code oder aus der Tastatur des Nutzers stammt. Genau diese
       Unterscheidung ist das Feld — die Migration von 6 hält fest, warum ein
       nachträglicher Abgleich mit dem Katalog der falsche Weg wäre.
-- **Historischer Befund RM-014 (weiter offen; aktuelle Aufgabe [RM-014](ROADMAP.md#rm-014)):** **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Die
+- **Historischer Befund RM-014 (weiter offen; aktuelle Aufgabe [RM-014](#rm-014)):** **P16.10 — Weg 4, Handbuch, Website, Beispiel, Regelsammlung.** Die
       Sperre steht; offen ist nur noch, ob eine Regel dazukommt.
 
       **Handbuch:** ein Kapitel *Formen* mit dem Abschnitt, den `AGENTS.md`
@@ -20022,7 +20037,7 @@ Grund noch den Weg. Der Kunde nannte seine Projektdatei selbst
   reproduziert und nicht am Code nachgewiesen; die Fassung des Kunden ist zwei
   Versionen alt. Wer ihn schließt, braucht eine Rückmeldung aus 0.3.4 oder
   einen eigenen Manjaro-Lauf.
-- **Historischer Befund RM-038 (weiter offen; aktuelle Aufgabe [RM-038](ROADMAP.md#rm-038)):** **Der Mailweg liefert prozentkodierten Text.** Der `mailto`-Link trägt
+- **Historischer Befund RM-038 (erledigt 06.10.2026, [RM-038](ROADMAP-ARCHIV.md#rm-038)):** **Der Mailweg liefert prozentkodierten Text.** Der `mailto`-Link trägt
   den ganzen Bericht; ein kurzer Text, der auf den abgelegten Ordner verweist,
   wäre der robustere Weg.
 - **Historischer Befund RM-039 (weiter offen; aktuelle Aufgabe [RM-039](#rm-039)):** **Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht.**
@@ -20050,7 +20065,7 @@ heutigen als `ValidationError` oder sauber durch (`output/review/
 landung-01a07020-2026-09-06/probe_load_op.py`). Der Fehler ist also
 dateispezifisch und mit dem, was der Bericht trägt, nicht zu finden.
 
-- **Historischer Befund RM-040 (weiter offen; aktuelle Aufgabe [RM-040](ROADMAP.md#rm-040)):** **Der erste Kundenbericht aus 0.3.4 nennt keine Ursache.** Seit
+- **Historischer Befund RM-040 (erledigt 06.10.2026, [RM-040](ROADMAP-ARCHIV.md#rm-040)):** **Der erste Kundenbericht aus 0.3.4 nennt keine Ursache.** Seit
   Commit 96da8fd0 schreibt die Auswertung eine fremde Ausnahme
   mit Traceback als Fehlerzeile ins Protokoll, die Abbruchzeile nennt den
   Grund, und der Fehlerbericht aus dem Prüfbericht trägt ihn — der nächste
@@ -21418,7 +21433,7 @@ zusammen — er stand in der Behebung selbst.
       kein Unterschied; `environment` ist optional. **Die Trennlinie ist die
       Antwort, nicht der Erfolg:** Ein 400 hieße Protokollbruch, ein 502 heißt
       angekommen.
-- **Historischer Befund RM-064 (weiter offen; aktuelle Aufgabe [RM-064](ROADMAP.md#rm-064)):** **Ob die Übergabe an den Slicer im Flatpak jetzt ankommt.** Vier
+- **Historischer Befund RM-064 (erledigt 06.10.2026, [RM-064](ROADMAP-ARCHIV.md#rm-064)):** **Ob die Übergabe an den Slicer im Flatpak jetzt ankommt.** Vier
   Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind
   repariert (`ca18e5a8`, `8c38d193`), und jeder Schritt ist einzeln geprüft.
   **Die Kette als Ganzes nicht** — dazu braucht es zwei echte Flatpaks, und
@@ -34574,6 +34589,13 @@ waren für die geprüften Dateien grün. Ein separater Boolescher Direktlauf bei
 einer Weltverschiebung von `1e7` liefert weiterhin unplausible Volumina; die
 Schnittprüfungsregression deckt diesen anderen Solverfehler nicht ab. Das
 vollständige Entwicklungstor steht für den gebündelten Arbeitsstand noch aus.
+**Berichtigung (RM-385, 06.10.2026):** Der Solverfehler bei `1e7` ließ sich
+nicht nachstellen und gilt nicht. Zwei überlappende Würfel, die zwei
+RM-319-Platten mit Bohrung und ein um 37° gekippter Zylinder durch einen Quader
+(Differenz, Vereinigung, Schnittmenge) rechnen bei Verschiebungen bis `1e8`
+bitgleich mit dem Ursprung, dicht und auf Stufe `direct`; der Satz nannte
+keinen Fall. Sonden `r2_boolean_weltversatz.py` und `r2_weltversatz_schraeg.py`
+unter `F:\solidon-review-reports\claude-2026-10-06\geometrie\`.
 
 **Statuskorrektur (02.10.2026):** Die vorherige Erledigt-Markierung war zu
 weit gefasst. Ein lesender Paket-Review trennt die geprüfte
@@ -36494,7 +36516,7 @@ Entwicklungstor grün (19735 bestanden, ruff, format, mypy ohne Befund).
   vorher; Strg+Y → Hashes gleich. Bauplan §15.5, §2.1.
   **Vorgabe Robert 02.10.2026 — allgemein:** dieselbe Bündelung für jeden zusammengehörigen Ablauf, der heute mehrere Transaktionen anlegt (Erzeugen, Import mit Reparatur, Assistenten); Abnahme an mindestens drei unterschiedlichen Abläufen.
 
-**Abschluss:** `generate.into_project` legt eine Transaktion „Modell erzeugen“ an, die Ops stehen einzeln im Verlauf; die Körperkennung kommt vorab aus `History.next_object_id()`, bei Absage wird die Quelle entfernt. Allgemein sammelt `Session.one_step()` mehrere `apply` zu einer Transaktion, die Sammelzeile in `panels._run_action_for` läuft darin; alte Titel in `generate.EARLIER_TITLES`. Abgenommen an Erzeugen (Strg+Z leer, Strg+Y bitgleich), Agentenrücknahme, Sammelzeile *Auf den Bauraum verkleinern* über zwei Körper und Einfügen mit Reparatur. Rest in [RM-441](ROADMAP.md#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
+**Abschluss:** `generate.into_project` legt eine Transaktion „Modell erzeugen“ an, die Ops stehen einzeln im Verlauf; die Körperkennung kommt vorab aus `History.next_object_id()`, bei Absage wird die Quelle entfernt. Allgemein sammelt `Session.one_step()` mehrere `apply` zu einer Transaktion, die Sammelzeile in `panels._run_action_for` läuft darin; alte Titel in `generate.EARLIER_TITLES`. Abgenommen an Erzeugen (Strg+Z leer, Strg+Y bitgleich), Agentenrücknahme, Sammelzeile *Auf den Bauraum verkleinern* über zwei Körper und Einfügen mit Reparatur. Rest in [RM-441](#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
 ## RM-374: Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern* (02.10.2026)
 
@@ -36515,7 +36537,7 @@ Entwicklungstor grün (19735 bestanden, ruff, format, mypy ohne Befund).
   Maß; Änderung auf 150 mm → Körper 150 mm. Bauplan §2.7, §2.6.
   **Vorgabe Robert 02.10.2026 — allgemein:** jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf zum Ändern dieses Schritts (nicht nur `transform.fitted`); Abnahme an mindestens drei unterschiedlichen Befunden.
 
-**Abschluss:** Handlung `change_step` (`errors.py`) mit *Größe ändern*, *Diesen Schritt ändern*, *Reliefhöhe ändern* und *Zellgröße ändern*, eingelöst über `_correct_after_error`/`edit_operation`; Befunde `transform.fitted`, `transform.without_effect`, `lattice.filled`, `displace.applied`; `cache_version` erhöht bei translate, rotate, scale, fit_to_size, lattice_fill, displace_image. Wächter `MEINT_DEN_SCHRITT` in `test_finding_ways`. Rest in [RM-441](ROADMAP.md#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
+**Abschluss:** Handlung `change_step` (`errors.py`) mit *Größe ändern*, *Diesen Schritt ändern*, *Reliefhöhe ändern* und *Zellgröße ändern*, eingelöst über `_correct_after_error`/`edit_operation`; Befunde `transform.fitted`, `transform.without_effect`, `lattice.filled`, `displace.applied`; `cache_version` erhöht bei translate, rotate, scale, fit_to_size, lattice_fill, displace_image. Wächter `MEINT_DEN_SCHRITT` in `test_finding_ways`. Rest in [RM-441](#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
 ## RM-439: Die Formleiste nennt die Pinselstärke in fünf Sprachen Wanddicke (02.10.2026)
 
@@ -42715,7 +42737,7 @@ Schritt mit der Warnung `boolean.parts_not_united`. Tests in `tests/test_boolean
 `test_a_crossing_scene_tool_stops_a_difference_with_its_own_id`. Am echten Laptop-Ständer am
 06.10.: `hole_1` bis `hole_4` rechnen mit `boolean.parts_not_united`, `hole_11` hält mit dem
 Satz zur sich selbst kreuzenden Oberfläche. Dass §17.2 den Halt nennt, steht mit Ansage bei
-[RM-385](ROADMAP.md#rm-385); die übrigen Fehlbilder am Original bei [RM-253](ROADMAP.md#rm-253).
+[RM-385](#rm-385); die übrigen Fehlbilder am Original bei [RM-253](ROADMAP.md#rm-253).
 
 ## RM-383: Viele getrennte Teile halten keine Boolesche mehr an (06.10.2026)
 
@@ -43038,6 +43060,105 @@ Skizzenmodus am echten Gerät — geht in RM-070 auf, das ihn in seiner Register
 Druckprojekte, und die liegen in `F:\3D Dateien`; das Repository „3D Drucker“ braucht keine
 eigene Sicherung.
 
+## RM-534: Der Prüfbericht sagt, wenn er neu rechnet, und die volle Kette entscheidet selbst (06.10.2026)
+
+<a id="rm-534-der-prüfbericht-sagt-wenn-er-neu-rechnet-und-die-volle-kette-entscheidet-selbst-06102026"></a>
+<a id="rm-534"></a>
+
+**RM-534 — Der Prüfbericht zeigt während einer Neuberechnung alte Fehler als gültig
+  (Fragebogen S-20261006-5be329).** Kunde: „manchmal wird im Prüfbericht auch Fehler angezeigt und
+  kurz darauf ist die Berechnung erst fertig“. Gemessen am HEAD `3a5d607f3` mit der Kundendatei
+  (Bericht `pruefbericht-bericht.md` im Zustandsordner von RM-533): Beim Wechsel des Radius
+  2,0 → 1,0 (Schritt 18) bleibt die Zeile „Der Radius ist für diese Kanten zu groß“ mit voller
+  Schwere stehen, der Kopf sagt „Übergabe nicht empfohlen“, die Statuszeile „Die Kette hält an“ —
+  3,7 s lang, bis das Ergebnis kommt. Der Hinweis „Die Bewertung läuft“ wird gerade dann
+  unterdrückt (`ReportPanel`: `self._review_missing and not counts["error"]`). Widerlegt sind
+  Zwischenstände aus dem Bild zuerst, `check_states` und die Vorschau eines offenen Dialogs.
+  Dazu ein eigener Fehler: Ein Halt im Entwurf gilt als fein. `evaluate.py` bricht beim Halt ab,
+  bevor `reads_quality` gesetzt wird, `fine_current` ist wahr, und Druckdialog und Export rechnen
+  die volle Kette nie, obwohl der Satz „… sagt erst die vollständige“ sie ankündigt. Am
+  Kundenschritt 6 (*Merkmal entfernen* am Stift) bestätigt die volle Kette den Fehler mit dem
+  besseren Satz („das Werkzeug deckt ihn vollständig ab“); der Kunde nahm zweimal *Reparieren und
+  erneut versuchen*, das dort nicht helfen konnte.
+
+  **Fix in vier Teilen (Entscheidung aus Kundensicht):** (1) Läuft eine Auswertung länger als
+  200 ms, sagt der Kopf „Wird neu berechnet …“; alte Zeilen bleiben als voriger Stand sichtbar,
+  mit Text als zweiter Kodierung (Regel 18), ihre Knöpfe gesperrt, die Reitermarke zählt sie nicht
+  neu, die Haltansage weicht dem Fortschritt; `print_contract.handoff_state` bekommt den
+  Laufzustand als eigenen Eingang. (2) Hält der Entwurf mit `BooleanFailedError` ohne Voxelstufe
+  an, rechnet die Sitzung die volle Kette einmal selbst; bis dahin steht der Laufzustand, kein
+  Fehler; *Voxelstufe erzwingen* bleibt. (3) Ein Halt im Entwurf ist nie `fine_current`. (4) Das
+  feine Urteil gilt für folgende Entwurfsläufe, solange Schritt und Eingang gleich sind — kein
+  Hin und Her. Tests, die heute Verhalten zusichern und bleiben: `test_print_contract.py`
+  (Übergabezustand ohne Lauf), `test_boolean.py` (Entwurfssatz), `test_ui.py` (`use_voxel_stage`);
+  der Halt gehört neben RM-494 in `test_evaluation.py`. **Abnahme:** Während eines Laufs steht
+  kein alter Fehler als gültig da; ein Export nach einem Entwurfshalt rechnet fein.
+
+**Erledigt (06.10.2026, nach der Durchsicht am 07.10.2026 vervollständigt).**
+Alle vier Teile sind gebaut, Teil 2 und 4 anders als vorgeschlagen und dafür
+einfacher:
+
+- **Teil 1, Laufzustand:** `ReportPanel.set_running` aus
+  `MainWindow._follow_the_run_in_the_report` (bei jedem Wechsel von `busy`,
+  nach jedem gezeigten Ergebnis und nach jeder Änderung am Dokument). Nach
+  200 ms sagt der Kopf „Wird neu berechnet …“ mit Uhr (`icons.PATHS["running"]`);
+  die Zeilen, die beim Beginn dastanden, beginnen mit „Voriger Stand:“ in
+  `muted` (lesbar, nicht die Sperrfarbe mit 3,1 : 1), ohne Folgezeile, Knöpfe
+  und Kontextmenü gesperrt — auch wenn der Lauf beginnt, während das Menü offen
+  ist. Was währenddessen über `add_findings` dazukommt, gehört zum neuen
+  Stand. Die Reiterzahl bleibt, die Haltansage weicht in `_on_busy` dem Lauf.
+  Ein Bild vor der Erkennung gehört zum Dokument, bis es sich ändert
+  (`Session.picture_current`). Endet der Lauf ohne Ergebnis, sagt der Bericht
+  auch unter einem Fehler, dass für den aktuellen Stand keine abgeschlossene
+  Bewertung vorliegt (`set_stale`). `handoff_state` hat den Eingang `running`.
+- **Teil 2 und 4, volle Kette:** Statt eines zweiten, ganz feinen Laufs der
+  Sitzung rechnet die Auswertung genau den Schritt, an dem nur die kurze Kette
+  ausging, im selben Lauf mit allen Stufen weiter (`_FullChain`) — im
+  Fensterlauf, im Verlaufsumbau und beim Agenten (`full_chain_when_stuck`),
+  damit sie über denselben Stand dasselbe sagen. Eine Vorschau bleibt beim
+  Entwurf (Entscheidung Robert): Sie nimmt ein Urteil der vollen Kette, das
+  schon vorliegt, hält sonst mit `short_chain_only` und sperrt *Übernehmen*
+  nicht, denn Übernehmen rechnet den Schritt vollständig. Die zweite
+  Durchsicht hatte gezeigt, dass die Voxelstufe sonst in jeder Vorschau lief,
+  sich nicht abbrechen ließ und je Wert im Dialog 20 s kostete; sie läuft
+  seither im Hilfsprozess (`kernel_jobs`) und bricht mit ihm ab. Eskaliert wird
+  nur, wenn genau die Entwurfskette lief und der Schritt nach der Güte fragte;
+  eine Frage des ersten Durchgangs beantwortet der zweite aus dem Gedächtnis.
+  Ohne Frage merkt sich die Speicherebene das gerettete Ergebnis sofort, auch
+  hinter einem späteren Halt, und das Urteil der vollen Kette
+  (`ResultCache.refuse`, nur ein `BooleanFailedError` mit gelaufener
+  Voxelstufe und ohne `transient` — Speichermangel ist kein Urteil); der
+  gemerkte Halt nennt die Kennung, die der Schritt heute trägt. Der Agent
+  rechnet mit dem Sitzungscache. Der Bauplan §17.2 nennt das seither.
+- **Teil 3:** Ein Halt nimmt mit, ob der Schritt nach der Güte fragte
+  (`reads_quality`); `fine_current` ist nach einem Entwurfshalt falsch, Export
+  und Druckdialog bestellen die feine Rechnung.
+
+Nachweis: `tests/test_evaluation.py`
+(`test_a_halt_that_read_the_quality_is_no_fine_verdict`,
+`test_a_draft_run_goes_the_full_chain_where_the_short_one_ends`,
+`test_a_rescued_step_is_kept_even_when_a_later_one_stops`,
+`test_the_full_chain_says_its_verdict_once_with_the_step_of_today`,
+`test_a_helper_that_died_in_the_full_chain_is_tried_again`,
+`test_a_question_of_the_step_comes_once_per_run`,
+`test_a_halt_after_a_question_is_not_kept`,
+`test_a_move_is_judged_with_the_full_chain_like_the_window`,
+`test_the_agent_keeps_a_step_that_only_the_full_chain_carries`,
+`test_a_step_that_wants_one_stage_gets_no_full_chain`,
+`test_window_revision_and_agent_go_the_full_chain_and_previews_do_not`,
+`test_a_preview_takes_known_verdicts_but_never_computes_the_full_chain`,
+`test_a_window_halt_is_no_short_chain_halt`; jeder rot, wenn sein Teil der
+Behebung fehlt), `tests/test_print_contract.py`
+(`test_a_running_evaluation_goes_before_every_finding`),
+`tests/test_print_contract_ui.py`
+(`test_a_report_being_recalculated_says_so_and_holds_back_its_old_errors`,
+`test_a_report_after_a_cancelled_run_says_it_is_not_current`),
+`tests/test_ui.py` (`test_a_new_run_takes_the_halt_message_and_the_report_follows_it`,
+`test_the_window_goes_the_full_chain_where_the_short_one_ends` mit Übernehmen im
+Schrittdialog, `test_the_report_follows_a_change_during_recognition_and_a_cancelled_run`).
+Regeln: `kern.md` („Auswertung“), `oberflaeche.md` („Der Prüfbericht sagt, wenn
+er zum vorigen Stand gehört“).
+
 ## RM-113: Die Tokendatei gilt auf dem Windows-Runner als privat (06.10.2026)
 
 <a id="rm-113-die-tokendatei-gilt-auf-dem-windows-runner-als-privat-06102026"></a>
@@ -43157,6 +43278,189 @@ im Zustandsordner zeigen auf die neuen Dateien. `git grep -n .claude/.state -- t
 findet nur noch `mac-netz.yml` und den Kommentar in `tests/helpers.py` (Sonde des offenen
 RM-187) sowie erfundene Pfade in `test_affected_tests.py` und `test_roadmap.py`, die keine Datei
 lesen.
+
+## RM-038: Der Mailentwurf kommt aus dem Flatpak unverändert an (06.10.2026)
+
+<a id="rm-038-der-mailentwurf-kommt-aus-dem-flatpak-unverändert-an-06102026"></a>
+<a id="rm-038"></a>
+
+**RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen.** `SupportDialog` übergibt
+  Betreff und Nachricht inzwischen direkt als Klartext an `ComposeEmail`; die alte Forderung nach
+  gekürztem mailto-Text ist überholt. Abnahme im ausgelieferten Paket: Umlaute, Satzzeichen und
+  Zeilenumbrüche kommen unverändert im Mailentwurf an; fehlendes Portal liefert eine Rückmeldung und
+  den gespeicherten Ordner als Rückweg.
+
+  Gebaut: `ComposeEmail` mit Klartext (`app/ui/support_dialog.py`), Code und Tests grün. Offen
+  nur der Portalweg im ausgelieferten Flatpak, abzunehmen am Gerät.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-linux-kunde-und-was-sein-protokoll-trug-06092026).
+
+**Erledigt (06.10.2026), am Runner statt am Gerät (Entscheidung Robert:
+„Runner genügt“).** Lauf
+[37506242154](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37506242154)
+auf ubuntu-24.04: das ausgelieferte Flatpak 0.5.3 von solidon3d.de (Prüfsumme
+geprüft) installiert, darin über `flatpak run --command=<python>` der Quelltext
+von `v0.5.3` mit den Rechten des installierten Pakets, `xdg-desktop-portal-gtk`
+als Backend und eine Mailprogramm-Attrappe für `mailto`. `SupportDialog._open_mail`
+mit Umlauten, `„Zitat“`, `;&?=#%+/`, Zeilenumbrüchen und Leerzeile: Betreff
+gleich, Text gleich bis auf die Zeitzeile (die Sonde baute das Ticket zum
+Vergleich ein zweites Mal). Ohne Mailprogramm antwortet das Portal mit 2, ohne
+Backend mit `UnknownMethod`; beide Male nennt der Dialog „bericht.txt“ und die
+abgelegten Anhänge als Rückweg. Workflow und Sonde:
+`.claude/.state/flatpak-abnahme-2026-10-06/`.
+
+
+## RM-040: Ein Kundenbericht aus 0.5.3 führte über Ausnahme und Stapel zur Behebung (06.10.2026)
+
+<a id="rm-040-ein-kundenbericht-aus-053-führte-über-ausnahme-und-stapel-zur-behebung-06102026"></a>
+<a id="rm-040"></a>
+
+**RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen.**
+  Traceback-Protokollierung und Übergabe in den Fehlerbericht sind gebaut. Abnahme: neuer Bericht
+  aus einer aktuellen Fassung nennt die konkrete Ausnahme und betroffene Datei; Ursache nachgestellt
+  und erforderlicher Fix geprüft.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-034-06092026).
+
+**Abgenommen (Robert, 06.10.2026).** Der Fragebogen S-20261006-5be329 aus
+0.5.3 trug ein Absturzprotokoll mit „Windows fatal exception: code 0x8001010d“
+samt Stapel. Ursache nachgestellt (eine von COM selbst geworfene und gefangene
+Ausnahme, die der Prozess überlebt) und behoben in `c3e68671e`: Der Bericht
+hängt nur noch an, was der Prozess nicht überlebt hat. Der Ladefehler aus 0.3.4
+(`op.load.InternalError` ohne Datei, S-20260906-9ca141) ist seither nicht
+wieder gemeldet worden; ohne Datei und Rückadresse bleibt er nicht
+nachstellbar.
+
+
+## RM-064: Das ausgelieferte Flatpak findet Orca als Flatpak, slict und öffnet es (06.10.2026)
+
+<a id="rm-064-das-ausgelieferte-flatpak-findet-orca-als-flatpak-slict-und-öffnet-es-06102026"></a>
+<a id="rm-064"></a>
+
+**RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen.** Erkennung, Hostpfade und
+  Austauschordner sind repariert. Seit `ce4e66ffb` liest Solidon Herstellerprofile und eigene
+  Drucker eines Slicer-Flatpaks (`/app/share/<Programm>/profiles`, `~/.var/app/<Kennung>/config`),
+  das Manifest gibt beides lesend frei, und eine Portalkopie aus dem Dateidialog wird zum Starter
+  (Kundenmeldung 05.10.2026: Ubuntu 24.04, Orca 2.5 als Flatpak, keine Drucker, nur ein alter aus
+  `~/.config`). Dazu `91b42fc13` (Cura im Mac-Bündel, `.app`-Wahl, Creality Print 7),
+  `b1d2b69ff` (eingerichtete Drucker eines AppImage aus `system/`) und `b79f8a07e` (PrusaSlicer
+  als Flatpak rechnet über `--command`, sein Startskript ruft im Hintergrund auf).
+
+  Am 05.10.2026 am Runner belegt (Zweig `diagnose/slicer-erkennung`, Läufe 37336128130,
+  37337780033, 37339765628, je vorher/nachher): Unter Linux fand der Stand von 0.5.2 im Sandkasten
+  mit seinen Rechten **kein** Slicer-Flatpak und außerhalb bei Orca nur den Drucker aus
+  `~/.config`. Danach bieten Orca-, Bambu- und Prusa-Flatpak sowie Orca-, Elegoo- und
+  Creality-AppImage ihre Herstellerdrucker und den eigenen an und slicen einen Würfel —
+  außerhalb und im Sandkasten mit den Manifestrechten. Auf beiden Macs (macOS 26.6, ARM und
+  Intel) slicen PrusaSlicer, Creality Print, Cura, ElegooSlicer, Bambu Studio und OrcaSlicer aus
+  Homebrew; vorher fand Solidon dort von Cura nur das Fenster. Cura unter Linux: RM-521.
+
+  Offen: derselbe Weg mit dem ausgelieferten Solidon-Flatpak 0.5.3 (es enthält `ce4e66ffb`,
+  `91b42fc13`, `b1d2b69ff` und `b79f8a07e`) und das Öffnen im Fenster des Slicers. Sonde und
+  Workflows liegen unter `.claude/.state/slicer-sonde-2026-10-05/`; für einen neuen Lauf auf
+  einem Wegwerfzweig `probe_slicers.py` ins Wurzelverzeichnis und die beiden `.yml` nach
+  `.github/workflows/` legen. Der Zweig `diagnose/slicer-erkennung` ist gelöscht.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#der-erste-kundenbericht-aus-dem-feld-27082026).
+
+**Erledigt (06.10.2026).** Mit dem ausgelieferten Flatpak 0.5.3 (Quelltext
+`v0.5.3`, Rechte des installierten Pakets) und Orca 2.x von Flathub auf
+ubuntu-24.04: Lauf
+[37503288561](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37503288561)
+findet Orca mit 1002 Herstellerdruckern und 2883 Prozessprofilen, den eigenen
+Drucker „Mein Drucker Flatpak“ als zuletzt gewählten mit seiner Druckhöhe 123 mm,
+und slict damit einen Würfel. Lauf
+[37506837179](https://github.com/RS-Digital-Studio/Solidon/actions/runs/37506837179)
+öffnet Orcas Fenster über `open_in_slicer` (`flatpak-spawn --host` auf den
+Starter); Orca läuft danach. Im Lauf davor endete Orca nach drei Sekunden — der
+Testaufbau startete den Sitzungsbus vor Xvfb, und der Flatpak-Hilfsdienst
+kannte kein `DISPLAY`; auf einem Desktop hat er es. Workflow:
+`.claude/.state/flatpak-abnahme-2026-10-06/abnahme-flatpak.yml`.
+
+## RM-537: Im Bild vor der Erkennung stehen keine veralteten Merkmale mehr, und eine verschwundene Wahl fällt nicht auf den Körper (06.10.2026)
+
+<a id="rm-537-im-bild-vor-der-erkennung-stehen-keine-veralteten-merkmale-mehr-und-eine-verschwundene-wahl-fällt-nicht-auf-den-körper-06102026"></a>
+<a id="rm-537"></a>
+
+**RM-537 — Eine Merkmalswahl fällt nach der Erkennung still auf den Körper zurück, und Entf
+  entfernt dann den Körper.** Fund beim Nachstellen von RM-533 an der Kundendatei: Nach dem
+  Öffnen zeigt der Baum am Stift (`obj_3`) „Sackbohrung 10“ und „Sackbohrung 11“ (Ø 23,8, Tiefe
+  22,1 und 19,7, `provenance=detected`); dieselben Merkmale trägt eine Auswertung ohne Erkennung
+  (`detect_features=False`). Ist die Erstauswertung durch (in der Sonde mehrere Sekunden,
+  `busy`), steht dort eine durchgehende „Bohrung 12“ (Tiefe 50). Wer in dieser Zeit eine
+  Sackbohrung wählt, verliert sie: `ObjectTree._restore` findet die Kennung nicht mehr und wählt
+  den Körper, und Entf entfernt danach den ganzen Körper statt der Bohrung. Messung:
+  `sonde_merkmale.py` und `merkmale.txt` im Zustandsordner von RM-533. **Offen:** woher die
+  vorläufigen Sackbohrungen kommen (Übertrag aus einem früheren Stand statt Erkennung?), ob sie vor
+  dem Ende der Erkennung im Baum stehen sollen, und was mit einer Auswahl geschieht, deren Merkmal
+  verschwindet (den Körper zu wählen steht so im Docstring von `_restore`; leeren und ansagen wäre
+  die Alternative). **Abnahme:** Eine Merkmalswahl während der Erstauswertung überlebt sie oder
+  wird sichtbar aufgegeben, nie still zum Körper.
+
+**Erledigt (06.10.2026).** Drei Ursachen, drei Behebungen:
+
+- **Herkunft der vorläufigen Sackbohrungen:** Ohne Erkennung (Bild zuerst,
+  KUNDE-14) gab `_with_features` die Merkmalsliste der Operation ungeprüft aus.
+  *Fläche versetzen* reicht am Netz jedes Eingangsmerkmal mit geleerten
+  Dreiecken und alten Maßen weiter; so standen `hole_10`/`hole_11` (Tiefe 22,11
+  und 19,71) im Bild, wo op 17 längst eine durchgehende Bohrung gedrückt hatte.
+  `_proven_without_recognition` gibt ohne Erkennung nur noch aus, was belegt
+  ist: erzeugte Merkmale, unveränderte Dreiecke, starr Bewegtes; ein erkanntes
+  Merkmal mit geleerten Dreiecken oder über ein geändertes Netz unverändert
+  gereichtes fällt weg. Dieselbe Bauart hatten `remove_feature`, `plug_hole`,
+  `move_feature`, `cut_away`, `drill_hole`, `countersink_hole`, `smooth_mesh`,
+  `remesh_uniform`, `subdivide_surface`, `compensate_first_layer` (gemessen).
+  Eine neue Ausgabe ohne eigenen Vorgänger — die Hälften nach *Teilen* —
+  misst sich am einzigen Eingang (`origin_features`); beide Hälften trugen im
+  Bild sonst die Merkmale der ganzen Platte mit deren Dreiecken (Durchsicht,
+  N1). Gemessen sauber: Spiegeln, Kopien in Reihe, Merkmal vervielfachen.
+- **Verbrauchte Flächen:** Ein späterer Schritt, der eine erzeugte Fläche ganz
+  durchdrückt, ließ sie ohne Dreiecke im Ergebnis stehen (`face_1`, `face_2` am
+  Kundenstift). `_consumed_faces` nimmt sie heraus, wenn die Erkennung
+  vollständig lief und keine gleich gerichtete Fläche in ihrer Ebene liegt
+  (`matching.faces_in_plane`, dieselbe Rechnung wie `pieces_in_place`; die
+  Normale über `units.dot3`, nicht BLAS). Ihr Name bleibt im selben Schritt
+  gesperrt (`apply_mapping`, `reserved`); vorher bekam am Kasten mit Fase die
+  neue Taschenwand den Namen der durchgedrückten Deckfläche, und ein späterer
+  Schritt versetzte still die Wand (Durchsicht, B3). Nennt ein späterer
+  Schritt die Fläche, hält er mit „Diese Fläche gibt es an dem Körper nicht
+  mehr …“ (`faces.gone_face_error`, gerufen aus `face_ops._chosen_face`,
+  `_drafted_face` und `faces._triangles_of`) und dem Bezugsverlust
+  `perceive.generated_lost` am verbrauchenden Schritt.
+- **Die Wahl:** `ObjectTree.show_scene` hebt eine Merkmalswahl auf, die der
+  neue Stand nicht trägt, und hält sie mit dem Text ihrer Zeile in
+  `lost_selection` fest. `MainWindow._say_features_lost` entscheidet erst nach
+  den Wiederwahlen (Langloch aus der gewählten Bohrung, Baustein, neuer
+  Körper) und sagt „„{Zeile}“ gibt es nach der Neuberechnung nicht mehr, die
+  Auswahl ist aufgehoben.“ nur, wenn der Verlaufsstand seit dem letzten Bild
+  gleich ist und der Körper noch da — nach Entf, Undo oder einem neuen Schritt
+  bleibt deren Quittung mit dem Rückweg stehen. Entf trifft danach nichts statt
+  des ganzen Körpers. Die erste Fassung meldete aus dem Baum heraus: Die
+  Wiederwahl nach *Zum Langloch ziehen* fand den Körper nicht mehr, und die
+  Ansage überschrieb die Quittung eigener Handlungen (Durchsicht, B1/B2).
+  Der Verlaufsstand kommt aus `History.document_mark` (eine Quelle mit dem
+  Redo-Stapel) samt Projektgeneration der Sitzung; ein überholtes Ergebnis
+  (`result_current` falsch, nicht das Bild) sagt nichts an und verbraucht die
+  Marke nicht (zweite Durchsicht).
+- **Namenssperre, zweite Durchsicht:** Im frühen Ausgang ohne Vorgänger sperrt
+  das Ausweichen auch erzeugte und mitreisende Namen; sonst fiel der neue Name
+  der Wand auf `face_2` daneben und wurde beim Zusammenführen still
+  überschrieben. Eine abgeschnittene erzeugte Fläche (`cut_off`) braucht keine
+  eigene Sperre: Sie reist als erzeugtes Merkmal in die Zuordnung und endet
+  verwaist, und verwaiste Namen sperrt `apply_mapping` ohnehin; ein Test hält
+  diesen Weg fest.
+
+Nachweis: `tests/test_evaluation.py` (Stiftnachbau mit Fase und drei
+`push_face`, Lochplatte mit Bohren, Verschieben und Teilen am Ende, verbrauchte
+Flächen samt späterem Bezug, Kasten mit Fase für den gesperrten Namen,
+`_consumed_faces` direkt), `tests/test_matching.py`
+(`test_one_plane_question_for_pieces_and_used_up_faces`),
+`tests/test_mesh_faces.py` (derselbe Satz für fehlende Kennung und alte
+Dreiecke), `tests/test_platform_identity.py` (Weg `used_up_faces`),
+`tests/test_feature_panel.py` (Wahl aufgehoben, Name wie die Zeile) und
+`tests/test_ui.py` (Langloch bleibt gewählt, Ansage am Fenster, Quittung nach
+Entf an Fläche und Bohrung und nach Undo); jeder ohne seinen Fix rot.
+Regel: `oberflaeche.md` („Eine Auswahl fällt nie still auf etwas Größeres“).
 
 ## RM-526: Leer heißt Oberkante, und die Null der Deckelhöhe ist das Bett (06.10.2026)
 
@@ -43495,3 +43799,409 @@ Bauplan, Regeln und Code sind nachgezogen (`tools/docs_scan.py --frage 3` ohne t
 Linkprüfung vorher und nachher ohne neuen). Review mit Nachprüfung (06./07.10.2026). Dabei
 gefunden und eingetragen: die fünf offenen Entscheidungen der Erstkonfiguration als
 [RM-542](ROADMAP.md#rm-542).
+
+## RM-104 (Teil): Abbruch des lokalen Modells auf macOS und HiDPI-Test unter Xvfb (06.10.2026)
+
+<a id="rm-104-teil-abbruch-des-lokalen-modells-auf-macos-und-hidpi-test-unter-xvfb-06102026"></a>
+
+**Zwei sporadische Befunde aus den Tag-Läufen von v0.4.1 (13.09.2026), beide
+mit nicht strenger `xfail`-Marke im Test — der Bau läuft, der Fall steht
+hier, und ein grüner Runner-Lauf gilt nicht als Nachweis:** Auf **macOS**
+kommt der Abbruch eines lokalen Ollama-Aufrufs nicht sicher in einer
+Sekunde an — der Weg schließt den Socket aus dem wartenden Thread
+(`shutdown`, `detach`); in drei Läufen waren drei, zwei und dann eine Stufe
+rot — jede der vier einmal, auch die mit Verbindungsende
+(`test_backends.py`). Ein Umbau auf einen
+Leser mit kurzem Socket-Timeout, der das Token selbst prüft, ist der
+naheliegende Weg; gemessen wird er auf einem Mac. Auf **Linux (Xvfb)** reißt
+der Renderer-Kindprozess des HiDPI-Grifftests sporadisch mit Exit -11 —
+erst bei `QT_SCALE_FACTOR=2`, dann bei beiden Werten grün, dann bei 1
+(`test_render_factory.py`) — ob Softwarerenderer des Runners oder
+Anwendung, sagt nur ein Linux mit Bildschirm. Abnahme beider: dreimal in Folge auf der Plattform
+grün ohne Marke. Der Changelog-Punkt zum Abbruch während der Antwort ist für
+0.4.1 gestrichen, bis er auf allen drei Plattformen belegt ist.
+
+**Nachweis (06.10.2026):** Beide Marken sind entfernt. Der Anfragefaden liest und sendet
+an einem `llm._WatchedSocket`, der den Abbruch selbst bemerkt; ohne `xfail`-Marke grün auf
+macOS und Ubuntu je 20 von 20, Endstand von `llm.py` mit Senden (Lauf 37591775378), und
+Windows 40 von 40 am i9. Die eine rote Wiederholung auf macOS davor (Lauf 37587942773) war
+der Test: Kam ein Stück der Antwort erst nach dem Schließen an, sah die Gegenstelle einen
+Reset statt eines geordneten Endes, und der Test zählte nur dieses; die Stufe `late_body`
+stellt das fest her. Der
+HiDPI-Grifftest lief unter Xvfb 20 von 20 über beide Skalen (Lauf 37492243563). Commit
+„Abbrechen erreicht das lokale Modell auch auf dem Mac sofort“; der offene Rest von RM-104
+steht weiter im Register.
+
+## RM-441: Jeder Befund, der sagt, dass ein Schritt nichts getan hat, öffnet diesen Schritt (06.10.2026)
+
+<a id="rm-441-jeder-befund-der-sagt-dass-ein-schritt-nichts-getan-hat-öffnet-diesen-schritt-06102026"></a>
+<a id="rm-441"></a>
+
+**RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen.**
+  Fund 02.10.2026 beim Abschluss von RM-372/RM-374 (Claude). (a) Der Befund `hollow.done`
+  (`app/core/geom/hollow.py`) meint einen änderbaren Schritt und trägt noch nicht
+  *Diesen Schritt ändern* — Vorgabe Robert zu RM-374, ausgelassen, weil `hollow.py` bei Codex
+  offen lag; danach `MEINT_DEN_SCHRITT` in `tests/test_finding_ways.py` nachziehen.
+  (b) `weg3-generiert-aufbereiten.p3d` trägt noch die früheren getrennten Transaktionen; beim
+  Release mit `tools/make_examples.py` neu erzeugen. **Abnahme:** Test für (a); (b) im
+  Release-Lauf. Bauplan §2.7, §15.5.
+  Review 02.10. (`73d83b55b`, RM-374 archiviert mit `9983e9923`): Die Vorgabe „jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf“ ist nicht erfüllt — ohne Knopf bleiben `mesh.already_below_target` (`app/core/geom/mesh_ops.py:2222`, im Fenster geprüft), `rotate_feature.unchanged`, `resize_feature.unchanged`, `move_feature.unchanged`, `{operation}.unchanged` (`prepare_ops.py`) und `bore.resize_unchanged` (`prepare.py`, `prepare_ops.py`); dieser Punkt nennt bisher nur `hollow.done`. Beleg `F:\solidon-review-reports\verif-73d83b55b-claude.md`.
+  **Stand 02.10.2026 abends:** (a) erledigt (Claude, Thread „Bedienung und KI“): Beide `hollow.done` tragen *Diesen Schritt ändern* mit `field: wall`, `MEINT_DEN_SCHRITT` nennt sie. Offen (b).
+  **Stand 06.10.2026:** (b) erledigt im Release-Lauf 0.5.3: `make_examples.py` hat alle
+  Beispielprojekte neu erzeugt (`ac0d11486`), `weg3-generiert-aufbereiten.p3d` trägt die
+  Transaktionen des heutigen Codes. Offen bleibt der Review-Fund: Die sechs Befunde oben
+  (`mesh.already_below_target`, `rotate_feature.unchanged`, `resize_feature.unchanged`,
+  `move_feature.unchanged`, `{operation}.unchanged`, `bore.resize_unchanged`) tragen den Knopf
+  noch nicht und stehen nicht in `MEINT_DEN_SCHRITT`; je Befund mit `cache_version` der Op.
+
+**Abschluss:** (a) `hollow.done` am 02.10.2026, (b) das Beispielprojekt im Release-Lauf
+0.5.3 (`ac0d11486`). Der Review-Fund mit `1b1547527`: `mesh.already_below_target`,
+`move_feature.unchanged`, `duplicate_feature.unchanged`, `rotate_feature.unchanged`,
+`resize_feature.unchanged` und `bore.resize_unchanged` tragen *Diesen Schritt ändern* mit
+dem Feld, das der Befund meint, die Operationen mit erhöhter `cache_version`. Nach den
+Reviews vom 06.10. nachgebessert: `bore.already_through` öffnet den Schritt an der Tiefe;
+der Wächter `tests/test_finding_ways.py` hält das Feld je Stelle und prüft es gegen das
+Parameterschema jeder Operation, die der Knopf öffnet; zwei Helfer statt wortgleicher
+Befunde (`prepare_ops._already_this_size` an fünf Merkmalsarten, `_already_in_place` für
+Versetzen und Verdoppeln), *Merkmal verdoppeln* sagt auch im Weg mit freier Richtung
+„nichts verdoppelt“ (`cache_version` 14); `agent.checks.DID_NOTHING` reicht diese Befunde
+ans Modell, wenn der geprüfte Schritt sie erzeugt hat — sonst meldete es eine
+Verdoppelung, Drehung oder Bohrung, die es nicht gab, oder las nach jedem Zug den Befund
+eines alten Schritts. Umgesetzt von Claude.
+
+## RM-529: Der Steckbrief nennt den Schritt, der ein Merkmal erzeugt hat (06.10.2026)
+
+<a id="rm-529-der-steckbrief-nennt-den-schritt-der-ein-merkmal-erzeugt-hat-06102026"></a>
+<a id="rm-529"></a>
+
+**RM-529 — Der Steckbrief nennt nicht, welcher Schritt ein Merkmal erzeugt hat.** Bauplan §23 zeigt im
+Steckbrief `created_by=op3`, und §21.2 macht die Provenienz zur Grundlage für „den Schritt
+ändern, der es erzeugt hat“. `app/core/perceive/digest.py` schreibt sie weder in die
+Merkmals- noch in die Objektzeile; der Agent braucht sie für Anfragen wie „ändere den Stift
+von vorhin“. **Entschieden (Robert, 06.10.2026):** nachrüsten. **Abnahme:** Der Steckbrief
+nennt bei erzeugten Merkmalen den erzeugenden Schritt, Test an einem Beispielprojekt, das
+Beispiel in Bauplan §23 ist eine echte Ausgabe, Agenten-Suite vorher und nachher.
+
+**Stand 06.10.2026 (Claude):** Gebaut mit `256b6b130`: `created_by=op3` am erzeugten
+Merkmal, `last_op` am Objekt, dieselbe Nummer vor jedem Aufruf im Verlauf, Bauplan §23 ein
+echter Ausschnitt. Nach dem Review nachgebessert: Die Nummer ist die sichtbare
+(`types.step_numbers`, eine Zählung für Verlauf, Fenster und Steckbrief), eine beim Umbau neu
+gefasste Transaktion fehlt wie im Fenster, auch in Dateien vor Format 45
+(`types.replanned_steps`), ein gelöschter Schritt heißt „gelöscht“, und der Wächter über §23
+vergleicht die Form, nicht die Zahlen. **Offen:** die Agenten-Suite mit
+qwen3:14b vorher (`d25f12366`) und nachher auf freier Karte.
+
+**Abschluss:** Gebaut mit `256b6b130`, nach den Reviews vom 06.10. nachgebessert (eine Zählung
+mit dem Verlauf über `types.step_numbers`, neu gefasste Transaktionen über
+`types.replanned_steps` auch in Dateien vor Format 45). Agenten-Suite mit qwen3:14b, Kontext
+32768: vorher (`65e3ec97b`) 25 von 39 gut, nachher (`256b6b130`) 27 von 39; `drill_on_feature`
+kippte dabei von gut auf schlecht und ist RM-251 zur Klärung mitgegeben. Messdateien
+`.claude/.state/ki-2026-10-06/messung/`. Umgesetzt von Claude.
+
+## RM-413: Ein fremdes Teil in einer Bohrung wird nicht mehr still verschmolzen (06.10.2026)
+
+<a id="rm-413-ein-fremdes-teil-in-einer-bohrung-wird-nicht-mehr-still-verschmolzen-06102026"></a>
+<a id="rm-413"></a>
+
+**RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`.**
+  Review 02.10.2026, Funde F7–F11.
+  - **Toter Code:** `repair.has_nested_parts` (`app/core/geom/repair.py:1270–1286`) hat keinen
+    Aufrufer, obwohl Karte, Bericht und zwei Tests ihn als Teil der Freigabe führen; in `_closed_at`
+    (`prepare_ops.py:2227–2238`) wird ein Werkzeug gebaut und immer überschrieben.
+  - **Abgelöster Merkmalarbeiter verwirft seine fertige Antwort** (`app/ui/main_window.py:15366–15368`);
+    Docstring von `_answers_arrived` (`:15380–15383`) und `tests/test_ui.py:336` sagen das Gegenteil.
+  - **Doppelter Builder:** `app/core/brep/edit.py:3203–3216` baut die Rundung ein zweites Mal statt
+    über `_build_constant_fillet`; die Gegenprobe „Achsprüfung immer wahr“ in
+    `_same_cylinder_axis` lässt alle 57 Fälle grün; Docstring von `fillet_group` (`:810–816`) nennt
+    die Reihenfolge falsch.
+  - **Falscher Absagegrund:** Berühren sich zwei andere Teile der Baugruppe, sagt der Langlochzug am
+    freien Stift „sie ist eine Wand, keine Bohrung …“ — Grund falsch, Weg fehlt
+    (`sonden\r3_kontakt_anderswo.txt`).
+  - **Regel:** `.claude/rules/operationen.md` ist für drei Entscheidungen der Commits nicht
+    nachgezogen; das Verhalten steht stattdessen in den Karten.
+  **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage (Gegenprobe `_same_cylinder_axis`
+  rot). Beleg: `F:\solidon-review-reports\review-e3dff1907.md`.
+
+**Abschluss (06.10.2026, Claude):** Alle fünf Reste behoben, je mit Test.
+- **Toter Code:** `repair.has_nested_parts` entfernt (die Freigabe fragt
+  `material_part_families`), `_part_containment` ohne die nur dort gebrauchten Werte; der
+  Abbruchtest fährt jetzt den lebenden Aufrufer
+  (`test_the_material_families_can_cancel_during_their_geometric_proof`). In `_closed_at`
+  entfällt der verworfene Werkzeugbau: Die Bohrung fragt nur noch die Absage
+  (`_checked_bore_air`, aus `_tool_for` gezogen); Zapfen und ein Langloch an seinen Rändern
+  bauen ihr Werkzeug ohne den vorher weggeworfenen Flächenkörper.
+- **Abgelöster Merkmalarbeiter:** Eine fertig gerechnete Antwort geht hinaus, auch wenn ein neuer
+  Klick den Arbeiter inzwischen abgelöst hat; abgebrochen wird nur während der Rechnung
+  (`test_a_replaced_answer_worker_still_delivers_a_finished_answer`, am Stand davor rot).
+- **Doppelter Builder:** `_build_constant_fillet` gibt den Builder mit, `_reround` baut darüber;
+  `_same_cylinder_axis` hat einen eigenen Gegenfall
+  (`test_the_offset_wall_is_found_only_on_the_same_cylinder_axis`, mit „immer wahr“ 2 von 4 rot).
+  Der Docstring von `fillet_group` nannte die Reihenfolge schon richtig.
+- **Falscher Absagegrund und mehr:** Die Kontaktfrage des Langlochzugs gilt dem Träger und den
+  Teilen, deren Hüllquader ihn berühren (`_near_the_carrier`); zwei Würfel, die sich weit daneben
+  berühren, sperren nicht mehr
+  (`test_parts_touching_far_from_the_bore_do_not_block_the_slot_at_a_free_pin`, am Stand davor
+  rot); ein Querstift in einer Welle, deren Bohrung sich nicht an zwei ebenen Ringen schließt,
+  wird am Netz wie am exakten Kern mit dem Zylinder aus den Kennzahlen gekürzt
+  (`test_a_cross_pin_in_a_shaft_is_cut_only_inside_the_bore`). Gehört das Material in einer
+  Bohrung einem anderen Teil, sagt es
+  `OTHER_PART_IN_THE_BORE` mit *In Einzelteile aufteilen*, im Menü und in jeder Handlung an
+  der Bohrung selbst (`_refuse_another_part_in_the_bore`, `resize_hole`, `_closed_at` über
+  `filled_bore_refusal`). **Dabei gefunden:** Versetzen,
+  Verdoppeln, Entfernen, Kippen, Verschließen und *Bohrung ändern* rechneten an einer Platte mit
+  einem Stift Ø 5 oder Ø 2 in der Bohrung (beide Kerne) und verschmolzen den Stift still mit der
+  Platte, schnitten ihn ab oder ließen am exakten Kern drei überlappende Körper stehen; jetzt
+  sagen alle 24 Fälle ab (`test_every_bore_op_names_the_separate_pin`,
+  `test_moving_a_bore_with_a_separate_pin_names_the_other_part`,
+  `test_a_bore_through_two_plates_with_a_pin_names_the_pin`, am Stand davor rot). Eigen
+  sind alle Teile, die den Mantel tragen (Laptop-Ständer `hole_3`, RM-253). **Nicht
+  erfasst** sind Senkung, Langloch und der gesenkte Baustein *Schraube*: Dort hängt die
+  Absage nicht, weil sie nach `kind == "hole"` fragt — registriert als RM-545.
+- **Regel:** `operationen.md` nennt den zweiten Satz und die Nachbarn des Trägers, der Grund steht
+  in `konzepte/begruendungen/regel-operationen.md`; die exakte Auslassung steht in `kanten.md`,
+  die Baugruppentiefe von `slot_hole` schon in der Regel.
+- **Review der Einheit** (`review-einheit-1.md`): *Bohrung ändern* und der Pfropfen in
+  `_closed_at` haben eigene Tests (`test_every_bore_op_names_the_separate_pin`,
+  `test_removing_or_plugging_a_wall_with_material_inside_says_so`), der abgelöste
+  Arbeiter auch mit dem echten `feature_answers`
+  (`test_the_real_answers_still_arrive_when_replaced_after_the_last_step`), ferne Teile und
+  eine ferne Negativhaut kommen unverändert zurück; je am Stand ohne die Stelle rot.
+  *Verdoppeln* sagt am getrennten Stift ebenso ab: Das Menü stellt die Zeile seit jeher
+  grau, und am Netz wäre die Kopie die Luft um den Stift gewesen. Der Satz heißt
+  „getrenntes Teil“ wie sein Geschwister in `slot_hole`.
+Belege und Sonden: `F:\solidon-review-reports\claude-2026-10-06\geometrie\`
+(`f10_ops.py` vorher/nachher, `rot-am-basisstand.txt`).
+
+## RM-385: Bauplan §17.2 nennt den Halt vor der Rückfallkette (06.10.2026)
+
+<a id="rm-385-bauplan-172-nennt-den-halt-vor-der-rückfallkette-06102026"></a>
+<a id="rm-385"></a>
+
+**RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`.**
+  Review 02.10.2026 der Commits bis `3fd3b1ace`, Funde 7–11.
+  - **Exakte Boolesche ohne konkreten Rat:** `app/core/brep/edit.py:1386` hat ihren konkreten Rat
+    verloren; `tests/test_brep.py:1385` vergleicht nur noch die Konstante.
+  - **`boolean.parts_united` nur am Netz:** Der exakte Kern vereinigt still (Kerne sagen
+    Verschiedenes, `operationen.md`).
+  - **Tests:** `tests/test_geometry_review_regressions.py:607` sichert etwas zu, das nicht mehr
+    eintreten kann; drei neue Tests prüfen Aufrufargumente statt Wirkung (siehe Bericht).
+  - **Unterlagen:** RM-253, RM-319 und RM-298 sind veraltet; der neue Halt steht weder in
+    `.claude/rules/operationen.md` noch in §17.2; „vorübergehend“ in den Karten stimmt nicht; die
+    Karte `app/core/geom/CLAUDE.md` trägt Implementierungsdetails, die in den Docstring gehören;
+    in `app/ui/CLAUDE.md` (`3739d46af`) zwei schiefe Formulierungen (Wahldialoge, „in einer
+    Transaktion“).
+  **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage; `tests/test_directory_docs.py`
+  grün. Beleg: `F:\solidon-review-reports\review-3fd3b1ace.md`.
+  Review 02.10. (`7f0de659d`): Wiederholt sich — `ROADMAP.md` sagt im integrierenden Commit selbst „Zentrales Tor und Integration stehen aus“; der neue Absatz in `app/core/geom/CLAUDE.md` trägt wieder Implementierungsdetails. Dazu `ROADMAP-ARCHIV.md:34158–34160` (aus `0eccbe952`): ein „weiterhin“ offener Solverfehler bei Weltverschiebung 1e7 ohne Registerpunkt; ein Nachbau rechnet richtig (`sonden\r2_boolean_weltversatz.txt`) — Fall benennen und registrieren oder die Aussage streichen.
+
+  **Stand 06.10.2026:** Mit `6d395169c` (v0.5.2) erledigt sind der erste und zweite
+  Spiegelstrich und die Unterlagen bis auf §17.2: Die exakte Boolesche nennt wieder Grund und
+  Weg (`BOOLEAN_REFUSED_DETAIL` in `app/core/brep/edit.py`), der exakte Kern meldet
+  `boolean.parts_united` (`geom/prepare_ops.py`), Regel, Karten und Begründungen sind
+  nachgezogen, die drei Testdoppel sind entfernt, und ein Wächter in `tests/test_toolchain.py`
+  verhindert neue. **Offen:** der Archivsatz zur Weltverschiebung 1e7 (aus `0eccbe952`, ohne
+  Registerpunkt) — belegen oder streichen; `tests/test_geometry_review_regressions.py:607` ist
+  unverändert, und ob die Zusicherung nach dem Umbau wieder Sinn hat (der Befund kann seit
+  `6d395169c` wieder auftreten), ist nicht geprüft; dass §17.2 den Halt nennt, geht nur mit
+  Ansage an den Bauplan.
+
+**Abschluss (06.10.2026, Claude):** Die drei Reste sind erledigt. Der Archivsatz zum
+Solverfehler bei einer Weltverschiebung von `1e7` ließ sich nicht nachstellen (Würfel,
+RM-319-Platten und ein gekippter Zylinder bis `1e8` bitgleich mit dem Ursprung) und ist dort
+berichtigt. `tests/test_geometry_review_regressions.py` (Gitter füllen): Bekäme das Gitter als
+Werkzeug eine Szenenkennung statt `None`, hielte der Schritt an den sich kreuzenden Streben an
+(`CROSSING_SHELL_IN_THE_WAY`), und der Test würde rot;
+die Zusicherung auf `boolean.parts_not_united` deckt den Rest ohne Kreuzung und steht jetzt mit
+Kommentar da. §17.2 nennt den Halt vor Stufe 1 (Ansage Robert, 06.10.2026).
+
+## RM-535: Karte, Operation und Griff fragen dieselbe Funktion, und das Material reist beim Versetzen, wie es ist (07.10.2026)
+
+<a id="rm-535-karte-operation-und-griff-fragen-dieselbe-funktion-und-das-material-reist-beim-versetzen-wie-es-ist-07102026"></a>
+<a id="rm-535"></a>
+
+**RM-535 — Merkmal verschieben: Felder fehlen an Flächen, Karte und Operation sind uneins,
+  drei falsche Ergebnisse ohne Befund (Fragebogen S-20261006-5be329).** Kunde: „das Verschieben
+  mit Maßen bei Bohrungen ist gut, bei anderen Merkmalen fehlen sie“. Gemessen an HEAD
+  `3a5d607f3`, der Kundendatei und sechs Modellen mit 734 Merkmalen (Bericht
+  `verschieben-bericht.md` im Zustandsordner von RM-533): X/Y/Z stehen an Bohrung, Sackbohrung,
+  Langloch, Zapfen, Senkung, Verjüngung, Kugel, Einschluss, Wulst und Kehle. Keine Zeile haben
+  Verrundung, Fläche, Schrägfläche, gerundete Seite, Muster und Gewinde (Sätze in
+  `perceive/actions.py`); gesperrt sind Kegelstück, Kugel oder Kegel ohne eigenen Körper und die
+  Sackbohrung mit Zapfen. Am Kundenmodell haben 16 von 190 Merkmalen Felder, 174 keine (117
+  Verrundungen, 42 Flächen). Ursache ist `MOVABLE_KINDS` (`prepare_ops.py`), und die Karte
+  überspringt Zeilen ohne Handlung (`panels.py`, seit `fad4a15c5`, Test in
+  `test_feature_panel.py`); `app/core/perceive/CLAUDE.md` und `fenster.md` beschreiben das
+  Gegenteil. Der Flächenzug legt `push_face` sofort an, ohne Zahl und *Übernehmen*.
+
+  Fehler unabhängig von den Entscheidungen: An Wulst und Kehle stehen Felder, `move_feature`
+  sagt an allen vier geprüften Ringen ab (die Karte prüft nur `torus_is_the_body`, die Operation
+  auch `_torus_rims`). An der Sackbohrung mit Zapfen umgekehrt: Die Karte sperrt, die Operation
+  rechnet über `_air_of_the_bore`, und nach 0,5 mm erkennt Solidon zwei Sackbohrungen weniger.
+  Der Griff fragt nur die Art (`viewport.py`): An gesperrten Merkmalen endet sein Zug mit „Die
+  neue Stelle steht rechts unter Auswahl.“, an einer Verrundung greift er den Körper. Falsch ohne
+  Befund: Zapfen im Kundenmodell 0,5 mm in die Taschenwand −189 mm³ (danach 4 statt 6 Zapfen),
+  Zapfen Ø 30 im mini-pot bei 0,2/0,5/1,0 mm immer +240,65 mm³, Endfase am Stift bei 0,2 mm
+  +2218 mm³.
+
+  **Vorschlag:** Flächen bekommen *Fläche versetzen* mit dem Feld „Weg“ (erste Zeile in
+  `ACTION_ORDER` als `("move_feature", "push_face")`, der Weg beginnt bei 0); Karte, Operation und
+  Griff fragen dieselbe Funktion; eine zusammengelegte Absage steht wieder als Zeile.
+  **Entscheidungen Robert:** (a) der Flächenzug als Zahl mit *Übernehmen* statt sofortigem
+  Schritt (ändert die Zusage in `_on_face_dragged`); (b) Absagen wieder sichtbar, das nimmt
+  `fad4a15c5` teilweise zurück, oder die zwei Unterlagen angleichen; (c) Maße im Bild auch an
+  Zapfen, Senkung, Kugel und Ring (ändert die Entscheidung vom 10.09., dass *Merkmal verschieben*
+  auf Klick rechnet); (d) Tasche um einen Zapfen: absagen (Empfehlung) oder beide gemeinsam
+  versetzen. **Abnahme:** Ein Test über echte Netze, der heute an Ring und Sackbohrung mit Zapfen
+  rot ist; die drei falschen Ergebnisse rechnen richtig oder sagen mit Grund ab.
+
+**Nachweis (07.10.2026, `aa72450ca`):** Karte, `move_feature` und Griff fragen
+`actions.move_refusal` — die Zeile *Merkmal verschieben* der Karte (`actions_for(only=)`);
+`move_feature` sagt mit ihrem Satz ab, der Griff liest sie über `FeaturePanel.refuses`. Wulst und
+Kehle nehmen `torus_refusal` (Commit `398c7ea43`); die Tasche um einen Zapfen sagt ab
+(`HOLE_HOLDS_A_PIN`, Entscheidung (d)), eine Haltelippe sperrt nicht mehr; ein Zapfen oder eine
+Kuppel, die der ganze Körper sind, sagen ab (`FEATURE_SPANS_THE_BODY`). Starr versetzt reist das
+Material, wie es ist (`_placing_tool(carried_from=)`, `_carried_cavities`, `cache_version` 15):
+Zapfen 0,5 mm in die Taschenwand minus 3,85 statt minus 178 mm³ am Korpus, Minitopf
+0,000 statt +240,65 mm³ (bei 0,2 und 1,0 mm, Zapfen am Ziel wiedererkannt), Endfase am Stift ohne
+erkanntes Sackloch unter 1 mm³ statt +2 224 mm³. Die Fläche trägt *Fläche versetzen* mit dem Weg
+ab 0 als Zeile, der Flächenzug schreibt dorthin und *Übernehmen* legt den Schritt an (a);
+Absagen stehen wieder als Zeile mit Grund (b); *Merkmal verschieben* führt an Zapfen, Senkung,
+Kugel und Ring ins Bild (c, `MEASURED_WHILE_MOVED`). Abnahmetest über Korpusnetze
+`test_the_card_offers_a_move_exactly_where_the_operation_moves` (neu im Korpus
+`pocket_with_pin.stl`, `cup_on_stem.stl`, `pin_with_end_chamfers.stl`): vor `398c7ea43` rot an
+Wulst (`post_with_fillet.stl`) und Sackbohrung mit Zapfen, dazu am ganzen Zapfen und an der
+ganzen Kuppel; Fenstertests für Flächenzug, Griff und Maße im Bild. Am echten Fenster
+abzunehmen bleibt die Maßgruppe an Zapfen, Senkung, Kugel und Ring (Release).
+
+## RM-014: Der Agent setzt keine Pinselstriche und kein Skelett, er nennt dem Nutzer den Weg (07.10.2026)
+
+<a id="rm-014-der-agent-setzt-keine-pinselstriche-und-kein-skelett-er-nennt-dem-nutzer-den-weg-07102026"></a>
+<a id="rm-014"></a>
+
+**RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden.** Entscheiden, ob
+  zusätzlich zur bestehenden Sperre für geratene Skizzen, Pinselzüge und Skelettdaten eine
+  erklärende Agentenregel gebraucht wird. Abnahme: Entscheidung dokumentiert; bei einer
+  Regeländerung Sammlungsversion sowie vergleichbare Agenten-Suite-Läufe davor und danach. Weg 4,
+  Beispiel, Handbuch und Website sind bereits umgesetzt.
+
+  [Bisheriger Befund](ROADMAP-ARCHIV.md#p16--organische-modellierung).
+
+**Abschluss:** Entschieden (Claude, Produktabwägung, 07.10.2026): keine zusätzliche Regel in
+der Sammlung, weil die Sperre schon im Code steht und eine Regel sie nur wiederholte. Stattdessen
+tragen `sculpt_strokes` und `pose_armature` in ihrer Beschreibung den Satz, dass der Nutzer die
+Gesten selbst setzt und der Agent ihm beschreibt, wo er ansetzen soll (`tools.USER_ONLY_KINDS`);
+auch der leere Aufruf wird abgelehnt — in der Sitzung und über MCP mit derselben Prüfung
+(`tools.refused_gathered`), und MCP bietet die beiden gar nicht erst an. Jede gesammelte Art
+(Skizze, Pinsel, Skelett, Kanten, Punkte) nennt in der Ablehnung ihren eigenen Weg
+(`tools.gathered_refusal`), ein Test hält das für jede Art. Regelsammlung unverändert, daher
+keine Sammlungsversion. Agenten-Suite lokal mit Prompt-Version 9 nicht schlechter (28 gegen 27
+von 39, siehe [RM-251](ROADMAP.md#rm-251)); kein Referenzfall ruft die beiden Werkzeuge. Die
+gehostete Abnahme der geänderten Beschreibungen steht in [RM-016](ROADMAP.md#rm-016).
+Umgesetzt von Claude.
+
+## RM-543: Die gelöschte Zeile hielt der Test, nicht das Fenster (07.10.2026)
+
+<a id="rm-543-die-gelöschte-zeile-hielt-der-test-nicht-das-fenster-07102026"></a>
+<a id="rm-543"></a>
+
+**RM-543 — Ein Klick in den Prüfbericht trifft zeitweise eine schon gelöschte Zeile.**
+  `tests/test_analysis_ui.py::test_a_report_click_keeps_its_mark_across_the_async_map` fährt
+  den Klick von der Berichtszeile bis zur fertigen Analysekarte mit echtem `QTimer`. Am
+  07.10.2026 war er lokal zweimal rot, an `d25f12366` und am Zweig von RM-134, einzeln wie im
+  Dateilauf, mit `RuntimeError: Internal C++ object (QListWidgetItem) already deleted`; am
+  selben Morgen lief er einzeln grün und im CI-Lauf 37560540258 auf allen vier Plattformen.
+  Ob der Test eine Zeile hält, die der Bericht beim Neuaufbau verwirft, oder ob die Oberfläche
+  nach dem Neuaufbau eine alte Zeile anfasst, ist offen. **Abnahme:** Ursache benannt; liegt sie
+  in der Oberfläche, ein Test, der den Neuaufbau zwischen Klick und Karte erzwingt; der Test
+  zwanzigmal hintereinander grün, auch unter Last.
+
+**Erledigt (07.10.2026).** Die Ursache lag im Test. Nachkommende Befunde —
+die Schichtanalyse über `ReportPanel.add_findings` — bauen die Liste neu
+(`_rebuild` leert sie), und der Test hielt die Zeile über `scrollToItem` und
+`processEvents` bis `visualItemRect(item)`: Kamen die Befunde dazwischen, warf
+genau dieser Zugriff `RuntimeError: Internal C++ object (QListWidgetItem)
+already deleted`. Die Oberfläche liest die Zeile nur im Druck
+(`ReportList.mousePressEvent`) und reicht danach den Befund weiter.
+Belegt in `tests/test_analysis_ui.py::test_a_report_rebuild_takes_the_held_row_and_the_click_still_reaches_its_map`:
+Ein Neuaufbau zwischen Griff und Klick löscht die gehaltene Zeile mit genau
+diesem Fehler; ein Neuaufbau zwischen Klick und fertiger Karte lässt Karte,
+Marke und beide Aktoren stehen. Gegenprobe: Liest die Oberfläche die Zeile
+nach dem Druck noch einmal (verzögertes `leftPressed`), bleibt die Karte aus
+und der Test ist rot. Der Kundentest wartet seither auf die Arbeiter, bevor
+er greift (`b8d2d6264`). Beide Tests 20-mal hintereinander grün, unter Last
+von 28 rechnenden Prozessen auf 32 Kernen. Gefunden im Review 1 von
+Konsolidierungspaket 3 (G-11), behoben von Claude.
+## RM-532: Gewinde, Schrauben und Muttern gibt es in jeder Größe (07.10.2026)
+
+<a id="rm-532-gewinde-schrauben-und-muttern-gibt-es-in-jeder-größe-07102026"></a>
+<a id="rm-532"></a>
+
+**RM-532 — Gewinde in jedem Maß und Normteile in allen Größen.** Kundenvorschlag
+S-20261006-c66299 (0.5.3, ohne Rückadresse): Ein Innengewinde in einem Rohr mit mindestens 60 mm
+Innendurchmesser ging nicht, *Druckbares Gewinde* endete bei M8. Robert: „keine Beschränkungen“,
+„die Gewinde usw sollten alle Größen unterstützen“.
+
+**Umsetzung** (Zweige `gewinde-eigenes-mass` und `normteile-alle-groessen`, Commits
+`63d7a7826`, `c82f9ca9e`, `3fd3c762c`): *Druckbares Gewinde*, Bohrung mit Gewinde, Gegenstück,
+*Schraube erstellen* und *Drehdeckel erzeugen* nehmen jeden Nenndurchmesser von 1,6 bis 1000 mm
+(*Eigenes Maß*, `fasteners.CUSTOM_SIZE`; Steigung null ist die Regelsteigung
+`standards.regular_pitch`, Untergrenze `units.FINEST_PITCH`, Kernanteil
+`units.THREAD_MIN_CORE_SHARE`). An einer Bohrung ohne Tabellengröße wählt `custom_thread_for` das
+Maß, dessen Kernloch sie ist (Ø 60 → Ø 66,6 × 6). Die Normteiltabelle (Version 13) führt
+Schrauben, Muttern und Scheiben von M1,6 bis M64, 27 Größen nach ISO 261/262, ISO 4762, ISO 4032,
+ISO 7089 und ISO 273, je Spalte mit Herkunft; Schraubenloch, Mutternfalle, Schraube, Mutter und
+Einpressbuchse nehmen *Eigenes Maß*, die Maße leitet `standards._along` aus den Nachbargrößen ab
+und der Befund `parts.derived_size` sagt es. Netz: ganze Umläufe und Kernecken als Vielfaches der
+Gangsehnen (`build._core_segments`, `shapes.turn_segments`), `LIBRARY_VERSION` 24 mit
+`THREAD_MESH_WHOLE_TURNS` und `LUG_END_FOLLOWS_ITS_ROUNDING`.
+
+**Zwei Durchsichten.** Runde 1 (F1–F3, R1–R6, K1–K7) im Commit `c82f9ca9e` behoben. Runde 2
+(`3fd3c762c`): Sollwerte nach dem Nachtrag M33/M39/M45/M52 (N1); der Restwand-Befund rät zu einem
+kleineren Nennmaß mit feinerer Steigung, sein Knopf öffnet `diameter` oder `size`, Restwand und
+Aufbohren gelten zugleich und die Wand wird längs der Gewindestrecke ab der Mündung gemessen
+(N2, K-N5, beide Codes in `MEINT_DEN_SCHRITT`); Senkköpfe nach DIN 7991 bis M24, darüber sowie
+für M18 und M22 gerechnet mit `countersink_derived` und Befund `parts.countersink_derived` (N3);
+ein Maß hinter der Klappe, das erst die Wahl vorn verlangt, öffnet sie (N4); kürzere Sätze über
+der Bohrung samt Wortprüfung (N5); Kopftiefe und Laschenbreite aus der größten Größe (N6); ein
+Außengewinde begrenzt eine Wand mit seinem Kern (N7); M1.6 Kernloch 1,25 nach DIN 336. Danach die
+Restfunde: Ein abgeleiteter Sechskant nimmt eine Schlüsselweite nach ISO 272 (K-N2), Ø 60 sagt,
+dass nur der Kopf abgeleitet ist (K-N3), der Satz „das ist M6 innerhalb der Messunsicherheit“
+steht über die Gewindepassung im Prüfbericht (K-N4), eine Tabellengröße an einer Bohrung
+verlangt die halbe Gangtiefe (`units.THREAD_MIN_GRIP_SHARE`, K-N6), und die Regel zur Herkunft
+der Normteiltabelle nennt Händler- und Nachschlageseiten mit Stichprobe (U-N3).
+
+**Nachweis:** Bereichsnachweis aller 49 Bausteine nach dem Merge in `stift-fuer-bohrung`
+(alle 49 bestanden, `printed_thread` 248 Ecken mit 8 erklärt ausgeschlossen, `screw_hole` 464, `wall_mount` 512); betroffene Tests je Schritt grün (Normteile 3713 bestanden ohne Fenster, Stift 1256),
+ruff und mypy grün. Der Fenstertest zu N4
+(`test_choosing_a_custom_size_opens_the_flap_with_its_diameter`) läuft beim Release. Beim Release
+meldet die Erzeugnisprüfung in `test_wording` die geänderten Handbuchabsätze. Changelog: ja —
+Gewinde in jedem Maß, Normteile von M1,6 bis M64.
+
+## RM-536: Stift für Bohrung baut das passende Gegenstück (07.10.2026)
+
+<a id="rm-536-stift-für-bohrung-baut-das-passende-gegenstück-07102026"></a>
+<a id="rm-536"></a>
+
+**RM-536 — Stift für Bohrung baut das passende Gegenstück zu Gewinde und Senkung**
+(Fragebogen S-20261006-5be329). Kundenwunsch: „… wenn man ein Gewinde bei der Bohrung oder
+Senkung hat, dass man dafür auch das passende Gegenstück mit der Funktion erzeugen könnte“.
+Bis dahin baute `pin_for_bore` einen glatten Zylinder.
+
+**Umsetzung** (Zweig `stift-fuer-bohrung`, Commits `1a8c8ac7b`, `4a772355b`): Neue Form hinter
+der Klappe, Vorgabe „Passend zur Bohrung“ (`geom/bore_pin.py`, `geom/lid_hinge.py`). Eine
+Senkung an der Mündung gibt einen bündigen Senkkopf im Winkel der Senkung, eine Ansenkung einen
+Zylinderkopf, ein Innengewinde auf derselben Achse ein Außengewinde derselben Größe und Steigung
+aus dem Gewindebaustein (`counterpart.thread_values_for`, Tabellenmaß oder `CUSTOM_SIZE`);
+Senkung und Gewinde ergeben eine Senkkopfschraube. Der Stift hält überall das halbe Spiel
+senkrecht zur Wand, die Lage der Gänge wird am Träger gemessen. „Glatter Stift“ baut den
+Zylinder von vorher; Format 48 (`scene/migrations.py`) lässt bestehende Projekte ihn behalten.
+`leaves_inputs_unchanged` bleibt wahr. Der Befund `pin_for_bore.made` nennt den Träger in
+`object_ids` und fällt mit ihm, wenn ein späterer Schritt die Platte entfernt und den Stift
+behält (Review zu `bbd41ff2d`, R-a); `cache_version` 3.
+
+**Nachweis:** `tests/test_bore_pin.py` an `plate_countersunk.stl`, `plate_countersunk_blind.stl`, `plate_counterbored.stl` und
+einer Bohrung mit `insert_printed_thread`; `tests/data/projects/pin_for_bore_v46.p3d` rechnet
+unverändert; `test_evaluation.py::test_a_pin_whose_plate_is_removed_says_nothing_about_the_bore`
+mit Gegenprobe (ohne `object_ids` rot). Die zwölf Beispielprojekte und `example_v48.p3d` tragen
+Format 48 und Bibliotheksversion 24. Changelog: ja — Stift für Bohrung baut Senkkopf,
+Zylinderkopf und Gewinde passend zur Bohrung.

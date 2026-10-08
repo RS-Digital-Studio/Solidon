@@ -1,0 +1,45 @@
+qwen3:14b — 39 Fälle, Baum F:/sl-suite538, Fenster 32768
+ok move                     37.0s  translate_object
+ok rotate                   30.1s  rotate_object
+ok on_bed                   25.0s  place_on_bed
+ok scale                    22.8s  scale_object
+ok repair                   82.9s  repair, compensate_first_layer
+ok orient                   62.5s  orient_for_print, place_on_bed  [1 ungültig]
+evaluation stopped at op 2: op.split_pinned.ValidationError: Diese Ebene teilt das Objekt nicht.
+ok split                    41.8s  split_pinned
+evaluation stopped at op 3: op.resize_hole.ValidationError: Dieses Merkmal gibt es an diesem Objekt nicht.
+ok drill                   281.3s  drill_hole, drill_hole, drill_hole, drill_hole, drill_hole  [3 ungültig]
+ok drill_on_feature        367.1s  drill_hole, drill_hole, drill_hole, drill_hole, drill_hole, drill_hole  [gefragt]
+ok duplicate                70.7s  duplicate_object, translate_object
+ok parameter                27.9s  keine Operation
+ok question                  8.8s  keine Operation
+-- printable                54.7s  place_on_bed
+ok how_long                 17.0s  keine Operation
+-- core_hole                76.7s  insert_printed_thread  [gefragt]  [1 ungültig]
+ok switch_material          18.3s  keine Operation
+-- where_menu              154.4s  keine Operation  [gefragt]
+ok where_hollow             13.5s  keine Operation
+ok which_hole              171.9s  keine Operation  [gefragt]
+ok how_much_thinner        212.8s  keine Operation  [gefragt]  [2 ungültig]
+ok join_what               147.5s  keine Operation  [gefragt]
+-- bracket                 152.5s  create_brep_box, insert_screw_hole  [4 ungültig]
+-- magnet_lid              158.9s  keine Operation  [gefragt]
+ok wall_holder              87.0s  create_brep_box, insert_wall_mount  [2 ungültig]
+-- cable_exit               46.6s  Das Sprachmodell hat nicht geantwortet.: {"error":"Post \"http://127.0.0.1:59844/tokenize\": write tcp 127.0.0.1:53811-\
+evaluation stopped at op 2: op.insert_printed_thread.AppError: Er wird an eine Fläche oder eine Bohrung gesetzt, und ohne sie weiß er weder wohin noch in welche Richtung. Es ist auch keine Position eingetragen — so säße er im Nullpunkt des Objekts, halb darin und halb darunter.
+ok threaded_stud           101.5s  create_brep_cylinder, insert_printed_thread  [1 ungültig]
+ok nut_plate                62.8s  create_brep_box, insert_nut_trap
+-- spacer                  270.9s  create_brep_tube, drill_hole  [7 ungültig]
+ok hinge                   276.1s  create_brep_box, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge, insert_living_hinge  [3 ungültig]
+-- snap_box                169.9s  keine Operation  [gefragt]
+ok keyhole_back            130.3s  create_brep_box, insert_keyhole  [gefragt]  [1 ungültig]
+-- stiffen                 252.2s  create_brep_box  [9 ungültig]
+-- dowels                  189.0s  create_brep_box, create_brep_box, drill_hole, drill_hole  [gefragt]  [10 ungültig]
+ok inserts                 343.5s  create_brep_box, create_box, create_brep_box, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, insert_heatset_m4, create_brep_box  [25 ungültig]
+-- parameterise            198.2s  Das Sprachmodell hat nicht geantwortet.: {"error":"an error was encountered while running the model: CUDA error: out of 
+-- free_shape              270.2s  keine Operation  [gefragt]
+ok hex_base                 79.7s  sketch_extrude  [1 ungültig]
+-- pocket_plate             87.2s  create_brep_box, sketch_pocket  [1 ungültig]
+-- handrail_bend           426.3s  create_brep_tube, create_brep_cylinder, subtract_objects, create_brep_cylinder, subtract_objects  [3 ungültig]
+
+gut 25/39; gefragt 3/3; schemagültig 171/245; Baustein 7/13; Parameter 1/3; Zeit 87.1 min

@@ -82,7 +82,7 @@ def flow(qt_app: QApplication) -> Any:
     controller: PlacementFlow | None = None
     try:
         session.import_model(Path(__file__).parent / "data/meshes/cube_clean.stl")
-        assert session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
         result = session.last_result
         assert result is not None and result.complete
         viewport.show_scene(result)
@@ -1280,7 +1280,7 @@ def test_centre_dimensions_keep_the_selected_hole_reference(flow: Any) -> None:
     session.start_new()
     assert session.wait_for_idle(30_000)
     session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
-    assert session.wait_for_idle(30_000)
+    assert session.wait_for_idle(60_000)
     object_id, entry = next(iter(session.last_result.scene.objects.items()))
     face = int(np.argmax(entry.mesh.raw.face_normals[:, 2]))
     point = tuple(entry.mesh.raw.triangles_center[face])
@@ -1307,7 +1307,7 @@ def _keyboard_placement(flow: Any, qt_app: QApplication) -> Any:
     session.start_new()
     assert session.wait_for_idle(10_000)
     session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
-    assert session.wait_for_idle(10_000)
+    assert session.wait_for_idle(60_000)
     object_id, entry = next(iter(session.last_result.scene.objects.items()))
     face = int(np.argmax(entry.mesh.raw.face_normals[:, 2]))
     viewport.hit = object_id, tuple(entry.mesh.raw.triangles_center[face]), face, None
@@ -1564,7 +1564,7 @@ def test_editing_a_hole_opens_the_same_placement_as_drilling(
     controller: PlacementFlow | None = None
     try:
         session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
-        assert session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
         result = session.last_result
         assert result is not None and result.complete
         viewport.show_scene(result)
@@ -1636,7 +1636,7 @@ def test_moving_a_feature_starts_where_it_already_sits(qt_app: QApplication) -> 
     controller: PlacementFlow | None = None
     try:
         session.import_model(Path(__file__).parent / "data/meshes/plate_holes.stl")
-        assert session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
         result = session.last_result
         assert result is not None and result.complete
         viewport.show_scene(result)
@@ -1700,7 +1700,7 @@ def _a_selected_hole(window, filename="plate_holes.stl"):
     from PySide6.QtWidgets import QApplication
 
     window.open_path(MESHES / filename)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -1708,7 +1708,7 @@ def _a_selected_hole(window, filename="plate_holes.stl"):
     )
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, hole)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     return object_id, hole
@@ -1723,7 +1723,7 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
     window = _window_with_a_renderer()
     try:
         window.open_path(MESHES / "plate_coarse_slots.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         object_id, entry = next(iter(result.scene.objects.items()))
         feature = next(feature for feature in entry.features.values() if feature.kind == "slot")
@@ -1760,13 +1760,13 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
         flow.accept()
         for _ in range(120):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
         assert len(window.session.project.document.ops) == before + 1
         added = window.session.project.document.ops[-1]
         assert added.op == "slot_hole" and added.params["slot_length"] == pytest.approx(12.0)
         assert window.session.last_result.stopped_at is None
         window.session.undo()
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         assert len(window.session.project.document.ops) == before
     finally:
         window.end_quiet_placement()
@@ -2098,7 +2098,7 @@ def test_the_feature_panel_keeps_measuring_from_hole_to_hole(qt_app: QApplicatio
         )
         assert _measures_in_the_view(window) is not None and panel.measuring
         window.object_tree.select_object(object_id)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         for _ in range(20):
             QApplication.processEvents()
         assert window._quiet_placement is None and not panel.measuring, "ohne Bohrung kein Messen"
@@ -2154,7 +2154,7 @@ def test_a_selected_hole_names_each_number_once_in_the_view(qt_app: QApplication
         )
         assert viewport._slot_length_text() == ""
         window.object_tree.select_object(object_id)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         for _ in range(20):
             QApplication.processEvents()
         assert viewport._measured_feature is None, "ohne Maße im Bild kommt die Marke zurück"
@@ -2219,7 +2219,7 @@ def test_an_open_dialog_keeps_the_click(qt_app: QApplication) -> None:
     window = _window_with_a_renderer()
     try:
         window.open_path(MESHES / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         object_id, entry = next(iter(result.scene.objects.items()))
         hole = next(
@@ -2235,7 +2235,7 @@ def test_an_open_dialog_keeps_the_click(qt_app: QApplication) -> None:
         assert window._op_dialog.spec.name == "countersink_hole"
 
         window.object_tree.select_feature(object_id, hole)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         for _ in range(40):
             QApplication.processEvents()
 
@@ -2335,7 +2335,7 @@ def test_pulling_a_slot_and_moving_it_at_the_grip_is_one_step(qt_app: QApplicati
         assert erster is not None and erster.active
         for _ in range(200):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
             if erster._tool_context is not None:
                 break
         feature = window.viewport._features_of_selection()[hole]
@@ -2400,7 +2400,7 @@ def test_pulling_a_slot_and_moving_it_at_the_grip_is_one_step(qt_app: QApplicati
         vorher = [o.op for o in window.session.history.operations]
         _display_measure_preview(window, erster)
         erster._measure_accept.click()
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         for _ in range(120):
             QApplication.processEvents()
         assert [o.op for o in window.session.history.operations] == [*vorher, "slot_hole"], (
@@ -2557,7 +2557,7 @@ def test_a_click_on_the_grip_leaves_the_next_hole_free(qt_app: QApplication) -> 
             if feature.kind == "hole" and identifier != hole
         )
         window.object_tree.select_feature(object_id, other)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         for _ in range(40):
             QApplication.processEvents()
         assert window.object_tree.selected_feature() == other
@@ -3090,7 +3090,7 @@ def test_the_flow_runs_on_a_host_without_a_window(
     übernommen: list[Any] = []
     try:
         session.import_model(Path(__file__).parent / "data/meshes/cube_clean.stl")
-        assert session.wait_for_idle(30_000)
+        assert session.wait_for_idle(60_000)
         result = session.last_result
         assert result is not None and result.complete
         viewport.show_scene(result)
@@ -3253,7 +3253,7 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
         assert flow._measure_box.isVisibleTo(window.viewport)
         editor = flow._measure_group.findChildren(LengthSpin)[0].lineEdit()
         QTest.keyClick(editor, Qt.Key.Key_Return)
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         for _ in range(60):
             QApplication.processEvents()
         nachher = [step.op for step in window.session.project.document.ops]
@@ -3269,7 +3269,7 @@ def test_a_slot_drag_puts_its_numbers_into_the_panel(qt_app: QApplication) -> No
 def _a_selected_plate(window, *, face_normal: tuple[float, float, float] | None = None):
     """Öffnet die Platte und wählt sie — oder eine ihrer Flächen nach Normale."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     window.object_tree.select_object(object_id)
@@ -3284,7 +3284,7 @@ def _a_selected_plate(window, *, face_normal: tuple[float, float, float] | None 
             )
         )
         window.object_tree.select_feature(object_id, face)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _ in range(40):
         QApplication.processEvents()
     return object_id, entry
@@ -3303,7 +3303,7 @@ def _a_part_placement(window, name: str):
     assert flow is not None and flow.active, "ein Baustein geht von selbst in die Platzierung"
     for _ in range(300):
         QApplication.processEvents()
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         if flow._surface is not None and flow._tool is not None:
             break
         time.sleep(0.02)
@@ -3512,7 +3512,7 @@ def test_the_part_grip_moves_the_place_and_a_click_replaces_before_it_applies(
         for _ in range(200):
             # Der Klick geht über den Zeitgeber des Flusses — der braucht Zeit.
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
             if flow._surface is not None and abs(flow._surface.point[0] + 20.0) < 0.5:
                 break
             time.sleep(0.02)
@@ -3538,7 +3538,7 @@ def _a_pulled_slot(window):
     assert flow is not None and flow.active
     for _ in range(200):
         QApplication.processEvents()
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         if flow._tool_context is not None:
             break
     handle = window.viewport._slot_handle
@@ -3741,7 +3741,7 @@ def test_a_drag_at_the_chosen_hole_pulls_the_slot_instead_of_moving_the_body(
             QApplication.processEvents()
         for _ in range(120):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
 
         assert len(window.session.history.operations) == steps, "kein Schritt — der Körper steht"
         assert window.viewport.slot_drag_waits(), "der Zug zum Langloch wartet"
@@ -4160,7 +4160,7 @@ def test_the_measures_stay_in_the_view_while_a_pulled_slot_waits(qt_app: QApplic
             QApplication.processEvents()
         for _ in range(120):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
         assert window.viewport.slot_drag_waits(), "der Zug zum Langloch wartet"
         assert not flow.active, "der alte Bohrungseditor ist abgelöst"
         flow = window._quiet_placement
@@ -4225,7 +4225,7 @@ def test_accepting_the_measures_takes_a_pulled_slot_along(qt_app: QApplication) 
             QApplication.processEvents()
         for _ in range(120):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
         assert window.viewport.slot_drag_waits(), "der Zug zum Langloch wartet"
         pulled = window.viewport.waiting_slot_drag(hole)
         assert pulled is not None and pulled[0] > 0.0
@@ -4236,7 +4236,7 @@ def test_accepting_the_measures_takes_a_pulled_slot_along(qt_app: QApplication) 
         flow.accept()
         for _ in range(200):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
             if len(window.session.project.document.ops) > before:
                 break
         steps = window.session.project.document.ops
@@ -4304,7 +4304,7 @@ def test_a_new_diameter_beside_a_pulled_slot_is_one_step_with_the_new_width(
             QApplication.processEvents()
         for _ in range(120):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
         pulled = window.viewport.waiting_slot_drag(hole)
         assert pulled is not None and pulled[0] > 0.0, "der Zug wartet"
         flow = window._quiet_placement
@@ -4319,7 +4319,7 @@ def test_a_new_diameter_beside_a_pulled_slot_is_one_step_with_the_new_width(
         fields["Breite"].set_value_mm(wider)
         for _ in range(200):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
         assert flow.dialog.values()["diameter"] == pytest.approx(wider)
         assert flow.dialog.values()["slot_length"] == pytest.approx(pulled[0])
 
@@ -4328,12 +4328,12 @@ def test_a_new_diameter_beside_a_pulled_slot_is_one_step_with_the_new_width(
         flow.accept()
         for _ in range(300):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
             if len(window.session.project.document.ops) > before:
                 break
         for _ in range(60):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
         document = window.session.project.document
         steps = document.ops
         assert [step.op for step in steps[before:]] == ["slot_hole"], (
@@ -4361,7 +4361,7 @@ def test_a_new_diameter_beside_a_pulled_slot_is_one_step_with_the_new_width(
         window.session.undo()
         for _ in range(120):
             QApplication.processEvents()
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
         assert len(window.session.project.document.ops) == before
     finally:
         window.end_quiet_placement()
@@ -4943,7 +4943,7 @@ def test_label_text_starts_with_the_sentence_of_the_empty_field(
         line.setText("A")
         for _round in range(50):
             QApplication.processEvents()
-            session.wait_for_idle(30_000)
+            assert session.wait_for_idle(60_000)
             if controller._tool_context is not None:
                 break
         assert controller._tool_context is not None, "mit Text entsteht das Werkzeug"

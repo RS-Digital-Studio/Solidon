@@ -217,14 +217,11 @@ class _FlatRenderer(Renderer):
     def place_axes_marker(self, corner: tuple[float, float, float, float]) -> None:
         return
 
-    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> int:
-        return 1
+    def add_pointer_listener(self, listener: Callable[[PointerEvent], None]) -> None:
+        return
 
     def deliver_pointer(self, kind: str, event: Any) -> None:
         del kind, event  # ohne Fenster kommt hier nichts an
-
-    def remove_pointer_listener(self, token: int) -> None:
-        return
 
     def close(self) -> None:
         return

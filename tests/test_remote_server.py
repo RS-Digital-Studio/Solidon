@@ -153,6 +153,27 @@ def test_it_binds_to_the_loopback_and_nowhere_else(
     assert running.port > 0
 
 
+def test_starting_does_not_resolve_the_loopback_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Start fragt keine Namensauflösung — er läuft im Hauptfaden des Fensters.
+
+    ``HTTPServer.server_bind`` ruft ``socket.getfqdn``; am macOS-Runner brauchte
+    das für ``127.0.0.1`` 35 s (RM-104), und so lange stünde die Oberfläche.
+    """
+
+    def refused(*_args: object) -> str:
+        raise AssertionError("der Server fragte socket.getfqdn")
+
+    monkeypatch.setattr(socket, "getfqdn", refused)
+    running = RemoteServer(_Bridge(), port=0)
+    running.start()
+    try:
+        assert running.running and running.port > 0
+        status, _body = post(running.port, {"message": "Hallo"})
+        assert status == 200
+    finally:
+        running.stop()
+
+
 def test_a_call_comes_through_and_reaches_the_bridge(
     server: tuple[RemoteServer, _Bridge],
 ) -> None:

@@ -139,7 +139,7 @@ def test_exact_profile_edits_preserve_filaments_on_surviving_surfaces(operation:
     if operation == "shell":
         result = profiles.shell_open_top(source, 2.0)
     elif operation == "draft":
-        result = profiles.draft_vertical(source, 3.0)
+        result, _added = profiles.draft_faces(source, 3.0)
     else:
         result = profiles.push_faces(source, (0.0, 0.0, 1.0), 2.0)
     points = result.raw.triangles_center
@@ -4158,9 +4158,9 @@ def test_a_tessellation_triangle_whose_corners_lie_on_one_line_is_left_out() -> 
     "attempt",
     [
         lambda: profiles.shell_open_top(edit.sphere(20.0), 1.0),
-        lambda: profiles.draft_vertical(edit.sphere(20.0), 5.0),
+        lambda: profiles.draft_faces(edit.sphere(20.0), 5.0),
         lambda: profiles.push_faces(edit.box(40.0, 30.0, 20.0), (0.0, 0.0, 1.0), -25.0),
-        lambda: profiles.draft_vertical(_nurbs(edit.box(60.0, 40.0, 10.0)), 3.0),
+        lambda: profiles.draft_faces(_nurbs(edit.box(60.0, 40.0, 10.0)), 3.0),
     ],
     ids=["shell_open_top", "draft_vertical", "push_faces", "draft_on_nurbs"],
 )
@@ -4440,7 +4440,7 @@ def test_the_stitcher_closes_a_seam_the_hole_filler_cannot() -> None:
     ausschließlich versucht, feiner zu vernetzen; repariert wurde nie.
 
     Warum **Vernähen** und nicht Füllen: Gemessen an einem M6-Netz mit einem
-    echten Loch lässt `repair.fill_holes` es offen und rührt kein Dreieck an —
+    echten Loch lässt der Lochfüller der Reparatur es offen und rührt kein Dreieck an —
     zu Recht, denn ein Dreieck über kollinearen Punkten hat keine Fläche. Was
     hier fehlt, ist kein Material, sondern ein Punkt, den die Nachbarfläche
     nicht kennt.

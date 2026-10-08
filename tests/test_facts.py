@@ -142,7 +142,7 @@ def test_the_window_compares_within_a_project_and_never_across(
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(tmp_path / "klein.p3d")
-        assert window.session.wait_for_idle(30_000)
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         ops = window.session.project.document.ops
         box = next(entry for entry in ops if entry.op == "create_box")
@@ -157,7 +157,7 @@ def test_the_window_compares_within_a_project_and_never_across(
         window.session.save_project(tmp_path / "klein.p3d")
 
         window.open_path(tmp_path / "gross.p3d")
-        assert window.session.wait_for_idle(30_000)
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
         summary, delta = window.facts.state()
         assert summary, "das neue Projekt hat eine Zahl"

@@ -31,7 +31,7 @@ def local_window(qt_app, monkeypatch, tmp_path):
     path.write_bytes(blind_cylinder().raw.export(file_type="stl"))
     window = MainWindow(Session(), UiSettings())
     window.open_path(path)
-    assert window.session.wait_for_idle(30000)
+    assert window.session.wait_for_idle(60_000)
     assert window.session.last_result.complete
     entry = next(iter(window.session.last_result.scene.objects.values()))
     assert not entry.features
@@ -308,7 +308,7 @@ def test_old_worker_crash_cannot_override_new_preview_status(qt_app, monkeypatch
     finally:
         release.set()
         session.cancel_preview()
-        session.wait_for_idle(30000)
+        assert session.wait_for_idle(60_000)
 
 
 def test_a_recalculation_in_between_does_not_swallow_the_accepted_edit(local_window, qt_app):

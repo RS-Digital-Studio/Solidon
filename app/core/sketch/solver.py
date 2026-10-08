@@ -169,6 +169,13 @@ class _Equation:
     grad: _GradientFn
 
 
+#: Bis zu wie vielen freien Koordinaten der Löser dicht rechnet (``tr_solver``
+#: ``exact``, :func:`_solve`). Eine SVD über 64 Spalten kostet je Schritt weniger
+#: als ein Zehntel Millisekunde; über ``lsmr`` liefen kleine, unterbestimmte
+#: Skizzen in einen entarteten Schritt. Die großen Skizzen aus §31 bleiben bei
+#: ``lsmr``, wo die dichte Rechnung das Budget sprengt.
+EXACT_UP_TO: Final[int] = 64
+
 #: Wie zäh ein gezogener Punkt im **weichen** Zug ist, als Maßstab seiner
 #: Koordinaten (``x_scale`` in scipy — die Rechnung läuft in ``x / scale``).
 #:
@@ -1583,12 +1590,21 @@ def _solve(
 
     # ``lsmr`` statt der dichten SVD je Iteration: bei 200 Bedingungen der
     # Unterschied zwischen 700 ms und dem Budget aus §31 — nachgemessen.
+    # **Kleine Skizzen rechnen dicht** (:data:`EXACT_UP_TO`): Mit ``lsmr``
+    # löst TRF den Schritt in einem Zweierraum aus Gradient und
+    # Gauß-Newton-Schritt. Bei einer einzelnen Bedingung zeigen beide in
+    # dieselbe Richtung, der Raum entartet, und der Schritt lief bis an den
+    # Rand des Vertrauensbereichs — mit einer Richtung aus dem Rundungsrauschen.
+    # Ein Winkel warf so Linien um, je Plattform verschieden. Ein Zug bleibt
+    # bei ``lsmr``: Er beginnt an einer gelösten Skizze, und seine Stufen
+    # (``tries``, ``stiff``) sind auf diesen Löser abgestimmt.
+    dense = not pinned and int(free.sum()) <= EXACT_UP_TO
     result = least_squares(
         free_fun,
         flat[free],
-        jac=free_jac,
+        jac=(lambda z: free_jac(z).toarray()) if dense else free_jac,
         method="trf",
-        tr_solver="lsmr",
+        tr_solver="exact" if dense else "lsmr",
         x_scale=scale,
         # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
         # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
@@ -1597,10 +1613,10 @@ def _solve(
         # weit unter ``_TOL`` und löst die 200 Bedingungen in 42 ms. Die
         # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
         # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
-        tr_options={"maxiter": 150},
-        xtol=1e-10,
-        ftol=1e-10,
-        gtol=1e-10,
+        tr_options={} if dense else {"maxiter": 150},
+        xtol=1e-14 if dense else 1e-10,
+        ftol=1e-14 if dense else 1e-10,
+        gtol=1e-14 if dense else 1e-10,
         max_nfev=tries,
     )
     solution = widened(np.asarray(result.x, dtype=float)).copy()

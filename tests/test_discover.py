@@ -1376,27 +1376,29 @@ def test_a_file_inside_a_flatpak_installation_stands_for_its_launcher(
 
 
 @pytest.mark.parametrize(
-    ("app_id", "title"),
+    ("app_id", "title", "named"),
     [
-        ("com.prusa3d.PrusaSlicer", "PrusaSlicer"),
-        ("com.orcaslicer.OrcaSlicer", "OrcaSlicer"),
-        ("io.github.softfever.OrcaSlicer", "OrcaSlicer"),
-        ("com.bambulab.BambuStudio", "BambuStudio"),
-        ("com.ultimaker.cura", "Cura"),
+        ("com.prusa3d.PrusaSlicer", "PrusaSlicer", "PrusaSlicer"),
+        ("com.orcaslicer.OrcaSlicer", "OrcaSlicer", "OrcaSlicer"),
+        ("io.github.softfever.OrcaSlicer", "OrcaSlicer", "OrcaSlicer"),
+        ("com.bambulab.BambuStudio", "BambuStudio", "Bambu Studio"),
+        ("com.ultimaker.cura", "Cura", "Cura"),
     ],
 )
 def test_a_flatpak_slicer_is_named_after_its_program(
-    flatpak_exports: Path, app_id: str, title: str
+    flatpak_exports: Path, app_id: str, title: str, named: str
 ) -> None:
     """Meldungen und Listen nannten einen Slicer-Flatpak „com.prusa3d“ — den
     Dateistamm der Kennung (Durchsicht 0.5.3, Fund 5). Das letzte Glied ist der
-    Programmname; Curas Kennung schreibt ihn klein."""
+    Programmname; Curas Kennung schreibt ihn klein. Genannt wird er wie auf der
+    Packung (:func:`discover.slicer_title`): „Bambu Studio“."""
     from app.core.export.handover import SlicerSetup
 
     launcher = flatpak_exports / app_id
 
     assert discover.flatpak_title(launcher) == title
-    assert SlicerSetup(executable=launcher, flavour="orca").name == title
+    assert discover.slicer_title(launcher) == named
+    assert SlicerSetup(executable=launcher, flavour="orca").name == named
     assert discover.flatpak_title("/usr/bin/prusa-slicer") == "", "kein Flatpak, kein Name daraus"
 
 
@@ -1499,3 +1501,62 @@ def test_a_chosen_mac_bundle_stands_for_its_slicer(tmp_path: Path) -> None:
     assert discover.host_program(orca) == orca / "Contents" / "MacOS" / "OrcaSlicer"
     assert discover.host_program(cura) == cura / "Contents" / "Resources" / "CuraEngine"
     assert discover.host_program(ollama) == ollama
+
+
+@pytest.mark.parametrize(
+    ("path", "name"),
+    [
+        (r"C:\Program Files\AnycubicSlicerNext\AnycubicSlicerNext.exe", "Anycubic Slicer Next"),
+        (r"C:\Program Files\Bambu Studio\bambu-studio.exe", "Bambu Studio"),
+        (r"C:\Program Files\ElegooSlicer\elegoo-slicer.exe", "ElegooSlicer"),
+        ("/usr/bin/AnycubicSlicerNext", "Anycubic Slicer Next"),
+        ("/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer", "OrcaSlicer"),
+        ("/var/lib/flatpak/exports/bin/com.bambulab.BambuStudio", "Bambu Studio"),
+        ("/home/kunde/Downloads/OrcaSlicer_Linux_V2.3.1.AppImage", "OrcaSlicer"),
+    ],
+)
+def test_a_message_names_the_slicer_as_the_dialog_does(path: str, name: str) -> None:
+    """Die Übergabe nannte den Slicer beim Dateistamm: „AnycubicSlicerNext kennt
+    Kobra S1 nicht“, „bambu-studio“, „elegoo-slicer“ — unter einem Dialog, der
+    „Anycubic Slicer Next“ schrieb. ``SlicerSetup.name`` liest dieselbe
+    Namensregel wie die Listen (:func:`discover.slicer_title`)."""
+    from pathlib import PurePosixPath, PureWindowsPath
+
+    from app.core.export.handover import SlicerSetup
+
+    pure = PureWindowsPath(path) if "\\" in path else PurePosixPath(path)
+
+    assert discover.slicer_title(pure) == name
+    assert SlicerSetup(executable=pure, flavour="orca").name == name  # type: ignore[arg-type]
+
+
+def test_the_suite_takes_a_remembered_program_as_the_real_search_does(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Attrappe in ``conftest.py`` las den gemerkten Pfad selbst und nahm nur
+    eine Datei an. Die echte Suche (``_remembered_program``) nimmt auch ein
+    Mac-Bündel, das ein Ordner ist, und im Flatpak einen Host-Pfad, den der
+    Sandkasten nicht sieht — ein Test mit einem davon sah sonst keinen Fund."""
+    stored: dict[str, str] = {}
+
+    def store(entries: dict[str, str]) -> None:
+        stored.clear()
+        stored.update(entries)
+
+    monkeypatch.setattr(discover, "_load", lambda: dict(stored))
+    monkeypatch.setattr(discover, "_store", store)
+    bundle = tmp_path / "Ollama.app"
+    (bundle / "Contents" / "MacOS").mkdir(parents=True)
+    monkeypatch.setattr(discover.sys, "platform", "darwin")
+    discover.remember_path("ollama", str(bundle))
+
+    assert discover.find_program("ollama", ("ollama",)) == bundle
+    assert discover.find_programs("ollama", ("ollama",)) == (bundle,)
+
+    monkeypatch.setattr(discover.sys, "platform", "linux")
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    host = Path("/home/kunde/Applications/OrcaSlicer_Linux_V2.3.1.AppImage")
+    discover.remember_path("slicer", str(host))
+
+    assert not host.is_file(), "Gegenprobe: der Sandkasten sieht den Host-Pfad nicht"
+    assert discover.find_program("slicer", ("orca-slicer",)) == host

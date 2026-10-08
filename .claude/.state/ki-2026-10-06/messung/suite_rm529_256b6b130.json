@@ -1,0 +1,2575 @@
+{
+ "model": "qwen3:14b",
+ "root": "F:/ki-529",
+ "window": 32768,
+ "results": [
+  {
+   "id": "move",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Die Platte wurde um 10 mm nach rechts verschoben.",
+   "seconds": 34.7,
+   "requests": [
+    {
+     "seconds": 27.8,
+     "in": 11048,
+     "out": 461,
+     "load_s": 11.68,
+     "prompt_s": 3.86,
+     "tools": 189
+    },
+    {
+     "seconds": 5.63,
+     "in": 11132,
+     "out": 146,
+     "load_s": 0.02,
+     "prompt_s": 0.15,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "1123, 47",
+   "stopped": ""
+  },
+  {
+   "id": "rotate",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "rotate_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der Teil wurde um 90 Grad um die Z-Achse gedreht, wodurch seine Ausrichtung und die Maße (50,0 × 80,0 × 8,0 mm) angepasst wurden. Die Prüfung ergab keine Probleme, sodass das Objekt nun korrekt im Druckbereich liegt.",
+   "seconds": 47.6,
+   "requests": [
+    {
+     "seconds": 25.28,
+     "in": 10578,
+     "out": 853,
+     "load_s": 0.02,
+     "prompt_s": 3.21,
+     "tools": 189
+    },
+    {
+     "seconds": 22.11,
+     "in": 10666,
+     "out": 871,
+     "load_s": 0.02,
+     "prompt_s": 0.12,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15139, 97",
+   "stopped": ""
+  },
+  {
+   "id": "on_bed",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "place_on_bed"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Objekt ist jetzt korrekt auf dem Druckbett positioniert, da seine Unterseite (face_3/face_4) nun auf der Ebene z=0 liegt. Die vorherige Überlappung von 4 mm unter dem Bett wurde behoben.",
+   "seconds": 23.8,
+   "requests": [
+    {
+     "seconds": 12.95,
+     "in": 10145,
+     "out": 317,
+     "load_s": 0.01,
+     "prompt_s": 2.5,
+     "tools": 189
+    },
+    {
+     "seconds": 10.5,
+     "in": 10222,
+     "out": 343,
+     "load_s": 0.05,
+     "prompt_s": 0.12,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15112, 96",
+   "stopped": ""
+  },
+  {
+   "id": "scale",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "scale_object"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Objekt wurde um 120 % skaliert, wodurch seine Abmessungen auf 96,0 × 60,0 × 9,6 mm angewachsen sind.",
+   "seconds": 19.4,
+   "requests": [
+    {
+     "seconds": 13.34,
+     "in": 9711,
+     "out": 362,
+     "load_s": 0.02,
+     "prompt_s": 2.28,
+     "tools": 189
+    },
+    {
+     "seconds": 5.81,
+     "in": 9796,
+     "out": 156,
+     "load_s": 0.03,
+     "prompt_s": 0.13,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15125, 96",
+   "stopped": ""
+  },
+  {
+   "id": "repair",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "repair"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Modell wurde repariert, indem alle offenen Stellen (insbesondere die Durchgangsbohrungen) geschlossen wurden. Die Prüfung ergab keine weiteren Probleme.",
+   "seconds": 34.1,
+   "requests": [
+    {
+     "seconds": 19.65,
+     "in": 10069,
+     "out": 623,
+     "load_s": 0.08,
+     "prompt_s": 2.52,
+     "tools": 189
+    },
+    {
+     "seconds": 14.1,
+     "in": 10148,
+     "out": 516,
+     "load_s": 0.02,
+     "prompt_s": 0.12,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15121, 97",
+   "stopped": ""
+  },
+  {
+   "id": "orient",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "orient_for_print"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Teil ist nun optimal ausgerichtet, um den Stützbedarf zu minimieren. Die Positionierung erfolgte automatisch, sodass es keine Überschneidungen mit dem Druckbett mehr gibt.",
+   "seconds": 30.2,
+   "requests": [
+    {
+     "seconds": 18.53,
+     "in": 9807,
+     "out": 597,
+     "load_s": 0.02,
+     "prompt_s": 1.6,
+     "tools": 189
+    },
+    {
+     "seconds": 10.63,
+     "in": 9887,
+     "out": 357,
+     "load_s": 0.01,
+     "prompt_s": 0.34,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15107, 12",
+   "stopped": ""
+  },
+  {
+   "id": "split",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "split_pinned"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Objekt ist jetzt in zwei Teile geteilt, jeweils mit einer Höhe von 4 mm. Die Bohrungen und Flächen sind in beiden Teilen korrekt positioniert.",
+   "seconds": 28.5,
+   "requests": [
+    {
+     "seconds": 17.83,
+     "in": 9425,
+     "out": 593,
+     "load_s": 0.1,
+     "prompt_s": 1.11,
+     "tools": 189
+    },
+    {
+     "seconds": 10.32,
+     "in": 10596,
+     "out": 330,
+     "load_s": 0.02,
+     "prompt_s": 0.68,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15113, 94",
+   "stopped": ""
+  },
+  {
+   "id": "drill",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole",
+    "drill_hole"
+   ],
+   "parameters": 0,
+   "calls": 9,
+   "invalid": 1,
+   "steps": 9,
+   "error": "",
+   "answer": "",
+   "seconds": 278.8,
+   "requests": [
+    {
+     "seconds": 43.95,
+     "in": 11536,
+     "out": 1654,
+     "load_s": 0.02,
+     "prompt_s": 3.52,
+     "tools": 189
+    },
+    {
+     "seconds": 21.64,
+     "in": 11747,
+     "out": 842,
+     "load_s": 0.1,
+     "prompt_s": 0.24,
+     "tools": 189
+    },
+    {
+     "seconds": 22.38,
+     "in": 11877,
+     "out": 865,
+     "load_s": 0.02,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 15.06,
+     "in": 12038,
+     "out": 554,
+     "load_s": 0.03,
+     "prompt_s": 0.19,
+     "tools": 189
+    },
+    {
+     "seconds": 31.93,
+     "in": 12203,
+     "out": 1249,
+     "load_s": 0.02,
+     "prompt_s": 0.22,
+     "tools": 189
+    },
+    {
+     "seconds": 37.85,
+     "in": 12372,
+     "out": 1498,
+     "load_s": 0.05,
+     "prompt_s": 0.22,
+     "tools": 189
+    },
+    {
+     "seconds": 37.0,
+     "in": 12541,
+     "out": 1363,
+     "load_s": 0.09,
+     "prompt_s": 0.28,
+     "tools": 189
+    },
+    {
+     "seconds": 36.67,
+     "in": 12714,
+     "out": 1443,
+     "load_s": 0.1,
+     "prompt_s": 0.2,
+     "tools": 189
+    },
+    {
+     "seconds": 29.68,
+     "in": 12887,
+     "out": 1141,
+     "load_s": 0.02,
+     "prompt_s": 0.23,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15113, 96",
+   "stopped": "tokens"
+  },
+  {
+   "id": "drill_on_feature",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "duplicate_feature"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 1,
+   "steps": 3,
+   "error": "",
+   "answer": "Die Bohrung wurde erfolgreich neben hole_1 am Objekt obj_1 hinzugefügt. Es wurde eine neue Bohrung mit den gleichen Eigenschaften wie hole_1 erstellt. \n\nWenn Sie weitere Anpassungen oder zusätzliche Bohrungen benötigen, können Sie dies gerne mitteilen.",
+   "seconds": 99.5,
+   "requests": [
+    {
+     "seconds": 59.52,
+     "in": 11286,
+     "out": 2209,
+     "load_s": 0.47,
+     "prompt_s": 3.54,
+     "tools": 189
+    },
+    {
+     "seconds": 29.95,
+     "in": 11377,
+     "out": 1184,
+     "load_s": 0.02,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 9.77,
+     "in": 11472,
+     "out": 320,
+     "load_s": 0.02,
+     "prompt_s": 0.13,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15108, 13",
+   "stopped": ""
+  },
+  {
+   "id": "duplicate",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "duplicate_object",
+    "translate_object"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 4,
+   "error": "",
+   "answer": "Der Vorschlag platziert eine Kopie des Objekts neben dem Original, indem er es um 80 mm in x-Richtung verschiebt. Dies bewirkt, dass die beiden Objekte nebeneinander liegen, ohne sich zu überschneiden.",
+   "seconds": 73.7,
+   "requests": [
+    {
+     "seconds": 18.8,
+     "in": 9602,
+     "out": 559,
+     "load_s": 0.16,
+     "prompt_s": 2.3,
+     "tools": 189
+    },
+    {
+     "seconds": 12.97,
+     "in": 10241,
+     "out": 446,
+     "load_s": 0.25,
+     "prompt_s": 0.4,
+     "tools": 189
+    },
+    {
+     "seconds": 25.66,
+     "in": 10662,
+     "out": 953,
+     "load_s": 0.03,
+     "prompt_s": 1.3,
+     "tools": 189
+    },
+    {
+     "seconds": 15.99,
+     "in": 10769,
+     "out": 578,
+     "load_s": 0.13,
+     "prompt_s": 0.13,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15108, 95",
+   "stopped": ""
+  },
+  {
+   "id": "parameter",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": true,
+   "ops": [],
+   "parameters": 1,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "Der Projektparameter `plate_width` wurde erfolgreich mit dem Wert 80 mm erstellt und ist nun im Steckbrief sichtbar. Dies ermöglicht eine spätere Änderung der Plattenbreite ohne manuelle Anpassung der Geometrie.",
+   "seconds": 40.6,
+   "requests": [
+    {
+     "seconds": 16.86,
+     "in": 9196,
+     "out": 468,
+     "load_s": 0.98,
+     "prompt_s": 0.82,
+     "tools": 189
+    },
+    {
+     "seconds": 10.48,
+     "in": 9275,
+     "out": 345,
+     "load_s": 0.08,
+     "prompt_s": 0.11,
+     "tools": 189
+    },
+    {
+     "seconds": 12.98,
+     "in": 9354,
+     "out": 474,
+     "load_s": 0.07,
+     "prompt_s": 0.11,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15133, 13",
+   "stopped": ""
+  },
+  {
+   "id": "question",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Die Platte ist 8,0 mm dick. \n\nDies ergibt sich direkt aus den angegebenen Abmessungen von obj_1 (80,0 × 50,0 × 8,0 mm), wobei die dritte Zahl die Höhe (Dicke) angibt.",
+   "seconds": 9.0,
+   "requests": [
+    {
+     "seconds": 8.31,
+     "in": 9189,
+     "out": 252,
+     "load_s": 0.12,
+     "prompt_s": 0.14,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15118, 14",
+   "stopped": ""
+  },
+  {
+   "id": "printable",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "place_on_bed",
+    "compensate_first_layer"
+   ],
+   "parameters": 0,
+   "calls": 7,
+   "invalid": 4,
+   "steps": 6,
+   "error": "",
+   "answer": "Der Teil ist nun korrekt auf dem Druckbett positioniert und die erste Schicht wurde um 0,1 mm eingezogen, um den Elefantenfuß zu minimieren. Die Bohrungen wurden leicht vergrößert (von 5,20 mm auf 5,40 mm), was bei PETG-Druck geeignet ist, um den Materialausdehnungskompensationswert zu berücksichtig",
+   "seconds": 123.8,
+   "requests": [
+    {
+     "seconds": 26.71,
+     "in": 10488,
+     "out": 808,
+     "load_s": 1.03,
+     "prompt_s": 2.95,
+     "tools": 189
+    },
+    {
+     "seconds": 19.95,
+     "in": 10591,
+     "out": 766,
+     "load_s": 0.03,
+     "prompt_s": 0.14,
+     "tools": 189
+    },
+    {
+     "seconds": 32.87,
+     "in": 10840,
+     "out": 1140,
+     "load_s": 0.02,
+     "prompt_s": 3.28,
+     "tools": 189
+    },
+    {
+     "seconds": 14.16,
+     "in": 11000,
+     "out": 518,
+     "load_s": 0.03,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 16.74,
+     "in": 11148,
+     "out": 633,
+     "load_s": 0.05,
+     "prompt_s": 0.18,
+     "tools": 189
+    },
+    {
+     "seconds": 11.66,
+     "in": 11992,
+     "out": 386,
+     "load_s": 0.11,
+     "prompt_s": 0.52,
+     "tools": 189
+    }
+   ],
+   "lookups": 2,
+   "gpu": "15110, 10",
+   "stopped": ""
+  },
+  {
+   "id": "how_long",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der Druck dauert ungefähr 32 Minuten und benötigt etwa 18 g Material (14,4 cm³), basierend auf Volumen und Oberfläche — ohne Stützen und Haftungshilfen. Dies ist eine Schätzung; die tatsächliche Druckzeit kann je nach Druckersettings variieren.",
+   "seconds": 18.7,
+   "requests": [
+    {
+     "seconds": 8.28,
+     "in": 9720,
+     "out": 139,
+     "load_s": 0.02,
+     "prompt_s": 1.42,
+     "tools": 189
+    },
+    {
+     "seconds": 10.2,
+     "in": 9824,
+     "out": 349,
+     "load_s": 0.02,
+     "prompt_s": 0.13,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15103, 95",
+   "stopped": ""
+  },
+  {
+   "id": "core_hole",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der Kernloch-Durchmesser für ein M4-Gewinde sollte mindestens 4,5 mm betragen (Standard-Spielmaß). Bei FDM-Druck empfiehlt sich jedoch eine Vergrößerung um den Kompensationswert aus dem Materialprofil (z. B. +0,2 mm für PETG), um Druckfehler zu kompensieren. \n\nVorschlag: Erstelle eine Bohrung mit Ø ",
+   "seconds": 46.7,
+   "requests": [
+    {
+     "seconds": 29.06,
+     "in": 9517,
+     "out": 1122,
+     "load_s": 0.01,
+     "prompt_s": 1.8,
+     "tools": 189
+    },
+    {
+     "seconds": 17.45,
+     "in": 9625,
+     "out": 683,
+     "load_s": 0.02,
+     "prompt_s": 0.13,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15117, 96",
+   "stopped": ""
+  },
+  {
+   "id": "switch_material",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Das Projektmaterial wurde auf PLA geändert.",
+   "seconds": 13.6,
+   "requests": [
+    {
+     "seconds": 8.07,
+     "in": 9501,
+     "out": 124,
+     "load_s": 0.01,
+     "prompt_s": 2.13,
+     "tools": 189
+    },
+    {
+     "seconds": 5.23,
+     "in": 9560,
+     "out": 131,
+     "load_s": 0.04,
+     "prompt_s": 0.1,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15105, 12",
+   "stopped": ""
+  },
+  {
+   "id": "where_menu",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 1,
+   "steps": 3,
+   "error": "",
+   "answer": "",
+   "seconds": 79.7,
+   "requests": [
+    {
+     "seconds": 21.32,
+     "in": 10363,
+     "out": 687,
+     "load_s": 0.01,
+     "prompt_s": 2.67,
+     "tools": 189
+    },
+    {
+     "seconds": 34.7,
+     "in": 10450,
+     "out": 1403,
+     "load_s": 0.29,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 23.38,
+     "in": 10533,
+     "out": 871,
+     "load_s": 0.41,
+     "prompt_s": 0.15,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15112, 13",
+   "stopped": ""
+  },
+  {
+   "id": "where_hollow",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 0,
+   "invalid": 0,
+   "steps": 1,
+   "error": "",
+   "answer": "Das Aushöhlen (Hollowing) finden Sie unter **Handlungen rechts (bei gewähltem Körper) → Aushöhlen**. Wählen Sie zuerst das Objekt aus, dann öffnet sich der entsprechende Bereich im rechten Fenster, wo Sie die Einstellungen für das Aushöhlen konfigurieren können (z. B. Wanddicke, Entlüftungen, offene",
+   "seconds": 14.2,
+   "requests": [
+    {
+     "seconds": 13.99,
+     "in": 9421,
+     "out": 366,
+     "load_s": 0.03,
+     "prompt_s": 2.14,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15114, 95",
+   "stopped": ""
+  },
+  {
+   "id": "which_hole",
+   "good": true,
+   "asked": true,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "resize_hole"
+   ],
+   "parameters": 1,
+   "calls": 6,
+   "invalid": 3,
+   "steps": 8,
+   "error": "",
+   "answer": "Der Durchmesser des Lochs hole_1 wurde auf 5,4 mm erhöht, basierend auf dem kompensierten Wert für PETG.",
+   "seconds": 118.6,
+   "requests": [
+    {
+     "seconds": 27.17,
+     "in": 10004,
+     "out": 956,
+     "load_s": 0.08,
+     "prompt_s": 2.41,
+     "tools": 189
+    },
+    {
+     "seconds": 14.03,
+     "in": 10070,
+     "out": 511,
+     "load_s": 0.06,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 18.56,
+     "in": 10182,
+     "out": 656,
+     "load_s": 0.64,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 10.32,
+     "in": 10505,
+     "out": 292,
+     "load_s": 0.02,
+     "prompt_s": 1.38,
+     "tools": 189
+    },
+    {
+     "seconds": 15.73,
+     "in": 10599,
+     "out": 576,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 189
+    },
+    {
+     "seconds": 10.23,
+     "in": 10697,
+     "out": 335,
+     "load_s": 0.03,
+     "prompt_s": 0.13,
+     "tools": 189
+    },
+    {
+     "seconds": 11.92,
+     "in": 10780,
+     "out": 410,
+     "load_s": 0.03,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 10.22,
+     "in": 10875,
+     "out": 339,
+     "load_s": 0.06,
+     "prompt_s": 0.12,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15116, 70",
+   "stopped": ""
+  },
+  {
+   "id": "how_much_thinner",
+   "good": true,
+   "asked": true,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 10,
+   "invalid": 0,
+   "steps": 12,
+   "error": "",
+   "answer": "",
+   "seconds": 197.0,
+   "requests": [
+    {
+     "seconds": 50.56,
+     "in": 9551,
+     "out": 1944,
+     "load_s": 0.08,
+     "prompt_s": 2.23,
+     "tools": 189
+    },
+    {
+     "seconds": 8.88,
+     "in": 9602,
+     "out": 297,
+     "load_s": 0.03,
+     "prompt_s": 0.09,
+     "tools": 189
+    },
+    {
+     "seconds": 11.88,
+     "in": 9694,
+     "out": 415,
+     "load_s": 0.03,
+     "prompt_s": 0.11,
+     "tools": 189
+    },
+    {
+     "seconds": 14.83,
+     "in": 9786,
+     "out": 540,
+     "load_s": 0.03,
+     "prompt_s": 0.13,
+     "tools": 189
+    },
+    {
+     "seconds": 17.49,
+     "in": 9878,
+     "out": 484,
+     "load_s": 0.1,
+     "prompt_s": 0.21,
+     "tools": 189
+    },
+    {
+     "seconds": 19.29,
+     "in": 9973,
+     "out": 738,
+     "load_s": 0.04,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 11.7,
+     "in": 10251,
+     "out": 330,
+     "load_s": 0.02,
+     "prompt_s": 1.64,
+     "tools": 189
+    },
+    {
+     "seconds": 11.19,
+     "in": 10395,
+     "out": 379,
+     "load_s": 0.01,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 12.8,
+     "in": 10466,
+     "out": 447,
+     "load_s": 0.03,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 11.65,
+     "in": 10563,
+     "out": 399,
+     "load_s": 0.03,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 11.07,
+     "in": 10658,
+     "out": 363,
+     "load_s": 0.02,
+     "prompt_s": 0.13,
+     "tools": 189
+    },
+    {
+     "seconds": 15.42,
+     "in": 10982,
+     "out": 481,
+     "load_s": 0.06,
+     "prompt_s": 1.89,
+     "tools": 189
+    }
+   ],
+   "lookups": 2,
+   "gpu": "15113, 14",
+   "stopped": "steps"
+  },
+  {
+   "id": "join_what",
+   "good": true,
+   "asked": true,
+   "ambiguous": true,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 12,
+   "invalid": 0,
+   "steps": 12,
+   "error": "",
+   "answer": "",
+   "seconds": 150.6,
+   "requests": [
+    {
+     "seconds": 15.56,
+     "in": 9226,
+     "out": 510,
+     "load_s": 0.03,
+     "prompt_s": 1.26,
+     "tools": 189
+    },
+    {
+     "seconds": 14.63,
+     "in": 9332,
+     "out": 520,
+     "load_s": 0.35,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 15.25,
+     "in": 9449,
+     "out": 547,
+     "load_s": 0.61,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 10.43,
+     "in": 9540,
+     "out": 361,
+     "load_s": 0.02,
+     "prompt_s": 0.11,
+     "tools": 189
+    },
+    {
+     "seconds": 13.47,
+     "in": 9660,
+     "out": 450,
+     "load_s": 0.36,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 10.23,
+     "in": 9784,
+     "out": 333,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 189
+    },
+    {
+     "seconds": 13.04,
+     "in": 9920,
+     "out": 472,
+     "load_s": 0.03,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 12.59,
+     "in": 10044,
+     "out": 452,
+     "load_s": 0.01,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 11.06,
+     "in": 10168,
+     "out": 380,
+     "load_s": 0.02,
+     "prompt_s": 0.14,
+     "tools": 189
+    },
+    {
+     "seconds": 10.17,
+     "in": 10304,
+     "out": 338,
+     "load_s": 0.02,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 11.42,
+     "in": 10428,
+     "out": 376,
+     "load_s": 0.16,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 12.18,
+     "in": 10552,
+     "out": 429,
+     "load_s": 0.08,
+     "prompt_s": 0.15,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15119, 14",
+   "stopped": "steps"
+  },
+  {
+   "id": "bracket",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": true,
+   "ops": [
+    "create_brep_box",
+    "insert_screw_hole"
+   ],
+   "parameters": 0,
+   "calls": 6,
+   "invalid": 4,
+   "steps": 7,
+   "error": "",
+   "answer": "Der Halter mit den beiden M4-Bohrungen ist fertiggestellt. Die Bohrungen sind korrekt positioniert und gemäß den Materialtoleranzen dimensioniert. \n\n**Änderung:** Zwei M4-Schraubenlöcher wurden in die linke Fläche des 60×40×6 mm großen Halterkörpers eingefügt.",
+   "seconds": 151.4,
+   "requests": [
+    {
+     "seconds": 33.37,
+     "in": 10999,
+     "out": 1169,
+     "load_s": 0.01,
+     "prompt_s": 3.34,
+     "tools": 189
+    },
+    {
+     "seconds": 35.27,
+     "in": 11786,
+     "out": 1334,
+     "load_s": 0.03,
+     "prompt_s": 1.87,
+     "tools": 189
+    },
+    {
+     "seconds": 21.22,
+     "in": 11954,
+     "out": 803,
+     "load_s": 0.04,
+     "prompt_s": 0.21,
+     "tools": 189
+    },
+    {
+     "seconds": 21.22,
+     "in": 12124,
+     "out": 816,
+     "load_s": 0.06,
+     "prompt_s": 0.23,
+     "tools": 189
+    },
+    {
+     "seconds": 8.08,
+     "in": 12287,
+     "out": 256,
+     "load_s": 0.02,
+     "prompt_s": 0.24,
+     "tools": 189
+    },
+    {
+     "seconds": 15.78,
+     "in": 12378,
+     "out": 605,
+     "load_s": 0.02,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 14.31,
+     "in": 12742,
+     "out": 508,
+     "load_s": 0.09,
+     "prompt_s": 0.36,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15172, 97",
+   "stopped": ""
+  },
+  {
+   "id": "magnet_lid",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 11,
+   "invalid": 0,
+   "steps": 11,
+   "error": "",
+   "answer": "",
+   "seconds": 154.4,
+   "requests": [
+    {
+     "seconds": 33.87,
+     "in": 10934,
+     "out": 1263,
+     "load_s": 0.07,
+     "prompt_s": 2.82,
+     "tools": 189
+    },
+    {
+     "seconds": 11.41,
+     "in": 10997,
+     "out": 412,
+     "load_s": 0.03,
+     "prompt_s": 0.11,
+     "tools": 189
+    },
+    {
+     "seconds": 10.79,
+     "in": 11094,
+     "out": 368,
+     "load_s": 0.21,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 11.69,
+     "in": 11191,
+     "out": 408,
+     "load_s": 0.17,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 11.01,
+     "in": 11288,
+     "out": 394,
+     "load_s": 0.04,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 13.66,
+     "in": 11385,
+     "out": 507,
+     "load_s": 0.04,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 11.68,
+     "in": 11482,
+     "out": 416,
+     "load_s": 0.09,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 15.13,
+     "in": 11579,
+     "out": 583,
+     "load_s": 0.03,
+     "prompt_s": 0.14,
+     "tools": 189
+    },
+    {
+     "seconds": 12.68,
+     "in": 11676,
+     "out": 458,
+     "load_s": 0.02,
+     "prompt_s": 0.13,
+     "tools": 189
+    },
+    {
+     "seconds": 12.89,
+     "in": 11773,
+     "out": 447,
+     "load_s": 0.04,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 9.42,
+     "in": 11870,
+     "out": 312,
+     "load_s": 0.02,
+     "prompt_s": 0.15,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15106, 96",
+   "stopped": "tokens"
+  },
+  {
+   "id": "wall_holder",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_wall_mount"
+   ],
+   "parameters": 0,
+   "calls": 4,
+   "invalid": 2,
+   "steps": 5,
+   "error": "",
+   "answer": "Der Wandhalter wurde erfolgreich an die Unterseite des Routerkörpers (face_5) montiert. Die beiden M3-Bohrungen sind positioniert und der Steg (lip) sorgt für eine stabile Befestigung an der Wand. Das Objekt ist jetzt 120 mm hoch, um den Halter zu berücksichtigen.\n\nÄnderung: Wandhalter mit zwei M3-B",
+   "seconds": 83.7,
+   "requests": [
+    {
+     "seconds": 15.79,
+     "in": 10950,
+     "out": 446,
+     "load_s": 0.06,
+     "prompt_s": 2.59,
+     "tools": 189
+    },
+    {
+     "seconds": 27.86,
+     "in": 11048,
+     "out": 1158,
+     "load_s": 0.07,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 12.19,
+     "in": 11472,
+     "out": 423,
+     "load_s": 0.07,
+     "prompt_s": 0.32,
+     "tools": 189
+    },
+    {
+     "seconds": 12.26,
+     "in": 11577,
+     "out": 451,
+     "load_s": 0.02,
+     "prompt_s": 0.18,
+     "tools": 189
+    },
+    {
+     "seconds": 15.17,
+     "in": 12169,
+     "out": 562,
+     "load_s": 0.03,
+     "prompt_s": 0.44,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15111, 8",
+   "stopped": ""
+  },
+  {
+   "id": "cable_exit",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "drill_hole",
+    "create_brep_box",
+    "create_brep_box"
+   ],
+   "parameters": 0,
+   "calls": 9,
+   "invalid": 5,
+   "steps": 10,
+   "error": "",
+   "answer": "",
+   "seconds": 216.0,
+   "requests": [
+    {
+     "seconds": 25.13,
+     "in": 10710,
+     "out": 881,
+     "load_s": 0.02,
+     "prompt_s": 2.69,
+     "tools": 189
+    },
+    {
+     "seconds": 6.88,
+     "in": 10807,
+     "out": 206,
+     "load_s": 0.03,
+     "prompt_s": 0.14,
+     "tools": 189
+    },
+    {
+     "seconds": 22.94,
+     "in": 11229,
+     "out": 927,
+     "load_s": 0.02,
+     "prompt_s": 0.3,
+     "tools": 189
+    },
+    {
+     "seconds": 18.16,
+     "in": 11326,
+     "out": 700,
+     "load_s": 0.04,
+     "prompt_s": 0.18,
+     "tools": 189
+    },
+    {
+     "seconds": 17.03,
+     "in": 11715,
+     "out": 497,
+     "load_s": 0.02,
+     "prompt_s": 2.7,
+     "tools": 189
+    },
+    {
+     "seconds": 57.54,
+     "in": 11881,
+     "out": 2433,
+     "load_s": 0.13,
+     "prompt_s": 0.23,
+     "tools": 189
+    },
+    {
+     "seconds": 27.34,
+     "in": 12400,
+     "out": 1093,
+     "load_s": 0.12,
+     "prompt_s": 0.42,
+     "tools": 189
+    },
+    {
+     "seconds": 14.93,
+     "in": 12875,
+     "out": 539,
+     "load_s": 0.05,
+     "prompt_s": 0.41,
+     "tools": 189
+    },
+    {
+     "seconds": 14.18,
+     "in": 12972,
+     "out": 531,
+     "load_s": 0.03,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 11.31,
+     "in": 13475,
+     "out": 373,
+     "load_s": 0.1,
+     "prompt_s": 0.38,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15118, 95",
+   "stopped": "tokens"
+  },
+  {
+   "id": "threaded_stud",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_cylinder",
+    "insert_printed_thread"
+   ],
+   "parameters": 0,
+   "calls": 4,
+   "invalid": 1,
+   "steps": 5,
+   "error": "",
+   "answer": "Der Vorschlag fügt ein externes M6-Gewinde an die obere Fläche des Zylinders an, wodurch sich die Gesamtlänge des Zapfens auf 24 mm erhöht. Dieses Gewinde ist rechtsgängig, 12 mm lang und basiert auf der Bohrung in der Fläche face_1. \n\n**Änderung:** Ein externes M6-Gewinde (12 mm Länge) wurde an die",
+   "seconds": 99.4,
+   "requests": [
+    {
+     "seconds": 24.69,
+     "in": 10940,
+     "out": 866,
+     "load_s": 0.04,
+     "prompt_s": 1.29,
+     "tools": 189
+    },
+    {
+     "seconds": 16.95,
+     "in": 11587,
+     "out": 526,
+     "load_s": 0.75,
+     "prompt_s": 1.94,
+     "tools": 189
+    },
+    {
+     "seconds": 10.03,
+     "in": 11738,
+     "out": 327,
+     "load_s": 0.1,
+     "prompt_s": 0.2,
+     "tools": 189
+    },
+    {
+     "seconds": 27.85,
+     "in": 11878,
+     "out": 1109,
+     "load_s": 0.02,
+     "prompt_s": 0.2,
+     "tools": 189
+    },
+    {
+     "seconds": 16.54,
+     "in": 12166,
+     "out": 607,
+     "load_s": 0.04,
+     "prompt_s": 0.34,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15111, 95",
+   "stopped": ""
+  },
+  {
+   "id": "nut_plate",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_nut_trap"
+   ],
+   "parameters": 0,
+   "calls": 3,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "Die Platte (obj_1) mit einer seitlichen Mutternfalle für M4 ist erstellt. Die Falle hat einen Schraubenloch-Durchgang (4,5 mm) und eine Tasche (7,25 mm) für die Sechskantmutter. Die Positionierung erfolgte an der Vorderseite der Platte (face_1). \n\nÄnderung: Eine 100×50×10 mm große Platte mit seitlic",
+   "seconds": 60.7,
+   "requests": [
+    {
+     "seconds": 8.43,
+     "in": 11010,
+     "out": 190,
+     "load_s": 0.03,
+     "prompt_s": 1.81,
+     "tools": 189
+    },
+    {
+     "seconds": 36.3,
+     "in": 12788,
+     "out": 1363,
+     "load_s": 0.15,
+     "prompt_s": 2.74,
+     "tools": 189
+    },
+    {
+     "seconds": 15.49,
+     "in": 13803,
+     "out": 526,
+     "load_s": 0.35,
+     "prompt_s": 0.68,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15106, 9",
+   "stopped": ""
+  },
+  {
+   "id": "spacer",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_tube",
+    "drill_hole"
+   ],
+   "parameters": 2,
+   "calls": 12,
+   "invalid": 7,
+   "steps": 10,
+   "error": "",
+   "answer": "",
+   "seconds": 274.0,
+   "requests": [
+    {
+     "seconds": 44.0,
+     "in": 10721,
+     "out": 1643,
+     "load_s": 0.04,
+     "prompt_s": 2.32,
+     "tools": 189
+    },
+    {
+     "seconds": 15.36,
+     "in": 11129,
+     "out": 520,
+     "load_s": 0.62,
+     "prompt_s": 0.35,
+     "tools": 189
+    },
+    {
+     "seconds": 35.5,
+     "in": 11323,
+     "out": 1391,
+     "load_s": 0.07,
+     "prompt_s": 0.25,
+     "tools": 189
+    },
+    {
+     "seconds": 19.57,
+     "in": 11474,
+     "out": 725,
+     "load_s": 0.06,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 36.06,
+     "in": 11822,
+     "out": 1049,
+     "load_s": 0.16,
+     "prompt_s": 0.44,
+     "tools": 189
+    },
+    {
+     "seconds": 42.43,
+     "in": 12222,
+     "out": 1508,
+     "load_s": 0.14,
+     "prompt_s": 2.83,
+     "tools": 189
+    },
+    {
+     "seconds": 16.35,
+     "in": 12380,
+     "out": 583,
+     "load_s": 0.05,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 35.23,
+     "in": 12538,
+     "out": 1362,
+     "load_s": 0.1,
+     "prompt_s": 0.18,
+     "tools": 189
+    },
+    {
+     "seconds": 13.52,
+     "in": 12809,
+     "out": 443,
+     "load_s": 0.1,
+     "prompt_s": 0.26,
+     "tools": 189
+    },
+    {
+     "seconds": 15.55,
+     "in": 13133,
+     "out": 445,
+     "load_s": 0.01,
+     "prompt_s": 2.05,
+     "tools": 189
+    }
+   ],
+   "lookups": 2,
+   "gpu": "15108, 8",
+   "stopped": "tokens"
+  },
+  {
+   "id": "hinge",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_living_hinge",
+    "insert_living_hinge",
+    "insert_living_hinge",
+    "insert_living_hinge",
+    "insert_living_hinge",
+    "insert_living_hinge"
+   ],
+   "parameters": 0,
+   "calls": 10,
+   "invalid": 3,
+   "steps": 10,
+   "error": "",
+   "answer": "",
+   "seconds": 269.6,
+   "requests": [
+    {
+     "seconds": 31.96,
+     "in": 10950,
+     "out": 1073,
+     "load_s": 0.2,
+     "prompt_s": 2.66,
+     "tools": 189
+    },
+    {
+     "seconds": 12.27,
+     "in": 11055,
+     "out": 414,
+     "load_s": 0.12,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 18.66,
+     "in": 11471,
+     "out": 668,
+     "load_s": 0.02,
+     "prompt_s": 0.35,
+     "tools": 189
+    },
+    {
+     "seconds": 18.69,
+     "in": 11584,
+     "out": 691,
+     "load_s": 0.02,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 24.83,
+     "in": 12261,
+     "out": 921,
+     "load_s": 0.04,
+     "prompt_s": 0.48,
+     "tools": 189
+    },
+    {
+     "seconds": 32.12,
+     "in": 12374,
+     "out": 1126,
+     "load_s": 2.42,
+     "prompt_s": 0.36,
+     "tools": 189
+    },
+    {
+     "seconds": 19.18,
+     "in": 12681,
+     "out": 647,
+     "load_s": 0.03,
+     "prompt_s": 0.28,
+     "tools": 189
+    },
+    {
+     "seconds": 60.06,
+     "in": 13042,
+     "out": 2496,
+     "load_s": 0.01,
+     "prompt_s": 0.34,
+     "tools": 189
+    },
+    {
+     "seconds": 17.78,
+     "in": 13457,
+     "out": 605,
+     "load_s": 0.51,
+     "prompt_s": 0.47,
+     "tools": 189
+    },
+    {
+     "seconds": 30.14,
+     "in": 13930,
+     "out": 1168,
+     "load_s": 0.03,
+     "prompt_s": 0.53,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15110, 14",
+   "stopped": "tokens"
+  },
+  {
+   "id": "snap_box",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [],
+   "parameters": 0,
+   "calls": 10,
+   "invalid": 0,
+   "steps": 11,
+   "error": "",
+   "answer": "",
+   "seconds": 167.1,
+   "requests": [
+    {
+     "seconds": 22.38,
+     "in": 10896,
+     "out": 463,
+     "load_s": 0.02,
+     "prompt_s": 2.51,
+     "tools": 189
+    },
+    {
+     "seconds": 19.58,
+     "in": 10953,
+     "out": 759,
+     "load_s": 0.03,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 20.56,
+     "in": 11232,
+     "out": 741,
+     "load_s": 0.25,
+     "prompt_s": 1.6,
+     "tools": 189
+    },
+    {
+     "seconds": 14.32,
+     "in": 11298,
+     "out": 542,
+     "load_s": 0.03,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 13.13,
+     "in": 11360,
+     "out": 483,
+     "load_s": 0.03,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 11.38,
+     "in": 11425,
+     "out": 414,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 189
+    },
+    {
+     "seconds": 13.96,
+     "in": 11496,
+     "out": 528,
+     "load_s": 0.01,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 14.36,
+     "in": 11577,
+     "out": 533,
+     "load_s": 0.09,
+     "prompt_s": 0.14,
+     "tools": 189
+    },
+    {
+     "seconds": 12.9,
+     "in": 11677,
+     "out": 423,
+     "load_s": 0.66,
+     "prompt_s": 0.37,
+     "tools": 189
+    },
+    {
+     "seconds": 13.9,
+     "in": 11795,
+     "out": 501,
+     "load_s": 0.44,
+     "prompt_s": 0.18,
+     "tools": 189
+    },
+    {
+     "seconds": 10.29,
+     "in": 11913,
+     "out": 362,
+     "load_s": 0.02,
+     "prompt_s": 0.17,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15107, 8",
+   "stopped": "tokens"
+  },
+  {
+   "id": "keyhole_back",
+   "good": true,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "insert_keyhole"
+   ],
+   "parameters": 0,
+   "calls": 8,
+   "invalid": 1,
+   "steps": 9,
+   "error": "",
+   "answer": "Die Schlüsselloch-Aufhängung wurde erfolgreich auf der Rückseite des Objekts `obj_1` (Face 5, -Z-Normale) platziert. Die Bohrung (keyhole_bore_1) und der Schlitz (slot_1) sind jetzt Teil des Modells. Das Objekt ist druckbereit. \n\n**Änderung:** Schlüsselloch-Aufhängung mit M3-Größe auf der Rückseite ",
+   "seconds": 113.4,
+   "requests": [
+    {
+     "seconds": 16.71,
+     "in": 10950,
+     "out": 576,
+     "load_s": 0.02,
+     "prompt_s": 1.82,
+     "tools": 189
+    },
+    {
+     "seconds": 9.12,
+     "in": 11021,
+     "out": 307,
+     "load_s": 0.07,
+     "prompt_s": 0.12,
+     "tools": 189
+    },
+    {
+     "seconds": 12.05,
+     "in": 11103,
+     "out": 424,
+     "load_s": 0.12,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 11.52,
+     "in": 11197,
+     "out": 415,
+     "load_s": 0.01,
+     "prompt_s": 0.14,
+     "tools": 189
+    },
+    {
+     "seconds": 15.23,
+     "in": 11314,
+     "out": 580,
+     "load_s": 0.02,
+     "prompt_s": 0.19,
+     "tools": 189
+    },
+    {
+     "seconds": 8.15,
+     "in": 11431,
+     "out": 259,
+     "load_s": 0.02,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 17.23,
+     "in": 11851,
+     "out": 658,
+     "load_s": 0.02,
+     "prompt_s": 0.37,
+     "tools": 189
+    },
+    {
+     "seconds": 11.12,
+     "in": 11953,
+     "out": 394,
+     "load_s": 0.09,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 10.71,
+     "in": 12650,
+     "out": 357,
+     "load_s": 0.04,
+     "prompt_s": 0.48,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15103, 95",
+   "stopped": ""
+  },
+  {
+   "id": "stiffen",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box"
+   ],
+   "parameters": 3,
+   "calls": 13,
+   "invalid": 9,
+   "steps": 10,
+   "error": "",
+   "answer": "",
+   "seconds": 245.5,
+   "requests": [
+    {
+     "seconds": 15.19,
+     "in": 10650,
+     "out": 424,
+     "load_s": 0.02,
+     "prompt_s": 2.65,
+     "tools": 189
+    },
+    {
+     "seconds": 10.15,
+     "in": 10991,
+     "out": 337,
+     "load_s": 0.22,
+     "prompt_s": 0.33,
+     "tools": 189
+    },
+    {
+     "seconds": 20.95,
+     "in": 11097,
+     "out": 822,
+     "load_s": 0.06,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 12.01,
+     "in": 11513,
+     "out": 412,
+     "load_s": 0.03,
+     "prompt_s": 0.32,
+     "tools": 189
+    },
+    {
+     "seconds": 38.47,
+     "in": 11626,
+     "out": 1570,
+     "load_s": 0.02,
+     "prompt_s": 0.14,
+     "tools": 189
+    },
+    {
+     "seconds": 23.61,
+     "in": 11749,
+     "out": 910,
+     "load_s": 0.05,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 28.25,
+     "in": 11862,
+     "out": 1079,
+     "load_s": 0.83,
+     "prompt_s": 0.18,
+     "tools": 189
+    },
+    {
+     "seconds": 34.06,
+     "in": 11986,
+     "out": 1366,
+     "load_s": 0.02,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 32.81,
+     "in": 12099,
+     "out": 1290,
+     "load_s": 0.31,
+     "prompt_s": 0.15,
+     "tools": 189
+    },
+    {
+     "seconds": 29.54,
+     "in": 12222,
+     "out": 1115,
+     "load_s": 0.54,
+     "prompt_s": 0.16,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15103, 8",
+   "stopped": "tokens"
+  },
+  {
+   "id": "dowels",
+   "good": false,
+   "asked": true,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "create_brep_box",
+    "drill_hole",
+    "drill_hole"
+   ],
+   "parameters": 0,
+   "calls": 16,
+   "invalid": 10,
+   "steps": 10,
+   "error": "",
+   "answer": "",
+   "seconds": 185.5,
+   "requests": [
+    {
+     "seconds": 24.36,
+     "in": 10391,
+     "out": 803,
+     "load_s": 0.09,
+     "prompt_s": 2.37,
+     "tools": 189
+    },
+    {
+     "seconds": 11.38,
+     "in": 10500,
+     "out": 387,
+     "load_s": 0.09,
+     "prompt_s": 0.13,
+     "tools": 189
+    },
+    {
+     "seconds": 17.63,
+     "in": 11472,
+     "out": 639,
+     "load_s": 0.09,
+     "prompt_s": 0.57,
+     "tools": 189
+    },
+    {
+     "seconds": 18.43,
+     "in": 11597,
+     "out": 688,
+     "load_s": 0.03,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 16.24,
+     "in": 11775,
+     "out": 595,
+     "load_s": 0.07,
+     "prompt_s": 0.22,
+     "tools": 189
+    },
+    {
+     "seconds": 16.96,
+     "in": 11947,
+     "out": 633,
+     "load_s": 0.02,
+     "prompt_s": 0.17,
+     "tools": 189
+    },
+    {
+     "seconds": 21.17,
+     "in": 12019,
+     "out": 812,
+     "load_s": 0.02,
+     "prompt_s": 0.1,
+     "tools": 189
+    },
+    {
+     "seconds": 15.61,
+     "in": 12357,
+     "out": 491,
+     "load_s": 0.05,
+     "prompt_s": 0.18,
+     "tools": 189
+    },
+    {
+     "seconds": 17.97,
+     "in": 13005,
+     "out": 628,
+     "load_s": 0.02,
+     "prompt_s": 0.45,
+     "tools": 189
+    },
+    {
+     "seconds": 25.07,
+     "in": 13125,
+     "out": 934,
+     "load_s": 0.29,
+     "prompt_s": 0.16,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15104, 96",
+   "stopped": "tokens"
+  },
+  {
+   "id": "inserts",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": true,
+   "expects_parameter": false,
+   "ops": [
+    "create_box",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "create_box",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4",
+    "insert_heatset_m4"
+   ],
+   "parameters": 3,
+   "calls": 34,
+   "invalid": 13,
+   "steps": 8,
+   "error": "",
+   "answer": "",
+   "seconds": 328.5,
+   "requests": [
+    {
+     "seconds": 32.22,
+     "in": 10963,
+     "out": 1117,
+     "load_s": 0.17,
+     "prompt_s": 1.8,
+     "tools": 189
+    },
+    {
+     "seconds": 25.81,
+     "in": 11746,
+     "out": 972,
+     "load_s": 0.04,
+     "prompt_s": 0.46,
+     "tools": 189
+    },
+    {
+     "seconds": 22.66,
+     "in": 12503,
+     "out": 581,
+     "load_s": 1.08,
+     "prompt_s": 4.04,
+     "tools": 189
+    },
+    {
+     "seconds": 43.67,
+     "in": 12899,
+     "out": 1668,
+     "load_s": 0.68,
+     "prompt_s": 0.31,
+     "tools": 189
+    },
+    {
+     "seconds": 60.08,
+     "in": 14016,
+     "out": 2305,
+     "load_s": 0.14,
+     "prompt_s": 0.81,
+     "tools": 189
+    },
+    {
+     "seconds": 60.08,
+     "in": 15193,
+     "out": 2268,
+     "load_s": 0.05,
+     "prompt_s": 0.89,
+     "tools": 189
+    },
+    {
+     "seconds": 32.19,
+     "in": 16098,
+     "out": 1153,
+     "load_s": 0.5,
+     "prompt_s": 0.62,
+     "tools": 189
+    },
+    {
+     "seconds": 37.48,
+     "in": 17615,
+     "out": 1350,
+     "load_s": 0.06,
+     "prompt_s": 0.82,
+     "tools": 189
+    }
+   ],
+   "lookups": 1,
+   "gpu": "15118, 13",
+   "stopped": "tokens"
+  },
+  {
+   "id": "parameterise",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": true,
+   "ops": [
+    "create_brep_box"
+   ],
+   "parameters": 2,
+   "calls": 6,
+   "invalid": 1,
+   "steps": 5,
+   "error": "",
+   "answer": "Der Quader mit den Parametern Breite (@width) und Höhe (@height) wurde erstellt. Die Tiefe ist festgelegt auf 10 mm. Das Objekt hat die Maße 0.1×10.0×0.1 mm. \n\nUm die Abmessungen anzupassen, können die Parameter Breite und Höhe im Steckbrief geändert werden.",
+   "seconds": 79.9,
+   "requests": [
+    {
+     "seconds": 14.62,
+     "in": 10908,
+     "out": 307,
+     "load_s": 0.06,
+     "prompt_s": 2.11,
+     "tools": 189
+    },
+    {
+     "seconds": 21.31,
+     "in": 11055,
+     "out": 802,
+     "load_s": 0.02,
+     "prompt_s": 0.18,
+     "tools": 189
+    },
+    {
+     "seconds": 11.66,
+     "in": 11168,
+     "out": 382,
+     "load_s": 0.39,
+     "prompt_s": 0.16,
+     "tools": 189
+    },
+    {
+     "seconds": 15.93,
+     "in": 11327,
+     "out": 423,
+     "load_s": 0.03,
+     "prompt_s": 0.22,
+     "tools": 189
+    },
+    {
+     "seconds": 15.96,
+     "in": 11759,
+     "out": 594,
+     "load_s": 0.03,
+     "prompt_s": 0.21,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15160, 32",
+   "stopped": ""
+  },
+  {
+   "id": "free_shape",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_cone"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "Der Kegelstumpf (obj_1) mit 40 mm Ø oben, 10 mm Ø unten und 50 mm Höhe ist erstellt. Die Flächen und Merkmale sind korrekt erkannt. \n\nAls nächstes sollten wir die Wandstärke prüfen und gegebenenfalls anpassen, um Druckprobleme zu vermeiden. Zudem könnten Parameter für die Hauptmaße (Ø oben, Ø unten,",
+   "seconds": 71.4,
+   "requests": [
+    {
+     "seconds": 22.14,
+     "in": 10759,
+     "out": 718,
+     "load_s": 0.02,
+     "prompt_s": 2.67,
+     "tools": 189
+    },
+    {
+     "seconds": 34.56,
+     "in": 12498,
+     "out": 1230,
+     "load_s": 0.02,
+     "prompt_s": 2.85,
+     "tools": 189
+    },
+    {
+     "seconds": 14.41,
+     "in": 12764,
+     "out": 500,
+     "load_s": 0.14,
+     "prompt_s": 0.29,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15111, 32",
+   "stopped": ""
+  },
+  {
+   "id": "hex_base",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "sketch_extrude"
+   ],
+   "parameters": 1,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 3,
+   "error": "",
+   "answer": "Der sechseckige Sockel mit 30 mm Seitenweite und 8 mm Höhe ist erstellt und der Parameter @seitenweite ist gesetzt. Keine weiteren Schritte erforderlich, es sei denn, der Nutzer gibt zusätzliche Anforderungen bekannt.",
+   "seconds": 93.1,
+   "requests": [
+    {
+     "seconds": 46.08,
+     "in": 10323,
+     "out": 1745,
+     "load_s": 0.06,
+     "prompt_s": 2.98,
+     "tools": 189
+    },
+    {
+     "seconds": 31.19,
+     "in": 10836,
+     "out": 1252,
+     "load_s": 0.29,
+     "prompt_s": 0.38,
+     "tools": 189
+    },
+    {
+     "seconds": 15.59,
+     "in": 10928,
+     "out": 596,
+     "load_s": 0.01,
+     "prompt_s": 0.11,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15114, 14",
+   "stopped": ""
+  },
+  {
+   "id": "pocket_plate",
+   "good": false,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "create_brep_box",
+    "sketch_pocket"
+   ],
+   "parameters": 0,
+   "calls": 2,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der Deckel mit der Tasche ist erstellt. Bitte prüfen Sie, ob weitere Anpassungen erforderlich sind.",
+   "seconds": 38.0,
+   "requests": [
+    {
+     "seconds": 28.09,
+     "in": 11164,
+     "out": 976,
+     "load_s": 0.02,
+     "prompt_s": 2.69,
+     "tools": 189
+    },
+    {
+     "seconds": 9.69,
+     "in": 11924,
+     "out": 325,
+     "load_s": 0.02,
+     "prompt_s": 0.46,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15095, 94",
+   "stopped": ""
+  },
+  {
+   "id": "handrail_bend",
+   "good": true,
+   "asked": false,
+   "ambiguous": false,
+   "expects_part": false,
+   "expects_parameter": false,
+   "ops": [
+    "sketch_sweep"
+   ],
+   "parameters": 0,
+   "calls": 1,
+   "invalid": 0,
+   "steps": 2,
+   "error": "",
+   "answer": "Der Handlauf-Bogen wurde erfolgreich erstellt. Bitte geben Sie weitere Anweisungen, falls weitere Änderungen oder Operationen erforderlich sind.",
+   "seconds": 80.8,
+   "requests": [
+    {
+     "seconds": 71.79,
+     "in": 11068,
+     "out": 2989,
+     "load_s": 0.02,
+     "prompt_s": 2.6,
+     "tools": 189
+    },
+    {
+     "seconds": 8.76,
+     "in": 11357,
+     "out": 278,
+     "load_s": 0.04,
+     "prompt_s": 0.32,
+     "tools": 189
+    }
+   ],
+   "lookups": 0,
+   "gpu": "15086, 97",
+   "stopped": ""
+  }
+ ]
+}

@@ -35,7 +35,7 @@ def open_window(tmp_path, entry):
     path.write_bytes(entry.mesh.raw.export(file_type="stl"))
     window = MainWindow(Session(), UiSettings())
     window.open_path(path)
-    assert window.session.wait_for_idle(30000)
+    assert window.session.wait_for_idle(60_000)
     assert window.session.last_result.complete
     return window
 

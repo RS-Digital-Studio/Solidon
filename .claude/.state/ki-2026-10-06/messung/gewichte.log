@@ -1,0 +1,9 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+geladen E:\ComfyUI (1)\ComfyUI\models\diffusion_models\trellis_2_int8_convrot.safetensors 5253048192
+geladen E:\ComfyUI (1)\ComfyUI\models\vae\trellis_2_shape_vae_bf16.safetensors 1095844024
+geladen E:\ComfyUI (1)\ComfyUI\models\clip_vision\dino_v3_vit_l.safetensors 1212559776
+geladen E:\ComfyUI (1)\ComfyUI\models\diffusion_models\flux-2-klein-4b-fp8.safetensors 4070624520
+geladen E:\ComfyUI (1)\ComfyUI\models\text_encoders\qwen_3_4b_fp4_flux2.safetensors 3848213998
+geladen E:\ComfyUI (1)\ComfyUI\models\vae\flux2-vae.safetensors 336211292
+fertig
+EXIT=0

@@ -134,6 +134,15 @@ def test_handoff_state_requires_completed_scope_even_without_findings(
     assert handoff_state(findings, ("Prüfung fehlt",) if incomplete else ()) == expected
 
 
+def test_a_running_evaluation_goes_before_every_finding():
+    """RM-534: Ein Lauf geht dem Fehler vor — der gehört dann zum vorigen Stand."""
+    error = [Finding("op.fillet_edges.GeometryError", "error", "Der Radius ist zu groß.")]
+
+    assert handoff_state(error, (), running=True) == "Wird neu berechnet …"
+    assert handoff_state(error, ()) == "Übergabe nicht empfohlen"
+    assert handoff_state((), (), running=True) == "Wird neu berechnet …"
+
+
 def test_preview_explanation_reads_the_same_scenes_and_does_not_claim_print_checks():
     from app.core.geom.difference import SceneDifference
     from app.ui.print_contract import explain_difference

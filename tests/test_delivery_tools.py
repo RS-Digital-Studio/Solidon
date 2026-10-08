@@ -627,7 +627,10 @@ source "$HOOK_FILE"
         errors="replace",
         env=environment,
         cwd=tmp_path,
-        timeout=20,
+        # Die Grenze fängt einen hängenden Hook, keinen langsamen: Unter Volllast
+        # brauchte ein Lauf über 20 Sekunden, und je Lauf rissen andere Fälle
+        # (06.10.2026, 100 % CPU neben fremden Testläufen).
+        timeout=180,
     )
     call_log = tmp_path / "calls.txt"
     calls = call_log.read_text(encoding="utf-8").splitlines() if call_log.exists() else []

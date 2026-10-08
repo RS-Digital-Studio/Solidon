@@ -26,6 +26,7 @@ from app.core.types import (
     Finding,
     Fit,
     OpContext,
+    OpId,
     OpResult,
     Parameter,
     Profile,
@@ -669,6 +670,72 @@ def test_a_removed_pin_leaves_no_finding_behind(profile: Profile) -> None:
     history.undo()
     both = {entry.code for entry in evaluate(document, profile).scene.report.findings}
     assert {"pin_for_bore.made", "prepare.halves_in_place"} <= both
+
+
+def test_a_pin_whose_plate_is_removed_says_nothing_about_the_bore(profile: Profile) -> None:
+    """Entfernt man die Platte und behält den Stift, steht er nicht mehr „in der Bohrung“.
+
+    Der Befund des Stifts nennt seinen Träger (``Finding.object_ids``) und fällt
+    mit ihm. Ohne das sprach er weiter von einer Bohrung, die es nicht mehr gibt.
+    """
+    history, pin = _plate_with_pin(profile)
+    before = evaluate(history.document, profile)
+    assert "pin_for_bore.made" in {entry.code for entry in before.scene.report.findings}
+
+    history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=("obj_1",))])
+    after = evaluate(history.document, profile)
+
+    assert after.complete and pin in after.scene.objects, "der Stift bleibt"
+    assert "pin_for_bore.made" not in {entry.code for entry in after.scene.report.findings}
+
+
+def test_a_pin_whose_plate_is_removed_drops_its_thread_warning_too(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch „Im Teil berühren sich die Gänge …“ fällt mit der Platte (Review P2, G1).
+
+    Der Stift hat zwei Ausgänge, und ``evaluate`` ordnet einen Befund dann
+    keinem zu; nur ``object_ids`` bindet ihn an den Träger. Erzwungen wird die
+    Berührung über die Drehmessung (``bore_pin.thread_turn``).
+    """
+    from app.core.geom import bore_pin
+    from app.core.scene.project import new_project
+
+    monkeypatch.setattr(bore_pin, "thread_turn", lambda *args, **kwargs: (0.0, -0.05))
+    history = History(new_project("centauri-carbon-2", "petg").document)
+    history.apply(
+        "Platte mit Gewinde",
+        [
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 10.0}),
+            OperationDraft(op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "z": 10.0}),
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"size": "M6", "length": 8.0, "internal": True, "at_feature": "hole_1"},
+            ),
+        ],
+    )
+    plate = evaluate(history.document, profile).scene.objects["obj_1"]
+    thread = next(name for name, entry in plate.features.items() if entry.kind == "thread")
+    history.apply(
+        "Stift",
+        [OperationDraft(op="pin_for_bore", inputs=("obj_1",), params={"at_feature": thread})],
+    )
+    before = evaluate(history.document, profile)
+    touching = [
+        entry
+        for entry in before.scene.report.findings
+        if entry.code == "pin_for_bore.thread_touches"
+    ]
+    assert touching and touching[0].object_ids == ("obj_1",), "die Gegenprobe davor"
+
+    history.apply("Entfernen", [OperationDraft(op="delete_object", inputs=("obj_1",))])
+    after = evaluate(history.document, profile)
+
+    assert after.complete and len(after.scene.objects) == 1, "der Stift bleibt"
+    assert not [
+        entry for entry in after.scene.report.findings if entry.code.startswith("pin_for_bore.")
+    ]
 
 
 def _plate_with_pin(profile: Profile) -> tuple[History, str]:
@@ -1871,6 +1938,9 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
         def get(self, key: str) -> CachedResult | None:
             return None
 
+        def refusal(self, key: str) -> None:
+            return None
+
         def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
             self.written.append(to_disk)
 
@@ -2030,6 +2100,562 @@ def test_a_preview_still_detects_where_a_later_step_needs_the_feature(monkeypatc
 
     assert preview.stopped_at is None, "der Bezug auf hole_1 ist eingelöst"
     assert len(runs) >= 1, "der gebohrte Körper wurde erkannt, weil hole_1 gebraucht wird"
+
+
+def _unconfirmed(shown: Any, confirmed: Any) -> list[str]:
+    """Erkannte Merkmale im Bild, die der Lauf mit Erkennung so nicht bestätigt.
+
+    Bestätigt heißt: derselbe Name, dieselben Dreiecke, dieselben Maße.
+    """
+
+    def differs(first: Any, second: Any) -> bool:
+        if isinstance(first, bool) or isinstance(second, bool):
+            return first != second
+        if isinstance(first, tuple | list):
+            return any(differs(a, b) for a, b in zip(first, second, strict=True))
+        return abs(float(first) - float(second)) > EPS_GEOM
+
+    found: list[str] = []
+    for name, feature in sorted(shown.features.items()):
+        if feature.provenance == "generated":
+            continue
+        partner = confirmed.features.get(name)
+        if partner is None or tuple(feature.face_indices) != tuple(partner.face_indices):
+            found.append(name)
+            continue
+        found.extend(
+            f"{name}.{key}"
+            for key in ("diameter", "depth", "through", "centre", "area")
+            if key in feature.params
+            and key in partner.params
+            and differs(feature.params[key], partner.params[key])
+        )
+    return found
+
+
+def _chamfered_pin(
+    pushes: Callable[[dict[bool, str]], list[tuple[str, float]]],
+    *,
+    solid: Any = None,
+    chamfer: float = 5.0,
+) -> Any:
+    """Der Kundenstift aus RM-537, nachgebaut, mit den gegebenen Versätzen.
+
+    Stift Ø 33,8 × 50 als Netz, 5 mm Fase an beiden Enden; ``pushes`` bekommt
+    die Namen der Stirnflächen (oben ``True``) und nennt Fläche und Weg je
+    *Fläche versetzen*. Zurück kommen Dokument, Profil, Quellen und Körper.
+    ``solid`` setzt einen anderen Körper (``trimesh``) an die Stelle des
+    Stifts, ``chamfer`` die Fase.
+    """
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    pin = solid
+    if pin is None:
+        pin = trimesh.creation.cylinder(radius=16.9, height=50.0, sections=32)
+        pin.apply_translation((0.0, 0.0, 25.0))
+    profile = make_profile("centauri-carbon-2", "petg")
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/pin.stl", sha256=""
+    )
+    project.sources["src_1"] = trimesh.exchange.stl.export_stl(pin)
+    history = History(project.document)
+    history.apply("Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    body = project.document.ops[0].outputs[0]
+    history.apply(
+        "Fase",
+        [
+            OperationDraft(
+                op="chamfer_edges",
+                inputs=(body,),
+                params={"distance": chamfer, "edges": "horizontal"},
+            )
+        ],
+    )
+    sources = ProjectSources(project)
+    chamfered = evaluate(project.document, profile, sources=sources)
+    ends = {
+        feature.params["normal"][2] > 0: name
+        for name, feature in chamfered.scene.objects[body].features.items()
+        if feature.kind == "face" and abs(abs(feature.params["normal"][2]) - 1.0) < EPS_GEOM
+    }
+    assert set(ends) == {True, False}, "Voraussetzung: beide Stirnflächen sind erkannt"
+    for face, distance in pushes(ends):
+        history.apply(
+            "Versetzen",
+            [
+                OperationDraft(
+                    op="push_face", inputs=(body,), params={"face": face, "distance": distance}
+                )
+            ],
+        )
+    forget_cache()
+    return project.document, profile, sources, body, ends
+
+
+def _through(ends: dict[bool, str]) -> list[tuple[str, float]]:
+    """Oben −22 und unten −20 (je eine Sackbohrung), dann oben −70 durch — der Kundenfall."""
+    return [(ends[True], -22.0), (ends[False], -20.0), (ends[True], -70.0)]
+
+
+def test_the_picture_shows_no_blind_holes_that_a_later_push_drilled_through() -> None:
+    """RM-537: Ohne Erkennung stand der Stift mit zwei Sackbohrungen im Bild.
+
+    Die beiden Sackbohrungen braucht je ein Folgeschritt, also werden sie
+    erkannt. Der letzte Schritt reicht am Netz jedes Merkmal mit geleerten
+    Dreiecken und alten Maßen weiter; ohne Erkennung standen beide im Bild, und
+    wer eine wählte, verlor sie, sobald die Erkennung die durchgehende fand.
+    """
+    document, profile, sources, body, _ends = _chamfered_pin(_through)
+
+    picture = evaluate(document, profile, sources=sources, detect_features=False)
+    full = evaluate(document, profile, sources=sources)
+
+    assert picture.stopped_at is None and full.stopped_at is None
+    holes = [f for f in full.scene.objects[body].features.values() if f.kind == "hole"]
+    assert len(holes) == 1 and holes[0].params["through"], "Voraussetzung: eine durchgehende"
+    assert body in picture.recognition_left_out, "Voraussetzung: das Bild hat nicht erkannt"
+    assert not [
+        name
+        for name, feature in picture.scene.objects[body].features.items()
+        if feature.kind == "hole" and not feature.params.get("through")
+    ], "im Bild steht eine Sackbohrung, die der letzte Schritt durchgebohrt hat"
+    assert _unconfirmed(picture.scene.objects[body], full.scene.objects[body]) == []
+
+
+@pytest.mark.parametrize(
+    ("op", "params", "kept"),
+    [
+        # Bohren reicht die alten Merkmale unverändert weiter, über ein neues Netz.
+        ("drill_hole", {"diameter": 6.0, "x": 3.0, "y": 3.0, "z": 4.0}, False),
+        # Verschieben nimmt sie starr mit; das ist belegt und bleibt im Bild.
+        ("translate_object", {"dx": 5.0}, True),
+        # Teilen gibt zwei neue Körper ohne eigenen Vorgänger aus; beide
+        # trugen die Merkmale der ganzen Platte mit deren Dreiecken (N1).
+        ("split_pinned", {"axis": "x", "position": 0.37, "pins": 0}, False),
+    ],
+)
+def test_the_picture_carries_only_features_the_recognition_confirms(
+    op: str, params: dict[str, Any], kept: bool
+) -> None:
+    """Die Zwillinge zu RM-537: was eine Operation unbelegt weiterreicht.
+
+    Kennt der Merker das Eingangsnetz (ein voller Lauf vorher im selben
+    Prozess), trägt der Körper vor dem letzten Schritt erkannte Merkmale. Ohne
+    Erkennung danach darf das Bild davon nur zeigen, was auch der Lauf mit
+    Erkennung so ausgibt — die starre Bewegung ja, das unverändert über ein
+    gebohrtes Netz gereichte nicht, auch nicht in den Hälften nach *Teilen*.
+    """
+    project, history, profile, cache, sources, first = _plate_project()
+    body = project.document.ops[0].outputs[0]
+    assert len(first.scene.objects[body].features) == 10
+    history.apply(op, [OperationDraft(op=op, inputs=(body,), params=params)])
+    outputs = project.document.ops[-1].outputs
+
+    picture = evaluate(
+        project.document, profile, sources=sources, cache=cache, detect_features=False
+    )
+    full = evaluate(project.document, profile, sources=sources, cache=cache)
+
+    assert picture.stopped_at is None and full.stopped_at is None
+    shown = []
+    for output in outputs:
+        assert output in picture.scene.objects and output in full.scene.objects, "Voraussetzung"
+        assert _unconfirmed(picture.scene.objects[output], full.scene.objects[output]) == [], output
+        shown += [
+            f for f in picture.scene.objects[output].features.values() if f.provenance == "detected"
+        ]
+    assert bool(shown) is kept
+
+
+def test_a_generated_face_that_a_later_push_used_up_leaves_the_scene() -> None:
+    """RM-537, Nebenbefund: Erzeugte Flächen ohne Dreiecke blieben nach dem Durchdrücken stehen.
+
+    *Fläche versetzen* erklärt die gewählte Fläche als erzeugt. Am Kundenstift
+    drückte der letzte Versatz den Taschenboden durch das Teil; beide
+    Bodenflächen gibt es danach nicht mehr, und trotzdem standen ``face_1`` und
+    ``face_2`` ohne Dreiecke im Baum — wählbar, im Bild unsichtbar. Im Bild
+    vor der Erkennung stehen sie ebenso wenig: Was dort steht, steht danach
+    auch im Baum.
+    """
+    document, profile, sources, body, ends = _chamfered_pin(_through)
+
+    picture = evaluate(document, profile, sources=sources, detect_features=False)
+    full = evaluate(document, profile, sources=sources)
+
+    assert full.stopped_at is None
+    features = full.scene.objects[body].features
+    assert ends[True] not in features and ends[False] not in features, "verbrauchte Flächen"
+    assert not [
+        finding
+        for finding in full.scene.report.findings
+        if finding.code in {"perceive.generated_lost", "perceive.referenced_lost"}
+    ], "der Schritt verbraucht seine eigene Fläche — kein Verlust, auf den jemand zeigt"
+    assert set(picture.scene.objects[body].features) <= set(features)
+
+
+def test_a_later_step_on_a_used_up_face_stops_with_the_lost_reference() -> None:
+    """Wer die verbrauchte Fläche danach noch nennt, hält an — mit Bezugsverlust.
+
+    Der Verlust steht am verbrauchenden Schritt und nennt den späteren; der
+    spätere hält mit dem Satz, dass die Fläche nicht mehr da ist — nicht mit
+    „keine Fläche gewählt“, denn gewählt war eine.
+    """
+    document, profile, sources, _body, ends = _chamfered_pin(
+        lambda ends: [*_through(ends), (ends[True], -1.0)]
+    )
+
+    full = evaluate(document, profile, sources=sources)
+
+    last, consuming = document.ops[-1], document.ops[-2]
+    assert full.stopped_at == last.id
+    lost = [
+        finding
+        for finding in full.scene.report.findings
+        if finding.code == "perceive.generated_lost"
+    ]
+    assert [(f.op_id, f.values["feature"]) for f in lost] == [(consuming.id, ends[True])]
+    assert str(last.id) in lost[0].values["where"]
+    halt = next(f for f in full.scene.report.findings if f.op_id == last.id)
+    assert halt.severity == "error"
+    assert "gibt es an dem Körper nicht mehr" in str(halt.message)
+
+
+def test_the_new_name_for_a_used_up_one_spares_the_declared_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-537, zweite Durchsicht: Der Ausweichname fällt auf kein erzeugtes Merkmal.
+
+    Der frühe Ausgang ohne erkannte Vorgänger: Der Körper trug vor dem Schritt
+    nur erzeugte Flächen; ``face_1`` ist verbraucht, ``face_2`` bleibt. Die
+    Erkennung nennt eine neue Wand ``face_1``, die deshalb ausweichen muss —
+    und wich auf ``face_2`` aus, das erzeugte Merkmal daneben. Beim
+    Zusammenführen überschrieb ``face_2`` die Wand, und sie fehlte still.
+    """
+    import importlib
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Feature, Operation, SceneObject
+
+    box = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    box.apply_translation((0.0, 0.0, 5.0))
+    mesh = MeshData.of(box)
+
+    def face(name: str, normal: tuple[float, float, float], centre: Any, **more: Any) -> Feature:
+        return Feature(
+            id=name,
+            kind="face",
+            params={"normal": normal, "centre": centre, "area": 1600.0},
+            **{"provenance": "generated", **more},
+        )
+
+    previous = {
+        "face_1": face("face_1", (0.0, 0.0, 1.0), (0.0, 0.0, 10.0), face_indices=(0, 1)),
+        "face_2": face("face_2", (0.0, 0.0, -1.0), (0.0, 0.0, 0.0), face_indices=(2, 3)),
+    }
+    # Die Operation reicht beide weiter, ``face_1`` weit hinausgedrückt.
+    output = {
+        "face_1": face("face_1", (0.0, 0.0, 1.0), (0.0, 0.0, -50.0)),
+        "face_2": face("face_2", (0.0, 0.0, -1.0), (0.0, 0.0, 0.0)),
+    }
+    wall = face("face_1", (1.0, 0.0, 0.0), (20.0, 0.0, 5.0), provenance="detected")
+    wall = dataclasses.replace(wall, params={**wall.params, "area": 400.0}, face_indices=(4, 5))
+    floor = face("face_9", (0.0, 0.0, -1.0), (0.0, 0.0, 0.0), provenance="detected")
+    floor = dataclasses.replace(floor, face_indices=(2, 3))
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(
+        evaluation, "detect", lambda *_args, **_kwargs: {"face_1": wall, "face_9": floor}
+    )
+
+    result = _with_features(
+        SceneObject(id="obj_1", name="Kasten", mesh=mesh, features=output),
+        previous,
+        Operation(id=5, op="push_face", inputs=("obj_1",), outputs=("obj_1",)),
+        lambda _question, choices: choices[0],
+        [],
+    )
+
+    assert "face_1" not in result.features, "die verbrauchte Fläche ist fort"
+    assert result.features["face_2"].provenance == "generated", "Voraussetzung: sie bleibt"
+    walls = [
+        name
+        for name, feature in result.features.items()
+        if tuple(feature.params["normal"]) == (1.0, 0.0, 0.0)
+    ]
+    assert len(walls) == 1, f"die neue Wand fehlt: {sorted(result.features)}"
+
+
+@pytest.mark.parametrize(
+    "with_floor", [False, True], ids=["ohne_vorgaenger", "mit_erkanntem_vorgaenger"]
+)
+def test_a_cut_off_face_does_not_lend_its_name_either(
+    monkeypatch: pytest.MonkeyPatch, with_floor: bool
+) -> None:
+    """RM-537, zweite Durchsicht: Auch eine abgeschnittene erzeugte Fläche behält ihren Namen.
+
+    Der Zwilling der verbrauchten Fläche (``cut_off``) fällt aus ``declared``
+    und ``carried``; sein Name bleibt über ``gone_here`` gesperrt, an beiden
+    Aufrufen von ``apply_mapping``. Kasten 40 × 40 × 10 auf 5 mm
+    abgeschnitten, die erzeugte Deckfläche ``face_1`` liegt darüber, und die
+    Erkennung nennt eine Seitenwand ``face_1``. Ohne erkannten Vorgänger läuft
+    die Zuordnung über ``if not previous``, mit der erkannten Bodenfläche
+    ``face_9`` über den unteren Aufruf.
+    """
+    import importlib
+
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Feature, Operation, SceneObject
+
+    def box(height: float) -> MeshData:
+        made = trimesh.creation.box(extents=(40.0, 40.0, height))
+        made.apply_translation((0.0, 0.0, height / 2.0))
+        return MeshData.of(made)
+
+    before, after = box(10.0), box(5.0)
+    normals = np.asarray(before.raw.face_normals)
+    centres = np.asarray(before.raw.triangles_center)
+    top = tuple(int(i) for i in np.flatnonzero((normals[:, 2] > 0.99) & (centres[:, 2] > 9.9)))
+    assert top, "Voraussetzung: die Deckfläche hat Dreiecke"
+    lid = Feature(
+        id="face_1",
+        kind="face",
+        provenance="generated",
+        params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 10.0), "area": 1600.0},
+        face_indices=top,
+    )
+    wall = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"normal": (1.0, 0.0, 0.0), "centre": (20.0, 0.0, 2.5), "area": 200.0},
+        face_indices=(0, 1),
+    )
+    cap = dataclasses.replace(
+        wall,
+        id="face_7",
+        params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 5.0), "area": 1600.0},
+        face_indices=(2, 3),
+    )
+    bottom = tuple(int(i) for i in np.flatnonzero(normals[:, 2] < -0.99))
+    floor = Feature(
+        id="face_9",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 0.0, -1.0), "centre": (0.0, 0.0, 0.0), "area": 1600.0},
+        face_indices=bottom,
+    )
+    detected = {"face_1": wall, "face_7": cap}
+    before_features = {"face_1": lid}
+    if with_floor:
+        detected["face_8"] = dataclasses.replace(floor, id="face_8")
+        before_features["face_9"] = floor
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    cut: list[str] = []
+    real_cut = evaluation._cut_by_the_step
+
+    def watched(feature: Feature, source: Any, bounds: Any) -> bool:
+        found = real_cut(feature, source, bounds)
+        if found:
+            cut.append(feature.id)
+        return bool(found)
+
+    monkeypatch.setattr(evaluation, "_cut_by_the_step", watched)
+    monkeypatch.setattr(evaluation, "detect", lambda *_args, **_kwargs: dict(detected))
+
+    result = _with_features(
+        SceneObject(
+            id="obj_1",
+            name="Kasten",
+            mesh=after,
+            features={"face_1": dataclasses.replace(lid, face_indices=())},
+        ),
+        before_features,
+        Operation(id=3, op="cut_away", inputs=("obj_1",), outputs=("obj_1",)),
+        lambda _question, choices: choices[0],
+        [],
+        source_mesh=before,
+        origin_mesh=before,
+    )
+
+    assert cut == ["face_1"], "Voraussetzung: der Schritt hat die Deckfläche abgeschnitten"
+    if with_floor:
+        assert "face_9" in result.features, "Voraussetzung: der Boden fand seinen Vorgänger"
+    named = result.features.get("face_1")
+    assert named is None or tuple(named.params["normal"]) == (0.0, 0.0, 1.0), (
+        f"die Seitenwand trägt den Namen der Deckfläche: {named}"
+    )
+
+
+@pytest.mark.parametrize("needed", [None, {"hole_1": ("op5",)}], ids=["frei", "gebraucht"])
+def test_a_cut_away_carried_feature_does_not_lend_its_name_either(
+    monkeypatch: pytest.MonkeyPatch, needed: dict[str, tuple[str, ...]] | None
+) -> None:
+    """Ein ungeprüft mitreisendes Merkmal, das der Schritt ganz wegschneidet, behält seinen Namen.
+
+    *Abschneiden* gibt seine Merkmale nicht vollständig aus, und eine
+    Bausteinbohrung (``recognised=False``) reist ungeprüft mit. Liegt sie
+    danach ganz außerhalb, fällt sie als ``dropped`` weg — ihr Name bleibt
+    über ``gone_here`` vergeben. Sonst hieße die neu erkannte Bohrung
+    ``hole_1``, und ein späterer Schritt auf ``hole_1`` träfe still sie,
+    statt anzuhalten (§21.3).
+    """
+    import importlib
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Feature, Operation, SceneObject
+
+    def box(height: float) -> MeshData:
+        made = trimesh.creation.box(extents=(40.0, 40.0, height))
+        made.apply_translation((0.0, 0.0, height / 2.0))
+        return MeshData.of(made)
+
+    before, after = box(10.0), box(5.0)
+    part_bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="generated",
+        recognised=False,
+        params={"centre": (0.0, 0.0, 9.0), "axis": (0.0, 0.0, 1.0), "diameter": 3.0, "depth": 1.0},
+    )
+    new_hole = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"centre": (10.0, 0.0, 2.5), "axis": (0.0, 0.0, 1.0), "diameter": 3.0, "depth": 5.0},
+        face_indices=(0, 1),
+    )
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    away: list[str] = []
+    real_away = evaluation._cut_away_here
+
+    def watched(feature: Feature, *args: Any) -> bool:
+        found = bool(real_away(feature, *args))
+        if found:
+            away.append(feature.id)
+        return found
+
+    monkeypatch.setattr(evaluation, "_cut_away_here", watched)
+    monkeypatch.setattr(evaluation, "detect", lambda *_args, **_kwargs: {"hole_1": new_hole})
+    findings: list[Finding] = []
+
+    result = _with_features(
+        SceneObject(id="obj_1", name="Kasten", mesh=after, features={}),
+        {"hole_1": part_bore},
+        Operation(id=3, op="cut_away", inputs=("obj_1",), outputs=("obj_1",)),
+        lambda _question, choices: choices[0],
+        findings,
+        previous_bounds=before.bounds,
+        source_mesh=before,
+        origin_mesh=before,
+        needed=needed,
+    )
+
+    assert away == ["hole_1"], "Voraussetzung: der Schritt hat die Bausteinbohrung weggeschnitten"
+    assert "hole_1" not in result.features, (
+        f"die neue Bohrung trägt den Namen der weggeschnittenen: {result.features.get('hole_1')}"
+    )
+    renamed = [f for f in result.features.values() if f.params.get("centre") == (10.0, 0.0, 2.5)]
+    assert len(renamed) == 1, f"die neue Bohrung fehlt: {sorted(result.features)}"
+    lost = [f.code for f in findings if f.code == "perceive.generated_lost"]
+    assert lost == (["perceive.generated_lost"] if needed else []), findings
+
+
+def test_a_used_up_face_does_not_lend_its_name_to_a_new_one() -> None:
+    """RM-537, B3: Der Name einer verbrauchten Fläche geht an keine neue Fläche.
+
+    Kasten 40 × 40 × 10 mit 2-mm-Fase, die Deckfläche −4 und dann −20 durch:
+    Im selben Schritt entstehen die Wände der Öffnung, und die erste bekam den
+    freien Namen der Deckfläche. Ein späterer Schritt auf die Deckfläche
+    versetzte dann still die Taschenwand, statt anzuhalten.
+    """
+    import trimesh
+
+    box = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    box.apply_translation((0.0, 0.0, 5.0))
+    document, profile, sources, body, ends = _chamfered_pin(
+        lambda ends: [(ends[True], -4.0), (ends[True], -20.0), (ends[True], -1.0)],
+        solid=box,
+        chamfer=2.0,
+    )
+
+    full = evaluate(document, profile, sources=sources)
+
+    top = ends[True]
+    last = document.ops[-1]
+    assert full.stopped_at == last.id, "der spätere Bezug auf die Deckfläche hält an"
+    # Stehen bleibt der Stand nach dem Durchdrücken (§15.3).
+    after = full.scene.objects[body].features
+    assert top not in after, f"„{top}“ bezeichnet jetzt etwas anderes: {after.get(top)}"
+
+
+def test_a_pushed_face_that_stays_keeps_its_name_and_triangles() -> None:
+    """Gegenfall: Eine Tasche ohne Durchbruch behält ihren Boden unter seinem Namen."""
+    document, profile, sources, body, ends = _chamfered_pin(
+        lambda ends: [(ends[True], -10.0), (ends[False], -10.0)]
+    )
+
+    full = evaluate(document, profile, sources=sources)
+
+    assert full.stopped_at is None
+    features = full.scene.objects[body].features
+    for name in (ends[True], ends[False]):
+        assert name in features and features[name].provenance == "generated"
+        assert features[name].face_indices, "der Boden trägt seine Dreiecke"
+
+
+def test_only_a_face_without_a_trace_counts_as_used_up() -> None:
+    """Verbraucht ist nur eine erzeugte Fläche, von der nichts mehr da ist.
+
+    Bleibt eine erkannte Fläche in ihrer Ebene, gleich gerichtet, gilt sie als
+    möglicherweise noch da. Eine Bausteinfläche, die nie Dreiecke hatte, und
+    jede andere Art ohne Dreiecke fragt die Regel nicht.
+    """
+    from app.core.scene.evaluate import _consumed_faces
+    from app.core.types import Feature
+
+    def face(name: str, z: float, *, provenance: str = "generated", triangles=()) -> Feature:
+        return Feature(
+            id=name,
+            kind="face",
+            provenance=provenance,  # type: ignore[arg-type]
+            params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, z), "area": 10.0},
+            face_indices=tuple(triangles),
+        )
+
+    declared = {
+        "face_gone": face("face_gone", 5.0),
+        "face_in_plane": face("face_in_plane", 10.0),
+        "face_part": face("face_part", 5.0),
+        "pin_part": Feature(
+            id="pin_part", kind="pin", provenance="generated", params={"diameter": 4.0}
+        ),
+    }
+    before = {
+        "face_gone": face("face_gone", 5.0, triangles=(1, 2)),
+        "face_in_plane": face("face_in_plane", 10.0, triangles=(3, 4)),
+        "face_part": face("face_part", 5.0),
+        "pin_part": dataclasses.replace(declared["pin_part"], face_indices=(5, 6)),
+    }
+    detected = {"face_9": face("face_9", 10.0, provenance="detected", triangles=(7, 8))}
+
+    assert _consumed_faces(declared, set(declared), before, detected, 100.0) == {"face_gone"}
 
 
 def test_coarse_steps_before_a_changed_step_rebuild_the_stack_without_gaps(monkeypatch) -> None:
@@ -6801,6 +7427,673 @@ def test_a_hole_change_that_the_first_stage_holds_does_not_ask_for_the_quality()
 
     assert not first.reads_quality, "Voraussetzung: das Einlesen fragt nicht"
     assert changed.complete and not changed.reads_quality
+
+
+def _short_chain_finds_nothing(monkeypatch: pytest.MonkeyPatch, *, nor_the_full: bool) -> list[str]:
+    """Die verlustfreien Stufen liefern nichts, wie am Kundenteil (RM-534).
+
+    Mit ``nor_the_full`` auch die übrigen — die volle Kette bestätigt den
+    Halt. Zurück kommt die Liste der gerufenen Stufen.
+    """
+    import trimesh
+
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.mesh import MeshData
+
+    real = boolean_module._run_stage
+    called: list[str] = []
+
+    def stage(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        called.append(name)
+        if nor_the_full or name in boolean_module.DRAFT_CHAIN:
+            return MeshData.of(trimesh.Trimesh())
+        return real(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", stage)
+    return called
+
+
+def _drilled_box(profile: Profile) -> Any:
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={})])
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 10.0, "depth": 0.0},
+            )
+        ],
+    )
+    return project.document
+
+
+def _window(document: Document, profile: Profile, **options: Any) -> Any:
+    """Wie Fensterlauf, Verlaufsumbau und Agent: Entwurf, und wo nur die kurze Kette ausgeht, fein.
+
+    Vorschauen rechnen ohne ``full_chain_when_stuck`` (RM-534, §17.2).
+    """
+    return evaluate(document, profile, quality="draft", full_chain_when_stuck=True, **options)
+
+
+def _asking_cut(registry: Registry, *, stages: Any = None) -> None:
+    """Eine Operation, die erst fragt und dann bohrt — wie *Abdichten* (RM-534).
+
+    ``stages`` gibt der Booleschen eine feste Kette, wie es ein Schritt tut,
+    der ausdrücklich nur eine Stufe will.
+    """
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+
+    @register_op(
+        name="asking_cut",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def cut(ctx: OpContext) -> OpResult:
+        ctx.ask("Welche Seite?", ["links", "rechts"])
+        block = MeshData.of(trimesh.creation.box((20.0, 20.0, 20.0)))
+        # Die Güte fragt der Schritt auch selbst, wie jede Operation mit Rundungen.
+        sections = 64 if ctx.quality == "fine" else 32
+        tool = MeshData.of(trimesh.creation.cylinder(radius=2.5, height=40.0, sections=sections))
+        outcome = boolean(
+            "difference", [block, tool], quality=ctx.quality, seed=ctx.seed, stages=stages
+        )
+        return OpResult(
+            outputs=[SceneObject(id="", name="Probe", mesh=outcome.mesh)], solver=outcome.solver
+        )
+
+
+def test_a_halt_that_read_the_quality_is_no_fine_verdict(
+    document: Document, profile: Profile
+) -> None:
+    """RM-534: Ein Entwurfshalt, der nach der Güte gefragt hat, ist nie fein.
+
+    Die Auswertung brach beim Halt ab, bevor sie die Frage nach der Güte
+    festhielt; die Sitzung hielt den Halt deshalb für fein, und Druckdialog
+    wie Export bestellten die feine Rechnung nie — obwohl sie anders hätte
+    ausgehen können.
+    """
+    registry = Registry()
+
+    @register_op(
+        name="draft_only_fails",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def make(ctx: OpContext) -> OpResult:
+        if ctx.quality == "draft":
+            raise GeometryError()
+        return OpResult(outputs=[SceneObject(id="", name="Probe", mesh=_mesh(10.0))])
+
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="draft_only_fails")])
+
+    halted = evaluate(document, profile, quality="draft", registry=registry)
+
+    assert halted.stopped_at == document.ops[-1].id, "Voraussetzung: der Entwurf hält an"
+    assert halted.reads_quality, "der Halt gilt als fein, und keiner rechnet fein nach"
+
+
+def test_a_draft_run_goes_the_full_chain_where_the_short_one_ends(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Im Entwurf rechnet derselbe Lauf den einen Schritt mit allen Stufen.
+
+    Der Kunde sah „… sagt erst die vollständige“ als Fehler und nahm
+    *Reparieren und erneut versuchen*, das nicht helfen konnte. Jetzt kommt
+    das Ergebnis der vollen Kette, und es ist genau das der feinen Rechnung.
+    Fensterlauf, Verlaufsumbau und Agent tun es, mit oder ohne Cache, und
+    der nächste Lauf trifft es im Cache.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+    drill = document.ops[-1].id
+
+    cold = _window(document, profile)
+    rescued = _window(document, profile, cache=cache)
+    fine = evaluate(document, profile, quality="fine")
+    called.clear()
+    again = _window(document, profile, cache=cache)
+
+    assert rescued.complete, [str(finding.message) for finding in rescued.scene.report.findings]
+    assert rescued.solvers[drill].strategy == "jittered", rescued.solvers[drill]
+    assert rescued.reads_quality, "ein fein gerechneter Schritt fragt nach der Güte"
+    shown = rescued.scene.objects["obj_1"].mesh
+    expected = fine.scene.objects["obj_1"].mesh
+    assert shown.triangle_count == expected.triangle_count
+    assert math.isclose(shown.volume, expected.volume, rel_tol=1e-12)
+    assert cold.complete and cold.object_hashes == rescued.object_hashes, (
+        "ohne Cache sagt der Fensterlauf etwas anderes als mit"
+    )
+    assert again.complete and not called, f"der zweite Lauf rechnete neu: {called}"
+
+
+def test_a_rescued_step_is_kept_even_when_a_later_one_stops(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Was die volle Kette gerettet hat, rechnet hinter einem Halt nicht noch einmal.
+
+    Ein angehaltener Lauf legt sonst nichts in den Cache (§15.6). Ohne
+    Ausnahme kostete am Kundenteil jede Änderung an einem späteren,
+    anhaltenden Schritt die 17 s des geretteten noch einmal.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    History(document).apply(
+        "Bohrung, die es nicht gibt",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_99", "diameter": 6.0},
+            )
+        ],
+    )
+    cache = ResultCache()
+    rescued = document.ops[-2].id
+
+    first = _window(document, profile, cache=cache)
+    assert first.stopped_at == document.ops[-1].id, "Voraussetzung: der letzte Schritt hält an"
+    assert first.solvers[rescued].strategy == "jittered", "Voraussetzung: der vorige ist gerettet"
+    called.clear()
+    second = _window(document, profile, cache=cache)
+
+    assert second.stopped_at == document.ops[-1].id
+    assert "jittered" not in called, f"der gerettete Schritt rechnete noch einmal: {called}"
+
+
+def test_the_full_chain_says_its_verdict_once_with_the_step_of_today(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Bestätigt die volle Kette den Halt, gilt ihr Satz, und zwar ohne Nachrechnen.
+
+    Am Kundenteil sagte sie „Das Werkzeug deckt ihn vollständig ab“, der
+    hilfreichere Satz. Jede Änderung dahinter rechnete den Schritt sonst
+    wieder mit allen Stufen — 17 s für dieselbe Auskunft. Der gemerkte Satz
+    trägt die Kennung, die der Schritt heute hat: Verschieben und Einfügen
+    vergeben neue bei gleichem Schlüssel, und ein Befund am alten Schritt
+    führte *Eingabe korrigieren* ins Leere.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+    drill = document.ops[-1].id
+
+    first = _window(document, profile, cache=cache)
+    tried = list(called)
+    called.clear()
+    renumbered = dataclasses.replace(
+        document,
+        ops=[*document.ops[:-1], dataclasses.replace(document.ops[-1], id=OpId(drill + 1000))],
+    )
+    second = _window(renumbered, profile, cache=cache)
+
+    assert first.stopped_at == drill and second.stopped_at == drill + 1000
+    assert "voxel" in tried, f"die volle Kette lief nicht: {tried}"
+    halt = next(finding for finding in first.scene.report.findings if finding.op_id == drill)
+    assert all(action.id != "use_voxel_stage" for action in halt.suggestions), (
+        "der Satz verweist weiter auf eine Kette, die schon gelaufen ist"
+    )
+    assert first.reads_quality and second.reads_quality
+    assert not called, f"der zweite Lauf rechnete den Schritt noch einmal: {called}"
+    again = next(finding for finding in second.scene.report.findings if finding.code == halt.code)
+    assert again.op_id == drill + 1000, "der gemerkte Halt nennt den Schritt von damals"
+    assert str(again.message) == str(halt.message)
+
+
+def test_a_helper_that_died_in_the_full_chain_is_tried_again(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Gemerkt wird nur das Urteil der vollen Kette, kein verlorener Hilfsprozess.
+
+    Der Satz dazu rät, den Schritt noch einmal zu versuchen; gemerkt hielt
+    der nächste Lauf an, ohne eine Stufe zu rufen — eine Sackgasse bis zum
+    Projektwechsel.
+    """
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.kernel_process import KernelHelperLostError
+
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    patched = boolean_module._run_stage
+    lost = [True]
+
+    def dies_once(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name == "jittered" and lost:
+            lost.clear()
+            raise KernelHelperLostError()
+        return patched(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", dies_once)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+
+    first = _window(document, profile, cache=cache)
+    second = _window(document, profile, cache=cache)
+
+    assert first.stopped_at == document.ops[-1].id, "Voraussetzung: der Hilfsprozess starb"
+    assert second.complete, "der verlorene Hilfsprozess wurde als Urteil gemerkt"
+    assert "jittered" in called
+
+
+def test_a_question_of_the_step_comes_once_per_run(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Rechnet der Schritt mit der vollen Kette nach, kommt seine Frage nicht noch einmal.
+
+    Der zweite Aufruf bekam dasselbe ``ctx.ask``, und im Fenster stand
+    dieselbe Frage im selben Lauf zweimal am Bildschirm.
+    """
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    registry = Registry()
+    _asking_cut(registry)
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
+    asked: list[str] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    result = _window(document, profile, registry=registry, ask=answer)
+
+    assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+    assert result.solvers[document.ops[-1].id].strategy == "jittered"
+    assert asked == ["Welche Seite?"]
+
+
+def test_a_halt_after_a_question_is_not_kept(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Hat der Schritt gefragt, merkt sich der Cache sein Urteil nicht.
+
+    Die Antwort steht nirgends im Schlüssel; der nächste Lauf fragt wieder,
+    und eine andere Wahl kann anders ausgehen.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    registry = Registry()
+    _asking_cut(registry)
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
+    asked: list[str] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    cache = ResultCache()
+    first = _window(document, profile, registry=registry, ask=answer, cache=cache)
+    called.clear()
+    second = _window(document, profile, registry=registry, ask=answer, cache=cache)
+
+    assert first.stopped_at == second.stopped_at == document.ops[-1].id
+    assert asked == ["Welche Seite?", "Welche Seite?"]
+    assert "voxel" in called, "der zweite Lauf nahm ein gemerktes Urteil statt zu fragen"
+
+
+def test_a_move_is_judged_with_the_full_chain_like_the_window(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Der Verlaufsumbau sagt nicht ab, was das Fenster danach rechnet.
+
+    Er prüfte das umgebaute Dokument im Entwurf ohne volle Kette und sagte
+    „Das würde die Kette anhalten — geändert wurde nichts“ über einen
+    Schritt, den das Fenster gerettet hätte.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+    from app.core.scene.revision import dependencies, revise
+
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={})])
+    history.apply(
+        "Schieben", [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 5.0})]
+    )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 10.0, "depth": 0.0},
+            )
+        ],
+    )
+    cache = ResultCache()
+    window = _window(history.document, profile, cache=cache)
+    assert window.complete, "Voraussetzung: der Entwurf rettet die Bohrung"
+    ops = history.operations
+    context = dependencies(history.document, window)
+    plan = history.plan_move([ops[2].id], ops[1].id, context)
+
+    revision = revise(
+        history,
+        plan,
+        evaluate=lambda document: _window(document, profile, cache=cache),
+        baseline=window,
+        context=context,
+    )
+
+    assert revision.result.complete
+    moved = revision.plan.document(history.document)
+    assert [entry.op for entry in sorted(moved.ops, key=lambda entry: entry.id)] == [
+        "create_box",
+        "drill_hole",
+        "translate_object",
+    ]
+
+
+def test_the_agent_keeps_a_step_that_only_the_full_chain_carries(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Der Agent verwirft keinen Schritt, den das Fenster rechnet.
+
+    Er prüfte jeden Schritt im Entwurf ohne volle Kette, nahm ihn bei
+    „… sagt erst die vollständige“ zurück und meldete „Die Kette hält an“.
+    Und er rechnet den geretteten Schritt nicht nach jedem weiteren neu.
+    """
+    from app.core.agent.session import AgentSession
+    from app.core.backends.llm import Reply, ToolCall
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import ProjectSources, new_project
+    from tests.scripted_backend import ScriptedBackend
+
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    agent = AgentSession(
+        backend=ScriptedBackend(
+            answers=[
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="drill_hole",
+                            arguments={
+                                "objects": ["obj_1"],
+                                "diameter": 5.0,
+                                "x": 0.0,
+                                "y": 0.0,
+                                "z": 10.0,
+                                "depth": 0.0,
+                            },
+                        ),
+                    )
+                ),
+                Reply(tool_calls=(ToolCall(id="2", name="create_box", arguments={}),)),
+                Reply(text="Loch gebohrt, zweiter Quader daneben."),
+            ]
+        ),
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Bohr ein Loch in den Quader")
+
+    assert [draft.op for draft in proposal.drafts] == ["drill_hole", "create_box"]
+    assert proposal.stopped != "halted", [str(finding.message) for finding in proposal.findings]
+    assert "jittered" in called, "Voraussetzung: nur die volle Kette trägt den Schritt"
+    assert called.count("jittered") == 1, f"jede Prüfung rechnete den Schritt neu: {called}"
+
+
+@pytest.mark.parametrize("stages", [("direct",), ("direct", "welded")])
+def test_a_step_that_wants_its_own_stages_gets_no_full_chain(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch, stages: Any
+) -> None:
+    """RM-534: Verlangt ein Schritt ausdrücklich seine Stufen, bleibt es dabei.
+
+    Auch die Entwurfskette selbst, ausdrücklich verlangt: Die volle Güte gäbe
+    ihm dieselben Stufen noch einmal — in jedem Lauf umsonst, und danach
+    dieselbe Absage. Entscheidend ist, ob die Güte gekürzt hat
+    (``BooleanFailedError.cut_short``), nicht welche Stufen liefen.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    registry = Registry()
+    _asking_cut(registry, stages=stages)
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="asking_cut")])
+
+    result = _window(document, profile, registry=registry, ask=lambda _q, c: c[0])
+
+    assert result.stopped_at == document.ops[-1].id
+    assert called == list(stages), called
+
+
+def test_window_revision_and_agent_go_the_full_chain_and_previews_do_not() -> None:
+    """RM-534, Anschluss: Wer den Schalter setzt, steht im Quelltext fest (§17.2).
+
+    Fensterlauf, Verlaufsumbau und Agent entscheiden über den Stand und setzen
+    ``full_chain_when_stuck``; jede andere Auswertung der Sitzung ist eine
+    Vorschau und setzt ihn nicht — sonst kostete ein überdeckendes Werkzeug
+    je Wert im Dialog die 20 s der Voxelstufe.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+
+    def own_nodes(function: ast.AST) -> list[ast.AST]:
+        # Jeder Aufruf zählt bei seiner innersten Funktion: ``_RevisionWorker.work``
+        # umschließt nur das innere ``run`` und ist selbst keine Vorschau.
+        found: list[ast.AST] = []
+        pending = list(ast.iter_child_nodes(function))
+        while pending:
+            node = pending.pop()
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+                continue
+            found.append(node)
+            pending.extend(ast.iter_child_nodes(node))
+        return found
+
+    def calls(path: str) -> dict[str, list[bool]]:
+        tree = ast.parse((root / path).read_text(encoding="utf-8"))
+        found: dict[str, list[bool]] = {}
+        for function in ast.walk(tree):
+            if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for node in own_nodes(function):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "evaluate"
+                ):
+                    flagged = any(
+                        keyword.arg == "full_chain_when_stuck"
+                        and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is True
+                        for keyword in node.keywords
+                    )
+                    found.setdefault(function.name, []).append(flagged)
+        return found
+
+    window = calls("app/ui/session.py")
+    agent = calls("app/core/agent/session.py")
+    assert window["run_evaluation"] == [True]
+    assert window["run"] == [True], "der Verlaufsumbau rechnet wie das Fenster danach"
+    assert agent["_evaluate"] == [True]
+    previews = {
+        name: flags for name, flags in window.items() if name not in {"run_evaluation", "run"}
+    }
+    assert previews and not any(any(flags) for flags in previews.values()), previews
+
+
+def test_a_preview_takes_known_verdicts_but_never_computes_the_full_chain(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534, §17.2: Vorschauen bleiben beim Entwurf (Entscheidung Robert).
+
+    Die Voxelstufe kostet an einem überdeckenden Werkzeug 20 s, und eine
+    Vorschau läuft je Wert im Dialog. Sie rechnet die volle Kette deshalb nie
+    selbst: Kalt hält sie mit ``short_chain_only`` — das sperrt *Übernehmen*
+    nicht —, und was der Fensterlauf schon gerettet hat, nimmt sie.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+
+    cold = evaluate(document, profile, quality="draft", cache=cache)
+    assert cold.stopped_at == document.ops[-1].id
+    assert cold.short_chain_only, "der Halt der Vorschau ist als schnelle Rechnung gekennzeichnet"
+    assert "jittered" not in called and "voxel" not in called, called
+    _window(document, profile, cache=cache)
+    called.clear()
+    warm = evaluate(document, profile, quality="draft", cache=cache)
+
+    assert warm.complete and not called, "die Vorschau nimmt das Ergebnis der vollen Kette"
+    assert not warm.short_chain_only
+
+
+def test_a_window_halt_is_no_short_chain_halt(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach der vollen Kette ist ein Halt ein Urteil, kein Halt der schnellen Rechnung."""
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    document = _drilled_box(profile)
+
+    halted = _window(document, profile)
+
+    assert halted.stopped_at == document.ops[-1].id and not halted.short_chain_only
+
+
+def test_a_memory_shortage_in_the_full_chain_is_not_kept(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Eine Stufe, der der Speicher ausging, urteilt nicht über den Schritt.
+
+    Gemerkt hielt der nächste Lauf an, ohne eine Stufe zu rufen — eine
+    Sackgasse bis zum Projektwechsel, dieselbe Bauart wie beim verlorenen
+    Hilfsprozess.
+    """
+    from app.core.geom import boolean as boolean_module
+
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=True)
+    patched = boolean_module._run_stage
+    short = [True]
+
+    def runs_out(kind: Any, meshes: Any, name: str, seed: Any, cancelled: Any = None) -> Any:
+        if name == "voxel" and short:
+            short.clear()
+            raise MemoryError
+        return patched(kind, meshes, name, seed, cancelled)
+
+    monkeypatch.setattr(boolean_module, "_run_stage", runs_out)
+    document = _drilled_box(profile)
+    cache = ResultCache()
+
+    first = _window(document, profile, cache=cache)
+    called.clear()
+    second = _window(document, profile, cache=cache)
+
+    assert first.stopped_at == second.stopped_at == document.ops[-1].id
+    assert "voxel" in called, f"der Speichermangel wurde als Urteil gemerkt: {called}"
+
+
+def test_a_foreign_failure_that_read_the_quality_is_no_fine_verdict(
+    document: Document, profile: Profile
+) -> None:
+    """RM-534: Auch ein Programmfehler nach der Frage nach der Güte hält nicht als fein."""
+    registry = Registry()
+
+    @register_op(
+        name="draft_breaks",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def make(ctx: OpContext) -> OpResult:
+        if ctx.quality == "draft":
+            raise RuntimeError("nur im Entwurf")
+        return OpResult(outputs=[SceneObject(id="", name="Probe", mesh=_mesh(10.0))])
+
+    History(document, registry=registry).apply("Probe", [OperationDraft(op="draft_breaks")])
+
+    halted = evaluate(document, profile, quality="draft", registry=registry)
+
+    assert halted.stopped_at == document.ops[-1].id
+    assert halted.reads_quality
+
+
+def test_the_full_chain_says_in_the_progress_why_the_step_takes_longer(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Fortschrittszeile nennt den Schritt und warum er jetzt länger rechnet."""
+    _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    document = _drilled_box(profile)
+    said: list[str] = []
+
+    _window(document, profile, progress=lambda _fraction, text: said.append(text))
+
+    assert any("die vollständige läuft" in text for text in said), said
+
+
+def test_a_rescued_step_that_asked_waits_for_a_complete_run(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-534: Sofort gemerkt wird nur, was ohne Frage entstand.
+
+    Die Antwort steht nirgends im Schlüssel; erst ein vollständiger Lauf legt
+    das Ergebnis in den Cache, wie jedes andere. Hält ein späterer Schritt,
+    fragt der nächste Lauf wieder.
+    """
+    called = _short_chain_finds_nothing(monkeypatch, nor_the_full=False)
+    registry = Registry()
+    _asking_cut(registry)
+
+    @register_op(
+        name="always_stops",
+        title=_("Objekt erzeugen"),
+        category="scene",
+        params=MakeParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def stops(ctx: OpContext) -> OpResult:
+        raise GeometryError()
+
+    History(document, registry=registry).apply(
+        "Probe", [OperationDraft(op="asking_cut"), OperationDraft(op="always_stops")]
+    )
+    asked: list[str] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    cache = ResultCache()
+    _window(document, profile, registry=registry, ask=answer, cache=cache)
+    called.clear()
+    _window(document, profile, registry=registry, ask=answer, cache=cache)
+
+    assert asked == ["Welche Seite?", "Welche Seite?"]
+    assert "jittered" in called, (
+        "ein Ergebnis mit Frage ging vor einem vollständigen Lauf in den Cache"
+    )
 
 
 @pytest.mark.parametrize("following", [False, True])

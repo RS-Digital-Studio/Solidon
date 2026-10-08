@@ -33,7 +33,15 @@ from typing import Any, Final, Protocol
 from urllib.parse import urlsplit
 
 from app.branding import APP_NAME, APP_VERSION
-from app.core.agent.tools import ADD_FIT, ASK_USER, runs_foreign_source, tool_schemas
+from app.core.agent.tools import (
+    ADD_FIT,
+    ASK_USER,
+    gathered_refusal,
+    refused_gathered,
+    runs_foreign_source,
+    tool_schemas,
+    user_only_kind,
+)
 from app.core.errors import AppError, OperationCancelled
 from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
@@ -192,11 +200,16 @@ def remote_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]
 
     Gesperrt heißt hier auch: nicht angeboten. Eine Operation, die
     :func:`check_call` abweisen wird, in der Liste zu führen, hieße, der
-    Gegenstelle einen Weg zu zeigen, den es nicht gibt."""
+    Gegenstelle einen Weg zu zeigen, den es nicht gibt — das gilt auch für
+    *Formen* und *Stellung geben*, die ohne die Geste des Nutzers nichts tun
+    und deshalb immer abgewiesen werden (RM-014)."""
+    source = registry or REGISTRY
     return tuple(
         _as_mcp_tool(entry)
         for entry in tool_schemas(registry)
-        if entry["name"] not in DENIED and not runs_foreign_source(str(entry["name"]))
+        if entry["name"] not in DENIED
+        and not runs_foreign_source(str(entry["name"]))
+        and not (source.has(str(entry["name"])) and user_only_kind(source.get(str(entry["name"]))))
     )
 
 
@@ -372,18 +385,18 @@ def _refuse_gathered(name: str, arguments: dict[str, Any], registry: Registry | 
     Ein unbekanntes Werkzeug ist hier kein Fehler mehr — die Zeile darüber hat
     das schon abgelehnt; was hier ankommt, steht im Register.
     """
-    from app.core.registry import GATHERED_KINDS, REGISTRY
+    from app.core.registry import REGISTRY
 
     source = registry or REGISTRY
     if not source.has(name):
         return
-    for entry in source.get(name).params.spec():
-        if entry.kind in GATHERED_KINDS and arguments.get(entry.name):
-            refused = _(
-                "Dieser Parameter entsteht aus Gesten des Nutzers und wird nicht "
-                "ferngesteuert — Skizze, Pinsel und Skelett gehören ins Fenster."
-            )
-            raise RemoteRefusedError(f"{refused} ({entry.name})")
+    # Dieselbe Frage wie die Chat-Sitzung (``tools.refused_gathered``): auch
+    # der leere Aufruf von *Formen* oder *Stellung geben* legte sonst einen
+    # Schritt an, der nichts tut (RM-014).
+    entry = refused_gathered(source.get(name), arguments)
+    if entry is not None:
+        # Derselbe Satz wie im Chat: Er nennt je Art den Weg, der offen bleibt.
+        raise RemoteRefusedError(f"{gathered_refusal(entry.kind)} ({entry.name})")
 
 
 class RemoteRefusedError(Exception):

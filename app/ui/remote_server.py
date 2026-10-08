@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import socket
+import socketserver
 import threading
 import time
 from contextlib import suppress
@@ -552,6 +553,18 @@ class _BoundedHTTPServer(ThreadingHTTPServer):
         self._active_lock = threading.Lock()
         self._stopping = threading.Event()
         super().__init__(address, handler)
+
+    def server_bind(self) -> None:
+        """Binden ohne Namensauflösung — ``HTTPServer`` fragt sonst ``socket.getfqdn``.
+
+        Gestartet wird im Hauptfaden des Fensters, und die Rückwärtsauflösung von
+        ``127.0.0.1`` dauerte am macOS-Runner 35 s (RM-104); so lange stünde die
+        Oberfläche. Den Namen liest niemand, der Handler fragt nur ``server_port``.
+        """
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
 
     def process_request(self, request: _SocketRequest, client_address: Any) -> None:
         assert isinstance(request, socket.socket)

@@ -209,7 +209,7 @@ Zur Kenntnis — vom Bericht ausdrücklich ohne Arbeitsauftrag, im Register bewu
 | RM-204 | Merkmalklick baut alle Handlungen neu | release | Nur noch `test_feature_panel.py` und `test_ui.py` im Release-Tor; die Zeit ist am echten Fenster erfüllt (massbild: 7,4–9,5 ms, Ziel unter 20 ms) — das Register nennt diese Messung nicht. | massbild.md:457 |
 | RM-197 | Maßeditor im Bild | release | Abnahme am echten Fenster mit Hardware-Gefühl; massbild hat es ohne dieses belegt. | massbild.md:460 |
 | RM-200 | Ein Zug am Griff soll flüssig sein | release | „Fühlt sich flüssig an“ am echten Fenster; die Zahlen (3–35 ms je Bewegung) liegen im Rahmen. | massbild.md:462 |
-| RM-166 | Ergebnisnetze aus Mesh-Ops überstehen keinen Weld | release | `xfail(linux)` fällt nach drei grünen Linux-CI-Läufen in Folge; Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde. | reparatur-schluss.md:41 |
+| RM-166 | Ergebnisnetze aus Mesh-Ops überstehen keinen Weld | release | `xfail(linux)` gefallen (06.10.2026, acht grüne Linux-Läufe in Folge); offen das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde. | reparatur-schluss.md:41 |
 | RM-055 | Neue Paketwerkzeuge im Kundenpaket | release | Den Signierprüfschritt (`73692bfbc`) am nächsten Installerlauf mit abweichendem Commit im Protokoll belegen. | werkzeuge-schluss.md:21 |
 | RM-234 | Linux-Fensterabnahme und macOS-Gegenprobe | release | Nachweis der unabhängigen Meldung der Fensterverträge an einem echten Lauf. | werkzeuge-schluss.md:14 |
 | RM-113 | Besitzerprüfung der Tokendatei auf dem Windows-Runner | release | Beleg auf dem CI-Runner; der Registertext sagt noch „das Repository ist nur beim Release öffentlich“, seit 27.09. ist es öffentlich (register.md:131–133). | werkzeuge-schluss.md:14 |

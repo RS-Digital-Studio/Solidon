@@ -1,0 +1,5 @@
+=== 17:20:32 head_65e3ec97b (qwen3:14b, F:/ki-head, 65e3ec97b) GPU vorher: 1373 MiB, 29 %
+    Exit 0  gut 25/39; gefragt 2/3; schemagültig 143/204; Baustein 6/13; Parameter 2/3; Zeit 75.3 min
+=== 18:36:13 ref_1ce7eac68 (qwen3:14b, F:/ki-ref, 1ce7eac68) GPU vorher: 1483 MiB, 33 %
+    Exit 0  gut 22/39; gefragt 2/3; schemagültig 174/242; Baustein 4/13; Parameter 2/3; Zeit 70.9 min
+=== 19:47:48 Kette fertig
