@@ -25,12 +25,13 @@ Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
 Auflagen werden daneben rechtzeitig bearbeitet. **Als Nächstes:** die Kundenblocker nach
 0.5.3 — das signierte Paket startet auf echten Intel-Macs nicht (RM-104; Ursache eingegrenzt,
-Signierschritt korrigiert, kommt mit dem nächsten Tag), Cura unter Linux (RM-521, gebaut,
-Abnahme beim Kunden mit dem nächsten Paket) — und die mit 0.5.3 fällige Antwort an den
-Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis 15.10. (RM-092),
-Verkaufskandidat bis 25.10., Start am 01.11.2026 um 10:00 Uhr (RM-061). Daneben bleiben die
-Mac-/Linux-Nachweise und die CRA-Betriebsvorbereitung offen — deren Frist ist am 11.09.2026
-**abgelaufen**, die Meldepflicht aus Art. 14 gilt seither (RM-091). Eine zurückgestellte
+am Kundengerät von Hand gegengeprobt, Signierschritt korrigiert, kommt mit dem nächsten Tag),
+Cura unter Linux (RM-521, gebaut, Abnahme beim Kunden mit dem nächsten Paket) — und die mit
+0.5.3 fällige Antwort an den Orca-Flatpak-Kunden (RM-522). Fristen: Verkaufskonzept bis
+15.10. (RM-092), Verkaufskandidat bis 25.10., Start am 01.11.2026 um 10:00 Uhr (RM-061).
+Daneben bleiben die Mac-/Linux-Nachweise und die CRA-Betriebsvorbereitung offen — deren Frist
+ist am 11.09.2026 **abgelaufen**, die Meldepflicht aus Art. 14 gilt seither (RM-091).
+Eine zurückgestellte
 Produktentscheidung oder ein kostenpflichtiger Lauf wird durch diesen
 Abgleich nicht freigegeben.
 
@@ -46,7 +47,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-050 — Kopier- und Pufferkosten großer Szenen am Fenster messen](#rm-050) | Plattformen, Pakete und Grafik | VTK ausgebaut (`5a57e261`), matplotlib durch HarfBuzz ersetzt (`25d5536ee`); offen die kopierten Bytes und Pufferkosten je großer Szene am Fenster |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der 0.5.3-Pakete am echten Linux- und Mac-Bildschirm; der Release-Starttest belegt Fenster und 3D-Ansicht nur unter Xvfb und am ARM-Runner |
 | [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Aktualisieren und Deinstallieren prüft der Installer-Workflow ab dem nächsten Release (`tools/check_windows_update.py`, am Runner von 0.5.2 auf 0.5.3 grün); offen: der Lauf im Release ohne Ausnahme für den behobenen Registerrest, Flatpak auf echter Linux-Grafik, Offline-Start |
-| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); offen der Start beim Kunden, Gegenprobe dafür `solidon-gegenprobe.sh`. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
+| [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Macs mit macOS 26: Hardened Runtime ohne `allow-unsigned-executable-memory` lässt schon das `import ctypes` in PyInstallers Bootstrap in Apples libffi kreisen (Quelltext, fremde Berichte); Signierschritt korrigiert, wörtlich samt Rücklesung ad hoc am Runner gefahren (Lauf 37530339300), Developer-ID-Signatur, Notarisierung, Installer und macOS-Releaseakte beider Architekturen im Handstart grün (Lauf 37530876754); eine Gegenprobe von Hand (Nachtrag, ohne Skript) am Intel-Mac des Kunden spricht für die Ursache (08.10.: ohne die Berechtigung hing es, mit ihr startete es), offen der Doppelklick auf das signierte Paket mit dem nächsten Tag. Daneben Intel-Fenster am Gerät, `abort_active` der Fernsteuerung und die übrigen Unix-Fälle |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Der Arbeiter stirbt nach dem Overlay-Ziehtest, die Overlay-Datei allein ist grün; nächster Schritt: die Testfolge des abgestürzten Arbeiters nachstellen und halbieren |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Paket A ist auf main: Bausteine, Muster, Skizzenbögen, Teilen und *Merkmal drehen* rechnen plattformgleich, der Wächter sieht durch den Merker der Erkennung; offen: Einpassungen in `perceive` (eigener Kern), Formen in `shapes.py` und Potenzen `**` im Kern (Liste am Punkt) |
 | [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Pakete 0.5.2 und 0.5.3 mit 3.14.8 gebaut, die Stückliste des Windows-Pakets 0.5.3 nennt CPython 3.14.8 und OpenSSL 3.5.9; offen die drei Arbeitsplätze |
@@ -541,8 +542,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   widerlegt, war **falsch**: Am Runner greift dieser Schutz nicht (unten). Messweg:
   `hardened_probe.py` und `mac-hardened-diag.yml` im selben Ordner.
 
-  **Ursache eingegrenzt am 06.10.2026** — belegt an Quelltext und fremden Geräten, am Gerät des
-  Kunden offen. Seine Angaben zu 0.5.3 (zu Hause): MacBookPro16,1 (Intel), macOS 26.5 (25F71),
+  **Ursache eingegrenzt am 06.10.2026** — belegt an Quelltext und fremden Geräten. Am Gerät des
+  Kunden spricht seit dem 08.10. eine Probe von Hand dafür, dass der Start an
+  `allow-unsigned-executable-memory` hängt; Ort und Kreisen in libffi zeigt dort kein Stapel
+  (unten, „Am Kundengerät“). Seine Angaben zu 0.5.3 (zu Hause): MacBookPro16,1 (Intel),
+  macOS 26.5 (25F71),
   `codesign --verify --deep --strict` „valid on disk“ — die Installation ist heil. Der direkte
   Start schrieb kein Zeichen, Strg+C wirkte nicht, ein Protokoll gab es nicht. Der Stand schreibt
   sonst beim Aufbau des Hauptfensters `QWidget::setMinimumSize: (/QLabel) Negative sizes (0,-1)`
@@ -583,7 +587,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   `ci/rm-104-signatur` (Lauf 37530876754): grün auf beiden Architekturen, samt
   Installer-Signatur und macOS-Releaseakte mit Start des notarisierten Pakets; die
   Notarisierung riss im ersten Versuch an einem Netzausfall des Runners ab und lief nach dem
-  Neustart der zwei Jobs durch. **Offen:** der Start auf dem Intel-Mac des Kunden.
+  Neustart der zwei Jobs durch. **Offen:** der Start des signierten und notarisierten Pakets mit
+  der Korrektur auf dem Intel-Mac des Kunden.
 
   **Gegenprobe am Kundengerät:** `solidon-gegenprobe.sh` signiert die installierte Kopie zweimal ad
   hoc mit `--options runtime` und `com.apple.security.cs.disable-library-validation` (ohne sie
@@ -599,6 +604,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   Aussage gescheitert), der Nachtrag eine mit, aber ohne Wächter und Stapel — belastbar ist das
   Skript. Changelog: ja — notarisiert mit Hardened Runtime ohne Liste ist jedes Mac-Paket seit
   0.4.1, am Kundengerät belegt 0.5.1 bis 0.5.3.
+
+  **Am Kundengerät (08.10.2026):** Der Kunde fuhr den Nachtrag vom 06.10. von Hand auf seinem
+  MacBookPro16,1 mit macOS 26.5 an 0.5.3. Ad hoc mit `--options runtime` und
+  `disable-library-validation`, aber ohne `allow-unsigned-executable-memory` blieb Solidon hängen
+  wie das Developer-ID-Paket; mit der Berechtigung startete es. Die Signaturen der beiden Läufe
+  unterscheiden sich nur in dieser einen Berechtigung, genau der, die der korrigierte
+  Signierschritt setzt. Den Ablauf deckt das nicht ganz: Ob vor dem ersten Start noch ein
+  hängendes Solidon lief (Strg+C wirkte am 06.10. nicht) und wie lange „ohne“ beobachtet wurde,
+  sagt die Rückmeldung nicht (beides fängt das Skript ab), und ein Stapel fehlt. Dass „mit“
+  startete, zeigt nur, dass beim zweiten Start nichts Altes im Weg war. Das Skript entfällt
+  trotzdem: Den Ausschlag gibt der Doppelklick auf das notarisierte Paket mit der Korrektur;
+  hängt es dort, folgt `solidon-diagnose.sh`.
 
   Messwege im selben Ordner: `mac_online_check.py` und `mac-online-check.yml`
   (Zertifikatssperre), `mac-entitlement-check.yml` (Signierteil und Rücklesung),
