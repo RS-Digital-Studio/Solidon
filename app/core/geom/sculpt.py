@@ -18,6 +18,13 @@ das Ergebnis des ersten zu setzen. Drei Werkzeuge lassen sich so nicht rechnen
 und beginnen von selbst eine neue Etappe (:data:`ORDERED_TOOLS`), und jeder
 Strich kann eine erzwingen (``cut``) — wer die exakte Reihenfolge braucht,
 kauft sie sich stückweise statt für die ganze Sitzung.
+
+**Pinselfassung 2 (RM-560)** legt die Etappengrenze an jede Geste: Ein neuer
+Mauszug wirkt auf das Ergebnis der vorigen, zehnmal dieselbe Linie wird ein
+runder Hügel statt einer Säule mit Falte (H4). Die Stärke ist eine Stufe 1
+bis 10 ohne Einheit; Auftragen sättigt je Geste, Glätten, Flachziehen und
+Kneifen laufen höchstens bis an ihr Ziel (H3). Alte Züge tragen Fassung 1
+und rechnen wie zuvor (:attr:`Stroke.brush`).
 """
 
 from __future__ import annotations
@@ -49,6 +56,7 @@ from app.core.geom.mesh import (
 )
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
+    CONVERGENT_TOOLS,
     ORDERED_TOOLS,
     Action,
     BaseParams,
@@ -74,29 +82,61 @@ AXIS_BITS: Final[tuple[tuple[int, int], ...]] = ((1, 0), (2, 1), (4, 2))
 #: beschränkt bleiben kann (P16.2).
 FALLOFF: Final = 1.0
 
+#: Die Pinselfassung neuer Züge (:attr:`Stroke.brush`, RM-560).
+BRUSH: Final = 2
 
-def stages(strokes: Sequence[Stroke]) -> list[list[Stroke]]:
-    """Die Strichliste in Abschnitte zerlegen, die je in einem Durchgang gehen.
+#: Die Stufen der Stärke in Fassung 2: eine Zahl ohne Einheit.
+LEVEL_RANGE: Final = (1, 10)
 
-    Ein Abschnitt endet vor einem Strich, der den Zustand vor sich liest
-    (``smooth``, ``inflate``, ``flatten``), vor einem erzwungenen Schnitt — und
-    nach einem solchen Strich wieder, denn was er hinterlässt, muss der
-    nächste sehen.
+#: Die Vorgabestufe einer neuen Sitzung — die Mitte, von der aus man in beide
+#: Richtungen nachstellen kann.
+LEVEL_DEFAULT: Final = 5
+
+#: Wie weit eine auftragende Probe der Fassung 2 bei voller Stufe trägt, als
+#: Anteil ihres Radius. Eine Linie aus Proben im Abstand eines halben Radius
+#: hebt die Fläche bei Stufe 5 um rund ein Fünftel des Radius (Messung H4).
+ADD_SHARE: Final = 0.25
+
+#: Wie viele Proben voller Stufe eine Geste höchstens aufhäuft, bevor sie
+#: sättigt. Ohne Grenze wuchs aus einem Kritzeln an einer Stelle eine Säule
+#: mit gefalteten Flanken (H4: 148,6° Diederwinkel); gesättigt wird sie ein
+#: Hügel, und die nächste Geste setzt auf dessen Ergebnis auf.
+ADD_LIMIT: Final = 2.0
+
+
+def starts_stage(previous: Stroke | None, stroke: Stroke) -> bool:
+    """Ob ``stroke`` hinter ``previous`` eine neue Etappe beginnt.
+
+    Fassung 1 (bis Format 48, RM-560): vor einem Strich, der den Zustand vor
+    sich liest (``smooth``, ``inflate``, ``flatten``), nach einem solchen und
+    vor einem erzwungenen Schnitt. Fassung 2: an jeder neuen Geste — und vor
+    einem Zug ohne Gestenkennung, denn der ist seine eigene. Wechselt die
+    Fassung, beginnt ebenfalls eine Etappe.
 
     Der erste Strich beginnt nie eine zweite Etappe: Vor ihm liegt nichts, was
     er lesen könnte, und ein leerer Durchgang kostet nur Zeit.
     """
+    if previous is None:
+        return False
+    if stroke.cut or stroke.brush != previous.brush:
+        return True
+    if stroke.brush >= BRUSH:
+        return not stroke.gesture or stroke.gesture != previous.gesture
+    return stroke.tool in ORDERED_TOOLS or previous.tool in ORDERED_TOOLS
+
+
+def stages(strokes: Sequence[Stroke]) -> list[list[Stroke]]:
+    """Die Strichliste in Abschnitte zerlegen, die je in einem Durchgang gehen
+    (:func:`starts_stage`)."""
     parts: list[list[Stroke]] = []
     current: list[Stroke] = []
+    previous: Stroke | None = None
     for stroke in strokes:
-        breaks = stroke.cut or stroke.tool in ORDERED_TOOLS
-        if breaks and current:
+        if current and starts_stage(previous, stroke):
             parts.append(current)
             current = []
         current.append(stroke)
-        if stroke.tool in ORDERED_TOOLS:
-            parts.append(current)
-            current = []
+        previous = stroke
     if current:
         parts.append(current)
     return parts
@@ -119,6 +159,91 @@ def mirror_centre(mesh: MeshData) -> np.ndarray:
         return np.zeros(3)
     middle: np.ndarray = (bounds[0] + bounds[1]) / 2.0
     return middle
+
+
+#: Wie viele Eckpunkte die Suche nach der Spiegelebene höchstens befragt —
+#: gleichmäßig über das Netz genommen, jeder so und so vielte.
+SYMMETRY_SAMPLE: Final = 500
+
+#: Wie weit die Spiegelebene von der Hüllquadermitte abrücken darf, als Anteil
+#: der Ausdehnung — und wie fein die Suche sie stellt (Anzahl Schritte je
+#: Seite, grob und dann fein um den besten).
+SYMMETRY_REACH: Final = 0.25
+SYMMETRY_STEPS: Final = 10
+
+#: Um wie viel die gefundene Ebene das Spiegelbild besser treffen muss als die
+#: Mitte, damit sie gilt. Ein Körper ohne Symmetrie fände sonst irgendeine
+#: Ebene, die ein wenig besser passt, und spiegelte dort: Eine erzeugte Figur
+#: trifft sich links/rechts an der gefundenen Ebene auf 0,38 bis 0,41 des
+#: Fehlers an der Mitte, oben/unten nur auf 0,6 bis 0,7 — dort ist keine.
+SYMMETRY_GAIN: Final = 0.5
+
+
+def fitted_mirror_centre(mesh: MeshData, axes: Sequence[int] = (0, 1, 2)) -> np.ndarray:
+    """Wo die Spiegelebenen eines Körpers liegen, wenn er sich dort selbst trifft (H11).
+
+    Die Mitte des Hüllquaders lag an einer erzeugten Figur 4,2 mm neben ihrer
+    Symmetrie: ein ausgestreckter Arm schiebt den Hüllquader, nicht den
+    Körper. Je Achse wird die Ebene gesucht, an der das Spiegelbild der
+    Eckpunkte das Netz am nächsten trifft, auf einem festen Raster um die
+    Mitte — dieselbe Ebene auf jeder Maschine. Trifft sie nicht deutlich
+    besser als die Mitte (:data:`SYMMETRY_GAIN`), bleibt die Mitte: Ein
+    unsymmetrischer Körper hat keine Symmetrie zu finden. Gesucht wird nur an
+    ``axes``; jede Achse für sich, also dieselbe Ebene, ob eine oder drei
+    gefragt sind.
+    """
+    middle = mirror_centre(mesh)
+    vertices = np.asarray(mesh.raw.vertices, dtype=float)
+    if len(vertices) < 4:
+        return middle
+    extent = np.ptp(vertices, axis=0)
+    tree = cKDTree(vertices)
+    sample = vertices[:: max(1, len(vertices) // SYMMETRY_SAMPLE)]
+    centre = middle.copy()
+    for axis in axes:
+        if extent[axis] <= EPS_GEOM:
+            continue
+
+        def miss(at: float, axis: int = axis) -> float:
+            mirrored = sample.copy()
+            mirrored[:, axis] = 2.0 * at - sample[:, axis]
+            away, _index = tree.query(mirrored)
+            return float(np.mean(away))
+
+        at_middle = miss(float(middle[axis]))
+        step = float(extent[axis]) * SYMMETRY_REACH / SYMMETRY_STEPS
+        best = (at_middle, 0, float(middle[axis]))
+        for rounds in range(2):
+            around = best[2]
+            for index in range(-SYMMETRY_STEPS, SYMMETRY_STEPS + 1):
+                at = around + index * step
+                candidate = (miss(at), abs(index) + rounds * SYMMETRY_STEPS, at)
+                best = min(best, candidate)
+            step /= SYMMETRY_STEPS
+        if best[0] < at_middle * SYMMETRY_GAIN:
+            centre[axis] = best[2]
+    return centre
+
+
+def mirror_plane(
+    mesh: MeshData, *, at_body: bool = True, fitted: bool = True, axes: int = 7
+) -> Vec3:
+    """Der Punkt, durch den die Spiegelebenen eines Formschritts gehen.
+
+    Eine Stelle für Operation, Vorschau und Fenster: Liefen sie auseinander,
+    zeigte die Vorschau den Spiegelzug an einer anderen Stelle als die
+    Auswertung danach. ``at_body`` aus heißt Nullpunkt der Szene (vor Format
+    40), ``fitted`` aus die Hüllquadermitte (vor Format 49). ``axes`` ist die
+    Bitmaske der Ebenen, die gebraucht werden (wie ``Stroke.symmetry``); die
+    übrigen bleiben in der Mitte und kosten keine Suche.
+    """
+    if not at_body:
+        return (0.0, 0.0, 0.0)
+    if fitted:
+        found = fitted_mirror_centre(mesh, [axis for bit, axis in AXIS_BITS if axes & bit])
+    else:
+        found = mirror_centre(mesh)
+    return (float(found[0]), float(found[1]), float(found[2]))
 
 
 def _mirrored(stroke: Stroke, centre: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -256,6 +381,13 @@ class _Stage:
         self.strokes: list[Stroke] = []
         self._neighbours: tuple[np.ndarray, np.ndarray] | None = None
         self._curvature: np.ndarray | None = None
+        # Pinselfassung 2: Weg und Gewicht je Eckpunkt, getrennt nach
+        # auftragend und zulaufend — angewandt erst in :meth:`positions`, weil
+        # Sättigung und Obergrenze an der Summe hängen, nicht am einzelnen Zug.
+        self._push: np.ndarray | None = None
+        self._push_weight: np.ndarray | None = None
+        self._pull: np.ndarray | None = None
+        self._pull_weight: np.ndarray | None = None
 
     def neighbours(self) -> tuple[np.ndarray, np.ndarray]:
         """Summe und Zahl der Nachbarn je Eckpunkt (:func:`_neighbours`)."""
@@ -308,6 +440,11 @@ class _Stage:
             if share != 1.0:
                 weight = weight * share
             places.append((centre, direction, near, weight))
+        if stroke.brush >= BRUSH:
+            self._add_level(stroke, places)
+            if missed is not None and not touched:
+                missed.append(stroke)
+            return
         for centre, direction, near, weight in places:
             if not np.any(weight > 0.0):
                 continue
@@ -339,11 +476,84 @@ class _Stage:
         if missed is not None and not touched:
             missed.append(stroke)
 
+    def _add_level(
+        self, stroke: Stroke, places: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]
+    ) -> None:
+        """Einen Zug der Pinselfassung 2 sammeln (RM-560, H3).
+
+        Die Stärke ist eine Stufe: ``stroke.strength / 10`` ist der Anteil, den
+        die Probe an ihrer Mitte beiträgt. Auftragende Werkzeuge sammeln eine
+        Richtung mal :data:`ADD_SHARE` des Radius, zulaufende den Weg zu ihrem
+        Ziel — beide mit ihrem Gewicht, damit :meth:`positions` die Summe
+        sättigen oder deckeln kann.
+        """
+        points, normals = self.points, self.normals
+        level = min(max(float(stroke.strength), 0.0), float(LEVEL_RANGE[1])) / LEVEL_RANGE[1]
+        converging = stroke.tool in CONVERGENT_TOOLS
+        if converging and self._pull is None:
+            self._pull = np.zeros_like(points)
+            self._pull_weight = np.zeros(len(points))
+        if not converging and self._push is None:
+            self._push = np.zeros_like(points)
+            self._push_weight = np.zeros(len(points))
+        reach = stroke.radius * ADD_SHARE
+        for centre, direction, near, weight in places:
+            share = weight * level
+            if not np.any(share > 0.0):
+                continue
+            if stroke.tool == "draw":
+                way = np.broadcast_to(direction * reach, (len(near), 3))
+            elif stroke.tool == "carve":
+                way = np.broadcast_to(-direction * reach, (len(near), 3))
+            elif stroke.tool == "inflate":
+                way = normals[near] * reach
+            elif stroke.tool == "smooth":
+                total, seen = self.neighbours()
+                way = total[near] / seen[near, None] - points[near]
+            elif stroke.tool == "flatten":
+                anchor = np.average(points[near], axis=0, weights=weight)
+                height = np.einsum("ij,j->i", points[near] - anchor, direction)
+                way = -direction * height[:, None]
+            else:
+                # Kneifen: höchstens auf halbem Weg zur Strichmitte — so kreuzen
+                # zwei Seiten einer Falte einander nie (H3: Stärke 3 ergab 216
+                # sich schneidende Dreieckspaare).
+                way = (centre - points[near]) * 0.5
+            if converging:
+                assert self._pull is not None and self._pull_weight is not None
+                self._pull[near] += way * share[:, None]
+                self._pull_weight[near] += share
+            else:
+                assert self._push is not None and self._push_weight is not None
+                self._push[near] += way * share[:, None]
+                self._push_weight[near] += share
+
+    def positions(self) -> np.ndarray:
+        """Die Eckpunkte nach den bisherigen Zügen dieser Etappe.
+
+        Fassung 1 ist die Summe der Wege. Fassung 2 teilt die gesammelte
+        Richtung durch ihr Gewicht und nimmt davon, was die Sättigung zulässt:
+        auftragend ``ADD_LIMIT·(1 - e^(-W/ADD_LIMIT))`` — für wenige Proben
+        fast die Summe, für ein Kritzeln an einer Stelle höchstens
+        :data:`ADD_LIMIT` volle Proben —, zulaufend ``min(W, 1)``: nie über das
+        Ziel hinaus.
+        """
+        placed = self.points + self.shift
+        if self._push is not None and self._push_weight is not None:
+            weight = self._push_weight
+            safe = np.where(weight > 0.0, weight, 1.0)
+            gain = np.where(weight > 0.0, -ADD_LIMIT * np.expm1(-weight / ADD_LIMIT) / safe, 0.0)
+            placed = placed + self._push * gain[:, None]
+        if self._pull is not None and self._pull_weight is not None:
+            weight = self._pull_weight
+            safe = np.where(weight > 0.0, weight, 1.0)
+            gain = np.where(weight > 0.0, np.minimum(weight, 1.0) / safe, 0.0)
+            placed = placed + self._pull * gain[:, None]
+        return np.asarray(placed, dtype=float)
+
     def moved(self) -> trimesh.Trimesh:
         """Die Fläche nach den bisherigen Zügen dieser Etappe."""
-        return trimesh.Trimesh(
-            vertices=self.points + self.shift, faces=self.body.faces, process=False
-        )
+        return trimesh.Trimesh(vertices=self.positions(), faces=self.body.faces, process=False)
 
 
 #: Nach wie vielen Zügen die Auswertung ihren Fortschritt meldet — je Zug
@@ -383,6 +593,59 @@ def median_edge(mesh: MeshData) -> float:
     return float(np.median(lengths)) if len(lengths) else 0.0
 
 
+#: Welcher Anteil der Hüllquaderdiagonale ein Pinsel zu Beginn greift (H8).
+#: Ein fester Radius von 6 mm war an der Figur aus dem Korpus ein Zwanzigstel
+#: der Diagonale, am Würfel ein Sechstel — derselbe Zug tat am einen fast
+#: nichts und überdeckte am anderen eine ganze Seite.
+RADIUS_SHARE: Final = 1.0 / 20.0
+
+#: Wie viele Dreiecke das selbsttätige Angleichen höchstens erzeugt. Darüber
+#: nimmt es die Kante, die dorthin passt, und die Leiste sagt, dass ein
+#: größerer Pinsel glatter wird — besser als eine Sitzung, die minutenlang
+#: rechnet und dann keinen Speicher mehr hat.
+REFINE_MAX_TRIANGLES: Final = 600_000
+
+
+def brush_radius_for(mesh: MeshData) -> float:
+    """Der Pinselradius, mit dem eine Sitzung an diesem Körper beginnt (H8).
+
+    Ein Zwanzigstel der Hüllquaderdiagonale, gerundet auf 1, 2 oder 5 mal
+    eine Zehnerpotenz — eine Zahl, die man liest und nachstellt, keine mit
+    drei Nachkommastellen.
+    """
+    bounds = np.asarray(mesh.raw.bounds, dtype=float)
+    if bounds.shape != (2, 3) or not np.isfinite(bounds).all():
+        return 5.0
+    diagonal = float(np.sqrt(((bounds[1] - bounds[0]) ** 2).sum())) * RADIUS_SHARE
+    if diagonal <= EPS_GEOM:
+        return 5.0
+    power = 10.0 ** math.floor(math.log10(diagonal))
+    mantissa = min((1.0, 2.0, 5.0, 10.0), key=lambda step: abs(math.log(diagonal / power / step)))
+    return float(min(max(mantissa * power, 0.1), 100.0))
+
+
+def refine_edge_for(
+    mesh: MeshData, radius: float, finest: float, edge: float | None = None
+) -> float:
+    """Auf welche Kantenlänge die Sitzung das Netz für diesen Pinsel angleicht —
+    oder null, wenn es fein genug ist (H2, H9).
+
+    Zu grob heißt: weniger als :data:`BRUSH_TO_EDGE` Kanten je Radius. Dann
+    :data:`REFINE_TO_EDGE` Kanten je Radius, nicht feiner als ``finest`` (die
+    Untergrenze von *Dreiecke angleichen*) und nicht feiner, als
+    :data:`REFINE_MAX_TRIANGLES` zulassen. ``edge`` ist die mittlere
+    Kantenlänge, wenn sie schon bekannt ist.
+    """
+    current = median_edge(mesh) if edge is None else edge
+    if current * BRUSH_TO_EDGE <= radius:
+        return 0.0
+    area = float(mesh.raw.area)
+    # Ein gleichseitiges Dreieck mit Kante e hat die Fläche √3/4·e².
+    largest = math.sqrt(max(area, 0.0) / (math.sqrt(3.0) / 4.0 * REFINE_MAX_TRIANGLES))
+    wanted = max(finest, radius / REFINE_TO_EDGE, largest)
+    return wanted if wanted < current else 0.0
+
+
 def stroke_at(
     mesh: MeshData,
     point: Vec3,
@@ -395,13 +658,22 @@ def stroke_at(
     before: Sequence[Stroke] = (),
     mirrored: int = 0,
     preview: SculptPreview | None = None,
+    gesture: int = 0,
+    brush: int = 1,
+    centre: Vec3 | None = None,
 ) -> Stroke:
     """Aus einem angeklickten Punkt einen Strich machen.
 
     Die Oberfläche liefert einen Ort, keine Richtung — und die Richtung ist
-    das, woran der Strich trägt. Sie kommt hier aus der Normale des nächsten
-    Eckpunkts: Bei einem Pinsel von einigen Millimetern ist das genau genug,
-    und es geht ohne den Abstandsindex, der auf dieser Maschine danebengreift.
+    das, woran der Strich trägt. In Pinselfassung 1 kommt sie aus der Normale
+    des nächsten Eckpunkts; an einer Kante zeigte die 45° schräg (H10). In
+    Fassung 2 ist sie das Mittel der Normalen im Pinselgebiet, gewichtet wie
+    der Pinsel selbst (:func:`_brush_direction`).
+
+    ``gesture`` und ``brush`` gehören zur Frage, ob der Zug eine Etappe
+    beginnt (:func:`starts_stage`), und reisen im Zug mit. ``centre`` ist die
+    Spiegelmitte der Sitzung (:func:`mirror_plane`); ohne Angabe die Mitte des
+    Hüllquaders.
 
     ``before`` sind die Züge, die schon in der Sitzung stehen, so wie die
     Vorschau sie rechnet. Geklickt wird auf die Fläche, die sie zeigt; ein
@@ -424,49 +696,77 @@ def stroke_at(
     Im Kern und nicht in der Oberfläche, weil es Geometrie ist. Was das Fenster
     beisteuert, sind zwei Zahlen und ein Klick.
     """
+    candidate = Stroke(
+        point=point,
+        normal=(0.0, 0.0, 1.0),
+        radius=radius,
+        strength=strength,
+        tool=_tool(tool),
+        symmetry=symmetry,
+        cut=cut,
+        gesture=gesture,
+        brush=brush,
+    )
     if preview is not None and preview.mesh is mesh and preview.strokes == tuple(before):
-        surface, cut, tree, normals = preview.surface_for(
-            point, radius, tool=tool, cut=cut, symmetry=symmetry | mirrored
-        )
+        surface, cut, tree, normals = preview.surface_for(candidate, symmetry=symmetry | mirrored)
     else:
         surface, cut = _surface_for(
-            mesh, before, point, radius, tool=tool, cut=cut, symmetry=symmetry | mirrored
+            mesh, before, candidate, symmetry=symmetry | mirrored, centre=centre
         )
         points = np.asarray(surface.raw.vertices, dtype=float)
         tree = cKDTree(points) if len(points) else None
         normals = np.asarray(surface.raw.vertex_normals, dtype=float)
     if tree is None:
-        return Stroke(point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=strength)
-    _away, index = tree.query(np.asarray(point, dtype=float))
+        return replace(candidate, cut=cut)
+    here = np.asarray(point, dtype=float)
+    _away, index = tree.query(here)
     normal = normals[int(index)]
-    return Stroke(
-        point=point,
-        normal=(float(normal[0]), float(normal[1]), float(normal[2])),
-        radius=radius,
-        strength=strength,
-        tool=tool,  # type: ignore[arg-type]
-        symmetry=symmetry,
-        cut=cut,
+    if brush >= BRUSH:
+        normal = _brush_direction(tree, normals, here, radius, normal)
+    return replace(
+        candidate, normal=(float(normal[0]), float(normal[1]), float(normal[2])), cut=cut
     )
+
+
+def _brush_direction(
+    tree: Any, normals: np.ndarray, point: np.ndarray, radius: float, nearest: np.ndarray
+) -> np.ndarray:
+    """Die Richtung eines Zugs der Fassung 2: das Mittel der Normalen unter dem Pinsel.
+
+    Gewichtet mit derselben Glocke, mit der der Pinsel wirkt, und nur über
+    Punkte, die zur Seite des Klicks schauen — sonst höben sich an einer
+    dünnen Wand Vorder- und Rückseite auf. Auf einer Kante eines Quaders zog
+    die Normale der nächsten Ecke den Zug 45° schräg (H10); das Mittel zeigt,
+    wohin die Fläche unter dem Pinsel im Ganzen schaut.
+    """
+    near = np.asarray(tree.query_ball_point(point, radius * FALLOFF), dtype=np.int64)
+    if not len(near):
+        return nearest
+    offset = tree.data[near] - point
+    away = np.sqrt(np.add.reduce(offset * offset, axis=1)) / max(radius, 1e-9)
+    weight = _falloff(away) * _facing(normals[near], nearest)
+    total = np.einsum("ij,i->j", normals[near], weight)
+    length = float(np.sqrt((total * total).sum()))
+    if length <= EPS_GEOM:
+        return nearest
+    found: np.ndarray = total / length
+    return found
 
 
 def _surface_for(
     mesh: MeshData,
     before: Sequence[Stroke],
-    point: Vec3,
-    radius: float,
+    stroke: Stroke,
     *,
-    tool: str,
-    cut: bool,
     symmetry: int = 0,
+    centre: Vec3 | None = None,
 ) -> tuple[MeshData, bool]:
     """Die Fläche, auf die ein neuer Zug wirkt, und ob er dafür eine Etappe
     beginnen muss.
 
     Die Etappe, der er sich anschließt, beginnt nach den abgeschlossenen
-    Etappen davor. Beginnt er ohnehin eine neue — erzwungen, als Werkzeug
-    aus :data:`ORDERED_TOOLS` oder nach einem solchen —, wirkt er auf die
-    Fläche nach allen Zügen. Sonst entscheidet, ob seine Kugel einen
+    Etappen davor. Beginnt er ohnehin eine neue (:func:`starts_stage`),
+    wirkt er auf die Fläche nach allen Zügen. Sonst entscheidet, ob seine Kugel einen
     Eckpunkt der Etappenfläche greift: dieselbe Frage, an der
     :meth:`_Stage.add` einen Zug verfehlt nennt — **an jedem seiner
     Spiegelorte**, um dieselbe Mitte, um die die Auswertung spiegelt.
@@ -477,16 +777,17 @@ def _surface_for(
     greift. Greift er auch die nicht, ist er verfehlt, und eine Etappe
     kostete einen Durchgang, ohne etwas zu ändern (RM-442).
     """
+    cut, radius = stroke.cut, stroke.radius
     if not before:
         return mesh, cut
-    centre = mirror_centre(mesh)
-    plane: Vec3 = (float(centre[0]), float(centre[1]), float(centre[2]))
+    middle = mirror_centre(mesh) if centre is None else np.asarray(centre, dtype=float)
+    plane: Vec3 = (float(middle[0]), float(middle[1]), float(middle[2]))
     current = stages(before)[-1]
-    fresh = cut or tool in ORDERED_TOOLS or current[-1].tool in ORDERED_TOOLS
+    fresh = starts_stage(before[-1], stroke)
     start = len(before) if fresh else len(before) - len(current)
     surface = _completed(mesh, tuple(before[:start]), plane)
-    probe = Stroke(point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=0.0)
-    places = [place for place, _way in _mirrored(replace(probe, symmetry=symmetry), centre)]
+    probe = replace(stroke, strength=0.0, symmetry=symmetry)
+    places = [place for place, _way in _mirrored(probe, middle)]
     if fresh or _reaches(surface, places, radius):
         return surface, cut
     after = apply_strokes(surface, before[start:], centre=plane)
@@ -618,21 +919,41 @@ class SculptPreview:
         """Die Ecken am Anfang der Etappen, nach der Nummer ihres ersten Zugs."""
         self._stage: _Stage | None = None
         self._begin = 0
-        self._shown: MeshData = mesh
+        self._shown: MeshData | None = mesh
+        """Die gezeigte Fläche — ``None``, solange sie nach einem Zug noch nicht
+        gebaut ist (:meth:`extend`)."""
         self._shown_tree: Any = None
         self._input_tree: Any = None
 
     @property
     def shown(self) -> MeshData:
         """Die Fläche nach allen Zügen — was die Vorschau zeigt."""
+        return self._shown_mesh()
+
+    def _shown_mesh(self) -> MeshData:
+        """Die gezeigte Fläche, gebaut, wenn jemand sie braucht."""
+        if self._shown is None:
+            stage = self._stage
+            self._shown = self.mesh if stage is None else self.mesh.replacing(stage.moved())
         return self._shown
 
     def show(self, strokes: Sequence[Stroke]) -> MeshData:
         """Die Fläche nach ``strokes``, gerechnet ab der letzten Etappe, die
         sich nicht geändert hat."""
+        self.extend(strokes)
+        return self._shown_mesh()
+
+    def extend(self, strokes: Sequence[Stroke]) -> None:
+        """Wie :meth:`show`, ohne die Fläche zu bauen (H6).
+
+        Ein Arbeiter, der mehrere wartende Proben auf einmal rechnet, braucht
+        das Netz nur nach der letzten; je Probe ein neues kostete an 241 480
+        Dreiecken mehr als die Probe selbst. Der nächste Zug fragt
+        :meth:`surface_for`, und das baut die Fläche, wo es sie braucht.
+        """
         strokes = tuple(strokes)
         if strokes == self.strokes:
-            return self._shown
+            return
         common = 0
         limit = min(len(strokes), len(self.strokes))
         while common < limit and strokes[common] == self.strokes[common]:
@@ -672,14 +993,13 @@ class SculptPreview:
             for stroke in strokes[begin + len(stage.strokes) : end]:
                 stage.add(stroke)
             if end < len(strokes):
-                self._starts[end] = stage.points + stage.shift
+                self._starts[end] = stage.positions()
                 stage = None
         self._keep_few()
         self._stage = stage
         self.strokes = strokes
-        self._shown = self.mesh if stage is None else self.mesh.replacing(stage.moved())
+        self._shown = None
         self._shown_tree = None
-        return self._shown
 
     def _start_of(self, begin: int, common: int) -> tuple[trimesh.Trimesh, Any]:
         """Fläche und Suchbaum am Anfang der Etappe, deren erster Zug die
@@ -693,7 +1013,7 @@ class SculptPreview:
         if begin == 0:
             return self.mesh.raw, self._input_tree
         if begin == len(self.strokes) == common:
-            return self._shown.raw, self._shown_tree
+            return self._shown_mesh().raw, self._shown_tree
         body = trimesh.Trimesh(
             vertices=self._starts[begin], faces=self.mesh.raw.faces, process=False
         )
@@ -705,21 +1025,20 @@ class SculptPreview:
             del self._starts[index]
 
     def surface_for(
-        self, point: Vec3, radius: float, *, tool: str, cut: bool, symmetry: int
+        self, stroke: Stroke, *, symmetry: int
     ) -> tuple[MeshData, bool, Any, np.ndarray]:
         """:func:`_surface_for` für den nächsten Zug — mit Suchbaum und Normalen
         der Fläche, auf die er wirkt, aus der laufenden Etappe."""
+        cut, radius = stroke.cut, stroke.radius
         stage = self._stage
         if not self.strokes or stage is None:
             if self._input_tree is None:
                 self._input_tree = cKDTree(np.asarray(self.mesh.raw.vertices, dtype=float))
             normals = np.asarray(self.mesh.raw.vertex_normals, dtype=float)
             return self.mesh, cut, self._input_tree, normals
-        fresh = cut or tool in ORDERED_TOOLS or self.strokes[-1].tool in ORDERED_TOOLS
+        fresh = starts_stage(self.strokes[-1], stroke)
         if not fresh:
-            probe = Stroke(
-                point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=0.0, symmetry=symmetry
-            )
+            probe = replace(stroke, strength=0.0, symmetry=symmetry)
             places = np.asarray([place for place, _way in _mirrored(probe, self.plane)])
             away, _index = stage.tree.query(places)
             if float(np.min(away)) <= radius * FALLOFF:
@@ -728,13 +1047,14 @@ class SculptPreview:
             if float(np.min(away)) > radius * FALLOFF:
                 return self.mesh.replacing(stage.body), False, stage.tree, stage.normals
             cut = True
-        normals = np.asarray(self._shown.raw.vertex_normals, dtype=float)
-        return self._shown, cut, self._shown_query(), normals
+        shown = self._shown_mesh()
+        normals = np.asarray(shown.raw.vertex_normals, dtype=float)
+        return shown, cut, self._shown_query(), normals
 
     def _shown_query(self) -> Any:
         """Der Suchbaum über die gezeigte Fläche — gebaut, wenn ihn ein Zug braucht."""
         if self._shown_tree is None:
-            self._shown_tree = cKDTree(np.asarray(self._shown.raw.vertices, dtype=float))
+            self._shown_tree = cKDTree(np.asarray(self._shown_mesh().raw.vertices, dtype=float))
         return self._shown_tree
 
 
@@ -760,6 +1080,13 @@ def _gesture(value: object) -> int:
     return value
 
 
+def _brush(value: object) -> int:
+    """Eine Pinselfassung, die dieses Programm rechnen kann (:attr:`Stroke.brush`)."""
+    if type(value) is not int or not 1 <= value <= BRUSH:
+        raise ValueError(f"not a brush: {value!r}")
+    return value
+
+
 def strokes_to_text(strokes: Sequence[Stroke]) -> str:
     """Die Strichliste als kompakter JSON-Text."""
     return json.dumps(
@@ -773,6 +1100,7 @@ def strokes_to_text(strokes: Sequence[Stroke]) -> str:
                 "y": stroke.symmetry,
                 "c": stroke.cut,
                 **({"g": stroke.gesture} if stroke.gesture else {}),
+                **({"v": stroke.brush} if stroke.brush != 1 else {}),
             }
             for stroke in strokes
         ],
@@ -802,6 +1130,7 @@ def strokes_from_text(text: str) -> list[Stroke]:
                 symmetry=int(entry.get("y", 0)),
                 cut=bool(entry.get("c", False)),
                 gesture=_gesture(entry.get("g", 0)),
+                brush=_brush(entry.get("v", 1)),
             )
             for entry in entries
         ]
@@ -872,10 +1201,18 @@ BAKE_STAGES: Final = 20
 #: und keine Liste von Entscheidungen mehr.
 BAKE_STROKES: Final = 20_000
 
-#: Ab wie vielen mittleren Kantenlängen ein Pinsel noch etwas ausrichtet.
-#: Darunter liegen im Pinselgebiet zu wenige Eckpunkte, um eine Form zu
-#: tragen — es entsteht keine Falte, sondern eine verzogene Facette.
-BRUSH_TO_EDGE: Final = 2.0
+#: Ab wie vielen mittleren Kantenlängen je Radius ein Pinsel eine glatte Form
+#: trägt. Darunter liegen im Pinselgebiet zu wenige Eckpunkte — es entsteht
+#: keine Falte, sondern eine Facette. Gemessen an einer Kugel (H2): bei
+#: r/2,5 Kantenlänge 22,9° Diederwinkel und 13,6 % Abweichung von der Glocke,
+#: bei r/4 noch 5,5 %, bei r/6 2,9 %. Bis RM-560 stand hier 2, und gewarnt
+#: wurde erst, wo es schon facettiert.
+BRUSH_TO_EDGE: Final = 4.0
+
+#: Auf wie viele Kantenlängen je Radius die Formsitzung ein zu grobes Netz
+#: angleicht — feiner als die Warnschwelle, damit die Warnung nach dem
+#: Angleichen nicht stehen bleibt (H2: unter 3 % Abweichung).
+REFINE_TO_EDGE: Final = 6.0
 
 
 @op_params
@@ -933,6 +1270,13 @@ class SculptParams(BaseParams):
             "sie durch den Nullpunkt der Szene, wie in älteren Projekten."
         ),
     )
+    mirror_fitted: bool = param(
+        title=_("Spiegelebene an der Form ausrichten"),
+        default=True,
+        placement="advanced",
+        internal=True,
+        doc=_("Die Spiegelebene liegt dort, wo der Körper sich selbst am besten trifft."),
+    )
 
 
 @register_op(
@@ -945,8 +1289,9 @@ class SculptParams(BaseParams):
     produces=1,
     # 1: Spiegelkopien teilen sich glatt (RM-428), der Durchstich nennt
     # seinen Zug (RM-419). 2: Der Befund ``sculpt.subtle`` ist neu gefasst
-    # (RM-084); der Plattencache gäbe sonst den alten Satz zurück.
-    cache_version="2",
+    # (RM-084); der Plattencache gäbe sonst den alten Satz zurück. 3:
+    # Pinselfassung 2, Spiegelebene an der Form, ``too_coarse`` ab r/4 (RM-560).
+    cache_version="3",
     doc=_(
         "Trägt Material mit dem Pinsel auf und ab. Der ganze Vorgang ist ein Schritt "
         "im Verlauf und bleibt änderbar, so viele Züge er auch enthält."
@@ -976,10 +1321,14 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
         strokes = [replace(stroke, symmetry=stroke.symmetry | extra) for stroke in strokes]
 
     missed: list[Stroke] = []
-    centre: Vec3 = (0.0, 0.0, 0.0)
-    if params.mirror_at_body:
-        middle = mirror_centre(before)
-        centre = (float(middle[0]), float(middle[1]), float(middle[2]))
+    # Die Suche nach der Spiegelebene kostet nur, wer spiegelt, und nur an
+    # den Ebenen, an denen gespiegelt wird.
+    axes = 0
+    for stroke in strokes:
+        axes |= stroke.symmetry
+    centre = mirror_plane(
+        before, at_body=params.mirror_at_body, fitted=params.mirror_fitted, axes=axes
+    )
     ctx.progress(0.0, str(_("Züge übertragen")))
     after = apply_strokes(
         before,
@@ -1172,8 +1521,8 @@ def _sculpting_findings(
                 code="sculpt.too_coarse",
                 severity="warning",
                 message=_(
-                    "Der feinste Pinsel ist kleiner als die Dreiecke darunter, dort entsteht nur "
-                    "eine verzogene Fläche. Erst „Dreiecke angleichen“."
+                    "Der feinste Pinsel ist für die Dreiecke darunter zu klein, dort entsteht "
+                    "eine kantige Fläche. Erst „Dreiecke angleichen“."
                 ),
                 object_id=object_id,
                 values={"brush_mm": round(finest, 3), "edge_mm": round(edge, 3)},

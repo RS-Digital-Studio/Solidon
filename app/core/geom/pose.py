@@ -51,6 +51,13 @@ REACH: Final = 0.6
 #: Übergänge zwischen zwei Knochen; kleiner zieht die Haut zu weit mit.
 FALLOFF: Final = 2.0
 
+#: Wo der feste Rumpf zu halten beginnt und wo er allein hält, in Vielfachen
+#: der Reichweite des nächsten Knochens (RM-561). Bis zur ersten Grenze folgt
+#: die Haut ihren Knochen ganz wie bisher, hinter der zweiten bleibt sie
+#: stehen, und dazwischen gleitet es kubisch, ohne Knick und ohne Riss.
+REST_NEAR: Final = 1.0
+REST_FAR: Final = 3.0
+
 
 def _closest_on_segment(points: np.ndarray, head: np.ndarray, tail: np.ndarray) -> np.ndarray:
     """Der Abstand jedes Punktes zum Knochen — zum *Segment*, nicht zur Achse.
@@ -225,22 +232,31 @@ def _falloff(values: np.ndarray) -> np.ndarray:
     return np.asarray(np.ldexp(total, exponent), dtype=np.float64)
 
 
-def weights(mesh: MeshData, bones: Sequence[Bone]) -> np.ndarray:
+def weights(mesh: MeshData, bones: Sequence[Bone], *, fixed_rest: bool = False) -> np.ndarray:
     """Wie stark jeder Eckpunkt an jedem Knochen hängt.
 
-    Eine Zeile je Eckpunkt, eine Spalte je Knochen, zeilenweise auf eins
-    normiert. Gerechnet aus dem Abstand zum Knochensegment: nah heißt stark,
-    und jenseits von Knochenlänge plus :data:`REACH` heißt gar nicht.
+    Eine Zeile je Eckpunkt, eine Spalte je Knochen. Gerechnet aus dem Abstand
+    zum Knochensegment: nah heißt stark, und jenseits von Knochenlänge plus
+    :data:`REACH` heißt kaum noch.
 
-    Ein Eckpunkt, den kein Knochen erreicht, hängt am nächstgelegenen — sonst
-    bliebe er beim Posieren stehen, während sein Nachbar mitgeht, und das
-    Netz risse genau dort auf.
+    Mit ``fixed_rest`` (ab Format 49, RM-561) hält ein unsichtbarer fester
+    Rumpf, was weit von allen Knochen liegt: Die Zeile summiert sich auf den
+    Anteil, den die Knochen halten — eins bis :data:`REST_NEAR` Reichweiten
+    vom nächsten Knochen, null ab :data:`REST_FAR`, dazwischen ein glatter
+    Übergang —, und der Rest bleibt stehen. Wer nur einen Arm setzt und
+    beugt, beugt den Arm und nicht den ganzen Körper.
+
+    Ohne ``fixed_rest`` ist jede Zeile auf eins normiert, und ein Eckpunkt,
+    den kein Knochen erreicht, hängt am nächstgelegenen — sonst bliebe er
+    stehen, während sein Nachbar mitgeht, und das Netz risse dort auf. So
+    rechneten Stellungen bis Format 48.
     """
     points = np.asarray(mesh.raw.vertices, dtype=float)
     if not len(bones):
         return np.zeros((len(points), 0))
 
     field = np.zeros((len(points), len(bones)))
+    nearest = np.full(len(points), np.inf)
     for index, bone in enumerate(bones):
         head = np.asarray(bone.head, dtype=float)
         tail = np.asarray(bone.tail, dtype=float)
@@ -248,9 +264,15 @@ def weights(mesh: MeshData, bones: Sequence[Bone]) -> np.ndarray:
         span = tail - head
         reach = max(math.hypot(float(span[0]), float(span[1]), float(span[2])) * REACH, 1e-9)
         ratio = away / reach
+        nearest = np.minimum(nearest, ratio)
         field[:, index] = _falloff(-FALLOFF * (ratio * ratio))
 
     total = field.sum(axis=1)
+    if fixed_rest:
+        share = np.clip((REST_FAR - nearest) / (REST_FAR - REST_NEAR), 0.0, 1.0)
+        held = share * share * (3.0 - 2.0 * share)
+        safe = np.where(total > 0.0, total, 1.0)
+        return np.asarray(field / safe[:, None] * held[:, None], dtype=float)
     orphan = total < 1e-9
     if orphan.any():
         nearest = np.argmin(
@@ -352,37 +374,138 @@ def transforms(bones: Sequence[Bone], poses: Mapping[str, Vec3]) -> dict[str, np
     return result
 
 
-def posed(mesh: MeshData, bones: Sequence[Bone], poses: Sequence[Pose]) -> MeshData:
+class Skin:
+    """Ein Körper an seinem Skelett: Gewichte einmal, Stellungen beliebig oft.
+
+    Die Gewichte hängen nur an Netz und Knochen; wer beim Beugen mit der Maus
+    jede Bewegung zeigt, rechnet sie nicht je Bewegung neu (RM-561). Die
+    Operation geht denselben Weg (:func:`posed`) — Vorschau und Ergebnis
+    sind dieselbe Rechnung.
+    """
+
+    def __init__(self, mesh: MeshData, bones: Sequence[Bone], *, fixed_rest: bool = False) -> None:
+        self.mesh = mesh
+        self.bones = list(bones)
+        self.fixed_rest = fixed_rest
+        self.points = np.asarray(mesh.raw.vertices, dtype=float)
+        self.field = weights(mesh, self.bones, fixed_rest=fixed_rest)
+
+    def posed(self, angles: Mapping[str, Vec3]) -> MeshData:
+        """Der Körper in dieser Stellung — ``angles`` je Knochenname drei Winkel."""
+        if not self.bones or not any(
+            any(abs(value) > 1e-9 for value in turn) for turn in angles.values()
+        ):
+            return self.mesh
+        matrices = transforms(self.bones, angles)
+        points, field = self.points, self.field
+        moved = np.zeros_like(points)
+        for index, bone in enumerate(self.bones):
+            share = field[:, index]
+            if not share.any():
+                continue
+            matrix = matrices.get(bone.name, np.eye(4))
+            # Elementweise bewegt (``transform.moved_points``), nicht über BLAS.
+            moved += transform.moved_points(points, matrix) * share[:, None]
+        if self.fixed_rest:
+            moved += points * (1.0 - field.sum(axis=1))[:, None]
+        built = trimesh.Trimesh(vertices=moved, faces=self.mesh.raw.faces, process=False)
+        _log.info("posed %d vertices over %d bones", len(points), len(self.bones))
+        return self.mesh.replacing(built)
+
+
+def posed(
+    mesh: MeshData, bones: Sequence[Bone], poses: Sequence[Pose], *, fixed_rest: bool = False
+) -> MeshData:
     """Den Körper in die Stellung bringen, die das Skelett beschreibt.
 
     Jeder Eckpunkt geht den gewichteten Mittelweg aller Knochenmatrizen —
     lineares Blend-Skinning. Es schnürt die Haut an stark gebeugten Gelenken
     ein; das ist der bekannte Preis des Verfahrens, und bei einer einzelnen
     Druckpose mit mäßigen Winkeln ist er kleiner als der Aufwand für die
-    Alternativen.
+    Alternativen. Mit ``fixed_rest`` bleibt, was kein Knochen hält, stehen
+    (:func:`weights`).
     """
     if not bones or not poses:
         return mesh
     angles = {pose.bone: pose.angles for pose in poses}
     if not any(any(abs(value) > 1e-9 for value in turn) for turn in angles.values()):
         return mesh
+    return Skin(mesh, bones, fixed_rest=fixed_rest).posed(angles)
 
+
+def posed_bones(bones: Sequence[Bone], angles: Mapping[str, Vec3]) -> list[tuple[Vec3, Vec3]]:
+    """Kopf und Fuß jedes Knochens in der Stellung — was das Bild beim Beugen zeigt."""
     matrices = transforms(bones, angles)
-    field = weights(mesh, bones)
-    points = np.asarray(mesh.raw.vertices, dtype=float)
+    found: list[tuple[Vec3, Vec3]] = []
+    for bone in bones:
+        ends = transform.moved_points(
+            np.asarray([bone.head, bone.tail], dtype=float), matrices.get(bone.name, np.eye(4))
+        )
+        found.append((as_vec3(ends[0]), as_vec3(ends[1])))
+    return found
 
-    moved = np.zeros_like(points)
-    for index, bone in enumerate(bones):
-        share = field[:, index]
-        if not share.any():
-            continue
-        matrix = matrices.get(bone.name, np.eye(4))
-        # Elementweise bewegt (``transform.moved_points``), nicht über BLAS.
-        moved += transform.moved_points(points, matrix) * share[:, None]
 
-    built = trimesh.Trimesh(vertices=moved, faces=mesh.raw.faces, process=False)
-    _log.info("posed %d vertices over %d bones", len(points), len(bones))
-    return mesh.replacing(built)
+def bent(
+    bones: Sequence[Bone], angles: Mapping[str, Vec3], name: str, axis: Vec3, degrees: float
+) -> Vec3:
+    """Die drei Winkel von ``name``, nachdem er in der Stellung um ``degrees`` um
+    ``axis`` gedreht wurde — um seinen Kopf, wie ihn das Bild zeigt (RM-561).
+
+    Das Ziehen an einem Gelenk dreht den Knochen, der dort endet, in der
+    Bildebene; geschrieben wird dasselbe ``pose``-Feld wie im Dialog (Regel
+    2: die Geste wird ein Parameterwert). Die Drehung geschieht in der Welt
+    nach der Stellung der Eltern; im Knochen steht sie davor, also
+    ``R' = Pᵀ · Δ · P · R`` mit der Drehung ``P`` der Eltern.
+    """
+    bone = next(entry for entry in bones if entry.name == name)
+    matrices = transforms(bones, angles)
+    parent = matrices.get(bone.parent, np.eye(4))[:3, :3]
+    turn = _about(axis, degrees)
+    own = _rotation(angles.get(name, (0.0, 0.0, 0.0)))
+    return _angles_of(_times(_times(_times(parent.T, turn), parent), own))
+
+
+def _times(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    """3x3 mal 3x3 über :func:`transform.composed` — ohne BLAS (RM-187)."""
+    a, b = np.eye(4), np.eye(4)
+    a[:3, :3], b[:3, :3] = left, right
+    return np.asarray(transform.composed(a, b)[:3, :3], dtype=float)
+
+
+def _about(axis: Vec3, degrees: float) -> np.ndarray:
+    """Die Drehung um eine Achse durch den Ursprung (Rodrigues)."""
+    way = np.asarray(axis, dtype=float)
+    length = float(np.sqrt((way * way).sum()))
+    if length <= units.EPS_GEOM:
+        return np.eye(3)
+    x, y, z = (float(value) for value in way / length)
+    c, s = units.exact_cos_degrees(degrees), units.exact_sin_degrees(degrees)
+    t = 1.0 - c
+    return np.array(
+        [
+            [t * x * x + c, t * x * y - s * z, t * x * z + s * y],
+            [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
+            [t * x * z - s * y, t * y * z + s * x, t * z * z + c],
+        ]
+    )
+
+
+def _angles_of(matrix: np.ndarray) -> Vec3:
+    """Die Winkel X, Y, Z in Grad, aus denen :func:`_rotation` diese Matrix baut.
+
+    Auf hundertstel Grad gerundet — eine Stellung, die der Kunde im Dialog
+    liest, soll keine vierzehn Nachkommastellen tragen. In der Sperrlage
+    (Y = ±90°) ist Z null, und X trägt die ganze Drehung.
+    """
+    sine = min(1.0, max(-1.0, float(matrix[0, 2])))
+    y = math.degrees(math.asin(sine))
+    if abs(sine) < 1.0 - 1e-9:
+        x = math.degrees(math.atan2(-float(matrix[1, 2]), float(matrix[2, 2])))
+        z = math.degrees(math.atan2(-float(matrix[0, 1]), float(matrix[0, 0])))
+    else:
+        x = math.degrees(math.atan2(float(matrix[2, 1]), float(matrix[1, 1])))
+        z = 0.0
+    return (round(x, 2) + 0.0, round(y, 2) + 0.0, round(z, 2) + 0.0)
 
 
 def _circular(chain: tuple[str, ...]) -> ValidationError:
@@ -624,6 +747,16 @@ class PoseParams(BaseParams):
         placement="advanced",
         doc=_("Je Knochen drei Winkel. Ein Winkel darf ein Projektparameter sein."),
     )
+    fixed_rest: bool = param(
+        title=_("Ohne Knochen bleibt stehen"),
+        default=True,
+        placement="advanced",
+        internal=True,
+        doc=_(
+            "Was kein Knochen erreicht, bleibt beim Beugen stehen. Ohne Haken folgt es "
+            "dem nächsten Knochen, wie in älteren Projekten."
+        ),
+    )
 
 
 @register_op(
@@ -634,6 +767,8 @@ class PoseParams(BaseParams):
     params=PoseParams,
     consumes=1,
     produces=1,
+    # 1: Ohne Knochen bleibt stehen (``fixed_rest``, RM-561).
+    cache_version="1",
     doc=_(
         "Beugt einen Körper um ein Skelett. Eine Stellung, keine Bewegung — gedruckt "
         "wird ein Zustand."
@@ -656,7 +791,7 @@ def pose_armature(ctx: OpContext) -> OpResult:
     values = {name: entry.value for name, entry in ctx.scene.parameters.items()}
     poses = pose_from_text(params.pose, values)
 
-    after = posed(before, bones, poses)
+    after = posed(before, bones, poses, fixed_rest=params.fixed_rest)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=after)],
         findings=_pose_findings(before, after, bones, poses, source.id),
@@ -693,7 +828,7 @@ def _pose_findings(
                 severity="warning",
                 message=_(
                     "Für eine Stellung fehlt das Skelett, der Schritt bewegt nichts. Im "
-                    "Skeletteditor setzen zwei Klicks einen Knochen."
+                    "Skeletteditor setzt jeder Klick ein Gelenk."
                 ),
                 object_id=object_id,
             )

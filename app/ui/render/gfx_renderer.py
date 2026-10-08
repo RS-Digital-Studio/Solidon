@@ -530,6 +530,13 @@ class GfxItem(Item):
             if id(geometry) in replacements:
                 obj.geometry = replacements[id(geometry)]
                 continue
+            if _rewrite_surface(geometry, fresh):
+                # Dieselbe Geometrie, neue Zahlen in ihren Puffern: Ohne neues
+                # Objekt baut pygfx keine Pipeline neu. Je Vorschau einer
+                # Formsitzung kostete der Neubau an 241 480 Dreiecken mehr als
+                # alles andere zusammen (RM-560, H6).
+                replacements[id(geometry)] = geometry
+                continue
             # Normalen und Hüllquader hängen an den Ecken; ein neues Netz
             # rechnet beides frisch. Bis zum 21.09.2026 stand davor noch ein
             # ``set_data`` in den alten Puffer — der ging mit der alten
@@ -657,6 +664,24 @@ def _buffer_bytes(item: GfxItem) -> int:
             seen.add(id(buffer))
             total += int(getattr(buffer, "nbytes", 0) or 0)
     return total
+
+
+def _rewrite_surface(geometry: Any, positions: np.ndarray) -> bool:
+    """Neue Ecken in die Puffer einer beleuchteten Fläche schreiben, Normalen
+    gleich mit — ``False``, wenn sie keine Dreiecke mit Normalenpuffer ist."""
+    normals = getattr(geometry, "normals", None)
+    indices = getattr(geometry, "indices", None)
+    current = geometry.positions
+    if normals is None or indices is None or normals.nitems != current.nitems:
+        return False
+    fresh = np.asarray(positions, dtype=np.float32)
+    if not np.isfinite(fresh).all():
+        return False
+    current.data[:] = fresh
+    current.update_full()
+    normals.data[:] = _normals(fresh, np.asarray(indices.data))
+    normals.update_full()
+    return True
 
 
 def _geometry_like(geometry: Any, positions: np.ndarray) -> Any:

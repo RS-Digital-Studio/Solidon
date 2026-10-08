@@ -1490,3 +1490,31 @@ def test_pointer_events_do_not_ask_the_gpu_for_a_pick(
     renderer._canvas._events.flush()
     renderer.screenshot()
     assert asked == []
+
+
+def test_moving_a_lit_surface_rewrites_its_buffers_instead_of_a_new_geometry(
+    renderer: GfxRenderer,
+) -> None:
+    """RM-560, H6: Eine Vorschau der Formsitzung bekam je Zug eine neue
+    Geometrie, und pygfx baute dafür Bindungen und Pipeline neu — an 241 480
+    Dreiecken das Teuerste am ganzen Zug. Jetzt gehen Ecken und Normalen in die
+    vorhandenen Puffer; Bild, Hüllquader und Beleuchtung folgen trotzdem."""
+    from app.ui.render.gfx_renderer import _normals
+
+    vertices, faces = cube()
+    body = renderer.add_surface(vertices, faces, name="body", style=SurfaceStyle())
+    geometry = body.objects[0].geometry
+    look_down(renderer, body.bounds())
+    before = renderer.screenshot()
+    lower, upper = body.bounds()[0], body.bounds()[1]
+
+    moved = np.asarray(vertices, dtype=float) + np.asarray((4.0, 0.0, 0.0))
+    body.update_points(moved)
+
+    assert body.objects[0].geometry is geometry, "dieselbe Geometrie, neue Zahlen"
+    assert body.bounds()[0] == pytest.approx(lower + 4.0)
+    assert body.bounds()[1] == pytest.approx(upper + 4.0)
+    assert np.array_equal(
+        geometry.normals.data, _normals(moved.astype(np.float32), np.asarray(faces))
+    )
+    assert not np.array_equal(before, renderer.screenshot())

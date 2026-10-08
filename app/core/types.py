@@ -2829,6 +2829,10 @@ Etappe."""
 #: Werkzeuge, die den Zustand vor sich lesen und deshalb eine Etappe beginnen.
 ORDERED_TOOLS: Final[frozenset[str]] = frozenset({"smooth", "inflate", "flatten"})
 
+#: Werkzeuge, die in Pinselfassung 2 auf ein Ziel zulaufen (Mittel der
+#: Nachbarn, Ebene, Strichmitte) und es nie überschreiten (RM-560, H3).
+CONVERGENT_TOOLS: Final[frozenset[str]] = frozenset({"smooth", "flatten", "pinch"})
+
 
 @dataclass(frozen=True, slots=True)
 class Stroke:
@@ -2870,7 +2874,15 @@ class Stroke:
     die ganze Sitzung zu verlangsamen."""
     gesture: int = 0
     """Gemeinsame Kennung aller Proben eines Mauszuges. Null bezeichnet
-    einen einzeln rücknehmbaren Altzug; die Kennung verändert keine Geometrie."""
+    einen einzeln rücknehmbaren Altzug. In Pinselfassung 1 verändert die
+    Kennung keine Geometrie, in Fassung 2 ist jede Geste eine Etappe."""
+    brush: int = 1
+    """Die Pinselfassung (RM-560). 1 rechnet wie bis Format 48: Stärke in
+    Millimetern je Probe, Etappen nach Werkzeug, Wirkungen aufsummiert. 2:
+    Stärke als Stufe 1 bis 10, jede Geste eine Etappe, Auftragen gesättigt,
+    Glätten und Flachziehen höchstens bis zum Ziel. Am Zug und nicht an der
+    Operation, damit ein wieder geöffneter alter Schritt seine alten Züge
+    unverändert rechnet und neue daneben nach der neuen Fassung."""
 
 
 @dataclass(frozen=True, slots=True)

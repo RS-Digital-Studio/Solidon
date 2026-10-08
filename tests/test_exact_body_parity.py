@@ -1412,6 +1412,10 @@ def _parameters(case: Case, inputs: list[SceneObject]) -> dict[str, Any]:
 
         params["armature"] = armature_to_text([Bone("root", (0.0, 0.0, 0.0), (0.0, 0.0, 10.0))])
         params["pose"] = pose_to_text([Pose("root", (0.0, 0.0, 90.0))])
+        # Ein Knochen ohne festen Rumpf dreht den ganzen Quader starr; mit
+        # Rumpf (Vorgabe seit Format 49) blieben die Ecken jenseits seiner
+        # Reichweite stehen, und das Maß hier prüft die starre Drehung.
+        params["fixed_rest"] = False
     if case.name == "sculpt_strokes":
         from app.core.geom.sculpt import strokes_to_text
         from app.core.types import Stroke

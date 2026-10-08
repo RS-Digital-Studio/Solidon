@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 48
+FORMAT_VERSION: Final = 49
 
 #: Unter diesem Schlüssel steht während der Kette, mit welcher Version die Datei
 #: gespeichert wurde — für einen Schritt, der davon abhängt, ob das Projekt mit
@@ -1432,6 +1432,35 @@ def _empty_the_top_edge(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+#: Die zwei Gestenoperationen, deren Rechnung sich mit Format 49 ändert.
+_GESTURE_OPERATIONS: Final = frozenset({"sculpt_strokes", "pose_armature"})
+
+
+def _keep_gestures_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """48 → 49: Formen und Stellung aus einer älteren Datei rechnen wie gespeichert.
+
+    Seit RM-560 sucht *Formen* die Spiegelebene dort, wo der Körper sich selbst
+    trifft (``mirror_fitted``), und seit RM-561 bleibt beim Beugen stehen, was
+    kein Knochen erreicht (``fixed_rest``). Ein vorhandener Schritt bekommt
+    beide aus, auch in den Fassungen jeder Änderung. Die übrigen Neuerungen
+    der Pinsel (Stärke als Stufe, Etappe je Geste) tragen die neuen Züge
+    selbst (``Stroke.brush``); alte Züge rechnen ohne Umschreiben wie bisher.
+    Festgehalten an ``tests/data/projects/gestures_v48.p3d``, geschrieben vom
+    Stand davor.
+    """
+    for operation in _saved_operations(data):
+        if not isinstance(operation, dict) or operation.get("op") not in _GESTURE_OPERATIONS:
+            continue
+        params = operation.setdefault("params", {})
+        if not isinstance(params, dict):
+            continue
+        if operation.get("op") == "sculpt_strokes":
+            params.setdefault("mirror_fitted", False)
+        elif operation.get("op") == "pose_armature":
+            params.setdefault("fixed_rest", False)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1481,6 +1510,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=45, to_version=46, apply=_keep_slot_tools_as_they_were),
     Step(from_version=46, to_version=47, apply=_empty_the_top_edge),
     Step(from_version=47, to_version=48, apply=_keep_bore_pins_plain),
+    Step(from_version=48, to_version=49, apply=_keep_gestures_as_they_were),
 )
 
 

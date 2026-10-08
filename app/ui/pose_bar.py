@@ -1,81 +1,56 @@
-"""Die Leiste des Skeletteditors (Bauplan §25, Konzept P16 §7.5).
+"""Die Leiste des Skelettwerkzeugs (Bauplan §25, Konzept P16 §7.5, RM-561).
 
 Sie steht neben der Werkzeugzeile wie die Skizzen- und die Formleiste, und aus
 demselben Grund: Ein Skelett zu setzen ist kein Ansichtswerkzeug, das sich mit
 Schnitt und Messen ablöst.
 
-**Was hier passiert, sind Gesten; was danach passiert, sind Zahlen.** Der
-Editor setzt die Knochen — zwei Klicks je Knochen, Kopf und Fuß. Die
-*Stellung* setzt niemand mit der Maus: Sie sind drei Winkel je Knochen und
-gehören in den Dialog der Operation, wo auch ein Projektparameter stehen darf
-(``=@arm_angle``). Das ist der Punkt, an dem Posing hierher gehört und nicht
-zu einem Animationsprogramm.
+**Gesetzt und gebeugt wird im Bild.** Der erste Klick setzt ein Gelenk, jeder
+weitere einen Knochen am Fuß des vorigen; Enter beendet die Kette, ein Klick
+auf ein Gelenk setzt dort fort. Ziehen an einem Gelenk beugt den Knochen, der
+dort endet. Was in der Leiste bleibt, ist Zustand, Hinweis, Kartenwahl und
+*Fertig* — Namen, Winkel als Zahlen und ihre Bindung an Projektparameter
+stehen im Schrittdialog (*Diesen Schritt ändern*). *Neue Kette*, *Letzten
+zurück* und das Namensfeld sind entfallen: Enter und Strg+Z tun dasselbe, und
+Namen braucht nur, wer Winkel bindet.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from app.i18n import tr
+from app.i18n import format_decimal, tr
 from app.ui.analysis_bar import GestureAnalysis
 from app.ui.style import NORMAL, TIGHT, make_primary
 
 
 class PoseBar(QWidget):
-    """Knochen setzen, benennen, Ketten beginnen."""
+    """Zustand und Abschluss des Skelettwerkzeugs."""
 
     finished = Signal()
-    chainBroken = Signal()
-    lastRemoved = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self.name = QLineEdit(self)
-        # **Der Name gehört dem Knochen, nicht der Pose.** Hier stand „Name
-        # der Pose" — was ein Screenreader vorlas, war damit etwas anderes als
-        # das, was daneben stand (der Platzhalter sagt es richtig) und als
-        # das, was das Feld tut (``next_name`` benennt den nächsten Knochen).
-        # Eine Pose hat in dieser Anwendung überhaupt keinen Namen.
-        self.name.setAccessibleName(tr("Name des nächsten Knochens"))
-        self.name.setPlaceholderText(tr("Name des nächsten Knochens"))
-        self.name.setToolTip(
-            tr("Leer heißt: durchnummeriert. Ein Name macht die Stellung später lesbar.")
-        )
-
         self.state = QLabel("", self)
-
-        self.chain = QPushButton(tr("Neue Kette"), self)
-        self.chain.setToolTip(
-            tr(
-                "Der nächste Knochen hängt an nichts. Für den zweiten Arm oder das zweite "
-                "Bein — sonst wächst alles an einer Kette weiter."
-            )
-        )
-        self.chain.clicked.connect(self.chainBroken)
-
-        self.remove = QPushButton(tr("Letzten zurück"), self)
-        # **„Zurück" allein sagt nicht, was zurückgeht.** Der Knopf nimmt
-        # genau einen Knochen weg, nicht die ganze Kette und nicht die
-        # Sitzung — und dass er einzeln arbeitet, ist der Unterschied zu
-        # Escape daneben.
-        self.remove.setToolTip(
-            tr("Nimmt den zuletzt gesetzten Knochen weg — einen, nicht die ganze Kette.")
-        )
-        self.remove.clicked.connect(self.lastRemoved)
 
         self.done = QPushButton(tr("Fertig"), self)
         # **Was nach „Fertig" passiert, stand nirgends.** Der Knopf ist das
         # Ende der Sitzung *und* der Anfang eines Verlaufsschritts; wer das
         # nicht weiß, sucht das Skelett anschließend im Bild statt im Verlauf.
         self.done.setToolTip(
-            tr("Schließt den Editor und legt das Skelett als einen Schritt in den Verlauf.")
+            tr("Schließt das Werkzeug und legt Skelett und Stellung als einen Schritt ab.")
         )
         make_primary(self.done)
         self.done.clicked.connect(self.finished)
 
-        self.hint = QLabel(tr("Erst das Gelenk anklicken, dann das Ende des Knochens."), self)
+        self.hint = QLabel(
+            tr(
+                "Erster Klick ein Gelenk, jeder weitere ein Knochen. Enter beendet die Kette, "
+                "Ziehen an einem Gelenk beugt."
+            ),
+            self,
+        )
         self.hint.setWordWrap(True)
 
         outer = QVBoxLayout(self)
@@ -83,11 +58,8 @@ class PoseBar(QWidget):
         layout = QHBoxLayout()
         outer.addLayout(layout)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
-        self.caption = QLabel(tr("Knochen"), self)
+        self.caption = QLabel(tr("Skelett"), self)
         layout.addWidget(self.caption)
-        layout.addWidget(self.name)
-        layout.addWidget(self.chain)
-        layout.addWidget(self.remove)
         layout.addWidget(self.state)
         layout.addWidget(self.hint, stretch=1)
         layout.addWidget(self.done)
@@ -96,26 +68,13 @@ class PoseBar(QWidget):
 
     def set_editing(self, editing: bool) -> None:
         """Nach Fertig bleiben Druckbefund, Kartenwahl und der Rückweg sichtbar."""
-        for widget in (self.caption, self.name, self.chain, self.remove, self.state, self.hint):
+        for widget in (self.caption, self.state, self.hint):
             widget.setVisible(editing)
         self.done.setText(tr("Fertig") if editing else tr("Schließen"))
 
-    def next_name(self) -> str:
-        """Wie der nächste Knochen heißen soll — leer heißt durchnummeriert."""
-        return self.name.text().strip()
-
-    def clear_name(self) -> None:
-        """Nach einem gesetzten Knochen ist das Feld wieder leer.
-
-        Ein stehen gebliebener Name wäre der Name des nächsten Knochens, und
-        zwei Knochen mit demselben Namen sind ein Skelett, dessen Stellung
-        niemand mehr zuordnet.
-        """
-        self.name.clear()
-
-    def show_state(self, bones: int, pending: bool, chain: bool) -> None:
-        """Wie viele Knochen stehen und was der nächste Klick tut."""
-        if pending:
+    def show_state(self, bones: int, half: bool) -> None:
+        """Wie viele Knochen stehen und ob eine Kette auf ihren ersten Knochen wartet."""
+        if half:
             self.state.setText(tr("Ende des Knochens setzen …"))
             return
         if not bones:
@@ -123,9 +82,12 @@ class PoseBar(QWidget):
             return
         # Die Einzahl steht daneben (P0.1): „{count} Knochen" ist im Deutschen
         # auch für einen richtig, im Englischen hieß es „1 bones".
-        counted = (
-            tr("Ein Knochen")
-            if bones == 1
-            else tr("{count} Knochen").replace("{count}", str(bones))
+        self.state.setText(
+            tr("Ein Knochen") if bones == 1 else tr("{count} Knochen").format(count=bones)
         )
-        self.state.setText(counted + ("" if chain else f" · {tr('neue Kette')}"))
+
+    def show_angle(self, degrees: float) -> None:
+        """Während des Ziehens: um wie viel der Knochen gerade gebeugt wird."""
+        self.state.setText(
+            tr("Gebeugt um {angle}°").format(angle=format_decimal(round(degrees), 0))
+        )

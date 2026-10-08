@@ -652,3 +652,125 @@ def test_a_click_on_the_skin_becomes_a_joint_on_the_axis() -> None:
     assert inside_the_body(mesh, on_top, (1.0, 0.0, 0.0)) == on_top, "streifend bleibt"
     beside = (9.0, 0.0, 10.0)
     assert inside_the_body(mesh, beside, (-1.0, 0.0, 0.0)) == beside, "neben der Haut bleibt"
+
+
+# --- fester Rumpf und Beugen mit der Maus (RM-561) --------------------------------
+
+
+def rod() -> MeshData:
+    """Ein stehender Stab 12 × 12 × 60 mm, fein genug zum Beugen."""
+    body = trimesh.creation.box(extents=(12.0, 12.0, 60.0))
+    body.apply_translation((0.0, 0.0, 30.0))
+    vertices, faces = trimesh.remesh.subdivide_to_size(
+        np.asarray(body.vertices, dtype=float), np.asarray(body.faces, dtype=np.int64), 2.0
+    )
+    fine = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    fine.merge_vertices()
+    return MeshData.of(fine)
+
+
+def upper_bones() -> list[Bone]:
+    """Nur die obere Hälfte trägt Knochen — wie ein Arm ohne Rumpfknochen."""
+    return [
+        Bone(name="oben", head=(0.0, 0.0, 30.0), tail=(0.0, 0.0, 45.0)),
+        Bone(name="spitze", head=(0.0, 0.0, 45.0), tail=(0.0, 0.0, 58.0), parent="oben"),
+    ]
+
+
+def test_what_no_bone_reaches_stays_where_it_is() -> None:
+    """Die verborgene Voraussetzung fällt: Wer nur den oberen Teil mit Knochen
+    versieht und beugt, beugt den oberen Teil. Bis Format 48 hing der Fuß am
+    nächsten Knochen und drehte mit (Gegenprobe ``fixed_rest=False``)."""
+    body = rod()
+    turn = [Pose(bone="oben", angles=(0.0, 30.0, 0.0))]
+    now = posed(body, upper_bones(), turn, fixed_rest=True)
+    then = posed(body, upper_bones(), turn, fixed_rest=False)
+    foot = np.asarray(body.raw.vertices)[:, 2] < 5.0
+
+    still = np.linalg.norm(now.raw.vertices[foot] - body.raw.vertices[foot], axis=1).max()
+    swung = np.linalg.norm(then.raw.vertices[foot] - body.raw.vertices[foot], axis=1).max()
+    assert still < 1e-3, f"der Fuß bleibt stehen: {still:.4f} mm"
+    assert swung > 5.0, f"Gegenprobe: bis Format 48 drehte er mit, {swung:.2f} mm"
+
+
+def test_a_bone_still_carries_its_own_skin() -> None:
+    """Der Rumpf hält nur, was kein Knochen hält: Was in der Reichweite eines
+    Knochens liegt, folgt ihm genau wie bisher."""
+    from app.core.geom.pose import REACH, _closest_on_segment
+
+    body = rod()
+    turn = [Pose(bone="oben", angles=(0.0, 30.0, 0.0))]
+    now = posed(body, upper_bones(), turn, fixed_rest=True)
+    then = posed(body, upper_bones(), turn, fixed_rest=False)
+    points = np.asarray(body.raw.vertices, dtype=float)
+    within = np.zeros(len(points), dtype=bool)
+    for bone in upper_bones():
+        head, tail = np.asarray(bone.head), np.asarray(bone.tail)
+        reach = float(np.linalg.norm(tail - head)) * REACH
+        within |= _closest_on_segment(points, head, tail) <= reach
+    assert within.sum() > 100, "Voraussetzung: die Haut um die Knochen"
+    assert np.abs(now.raw.vertices[within] - then.raw.vertices[within]).max() < 1e-9
+
+
+def test_the_rest_weight_rises_smoothly() -> None:
+    """Zwischen Knochen und Rumpf gleitet die Haut, sie reißt nicht: Kein Eckpunkt
+    springt mehr als die Nachbarn um ihn herum."""
+    from app.core.geom.pose import Skin
+
+    body = rod()
+    skin = Skin(body, upper_bones(), fixed_rest=True)
+    held = skin.field.sum(axis=1)
+    edges = np.asarray(body.raw.edges_unique)
+    jump = np.abs(held[edges[:, 0]] - held[edges[:, 1]]).max()
+    assert held.min() >= 0.0 and held.max() <= 1.0 + 1e-12
+    assert jump < 0.25, f"größter Sprung des Haltens zwischen Nachbarn: {jump:.3f}"
+
+
+def test_the_skin_computes_what_posed_computes() -> None:
+    """Die Vorschau beim Ziehen und die Operation sind dieselbe Rechnung."""
+    from app.core.geom.pose import Skin
+
+    body = rod()
+    angles = {"oben": (0.0, 20.0, 0.0), "spitze": (10.0, 0.0, 0.0)}
+    poses = [Pose(bone=name, angles=turn) for name, turn in angles.items()]
+    skin = Skin(body, upper_bones(), fixed_rest=True)
+    assert np.array_equal(
+        skin.posed(angles).raw.vertices,
+        posed(body, upper_bones(), poses, fixed_rest=True).raw.vertices,
+    )
+
+
+@pytest.mark.parametrize(
+    "angles",
+    [
+        (0.0, 0.0, 0.0),
+        (30.0, 0.0, 0.0),
+        (0.0, -45.0, 0.0),
+        (12.5, 33.0, -70.0),
+        (-120.0, 10.0, 80.0),
+    ],
+)
+def test_angles_read_back_from_their_rotation(angles: tuple[float, float, float]) -> None:
+    from app.core.geom.pose import _angles_of, _rotation
+
+    assert _angles_of(_rotation(angles)) == pytest.approx(angles, abs=0.01)
+
+
+def test_dragging_a_joint_turns_its_bone_about_the_head_in_the_view() -> None:
+    """Ziehen am Gelenk dreht den Knochen, der dort endet, um seinen Kopf und um
+    die Blickachse; geschrieben werden seine drei Winkel. Mit gebeugtem Elternteil
+    dreht er um den Kopf, wo das Bild ihn zeigt, und die Eltern bleiben."""
+    from app.core.geom.pose import bent, posed_bones
+
+    bones = two_bones()
+    assert bent(bones, {}, "upper", (0.0, 1.0, 0.0), 30.0) == pytest.approx((0.0, 30.0, 0.0))
+
+    angles = {"upper": (0.0, 0.0, 40.0)}
+    before = posed_bones(bones, angles)
+    turned = dict(angles, lower=bent(bones, angles, "lower", (0.0, 0.0, 1.0), 25.0))
+    after = posed_bones(bones, turned)
+    assert np.allclose(after[0], before[0]), "der Elternteil bleibt"
+    head, tail = np.asarray(after[1][0]), np.asarray(after[1][1])
+    assert head == pytest.approx(np.asarray(before[1][0])), "um den eigenen Kopf"
+    direction = math.degrees(math.atan2(tail[1] - head[1], tail[0] - head[0]))
+    assert direction == pytest.approx(65.0, abs=0.05), "40° der Eltern und 25° gezogen"

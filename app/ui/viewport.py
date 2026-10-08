@@ -1561,6 +1561,20 @@ SSAO_RADIUS = 2.0
 #: übers Bild keine hundert Suchen auslöst.
 HOVER_DELAY_MS = 90
 
+#: Wie lange der Pinselring nach der letzten Mausbewegung wartet, bevor er auf
+#: die Fläche darunter springt — ein Bildtakt (H1, RM-560). Er wartete auf die
+#: Ruhepause der Merkmalssuche und stand nie dort, wo der Zug gerade war.
+BRUSH_FOLLOW_MS = 16
+
+#: Wie viele Zwischenpunkte ein gezogener Pinselzug zwischen zwei
+#: Mausereignissen höchstens einfügt (H5). Ein schneller Zug lieferte Proben
+#: bis 1,56 Radien auseinander, eine Perlenkette statt eines Strichs.
+DRAG_FILL_LIMIT = 8
+
+#: Wie nah ein Klick oder Druck an einem Gelenk liegen muss, um es zu greifen,
+#: in logischen Bildpunkten (RM-561) — so weit wie die Kante eines Klickziels.
+JOINT_PIXELS = 10
+
 #: Wie weit zwei Tiefen auseinanderliegen müssen, damit eine die andere
 #: verdeckt. Zu klein, und eine ebene Fläche verdeckt sich selbst — das ist
 #: das Streifenmuster, an dem man schlecht eingestellte Verdeckung erkennt.
@@ -5143,6 +5157,18 @@ class Viewport(QWidget):
     Derselbe Vertrag wie beim Formen und beim Bemalen: Die Ansicht meldet
     einen Ort, das Fenster macht daraus einen Knochen, und Geometrie ändert
     einzig die Operation."""
+    jointPicked = Signal(int)
+    """Ein Klick auf ein Gelenk des Skelettwerkzeugs: dort setzt die Kette fort."""
+    jointDragStarted = Signal(int)
+    jointDragged = Signal(int, int)
+    """Ziehen an einem Gelenk, Bildpunkt in Gerätepixeln — es beugt (RM-561)."""
+    jointDragFinished = Signal()
+    jointAngleTyped = Signal(float)
+    """Während des Beugens getippt: genau dieser Winkel, Grad (§18.11)."""
+    jointDragCancelled = Signal()
+    """Escape während des Beugens: die Stellung von vor dem Zug."""
+    chainEnded = Signal()
+    """Enter im Skelettwerkzeug: die Kette ist zu Ende."""
     splitPointRequested = Signal(object)
     """Ein Ende der Trennlinie (§25).
 
@@ -5924,6 +5950,11 @@ class Viewport(QWidget):
         #: als Punkte — eine Aussage über das Bild, auch ohne Renderer prüfbar.
         self.bones_shown: tuple[tuple[Vec3, Vec3], ...] = ()
         self.joint_shown: Vec3 | None = None
+        self.joints_shown: tuple[Vec3, ...] = ()
+        """Die Gelenke, die sich greifen lassen — Szenekoordinaten, in der Stellung."""
+        self._joints_target: ObjectId | None = None
+        self._hover_joint: int | None = None
+        self._joint_drag: int | None = None
         """Was von der gezeichneten Linie im Bild steht. Eine eigene Liste, weil
         sie ein anderes Leben hat als die Körper: Ein Szenenaufbau räumt sie
         nicht weg, ein Werkzeugwechsel schon."""
@@ -5948,6 +5979,20 @@ class Viewport(QWidget):
         """Der Ring, der ihn zeigt — als Weltmaß in der Szene und nicht am
         Zeiger: Ein Zeiger hat feste Punktgröße und weiß nichts von der Kamera,
         er behauptete beim ersten Zoom eine Größe, die er nicht mehr hat."""
+        self._brush_copies: list[Any] = []
+        """Die Spiegelbilder des Rings, solange *Spiegeln* an ist."""
+        self._brush_mirror: tuple[Vec3, int] | None = None
+        self._brush_timer = QTimer(self)
+        self._brush_timer.setSingleShot(True)
+        self._brush_timer.setInterval(BRUSH_FOLLOW_MS)
+        self._brush_timer.timeout.connect(self._draw_brush)
+        """Legt den Ring einen Takt nach der letzten Bewegung auf die Fläche (H1)."""
+        self._last_drag_screen: tuple[int, int] | None = None
+        """Wo im Bild die letzte Probe eines gezogenen Strichs lag — von dort aus
+        füllt ein schneller Zug auf (H5)."""
+        self._preview_meshes: dict[ObjectId, Any] = {}
+        """Die Netze, deren Koordinaten :meth:`show_preview_mesh` gerade zeigt —
+        der Ring liest dort die Fläche, die im Bild steht."""
         self._cursor_role = "select"
         """Welcher Zeiger gerade über dem Bild steht. Gemerkt, damit nicht bei
         jeder Mausbewegung derselbe neu gesetzt wird — Qt zeichnet ihn sonst
@@ -7215,6 +7260,7 @@ class Viewport(QWidget):
             actor.update_points(points)
         except ValueError:
             return
+        self._preview_meshes[object_id] = mesh
         self.renderer.render()
 
     def clear_preview_mesh(self) -> None:
@@ -7224,6 +7270,7 @@ class Viewport(QWidget):
         wurde, war eine Vorschau, und der Dokumentzustand ist die einzige
         Wahrheit darüber, was danach zu sehen ist.
         """
+        self._preview_meshes.clear()
         self.show_scene(self._scene_for_rebuild())
 
     def _rebuild_layer(self) -> None:
@@ -9525,6 +9572,7 @@ class Viewport(QWidget):
         pending: Vec3 | None = None,
         *,
         target: ObjectId | None = None,
+        joints: Sequence[Vec3] = (),
     ) -> None:
         """Die Knochen des Skeletteditors und das gesetzte Gelenk (RM-367, W4-6).
 
@@ -9537,6 +9585,8 @@ class Viewport(QWidget):
 
         self.bones_shown = tuple(bones)
         self.joint_shown = pending
+        self.joints_shown = tuple(joints)
+        self._joints_target = target
         self.clear_bones(keep=True)
         if self.renderer is None or (not bones and pending is None):
             return
@@ -9583,6 +9633,8 @@ class Viewport(QWidget):
         if not keep:
             self.bones_shown = ()
             self.joint_shown = None
+            self.joints_shown = ()
+            self._hover_joint = None
         if self.renderer is None:
             self._bone_actors.clear()
             return
@@ -9634,7 +9686,70 @@ class Viewport(QWidget):
         der beides gleichzeitig kann, kann keines von beidem verlässlich.
         """
         self._boning = active
+        self._hover_joint = None
+        self._joint_drag = None
         self._update_cursor()
+
+    def joint_at(self, x: int, y: int) -> int | None:
+        """Welches gezeigte Gelenk unter diesem Bildpunkt liegt (Gerätepixel), oder keins.
+
+        Gemessen im Bild und nicht im Raum: Ein Gelenk sitzt im Körper, und
+        der Klick trifft die Haut darüber. Das nächste innerhalb von
+        :data:`JOINT_PIXELS` gewinnt.
+        """
+        import numpy as np
+
+        if self.renderer is None or not self.joints_shown or self._result is None:
+            return None
+        entry = self._result.scene.objects.get(self._joints_target or "")
+        shift = self._view_offset(entry, self._result) if entry is not None else np.zeros(3)
+        reach = self._device_pixels(JOINT_PIXELS)
+        best: tuple[float, int] | None = None
+        for index, joint in enumerate(self.joints_shown):
+            at = np.asarray(joint, dtype=float) + shift
+            sx, sy, _depth = self.renderer.world_to_display(
+                (float(at[0]), float(at[1]), float(at[2]))
+            )
+            away = math.hypot(sx - x, sy - y)
+            if away <= reach and (best is None or away < best[0]):
+                best = (away, index)
+        return None if best is None else best[1]
+
+    def show_bend_angle(self, degrees: float, x: int, y: int) -> None:
+        """Den Winkel des Beugens am Zeiger zeigen — tippbar wie jeder Zug (§18.11)."""
+        ratio = self.renderer.device_ratio() if self.renderer is not None else 1.0
+        self.drag_bar.anchor = QPoint(int(x / ratio), int(y / ratio))
+        self.drag_bar.follow(str(tr("Winkel")), degrees, "°", 0)
+
+    def finish_bend(self) -> None:
+        """Das Beugen ist vorbei — gezogen, getippt oder abgebrochen."""
+        if self._drag_kind == "bend":
+            self._drag_kind = None
+        self._joint_drag = None
+        self.drag_bar.dismiss()
+
+    def point_beside(self, x: int, y: int, through: Vec3) -> Vec3 | None:
+        """Der Punkt unter dem Bildpunkt in der Bildebene durch ``through`` (Szene).
+
+        Beugen dreht in der Ebene senkrecht zum Blick; was die Maus dort zieht,
+        ist der Winkel. Szenekoordinaten hinein und heraus — der Ansichtsversatz
+        des Körpers fällt dazwischen weg.
+        """
+        import numpy as np
+
+        if self.renderer is None or self._result is None:
+            return None
+        entry = self._result.scene.objects.get(self._joints_target or "")
+        shift = self._view_offset(entry, self._result) if entry is not None else np.zeros(3)
+        anchor = np.asarray(through, dtype=float) + shift
+        depth = self.renderer.world_to_display(
+            (float(anchor[0]), float(anchor[1]), float(anchor[2]))
+        )[2]
+        found = self.renderer.display_to_world(x, y, depth)
+        if found is None:
+            return None
+        back = np.asarray(found, dtype=float) - shift
+        return (float(back[0]), float(back[1]), float(back[2]))
 
     def set_sculpting(self, active: bool, radius: float = 0.0) -> None:
         """Macht aus Klicks Pinselzüge (§25).
@@ -9647,7 +9762,9 @@ class Viewport(QWidget):
         self._brush_radius = radius if active else 0.0
         if not active:
             self.stop_sculpt_gesture()
+            self._brush_timer.stop()
             self._hide_brush()
+            self._preview_meshes.clear()
         self._update_cursor()
 
     def stop_sculpt_gesture(self) -> None:
@@ -9663,45 +9780,126 @@ class Viewport(QWidget):
         if self._sculpting:
             self._draw_brush()
 
+    def set_brush_mirror(self, centre: Vec3 | None, planes: int) -> None:
+        """Wo der Ring sein Spiegelbild zeigt: die Spiegelmitte der Sitzung in
+        Szenekoordinaten und die Bitmaske der Ebenen (wie ``Stroke.symmetry``).
+
+        *Spiegeln* ist ein Schalter in der Leiste; was er bewirkt, soll man vor
+        dem Zug sehen und nicht erst danach (Konzept P16 §7.3)."""
+        wanted = (centre, planes) if centre is not None and planes else None
+        if wanted == self._brush_mirror:
+            # Unverändert kein neuer Pick: Die Vorschau meldet sich je Zug.
+            return
+        self._brush_mirror = wanted
+        if self._sculpting:
+            self._draw_brush()
+
     def _hide_brush(self) -> None:
-        if self._brush_actor is not None and self.renderer is not None:
-            self.renderer.remove(self._brush_actor)
+        if self.renderer is not None and (self._brush_actor is not None or self._brush_copies):
+            for actor in (self._brush_actor, *self._brush_copies):
+                if actor is not None:
+                    self.renderer.remove(actor)
             self.renderer.render()
         self._brush_actor = None
+        self._brush_copies = []
 
     def _draw_brush(self) -> None:
-        """Den Pinselradius als Ring auf der Fläche unter dem Zeiger zeigen (§20).
+        """Den Pinselradius als Ring auf der Fläche unter dem Zeiger zeigen (§20, H1).
 
         Als Weltmaß in der Szene und nicht am Zeiger: Ein Zeiger hat feste
-        Punktgröße und weiß nichts von der Kamera. Der Ring liegt in der
-        Ebene der nächsten Ecke des Netzes.
+        Punktgröße und weiß nichts von der Kamera. **Auf der Fläche**, die der
+        Pick trifft (:meth:`_world_at`), nicht auf der Fokusebene der Kamera:
+        Dort lag er bis RM-560 im Median 7 mm hinter der Fläche, verdeckt, und
+        stand hochkant (90° zur Flächennormale gemessen, 28 von 28 Orten).
         """
-        import numpy as np
-
         if self.renderer is None or self._hover_at is None or self._brush_radius <= 0.0:
             return
         x, y = self._hover_at
-        point = self.renderer.display_to_world(x, y, self.renderer.focal_depth())
+        point = self._world_at(x, y)
         if point is None:
             self._hide_brush()
             return
-        mesh = self._nearest_mesh(point)
-        if mesh is None:
+        self._place_brush(point)
+
+    def _place_brush(self, point: Vec3) -> None:
+        """Den Ring flach auf die Fläche am Pickpunkt legen.
+
+        ``point`` steht in Ansichtskoordinaten und kommt aus dem letzten
+        :meth:`_world_at`; dessen Dreieck nennt ``_selection_hit``. Ein
+        gezogener Zug ruft das mit seinem eigenen Pick — der Ring folgt dem
+        Strich, ohne ein zweites Mal zu picken.
+        """
+        import numpy as np
+
+        if self.renderer is None or self._brush_radius <= 0.0:
+            return
+        normal = self._surface_normal_at_hit()
+        if normal is None:
             self._hide_brush()
             return
-        vertices = np.asarray(mesh.raw.vertices, dtype=float)
-        nearest = int(np.argmin(np.linalg.norm(vertices - np.asarray(point), axis=1)))
-        normal = np.asarray(mesh.raw.vertex_normals, dtype=float)[nearest]
-        ring = _ring_points(np.asarray(point, dtype=float), normal, self._brush_radius)
-        self._hide_brush()
+        for actor in (self._brush_actor, *self._brush_copies):
+            if actor is not None:
+                self.renderer.remove(actor)
+        self._brush_copies = []
+        rings = [_ring_points(np.asarray(point, dtype=float), normal, self._brush_radius)]
+        hit = self._selection_hit
+        if self._brush_mirror is not None and hit is not None:
+            centre, planes = self._brush_mirror
+            shift = np.asarray(hit.view_point, dtype=float) - np.asarray(hit.scene_point)
+            places = [(np.asarray(hit.scene_point, dtype=float), np.asarray(normal, dtype=float))]
+            for bit, axis in ((1, 0), (2, 1), (4, 2)):
+                if planes & bit:
+                    flip = np.ones(3)
+                    flip[axis] = -1.0
+                    middle = np.asarray(centre, dtype=float)
+                    places += [((at - middle) * flip + middle, way * flip) for at, way in places]
+            rings += [_ring_points(at + shift, way, self._brush_radius) for at, way in places[1:]]
         self._brush_actor = self.renderer.add_lines(
-            shapes.closed_ring(ring),
+            shapes.closed_ring(rings[0]),
             name="brush",
             colour=SELECTED_COLOUR,
             width=2.0,
             connected=True,
         )
+        self._brush_copies = [
+            self.renderer.add_lines(
+                shapes.closed_ring(ring),
+                name="brush:mirror",
+                colour=SELECTED_COLOUR,
+                width=1.0,
+                connected=True,
+            )
+            for ring in rings[1:]
+        ]
         self.renderer.render()
+
+    def _surface_normal_at_hit(self) -> Any:
+        """Die Normale der Fläche, die der letzte Pick traf, in der gezeigten Lage.
+
+        Das getroffene Dreieck, wenn die Dreiecke des Bildes die der Szene sind
+        (``_original_pick_cells``) — aus dem Netz, das die Vorschau gerade zeigt.
+        Sonst die Normale der nächsten Ecke um den getroffenen Punkt.
+        """
+        import numpy as np
+
+        hit = self._selection_hit
+        if hit is None or self._result is None:
+            return None
+        entry = self._result.scene.objects.get(hit.object_id)
+        mesh = self._preview_meshes.get(hit.object_id) or (entry.mesh if entry else None)
+        if mesh is None:
+            return None
+        raw = as_mesh_data(mesh).raw
+        faces = np.asarray(raw.faces)
+        vertices = np.asarray(raw.vertices, dtype=float)
+        if hit.object_id in self._original_pick_cells and 0 <= hit.cell < len(faces):
+            a, b, c = vertices[faces[hit.cell]]
+            normal = np.cross(b - a, c - a)
+            length = float(np.sqrt((normal * normal).sum()))
+            if length > EPS_GEOM:
+                return normal / length
+        nearest = int(np.argmin(np.linalg.norm(vertices - np.asarray(hit.scene_point), axis=1)))
+        return np.asarray(raw.vertex_normals, dtype=float)[nearest]
 
     # --- der Zeiger (§19.3) -----------------------------------------------------
 
@@ -9765,10 +9963,10 @@ class Viewport(QWidget):
             # haben.
             return "measure"
         if self._boning:
-            # Derselbe Zeiger wie beim Formen: Beide setzen einen Punkt auf der
-            # Fläche, und ein dritter Ring wäre eine Unterscheidung ohne
-            # Unterschied.
-            return "sculpt"
+            # Über einem Gelenk zeigt der Zeiger, dass es sich ziehen lässt
+            # (RM-561); sonst derselbe wie beim Formen: Beide setzen einen
+            # Punkt auf der Fläche.
+            return "move" if self._hover_joint is not None else "sculpt"
         if self._sculpting:
             return "sculpt"
         if self._measure_mode != "off":
@@ -9927,6 +10125,20 @@ class Viewport(QWidget):
         # Der Schnitt mit der Zeichenebene kostet nichts dergleichen — er ist
         # eine Division —, und eine Linie, die dem Zeiger erst nach neunzig
         # Millisekunden folgt, sieht aus wie ein hängendes Programm.
+        if self._sculpting:
+            # **Der Ring folgt dem Zeiger einen Takt später, nicht nach der
+            # Ruhepause** (H1). Die Merkmalssuche, auf die er wartete, ist beim
+            # Formen ohnehin nicht gemeint.
+            self._brush_timer.start()
+            return
+        if self._boning:
+            # Ein paar Gelenke ins Bild zu rechnen kostet nichts; der Zeiger
+            # sagt sofort, was sich greifen lässt.
+            joint = self.joint_at(*self._hover_at)
+            if joint != self._hover_joint:
+                self._hover_joint = joint
+                self._update_cursor()
+            return
         if self._sketch_frame is not None:
             if self._pull_from is not None:
                 # **Während eines Zugs am Ziehgriff hält die Zeichnung still.**
@@ -9960,6 +10172,7 @@ class Viewport(QWidget):
         Regler führt hinaus.
         """
         self._hover_timer.stop()
+        self._brush_timer.stop()
         self._hover_at = None
         self._set_hover_target(None, None)
         self._clear_snap_preview()
@@ -9973,18 +10186,42 @@ class Viewport(QWidget):
         darüber hinaus — sonst schluckte ein neuer Ansatz neben dem alten
         Endpunkt seinen ersten Zug. Die Kosten sprechen nicht dagegen:
         ``apply_strokes`` liegt gemessen bei zwei Millisekunden für 25 Züge.
+
+        **Und er ist auch ein Höchstabstand** (H5): Liegt die neue Stelle mehr
+        als einen halben Radius hinter der letzten Probe, setzt der Zug
+        dazwischen Proben auf die Fläche, gepickt an Bildpunkten auf der
+        Strecke dorthin (höchstens :data:`DRAG_FILL_LIMIT`). Ein schneller Zug
+        ist ein Strich, keine Perlenkette. Der Ring folgt dabei der Probe.
         """
         if fresh:
             self._last_drag_stroke = None
+            self._last_drag_screen = None
             self.sculptGestureStarted.emit()
         point = self._world_at(x, y)
         if point is None:
             return
+        if self._sculpting:
+            self._place_brush(point)
         last = self._last_drag_stroke
         spacing = self._brush_radius * 0.5
         if last is not None and spacing > 0.0 and math.dist(last, point) < spacing:
             return
+        before = self._last_drag_screen
+        if last is not None and before is not None and spacing > 0.0:
+            gaps = min(int(math.dist(last, point) / spacing), DRAG_FILL_LIMIT + 1)
+            for step in range(1, gaps):
+                share = step / gaps
+                between = self._world_at(
+                    round(before[0] + (x - before[0]) * share),
+                    round(before[1] + (y - before[1]) * share),
+                )
+                if between is not None and math.dist(self._last_drag_stroke or last, between) >= (
+                    spacing * 0.5
+                ):
+                    self._last_drag_stroke = between
+                    self._on_picked(between)
         self._last_drag_stroke = point
+        self._last_drag_screen = (x, y)
         self._on_picked(point)
 
     def _on_picked(self, point: Any, add: bool = False) -> None:
@@ -16258,6 +16495,13 @@ class Viewport(QWidget):
         """
         value = self.drag_bar.typed_value()
         kind = self._drag_kind
+        if kind == "bend":
+            if value is None:
+                self.drag_bar.value.selectAll()
+                return
+            self.finish_bend()
+            self.jointAngleTyped.emit(float(value))
+            return
         unusable = (kind == "scale" and value is not None and value <= 0.0) or (
             kind == "pull" and value is not None and not self._pull_takes(value)
         )
@@ -16412,6 +16656,10 @@ class Viewport(QWidget):
             return True
         if key == Qt.Key.Key_Escape:
             # Esc verwirft den Zug: nichts angewandt, das Bild zurück zur Szene.
+            if self._drag_kind == "bend":
+                self.finish_bend()
+                self.jointDragCancelled.emit()
+                return True
             self._end_drag()
             return True
         if watched is self.drag_bar.value:
@@ -17611,6 +17859,10 @@ class Viewport(QWidget):
         das System vor der ersten Wiederholung wartet.
         """
         if self._surface_picker_key(event):
+            return
+        if self._boning and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.chainEnded.emit()
+            event.accept()
             return
         if self._scheme != "solidon" or self.renderer is None:
             super().keyPressEvent(event)
@@ -18905,6 +19157,13 @@ class Viewport(QWidget):
             if hit is not None:
                 self.sketchPointPicked.emit(hit)
             return
+        if self._boning:
+            # Ein Klick auf ein Gelenk setzt dort fort — vor dem Pick der Haut
+            # darüber, die der Klick sonst träfe (RM-561).
+            joint = self.joint_at(x, y)
+            if joint is not None:
+                self.jointPicked.emit(joint)
+                return
         if self._means_a_feature() and not self.user_selection_allowed():
             self._refuse_selection()
             return
@@ -19148,6 +19407,30 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
             else:
                 found.finish_sketch_pull()
             found._sketch_gesture = None
+            return True
+        if found._boning:
+            # **Ziehen an einem Gelenk beugt** (RM-561), mit derselben
+            # Klickschwelle wie der Körperzug: Bleibt die Maus darunter, ist es
+            # ein Klick, und der setzt am Gelenk fort.
+            if phase == "ready":
+                found._joint_drag = found.joint_at(x, y)
+                return found._joint_drag is not None
+            if found._joint_drag is None:
+                return False
+            if phase == "start":
+                found._drag_kind = "bend"
+                found.jointDragStarted.emit(found._joint_drag)
+            elif phase == "move":
+                if not found.drag_bar.typing:
+                    found.jointDragged.emit(x, y)
+            elif found.drag_bar.typing:
+                # Wer tippt, hat den Zug der Tastatur gegeben: Die
+                # Eingabetaste schließt ihn ab, nicht das Loslassen.
+                found._joint_drag = None
+            else:
+                found._joint_drag = None
+                found.finish_bend()
+                found.jointDragFinished.emit()
             return True
         if phase == "ready":
             # Nur die Frage, ob hier der gewählte Körper liegt — der Zug
