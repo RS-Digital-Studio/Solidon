@@ -2565,11 +2565,11 @@ def test_a_texture_panel_click_while_the_scene_evaluates_changes_the_step_after_
     numeric = {
         field._entry.name: field for row in panel._built for field in row.findChildren(ValueField)
     }
-    monkeypatch.setattr(window, "_show_preview", lambda _difference: None)
+    monkeypatch.setattr(window, "_show_preview", lambda _difference, **_kwargs: None)
     numeric["depth"].spin.setValue(0.9)
     window._feature_preview.stop()
     window._preview_feature_change()
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     gate = threading.Event()
     evaluate = Session.run_evaluation
 
