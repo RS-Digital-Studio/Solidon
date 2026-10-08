@@ -176,6 +176,11 @@ zu halten fängt keinen Fehler, der beide gleich trifft.
 Ein Test beschreibt, **was** er sicherstellt und **warum** — der Name allein
 reicht dafür selten. Sprache in `tests/`: `AGENTS.md`, „Sprachregelung“.
 
+- **Nach dem Öffnen einer Datei `assert ….wait_for_idle(60_000)`**: Ungeprüft
+  und mit zehn Sekunden lief der Test auf dem langsamsten Läufer weiter, und
+  die späte Auswertung baute unter ihm um. Der Wächter steht in
+  `test_toolchain.py`.
+
 ## Den Lauf messen, nicht einen Filter darüber
 
 Wie ein Lauf gelesen wird, sagt `/pruefen`; hier die Fallen, die schon

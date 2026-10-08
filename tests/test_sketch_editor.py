@@ -6181,7 +6181,7 @@ def test_an_imported_mesh_is_a_target_for_cutting(qt_app: QApplication) -> None:
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         entry = next(iter(result.scene.objects.values()))
         assert entry.kind == "mesh", "eine eingelesene Datei ist ein Netz — darum ging es"
@@ -6233,7 +6233,7 @@ def test_pulling_down_on_an_imported_mesh_starts_the_pocket(qt_app: QApplication
     window = MainWindow(Session(), UiSettings())
     try:
         window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.evaluate_now()
         entry = next(iter(result.scene.objects.values()))
 
@@ -8925,7 +8925,7 @@ def test_the_window_hands_the_objects_to_the_face_outline(qt_app: QApplication) 
     window._may_discard = lambda: True  # type: ignore[method-assign]
     try:
         window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
-        assert window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         result = window.session.last_result
         assert result is not None
         (object_id,) = result.scene.objects

@@ -118,7 +118,7 @@ def quick_survey(monkeypatch: pytest.MonkeyPatch) -> None:
 def window(qt_app: QApplication) -> MainWindow:
     made = MainWindow(Session(), UiSettings())
     made.open_path(MESHES / "plate_holes.stl")
-    made.session.wait_for_idle()
+    assert made.session.wait_for_idle(60_000)
     return made
 
 
@@ -431,7 +431,7 @@ def test_a_released_window_with_a_waiting_proposal_lets_go(
     session = Session()
     window = MainWindow(session, UiSettings())
     window.open_path(MESHES / "plate_holes.stl")
-    assert session.wait_for_idle(30_000)
+    assert session.wait_for_idle(60_000)
     waiting = Proposal(request="x")
     waiting.stopped = "refused"
     window._on_proposal(ProposalPreview(proposal=waiting))

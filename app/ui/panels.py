@@ -133,7 +133,11 @@ from app.core.export.writer import PART_SETTING_CODES
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
-from app.core.perceive.actions import measure_explanation, measure_qualifier
+from app.core.perceive.actions import (
+    group_action_first,
+    measure_explanation,
+    measure_qualifier,
+)
 from app.core.perceive.groups import FunctionalGroup
 from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES
 from app.core.perceive.relations import FeatureActionGroup
@@ -8420,7 +8424,10 @@ def feature_answers(
         unit = group_of(feature_id, functional)
         if unit is not None:
             unit_name = numbered_titles(functional)[unit.key]
-    return _FeatureAnswers(cavity, tuple(actions), groups, unit, unit_name)
+    # Am Anker der Gruppe führt ihre Handlung — die erste Zeile wird scharf
+    # und klappt auf (:meth:`FeaturePanel._arm`).
+    ordered = group_action_first(actions, feature_id, unit.anchor if unit is not None else None)
+    return _FeatureAnswers(cavity, ordered, groups, unit, unit_name)
 
 
 #: Der Merker des Merkmalfensters: der Körper (schwach), die Merkmalsliste,
@@ -8830,9 +8837,13 @@ class ColumnScroller(QScrollArea):
     @override
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         # ``setWidget`` trägt den Rollbereich als Filter am Inhalt ein; ein neu
-        # gelegter Inhalt kann eine neue Mindestbreite haben.
+        # gelegter Inhalt kann eine neue Mindestbreite haben. **Bis zur Zone**
+        # (:func:`overlay.tell_the_zone`): Qt reicht den Wunsch je Runde eine
+        # Ebene weiter, über Seite, Stapel, Reiter und Karte. An einer
+        # gewählten Fläche stand die Karte so einige Runden 22 Punkte zu
+        # schmal, und *Loch oder Aussparung zeichnen …* lief unter den Rand.
         if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
-            self.updateGeometry()
+            tell_the_zone(self)
         return super().eventFilter(watched, event)
 
 

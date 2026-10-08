@@ -1246,7 +1246,7 @@ def test_the_tool_strip_comes_back_with_a_body(window: MainWindow) -> None:
     einer zu wenig — ein grauer Knopf mit Grund, kein Fehler.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._update_actions()
 
     buttons = [
@@ -1604,7 +1604,7 @@ def test_workspace_menus_remain_available_without_selection(qt_app: QApplication
         assert any(action.isEnabled() and not action.isSeparator() for action in create.actions())
 
         window.session.import_model(Path("tests/data/meshes/plate_holes.stl"))
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         qt_app.processEvents()
         result = window.session.last_result
         assert result is not None and result.stopped_at is None

@@ -104,7 +104,7 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     """
     view = MainWindow(Session(), UiSettings())
     view.open_path(MESHES / "plate_holes.stl")
-    view.session.wait_for_idle()
+    assert view.session.wait_for_idle(60_000)
     result = view.session.evaluate_now()
     # **Das Teil ist angeklickt.** Ohne das bekommt die Schnittleiste nie ihre
     # Spannen und steht auf der Vorgabe (-50 bis 50, Regler auf 0) — also

@@ -4673,6 +4673,36 @@ def test_a_wall_says_which_chamber_it_belongs_to_and_offers_to_change_it(
     panel.close()
 
 
+def test_the_chamber_row_leads_with_changing_the_chamber_and_a_wall_with_its_own_face() -> None:
+    """Wer im Baum „Kammer 1“ wählt, bekommt *Kammer ändern* als erste Zeile.
+
+    Der Baum zeigt die Kammer unter ihrem Anker, dem Boden; die erste Zeile
+    des Merkmalfensters wird scharf und klappt auf (``FeaturePanel._arm``).
+    Seit *Fläche versetzen* an jeder Fläche vorn steht (RM-535), stand dort
+    ein Weg von 0 mm offen und die Kammer zugeklappt darunter — der
+    Fensterweg der Einzeldateiabnahme änderte den Boden statt der Kammer.
+    An einer Wand bleibt die Fläche vorn: Gewählt ist sie, nicht die Gruppe.
+    """
+    from app.core.perceive.groups import functional_groups
+    from app.ui.panels import feature_answers
+    from tests.helpers import walled_bin
+
+    load_operations()
+    mesh = walled_bin()
+    found = features.detect(mesh)
+    chamber = next(group for group in functional_groups(found, mesh) if group.kind == "chamber")
+    wall = next(member for member, role in chamber.roles if role == "wall")
+
+    at_the_anchor = feature_answers(chamber.anchor, found[chamber.anchor], found, mesh)
+    offered = [action.op for action in at_the_anchor.actions if action.op]
+    assert offered[0] == "resize_chamber", offered
+    assert "push_face" in offered, "Voraussetzung: Der Boden trägt auch Fläche versetzen"
+
+    at_a_wall = feature_answers(wall, found[wall], found, mesh)
+    offered = [action.op for action in at_a_wall.actions if action.op]
+    assert offered[0] == "push_face" and "resize_chamber" in offered, offered
+
+
 def test_a_lug_offers_to_change_the_closure_by_its_play(qt_app: QApplication) -> None:
     """Das Merkmalfenster an einer Nocke: *Verschluss ändern* mit dem Spiel, vorbelegt mit null.
 

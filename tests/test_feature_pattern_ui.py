@@ -22,7 +22,7 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 def _plate_with_holes(window: MainWindow) -> tuple[str, str, int]:
     """Die Lochplatte aus dem Korpus, eine ihrer vier Bohrungen und ihre Anzahl."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = sorted(

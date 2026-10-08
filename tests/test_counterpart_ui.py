@@ -624,7 +624,7 @@ def test_the_pin_for_a_bore_is_offered_at_an_internal_thread_only(qt_app: QAppli
         window = MainWindow(Session(), UiSettings())
         try:
             window.open_path(THREADS / name)
-            window.session.wait_for_idle()
+            assert window.session.wait_for_idle(60_000)
             result = window.session.evaluate_now()
             object_id, entry = next(iter(result.scene.objects.items()))
             [thread] = [key for key, feature in entry.features.items() if feature.kind == "thread"]

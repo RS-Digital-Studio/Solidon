@@ -637,7 +637,7 @@ def test_legacy_paint_finding_opens_its_real_values_and_history(window, monkeypa
     from app.ui.dialogs import StepValuesDialog
 
     window.session.open_project(Path(__file__).parent / "data" / "projects" / "painted_v13.p3d")
-    assert window.session.wait_for_idle(30000)
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None and result.stopped_at == 2
     window._on_scene(result)
@@ -986,7 +986,7 @@ def test_opening_repairs_the_reference_at_the_stopped_operation(
     )
     try:
         session.open_project(path)
-        assert session.wait_for_idle()
+        assert session.wait_for_idle(60_000)
         assert requests, "die unvollständige Auswertung muss die Wiederzuordnung erreichen"
         assert requests[0].candidates == (("obj_1", "hole_2"),)
         assert requests[0].preview is not None and requests[0].preview.scene is scene
@@ -1504,7 +1504,7 @@ def test_outline_import_waits_for_the_shown_contours(
     path.write_bytes(SOURCE)
     window.open_path(path)
     # Gelesen und geplant wird im Arbeiter (RM-224); die Konturwahl öffnet danach.
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     dialog = window.findChild(OutlineDialog)
     assert dialog is not None
     assert not window.session.history.operations
@@ -1543,7 +1543,7 @@ def test_cancelling_outline_import_drops_only_its_pending_source(
     path.write_bytes(SOURCE)
     window.open_path(path)
     # Gelesen und geplant wird im Arbeiter (RM-224); die Konturwahl öffnet danach.
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     dialog = window.findChild(OutlineDialog)
     assert dialog is not None
     assert window.session.project.document.sources
@@ -1729,7 +1729,7 @@ def test_cancelled_or_stale_organizer_editor_cannot_change_the_document(
 
 def test_importing_a_model_goes_through_the_stack(session: Session) -> None:
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     assert [entry.op for entry in session.project.document.ops] == ["load"]
     assert session.modified
@@ -1802,7 +1802,7 @@ def test_a_cancelled_filament_dialog_is_released(
 
 def test_undo_and_redo_reach_the_document(session: Session) -> None:
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     session.undo()
     session.wait_for_idle()
@@ -2039,7 +2039,7 @@ def test_a_parameter_unit_is_a_safe_choice_in_the_left_panel(window: MainWindow)
 
 def test_saving_and_reopening_keeps_the_stack(session: Session, tmp_path: Path) -> None:
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     path = session.save_project(tmp_path / "projekt.p3d")
 
     assert not session.modified
@@ -2051,7 +2051,7 @@ def test_an_ambiguous_unit_reaches_the_surface_as_a_question(session: Session) -
     session.askRequested.connect(lambda request: (seen.append(request), request.reply("in")))
 
     session.import_model(MESHES / "bracket_inch.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     result = session.evaluate_now()
 
     assert seen, "the surface is asked instead of the core guessing"
@@ -2073,7 +2073,7 @@ def test_the_title_marks_unsaved_changes(session: Session, tmp_path: Path) -> No
     """
     assert not session.title.endswith("*")
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     assert "ungespeichert" in session.title, f"ohne Datei sagt es das Wort: {session.title!r}"
     assert session.title.startswith("cube_clean"), "und es nennt, was offen ist"
 
@@ -2082,7 +2082,7 @@ def test_the_title_marks_unsaved_changes(session: Session, tmp_path: Path) -> No
 
     # Und ab da trägt der Stern die Aussage.
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     assert session.title == "projekt.p3d*", f"mit Datei sagt es der Stern: {session.title!r}"
 
 
@@ -2273,7 +2273,7 @@ def test_a_dialog_says_which_body_it_works_on(window: MainWindow) -> None:
     from app.ui.main_window import inputs_for
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     first = next(iter(window.session.last_result.scene.objects))
 
     spec = REGISTRY.get("drill_hole")
@@ -2383,7 +2383,7 @@ def test_escape_ends_insertion_from_the_history_without_changing_the_stack(
 
     window.show()
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     operations = tuple(window.session.project.document.ops)
     assert window.session.start_inserting(operations[0].id)
     assert window.session.wait_for_idle(30_000)
@@ -2444,7 +2444,7 @@ def test_the_start_screen_shows_only_menus_that_do_something_there(window: MainW
     assert not window.toolbar.isVisibleTo(window)
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.toolbar.isVisibleTo(window)
     for menu in window._workspace_menus:
         assert menu.menuAction().isVisible(), menu.title()
@@ -2498,7 +2498,7 @@ def test_new_leads_back_to_the_examples(window: MainWindow) -> None:
     liegt auf der Eingabetaste.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.stack.currentWidget() is not window.start_screen
     assert window.toolbar.isVisibleTo(window)
 
@@ -2528,7 +2528,7 @@ def test_the_help_menu_leads_back_to_the_examples(window: MainWindow) -> None:
     nicht — gefragt wird erst, wenn wirklich etwas verloren ginge (Regel 19).
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.stack.currentWidget() is not window.start_screen
 
     labels = [
@@ -2788,7 +2788,7 @@ def test_the_third_export_shows_the_support_line_once(
 
     window.show()
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     notice = window._support_notice
     for number in (1, 2, 3):
         assert not notice.isVisible(), f"vor dem {number}. Export steht nichts da"
@@ -2819,7 +2819,7 @@ def test_declined_and_failed_exports_do_not_count(
 
     window.show()
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
 
     # Der Dateidialog wird geschlossen, ohne einen Namen zu wählen.
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: ("", "")))
@@ -2869,7 +2869,7 @@ def test_a_slicer_start_counts_on_the_way_of_the_application(
 
     window.show()
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     _export_once(window, monkeypatch, tmp_path / "eins.stl")
     _export_once(window, monkeypatch, tmp_path / "zwei.stl")
     assert feedback.read().deliveries == 2
@@ -2938,7 +2938,7 @@ def test_the_support_line_stays_clear_of_banner_and_cards(
     window.resize(1400, 900)
     window.show()
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     for _ in range(3):
         QApplication.processEvents()
     viewport = window.viewport
@@ -3042,7 +3042,7 @@ def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> No
     """Nach *Neu* blieben die orangen Merkmalsmarkierungen des vorigen Objekts
     im Bild stehen, während Objektbaum und Prüfbericht längst leer waren."""
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     viewport = window.viewport
     viewport.select("obj_1")
     viewport.set_feature_overlay(True)
@@ -3165,7 +3165,7 @@ def test_measuring_never_ends_in_silence(
 
 def test_opening_a_model_leaves_the_start_screen(window: MainWindow) -> None:
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.stack.currentWidget() is window.overlay
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
@@ -3196,7 +3196,7 @@ def test_importing_from_the_start_screen_shows_the_workspace(
 
 def test_the_panels_follow_the_evaluation(window: MainWindow) -> None:
     window.open_path(MESHES / "two_components.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
 
@@ -3207,7 +3207,7 @@ def test_the_panels_follow_the_evaluation(window: MainWindow) -> None:
 
 def test_the_status_bar_describes_the_selection(window: MainWindow) -> None:
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
     window.object_tree.tree.setCurrentItem(window.object_tree.tree.topLevelItem(0))
 
@@ -3221,7 +3221,7 @@ def test_the_status_bar_describes_the_selection(window: MainWindow) -> None:
 def test_a_thread_dialog_uses_the_selected_face_or_bore(window: MainWindow) -> None:
     """Bohrung und ebene Außenfläche bekommen die Richtung ohne Raten."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -3257,7 +3257,7 @@ def test_a_thread_dialog_uses_the_selected_face_or_bore(window: MainWindow) -> N
 def test_drawable_faces_keep_the_object_that_owns_them(window: MainWindow) -> None:
     """Die Ebenenliste bindet jede Fläche an ihren Körper, ohne NameError."""
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id = next(iter(result.scene.objects))
 
@@ -3281,7 +3281,7 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     echte Ereignis an den Viewport, so wie Qt es zustellt.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -3342,7 +3342,7 @@ def test_the_selection_tab_starts_behind_and_comes_forward_on_a_selection(
     assert not window.feature_dock.is_current(), "beim Start steht der Bericht vorn"
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     window.object_tree.select_object(object_id)
@@ -3380,7 +3380,7 @@ def test_a_left_selection_tab_stays_behind_for_this_selection(window: MainWindow
     Merkmal springt nichts wieder auf. Die nächste Auswahl bringt es zurück.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
@@ -3414,7 +3414,7 @@ def test_coming_back_to_the_selection_tab_takes_the_decision_back(window: MainWi
     der Kunde ihn für jedes weitere Merkmal erneut holen.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -3443,9 +3443,9 @@ def test_a_finding_click_shows_its_body_and_keeps_the_report_in_front(window: Ma
     weiterhin — sie ist eine Wahl zur Arbeit.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.import_model_async(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     first, second = list(result.scene.objects)[:2]
     window.object_tree.select_object(first)
@@ -3480,7 +3480,7 @@ def test_two_selected_features_show_their_distance(window: MainWindow) -> None:
     from PySide6.QtWidgets import QLabel
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
@@ -3509,7 +3509,7 @@ def test_three_selected_features_explain_the_pair_limit(window: MainWindow) -> N
     from PySide6.QtWidgets import QLabel
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
@@ -3656,7 +3656,7 @@ def test_one_handling_for_all_alike_features_is_one_transaction(window: MainWind
     Handgriff.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
@@ -3707,7 +3707,7 @@ def test_applying_to_all_alike_holes_leaves_each_hole_where_it_is(window: MainWi
     heißt, ist hier nicht die Frage — dass sie noch dort sitzt, schon.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
@@ -3762,7 +3762,7 @@ def test_a_face_offers_the_catalogue_from_the_panel(
     darüber wäre eine Frage ohne Antwort; dort steht das Zeichnen.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     face = next(
@@ -3795,7 +3795,7 @@ def test_a_changed_number_previews_before_it_changes_anything(window: MainWindow
     schreibt, wäre keine (Regel 2).
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -3832,7 +3832,7 @@ def test_choosing_another_feature_drops_the_waiting_preview(window: MainWindow) 
     angefasst hat.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
@@ -3866,7 +3866,7 @@ def test_cancel_in_the_feature_panel_drops_the_waiting_preview_and_restores_the_
     from app.ui.labels import LengthSpin
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
@@ -3927,7 +3927,7 @@ def test_applying_drops_the_waiting_preview_too(window: MainWindow) -> None:
     derselbe Fehler noch einmal (gemeldet von 3d-druck-85, 03.09.2026).
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
@@ -4003,7 +4003,7 @@ def _a_drawn_preview(window: MainWindow) -> tuple[str, str]:
     Bild, das es nie gab, ist immer grün.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -4076,7 +4076,7 @@ def test_a_feature_the_new_scene_does_not_know_leaves_the_window(window: MainWin
     Merkmal weiter, und dann soll das Fenster stehenbleiben.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -4154,9 +4154,9 @@ def test_every_selected_body_lights_up_not_just_the_first(window: MainWindow) ->
     Bild.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
     bodies = list(window.session.last_result.scene.objects)
     assert len(bodies) >= 2, f"Voraussetzung: mehrere Körper — {bodies}"
@@ -4185,7 +4185,7 @@ def test_delete_removes_the_feature_not_the_body(window: MainWindow) -> None:
     sagen sie, dass die richtige Operation gelaufen ist.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -4210,7 +4210,7 @@ def test_delete_without_a_feature_still_takes_the_body(window: MainWindow) -> No
     Test darüber nicht zu unterscheiden.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id = next(iter(result.scene.objects))
     window.object_tree.select_object(object_id)
@@ -4257,7 +4257,7 @@ def test_a_drag_on_a_feature_becomes_a_feature_step(window: MainWindow) -> None:
     Sender prüft.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -4281,7 +4281,7 @@ def test_a_turn_on_a_feature_keeps_the_settled_angle(window: MainWindow) -> None
     """Der Winkel kommt **gerastet** aus der Ansicht — sie kennt den Fang, das
     Fenster nicht. Nachgerechnet wird hier nichts."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -4310,7 +4310,7 @@ def test_a_drag_on_the_slot_knobs_becomes_one_slot_step(window: MainWindow) -> N
     ihn ganz zurück (§15.5).
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -4355,7 +4355,7 @@ def test_the_panel_sends_a_feature_into_the_view_without_changing_it(window: Mai
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -4419,10 +4419,10 @@ def test_a_feature_placement_stays_with_its_selected_place(
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     if selection == "other_body":
         window.session.import_model(MESHES / "plate_holes.stl")
-        assert window.session.wait_for_idle(30_000)
+        assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [name for name, feature in entry.features.items() if feature.kind == "hole"]
@@ -4447,7 +4447,7 @@ def test_a_feature_placement_stays_with_its_selected_place(
     elif selection == "project":
         window.session.start_new()
         window.session.import_model(MESHES / "plate_holes.stl")
-        assert window.session.wait_for_idle(30_000)
+        assert window.session.wait_for_idle(60_000)
     elif selection == "evaluation":
         window.session.evaluate_now()
     if selection == "none":
@@ -4505,7 +4505,7 @@ def _hole_fields_in_placement(window: MainWindow) -> tuple[str, str, Any, dict[s
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
@@ -4684,7 +4684,7 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
@@ -4754,7 +4754,7 @@ def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     holes = [name for name, feature in entry.features.items() if feature.kind == "hole"]
@@ -5041,7 +5041,7 @@ def test_selecting_a_feature_fills_the_panel_and_clearing_empties_it(
     Zeilen bauen kann und nie eine Auswahl bekommt, ist beim Kunden leer.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -5073,7 +5073,7 @@ def test_a_changed_number_in_the_panel_becomes_a_step(window: MainWindow) -> Non
     from app.ui.labels import LengthSpin
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -5118,7 +5118,7 @@ def test_a_changed_number_in_the_panel_becomes_a_step(window: MainWindow) -> Non
 def _a_chosen_hole(window: MainWindow) -> tuple[str, str]:
     """Eine eingelesene Platte mit gewählter Bohrung — der Ausgangspunkt von Weg 2."""
     window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -5444,7 +5444,7 @@ def test_a_renamed_feature_found_again_is_no_lost_choice(window: MainWindow) -> 
 def test_deleting_the_body_of_a_chosen_face_keeps_the_receipt(window: MainWindow) -> None:
     """RM-537, B2: Die Quittung mit dem Rückweg bleibt, wenn die eigene Handlung die Wahl nimmt."""
     window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     face = next(name for name, f in entry.features.items() if f.kind == "face")
@@ -5479,7 +5479,7 @@ def test_removing_the_chosen_hole_says_no_loss(window: MainWindow) -> None:
 def test_undo_with_the_new_hole_chosen_keeps_its_receipt(window: MainWindow) -> None:
     """RM-537, B2: Nach Strg+Z steht „… zurückgenommen“, nicht der Verlust der neuen Bohrung."""
     window.open_path(MESHES / "plate_holes.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     before = set(entry.features)
@@ -5594,7 +5594,7 @@ def test_a_double_click_on_a_feature_opens_what_changes_it(window: MainWindow) -
     An einer erkannten Bohrung ist das *Bohrung ändern*.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -5620,7 +5620,7 @@ def test_a_double_click_on_a_body_keeps_unfolding_it(window: MainWindow) -> None
     """Die Gegenprobe: Ein Körper und ein Dach über gleichartigen Merkmalen
     sind nichts, was man ändert — dort bleibt der Doppelklick das Aufklappen."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     body = window.object_tree.tree.topLevelItem(0)
     assert body is not None and body.childCount() > 0, "der Körper hat Merkmale"
@@ -5638,7 +5638,7 @@ def test_a_double_click_on_a_made_feature_opens_its_step(window: MainWindow) -> 
     """Was aus einem Schritt kam, führt in diesen Schritt zurück — dort stehen
     seine Maße als Parameter, und genau die will der Kunde ändern (§21.2)."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -5848,7 +5848,7 @@ def test_the_explosion_tool_stays_in_the_strip_and_says_it_needs_two_bodies(
     Knopf und trägt den Grund, wie die sechs anderen ihren.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     button = window.tools._buttons["explode"]
     assert not button.isHidden(), "der Knopf bleibt in der Zeile"
     assert not button.isEnabled(), "mit einem Körper gibt es nichts auseinanderzuziehen"
@@ -5976,11 +5976,11 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
     from PySide6.QtWidgets import QAbstractButton
 
     window.open_path(MESHES / "block_with_rounded_edge.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     # Das zweite Modell ist das, das unter der Platte landet — mit den Haken
     # seines Ladeschritts aus, sonst läge es aufgesetzt an einer freien Stelle.
     window.open_path(MESHES / "block_with_rounded_edge.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
 
@@ -6040,7 +6040,7 @@ def test_the_split_and_retry_button_lays_the_pieces_on_the_plates(
     path = tmp_path / "inseln.stl"
     path.write_bytes(trimesh.util.concatenate([near, far]).export(file_type="stl"))
     window.open_path(path)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     spec = REGISTRY.get("orient_for_print")
     window.session.apply(
@@ -6124,7 +6124,7 @@ def test_the_decimate_and_retry_button_thins_before_the_step_and_runs_through(
 
     monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 200_000)
     window.open_path(_dense_plate_file(tmp_path))
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     spec = REGISTRY.get("remesh_mesh")
     window.session.apply(
@@ -6197,7 +6197,7 @@ def test_the_remesh_and_retry_button_refines_before_the_smoothing_and_runs_throu
     path = tmp_path / "schale.stl"
     path.write_bytes(hollow(MeshData.of(box), 2.0, vents=1).mesh.raw.export(file_type="stl"))
     window.open_path(path)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     spec = REGISTRY.get("smooth_mesh")
     window.session.apply(
@@ -6779,7 +6779,7 @@ def test_the_small_parts_button_removes_them_and_not_merely_runs(window: MainWin
     from app.ui.panels import actions_for, as_error
 
     window.open_path(MESHES / "two_components.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
 
@@ -6825,7 +6825,7 @@ def test_leaving_the_wide_opening_open_changes_the_load_step(window: MainWindow)
     from app.ui.panels import actions_for, as_error
 
     window.open_path(MESHES / "broken_open.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     wide = next(f for f in result.scene.report.findings if f.code == "repair.wide_hole_filled")
@@ -6859,7 +6859,7 @@ def test_resolving_intersections_changes_the_repair_step(window: MainWindow) -> 
     from app.ui.panels import actions_for, as_error
 
     window.open_path(MESHES / "broken_selfint.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     first = next(iter(window.session.evaluate_now().scene.objects))
     handlers = window.error_handlers()
     window.session.apply(
@@ -6898,9 +6898,9 @@ def test_a_chosen_finding_survives_a_second_report(window: MainWindow) -> None:
     den Befund (sonst läge es seit dem 28.09.2026 an einer freien Stelle).
     """
     window.open_path(MESHES / "block_with_rounded_edge.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.open_path(MESHES / "block_with_rounded_edge.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
     assert window.report.list.count(), "ohne Befund prüft dieser Test nichts"
@@ -7516,9 +7516,9 @@ def _with_two_objects(window: MainWindow) -> None:
     obj_1 und obj_2.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
 
 
@@ -8202,7 +8202,7 @@ def test_removing_a_history_step_asks_and_can_be_undone(
     unangetastet.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     op_id = window.session.project.document.ops[0].id
     shown: list[str] = []
 
@@ -8250,10 +8250,10 @@ def test_history_deletion_warns_before_discarding_redo(
 ) -> None:
     """Der eine Löschdialog nennt auch den abgeschnittenen Redo-Zweig."""
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     active_id = window.session.project.document.ops[0].id
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.undo()
     window.session.wait_for_idle()
     assert window.session.history.can_redo
@@ -8483,7 +8483,7 @@ def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     # maß dieses Bild statt der Regel. Die Befunde kommen jetzt aus einem
     # Netz, das welche hat; die Regel steht an den Rechtecken.
     window.session.import_model(MESHES / "broken_open.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
     first = window.object_tree.tree.topLevelItem(0)
     second = window.object_tree.tree.topLevelItem(1)
@@ -8758,7 +8758,7 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
     from app.ui.selection_operations import QUICK_BODY, REBUILD
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
@@ -8877,7 +8877,7 @@ def test_a_chosen_edge_reaches_the_panel_as_its_own_level(window: MainWindow) ->
     genau diese Zeile ungeprüft.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id = next(iter(result.scene.objects))
     panel = window.selection_operations
@@ -8943,7 +8943,7 @@ def test_the_chamfer_marks_follow_the_panel_and_a_click_on_one_swaps_the_sides(
     renderer = RecordingRenderer(size=(900, 600))
     window.viewport.renderer = renderer
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     assert REGISTRY.has("chamfer_edges"), "ohne Fase im Register gibt es keine Marken"
     object_id, body = next(iter(result.scene.objects.items()))
@@ -9048,7 +9048,7 @@ def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -
     sonst unbemerkt ausbliebe.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
@@ -9096,7 +9096,7 @@ def test_undo_and_redo_follow_the_stack(window: MainWindow) -> None:
     assert not window.redo_action.isEnabled()
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.undo_action.isEnabled()
 
     window.session.undo()
@@ -9709,12 +9709,12 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
     from PySide6.QtWidgets import QPushButton
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     # Zwei Modelle, weil das erste seit dem 03.09.2026 mittig auf dem Bett
     # landet und der Fall „unter der Platte" erst mit dem zweiten entsteht —
     # mit ausgeschalteten Haken, sonst läge es an einer freien Stelle.
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     keep_the_files_place(window)
     report = window.report
     report.show_result(window.session.last_result, window.session.project.document)
@@ -9779,7 +9779,7 @@ def test_a_stopped_step_is_one_click_from_its_own_dialog(window: MainWindow) -> 
     from app.ui.panels import actions_for, as_error
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
 
     window.session.apply(
@@ -10126,7 +10126,7 @@ def test_partial_repair_runs_from_the_report_and_undoes(
     keep_imports_open(monkeypatch, window.session)
     fill_only_small_holes(monkeypatch)
     window.open_path(MESHES / "partially_open.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
     assert open_edge_count(window.session.last_result.scene.objects[object_id].mesh) == 19
 
@@ -10205,7 +10205,7 @@ def test_failed_operation_is_repaired_before_retry_without_a_loop(
     window.show()
     QApplication.processEvents()
     window.open_path(MESHES / "partially_open.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
     window.session.apply(
         REGISTRY.get("remesh_uniform").title,
@@ -10309,7 +10309,7 @@ def test_correcting_puts_the_cursor_in_the_field_that_failed(window: MainWindow)
     from app.ui.panels import as_error
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
     window.session.apply(
         "Bohrung setzen",
@@ -10782,9 +10782,9 @@ def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWin
     from app.ui.panels import FINDING_ACTIONS, as_error
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     keep_the_files_place(window)
 
     result = window.session.last_result
@@ -10827,7 +10827,7 @@ def test_scaling_to_the_build_volume_keeps_the_part_on_the_bed(window: MainWindo
     from app.ui.panels import as_error
 
     window.open_path(MESHES / "oversized.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     over = [f for f in result.scene.report.findings if f.code == "arrange.out_of_build_volume"]
     assert over, "das Testmodell steht über den Bauraum hinaus"
@@ -11064,7 +11064,7 @@ def test_closing_with_unsaved_changes_asks(window: MainWindow, monkeypatch) -> N
     )
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.session.apply("Quader", [OperationDraft(op="create_box")])
     window.session.wait_for_idle()
     assert window.session.modified
@@ -11093,7 +11093,7 @@ def test_a_model_that_was_only_looked_at_closes_without_a_question(
     monkeypatch.setattr(module, "confirm_unsaved", niemals)
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window.session.modified, "gesichert wird weiterhin — der Absturz kennt keine Nachfrage"
     assert window.session.only_imported
@@ -11111,14 +11111,14 @@ def test_a_model_that_was_only_looked_at_lands_in_the_recent_list(window: MainWi
     window.settings.recent = []
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window.settings.recent == [str(MESHES / "cube_clean.stl")]
 
 
 def test_a_saved_project_closes_without_a_question(window: MainWindow, tmp_path: Path) -> None:
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.save_project(tmp_path / "projekt.p3d")
 
     assert window._may_discard(), "nichts Ungesichertes, nichts zu fragen"
@@ -11146,7 +11146,7 @@ def test_cancelling_the_question_keeps_the_window_open(window: MainWindow, monke
     monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: answers[0])
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.session.apply("Quader", [OperationDraft(op="create_box")])
     window.session.wait_for_idle()
     window.show()
@@ -11187,7 +11187,7 @@ def test_dropping_a_model_on_the_start_screen_asks_before_replacing(
     import app.ui.main_window as module
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.session.apply("Quader", [OperationDraft(op="create_box")])
     window.session.wait_for_idle()
     assert window.session.modified
@@ -11203,7 +11203,7 @@ def test_dropping_a_model_on_the_start_screen_asks_before_replacing(
 
     monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: "discard")
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert [entry.op for entry in window.session.project.document.ops] == ["load"], (
         "Verwerfen beginnt das neue Projekt"
     )
@@ -11281,7 +11281,7 @@ def test_the_display_unit_reaches_everything_that_shows_a_length(window: MainWin
     from app.ui.labels import display_unit, length
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
     window.object_tree.tree.setCurrentItem(window.object_tree.tree.topLevelItem(0))
 
@@ -11442,7 +11442,7 @@ def test_the_printer_of_an_open_project_can_change(session: Session) -> None:
     eine fremde Datei öffnete, arbeitete für immer gegen deren Bauraum.
     """
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     before = session.project.document.printer
 
     session.change_scene_profile("prusa-mk4s", "petg")
@@ -11523,7 +11523,7 @@ def test_the_first_body_gets_the_camera(window: MainWindow) -> None:
     assert not window._seen_objects
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
 
     assert window._seen_objects
@@ -11681,7 +11681,7 @@ def test_the_report_can_be_filtered(window: MainWindow) -> None:
 def test_the_history_shows_what_a_redo_would_bring_back(window: MainWindow) -> None:
     """Zurückgenommene Schritte verschwanden hier spurlos."""
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_project()
     before = window.history_panel.list.count()
 
@@ -12417,7 +12417,7 @@ def test_split_restores_the_complete_export_progress(
     # Am feinen Ergebnis beginnt der Export sofort (RM-426); um das Warten geht es hier nicht.
     window.session.quality = "fine"
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._start_export(tmp_path / "halter.stl", "stl")
     worker = window._export_worker
     assert worker is not None
@@ -12647,7 +12647,7 @@ def test_auto_split_runs_in_a_worker(session: Session) -> None:
     meldet sie sich über ``splitBusyChanged`` und liefert ihr Ergebnis an
     einen Rückruf, während das Fenster bedienbar bleibt."""
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     states: list[bool] = []
     session.splitBusyChanged.connect(states.append)
@@ -12777,7 +12777,7 @@ def test_async_split_keeps_one_object_profile_from_search_through_apply(
     session.project.document.printer = "centauri-carbon-2"
     session.project.document.material = "petg"
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     assert session.last_result is not None
     entry = session.last_result.scene.objects["obj_1"]
     entry.material_slots = [MaterialSlot(index=0, name="PLA", material_type="PLA")]
@@ -12874,7 +12874,7 @@ def test_a_second_split_start_is_refused_while_one_runs(session: Session) -> Non
     überlebte sein Fenster.
     """
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     class Running:
         """Nur was die Wache fragt: läuft er noch — wie ``QThread.isRunning``."""
@@ -12970,7 +12970,7 @@ def test_a_stale_split_worker_cannot_deliver(session: Session) -> None:
     nur, wenn sie vom aktuellen Arbeiter kommen.
     """
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     stale = object()
     busy: list[bool] = []
@@ -13001,7 +13001,7 @@ def test_a_preview_delivers_a_difference(session: Session) -> None:
     """Der Dialog zeigt, was er täte: dieselbe Differenzansicht wie beim
     Agentenvorschlag, gerechnet auf einer Kopie, ohne den Stapel anzufassen."""
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     stack_before = list(session.project.document.ops)
 
     collected: list[object] = []
@@ -13039,7 +13039,7 @@ def test_a_preview_computes_the_stand_it_was_asked_about(
     import threading
 
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     gate = threading.Event()
     original = Session._preview_outcome
 
@@ -13075,7 +13075,7 @@ def test_a_cancelled_preview_stays_silent(session: Session) -> None:
     """Der Dialog ist zu, bevor die Rechnung fertig ist — das Ergebnis wird
     verworfen statt gezeigt (§18.7)."""
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     collected: list[object] = []
     session.preview_async(
@@ -13108,7 +13108,7 @@ def test_a_cancelled_preview_actually_stops_computing(session: Session) -> None:
     Wettlauf — der alte Lauf saehe den gesetzten Zustand womoeglich nie.
     """
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     def bohrung() -> list[OperationDraft]:
         return [
@@ -13141,7 +13141,7 @@ def test_a_broken_preview_shows_nothing_instead_of_failing(session: Session) -> 
     """Beim Tippen entstehen ungültige Zwischenstände — die Vorschau zeigt
     dann nichts; der echte Fehler kommt beim Anwenden als Vorschlag (§2.7)."""
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     collected: list[object] = []
     session.preview_async(
@@ -13157,7 +13157,7 @@ def test_the_wired_dialog_previews_into_the_viewport(window: MainWindow) -> None
     """Die Verdrahtung Ende zu Ende: Dialog auf, erste Vorschau läuft von
     selbst, die Differenz steht im Viewport — und mit dem Schließen geht sie."""
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     spec = REGISTRY.get("drill_hole")
     dialog = OperationDialog(spec, window._object_names(), window)
@@ -13198,7 +13198,7 @@ def test_the_window_reads_metrics_the_worker_has_already_computed(
         monkeypatch.setattr(MeshData, name, property(spy))
 
     session.import_model(MESHES / "cube_clean.stl")
-    assert session.wait_for_idle(30_000)
+    assert session.wait_for_idle(60_000)
     entry = next(iter(session.last_result.scene.objects.values()))
     # Der Hauptthread liest — und trifft dabei auf gemerkte Werte.
     assert entry.mesh.volume > 0.0 and entry.mesh.is_watertight
@@ -13214,7 +13214,7 @@ def test_rapid_previews_never_orphan_a_worker(session: Session) -> None:
     import gc
 
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     collected: list[object] = []
     for diameter in (2.0, 3.0, 4.0, 5.0, 6.0):
@@ -13249,7 +13249,7 @@ def test_a_preview_that_cannot_be_says_why(session: Session) -> None:
     Unterseite), oder die Operation wirft (Bohrung mit negativem Durchmesser).
     """
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     reasons: list[str] = []
     shown: list[object] = []
@@ -13305,7 +13305,7 @@ def test_a_preview_that_stops_at_a_question_says_so(session: Session) -> None:
     „am Volumen ändert sich nichts". Nichts hatte sich geändert; es war
     noch nichts entschieden."""
     session.import_model(MESHES / "plate_countersunk.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     result = session.evaluate_now()
     entry = result.scene.objects["obj_1"]
     hole = next(identifier for identifier, f in entry.features.items() if f.kind == "hole")
@@ -13335,7 +13335,7 @@ def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow
     teilt. Nur der erste Satz war wahr.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     banner = window.viewport.banner
 
     window._preview_explained("Diese Ebene teilt das Objekt nicht.")
@@ -13399,7 +13399,7 @@ def test_splitting_starts_in_the_middle_of_the_body(window: MainWindow) -> None:
     der auf dem Bett steht. Die Ebene teilte nichts, und der Dialog sagte
     nichts. Jetzt beginnt sie in der Mitte; die Zahl bleibt änderbar."""
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.object_tree.select_object("obj_1")
 
     window.run_operation(REGISTRY.get("split_pinned"))
@@ -13418,7 +13418,7 @@ def test_aligning_is_grey_until_a_second_body_carries_a_feature(window: MainWind
     Körper ein Merkmal trägt; bis dahin sagt der Knopf das.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     object_id, entry = next(iter(result.scene.objects.items()))
@@ -13456,7 +13456,7 @@ def test_a_lid_is_offered_only_at_an_opening_that_faces_up(window: MainWindow) -
     from app.core.scene.placement import faces_up
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     plate, entry = next(iter(result.scene.objects.items()))
@@ -13533,7 +13533,7 @@ def test_decimating_and_remeshing_start_from_the_body(window: MainWindow) -> Non
     from app.ui.main_window import EDGE_SHARE
 
     window.open_path(MESHES / "post_with_fillet.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.object_tree.select_object("obj_1")
     result = window.session.last_result
     assert result is not None
@@ -13572,7 +13572,7 @@ def test_a_model_of_several_parts_offers_to_split_it(window: MainWindow) -> None
     from app.ui.panels import actions_for, as_error
 
     window.open_path(MESHES / "two_components.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window._on_scene(result)
     several = next(
@@ -13598,7 +13598,7 @@ def test_an_stl_import_greets_without_a_finding_about_reading_it(window: MainWin
     STL ist Lesen; gemeldet wird es nicht mehr, getan weiterhin.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     codes = [finding.code for finding in result.scene.report.findings]
@@ -13716,7 +13716,7 @@ def test_opening_an_example_starts_its_tour(window: MainWindow, session: Session
     from app.core import examples
 
     window.open_path(examples.directory() / "weg1-halterung-anpassen.p3d")
-    session.wait_for_idle(120_000)
+    assert session.wait_for_idle(120_000)
 
     assert _tour_tab_visible(window)
     assert window.right.currentWidget() is window.tour, "auch eine Warnung stiehlt den Reiter nicht"
@@ -13757,12 +13757,12 @@ def test_a_plain_project_carries_no_tour(
     from app.core.scene.project import new_project, save
 
     window.open_path(examples.directory() / "weg1-halterung-anpassen.p3d")
-    session.wait_for_idle(120_000)
+    assert session.wait_for_idle(120_000)
     assert _tour_tab_visible(window)
 
     path = save(new_project("centauri-carbon-2", "petg"), tmp_path / "plain.p3d")
     window.open_path(path)
-    session.wait_for_idle(120_000)
+    assert session.wait_for_idle(120_000)
 
     assert not _tour_tab_visible(window)
     assert not window.tour.active
@@ -13815,7 +13815,7 @@ def test_the_toolbar_has_the_two_entries_for_way_four(window: MainWindow) -> Non
     assert labels.index("Zeichnen") < labels.index("Formen") < labels.index("Skelett")
 
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
@@ -13846,7 +13846,7 @@ def test_way_four_says_what_it_needs_before_the_click(window: MainWindow) -> Non
     assert "ausgewählten Körper" in window._toolbar_sculpt.toolTip()
 
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)
@@ -14178,7 +14178,7 @@ def test_the_grip_and_the_card_agree_whether_a_feature_moves(
     from app.core.perceive.actions import HOLE_HOLDS_A_PIN
 
     window.open_path(MESHES / "pocket_with_pin.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     pocket = next(fid for fid, f in entry.features.items() if f.kind == "hole")
@@ -14223,7 +14223,7 @@ def test_moving_a_feature_brings_its_measures_into_the_view(
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / mesh)
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     chosen = next(fid for fid, f in entry.features.items() if f.kind == kind)
@@ -14448,7 +14448,7 @@ def test_a_late_result_does_not_overwrite_the_current_scene(session: Session) ->
     from app.ui.session import _EvaluationWorker
 
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
     current = session.last_result
     assert current is not None and current.scene.objects
 
@@ -14491,7 +14491,7 @@ def test_every_worker_survives_the_delivery_of_its_own_signal(session: Session) 
     import re
 
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     assert session._worker is None, "nach dem Warten läuft keiner mehr"
     assert hasattr(session, "_leash"), "die Sitzung hat keine Halteleine"
@@ -14726,7 +14726,7 @@ def test_a_project_with_content_keeps_its_profile(window: MainWindow) -> None:
     """In ein Projekt mit Inhalt greift eine Einstellung nicht hinein — das
     wäre eine Geometrieänderung ohne Operation."""
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     before = window.session.profile.printer.id
     window.settings.printer = "centauri-carbon-2"
 
@@ -14739,7 +14739,7 @@ def test_the_discard_question_names_what_it_throws_away(window: MainWindow) -> N
     """„Diese Änderung verwirft 2 zurückgenommene Schritte" sagt, wie viel weg
     ist, nicht was — und genau das entscheidet, ob man Ja sagt."""
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert not window._discarded_names(), "nichts zurückgenommen, nichts zu nennen"
 
     window.action_undo()
@@ -15475,7 +15475,7 @@ def test_the_veil_covers_the_view_only_while_it_shows_nothing(window: MainWindow
     assert not window.veil.showing, "und gibt sie nach dem Lauf wieder her"
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
 
     window._on_busy(True)
@@ -15491,7 +15491,7 @@ def test_the_veil_waits_for_the_first_picture_of_a_large_model(
     Auskunft der Ansicht, geprüft der Anschluss an ``sceneApplied``.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window._on_scene(window.session.evaluate_now())
     preparing = [True]
     monkeypatch.setattr(window.viewport, "preparing_an_empty_view", lambda: preparing[0])
@@ -15607,7 +15607,7 @@ def test_cancelling_frees_the_window_while_the_drive_still_reads(
     # Die späte Antwort des Laufwerks verfällt, und ein neuer Import geht durch.
     qt_app.processEvents()
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
 
@@ -15626,7 +15626,7 @@ def test_a_project_on_a_slow_drive_does_not_stop_the_window(
     from app.ui import session as session_module
 
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     target = save(window.session.project, tmp_path / "langsam.p3d")
     real = session_module.load
 
@@ -15683,7 +15683,7 @@ def test_the_autosave_writes_beside_the_window_and_says_when_it_cannot(
 
     monkeypatch.setattr(session_module, "write_autosave", watched)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     assert window.session.modified
     window._autosave.timeout.emit()
     assert window.session.wait_for_idle()
@@ -15726,7 +15726,7 @@ def test_a_backup_that_finishes_after_saving_is_cleared(
 
     monkeypatch.setattr(session_module, "write_autosave", slow)
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     target = tmp_path / "gespeichert.p3d"
     token = window.session.recovery_token
     window.session.autosave_async()
@@ -15755,7 +15755,7 @@ def test_a_recent_file_that_vanished_leaves_the_list_after_the_attempt(
     assert window.start_screen.recent_list.count() == 1
     moved.unlink()
     window.open_path(moved)
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     for _round in range(20):
         qt_app.processEvents()
         if window.start_screen.recent_list.count() == 0:
@@ -15791,7 +15791,7 @@ def test_a_file_without_a_model_leaves_no_step_and_no_recent_entry(
     assert str(broken) not in window.settings.recent
 
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     qt_app.processEvents()
     assert len(shown) == 1, "die nächste Datei wird angenommen"
     assert len(window.session.last_result.scene.objects) == 1
@@ -15833,7 +15833,7 @@ def test_the_window_title_names_the_model_once_it_is_read(window: MainWindow) ->
     Einlesen stand oben „Unbenannt“ (Durchsicht 0.5.1).
     """
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
     assert window.windowTitle().startswith("cube_clean"), window.windowTitle()
 
@@ -15904,7 +15904,7 @@ def test_a_broken_file_takes_the_wait_cursor_with_it(
 
     window.open_path(MESHES / "cube_clean.stl")
     # Gelesen und geplant wird im Arbeiter (RM-224); der Fehler kommt danach.
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert shown, "der Fehler kam nirgends an"
     assert QApplication.overrideCursor() is None, "der Wartezeiger überlebte den Fehler"
@@ -15930,7 +15930,7 @@ def test_a_rejected_file_restores_status_before_showing_the_error(
     )
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert shown, "die Abweisung kam nirgends an"
     _error, cursor, status = shown[0]
@@ -16718,7 +16718,7 @@ def test_the_object_tree_offers_the_keyboard_a_starting_point(window: MainWindow
     Auswahl hängen die Menüs.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     assert window.object_tree.tree.topLevelItemCount() >= 1
     assert window.object_tree.tree.currentItem() is not None, "die Tastatur hat einen Anfang"
@@ -17545,7 +17545,7 @@ def test_the_face_jump_names_the_area_in_the_chosen_unit(window: MainWindow) -> 
     from app.ui.labels import set_display_unit
 
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
 
     try:
         set_display_unit("in")
@@ -17615,7 +17615,7 @@ def test_no_visible_text_writes_a_decimal_point(window: MainWindow) -> None:
     try:
         QLocale.setDefault(QLocale("de"))
         window.open_path(MESHES / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         QApplication.processEvents()
 
         texts = _visible_texts(window, "Fenster")
@@ -17660,7 +17660,7 @@ def test_the_decimal_point_check_would_catch_a_violation() -> None:
 def _face_menu(window: MainWindow) -> tuple[str, object]:
     """Ein Modell laden, seine erste Fläche wählen, ihr Kontextmenü bauen."""
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     face = next(fid for fid, feature in entry.features.items() if feature.kind == "face")
@@ -17723,7 +17723,7 @@ def test_without_a_chosen_face_nothing_offers_to_be_drawn_on(window: MainWindow)
     Fläche, die niemand gewählt hat.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id = next(iter(result.scene.objects))
 
@@ -17746,7 +17746,7 @@ def test_a_hole_does_not_offer_to_be_drawn_on(window: MainWindow) -> None:
     ein Modell mit Bohrung.
     """
     window.session.import_model(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(fid for fid, feature in entry.features.items() if feature.kind == "hole")
@@ -17782,7 +17782,7 @@ def test_the_three_slicer_handles_stand_where_a_body_is_chosen(window: MainWindo
     Klicks tief in einem Menü, und der Griff im Bild bleibt ohnehin.
     """
     window.session.import_model(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id = next(iter(result.scene.objects))
 
@@ -17817,7 +17817,7 @@ def test_the_sketch_mode_leaves_the_view_standing(window: MainWindow) -> None:
     darin.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     vorher = window.viewport.display_mode
 
@@ -17998,7 +17998,7 @@ def test_drawing_starts_on_the_selected_face_not_under_it(window: MainWindow) ->
     gemessene nicht.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     top = next(
@@ -18035,9 +18035,9 @@ def test_duplicate_face_ids_keep_the_selected_body_and_its_label(window: MainWin
     ihm bleiben, unabhängig von Flächengröße und Szenenreihenfolge.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     first, second = list(result.scene.objects.items())[-2:]
     _first_id, first_entry = first
@@ -18124,7 +18124,7 @@ def test_the_sketch_hint_names_the_plane_being_drawn_on(window: MainWindow) -> N
     (XY)" gesagt, während er auf die Deckfläche sah.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     top = next(
@@ -18176,7 +18176,7 @@ def test_saving_a_part_takes_the_whole_stack_by_id_not_by_position(window: MainW
     from app.core import examples
 
     window.session.open_project(examples.directory() / "weg2-halter-konstruieren.p3d")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.evaluate_now()
     document = window.session.project.document
     assert len(document.ops) >= 2, "der Fall braucht einen Stapel mit mehreren Schritten"
@@ -18301,7 +18301,7 @@ def test_the_halt_message_goes_when_the_chain_runs_again(window: MainWindow) -> 
     Vergleich auf den Satz bräche beim ersten Sprachwechsel.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
 
     window.session.apply(
@@ -18339,7 +18339,7 @@ def test_a_new_run_takes_the_halt_message_and_the_report_follows_it(window: Main
     Ergebnis es neu.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
     window.session.apply(
         "Bohrung setzen",
@@ -18388,7 +18388,7 @@ def test_the_window_goes_the_full_chain_where_the_short_one_ends(
     from app.core.geom.mesh import MeshData
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     object_id = next(iter(window.session.last_result.scene.objects))
     real = boolean_module._run_stage
 
@@ -18474,12 +18474,20 @@ def test_the_feature_card_applies_what_the_short_chain_could_not_preview(
     from app.core.geom import boolean as boolean_module
     from app.core.geom.mesh import MeshData
     from app.core.registry import REGISTRY
+    from app.core.scene.cache import ResultCache
     from app.ui.labels import LengthSpin
     from tests.render_fakes import RecordingRenderer
 
+    # **Die kurze Kette muss rechnen, sonst prüft der Fall nichts.** Der
+    # Plattencache gehört dem ganzen Testprozess: Nach
+    # ``test_a_pending_feature_placement_accept_belongs_to_its_current_context[accept]``
+    # lag dieselbe Bohrung auf Ø 6,2 darin. Die Vorschau holte sie ohne Kette,
+    # und ihr Volumenvergleich lief über die hier gekappten Stufen — das Band
+    # sagte „das Volumen nicht“, rot auf allen vier Plattformen.
+    window.session.cache = ResultCache()
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / name)
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     chosen = next(key for key, feature in entry.features.items() if feature.kind == kind)
@@ -18639,7 +18647,7 @@ def test_the_report_follows_a_change_during_recognition_and_a_cancelled_run(
     from app.ui.session import Session
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     session = window.session
     session.picture = session.last_result
     session.picture_current = True
@@ -19730,7 +19738,7 @@ def test_many_features_of_one_kind_stand_under_one_roof(window: MainWindow) -> N
     nicht die Erkennung — und kein Modell des Korpus hat vier gleichnamige.
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
 
@@ -19790,7 +19798,7 @@ def test_every_bundle_in_the_tree_selects_what_it_bundles(window: MainWindow) ->
     from PySide6.QtWidgets import QTreeWidgetItem
 
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     tree = window.object_tree
@@ -19910,9 +19918,9 @@ def test_the_same_operation_on_many_bodies_is_one_transaction(window: MainWindow
     fragt seine Werte dabei einmal für alle.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     bodies = tuple(result.scene.objects)
     assert len(bodies) >= 2, f"zwei Körper für den Fall, gefunden: {len(bodies)}"
@@ -20516,7 +20524,7 @@ def test_a_further_model_brings_its_plate_into_view(
     board = tmp_path / "brett.stl"
     trimesh.creation.box(extents=(200.0, 200.0, 20.0)).export(board)
     window.open_path(board)
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     plates = window.header.plates
     plates.setCurrentIndex(plates.findData(0))
     assert window.header.plate == 0
@@ -20625,7 +20633,7 @@ def test_no_second_window_appears_along_the_way(window: MainWindow) -> None:
     # freien Stelle (0.5.1) nur mit ausgeschalteten Haken am Ladeschritt.
     for _ in range(2):
         window.open_path(MESHES / "block_with_rounded_edge.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
     keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
     # Ein Hinweis ist nicht vorgewählt (RM-512) — gewählt wird er wie vom Kunden.
@@ -20679,7 +20687,7 @@ def test_a_drawn_split_line_starts_in_the_middle_of_the_body(window: MainWindow)
     unter ihm.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.object_tree.select_object("obj_1")
 
     window.run_operation(REGISTRY.get("split_line"))
@@ -20980,7 +20988,7 @@ def test_the_band_of_an_empty_preview_carries_that_sentence(window: MainWindow) 
     *Reparieren* an einem heilen Quader ändert nichts und sagt, warum.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.last_result
     assert result is not None
     body = next(iter(result.scene.objects))
@@ -21007,7 +21015,7 @@ def test_a_changed_preview_keeps_its_warning_and_its_result(
     source = tmp_path / "neighbour.stl"
     mesh.raw.export(source)
     window.open_path(source)
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     before = window.session.last_result
     assert before is not None
     body = next(iter(before.scene.objects.values()))
@@ -21437,7 +21445,7 @@ def test_delete_on_a_face_takes_the_body_and_says_so(window: MainWindow) -> None
     nicht löschen lässt, ist eine Sackgasse. Rücknehmbar, mit Ansage (Regel 19).
     """
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     face = next(
@@ -21471,7 +21479,7 @@ def test_hiding_from_a_feature_row_names_the_body(window: MainWindow) -> None:
     der Körper verschwand (Robert, 16.09.2026). Der Eintrag sagt jetzt, was er
     trifft; am Körper selbst heißt er weiter wie bisher."""
     window.open_path(MESHES / "plate_holes.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     object_id, entry = next(iter(result.scene.objects.items()))
     hole = next(
@@ -21941,7 +21949,7 @@ def test_a_countersunk_bore_builds_the_selection_window_once(
     Hälfte davon doppelt.
     """
     window.open_path(MESHES / "plate_countersunk.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     entry = window.session.last_result.scene.objects["obj_1"]
     hole = next(identifier for identifier, f in entry.features.items() if f.kind == "hole")
     window.object_tree.select_object("obj_1")
@@ -21976,7 +21984,7 @@ def test_a_countersunk_bore_stays_one_chosen_feature_after_a_new_evaluation(
     (Durchsicht 0.5.1, Wabenhalter).
     """
     window.open_path(MESHES / "plate_countersunk.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     entry = window.session.last_result.scene.objects["obj_1"]
     hole = next(identifier for identifier, f in entry.features.items() if f.kind == "hole")
     window.object_tree.select_object("obj_1")
@@ -22002,7 +22010,7 @@ def test_a_click_in_the_tree_settles_the_menu_entries_once_per_signal_pair(
     die Hauptaktionen ebenfalls nur einmal aktualisieren.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     entry = window.session.last_result.scene.objects["obj_1"]
     face = next(identifier for identifier, f in entry.features.items() if f.kind == "face")
     window.object_tree.select_object("obj_1")
@@ -22119,7 +22127,7 @@ def test_a_missing_selection_is_said_not_put_in_a_box(
 
     monkeypatch.setattr(QMessageBox, "information", no_box)
     window.open_path(MESHES / "cube_clean.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.object_tree.tree.clearSelection()
 
     window.run_operation(REGISTRY.get("blend_union"))
@@ -22464,7 +22472,7 @@ def test_three_arrow_steps_in_the_parameter_bar_turn_the_number_by_three(
     session = window.session
     window.show()
     window.open_path(MESHES / "cube_clean.stl")
-    assert session.wait_for_idle(30_000)
+    assert session.wait_for_idle(60_000)
     assert session.add_parameter(Parameter(name="breite", value=60.0, unit="mm", title=_("Breite")))
     session.wait_for_idle()
     QApplication.processEvents()
@@ -22840,7 +22848,7 @@ def test_a_project_halting_at_its_first_step_says_so_instead_of_inviting(
     try:
         window.show()
         window.open_path(stored)
-        assert window.session.wait_for_idle(30_000)
+        assert window.session.wait_for_idle(60_000)
         for _ in range(8):
             QApplication.processEvents()
         result = window.session.last_result
@@ -23130,7 +23138,7 @@ def test_an_export_without_quality_steps_writes_at_once(window: MainWindow, tmp_
     fragt nicht nach der Güte; der Export beginnt sofort.
     """
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle(30_000)
+    assert window.session.wait_for_idle(60_000)
     QApplication.processEvents()
     assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
 
@@ -23713,7 +23721,7 @@ def test_new_model_clears_previous_tour_only_after_confirmed_project_change(
     from app.core.tour import tour_for
 
     window.open_path(MESHES / "cube_clean.stl")
-    assert window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     window.session.apply("Quader", [OperationDraft(op="create_box")])
     assert window.session.wait_for_idle()
     example = next(item for item in examples.EXAMPLES if tour_for(item.id))

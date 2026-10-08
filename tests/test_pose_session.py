@@ -306,7 +306,7 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
 
     session = Session()
     session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
+    assert session.wait_for_idle(60_000)
 
     session.add_parameter(Parameter(name="neigung", value=10.0, unit="°"))
     session.apply(

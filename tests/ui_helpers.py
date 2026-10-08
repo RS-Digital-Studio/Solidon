@@ -70,7 +70,7 @@ def with_a_body(window: MainWindow) -> str:
     Auflösungshinweis prüfbar.
     """
     window.open_path(MESHES / "clean_figure.stl")
-    window.session.wait_for_idle()
+    assert window.session.wait_for_idle(60_000)
     item = window.object_tree.tree.topLevelItem(0)
     assert item is not None
     item.setSelected(True)

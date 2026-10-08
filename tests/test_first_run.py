@@ -2545,7 +2545,7 @@ def test_the_rebuilt_window_shows_the_work_it_kept(qt_app: object) -> None:
     window = MainWindow(Session(), settings)
     try:
         window.open_path(meshes / "cube_clean.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
         assert window.session.last_result is not None, "ohne Auswertung prüft der Test nichts"
 
         settings.language = "it"

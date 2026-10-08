@@ -510,7 +510,7 @@ def _with_a_selected_body(window: MainWindow) -> None:
     Operationen überhaupt erst freigegeben werden."""
     if not window.session.project.document.ops:
         window.open_path(MESHES / "plate_holes.stl")
-        window.session.wait_for_idle()
+        assert window.session.wait_for_idle(60_000)
     result = window.session.evaluate_now()
     window.object_tree.select_object(next(iter(result.scene.objects)))
 
