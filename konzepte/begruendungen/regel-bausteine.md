@@ -48,6 +48,21 @@ Warum der Deckel bis über die Ebene der Fläche angehoben wird:
 Seitdem gilt: „`profile_clamp_ops` gibt `build_shell` die Bundhöhe als
 `lift`, die Schale selbst kennt das Maß nicht mehr."
 
+## Was für sich ein Teil ist, steht frei
+
+> Kunden-E-Mail vom 07.10.2026 (RM-562): Kabelclip, Eckwinkel, Rippe,
+> Standfuß und Wandhalter ließen sich nur an einen gewählten Körper anfügen.
+> Nach *Quader anlegen* ist der Quader gewählt; der Katalog setzte die Rippe
+> deshalb an ihn statt neben ihn.
+
+Darum zählt nur eine gewählte Fläche oder Bohrung als Stelle. Am Träger
+beginnt eine Schraube an der Mündung, der Schaft darunter; ohne Träger hing
+er unter dem Druckbett, und die lösbare Mutter schwebte um ihr Spiel darüber.
+Ausgelassen wurden Rastnase, Schnappverbindung, Schnappverbinder,
+Scharnierauge, Lasche, Nutfeder und Lochwand-Einhänger (sie wirken nur am
+Träger) und das druckbare Gewinde (der freie Gewindebolzen ist *Schraube
+erstellen*).
+
 ## Was vereinigt wird, kann nur weiter werden
 
 > Die Haltelippe der Magnettasche stand als eigener Kegel neben dem

@@ -163,7 +163,7 @@ from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.knowledge import calibration, filaments, print_settings, profiles
-from app.core.knowledge.parts.ops import creation_name, direction_of, part_of
+from app.core.knowledge.parts.ops import catalog_operation, creation_name, direction_of, part_of
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -10067,12 +10067,14 @@ class MainWindow(QMainWindow):
                     ("import", self.import_action.text()),
                 )
             )
-        # Und die zweite Bedingung, die je Baustein gilt: Die meisten
-        # Bausteine werden an eine Fläche oder Bohrung gesetzt (gezählt am
-        # 02.10.2026: 25 von 35, die übrigen zehn stehen frei). Sie sperrt
-        # nicht — der Weg über eine eingetragene Position bleibt —, aber sie
-        # sagt es vorher statt als Fehler danach (Robert, 29.08.2026).
-        catalog.set_feature_chosen(self.object_tree.selected_feature() is not None)
+        # Und die zweite Bedingung, die je Baustein gilt: Ein Teil der
+        # Bausteine wird an eine Fläche oder Bohrung gesetzt, die übrigen
+        # stehen frei (``standalone``). Sie sperrt nicht — der Weg über eine
+        # eingetragene Position bleibt —, aber sie sagt es vorher statt als
+        # Fehler danach (Robert, 29.08.2026).
+        catalog.set_feature_chosen(
+            self.object_tree.selected_feature() is not None, self.selected_feature_kind()
+        )
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
         catalog.shareRequested.connect(lambda: self._share_part(catalog))
         catalog.adoptRequested.connect(lambda: self._adopt_part(catalog))
@@ -10095,7 +10097,7 @@ class MainWindow(QMainWindow):
                 return
             name = catalog.chosen()
             if name:
-                spec = REGISTRY.get(creation_name(name))
+                spec = REGISTRY.get(catalog_operation(name, at=self.selected_feature_kind()))
                 lone = self._lone_body()
                 if spec.consumes and not self.object_tree.selected_objects() and lone:
                     # Genau ein Körper ist keine Frage (RM-356): Der Katalog

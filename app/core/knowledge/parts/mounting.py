@@ -431,6 +431,7 @@ class WallMountParams(BaseParams):
 
 @register_part(
     name="wall_mount",
+    standalone=True,
     title=_("Wandhalter"),
     group="mounting",
     params=WallMountParams,
@@ -1779,6 +1780,7 @@ class FootParams(BaseParams):
 
 @register_part(
     name="foot",
+    standalone=True,
     title=_("Standfuß"),
     group="mounting",
     params=FootParams,

@@ -435,7 +435,7 @@ def test_without_a_body_the_catalogue_shows_but_does_not_insert(qt_app: QApplica
 
 
 def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication) -> None:
-    """Die meisten Bausteine brauchen eine Stelle (gezählt am 02.10.2026: 25 von 35).
+    """Ein Baustein, der nur an einem Körper wirkt, braucht eine Stelle (``standalone`` nicht).
 
     Der Katalog fragte nur, ob ein **Körper** gewählt ist, und ließ dann
     einsetzen; die Absage kam als Fehler danach — „Für diesen Baustein fehlt
@@ -460,7 +460,7 @@ def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication)
                     return True
             return False
 
-        assert waehle("printed_screw"), "die Schraube steht im Katalog"
+        assert waehle("screw_hole"), "das Schraubenloch steht im Katalog"
         assert catalog._insert is not None
         assert catalog._insert.isEnabled(), "kein Riegel — die Position bleibt ein Weg"
         assert catalog.insert_hint.isVisibleTo(catalog), "aber der Hinweis steht da"
@@ -468,16 +468,22 @@ def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication)
         assert "Fläche" in text and "Bohrung" in text, "er nennt beide Stellen"
         assert "Position" in text, "und den zweiten Weg, den es gibt"
 
+        # Eine Schraube ist für sich ein Teil (RM-562): ohne Stelle ein eigener Körper.
+        assert waehle("printed_screw")
+        assert catalog._insert.isEnabled()
+        assert "eigener Körper" in catalog.insert_hint.text()
+
         assert waehle("wall_ladder"), "die Wandstärkenleiter steht im Katalog"
         assert not catalog.insert_hint.isVisibleTo(catalog), (
             "ein frei stehender Prüfkörper braucht keine Stelle — die Sperre gilt je Baustein"
         )
 
-        catalog.set_feature_chosen(True)
-        assert waehle("printed_screw")
-        assert not catalog.insert_hint.isVisibleTo(catalog), (
-            "mit gewählter Stelle ist nichts zu sagen"
-        )
+        catalog.set_feature_chosen(True, "hole")
+        for name in ("screw_hole", "printed_screw"):
+            assert waehle(name)
+            assert not catalog.insert_hint.isVisibleTo(catalog), (
+                f"{name}: mit gewählter Stelle ist nichts zu sagen"
+            )
     finally:
         catalog.release()
 
@@ -1486,6 +1492,85 @@ def test_a_new_body_is_chosen_and_the_catalogue_takes_the_only_body(
 
         assert states and states[0][0], "der Flächenbaustein ist frei"
         assert started == [(creation_name(part), created)], "und er gilt dem einzigen Körper"
+    finally:
+        window.close()
+
+
+def test_a_standalone_part_becomes_its_own_body_and_attaches_only_at_a_chosen_face(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-562: Eine Versteifungsrippe hing am gewählten Quader, statt ein eigenes Teil zu werden.
+
+    Kunden-E-Mail vom 07.10.2026: Kabelclip, Eckwinkel, Rippe, Standfuß und
+    Wandhalter ließen sich nur an einen Körper anfügen. Nach *Quader anlegen*
+    ist der Quader gewählt, aber keine Fläche — der Katalog sagt, dass die
+    Rippe ein eigener Körper wird, und legt sie so an; der Quader bleibt, wie
+    er war. Mit einer gewählten Fläche setzt sie sich dort an.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.registry import REGISTRY
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        window.run_operation(REGISTRY.get(_shown_box()))
+        dialog = window._op_dialog
+        assert dialog is not None
+        dialog.accept()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+        (box,) = window.session.project.document.ops[-1].outputs
+        assert window.object_tree.selected_objects() == (box,)
+        assert window.object_tree.selected_feature() is None
+        result = window.session.last_result
+        assert result is not None
+        volume = as_mesh_data(result.scene.objects[box].mesh).volume
+
+        hints: list[str] = []
+
+        def choose_rib(catalog: PartCatalog) -> int:
+            catalog.show()
+            QApplication.processEvents()
+            _choose(catalog, "rib")
+            assert catalog._insert is not None and catalog._insert.isEnabled()
+            hints.append(
+                catalog.insert_hint.text() if catalog.insert_hint.isVisibleTo(catalog) else ""
+            )
+            return int(PartCatalog.DialogCode.Accepted)
+
+        monkeypatch.setattr(PartCatalog, "exec", choose_rib)
+        window.action_catalog()
+        assert hints and "eigener Körper" in hints[0], hints
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "create_rib"
+        dialog.accept()
+        assert window.session.wait_for_idle(60_000)
+        QApplication.processEvents()
+
+        result = window.session.last_result
+        assert result is not None and result.complete
+        assert len(result.scene.objects) == 2, "die Rippe ist ein eigenes Teil"
+        assert as_mesh_data(result.scene.objects[box].mesh).volume == pytest.approx(volume)
+        (rib,) = window.session.project.document.ops[-1].outputs
+        assert as_mesh_data(result.scene.objects[rib].mesh).is_watertight
+
+        top = next(
+            name
+            for name, feature in result.scene.objects[box].features.items()
+            if tuple(feature.params.get("normal") or ()) == pytest.approx((0.0, 0.0, 1.0))
+        )
+        window.object_tree.select_feature(box, top)
+        assert window.object_tree.selected_feature() == top
+        hints.clear()
+        window.action_catalog()
+        assert hints == [""], "an der gewählten Fläche gibt es nichts zu erklären"
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == "insert_rib"
+        dialog.reject()
     finally:
         window.close()
 

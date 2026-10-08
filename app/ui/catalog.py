@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.knowledge.parts import GROUPS, PARTS
+from app.core.knowledge.parts.ops import catalog_operation, op_name
 from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
@@ -461,6 +462,7 @@ class PartCatalog(QDialog):
         self._way: str | None = None
         self._insert_allowed = True
         self._insert_reason = ""
+        self._chosen_kind: str | None = None
         self._feature_chosen = True
         """Ob im Objektbaum eine Fläche oder Bohrung gewählt ist.
 
@@ -726,13 +728,17 @@ class PartCatalog(QDialog):
         self._way = key
         self.reject()
 
-    def set_feature_chosen(self, chosen: bool) -> None:
+    def set_feature_chosen(self, chosen: bool, kind: str | None = None) -> None:
         """Ob eine Fläche oder Bohrung gewählt ist — die zweite Bedingung.
 
-        Sie gilt **je Baustein** und nicht für den ganzen Katalog: Von den
-        Bausteinen wird der größere Teil an eine Stelle gesetzt, der Rest steht
-        frei (``standalone``; gezählt am 02.10.2026: 25 und 10 von 35). Eine
-        pauschale Sperre nähme den freistehenden den Weg, den sie haben.
+        ``kind`` ist ihre Art; an ihr entscheidet ``catalog_operation``, ob ein
+        eigenständiger Baustein dort ansetzt oder frei entsteht.
+
+        Sie gilt **je Baustein** und nicht für den ganzen Katalog: Ein Teil der
+        Bausteine wird an eine Stelle gesetzt, der Rest steht frei
+        (``standalone``; wie viele, sagt das Register) und entsteht ohne Stelle
+        als eigener Körper. Eine pauschale Sperre nähme den freistehenden den
+        Weg, den sie haben.
 
         Und sie **sperrt nicht, sie sagt es** — anders als die Bedingung des
         Fensters darüber. Ein Baustein lässt sich auch über eine eingetragene
@@ -744,6 +750,7 @@ class PartCatalog(QDialog):
         Körper, hier die fehlende Stelle daran).
         """
         self._feature_chosen = chosen
+        self._chosen_kind = kind if chosen else None
         self._show_detail()
 
     def _insert_state(self, spec: PartSpec | None) -> tuple[bool, str]:
@@ -754,6 +761,17 @@ class PartCatalog(QDialog):
         Hinweis, weil der Weg über eine eingetragene Position offen bleibt.
         """
         if spec is not None and spec.standalone:
+            # Ohne passende Stelle entsteht er als eigener Körper (RM-562,
+            # ``catalog_operation``). Wo es einen Körper gäbe, an den er passt,
+            # sagt der Satz das vorher, statt ihn still daneben zu legen.
+            creates = catalog_operation(spec.name, at=self._chosen_kind) != op_name(spec.name)
+            # Ohne Auskunft über die Art bleibt es beim Katalog wie zuvor.
+            told = not self._feature_chosen or self._chosen_kind is not None
+            if creates and told and (spec.at_face or spec.at_hole) and self._insert_allowed:
+                return True, tr(
+                    "Ohne passende Stelle entsteht er als eigener Körper. Wählen Sie im "
+                    "Objektbaum die Stelle, an der er ansetzen soll."
+                )
             return True, ""
         if not self._insert_allowed:
             return False, self._insert_reason

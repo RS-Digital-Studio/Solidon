@@ -2495,7 +2495,13 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: ohne neue Operation derselbe Aufruf: **8 511 Token bei 189 Werkzeugen**,
 #: 26,0 % des Fensters; SHA-256
 #: ``4d29895bd0d4dc34a8829d920a3deb3590385e051c21926147b7e931d564f67c``.
-PROMPT_TOKENS: Final = 8511
+#: Am 08.10.2026 mit den zehn eigenständigen Bausteinen (RM-562: Erzeugen für
+#: Kabelclip, Eckwinkel, Rippe, Standfuß, Wandhalter, Passstift, beide
+#: Scharniere, Schraube und Mutter) derselbe Aufruf: **8 822 Token bei 199
+#: Werkzeugen**, 26,9 % des Fensters — qwen3:14b (bdbd181c33f2), Ollama 0.35.1,
+#: ``num_ctx`` 32 768, ein Ausgabetoken. SHA-256 der Anfrage:
+#: ``2d17f9b6ec21bbffb1aaa3ebef2b80a743953a233d72aff164681456e8eefee7``.
+PROMPT_TOKENS: Final = 8822
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird
@@ -2522,9 +2528,10 @@ TURN_TOKENS: Final = 9061
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Die Zählung vom 04.10.2026 mit *Verschluss ändern* enthält genau diese 189
-#: Werkzeuge; Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 189
+#: Die Zählung vom 08.10.2026 mit den eigenständigen Bausteinen enthält genau
+#: diese 199 Werkzeuge; Modell, Kontext und Anfragebeleg stehen bei
+#: :data:`PROMPT_TOKENS`.
+PROMPT_TOOL_COUNT: Final = 199
 
 #: Unter diesem Anteil der Mindestzahl aus :func:`least_tokens` gilt eine
 #: Antwort als gekürzt (:func:`prompt_was_cut`). Die Mindestzahl ist schon

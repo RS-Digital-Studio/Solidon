@@ -220,7 +220,11 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   deklariert es über `ParamSpec.subtractive_on` (`cuts`, `cuts_by_parameter`).
 - **`standalone`** erzeugt zusätzlich `create_<name>` ohne Eingang
   (`creation_name()`), `insert_<name>` bleibt lesbar; Erzeuger übernehmen die
-  freie Normale und sinken ohne Träger nicht ein. **`template`** (nur mit
+  freie Normale und sinken ohne Träger nicht ein. Der Katalog nimmt den
+  Erzeuger, solange keine Stelle gewählt ist, an die er gehört
+  (`catalog_operation`); `build_params(standalone=True)` lässt die abtragende
+  Wahl weg, `_on_its_own_bed` stellt den Körper auf die Ebene seines
+  Ursprungs (Mündungsbausteine kopfüber). **`template`** (nur mit
   `standalone`) lässt den Erzeuger *Maße als Parameter anlegen* anbieten wie
   einen Grundkörper (`offers_naming`, Regel in `grenzen.md`) und baut ihn wie einen
   Grundkörper exakt, wo der Kern da ist (`ops._creates_exactly`). Die Toleranzleiter erklärt

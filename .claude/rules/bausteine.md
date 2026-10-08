@@ -110,6 +110,21 @@ Bausteins (`oberflaeche.md`: „Ein Feld ohne Wirkung steht nicht da").
 aufgesetzter Baustein verbindet sich mit seinem Träger, und ein Rahmen, der
 das nicht hergibt, gehört nicht in den Katalog.
 
+## Was für sich ein Teil ist, steht frei
+
+`standalone` sagt der Baustein selbst, die eine Quelle für Katalog,
+Erzeuger und Agent: gesetzt, wo er ohne Träger seine Aufgabe erfüllt
+(Kabelclip, Rippe, Standfuß, Mutter), nicht, wo er nur am Träger wirkt
+(Rastnase, Federarm, Lasche, Auge, Nutfeder, Lochwand-Haken) oder nur
+abträgt — Letzteres weist das Register ab. **Eine gewählte Stelle, an die er
+gehört, setzt an, ein gewählter Körper nicht** (`ops.catalog_operation`): Jeder Erzeuger wählt
+seinen Körper, und der zweite Clip hinge sonst am ersten. Ohne Träger gibt es
+nur die aufgesetzte Form; eine abtragende Wahl muss genau ihre Vorgabe als
+aufgesetzte Form übrig lassen, und kein Feld darf an ihr hängen. Der Körper
+steht auf der Ebene seines Ursprungs, ein Mündungsbaustein kopfüber
+(`_on_its_own_bed`). `test_every_standalone_part_makes_a_watertight_body_without_a_selection`
+prüft jeden.
+
 ## Was vereinigt wird, kann nur weiter werden
 
 Ein Baustein ist **ein** Körper, seine Teile entstehen mit `union`. Eine

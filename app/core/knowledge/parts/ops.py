@@ -262,9 +262,26 @@ def op_name(part: str) -> str:
 
 
 def creation_name(part: str) -> str:
-    """Der Katalog erzeugt eigenständige Prüfkörper und setzt alle übrigen Bausteine ein."""
+    """Die Operation, die diesen Baustein ohne Träger anlegt — sonst die, die ihn einsetzt."""
     spec = PARTS.get(part)
     return f"create_{part}" if spec.standalone else op_name(part)
+
+
+def catalog_operation(part: str, *, at: str | None) -> str:
+    """Was der Katalog für diesen Baustein ausführt (RM-562).
+
+    ``at`` ist die Art des gewählten Merkmals (``face``, ``hole`` …) oder
+    ``None``. Ein eigenständiger Baustein setzt sich an eine gewählte Stelle,
+    an die er gehört (``_applies_to``); sonst entsteht er als eigener Körper,
+    eine Schraube an einer Fläche also frei. **Ein gewählter Körper allein
+    zählt nicht als Stelle**: Jeder Erzeugerschritt wählt seinen neuen Körper,
+    und der zweite Kabelclip hinge sonst am ersten. Die übrigen Bausteine
+    werden immer eingesetzt.
+    """
+    spec = PARTS.get(part)
+    if not spec.standalone or (at is not None and at in _applies_to(spec)):
+        return op_name(part)
+    return creation_name(part)
 
 
 def part_of(operation: str) -> PartSpec | None:
@@ -288,7 +305,13 @@ def part_of(operation: str) -> PartSpec | None:
 def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams]:
     """Die Parameter des Bausteins plus den Ort, an den er gehört, als ein
     Schema (§10).
+
+    Der Erzeuger (``standalone``) hat keinen Träger, von dem etwas abzutragen
+    wäre: Die abtragende Wahl (``subtractive_on``) fehlt in seinem Schema, und
+    der Baustein baut mit ihrer Vorgabe, der aufgesetzten Form — das Register
+    stellt sicher, dass es genau eine gibt.
     """
+    cutting = cuts_by_parameter(spec.params) if standalone else None
     normal = ("nx", "ny", "nz")
     owned = {entry.name for entry in spec.params.fields()}
     while owned.intersection(normal):
@@ -309,6 +332,8 @@ def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams
         "_placement_fields": names,
     }
     for entry in spec.params.fields():
+        if cutting is not None and entry.name == cutting[0]:
+            continue
         namespace["__annotations__"][entry.name] = entry.type
         namespace[entry.name] = (
             dataclasses.field(default=entry.default, metadata=entry.metadata)
@@ -533,11 +558,12 @@ def _creates_exactly(spec: PartSpec) -> bool:
 
 
 def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
-    """Erzeugt einen erklärten Prüfkörper ohne einen künstlichen Träger im Projekt."""
+    """Legt einen eigenständigen Baustein ohne Träger an — kein künstlicher Körper im Projekt."""
     schema = build_params(spec, standalone=True)
     # exact:1 — eine Vorlage entsteht exakt, wo der Kern da ist (RM-443); ein
     # Ergebnis von davor wäre ein Netz.
-    version = f"{_result_version(spec)}:guards:2" + (":exact:1" if _creates_exactly(spec) else "")
+    # guards:3 — ohne Träger steht er auf dem Bett und rollt wie seine Merkmale (RM-562).
+    version = f"{_result_version(spec)}:guards:3" + (":exact:1" if _creates_exactly(spec) else "")
 
     @register_op(
         name=f"create_{spec.name}",
@@ -563,14 +589,28 @@ def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
             kernel="brep" if exact else "mesh",
         )
         direction = _free_direction(ctx.params)
+        turned, sink = _on_its_own_bed(spec, ctx.params, produced.mesh, direction)
         solid = _solid_of(produced.mesh) if exact else None
         placed: Mesh = (
-            _place_solid(solid, ctx.params, direction=direction, cancelled=ctx.cancelled)
+            _place_solid(
+                solid,
+                ctx.params,
+                sink=sink,
+                direction=turned,
+                keeps_up=spec.keeps_up,
+                cancelled=ctx.cancelled,
+            )
             if solid is not None
-            else _place(as_mesh_data(produced.mesh), ctx.params, direction=direction)
+            else _place(
+                as_mesh_data(produced.mesh),
+                ctx.params,
+                sink=sink,
+                direction=turned,
+                keeps_up=spec.keeps_up,
+            )
         )
         features = _placed_features(
-            produced, spec, ctx.params, (0.0, 0.0, 0.0), 0.0, direction, spec.keeps_up, False
+            produced, spec, ctx.params, (0.0, 0.0, 0.0), sink, turned, spec.keeps_up, False
         )
         from app.i18n import source_text
 
@@ -2516,6 +2556,26 @@ def _builds_upward_on_a_face(source: SceneObject, params: Any, built: Mesh) -> b
     if feature is None or feature.kind != "face":
         return False
     return _extends_above_mouth(built)
+
+
+def _on_its_own_bed(
+    spec: PartSpec, params: Any, built: Mesh, direction: Vec3 | None
+) -> tuple[Vec3 | None, float]:
+    """Richtung und Einsenken eines Bausteins ohne Träger (RM-562).
+
+    Am Träger beginnt ein Baustein an der Mündung: Eine Schraube hat den Kopf
+    darüber und den Schaft darunter, eine lösbare Mutter steht um das Spiel
+    über der Fläche (``separate_from_host``). Ohne Träger hinge der Schaft unter
+    dem Druckbett und die Mutter schwebte. Hier steht die Unterseite auf der
+    Ebene des Ursprungs, und was an einer Mündung sitzt (``at_hole_mouth``),
+    steht auf dem Kopf, wie man eine Schraube druckt. Eine eingetragene
+    Richtung oder Achse gilt, wie sie ist.
+    """
+    low = float(built.bounds.minimum[2])
+    upright = direction is None and _placement_value(params, "axis", "z") == "z"
+    if spec.at_hole_mouth and upright:
+        return (0.0, 0.0, -1.0), float(built.bounds.maximum[2])
+    return direction, low if abs(low) > EPS_GEOM else 0.0
 
 
 def _extends_above_mouth(built: Mesh) -> bool:

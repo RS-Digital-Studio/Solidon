@@ -1603,6 +1603,7 @@ class PrintedScrewParams(BaseParams):
 
 @register_part(
     name="printed_screw",
+    standalone=True,
     title=_("Schraube"),
     group="fasteners",
     params=PrintedScrewParams,
@@ -1741,6 +1742,7 @@ class PrintedNutParams(BaseParams):
 
 @register_part(
     name="printed_nut",
+    standalone=True,
     title=_("Gedruckte Mutter"),
     group="fasteners",
     params=PrintedNutParams,

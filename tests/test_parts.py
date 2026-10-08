@@ -7618,6 +7618,124 @@ def test_a_template_without_a_creator_is_refused() -> None:
             raise AssertionError
 
 
+#: Was ein Kunde für sich druckt (RM-562, Kunden-E-Mail 07.10.2026): Kabelclip,
+#: Eckwinkel, Rippe, Standfuß, Wandhalter und die Teile, die wie sie ohne Träger
+#: ihre Aufgabe erfüllen. Die Quelle ist ``standalone`` am Baustein; diese Liste
+#: hält nur fest, dass die genannten dabei sind.
+ON_THEIR_OWN = (
+    "barrel_hinge",
+    "cable_clip",
+    "dowel",
+    "foot",
+    "gusset",
+    "living_hinge",
+    "printed_nut",
+    "printed_screw",
+    "rib",
+    "wall_mount",
+)
+
+
+def test_the_parts_customers_print_on_their_own_stand_alone() -> None:
+    """RM-562: Diese Bausteine ließen sich nur an einen gewählten Körper anfügen."""
+    assert [name for name in ON_THEIR_OWN if not PARTS.get(name).standalone] == []
+
+
+@pytest.mark.parametrize(
+    "name", [spec.name for spec in PARTS.all() if spec.standalone], ids=lambda name: name
+)
+def test_every_standalone_part_makes_a_watertight_body_without_a_selection(
+    name: str, profile: Profile
+) -> None:
+    """Ein eigenständiger Baustein braucht keinen Körper: leeres Projekt, ein Schritt, ein Teil.
+
+    Mit den Vorgaben seines Erzeugers, so wie der Katalog ihn ohne Auswahl
+    anlegt — wasserdicht, mit den erklärten Teilen und ohne Fehler. Wo der
+    Kunde eine Kontur zeichnen muss, steht hier ein Kreis.
+    """
+    from app.core.sketch import shapes as sketch_shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    spec = PARTS.get(name)
+    creator = REGISTRY.get(part_ops.creation_name(name))
+    assert (creator.consumes, creator.produces) == (0, 1)
+    drawn = {
+        entry.name: sketch_to_text(sketch_shapes.circle(20.0))
+        for entry in creator.params.spec()
+        if entry.kind == "sketch" and entry.required
+    }
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(spec.name, [OperationDraft(op=creator.name, params=drawn)])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert len(result.scene.objects) == 1
+    body = as_mesh_data(next(iter(result.scene.objects.values())).mesh)
+    assert body.is_watertight
+    assert body.component_count == spec.bodies
+    assert float(body.raw.bounds[0][2]) == pytest.approx(0.0, abs=1e-6), "er steht auf dem Bett"
+
+
+@pytest.mark.parametrize("name", ["foot", "dowel"])
+def test_a_standalone_creator_offers_only_the_form_that_is_a_body(name: str) -> None:
+    """Ein Fuß als Tasche, ein Stift als Bohrung trägt ab — ohne Träger gibt es nichts abzutragen.
+
+    Der Erzeuger lässt die Wahl deshalb weg, statt sie anzubieten und danach
+    abzuweisen; das Einsetzen an einer Fläche behält sie.
+    """
+    created = {entry.name for entry in REGISTRY.get(f"create_{name}").params.spec()}
+    inserted = {entry.name for entry in REGISTRY.get(f"insert_{name}").params.spec()}
+    assert "kind" in inserted
+    assert "kind" not in created
+    assert not part_ops.cuts(PARTS.get(name), PARTS.get(name).params())
+
+
+def test_a_part_that_only_cuts_cannot_stand_alone() -> None:
+    """Eine Bohrung als eigenes Objekt wäre ein Zylinder, der nichts bohrt."""
+    from app.core.errors import InternalError
+
+    @op_params
+    class Params(BaseParams):
+        size: float = param(title="x", default=1.0)
+
+    @op_params
+    class Choice(BaseParams):
+        kind: str = param(
+            title="x", default="hole", choices=("hole", "pin"), subtractive_on=("hole",)
+        )
+
+    for params, subtractive in ((Params, True), (Choice, False)):
+        with pytest.raises(InternalError):
+
+            @register_part(
+                name="pit",
+                title="x",
+                group="mounting",
+                params=params,
+                features=["pit"],
+                standalone=True,
+                subtractive=subtractive,
+                registry=PartRegistry(),
+            )
+            def pit(raw: BaseParams) -> PartResult:  # pragma: no cover - läuft nie
+                raise AssertionError
+
+
+def test_the_catalogue_attaches_at_a_chosen_place_and_creates_without_one() -> None:
+    """RM-562: Ohne gewählte Fläche entsteht ein eigenständiger Baustein als eigener Körper.
+
+    Mit einer gewählten Stelle setzt er sich dort an, wie bisher. Was nur an
+    einem Träger wirkt, bleibt beim Einsetzen; ein Prüfkörper bleibt frei.
+    """
+    choose = part_ops.catalog_operation
+    assert choose("rib", at=None) == "create_rib"
+    assert choose("rib", at="face") == "insert_rib"
+    assert choose("rib", at="edge") == "create_rib"
+    assert choose("printed_screw", at="hole") == "insert_printed_screw"
+    assert choose("printed_screw", at="face") == "create_printed_screw", "an einer Fläche frei"
+    assert choose("screw_hole", at=None) == "insert_screw_hole"
+    assert choose("fit_ladder", at="face") == "create_fit_ladder"
+
+
 def test_a_u_holder_arises_in_one_step_and_the_parameter_bar_turns_its_inner_width(
     profile: Profile,
 ) -> None:

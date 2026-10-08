@@ -242,7 +242,16 @@ class PartSpec:
     host_add: HostCut | None = None
     """Zusätzlicher Trägeraufbau, der vor dem Schnitt mit dem Ziel vereinigt wird."""
     standalone: bool = False
-    """Bietet zusätzlich eine Erzeugeroperation ohne Trägerobjekt an."""
+    """Wahr für einen Baustein, der für sich ein Teil ist (RM-562).
+
+    Er bekommt zusätzlich einen Erzeuger ohne Trägerobjekt (``create_…``), und
+    der Katalog legt ihn ohne gewählte Stelle als eigenen Körper an
+    (``ops.catalog_operation``). Eigenständig ist, was ohne Träger seine
+    Aufgabe erfüllt — Kabelclip, Rippe, Standfuß, Mutter. Was nur am Träger
+    wirkt (Rastnase, Federarm, Lasche) oder nur abträgt, ist es nicht; das
+    Abtragen weist das Register ab. Eine abtragende Wahl (``subtractive_on``)
+    lässt der Erzeuger weg.
+    """
     template: bool = False
     """Eine Vorlage: Der Erzeuger bietet an, seine Maße als Projektparameter anzulegen (§13).
 
@@ -599,6 +608,34 @@ class PartRegistry:
                 detail=f"{spec.name!r} is a template without a creator",
                 values={"part": spec.name},
             )
+        if spec.standalone and spec.subtractive:
+            raise InternalError(
+                detail=f"{spec.name!r} only cuts and cannot stand alone",
+                values={"part": spec.name},
+            )
+        if spec.standalone:
+            # Der Erzeuger lässt die abtragende Wahl weg (``ops.build_params``):
+            # Übrig bleiben muss genau die Vorgabe, und kein Feld darf an ihr hängen.
+            fields = spec.params.spec()
+            for entry in fields:
+                if entry.subtractive_on is None:
+                    continue
+                kept = [
+                    value
+                    for value in (entry.choices or (False, True))
+                    if value not in entry.subtractive_on
+                ]
+                hanging = [
+                    other.name
+                    for other in fields
+                    if other.depends_on is not None and other.depends_on[0] == entry.name
+                ]
+                if kept != [entry.default] or hanging:
+                    raise InternalError(
+                        detail=f"{spec.name!r} cannot stand alone: {entry.name!r} "
+                        "must leave exactly its default as the uncut form",
+                        values={"part": spec.name, "field": entry.name},
+                    )
 
     def get(self, name: str) -> PartSpec:
         if name not in self._parts:
