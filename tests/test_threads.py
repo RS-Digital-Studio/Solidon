@@ -910,3 +910,51 @@ def test_an_own_inch_thread_at_a_bore_takes_the_series_of_its_form() -> None:
     assert nominal - 2.0 * RIDGE_SHARE * pitch == pytest.approx(40.0)
     assert pytest.approx(0.640327, abs=1e-6) == WHITWORTH_DEPTH
     assert pytest.approx(0.8) == NPT_DEPTH
+
+
+@pytest.mark.parametrize(
+    ("values", "pitch", "handedness"),
+    [
+        ({"diameter": 20.955, "form": "whitworth", "tpi": 14.0}, 25.4 / 14.0, "right"),
+        ({"diameter": 6.35, "form": "unified", "tpi": 0.0}, 25.4 / 20.0, "right"),
+        ({"diameter": 10.0, "pitch": 1.5, "starts": 2, "left_hand": True}, 1.5, "left"),
+    ],
+    ids=["whitworth", "unc-automatisch", "zweigaengig-links"],
+)
+def test_create_screw_takes_inch_forms_starts_and_left_hand(
+    values: dict[str, object], pitch: float, handedness: str
+) -> None:
+    """*Schraube erstellen* (RM-544): Gänge je Zoll, Whitworth-Profil, Gangzahl, Linksgewinde.
+
+    Null Gänge je Zoll nimmt die Reihe der Gewindeform — Ø 6,35 Unified ist 1/4-20 UNC.
+    Der Körper ist geschlossen, und das Merkmal nennt, was gebaut ist.
+    """
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    load_operations()
+    spec = REGISTRY.get("thread_exact")
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={}),
+            inputs=[],
+            params=spec.params(length=10.0, **values),
+            profile=None,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    (body,) = result.outputs
+    assert body.mesh.is_closed and body.mesh.solid_count == 1
+    (thread,) = [entry for entry in body.features.values() if entry.kind == "thread"]
+    assert thread.params["pitch"] == pytest.approx(pitch)
+    assert thread.params["handedness"] == handedness
+    assert int(thread.params.get("starts", 1)) == int(values.get("starts", 1))  # type: ignore[call-overload]

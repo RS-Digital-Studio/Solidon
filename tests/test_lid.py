@@ -1163,3 +1163,39 @@ def test_the_exact_neck_follows_the_translated_opening(profile: Profile) -> None
     assert neck.mesh.bounds.minimum[0] >= 30.0 - 1e-6
     assert neck.mesh.bounds.maximum[0] <= 70.0 + 1e-6
     assert neck.features[NECK_THREAD_FEATURE].params["centre"][:2] == pytest.approx((50.0, -20.0))
+
+
+@pytest.mark.parametrize(
+    ("values", "pitch", "handedness", "starts"),
+    [
+        ({"form": "whitworth", "tpi": 11.0}, 25.4 / 11.0, "right", 1),
+        ({"form": "unified", "tpi": 0.0}, None, "right", 1),
+        ({"pitch": 3.0, "starts": 3}, 3.0, "right", 3),
+        ({"pitch": 3.0, "left_hand": True}, 3.0, "left", 1),
+    ],
+    ids=["whitworth", "unified-automatisch", "dreigaengig", "links"],
+)
+def test_a_screw_lid_takes_inch_forms_starts_and_left_hand(
+    profile, values, pitch, handedness, starts
+):
+    """*Drehdeckel erzeugen* (RM-544): Gänge je Zoll, Whitworth, Gangzahl, Linksgewinde.
+
+    Hals und Deckel kommen aus derselben Gewindeform, und der Deckel geht über den
+    ganzen Hals, ohne irgendwo Material zu treffen. Null Gänge je Zoll nimmt die
+    Reihe der Form beim Halsdurchmesser.
+    """
+    from app.core.geom.boolean import shared_volume
+    from app.core.geom.lid import CAP_THREAD_FEATURE, NECK_THREAD_FEATURE
+
+    result = make_screw_lid(jar(wall=5), profile, height=8.0, **values)
+    container, lid = result.outputs
+    neck_thread = container.features[NECK_THREAD_FEATURE].params
+    cap_thread = lid.features[CAP_THREAD_FEATURE].params
+    if pitch is not None:
+        assert neck_thread["pitch"] == pytest.approx(pitch, abs=1e-4)
+    assert neck_thread["pitch"] == pytest.approx(cap_thread["pitch"])
+    assert neck_thread["handedness"] == cap_thread["handedness"] == handedness
+    assert int(neck_thread.get("starts", 1)) == int(cap_thread.get("starts", 1)) == starts
+    assembled = lid.mesh.raw.copy()
+    assembled.apply_translation((0, 0, 60))
+    assert shared_volume(container.mesh.raw, assembled) < 1e-5

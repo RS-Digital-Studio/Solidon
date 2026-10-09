@@ -4276,13 +4276,18 @@ class Session(QObject):
         first_object: str,
         second_object: str,
         second_place: Mapping[str, Any],
+        *,
+        size: str | None = None,
     ) -> CounterpartApplied:
-        """Das Gegenstück zu einem vorhandenen Gewinde samt Passung, eine Änderung (P2.6)."""
+        """Das Gegenstück zu einem vorhandenen Gewinde samt Passung, eine Änderung (P2.6).
+
+        ``size`` ist die Antwort auf die Rückfrage nach der Größe (RM-544).
+        """
         refusal = self.halt_in_the_way()
         if refusal is not None:
             raise refusal
         applied = apply_thread_counterpart(
-            self.project.document, feature, first_object, second_object, second_place
+            self.project.document, feature, first_object, second_object, second_place, size=size
         )
         self._finish_after(
             lambda scene: attach_thread_fit(self.project.document, applied, feature, scene),

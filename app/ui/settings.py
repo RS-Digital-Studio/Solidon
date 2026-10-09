@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from app.core.knowledge.standards import THREAD_FAMILIES
 from app.core.log import get_logger
 
 # ``installed_language`` liegt im Kern, weil die Kommandozeile dieselbe Frage
@@ -257,6 +258,11 @@ class UiSettings:
     Beim ersten Start an, danach die letzte Wahl beim Übernehmen: Wer Weg 2
     geht, will seine Maße jedes Mal benannt haben und musste den Haken bisher
     bei jedem Grundkörper neu finden (Entscheidung Robert, 02.10.2026)."""
+    thread_families: list[str] = field(default_factory=lambda: list(THREAD_FAMILIES))
+    """Welche Gewindereihen die Auswahllisten zeigen (RM-544): metrisch, G, R, UNC,
+    UNF, NPT — Vorgabe alle. Darstellung, kein Dokumentzustand: Ein Schritt mit
+    einer ausgeblendeten Reihe zeigt und rechnet sie weiter, und die Erkennung
+    an einer Bohrung schlägt nur gezeigte vor (``standards.shown_thread_families``)."""
     open_sections: dict[str, bool] = field(default_factory=dict)
     """Welche einklappbaren Abschnitte der Kunde offen oder zu verließ, unter
     ihrem Merker (``panels.collapsible(remember=…)``, RM-491)."""

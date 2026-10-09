@@ -695,3 +695,50 @@ def test_the_palette_offers_every_visible_setting_under_its_row_name() -> None:
     seen = searchable_options(UiSettings(spacemouse_seen=True))
     assert set(SPACEMOUSE_OPTIONS) <= set(seen)
     assert "3D-Maus" in seen["spacemouse_invert"], "„Richtung umkehren“ allein sagt nicht, wessen"
+
+
+def test_the_thread_series_are_chosen_in_the_settings_and_filter_the_size_lists(
+    qt_app, monkeypatch
+) -> None:
+    """RM-544: Der Kunde wählt, welche Gewindereihen die Größenlisten zeigen.
+
+    Gespeichert in ``UiSettings.thread_families``, gesetzt im Kern
+    (``standards.set_shown_thread_families``); der letzte Haken lässt sich nicht
+    nehmen. Die Liste von *Druckbares Gewinde* zeigt nur gezeigte Reihen — außer
+    der Größe, die der Schritt schon trägt —, die metrische Liste des
+    Schraubenlochs bleibt unberührt.
+    """
+    from app.core.knowledge import standards
+    from app.ui import settings_dialog as module
+    from app.ui.op_dialog import shown_choices
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(module.discover, "remembered_path", lambda _key: "")
+    monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
+    settings = UiSettings()
+    assert settings.thread_families == list(standards.THREAD_FAMILIES), "Vorgabe alle"
+    dialog = module.SettingsDialog(settings)
+    try:
+        for family in ("R", "UNC", "UNF", "NPT"):
+            dialog._family_boxes[family].setChecked(False)
+        dialog.apply_to(settings)
+        assert settings.thread_families == ["metric", "G"]
+        dialog._family_boxes["metric"].setChecked(False)
+        assert not dialog._family_boxes["G"].isEnabled(), "der letzte Haken bleibt"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+    choices = (*standards.thread_sizes(), "custom_size")
+    before = standards.shown_thread_families()
+    try:
+        standards.set_shown_thread_families(settings.thread_families)
+        shown = shown_choices(choices, "M6")
+        assert "G1/2" in shown and "M6" in shown and "custom_size" in shown
+        assert "1/4-20 UNC" not in shown and "R1/2" not in shown
+        assert "1/2-14 NPT" in shown_choices(choices, "1/2-14 NPT"), "die gewählte bleibt"
+        metric = (*standards.screw_sizes(), "custom_size")
+        standards.set_shown_thread_families(("G",))
+        assert shown_choices(metric, "M3") == metric, "eine rein metrische Liste bleibt"
+    finally:
+        standards.set_shown_thread_families(before)

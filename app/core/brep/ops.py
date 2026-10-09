@@ -69,7 +69,9 @@ from app.core.geom.primitive_ops import (
     tube_fits_the_ring,
 )
 from app.core.geom.transform import Axis
+from app.core.knowledge.parts.fasteners import CUSTOM_FORMS, MOST_STARTS, MOST_TPI
 from app.core.registry import NAME_DOC, op_params, param, register_op
+from app.core.registry.params import ZERO_AUTOMATIC
 from app.core.types import (
     BaseParams,
     CancelToken,
@@ -591,10 +593,23 @@ class ThreadParams(PositionedPrimitiveParams):
         unit="mm",
         minimum=FINEST_PITCH,
         maximum=COARSEST_PITCH,
+        depends_on=("form", ("metric",)),
         doc=_(
             "Höhenzuwachs je Umdrehung. Ob sich die Gewindegänge sauber drucken lassen, hängt "
             "von Drucker, Material und Einstellungen ab; prüfen Sie ein kleines Passungsstück."
         ),
+    )
+    tpi: float = param(
+        title=_("Gänge je Zoll"),
+        default=0.0,
+        minimum=0.0,
+        maximum=MOST_TPI,
+        depends_on=("form", ("whitworth", "unified")),
+        doc=_(
+            "Wie viele Gänge auf einem Zoll Länge liegen. Null nimmt die Reihe G bei "
+            "Whitworth und UNC bei Unified."
+        ),
+        zero_text=ZERO_AUTOMATIC,
     )
     length: float = param(
         title=_("Länge"),
@@ -610,10 +625,51 @@ class ThreadParams(PositionedPrimitiveParams):
         placement="advanced",
         doc=NAME_DOC,
     )
+    # RM-544: Zoll und Whitworth, mehrgängig und links — wie beim Gewindebaustein.
+    form: str = param(
+        title=_("Gewindeform"),
+        default="metric",
+        choices=CUSTOM_FORMS,
+        placement="advanced",
+        doc=_(
+            "Metrisch mit der Steigung in Millimetern, Whitworth (55°, wie G) oder Unified "
+            "(60°, wie UNC) mit Gängen je Zoll."
+        ),
+    )
+    starts: int = param(
+        title=_("Gangzahl"),
+        default=1,
+        minimum=1,
+        maximum=MOST_STARTS,
+        placement="advanced",
+        doc=_(
+            "Mehrere Gänge nebeneinander, wie an Flaschen und Spindeln: Je Umdrehung "
+            "geht es um so viele Steigungen weiter."
+        ),
+    )
+    left_hand: bool = param(
+        title=_("Linksgewinde"),
+        default=False,
+        placement="advanced",
+        doc=_("Schraubt gegen den Uhrzeigersinn ein, wie an Pedal, Spannschloss und Gasflasche."),
+    )
+
+
+def _exact_pitch(params: ThreadParams) -> float:
+    """Die Steigung des Bolzens: metrisch eingetragen, in Zoll aus den Gängen je Zoll (RM-544)."""
+    from app.core.knowledge import standards
+
+    if params.form not in ("whitworth", "unified"):
+        return params.pitch
+    series = "G" if params.form == "whitworth" else "UNC"
+    count = params.tpi if params.tpi > 0.0 else standards.regular_tpi(params.diameter, series)
+    return 25.4 / count
 
 
 @register_op(
     name="thread_exact",
+    # 1: Gewindeform, Gänge je Zoll, Gangzahl und Linksgewinde (RM-544).
+    cache_version="1",
     title=_("Schraube erstellen"),
     # „primitive" und nicht „shaping": Der Bolzen verbraucht nichts und
     # erzeugt einen Körper — dasselbe wie der exakte Quader und der exakte
@@ -638,9 +694,16 @@ def thread_exact(ctx: OpContext) -> OpResult:
     # Dialog oder der Griff an der Vorschau ihn hinstellt.
     placement = placement_transform(params)
     matrix = np.asarray(placement, dtype=float)
+    pitch = _exact_pitch(params)
     solid = edit.transformed(
         profiles.threaded_rod(
-            params.diameter, params.pitch, params.length, cancelled=ctx.cancelled
+            params.diameter,
+            pitch,
+            params.length,
+            cancelled=ctx.cancelled,
+            whitworth=params.form == "whitworth",
+            starts=params.starts,
+            left=params.left_hand,
         ),
         placement,
         cancelled=ctx.cancelled,
@@ -682,10 +745,17 @@ def thread_exact(ctx: OpContext) -> OpResult:
         kind="thread",
         provenance="generated",
         params={
+            **(
+                {"starts": params.starts, "lead": params.starts * pitch}
+                if params.starts > 1
+                else {}
+            ),
+            **({"profile": "whitworth"} if params.form == "whitworth" else {}),
             "diameter": params.diameter,
-            "pitch": params.pitch,
-            # profiles.threaded_rod folgt (Winkel, Höhe) = (2π, Steigung).
-            "handedness": "right",
+            "pitch": pitch,
+            # profiles.threaded_rod folgt (Winkel, Höhe) = (2π, Steigung);
+            # links ist der Bolzen gespiegelt.
+            "handedness": "left" if params.left_hand else "right",
             "length": params.length,
             "centre": centre,
             "axis": axis,

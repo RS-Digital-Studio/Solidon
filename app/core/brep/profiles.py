@@ -1094,7 +1094,14 @@ def thread_ridge(major: float, pitch: float) -> tuple[Point2, ...]:
 
 
 def threaded_rod(
-    major: float, pitch: float, length: float, *, cancelled: CancelToken | None = None
+    major: float,
+    pitch: float,
+    length: float,
+    *,
+    cancelled: CancelToken | None = None,
+    whitworth: bool = False,
+    starts: int = 1,
+    left: bool = False,
 ) -> Solid:
     """Ein Bolzen mit exaktem Außengewinde: Kern und Gang als **ein** genähter Körper.
 
@@ -1115,14 +1122,20 @@ def threaded_rod(
     doch nicht geschlossen ist, bleibt (:func:`_checked_rod`). Ein langer
     Bolzen hat Hunderte Flächen; ``cancelled`` wird je Umlauf, vor und nach
     jedem nativen Schritt gefragt.
+
+    Zoll- und Rohrgewinde (RM-544): ``whitworth`` legt das gerundete 55°-Profil
+    nach ISO 228-1 statt des ISO-nahen 60°-Profils, ``starts`` Gänge teilen sich
+    den Vorschub, und ``left`` spiegelt den fertigen Bolzen an der Ebene y = 0 —
+    die Gänge bei Winkel null bleiben, wo sie sind.
     """
     require()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
     from OCP.gp import gp_Pnt
 
     from app.core.brep import edit
+    from app.core.knowledge.parts.shapes import WHITWORTH_DEPTH, ridge_profile
 
-    ridge = _THREAD_DEPTH_SHARE * pitch
+    ridge = (WHITWORTH_DEPTH if whitworth else _THREAD_DEPTH_SHARE) * pitch
     core_radius = major / 2.0 - ridge
     if core_radius <= major / 2.0 * _THREAD_MIN_CORE_SHARE:
         raise ValidationError(
@@ -1140,9 +1153,16 @@ def threaded_rod(
             constraint="too_short",
         )
 
-    turns = math.ceil(length / pitch) + 2
-    profile = thread_ridge(major, pitch)
-    whole = helical_thread(core_radius, pitch, turns, profile, start=-pitch, cancelled=cancelled)
+    lead = max(1, starts) * pitch
+    turns = math.ceil(length / lead) + 2
+    profile = (
+        ridge_profile(major, pitch, profile="whitworth")
+        if whitworth
+        else thread_ridge(major, pitch)
+    )
+    whole = helical_thread(
+        core_radius, pitch, turns, profile, start=-lead, starts=max(1, starts), cancelled=cancelled
+    )
     # **Auf Länge mit einem Quader, nicht mit einem Zylinder.** Der Mantel
     # eines Schnittzylinders umhüllt jede Gangfläche, und die Boolesche prüfte
     # jede davon gegen ihn: 1,4 s am M3 x 0,5 x 60. Die Seiten eines Quaders
@@ -1176,6 +1196,16 @@ def threaded_rod(
     # Ein Zwanzigstel der Steigung ist die Grenze, unterhalb derer die Flanke
     # in Dreiecken aufgeht; feiner als nötig wird nicht vernetzt, denn jede
     # Halbierung vervierfacht die Dreiecke.
+    if left:
+        rod = edit.transformed(
+            rod,
+            (
+                (1.0, 0.0, 0.0, 0.0),
+                (0.0, -1.0, 0.0, 0.0),
+                (0.0, 0.0, 1.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+            ),
+        )
     return _finely_meshed(rod, min(DEFLECTION, pitch / 20.0))
 
 

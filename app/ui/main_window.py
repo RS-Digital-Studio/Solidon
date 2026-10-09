@@ -11237,7 +11237,7 @@ class MainWindow(QMainWindow):
         der nächsten Änderung auseinander, und der Kunde liest sie hier
         nacheinander.
         """
-        from app.core.counterpart import drafts_for
+        from app.core.counterpart import AMBIGUOUS_THREAD, drafts_for
         from app.ui.counterpart_dialog import CounterpartDialog
 
         chosen = self._counterpart_targets()
@@ -11261,13 +11261,30 @@ class MainWindow(QMainWindow):
         thread = self._thread_among((first_object, first_feature), (second_object, second_feature))
         if thread is not None:
             (thread_object, thread_feature), (other_object, other_feature) = thread
-            try:
-                applied = self.session.create_thread_counterpart(
-                    thread_feature, thread_object, other_object, {"at_feature": other_feature}
-                )
-            except AppError as error:
-                show_error(error, self)
-                return
+            size: str | None = None
+            while True:
+                try:
+                    applied = self.session.create_thread_counterpart(
+                        thread_feature,
+                        thread_object,
+                        other_object,
+                        {"at_feature": other_feature},
+                        size=size,
+                    )
+                    break
+                except AppError as error:
+                    # Passt das Gewinde zu Größen zweier Reihen, fragt der Kern
+                    # zurück (RM-544, Regel 21) — hier die Frage, dann derselbe Weg.
+                    choices = [str(entry) for entry in error.values.get("choices", ())]
+                    if error.constraint != AMBIGUOUS_THREAD or size is not None or not choices:
+                        show_error(error, self)
+                        return
+                    chosen, accepted = QInputDialog.getItem(
+                        self, tr("Gegenstück zum Gewinde"), str(error.detail), choices, 0, False
+                    )
+                    if not accepted:
+                        return
+                    size = str(chosen)
             for finding in applied.findings:
                 self.announce(str(finding.message))
             return
@@ -11629,6 +11646,9 @@ class MainWindow(QMainWindow):
 
     def _apply_settings(self) -> None:
         """Trägt die Einstellungen dorthin, wo sie wirken."""
+        from app.core.knowledge import standards
+
+        standards.set_shown_thread_families(self.settings.thread_families)
         application = QApplication.instance()
         if application is not None:
             apply_theme(application, self.settings.theme)  # type: ignore[arg-type]
