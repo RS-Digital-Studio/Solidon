@@ -13795,18 +13795,19 @@ def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow
     assert banner.isHidden()
 
 
-def test_a_slow_preview_says_it_is_computing(window: MainWindow) -> None:
+def test_a_slow_preview_says_it_is_computing(window: MainWindow, qt_app: QApplication) -> None:
     """Nach 0,2 s ohne Ergebnis sagt das Band, dass gerechnet wird (§2.8).
 
     Ein Aushöhlen über einem großen Netz braucht Sekunden; solange stand das
     alte Bild unter dem alten Band, und ein Haken, dessen Wirkung erst nach
     drei Sekunden kommt, sah aus wie einer, der nicht reagiert.
     """
-    from PySide6.QtTest import QTest
-
     banner = window.viewport.banner
+    assert window._preview_busy.interval() == 200
+    assert window._preview_busy.isSingleShot()
     window._preview_busy.start()
-    QTest.qWait(300)
+    # Die Frist bleibt oben geprüft; der CI-Helfer wartet auf Qts Zustellung.
+    wait_until(qt_app, lambda: banner.note.text() == tr("Vorschau wird gerechnet …"))
     assert banner.note.text() == tr("Vorschau wird gerechnet …")
 
     # Das Ergebnis löst die Ansage ab — und ein Ergebnis vor Ablauf der
@@ -13815,7 +13816,7 @@ def test_a_slow_preview_says_it_is_computing(window: MainWindow) -> None:
     assert banner.note.text() == tr("Vorschau — noch nicht übernommen")
     window._preview_busy.start()
     window._show_preview(dataclasses.make_dataclass("Voll", [("changed", bool)])(True))
-    QTest.qWait(300)
+    assert not window._preview_busy.isActive()
     assert banner.note.text() == tr("Vorschau — noch nicht übernommen")
     window._clear_preview()
 
