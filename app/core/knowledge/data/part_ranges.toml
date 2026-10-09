@@ -341,7 +341,7 @@ date = "2026-10-09"
 [[parts]]
 name = "pipe_clamp"
 version = "1"
-fingerprint = "5a39b7e5a8d8b28fb524786adbb69df4c7b508c4c2424d598972033812a83fa2"
+fingerprint = "dcca8b0d0183dadc7c19eaaf2e8d1fdb7887c356aab9ba38bec8953a6ad5f736"
 corners = 3072
 checked = 3072
 excluded = 1472
