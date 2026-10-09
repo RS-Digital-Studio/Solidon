@@ -246,11 +246,16 @@ def released_bytes() -> int:
         return _released
 
 
-def forget_released() -> None:
-    """Nach einer vollen Bereinigung: Was gemeldet war, ist frei."""
+def forget_released(count: int | None = None) -> None:
+    """Nach einer vollen Bereinigung: Was gemeldet war, ist frei.
+
+    ``count`` ist, was vor der Bereinigung gemeldet war; was ein anderer Faden
+    währenddessen meldet, bleibt stehen und wartet auf die nächste (Nachprüfung
+    L, G-4). Ohne ``count`` ist alles vergessen.
+    """
     global _released
     with _released_lock:
-        _released = 0
+        _released = 0 if count is None else max(0, _released - count)
 
 
 def held_bytes(value: object, seen: set[int] | None = None) -> int:

@@ -51,7 +51,8 @@ from contextlib import contextmanager
 from threading import Lock
 from typing import Any, Final
 
-from PySide6.QtCore import QEvent, QMetaMethod, QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QEvent, QMetaMethod, QObject, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QGuiApplication
 from shiboken6 import isValid
 
 from app.core.log import get_logger
@@ -694,12 +695,26 @@ def _collect_released() -> bool:
     und werden erst frei, wenn die älteste abgeräumt wird; deren Schwelle
     erreichte der Sammler selten. Nur im Hauptfaden rufen, wie
     :meth:`_MainThreadCollector.collect_if_due`.
+
+    **Nicht mitten in einem Zug** (Nachprüfung L, G-4): Eine volle
+    Bereinigung hält den Hauptfaden 160 bis 180 ms an (Laptop-Riser, sechs
+    Schritte, 250 000 Objekte). Eine Auswertung endet oft, während der Nutzer
+    schon die Ansicht dreht; solange eine Maustaste gedrückt ist, wartet sie
+    bis zum nächsten Takt.
     """
-    if released_bytes() < COLLECT_AFTER_RELEASED:
+    reported = released_bytes()
+    if reported < COLLECT_AFTER_RELEASED or _buttons_held():
         return False
     gc.collect()
-    forget_released()
+    forget_released(reported)
     return True
+
+
+def _buttons_held() -> bool:
+    """Ob gerade eine Maustaste gedrückt ist — ein Zug in der Ansicht oder an einem Griff."""
+    if QGuiApplication.instance() is None:
+        return False
+    return QGuiApplication.mouseButtons() != Qt.MouseButton.NoButton
 
 
 def collect_in_main_thread(application: QObject) -> None:

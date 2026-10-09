@@ -225,6 +225,58 @@ def test_released_meshes_reach_the_oldest_generation(monkeypatch: pytest.MonkeyP
             gc.enable()
 
 
+def test_a_full_collection_waits_for_the_drag_and_keeps_what_arrives_meanwhile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bei gedrückter Maustaste wartet die volle Bereinigung (Nachprüfung L, G-4).
+
+    Sie hält den Hauptfaden 160 bis 180 ms an — mitten in einem Zug an der
+    Ansicht ein Ruck. Und was ein Arbeiter meldet, während sie läuft, ist von
+    ihr nicht erfasst; es bleibt gemeldet und wartet auf die nächste.
+    """
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import Qt
+
+    import app.ui.leash as leash_module
+    from app.core import memory
+
+    enabled = gc.isenabled()
+    gc.disable()
+    pressed = [Qt.MouseButton.LeftButton]
+    monkeypatch.setattr(
+        leash_module,
+        "QGuiApplication",
+        SimpleNamespace(instance=lambda: object(), mouseButtons=lambda: pressed[0]),
+        raising=False,
+    )
+    late = 4096
+    starts: list[str] = []
+
+    def meanwhile(phase: str, _info: dict[str, int]) -> None:
+        if phase == "start":
+            starts.append(phase)
+            memory.note_released(late)
+
+    try:
+        memory.forget_released()
+        memory.note_released(leash_module.COLLECT_AFTER_RELEASED)
+        assert not leash_module._collect_released(), "a held button postpones it"
+        assert memory.released_bytes() == leash_module.COLLECT_AFTER_RELEASED
+        pressed[0] = Qt.MouseButton.NoButton
+        gc.callbacks.append(meanwhile)
+        try:
+            assert leash_module._collect_released(), "released, the next tick collects"
+        finally:
+            gc.callbacks.remove(meanwhile)
+        assert starts, "Voraussetzung: die Meldung kam während der Bereinigung"
+        assert memory.released_bytes() == late * len(starts), "what came in meanwhile waits"
+    finally:
+        memory.forget_released()
+        if enabled:
+            gc.enable()
+
+
 def test_the_main_thread_collector_asks_for_released_meshes_first() -> None:
     """Der Sammler fragt nach losgelassenen Netzen, bevor er die Schwellen liest (RM-594)."""
     import inspect
