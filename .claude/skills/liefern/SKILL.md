@@ -20,7 +20,9 @@ ausdrückliches „nicht pushen“ von Robert hält den Commit lokal — dann f�
 diesen Aufruf `SOLIDON_KEIN_PUSH=1`. Holen und Zusammenführen gehören dazu,
 wenn der Push daran scheitert. Tag, Release und Force-Push sind eigene Aufträge.
 
-Vorher ist das Entwicklungstor nach `/pruefen` grün. Ein grüner Nachweis über
+Vor einem Merge nach main ist das Entwicklungstor nach `/pruefen` grün; auf
+einem Paket- oder Fixzweig genügen die betroffenen Tests, ruff, format und
+mypy (Entscheidung Robert). Ein grüner Nachweis über
 denselben Stand muss nicht wiederholt werden; was sich seither geändert hat,
 wird geprüft. Ein roter oder abgebrochener Lauf wird mit Ursache gemeldet und
 nicht committet.
