@@ -182,9 +182,11 @@ _STEADY_LIGHT: Any = None
 #: Die Kantenlänge der Schattentexturen je Licht. pygfx legt je gerichtetem
 #: Licht eine Tiefentextur von 1024 x 1024 an, auch wenn es keinen Schatten
 #: wirft — hier wirft keines (:func:`_directional_light`), und der Shader liest
-#: die Textur nur bei ``cast_shadow``. Am echten Fenster waren das 24 MB
-#: Grafikspeicher für nichts: fünf Lichter der Ansicht, eines im Achsenkreuz
-#: (RM-567, Sonde in ``paket-l2``).
+#: die Textur nur bei ``cast_shadow`` (pygfx 0.17, ``light_punctual.wgsl``).
+#: Am echten Fenster waren das 24 MB Grafikspeicher für nichts: fünf Lichter
+#: der Ansicht, eines im Achsenkreuz (RM-567). Dass keines Schatten wirft und
+#: das Bild mit einem Texel dasselbe ist wie mit 1024, halten zwei Tests in
+#: ``test_render_contract.py`` fest.
 SHADOW_MAP_SIZE = (1, 1)
 
 _SHADOW_MAPS_SMALL = False
