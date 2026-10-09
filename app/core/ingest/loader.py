@@ -1248,6 +1248,13 @@ def normalise(
 
     # 5 — Komponenten. Kleine werden gemeldet, nie still verworfen.
     progress(0.8, str(_("Komponenten zählen")))
+    # trimesh berechnet Dichtheit und Umlaufsinn gemeinsam. Gefragt vor dem
+    # Zählen: Ob sich ineinandersteckende Teile auflösen lassen, fragt dasselbe
+    # Netz dasselbe (``repair.parts_can_be_merged``), und am Spiderman lief die
+    # Kantengruppierung sonst zweimal (RM-636). Das Zählen ändert das Netz nicht.
+    # Die reine Verschiebung unten verwirft beide Cachewerte; zurückgelegt
+    # werden sie als Paar.
+    winding = bool(body.is_winding_consistent) if len(body.faces) else False
     components = _count_components(
         body, findings, closed=bool(closed) and unify_normals, cancelled=cancelled
     )
@@ -1260,10 +1267,6 @@ def normalise(
         places = parts_inside_parts(body)
         if places:
             findings.append(part_inside_finding(places, components))
-    # trimesh berechnet Dichtheit und Umlaufsinn gemeinsam. Die reine
-    # Verschiebung verwirft beide Cachewerte; zurückgelegt werden sie als Paar.
-    winding = bool(body.is_winding_consistent) if len(body.faces) else False
-
     # 6 — Lage. Aufsetzen und Zentrieren werden angeboten, nicht erzwungen.
     if (place_on_bed or centre) and len(body.faces):
         progress(0.9, str(_("Auf das Bett setzen")))
