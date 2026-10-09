@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-09 | [RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)](#rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026) |
 | 2026-10-09 | [RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)](#rm-344-die-release-ci-fährt-die-rendererfälle-ohne-fenster-auf-allen-vier-paketplattformen-09102026) |
 | 2026-10-09 | [RM-680: Bausteine verwalten steht ohne eigenen Baustein offen (09.10.2026)](#rm-680-bausteine-verwalten-steht-ohne-eigenen-baustein-offen-09102026) |
 | 2026-10-09 | [RM-650: Ein eingefügtes Modell kommt in den Ausschnitt (09.10.2026)](#rm-650-ein-eingefügtes-modell-kommt-in-den-ausschnitt-09102026) |
@@ -45494,6 +45495,58 @@ dass er geladen ist. Gegenprobe: `align_forms` ohne `at_most` macht fr und pt ro
 und die Spalten unverändert. Mit 150 % Schrift reichen die Felder bis 527 px statt 531 px.
 Changelog: ja, unter *Drucken und Übergabe an den Slicer* — mit vergrößerter Schrift hatte
 `v0.5.3` den Fehler.
+
+## RM-635: Prozesstests zählen ihre Zeit ab dem Zustand, und der Abbau wartet auf das Ende des Prozesses (09.10.2026)
+
+<a id="rm-635-prozesstests-zählen-ihre-zeit-ab-dem-zustand-und-der-abbau-wartet-auf-das-ende-des-prozesses-09102026"></a>
+<a id="rm-635"></a>
+
+**Befund (Pakete CI und SK, 09.10.2026):** Im vollen Entwicklungstor wurden sechs Fälle aus
+`tests/test_process.py` (Grenzen 3 bis 5 s) und
+`test_suite_script.py::test_a_portion_that_swallows_tests_is_halved_until_it_runs` (60 s) rot,
+einzeln grün; wiederholt auch `test_kernel_process.py::test_a_job_gives_the_same_bytes_in_the_helper_as_here[voxel]`
+(120 s) und `test_cura_machine.py::test_every_way_out_of_a_mount_closes_its_pipes[point]`.
+
+**Ursache, mit Lastgegenprobe:** Mit 192 rechnenden Prozessen auf 32 Threads braucht ein frischer
+Interpreter bis zu seiner ersten Ausgabe im Mittel 5,5 s statt 0,07 s (über `run_limited` 10,9 s
+statt 0,19 s, Höchstwert 13,3 s), und unter genau dieser Last werden dieselben sechs Fälle aus
+`test_process.py` rot. Die festen Grenzen zählten den Interpreterstart des Kindes mit. Der
+Halbierungstest braucht ruhig 0,87 s und riss dort die 60 s: Git-Bash bildet jeden Teilprozess über
+eine nachgebaute `fork` nach. `voxel` brauchte 81 s statt 1,9 s, weil der Hilfsprozess
+absichtlich eine Klasse tiefer rechnet. Eine abgesenkte Klasse des pytest-Arbeiters ist es nicht:
+Eine Prioritätssonde über `test_kernel_process.py` und `test_kernel_process_lifecycle.py` fand
+keinen Test, der sie zurücklässt. Der Cura-Fall `[point]` hatte dieselbe Ursache (erste Zeile in
+1 s) und war in `90467cefb` schon behoben; unter Last zeigte er eine zweite im Produktcode:
+`process.terminate_process_tree` wartete nach dem harten Beenden fest 0,5 s und warf dann selbst
+`TimeoutExpired`. Ein beendetes Kind mit acht rechnenden Fäden braucht schon ruhig im Median
+0,53 s bis zu seinem Ende, unter Last bis 3,2 s; der Lauf meldete dann einen Zeitablauf statt
+seines Grundes (Abbruch, Zeitgrenze, Ausgabegrenze, oder ein Ergebnis, nach dem der Slicer nicht
+endete). Seit `df8fae688`, also in jeder veröffentlichten Version seit 0.3.0.
+
+**Behoben:** `PROCESS_KILL_SECONDS` (30 s) ist die Grenze für das Ende eines hart beendeten
+Prozesses und für `taskkill`, die Schonfrist davor bleibt 0,5 s; Test zuerst
+(`test_a_killed_process_that_takes_a_moment_to_die_is_waited_for`, beide Zweige, am alten Stand
+rot). In `test_process.py` zählt eine Zeitgrenze, die das Thema ist, ab dem Ereignis
+(`_clock_held_until`: die 0,2 s ab dem lebenden Nachkommen oder dem hängenden Empfänger),
+Nachkommen werden über ihre Prozesskennung als beendet nachgewiesen statt über eine Marke nach
+fester Wartezeit, ein blockierender Empfänger über die Ordnung der Ereignisse; reine
+Hängergrenzen sind `HANG_GUARD` und entscheiden keinen Fall. `test_suite_script.py` wartet,
+solange Aufrufe, Ausgabe oder Dateien im Arbeitsordner dazukommen (`run_while_moving`, Stille
+120 s, höchstens 500 Aufrufe), `test_kernel_process.in_a_worker`, solange dieser Prozess oder ein
+Hilfsprozess Rechenzeit bekommt (Stille 60 s, höchstens 30 min). Dasselbe Muster
+hatten `test_print_settings.py::test_a_slicer_that_says_too_much_is_not_an_error_code` (auch im
+Tor von Paket E rot) und `test_a_slicer_with_endless_output_is_stopped`: 4 s ab dem Start als
+bloße Hängergrenze, jetzt 120 s bei einem Kind, das 240 s schliefe. Regel in
+`.claude/rules/tests.md` („Fremdlast macht auch funktionale Tests rot“).
+
+**Nachweis:** Unter derselben Last, unter der vorher sechs Fälle rot waren: `test_process.py` und
+die fünf Cura-Einhängefälle 29 von 29 grün; in einem zweiten Lauf unter noch schwererer Last
+(Interpreterstart bis 16,6 s) alle Fälle aus `test_process.py`, die 13 Bitgleichheitsfälle
+(`voxel` 64 bis 101 s) und die Cura-Fälle grün, der Halbierungstest grün nach 295 s. Sechs
+Mutationen am Prozesskern (Zeitgrenze ohne Baum, Erfolg ohne Nachkommen, Ausgabegrenze erst am
+Ende, Empfänger im Faden der Uhr, ohne `linger`, `linger` sofort) machen je ihren Fall rot; die
+Wartelogiken selbst haben Gegenproben (stiller Hänger, Aufrufschleife, Rechnung ohne Ende).
+Changelog: ja, unter *Drucken und Übergabe an den Slicer*.
 
 ## RM-344: Die Release-CI fährt die Rendererfälle ohne Fenster auf allen vier Paketplattformen (09.10.2026)
 

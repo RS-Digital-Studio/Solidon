@@ -144,7 +144,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | (a) bis (d) bis auf zwei Namen erledigt (07.10.); offen `ai_disclosure._fit_content_height` (gewollt mit Fenstertest oder in `ContentHeight`) und `slice.analysis._opening_loss` ohne Produktionsaufrufer |
 | [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | Läufe 02.10. und 09.10. im Archiv, der nächste am 12.10.; Paketbeleg der Bauplattform unter RM-468 |
 | [RM-531 — Fenstertests und echte Slicer auch unter Linux und macOS in der CI](#rm-531) | Tests und Entwicklungswerkzeuge | Entschieden (Robert, 06.10.): Fenster- und Renderergruppe auf vier Plattformen am Tag, per Handstart und bei jedem Push auf main. 14 der 23 roten Fenstertests außerhalb von Windows behoben, auf allen vier grün (07.10.), der Intel-Kontrastfall danach (`58f768eb6`), Rendererfälle ohne Fenster seit RM-344 auf allen vier; offen sieben Fälle, `build.yml`, die Wächter und der Slicer-Job |
-| [RM-635 — Prozesstests reißen im vollen Tor feste Zeitgrenzen](#rm-635) | Tests und Entwicklungswerkzeuge | `test_process.py` (3–5 s) und der Halbierungstest in `test_suite_script.py` (60 s) rot unter Last, einzeln grün; Ursache und Zustandswarten offen |
 | [RM-688 — Der Test zu Curas Mindesttempo prüft das Mindesttempo nicht mehr](#rm-688) | Tests und Entwicklungswerkzeuge | Seit `9416f41ef` steht dort nur `assert motion is not None`; Attrappe und Vorgabe sind beide 10 |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Bestätigung des Plans bis 01.11. und die Montagsmessungen; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -5351,20 +5350,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Die Frage nach eine
   ARM und Intel je 13 von 13 Fällen grün, keiner übersprungen; Gegenprobe 37594281698 rot
   an fehlendem Programm und leerer Auswahl wie verlangt; Fensterauswahl 37591643343 auf
   vier Plattformen grün. Offen bleibt hier der Tag-Job in `build.yml` aus dem Fix oben.
-
-<a id="rm-635"></a>
-
-- [ ] **RM-635 — Prozesstests reißen im vollen Tor feste Zeitgrenzen.** Gemeldet aus den
-  Paketen CI und SK (09.10.2026): Im vollen Entwicklungstor wurden sechs Fälle aus
-  `tests/test_process.py` (Grenzen 3 bis 5 s) und
-  `test_suite_script.py::test_a_portion_that_swallows_tests_is_halved_until_it_runs` (60 s)
-  rot, einzeln grün; wiederholt unter Last auch
-  `test_kernel_process.py::test_a_job_gives_the_same_bytes_in_the_helper_as_here[voxel]` (120 s)
-  und `test_cura_machine.py::test_every_way_out_of_a_mount_closes_its_pipes[point]`. „Fremdlast“
-  allein ist kein Kausalnachweis. **Fix:** die Ursache mit einer reproduzierbaren Lastgegenprobe
-  isolieren und die Tests auf Zustands- oder Ereigniswarten umstellen, statt Grenzen pauschal zu
-  heben. **Abnahme:** dieselbe Last, unter der die Fälle vorher rot werden, lässt sie grün; jede
-  umgebaute Prüfung bleibt gegen ihren Fehler rot.
 
 <a id="rm-688"></a>
 

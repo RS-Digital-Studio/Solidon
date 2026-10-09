@@ -304,6 +304,12 @@ einzeln laufen grün. Deshalb:
   danach abbaut, hebt vorher die Klasse (wie `process.hurry_helper`); ist die
   Zusage die Freigabe (Speicher, Griffe, Ordner), wartet er danach auf den
   Abschluss.
+- **Eine Zeitgrenze im Test zählt ab dem Zustand, um den es geht** (RM-635):
+  Ein frischer Interpreter braucht unter Last Sekunden bis zu seiner ersten
+  Zeile, und eine Frist ab dem Start entschied dann den Fall. Ist die Frist das
+  Thema, läuft sie ab dem Ereignis (`test_process._clock_held_until`, Ordnung
+  von Ereignissen); schützt sie nur vor Hängern, hält ein Wächter an Stille an —
+  ohne Aufruf, Ausgabe oder Rechenzeit (`run_while_moving`, `in_a_worker`).
 - **Eine eben umbenannte Datei sperrt kurz**: Eine Meldung, die über
   `Path.replace` erscheint, liest der Wartende mit Wiederholung bis zu seiner
   Frist, nie mit einem einzelnen `read_text`.

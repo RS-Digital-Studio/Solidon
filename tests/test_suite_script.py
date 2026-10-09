@@ -15,11 +15,15 @@ Skript von selbst kleiner wird, statt eine Konstante zu brauchen.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
+from typing import IO
 
 import pytest
 
@@ -27,7 +31,92 @@ SCRIPT = Path(__file__).parent.parent / ".claude" / "scripts" / "suite-getrennt.
 
 BASH = shutil.which("bash")
 
+#: Ein Lauf hängt, wenn so lange weder ein Aufruf des Doppels noch eine Ausgabe
+#: noch eine Datei im Arbeitsordner dazukommt. Eine feste Gesamtzeit war es nicht:
+#: Der längste Fall braucht ruhig unter einer Sekunde, unter sechsfach überbuchten
+#: Kernen bis 295 s (RM-635) — Git-Bash bildet jeden Teilprozess über eine
+#: nachgebaute ``fork`` nach, und jede wartet auf Zeitscheiben. Die stillste
+#: Strecke (Selbstkopie, ``exec``, Importprobe) lag dort über 60 s.
+STALL_SECONDS = 120.0
+
+#: Gegen eine Schleife, die weiter Aufrufe macht und nie endet: Der größte Fall
+#: hier macht keine zwanzig.
+MOST_CALLS = 500
+
+
+def _tree_state(folder: Path) -> tuple[int, int, int]:
+    """Anzahl, Größe und jüngste Änderung der Dateien unter ``folder``."""
+    count = size = newest = 0
+    for base, _folders, names in os.walk(folder):
+        for name in names:
+            with contextlib.suppress(OSError):
+                found = (Path(base) / name).stat()
+                count, size = count + 1, size + found.st_size
+                newest = max(newest, found.st_mtime_ns)
+    return count, size, newest
+
+
+def run_while_moving(
+    command: list[str], *, env: dict[str, str] | None = None, cwd: Path, calls: Path
+) -> subprocess.CompletedProcess[str]:
+    """Fährt ``command``, solange es vorankommt: neue Zeilen in ``calls``, neue Ausgabe
+    oder eine Änderung unter ``cwd``.
+
+    Ein Zustand statt einer Stoppuhr — gehalten wird an einer Pause von
+    :data:`STALL_SECONDS` oder an mehr als :data:`MOST_CALLS` Aufrufen. Die
+    Ausgabe geht in Dateien außerhalb von ``cwd``, gelesen wie ``text=True``.
+    """
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        child = subprocess.Popen(command, stdout=out, stderr=err, env=env, cwd=cwd)
+        seen: tuple[object, ...] | None = None
+        moved = time.monotonic()
+        try:
+            while child.poll() is None:
+                time.sleep(0.1)
+                made = calls.read_bytes().count(b"\n") if calls.is_file() else 0
+                state = (
+                    made,
+                    os.fstat(out.fileno()).st_size,
+                    os.fstat(err.fileno()).st_size,
+                    _tree_state(cwd),
+                )
+                if state != seen:
+                    seen, moved = state, time.monotonic()
+                assert made <= MOST_CALLS, f"mehr als {MOST_CALLS} Aufrufe — eine Schleife?"
+                assert time.monotonic() - moved < STALL_SECONDS, (
+                    f"{STALL_SECONDS:.0f} s ohne Aufruf und ohne Ausgabe — der Lauf hängt"
+                )
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
+
+        def text(stream: IO[bytes]) -> str:
+            stream.seek(0)
+            raw = stream.read().decode("utf-8", errors="replace")
+            return raw.replace("\r\n", "\n").replace("\r", "\n")
+
+        return subprocess.CompletedProcess(command, child.returncode, text(out), text(err))
+
+
 pytestmark = pytest.mark.skipif(BASH is None, reason="ohne bash gibt es nichts zu prüfen")
+
+
+def test_a_run_that_neither_calls_nor_writes_is_stopped_as_hanging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Wartelogik selbst: Stille ohne Aufruf ist ein Hänger, eine Aufrufschleife ohne
+    Ende auch — beides ohne Stoppuhr über den ganzen Lauf."""
+    monkeypatch.setattr(sys.modules[__name__], "STALL_SECONDS", 1.0)
+    with pytest.raises(AssertionError, match="hängt"):
+        run_while_moving([BASH or "bash", "-c", "sleep 30"], cwd=tmp_path, calls=tmp_path / "c")
+    # Die Schleife allein: Stille darf hier unter Last nicht zuerst anschlagen.
+    monkeypatch.setattr(sys.modules[__name__], "STALL_SECONDS", 600.0)
+    monkeypatch.setattr(sys.modules[__name__], "MOST_CALLS", 5)
+    calls = tmp_path / "aufrufe.txt"
+    endless = f'while true; do echo x >> "{calls.as_posix()}"; done'
+    with pytest.raises(AssertionError, match="Schleife"):
+        run_while_moving([BASH or "bash", "-c", endless], cwd=tmp_path, calls=calls)
 
 
 def test_the_script_lies_where_the_house_rules_point() -> None:
@@ -270,15 +359,11 @@ printf '\n%s passed in 0.01s\n' "$count"
             encoding="utf-8",
             newline="\n",
         )
-    return subprocess.run(
+    return run_while_moving(
         [BASH or "bash", str(script), *(["--release"] if release else []), *arguments],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
         env=environment,
         cwd=tmp_path,
-        timeout=60,
+        calls=tmp_path / "calls.txt",
     )
 
 
@@ -471,5 +556,5 @@ def test_the_final_exit_does_not_wrap_after_256_failures(tmp_path: Path, failure
         encoding="utf-8",
         newline="\n",
     )
-    result = subprocess.run([BASH or "bash", str(probe)], capture_output=True, text=True, timeout=5)
+    result = run_while_moving([BASH or "bash", str(probe)], cwd=tmp_path, calls=tmp_path / "keine")
     assert result.returncode == (0 if failures == 0 else 1)
