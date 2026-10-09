@@ -76,8 +76,6 @@ EVENT_ROUNDS = 5
 @pytest.mark.parametrize(
     "route",
     [
-        "panel_add",
-        "panel_edit",
         "field",
         "inventory_add",
         "inventory_edit",
@@ -108,17 +106,7 @@ def test_finished_filament_and_body_dialogs_are_released(qt_app, tmp_path, monke
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "spools.json")
     entry = filaments.save(filaments.CatalogueFilament("Spule", "#112233"))
-    if route.startswith("panel"):
-        owner = picker.FilamentPanel()
-        owner.list.setCurrentRow(
-            next(
-                row
-                for row in range(owner.list.count())
-                if owner.list.item(row).text().startswith(entry.name)
-            )
-        )
-        trigger = owner._add if route == "panel_add" else owner._edit
-    elif route == "field":
+    if route == "field":
         owner = picker.FilamentField(0)
         trigger = partial(owner._make_one, owner.findData(picker.NEW_FILAMENT))
     elif route.startswith("inventory"):

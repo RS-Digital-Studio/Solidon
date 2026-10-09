@@ -67,8 +67,6 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
   für Kreis-/Spiegelmuster, Spiegeln und Fügeweg gemeinsam an. `reference_point` löst
   Körper-/Merkmalbezüge vor Vorschau und Übernahme in gespeicherte cx/cy/cz auf.
   Vorhandene Koordinaten und Ausdrücke bleiben beim Wiederöffnen unverändert.
-- **Startansicht** — Die Vorwahl ersetzt kein Projekt und erhält dessen Tour.
-  Erst ein wirklicher Projektwechsel beendet die alte Tour.
 - **Import** — `import_model_async` → `_ReadWorker`, Plan im Arbeiter →
   `pictureChanged` (das Modell vor seiner Erkennung), `importConfirmed`,
   `importRejected`, `importFailed`; STEP-Baugruppen über
@@ -92,15 +90,10 @@ und führen über die Browserhandlung zum Download; Archive zur Importauswahl.
 
 ## Die Regeln dieses Gebiets
 
-Maßgeblich sind die `paths:` in `.claude/rules/`: `oberflaeche` und
-`zwillinge` allgemein; `fenster` für Dialoge/Karten, `grenzen` für Menü/Felder,
-`ansicht` für Viewport/Picks/Rendering, `griffe` für Gesten, `kamera` für
-Navigation, `wartezeit` für Arbeiter/Abbau, `zeichenflaeche` für den Skizzeneditor.
-Die konkrete Dateizuordnung steht ausschließlich dort.
+Maßgeblich sind die `paths:` in `.claude/rules/`; welche Regel welches Thema
+trägt, sagt der Kopf von `oberflaeche.md`.
 
 ## Module
-
-`__init__.py` trägt nur den Paketdocstring.
 
 ### Rahmen und Einstieg
 
@@ -113,14 +106,14 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `start_check.py` | Starttest des Pakets (`auslieferung.md`), ohne Qt auf Modulebene |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten je Modell gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
-| `header.py` | Kopfzeile: Projektname, `printer_button_text`, die belegten Filamente (`mesh.slot_indices`) |
+| `header.py` | Kopfzeile: Projektname, `printer_button_text`, Knopf *Filamente* (Kurzhilfe aus `FilamentPanel.rows`) |
 
 ### Brücke zum Kern
 
 | Datei | Zweck |
 |---|---|
 | `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`), `one_step` (mehrere `apply` als eine Transaktion); `evaluation_profile` (Profil der Auswertung samt Stützschwelle, `druckrat.md`), `evaluation_follows` (spät gelesene Grundlage wertet neu aus) |
-| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `collect_in_main_thread`, GC-Zähler mit Zustandswahrung; `stop_watching_the_dying` für Ereignisfilter, die ihr Objekt überleben; `configure_gil_switching` (Umschaltintervall), `Worker.run` mit 1-ms-Takt unter Windows |
+| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `collect_in_main_thread`, GC-Zähler mit Zustandswahrung; `stop_watching_the_dying` für Filter, die ihr Objekt überleben; `configure_gil_switching`, 1-ms-Takt in `Worker.run`; `RightOfWay`: Vortritt fürs Bild |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung; Zuhörer melden dort ihre Ereignisarten an (`listen`), wer es tut, sagt der Modul-Docstring |
 | `loading.py` | Ladeanzeige über der Ansicht (§2.8); `ProgressTiming` führt je Auswertung eine Uhr und einen Zeittext für Statuszeile und Schleier |
 
@@ -153,16 +146,17 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `analysis_bar.py` | Analysekarten, Legende und Schichtvorschau (§18.4, §18.10) |
 | `section_bar.py` | Schnittebene (§18.2) |
 | `split_bar.py` | Trennleiste (§25, §18.2) |
+| `draw_tool.py`, `draw_flow.py`, `draw_bar.py` | Aufziehen (§30.1): Klicks, Ablauf, Leiste |
 | `explode_bar.py` | Explosionsansicht (§18.8) |
-| `sculpt_bar.py` | Leiste der Formsitzung (§25); `GestureAnalysis` aus `analysis_bar` teilt Kartenwahl und Druckbefund mit dem Skelett |
-| `pose_bar.py` | Leiste des Skeletteditors (§25); nach Abschluss bleiben Kartenwahl, Druckbefund und Schließen erreichbar |
+| `sculpt_bar.py` | Leiste der Formsitzung (§25): vier Werkzeugknöpfe, Stufe 1–10, *Spiegeln*; `GestureAnalysis` teilt Karte und Befund mit dem Skelett |
+| `pose_bar.py` | Leiste des Skeletts (§25): Zustand, Hinweis, *Fertig*; danach bleiben Karte, Befund und Schließen |
 | `facts.py` | was das Teil kostet, während man daran baut (§22, §29) |
 
 ### Dialoge
 
 | Datei | Zweck |
 |---|---|
-| `op_dialog.py` | ausschließlich aus Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence` und die Lesezeile *Stelle* (`place_fields`, `place_text`) mit `aim_again` zurück zur Platzierung, hinten die Klappe mit `advanced_summary`; `show_seat`: *Auf das Bett* bei Erzeugern auf gewählter Fläche |
+| `op_dialog.py` | aus dem Parameterschema (§10, §2.4): `ValueField`, `CountField`, `offer_naming` (§13); Hauptknopf `accept_text`; vorn `lead_sentence`, `front_fields` (Einfachform) und die Lesezeile *Stelle* (`place_fields`, `place_text`, `aim_again`), hinten die Klappe mit `advanced_summary`; `show_seat` (*Auf das Bett*) |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link`; `align_to_the_front` für Dialoge mit Rückseite |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
@@ -191,18 +185,14 @@ Die konkrete Dateizuordnung steht ausschließlich dort.
 | `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Slicer vor Drucker, Erhebung aus `first_run` (`_PrinterSurvey`, `printers_on_offer`, `SlicerPrinters`); Düsenvariante nach Profilidentität, Modell und Hersteller; am Resin-Drucker nur, was gilt (`_reduce_for_resin`); `PlateRun.meshes`: Netze je Platte |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
-**Druckfelder und Kennung:** `manufacturer.base_settings`, Feldherkunft und
-Rücksetzen: `konzepte/begruendungen/karte-app-ui.md`. `_editor_changed` ändert
-nur das berührte Feld; gerundete Basiswerte anderer Felder bleiben unberührt. Suchtreffer in
-inaktiven Stützen-/Haftungsfeldern nennen den Umschalter, ändern keine Werte,
-stellen nach dessen Wahl den Fokus am Feld wieder her; der Hinweis bleibt scrollbar.
+Druckfelder, ihre Herkunft und Suchtreffer: `druckerwahl.md`.
 
 ### Filamente und Lager
 
 | Datei | Zweck |
 |---|---|
 | `filament_inventory.py` | das lokale Lager ohne Renderer (`InventoryView`): Spulen, Bestand, Archiv, Rücknahme mit Rückweg (`restore_booking`) |
-| `filament_picker.py` | Filamentwähler (Name, Typ, Farbe statt 0–7), gemeinsamer Spulendialog und Slicerfilamente (`_SlicerFilamentSearch` im Arbeiter); Schreiben über `CatalogueWrites`; `swatch` = Farbpunkt |
+| `filament_picker.py` | Filamentwähler (Name, Typ, Farbe statt 0–7), gemeinsamer Spulendialog, Slicerfilamente (`_SlicerFilamentSearch`), `FilamentPopup` hinter *Filamente*; `CatalogueWrites`; `swatch` |
 | `filament_assignment.py` | Schnellauswahl an der Auswahl (`QuickFilamentPicker`, `spoolChosen`), ohne eigene Operation |
 | `filament_usage.py` | Buchungsangebote nach der Ausgabe (§20) |
 
@@ -243,7 +233,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18); `svg_pixmap` rastert scharf auf HiDPI |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
-| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht |
+| `tab_signal.py` | Marken und Blinken am Reiter Prüfbericht; Zuordnungen folgen `tabMoved` |
+| `tab_windows.py` | Reiter mit stabiler Inhaltshülle, Umordnung, eigenen OS-Fenstern und Rückweg; lokale Anordnung über `UiSettings.tab_layout`, vorhandene Bildschirme begrenzen die Geometrie |
 | `labels.py` | Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `group_summary`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
 
 ### Hilfe und Bedienung
@@ -273,8 +264,8 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   nur an cachegleiche Rechnung (`Session.preview_is_the_evaluation`); läuft
   oder fehlt die Auswertung, an ihr Ende (`_WaitingClick`). Wert-/Dokumentwechsel
   entwertet jede Bindung, wartende mit Satz.
-  `block_apply` sperrt bei Problemen, nicht beim Warten. Dialog, Panel,
-  `QuietHost`, Filamentwahl prüfen über `preview_check`/`preview_defer`.
+  `block_apply` sperrt bei Problemen, nicht beim Warten. Dialog, Panel und
+  `QuietHost` prüfen über `preview_check`/`preview_defer`.
 - **Panel und Bild:** `QuietHost`: `feature_field`/`feature_field_values`.
   `set_measuring` übergibt Abschluss an die Maßgruppe; Panelzwillinge aus
   (`_blocks`, `LEADS_INTO_THE_VIEW`, `_in_the_view`); Fußknöpfe bleiben beim
@@ -311,8 +302,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   (`fenster.md`). Tests lösen Halt durch Undo, `change_params` oder
   `recount_and_retry`, Einfügen durch `stop_inserting`, dann `wait_for_idle`.
 - Kennzahlen/Hohlraumketten liest der Hauptthread nur; `_warm_metrics` wärmt
-  im Arbeiter. Dialogvorschau setzt `detect_features=False`, `preview_scene`
-  des Agenten erkennt Merkmale.
+  im Arbeiter.
 - Vor Zustandswechseln prüfen Nutzereinstiege `_quiet_command_allowed`,
   Werkzeugstarts `ToolStrip.activation_allowed`: Maßentwürfe behalten ihre
   Auswahl auch gegen Berichtsklicks, Gesteneditoren und lokale Erkennung.
@@ -362,8 +352,7 @@ Bausteinherkunft: `MainWindow.part_step_of` liest Provenienz/Schrittkategorie;
   ohne Netzscan. Der Prüfumfang scrollt höhenbegrenzt, nennt sichtbare Körpernamen
   und wiederholt offene Prüfungen nicht.
 - **Befundkarte**: `finding_meta` als eine Zeile; Nebenfolge `effect_worth_showing`.
-- **Änderung und Übergabe**: `ExplainedDifference` sagt in einer Zeile, was
-  sich ändert, `review_difference` nur Neues und Behobenes. Belege aus
+- **Änderung und Übergabe** (Band: `oberflaeche.md`): Belege aus
   dem eingefrorenen Auftrag, Dateien und Slicerstarts getrennt, Gegenprobe
   `export.readback` im Arbeiter. Gleiche Importbefunde einer Transaktion werden
   gebündelt; Originalwerte und Körper bleiben zugänglich.

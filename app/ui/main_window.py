@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 from threading import Lock
-from typing import Any, Final, cast
+from typing import Any, Final, cast, get_args
 from uuid import uuid4
 
 from PySide6.QtCore import (
@@ -51,7 +51,6 @@ from PySide6.QtGui import (
     QDropEvent,
     QKeyEvent,
     QKeySequence,
-    QShortcut,
     QShowEvent,
     QStandardItemModel,
 )
@@ -75,7 +74,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
-    QTabWidget,
     QTextEdit,
     QToolBar,
     QToolButton,
@@ -85,7 +83,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
-from app.core import activation, bootstrap, examples, feedback, manual, tools, updates
+from app.core import activation, bootstrap, discover, examples, feedback, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text, unknown_analysis
 from app.core.agent.remote import Deferred as RemoteDeferred
@@ -111,7 +109,7 @@ from app.core.agent.tools import (
     SET_PRINT_TARGET,
     UNDO_TRANSACTION,
 )
-from app.core.backends import llm
+from app.core.backends import llm, machine
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
     CANCEL,
@@ -150,8 +148,10 @@ from app.core.geom.sculpt import (
     BRUSH_TO_EDGE,
     SYMMETRY_BITS,
     SculptPreview,
+    brush_radius_for,
     median_edge,
-    stages,
+    mirror_plane,
+    refine_edge_for,
     stroke_at,
     stroke_count,
     strokes_from_text,
@@ -163,8 +163,16 @@ from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.knowledge import calibration, filaments, print_settings, profiles
-from app.core.knowledge.parts.ops import creation_name, direction_of, part_of
-from app.core.knowledge.parts.ops import op_name as part_op_name
+from app.core.knowledge.parts.ops import (
+    catalog_operation,
+    creation_name,
+    direction_of,
+    footprint_at_once,
+    free_spot_for,
+    operation_names,
+    part_of,
+)
+from app.core.knowledge.parts.recipe import steps_of
 from app.core.log import get_logger
 from app.core.perceive import maps
 from app.core.perceive.actions import GROUP_OPS
@@ -225,7 +233,7 @@ from app.core.slice.estimate import plates_findings, support_material, time_comp
 from app.core.slice.estimate import total as estimate_total
 from app.core.slice.findings import analysed
 from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
-from app.core.tour import tour_for
+from app.core.tour import TourTarget, tour_for
 from app.core.types import (
     Bone,
     CancelToken,
@@ -254,7 +262,7 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
-from app.i18n import TranslatableText, _, format_decimal, key_platform, tr
+from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui import app_events, first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
@@ -286,9 +294,13 @@ from app.ui.dialogs import (
     show_details,
     show_error,
 )
+from app.ui.draw_bar import DrawBar
+from app.ui.draw_flow import DrawFlow
+from app.ui.draw_tool import DRAW_KEY, JOIN_OP, POCKET_OP, DrawSurface, face_surface
+from app.ui.draw_tool import EXTRUDE_OP as PULL_OP
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.filament_picker import CatalogueWrites, FilamentPanel, colours_of, spool_slot
+from app.ui.filament_picker import CatalogueWrites, FilamentPopup, colours_of, spool_slot
 from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.guide_targets import MissingTargetError, widget_for
@@ -301,6 +313,7 @@ from app.ui.labels import (
     BoundedLengthSpin,
     BoundedSpin,
     LengthSpin,
+    adding_key,
     body_facts,
     body_requirement,
     circle_measure,
@@ -337,7 +350,7 @@ from app.ui.loading import (
 from app.ui.local_recognition_flow import LocalRecognitionFlow
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
-from app.ui.op_dialog import DeferredSourcePicker, OperationDialog
+from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, simple_shape_of
 from app.ui.overlay import (
     CARD_PADDING,
     SIDE_CARDS,
@@ -467,6 +480,7 @@ CARD_PLACES_SAVE_MS = 500
 #: hätte ihn aus dem Katalog geworfen: Dort steht dann eine Variable, und die
 #: sieht der Einsammler nicht.
 _NEEDS_SELECTION = _("Bitte zuerst ein Objekt auswählen.")
+
 _NEEDS_BODY = _("Dafür braucht es einen Körper in der Szene.")
 _NEEDS_TWO_BODIES = _("Dafür braucht es zwei Körper in der Szene.")
 _NEEDS_TARGET = _("Dafür braucht es ein Merkmal an einem zweiten Körper.")
@@ -869,8 +883,8 @@ class _SelectionPage(QWidget):
     **Zwei Lagen, in denen eine Auswahl den Reiter nicht holt** (Durchsicht
     0.5.3): eine Auswahl, die der Prüfbericht trifft (:meth:`held` — wer dort
     einen Befund anklickt, liest den Bericht weiter), und eine laufende Tour,
-    die vorn steht — sie holt ihre Reiter selbst (``_flash_area``), wie sie
-    auch dem Bericht nicht weicht (``_focus_report``).
+    die vorn steht — sie zeigt selbst auf ihre Reiter (``_flash_area`` rahmt
+    sie, RM-573), wie sie auch dem Bericht nicht weicht (``_focus_report``).
     """
 
     closed = Signal()
@@ -879,7 +893,7 @@ class _SelectionPage(QWidget):
 
     def __init__(
         self,
-        tabs: QTabWidget,
+        tabs: CurrentPageTabs,
         fallback: QWidget,
         parent: QWidget | None = None,
         *,
@@ -896,6 +910,7 @@ class _SelectionPage(QWidget):
         self._was_current = False
         self._held = 0
         tabs.currentChanged.connect(self._current_changed)
+        tabs.pageVisibilityChanged.connect(self._current_changed)
 
     @contextmanager
     def held(self) -> Iterator[None]:
@@ -920,7 +935,7 @@ class _SelectionPage(QWidget):
 
     def is_current(self) -> bool:
         """Ob der Reiter vorn ist."""
-        return self._tabs.currentWidget() is self
+        return self._tabs.page_is_visible(self)
 
     def reveal(self) -> None:
         """Holt den Reiter nach vorn, es sei denn, der Kunde hat ihn verlassen.
@@ -929,6 +944,10 @@ class _SelectionPage(QWidget):
         nicht über eine laufende Tour, die vorn steht.
         """
         if not self._workspace_visible or self.dismissed or self._held:
+            return
+        if self._tabs.is_detached(self):
+            # Die sichtbaren Felder werden passiv erneuert. Eine neue Auswahl
+            # darf dem gerade benutzten Fenster nicht den Fokus stehlen.
             return
         if not self._tabs.isTabVisible(self._tabs.indexOf(self)):
             # Verborgen im Zeichenmodus (RM-519): Eine Auswahl dort holt
@@ -1087,10 +1106,62 @@ class _MapRequest:
     key: tuple[Any, ...]
 
 
-class _SculptPreviewWorker(Worker):
-    """Berechnet einen Pinselzug oder eine neue Symmetrie am eigenen Vorschaunetz."""
+def _plane_of(preview: SculptPreview) -> tuple[float, float, float]:
+    """Die Spiegelmitte einer Vorschau als Punkt — für ``stroke_at``, damit ein
+    Zug ohne passende Vorschau um dieselbe Mitte spiegelt (Review G2)."""
+    middle = preview.plane
+    return (float(middle[0]), float(middle[1]), float(middle[2]))
 
-    done = Signal(int, object, object, float)
+
+def _sculpt_preview_of(mesh: MeshData, params: dict[str, Any]) -> SculptPreview:
+    """Die Vorschau einer Formsitzung an diesem Netz, mit der Spiegelmitte, die
+    die Operation danach nimmt (:func:`app.core.geom.sculpt.mirror_plane`)."""
+    return SculptPreview(
+        mesh,
+        centre=mirror_plane(
+            mesh,
+            at_body=bool(params.get("mirror_at_body", True)),
+            fitted=bool(params.get("mirror_fitted", True)),
+        ),
+        front_only=bool(params.get("front_only", True)),
+        mirror_once=bool(params.get("mirror_once", True)),
+    )
+
+
+def _refinement_params(edge: float) -> dict[str, float]:
+    """Die Werte von *Dreiecke angleichen* für den Pinsel — eine Quelle für den
+    Arbeiter, der die Vorschau angleicht, und den Schritt, den *Fertig* schreibt
+    (Review G2): Die Vorgabe der Abweichung darf sich ändern, ohne dass die
+    Vorschau ein anderes Netz zeigt als der Verlauf rechnet."""
+    return {"edge": edge, "deviation": 0.0}
+
+
+#: Die feinste Kante, die *Dreiecke angleichen* annimmt — aus ihrem Schema,
+#: damit der kleinste Pinsel keine Kante verlangt, die die Operation ablehnt.
+def _finest_edge() -> float:
+    return next(
+        entry.minimum or 0.0
+        for entry in REGISTRY.get("remesh_uniform").params.spec()
+        if entry.name == "edge"
+    )
+
+
+class _SculptPreviewWorker(Worker):
+    """Berechnet die wartenden Pinselproben oder eine neue Symmetrie am eigenen Vorschaunetz.
+
+    **Alle wartenden Proben auf einmal** (H6): Je Probe ein Lauf hieß je Probe
+    eine Netzübergabe an die Ansicht, und an 241 480 Dreiecken wartete die
+    Schlange bis zu 32 Proben, 7,4 s für 0,64 s Eingabe. Jetzt nimmt ein Lauf,
+    was bis zu seinem Start eingegangen ist, und das Bild kommt einmal.
+
+    ``refine`` ist ``(Eingang, Radius, feinste Kante)`` der Sitzung, neu oder
+    wieder geöffnet: Ist das Netz für den Pinsel zu grob, gleicht der Lauf
+    zuerst an (H2, H9) und gibt das neue Netz mit; die Züge liegen im Raum und
+    überleben das. Scheitert das Angleichen (offenes Netz), meldet er die
+    Kante ``-1`` — ohne Dialog, einmal (Review F4).
+    """
+
+    done = Signal(int, object, object, float, object, float, int)
 
     def __init__(
         self,
@@ -1098,56 +1169,126 @@ class _SculptPreviewWorker(Worker):
         mesh: MeshData,
         preview: SculptPreview | None,
         strokes: list[Stroke],
-        point: Any,
+        points: list[Any],
         plane: int,
         params: dict[str, Any],
+        refine: tuple[MeshData, float, float] | None = None,
+        edge: float | None = None,
     ) -> None:
         super().__init__()
         self.number = number
+        self.edge = edge
+        """Die mittlere Kante von ``mesh``, wenn die Sitzung sie schon kennt —
+        an 241 480 Dreiecken kostet sie je Lauf mehr als die Proben."""
         self.mesh = MeshData(mesh.raw.copy()) if preview is None else preview.mesh
         self.preview = preview
         self.strokes = list(strokes)
-        self.point = point
+        self.points = list(points)
         self.plane = plane
         self.params = params
+        self.refine = refine
         self.cancel = CancelSignal()
 
     def work(self) -> None:
-        preview = self.preview or SculptPreview(
-            self.mesh,
-            centre=None if self.params.get("mirror_at_body", True) else (0.0, 0.0, 0.0),
-            front_only=bool(self.params.get("front_only", True)),
-            mirror_once=bool(self.params.get("mirror_once", True)),
-        )
+        from app.core.geom.mesh_ops import uniform
+
+        base, preview, refined, refined_edge = self.mesh, self.preview, None, 0.0
+        if self.refine is not None:
+            source, radius, finest = self.refine
+            refined_edge = refine_edge_for(base, radius, finest, self.edge)
+            if refined_edge:
+                values = _refinement_params(refined_edge)
+                try:
+                    refined = uniform(
+                        source, values["edge"], values["deviation"], cancelled=self.cancel
+                    )
+                except AppError:
+                    # Ein offenes Netz lässt sich nicht angleichen. Geformt wird
+                    # trotzdem, und die Leiste sagt, warum es kantig bleibt.
+                    refined_edge = -1.0
+                else:
+                    base, preview = refined, None
+        preview = preview or _sculpt_preview_of(base, self.params)
         shown = [replace(s, symmetry=s.symmetry | self.plane) for s in self.strokes]
         # Beim Wiederöffnen und Symmetriewechsel bleibt jede Etappe abbrechbar.
         if tuple(shown) != preview.strokes:
             for count in range(1, len(shown) + 1):
                 if self.cancel.is_cancelled:
                     return
-                preview.show(shown[:count])
+                preview.extend(shown[:count])
             if not shown:
-                preview.show([])
-        if self.cancel.is_cancelled:
-            return
-        if self.point is not None:
-            point, values = self.point
-            values = dict(values)
-            gesture = values.pop("gesture", 0)
+                preview.extend([])
+        for point, values in self.points:
+            if self.cancel.is_cancelled:
+                return
             stroke = stroke_at(
-                self.mesh, point, **values, before=shown, mirrored=self.plane, preview=preview
+                base,
+                point,
+                **values,
+                before=shown,
+                mirrored=self.plane,
+                preview=preview,
+                centre=_plane_of(preview),
             )
-            stroke = replace(stroke, gesture=gesture)
             self.strokes.append(stroke)
             shown.append(replace(stroke, symmetry=stroke.symmetry | self.plane))
-            preview.show(shown)
-        edge = median_edge(self.mesh)
+            preview.extend(shown)
+        preview.show(shown)
+        edge = self.edge if refined is None and self.edge is not None else median_edge(base)
         if not self.cancel.is_cancelled:
-            self.done.emit(self.number, preview, self.strokes, edge)
+            self.done.emit(
+                self.number, preview, self.strokes, edge, refined, refined_edge, len(self.points)
+            )
 
     def release_finished_references(self) -> None:
         """Nur die Sitzung hält die übernommene Vorschau nach zugestelltem Ende weiter."""
-        del self.mesh, self.preview, self.strokes, self.point, self.params
+        del self.mesh, self.preview, self.strokes, self.points, self.params, self.refine
+        super().release_finished_references()
+
+
+class _ArmatureSkinWorker(Worker):
+    """Haut und Stellung eines großen Körpers abseits des Oberflächen-Threads (Review F3).
+
+    Gewichte und Beugung kosteten an 327 680 Dreiecken 1,2 s je Klick im
+    Hauptfaden, an 1,3 Millionen 4,3 s. Ab ``AT_ONCE_BELOW`` rechnet dieser
+    Arbeiter; das Fenster zeigt so lange die letzte Stellung und nimmt nur die
+    Antwort der jüngsten Nummer. ``skin`` ist die schon gewichtete Haut, wenn
+    sich nur die Winkel geändert haben.
+    """
+
+    done = Signal(int, object, object)
+
+    def __init__(
+        self,
+        number: int,
+        mesh: MeshData,
+        bones: list[Any],
+        angles: dict[str, Vec3],
+        fixed_rest: bool,
+        skin: Any = None,
+    ) -> None:
+        super().__init__()
+        self.number = number
+        self.mesh = mesh
+        self.bones = list(bones)
+        self.angles = dict(angles)
+        self.fixed_rest = fixed_rest
+        self.skin = skin
+        self.cancel = CancelSignal()
+
+    def work(self) -> None:
+        from app.core.geom.pose import Skin
+
+        skin = self.skin or Skin(self.mesh, self.bones, fixed_rest=self.fixed_rest)
+        if self.cancel.is_cancelled:
+            return
+        posed = skin.posed(self.angles)
+        if not self.cancel.is_cancelled:
+            self.done.emit(self.number, skin, posed)
+
+    def release_finished_references(self) -> None:
+        """Haut und Netz gehören nach der Zustellung nur noch dem Fenster."""
+        del self.mesh, self.bones, self.angles, self.skin
         super().release_finished_references()
 
 
@@ -1287,22 +1428,78 @@ class _OllamaSizeWorker(Worker):
         self._model = model
 
     def work(self) -> None:
+        # Die Grafikkarte hier erheben, nicht im Hauptthread: Der Satz in der
+        # Chatleiste nennt sie danach (Nachprüfung K, N2).
+        machine.probe_card()
         self.done.emit(llm.ollama_size_warning(self._model))
+
+
+class _FreeSpotWorker(Worker):
+    """Die freie Stelle für einen eigenen Baustein, mit seinem echten Umriss (Review N3).
+
+    Ein Rezept rechnet für den Umriss seinen ganzen Stapel; im Hauptthread
+    stand das Fenster dafür Sekunden, bevor der Dialog aufging. Der Dialog
+    öffnet deshalb mit der Stelle für den Platzhalter, und dieser Arbeiter
+    reicht die echte nach. Kein Abbruch: Die Rechnung ist ein Bausteinaufbau
+    mit Vorgaben, endet von selbst, und ihr Ergebnis verfällt, wenn der Dialog
+    nicht mehr steht.
+    """
+
+    done = Signal(object)
+
+    def __init__(self, part: str, objects: tuple[Any, ...], profile: Profile) -> None:
+        super().__init__()
+        self._part = part
+        self._objects = objects
+        self._profile = profile
+
+    def work(self) -> None:
+        self.done.emit(free_spot_for(self._part, self._objects, self._profile))
+
+
+@dataclass(frozen=True, slots=True)
+class _ChosenSetup:
+    """Die Einrichtung aus :func:`remembered_setup` und wofür — auch ``None`` ist
+    eine Antwort.
+
+    Sie hängt nicht an der Stufe (``manufacturer.for_stage`` legt die erst
+    danach auf), kostet ohne gemerkte Maschine aber den Profilbestand des
+    Slicers (RM-623). Gemerkt je Schlüssel ohne Stufe
+    (:func:`_without_stage`), rechnen Stufenwechsel und Export mit ihr, statt
+    sie neu herzuleiten — und Zahlenzeile und Datei sicher mit derselben Wahl.
+    """
+
+    key: tuple[object, ...]
+    setup: handover.SlicerSetup | None
+
+
+def _without_stage(key: tuple[object, ...]) -> tuple[object, ...]:
+    """Der Grundlagenschlüssel ohne die Stufe (``MainWindow._foundation_key``)."""
+    return (key[0], *key[2:])
 
 
 class _FoundationWorker(Worker):
     """Die Grundlage aus dem gemerkten Slicerprofil, abseits des Oberflächen-Threads.
 
     Die Slicersuche in :func:`remembered_setup` kostet eine halbe Sekunde, auf
-    einer Maschine mit mehreren Slicern Sekunden, die Auflösung der Profile
-    ein Zehntel. Gefragt wurde nach jeder Auswertung, und bei jedem Wechsel
-    von Drucker, Material, Stufe oder Profilwahl stand das Fenster so lange
-    (Review Stufe A+B, R7). Die Slicersuche im Druckdialog läuft aus demselben
-    Grund seit dem 13.09.2026 in ``_SlicerWorker``.
+    einer Maschine mit mehreren Slicern Sekunden; ohne gemerkte Maschine kommt
+    die Vorwahl aus dem Profilbestand dazu (:func:`handover.standard_choice`),
+    an einem großen Bestand Sekunden CPU-Zeit. Gefragt wurde nach jeder
+    Auswertung, und bei jedem Wechsel von Drucker, Material, Stufe oder
+    Profilwahl stand das Fenster so lange (Review Stufe A+B, R7). Die
+    Slicersuche im Druckdialog läuft aus demselben Grund seit dem 13.09.2026
+    in ``_SlicerWorker``.
+
+    Ist die Einrichtung für diesen Schlüssel schon bekannt (``chosen``), wird
+    sie nicht neu hergeleitet: Ein Stufenwechsel kostet dann nur die Grundlage.
+    Abgelöst oder beim Schließen sagt das Fenster den Arbeiter ab
+    (:meth:`cancel`); die Vorwahl hält zwischen ihren Schritten an, ein
+    begonnenes Lesen des Bestands läuft zu Ende.
     """
 
-    done = Signal(object, object)
-    """Der Schlüssel, für den gerechnet wurde, und die Grundlage."""
+    done = Signal(object, object, object)
+    """Der Schlüssel, für den gerechnet wurde, die Grundlage und die Einrichtung
+    dazu (:class:`_ChosenSetup`)."""
 
     def __init__(
         self,
@@ -1310,23 +1507,48 @@ class _FoundationWorker(Worker):
         ui_settings: UiSettings,
         profile: Profile,
         quality: QualityPreset,
+        chosen: _ChosenSetup | None = None,
     ) -> None:
         super().__init__()
         self._key = key
         self._ui = ui_settings
         self._profile = profile
         self._quality = quality
+        self._chosen = chosen if chosen is not None and chosen.key == _without_stage(key) else None
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        self.cancelled.cancel()
 
     def work(self) -> None:
+        # Ein Lesedurchgang für Vorwahl, Stufe und Grundlage (RM-670): Jeder
+        # Schritt öffnete sonst einen eigenen und las die Erbketten des
+        # Herstellers neu.
+        with slicer_profiles.single_read():
+            self._in_one_read()
+
+    def _in_one_read(self) -> None:
+        chosen = self._chosen
+        if chosen is None:
+            try:
+                chosen = _ChosenSetup(
+                    _without_stage(self._key),
+                    remembered_setup(
+                        self._ui,
+                        self._profile.material.id,
+                        self._profile.printer.id,
+                        cancelled=self.cancelled,
+                    ),
+                )
+            except OperationCancelled:
+                return
         # Die Stufe wählt den Prozess des Herstellers (Entscheidung I) — hier wie
         # im Druckdialog und beim Export, sonst rechnete die Zahlenzeile mit
         # einem anderen Prozess, als gedruckt wird.
-        setup = manufacturer.for_stage(
-            remembered_setup(self._ui, self._profile.material.id, self._profile.printer.id),
-            self._profile,
-            self._quality,
+        setup = manufacturer.for_stage(chosen.setup, self._profile, self._quality)
+        self.done.emit(
+            self._key, manufacturer.base_settings(self._profile, self._quality, setup), chosen
         )
-        self.done.emit(self._key, manufacturer.base_settings(self._profile, self._quality, setup))
 
 
 def _warm_the_slicer() -> None:
@@ -1524,10 +1746,14 @@ class _ExportWorker(Worker):
         document: Any = None,
         checked: list[Finding] | None = None,
         evaluated: Sequence[Finding] = (),
+        chosen: _ChosenSetup | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
         self._target = target
+        self._chosen = chosen
+        """Die Einrichtung, mit der das Hauptfenster schon rechnet — dann wird
+        sie nicht neu hergeleitet (:class:`_ChosenSetup`)."""
         self._format = export_format
         self._profile = profile
         self._sources = sources
@@ -1583,6 +1809,7 @@ class _ExportWorker(Worker):
             document=self._document,
             checked=list(findings),
             evaluated=self._evaluated,
+            chosen=self._chosen,
         )
 
     def work(self) -> None:
@@ -1678,9 +1905,33 @@ class _ExportWorker(Worker):
 
         Die Slicer-Suche in ``remembered_setup`` läuft hier mit: sie kostet
         eine knappe halbe Sekunde und hatte im Hauptthread einen Wartezeiger
-        über sich. Hier braucht sie keinen.
+        über sich. Hier braucht sie keinen. Ohne gemerkte Maschine kommt die
+        Vorwahl aus dem Profilbestand dazu (:func:`handover.standard_choice`),
+        an einem großen Bestand Sekunden CPU-Zeit — es sei denn, das
+        Hauptfenster hat sie für denselben Drucker, dasselbe Material und
+        dieselbe Profilwahl schon (``chosen``). Abbrechbar ist sie wie die
+        Vorbereitung über ``cancelled``, zwischen ihren Schritten.
+
+        **Ein Lesedurchgang für den ganzen Export** (RM-670): Vorwahl, Stufe,
+        Grundlage und Datei öffneten je einen eigenen und lasen die Erbketten
+        des Herstellers jedes Mal neu. Am ElegooSlicer kostete der zweite Export
+        eines Würfels so 1,7 s statt 0,7 s (unter Fremdlast gemessen).
         """
-        setup = remembered_setup(self._ui_settings, self._material, self._profile.printer.id)
+        with slicer_profiles.single_read():
+            return self._assembly_in_one_read()
+
+    def _assembly_in_one_read(self) -> tuple[list[Path], list[Finding]]:
+        """Der Export aus :meth:`_assembly`, in dessen Lesedurchgang."""
+        setup = (
+            self._chosen.setup
+            if self._chosen is not None
+            else remembered_setup(
+                self._ui_settings,
+                self._material,
+                self._profile.printer.id,
+                cancelled=self.cancelled,
+            )
+        )
         if setup is None:
             found = tools.slicer_program()
             if found is not None:
@@ -2228,27 +2479,34 @@ def _sketch_param(op_name: str) -> str:
     )
 
 
-#: Die Operation, in die der Ziehgriff der Querschau mündet (§30.1).
-#:
-#: Er zieht eine **Höhe** aus einem Umriss, und das ist genau das, was
-#: ``sketch_extrude`` tut — aus einer gezeichneten Fläche wird im Normalfall
-#: ein Körper, indem man sie aufzieht. Der Griff ist die kurze Hand für den
-#: häufigsten der fünf Wege, nicht ein sechster; unter *Mehr* steht er deshalb
-#: vorn und nicht nach Titel, wo „Entlang eines Bogens führen", der seltenste
-#: Fall, oben stünde (:meth:`MainWindow._fill_finish_menu`).
-PULL_OP = "sketch_extrude"
+#: Die Kürzel der Werkzeuge in der oberen Leiste, je Zeichen ihres Knopfs
+#: (RM-561: je Werkzeug eines, im Baum frei, ein Buchstabe, der zum Wort
+#: passt). Am Mac ⌘⇧ statt Strg+Umschalt; keine zwei Kürzel gleich
+#: (``tests/test_ui.py``).
+TOOLBAR_KEYS: dict[str, str] = {
+    "category.sketch": DRAW_KEY,
+    "sculpt": "Ctrl+Shift+F",
+    "armature": "Ctrl+Shift+K",
+}
 
-#: Wie der Höhenparameter dieser Operation heißt.
-PULL_FIELD = "height"
+#: Was eine andere Handlung sagt, solange ein Körper aufgezogen wird (§18.11).
+_DRAWING_FIRST = _("Erst den Körper fertig aufziehen oder mit Escape abbrechen.")
 
-#: Nach innen ziehen schneidet eine Tasche in den gewählten exakten Körper.
-POCKET_OP = "sketch_pocket"
-POCKET_FIELD = "depth"
 
-#: Nach außen an einem Zielkörper: der Umriss wächst an ihn an, statt ein
-#: zweiter Körper daneben zu werden (Bedienabnahme Zeichnen, E4). Dasselbe
-#: Höhenfeld wie :data:`PULL_OP` — beide teilen ihr Schema.
-JOIN_OP = "sketch_join"
+def _drawing_needs_the_kernel() -> str:
+    """Der Satz, warum das Aufziehen ohne exakten Kern nicht geht — leer, wenn er da ist."""
+    from app.core.registry.registry import exact_kernel_present
+
+    if exact_kernel_present():
+        return ""
+    from app.core.brep.kernel import BRepUnavailable
+
+    return str(BRepUnavailable().title)
+
+
+#: Die Skizzen-Operationen, die das Aufziehen anlegt — ihr Einstieg ist es auch:
+#: neuer Körper, an einen anfügen, aus einem schneiden (``draw_tool``).
+DRAWN_OPERATIONS: frozenset[str] = frozenset({PULL_OP, JOIN_OP, POCKET_OP})
 
 #: Wie viele Flächen des Zielkörpers das Ebenenfeld höchstens anbietet.
 #:
@@ -2257,34 +2515,6 @@ JOIN_OP = "sketch_join"
 #: sind es zwölf Einträge — gezählt standen dort 41 am Besenhalter und 234 an
 #: der Druckschale, weil jede ebene Fläche jedes Körpers kam (Befund B4).
 MOST_PLANE_FACES = 8
-
-
-def operation_limits(op_name: str, field: str) -> tuple[float, float]:
-    """Unter- und Obergrenze eines gezogenen Maßes — **aus dem Schema**.
-
-    Gefragt statt abgeschrieben, aus demselben Grund wie bei
-    :func:`_sketch_param`: Eine zweite Zahl in der Ansicht fiele erst auf, wenn
-    der Dialog einen Wert ablehnt, den der Griff gerade gezeigt hat. Fehlt eine
-    Grenze im Schema, kommt null zurück — die Ansicht klemmt dann nicht, und
-    das ist richtiger als eine erfundene Grenze.
-    """
-    for entry in REGISTRY.get(op_name).params.spec():
-        if entry.name == field:
-            return (float(entry.minimum or 0.0), float(entry.maximum or 0.0))
-    raise InternalError(
-        detail=f"{op_name!r} has no {field!r} parameter",
-        values={"op": op_name},
-    )
-
-
-def pull_limits() -> tuple[float, float]:
-    """Grenzen der Höhe für den Zug nach außen."""
-    return operation_limits(PULL_OP, PULL_FIELD)
-
-
-def pocket_limits() -> tuple[float, float]:
-    """Grenzen der Tiefe für den Zug nach innen."""
-    return operation_limits(POCKET_OP, POCKET_FIELD)
 
 
 #: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
@@ -2350,10 +2580,7 @@ def _needs_objects(count: int) -> str:
     """
     if count <= 1:
         return tr("Wählen Sie zuerst ein Objekt im Objektbaum.")
-    # Am Mac nimmt ⌘ und Klick dazu, nicht Control: „Strg“ ist für Qt dort die
-    # Befehlstaste (``app.i18n.keys``). ``native_keys`` wandelt nur Kürzel mit
-    # „+“, „Strg und Klick“ bliebe stehen — die Taste kommt als Wert.
-    key = "⌘" if key_platform() == "darwin" else tr("Strg", context="Taste")
+    key = adding_key()
     if count == 2:
         return tr(
             "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder {key}"
@@ -2417,6 +2644,36 @@ def _face_side(normal: Any) -> str:
     if abs(x) >= abs(y):
         return tr("rechts") if x >= 0.0 else tr("links")
     return tr("hinten") if y >= 0.0 else tr("vorn")
+
+
+@dataclass(slots=True)
+class _BendDrag:
+    """Ein laufender Zug an einem Gelenk des Skelettwerkzeugs (RM-561)."""
+
+    name: str
+    """Der Knochen, der am gegriffenen Gelenk endet — er wird gebeugt."""
+    before: Any
+    """Sein Eintrag in der Stellung vor dem Zug, für Rückgängig und Escape."""
+    angles: dict[str, Vec3]
+    """Alle Winkel beim Zuganfang — gebeugt wird von dort aus, nicht aufaddiert."""
+    head: Vec3
+    start: Any
+    """Der Knochen beim Zuganfang, vom Kopf zum Fuß, in der Stellung."""
+    axis: Any
+    """Die Blickrichtung — um sie dreht der Zug."""
+
+
+@dataclass(frozen=True, slots=True)
+class _OutlineOrigin:
+    """Woher ein Umriss im Aufziehen kam: Art, Ebene und Körper des Editors (H2).
+
+    Mit ihm führt Strg+Z zurück in den Editor, und Escape legt den Umriss als
+    :class:`_DiscardedSketch` ab — der Text kommt vom Entwurf.
+    """
+
+    op_name: str
+    plane: str
+    body: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2550,8 +2807,8 @@ class _WaitingClick:
     carried: bool = False
     """Der Rückruf übernimmt genau ``order`` und läuft auch ohne Freigabe
     (:meth:`MainWindow._carry_click`). Für Eigentümer, die das Ende der
-    Auswertung neu aufbaut — Merkmalfenster, Maßgruppe, Filamentwahl —: Ihre
-    Felder zeigen danach den Schritt und nicht mehr, was der Kunde sah."""
+    Auswertung neu aufbaut — Merkmalfenster, Maßgruppe —: Ihre Felder zeigen
+    danach den Schritt und nicht mehr, was der Kunde sah."""
     source: weakref.ref[Any] | None = None
     """Der Träger, dessen Werte der Klick trägt, wenn er nicht der Eigentümer
     ist (die Maßgruppe des Merkmalfensters): Seine Wertänderung verwirft den
@@ -2680,6 +2937,8 @@ class MainWindow(QMainWindow):
         self._foundation_worker: Any = None
         self._foundation_pending: tuple[object, ...] | None = None
         """Wofür der laufende Arbeiter rechnet — ``None``, wenn keiner rechnet."""
+        self._chosen_setup: _ChosenSetup | None = None
+        """Die zuletzt hergeleitete Slicerwahl, je Schlüssel ohne Stufe (RM-623)."""
         self._map_cache: dict[tuple[Any, ...], Any] = {}
         self._finding_awaiting_map: tuple[Finding, _MapRequest] | None = None
         """Der angeklickte Befund, dessen Analysekarte noch gerechnet wird.
@@ -2723,6 +2982,7 @@ class MainWindow(QMainWindow):
         """Die ausgelaufene Abfrage, festgehalten bis zur nächsten — dieselbe
         Halteleine wie bei den Arbeitern der Sitzung."""
         self._ollama_size_worker: Any = None
+        self._free_spot_worker: _FreeSpotWorker | None = None
         """Die Modellgrößen-Frage an Ollama (§27), aus demselben Grund."""
         self._backend_probe: Any = None
         """Der laufende Arbeiter der Modellfrage (:class:`_BackendProbe`)."""
@@ -2809,6 +3069,13 @@ class MainWindow(QMainWindow):
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
         verschwindet mit dem Verlassen der Funktion."""
         self._local_features: LocalRecognitionFlow | None = None
+        self._draw_flow: DrawFlow | None = None
+        """Das Werkzeug *Zeichnen* (RM-559) — angelegt beim ersten Gebrauch,
+        wenn Sitzung, Baum und Ansicht schon verbunden sind."""
+        self._draw_shift: tuple[float, float, float] | None = None
+        """Der Ansichtsversatz eines freien Umrisses aus dem Aufziehen — gesetzt,
+        solange der Skizzeneditor für *Freie Form …* offen ist; *Fertig* führt
+        dann zurück in die Ansicht (RM-561)."""
         self._plane_points_armed = False
         """Ob die nächsten Klicks Punkte einer Schnittebene sind (RM-400)."""
         self._hidden: frozenset[str] = frozenset()
@@ -2976,6 +3243,8 @@ class MainWindow(QMainWindow):
         # Nach dem Zentrum, das Karte, Bericht und Tour baut: Der Reiter
         # *Auswahl* setzt sich dort vor sie (RM-511).
         self._build_feature_dock()
+        self.right.layoutChanged.connect(self._remember_tab_layout)
+        QTimer.singleShot(0, self, self._restore_tab_layout)
         # Nach den Menüs, denn die Kopfzeile entsteht in der Werkzeugleiste:
         # ein Aufruf aus ``_build_central`` heraus fände sie noch nicht.
         self._apply_card_style(self.settings.theme)
@@ -2985,7 +3254,7 @@ class MainWindow(QMainWindow):
 
         # §2.6: das offene Werkzeug schließen. ``close_tool`` gab es dafür seit
         # jeher und niemanden, der es rief — Escape tat nichts.
-        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self._escape)
+        self._window_shortcut(QKeySequence(Qt.Key.Key_Escape), weak_slot(self, MainWindow._escape))
 
         # §19.2: der Viewport ist mit der Tastatur navigierbar. Die
         # Achsansichten waren es, Zoom und Durchblättern nicht — wer ohne
@@ -2994,15 +3263,15 @@ class MainWindow(QMainWindow):
             (QKeySequence.StandardKey.ZoomIn, 1.25),
             (QKeySequence.StandardKey.ZoomOut, 0.8),
         ):
-            QShortcut(sequence, self, weak_slot(self, lambda view, f: view.viewport.zoom(f), step))
-        QShortcut(
+            self._window_shortcut(
+                QKeySequence(sequence), weak_slot(self, lambda view, f: view.viewport.zoom(f), step)
+            )
+        self._window_shortcut(
             QKeySequence("Ctrl+Tab"),
-            self,
             weak_slot(self, lambda view: view.object_tree.step_selection(True)),
         )
-        QShortcut(
+        self._window_shortcut(
             QKeySequence("Ctrl+Shift+Tab"),
-            self,
             weak_slot(self, lambda view: view.object_tree.step_selection(False)),
         )
 
@@ -3027,9 +3296,8 @@ class MainWindow(QMainWindow):
         # und in der Kürzelübersicht; geraten werden muss es nicht.
         for index, key in enumerate(self.tools.tools(), start=1):
             self.tools.set_shortcut(key, f"Alt+{index}")
-            QShortcut(
+            self._window_shortcut(
                 QKeySequence(f"Alt+{index}"),
-                self,
                 weak_slot(self, lambda view, name: view.tools.toggle(name), key),
             )
 
@@ -3067,6 +3335,9 @@ class MainWindow(QMainWindow):
         self.object_tree.set_theme(self.settings.theme)
         self.parameters = ParameterPanel(self)
         self.history_panel = HistoryPanel(self)
+        self._steps_chosen_last = False
+        """Ob die Markierung im Verlauf jünger ist als die Körperwahl im Baum (Review G7)."""
+        self.history_panel.list.itemSelectionChanged.connect(self._history_selection_changed)
         self.history_panel.operationActivated.connect(self.edit_operation)
         self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
@@ -3075,11 +3346,13 @@ class MainWindow(QMainWindow):
         self.session.bakeCancelled.connect(self._on_revision_cancelled)
         self.history_panel.kernelSwitchRequested.connect(self.switch_kernel)
         self.history_panel.drawingReuseRequested.connect(self.reuse_drawing)
-        self.filaments = FilamentPanel(self)
+        # Die Filamente des Projekts stehen hinter *Filamente* in der Kopfzeile
+        # (RM-556); jede Handlung darin schließt die Liste vorher.
+        self.filament_popup = FilamentPopup(self)
+        self.filaments = self.filament_popup.panel
         self.filaments.overrideRequested.connect(self._edit_filament_settings)
-        self.filaments.printSettingsRequested.connect(self.action_print_settings)
-        self.filaments.inventoryRequested.connect(self.action_inventory)
-        self.filaments.catalogueChanged.connect(self._refresh_inventory)
+        self.filaments.printSettingsRequested.connect(self._print_settings_from_filaments)
+        self.filaments.inventoryRequested.connect(self._inventory_from_filaments)
 
         # Ohne Streckfaktoren: die Karte ist so hoch wie ihr Inhalt, nicht so
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
@@ -3215,6 +3488,7 @@ class MainWindow(QMainWindow):
         self.feature_panel.stepEditRequested.connect(self._edit_panel_step)
         self.feature_panel.stepSelectionChanged.connect(self._drop_feature_preview)
         self.feature_panel.stepRemoveRequested.connect(self._remove_part_step)
+        self.feature_panel.manualRequested.connect(self.action_manual)
         # **Die eine Kundengeste der Trennen-Serie** (T8, RM-080): „Diese
         # Fläche soll schön bleiben." Kein Operationsweg — die Sperre steht im
         # Dokument und wirkt in der Suche, nicht im Verlauf.
@@ -3230,10 +3504,6 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree))
         left_layout.addWidget(collapsible(tr("Parameter"), self.parameters))
         left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel))
-        # Zugeklappt: Die drei darüber beantworten Fragen, die beim Bauen
-        # jeden Schritt begleiten; welche Spulen im Regal liegen, fragt man
-        # einmal am Anfang und einmal vor dem Drucken (§2.4).
-        left_layout.addWidget(collapsible(tr("Filamente"), self.filaments, open_now=False))
         left_layout.addStretch(1)
 
         self.viewport = Viewport(self)
@@ -3278,9 +3548,7 @@ class MainWindow(QMainWindow):
         self.viewport.sketchPointPicked.connect(self._on_sketch_point)
         self.viewport.sketchMenuAt.connect(self._on_sketch_menu)
         self.viewport.sketchPointHovered.connect(self._on_sketch_hover)
-        self.viewport.sketchPulled.connect(self._on_sketch_pulled)
         self.viewport.sketchPlaneChosen.connect(self._on_sketch_plane_chosen)
-        self.viewport.sketchPullBlocked.connect(self.announce)
         self.viewport.sketchViewChanged.connect(self._on_sketch_view_changed)
         self.viewport.faceDragged.connect(self._on_face_dragged)
         self.viewport.scaleDragged.connect(self._on_scale_dragged)
@@ -3350,6 +3618,13 @@ class MainWindow(QMainWindow):
 
         Dieselbe Bauart wie die Hälften darüber: gemerkt werden die Ausgaben,
         gewählt wird, sobald sie im Bild stehen (:meth:`_choose_the_created`).
+        """
+        self._placed_to_frame: ObjectId | None = None
+        """Der Körper eines eben eingefügten Modells, bis ein Aufbau ihn trägt (RM-650).
+
+        Dieselbe Bauart: gemerkt wird der Körper, nicht der Zeitpunkt. Eine
+        Bitte an die Ansicht gleich beim Einfügen verbrauchte der nächste
+        Aufbau, auch einer der alten Szene (Schichtansicht, Ausblenden).
         """
 
         # §2.4: eine Zeile Umschalter statt sieben Dauerleisten. Wie ein
@@ -3578,26 +3853,30 @@ class MainWindow(QMainWindow):
         # dem man herauskommt (Konzept P16, Entscheidung J).
         self.sculpt_bar = SculptBar(self)
         self.sculpt_bar.finished.connect(self.finish_sculpt)
-        self.sculpt_bar.refineRequested.connect(self.refine_for_sculpt)
         # Der Ring folgt dem Regler und nicht erst dem nächsten Zug: Wer den
         # Pinsel größer stellt, will vor dem Klicken sehen, was er greift.
         # ``valueChangedMm`` und nicht ``valueChanged``: Letzteres trägt die
         # Zahl aus dem Feld, und in Zoll wäre der Ring ein Fünfundzwanzigstel
         # des Pinsels.
         self.sculpt_bar.radius.valueChangedMm.connect(self.viewport.set_brush_radius)
-        self.sculpt_bar.radius.valueChangedMm.connect(self._refresh_sculpt_refinement)
-        self.sculpt_bar.symmetry.currentIndexChanged.connect(self._refresh_sculpt_preview)
+        self.sculpt_bar.radius.valueChangedMm.connect(self._sculpt_radius_changed)
+        self.sculpt_bar.mirrorChanged.connect(self._refresh_sculpt_preview)
         self.sculpt_bar.analysis.changed.connect(self._gesture_analysis_changed)
 
         # Der Skeletteditor, dieselbe Bauart: eine Leiste neben der
         # Werkzeugzeile, ein Zustand im Fenster, eine Operation am Ende.
         self.pose_bar = PoseBar(self)
         self.pose_bar.finished.connect(self.finish_armature)
-        self.pose_bar.chainBroken.connect(self.break_armature_chain)
-        self.pose_bar.lastRemoved.connect(self.undo_bone)
         self.pose_bar.analysis.changed.connect(self._gesture_analysis_changed)
         self.pose_bar.setVisible(False)
         self.viewport.boneRequested.connect(self._on_bone_point)
+        self.viewport.jointPicked.connect(self._on_joint_picked)
+        self.viewport.jointDragStarted.connect(self._on_joint_drag_started)
+        self.viewport.jointDragged.connect(self._on_joint_dragged)
+        self.viewport.jointDragFinished.connect(self._on_joint_drag_finished)
+        self.viewport.jointAngleTyped.connect(self._on_joint_angle_typed)
+        self.viewport.jointDragCancelled.connect(self._on_joint_drag_cancelled)
+        self.viewport.chainEnded.connect(self.end_armature_chain)
         self._armature_target: str | None = None
         self._armature_step: int | None = None
         self._pose_report_target: str | None = None
@@ -3613,11 +3892,38 @@ class MainWindow(QMainWindow):
         """Welches der Skizzenfelder der Editor an diesen Schritt zurückgibt."""
         self._armature_bones: list[Bone] = []
         self._armature_head: tuple[float, float, float] | None = None
-        """Das Gelenk eines angefangenen Knochens — zwei Klicks machen einen."""
+        """Das Gelenk, an das der nächste Klick einen Knochen hängt — in Ruhelage.
+        ``None`` heißt: Der nächste Klick beginnt eine Kette."""
         self._armature_parent = ""
-        """Woran der nächste Knochen hängt. Leer nach *Neue Kette*."""
+        """Woran der nächste Knochen hängt. Leer am Anfang einer Kette."""
+        self._armature_fresh = False
+        """Ob die Kette erst ein Gelenk und noch keinen Knochen hat — das
+        Unfertige, das Escape wegnimmt."""
+        self._armature_params: dict[str, Any] = {}
+        self._armature_pose: dict[str, Any] = {}
+        """Die Stellung, wie sie im Schritt steht — ein Winkel darf ein Ausdruck sein."""
+        self._armature_angles: dict[str, Vec3] = {}
+        """Dieselbe Stellung als Zahlen, für Bild und Haut."""
+        self._armature_undo: list[tuple[Any, ...]] = []
+        """Das Rückgängig des Werkzeugs: Klick, Knochen, Kettenende, Beugung."""
+        self._armature_drag: _BendDrag | None = None
+        self._sculpt_committing: Any = None
+        """Das Dokument, in das die Formsitzung gerade über einen Umbau schreibt
+        (:meth:`_commit_sculpt_revision`) — bis dahin bleibt sie offen."""
+        self.session.revisionDone.connect(self._sculpt_commit_done)
+        self.session.failed.connect(self._sculpt_commit_refused)
+        self._armature_skin: Any = None
+        self._armature_surfaces: list[Any] = []
+        self._armature_shown: MeshData | None = None
+        """Der Körper, wie das Bild ihn gerade zeigt — ein Klick trifft ihn (Review F3, G1)."""
+        self._armature_skin_worker: _ArmatureSkinWorker | None = None
+        self._armature_skin_number = 0
+        self._armature_ended: tuple[Vec3, float] | None = None
+        """Wo und wann zuletzt eine Kette am Gelenk endete — der zweite Klick
+        eines Doppelklicks öffnet sie nicht gleich wieder."""
         self.sculpt_bar.setVisible(False)
         self.viewport.sculptRequested.connect(self._on_sculpt)
+        self.viewport.sceneApplied.connect(self._sculpt_scene_applied)
         self.viewport.sculptGestureStarted.connect(self._begin_sculpt_gesture)
         self.viewport.sculptGestureFinished.connect(self._end_sculpt_gesture)
         self._sculpt_target: str | None = None
@@ -3626,11 +3932,6 @@ class MainWindow(QMainWindow):
         self._gesture_scene: Any = None
         self._gesture_document = self.session.project.document
         self._gesture_open_number = 0
-        self._sculpt_refine_reopen: tuple[Any, int] | None = None
-        self._sculpt_refine_pending = False
-        self.session.revisionDone.connect(self._sculpt_refinement_inserted)
-        self.session.revisionCancelled.connect(self._sculpt_refinement_failed)
-        self.session.failed.connect(self._sculpt_refinement_failed)
         self._gesture_save_dialog: Any = None
         self._sculpt_params: dict[str, Any] = {}
         """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
@@ -3669,6 +3970,14 @@ class MainWindow(QMainWindow):
         self._sculpt_check.setSingleShot(True)
         self._sculpt_check.setInterval(SCULPT_CHECK_MS)
         self._sculpt_check.timeout.connect(self._check_sculpted_walls)
+        self._sculpt_display = QTimer(self)
+        """Übergibt die Vorschau eines kleinen Netzes einmal je Ereignisrunde (RM-576):
+        Ein Mauszug füllt bis zu :data:`~app.ui.viewport.DRAG_FILL_LIMIT` Proben
+        in ein Ereignis, und je Probe Fläche, Puffer und Normalen neu kostete an
+        20 480 Dreiecken 2,75 ms gegen 0,38 ms für die Probe selbst."""
+        self._sculpt_display.setSingleShot(True)
+        self._sculpt_display.setInterval(0)
+        self._sculpt_display.timeout.connect(self._show_sculpt_display)
         self._sculpt_wall_worker: Any = None
         """Die laufende Wandprüfung der Formsitzung (:class:`_SculptWallWorker`)."""
         self._sculpt_wall_number = 0
@@ -3690,8 +3999,19 @@ class MainWindow(QMainWindow):
         self._sculpt_finish_pending = False
         self._sculpt_edge: float | None = None
         """Die Vorschau der laufenden Formsitzung, Zug für Zug (RM-366)."""
+        self._sculpt_refined: MeshData | None = None
+        """Das Netz, auf das eine neue Sitzung für ihren Pinsel angeglichen hat
+        (H2, H9) — ``None``, solange der Eingang fein genug ist. *Fertig* legt
+        Angleichen und Formen in einer Transaktion ab (RM-561)."""
+        self._sculpt_refined_edge = 0.0
+        self._sculpt_refine_blocked = False
+        """Ob das Angleichen an diesem Netz gescheitert ist — dann versucht es
+        die Sitzung nicht bei jedem Zug von Neuem."""
         self._discarded_sketch: _DiscardedSketch | None = None
         """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
+        self._restored_text: str | None = None
+        """Der Text eines eben zurückgeholten Umrisses — unverändert verworfen,
+        wird er nicht noch einmal angeboten (N12)."""
         self._sketch_body: ObjectId | None = None
         """Der Körper, für den gezeichnet wird — ``None`` heißt „neu zeichnen"
         (Bedienabnahme Zeichnen, Abschnitt 7)."""
@@ -3700,46 +4020,6 @@ class MainWindow(QMainWindow):
         self._view_before_sketch: tuple[int, str | None, int] | None = None
         """Plattenindex, offenes Werkzeug und Explosion vor dem Zeichnen."""
 
-        # Die zwei häufigsten Folgen stehen **an der fertigen Kontur**. Wer
-        # Solidon ohne CAD-Vokabular benutzt, soll weder „Extrusion“ kennen
-        # noch erst über *Fertig* eine Liste durchsuchen. Der Dialog danach
-        # bleibt: Dort wird die genaue Höhe oder Tiefe eingetragen.
-        self.sketch_pull_button = QPushButton(tr("Hochziehen"), self.sketch_bar)
-        self.sketch_pull_button.setIcon(icon("sketch_pull", self.sketch_pull_button))
-        # *Hochziehen* heißt am Zielkörper anfügen, sonst ein neuer Körper
-        # (Befund E4) — entschieden beim Klick, dieselbe Frage wie Tooltip und
-        # Liste (:meth:`_pull_op`). Wer ausdrücklich das andere will, findet es
-        # unter *Mehr*.
-        self.sketch_pull_button.clicked.connect(
-            weak_slot(self, lambda view: view._finish_sketch_as(view._pull_op()))
-        )
-        self.sketch_cut_button = QPushButton(tr("Abtragen"), self.sketch_bar)
-        self.sketch_cut_button.setIcon(icon("sketch_cut", self.sketch_cut_button))
-        self.sketch_cut_button.clicked.connect(
-            weak_slot(self, lambda view: view._finish_sketch_as(POCKET_OP))
-        )
-        sketch_actions.addWidget(self.sketch_pull_button)
-        sketch_actions.addWidget(self.sketch_cut_button)
-
-        # **Die übrigen Arten stehen hinter einem eigenen Knopf, nicht unter
-        # Fertig** (Bedienabnahme Zeichnen, E2). Die Liste hing seit dem
-        # 16.09.2026 als Menü an *Fertig*, und derselbe Knopf trug zugleich
-        # ``clicked`` → Abschluss mit der Vorgabe. Welche der beiden
-        # Bedeutungen eine Geste traf, hing daran, wer das Loslassen bekam:
-        # Mit der echten Maus (gemessen über ``SendInput``) öffnete der Druck
-        # das Menü und das Loslassen ging an das Menü; mit der Eingabetaste,
-        # mit ``QTest`` oder über die Barrierefreiheit (``click()``) lief
-        # dagegen ``clicked`` — der Dialog der Vorgabe ging auf, das Menü nie.
-        # Die Abnahme hat genau das gesehen. Ein Knopf, eine Bedeutung.
-        more = QPushButton(tr("Mehr"), self.sketch_bar)
-        more.setToolTip(tr("Weitere Arten, aus der Zeichnung einen Körper zu machen."))
-        more.setAccessibleName(tr("Mehr"))
-        self.sketch_more_button = more
-        self._finish_menu = QMenu(more)
-        self._finish_menu.setToolTipsVisible(True)
-        self._finish_actions: dict[str, QAction] = {}
-        self._fill_finish_menu()
-        more.setMenu(self._finish_menu)
         done = QPushButton(tr("Fertig"), self.sketch_bar)
         make_primary(done)
         done.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=True)))
@@ -3747,11 +4027,17 @@ class MainWindow(QMainWindow):
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
         discard.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=False)))
         self.sketch_discard_button = discard
-        sketch_actions.addWidget(more)
         sketch_actions.addWidget(done)
         sketch_actions.addWidget(discard)
         sketch_layout.addLayout(sketch_actions)
         self.sketch_bar.setVisible(False)
+
+        # **Das Aufziehen hat seine eigene schmale Leiste** (RM-559): zwei
+        # Formen, ein Satz, *Freie Form …*. Sie steht, wo die Werkzeugzeile
+        # stand, solange das Werkzeug offen ist — kein Moduswechsel, nur die
+        # Leiste wechselt.
+        self.draw_bar = DrawBar(self)
+        self.draw_bar.setVisible(False)
 
         # Werkzeugzeile und Skizzenleiste schweben zusammen unten in der Mitte.
         # Zusammen, weil beide dasselbe meinen — was gerade in der Hand liegt —
@@ -3768,6 +4054,7 @@ class MainWindow(QMainWindow):
         Als Feld, weil ``start_sketch`` das Panel hineinstellt, statt es wie
         früher gegen die Ansicht zu tauschen (§30.1, P4)."""
         bottom_layout.addWidget(self.sketch_bar)
+        bottom_layout.addWidget(self.draw_bar)
         bottom_layout.addWidget(self.sculpt_bar)
         bottom_layout.addWidget(self.pose_bar)
         bottom_layout.addWidget(self.tools)
@@ -3868,9 +4155,6 @@ class MainWindow(QMainWindow):
         self.quick_filament.spoolChosen.connect(self._assign_inventory_spool)
         self.quick_filament.clearRequested.connect(self._clear_selected_filament)
         self.quick_filament.inventoryRequested.connect(self.action_inventory)
-        # *Abbrechen* ist eine Entscheidung; ein Auswahlwechsel oder das Ende
-        # der Auswertung räumt die Zuweisung nur ab (:meth:`_drop_click_of`).
-        self.quick_filament.cancel_button.clicked.connect(self._quick_filament_cancelled)
         # Zugeklappt unter der Liste, die Kopfzeile nennt die Zuweisung (RM-510).
         self.quick_filament.described.connect(self.selection_operations.describe_print)
         self.selection_operations.add_print_widget(self.quick_filament)
@@ -4332,6 +4616,17 @@ class MainWindow(QMainWindow):
         self.skip_recognition.setVisible(False)
         self.skip_recognition.clicked.connect(self._load_without_recognition)
         bar.addPermanentWidget(self.skip_recognition)
+        # **Nach dem Aufziehen ein Weg weiter, wenn er nötig ist** (RM-559,
+        # F-g/F-h): Vereinigen, Abziehen oder Zerlegen — je ein Schritt.
+        # Sichtbar nur mit ihrer Ansage, wie *Ordner zeigen*.
+        self._draw_offers: list[QToolButton] = []
+        for _number in range(2):
+            offer = QToolButton(self)
+            offer.setAutoRaise(True)
+            offer.setVisible(False)
+            offer.clicked.connect(self._take_the_draw_offer)
+            bar.addPermanentWidget(offer)
+            self._draw_offers.append(offer)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
         bar.addPermanentWidget(self.cancel_button)
@@ -5260,15 +5555,17 @@ class MainWindow(QMainWindow):
             ("import", tr("Modell einfügen"), self.action_import, self.import_action, ""),
             # Weg 2 aus §2.2 bekommt seinen vorgesehenen Platz: die
             # Hauptwege-Tabelle nennt für „neu konstruieren" ausdrücklich die
-            # Werkzeugzeile — belegt war er nie, und das Zeichnen lag drei
-            # Ebenen tief im Menü. Erst zeichnen, die Erzeugungsart kommt bei
-            # „Fertig".
+            # Werkzeugzeile. Ein Körper entsteht mit drei Klicks in der
+            # Ansicht (RM-559); der freie Umriss liegt in der Leiste dahinter.
             (
                 "category.sketch",
                 tr("Zeichnen"),
                 self.action_sketch_free,
                 None,
-                tr("Ein Profil zeichnen; was daraus wird, fragt der Dialog bei „Fertig“."),
+                tr(
+                    "Einen Körper mit drei Klicks aufziehen, anfügen oder ausschneiden. "
+                    "Ein zweiter Druck schließt das Werkzeug."
+                ),
             ),
             # Und Weg 4 daneben. Beide lagen unter *Ändern → Netz* zwischen
             # Reparaturwerkzeugen, ohne Kürzel — die Hauptwege-Tabelle nennt
@@ -5293,13 +5590,22 @@ class MainWindow(QMainWindow):
             if symbol in ("import", "sculpt"):
                 toolbar.addSeparator()
             action = QAction(icon(symbol, toolbar), label, self)
+            if symbol == "category.sketch":
+                # Gedrückt, solange das Aufziehen offen ist (G10).
+                action.setCheckable(True)
             action.triggered.connect(slot)
+            key = TOOLBAR_KEYS.get(symbol)
+            if key:
+                # Je Werkzeug ein Kürzel (RM-561); der Tooltip nennt es, also
+                # ist der Knopf selbst seine Quelle.
+                action.setShortcut(QKeySequence(key))
+                source = action
             # Ohne Beschriftung am Knopf ist der Tooltip die Stelle, an der
             # Name, Kürzel und Zweck gelesen werden; dieselbe Angabe gehört in
             # die Statusleiste (§2 C). Der ``statusTip`` ist zugleich das,
             # woraus ``_lock_hint`` den eigenen Hinweis wiederherstellt — ohne
             # ihn bliebe der Knopf nach dem Freischalten stumm.
-            tip = self._button_tip(label, source, own_hint)
+            tip = self._button_tip(label, source or action, own_hint)
             action.setToolTip(tip)
             action.setStatusTip(tip)
             action.setProperty("wordless", False)
@@ -5345,6 +5651,7 @@ class MainWindow(QMainWindow):
         self.header = HeaderBar(toolbar)
         self.header.plateChanged.connect(self.viewport.set_plate)
         self.header.printerRequested.connect(self.action_print_settings)
+        self.header.filamentsRequested.connect(self._toggle_filament_list)
         toolbar.addWidget(self.header)
 
     def _menu(self, title: str) -> QMenu:
@@ -5443,8 +5750,19 @@ class MainWindow(QMainWindow):
         in einem Rohdialog: die Operation lief, veränderte nichts und
         hinterließ einen leeren Schritt im Verlauf.
         """
+        if self.drawing():
+            # Eine andere Handlung beginnt erst nach dem dritten Klick oder
+            # Escape (§18.11) — die Palette sagt es wie die Knöpfe.
+            self.announce(str(_DRAWING_FIRST))
+            return
         if spec.name == "detect_region":
             self.local_features().arm()
+        elif spec.name in DRAWN_OPERATIONS:
+            # **Hochziehen, Anfügen und Tasche beginnen im Bild** (RM-559): drei
+            # Klicks, die Richtung des dritten entscheidet die Art. Auch
+            # *Erzeugen → Zeichnen …* und im Fusion-Schema E kommen hier an.
+            # Eine gewählte Tasche bleibt Tasche: Getippt ist die Tiefe (M4).
+            self.start_drawing(intent=spec.name)
         elif _has_sketch_param(spec):
             self.start_sketch(spec.name)
         elif _has_armature_param(spec):
@@ -5617,7 +5935,7 @@ class MainWindow(QMainWindow):
         # Fusion-Schema auf Drehen und Fasen, und Qt lässt bei zwei aktiven
         # Kürzeln derselben Taste **keines** von beiden feuern. Fusion macht
         # es genauso: im Skizzenmodus gilt der Zeichensatz.
-        drawing = self._sketch_panel is not None
+        drawing = self._sketch_panel is not None or self.drawing()
         # **Und in einer Form- oder Skelettsitzung genauso.** Beide sammeln
         # Gesten für die eine Operation, die gerade entsteht — wer währenddessen
         # „Objekt entfernen" traf, malte danach stumm ins Leere, und *Fertig*
@@ -5681,7 +5999,13 @@ class MainWindow(QMainWindow):
             # aus Regel 19, die dieselbe Schleife bei den Operationen des
             # exakten Kerns seit je vermeidet.
             reason = (
-                None if locked or gesturing else self._reason_locked(spec, kinds, objects, chosen)
+                None
+                if locked
+                else str(_DRAWING_FIRST)
+                if self.drawing()
+                else None
+                if gesturing
+                else self._reason_locked(spec, kinds, objects, chosen)
             )
             action.setEnabled(not locked and not gesturing and reason is None)
             self._lock_hint(action, locked)
@@ -5728,6 +6052,7 @@ class MainWindow(QMainWindow):
                 self.setting_armature()
                 and bool(self._armature_bones or self._armature_head is not None)
             )
+            or (self._draw_flow is not None and self._draw_flow.can_undo())
         )
         self.redo_action.setEnabled(
             (self.session.history.can_redo and not gesturing)
@@ -5785,14 +6110,25 @@ class MainWindow(QMainWindow):
         )
         # Einfügen, Erzeugen und Zeichnen legen Schritte an — hinter einem
         # Halt landeten sie im Nichts; der Grund steht am Knopf (`_say_why`).
+        # Und während des Aufziehens beginnt keine andere Handlung (§18.11, G2).
+        drawing_note = str(_DRAWING_FIRST) if self.drawing() else ""
         for action in (
             self.import_action,
             self.generate_action,
             self._toolbar_import,
-            self._toolbar_sketch,
         ):
-            action.setEnabled(not locked and halted is None)
-            self._say_why(action, halted or "")
+            action.setEnabled(not locked and halted is None and not drawing_note)
+            self._say_why(action, halted or drawing_note)
+        # Das Aufziehen legt Skizzen-Schritte an, und die rechnen am exakten
+        # Kern: ohne ihn grau, mit dem Satz der Skizzen-Operationen (F-j).
+        # Gedrückt, solange es offen ist — ein zweiter Druck schließt (G10).
+        kernel_missing = _drawing_needs_the_kernel()
+        self._toolbar_sketch.setEnabled(
+            self.drawing() or (not locked and halted is None and not kernel_missing)
+        )
+        with QSignalBlocker(self._toolbar_sketch):
+            self._toolbar_sketch.setChecked(self.drawing())
+        self._say_why(self._toolbar_sketch, halted or kernel_missing)
         # Formen und Skelett gehen beide von einem gewählten Körper aus. Das
         # fing bisher erst die Sitzung selbst ab — eine Meldung nach dem Klick,
         # wo der Knopf sie vorher sagen kann (§2.6).
@@ -5815,7 +6151,7 @@ class MainWindow(QMainWindow):
         ):
             self._lock_hint(action, locked)
         for action in (self._toolbar_sculpt, self._toolbar_armature):
-            self._pick_hint(action, ready, locked, missing=halted or "")
+            self._pick_hint(action, ready, locked, missing=halted or drawing_note)
         # Der Knopf im Prüfbericht folgt dem Menüeintrag: dieselbe Sperre,
         # derselbe Grund (RM-508).
         self.report.follow_export(self.export_action.isEnabled(), self.export_action.toolTip())
@@ -6505,6 +6841,10 @@ class MainWindow(QMainWindow):
             self.report.add_findings(list(revision.findings))
 
     def _on_revision_cancelled(self) -> None:
+        if self._sculpt_committing is not None:
+            # Die Formsitzung ist noch offen, und ihr Satz sagt mehr (Review N1).
+            self._sculpt_commit_refused()
+            return
         self.announce(tr("Abgebrochen — am Verlauf hat sich nichts geändert."))
 
     def _on_insertion_changed(self, marker: int | None) -> None:
@@ -7053,6 +7393,9 @@ class MainWindow(QMainWindow):
         """Lokale Entwürfe sind Arbeit, auch solange noch keine Operation existiert."""
         if self._gesture_save_dialog is not None and self._gesture_save_dialog is self._op_dialog:
             return True
+        if self._draw_flow is not None and self._draw_flow.unsaved():
+            # Dem Umriss fehlt die Höhe, und die rät das Speichern nicht (Regel 21).
+            return True
         if self._sculpt_target is not None:
             original = strokes_from_text(str(self._sculpt_params.get("strokes", "")))
             return (
@@ -7064,13 +7407,9 @@ class MainWindow(QMainWindow):
                 )
             )
         if self._armature_target is not None:
-            from app.core.geom.pose import armature_from_text
-
-            bones = []
-            if self._armature_step is not None:
-                entry = self.session.history.operation(self._armature_step)
-                bones = armature_from_text(str(entry.params.get("armature", "")))
-            return self._armature_head is not None or self._armature_bones != bones
+            saved = self._armature_saved()
+            pose = {name: tuple(angles) for name, angles in self._armature_pose.items()}
+            return self._armature_fresh or (self._armature_bones, pose) != saved
         if self._sketch_panel is not None:
             original_text = ""
             if self._sketch_step is not None:
@@ -7086,7 +7425,7 @@ class MainWindow(QMainWindow):
         if self._sculpt_target is not None:
             self.finish_sculpt()
         elif self._armature_target is not None:
-            if self._armature_head is not None:
+            if self._armature_fresh:
                 self.announce(tr("Ende des Knochens setzen …"))
                 return False
             self.finish_armature()
@@ -7095,9 +7434,11 @@ class MainWindow(QMainWindow):
         if self._op_dialog is not None:
             self._gesture_save_dialog = self._op_dialog
         if self._has_unsaved_gestures():
-            self.announce(
-                tr("Übernehmen Sie zuerst die Bearbeitung und speichern Sie danach das Projekt.")
+            # Das Aufziehen hat kein *Übernehmen*; ihm fehlt die Höhe (G3).
+            first = tr(
+                "Übernehmen Sie zuerst die Bearbeitung und speichern Sie danach das Projekt."
             )
+            self.announce(str(_DRAWING_FIRST) if self.drawing() else first)
             return False
         return True
 
@@ -7105,6 +7446,9 @@ class MainWindow(QMainWindow):
         """Einen verlassenen Entwurf vollständig vom folgenden Projekt lösen."""
         self._gesture_open_number += 1
         self._discarded_sketch = None
+        if self._draw_flow is not None:
+            self._draw_flow.cancel_overlap()
+            self._draw_flow.close()
         if not (
             self.sculpting()
             or self.setting_armature()
@@ -7113,8 +7457,6 @@ class MainWindow(QMainWindow):
             or self._pose_report_target is not None
         ):
             return
-        self._sculpt_refine_reopen = None
-        self._sculpt_refine_pending = False
         self._cancel_sculpt_preview()
         self._sculpt_check.stop()
         self._sculpt_wall_number += 1
@@ -7135,13 +7477,26 @@ class MainWindow(QMainWindow):
         self._sculpt_redo.clear()
         self._sculpt_preview = None
         self._sculpt_preview_base = None
+        self._sculpt_refined = None
         self._gesture_scene = None
         self._armature_target = None
         self._armature_step = None
         self._armature_bones = []
         self._armature_head = None
         self._armature_parent = ""
+        self._armature_fresh = False
+        self._armature_undo = []
+        self._armature_drag = None
+        self._cancel_armature_skin()
+        self._armature_skin = None
+        self._armature_shown = None
+        self._armature_surfaces = []
+        self._armature_pose = {}
+        self._armature_angles = {}
         self._pose_report_target = None
+        self._sculpt_committing = None
+        self.sculpt_bar.setEnabled(True)
+        self.viewport.finish_bend()
         self.viewport.set_sculpting(False)
         self.viewport.set_boning(False)
         self.viewport.clear_bones()
@@ -7434,8 +7789,22 @@ class MainWindow(QMainWindow):
         self._store_settings()
         self.announce(tr("Gespeichert"))
 
+    def _drawing_refuses(self) -> bool:
+        """Während des Aufziehens beginnt keine andere Handlung; der Satz sagt es (§18.11, G2).
+
+        Für die Wege, die nicht über :meth:`_quiet_command_allowed` gehen:
+        Einfügen, Erzeugen, Teilen und Varianten öffnen zuerst einen eigenen
+        Dialog, und der stünde sonst neben einem halben Entwurf.
+        """
+        if not self.drawing():
+            return False
+        self.announce(str(_DRAWING_FIRST))
+        return True
+
     def action_import(self) -> None:
         """Eine oder mehrere Modelldateien in einem Auftrag einfügen."""
+        if self._drawing_refuses():
+            return
         names, _filter = QFileDialog.getOpenFileNames(
             self,
             tr("Modell öffnen")
@@ -7449,6 +7818,8 @@ class MainWindow(QMainWindow):
 
     def _gesture_allows_import(self) -> bool:
         """Import und Ablegen warten auf den Abschluss des sichtbaren Gesteneditors."""
+        if self._drawing_refuses():
+            return False
         if (
             self.sculpting()
             or self.setting_armature()
@@ -7724,6 +8095,8 @@ class MainWindow(QMainWindow):
         self._generate(Path(path))
 
     def _generate(self, image: Path | None) -> None:
+        if self._drawing_refuses():
+            return
         # **Gefragt wird vor dem Start, wie beim Import** (RM-361). Der Lauf
         # dauert Minuten, und erst danach sagte *Übernehmen* ab — an einer
         # Einfügemarke, hinter einem Halt, nach dem Testzeitraum. Der
@@ -7758,6 +8131,9 @@ class MainWindow(QMainWindow):
         # *Übernehmen* geht über das Fenster: Sagt die Sitzung ab, bleibt der
         # Dialog mit seinen Versuchen offen (:meth:`_take_generated`).
         dialog.take = partial(self._take_generated, dialog)
+        # Dieselbe Mindestwand wie der Prüfbericht für ein frisch erzeugtes
+        # Objekt ohne eigenes Material (``evaluate.check_thin_skins``).
+        dialog.minimum_wall = lambda: self.session.evaluation_profile.minimum_wall_thickness
         # Regel 17: „Es läuft kein Generator" bot nichts an. Von hier führt der
         # Weg in die Liste der zusätzlichen Programme, und danach sieht der
         # Dialog noch einmal nach — wer ComfyUI gerade gestartet hat, soll
@@ -8157,6 +8533,8 @@ class MainWindow(QMainWindow):
         Der Körper lässt sich benennen, damit auch der Fehlerdialog „Modell
         teilen" anbieten kann — er weiß, welches Teil nicht passte.
         """
+        if self._drawing_refuses():
+            return
         if self.session.split_running:
             # Erste Hälfte der Sperre (Gesamtreview I-10) — die zweite steht
             # in ``session.split_async``: Zwei Suchen zugleich gab es nie
@@ -8487,15 +8865,29 @@ class MainWindow(QMainWindow):
         # nicht die Operation davor. Dieselbe Trennung wie beim
         # Skizzeneditor: Der Editor hat sein eigenes Rückgängig, der Verlauf
         # bekommt die Sitzung als eine Transaktion (Regel 16).
-        if self.restore_discarded_sketch() or self.undo_sculpt_stroke() or self.undo_bone():
+        if (
+            self.undo_drawing()
+            or self.restore_discarded_sketch()
+            or self.undo_sculpt_stroke()
+            or self.undo_bone()
+        ):
             return
-        if self.sculpting() or self.setting_armature() or self._sketch_panel is not None:
+        if (
+            self.sculpting()
+            or self.setting_armature()
+            or self._sketch_panel is not None
+            or self.drawing()
+        ):
             return
         if not self._quiet_command_allowed():
             return
         transaction = self.session.undo()
         if transaction is not None:
             self.announce(_history_feedback(transaction, undone=True))
+
+    def undo_drawing(self) -> bool:
+        """Strg+Z im Entwurf des Aufziehens: den letzten Klick zurück (E7)."""
+        return self._draw_flow is not None and self._draw_flow.undo()
 
     def action_redo(self) -> None:
         if self.sculpting():
@@ -8519,6 +8911,32 @@ class MainWindow(QMainWindow):
         self.viewport.set_bed_visible(visible)
         self._store_settings()
         self.announce(tr("Druckplatte wieder da.") if visible else tr("Druckplatte ausgeblendet."))
+
+    def _window_shortcut(self, sequence: QKeySequence, invoke: Callable[[], None]) -> None:
+        """Eine Fensteraktion, die auch herausgezogene Reiter unverändert teilen."""
+        action = QAction(self)
+        action.setShortcut(sequence)
+        action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+        action.triggered.connect(lambda _checked=False: invoke())
+        self.addAction(action)
+
+    def _restore_tab_layout(self) -> None:
+        """Eigene Fenster erst nach dem vollständigen Aufbau wieder öffnen."""
+        self.right.configure_pages(
+            {
+                "selection": self.feature_dock,
+                "report": self.report,
+                "chat": self.chat,
+                "tour": self.tour,
+                "constraints": self._constraints_room,
+            },
+            self.settings.tab_layout,
+        )
+
+    def _remember_tab_layout(self, state: dict[str, object]) -> None:
+        """Die Reiteranordnung über denselben verzögerten Schreibweg merken."""
+        self.settings.tab_layout = state
+        self._card_places_save.start()
 
     def _remember_card_places(self, places: dict[str, str]) -> None:
         """Wo die Seitenkarten liegen, für den nächsten Start (:class:`CardPlace`).
@@ -8573,6 +8991,8 @@ class MainWindow(QMainWindow):
         was der Lauf zu sagen hatte (eine Gravur ohne Platz), kam nie im
         Prüfbericht an, obwohl der Haken im Dialog genau das zusagt.
         """
+        if self._drawing_refuses():
+            return
         dialog = VariantsDialog(self.session, self)
         dialog.exec()
         if dialog.findings:
@@ -8594,11 +9014,7 @@ class MainWindow(QMainWindow):
         dialog.recheck_slicer()
 
     def _show_filaments(self, dialog: PrintSettingsDialog) -> None:
-        """Aus den Druckeinstellungen zum Filamentwähler in der linken Spalte.
-
-        Der Abschnitt ist einklappbar und im Regelfall zu; ein Aufleuchten
-        allein zeigte auf eine Kopfzeile, unter der nichts steht — dieselbe
-        Zusage wie beim Tourschritt (:meth:`_flash_area`).
+        """Aus den Druckeinstellungen zur Liste unter *Filamente* in der Kopfzeile.
 
         Die Änderungen bleiben beim regulären Dialogabschluss erhalten. Erst
         nach dem Abschluss ist die Hauptansicht wieder bedienbar; der sichtbare
@@ -8608,12 +9024,43 @@ class MainWindow(QMainWindow):
         dialog.accept()
 
     def _focus_filaments(self) -> None:
-        """Die freigegebene Filamentkarte samt Rückweg in den Vordergrund holen."""
-        self.filaments.return_to_print_button.show()
-        open_section(self.filaments)
-        self.filaments.list.setFocus()
-        self.filaments.setStyleSheet(f"border: 2px solid {_flash_colour(self.filaments)};")
-        QTimer.singleShot(FLASH_MS, self, lambda: self.filaments.setStyleSheet(""))
+        """Die Filamentliste samt Rückweg zu den Druckeinstellungen öffnen."""
+        self._show_filament_list(back_to_print=True)
+
+    def _show_filament_list(self, *, back_to_print: bool = False) -> None:
+        """*Filamente* in der Kopfzeile: die Filamente des Projekts und der Weg ins Lager.
+
+        Den Rückweg zu den Druckeinstellungen trägt die Liste nur, wenn sie von
+        dort kam (Review U2, Fund 6).
+        """
+        self.filaments.return_to_print_button.setVisible(back_to_print)
+        self.filament_popup.show_below(self.header.filament_button)
+
+    def _toggle_filament_list(self) -> None:
+        """Der Knopf *Filamente* öffnet die Liste, ein zweiter Klick schließt sie (Fund 5).
+
+        Am Fenster nimmt die offene Liste den Druck selbst, auch unter X11
+        (``FilamentPopup.mousePressEvent``); erreicht ein Klick den Knopf bei
+        offener Liste doch — Bildschirmleser, ``click()`` —, schließt er hier.
+        """
+        if self.filament_popup.isVisible():
+            self.filament_popup.hide()
+            return
+        self._show_filament_list()
+
+    def _print_settings_from_filaments(self) -> None:
+        self.filament_popup.hide()
+        self.action_print_settings()
+
+    def _inventory_from_filaments(self) -> None:
+        self.filament_popup.hide()
+        self.action_inventory()
+
+    def _show_project_filaments(self, result: EvaluationResult, settings: PrintSettings) -> None:
+        """Liste und Kopfzeile nennen dieselben Filamente derselben Szene."""
+        bodies = list(result.scene.objects.values())
+        self.filaments.show_scene(bodies, settings)
+        self.header.show_filaments(self.filaments.rows())
 
     def _offer_generator_nodes(self, dialog: GenerateDialog) -> None:
         """Die Knoten und das Modell einrichten, und danach neu nachsehen."""
@@ -8786,7 +9233,6 @@ class MainWindow(QMainWindow):
 
     def _refresh_inventory(self) -> None:
         """Lageranzeigen erneuern; eingebettete Projektfilamente bleiben Schnappschüsse."""
-        self.filaments.refresh_catalogue()
         self.start_screen.refresh_inventory()
         self.quick_filament.refresh()
         if self._inventory_view is not None:
@@ -8998,59 +9444,6 @@ class MainWindow(QMainWindow):
         current = self._current_inventory_spool(entry)
         if current is None:
             return
-        if any(result.scene.objects[draft.inputs[0]].kind == "brep" for draft in drafts):
-            owner = self.quick_filament
-            order = _PreviewOrder(
-                drafts=tuple(drafts), changes=self._spool_change(current, prepare=True)
-            )
-            window_ref = weakref.ref(self)
-
-            def cancel() -> None:
-                window = window_ref()
-                if window is None:
-                    return
-                approval = window._preview_approval
-                if approval is not None and approval.owner is window.quick_filament:
-                    window._clear_preview()
-
-            def accept() -> None:
-                window = window_ref()
-                if window is None:
-                    return
-                picker = window.quick_filament
-                # Während einer Auswertung: Ihr Ende verwirft die vorbereitete
-                # Zuweisung (``set_context``), der Klick trägt sie deshalb
-                # selbst hinüber (:meth:`_carry_click`).
-                if window._carry_click(picker, order, accept):
-                    return
-                # Vor dem Bild geklickt: Die Zuweisung läuft, sobald die
-                # Vorschau steht (:meth:`_apply_when_previewed`).
-                if not window._preview_can_apply(picker, order, then=accept):
-                    return
-                if window._current_inventory_spool(current) is None:
-                    picker.cancel_preview()
-                    return
-                picker.finish_preview()
-                window._clear_preview()
-                # Die Projektkennung entsteht erst beim Schreiben. Die
-                # Vorschau einschließlich Abbrechen verändert das Dokument nie.
-                window._inventory_settings()
-                window.session.apply(
-                    _("Filament zuweisen"), list(order.drafts), changes=order.changes
-                )
-
-            def current_preview() -> bool:
-                window = window_ref()
-                return window is not None and window._preview_can_apply(
-                    window.quick_filament, order
-                )
-
-            owner.stage_preview(accept, cancel)
-            owner.preview_check = current_preview
-            owner.preview_defer = accept
-            approval = self._set_preview_order(owner, order)
-            self._request_order_preview(approval)
-            return
         self.session.apply(_("Filament zuweisen"), drafts, changes=self._spool_change(current))
 
     def action_print_settings(self, *, field: str = "") -> None:
@@ -9133,6 +9526,7 @@ class MainWindow(QMainWindow):
         """
         if not isinstance(slot, MaterialSlot):
             return
+        self.filament_popup.hide()
         # Vorbelegt mit dem, was gedruckt wird (Review Stufe A+B, R3): Die
         # Spule übersteuert die Werte des Herstellerfilaments, nicht einen
         # gespeicherten Stand davon.
@@ -9150,7 +9544,7 @@ class MainWindow(QMainWindow):
             self.session.set_print_settings(updated)
             result = self.session.last_result
             if result is not None:
-                self.filaments.show_scene(list(result.scene.objects.values()), updated)
+                self._show_project_filaments(result, updated)
         finally:
             # Das Hauptfenster ist Qt-Eigentümer. Ohne die Freigabe bliebe
             # jeder geschlossene Dialog samt seinen neunzehn Feldern bis zum
@@ -9693,6 +10087,9 @@ class MainWindow(QMainWindow):
             # Und was die Auswertung schon fand: Ein durchstochener Formzug
             # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
             evaluated=result.scene.report.findings,
+            # Dieselbe Slicerwahl wie die Zahlenzeile, ohne den Bestand ein
+            # zweites Mal zu lesen (RM-623).
+            chosen=self._chosen_setup_now(),
         )
         self._run_export(worker)
 
@@ -10112,12 +10509,13 @@ class MainWindow(QMainWindow):
                     ("import", self.import_action.text()),
                 )
             )
-        # Und die zweite Bedingung, die je Baustein gilt: Die meisten
-        # Bausteine werden an eine Fläche oder Bohrung gesetzt (gezählt am
-        # 02.10.2026: 25 von 35, die übrigen zehn stehen frei). Sie sperrt
-        # nicht — der Weg über eine eingetragene Position bleibt —, aber sie
-        # sagt es vorher statt als Fehler danach (Robert, 29.08.2026).
-        catalog.set_feature_chosen(self.object_tree.selected_feature() is not None)
+        # Und die zweite Bedingung, die je Baustein gilt: Ein Teil der
+        # Bausteine wird an eine Fläche oder Bohrung gesetzt, die übrigen
+        # stehen frei (``standalone``). Sie sperrt nicht — der Weg über eine
+        # eingetragene Position bleibt —, aber sie sagt es vorher statt als
+        # Fehler danach (Robert, 29.08.2026).
+        kinds = self._selected_place_kinds()
+        catalog.set_feature_chosen(bool(kinds), kinds)
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
         catalog.shareRequested.connect(lambda: self._share_part(catalog))
         catalog.adoptRequested.connect(lambda: self._adopt_part(catalog))
@@ -10140,13 +10538,28 @@ class MainWindow(QMainWindow):
                 return
             name = catalog.chosen()
             if name:
-                spec = REGISTRY.get(creation_name(name))
+                spec = REGISTRY.get(catalog_operation(name, at=self._selected_place_kinds()))
                 lone = self._lone_body()
                 if spec.consumes and not self.object_tree.selected_objects() and lone:
                     # Genau ein Körper ist keine Frage (RM-356): Der Katalog
                     # hat den Baustein für ihn freigegeben, also gilt er ihm.
                     self.object_tree.select_object(lone)
-                self.run_operation(spec)
+                # Ein eigener Körper kommt auf eine freie Stelle der Platte, nicht
+                # in den Grundkörper im Ursprung (Review M1).
+                # Ein eigener Baustein rechnet für seinen Umriss den ganzen
+                # Stapel: Der Dialog geht mit dem Platzhalter auf, die echte
+                # Stelle reicht ein Arbeiter nach (Review N3).
+                result = self.session.last_result
+                bodies = tuple(result.scene.objects.values()) if result is not None else ()
+                later = bool(bodies) and not spec.consumes and not footprint_at_once(name)
+                spot = (
+                    free_spot_for(name, bodies, self.session.profile, rough=later)
+                    if not spec.consumes
+                    else {}
+                )
+                self.run_operation(spec, spot or None)
+                if later:
+                    self._settle_free_spot(name, bodies, spot)
         finally:
             # Die sechs Lambdas aus :meth:`_make_catalog` fangen das Fenster,
             # und der Katalog ist sein Kind: Ohne Freigeben hält jede Öffnung
@@ -10175,6 +10588,52 @@ class MainWindow(QMainWindow):
         if not self.object_tree.selected_objects() and self._lone_body() is None:
             return False, _needs_objects(1)
         return True, ""
+
+    def _settle_free_spot(
+        self, part: str, bodies: tuple[Any, ...], rough: Mapping[str, float]
+    ) -> None:
+        """Die echte freie Stelle im Arbeiter rechnen und in den offenen Dialog geben."""
+        dialog = self._op_dialog
+        if dialog is None:
+            return
+        worker = _FreeSpotWorker(part, bodies, self.session.profile)
+        worker.done.connect(
+            lambda spot, for_dialog=dialog: self._free_spot_arrived(for_dialog, rough, spot)
+        )
+        worker.crashed.connect(lambda detail: _log.warning("free spot crashed: %s", detail))
+        self._retire(self._free_spot_worker)
+        self._free_spot_worker = worker
+        worker.finished.connect(lambda done=worker: self._free_spot_worker_done(done))
+        self._leash.start(worker)
+
+    def _free_spot_arrived(
+        self, dialog: OperationDialog, rough: Mapping[str, float], spot: Mapping[str, float]
+    ) -> None:
+        """Ein nachgereichter Vorschlag überschreibt keine Wahl (``wartezeit.md``).
+
+        Übernommen wird nur, solange derselbe Dialog steht und seine Lagefelder
+        noch die erste, grobe Stelle tragen.
+        """
+        if self._op_dialog is not dialog or not isValid(dialog):
+            return
+        values = dialog.values()
+        if any(
+            not math.isclose(float(values.get(field, value)), value, abs_tol=1e-9)
+            for field, value in rough.items()
+        ):
+            return
+        for field, value in spot.items():
+            dialog.take_value(field, value)
+
+    def _free_spot_worker_done(self, worker: Any) -> None:
+        if self._free_spot_worker is worker:
+            self._free_spot_worker = None
+        self._hold_until_done(worker)
+
+    def wait_for_free_spot(self, milliseconds: int = 60_000) -> bool:
+        """Auf die nachgereichte freie Stelle warten — für Tests."""
+        worker = self._free_spot_worker
+        return worker.wait(milliseconds) if worker is not None else True
 
     def _lone_body(self) -> ObjectId | None:
         """Der einzige Körper der Szene — ``None`` bei keinem oder mehreren.
@@ -10706,11 +11165,15 @@ class MainWindow(QMainWindow):
             catalog.show_file_result("")
 
     def _part_usage(self, name: str) -> tuple[int, ...]:
-        """Schritte des offenen Dokuments, die den Bibliotheksbaustein verwenden."""
+        """Schritte des offenen Dokuments, die den Bibliotheksbaustein verwenden.
 
-        operation = part_op_name(name)
+        Einsetzen und Erzeugen (RM-574, Review N2); gefragt vor dem Abmelden,
+        denn danach gehört dem Namen kein Erzeuger mehr.
+        """
+
+        operations = set(operation_names(name))
         return tuple(
-            entry.id for entry in self.session.project.document.ops if entry.op == operation
+            entry.id for entry in self.session.project.document.ops if entry.op in operations
         )
 
     @staticmethod
@@ -10803,7 +11266,14 @@ class MainWindow(QMainWindow):
     def _save_as_part(self, catalog: PartCatalog) -> None:
         """Öffnet den Rezeptdialog über dem Katalog (Konzept §16, Schritt 4 und 5).
 
-        **Genommen wird, was im Verlauf gewählt ist — sonst der ganze Stapel.**
+        **Genommen wird, was im Verlauf gewählt ist — sonst der gewählte Körper,
+        sonst der ganze Stapel.** Robert, 07.10.2026 (RM-565): Körper wählen,
+        Katalog öffnen, *Speichern* — ohne Umweg über die Verlaufsschritte. Der
+        Körper bringt die Schritte mit, aus denen er hervorgeht
+        (``recipe.steps_of``), und nur seine Merkmale. Die Verlaufsauswahl geht
+        vor, weil jeder Erzeugerschritt seinen Körper wählt: Wer im Verlauf
+        gezielt Schritte markiert, hat das danach getan.
+
         Das Konzept spricht von einem Ausschnitt, und ``capture`` nimmt dafür
         ``op_ids``; bis der Verlauf eine Mehrfachauswahl bekam, wanderte
         mangels Auswahl immer alles mit. Das fehlt selten und dann deutlich:
@@ -10836,14 +11306,25 @@ class MainWindow(QMainWindow):
         # und der Bereichstest war trotzdem grün, denn drei Schritte ergeben
         # auch einen Körper.
         whole = tuple(op.id for op in document.ops)
-        chosen = self.history_panel.selected_operations()
+        # Die Markierung im Verlauf gilt, wenn sie die jüngere Wahl ist (Review G7):
+        # Ein Klick auf einen Befund markiert seinen Schritt, und ein danach im
+        # Baum gewählter Körper ist dann gemeint.
+        marked = self.history_panel.selected_operations()
+        tree = self.object_tree.selected_objects()
+        chosen = marked if marked and (self._steps_chosen_last or not tree) else ()
+        bodies = () if chosen else tree
+        if bodies:
+            chosen = steps_of(document, bodies, self.session.step_needs())
+        names = {key: str(entry.name) for key, entry in result.scene.objects.items()}
         dialog = RecipeDialog(
             document,
             dict(self.session.project.sources),
             chosen or whole,
-            self._result_features(),
+            self._result_features(bodies),
             self.session.profile,
             parent=catalog,
+            bodies={body: names.get(body, body) for body in bodies},
+            names=names,
             # **Kam dieses Dokument aus einem Baustein, sagt es der Dialog**
             # (E6): Er belegt Titel, Gruppe, Maße und Merkmale daraus vor, und
             # sein Knopf heißt dann „Baustein ersetzen". Ein gewöhnliches
@@ -10863,8 +11344,12 @@ class MainWindow(QMainWindow):
             dialog.release()
             dialog.deleteLater()
 
-    def _result_features(self) -> tuple[Feature, ...]:
-        """Jedes erkannte und erzeugte Merkmal des gerechneten Standes.
+    def _history_selection_changed(self) -> None:
+        """Markierte Schritte sind die jüngere Wahl, bis wieder ein Körper gewählt wird."""
+        self._steps_chosen_last = bool(self.history_panel.selected_operations())
+
+    def _result_features(self, bodies: Sequence[ObjectId] = ()) -> tuple[Feature, ...]:
+        """Jedes erkannte und erzeugte Merkmal des gerechneten Standes — oder dieser Körper.
 
         Eigene Methode und keine Zeile im Aufruf darüber: **Szene und Körper
         führen ihre Inhalte als Wörterbücher.** Über sie zu iterieren gibt
@@ -10878,7 +11363,8 @@ class MainWindow(QMainWindow):
             return ()
         return tuple(
             feature
-            for scene_object in result.scene.objects.values()
+            for object_id, scene_object in result.scene.objects.items()
+            if not bodies or object_id in bodies
             for feature in scene_object.features.values()
         )
 
@@ -11601,6 +12087,27 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry else None
         return feature.kind if feature is not None else None
 
+    def _selected_place_kinds(self) -> tuple[str, ...]:
+        """Die Arten der gewählten Stellen — eine je markierter Zeile (Review M2).
+
+        Eine Zeile gibt ihre eine Art (:meth:`selected_feature_kind`), auch wenn
+        sie eine Senkung mit ihrer Bohrung bündelt. Mehrere Zeilen geben je
+        Merkmal die Art: Vier markierte Seitenflächen sind vier Stellen.
+        """
+        single = self.selected_feature_kind()
+        if single is not None:
+            return (single,)
+        result = self.session.last_result
+        if result is None:
+            return ()
+        kinds: list[str] = []
+        for object_id, feature_id in self.object_tree.selected_features():
+            entry = result.scene.objects.get(object_id)
+            feature = entry.features.get(feature_id) if entry is not None else None
+            if feature is not None:
+                kinds.append(feature.kind)
+        return tuple(kinds)
+
     def selection_label(self) -> str:
         """Wie die Auswahl heißt — ``Halter`` oder ``Halter · Oberseite``.
 
@@ -11734,6 +12241,10 @@ class MainWindow(QMainWindow):
             # und was schon eingetragen ist, bleibt stehen.
             self.announce(tr("Punktwahl beendet. Die eingetragenen Punkte bleiben."))
             return
+        if self._draw_flow is not None and self._draw_flow.escape():
+            # Das Aufziehen nimmt nur Unfertiges: das offene Maßfeld, sonst den
+            # Entwurf samt Werkzeug (E7). Ein angelegter Schritt bleibt.
+            return
         if self.session.split_running:
             # Die lange Suche ist die oberste laufende Handlung. Erst sie
             # anhalten; die Auswahl darunter bleibt stehen und zeigt weiter,
@@ -11762,7 +12273,15 @@ class MainWindow(QMainWindow):
             self.announce(tr("Zum Verlassen: Fertig oder Verwerfen."))
             return
         if self._armature_target is not None:
-            # Wie beim Formen: Escape beendet und verwirft nicht.
+            # Escape nimmt das Unfertige — einen laufenden Zug, ein Gelenk ohne
+            # Knochen — und beendet sonst wie *Fertig* (RM-561). Verworfen wird
+            # nichts Fertiges.
+            if self._armature_drag is not None:
+                self.viewport.finish_bend()
+                self._on_joint_drag_cancelled()
+                return
+            if self.drop_half_bone():
+                return
             self.finish_armature()
             return
         if self._sculpt_target is not None:
@@ -11950,9 +12469,6 @@ class MainWindow(QMainWindow):
             panel.status,
             self.sketch_body_choice,
             self.sketch_neighbours_button,
-            self.sketch_pull_button,
-            self.sketch_cut_button,
-            self.sketch_more_button,
             self.sketch_finish_button,
             self.sketch_discard_button,
             panel.constraint_list,
@@ -12026,6 +12542,9 @@ class MainWindow(QMainWindow):
         """
         if not self._quiet_command_allowed():
             return
+        if self.drawing():
+            self.announce(str(_DRAWING_FIRST))
+            return
         if (
             self._sketch_panel is not None
             or self._sculpt_target is not None
@@ -12069,8 +12588,8 @@ class MainWindow(QMainWindow):
         # Schritts, den er ändert (Z9). Beim Anlegen bleibt sie leer.
         self._sketch_step = step
         self._sketch_parameter = field_name
-        """Leer beim freien Zeichnen über den Werkzeugzeilen-Knopf — die
-        Erzeugungsart kommt dann bei „Fertig" (§2.2, Weg 2)."""
+        """Leer beim freien Umriss — *Fertig* führt dann zurück in die Ansicht,
+        und die Richtung der Höhe entscheidet die Art (RM-561)."""
         # **Der Schnitt (§30.1, P4): Die Ansicht bleibt stehen.** Früher stand
         # hier ein Tausch im Stapel, und daraus folgte alles, was Robert am
         # 24.08.2026 gemeldet hat — „am Viewport ändert sich nichts", und
@@ -12095,17 +12614,6 @@ class MainWindow(QMainWindow):
             panel.canvas.begin_drag_on_plane,
             panel.canvas.drag_on_plane,
             panel.canvas.end_drag_on_plane,
-        )
-        # **Der Ziehgriff der Querschau** (§30.1): Sobald Blick und
-        # Zeichenebene auseinandergehen, wird aus einem Zug am Umriss eine
-        # Höhe. Die Grenzen kommen aus dem Schema, damit die Zahl am Zeiger
-        # dieselbe ist, die der Dialog danach annimmt.
-        self.viewport.set_sketch_pull(
-            self._sketch_pull_offer,
-            pull_limits(),
-            pocket_limits(),
-            self._sketch_cut_available,
-            self._pocket_top_shift,
         )
         # **Die Bedingungen ziehen in die rechte Spalte, als eigener Reiter.**
         # Gemessen nahm die Leiste sonst 334 von 900 Bildpunkten — 37 Prozent
@@ -12551,10 +13059,6 @@ class MainWindow(QMainWindow):
         plane = sum(o * n for o, n in zip(frame.origin, frame.normal, strict=True))
         return min(along) - slack <= plane <= max(along) + slack
 
-    def _pull_op(self) -> str:
-        """Was *Hochziehen* hier bedeutet: anfügen am Zielkörper oder neu."""
-        return JOIN_OP if self._outline_meets_the_body() else PULL_OP
-
     def _top_face_plane(self) -> str:
         """Die oberste Fläche des Zielkörpers als Ebenenangabe — oder leer.
 
@@ -12713,64 +13217,6 @@ class MainWindow(QMainWindow):
             return ()
         return curves_of(SolvedSketch(elements, 0, 0.0), frame)
 
-    def _sketch_pull_offer(self) -> str:
-        """Ob am Umriss gerade eine Höhe gezogen werden darf (§30.1).
-
-        Robert am 27.08.2026: „schön wäre auch dass wenn ich in der skizze was
-        in der draufsicht zeichne und dann in die Seitenansicht oder
-        vorderansicht gehe sie nach oben ziehen kann." Genau dieser Zustand ist
-        die Bedingung — **die Querschau**, also Blick und Zeichenebene
-        nicht parallel (``SketchCanvas.planes_are_parallel``). In der Draufsicht
-        bliebe die Geste dem Zeichnen im Weg: Ein Druck auf eine Umrisskante
-        wäre dort mal ein Punkt, mal ein Zug.
-
-        **Hier stand „dort sieht man die Ebene von der Kante", und das galt
-        nur für die eingerasteten Ansichten.** Ein Ungleichheitsvergleich
-        trennt „von der Kante gesehen" nicht von „ein wenig gekippt": Sobald
-        die Kamera frei steht, meldet ``reflect_camera_view`` ``FREE_VIEW``,
-        und die Bedingung war erfüllt, während weiter von schräg oben
-        gezeichnet wurde. Der Ziehgriff ist dort zugleich am unbrauchbarsten —
-        seine Empfindlichkeit wächst mit ``1/sin`` des Kippwinkels, bei einem
-        Grad bedeuten zehn Pixel Mausbewegung rund siebzig Millimeter Höhe
-        (gemessen am 30.08.2026 über :func:`app.core.sketch.planes.axis_hit`).
-
-        **Geschlossen ist das nicht hier, sondern am Einrasten**
-        (:meth:`Viewport._settle_sketch_view`): Eine Kamera innerhalb von zehn
-        Grad um eine Hauptansicht rastet auf sie ein, und damit gibt es die
-        unbrauchbare Lage nach einem Mausdrehen nicht mehr. Zehn Grad decken
-        die rund sieben ab, unter denen ein Pixel mehr als einen Rasterschritt
-        bedeutet — deshalb steht hier **keine** zweite Schwelle daneben.
-
-        Drei Antworten, wie :meth:`Viewport.set_sketch_pull` sie erwartet.
-        Ein **Grund** statt einer leeren Zeichenkette kommt nur, wo die Geste
-        gemeint war und nicht ging — sonst stünde bei jedem Druck irgendwo im
-        Bild ein Satz über eine Handlung, die niemand versucht hat.
-        """
-        panel = self._sketch_panel
-        if panel is None:
-            return ""
-        if panel.canvas.planes_are_parallel(panel.canvas.view_plane, panel.canvas.sketch.plane):
-            return ""
-        if self._sketch_target and self._sketch_target not in (PULL_OP, JOIN_OP, POCKET_OP):
-            # Wer den Modus für *Grundform drehen* betreten hat, meint keine
-            # Höhe. Der Griff gehört zu ``sketch_extrude``; ihn dort anzubieten
-            # hieße, die gewählte Operation stillschweigend zu tauschen.
-            return str(
-                tr(
-                    "Der Ziehgriff zieht eine Höhe auf — bei {op} entscheidet das der Dialog."
-                ).format(op=str(REGISTRY.get(self._sketch_target).title))
-            )
-        if not panel.canvas.outline:
-            return str(tr("Zum Aufziehen fehlt der geschlossene Umriss."))
-        if self._sketch_target == POCKET_OP:
-            # Wer ausdrücklich „Abtragen" gewählt hat, bekommt ohne Zielkörper
-            # nicht ersatzweise den entgegengesetzten Aufbau angeboten. Eine
-            # verlorene Auswahl ändert die Absicht nicht stillschweigend.
-            problem = self._pocket_target_problem()
-            if problem:
-                return problem
-        return "ready"
-
     def _pocket_top_shift(self) -> float:
         """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt.
 
@@ -12824,149 +13270,6 @@ class MainWindow(QMainWindow):
         # dabei herauskommt, ist wieder ein Netz, und das ist die richtige
         # Antwort und nicht eine Absage.
         return ""
-
-    def _sketch_cut_available(self) -> bool:
-        """Ob Griff, Beschriftung und Operation dieselbe Tasche anbieten."""
-        return not self._pocket_target_problem()
-
-    def _fill_finish_menu(self) -> None:
-        """Die Skizzen-Operationen des Registers als Einträge unter *Mehr*.
-
-        Hochziehen, Anfügen und Tasche vorn — die häufigsten Folgen —, dann
-        der Rest nach Titel; eine neue Skizzen-Op taucht von selbst auf. Jeder
-        Eintrag trägt den ``doc``-Satz als Tooltip, denselben wie Menü und
-        Dialog; was gerade nicht geht, sagt :meth:`_update_sketch_actions`, und
-        was schon als Knopf daneben steht, blendet es aus.
-        """
-        section = next((entry for entry in menu_tree(REGISTRY) if entry.category == "sketch"), None)
-        specs = list(section.entries) if section else []
-        first = (PULL_OP, JOIN_OP, POCKET_OP)
-        specs.sort(
-            key=lambda spec: (
-                spec.name not in first,
-                first.index(spec.name) if spec.name in first else 0,
-                str(spec.title),
-            )
-        )
-        for spec in specs:
-            action = self._finish_menu.addAction(str(spec.title))
-            action.setToolTip(first_sentence(str(spec.doc)))
-            action.setStatusTip(first_sentence(str(spec.doc)))
-            action.triggered.connect(weak_slot(self, MainWindow._finish_sketch_as, spec.name))
-            self._finish_actions[spec.name] = action
-
-    def _update_sketch_actions(self) -> None:
-        """Hochziehen, Abtragen und die Liste unter *Mehr* folgen dem Zustand
-        der freien Kontur — und dem Zielkörper.
-
-        **Abtragen steht nur mit Ziel da** (Abschnitt 7.2): Ohne Zielkörper
-        gibt es nichts zu schneiden, und ein grauer Knopf mit dem Satz „einen
-        auswählen" verwiese auf Körper, die gerade ausgeblendet sind. Der Weg
-        dorthin ist das Feld *Ziel*.
-        """
-        panel = self._sketch_panel
-        free = panel is not None and not self._sketch_target
-        target = self._sketch_body
-        self.sketch_pull_button.setVisible(free)
-        self.sketch_cut_button.setVisible(free and target is not None)
-        self.sketch_more_button.setVisible(free)
-        if not free or panel is None:
-            return
-
-        closed = bool(panel.canvas.outline)
-        outline_problem = str(tr("Erst einen geschlossenen Umriss zeichnen."))
-        pull = self._pull_op() if closed else PULL_OP
-        name = self._sketch_body_label
-        self.sketch_pull_button.setEnabled(closed)
-        if not closed:
-            self.sketch_pull_button.setToolTip(outline_problem)
-        elif pull == JOIN_OP:
-            self.sketch_pull_button.setToolTip(
-                str(tr("Zieht den Umriss hoch und fügt ihn an {name} an.")).replace("{name}", name)
-            )
-        else:
-            self.sketch_pull_button.setToolTip(
-                str(tr("Macht aus dem Umriss einen neuen Körper. Danach die Höhe einstellen."))
-            )
-        pocket_problem = self._pocket_target_problem() if closed else outline_problem
-        self.sketch_cut_button.setEnabled(closed and not pocket_problem)
-        self.sketch_cut_button.setToolTip(
-            pocket_problem
-            or str(tr("Schneidet den Umriss aus {name}. Danach die Tiefe einstellen.")).replace(
-                "{name}", name
-            )
-        )
-        # Dieselbe Auskunft an jedem Eintrag der Liste: Ohne Umriss geht
-        # keine, ohne Körper keine, die einen braucht — und der Tooltip sagt
-        # es, statt nur grau zu werden (Regel 18). Was als Knopf daneben
-        # steht, steht nicht noch einmal in der Liste.
-        beside = {pull, POCKET_OP} if target is not None else {pull}
-        for op_name, action in self._finish_actions.items():
-            spec = REGISTRY.get(op_name)
-            if not closed:
-                problem = outline_problem
-            elif needed_inputs(spec):
-                problem = pocket_problem
-            else:
-                problem = ""
-            action.setVisible(op_name not in beside)
-            action.setEnabled(not problem)
-            action.setToolTip(problem or str(spec.doc))
-
-    def _finish_sketch_as(self, op_name: str) -> None:
-        """Die kurze Hand von der Kontur zur Operation — Hochziehen, Abtragen
-        und jeder Eintrag der Liste unter *Fertig*."""
-        panel = self._sketch_panel
-        if panel is None:
-            return
-        if not panel.canvas.outline:
-            self.announce(tr("Erst einen geschlossenen Umriss zeichnen."))
-            return
-        if needed_inputs(REGISTRY.get(op_name)):
-            problem = self._pocket_target_problem()
-            if problem:
-                self.announce(problem)
-                return
-        self._sketch_target = op_name
-        self.finish_sketch(keep=True)
-
-    def _on_sketch_pulled(self, height: float) -> None:
-        """Der Zug am Griff wird zur Operation — mit dem Dialog als Bestätigung.
-
-        Während des Zugs steht das Maß an der Drahtform (Viewport,
-        ``sketch_pull_measure``), so wie beim Zeichnen einer Linie. Loslassen
-        öffnet den Dialog mit der gezogenen Höhe, und dort bleiben alle Werte
-        änderbar — Robert, 02.09.2026: „bei Bestätigung sollen alle drei Werte
-        noch änderbar sein". Ein Höhenfeld in der Skizzenleiste stand hier
-        einen Vormittag lang und ging wieder: „unten im Feld wollen wir es
-        nicht".
-        """
-        self._apply_sketch_pull(height)
-
-    def _apply_sketch_pull(self, height: float) -> None:
-        """Außen wird Material aufgebaut, innen aus einem Körper entfernt.
-
-        Der Zug endet als **Operation** und nicht als Zustand (Regel 2): Der
-        Modus wird verlassen wie bei „Fertig", und ``sketch_extrude`` bekommt
-        die Zeichnung und die Höhe. Der Dialog geht dabei auf wie immer — wer
-        nachrechnen oder eine andere Zahl setzen will, tut es dort, und der
-        Verlauf trägt einen Schritt und nicht zwei.
-        """
-        if self._sketch_panel is None:
-            return
-        if height < 0.0:
-            problem = self._pocket_target_problem()
-            if problem:
-                self.viewport.cancel_sketch_pull()
-                self.announce(problem)
-                return
-            self._sketch_target = POCKET_OP
-            self.finish_sketch(keep=True, given={POCKET_FIELD: abs(float(height))})
-            return
-        # Nach außen am Zielkörper heißt anfügen (E4); sonst ein neuer Körper.
-        # Beide Schemata tragen dasselbe Höhenfeld.
-        self._sketch_target = self._pull_op()
-        self.finish_sketch(keep=True, given={PULL_FIELD: float(height)})
 
     def _on_sketch_hover(self, point: object) -> None:
         """Der Zeiger steht auf der Ebene — die Vorschau zieht nach."""
@@ -13030,37 +13333,8 @@ class MainWindow(QMainWindow):
             # der Draufsicht (XY)" steht im Feld darüber abgeschnitten, und
             # wie weit über dem Bett gezeichnet wird, soll man nicht raten.
             line = tr("Zeichenebene: {place}").format(place=place)
-        offer = self._sketch_pull_offer()
-        action = ""
-        if offer == "ready":
-            # **Der Gestensatz steht einmal, im Bild.** ``show_sketch_action``
-            # trägt ihn als Karte über die Zeichnung; hier stand er bis zum
-            # 16.09.2026 wörtlich noch einmal — zwei Sätze für eine Geste, und
-            # die Karte unten wuchs auf vier Zeilen (Robert: „das zeichen
-            # panel ein bisschen übersichtlicher gestalten").
-            # **Abtragen nur mit Zielkörper** (E9, Abschnitt 7): Ohne Ziel
-            # steht der Satz über das Kreuz nicht da — auch keiner, der
-            # erklärt, warum es fehlt; im leeren Projekt gibt es nichts zu
-            # schneiden, und bei einer neuen Zeichnung ist das Ziel die Wahl.
-            action = (
-                str(tr("Pfeil: Körper hochziehen · Kreuz: Tasche schneiden."))
-                if self._sketch_cut_available()
-                else str(tr("Pfeil: Körper hochziehen."))
-            )
-        elif offer:
-            # Der Grund, aus dem der Griff gerade nicht geht, steht dort, wo
-            # der Griff wäre: in der Karte im Bild.
-            action = offer
-        elif (
-            panel.canvas.outline
-            and panel.canvas.planes_are_parallel(panel.canvas.view_plane, drawing_plane)
-            and self._sketch_target in ("", PULL_OP, JOIN_OP, POCKET_OP)
-        ):
-            action = str(tr("Zum Ziehen mit der Maus: Vorder- oder Seitenansicht wählen."))
         self._sketch_hint.setText(line)
         self._sketch_hint.setVisible(bool(line))
-        self.viewport.show_sketch_action(action)
-        self._update_sketch_actions()
 
     def _sketch_frame(self) -> PlaneFrame | None:
         """Der Rahmen der Ebene, auf der gerade gezeichnet wird."""
@@ -13177,13 +13451,13 @@ class MainWindow(QMainWindow):
         self._update_sketch_hint()
 
     def finish_sketch(self, keep: bool = True, *, given: dict[str, Any] | None = None) -> None:
-        """Den Modus verlassen. Mit ``keep`` öffnet die Operation auf der
-        gezeichneten Skizze, sonst wird sie verworfen.
+        """Den Modus verlassen. Mit ``keep`` geht die Zeichnung weiter, sonst wird sie verworfen.
 
-        ``given`` sind Werte, die schon beantwortet sind, wenn der Dialog
-        aufgeht. Der Ziehgriff ist der eine Fall: Er hat die Höhe gezogen, und
-        sie im Dialog wieder auf die Vorgabe zu stellen hieße, die Geste
-        wegzuwerfen (:meth:`_on_sketch_pulled`).
+        Weiter heißt: Ein freier Umriss und einer für Hochziehen, Anfügen oder
+        Tasche kommt zurück in die Ansicht, und der nächste Klick setzt die
+        Höhe (RM-561, :meth:`_rise_from_the_sketch`). Eine andere Art — Drehen,
+        Führen, Überblenden — und ein geänderter Schritt öffnen ihren Dialog.
+        ``given`` sind Werte, die dort schon beantwortet sind.
         """
         panel = self._sketch_panel
         target = self._sketch_target
@@ -13193,6 +13467,21 @@ class MainWindow(QMainWindow):
             return
         text = panel.sketch_text()
         body = self._sketch_body
+        # **Aus jedem Umriss wird ein Körper auf einem Weg** (RM-561): Der freie
+        # Umriss und der für Hochziehen, Anfügen oder Tasche geht zurück in die
+        # Ansicht, und der nächste Klick setzt die Höhe — Richtung entscheidet
+        # die Art, kein Dialog. Was die Ansicht dafür braucht, wird hier
+        # gelesen, solange Panel und Rahmen noch stehen.
+        #
+        # ``given`` sind Antworten, die der Aufrufer schon hat — dann öffnet
+        # der Dialog mit ihnen, statt sie auf dem Höhenweg zu verlieren (M7).
+        rises = keep and text and step is None and not given and target in ("", *DRAWN_OPERATIONS)
+        if rises and not panel.canvas.outline:
+            # **Ein offener Umriss hat keine Höhe** (M5): Er bliebe bis zur
+            # Auswertung stehen und hielte dort die Kette an.
+            self.announce(tr("Erst einen geschlossenen Umriss zeichnen."))
+            return
+        rising = self._rising_surface(panel) if rises else None
         if keep and text and target and step is None and needed_inputs(REGISTRY.get(target)):
             # **Ohne Ziel geht die Zeichnung nicht verloren.** Eine Tasche aus
             # dem Menü, begonnen ohne Auswahl, lief bis zum Dialog und endete
@@ -13203,11 +13492,11 @@ class MainWindow(QMainWindow):
             if problem:
                 self.announce(problem)
                 return
-        # Nach dem Abbau kennt die Ansicht weder Kontur noch Zeichenrahmen.
-        # Die Vorwahl fällt deshalb hier: Ohne gewählte Art gilt der
-        # wahrscheinlichere Fall (Robert, 03.09.2026) — über dem Zielkörper eine
-        # Tasche, sonst ein neuer Körper.
-        on_body = bool(keep and text and not target and self._outline_meets_the_body())
+        origin = (
+            _OutlineOrigin(op_name=target or "", plane=panel.canvas.sketch.plane, body=body or "")
+            if rising is not None
+            else None
+        )
         if not keep:
             # **Verworfen heißt nicht vernichtet.** Escape war die teuerste
             # Taste des Programms: eine halbe Stunde Zeichnung, ein Tastendruck,
@@ -13243,13 +13532,8 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketch_entry(None, None)
         self.viewport.set_sketch_stroke(None)
         self.viewport.set_sketch_edit(None, None, None, None)
-        # Aus demselben Grund wie die Zeile darüber: ``_sketch_pull_offer`` ist
-        # eine gebundene Methode dieses Fensters und liest das Panel, das
-        # gleich stirbt.
-        self.viewport.set_sketch_pull(None)
         self.viewport.show_sketch_planes(False)
         self.viewport.show_sketch_selection("")
-        self.viewport.show_sketch_action("")
         panel.canvas.reclaim_measure_field()
         panel.sketchChanged.disconnect(self._redraw_sketch)
         self.viewport.cameraMoved.disconnect(self._redraw_sketch)
@@ -13302,8 +13586,13 @@ class MainWindow(QMainWindow):
         self.statusBar().clearMessage()
         self._update_actions()
         self._show_invitation()
-        if keep and target and not text:
+        shift = self._draw_shift
+        self._draw_shift = None
+        if keep and not text:
             self.announce(tr("Die Zeichnung ist leer. Es wurde nichts übernommen."))
+        if keep and text and rising is not None and origin is not None:
+            self._rise_from_the_sketch(text, rising, shift, origin)
+            return
         if keep and text:
             # Die Operation nimmt ihre Eingänge aus dem Objektbaum; das Ziel des
             # Zeichenmodus muss dort ankommen, sonst liefe sie ohne Eingang.
@@ -13329,12 +13618,64 @@ class MainWindow(QMainWindow):
                 else:
                     self.run_operation(REGISTRY.get(target), given=values)
             else:
-                # Ohne Wahl gilt der wahrscheinlichere Fall (Robert, 03.09.2026):
-                # auf leerer Fläche ein Körper, über dem Zielkörper eine Tasche.
-                name = POCKET_OP if on_body else PULL_OP
-                if on_body and body is not None and self.object_tree.selected_objects() != (body,):
-                    self.object_tree.select_object(body)
-                self.run_operation(REGISTRY.get(name), given={_sketch_param(name): text})
+                # Ohne auflösbare Ebene (ihre Fläche ist fort) gibt es keine Höhe
+                # im Bild; die Zeichnung geht dann nicht verloren, der Dialog öffnet.
+                self.run_operation(REGISTRY.get(PULL_OP), given={_sketch_param(PULL_OP): text})
+
+    def _rising_surface(self, panel: SketchPanel) -> DrawSurface | None:
+        """Worauf ein Umriss aus dem Editor in der Ansicht aufgezogen wird (RM-561).
+
+        Seine Ebene und sein Ziel: Auf einer Fläche fügt nach außen an, auf
+        einer Grundebene nur, wenn der Umriss den Zielkörper trifft — dieselbe
+        Frage, die *Hochziehen* im Editor stellte (:meth:`_outline_meets_the_body`).
+        Nach innen beginnt der Schnitt an der Oberkante des Ziels
+        (:meth:`_pocket_top_shift`), wie ``sketch_pocket`` ihn rechnet.
+        """
+        from app.core.sketch.planes import is_feature_plane
+        from app.ui.draw_tool import outline_surface
+
+        plane = panel.canvas.sketch.plane
+        frame = self._plane_frame(plane)
+        if frame is None:
+            return None
+        result = self.session.last_result
+        body = self._sketch_body
+        entry = result.scene.objects.get(body) if result is not None and body else None
+        on_face = is_feature_plane(plane)
+        return outline_surface(
+            plane,
+            frame,
+            entry,
+            joins=on_face or self._outline_meets_the_body(),
+            cut_top=0.0 if on_face else self._pocket_top_shift(),
+        )
+
+    def _rise_from_the_sketch(
+        self,
+        text: str,
+        surface: DrawSurface,
+        shift: tuple[float, float, float] | None,
+        origin: _OutlineOrigin,
+    ) -> None:
+        """Der Umriss steht in der Ansicht, die Höhe fehlt: Phase 3 des Aufziehens.
+
+        Eine gewählte Tasche bleibt Tasche (M4): Getippt ist die Tiefe, die
+        Leiste sagt es, und die Maus darf weiter umkehren.
+        """
+        from app.core.sketch.serialize import sketch_from_text
+
+        if shift is None:
+            shift = self.viewport.view_offset_of(surface.body)
+        self.open_draw_bar()
+        self.draw_flow().start_with_outline(
+            sketch_from_text(text),
+            surface,
+            shift,
+            intent=origin.op_name,
+            origin=origin,
+        )
+        self._update_actions()
+        self._show_invitation()
 
     # --- Formsitzung (§25, Konzept P16.6) ---------------------------------------
 
@@ -13378,28 +13719,29 @@ class MainWindow(QMainWindow):
         self._sculpt_params = (
             dict(self.session.history.operation(step).params) if step is not None else {}
         )
-        # **Auch der erste Zug ist einer.** Der Schalter wird nach jedem Zug
-        # zurückgenommen (der Grund steht dort), beim Betreten aber nicht: Wer
-        # ihn in der vorigen Sitzung zuletzt setzte, fand ihn hier wieder und
-        # bekam eine eigene Etappe, ohne sie verlangt zu haben.
-        self.sculpt_bar.cut.setChecked(False)
         self._sculpt_strokes = strokes_from_text(str(self._sculpt_params.get("strokes", "")))
         self._sculpt_gesture = None
         self._sculpt_gesture_number = max((s.gesture for s in self._sculpt_strokes), default=0)
         self._sculpt_redo.clear()
-        with QSignalBlocker(self.sculpt_bar.symmetry):
-            self.sculpt_bar.symmetry.setCurrentIndex(
-                self.sculpt_bar.symmetry.findData(self._sculpt_params.get("symmetry", "none"))
-            )
+        self.sculpt_bar.set_plane(str(self._sculpt_params.get("symmetry", "none")))
         self._sculpt_preview = None
         self._sculpt_preview_base = None
         self._sculpt_edge = None
+        self._sculpt_refined = None
+        self._sculpt_refined_edge = 0.0
+        self._sculpt_refine_blocked = False
+        # **Der Pinsel passt zum Körper** (H8): ein Zwanzigstel seiner
+        # Diagonale, wieder geöffnet der Radius des letzten Zugs. Ein fester
+        # Wert griff an der Figur fast nichts und am Würfel eine ganze Seite.
+        radius = self._sculpt_strokes[-1].radius if self._sculpt_strokes else brush_radius_for(mesh)
+        with QSignalBlocker(self.sculpt_bar.radius):
+            self.sculpt_bar.radius.set_value_mm(radius)
         self.viewport.set_sculpting(True, self.sculpt_bar.radius.value_mm())
         self.tools.close_tool()
         self.tools.setVisible(False)
         self.sculpt_bar.setVisible(True)
-        self.sculpt_bar.show_count(0, 0)
-        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
+        self.sculpt_bar.show_count(stroke_count(self._sculpt_strokes))
+        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
         # Der Befund der vorigen Sitzung gehört ihrem Körper und ihren Zügen.
         self.sculpt_bar.analysis.show_note("")
         self._update_actions()
@@ -13463,7 +13805,14 @@ class MainWindow(QMainWindow):
         return self._sculpt_target is not None
 
     def _sculpt_mesh(self, object_id: str) -> MeshData | None:
-        """Das Netz, auf dem geformt wird — aus der letzten Auswertung."""
+        """Das Netz, auf dem geformt wird — das für den Pinsel angeglichene der
+        Sitzung, sonst das aus der letzten Auswertung."""
+        if object_id == self._sculpt_target and self._sculpt_refined is not None:
+            return self._sculpt_refined
+        return self._sculpt_input(object_id)
+
+    def _sculpt_input(self, object_id: str) -> MeshData | None:
+        """Der Eingang des Formschritts, vor jedem Angleichen der Sitzung."""
         if object_id == self._sculpt_target and self._sculpt_source is not None:
             return self._sculpt_source
         result = self.session.last_result
@@ -13476,147 +13825,59 @@ class MainWindow(QMainWindow):
         except AppError:
             return None
 
-    def _sculpt_resolution_hint(self, mesh: MeshData) -> str:
-        """Entscheidung E: sagen, dass das Netz zu grob ist, **bevor** jemand
-        vergeblich malt.
-
-        ``warp`` ändert die Topologie nicht. Wer eine feine Falte in ein grobes
-        Netz zieht, bekommt keine Falte, sondern eine verzogene Facette — und
-        das erkennt man am Ergebnis nicht, sondern nur an dieser Zeile.
-        """
+    def _sculpt_mesh_edge(self, mesh: MeshData) -> float | None:
+        """Die mittlere Kante des Netzes — an einem großen Netz die, die der
+        Arbeiter gemessen hat, und ``None``, solange er es nicht hat."""
         if self._sculpt_needs_worker(mesh):
-            if self._sculpt_edge is None:
-                return ""
-            edge = self._sculpt_edge
-        else:
-            edge = median_edge(mesh)
-        radius = self.sculpt_bar.radius.value_mm()
-        if radius >= edge * BRUSH_TO_EDGE:
-            return ""
-        return tr("Das Netz ist für diesen Pinsel zu grob. Gleichen Sie erst die Dreiecke an.")
+            return self._sculpt_edge
+        return median_edge(mesh)
 
-    def _sculpt_refinement_order(self) -> _PreviewOrder:
-        """Die zum aktuellen Pinsel passende Vernetzung einmal vorbereiten."""
-        if self._sculpt_target is None:
-            return _PreviewOrder()
-        edge = self.sculpt_bar.radius.value_mm() / (BRUSH_TO_EDGE * 1.25)
-        finest = next(
-            entry.minimum or 0.0
-            for entry in REGISTRY.get("remesh_uniform").params.spec()
-            if entry.name == "edge"
-        )
-        return _PreviewOrder(
-            drafts=(
-                OperationDraft(
-                    op="remesh_uniform",
-                    inputs=(self._sculpt_target,),
-                    outputs=(self._sculpt_target,),
-                    params={"edge": max(finest, edge)},
-                ),
-            )
-        )
+    def _sculpt_refine_edge(self, mesh: MeshData) -> float:
+        """Auf welche Kante der eingestellte Pinsel das Netz braucht — null, wenn
+        es reicht oder die Kante noch nicht gemessen ist (H2, H9)."""
+        edge = self._sculpt_mesh_edge(mesh)
+        if edge is None:
+            return 0.0
+        return refine_edge_for(mesh, self.sculpt_bar.radius.value_mm(), _finest_edge(), edge)
 
-    def _refresh_sculpt_refinement(self, _radius: float) -> None:
-        """Ein neuer Pinselradius entwertet eine bereits angeforderte Vernetzung."""
-        approval = self._preview_approval
-        if (
-            self._sculpt_target is not None
-            and approval is not None
-            and approval.owner is self.sculpt_bar.refine
-        ):
-            approval = self._set_preview_order(
-                self.sculpt_bar.refine, self._sculpt_refinement_order()
-            )
-            self._request_order_preview(approval)
-
-    def refine_for_sculpt(self) -> None:
-        """Das Netz so fein machen, dass der eingestellte Pinsel greift.
-
-        Die Kantenlänge ist keine Frage an den Nutzer: Sie folgt aus dem
-        Radius, den er schon eingestellt hat, über dieselbe Schwelle, die die
-        Warnung auslöst (:data:`BRUSH_TO_EDGE`). Ein Viertel darunter statt
-        genau darauf — die Vernetzung trifft ihren Zielwert nur ungefähr, und
-        eine Warnung, die nach ihrer eigenen Behebung stehen bleibt, ist
-        schlimmer als gar keine.
-
-        Die Sitzung läuft weiter. Vorhandene Züge überleben das: sie stehen in
-        Weltkoordinaten und nicht als Eckenverweise (§30.1), und die Operation
-        entsteht ohnehin erst beim Verlassen.
+    def _sculpt_resolution_hint(self, mesh: MeshData) -> str:
+        """Entscheidung E, seit RM-561 ohne Knopf: Ist das Netz für den Pinsel zu
+        grob, gleicht die Sitzung beim nächsten Zug an und sagt es vorher. Eine
+        Warnung bleibt der Satz nur, wo sie es nicht kann — die Dreiecksgrenze
+        (:data:`REFINE_MAX_TRIANGLES`) ist erreicht.
         """
-        if self._sculpt_target is None:
-            return
-        if self._sculpt_preview_worker is not None or self._sculpt_pending:
-            self._sculpt_refine_pending = True
-            return
-        # Der feinste Wert, den die Operation annimmt, steht in ihrem Schema
-        # und nicht hier: der kleinste Pinsel (0,1 mm) rechnet sich sonst auf
-        # eine Kante, die sie ablehnt — eine Sackgasse hinter einem Knopf, der
-        # aus einer Sackgasse herausführen soll.
-        order = self._sculpt_refinement_order()
-        if self._sculpt_step is not None:
-            if self._sculpt_refine_reopen is not None:
-                return
-            self._sculpt_refine_reopen = (self.session.project.document, self._sculpt_step)
-            if not self.session.insert_before(
-                self._sculpt_step, tr("Dreiecke angleichen"), list(order.drafts)
-            ):
-                self._sculpt_refine_reopen = None
-            return
-        # Der Klick vor dem Bild wartet auf die Vorschau, wie am Dialog
-        # (:meth:`_apply_when_previewed`): Der Knopf ist seit „Warten ist
-        # keine Sperre" frei, und ein stiller Rücksprung wäre ein Knopf, der
-        # nichts tut (Release-Tor 22.09.2026, ``test_sculpt_session``).
-        if not self._preview_can_apply(
-            self.sculpt_bar.refine, order, then=weak_slot(self, MainWindow.refine_for_sculpt)
-        ):
-            return
-        self._clear_preview()
-        self.session.apply(tr("Dreiecke angleichen"), list(order.drafts))
+        edge = self._sculpt_mesh_edge(mesh)
+        if edge is None or edge * BRUSH_TO_EDGE <= self.sculpt_bar.radius.value_mm():
+            return ""
+        if self._sculpt_refine_blocked:
+            return tr(
+                "Das Netz ist offen und lässt sich nicht angleichen. Erst reparieren, dann formen."
+            )
+        if self._sculpt_refine_edge(mesh):
+            return tr("Beim nächsten Zug werden die Dreiecke für diesen Pinsel angeglichen.")
+        return tr("Für diesen Pinsel bleibt das Netz grob, ein größerer Radius wird glatter.")
 
-    def _sculpt_refinement_inserted(self, revision: Any) -> None:
-        """Die weiterhin offenen Züge bekommen den verfeinerten Eingang ihres Schritts."""
-        pending, self._sculpt_refine_reopen = self._sculpt_refine_reopen, None
-        if pending is None or pending[0] is not self.session.project.document:
-            return
-        if self._sculpt_target is None or revision.plan.kind != "insert":
-            return
-        self._sculpt_step = revision.plan.new_id(pending[1])
-        self._sculpt_params = dict(self.session.history.operation(self._sculpt_step).params)
-        finish_pending = self._sculpt_finish_pending
-        self._cancel_sculpt_preview()
-        self._gesture_open_number += 1
-        number = self._gesture_open_number
+    def _sculpt_radius_changed(self, _radius: float) -> None:
+        """Ein anderer Radius kann ein feineres Netz verlangen — die Leiste sagt es."""
         target = self._sculpt_target
-        self._start_preview_progress()
+        mesh = self._sculpt_mesh(target) if target is not None else None
+        if mesh is not None:
+            self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
 
-        def ready(scene: Any) -> None:
-            if number != self._gesture_open_number or target != self._sculpt_target:
-                return
-            self._finish_preview_progress()
-            body = scene.objects.get(target) if scene is not None else None
-            if body is None:
-                self.announce(
-                    tr(
-                        "Der Schritt lässt sich noch nicht öffnen. "
-                        "Prüfen Sie den vorherigen Schritt."
-                    )
-                )
-                return
-            self._gesture_scene = scene
-            self._sculpt_source = as_mesh_data(body.mesh)
-            self._sculpt_preview = None
-            self._sculpt_preview_base = None
-            self._sculpt_edge = None
-            self._show_sculpt_preview(self._sculpt_source)
-            self._gesture_analysis_changed()
-            if finish_pending:
-                self.finish_sculpt()
+    def _sculpt_refinement_draft(self, edge: float) -> OperationDraft:
+        """*Dreiecke angleichen* am Körper der Sitzung auf diese Kantenlänge."""
+        assert self._sculpt_target is not None
+        return self._refinement_draft_for(self._sculpt_target, edge)
 
-        self.session.scene_before_step_async(self._sculpt_step, ready, explained=self.announce)
-
-    def _sculpt_refinement_failed(self, _error: Any = None) -> None:
-        """Ein abgewiesener Umbau lässt die Gesten stehen und erlaubt einen neuen Versuch."""
-        self._sculpt_refine_reopen = None
+    @staticmethod
+    def _refinement_draft_for(target: str, edge: float) -> OperationDraft:
+        """*Dreiecke angleichen* an ``target`` mit den Werten der Vorschau."""
+        return OperationDraft(
+            op="remesh_uniform",
+            inputs=(target,),
+            outputs=(target,),
+            params=_refinement_params(edge),
+        )
 
     def _begin_sculpt_gesture(self) -> None:
         """Ein Mauszug beginnt, auch wenn sein erster Punkt neben dem Körper liegt."""
@@ -13633,8 +13894,14 @@ class MainWindow(QMainWindow):
         Geometrie entsteht dabei **nicht** (Regel 2): Der Zug geht in die
         Liste, und was das Fenster zeigt, ist eine Vorschau. Die Operation
         entsteht beim Verlassen der Sitzung, aus derselben Liste.
+
+        Jede Geste ist eine Etappe (Pinselfassung 2, RM-560): Der Zug trägt
+        die Kennung seines Mauszugs. Ist das Netz für den Pinsel zu grob, geht
+        der Zug in den Arbeiter, der zuerst angleicht — auch an einem wieder
+        geöffneten Schritt; ins Dokument kommt das Angleichen erst mit *Fertig*
+        (:meth:`finish_sculpt`).
         """
-        if self._sculpt_target is None:
+        if self._sculpt_target is None or self._sculpt_committing is not None:
             return
         mesh = self._sculpt_mesh(self._sculpt_target)
         if mesh is None:
@@ -13646,19 +13913,20 @@ class MainWindow(QMainWindow):
         if gesture is None:
             self._sculpt_gesture_number += 1
             gesture = self._sculpt_gesture_number
-        if self._sculpt_needs_worker(mesh):
+        refine = 0.0 if self._sculpt_refine_blocked else self._sculpt_refine_edge(mesh)
+        if self._sculpt_needs_worker(mesh) or refine:
             self._sculpt_pending.append(
                 (tuple(float(v) for v in point), {**bar.values(), "gesture": gesture})
             )
             self.undo_action.setEnabled(True)
             self._sculpt_finish_pending = False
             self._drop_sculpt_click()
-            bar.cut.setChecked(False)
             self._sculpt_wall_number += 1
             self._sculpt_check.stop()
             self._cancel_sculpt_check()
             self._start_sculpt_preview(mesh)
             return
+        preview = self._sculpt_preview_for(mesh)
         self._sculpt_strokes.append(
             stroke_at(
                 mesh,
@@ -13669,26 +13937,40 @@ class MainWindow(QMainWindow):
                 # Zoll ein Pinsel von 0,2 mm, wo 5 mm eingestellt waren —
                 # Geometrie ins Dokument, aus einem Anzeigewert.
                 **bar.values(),
+                gesture=gesture,
                 # Geklickt wird auf die Vorschau, also nach diesen Zügen. Ob
                 # der neue Zug dort noch wirkt oder eine Etappe braucht, weiß
                 # nur, wer sie kennt (RM-438) — samt der Spiegelung, die die
                 # Leiste über alle Züge legt (RM-454).
                 before=self._sculpt_shown(),
                 mirrored=SYMMETRY_BITS.get(bar.plane(), 0),
-                preview=self._sculpt_preview_for(mesh),
+                preview=preview,
+                centre=_plane_of(preview),
             )
         )
-        self._sculpt_strokes[-1] = replace(self._sculpt_strokes[-1], gesture=gesture)
-        # Der Schalter gilt für **einen** Zug. Stehen zu bleiben hieße, dass
-        # jeder weitere Zug eine eigene Etappe bekommt — und damit einen
-        # eigenen Durchgang, ohne dass jemand das verlangt hätte.
-        self.sculpt_bar.cut.setChecked(False)
         self.undo_action.setEnabled(True)
-        self._show_sculpt_preview(mesh)
+        # Die Vorschau zählt den Zug sofort mit — der nächste Zug fragt sie —,
+        # die Fläche kommt einmal nach allen Proben dieses Ereignisses (RM-576).
+        preview.extend(self._sculpt_shown())
+        self._drop_sculpt_click()
+        self.sculpt_bar.show_count(stroke_count(self._sculpt_strokes))
         self._gesture_analysis_changed()
+        self._sculpt_display.start()
+
+    def _show_sculpt_display(self) -> None:
+        """Die gesammelten Proben ins Bild (RM-576)."""
+        target = self._sculpt_target
+        mesh = self._sculpt_mesh(target) if target is not None else None
+        if mesh is not None:
+            self._show_sculpt_preview(mesh)
 
     def _sculpt_order(self) -> _PreviewOrder:
-        """Gesammelte Gesten und aktuelle Symmetrie bilden den gemeinsamen Auftrag."""
+        """Gesammelte Gesten und aktuelle Symmetrie bilden den gemeinsamen Auftrag.
+
+        Hat eine neue Sitzung angeglichen, steht *Dreiecke angleichen* davor —
+        in derselben Transaktion: Ein Strg+Z nimmt beides (RM-561). Ein wieder
+        geöffneter Schritt ändert sich selbst; sein Angleichen fügt
+        :meth:`finish_sculpt` davor ein."""
         if self._sculpt_target is None:
             return _PreviewOrder()
         values = {
@@ -13704,17 +13986,12 @@ class MainWindow(QMainWindow):
             return _PreviewOrder(change_op=self._sculpt_step, change_values=values)
         if not self._sculpt_strokes:
             return _PreviewOrder()
-        return _PreviewOrder(
-            drafts=(
-                OperationDraft(
-                    op="sculpt_strokes",
-                    inputs=(self._sculpt_target,),
-                    params=values,
-                ),
-            )
-        )
+        drafts = [OperationDraft(op="sculpt_strokes", inputs=(self._sculpt_target,), params=values)]
+        if self._sculpt_refined is not None:
+            drafts.insert(0, self._sculpt_refinement_draft(self._sculpt_refined_edge))
+        return _PreviewOrder(drafts=tuple(drafts))
 
-    def _refresh_sculpt_preview(self, _index: int) -> None:
+    def _refresh_sculpt_preview(self, _index: int = 0) -> None:
         """Die Symmetrie gilt auch den vorhandenen Zügen und braucht deren neue Vorschau."""
         if self._sculpt_target is not None:
             mesh = self._sculpt_mesh(self._sculpt_target)
@@ -13724,7 +14001,7 @@ class MainWindow(QMainWindow):
 
     def _drop_sculpt_click(self) -> None:
         """Ein neuer, zurückgenommener oder gespiegelter Zug entwertet einen
-        *Fertig*- oder *Angleichen*-Klick, der auf die Auswertung wartet.
+        *Fertig*-Klick, der auf die Auswertung wartet.
 
         Ohne das nähme der Klick den Zug mit, der nach ihm kam: Am großen Netz
         rechnet die Zugvorschau im Arbeiter, und *Fertig* wartet dann auf sie
@@ -13733,8 +14010,7 @@ class MainWindow(QMainWindow):
         waiting = self._click_after_evaluation
         if waiting is None:
             return
-        owner = waiting.owner()
-        if owner is self.sculpt_bar.done or owner is self.sculpt_bar.refine:
+        if waiting.owner() is self.sculpt_bar.done:
             self._drop_waiting_click(self._not_applied("values"))
 
     def _show_sculpt_preview(self, mesh: MeshData) -> None:
@@ -13749,40 +14025,51 @@ class MainWindow(QMainWindow):
         Transaktion.
         """
         self._drop_sculpt_click()
-        strokes = self._sculpt_strokes
-        self.sculpt_bar.show_count(stroke_count(strokes), len(stages(strokes)))
-        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
+        self.sculpt_bar.show_count(stroke_count(self._sculpt_strokes))
+        self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
         if self._sculpt_target is None:
             return
         if self._sculpt_needs_worker(mesh):
             self._cancel_sculpt_preview(keep_points=True)
             self._start_sculpt_preview(mesh)
             return
-        order = self._sculpt_order()
-        if order.drafts and self._order_has_exact_inputs(order, self.session.last_result):
-            approval = self._set_preview_order(self.sculpt_bar.done, order)
-            self._request_order_preview(approval)
+        if self._present_exact_sculpt():
             return
         previous = self._preview_approval
-        if previous is not None and previous.owner in (
-            self.sculpt_bar.done,
-            self.sculpt_bar.refine,
-        ):
+        if previous is not None and previous.owner is self.sculpt_bar.done:
             self._clear_preview()
         preview = self._sculpt_preview_for(mesh)
         self.viewport.show_preview_mesh(self._sculpt_target, preview.show(self._sculpt_shown()))
+        self._sync_brush_mirror()
+
+    def _sync_brush_mirror(self) -> None:
+        """Der Ring zeigt sein Spiegelbild, solange *Spiegeln* an ist — um die
+        Mitte, um die die Vorschau spiegelt."""
+        preview = self._sculpt_preview
+        planes = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
+        if preview is None or self._sculpt_target is None:
+            self.viewport.set_brush_mirror(None, 0)
+            return
+        centre = (float(preview.plane[0]), float(preview.plane[1]), float(preview.plane[2]))
+        self.viewport.set_brush_mirror(centre, planes)
+
+    def _present_exact_sculpt(self) -> bool:
+        """Am exakten Körper ist die Vorschau die geprüfte Auswertung samt
+        Konvertierung (Entscheidung Robert, 21.09.2026) — ``True``, wenn sie
+        angefordert wurde. Ein angeglichenes Netz zeigt sie dabei mit."""
+        order = self._sculpt_order()
+        if not order.drafts or not self._order_has_exact_inputs(order, self.session.last_result):
+            return False
+        approval = self._set_preview_order(self.sculpt_bar.done, order)
+        self._request_order_preview(approval)
+        return True
 
     def _sculpt_preview_for(self, mesh: MeshData) -> SculptPreview:
         """Die Vorschau der Sitzung an diesem Netz — neu, wenn das Netz ein
-        anderes ist (*Dreiecke jetzt angleichen* mitten in der Sitzung)."""
+        anderes ist (angeglichen mitten in der Sitzung)."""
         preview = self._sculpt_preview
         if preview is None or self._sculpt_preview_base is not mesh:
-            preview = SculptPreview(
-                mesh,
-                centre=None if self._sculpt_params.get("mirror_at_body", True) else (0.0, 0.0, 0.0),
-                front_only=bool(self._sculpt_params.get("front_only", True)),
-                mirror_once=bool(self._sculpt_params.get("mirror_once", True)),
-            )
+            preview = _sculpt_preview_of(mesh, self._sculpt_params)
             self._sculpt_preview = preview
             self._sculpt_preview_base = mesh
         return preview
@@ -13795,18 +14082,32 @@ class MainWindow(QMainWindow):
         return mesh.triangle_count >= AT_ONCE_BELOW
 
     def _start_sculpt_preview(self, mesh: MeshData) -> None:
-        """Züge bleiben in Reihenfolge; höchstens ein Arbeiter besitzt die Vorschau."""
+        """Züge bleiben in Reihenfolge; höchstens ein Arbeiter besitzt die Vorschau.
+
+        Er nimmt alle Proben, die bis zu seinem Start warten (H6). Die Sitzung
+        gibt ihm ihren Eingang mit, damit er für den Pinsel angleichen kann —
+        neu oder wieder geöffnet; das Dokument ändert sich dabei nicht."""
         if self._sculpt_preview_worker is not None or self._sculpt_target is None:
             return
         preview = self._sculpt_preview if self._sculpt_preview_base is mesh else None
+        refine = None
+        # Angeglichen wird für einen Zug, nicht fürs Ansehen (Review N3): Ein
+        # geöffneter großer Schritt zeigte seine alten Züge sonst schon auf
+        # einem anderen Netz, bevor jemand etwas tat.
+        if not self._sculpt_refine_blocked and self._sculpt_pending:
+            source = self._sculpt_input(self._sculpt_target)
+            if source is not None:
+                refine = (source, self.sculpt_bar.radius.value_mm(), _finest_edge())
         worker = _SculptPreviewWorker(
             self._sculpt_preview_number,
             mesh,
             preview,
             self._sculpt_strokes,
-            self._sculpt_pending[0] if self._sculpt_pending else None,
+            list(self._sculpt_pending),
             SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0),
             self._sculpt_params,
+            refine,
+            self._sculpt_edge if self._sculpt_preview_base is mesh else None,
         )
         self._sculpt_preview_base = mesh
         self._sculpt_preview_worker = worker
@@ -13821,7 +14122,15 @@ class MainWindow(QMainWindow):
         self._leash.start(worker)
 
     def _sculpt_preview_received(
-        self, worker: _SculptPreviewWorker, number: int, preview: Any, strokes: Any, edge: float
+        self,
+        worker: _SculptPreviewWorker,
+        number: int,
+        preview: Any,
+        strokes: Any,
+        edge: float,
+        refined: Any,
+        refined_edge: float,
+        consumed: int,
     ) -> None:
         """Nur die aktuelle Sitzung übernimmt Antwort, Zählung und nächste Geste."""
         if worker is not self._sculpt_preview_worker or number != self._sculpt_preview_number:
@@ -13829,30 +14138,56 @@ class MainWindow(QMainWindow):
         self._sculpt_preview_worker = None
         self._sculpt_preview = preview
         self._sculpt_strokes = strokes
-        self.undo_action.setEnabled(bool(strokes or self._sculpt_pending))
         self._sculpt_edge = edge
-        if worker.point is not None and self._sculpt_pending:
-            self._sculpt_pending.pop(0)
+        del self._sculpt_pending[:consumed]
+        self.undo_action.setEnabled(bool(strokes or self._sculpt_pending))
         target = self._sculpt_target
         if target is None:
             return
+        if refined is not None:
+            self._sculpt_refined = refined
+            self._sculpt_refined_edge = refined_edge
+            self._sculpt_preview_base = refined
+            if not self._present_exact_sculpt():
+                self._show_sculpt_base(refined)
+        elif refined_edge < 0.0:
+            self._sculpt_refine_blocked = True
         self.viewport.show_preview_mesh(target, preview.shown)
-        self.sculpt_bar.show_count(stroke_count(strokes), len(stages(strokes)))
+        self._sync_brush_mirror()
+        self.sculpt_bar.show_count(stroke_count(strokes))
         mesh = self._sculpt_mesh(target)
         if mesh is not None:
-            self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
+            self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh))
         if self._sculpt_pending and mesh is not None:
             self._start_sculpt_preview(mesh)
             return
         self._finish_preview_progress()
         self._gesture_analysis_changed()
-        if self._sculpt_refine_pending:
-            self._sculpt_refine_pending = False
-            self.refine_for_sculpt()
-            return
         if self._sculpt_finish_pending:
             self._sculpt_finish_pending = False
             self.finish_sculpt()
+
+    def _show_sculpt_base(self, mesh: MeshData) -> None:
+        """Das angeglichene Netz in die Ansicht — die Vorschau trägt andere Ecken
+        als der Körper, der dort steht, und ``show_preview_mesh`` tauscht nur
+        Koordinaten. Die Szene der Ansicht bekommt den Körper mit dem neuen Netz;
+        die Vorschau zieht nach, sobald sie steht (:meth:`_sculpt_scene_applied`)."""
+        result = self.session.last_result
+        target = self._sculpt_target
+        scene = self._gesture_scene or (result.scene if result is not None else None)
+        if result is None or scene is None or target is None or target not in scene.objects:
+            return
+        objects = dict(scene.objects)
+        objects[target] = replace(objects[target], mesh=mesh)
+        self.viewport.show_scene(
+            replace(result, scene=replace(scene, objects=objects)), preserve_camera=True
+        )
+
+    def _sculpt_scene_applied(self) -> None:
+        """Steht in der Ansicht ein neuer Körperaufbau, liegt die Vorschau wieder darauf."""
+        target, preview = self._sculpt_target, self._sculpt_preview
+        if target is not None and preview is not None:
+            self.viewport.show_preview_mesh(target, preview.shown)
 
     def _sculpt_preview_crashed(self, worker: Any, detail: str) -> None:
         """Ein ausgefallener Zug erhält die letzte gültige Sitzung und nennt den Ausweg."""
@@ -13870,6 +14205,9 @@ class MainWindow(QMainWindow):
         """Prüfstände warten auf alle geordneten Antworten; die Oberfläche wartet nie."""
         from time import monotonic
 
+        if self._sculpt_display.isActive():
+            self._sculpt_display.stop()
+            self._show_sculpt_display()
         deadline = monotonic() + timeout_ms / 1000
         while self._sculpt_preview_worker is not None:
             remaining = max(0, int((deadline - monotonic()) * 1000))
@@ -13893,7 +14231,6 @@ class MainWindow(QMainWindow):
         if self._sculpt_target is not None:
             self.undo_action.setEnabled(bool(self._sculpt_strokes or self._sculpt_pending))
         self._sculpt_finish_pending = False
-        self._sculpt_refine_pending = False
         self._finish_preview_progress()
 
     def _sculpt_shown(self) -> list[Stroke]:
@@ -13920,6 +14257,12 @@ class MainWindow(QMainWindow):
         einem echten Modell, und währenddessen formt man weiter. Ein neuer
         Zug stößt eine neue Prüfung an; die Antwort einer älteren verfällt.
         """
+        # Erst die wartende Übergabe der Vorschau (RM-576), dann die Prüfung: Die
+        # Übergabe schreibt die Warnzeile neu und löschte sonst die Antwort, wo
+        # Qt sie nach ihr zustellt (macOS, Linux).
+        if self._sculpt_display.isActive():
+            self._sculpt_display.stop()
+            self._show_sculpt_display()
         if self._sculpt_preview_worker is not None:
             return
         target = self._sculpt_target or self._armature_target or self._pose_report_target
@@ -13971,9 +14314,15 @@ class MainWindow(QMainWindow):
         self._leash.start(worker)
 
     def _gesture_analysis_changed(self) -> None:
-        """Kartenwechsel und neue Gesten entwerten alte Antworten sofort."""
+        """Kartenwechsel und neue Gesten entwerten alte Antworten sofort.
+
+        Die Vorschau kommt nur dann ein zweites Mal in die Ansicht, wenn eine
+        Karte sie verdeckt hatte (H6): Die Ansicht baut beim Wegnehmen der
+        Karte den Körper neu auf. Ohne Karte gab jede Probe ihr Netz zweimal
+        ab — gemessen 80 Übergaben für 40 Proben."""
         self._sculpt_wall_number += 1
         self._cancel_sculpt_check()
+        covered = self.viewport.analysis_map is not None
         self.viewport.set_analysis_map(None, None)
         self.analysis_bar.show_legend(None)
         self.sculpt_bar.analysis.show_map(None)
@@ -13982,9 +14331,9 @@ class MainWindow(QMainWindow):
         if self._sculpt_target is not None and self.sculpt_bar.analysis.chosen() == "overhang":
             mesh = self._sculpt_mesh(self._sculpt_target)
             self.sculpt_bar.show_warning(
-                self._sculpt_resolution_hint(mesh) if mesh is not None else "", refinable=True
+                self._sculpt_resolution_hint(mesh) if mesh is not None else ""
             )
-        if self._sculpt_target is not None and self._sculpt_preview is not None:
+        if covered and self._sculpt_target is not None and self._sculpt_preview is not None:
             self.viewport.show_preview_mesh(self._sculpt_target, self._sculpt_preview.shown)
         self._sculpt_check.start()
 
@@ -14048,7 +14397,7 @@ class MainWindow(QMainWindow):
         if not thin:
             mesh = self._sculpt_mesh(target)
             hint = self._sculpt_resolution_hint(mesh) if mesh is not None else ""
-            self.sculpt_bar.show_warning(hint, refinable=True)
+            self.sculpt_bar.show_warning(hint)
             return
         self.sculpt_bar.show_warning(
             tr("Eine Stelle dünner als {minimum}").replace("{minimum}", length(minimum))
@@ -14107,7 +14456,10 @@ class MainWindow(QMainWindow):
         Eine leere Zeichnung wird nicht gemerkt — ein Angebot, nichts
         zurückzuholen, wäre eine Meldung ohne Inhalt.
         """
-        if not text:
+        restored, self._restored_text = self._restored_text, None
+        if not text or text == restored:
+            # Ein eben zurückgeholter, unveränderter Umriss wird nicht noch
+            # einmal angeboten: Sonst käme Strg+Z nie mehr am Verlauf an (N12).
             self._discarded_sketch = None
             return
         plane = ""
@@ -14158,6 +14510,8 @@ class MainWindow(QMainWindow):
             step=discarded.step,
             field_name=discarded.field_name,
         )
+        if self._sketch_panel is not None:
+            self._restored_text = self._sketch_panel.sketch_text()
         self.announce(tr("Zeichnung zurückgeholt."))
         return True
 
@@ -14170,6 +14524,8 @@ class MainWindow(QMainWindow):
         """
         if self._sculpt_target is None or not (self._sculpt_strokes or self._sculpt_pending):
             return False
+        if self._sculpt_committing is not None:
+            return True
         self._cancel_sculpt_preview(keep_points=True)
         self.viewport.stop_sculpt_gesture()
         gesture = (
@@ -14230,13 +14586,9 @@ class MainWindow(QMainWindow):
         """Die Sitzung schließen — und aus ihr genau eine Operation machen."""
         target = self._sculpt_target
         strokes = self._sculpt_strokes
-        if target is None:
+        if target is None or self._sculpt_committing is not None:
             return
-        if (
-            self._sculpt_preview_worker is not None
-            or self._sculpt_pending
-            or self._sculpt_refine_reopen is not None
-        ):
+        if self._sculpt_preview_worker is not None or self._sculpt_pending:
             self._sculpt_finish_pending = True
             return
         unchanged = self._sculpt_step is not None and (
@@ -14254,6 +14606,7 @@ class MainWindow(QMainWindow):
             self.announce(tr("Der geformte Körper ist nicht mehr da — die Sitzung bleibt offen."))
             return
         order = self._sculpt_order()
+        refined_edge = self._sculpt_refined_edge if self._sculpt_refined is not None else 0.0
         # Ein frühes *Fertig* wartet auf das Bild mit der Konvertierung und
         # schließt dann — genau einmal; ein neuer Zug entwertet die Vorschau
         # samt dem wartenden Klick (:meth:`_apply_when_previewed`).
@@ -14261,8 +14614,74 @@ class MainWindow(QMainWindow):
             self.sculpt_bar.done, order, then=weak_slot(self, MainWindow.finish_sculpt)
         ):
             return
+        if order.change_op is not None and unchanged:
+            # Auch ein Angleichen der Sitzung bleibt draußen: Ohne neuen Zug
+            # gibt es keinen Grund für einen Schritt (Review F5).
+            self._close_sculpt_session()
+            return
+        if order.change_op is None and not strokes:
+            # Eine Sitzung ohne Zug hinterlässt nichts. Ein leerer Schritt im
+            # Verlauf wäre Rauschen an genau der Stelle, an der man sucht.
+            self._close_sculpt_session()
+            return
+        if order.change_op is not None and refined_edge:
+            # Angleichen davor und die neuen Züge im Schritt — eine
+            # Transaktion, ein Strg+Z (Review F5), gerechnet als Umbau.
+            change_op, values = order.change_op, dict(order.change_values or {})
+            self._commit_sculpt_revision(
+                lambda: self.session.insert_before(
+                    change_op,
+                    _("Formen (Dreiecke angeglichen)"),
+                    [self._refinement_draft_for(target, refined_edge)],
+                    changed={change_op: values},
+                )
+            )
+            return
+        if order.change_op is None and self.session.inserting is not None:
+            # Mit Einfügemarke wird auch ein neuer Schritt zum Umbau.
+            drafts = list(order.drafts)
+            self._commit_sculpt_revision(lambda: self.session.apply(_("Formen"), drafts))
+            return
+        self._close_sculpt_session()
+        if order.change_op is not None:
+            self._commit_preview_order(order)
+            return
+        self.session.apply(_("Formen"), list(order.drafts))
+
+    def _commit_sculpt_revision(self, start: Callable[[], bool]) -> None:
+        """Die Sitzung über einen Umbau im Arbeiter schreiben — und erst schließen,
+        wenn er übernommen ist (Review N1).
+
+        Ein Umbau lässt sich abbrechen, und er kann abgelehnt werden; beides ändert
+        den Verlauf nicht. Schloss die Sitzung vorher, waren ihre Züge dann fort,
+        ohne Strg+Z, und der Satz sagte, es sei nichts geschehen. Bis zur Antwort
+        nimmt die Sitzung keine Eingabe an."""
+        self._sculpt_committing = self.session.project.document
+        self.sculpt_bar.setEnabled(False)
+        if not start():
+            self._sculpt_commit_refused()
+
+    def _sculpt_commit_done(self, _revision: Any = None) -> None:
+        """Der Umbau der Sitzung steht im Verlauf: jetzt schließt sie."""
+        if self._sculpt_committing is None:
+            return
+        self._sculpt_committing = None
+        self.sculpt_bar.setEnabled(True)
+        self._close_sculpt_session()
+
+    def _sculpt_commit_refused(self, _error: Any = None) -> None:
+        """Abgebrochen oder abgelehnt: Die Sitzung bleibt mit allen Zügen offen."""
+        if self._sculpt_committing is None:
+            return
+        self._sculpt_committing = None
+        self.sculpt_bar.setEnabled(True)
+        self.announce(tr("Nicht übernommen — die Züge bleiben in der Sitzung."))
+
+    def _close_sculpt_session(self) -> None:
+        """Die Formsitzung abbauen: Ziel, Züge, Vorschau, Leiste und Ansicht."""
         self._clear_preview()
         self._cancel_sculpt_preview()
+        self._sculpt_display.stop()
         self._sculpt_target = None
         self._sculpt_step = None
         self._sculpt_source = None
@@ -14273,10 +14692,12 @@ class MainWindow(QMainWindow):
         self._sculpt_redo.clear()
         self._sculpt_preview = None
         self._sculpt_preview_base = None
+        self._sculpt_refined = None
         self._sculpt_check.stop()
         # Eine Antwort, die nach dem Verlassen ankommt, gehört niemandem mehr.
         self._sculpt_wall_number += 1
         self._cancel_sculpt_check()
+        self.viewport.set_brush_mirror(None, 0)
         self.viewport.set_sculpting(False)
         self.viewport.clear_preview_mesh()
         self.viewport.show_scene(self.session.last_result)
@@ -14286,25 +14707,17 @@ class MainWindow(QMainWindow):
         self.tools.setVisible(True)
         self.statusBar().clearMessage()
         self._update_actions()
-        if order.change_op is not None:
-            if not unchanged:
-                self._commit_preview_order(order)
-            return
-        if not strokes:
-            # Eine Sitzung ohne Zug hinterlässt nichts. Ein leerer Schritt im
-            # Verlauf wäre Rauschen an genau der Stelle, an der man sucht.
-            return
-        self.session.apply(_("Formen"), list(order.drafts))
 
-    # --- Skelettsitzung (§25, Konzept P16 §7.5) ---------------------------------
+    # --- Skelettsitzung (§25, Konzept P16 §7.5, RM-561) ---------------------------
 
     def start_armature(self, object_id: str = "", *, step: int | None = None) -> None:
-        """Den Skeletteditor öffnen: Klicks setzen von jetzt an Knochenpunkte.
+        """Das Skelettwerkzeug öffnen: Klicks setzen Gelenke und Knochen, Ziehen beugt.
 
-        Zwei Klicks je Knochen — erst das Gelenk, dann das Ende. Der nächste
-        Knochen hängt am vorigen, bis jemand *Neue Kette* drückt: Ein Skelett
-        ist meistens eine Kette, und wer für jeden Knochen sein Elternteil
-        wählen muss, klickt dreimal so oft wie nötig.
+        Der erste Klick setzt ein Gelenk, jeder weitere einen Knochen am Fuß des
+        vorigen — n Knochen sind n + 1 Klicks (RM-561). Enter beendet die Kette,
+        ein Klick auf ein Gelenk setzt dort fort. Ziehen an einem Gelenk beugt
+        den Knochen, der dort endet, in der Bildebene; geschrieben wird dasselbe
+        ``pose``-Feld, das der Schrittdialog als Zahlen zeigt (Regel 2).
         """
         if not self._quiet_command_allowed():
             return
@@ -14329,22 +14742,34 @@ class MainWindow(QMainWindow):
         self._gesture_open_number += 1
         self._finish_preview_progress()
         self._armature_target = target
-        # **Ein vorhandenes Skelett kommt mit.** Wer den Editor auf einem
-        # Körper öffnet, der schon eines trägt, erwartet seine Knochen zu
-        # sehen — nicht ein leeres Blatt. Ohne das war der einzige Weg zu
-        # einem verschobenen Gelenk, das Skelett neu zu setzen, und beim
-        # „Fertig" entstand eine **zweite** Operation, die ein zweites Mal
-        # beugt.
+        # **Ein vorhandenes Skelett kommt mit**, samt Stellung: Wer das Werkzeug
+        # auf einem Körper öffnet, der schon eines trägt, erwartet seine Knochen
+        # und Gelenke zu sehen und weiterzubeugen — nicht ein leeres Blatt und
+        # nicht eine zweite Operation, die ein zweites Mal beugt.
         self._armature_step, self._armature_bones = self._armature_of(target)
+        self._armature_params = {}
         if step is not None:
             from app.core.geom.pose import armature_from_text
 
             self._armature_step = step
+            self._armature_params = dict(self.session.history.operation(step).params)
             self._armature_bones = armature_from_text(
-                str(self.session.history.operation(step).params.get("armature", ""))
+                str(self._armature_params.get("armature", ""))
             )
+        from app.core.geom.pose import pose_angles
+
+        self._armature_pose = dict(pose_angles(str(self._armature_params.get("pose", ""))))
+        self._armature_angles = self._armature_numbers()
+        unreadable = sorted(set(self._armature_pose) - set(self._armature_angles))
         self._armature_head = None
         self._armature_parent = ""
+        self._armature_fresh = False
+        self._armature_undo = []
+        self._armature_drag = None
+        self._armature_skin = None
+        self._armature_shown = None
+        self._armature_surfaces = []
+        self._armature_ended = None
         self.viewport.set_boning(True)
         self.tools.close_tool()
         self.tools.setVisible(False)
@@ -14352,29 +14777,28 @@ class MainWindow(QMainWindow):
         self.pose_bar.set_editing(True)
         self._pose_report_target = None
         self._gesture_analysis_changed()
-        # **Der Zustand wird abgeleitet, nicht behauptet.** Sieben Zeilen
-        # darüber lädt ``_armature_of`` die Knochen des vorhandenen Schritts;
-        # eine feste Null daneben ist eine zweite Quelle für etwas, das schon
-        # eine hat — und sie war die falsche. Wer „Noch kein Knochen" liest,
-        # hält das für eine Zusage: Er fängt bei null an. Setzt er dann einen
-        # und sieht vier, weiß er nicht, ob er drei fremde geerbt oder drei
-        # eigene verloren hat, und *Fertig* ändert einen Schritt, von dem die
-        # Leiste behauptet hat, er sei leer (gemessen 3d-druck-85, 03.09.2026:
-        # drei geladene Knochen, angezeigt „Noch kein Knochen").
-        #
-        # Das Namensfeld gehört dazu: Es überlebte sonst die Sitzung, und der
-        # erste Knochen am **nächsten** Körper hieß, was jemand hier getippt
-        # und nie gesetzt hatte. ``clear_name`` verbietet das in seinem
-        # eigenen Docstring — gerufen hat es diese Stelle nur nicht.
-        self.pose_bar.clear_name()
-        self.pose_bar.show_state(
-            len(self._armature_bones),
-            pending=False,
-            chain=bool(self._armature_parent),
+        # **Der Zustand wird abgeleitet, nicht behauptet** (gemessen
+        # 03.09.2026: drei geladene Knochen, angezeigt „Noch kein Knochen").
+        self._armature_changed()
+        self._show_armature_skin()
+        self.statusBar().showMessage(
+            tr("Erster Klick ein Gelenk, jeder weitere ein Knochen — Escape beendet.")
         )
-        self._update_actions()
-        self._show_bones()
-        self.statusBar().showMessage(tr("Zwei Klicks setzen einen Knochen — Escape beendet."))
+        if unreadable:
+            # Nur dieser Knochen steht in Ruhe, die übrigen in ihrer Stellung
+            # (Review G1); was fehlt, sagt der Schrittdialog.
+            sentence = (
+                tr(
+                    "Der Winkel von {bones} ist nicht lesbar. Bis er geklärt ist, "
+                    "steht der Knochen in Ruhe."
+                )
+                if len(unreadable) == 1
+                else tr(
+                    "Die Winkel von {bones} sind nicht lesbar. Bis sie geklärt sind, "
+                    "stehen diese Knochen in Ruhe."
+                )
+            )
+            self.announce(sentence.format(bones=", ".join(unreadable)))
 
     def _armature_of(self, target: str) -> tuple[int | None, list[Any]]:
         """Der letzte Skelettschritt dieses Körpers und seine Knochen.
@@ -14409,96 +14833,520 @@ class MainWindow(QMainWindow):
         """Ob gerade ein Skelett gesetzt wird."""
         return self._armature_target is not None
 
+    def _armature_numbers(self) -> dict[str, Vec3]:
+        """Die Winkel der Stellung als Zahlen — ein Projektparameter aufgelöst (§13).
+
+        Ein unlesbarer oder ungebundener Winkel fehlt hier, und nur sein Knochen
+        steht in Ruhe (Review G1): Ein einziger ungebundener Winkel zeigte das
+        ganze Skelett in Ruhe, und ein Zug rechnete dann gegen Eltern, die die
+        Auswertung anders sah."""
+        from app.core.geom.pose import pose_from_text, pose_text
+
+        values = {
+            name: entry.value for name, entry in self.session.project.document.parameters.items()
+        }
+        try:
+            poses = pose_from_text(pose_text(self._armature_pose), values)
+        except AppError:
+            poses = []
+            for name, entry in self._armature_pose.items():
+                try:
+                    poses.extend(pose_from_text(pose_text({name: entry}), values))
+                except AppError:
+                    continue
+        return {pose.bone: pose.angles for pose in poses}
+
+    def _armature_joints(self) -> list[tuple[Vec3, str, Vec3]]:
+        """Die Gelenke des Skeletts: Lage in der Stellung, der Knochen, der dort
+        endet (leer an einem Kettenanfang), und die Lage in Ruhe."""
+        from app.core.geom.pose import posed_bones
+
+        ends = posed_bones(self._armature_bones, self._armature_angles)
+        joints: list[tuple[Vec3, str, Vec3]] = []
+        for bone, (head, tail) in zip(self._armature_bones, ends, strict=True):
+            if not bone.parent:
+                joints.append((head, "", bone.head))
+            joints.append((tail, bone.name, bone.tail))
+        return joints
+
+    def _posed_point(self, rest: Vec3) -> Vec3:
+        """Wo ein Ruhepunkt am Kettenende in der Stellung liegt — am Knochen, an dem er hängt."""
+        import numpy as np
+
+        from app.core.geom.pose import transforms
+        from app.core.geom.transform import moved_points
+
+        if not self._armature_parent:
+            return rest
+        matrix = transforms(self._armature_bones, self._armature_angles).get(self._armature_parent)
+        if matrix is None:
+            return rest
+        found = moved_points(np.asarray([rest], dtype=float), matrix)[0]
+        return (float(found[0]), float(found[1]), float(found[2]))
+
+    def _rest_point(self, posed: Vec3) -> Vec3:
+        """Ein in der Stellung geklickter Punkt in Ruhelage — durch den Knochen,
+        an dem die Kette hängt, zurückgedreht. Ohne Elternteil ist es der Punkt."""
+        import numpy as np
+
+        from app.core.geom.pose import transforms
+
+        if not self._armature_parent:
+            return posed
+        matrix = transforms(self._armature_bones, self._armature_angles).get(self._armature_parent)
+        if matrix is None:
+            return posed
+        turn = np.asarray(matrix[:3, :3], dtype=float)
+        offset = np.asarray(posed, dtype=float) - np.asarray(matrix[:3, 3], dtype=float)
+        # Rᵀ·o elementweise, ohne BLAS (RM-187): eine gespeicherte Koordinate.
+        back = (turn * offset[:, None]).sum(axis=0)
+        return (float(back[0]), float(back[1]), float(back[2]))
+
     def _on_bone_point(self, point: Any) -> None:
-        """Ein Klick im Viewport: erst der Kopf, dann der Fuß eines Knochens."""
-        if self._armature_target is None:
+        """Ein Klick im Bild: der erste setzt ein Gelenk, jeder weitere einen Knochen
+        am Fuß des vorigen (n Knochen, n + 1 Klicks — RM-561)."""
+        if self._armature_target is None or self._armature_drag is not None:
             return
         place = self._joint_inside((float(point[0]), float(point[1]), float(point[2])))
-        self.undo_action.setEnabled(True)
+        state = (self._armature_head, self._armature_parent, self._armature_fresh)
         if self._armature_head is None:
+            self._armature_undo.append(("head", *state))
             self._armature_head = place
-            self.pose_bar.show_state(
-                len(self._armature_bones), pending=True, chain=bool(self._armature_parent)
+            self._armature_parent = ""
+            self._armature_fresh = True
+        else:
+            tail = place
+            if math.dist(tail, self._armature_head) <= EPS_GEOM:
+                self.announce(tr("Zwei verschiedene Punkte klicken."))
+                return
+            taken = {bone.name for bone in self._armature_bones}
+            number = len(self._armature_bones) + 1
+            while f"bone_{number}" in taken:
+                number += 1
+            name = f"bone_{number}"
+            self._armature_undo.append(("bone", *state))
+            self._armature_bones.append(
+                Bone(name=name, head=self._armature_head, tail=tail, parent=self._armature_parent)
             )
-            self._show_bones()
-            return
+            self._armature_head = tail
+            self._armature_parent = name
+            self._armature_fresh = False
+            self._armature_skin = None
+            if self._armature_bent():
+                # Der neue Knochen ändert die Gewichte der gebeugten Haut: Das
+                # Bild zeigt, was *Fertig* rechnet (Review G1).
+                self._show_armature_skin()
+        self._armature_changed()
 
-        name = self.pose_bar.next_name() or f"bone_{len(self._armature_bones) + 1}"
-        # Ein Name, den es schon gibt, wäre ein Skelett, dessen Stellung
-        # niemand mehr zuordnet — die Winkel stehen je Knochenname.
-        taken = {bone.name for bone in self._armature_bones}
-        while name in taken:
-            name = f"{name}_1"
-        self._armature_bones.append(
-            Bone(name=name, head=self._armature_head, tail=place, parent=self._armature_parent)
+    def _on_joint_picked(self, index: int) -> None:
+        """Ein Klick auf ein Gelenk: am Ende der laufenden Kette beendet er sie, an
+        jedem anderen setzt die Kette dort fort (RM-561).
+
+        Ein Doppelklick auf den letzten Punkt beendet die Kette — sein zweiter
+        Klick fällt auf dasselbe Gelenk und öffnet sie nicht gleich wieder."""
+        if self._armature_target is None or self._armature_drag is not None:
+            return
+        joints = self._armature_joints()
+        if not 0 <= index < len(joints):
+            return
+        _posed, ends, rest = joints[index]
+        ended = self._armature_ended
+        if (
+            ended is not None
+            and math.dist(ended[0], rest) <= EPS_GEOM
+            and time.monotonic() - ended[1] < QApplication.doubleClickInterval() / 1000
+        ):
+            return
+        state = (self._armature_head, self._armature_parent, self._armature_fresh)
+        if self._armature_head is not None and math.dist(self._armature_head, rest) <= EPS_GEOM:
+            self._armature_undo.append(("end", *state))
+            self._armature_head, self._armature_parent, self._armature_fresh = None, "", False
+            self._armature_ended = (rest, time.monotonic())
+        else:
+            self._armature_undo.append(("head", *state))
+            self._armature_head, self._armature_parent, self._armature_fresh = rest, ends, False
+        self._armature_changed()
+
+    def end_armature_chain(self) -> None:
+        """Enter: die Kette ist zu Ende, der nächste Klick beginnt eine neue."""
+        if self._armature_target is None or self._armature_head is None:
+            return
+        self._armature_undo.append(
+            ("end", self._armature_head, self._armature_parent, self._armature_fresh)
         )
-        self._armature_head = None
-        self._armature_parent = name
-        self.pose_bar.clear_name()
-        self.pose_bar.show_state(
-            len(self._armature_bones), pending=False, chain=bool(self._armature_parent)
-        )
+        self._armature_head, self._armature_parent, self._armature_fresh = None, "", False
+        self._armature_changed()
+
+    def _armature_changed(self) -> None:
+        """Leiste, Rückgängig und Bild nach jeder Änderung am Skelett."""
+        self.pose_bar.show_state(len(self._armature_bones), half=self._armature_fresh)
+        self.undo_action.setEnabled(bool(self._armature_undo or self._armature_bones))
         self._show_bones()
 
     def _joint_inside(self, place: Vec3) -> Vec3:
-        """Der Klick auf die Haut wird ein Punkt auf der Achse darunter (RM-367, W4-7)."""
-        from app.core.geom.pose import inside_the_body
+        """Der Klick auf die Haut wird ein Punkt auf der Achse darunter (RM-367,
+        W4-7) — in Ruhelage, wo die Knochen stehen.
+
+        Gezeigt ist die gebeugte Haut. Ruhende und gebeugte Haut haben dieselben
+        Ecken; das getroffene Dreieck bringt den Klick und die Blickrichtung in
+        die Ruhe, und dort sucht :func:`inside_the_body` die Achse (Review G1).
+        Rückgerechnet über den Elternknochen fand eine neue Kette in gebeugter
+        Haut keinen. Gerechnet am gezeigten Körper, nicht an einer neu
+        gebeugten Haut je Klick (Review F3)."""
+        from app.core.geom.pose import inside_the_body, rest_of_click
 
         target = self._armature_target
-        mesh = self._sculpt_mesh(target) if target else None
-        if mesh is None:
+        rest = self._sculpt_mesh(target) if target else None
+        if rest is None:
             return place
+        direction = self.viewport.ray_toward(place)
+        shown = self._armature_shown
+        if shown is not None and shown is not rest:
+            mapped = rest_of_click(
+                rest, shown, place, direction, surface=self._click_surface(shown)
+            )
+            if mapped is None:
+                return self._rest_point(place)
+            place, direction = mapped
         try:
-            return inside_the_body(mesh, place, self.viewport.ray_toward(place))
+            return inside_the_body(rest, place, direction, surface=self._click_surface(rest))
         except AppError:
             return place
 
+    def _click_surface(self, mesh: MeshData) -> Any:
+        """Suchbaum und längste Kante eines geklickten Netzes, je Netz einmal
+        (:class:`~app.core.geom.pose.ClickSurface`, Review N4) — gemerkt für die
+        Ruhelage und die gezeigte Haut."""
+        from app.core.geom.pose import ClickSurface
+
+        for known in self._armature_surfaces:
+            if known.mesh is mesh:
+                return known
+        made = ClickSurface(mesh)
+        self._armature_surfaces = [*self._armature_surfaces[-1:], made]
+        return made
+
+    def _armature_bent(self) -> bool:
+        """Ob die Stellung irgendeinen Knochen dreht."""
+        return any(
+            any(abs(value) > 1e-9 for value in turn) for turn in self._armature_angles.values()
+        )
+
+    def _armature_skin_of(self, mesh: MeshData) -> Any:
+        """Die Haut am Skelett — Gewichte einmal je Knochenstand (:class:`Skin`)."""
+        from app.core.geom.pose import Skin
+
+        skin = self._armature_skin
+        if skin is None or skin.mesh is not mesh:
+            skin = Skin(
+                mesh,
+                self._armature_bones,
+                fixed_rest=bool(self._armature_params.get("fixed_rest", True)),
+            )
+            self._armature_skin = skin
+        return skin
+
     def _show_bones(self) -> None:
-        """Knochen und gesetztes Gelenk ins Bild (RM-367, W4-6)."""
+        """Knochen, Gelenke und das offene Kettenende ins Bild (RM-367, W4-6),
+        in der Stellung, die gerade gilt."""
+        from app.core.geom.pose import posed_bones
+
+        segments = posed_bones(self._armature_bones, self._armature_angles)
+        head = self._armature_head
         self.viewport.show_bones(
-            [(bone.head, bone.tail) for bone in self._armature_bones],
-            self._armature_head,
+            segments,
+            self._posed_point(head) if head is not None else None,
             target=self._armature_target,
+            joints=[posed for posed, _ends, _rest in self._armature_joints()],
         )
 
-    def break_armature_chain(self) -> None:
-        """Der nächste Knochen hängt an nichts — für den zweiten Arm."""
-        self._armature_parent = ""
-        self._armature_head = None
-        self.undo_action.setEnabled(bool(self._armature_bones))
-        self.pose_bar.show_state(len(self._armature_bones), pending=False, chain=False)
-        self._show_bones()
+    def _show_armature_skin(self) -> None:
+        """Den Körper in der Stellung zeigen, die gerade gilt — eine Vorschau (Regel 2).
 
-    def undo_bone(self) -> bool:
-        """Das Rückgängig des Editors: ein Knochen, nicht die Sitzung."""
-        if self._armature_target is None:
-            return False
-        if self._armature_head is not None:
-            # Ein halb gesetzter Knochen ist der erste, der zurückgeht: Sonst
-            # nähme das erste Strg+Z einen fertigen Knochen und ließe den
-            # angefangenen stehen.
-            self._armature_head = None
-        elif self._armature_bones:
-            gone = self._armature_bones.pop()
-            self._armature_parent = gone.parent
-        else:
-            return False
-        # ``gone.parent`` ist leer, sobald der zurückgenommene Knochen der
-        # erste einer neuen Kette war: Der nächste hängt dann wieder an nichts
-        # — ein zweiter Arm —, und ein festes ``chain=True`` verschwieg genau
-        # das. Der Kunde drückte *Neue Kette* ein zweites Mal oder bekam ein
-        # Skelett mit falscher Elternkette.
-        self.pose_bar.show_state(
-            len(self._armature_bones),
-            pending=False,
-            chain=bool(self._armature_parent),
+        Ein großer Körper wird im Arbeiter gewichtet und gebeugt
+        (:class:`_ArmatureSkinWorker`, Review F3); bis seine Antwort kommt,
+        bleibt die letzte Stellung im Bild, und ein Klick trifft sie."""
+        target = self._armature_target
+        mesh = self._sculpt_mesh(target) if target else None
+        if target is None or mesh is None:
+            return
+        self._cancel_armature_skin()
+        if not self._armature_bones or not self._armature_bent():
+            self._armature_shown = mesh
+            self.viewport.show_preview_mesh(target, mesh)
+            return
+        if not self._sculpt_needs_worker(mesh):
+            posed: MeshData = self._armature_skin_of(mesh).posed(self._armature_angles)
+            self._armature_shown = posed
+            self.viewport.show_preview_mesh(target, posed)
+            return
+        skin = self._armature_skin
+        worker = _ArmatureSkinWorker(
+            self._armature_skin_number,
+            mesh,
+            self._armature_bones,
+            self._armature_angles,
+            bool(self._armature_params.get("fixed_rest", True)),
+            skin if skin is not None and skin.mesh is mesh else None,
         )
-        self._show_bones()
-        self.undo_action.setEnabled(bool(self._armature_bones or self._armature_head is not None))
+        self._armature_skin_worker = worker
+        worker.done.connect(
+            weak_slot(self, MainWindow._armature_skin_received, worker, forward=True)
+        )
+        worker.crashed.connect(
+            weak_slot(self, MainWindow._armature_skin_crashed, worker, forward=True)
+        )
+        worker.finished.connect(weak_slot(self, MainWindow._armature_skin_finished, worker))
+        self._start_preview_progress()
+        self._leash.start(worker)
+
+    def _armature_skin_received(
+        self, worker: _ArmatureSkinWorker, number: int, skin: Any, posed: Any
+    ) -> None:
+        """Nur die jüngste Haut der laufenden Sitzung kommt ins Bild."""
+        if worker is not self._armature_skin_worker or number != self._armature_skin_number:
+            return
+        self._armature_skin_worker = None
+        self._finish_preview_progress()
+        target = self._armature_target
+        if target is None:
+            return
+        self._armature_skin = skin
+        self._armature_shown = posed
+        self.viewport.show_preview_mesh(target, posed)
+
+    def _armature_skin_crashed(self, worker: Any, detail: str) -> None:
+        """Eine ausgefallene Haut lässt die letzte Stellung stehen und nennt den Ausweg."""
+        if worker is self._armature_skin_worker:
+            self._cancel_armature_skin()
+            self._on_error(InternalError(detail=detail))
+
+    def _armature_skin_finished(self, worker: Any) -> None:
+        if worker is self._armature_skin_worker:
+            self._armature_skin_worker = None
+            self._finish_preview_progress()
+        self._hold_until_done(worker)
+
+    def _cancel_armature_skin(self) -> None:
+        """Eine laufende Haut aufgeben — ihre Stellung gilt nicht mehr."""
+        self._armature_skin_number += 1
+        worker, self._armature_skin_worker = self._armature_skin_worker, None
+        if worker is not None:
+            worker.cancel.cancel()
+            self._retire(worker)
+            self._finish_preview_progress()
+
+    def wait_for_armature_skin(self, timeout_ms: int = 30_000) -> bool:
+        """Prüfstände warten auf die Haut im Arbeiter; die Oberfläche wartet nie."""
+        worker = self._armature_skin_worker
+        if worker is not None and worker.isRunning() and not worker.wait(timeout_ms):
+            return False
+        QApplication.sendPostedEvents()
+        QApplication.processEvents()
         return True
 
+    def _on_joint_drag_started(self, index: int) -> None:
+        """Ziehen an einem Gelenk beginnt: gebeugt wird der Knochen, der dort endet."""
+        import numpy as np
+
+        if self._armature_target is None:
+            return
+        joints = self._armature_joints()
+        if not 0 <= index < len(joints) or not joints[index][1]:
+            self.viewport.finish_bend()
+            return
+        from app.core import expressions
+        from app.core.geom.pose import posed_bones
+
+        name = joints[index][1]
+        bound = [
+            value for value in self._armature_pose.get(name, ()) if expressions.is_expression(value)
+        ]
+        if bound:
+            # **Eine Bindung wird nicht still ersetzt** (Review F2, Regel 21):
+            # Gezogen hieße hier, den Ausdruck durch eine Zahl zu überschreiben,
+            # und Varianten über das Maß bewegten den Knochen nicht mehr.
+            self.viewport.finish_bend()
+            self.announce(
+                tr(
+                    "Der Winkel von {bone} hängt an {value}. Ändern Sie ihn unter "
+                    "„Diesen Schritt ändern“ oder am Projektmaß."
+                ).format(bone=name, value=bound[0])
+            )
+            return
+        position = [bone.name for bone in self._armature_bones].index(name)
+        head, tail = posed_bones(self._armature_bones, self._armature_angles)[position]
+        self._armature_drag = _BendDrag(
+            name=name,
+            before=self._armature_pose.get(name),
+            angles=dict(self._armature_angles),
+            head=head,
+            start=np.asarray(tail, dtype=float) - np.asarray(head, dtype=float),
+            axis=np.asarray(self.viewport.view_direction(), dtype=float),
+        )
+
+    def _on_joint_dragged(self, x: int, y: int) -> None:
+        """Der Winkel folgt der Maus in der Bildebene; Bild und Haut ziehen mit."""
+        import numpy as np
+
+        drag = self._armature_drag
+        if drag is None:
+            return
+        reached = self.viewport.point_beside(x, y, drag.head)
+        if reached is None:
+            return
+        axis = drag.axis
+        start = drag.start - axis * float((drag.start * axis).sum())
+        now = np.asarray(reached, dtype=float) - np.asarray(drag.head, dtype=float)
+        now = now - axis * float((now * axis).sum())
+        if float((start * start).sum()) <= EPS_GEOM or float((now * now).sum()) <= EPS_GEOM:
+            return
+        cross = np.cross(start, now)
+        degrees = math.degrees(math.atan2(float((cross * axis).sum()), float((start * now).sum())))
+        self._bend_to(degrees)
+        self.viewport.show_bend_angle(degrees, x, y)
+
+    def _bend_to(self, degrees: float) -> None:
+        """Den gezogenen Knochen um ``degrees`` gegenüber dem Zuganfang beugen."""
+        from app.core.geom.pose import bent
+
+        drag = self._armature_drag
+        if drag is None:
+            return
+        axis = (float(drag.axis[0]), float(drag.axis[1]), float(drag.axis[2]))
+        turned = bent(self._armature_bones, drag.angles, drag.name, axis, degrees)
+        self._armature_angles[drag.name] = turned
+        self._armature_pose[drag.name] = turned
+        self.pose_bar.show_angle(degrees)
+        self._show_bones()
+        target = self._armature_target
+        mesh = self._sculpt_mesh(target) if target else None
+        # Die Haut zieht live mit, solange das Netz klein genug für den
+        # Hauptfaden ist; ein großes folgt beim Loslassen (§2.8).
+        if mesh is not None and not self._sculpt_needs_worker(mesh):
+            self._show_armature_skin()
+
+    def _on_joint_angle_typed(self, degrees: float) -> None:
+        """Getippt statt gezogen: genau dieser Winkel, dann ist der Zug zu Ende."""
+        self._bend_to(degrees)
+        self._on_joint_drag_finished()
+
+    def _on_joint_drag_finished(self) -> None:
+        """Das Beugen ist ein Schritt im Rückgängig des Werkzeugs."""
+        drag, self._armature_drag = self._armature_drag, None
+        if drag is None:
+            return
+        self._armature_undo.append(("bend", drag.name, drag.before))
+        self._show_armature_skin()
+        self._armature_changed()
+
+    def _on_joint_drag_cancelled(self) -> None:
+        """Escape im Zug: die Stellung von vorher, nichts gemerkt."""
+        drag, self._armature_drag = self._armature_drag, None
+        if drag is None:
+            return
+        self._armature_angles = drag.angles
+        self._restore_pose_entry(drag.name, drag.before)
+        self._show_armature_skin()
+        self._armature_changed()
+
+    def _restore_pose_entry(self, name: str, before: Any) -> None:
+        if before is None:
+            self._armature_pose.pop(name, None)
+        else:
+            self._armature_pose[name] = before
+        self._armature_angles = self._armature_numbers()
+
+    def undo_bone(self) -> bool:
+        """Das Rückgängig des Werkzeugs: der letzte Klick, Knochen oder die letzte
+        Beugung, nicht die Sitzung.
+
+        Ein wieder geöffnetes Skelett hat noch nichts zurückzunehmen; dort nimmt
+        Strg+Z den letzten Knochen weg — der eine Weg, einen Knochen zu
+        löschen, seit es *Letzten zurück* nicht mehr gibt."""
+        if self._armature_target is None:
+            return False
+        if self._armature_drag is not None:
+            self.viewport.finish_bend()
+            self._on_joint_drag_cancelled()
+            return True
+        if not self._armature_undo:
+            if not self._armature_bones:
+                return False
+            gone = self._armature_bones.pop()
+            self._armature_pose.pop(gone.name, None)
+            self._armature_angles.pop(gone.name, None)
+            self._armature_skin = None
+            if self._armature_parent == gone.name:
+                self._armature_head, self._armature_parent = None, ""
+            self._show_armature_skin()
+            self._armature_changed()
+            return True
+        action = self._armature_undo.pop()
+        if action[0] == "bend":
+            self._restore_pose_entry(action[1], action[2])
+            self._show_armature_skin()
+        else:
+            if action[0] == "bone":
+                gone = self._armature_bones.pop()
+                self._armature_pose.pop(gone.name, None)
+                self._armature_angles.pop(gone.name, None)
+                self._armature_skin = None
+                self._show_armature_skin()
+            self._armature_head, self._armature_parent, self._armature_fresh = action[1:]
+        self._armature_changed()
+        return True
+
+    def drop_half_bone(self) -> bool:
+        """Escape nimmt das Unfertige weg: das Gelenk, an dem noch kein Knochen hängt."""
+        if self._armature_target is None or not self._armature_fresh:
+            return False
+        if self._armature_undo and self._armature_undo[-1][0] == "head":
+            self._armature_undo.pop()
+        self._armature_head, self._armature_parent, self._armature_fresh = None, "", False
+        self._armature_changed()
+        return True
+
+    def _armature_saved(self) -> tuple[list[Any], dict[str, tuple[Any, ...]]]:
+        """Knochen und Stellung, wie sie am geöffneten Schritt stehen — gelesen,
+        nicht als Text verglichen: Derselbe Winkel steht dort als ``30`` oder
+        ``30.0``."""
+        from app.core.geom.pose import armature_from_text, pose_angles
+
+        if self._armature_step is None:
+            return ([], {})
+        params = self.session.history.operation(self._armature_step).params
+        try:
+            bones = armature_from_text(str(params.get("armature", "")))
+        except AppError:
+            bones = []
+        return (bones, dict(pose_angles(str(params.get("pose", "")))))
+
+    def _armature_order(self) -> _PreviewOrder:
+        """Skelett und Stellung als Auftrag: ein neuer Schritt oder derselbe geändert."""
+        from app.core.geom.pose import pose_text
+
+        target = self._armature_target
+        if target is None:
+            return _PreviewOrder()
+        values = {
+            "armature": armature_to_text(self._armature_bones) if self._armature_bones else "",
+            "pose": pose_text(self._armature_pose) if self._armature_pose else "",
+        }
+        if self._armature_step is not None:
+            return _PreviewOrder(change_op=self._armature_step, change_values=values)
+        if not self._armature_bones:
+            return _PreviewOrder()
+        return _PreviewOrder(
+            drafts=(OperationDraft(op="pose_armature", inputs=(target,), params=values),)
+        )
+
     def finish_armature(self) -> None:
-        """Die Sitzung schließen — und aus ihr genau eine Operation machen."""
+        """Die Sitzung schließen — und aus ihr genau eine Operation machen, ohne Dialog.
+
+        Es ist nichts mehr zu fragen (RM-561): Die Knochen sind gesetzt, die
+        Winkel gezogen. Zahlen und Bindung an Projektparameter stehen danach im
+        Schrittdialog (*Diesen Schritt ändern*)."""
         target = self._armature_target
         bones = self._armature_bones
         if target is None:
@@ -14509,6 +15357,9 @@ class MainWindow(QMainWindow):
             self.viewport.set_analysis_map(None, None)
             self.analysis_bar.show_legend(None)
             return
+        if self._armature_drag is not None:
+            self.viewport.finish_bend()
+            self._on_joint_drag_finished()
         result = self.session.last_result
         historical = self._armature_step is not None and self._gesture_scene is not None
         if bones and not historical and (result is None or target not in result.scene.objects):
@@ -14519,17 +15370,40 @@ class MainWindow(QMainWindow):
                 tr("Der Körper des Skeletts ist nicht mehr da — die Sitzung bleibt offen.")
             )
             return
+        order = self._armature_order()
+        if (
+            order.drafts
+            and self._order_has_exact_inputs(order, result)
+            and not self._preview_can_apply(
+                self.pose_bar.done, order, then=weak_slot(self, MainWindow.finish_armature)
+            )
+        ):
+            return
         step = self._armature_step
+        unchanged = step is not None and self._armature_saved() == (
+            bones,
+            {name: tuple(angles) for name, angles in self._armature_pose.items()},
+        )
+        self._clear_preview()
         self._armature_target = None
         self._pose_report_target = target
         self._gesture_scene = None
-        self.viewport.show_scene(self.session.last_result)
         self._sculpt_check.stop()
         self._armature_bones = []
         self._armature_step = None
         self._armature_head = None
+        self._armature_fresh = False
+        self._armature_undo = []
+        self._cancel_armature_skin()
+        self._armature_skin = None
+        self._armature_shown = None
+        self._armature_surfaces = []
+        self._armature_pose = {}
+        self._armature_angles = {}
         self.viewport.set_boning(False)
         self.viewport.clear_bones()
+        self.viewport.clear_preview_mesh()
+        self.viewport.show_scene(self.session.last_result)
         self._sculpt_wall_number += 1
         self._cancel_sculpt_check()
         self.pose_bar.setVisible(True)
@@ -14537,31 +15411,190 @@ class MainWindow(QMainWindow):
         self.tools.setVisible(True)
         self.statusBar().clearMessage()
         self._update_actions()
-        if not bones:
-            if step is not None:
-                self.session.change_params(step, {"armature": "", "pose": ""})
+        if not bones and step is None:
+            # Eine Sitzung ohne Knochen hinterlässt nichts.
             self._pose_report_target = None
             self.pose_bar.setVisible(False)
             return
-        # Der Editor setzt das Skelett, die Winkel sind Zahlen und gehören in
-        # den Dialog — dort darf auch ein Projektparameter stehen. Also öffnet
-        # „Fertig" den Dialog mit gesetztem Skelett, wie es „Fertig" der
-        # Skizze vormacht: eine Operation mit leerer Stellung anzulegen hieße,
-        # dass nichts geschieht und niemand erfährt, wo es weitergeht.
         self.object_tree.select_object(target)
-        gesetzt = {"armature": armature_to_text(bones)}
-        if step is not None:
-            # **Denselben Schritt ändern, keinen zweiten anlegen.** Zwei
-            # Skelettschritte auf einem Körper beugen ihn zweimal; der Kunde
-            # hat aber sein Skelett bearbeitet und kein weiteres gesetzt.
-            self.edit_operation(step, given=gesetzt)
+        if order.change_op is not None:
+            if not unchanged:
+                self._commit_preview_order(order)
+            if not bones:
+                self._pose_report_target = None
+                self.pose_bar.setVisible(False)
             return
-        self.run_operation(REGISTRY.get("pose_armature"), given=gesetzt)
+        self.session.apply(_("Stellung geben"), list(order.drafts))
 
     def action_sketch_free(self) -> None:
-        """Der Zeichnen-Knopf der Werkzeugzeile: Skizzenmodus ohne
-        festgelegte Operation (§2.2, Weg 2)."""
-        self.start_sketch("")
+        """Der Zeichnen-Knopf der oberen Leiste: das Aufziehen (RM-559, §2.2 Weg 2).
+
+        Ein zweiter Druck schließt das Werkzeug wieder, wie Escape — der Weg
+        hinaus, den eine Maus ohne Tastatur hat.
+        """
+        if self.drawing():
+            # Wie Escape: Ein Umriss aus dem Editor bleibt für Strg+Z (H2).
+            self.draw_flow().discard()
+        else:
+            self.start_drawing()
+        # Qt hat den Knopf schon umgeschaltet; gilt eine Absage, gilt sie auch
+        # am Knopf (N6).
+        with QSignalBlocker(self._toolbar_sketch):
+            self._toolbar_sketch.setChecked(self.drawing())
+
+    # --- Körper aufziehen (RM-559) ----------------------------------------------
+
+    def draw_flow(self) -> DrawFlow:
+        """Der Ablauf des Aufziehens — beim ersten Gebrauch angelegt.
+
+        Erst dann, weil er sich an ``sceneChanged`` hängt und den neuen Körper
+        im Baum wählt: Sein Zuhörer muss **nach** :meth:`_on_scene` laufen,
+        das den Baum füllt.
+        """
+        if self._draw_flow is None:
+            self._draw_flow = DrawFlow(self)
+            self._draw_flow.closed.connect(self._drawing_closed)
+        return self._draw_flow
+
+    def drawing(self) -> bool:
+        """Ob gerade ein Körper aufgezogen wird."""
+        return self._draw_flow is not None and self._draw_flow.active
+
+    def start_drawing(self, shape: str = "", *, intent: str = "") -> None:
+        """Das Werkzeug *Zeichnen* öffnen — Ansicht, Projektion und Nachbarn bleiben.
+
+        Gesperrt wie jede schreibende Handlung: ein Halt der Kette nennt seinen
+        Schritt, ohne exakten Kern sagt der Satz der Skizzen-Operationen, was
+        fehlt (F-j). ``intent`` ist die gewählte Art aus Menü oder Palette (N1).
+        """
+        if not self._quiet_command_allowed() or self.drawing():
+            return
+        if self._sketch_panel is not None or self.sculpting() or self.setting_armature():
+            return
+        halted = self._halt_reason()
+        if halted is not None:
+            self.announce(halted)
+            return
+        reason = _drawing_needs_the_kernel()
+        if reason:
+            self.announce(reason)
+            return
+        if not self._begin_from_the_start_screen():
+            return
+        if self._quiet_host is not None:
+            self.end_quiet_placement()
+        self.open_draw_bar()
+        self.draw_flow().start(shape, intent=intent)
+        self._update_actions()
+        self._show_invitation()
+
+    def open_draw_bar(self) -> None:
+        """Die Leiste des Aufziehens statt der Werkzeugzeile — auch für den Entwurf nach F-i."""
+        self.tools.close_tool()
+        self.tools.setVisible(False)
+        self.draw_bar.setVisible(True)
+
+    def outline_origin(self, surface: DrawSurface) -> _OutlineOrigin:
+        """Die Herkunft eines aufgezogenen Umrisses ohne Editor: seine Fläche, sein Körper (F-i)."""
+        return _OutlineOrigin(op_name="", plane=surface.plane, body=surface.body or "")
+
+    def _drawing_closed(self) -> None:
+        """Das Werkzeug ist zu: die Werkzeugzeile kommt zurück."""
+        self.draw_bar.setVisible(False)
+        self.tools.setVisible(True)
+        self._update_actions()
+        self._show_invitation()
+
+    def drawing_changed(self) -> None:
+        """Der Entwurf hat seine Phase gewechselt — Rückgängig folgt ihm."""
+        self._update_actions()
+
+    def return_the_outline(self, origin: _OutlineOrigin, text: str, *, now: bool) -> None:
+        """Ein Umriss aus dem Editor, der keine Höhe bekam, geht nicht verloren (H2).
+
+        ``now`` (Strg+Z im Aufziehen): zurück in den Editor, aus dem er kam.
+        Sonst (Escape, *Zeichnen* ein zweites Mal, F-k): beiseitegelegt wie eine
+        verworfene Zeichnung, und Strg+Z holt ihn von dort
+        (:meth:`restore_discarded_sketch`) — solange nichts anderes geschah.
+        """
+        from app.core.sketch.planes import is_feature_plane
+        from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+
+        result = self.session.last_result
+        body = origin.body if result is not None and origin.body in result.scene.objects else ""
+        plane = origin.plane
+        if not body and is_feature_plane(plane):
+            # Die Fläche gehört einem Körper, den es nicht mehr gibt (F-k):
+            # Der Umriss bleibt und **liegt** auf der Grundebene, nicht nur die
+            # Wahl daneben — sonst führte *Fertig* in einen Dialog, der die
+            # tote Fläche nicht findet (N2).
+            plane = "plane:xy"
+            text = sketch_to_text(replace(sketch_from_text(text), plane=plane))
+        if now:
+            self.start_sketch(origin.op_name, text=text, plane=plane, body=body or None)
+            return
+        self._discarded_sketch = _DiscardedSketch(
+            op_name=origin.op_name,
+            text=text,
+            plane=plane,
+            steps=len(self.session.history.operations),
+            project=self.session.project,
+            body=body,
+        )
+        self.announce(tr("Zeichnung verworfen — Strg+Z holt sie zurück."))
+        self._update_actions()
+
+    def drawn_face_of_the_selection(self) -> DrawSurface | None:
+        """Die gewählte ebene Fläche als Anfang für die Eingabetaste (Abnahme 9)."""
+        feature_id = self.object_tree.selected_feature()
+        object_id = self.object_tree.selected()
+        result = self.session.last_result
+        if feature_id is None or object_id is None or result is None:
+            return None
+        entry = result.scene.objects.get(object_id)
+        return face_surface(entry, feature_id) if entry is not None else None
+
+    def draw_freely(
+        self, surface: DrawSurface, start: tuple[float, float], shift: tuple[float, float, float]
+    ) -> None:
+        """*Freie Form …*: der Skizzeneditor auf der angeklickten Fläche, die Linie beginnt dort.
+
+        *Fertig* bringt den Umriss zurück in die Ansicht, und es fehlt nur die
+        Höhe (RM-561) — :meth:`finish_sketch` übergibt ihn an das Aufziehen.
+        """
+        self._draw_shift = shift
+        self.start_sketch("", plane=surface.plane, body=surface.body)
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        panel.start_line_at(start)
+
+    def offer_after_drawing(self, offers: list[tuple[str, str, tuple[str, ...]]]) -> None:
+        """Knöpfe neben der Ansage nach dem Aufziehen: Vereinigen, Abziehen, Zerlegen (F-g, F-h).
+
+        Jeder ist ein eigener rücknehmbarer Schritt; nichts geschieht von
+        selbst. Die nächste Ansage räumt sie ab (:meth:`announce`).
+        """
+        for button in self._draw_offers:
+            button.setVisible(False)
+        for button, (label, op_name, inputs) in zip(self._draw_offers, offers, strict=False):
+            button.setText(label)
+            button.setAccessibleName(label)
+            button.setProperty("operation", op_name)
+            button.setProperty("inputs", list(inputs))
+            button.setVisible(True)
+
+    def _take_the_draw_offer(self) -> None:
+        button = self.sender()
+        if not isinstance(button, QToolButton):
+            return
+        op_name = str(button.property("operation") or "")
+        inputs = tuple(str(entry) for entry in button.property("inputs") or ())
+        for offered in self._draw_offers:
+            offered.setVisible(False)
+        if not op_name or not REGISTRY.has(op_name):
+            return
+        self.session.apply(REGISTRY.get(op_name).title, [OperationDraft(op=op_name, inputs=inputs)])
 
     def action_sculpt_free(self) -> None:
         """Der Formen-Knopf der Werkzeugleiste (§2.2, Weg 4).
@@ -17715,8 +18748,18 @@ class MainWindow(QMainWindow):
 
         Bis hierher gab es die Kantenwahl nur als Liste im Dialog: Der
         Renderer pickte Flächen und Merkmale, keine Kanten.
+
+        **Mehrere Kanten sind eine Wahl** (RM-563): Strg- oder Umschalt-Klick
+        sammelt sie in der Ansicht (:meth:`Viewport.highlighted_edges`), und
+        jede Handlung im Fenster nimmt alle als einen Schritt. Ging mit Taste
+        die letzte heraus, steht die Auswahl wieder auf dem Körper, wie nach
+        Escape.
         """
-        title = self.viewport.edge_title(object_id, key)
+        keys = self.viewport.highlighted_edges()
+        if not keys:
+            self.object_tree.select_object(object_id)
+            return
+        title = self.viewport.edge_title(object_id, keys[-1])
         if not title:
             # **Die Kante gibt es nicht mehr** — und dann bleibt sie auch
             # nicht hervorgehoben stehen. Ein leeres Fenster über einer
@@ -17747,18 +18790,24 @@ class MainWindow(QMainWindow):
         # nichts, und dann kostet die Kantenwahl keinen Umweg.
         if self.object_tree.selected_features():
             self.object_tree.select_object(object_id)
-            self.viewport.select_edge(object_id, key)
+            self.viewport.select_edges(object_id, keys)
         self._feature_shown = None
         # Die Statuszeile nennt die Kante, denn im Bild trägt sie nur Farbe
         # und Strichstärke — für einen Bildschirmleser wäre sie sonst allein
         # an der Fensterüberschrift zu erkennen (Regel 18).
-        self.measurements.setText(title)
+        heading = said = title
+        if len(keys) > 1:
+            heading = tr("{count} Kanten", count=len(keys))
+            said = tr("{count} Kanten, zuletzt {edge}", count=len(keys), edge=title)
+        self.measurements.setText(said)
         # Zugemacht heißt „bei diesem Merkmal nicht", nicht „in dieser
         # Sitzung nie wieder" — dieselbe Zeile wie bei der Merkmalsauswahl.
         # Ohne sie leuchtete die Kante, und die beiden Handlungen dazu waren
         # über keinen Weg mehr erreichbar.
         self.feature_dock.forget_dismissal()
-        self.feature_panel.show_edge(key, title, parameter_values=self._parameter_values())
+        self.feature_panel.show_edge(
+            " ".join(keys), heading, parameter_values=self._parameter_values()
+        )
         self.feature_dock.reveal()
         self._start_feature_preview()
         # **Und die Karte rechts erfährt davon** — dieselbe Zeile wie bei der
@@ -17973,17 +19022,17 @@ class MainWindow(QMainWindow):
         Merkmalspanel (:func:`~app.core.perceive.actions.edge_actions`): Welche
         Operation an einer Kante ansetzt, ist eine Aussage über Geometrie und
         keine über die Oberfläche. Zwei Listen liefen auseinander, und dann
-        stünde im Menü eine Handlung, die das Panel nicht kennt.
+        stünde im Menü eine Handlung, die das Panel nicht kennt. Sind mehrere
+        Kanten gewählt, gilt jeder Eintrag allen (RM-563).
         """
         from app.core.perceive.actions import edge_actions
 
-        chosen = self.viewport.highlighted_edge()
-        if chosen is None:
+        keys = self.viewport.highlighted_edges()
+        if not keys:
             return None
-        _object_id, key = chosen
         menu = QMenu(self)
         menu.setToolTipsVisible(True)
-        for action in edge_actions(key):
+        for action in edge_actions(" ".join(keys)):
             if action.op is None:
                 continue
             entry = menu.addAction(str(action.title))
@@ -18065,8 +19114,8 @@ class MainWindow(QMainWindow):
 
         §2.6 verspricht dort den kürzesten Weg vom Sehen zum Tun; angeboten war
         nur „Baustein einsetzen …". Beide Zeilen beginnen den Zeichenmodus auf
-        dieser Fläche mit ihrem Körper als Ziel; die zweite legt die Art fest —
-        *Fertig* schneidet dann eine Tasche.
+        dieser Fläche mit ihrem Körper als Ziel. Nach *Fertig* entscheidet die
+        Richtung der Höhe, ob angefügt oder geschnitten wird (RM-561).
         """
         object_id = self.object_tree.selected()
         if object_id is None:
@@ -18106,10 +19155,9 @@ class MainWindow(QMainWindow):
         (``app.core.sketch.planes``), und der Objektbaum kennt den
         Skizzenmodus nicht.
 
-        **Ohne festgelegte Operation.** Was aus der Zeichnung wird, fragt der
-        Dialog bei „Fertig" (§2.2, Weg 2) — auf einer Deckfläche ist eine
-        Tasche so plausibel wie ein Aufbau, und die Entscheidung vorwegzunehmen
-        hieße, dem Nutzer eine von zwei gleich guten zu nehmen.
+        **Ohne festgelegte Operation.** Was aus der Zeichnung wird, entscheidet
+        die Richtung der Höhe nach *Fertig* (RM-561) — auf einer Deckfläche ist
+        eine Tasche so plausibel wie ein Aufbau.
         """
         object_id = self.object_tree.selected()
         plane = (
@@ -19586,6 +20634,12 @@ class MainWindow(QMainWindow):
         if getattr(self, "_rebuild_dialog", None) is not None:
             self._say_the_change_comes_first()
             return False
+        if getattr(self, "_draw_flow", None) is not None and self.drawing():
+            # Eine andere Handlung beginnt erst nach dem dritten Klick oder
+            # Escape (§18.11): Einfügen, Erzeugen, Teilen und Varianten
+            # hielten sonst einen halben Entwurf neben sich offen (G2).
+            self.announce(str(_DRAWING_FIRST))
+            return False
         host = self._quiet_host
         if host is not None and host.begun and not host.committing:
             self._say_the_change_comes_first()
@@ -20528,6 +21582,7 @@ class MainWindow(QMainWindow):
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
+        values.update(self._edges_from_view(spec, chosen[0] if chosen else None))
         # **Zwei gewählte Teile einer Passung** (RM-184): Das Prüfstück sitzt
         # dort, wo sie sich am nächsten kommen — die Oberseite des ersten
         # träfe beim Deckel die Öffnung und beim Zapfen nur ihn.
@@ -21259,15 +22314,33 @@ class MainWindow(QMainWindow):
         if entry.op == "pose_armature" and given is None and field != "pose":
             self.reopen_gesture(op_id)
             return
+        front: tuple[str, ...] = ()
         if given is None and _has_sketch_param(spec):
             sketch_fields = {item.name for item in spec.params.spec() if item.kind == "sketch"}
             drawing = field or _sketch_param(entry.op)
             text = str(entry.params.get(drawing, "") or "")
-            if drawing in sketch_fields and text.strip():
+            # **Ein aufgezogener Quader ist drei Zahlen** (RM-559, E11): Trägt die
+            # Zeichnung genau ein Rechteck oder einen Kreis, öffnet der Dialog
+            # mit den Maßen vorn statt des Zeichenmodus; *Umriss bearbeiten …*
+            # führt von dort in den Editor. Ein freier Umriss öffnet ihn direkt.
+            simple = simple_shape_of(text) if not field and entry.op in DRAWN_OPERATIONS else None
+            if drawing in sketch_fields and text.strip() and simple is None:
                 self.start_sketch(entry.op, text=text, step=op_id, field_name=drawing)
                 return
+            front = ("length",) if simple == "circle" else ("length", "width") if simple else ()
+
+        # **Die Art eines Zeichnungsschritts wechselt im Dialog** (§30.1, H1):
+        # Ein aufgezogener Quader wird gedreht, entlanggeführt oder als
+        # Lochfeld geschnitten, ohne neu zu zeichnen — dieselbe Liste *Art* wie
+        # beim Anlegen, und *Übernehmen* ersetzt den Schritt in einer
+        # Transaktion (``History.change_kind``).
+        variant = self._kind_choice(op_id, entry.op)
+        shown = {**entry.params, **(given or {})}
+        drawing_text = str(shown.get(_sketch_param(entry.op), "") or "") if variant else ""
 
         def chosen_spec() -> OperationSpec:
+            if variant is not None:
+                return REGISTRY.get(str(variant.currentData()))
             return spec
 
         def fitted(entered: Mapping[str, Any]) -> dict[str, Any]:
@@ -21282,6 +22355,7 @@ class MainWindow(QMainWindow):
             self,
             values={**entry.params, **(given or {})},
             promote_values=False,
+            front_fields=front,
             sources=self._source_names(),
             parameter_values=self._parameter_values(),
             # Dieselbe Verengung wie beim Anlegen: Wer einen Schritt im Verlauf
@@ -21298,7 +22372,8 @@ class MainWindow(QMainWindow):
                 if self.session.last_result is not None and chooses_a_centre(spec)
                 else ()
             ),
-            extra=None,
+            extra=variant,
+            extra_label=str(VARIANT_GROUPS[0].choice) if variant is not None else "",
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
             pick_image=DeferredSourcePicker(self._pick_image_source, self._cancel_source_read),
@@ -21339,6 +22414,23 @@ class MainWindow(QMainWindow):
 
         connect_sketch_editors()
         dialog.schemaChanged.connect(connect_sketch_editors)
+        if variant is not None:
+
+            def switch_kind() -> None:
+                """Die Zeichnung geht mit, auch wenn die neue Art ihr Feld anders nennt.
+
+                Mit der zuletzt gezeigten, nicht der beim Öffnen (N5): Wer den
+                Umriss im Dialog geändert hat, meint den geänderten.
+                """
+                shown = str(dialog.values().get(_sketch_param(dialog.spec.name), "") or "")
+                picked = chosen_spec()
+                dialog.switch_variant(picked)
+                editor = dialog._editors.get(_sketch_param(picked.name))
+                if isinstance(editor, SketchField) and not editor.text().strip():
+                    editor.set_text(shown or drawing_text)
+
+            variant.currentIndexChanged.connect(switch_kind)
+            variant.currentIndexChanged.connect(dialog.valuesChanged)
 
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
@@ -21364,15 +22456,21 @@ class MainWindow(QMainWindow):
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
+            picked = chosen_spec()
             params, changes = self._named_dimensions(
-                spec, fitted(dialog.values()), dialog.names_dimensions()
+                picked, fitted(dialog.values()), dialog.names_dimensions()
             )
             if spec.name == "create_container":
                 order = container_edit(params)
                 assert order.change_values is not None
                 params = dict(order.change_values)
                 changes = order.changes
-            changed = self.session.change_params(op_id, params, changes)
+            if picked.name != entry.op:
+                # Eine andere Art: derselbe Schritt, ersetzt in einer Transaktion.
+                self.session.change_kernel(op_id, picked.name, params)
+                changed = self.session.history.operation(op_id).op == picked.name
+            else:
+                changed = self.session.change_params(op_id, params, changes)
             if (
                 changed
                 and dialog.offers_naming()
@@ -21386,6 +22484,45 @@ class MainWindow(QMainWindow):
             # Nach dem Öffnen: ein Fokus in einem Fenster, das noch nicht
             # gezeigt wurde, ist keiner.
             dialog.focus_field(field)
+
+    def _kind_choice(self, op_id: int, op_name: str) -> QComboBox | None:
+        """Die Liste *Art* für einen Zeichnungsschritt — oder nichts für jede andere Operation.
+
+        Die Arten der Gruppe *Zeichnen …* und die übrigen Operationen der
+        Zeichnungsfamilie (*Lochfeld schneiden*): Was früher unter *Mehr* am
+        freien Umriss stand, steht jetzt am Schritt (RM-561, H1). Eine Art, die
+        einen Körper bräuchte und keinen hat, ist gesperrt und sagt warum
+        (Regel 18, ``History.kind_inputs``).
+        """
+        if REGISTRY.get(op_name).category != "sketch":
+            return None
+        group = VARIANT_GROUPS[0]
+        others = sorted(
+            (
+                candidate
+                for candidate in REGISTRY.all()
+                if candidate.category == "sketch"
+                and candidate.name not in group.members
+                and _has_sketch_param(candidate)
+            ),
+            key=lambda candidate: str(candidate.title),
+        )
+        kinds = (*group.members, *(candidate.name for candidate in others))
+        choice = QComboBox(self)
+        model = choice.model()
+        reason = str(tr("Diese Art braucht einen Körper. Zeichnen Sie dafür auf seiner Fläche."))
+        for name in kinds:
+            choice.addItem(str(REGISTRY.get(name).title), name)
+            if self.session.history.kind_inputs(op_id, name) is None and isinstance(
+                model, QStandardItemModel
+            ):
+                item = model.item(choice.count() - 1)
+                item.setEnabled(False)
+                item.setToolTip(reason)
+                item.setData(reason, Qt.ItemDataRole.AccessibleDescriptionRole)
+        choice.setToolTip(str(group.doc))
+        choice.setCurrentIndex(choice.findData(op_name))
+        return choice
 
     def _named_dimensions(
         self, spec: OperationSpec, params: Mapping[str, Any], wanted: bool
@@ -22835,6 +23972,12 @@ class MainWindow(QMainWindow):
                 tr("Die Vorschau wurde abgebrochen. Die bisherigen Züge bleiben erhalten.")
             )
             return
+        if self._armature_skin_worker is not None:
+            self._cancel_armature_skin()
+            self.announce(
+                tr("Die Vorschau wurde abgebrochen. Skelett und Stellung bleiben erhalten.")
+            )
+            return
         approval = self._preview_approval
         reviewing = approval is not None and approval.reviewing
         self.session.cancel_preview()
@@ -23171,10 +24314,10 @@ class MainWindow(QMainWindow):
         Operation selbst ist an einem Netz ohnehin gesperrt
         (``requires_kind="brep"``), und dort steht der Grund.
 
-        **Bis auf die Kante, die im Bild gewählt ist**: Sie steht auch an einem
-        Netz mit ihrer Beschriftung da. *Abschneiden* durch eine Kante nimmt
-        sie an beiden Kernen (RM-400), und ohne sie stünde im Dialog ihr
-        Schlüssel statt Lage und Länge.
+        **Bis auf die Kanten, die im Bild gewählt sind**: Sie stehen auch an
+        einem Netz mit ihrer Beschriftung da. *Abschneiden* durch eine Kante
+        nimmt sie an beiden Kernen (RM-400), *Verrunden* mehrere (RM-563), und
+        ohne sie stünde im Dialog ihr Schlüssel statt Lage und Länge.
         """
         from app.core.brep import edit as brep_edit
         from app.core.brep.kernel import Solid, available
@@ -23187,9 +24330,9 @@ class MainWindow(QMainWindow):
         highlighted = self.viewport.highlighted_edge()
         picked: dict[str, str] = {}
         if highlighted is not None and highlighted[0] == chosen:
-            title = self.viewport.edge_title(chosen, highlighted[1])
-            if title:
-                picked[highlighted[1]] = title
+            for key in self.viewport.highlighted_edges():
+                if title := self.viewport.edge_title(chosen, key):
+                    picked[key] = title
         if not available():
             return picked
         # **Der exakte Körper steht in ``mesh``**, und das ist keine Feinheit:
@@ -23201,6 +24344,32 @@ class MainWindow(QMainWindow):
         if not isinstance(body, Solid):
             return picked
         return {brep_edit.edge_key(edge): edge_label(edge) for edge in brep_edit.edges_of(body)}
+
+    def _edges_from_view(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
+        """Die im Bild gewählten Kanten als Vorgabe jedes Kantenfelds (RM-563).
+
+        Wer Kanten anklickt und *Verrunden* aus Menü oder Befehlspalette holt,
+        meint diese Kanten und nicht die Vorgabegruppe des Dialogs — sonst
+        rundete ein Klick auf OK alle senkrechten. Belegt wird bei den
+        Handlungen einer Kante (``EDGE_OPERATIONS``) jedes Feld der Art
+        ``edges`` und die Wahl, von der es abhängt (``edges="named"``);
+        *Abschneiden* durch eine Kante legt :meth:`_plane_through` fest.
+        """
+        from app.core.perceive.actions import EDGE_OPERATIONS
+
+        highlighted = self.viewport.highlighted_edge()
+        if highlighted is None or highlighted[0] != selected:
+            return {}
+        if spec.name not in {name for name, _measure in EDGE_OPERATIONS}:
+            return {}
+        values: dict[str, Any] = {}
+        for entry in spec.params.spec():
+            if entry.kind != "edges":
+                continue
+            values[entry.name] = " ".join(self.viewport.highlighted_edges())
+            if entry.depends_on is not None:
+                values[entry.depends_on[0]] = entry.depends_on[1][0]
+        return values
 
     def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
         """Der Abstand beim Anordnen kennt Druckbetthaftung und Stützen
@@ -23409,7 +24578,9 @@ class MainWindow(QMainWindow):
         if entry is None:
             return {}
         feature_sets = [
-            parameter for parameter in spec.params.spec() if parameter.kind == "features"
+            parameter
+            for parameter in spec.params.spec()
+            if parameter.kind == "features" and not parameter.internal
         ]
         # **Eine Liste schlägt das Einzelfeld erst, wenn sie führt oder wirklich
         # mehrere Zeilen gewählt sind** (09.09.2026). Seit die Bausteine
@@ -23698,6 +24869,7 @@ class MainWindow(QMainWindow):
         # Karte lag mitten über der Skizze und dem gezogenen Körper.
         covered = (
             self._sketch_panel is not None
+            or self.drawing()
             or self._op_dialog is not None
             or self._difference_standing
         )
@@ -23894,8 +25066,7 @@ class MainWindow(QMainWindow):
         self._seen_objects = bool(result.scene.objects)
         self._sketch_body_missing(result)
         self.object_tree.show_scene(result, self.session.project.document)
-        effective_settings = self.effective_print_settings()
-        self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)
+        self._show_project_filaments(result, self.effective_print_settings())
         plates = [entry.plate for entry in picture.scene.objects.values()]
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
@@ -23934,6 +25105,7 @@ class MainWindow(QMainWindow):
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
         self._frame_after_resizing()
+        self._frame_the_placed(picture)
         gesture = self.sculpting() or self.setting_armature()
         self.viewport.show_scene(
             replace(picture, scene=self._gesture_scene)
@@ -24048,9 +25220,29 @@ class MainWindow(QMainWindow):
         Derselbe Weg für Datei, Download und erzeugtes Modell. Bis 0.5.1
         wechselte nur eine Datei vom Pfad die Platte, und das über den
         letzten Schritt des Stapels — an der Einfügemarke ist das ein fremder.
+
+        **Und es kommt ins Bild**, wenn es über den eingepassten Rahmen
+        hinausragt (:meth:`_frame_the_placed`, RM-650).
         """
         self._plate_of_import = body
+        self._placed_to_frame = body
         self._show_the_plate_of_the_import()
+
+    def _frame_the_placed(self, picture: EvaluationResult) -> None:
+        """Trägt dieser Aufbau das eben eingefügte Modell, rahmt die Ansicht einmal nach (RM-650).
+
+        Derselbe Weg wie nach einem Größenschritt (:meth:`Viewport.frame_if_beyond`):
+        gerahmt wird nur, wenn die Körper über den zuletzt eingepassten Rahmen
+        hinausreichen. Neben ein herangezoomtes Modell gesetzt, stand das neue
+        außerhalb des Bilds, und nur der Objektbaum verriet, dass es da war.
+        Gefragt wird unmittelbar vor dem Aufbau, der es trägt — ein Aufbau der
+        alten Szene dazwischen verbrauchte sonst die Bitte.
+        """
+        body = self._placed_to_frame
+        if body is None or body not in picture.scene.objects:
+            return
+        self._placed_to_frame = None
+        self.viewport.frame_if_beyond()
 
     def _on_import_confirmed(self) -> None:
         """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
@@ -24076,6 +25268,7 @@ class MainWindow(QMainWindow):
         self._recent_candidate = None
         self._recent_batch = ()
         self._plate_of_import = None
+        self._placed_to_frame = None
         if not self.session.project.document.ops and self.session.path is None:
             self._show_start_screen(True)
         self.status_message.setText(self._announcement)
@@ -24144,6 +25337,8 @@ class MainWindow(QMainWindow):
             self._pending_split_reveal = frozenset()
         if self._created_to_choose and not set(self._created_to_choose) <= produced:
             self._created_to_choose = ()
+        if self._placed_to_frame is not None and self._placed_to_frame not in produced:
+            self._placed_to_frame = None
         # Wer auf dem Startbildschirm etwas ins Dokument bringt — Einfügen,
         # Generieren, ein Baustein aus dem Katalog —, will es auch sehen. Von
         # acht Wegen wechselten sieben einzeln von Hand, und der achte war der
@@ -24326,7 +25521,9 @@ class MainWindow(QMainWindow):
         return manufacturer.base_settings(self.session.profile, quality, None)
 
     def _foundation_key(self, quality: QualityPreset) -> tuple[object, ...]:
-        """Woraus die Grundlage entsteht — Drucker und Material, Stufe, Profilwahl."""
+        """Woraus die Grundlage entsteht — Drucker und Material, Stufe, Profilwahl,
+        und der Stand der Programmsuche: Ein anderer Slicer in den Einstellungen
+        heißt ein anderer Bestand (``discover.cache_generation``)."""
         profile = self.session.profile
         ui = self.settings
         return (
@@ -24338,27 +25535,54 @@ class MainWindow(QMainWindow):
             ui.slicer_profile_printer,
             ui.slicer_profile_slicer,
             ui.slicer_bed_plate,
+            discover.cache_generation(),
         )
 
+    def _chosen_setup_now(self) -> _ChosenSetup | None:
+        """Die gemerkte Slicerwahl, wenn sie zum jetzigen Stand gehört — sonst
+        ``None``, und wer sie braucht, leitet sie selbst her."""
+        chosen = self._chosen_setup
+        if chosen is None:
+            return None
+        current = _without_stage(self._foundation_key(print_settings.DEFAULT_QUALITY))
+        return chosen if chosen.key == current else None
+
     def _start_foundation(self, key: tuple[object, ...], quality: QualityPreset) -> None:
-        """Die Grundlage für ``key`` im Arbeiter rechnen lassen."""
+        """Die Grundlage für ``key`` im Arbeiter rechnen lassen.
+
+        Der abgelöste Arbeiter wird abgesagt: Seine Antwort gälte einem
+        Schlüssel, nach dem niemand mehr fragt, und schnelle Wechsel stapelten
+        sonst volle Lesedurchgänge des Profilbestands (RM-623).
+        """
         if self._close_requested:
             return
-        worker = _FoundationWorker(key, deepcopy(self.settings), self.session.profile, quality)
+        worker = _FoundationWorker(
+            key, deepcopy(self.settings), self.session.profile, quality, self._chosen_setup
+        )
         worker.done.connect(self._foundation_found)
         # Ein Absturz kostet die Herstellergrundlage, nicht das Fenster: Dann
         # rechnet es mit Solidons Tabelle weiter, und der Grund steht im Protokoll.
         worker.crashed.connect(self._foundation_crashed)
+        if self._foundation_worker is not None:
+            self._foundation_worker.cancel()
         self._retire(self._foundation_worker)
         self._foundation_worker = worker
         self._foundation_pending = key
         worker.finished.connect(lambda done=worker: self._foundation_worker_done(done))
         self._leash.start(worker)
 
-    def _foundation_found(self, key: tuple[object, ...], foundation: object) -> None:
-        """Die Grundlage ist da: merken, und was mit ihr rechnet, neu zeigen."""
+    def _foundation_found(
+        self, key: tuple[object, ...], foundation: object, chosen: object = None
+    ) -> None:
+        """Die Grundlage ist da: merken, und was mit ihr rechnet, neu zeigen.
+
+        Mit ihr die Slicerwahl (:class:`_ChosenSetup`), für die nächste Stufe
+        und den Export.
+        """
         if not isinstance(foundation, manufacturer.Foundation):
             return
+        if isinstance(chosen, _ChosenSetup):
+            self._chosen_setup = chosen
         self._foundation_cache = (key, foundation)
         if self._foundation_pending == key:
             self._foundation_pending = None
@@ -24380,7 +25604,7 @@ class MainWindow(QMainWindow):
             # Prüfbericht und Analyse auf die Grenze, mit der der Slicer stützt.
             self.session.evaluate_async()
             return
-        self.filaments.show_scene(list(result.scene.objects.values()), settings)
+        self._show_project_filaments(result, settings)
         self._update_facts()
         if result is not self.session.picture:
             self._start_print_findings(result, settings)
@@ -24538,6 +25762,8 @@ class MainWindow(QMainWindow):
             self.reveal_export.setVisible(False)
         if hasattr(self, "skip_recognition"):
             self.skip_recognition.setVisible(False)
+        for offer in getattr(self, "_draw_offers", ()):
+            offer.setVisible(False)
         if self._active_progress_owner() is None:
             self.status_message.setText(text)
         else:
@@ -24818,8 +26044,7 @@ class MainWindow(QMainWindow):
 
         Für Eigentümer, die das Ende der Auswertung neu aufbaut: Das
         Merkmalfenster zeigt danach die Werte des Schritts, die Maßgruppe geht
-        mit dem alten Ergebnis, die Filamentwahl verwirft ihre vorbereitete
-        Zuweisung. Ein Klick, der dort auf eine neue Freigabe wartete, löste
+        mit dem alten Ergebnis. Ein Klick, der dort auf eine neue Freigabe wartete, löste
         seine Zusage nie ein (Nachprüfung, Fund 3 und Verdacht Maßgruppe).
         ``then`` übernimmt deshalb genau ``order``, auch ohne Freigabe.
 
@@ -24891,10 +26116,6 @@ class MainWindow(QMainWindow):
         waiting = self._click_after_evaluation
         if waiting is not None and waiting.owner() is owner:
             self._drop_waiting_click()
-
-    def _quick_filament_cancelled(self) -> None:
-        """*Abbrechen* an der Filamentwahl: Ein wartendes Übernehmen fällt mit."""
-        self._drop_click_of(self.quick_filament)
 
     def _apply_carried_feature_order(
         self, order: _PreviewOrder, params: dict[str, Any], displayed: bool = False
@@ -25116,10 +26337,10 @@ class MainWindow(QMainWindow):
             self._click_replay = None
 
     def _sculpt_click_stands(self, waiting: _WaitingClick) -> bool:
-        """Ob der Klick *Fertig* oder *Angleichen* der noch offenen Formsitzung ist."""
+        """Ob der Klick *Fertig* der noch offenen Form- oder Skelettsitzung ist."""
         owner = waiting.owner()
-        return self._sculpt_target is not None and (
-            owner is self.sculpt_bar.done or owner is self.sculpt_bar.refine
+        return (self._sculpt_target is not None and owner is self.sculpt_bar.done) or (
+            self._armature_target is not None and owner is self.pose_bar.done
         )
 
     def _update_waiting_state(self) -> None:
@@ -25552,6 +26773,7 @@ class MainWindow(QMainWindow):
             # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
             # stehen die Transaktionen, die eine Annahme mitnähme (H-1).
             "show_history": lambda _error: self._flash_area("history"),
+            "generate_again": lambda _error: self._generate(None),
             # **Ein Rat, den nur der Kunde ausführen kann, ist ein halber.**
             # „Die Teilung läuft schon" schlägt vor, sie abzubrechen, und die
             # Handlung gibt es (``Session.cancel_split`` hält an *und*
@@ -25860,8 +27082,15 @@ class MainWindow(QMainWindow):
         if not self._quiet_command_allowed():
             return
         object_id = self._object_of(error)
+        if object_id:
+            # Als Funktion der Klasse: Die Prüfstände des Berichts rufen diesen
+            # Weg an einem Stellvertreter ohne die übrigen Methoden des Fensters.
+            MainWindow.show_places_of(self, object_id)
+
+    def show_places_of(self, object_id: ObjectId) -> None:
+        """Die Defektkarte eines Körpers — *Stellen zeigen* aus Fehler und Aufziehen (F-i)."""
         result = self.session.last_result
-        entry = result.scene.objects.get(object_id) if result and object_id else None
+        entry = result.scene.objects.get(object_id) if result else None
         if entry is None:
             return
         with self.feature_dock.held():
@@ -26546,6 +27775,8 @@ class MainWindow(QMainWindow):
         dem Merkmalsempfänger, der als zweiter kommt und die Auswahl dann
         vollständig kennt.
         """
+        if object_id is not None:
+            self._steps_chosen_last = False
         self._on_selection(object_id, settle_actions=False)
 
     def _on_selection(
@@ -26604,17 +27835,6 @@ class MainWindow(QMainWindow):
         if settle_actions and not self._showing_scene:
             self._update_actions()
         self._update_transform_roles()
-        # „Abtragen“ hängt nicht nur am Umriss, sondern am gewählten exakten
-        # Körper. Wer dem Hinweis folgt und ihn im Objektbaum auswählt, muss
-        # den Knopf sofort benutzen können — ohne erst noch die Kamera oder
-        # die Skizze zu bewegen.
-        if self._sketch_panel is not None:
-            # Neben dem Knopf ändern sich auch Kreuz, Griffbeschriftung und
-            # Erklärung im Viewport. Ein gemeinsamer Neuaufbau hält alle vier
-            # Auskünfte im selben Zustand.
-            self._redraw_sketch()
-        else:
-            self._update_sketch_actions()
         result = self.session.last_result
         chosen = self.object_tree.selected_objects()
         entries = [result.scene.objects.get(entry) for entry in chosen] if result else []
@@ -26925,7 +28145,7 @@ class MainWindow(QMainWindow):
             self.settings.first_run_done = True
         # Das bestehende Filamentpanel liest den Katalog neu, ohne dafür
         # ein geöffnetes Projekt auszuwerten oder seine Zuordnungen zu ändern.
-        self.filaments.refresh_catalogue()
+        self._refresh_inventory()
         self._store_settings()
         if inventory_requested and answer == first_run.FirstRunDialog.DialogCode.Accepted:
             self.action_inventory()
@@ -27369,6 +28589,11 @@ class MainWindow(QMainWindow):
             self._remove_tour()
             return
         self.right.setTabVisible(self.right.indexOf(self.tour), True)
+        # Vorn, bevor die Tour beginnt: Ihr erster Schritt kann schon auf
+        # einen Nachbarreiter zeigen, und gezeigt wird nur auf einen, der
+        # nicht vorn steht (RM-573).
+        self.right.setCurrentWidget(self.tour)
+        self.tour.set_tab_names(self._tour_tab_names())
         self.tour.start(example, tour)
         if not self.right_column.isVisible():
             # Wer die rechte Spalte ausgeblendet hatte, bekäme eine
@@ -27377,7 +28602,23 @@ class MainWindow(QMainWindow):
             self.settings.right_panel_visible = True
             self._store_settings()
             self.right_column.setVisible(True)
-        self.right.setCurrentWidget(self.tour)
+
+    def _tour_tab_names(self) -> dict[str, str]:
+        """Welche Ziele der Tour Reiter der rechten Karte sind, mit dem Namen am Reiter.
+
+        Die Tour nennt dem Kunden den Reiter, auf den er klicken soll (RM-573);
+        welches Widget ein Ziel meint, sagt :mod:`app.ui.guide_targets`.
+        """
+        names: dict[str, str] = {}
+        for target in get_args(TourTarget):
+            try:
+                area = widget_for(self, target)
+            except MissingTargetError:
+                continue
+            index = self.right.indexOf(area)
+            if index >= 0:
+                names[target] = self.right.tabText(index)
+        return names
 
     def _open_example(self, example_id: str) -> None:
         """Öffnet ein Beispiel über seine Kennung — der Weg vom Ende einer Tour
@@ -27396,8 +28637,11 @@ class MainWindow(QMainWindow):
         Sekunde beantwortet die Frage, ohne sie gestellt zu haben.
 
         Zeigt der Schritt auf einen Reiter der rechten Karte, etwa den
-        Prüfbericht, wird er gleich mitgeholt: er teilt sich die Karte mit der
-        Tour, und ihn suchen zu lassen hieße, die Tour aus dem Blick zu nehmen.
+        Prüfbericht, wird er **nicht** nach vorn geholt (RM-573, Entscheidung
+        Robert): Er teilt sich die Karte mit der Tour und verdeckte sie samt
+        dem Schritt, den der Kunde gerade liest. Der Reiter trägt stattdessen
+        einen gestrichelten Rahmen, der Schritt sagt, worauf zu klicken ist,
+        und der Kunde öffnet selbst. Ein leeres Ziel nimmt den Rahmen wieder ab.
 
         Welches Widget ein Name meint, sagt :mod:`app.ui.guide_targets` —
         dieselbe Auflösung, mit der die Bildanleitungen ihre Rahmen setzen.
@@ -27406,6 +28650,9 @@ class MainWindow(QMainWindow):
         Hinweis; es wird protokolliert und nicht zum Fehler, anders als bei
         der Aufnahme, die daran den Release anhält.
         """
+        if not target:
+            self.right_tabs.stop_pointing()
+            return
         try:
             area = widget_for(self, target)
         except MissingTargetError as missing:
@@ -27413,8 +28660,11 @@ class MainWindow(QMainWindow):
             return
         # Jeder Reiter der rechten Karte, nicht nur der Bericht: Seit RM-511
         # steht dort auch die Auswahl.
-        if self.right.indexOf(area) >= 0:
-            self.right.setCurrentWidget(area)
+        index = self.right.indexOf(area)
+        if index >= 0 and self.right.currentIndex() != index:
+            self.right_tabs.point_at(index)
+            return
+        self.right_tabs.stop_pointing()
         # **Und die andere Bauart derselben Zusage.** Der Bericht teilt sich
         # eine Spalte mit der Tour und wird über den Reiter geholt; Objektbaum,
         # Parameter und Verlauf sitzen in einklappbaren Abschnitten (§2.5).
@@ -27429,6 +28679,7 @@ class MainWindow(QMainWindow):
 
     def _remove_tour(self) -> None:
         """Blendet den Tour-Reiter aus — beim Beenden und beim Projektwechsel."""
+        self.right_tabs.stop_pointing()
         self.tour.reset()
         self.right.setTabVisible(self.right.indexOf(self.tour), False)
 
@@ -27638,6 +28889,8 @@ class MainWindow(QMainWindow):
             seal_dialog.reject()
         for seal_flow in self.findChildren(SealFlow):
             seal_flow.close()
+        if self._draw_flow is not None:
+            self._draw_flow.cancel_overlap()
         self.session.cancel()
         session_idle = self.session.wait_for_idle(timeout_ms)
         # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie
@@ -27649,6 +28902,10 @@ class MainWindow(QMainWindow):
         self._cancel_gcode()
         self._cancel_export()
         self._cancel_sculpt_check()
+        # Die Vorwahl aus dem Profilbestand hält zwischen ihren Schritten an,
+        # statt das Schließen Sekunden warten zu lassen (RM-623).
+        if self._foundation_worker is not None:
+            self._foundation_worker.cancel()
         if self._slice_worker is not None:
             self._slice_worker.cancel.cancel()
         # Der Erzeugen-Dialog ist nichtmodal und kann neben dem Fenster einen
@@ -27672,6 +28929,7 @@ class MainWindow(QMainWindow):
             self._update_worker,
             self._finished_update_worker,
             self._ollama_size_worker,
+            self._free_spot_worker,
             # Der Download fehlte hier. Er folgt dem Muster mit ``retire`` und
             # ``hold_until_done`` sauber — aber die Halteleine bekommt ihn erst,
             # wenn er fertig ist. Solange er läuft, hält ihn allein dieses Feld,
@@ -27849,7 +29107,12 @@ class MainWindow(QMainWindow):
         if room <= 0:
             return
         self._measure_toolbar_afresh()
-        header = self.header.sizeHint().width()
+        # **So breit, wie die Leiste die Kopfzeile rechnet:** ``QWidgetItem``
+        # nimmt das Wunschmaß, mindestens aber das Mindestmaß. Ohne Projekt ist
+        # das Wunschmaß null, das Mindestmaß nicht — die Bedarfe, die beim
+        # Aufbau gemerkt werden, trugen sonst die Kopfzeile mit, und die Suche
+        # bekam ihr Wort bei 1366 px nie zurück (Review U2, Fund 4).
+        header = max(self.header.sizeHint().width(), self.header.minimumSizeHint().width())
         while self._toolbar_form < TOOLBAR_WORDS:
             need = self._toolbar_needs.get(self._toolbar_form + 1)
             if need is None or need + header + TOOLBAR_HYSTERESIS > room:
@@ -27939,6 +29202,8 @@ class MainWindow(QMainWindow):
         # Wie das Fenster verlassen wird, so kommt es wieder — maximiert ist
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
+        self.settings.tab_layout = self.right.layout_state()
+        self.right.shutdown_windows()
         self.settings.circle_measure = circle_measure()
         # Eine gebündelte Kartenlage geht mit dieser Zeile in die Datei.
         self._card_places_save.stop()

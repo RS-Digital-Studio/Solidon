@@ -32,6 +32,8 @@ from io import BytesIO
 from typing import Final
 from xml.etree import ElementTree as ET
 
+import numpy as np
+
 from app.branding import APP_NAME, APP_VERSION
 from app.core.errors import CANCEL, SPLIT_FILAMENT_FILES, InternalError, ValidationError
 from app.core.export import slicer_keys
@@ -610,6 +612,9 @@ def _slots_for(mesh: MeshData, slots: Sequence[MaterialSlot] | None) -> list[Mat
 #: XML, und ein Körper namens ``[SOLIDON-MESH-2]`` ließ die Zählung mit
 #: einer nackten Ausnahme abbrechen. Auf das Ergebnis hat der Zufall keinen
 #: Einfluss — die Marke wird ersetzt und steht in keiner Datei.
+#: Wie viele Ecken oder Dreiecke :func:`_write_geometry` je Block als Text baut.
+_TEXT_BLOCK: Final = 65_536
+
 _GEOMETRY_MARK: Final = "[SOLIDON-MESH-{run}-{number}]"
 
 
@@ -665,38 +670,71 @@ def _write_geometry(
     geometry = ET.SubElement(parent, "mesh")
     geometry.text = mark
 
-    lines: list[str] = ["<vertices>"]
-    for point in mesh.raw.vertices:
-        lines.append(f'<vertex x="{point[0]:.17g}" y="{point[1]:.17g}" z="{point[2]:.17g}" />')
+    # **Über Python-Listen, nicht über NumPy-Zeilen** (RM-568): Je Ecke drei
+    # NumPy-Skalare zu lesen kostete am Meshy-Murmelbrett (1,95 Mio. Dreiecke)
+    # den größten Teil der 7,3 s des 3MF-Exports. Dieselben Zahlen, dieselbe
+    # Schreibweise: ``tolist`` gibt jeden float64 und jede Eckennummer
+    # unverändert als Python-Zahl. **Und blockweise** (RM-567): Als eine
+    # Liste aus Millionen Zeilen hielt der Text am Murmelbrett 850 MB über
+    # dem Ergebnis; je Block entsteht er, wird kodiert und losgelassen.
+    parts: list[bytes] = [b"<vertices>"]
+
+    def vertex_rows(points: np.ndarray) -> None:
+        for begin in range(0, len(points), _TEXT_BLOCK):
+            parts.append(
+                "".join(
+                    f'<vertex x="{x:.17g}" y="{y:.17g}" z="{z:.17g}" />'
+                    for x, y, z in points[begin : begin + _TEXT_BLOCK].tolist()
+                ).encode("utf-8")
+            )
+
+    vertex_rows(np.asarray(mesh.raw.vertices))
     # Die Stützsperre als Bereich (PrusaSlicer): Ihre Dreiecke kommen nach
     # allen des Körpers, und die Prusa-Beilage nennt den Bereich.
     if blocker is not None:
-        for point in blocker.raw.vertices:
-            lines.append(f'<vertex x="{point[0]:.17g}" y="{point[1]:.17g}" z="{point[2]:.17g}" />')
-    lines.append("</vertices><triangles>")
+        vertex_rows(np.asarray(blocker.raw.vertices))
+    parts.append(b"</vertices><triangles>")
 
-    assignment = mesh.slots or ((0,) * len(mesh.raw.faces))
-    for face, slot in zip(mesh.raw.faces, assignment, strict=True):
-        position = order.get(int(slot), 0)
-        painted = (
-            f' paint_color="{_paint_code(order[int(slot)])}"'
-            f' slic3rpe:mmu_segmentation="{_paint_code(order[int(slot)])}"'
-            if native
-            else ""
-        )
-        lines.append(
-            f'<triangle v1="{int(face[0])}" v2="{int(face[1])}" v3="{int(face[2])}"'
-            f' pid="{group_id}" p1="{position}"{painted} />'
+    # Der Schwanz eines Dreiecks hängt nur an seinem Slot: einmal je Slot
+    # gebaut statt je Dreieck.
+    tails: dict[int, str] = {}
+
+    def tail(slot: int) -> str:
+        known = tails.get(slot)
+        if known is None:
+            painted = (
+                f' paint_color="{_paint_code(order[slot])}"'
+                f' slic3rpe:mmu_segmentation="{_paint_code(order[slot])}"'
+                if native
+                else ""
+            )
+            known = tails[slot] = f' pid="{group_id}" p1="{order.get(slot, 0)}"{painted} />'
+        return known
+
+    faces = np.asarray(mesh.raw.faces)
+    assignment = mesh.slots or ((0,) * len(faces))
+    for begin in range(0, len(faces), _TEXT_BLOCK):
+        parts.append(
+            "".join(
+                f'<triangle v1="{a}" v2="{b}" v3="{c}"{tail(int(slot))}'
+                for (a, b, c), slot in zip(
+                    faces[begin : begin + _TEXT_BLOCK].tolist(),
+                    assignment[begin : begin + _TEXT_BLOCK],
+                    strict=True,
+                )
+            ).encode("utf-8")
         )
     if blocker is not None:
         start = len(mesh.raw.vertices)
-        for face in blocker.raw.faces:
-            lines.append(
-                f'<triangle v1="{int(face[0]) + start}" v2="{int(face[1]) + start}"'
-                f' v3="{int(face[2]) + start}" pid="{group_id}" p1="0" />'
-            )
-    lines.append("</triangles>")
-    return mark, "".join(lines).encode("utf-8")
+        parts.append(
+            "".join(
+                f'<triangle v1="{a + start}" v2="{b + start}" v3="{c + start}"'
+                f' pid="{group_id}" p1="0" />'
+                for a, b, c in np.asarray(blocker.raw.faces).tolist()
+            ).encode("utf-8")
+        )
+    parts.append(b"</triangles>")
+    return mark, b"".join(parts)
 
 
 def _fill_in(document: bytes, blocks: Sequence[tuple[str, bytes]]) -> bytes:

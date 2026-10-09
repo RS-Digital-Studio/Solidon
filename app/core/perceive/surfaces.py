@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import math
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import replace
@@ -217,6 +218,30 @@ def radial_scales(linear: np.ndarray, axis: np.ndarray) -> tuple[float, float] |
     return float(factors[0]), float(np.linalg.norm(along))
 
 
+@functools.lru_cache(maxsize=32)
+def _frame(key: bytes) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool] | None:
+    """Was :func:`transformed_patches` an der Abbildung selbst prüft — einmal je Abbildung.
+
+    Gefragt wird sie je Merkmal mit derselben Matrix: am Eiffelturm 14 634-mal
+    je Verschieben, mit Singulärwertzerlegung und zwei ``allclose`` jedes Mal
+    (RM-568). Dieselben Rechnungen auf denselben Zahlen, die Felder nur
+    lesbar, weil sie geteilt werden.
+    """
+    matrix = np.frombuffer(key, dtype=np.float64).reshape(4, 4).copy()
+    if not np.all(np.isfinite(matrix)):
+        return None
+    if not np.allclose(matrix[3], (0.0, 0.0, 0.0, 1.0), rtol=0.0, atol=EPS_GEOM):
+        return None
+    linear = matrix[:3, :3]
+    scales = np.linalg.svd(linear, compute_uv=False)
+    if scales[-1] <= 0.0:
+        return None
+    uniform = bool(np.allclose(scales, scales[0], rtol=0.0, atol=EPS_GEOM))
+    for shared in (matrix, linear, scales):
+        shared.flags.writeable = False
+    return matrix, linear, scales, uniform
+
+
 def transformed_patches(
     patches: Sequence[SurfacePatch],
     transform: Transform | np.ndarray,
@@ -228,15 +253,12 @@ def transformed_patches(
     if not patches:
         return ()
     matrix = np.asarray(transform, dtype=np.float64)
-    if matrix.shape != (4, 4) or not np.all(np.isfinite(matrix)):
+    if matrix.shape != (4, 4):
         return ()
-    if not np.allclose(matrix[3], (0.0, 0.0, 0.0, 1.0), rtol=0.0, atol=EPS_GEOM):
+    frame = _frame(np.ascontiguousarray(matrix).tobytes())
+    if frame is None:
         return ()
-    linear = matrix[:3, :3]
-    scales = np.linalg.svd(linear, compute_uv=False)
-    if scales[-1] <= 0.0:
-        return ()
-    uniform = bool(np.allclose(scales, scales[0], rtol=0.0, atol=EPS_GEOM))
+    matrix, linear, scales, uniform = frame
     result = []
     for patch in patches:
         if not valid_patch(patch, check_cancelled=check_cancelled):

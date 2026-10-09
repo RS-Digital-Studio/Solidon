@@ -397,22 +397,28 @@ class GfxItem(Item):
     def colour(self) -> Colour:
         return self._colour
 
-    def set_face_colours_visible(self, visible: bool) -> None:
-        """Zwischen Dreiecksfarben und der einen Körperfarbe umschalten.
+    def set_face_tint(self, tint: Colour | None, share: float = 0.0) -> None:
+        """Mischt den Ton in den Farbpuffer je Dreieck; ``color_mode`` bleibt ``"face"``.
 
-        pygfx entscheidet das über ``material.color_mode``: ``"face"`` liest
-        ``geometry.colors`` je Dreieck, ``"uniform"`` nur ``material.color``.
         **Nicht ``"auto"``:** Das multipliziert die Körperfarbe mit
         ``geometry.colors``, gelesen je Ecke — ein Puffer je Dreieck lag dann
-        über den Eckennummern. Nur Körper, die beim Anlegen Zellfarben
-        bekamen, tragen die Marke — bei allen anderen tut der Aufruf nichts,
-        und das ist auch richtig so: Sie hätten keine Dreiecksfarben, zu denen
-        sie zurückkehren könnten.
+        über den Eckennummern. Gemischt wird aus den Farben vom Anlegen
+        (``_solidon_face_colours``); nur Körper mit Zellfarben tragen sie.
         """
+        wanted = (tint, float(share)) if tint is not None and share > 0.0 else None
         for obj in self._coloured():
-            if not getattr(obj, "_solidon_face_colours", False):
+            base = getattr(obj, "_solidon_face_colours", None)
+            if base is None or getattr(obj, "_solidon_face_tint", None) == wanted:
                 continue
-            obj.material.color_mode = "face" if visible else "uniform"
+            shown = base
+            if wanted is not None:
+                shown = base.copy()
+                shown[:, :3] = (
+                    base[:, :3] * (1.0 - wanted[1]) + np.asarray(rgb(wanted[0])) * (wanted[1])
+                )
+            obj.geometry.colors.data[:] = shown
+            obj.geometry.colors.update_full()
+            obj._solidon_face_tint = wanted
             self.restyled = True
         self._changed()
 
@@ -529,6 +535,13 @@ class GfxItem(Item):
                 obj._solidon_positions = source
             if id(geometry) in replacements:
                 obj.geometry = replacements[id(geometry)]
+                continue
+            if _rewrite_surface(geometry, fresh):
+                # Dieselbe Geometrie, neue Zahlen in ihren Puffern: Ohne neues
+                # Objekt baut pygfx keine Pipeline neu. Je Vorschau einer
+                # Formsitzung kostete der Neubau an 241 480 Dreiecken mehr als
+                # alles andere zusammen (RM-560, H6).
+                replacements[id(geometry)] = geometry
                 continue
             # Normalen und Hüllquader hängen an den Ecken; ein neues Netz
             # rechnet beides frisch. Bis zum 21.09.2026 stand davor noch ein
@@ -657,6 +670,30 @@ def _buffer_bytes(item: GfxItem) -> int:
             seen.add(id(buffer))
             total += int(getattr(buffer, "nbytes", 0) or 0)
     return total
+
+
+def _rewrite_surface(geometry: Any, positions: np.ndarray) -> bool:
+    """Neue Ecken in die Puffer einer beleuchteten Fläche geben, Normalen
+    gleich mit — ``False``, wenn sie keine Dreiecke mit Normalenpuffer ist.
+
+    Die Puffer bekommen eigene, neue Felder (``set_data``) und werden nicht
+    überschrieben: Das Feld eines Puffers gehört nicht immer ihm.
+    :meth:`GfxRenderer.add_surface` reicht vorbereitete Normalen ohne Kopie
+    hinein, und die Ansicht merkt sie sich für das nächste Bild desselben
+    Netzes. Ein Schreiben hinein gab dem unveränderten Körper nach einer
+    Formvorschau deren Beleuchtung (Review F1).
+    """
+    normals = getattr(geometry, "normals", None)
+    indices = getattr(geometry, "indices", None)
+    current = geometry.positions
+    if normals is None or indices is None or normals.nitems != current.nitems:
+        return False
+    fresh = np.array(positions, dtype=np.float32, order="C", copy=True)
+    if fresh.shape != np.shape(current.data) or not np.isfinite(fresh).all():
+        return False
+    current.set_data(fresh)
+    normals.set_data(_normals(fresh, np.asarray(indices.data)))
+    return True
 
 
 def _geometry_like(geometry: Any, positions: np.ndarray) -> Any:
@@ -1328,9 +1365,9 @@ class GfxRenderer(Renderer):
             material.color_mode = "face"
         mesh = gfx.Mesh(geometry, material)
         mesh._solidon_mesh = True
-        # Wer Dreiecksfarben hat, merkt es sich: Nur dann darf
-        # ``set_face_colours_visible`` den Modus überhaupt anfassen.
-        mesh._solidon_face_colours = cell_colours is not None
+        # Wer Dreiecksfarben hat, behält sie ungetönt: daraus mischt
+        # ``set_face_tint`` den Ton der Auswahl und nimmt ihn wieder zurück.
+        mesh._solidon_face_colours = fields["colors"].copy() if cell_colours is not None else None
         mesh._solidon_positions = np.asarray(vertices, dtype=float).reshape(-1, 3)
         mesh._solidon_force_opaque = style.force_opaque
         if style.ambient is not None and style.lighting:

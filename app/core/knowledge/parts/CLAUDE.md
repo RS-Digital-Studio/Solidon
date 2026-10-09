@@ -8,6 +8,9 @@ Checkliste in `AGENTS.md`, Skill `neuer-baustein`. Herleitungen:
 **Dieses Verzeichnis steht unter MIT** (`LICENSE` hier, der Grund aus §36 im
 Paketdocstring). Wer hier Code hinzufügt, prüft, dass er unter MIT stehen darf.
 
+Die Spiegelungsentscheidung für abtragende Bausteine liegt in
+`through.builds_upward`; Operation, Vorschau und SCAD verwenden sie gemeinsam.
+
 ## Die Karte
 
 | Datei | Rolle |
@@ -29,6 +32,7 @@ Paketdocstring). Wer hier Code hinzufügt, prüft, dass er unter MIT stehen darf
 | `range_check.py` | Der Bereichstest in der Anwendung: Selbstdurchdringung über `geom.intersections`, Wandstärke über `geom.mesh.ray_hits_batch`, ohne VTK |
 | `range_proof.py` | Der Bereichsnachweis: Abdruck je Baustein gegen `data/part_ranges.toml` (`tools/check_part_ranges.py`) |
 | `preview.py` | Vorschaubilder — gerendert, nicht von Hand gepflegt |
+| `through.py` | Bohrungen durch den ganzen Träger (`reaches_through`): ihr Zylinder für `ops._reaching_through` und ihre Fortsetzung in Vorschau, Platzierungsgeist und SCAD mit der Anzeigelänge `SHOWN_REACH` |
 | `scad.py` | Export als OpenSCAD-Quelltext; schreibt, führt nichts aus |
 | `recipe.py` | Ein eigener Baustein als **Rezept**: Daten statt Programm (§24.5) |
 | `shared.py` · `shared_texts.py` | Der geschlossene Prüfvertrag lokaler Bausteindateien (Form, Mengen, Ops, Payloads, `MAX_EXPOSED`) · seine übersetzbaren Prüfgründe |
@@ -146,8 +150,14 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 
 ### Rezepte und Dateien
 
-- **Rezept** (Regel 13, `bausteine.md`): `recipe.draft` ist der Gegenweg zu
-  `capture`, `Session.open_draft` merkt sich die Herkunft. Ein Ausschnitt trägt
+- **Rezept** (Regel 13, `bausteine.md`): eigenständig mit Erzeuger und Namensschutz
+  (`reserved_name`, `_recipe_creator`, RM-574). `recipe.draft` ist der Gegenweg zu
+  `capture`, `Session.open_draft` merkt sich die Herkunft. `steps_of` schneidet
+  den Ausschnitt eines gewählten Körpers aus dem Stapel, rückwärts über die
+  Kanten aus `revision.step_needs`; Berichte, durchgereichte Körper und
+  ausgeschaltete Schritte zählen nicht, Ganzszenen-Schritte verengt
+  `_narrowed`, und `slice_bodies` nennt die
+  Körper eines Ausschnitts ohne Rechnung. Ein Ausschnitt trägt
   keine Auftragseinstellungen; Abhängigkeiten sammelt der Container transitiv,
   Namenskonflikte bekommen freie Namen, vorhandene Fassungen bleiben.
 - **Format v2**: flache `dependencies` (v1 migriert, Quelldaten bleiben);
@@ -172,7 +182,8 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 ### Bereichstest und Versionen
 
 - **Der Bereichstest zählt das kartesische Produkt vor jedem Bau**
-  (`range_check.corner_count`, über `MAX_CORNERS` eine Absage mit Anzahl);
+  (`range_check.corner_count`, über `corner_limit` — 512 für eigene, 4096 für
+  mitgelieferte Bausteine — eine Absage mit Anzahl);
   Stichproben ersetzen den Vertrag nicht, `recipe.capture` begrenzt die Felder
   (`shared.MAX_EXPOSED`), der Dialog zeigt die Prüfmenge. Jede Phase einer Ecke
   gehört in ihren Bericht; nur eine erklärte Ablehnung beim Bau ist ein
@@ -215,12 +226,21 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   und alter Ortsvorgabe; frische Dokumente nie. Jedes erzeugte Schema bekommt
   eigene Dataclass-Felder — ein geteiltes `Field` benennt sich beim nächsten
   Klassenbau um.
+- **`reaches_through`** nennt die Bohrungen, die der Schritt durch den
+  ganzen Träger führt (`_reaching_through`, Mutternfalle); jede erklärte
+  Durchgangsbohrung prüft `_through_bores_in_the_body` am Ergebnis (Regel in
+  `bausteine.md`).
 - **`depth_field`** sagt, welches Feld die Eindringtiefe ist (§18.5; warum der
   Name nicht reicht, im Docstring); wer ein auftragendes `depth` baut,
   deklariert es über `ParamSpec.subtractive_on` (`cuts`, `cuts_by_parameter`).
 - **`standalone`** erzeugt zusätzlich `create_<name>` ohne Eingang
   (`creation_name()`), `insert_<name>` bleibt lesbar; Erzeuger übernehmen die
-  freie Normale und sinken ohne Träger nicht ein. **`template`** (nur mit
+  freie Normale und sinken ohne Träger nicht ein. Der Katalog nimmt den
+  Erzeuger, solange keine Stelle gewählt ist, an die er gehört
+  (`catalog_operation` über `fitting_places`, eine gerundete Seite zählt als
+  Fläche), und legt ihn auf eine freie Stelle (`free_spot_for`); `build_params(standalone=True)` lässt die abtragende
+  Wahl weg, `_on_its_own_bed` stellt den Körper auf die Ebene seines
+  Ursprungs (Mündungsbausteine kopfüber). **`template`** (nur mit
   `standalone`) lässt den Erzeuger *Maße als Parameter anlegen* anbieten wie
   einen Grundkörper (`offers_naming`, Regel in `grenzen.md`) und baut ihn wie einen
   Grundkörper exakt, wo der Kern da ist (`ops._creates_exactly`). Die Toleranzleiter erklärt

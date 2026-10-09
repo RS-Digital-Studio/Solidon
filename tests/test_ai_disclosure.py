@@ -43,6 +43,7 @@ from app.ui.settings import UiSettings, load_settings, save_settings
 from app.ui.settings_dialog import SettingsDialog
 from tests.scripted_backend import ScriptedBackend
 from tests.ui_helpers import session as session
+from tests.ui_helpers import wait_until
 from tests.ui_helpers import window as window
 
 
@@ -621,13 +622,15 @@ def test_real_accessibility_actions_activate_all_visible_privacy_paths(
     dialog = AiDisclosureDialog(_target("anthropic"))
     _show_until_ready(dialog, qt_app)
 
-    for link in (dialog.local_privacy_link, *dialog.external_links):
+    for index, link in enumerate((dialog.local_privacy_link, *dialog.external_links)):
         interface = QAccessible.queryAccessibleInterface(link)
         assert interface is not None
         action = interface.actionInterface()
         assert action is not None
         action.doAction(QAccessibleActionInterface.pressAction())
-        QTest.qWait(150)
+        # Qt stellt den zugänglichen Tastendruck zeitversetzt zu. Die feste
+        # Pause konnte auf dem Intel-Mac enden, bevor der letzte Link öffnete.
+        wait_until(qt_app, lambda expected=index + 1: len(local) + len(opened) == expected)
 
     assert local == [True]
     assert opened == [ANTHROPIC_PRIVACY_URL, ANTHROPIC_COMMERCIAL_TERMS_URL]

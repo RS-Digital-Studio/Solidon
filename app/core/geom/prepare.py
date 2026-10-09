@@ -64,6 +64,7 @@ from app.core.geom.mesh import (
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
 from app.core.geom.transform import Axis, translation
+from app.core.knowledge.parts.shapes import turn_segments
 from app.core.knowledge.print_settings import is_slender
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.registry import param
@@ -1777,12 +1778,14 @@ def drill_tool(
         )
         return MeshData.of(body)
     if widening_diameter > EPS_GEOM:
-        return MeshData.of(lathe.revolve(outline, sections=BORE_SECTIONS))
+        return MeshData.of(
+            lathe.revolve(outline, sections=turn_segments(max(r for r, _ in outline)))
+        )
     radius = outline[1][0]
     cylinder = lathe.cylinder(
         radius=radius,
         height=depth + mouth_overlap,
-        sections=BORE_SECTIONS,
+        sections=turn_segments(radius),
     )
     shift_body(cylinder, (0.0, 0.0, (mouth_overlap - depth) / 2.0))
     return MeshData.of(cylinder)
@@ -2190,12 +2193,17 @@ def countersink(
 
     # Über ``lathe`` (RM-187): ``trimesh.creation.cone`` nimmt seine Ecken aus
     # ``np.cos``, und das rechnet je CPU anders.
-    cone = lathe.revolve([[0.0, 0.0], [diameter / 2.0, 0.0], [0.0, depth]], sections=BORE_SECTIONS)
+    outer = diameter / 2.0 + BOOLEAN_OVERLAP * units.exact_tan_degrees(angle / 2.0)
+    cone = lathe.revolve(
+        [[0.0, 0.0], [outer, 0.0], [0.0, depth + BOOLEAN_OVERLAP]],
+        sections=turn_segments(outer),
+    )
     # Der Kegel kommt auf seiner Basis stehend heraus, Spitze nach oben. Eine
     # Senkung ist andersherum: am weitesten an der Fläche, enger werdend ins
     # Material. Umgedreht läuft er von null abwärts, was genau das ist — und
-    # er wird um die Überlappung angehoben, damit die zwei Flächen nicht
-    # zusammenfallen (§39). Die halbe Drehung ist exakt (``transform.rotation``).
+    # er wird über die Mündung entlang derselben Flanke verlängert, damit die
+    # Flächen nicht zusammenfallen und das Nennmaß bleibt (§39, wie am exakten
+    # Kern). Die halbe Drehung ist exakt (``transform.rotation``).
     transform.moved(cone, transform.rotation("x", 180.0))
     shift_body(cone, [0.0, 0.0, BOOLEAN_OVERLAP])
     transform.moved(cone, transform.rotation_between(np.array([0.0, 0.0, -1.0]), narrows))
@@ -2435,8 +2443,13 @@ def plug(
     """
     centre, height = plug_placement(mesh, axis, position, depth, anchor)
     filled = diameter if profile is None else bore_diameter(diameter, profile, compensate)
+    sections = turn_segments(filled / 2.0 + BOOLEAN_OVERLAP)
+    # Umschrieben: Auch die Ecken einer fremden Winkelunterteilung werden
+    # geschlossen, nicht nur die Sehnen des eigenen Bohrwerkzeugs.
     cylinder = lathe.cylinder(
-        radius=filled / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
+        radius=filled / (2.0 * units.inscribed_ratio(sections)) + BOOLEAN_OVERLAP,
+        height=height,
+        sections=sections,
     )
     transform.moved(cylinder, _axis_alignment(axis))
     shift_body(cylinder, np.asarray(centre, dtype=float))

@@ -13,6 +13,8 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 
+import pytest
+
 from app.core import examples
 from app.core.knowledge import profiles
 from app.core.scene import OperationDraft, evaluate
@@ -499,16 +501,121 @@ def test_only_the_current_tour_step_is_expanded(qt_app: object) -> None:
 
     assert panel._rows[0][1].wordWrap()
     assert all(not text.wordWrap() for _marker, text in panel._rows[1:])
-    assert panel._rows[1][1].toolTip() == panel._rows[1][1].full_text()
+    # Keine Sprechblase (RM-553): Sie lief quer über Ansicht und Kartentext.
+    # Die Hilfstechnik liest den ganzen Satz aus der Beschreibung.
+    assert all(not text.toolTip() for _marker, text in panel._rows)
+    assert panel._rows[1][1].accessibleDescription() == panel._rows[1][1].full_text()
 
     panel.advance()
 
     assert not panel._rows[0][1].wordWrap()
     assert panel._rows[1][1].wordWrap()
-    assert panel._rows[1][1].toolTip() == ""
+    assert panel._rows[1][1].accessibleDescription() == ""
+
+    # Ein Klick klappt einen anderen Schritt auf und wieder zu, der aktuelle bleibt offen
+    # — über den Mausweg, nicht am Signal vorbei (Review U1, Fund 5).
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    fourth = panel._rows[3][1]
+    QTest.mouseClick(fourth, Qt.MouseButton.LeftButton)
+    assert fourth.wordWrap()
+    assert panel._rows[1][1].wordWrap()
+    QTest.mouseClick(fourth, Qt.MouseButton.LeftButton)
+    assert not fourth.wordWrap()
+    QTest.mouseClick(fourth, Qt.MouseButton.RightButton)
+    assert not fourth.wordWrap(), "die rechte Taste klappt nicht auf"
+    QTest.mouseClick(panel._rows[1][1], Qt.MouseButton.LeftButton)
+    assert panel._rows[1][1].wordWrap(), "der aktuelle Schritt klappt nicht zu"
+
+    # Und mit der Tastatur: Die eingeklappte Zeile nimmt den Tabulatorfokus, die
+    # Leertaste klappt auf, die Eingabetaste wieder zu.
+    assert fourth.focusPolicy() == Qt.FocusPolicy.TabFocus
+    assert panel._rows[1][1].focusPolicy() == Qt.FocusPolicy.NoFocus
+    QTest.keyClick(fourth, Qt.Key.Key_Space)
+    assert fourth.wordWrap()
+    QTest.keyClick(fourth, Qt.Key.Key_Return)
+    assert not fourth.wordWrap()
 
     panel.deleteLater()
     session.release()
+
+
+def test_a_step_taller_than_the_card_shows_its_beginning(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review U1, Fund 4: Ist der aktuelle Schritt höher als der Ausschnitt, steht sein Anfang.
+
+    ``ensureWidgetVisible`` mittet ein zu hohes Widget, und Nummer und erste
+    Zeilen standen über dem Rand.
+
+    **Jedes Rollen trifft, nicht erst das letzte.** Gerollt wurde auch mitten in
+    Qts Größenrechnung, vor dem neuen Rollbereich, und dort stieß es an die
+    alte Grenze. Unter Windows rückte ein späterer Umbruch es zurecht; auf macOS
+    blieb der Schritt 46 Punkte unter dem Rand. Deshalb wird jeder Aufruf
+    geprüft, auch nach dem Verkleinern der Karte.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.session import Session
+    from app.ui.tour import TourPanel
+
+    missed: list[tuple[int, int]] = []
+    real_show_row = TourPanel._show_row
+
+    def show_row(self: TourPanel) -> None:
+        real_show_row(self)
+        if not 0 <= self._in_view < len(self._row_hosts):
+            return
+        row = self._row_hosts[self._in_view]
+        seen = self._scroll.viewport()
+        if row.height() > seen.height():
+            top = row.mapTo(seen, QPoint(0, 0)).y()
+            if top != 0:
+                missed.append((row.y(), top))
+
+    monkeypatch.setattr(TourPanel, "_show_row", show_row)
+
+    example = next(entry for entry in examples.EXAMPLES if entry.id == "weg2-halter-konstruieren")
+    project, history = _opened(example.id)
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for(example.id)
+    assert tour is not None
+    longest = max(range(len(tour.steps)), key=lambda at: len(str(tour.steps[at].text)))
+    panel = TourPanel(session)
+    try:
+        panel.resize(220, 240)
+        panel.show()
+        panel.start(example, tour)
+        panel._current = longest
+        panel._update_marks()
+        for _ in range(6):
+            QApplication.processEvents()
+        host = panel._row_hosts[longest]
+        viewport = panel._scroll.viewport()
+        assert host.height() > viewport.height(), (
+            f"premise: der Schritt ({host.height()}) ist höher als der Ausschnitt "
+            f"({viewport.height()})"
+        )
+        assert host.mapTo(viewport, QPoint(0, 0)).y() == 0, "der Anfang des Schritts steht oben"
+
+        # Erst groß, dann klein: Die Karte schrumpft, der Inhalt mit ihr, und
+        # der Rollbereich bekommt seine Grenze erst nach dem Inhalt.
+        panel.resize(220, 2000)
+        for _ in range(6):
+            QApplication.processEvents()
+        panel.resize(220, 240)
+        for _ in range(6):
+            QApplication.processEvents()
+        assert host.mapTo(viewport, QPoint(0, 0)).y() == 0, "nach dem Verkleinern steht er oben"
+        assert not missed, f"gerollt vor dem neuen Rollbereich (Lage, Oberkante): {missed}"
+    finally:
+        panel.close()
+        panel.deleteLater()
+        session.release()
 
 
 def test_the_last_step_of_a_tour_leads_to_the_next_example() -> None:
@@ -780,3 +887,47 @@ def test_a_restarted_tour_points_at_its_first_place_again(qt_app: object) -> Non
 
     panel.deleteLater()
     session.release()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_an_upcoming_step_is_readable_and_says_so(qt_app: object, theme: str) -> None:
+    """Nachprüfung U1, Fund 6: Kommende Schritte sind lesbar grau und nennen ihren Zustand.
+
+    Seit sie nicht mehr gesperrt sind, nehmen sie Fokus und Klick an und sind
+    lesbarer Inhalt: Das Grau braucht 4,5 : 1 gegen die Karte, und der Marker
+    sagt dem Bildschirmleser, dass der Schritt noch kommt — vorher meldete er
+    „nicht verfügbar“, ohne Namen gar nichts.
+    """
+    from PySide6.QtGui import QPalette
+    from PySide6.QtWidgets import QApplication
+
+    from app.i18n import tr
+    from app.ui.session import Session
+    from app.ui.theme import THEMES, apply_theme, contrast_ratio
+    from app.ui.tour import TourPanel
+
+    application = QApplication.instance()
+    assert isinstance(application, QApplication)
+    apply_theme(application, theme)  # type: ignore[arg-type]
+    project, history = _opened("weg1-halterung-anpassen")
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for("weg1-halterung-anpassen")
+    assert tour is not None
+    panel = TourPanel(session)
+    try:
+        panel.show()
+        panel.start(examples.EXAMPLES[0], tour)
+        QApplication.processEvents()
+        marker, text = panel._rows[3]
+        assert panel._row_hosts[3].property("tourState") == "upcoming"
+        assert marker.accessibleName() == tr("Kommt noch")
+        shown = text.palette().color(QPalette.ColorRole.WindowText).name()
+        card = THEMES[theme]["window"]
+        assert contrast_ratio(shown, card) >= 4.5, (shown, card, contrast_ratio(shown, card))
+    finally:
+        panel.close()
+        panel.deleteLater()
+        session.release()
+        apply_theme(application, "dark")  # type: ignore[arg-type]

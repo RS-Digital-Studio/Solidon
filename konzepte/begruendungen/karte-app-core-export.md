@@ -34,7 +34,7 @@ installiert ist, statt etwas mitzubringen.
 |---|---|
 | `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3); `default_scheme` nennt das Namensmuster, nach dem ohne eigene Angabe benannt wird — das Fenster zeigt es im Dateidialog (RM-141). `mesh_for_export` vernetzt einen exakten Körper so fein, wie das Verfahren des Druckers es verlangt (`Profile.export_deflection`: ein Achtel des kleinsten Details, gedeckelt von der Zahl des Kerns — FDM bleibt bei 0,05 mm, ein Resin-Drucker mit 50-µm-Pixeln bekommt 0,006), an allen drei Stellen des Schreibers; `export.tessellated` nennt das Maß. Bei einem Resin-Drucker lässt `write_assembly` den FDM-Satz fallen: keine Haftungs- und Filamentbefunde, keine Beilage |
 | `threemf.py` | 3MF **schreiben** — ein Körper oder eine Baugruppe, mit Farbgruppen und Slicer-Beilagen (§20, §29); `AssemblyPart.support_blocker` legt eine Stützsperre an — für die Orca-Familie als eigenes Teil (`support_blocker` in `model_settings.config`), für PrusaSlicer als Bereich im Netz (`SupportBlocker` in der Prusa-Beilage, dazu `slic3rpe:Version3mf`), je nach `blocker_as_part`. Gelesen wird in `ingest/threemf.py` |
-| `handover.py` | Übergabe an den Slicer (§29, §28.1); `prusa_values` schreibt für PrusaSlicer die Kette seines Bündels samt Abweichung, für Konsole und 3MF-Beilage |
+| `handover.py` | Übergabe an den Slicer (§29, §28.1); `prusa_values` schreibt für PrusaSlicer die Kette seines Bündels samt Abweichung, für Konsole und 3MF-Beilage; Profilvektoren anderer Semantik bleiben in gemischten 3MFs auch bei gleicher Länge vollständig |
 | `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, dazu `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); über dem Standardprozess die Werte der gewählten Stufe (`STAGE_PATHS`, `Foundation.staged`); die Platten, für die das Filament eine Betttemperatur nennt (`plate_temperatures`), ob der Drucker eine Plattenwahl hat (`offers_plates`); `written_paths` sagt, was die Übergabe davon schreibt, `findings`, was der Kunde über Platte und unlesbares Profil wissen muss. Für PrusaSlicer löst `prusa_chain` Drucker, Prozess und Filament des Bündels auf (`PrusaChain`), `PRUSA_PROCESS` und `PRUSA_PROGRAM_DEFAULTS` lesen sie zurück, samt Tempi in Prozent, erster Schicht, Stützwinkel „automatisch" und Rückzug am Filament |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
 | `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt; ein Durchgang liest jede Datei einmal (`ProfileDocuments`, geteilt von Auswahl, Namensindex und Erbkette). Den Prusa-Bestand hält `_prusa_store` über Aufrufe hinweg, solange keine Bündeldatei sich ändert, den der Orca-Familie und von Cura `_held` je Profilarten, solange die Signatur gleich bleibt (RM-670: jeder 3MF-Export las vorher rund 1 550 Maschinenprofile, eine bis drei Sekunden); `identity` ist die Kennung eines Profils in einer Auswahl. `match_filament` wählt die Filament-Vorgabe: Vorwahl der Maschine, Vorschlag des Modells (`suggested_filaments`, bei der Orca-Familie aus dem Modellprofil `machine_model`), dann Generic oder die Marke des Druckers (`brand_of` aus `filament_vendor`) vor jeder Fremdmarke, die schlichteste Ausführung, erst dann die Namenslänge. Die Signatur von `_held` (`_holding_signature`) nimmt eigene Profile und den `system`-Bestand Datei für Datei, die Installation an Programmdatei und oberster Ebene; `_prusa_printer_models` und `_program_folders` merken ebenso, `forget_holdings` leert alle |
@@ -448,6 +448,84 @@ fragt nur die Marke. Gemessen am Runner (Läufe 37504088443, 37528397381):
 Einhängen 0,01 s, erste Kopie 3,3 s; Würfel auf dem K1 Max mit Flatpak und
 AppImage, draußen und im Sandkasten, gleich wie CuraEngine unter Windows.
 Eine Kopie wiegt rund 26 MB in rund 9 900 Dateien (Cura 5.13).
+
+**Seit RM-599 hängt die Kopie nicht mehr ein** (09.10.2026): `_read_resources`
+liest `share/cura/resources` über `squashfs` aus dem Abbild (Cura 5.13: gzip,
+128 KiB), und `engine_complete` beantwortet aus `AppRun.env`, Lader und
+CuraEngine im Abbild, ob Solidon rechnen kann — dieselbe Prüfung wie
+`loader_command` am eingehängten Ordner. Der Lader ist im Abbild eine
+Verknüpfung (`runtime/compat/lib64/ld-linux-x86-64.so.2` →
+`../lib/x86_64-linux-gnu/…`); `SquashImage.resolve` folgt ihr, ein absolutes
+Ziel zählte am eingehängten Abbild den Rechner mit und gilt hier als fehlend.
+Gegen 7-Zip: 9 944 Dateien byte-gleich, Rechenmaschine erkannt. Ein AppImage,
+das Solidon nicht sieht (aus seinem Flatpak außerhalb der Freigaben), hat schon
+vorher keine Fassung (`_key`) und keine Kopie bekommen. Eingehängt wird nur
+noch für den Lauf (`engine`). Ob das gebaute Paket gzip und zstd entpackt,
+meldet es im Starttest (`image_compressions`, `tools/check_frozen_start.py`).
+
+## Die Orca-Familie als AppImage (`appimage.py`, RM-549)
+
+Ein AppImage der Orca-Familie trägt seinen Herstellerbestand nur im
+eingebetteten SquashFS unter `resources/profiles`; erst sein erster Start legt
+die Bündel nach `<Konfiguration>/<Programm>/system/`. Bis RM-549 sah Solidon
+unter Linux deshalb keinen Herstellerdrucker, bis der Kunde den Slicer einmal
+geöffnet hatte, und die Konsole lehnte den Auftrag ohne vorgewähltes Profil ab.
+
+Gelesen wird das Abbild als Datei: Es beginnt hinter der Abschnittstabelle der
+Laufzeit (`image_offset`), Kompression über die Standardbibliothek (zlib,
+lzma, `compression.zstd`). Gestartet wird nichts, auch nicht
+`--appimage-extract` oder `--appimage-mount` (Regel 11). Der Leser steht seit
+RM-599 in `squashfs.py` und liest auch Curas Bestand (unten). Gemessen an
+den Fassungen der Slicerauswahl (09.10.2026, alle Typ 2, SquashFS 4.0, zstd,
+128-KiB-Blöcke): OrcaSlicer 2.4.2 12 006 Profile, ElegooSlicer 1.5.3.5
+12 007, Creality Print 7.3.0 6 898, Bambu Studio 2.8.2 3 589, jede Datei
+byte-gleich mit dem Auszug von 7-Zip. Lesen aller Profile 0,2 s; die Kopie
+dauert unter Windows 6 bis 17 s, fast ganz im Anlegen der Dateien. Die
+Erhebung findet danach 997, 997, 491 und 202 Drucker.
+
+Die Kopie folgte zuerst Curas Muster als Abschrift (`stamp.json` mit Pfad,
+Änderungszeit, Größe und Fassung des Kopierers, Austausch über einen
+Zwischenordner, Räumen verschwundener AppImages). Die Durchsicht fand den
+Zwilling schon auseinandergelaufen: Nur die Orca-Seite legte eine gelöschte
+Kopie neu an; Curas Merker nannte nach einem geleerten Nutzer-Cache den
+gelöschten Ordner weiter, und Curas Drucker fehlten bis zum Neustart, auch
+nach *Neu suchen*. Seitdem verwaltet `ImageCopies` beide Kopien; jeder Slicer
+bringt nur Cache-Ordner, Fassung und seinen Leser mit (`_fill_profiles`,
+`cura_linux._fill_printers`). Dort liegt auch `never_wait_in`, damit
+`cura_linux` `appimage` importiert und nicht umgekehrt.
+
+Ist das Abbild unlesbar (andere Kompression, beschädigt), bleibt
+`install_root` leer wie zuvor; die eigenen Profile bleiben in der Liste, ohne
+Profil rät der Druckdialog, den Slicer einmal zu öffnen (`_profiles_found`),
+und danach gilt `system/`. Bis zur Durchsicht übersetzte nur der xz- und der
+zstd-Zweig ihren Entpackfehler; ein gekipptes Bit in einem gzip-Block (Curas
+Kompression) entkam als `zlib.error`, kostete die ganze Profilliste, ließ
+einen Zwischenordner liegen und wurde bei jeder Frage neu gelesen. Jetzt
+übersetzt ein Entpacker für alle Kompressionen (`_inflater`), und die Kopie
+räumt ihren Zwischenordner auch bei einem unerwarteten Abbruch. Die Grenzen
+greifen vor der Allokation (§32): `read` prüft die angegebene Dateigröße vor
+dem ersten Block (eine Lücke kostet im Abbild vier Byte und entpackt einen
+ganzen Block; gemessen: 16 MiB Lückendatei bei 1 MiB Grenze belegten vorher
+34,6 MB), `entries` eine Verzeichnisgröße über `MAX_LISTING`, und der
+xz-/lzma-Entpacker bekommt höchstens `MAX_INFLATER_MEMORY`.
+
+Unter Windows verweigerte das Umbenennen des fertigen Zwischenordners in
+der Testsuite gelegentlich mit `WinError 5`, weil ein Scanner die frisch
+geschriebenen Dateien kurz offen hält (zwei von vier Läufen der Testdatei);
+`_rename` versucht es fünfmal im Abstand von 0,1 s.
+
+## Curas Jerk-Steuerung
+
+Aus der Karte verschoben (09.10.2026): Curas Jerk-Steuerung folgt der
+gewählten Definitions- und Containerkette. Bekannte Abhängigkeiten werden
+aufgelöst, eigene Rollen und Schalter gehen vor.
+`resolve_profile(cura_motion=True)` prüft die Bewegungswerte erst für die
+konkrete Übergabe; Druckerliste und Bettlesen bleiben davon unabhängig.
+Unbekannte aktive Werte halten CLI und Fensterprofil mit derselben Handlung
+an. Beide schreiben denselben aufgelösten Bestand. Extrudercontainer beachten
+das geerbte `settable_per_extruder`; globale Schalter bleiben global.
+Verglichen werden wirksame Rollen; ausgeschaltete Druck- oder Leerfahrtwerte
+bleiben ohne Wirkung und ohne rohe Formeln in der strikten Ausgabe.
 
 ## Warum `slicer_keys.py` existiert
 

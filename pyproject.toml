@@ -317,6 +317,10 @@ module = [
   # Das Filamentlager tauscht seine Datei auf Windows über kernel32 mit
   # POSIX-Semantik aus und öffnet sie über msvcrt; beides gibt es nur dort.
   "app.core.knowledge.filaments",
+  # Arbeitsspeicher über kernel32 oder sysconf, Apple Silicon über sysctl (RM-564).
+  "app.core.backends.machine",
+  # Der eingebaute Arbeitsspeicher: kernel32 auf Windows, sysconf sonst.
+  "app.core.memory",
 ]
 warn_unreachable = false
 

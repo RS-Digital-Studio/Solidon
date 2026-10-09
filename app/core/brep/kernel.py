@@ -48,6 +48,13 @@ DEFLECTION = MAX_FACET_SAG
 #: Winkelabweichung im Bogenmaß, aus demselben Grund und aus derselben Quelle.
 ANGULAR_DEFLECTION = MAX_FACET_ANGLE
 
+#: Was eine OCCT-Form je Fläche und Kante im Speicher hält, in Bytes — für
+#: :meth:`Solid.held_bytes`. Gemessen am Prozessspeicher über fünfzig Kopien
+#: einer Platte mit 20, 100 und 400 Bohrungen: 792, 896 und 999 Byte je
+#: Fläche und Kante (Paket L, ``solid_bytes.py``). Die Tessellierung hält ein
+#: Vielfaches davon und wird genau gezählt.
+SHAPE_BYTES_PER_ENTITY: Final = 1024
+
 #: Zu welcher exakten Fläche jedes Dreieck der Anzeigetessellation gehört.
 #: Das Attribut bleibt am ``trimesh``-Körper, bis ``features_of`` daraus die
 #: öffentlichen ``Feature.face_indices`` macht. Ein gewöhnlicher Flächenindex
@@ -728,6 +735,57 @@ class Solid:
         nicht zurück."""
         return self.mesh if deflection is None else self._tessellated(deflection)
 
+    def held_bytes(self, seen: set[int] | None = None, freeable: list[int] | None = None) -> int:
+        """Was dieser Körper im Arbeitsspeicher hält, in Bytes — eine Schätzung (Review L, G5).
+
+        Die Tessellierung samt ihrem Cache (``MeshData.held_bytes``, dort auch
+        ``seen`` und ``freeable``), was der Körper sonst gemerkt hat, das Netz,
+        aus dem er umgewandelt wurde, und die Form selbst. Die liegt in OCCT
+        außerhalb von Python und zählt :data:`SHAPE_BYTES_PER_ENTITY` je
+        Fläche und Kante. Die Frage rechnet nichts: Ohne Tessellierung zählt
+        keine.
+        """
+        from app.core.memory import held_bytes
+
+        known = set() if seen is None else seen
+        remembered = dict(self._cache)
+        mesh = remembered.pop("mesh", None)
+        total = held_bytes(remembered, known) + held_bytes(self.converted_from, known)
+        if isinstance(mesh, MeshData):
+            total += mesh.held_bytes(known, freeable)
+        if id(self.shape) not in known:
+            known.add(id(self.shape))
+            entities = len(self._copied_faces) + len(self._copied_edges)
+            total += SHAPE_BYTES_PER_ENTITY * entities
+        return total
+
+    def lean(self) -> Solid:
+        """Derselbe Körper mit schlanker Tessellierung (``MeshData.lean``, RM-567).
+
+        Für ältere Einträge des Ergebniscaches, wie am Netz. Die Form teilt
+        der neue Körper mit dem alten, wie zuvor der Cache denselben Körper
+        mit der Szene teilte; kopiert wird sie nicht, und tesselliert wird
+        nicht neu. Ohne Tessellierung oder ohne Lösbares bleibt er, wie er ist.
+        """
+        mesh = self._cache.get("mesh")
+        if not isinstance(mesh, MeshData):
+            return self
+        lean = mesh.lean()
+        if lean is mesh:
+            return self
+        fresh = object.__new__(Solid)
+        for name in (
+            "shape",
+            "deflection",
+            "face_slots",
+            "converted_from",
+            "_copied_faces",
+            "_copied_edges",
+        ):
+            object.__setattr__(fresh, name, getattr(self, name))
+        object.__setattr__(fresh, "_cache", {**self._cache, "mesh": lean})
+        return fresh
+
     def _tessellated(self, deflection: float) -> MeshData:
         """Jede neue Vernetzung liest ihre Filamente aus den exakten Trägerflächen."""
         import numpy as np
@@ -781,16 +839,52 @@ class Solid:
                 face_slots[face] = int(low[face])
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        result = replace(self, face_slots=tuple(face_slots))
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        # Die Kopie besitzt andere native Flächen. Die schon angezeigten Dreiecke
-        # behalten ihre Reihenfolge; nur ihr belegter Weg zur Topologie ändert sich.
+        return self._recoloured(tuple(face_slots), replace(mesh, slots=slots))
+
+    def _recoloured(self, face_slots: tuple[int, ...], mesh: MeshData) -> Solid:
+        """Derselbe Körper mit anderen Filamenten — dieselbe Form, dieselben Merker.
+
+        **Keine Kopie der Form** (RM-557). ``replace`` hätte sie über
+        ``__post_init__`` kopiert, und mit der Kopie begann jeder Merker kalt:
+        Fläche und Volumen am Lochbrett aus STEP 2,5 s nach jeder Zuweisung,
+        die Schichtanalyse des Prüfberichts ganz von vorn. Beide Körper
+        besitzen ihre Form nur lesend (§30), die Flächennummern bleiben
+        dieselben, und das Netz teilt seine Dreiecke samt ``trimesh``-Merkern —
+        nur die Slots sind neu.
+        """
+        result = object.__new__(Solid)
+        object.__setattr__(result, "shape", self.shape)
+        object.__setattr__(result, "deflection", self.deflection)
+        object.__setattr__(result, "face_slots", face_slots)
+        object.__setattr__(result, "converted_from", self.converted_from)
+        object.__setattr__(result, "_copied_faces", tuple(range(len(self._copied_faces))))
+        object.__setattr__(result, "_copied_edges", tuple(range(len(self._copied_edges))))
+        known = {key: value for key, value in self._cache.items() if key != "mesh"}
+        known["mesh"] = mesh
+        object.__setattr__(result, "_cache", known)
+        return result
+
+    def detached(self) -> Solid:
+        """Eine eigene Kopie für einen Arbeiter: eigene Form und Merker, dieselben Dreiecke.
+
+        Ein Platzierungsarbeiter rechnet daran (``surface_object_for_worker``),
+        damit er die trägen Merker des gezeigten Körpers nicht aus einem
+        zweiten Faden füllt. Die Dreiecke stehen in derselben Folge wie im
+        Bild, samt ihren Slots; nur ihr belegter Weg zur Topologie folgt der
+        Kopie. Bis RM-557 lieferte diese Kopie ``with_triangle_slots`` nebenbei.
+        """
+        import numpy as np
+
+        mesh = self.mesh
+        source = np.asarray(mesh.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
+        if len(source) != mesh.triangle_count:
+            raise InternalError(detail="the tessellation has no complete native face mapping")
+        result = replace(self)
         raw = mesh.raw.copy()
         raw.face_attributes[_FACE_ATTRIBUTE] = np.asarray(result._copied_faces, dtype=np.int64)[
             source
         ]
-        result._cache["mesh"] = replace(mesh, raw=raw, slots=slots)
+        result._cache["mesh"] = replace(mesh, raw=raw)
         return result
 
     def complete_faces_of_triangles(self, indices: Sequence[int]) -> tuple[int, ...]:

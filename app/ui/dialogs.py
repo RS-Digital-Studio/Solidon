@@ -71,7 +71,7 @@ from app.branding import (
 from app.core import activation, expressions, licence_service, tools
 from app.core.activation import certificate as activation_certificate
 from app.core.activation import store as activation_store
-from app.core.backends import keys, llm
+from app.core.backends import keys, llm, machine, needs
 from app.core.errors import (
     CANCEL,
     REPORT_ERROR,
@@ -1087,6 +1087,10 @@ class _Look(Worker):
 
     def work(self) -> None:
         tool = tools.by_id("ollama")
+        # Die Grafikkarte hier erheben (``nvidia-smi`` ist ein Prozess), nie im
+        # Hauptthread; der Satz unter dem Modell nennt sie erst danach
+        # (Nachprüfung K, N2).
+        machine.probe_card()
         self.done.emit(
             ChatState(
                 answers=_what_answers(),
@@ -1196,6 +1200,10 @@ class KeyDialog(QDialog):
         self._probe: _ToolProbeWorker | None = None
         self._starter: _StartWorker | None = None
         self._pull: _PullWorker | None = None
+        self._probe_result_in_view = False
+        """Ob ein Prüfergebnis steht, das bei späteren Umbrüchen im Bild bleiben soll."""
+        self._space_warned = ""
+        """Für welches Modell die Platzwarnung schon stand — der nächste Klick holt."""
         self._leash = WorkerLeash(self)
         """Hält den ausgelaufenen Prüf-Arbeiter, bis Qt mit ihm durch ist —
         das Warum steht in :mod:`app.ui.leash`."""
@@ -1266,6 +1274,11 @@ class KeyDialog(QDialog):
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_key_content_soon)
+        # Rollt der Kunde selbst, gehört die Ansicht ihm: Ein späteres Wachsen
+        # einer Notiz zieht sie nicht mehr zum Prüfergebnis zurück (Nachprüfung
+        # K, N12). ``actionTriggered`` kommt nur von Rad, Tasten und Schieber,
+        # nicht von ``ensureWidgetVisible``.
+        self._scroll.verticalScrollBar().actionTriggered.connect(self._reader_scrolled)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         outer.setSpacing(NORMAL)
@@ -1313,6 +1326,17 @@ class KeyDialog(QDialog):
             grow_width=initial,
             natural_width=expanded_width(self._scroll) if initial else 0,
         )
+        # **Ein gezeigtes Prüfergebnis bleibt im Bild**, auch wenn ein Satz
+        # darüber später umbricht und es nach unten schiebt — die Zeile unter
+        # jedem Modell ist seit RM-564 länger, und auf 640 mal 720 Punkten rutschte das
+        # Ergebnis aus dem Rollbereich.
+        if self._probe_result_in_view:
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+            self._scroll.ensureWidgetVisible(self.probe_result)
+
+    def _reader_scrolled(self, _action: int) -> None:
+        """Der Kunde rollt selbst — das Prüfergebnis wird nicht mehr nachgeführt."""
+        self._probe_result_in_view = False
 
     def _set_tab_order(self) -> None:
         """Die Tab-Taste folgt Cloud, lokalem Modell und erst dann den Aktionen."""
@@ -1730,7 +1754,8 @@ class KeyDialog(QDialog):
             self.model_field.addItem(name, name)
             seen.add(family)
         if not self.model_field.count():
-            self.model_field.addItem(llm.DEFAULT_OLLAMA_MODEL, llm.DEFAULT_OLLAMA_MODEL)
+            fallback = llm.default_ollama_model()
+            self.model_field.addItem(fallback, fallback)
         self._select_model(chosen)
         self._show_model_note()
 
@@ -1747,7 +1772,11 @@ class KeyDialog(QDialog):
         if suggestion is not None:
             gigabytes, note = suggestion
             size = f"{format_decimal(gigabytes, 1)} GB"
-            self.model_note.setText(f"{tr('Download: {size}', size=size)} — {note}")
+            # Dazu, was es braucht und ob dieser Rechner es hat — vor dem
+            # Herunterladen, nicht nach der ersten halben Stunde (RM-564).
+            here = needs.chat_needs(name)
+            said = f"{tr('Download: {size}', size=size)} — {note}"
+            self.model_note.setText(f"{said} {here}" if here else said)
             return
         self.model_note.setText(
             tr(
@@ -1782,7 +1811,7 @@ class KeyDialog(QDialog):
         typed = self.model_field.currentText().strip()
         if isinstance(data, str) and typed.startswith(f"{data} — "):
             return data
-        return typed.split(" — ")[0] or llm.DEFAULT_OLLAMA_MODEL
+        return typed.split(" — ")[0] or llm.default_ollama_model()
 
     def _pull_model(self) -> None:
         """Neun Gigabyte, mit Balken und Abbrechen statt eines Terminals."""
@@ -1790,6 +1819,16 @@ class KeyDialog(QDialog):
             self._pull.cancel()
             return
         model = self._chosen_model()
+        # **Der Platz zuerst** (RM-564): Ein Download, der an einer vollen
+        # Platte stirbt, hat bis dahin Gigabyte geladen und sagt nicht warum.
+        # Beim ersten Klick als Warnung, beim zweiten wird trotzdem geholt —
+        # die Rechnung kann irren, und der Kunde soll nicht festsitzen (Review K, M5).
+        no_room = needs.pull_space_problem(model)
+        if no_room is not None and self._space_warned != model:
+            self._space_warned = model
+            set_role(self.probe_result, "warning", no_room)
+            return
+        self._space_warned = ""
         self.model_field.setEnabled(False)
         self.pull_progress.setRange(0, 0)
         self.pull_progress.setVisible(True)
@@ -1960,6 +1999,7 @@ class KeyDialog(QDialog):
     def _show_probe_result(self, role: str, text: str) -> None:
         """Das nachgereichte Ergebnis sichtbar machen, einschließlich Knöpfen."""
         set_role(self.probe_result, role, text)
+        self._probe_result_in_view = True
         self._fit_probe_result()
         QTimer.singleShot(0, self, self._fit_probe_result)
 

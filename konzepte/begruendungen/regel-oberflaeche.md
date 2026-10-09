@@ -158,6 +158,11 @@ Und beim Tauschen eines Katalogtexts muss der **alte Schlüssel hinaus**:
 „no longer used". Zwei gegenläufige Zusicherungen decken einander.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
+Nachweise, aus der Regel hierher verschoben: Zu Beschriftung und Doppelpunkt
+prüft `tests/test_translations.py` direkte Zusammensetzungen im Quelltext und
+die Ausgaben gemeinsamer Beschriftungshelfer. Dass nur Menüaktionen einen
+`statusTip` tragen, hält `test_status_tips_stand_only_at_menu_actions`.
+
 ## Texte, die der Kunde liest
 
 Der Abschnitt ist bei der Verdichtung neu hinzugekommen. Er übernimmt Roberts
@@ -519,7 +524,9 @@ Problem bietet dieselben Handlungen“; dieser Punkt steht wörtlich in
   `None`); im **Dokument** steht sie nicht, denn keine Farbe zu haben ist ein
   Zustand, den „Slot zuweisen" auflöst. Die Zahl daneben bleibt: Die
   Pinselleiste zeigt Farbfeld **und** Name, „neu" für einen Slot, den der
-  gewählte Körper noch nicht hat.
+  gewählte Körper noch nicht hat. Dass die Grauleiter von der Auswahlfarbe
+  sicher zu unterscheiden ist, hält
+  `test_no_fallback_colour_can_be_mistaken_for_the_selection`.
   (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 - Differenzansicht in Blau/Orange als Vorgabe, nicht Rot/Grün.

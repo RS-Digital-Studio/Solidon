@@ -84,9 +84,9 @@ from app.core import discover
 from app.core.activation import store as activation_store
 from app.core.export import slicer_profiles
 from app.core.knowledge import profiles
-from app.core.perceive import features, local
+from app.core.perceive import features, local, matching
 from app.core.types import Document, Profile
-from tests.helpers import FakeMesh, first_start
+from tests.helpers import FakeMesh
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
@@ -607,6 +607,21 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(discover, "unpatched_find_programs", discover.find_programs, raising=False)
     monkeypatch.setattr(discover, "find_programs", only_what_was_set_plural)
     discover.forget_cache()
+    # **Und nicht Prozessor und Speicher** (RM-564): Auf einem Mac mit 16 GB
+    # wäre die Vorgabe des Chats ein anderes Modell als auf dem Bauserver.
+    # Wer die Rechnerauskunft prüft, setzt seinen Rechner ausdrücklich.
+    from app.core.backends import machine
+
+    monkeypatch.setattr(machine, "this_machine", lambda: machine.Machine())
+
+    # Die Arbeiter fragen nach der Karte; ``nvidia-smi`` des Entwicklerrechners
+    # bleibt draußen, und keine Erhebung reist in den nächsten Test. Wer die
+    # Erhebung prüft, setzt ``run_limited`` selbst.
+    def no_card_program(*_args: object, **_kwargs: object) -> object:
+        raise OSError("in der Suite antwortet kein nvidia-smi")
+
+    monkeypatch.setattr(machine, "run_limited", no_card_program)
+    machine.forget_card()
 
 
 #: Unter dieser Variable ist ein fehlender Slicer ein Fehler statt ein Skip —
@@ -627,9 +642,8 @@ def installed_slicer(request: pytest.FixtureRequest) -> Path:
     ``tools/ci_selection.py`` den Test für die Slicerauswahl auf Linux und
     macOS, und der Workflow installiert genau die genannten Programme.
 
-    Ein AppImage der Orca-Familie bekommt dabei, was sein erster Start
-    hinterlässt (``tests.helpers.first_start``) — ohne ihn sieht Solidon dort
-    keinen Herstellerdrucker, und der Kunde hat ihn hinter sich.
+    Ein AppImage der Orca-Familie bleibt dabei ungestartet, wie frisch
+    geladen: Solidon liest seinen Herstellerbestand aus dem Abbild (RM-549).
 
     Fehlt das Programm, überspringt sich der Test — außer unter
     :data:`REQUIRE_SLICERS`: Dort ist ein übersprungener Slicertest kein
@@ -651,11 +665,7 @@ def installed_slicer(request: pytest.FixtureRequest) -> Path:
         if discover.program_mark(program.name) == wanted
     ]
     if found:
-        program = Path(found[0])
-        # Ein AppImage der Orca-Familie zeigt seinen Herstellerbestand erst
-        # nach dem ersten Start; der Kunde hat ihn hinter sich.
-        first_start(program)
-        return program
+        return Path(found[0])
     message = f"{wanted} ist auf dieser Maschine nicht installiert"
     if os.environ.get(REQUIRE_SLICERS):
         pytest.fail(f"{message}, und {REQUIRE_SLICERS} verlangt es", pytrace=False)
@@ -681,17 +691,24 @@ def _remembered_features_stay_out_of_it() -> None:
     oben (§38).
 
     Dasselbe gilt für die gemerkten örtlichen Nachmessungen
-    (``local.forget_known``): Ein Test, der die Suche zählt oder abklemmt,
-    bekäme sonst das Ergebnis eines Vorgängers mit denselben Merkmalen —
+    (``local.forget_known``), Zuordnungen (``matching.forget_matches``) und
+    Zuordnungsschritte der Auswertung (``evaluate.forget_remembered_steps``):
+    Ein Test, der die Suche zählt oder abklemmt, bekäme sonst das Ergebnis
+    eines Vorgängers mit denselben Merkmalen —
     und für den gemerkten Profilbestand der Slicer
     (``slicer_profiles.forget_holdings``, RM-670): Seine Signatur sieht die
     Installation nur an ihrer obersten Ebene an, und ein Test, der einen
     Profilbaum hinter einem gleichen Programmpfad baut, erbte sonst den
     Bestand seines Vorgängers.
     """
+    import importlib
+
     features.forget_cache()
     local.forget_known()
     slicer_profiles.forget_holdings()
+    matching.forget_matches()
+    # Über das Modul: ``app.core.scene.evaluate`` ist im Paket die Funktion.
+    importlib.import_module("app.core.scene.evaluate").forget_remembered_steps()
 
 
 @pytest.fixture(autouse=True)

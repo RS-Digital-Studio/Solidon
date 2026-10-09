@@ -551,6 +551,49 @@ def test_export_as_3mf_writes_one_assembly(
     )
 
 
+@pytest.mark.parametrize("remembered", ["", "other printer"])
+def test_without_a_fitting_choice_the_export_takes_the_dialogs_choice(
+    monkeypatch: pytest.MonkeyPatch, remembered: str
+) -> None:
+    """RM-623: Leere oder fremde Wahl hieß bisher gar kein Setup.
+
+    Roberts Einstellungen trugen weder Maschine noch Prozess; die Datei ging
+    ohne Herstellerprozess hinaus, und das Hauptfenster rechnete mit Solidons
+    Tabelle. Jetzt fragt der Export den Bestand nach der Wahl, die der Dialog
+    für **diesen** Drucker und dieses Material vorbelegt.
+    """
+    from pathlib import Path as PathType
+
+    from app.core import discover
+    from app.core.export import handover
+    from app.ui.print_settings_dialog import remembered_setup
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(
+        discover, "find_program", lambda *args, **kwargs: PathType("elegoo-slicer.exe")
+    )
+    asked: list[tuple[str, str, str, str]] = []
+    chosen = handover.SlicerSetup(PathType("elegoo-slicer.exe"), "orca", machine_profile="CC2")
+
+    def standard(setup: handover.SlicerSetup, profile, **_kwargs) -> handover.SlicerSetup:  # type: ignore[no-untyped-def]
+        asked.append(
+            (profile.printer.id, profile.material.id, setup.machine_profile, setup.base_filament)
+        )
+        return chosen
+
+    monkeypatch.setattr(handover, "standard_choice", standard)
+    settings = UiSettings()
+    settings.slicer_filament_per_material["petg"] = "Elegoo PETG PRO @ECC2"
+    if remembered:
+        settings.slicer_machine_profile = "Prusa MK4S"
+        settings.slicer_profile_printer = "prusa-mk4s"
+
+    assert remembered_setup(settings, "petg", "centauri-carbon-2") is chosen
+    assert asked == [("centauri-carbon-2", "petg", "", "Elegoo PETG PRO @ECC2")], (
+        "die gemerkte Spule ist der Vorzug wie im Dialog, die fremde Maschine reist nicht mit"
+    )
+
+
 def test_the_remembered_slicer_becomes_a_setup(monkeypatch: pytest.MonkeyPatch) -> None:
     """Was im Druckeinstellungen-Dialog stand, gilt auch für den Export (§29).
 
@@ -566,11 +609,13 @@ def test_the_remembered_slicer_becomes_a_setup(monkeypatch: pytest.MonkeyPatch) 
     from app.ui.settings import UiSettings
 
     settings = UiSettings()
-    assert remembered_setup(settings) is None, "ohne gemerkten Drucker gibt es nichts aufzulösen"
-
     monkeypatch.setattr(
         discover, "find_program", lambda *args, **kwargs: PathType("orca-slicer.exe")
     )
+    # Ohne gemerkte Wahl entscheidet der Bestand (RM-623); dieser hier hat
+    # keinen, und ohne ihn gibt es nichts aufzulösen.
+    assert remembered_setup(settings) is None, "kein Bestand, der den Drucker kennt"
+
     settings.slicer_machine_profile = "Elegoo Centauri Carbon 2 0.4 nozzle"
     settings.slicer_base_process = "0.20mm Standard @Elegoo CC2 0.4 nozzle"
     settings.slicer_base_filament = "Elegoo PETG PRO @ECC2"
@@ -625,6 +670,42 @@ def test_a_single_body_3mf_carries_the_settings_too(
         )
         values = json.loads(archive.read("Metadata/project_settings.config"))
     assert values.get("layer_height"), "die Auflösung aus Stufe, Material und Drucker gilt"
+
+
+def test_the_3mf_export_reads_the_slicer_stock_in_one_pass(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-670: Stufe, Grundlage und Datei eines Exports teilen einen
+    Lesedurchgang. Jeder Schritt öffnete sonst einen eigenen und las die
+    Erbketten des Herstellers neu; am ElegooSlicer kostete der zweite Export
+    eines Würfels so 1,7 s statt 0,7 s."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.export import manufacturer, slicer_profiles
+
+    seen: list[bool] = []
+    original = manufacturer.base_settings
+
+    def recorded(*args: object, **kwargs: object) -> object:
+        seen.append(getattr(slicer_profiles._SINGLE_READ, "documents", None) is not None)
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(manufacturer, "base_settings", recorded)
+    window.open_path(MESHES / "cube_clean.stl")
+    assert window.session.wait_for_idle(60_000)
+    target = tmp_path / "einzel.3mf"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
+    )
+    seen.clear()
+    window.object_tree.tree.clearSelection()
+    window.action_export()
+    wait_for_export(window)
+
+    assert target.exists()
+    assert seen and all(seen), "die Grundlage des Exports liegt im Lesedurchgang"
 
 
 def test_the_export_leaves_the_window_usable(

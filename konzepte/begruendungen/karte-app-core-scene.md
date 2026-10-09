@@ -821,6 +821,14 @@ Ausdrücklich entfernte Passungen werden dadurch nicht neu angelegt.
 
 *Früher im Kopf der Karte.*
 
+Achsen und Richtungen in `placement.py` (aus der Tabelle der Karte verschoben):
+`slot_hole`/`resize_hole` verwenden bei markierten Altwinkeln die positive
+Merkmalsachse, ein migriertes `drill_hole` mit `measured_frame` behält seine
+gespeicherte Richtung, auch gegen die positive Normale. Nullnormalen verwenden
+dieselbe BRep-Hüllmittenentscheidung wie `_bore_span`, Mesh liest die lokale
+Materialsäule. `SIDE_NAMES` übernimmt die gemeinsamen Seitennamen aus
+`registry/surfaces.py`.
+
 `placement.seat_of` prüft beide Mündungen einer erkannten Bohrung. Bei
 Bohrung und Langloch muss die Flächennormale vom Hohlraum weg zeigen; der
 Sacklochboden ist deshalb keine Trägerfläche. Liegt die Mündung hinter einer

@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 import re
 import unicodedata
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
@@ -1305,6 +1305,8 @@ def part_advice(
     fit_kinds: Sequence[str],
     flavour: SlicerFlavour | None = None,
     accepted: Mapping[str, object] | None = None,
+    whole_layers: bool = False,
+    organic: Collection[str] = (),
 ) -> list[SettingAdvice]:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
 
@@ -1320,7 +1322,12 @@ def part_advice(
     Hüllquader: Ein Teil auf drei schmalen Armen hat eine große Grundfläche und
     kaum Halt. Passungen (``fit_kinds``) und Zapfen zählen nur, wenn dieses
     Teil sie trägt. ``flavour`` sagt, ob der Slicer unter „automatisch“ seinen
-    Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`).
+    Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`), ``whole_layers``,
+    ob seine Platte einen Reinigungsturm trägt (:func:`tower_plates`), ``organic``,
+    welche Stützarten das Programm als organische Bäume druckt
+    (:func:`handover.organic_styles`). Ist die Stützart nicht übernommen,
+    druckt das Teil die der Platte, und Abstand wie Trennschicht fragen mit ihr
+    (``declined``, :func:`advise.printed_style`).
 
     **Eine Regel kann einen Wert je Teil voraussetzen** (``accepted``, die
     übernommenen Werte je Teil aus :meth:`handover.PartSplit.accepted_per_part`):
@@ -1351,6 +1358,8 @@ def part_advice(
         flavour,
         program,
         dict(accepted or {}),
+        whole_layers,
+        tuple(sorted(organic)),
     )
     cache = getattr(mesh.raw, "_cache", None)
     name = f"solidon_export_advice|{entry.id}"
@@ -1366,6 +1375,11 @@ def part_advice(
             cache[name] = _PartAdviceMemo(inputs, result, tuple(advice))
         return advice
 
+    # Eine Stützart, die der Kunde nicht übernommen hat, bekommt kein Teil:
+    # Abstand und Trennschicht fragen dann mit der Art der Platte (RM-622).
+    # Übernommen bekommt jedes Teil seinen eigenen Vorschlag (``applied``).
+    declined = frozenset({"support.style"}) - frozenset(accepted or {})
+
     def asked(current: PrintSettings) -> list[SettingAdvice]:
         groups = [
             (
@@ -1379,6 +1393,9 @@ def part_advice(
                     fit_kinds=fit_kinds,
                     connectors=connectors,
                     flavour=flavour,
+                    whole_layers=whole_layers,
+                    organic=organic,
+                    declined=declined,
                 ),
             )
             for process in (
@@ -1395,8 +1412,14 @@ def part_advice(
     unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(program, frozenset())
 
     def asked_here(current: PrintSettings) -> list[SettingAdvice]:
+        entries = [item for item in asked(current) if item.path not in unknown]
+        # Unter Bäumen druckt manches Programm keine untere Trennschicht; ein
+        # Vorschlag darauf änderte nichts (RM-622, wie der Druckdialog).
+        under_trees = handover.ignored_under_trees(
+            advise.printed_style(current, entries, declined), organic, program
+        )
         return slicer_keys.offered(
-            [item for item in asked(current) if item.path not in unknown], program
+            [item for item in entries if item.path not in under_trees], program
         )
 
     advice = asked_here(settings)
@@ -1441,6 +1464,8 @@ def _part_values(
     slot_profiles: Mapping[threemf.SlotKey, str],
     document: Document | None,
     cancelled: CancelToken | None,
+    whole_layers: bool = False,
+    organic: Collection[str] = (),
 ) -> _PartValues:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G) — und warum.
 
@@ -1489,6 +1514,8 @@ def _part_values(
         fit_kinds=fit_kinds_for(document, {entry.id}) if document is not None else (),
         flavour=flavour,
         accepted=split.accepted_per_part(),
+        whole_layers=whole_layers,
+        organic=organic,
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -1638,6 +1665,8 @@ def _served_elsewhere(
     slot_profiles: Mapping[threemf.SlotKey, str],
     document: Document | None,
     cancelled: CancelToken | None,
+    towers: frozenset[int] = frozenset(),
+    organic: Collection[str] = (),
 ) -> frozenset[str]:
     """Welche dieser Pfade ein Teil des Auftrags auf einer anderen Platte verlangt.
 
@@ -1646,27 +1675,34 @@ def _served_elsewhere(
     auf Platte 1, bekam auf Platte 2 jeder Klotz Stützen — der Ausgangsfehler
     von Entscheidung G, auf den übrigen Platten zurück. Gefragt wird derselbe
     Rat je Teil wie beim Schreiben (:func:`_part_values`), und nur, solange
-    ein Pfad noch offen ist.
+    ein Pfad noch offen ist. ``towers`` sind die Platten mit Reinigungsturm
+    (:func:`tower_plates`, über den ganzen Auftrag gefragt), ``organic`` die Arten,
+    die das Programm als organische Bäume druckt.
     """
+    from app.core.export import slicer_profiles
+
     open_paths = set(paths)
     served: set[str] = set()
-    for entry in others:
-        if not open_paths:
-            break
-        values = _part_values(
-            entry,
-            mesh_for_export(entry.mesh, profile),
-            split,
-            profile,
-            flavour,
-            setup,
-            slot_profiles,
-            document,
-            cancelled,
-        )
-        hit = {item.path for item in (*values.applied, *values.unavailable)} & open_paths
-        served |= hit
-        open_paths -= hit
+    with slicer_profiles.single_read():
+        for entry in others:
+            if not open_paths:
+                break
+            values = _part_values(
+                entry,
+                mesh_for_export(entry.mesh, profile),
+                split,
+                profile,
+                flavour,
+                setup,
+                slot_profiles,
+                document,
+                cancelled,
+                whole_layers=entry.plate in towers,
+                organic=organic,
+            )
+            hit = {item.path for item in (*values.applied, *values.unavailable)} & open_paths
+            served |= hit
+            open_paths -= hit
     return frozenset(served)
 
 
@@ -2489,20 +2525,37 @@ def write_assembly(
     # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
     # die Schlüssel wie der Grund kommen aus demselben Aufruf. Auch was der
     # Slicer je Teil nicht annimmt, wird benannt.
-    part_values = {
-        entry.id: _part_values(
-            entry,
-            exported[entry.id],
-            split,
-            profile,
-            flavour,
-            setup,
-            slot_profiles,
-            document,
-            cancelled,
+    # Der Turm hängt an allen Spulen einer Platte, auch an denen, die dieser
+    # Export nicht schreibt — gefragt über den ganzen Auftrag, einmal.
+    in_job = {entry.id for entry in job or ()}
+    every = [*(job or ()), *(entry for entry in chosen if entry.id not in in_job)]
+    from app.core.export import slicer_profiles
+
+    # Ein Lesedurchgang: Turm, Bäume und der Rat je Teil fragen den
+    # Herstellerprozess mehrfach.
+    with slicer_profiles.single_read():
+        towers = tower_plates(every, setup) if split is not None else frozenset()
+        organic = (
+            handover.organic_styles(setup, profile, flavour=flavour)
+            if split is not None
+            else frozenset()
         )
-        for entry in chosen
-    }
+        part_values = {
+            entry.id: _part_values(
+                entry,
+                exported[entry.id],
+                split,
+                profile,
+                flavour,
+                setup,
+                slot_profiles,
+                document,
+                cancelled,
+                whole_layers=entry.plate in towers,
+                organic=organic,
+            )
+            for entry in chosen
+        }
     asked = {key: values.asked for key, values in part_values.items()}
     # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
     # als Objektwert an jedem Teil, und der Bericht sagt es. „Kein Teil" heißt
@@ -2523,6 +2576,8 @@ def write_assembly(
             handover.chosen_slot_profiles(job, split.plate),
             document,
             cancelled,
+            towers,
+            organic,
         )
         everywhere = [item for item in everywhere if item.path not in served]
     if split is not None and everywhere:
@@ -2734,10 +2789,23 @@ def write_assembly(
     ]
     merged_slots = threemf.merge_slots(parts, across=whole_job)
     configured_slots: Sequence[MaterialSlot] = merged_slots
+    free_support_layers = False
     if settings is not None:
         from app.core.export import handover
+        from app.core.slice import advise
 
         configured_slots = handover.configured_slots(merged_slots, settings)
+        # Gefragt an dem, was geschrieben wird: Platte und Objektwerte (RM-583),
+        # je Teil mit der Art, mit der es stützt. Unter organischen Bäumen rundet
+        # jedes Programm, dort schaltete die eigene Stützschichthöhe nur gegen
+        # den Hersteller um (RM-622).
+        under_trees, elsewhere = handover.support_gaps_by_style(
+            settings,
+            [(part_values[entry.id].keys, part_values[entry.id].effective) for entry in chosen],
+            organic,
+        )
+        layer = settings.layers.layer_height
+        free_support_layers = handover.frees_support_layers(elsewhere, layer, flavour)
         known_setup = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
         findings += handover.unreachable_overrides(
             settings, known_setup, configured_slots, profile=profile
@@ -2753,6 +2821,45 @@ def write_assembly(
                 findings += handover.foundation_findings(
                     settings, profile, setup, slots=configured_slots
                 )
+            cause = _tower_cause(parts, setup) if free_support_layers else None
+            # Mit Turm gilt die eigene Stützschichthöhe nicht, also nur der eine
+            # Satz: Der Abstand wird gerundet (RM-583). Sonst je Teil: unter
+            # organischen Bäumen rundet er in jedem Programm, auch in PrusaSlicer,
+            # unter Gitter gilt die eigene Höhe — gemischt beide Sätze (RM-622).
+            if cause is None and any(not advise.in_whole_layers(gap, layer) for gap in under_trees):
+                findings.append(
+                    Finding(
+                        code="export.support_gap_rounded",
+                        severity="info",
+                        message=_(
+                            "{slicer} legt Baumstützen auf die Modellschichten und rundet den "
+                            "*Abstand oben und unten*. Mit Gitter gilt er genau.",
+                            slicer=setup.name,
+                        ),
+                        values={"slicer": setup.name},
+                    )
+                )
+            if cause is None:
+                findings += handover.support_layers_findings(setup, free_support_layers)
+            else:
+                findings.append(
+                    Finding(
+                        code="export.support_gap_rounded",
+                        severity="info",
+                        message=_(
+                            "Mit mehreren Filamenten rundet {slicer} den *Abstand oben und unten* "
+                            "auf ganze Schichten. Auf getrennten Platten gilt er genau.",
+                            slicer=setup.name,
+                        )
+                        if cause == "filaments"
+                        else _(
+                            "Das Herstellerprofil baut einen Reinigungsturm, und damit rundet "
+                            "{slicer} den *Abstand oben und unten* auf ganze Schichten.",
+                            slicer=setup.name,
+                        ),
+                        values={"slicer": setup.name},
+                    )
+                )
     payload = threemf.write_assembly(
         parts,
         project_name,
@@ -2764,6 +2871,7 @@ def write_assembly(
             flavour,
             setup,
             configured_slots,
+            free_support_layers=free_support_layers,
         ),
         prusa_config=_plate_config(
             settings,
@@ -2792,12 +2900,71 @@ def write_assembly(
     return target, findings
 
 
+def _tower_causes(
+    plates: Mapping[int, Sequence[threemf.AssemblyPart]], setup: SlicerSetup
+) -> dict[int, Literal["filaments", "process"] | None]:
+    """Warum die Orca-Familie auf welcher Platte einen Reinigungsturm baut
+    (:func:`handover.tower_cause`), gezählt nach den Spulen je Platte. Der
+    Herstellerprozess wird in einem Durchgang gelesen
+    (:func:`slicer_profiles.single_read`): Je Platte neu aufgelöst kostete er am
+    ElegooSlicer 39 ms, bei acht Platten 382 (Review RM-622)."""
+    from app.core.export import handover, slicer_profiles
+
+    with slicer_profiles.single_read():
+        return {
+            plate: handover.tower_cause(
+                setup, filaments=len(threemf.merge_slots(here)), objects=len(here)
+            )
+            for plate, here in plates.items()
+        }
+
+
+def _tower_cause(
+    parts: Sequence[threemf.AssemblyPart], setup: SlicerSetup
+) -> Literal["filaments", "process"] | None:
+    """Baut die Orca-Familie auf einer der Platten einen Reinigungsturm? Dann
+    schaltet sie die eigene Stützschichthöhe ab, die
+    :func:`handover.frees_support_layers` eingeschaltet hätte, und ein Abstand
+    zwischen zwei Schichten wird gerundet (RM-583). Gefragt wird je Platte
+    (:func:`_tower_causes`); mehrere Filamente gehen vor.
+    """
+    plates: dict[int, list[threemf.AssemblyPart]] = {}
+    for part in parts:
+        plates.setdefault(part.plate, []).append(part)
+    causes = set(_tower_causes(plates, setup).values())
+    if "filaments" in causes:
+        return "filaments"
+    return "process" if "process" in causes else None
+
+
+def tower_plates(bodies: Sequence[SceneObject], setup: SlicerSetup | None) -> frozenset[int]:
+    """Die Platten dieser Körper, auf denen der Herstellerprozess einen
+    Reinigungsturm baut (:func:`_tower_causes`).
+
+    Dort legt die Orca-Familie die Stütze auf die Schichten des Modells und
+    rundet den Stützabstand auf ganze Schichten; der Rat rechnet ihn dann
+    gleich in ganzen Schichten (``whole_layers``, RM-622). Druckdialog und
+    Export fragen hier, damit die Zeile den Wert nennt, den die Datei bekommt —
+    beide mit allen Körpern einer Platte, denn der Turm hängt an ihren Spulen.
+    """
+    if setup is None:
+        return frozenset()
+    plates: dict[int, list[threemf.AssemblyPart]] = {}
+    for body in bodies:
+        plates.setdefault(body.plate, []).append(
+            threemf.AssemblyPart(mesh=as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+        )
+    return frozenset(plate for plate, cause in _tower_causes(plates, setup).items() if cause)
+
+
 def _plate_settings(
     settings: PrintSettings | None,
     profile: Profile,
     flavour: SlicerFlavour,
     setup: SlicerSetup | None,
     slots: Sequence[MaterialSlot] = (),
+    *,
+    free_support_layers: bool = False,
 ) -> dict[str, object]:
     """Die Druckeinstellungen, die mit der Datei reisen (§29).
 
@@ -2809,13 +2976,20 @@ def _plate_settings(
     Ist kein Slicer bekannt, werden trotzdem Solidons Werte geschrieben, nur
     ohne das Systemprofil darunter: die Maschine kennt Solidon aus dem eigenen
     Profil, und ein Wert, der dasteht, ist mehr als einer, der fehlt.
+    ``free_support_layers`` sagt :func:`handover.frees_support_layers`.
     """
     if settings is None:
         return {}
     from app.core.export import handover
 
     known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
-    return handover.project_settings(settings, profile, known, slots=slots)
+    return handover.project_settings(
+        settings,
+        profile,
+        known,
+        slots=slots,
+        free_support_layers=free_support_layers,
+    )
 
 
 def _plate_config(

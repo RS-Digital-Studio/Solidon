@@ -5202,3 +5202,36 @@ def test_the_program_folder_is_listed_again_only_when_its_parent_changes(
 
     (base / "OrcaSlicer").mkdir()
     assert sp._program_folders(base, "orcaslicer") == [base / "OrcaSlicer"]
+def test_a_single_read_walks_each_stock_folder_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Vorwahl ohne gemerkte Maschine liest erst die Maschinen, dann Prozesse
+    und Filamente (RM-623). Im Durchgang geht sie einmal durch den Bestand statt
+    zweimal; danach verfällt die Liste wie die Dateien, denn der Kunde legt im
+    Slicer Profile an."""
+    from tests.helpers import cc2_stock
+
+    executable = cc2_stock(tmp_path)
+    root = sp.install_root(executable)
+    walks: list[Path] = []
+    original = Path.rglob
+
+    def counted(self: Path, pattern: str, **kwargs: object) -> object:
+        if self == root:
+            walks.append(self)
+        return original(self, pattern, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "rglob", counted)
+
+    def both() -> list[str]:
+        return [
+            entry.name
+            for kinds in (("machine",), ("process", "filament"))
+            for entry in sp.find_profiles(executable, "orca", kinds)
+        ]
+
+    with sp.single_read():
+        inside = both()
+    assert len(walks) == 1, "im Durchgang einmal"
+    assert both() == inside, "dieselbe Liste, dieselben Profile"
+    assert len(walks) == 3, "ohne Durchgang je Frage, danach verfallen"

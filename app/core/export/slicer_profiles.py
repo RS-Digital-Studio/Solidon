@@ -38,10 +38,11 @@ from xml.etree import ElementTree as ET
 
 from app.core import build_area, discover
 from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
-from app.core.export import cura_linux, prusa_conditions
+from app.core.export import appimage, cura_linux, prusa_conditions
 from app.core.export.slicer_keys import (
     CURA_JERK_LINKS,
     SlicerFlavour,
+    flavour_of,
     for_the_nozzle,
     has_readable_profiles,
     has_user_profile_tree,
@@ -124,12 +125,29 @@ def single_read() -> Iterator[None]:
     _SINGLE_READ.documents = {}
     _SINGLE_READ.indexes = {}
     _SINGLE_READ.signatures = {}
+    _SINGLE_READ.listings = {}
     try:
         yield
     finally:
         _SINGLE_READ.documents = None
         _SINGLE_READ.indexes = None
         _SINGLE_READ.signatures = None
+        _SINGLE_READ.listings = None
+
+
+def _json_files(root: Path) -> list[Path]:
+    """Die JSON-Dateien unter ``root``, sortiert — im Lesedurchgang einmal je
+    Wurzel. Die Vorwahl ohne gemerkte Maschine liest erst die Maschinen, dann
+    Prozesse und Filamente (``handover.standard_choice``); der zweite
+    Durchlauf über ElegooSlicers zwölftausend Dateien kostete noch einmal
+    0,36 s CPU-Zeit."""
+    shared: dict[Path, list[Path]] | None = getattr(_SINGLE_READ, "listings", None)
+    if shared is not None and root in shared:
+        return shared[root]
+    found = sorted(root.rglob("*.json"))
+    if shared is not None:
+        shared[root] = found
+    return found
 
 
 def _pass_documents(documents: ProfileDocuments | None) -> ProfileDocuments | None:
@@ -245,14 +263,24 @@ def install_root(executable: Path) -> Path | None:
     ``cura/share/cura``. Ein Slicer aus dem Paketverwalter der Distribution legt
     genauso nach FHS ab (``/usr/share/PrusaSlicer/profiles``).
 
-    **Eine Cura als AppImage trägt ihn im Abbild**, das nur eingehängt lesbar
-    ist; gelesen wird eine Kopie im Nutzer-Cache (:func:`cura_linux.appimage_resources`).
-    Im Fensterfaden (:func:`cura_linux.never_wait_in`) heißt ``None`` dort „noch
-    nicht kopiert“, nicht „kein Bestand“.
+    **Eine Cura als AppImage trägt ihn im Abbild**; gelesen wird eine Kopie im
+    Nutzer-Cache (:func:`cura_linux.appimage_resources`), aus dem Abbild
+    gelesen, ohne das AppImage zu starten (Regel 11). Im Fensterfaden
+    (:func:`appimage.never_wait_in`) heißt ``None`` dort „noch nicht kopiert“,
+    nicht „kein Bestand“; ebenso bei einem unlesbaren Abbild.
+
+    **Die Orca-Familie als AppImage ebenso** (RM-549): Ihr Bestand liegt im
+    Abbild unter ``resources/profiles``, und erst ihr erster Start legte ihn
+    nach ``system/``. Die Wurzel ist die Kopie im Nutzer-Cache
+    (:func:`appimage.profiles`).
     """
     mark = discover.program_mark(executable.name)
     if mark == "cura" and cura_linux.is_appimage(executable):
         return cura_linux.appimage_resources(executable)
+    if cura_linux.is_appimage(executable) and has_user_profile_tree(
+        flavour_of(executable.name) or "other"
+    ):
+        return appimage.profiles(executable)
     app = discover.flatpak_app(executable)
     if mark == "cura" and app:
         # Curas AppDir bestimmt eine Stelle, für Bestand und Lader zugleich.
@@ -3148,11 +3176,11 @@ def _orca_profiles(
     users = user_roots(flavour, executable)
     roots.extend((folder, True) for folder in users)
     if installed is None:
-        # Ein AppImage trägt seinen Bestand im Abbild, das nur während seines
-        # Laufs eingehängt ist — unter Linux der Normalfall für Orca, Bambu,
-        # Elegoo und Creality. Die Orca-Familie kopiert die Bündel der
-        # eingerichteten Drucker nach ``system/`` neben ``user/``, und dort
-        # stehen genau die Drucker des Kunden.
+        # Der Rückfall ohne mitgelieferten Bestand: beim AppImage der
+        # Orca-Familie, solange der Fensterfaden noch keine Kopie hat oder das
+        # Abbild unlesbar ist (``appimage.profiles``). Der Slicer kopiert die
+        # Bündel der eingerichteten Drucker nach ``system/`` neben ``user/``,
+        # und dort stehen genau die Drucker des Kunden.
         for system in dict.fromkeys(folder.parent.parent / "system" for folder in users):
             if system.is_dir():
                 roots.append((system, False))
@@ -3160,7 +3188,7 @@ def _orca_profiles(
     count = 0
     documents: ProfileDocuments = {}
     for root, from_user in roots:
-        for path in sorted(root.rglob("*.json")):
+        for path in _json_files(root):
             # Die Ordnertiefe ist nicht einheitlich: Bambu legt seine Profile
             # direkt in `machine/`, Elegoo eine Ebene tiefer in `machine/ECC2/`.
             # Gesucht wird deshalb nach dem Ordner irgendwo im Pfad, nicht nach
@@ -3299,9 +3327,10 @@ def _kind_by_folder(path: Path) -> ProfileKind | None:
 
 def profile_roots(flavour: SlicerFlavour, executable: Path) -> tuple[Path, ...]:
     """Alle Wurzeln des Profilbestands dieser Installation, mitgelieferte
-    zuerst: ``resources/profiles`` neben dem Programm, die eigenen
-    ``user/<Konto>`` und der ``system``-Bestand daneben, in den die
-    Orca-Familie die gewählten Herstellerbündel kopiert.
+    zuerst (:func:`install_root`: ``resources/profiles`` neben dem Programm,
+    beim AppImage dessen Kopie im Nutzer-Cache), die eigenen ``user/<Konto>``
+    und der ``system``-Bestand daneben, in den die Orca-Familie die gewählten
+    Herstellerbündel kopiert.
 
     Die Erbkette eines eigenen Profils (:func:`resolve_values`) braucht sie:
     Ein im Slicer angelegtes Filament unter ``user/<Konto>/filament/`` erbt
@@ -3774,7 +3803,9 @@ def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
     Pfad abgelesenen — für Aufrufer, die nur die Datei kennen: Ein eigenes
     Profil liegt unter ``<Programm>/user/<Konto>/``, und daneben liegt
     ``<Programm>/system/`` mit den kopierten Herstellerbündeln; ein
-    mitgeliefertes liegt unter ``resources/profiles``.
+    mitgeliefertes liegt unter ``resources/profiles``. Die Kopie aus einem
+    AppImage (``<Cache>/<Kennung>/profiles``) erkennt der Pfad nicht; ihre
+    Wurzel kommt über ``roots``.
     """
     found = [Path(root) for root in roots]
     for parent in path.parents:
@@ -4752,6 +4783,20 @@ def _standard_process(
     return min(pool, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
 
 
+def _full_cooling(percent: float) -> bool | None:
+    """Der Kontaktlüfter: 100 heißt volle Kühlung, -1 „wie die übrige Schicht“
+    (RM-583). Einen Anteil dazwischen, auch 0 (Lüfter aus), führt Solidon nicht;
+    er wird nicht umgedeutet, sondern nicht gelesen."""
+    if percent >= 100.0:
+        return True
+    if percent < 0.0:
+        return False
+    return None
+
+
+#: Wie ein Rücklesewert aus der Zahl des Profils wird; ``None`` heißt „nicht lesbar“.
+Readback = Callable[[float], float | int | None]
+
 #: Was ein Filamentprofil des Slicers über das Material sagt, in Solidons
 #: Worten. Die Gegenrichtung zu :mod:`slicer_keys`, und mit Absicht kurz: hier
 #: stehen nur die Werte, die *dem Filament* gehören und nicht der Maschine oder
@@ -4762,7 +4807,7 @@ def _standard_process(
 #: PRO fährt 5 mm³/s bei Bett 70. Der Unterschied ist kein Feinschliff: mit dem
 #: falschen Volumenstrom rechnet die Beratung an der Grenze vorbei, die das
 #: Material wirklich hat.
-FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+FILAMENT_READBACK: Final[tuple[tuple[str, str, Readback], ...]] = (
     ("temperature.nozzle", "nozzle_temperature", int),
     ("temperature.nozzle_first_layer", "nozzle_temperature_initial_layer", int),
     ("temperature.bed", "hot_plate_temp", int),
@@ -4778,6 +4823,7 @@ FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("cooling.disable_first_layers", "close_fan_the_first_x_layers", int),
     ("cooling.minimum_layer_time", "slow_down_layer_time", float),
     ("cooling.minimum_speed", "slow_down_min_speed", float),
+    ("cooling.support_interface_cooling", "support_material_interface_fan_speed", _full_cooling),
     ("filament.density", "filament_density", float),
     ("filament.flow_ratio", "filament_flow_ratio", float),
     ("filament.max_flow", "filament_max_volumetric_speed", float),
@@ -4950,7 +4996,7 @@ def machine_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     return {key: resolved[key] for key in MACHINE_READBACK if key in resolved}
 
 
-PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, Readback], ...]] = (
     ("temperature.nozzle", "temperature", int),
     ("temperature.nozzle_first_layer", "first_layer_temperature", int),
     ("temperature.bed", "bed_temperature", int),
@@ -4963,6 +5009,8 @@ PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
     ("cooling.disable_first_layers", "disable_fan_first_layers", int),
     ("cooling.minimum_layer_time", "slowdown_below_layer_time", float),
     ("cooling.minimum_speed", "min_print_speed", float),
+    # Nur SuperSlicer führt ihn; im Bündel von PrusaSlicer fehlt er.
+    ("cooling.support_interface_cooling", "support_material_interface_fan_speed", _full_cooling),
     ("filament.density", "filament_density", float),
     ("filament.diameter", "filament_diameter", float),
     ("filament.flow_ratio", "extrusion_multiplier", float),
@@ -5069,7 +5117,9 @@ def filament_readback(
             continue
         if solidon in _AS_FRACTION:
             number /= 100.0
-        values[solidon] = kind(number)
+        value = kind(number)
+        if value is not None:
+            values[solidon] = value
     return FilamentReadback(values, True)
 
 

@@ -687,8 +687,11 @@ SUPPORT_DETAILS: Final = (
     "support.xy_gap",
     "support.density",
     "support.interface_layers",
+    "support.bottom_interface_layers",
+    "support.interface_spacing",
     "support.block_channels",
     "support.spare_ledges",
+    "cooling.support_interface_cooling",
 )
 
 #: Alle Haftungsmaße, in der Reihenfolge des Dialogs — abgeleitet aus
